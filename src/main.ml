@@ -77,8 +77,49 @@ type 'rid region =
  *)
 type erased_region = Erased
 
-(* TODO *)
-type rty = unit
+type integer_type =
+  | Isize
+  | I8
+  | I16
+  | I32
+  | I64
+  | I128
+  | Usize
+  | U8
+  | U16
+  | U32
+  | U64
+  | U128
+
+type ref_kind = Mut | Shared
+
+type assumed_ty = Box
+
+type 'r ty =
+  | Adt of TypeDefId.id * 'r list * 'r ty list
+  | TypeVar of TypeVarId.id
+  | Bool
+  | Char
+  | Never
+  | Integer of integer_type
+  | Str
+  | Array of 'r ty (* TODO: there should be a constant with the array *)
+  | Slice of 'r ty
+  | Ref of 'r * 'r ty * ref_kind
+  | Tuple of 'r ty list
+  | Assumed of assumed_ty * 'r list * 'r ty
+
+type rty = RegionVarId.id region ty
+(** Type with *R*egions.
+
+    Used in function signatures and type definitions.
+ *)
+
+type ety = erased_region ty
+(** Type with *E*rased regions.
+    
+    Used in function bodies, "general" value types, etc.
+ *)
 
 type field = { name : string; ty : rty }
 
