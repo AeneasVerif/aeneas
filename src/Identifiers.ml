@@ -16,6 +16,9 @@ module type Id = sig
   val incr : id -> id
 
   val to_string : id -> string
+
+  (* TODO: remove *)
+  (* module Map : Map.S with type key = id *)
 end
 
 (** Generative functor for identifiers.
@@ -25,7 +28,7 @@ end
 module IdGen () : Id = struct
   type id = int
 
-  type 'a vector = 'a list (* TODO: use a map *)
+  type 'a vector = 'a list
 
   let zero = 0
 
@@ -36,6 +39,21 @@ module IdGen () : Id = struct
     if x == max_int then raise (IntegerOverflow ()) else x + 1
 
   let to_string = string_of_int
+
+  (* TODO: how to make this work? *)
+  (* (module Ord : Map.OrderedType = struct
+       type t = id
+
+       let compare t1 t2 = t2 - t1
+     end)
+
+     module IdMap = Map.Make (Ord) *)
+
+  (* module Map = Map.Make (struct
+       type t = id
+
+       let compare = Stdlib.compare
+     end) *)
 end
 
 type name = string list

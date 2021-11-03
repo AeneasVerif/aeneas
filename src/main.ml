@@ -1,4 +1,5 @@
 open Identifiers
+open CfimAst
 
 module Id0 = IdGen ()
 
