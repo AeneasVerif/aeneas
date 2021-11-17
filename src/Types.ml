@@ -85,9 +85,9 @@ type ety = erased_region ty [@@deriving yojson]
     Used in function bodies, "general" value types, etc.
  *)
 
-type field = { name : string; ty : rty } [@@deriving yojson]
+type field = { field_name : string; field_ty : rty } [@@deriving yojson]
 
-type variant = { name : string; fields : field FieldId.vector }
+type variant = { variant_name : string; fields : field FieldId.vector }
 [@@deriving yojson]
 
 type type_def_kind =

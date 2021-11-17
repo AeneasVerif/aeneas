@@ -160,6 +160,60 @@ let rec ty_of_json (r_of_json : json -> ('r, string) result) (js : json) :
       Ok (Assumed (assumed_ty, regions, types))
   | _ -> Error ("ty_of_json failed on:" ^ show js)
 
+let rty_of_json (js : json) : (rty, string) result =
+  ty_of_json region_of_json js
+
+let ety_of_json (js : json) : (ety, string) result =
+  ty_of_json erased_region_of_json js
+
+let field_of_json (js : json) : (field, string) result =
+  match js with
+  | `Assoc [ ("name", name); ("ty", ty) ] ->
+      let* name = string_of_json name in
+      let* ty = rty_of_json ty in
+      Ok { field_name = name; field_ty = ty }
+  | _ -> Error ("field_of_json failed on:" ^ show js)
+
+let variant_of_json (js : json) : (variant, string) result =
+  match js with
+  | `Assoc [ ("name", name); ("fields", fields) ] ->
+      let* name = string_of_json name in
+      let* fields = FieldId.vector_of_json field_of_json fields in
+      Ok { variant_name = name; fields }
+  | _ -> Error ("variant_of_json failed on:" ^ show js)
+
+let type_def_kind_of_json (js : json) : (type_def_kind, string) result =
+  match js with
+  | `Variant ("Struct", Some fields) ->
+      let* fields = FieldId.vector_of_json field_of_json fields in
+      Ok (Struct fields)
+  | `Variant ("Enum", Some variants) ->
+      let* variants = VariantId.vector_of_json variant_of_json variants in
+      Ok (Enum variants)
+  | _ -> Error ("type_def_kind_of_json failed on:" ^ show js)
+
+let type_def_of_json (js : json) : (type_def, string) result =
+  match js with
+  | `Assoc
+      [
+        ("def_id", def_id);
+        ("name", name);
+        ("region_params", region_params);
+        ("type_params", type_params);
+        ("kind", kind);
+      ] ->
+      let* def_id = TypeDefId.id_of_json def_id in
+      let* name = name_of_json name in
+      let* region_params =
+        RegionVarId.vector_of_json region_var_of_json region_params
+      in
+      let* type_params =
+        TypeVarId.vector_of_json type_var_of_json type_params
+      in
+      let* kind = type_def_kind_of_json kind in
+      Ok { def_id; name; region_params; type_params; kind }
+  | _ -> Error ("type_def_of_json failed on:" ^ show js)
+
 (*
 open Values
 open Expressions
