@@ -19,9 +19,16 @@ module type Id = sig
 
   val id_of_yojson : Yojson.Safe.t -> (id, string) Result.result
 
+  val id_of_json : Yojson.Safe.t -> (id, string) Result.result
+
   val id_to_yojson : id -> Yojson.Safe.t
 
   val vector_of_yojson :
+    (Yojson.Safe.t -> ('a, string) Result.result) ->
+    Yojson.Safe.t ->
+    ('a vector, string) Result.result
+
+  val vector_of_json :
     (Yojson.Safe.t -> ('a, string) Result.result) ->
     Yojson.Safe.t ->
     ('a vector, string) Result.result
@@ -51,6 +58,10 @@ module IdGen () : Id = struct
     if x == max_int then raise (IntegerOverflow ()) else x + 1
 
   let to_string = string_of_int
+
+  let id_of_json = id_of_yojson
+
+  let vector_of_json = vector_of_yojson
 
   (* TODO: how to make this work? *)
   (* (module Ord : Map.OrderedType = struct

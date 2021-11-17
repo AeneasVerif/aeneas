@@ -11,14 +11,14 @@ module FieldId = IdGen ()
 module RegionVarId = IdGen ()
 
 type type_var = {
-  index : TypeVarId.id;  (** Unique index identifying the variable *)
-  name : string;  (** Variable name *)
+  tv_index : TypeVarId.id;  (** Unique index identifying the variable *)
+  tv_name : string;  (** Variable name *)
 }
 [@@deriving yojson]
 
 type region_var = {
-  index : RegionVarId.id;  (** Unique index identifying the region *)
-  name : string option;  (** Region name *)
+  rv_index : RegionVarId.id;  (** Unique index identifying the region *)
+  rv_name : string option;  (** Region name *)
 }
 [@@deriving yojson]
 
@@ -70,7 +70,7 @@ type 'r ty =
   | Slice of 'r ty
   | Ref of 'r * 'r ty * ref_kind
   | Tuple of 'r ty list
-  | Assumed of assumed_ty * 'r list * 'r ty
+  | Assumed of assumed_ty * 'r list * 'r ty list
 [@@deriving yojson]
 
 type rty = RegionVarId.id region ty [@@deriving yojson]

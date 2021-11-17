@@ -1,5 +1,6 @@
 open Types
 open CfimAst
+open CfimOfJson
 
 type declaration =
   | Type of TypeDefId.id
@@ -24,6 +25,9 @@ let () =
   let e1 = Statement Return in
   let e1_json = expression_to_yojson e1 in
   print_endline (Yojson.Safe.to_string e1_json);
+  let int_ty = Isize in
+  let int_ty_json = integer_type_to_yojson int_ty in
+  print_endline (Yojson.Safe.to_string int_ty_json);
   let json2 = Yojson.Safe.from_string "[\"Return\"]" in
   match statement_of_yojson json2 with
   | Error s -> Printf.printf "error: %s\n" s
