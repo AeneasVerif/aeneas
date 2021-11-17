@@ -582,3 +582,69 @@ and switch_targets_of_json (js : json) : (switch_targets, string) result =
       let* otherwise = expression_of_json otherwise in
       Ok (SwitchInt (int_ty, tgts, otherwise))
   | _ -> Error ("switch_targets_of_json failed on:" ^ show js)
+
+let fun_def_of_json (js : json) : (fun_def, string) result =
+  match js with
+  | `Assoc
+      [
+        ("def_id", def_id);
+        ("name", name);
+        ("signature", signature);
+        ("divergent", divergent);
+        ("arg_count", arg_count);
+        ("locals", locals);
+        ("body", body);
+      ] ->
+      let* def_id = FunDefId.id_of_json def_id in
+      let* name = name_of_json name in
+      let* signature = fun_sig_of_json signature in
+      let* divergent = bool_of_json divergent in
+      let* arg_count = int_of_json arg_count in
+      let* locals = VarId.vector_of_json var_of_json locals in
+      let* body = expression_of_json body in
+      Ok { def_id; name; signature; divergent; arg_count; locals; body }
+  | _ -> Error ("fun_def_of_json failed on:" ^ show js)
+
+(** Module declaration *)
+type declaration =
+  | Type of TypeDefId.id
+  | Fun of FunDefId.id
+  | RecTypes of TypeDefId.id list
+  | RecFuns of FunDefId.id list
+
+type cfim_module = {
+  declarations : declaration list;
+  types : type_def TypeDefId.vector;
+  functions : fun_def FunDefId.vector;
+}
+(** CFIM module *)
+
+let declaration_of_json (js : json) : (declaration, string) result =
+  match js with
+  | `Variant ("Type", Some id) ->
+      let* id = TypeDefId.id_of_json id in
+      Ok (Type id)
+  | `Variant ("Fun", Some id) ->
+      let* id = FunDefId.id_of_json id in
+      Ok (Fun id)
+  | `Variant ("RecTypes", Some ids) ->
+      let* ids = list_of_json TypeDefId.id_of_json ids in
+      Ok (RecTypes ids)
+  | `Variant ("RecFuns", Some ids) ->
+      let* ids = list_of_json FunDefId.id_of_json ids in
+      Ok (RecFuns ids)
+  | _ -> Error ("declaration_of_json failed on:" ^ show js)
+
+let cfim_module_of_json (js : json) : (cfim_module, string) result =
+  match js with
+  | `Assoc
+      [
+        ("declarations", declarations);
+        ("types", types);
+        ("functions", functions);
+      ] ->
+      let* declarations = list_of_json declaration_of_json declarations in
+      let* types = TypeDefId.vector_of_json type_def_of_json types in
+      let* functions = FunDefId.vector_of_json fun_def_of_json functions in
+      Ok { declarations; types; functions }
+  | _ -> Error ("cfim_module_of_json failed on:" ^ show js)
