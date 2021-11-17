@@ -3,6 +3,8 @@ open Types
 open Values
 open Expressions
 
+module FunDefId = IdGen ()
+
 type assumed_fun_id = BoxNew | BoxDeref | BoxDerefMut | BoxFree
 [@@deriving of_yojson]
 

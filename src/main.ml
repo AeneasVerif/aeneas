@@ -1,29 +1,23 @@
-open Identifiers
-(*open CfimAst*)
+open Types
+open CfimAst
 
-module Id0 = IdGen ()
+type declaration =
+  | Type of TypeDefId.id
+  | Fun of FunDefId.id
+  | RecTypes of TypeDefId.id list
+  | RecFuns of FunDefId.id list
+[@@deriving of_yojson]
 
-module Id1 = IdGen ()
-
-let x0 = Id0.zero
-
-let x1 = Id0.incr x0
-
-let () =
-  let _ = print_endline "Hello, world!" in
-  let _ = print_endline (Id0.to_string x1) in
-  ()
-
-type 'a test_struct = { x : 'a } [@@deriving of_yojson]
-
-type id0_t = Id0.id [@@deriving of_yojson]
-
-let id0_t_test_struct_of_yojson = test_struct_of_yojson id0_t_of_yojson
-
-type ty1 = int Id0.vector [@@deriving of_yojson]
+type rust_module = {
+  declarations : declaration list;
+  types : type_def TypeDefId.vector;
+  functions : fun_def FunDefId.vector;
+}
+[@@deriving of_yojson]
 
 let () =
   (*  let json = Yojson.Basic.from_file "../charon/charon/tests/test1.cfim" in *)
-  let _json = Yojson.Safe.from_file "../charon/charon/tests/test1.cfim" in
-  let _test = CfimAst.fun_def_of_yojson _json in
-  ()
+  let json = Yojson.Safe.from_file "../charon/charon/tests/test1.cfim" in
+  match rust_module_of_yojson json with
+  | Error s -> Printf.printf "error: %s\n" s
+  | Ok _ast -> print_endline "ast"

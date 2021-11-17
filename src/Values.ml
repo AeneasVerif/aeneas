@@ -3,8 +3,6 @@ open Types
 
 module VarId = IdGen ()
 
-module FunDefId = IdGen ()
-
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;
