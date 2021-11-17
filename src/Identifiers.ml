@@ -1,11 +1,5 @@
 exception IntegerOverflow of unit
 
-type gen_int = int [@@deriving of_yojson]
-(** This definition is used only to derive a proper int deserialization function *)
-
-type 'a gen_list = 'a list [@@deriving of_yojson]
-(** This definition is used only to derive a proper list deserialization function *)
-
 (** Signature for a module describing an identifier.
     
     We often need identifiers (for definitions, variables, etc.) and in
@@ -39,9 +33,9 @@ end
     See [Id].
 *)
 module IdGen () : Id = struct
-  type id = int
+  type id = int [@@deriving of_yojson]
 
-  type 'a vector = 'a list
+  type 'a vector = 'a list [@@deriving of_yojson]
 
   let zero = 0
 
@@ -52,10 +46,6 @@ module IdGen () : Id = struct
     if x == max_int then raise (IntegerOverflow ()) else x + 1
 
   let to_string = string_of_int
-
-  let id_of_yojson json = gen_int_of_yojson json
-
-  let vector_of_yojson a_of_yojson json = gen_list_of_yojson a_of_yojson json
 
   (* TODO: how to make this work? *)
   (* (module Ord : Map.OrderedType = struct
