@@ -55,6 +55,16 @@ let rec of_json_list (a_of_json : json -> ('a, string) result) (jsl : json list)
       let* jsl' = of_json_list a_of_json jsl' in
       Ok (x :: jsl')
 
+let pair_of_json (a_of_json : json -> ('a, string) result)
+    (b_of_json : json -> ('b, string) result) (js : json) :
+    ('a * 'b, string) result =
+  match js with
+  | `Tuple [ a; b ] ->
+      let* a = a_of_json a in
+      let* b = b_of_json b in
+      Ok (a, b)
+  | _ -> Error ("pair_of_json failed on: " ^ show js)
+
 let list_of_json (a_of_json : json -> ('a, string) result) (js : json) :
     ('a list, string) result =
   match js with
@@ -412,7 +422,7 @@ let aggregate_kind_of_json (js : json) : (aggregate_kind, string) result =
       Ok (AggregatedAdt (id, opt_variant_id))
   | _ -> Error ("aggregate_kind_of_json failed on:" ^ show js)
 
-let rvalue_kind_of_json (js : json) : (rvalue, string) result =
+let rvalue_of_json (js : json) : (rvalue, string) result =
   match js with
   | `Variant ("Use", Some op) ->
       let* op = operand_of_json op in
@@ -439,4 +449,136 @@ let rvalue_kind_of_json (js : json) : (rvalue, string) result =
       Ok (Aggregate (aggregate_kind, ops))
   | _ -> Error ("rvalue_of_json failed on:" ^ show js)
 
-(*open CfimAst*)
+open CfimAst
+
+let assumed_fun_id_of_json (js : json) : (assumed_fun_id, string) result =
+  match js with
+  | `Variant ("BoxNew", None) -> Ok BoxNew
+  | `Variant ("BoxDeref", None) -> Ok BoxDeref
+  | `Variant ("BoxDerefMut", None) -> Ok BoxDerefMut
+  | `Variant ("BoxFree", None) -> Ok BoxFree
+  | _ -> Error ("assumed_fun_id_of_json failed on:" ^ show js)
+
+let fun_id_of_json (js : json) : (fun_id, string) result =
+  match js with
+  | `Variant ("Local", Some id) ->
+      let* id = FunDefId.id_of_json id in
+      Ok (Local id)
+  | `Variant ("BoxDeref", Some fid) ->
+      let* fid = assumed_fun_id_of_json fid in
+      Ok (Assumed fid)
+  | _ -> Error ("fun_id_of_json failed on:" ^ show js)
+
+let assertion_of_json (js : json) : (assertion, string) result =
+  match js with
+  | `Assoc [ ("cond", cond); ("expected", expected) ] ->
+      let* cond = operand_of_json cond in
+      let* expected = bool_of_json expected in
+      Ok { cond; expected }
+  | _ -> Error ("assertion_of_json failed on:" ^ show js)
+
+let fun_sig_of_json (js : json) : (fun_sig, string) result =
+  match js with
+  | `Assoc
+      [
+        ("region_params", region_params);
+        ("num_early_bound_regions", num_early_bound_regions);
+        ("type_params", type_params);
+        ("inputs", inputs);
+        ("output", output);
+      ] ->
+      let* region_params =
+        RegionVarId.vector_of_json region_var_of_json region_params
+      in
+      let* num_early_bound_regions = int_of_json num_early_bound_regions in
+      let* type_params =
+        TypeVarId.vector_of_json type_var_of_json type_params
+      in
+      let* inputs = VarId.vector_of_json rty_of_json inputs in
+      let* output = rty_of_json output in
+      Ok { region_params; num_early_bound_regions; type_params; inputs; output }
+  | _ -> Error ("fun_sig_of_json failed on:" ^ show js)
+
+let call_of_json (js : json) : (call, string) result =
+  match js with
+  | `Assoc
+      [
+        ("func", func);
+        ("region_params", region_params);
+        ("type_params", type_params);
+        ("args", args);
+        ("dest", dest);
+      ] ->
+      let* func = fun_id_of_json func in
+      let* region_params = list_of_json erased_region_of_json region_params in
+      let* type_params = list_of_json ety_of_json type_params in
+      let* args = list_of_json operand_of_json args in
+      let* dest = place_of_json dest in
+      Ok { func; region_params; type_params; args; dest }
+  | _ -> Error ("call_of_json failed on:" ^ show js)
+
+let statement_of_json (js : json) : (statement, string) result =
+  match js with
+  | `Variant ("Assign", Some (`Tuple [ place; rvalue ])) ->
+      let* place = place_of_json place in
+      let* rvalue = rvalue_of_json rvalue in
+      Ok (Assign (place, rvalue))
+  | `Variant ("FakeRead", Some place) ->
+      let* place = place_of_json place in
+      Ok (FakeRead place)
+  | `Variant ("SetDiscriminant", Some (`Tuple [ place; variant_id ])) ->
+      let* place = place_of_json place in
+      let* variant_id = VariantId.id_of_json variant_id in
+      Ok (SetDiscriminant (place, variant_id))
+  | `Variant ("Drop", Some place) ->
+      let* place = place_of_json place in
+      Ok (Drop place)
+  | `Variant ("Assert", Some assertion) ->
+      let* assertion = assertion_of_json assertion in
+      Ok (Assert assertion)
+  | `Variant ("Call", Some call) ->
+      let* call = call_of_json call in
+      Ok (Call call)
+  | `Variant ("Panic", None) -> Ok Panic
+  | `Variant ("Return", None) -> Ok Return
+  | `Variant ("Break", Some i) ->
+      let* i = int_of_json i in
+      Ok (Break i)
+  | `Variant ("Continue", Some i) ->
+      let* i = int_of_json i in
+      Ok (Continue i)
+  | `Variant ("Nop", None) -> Ok Nop
+  | _ -> Error ("statement_of_json failed on:" ^ show js)
+
+let rec expression_of_json (js : json) : (expression, string) result =
+  match js with
+  | `Variant ("Statement", Some statement) ->
+      let* statement = statement_of_json statement in
+      Ok (Statement statement)
+  | `Variant ("Sequence", Some (`Tuple [ e1; e2 ])) ->
+      let* e1 = expression_of_json e1 in
+      let* e2 = expression_of_json e2 in
+      Ok (Sequence (e1, e2))
+  | `Variant ("Switch", Some (`Tuple [ op; tgt ])) ->
+      let* op = operand_of_json op in
+      let* tgt = switch_targets_of_json tgt in
+      Ok (Switch (op, tgt))
+  | `Variant ("Loop", Some e) ->
+      let* e = expression_of_json e in
+      Ok (Loop e)
+  | _ -> Error ("expression_of_json failed on:" ^ show js)
+
+and switch_targets_of_json (js : json) : (switch_targets, string) result =
+  match js with
+  | `Variant ("If", Some (`Tuple [ e1; e2 ])) ->
+      let* e1 = expression_of_json e1 in
+      let* e2 = expression_of_json e2 in
+      Ok (If (e1, e2))
+  | `Variant ("SwitchInt", Some (`Tuple [ int_ty; tgts; otherwise ])) ->
+      let* int_ty = integer_type_of_json int_ty in
+      let* tgts =
+        list_of_json (pair_of_json scalar_value_of_json expression_of_json) tgts
+      in
+      let* otherwise = expression_of_json otherwise in
+      Ok (SwitchInt (int_ty, tgts, otherwise))
+  | _ -> Error ("switch_targets_of_json failed on:" ^ show js)
