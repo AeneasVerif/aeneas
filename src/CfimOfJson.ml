@@ -30,6 +30,15 @@ type json = t
 
 let ( let* ) o f = match o with Error e -> Error e | Ok x -> f x
 
+let bool_of_json (js : json) : (bool, string) result =
+  match js with
+  | `Bool b -> Ok b
+  | _ -> Error ("bool_of_json: not a bool: " ^ show js)
+
+let char_of_json (_js : json) : (char, string) result =
+  (* TODO: implement *)
+  Error "char_of_json: unimplemented"
+
 let rec of_json_list (a_of_json : json -> ('a, string) result) (jsl : json list)
     : ('a list, string) result =
   match jsl with
@@ -214,7 +223,79 @@ let type_def_of_json (js : json) : (type_def, string) result =
       Ok { def_id; name; region_params; type_params; kind }
   | _ -> Error ("type_def_of_json failed on:" ^ show js)
 
-(*
 open Values
+
+let var_of_json (js : json) : (var, string) result =
+  match js with
+  | `Assoc [ ("index", index); ("name", name); ("ty", ty) ] ->
+      let* index = VarId.id_of_json index in
+      let* name = string_option_of_json name in
+      let* ty = ety_of_json ty in
+      Ok { index; name; ty }
+  | _ -> Error ("var_of_json failed on:" ^ show js)
+
+let big_int_of_json (js : json) : (big_int, string) result =
+  match js with
+  | `Int i -> Ok (Z.of_int i)
+  | `Intlit is -> Ok (Z.of_string is)
+  | _ -> Error ("big_int_of_json failed on: " ^ show js)
+
+let scalar_value_of_json (js : json) : (scalar_value, string) result =
+  match js with
+  | `Variant ("Isize", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (Isize bi)
+  | `Variant ("I8", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (I8 bi)
+  | `Variant ("I16", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (I16 bi)
+  | `Variant ("I32", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (I32 bi)
+  | `Variant ("I64", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (I64 bi)
+  | `Variant ("I128", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (I128 bi)
+  | `Variant ("Usize", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (Usize bi)
+  | `Variant ("U8", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (U8 bi)
+  | `Variant ("U16", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (U16 bi)
+  | `Variant ("U32", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (U32 bi)
+  | `Variant ("U64", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (U64 bi)
+  | `Variant ("U128", Some bi) ->
+      let* bi = big_int_of_json bi in
+      Ok (U128 bi)
+  | _ -> Error ("scalar_value_of_json failed on:" ^ show js)
+
+let constant_value_of_json (js : json) : (constant_value, string) result =
+  match js with
+  | `Variant ("Scalar", Some scalar_value) ->
+      let* scalar_value = scalar_value_of_json scalar_value in
+      Ok (Scalar scalar_value)
+  | `Variant ("Bool", Some v) ->
+      let* v = bool_of_json v in
+      Ok (Bool v)
+  | `Variant ("Char", Some v) ->
+      let* v = char_of_json v in
+      Ok (Char v)
+  | `Variant ("String", Some v) ->
+      let* v = string_of_json v in
+      Ok (String v)
+  | _ -> Error ("scalar_value_of_json failed on:" ^ show js)
+(*
+
 open Expressions
 open CfimAst*)
