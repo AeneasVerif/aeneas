@@ -17,7 +17,11 @@ type rust_module = {
 
 let () =
   (*  let json = Yojson.Basic.from_file "../charon/charon/tests/test1.cfim" in *)
-  let json = Yojson.Safe.from_file "../charon/charon/tests/test1.cfim" in
-  match rust_module_of_yojson json with
+  let _json1 = Yojson.Safe.from_file "../charon/charon/tests/test1.cfim" in
+  let json2 = Yojson.Safe.from_file "../charon/charon/tests/test4.cfim" in
+  match statement_of_yojson json2 with
   | Error s -> Printf.printf "error: %s\n" s
   | Ok _ast -> print_endline "ast"
+(*  match rust_module_of_yojson json with
+  | Error s -> Printf.printf "error: %s\n" s
+  | Ok _ast -> print_endline "ast"*)
