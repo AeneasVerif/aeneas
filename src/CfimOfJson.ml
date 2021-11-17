@@ -20,6 +20,8 @@
     to implement our own deserializing functions. Moreover, it allows us to
     generate a friendlier debugging output in case the deserialization functions
     fail.
+
+    TODO: we should check that the integer values are in the proper range
  *)
 
 open Yojson.Safe
@@ -34,6 +36,11 @@ let bool_of_json (js : json) : (bool, string) result =
   match js with
   | `Bool b -> Ok b
   | _ -> Error ("bool_of_json: not a bool: " ^ show js)
+
+let int_of_json (js : json) : (int, string) result =
+  match js with
+  | `Int i -> Ok i
+  | _ -> Error ("int_of_json: not an int: " ^ show js)
 
 let char_of_json (_js : json) : (char, string) result =
   (* TODO: implement *)
@@ -294,8 +301,142 @@ let constant_value_of_json (js : json) : (constant_value, string) result =
   | `Variant ("String", Some v) ->
       let* v = string_of_json v in
       Ok (String v)
-  | _ -> Error ("scalar_value_of_json failed on:" ^ show js)
-(*
+  | _ -> Error ("constant_value_of_json failed on:" ^ show js)
 
 open Expressions
-open CfimAst*)
+
+let field_proj_kind_of_json (js : json) : (field_proj_kind, string) result =
+  match js with
+  | `Variant ("ProjAdt", Some (`Tuple [ def_id; opt_variant_id ])) ->
+      let* def_id = TypeDefId.id_of_json def_id in
+      let* opt_variant_id =
+        option_of_json VariantId.id_of_json opt_variant_id
+      in
+      Ok (ProjAdt (def_id, opt_variant_id))
+  | `Variant ("ProjTuple", Some i) ->
+      let* i = int_of_json i in
+      Ok (ProjTuple i)
+  | _ -> Error ("field_proj_kind_of_json failed on:" ^ show js)
+
+let projection_elem_of_json (js : json) : (projection_elem, string) result =
+  match js with
+  | `Variant ("Deref", None) -> Ok Deref
+  | `Variant ("DerefBox", None) -> Ok DerefBox
+  | `Variant ("Field", Some (`Tuple [ proj_kind; field_id ])) ->
+      let* proj_kind = field_proj_kind_of_json proj_kind in
+      let* field_id = FieldId.id_of_json field_id in
+      Ok (Field (proj_kind, field_id))
+  | `Variant ("Downcast", Some variant_id) ->
+      let* variant_id = VariantId.id_of_json variant_id in
+      Ok (Downcast variant_id)
+  | _ -> Error ("projection_elem_of_json failed on:" ^ show js)
+
+let projection_of_json (js : json) : (projection, string) result =
+  list_of_json projection_elem_of_json js
+
+let place_of_json (js : json) : (place, string) result =
+  match js with
+  | `Assoc [ ("var_id", var_id); ("projection", projection) ] ->
+      let* var_id = VarId.id_of_json var_id in
+      let* projection = projection_of_json projection in
+      Ok { var_id; projection }
+  | _ -> Error ("place_of_json failed on:" ^ show js)
+
+let borrow_kind_of_json (js : json) : (borrow_kind, string) result =
+  match js with
+  | `Variant ("Shared", None) -> Ok Shared
+  | `Variant ("Mut", None) -> Ok Mut
+  | `Variant ("TwoPhaseMut", None) -> Ok TwoPhaseMut
+  | _ -> Error ("borrow_kind_of_json failed on:" ^ show js)
+
+let unop_of_json (js : json) : (unop, string) result =
+  match js with
+  | `Variant ("Not", None) -> Ok Not
+  | `Variant ("Neg", None) -> Ok Neg
+  | _ -> Error ("unop_of_json failed on:" ^ show js)
+
+let binop_of_json (js : json) : (binop, string) result =
+  match js with
+  | `Variant ("BitXor", None) -> Ok BitXor
+  | `Variant ("BitAnd", None) -> Ok BitAnd
+  | `Variant ("BitOr", None) -> Ok BitOr
+  | `Variant ("Eq", None) -> Ok Eq
+  | `Variant ("Lt", None) -> Ok Lt
+  | `Variant ("Le", None) -> Ok Le
+  | `Variant ("Ne", None) -> Ok Ne
+  | `Variant ("Ge", None) -> Ok Ge
+  | `Variant ("Gt", None) -> Ok Gt
+  | `Variant ("Div", None) -> Ok Div
+  | `Variant ("Rem", None) -> Ok Rem
+  | `Variant ("Add", None) -> Ok Add
+  | `Variant ("Sub", None) -> Ok Sub
+  | `Variant ("Mul", None) -> Ok Mul
+  | `Variant ("Shl", None) -> Ok Shl
+  | `Variant ("Shr", None) -> Ok Shr
+  | _ -> Error ("binop_of_json failed on:" ^ show js)
+
+let operand_constant_value_of_json (js : json) :
+    (operand_constant_value, string) result =
+  match js with
+  | `Variant ("ConstantValue", Some cv) ->
+      let* cv = constant_value_of_json cv in
+      Ok (ConstantValue cv)
+  | `Variant ("ConstantAdt", Some id) ->
+      let* id = TypeDefId.id_of_json id in
+      Ok (ConstantAdt id)
+  | `Variant ("Unit", None) -> Ok Unit
+  | _ -> Error ("operand_constant_value_of_json failed on:" ^ show js)
+
+let operand_of_json (js : json) : (operand, string) result =
+  match js with
+  | `Variant ("Copy", Some place) ->
+      let* place = place_of_json place in
+      Ok (Copy place)
+  | `Variant ("Move", Some place) ->
+      let* place = place_of_json place in
+      Ok (Move place)
+  | `Variant ("Constant", Some (`Tuple [ ty; cv ])) ->
+      let* ty = ety_of_json ty in
+      let* cv = operand_constant_value_of_json cv in
+      Ok (Constant (ty, cv))
+  | _ -> Error ("operand_of_json failed on:" ^ show js)
+
+let aggregate_kind_of_json (js : json) : (aggregate_kind, string) result =
+  match js with
+  | `Variant ("AggregatedTuple", None) -> Ok AggregatedTuple
+  | `Variant ("AggregatedAdt", Some (`Tuple [ id; opt_variant_id ])) ->
+      let* id = TypeDefId.id_of_json id in
+      let* opt_variant_id =
+        option_of_json VariantId.id_of_json opt_variant_id
+      in
+      Ok (AggregatedAdt (id, opt_variant_id))
+  | _ -> Error ("aggregate_kind_of_json failed on:" ^ show js)
+
+let rvalue_kind_of_json (js : json) : (rvalue, string) result =
+  match js with
+  | `Variant ("Use", Some op) ->
+      let* op = operand_of_json op in
+      Ok (Use op)
+  | `Variant ("Ref", Some (`Tuple [ place; borrow_kind ])) ->
+      let* place = place_of_json place in
+      let* borrow_kind = borrow_kind_of_json borrow_kind in
+      Ok (Ref (place, borrow_kind))
+  | `Variant ("UnaryOp", Some (`Tuple [ unop; op ])) ->
+      let* unop = unop_of_json unop in
+      let* op = operand_of_json op in
+      Ok (UnaryOp (unop, op))
+  | `Variant ("BinaryOp", Some (`Tuple [ binop; op1; op2 ])) ->
+      let* binop = binop_of_json binop in
+      let* op1 = operand_of_json op1 in
+      let* op2 = operand_of_json op2 in
+      Ok (BinaryOp (binop, op1, op2))
+  | `Variant ("Discriminant", Some place) ->
+      let* place = place_of_json place in
+      Ok (Discriminant place)
+  | `Variant ("Aggregate", Some (`Tuple [ aggregate_kind; ops ])) ->
+      let* aggregate_kind = aggregate_kind_of_json aggregate_kind in
+      let* ops = list_of_json operand_of_json ops in
+      Ok (Aggregate (aggregate_kind, ops))
+  | _ -> Error ("rvalue_of_json failed on:" ^ show js)
+
+(*open CfimAst*)

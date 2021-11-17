@@ -2,8 +2,8 @@ open Types
 open Values
 
 type field_proj_kind =
-  | Adt of TypeDefId.id * VariantId.id option
-  | Tuple of int
+  | ProjAdt of TypeDefId.id * VariantId.id option
+  | ProjTuple of int
 [@@deriving yojson]
 
 type projection_elem =
@@ -62,7 +62,7 @@ type binop =
  *)
 type operand_constant_value =
   | ConstantValue of constant_value
-  | Adt of TypeDefId.id
+  | ConstantAdt of TypeDefId.id
   | Unit
 [@@deriving yojson]
 
@@ -72,7 +72,9 @@ type operand =
   | Constant of ety * operand_constant_value
 [@@deriving yojson]
 
-type aggregate_kind = Tuple | Adt of TypeDefId.id * VariantId.id list
+type aggregate_kind =
+  | AggregatedTuple
+  | AggregatedAdt of TypeDefId.id * VariantId.id option
 [@@deriving yojson]
 
 type rvalue =
