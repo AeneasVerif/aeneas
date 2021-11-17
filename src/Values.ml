@@ -12,7 +12,16 @@ type var = {
       (** The variable type - erased type, because variables are not used
        ** in function signatures *)
 }
+[@@deriving of_yojson]
 (** A variable *)
+
+type big_int = Z.t
+
+let big_int_of_yojson (json : Yojson.Safe.t) : (big_int, string) result =
+  match json with
+  | `Int i -> Ok (Z.of_int i)
+  | `Intlit is -> Ok (Z.of_string is)
+  | _ -> Error "not an integer or an integer literal"
 
 (** A scalar value
 
@@ -20,21 +29,23 @@ type var = {
     We then harcode the boundaries for the different types.
  *)
 type scalar_value =
-  | Isize of Big_int.big_int
-  | I8 of Big_int.big_int
-  | I16 of Big_int.big_int
-  | I32 of Big_int.big_int
-  | I64 of Big_int.big_int
-  | I128 of Big_int.big_int
-  | Usize of Big_int.big_int
-  | U8 of Big_int.big_int
-  | U16 of Big_int.big_int
-  | U32 of Big_int.big_int
-  | U64 of Big_int.big_int
-  | U128 of Big_int.big_int
+  | Isize of big_int
+  | I8 of big_int
+  | I16 of big_int
+  | I32 of big_int
+  | I64 of big_int
+  | I128 of big_int
+  | Usize of big_int
+  | U8 of big_int
+  | U16 of big_int
+  | U32 of big_int
+  | U64 of big_int
+  | U128 of big_int
+[@@deriving of_yojson]
 
 type constant_value =
   | Scalar of scalar_value
   | Bool of bool
   | Char of char
   | String of string
+[@@deriving of_yojson]

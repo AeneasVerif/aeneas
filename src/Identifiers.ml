@@ -33,6 +33,7 @@ end
     See [Id].
 *)
 module IdGen () : Id = struct
+  (* TODO: use Int64.t *)
   type id = int [@@deriving of_yojson]
 
   type 'a vector = 'a list [@@deriving of_yojson]
@@ -72,6 +73,6 @@ module IdGen () : Id = struct
      module Map = Map.Make (ord) *)
 end
 
-type name = string list
+type name = string list [@@deriving of_yojson]
 (** A name such as: `std::collections::vector` (which would be represented as
     [["std"; "collections"; "vector"]]) *)

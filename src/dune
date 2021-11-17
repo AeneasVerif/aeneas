@@ -1,4 +1,4 @@
 (executable
  (name main)
- (libraries yojson)
+ (libraries yojson zarith)
  (preprocess (pps ppx_deriving.show ppx_deriving.ord ppx_deriving_yojson)))

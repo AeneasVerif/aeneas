@@ -25,5 +25,5 @@ type ty1 = int Id0.vector [@@deriving of_yojson]
 let () =
   (*  let json = Yojson.Basic.from_file "../charon/charon/tests/test1.cfim" in *)
   let _json = Yojson.Safe.from_file "../charon/charon/tests/test1.cfim" in
-  let _test = ty1_of_yojson _json in
+  let _test = CfimAst.fun_def_of_yojson _json in
   ()
