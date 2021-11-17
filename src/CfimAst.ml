@@ -33,7 +33,7 @@ type statement =
   | Assert of assertion
   | Call of call
   | Panic
-  | Return
+  | Returna
   | Break of int
       (** Break to (outer) loop. The [int] identifies the loop to break to:
           * 0: break to the first outer loop (the current loop)

@@ -1,5 +1,11 @@
 exception IntegerOverflow of unit
 
+type gen_int = int [@@deriving of_yojson]
+(** This definition is used only to derive a proper int deserialization function *)
+
+type 'a gen_list = 'a list [@@deriving of_yojson]
+(** This definition is used only to derive a proper list deserialization function *)
+
 (** Signature for a module describing an identifier.
     
     We often need identifiers (for definitions, variables, etc.) and in
@@ -16,6 +22,13 @@ module type Id = sig
   val incr : id -> id
 
   val to_string : id -> string
+
+  val id_of_yojson : Yojson.Safe.t -> (id, string) Result.result
+
+  val vector_of_yojson :
+    (Yojson.Safe.t -> ('a, string) Result.result) ->
+    Yojson.Safe.t ->
+    ('a vector, string) Result.result
 
   (* TODO: remove *)
   (* module Map : Map.S with type key = id *)
@@ -40,6 +53,10 @@ module IdGen () : Id = struct
 
   let to_string = string_of_int
 
+  let id_of_yojson json = gen_int_of_yojson json
+
+  let vector_of_yojson a_of_yojson json = gen_list_of_yojson a_of_yojson json
+
   (* TODO: how to make this work? *)
   (* (module Ord : Map.OrderedType = struct
        type t = id
@@ -54,7 +71,17 @@ module IdGen () : Id = struct
 
        let compare = Stdlib.compare
      end) *)
+
+  (* let ord =
+        (module struct
+          type t = id
+
+          let compare = Stdlib.compare
+        end)
+
+     module Map = Map.Make (ord) *)
 end
 
 type name = string list
-(** A name such as: `std::collections::vector` *)
+(** A name such as: `std::collections::vector` (which would be represented as
+    [["std"; "collections"; "vector"]]) *)
