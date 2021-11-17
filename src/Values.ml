@@ -10,7 +10,7 @@ type var = {
       (** The variable type - erased type, because variables are not used
        ** in function signatures *)
 }
-[@@deriving of_yojson]
+[@@deriving yojson]
 (** A variable *)
 
 type big_int = Z.t
@@ -20,6 +20,8 @@ let big_int_of_yojson (json : Yojson.Safe.t) : (big_int, string) result =
   | `Int i -> Ok (Z.of_int i)
   | `Intlit is -> Ok (Z.of_string is)
   | _ -> Error "not an integer or an integer literal"
+
+let big_int_to_yojson (i : big_int) = `Intlit (Z.to_string i)
 
 (** A scalar value
 
@@ -39,11 +41,11 @@ type scalar_value =
   | U32 of big_int
   | U64 of big_int
   | U128 of big_int
-[@@deriving of_yojson]
+[@@deriving yojson]
 
 type constant_value =
   | Scalar of scalar_value
   | Bool of bool
   | Char of char
   | String of string
-[@@deriving of_yojson]
+[@@deriving yojson]

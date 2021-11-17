@@ -19,10 +19,14 @@ module type Id = sig
 
   val id_of_yojson : Yojson.Safe.t -> (id, string) Result.result
 
+  val id_to_yojson : id -> Yojson.Safe.t
+
   val vector_of_yojson :
     (Yojson.Safe.t -> ('a, string) Result.result) ->
     Yojson.Safe.t ->
     ('a vector, string) Result.result
+
+  val vector_to_yojson : ('a -> Yojson.Safe.t) -> 'a vector -> Yojson.Safe.t
 
   (* TODO: remove *)
   (* module Map : Map.S with type key = id *)
@@ -34,9 +38,9 @@ end
 *)
 module IdGen () : Id = struct
   (* TODO: use Int64.t *)
-  type id = int [@@deriving of_yojson]
+  type id = int [@@deriving yojson]
 
-  type 'a vector = 'a list [@@deriving of_yojson]
+  type 'a vector = 'a list [@@deriving yojson]
 
   let zero = 0
 
@@ -73,6 +77,6 @@ module IdGen () : Id = struct
      module Map = Map.Make (ord) *)
 end
 
-type name = string list [@@deriving of_yojson]
+type name = string list [@@deriving yojson]
 (** A name such as: `std::collections::vector` (which would be represented as
     [["std"; "collections"; "vector"]]) *)
