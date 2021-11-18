@@ -1,5 +1,3 @@
-exception IntegerOverflow of unit
-
 (** Signature for a module describing an identifier.
     
     We often need identifiers (for definitions, variables, etc.) and in
@@ -45,7 +43,7 @@ module IdGen () : Id = struct
     (* Identifiers should never overflow (because max_int is a really big
      * value - but we really want to make sure we detect overflows if
      * they happen *)
-    if x == max_int then raise (IntegerOverflow ()) else x + 1
+    if x == max_int then raise (Errors.IntegerOverflow ()) else x + 1
 
   let to_string = string_of_int
 
