@@ -54,27 +54,9 @@ module IdGen () : Id = struct
     | `Int i -> Ok i
     | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)
 
-  let ( let* ) o f = match o with Error e -> Error e | Ok x -> f x
-
-  (* TODO: this duplicates code from CfimToJson *)
-  let rec of_json_list (a_of_json : Yojson.Basic.t -> ('a, string) result)
-      (jsl : Yojson.Basic.t list) : ('a list, string) result =
-    match jsl with
-    | [] -> Ok []
-    | x :: jsl' ->
-        let* x = a_of_json x in
-        let* jsl' = of_json_list a_of_json jsl' in
-        Ok (x :: jsl')
-
   let vector_of_json a_of_json js =
-    match js with
-    | `List jsl -> (
-        match of_json_list a_of_json jsl with
-        | Error msg ->
-            Error
-              ("vector_of_json failed on: " ^ Yojson.Basic.show js ^ ":\n" ^ msg)
-        | Ok x -> Ok x)
-    | _ -> Error ("not a list: " ^ Yojson.Basic.show js)
+    OfJsonBasic.combine_error_msgs js "vector_of_json"
+      (OfJsonBasic.list_of_json a_of_json js)
 end
 
 type name = string list [@@deriving yojson]

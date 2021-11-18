@@ -11,8 +11,7 @@
 open Yojson.Basic
 open Identifiers
 open Types
-
-type json = t
+open OfJsonBasic
 
 let ( let* ) o f = match o with Error e -> Error e | Ok x -> f x
 
