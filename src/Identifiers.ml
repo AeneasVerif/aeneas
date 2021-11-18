@@ -17,7 +17,9 @@ module type Id = sig
 
   val to_string : id -> string
 
-  val empty : 'a vector
+  val empty_vector : 'a vector
+
+  module Set : Set.S with type elt = id
 
   val id_of_json : Yojson.Basic.t -> (id, string) result
 
@@ -47,7 +49,13 @@ module IdGen () : Id = struct
 
   let to_string = string_of_int
 
-  let empty = []
+  let empty_vector = []
+
+  module Set = Set.Make (struct
+    type t = id
+
+    let compare = compare
+  end)
 
   let id_of_json js =
     match js with
