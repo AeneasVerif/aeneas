@@ -25,9 +25,6 @@ module type Id = sig
     (Yojson.Basic.t -> ('a, string) result) ->
     Yojson.Basic.t ->
     ('a vector, string) result
-
-  (* TODO: remove *)
-  (* module Map : Map.S with type key = id *)
 end
 
 (** Generative functor for identifiers.
@@ -78,30 +75,6 @@ module IdGen () : Id = struct
               ("vector_of_json failed on: " ^ Yojson.Basic.show js ^ ":\n" ^ msg)
         | Ok x -> Ok x)
     | _ -> Error ("not a list: " ^ Yojson.Basic.show js)
-
-  (* TODO: how to make this work? *)
-  (* (module Ord : Map.OrderedType = struct
-       type t = id
-
-       let compare t1 t2 = t2 - t1
-     end)
-
-     module IdMap = Map.Make (Ord) *)
-
-  (* module Map = Map.Make (struct
-       type t = id
-
-       let compare = Stdlib.compare
-     end) *)
-
-  (* let ord =
-        (module struct
-          type t = id
-
-          let compare = Stdlib.compare
-        end)
-
-     module Map = Map.Make (ord) *)
 end
 
 type name = string list [@@deriving yojson]
