@@ -14,13 +14,11 @@ type type_var = {
   tv_index : TypeVarId.id;  (** Unique index identifying the variable *)
   tv_name : string;  (** Variable name *)
 }
-[@@deriving yojson]
 
 type region_var = {
   rv_index : RegionVarId.id;  (** Unique index identifying the region *)
   rv_name : string option;  (** Region name *)
 }
-[@@deriving yojson]
 
 (** A region.
     
@@ -31,13 +29,12 @@ type region_var = {
 type 'rid region =
   | Static  (** Static region *)
   | Var of 'rid  (** Non-static region *)
-[@@deriving yojson]
 
 (** The type of erased regions.
     
     We could use unit, but having a dedicated type makes things more explicit.
  *)
-type erased_region = Erased [@@deriving yojson]
+type erased_region = Erased
 
 type integer_type =
   | Isize
@@ -52,11 +49,10 @@ type integer_type =
   | U32
   | U64
   | U128
-[@@deriving yojson]
 
-type ref_kind = Mut | Shared [@@deriving yojson]
+type ref_kind = Mut | Shared
 
-type assumed_ty = Box [@@deriving yojson]
+type assumed_ty = Box
 
 type 'r ty =
   | Adt of TypeDefId.id * 'r list * 'r ty list
@@ -71,29 +67,26 @@ type 'r ty =
   | Ref of 'r * 'r ty * ref_kind
   | Tuple of 'r ty list
   | Assumed of assumed_ty * 'r list * 'r ty list
-[@@deriving yojson]
 
-type rty = RegionVarId.id region ty [@@deriving yojson]
+type rty = RegionVarId.id region ty
 (** Type with *R*egions.
 
     Used in function signatures and type definitions.
  *)
 
-type ety = erased_region ty [@@deriving yojson]
+type ety = erased_region ty
 (** Type with *E*rased regions.
     
     Used in function bodies, "general" value types, etc.
  *)
 
-type field = { field_name : string; field_ty : rty } [@@deriving yojson]
+type field = { field_name : string; field_ty : rty }
 
 type variant = { variant_name : string; fields : field FieldId.vector }
-[@@deriving yojson]
 
 type type_def_kind =
   | Struct of field FieldId.vector
   | Enum of variant VariantId.vector
-[@@deriving yojson]
 
 type type_def = {
   def_id : TypeDefId.id;
@@ -102,4 +95,3 @@ type type_def = {
   type_params : type_var TypeVarId.vector;
   kind : type_def_kind;
 }
-[@@deriving yojson]

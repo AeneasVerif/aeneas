@@ -19,23 +19,12 @@ module type Id = sig
 
   val empty : 'a vector
 
-  val id_of_yojson : Yojson.Safe.t -> (id, string) Result.result
-
-  val id_of_json : Yojson.Basic.t -> (id, string) Result.result
-
-  val id_to_yojson : id -> Yojson.Safe.t
-
-  val vector_of_yojson :
-    (Yojson.Safe.t -> ('a, string) Result.result) ->
-    Yojson.Safe.t ->
-    ('a vector, string) Result.result
+  val id_of_json : Yojson.Basic.t -> (id, string) result
 
   val vector_of_json :
-    (Yojson.Basic.t -> ('a, string) Result.result) ->
+    (Yojson.Basic.t -> ('a, string) result) ->
     Yojson.Basic.t ->
-    ('a vector, string) Result.result
-
-  val vector_to_yojson : ('a -> Yojson.Safe.t) -> 'a vector -> Yojson.Safe.t
+    ('a vector, string) result
 
   (* TODO: remove *)
   (* module Map : Map.S with type key = id *)
@@ -47,9 +36,9 @@ end
 *)
 module IdGen () : Id = struct
   (* TODO: use Int64.t *)
-  type id = int [@@deriving yojson]
+  type id = int
 
-  type 'a vector = 'a list [@@deriving yojson]
+  type 'a vector = 'a list
 
   let zero = 0
 

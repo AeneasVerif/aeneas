@@ -4,22 +4,20 @@ open Values
 type field_proj_kind =
   | ProjAdt of TypeDefId.id * VariantId.id option
   | ProjTuple of int
-[@@deriving yojson]
 
 type projection_elem =
   | Deref
   | DerefBox
   | Field of field_proj_kind * FieldId.id
   | Downcast of VariantId.id
-[@@deriving yojson]
 
-type projection = projection_elem list [@@deriving yojson]
+type projection = projection_elem list
 
-type place = { var_id : VarId.id; projection : projection } [@@deriving yojson]
+type place = { var_id : VarId.id; projection : projection }
 
-type borrow_kind = Shared | Mut | TwoPhaseMut [@@deriving yojson]
+type borrow_kind = Shared | Mut | TwoPhaseMut
 
-type unop = Not | Neg [@@deriving yojson]
+type unop = Not | Neg
 
 (** A binary operation
 
@@ -45,7 +43,6 @@ type binop =
   | Mul
   | Shl
   | Shr
-[@@deriving yojson]
 
 (** Constant value for an operand
 
@@ -64,18 +61,15 @@ type operand_constant_value =
   | ConstantValue of constant_value
   | ConstantAdt of TypeDefId.id
   | Unit
-[@@deriving yojson]
 
 type operand =
   | Copy of place
   | Move of place
   | Constant of ety * operand_constant_value
-[@@deriving yojson]
 
 type aggregate_kind =
   | AggregatedTuple
   | AggregatedAdt of TypeDefId.id * VariantId.id option
-[@@deriving yojson]
 
 type rvalue =
   | Use of operand
@@ -84,4 +78,3 @@ type rvalue =
   | BinaryOp of binop * operand * operand
   | Discriminant of place
   | Aggregate of aggregate_kind * operand list
-[@@deriving yojson]

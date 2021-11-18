@@ -10,7 +10,7 @@ type var = {
       (** The variable type - erased type, because variables are not used
        ** in function signatures *)
 }
-[@@deriving yojson]
+
 (** A variable *)
 
 type big_int = Z.t
@@ -41,11 +41,9 @@ type scalar_value =
   | U32 of big_int
   | U64 of big_int
   | U128 of big_int
-[@@deriving yojson]
 
 type constant_value =
   | Scalar of scalar_value
   | Bool of bool
   | Char of char
   | String of string
-[@@deriving yojson]

@@ -103,7 +103,7 @@ let region_var_of_json (js : json) : (region_var, string) result =
 let region_of_json (js : json) : (RegionVarId.id region, string) result =
   combine_error_msgs js "region_of_json"
     (match js with
-    | `String "Static" -> Ok Static (* TODO *)
+    | `String "Static" -> Ok Static
     | `Assoc [ ("Var", rid) ] ->
         let* rid = RegionVarId.id_of_json rid in
         Ok (Var rid)
@@ -115,7 +115,7 @@ let erased_region_of_json (js : json) : (erased_region, string) result =
 
 let integer_type_of_json (js : json) : (integer_type, string) result =
   match js with
-  | `String "Isize" -> Ok Isize (* TODO *)
+  | `String "Isize" -> Ok Isize
   | `String "I8" -> Ok I8
   | `String "I16" -> Ok I16
   | `String "I32" -> Ok I32

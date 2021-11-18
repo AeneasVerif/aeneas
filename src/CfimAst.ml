@@ -6,12 +6,10 @@ open Expressions
 module FunDefId = IdGen ()
 
 type assumed_fun_id = BoxNew | BoxDeref | BoxDerefMut | BoxFree
-[@@deriving yojson]
 
 type fun_id = Local of FunDefId.id | Assumed of assumed_fun_id
-[@@deriving yojson]
 
-type assertion = { cond : operand; expected : bool } [@@deriving yojson]
+type assertion = { cond : operand; expected : bool }
 
 type fun_sig = {
   region_params : region_var RegionVarId.vector;
@@ -20,7 +18,6 @@ type fun_sig = {
   inputs : rty VarId.vector;
   output : rty;
 }
-[@@deriving yojson]
 
 type call = {
   func : fun_id;
@@ -29,7 +26,6 @@ type call = {
   args : operand list;
   dest : place;
 }
-[@@deriving yojson]
 
 type statement =
   | Assign of place * rvalue
@@ -50,14 +46,12 @@ type statement =
       (** Continue to (outer) loop. The loop identifier works
           the same way as for [Break] *)
   | Nop
-[@@deriving yojson]
 
 type expression =
   | Statement of statement
   | Sequence of expression * expression
   | Switch of operand * switch_targets
   | Loop of expression
-[@@deriving yojson]
 
 and switch_targets =
   | If of expression * expression  (** Gives the "if" and "else" blocks *)
@@ -67,7 +61,6 @@ and switch_targets =
           - the "otherwise" expression.
           Also note that we precise the type of the integer (uint32, int64, etc.)
           which we switch on. *)
-[@@deriving yojson]
 
 type fun_def = {
   def_id : FunDefId.id;
@@ -78,4 +71,3 @@ type fun_def = {
   locals : var VarId.vector;
   body : expression;
 }
-[@@deriving yojson]

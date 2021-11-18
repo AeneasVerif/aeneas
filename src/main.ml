@@ -7,14 +7,12 @@ type declaration =
   | Fun of FunDefId.id
   | RecTypes of TypeDefId.id list
   | RecFuns of FunDefId.id list
-[@@deriving of_yojson]
 
 type rust_module = {
   declarations : declaration list;
   types : type_def TypeDefId.vector;
   functions : fun_def FunDefId.vector;
 }
-[@@deriving of_yojson]
 
 let () =
   (* let json = Yojson.Basic.from_string "{\"Return\"}" in
