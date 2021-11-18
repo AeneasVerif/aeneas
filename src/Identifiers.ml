@@ -17,9 +17,11 @@ module type Id = sig
 
   val to_string : id -> string
 
+  val empty : 'a vector
+
   val id_of_yojson : Yojson.Safe.t -> (id, string) Result.result
 
-  val id_of_json : Yojson.Safe.t -> (id, string) Result.result
+  val id_of_json : Yojson.Basic.t -> (id, string) Result.result
 
   val id_to_yojson : id -> Yojson.Safe.t
 
@@ -29,8 +31,8 @@ module type Id = sig
     ('a vector, string) Result.result
 
   val vector_of_json :
-    (Yojson.Safe.t -> ('a, string) Result.result) ->
-    Yojson.Safe.t ->
+    (Yojson.Basic.t -> ('a, string) Result.result) ->
+    Yojson.Basic.t ->
     ('a vector, string) Result.result
 
   val vector_to_yojson : ('a -> Yojson.Safe.t) -> 'a vector -> Yojson.Safe.t
@@ -59,9 +61,34 @@ module IdGen () : Id = struct
 
   let to_string = string_of_int
 
-  let id_of_json = id_of_yojson
+  let empty = []
 
-  let vector_of_json = vector_of_yojson
+  let id_of_json js =
+    match js with
+    | `Int i -> Ok i
+    | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)
+
+  let ( let* ) o f = match o with Error e -> Error e | Ok x -> f x
+
+  (* TODO: this duplicates code from CfimToJson *)
+  let rec of_json_list (a_of_json : Yojson.Basic.t -> ('a, string) result)
+      (jsl : Yojson.Basic.t list) : ('a list, string) result =
+    match jsl with
+    | [] -> Ok []
+    | x :: jsl' ->
+        let* x = a_of_json x in
+        let* jsl' = of_json_list a_of_json jsl' in
+        Ok (x :: jsl')
+
+  let vector_of_json a_of_json js =
+    match js with
+    | `List jsl -> (
+        match of_json_list a_of_json jsl with
+        | Error msg ->
+            Error
+              ("vector_of_json failed on: " ^ Yojson.Basic.show js ^ ":\n" ^ msg)
+        | Ok x -> Ok x)
+    | _ -> Error ("not a list: " ^ Yojson.Basic.show js)
 
   (* TODO: how to make this work? *)
   (* (module Ord : Map.OrderedType = struct
