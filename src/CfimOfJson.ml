@@ -103,7 +103,7 @@ let region_var_of_json (js : json) : (region_var, string) result =
 let region_of_json (js : json) : (RegionVarId.id region, string) result =
   combine_error_msgs js "region_of_json"
     (match js with
-    | `Assoc [ ("Static", `List []) ] -> Ok Static (* TODO *)
+    | `String "Static" -> Ok Static (* TODO *)
     | `Assoc [ ("Var", rid) ] ->
         let* rid = RegionVarId.id_of_json rid in
         Ok (Var rid)
@@ -151,13 +151,13 @@ let rec ty_of_json (r_of_json : json -> ('r, string) result) (js : json) :
     | `Assoc [ ("TypeVar", `List [ id ]) ] ->
         let* id = TypeVarId.id_of_json id in
         Ok (TypeVar id)
-    | `Assoc [ ("Bool", `List []) ] -> Ok Bool (* TODO *)
-    | `Assoc [ ("Char", `List []) ] -> Ok Char (* TODO *)
-    | `Assoc [ ("`Never", `List []) ] -> Ok Never (* TODO *)
+    | `Assoc [ ("Bool", `List []) ] -> Ok Bool
+    | `Assoc [ ("Char", `List []) ] -> Ok Char
+    | `Assoc [ ("`Never", `List []) ] -> Ok Never
     | `Assoc [ ("Integer", `List [ int_ty ]) ] ->
         let* int_ty = integer_type_of_json int_ty in
         Ok (Integer int_ty)
-    | `Assoc [ ("Str", `List []) ] -> Ok Str (* TODO *)
+    | `Assoc [ ("Str", `List []) ] -> Ok Str
     | `Assoc [ ("Array", `List [ ty ]) ] ->
         let* ty = ty_of_json r_of_json ty in
         Ok (Array ty)
@@ -560,7 +560,7 @@ let statement_of_json (js : json) : (statement, string) result =
     | `Assoc [ ("Call", call) ] ->
         let* call = call_of_json call in
         Ok (Call call)
-    | `String "Panic" -> Ok Panic (* TODO *)
+    | `String "Panic" -> Ok Panic
     | `String "Return" -> Ok Return
     | `Assoc [ ("Break", i) ] ->
         let* i = int_of_json i in
