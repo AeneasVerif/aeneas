@@ -151,13 +151,13 @@ let rec ty_of_json (r_of_json : json -> ('r, string) result) (js : json) :
     | `Assoc [ ("TypeVar", `List [ id ]) ] ->
         let* id = TypeVarId.id_of_json id in
         Ok (TypeVar id)
-    | `Assoc [ ("Bool", `List []) ] -> Ok Bool
-    | `Assoc [ ("Char", `List []) ] -> Ok Char
-    | `Assoc [ ("`Never", `List []) ] -> Ok Never
+    | `String "Bool" -> Ok Bool
+    | `String "Char" -> Ok Char
+    | `String "`Never" -> Ok Never
     | `Assoc [ ("Integer", `List [ int_ty ]) ] ->
         let* int_ty = integer_type_of_json int_ty in
         Ok (Integer int_ty)
-    | `Assoc [ ("Str", `List []) ] -> Ok Str
+    | `String "Str" -> Ok Str
     | `Assoc [ ("Array", `List [ ty ]) ] ->
         let* ty = ty_of_json r_of_json ty in
         Ok (Array ty)
@@ -400,7 +400,7 @@ let operand_constant_value_of_json (js : json) :
     | `Assoc [ ("ConstantAdt", id) ] ->
         let* id = TypeDefId.id_of_json id in
         Ok (ConstantAdt id)
-    | `Assoc [ ("Unit", `List []) ] -> Ok Unit
+    | `String "Unit" -> Ok Unit
     | _ -> Error "")
 
 let operand_of_json (js : json) : (operand, string) result =
@@ -421,7 +421,7 @@ let operand_of_json (js : json) : (operand, string) result =
 let aggregate_kind_of_json (js : json) : (aggregate_kind, string) result =
   combine_error_msgs js "operand_kind_of_json"
     (match js with
-    | `Assoc [ ("AggregatedTuple", `List []) ] -> Ok AggregatedTuple
+    | `String "AggregatedTuple" -> Ok AggregatedTuple
     | `Assoc [ ("AggregatedAdt", `List [ id; opt_variant_id ]) ] ->
         let* id = TypeDefId.id_of_json id in
         let* opt_variant_id =
