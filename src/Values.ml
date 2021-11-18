@@ -5,6 +5,12 @@ module VarId = IdGen ()
 
 module BorrowId = IdGen ()
 
+module SymbolicValueId = IdGen ()
+
+module AbstractionId = IdGen ()
+
+module RegionId = IdGen ()
+
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;
@@ -51,26 +57,37 @@ type constant_value =
   | Char of char
   | String of string
 
-type symbolic_value = unit
-(** Symbolic value - TODO *)
+type symbolic_value = { svalue_id : SymbolicValueId.id; rty : rty }
+(** Symbolic value *)
+
+type symbolic_proj_comp = {
+  svalue : symbolic_value;  (** The symbolic value itself *)
+  rset_ended : BorrowId.Set.t;
+      (** The regions used in the symbolic value which have already ended *)
+}
+(** A complementary projector over a symbolic value.
+    
+    "Complementary" stands for the fact that it is a projector over all the
+    regions *but* the ones which are listed in the projector.
+ *)
 
 (** An untyped value, used in the environments *)
 type value =
-  | Adt of adt_value  (** Enumerations and structures *)
-  | Symbolic of symbolic_value  (** Unknown value *)
   | Concrete of constant_value  (** Concrete (non-symbolic) value *)
+  | Adt of adt_value  (** Enumerations and structures *)
   | Tuple of value FieldId.vector
       (** Tuple - note that units are encoded as 0-tuples *)
-  | Borrow of borrow_content  (** A borrowed value *)
-  | Loan of loan_content  (** A loaned value *)
   | Bottom  (** No value (uninitialized or moved value) *)
   | Assumed of assumed_value  (** Assumed types (Box, Vec, Cell...) *)
+  | Borrow of borrow_content  (** A borrowed value *)
+  | Loan of loan_content  (** A loaned value *)
+  | Symbolic of symbolic_proj_comp  (** Unknown value *)
 
 and adt_value = {
   def_id : TypeDefId.id;
   variant_id : VariantId.id option;
   regions : erased_region list;
-  types : rty list;
+  types : ety list;
   field_values : value FieldId.vector;
 }
 
@@ -94,3 +111,62 @@ and loan_content =
   | MutLoan of BorrowId.id
 
 and assumed_value = Box of value
+
+type typed_value = { value : value; ty : ety }
+
+type abstract_shared_borrow =
+  | AsvSet of BorrowId.Set.t
+  | AsvProjReborrows of symbolic_value * rty
+  | AsvUntion of abstract_shared_borrow * abstract_shared_borrow
+      (** TODO: explanations *)
+
+(** Abstraction values are used inside of abstractions to properly model
+    borrowing relations introduced by function calls.
+
+    When calling a function, we lose information about the borrow graph:
+    part of it is thus "abstracted" away.
+*)
+type avalue =
+  | AConcrete of constant_value
+  | AAdt of aadt_value
+  | ATuple of avalue FieldId.vector
+  | ABottom
+  | AAssumed of aassumed_value
+  | AMutBorrow of BorrowId.id * avalue
+  | ASharedBorrow of BorrowId.id
+  | AMutLoan of BorrowId.id * avalue
+  | ASharedLoan of BorrowId.Set.t * value * avalue
+  | AEndedMutLoan of value * avalue (* TODO: given_back, child *)
+  | AEndedSharedLoan of value * avalue
+  | AIgnoredMutLoan of BorrowId.id * avalue
+  | AIgnoredMutBorrow of avalue
+  | AEndedIgnoredMutLoan of avalue * avalue (* TODO: given back, child *)
+  | AIgnoredSharedBorrow of abstract_shared_borrow
+  | AIgnoredSharedLoan of abstract_shared_borrow
+  | AProjLoans of symbolic_value
+  | AProjBorrows of symbolic_value * rty
+
+and aadt_value = {
+  adef_id : TypeDefId.id;
+  avariant_id : VariantId.id option;
+  aregions : erased_region list;
+  atypes : rty list;
+  afield_values : avalue FieldId.vector;
+}
+
+and aassumed_value = ABox of avalue
+
+type abs = {
+  parents : AbstractionId.Set.t;  (** The parent abstraction *)
+  acc_regions : RegionId.Set.t;
+      (** Union of the regions owned by the (transitive) parent abstractions and
+          by the current abstraction *)
+  regions : RegionId.Set.t;  (** Regions owned by this abstraction *)
+  values : avalue list;  (** The values in this abstraction *)
+}
+(** Abstractions model the parts in the borrow graph where the borrowing relations
+    have been abstracted because of a function call.
+    
+    In order to model the relations between the borrows, we use "abstraction values",
+    which are a special kind of value.
+*)
