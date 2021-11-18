@@ -17,6 +17,10 @@ module type Id = sig
 
   val empty_vector : 'a vector
 
+  val vector_to_list : 'a vector -> 'a list
+
+  val vector_of_list : 'a list -> 'a vector
+
   module Set : Set.S with type elt = id
 
   val id_of_json : Yojson.Basic.t -> (id, string) result
@@ -48,6 +52,10 @@ module IdGen () : Id = struct
   let to_string = string_of_int
 
   let empty_vector = []
+
+  let vector_to_list v = v
+
+  let vector_of_list v = v
 
   module Set = Set.Make (struct
     type t = id

@@ -75,7 +75,7 @@ type symbolic_proj_comp = {
 type value =
   | Concrete of constant_value  (** Concrete (non-symbolic) value *)
   | Adt of adt_value  (** Enumerations and structures *)
-  | Tuple of value FieldId.vector
+  | Tuple of typed_value FieldId.vector
       (** Tuple - note that units are encoded as 0-tuples *)
   | Bottom  (** No value (uninitialized or moved value) *)
   | Assumed of assumed_value  (** Assumed types (Box, Vec, Cell...) *)
@@ -88,12 +88,12 @@ and adt_value = {
   variant_id : VariantId.id option;
   regions : erased_region list;
   types : ety list;
-  field_values : value FieldId.vector;
+  field_values : typed_value FieldId.vector;
 }
 
 and borrow_content =
   | SharedBorrow of BorrowId.id  (** A shared value *)
-  | MutBorrow of BorrowId.id * value  (** A mutably borrowed value *)
+  | MutBorrow of BorrowId.id * typed_value  (** A mutably borrowed value *)
   | InactivatedMutBorrow of BorrowId.id
       (** An inactivated mut borrow.
 
@@ -107,12 +107,12 @@ and borrow_content =
        *)
 
 and loan_content =
-  | SharedLoan of BorrowId.Set.t * value
+  | SharedLoan of BorrowId.Set.t * typed_value
   | MutLoan of BorrowId.id
 
-and assumed_value = Box of value
+and assumed_value = Box of typed_value
 
-type typed_value = { value : value; ty : ety }
+and typed_value = { value : value; ty : ety }
 
 type abstract_shared_borrow =
   | AsvSet of BorrowId.Set.t
@@ -129,18 +129,18 @@ type abstract_shared_borrow =
 type avalue =
   | AConcrete of constant_value
   | AAdt of aadt_value
-  | ATuple of avalue FieldId.vector
+  | ATuple of typed_avalue FieldId.vector
   | ABottom
   | AAssumed of aassumed_value
-  | AMutBorrow of BorrowId.id * avalue
+  | AMutBorrow of BorrowId.id * typed_avalue
   | ASharedBorrow of BorrowId.id
-  | AMutLoan of BorrowId.id * avalue
-  | ASharedLoan of BorrowId.Set.t * value * avalue
-  | AEndedMutLoan of value * avalue (* TODO: given_back, child *)
-  | AEndedSharedLoan of value * avalue
-  | AIgnoredMutLoan of BorrowId.id * avalue
-  | AIgnoredMutBorrow of avalue
-  | AEndedIgnoredMutLoan of avalue * avalue (* TODO: given back, child *)
+  | AMutLoan of BorrowId.id * typed_avalue
+  | ASharedLoan of BorrowId.Set.t * value * typed_avalue
+  | AEndedMutLoan of value * typed_avalue (* TODO: given_back, child *)
+  | AEndedSharedLoan of value * typed_avalue
+  | AIgnoredMutLoan of BorrowId.id * typed_avalue
+  | AIgnoredMutBorrow of typed_avalue
+  | AEndedIgnoredMutLoan of typed_avalue * typed_avalue (* TODO: given back, child *)
   | AIgnoredSharedBorrow of abstract_shared_borrow
   | AIgnoredSharedLoan of abstract_shared_borrow
   | AProjLoans of symbolic_value
@@ -151,10 +151,12 @@ and aadt_value = {
   avariant_id : VariantId.id option;
   aregions : erased_region list;
   atypes : rty list;
-  afield_values : avalue FieldId.vector;
+  afield_values : typed_avalue FieldId.vector;
 }
 
-and aassumed_value = ABox of avalue
+and aassumed_value = ABox of typed_avalue
+
+and typed_avalue = { avalue : avalue; aty : rty }
 
 type abs = {
   parents : AbstractionId.Set.t;  (** The parent abstraction *)
@@ -162,7 +164,7 @@ type abs = {
       (** Union of the regions owned by the (transitive) parent abstractions and
           by the current abstraction *)
   regions : RegionId.Set.t;  (** Regions owned by this abstraction *)
-  values : avalue list;  (** The values in this abstraction *)
+  values : typed_avalue list;  (** The values in this abstraction *)
 }
 (** Abstractions model the parts in the borrow graph where the borrowing relations
     have been abstracted because of a function call.
