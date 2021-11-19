@@ -57,12 +57,12 @@ type constant_value =
   | Char of char
   | String of string
 
-type symbolic_value = { svalue_id : SymbolicValueId.id; rty : rty }
+type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
 (** Symbolic value *)
 
 type symbolic_proj_comp = {
   svalue : symbolic_value;  (** The symbolic value itself *)
-  rset_ended : BorrowId.Set.t;
+  rset_ended : RegionId.Set.t;
       (** The regions used in the symbolic value which have already ended *)
 }
 (** A complementary projector over a symbolic value.
