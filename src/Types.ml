@@ -11,12 +11,15 @@ module FieldId = IdGen ()
 module RegionVarId = IdGen ()
 
 type type_var = {
-  tv_index : TypeVarId.id;  (** Unique index identifying the variable *)
+  tv_index : TypeVarId.id;
+      (** Unique index identifying the variable - TODO: may be redundant with
+          using indexed vectors *)
   tv_name : string;  (** Variable name *)
 }
 
 type region_var = {
-  rv_index : RegionVarId.id;  (** Unique index identifying the region *)
+  rv_index : RegionVarId.id;
+      (** Unique index identifying the region - TODO: may be redundant *)
   rv_name : string option;  (** Region name *)
 }
 

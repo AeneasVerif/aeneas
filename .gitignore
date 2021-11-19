@@ -31,3 +31,4 @@ _opam/
 # Misc
 *~
 nohup.out
+.ocamlformat

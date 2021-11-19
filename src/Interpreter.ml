@@ -91,13 +91,13 @@ and end_borrow_get_borrow_in_values config l outer_borrows vl0 :
           (res, v' :: vl')
       | _ -> (res, v' :: vl))
 
-(*let rec end_borrow_get_borrow_in_env config l env : borrow_lres * env =
-  match env with
+(*let rec end_borrow_get_borrow_in_env config l env0 : borrow_lres * env =
+  match env0 with
   | [] -> NotFound
-  | Var (x, v) :: env' -> (
+  | Var (x, v) :: env -> (
       match end_borrow_get_borrow_in_value config None l v with
       | NotFound, v' ->
-          let res, env'' = end_borrow_get_borrow_in_env config l env' in
+          let res, env' = end_borrow_get_borrow_in_env config l env' in
           (res, Var (x, v') :: env'')
       | res, v' -> (res, Var (x, v') :: env'))
   | Abs _ :: _ -> unimplemented __LOC__*)

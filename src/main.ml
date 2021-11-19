@@ -1,5 +1,7 @@
 open CfimOfJson
+
 (*open Interpreter*)
+open Print
 
 let () =
   let json = Yojson.Basic.from_file "../charon/charon/tests/test1.cfim" in
