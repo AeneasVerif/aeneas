@@ -1,15 +1,17 @@
 open Types
 open Values
+open Expressions
 open Print.Values
 open Errors
 
-type env_value = Var of string * typed_value | Abs of abs
+type env_value = Var of VarId.id * typed_value | Abs of abs
 
 type env = env_value list
 
 let env_value_to_string (fmt : value_formatter) (ev : env_value) : string =
   match ev with
-  | Var (vname, tv) -> vname ^ " -> " ^ typed_value_to_string fmt tv
+  | Var (vid, tv) ->
+      var_id_to_string vid ^ " -> " ^ typed_value_to_string fmt tv
   | Abs abs -> abs_to_string fmt abs
 
 let env_to_string (fmt : value_formatter) (env : env) : string =
@@ -170,8 +172,7 @@ let give_back_value_to_abs (_config : config) _bid _v _abs : abs =
 
 let give_back_value_to_env_value config bid v ev : env_value =
   match ev with
-  | Var (vname, destv) ->
-      Var (vname, give_back_value_to_value config bid v destv)
+  | Var (vid, destv) -> Var (vid, give_back_value_to_value config bid v destv)
   | Abs abs -> (
       match config.mode with
       | ConcreteMode -> unreachable __LOC__
@@ -238,18 +239,18 @@ let give_back_shared_to_abs _config _bid _abs : abs =
 
 let give_back_shared_to_env_value (config : config) bid ev : env_value =
   match ev with
-  | Var (vname, destv) -> Var (vname, give_back_shared_to_value config bid destv)
+  | Var (vid, destv) -> Var (vid, give_back_shared_to_value config bid destv)
   | Abs abs -> (
       match config.mode with
       | ConcreteMode -> unreachable __LOC__
       | SymbolicMode -> Abs (give_back_shared_to_abs config bid abs))
 
 let give_back_value (config : config) (bid : BorrowId.id) (v : typed_value)
-    (env0 : env) : env =
-  List.map (give_back_value_to_env_value config bid v) env0
+    (env : env) : env =
+  List.map (give_back_value_to_env_value config bid v) env
 
-let give_back_shared config (bid : BorrowId.id) (env0 : env) : env =
-  List.map (give_back_shared_to_env_value config bid) env0
+let give_back_shared config (bid : BorrowId.id) (env : env) : env =
+  List.map (give_back_shared_to_env_value config bid) env
 
 (** End a borrow identified by its borrow id
     
@@ -384,12 +385,12 @@ let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
   let rec promote_in_env (env0 : env) : typed_value * env =
     match env0 with
     | [] -> unreachable __LOC__
-    | Var (vname, v) :: env -> (
+    | Var (vid, v) :: env -> (
         match promote_in_value v with
         | None ->
             let borrowed, env' = promote_in_env env in
-            (borrowed, Var (vname, v) :: env')
-        | Some (borrowed, new_v) -> (borrowed, Var (vname, new_v) :: env))
+            (borrowed, Var (vid, v) :: env')
+        | Some (borrowed, new_v) -> (borrowed, Var (vid, new_v) :: env))
     | Abs abs :: env ->
         (* We don't promote inside abstractions *)
         if config.mode = ConcreteMode then unreachable __LOC__
@@ -454,3 +455,98 @@ let activate_inactivated_mut_borrow (config : config) (l : BorrowId.id)
       in
       (* Promote the borrow *)
       promote_inactivated_borrow_to_mut_borrow config l borrowed_value env''
+
+(** Paths *)
+
+type path_access = Read | Write
+
+(** The result of reading from/writing to a place *)
+type 'a path_access_result =
+  | Success of 'a  (** Success *)
+  | SharedLoan of BorrowId.Set.t
+      (** Failure because we couldn't go inside a shared loan *)
+  | MutLoan of BorrowId.id
+      (** Failure because we couldn't go inside a mutable loan *)
+  | InactivatedMutBorrow of BorrowId.id
+      (** Failure because we couldn't go inside an inactivated mutable borrow
+          (which should get activated) *)
+  | Failed
+      (** Failure for another reason (ex.: couldn't go inside a shared borrow... *)
+
+let lookup_shared_value_from_borrow_id (bid : BorrowId.id) (env : env) :
+    typed_value =
+  let rec lookup_in_value (v : typed_value) : typed_value option =
+    match v.value with
+    | Concrete _ | Bottom | Symbolic _ -> None
+    | Adt av ->
+        let values = FieldId.vector_to_list av.field_values in
+        lookup_in_values values
+    | Tuple values ->
+        let values = FieldId.vector_to_list values in
+        lookup_in_values values
+    | Borrow bc -> (
+        match bc with
+        | SharedBorrow _ | InactivatedMutBorrow _ -> None
+        | MutBorrow (_, bv) -> lookup_in_value bv)
+    | Loan lc -> (
+        match lc with
+        | SharedLoan (bids, sv) ->
+            if BorrowId.Set.mem bid bids then Some v else lookup_in_value sv
+        | MutLoan _ -> None)
+    | Assumed (Box bv) -> lookup_in_value bv
+  and lookup_in_values (vl : typed_value list) : typed_value option =
+    List.find_map lookup_in_value vl
+  in
+  let lookup_in_env_value (ev : env_value) : typed_value option =
+    match ev with
+    | Var (_, v) -> lookup_in_value v
+    | Abs _ -> unimplemented __LOC__
+  in
+  match List.find_map lookup_in_env_value env with
+  | None -> unreachable __LOC__
+  | Some v -> v
+
+(** Read the value at the end of a projection *)
+let rec read_projection (config : config) (access : path_access) (env : env)
+    (p : projection) (v : typed_value) : typed_value path_access_result =
+  match p with
+  | [] -> Success v
+  | pe :: p' -> (
+      match (pe, v.value) with
+      | _, Concrete _ | _, Bottom -> Failed
+      | _, Symbolic _ -> (
+          match config.mode with
+          | ConcreteMode -> unreachable __LOC__
+          | SymbolicMode ->
+              (* Expand the symbolic value *)
+              (* TODO *)
+              unimplemented __LOC__)
+      | DerefBox, Assumed (Box bv) -> read_projection config access env p' bv
+      | Deref, Borrow bc -> (
+          match (access, bc) with
+          | Read, SharedBorrow bid ->
+              let sv = lookup_shared_value_from_borrow_id bid env in
+              read_projection config access env p' sv
+          | Write, SharedBorrow _ -> Failed
+          | _, MutBorrow (_, bv) -> read_projection config access env p' bv
+          | _, InactivatedMutBorrow bid -> InactivatedMutBorrow bid)
+      | _, Loan lc -> (
+          match (access, lc) with
+          | Read, SharedLoan (_, sv) ->
+              read_projection config access env (pe :: p') sv
+          | Write, SharedLoan (bids, _) -> SharedLoan bids
+          | _, MutLoan bid -> MutLoan bid)
+      | _ -> unreachable __LOC__)
+
+(** Read the value at the end of a place *)
+let read_place (config : config) (access : path_access) (p : place) (env0 : env)
+    : typed_value path_access_result =
+  let rec read_in_env env : typed_value path_access_result =
+    match env with
+    | [] -> unreachable __LOC__
+    | Var (vid, v) :: env' ->
+        if vid = p.var_id then read_projection config access env0 p.projection v
+        else read_in_env env'
+    | Abs _ :: env' -> read_in_env env'
+  in
+  read_in_env env0
