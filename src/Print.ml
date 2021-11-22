@@ -248,8 +248,32 @@ module Values = struct
     | Bottom -> "⊥"
     | Assumed av -> (
         match av with Box bv -> "@Box(" ^ typed_value_to_string fmt bv ^ ")")
-    | Borrow bc -> "" (* TODO *)
-    | Loan lc -> "" (* TODO *)
+    | Borrow bc -> borrow_content_to_string fmt bc
+    | Loan lc -> loan_content_to_string fmt lc
     | Symbolic sp ->
         symbolic_proj_comp_to_string (value_to_rtype_formatter fmt) sp
+
+  and borrow_content_to_string (fmt : value_formatter) (bc : borrow_content) :
+      string =
+    match bc with
+    | SharedBorrow bid -> "⌊shared@" ^ BorrowId.to_string bid ^ "⌋"
+    | MutBorrow (bid, tv) ->
+        "&mut@" ^ BorrowId.to_string bid ^ " ("
+        ^ typed_value_to_string fmt tv
+        ^ ")"
+    | InactivatedMutBorrow bid ->
+        "⌊inactivated_mut@" ^ BorrowId.to_string bid ^ "⌋"
+
+  and loan_content_to_string (fmt : value_formatter) (lc : loan_content) :
+      string =
+    match lc with
+    | SharedLoan (loans, v) ->
+        let loans =
+          BorrowId.Set.fold
+            (fun lid loans -> BorrowId.to_string lid :: loans)
+            loans []
+        in
+        let loans = String.concat ", " (List.rev loans) in
+        "@shared_loan({" ^ loans ^ "}, " ^ typed_value_to_string fmt v ^ ")"
+    | MutLoan bid -> "⌊mut@" ^ BorrowId.to_string bid ^ "⌋"
 end
