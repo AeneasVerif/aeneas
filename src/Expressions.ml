@@ -4,6 +4,7 @@ open Values
 type field_proj_kind =
   | ProjAdt of TypeDefId.id * VariantId.id option
   | ProjTuple of int
+(* arity of the tuple *)
 
 type projection_elem =
   | Deref
