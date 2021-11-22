@@ -262,22 +262,121 @@ module Values = struct
     match lc with
     | SharedLoan (loans, v) ->
         let loans = BorrowId.set_to_string loans in
-        "@shared_loan({" ^ loans ^ "}, " ^ typed_value_to_string fmt v ^ ")"
+        "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
     | MutLoan bid -> "⌊mut@" ^ BorrowId.to_string bid ^ "⌋"
+
+  let symbolic_value_proj_to_string (fmt : value_formatter)
+      (sv : symbolic_value) (rty : rty) : string =
+    symbolic_value_id_to_string sv.sv_id
+    ^ " : "
+    ^ ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
+    ^ " <: "
+    ^ ty_to_string (value_to_rtype_formatter fmt) rty
 
   let rec abstract_shared_borrows_to_string (fmt : value_formatter)
       (abs : abstract_shared_borrows) : string =
     match abs with
     | AsbSet bs -> BorrowId.set_to_string bs
     | AsbProjReborrows (sv, rty) ->
-        "{"
-        ^ symbolic_value_id_to_string sv.sv_id
-        ^ " : "
-        ^ ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
-        ^ " <: "
-        ^ ty_to_string (value_to_rtype_formatter fmt) rty
+        "{" ^ symbolic_value_proj_to_string fmt sv rty ^ "}"
     | AsbUnion (asb1, asb2) ->
         abstract_shared_borrows_to_string fmt asb1
         ^ " U "
         ^ abstract_shared_borrows_to_string fmt asb2
+
+  let rec typed_avalue_to_string (fmt : value_formatter) (v : typed_avalue) :
+      string =
+    match v.avalue with
+    | AConcrete cv -> constant_value_to_string cv
+    | AAdt av ->
+        let adt_ident =
+          match av.avariant_id with
+          | Some vid -> fmt.type_def_id_variant_id_to_string av.adef_id vid
+          | None -> fmt.type_def_id_to_string av.adef_id
+        in
+        let field_values = FieldId.vector_to_list av.afield_values in
+        if List.length field_values > 0 then
+          let field_values =
+            String.concat " "
+              (List.map (typed_avalue_to_string fmt) field_values)
+          in
+          adt_ident ^ " " ^ field_values
+        else adt_ident
+    | ATuple values ->
+        let values = FieldId.vector_to_list values in
+        let values =
+          String.concat ", " (List.map (typed_avalue_to_string fmt) values)
+        in
+        "(" ^ values ^ ")"
+    | ABottom -> "⊥"
+    | ALoan lc -> aloan_content_to_string fmt lc
+    | ABorrow bc -> aborrow_content_to_string fmt bc
+    | AAssumed av -> (
+        match av with ABox bv -> "@Box(" ^ typed_avalue_to_string fmt bv ^ ")")
+    | AProj pv -> aproj_to_string fmt pv
+
+  and aloan_content_to_string (fmt : value_formatter) (lc : aloan_content) :
+      string =
+    match lc with
+    | AMutLoan (bid, av) ->
+        "⌊mut@" ^ BorrowId.to_string bid ^ ", "
+        ^ typed_avalue_to_string fmt av
+        ^ "⌋"
+    | ASharedLoan (loans, v, av) ->
+        let loans = BorrowId.set_to_string loans in
+        "@shared_loan(" ^ loans ^ ", "
+        ^ typed_value_to_string fmt v
+        ^ ", "
+        ^ typed_avalue_to_string fmt av
+        ^ ")"
+    | AEndedMutLoan ml ->
+        "@ended_mut_loan{ given_back="
+        ^ typed_value_to_string fmt ml.given_back
+        ^ "; child="
+        ^ typed_avalue_to_string fmt ml.child
+        ^ " }"
+    | AEndedSharedLoan (v, av) ->
+        "@ended_shared_loan("
+        ^ typed_value_to_string fmt v
+        ^ ", "
+        ^ typed_avalue_to_string fmt av
+        ^ ")"
+    | AIgnoredMutLoan (bid, av) ->
+        "@ignored_mut_loan(" ^ BorrowId.to_string bid ^ ", "
+        ^ typed_avalue_to_string fmt av
+        ^ ")"
+    | AIgnoredSharedLoan asb ->
+        "@ignored_shared_loan("
+        ^ abstract_shared_borrows_to_string fmt asb
+        ^ ")"
+
+  and aborrow_content_to_string (fmt : value_formatter) (bc : aborrow_content) :
+      string =
+    match bc with
+    | AMutBorrow (bid, av) ->
+        "&mut@" ^ BorrowId.to_string bid ^ " ("
+        ^ typed_avalue_to_string fmt av
+        ^ ")"
+    | ASharedBorrow bid -> "⌊shared@" ^ BorrowId.to_string bid ^ "⌋"
+    | AIgnoredMutBorrow av ->
+        "@ignored_mut_borrow(" ^ typed_avalue_to_string fmt av ^ ")"
+    | AEndedIgnoredMutLoan ml ->
+        "@ended_ignored_mut_borrow{ given_back="
+        ^ typed_avalue_to_string fmt ml.given_back
+        ^ "; child: "
+        ^ typed_avalue_to_string fmt ml.child
+        ^ "}"
+    | AIgnoredSharedBorrow sb ->
+        "@ignored_shared_borrow("
+        ^ abstract_shared_borrows_to_string fmt sb
+        ^ ")"
+
+  and aproj_to_string (fmt : value_formatter) (pv : aproj) : string =
+    match pv with
+    | AProjLoans sv ->
+        "proj_loans ("
+        ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
+        ^ ")"
+    | AProjBorrows (sv, rty) ->
+        "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
 end

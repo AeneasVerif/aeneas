@@ -146,9 +146,9 @@ and aadt_value = {
 
 and aloan_content =
   | AMutLoan of BorrowId.id * typed_avalue
-  | ASharedLoan of BorrowId.Set.t * value * typed_avalue
-  | AEndedMutLoan of value * typed_avalue (* TODO: given_back, child *)
-  | AEndedSharedLoan of value * typed_avalue
+  | ASharedLoan of BorrowId.Set.t * typed_value * typed_avalue
+  | AEndedMutLoan of { given_back : typed_value; child : typed_avalue }
+  | AEndedSharedLoan of typed_value * typed_avalue
   | AIgnoredMutLoan of BorrowId.id * typed_avalue
   | AIgnoredSharedLoan of abstract_shared_borrows
 
@@ -159,7 +159,7 @@ and aborrow_content =
   | AMutBorrow of BorrowId.id * typed_avalue
   | ASharedBorrow of BorrowId.id
   | AIgnoredMutBorrow of typed_avalue
-  | AEndedIgnoredMutLoan of typed_avalue * typed_avalue (* TODO: given back, child *)
+  | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
   | AIgnoredSharedBorrow of abstract_shared_borrows
 
 and aassumed_value = ABox of typed_avalue
