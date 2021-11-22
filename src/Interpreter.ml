@@ -270,8 +270,5 @@ let rec end_borrow (config : config) (l : BorrowId.id) (env0 : env) : env =
       end_borrow config l env'
   (* If found mut: give the value back *)
   | FoundMut tv, env -> give_back_value config l tv env
-  (* If found shared: remove the borrow id from the loan set of the shared value *)
-  | FoundShared, env -> give_back_shared config l env
-  | FoundInactivatedMut, _env ->
-      (* We found an inactivated mut: activate it *)
-      unimplemented __LOC__
+  (* If found shared or inactivated mut: remove the borrow id from the loan set of the shared value *)
+  | (FoundShared | FoundInactivatedMut), env -> give_back_shared config l env
