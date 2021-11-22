@@ -379,4 +379,17 @@ module Values = struct
         ^ ")"
     | AProjBorrows (sv, rty) ->
         "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
+
+  let abs_to_string (fmt : value_formatter) (abs : abs) : string =
+    let avs =
+      List.map (fun av -> "  " ^ typed_avalue_to_string fmt av) abs.avalues
+    in
+    let avs = String.concat ",\n" avs in
+    "abs@"
+    ^ AbstractionId.to_string abs.abs_id
+    ^ "{parents="
+    ^ AbstractionId.set_to_string abs.parents
+    ^ "}" ^ "{regions="
+    ^ RegionId.set_to_string abs.regions
+    ^ "}" ^ " {\n" ^ avs ^ "\n}"
 end

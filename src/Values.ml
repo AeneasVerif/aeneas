@@ -171,12 +171,13 @@ and aproj =
 and typed_avalue = { avalue : avalue; aty : rty }
 
 type abs = {
-  parents : AbstractionId.Set.t;  (** The parent abstraction *)
+  abs_id : AbstractionId.id;
+  parents : AbstractionId.Set.t;  (** The parent abstractions *)
   acc_regions : RegionId.Set.t;
       (** Union of the regions owned by the (transitive) parent abstractions and
           by the current abstraction *)
   regions : RegionId.Set.t;  (** Regions owned by this abstraction *)
-  values : typed_avalue list;  (** The values in this abstraction *)
+  avalues : typed_avalue list;  (** The values in this abstraction *)
 }
 (** Abstractions model the parts in the borrow graph where the borrowing relations
     have been abstracted because of a function call.
