@@ -211,15 +211,8 @@ module Values = struct
 
   let symbolic_proj_comp_to_string (fmt : rtype_formatter)
       (sp : symbolic_proj_comp) : string =
-    let regions =
-      RegionId.Set.fold
-        (fun id ids -> region_id_to_string id :: ids)
-        sp.rset_ended []
-    in
-    let regions = String.concat "," (List.rev regions) in
-    "proj_comp {" ^ regions ^ "} ("
-    ^ symbolic_value_to_string fmt sp.svalue
-    ^ ")"
+    let regions = RegionId.set_to_string sp.rset_ended in
+    "proj_comp " ^ regions ^ " (" ^ symbolic_value_to_string fmt sp.svalue ^ ")"
 
   let rec typed_value_to_string (fmt : value_formatter) (v : typed_value) :
       string =
@@ -268,12 +261,23 @@ module Values = struct
       string =
     match lc with
     | SharedLoan (loans, v) ->
-        let loans =
-          BorrowId.Set.fold
-            (fun lid loans -> BorrowId.to_string lid :: loans)
-            loans []
-        in
-        let loans = String.concat ", " (List.rev loans) in
+        let loans = BorrowId.set_to_string loans in
         "@shared_loan({" ^ loans ^ "}, " ^ typed_value_to_string fmt v ^ ")"
     | MutLoan bid -> "⌊mut@" ^ BorrowId.to_string bid ^ "⌋"
+
+  let rec abstract_shared_borrows_to_string (fmt : value_formatter)
+      (abs : abstract_shared_borrows) : string =
+    match abs with
+    | AsbSet bs -> BorrowId.set_to_string bs
+    | AsbProjReborrows (sv, rty) ->
+        "{"
+        ^ symbolic_value_id_to_string sv.sv_id
+        ^ " : "
+        ^ ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
+        ^ " <: "
+        ^ ty_to_string (value_to_rtype_formatter fmt) rty
+    | AsbUnion (asb1, asb2) ->
+        abstract_shared_borrows_to_string fmt asb1
+        ^ " U "
+        ^ abstract_shared_borrows_to_string fmt asb2
 end

@@ -114,10 +114,10 @@ and assumed_value = Box of typed_value
 
 and typed_value = { value : value; ty : ety }
 
-type abstract_shared_borrow =
-  | AsvSet of BorrowId.Set.t
-  | AsvProjReborrows of symbolic_value * rty
-  | AsvUntion of abstract_shared_borrow * abstract_shared_borrow
+type abstract_shared_borrows =
+  | AsbSet of BorrowId.Set.t
+  | AsbProjReborrows of symbolic_value * rty
+  | AsbUnion of abstract_shared_borrows * abstract_shared_borrows
       (** TODO: explanations *)
 
 (** Abstraction values are used inside of abstractions to properly model
@@ -131,20 +131,10 @@ type avalue =
   | AAdt of aadt_value
   | ATuple of typed_avalue FieldId.vector
   | ABottom
+  | ALoan of aloan_content
+  | ABorrow of aborrow_content
   | AAssumed of aassumed_value
-  | AMutBorrow of BorrowId.id * typed_avalue
-  | ASharedBorrow of BorrowId.id
-  | AMutLoan of BorrowId.id * typed_avalue
-  | ASharedLoan of BorrowId.Set.t * value * typed_avalue
-  | AEndedMutLoan of value * typed_avalue (* TODO: given_back, child *)
-  | AEndedSharedLoan of value * typed_avalue
-  | AIgnoredMutLoan of BorrowId.id * typed_avalue
-  | AIgnoredMutBorrow of typed_avalue
-  | AEndedIgnoredMutLoan of typed_avalue * typed_avalue (* TODO: given back, child *)
-  | AIgnoredSharedBorrow of abstract_shared_borrow
-  | AIgnoredSharedLoan of abstract_shared_borrow
-  | AProjLoans of symbolic_value
-  | AProjBorrows of symbolic_value * rty
+  | AProj of aproj
 
 and aadt_value = {
   adef_id : TypeDefId.id;
@@ -154,7 +144,29 @@ and aadt_value = {
   afield_values : typed_avalue FieldId.vector;
 }
 
+and aloan_content =
+  | AMutLoan of BorrowId.id * typed_avalue
+  | ASharedLoan of BorrowId.Set.t * value * typed_avalue
+  | AEndedMutLoan of value * typed_avalue (* TODO: given_back, child *)
+  | AEndedSharedLoan of value * typed_avalue
+  | AIgnoredMutLoan of BorrowId.id * typed_avalue
+  | AIgnoredSharedLoan of abstract_shared_borrows
+
+(** Note that when a borrow content is ended, it is replaced by Bottom (while
+    we need to track ended loans more precisely, especially because of their
+    children values) *)
+and aborrow_content =
+  | AMutBorrow of BorrowId.id * typed_avalue
+  | ASharedBorrow of BorrowId.id
+  | AIgnoredMutBorrow of typed_avalue
+  | AEndedIgnoredMutLoan of typed_avalue * typed_avalue (* TODO: given back, child *)
+  | AIgnoredSharedBorrow of abstract_shared_borrows
+
 and aassumed_value = ABox of typed_avalue
+
+and aproj =
+  | AProjLoans of symbolic_value
+  | AProjBorrows of symbolic_value * rty
 
 and typed_avalue = { avalue : avalue; aty : rty }
 

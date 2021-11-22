@@ -23,6 +23,8 @@ module type Id = sig
 
   module Set : Set.S with type elt = id
 
+  val set_to_string : Set.t -> string
+
   val id_of_json : Yojson.Basic.t -> (id, string) result
 
   val vector_of_json :
@@ -62,6 +64,10 @@ module IdGen () : Id = struct
 
     let compare = compare
   end)
+
+  let set_to_string ids =
+    let ids = Set.fold (fun id ids -> to_string id :: ids) ids [] in
+    "{" ^ String.concat ", " (List.rev ids) ^ "}"
 
   let id_of_json js =
     match js with
