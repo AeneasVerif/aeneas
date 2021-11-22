@@ -21,6 +21,8 @@ module type Id = sig
 
   val vector_of_list : 'a list -> 'a vector
 
+  val nth_opt : 'a vector -> id -> 'a option
+
   module Set : Set.S with type elt = id
 
   val set_to_string : Set.t -> string
@@ -58,6 +60,8 @@ module IdGen () : Id = struct
   let vector_to_list v = v
 
   let vector_of_list v = v
+
+  let nth_opt v id = List.nth_opt v id
 
   module Set = Set.Make (struct
     type t = id

@@ -20,7 +20,7 @@ let env_to_string (fmt : value_formatter) (env : env) : string =
       (List.map (fun ev -> "  " ^ env_value_to_string fmt ev) env)
   ^ "\n}"
 
-type 'a result = Stuck | Panic | Res of 'a
+type 'a eval_result = Stuck | Panic | Res of 'a
 
 type interpreter_mode = ConcreteMode | SymbolicMode
 
@@ -460,18 +460,33 @@ let activate_inactivated_mut_borrow (config : config) (l : BorrowId.id)
 
 type path_access = Read | Write
 
-(** The result of reading from/writing to a place *)
-type 'a path_access_result =
-  | Success of 'a  (** Success *)
-  | SharedLoan of BorrowId.Set.t
+(** When we fail reading from or writing to a path, it might be because we
+ ** need to update the environment by ending borrows, expanding symbolic
+ ** values, etc. *)
+type path_fail_kind =
+  | FailSharedLoan of BorrowId.Set.t
       (** Failure because we couldn't go inside a shared loan *)
-  | MutLoan of BorrowId.id
+  | FailMutLoan of BorrowId.id
       (** Failure because we couldn't go inside a mutable loan *)
-  | InactivatedMutBorrow of BorrowId.id
+  | FailInactivatedMutBorrow of BorrowId.id
       (** Failure because we couldn't go inside an inactivated mutable borrow
           (which should get activated) *)
-  | Failed
-      (** Failure for another reason (ex.: couldn't go inside a shared borrow... *)
+  | FailSymbolic of (projection_elem * symbolic_proj_comp)
+      (** Failure because we need to enter a symbolic value (and thus need to expand it) *)
+  | FailBottom of (int * projection_elem * ety)
+      (** Failure because we need to enter an any value - we can expand Bottom
+          values if they are left values. We return the number of elements which
+          were remaining in the path when we reached the error - this allows to
+          properly update the Bottom value, if needs be.
+       *)
+
+(** Result of evaluating a path (reading from a path/writing to a path)
+    
+    Note that when we fail, we return information used to update the
+    environment, as well as the 
+*)
+type 'a path_access_result = ('a, path_fail_kind) result
+(** The result of reading from/writing to a place *)
 
 let lookup_shared_value_from_borrow_id (bid : BorrowId.id) (env : env) :
     typed_value =
@@ -510,34 +525,73 @@ let lookup_shared_value_from_borrow_id (bid : BorrowId.id) (env : env) :
 let rec read_projection (config : config) (access : path_access) (env : env)
     (p : projection) (v : typed_value) : typed_value path_access_result =
   match p with
-  | [] -> Success v
+  | [] -> Ok v
   | pe :: p' -> (
-      match (pe, v.value) with
-      | _, Concrete _ | _, Bottom -> Failed
-      | _, Symbolic _ -> (
-          match config.mode with
-          | ConcreteMode -> unreachable __LOC__
-          | SymbolicMode ->
+      (* The projection is non-empty: we need to enter all the loans we find,
+       * if we are allowed to do so *)
+      let rec enter_loans (v : typed_value) : typed_value path_access_result =
+        match v.value with
+        | Loan lc -> (
+            match (access, lc) with
+            (* We can enter shared loans only if we are in "read" mode *)
+            | Read, SharedLoan (_, sv) -> enter_loans sv
+            | Write, SharedLoan (bids, _) -> Error (FailSharedLoan bids)
+            (* We can always enter mutable loans *)
+            | _, MutLoan bid -> Error (FailMutLoan bid))
+        | _ -> Ok v
+      in
+      (* Enter inside the loans and match on the resulting value *)
+      match enter_loans v with
+      | Ok v -> (
+          (* Match on the projection element and the value *)
+          match (pe, v.value) with
+          (* Field projection *)
+          | Field (ProjAdt (_def_id, opt_variant_id), field_id), Adt adt -> (
+              (* Check that the projection is consistent with the current value *)
+              (match (opt_variant_id, adt.variant_id) with
+              | None, None -> ()
+              | Some vid, Some vid' -> if vid <> vid' then unreachable __LOC__
+              | _ -> unreachable __LOC__);
+              (* Actually project *)
+              match FieldId.nth_opt adt.field_values field_id with
+              | None -> unreachable __LOC__
+              | Some fv -> read_projection config access env p fv)
+          | _, Adt _ -> unreachable __LOC__
+          (* Tuples *)
+          | Field (ProjTuple _, field_id), Tuple values -> (
+              match FieldId.nth_opt values field_id with
+              | None -> unreachable __LOC__
+              | Some fv -> read_projection config access env p fv)
+          | _, Tuple _ -> unreachable __LOC__
+          (* If we reach Bottom, it may mean we need to expand an uninitialized
+           * enumeration value *)
+          | Field (ProjAdt (_, Some _variant_id), _), Bottom ->
+              Error (FailBottom (1 + List.length p', pe, v.ty))
+          | _, Bottom -> unreachable __LOC__
+          (* Symbolic value: needs to be expanded *)
+          | _, Symbolic sp ->
+              assert (config.mode = SymbolicMode);
               (* Expand the symbolic value *)
-              (* TODO *)
-              unimplemented __LOC__)
-      | DerefBox, Assumed (Box bv) -> read_projection config access env p' bv
-      | Deref, Borrow bc -> (
-          match (access, bc) with
-          | Read, SharedBorrow bid ->
-              let sv = lookup_shared_value_from_borrow_id bid env in
-              read_projection config access env p' sv
-          | Write, SharedBorrow _ -> Failed
-          | _, MutBorrow (_, bv) -> read_projection config access env p' bv
-          | _, InactivatedMutBorrow bid -> InactivatedMutBorrow bid)
-      | _, Loan lc -> (
-          match (access, lc) with
-          | Read, SharedLoan (_, sv) ->
-              read_projection config access env (pe :: p') sv
-          | Write, SharedLoan (bids, _) -> SharedLoan bids
-          | _, MutLoan bid -> MutLoan bid)
-      | _ -> unreachable __LOC__)
+              Error (FailSymbolic (pe, sp))
+          (* Box dereferencement *)
+          | DerefBox, Assumed (Box bv) ->
+              read_projection config access env p' bv
+          (* Borrow dereferencement *)
+          | Deref, Borrow bc -> (
+              match (access, bc) with
+              | Read, SharedBorrow bid ->
+                  let sv = lookup_shared_value_from_borrow_id bid env in
+                  read_projection config access env p' sv
+              | Write, SharedBorrow _ -> unreachable __LOC__
+              | _, MutBorrow (_, bv) -> read_projection config access env p' bv
+              | _, InactivatedMutBorrow bid ->
+                  Error (FailInactivatedMutBorrow bid))
+          | _, (Concrete _ | Assumed _ | Borrow _ | Loan _) ->
+              unreachable __LOC__)
+      (* Entering loans failed *)
+      | res -> res)
 
+(*
 (** Read the value at the end of a place *)
 let read_place (config : config) (access : path_access) (p : place) (env0 : env)
     : typed_value path_access_result =
@@ -550,3 +604,61 @@ let read_place (config : config) (access : path_access) (p : place) (env0 : env)
     | Abs _ :: env' -> read_in_env env'
   in
   read_in_env env0
+
+(** Update the value at the end of a projection *)
+let rec write_projection (config : config) (nv : typed_value) (p : projection)
+    (v : typed_value) : typed_value path_access_result =
+  match p with
+  | [] -> Success v
+  | pe :: p' -> (
+      match (pe, v.value) with
+      | _, Concrete _ | _, Bottom -> Failed
+      | _, Symbolic _ -> (
+          match config.mode with
+          | ConcreteMode -> unreachable __LOC__
+          | SymbolicMode ->
+              (* Expand the symbolic value *)
+              (* TODO *)
+              unimplemented __LOC__)
+      | DerefBox, Assumed (Box bv) -> (
+          match write_projection config p' bv with
+          | Success bv' ->
+              Success
+                { v with value = Assumed (Box (write_projection config p' bv)) }
+          | res -> res)
+      | Deref, Borrow bc -> (
+          match bc with
+          | SharedBorrow _ -> Failed
+          | MutBorrow (bid, bv) -> (
+              match write_projection config p' bv with
+              | Success bv' -> Success (Borrow (MutBorrow (bid, bv')))
+              | res -> res)
+          | InactivatedMutBorrow bid -> InactivatedMutBorrow bid)
+      | _, Loan lc -> (
+          match lc with
+          | SharedLoan (bids, _) -> SharedLoan bids
+          | MutLoan bid -> MutLoan bid)
+      | _ -> unreachable __LOC__)
+
+(** Update the value at the end of a place *)
+let write_place (config : config) (p : place) (env0 : env) :
+    env path_access_result =
+  let rec write_in_env env : env path_access_result =
+    match env with
+    | [] -> unreachable __LOC__
+    | Var (vid, v) :: env' -> (
+        if vid = p.var_id then
+          match write_projection config access p.projection v with
+          | Success nv -> Var (vid, nv) :: env'
+          | res -> res
+        else
+          match write_in_env env' with
+          | Success env'' -> Success (Var (vid v) :: env'')
+          | res -> res)
+    | Abs abs :: env' -> (
+        match write_in_env env' with
+        | Success env'' -> Success (Abs abs :: env'')
+        | res -> res)
+  in
+  write_in_env env0
+ *)

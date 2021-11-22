@@ -9,7 +9,6 @@ type projection_elem =
   | Deref
   | DerefBox
   | Field of field_proj_kind * FieldId.id
-  | Downcast of VariantId.id
 
 type projection = projection_elem list
 

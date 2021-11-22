@@ -273,9 +273,6 @@ let projection_elem_of_json (js : json) : (projection_elem, string) result =
         let* proj_kind = field_proj_kind_of_json proj_kind in
         let* field_id = FieldId.id_of_json field_id in
         Ok (Field (proj_kind, field_id))
-    | `Assoc [ ("Downcast", variant_id) ] ->
-        let* variant_id = VariantId.id_of_json variant_id in
-        Ok (Downcast variant_id)
     | _ -> Error ("projection_elem_of_json failed on:" ^ show js))
 
 let projection_of_json (js : json) : (projection, string) result =
