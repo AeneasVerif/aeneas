@@ -251,6 +251,12 @@ let give_back_value (config : config) (bid : BorrowId.id) (v : typed_value)
 let give_back_shared config (bid : BorrowId.id) (env0 : env) : env =
   List.map (give_back_shared_to_env_value config bid) env0
 
+(** End a borrow identified by its borrow id
+    
+    First lookup the borrow in the environment and replace it with [Bottom],
+    then update the loan. Ends outer borrows before updating the borrow if
+    it is necessary.
+ *)
 let rec end_borrow (config : config) (l : BorrowId.id) (env0 : env) : env =
   match end_borrow_get_borrow_in_env config l env0 with
   (* It is possible that we can't find a borrow in symbolic mode (ending
@@ -263,8 +269,7 @@ let rec end_borrow (config : config) (l : BorrowId.id) (env0 : env) : env =
   | Outer outer_borrows, env ->
       let env' =
         match outer_borrows with
-        | Borrows bids ->
-            BorrowId.Set.fold (fun id env -> end_borrow config id env) bids env
+        | Borrows bids -> end_borrows config bids env
         | Borrow bid -> end_borrow config bid env
       in
       end_borrow config l env'
@@ -272,3 +277,180 @@ let rec end_borrow (config : config) (l : BorrowId.id) (env0 : env) : env =
   | FoundMut tv, env -> give_back_value config l tv env
   (* If found shared or inactivated mut: remove the borrow id from the loan set of the shared value *)
   | (FoundShared | FoundInactivatedMut), env -> give_back_shared config l env
+
+and end_borrows (config : config) (lset : BorrowId.Set.t) (env0 : env) : env =
+  BorrowId.Set.fold (fun id env -> end_borrow config id env) lset env0
+
+let rec lookup_loan_in_value (config : config) (l : BorrowId.id)
+    (v : typed_value) : loan_content option =
+  match v.value with
+  | Concrete _ | Bottom | Symbolic _ -> None
+  | Adt av ->
+      let values = FieldId.vector_to_list av.field_values in
+      List.find_map (lookup_loan_in_value config l) values
+  | Tuple values ->
+      let values = FieldId.vector_to_list values in
+      List.find_map (lookup_loan_in_value config l) values
+  | Assumed (Box bv) -> lookup_loan_in_value config l bv
+  | Borrow bc -> (
+      match bc with
+      | SharedBorrow _ | InactivatedMutBorrow _ -> None
+      | MutBorrow (_, mv) -> lookup_loan_in_value config l mv)
+  | Loan lc -> (
+      match lc with
+      | SharedLoan (bids, sv) ->
+          if BorrowId.Set.mem l bids then Some lc
+          else lookup_loan_in_value config l sv
+      | MutLoan _ -> None)
+
+(** Lookup a loan - note that we never lookup loans in abstractions *)
+let lookup_loan_in_env_value (config : config) (l : BorrowId.id)
+    (ev : env_value) : loan_content option =
+  match ev with
+  | Var (_, v) -> lookup_loan_in_value config l v
+  | Abs _ -> (
+      match config.mode with
+      | ConcreteMode -> unreachable __LOC__
+      | SymbolicMode -> None)
+
+(** Lookup a loan content from a borrow id.
+    Note that we never lookup loans in the abstractions.
+ *)
+let lookup_loan_from_borrow_id (config : config) (l : BorrowId.id) (env : env) :
+    loan_content =
+  match List.find_map (lookup_loan_in_env_value config l) env with
+  | None -> unreachable __LOC__
+  | Some lc -> lc
+
+(** If a shared value is borrowed exactly once, we can promote this shared loan
+    to a mutable loan. The function returns the borrowed value and the updated
+    environment.
+ *)
+let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
+    (env0 : env) : typed_value * env =
+  (* Promote inside a value: return the borrowed value and the updated value.
+   * The return value is an option: we return None if we didn't update anything. *)
+  let rec promote_in_value (v : typed_value) :
+      (typed_value * typed_value) option =
+    match v.value with
+    | Concrete _ | Bottom | Symbolic _ -> None
+    | Adt av -> (
+        let values = FieldId.vector_to_list av.field_values in
+        match promote_in_values values with
+        | None -> None
+        | Some (borrowed, values') ->
+            let av =
+              { av with field_values = FieldId.vector_of_list values' }
+            in
+            Some (borrowed, { v with value = Adt av }))
+    | Tuple values -> (
+        let values = FieldId.vector_to_list values in
+        match promote_in_values values with
+        | None -> None
+        | Some (borrowed, values') ->
+            let values' = FieldId.vector_of_list values' in
+            Some (borrowed, { v with value = Tuple values' }))
+    | Borrow _ ->
+        (* We can't promote inside a borrow *)
+        None
+    | Loan lc -> (
+        match lc with
+        | SharedLoan (bids, tv) ->
+            (* Note that we can't promote *inside* shared values *)
+            if BorrowId.Set.mem l bids && BorrowId.Set.cardinal bids = 1 then
+              Some (tv, { v with value = Loan (MutLoan l) })
+            else None
+        | MutLoan _ -> None)
+    | Assumed (Box bv) -> (
+        match promote_in_value bv with
+        | None -> None
+        | Some (borrowed, bv') ->
+            Some (borrowed, { v with value = Assumed (Box bv') }))
+  (* Promote inside a list of values: return the borrowed value (if we promoted one)
+   * and the list of updated values *)
+  and promote_in_values (vl : typed_value list) :
+      (typed_value * typed_value list) option =
+    match vl with
+    | [] -> None
+    | v :: vl' -> (
+        match promote_in_value v with
+        | None -> (
+            match promote_in_values vl' with
+            | None -> None
+            | Some (borrowed, vl'') -> Some (borrowed, v :: vl''))
+        | Some (borrowed, nv) -> Some (borrowed, nv :: vl'))
+  in
+  (* Promote in the environment *)
+  let rec promote_in_env (env0 : env) : typed_value * env =
+    match env0 with
+    | [] -> unreachable __LOC__
+    | Var (vname, v) :: env -> (
+        match promote_in_value v with
+        | None ->
+            let borrowed, env' = promote_in_env env in
+            (borrowed, Var (vname, v) :: env')
+        | Some (borrowed, new_v) -> (borrowed, Var (vname, new_v) :: env))
+    | Abs abs :: env ->
+        (* We don't promote inside abstractions *)
+        if config.mode = ConcreteMode then unreachable __LOC__
+        else
+          let borrowed, env' = promote_in_env env in
+          (borrowed, Abs abs :: env')
+  in
+  (* Apply *)
+  promote_in_env env0
+
+let promote_inactivated_borrow_to_mut_borrow (config : config) (l : BorrowId.id)
+    (borrowed_value : typed_value) (env0 : env) : env =
+  let rec promote_in_value (v : typed_value) : typed_value =
+    match v.value with
+    | Concrete _ | Bottom | Symbolic _ -> v
+    | Adt av ->
+        let values = FieldId.vector_to_list av.field_values in
+        let values = List.map promote_in_value values in
+        let values = FieldId.vector_of_list values in
+        { v with value = Adt { av with field_values = values } }
+    | Tuple values ->
+        let values = FieldId.vector_to_list values in
+        let values = List.map promote_in_value values in
+        let values = FieldId.vector_of_list values in
+        { v with value = Tuple values }
+    | Assumed (Box av) -> { v with value = Assumed (Box (promote_in_value av)) }
+    | Borrow bc -> (
+        (* We shouldn't need to promote inside borrowed values: here we just need
+         * to check if the borrow is the inactivated mutable borrow we are looking
+         * for *)
+        match bc with
+        | SharedBorrow _ | MutBorrow (_, _) -> v
+        | InactivatedMutBorrow bid -> if bid == l then borrowed_value else v)
+    | Loan _ ->
+        (* We shouldn't need to promote inside loans *)
+        v
+  in
+  let promote_in_env_value (ev : env_value) : env_value =
+    match ev with
+    | Var (name, v) -> Var (name, promote_in_value v)
+    | Abs abs ->
+        if config.mode = ConcreteMode then unreachable __LOC__ else Abs abs
+  in
+  List.map promote_in_env_value env0
+
+(** Promote an inactivated mut borrow to a mut borrow.
+
+    The borrow must point to a shared value which is borrowed exactly once.
+ *)
+let activate_inactivated_mut_borrow (config : config) (l : BorrowId.id)
+    (env : env) : env =
+  match lookup_loan_from_borrow_id config l env with
+  | MutLoan _ -> unreachable __LOC__
+  | SharedLoan (bids, _) ->
+      (* End the borrows which borrow from the value, at the exception of the borrow
+       * we want to promote *)
+      let bids = BorrowId.Set.remove l bids in
+      let env' = end_borrows config bids env in
+      (* Promote the loan *)
+      let borrowed_value, env'' =
+        promote_shared_loan_to_mut_loan config l env'
+      in
+      (* Promote the borrow *)
+      promote_inactivated_borrow_to_mut_borrow config l borrowed_value env''
