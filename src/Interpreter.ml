@@ -536,7 +536,7 @@ let rec read_projection (config : config) (access : path_access) (env : env)
             (* We can enter shared loans only if we are in "read" mode *)
             | Read, SharedLoan (_, sv) -> enter_loans sv
             | Write, SharedLoan (bids, _) -> Error (FailSharedLoan bids)
-            (* We can always enter mutable loans *)
+            (* We always have to end mutable loans *)
             | _, MutLoan bid -> Error (FailMutLoan bid))
         | _ -> Ok v
       in
@@ -581,6 +581,7 @@ let rec read_projection (config : config) (access : path_access) (env : env)
                   read_projection config access env p' sv
               | Write, SharedBorrow _ -> unreachable __LOC__
               | _, MutBorrow (_, bv) -> read_projection config access env p' bv
+              (* We need to activate inactivated mutable borrows *)
               | _, InactivatedMutBorrow bid ->
                   Error (FailInactivatedMutBorrow bid))
           (* Remaining cases: error. We enumerate all the value variants
@@ -605,6 +606,86 @@ let read_place (config : config) (access : path_access) (p : place) (env0 : env)
     | Abs _ :: env' -> read_in_env env'
   in
   read_in_env env0
+
+(** Update the value at the end of a projection *)
+let rec write_projection (config : config) (new_value : typed_value)
+    (p : projection) (v : typed_value) : typed_value path_access_result =
+  match p with
+  | [] -> Ok v
+  | pe :: p' -> (
+      (* Match on the projection element and the value *)
+      match (pe, v.value) with
+      (* Field projection *)
+      | Field (ProjAdt (_def_id, opt_variant_id), field_id), Adt adt -> (
+          (* Check that the projection is consistent with the current value *)
+          (match (opt_variant_id, adt.variant_id) with
+          | None, None -> ()
+          | Some vid, Some vid' -> if vid <> vid' then unreachable __LOC__
+          | _ -> unreachable __LOC__);
+          (* Actually project *)
+          match FieldId.nth_opt adt.field_values field_id with
+          | None -> unreachable __LOC__
+          | Some fv -> (
+              (* Update the field value *)
+              match write_projection config new_value p fv with
+              | Error err -> Error err
+              | Ok nfv ->
+                  (* Reinsert the field value *)
+                  let nvalues =
+                    FieldId.update_nth adt.field_values field_id nfv
+                  in
+                  let nadt = Adt { adt with field_values = nvalues } in
+                  Ok { v with value = nadt }))
+      (* Tuples *)
+      | Field (ProjTuple _, field_id), Tuple values -> (
+          (* Project *)
+          match FieldId.nth_opt values field_id with
+          | None -> unreachable __LOC__
+          | Some fv -> (
+              (* Update the field value *)
+              match write_projection config new_value p fv with
+              | Error err -> Error err
+              | Ok nfv ->
+                  (* Reinsert the field value *)
+                  let nvalues = FieldId.update_nth values field_id nfv in
+                  let ntuple = Tuple nvalues in
+                  Ok { v with value = ntuple }))
+      (* If we reach Bottom, it may mean we need to expand an uninitialized
+       * enumeration value *)
+      | Field (ProjAdt (_, Some _variant_id), _), Bottom ->
+          Error (FailBottom (1 + List.length p', pe, v.ty))
+      (* Symbolic value: needs to be expanded *)
+      | _, Symbolic sp ->
+          assert (config.mode = SymbolicMode);
+          (* Expand the symbolic value *)
+          Error (FailSymbolic (pe, sp))
+      (* Box dereferencement *)
+      | DerefBox, Assumed (Box bv) -> (
+          (* Update the boxed value *)
+          match write_projection config new_value p' bv with
+          | Error err -> Error err
+          | Ok nbv -> Ok { v with value = Assumed (Box nbv) })
+      (* Borrow dereferencement *)
+      | Deref, Borrow bc -> (
+          match bc with
+          | SharedBorrow _ ->
+              (* We can't update inside shared borrows *)
+              unreachable __LOC__
+          | MutBorrow (bid, bv) -> (
+              match write_projection config new_value p' bv with
+              | Error err -> Error err
+              | Ok nbv -> Ok { v with value = Borrow (MutBorrow (bid, nbv)) })
+          (* We need to activate inactivated mutable borrows *)
+          | InactivatedMutBorrow bid -> Error (FailInactivatedMutBorrow bid))
+      (* We can never enter loans *)
+      | _, Loan (SharedLoan (bids, _)) -> Error (FailSharedLoan bids)
+      (* We also always have to end mutable loans *)
+      | _, Loan (MutLoan bid) -> Error (FailMutLoan bid)
+      (* Remaining cases: error. We enumerate all the value variants
+       * on purpose, to make sure we statically catch errors if we
+       * modify the [value] definition. *)
+      | _, (Concrete _ | Adt _ | Tuple _ | Bottom | Assumed _ | Borrow _) ->
+          unreachable __LOC__)
 
 (*
 (** Update the value at the end of a projection *)

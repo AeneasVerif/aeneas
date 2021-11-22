@@ -1,3 +1,5 @@
+open Errors
+
 (** Signature for a module describing an identifier.
     
     We often need identifiers (for definitions, variables, etc.) and in
@@ -22,6 +24,8 @@ module type Id = sig
   val vector_of_list : 'a list -> 'a vector
 
   val nth_opt : 'a vector -> id -> 'a option
+
+  val update_nth : 'a vector -> id -> 'a -> 'a vector
 
   module Set : Set.S with type elt = id
 
@@ -62,6 +66,12 @@ module IdGen () : Id = struct
   let vector_of_list v = v
 
   let nth_opt v id = List.nth_opt v id
+
+  let rec update_nth vec id v =
+    match (vec, id) with
+    | [], _ -> unreachable __LOC__
+    | _ :: vec', 0 -> v :: vec'
+    | x :: vec', _ -> x :: update_nth vec' (id - 1) v
 
   module Set = Set.Make (struct
     type t = id
