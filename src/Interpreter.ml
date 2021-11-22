@@ -556,18 +556,15 @@ let rec read_projection (config : config) (access : path_access) (env : env)
               match FieldId.nth_opt adt.field_values field_id with
               | None -> unreachable __LOC__
               | Some fv -> read_projection config access env p fv)
-          | _, Adt _ -> unreachable __LOC__
           (* Tuples *)
           | Field (ProjTuple _, field_id), Tuple values -> (
               match FieldId.nth_opt values field_id with
               | None -> unreachable __LOC__
               | Some fv -> read_projection config access env p fv)
-          | _, Tuple _ -> unreachable __LOC__
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *)
           | Field (ProjAdt (_, Some _variant_id), _), Bottom ->
               Error (FailBottom (1 + List.length p', pe, v.ty))
-          | _, Bottom -> unreachable __LOC__
           (* Symbolic value: needs to be expanded *)
           | _, Symbolic sp ->
               assert (config.mode = SymbolicMode);
@@ -586,7 +583,12 @@ let rec read_projection (config : config) (access : path_access) (env : env)
               | _, MutBorrow (_, bv) -> read_projection config access env p' bv
               | _, InactivatedMutBorrow bid ->
                   Error (FailInactivatedMutBorrow bid))
-          | _, (Concrete _ | Assumed _ | Borrow _ | Loan _) ->
+          (* Remaining cases: error. We enumerate all the value variants
+           * on purpose, to make sure we statically catch errors if we
+           * modify the [value] definition. *)
+          | ( _,
+              ( Concrete _ | Adt _ | Tuple _ | Bottom | Assumed _ | Borrow _
+              | Loan _ ) ) ->
               unreachable __LOC__)
       (* Entering loans failed *)
       | res -> res)
