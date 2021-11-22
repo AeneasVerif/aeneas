@@ -1,9 +1,22 @@
 open Types
 open Values
+open Print.Values
+open Errors
 
 type env_value = Var of string * typed_value | Abs of abs
 
 type env = env_value list
+
+let env_value_to_string (fmt : value_formatter) (ev : env_value) : string =
+  match ev with
+  | Var (vname, tv) -> vname ^ " -> " ^ typed_value_to_string fmt tv
+  | Abs abs -> abs_to_string fmt abs
+
+let env_to_string (fmt : value_formatter) (env : env) : string =
+  "{\n"
+  ^ String.concat ";\n"
+      (List.map (fun ev -> "  " ^ env_value_to_string fmt ev) env)
+  ^ "\n}"
 
 type 'a result = Stuck | Panic | Res of 'a
 
@@ -91,16 +104,16 @@ and end_borrow_get_borrow_in_values config l outer_borrows vl0 :
           (res, v' :: vl')
       | _ -> (res, v' :: vl))
 
-(*let rec end_borrow_get_borrow_in_env config l env0 : borrow_lres * env =
+let rec end_borrow_get_borrow_in_env config l env0 : borrow_lres * env =
   match env0 with
-  | [] -> NotFound
+  | [] -> (NotFound, [])
   | Var (x, v) :: env -> (
-      match end_borrow_get_borrow_in_value config None l v with
+      match end_borrow_get_borrow_in_value config l None v with
       | NotFound, v' ->
-          let res, env' = end_borrow_get_borrow_in_env config l env' in
-          (res, Var (x, v') :: env'')
-      | res, v' -> (res, Var (x, v') :: env'))
-  | Abs _ :: _ -> unimplemented __LOC__*)
+          let res, env' = end_borrow_get_borrow_in_env config l env in
+          (res, Var (x, v') :: env')
+      | res, v' -> (res, Var (x, v') :: env))
+  | Abs _ :: _ -> unimplemented __LOC__
 
 (*let rec end_borrow config (env0 : env) (env : env) (l : BorrowId.id) =
   match env with
