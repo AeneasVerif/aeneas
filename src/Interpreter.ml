@@ -591,7 +591,6 @@ let rec read_projection (config : config) (access : path_access) (env : env)
       (* Entering loans failed *)
       | res -> res)
 
-(*
 (** Read the value at the end of a place *)
 let read_place (config : config) (access : path_access) (p : place) (env0 : env)
     : typed_value path_access_result =
@@ -605,6 +604,7 @@ let read_place (config : config) (access : path_access) (p : place) (env0 : env)
   in
   read_in_env env0
 
+(*
 (** Update the value at the end of a projection *)
 let rec write_projection (config : config) (nv : typed_value) (p : projection)
     (v : typed_value) : typed_value path_access_result =
