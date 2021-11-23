@@ -547,7 +547,11 @@ let activate_inactivated_mut_borrow (config : config) (io : inner_outer)
 
 (** Paths *)
 
-type access_kind = Read | Write
+type access_kind =
+  | Read  (** Read a value *)
+  | Write
+      (** Update a value (but don't replace it with [Bottom] or values containing [Bottom] *)
+  | Move  (** Replace a value with [Bottom] *)
 
 (** When we fail reading from or writing to a path, it might be because we
  ** need to update the environment by ending borrows, expanding symbolic
@@ -625,7 +629,8 @@ let rec read_projection (config : config) (access : access_kind) (env : env)
             match (access, lc) with
             (* We can enter shared loans only if we are in "read" mode *)
             | Read, SharedLoan (_, sv) -> enter_loans sv
-            | Write, SharedLoan (bids, _) -> Error (FailSharedLoan bids)
+            | (Write | Move), SharedLoan (bids, _) ->
+                Error (FailSharedLoan bids)
             (* We always have to end mutable loans *)
             | _, MutLoan bid -> Error (FailMutLoan bid))
         | _ -> Ok v
@@ -666,8 +671,11 @@ let rec read_projection (config : config) (access : access_kind) (env : env)
               | Read, SharedBorrow bid ->
                   let sv = lookup_shared_value_from_borrow_id bid env in
                   read_projection config access env p' sv
-              | Write, SharedBorrow _ -> failwith "Unreachable"
-              | _, MutBorrow (_, bv) -> read_projection config access env p' bv
+              | Write, SharedBorrow _ ->
+                  failwith "Can't write to a shared borrow"
+              | (Read | Write), MutBorrow (_, bv) ->
+                  read_projection config access env p' bv
+              | Move, _ -> failwith "Can't move out of a borrow"
               (* We need to activate inactivated mutable borrows *)
               | _, InactivatedMutBorrow bid ->
                   Error (FailInactivatedMutBorrow bid))
@@ -692,7 +700,7 @@ let read_place (config : config) (access : access_kind) (p : place) (env0 : env)
   in
   read_in_env env0
 
-(** Update the value at the end of a projection *)
+(** Update the value at the end of a projection. *)
 let rec write_projection (config : config) (new_value : typed_value)
     (p : projection) (v : typed_value) : typed_value path_access_result =
   match p with
@@ -766,7 +774,11 @@ let rec write_projection (config : config) (new_value : typed_value)
       | _, (Concrete _ | Adt _ | Tuple _ | Bottom | Assumed _ | Borrow _) ->
           failwith "Unreachable")
 
-(** Update the value at the end of a place *)
+(** Update the value at the end of a place.
+
+    We don't specify the access kind, because it should have been specified in
+    a prior access check with [read_place].
+ *)
 let write_place (config : config) (nv : typed_value) (p : place) (env0 : env) :
     env path_access_result =
   let rec write_in_env env : env path_access_result =
@@ -884,10 +896,10 @@ let expand_bottom_value (config : config) (tyctx : type_def TypeDefId.vector)
     expanding symbolic values) until we manage to fully read the place.
  *)
 let rec update_env_along_read_place (config : config) (access : access_kind)
-    (p : place) (env : env) : env * typed_value =
+    (p : place) (env : env) : env =
   (* Attempt to read the place: if it fails, update the environment and retry *)
   match read_place config access p env with
-  | Ok v -> (env, v)
+  | Ok _ -> env
   | Error err ->
       let env' =
         match err with
@@ -1219,12 +1231,36 @@ let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
 (*let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
     eval_ctx * typed_value =
   match op with
-  | Constant (ty, cv) ->
+  | Expressions.Constant (ty, cv) ->
       let v = constant_value_to_typed_value ctx ty cv in
       (ctx, v)
-  | Copy p ->
-     let ctx' = 
-  | Move p -> ()
+  | Expressions.Copy p -> (
+      (* Access the value *)
+      let access = Read in
+      let env1 = update_env_along_read_place config access p ctx.env in
+      let env2 = collect_borrows_at_place config access p env1 in
+      match read_place config access p env2 with
+      | Err _ -> failwith "Unreachable"
+      | Ok v ->
+          (* Copy the value *)
+          assert (not (bottom_in_value v));
+          let ctx2 = { ctx with env = env2 } in
+          copy_value config ctx2 v)
+  | Expressions.Move p -> (
+      (* Access the value *)
+      let access = Move in
+      let env1 = update_env_along_read_place config access p ctx.env in
+      let env2 = collect_borrows_at_place config access p env1 in
+      match read_place config access p env2 with
+      | Err _ -> failwith "Unreachable"
+      | Ok v ->
+          (* Move the value *)
+          assert (not (bottom_in_value v));
+          let bottom = { value = Bottom; ty = v.ty } in
+          let env3 = write_place config bottom p env2 in
+          let ctx3 = { ctx with env = env3 } in
+          (ctx3, v))*)
 
+(*
 let rec update_env_along_read_place (config : config) (access : access_kind)
     (p : place) (env : env) : typed_value * env =*)
