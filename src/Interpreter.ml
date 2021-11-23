@@ -8,7 +8,7 @@ open Errors
 open Contexts
 
 (* TODO: Change state-passing style to : st -> ... -> (st, v) *)
-(* TODO: check the types *)
+(* TODO: check that the value types are correct when evaluating *)
 
 (** The following type identifies the relative position of expressions (in
     particular borrows) in other expressions.
@@ -28,6 +28,7 @@ type borrow_lres =
 
 let update_if_none opt x = match opt with None -> Some x | _ -> opt
 
+(** Auxiliary function: see its usage in [end_borrow_get_borrow_in_value] *)
 let update_outer_borrows (io : inner_outer) opt x =
   match io with
   | Inner ->
@@ -38,16 +39,7 @@ let update_outer_borrows (io : inner_outer) opt x =
 let unwrap_res_to_outer_or opt default =
   match opt with Some x -> Outer x | None -> default
 
-(** Auxiliary function to end borrows: check if a value contains the borrow
-    we are looking for, return the updated value if it is the case (where the
-    Borrom has been replace by [Bottom]) and we can end the borrow (for instance,
-    it is not an outer borrow...) or return the reason why we couldn't update the
-    borrow.
-
-    End borrow then simply performs a loop: as long as we need to end (outer)
-    borrows, we end them, then end the borrow we wanted to end in the first
-    place.
-*)
+(** See [end_borrow_get_borrow_in_env] *)
 let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
     typed_value * borrow_lres =
   match v0.value with
@@ -124,6 +116,15 @@ and end_borrow_get_borrow_in_values config io l outer_borrows vl0 :
           (v' :: vl', res)
       | _ -> (v' :: vl, res))
 
+(** Auxiliary function to end borrows: lookup a borrow in the environment,
+    update it (by returning an updated environment where the borrow has been
+    replaced by [Bottom])) if we can end the borrow (for instance, it is not
+    an outer borrow...) or return the reason why we couldn't update the borrow.
+
+    [end_borrow] then simply performs a loop: as long as we need to end (outer)
+    borrows, we end them, and finally we end the borrow we wanted to end in the
+    first place.
+*)
 let rec end_borrow_get_borrow_in_env (config : config) (io : inner_outer) l env0
     : env * borrow_lres =
   match env0 with
@@ -138,6 +139,7 @@ let rec end_borrow_get_borrow_in_env (config : config) (io : inner_outer) l env0
       assert (config.mode = SymbolicMode);
       raise Unimplemented
 
+(** See [give_back_value]. *)
 let rec give_back_value_to_value config bid (v : typed_value)
     (destv : typed_value) : typed_value =
   match destv.value with
@@ -178,10 +180,12 @@ let rec give_back_value_to_value config bid (v : typed_value)
       | MutLoan bid' ->
           if bid' = bid then v else { destv with value = Loan (MutLoan bid') })
 
+(** See [give_back_value]. *)
 let give_back_value_to_abs (_config : config) _bid _v _abs : abs =
   (* TODO *)
   raise Unimplemented
 
+(** See [give_back_shared]. *)
 let rec give_back_shared_to_value (config : config) bid (destv : typed_value) :
     typed_value =
   match destv.value with
@@ -237,10 +241,16 @@ let rec give_back_shared_to_value (config : config) bid (destv : typed_value) :
             }
       | MutLoan _ -> destv)
 
+(** See [give_back_shared]. *)
 let give_back_shared_to_abs _config _bid _abs : abs =
   (* TODO *)
   raise Unimplemented
 
+(** Auxiliary function to end borrows.
+    
+    When we end a mutable borrow, we need to "give back" the value it contained
+    to its original owner by reinserting it at the proper position.
+ *)
 let give_back_value (config : config) (bid : BorrowId.id) (v : typed_value)
     (env : env) : env =
   let give_back_value_to_env_value ev : env_value =
@@ -252,6 +262,11 @@ let give_back_value (config : config) (bid : BorrowId.id) (v : typed_value)
   in
   List.map give_back_value_to_env_value env
 
+(** Auxiliary function to end borrows.
+    
+    When we end a shared borrow, we need to remove the borrow id from the list
+    of borrows to the shared value.
+ *)
 let give_back_shared config (bid : BorrowId.id) (env : env) : env =
   let give_back_shared_to_env_value ev : env_value =
     match ev with
@@ -262,6 +277,11 @@ let give_back_shared config (bid : BorrowId.id) (env : env) : env =
   in
   List.map give_back_shared_to_env_value env
 
+(** When copying values, we duplicate the shared borrows. This is tantamount
+    to reborrowing the shared value. The following function applies this change
+    to an environment by inserting a new borrow id in the set of borrows tracked
+    by a shared value, referenced by the [original_bid] argument.
+ *)
 let reborrow_shared (config : config) (original_bid : BorrowId.id)
     (new_bid : BorrowId.id) (env : env) : env =
   let rec reborrow_in_value (v : typed_value) : typed_value =
@@ -386,9 +406,11 @@ let lookup_loan_from_borrow_id (config : config) (l : BorrowId.id) (env : env) :
   | None -> failwith "Unreachable"
   | Some lc -> lc
 
-(** If a shared value is borrowed exactly once, we can promote this shared loan
-    to a mutable loan. The function returns the borrowed value and the updated
-    environment.
+(** See [activate_inactivated_mut_borrow].
+
+    This function updates the shared loan to a mutable loan (we then update
+    the borrow). Of course, the shared loan must contain exactly one borrow id
+    (the one we give as parameter), otherwise we can't promote it.
  *)
 let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
     (env0 : env) : typed_value * env =
@@ -463,6 +485,10 @@ let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
   (* Apply *)
   promote_in_env env0
 
+(** See [activate_inactivated_mut_borrow].
+
+    This function updates the shared borrow to a mutable borrow.
+ *)
 let promote_inactivated_borrow_to_mut_borrow (config : config) (l : BorrowId.id)
     (borrowed_value : typed_value) (env0 : env) : env =
   let rec promote_in_value (v : typed_value) : typed_value =
@@ -551,6 +577,7 @@ type path_fail_kind =
 type 'a path_access_result = ('a, path_fail_kind) result
 (** The result of reading from/writing to a place *)
 
+(** Return the shared value referenced by a borrow id *)
 let lookup_shared_value_from_borrow_id (bid : BorrowId.id) (env : env) :
     typed_value =
   let rec lookup_in_value (v : typed_value) : typed_value option =
