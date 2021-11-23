@@ -687,61 +687,24 @@ let rec write_projection (config : config) (new_value : typed_value)
       | _, (Concrete _ | Adt _ | Tuple _ | Bottom | Assumed _ | Borrow _) ->
           unreachable __LOC__)
 
-(*
-(** Update the value at the end of a projection *)
-let rec write_projection (config : config) (nv : typed_value) (p : projection)
-    (v : typed_value) : typed_value path_access_result =
-  match p with
-  | [] -> Success v
-  | pe :: p' -> (
-      match (pe, v.value) with
-      | _, Concrete _ | _, Bottom -> Failed
-      | _, Symbolic _ -> (
-          match config.mode with
-          | ConcreteMode -> unreachable __LOC__
-          | SymbolicMode ->
-              (* Expand the symbolic value *)
-              (* TODO *)
-              unimplemented __LOC__)
-      | DerefBox, Assumed (Box bv) -> (
-          match write_projection config p' bv with
-          | Success bv' ->
-              Success
-                { v with value = Assumed (Box (write_projection config p' bv)) }
-          | res -> res)
-      | Deref, Borrow bc -> (
-          match bc with
-          | SharedBorrow _ -> Failed
-          | MutBorrow (bid, bv) -> (
-              match write_projection config p' bv with
-              | Success bv' -> Success (Borrow (MutBorrow (bid, bv')))
-              | res -> res)
-          | InactivatedMutBorrow bid -> InactivatedMutBorrow bid)
-      | _, Loan lc -> (
-          match lc with
-          | SharedLoan (bids, _) -> SharedLoan bids
-          | MutLoan bid -> MutLoan bid)
-      | _ -> unreachable __LOC__)
-
 (** Update the value at the end of a place *)
-let write_place (config : config) (p : place) (env0 : env) :
+let write_place (config : config) (nv : typed_value) (p : place) (env0 : env) :
     env path_access_result =
   let rec write_in_env env : env path_access_result =
     match env with
     | [] -> unreachable __LOC__
     | Var (vid, v) :: env' -> (
         if vid = p.var_id then
-          match write_projection config access p.projection v with
-          | Success nv -> Var (vid, nv) :: env'
-          | res -> res
+          match write_projection config nv p.projection v with
+          | Ok nv -> Ok (Var (vid, nv) :: env')
+          | Error res -> Error res
         else
           match write_in_env env' with
-          | Success env'' -> Success (Var (vid v) :: env'')
+          | Ok env'' -> Ok (Var (vid, v) :: env'')
           | res -> res)
     | Abs abs :: env' -> (
         match write_in_env env' with
-        | Success env'' -> Success (Abs abs :: env'')
+        | Ok env'' -> Ok (Abs abs :: env'')
         | res -> res)
   in
   write_in_env env0
- *)
