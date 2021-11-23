@@ -117,14 +117,9 @@ let rec end_borrow_get_borrow_in_env (config : config) l env0 :
           let res, env' = end_borrow_get_borrow_in_env config l env in
           (res, Var (x, v') :: env')
       | res, v' -> (res, Var (x, v') :: env))
-  | Abs _ :: _ -> (
-      match config.mode with
-      | ConcreteMode ->
-          (* There can't be abstractions if we run in concrete mode *)
-          failwith "Unreachable"
-      | SymbolicMode ->
-          (* TODO *)
-          raise Unimplemented)
+  | Abs _ :: _ ->
+      assert (config.mode = SymbolicMode);
+      raise Unimplemented
 
 let rec give_back_value_to_value config bid (v : typed_value)
     (destv : typed_value) : typed_value =
@@ -173,10 +168,9 @@ let give_back_value_to_abs (_config : config) _bid _v _abs : abs =
 let give_back_value_to_env_value config bid v ev : env_value =
   match ev with
   | Var (vid, destv) -> Var (vid, give_back_value_to_value config bid v destv)
-  | Abs abs -> (
-      match config.mode with
-      | ConcreteMode -> failwith "Unreachable"
-      | SymbolicMode -> Abs (give_back_value_to_abs config bid v abs))
+  | Abs abs ->
+      assert (config.mode = SymbolicMode);
+      Abs (give_back_value_to_abs config bid v abs)
 
 let rec give_back_shared_to_value (config : config) bid (destv : typed_value) :
     typed_value =
@@ -237,13 +231,13 @@ let give_back_shared_to_abs _config _bid _abs : abs =
   (* TODO *)
   raise Unimplemented
 
+(* TODO: merge this in the other functions *)
 let give_back_shared_to_env_value (config : config) bid ev : env_value =
   match ev with
   | Var (vid, destv) -> Var (vid, give_back_shared_to_value config bid destv)
-  | Abs abs -> (
-      match config.mode with
-      | ConcreteMode -> failwith "Unreachable"
-      | SymbolicMode -> Abs (give_back_shared_to_abs config bid abs))
+  | Abs abs ->
+      assert (config.mode = SymbolicMode);
+      Abs (give_back_shared_to_abs config bid abs)
 
 let give_back_value (config : config) (bid : BorrowId.id) (v : typed_value)
     (env : env) : env =
@@ -262,10 +256,9 @@ let rec end_borrow (config : config) (l : BorrowId.id) (env0 : env) : env =
   match end_borrow_get_borrow_in_env config l env0 with
   (* It is possible that we can't find a borrow in symbolic mode (ending
    * an abstraction may end several borrows at once *)
-  | NotFound, env -> (
-      match config.mode with
-      | ConcreteMode -> failwith "Unreachable"
-      | SymbolicMode -> env)
+  | NotFound, env ->
+      assert (config.mode = SymbolicMode);
+      env
   (* If we found outer borrows: end those borrows first *)
   | Outer outer_borrows, env ->
       let env' =
@@ -309,10 +302,9 @@ let lookup_loan_in_env_value (config : config) (l : BorrowId.id)
     (ev : env_value) : loan_content option =
   match ev with
   | Var (_, v) -> lookup_loan_in_value config l v
-  | Abs _ -> (
-      match config.mode with
-      | ConcreteMode -> failwith "Unreachable"
-      | SymbolicMode -> None)
+  | Abs _ ->
+      assert (config.mode = SymbolicMode);
+      None
 
 (** Lookup a loan content from a borrow id.
     Note that we never lookup loans in the abstractions.
@@ -393,10 +385,9 @@ let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
         | Some (borrowed, new_v) -> (borrowed, Var (vid, new_v) :: env))
     | Abs abs :: env ->
         (* We don't promote inside abstractions *)
-        if config.mode = ConcreteMode then failwith "Unreachable"
-        else
-          let borrowed, env' = promote_in_env env in
-          (borrowed, Abs abs :: env')
+        assert (config.mode = SymbolicMode);
+        let borrowed, env' = promote_in_env env in
+        (borrowed, Abs abs :: env')
   in
   (* Apply *)
   promote_in_env env0
@@ -432,7 +423,8 @@ let promote_inactivated_borrow_to_mut_borrow (config : config) (l : BorrowId.id)
     match ev with
     | Var (name, v) -> Var (name, promote_in_value v)
     | Abs abs ->
-        if config.mode = ConcreteMode then failwith "Unreachable" else Abs abs
+        assert (config.mode = SymbolicMode);
+        Abs abs
   in
   List.map promote_in_env_value env0
 
@@ -546,7 +538,7 @@ let rec read_projection (config : config) (access : path_access) (env : env)
           (* Match on the projection element and the value *)
           match (pe, v.value) with
           (* Field projection *)
-          | Field (ProjAdt (_def_id, opt_variant_id), field_id), Adt adt -> (
+          | Field (ProjAdt (_def_id, opt_variant_id), field_id), Adt adt ->
               (* Check that the projection is consistent with the current value *)
               (match (opt_variant_id, adt.variant_id) with
               | None, None -> ()
@@ -554,18 +546,14 @@ let rec read_projection (config : config) (access : path_access) (env : env)
                   if vid <> vid' then failwith "Unreachable"
               | _ -> failwith "Unreachable");
               (* Actually project *)
-              match FieldId.nth_opt adt.field_values field_id with
-              | None -> failwith "Unreachable"
-              | Some fv -> read_projection config access env p fv)
+              let fv = FieldId.nth adt.field_values field_id in
+              read_projection config access env p fv
           (* Tuples *)
-          | Field (ProjTuple _, field_id), Tuple values -> (
-              match FieldId.nth_opt values field_id with
-              | None -> failwith "Unreachable"
-              | Some fv -> read_projection config access env p fv)
-          (* If we reach Bottom, it may mean we need to expand an uninitialized
-           * enumeration value *)
-          | Field (ProjAdt (_, Some _variant_id), _), Bottom ->
-              Error (FailBottom (1 + List.length p', pe, v.ty))
+          | Field (ProjTuple _, field_id), Tuple values ->
+              let fv = FieldId.nth values field_id in
+              read_projection config access env p fv
+          (* We can expand [Bottom] values only while *writing* to places *)
+          | _, Bottom -> failwith "Unreachable"
           (* Symbolic value: needs to be expanded *)
           | _, Symbolic sp ->
               assert (config.mode = SymbolicMode);
@@ -588,9 +576,7 @@ let rec read_projection (config : config) (access : path_access) (env : env)
           (* Remaining cases: error. We enumerate all the value variants
            * on purpose, to make sure we statically catch errors if we
            * modify the [value] definition. *)
-          | ( _,
-              ( Concrete _ | Adt _ | Tuple _ | Bottom | Assumed _ | Borrow _
-              | Loan _ ) ) ->
+          | _, (Concrete _ | Adt _ | Tuple _ | Assumed _ | Borrow _ | Loan _) ->
               failwith "Unreachable")
       (* Entering loans failed *)
       | res -> res)
@@ -624,33 +610,27 @@ let rec write_projection (config : config) (new_value : typed_value)
           | Some vid, Some vid' -> if vid <> vid' then failwith "Unreachable"
           | _ -> failwith "Unreachable");
           (* Actually project *)
-          match FieldId.nth_opt adt.field_values field_id with
-          | None -> failwith "Unreachable"
-          | Some fv -> (
-              (* Update the field value *)
-              match write_projection config new_value p fv with
-              | Error err -> Error err
-              | Ok nfv ->
-                  (* Reinsert the field value *)
-                  let nvalues =
-                    FieldId.update_nth adt.field_values field_id nfv
-                  in
-                  let nadt = Adt { adt with field_values = nvalues } in
-                  Ok { v with value = nadt }))
+          let fv = FieldId.nth adt.field_values field_id in
+          (* Update the field value *)
+          match write_projection config new_value p fv with
+          | Error err -> Error err
+          | Ok nfv ->
+              (* Reinsert the field value *)
+              let nvalues = FieldId.update_nth adt.field_values field_id nfv in
+              let nadt = Adt { adt with field_values = nvalues } in
+              Ok { v with value = nadt })
       (* Tuples *)
       | Field (ProjTuple _, field_id), Tuple values -> (
           (* Project *)
-          match FieldId.nth_opt values field_id with
-          | None -> failwith "Unreachable"
-          | Some fv -> (
-              (* Update the field value *)
-              match write_projection config new_value p fv with
-              | Error err -> Error err
-              | Ok nfv ->
-                  (* Reinsert the field value *)
-                  let nvalues = FieldId.update_nth values field_id nfv in
-                  let ntuple = Tuple nvalues in
-                  Ok { v with value = ntuple }))
+          let fv = FieldId.nth values field_id in
+          (* Update the field value *)
+          match write_projection config new_value p fv with
+          | Error err -> Error err
+          | Ok nfv ->
+              (* Reinsert the field value *)
+              let nvalues = FieldId.update_nth values field_id nfv in
+              let ntuple = Tuple nvalues in
+              Ok { v with value = ntuple })
       (* If we reach Bottom, it may mean we need to expand an uninitialized
        * enumeration value *)
       | Field (ProjAdt (_, Some _variant_id), _), Bottom ->
@@ -710,6 +690,32 @@ let write_place (config : config) (nv : typed_value) (p : place) (env0 : env) :
   in
   write_in_env env0
 
+(** Auxiliary function to expand [Bottom] values
+
+    During compilation, rustc desaggregates the ADT initializations. The
+    consequence is that the following rust code:
+    ```
+    let x = Cons a b;
+    ```
+
+    Looks like this in MIR:
+    ```
+    (x as Cons).0 = a;
+    (x as Cons).1 = b;
+    set_discriminant(x, 0); // If `Cons` is the variant of index 0
+    ```
+
+    The consequence is that we may sometimes need to write fields to values
+    which are currently [Bottom]. When doing this, we first expand the value
+    to, say, [Cons Bottom Bottom] (note that field projection contains information
+    about which variant we should project to, which is why we *can* set the
+    variant index when writing one of its fields).
+*)
+(*let expand_bottom_value (config : config) (tyctx : type_def TypeDefId.vector)
+    (p : place) (env : env) (remaining_pes : int) (pe : projection_elem)
+    (ty : ety) : env =
+  let *)
+
 (** Update the environment to be able to read a place.
 
     When reading a place, we may be stuck along the way because some value
@@ -734,7 +740,7 @@ let rec update_env_along_read_place (config : config) (access : path_access)
             (* Expand the symbolic value *)
             raise Unimplemented
         | FailBottom (remaining_pes, pe, ty) ->
-            (* Expand the "bottom" value, if possible *)
-            raise Unimplemented
+            (* We can't expand [Bottom] values while reading them *)
+            failwith "Unreachable"
       in
       update_env_along_read_place config access p env'

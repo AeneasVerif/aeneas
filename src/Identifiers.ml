@@ -23,6 +23,8 @@ module type Id = sig
 
   val vector_of_list : 'a list -> 'a vector
 
+  val nth : 'a vector -> id -> 'a
+
   val nth_opt : 'a vector -> id -> 'a option
 
   val update_nth : 'a vector -> id -> 'a -> 'a vector
@@ -64,6 +66,8 @@ module IdGen () : Id = struct
   let vector_to_list v = v
 
   let vector_of_list v = v
+
+  let nth v id = List.nth v id
 
   let nth_opt v id = List.nth_opt v id
 
