@@ -620,6 +620,9 @@ let rec activate_inactivated_mut_borrow (config : config) (io : inner_outer)
           (* Recursive call *)
           activate_inactivated_mut_borrow config io l env'
       | None ->
+          (* Some sanity checks *)
+          assert (not (loans_in_value sv));
+          assert (not (bottom_in_value sv));
           (* End the borrows which borrow from the value, at the exception of the borrow
            * we want to promote *)
           let bids = BorrowId.Set.remove l bids in
