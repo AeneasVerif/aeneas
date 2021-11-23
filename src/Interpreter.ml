@@ -411,6 +411,9 @@ let lookup_loan_from_borrow_id (config : config) (l : BorrowId.id) (env : env) :
     This function updates the shared loan to a mutable loan (we then update
     the borrow). Of course, the shared loan must contain exactly one borrow id
     (the one we give as parameter), otherwise we can't promote it.
+
+    TODO: this is wrong, we need to check the shared value and end the loans
+    inside (eventually...).
  *)
 let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
     (env0 : env) : typed_value * env =
@@ -1264,5 +1267,28 @@ let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
               (ctx3, v)))
 
 (*
-let rec update_env_along_read_place (config : config) (access : access_kind)
-    (p : place) (env : env) : typed_value * env =*)
+let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
+    eval_ctx * typed_value =
+  match rvalue with
+  | Use op -> eval_operand config ctx op
+  | Ref (p, bkind) -> (
+      match bkind with
+      | Expressions.Shared ->
+          (* Access the value *)
+          let access = Read in
+          let env1 = update_env_along_read_place config access p ctx.env in
+          let env2 = collect_borrows_at_place config access p env1 in
+          (* Update the value *)
+          ()
+      | Expressions.Mut -> ()
+      | Expressions.TwoPhaseMut -> ())
+  | UnaryOp (unop, op) -> ()
+  | BinaryOp (binop, op1, op2) -> ()
+  | Discriminant p -> ()
+  | Aggregate (aggregate_kind, ops) -> ()
+ *)
+
+(* TODO:
+   update activate_inactivated_mut_borrow (need to end loans inside)
+   update write_value
+ *)
