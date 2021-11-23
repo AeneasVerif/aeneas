@@ -834,7 +834,8 @@ let rec update_env_along_write_place (config : config)
 exception UpdateEnv of env
 (** Small utility used to break control-flow *)
 
-(** Update the value at a given place to be able to perform a manipulation.
+(** Collect the borrows at a given place (by ending borrows when we find some
+    loans).
 
     This is used when reading, borrowing, writing to a value. We typically
     first call [update_env_along_read_place] or [update_env_along_write_place]
@@ -844,8 +845,8 @@ exception UpdateEnv of env
     - [Read]: copy the value, perform an immutable borrow
     - [Write]: update the value, move, mutably borrow
  *)
-let rec update_env_at_place (config : config) (access : access_kind) (p : place)
-    (env : env) : env =
+let rec collect_borrows_at_place (config : config) (access : access_kind)
+    (p : place) (env : env) : env =
   (* First, retrieve the value *)
   match read_place config access p env with
   | Error _ -> failwith "Unreachable"
@@ -900,4 +901,4 @@ let rec update_env_at_place (config : config) (access : access_kind) (p : place)
         inspect_update v;
         (* No environment update required: return the current environment *)
         env
-      with UpdateEnv env' -> update_env_at_place config access p env')
+      with UpdateEnv env' -> collect_borrows_at_place config access p env')
