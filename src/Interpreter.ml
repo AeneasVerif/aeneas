@@ -902,3 +902,69 @@ let rec collect_borrows_at_place (config : config) (access : access_kind)
         (* No environment update required: return the current environment *)
         env
       with UpdateEnv env' -> collect_borrows_at_place config access p env')
+
+(** Drop (end) all the borrows at a given place.
+
+    Repeat:
+    - read the value at a given place
+    - as long as we find a loans or a borrow, end it
+
+    This is used to drop values (when we need to write to a place, we first
+    drop the value there to properly propagate back values which are not/can't
+    be borrowed anymore).
+
+    TODO: this doesn't work because we may insert bottoms below borrows, etc.
+    We need to use proper end_borrow functions...
+ *)
+let rec drop_borrows_at_place (config : config) (p : place) (env : env) : env =
+  (* We do something similar to [collect_borrows_at_place].
+     First, retrieve the value *)
+  match read_place config Write p env with
+  | Error _ -> failwith "Unreachable"
+  | Ok v -> (
+      (* Explore the value to check if we need to update the environment.
+
+         We use exceptions to make it handy.
+      *)
+      let rec inspect_update v : unit =
+        match v.value with
+        | Concrete _ -> ()
+        | Bottom ->
+            (* Note that we are going to *write* to the value: it is ok if this
+               value contains [Bottom] - and actually we introduce some
+               occurrences of [Bottom] by ending borrows *)
+            ()
+        | Symbolic _ ->
+            (* Nothing to do for symbolic values - TODO: not sure *)
+            raise Unimplemented
+        | Adt adt -> FieldId.iter inspect_update adt.field_values
+        | Tuple values -> FieldId.iter inspect_update values
+        | Assumed (Box v) -> inspect_update v
+        | Borrow bc -> (
+            (* We need to end all borrows *)
+            match bc with
+            | SharedBorrow bid | MutBorrow (bid, _) ->
+                raise (UpdateEnv (end_borrow config bid env))
+            | InactivatedMutBorrow bid ->
+                (* We need to activate inactivated borrows - later, we will
+                 * actually end it *)
+                let env' = activate_inactivated_mut_borrow config bid env in
+                raise (UpdateEnv env'))
+        | Loan lc -> (
+            (* We need to end all loans *)
+            match lc with
+            | SharedLoan (bids, _) ->
+                raise (UpdateEnv (end_borrows config bids env))
+            | MutLoan bid -> raise (UpdateEnv (end_borrow config bid env)))
+      in
+      (* Inspect the value and update the environment while doing so.
+         If the environment gets updated: perform a recursive call (many things
+         may have been updated in the environment: first we need to retrieve the
+         proper updated value - and this value may actually not be accessible
+         anymore
+      *)
+      try
+        inspect_update v;
+        (* No environment update required: return the current environment *)
+        env
+      with UpdateEnv env' -> drop_borrows_at_place config p env')
