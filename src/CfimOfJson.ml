@@ -12,6 +12,7 @@ open Yojson.Basic
 open Identifiers
 open Types
 open OfJsonBasic
+open Scalars
 
 let name_of_json (js : json) : (name, string) result =
   combine_error_msgs js "name_of_json" (list_of_json string_of_json js)
@@ -190,46 +191,54 @@ let big_int_of_json (js : json) : (big_int, string) result =
     | `String is -> Ok (Z.of_string is)
     | _ -> Error "")
 
+(** Deserialize a [scalar_value] from JSON and **check the ranges** *)
 let scalar_value_of_json (js : json) : (scalar_value, string) result =
-  combine_error_msgs js "scalar_value_of_json"
-    (match js with
-    | `Assoc [ ("Isize", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (Isize bi)
-    | `Assoc [ ("I8", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (I8 bi)
-    | `Assoc [ ("I16", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (I16 bi)
-    | `Assoc [ ("I32", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (I32 bi)
-    | `Assoc [ ("I64", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (I64 bi)
-    | `Assoc [ ("I128", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (I128 bi)
-    | `Assoc [ ("Usize", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (Usize bi)
-    | `Assoc [ ("U8", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (U8 bi)
-    | `Assoc [ ("U16", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (U16 bi)
-    | `Assoc [ ("U32", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (U32 bi)
-    | `Assoc [ ("U64", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (U64 bi)
-    | `Assoc [ ("U128", bi) ] ->
-        let* bi = big_int_of_json bi in
-        Ok (U128 bi)
-    | _ -> Error "")
+  let res =
+    combine_error_msgs js "scalar_value_of_json"
+      (match js with
+      | `Assoc [ ("Isize", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (Isize bi)
+      | `Assoc [ ("I8", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (I8 bi)
+      | `Assoc [ ("I16", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (I16 bi)
+      | `Assoc [ ("I32", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (I32 bi)
+      | `Assoc [ ("I64", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (I64 bi)
+      | `Assoc [ ("I128", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (I128 bi)
+      | `Assoc [ ("Usize", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (Usize bi)
+      | `Assoc [ ("U8", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (U8 bi)
+      | `Assoc [ ("U16", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (U16 bi)
+      | `Assoc [ ("U32", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (U32 bi)
+      | `Assoc [ ("U64", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (U64 bi)
+      | `Assoc [ ("U128", bi) ] ->
+          let* bi = big_int_of_json bi in
+          Ok (U128 bi)
+      | _ -> Error "")
+  in
+  match res with
+  | Error _ -> res
+  | Ok sv ->
+      assert (check_scalar_value_in_range sv);
+      res
 
 let constant_value_of_json (js : json) : (constant_value, string) result =
   combine_error_msgs js "constant_value_of_json"

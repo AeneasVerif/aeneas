@@ -1,11 +1,21 @@
 /// The following code generates the limits for the scalar types
 
 fn main() {
-    let ints = &[
+    let ints_lower = [
         "isize", "i8", "i16", "i32", "i64", "i128", "usize", "u8", "u16", "u32", "u64", "u128",
     ];
-    // Generate the code to print the limits
-    for s in ints {
+
+    let ints_upper = [
+        "Isize", "I8", "I16", "I32", "I64", "I128", "Usize", "U8", "U16", "U32", "U64", "U128",
+    ];
+
+    let mut ints_pairs = vec![];
+    for i in 0..ints_lower.len() {
+        ints_pairs.push((&ints_lower[i], &ints_upper[i]));
+    }
+
+    // Generate the code to print the scalar ranges
+    for s in &ints_lower {
         println!(
             "println!(\"let {}_min = Z.of_string \\\"{{}}\\\"\", {}::MIN);",
             s, s
@@ -17,7 +27,8 @@ fn main() {
     }
     println!("\n");
 
-    // Generate the OCaml definitions - this code is generated (comes from the above)
+    // Generate the OCaml definitions for the ranges - this code is
+    // generated (comes from the above)
     println!("let isize_min = Z.of_string \"{}\"", isize::MIN);
     println!("let isize_max = Z.of_string \"{}\"", isize::MAX);
     println!("let i8_min = Z.of_string \"{}\"", i8::MIN);
@@ -42,4 +53,17 @@ fn main() {
     println!("let u64_max = Z.of_string \"{}\"", u64::MAX);
     println!("let u128_min = Z.of_string \"{}\"", u128::MIN);
     println!("let u128_max = Z.of_string \"{}\"", u128::MAX);
+    println!("\n");
+
+    // Generate the check_int_in_range body
+    for (lo, up) in &ints_pairs {
+        println!("| {} -> Z.leq {}_min i && Z.leq i {}_max", up, lo, lo);
+    }
+    println!("\n");
+
+    // Generate the scalar_value_get_value_range body
+    for s in &ints_upper {
+        println!("| {} i -> i", s);
+    }
+    println!("\n");
 }
