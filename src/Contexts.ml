@@ -36,13 +36,13 @@ type eval_ctx = {
 }
 (** Evaluation context *)
 
-let fresh_symbolic_value_id (ctx : eval_ctx) : SymbolicValueId.id * eval_ctx =
+let fresh_symbolic_value_id (ctx : eval_ctx) : eval_ctx * SymbolicValueId.id =
   let id, counter' = SymbolicValueId.fresh ctx.symbolic_counter in
-  (id, { ctx with symbolic_counter = counter' })
+  ({ ctx with symbolic_counter = counter' }, id)
 
-let fresh_borrow_id (ctx : eval_ctx) : BorrowId.id * eval_ctx =
+let fresh_borrow_id (ctx : eval_ctx) : eval_ctx * BorrowId.id =
   let id, counter' = BorrowId.fresh ctx.borrow_counter in
-  (id, { ctx with borrow_counter = counter' })
+  ({ ctx with borrow_counter = counter' }, id)
 
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid

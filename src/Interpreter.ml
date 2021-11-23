@@ -248,6 +248,50 @@ let give_back_shared config (bid : BorrowId.id) (env : env) : env =
   in
   List.map give_back_shared_to_env_value env
 
+let reborrow_shared (config : config) (original_bid : BorrowId.id)
+    (new_bid : BorrowId.id) (env : env) : env =
+  let rec reborrow_in_value (v : typed_value) : typed_value =
+    match v.value with
+    | Concrete _ | Bottom | Symbolic _ -> v
+    | Adt av ->
+        let fields = FieldId.vector_to_list av.field_values in
+        let fields = List.map reborrow_in_value fields in
+        let fields = FieldId.vector_of_list fields in
+        { v with value = Adt { av with field_values = fields } }
+    | Tuple fields ->
+        let fields = FieldId.vector_to_list fields in
+        let fields = List.map reborrow_in_value fields in
+        let fields = FieldId.vector_of_list fields in
+        { v with value = Tuple fields }
+    | Assumed (Box bv) ->
+        { v with value = Assumed (Box (reborrow_in_value bv)) }
+    | Borrow bc -> (
+        match bc with
+        | SharedBorrow _ | InactivatedMutBorrow _ -> v
+        | MutBorrow (bid, bv) ->
+            { v with value = Borrow (MutBorrow (bid, reborrow_in_value bv)) })
+    | Loan lc -> (
+        match lc with
+        | MutLoan _ -> v
+        | SharedLoan (bids, sv) ->
+            (* Shared loan: check if the borrow id we are looking for is in the
+               set of borrow ids. If yes, insert the new borrow id, otherwise
+               explore inside the shared value *)
+            if BorrowId.Set.mem original_bid bids then
+              let bids' = BorrowId.Set.add new_bid bids in
+              { v with value = Loan (SharedLoan (bids', sv)) }
+            else
+              { v with value = Loan (SharedLoan (bids, reborrow_in_value sv)) })
+  in
+  let reborrow_in_ev (ev : env_value) : env_value =
+    match ev with
+    | Var (vid, v) -> Var (vid, reborrow_in_value v)
+    | Abs abs ->
+        assert (config.mode = SymbolicMode);
+        Abs abs
+  in
+  List.map reborrow_in_ev env
+
 (** End a borrow identified by its borrow id
     
     First lookup the borrow in the environment and replace it with [Bottom],
@@ -1018,3 +1062,44 @@ let rec drop_borrows_at_place (config : config) (p : place) (env : env) : env =
         (* No environment update required: return the current environment *)
         env
       with UpdateEnv env' -> drop_borrows_at_place config p env')
+
+(** Copy a value, and return the resulting value.
+
+    Note that copying values might update the context. For instance, when
+    copying shared borrows, we need to insert new shared borrows in the context.
+ *)
+let rec copy_value (config : config) (ctx : eval_ctx) (v : typed_value) :
+    eval_ctx * typed_value =
+  match v.value with
+  | Values.Concrete _ -> (ctx, v)
+  | Values.Adt av ->
+      let fields = FieldId.vector_to_list av.field_values in
+      let ctx', fields = List.fold_left_map (copy_value config) ctx fields in
+      let fields = FieldId.vector_of_list fields in
+      (ctx', { v with value = Values.Adt { av with field_values = fields } })
+  | Values.Tuple fields ->
+      let fields = FieldId.vector_to_list fields in
+      let ctx', fields = List.fold_left_map (copy_value config) ctx fields in
+      let fields = FieldId.vector_of_list fields in
+      (ctx', { v with value = Values.Tuple fields })
+  | Values.Bottom -> failwith "Can't copy ⊥"
+  | Values.Assumed av -> failwith "Can't copy an assumed value"
+  | Values.Borrow bc -> (
+      (* We can only copy shared borrows *)
+      match bc with
+      | SharedBorrow bid ->
+          let ctx', bid' = fresh_borrow_id ctx in
+          let env'' = reborrow_shared config bid bid' ctx'.env in
+          let ctx'' = { ctx' with env = env'' } in
+          (ctx'', { v with value = Values.Borrow (SharedBorrow bid') })
+      | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
+      | InactivatedMutBorrow _ ->
+          failwith "Can't copy an inactivated mut borrow")
+  | Values.Loan lc -> (
+      (* We can only copy shared loans *)
+      match lc with
+      | MutLoan _ -> failwith "Can't copy a mutable loan"
+      | SharedLoan (_, sv) -> copy_value config ctx sv)
+  | Values.Symbolic _sp ->
+      (* TODO: check that the value is copyable *)
+      raise Unimplemented
