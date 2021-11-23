@@ -1,3 +1,17 @@
 (executable
  (name main)
  (libraries yojson zarith))
+
+(env
+  (dev (flags
+    :standard
+    -safe-string
+    -g
+    -w -8-9-11-33-20-21-26-27-39
+  ))
+  (release (flags
+    :standard
+    -safe-string
+    -g
+    -w -8-9-11-33-20-21-26-27-39
+  )))

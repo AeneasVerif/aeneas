@@ -1,5 +1,10 @@
 open CfimOfJson
 open Interpreter
+open Errors
+
+(* This is necessary to have a backtrace when raising exceptions - for some
+ * reason, the -g option doesn't work *)
+let () = Printexc.record_backtrace true
 
 let () =
   let json = Yojson.Basic.from_file "../charon/charon/tests/test1.cfim" in
