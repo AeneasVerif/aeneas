@@ -29,6 +29,8 @@ module type Id = sig
 
   val update_nth : 'a vector -> id -> 'a -> 'a vector
 
+  val iter : ('a -> unit) -> 'a vector -> unit
+
   val map : ('a -> 'b) -> 'a vector -> 'b vector
 
   module Set : Set.S with type elt = id
@@ -78,6 +80,8 @@ module IdGen () : Id = struct
     | [], _ -> failwith "Unreachable"
     | _ :: vec', 0 -> v :: vec'
     | x :: vec', _ -> x :: update_nth vec' (id - 1) v
+
+  let iter = List.iter
 
   let map = List.map
 

@@ -449,7 +449,7 @@ let activate_inactivated_mut_borrow (config : config) (l : BorrowId.id)
 
 (** Paths *)
 
-type path_access = Read | Write
+type access_kind = Read | Write
 
 (** When we fail reading from or writing to a path, it might be because we
  ** need to update the environment by ending borrows, expanding symbolic
@@ -513,7 +513,7 @@ let lookup_shared_value_from_borrow_id (bid : BorrowId.id) (env : env) :
   | Some v -> v
 
 (** Read the value at the end of a projection *)
-let rec read_projection (config : config) (access : path_access) (env : env)
+let rec read_projection (config : config) (access : access_kind) (env : env)
     (p : projection) (v : typed_value) : typed_value path_access_result =
   match p with
   | [] -> Ok v
@@ -581,7 +581,7 @@ let rec read_projection (config : config) (access : path_access) (env : env)
       | res -> res)
 
 (** Read the value at the end of a place *)
-let read_place (config : config) (access : path_access) (p : place) (env0 : env)
+let read_place (config : config) (access : access_kind) (p : place) (env0 : env)
     : typed_value path_access_result =
   let rec read_in_env env : typed_value path_access_result =
     match env with
@@ -784,7 +784,7 @@ let expand_bottom_value (config : config) (tyctx : type_def TypeDefId.vector)
     uses this information to update the environment (by ending borrows,
     expanding symbolic values) until we manage to fully read the place.
  *)
-let rec update_env_along_read_place (config : config) (access : path_access)
+let rec update_env_along_read_place (config : config) (access : access_kind)
     (p : place) (env : env) : typed_value * env =
   (* Attempt to read the place: if it fails, update the environment and retry *)
   match read_place config access p env with
@@ -830,3 +830,74 @@ let rec update_env_along_write_place (config : config)
             expand_bottom_value config tyctx p env remaining_pes pe ty
       in
       update_env_along_write_place config tyctx nv p env'
+
+exception UpdateEnv of env
+(** Small utility used to break control-flow *)
+
+(** Update the value at a given place to be able to perform a manipulation.
+
+    This is used when reading, borrowing, writing to a value. We typically
+    first call [update_env_along_read_place] or [update_env_along_write_place]
+    to get access to the value, then call this function to "prepare" the value.
+
+    The [access_kind] controls the type of operation we will perform:
+    - [Read]: copy the value, perform an immutable borrow
+    - [Write]: update the value, move, mutably borrow
+ *)
+let rec update_env_at_place (config : config) (access : access_kind) (p : place)
+    (env : env) : env =
+  (* First, retrieve the value *)
+  match read_place config access p env with
+  | Error _ -> failwith "Unreachable"
+  | Ok v -> (
+      (* Explore the value to check if we need to update the environment.
+         In particular, we need to end the proper loans in the value.
+         Also, we fail if the value contains any [Bottom].
+
+         We use exceptions to make it handy.
+      *)
+      let rec inspect_update v : unit =
+        match v.value with
+        | Concrete _ -> ()
+        | Bottom -> failwith "Unreachable"
+        | Symbolic _ ->
+            (* Nothing to do for symbolic values - note that if the value needs
+               to be copied, etc. we perform additional checks later *)
+            ()
+        | Adt adt -> FieldId.iter inspect_update adt.field_values
+        | Tuple values -> FieldId.iter inspect_update values
+        | Assumed (Box v) -> inspect_update v
+        | Borrow bc -> (
+            match bc with
+            | SharedBorrow _ -> ()
+            | MutBorrow (_, tv) -> inspect_update tv
+            | InactivatedMutBorrow bid ->
+                (* We need to activate inactivated borrows *)
+                let env' = activate_inactivated_mut_borrow config bid env in
+                raise (UpdateEnv env'))
+        | Loan lc -> (
+            match lc with
+            | SharedLoan (bids, ty) -> (
+                (* End the borrows if we need a [Write] access, otherwise dive into
+                   the shared value *)
+                match access with
+                | Read -> inspect_update ty
+                | Write ->
+                    let env' = end_borrows config bids env in
+                    raise (UpdateEnv env'))
+            | MutLoan bid ->
+                (* We always need to end mutable borrows *)
+                let env' = end_borrow config bid env in
+                raise (UpdateEnv env'))
+      in
+      (* Inspect the value and update the environment while doing so.
+         If the environment gets updated: perform a recursive call (many things
+         may have been updated in the environment: first we need to retrieve the
+         proper updated value - and this value may actually not be accessible
+         anymore
+      *)
+      try
+        inspect_update v;
+        (* No environment update required: return the current environment *)
+        env
+      with UpdateEnv env' -> update_env_at_place config access p env')
