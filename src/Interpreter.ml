@@ -710,10 +710,71 @@ let write_place (config : config) (nv : typed_value) (p : place) (env0 : env) :
     about which variant we should project to, which is why we *can* set the
     variant index when writing one of its fields).
 *)
-(*let expand_bottom_value (config : config) (tyctx : type_def TypeDefId.vector)
+let expand_bottom_value (config : config) (tyctx : type_def TypeDefId.vector)
     (p : place) (env : env) (remaining_pes : int) (pe : projection_elem)
     (ty : ety) : env =
-  let *)
+  (* Prepare the update: we need to take the proper prefix of the place
+     during whose evaluation we got stuck *)
+  let projection' =
+    fst
+      (Utilities.list_split_at p.projection
+         (List.length p.projection - remaining_pes))
+  in
+  let p' = { p with projection = projection' } in
+  (* The type of the [Bottom] value should be a tuple or an ADT: use it
+     to generate the expanded value. Note that the projection element we
+     got stuck at should be a field projection, and gives the variant id
+     if the [Bottom] value is an enumeration value.
+     Also, the expanded value should be the proper ADT variant or a tuple
+     with the proper arity, with all the fields initialized to [Bottom]
+  *)
+  let nv =
+    match (pe, ty) with
+    | ( Field (ProjAdt (def_id, opt_variant_id), _),
+        Types.Adt (def_id', regions, types) ) ->
+        (* Lookup the definition and check if it is an enumeration - it
+           should be an enumeration if and only if the projection element
+           is a field projection with *some* variant id. Retrieve the list
+           of fields at the same time. *)
+        assert (def_id = def_id');
+        let def = TypeDefId.nth tyctx def_id in
+        let fields =
+          match (def.kind, opt_variant_id) with
+          | Struct fields, None -> fields
+          | Enum variants, Some variant_id ->
+              (* Retrieve the proper variant *)
+              let variant = VariantId.nth variants variant_id in
+              variant.fields
+        in
+        (* Initialize the expanded value *)
+        let fields = FieldId.vector_to_list fields in
+        let fields =
+          List.map
+            (fun f -> { value = Bottom; ty = erase_regions f.field_ty })
+            fields
+        in
+        let fields = FieldId.vector_of_list fields in
+        Values.Adt
+          {
+            def_id;
+            variant_id = opt_variant_id;
+            regions;
+            types;
+            field_values = fields;
+          }
+    | Field (ProjTuple arity, _), Types.Tuple tys ->
+        assert (arity = List.length tys);
+        (* Generate the field values *)
+        let fields = List.map (fun ty -> { value = Bottom; ty }) tys in
+        let fields = FieldId.vector_of_list fields in
+        Values.Tuple fields
+    | _ -> failwith "Unreachable"
+  in
+  let nv = { value = nv; ty } in
+  (* Update the environment by inserting the expanded value at the proper place *)
+  match write_place config nv p' env with
+  | Ok env -> env
+  | Error _ -> failwith "Unreachable"
 
 (** Update the environment to be able to read a place.
 

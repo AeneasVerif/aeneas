@@ -29,6 +29,8 @@ module type Id = sig
 
   val update_nth : 'a vector -> id -> 'a -> 'a vector
 
+  val map : ('a -> 'b) -> 'a vector -> 'b vector
+
   module Set : Set.S with type elt = id
 
   val set_to_string : Set.t -> string
@@ -76,6 +78,8 @@ module IdGen () : Id = struct
     | [], _ -> failwith "Unreachable"
     | _ :: vec', 0 -> v :: vec'
     | x :: vec', _ -> x :: update_nth vec' (id - 1) v
+
+  let map = List.map
 
   module Set = Set.Make (struct
     type t = id

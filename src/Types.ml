@@ -59,6 +59,7 @@ type assumed_ty = Box
 
 type 'r ty =
   | Adt of TypeDefId.id * 'r list * 'r ty list
+  | Tuple of 'r ty list
   | TypeVar of TypeVarId.id
   | Bool
   | Char
@@ -68,7 +69,6 @@ type 'r ty =
   | Array of 'r ty (* TODO: there should be a constant with the array *)
   | Slice of 'r ty
   | Ref of 'r * 'r ty * ref_kind
-  | Tuple of 'r ty list
   | Assumed of assumed_ty * 'r list * 'r ty list
 
 type rty = RegionVarId.id region ty
@@ -98,3 +98,25 @@ type type_def = {
   type_params : type_var TypeVarId.vector;
   kind : type_def_kind;
 }
+
+(** Convert an [rty] to an [ety] by erasing the region variables *)
+let rec erase_regions (ty : rty) : ety =
+  match ty with
+  | Adt (def_id, regions, tys) ->
+      let regions = List.map (fun _ -> Erased) regions in
+      let tys = List.map erase_regions tys in
+      Adt (def_id, regions, tys)
+  | Tuple tys -> Tuple (List.map erase_regions tys)
+  | TypeVar vid -> TypeVar vid
+  | Bool -> Bool
+  | Char -> Char
+  | Never -> Never
+  | Integer int_ty -> Integer int_ty
+  | Str -> Str
+  | Array ty -> Array (erase_regions ty)
+  | Slice ty -> Slice (erase_regions ty)
+  | Ref (r, ty, ref_kind) -> Ref (Erased, erase_regions ty, ref_kind)
+  | Assumed (aty, regions, tys) ->
+      let regions = List.map (fun _ -> Erased) regions in
+      let tys = List.map erase_regions tys in
+      Assumed (aty, regions, tys)
