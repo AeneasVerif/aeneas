@@ -804,3 +804,29 @@ let rec update_env_along_read_place (config : config) (access : path_access)
             failwith "Unreachable"
       in
       update_env_along_read_place config access p env'
+
+(** Update the environment to be able to write to a place.
+
+    See [update_env_alond_read_place].
+*)
+let rec update_env_along_write_place (config : config)
+    (tyctx : type_def TypeDefId.vector) (nv : typed_value) (p : place)
+    (env : env) : env =
+  (* Attempt to write the place: if it fails, update the environment and retry *)
+  match write_place config nv p env with
+  | Ok v -> env
+  | Error err ->
+      let env' =
+        match err with
+        | FailSharedLoan bids -> end_borrows config bids env
+        | FailMutLoan bid -> end_borrow config bid env
+        | FailInactivatedMutBorrow bid ->
+            activate_inactivated_mut_borrow config bid env
+        | FailSymbolic (pe, sp) ->
+            (* Expand the symbolic value *)
+            raise Unimplemented
+        | FailBottom (remaining_pes, pe, ty) ->
+            (* Expand the [Bottom] value *)
+            expand_bottom_value config tyctx p env remaining_pes pe ty
+      in
+      update_env_along_write_place config tyctx nv p env'
