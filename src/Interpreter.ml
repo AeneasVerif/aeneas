@@ -165,13 +165,6 @@ let give_back_value_to_abs (_config : config) _bid _v _abs : abs =
   (* TODO *)
   raise Unimplemented
 
-let give_back_value_to_env_value config bid v ev : env_value =
-  match ev with
-  | Var (vid, destv) -> Var (vid, give_back_value_to_value config bid v destv)
-  | Abs abs ->
-      assert (config.mode = SymbolicMode);
-      Abs (give_back_value_to_abs config bid v abs)
-
 let rec give_back_shared_to_value (config : config) bid (destv : typed_value) :
     typed_value =
   match destv.value with
@@ -231,20 +224,26 @@ let give_back_shared_to_abs _config _bid _abs : abs =
   (* TODO *)
   raise Unimplemented
 
-(* TODO: merge this in the other functions *)
-let give_back_shared_to_env_value (config : config) bid ev : env_value =
-  match ev with
-  | Var (vid, destv) -> Var (vid, give_back_shared_to_value config bid destv)
-  | Abs abs ->
-      assert (config.mode = SymbolicMode);
-      Abs (give_back_shared_to_abs config bid abs)
-
 let give_back_value (config : config) (bid : BorrowId.id) (v : typed_value)
     (env : env) : env =
-  List.map (give_back_value_to_env_value config bid v) env
+  let give_back_value_to_env_value ev : env_value =
+    match ev with
+    | Var (vid, destv) -> Var (vid, give_back_value_to_value config bid v destv)
+    | Abs abs ->
+        assert (config.mode = SymbolicMode);
+        Abs (give_back_value_to_abs config bid v abs)
+  in
+  List.map give_back_value_to_env_value env
 
 let give_back_shared config (bid : BorrowId.id) (env : env) : env =
-  List.map (give_back_shared_to_env_value config bid) env
+  let give_back_shared_to_env_value ev : env_value =
+    match ev with
+    | Var (vid, destv) -> Var (vid, give_back_shared_to_value config bid destv)
+    | Abs abs ->
+        assert (config.mode = SymbolicMode);
+        Abs (give_back_shared_to_abs config bid abs)
+  in
+  List.map give_back_shared_to_env_value env
 
 (** End a borrow identified by its borrow id
     
