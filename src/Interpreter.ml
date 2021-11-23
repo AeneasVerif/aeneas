@@ -121,10 +121,10 @@ let rec end_borrow_get_borrow_in_env (config : config) l env0 :
       match config.mode with
       | ConcreteMode ->
           (* There can't be abstractions if we run in concrete mode *)
-          unreachable __LOC__
+          failwith "Unreachable"
       | SymbolicMode ->
           (* TODO *)
-          unimplemented __LOC__)
+          raise Unimplemented)
 
 let rec give_back_value_to_value config bid (v : typed_value)
     (destv : typed_value) : typed_value =
@@ -168,14 +168,14 @@ let rec give_back_value_to_value config bid (v : typed_value)
 
 let give_back_value_to_abs (_config : config) _bid _v _abs : abs =
   (* TODO *)
-  unimplemented __LOC__
+  raise Unimplemented
 
 let give_back_value_to_env_value config bid v ev : env_value =
   match ev with
   | Var (vid, destv) -> Var (vid, give_back_value_to_value config bid v destv)
   | Abs abs -> (
       match config.mode with
-      | ConcreteMode -> unreachable __LOC__
+      | ConcreteMode -> failwith "Unreachable"
       | SymbolicMode -> Abs (give_back_value_to_abs config bid v abs))
 
 let rec give_back_shared_to_value (config : config) bid (destv : typed_value) :
@@ -235,14 +235,14 @@ let rec give_back_shared_to_value (config : config) bid (destv : typed_value) :
 
 let give_back_shared_to_abs _config _bid _abs : abs =
   (* TODO *)
-  unimplemented __LOC__
+  raise Unimplemented
 
 let give_back_shared_to_env_value (config : config) bid ev : env_value =
   match ev with
   | Var (vid, destv) -> Var (vid, give_back_shared_to_value config bid destv)
   | Abs abs -> (
       match config.mode with
-      | ConcreteMode -> unreachable __LOC__
+      | ConcreteMode -> failwith "Unreachable"
       | SymbolicMode -> Abs (give_back_shared_to_abs config bid abs))
 
 let give_back_value (config : config) (bid : BorrowId.id) (v : typed_value)
@@ -264,7 +264,7 @@ let rec end_borrow (config : config) (l : BorrowId.id) (env0 : env) : env =
    * an abstraction may end several borrows at once *)
   | NotFound, env -> (
       match config.mode with
-      | ConcreteMode -> unreachable __LOC__
+      | ConcreteMode -> failwith "Unreachable"
       | SymbolicMode -> env)
   (* If we found outer borrows: end those borrows first *)
   | Outer outer_borrows, env ->
@@ -311,7 +311,7 @@ let lookup_loan_in_env_value (config : config) (l : BorrowId.id)
   | Var (_, v) -> lookup_loan_in_value config l v
   | Abs _ -> (
       match config.mode with
-      | ConcreteMode -> unreachable __LOC__
+      | ConcreteMode -> failwith "Unreachable"
       | SymbolicMode -> None)
 
 (** Lookup a loan content from a borrow id.
@@ -320,7 +320,7 @@ let lookup_loan_in_env_value (config : config) (l : BorrowId.id)
 let lookup_loan_from_borrow_id (config : config) (l : BorrowId.id) (env : env) :
     loan_content =
   match List.find_map (lookup_loan_in_env_value config l) env with
-  | None -> unreachable __LOC__
+  | None -> failwith "Unreachable"
   | Some lc -> lc
 
 (** If a shared value is borrowed exactly once, we can promote this shared loan
@@ -384,7 +384,7 @@ let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
   (* Promote in the environment *)
   let rec promote_in_env (env0 : env) : typed_value * env =
     match env0 with
-    | [] -> unreachable __LOC__
+    | [] -> failwith "Unreachable"
     | Var (vid, v) :: env -> (
         match promote_in_value v with
         | None ->
@@ -393,7 +393,7 @@ let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
         | Some (borrowed, new_v) -> (borrowed, Var (vid, new_v) :: env))
     | Abs abs :: env ->
         (* We don't promote inside abstractions *)
-        if config.mode = ConcreteMode then unreachable __LOC__
+        if config.mode = ConcreteMode then failwith "Unreachable"
         else
           let borrowed, env' = promote_in_env env in
           (borrowed, Abs abs :: env')
@@ -432,7 +432,7 @@ let promote_inactivated_borrow_to_mut_borrow (config : config) (l : BorrowId.id)
     match ev with
     | Var (name, v) -> Var (name, promote_in_value v)
     | Abs abs ->
-        if config.mode = ConcreteMode then unreachable __LOC__ else Abs abs
+        if config.mode = ConcreteMode then failwith "Unreachable" else Abs abs
   in
   List.map promote_in_env_value env0
 
@@ -443,7 +443,7 @@ let promote_inactivated_borrow_to_mut_borrow (config : config) (l : BorrowId.id)
 let activate_inactivated_mut_borrow (config : config) (l : BorrowId.id)
     (env : env) : env =
   match lookup_loan_from_borrow_id config l env with
-  | MutLoan _ -> unreachable __LOC__
+  | MutLoan _ -> failwith "Unreachable"
   | SharedLoan (bids, _) ->
       (* End the borrows which borrow from the value, at the exception of the borrow
        * we want to promote *)
@@ -515,10 +515,10 @@ let lookup_shared_value_from_borrow_id (bid : BorrowId.id) (env : env) :
   let lookup_in_env_value (ev : env_value) : typed_value option =
     match ev with
     | Var (_, v) -> lookup_in_value v
-    | Abs _ -> unimplemented __LOC__
+    | Abs _ -> raise Unimplemented
   in
   match List.find_map lookup_in_env_value env with
-  | None -> unreachable __LOC__
+  | None -> failwith "Unreachable"
   | Some v -> v
 
 (** Read the value at the end of a projection *)
@@ -550,16 +550,17 @@ let rec read_projection (config : config) (access : path_access) (env : env)
               (* Check that the projection is consistent with the current value *)
               (match (opt_variant_id, adt.variant_id) with
               | None, None -> ()
-              | Some vid, Some vid' -> if vid <> vid' then unreachable __LOC__
-              | _ -> unreachable __LOC__);
+              | Some vid, Some vid' ->
+                  if vid <> vid' then failwith "Unreachable"
+              | _ -> failwith "Unreachable");
               (* Actually project *)
               match FieldId.nth_opt adt.field_values field_id with
-              | None -> unreachable __LOC__
+              | None -> failwith "Unreachable"
               | Some fv -> read_projection config access env p fv)
           (* Tuples *)
           | Field (ProjTuple _, field_id), Tuple values -> (
               match FieldId.nth_opt values field_id with
-              | None -> unreachable __LOC__
+              | None -> failwith "Unreachable"
               | Some fv -> read_projection config access env p fv)
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *)
@@ -579,7 +580,7 @@ let rec read_projection (config : config) (access : path_access) (env : env)
               | Read, SharedBorrow bid ->
                   let sv = lookup_shared_value_from_borrow_id bid env in
                   read_projection config access env p' sv
-              | Write, SharedBorrow _ -> unreachable __LOC__
+              | Write, SharedBorrow _ -> failwith "Unreachable"
               | _, MutBorrow (_, bv) -> read_projection config access env p' bv
               (* We need to activate inactivated mutable borrows *)
               | _, InactivatedMutBorrow bid ->
@@ -590,7 +591,7 @@ let rec read_projection (config : config) (access : path_access) (env : env)
           | ( _,
               ( Concrete _ | Adt _ | Tuple _ | Bottom | Assumed _ | Borrow _
               | Loan _ ) ) ->
-              unreachable __LOC__)
+              failwith "Unreachable")
       (* Entering loans failed *)
       | res -> res)
 
@@ -599,7 +600,7 @@ let read_place (config : config) (access : path_access) (p : place) (env0 : env)
     : typed_value path_access_result =
   let rec read_in_env env : typed_value path_access_result =
     match env with
-    | [] -> unreachable __LOC__
+    | [] -> failwith "Unreachable"
     | Var (vid, v) :: env' ->
         if vid = p.var_id then read_projection config access env0 p.projection v
         else read_in_env env'
@@ -620,11 +621,11 @@ let rec write_projection (config : config) (new_value : typed_value)
           (* Check that the projection is consistent with the current value *)
           (match (opt_variant_id, adt.variant_id) with
           | None, None -> ()
-          | Some vid, Some vid' -> if vid <> vid' then unreachable __LOC__
-          | _ -> unreachable __LOC__);
+          | Some vid, Some vid' -> if vid <> vid' then failwith "Unreachable"
+          | _ -> failwith "Unreachable");
           (* Actually project *)
           match FieldId.nth_opt adt.field_values field_id with
-          | None -> unreachable __LOC__
+          | None -> failwith "Unreachable"
           | Some fv -> (
               (* Update the field value *)
               match write_projection config new_value p fv with
@@ -640,7 +641,7 @@ let rec write_projection (config : config) (new_value : typed_value)
       | Field (ProjTuple _, field_id), Tuple values -> (
           (* Project *)
           match FieldId.nth_opt values field_id with
-          | None -> unreachable __LOC__
+          | None -> failwith "Unreachable"
           | Some fv -> (
               (* Update the field value *)
               match write_projection config new_value p fv with
@@ -670,7 +671,7 @@ let rec write_projection (config : config) (new_value : typed_value)
           match bc with
           | SharedBorrow _ ->
               (* We can't update inside shared borrows *)
-              unreachable __LOC__
+              failwith "Unreachable"
           | MutBorrow (bid, bv) -> (
               match write_projection config new_value p' bv with
               | Error err -> Error err
@@ -685,14 +686,14 @@ let rec write_projection (config : config) (new_value : typed_value)
        * on purpose, to make sure we statically catch errors if we
        * modify the [value] definition. *)
       | _, (Concrete _ | Adt _ | Tuple _ | Bottom | Assumed _ | Borrow _) ->
-          unreachable __LOC__)
+          failwith "Unreachable")
 
 (** Update the value at the end of a place *)
 let write_place (config : config) (nv : typed_value) (p : place) (env0 : env) :
     env path_access_result =
   let rec write_in_env env : env path_access_result =
     match env with
-    | [] -> unreachable __LOC__
+    | [] -> failwith "Unreachable"
     | Var (vid, v) :: env' -> (
         if vid = p.var_id then
           match write_projection config nv p.projection v with

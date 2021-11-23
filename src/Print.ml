@@ -105,13 +105,13 @@ module Types = struct
     let rid_to_string rid =
       match List.find_opt (fun rv -> rv.rv_index = rid) regions with
       | Some rv -> region_var_to_string rv
-      | None -> unreachable __LOC__
+      | None -> failwith "Unreachable"
     in
     let r_to_string = region_to_string rid_to_string in
     let type_var_id_to_string id =
       match List.find_opt (fun tv -> tv.tv_index = id) types with
       | Some tv -> type_var_to_string tv
-      | None -> unreachable __LOC__
+      | None -> failwith "Unreachable"
     in
     let fmt = { r_to_string; type_var_id_to_string; type_def_id_to_string } in
     let name = name_to_string def.name in

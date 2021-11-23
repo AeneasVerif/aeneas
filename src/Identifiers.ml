@@ -69,7 +69,7 @@ module IdGen () : Id = struct
 
   let rec update_nth vec id v =
     match (vec, id) with
-    | [], _ -> unreachable __LOC__
+    | [], _ -> failwith "Unreachable"
     | _ :: vec', 0 -> v :: vec'
     | x :: vec', _ -> x :: update_nth vec' (id - 1) v
 
