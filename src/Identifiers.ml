@@ -26,6 +26,8 @@ module type Id = sig
 
   val vector_of_list : 'a list -> 'a vector
 
+  val length : 'a vector -> int
+
   val nth : 'a vector -> id -> 'a
 
   val nth_opt : 'a vector -> id -> 'a option
@@ -55,7 +57,7 @@ end
     See [Id].
 *)
 module IdGen () : Id = struct
-  (* TODO: use Int64.t *)
+  (* TODO: use Z.t *)
   type id = int
 
   type generator = id
@@ -79,6 +81,8 @@ module IdGen () : Id = struct
   let vector_to_list v = v
 
   let vector_of_list v = v
+
+  let length v = List.length v
 
   let nth v id = List.nth v id
 
@@ -111,6 +115,7 @@ module IdGen () : Id = struct
     "{" ^ String.concat ", " (List.rev ids) ^ "}"
 
   let id_of_json js =
+    (* TODO: check boundaries ? *)
     match js with
     | `Int i -> Ok i
     | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)

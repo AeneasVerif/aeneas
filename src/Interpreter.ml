@@ -6,6 +6,9 @@ open Print.Values
 open Errors
 open Contexts
 
+(* TODO: Change state-passing style to : st -> ... -> (st, v) *)
+(* TODO: check the types *)
+
 (** The following type identifies the relative position of expressions (in
     particular borrows) in other expressions.
     
@@ -918,7 +921,9 @@ let rec collect_borrows_at_place (config : config) (access : access_kind)
       let rec inspect_update v : unit =
         match v.value with
         | Concrete _ -> ()
-        | Bottom -> failwith "Unreachable"
+        | Bottom ->
+            failwith "Unreachable"
+            (* note that we don't really need to fail here *)
         | Symbolic _ ->
             (* Nothing to do for symbolic values - note that if the value needs
                to be copied, etc. we perform additional checks later *)
@@ -972,9 +977,6 @@ let rec collect_borrows_at_place (config : config) (access : access_kind)
     This is used to drop values (when we need to write to a place, we first
     drop the value there to properly propagate back values which are not/can't
     be borrowed anymore).
-
-    TODO: this doesn't work because we may insert bottoms below borrows, etc.
-    We need to use proper end_borrow functions...
  *)
 let rec drop_borrows_at_place (config : config) (p : place) (env : env) : env =
   (* We do something similar to [collect_borrows_at_place].
@@ -1103,3 +1105,155 @@ let rec copy_value (config : config) (ctx : eval_ctx) (v : typed_value) :
   | Values.Symbolic _sp ->
       (* TODO: check that the value is copyable *)
       raise Unimplemented
+
+(** Check if a value contains ⊥ *)
+let rec bottom_in_value (v : typed_value) : bool =
+  match v.value with
+  | Concrete _ -> false
+  | Adt av ->
+      let fields = FieldId.vector_to_list av.field_values in
+      List.exists bottom_in_value fields
+  | Tuple fields ->
+      let fields = FieldId.vector_to_list fields in
+      List.exists bottom_in_value fields
+  | Assumed (Box bv) -> bottom_in_value bv
+  | Borrow bc -> (
+      match bc with
+      | SharedBorrow _ | InactivatedMutBorrow _ -> false
+      | MutBorrow (_, bv) -> bottom_in_value bv)
+  | Loan lc -> (
+      match lc with
+      | SharedLoan (_, sv) -> bottom_in_value sv
+      | MutLoan _ -> false)
+
+(* TODO: move those to Scalar.ml *)
+
+let integer_type_of_scalar_value (sv : scalar_value) : integer_type =
+  match sv with
+  | Isize _ -> Types.Isize
+  | I8 _ -> Types.I8
+  | I16 _ -> Types.I16
+  | I32 _ -> Types.I32
+  | I64 _ -> Types.I64
+  | I128 _ -> Types.I128
+  | Usize _ -> Types.Usize
+  | U8 _ -> Types.U8
+  | U16 _ -> Types.U16
+  | U32 _ -> Types.U32
+  | U64 _ -> Types.U64
+  | U128 _ -> Types.U128
+
+(** The minimum values an integer type can have *)
+
+let i8_min = Z.of_string "-128"
+
+let i8_max = Z.of_string "127"
+
+let i16_min = Z.of_string "-32768"
+
+let i16_max = Z.of_string "32767"
+
+let i32_min = Z.of_string "-2147483648"
+
+let i32_max = Z.of_string "2147483647"
+
+let i64_min = Z.of_string "-9223372036854775808"
+
+let i64_max = Z.of_string "9223372036854775807"
+
+let i128_min = Z.of_string "-170141183460469231731687303715884105728"
+
+let i128_max = Z.of_string "170141183460469231731687303715884105727"
+
+let u8_min = Z.of_string "0"
+
+let u8_max = Z.of_string "255"
+
+let u16_min = Z.of_string "0"
+
+let u16_max = Z.of_string "65535"
+
+let u32_min = Z.of_string "0"
+
+let u32_max = Z.of_string "4294967295"
+
+let u64_min = Z.of_string "0"
+
+let u64_max = Z.of_string "18446744073709551615"
+
+let u128_min = Z.of_string "0"
+
+let u128_max = Z.of_string "340282366920938463463374607431768211455"
+
+(** Being a bit conservative about isize/usize: depending on the system,
+    the values are encoded as 32-bit values or 64-bit values - we may
+    want to take that into account in the future *)
+
+let isize_min = i32_min
+
+let isize_max = i32_max
+
+let usize_min = u32_min
+
+let usize_max = u32_max
+
+(*let integer_type_min_value (int_ty : integer_type) : big_int =*)
+
+(** Convert a constant operand value to a typed value *)
+let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
+    (cv : operand_constant_value) : typed_value =
+  (* Check the type while converting *)
+  match (ty, cv) with
+  (* Unit *)
+  | Types.Tuple [], Unit -> { value = Tuple (FieldId.vector_of_list []); ty }
+  (* Adt with one variant and no fields *)
+  | Types.Adt (def_id, [], []), ConstantAdt def_id' ->
+      assert (def_id = def_id');
+      (* Check that the adt definition only has one variant with no fields,
+         compute the variant id at the same time. *)
+      let def = TypeDefId.nth ctx.type_context def_id in
+      assert (RegionVarId.length def.region_params = 0);
+      assert (TypeVarId.length def.type_params = 0);
+      let variant_id =
+        match def.kind with
+        | Struct fields ->
+            assert (FieldId.length fields = 0);
+            None
+        | Enum variants ->
+            assert (VariantId.length variants = 1);
+            let variant_id = VariantId.zero in
+            let variant = VariantId.nth variants variant_id in
+            assert (FieldId.length variant.fields = 0);
+            Some variant_id
+      in
+      let value =
+        Adt
+          {
+            def_id;
+            variant_id;
+            regions = [];
+            types = [];
+            field_values = FieldId.vector_of_list [];
+          }
+      in
+      { value; ty }
+  (* Scalar, boolean... *)
+  | Types.Bool, ConstantValue (Bool v) -> { value = Concrete (Bool v); ty }
+  | Types.Char, ConstantValue (Char v) -> { value = Concrete (Char v); ty }
+  | Types.Str, ConstantValue (String v) -> { value = Concrete (String v); ty }
+  | Types.Integer int_ty, ConstantValue (Scalar v) ->
+      (* TODO *)
+      raise Unimplemented
+  (* Remaining cases (invalid) - listing as much as we can on purpose
+     (allows to catch errors at compilation if the definitions change) *)
+  | _, Unit | _, ConstantAdt _ | _, ConstantValue _ ->
+      failwith "Improperly typed constant value"
+
+(*
+let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
+      (eval_ctx * typed_value) =
+  match op with
+  | Constant (ty, cv) ->
+  | Copy p ->
+  | Move p ->
+ *)
