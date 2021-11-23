@@ -18,10 +18,12 @@ open Contexts
 *)
 type inner_outer = Inner | Outer
 
+type borrow_ids = Borrows of BorrowId.Set.t | Borrow of BorrowId.id
+
 (** Borrow lookup result *)
 type borrow_lres =
   | NotFound
-  | Outer of outer_borrows
+  | Outer of borrow_ids
   | FoundMut of typed_value
   | FoundShared
   | FoundInactivatedMut
@@ -38,6 +40,68 @@ let update_outer_borrows (io : inner_outer) opt x =
 
 let unwrap_res_to_outer_or opt default =
   match opt with Some x -> Outer x | None -> default
+
+(** Check if a value contains loans *)
+let rec loans_in_value (v : typed_value) : bool =
+  match v.value with
+  | Concrete _ -> false
+  | Adt av ->
+      let fields = FieldId.vector_to_list av.field_values in
+      List.exists loans_in_value fields
+  | Tuple fields ->
+      let fields = FieldId.vector_to_list fields in
+      List.exists loans_in_value fields
+  | Assumed (Box bv) -> loans_in_value bv
+  | Borrow bc -> (
+      match bc with
+      | SharedBorrow _ | InactivatedMutBorrow _ -> false
+      | MutBorrow (_, bv) -> loans_in_value bv)
+  | Loan lc -> true
+
+(** Return the first loan we find in a value *)
+let rec get_first_loan_in_value (v : typed_value) : loan_content option =
+  match v.value with
+  | Concrete _ -> None
+  | Adt av ->
+      let fields = FieldId.vector_to_list av.field_values in
+      get_first_loan_in_values fields
+  | Tuple fields ->
+      let fields = FieldId.vector_to_list fields in
+      get_first_loan_in_values fields
+  | Assumed (Box bv) -> get_first_loan_in_value bv
+  | Borrow bc -> (
+      match bc with
+      | SharedBorrow _ | InactivatedMutBorrow _ -> None
+      | MutBorrow (_, bv) -> get_first_loan_in_value bv)
+  | Loan lc -> Some lc
+
+and get_first_loan_in_values (vl : typed_value list) : loan_content option =
+  match vl with
+  | [] -> None
+  | v :: vl' -> (
+      match get_first_loan_in_value v with
+      | Some lc -> Some lc
+      | None -> get_first_loan_in_values vl)
+
+(** Check if a value contains ⊥ *)
+let rec bottom_in_value (v : typed_value) : bool =
+  match v.value with
+  | Concrete _ -> false
+  | Adt av ->
+      let fields = FieldId.vector_to_list av.field_values in
+      List.exists bottom_in_value fields
+  | Tuple fields ->
+      let fields = FieldId.vector_to_list fields in
+      List.exists bottom_in_value fields
+  | Assumed (Box bv) -> bottom_in_value bv
+  | Borrow bc -> (
+      match bc with
+      | SharedBorrow _ | InactivatedMutBorrow _ -> false
+      | MutBorrow (_, bv) -> bottom_in_value bv)
+  | Loan lc -> (
+      match lc with
+      | SharedLoan (_, sv) -> bottom_in_value sv
+      | MutLoan _ -> false)
 
 (** See [end_borrow_get_borrow_in_env] *)
 let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
@@ -411,9 +475,7 @@ let lookup_loan_from_borrow_id (config : config) (l : BorrowId.id) (env : env) :
     This function updates the shared loan to a mutable loan (we then update
     the borrow). Of course, the shared loan must contain exactly one borrow id
     (the one we give as parameter), otherwise we can't promote it.
-
-    TODO: this is wrong, we need to check the shared value and end the loans
-    inside (eventually...).
+    Also, the shared value mustn't contain any loan.
  *)
 let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
     (env0 : env) : typed_value * env =
@@ -445,9 +507,16 @@ let promote_shared_loan_to_mut_loan (config : config) (l : BorrowId.id)
     | Loan lc -> (
         match lc with
         | SharedLoan (bids, tv) ->
-            (* Note that we can't promote *inside* shared values *)
-            if BorrowId.Set.mem l bids && BorrowId.Set.cardinal bids = 1 then
-              Some (tv, { v with value = Loan (MutLoan l) })
+            (* Note that we can't promote *inside* shared values: if we
+               don't find the borrow we were looking for, we don't dive
+               inside the shared value *)
+            if BorrowId.Set.mem l bids && BorrowId.Set.cardinal bids = 1 then (
+              (* We need to check that there aren't any loans in the value:
+                 we should have gotten rid of those already, but it is better
+                 to do a sanity check. *)
+              assert (not (loans_in_value tv));
+              assert (not (bottom_in_value tv));
+              Some (tv, { v with value = Loan (MutLoan l) }))
             else None
         | MutLoan _ -> None)
     | Assumed (Box bv) -> (
@@ -532,21 +601,36 @@ let promote_inactivated_borrow_to_mut_borrow (config : config) (l : BorrowId.id)
 
     The borrow must point to a shared value which is borrowed exactly once.
  *)
-let activate_inactivated_mut_borrow (config : config) (io : inner_outer)
+let rec activate_inactivated_mut_borrow (config : config) (io : inner_outer)
     (l : BorrowId.id) (env : env) : env =
+  (* Lookup the value *)
   match lookup_loan_from_borrow_id config l env with
   | MutLoan _ -> failwith "Unreachable"
-  | SharedLoan (bids, _) ->
-      (* End the borrows which borrow from the value, at the exception of the borrow
-       * we want to promote *)
-      let bids = BorrowId.Set.remove l bids in
-      let env' = end_borrows config io bids env in
-      (* Promote the loan *)
-      let borrowed_value, env'' =
-        promote_shared_loan_to_mut_loan config l env'
-      in
-      (* Promote the borrow *)
-      promote_inactivated_borrow_to_mut_borrow config l borrowed_value env''
+  | SharedLoan (bids, sv) -> (
+      (* If there is a borrow inside the value, end it. Also activate inactivated
+         loans. If we perform an update, do a recursive call to lookup the value *)
+      match get_first_loan_in_value sv with
+      | Some lc ->
+          (* End the loans *)
+          let env' =
+            match lc with
+            | SharedLoan (bids, _) -> end_outer_borrows config bids env
+            | MutLoan bid -> end_outer_borrow config bid env
+          in
+          (* Recursive call *)
+          activate_inactivated_mut_borrow config io l env'
+      | None ->
+          (* End the borrows which borrow from the value, at the exception of the borrow
+           * we want to promote *)
+          let bids = BorrowId.Set.remove l bids in
+          let env' = end_borrows config io bids env in
+          (* Promote the loan *)
+          let borrowed_value, env'' =
+            promote_shared_loan_to_mut_loan config l env'
+          in
+          (* Promote the borrow *)
+          promote_inactivated_borrow_to_mut_borrow config l borrowed_value env''
+      )
 
 (** Paths *)
 
@@ -1159,26 +1243,6 @@ let rec copy_value (config : config) (ctx : eval_ctx) (v : typed_value) :
       (* TODO: check that the value is copyable *)
       raise Unimplemented
 
-(** Check if a value contains ⊥ *)
-let rec bottom_in_value (v : typed_value) : bool =
-  match v.value with
-  | Concrete _ -> false
-  | Adt av ->
-      let fields = FieldId.vector_to_list av.field_values in
-      List.exists bottom_in_value fields
-  | Tuple fields ->
-      let fields = FieldId.vector_to_list fields in
-      List.exists bottom_in_value fields
-  | Assumed (Box bv) -> bottom_in_value bv
-  | Borrow bc -> (
-      match bc with
-      | SharedBorrow _ | InactivatedMutBorrow _ -> false
-      | MutBorrow (_, bv) -> bottom_in_value bv)
-  | Loan lc -> (
-      match lc with
-      | SharedLoan (_, sv) -> bottom_in_value sv
-      | MutLoan _ -> false)
-
 (** Convert a constant operand value to a typed value *)
 let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
     (cv : operand_constant_value) : typed_value =
@@ -1289,6 +1353,5 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
  *)
 
 (* TODO:
-   update activate_inactivated_mut_borrow (need to end loans inside)
    update write_value
  *)

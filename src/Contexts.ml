@@ -14,8 +14,6 @@ type interpreter_mode = ConcreteMode | SymbolicMode
 
 type config = { mode : interpreter_mode; check_invariants : bool }
 
-type outer_borrows = Borrows of BorrowId.Set.t | Borrow of BorrowId.id
-
 type stack_frame = { vars : VarId.id list }
 (** A function frame
 
