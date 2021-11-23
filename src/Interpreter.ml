@@ -709,3 +709,32 @@ let write_place (config : config) (nv : typed_value) (p : place) (env0 : env) :
         | res -> res)
   in
   write_in_env env0
+
+(** Update the environment to be able to read a place.
+
+    When reading a place, we may be stuck along the way because some value
+    is borrowed, we reach a symbolic value, etc. In this situation [read_place]
+    fails while returning precise information about the failure. This function
+    uses this information to update the environment (by ending borrows,
+    expanding symbolic values) until we manage to fully read the place.
+ *)
+let rec update_env_along_read_place (config : config) (access : path_access)
+    (p : place) (env : env) : typed_value * env =
+  (* Attempt to read the place: if it fails, update the environment and retry *)
+  match read_place config access p env with
+  | Ok v -> (v, env)
+  | Error err ->
+      let env' =
+        match err with
+        | FailSharedLoan bids -> end_borrows config bids env
+        | FailMutLoan bid -> end_borrow config bid env
+        | FailInactivatedMutBorrow bid ->
+            activate_inactivated_mut_borrow config bid env
+        | FailSymbolic (pe, sp) ->
+            (* Expand the symbolic value *)
+            raise Unimplemented
+        | FailBottom (remaining_pes, pe, ty) ->
+            (* Expand the "bottom" value, if possible *)
+            raise Unimplemented
+      in
+      update_env_along_read_place config access p env'
