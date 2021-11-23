@@ -28,6 +28,14 @@ type config = { mode : interpreter_mode; check_invariants : bool }
 
 type outer_borrows = Borrows of BorrowId.Set.t | Borrow of BorrowId.id
 
+(** The following type identifies the relative position of expressions (in
+    particular borrows) in other expressions.
+    
+    For instance, it is used to control [end_borrow]: we usually only allow
+    to end "outer" borrows, unless we perform a drop.
+*)
+type inner_outer = Inner | Outer
+
 (** Borrow lookup result *)
 type borrow_lres =
   | NotFound
@@ -38,15 +46,24 @@ type borrow_lres =
 
 let update_if_none opt x = match opt with None -> Some x | _ -> opt
 
+let update_outer_borrows (io : inner_outer) opt x =
+  match io with
+  | Inner ->
+      (* If we can end inner borrows, we don't keep track of the outer borrows *)
+      None
+  | Outer -> update_if_none opt x
+
 let unwrap_res_to_outer_or opt default =
   match opt with Some x -> Outer x | None -> default
 
-let rec end_borrow_get_borrow_in_value config l outer_borrows v0 :
+let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
     borrow_lres * typed_value =
   match v0.value with
   | Concrete _ | Bottom | Symbolic _ -> (NotFound, v0)
   | Assumed (Box bv) ->
-      let res, bv' = end_borrow_get_borrow_in_value config l outer_borrows bv in
+      let res, bv' =
+        end_borrow_get_borrow_in_value config io l outer_borrows bv
+      in
       (* Note that we allow boxes to outlive the inner borrows.
        * Also note that when using the symbolic mode, boxes will never
        * be "opened" and will be manipulated solely through functions
@@ -56,21 +73,26 @@ let rec end_borrow_get_borrow_in_value config l outer_borrows v0 :
   | Adt adt ->
       let values = FieldId.vector_to_list adt.field_values in
       let res, values' =
-        end_borrow_get_borrow_in_values config l outer_borrows values
+        end_borrow_get_borrow_in_values config io l outer_borrows values
       in
       let values' = FieldId.vector_of_list values' in
       (res, { v0 with value = Adt { adt with field_values = values' } })
   | Tuple values ->
       let values = FieldId.vector_to_list values in
       let res, values' =
-        end_borrow_get_borrow_in_values config l outer_borrows values
+        end_borrow_get_borrow_in_values config io l outer_borrows values
       in
       let values' = FieldId.vector_of_list values' in
       (res, { v0 with value = Tuple values' })
   | Loan (MutLoan _) -> (NotFound, v0)
   | Loan (SharedLoan (borrows, v)) ->
-      let outer_borrows = update_if_none outer_borrows (Borrows borrows) in
-      let res, v' = end_borrow_get_borrow_in_value config l outer_borrows v in
+      (* Update the outer borrows, if necessary *)
+      let outer_borrows =
+        update_outer_borrows io outer_borrows (Borrows borrows)
+      in
+      let res, v' =
+        end_borrow_get_borrow_in_value config io l outer_borrows v
+      in
       (res, { value = Loan (SharedLoan (borrows, v')); ty = v0.ty })
   | Borrow (SharedBorrow l') ->
       if l = l' then
@@ -87,34 +109,37 @@ let rec end_borrow_get_borrow_in_value config l outer_borrows v0 :
         ( unwrap_res_to_outer_or outer_borrows (FoundMut bv),
           { v0 with value = Bottom } )
       else
-        let outer_borrows = update_if_none outer_borrows (Borrow l') in
+        (* Update the outer borrows, if necessary *)
+        let outer_borrows = update_outer_borrows io outer_borrows (Borrow l') in
         let res, bv' =
-          end_borrow_get_borrow_in_value config l outer_borrows bv
+          end_borrow_get_borrow_in_value config io l outer_borrows bv
         in
         (res, { v0 with value = Borrow (MutBorrow (l', bv')) })
 
-and end_borrow_get_borrow_in_values config l outer_borrows vl0 :
+and end_borrow_get_borrow_in_values config io l outer_borrows vl0 :
     borrow_lres * typed_value list =
   match vl0 with
   | [] -> (NotFound, vl0)
   | v :: vl -> (
-      let res, v' = end_borrow_get_borrow_in_value config l outer_borrows v in
+      let res, v' =
+        end_borrow_get_borrow_in_value config io l outer_borrows v
+      in
       match res with
       | NotFound ->
           let res, vl' =
-            end_borrow_get_borrow_in_values config l outer_borrows vl
+            end_borrow_get_borrow_in_values config io l outer_borrows vl
           in
           (res, v' :: vl')
       | _ -> (res, v' :: vl))
 
-let rec end_borrow_get_borrow_in_env (config : config) l env0 :
-    borrow_lres * env =
+let rec end_borrow_get_borrow_in_env (config : config) (io : inner_outer) l env0
+    : borrow_lres * env =
   match env0 with
   | [] -> (NotFound, [])
   | Var (x, v) :: env -> (
-      match end_borrow_get_borrow_in_value config l None v with
+      match end_borrow_get_borrow_in_value config io l None v with
       | NotFound, v' ->
-          let res, env' = end_borrow_get_borrow_in_env config l env in
+          let res, env' = end_borrow_get_borrow_in_env config io l env in
           (res, Var (x, v') :: env')
       | res, v' -> (res, Var (x, v') :: env))
   | Abs _ :: _ ->
@@ -251,8 +276,9 @@ let give_back_shared config (bid : BorrowId.id) (env : env) : env =
     then update the loan. Ends outer borrows before updating the borrow if
     it is necessary.
  *)
-let rec end_borrow (config : config) (l : BorrowId.id) (env0 : env) : env =
-  match end_borrow_get_borrow_in_env config l env0 with
+let rec end_borrow (config : config) (io : inner_outer) (l : BorrowId.id)
+    (env0 : env) : env =
+  match end_borrow_get_borrow_in_env config io l env0 with
   (* It is possible that we can't find a borrow in symbolic mode (ending
    * an abstraction may end several borrows at once *)
   | NotFound, env ->
@@ -262,17 +288,27 @@ let rec end_borrow (config : config) (l : BorrowId.id) (env0 : env) : env =
   | Outer outer_borrows, env ->
       let env' =
         match outer_borrows with
-        | Borrows bids -> end_borrows config bids env
-        | Borrow bid -> end_borrow config bid env
+        | Borrows bids -> end_borrows config io bids env
+        | Borrow bid -> end_borrow config io bid env
       in
-      end_borrow config l env'
+      (* Retry to end the borrow *)
+      end_borrow config io l env'
   (* If found mut: give the value back *)
   | FoundMut tv, env -> give_back_value config l tv env
   (* If found shared or inactivated mut: remove the borrow id from the loan set of the shared value *)
   | (FoundShared | FoundInactivatedMut), env -> give_back_shared config l env
 
-and end_borrows (config : config) (lset : BorrowId.Set.t) (env0 : env) : env =
-  BorrowId.Set.fold (fun id env -> end_borrow config id env) lset env0
+and end_borrows (config : config) (io : inner_outer) (lset : BorrowId.Set.t)
+    (env0 : env) : env =
+  BorrowId.Set.fold (fun id env -> end_borrow config io id env) lset env0
+
+let end_outer_borrow config = end_borrow config Outer
+
+let end_outer_borrows config = end_borrows config Outer
+
+let end_inner_borrow config = end_borrow config Inner
+
+let end_inner_borrows config = end_borrows config Inner
 
 let rec lookup_loan_in_value (config : config) (l : BorrowId.id)
     (v : typed_value) : loan_content option =
@@ -431,15 +467,15 @@ let promote_inactivated_borrow_to_mut_borrow (config : config) (l : BorrowId.id)
 
     The borrow must point to a shared value which is borrowed exactly once.
  *)
-let activate_inactivated_mut_borrow (config : config) (l : BorrowId.id)
-    (env : env) : env =
+let activate_inactivated_mut_borrow (config : config) (io : inner_outer)
+    (l : BorrowId.id) (env : env) : env =
   match lookup_loan_from_borrow_id config l env with
   | MutLoan _ -> failwith "Unreachable"
   | SharedLoan (bids, _) ->
       (* End the borrows which borrow from the value, at the exception of the borrow
        * we want to promote *)
       let bids = BorrowId.Set.remove l bids in
-      let env' = end_borrows config bids env in
+      let env' = end_borrows config io bids env in
       (* Promote the loan *)
       let borrowed_value, env'' =
         promote_shared_loan_to_mut_loan config l env'
@@ -792,10 +828,10 @@ let rec update_env_along_read_place (config : config) (access : access_kind)
   | Error err ->
       let env' =
         match err with
-        | FailSharedLoan bids -> end_borrows config bids env
-        | FailMutLoan bid -> end_borrow config bid env
+        | FailSharedLoan bids -> end_outer_borrows config bids env
+        | FailMutLoan bid -> end_outer_borrow config bid env
         | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config bid env
+            activate_inactivated_mut_borrow config Outer bid env
         | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
             raise Unimplemented
@@ -818,10 +854,10 @@ let rec update_env_along_write_place (config : config)
   | Error err ->
       let env' =
         match err with
-        | FailSharedLoan bids -> end_borrows config bids env
-        | FailMutLoan bid -> end_borrow config bid env
+        | FailSharedLoan bids -> end_outer_borrows config bids env
+        | FailMutLoan bid -> end_outer_borrow config bid env
         | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config bid env
+            activate_inactivated_mut_borrow config Outer bid env
         | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
             raise Unimplemented
@@ -874,7 +910,9 @@ let rec collect_borrows_at_place (config : config) (access : access_kind)
             | MutBorrow (_, tv) -> inspect_update tv
             | InactivatedMutBorrow bid ->
                 (* We need to activate inactivated borrows *)
-                let env' = activate_inactivated_mut_borrow config bid env in
+                let env' =
+                  activate_inactivated_mut_borrow config Inner bid env
+                in
                 raise (UpdateEnv env'))
         | Loan lc -> (
             match lc with
@@ -884,11 +922,11 @@ let rec collect_borrows_at_place (config : config) (access : access_kind)
                 match access with
                 | Read -> inspect_update ty
                 | Write ->
-                    let env' = end_borrows config bids env in
+                    let env' = end_outer_borrows config bids env in
                     raise (UpdateEnv env'))
             | MutLoan bid ->
                 (* We always need to end mutable borrows *)
-                let env' = end_borrow config bid env in
+                let env' = end_outer_borrow config bid env in
                 raise (UpdateEnv env'))
       in
       (* Inspect the value and update the environment while doing so.
@@ -924,9 +962,22 @@ let rec drop_borrows_at_place (config : config) (p : place) (env : env) : env =
   | Ok v -> (
       (* Explore the value to check if we need to update the environment.
 
+         Note that we can end the borrows which are inside the value (while the
+         value itself might be inside a borrow/loan: we are thus ending inner
+         borrows). Because a loan inside the value may be linked to a borrow
+         somewhere else *also inside* the value (it's possible with adts),
+         we first end all the borrows we find - by using [Inner] to allow
+         ending inner borrows - then end all the loans we find. It is really
+         important to do this in two steps: the borrow linked to a loan may
+         be inside the value at place p, in which case this borrow may be
+         an inner borrow that we *can* end, but it may also be outside this
+         value, in which case we need to end all the outer borrows first...
+         Also, whenever the environment is updated, we need to re-inspect
+         the value at place p *in two steps* again (end borrows, then end loans).
+
          We use exceptions to make it handy.
       *)
-      let rec inspect_update v : unit =
+      let rec inspect_update (end_loans : bool) v : unit =
         match v.value with
         | Concrete _ -> ()
         | Bottom ->
@@ -937,25 +988,43 @@ let rec drop_borrows_at_place (config : config) (p : place) (env : env) : env =
         | Symbolic _ ->
             (* Nothing to do for symbolic values - TODO: not sure *)
             raise Unimplemented
-        | Adt adt -> FieldId.iter inspect_update adt.field_values
-        | Tuple values -> FieldId.iter inspect_update values
-        | Assumed (Box v) -> inspect_update v
+        | Adt adt -> FieldId.iter (inspect_update end_loans) adt.field_values
+        | Tuple values -> FieldId.iter (inspect_update end_loans) values
+        | Assumed (Box v) -> inspect_update end_loans v
         | Borrow bc -> (
-            (* We need to end all borrows *)
+            assert (not end_loans);
+            (* Sanity check *)
+            (* We need to end all borrows. Note that we ignore the outer borrows
+               when ending the borrows we find here (we call [end_inner_borrow(s)]:
+               the value at place p might be below a borrow/loan. Note however
+               that the borrow we found here is an outer borrow, if we restrain
+               ourselves at the value at place p.
+            *)
             match bc with
             | SharedBorrow bid | MutBorrow (bid, _) ->
-                raise (UpdateEnv (end_borrow config bid env))
+                raise (UpdateEnv (end_inner_borrow config bid env))
             | InactivatedMutBorrow bid ->
                 (* We need to activate inactivated borrows - later, we will
                  * actually end it *)
-                let env' = activate_inactivated_mut_borrow config bid env in
+                let env' =
+                  activate_inactivated_mut_borrow config Inner bid env
+                in
                 raise (UpdateEnv env'))
-        | Loan lc -> (
-            (* We need to end all loans *)
-            match lc with
-            | SharedLoan (bids, _) ->
-                raise (UpdateEnv (end_borrows config bids env))
-            | MutLoan bid -> raise (UpdateEnv (end_borrow config bid env)))
+        | Loan lc ->
+            if (* If we can, end the loans, otherwise ignore *)
+               end_loans then
+              (* We need to end all loans. Note that as all the borrows inside
+                 the value at place p should already have ended, the borrows
+                 associated to the loans we find here should be borrows from
+                 outside this value: we need to call [end_outer_borrow(s)]
+                 (we can't ignore outer borrows this time).
+              *)
+              match lc with
+              | SharedLoan (bids, _) ->
+                  raise (UpdateEnv (end_outer_borrows config bids env))
+              | MutLoan bid ->
+                  raise (UpdateEnv (end_outer_borrow config bid env))
+            else ()
       in
       (* Inspect the value and update the environment while doing so.
          If the environment gets updated: perform a recursive call (many things
@@ -964,7 +1033,10 @@ let rec drop_borrows_at_place (config : config) (p : place) (env : env) : env =
          anymore
       *)
       try
-        inspect_update v;
+        (* Inspect the value: end the borrows only *)
+        inspect_update false v;
+        (* Inspect the value: end the loans *)
+        inspect_update true v;
         (* No environment update required: return the current environment *)
         env
       with UpdateEnv env' -> drop_borrows_at_place config p env')
