@@ -38,6 +38,16 @@ let update_outer_borrows (io : inner_outer) opt x =
 let unwrap_res_to_outer_or opt default =
   match opt with Some x -> Outer x | None -> default
 
+(** Auxiliary function to end borrows: check if a value contains the borrow
+    we are looking for, return the updated value if it is the case (where the
+    Borrom has been replace by [Bottom]) and we can end the borrow (for instance,
+    it is not an outer borrow...) or return the reason why we couldn't update the
+    borrow.
+
+    End borrow then simply performs a loop: as long as we need to end (outer)
+    borrows, we end them, then end the borrow we wanted to end in the first
+    place.
+*)
 let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
     borrow_lres * typed_value =
   match v0.value with
@@ -847,10 +857,10 @@ let expand_bottom_value (config : config) (tyctx : type_def TypeDefId.vector)
     expanding symbolic values) until we manage to fully read the place.
  *)
 let rec update_env_along_read_place (config : config) (access : access_kind)
-    (p : place) (env : env) : typed_value * env =
+    (p : place) (env : env) : env * typed_value =
   (* Attempt to read the place: if it fails, update the environment and retry *)
   match read_place config access p env with
-  | Ok v -> (v, env)
+  | Ok v -> (env, v)
   | Error err ->
       let env' =
         match err with
@@ -1179,11 +1189,15 @@ let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
   | _, Unit | _, ConstantAdt _ | _, ConstantValue _ ->
       failwith "Improperly typed constant value"
 
-(*
-let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
-      (eval_ctx * typed_value) =
+(*let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
+    eval_ctx * typed_value =
   match op with
   | Constant (ty, cv) ->
+      let v = constant_value_to_typed_value ctx ty cv in
+      (ctx, v)
   | Copy p ->
-  | Move p ->
- *)
+     let ctx' = 
+  | Move p -> ()
+
+let rec update_env_along_read_place (config : config) (access : access_kind)
+    (p : place) (env : env) : typed_value * env =*)
