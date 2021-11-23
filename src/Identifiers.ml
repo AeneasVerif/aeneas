@@ -9,11 +9,14 @@ open Errors
 module type Id = sig
   type id
 
+  type generator
+  (** Id generator - simply a counter *)
+
   type 'a vector
 
   val zero : id
 
-  val incr : id -> id
+  val fresh : generator -> id * generator
 
   val to_string : id -> string
 
@@ -53,6 +56,8 @@ module IdGen () : Id = struct
   (* TODO: use Int64.t *)
   type id = int
 
+  type generator = id
+
   type 'a vector = 'a list
 
   let zero = 0
@@ -62,6 +67,8 @@ module IdGen () : Id = struct
      * value - but we really want to make sure we detect overflows if
      * they happen *)
     if x == max_int then raise (Errors.IntegerOverflow ()) else x + 1
+
+  let fresh gen = (gen, incr gen)
 
   let to_string = string_of_int
 
