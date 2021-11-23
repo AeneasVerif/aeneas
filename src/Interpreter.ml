@@ -1228,7 +1228,7 @@ let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
   | _, Unit | _, ConstantAdt _ | _, ConstantValue _ ->
       failwith "Improperly typed constant value"
 
-(*let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
+let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
     eval_ctx * typed_value =
   match op with
   | Expressions.Constant (ty, cv) ->
@@ -1240,7 +1240,7 @@ let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
       let env1 = update_env_along_read_place config access p ctx.env in
       let env2 = collect_borrows_at_place config access p env1 in
       match read_place config access p env2 with
-      | Err _ -> failwith "Unreachable"
+      | Error _ -> failwith "Unreachable"
       | Ok v ->
           (* Copy the value *)
           assert (not (bottom_in_value v));
@@ -1252,14 +1252,16 @@ let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
       let env1 = update_env_along_read_place config access p ctx.env in
       let env2 = collect_borrows_at_place config access p env1 in
       match read_place config access p env2 with
-      | Err _ -> failwith "Unreachable"
-      | Ok v ->
+      | Error _ -> failwith "Unreachable"
+      | Ok v -> (
           (* Move the value *)
           assert (not (bottom_in_value v));
           let bottom = { value = Bottom; ty = v.ty } in
-          let env3 = write_place config bottom p env2 in
-          let ctx3 = { ctx with env = env3 } in
-          (ctx3, v))*)
+          match write_place config bottom p env2 with
+          | Error _ -> failwith "Unreachable"
+          | Ok env3 ->
+              let ctx3 = { ctx with env = env3 } in
+              (ctx3, v)))
 
 (*
 let rec update_env_along_read_place (config : config) (access : access_kind)
