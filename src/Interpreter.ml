@@ -49,11 +49,11 @@ let unwrap_res_to_outer_or opt default =
     place.
 *)
 let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
-    borrow_lres * typed_value =
+    typed_value * borrow_lres =
   match v0.value with
-  | Concrete _ | Bottom | Symbolic _ -> (NotFound, v0)
+  | Concrete _ | Bottom | Symbolic _ -> (v0, NotFound)
   | Assumed (Box bv) ->
-      let res, bv' =
+      let bv', res =
         end_borrow_get_borrow_in_value config io l outer_borrows bv
       in
       (* Note that we allow boxes to outlive the inner borrows.
@@ -61,79 +61,79 @@ let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
        * be "opened" and will be manipulated solely through functions
        * like new, deref, etc. which will enforce that we destroy
        * boxes upon ending inner borrows *)
-      (res, { v0 with value = Assumed (Box bv') })
+      ({ v0 with value = Assumed (Box bv') }, res)
   | Adt adt ->
       let values = FieldId.vector_to_list adt.field_values in
-      let res, values' =
+      let values', res =
         end_borrow_get_borrow_in_values config io l outer_borrows values
       in
       let values' = FieldId.vector_of_list values' in
-      (res, { v0 with value = Adt { adt with field_values = values' } })
+      ({ v0 with value = Adt { adt with field_values = values' } }, res)
   | Tuple values ->
       let values = FieldId.vector_to_list values in
-      let res, values' =
+      let values', res =
         end_borrow_get_borrow_in_values config io l outer_borrows values
       in
       let values' = FieldId.vector_of_list values' in
-      (res, { v0 with value = Tuple values' })
-  | Loan (MutLoan _) -> (NotFound, v0)
+      ({ v0 with value = Tuple values' }, res)
+  | Loan (MutLoan _) -> (v0, NotFound)
   | Loan (SharedLoan (borrows, v)) ->
       (* Update the outer borrows, if necessary *)
       let outer_borrows =
         update_outer_borrows io outer_borrows (Borrows borrows)
       in
-      let res, v' =
+      let v', res =
         end_borrow_get_borrow_in_value config io l outer_borrows v
       in
-      (res, { value = Loan (SharedLoan (borrows, v')); ty = v0.ty })
+      ({ value = Loan (SharedLoan (borrows, v')); ty = v0.ty }, res)
   | Borrow (SharedBorrow l') ->
       if l = l' then
-        ( unwrap_res_to_outer_or outer_borrows FoundInactivatedMut,
-          { v0 with value = Bottom } )
-      else (NotFound, v0)
+        ( { v0 with value = Bottom },
+          unwrap_res_to_outer_or outer_borrows FoundInactivatedMut )
+      else (v0, NotFound)
   | Borrow (InactivatedMutBorrow l') ->
       if l = l' then
-        ( unwrap_res_to_outer_or outer_borrows FoundInactivatedMut,
-          { v0 with value = Bottom } )
-      else (NotFound, v0)
+        ( { v0 with value = Bottom },
+          unwrap_res_to_outer_or outer_borrows FoundInactivatedMut )
+      else (v0, NotFound)
   | Borrow (MutBorrow (l', bv)) ->
       if l = l' then
-        ( unwrap_res_to_outer_or outer_borrows (FoundMut bv),
-          { v0 with value = Bottom } )
+        ( { v0 with value = Bottom },
+          unwrap_res_to_outer_or outer_borrows (FoundMut bv) )
       else
         (* Update the outer borrows, if necessary *)
         let outer_borrows = update_outer_borrows io outer_borrows (Borrow l') in
-        let res, bv' =
+        let bv', res =
           end_borrow_get_borrow_in_value config io l outer_borrows bv
         in
-        (res, { v0 with value = Borrow (MutBorrow (l', bv')) })
+        ({ v0 with value = Borrow (MutBorrow (l', bv')) }, res)
 
 and end_borrow_get_borrow_in_values config io l outer_borrows vl0 :
-    borrow_lres * typed_value list =
+    typed_value list * borrow_lres =
   match vl0 with
-  | [] -> (NotFound, vl0)
+  | [] -> (vl0, NotFound)
   | v :: vl -> (
-      let res, v' =
+      let v', res =
         end_borrow_get_borrow_in_value config io l outer_borrows v
       in
       match res with
       | NotFound ->
-          let res, vl' =
+          let vl', res =
             end_borrow_get_borrow_in_values config io l outer_borrows vl
           in
-          (res, v' :: vl')
-      | _ -> (res, v' :: vl))
+          (v' :: vl', res)
+      | _ -> (v' :: vl, res))
 
 let rec end_borrow_get_borrow_in_env (config : config) (io : inner_outer) l env0
-    : borrow_lres * env =
+    : env * borrow_lres =
   match env0 with
-  | [] -> (NotFound, [])
+  | [] -> ([], NotFound)
   | Var (x, v) :: env -> (
       match end_borrow_get_borrow_in_value config io l None v with
-      | NotFound, v' ->
-          let res, env' = end_borrow_get_borrow_in_env config io l env in
-          (res, Var (x, v') :: env')
-      | res, v' -> (res, Var (x, v') :: env))
+      | v', NotFound ->
+          let env', res = end_borrow_get_borrow_in_env config io l env in
+          (Var (x, v') :: env', res)
+      | v', res -> (Var (x, v') :: env, res))
   | Abs _ :: _ ->
       assert (config.mode = SymbolicMode);
       raise Unimplemented
@@ -317,11 +317,11 @@ let rec end_borrow (config : config) (io : inner_outer) (l : BorrowId.id)
   match end_borrow_get_borrow_in_env config io l env0 with
   (* It is possible that we can't find a borrow in symbolic mode (ending
    * an abstraction may end several borrows at once *)
-  | NotFound, env ->
+  | env, NotFound ->
       assert (config.mode = SymbolicMode);
       env
   (* If we found outer borrows: end those borrows first *)
-  | Outer outer_borrows, env ->
+  | env, Outer outer_borrows ->
       let env' =
         match outer_borrows with
         | Borrows bids -> end_borrows config io bids env
@@ -330,9 +330,9 @@ let rec end_borrow (config : config) (io : inner_outer) (l : BorrowId.id)
       (* Retry to end the borrow *)
       end_borrow config io l env'
   (* If found mut: give the value back *)
-  | FoundMut tv, env -> give_back_value config l tv env
+  | env, FoundMut tv -> give_back_value config l tv env
   (* If found shared or inactivated mut: remove the borrow id from the loan set of the shared value *)
-  | (FoundShared | FoundInactivatedMut), env -> give_back_shared config l env
+  | env, (FoundShared | FoundInactivatedMut) -> give_back_shared config l env
 
 and end_borrows (config : config) (io : inner_outer) (lset : BorrowId.Set.t)
     (env0 : env) : env =
