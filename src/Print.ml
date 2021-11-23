@@ -147,7 +147,7 @@ end
 open Values
 
 module Values = struct
-  open Types
+  open Types (* local module *)
 
   type value_formatter = {
     r_to_string : RegionVarId.id -> string;
@@ -394,4 +394,87 @@ module Values = struct
     ^ "}" ^ "{regions="
     ^ RegionId.set_to_string abs.regions
     ^ "}" ^ " {\n" ^ avs ^ "\n}"
+end
+
+open Contexts
+(** Pretty-printing for contexts *)
+
+module Contexts = struct
+  open Values (* local module *)
+
+  open Contexts
+
+  let env_value_to_string (fmt : value_formatter) (ev : env_value) : string =
+    match ev with
+    | Var (vid, tv) ->
+        var_id_to_string vid ^ " -> " ^ typed_value_to_string fmt tv
+    | Abs abs -> abs_to_string fmt abs
+
+  let env_to_string (fmt : value_formatter) (env : env) : string =
+    "{\n"
+    ^ String.concat ";\n"
+        (List.map (fun ev -> "  " ^ env_value_to_string fmt ev) env)
+    ^ "\n}"
+
+  type ctx_formatter = value_formatter
+
+  let eval_ctx_to_ctx_formatter (ctx : eval_ctx) : ctx_formatter =
+    (* We shouldn't use r_to_string *)
+    let r_to_string _ = failwith "Unreachable" in
+    let type_var_id_to_string vid =
+      let v = lookup_type_var ctx vid in
+      v.tv_name
+    in
+    let type_def_id_to_string def_id =
+      let def = TypeDefId.nth ctx.type_context def_id in
+      Types.name_to_string def.name
+    in
+    let type_def_id_variant_id_to_string def_id variant_id =
+      let def = TypeDefId.nth ctx.type_context def_id in
+      match def.kind with
+      | Struct _ -> failwith "Unreachable"
+      | Enum variants ->
+          let variant = VariantId.nth variants variant_id in
+          Types.name_to_string def.name ^ "::" ^ variant.variant_name
+    in
+    let var_id_to_string vid =
+      let v = VarId.Map.find vid ctx.vars in
+      var_to_string v
+    in
+    {
+      r_to_string;
+      type_var_id_to_string;
+      type_def_id_to_string;
+      type_def_id_variant_id_to_string;
+      var_id_to_string;
+    }
+
+  let frame_to_string (fmt : ctx_formatter) (ctx : eval_ctx)
+      (frame : stack_frame) : string =
+    let var_binding_to_string (vid : VarId.id) : string =
+      let var = lookup_var ctx vid in
+      let v = lookup_var_value ctx vid in
+      let var_name =
+        match var.name with Some name -> "(" ^ name ^ ")" | None -> ""
+      in
+      "  @" ^ VarId.to_string var.index ^ var_name ^ " --> "
+      ^ typed_value_to_string fmt v
+    in
+    let vars =
+      String.concat ",\n" (List.map var_binding_to_string frame.vars)
+    in
+    "[\n" ^ vars ^ "\n]"
+
+  let eval_ctx_to_string (ctx : eval_ctx) : string =
+    let fmt = eval_ctx_to_ctx_formatter ctx in
+    let num_frames = List.length ctx.frames in
+    let frames =
+      List.mapi
+        (fun i f ->
+          "\n# Frame " ^ string_of_int i ^ ":\n" ^ frame_to_string fmt ctx f
+          ^ "\n")
+        ctx.frames
+    in
+    let frames = List.rev frames in
+    "# " ^ string_of_int num_frames ^ " frame(s)\n" ^ String.concat "" frames
 end

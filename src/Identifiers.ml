@@ -40,6 +40,8 @@ module type Id = sig
 
   val set_to_string : Set.t -> string
 
+  module Map : Map.S with type key = id
+
   val id_of_json : Yojson.Basic.t -> (id, string) result
 
   val vector_of_json :
@@ -93,6 +95,12 @@ module IdGen () : Id = struct
   let map = List.map
 
   module Set = Set.Make (struct
+    type t = id
+
+    let compare = compare
+  end)
+
+  module Map = Map.Make (struct
     type t = id
 
     let compare = compare
