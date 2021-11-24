@@ -1462,7 +1462,7 @@ let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
   | Types.Str, ConstantValue (String v) -> { value = Concrete (String v); ty }
   | Types.Integer int_ty, ConstantValue (Scalar v) ->
       (* Check the type and the ranges *)
-      assert (int_ty == scalar_value_get_integer_type v);
+      assert (int_ty == v.int_ty);
       assert (check_scalar_value_in_range v);
       { value = Concrete (Scalar v); ty }
   (* Remaining cases (invalid) - listing as much as we can on purpose
@@ -1515,14 +1515,80 @@ let eval_unary_op (config : config) (ctx : eval_ctx) (unop : unop)
   | Not, Concrete (Bool b) ->
       Ok (ctx1, { v with value = Concrete (Bool (not b)) })
   | Neg, Concrete (Scalar sv) -> (
-      let int_ty = scalar_value_get_integer_type sv in
-      let i = scalar_value_get_value sv in
-      let i = Z.neg i in
-      match mk_scalar int_ty i with
+      let i = Z.neg sv.value in
+      match mk_scalar sv.int_ty i with
       | Error _ -> Error Panic
       | Ok sv -> Ok (ctx1, { v with value = Concrete (Scalar sv) }))
   | (Not | Neg), Symbolic _ -> raise Unimplemented (* TODO *)
   | _ -> failwith "Invalid value for unop"
+
+let eval_binary_op (config : config) (ctx : eval_ctx) (binop : binop)
+    (op1 : operand) (op2 : operand) : (eval_ctx * typed_value) eval_result =
+  (* Evaluate the operands *)
+  let access = Read in
+  let ctx1, v1 = eval_operand config ctx op1 in
+  let ctx2, v2 = eval_operand config ctx1 op2 in
+  (* Binary operations only apply on integer values, but when we check for
+   * equality *)
+  if binop = Eq || binop = Ne then (
+    (* Equality/inequality check is primitive only on primitive types *)
+    assert (v1.ty = v2.ty);
+    let b = v1 = v2 in
+    Ok (ctx2, { value = Concrete (Bool b); ty = Types.Bool }))
+  else
+    match (v1.value, v2.value) with
+    | Concrete (Scalar sv1), Concrete (Scalar sv2) -> (
+        let res =
+          (* There are binops which require the two operands to have the same
+             type, and binops for which it is not the case.
+             There are also binops which return booleans, and binops which
+             return integers.
+          *)
+          match binop with
+          | Lt | Le | Ge | Gt ->
+              (* The two operands must have the same type and the result is a boolean *)
+              assert (sv1.int_ty = sv2.int_ty);
+              let b =
+                match binop with
+                | Lt -> Z.lt sv1.value sv1.value
+                | Le -> Z.leq sv1.value sv1.value
+                | Ge -> Z.geq sv1.value sv1.value
+                | Gt -> Z.gt sv1.value sv1.value
+                | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr | Shl
+                | Shr | Ne | Eq ->
+                    failwith "Unreachable"
+              in
+              Ok { value = Concrete (Bool b); ty = Types.Bool }
+          | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr -> (
+              (* The two operands must have the same type and the result is an integer *)
+              assert (sv1.int_ty = sv2.int_ty);
+              let res =
+                match binop with
+                | Div ->
+                    if sv2.value = Z.zero then Error ()
+                    else mk_scalar sv1.int_ty (Z.div sv1.value sv2.value)
+                | Rem ->
+                    (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
+                    if sv2.value = Z.zero then Error ()
+                    else mk_scalar sv1.int_ty (Z.rem sv1.value sv2.value)
+                | Add -> mk_scalar sv1.int_ty (Z.add sv1.value sv2.value)
+                | Sub -> mk_scalar sv1.int_ty (Z.sub sv1.value sv2.value)
+                | Mul -> mk_scalar sv1.int_ty (Z.mul sv1.value sv2.value)
+                | BitXor -> raise Unimplemented
+                | BitAnd -> raise Unimplemented
+                | BitOr -> raise Unimplemented
+                | Lt | Le | Ge | Gt | Shl | Shr | Ne | Eq ->
+                    failwith "Unreachable"
+              in
+              match res with
+              | Error err -> Error err
+              | Ok sv ->
+                  Ok { value = Concrete (Scalar sv); ty = Integer sv1.int_ty })
+          | Shl | Shr -> raise Unimplemented
+          | Ne | Eq -> failwith "Unreachable"
+        in
+        match res with Error _ -> Error Panic | Ok v -> Ok (ctx2, v))
+    | _ -> failwith "Invalid inputs for binop"
 
 let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
     (eval_ctx * typed_value) eval_result =
@@ -1573,7 +1639,7 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
           (* Return *)
           Ok ({ ctx3 with env = env4 }, rv))
   | UnaryOp (unop, op) -> eval_unary_op config ctx unop op
-  | BinaryOp (binop, op1, op2) -> raise Unimplemented
+  | BinaryOp (binop, op1, op2) -> eval_binary_op config ctx binop op1 op2
   | Discriminant p -> raise Unimplemented
   | Aggregate (aggregate_kind, ops) -> raise Unimplemented
 

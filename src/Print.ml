@@ -180,19 +180,7 @@ module Values = struct
   let big_int_to_string (bi : big_int) : string = Z.to_string bi
 
   let scalar_value_to_string (sv : scalar_value) : string =
-    match sv with
-    | Isize bi -> big_int_to_string bi ^ ": isize"
-    | I8 bi -> big_int_to_string bi ^ ": i8"
-    | I16 bi -> big_int_to_string bi ^ ": i16"
-    | I32 bi -> big_int_to_string bi ^ ": i32"
-    | I64 bi -> big_int_to_string bi ^ ": i64"
-    | I128 bi -> big_int_to_string bi ^ ": i128"
-    | Usize bi -> big_int_to_string bi ^ ": usize"
-    | U8 bi -> big_int_to_string bi ^ ": u8"
-    | U16 bi -> big_int_to_string bi ^ ": u16"
-    | U32 bi -> big_int_to_string bi ^ ": u32"
-    | U64 bi -> big_int_to_string bi ^ ": u64"
-    | U128 bi -> big_int_to_string bi ^ ": u128"
+    big_int_to_string sv.value ^ ": " ^ integer_type_to_string sv.int_ty
 
   let constant_value_to_string (cv : constant_value) : string =
     match cv with

@@ -1,5 +1,9 @@
 /// The following code generates the limits for the scalar types
 
+fn test_modulo(x: i32, y: i32) {
+    println!("{} % {} = {}", x, y, x % y);
+}
+
 fn main() {
     let ints_lower = [
         "isize", "i8", "i16", "i32", "i64", "i128", "usize", "u8", "u16", "u32", "u64", "u128",
@@ -72,4 +76,9 @@ fn main() {
         println!("| Types.{} -> Ok ({} i)", s, s);
     }
     println!("\n");
+
+    // Modulo tests
+    test_modulo(1, 2);
+    test_modulo(-1, 2);
+    test_modulo(-1, -2);
 }

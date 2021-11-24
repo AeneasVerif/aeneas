@@ -55,38 +55,6 @@ let usize_min = u32_min
 
 let usize_max = u32_max
 
-(** Return the integer value in a scalar value *)
-let scalar_value_get_value (v : scalar_value) : big_int =
-  match v with
-  | Isize i -> i
-  | I8 i -> i
-  | I16 i -> i
-  | I32 i -> i
-  | I64 i -> i
-  | I128 i -> i
-  | Usize i -> i
-  | U8 i -> i
-  | U16 i -> i
-  | U32 i -> i
-  | U64 i -> i
-  | U128 i -> i
-
-(** Retrieve the [integer_type] of a scalar value *)
-let scalar_value_get_integer_type (sv : scalar_value) : integer_type =
-  match sv with
-  | Isize _ -> Types.Isize
-  | I8 _ -> Types.I8
-  | I16 _ -> Types.I16
-  | I32 _ -> Types.I32
-  | I64 _ -> Types.I64
-  | I128 _ -> Types.I128
-  | Usize _ -> Types.Usize
-  | U8 _ -> Types.U8
-  | U16 _ -> Types.U16
-  | U32 _ -> Types.U32
-  | U64 _ -> Types.U64
-  | U128 _ -> Types.U128
-
 (** Check that an integer value is in range *)
 let check_int_in_range (int_ty : integer_type) (i : big_int) : bool =
   match int_ty with
@@ -105,25 +73,9 @@ let check_int_in_range (int_ty : integer_type) (i : big_int) : bool =
 
 (** Check that a scalar value is correct (the integer value it contains is in range) *)
 let check_scalar_value_in_range (v : scalar_value) : bool =
-  let i = scalar_value_get_value v in
-  let int_ty = scalar_value_get_integer_type v in
-  check_int_in_range int_ty i
+  check_int_in_range v.int_ty v.value
 
 (** Make a scalar value, while checking the value is in range *)
 let mk_scalar (int_ty : integer_type) (i : big_int) :
     (scalar_value, unit) result =
-  if check_int_in_range int_ty i then
-    match int_ty with
-    | Types.Isize -> Ok (Isize i)
-    | Types.I8 -> Ok (I8 i)
-    | Types.I16 -> Ok (I16 i)
-    | Types.I32 -> Ok (I32 i)
-    | Types.I64 -> Ok (I64 i)
-    | Types.I128 -> Ok (I128 i)
-    | Types.Usize -> Ok (Usize i)
-    | Types.U8 -> Ok (U8 i)
-    | Types.U16 -> Ok (U16 i)
-    | Types.U32 -> Ok (U32 i)
-    | Types.U64 -> Ok (U64 i)
-    | Types.U128 -> Ok (U128 i)
-  else Error ()
+  if check_int_in_range int_ty i then Ok { value = i; int_ty } else Error ()

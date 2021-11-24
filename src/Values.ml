@@ -31,24 +31,12 @@ let big_int_of_yojson (json : Yojson.Safe.t) : (big_int, string) result =
 
 let big_int_to_yojson (i : big_int) = `Intlit (Z.to_string i)
 
+type scalar_value = { value : big_int; int_ty : integer_type }
 (** A scalar value
 
     Note that we use unbounded integers everywhere.
     We then harcode the boundaries for the different types.
  *)
-type scalar_value =
-  | Isize of big_int
-  | I8 of big_int
-  | I16 of big_int
-  | I32 of big_int
-  | I64 of big_int
-  | I128 of big_int
-  | Usize of big_int
-  | U8 of big_int
-  | U16 of big_int
-  | U32 of big_int
-  | U64 of big_int
-  | U128 of big_int
 
 (** A constant value *)
 type constant_value =

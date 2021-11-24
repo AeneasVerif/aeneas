@@ -203,40 +203,40 @@ let scalar_value_of_json (js : json) : (scalar_value, string) result =
       (match js with
       | `Assoc [ ("Isize", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (Isize bi)
+          Ok { value = bi; int_ty = Isize }
       | `Assoc [ ("I8", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (I8 bi)
+          Ok { value = bi; int_ty = I8 }
       | `Assoc [ ("I16", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (I16 bi)
+          Ok { value = bi; int_ty = I16 }
       | `Assoc [ ("I32", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (I32 bi)
+          Ok { value = bi; int_ty = I32 }
       | `Assoc [ ("I64", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (I64 bi)
+          Ok { value = bi; int_ty = I64 }
       | `Assoc [ ("I128", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (I128 bi)
+          Ok { value = bi; int_ty = I128 }
       | `Assoc [ ("Usize", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (Usize bi)
+          Ok { value = bi; int_ty = Usize }
       | `Assoc [ ("U8", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (U8 bi)
+          Ok { value = bi; int_ty = U8 }
       | `Assoc [ ("U16", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (U16 bi)
+          Ok { value = bi; int_ty = U16 }
       | `Assoc [ ("U32", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (U32 bi)
+          Ok { value = bi; int_ty = U32 }
       | `Assoc [ ("U64", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (U64 bi)
+          Ok { value = bi; int_ty = U64 }
       | `Assoc [ ("U128", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok (U128 bi)
+          Ok { value = bi; int_ty = U128 }
       | _ -> Error "")
   in
   match res with
