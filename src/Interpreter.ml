@@ -1479,7 +1479,32 @@ let prepare_rplace (config : config) (access : access_kind) (p : place)
   let ctx2 = { ctx with env = env2 } in
   (ctx2, v)
 
-let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
+(** When we need to evaluate several operands (for a function call for instance),
+    we need to prepare *all* the values by ending borrows, etc. *then* update them
+    (by moving them, borrowing them, etc.).
+
+    The reason is that borrows in some of the values we access may reference
+    some of the other values: we may not be able to update the borrows if those
+    values have, say, been moved (and are not present in the environment anymore).
+
+    For this reason, we split [eval_operand] into two functions:
+    - [eval_operand_prepare]
+    - [eval_operand_apply]
+    which are then used in [eval_operand] and [eval_operands].
+ *)
+let eval_operand_prepare (config : config) (ctx : eval_ctx) (op : operand) :
+    eval_ctx =
+  match op with
+  | Expressions.Constant (ty, cv) -> ctx (* nothing to do *)
+  | Expressions.Copy p ->
+      let access = Read in
+      fst (prepare_rplace config access p ctx)
+  | Expressions.Move p ->
+      let access = Move in
+      fst (prepare_rplace config access p ctx)
+
+(** See [eval_operand_prepare] (which should have been called before) *)
+let eval_operand_apply (config : config) (ctx : eval_ctx) (op : operand) :
     eval_ctx * typed_value =
   match op with
   | Expressions.Constant (ty, cv) ->
@@ -1488,22 +1513,52 @@ let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
-      let ctx2, v = prepare_rplace config access p ctx in
+      let v = read_place_unwrap config access p ctx.env in
       (* Copy the value *)
       assert (not (bottom_in_value v));
-      copy_value config ctx2 v
+      copy_value config ctx v
   | Expressions.Move p -> (
       (* Access the value *)
       let access = Move in
-      let ctx2, v = prepare_rplace config access p ctx in
+      let v = read_place_unwrap config access p ctx.env in
       (* Move the value *)
       assert (not (bottom_in_value v));
       let bottom = { value = Bottom; ty = v.ty } in
-      match write_place config access p bottom ctx2.env with
+      match write_place config access p bottom ctx.env with
       | Error _ -> failwith "Unreachable"
-      | Ok env3 ->
-          let ctx3 = { ctx2 with env = env3 } in
-          (ctx3, v))
+      | Ok env1 ->
+          let ctx1 = { ctx with env = env1 } in
+          (ctx1, v))
+
+(** Evaluate an operand.
+
+    WARNING: it is ok to use this function only if we have exactly one
+    operand to evaluate. If there are several, use [eval_operands].
+    Otherwise, we may break invariants (if some values refer to other
+    values via borrows).
+ *)
+let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
+    eval_ctx * typed_value =
+  let ctx1 = eval_operand_prepare config ctx op in
+  eval_operand_apply config ctx1 op
+
+(** Evaluate several operands.
+
+ *)
+let eval_operands (config : config) (ctx : eval_ctx) (ops : operand list) :
+    eval_ctx * typed_value list =
+  (* First prepare the values to end/activate the borrows *)
+  let ctx1 =
+    List.fold_left (fun ctx op -> eval_operand_prepare config ctx op) ctx ops
+  in
+  (* Then actually apply the operands to move, borrow, copy... *)
+  List.fold_left_map (fun ctx op -> eval_operand_apply config ctx op) ctx ops
+
+let eval_two_operands (config : config) (ctx : eval_ctx) (op1 : operand)
+    (op2 : operand) : eval_ctx * typed_value * typed_value =
+  match eval_operands config ctx [ op1; op2 ] with
+  | ctx', [ v1; v2 ] -> (ctx', v1, v2)
+  | _ -> failwith "Unreachable"
 
 let eval_unary_op (config : config) (ctx : eval_ctx) (unop : unop)
     (op : operand) : (eval_ctx * typed_value) eval_result =
@@ -1526,11 +1581,12 @@ let eval_binary_op (config : config) (ctx : eval_ctx) (binop : binop)
     (op1 : operand) (op2 : operand) : (eval_ctx * typed_value) eval_result =
   (* Evaluate the operands *)
   let access = Read in
-  let ctx1, v1 = eval_operand config ctx op1 in
-  let ctx2, v2 = eval_operand config ctx1 op2 in
-  (* Binary operations only apply on integer values, but when we check for
-   * equality *)
-  if binop = Eq || binop = Ne then (
+  let ctx2, v1, v2 = eval_two_operands config ctx op1 op2 in
+  if
+    (* Binary operations only apply on integer values, but when we check for
+     * equality *)
+    binop = Eq || binop = Ne
+  then (
     (* Equality/inequality check is primitive only on primitive types *)
     assert (v1.ty = v2.ty);
     let b = v1 = v2 in
@@ -1661,4 +1717,17 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
                   Ok (ctx1, { value = Concrete (Scalar sv); ty = Integer Isize })
               ))
       | _ -> failwith "Invalid input for `discriminant`")
-  | Aggregate (aggregate_kind, ops) -> raise Unimplemented
+  | Aggregate (aggregate_kind, ops) ->
+      (* Evaluate the operands *)
+      let ctx1, values = eval_operands config ctx ops in
+      raise Unimplemented
+(* (* Match on the aggregate kind *)
+   match aggregate_kind with
+   | AggregatedTuple ->
+       let tys = List.map (fun v -> v.ty) values in
+       let values = FieldId.vector_of_list values in
+       Ok (ctx1, { value = Tuple values; ty = Types.Tuple tys })
+   | AggregatedAdt (def_id, opt_variant_id) -> raise Unimplemented
+    begin match
+      let expected_types = ctx_get_adt_field_types def_id opt_variant_id
+      let fields = ctx_get_adt_fields def_id opt_variant_id in*)

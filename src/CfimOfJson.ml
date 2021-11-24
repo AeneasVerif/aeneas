@@ -367,12 +367,15 @@ let aggregate_kind_of_json (js : json) : (aggregate_kind, string) result =
   combine_error_msgs js "operand_kind_of_json"
     (match js with
     | `String "AggregatedTuple" -> Ok AggregatedTuple
-    | `Assoc [ ("AggregatedAdt", `List [ id; opt_variant_id ]) ] ->
+    | `Assoc [ ("AggregatedAdt", `List [ id; opt_variant_id; regions; tys ]) ]
+      ->
         let* id = TypeDefId.id_of_json id in
         let* opt_variant_id =
           option_of_json VariantId.id_of_json opt_variant_id
         in
-        Ok (AggregatedAdt (id, opt_variant_id))
+        let* regions = list_of_json erased_region_of_json regions in
+        let* tys = list_of_json ety_of_json tys in
+        Ok (AggregatedAdt (id, opt_variant_id, regions, tys))
     | _ -> Error "")
 
 let rvalue_of_json (js : json) : (rvalue, string) result =

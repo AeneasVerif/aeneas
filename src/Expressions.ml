@@ -69,7 +69,8 @@ type operand =
 
 type aggregate_kind =
   | AggregatedTuple
-  | AggregatedAdt of TypeDefId.id * VariantId.id option
+  | AggregatedAdt of
+      TypeDefId.id * VariantId.id option * erased_region list * ety list
 
 type rvalue =
   | Use of operand
