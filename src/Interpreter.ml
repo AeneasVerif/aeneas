@@ -867,6 +867,7 @@ let rec access_projection (access : projection_access) (env : env)
   match p with
   | [] ->
       let nv = update v in
+      (* Type checking *)
       assert (nv.ty = v.ty);
       Ok (env, { read = v; updated = nv })
   | pe :: p' -> (
@@ -1067,8 +1068,8 @@ let write_place (_config : config) (access : access_kind) (p : place)
     about which variant we should project to, which is why we *can* set the
     variant index when writing one of its fields).
 *)
-let expand_bottom_value (config : config) (tyctx : type_def TypeDefId.vector)
-    (access : access_kind) (p : place) (remaining_pes : int)
+let expand_bottom_value (config : config) (access : access_kind)
+    (tyctx : type_def TypeDefId.vector) (p : place) (remaining_pes : int)
     (pe : projection_elem) (ty : ety) (env : env) : env =
   (* Prepare the update: we need to take the proper prefix of the place
      during whose evaluation we got stuck *)
@@ -1134,7 +1135,6 @@ let expand_bottom_value (config : config) (tyctx : type_def TypeDefId.vector)
   | Ok env -> env
   | Error _ -> failwith "Unreachable"
 
-(*
 (** Update the environment to be able to read a place.
 
     When reading a place, we may be stuck along the way because some value
@@ -1160,7 +1160,8 @@ let rec update_env_along_read_place (config : config) (access : access_kind)
             raise Unimplemented
         | FailBottom (remaining_pes, pe, ty) ->
             (* We can't expand [Bottom] values while reading them *)
-            failwith "Unreachable"
+            failwith "Found [Bottom] while reading a place"
+        | FailBorrow _ -> failwith "Could not read a borrow"
       in
       update_env_along_read_place config access p env'
 
@@ -1168,11 +1169,11 @@ let rec update_env_along_read_place (config : config) (access : access_kind)
 
     See [update_env_alond_read_place].
 *)
-let rec update_env_along_write_place (config : config)
-    (tyctx : type_def TypeDefId.vector) (nv : typed_value) (p : place)
+let rec update_env_along_write_place (config : config) (access : access_kind)
+    (tyctx : type_def TypeDefId.vector) (p : place) (nv : typed_value)
     (env : env) : env =
   (* Attempt to write the place: if it fails, update the environment and retry *)
-  match write_place config nv p env with
+  match write_place config access p nv env with
   | Ok v -> env
   | Error err ->
       let env' =
@@ -1186,10 +1187,12 @@ let rec update_env_along_write_place (config : config)
             raise Unimplemented
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
-            expand_bottom_value config tyctx p env remaining_pes pe ty
+            expand_bottom_value config access tyctx p remaining_pes pe ty env
+        | FailBorrow _ -> failwith "Could not write to a borrow"
       in
-      update_env_along_write_place config tyctx nv p env'
+      update_env_along_write_place config access tyctx p nv env'
 
+(*
 exception UpdateEnv of env
 (** Small utility used to break control-flow *)
 
