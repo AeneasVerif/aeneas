@@ -8,8 +8,6 @@ type env_value = Var of VarId.id * typed_value | Abs of abs
 
 type env = env_value list
 
-type 'a eval_result = Stuck | Panic | Res of 'a
-
 type interpreter_mode = ConcreteMode | SymbolicMode
 
 type config = { mode : interpreter_mode; check_invariants : bool }

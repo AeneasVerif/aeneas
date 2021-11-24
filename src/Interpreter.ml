@@ -10,6 +10,10 @@ open Contexts
 (* TODO: Change state-passing style to : st -> ... -> (st, v) *)
 (* TODO: check that the value types are correct when evaluating *)
 
+type eval_error = Panic
+
+type 'a eval_result = ('a, eval_error) result
+
 type exploration_kind = {
   enter_shared_loans : bool;
   enter_mut_borrows : bool;
@@ -1466,57 +1470,59 @@ let constant_value_to_typed_value (ctx : eval_ctx) (ty : ety)
   | _, Unit | _, ConstantAdt _ | _, ConstantValue _ ->
       failwith "Improperly typed constant value"
 
+(** Small utility *)
+let prepare_rplace (config : config) (access : access_kind) (p : place)
+    (ctx : eval_ctx) : eval_ctx * typed_value =
+  let env1 = update_env_along_read_place config access p ctx.env in
+  let env2 = collect_borrows_at_place config access p env1 in
+  let v = read_place_unwrap config access p env2 in
+  let ctx2 = { ctx with env = env2 } in
+  (ctx2, v)
+
 let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
     eval_ctx * typed_value =
   match op with
   | Expressions.Constant (ty, cv) ->
       let v = constant_value_to_typed_value ctx ty cv in
       (ctx, v)
-  | Expressions.Copy p -> (
+  | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
-      let env1 = update_env_along_read_place config access p ctx.env in
-      let env2 = collect_borrows_at_place config access p env1 in
-      match read_place config access p env2 with
-      | Error _ -> failwith "Unreachable"
-      | Ok v ->
-          (* Copy the value *)
-          assert (not (bottom_in_value v));
-          let ctx2 = { ctx with env = env2 } in
-          copy_value config ctx2 v)
+      let ctx2, v = prepare_rplace config access p ctx in
+      (* Copy the value *)
+      assert (not (bottom_in_value v));
+      copy_value config ctx2 v
   | Expressions.Move p -> (
       (* Access the value *)
       let access = Move in
-      let env1 = update_env_along_read_place config access p ctx.env in
-      let env2 = collect_borrows_at_place config access p env1 in
-      match read_place config access p env2 with
+      let ctx2, v = prepare_rplace config access p ctx in
+      (* Move the value *)
+      assert (not (bottom_in_value v));
+      let bottom = { value = Bottom; ty = v.ty } in
+      match write_place config access p bottom ctx2.env with
       | Error _ -> failwith "Unreachable"
-      | Ok v -> (
-          (* Move the value *)
-          assert (not (bottom_in_value v));
-          let bottom = { value = Bottom; ty = v.ty } in
-          match write_place config access p bottom env2 with
-          | Error _ -> failwith "Unreachable"
-          | Ok env3 ->
-              let ctx3 = { ctx with env = env3 } in
-              (ctx3, v)))
+      | Ok env3 ->
+          let ctx3 = { ctx2 with env = env3 } in
+          (ctx3, v))
 
-(** Small utility *)
-let prepare_rplace (config : config) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : eval_ctx =
-  let env1 = update_env_along_read_place config access p ctx.env in
-  let env2 = collect_borrows_at_place config access p env1 in
-  { ctx with env = env2 }
-
-(*let eval_unary_op (config : config) (ctx : eval_ctx) (unop : unop) (op : operand)  :
-      eval_ctx * typed_value =
+let eval_unary_op (config : config) (ctx : eval_ctx) (unop : unop)
+    (op : operand) : (eval_ctx * typed_value) eval_result =
   (* Evaluate the operand *)
   let access = Read in
-  let env1 = update_env_along_read_place config access p ctx.env in
-  let env2 = collect_borrows_at_place config access p env1 in
-  (* *)
-  match unop with
-  |*)
+  let ctx1, v = eval_operand config ctx op in
+  (* Apply the unop *)
+  match (unop, v.value) with
+  | Not, Concrete (Bool b) ->
+      Ok (ctx1, { v with value = Concrete (Bool (not b)) })
+  | Neg, Concrete (Scalar sv) -> (
+      let int_ty = scalar_value_get_integer_type sv in
+      let i = scalar_value_get_value sv in
+      let i = Z.neg i in
+      match mk_scalar int_ty i with
+      | Error _ -> Error Panic
+      | Ok sv -> Ok (ctx1, { v with value = Concrete (Scalar sv) }))
+  | (Not | Neg), Symbolic _ -> raise Unimplemented (* TODO *)
+  | _ -> failwith "Invalid value for unop"
 
 let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
     eval_ctx * typed_value =
@@ -1527,8 +1533,7 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
       | Expressions.Shared | Expressions.TwoPhaseMut ->
           (* Access the value *)
           let access = if bkind = Expressions.Shared then Read else Write in
-          let ctx2 = prepare_rplace config access p ctx in
-          let v = read_place_unwrap config access p ctx2.env in
+          let ctx2, v = prepare_rplace config access p ctx in
           (* Compute the rvalue - simply a shared borrow with a fresh id *)
           let ctx3, bid = fresh_borrow_id ctx2 in
           let rv_ty = Types.Ref (Erased, v.ty, Shared) in
@@ -1556,8 +1561,7 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
       | Expressions.Mut ->
           (* Access the value *)
           let access = Write in
-          let ctx2 = prepare_rplace config access p ctx in
-          let v = read_place_unwrap config access p ctx2.env in
+          let ctx2, v = prepare_rplace config access p ctx in
           (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
           let ctx3, bid = fresh_borrow_id ctx2 in
           let rv_ty = Types.Ref (Erased, v.ty, Mut) in

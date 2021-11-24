@@ -108,3 +108,22 @@ let check_scalar_value_in_range (v : scalar_value) : bool =
   let i = scalar_value_get_value v in
   let int_ty = scalar_value_get_integer_type v in
   check_int_in_range int_ty i
+
+(** Make a scalar value, while checking the value is in range *)
+let mk_scalar (int_ty : integer_type) (i : big_int) :
+    (scalar_value, unit) result =
+  if check_int_in_range int_ty i then
+    match int_ty with
+    | Types.Isize -> Ok (Isize i)
+    | Types.I8 -> Ok (I8 i)
+    | Types.I16 -> Ok (I16 i)
+    | Types.I32 -> Ok (I32 i)
+    | Types.I64 -> Ok (I64 i)
+    | Types.I128 -> Ok (I128 i)
+    | Types.Usize -> Ok (Usize i)
+    | Types.U8 -> Ok (U8 i)
+    | Types.U16 -> Ok (U16 i)
+    | Types.U32 -> Ok (U32 i)
+    | Types.U64 -> Ok (U64 i)
+    | Types.U128 -> Ok (U128 i)
+  else Error ()

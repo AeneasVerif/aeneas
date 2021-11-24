@@ -66,4 +66,10 @@ fn main() {
         println!("| {} i -> i", s);
     }
     println!("\n");
+
+    // Generate the mk_scalar body
+    for s in &ints_upper {
+        println!("| Types.{} -> Ok ({} i)", s, s);
+    }
+    println!("\n");
 }
