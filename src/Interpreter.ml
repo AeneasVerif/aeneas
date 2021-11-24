@@ -973,6 +973,27 @@ let rec access_projection (access : projection_access) (env : env)
                     Ok (env1, { res with updated = nv })
               else Error (FailSharedLoan bids)))
 
+(** Generic function to access (read/write) the value at a given place.
+
+    We return the value we read at the place and the (eventually) updated
+    environment, if we managed to access the place, or the precise reason
+    why we failed.
+ *)
+let access_place (access : projection_access) (env : env)
+    (* Function to (eventually) update the value we find *)
+      (update : typed_value -> typed_value) (p : place) (env : env) :
+    (env * typed_value) path_access_result =
+  (* Lookup the variable's value *)
+  let value = env_lookup_var_value env p.var_id in
+  (* Apply the projection *)
+  match access_projection access env update p.projection value with
+  | Error err -> Error err
+  | Ok (env1, res) ->
+      (* Update the value *)
+      let env2 = env_update_var_value env p.var_id res.updated in
+      (* Return *)
+      Ok (env2, res.read)
+
 (*
 (*
 TODO: loans
