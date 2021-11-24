@@ -1192,7 +1192,6 @@ let rec update_env_along_write_place (config : config) (access : access_kind)
       in
       update_env_along_write_place config access tyctx p nv env'
 
-(*
 exception UpdateEnv of env
 (** Small utility used to break control-flow *)
 
@@ -1202,10 +1201,6 @@ exception UpdateEnv of env
     This is used when reading, borrowing, writing to a value. We typically
     first call [update_env_along_read_place] or [update_env_along_write_place]
     to get access to the value, then call this function to "prepare" the value.
-
-    The [access_kind] controls the type of operation we will perform:
-    - [Read]: copy the value, perform an immutable borrow
-    - [Write]: update the value, move, mutably borrow
  *)
 let rec collect_borrows_at_place (config : config) (access : access_kind)
     (p : place) (env : env) : env =
@@ -1245,11 +1240,11 @@ let rec collect_borrows_at_place (config : config) (access : access_kind)
         | Loan lc -> (
             match lc with
             | SharedLoan (bids, ty) -> (
-                (* End the borrows if we need a [Write] access, otherwise dive into
+                (* End the loans if we need a modification access, otherwise dive into
                    the shared value *)
                 match access with
                 | Read -> inspect_update ty
-                | Write ->
+                | Write | Move ->
                     let env' = end_outer_borrows config bids env in
                     raise (UpdateEnv env'))
             | MutLoan bid ->
@@ -1488,7 +1483,7 @@ let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
           (* Move the value *)
           assert (not (bottom_in_value v));
           let bottom = { value = Bottom; ty = v.ty } in
-          match write_place config bottom p env2 with
+          match write_place config access p bottom env2 with
           | Error _ -> failwith "Unreachable"
           | Ok env3 ->
               let ctx3 = { ctx with env = env3 } in
@@ -1518,5 +1513,4 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
 
 (* TODO:
    update write_value
- *)
  *)
