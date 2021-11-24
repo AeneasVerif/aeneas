@@ -38,6 +38,10 @@ module type Id = sig
 
   val map : ('a -> 'b) -> 'a vector -> 'b vector
 
+  val for_all : ('a -> bool) -> 'a vector -> bool
+
+  val exists : ('a -> bool) -> 'a vector -> bool
+
   module Set : Set.S with type elt = id
 
   val set_to_string : Set.t -> string
@@ -97,6 +101,10 @@ module IdGen () : Id = struct
   let iter = List.iter
 
   let map = List.map
+
+  let for_all = List.for_all
+
+  let exists = List.exists
 
   module Set = Set.Make (struct
     type t = id

@@ -452,8 +452,8 @@ module Contexts = struct
   let frame_to_string (fmt : ctx_formatter) (ctx : eval_ctx)
       (frame : stack_frame) : string =
     let var_binding_to_string (vid : VarId.id) : string =
-      let var = lookup_var ctx vid in
-      let v = lookup_var_value ctx vid in
+      let var = ctx_lookup_var ctx vid in
+      let v = ctx_lookup_var_value ctx vid in
       let var_name =
         match var.name with Some name -> "(" ^ name ^ ")" | None -> ""
       in
