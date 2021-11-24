@@ -20,6 +20,8 @@ module type Id = sig
 
   val to_string : id -> string
 
+  val to_int : id -> int
+
   val empty_vector : 'a vector
 
   val vector_to_list : 'a vector -> 'a list
@@ -79,6 +81,8 @@ module IdGen () : Id = struct
   let fresh gen = (gen, incr gen)
 
   let to_string = string_of_int
+
+  let to_int x = x
 
   let empty_vector = []
 

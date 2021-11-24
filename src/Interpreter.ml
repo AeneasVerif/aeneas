@@ -1640,9 +1640,25 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
           Ok ({ ctx3 with env = env4 }, rv))
   | UnaryOp (unop, op) -> eval_unary_op config ctx unop op
   | BinaryOp (binop, op1, op2) -> eval_binary_op config ctx binop op1 op2
-  | Discriminant p -> raise Unimplemented
+  | Discriminant p -> (
+      (* Note that discriminant values have type `isize` *)
+      (* Access the value *)
+      let access = Read in
+      let ctx1, v = prepare_rplace config access p ctx in
+      match v.value with
+      | Adt av -> (
+          match av.variant_id with
+          | None ->
+              failwith
+                "Invalid input for `discriminant`: structure instead of enum"
+          | Some variant_id -> (
+              let id = Z.of_int (VariantId.to_int variant_id) in
+              match mk_scalar Isize id with
+              | Error _ ->
+                  failwith "Disciminant id out of range"
+                  (* Should really never happen *)
+              | Ok sv ->
+                  Ok (ctx1, { value = Concrete (Scalar sv); ty = Integer Isize })
+              ))
+      | _ -> failwith "Invalid input for `discriminant`")
   | Aggregate (aggregate_kind, ops) -> raise Unimplemented
-
-(* TODO:
-   update write_value
- *)
