@@ -779,11 +779,6 @@ let rec activate_inactivated_mut_borrow (config : config) (io : inner_outer)
 
 (** Paths *)
 
-type access_kind =
-  | Read  (** We can go inside borrows and loans *)
-  | Write  (** Don't enter shared borrows or shared loans *)
-  | Move  (** Don't enter borrows or loans *)
-
 (** When we fail reading from or writing to a path, it might be because we
     need to update the environment by ending borrows, expanding symbolic
     values, etc. The following type is used to convey this information. *)
@@ -979,7 +974,7 @@ let rec access_projection (access : projection_access) (env : env)
     environment, if we managed to access the place, or the precise reason
     why we failed.
  *)
-let access_place (access : projection_access) (env : env)
+let access_place (access : projection_access)
     (* Function to (eventually) update the value we find *)
       (update : typed_value -> typed_value) (p : place) (env : env) :
     (env * typed_value) path_access_result =
@@ -993,6 +988,60 @@ let access_place (access : projection_access) (env : env)
       let env2 = env_update_var_value env p.var_id res.updated in
       (* Return *)
       Ok (env2, res.read)
+
+type access_kind =
+  | Read  (** We can go inside borrows and loans *)
+  | Write  (** Don't enter shared borrows or shared loans *)
+  | Move  (** Don't enter borrows or loans *)
+
+let access_kind_to_projection_access (access : access_kind) : projection_access
+    =
+  match access with
+  | Read ->
+      {
+        enter_shared_loans = true;
+        enter_mut_borrows = true;
+        lookup_shared_borrows = true;
+      }
+  | Write ->
+      {
+        enter_shared_loans = false;
+        enter_mut_borrows = true;
+        lookup_shared_borrows = false;
+      }
+  | Move ->
+      {
+        enter_shared_loans = false;
+        enter_mut_borrows = false;
+        lookup_shared_borrows = false;
+      }
+
+(** Read the value at a given place *)
+let read_place (config : config) (access : access_kind) (p : place) (env : env)
+    : typed_value path_access_result =
+  let access = access_kind_to_projection_access access in
+  (* The update function is the identity *)
+  let update v = v in
+  match access_place access update p env with
+  | Error err -> Error err
+  | Ok (env1, read_value) ->
+      (* Note that we ignore the new environment: it should be the same as the
+         original one.
+      *)
+      if config.check_invariants then assert (env1 = env);
+      Ok read_value
+
+(** Update the value at a given place *)
+let write_place (config : config) (access : access_kind) (p : place)
+    (nv : typed_value) (env : env) : env path_access_result =
+  let access = access_kind_to_projection_access access in
+  (* The update function substitutes the value with the new value *)
+  let update _ = nv in
+  match access_place access update p env with
+  | Error err -> Error err
+  | Ok (env1, _) ->
+      (* We ignore the read value *)
+      Ok env1
 
 (*
 (*
