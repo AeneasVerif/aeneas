@@ -1544,7 +1544,7 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
           let env1 = update_env_along_read_place config access p ctx.env in
           let env2 = collect_borrows_at_place config access p env1 in
           let v = read_place_unwrap config access p ctx.env in
-          (* Compute the rvalue - write the value in a mutable borrow *)
+          (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
           let ctx2 = { ctx with env = env2 } in
           let ctx3, bid = fresh_borrow_id ctx2 in
           let rv_ty = Types.Ref (Erased, v.ty, Mut) in
