@@ -1507,9 +1507,9 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
   | Use op -> eval_operand config ctx op
   | Ref (p, bkind) -> (
       match bkind with
-      | Expressions.Shared ->
+      | Expressions.Shared | Expressions.TwoPhaseMut ->
           (* Access the value *)
-          let access = Read in
+          let access = if bkind = Expressions.Shared then Read else Write in
           let env1 = update_env_along_read_place config access p ctx.env in
           let env2 = collect_borrows_at_place config access p env1 in
           let v = read_place_unwrap config access p ctx.env in
@@ -1517,7 +1517,11 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
           let ctx2 = { ctx with env = env2 } in
           let ctx3, bid = fresh_borrow_id ctx2 in
           let rv_ty = Types.Ref (Erased, v.ty, Shared) in
-          let rv = { value = Borrow (SharedBorrow bid); ty = rv_ty } in
+          let bc =
+            if bkind = Expressions.Shared then SharedBorrow bid
+            else InactivatedMutBorrow bid
+          in
+          let rv = { value = Borrow bc; ty = rv_ty } in
           (* Compute the value with which to replace the value at place p *)
           let nv =
             match v.value with
@@ -1550,8 +1554,7 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
           (* Update the value in the environment *)
           let env4 = write_place_unwrap config access p nv ctx3.env in
           (* Return *)
-          ({ ctx3 with env = env4 }, rv)
-      | Expressions.TwoPhaseMut -> raise Unimplemented)
+          ({ ctx3 with env = env4 }, rv))
   | UnaryOp (unop, op) -> raise Unimplemented
   | BinaryOp (binop, op1, op2) -> raise Unimplemented
   | Discriminant p -> raise Unimplemented
