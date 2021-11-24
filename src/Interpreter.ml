@@ -1525,9 +1525,9 @@ let eval_unary_op (config : config) (ctx : eval_ctx) (unop : unop)
   | _ -> failwith "Invalid value for unop"
 
 let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
-    eval_ctx * typed_value =
+    (eval_ctx * typed_value) eval_result =
   match rvalue with
-  | Use op -> eval_operand config ctx op
+  | Use op -> Ok (eval_operand config ctx op)
   | Ref (p, bkind) -> (
       match bkind with
       | Expressions.Shared | Expressions.TwoPhaseMut ->
@@ -1557,7 +1557,7 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
           (* Update the value in the environment *)
           let env4 = write_place_unwrap config access p nv ctx3.env in
           (* Return *)
-          ({ ctx3 with env = env4 }, rv)
+          Ok ({ ctx3 with env = env4 }, rv)
       | Expressions.Mut ->
           (* Access the value *)
           let access = Write in
@@ -1571,8 +1571,8 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
           (* Update the value in the environment *)
           let env4 = write_place_unwrap config access p nv ctx3.env in
           (* Return *)
-          ({ ctx3 with env = env4 }, rv))
-  | UnaryOp (unop, op) -> raise Unimplemented
+          Ok ({ ctx3 with env = env4 }, rv))
+  | UnaryOp (unop, op) -> eval_unary_op config ctx unop op
   | BinaryOp (binop, op1, op2) -> raise Unimplemented
   | Discriminant p -> raise Unimplemented
   | Aggregate (aggregate_kind, ops) -> raise Unimplemented
