@@ -777,7 +777,6 @@ let rec activate_inactivated_mut_borrow (config : config) (io : inner_outer)
           *)
           promote_inactivated_borrow_to_mut_borrow l borrowed_value env2)
 
-(*
 (** Paths *)
 
 type access_kind =
@@ -786,8 +785,8 @@ type access_kind =
   | Move  (** Don't enter borrows or loans *)
 
 (** When we fail reading from or writing to a path, it might be because we
- ** need to update the environment by ending borrows, expanding symbolic
- ** values, etc. *)
+    need to update the environment by ending borrows, expanding symbolic
+    values, etc. The following type is used to convey this information. *)
 type path_fail_kind =
   | FailSharedLoan of BorrowId.Set.t
       (** Failure because we couldn't go inside a shared loan *)
@@ -804,6 +803,8 @@ type path_fail_kind =
           were remaining in the path when we reached the error - this allows to
           properly update the Bottom value, if needs be.
        *)
+  | FailBorrow of borrow_content
+      (** We got stuck because we couldn't enter a borrow *)
 
 (** Result of evaluating a path (reading from a path/writing to a path)
     
@@ -813,7 +814,7 @@ type path_fail_kind =
 type 'a path_access_result = ('a, path_fail_kind) result
 (** The result of reading from/writing to a place *)
 
-(** Return the shared value referenced by a borrow id *)
+(*(** Return the shared value referenced by a borrow id *)
 let lookup_shared_value_from_borrow_id (bid : BorrowId.id) (env : env) :
     typed_value =
   let rec lookup_in_value (v : typed_value) : typed_value option =
@@ -845,118 +846,162 @@ let lookup_shared_value_from_borrow_id (bid : BorrowId.id) (env : env) :
   in
   match List.find_map lookup_in_env_value env with
   | None -> failwith "Unreachable"
-  | Some v -> v
+  | Some v -> v*)
 
 type updated_read_value = { read : typed_value; updated : typed_value }
 
-(*
+type projection_access = {
+  enter_shared_loans : bool;
+  enter_mut_borrows : bool;
+  lookup_shared_borrows : bool;
+}
+
 (** Generic function to access (read/write) the value at the end of a projection.
 
-    We return the eventually updated value, and the value we read at the end of
-    the place.
+    We return the (eventually) updated value, the value we read at the end of
+    the place and the (eventually) updated environment.
  *)
-let rec access_projection (config : config) (access : access_kind) (env : env)
+let rec access_projection (access : projection_access) (env : env)
     (* Function to (eventually) update the value we find *)
       (update : typed_value -> typed_value) (p : projection) (v : typed_value) :
-    updated_read_value path_access_result =
+    (env * updated_read_value) path_access_result =
+  (* For looking up/updating shared loans *)
+  let ek : exploration_kind =
+    { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
+  in
   match p with
-  | [] -> Ok { read = v; updated = update v }
+  | [] -> Ok (env, { read = v; updated = update v })
   | pe :: p' -> (
-      (* The projection is non-empty: we need to enter all the loans we find,
-       * if we are allowed to do so *)
-      let rec enter_loans (v : typed_value) : typed_value path_access_result =
-        match v.value with
-        | Loan lc -> (
-            match (access, lc) with
-            (* We can enter shared loans only if we are in "read" mode *)
-            | Read, SharedLoan (_, sv) -> enter_loans sv
-            | (Write | Move), SharedLoan (bids, _) ->
-                Error (FailSharedLoan bids)
-            (* We always have to end mutable loans *)
-            | _, MutLoan bid -> Error (FailMutLoan bid))
-        | _ -> Ok v
-      in
-      (* Enter inside the loans and match on the resulting value *)
-      match enter_loans v with
-      | Ok v -> (
-          (* Match on the projection element and the value *)
-          match (pe, v.value) with
-          (* Field projection *)
-          | Field (ProjAdt (_def_id, opt_variant_id), field_id), Adt adt -> (
-              (* Check that the projection is consistent with the current value *)
-              (match (opt_variant_id, adt.variant_id) with
-              | None, None -> ()
-              | Some vid, Some vid' ->
-                  if vid <> vid' then failwith "Unreachable"
-              | _ -> failwith "Unreachable");
-              (* Actually project *)
-              let fv = FieldId.nth adt.field_values field_id in
-              match access_projection config access env p fv with
-              | Error err -> Error err
-              | Ok res ->
-                  (* Update the field value *)
-                  let nvalues =
-                    FieldId.update_nth adt.field_values field_id res.updated
-                  in
-                  let nadt = Adt { adt with field_values = nvalues } in
-                  let updated = { v with value = nadt } in
-                  Ok { res with updated })
-          (* Tuples *)
-          | Field (ProjTuple _, field_id), Tuple values -> (
-              let fv = FieldId.nth values field_id in
-              (* Project *)
-              match access_projection config access env p fv with
-              | Error err -> Error err
-              | Ok res ->
-                  (* Update the field value *)
-                  let nvalues =
-                    FieldId.update_nth values field_id res.updated
-                  in
-                  let ntuple = Tuple nvalues in
-                  let updated = { v with value = ntuple } in
-                  Ok { res with updated })
-          (* We can expand [Bottom] values only while *writing* to places *)
-          | _, Bottom -> failwith "Unreachable"
-          (* Symbolic value: needs to be expanded *)
-          | _, Symbolic sp ->
-              assert (config.mode = SymbolicMode);
-              (* Expand the symbolic value *)
-              Error (FailSymbolic (pe, sp))
-          (* Box dereferencement *)
-          | DerefBox, Assumed (Box bv) -> (
-              (* We allow moving inside of boxes *)
-              match access_projection config access env p' bv with
-              | Error err -> err
-              | Ok res ->
-                  let nv = { v with value = Assumed (Box res.updated) } in
-                  { res with updated = nv })
-          (* Borrow dereferencement *)
-          | Deref, Borrow bc -> (
-              match (access, bc) with
-              | Read, SharedBorrow bid ->
-                  let sv = lookup_shared_value_from_borrow_id bid env in
-                  (match access_projection config access env p' sv with
-                   | Error err -> Error err
-                   | Ok res ->
-                      let nv = { v with value = Borrow (SharedBorrow
-                  ) 
-              | Write, SharedBorrow _ ->
-                  failwith "Can't write to a shared borrow"
-              | (Read | Write), MutBorrow (_, bv) ->
-                  access_projection config access env p' bv
-              | Move, _ -> failwith "Can't move out of a borrow"
-              (* We need to activate inactivated mutable borrows *)
-              | _, InactivatedMutBorrow bid ->
-                  Error (FailInactivatedMutBorrow bid))
-          (* Remaining cases: error. We enumerate all the value variants
-           * on purpose, to make sure we statically catch errors if we
-           * modify the [value] definition. *)
-          | _, (Concrete _ | Adt _ | Tuple _ | Assumed _ | Borrow _) ->
-              failwith "Unreachable")
-      (* Entering loans failed *)
-      | res -> res)
- *)
+      (* Match on the projection element and the value *)
+      match (pe, v.value) with
+      (* Field projection *)
+      | Field (ProjAdt (_def_id, opt_variant_id), field_id), Adt adt -> (
+          (* Check that the projection is consistent with the current value *)
+          (match (opt_variant_id, adt.variant_id) with
+          | None, None -> ()
+          | Some vid, Some vid' -> if vid <> vid' then failwith "Unreachable"
+          | _ -> failwith "Unreachable");
+          (* Actually project *)
+          let fv = FieldId.nth adt.field_values field_id in
+          match access_projection access env update p fv with
+          | Error err -> Error err
+          | Ok (env1, res) ->
+              (* Update the field value *)
+              let nvalues =
+                FieldId.update_nth adt.field_values field_id res.updated
+              in
+              let nadt = Adt { adt with field_values = nvalues } in
+              let updated = { v with value = nadt } in
+              Ok (env1, { res with updated }))
+      (* Tuples *)
+      | Field (ProjTuple arity, field_id), Tuple values -> (
+          assert (arity = FieldId.length values);
+          let fv = FieldId.nth values field_id in
+          (* Project *)
+          match access_projection access env update p fv with
+          | Error err -> Error err
+          | Ok (env1, res) ->
+              (* Update the field value *)
+              let nvalues = FieldId.update_nth values field_id res.updated in
+              let ntuple = Tuple nvalues in
+              let updated = { v with value = ntuple } in
+              Ok (env1, { res with updated })
+          (* If we reach Bottom, it may mean we need to expand an uninitialized
+           * enumeration value *))
+      | Field (ProjAdt (_, Some _variant_id), _), Bottom ->
+          Error (FailBottom (1 + List.length p', pe, v.ty))
+      (* Symbolic value: needs to be expanded *)
+      | _, Symbolic sp ->
+          (* Expand the symbolic value *)
+          Error (FailSymbolic (pe, sp))
+      (* Box dereferencement *)
+      | DerefBox, Assumed (Box bv) -> (
+          (* We allow moving inside of boxes *)
+          match access_projection access env update p' bv with
+          | Error err -> Error err
+          | Ok (env1, res) ->
+              let nv = { v with value = Assumed (Box res.updated) } in
+              Ok (env1, { res with updated = nv }))
+      (* Borrows *)
+      | Deref, Borrow bc -> (
+          match bc with
+          | SharedBorrow bid ->
+              (* Lookup the loan content, and explore from there *)
+              if access.lookup_shared_borrows then
+                match lookup_loan ek bid env with
+                | MutLoan _ -> failwith "Expected a shared loan"
+                | SharedLoan (bids, sv) -> (
+                    (* Explore the shared value *)
+                    match access_projection access env update p' sv with
+                    | Error err -> Error err
+                    | Ok (env1, res) ->
+                        (* Update the shared loan with the new value returned
+                           by [access_projection] *)
+                        let env2 =
+                          update_loan ek bid
+                            (SharedLoan (bids, res.updated))
+                            env1
+                        in
+                        (* Return - note that we don't need to update the borrow itself *)
+                        Ok (env2, { res with updated = v }))
+              else Error (FailBorrow bc)
+          | InactivatedMutBorrow bid -> Error (FailInactivatedMutBorrow bid)
+          | MutBorrow (bid, bv) ->
+              if access.enter_mut_borrows then
+                match access_projection access env update p' bv with
+                | Error err -> Error err
+                | Ok (env1, res) ->
+                    let nv =
+                      { v with value = Borrow (MutBorrow (bid, res.updated)) }
+                    in
+                    Ok (env1, { res with updated = nv })
+              else Error (FailBorrow bc))
+      | _, Loan lc -> (
+          match lc with
+          | MutLoan bid -> Error (FailMutLoan bid)
+          | SharedLoan (bids, sv) ->
+              (* If we can enter shared loan, we ignore the loan. Pay attention
+                 to the fact that we need to reexplore the *whole* place (i.e,
+                 we mustn't ignore the current projection element *)
+              if access.enter_shared_loans then
+                match access_projection access env update (pe :: p') sv with
+                | Error err -> Error err
+                | Ok (env1, res) ->
+                    let nv =
+                      { v with value = Loan (SharedLoan (bids, res.updated)) }
+                    in
+                    Ok (env1, { res with updated = nv })
+              else Error (FailSharedLoan bids)))
 
+(*
+(*
+TODO: loans
+    (* Borrow dereferencement *)
+    | Deref, Borrow bc -> (
+      match (access, bc) with
+      | Read, SharedBorrow bid ->
+         let sv = lookup_shared_value_from_borrow_id bid env in
+         (match access_projection config access env p' sv with
+          | Error err -> Error err
+          | Ok res ->
+             let nv = { v with value = Borrow (SharedBorrow
+                                         ) 
+                             | Write, SharedBorrow _ ->
+                                failwith "Can't write to a shared borrow"
+                             | (Read | Write), MutBorrow (_, bv) ->
+                                access_projection config access env p' bv
+                             | Move, _ -> failwith "Can't move out of a borrow"
+                             (* We need to activate inactivated mutable borrows *)
+                             | _, InactivatedMutBorrow bid ->
+                                Error (FailInactivatedMutBorrow bid))
+                    (* Remaining cases: error. We enumerate all the value variants
+                     * on purpose, to make sure we statically catch errors if we
+                     * modify the [value] definition. *)
+                    | _, (Concrete _ | Adt _ | Tuple _ | Assumed _ | Borrow _) ->
+                       failwith "Unreachable"
+                       *)
+
+(*
 (** Read the value at the end of a projection. *)
 let rec read_projection (config : config) (access : access_kind) (env : env)
     (p : projection) (v : typed_value) :
@@ -1028,7 +1073,7 @@ let rec read_projection (config : config) (access : access_kind) (env : env)
           | _, (Concrete _ | Adt _ | Tuple _ | Assumed _ | Borrow _ | Loan _) ->
               failwith "Unreachable")
       (* Entering loans failed *)
-      | res -> res)
+      | res -> res)*)
 
 (** Read the value at the end of a place *)
 let read_place (config : config) (access : access_kind) (p : place) (env0 : env)
