@@ -1501,6 +1501,23 @@ let eval_operand (config : config) (ctx : eval_ctx) (op : operand) :
               let ctx3 = { ctx with env = env3 } in
               (ctx3, v)))
 
+(** Small utility *)
+let prepare_rplace (config : config) (access : access_kind) (p : place)
+    (ctx : eval_ctx) : eval_ctx =
+  let env1 = update_env_along_read_place config access p ctx.env in
+  let env2 = collect_borrows_at_place config access p env1 in
+  { ctx with env = env2 }
+
+(*let eval_unary_op (config : config) (ctx : eval_ctx) (unop : unop) (op : operand)  :
+      eval_ctx * typed_value =
+  (* Evaluate the operand *)
+  let access = Read in
+  let env1 = update_env_along_read_place config access p ctx.env in
+  let env2 = collect_borrows_at_place config access p env1 in
+  (* *)
+  match unop with
+  |*)
+
 let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
     eval_ctx * typed_value =
   match rvalue with
@@ -1510,11 +1527,9 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
       | Expressions.Shared | Expressions.TwoPhaseMut ->
           (* Access the value *)
           let access = if bkind = Expressions.Shared then Read else Write in
-          let env1 = update_env_along_read_place config access p ctx.env in
-          let env2 = collect_borrows_at_place config access p env1 in
-          let v = read_place_unwrap config access p ctx.env in
+          let ctx2 = prepare_rplace config access p ctx in
+          let v = read_place_unwrap config access p ctx2.env in
           (* Compute the rvalue - simply a shared borrow with a fresh id *)
-          let ctx2 = { ctx with env = env2 } in
           let ctx3, bid = fresh_borrow_id ctx2 in
           let rv_ty = Types.Ref (Erased, v.ty, Shared) in
           let bc =
@@ -1541,11 +1556,9 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
       | Expressions.Mut ->
           (* Access the value *)
           let access = Write in
-          let env1 = update_env_along_read_place config access p ctx.env in
-          let env2 = collect_borrows_at_place config access p env1 in
-          let v = read_place_unwrap config access p ctx.env in
+          let ctx2 = prepare_rplace config access p ctx in
+          let v = read_place_unwrap config access p ctx2.env in
           (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
-          let ctx2 = { ctx with env = env2 } in
           let ctx3, bid = fresh_borrow_id ctx2 in
           let rv_ty = Types.Ref (Erased, v.ty, Mut) in
           let rv = { value = Borrow (MutBorrow (bid, v)); ty = rv_ty } in
