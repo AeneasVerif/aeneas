@@ -1653,6 +1653,8 @@ let eval_binary_op (config : config) (ctx : eval_ctx) (binop : binop)
         match res with Error _ -> Error Panic | Ok v -> Ok (ctx2, v))
     | _ -> failwith "Invalid inputs for binop"
 
+(** Evaluate an rvalue in a given context: return the updated context and
+    the computed value *)
 let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
     (eval_ctx * typed_value) eval_result =
   match rvalue with
@@ -1755,3 +1757,21 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
           in
           let aty = Types.Adt (def_id, regions, types) in
           Ok (ctx1, { value = Adt av; ty = aty }))
+
+(** Result of evaluating a statement *)
+type statement_eval_res = Unit | Break of int | Continue of int | Panic
+
+let rec eval_statement (ctx : eval_ctx) (st : statement) :
+    eval_ctx * statement_eval_res =
+  match st with
+  | Assign (p, rvalue) -> raise Unimplemented
+  | FakeRead p -> raise Unimplemented
+  | SetDiscriminant (p, variant_id) -> raise Unimplemented
+  | Drop p -> raise Unimplemented
+  | Assert assertion -> raise Unimplemented
+  | Call call -> raise Unimplemented
+  | Panic -> raise Unimplemented
+  | Return -> raise Unimplemented
+  | Break i -> raise Unimplemented
+  | Continue -> raise Unimplemented
+  | Nop -> (ctx, Unit)
