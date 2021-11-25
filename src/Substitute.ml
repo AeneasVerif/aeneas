@@ -4,6 +4,7 @@
 
 module T = Types
 module V = Values
+module E = Expressions
 module A = CfimAst
 module C = Contexts
 
@@ -92,10 +93,130 @@ let ctx_adt_get_instantiated_field_types (ctx : C.eval_ctx)
   let def = C.ctx_lookup_type_def ctx def_id in
   type_def_get_instantiated_field_type def opt_variant_id types
 
+(** Apply a type substitution to a place *)
+let place_substitute (_tsubst : T.TypeVarId.id -> T.ety) (p : E.place) : E.place
+    =
+  (* There is nothing to do *)
+  p
+
+(** Apply a type substitution to an operand constant value *)
+let operand_constant_value_substitute (_tsubst : T.TypeVarId.id -> T.ety)
+    (op : E.operand_constant_value) : E.operand_constant_value =
+  (* There is nothing to do *)
+  op
+
+(** Apply a type substitution to an operand *)
+let operand_substitute (tsubst : T.TypeVarId.id -> T.ety) (op : E.operand) :
+    E.operand =
+  let p_subst = place_substitute tsubst in
+  match op with
+  | E.Copy p -> E.Copy (p_subst p)
+  | E.Move p -> E.Move (p_subst p)
+  | E.Constant (ety, cv) ->
+      let rsubst x = x in
+      E.Constant
+        ( ty_substitute rsubst tsubst ety,
+          operand_constant_value_substitute tsubst cv )
+
+(** Apply a type substitution to an rvalue *)
+let rvalue_substitute (tsubst : T.TypeVarId.id -> T.ety) (rv : E.rvalue) :
+    E.rvalue =
+  let op_subst = operand_substitute tsubst in
+  let p_subst = place_substitute tsubst in
+  match rv with
+  | E.Use op -> E.Use (op_subst op)
+  | E.Ref (p, bkind) -> E.Ref (p_subst p, bkind)
+  | E.UnaryOp (unop, op) -> E.UnaryOp (unop, op_subst op)
+  | E.BinaryOp (binop, op1, op2) ->
+      E.BinaryOp (binop, op_subst op1, op_subst op2)
+  | E.Discriminant p -> E.Discriminant (p_subst p)
+  | E.Aggregate (kind, ops) ->
+      let ops = List.map op_subst ops in
+      let kind =
+        match kind with
+        | E.AggregatedTuple -> E.AggregatedTuple
+        | E.AggregatedAdt (def_id, variant_id, regions, tys) ->
+            let rsubst x = x in
+            E.AggregatedAdt
+              ( def_id,
+                variant_id,
+                regions,
+                List.map (ty_substitute rsubst tsubst) tys )
+      in
+      E.Aggregate (kind, ops)
+
+(** Apply a type substitution to an assertion *)
+let assertion_substitute (tsubst : T.TypeVarId.id -> T.ety) (a : A.assertion) :
+    A.assertion =
+  { A.cond = operand_substitute tsubst a.A.cond; A.expected = a.A.expected }
+
+(** Apply a type substitution to a call *)
+let call_substitute (tsubst : T.TypeVarId.id -> T.ety) (call : A.call) : A.call
+    =
+  let rsubst x = x in
+  let type_params = List.map (ty_substitute rsubst tsubst) call.A.type_params in
+  let args = List.map (operand_substitute tsubst) call.A.args in
+  let dest = place_substitute tsubst call.A.dest in
+  (* Putting all the paramters on purpose: we want to get a compiler error if
+     something moves - we may add a field on which we need to apply a substitution *)
+  {
+    func = call.A.func;
+    region_params = call.A.region_params;
+    A.type_params;
+    args;
+    dest;
+  }
+
+(** Apply a type substitution to a statement *)
+let statement_substitute (tsubst : T.TypeVarId.id -> T.ety) (st : A.statement) :
+    A.statement =
+  match st with
+  | A.Assign (p, rvalue) ->
+      let p = place_substitute tsubst p in
+      let rvalue = rvalue_substitute tsubst rvalue in
+      A.Assign (p, rvalue)
+  | A.FakeRead p ->
+      let p = place_substitute tsubst p in
+      A.FakeRead p
+  | A.SetDiscriminant (p, vid) ->
+      let p = place_substitute tsubst p in
+      A.SetDiscriminant (p, vid)
+  | A.Drop p ->
+      let p = place_substitute tsubst p in
+      A.Drop p
+  | A.Assert assertion ->
+      let assertion = assertion_substitute tsubst assertion in
+      A.Assert assertion
+  | A.Call call ->
+      let call = call_substitute tsubst call in
+      A.Call call
+  | A.Panic | A.Return | A.Break _ | A.Continue _ | A.Nop -> st
+
 (** Apply a type substitution to an expression *)
 let rec expression_substitute (tsubst : T.TypeVarId.id -> T.ety)
     (e : A.expression) : A.expression =
-  raise Errors.Unimplemented
+  match e with
+  | A.Statement st -> A.Statement (statement_substitute tsubst st)
+  | A.Sequence (e1, e2) ->
+      A.Sequence
+        (expression_substitute tsubst e1, expression_substitute tsubst e2)
+  | A.Switch (op, tgts) ->
+      A.Switch
+        (operand_substitute tsubst op, switch_targets_substitute tsubst tgts)
+  | A.Loop le -> A.Loop (expression_substitute tsubst le)
+
+(** Apply a type substitution to switch targets *)
+and switch_targets_substitute (tsubst : T.TypeVarId.id -> T.ety)
+    (tgts : A.switch_targets) : A.switch_targets =
+  match tgts with
+  | A.If (e1, e2) ->
+      A.If (expression_substitute tsubst e1, expression_substitute tsubst e2)
+  | A.SwitchInt (int_ty, tgts, otherwise) ->
+      let tgts =
+        List.map (fun (sv, e) -> (sv, expression_substitute tsubst e)) tgts
+      in
+      let otherwise = expression_substitute tsubst otherwise in
+      A.SwitchInt (int_ty, tgts, otherwise)
 
 (** Apply a type substitution to a function body. Return the local variables
     and the body. *)
