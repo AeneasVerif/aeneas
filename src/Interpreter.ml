@@ -1841,7 +1841,13 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       let env2 = write_place_unwrap config Write p nv ctx1.env in
       let ctx2 = { ctx with env = env2 } in
       Ok (ctx2, Unit)
-  | A.Assert assertion -> raise Unimplemented
+  | A.Assert assertion -> (
+      let ctx1, v = eval_operand config ctx assertion.cond in
+      assert (v.ty = T.Bool);
+      match v.value with
+      | Concrete (Bool b) ->
+          if b = assertion.expected then Ok (ctx1, Unit) else Error Panic
+      | _ -> failwith "Expected a boolean")
   | A.Call call -> raise Unimplemented
   | A.Panic -> Error Panic
   | A.Return -> Ok (ctx, Return)
