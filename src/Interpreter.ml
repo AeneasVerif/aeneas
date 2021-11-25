@@ -1835,7 +1835,12 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       let ctx1, _ = prepare_rplace config Read p ctx in
       Ok (ctx1, Unit)
   | A.SetDiscriminant (p, variant_id) -> raise Unimplemented
-  | A.Drop p -> raise Unimplemented
+  | A.Drop p ->
+      let ctx1, v = prepare_lplace config p ctx in
+      let nv = { v with value = V.Bottom } in
+      let env2 = write_place_unwrap config Write p nv ctx1.env in
+      let ctx2 = { ctx with env = env2 } in
+      Ok (ctx2, Unit)
   | A.Assert assertion -> raise Unimplemented
   | A.Call call -> raise Unimplemented
   | A.Panic -> Error Panic
