@@ -4,6 +4,7 @@
 
 module T = Types
 module V = Values
+module C = Contexts
 
 (** Substitute types variables and regions in a type *)
 let rec ty_subst (rsubst : 'r1 -> 'r2) (tsubst : T.TypeVarId.id -> 'r2 T.ty)
@@ -70,7 +71,6 @@ let type_def_get_fields (def : T.type_def)
 let type_def_get_instantiated_field_type (def : T.type_def)
     (opt_variant_id : T.VariantId.id option) (types : T.ety list) :
     T.ety T.FieldId.vector =
-  (*  let indices = List.mapi (fun i _ -> TypeVarId.of_int i) def.type_params in*)
   let ty_subst =
     make_type_subst
       (List.map
@@ -82,3 +82,11 @@ let type_def_get_instantiated_field_type (def : T.type_def)
   T.FieldId.map
     (fun f -> erase_regions_substitute_types ty_subst f.T.field_ty)
     fields
+
+(** Return the types of the properly instantiated ADT's variant, provided a
+    context *)
+let ctx_adt_get_instantiated_field_types (ctx : C.eval_ctx)
+    (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
+    (types : T.ety list) : T.ety T.FieldId.vector =
+  let def = C.ctx_lookup_type_def ctx def_id in
+  type_def_get_instantiated_field_type def opt_variant_id types

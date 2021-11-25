@@ -46,6 +46,9 @@ let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
 let ctx_lookup_var (ctx : eval_ctx) (vid : VarId.id) : var =
   VarId.Map.find vid ctx.vars
 
+let ctx_lookup_type_def (ctx : eval_ctx) (tid : TypeDefId.id) : type_def =
+  TypeDefId.nth ctx.type_context tid
+
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
   let check_ev (ev : env_value) : typed_value option =

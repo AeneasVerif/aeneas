@@ -1724,17 +1724,34 @@ let eval_rvalue (config : config) (ctx : eval_ctx) (rvalue : rvalue) :
                   Ok (ctx1, { value = Concrete (Scalar sv); ty = Integer Isize })
               ))
       | _ -> failwith "Invalid input for `discriminant`")
-  | Aggregate (aggregate_kind, ops) ->
+  | Aggregate (aggregate_kind, ops) -> (
       (* Evaluate the operands *)
       let ctx1, values = eval_operands config ctx ops in
-      raise Unimplemented
-(* (* Match on the aggregate kind *)
-   match aggregate_kind with
-   | AggregatedTuple ->
-       let tys = List.map (fun v -> v.ty) values in
-       let values = FieldId.vector_of_list values in
-       Ok (ctx1, { value = Tuple values; ty = Types.Tuple tys })
-   | AggregatedAdt (def_id, opt_variant_id) -> raise Unimplemented
-    begin match
-      let expected_types = ctx_get_adt_field_types def_id opt_variant_id
-      let fields = ctx_get_adt_fields def_id opt_variant_id in*)
+      let values = FieldId.vector_of_list values in
+      (* Match on the aggregate kind *)
+      match aggregate_kind with
+      | AggregatedTuple ->
+          let tys = List.map (fun v -> v.ty) (FieldId.vector_to_list values) in
+          Ok (ctx1, { value = Tuple values; ty = Types.Tuple tys })
+      | AggregatedAdt (def_id, opt_variant_id, regions, types) ->
+          (* Sanity checks *)
+          let type_def = ctx_lookup_type_def ctx def_id in
+          assert (
+            RegionVarId.length type_def.region_params = List.length regions);
+          let expected_field_types =
+            Subst.ctx_adt_get_instantiated_field_types ctx1 def_id
+              opt_variant_id types
+          in
+          assert (expected_field_types = FieldId.map (fun v -> v.ty) values);
+          (* Construct the value *)
+          let av =
+            {
+              def_id;
+              variant_id = opt_variant_id;
+              regions;
+              types;
+              field_values = values;
+            }
+          in
+          let aty = Types.Adt (def_id, regions, types) in
+          Ok (ctx1, { value = Adt av; ty = aty }))
