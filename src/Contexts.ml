@@ -4,7 +4,7 @@ open Expressions
 open CfimAst
 open Errors
 
-type env_value = Var of VarId.id * typed_value | Abs of abs
+type env_value = Var of var * typed_value | Abs of abs
 
 type env = env_value list
 
@@ -12,7 +12,7 @@ type interpreter_mode = ConcreteMode | SymbolicMode
 
 type config = { mode : interpreter_mode; check_invariants : bool }
 
-type stack_frame = { vars : VarId.id list }
+type stack_frame = { num_vars : int }
 (** A function frame
 
     When using the interpreter in concrete mode (i.e, non symbolic) we
@@ -24,8 +24,6 @@ type eval_ctx = {
   type_context : type_def TypeDefId.vector;
   fun_context : fun_def FunDefId.vector;
   type_vars : type_var TypeVarId.vector;
-  vars : var VarId.Map.t;
-  (* TODO: remove this *)
   frames : stack_frame list;
   env : env;
   symbolic_counter : SymbolicValueId.generator;
@@ -45,7 +43,14 @@ let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
 
 let ctx_lookup_var (ctx : eval_ctx) (vid : VarId.id) : var =
-  VarId.Map.find vid ctx.vars
+  let rec lookup env =
+    match env with
+    | [] ->
+        raise (Invalid_argument ("Variable not found: " ^ VarId.to_string vid))
+    | Var (var, _) :: env' -> if var.index = vid then var else lookup env'
+    | Abs _ :: env' -> lookup env'
+  in
+  lookup ctx.env
 
 let ctx_lookup_type_def (ctx : eval_ctx) (tid : TypeDefId.id) : type_def =
   TypeDefId.nth ctx.type_context tid
@@ -57,7 +62,7 @@ let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
   let check_ev (ev : env_value) : typed_value option =
     match ev with
-    | Var (vid', v) -> if vid' = vid then Some v else None
+    | Var (var, v) -> if var.index = vid then Some v else None
     | Abs _ -> None
   in
   match List.find_map check_ev env with
@@ -76,7 +81,7 @@ let ctx_lookup_var_value (ctx : eval_ctx) (vid : VarId.id) : typed_value =
 let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
   let update_ev (ev : env_value) : env_value =
     match ev with
-    | Var (vid', v) -> if vid' = vid then Var (vid, nv) else Var (vid', v)
+    | Var (var, v) -> if var.index = vid then Var (var, nv) else Var (var, v)
     | Abs abs -> Abs abs
   in
   List.map update_ev env
