@@ -1870,17 +1870,24 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
           else
             (* Replace the value *)
             let bottom_v =
-              compute_expanded_bottom_adt_value ctx.type_context def_id
+              compute_expanded_bottom_adt_value ctx2.type_context def_id
                 (Some variant_id) regions types
             in
             let env3 = write_place_unwrap config access p bottom_v ctx2.env in
             let ctx3 = { ctx2 with env = env3 } in
             Ok (ctx3, Unit))
-  | _, V.Bottom -> raise Unimplemented
+  | T.Adt (def_id, regions, types), V.Bottom ->
+      let bottom_v =
+        compute_expanded_bottom_adt_value ctx2.type_context def_id
+          (Some variant_id) regions types
+      in
+      let env3 = write_place_unwrap config access p bottom_v ctx2.env in
+      let ctx3 = { ctx2 with env = env3 } in
+      Ok (ctx3, Unit)
   | _, V.Symbolic _ ->
       assert (config.mode = SymbolicMode);
       (* TODO *) raise Unimplemented
-  | _, V.Adt _ -> failwith "Inconsistent state"
+  | _, (V.Adt _ | V.Bottom) -> failwith "Inconsistent state"
   | _, (V.Concrete _ | V.Tuple _ | V.Borrow _ | V.Loan _ | V.Assumed _) ->
       failwith "Unexpected value"
 
