@@ -11,6 +11,7 @@ module A = CfimAst
 (* TODO: check that the value types are correct when evaluating *)
 (* TODO: module Type = T, etc. *)
 
+(** TODO: change the name *)
 type eval_error = Panic
 
 type 'a eval_result = ('a, eval_error) result
@@ -1646,8 +1647,44 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
         match res with Error _ -> Error Panic | Ok v -> Ok (ctx2, v))
     | _ -> failwith "Invalid inputs for binop"
 
+(** Similarly to the problem of evaluating several operands at the same time,
+    we have to be careful when evaluating rvalues and assigning to lvalues.
+    See [eval_operand_prepare], [eval_operand_apply]
+    TODO: another possibility would be to put the variables somewhere in
+    the context.
+*)
+let eval_rvalue_prepare (config : C.config) (ctx : C.eval_ctx)
+    (rvalue : E.rvalue) : C.eval_ctx =
+  match rvalue with
+  | E.Use op -> eval_operand_prepare config ctx op
+  | E.Ref (p, bkind) -> (
+      match bkind with
+      | E.Shared | E.TwoPhaseMut ->
+          (* Access the value *)
+          let access = if bkind = E.Shared then Read else Write in
+          fst (prepare_rplace config access p ctx)
+      | E.Mut ->
+          (* Access the value *)
+          let access = Write in
+          fst (prepare_rplace config access p ctx))
+  | E.UnaryOp (_, op) -> eval_operand_prepare config ctx op
+  | E.BinaryOp (_, op1, op2) ->
+      let ctx1 = eval_operand_prepare config ctx op1 in
+      eval_operand_prepare config ctx op2
+  | E.Discriminant p ->
+      (* Access the value *)
+      let access = Read in
+      fst (prepare_rplace config access p ctx)
+  | E.Aggregate (aggregate_kind, ops) ->
+      (* Prepare the operands *)
+      List.fold_left (fun ctx op -> eval_operand_prepare config ctx op) ctx ops
+
 (** Evaluate an rvalue in a given context: return the updated context and
-    the computed value *)
+    the computed value
+    
+    WARNING:
+    TODO: we don't really need to call the "prepare" functions below
+*)
 let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
     (C.eval_ctx * V.typed_value) eval_result =
   match rvalue with
@@ -1758,12 +1795,44 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           Ok (ctx1, { V.value = Adt av; ty = aty }))
 
 (** Result of evaluating a statement *)
-type statement_eval_res = Unit | Break of int | Continue of int | Panic
+type statement_eval_res = Unit | Break of int | Continue of int
 
-let rec eval_statement (ctx : C.eval_ctx) (st : A.statement) :
-    C.eval_ctx * statement_eval_res =
+(** Small utility.
+    
+    Prepare a place which is to be used as the destination of an assignment:
+    update the environment along the paths, collect the borrows at the place,
+    then drop the borrows.
+
+    Return the updated value at the end of the place (which is likely to contain
+    [Bottoms] values).
+ *)
+let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
+    C.eval_ctx * V.typed_value =
+  let access = Write in
+  let env1 = update_env_along_read_place config access p ctx.env in
+  let env2 = collect_borrows_at_place config access p env1 in
+  let env3 = drop_borrows_at_place config p env2 in
+  let v = read_place_unwrap config access p env3 in
+  let ctx3 = { ctx with env = env3 } in
+  (ctx3, v)
+
+let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
+    : (C.eval_ctx * statement_eval_res) eval_result =
   match st with
-  | A.Assign (p, rvalue) -> raise Unimplemented
+  | A.Assign (p, rvalue) -> (
+      (* Prepare the rvalue, prepare the destination *)
+      let ctx1 = eval_rvalue_prepare config ctx rvalue in
+      let ctx2, _ = prepare_lplace config p ctx1 in
+      (* Actually compute the rvalue *)
+      match eval_rvalue config ctx2 rvalue with
+      | Error err -> Error err
+      | Ok (ctx3, rvalue) -> (
+          (* Update the lvalue *)
+          match write_place config Write p rvalue ctx3.env with
+          | Error err -> failwith "Unaccessible path"
+          | Ok env4 ->
+              let ctx4 = { ctx3 with env = env4 } in
+              Ok (ctx3, Unit)))
   | A.FakeRead p -> raise Unimplemented
   | A.SetDiscriminant (p, variant_id) -> raise Unimplemented
   | A.Drop p -> raise Unimplemented
@@ -1773,4 +1842,4 @@ let rec eval_statement (ctx : C.eval_ctx) (st : A.statement) :
   | A.Return -> raise Unimplemented
   | A.Break i -> raise Unimplemented
   | A.Continue i -> raise Unimplemented
-  | A.Nop -> (ctx, Unit)
+  | A.Nop -> Ok (ctx, Unit)
