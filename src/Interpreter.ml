@@ -1933,4 +1933,27 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
 
 and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
     (C.eval_ctx * statement_eval_res) eval_result =
+  (* There are two cases *
+     - this is a local function, in which case we execute its body
+     - this is a non-local function, in which case there is a special treatment
+  *)
+  match call.func with
+  | A.Local fid ->
+      eval_local_function_call fid call.region_params call.type_params call.args
+        call.dest
+  | A.Assumed fid ->
+      eval_assumed_function_call fid call.region_params call.type_params
+        call.args call.dest
+
+and eval_local_function_call (fid : A.FunDefId.id)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (args : E.operand list) (dest : E.place) :
+    (C.eval_ctx * statement_eval_res) eval_result =
+  (* Retrieve the (correctly instantiated) body *)
+  raise Unimplemented
+
+and eval_assumed_function_call (fid : A.assumed_fun_id)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (args : E.operand list) (dest : E.place) :
+    (C.eval_ctx * statement_eval_res) eval_result =
   raise Unimplemented

@@ -14,7 +14,7 @@ module RegionId = IdGen ()
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;
-  ty : ety;
+  var_ty : ety;
       (** The variable type - erased type, because variables are not used
        ** in function signatures *)
 }

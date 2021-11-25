@@ -4,13 +4,14 @@
 
 module T = Types
 module V = Values
+module A = CfimAst
 module C = Contexts
 
 (** Substitute types variables and regions in a type *)
-let rec ty_subst (rsubst : 'r1 -> 'r2) (tsubst : T.TypeVarId.id -> 'r2 T.ty)
-    (ty : 'r1 T.ty) : 'r2 T.ty =
+let rec ty_substitute (rsubst : 'r1 -> 'r2)
+    (tsubst : T.TypeVarId.id -> 'r2 T.ty) (ty : 'r1 T.ty) : 'r2 T.ty =
   let open T in
-  let subst = ty_subst rsubst tsubst in
+  let subst = ty_substitute rsubst tsubst in
   (* helper *)
   match ty with
   | Adt (def_id, regions, tys) ->
@@ -34,7 +35,7 @@ let rec ty_subst (rsubst : 'r1 -> 'r2) (tsubst : T.TypeVarId.id -> 'r2 T.ty)
 let erase_regions_substitute_types (tsubst : T.TypeVarId.id -> T.ety)
     (ty : T.rty) : T.ety =
   let rsubst (r : T.RegionVarId.id T.region) : T.erased_region = T.Erased in
-  ty_subst rsubst tsubst ty
+  ty_substitute rsubst tsubst ty
 
 (** Create a type substitution from a list of type variable ids and a list of
     types (with which to substitute the type variable ids *)
@@ -90,3 +91,21 @@ let ctx_adt_get_instantiated_field_types (ctx : C.eval_ctx)
     (types : T.ety list) : T.ety T.FieldId.vector =
   let def = C.ctx_lookup_type_def ctx def_id in
   type_def_get_instantiated_field_type def opt_variant_id types
+
+(** Apply a type substitution to an expression *)
+let rec expression_substitute (tsubst : T.TypeVarId.id -> T.ety)
+    (e : A.expression) : A.expression =
+  raise Errors.Unimplemented
+
+(** Apply a type substitution to a function body. Return the local variables
+    and the body. *)
+let fun_def_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
+    (def : A.fun_def) : V.var V.VarId.vector * A.expression =
+  let rsubst r = r in
+  let locals =
+    V.VarId.map
+      (fun v -> { v with V.var_ty = ty_substitute rsubst tsubst v.V.var_ty })
+      def.A.locals
+  in
+  let body = expression_substitute tsubst def.body in
+  (locals, body)

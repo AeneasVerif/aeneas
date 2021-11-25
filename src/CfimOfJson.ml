@@ -180,8 +180,8 @@ let var_of_json (js : json) : (var, string) result =
     | `Assoc [ ("index", index); ("name", name); ("ty", ty) ] ->
         let* index = VarId.id_of_json index in
         let* name = string_option_of_json name in
-        let* ty = ety_of_json ty in
-        Ok { index; name; ty }
+        let* var_ty = ety_of_json ty in
+        Ok { index; name; var_ty }
     | _ -> Error "")
 
 let big_int_of_json (js : json) : (big_int, string) result =
