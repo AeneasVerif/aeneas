@@ -25,6 +25,7 @@ type eval_ctx = {
   fun_context : fun_def FunDefId.vector;
   type_vars : type_var TypeVarId.vector;
   vars : var VarId.Map.t;
+  (* TODO: remove this *)
   frames : stack_frame list;
   env : env;
   symbolic_counter : SymbolicValueId.generator;
@@ -48,6 +49,9 @@ let ctx_lookup_var (ctx : eval_ctx) (vid : VarId.id) : var =
 
 let ctx_lookup_type_def (ctx : eval_ctx) (tid : TypeDefId.id) : type_def =
   TypeDefId.nth ctx.type_context tid
+
+let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
+  FunDefId.nth ctx.fun_context fid
 
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =

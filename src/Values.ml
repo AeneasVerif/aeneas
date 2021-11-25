@@ -1,6 +1,9 @@
 open Identifiers
 open Types
 
+(** TODO: do we put the type variable/variable/region names everywhere
+    (to not have to perform lookups by using the ids?) *)
+
 module VarId = IdGen ()
 
 module BorrowId = IdGen ()

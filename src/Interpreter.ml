@@ -1939,21 +1939,57 @@ and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
   *)
   match call.func with
   | A.Local fid ->
-      eval_local_function_call fid call.region_params call.type_params call.args
-        call.dest
+      eval_local_function_call config ctx fid call.region_params
+        call.type_params call.args call.dest
   | A.Assumed fid ->
-      eval_assumed_function_call fid call.region_params call.type_params
-        call.args call.dest
+      eval_assumed_function_call config ctx fid call.region_params
+        call.type_params call.args call.dest
 
-and eval_local_function_call (fid : A.FunDefId.id)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (args : E.operand list) (dest : E.place) :
+and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.FunDefId.id) (_region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     (C.eval_ctx * statement_eval_res) eval_result =
   (* Retrieve the (correctly instantiated) body *)
-  raise Unimplemented
+  let def = C.ctx_lookup_fun_def ctx fid in
+  match config.mode with
+  | ConcreteMode ->
+      let tsubst =
+        Subst.make_type_subst
+          (List.map
+             (fun v -> v.T.tv_index)
+             (T.TypeVarId.vector_to_list def.A.signature.type_params))
+          type_params
+      in
+      let locals, body = Subst.fun_def_substitute_in_body tsubst def in
 
-and eval_assumed_function_call (fid : A.assumed_fun_id)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (args : E.operand list) (dest : E.place) :
+      (* Evaluate the input operands *)
+      let ctx1, args = eval_operands config ctx args in
+
+      (* Compute the initial values for the local variables *)
+      (* First, compute the types of the variables *)
+      let local_tys =
+        List.map (fun l -> l.V.var_ty) (V.VarId.vector_to_list locals)
+      in
+
+      (* Second, push the return value *)
+      let ret_var, local_tys =
+        match local_tys with
+        | ret_ty :: local_tys -> (ret_ty, local_tys)
+        | _ -> failwith "Unreachable"
+      in
+
+      (*  let ctx2 = ctx_push_var *)
+
+      (* Third, push the inputs *)
+
+      (* Finally, put the remaining local variables (initialized as [Bottom]) *)
+
+      (* TODO ... *)
+      raise Unimplemented
+  | SymbolicMode -> raise Unimplemented
+
+and eval_assumed_function_call (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     (C.eval_ctx * statement_eval_res) eval_result =
   raise Unimplemented
