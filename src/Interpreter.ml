@@ -2,8 +2,6 @@ open Types
 open Values
 open Scalars
 open Expressions
-open CfimAst
-open Print.Values
 open Errors
 open Contexts
 module Subst = Substitute
@@ -158,7 +156,7 @@ let update_loan (ek : exploration_kind) (l : BorrowId.id) (nlc : loan_content)
   let update_loan_in_env_value (ev : env_value) : env_value =
     match ev with
     | Var (vid, v) -> Var (vid, update_loan_in_value ek l nlc v)
-    | Abs abs -> raise Unimplemented
+    | Abs _ -> raise Unimplemented
     (* TODO *)
   in
   List.map update_loan_in_env_value env
@@ -187,7 +185,7 @@ let rec lookup_borrow_in_value (ek : exploration_kind) (l : BorrowId.id)
       match lc with
       | SharedLoan (_, sv) ->
           if ek.enter_shared_loans then lookup_borrow_in_value ek l sv else None
-      | MutLoan bid -> None)
+      | MutLoan _ -> None)
 
 (** Lookup a borrow content from a borrow id. *)
 let lookup_borrow (ek : exploration_kind) (l : BorrowId.id) (env : env) :
@@ -257,7 +255,7 @@ let update_borrow (ek : exploration_kind) (l : BorrowId.id)
   let update_borrow_in_env_value (ev : env_value) : env_value =
     match ev with
     | Var (vid, v) -> Var (vid, update_borrow_in_value ek l nbc v)
-    | Abs abs -> raise Unimplemented
+    | Abs _ -> raise Unimplemented
     (* TODO *)
   in
   List.map update_borrow_in_env_value env
@@ -308,7 +306,8 @@ let rec loans_in_value (v : typed_value) : bool =
       match bc with
       | SharedBorrow _ | InactivatedMutBorrow _ -> false
       | MutBorrow (_, bv) -> loans_in_value bv)
-  | Loan lc -> true
+  | Loan _ -> true
+  | Bottom | Symbolic _ -> false
 
 (** Return the first loan we find in a value *)
 let rec get_first_loan_in_value (v : typed_value) : loan_content option =
@@ -326,6 +325,7 @@ let rec get_first_loan_in_value (v : typed_value) : loan_content option =
       | SharedBorrow _ | InactivatedMutBorrow _ -> None
       | MutBorrow (_, bv) -> get_first_loan_in_value bv)
   | Loan lc -> Some lc
+  | Bottom | Symbolic _ -> None
 
 and get_first_loan_in_values (vl : typed_value list) : loan_content option =
   match vl with
@@ -333,7 +333,7 @@ and get_first_loan_in_values (vl : typed_value list) : loan_content option =
   | v :: vl' -> (
       match get_first_loan_in_value v with
       | Some lc -> Some lc
-      | None -> get_first_loan_in_values vl)
+      | None -> get_first_loan_in_values vl')
 
 (** Check if a value contains ⊥ *)
 let rec bottom_in_value (v : typed_value) : bool =
@@ -354,6 +354,10 @@ let rec bottom_in_value (v : typed_value) : bool =
       match lc with
       | SharedLoan (_, sv) -> bottom_in_value sv
       | MutLoan _ -> false)
+  | Bottom -> true
+  | Symbolic _ ->
+      (* This depends on the regions which have ended *)
+      raise Unimplemented
 
 (** See [end_borrow_get_borrow_in_env] *)
 let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
@@ -976,7 +980,9 @@ let rec access_projection (access : projection_access) (env : env)
                       { v with value = Loan (SharedLoan (bids, res.updated)) }
                     in
                     Ok (env1, { res with updated = nv })
-              else Error (FailSharedLoan bids)))
+              else Error (FailSharedLoan bids))
+      | _, (Concrete _ | Adt _ | Tuple _ | Bottom | Assumed _ | Borrow _) ->
+          failwith "Inconsistent projection")
 
 (** Generic function to access (read/write) the value at a given place.
 
@@ -995,7 +1001,7 @@ let access_place (access : projection_access)
   | Error err -> Error err
   | Ok (env1, res) ->
       (* Update the value *)
-      let env2 = env_update_var_value env p.var_id res.updated in
+      let env2 = env_update_var_value env1 p.var_id res.updated in
       (* Return *)
       Ok (env2, res.read)
 
@@ -1122,6 +1128,7 @@ let expand_bottom_value (config : config) (access : access_kind)
               (* Retrieve the proper variant *)
               let variant = VariantId.nth variants variant_id in
               variant.fields
+          | _ -> failwith "Unreachable"
         in
         (* Initialize the expanded value *)
         let fields = FieldId.vector_to_list fields in
@@ -1173,10 +1180,10 @@ let rec update_env_along_read_place (config : config) (access : access_kind)
         | FailMutLoan bid -> end_outer_borrow config bid env
         | FailInactivatedMutBorrow bid ->
             activate_inactivated_mut_borrow config Outer bid env
-        | FailSymbolic (pe, sp) ->
+        | FailSymbolic (_pe, _sp) ->
             (* Expand the symbolic value *)
             raise Unimplemented
-        | FailBottom (remaining_pes, pe, ty) ->
+        | FailBottom (_, _, _) ->
             (* We can't expand [Bottom] values while reading them *)
             failwith "Found [Bottom] while reading a place"
         | FailBorrow _ -> failwith "Could not read a borrow"
@@ -1192,7 +1199,7 @@ let rec update_env_along_write_place (config : config) (access : access_kind)
     (env : env) : env =
   (* Attempt to write the place: if it fails, update the environment and retry *)
   match write_place config access p nv env with
-  | Ok v -> env
+  | Ok env' -> env'
   | Error err ->
       let env' =
         match err with
@@ -1200,7 +1207,7 @@ let rec update_env_along_write_place (config : config) (access : access_kind)
         | FailMutLoan bid -> end_outer_borrow config bid env
         | FailInactivatedMutBorrow bid ->
             activate_inactivated_mut_borrow config Outer bid env
-        | FailSymbolic (pe, sp) ->
+        | FailSymbolic (_pe, _sp) ->
             (* Expand the symbolic value *)
             raise Unimplemented
         | FailBottom (remaining_pes, pe, ty) ->
@@ -1399,7 +1406,7 @@ let rec copy_value (config : config) (ctx : eval_ctx) (v : typed_value) :
       let fields = FieldId.vector_of_list fields in
       (ctx', { v with value = Values.Tuple fields })
   | Values.Bottom -> failwith "Can't copy ⊥"
-  | Values.Assumed av -> failwith "Can't copy an assumed value"
+  | Values.Assumed _ -> failwith "Can't copy an assumed value"
   | Values.Borrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
@@ -1497,7 +1504,7 @@ let prepare_rplace (config : config) (access : access_kind) (p : place)
 let eval_operand_prepare (config : config) (ctx : eval_ctx) (op : operand) :
     eval_ctx =
   match op with
-  | Expressions.Constant (ty, cv) -> ctx (* nothing to do *)
+  | Expressions.Constant (_, _) -> ctx (* nothing to do *)
   | Expressions.Copy p ->
       let access = Read in
       fst (prepare_rplace config access p ctx)
@@ -1554,7 +1561,7 @@ let eval_operands (config : config) (ctx : eval_ctx) (ops : operand list) :
     List.fold_left (fun ctx op -> eval_operand_prepare config ctx op) ctx ops
   in
   (* Then actually apply the operands to move, borrow, copy... *)
-  List.fold_left_map (fun ctx op -> eval_operand_apply config ctx op) ctx ops
+  List.fold_left_map (fun ctx op -> eval_operand_apply config ctx op) ctx1 ops
 
 let eval_two_operands (config : config) (ctx : eval_ctx) (op1 : operand)
     (op2 : operand) : eval_ctx * typed_value * typed_value =
@@ -1565,7 +1572,6 @@ let eval_two_operands (config : config) (ctx : eval_ctx) (op1 : operand)
 let eval_unary_op (config : config) (ctx : eval_ctx) (unop : unop)
     (op : operand) : (eval_ctx * typed_value) eval_result =
   (* Evaluate the operand *)
-  let access = Read in
   let ctx1, v = eval_operand config ctx op in
   (* Apply the unop *)
   match (unop, v.value) with
@@ -1582,7 +1588,6 @@ let eval_unary_op (config : config) (ctx : eval_ctx) (unop : unop)
 let eval_binary_op (config : config) (ctx : eval_ctx) (binop : binop)
     (op1 : operand) (op2 : operand) : (eval_ctx * typed_value) eval_result =
   (* Evaluate the operands *)
-  let access = Read in
   let ctx2, v1, v2 = eval_two_operands config ctx op1 op2 in
   if
     (* Binary operations only apply on integer values, but when we check for
