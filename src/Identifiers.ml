@@ -22,6 +22,8 @@ module type Id = sig
 
   val to_int : id -> int
 
+  val of_int : id -> int
+
   val empty_vector : 'a vector
 
   val vector_to_list : 'a vector -> 'a list
@@ -35,14 +37,22 @@ module type Id = sig
   val nth_opt : 'a vector -> id -> 'a option
 
   val update_nth : 'a vector -> id -> 'a -> 'a vector
+  (** Update the nth element of the vector.
+
+      Raises [Invalid_argument] if the identifier is out of range.
+   *)
 
   val iter : ('a -> unit) -> 'a vector -> unit
 
   val map : ('a -> 'b) -> 'a vector -> 'b vector
 
+  val mapi : (id -> 'a -> 'b) -> 'a vector -> 'b vector
+
   val for_all : ('a -> bool) -> 'a vector -> bool
 
   val exists : ('a -> bool) -> 'a vector -> bool
+
+  module Ord : Map.OrderedType with type t = id
 
   module Set : Set.S with type elt = id
 
@@ -84,6 +94,8 @@ module IdGen () : Id = struct
 
   let to_int x = x
 
+  let of_int x = x
+
   let empty_vector = []
 
   let vector_to_list v = v
@@ -98,7 +110,7 @@ module IdGen () : Id = struct
 
   let rec update_nth vec id v =
     match (vec, id) with
-    | [], _ -> failwith "Unreachable"
+    | [], _ -> raise (Invalid_argument "Out of range")
     | _ :: vec', 0 -> v :: vec'
     | x :: vec', _ -> x :: update_nth vec' (id - 1) v
 
@@ -106,21 +118,20 @@ module IdGen () : Id = struct
 
   let map = List.map
 
+  let mapi = List.mapi
+
   let for_all = List.for_all
 
   let exists = List.exists
 
-  module Set = Set.Make (struct
+  module Ord = struct
     type t = id
 
     let compare = compare
-  end)
+  end
 
-  module Map = Map.Make (struct
-    type t = id
-
-    let compare = compare
-  end)
+  module Set = Set.Make (Ord)
+  module Map = Map.Make (Ord)
 
   let set_to_string ids =
     let ids = Set.fold (fun id ids -> to_string id :: ids) ids [] in
