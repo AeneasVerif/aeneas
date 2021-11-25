@@ -6,9 +6,11 @@ open CfimAst
 open Print.Values
 open Errors
 open Contexts
+module Subst = Substitute
 
 (* TODO: Change state-passing style to : st -> ... -> (st, v) *)
 (* TODO: check that the value types are correct when evaluating *)
+(* TODO: module Type = T, etc. *)
 
 type eval_error = Panic
 
