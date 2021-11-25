@@ -1,7 +1,7 @@
 open Types
 open Values
 open Scalars
-open Expressions
+module E = Expressions
 open Errors
 module C = Contexts
 module Subst = Substitute
@@ -803,9 +803,9 @@ type path_fail_kind =
   | FailInactivatedMutBorrow of BorrowId.id
       (** Failure because we couldn't go inside an inactivated mutable borrow
           (which should get activated) *)
-  | FailSymbolic of (projection_elem * symbolic_proj_comp)
+  | FailSymbolic of (E.projection_elem * symbolic_proj_comp)
       (** Failure because we need to enter a symbolic value (and thus need to expand it) *)
-  | FailBottom of (int * projection_elem * ety)
+  | FailBottom of (int * E.projection_elem * ety)
       (** Failure because we need to enter an any value - we can expand Bottom
           values if they are left values. We return the number of elements which
           were remaining in the path when we reached the error - this allows to
@@ -837,8 +837,8 @@ type projection_access = {
  *)
 let rec access_projection (access : projection_access) (env : C.env)
     (* Function to (eventually) update the value we find *)
-      (update : typed_value -> typed_value) (p : projection) (v : typed_value) :
-    (C.env * updated_read_value) path_access_result =
+      (update : typed_value -> typed_value) (p : E.projection) (v : typed_value)
+    : (C.env * updated_read_value) path_access_result =
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -961,7 +961,7 @@ let rec access_projection (access : projection_access) (env : C.env)
  *)
 let access_place (access : projection_access)
     (* Function to (eventually) update the value we find *)
-      (update : typed_value -> typed_value) (p : place) (env : C.env) :
+      (update : typed_value -> typed_value) (p : E.place) (env : C.env) :
     (C.env * typed_value) path_access_result =
   (* Lookup the variable's value *)
   let value = C.env_lookup_var_value env p.var_id in
@@ -1002,7 +1002,7 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
       }
 
 (** Read the value at a given place *)
-let read_place (config : C.config) (access : access_kind) (p : place)
+let read_place (config : C.config) (access : access_kind) (p : E.place)
     (env : C.env) : typed_value path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
@@ -1016,14 +1016,14 @@ let read_place (config : C.config) (access : access_kind) (p : place)
       if config.check_invariants then assert (env1 = env);
       Ok read_value
 
-let read_place_unwrap (config : C.config) (access : access_kind) (p : place)
+let read_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
     (env : C.env) : typed_value =
   match read_place config access p env with
   | Error _ -> failwith "Unreachable"
   | Ok v -> v
 
 (** Update the value at a given place *)
-let write_place (_config : C.config) (access : access_kind) (p : place)
+let write_place (_config : C.config) (access : access_kind) (p : E.place)
     (nv : typed_value) (env : C.env) : C.env path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function substitutes the value with the new value *)
@@ -1034,7 +1034,7 @@ let write_place (_config : C.config) (access : access_kind) (p : place)
       (* We ignore the read value *)
       Ok env1
 
-let write_place_unwrap (config : C.config) (access : access_kind) (p : place)
+let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
     (nv : typed_value) (env : C.env) : C.env =
   match write_place config access p nv env with
   | Error _ -> failwith "Unreachable"
@@ -1062,8 +1062,8 @@ let write_place_unwrap (config : C.config) (access : access_kind) (p : place)
     variant index when writing one of its fields).
 *)
 let expand_bottom_value (config : C.config) (access : access_kind)
-    (tyctx : type_def TypeDefId.vector) (p : place) (remaining_pes : int)
-    (pe : projection_elem) (ty : ety) (env : C.env) : C.env =
+    (tyctx : type_def TypeDefId.vector) (p : E.place) (remaining_pes : int)
+    (pe : E.projection_elem) (ty : ety) (env : C.env) : C.env =
   (* Prepare the update: we need to take the proper prefix of the place
      during whose evaluation we got stuck *)
   let projection' =
@@ -1138,7 +1138,7 @@ let expand_bottom_value (config : C.config) (access : access_kind)
     expanding symbolic values) until we manage to fully read the place.
  *)
 let rec update_env_along_read_place (config : C.config) (access : access_kind)
-    (p : place) (env : C.env) : C.env =
+    (p : E.place) (env : C.env) : C.env =
   (* Attempt to read the place: if it fails, update the environment and retry *)
   match read_place config access p env with
   | Ok _ -> env
@@ -1164,7 +1164,7 @@ let rec update_env_along_read_place (config : C.config) (access : access_kind)
     See [update_env_alond_read_place].
 *)
 let rec update_env_along_write_place (config : C.config) (access : access_kind)
-    (tyctx : type_def TypeDefId.vector) (p : place) (nv : typed_value)
+    (tyctx : type_def TypeDefId.vector) (p : E.place) (nv : typed_value)
     (env : C.env) : C.env =
   (* Attempt to write the place: if it fails, update the environment and retry *)
   match write_place config access p nv env with
@@ -1197,7 +1197,7 @@ exception UpdateEnv of C.env
     to get access to the value, then call this function to "prepare" the value.
  *)
 let rec collect_borrows_at_place (config : C.config) (access : access_kind)
-    (p : place) (env : C.env) : C.env =
+    (p : E.place) (env : C.env) : C.env =
   (* First, retrieve the value *)
   match read_place config access p env with
   | Error _ -> failwith "Unreachable"
@@ -1268,7 +1268,7 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
     drop the value there to properly propagate back values which are not/can't
     be borrowed anymore).
  *)
-let rec drop_borrows_at_place (config : C.config) (p : place) (env : C.env) :
+let rec drop_borrows_at_place (config : C.config) (p : E.place) (env : C.env) :
     C.env =
   (* We do something similar to [collect_borrows_at_place].
      First, retrieve the value *)
@@ -1399,7 +1399,7 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : typed_value) :
 
 (** Convert a constant operand value to a typed value *)
 let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : ety)
-    (cv : operand_constant_value) : typed_value =
+    (cv : E.operand_constant_value) : typed_value =
   (* Check the type while converting *)
   match (ty, cv) with
   (* Unit *)
@@ -1450,7 +1450,7 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : ety)
       failwith "Improperly typed constant value"
 
 (** Small utility *)
-let prepare_rplace (config : C.config) (access : access_kind) (p : place)
+let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
     (ctx : C.eval_ctx) : C.eval_ctx * typed_value =
   let env1 = update_env_along_read_place config access p ctx.env in
   let env2 = collect_borrows_at_place config access p env1 in
@@ -1471,8 +1471,8 @@ let prepare_rplace (config : C.config) (access : access_kind) (p : place)
     - [eval_operand_apply]
     which are then used in [eval_operand] and [eval_operands].
  *)
-let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : operand) :
-    C.eval_ctx =
+let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
+    : C.eval_ctx =
   match op with
   | Expressions.Constant (_, _) -> ctx (* nothing to do *)
   | Expressions.Copy p ->
@@ -1483,7 +1483,7 @@ let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : operand) :
       fst (prepare_rplace config access p ctx)
 
 (** See [eval_operand_prepare] (which should have been called before) *)
-let eval_operand_apply (config : C.config) (ctx : C.eval_ctx) (op : operand) :
+let eval_operand_apply (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
     C.eval_ctx * typed_value =
   match op with
   | Expressions.Constant (ty, cv) ->
@@ -1516,7 +1516,7 @@ let eval_operand_apply (config : C.config) (ctx : C.eval_ctx) (op : operand) :
     Otherwise, we may break invariants (if some values refer to other
     values via borrows).
  *)
-let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : operand) :
+let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
     C.eval_ctx * typed_value =
   let ctx1 = eval_operand_prepare config ctx op in
   eval_operand_apply config ctx1 op
@@ -1524,8 +1524,8 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : operand) :
 (** Evaluate several operands.
 
  *)
-let eval_operands (config : C.config) (ctx : C.eval_ctx) (ops : operand list) :
-    C.eval_ctx * typed_value list =
+let eval_operands (config : C.config) (ctx : C.eval_ctx) (ops : E.operand list)
+    : C.eval_ctx * typed_value list =
   (* First prepare the values to end/activate the borrows *)
   let ctx1 =
     List.fold_left (fun ctx op -> eval_operand_prepare config ctx op) ctx ops
@@ -1533,30 +1533,31 @@ let eval_operands (config : C.config) (ctx : C.eval_ctx) (ops : operand list) :
   (* Then actually apply the operands to move, borrow, copy... *)
   List.fold_left_map (fun ctx op -> eval_operand_apply config ctx op) ctx1 ops
 
-let eval_two_operands (config : C.config) (ctx : C.eval_ctx) (op1 : operand)
-    (op2 : operand) : C.eval_ctx * typed_value * typed_value =
+let eval_two_operands (config : C.config) (ctx : C.eval_ctx) (op1 : E.operand)
+    (op2 : E.operand) : C.eval_ctx * typed_value * typed_value =
   match eval_operands config ctx [ op1; op2 ] with
   | ctx', [ v1; v2 ] -> (ctx', v1, v2)
   | _ -> failwith "Unreachable"
 
-let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : unop)
-    (op : operand) : (C.eval_ctx * typed_value) eval_result =
+let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : E.unop)
+    (op : E.operand) : (C.eval_ctx * typed_value) eval_result =
   (* Evaluate the operand *)
   let ctx1, v = eval_operand config ctx op in
   (* Apply the unop *)
   match (unop, v.value) with
-  | Not, Concrete (Bool b) ->
+  | E.Not, Concrete (Bool b) ->
       Ok (ctx1, { v with value = Concrete (Bool (not b)) })
-  | Neg, Concrete (Scalar sv) -> (
+  | E.Neg, Concrete (Scalar sv) -> (
       let i = Z.neg sv.value in
       match mk_scalar sv.int_ty i with
       | Error _ -> Error Panic
       | Ok sv -> Ok (ctx1, { v with value = Concrete (Scalar sv) }))
-  | (Not | Neg), Symbolic _ -> raise Unimplemented (* TODO *)
+  | (E.Not | E.Neg), Symbolic _ -> raise Unimplemented (* TODO *)
   | _ -> failwith "Invalid value for unop"
 
-let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : binop)
-    (op1 : operand) (op2 : operand) : (C.eval_ctx * typed_value) eval_result =
+let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
+    (op1 : E.operand) (op2 : E.operand) : (C.eval_ctx * typed_value) eval_result
+    =
   (* Evaluate the operands *)
   let ctx2, v1, v2 = eval_two_operands config ctx op1 op2 in
   if
@@ -1578,68 +1579,69 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : binop)
              return integers.
           *)
           match binop with
-          | Lt | Le | Ge | Gt ->
+          | E.Lt | E.Le | E.Ge | E.Gt ->
               (* The two operands must have the same type and the result is a boolean *)
               assert (sv1.int_ty = sv2.int_ty);
               let b =
                 match binop with
-                | Lt -> Z.lt sv1.value sv1.value
-                | Le -> Z.leq sv1.value sv1.value
-                | Ge -> Z.geq sv1.value sv1.value
-                | Gt -> Z.gt sv1.value sv1.value
-                | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr | Shl
-                | Shr | Ne | Eq ->
+                | E.Lt -> Z.lt sv1.value sv1.value
+                | E.Le -> Z.leq sv1.value sv1.value
+                | E.Ge -> Z.geq sv1.value sv1.value
+                | E.Gt -> Z.gt sv1.value sv1.value
+                | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
+                | E.BitOr | E.Shl | E.Shr | E.Ne | E.Eq ->
                     failwith "Unreachable"
               in
               Ok { value = Concrete (Bool b); ty = Types.Bool }
-          | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr -> (
+          | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
+          | E.BitOr -> (
               (* The two operands must have the same type and the result is an integer *)
               assert (sv1.int_ty = sv2.int_ty);
               let res =
                 match binop with
-                | Div ->
+                | E.Div ->
                     if sv2.value = Z.zero then Error ()
                     else mk_scalar sv1.int_ty (Z.div sv1.value sv2.value)
-                | Rem ->
+                | E.Rem ->
                     (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
                     if sv2.value = Z.zero then Error ()
                     else mk_scalar sv1.int_ty (Z.rem sv1.value sv2.value)
-                | Add -> mk_scalar sv1.int_ty (Z.add sv1.value sv2.value)
-                | Sub -> mk_scalar sv1.int_ty (Z.sub sv1.value sv2.value)
-                | Mul -> mk_scalar sv1.int_ty (Z.mul sv1.value sv2.value)
-                | BitXor -> raise Unimplemented
-                | BitAnd -> raise Unimplemented
-                | BitOr -> raise Unimplemented
-                | Lt | Le | Ge | Gt | Shl | Shr | Ne | Eq ->
+                | E.Add -> mk_scalar sv1.int_ty (Z.add sv1.value sv2.value)
+                | E.Sub -> mk_scalar sv1.int_ty (Z.sub sv1.value sv2.value)
+                | E.Mul -> mk_scalar sv1.int_ty (Z.mul sv1.value sv2.value)
+                | E.BitXor -> raise Unimplemented
+                | E.BitAnd -> raise Unimplemented
+                | E.BitOr -> raise Unimplemented
+                | E.Lt | E.Le | E.Ge | E.Gt | E.Shl | E.Shr | E.Ne | E.Eq ->
                     failwith "Unreachable"
               in
               match res with
               | Error err -> Error err
               | Ok sv ->
                   Ok { value = Concrete (Scalar sv); ty = Integer sv1.int_ty })
-          | Shl | Shr -> raise Unimplemented
-          | Ne | Eq -> failwith "Unreachable"
+          | E.Shl | E.Shr -> raise Unimplemented
+          | E.Ne | E.Eq -> failwith "Unreachable"
         in
         match res with Error _ -> Error Panic | Ok v -> Ok (ctx2, v))
     | _ -> failwith "Invalid inputs for binop"
 
 (** Evaluate an rvalue in a given context: return the updated context and
     the computed value *)
-let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : rvalue) :
+let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
     (C.eval_ctx * typed_value) eval_result =
   match rvalue with
-  | Use op -> Ok (eval_operand config ctx op)
-  | Ref (p, bkind) -> (
+  | E.Use op -> Ok (eval_operand config ctx op)
+  | E.Ref (p, bkind) -> (
       match bkind with
-      | Expressions.Shared | Expressions.TwoPhaseMut ->
+      | E.Shared | E.TwoPhaseMut ->
           (* Access the value *)
-          let access = if bkind = Expressions.Shared then Read else Write in
+          let access = if bkind = E.Shared then Read else Write in
           let ctx2, v = prepare_rplace config access p ctx in
           (* Compute the rvalue - simply a shared borrow with a fresh id *)
           let ctx3, bid = C.fresh_borrow_id ctx2 in
           let rv_ty = Types.Ref (Erased, v.ty, Shared) in
           let bc =
-            if bkind = Expressions.Shared then SharedBorrow bid
+            if bkind = E.Shared then SharedBorrow bid
             else InactivatedMutBorrow bid
           in
           let rv = { value = Borrow bc; ty = rv_ty } in
@@ -1659,7 +1661,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : rvalue) :
           let env4 = write_place_unwrap config access p nv ctx3.env in
           (* Return *)
           Ok ({ ctx3 with env = env4 }, rv)
-      | Expressions.Mut ->
+      | E.Mut ->
           (* Access the value *)
           let access = Write in
           let ctx2, v = prepare_rplace config access p ctx in
@@ -1673,9 +1675,9 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : rvalue) :
           let env4 = write_place_unwrap config access p nv ctx3.env in
           (* Return *)
           Ok ({ ctx3 with env = env4 }, rv))
-  | UnaryOp (unop, op) -> eval_unary_op config ctx unop op
-  | BinaryOp (binop, op1, op2) -> eval_binary_op config ctx binop op1 op2
-  | Discriminant p -> (
+  | E.UnaryOp (unop, op) -> eval_unary_op config ctx unop op
+  | E.BinaryOp (binop, op1, op2) -> eval_binary_op config ctx binop op1 op2
+  | E.Discriminant p -> (
       (* Note that discriminant values have type `isize` *)
       (* Access the value *)
       let access = Read in
@@ -1696,16 +1698,16 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : rvalue) :
                   Ok (ctx1, { value = Concrete (Scalar sv); ty = Integer Isize })
               ))
       | _ -> failwith "Invalid input for `discriminant`")
-  | Aggregate (aggregate_kind, ops) -> (
+  | E.Aggregate (aggregate_kind, ops) -> (
       (* Evaluate the operands *)
       let ctx1, values = eval_operands config ctx ops in
       let values = FieldId.vector_of_list values in
       (* Match on the aggregate kind *)
       match aggregate_kind with
-      | AggregatedTuple ->
+      | E.AggregatedTuple ->
           let tys = List.map (fun v -> v.ty) (FieldId.vector_to_list values) in
           Ok (ctx1, { value = Tuple values; ty = Types.Tuple tys })
-      | AggregatedAdt (def_id, opt_variant_id, regions, types) ->
+      | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
           (* Sanity checks *)
           let type_def = C.ctx_lookup_type_def ctx def_id in
           assert (
