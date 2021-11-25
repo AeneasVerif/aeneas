@@ -1854,13 +1854,34 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
   let ctx2 = end_loan_exactly_at_place config access p ctx1 in
   let v = read_place_unwrap config access p ctx2.env in
   (* Update the value *)
-  match v.V.value with
-  | Adt av -> raise Unimplemented
-  | Bottom -> raise Unimplemented
-  | Symbolic _ ->
+  match (v.V.ty, v.V.value) with
+  | T.Adt (def_id, regions, types), V.Adt av -> (
+      (* There are two situations:
+         - either the discriminant is already the proper one (in which case we
+           don't do anything)
+         - or it is not the proper one, in which case we replace the value with
+           a variant with all its fields set to [Bottom]
+      *)
+      match av.variant_id with
+      | None -> failwith "Found a struct value while expected an enum"
+      | Some variant_id' ->
+          if variant_id' = variant_id then (* Nothing to do *)
+            Ok (ctx2, Unit)
+          else
+            (* Replace the value *)
+            let bottom_v =
+              compute_expanded_bottom_adt_value ctx.type_context def_id
+                (Some variant_id) regions types
+            in
+            let env3 = write_place_unwrap config access p bottom_v ctx2.env in
+            let ctx3 = { ctx2 with env = env3 } in
+            Ok (ctx3, Unit))
+  | _, V.Bottom -> raise Unimplemented
+  | _, V.Symbolic _ ->
       assert (config.mode = SymbolicMode);
       (* TODO *) raise Unimplemented
-  | Concrete _ | Tuple _ | Borrow _ | Loan _ | Assumed _ ->
+  | _, V.Adt _ -> failwith "Inconsistent state"
+  | _, (V.Concrete _ | V.Tuple _ | V.Borrow _ | V.Loan _ | V.Assumed _) ->
       failwith "Unexpected value"
 
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
