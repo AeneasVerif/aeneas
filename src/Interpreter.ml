@@ -1795,7 +1795,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           Ok (ctx1, { V.value = Adt av; ty = aty }))
 
 (** Result of evaluating a statement *)
-type statement_eval_res = Unit | Break of int | Continue of int
+type statement_eval_res = Unit | Break of int | Continue of int | Return
 
 (** Small utility.
     
@@ -1826,20 +1826,20 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       (* Actually compute the rvalue *)
       match eval_rvalue config ctx2 rvalue with
       | Error err -> Error err
-      | Ok (ctx3, rvalue) -> (
+      | Ok (ctx3, rvalue) ->
           (* Update the lvalue *)
-          match write_place config Write p rvalue ctx3.env with
-          | Error err -> failwith "Unaccessible path"
-          | Ok env4 ->
-              let ctx4 = { ctx3 with env = env4 } in
-              Ok (ctx3, Unit)))
-  | A.FakeRead p -> raise Unimplemented
+          let env4 = write_place_unwrap config Write p rvalue ctx3.env in
+          let ctx4 = { ctx3 with env = env4 } in
+          Ok (ctx3, Unit))
+  | A.FakeRead p ->
+      let ctx1, _ = prepare_rplace config Read p ctx in
+      Ok (ctx1, Unit)
   | A.SetDiscriminant (p, variant_id) -> raise Unimplemented
   | A.Drop p -> raise Unimplemented
   | A.Assert assertion -> raise Unimplemented
   | A.Call call -> raise Unimplemented
-  | A.Panic -> raise Unimplemented
-  | A.Return -> raise Unimplemented
-  | A.Break i -> raise Unimplemented
-  | A.Continue i -> raise Unimplemented
+  | A.Panic -> Error Panic
+  | A.Return -> Ok (ctx, Return)
+  | A.Break i -> Ok (ctx, Break i)
+  | A.Continue i -> Ok (ctx, Continue i)
   | A.Nop -> Ok (ctx, Unit)
