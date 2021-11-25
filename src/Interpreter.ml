@@ -1,4 +1,4 @@
-open Types
+module T = Types
 module V = Values
 open Scalars
 module E = Expressions
@@ -29,8 +29,8 @@ let rec check_borrows_in_value (check : V.borrow_content -> bool)
     (v : V.typed_value) : bool =
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> true
-  | V.Adt av -> FieldId.for_all (check_borrows_in_value check) av.field_values
-  | V.Tuple values -> FieldId.for_all (check_borrows_in_value check) values
+  | V.Adt av -> T.FieldId.for_all (check_borrows_in_value check) av.field_values
+  | V.Tuple values -> T.FieldId.for_all (check_borrows_in_value check) values
   | V.Assumed (Box bv) -> check_borrows_in_value check bv
   | V.Borrow bc -> (
       check bc
@@ -48,8 +48,8 @@ let rec check_loans_in_value (check : V.loan_content -> bool)
     (v : V.typed_value) : bool =
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> true
-  | V.Adt av -> FieldId.for_all (check_loans_in_value check) av.field_values
-  | V.Tuple values -> FieldId.for_all (check_loans_in_value check) values
+  | V.Adt av -> T.FieldId.for_all (check_loans_in_value check) av.field_values
+  | V.Tuple values -> T.FieldId.for_all (check_loans_in_value check) values
   | V.Assumed (Box bv) -> check_loans_in_value check bv
   | V.Borrow bc -> (
       match bc with
@@ -68,10 +68,10 @@ let rec lookup_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> None
   | V.Adt av ->
-      let values = FieldId.vector_to_list av.field_values in
+      let values = T.FieldId.vector_to_list av.field_values in
       List.find_map (lookup_loan_in_value ek l) values
   | V.Tuple values ->
-      let values = FieldId.vector_to_list values in
+      let values = T.FieldId.vector_to_list values in
       List.find_map (lookup_loan_in_value ek l) values
   | V.Assumed (Box bv) -> lookup_loan_in_value ek l bv
   | V.Borrow bc -> (
@@ -115,12 +115,12 @@ let rec update_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
   | V.Adt av ->
       let values =
-        FieldId.map (update_loan_in_value ek l nlc) av.field_values
+        T.FieldId.map (update_loan_in_value ek l nlc) av.field_values
       in
       let av = { av with field_values = values } in
       { v with value = Adt av }
   | V.Tuple values ->
-      let values = FieldId.map (update_loan_in_value ek l nlc) values in
+      let values = T.FieldId.map (update_loan_in_value ek l nlc) values in
       { v with value = Tuple values }
   | V.Assumed (Box bv) ->
       { v with value = Assumed (Box (update_loan_in_value ek l nlc bv)) }
@@ -168,10 +168,10 @@ let rec lookup_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> None
   | V.Adt av ->
-      let values = FieldId.vector_to_list av.field_values in
+      let values = T.FieldId.vector_to_list av.field_values in
       List.find_map (lookup_borrow_in_value ek l) values
   | V.Tuple values ->
-      let values = FieldId.vector_to_list values in
+      let values = T.FieldId.vector_to_list values in
       List.find_map (lookup_borrow_in_value ek l) values
   | V.Assumed (Box bv) -> lookup_borrow_in_value ek l bv
   | V.Borrow bc -> (
@@ -213,12 +213,12 @@ let rec update_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
   | V.Adt av ->
       let values =
-        FieldId.map (update_borrow_in_value ek l nbc) av.field_values
+        T.FieldId.map (update_borrow_in_value ek l nbc) av.field_values
       in
       let av = { av with field_values = values } in
       { v with value = Adt av }
   | V.Tuple values ->
-      let values = FieldId.map (update_borrow_in_value ek l nbc) values in
+      let values = T.FieldId.map (update_borrow_in_value ek l nbc) values in
       { v with value = Tuple values }
   | V.Assumed (Box bv) ->
       { v with value = Assumed (Box (update_borrow_in_value ek l nbc bv)) }
@@ -297,10 +297,10 @@ let rec loans_in_value (v : V.typed_value) : bool =
   match v.V.value with
   | V.Concrete _ -> false
   | V.Adt av ->
-      let fields = FieldId.vector_to_list av.field_values in
+      let fields = T.FieldId.vector_to_list av.field_values in
       List.exists loans_in_value fields
   | V.Tuple fields ->
-      let fields = FieldId.vector_to_list fields in
+      let fields = T.FieldId.vector_to_list fields in
       List.exists loans_in_value fields
   | V.Assumed (Box bv) -> loans_in_value bv
   | V.Borrow bc -> (
@@ -315,10 +315,10 @@ let rec get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
   match v.V.value with
   | V.Concrete _ -> None
   | V.Adt av ->
-      let fields = FieldId.vector_to_list av.field_values in
+      let fields = T.FieldId.vector_to_list av.field_values in
       get_first_loan_in_values fields
   | V.Tuple fields ->
-      let fields = FieldId.vector_to_list fields in
+      let fields = T.FieldId.vector_to_list fields in
       get_first_loan_in_values fields
   | V.Assumed (Box bv) -> get_first_loan_in_value bv
   | V.Borrow bc -> (
@@ -341,10 +341,10 @@ let rec bottom_in_value (v : V.typed_value) : bool =
   match v.V.value with
   | V.Concrete _ -> false
   | V.Adt av ->
-      let fields = FieldId.vector_to_list av.field_values in
+      let fields = T.FieldId.vector_to_list av.field_values in
       List.exists bottom_in_value fields
   | V.Tuple fields ->
-      let fields = FieldId.vector_to_list fields in
+      let fields = T.FieldId.vector_to_list fields in
       List.exists bottom_in_value fields
   | V.Assumed (Box bv) -> bottom_in_value bv
   | V.Borrow bc -> (
@@ -376,18 +376,18 @@ let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
        * boxes upon ending inner borrows *)
       ({ v0 with value = Assumed (Box bv') }, res)
   | V.Adt adt ->
-      let values = FieldId.vector_to_list adt.field_values in
+      let values = T.FieldId.vector_to_list adt.field_values in
       let values', res =
         end_borrow_get_borrow_in_values config io l outer_borrows values
       in
-      let values' = FieldId.vector_of_list values' in
+      let values' = T.FieldId.vector_of_list values' in
       ({ v0 with value = Adt { adt with field_values = values' } }, res)
   | V.Tuple values ->
-      let values = FieldId.vector_to_list values in
+      let values = T.FieldId.vector_to_list values in
       let values', res =
         end_borrow_get_borrow_in_values config io l outer_borrows values
       in
-      let values' = FieldId.vector_of_list values' in
+      let values' = T.FieldId.vector_of_list values' in
       ({ v0 with value = Tuple values' }, res)
   | V.Loan (V.MutLoan _) -> (v0, NotFound)
   | V.Loan (V.SharedLoan (borrows, v)) ->
@@ -469,17 +469,17 @@ let rec give_back_value_to_value config bid (v : V.typed_value)
       let field_values =
         List.map
           (give_back_value_to_value config bid v)
-          (FieldId.vector_to_list av.field_values)
+          (T.FieldId.vector_to_list av.field_values)
       in
-      let field_values = FieldId.vector_of_list field_values in
+      let field_values = T.FieldId.vector_of_list field_values in
       { destv with value = Adt { av with field_values } }
   | V.Tuple values ->
       let values =
         List.map
           (give_back_value_to_value config bid v)
-          (FieldId.vector_to_list values)
+          (T.FieldId.vector_to_list values)
       in
-      let values = FieldId.vector_of_list values in
+      let values = T.FieldId.vector_of_list values in
       { destv with value = Tuple values }
   | V.Assumed (Box destv') ->
       {
@@ -516,17 +516,17 @@ let rec give_back_shared_to_value (config : C.config) bid
       let field_values =
         List.map
           (give_back_shared_to_value config bid)
-          (FieldId.vector_to_list av.field_values)
+          (T.FieldId.vector_to_list av.field_values)
       in
-      let field_values = FieldId.vector_of_list field_values in
+      let field_values = T.FieldId.vector_of_list field_values in
       { destv with value = Adt { av with field_values } }
   | V.Tuple values ->
       let values =
         List.map
           (give_back_shared_to_value config bid)
-          (FieldId.vector_to_list values)
+          (T.FieldId.vector_to_list values)
       in
-      let values = FieldId.vector_of_list values in
+      let values = T.FieldId.vector_of_list values in
       { destv with value = Tuple values }
   | V.Assumed (Box destv') ->
       {
@@ -613,14 +613,14 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
     match v.V.value with
     | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
     | V.Adt av ->
-        let fields = FieldId.vector_to_list av.field_values in
+        let fields = T.FieldId.vector_to_list av.field_values in
         let fields = List.map reborrow_in_value fields in
-        let fields = FieldId.vector_of_list fields in
+        let fields = T.FieldId.vector_of_list fields in
         { v with value = Adt { av with field_values = fields } }
     | V.Tuple fields ->
-        let fields = FieldId.vector_to_list fields in
+        let fields = T.FieldId.vector_to_list fields in
         let fields = List.map reborrow_in_value fields in
-        let fields = FieldId.vector_of_list fields in
+        let fields = T.FieldId.vector_of_list fields in
         { v with value = Tuple fields }
     | V.Assumed (Box bv) ->
         { v with value = Assumed (Box (reborrow_in_value bv)) }
@@ -813,7 +813,7 @@ type path_fail_kind =
           (which should get activated) *)
   | FailSymbolic of (E.projection_elem * V.symbolic_proj_comp)
       (** Failure because we need to enter a symbolic value (and thus need to expand it) *)
-  | FailBottom of (int * E.projection_elem * ety)
+  | FailBottom of (int * E.projection_elem * T.ety)
       (** Failure because we need to enter an any value - we can expand Bottom
           values if they are left values. We return the number of elements which
           were remaining in the path when we reached the error - this allows to
@@ -868,27 +868,27 @@ let rec access_projection (access : projection_access) (env : C.env)
           | Some vid, Some vid' -> if vid <> vid' then failwith "Unreachable"
           | _ -> failwith "Unreachable");
           (* Actually project *)
-          let fv = FieldId.nth adt.field_values field_id in
+          let fv = T.FieldId.nth adt.field_values field_id in
           match access_projection access env update p fv with
           | Error err -> Error err
           | Ok (env1, res) ->
               (* Update the field value *)
               let nvalues =
-                FieldId.update_nth adt.field_values field_id res.updated
+                T.FieldId.update_nth adt.field_values field_id res.updated
               in
               let nadt = V.Adt { adt with V.field_values = nvalues } in
               let updated = { v with value = nadt } in
               Ok (env1, { res with updated }))
       (* Tuples *)
       | Field (ProjTuple arity, field_id), V.Tuple values -> (
-          assert (arity = FieldId.length values);
-          let fv = FieldId.nth values field_id in
+          assert (arity = T.FieldId.length values);
+          let fv = T.FieldId.nth values field_id in
           (* Project *)
           match access_projection access env update p fv with
           | Error err -> Error err
           | Ok (env1, res) ->
               (* Update the field value *)
-              let nvalues = FieldId.update_nth values field_id res.updated in
+              let nvalues = T.FieldId.update_nth values field_id res.updated in
               let ntuple = V.Tuple nvalues in
               let updated = { v with value = ntuple } in
               Ok (env1, { res with updated })
@@ -1078,8 +1078,8 @@ let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
     variant index when writing one of its fields).
 *)
 let expand_bottom_value (config : C.config) (access : access_kind)
-    (tyctx : type_def TypeDefId.vector) (p : E.place) (remaining_pes : int)
-    (pe : E.projection_elem) (ty : ety) (env : C.env) : C.env =
+    (tyctx : T.type_def T.TypeDefId.vector) (p : E.place) (remaining_pes : int)
+    (pe : E.projection_elem) (ty : T.ety) (env : C.env) : C.env =
   (* Prepare the update: we need to take the proper prefix of the place
      during whose evaluation we got stuck *)
   let projection' =
@@ -1099,30 +1099,30 @@ let expand_bottom_value (config : C.config) (access : access_kind)
   let nv =
     match (pe, ty) with
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
-        Types.Adt (def_id', regions, types) ) ->
+        T.Adt (def_id', regions, types) ) ->
         (* Lookup the definition and check if it is an enumeration - it
            should be an enumeration if and only if the projection element
            is a field projection with *some* variant id. Retrieve the list
            of fields at the same time. *)
         assert (def_id = def_id');
-        let def = TypeDefId.nth tyctx def_id in
+        let def = T.TypeDefId.nth tyctx def_id in
         let fields =
           match (def.kind, opt_variant_id) with
           | Struct fields, None -> fields
           | Enum variants, Some variant_id ->
               (* Retrieve the proper variant *)
-              let variant = VariantId.nth variants variant_id in
+              let variant = T.VariantId.nth variants variant_id in
               variant.fields
           | _ -> failwith "Unreachable"
         in
         (* Initialize the expanded value *)
-        let fields = FieldId.vector_to_list fields in
+        let fields = T.FieldId.vector_to_list fields in
         let fields =
           List.map
-            (fun f -> { V.value = Bottom; ty = erase_regions f.field_ty })
+            (fun f -> { V.value = Bottom; ty = T.erase_regions f.T.field_ty })
             fields
         in
-        let fields = FieldId.vector_of_list fields in
+        let fields = T.FieldId.vector_of_list fields in
         V.Adt
           {
             def_id;
@@ -1131,11 +1131,11 @@ let expand_bottom_value (config : C.config) (access : access_kind)
             types;
             field_values = fields;
           }
-    | Field (ProjTuple arity, _), Types.Tuple tys ->
+    | Field (ProjTuple arity, _), T.Tuple tys ->
         assert (arity = List.length tys);
         (* Generate the field values *)
         let fields = List.map (fun ty -> { V.value = Bottom; ty }) tys in
-        let fields = FieldId.vector_of_list fields in
+        let fields = T.FieldId.vector_of_list fields in
         V.Tuple fields
     | _ -> failwith "Unreachable"
   in
@@ -1180,7 +1180,7 @@ let rec update_env_along_read_place (config : C.config) (access : access_kind)
     See [update_env_alond_read_place].
 *)
 let rec update_env_along_write_place (config : C.config) (access : access_kind)
-    (tyctx : type_def TypeDefId.vector) (p : E.place) (nv : V.typed_value)
+    (tyctx : T.type_def T.TypeDefId.vector) (p : E.place) (nv : V.typed_value)
     (env : C.env) : C.env =
   (* Attempt to write the place: if it fails, update the environment and retry *)
   match write_place config access p nv env with
@@ -1234,8 +1234,8 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
             (* Nothing to do for symbolic values - note that if the value needs
                to be copied, etc. we perform additional checks later *)
             ()
-        | V.Adt adt -> FieldId.iter inspect_update adt.field_values
-        | V.Tuple values -> FieldId.iter inspect_update values
+        | V.Adt adt -> T.FieldId.iter inspect_update adt.field_values
+        | V.Tuple values -> T.FieldId.iter inspect_update values
         | V.Assumed (Box v) -> inspect_update v
         | V.Borrow bc -> (
             match bc with
@@ -1319,8 +1319,9 @@ let rec drop_borrows_at_place (config : C.config) (p : E.place) (env : C.env) :
         | V.Symbolic _ ->
             (* Nothing to do for symbolic values - TODO: not sure *)
             raise Unimplemented
-        | V.Adt adt -> FieldId.iter (inspect_update end_loans) adt.field_values
-        | V.Tuple values -> FieldId.iter (inspect_update end_loans) values
+        | V.Adt adt ->
+            T.FieldId.iter (inspect_update end_loans) adt.field_values
+        | V.Tuple values -> T.FieldId.iter (inspect_update end_loans) values
         | V.Assumed (Box v) -> inspect_update end_loans v
         | V.Borrow bc -> (
             assert (not end_loans);
@@ -1382,14 +1383,14 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
   match v.V.value with
   | V.Concrete _ -> (ctx, v)
   | V.Adt av ->
-      let fields = FieldId.vector_to_list av.field_values in
+      let fields = T.FieldId.vector_to_list av.field_values in
       let ctx', fields = List.fold_left_map (copy_value config) ctx fields in
-      let fields = FieldId.vector_of_list fields in
+      let fields = T.FieldId.vector_of_list fields in
       (ctx', { v with V.value = V.Adt { av with field_values = fields } })
   | V.Tuple fields ->
-      let fields = FieldId.vector_to_list fields in
+      let fields = T.FieldId.vector_to_list fields in
       let ctx', fields = List.fold_left_map (copy_value config) ctx fields in
-      let fields = FieldId.vector_of_list fields in
+      let fields = T.FieldId.vector_of_list fields in
       (ctx', { v with V.value = V.Tuple fields })
   | V.Bottom -> failwith "Can't copy ⊥"
   | V.Assumed _ -> failwith "Can't copy an assumed value"
@@ -1414,31 +1415,30 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
       raise Unimplemented
 
 (** Convert a constant operand value to a typed value *)
-let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : ety)
+let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
     (cv : E.operand_constant_value) : V.typed_value =
   (* Check the type while converting *)
   match (ty, cv) with
   (* Unit *)
-  | Types.Tuple [], Unit ->
-      { V.value = V.Tuple (FieldId.vector_of_list []); ty }
+  | T.Tuple [], Unit -> { V.value = V.Tuple (T.FieldId.vector_of_list []); ty }
   (* Adt with one variant and no fields *)
-  | Types.Adt (def_id, [], []), ConstantAdt def_id' ->
+  | T.Adt (def_id, [], []), ConstantAdt def_id' ->
       assert (def_id = def_id');
       (* Check that the adt definition only has one variant with no fields,
          compute the variant id at the same time. *)
-      let def = TypeDefId.nth ctx.type_context def_id in
-      assert (RegionVarId.length def.region_params = 0);
-      assert (TypeVarId.length def.type_params = 0);
+      let def = T.TypeDefId.nth ctx.type_context def_id in
+      assert (T.RegionVarId.length def.region_params = 0);
+      assert (T.TypeVarId.length def.type_params = 0);
       let variant_id =
         match def.kind with
         | Struct fields ->
-            assert (FieldId.length fields = 0);
+            assert (T.FieldId.length fields = 0);
             None
         | Enum variants ->
-            assert (VariantId.length variants = 1);
-            let variant_id = VariantId.zero in
-            let variant = VariantId.nth variants variant_id in
-            assert (FieldId.length variant.fields = 0);
+            assert (T.VariantId.length variants = 1);
+            let variant_id = T.VariantId.zero in
+            let variant = T.VariantId.nth variants variant_id in
+            assert (T.FieldId.length variant.fields = 0);
             Some variant_id
       in
       let value =
@@ -1448,16 +1448,15 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : ety)
             variant_id;
             regions = [];
             types = [];
-            field_values = FieldId.vector_of_list [];
+            field_values = T.FieldId.vector_of_list [];
           }
       in
       { value; ty }
   (* Scalar, boolean... *)
-  | Types.Bool, ConstantValue (Bool v) -> { V.value = V.Concrete (Bool v); ty }
-  | Types.Char, ConstantValue (Char v) -> { V.value = V.Concrete (Char v); ty }
-  | Types.Str, ConstantValue (String v) ->
-      { V.value = V.Concrete (String v); ty }
-  | Types.Integer int_ty, ConstantValue (V.Scalar v) ->
+  | T.Bool, ConstantValue (Bool v) -> { V.value = V.Concrete (Bool v); ty }
+  | T.Char, ConstantValue (Char v) -> { V.value = V.Concrete (Char v); ty }
+  | T.Str, ConstantValue (String v) -> { V.value = V.Concrete (String v); ty }
+  | T.Integer int_ty, ConstantValue (V.Scalar v) ->
       (* Check the type and the ranges *)
       assert (int_ty == v.int_ty);
       assert (check_scalar_value_in_range v);
@@ -1586,7 +1585,7 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
     (* Equality/inequality check is primitive only on primitive types *)
     assert (v1.ty = v2.ty);
     let b = v1 = v2 in
-    Ok (ctx2, { V.value = V.Concrete (Bool b); ty = Types.Bool }))
+    Ok (ctx2, { V.value = V.Concrete (Bool b); ty = T.Bool }))
   else
     match (v1.V.value, v2.V.value) with
     | V.Concrete (V.Scalar sv1), V.Concrete (V.Scalar sv2) -> (
@@ -1610,7 +1609,7 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
                 | E.BitOr | E.Shl | E.Shr | E.Ne | E.Eq ->
                     failwith "Unreachable"
               in
-              Ok { V.value = V.Concrete (Bool b); ty = Types.Bool }
+              Ok { V.value = V.Concrete (Bool b); ty = T.Bool }
           | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
           | E.BitOr -> (
               (* The two operands must have the same type and the result is an integer *)
@@ -1661,7 +1660,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           let ctx2, v = prepare_rplace config access p ctx in
           (* Compute the rvalue - simply a shared borrow with a fresh id *)
           let ctx3, bid = C.fresh_borrow_id ctx2 in
-          let rv_ty = Types.Ref (Erased, v.ty, Shared) in
+          let rv_ty = T.Ref (T.Erased, v.ty, Shared) in
           let bc =
             if bkind = E.Shared then V.SharedBorrow bid
             else V.InactivatedMutBorrow bid
@@ -1691,7 +1690,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           let ctx2, v = prepare_rplace config access p ctx in
           (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
           let ctx3, bid = C.fresh_borrow_id ctx2 in
-          let rv_ty = Types.Ref (Erased, v.ty, Mut) in
+          let rv_ty = T.Ref (T.Erased, v.ty, Mut) in
           let rv = { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty } in
           (* Compute the value with which to replace the value at place p *)
           let nv = { v with V.value = V.Loan (V.MutLoan bid) } in
@@ -1713,7 +1712,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
               failwith
                 "Invalid input for `discriminant`: structure instead of enum"
           | Some variant_id -> (
-              let id = Z.of_int (VariantId.to_int variant_id) in
+              let id = Z.of_int (T.VariantId.to_int variant_id) in
               match mk_scalar Isize id with
               | Error _ ->
                   failwith "Disciminant id out of range"
@@ -1727,24 +1726,24 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
   | E.Aggregate (aggregate_kind, ops) -> (
       (* Evaluate the operands *)
       let ctx1, values = eval_operands config ctx ops in
-      let values = FieldId.vector_of_list values in
+      let values = T.FieldId.vector_of_list values in
       (* Match on the aggregate kind *)
       match aggregate_kind with
       | E.AggregatedTuple ->
           let tys =
-            List.map (fun v -> v.V.ty) (FieldId.vector_to_list values)
+            List.map (fun v -> v.V.ty) (T.FieldId.vector_to_list values)
           in
-          Ok (ctx1, { V.value = Tuple values; ty = Types.Tuple tys })
+          Ok (ctx1, { V.value = Tuple values; ty = T.Tuple tys })
       | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
           (* Sanity checks *)
           let type_def = C.ctx_lookup_type_def ctx def_id in
           assert (
-            RegionVarId.length type_def.region_params = List.length regions);
+            T.RegionVarId.length type_def.region_params = List.length regions);
           let expected_field_types =
             Subst.ctx_adt_get_instantiated_field_types ctx1 def_id
               opt_variant_id types
           in
-          assert (expected_field_types = FieldId.map (fun v -> v.V.ty) values);
+          assert (expected_field_types = T.FieldId.map (fun v -> v.V.ty) values);
           (* Construct the value *)
           let av =
             {
@@ -1755,7 +1754,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
               V.field_values = values;
             }
           in
-          let aty = Types.Adt (def_id, regions, types) in
+          let aty = T.Adt (def_id, regions, types) in
           Ok (ctx1, { V.value = Adt av; ty = aty }))
 
 (** Result of evaluating a statement *)
