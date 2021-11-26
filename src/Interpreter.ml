@@ -1342,7 +1342,7 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
 
     Repeat:
     - read the value at a given place
-    - as long as we find a loans or a borrow, end it
+    - as long as we find a loan or a borrow, end it
 
     This is used to drop values (when we need to write to a place, we first
     drop the value there to properly propagate back values which are not/can't
@@ -1779,7 +1779,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           let aty = T.Adt (def_id, regions, types) in
           Ok (ctx1, { V.value = Adt av; ty = aty }))
 
-(** Result of evaluating a statement *)
+(** Result of evaluating a statement - TODO: add prefix *)
 type statement_eval_res = Unit | Break of int | Continue of int | Return
 
 (** Small utility.
@@ -1864,6 +1864,75 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
   | _, (V.Concrete _ | V.Tuple _ | V.Borrow _ | V.Loan _ | V.Assumed _) ->
       failwith "Unexpected value"
 
+(** Push a frame delimiter in the context's environment *)
+let ctx_push_frame (ctx : C.eval_ctx) : C.eval_ctx =
+  { ctx with env = Frame :: ctx.env }
+
+(** Small helper *)
+let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
+  { var_id; projection = [] }
+
+(** Drop a value at a given place *)
+let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
+    =
+  let ctx1, v = prepare_lplace config p ctx in
+  let nv = { v with value = V.Bottom } in
+  let env2 = write_place_unwrap config Write p nv ctx1.env in
+  let ctx2 = { ctx with env = env2 } in
+  ctx2
+
+(** Pop the current frame.
+    
+    Drop all the local variables but the return variable, move the return
+    value out of the return variable, remove all the local variables (but not the
+    abstractions!) from the context, remove the [Frame] indicator delimiting the
+    current frame and return the return value and the updated context.
+ *)
+let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
+    C.eval_ctx * V.typed_value =
+  let ret_vid = V.VarId.zero in
+  (* List the local variables, but the return variable *)
+  let rec list_locals env =
+    match env with
+    | [] -> failwith "Inconsistent environment"
+    | C.Abs _ :: env' -> list_locals env'
+    | C.Var (var, _) :: env' ->
+        let locals = list_locals env' in
+        if var.index = ret_vid then var.index :: locals else locals
+    | C.Frame :: _ -> []
+  in
+  let locals = list_locals ctx.env in
+  (* Drop the local variables *)
+  let ctx1 =
+    List.fold_left
+      (fun ctx lid -> drop_value config ctx (mk_place_from_var_id lid))
+      ctx locals
+  in
+  (* Move the return value out of the return variable *)
+  let ctx2, ret_value =
+    eval_operand config ctx1 (E.Move (mk_place_from_var_id ret_vid))
+  in
+  (* Pop the frame *)
+  let rec pop env =
+    match env with
+    | [] -> failwith "Inconsistent environment"
+    | C.Abs abs :: env' -> C.Abs abs :: pop env'
+    | C.Var (_, _) :: env' -> pop env'
+    | C.Frame :: env' -> env'
+  in
+  let env3 = pop ctx2.env in
+  let ctx3 = { ctx2 with env = env3 } in
+  (ctx3, ret_value)
+
+let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
+    (p : E.place) : C.eval_ctx =
+  (* Prepare the destination *)
+  let ctx2, _ = prepare_lplace config p ctx in
+  (* Update the destination *)
+  let env3 = write_place_unwrap config Write p v ctx2.env in
+  let ctx3 = { ctx2 with env = env3 } in
+  ctx3
+
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result =
   match st with
@@ -1872,23 +1941,15 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       match eval_rvalue config ctx rvalue with
       | Error err -> Error err
       | Ok (ctx1, rvalue) ->
-          (* Prepare the destination *)
-          let ctx2, _ = prepare_lplace config p ctx1 in
-          (* Update the destination *)
-          let env3 = write_place_unwrap config Write p rvalue ctx2.env in
-          let ctx3 = { ctx2 with env = env3 } in
-          Ok (ctx3, Unit))
+          (* Assign *)
+          let ctx2 = assign_to_place config ctx1 rvalue p in
+          Ok (ctx2, Unit))
   | A.FakeRead p ->
       let ctx1, _ = prepare_rplace config Read p ctx in
       Ok (ctx1, Unit)
   | A.SetDiscriminant (p, variant_id) ->
       set_discriminant config ctx p variant_id
-  | A.Drop p ->
-      let ctx1, v = prepare_lplace config p ctx in
-      let nv = { v with value = V.Bottom } in
-      let env2 = write_place_unwrap config Write p nv ctx1.env in
-      let ctx2 = { ctx with env = env2 } in
-      Ok (ctx2, Unit)
+  | A.Drop p -> Ok (drop_value config ctx p, Unit)
   | A.Assert assertion -> (
       let ctx1, v = eval_operand config ctx assertion.cond in
       assert (v.ty = T.Bool);
@@ -1924,7 +1985,7 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_def ctx fid in
   match config.mode with
-  | ConcreteMode ->
+  | ConcreteMode -> (
       let tsubst =
         Subst.make_type_subst
           (List.map
@@ -1933,35 +1994,60 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
           type_params
       in
       let locals, body = Subst.fun_def_substitute_in_body tsubst def in
+      let locals = V.VarId.vector_to_list locals in
 
       (* Evaluate the input operands *)
       let ctx1, args = eval_operands config ctx args in
+      assert (List.length args = def.A.arg_count);
+
+      (* Push a frame delimiter *)
+      let ctx2 = ctx_push_frame ctx1 in
 
       (* Compute the initial values for the local variables *)
-      (* First, compute the types of the variables *)
-      let local_tys =
-        List.map (fun l -> l.V.var_ty) (V.VarId.vector_to_list locals)
-      in
-
-      (* Second, push the return value *)
-      let ret_var, local_tys =
-        match local_tys with
-        | ret_ty :: local_tys -> (ret_ty, local_tys)
+      (* 1. Push the return value *)
+      let ret_var, locals =
+        match locals with
+        | ret_ty :: locals -> (ret_ty, locals)
         | _ -> failwith "Unreachable"
       in
+      let ctx3 = C.ctx_push_var ctx2 ret_var (C.mk_bottom ret_var.var_ty) in
 
-      (*  let ctx2 = ctx_push_var *)
+      (* 2. Push the input values *)
+      let input_locals, locals =
+        Utilities.list_split_at locals def.A.arg_count
+      in
+      let inputs = List.combine input_locals args in
+      (* Note that this function checks that the variables and their values
+         have the same type (this is important) *)
+      let ctx4 = C.ctx_push_vars ctx3 inputs in
 
-      (* Third, push the inputs *)
+      (* 3. Push the remaining local variables (initialized as [Bottom]) *)
+      let ctx5 = C.ctx_push_uninitialized_vars ctx4 locals in
 
-      (* Finally, put the remaining local variables (initialized as [Bottom]) *)
+      (* Execute the function body *)
+      match eval_function_body config ctx5 body with
+      | Error Panic -> Error Panic
+      | Ok ctx6 ->
+          (* Pop the stack frame and retrieve the return value *)
+          let ctx7, ret_value = ctx_pop_frame config ctx6 in
 
-      (* TODO ... *)
-      raise Unimplemented
+          (* Move the return value to its destination *)
+          let ctx8 = assign_to_place config ctx7 ret_value dest in
+
+          (* Return *)
+          Ok (ctx8, Unit))
   | SymbolicMode -> raise Unimplemented
+
+and eval_function_body (config : C.config) (ctx : C.eval_ctx)
+    (body : A.expression) : (C.eval_ctx, eval_error) result =
+  raise Unimplemented
 
 and eval_assumed_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     (C.eval_ctx * statement_eval_res) eval_result =
+  raise Unimplemented
+
+and eval_expression (config : C.config) (ctx : C.eval_ctx) (expr : A.expression)
+    : (C.eval_ctx * statement_eval_res) eval_result =
   raise Unimplemented

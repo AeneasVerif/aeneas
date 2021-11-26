@@ -39,6 +39,7 @@ let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
 
 let ctx_lookup_var (ctx : eval_ctx) (vid : VarId.id) : var =
+  (* TOOD: we might want to stop at the end of the frame *)
   let rec lookup env =
     match env with
     | [] ->
@@ -56,6 +57,7 @@ let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
 
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
+  (* TOOD: we might want to stop at the end of the frame *)
   let check_ev (ev : env_value) : typed_value option =
     match ev with
     | Var (var, v) -> if var.index = vid then Some v else None
@@ -75,6 +77,7 @@ let ctx_lookup_var_value (ctx : eval_ctx) (vid : VarId.id) : typed_value =
     any check.
 *)
 let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
+  (* TOOD: we might want to stop at the end of the frame *)
   let update_ev (ev : env_value) : env_value =
     match ev with
     | Var (var, v) -> if var.index = vid then Var (var, nv) else Var (var, v)
@@ -91,3 +94,31 @@ let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
 let ctx_update_var_value (ctx : eval_ctx) (vid : VarId.id) (nv : typed_value) :
     eval_ctx =
   { ctx with env = env_update_var_value ctx.env vid nv }
+
+(** Push a variable in the context's environment.
+
+    Checks that the pushed variable and its value have the same type (this
+    is important).
+*)
+let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
+  assert (var.var_ty = v.ty);
+  { ctx with env = Var (var, v) :: ctx.env }
+
+(** Push a list of variables.
+
+    Checks that the pushed variables and their values have the same type (this
+    is important).
+*)
+let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
+    =
+  assert (List.for_all (fun (var, value) -> var.var_ty = value.ty) vars);
+  let vars = List.map (fun (var, value) -> Var (var, value)) vars in
+  let vars = List.rev vars in
+  { ctx with env = List.append vars ctx.env }
+
+let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
+
+(** Push a list of uninitialized variables (which thus map to [Bottom]) *)
+let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
+  let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in
+  ctx_push_vars ctx vars
