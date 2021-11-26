@@ -2311,11 +2311,11 @@ and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
 (** Test a unit function (taking no arguments) by evaluating it in an empty
     environment
  *)
-let test_unit_function (type_decls : T.type_def T.TypeDefId.vector)
-    (fun_decls : A.fun_def A.FunDefId.vector) (fid : A.FunDefId.id) :
+let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
+    (fun_defs : A.fun_def A.FunDefId.vector) (fid : A.FunDefId.id) :
     unit eval_result =
   (* Retrieve the function declaration *)
-  let fdef = A.FunDefId.nth fun_decls fid in
+  let fdef = A.FunDefId.nth fun_defs fid in
 
   (* Sanity check - *)
   assert (T.RegionVarId.length fdef.A.signature.region_params = 0);
@@ -2325,8 +2325,8 @@ let test_unit_function (type_decls : T.type_def T.TypeDefId.vector)
   (* Create the evaluation context *)
   let ctx =
     {
-      C.type_context = type_decls;
-      C.fun_context = fun_decls;
+      C.type_context = type_defs;
+      C.fun_context = fun_defs;
       C.type_vars = T.TypeVarId.empty_vector;
       C.env = [];
       C.symbolic_counter = V.SymbolicValueId.generator_zero;
@@ -2339,3 +2339,24 @@ let test_unit_function (type_decls : T.type_def T.TypeDefId.vector)
   match eval_function_body config ctx fdef.A.body with
   | Error err -> Error err
   | Ok _ -> Ok ()
+
+(** Small helper: return true if the function is a unit function (no parameters,
+    no arguments) - TODO: move *)
+let fun_def_is_unit (def : A.fun_def) : bool =
+  def.A.arg_count = 0
+  && V.VarId.length def.A.locals = 0
+  && T.RegionVarId.length def.A.signature.region_params = 0
+  && T.TypeVarId.length def.A.signature.type_params = 0
+  && V.VarId.length def.A.signature.inputs = 0
+
+(** Test all the unit functions in a list of function definitions *)
+let test_all_unit_functions (type_defs : T.type_def T.TypeDefId.vector)
+    (fun_defs : A.fun_def A.FunDefId.vector) : bool =
+  let test_fun (def : A.fun_def) : bool =
+    if fun_def_is_unit def then
+      match test_unit_function type_defs fun_defs def.A.def_id with
+      | Error _ -> false
+      | Ok _ -> true
+    else true
+  in
+  A.FunDefId.for_all test_fun fun_defs
