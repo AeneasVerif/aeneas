@@ -1924,6 +1924,7 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
   let ctx3 = { ctx2 with env = env3 } in
   (ctx3, ret_value)
 
+(** Assign a value to a given place *)
 let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
     (p : E.place) : C.eval_ctx =
   (* Prepare the destination *)
@@ -1933,6 +1934,7 @@ let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
   let ctx3 = { ctx2 with env = env3 } in
   ctx3
 
+(** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result =
   match st with
@@ -1964,6 +1966,7 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
   | A.Continue i -> Ok (ctx, Continue i)
   | A.Nop -> Ok (ctx, Unit)
 
+(** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
     (C.eval_ctx * statement_eval_res) eval_result =
   (* There are two cases *
@@ -1978,6 +1981,8 @@ and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
       eval_assumed_function_call config ctx fid call.region_params
         call.type_params call.args call.dest
 
+(** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
+    [eval_statement]) *)
 and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.FunDefId.id) (_region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
@@ -2038,6 +2043,8 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
           Ok (ctx8, Unit))
   | SymbolicMode -> raise Unimplemented
 
+(** Evaluate an expression seen as a function body (auxiliary helper for
+    [eval_statement]) *)
 and eval_function_body (config : C.config) (ctx : C.eval_ctx)
     (body : A.expression) : (C.eval_ctx, eval_error) result =
   match eval_expression config ctx body with
@@ -2047,12 +2054,15 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
       | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
       | Return -> Ok ctx1)
 
+(** Evaluate an assumed function call such as `Box::deref` (auxiliary helper for
+    [eval_statement]) *)
 and eval_assumed_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     (C.eval_ctx * statement_eval_res) eval_result =
   raise Unimplemented
 
+(** Evaluate an expression *)
 and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
     (C.eval_ctx * statement_eval_res) eval_result =
   match e with
