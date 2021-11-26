@@ -92,15 +92,24 @@ let rec lookup_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
 
     The loan is referred to by a borrow id.
  *)
-let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    V.loan_content =
+let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
+    V.loan_content option =
   let lookup_loan_in_env_value (ev : C.env_value) : V.loan_content option =
     match ev with
     | C.Var (_, v) -> lookup_loan_in_value ek l v
     | C.Abs _ -> raise Unimplemented (* TODO *)
     | C.Frame -> None
   in
-  match List.find_map lookup_loan_in_env_value env with
+  List.find_map lookup_loan_in_env_value env
+
+(** Lookup a loan content.
+
+    The loan is referred to by a borrow id.
+    Raises an exception if no loan was found.
+ *)
+let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
+    V.loan_content =
+  match lookup_loan_opt ek l env with
   | None -> failwith "Unreachable"
   | Some lc -> lc
 
@@ -190,15 +199,23 @@ let rec lookup_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
       | V.MutLoan _ -> None)
 
 (** Lookup a borrow content from a borrow id. *)
-let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    V.borrow_content =
+let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
+    : V.borrow_content option =
   let lookup_borrow_in_env_value (ev : C.env_value) =
     match ev with
     | C.Var (_, v) -> lookup_borrow_in_value ek l v
     | C.Abs _ -> raise Unimplemented (* TODO *)
     | C.Frame -> None
   in
-  match List.find_map lookup_borrow_in_env_value env with
+  List.find_map lookup_borrow_in_env_value env
+
+(** Lookup a borrow content from a borrow id.
+
+    Raise an exception if no loan was found
+*)
+let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
+    V.borrow_content =
+  match lookup_borrow_opt ek l env with
   | None -> failwith "Unreachable"
   | Some lc -> lc
 
@@ -578,8 +595,9 @@ let give_back_shared_to_abs _config _bid _abs : V.abs =
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
 
-    TODO: we must share that the borrow is somewhere in the environment, before
-    giving it back.
+    Note that this function doesn't check that there is actually a loan somewhere
+    to which we can give the value: if this has to be checked, the check must
+    be independently done before.
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
     (v : V.typed_value) (env : C.env) : C.env =
@@ -598,6 +616,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     
     When we end a shared borrow, we need to remove the borrow id from the list
     of borrows to the shared value.
+
+    Note that this function doesn't check that there is actually a loan somewhere
+    from which to remove the shared borrow id: if this has to be checked, the
+    check must be independently done before.
  *)
 let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
   let give_back_shared_to_env_value ev : C.env_value =
@@ -669,12 +691,26 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
 
 (** End a borrow identified by its borrow id
     
-    First lookup the borrow in the environment and replace it with [Bottom],
-    then update the loan. Ends outer borrows before updating the borrow if
-    it is necessary.
+    First lookup the borrow in the environment and replace it with [Bottom].
+    Then, check that there is an associated loan in the environment. When moving
+    values, before putting putting the value in its destination, we get an
+    intermediate state where some values are "outside" the environment and thus
+    inaccessible. As [give_back_value], for instance, just performs a map, we
+    need to check independently that there is indeed a loan ready to receive
+    the value we give back. Note that in theory, we shouldn't never reach a
+    problematic state as the one we describe above, because when we move a value
+    we need to end all the loans inside before moving it. Still, it is a very
+    useful sanity check.
+    Finally, give the values back.
+    Of course, we end outer borrows before updating the target borrow if it
+    proves necessary.
  *)
 let rec end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
     (env0 : C.env) : C.env =
+  (* This is used for sanity checks *)
+  let sanity_ek =
+    { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
+  in
   match end_borrow_get_borrow_in_env config io l env0 with
   (* It is possible that we can't find a borrow in symbolic mode (ending
    * an abstraction may end several borrows at once *)
@@ -691,9 +727,15 @@ let rec end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
       (* Retry to end the borrow *)
       end_borrow config io l env'
   (* If found mut: give the value back *)
-  | env, FoundMut tv -> give_back_value config l tv env
+  | env, FoundMut tv ->
+      (* Check that the borrow is somewhere - purely a sanity check *)
+      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
+      give_back_value config l tv env
   (* If found shared or inactivated mut: remove the borrow id from the loan set of the shared value *)
-  | env, (FoundShared | FoundInactivatedMut) -> give_back_shared config l env
+  | env, (FoundShared | FoundInactivatedMut) ->
+      (* Check that the borrow is somewhere - purely a sanity check *)
+      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
+      give_back_shared config l env
 
 and end_borrows (config : C.config) (io : inner_outer) (lset : V.BorrowId.Set.t)
     (env0 : C.env) : C.env =
@@ -1497,34 +1539,8 @@ let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
   let ctx2 = { ctx with env = env2 } in
   (ctx2, v)
 
-(** When we need to evaluate several operands (for a function call for instance),
-    we need to prepare *all* the values by ending borrows, etc. *then* update them
-    (by moving them, borrowing them, etc.).
-
-    The reason is that borrows in some of the values we access may reference
-    some of the other values: we may not be able to update the borrows if those
-    values have, say, been moved (and are not present in the environment anymore).
-
-    For this reason, we split [eval_operand] into two functions:
-    - [eval_operand_prepare]
-    - [eval_operand_apply]
-    which are then used in [eval_operand] and [eval_operands].
-
-    TODO: this is not the proper way of doing
- *)
-let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
-    : C.eval_ctx =
-  match op with
-  | Expressions.Constant (_, _) -> ctx (* nothing to do *)
-  | Expressions.Copy p ->
-      let access = Read in
-      fst (prepare_rplace config access p ctx)
-  | Expressions.Move p ->
-      let access = Move in
-      fst (prepare_rplace config access p ctx)
-
-(** See [eval_operand_prepare] (which should have been called before) *)
-let eval_operand_apply (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
+(** Evaluate an operand. *)
+let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
     C.eval_ctx * V.typed_value =
   match op with
   | Expressions.Constant (ty, cv) ->
@@ -1533,46 +1549,27 @@ let eval_operand_apply (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
-      let v = read_place_unwrap config access p ctx.env in
+      let ctx1, v = prepare_rplace config access p ctx in
       (* Copy the value *)
       assert (not (bottom_in_value v));
-      copy_value config ctx v
+      copy_value config ctx1 v
   | Expressions.Move p -> (
       (* Access the value *)
       let access = Move in
-      let v = read_place_unwrap config access p ctx.env in
+      let ctx1, v = prepare_rplace config access p ctx in
       (* Move the value *)
       assert (not (bottom_in_value v));
       let bottom = { V.value = Bottom; ty = v.ty } in
-      match write_place config access p bottom ctx.env with
+      match write_place config access p bottom ctx1.env with
       | Error _ -> failwith "Unreachable"
-      | Ok env1 ->
-          let ctx1 = { ctx with env = env1 } in
-          (ctx1, v))
+      | Ok env2 ->
+          let ctx2 = { ctx1 with env = env2 } in
+          (ctx2, v))
 
-(** Evaluate an operand.
-
-    WARNING: it is ok to use this function only if we have exactly one
-    operand to evaluate. If there are several, use [eval_operands].
-    Otherwise, we may break invariants (if some values refer to other
-    values via borrows).
- *)
-let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
-    C.eval_ctx * V.typed_value =
-  let ctx1 = eval_operand_prepare config ctx op in
-  eval_operand_apply config ctx1 op
-
-(** Evaluate several operands.
-
- *)
+(** Evaluate several operands. *)
 let eval_operands (config : C.config) (ctx : C.eval_ctx) (ops : E.operand list)
     : C.eval_ctx * V.typed_value list =
-  (* First prepare the values to end/activate the borrows *)
-  let ctx1 =
-    List.fold_left (fun ctx op -> eval_operand_prepare config ctx op) ctx ops
-  in
-  (* Then actually apply the operands to move, borrow, copy... *)
-  List.fold_left_map (fun ctx op -> eval_operand_apply config ctx op) ctx1 ops
+  List.fold_left_map (fun ctx op -> eval_operand config ctx op) ctx ops
 
 let eval_two_operands (config : C.config) (ctx : C.eval_ctx) (op1 : E.operand)
     (op2 : E.operand) : C.eval_ctx * V.typed_value * V.typed_value =
@@ -1670,43 +1667,8 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
         match res with Error _ -> Error Panic | Ok v -> Ok (ctx2, v))
     | _ -> failwith "Invalid inputs for binop"
 
-(** Similarly to the problem of evaluating several operands at the same time,
-    we have to be careful when evaluating rvalues and assigning to lvalues.
-    See [eval_operand_prepare], [eval_operand_apply]
-    TODO: another possibility would be to put the variables somewhere in
-    the context.
-*)
-let eval_rvalue_prepare (config : C.config) (ctx : C.eval_ctx)
-    (rvalue : E.rvalue) : C.eval_ctx =
-  match rvalue with
-  | E.Use op -> eval_operand_prepare config ctx op
-  | E.Ref (p, bkind) -> (
-      match bkind with
-      | E.Shared | E.TwoPhaseMut ->
-          (* Access the value *)
-          let access = if bkind = E.Shared then Read else Write in
-          fst (prepare_rplace config access p ctx)
-      | E.Mut ->
-          (* Access the value *)
-          let access = Write in
-          fst (prepare_rplace config access p ctx))
-  | E.UnaryOp (_, op) -> eval_operand_prepare config ctx op
-  | E.BinaryOp (_, op1, op2) ->
-      let ctx1 = eval_operand_prepare config ctx op1 in
-      eval_operand_prepare config ctx op2
-  | E.Discriminant p ->
-      (* Access the value *)
-      let access = Read in
-      fst (prepare_rplace config access p ctx)
-  | E.Aggregate (aggregate_kind, ops) ->
-      (* Prepare the operands *)
-      List.fold_left (fun ctx op -> eval_operand_prepare config ctx op) ctx ops
-
 (** Evaluate an rvalue in a given context: return the updated context and
     the computed value
-    
-    WARNING:
-    TODO: we don't really need to call the "prepare" functions below
 *)
 let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
     (C.eval_ctx * V.typed_value) eval_result =
@@ -1906,17 +1868,15 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result =
   match st with
   | A.Assign (p, rvalue) -> (
-      (* TODO: this is WRONG *)
-      (* Prepare the rvalue, prepare the destination *)
-      let ctx1 = eval_rvalue_prepare config ctx rvalue in
-      let ctx2, _ = prepare_lplace config p ctx1 in
-      (* Actually compute the rvalue *)
-      match eval_rvalue config ctx2 rvalue with
+      (* Evaluate the rvalue *)
+      match eval_rvalue config ctx rvalue with
       | Error err -> Error err
-      | Ok (ctx3, rvalue) ->
-          (* Update the lvalue *)
-          let env4 = write_place_unwrap config Write p rvalue ctx3.env in
-          let ctx4 = { ctx3 with env = env4 } in
+      | Ok (ctx1, rvalue) ->
+          (* Prepare the destination *)
+          let ctx2, _ = prepare_lplace config p ctx1 in
+          (* Update the destination *)
+          let env3 = write_place_unwrap config Write p rvalue ctx2.env in
+          let ctx3 = { ctx2 with env = env3 } in
           Ok (ctx3, Unit))
   | A.FakeRead p ->
       let ctx1, _ = prepare_rplace config Read p ctx in
