@@ -16,6 +16,8 @@ module type Id = sig
 
   val zero : id
 
+  val generator_zero : generator
+
   val fresh : generator -> id * generator
 
   val to_string : id -> string
@@ -84,6 +86,8 @@ module IdGen () : Id = struct
   type 'a vector = 'a list
 
   let zero = 0
+
+  let generator_zero = 0
 
   let incr x =
     (* Identifiers should never overflow (because max_int is a really big

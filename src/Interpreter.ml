@@ -2307,3 +2307,35 @@ and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
               | None -> eval_expression config ctx1 otherwise
               | Some (_, tgt) -> eval_expression config ctx1 tgt)
           | _ -> failwith "Inconsistent state"))
+
+(** Test a unit function (taking no arguments) by evaluating it in an empty
+    environment
+ *)
+let test_unit_function (type_decls : T.type_def T.TypeDefId.vector)
+    (fun_decls : A.fun_def A.FunDefId.vector) (fid : A.FunDefId.id) :
+    unit eval_result =
+  (* Retrieve the function declaration *)
+  let fdef = A.FunDefId.nth fun_decls fid in
+
+  (* Sanity check - *)
+  assert (T.RegionVarId.length fdef.A.signature.region_params = 0);
+  assert (T.TypeVarId.length fdef.A.signature.type_params = 0);
+  assert (fdef.A.arg_count = 0);
+
+  (* Create the evaluation context *)
+  let ctx =
+    {
+      C.type_context = type_decls;
+      C.fun_context = fun_decls;
+      C.type_vars = T.TypeVarId.empty_vector;
+      C.env = [];
+      C.symbolic_counter = V.SymbolicValueId.generator_zero;
+      C.borrow_counter = V.BorrowId.generator_zero;
+    }
+  in
+
+  (* Evaluate the function *)
+  let config = { C.mode = C.ConcreteMode; C.check_invariants = true } in
+  match eval_function_body config ctx fdef.A.body with
+  | Error err -> Error err
+  | Ok _ -> Ok ()
