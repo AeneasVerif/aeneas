@@ -97,8 +97,8 @@ let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
   let lookup_loan_in_env_value (ev : C.env_value) : V.loan_content option =
     match ev with
     | C.Var (_, v) -> lookup_loan_in_value ek l v
-    | C.Abs _ -> raise Unimplemented
-    (* TODO *)
+    | C.Abs _ -> raise Unimplemented (* TODO *)
+    | C.Frame -> None
   in
   match List.find_map lookup_loan_in_env_value env with
   | None -> failwith "Unreachable"
@@ -158,8 +158,8 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
   let update_loan_in_env_value (ev : C.env_value) : C.env_value =
     match ev with
     | C.Var (vid, v) -> Var (vid, update_loan_in_value ek l nlc v)
-    | C.Abs _ -> raise Unimplemented
-    (* TODO *)
+    | C.Abs _ -> raise Unimplemented (* TODO *)
+    | C.Frame -> C.Frame
   in
   List.map update_loan_in_env_value env
 
@@ -195,8 +195,8 @@ let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
   let lookup_borrow_in_env_value (ev : C.env_value) =
     match ev with
     | C.Var (_, v) -> lookup_borrow_in_value ek l v
-    | C.Abs _ -> raise Unimplemented
-    (* TODO *)
+    | C.Abs _ -> raise Unimplemented (* TODO *)
+    | C.Frame -> None
   in
   match List.find_map lookup_borrow_in_env_value env with
   | None -> failwith "Unreachable"
@@ -257,8 +257,8 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
   let update_borrow_in_env_value (ev : C.env_value) : C.env_value =
     match ev with
     | C.Var (vid, v) -> Var (vid, update_borrow_in_value ek l nbc v)
-    | C.Abs _ -> raise Unimplemented
-    (* TODO *)
+    | C.Abs _ -> raise Unimplemented (* TODO *)
+    | C.Frame -> C.Frame
   in
   List.map update_borrow_in_env_value env
 
@@ -362,8 +362,9 @@ let rec bottom_in_value (v : V.typed_value) : bool =
       raise Unimplemented
 
 (** See [end_borrow_get_borrow_in_env] *)
-let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
-    V.typed_value * borrow_lres =
+let rec end_borrow_get_borrow_in_value (config : C.config) (io : inner_outer)
+    (l : V.BorrowId.id) (outer_borrows : borrow_ids option) (v0 : V.typed_value)
+    : V.typed_value * borrow_lres =
   match v0.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> (v0, NotFound)
   | V.Assumed (Box bv) ->
@@ -422,8 +423,9 @@ let rec end_borrow_get_borrow_in_value config io l outer_borrows v0 :
         in
         ({ v0 with value = V.Borrow (V.MutBorrow (l', bv')) }, res)
 
-and end_borrow_get_borrow_in_values config io l outer_borrows vl0 :
-    V.typed_value list * borrow_lres =
+and end_borrow_get_borrow_in_values (config : C.config) (io : inner_outer)
+    (l : V.BorrowId.id) (outer_borrows : borrow_ids option)
+    (vl0 : V.typed_value list) : V.typed_value list * borrow_lres =
   match vl0 with
   | [] -> (vl0, NotFound)
   | v :: vl -> (
@@ -447,8 +449,8 @@ and end_borrow_get_borrow_in_values config io l outer_borrows vl0 :
     borrows, we end them, and finally we end the borrow we wanted to end in the
     first place.
 *)
-let rec end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer) l
-    env0 : C.env * borrow_lres =
+let rec end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer)
+    (l : V.BorrowId.id) (env0 : C.env) : C.env * borrow_lres =
   match env0 with
   | [] -> ([], NotFound)
   | C.Var (x, v) :: env -> (
@@ -460,6 +462,7 @@ let rec end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer) l
   | C.Abs _ :: _ ->
       assert (config.mode = SymbolicMode);
       raise Unimplemented
+  | C.Frame :: env -> end_borrow_get_borrow_in_env config io l env
 
 (** See [give_back_value]. *)
 let rec give_back_value_to_value config bid (v : V.typed_value)
@@ -574,6 +577,9 @@ let give_back_shared_to_abs _config _bid _abs : V.abs =
     
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
+
+    TODO: we must share that the borrow is somewhere in the environment, before
+    giving it back.
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
     (v : V.typed_value) (env : C.env) : C.env =
@@ -584,6 +590,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     | C.Abs abs ->
         assert (config.mode = SymbolicMode);
         C.Abs (give_back_value_to_abs config bid v abs)
+    | C.Frame -> C.Frame
   in
   List.map give_back_value_to_env_value env
 
@@ -600,6 +607,7 @@ let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
     | C.Abs abs ->
         assert (config.mode = SymbolicMode);
         C.Abs (give_back_shared_to_abs config bid abs)
+    | C.Frame -> C.Frame
   in
   List.map give_back_shared_to_env_value env
 
@@ -655,6 +663,7 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
     | C.Abs abs ->
         assert (config.mode = SymbolicMode);
         C.Abs abs
+    | C.Frame -> C.Frame
   in
   List.map reborrow_in_ev env
 
@@ -1500,6 +1509,8 @@ let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
     - [eval_operand_prepare]
     - [eval_operand_apply]
     which are then used in [eval_operand] and [eval_operands].
+
+    TODO: this is not the proper way of doing
  *)
 let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
     : C.eval_ctx =
@@ -1895,6 +1906,7 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result =
   match st with
   | A.Assign (p, rvalue) -> (
+      (* TODO: this is WRONG *)
       (* Prepare the rvalue, prepare the destination *)
       let ctx1 = eval_rvalue_prepare config ctx rvalue in
       let ctx2, _ = prepare_lplace config p ctx1 in

@@ -394,9 +394,9 @@ module Contexts = struct
 
   let env_value_to_string (fmt : value_formatter) (ev : env_value) : string =
     match ev with
-    | Var (vid, tv) ->
-        var_id_to_string vid ^ " -> " ^ typed_value_to_string fmt tv
+    | Var (var, tv) -> var_to_string var ^ " -> " ^ typed_value_to_string fmt tv
     | Abs abs -> abs_to_string fmt abs
+    | Frame -> failwith "Can't print a Frame element"
 
   let env_to_string (fmt : value_formatter) (env : env) : string =
     "{\n"
@@ -426,8 +426,8 @@ module Contexts = struct
           Types.name_to_string def.name ^ "::" ^ variant.variant_name
     in
     let var_id_to_string vid =
-      let v = VarId.Map.find vid ctx.vars in
-      var_to_string v
+      let var = ctx_lookup_var ctx vid in
+      var_to_string var
     in
     {
       r_to_string;
@@ -437,32 +437,31 @@ module Contexts = struct
       var_id_to_string;
     }
 
-  let frame_to_string (fmt : ctx_formatter) (ctx : eval_ctx)
-      (frame : stack_frame) : string =
-    let var_binding_to_string (vid : VarId.id) : string =
-      let var = ctx_lookup_var ctx vid in
-      let v = ctx_lookup_var_value ctx vid in
-      let var_name =
-        match var.name with Some name -> "(" ^ name ^ ")" | None -> ""
-      in
-      "  @" ^ VarId.to_string var.index ^ var_name ^ " --> "
-      ^ typed_value_to_string fmt v
+  (** Split an [env] at every occurrence of [Frame], eliminating those elements.
+          Also reorders the frames and the values in the frames according to the
+          following order:
+          * frames: from the first pushed (oldest) to the last pushed (current frame)
+          * values: from the first pushed (oldest) to the last pushed
+       *)
+  let split_env_according_to_frames (env : env) : env list =
+    let rec split_aux (frames : env list) (curr_frame : env) (env : env) =
+      match env with
+      | [] -> frames
+      | Frame :: env' -> split_aux (curr_frame :: frames) [] env'
+      | ev :: env' -> split_aux frames (ev :: curr_frame) env'
     in
-    let vars =
-      String.concat ",\n" (List.map var_binding_to_string frame.vars)
-    in
-    "[\n" ^ vars ^ "\n]"
+    let frames = split_aux [] [] env in
+    List.rev frames
 
   let eval_ctx_to_string (ctx : eval_ctx) : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
-    let num_frames = List.length ctx.frames in
+    let frames = split_env_according_to_frames ctx.env in
+    let num_frames = List.length frames in
     let frames =
       List.mapi
         (fun i f ->
-          "\n# Frame " ^ string_of_int i ^ ":\n" ^ frame_to_string fmt ctx f
-          ^ "\n")
-        ctx.frames
+          "\n# Frame " ^ string_of_int i ^ ":\n" ^ env_to_string fmt f ^ "\n")
+        frames
     in
-    let frames = List.rev frames in
     "# " ^ string_of_int num_frames ^ " frame(s)\n" ^ String.concat "" frames
 end

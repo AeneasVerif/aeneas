@@ -31,6 +31,7 @@ let rec ty_substitute (rsubst : 'r1 -> 'r2)
   | Never -> Never
   | Integer int_ty -> Integer int_ty
   | Str -> Str
+  | TypeVar vid -> tsubst vid
 
 (** Erase the regions in a type and substitute the type variables *)
 let erase_regions_substitute_types (tsubst : T.TypeVarId.id -> T.ety)

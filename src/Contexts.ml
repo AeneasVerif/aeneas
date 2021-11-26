@@ -4,7 +4,12 @@ open Expressions
 open CfimAst
 open Errors
 
-type env_value = Var of var * typed_value | Abs of abs
+(** Environment value: mapping from variable to value, abstraction (only
+    used in symbolic mode) or stack frame delimiter.
+    
+    TODO: rename? Environment element or something?
+ *)
+type env_value = Var of var * typed_value | Abs of abs | Frame
 
 type env = env_value list
 
@@ -12,19 +17,10 @@ type interpreter_mode = ConcreteMode | SymbolicMode
 
 type config = { mode : interpreter_mode; check_invariants : bool }
 
-type stack_frame = { num_vars : int }
-(** A function frame
-
-    When using the interpreter in concrete mode (i.e, non symbolic) we
-    push a function frame whenever we enter a function body (and pop it
-    upon leaving it).
- *)
-
 type eval_ctx = {
   type_context : type_def TypeDefId.vector;
   fun_context : fun_def FunDefId.vector;
   type_vars : type_var TypeVarId.vector;
-  frames : stack_frame list;
   env : env;
   symbolic_counter : SymbolicValueId.generator;
   borrow_counter : BorrowId.generator;
@@ -48,7 +44,7 @@ let ctx_lookup_var (ctx : eval_ctx) (vid : VarId.id) : var =
     | [] ->
         raise (Invalid_argument ("Variable not found: " ^ VarId.to_string vid))
     | Var (var, _) :: env' -> if var.index = vid then var else lookup env'
-    | Abs _ :: env' -> lookup env'
+    | (Abs _ | Frame) :: env' -> lookup env'
   in
   lookup ctx.env
 
@@ -63,7 +59,7 @@ let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
   let check_ev (ev : env_value) : typed_value option =
     match ev with
     | Var (var, v) -> if var.index = vid then Some v else None
-    | Abs _ -> None
+    | Abs _ | Frame -> None
   in
   match List.find_map check_ev env with
   | None -> failwith "Unreachable"
@@ -83,6 +79,7 @@ let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
     match ev with
     | Var (var, v) -> if var.index = vid then Var (var, nv) else Var (var, v)
     | Abs abs -> Abs abs
+    | Frame -> Frame
   in
   List.map update_ev env
 

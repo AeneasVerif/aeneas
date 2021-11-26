@@ -7,11 +7,11 @@
     :standard
     -safe-string
     -g
-    -warn-error -8-9-11-33-20-21-26-27-39
+    -warn-error -9-11-33-20-21-26-27-39
   ))
   (release (flags
     :standard
     -safe-string
     -g
-    -warn-error -8-9-11-33-20-21-26-27-39
+    -warn-error -9-11-33-20-21-26-27-39
   )))
