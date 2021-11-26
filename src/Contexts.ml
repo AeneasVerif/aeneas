@@ -118,6 +118,10 @@ let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
 
 let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
 
+(** Push an uninitialized variable (which thus maps to [Bottom]) *)
+let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =
+  ctx_push_var ctx var (mk_bottom var.var_ty)
+
 (** Push a list of uninitialized variables (which thus map to [Bottom]) *)
 let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in

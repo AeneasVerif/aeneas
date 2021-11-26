@@ -48,6 +48,9 @@ module type Id = sig
 
   val mapi : (id -> 'a -> 'b) -> 'a vector -> 'b vector
 
+  val mapi_from1 : (id -> 'a -> 'b) -> 'a vector -> 'b vector
+  (** Same as [mapi], but where the indices start with 1 *)
+
   val for_all : ('a -> bool) -> 'a vector -> bool
 
   val exists : ('a -> bool) -> 'a vector -> bool
@@ -119,6 +122,12 @@ module IdGen () : Id = struct
   let map = List.map
 
   let mapi = List.mapi
+
+  let mapi_from1 f ls =
+    let rec aux i ls =
+      match ls with [] -> [] | x :: ls' -> f i x :: aux (i + 1) ls'
+    in
+    aux 1 ls
 
   let for_all = List.for_all
 

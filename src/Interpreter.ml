@@ -10,6 +10,30 @@ module A = CfimAst
 (* TODO: Change state-passing style to : st -> ... -> (st, v) *)
 (* TODO: check that the value types are correct when evaluating *)
 (* TODO: module Type = T, etc. *)
+(* TODO: is it a good idea to give indices to variables? For instance:
+   let ctx1 = .. in
+   let ctx2 = ... ctx1 in
+   ...
+ *)
+
+(* TODO: move *)
+let mk_unit_ty : T.ety = T.Tuple []
+
+(* TODO: move *)
+let mk_unit_value : V.typed_value =
+  { V.value = V.Tuple (T.FieldId.vector_of_list []); V.ty = mk_unit_ty }
+
+let mk_typed_value (ty : T.ety) (value : V.value) : V.typed_value =
+  { V.value; ty }
+
+(* TODO: move *)
+let mk_var (index : V.VarId.id) (name : string option) (var_ty : T.ety) : V.var
+    =
+  { V.index; name; var_ty }
+
+(** Small helper *)
+let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
+  { var_id; projection = [] }
 
 (** TODO: change the name *)
 type eval_error = Panic
@@ -1868,10 +1892,6 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
 let ctx_push_frame (ctx : C.eval_ctx) : C.eval_ctx =
   { ctx with env = Frame :: ctx.env }
 
-(** Small helper *)
-let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
-  { var_id; projection = [] }
-
 (** Drop a value at a given place *)
 let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
     =
@@ -1880,6 +1900,18 @@ let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
   let env2 = write_place_unwrap config Write p nv ctx1.env in
   let ctx2 = { ctx with env = env2 } in
   ctx2
+
+(** Small helper: compute the type of the return value for a specific
+    instantiation of a non-local function.
+ *)
+let get_non_local_function_return_type (fid : A.assumed_fun_id)
+    (region_params : T.erased_region list) (type_params : T.ety list) : T.ety =
+  match (fid, region_params, type_params) with
+  | A.BoxNew, [], [ bty ] -> T.Assumed (T.Box, [], [ bty ])
+  | A.BoxDeref, [], [ bty ] -> T.Ref (T.Erased, bty, T.Shared)
+  | A.BoxDerefMut, [], [ bty ] -> T.Ref (T.Erased, bty, T.Mut)
+  | A.BoxFree, [], [ _ ] -> mk_unit_ty
+  | _ -> failwith "Inconsistent state"
 
 (** Pop the current frame.
     
@@ -1934,6 +1966,123 @@ let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
   let ctx3 = { ctx2 with env = env3 } in
   ctx3
 
+(** Auxiliary function - see [eval_non_local_function_call] *)
+let eval_box_new (config : C.config) (region_params : T.erased_region list)
+    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+  (* Check and retrieve the arguments *)
+  match (region_params, type_params, ctx.env) with
+  | ( [],
+      [ boxed_ty ],
+      Var (input_var, input_value) :: Var (ret_var, _) :: C.Frame :: env' ) ->
+      (* Type checking *)
+      assert (input_value.V.ty = boxed_ty);
+
+      (* Move the input value *)
+      let ctx, moved_input_value =
+        eval_operand config ctx
+          (E.Move (mk_place_from_var_id input_var.V.index))
+      in
+
+      (* Create the box value *)
+      let box_ty = T.Assumed (T.Box, [], [ boxed_ty ]) in
+      let box_v = V.Assumed (V.Box moved_input_value) in
+      let box_v = mk_typed_value box_ty box_v in
+
+      (* Move this value to the return variable *)
+      let dest = mk_place_from_var_id V.VarId.zero in
+      let ctx = assign_to_place config ctx box_v dest in
+
+      (* Return *)
+      Ok ctx
+  | _ -> failwith "Inconsistent state"
+
+(** Auxiliary function - see [eval_non_local_function_call] *)
+let eval_box_deref (config : C.config) (region_params : T.erased_region list)
+    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+  raise Unimplemented
+
+(** Auxiliary function - see [eval_non_local_function_call] *)
+let eval_box_deref_mut (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+  raise Unimplemented
+
+(** Auxiliary function - see [eval_non_local_function_call].
+
+    In practice, does nothing put aside checking the input types: the box
+    value has been moved to a local variable in the function frame, this value
+    is then dropped uppon exiting.
+*)
+let eval_box_free (config : C.config) (region_params : T.erased_region list)
+    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+  match (region_params, type_params, ctx.env) with
+  | ( [],
+      [ box_ty ],
+      Var (input_var, input_value) :: Var (ret_var, _) :: C.Frame :: _ ) ->
+      (* Check the arguments *)
+      assert (
+        match input_value.V.ty with
+        | T.Assumed (T.Box, [], [ boxed_ty ]) -> boxed_ty = input_value.V.ty
+        | _ -> false);
+
+      (* Update the return value *)
+      let dest = mk_place_from_var_id V.VarId.zero in
+      let ctx = assign_to_place config ctx mk_unit_value dest in
+
+      (* Return *)
+      Ok ctx
+  | _ -> failwith "Inconsistent state"
+
+(** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
+    (auxiliary helper for [eval_statement]) *)
+let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
+    C.eval_ctx eval_result =
+  (* Evaluate the operands *)
+  let ctx, args_vl = eval_operands config ctx args in
+
+  (* Push the stack frame: we initialize the frame with the return variable,
+     and one variable per input argument *)
+  let ctx = ctx_push_frame ctx in
+
+  (* Create and push the return variable *)
+  let ret_vid = V.VarId.zero in
+  let ret_ty =
+    get_non_local_function_return_type fid region_params type_params
+  in
+  let ret_var = mk_var ret_vid (Some "@return") ret_ty in
+  let ctx = C.ctx_push_uninitialized_var ctx ret_var in
+
+  (* Create and push the input variables *)
+  let input_vars =
+    V.VarId.vector_to_list
+      (V.VarId.mapi_from1
+         (fun id v -> (mk_var id None v.V.ty, v))
+         (V.VarId.vector_of_list args_vl))
+  in
+  let ctx = C.ctx_push_vars ctx input_vars in
+
+  (* "Execute" the function body. As the functions are assumed, here we call
+     custom functions to perform the proper manipulations: we don't have
+     access to a body. *)
+  let res =
+    match fid with
+    | A.BoxNew -> eval_box_new config region_params type_params ctx
+    | A.BoxDeref -> eval_box_deref config region_params type_params ctx
+    | A.BoxDerefMut -> eval_box_deref_mut config region_params type_params ctx
+    | A.BoxFree -> eval_box_free config region_params type_params ctx
+  in
+
+  (* Pop the stack frame and retrieve the return value *)
+  let ctx, ret_value = ctx_pop_frame config ctx in
+
+  (* Move the return value to its destination *)
+  let ctx = assign_to_place config ctx ret_value dest in
+
+  (* Return *)
+  Ok ctx
+
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result =
@@ -1973,20 +2122,23 @@ and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
      - this is a local function, in which case we execute its body
      - this is a non-local function, in which case there is a special treatment
   *)
-  match call.func with
-  | A.Local fid ->
-      eval_local_function_call config ctx fid call.region_params
-        call.type_params call.args call.dest
-  | A.Assumed fid ->
-      eval_assumed_function_call config ctx fid call.region_params
-        call.type_params call.args call.dest
+  let res =
+    match call.func with
+    | A.Local fid ->
+        eval_local_function_call config ctx fid call.region_params
+          call.type_params call.args call.dest
+    | A.Assumed fid ->
+        eval_non_local_function_call config ctx fid call.region_params
+          call.type_params call.args call.dest
+  in
+  match res with Error err -> Error err | Ok ctx -> Ok (ctx, Unit)
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
 and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.FunDefId.id) (_region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    (C.eval_ctx * statement_eval_res) eval_result =
+    C.eval_ctx eval_result =
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_def ctx fid in
   match config.mode with
@@ -2040,7 +2192,7 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
           let ctx8 = assign_to_place config ctx7 ret_value dest in
 
           (* Return *)
-          Ok (ctx8, Unit))
+          Ok ctx8)
   | SymbolicMode -> raise Unimplemented
 
 (** Evaluate an expression seen as a function body (auxiliary helper for
@@ -2053,14 +2205,6 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
       match res with
       | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
       | Return -> Ok ctx1)
-
-(** Evaluate an assumed function call such as `Box::deref` (auxiliary helper for
-    [eval_statement]) *)
-and eval_assumed_function_call (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    (C.eval_ctx * statement_eval_res) eval_result =
-  raise Unimplemented
 
 (** Evaluate an expression *)
 and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
