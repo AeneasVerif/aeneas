@@ -2040,7 +2040,12 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
 
 and eval_function_body (config : C.config) (ctx : C.eval_ctx)
     (body : A.expression) : (C.eval_ctx, eval_error) result =
-  raise Unimplemented
+  match eval_expression config ctx body with
+  | Error err -> Error err
+  | Ok (ctx1, res) -> (
+      match res with
+      | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
+      | Return -> Ok ctx1)
 
 and eval_assumed_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
@@ -2048,6 +2053,69 @@ and eval_assumed_function_call (config : C.config) (ctx : C.eval_ctx)
     (C.eval_ctx * statement_eval_res) eval_result =
   raise Unimplemented
 
-and eval_expression (config : C.config) (ctx : C.eval_ctx) (expr : A.expression)
-    : (C.eval_ctx * statement_eval_res) eval_result =
-  raise Unimplemented
+and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
+    (C.eval_ctx * statement_eval_res) eval_result =
+  match e with
+  | A.Statement st -> eval_statement config ctx st
+  | A.Sequence (e1, e2) -> (
+      (* Evaluate the first expression *)
+      match eval_expression config ctx e1 with
+      | Error err -> Error err
+      | Ok (ctx1, Unit) ->
+          (* Evaluate the second expression *)
+          eval_expression config ctx1 e2
+      (* Control-flow break: transmit. We enumerate the cases on purpose *)
+      | Ok (ctx1, Break i) -> Ok (ctx1, Break i)
+      | Ok (ctx1, Continue i) -> Ok (ctx1, Continue i)
+      | Ok (ctx1, Return) -> Ok (ctx1, Return))
+  | A.Loop loop_body ->
+      (* Evaluate a loop body
+
+         We need a specific function for the [Continue] case: in case we continue,
+         we might have to reevaluate the current loop body with the new context
+         (and repeat this an indefinite number of times).
+      *)
+      let rec eval_loop_body (ctx : C.eval_ctx) :
+          (C.eval_ctx * statement_eval_res) eval_result =
+        (* Evaluate the loop body *)
+        match eval_expression config ctx loop_body with
+        | Error err -> Error err
+        | Ok (ctx1, Unit) ->
+            (* We finished evaluating the expression in a "normal" manner *)
+            Ok (ctx1, Unit)
+        (* Control-flow breaks *)
+        | Ok (ctx1, Break i) ->
+            (* Decrease the break index *)
+            if i = 0 then Ok (ctx1, Unit) else Ok (ctx1, Break (i - 1))
+        | Ok (ctx1, Continue i) ->
+            (* Decrease the continue index *)
+            if i = 0 then
+              (* We stop there. When we continue, we go back to the beginning
+                 of the loop: we must thus reevaluate the loop body (and
+                 recheck the result to know whether we must reevaluate again,
+                 etc. *)
+              eval_loop_body ctx1
+            else (* We don't stop there: transmit *)
+              Ok (ctx1, Continue (i - 1))
+        | Ok (ctx1, Return) -> Ok (ctx1, Return)
+      in
+      (* Apply *)
+      eval_loop_body ctx
+  | A.Switch (op, tgts) -> (
+      (* Evaluate the operand *)
+      let ctx1, op_v = eval_operand config ctx op in
+      match tgts with
+      | A.If (e1, e2) -> (
+          match op_v.value with
+          | V.Concrete (V.Bool b) ->
+              if b then eval_expression config ctx1 e1
+              else eval_expression config ctx1 e2
+          | _ -> failwith "Inconsistent state")
+      | A.SwitchInt (int_ty, tgts, otherwise) -> (
+          match op_v.value with
+          | V.Concrete (V.Scalar sv) -> (
+              assert (sv.V.int_ty = int_ty);
+              match List.find_opt (fun (sv', _) -> sv = sv') tgts with
+              | None -> eval_expression config ctx1 otherwise
+              | Some (_, tgt) -> eval_expression config ctx1 tgt)
+          | _ -> failwith "Inconsistent state"))
