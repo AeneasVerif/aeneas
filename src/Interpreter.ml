@@ -978,7 +978,11 @@ let rec access_projection (access : projection_access) (env : C.env)
           Error (FailSymbolic (pe, sp))
       (* Box dereferencement *)
       | DerefBox, Assumed (Box bv) -> (
-          (* We allow moving inside of boxes *)
+          (* We allow moving inside of boxes. In practice, this kind of
+           * manipulations should happen only inside unsage code, so
+           * it shouldn't happen due to user code, and we leverage it
+           * when implementing box dereferencement for the concrete
+           * interpreter *)
           match access_projection access env update p' bv with
           | Error err -> Error err
           | Ok (env1, res) ->
@@ -1996,16 +2000,49 @@ let eval_box_new (config : C.config) (region_params : T.erased_region list)
       Ok ctx
   | _ -> failwith "Inconsistent state"
 
+let ty_is_boxed_ty (box_ty : T.ety) (boxed_ty : T.ety) : bool =
+  match box_ty with
+  | T.Assumed (T.Box, [], [ boxed_ty' ]) -> boxed_ty' = boxed_ty
+  | _ -> false
+
+(** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
+    and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
+let eval_box_deref_mut_or_shared (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (is_mut : bool) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+  (* Check the arguments *)
+  match (region_params, type_params, ctx.env) with
+  | ( [],
+      [ boxed_ty ],
+      Var (input_var, input_value) :: Var (ret_var, _) :: C.Frame :: _ ) -> (
+      (* Type checking *)
+      assert (ty_is_boxed_ty input_value.V.ty boxed_ty);
+
+      (* Borrow the boxed value *)
+      let p = { E.var_id = input_var.V.index; projection = [ E.DerefBox ] } in
+      let borrow_kind = if is_mut then E.Mut else E.Shared in
+      let rv = E.Ref (p, borrow_kind) in
+      match eval_rvalue config ctx rv with
+      | Error err -> Error err
+      | Ok (ctx, borrowed_value) ->
+          (* Move the borrowed value to its destination *)
+          let destp = mk_place_from_var_id V.VarId.zero in
+          let ctx = assign_to_place config ctx borrowed_value destp in
+          Ok ctx)
+  | _ -> failwith "Inconsistent state"
+
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_deref (config : C.config) (region_params : T.erased_region list)
     (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
-  raise Unimplemented
+  let is_mut = false in
+  eval_box_deref_mut_or_shared config region_params type_params is_mut ctx
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_deref_mut (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (ctx : C.eval_ctx) : C.eval_ctx eval_result =
-  raise Unimplemented
+  let is_mut = true in
+  eval_box_deref_mut_or_shared config region_params type_params is_mut ctx
 
 (** Auxiliary function - see [eval_non_local_function_call].
 
@@ -2017,13 +2054,10 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
     (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
   match (region_params, type_params, ctx.env) with
   | ( [],
-      [ box_ty ],
+      [ boxed_ty ],
       Var (input_var, input_value) :: Var (ret_var, _) :: C.Frame :: _ ) ->
       (* Check the arguments *)
-      assert (
-        match input_value.V.ty with
-        | T.Assumed (T.Box, [], [ boxed_ty ]) -> boxed_ty = input_value.V.ty
-        | _ -> false);
+      assert (ty_is_boxed_ty input_value.V.ty boxed_ty);
 
       (* Update the return value *)
       let dest = mk_place_from_var_id V.VarId.zero in
