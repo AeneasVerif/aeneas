@@ -13,6 +13,7 @@ open Identifiers
 open Types
 open OfJsonBasic
 open Scalars
+open Modules
 
 let name_of_json (js : json) : (name, string) result =
   combine_error_msgs js "name_of_json" (list_of_json string_of_json js)
@@ -578,20 +579,6 @@ let fun_def_of_json (js : json) : (fun_def, string) result =
         let* body = expression_of_json body in
         Ok { def_id; name; signature; divergent; arg_count; locals; body }
     | _ -> Error "")
-
-(** Module declaration *)
-type declaration =
-  | Type of TypeDefId.id
-  | Fun of FunDefId.id
-  | RecTypes of TypeDefId.id list
-  | RecFuns of FunDefId.id list
-
-type cfim_module = {
-  declarations : declaration list;
-  types : type_def TypeDefId.vector;
-  functions : fun_def FunDefId.vector;
-}
-(** CFIM module *)
 
 let declaration_of_json (js : json) : (declaration, string) result =
   combine_error_msgs js "declaration_of_json"

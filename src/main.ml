@@ -1,6 +1,10 @@
 open CfimOfJson
 open Logging
 open Print
+module T = Types
+module A = CfimAst
+
+(*let print_type_definition =*)
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work *)
