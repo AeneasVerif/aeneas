@@ -12,6 +12,8 @@ module type Id = sig
 
   type 'a vector
 
+  type set_t
+
   val zero : id
 
   val generator_zero : generator
@@ -68,9 +70,13 @@ module type Id = sig
 
   val exists : ('a -> bool) -> 'a vector -> bool
 
+  val pp_set_t : Format.formatter -> set_t -> unit
+
+  val show_set_t : set_t -> string
+
   module Ord : Map.OrderedType with type t = id
 
-  module Set : Set.S with type elt = id
+  module Set : Set.S with type elt = id with type t = set_t
 
   val set_to_string : Set.t -> string
 
@@ -156,6 +162,15 @@ module IdGen () : Id = struct
 
   module Set = Set.Make (Ord)
   module Map = Map.Make (Ord)
+
+  type set_t = Set.t
+
+  let show_set_t s =
+    let ids = Set.fold (fun id s -> to_string id :: s) s [] in
+    let ids = List.rev ids in
+    "{" ^ String.concat "," ids ^ "}"
+
+  let pp_set_t fmt s = Format.pp_print_string fmt (show_set_t s)
 
   let set_to_string ids =
     let ids = Set.fold (fun id ids -> to_string id :: ids) ids [] in

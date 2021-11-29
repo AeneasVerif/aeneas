@@ -35,7 +35,12 @@ let big_int_of_yojson (json : Yojson.Safe.t) : (big_int, string) result =
 
 let big_int_to_yojson (i : big_int) = `Intlit (Z.to_string i)
 
-type scalar_value = { value : big_int; int_ty : integer_type }
+let pp_big_int (fmt : Format.formatter) (bi : big_int) : unit =
+  Format.pp_print_string fmt (Z.to_string bi)
+
+let show_big_int (bi : big_int) : string = Z.to_string bi
+
+type scalar_value = { value : big_int; int_ty : integer_type } [@@deriving show]
 (** A scalar value
 
     Note that we use unbounded integers everywhere.
@@ -48,15 +53,18 @@ type constant_value =
   | Bool of bool
   | Char of char
   | String of string
+[@@deriving show]
 
 type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
+[@@deriving show]
 (** Symbolic value *)
 
 type symbolic_proj_comp = {
   svalue : symbolic_value;  (** The symbolic value itself *)
-  rset_ended : RegionId.Set.t;
+  rset_ended : RegionId.set_t;
       (** The regions used in the symbolic value which have already ended *)
 }
+[@@deriving show]
 (** A complementary projector over a symbolic value.
     
     "Complementary" stands for the fact that it is a projector over all the
@@ -74,6 +82,7 @@ type value =
   | Borrow of borrow_content  (** A borrowed value *)
   | Loan of loan_content  (** A loaned value *)
   | Symbolic of symbolic_proj_comp  (** Unknown value *)
+[@@deriving show]
 
 and adt_value = {
   def_id : TypeDefId.id;
@@ -82,6 +91,7 @@ and adt_value = {
   types : ety list;
   field_values : typed_value FieldId.vector;
 }
+[@@deriving show]
 
 and borrow_content =
   | SharedBorrow of BorrowId.id  (** A shared value *)
@@ -97,20 +107,23 @@ and borrow_content =
           is well typed) of this value and replace the inactivated borrow with a
           mutable borrow.
        *)
+[@@deriving show]
 
 and loan_content =
-  | SharedLoan of BorrowId.Set.t * typed_value
+  | SharedLoan of BorrowId.set_t * typed_value
   | MutLoan of BorrowId.id
+[@@deriving show]
 
-and assumed_value = Box of typed_value
+and assumed_value = Box of typed_value [@@deriving show]
 
-and typed_value = { value : value; ty : ety }
+and typed_value = { value : value; ty : ety } [@@deriving show]
 
 type abstract_shared_borrows =
-  | AsbSet of BorrowId.Set.t
+  | AsbSet of BorrowId.set_t
   | AsbProjReborrows of symbolic_value * rty
   | AsbUnion of abstract_shared_borrows * abstract_shared_borrows
       (** TODO: explanations *)
+[@@deriving show]
 
 (** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.
@@ -127,6 +140,7 @@ type avalue =
   | ABorrow of aborrow_content
   | AAssumed of aassumed_value
   | AProj of aproj
+[@@deriving show]
 
 and aadt_value = {
   adef_id : TypeDefId.id;
@@ -135,14 +149,16 @@ and aadt_value = {
   atypes : rty list;
   afield_values : typed_avalue FieldId.vector;
 }
+[@@deriving show]
 
 and aloan_content =
   | AMutLoan of BorrowId.id * typed_avalue
-  | ASharedLoan of BorrowId.Set.t * typed_value * typed_avalue
+  | ASharedLoan of BorrowId.set_t * typed_value * typed_avalue
   | AEndedMutLoan of { given_back : typed_value; child : typed_avalue }
   | AEndedSharedLoan of typed_value * typed_avalue
   | AIgnoredMutLoan of BorrowId.id * typed_avalue
   | AIgnoredSharedLoan of abstract_shared_borrows
+[@@deriving show]
 
 (** Note that when a borrow content is ended, it is replaced by Bottom (while
     we need to track ended loans more precisely, especially because of their
@@ -153,24 +169,27 @@ and aborrow_content =
   | AIgnoredMutBorrow of typed_avalue
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
   | AIgnoredSharedBorrow of abstract_shared_borrows
+[@@deriving show]
 
-and aassumed_value = ABox of typed_avalue
+and aassumed_value = ABox of typed_avalue [@@deriving show]
 
 and aproj =
   | AProjLoans of symbolic_value
   | AProjBorrows of symbolic_value * rty
+[@@deriving show]
 
-and typed_avalue = { avalue : avalue; aty : rty }
+and typed_avalue = { avalue : avalue; aty : rty } [@@deriving show]
 
 type abs = {
   abs_id : AbstractionId.id;
-  parents : AbstractionId.Set.t;  (** The parent abstractions *)
-  acc_regions : RegionId.Set.t;
+  parents : AbstractionId.set_t;  (** The parent abstractions *)
+  acc_regions : RegionId.set_t;
       (** Union of the regions owned by the (transitive) parent abstractions and
           by the current abstraction *)
-  regions : RegionId.Set.t;  (** Regions owned by this abstraction *)
+  regions : RegionId.set_t;  (** Regions owned by this abstraction *)
   avalues : typed_avalue list;  (** The values in this abstraction *)
 }
+[@@deriving show]
 (** Abstractions model the parts in the borrow graph where the borrowing relations
     have been abstracted because of a function call.
     
