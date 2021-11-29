@@ -12,7 +12,8 @@ open Yojson.Basic
 open Identifiers
 open Types
 open OfJsonBasic
-open Scalars
+module V = Values
+module S = Scalars
 module M = Modules
 
 let name_of_json (js : json) : (name, string) result =
@@ -173,19 +174,17 @@ let type_def_of_json (js : json) : (type_def, string) result =
         Ok { def_id; name; region_params; type_params; kind }
     | _ -> Error "")
 
-open Values
-
-let var_of_json (js : json) : (var, string) result =
+let var_of_json (js : json) : (V.var, string) result =
   combine_error_msgs js "var_of_json"
     (match js with
     | `Assoc [ ("index", index); ("name", name); ("ty", ty) ] ->
-        let* index = VarId.id_of_json index in
+        let* index = V.VarId.id_of_json index in
         let* name = string_option_of_json name in
         let* var_ty = ety_of_json ty in
-        Ok { index; name; var_ty }
+        Ok { V.index; name; var_ty }
     | _ -> Error "")
 
-let big_int_of_json (js : json) : (big_int, string) result =
+let big_int_of_json (js : json) : (V.big_int, string) result =
   combine_error_msgs js "big_int_of_json"
     (match js with
     | `Int i -> Ok (Z.of_int i)
@@ -198,69 +197,69 @@ let big_int_of_json (js : json) : (big_int, string) result =
     in the interpreter functions. Still, it doesn't cost much to be
     a bit conservative.
  *)
-let scalar_value_of_json (js : json) : (scalar_value, string) result =
+let scalar_value_of_json (js : json) : (V.scalar_value, string) result =
   let res =
     combine_error_msgs js "scalar_value_of_json"
       (match js with
       | `Assoc [ ("Isize", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = Isize }
+          Ok { V.value = bi; int_ty = Isize }
       | `Assoc [ ("I8", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = I8 }
+          Ok { V.value = bi; int_ty = I8 }
       | `Assoc [ ("I16", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = I16 }
+          Ok { V.value = bi; int_ty = I16 }
       | `Assoc [ ("I32", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = I32 }
+          Ok { V.value = bi; int_ty = I32 }
       | `Assoc [ ("I64", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = I64 }
+          Ok { V.value = bi; int_ty = I64 }
       | `Assoc [ ("I128", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = I128 }
+          Ok { V.value = bi; int_ty = I128 }
       | `Assoc [ ("Usize", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = Usize }
+          Ok { V.value = bi; int_ty = Usize }
       | `Assoc [ ("U8", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = U8 }
+          Ok { V.value = bi; int_ty = U8 }
       | `Assoc [ ("U16", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = U16 }
+          Ok { V.value = bi; int_ty = U16 }
       | `Assoc [ ("U32", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = U32 }
+          Ok { V.value = bi; int_ty = U32 }
       | `Assoc [ ("U64", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = U64 }
+          Ok { V.value = bi; int_ty = U64 }
       | `Assoc [ ("U128", bi) ] ->
           let* bi = big_int_of_json bi in
-          Ok { value = bi; int_ty = U128 }
+          Ok { V.value = bi; int_ty = U128 }
       | _ -> Error "")
   in
   match res with
   | Error _ -> res
   | Ok sv ->
-      assert (check_scalar_value_in_range sv);
+      assert (S.check_scalar_value_in_range sv);
       res
 
-let constant_value_of_json (js : json) : (constant_value, string) result =
+let constant_value_of_json (js : json) : (V.constant_value, string) result =
   combine_error_msgs js "constant_value_of_json"
     (match js with
     | `Assoc [ ("Scalar", scalar_value) ] ->
         let* scalar_value = scalar_value_of_json scalar_value in
-        Ok (Scalar scalar_value)
+        Ok (V.Scalar scalar_value)
     | `Assoc [ ("Bool", v) ] ->
         let* v = bool_of_json v in
-        Ok (Bool v)
+        Ok (V.Bool v)
     | `Assoc [ ("Char", v) ] ->
         let* v = char_of_json v in
-        Ok (Char v)
+        Ok (V.Char v)
     | `Assoc [ ("String", v) ] ->
         let* v = string_of_json v in
-        Ok (String v)
+        Ok (V.String v)
     | _ -> Error "")
 
 open Expressions
@@ -298,7 +297,7 @@ let place_of_json (js : json) : (place, string) result =
   combine_error_msgs js "place_of_json"
     (match js with
     | `Assoc [ ("var_id", var_id); ("projection", projection) ] ->
-        let* var_id = VarId.id_of_json var_id in
+        let* var_id = V.VarId.id_of_json var_id in
         let* projection = projection_of_json projection in
         Ok { var_id; projection }
     | _ -> Error "")
@@ -455,7 +454,7 @@ let fun_sig_of_json (js : json) : (fun_sig, string) result =
         let* type_params =
           TypeVarId.vector_of_json type_var_of_json type_params
         in
-        let* inputs = VarId.vector_of_json rty_of_json inputs in
+        let* inputs = V.VarId.vector_of_json rty_of_json inputs in
         let* output = rty_of_json output in
         Ok
           {
@@ -575,7 +574,7 @@ let fun_def_of_json (js : json) : (fun_def, string) result =
         let* signature = fun_sig_of_json signature in
         let* divergent = bool_of_json divergent in
         let* arg_count = int_of_json arg_count in
-        let* locals = VarId.vector_of_json var_of_json locals in
+        let* locals = V.VarId.vector_of_json var_of_json locals in
         let* body = expression_of_json body in
         Ok { def_id; name; signature; divergent; arg_count; locals; body }
     | _ -> Error "")
