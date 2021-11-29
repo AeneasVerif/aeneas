@@ -213,6 +213,7 @@ module Values = struct
 
   let rec typed_value_to_string (fmt : value_formatter) (v : V.typed_value) :
       string =
+    let ety_fmt = value_to_etype_formatter fmt in
     match v.value with
     | Concrete cv -> constant_value_to_string cv
     | Adt av ->
@@ -244,7 +245,7 @@ module Values = struct
           String.concat ", " (List.map (typed_value_to_string fmt) values)
         in
         "(" ^ values ^ ")"
-    | Bottom -> "⊥"
+    | Bottom -> "⊥ : " ^ PT.ety_to_string ety_fmt v.ty
     | Assumed av -> (
         match av with Box bv -> "@Box(" ^ typed_value_to_string fmt bv ^ ")")
     | Borrow bc -> borrow_content_to_string fmt bc
@@ -292,6 +293,7 @@ module Values = struct
 
   let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
       string =
+    let rty_fmt = value_to_rtype_formatter fmt in
     match v.avalue with
     | AConcrete cv -> constant_value_to_string cv
     | AAdt av ->
@@ -314,7 +316,7 @@ module Values = struct
           String.concat ", " (List.map (typed_avalue_to_string fmt) values)
         in
         "(" ^ values ^ ")"
-    | ABottom -> "⊥"
+    | ABottom -> "⊥ : " ^ PT.rty_to_string rty_fmt v.aty
     | ALoan lc -> aloan_content_to_string fmt lc
     | ABorrow bc -> aborrow_content_to_string fmt bc
     | AAssumed av -> (
@@ -408,13 +410,13 @@ module Contexts = struct
       =
     match ev with
     | Var (var, tv) ->
-        PV.var_to_string var ^ " -> " ^ PV.typed_value_to_string fmt tv
+        PV.var_to_string var ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
     | Abs abs -> PV.abs_to_string fmt abs
     | Frame -> failwith "Can't print a Frame element"
 
   let env_to_string (fmt : PV.value_formatter) (env : C.env) : string =
     "{\n"
-    ^ String.concat ";\n"
+    ^ String.concat "\n"
         (List.map (fun ev -> "  " ^ env_value_to_string fmt ev) env)
     ^ "\n}"
 
@@ -477,7 +479,8 @@ module Contexts = struct
   let split_env_according_to_frames (env : C.env) : C.env list =
     let rec split_aux (frames : C.env list) (curr_frame : C.env) (env : C.env) =
       match env with
-      | [] -> frames
+      | [] ->
+          if List.length curr_frame > 0 then curr_frame :: frames else frames
       | Frame :: env' -> split_aux (curr_frame :: frames) [] env'
       | ev :: env' -> split_aux frames (ev :: curr_frame) env'
     in

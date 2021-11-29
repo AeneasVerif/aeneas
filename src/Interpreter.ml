@@ -2146,7 +2146,7 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
   L.log#ldebug
     (lazy
       ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate statement: "
-     ^ statement_to_string ctx st));
+     ^ statement_to_string ctx st ^ "\n"));
   (* Evaluate *)
   match st with
   | A.Assign (p, rvalue) -> (
@@ -2275,7 +2275,7 @@ and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
   L.log#ldebug
     (lazy
       ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate expression: \n"
-     ^ expression_to_string ctx e));
+     ^ expression_to_string ctx e ^ "\n"));
   (* Evaluate *)
   match e with
   | A.Statement st -> eval_statement config ctx st
