@@ -182,8 +182,7 @@ module Values = struct
     "var@" ^ V.VarId.to_string id
 
   let var_to_string (v : V.var) : string =
-    let id = var_id_to_string v.index in
-    match v.name with None -> id | Some name -> name ^ "(" ^ id ^ ")"
+    match v.name with None -> var_id_to_string v.index | Some name -> name
 
   let big_int_to_string (bi : V.big_int) : string = Z.to_string bi
 
