@@ -140,7 +140,7 @@ module Types = struct
               (List.map (fun f -> "\n  " ^ field_to_string fmt f) fields)
           in
           "struct " ^ name ^ params ^ "{" ^ fields ^ "}"
-        else "struct" ^ name ^ params ^ "{}"
+        else "struct " ^ name ^ params ^ "{}"
     | T.Enum variants ->
         let variants = T.VariantId.vector_to_list variants in
         let variants =
@@ -785,7 +785,7 @@ module CfimAst = struct
       | [] -> failwith "Inconsistent signature"
       | ret_var :: inputs -> (ret_var, inputs)
     in
-    let inputs, aux_locals = Utilities.list_split_at inputs def.arg_count in
+    let inputs, _aux_locals = Utilities.list_split_at inputs def.arg_count in
     let args = List.combine inputs (V.VarId.vector_to_list sg.inputs) in
     let args =
       List.map
@@ -795,7 +795,7 @@ module CfimAst = struct
     let args = String.concat ", " args in
 
     (* Return type *)
-    let ret_ty = V.VarId.nth sg.inputs V.VarId.zero in
+    let ret_ty = sg.output in
     let ret_ty =
       if T.ty_is_unit ret_ty then "" else " -> " ^ rty_to_string ret_ty
     in
@@ -804,8 +804,9 @@ module CfimAst = struct
     let locals =
       List.map
         (fun var ->
-          indent ^ PV.var_to_string var ^ " : " ^ ety_to_string var.var_ty ^ ";")
-        (ret_var :: aux_locals)
+          indent ^ indent_incr ^ PV.var_to_string var ^ " : "
+          ^ ety_to_string var.var_ty ^ ";")
+        (V.VarId.vector_to_list def.locals)
     in
     let locals = String.concat "\n" locals in
 

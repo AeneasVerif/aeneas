@@ -14,4 +14,4 @@ let () =
   | Error s -> log#error "error: %s\n" s
   | Ok m ->
       (* Print the module *)
-      log#ldebug (lazy (Print.Module.module_to_string m))
+      log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m))
