@@ -1977,8 +1977,10 @@ let eval_box_new (config : C.config) (region_params : T.erased_region list)
   match (region_params, type_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
-      Var (input_var, input_value) :: Var (ret_var, _) :: C.Frame :: env' ) ->
-      (* Type checking *)
+      Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) ->
+      (* Sanity check for invariant *)
+      assert (input_var.var_ty = input_value.V.ty);
+      (* Necessary type checking *)
       assert (input_value.V.ty = boxed_ty);
 
       (* Move the input value *)
@@ -2014,8 +2016,10 @@ let eval_box_deref_mut_or_shared (config : C.config)
   match (region_params, type_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
-      Var (input_var, input_value) :: Var (ret_var, _) :: C.Frame :: _ ) -> (
-      (* Type checking *)
+      Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) -> (
+      (* Sanity check for invariant *)
+      assert (input_var.var_ty = input_value.V.ty);
+      (* Necessary type checking *)
       assert (ty_is_boxed_ty input_value.V.ty boxed_ty);
 
       (* Borrow the boxed value *)
@@ -2055,9 +2059,13 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
   match (region_params, type_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
-      Var (input_var, input_value) :: Var (ret_var, _) :: C.Frame :: _ ) ->
+      Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) ->
       (* Check the arguments *)
+      assert (input_var.var_ty = input_value.V.ty);
+      (* Sanity check for type invariant *)
       assert (ty_is_boxed_ty input_value.V.ty boxed_ty);
+
+      (* Required type checking *)
 
       (* Update the return value *)
       let dest = mk_place_from_var_id V.VarId.zero in
@@ -2108,14 +2116,18 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
     | A.BoxFree -> eval_box_free config region_params type_params ctx
   in
 
-  (* Pop the stack frame and retrieve the return value *)
-  let ctx, ret_value = ctx_pop_frame config ctx in
+  (* Check if the function body evaluated correctly *)
+  match res with
+  | Error err -> Error err
+  | Ok ctx ->
+      (* Pop the stack frame and retrieve the return value *)
+      let ctx, ret_value = ctx_pop_frame config ctx in
 
-  (* Move the return value to its destination *)
-  let ctx = assign_to_place config ctx ret_value dest in
+      (* Move the return value to its destination *)
+      let ctx = assign_to_place config ctx ret_value dest in
 
-  (* Return *)
-  Ok ctx
+      (* Return *)
+      Ok ctx
 
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
