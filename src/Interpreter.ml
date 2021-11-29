@@ -17,6 +17,14 @@ module L = Logging
    ...
  *)
 
+(** Some utilities *)
+
+let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
+
+let statement_to_string = Print.EvalCtxCfimAst.statement_to_string
+
+let expression_to_string = Print.EvalCtxCfimAst.expression_to_string
+
 (* TODO: move *)
 let mk_unit_ty : T.ety = T.Tuple []
 
@@ -2133,6 +2141,12 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result =
+  (* Debugging *)
+  L.log#ldebug
+    (lazy
+      ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate statement: "
+     ^ statement_to_string ctx st));
+  (* Evaluate *)
   match st with
   | A.Assign (p, rvalue) -> (
       (* Evaluate the rvalue *)
@@ -2256,6 +2270,12 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
 (** Evaluate an expression *)
 and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
     (C.eval_ctx * statement_eval_res) eval_result =
+  (* Debugging *)
+  L.log#ldebug
+    (lazy
+      ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate expression: \n"
+     ^ expression_to_string ctx e));
+  (* Evaluate *)
   match e with
   | A.Statement st -> eval_statement config ctx st
   | A.Sequence (e1, e2) -> (
@@ -2357,7 +2377,6 @@ let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
     no arguments) - TODO: move *)
 let fun_def_is_unit (def : A.fun_def) : bool =
   def.A.arg_count = 0
-  && V.VarId.length def.A.locals = 0
   && T.RegionVarId.length def.A.signature.region_params = 0
   && T.TypeVarId.length def.A.signature.type_params = 0
   && V.VarId.length def.A.signature.inputs = 0
