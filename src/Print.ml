@@ -5,6 +5,7 @@ module T = Types
 module V = Values
 module E = Expressions
 module A = CfimAst
+module C = Contexts
 
 open Types
 (** Pretty-printing for types *)
@@ -391,35 +392,30 @@ end
 
 module PV = Values (* Local module *)
 
-open Contexts
-module C = Contexts
-
 (** Pretty-printing for contexts *)
 
 module Contexts = struct
-  open Values (* local module *)
-
-  open Contexts
-
-  let env_value_to_string (fmt : value_formatter) (ev : env_value) : string =
+  let env_value_to_string (fmt : PV.value_formatter) (ev : C.env_value) : string
+      =
     match ev with
-    | Var (var, tv) -> var_to_string var ^ " -> " ^ typed_value_to_string fmt tv
-    | Abs abs -> abs_to_string fmt abs
+    | Var (var, tv) ->
+        PV.var_to_string var ^ " -> " ^ PV.typed_value_to_string fmt tv
+    | Abs abs -> PV.abs_to_string fmt abs
     | Frame -> failwith "Can't print a Frame element"
 
-  let env_to_string (fmt : value_formatter) (env : env) : string =
+  let env_to_string (fmt : PV.value_formatter) (env : C.env) : string =
     "{\n"
     ^ String.concat ";\n"
         (List.map (fun ev -> "  " ^ env_value_to_string fmt ev) env)
     ^ "\n}"
 
-  type ctx_formatter = value_formatter
+  type ctx_formatter = PV.value_formatter
 
-  let eval_ctx_to_ctx_formatter (ctx : eval_ctx) : ctx_formatter =
+  let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
     (* We shouldn't use r_to_string *)
     let r_to_string _ = failwith "Unreachable" in
     let type_var_id_to_string vid =
-      let v = lookup_type_var ctx vid in
+      let v = C.lookup_type_var ctx vid in
       v.tv_name
     in
     let type_def_id_to_string def_id =
@@ -435,8 +431,8 @@ module Contexts = struct
           PT.name_to_string def.name ^ "::" ^ variant.variant_name
     in
     let var_id_to_string vid =
-      let var = ctx_lookup_var ctx vid in
-      var_to_string var
+      let var = C.ctx_lookup_var ctx vid in
+      PV.var_to_string var
     in
     {
       r_to_string;
@@ -452,8 +448,8 @@ module Contexts = struct
           * frames: from the first pushed (oldest) to the last pushed (current frame)
           * values: from the first pushed (oldest) to the last pushed
        *)
-  let split_env_according_to_frames (env : env) : env list =
-    let rec split_aux (frames : env list) (curr_frame : env) (env : env) =
+  let split_env_according_to_frames (env : C.env) : C.env list =
+    let rec split_aux (frames : C.env list) (curr_frame : C.env) (env : C.env) =
       match env with
       | [] -> frames
       | Frame :: env' -> split_aux (curr_frame :: frames) [] env'
@@ -462,7 +458,7 @@ module Contexts = struct
     let frames = split_aux [] [] env in
     List.rev frames
 
-  let eval_ctx_to_string (ctx : eval_ctx) : string =
+  let eval_ctx_to_string (ctx : C.eval_ctx) : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
