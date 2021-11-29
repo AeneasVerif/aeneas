@@ -161,7 +161,8 @@ module Values = struct
     type_def_id_to_string : T.TypeDefId.id -> string;
     adt_variant_to_string : T.TypeDefId.id -> T.VariantId.id -> string;
     var_id_to_string : V.VarId.id -> string;
-        (* TODO: add and use an adt_field_names : ... -> (string list) option *)
+    adt_field_names :
+      T.TypeDefId.id -> T.VariantId.id option -> string list option;
   }
 
   let value_to_etype_formatter (fmt : value_formatter) : PT.etype_formatter =
@@ -223,12 +224,21 @@ module Values = struct
           | None -> fmt.type_def_id_to_string av.def_id
         in
         let field_values = T.FieldId.vector_to_list av.field_values in
+        let field_values = List.map (typed_value_to_string fmt) field_values in
         if List.length field_values > 0 then
-          let field_values =
-            String.concat " "
-              (List.map (typed_value_to_string fmt) field_values)
-          in
-          adt_ident ^ " " ^ field_values
+          match fmt.adt_field_names av.V.def_id av.V.variant_id with
+          | None ->
+              let field_values = String.concat ", " field_values in
+              adt_ident ^ " (" ^ field_values ^ ")"
+          | Some field_names ->
+              let field_values = List.combine field_names field_values in
+              let field_values =
+                List.map
+                  (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                  field_values
+              in
+              let field_values = String.concat "; " field_values in
+              adt_ident ^ " { " ^ field_values ^ " }"
         else adt_ident
     | Tuple values ->
         let values = T.FieldId.vector_to_list values in
@@ -436,12 +446,21 @@ module Contexts = struct
       let var = C.ctx_lookup_var ctx vid in
       PV.var_to_string var
     in
+    let adt_field_names (def_id : T.TypeDefId.id)
+        (opt_variant_id : T.VariantId.id option) =
+      let def = C.ctx_lookup_type_def ctx def_id in
+      let fields = T.type_def_get_fields def opt_variant_id in
+      (* TODO: the field name should be optional?? *)
+      let fields = T.FieldId.map (fun f -> f.T.field_name) fields in
+      Some (T.FieldId.vector_to_list fields)
+    in
     {
       r_to_string;
       type_var_id_to_string;
       type_def_id_to_string;
       adt_variant_to_string;
       var_id_to_string;
+      adt_field_names;
     }
 
   (** Split an [env] at every occurrence of [Frame], eliminating those elements.
@@ -484,6 +503,8 @@ module CfimAst = struct
     adt_field_to_string :
       T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string;
     var_id_to_string : V.VarId.id -> string;
+    adt_field_names :
+      T.TypeDefId.id -> T.VariantId.id option -> string list option;
     fun_def_id_to_string : A.FunDefId.id -> string;
   }
 
@@ -494,6 +515,7 @@ module CfimAst = struct
       PV.type_def_id_to_string = fmt.type_def_id_to_string;
       PV.adt_variant_to_string = fmt.adt_variant_to_string;
       PV.var_id_to_string = fmt.var_id_to_string;
+      PV.adt_field_names = fmt.adt_field_names;
     }
 
   let ast_to_etype_formatter (fmt : ast_formatter) : PT.etype_formatter =
@@ -584,16 +606,28 @@ module CfimAst = struct
         let ops = List.map (operand_to_string fmt) ops in
         match akind with
         | E.AggregatedTuple -> "(" ^ String.concat ", " ops ^ ")"
-        | E.AggregatedAdt (def_id, opt_variant_id, _regions, _types) -> (
+        | E.AggregatedAdt (def_id, opt_variant_id, _regions, _types) ->
             let adt_name = fmt.type_def_id_to_string def_id in
-            match opt_variant_id with
-            | None -> adt_name ^ "{ " ^ String.concat ", " ops ^ " }"
-            | Some variant_id ->
-                let variant_name =
-                  fmt.adt_variant_to_string def_id variant_id
-                in
-                adt_name ^ "::" ^ variant_name ^ "(" ^ String.concat ", " ops
-                ^ ")"))
+            let variant_name =
+              match opt_variant_id with
+              | None -> adt_name
+              | Some variant_id ->
+                  adt_name ^ "::" ^ fmt.adt_variant_to_string def_id variant_id
+            in
+            let fields =
+              match fmt.adt_field_names def_id opt_variant_id with
+              | None -> "(" ^ String.concat ", " ops ^ ")"
+              | Some field_names ->
+                  let fields = List.combine field_names ops in
+                  let fields =
+                    List.map
+                      (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                      fields
+                  in
+                  let fields = String.concat " " fields in
+                  "{ " ^ fields ^ " }"
+            in
+            variant_name ^ " " ^ fields)
 
   let statement_to_string (fmt : ast_formatter) (st : A.statement) : string =
     match st with

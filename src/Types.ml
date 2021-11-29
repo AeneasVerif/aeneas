@@ -123,3 +123,18 @@ let rec erase_regions (ty : rty) : ety =
       let regions = List.map (fun _ -> Erased) regions in
       let tys = List.map erase_regions tys in
       Assumed (aty, regions, tys)
+
+(** Retrieve the list of fields for the given variant of a [type_def].
+
+    Raises [Invalid_argument] if the arguments are incorrect.
+ *)
+let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
+    : field FieldId.vector =
+  match (def.kind, opt_variant_id) with
+  | Enum variants, Some variant_id -> (VariantId.nth variants variant_id).fields
+  | Struct fields, None -> fields
+  | _ ->
+      raise
+        (Invalid_argument
+           "The variant id should be [Some] if and only if the definition is \
+            an enumeration")

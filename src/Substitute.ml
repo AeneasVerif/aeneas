@@ -51,24 +51,6 @@ let make_type_subst (var_ids : T.TypeVarId.id list) (tys : 'r T.ty list) :
   in
   fun id -> T.TypeVarId.Map.find id mp
 
-(** Retrieve the list of fields for the given variant of a [type_def].
-
-    Raises [Invalid_argument] if the arguments are incorrect.
-
-    TODO: move
- *)
-let type_def_get_fields (def : T.type_def)
-    (opt_variant_id : T.VariantId.id option) : T.field T.FieldId.vector =
-  match (def.kind, opt_variant_id) with
-  | Enum variants, Some variant_id ->
-      (T.VariantId.nth variants variant_id).fields
-  | Struct fields, None -> fields
-  | _ ->
-      raise
-        (Invalid_argument
-           "The variant id should be [Some] if and only if the definition is \
-            an enumeration")
-
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)
 let type_def_get_instantiated_field_type (def : T.type_def)
