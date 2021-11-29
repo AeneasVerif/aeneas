@@ -7,80 +7,81 @@ module E = Expressions
 module A = CfimAst
 module C = Contexts
 
-open Types
 (** Pretty-printing for types *)
 
 module Types = struct
-  let type_var_to_string (tv : type_var) : string = tv.tv_name
+  let type_var_to_string (tv : T.type_var) : string = tv.tv_name
 
-  let region_var_to_string (rv : region_var) : string =
+  let region_var_to_string (rv : T.region_var) : string =
     match rv.rv_name with
     | Some name -> name
-    | None -> RegionVarId.to_string rv.rv_index
+    | None -> T.RegionVarId.to_string rv.rv_index
 
-  let region_to_string (rid_to_string : 'rid -> string) (r : 'rid region) :
+  let region_to_string (rid_to_string : 'rid -> string) (r : 'rid T.region) :
       string =
     match r with Static -> "'static" | Var rid -> rid_to_string rid
 
-  let erased_region_to_string (_ : erased_region) : string = "'_"
+  let erased_region_to_string (_ : T.erased_region) : string = "'_"
 
-  let ref_kind_to_string (rk : ref_kind) : string =
+  let ref_kind_to_string (rk : T.ref_kind) : string =
     match rk with Mut -> "Mut" | Shared -> "Shared"
 
-  let assumed_ty_to_string (_ : assumed_ty) : string = "Box"
+  let assumed_ty_to_string (_ : T.assumed_ty) : string = "Box"
 
   (* TODO: This is probably not the most OCaml-like way of doing this *)
   type 'r type_formatter = {
     r_to_string : 'r -> string;
     (* TODO: remove this and put the name everywhere instead? *)
-    type_var_id_to_string : TypeVarId.id -> string;
+    type_var_id_to_string : T.TypeVarId.id -> string;
     (* TODO: remove this and put the name everywhere instead? *)
-    type_def_id_to_string : TypeDefId.id -> string;
+    type_def_id_to_string : T.TypeDefId.id -> string;
   }
 
-  type etype_formatter = erased_region type_formatter
+  type etype_formatter = T.erased_region type_formatter
 
-  type rtype_formatter = RegionVarId.id region type_formatter
+  type rtype_formatter = T.RegionVarId.id T.region type_formatter
 
   let integer_type_to_string = function
-    | Isize -> "isize"
-    | I8 -> "i8"
-    | I16 -> "i16"
-    | I32 -> "i32"
-    | I64 -> "i64"
-    | I128 -> "i128"
-    | Usize -> "usize"
-    | U8 -> "u8"
-    | U16 -> "u16"
-    | U32 -> "u32"
-    | U64 -> "u64"
-    | U128 -> "u128"
+    | T.Isize -> "isize"
+    | T.I8 -> "i8"
+    | T.I16 -> "i16"
+    | T.I32 -> "i32"
+    | T.I64 -> "i64"
+    | T.I128 -> "i128"
+    | T.Usize -> "usize"
+    | T.U8 -> "u8"
+    | T.U16 -> "u16"
+    | T.U32 -> "u32"
+    | T.U64 -> "u64"
+    | T.U128 -> "u128"
 
-  let rec ty_to_string (fmt : 'r type_formatter) (ty : 'r ty) : string =
+  let rec ty_to_string (fmt : 'r type_formatter) (ty : 'r T.ty) : string =
     match ty with
-    | Adt (id, regions, tys) ->
+    | T.Adt (id, regions, tys) ->
         let params = params_to_string fmt regions tys in
         fmt.type_def_id_to_string id ^ params
-    | TypeVar tv -> fmt.type_var_id_to_string tv
-    | Bool -> "bool"
-    | Char -> "char"
-    | Never -> "⊥"
-    | Integer int_ty -> integer_type_to_string int_ty
-    | Str -> "str"
-    | Array aty -> "[" ^ ty_to_string fmt aty ^ "; ?]"
-    | Slice sty -> "[" ^ ty_to_string fmt sty ^ "]"
-    | Ref (r, rty, ref_kind) -> (
+    | T.TypeVar tv -> fmt.type_var_id_to_string tv
+    | T.Bool -> "bool"
+    | T.Char -> "char"
+    | T.Never -> "⊥"
+    | T.Integer int_ty -> integer_type_to_string int_ty
+    | T.Str -> "str"
+    | T.Array aty -> "[" ^ ty_to_string fmt aty ^ "; ?]"
+    | T.Slice sty -> "[" ^ ty_to_string fmt sty ^ "]"
+    | T.Ref (r, rty, ref_kind) -> (
         match ref_kind with
-        | Mut -> "&" ^ fmt.r_to_string r ^ " mut (" ^ ty_to_string fmt rty ^ ")"
-        | Shared -> "&" ^ fmt.r_to_string r ^ " (" ^ ty_to_string fmt rty ^ ")")
-    | Tuple tys ->
+        | T.Mut ->
+            "&" ^ fmt.r_to_string r ^ " mut (" ^ ty_to_string fmt rty ^ ")"
+        | T.Shared ->
+            "&" ^ fmt.r_to_string r ^ " (" ^ ty_to_string fmt rty ^ ")")
+    | T.Tuple tys ->
         "(" ^ String.concat ",  " (List.map (ty_to_string fmt) tys) ^ ")"
-    | Assumed (aty, regions, tys) -> (
+    | T.Assumed (aty, regions, tys) -> (
         let params = params_to_string fmt regions tys in
         match aty with Box -> "std::boxed::Box" ^ params)
 
   and params_to_string (fmt : 'r type_formatter) (regions : 'r list)
-      (types : 'r ty list) : string =
+      (types : 'r T.ty list) : string =
     if List.length regions + List.length types > 0 then
       let regions = List.map fmt.r_to_string regions in
       let types = List.map (ty_to_string fmt) types in
@@ -88,35 +89,35 @@ module Types = struct
       "<" ^ params ^ ">"
     else ""
 
-  let rty_to_string fmt (ty : rty) : string = ty_to_string fmt ty
+  let rty_to_string fmt (ty : T.rty) : string = ty_to_string fmt ty
 
-  let ety_to_string fmt (ty : ety) : string = ty_to_string fmt ty
+  let ety_to_string fmt (ty : T.ety) : string = ty_to_string fmt ty
 
-  let field_to_string fmt (f : field) : string =
+  let field_to_string fmt (f : T.field) : string =
     f.field_name ^ " : " ^ ty_to_string fmt f.field_ty
 
-  let variant_to_string fmt (v : variant) : string =
+  let variant_to_string fmt (v : T.variant) : string =
     v.variant_name ^ "("
     ^ String.concat ", "
-        (List.map (field_to_string fmt) (FieldId.vector_to_list v.fields))
+        (List.map (field_to_string fmt) (T.FieldId.vector_to_list v.fields))
     ^ ")"
 
   let name_to_string (name : name) : string = String.concat "::" name
 
-  let type_def_to_string (type_def_id_to_string : TypeDefId.id -> string)
-      (def : type_def) : string =
-    let regions : region_var list =
-      RegionVarId.vector_to_list def.region_params
+  let type_def_to_string (type_def_id_to_string : T.TypeDefId.id -> string)
+      (def : T.type_def) : string =
+    let regions : T.region_var list =
+      T.RegionVarId.vector_to_list def.region_params
     in
-    let types : type_var list = TypeVarId.vector_to_list def.type_params in
+    let types : T.type_var list = T.TypeVarId.vector_to_list def.type_params in
     let rid_to_string rid =
-      match List.find_opt (fun rv -> rv.rv_index = rid) regions with
+      match List.find_opt (fun rv -> rv.T.rv_index = rid) regions with
       | Some rv -> region_var_to_string rv
       | None -> failwith "Unreachable"
     in
     let r_to_string = region_to_string rid_to_string in
     let type_var_id_to_string id =
-      match List.find_opt (fun tv -> tv.tv_index = id) types with
+      match List.find_opt (fun tv -> tv.T.tv_index = id) types with
       | Some tv -> type_var_to_string tv
       | None -> failwith "Unreachable"
     in
@@ -131,8 +132,8 @@ module Types = struct
       else ""
     in
     match def.kind with
-    | Struct fields ->
-        let fields = FieldId.vector_to_list fields in
+    | T.Struct fields ->
+        let fields = T.FieldId.vector_to_list fields in
         if List.length fields > 0 then
           let fields =
             String.concat ","
@@ -140,8 +141,8 @@ module Types = struct
           in
           "struct " ^ name ^ params ^ "{" ^ fields ^ "}"
         else "struct" ^ name ^ params ^ "{}"
-    | Enum variants ->
-        let variants = VariantId.vector_to_list variants in
+    | T.Enum variants ->
+        let variants = T.VariantId.vector_to_list variants in
         let variants =
           List.map (fun v -> "|  " ^ variant_to_string fmt v) variants
         in
@@ -155,11 +156,12 @@ module PT = Types (* local module *)
 
 module Values = struct
   type value_formatter = {
-    r_to_string : RegionVarId.id -> string;
-    type_var_id_to_string : TypeVarId.id -> string;
-    type_def_id_to_string : TypeDefId.id -> string;
-    adt_variant_to_string : TypeDefId.id -> VariantId.id -> string;
+    r_to_string : T.RegionVarId.id -> string;
+    type_var_id_to_string : T.TypeVarId.id -> string;
+    type_def_id_to_string : T.TypeDefId.id -> string;
+    adt_variant_to_string : T.TypeDefId.id -> T.VariantId.id -> string;
     var_id_to_string : V.VarId.id -> string;
+        (* TODO: add and use an adt_field_names : ... -> (string list) option *)
   }
 
   let value_to_etype_formatter (fmt : value_formatter) : PT.etype_formatter =
@@ -220,7 +222,7 @@ module Values = struct
           | Some vid -> fmt.adt_variant_to_string av.def_id vid
           | None -> fmt.type_def_id_to_string av.def_id
         in
-        let field_values = FieldId.vector_to_list av.field_values in
+        let field_values = T.FieldId.vector_to_list av.field_values in
         if List.length field_values > 0 then
           let field_values =
             String.concat " "
@@ -229,7 +231,7 @@ module Values = struct
           adt_ident ^ " " ^ field_values
         else adt_ident
     | Tuple values ->
-        let values = FieldId.vector_to_list values in
+        let values = T.FieldId.vector_to_list values in
         let values =
           String.concat ", " (List.map (typed_value_to_string fmt) values)
         in
@@ -419,15 +421,15 @@ module Contexts = struct
       v.tv_name
     in
     let type_def_id_to_string def_id =
-      let def = TypeDefId.nth ctx.type_context def_id in
+      let def = T.TypeDefId.nth ctx.type_context def_id in
       PT.name_to_string def.name
     in
     let adt_variant_to_string def_id variant_id =
-      let def = TypeDefId.nth ctx.type_context def_id in
+      let def = T.TypeDefId.nth ctx.type_context def_id in
       match def.kind with
       | Struct _ -> failwith "Unreachable"
       | Enum variants ->
-          let variant = VariantId.nth variants variant_id in
+          let variant = T.VariantId.nth variants variant_id in
           PT.name_to_string def.name ^ "::" ^ variant.variant_name
     in
     let var_id_to_string vid =
@@ -475,12 +477,12 @@ module PC = Contexts
 
 module CfimAst = struct
   type ast_formatter = {
-    r_to_string : RegionVarId.id -> string;
-    type_var_id_to_string : TypeVarId.id -> string;
-    type_def_id_to_string : TypeDefId.id -> string;
-    adt_variant_to_string : TypeDefId.id -> VariantId.id -> string;
+    r_to_string : T.RegionVarId.id -> string;
+    type_var_id_to_string : T.TypeVarId.id -> string;
+    type_def_id_to_string : T.TypeDefId.id -> string;
+    adt_variant_to_string : T.TypeDefId.id -> T.VariantId.id -> string;
     adt_field_to_string :
-      TypeDefId.id -> VariantId.id option -> FieldId.id -> string;
+      T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string;
     var_id_to_string : V.VarId.id -> string;
     fun_def_id_to_string : A.FunDefId.id -> string;
   }
@@ -510,7 +512,8 @@ module CfimAst = struct
         match pe with
         | E.Deref -> "*(" ^ s ^ ")"
         | E.DerefBox -> "deref_box(" ^ s ^ ")"
-        | E.Field (E.ProjTuple _, fid) -> "(" ^ s ^ ")." ^ FieldId.to_string fid
+        | E.Field (E.ProjTuple _, fid) ->
+            "(" ^ s ^ ")." ^ T.FieldId.to_string fid
         | E.Field (E.ProjAdt (adt_id, opt_variant_id), fid) -> (
             let field_name =
               fmt.adt_field_to_string adt_id opt_variant_id fid
