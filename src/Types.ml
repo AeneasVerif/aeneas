@@ -138,3 +138,7 @@ let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
         (Invalid_argument
            "The variant id should be [Some] if and only if the definition is \
             an enumeration")
+
+(** Return [true] if a [ty] is actually `unit` *)
+let ty_is_unit (ty : 'r ty) : bool =
+  match ty with Tuple tys -> List.length tys = 0 | _ -> false

@@ -525,6 +525,13 @@ module CfimAst = struct
       PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
+  let ast_to_rtype_formatter (fmt : ast_formatter) : PT.rtype_formatter =
+    {
+      PT.r_to_string = PT.region_to_string fmt.r_to_string;
+      PT.type_var_id_to_string = fmt.type_var_id_to_string;
+      PT.type_def_id_to_string = fmt.type_def_id_to_string;
+    }
+
   let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : ast_formatter =
     let ctx_fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let adt_field_to_string def_id opt_variant_id field_id =
@@ -715,9 +722,6 @@ module CfimAst = struct
         | A.SwitchInt (_ty, branches, otherwise) ->
             let indent1 = indent ^ indent_incr in
             let indent2 = indent1 ^ indent_incr in
-            let inner_to_string1 =
-              expression_to_string fmt indent1 indent_incr
-            in
             let inner_to_string2 =
               expression_to_string fmt indent2 indent_incr
             in
@@ -739,4 +743,54 @@ module CfimAst = struct
         indent ^ "loop {\n"
         ^ expression_to_string fmt (indent ^ indent_incr) indent_incr loop_e
         ^ "\n" ^ indent ^ "}"
+
+  let fun_def_to_string (fmt : ast_formatter) (indent : string)
+      (indent_incr : string) (def : A.fun_def) : string =
+    let rty_fmt = ast_to_rtype_formatter fmt in
+    let rty_to_string = PT.rty_to_string rty_fmt in
+    let sg = def.signature in
+
+    (* Function name *)
+    let name = PT.name_to_string def.A.name in
+
+    (* Region/type parameters *)
+    let regions = T.RegionVarId.vector_to_list sg.region_params in
+    let types = T.TypeVarId.vector_to_list sg.type_params in
+    let params =
+      if List.length regions + List.length types = 0 then ""
+      else
+        let regions = List.map PT.region_var_to_string regions in
+        let types = List.map PT.type_var_to_string types in
+        "<" ^ String.concat "," (List.append regions types) ^ ">"
+    in
+
+    (* Arguments *)
+    let inputs = V.VarId.vector_to_list def.locals in
+    let inputs =
+      match inputs with
+      | [] -> failwith "Inconsistent signature"
+      | _ret_var :: inputs' -> inputs'
+    in
+    let args = List.combine inputs (V.VarId.vector_to_list sg.inputs) in
+    let args =
+      List.map
+        (fun (var, rty) -> PV.var_to_string var ^ " : " ^ rty_to_string rty)
+        args
+    in
+    let args = String.concat ", " args in
+
+    (* Return type *)
+    let ret_ty = V.VarId.nth sg.inputs V.VarId.zero in
+    let ret_ty =
+      if T.ty_is_unit ret_ty then "" else " -> " ^ rty_to_string ret_ty
+    in
+
+    (* Body *)
+    let body =
+      expression_to_string fmt (indent ^ indent_incr) indent_incr def.body
+    in
+
+    (* Put everything together *)
+    indent ^ "fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty ^ "{\n" ^ body
+    ^ "\n" ^ indent ^ "}"
 end
