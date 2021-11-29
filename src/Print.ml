@@ -821,7 +821,6 @@ end
 module PA = CfimAst (* local module *)
 
 (** Pretty-printing for ASTs (functions based on a definition context) *)
-
 module DefCtxCfimAst = struct
   (** This function pretty-prints a type definition by using a definition
       context *)
@@ -885,5 +884,12 @@ module DefCtxCfimAst = struct
 end
 
 (** Pretty-printing for ASTs (functions based on an evaluation context) *)
+module EvalCtxCfimAst = struct
+  let statement_to_string (ctx : C.eval_ctx) (s : A.statement) : string =
+    let fmt = PA.eval_ctx_to_ast_formatter ctx in
+    PA.statement_to_string fmt s
 
-module EvalCtxCfimAst = struct end
+  let expression_to_string (ctx : C.eval_ctx) (e : A.expression) : string =
+    let fmt = PA.eval_ctx_to_ast_formatter ctx in
+    PA.expression_to_string fmt "" "  " e
+end
