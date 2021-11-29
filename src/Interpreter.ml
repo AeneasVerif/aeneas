@@ -23,7 +23,8 @@ let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 
 let statement_to_string = Print.EvalCtxCfimAst.statement_to_string
 
-let expression_to_string = Print.EvalCtxCfimAst.expression_to_string
+let expression_to_string ctx =
+  Print.EvalCtxCfimAst.expression_to_string ctx "  " "  "
 
 (* TODO: move *)
 let mk_unit_ty : T.ety = T.Tuple []
@@ -2365,6 +2366,11 @@ let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
       C.symbolic_counter = V.SymbolicValueId.generator_zero;
       C.borrow_counter = V.BorrowId.generator_zero;
     }
+  in
+
+  (* Put the (uninitialized) local variables *)
+  let ctx =
+    C.ctx_push_uninitialized_vars ctx (V.VarId.vector_to_list fdef.A.locals)
   in
 
   (* Evaluate the function *)

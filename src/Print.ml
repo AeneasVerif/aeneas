@@ -909,7 +909,8 @@ module EvalCtxCfimAst = struct
     let fmt = PA.eval_ctx_to_ast_formatter ctx in
     PA.statement_to_string fmt s
 
-  let expression_to_string (ctx : C.eval_ctx) (e : A.expression) : string =
+  let expression_to_string (ctx : C.eval_ctx) (indent : string)
+      (indent_incr : string) (e : A.expression) : string =
     let fmt = PA.eval_ctx_to_ast_formatter ctx in
-    PA.expression_to_string fmt "" "  " e
+    PA.expression_to_string fmt indent indent_incr e
 end
