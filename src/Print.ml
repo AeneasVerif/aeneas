@@ -55,21 +55,6 @@ module Types = struct
     | T.U64 -> "u64"
     | T.U128 -> "u128"
 
-  let ty_variant_name (ty : 'r T.ty) : string =
-    match ty with
-    | T.Adt (_, _, _) -> "Adt"
-    | T.TypeVar _ -> "TypeVar"
-    | T.Bool -> "Bool"
-    | T.Char -> "Char"
-    | T.Never -> "Never"
-    | T.Integer _ -> "Integer"
-    | T.Str -> "Str"
-    | T.Array _ -> "Array"
-    | T.Slice _ -> "Slice"
-    | T.Ref (_, _, _) -> "Ref"
-    | T.Tuple _ -> "Tuple"
-    | T.Assumed (_, _, _) -> "Assumed"
-
   let rec ty_to_string (fmt : 'r type_formatter) (ty : 'r T.ty) : string =
     match ty with
     | T.Adt (id, regions, tys) ->
@@ -584,12 +569,6 @@ module CfimAst = struct
       fun_def_id_to_string;
     }
 
-  let projection_elem_variant_name (pe : E.projection_elem) : string =
-    match pe with
-    | E.Deref -> "Deref"
-    | E.DerefBox -> "DerefBox"
-    | E.Field (_, _) -> "Field"
-
   let rec projection_to_string (fmt : ast_formatter) (inside : string)
       (p : E.projection) : string =
     match p with
@@ -938,59 +917,3 @@ module EvalCtxCfimAst = struct
     let fmt = PA.eval_ctx_to_ast_formatter ctx in
     PA.expression_to_string fmt indent indent_incr e
 end
-
-(*
-(** Debugging facilities, for when there is missing context *)
-module Debug = struct
-  let erased_region_to_string = PT.erased_region_to_string
-
-  let region_var_id_to_string (id : T.RegionVarId.id) =
-    "@" ^ T.RegionVarId.to_string id
-
-  let type_var_id_to_string (id : T.TypeVarId.id) =
-    "@" ^ T.TypeVarId.to_string id
-
-  let type_def_id_to_string (id : T.TypeDefId.id) =
-    "@" ^ T.TypeDefId.to_string id
-
-  let adt_variant_to_string (_def_id : T.TypeDefId.id)
-      (variant_id : T.VariantId.id) : string =
-    T.VariantId.to_string variant_id
-
-  let var_id_to_string (id : V.VarId.id) = "@" ^ V.VarId.to_string id
-
-  let adt_field_names (_def_id : T.TypeDefId.id)
-      (opt_variant_idt : T.VariantId.id option) : string list option =
-    None
-
-  let dummy_etype_fmt : PT.etype_formatter =
-    let r_to_string = erased_region_to_string in
-    { r_to_string; type_var_id_to_string; type_def_id_to_string }
-
-  let dummy_rtype_fmt : PT.rtype_formatter =
-    let r_to_string r = PT.region_to_string region_var_id_to_string r in
-    { r_to_string; type_var_id_to_string; type_def_id_to_string }
-
-  let dummy_value_fmt : PV.value_formatter =
-    let r_to_string = region_var_id_to_string in
-    {
-      r_to_string;
-      type_var_id_to_string;
-      type_def_id_to_string;
-      adt_variant_to_string;
-      var_id_to_string;
-      adt_field_names;
-    }
-
-  let field_proj_kind_to_string (pe : E.projection_elem) : string =
-    match pe with
-    | E.Deref -> "Deref"
-    | E.DerefBox -> "DerefBox"
-    | Field 
-
-  let projection_elem_to_string (pe : E.projection_elem) : string =
-    match pe with
-    | E.Deref -> "Deref"
-    | E.DerefBox -> "DerefBox"
-    | Field 
-end*)
