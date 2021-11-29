@@ -525,6 +525,29 @@ module CfimAst = struct
       PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
+  let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : ast_formatter =
+    let ctx_fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let adt_field_to_string def_id opt_variant_id field_id =
+      let def = T.TypeDefId.nth ctx.type_context def_id in
+      let fields = T.type_def_get_fields def opt_variant_id in
+      let field = T.FieldId.nth fields field_id in
+      field.T.field_name
+    in
+    let fun_def_id_to_string def_id =
+      let def = A.FunDefId.nth ctx.fun_context def_id in
+      PT.name_to_string def.name
+    in
+    {
+      r_to_string = ctx_fmt.PV.r_to_string;
+      type_var_id_to_string = ctx_fmt.PV.type_var_id_to_string;
+      type_def_id_to_string = ctx_fmt.PV.type_def_id_to_string;
+      adt_variant_to_string = ctx_fmt.PV.adt_variant_to_string;
+      var_id_to_string = ctx_fmt.PV.var_id_to_string;
+      adt_field_names = ctx_fmt.PV.adt_field_names;
+      adt_field_to_string;
+      fun_def_id_to_string;
+    }
+
   let rec projection_to_string (fmt : ast_formatter) (inside : string)
       (p : E.projection) : string =
     match p with
