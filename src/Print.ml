@@ -8,7 +8,6 @@ module A = CfimAst
 module C = Contexts
 
 (** Pretty-printing for types *)
-
 module Types = struct
   let type_var_to_string (tv : T.type_var) : string = tv.tv_name
 
@@ -150,10 +149,9 @@ module Types = struct
         "enum " ^ name ^ params ^ " =\n" ^ variants
 end
 
-(** Pretty-printing for values *)
-
 module PT = Types (* local module *)
 
+(** Pretty-printing for values *)
 module Values = struct
   type value_formatter = {
     r_to_string : T.RegionVarId.id -> string;
@@ -402,10 +400,9 @@ module Values = struct
     ^ "}" ^ " {\n" ^ avs ^ "\n}"
 end
 
-module PV = Values (* Local module *)
+module PV = Values (* local module *)
 
 (** Pretty-printing for contexts *)
-
 module Contexts = struct
   let env_value_to_string (fmt : PV.value_formatter) (ev : C.env_value) : string
       =
@@ -423,9 +420,29 @@ module Contexts = struct
 
   type ctx_formatter = PV.value_formatter
 
+  let type_ctx_to_adt_variant_to_string_fun
+      (ctx : T.type_def T.TypeDefId.vector) :
+      T.TypeDefId.id -> T.VariantId.id -> string =
+   fun def_id variant_id ->
+    let def = T.TypeDefId.nth ctx def_id in
+    match def.kind with
+    | Struct _ -> failwith "Unreachable"
+    | Enum variants ->
+        let variant = T.VariantId.nth variants variant_id in
+        PT.name_to_string def.name ^ "::" ^ variant.variant_name
+
+  let type_ctx_to_adt_field_names_fun (ctx : T.type_def T.TypeDefId.vector) :
+      T.TypeDefId.id -> T.VariantId.id option -> string list option =
+   fun def_id opt_variant_id ->
+    let def = T.TypeDefId.nth ctx def_id in
+    let fields = T.type_def_get_fields def opt_variant_id in
+    (* TODO: the field name should be optional?? *)
+    let fields = T.FieldId.map (fun f -> f.T.field_name) fields in
+    Some (T.FieldId.vector_to_list fields)
+
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
     (* We shouldn't use r_to_string *)
-    let r_to_string _ = failwith "Unreachable" in
+    let r_to_string _ = failwith "Unexpected use of r_to_string" in
     let type_var_id_to_string vid =
       let v = C.lookup_type_var ctx vid in
       v.tv_name
@@ -434,26 +451,14 @@ module Contexts = struct
       let def = T.TypeDefId.nth ctx.type_context def_id in
       PT.name_to_string def.name
     in
-    let adt_variant_to_string def_id variant_id =
-      let def = T.TypeDefId.nth ctx.type_context def_id in
-      match def.kind with
-      | Struct _ -> failwith "Unreachable"
-      | Enum variants ->
-          let variant = T.VariantId.nth variants variant_id in
-          PT.name_to_string def.name ^ "::" ^ variant.variant_name
+    let adt_variant_to_string =
+      type_ctx_to_adt_variant_to_string_fun ctx.type_context
     in
     let var_id_to_string vid =
       let var = C.ctx_lookup_var ctx vid in
       PV.var_to_string var
     in
-    let adt_field_names (def_id : T.TypeDefId.id)
-        (opt_variant_id : T.VariantId.id option) =
-      let def = C.ctx_lookup_type_def ctx def_id in
-      let fields = T.type_def_get_fields def opt_variant_id in
-      (* TODO: the field name should be optional?? *)
-      let fields = T.FieldId.map (fun f -> f.T.field_name) fields in
-      Some (T.FieldId.vector_to_list fields)
-    in
+    let adt_field_names = type_ctx_to_adt_field_names_fun ctx.C.type_context in
     {
       r_to_string;
       type_var_id_to_string;
@@ -492,8 +497,9 @@ module Contexts = struct
     "# " ^ string_of_int num_frames ^ " frame(s)\n" ^ String.concat "" frames
 end
 
-module PC = Contexts
+module PC = Contexts (* local module *)
 
+(** Pretty-printing for contexts (generic functions) *)
 module CfimAst = struct
   type ast_formatter = {
     r_to_string : T.RegionVarId.id -> string;
@@ -532,13 +538,18 @@ module CfimAst = struct
       PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
+  let type_ctx_to_adt_field_to_string_fun (ctx : T.type_def T.TypeDefId.vector)
+      : T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string =
+   fun def_id opt_variant_id field_id ->
+    let def = T.TypeDefId.nth ctx def_id in
+    let fields = T.type_def_get_fields def opt_variant_id in
+    let field = T.FieldId.nth fields field_id in
+    field.T.field_name
+
   let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : ast_formatter =
     let ctx_fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let adt_field_to_string def_id opt_variant_id field_id =
-      let def = T.TypeDefId.nth ctx.type_context def_id in
-      let fields = T.type_def_get_fields def opt_variant_id in
-      let field = T.FieldId.nth fields field_id in
-      field.T.field_name
+    let adt_field_to_string =
+      type_ctx_to_adt_field_to_string_fun ctx.type_context
     in
     let fun_def_id_to_string def_id =
       let def = A.FunDefId.nth ctx.fun_context def_id in
@@ -806,3 +817,73 @@ module CfimAst = struct
     indent ^ "fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty ^ "{\n" ^ locals
     ^ "\n\n" ^ body ^ "\n" ^ indent ^ "}"
 end
+
+module PA = CfimAst (* local module *)
+
+(** Pretty-printing for ASTs (functions based on a definition context) *)
+
+module DefCtxCfimAst = struct
+  (** This function pretty-prints a type definition by using a definition
+      context *)
+  let type_def_to_string (type_context : T.type_def T.TypeDefId.vector)
+      (def : T.type_def) : string =
+    let type_def_id_to_string (id : T.TypeDefId.id) : string =
+      let def = T.TypeDefId.nth type_context id in
+      PT.name_to_string def.name
+    in
+    PT.type_def_to_string type_def_id_to_string def
+
+  (** Generate an [ast_formatter] by using a definition context in combination
+      with the variables local to a function's definition *)
+  let def_ctx_to_ast_formatter (type_context : T.type_def T.TypeDefId.vector)
+      (fun_context : A.fun_def A.FunDefId.vector) (def : A.fun_def) :
+      PA.ast_formatter =
+    let r_to_string vid =
+      let var = T.RegionVarId.nth def.signature.region_params vid in
+      PT.region_var_to_string var
+    in
+    let type_var_id_to_string vid =
+      let var = T.TypeVarId.nth def.signature.type_params vid in
+      PT.type_var_to_string var
+    in
+    let type_def_id_to_string def_id =
+      let def = T.TypeDefId.nth type_context def_id in
+      PT.name_to_string def.name
+    in
+    let fun_def_id_to_string def_id =
+      let def = A.FunDefId.nth fun_context def_id in
+      PT.name_to_string def.name
+    in
+    let var_id_to_string vid =
+      let var = V.VarId.nth def.locals vid in
+      PV.var_to_string var
+    in
+    let adt_variant_to_string =
+      PC.type_ctx_to_adt_variant_to_string_fun type_context
+    in
+    let adt_field_to_string =
+      PA.type_ctx_to_adt_field_to_string_fun type_context
+    in
+    let adt_field_names = PC.type_ctx_to_adt_field_names_fun type_context in
+    {
+      r_to_string;
+      type_var_id_to_string;
+      type_def_id_to_string;
+      adt_variant_to_string;
+      adt_field_to_string;
+      var_id_to_string;
+      adt_field_names;
+      fun_def_id_to_string;
+    }
+
+  (** This function pretty-prints a function definition by using a definition
+      context *)
+  let fun_def_to_string (type_context : T.type_def T.TypeDefId.vector)
+      (fun_context : A.fun_def A.FunDefId.vector) (def : A.fun_def) : string =
+    let fmt = def_ctx_to_ast_formatter type_context fun_context def in
+    PA.fun_def_to_string fmt "" "  " def
+end
+
+(** Pretty-printing for ASTs (functions based on an evaluation context) *)
+
+module EvalCtxCfimAst = struct end
