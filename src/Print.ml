@@ -151,7 +151,6 @@ end
 
 (** Pretty-printing for values *)
 
-open Values
 module PT = Types (* local module *)
 
 module Values = struct
@@ -160,7 +159,7 @@ module Values = struct
     type_var_id_to_string : TypeVarId.id -> string;
     type_def_id_to_string : TypeDefId.id -> string;
     type_def_id_variant_id_to_string : TypeDefId.id -> VariantId.id -> string;
-    var_id_to_string : VarId.id -> string;
+    var_id_to_string : V.VarId.id -> string;
   }
 
   let value_to_etype_formatter (fmt : value_formatter) : PT.etype_formatter =
@@ -177,40 +176,41 @@ module Values = struct
       PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
-  let var_id_to_string (id : VarId.id) : string = "var@" ^ VarId.to_string id
+  let var_id_to_string (id : V.VarId.id) : string =
+    "var@" ^ V.VarId.to_string id
 
-  let var_to_string (v : var) : string =
+  let var_to_string (v : V.var) : string =
     let id = var_id_to_string v.index in
     match v.name with None -> id | Some name -> name ^ "(" ^ id ^ ")"
 
-  let big_int_to_string (bi : big_int) : string = Z.to_string bi
+  let big_int_to_string (bi : V.big_int) : string = Z.to_string bi
 
-  let scalar_value_to_string (sv : scalar_value) : string =
+  let scalar_value_to_string (sv : V.scalar_value) : string =
     big_int_to_string sv.value ^ ": " ^ PT.integer_type_to_string sv.int_ty
 
-  let constant_value_to_string (cv : constant_value) : string =
+  let constant_value_to_string (cv : V.constant_value) : string =
     match cv with
     | Scalar sv -> scalar_value_to_string sv
     | Bool b -> Bool.to_string b
     | Char c -> String.make 1 c
     | String s -> s
 
-  let symbolic_value_id_to_string (id : SymbolicValueId.id) : string =
-    "s@" ^ SymbolicValueId.to_string id
+  let symbolic_value_id_to_string (id : V.SymbolicValueId.id) : string =
+    "s@" ^ V.SymbolicValueId.to_string id
 
-  let symbolic_value_to_string (fmt : PT.rtype_formatter) (sv : symbolic_value)
-      : string =
+  let symbolic_value_to_string (fmt : PT.rtype_formatter)
+      (sv : V.symbolic_value) : string =
     symbolic_value_id_to_string sv.sv_id ^ " : " ^ PT.ty_to_string fmt sv.sv_ty
 
-  let region_id_to_string (rid : RegionId.id) : string =
-    "r@" ^ RegionId.to_string rid
+  let region_id_to_string (rid : V.RegionId.id) : string =
+    "r@" ^ V.RegionId.to_string rid
 
   let symbolic_proj_comp_to_string (fmt : PT.rtype_formatter)
-      (sp : symbolic_proj_comp) : string =
-    let regions = RegionId.set_to_string sp.rset_ended in
+      (sp : V.symbolic_proj_comp) : string =
+    let regions = V.RegionId.set_to_string sp.rset_ended in
     "proj_comp " ^ regions ^ " (" ^ symbolic_value_to_string fmt sp.svalue ^ ")"
 
-  let rec typed_value_to_string (fmt : value_formatter) (v : typed_value) :
+  let rec typed_value_to_string (fmt : value_formatter) (v : V.typed_value) :
       string =
     match v.value with
     | Concrete cv -> constant_value_to_string cv
@@ -242,27 +242,27 @@ module Values = struct
     | Symbolic sp ->
         symbolic_proj_comp_to_string (value_to_rtype_formatter fmt) sp
 
-  and borrow_content_to_string (fmt : value_formatter) (bc : borrow_content) :
+  and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
       string =
     match bc with
-    | SharedBorrow bid -> "⌊shared@" ^ BorrowId.to_string bid ^ "⌋"
+    | SharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
     | MutBorrow (bid, tv) ->
-        "&mut@" ^ BorrowId.to_string bid ^ " ("
+        "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_value_to_string fmt tv
         ^ ")"
     | InactivatedMutBorrow bid ->
-        "⌊inactivated_mut@" ^ BorrowId.to_string bid ^ "⌋"
+        "⌊inactivated_mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
-  and loan_content_to_string (fmt : value_formatter) (lc : loan_content) :
+  and loan_content_to_string (fmt : value_formatter) (lc : V.loan_content) :
       string =
     match lc with
     | SharedLoan (loans, v) ->
-        let loans = BorrowId.set_to_string loans in
+        let loans = V.BorrowId.set_to_string loans in
         "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
-    | MutLoan bid -> "⌊mut@" ^ BorrowId.to_string bid ^ "⌋"
+    | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
   let symbolic_value_proj_to_string (fmt : value_formatter)
-      (sv : symbolic_value) (rty : rty) : string =
+      (sv : V.symbolic_value) (rty : T.rty) : string =
     symbolic_value_id_to_string sv.sv_id
     ^ " : "
     ^ PT.ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
@@ -270,9 +270,9 @@ module Values = struct
     ^ PT.ty_to_string (value_to_rtype_formatter fmt) rty
 
   let rec abstract_shared_borrows_to_string (fmt : value_formatter)
-      (abs : abstract_shared_borrows) : string =
+      (abs : V.abstract_shared_borrows) : string =
     match abs with
-    | AsbSet bs -> BorrowId.set_to_string bs
+    | AsbSet bs -> V.BorrowId.set_to_string bs
     | AsbProjReborrows (sv, rty) ->
         "{" ^ symbolic_value_proj_to_string fmt sv rty ^ "}"
     | AsbUnion (asb1, asb2) ->
@@ -280,7 +280,7 @@ module Values = struct
         ^ " U "
         ^ abstract_shared_borrows_to_string fmt asb2
 
-  let rec typed_avalue_to_string (fmt : value_formatter) (v : typed_avalue) :
+  let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
       string =
     match v.avalue with
     | AConcrete cv -> constant_value_to_string cv
@@ -290,7 +290,7 @@ module Values = struct
           | Some vid -> fmt.type_def_id_variant_id_to_string av.adef_id vid
           | None -> fmt.type_def_id_to_string av.adef_id
         in
-        let field_values = FieldId.vector_to_list av.afield_values in
+        let field_values = T.FieldId.vector_to_list av.afield_values in
         if List.length field_values > 0 then
           let field_values =
             String.concat " "
@@ -299,7 +299,7 @@ module Values = struct
           adt_ident ^ " " ^ field_values
         else adt_ident
     | ATuple values ->
-        let values = FieldId.vector_to_list values in
+        let values = T.FieldId.vector_to_list values in
         let values =
           String.concat ", " (List.map (typed_avalue_to_string fmt) values)
         in
@@ -311,15 +311,15 @@ module Values = struct
         match av with ABox bv -> "@Box(" ^ typed_avalue_to_string fmt bv ^ ")")
     | AProj pv -> aproj_to_string fmt pv
 
-  and aloan_content_to_string (fmt : value_formatter) (lc : aloan_content) :
+  and aloan_content_to_string (fmt : value_formatter) (lc : V.aloan_content) :
       string =
     match lc with
     | AMutLoan (bid, av) ->
-        "⌊mut@" ^ BorrowId.to_string bid ^ ", "
+        "⌊mut@" ^ V.BorrowId.to_string bid ^ ", "
         ^ typed_avalue_to_string fmt av
         ^ "⌋"
     | ASharedLoan (loans, v, av) ->
-        let loans = BorrowId.set_to_string loans in
+        let loans = V.BorrowId.set_to_string loans in
         "@shared_loan(" ^ loans ^ ", "
         ^ typed_value_to_string fmt v
         ^ ", "
@@ -338,7 +338,7 @@ module Values = struct
         ^ typed_avalue_to_string fmt av
         ^ ")"
     | AIgnoredMutLoan (bid, av) ->
-        "@ignored_mut_loan(" ^ BorrowId.to_string bid ^ ", "
+        "@ignored_mut_loan(" ^ V.BorrowId.to_string bid ^ ", "
         ^ typed_avalue_to_string fmt av
         ^ ")"
     | AIgnoredSharedLoan asb ->
@@ -346,14 +346,14 @@ module Values = struct
         ^ abstract_shared_borrows_to_string fmt asb
         ^ ")"
 
-  and aborrow_content_to_string (fmt : value_formatter) (bc : aborrow_content) :
-      string =
+  and aborrow_content_to_string (fmt : value_formatter) (bc : V.aborrow_content)
+      : string =
     match bc with
     | AMutBorrow (bid, av) ->
-        "&mut@" ^ BorrowId.to_string bid ^ " ("
+        "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_avalue_to_string fmt av
         ^ ")"
-    | ASharedBorrow bid -> "⌊shared@" ^ BorrowId.to_string bid ^ "⌋"
+    | ASharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
     | AIgnoredMutBorrow av ->
         "@ignored_mut_borrow(" ^ typed_avalue_to_string fmt av ^ ")"
     | AEndedIgnoredMutLoan ml ->
@@ -367,7 +367,7 @@ module Values = struct
         ^ abstract_shared_borrows_to_string fmt sb
         ^ ")"
 
-  and aproj_to_string (fmt : value_formatter) (pv : aproj) : string =
+  and aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
     match pv with
     | AProjLoans sv ->
         "proj_loans ("
@@ -376,17 +376,17 @@ module Values = struct
     | AProjBorrows (sv, rty) ->
         "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
 
-  let abs_to_string (fmt : value_formatter) (abs : abs) : string =
+  let abs_to_string (fmt : value_formatter) (abs : V.abs) : string =
     let avs =
       List.map (fun av -> "  " ^ typed_avalue_to_string fmt av) abs.avalues
     in
     let avs = String.concat ",\n" avs in
     "abs@"
-    ^ AbstractionId.to_string abs.abs_id
+    ^ V.AbstractionId.to_string abs.abs_id
     ^ "{parents="
-    ^ AbstractionId.set_to_string abs.parents
+    ^ V.AbstractionId.set_to_string abs.parents
     ^ "}" ^ "{regions="
-    ^ RegionId.set_to_string abs.regions
+    ^ V.RegionId.set_to_string abs.regions
     ^ "}" ^ " {\n" ^ avs ^ "\n}"
 end
 
@@ -482,7 +482,7 @@ module CfimAst = struct
     type_def_id_variant_id_to_string : TypeDefId.id -> VariantId.id -> string;
     adt_field_to_string :
       TypeDefId.id -> VariantId.id option -> FieldId.id -> string;
-    var_id_to_string : VarId.id -> string;
+    var_id_to_string : V.VarId.id -> string;
     fun_def_id_to_string : A.FunDefId.id -> string;
   }
 
