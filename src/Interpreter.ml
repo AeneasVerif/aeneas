@@ -1329,9 +1329,7 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
       let rec inspect_update v : unit =
         match v.V.value with
         | V.Concrete _ -> ()
-        | V.Bottom ->
-            failwith "Unreachable"
-            (* note that we don't really need to fail here *)
+        | V.Bottom -> ()
         | V.Symbolic _ ->
             (* Nothing to do for symbolic values - note that if the value needs
                to be copied, etc. we perform additional checks later *)
