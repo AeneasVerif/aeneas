@@ -748,6 +748,8 @@ module CfimAst = struct
       (indent_incr : string) (def : A.fun_def) : string =
     let rty_fmt = ast_to_rtype_formatter fmt in
     let rty_to_string = PT.rty_to_string rty_fmt in
+    let ety_fmt = ast_to_etype_formatter fmt in
+    let ety_to_string = PT.ety_to_string ety_fmt in
     let sg = def.signature in
 
     (* Function name *)
@@ -766,11 +768,12 @@ module CfimAst = struct
 
     (* Arguments *)
     let inputs = V.VarId.vector_to_list def.locals in
-    let inputs =
+    let ret_var, inputs =
       match inputs with
       | [] -> failwith "Inconsistent signature"
-      | _ret_var :: inputs' -> inputs'
+      | ret_var :: inputs -> (ret_var, inputs)
     in
+    let inputs, aux_locals = Utilities.list_split_at inputs def.arg_count in
     let args = List.combine inputs (V.VarId.vector_to_list sg.inputs) in
     let args =
       List.map
@@ -785,12 +788,21 @@ module CfimAst = struct
       if T.ty_is_unit ret_ty then "" else " -> " ^ rty_to_string ret_ty
     in
 
+    (* All the locals (with erased regions) *)
+    let locals =
+      List.map
+        (fun var ->
+          indent ^ PV.var_to_string var ^ " : " ^ ety_to_string var.var_ty ^ ";")
+        (ret_var :: aux_locals)
+    in
+    let locals = String.concat "\n" locals in
+
     (* Body *)
     let body =
       expression_to_string fmt (indent ^ indent_incr) indent_incr def.body
     in
 
     (* Put everything together *)
-    indent ^ "fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty ^ "{\n" ^ body
-    ^ "\n" ^ indent ^ "}"
+    indent ^ "fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty ^ "{\n" ^ locals
+    ^ "\n\n" ^ body ^ "\n" ^ indent ^ "}"
 end
