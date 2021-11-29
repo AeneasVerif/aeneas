@@ -6,6 +6,7 @@ module V = Values
 module E = Expressions
 module A = CfimAst
 module C = Contexts
+module M = Modules
 
 (** Pretty-printing for types *)
 module Types = struct
@@ -821,7 +822,7 @@ end
 module PA = CfimAst (* local module *)
 
 (** Pretty-printing for ASTs (functions based on a definition context) *)
-module DefCtxCfimAst = struct
+module Module = struct
   (** This function pretty-prints a type definition by using a definition
       context *)
   let type_def_to_string (type_context : T.type_def T.TypeDefId.vector)
@@ -881,6 +882,25 @@ module DefCtxCfimAst = struct
       (fun_context : A.fun_def A.FunDefId.vector) (def : A.fun_def) : string =
     let fmt = def_ctx_to_ast_formatter type_context fun_context def in
     PA.fun_def_to_string fmt "" "  " def
+
+  let module_to_string (m : M.cfim_module) : string =
+    (* The types *)
+    let type_defs =
+      List.map
+        (type_def_to_string m.M.types)
+        (T.TypeDefId.vector_to_list m.M.types)
+    in
+
+    (* The functions *)
+    let fun_defs =
+      List.map
+        (fun_def_to_string m.M.types m.M.functions)
+        (A.FunDefId.vector_to_list m.M.functions)
+    in
+
+    (* Put everything together *)
+    let all_defs = List.append type_defs fun_defs in
+    String.concat "\n\n" all_defs
 end
 
 (** Pretty-printing for ASTs (functions based on an evaluation context) *)

@@ -87,7 +87,7 @@ let rec ty_of_json (r_of_json : json -> ('r, string) result) (js : json) :
         let* regions = list_of_json r_of_json regions in
         let* types = list_of_json (ty_of_json r_of_json) types in
         Ok (T.Adt (id, regions, types))
-    | `Assoc [ ("T.TypeVar", `List [ id ]) ] ->
+    | `Assoc [ ("TypeVar", `List [ id ]) ] ->
         let* id = T.TypeVarId.id_of_json id in
         Ok (T.TypeVar id)
     | `String "Bool" -> Ok Bool
@@ -283,7 +283,7 @@ let projection_elem_of_json (js : json) : (E.projection_elem, string) result =
     (match js with
     | `String "Deref" -> Ok E.Deref
     | `String "DerefBox" -> Ok E.DerefBox
-    | `Assoc [ ("T.Field", `List [ proj_kind; field_id ]) ] ->
+    | `Assoc [ ("Field", `List [ proj_kind; field_id ]) ] ->
         let* proj_kind = field_proj_kind_of_json proj_kind in
         let* field_id = T.FieldId.id_of_json field_id in
         Ok (E.Field (proj_kind, field_id))

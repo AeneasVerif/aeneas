@@ -4,8 +4,6 @@ open Print
 module T = Types
 module A = CfimAst
 
-(*let print_type_definition =*)
-
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work *)
 let () = Printexc.record_backtrace true
@@ -13,5 +11,7 @@ let () = Printexc.record_backtrace true
 let () =
   let json = Yojson.Basic.from_file "../charon/charon/tests/test1.cfim" in
   match cfim_module_of_json json with
-  | Error s -> Printf.printf "error: %s\n" s
-  | Ok _ast -> print_endline "Ok"
+  | Error s -> log#error "error: %s\n" s
+  | Ok m ->
+      (* Print the module *)
+      log#ldebug (lazy (Print.Module.module_to_string m))
