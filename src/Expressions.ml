@@ -6,20 +6,22 @@ open Values
 type field_proj_kind =
   | ProjAdt of TypeDefId.id * VariantId.id option
   | ProjTuple of int
+[@@deriving show]
 (* arity of the tuple *)
 
 type projection_elem =
   | Deref
   | DerefBox
   | Field of field_proj_kind * FieldId.id
+[@@deriving show]
 
-type projection = projection_elem list
+type projection = projection_elem list [@@deriving show]
 
-type place = { var_id : VarId.id; projection : projection }
+type place = { var_id : VarId.id; projection : projection } [@@deriving show]
 
-type borrow_kind = Shared | Mut | TwoPhaseMut
+type borrow_kind = Shared | Mut | TwoPhaseMut [@@deriving show]
 
-type unop = Not | Neg
+type unop = Not | Neg [@@deriving show]
 
 (** A binary operation
 
@@ -45,6 +47,7 @@ type binop =
   | Mul
   | Shl
   | Shr
+[@@deriving show]
 
 (** Constant value for an operand
 

@@ -1,6 +1,7 @@
 (executable
  (name main)
- (libraries yojson zarith easy_logging))
+ (preprocess (pps ppx_deriving.show ppx_deriving.ord))
+ (libraries ppx_deriving yojson zarith easy_logging))
 
 (env
   (dev (flags

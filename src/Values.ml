@@ -21,6 +21,7 @@ type var = {
       (** The variable type - erased type, because variables are not used
        ** in function signatures *)
 }
+[@@deriving show]
 
 (** A variable *)
 

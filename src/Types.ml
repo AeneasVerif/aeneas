@@ -16,12 +16,14 @@ type type_var = {
           using indexed vectors *)
   tv_name : string;  (** Variable name *)
 }
+[@@deriving show]
 
 type region_var = {
   rv_index : RegionVarId.id;
       (** Unique index identifying the region - TODO: may be redundant *)
   rv_name : string option;  (** Region name *)
 }
+[@@deriving show]
 
 (** A region.
     
@@ -32,12 +34,13 @@ type region_var = {
 type 'rid region =
   | Static  (** Static region *)
   | Var of 'rid  (** Non-static region *)
+[@@deriving show]
 
 (** The type of erased regions.
     
     We could use unit, but having a dedicated type makes things more explicit.
  *)
-type erased_region = Erased
+type erased_region = Erased [@@deriving show]
 
 type integer_type =
   | Isize
@@ -52,10 +55,11 @@ type integer_type =
   | U32
   | U64
   | U128
+[@@deriving show]
 
-type ref_kind = Mut | Shared
+type ref_kind = Mut | Shared [@@deriving show]
 
-type assumed_ty = Box
+type assumed_ty = Box [@@deriving show]
 
 type 'r ty =
   | Adt of TypeDefId.id * 'r list * 'r ty list
@@ -70,26 +74,29 @@ type 'r ty =
   | Slice of 'r ty
   | Ref of 'r * 'r ty * ref_kind
   | Assumed of assumed_ty * 'r list * 'r ty list
+[@@deriving show]
 
-type rty = RegionVarId.id region ty
+type rty = RegionVarId.id region ty [@@deriving show]
 (** Type with *R*egions.
 
     Used in function signatures and type definitions.
  *)
 
-type ety = erased_region ty
+type ety = erased_region ty [@@deriving show]
 (** Type with *E*rased regions.
     
     Used in function bodies, "general" value types, etc.
  *)
 
-type field = { field_name : string; field_ty : rty }
+type field = { field_name : string; field_ty : rty } [@@deriving show]
 
 type variant = { variant_name : string; fields : field FieldId.vector }
+[@@deriving show]
 
 type type_def_kind =
   | Struct of field FieldId.vector
   | Enum of variant VariantId.vector
+[@@deriving show]
 
 type type_def = {
   def_id : TypeDefId.id;
@@ -98,6 +105,7 @@ type type_def = {
   type_params : type_var TypeVarId.vector;
   kind : type_def_kind;
 }
+[@@deriving show]
 
 (** Convert an [rty] to an [ety] by erasing the region variables
     

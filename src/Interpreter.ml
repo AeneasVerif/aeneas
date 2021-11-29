@@ -16,6 +16,8 @@ module L = Logging
    let ctx2 = ... ctx1 in
    ...
  *)
+(* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
+   (rather than only env) *)
 
 (** Some utilities *)
 
@@ -980,7 +982,9 @@ let rec access_projection (access : projection_access) (env : C.env)
               Ok (env1, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *))
-      | Field (ProjAdt (_, Some _variant_id), _), V.Bottom ->
+      | Field (ProjAdt (_, _), _), V.Bottom ->
+          Error (FailBottom (1 + List.length p', pe, v.ty))
+      | Field (ProjTuple _, _), V.Bottom ->
           Error (FailBottom (1 + List.length p', pe, v.ty))
       (* Symbolic value: needs to be expanded *)
       | _, Symbolic sp ->
@@ -1240,7 +1244,12 @@ let expand_bottom_value (config : C.config) (access : access_kind)
         assert (arity = List.length tys);
         (* Generate the field values *)
         compute_expanded_bottom_tuple_value tys
-    | _ -> failwith "Unreachable"
+    | _ ->
+        failwith
+          ("Unreachable: "
+          ^ Print.CfimAst.projection_elem_variant_name pe
+          ^ ", "
+          ^ Print.Types.ty_variant_name ty)
   in
   (* Update the environment by inserting the expanded value at the proper place *)
   match write_place config access p' nv env with
@@ -1282,11 +1291,12 @@ let rec update_env_along_read_place (config : C.config) (access : access_kind)
     See [update_env_alond_read_place].
 *)
 let rec update_env_along_write_place (config : C.config) (access : access_kind)
-    (tyctx : T.type_def T.TypeDefId.vector) (p : E.place) (nv : V.typed_value)
-    (env : C.env) : C.env =
-  (* Attempt to write the place: if it fails, update the environment and retry *)
-  match write_place config access p nv env with
-  | Ok env' -> env'
+    (tyctx : T.type_def T.TypeDefId.vector) (p : E.place) (env : C.env) : C.env
+    =
+  (* Attempt to *read* (yes, "read": we check the access to the place, and
+     write to it later) the place: if it fails, update the environment and retry *)
+  match read_place config access p env with
+  | Ok _ -> env
   | Error err ->
       let env' =
         match err with
@@ -1302,7 +1312,7 @@ let rec update_env_along_write_place (config : C.config) (access : access_kind)
             expand_bottom_value config access tyctx p remaining_pes pe ty env
         | FailBorrow _ -> failwith "Could not write to a borrow"
       in
-      update_env_along_write_place config access tyctx p nv env'
+      update_env_along_write_place config access tyctx p env'
 
 exception UpdateEnv of C.env
 (** Small utility used to break control-flow *)
@@ -1830,7 +1840,9 @@ type statement_eval_res = Unit | Break of int | Continue of int | Return
 let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
     C.eval_ctx * V.typed_value =
   let access = Write in
-  let env1 = update_env_along_read_place config access p ctx.env in
+  let env1 =
+    update_env_along_write_place config access ctx.type_context p ctx.env
+  in
   let env2 = collect_borrows_at_place config access p env1 in
   let env3 = drop_borrows_at_place config p env2 in
   let v = read_place_unwrap config access p env3 in

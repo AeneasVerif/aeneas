@@ -20,9 +20,22 @@ module type Id = sig
 
   val to_string : id -> string
 
+  val pp_id : Format.formatter -> id -> unit
+
+  val show_id : id -> string
+
+  val pp_generator : Format.formatter -> generator -> unit
+
+  val show_generator : generator -> string
+
   val to_int : id -> int
 
   val of_int : id -> int
+
+  val pp_vector :
+    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a vector -> unit
+
+  val show_vector : (Format.formatter -> 'a -> unit) -> 'a vector -> string
 
   val empty_vector : 'a vector
 
@@ -77,11 +90,11 @@ end
 *)
 module IdGen () : Id = struct
   (* TODO: use Z.t *)
-  type id = int
+  type id = int [@@deriving show]
 
-  type generator = id
+  type generator = id [@@deriving show]
 
-  type 'a vector = 'a list
+  type 'a vector = 'a list [@@deriving show]
 
   let zero = 0
 
@@ -159,6 +172,6 @@ module IdGen () : Id = struct
       (OfJsonBasic.list_of_json a_of_json js)
 end
 
-type name = string list [@@deriving yojson]
+type name = string list [@@deriving show]
 (** A name such as: `std::collections::vector` (which would be represented as
     [["std"; "collections"; "vector"]]) *)
