@@ -3,6 +3,8 @@
 open Identifiers
 module T = Types
 module V = Values
+module E = Expressions
+module A = CfimAst
 
 open Types
 (** Pretty-printing for types *)
@@ -152,8 +154,6 @@ open Values
 module PT = Types (* local module *)
 
 module Values = struct
-  open Types (* local module *)
-
   type value_formatter = {
     r_to_string : RegionVarId.id -> string;
     type_var_id_to_string : TypeVarId.id -> string;
@@ -162,18 +162,18 @@ module Values = struct
     var_id_to_string : VarId.id -> string;
   }
 
-  let value_to_etype_formatter (fmt : value_formatter) : etype_formatter =
+  let value_to_etype_formatter (fmt : value_formatter) : PT.etype_formatter =
     {
-      Types.r_to_string = PT.erased_region_to_string;
-      Types.type_var_id_to_string = fmt.type_var_id_to_string;
-      Types.type_def_id_to_string = fmt.type_def_id_to_string;
+      PT.r_to_string = PT.erased_region_to_string;
+      PT.type_var_id_to_string = fmt.type_var_id_to_string;
+      PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
-  let value_to_rtype_formatter (fmt : value_formatter) : rtype_formatter =
+  let value_to_rtype_formatter (fmt : value_formatter) : PT.rtype_formatter =
     {
-      Types.r_to_string = region_to_string fmt.r_to_string;
-      Types.type_var_id_to_string = fmt.type_var_id_to_string;
-      Types.type_def_id_to_string = fmt.type_def_id_to_string;
+      PT.r_to_string = PT.region_to_string fmt.r_to_string;
+      PT.type_var_id_to_string = fmt.type_var_id_to_string;
+      PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
   let var_id_to_string (id : VarId.id) : string = "var@" ^ VarId.to_string id
@@ -185,7 +185,7 @@ module Values = struct
   let big_int_to_string (bi : big_int) : string = Z.to_string bi
 
   let scalar_value_to_string (sv : scalar_value) : string =
-    big_int_to_string sv.value ^ ": " ^ integer_type_to_string sv.int_ty
+    big_int_to_string sv.value ^ ": " ^ PT.integer_type_to_string sv.int_ty
 
   let constant_value_to_string (cv : constant_value) : string =
     match cv with
@@ -197,14 +197,14 @@ module Values = struct
   let symbolic_value_id_to_string (id : SymbolicValueId.id) : string =
     "s@" ^ SymbolicValueId.to_string id
 
-  let symbolic_value_to_string (fmt : rtype_formatter) (sv : symbolic_value) :
-      string =
-    symbolic_value_id_to_string sv.sv_id ^ " : " ^ ty_to_string fmt sv.sv_ty
+  let symbolic_value_to_string (fmt : PT.rtype_formatter) (sv : symbolic_value)
+      : string =
+    symbolic_value_id_to_string sv.sv_id ^ " : " ^ PT.ty_to_string fmt sv.sv_ty
 
   let region_id_to_string (rid : RegionId.id) : string =
     "r@" ^ RegionId.to_string rid
 
-  let symbolic_proj_comp_to_string (fmt : rtype_formatter)
+  let symbolic_proj_comp_to_string (fmt : PT.rtype_formatter)
       (sp : symbolic_proj_comp) : string =
     let regions = RegionId.set_to_string sp.rset_ended in
     "proj_comp " ^ regions ^ " (" ^ symbolic_value_to_string fmt sp.svalue ^ ")"
@@ -264,9 +264,9 @@ module Values = struct
       (sv : symbolic_value) (rty : rty) : string =
     symbolic_value_id_to_string sv.sv_id
     ^ " : "
-    ^ ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
+    ^ PT.ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
     ^ " <: "
-    ^ ty_to_string (value_to_rtype_formatter fmt) rty
+    ^ PT.ty_to_string (value_to_rtype_formatter fmt) rty
 
   let rec abstract_shared_borrows_to_string (fmt : value_formatter)
       (abs : abstract_shared_borrows) : string =
@@ -389,7 +389,11 @@ module Values = struct
     ^ "}" ^ " {\n" ^ avs ^ "\n}"
 end
 
+module PV = Values (* Local module *)
+
 open Contexts
+module C = Contexts
+
 (** Pretty-printing for contexts *)
 
 module Contexts = struct
@@ -420,7 +424,7 @@ module Contexts = struct
     in
     let type_def_id_to_string def_id =
       let def = TypeDefId.nth ctx.type_context def_id in
-      Types.name_to_string def.name
+      PT.name_to_string def.name
     in
     let type_def_id_variant_id_to_string def_id variant_id =
       let def = TypeDefId.nth ctx.type_context def_id in
@@ -428,7 +432,7 @@ module Contexts = struct
       | Struct _ -> failwith "Unreachable"
       | Enum variants ->
           let variant = VariantId.nth variants variant_id in
-          Types.name_to_string def.name ^ "::" ^ variant.variant_name
+          PT.name_to_string def.name ^ "::" ^ variant.variant_name
     in
     let var_id_to_string vid =
       let var = ctx_lookup_var ctx vid in
@@ -471,14 +475,9 @@ module Contexts = struct
     "# " ^ string_of_int num_frames ^ " frame(s)\n" ^ String.concat "" frames
 end
 
-module E = Expressions
-module A = CfimAst
+module PC = Contexts
 
 module CfimAst = struct
-  module PV = Values
-  module PC = Contexts
-  module PT = Types
-
   type ast_formatter = {
     r_to_string : RegionVarId.id -> string;
     type_var_id_to_string : TypeVarId.id -> string;
