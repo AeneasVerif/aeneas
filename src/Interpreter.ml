@@ -935,6 +935,11 @@ let rec access_projection (access : projection_access) (env : C.env)
     (* Function to (eventually) update the value we find *)
       (update : V.typed_value -> V.typed_value) (p : E.projection)
     (v : V.typed_value) : (C.env * updated_read_value) path_access_result =
+  (* Debug *)
+  L.log#ldebug
+    (lazy
+      ("access_projection:\n" ^ "p: " ^ E.show_projection p ^ "\nv.ty: "
+     ^ T.show_ety v.V.ty));
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -957,7 +962,7 @@ let rec access_projection (access : projection_access) (env : C.env)
           | _ -> failwith "Unreachable");
           (* Actually project *)
           let fv = T.FieldId.nth adt.field_values field_id in
-          match access_projection access env update p fv with
+          match access_projection access env update p' fv with
           | Error err -> Error err
           | Ok (env1, res) ->
               (* Update the field value *)
@@ -972,7 +977,7 @@ let rec access_projection (access : projection_access) (env : C.env)
           assert (arity = T.FieldId.length values);
           let fv = T.FieldId.nth values field_id in
           (* Project *)
-          match access_projection access env update p fv with
+          match access_projection access env update p' fv with
           | Error err -> Error err
           | Ok (env1, res) ->
               (* Update the field value *)
@@ -1217,6 +1222,11 @@ let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
 let expand_bottom_value (config : C.config) (access : access_kind)
     (tyctx : T.type_def T.TypeDefId.vector) (p : E.place) (remaining_pes : int)
     (pe : E.projection_elem) (ty : T.ety) (env : C.env) : C.env =
+  (* Debugging *)
+  L.log#ldebug
+    (lazy
+      ("expand_bottom_value:\n" ^ "pe: " ^ E.show_projection_elem pe ^ "\n"
+     ^ "ty: " ^ T.show_ety ty));
   (* Prepare the update: we need to take the proper prefix of the place
      during whose evaluation we got stuck *)
   let projection' =
@@ -1246,10 +1256,7 @@ let expand_bottom_value (config : C.config) (access : access_kind)
         compute_expanded_bottom_tuple_value tys
     | _ ->
         failwith
-          ("Unreachable: "
-          ^ Print.CfimAst.projection_elem_variant_name pe
-          ^ ", "
-          ^ Print.Types.ty_variant_name ty)
+          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_ety ty)
   in
   (* Update the environment by inserting the expanded value at the proper place *)
   match write_place config access p' nv env with
