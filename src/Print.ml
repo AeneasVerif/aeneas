@@ -815,7 +815,7 @@ module CfimAst = struct
     in
 
     (* Put everything together *)
-    indent ^ "fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty ^ "{\n" ^ locals
+    indent ^ "fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty ^ " {\n" ^ locals
     ^ "\n\n" ^ body ^ "\n" ^ indent ^ "}"
 end
 
