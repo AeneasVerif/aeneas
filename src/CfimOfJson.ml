@@ -13,7 +13,7 @@ open Identifiers
 open Types
 open OfJsonBasic
 open Scalars
-open Modules
+module M = Modules
 
 let name_of_json (js : json) : (name, string) result =
   combine_error_msgs js "name_of_json" (list_of_json string_of_json js)
@@ -580,24 +580,24 @@ let fun_def_of_json (js : json) : (fun_def, string) result =
         Ok { def_id; name; signature; divergent; arg_count; locals; body }
     | _ -> Error "")
 
-let declaration_of_json (js : json) : (declaration, string) result =
+let declaration_of_json (js : json) : (M.declaration, string) result =
   combine_error_msgs js "declaration_of_json"
     (match js with
     | `Assoc [ ("Type", id) ] ->
         let* id = TypeDefId.id_of_json id in
-        Ok (Type id)
+        Ok (M.Type id)
     | `Assoc [ ("Fun", id) ] ->
         let* id = FunDefId.id_of_json id in
-        Ok (Fun id)
+        Ok (M.Fun id)
     | `Assoc [ ("RecTypes", ids) ] ->
         let* ids = list_of_json TypeDefId.id_of_json ids in
-        Ok (RecTypes ids)
+        Ok (M.RecTypes ids)
     | `Assoc [ ("RecFuns", ids) ] ->
         let* ids = list_of_json FunDefId.id_of_json ids in
-        Ok (RecFuns ids)
+        Ok (M.RecFuns ids)
     | _ -> Error "")
 
-let cfim_module_of_json (js : json) : (cfim_module, string) result =
+let cfim_module_of_json (js : json) : (M.cfim_module, string) result =
   combine_error_msgs js "cfim_module_of_json"
     (match js with
     | `Assoc
@@ -609,5 +609,5 @@ let cfim_module_of_json (js : json) : (cfim_module, string) result =
         let* declarations = list_of_json declaration_of_json declarations in
         let* types = TypeDefId.vector_of_json type_def_of_json types in
         let* functions = FunDefId.vector_of_json fun_def_of_json functions in
-        Ok { declarations; types; functions }
+        Ok { M.declarations; types; functions }
     | _ -> Error "")
