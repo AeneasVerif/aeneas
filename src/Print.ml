@@ -158,7 +158,7 @@ module Values = struct
     r_to_string : RegionVarId.id -> string;
     type_var_id_to_string : TypeVarId.id -> string;
     type_def_id_to_string : TypeDefId.id -> string;
-    type_def_id_variant_id_to_string : TypeDefId.id -> VariantId.id -> string;
+    adt_variant_to_string : TypeDefId.id -> VariantId.id -> string;
     var_id_to_string : V.VarId.id -> string;
   }
 
@@ -217,7 +217,7 @@ module Values = struct
     | Adt av ->
         let adt_ident =
           match av.variant_id with
-          | Some vid -> fmt.type_def_id_variant_id_to_string av.def_id vid
+          | Some vid -> fmt.adt_variant_to_string av.def_id vid
           | None -> fmt.type_def_id_to_string av.def_id
         in
         let field_values = FieldId.vector_to_list av.field_values in
@@ -287,7 +287,7 @@ module Values = struct
     | AAdt av ->
         let adt_ident =
           match av.avariant_id with
-          | Some vid -> fmt.type_def_id_variant_id_to_string av.adef_id vid
+          | Some vid -> fmt.adt_variant_to_string av.adef_id vid
           | None -> fmt.type_def_id_to_string av.adef_id
         in
         let field_values = T.FieldId.vector_to_list av.afield_values in
@@ -422,7 +422,7 @@ module Contexts = struct
       let def = TypeDefId.nth ctx.type_context def_id in
       PT.name_to_string def.name
     in
-    let type_def_id_variant_id_to_string def_id variant_id =
+    let adt_variant_to_string def_id variant_id =
       let def = TypeDefId.nth ctx.type_context def_id in
       match def.kind with
       | Struct _ -> failwith "Unreachable"
@@ -438,7 +438,7 @@ module Contexts = struct
       r_to_string;
       type_var_id_to_string;
       type_def_id_to_string;
-      type_def_id_variant_id_to_string;
+      adt_variant_to_string;
       var_id_to_string;
     }
 
@@ -478,8 +478,7 @@ module CfimAst = struct
     r_to_string : RegionVarId.id -> string;
     type_var_id_to_string : TypeVarId.id -> string;
     type_def_id_to_string : TypeDefId.id -> string;
-    (* TODO: rename to something like adt_variant_to_string *)
-    type_def_id_variant_id_to_string : TypeDefId.id -> VariantId.id -> string;
+    adt_variant_to_string : TypeDefId.id -> VariantId.id -> string;
     adt_field_to_string :
       TypeDefId.id -> VariantId.id option -> FieldId.id -> string;
     var_id_to_string : V.VarId.id -> string;
@@ -491,7 +490,7 @@ module CfimAst = struct
       PV.r_to_string = fmt.r_to_string;
       PV.type_var_id_to_string = fmt.type_var_id_to_string;
       PV.type_def_id_to_string = fmt.type_def_id_to_string;
-      PV.type_def_id_variant_id_to_string = fmt.type_def_id_variant_id_to_string;
+      PV.adt_variant_to_string = fmt.adt_variant_to_string;
       PV.var_id_to_string = fmt.var_id_to_string;
     }
 
@@ -520,7 +519,7 @@ module CfimAst = struct
             | None -> "(" ^ s ^ ")." ^ field_name
             | Some variant_id ->
                 let variant_name =
-                  fmt.type_def_id_variant_id_to_string adt_id variant_id
+                  fmt.adt_variant_to_string adt_id variant_id
                 in
                 "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
 
@@ -588,7 +587,7 @@ module CfimAst = struct
             | None -> adt_name ^ "{ " ^ String.concat ", " ops ^ " }"
             | Some variant_id ->
                 let variant_name =
-                  fmt.type_def_id_variant_id_to_string def_id variant_id
+                  fmt.adt_variant_to_string def_id variant_id
                 in
                 adt_name ^ "::" ^ variant_name ^ "(" ^ String.concat ", " ops
                 ^ ")"))
