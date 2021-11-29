@@ -66,16 +66,19 @@ type operand_constant_value =
   | ConstantValue of constant_value
   | ConstantAdt of TypeDefId.id
   | Unit
+[@@deriving show]
 
 type operand =
   | Copy of place
   | Move of place
   | Constant of ety * operand_constant_value
+[@@deriving show]
 
 type aggregate_kind =
   | AggregatedTuple
   | AggregatedAdt of
       TypeDefId.id * VariantId.id option * erased_region list * ety list
+[@@deriving show]
 
 type rvalue =
   | Use of operand
@@ -84,3 +87,4 @@ type rvalue =
   | BinaryOp of binop * operand * operand
   | Discriminant of place
   | Aggregate of aggregate_kind * operand list
+[@@deriving show]

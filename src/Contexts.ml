@@ -8,12 +8,14 @@ open CfimAst
     TODO: rename? Environment element or something?
  *)
 type env_value = Var of var * typed_value | Abs of abs | Frame
+[@@deriving show]
 
-type env = env_value list
+type env = env_value list [@@deriving show]
 
-type interpreter_mode = ConcreteMode | SymbolicMode
+type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 
 type config = { mode : interpreter_mode; check_invariants : bool }
+[@@deriving show]
 
 type eval_ctx = {
   type_context : type_def TypeDefId.vector;
@@ -23,6 +25,7 @@ type eval_ctx = {
   symbolic_counter : SymbolicValueId.generator;
   borrow_counter : BorrowId.generator;
 }
+[@@deriving show]
 (** Evaluation context *)
 
 let fresh_symbolic_value_id (ctx : eval_ctx) : eval_ctx * SymbolicValueId.id =
