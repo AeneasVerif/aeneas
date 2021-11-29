@@ -1,6 +1,6 @@
 (executable
  (name main)
- (libraries yojson zarith))
+ (libraries yojson zarith easy_logging))
 
 (env
   (dev (flags

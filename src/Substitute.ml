@@ -36,7 +36,7 @@ let rec ty_substitute (rsubst : 'r1 -> 'r2)
 (** Erase the regions in a type and substitute the type variables *)
 let erase_regions_substitute_types (tsubst : T.TypeVarId.id -> T.ety)
     (ty : T.rty) : T.ety =
-  let rsubst (r : T.RegionVarId.id T.region) : T.erased_region = T.Erased in
+  let rsubst (_ : T.RegionVarId.id T.region) : T.erased_region = T.Erased in
   ty_substitute rsubst tsubst ty
 
 (** Create a type substitution from a list of type variable ids and a list of

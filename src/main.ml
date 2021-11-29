@@ -1,5 +1,5 @@
 open CfimOfJson
-open Interpreter
+open Logging
 open Print
 
 (* This is necessary to have a backtrace when raising exceptions - for some

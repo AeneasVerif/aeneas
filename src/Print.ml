@@ -1,5 +1,8 @@
-open Errors
+(* TODO: use one letter abbreviations for modules *)
+
 open Identifiers
+module T = Types
+module V = Values
 
 open Types
 (** Pretty-printing for types *)
@@ -73,7 +76,8 @@ module Types = struct
         let params = params_to_string fmt regions tys in
         match aty with Box -> "std::boxed::Box" ^ params)
 
-  and params_to_string fmt (regions : 'r list) (types : 'r ty list) : string =
+  and params_to_string (fmt : 'r type_formatter) (regions : 'r list)
+      (types : 'r ty list) : string =
     if List.length regions + List.length types > 0 then
       let regions = List.map fmt.r_to_string regions in
       let types = List.map (ty_to_string fmt) types in
@@ -145,6 +149,7 @@ end
 (** Pretty-printing for values *)
 
 open Values
+module PT = Types (* local module *)
 
 module Values = struct
   open Types (* local module *)
@@ -159,7 +164,7 @@ module Values = struct
 
   let value_to_etype_formatter (fmt : value_formatter) : etype_formatter =
     {
-      Types.r_to_string = erased_region_to_string;
+      Types.r_to_string = PT.erased_region_to_string;
       Types.type_var_id_to_string = fmt.type_var_id_to_string;
       Types.type_def_id_to_string = fmt.type_def_id_to_string;
     }
@@ -464,4 +469,172 @@ module Contexts = struct
         frames
     in
     "# " ^ string_of_int num_frames ^ " frame(s)\n" ^ String.concat "" frames
+end
+
+module E = Expressions
+module A = CfimAst
+
+module CfimAst = struct
+  module PV = Values
+  module PC = Contexts
+  module PT = Types
+
+  type ast_formatter = {
+    r_to_string : RegionVarId.id -> string;
+    type_var_id_to_string : TypeVarId.id -> string;
+    type_def_id_to_string : TypeDefId.id -> string;
+    (* TODO: rename to something like adt_variant_to_string *)
+    type_def_id_variant_id_to_string : TypeDefId.id -> VariantId.id -> string;
+    adt_field_to_string :
+      TypeDefId.id -> VariantId.id option -> FieldId.id -> string;
+    var_id_to_string : VarId.id -> string;
+    fun_def_id_to_string : A.FunDefId.id -> string;
+  }
+
+  let ast_to_ctx_formatter (fmt : ast_formatter) : PC.ctx_formatter =
+    {
+      PV.r_to_string = fmt.r_to_string;
+      PV.type_var_id_to_string = fmt.type_var_id_to_string;
+      PV.type_def_id_to_string = fmt.type_def_id_to_string;
+      PV.type_def_id_variant_id_to_string = fmt.type_def_id_variant_id_to_string;
+      PV.var_id_to_string = fmt.var_id_to_string;
+    }
+
+  let ast_to_etype_formatter (fmt : ast_formatter) : PT.etype_formatter =
+    {
+      PT.r_to_string = PT.erased_region_to_string;
+      PT.type_var_id_to_string = fmt.type_var_id_to_string;
+      PT.type_def_id_to_string = fmt.type_def_id_to_string;
+    }
+
+  let rec projection_to_string (fmt : ast_formatter) (inside : string)
+      (p : E.projection) : string =
+    match p with
+    | [] -> inside
+    | pe :: p' -> (
+        let s = projection_to_string fmt inside p' in
+        match pe with
+        | E.Deref -> "*(" ^ s ^ ")"
+        | E.DerefBox -> "deref_box(" ^ s ^ ")"
+        | E.Field (E.ProjTuple _, fid) -> "(" ^ s ^ ")." ^ FieldId.to_string fid
+        | E.Field (E.ProjAdt (adt_id, opt_variant_id), fid) -> (
+            let field_name =
+              fmt.adt_field_to_string adt_id opt_variant_id fid
+            in
+            match opt_variant_id with
+            | None -> "(" ^ s ^ ")." ^ field_name
+            | Some variant_id ->
+                let variant_name =
+                  fmt.type_def_id_variant_id_to_string adt_id variant_id
+                in
+                "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
+
+  let place_to_string (fmt : ast_formatter) (p : E.place) : string =
+    let var = fmt.var_id_to_string p.E.var_id in
+    projection_to_string fmt var p.E.projection
+
+  let unop_to_string (unop : E.unop) : string =
+    match unop with E.Not -> "¬" | E.Neg -> "-"
+
+  let binop_to_string (binop : E.binop) : string =
+    match binop with
+    | E.BitXor -> "^"
+    | E.BitAnd -> "&"
+    | E.BitOr -> "|"
+    | E.Eq -> "=="
+    | E.Lt -> "<"
+    | E.Le -> "<="
+    | E.Ne -> "!="
+    | E.Ge -> ">="
+    | E.Gt -> ">"
+    | E.Div -> "/"
+    | E.Rem -> "%"
+    | E.Add -> "+"
+    | E.Sub -> "-"
+    | E.Mul -> "*"
+    | E.Shl -> "<<"
+    | E.Shr -> ">>"
+
+  let operand_constant_value_to_string (fmt : ast_formatter)
+      (cv : E.operand_constant_value) : string =
+    match cv with
+    | E.ConstantValue cv -> PV.constant_value_to_string cv
+    | E.ConstantAdt def_id -> fmt.type_def_id_to_string def_id
+    | E.Unit -> "()"
+
+  let operand_to_string (fmt : ast_formatter) (op : E.operand) : string =
+    match op with
+    | E.Copy p -> "copy " ^ place_to_string fmt p
+    | E.Move p -> "move " ^ place_to_string fmt p
+    | E.Constant (_ty, cv) -> operand_constant_value_to_string fmt cv
+
+  let rvalue_to_string (fmt : ast_formatter) (rv : E.rvalue) : string =
+    match rv with
+    | E.Use op -> operand_to_string fmt op
+    | E.Ref (p, bk) -> (
+        let p = place_to_string fmt p in
+        match bk with
+        | E.Shared -> "&" ^ p
+        | E.Mut -> "&mut " ^ p
+        | E.TwoPhaseMut -> "&two-phase " ^ p)
+    | E.UnaryOp (unop, op) ->
+        unop_to_string unop ^ " " ^ operand_to_string fmt op
+    | E.BinaryOp (binop, op1, op2) ->
+        operand_to_string fmt op1 ^ " " ^ binop_to_string binop ^ " "
+        ^ operand_to_string fmt op2
+    | E.Discriminant p -> "discriminant(" ^ place_to_string fmt p ^ ")"
+    | E.Aggregate (akind, ops) -> (
+        let ops = List.map (operand_to_string fmt) ops in
+        match akind with
+        | E.AggregatedTuple -> "(" ^ String.concat ", " ops ^ ")"
+        | E.AggregatedAdt (def_id, opt_variant_id, _regions, _types) -> (
+            let adt_name = fmt.type_def_id_to_string def_id in
+            match opt_variant_id with
+            | None -> adt_name ^ "{ " ^ String.concat ", " ops ^ " }"
+            | Some variant_id ->
+                let variant_name =
+                  fmt.type_def_id_variant_id_to_string def_id variant_id
+                in
+                adt_name ^ "::" ^ variant_name ^ "(" ^ String.concat ", " ops
+                ^ ")"))
+
+  let statement_to_string (fmt : ast_formatter) (st : A.statement) : string =
+    match st with
+    | A.Assign (p, rv) ->
+        place_to_string fmt p ^ " := " ^ rvalue_to_string fmt rv
+    | A.FakeRead p -> "fake_read " ^ place_to_string fmt p
+    | A.SetDiscriminant (p, variant_id) ->
+        (* TODO: improve this to lookup the variant name by using the def id *)
+        "set_discriminant(" ^ place_to_string fmt p ^ ", "
+        ^ T.VariantId.to_string variant_id
+        ^ ")"
+    | A.Drop p -> "drop(" ^ place_to_string fmt p ^ ")"
+    | A.Assert a ->
+        let cond = operand_to_string fmt a.A.cond in
+        if a.A.expected then "assert(" ^ cond ^ ")"
+        else "assert(¬" ^ cond ^ ")"
+    | A.Call call -> (
+        let ty_fmt = ast_to_etype_formatter fmt in
+        let params =
+          if List.length call.A.type_params > 0 then
+            "<"
+            ^ String.concat ","
+                (List.map (PT.ty_to_string ty_fmt) call.A.type_params)
+            ^ ">"
+          else ""
+        in
+        match call.A.func with
+        | A.Local fid -> fmt.fun_def_id_to_string fid ^ params
+        | A.Assumed fid -> (
+            match fid with
+            | A.BoxNew -> "alloc::boxed::Box" ^ params ^ "::new"
+            | A.BoxDeref -> "core::ops::deref::Deref<Box" ^ params ^ ">::deref"
+            | A.BoxDerefMut ->
+                "core::ops::deref::DerefMut<Box" ^ params ^ ">::deref_mut"
+            | A.BoxFree -> "alloc::alloc::box_free<" ^ params ^ ">"))
+    | A.Panic -> "panic"
+    | A.Return -> "return"
+    | A.Break i -> "break " ^ string_of_int i
+    | A.Continue i -> "continue " ^ string_of_int i
+    | A.Nop -> "nop"
 end

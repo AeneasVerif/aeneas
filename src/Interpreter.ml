@@ -6,6 +6,7 @@ open Errors
 module C = Contexts
 module Subst = Substitute
 module A = CfimAst
+module L = Logging
 
 (* TODO: Change state-passing style to : st -> ... -> (st, v) *)
 (* TODO: check that the value types are correct when evaluating *)

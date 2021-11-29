@@ -1,8 +1,6 @@
 open Types
 open Values
-open Expressions
 open CfimAst
-open Errors
 
 (** Environment value: mapping from variable to value, abstraction (only
     used in symbolic mode) or stack frame delimiter.
