@@ -668,4 +668,52 @@ module CfimAst = struct
     | A.Break i -> "break " ^ string_of_int i
     | A.Continue i -> "continue " ^ string_of_int i
     | A.Nop -> "nop"
+
+  let rec expression_to_string (fmt : ast_formatter) (indent : string)
+      (indent_incr : string) (e : A.expression) : string =
+    match e with
+    | A.Statement st -> indent ^ statement_to_string fmt st ^ ";"
+    | A.Sequence (e1, e2) ->
+        expression_to_string fmt indent indent_incr e1
+        ^ "\n"
+        ^ expression_to_string fmt indent indent_incr e2
+    | A.Switch (op, tgts) -> (
+        let op = operand_to_string fmt op in
+        match tgts with
+        | A.If (true_e, false_e) ->
+            let inner_indent = indent ^ indent_incr in
+            let inner_to_string =
+              expression_to_string fmt inner_indent indent_incr
+            in
+            let true_e = inner_to_string true_e in
+            let false_e = inner_to_string false_e in
+            indent ^ "if (" ^ op ^ ") {\n" ^ true_e ^ "\n" ^ indent ^ "}\n"
+            ^ indent ^ "else {\n" ^ false_e ^ "\n" ^ indent ^ "}"
+        | A.SwitchInt (_ty, branches, otherwise) ->
+            let indent1 = indent ^ indent_incr in
+            let indent2 = indent1 ^ indent_incr in
+            let inner_to_string1 =
+              expression_to_string fmt indent1 indent_incr
+            in
+            let inner_to_string2 =
+              expression_to_string fmt indent2 indent_incr
+            in
+            let branches =
+              List.map
+                (fun (sv, be) ->
+                  indent1
+                  ^ PV.scalar_value_to_string sv
+                  ^ " => {\n" ^ inner_to_string2 be ^ "\n" ^ indent1 ^ "}")
+                branches
+            in
+            let branches = String.concat "\n" branches in
+            let branches =
+              branches ^ "\n" ^ indent1 ^ "_ => {\n"
+              ^ inner_to_string2 otherwise ^ "\n" ^ indent1 ^ "}"
+            in
+            indent ^ "switch (" ^ op ^ ") {\n" ^ branches ^ "\n" ^ indent ^ "}")
+    | A.Loop loop_e ->
+        indent ^ "loop {\n"
+        ^ expression_to_string fmt (indent ^ indent_incr) indent_incr loop_e
+        ^ "\n" ^ indent ^ "}"
 end
