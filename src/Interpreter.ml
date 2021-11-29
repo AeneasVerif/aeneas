@@ -2364,12 +2364,12 @@ let fun_def_is_unit (def : A.fun_def) : bool =
 
 (** Test all the unit functions in a list of function definitions *)
 let test_all_unit_functions (type_defs : T.type_def T.TypeDefId.vector)
-    (fun_defs : A.fun_def A.FunDefId.vector) : bool =
-  let test_fun (def : A.fun_def) : bool =
+    (fun_defs : A.fun_def A.FunDefId.vector) : unit =
+  let test_fun (def : A.fun_def) : unit =
     if fun_def_is_unit def then
       match test_unit_function type_defs fun_defs def.A.def_id with
-      | Error _ -> false
-      | Ok _ -> true
-    else true
+      | Error _ -> failwith "Unit test failed"
+      | Ok _ -> ()
+    else ()
   in
-  A.FunDefId.for_all test_fun fun_defs
+  A.FunDefId.iter test_fun fun_defs

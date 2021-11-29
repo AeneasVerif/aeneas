@@ -3,6 +3,7 @@ open Logging
 open Print
 module T = Types
 module A = CfimAst
+module I = Interpreter
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work *)
@@ -14,4 +15,7 @@ let () =
   | Error s -> log#error "error: %s\n" s
   | Ok m ->
       (* Print the module *)
-      log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m))
+      log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m));
+
+      (* Test the unit functions *)
+      I.test_all_unit_functions m.types m.functions
