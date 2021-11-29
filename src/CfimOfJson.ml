@@ -15,6 +15,7 @@ open OfJsonBasic
 module V = Values
 module S = Scalars
 module M = Modules
+module E = Expressions
 
 let name_of_json (js : json) : (name, string) result =
   combine_error_msgs js "name_of_json" (list_of_json string_of_json js)
@@ -262,9 +263,7 @@ let constant_value_of_json (js : json) : (V.constant_value, string) result =
         Ok (V.String v)
     | _ -> Error "")
 
-open Expressions
-
-let field_proj_kind_of_json (js : json) : (field_proj_kind, string) result =
+let field_proj_kind_of_json (js : json) : (E.field_proj_kind, string) result =
   combine_error_msgs js "field_proj_kind_of_json"
     (match js with
     | `Assoc [ ("ProjAdt", `List [ def_id; opt_variant_id ]) ] ->
@@ -272,101 +271,101 @@ let field_proj_kind_of_json (js : json) : (field_proj_kind, string) result =
         let* opt_variant_id =
           option_of_json VariantId.id_of_json opt_variant_id
         in
-        Ok (ProjAdt (def_id, opt_variant_id))
+        Ok (E.ProjAdt (def_id, opt_variant_id))
     | `Assoc [ ("ProjTuple", i) ] ->
         let* i = int_of_json i in
-        Ok (ProjTuple i)
+        Ok (E.ProjTuple i)
     | _ -> Error "")
 
-let projection_elem_of_json (js : json) : (projection_elem, string) result =
+let projection_elem_of_json (js : json) : (E.projection_elem, string) result =
   combine_error_msgs js "projection_elem_of_json"
     (match js with
-    | `String "Deref" -> Ok Deref
-    | `String "DerefBox" -> Ok DerefBox
+    | `String "Deref" -> Ok E.Deref
+    | `String "DerefBox" -> Ok E.DerefBox
     | `Assoc [ ("Field", `List [ proj_kind; field_id ]) ] ->
         let* proj_kind = field_proj_kind_of_json proj_kind in
         let* field_id = FieldId.id_of_json field_id in
-        Ok (Field (proj_kind, field_id))
+        Ok (E.Field (proj_kind, field_id))
     | _ -> Error ("projection_elem_of_json failed on:" ^ show js))
 
-let projection_of_json (js : json) : (projection, string) result =
+let projection_of_json (js : json) : (E.projection, string) result =
   combine_error_msgs js "projection_of_json"
     (list_of_json projection_elem_of_json js)
 
-let place_of_json (js : json) : (place, string) result =
+let place_of_json (js : json) : (E.place, string) result =
   combine_error_msgs js "place_of_json"
     (match js with
     | `Assoc [ ("var_id", var_id); ("projection", projection) ] ->
         let* var_id = V.VarId.id_of_json var_id in
         let* projection = projection_of_json projection in
-        Ok { var_id; projection }
+        Ok { E.var_id; projection }
     | _ -> Error "")
 
-let borrow_kind_of_json (js : json) : (borrow_kind, string) result =
+let borrow_kind_of_json (js : json) : (E.borrow_kind, string) result =
   match js with
-  | `String "Shared" -> Ok Shared
-  | `String "Mut" -> Ok Mut
-  | `String "TwoPhaseMut" -> Ok TwoPhaseMut
+  | `String "Shared" -> Ok E.Shared
+  | `String "Mut" -> Ok E.Mut
+  | `String "TwoPhaseMut" -> Ok E.TwoPhaseMut
   | _ -> Error ("borrow_kind_of_json failed on:" ^ show js)
 
-let unop_of_json (js : json) : (unop, string) result =
+let unop_of_json (js : json) : (E.unop, string) result =
   match js with
-  | `String "Not" -> Ok Not
-  | `String "Neg" -> Ok Neg
+  | `String "Not" -> Ok E.Not
+  | `String "Neg" -> Ok E.Neg
   | _ -> Error ("unop_of_json failed on:" ^ show js)
 
-let binop_of_json (js : json) : (binop, string) result =
+let binop_of_json (js : json) : (E.binop, string) result =
   match js with
-  | `String "BitXor" -> Ok BitXor
-  | `String "BitAnd" -> Ok BitAnd
-  | `String "BitOr" -> Ok BitOr
-  | `String "Eq" -> Ok Eq
-  | `String "Lt" -> Ok Lt
-  | `String "Le" -> Ok Le
-  | `String "Ne" -> Ok Ne
-  | `String "Ge" -> Ok Ge
-  | `String "Gt" -> Ok Gt
-  | `String "Div" -> Ok Div
-  | `String "Rem" -> Ok Rem
-  | `String "Add" -> Ok Add
-  | `String "Sub" -> Ok Sub
-  | `String "Mul" -> Ok Mul
-  | `String "Shl" -> Ok Shl
-  | `String "Shr" -> Ok Shr
+  | `String "BitXor" -> Ok E.BitXor
+  | `String "BitAnd" -> Ok E.BitAnd
+  | `String "BitOr" -> Ok E.BitOr
+  | `String "Eq" -> Ok E.Eq
+  | `String "Lt" -> Ok E.Lt
+  | `String "Le" -> Ok E.Le
+  | `String "Ne" -> Ok E.Ne
+  | `String "Ge" -> Ok E.Ge
+  | `String "Gt" -> Ok E.Gt
+  | `String "Div" -> Ok E.Div
+  | `String "Rem" -> Ok E.Rem
+  | `String "Add" -> Ok E.Add
+  | `String "Sub" -> Ok E.Sub
+  | `String "Mul" -> Ok E.Mul
+  | `String "Shl" -> Ok E.Shl
+  | `String "Shr" -> Ok E.Shr
   | _ -> Error ("binop_of_json failed on:" ^ show js)
 
 let operand_constant_value_of_json (js : json) :
-    (operand_constant_value, string) result =
+    (E.operand_constant_value, string) result =
   combine_error_msgs js "operand_constant_value_of_json"
     (match js with
     | `Assoc [ ("ConstantValue", cv) ] ->
         let* cv = constant_value_of_json cv in
-        Ok (ConstantValue cv)
+        Ok (E.ConstantValue cv)
     | `Assoc [ ("ConstantAdt", id) ] ->
         let* id = TypeDefId.id_of_json id in
-        Ok (ConstantAdt id)
-    | `String "Unit" -> Ok Unit
+        Ok (E.ConstantAdt id)
+    | `String "Unit" -> Ok E.Unit
     | _ -> Error "")
 
-let operand_of_json (js : json) : (operand, string) result =
+let operand_of_json (js : json) : (E.operand, string) result =
   combine_error_msgs js "operand_of_json"
     (match js with
     | `Assoc [ ("Copy", place) ] ->
         let* place = place_of_json place in
-        Ok (Copy place)
+        Ok (E.Copy place)
     | `Assoc [ ("Move", place) ] ->
         let* place = place_of_json place in
-        Ok (Move place)
+        Ok (E.Move place)
     | `Assoc [ ("Constant", `List [ ty; cv ]) ] ->
         let* ty = ety_of_json ty in
         let* cv = operand_constant_value_of_json cv in
-        Ok (Constant (ty, cv))
+        Ok (E.Constant (ty, cv))
     | _ -> Error "")
 
-let aggregate_kind_of_json (js : json) : (aggregate_kind, string) result =
+let aggregate_kind_of_json (js : json) : (E.aggregate_kind, string) result =
   combine_error_msgs js "operand_kind_of_json"
     (match js with
-    | `String "AggregatedTuple" -> Ok AggregatedTuple
+    | `String "AggregatedTuple" -> Ok E.AggregatedTuple
     | `Assoc [ ("AggregatedAdt", `List [ id; opt_variant_id; regions; tys ]) ]
       ->
         let* id = TypeDefId.id_of_json id in
@@ -375,35 +374,35 @@ let aggregate_kind_of_json (js : json) : (aggregate_kind, string) result =
         in
         let* regions = list_of_json erased_region_of_json regions in
         let* tys = list_of_json ety_of_json tys in
-        Ok (AggregatedAdt (id, opt_variant_id, regions, tys))
+        Ok (E.AggregatedAdt (id, opt_variant_id, regions, tys))
     | _ -> Error "")
 
-let rvalue_of_json (js : json) : (rvalue, string) result =
+let rvalue_of_json (js : json) : (E.rvalue, string) result =
   combine_error_msgs js "rvalue_of_json"
     (match js with
     | `Assoc [ ("Use", op) ] ->
         let* op = operand_of_json op in
-        Ok (Use op)
+        Ok (E.Use op)
     | `Assoc [ ("Ref", `List [ place; borrow_kind ]) ] ->
         let* place = place_of_json place in
         let* borrow_kind = borrow_kind_of_json borrow_kind in
-        Ok (Ref (place, borrow_kind))
+        Ok (E.Ref (place, borrow_kind))
     | `Assoc [ ("UnaryOp", `List [ unop; op ]) ] ->
         let* unop = unop_of_json unop in
         let* op = operand_of_json op in
-        Ok (UnaryOp (unop, op))
+        Ok (E.UnaryOp (unop, op))
     | `Assoc [ ("BinaryOp", `List [ binop; op1; op2 ]) ] ->
         let* binop = binop_of_json binop in
         let* op1 = operand_of_json op1 in
         let* op2 = operand_of_json op2 in
-        Ok (BinaryOp (binop, op1, op2))
+        Ok (E.BinaryOp (binop, op1, op2))
     | `Assoc [ ("Discriminant", place) ] ->
         let* place = place_of_json place in
-        Ok (Discriminant place)
+        Ok (E.Discriminant place)
     | `Assoc [ ("Aggregate", `List [ aggregate_kind; ops ]) ] ->
         let* aggregate_kind = aggregate_kind_of_json aggregate_kind in
         let* ops = list_of_json operand_of_json ops in
-        Ok (Aggregate (aggregate_kind, ops))
+        Ok (E.Aggregate (aggregate_kind, ops))
     | _ -> Error "")
 
 open CfimAst
