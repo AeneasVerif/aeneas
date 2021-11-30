@@ -737,7 +737,7 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
   in
   List.map reborrow_in_ev env
 
-(** End a borrow identified by its borrow id
+(** End a borrow identified by its borrow id in an environment
     
     First lookup the borrow in the environment and replace it with [Bottom].
     Then, check that there is an associated loan in the environment. When moving
@@ -758,8 +758,8 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
     we allow ending inner borrows (without ending the outer borrows first),
     otherwise we only allow ending outer borrows.
  *)
-let rec end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
-    (env0 : C.env) : C.env =
+let rec end_borrow_in_env (config : C.config) (io : inner_outer)
+    (l : V.BorrowId.id) (env0 : C.env) : C.env =
   (* This is used for sanity checks *)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -774,11 +774,11 @@ let rec end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
   | env, Outer outer_borrows ->
       let env' =
         match outer_borrows with
-        | Borrows bids -> end_borrows config io bids env
-        | Borrow bid -> end_borrow config io bid env
+        | Borrows bids -> end_borrows_in_env config io bids env
+        | Borrow bid -> end_borrow_in_env config io bid env
       in
       (* Retry to end the borrow *)
-      end_borrow config io l env'
+      end_borrow_in_env config io l env'
   (* If found mut: give the value back *)
   | env, FoundMut tv ->
       (* Check that the borrow is somewhere - purely a sanity check *)
@@ -790,9 +790,23 @@ let rec end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
       assert (Option.is_some (lookup_loan_opt sanity_ek l env));
       give_back_shared config l env
 
-and end_borrows (config : C.config) (io : inner_outer) (lset : V.BorrowId.Set.t)
-    (env0 : C.env) : C.env =
-  V.BorrowId.Set.fold (fun id env -> end_borrow config io id env) lset env0
+and end_borrows_in_env (config : C.config) (io : inner_outer)
+    (lset : V.BorrowId.Set.t) (env0 : C.env) : C.env =
+  V.BorrowId.Set.fold
+    (fun id env -> end_borrow_in_env config io id env)
+    lset env0
+
+(** Same as [end_borrow_in_env], but operating on evaluation contexts *)
+let end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  let env = end_borrow_in_env config io l ctx.env in
+  { ctx with env }
+
+(** Same as [end_borrows_in_env], but operating on evaluation contexts *)
+let end_borrows (config : C.config) (io : inner_outer) (lset : V.BorrowId.Set.t)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  let env = end_borrows_in_env config io lset ctx.env in
+  { ctx with env }
 
 let end_outer_borrow config = end_borrow config Outer
 
@@ -816,13 +830,13 @@ let end_inner_borrows config = end_borrows config Inner
     TODO: this kind of checks should be put in an auxiliary helper, because
     they are redundant
  *)
-let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (env : C.env) :
-    C.env * V.typed_value =
+let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
+    C.eval_ctx * V.typed_value =
   (* Lookup the shared loan *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
-  match lookup_loan ek l env with
+  match lookup_loan ek l ctx.env with
   | V.MutLoan _ -> failwith "Expected a shared loan, found a mut loan"
   | V.SharedLoan (bids, sv) ->
       (* Check that there is only one borrow id (l) and update the loan *)
@@ -834,40 +848,42 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (env : C.env) :
       (* Also need to check there isn't [Bottom] (this is actually an invariant *)
       assert (not (bottom_in_value sv));
       (* Update the loan content *)
-      let env1 = update_loan ek l (V.MutLoan l) env in
+      let env = update_loan ek l (V.MutLoan l) ctx.env in
+      let ctx = { ctx with env } in
       (* Return *)
-      (env1, sv)
+      (ctx, sv)
 
 (** Helper function: see [activate_inactivated_mut_borrow].
 
     This function updates a shared borrow to a mutable borrow.
  *)
 let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id)
-    (borrowed_value : V.typed_value) (env : C.env) : C.env =
+    (borrowed_value : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Lookup the inactivated borrow - note that we don't go inside borrows/loans:
      there can't be inactivated borrows inside other borrows/loans
   *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = false; enter_abs = false }
   in
-  match lookup_borrow ek l env with
+  match lookup_borrow ek l ctx.env with
   | V.SharedBorrow _ | V.MutBorrow (_, _) ->
       failwith "Expected an inactivated mutable borrow"
   | V.InactivatedMutBorrow _ ->
       (* Update it *)
-      update_borrow ek l (V.MutBorrow (l, borrowed_value)) env
+      let env = update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx.env in
+      { ctx with env }
 
 (** Promote an inactivated mut borrow to a mut borrow.
 
     The borrow must point to a shared value which is borrowed exactly once.
  *)
 let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
-    (l : V.BorrowId.id) (env : C.env) : C.env =
+    (l : V.BorrowId.id) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Lookup the value *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
-  match lookup_loan ek l env with
+  match lookup_loan ek l ctx.env with
   | V.MutLoan _ -> failwith "Unreachable"
   | V.SharedLoan (bids, sv) -> (
       (* If there are loans inside the value, end them. Note that there can't be
@@ -876,13 +892,13 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
       match get_first_loan_in_value sv with
       | Some lc ->
           (* End the loans *)
-          let env' =
+          let ctx =
             match lc with
-            | V.SharedLoan (bids, _) -> end_outer_borrows config bids env
-            | V.MutLoan bid -> end_outer_borrow config bid env
+            | V.SharedLoan (bids, _) -> end_outer_borrows config bids ctx
+            | V.MutLoan bid -> end_outer_borrow config bid ctx
           in
           (* Recursive call *)
-          activate_inactivated_mut_borrow config io l env'
+          activate_inactivated_mut_borrow config io l ctx
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
@@ -899,13 +915,13 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = V.BorrowId.Set.remove l bids in
-          let env1 = end_borrows config io bids env in
+          let ctx = end_borrows config io bids ctx in
           (* Promote the loan *)
-          let env2, borrowed_value = promote_shared_loan_to_mut_loan l env1 in
+          let ctx, borrowed_value = promote_shared_loan_to_mut_loan l ctx in
           (* Promote the borrow - the value should have been checked by
              [promote_shared_loan_to_mut_loan]
           *)
-          promote_inactivated_borrow_to_mut_borrow l borrowed_value env2)
+          promote_inactivated_borrow_to_mut_borrow l borrowed_value ctx)
 
 (** Paths *)
 
@@ -1150,49 +1166,49 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
 
 (** Read the value at a given place *)
 let read_place (config : C.config) (access : access_kind) (p : E.place)
-    (env : C.env) : V.typed_value path_access_result =
+    (ctx : C.eval_ctx) : V.typed_value path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
   let update v = v in
-  match access_place access update p env with
+  match access_place access update p ctx.env with
   | Error err -> Error err
   | Ok (env1, read_value) ->
       (* Note that we ignore the new environment: it should be the same as the
          original one.
       *)
       if config.check_invariants then
-        if env1 <> env then (
+        if env1 <> ctx.env then (
           let msg =
             "Unexpected environment update:\nNew environment:\n"
-            ^ C.show_env env1 ^ "\n\nOld environment:\n" ^ C.show_env env
+            ^ C.show_env env1 ^ "\n\nOld environment:\n" ^ C.show_env ctx.env
           in
           L.log#serror msg;
           failwith "Unexpected environment update");
       Ok read_value
 
 let read_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
-    (env : C.env) : V.typed_value =
-  match read_place config access p env with
+    (ctx : C.eval_ctx) : V.typed_value =
+  match read_place config access p ctx with
   | Error _ -> failwith "Unreachable"
   | Ok v -> v
 
 (** Update the value at a given place *)
 let write_place (_config : C.config) (access : access_kind) (p : E.place)
-    (nv : V.typed_value) (env : C.env) : C.env path_access_result =
+    (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function substitutes the value with the new value *)
   let update _ = nv in
-  match access_place access update p env with
+  match access_place access update p ctx.env with
   | Error err -> Error err
-  | Ok (env1, _) ->
+  | Ok (env, _) ->
       (* We ignore the read value *)
-      Ok env1
+      Ok { ctx with env }
 
 let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
-    (nv : V.typed_value) (env : C.env) : C.env =
-  match write_place config access p nv env with
+    (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
+  match write_place config access p nv ctx with
   | Error _ -> failwith "Unreachable"
-  | Ok env -> env
+  | Ok ctx -> ctx
 
 (** Compute an expanded ADT bottom value *)
 let compute_expanded_bottom_adt_value (tyctx : T.type_def T.TypeDefId.vector)
@@ -1258,9 +1274,9 @@ let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
 
     TODO: rename to express the fact that this function uses a projection
 *)
-let expand_bottom_value (config : C.config) (access : access_kind)
-    (tyctx : T.type_def T.TypeDefId.vector) (p : E.place) (remaining_pes : int)
-    (pe : E.projection_elem) (ty : T.ety) (env : C.env) : C.env =
+let expand_bottom_value (config : C.config) (access : access_kind) (p : E.place)
+    (remaining_pes : int) (pe : E.projection_elem) (ty : T.ety)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* Debugging *)
   L.log#ldebug
     (lazy
@@ -1287,8 +1303,8 @@ let expand_bottom_value (config : C.config) (access : access_kind)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         T.Adt (def_id', regions, types) ) ->
         assert (def_id = def_id');
-        compute_expanded_bottom_adt_value tyctx def_id opt_variant_id regions
-          types
+        compute_expanded_bottom_adt_value ctx.type_context def_id opt_variant_id
+          regions types
     | Field (ProjTuple arity, _), T.Tuple tys ->
         assert (arity = List.length tys);
         (* Generate the field values *)
@@ -1297,9 +1313,9 @@ let expand_bottom_value (config : C.config) (access : access_kind)
         failwith
           ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_ety ty)
   in
-  (* Update the environment by inserting the expanded value at the proper place *)
-  match write_place config access p' nv env with
-  | Ok env -> env
+  (* Update the context by inserting the expanded value at the proper place *)
+  match write_place config access p' nv ctx with
+  | Ok ctx -> ctx
   | Error _ -> failwith "Unreachable"
 
 (** Update the environment to be able to read a place.
@@ -1310,18 +1326,18 @@ let expand_bottom_value (config : C.config) (access : access_kind)
     uses this information to update the environment (by ending borrows,
     expanding symbolic values) until we manage to fully read the place.
  *)
-let rec update_env_along_read_place (config : C.config) (access : access_kind)
-    (p : E.place) (env : C.env) : C.env =
+let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
+    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Attempt to read the place: if it fails, update the environment and retry *)
-  match read_place config access p env with
-  | Ok _ -> env
+  match read_place config access p ctx with
+  | Ok _ -> ctx
   | Error err ->
-      let env' =
+      let ctx =
         match err with
-        | FailSharedLoan bids -> end_outer_borrows config bids env
-        | FailMutLoan bid -> end_outer_borrow config bid env
+        | FailSharedLoan bids -> end_outer_borrows config bids ctx
+        | FailMutLoan bid -> end_outer_borrow config bid ctx
         | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config Outer bid env
+            activate_inactivated_mut_borrow config Outer bid ctx
         | FailSymbolic (_pe, _sp) ->
             (* Expand the symbolic value *)
             raise Unimplemented
@@ -1330,37 +1346,36 @@ let rec update_env_along_read_place (config : C.config) (access : access_kind)
             failwith "Found [Bottom] while reading a place"
         | FailBorrow _ -> failwith "Could not read a borrow"
       in
-      update_env_along_read_place config access p env'
+      update_ctx_along_read_place config access p ctx
 
 (** Update the environment to be able to write to a place.
 
     See [update_env_alond_read_place].
 *)
-let rec update_env_along_write_place (config : C.config) (access : access_kind)
-    (tyctx : T.type_def T.TypeDefId.vector) (p : E.place) (env : C.env) : C.env
-    =
+let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
+    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Attempt to *read* (yes, "read": we check the access to the place, and
      write to it later) the place: if it fails, update the environment and retry *)
-  match read_place config access p env with
-  | Ok _ -> env
+  match read_place config access p ctx with
+  | Ok _ -> ctx
   | Error err ->
-      let env' =
+      let ctx =
         match err with
-        | FailSharedLoan bids -> end_outer_borrows config bids env
-        | FailMutLoan bid -> end_outer_borrow config bid env
+        | FailSharedLoan bids -> end_outer_borrows config bids ctx
+        | FailMutLoan bid -> end_outer_borrow config bid ctx
         | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config Outer bid env
+            activate_inactivated_mut_borrow config Outer bid ctx
         | FailSymbolic (_pe, _sp) ->
             (* Expand the symbolic value *)
             raise Unimplemented
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
-            expand_bottom_value config access tyctx p remaining_pes pe ty env
+            expand_bottom_value config access p remaining_pes pe ty ctx
         | FailBorrow _ -> failwith "Could not write to a borrow"
       in
-      update_env_along_write_place config access tyctx p env'
+      update_ctx_along_write_place config access p ctx
 
-exception UpdateEnv of C.env
+exception UpdateCtx of C.eval_ctx
 (** Small utility used to break control-flow *)
 
 (** Collect the borrows at a given place: whenever we find a loan, end the
@@ -1369,16 +1384,16 @@ exception UpdateEnv of C.env
     TODO: rename?
 
     This is used when reading, borrowing, writing to a value. We typically
-    first call [update_env_along_read_place] or [update_env_along_write_place]
+    first call [update_ctx_along_read_place] or [update_ctx_along_write_place]
     to get access to the value, then call this function to "prepare" the value.
  *)
 let rec collect_borrows_at_place (config : C.config) (access : access_kind)
-    (p : E.place) (env : C.env) : C.env =
+    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
   (* First, retrieve the value *)
-  match read_place config access p env with
+  match read_place config access p ctx with
   | Error _ -> failwith "Unreachable"
   | Ok v -> (
-      (* Explore the value to check if we need to update the environment.
+      (* Explore the value to check if we need to update the context.
          In particular, we need to end the proper loans in the value.
          Also, we fail if the value contains any [Bottom].
 
@@ -1401,10 +1416,10 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
             | V.MutBorrow (_, tv) -> inspect_update tv
             | V.InactivatedMutBorrow bid ->
                 (* We need to activate inactivated borrows *)
-                let env' =
-                  activate_inactivated_mut_borrow config Inner bid env
+                let ctx =
+                  activate_inactivated_mut_borrow config Inner bid ctx
                 in
-                raise (UpdateEnv env'))
+                raise (UpdateCtx ctx))
         | V.Loan lc -> (
             match lc with
             | V.SharedLoan (bids, ty) -> (
@@ -1413,24 +1428,24 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
                 match access with
                 | Read -> inspect_update ty
                 | Write | Move ->
-                    let env' = end_outer_borrows config bids env in
-                    raise (UpdateEnv env'))
+                    let ctx = end_outer_borrows config bids ctx in
+                    raise (UpdateCtx ctx))
             | V.MutLoan bid ->
                 (* We always need to end mutable borrows *)
-                let env' = end_outer_borrow config bid env in
-                raise (UpdateEnv env'))
+                let ctx = end_outer_borrow config bid ctx in
+                raise (UpdateCtx ctx))
       in
-      (* Inspect the value and update the environment while doing so.
-         If the environment gets updated: perform a recursive call (many things
-         may have been updated in the environment: first we need to retrieve the
+      (* Inspect the value and update the context while doing so.
+         If the context gets updated: perform a recursive call (many things
+         may have been updated in the context: first we need to retrieve the
          proper updated value - and this value may actually not be accessible
          anymore
       *)
       try
         inspect_update v;
-        (* No environment update required: return the current environment *)
-        env
-      with UpdateEnv env' -> collect_borrows_at_place config access p env')
+        (* No context update required: return the current context *)
+        ctx
+      with UpdateCtx ctx -> collect_borrows_at_place config access p ctx)
 
 (** Drop (end) all the borrows at a given place, which should be seen as
     an l-value (we will write to it later, but need to drop the borrows
@@ -1444,12 +1459,12 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
     drop the value there to properly propagate back values which are not/can't
     be borrowed anymore).
  *)
-let rec drop_borrows_at_lplace (config : C.config) (p : E.place) (env : C.env) :
-    C.env =
+let rec drop_borrows_at_lplace (config : C.config) (p : E.place)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* TODO: inner/outer + check drop_value *)
   (* We do something similar to [collect_borrows_at_place].
      First, retrieve the value *)
-  match read_place config Write p env with
+  match read_place config Write p ctx with
   | Error _ -> failwith "Unreachable"
   | Ok v -> (
       (* Explore the value to check if we need to update the environment.
@@ -1500,7 +1515,7 @@ let rec drop_borrows_at_lplace (config : C.config) (p : E.place) (env : C.env) :
                   (lazy
                     ("drop_borrows_at_lplace: dropping "
                    ^ V.BorrowId.to_string bid));
-                raise (UpdateEnv (end_inner_borrow config bid env))
+                raise (UpdateCtx (end_inner_borrow config bid ctx))
             | V.InactivatedMutBorrow bid ->
                 L.log#ldebug
                   (lazy
@@ -1508,10 +1523,10 @@ let rec drop_borrows_at_lplace (config : C.config) (p : E.place) (env : C.env) :
                    ^ V.BorrowId.to_string bid));
                 (* We need to activate inactivated borrows - later, we will
                  * actually end it *)
-                let env' =
-                  activate_inactivated_mut_borrow config Inner bid env
+                let ctx =
+                  activate_inactivated_mut_borrow config Inner bid ctx
                 in
-                raise (UpdateEnv env'))
+                raise (UpdateCtx ctx))
         | V.Loan lc ->
             if (* If we can, end the loans, otherwise ignore *)
                end_loans then
@@ -1523,14 +1538,14 @@ let rec drop_borrows_at_lplace (config : C.config) (p : E.place) (env : C.env) :
               *)
               match lc with
               | V.SharedLoan (bids, _) ->
-                  raise (UpdateEnv (end_outer_borrows config bids env))
+                  raise (UpdateCtx (end_outer_borrows config bids ctx))
               | V.MutLoan bid ->
-                  raise (UpdateEnv (end_outer_borrow config bid env))
+                  raise (UpdateCtx (end_outer_borrow config bid ctx))
             else ()
       in
-      (* Inspect the value and update the environment while doing so.
-         If the environment gets updated: perform a recursive call (many things
-         may have been updated in the environment: first we need to retrieve the
+      (* Inspect the value and update the context while doing so.
+         If the context gets updated: perform a recursive call (many things
+         may have been updated in the context: first we need to retrieve the
          proper updated value - and this value may actually not be accessible
          anymore
       *)
@@ -1539,9 +1554,9 @@ let rec drop_borrows_at_lplace (config : C.config) (p : E.place) (env : C.env) :
         inspect_update false v;
         (* Inspect the value: end the loans *)
         inspect_update true v;
-        (* No environment update required: return the current environment *)
-        env
-      with UpdateEnv env' -> drop_borrows_at_lplace config p env')
+        (* No context update required: return the current context *)
+        ctx
+      with UpdateCtx ctx -> drop_borrows_at_lplace config p ctx)
 
 (** Copy a value, and return the resulting value.
 
@@ -1639,11 +1654,10 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
 (** Small utility *)
 let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
     (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
-  let env1 = update_env_along_read_place config access p ctx.env in
-  let env2 = collect_borrows_at_place config access p env1 in
-  let v = read_place_unwrap config access p env2 in
-  let ctx2 = { ctx with env = env2 } in
-  (ctx2, v)
+  let ctx = update_ctx_along_read_place config access p ctx in
+  let ctx = collect_borrows_at_place config access p ctx in
+  let v = read_place_unwrap config access p ctx in
+  (ctx, v)
 
 (** Evaluate an operand. *)
 let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
@@ -1661,24 +1675,22 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
-      let ctx1, v = prepare_rplace config access p ctx in
+      let ctx, v = prepare_rplace config access p ctx in
       (* Copy the value *)
-      L.log#ldebug (lazy ("Value to copy:\n" ^ typed_value_to_string ctx1 v));
+      L.log#ldebug (lazy ("Value to copy:\n" ^ typed_value_to_string ctx v));
       assert (not (bottom_in_value v));
-      copy_value config ctx1 v
+      copy_value config ctx v
   | Expressions.Move p -> (
       (* Access the value *)
       let access = Move in
-      let ctx1, v = prepare_rplace config access p ctx in
+      let ctx, v = prepare_rplace config access p ctx in
       (* Move the value *)
-      L.log#ldebug (lazy ("Value to move:\n" ^ typed_value_to_string ctx1 v));
+      L.log#ldebug (lazy ("Value to move:\n" ^ typed_value_to_string ctx v));
       assert (not (bottom_in_value v));
       let bottom = { V.value = Bottom; ty = v.ty } in
-      match write_place config access p bottom ctx1.env with
+      match write_place config access p bottom ctx with
       | Error _ -> failwith "Unreachable"
-      | Ok env2 ->
-          let ctx2 = { ctx1 with env = env2 } in
-          (ctx2, v))
+      | Ok ctx -> (ctx, v))
 
 (** Evaluate several operands. *)
 let eval_operands (config : C.config) (ctx : C.eval_ctx) (ops : E.operand list)
@@ -1793,9 +1805,9 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
       | E.Shared | E.TwoPhaseMut ->
           (* Access the value *)
           let access = if bkind = E.Shared then Read else Write in
-          let ctx2, v = prepare_rplace config access p ctx in
+          let ctx, v = prepare_rplace config access p ctx in
           (* Compute the rvalue - simply a shared borrow with a fresh id *)
-          let ctx3, bid = C.fresh_borrow_id ctx2 in
+          let ctx, bid = C.fresh_borrow_id ctx in
           (* Note that the reference is *mutable* if we do a two-phase borrow *)
           let rv_ty =
             T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
@@ -1819,31 +1831,31 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
                 in
                 { v with V.value = v' }
           in
-          (* Update the value in the environment *)
-          let env4 = write_place_unwrap config access p nv ctx3.env in
+          (* Update the value in the context *)
+          let ctx = write_place_unwrap config access p nv ctx in
           (* Return *)
-          Ok ({ ctx3 with env = env4 }, rv)
+          Ok (ctx, rv)
       | E.Mut ->
           (* Access the value *)
           let access = Write in
-          let ctx2, v = prepare_rplace config access p ctx in
+          let ctx, v = prepare_rplace config access p ctx in
           (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
-          let ctx3, bid = C.fresh_borrow_id ctx2 in
+          let ctx, bid = C.fresh_borrow_id ctx in
           let rv_ty = T.Ref (T.Erased, v.ty, Mut) in
           let rv = { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty } in
           (* Compute the value with which to replace the value at place p *)
           let nv = { v with V.value = V.Loan (V.MutLoan bid) } in
-          (* Update the value in the environment *)
-          let env4 = write_place_unwrap config access p nv ctx3.env in
+          (* Update the value in the context *)
+          let ctx = write_place_unwrap config access p nv ctx in
           (* Return *)
-          Ok ({ ctx3 with env = env4 }, rv))
+          Ok (ctx, rv))
   | E.UnaryOp (unop, op) -> eval_unary_op config ctx unop op
   | E.BinaryOp (binop, op1, op2) -> eval_binary_op config ctx binop op1 op2
   | E.Discriminant p -> (
       (* Note that discriminant values have type `isize` *)
       (* Access the value *)
       let access = Read in
-      let ctx1, v = prepare_rplace config access p ctx in
+      let ctx, v = prepare_rplace config access p ctx in
       match v.V.value with
       | Adt av -> (
           match av.variant_id with
@@ -1858,13 +1870,13 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
                   (* Should really never happen *)
               | Ok sv ->
                   Ok
-                    ( ctx1,
+                    ( ctx,
                       { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }
                     )))
       | _ -> failwith "Invalid input for `discriminant`")
   | E.Aggregate (aggregate_kind, ops) -> (
       (* Evaluate the operands *)
-      let ctx1, values = eval_operands config ctx ops in
+      let ctx, values = eval_operands config ctx ops in
       let values = T.FieldId.vector_of_list values in
       (* Match on the aggregate kind *)
       match aggregate_kind with
@@ -1872,15 +1884,15 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           let tys =
             List.map (fun v -> v.V.ty) (T.FieldId.vector_to_list values)
           in
-          Ok (ctx1, { V.value = Tuple values; ty = T.Tuple tys })
+          Ok (ctx, { V.value = Tuple values; ty = T.Tuple tys })
       | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
           (* Sanity checks *)
           let type_def = C.ctx_lookup_type_def ctx def_id in
           assert (
             T.RegionVarId.length type_def.region_params = List.length regions);
           let expected_field_types =
-            Subst.ctx_adt_get_instantiated_field_types ctx1 def_id
-              opt_variant_id types
+            Subst.ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id
+              types
           in
           assert (expected_field_types = T.FieldId.map (fun v -> v.V.ty) values);
           (* Construct the value *)
@@ -1894,7 +1906,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
             }
           in
           let aty = T.Adt (def_id, regions, types) in
-          Ok (ctx1, { V.value = Adt av; ty = aty }))
+          Ok (ctx, { V.value = Adt av; ty = aty }))
 
 (** Result of evaluating a statement - TODO: add prefix *)
 type statement_eval_res = Unit | Break of int | Continue of int | Return
@@ -1913,16 +1925,13 @@ let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
     C.eval_ctx * V.typed_value =
   (* TODO *)
   let access = Write in
-  let env =
-    update_env_along_write_place config access ctx.type_context p ctx.env
-  in
+  let ctx = update_ctx_along_write_place config access p ctx in
   (* End the loans *)
-  let env = collect_borrows_at_place config access p env in
+  let ctx = collect_borrows_at_place config access p ctx in
   (* End the borrows *)
-  let env = drop_borrows_at_lplace config p env in
+  let ctx = drop_borrows_at_lplace config p ctx in
   (* Read the value and check it *)
-  let v = read_place_unwrap config access p env in
-  let ctx = { ctx with env } in
+  let v = read_place_unwrap config access p ctx in
   (* Sanity checks *)
   assert (not (loans_in_value v));
   assert (not (borrows_in_value v));
@@ -1933,16 +1942,14 @@ let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
     As long as it is a loan, end the loan *)
 let rec end_loan_exactly_at_place (config : C.config) (access : access_kind)
     (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
-  let v = read_place_unwrap config access p ctx.env in
+  let v = read_place_unwrap config access p ctx in
   match v.V.value with
   | V.Loan (V.SharedLoan (bids, _)) ->
-      let env1 = end_borrows config Outer bids ctx.env in
-      let ctx1 = { ctx with env = env1 } in
-      end_loan_exactly_at_place config access p ctx1
+      let ctx = end_borrows config Outer bids ctx in
+      end_loan_exactly_at_place config access p ctx
   | V.Loan (V.MutLoan bid) ->
-      let env1 = end_borrow config Outer bid ctx.env in
-      let ctx1 = { ctx with env = env1 } in
-      end_loan_exactly_at_place config access p ctx1
+      let ctx = end_borrow config Outer bid ctx in
+      end_loan_exactly_at_place config access p ctx
   | _ -> ctx
 
 let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
@@ -1950,10 +1957,9 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
     (C.eval_ctx * statement_eval_res) eval_result =
   (* Access the value *)
   let access = Write in
-  let env1 = update_env_along_read_place config access p ctx.env in
-  let ctx1 = { ctx with env = env1 } in
-  let ctx2 = end_loan_exactly_at_place config access p ctx1 in
-  let v = read_place_unwrap config access p ctx2.env in
+  let ctx = update_ctx_along_read_place config access p ctx in
+  let ctx = end_loan_exactly_at_place config access p ctx in
+  let v = read_place_unwrap config access p ctx in
   (* Update the value *)
   match (v.V.ty, v.V.value) with
   | T.Adt (def_id, regions, types), V.Adt av -> (
@@ -1967,24 +1973,22 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
       | None -> failwith "Found a struct value while expected an enum"
       | Some variant_id' ->
           if variant_id' = variant_id then (* Nothing to do *)
-            Ok (ctx2, Unit)
+            Ok (ctx, Unit)
           else
             (* Replace the value *)
             let bottom_v =
-              compute_expanded_bottom_adt_value ctx2.type_context def_id
+              compute_expanded_bottom_adt_value ctx.type_context def_id
                 (Some variant_id) regions types
             in
-            let env3 = write_place_unwrap config access p bottom_v ctx2.env in
-            let ctx3 = { ctx2 with env = env3 } in
-            Ok (ctx3, Unit))
+            let ctx = write_place_unwrap config access p bottom_v ctx in
+            Ok (ctx, Unit))
   | T.Adt (def_id, regions, types), V.Bottom ->
       let bottom_v =
-        compute_expanded_bottom_adt_value ctx2.type_context def_id
+        compute_expanded_bottom_adt_value ctx.type_context def_id
           (Some variant_id) regions types
       in
-      let env3 = write_place_unwrap config access p bottom_v ctx2.env in
-      let ctx3 = { ctx2 with env = env3 } in
-      Ok (ctx3, Unit)
+      let ctx = write_place_unwrap config access p bottom_v ctx in
+      Ok (ctx, Unit)
   | _, V.Symbolic _ ->
       assert (config.mode = SymbolicMode);
       (* TODO *) raise Unimplemented
@@ -2003,7 +2007,7 @@ let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
   let ctx, v = prepare_lplace config p ctx in
   (* Replace the value with [Bottom] *)
   let nv = { v with value = V.Bottom } in
-  let ctx = { ctx with env = write_place_unwrap config Write p nv ctx.env } in
+  let ctx = write_place_unwrap config Write p nv ctx in
   ctx
 
 (** Small helper: compute the type of the return value for a specific
@@ -2079,11 +2083,10 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
 let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
     (p : E.place) : C.eval_ctx =
   (* Prepare the destination *)
-  let ctx2, _ = prepare_lplace config p ctx in
+  let ctx, _ = prepare_lplace config p ctx in
   (* Update the destination *)
-  let env3 = write_place_unwrap config Write p v ctx2.env in
-  let ctx3 = { ctx2 with env = env3 } in
-  ctx3
+  let ctx = write_place_unwrap config Write p v ctx in
+  ctx
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_new (config : C.config) (region_params : T.erased_region list)
