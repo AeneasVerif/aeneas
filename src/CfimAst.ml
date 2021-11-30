@@ -14,10 +14,10 @@ type fun_id = Local of FunDefId.id | Assumed of assumed_fun_id
 type assertion = { cond : operand; expected : bool } [@@deriving show]
 
 type fun_sig = {
-  region_params : region_var RegionVarId.vector;
+  region_params : region_var list;
   num_early_bound_regions : int;
-  type_params : type_var TypeVarId.vector;
-  inputs : rty VarId.vector;
+  type_params : type_var list;
+  inputs : rty list;
   output : rty;
 }
 [@@deriving show]
@@ -75,7 +75,7 @@ type fun_def = {
   signature : fun_sig;
   divergent : bool;
   arg_count : int;
-  locals : var VarId.vector;
+  locals : var list;
   body : expression;
 }
 [@@deriving show]

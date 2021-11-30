@@ -15,7 +15,7 @@ type declaration =
 
 type cfim_module = {
   declarations : declaration list;
-  types : type_def TypeDefId.vector;
-  functions : fun_def FunDefId.vector;
+  types : type_def list;
+  functions : fun_def list;
 }
 (** CFIM module *)

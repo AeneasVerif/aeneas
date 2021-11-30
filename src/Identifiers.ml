@@ -10,16 +10,13 @@ module type Id = sig
   type generator
   (** Id generator - simply a counter *)
 
-  (* TODO: use list instead *)
-  type 'a vector
-
   type set_t
 
   val zero : id
 
   val generator_zero : generator
 
-  (* TODO: this is stateful! *)
+  (* TODO: this is stateful! - but we may want to be able to duplicated contexts... *)
   val fresh : generator -> id * generator
 
   val to_string : id -> string
@@ -36,41 +33,20 @@ module type Id = sig
 
   val of_int : id -> int
 
-  val pp_vector :
-    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a vector -> unit
+  val nth : 'a list -> id -> 'a
 
-  val show_vector : (Format.formatter -> 'a -> unit) -> 'a vector -> string
+  val nth_opt : 'a list -> id -> 'a option
 
-  val empty_vector : 'a vector
-
-  val vector_to_list : 'a vector -> 'a list
-
-  val vector_of_list : 'a list -> 'a vector
-
-  val length : 'a vector -> int
-
-  val nth : 'a vector -> id -> 'a
-
-  val nth_opt : 'a vector -> id -> 'a option
-
-  val update_nth : 'a vector -> id -> 'a -> 'a vector
-  (** Update the nth element of the vector.
+  val update_nth : 'a list -> id -> 'a -> 'a list
+  (** Update the nth element of the list.
 
       Raises [Invalid_argument] if the identifier is out of range.
    *)
 
-  val iter : ('a -> unit) -> 'a vector -> unit
+  val mapi : (id -> 'a -> 'b) -> 'a list -> 'b list
 
-  val map : ('a -> 'b) -> 'a vector -> 'b vector
-
-  val mapi : (id -> 'a -> 'b) -> 'a vector -> 'b vector
-
-  val mapi_from1 : (id -> 'a -> 'b) -> 'a vector -> 'b vector
+  val mapi_from1 : (id -> 'a -> 'b) -> 'a list -> 'b list
   (** Same as [mapi], but where the indices start with 1 *)
-
-  val for_all : ('a -> bool) -> 'a vector -> bool
-
-  val exists : ('a -> bool) -> 'a vector -> bool
 
   val pp_set_t : Format.formatter -> set_t -> unit
 
@@ -85,11 +61,6 @@ module type Id = sig
   module Map : Map.S with type key = id
 
   val id_of_json : Yojson.Basic.t -> (id, string) result
-
-  val vector_of_json :
-    (Yojson.Basic.t -> ('a, string) result) ->
-    Yojson.Basic.t ->
-    ('a vector, string) result
 end
 
 (** Generative functor for identifiers.
@@ -101,8 +72,6 @@ module IdGen () : Id = struct
   type id = int [@@deriving show]
 
   type generator = id [@@deriving show]
-
-  type 'a vector = 'a list [@@deriving show]
 
   let zero = 0
 
@@ -122,14 +91,6 @@ module IdGen () : Id = struct
 
   let of_int x = x
 
-  let empty_vector = []
-
-  let vector_to_list v = v
-
-  let vector_of_list v = v
-
-  let length v = List.length v
-
   let nth v id = List.nth v id
 
   let nth_opt v id = List.nth_opt v id
@@ -140,10 +101,6 @@ module IdGen () : Id = struct
     | _ :: vec', 0 -> v :: vec'
     | x :: vec', _ -> x :: update_nth vec' (id - 1) v
 
-  let iter = List.iter
-
-  let map = List.map
-
   let mapi = List.mapi
 
   let mapi_from1 f ls =
@@ -151,10 +108,6 @@ module IdGen () : Id = struct
       match ls with [] -> [] | x :: ls' -> f i x :: aux (i + 1) ls'
     in
     aux 1 ls
-
-  let for_all = List.for_all
-
-  let exists = List.exists
 
   module Ord = struct
     type t = id
@@ -183,10 +136,6 @@ module IdGen () : Id = struct
     match js with
     | `Int i -> Ok i
     | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)
-
-  let vector_of_json a_of_json js =
-    OfJsonBasic.combine_error_msgs js "vector_of_json"
-      (OfJsonBasic.list_of_json a_of_json js)
 end
 
 type name = string list [@@deriving show]

@@ -47,8 +47,7 @@ let expression_to_string ctx =
 let mk_unit_ty : T.ety = T.Tuple []
 
 (* TODO: move *)
-let mk_unit_value : V.typed_value =
-  { V.value = V.Tuple (T.FieldId.vector_of_list []); V.ty = mk_unit_ty }
+let mk_unit_value : V.typed_value = { V.value = V.Tuple []; V.ty = mk_unit_ty }
 
 let mk_typed_value (ty : T.ety) (value : V.value) : V.typed_value =
   { V.value; ty }
@@ -81,8 +80,8 @@ let rec check_borrows_in_value (check : V.borrow_content -> bool)
     (v : V.typed_value) : bool =
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> true
-  | V.Adt av -> T.FieldId.for_all (check_borrows_in_value check) av.field_values
-  | V.Tuple values -> T.FieldId.for_all (check_borrows_in_value check) values
+  | V.Adt av -> List.for_all (check_borrows_in_value check) av.field_values
+  | V.Tuple values -> List.for_all (check_borrows_in_value check) values
   | V.Assumed (Box bv) -> check_borrows_in_value check bv
   | V.Borrow bc -> (
       check bc
@@ -100,8 +99,8 @@ let rec check_loans_in_value (check : V.loan_content -> bool)
     (v : V.typed_value) : bool =
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> true
-  | V.Adt av -> T.FieldId.for_all (check_loans_in_value check) av.field_values
-  | V.Tuple values -> T.FieldId.for_all (check_loans_in_value check) values
+  | V.Adt av -> List.for_all (check_loans_in_value check) av.field_values
+  | V.Tuple values -> List.for_all (check_loans_in_value check) values
   | V.Assumed (Box bv) -> check_loans_in_value check bv
   | V.Borrow bc -> (
       match bc with
@@ -119,12 +118,8 @@ let rec lookup_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
     (v : V.typed_value) : V.loan_content option =
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> None
-  | V.Adt av ->
-      let values = T.FieldId.vector_to_list av.field_values in
-      List.find_map (lookup_loan_in_value ek l) values
-  | V.Tuple values ->
-      let values = T.FieldId.vector_to_list values in
-      List.find_map (lookup_loan_in_value ek l) values
+  | V.Adt av -> List.find_map (lookup_loan_in_value ek l) av.field_values
+  | V.Tuple values -> List.find_map (lookup_loan_in_value ek l) values
   | V.Assumed (Box bv) -> lookup_loan_in_value ek l bv
   | V.Borrow bc -> (
       match bc with
@@ -175,13 +170,11 @@ let rec update_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
   | V.Adt av ->
-      let values =
-        T.FieldId.map (update_loan_in_value ek l nlc) av.field_values
-      in
+      let values = List.map (update_loan_in_value ek l nlc) av.field_values in
       let av = { av with field_values = values } in
       { v with value = Adt av }
   | V.Tuple values ->
-      let values = T.FieldId.map (update_loan_in_value ek l nlc) values in
+      let values = List.map (update_loan_in_value ek l nlc) values in
       { v with value = Tuple values }
   | V.Assumed (Box bv) ->
       { v with value = Assumed (Box (update_loan_in_value ek l nlc bv)) }
@@ -228,12 +221,8 @@ let rec lookup_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
     (v : V.typed_value) : V.borrow_content option =
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> None
-  | V.Adt av ->
-      let values = T.FieldId.vector_to_list av.field_values in
-      List.find_map (lookup_borrow_in_value ek l) values
-  | V.Tuple values ->
-      let values = T.FieldId.vector_to_list values in
-      List.find_map (lookup_borrow_in_value ek l) values
+  | V.Adt av -> List.find_map (lookup_borrow_in_value ek l) av.field_values
+  | V.Tuple values -> List.find_map (lookup_borrow_in_value ek l) values
   | V.Assumed (Box bv) -> lookup_borrow_in_value ek l bv
   | V.Borrow bc -> (
       match bc with
@@ -281,13 +270,11 @@ let rec update_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
   match v.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
   | V.Adt av ->
-      let values =
-        T.FieldId.map (update_borrow_in_value ek l nbc) av.field_values
-      in
+      let values = List.map (update_borrow_in_value ek l nbc) av.field_values in
       let av = { av with field_values = values } in
       { v with value = Adt av }
   | V.Tuple values ->
-      let values = T.FieldId.map (update_borrow_in_value ek l nbc) values in
+      let values = List.map (update_borrow_in_value ek l nbc) values in
       { v with value = Tuple values }
   | V.Assumed (Box bv) ->
       { v with value = Assumed (Box (update_borrow_in_value ek l nbc bv)) }
@@ -369,12 +356,8 @@ let borrows_in_value (v : V.typed_value) : bool =
 let rec loans_in_value (v : V.typed_value) : bool =
   match v.V.value with
   | V.Concrete _ -> false
-  | V.Adt av ->
-      let fields = T.FieldId.vector_to_list av.field_values in
-      List.exists loans_in_value fields
-  | V.Tuple fields ->
-      let fields = T.FieldId.vector_to_list fields in
-      List.exists loans_in_value fields
+  | V.Adt av -> List.exists loans_in_value av.field_values
+  | V.Tuple fields -> List.exists loans_in_value fields
   | V.Assumed (Box bv) -> loans_in_value bv
   | V.Borrow bc -> (
       match bc with
@@ -387,12 +370,8 @@ let rec loans_in_value (v : V.typed_value) : bool =
 let rec get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
   match v.V.value with
   | V.Concrete _ -> None
-  | V.Adt av ->
-      let fields = T.FieldId.vector_to_list av.field_values in
-      get_first_loan_in_values fields
-  | V.Tuple fields ->
-      let fields = T.FieldId.vector_to_list fields in
-      get_first_loan_in_values fields
+  | V.Adt av -> get_first_loan_in_values av.field_values
+  | V.Tuple fields -> get_first_loan_in_values fields
   | V.Assumed (Box bv) -> get_first_loan_in_value bv
   | V.Borrow bc -> (
       match bc with
@@ -413,12 +392,8 @@ and get_first_loan_in_values (vl : V.typed_value list) : V.loan_content option =
 let rec bottom_in_value (v : V.typed_value) : bool =
   match v.V.value with
   | V.Concrete _ -> false
-  | V.Adt av ->
-      let fields = T.FieldId.vector_to_list av.field_values in
-      List.exists bottom_in_value fields
-  | V.Tuple fields ->
-      let fields = T.FieldId.vector_to_list fields in
-      List.exists bottom_in_value fields
+  | V.Adt av -> List.exists bottom_in_value av.field_values
+  | V.Tuple fields -> List.exists bottom_in_value fields
   | V.Assumed (Box bv) -> bottom_in_value bv
   | V.Borrow bc -> (
       match bc with
@@ -450,19 +425,16 @@ let rec end_borrow_get_borrow_in_value (config : C.config) (io : inner_outer)
        * boxes upon ending inner borrows *)
       ({ v0 with value = Assumed (Box bv') }, res)
   | V.Adt adt ->
-      let values = T.FieldId.vector_to_list adt.field_values in
-      let values', res =
-        end_borrow_get_borrow_in_values config io l outer_borrows values
+      let values, res =
+        end_borrow_get_borrow_in_values config io l outer_borrows
+          adt.field_values
       in
-      let values' = T.FieldId.vector_of_list values' in
-      ({ v0 with value = Adt { adt with field_values = values' } }, res)
+      ({ v0 with value = Adt { adt with field_values = values } }, res)
   | V.Tuple values ->
-      let values = T.FieldId.vector_to_list values in
-      let values', res =
+      let values, res =
         end_borrow_get_borrow_in_values config io l outer_borrows values
       in
-      let values' = T.FieldId.vector_of_list values' in
-      ({ v0 with value = Tuple values' }, res)
+      ({ v0 with value = Tuple values }, res)
   | V.Loan (V.MutLoan _) -> (v0, NotFound)
   | V.Loan (V.SharedLoan (borrows, v)) ->
       (* Update the outer borrows, if necessary *)
@@ -543,19 +515,11 @@ let rec give_back_value_to_value config bid (v : V.typed_value)
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> destv
   | V.Adt av ->
       let field_values =
-        List.map
-          (give_back_value_to_value config bid v)
-          (T.FieldId.vector_to_list av.field_values)
+        List.map (give_back_value_to_value config bid v) av.field_values
       in
-      let field_values = T.FieldId.vector_of_list field_values in
       { destv with value = Adt { av with field_values } }
   | V.Tuple values ->
-      let values =
-        List.map
-          (give_back_value_to_value config bid v)
-          (T.FieldId.vector_to_list values)
-      in
-      let values = T.FieldId.vector_of_list values in
+      let values = List.map (give_back_value_to_value config bid v) values in
       { destv with value = Tuple values }
   | V.Assumed (Box destv') ->
       {
@@ -590,19 +554,11 @@ let rec give_back_shared_to_value (config : C.config) bid
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> destv
   | V.Adt av ->
       let field_values =
-        List.map
-          (give_back_shared_to_value config bid)
-          (T.FieldId.vector_to_list av.field_values)
+        List.map (give_back_shared_to_value config bid) av.field_values
       in
-      let field_values = T.FieldId.vector_of_list field_values in
       { destv with value = Adt { av with field_values } }
   | V.Tuple values ->
-      let values =
-        List.map
-          (give_back_shared_to_value config bid)
-          (T.FieldId.vector_to_list values)
-      in
-      let values = T.FieldId.vector_of_list values in
+      let values = List.map (give_back_shared_to_value config bid) values in
       { destv with value = Tuple values }
   | V.Assumed (Box destv') ->
       {
@@ -699,14 +655,10 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
     match v.V.value with
     | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
     | V.Adt av ->
-        let fields = T.FieldId.vector_to_list av.field_values in
-        let fields = List.map reborrow_in_value fields in
-        let fields = T.FieldId.vector_of_list fields in
+        let fields = List.map reborrow_in_value av.field_values in
         { v with value = Adt { av with field_values = fields } }
     | V.Tuple fields ->
-        let fields = T.FieldId.vector_to_list fields in
         let fields = List.map reborrow_in_value fields in
-        let fields = T.FieldId.vector_of_list fields in
         { v with value = Tuple fields }
     | V.Assumed (Box bv) ->
         { v with value = Assumed (Box (reborrow_in_value bv)) }
@@ -1045,7 +997,7 @@ let rec access_projection (access : projection_access) (env : C.env)
               Ok (env1, { res with updated }))
       (* Tuples *)
       | Field (ProjTuple arity, field_id), V.Tuple values -> (
-          assert (arity = T.FieldId.length values);
+          assert (arity = List.length values);
           let fv = T.FieldId.nth values field_id in
           (* Project *)
           match access_projection access env update p' fv with
@@ -1238,7 +1190,7 @@ let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
   | Ok ctx -> ctx
 
 (** Compute an expanded ADT bottom value *)
-let compute_expanded_bottom_adt_value (tyctx : T.type_def T.TypeDefId.vector)
+let compute_expanded_bottom_adt_value (tyctx : T.type_def list)
     (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
     (regions : T.erased_region list) (types : T.ety list) : V.typed_value =
   (* Lookup the definition and check if it is an enumeration - it
@@ -1246,15 +1198,13 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_def T.TypeDefId.vector)
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
   let def = T.TypeDefId.nth tyctx def_id in
-  assert (List.length regions = T.RegionVarId.length def.T.region_params);
+  assert (List.length regions = List.length def.T.region_params);
   (* Compute the field types *)
   let field_types =
     Subst.type_def_get_instantiated_field_type def opt_variant_id types
   in
   (* Initialize the expanded value *)
-  let field_types = T.FieldId.vector_to_list field_types in
   let fields = List.map (fun ty -> { V.value = Bottom; ty }) field_types in
-  let fields = T.FieldId.vector_of_list fields in
   let av =
     V.Adt
       {
@@ -1273,7 +1223,6 @@ let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
     V.typed_value =
   (* Generate the field values *)
   let fields = List.map (fun ty -> { V.value = Bottom; ty }) field_types in
-  let fields = T.FieldId.vector_of_list fields in
   let v = V.Tuple fields in
   let ty = T.Tuple field_types in
   { V.value = v; V.ty }
@@ -1434,8 +1383,8 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
             (* Nothing to do for symbolic values - note that if the value needs
                to be copied, etc. we perform additional checks later *)
             ()
-        | V.Adt adt -> T.FieldId.iter inspect_update adt.field_values
-        | V.Tuple values -> T.FieldId.iter inspect_update values
+        | V.Adt adt -> List.iter inspect_update adt.field_values
+        | V.Tuple values -> List.iter inspect_update values
         | V.Assumed (Box v) -> inspect_update v
         | V.Borrow bc -> (
             match bc with
@@ -1534,9 +1483,8 @@ let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
         | V.Symbolic _ ->
             (* Nothing to do for symbolic values - TODO: not sure *)
             raise Unimplemented
-        | V.Adt adt ->
-            T.FieldId.iter (inspect_update end_loans) adt.field_values
-        | V.Tuple values -> T.FieldId.iter (inspect_update end_loans) values
+        | V.Adt adt -> List.iter (inspect_update end_loans) adt.field_values
+        | V.Tuple values -> List.iter (inspect_update end_loans) values
         | V.Assumed (Box v) -> inspect_update end_loans v
         | V.Borrow bc -> (
             assert (not end_loans);
@@ -1609,15 +1557,13 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
   match v.V.value with
   | V.Concrete _ -> (ctx, v)
   | V.Adt av ->
-      let fields = T.FieldId.vector_to_list av.field_values in
-      let ctx', fields = List.fold_left_map (copy_value config) ctx fields in
-      let fields = T.FieldId.vector_of_list fields in
-      (ctx', { v with V.value = V.Adt { av with field_values = fields } })
+      let ctx, fields =
+        List.fold_left_map (copy_value config) ctx av.field_values
+      in
+      (ctx, { v with V.value = V.Adt { av with field_values = fields } })
   | V.Tuple fields ->
-      let fields = T.FieldId.vector_to_list fields in
-      let ctx', fields = List.fold_left_map (copy_value config) ctx fields in
-      let fields = T.FieldId.vector_of_list fields in
-      (ctx', { v with V.value = V.Tuple fields })
+      let ctx, fields = List.fold_left_map (copy_value config) ctx fields in
+      (ctx, { v with V.value = V.Tuple fields })
   | V.Bottom -> failwith "Can't copy ⊥"
   | V.Assumed _ -> failwith "Can't copy an assumed value"
   | V.Borrow bc -> (
@@ -1625,6 +1571,7 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
       match bc with
       | SharedBorrow bid ->
           let ctx', bid' = C.fresh_borrow_id ctx in
+          (* TODO: clean indices *)
           let env'' = reborrow_shared config bid bid' ctx'.env in
           let ctx'' = { ctx' with env = env'' } in
           (ctx'', { v with V.value = V.Borrow (SharedBorrow bid') })
@@ -1646,36 +1593,30 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
   (* Check the type while converting *)
   match (ty, cv) with
   (* Unit *)
-  | T.Tuple [], Unit -> { V.value = V.Tuple (T.FieldId.vector_of_list []); ty }
+  | T.Tuple [], Unit -> { V.value = V.Tuple []; ty }
   (* Adt with one variant and no fields *)
   | T.Adt (def_id, [], []), ConstantAdt def_id' ->
       assert (def_id = def_id');
       (* Check that the adt definition only has one variant with no fields,
          compute the variant id at the same time. *)
       let def = T.TypeDefId.nth ctx.type_context def_id in
-      assert (T.RegionVarId.length def.region_params = 0);
-      assert (T.TypeVarId.length def.type_params = 0);
+      assert (List.length def.region_params = 0);
+      assert (List.length def.type_params = 0);
       let variant_id =
         match def.kind with
         | Struct fields ->
-            assert (T.FieldId.length fields = 0);
+            assert (List.length fields = 0);
             None
         | Enum variants ->
-            assert (T.VariantId.length variants = 1);
+            assert (List.length variants = 1);
             let variant_id = T.VariantId.zero in
             let variant = T.VariantId.nth variants variant_id in
-            assert (T.FieldId.length variant.fields = 0);
+            assert (List.length variant.fields = 0);
             Some variant_id
       in
       let value =
         V.Adt
-          {
-            def_id;
-            variant_id;
-            regions = [];
-            types = [];
-            field_values = T.FieldId.vector_of_list [];
-          }
+          { def_id; variant_id; regions = []; types = []; field_values = [] }
       in
       { value; ty }
   (* Scalar, boolean... *)
@@ -1918,24 +1859,20 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
   | E.Aggregate (aggregate_kind, ops) -> (
       (* Evaluate the operands *)
       let ctx, values = eval_operands config ctx ops in
-      let values = T.FieldId.vector_of_list values in
       (* Match on the aggregate kind *)
       match aggregate_kind with
       | E.AggregatedTuple ->
-          let tys =
-            List.map (fun v -> v.V.ty) (T.FieldId.vector_to_list values)
-          in
+          let tys = List.map (fun v -> v.V.ty) values in
           Ok (ctx, { V.value = Tuple values; ty = T.Tuple tys })
       | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
           (* Sanity checks *)
           let type_def = C.ctx_lookup_type_def ctx def_id in
-          assert (
-            T.RegionVarId.length type_def.region_params = List.length regions);
+          assert (List.length type_def.region_params = List.length regions);
           let expected_field_types =
             Subst.ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id
               types
           in
-          assert (expected_field_types = T.FieldId.map (fun v -> v.V.ty) values);
+          assert (expected_field_types = List.map (fun v -> v.V.ty) values);
           (* Construct the value *)
           let av =
             {
@@ -2312,10 +2249,7 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
 
       (* Create and push the input variables *)
       let input_vars =
-        V.VarId.vector_to_list
-          (V.VarId.mapi_from1
-             (fun id v -> (mk_var id None v.V.ty, v))
-             (V.VarId.vector_of_list args_vl))
+        V.VarId.mapi_from1 (fun id v -> (mk_var id None v.V.ty, v)) args_vl
       in
       let ctx = C.ctx_push_vars ctx input_vars in
 
@@ -2413,13 +2347,10 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
   | ConcreteMode -> (
       let tsubst =
         Subst.make_type_subst
-          (List.map
-             (fun v -> v.T.tv_index)
-             (T.TypeVarId.vector_to_list def.A.signature.type_params))
+          (List.map (fun v -> v.T.tv_index) def.A.signature.type_params)
           type_params
       in
       let locals, body = Subst.fun_def_substitute_in_body tsubst def in
-      let locals = V.VarId.vector_to_list locals in
 
       (* Evaluate the input operands *)
       let ctx1, args = eval_operands config ctx args in
@@ -2554,9 +2485,8 @@ and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
 (** Test a unit function (taking no arguments) by evaluating it in an empty
     environment
  *)
-let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
-    (fun_defs : A.fun_def A.FunDefId.vector) (fid : A.FunDefId.id) :
-    unit eval_result =
+let test_unit_function (type_defs : T.type_def list) (fun_defs : A.fun_def list)
+    (fid : A.FunDefId.id) : unit eval_result =
   (* Retrieve the function declaration *)
   let fdef = A.FunDefId.nth fun_defs fid in
 
@@ -2565,8 +2495,8 @@ let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
     (lazy ("test_unit_function: " ^ Print.Types.name_to_string fdef.A.name));
 
   (* Sanity check - *)
-  assert (T.RegionVarId.length fdef.A.signature.region_params = 0);
-  assert (T.TypeVarId.length fdef.A.signature.type_params = 0);
+  assert (List.length fdef.A.signature.region_params = 0);
+  assert (List.length fdef.A.signature.type_params = 0);
   assert (fdef.A.arg_count = 0);
 
   (* Create the evaluation context *)
@@ -2574,7 +2504,7 @@ let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
     {
       C.type_context = type_defs;
       C.fun_context = fun_defs;
-      C.type_vars = T.TypeVarId.empty_vector;
+      C.type_vars = [];
       C.env = [];
       C.symbolic_counter = V.SymbolicValueId.generator_zero;
       C.borrow_counter = V.BorrowId.generator_zero;
@@ -2582,9 +2512,7 @@ let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
   in
 
   (* Put the (uninitialized) local variables *)
-  let ctx =
-    C.ctx_push_uninitialized_vars ctx (V.VarId.vector_to_list fdef.A.locals)
-  in
+  let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
 
   (* Evaluate the function *)
   let config = { C.mode = C.ConcreteMode; C.check_invariants = true } in
@@ -2596,13 +2524,13 @@ let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
     no arguments) - TODO: move *)
 let fun_def_is_unit (def : A.fun_def) : bool =
   def.A.arg_count = 0
-  && T.RegionVarId.length def.A.signature.region_params = 0
-  && T.TypeVarId.length def.A.signature.type_params = 0
-  && V.VarId.length def.A.signature.inputs = 0
+  && List.length def.A.signature.region_params = 0
+  && List.length def.A.signature.type_params = 0
+  && List.length def.A.signature.inputs = 0
 
 (** Test all the unit functions in a list of function definitions *)
-let test_all_unit_functions (type_defs : T.type_def T.TypeDefId.vector)
-    (fun_defs : A.fun_def A.FunDefId.vector) : unit =
+let test_all_unit_functions (type_defs : T.type_def list)
+    (fun_defs : A.fun_def list) : unit =
   let test_fun (def : A.fun_def) : unit =
     if fun_def_is_unit def then
       match test_unit_function type_defs fun_defs def.A.def_id with
@@ -2610,4 +2538,4 @@ let test_all_unit_functions (type_defs : T.type_def T.TypeDefId.vector)
       | Ok _ -> ()
     else ()
   in
-  A.FunDefId.iter test_fun fun_defs
+  List.iter test_fun fun_defs

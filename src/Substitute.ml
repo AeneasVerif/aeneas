@@ -54,17 +54,12 @@ let make_type_subst (var_ids : T.TypeVarId.id list) (tys : 'r T.ty list) :
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)
 let type_def_get_instantiated_field_type (def : T.type_def)
-    (opt_variant_id : T.VariantId.id option) (types : T.ety list) :
-    T.ety T.FieldId.vector =
+    (opt_variant_id : T.VariantId.id option) (types : T.ety list) : T.ety list =
   let ty_subst =
-    make_type_subst
-      (List.map
-         (fun x -> x.T.tv_index)
-         (T.TypeVarId.vector_to_list def.T.type_params))
-      types
+    make_type_subst (List.map (fun x -> x.T.tv_index) def.T.type_params) types
   in
   let fields = T.type_def_get_fields def opt_variant_id in
-  T.FieldId.map
+  List.map
     (fun f -> erase_regions_substitute_types ty_subst f.T.field_ty)
     fields
 
@@ -72,7 +67,7 @@ let type_def_get_instantiated_field_type (def : T.type_def)
     context *)
 let ctx_adt_get_instantiated_field_types (ctx : C.eval_ctx)
     (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
-    (types : T.ety list) : T.ety T.FieldId.vector =
+    (types : T.ety list) : T.ety list =
   let def = C.ctx_lookup_type_def ctx def_id in
   type_def_get_instantiated_field_type def opt_variant_id types
 
@@ -204,10 +199,10 @@ and switch_targets_substitute (tsubst : T.TypeVarId.id -> T.ety)
 (** Apply a type substitution to a function body. Return the local variables
     and the body. *)
 let fun_def_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
-    (def : A.fun_def) : V.var V.VarId.vector * A.expression =
+    (def : A.fun_def) : V.var list * A.expression =
   let rsubst r = r in
   let locals =
-    V.VarId.map
+    List.map
       (fun v -> { v with V.var_ty = ty_substitute rsubst tsubst v.V.var_ty })
       def.A.locals
   in

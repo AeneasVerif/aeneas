@@ -138,7 +138,7 @@ let variant_of_json (js : json) : (T.variant, string) result =
     (match js with
     | `Assoc [ ("name", name); ("fields", fields) ] ->
         let* name = string_of_json name in
-        let* fields = T.FieldId.vector_of_json field_of_json fields in
+        let* fields = list_of_json field_of_json fields in
         Ok { T.variant_name = name; fields }
     | _ -> Error "")
 
@@ -146,10 +146,10 @@ let type_def_kind_of_json (js : json) : (T.type_def_kind, string) result =
   combine_error_msgs js "type_def_kind_of_json"
     (match js with
     | `Assoc [ ("Struct", fields) ] ->
-        let* fields = T.FieldId.vector_of_json field_of_json fields in
+        let* fields = list_of_json field_of_json fields in
         Ok (T.Struct fields)
     | `Assoc [ ("Enum", variants) ] ->
-        let* variants = T.VariantId.vector_of_json variant_of_json variants in
+        let* variants = list_of_json variant_of_json variants in
         Ok (T.Enum variants)
     | _ -> Error "")
 
@@ -166,12 +166,8 @@ let type_def_of_json (js : json) : (T.type_def, string) result =
         ] ->
         let* def_id = T.TypeDefId.id_of_json def_id in
         let* name = name_of_json name in
-        let* region_params =
-          T.RegionVarId.vector_of_json region_var_of_json region_params
-        in
-        let* type_params =
-          T.TypeVarId.vector_of_json type_var_of_json type_params
-        in
+        let* region_params = list_of_json region_var_of_json region_params in
+        let* type_params = list_of_json type_var_of_json type_params in
         let* kind = type_def_kind_of_json kind in
         Ok { T.def_id; name; region_params; type_params; kind }
     | _ -> Error "")
@@ -445,14 +441,10 @@ let fun_sig_of_json (js : json) : (A.fun_sig, string) result =
           ("inputs", inputs);
           ("output", output);
         ] ->
-        let* region_params =
-          T.RegionVarId.vector_of_json region_var_of_json region_params
-        in
+        let* region_params = list_of_json region_var_of_json region_params in
         let* num_early_bound_regions = int_of_json num_early_bound_regions in
-        let* type_params =
-          T.TypeVarId.vector_of_json type_var_of_json type_params
-        in
-        let* inputs = V.VarId.vector_of_json rty_of_json inputs in
+        let* type_params = list_of_json type_var_of_json type_params in
+        let* inputs = list_of_json rty_of_json inputs in
         let* output = rty_of_json output in
         Ok
           {
@@ -572,7 +564,7 @@ let fun_def_of_json (js : json) : (A.fun_def, string) result =
         let* signature = fun_sig_of_json signature in
         let* divergent = bool_of_json divergent in
         let* arg_count = int_of_json arg_count in
-        let* locals = V.VarId.vector_of_json var_of_json locals in
+        let* locals = list_of_json var_of_json locals in
         let* body = expression_of_json body in
         Ok { A.def_id; name; signature; divergent; arg_count; locals; body }
     | _ -> Error "")
@@ -604,7 +596,7 @@ let cfim_module_of_json (js : json) : (M.cfim_module, string) result =
           ("functions", functions);
         ] ->
         let* declarations = list_of_json declaration_of_json declarations in
-        let* types = T.TypeDefId.vector_of_json type_def_of_json types in
-        let* functions = A.FunDefId.vector_of_json fun_def_of_json functions in
+        let* types = list_of_json type_def_of_json types in
+        let* functions = list_of_json fun_def_of_json functions in
         Ok { M.declarations; types; functions }
     | _ -> Error "")

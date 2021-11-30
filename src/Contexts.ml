@@ -18,9 +18,9 @@ type config = { mode : interpreter_mode; check_invariants : bool }
 [@@deriving show]
 
 type eval_ctx = {
-  type_context : type_def TypeDefId.vector;
-  fun_context : fun_def FunDefId.vector;
-  type_vars : type_var TypeVarId.vector;
+  type_context : type_def list;
+  fun_context : fun_def list;
+  type_vars : type_var list;
   env : env;
   symbolic_counter : SymbolicValueId.generator;
   borrow_counter : BorrowId.generator;

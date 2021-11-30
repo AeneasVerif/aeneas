@@ -98,18 +98,15 @@ module Types = struct
 
   let variant_to_string fmt (v : T.variant) : string =
     v.variant_name ^ "("
-    ^ String.concat ", "
-        (List.map (field_to_string fmt) (T.FieldId.vector_to_list v.fields))
+    ^ String.concat ", " (List.map (field_to_string fmt) v.fields)
     ^ ")"
 
   let name_to_string (name : name) : string = String.concat "::" name
 
   let type_def_to_string (type_def_id_to_string : T.TypeDefId.id -> string)
       (def : T.type_def) : string =
-    let regions : T.region_var list =
-      T.RegionVarId.vector_to_list def.region_params
-    in
-    let types : T.type_var list = T.TypeVarId.vector_to_list def.type_params in
+    let regions = def.region_params in
+    let types = def.type_params in
     let rid_to_string rid =
       match List.find_opt (fun rv -> rv.T.rv_index = rid) regions with
       | Some rv -> region_var_to_string rv
@@ -133,7 +130,6 @@ module Types = struct
     in
     match def.kind with
     | T.Struct fields ->
-        let fields = T.FieldId.vector_to_list fields in
         if List.length fields > 0 then
           let fields =
             String.concat ","
@@ -142,7 +138,6 @@ module Types = struct
           "struct " ^ name ^ params ^ "{" ^ fields ^ "}"
         else "struct " ^ name ^ params ^ "{}"
     | T.Enum variants ->
-        let variants = T.VariantId.vector_to_list variants in
         let variants =
           List.map (fun v -> "|  " ^ variant_to_string fmt v) variants
         in
@@ -222,8 +217,9 @@ module Values = struct
           | Some vid -> fmt.adt_variant_to_string av.def_id vid
           | None -> fmt.type_def_id_to_string av.def_id
         in
-        let field_values = T.FieldId.vector_to_list av.field_values in
-        let field_values = List.map (typed_value_to_string fmt) field_values in
+        let field_values =
+          List.map (typed_value_to_string fmt) av.field_values
+        in
         if List.length field_values > 0 then
           match fmt.adt_field_names av.V.def_id av.V.variant_id with
           | None ->
@@ -240,7 +236,6 @@ module Values = struct
               adt_ident ^ " { " ^ field_values ^ " }"
         else adt_ident
     | Tuple values ->
-        let values = T.FieldId.vector_to_list values in
         let values =
           String.concat ", " (List.map (typed_value_to_string fmt) values)
         in
@@ -302,7 +297,7 @@ module Values = struct
           | Some vid -> fmt.adt_variant_to_string av.adef_id vid
           | None -> fmt.type_def_id_to_string av.adef_id
         in
-        let field_values = T.FieldId.vector_to_list av.afield_values in
+        let field_values = av.afield_values in
         if List.length field_values > 0 then
           let field_values =
             String.concat " "
@@ -311,7 +306,6 @@ module Values = struct
           adt_ident ^ " " ^ field_values
         else adt_ident
     | ATuple values ->
-        let values = T.FieldId.vector_to_list values in
         let values =
           String.concat ", " (List.map (typed_avalue_to_string fmt) values)
         in
@@ -428,8 +422,7 @@ module Contexts = struct
   let ctx_to_rtype_formatter (fmt : ctx_formatter) : PT.rtype_formatter =
     PV.value_to_rtype_formatter fmt
 
-  let type_ctx_to_adt_variant_to_string_fun
-      (ctx : T.type_def T.TypeDefId.vector) :
+  let type_ctx_to_adt_variant_to_string_fun (ctx : T.type_def list) :
       T.TypeDefId.id -> T.VariantId.id -> string =
    fun def_id variant_id ->
     let def = T.TypeDefId.nth ctx def_id in
@@ -439,14 +432,14 @@ module Contexts = struct
         let variant = T.VariantId.nth variants variant_id in
         PT.name_to_string def.name ^ "::" ^ variant.variant_name
 
-  let type_ctx_to_adt_field_names_fun (ctx : T.type_def T.TypeDefId.vector) :
+  let type_ctx_to_adt_field_names_fun (ctx : T.type_def list) :
       T.TypeDefId.id -> T.VariantId.id option -> string list option =
    fun def_id opt_variant_id ->
     let def = T.TypeDefId.nth ctx def_id in
     let fields = T.type_def_get_fields def opt_variant_id in
     (* TODO: the field name should be optional?? *)
-    let fields = T.FieldId.map (fun f -> f.T.field_name) fields in
-    Some (T.FieldId.vector_to_list fields)
+    let fields = List.map (fun f -> f.T.field_name) fields in
+    Some fields
 
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
     (* We shouldn't use r_to_string *)
@@ -547,8 +540,8 @@ module CfimAst = struct
       PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
-  let type_ctx_to_adt_field_to_string_fun (ctx : T.type_def T.TypeDefId.vector)
-      : T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string =
+  let type_ctx_to_adt_field_to_string_fun (ctx : T.type_def list) :
+      T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string =
    fun def_id opt_variant_id field_id ->
     let def = T.TypeDefId.nth ctx def_id in
     let fields = T.type_def_get_fields def opt_variant_id in
@@ -783,8 +776,8 @@ module CfimAst = struct
     let name = PT.name_to_string def.A.name in
 
     (* Region/type parameters *)
-    let regions = T.RegionVarId.vector_to_list sg.region_params in
-    let types = T.TypeVarId.vector_to_list sg.type_params in
+    let regions = sg.region_params in
+    let types = sg.type_params in
     let params =
       if List.length regions + List.length types = 0 then ""
       else
@@ -794,14 +787,14 @@ module CfimAst = struct
     in
 
     (* Arguments *)
-    let inputs = V.VarId.vector_to_list def.locals in
+    let inputs = def.locals in
     let ret_var, inputs =
       match inputs with
       | [] -> failwith "Inconsistent signature"
       | ret_var :: inputs -> (ret_var, inputs)
     in
     let inputs, _aux_locals = Utilities.list_split_at inputs def.arg_count in
-    let args = List.combine inputs (V.VarId.vector_to_list sg.inputs) in
+    let args = List.combine inputs sg.inputs in
     let args =
       List.map
         (fun (var, rty) -> PV.var_to_string var ^ " : " ^ rty_to_string rty)
@@ -821,7 +814,7 @@ module CfimAst = struct
         (fun var ->
           indent ^ indent_incr ^ PV.var_to_string var ^ " : "
           ^ ety_to_string var.var_ty ^ ";")
-        (V.VarId.vector_to_list def.locals)
+        def.locals
     in
     let locals = String.concat "\n" locals in
 
@@ -841,8 +834,8 @@ module PA = CfimAst (* local module *)
 module Module = struct
   (** This function pretty-prints a type definition by using a definition
       context *)
-  let type_def_to_string (type_context : T.type_def T.TypeDefId.vector)
-      (def : T.type_def) : string =
+  let type_def_to_string (type_context : T.type_def list) (def : T.type_def) :
+      string =
     let type_def_id_to_string (id : T.TypeDefId.id) : string =
       let def = T.TypeDefId.nth type_context id in
       PT.name_to_string def.name
@@ -851,9 +844,8 @@ module Module = struct
 
   (** Generate an [ast_formatter] by using a definition context in combination
       with the variables local to a function's definition *)
-  let def_ctx_to_ast_formatter (type_context : T.type_def T.TypeDefId.vector)
-      (fun_context : A.fun_def A.FunDefId.vector) (def : A.fun_def) :
-      PA.ast_formatter =
+  let def_ctx_to_ast_formatter (type_context : T.type_def list)
+      (fun_context : A.fun_def list) (def : A.fun_def) : PA.ast_formatter =
     let r_to_string vid =
       let var = T.RegionVarId.nth def.signature.region_params vid in
       PT.region_var_to_string var
@@ -894,24 +886,18 @@ module Module = struct
 
   (** This function pretty-prints a function definition by using a definition
       context *)
-  let fun_def_to_string (type_context : T.type_def T.TypeDefId.vector)
-      (fun_context : A.fun_def A.FunDefId.vector) (def : A.fun_def) : string =
+  let fun_def_to_string (type_context : T.type_def list)
+      (fun_context : A.fun_def list) (def : A.fun_def) : string =
     let fmt = def_ctx_to_ast_formatter type_context fun_context def in
     PA.fun_def_to_string fmt "" "  " def
 
   let module_to_string (m : M.cfim_module) : string =
     (* The types *)
-    let type_defs =
-      List.map
-        (type_def_to_string m.M.types)
-        (T.TypeDefId.vector_to_list m.M.types)
-    in
+    let type_defs = List.map (type_def_to_string m.M.types) m.M.types in
 
     (* The functions *)
     let fun_defs =
-      List.map
-        (fun_def_to_string m.M.types m.M.functions)
-        (A.FunDefId.vector_to_list m.M.functions)
+      List.map (fun_def_to_string m.M.types m.M.functions) m.M.functions
     in
 
     (* Put everything together *)

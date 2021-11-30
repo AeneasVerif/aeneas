@@ -90,19 +90,16 @@ type ety = erased_region ty [@@deriving show]
 
 type field = { field_name : string; field_ty : rty } [@@deriving show]
 
-type variant = { variant_name : string; fields : field FieldId.vector }
-[@@deriving show]
+type variant = { variant_name : string; fields : field list } [@@deriving show]
 
-type type_def_kind =
-  | Struct of field FieldId.vector
-  | Enum of variant VariantId.vector
+type type_def_kind = Struct of field list | Enum of variant list
 [@@deriving show]
 
 type type_def = {
   def_id : TypeDefId.id;
   name : name;
-  region_params : region_var RegionVarId.vector;
-  type_params : type_var TypeVarId.vector;
+  region_params : region_var list;
+  type_params : type_var list;
   kind : type_def_kind;
 }
 [@@deriving show]
@@ -137,7 +134,7 @@ let rec erase_regions (ty : rty) : ety =
     Raises [Invalid_argument] if the arguments are incorrect.
  *)
 let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
-    : field FieldId.vector =
+    : field list =
   match (def.kind, opt_variant_id) with
   | Enum variants, Some variant_id -> (VariantId.nth variants variant_id).fields
   | Struct fields, None -> fields

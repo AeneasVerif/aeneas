@@ -79,7 +79,7 @@ type symbolic_proj_comp = {
 type value =
   | Concrete of constant_value  (** Concrete (non-symbolic) value *)
   | Adt of adt_value  (** Enumerations and structures *)
-  | Tuple of typed_value FieldId.vector
+  | Tuple of typed_value list
       (** Tuple - note that units are encoded as 0-tuples *)
   | Bottom  (** No value (uninitialized or moved value) *)
   | Assumed of assumed_value  (** Assumed types (Box, Vec, Cell...) *)
@@ -93,7 +93,7 @@ and adt_value = {
   variant_id : VariantId.id option;
   regions : erased_region list;
   types : ety list;
-  field_values : typed_value FieldId.vector;
+  field_values : typed_value list;
 }
 [@@deriving show]
 
@@ -138,7 +138,7 @@ type abstract_shared_borrows =
 type avalue =
   | AConcrete of constant_value
   | AAdt of aadt_value
-  | ATuple of typed_avalue FieldId.vector
+  | ATuple of typed_avalue list
   | ABottom
   | ALoan of aloan_content
   | ABorrow of aborrow_content
@@ -151,7 +151,7 @@ and aadt_value = {
   avariant_id : VariantId.id option;
   aregions : erased_region list;
   atypes : rty list;
-  afield_values : typed_avalue FieldId.vector;
+  afield_values : typed_avalue list;
 }
 [@@deriving show]
 
