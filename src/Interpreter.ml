@@ -354,6 +354,10 @@ let update_outer_borrows (io : inner_outer) opt x =
 let unwrap_res_to_outer_or opt default =
   match opt with Some x -> Outer x | None -> default
 
+(** Check if a value contains a borrow *)
+let borrows_in_value (v : V.typed_value) : bool =
+  not (check_borrows_in_value (fun _ -> false) v)
+
 (** Check if a value contains loans *)
 let rec loans_in_value (v : V.typed_value) : bool =
   match v.V.value with
@@ -739,15 +743,20 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
     Then, check that there is an associated loan in the environment. When moving
     values, before putting putting the value in its destination, we get an
     intermediate state where some values are "outside" the environment and thus
-    inaccessible. As [give_back_value], for instance, just performs a map, we
+    inaccessible. As [give_back_value] just performs a map for instance, we
     need to check independently that there is indeed a loan ready to receive
-    the value we give back. Note that in theory, we shouldn't never reach a
+    the value we give back (note that we also have other invariants like: there
+    is exacly one mutable loan associated to a mutable borrow, etc. but they
+    are more easily maintained). Note that in theory, we shouldn't never reach a
     problematic state as the one we describe above, because when we move a value
     we need to end all the loans inside before moving it. Still, it is a very
     useful sanity check.
     Finally, give the values back.
+
     Of course, we end outer borrows before updating the target borrow if it
-    proves necessary.
+    proves necessary: this is controled by the [io] parameter. If it is [Inner],
+    we allow ending inner borrows (without ending the outer borrows first),
+    otherwise we only allow ending outer borrows.
  *)
 let rec end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
     (env0 : C.env) : C.env =
@@ -947,11 +956,11 @@ let rec access_projection (access : projection_access) (env : C.env)
     (* Function to (eventually) update the value we find *)
       (update : V.typed_value -> V.typed_value) (p : E.projection)
     (v : V.typed_value) : (C.env * updated_read_value) path_access_result =
-  (* Debug *)
-  L.log#ldebug
-    (lazy
-      ("access_projection:\n" ^ "- p: " ^ E.show_projection p ^ "\n- v: "
-     ^ V.show_typed_value v));
+  (* (* Debug *)
+     L.log#ldebug
+       (lazy
+         ("access_projection:\n" ^ "- p: " ^ E.show_projection p ^ "\n- v: "
+        ^ V.show_typed_value v));*)
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -1354,8 +1363,10 @@ let rec update_env_along_write_place (config : C.config) (access : access_kind)
 exception UpdateEnv of C.env
 (** Small utility used to break control-flow *)
 
-(** Collect the borrows at a given place (by ending borrows when we find some
-    loans).
+(** Collect the borrows at a given place: whenever we find a loan, end the
+    associated borrow.
+
+    TODO: rename?
 
     This is used when reading, borrowing, writing to a value. We typically
     first call [update_env_along_read_place] or [update_env_along_write_place]
@@ -1421,7 +1432,9 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
         env
       with UpdateEnv env' -> collect_borrows_at_place config access p env')
 
-(** Drop (end) all the borrows at a given place.
+(** Drop (end) all the borrows at a given place, which should be seen as
+    an l-value (we will write to it later, but need to drop the borrows
+    before writing).
 
     Repeat:
     - read the value at a given place
@@ -1431,8 +1444,9 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
     drop the value there to properly propagate back values which are not/can't
     be borrowed anymore).
  *)
-let rec drop_borrows_at_place (config : C.config) (p : E.place) (env : C.env) :
+let rec drop_borrows_at_lplace (config : C.config) (p : E.place) (env : C.env) :
     C.env =
+  (* TODO: inner/outer + check drop_value *)
   (* We do something similar to [collect_borrows_at_place].
      First, retrieve the value *)
   match read_place config Write p env with
@@ -1472,6 +1486,7 @@ let rec drop_borrows_at_place (config : C.config) (p : E.place) (env : C.env) :
         | V.Assumed (Box v) -> inspect_update end_loans v
         | V.Borrow bc -> (
             assert (not end_loans);
+
             (* Sanity check *)
             (* We need to end all borrows. Note that we ignore the outer borrows
                when ending the borrows we find here (we call [end_inner_borrow(s)]:
@@ -1481,8 +1496,16 @@ let rec drop_borrows_at_place (config : C.config) (p : E.place) (env : C.env) :
             *)
             match bc with
             | V.SharedBorrow bid | V.MutBorrow (bid, _) ->
+                L.log#ldebug
+                  (lazy
+                    ("drop_borrows_at_lplace: dropping "
+                   ^ V.BorrowId.to_string bid));
                 raise (UpdateEnv (end_inner_borrow config bid env))
             | V.InactivatedMutBorrow bid ->
+                L.log#ldebug
+                  (lazy
+                    ("drop_borrows_at_lplace: activating "
+                   ^ V.BorrowId.to_string bid));
                 (* We need to activate inactivated borrows - later, we will
                  * actually end it *)
                 let env' =
@@ -1518,7 +1541,7 @@ let rec drop_borrows_at_place (config : C.config) (p : E.place) (env : C.env) :
         inspect_update true v;
         (* No environment update required: return the current environment *)
         env
-      with UpdateEnv env' -> drop_borrows_at_place config p env')
+      with UpdateEnv env' -> drop_borrows_at_lplace config p env')
 
 (** Copy a value, and return the resulting value.
 
@@ -1879,23 +1902,32 @@ type statement_eval_res = Unit | Break of int | Continue of int | Return
 (** Small utility.
     
     Prepare a place which is to be used as the destination of an assignment:
-    update the environment along the paths, collect the borrows at the place,
-    then drop the borrows.
+    update the environment along the paths, collect the borrows (to end the
+    loans) at the place, then drop the borrows.
 
-    Return the updated value at the end of the place (which is likely to contain
-    [Bottoms] values).
+    Return the updated value at the end of the place. This value is likely
+    to contain [Bottom] values (as we drop borrows) but should not contain
+    any loan or borrow.
  *)
 let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
     C.eval_ctx * V.typed_value =
+  (* TODO *)
   let access = Write in
-  let env1 =
+  let env =
     update_env_along_write_place config access ctx.type_context p ctx.env
   in
-  let env2 = collect_borrows_at_place config access p env1 in
-  let env3 = drop_borrows_at_place config p env2 in
-  let v = read_place_unwrap config access p env3 in
-  let ctx3 = { ctx with env = env3 } in
-  (ctx3, v)
+  (* End the loans *)
+  let env = collect_borrows_at_place config access p env in
+  (* End the borrows *)
+  let env = drop_borrows_at_lplace config p env in
+  (* Read the value and check it *)
+  let v = read_place_unwrap config access p env in
+  let ctx = { ctx with env } in
+  (* Sanity checks *)
+  assert (not (loans_in_value v));
+  assert (not (borrows_in_value v));
+  (* Return *)
+  (ctx, v)
 
 (** Read the value at a given place.
     As long as it is a loan, end the loan *)
@@ -1967,11 +1999,12 @@ let ctx_push_frame (ctx : C.eval_ctx) : C.eval_ctx =
 (** Drop a value at a given place *)
 let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
     =
-  let ctx1, v = prepare_lplace config p ctx in
+  (* Prepare the place (by ending the loans, then the borrows) *)
+  let ctx, v = prepare_lplace config p ctx in
+  (* Replace the value with [Bottom] *)
   let nv = { v with value = V.Bottom } in
-  let env2 = write_place_unwrap config Write p nv ctx1.env in
-  let ctx2 = { ctx with env = env2 } in
-  ctx2
+  let ctx = { ctx with env = write_place_unwrap config Write p nv ctx.env } in
+  ctx
 
 (** Small helper: compute the type of the return value for a specific
     instantiation of a non-local function.
@@ -2009,12 +2042,23 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
     | C.Frame :: _ -> []
   in
   let locals = list_locals ctx.env in
+  (* Debug *)
+  L.log#ldebug
+    (lazy
+      ("ctx_pop_frame: locals to drop: ["
+      ^ String.concat "," (List.map V.VarId.to_string locals)
+      ^ "]"));
   (* Drop the local variables *)
   let ctx1 =
     List.fold_left
       (fun ctx lid -> drop_value config ctx (mk_place_from_var_id lid))
       ctx locals
   in
+  (* Debug *)
+  L.log#ldebug
+    (lazy
+      ("ctx_pop_frame: after dropping local variables:\n"
+     ^ eval_ctx_to_string ctx1));
   (* Move the return value out of the return variable *)
   let ctx2, ret_value =
     eval_operand config ctx1 (E.Move (mk_place_from_var_id ret_vid))

@@ -10,6 +10,7 @@ module type Id = sig
   type generator
   (** Id generator - simply a counter *)
 
+  (* TODO: use list instead *)
   type 'a vector
 
   type set_t
@@ -18,6 +19,7 @@ module type Id = sig
 
   val generator_zero : generator
 
+  (* TODO: this is stateful! *)
   val fresh : generator -> id * generator
 
   val to_string : id -> string

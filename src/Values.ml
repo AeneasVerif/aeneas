@@ -2,7 +2,10 @@ open Identifiers
 open Types
 
 (** TODO: do we put the type variable/variable/region names everywhere
-    (to not have to perform lookups by using the ids?) *)
+    (to not have to perform lookups by using the ids?)
+    No: it is good not to duplicate and to use ids. This allows to split/
+    make very explicit the role of variables/identifiers/binders/etc.
+ *)
 
 module VarId = IdGen ()
 
@@ -19,7 +22,8 @@ type var = {
   name : string option;
   var_ty : ety;
       (** The variable type - erased type, because variables are not used
-       ** in function signatures *)
+       ** in function signatures - TODO: useless? TODO: binder type for
+          function definitions *)
 }
 [@@deriving show]
 
