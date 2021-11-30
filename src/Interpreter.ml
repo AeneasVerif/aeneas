@@ -27,6 +27,8 @@ let ety_to_string = Print.EvalCtxCfimAst.ety_to_string
 
 let typed_value_to_string = Print.EvalCtxCfimAst.typed_value_to_string
 
+let place_to_string = Print.EvalCtxCfimAst.place_to_string
+
 let operand_to_string = Print.EvalCtxCfimAst.operand_to_string
 
 let statement_to_string = Print.EvalCtxCfimAst.statement_to_string
@@ -2045,7 +2047,7 @@ let eval_box_new (config : C.config) (region_params : T.erased_region list)
       Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) ->
       (* Sanity check for invariant *)
       assert (input_var.var_ty = input_value.V.ty);
-      (* Necessary type checking *)
+      (* Required type checking *)
       assert (input_value.V.ty = boxed_ty);
 
       (* Move the input value *)
@@ -2067,10 +2069,19 @@ let eval_box_new (config : C.config) (region_params : T.erased_region list)
       Ok ctx
   | _ -> failwith "Inconsistent state"
 
-let ty_is_boxed_ty (box_ty : T.ety) (boxed_ty : T.ety) : bool =
+(** Deconstruct a type of the form `Box<T>` to retrieve the `T` inside *)
+let ty_get_box (box_ty : T.ety) : T.ety =
   match box_ty with
-  | T.Assumed (T.Box, [], [ boxed_ty' ]) -> boxed_ty' = boxed_ty
-  | _ -> false
+  | T.Assumed (T.Box, [], [ boxed_ty ]) -> boxed_ty
+  | _ -> failwith "Not a boxed type"
+
+(** Deconstruct a type of the form `&T` or `&mut T` to retrieve the `T` (and
+    the borrow kind, etc.)
+ *)
+let ty_get_ref (ty : T.ety) : T.erased_region * T.ety * T.ref_kind =
+  match ty with
+  | T.Ref (r, ty, ref_kind) -> (r, ty, ref_kind)
+  | _ -> failwith "Not a ref type"
 
 (** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
     and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
@@ -2084,8 +2095,15 @@ let eval_box_deref_mut_or_shared (config : C.config)
       Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) -> (
       (* Sanity check for invariant *)
       assert (input_var.var_ty = input_value.V.ty);
-      (* Necessary type checking *)
-      assert (ty_is_boxed_ty input_value.V.ty boxed_ty);
+      (* Required type checking. We must have:
+         - input_value.ty == & (mut) Box<ty>
+         - boxed_ty == ty
+         for some ty
+      *)
+      (let _, input_ty, ref_kind = ty_get_ref input_value.V.ty in
+       assert (match ref_kind with T.Shared -> not is_mut | T.Mut -> is_mut);
+       let input_ty = ty_get_box input_ty in
+       assert (input_ty = boxed_ty));
 
       (* Borrow the boxed value *)
       let p = { E.var_id = input_var.V.index; projection = [ E.DerefBox ] } in
@@ -2128,7 +2146,8 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
       (* Check the arguments *)
       assert (input_var.var_ty = input_value.V.ty);
       (* Sanity check for type invariant *)
-      assert (ty_is_boxed_ty input_value.V.ty boxed_ty);
+      (let input_ty = ty_get_box input_value.V.ty in
+       assert (input_ty = boxed_ty));
 
       (* Required type checking *)
 
@@ -2146,6 +2165,22 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result =
+  (* Debug *)
+  L.log#ldebug
+    (lazy
+      (let type_params =
+         "["
+         ^ String.concat ", " (List.map (ety_to_string ctx) type_params)
+         ^ "]"
+       in
+       let args =
+         "[" ^ String.concat ", " (List.map (operand_to_string ctx) args) ^ "]"
+       in
+       let dest = place_to_string ctx dest in
+       "eval_non_local_function_call:\n- fid:" ^ A.show_assumed_fun_id fid
+       ^ "\n- type_params: " ^ type_params ^ "\n- args: " ^ args ^ "\n- dest: "
+       ^ dest));
+
   (* Evaluate the operands *)
   let ctx, args_vl = eval_operands config ctx args in
 
