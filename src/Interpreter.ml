@@ -951,11 +951,6 @@ let rec access_projection (access : projection_access) (env : C.env)
     (* Function to (eventually) update the value we find *)
       (update : V.typed_value -> V.typed_value) (p : E.projection)
     (v : V.typed_value) : (C.env * updated_read_value) path_access_result =
-  (* (* Debug *)
-     L.log#ldebug
-       (lazy
-         ("access_projection:\n" ^ "- p: " ^ E.show_projection p ^ "\n- v: "
-        ^ V.show_typed_value v));*)
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -987,14 +982,14 @@ let rec access_projection (access : projection_access) (env : C.env)
           let fv = T.FieldId.nth adt.field_values field_id in
           match access_projection access env update p' fv with
           | Error err -> Error err
-          | Ok (env1, res) ->
+          | Ok (env, res) ->
               (* Update the field value *)
               let nvalues =
                 T.FieldId.update_nth adt.field_values field_id res.updated
               in
               let nadt = V.Adt { adt with V.field_values = nvalues } in
               let updated = { v with value = nadt } in
-              Ok (env1, { res with updated }))
+              Ok (env, { res with updated }))
       (* Tuples *)
       | Field (ProjTuple arity, field_id), V.Tuple values -> (
           assert (arity = List.length values);
@@ -1002,12 +997,12 @@ let rec access_projection (access : projection_access) (env : C.env)
           (* Project *)
           match access_projection access env update p' fv with
           | Error err -> Error err
-          | Ok (env1, res) ->
+          | Ok (env, res) ->
               (* Update the field value *)
               let nvalues = T.FieldId.update_nth values field_id res.updated in
               let ntuple = V.Tuple nvalues in
               let updated = { v with value = ntuple } in
-              Ok (env1, { res with updated })
+              Ok (env, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *))
       | Field (ProjAdt (_, _), _), V.Bottom ->
@@ -1027,9 +1022,9 @@ let rec access_projection (access : projection_access) (env : C.env)
            * interpreter *)
           match access_projection access env update p' bv with
           | Error err -> Error err
-          | Ok (env1, res) ->
+          | Ok (env, res) ->
               let nv = { v with value = V.Assumed (V.Box res.updated) } in
-              Ok (env1, { res with updated = nv }))
+              Ok (env, { res with updated = nv }))
       (* Borrows *)
       | Deref, V.Borrow bc -> (
           match bc with
@@ -1042,30 +1037,30 @@ let rec access_projection (access : projection_access) (env : C.env)
                     (* Explore the shared value *)
                     match access_projection access env update p' sv with
                     | Error err -> Error err
-                    | Ok (env1, res) ->
+                    | Ok (env, res) ->
                         (* Update the shared loan with the new value returned
                            by [access_projection] *)
-                        let env2 =
+                        let env =
                           update_loan ek bid
                             (V.SharedLoan (bids, res.updated))
-                            env1
+                            env
                         in
                         (* Return - note that we don't need to update the borrow itself *)
-                        Ok (env2, { res with updated = v }))
+                        Ok (env, { res with updated = v }))
               else Error (FailBorrow bc)
           | V.InactivatedMutBorrow bid -> Error (FailInactivatedMutBorrow bid)
           | V.MutBorrow (bid, bv) ->
               if access.enter_mut_borrows then
                 match access_projection access env update p' bv with
                 | Error err -> Error err
-                | Ok (env1, res) ->
+                | Ok (env, res) ->
                     let nv =
                       {
                         v with
                         value = V.Borrow (V.MutBorrow (bid, res.updated));
                       }
                     in
-                    Ok (env1, { res with updated = nv })
+                    Ok (env, { res with updated = nv })
               else Error (FailBorrow bc))
       | _, V.Loan lc -> (
           match lc with
@@ -1077,14 +1072,14 @@ let rec access_projection (access : projection_access) (env : C.env)
               if access.enter_shared_loans then
                 match access_projection access env update (pe :: p') sv with
                 | Error err -> Error err
-                | Ok (env1, res) ->
+                | Ok (env, res) ->
                     let nv =
                       {
                         v with
                         value = V.Loan (V.SharedLoan (bids, res.updated));
                       }
                     in
-                    Ok (env1, { res with updated = nv })
+                    Ok (env, { res with updated = nv })
               else Error (FailSharedLoan bids))
       | ( _,
           ( V.Concrete _ | V.Adt _ | V.Tuple _ | V.Bottom | V.Assumed _
@@ -1110,11 +1105,11 @@ let access_place (access : projection_access)
   (* Apply the projection *)
   match access_projection access env update p.projection value with
   | Error err -> Error err
-  | Ok (env1, res) ->
+  | Ok (env, res) ->
       (* Update the value *)
-      let env2 = C.env_update_var_value env1 p.var_id res.updated in
+      let env = C.env_update_var_value env p.var_id res.updated in
       (* Return *)
-      Ok (env2, res.read)
+      Ok (env, res.read)
 
 type access_kind =
   | Read  (** We can go inside borrows and loans *)
@@ -2012,9 +2007,9 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
   let rec list_locals env =
     match env with
     | [] -> failwith "Inconsistent environment"
-    | C.Abs _ :: env' -> list_locals env'
-    | C.Var (var, _) :: env' ->
-        let locals = list_locals env' in
+    | C.Abs _ :: env -> list_locals env
+    | C.Var (var, _) :: env ->
+        let locals = list_locals env in
         if var.index <> ret_vid then var.index :: locals else locals
     | C.Frame :: _ -> []
   in
@@ -2026,7 +2021,7 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
       ^ String.concat "," (List.map V.VarId.to_string locals)
       ^ "]"));
   (* Drop the local variables *)
-  let ctx1 =
+  let ctx =
     List.fold_left
       (fun ctx lid -> drop_value config ctx (mk_place_from_var_id lid))
       ctx locals
@@ -2035,22 +2030,22 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
   L.log#ldebug
     (lazy
       ("ctx_pop_frame: after dropping local variables:\n"
-     ^ eval_ctx_to_string ctx1));
+     ^ eval_ctx_to_string ctx));
   (* Move the return value out of the return variable *)
-  let ctx2, ret_value =
-    eval_operand config ctx1 (E.Move (mk_place_from_var_id ret_vid))
+  let ctx, ret_value =
+    eval_operand config ctx (E.Move (mk_place_from_var_id ret_vid))
   in
   (* Pop the frame *)
   let rec pop env =
     match env with
     | [] -> failwith "Inconsistent environment"
-    | C.Abs abs :: env' -> C.Abs abs :: pop env'
-    | C.Var (_, _) :: env' -> pop env'
-    | C.Frame :: env' -> env'
+    | C.Abs abs :: env -> C.Abs abs :: pop env
+    | C.Var (_, _) :: env -> pop env
+    | C.Frame :: env -> env
   in
-  let env3 = pop ctx2.env in
-  let ctx3 = { ctx2 with env = env3 } in
-  (ctx3, ret_value)
+  let env = pop ctx.env in
+  let ctx = { ctx with env } in
+  (ctx, ret_value)
 
 (** Assign a value to a given place *)
 let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
@@ -2289,22 +2284,22 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       (* Evaluate the rvalue *)
       match eval_rvalue config ctx rvalue with
       | Error err -> Error err
-      | Ok (ctx1, rvalue) ->
+      | Ok (ctx, rvalue) ->
           (* Assign *)
-          let ctx2 = assign_to_place config ctx1 rvalue p in
-          Ok (ctx2, Unit))
+          let ctx = assign_to_place config ctx rvalue p in
+          Ok (ctx, Unit))
   | A.FakeRead p ->
-      let ctx1, _ = prepare_rplace config Read p ctx in
-      Ok (ctx1, Unit)
+      let ctx, _ = prepare_rplace config Read p ctx in
+      Ok (ctx, Unit)
   | A.SetDiscriminant (p, variant_id) ->
       set_discriminant config ctx p variant_id
   | A.Drop p -> Ok (drop_value config ctx p, Unit)
   | A.Assert assertion -> (
-      let ctx1, v = eval_operand config ctx assertion.cond in
+      let ctx, v = eval_operand config ctx assertion.cond in
       assert (v.ty = T.Bool);
       match v.value with
       | Concrete (Bool b) ->
-          if b = assertion.expected then Ok (ctx1, Unit) else Error Panic
+          if b = assertion.expected then Ok (ctx, Unit) else Error Panic
       | _ -> failwith "Expected a boolean")
   | A.Call call -> eval_function_call config ctx call
   | A.Panic -> Error Panic
