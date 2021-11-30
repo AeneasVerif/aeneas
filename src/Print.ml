@@ -236,7 +236,7 @@ module Values = struct
                   (fun (field, value) -> field ^ " = " ^ value ^ ";")
                   field_values
               in
-              let field_values = String.concat "; " field_values in
+              let field_values = String.concat " " field_values in
               adt_ident ^ " { " ^ field_values ^ " }"
         else adt_ident
     | Tuple values ->
@@ -718,7 +718,8 @@ module CfimAst = struct
                   "core::ops::deref::DerefMut" ^ params ^ "::deref_mut"
               | A.BoxFree -> "alloc::alloc::box_free" ^ params)
         in
-        name_params ^ args
+        let dest = place_to_string fmt call.A.dest in
+        dest ^ " := move " ^ name_params ^ args
     | A.Panic -> "panic"
     | A.Return -> "return"
     | A.Break i -> "break " ^ string_of_int i

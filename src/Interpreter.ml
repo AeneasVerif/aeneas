@@ -2226,26 +2226,28 @@ let eval_box_deref_mut (config : C.config)
 
 (** Auxiliary function - see [eval_non_local_function_call].
 
-    In practice, does nothing put aside checking the input types: the box
-    value has been moved to a local variable in the function frame, this value
-    is then dropped uppon exiting.
+    Note that this function doesn't behave like the others: it does not expect
+    a stack frame to have been pushed, but rather simply behaves like [drop_value].
+    Followingly: it updates the box value (by calling [drop_value]) and updates
+    the destination (by setting it to `()`).
+
+    See the comments in [eval_non_local_function_call] for more explanations of
+    why we do this this way.
 *)
 let eval_box_free (config : C.config) (region_params : T.erased_region list)
-    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
-  match (region_params, type_params, ctx.env) with
-  | ( [],
-      [ boxed_ty ],
-      Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) ->
-      (* Check the arguments *)
-      assert (input_var.var_ty = input_value.V.ty);
-      (* Sanity check for type invariant *)
-      (let input_ty = ty_get_box input_value.V.ty in
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place)
+    (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+  match (region_params, type_params, args) with
+  | [], [ boxed_ty ], [ E.Move input_box_place ] ->
+      (* Required type checking *)
+      let input_box = read_place_unwrap config Write input_box_place ctx in
+      (let input_ty = ty_get_box input_box.V.ty in
        assert (input_ty = boxed_ty));
 
-      (* Required type checking *)
+      (* Drop the value *)
+      let ctx = drop_value config ctx input_box_place in
 
-      (* Update the return value *)
-      let dest = mk_place_from_var_id V.VarId.zero in
+      (* Update the destination by setting it to `()` *)
       let ctx = assign_to_place config ctx mk_unit_value dest in
 
       (* Return *)
@@ -2274,53 +2276,74 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
        ^ "\n- type_params: " ^ type_params ^ "\n- args: " ^ args ^ "\n- dest: "
        ^ dest));
 
-  (* Evaluate the operands *)
-  let ctx, args_vl = eval_operands config ctx args in
+  (* There are two cases (and this is extremely annoying):
+     - the function is not box_free: evaluate the operands, push a frame
+       and call a dedicated function to correctly update the variables
+       in the frame (and mimic the execution of a body), pop the frame
+     - the function is box_free: the value given to this function is often
+       of the form `Box(⊥)` because we generally move the value out of the
+       box before freeing the box. The annoying thing is that it makes it
+       invalid to see box_free as a "regular" function: it is not valid
+       to call a function with arguments which contain `⊥`. For this reason,
+       we translate box_free as drop_value, but this is a bit annoying with
+       regards to the semantics...
+     TODO: think about that, deeply
+  *)
+  match fid with
+  | A.BoxFree ->
+      (* Degenerate case: box_free *)
+      eval_box_free config region_params type_params args dest ctx
+  | _ -> (
+      (* "Normal" case: not box_free *)
+      (* Evaluate the operands *)
+      let ctx, args_vl = eval_operands config ctx args in
 
-  (* Push the stack frame: we initialize the frame with the return variable,
-     and one variable per input argument *)
-  let ctx = ctx_push_frame ctx in
+      (* Push the stack frame: we initialize the frame with the return variable,
+         and one variable per input argument *)
+      let ctx = ctx_push_frame ctx in
 
-  (* Create and push the return variable *)
-  let ret_vid = V.VarId.zero in
-  let ret_ty =
-    get_non_local_function_return_type fid region_params type_params
-  in
-  let ret_var = mk_var ret_vid (Some "@return") ret_ty in
-  let ctx = C.ctx_push_uninitialized_var ctx ret_var in
+      (* Create and push the return variable *)
+      let ret_vid = V.VarId.zero in
+      let ret_ty =
+        get_non_local_function_return_type fid region_params type_params
+      in
+      let ret_var = mk_var ret_vid (Some "@return") ret_ty in
+      let ctx = C.ctx_push_uninitialized_var ctx ret_var in
 
-  (* Create and push the input variables *)
-  let input_vars =
-    V.VarId.vector_to_list
-      (V.VarId.mapi_from1
-         (fun id v -> (mk_var id None v.V.ty, v))
-         (V.VarId.vector_of_list args_vl))
-  in
-  let ctx = C.ctx_push_vars ctx input_vars in
+      (* Create and push the input variables *)
+      let input_vars =
+        V.VarId.vector_to_list
+          (V.VarId.mapi_from1
+             (fun id v -> (mk_var id None v.V.ty, v))
+             (V.VarId.vector_of_list args_vl))
+      in
+      let ctx = C.ctx_push_vars ctx input_vars in
 
-  (* "Execute" the function body. As the functions are assumed, here we call
-     custom functions to perform the proper manipulations: we don't have
-     access to a body. *)
-  let res =
-    match fid with
-    | A.BoxNew -> eval_box_new config region_params type_params ctx
-    | A.BoxDeref -> eval_box_deref config region_params type_params ctx
-    | A.BoxDerefMut -> eval_box_deref_mut config region_params type_params ctx
-    | A.BoxFree -> eval_box_free config region_params type_params ctx
-  in
+      (* "Execute" the function body. As the functions are assumed, here we call
+         custom functions to perform the proper manipulations: we don't have
+         access to a body. *)
+      let res =
+        match fid with
+        | A.BoxNew -> eval_box_new config region_params type_params ctx
+        | A.BoxDeref -> eval_box_deref config region_params type_params ctx
+        | A.BoxDerefMut ->
+            eval_box_deref_mut config region_params type_params ctx
+        | A.BoxFree -> failwith "Unreachable"
+        (* should have been treated above *)
+      in
 
-  (* Check if the function body evaluated correctly *)
-  match res with
-  | Error err -> Error err
-  | Ok ctx ->
-      (* Pop the stack frame and retrieve the return value *)
-      let ctx, ret_value = ctx_pop_frame config ctx in
+      (* Check if the function body evaluated correctly *)
+      match res with
+      | Error err -> Error err
+      | Ok ctx ->
+          (* Pop the stack frame and retrieve the return value *)
+          let ctx, ret_value = ctx_pop_frame config ctx in
 
-      (* Move the return value to its destination *)
-      let ctx = assign_to_place config ctx ret_value dest in
+          (* Move the return value to its destination *)
+          let ctx = assign_to_place config ctx ret_value dest in
 
-      (* Return *)
-      Ok ctx
+          (* Return *)
+          Ok ctx)
 
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
@@ -2455,10 +2478,13 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
 and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
     (C.eval_ctx * statement_eval_res) eval_result =
   (* Debugging *)
-  L.log#ldebug
-    (lazy
-      ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate expression: \n"
-     ^ expression_to_string ctx e ^ "\n"));
+  (match e with
+  | A.Statement _ | A.Sequence (_, _) -> ()
+  | A.Loop _ | A.Switch (_, _) ->
+      L.log#ldebug
+        (lazy
+          ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate expression: \n"
+         ^ expression_to_string ctx e ^ "\n")));
   (* Evaluate *)
   match e with
   | A.Statement st -> eval_statement config ctx st
