@@ -875,12 +875,16 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
+          L.log#ldebug
+            (lazy
+              ("activate_inactivated_mut_borrow: resulting value:\n"
+             ^ V.show_typed_value sv));
           assert (not (loans_in_value sv));
           assert (not (bottom_in_value sv));
           let check_not_inactivated bc =
             match bc with V.InactivatedMutBorrow _ -> false | _ -> true
           in
-          assert (not (check_borrows_in_value check_not_inactivated sv));
+          assert (check_borrows_in_value check_not_inactivated sv);
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = V.BorrowId.Set.remove l bids in
