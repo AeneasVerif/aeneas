@@ -1679,16 +1679,16 @@ let eval_two_operands (config : C.config) (ctx : C.eval_ctx) (op1 : E.operand)
 let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : E.unop)
     (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result =
   (* Evaluate the operand *)
-  let ctx1, v = eval_operand config ctx op in
+  let ctx, v = eval_operand config ctx op in
   (* Apply the unop *)
   match (unop, v.V.value) with
   | E.Not, V.Concrete (Bool b) ->
-      Ok (ctx1, { v with V.value = V.Concrete (Bool (not b)) })
+      Ok (ctx, { v with V.value = V.Concrete (Bool (not b)) })
   | E.Neg, V.Concrete (V.Scalar sv) -> (
       let i = Z.neg sv.V.value in
       match mk_scalar sv.int_ty i with
       | Error _ -> Error Panic
-      | Ok sv -> Ok (ctx1, { v with V.value = V.Concrete (V.Scalar sv) }))
+      | Ok sv -> Ok (ctx, { v with V.value = V.Concrete (V.Scalar sv) }))
   | (E.Not | E.Neg), Symbolic _ -> raise Unimplemented (* TODO *)
   | _ -> failwith "Invalid value for unop"
 
@@ -1696,7 +1696,7 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
     (op1 : E.operand) (op2 : E.operand) :
     (C.eval_ctx * V.typed_value) eval_result =
   (* Evaluate the operands *)
-  let ctx2, v1, v2 = eval_two_operands config ctx op1 op2 in
+  let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
   if
     (* Binary operations only apply on integer values, but when we check for
      * equality *)
@@ -1705,7 +1705,7 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
     (* Equality/inequality check is primitive only on primitive types *)
     assert (v1.ty = v2.ty);
     let b = v1 = v2 in
-    Ok (ctx2, { V.value = V.Concrete (Bool b); ty = T.Bool }))
+    Ok (ctx, { V.value = V.Concrete (Bool b); ty = T.Bool }))
   else
     match (v1.V.value, v2.V.value) with
     | V.Concrete (V.Scalar sv1), V.Concrete (V.Scalar sv2) -> (
@@ -1763,7 +1763,7 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
           | E.Shl | E.Shr -> raise Unimplemented
           | E.Ne | E.Eq -> failwith "Unreachable"
         in
-        match res with Error _ -> Error Panic | Ok v -> Ok (ctx2, v))
+        match res with Error _ -> Error Panic | Ok v -> Ok (ctx, v))
     | _ -> failwith "Invalid inputs for binop"
 
 (** Evaluate an rvalue in a given context: return the updated context and
@@ -2344,11 +2344,11 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
       let locals, body = Subst.fun_def_substitute_in_body tsubst def in
 
       (* Evaluate the input operands *)
-      let ctx1, args = eval_operands config ctx args in
+      let ctx, args = eval_operands config ctx args in
       assert (List.length args = def.A.arg_count);
 
       (* Push a frame delimiter *)
-      let ctx2 = ctx_push_frame ctx1 in
+      let ctx = ctx_push_frame ctx in
 
       (* Compute the initial values for the local variables *)
       (* 1. Push the return value *)
@@ -2357,7 +2357,7 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
         | ret_ty :: locals -> (ret_ty, locals)
         | _ -> failwith "Unreachable"
       in
-      let ctx3 = C.ctx_push_var ctx2 ret_var (C.mk_bottom ret_var.var_ty) in
+      let ctx = C.ctx_push_var ctx ret_var (C.mk_bottom ret_var.var_ty) in
 
       (* 2. Push the input values *)
       let input_locals, locals =
@@ -2366,23 +2366,23 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
       let inputs = List.combine input_locals args in
       (* Note that this function checks that the variables and their values
          have the same type (this is important) *)
-      let ctx4 = C.ctx_push_vars ctx3 inputs in
+      let ctx = C.ctx_push_vars ctx inputs in
 
       (* 3. Push the remaining local variables (initialized as [Bottom]) *)
-      let ctx5 = C.ctx_push_uninitialized_vars ctx4 locals in
+      let ctx = C.ctx_push_uninitialized_vars ctx locals in
 
       (* Execute the function body *)
-      match eval_function_body config ctx5 body with
+      match eval_function_body config ctx body with
       | Error Panic -> Error Panic
-      | Ok ctx6 ->
+      | Ok ctx ->
           (* Pop the stack frame and retrieve the return value *)
-          let ctx7, ret_value = ctx_pop_frame config ctx6 in
+          let ctx, ret_value = ctx_pop_frame config ctx in
 
           (* Move the return value to its destination *)
-          let ctx8 = assign_to_place config ctx7 ret_value dest in
+          let ctx = assign_to_place config ctx ret_value dest in
 
           (* Return *)
-          Ok ctx8)
+          Ok ctx)
   | SymbolicMode -> raise Unimplemented
 
 (** Evaluate an expression seen as a function body (auxiliary helper for
@@ -2391,10 +2391,10 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
     (body : A.expression) : (C.eval_ctx, eval_error) result =
   match eval_expression config ctx body with
   | Error err -> Error err
-  | Ok (ctx1, res) -> (
+  | Ok (ctx, res) -> (
       match res with
       | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
-      | Return -> Ok ctx1)
+      | Return -> Ok ctx)
 
 (** Evaluate an expression *)
 and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
@@ -2414,13 +2414,13 @@ and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
       (* Evaluate the first expression *)
       match eval_expression config ctx e1 with
       | Error err -> Error err
-      | Ok (ctx1, Unit) ->
+      | Ok (ctx, Unit) ->
           (* Evaluate the second expression *)
-          eval_expression config ctx1 e2
+          eval_expression config ctx e2
       (* Control-flow break: transmit. We enumerate the cases on purpose *)
-      | Ok (ctx1, Break i) -> Ok (ctx1, Break i)
-      | Ok (ctx1, Continue i) -> Ok (ctx1, Continue i)
-      | Ok (ctx1, Return) -> Ok (ctx1, Return))
+      | Ok (ctx, Break i) -> Ok (ctx, Break i)
+      | Ok (ctx, Continue i) -> Ok (ctx, Continue i)
+      | Ok (ctx, Return) -> Ok (ctx, Return))
   | A.Loop loop_body ->
       (* Evaluate a loop body
 
@@ -2433,44 +2433,44 @@ and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
         (* Evaluate the loop body *)
         match eval_expression config ctx loop_body with
         | Error err -> Error err
-        | Ok (ctx1, Unit) ->
+        | Ok (ctx, Unit) ->
             (* We finished evaluating the expression in a "normal" manner *)
-            Ok (ctx1, Unit)
+            Ok (ctx, Unit)
         (* Control-flow breaks *)
-        | Ok (ctx1, Break i) ->
+        | Ok (ctx, Break i) ->
             (* Decrease the break index *)
-            if i = 0 then Ok (ctx1, Unit) else Ok (ctx1, Break (i - 1))
-        | Ok (ctx1, Continue i) ->
+            if i = 0 then Ok (ctx, Unit) else Ok (ctx, Break (i - 1))
+        | Ok (ctx, Continue i) ->
             (* Decrease the continue index *)
             if i = 0 then
               (* We stop there. When we continue, we go back to the beginning
                  of the loop: we must thus reevaluate the loop body (and
                  recheck the result to know whether we must reevaluate again,
                  etc. *)
-              eval_loop_body ctx1
+              eval_loop_body ctx
             else (* We don't stop there: transmit *)
-              Ok (ctx1, Continue (i - 1))
-        | Ok (ctx1, Return) -> Ok (ctx1, Return)
+              Ok (ctx, Continue (i - 1))
+        | Ok (ctx, Return) -> Ok (ctx, Return)
       in
       (* Apply *)
       eval_loop_body ctx
   | A.Switch (op, tgts) -> (
       (* Evaluate the operand *)
-      let ctx1, op_v = eval_operand config ctx op in
+      let ctx, op_v = eval_operand config ctx op in
       match tgts with
       | A.If (e1, e2) -> (
           match op_v.value with
           | V.Concrete (V.Bool b) ->
-              if b then eval_expression config ctx1 e1
-              else eval_expression config ctx1 e2
+              if b then eval_expression config ctx e1
+              else eval_expression config ctx e2
           | _ -> failwith "Inconsistent state")
       | A.SwitchInt (int_ty, tgts, otherwise) -> (
           match op_v.value with
           | V.Concrete (V.Scalar sv) -> (
               assert (sv.V.int_ty = int_ty);
               match List.find_opt (fun (sv', _) -> sv = sv') tgts with
-              | None -> eval_expression config ctx1 otherwise
-              | Some (_, tgt) -> eval_expression config ctx1 tgt)
+              | None -> eval_expression config ctx otherwise
+              | Some (_, tgt) -> eval_expression config ctx tgt)
           | _ -> failwith "Inconsistent state"))
 
 (** Test a unit function (taking no arguments) by evaluating it in an empty
