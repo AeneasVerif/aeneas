@@ -23,6 +23,10 @@ module L = Logging
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 
+let typed_value_to_string = Print.EvalCtxCfimAst.typed_value_to_string
+
+let operand_to_string = Print.EvalCtxCfimAst.operand_to_string
+
 let statement_to_string = Print.EvalCtxCfimAst.statement_to_string
 
 let expression_to_string ctx =
@@ -1128,7 +1132,14 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
       (* Note that we ignore the new environment: it should be the same as the
          original one.
       *)
-      if config.check_invariants then assert (env1 = env);
+      if config.check_invariants then
+        if env1 <> env then (
+          let msg =
+            "Unexpected environment update:\nNew environment:\n"
+            ^ C.show_env env1 ^ "\n\nOld environment:\n" ^ C.show_env env
+          in
+          L.log#serror msg;
+          failwith "Unexpected environment update");
       Ok read_value
 
 let read_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
@@ -1595,6 +1606,12 @@ let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
 (** Evaluate an operand. *)
 let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
     C.eval_ctx * V.typed_value =
+  (* Debug *)
+  L.log#ldebug
+    (lazy
+      ("eval_operand:\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n\n- op:\n"
+     ^ operand_to_string ctx op ^ "\n"));
+  (* Evaluate *)
   match op with
   | Expressions.Constant (ty, cv) ->
       let v = constant_value_to_typed_value ctx ty cv in
@@ -1604,6 +1621,7 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       let access = Read in
       let ctx1, v = prepare_rplace config access p ctx in
       (* Copy the value *)
+      L.log#ldebug (lazy ("Value to copy:\n" ^ typed_value_to_string ctx1 v));
       assert (not (bottom_in_value v));
       copy_value config ctx1 v
   | Expressions.Move p -> (
@@ -1611,6 +1629,7 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       let access = Move in
       let ctx1, v = prepare_rplace config access p ctx in
       (* Move the value *)
+      L.log#ldebug (lazy ("Value to move:\n" ^ typed_value_to_string ctx1 v));
       assert (not (bottom_in_value v));
       let bottom = { V.value = Bottom; ty = v.ty } in
       match write_place config access p bottom ctx1.env with
@@ -1953,6 +1972,9 @@ let get_non_local_function_return_type (fid : A.assumed_fun_id)
  *)
 let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
     C.eval_ctx * V.typed_value =
+  (* Debug *)
+  L.log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
+  (* Eval *)
   let ret_vid = V.VarId.zero in
   (* List the local variables, but the return variable *)
   let rec list_locals env =
@@ -1961,7 +1983,7 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
     | C.Abs _ :: env' -> list_locals env'
     | C.Var (var, _) :: env' ->
         let locals = list_locals env' in
-        if var.index = ret_vid then var.index :: locals else locals
+        if var.index <> ret_vid then var.index :: locals else locals
     | C.Frame :: _ -> []
   in
   let locals = list_locals ctx.env in

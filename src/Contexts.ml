@@ -58,15 +58,17 @@ let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
 
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
-  (* TOOD: we might want to stop at the end of the frame *)
-  let check_ev (ev : env_value) : typed_value option =
-    match ev with
-    | Var (var, v) -> if var.index = vid then Some v else None
-    | Abs _ | Frame -> None
+  (* We take care to stop at the end of current frame: different variables
+     in different frames can have the same id!
+  *)
+  let rec lookup env =
+    match env with
+    | [] -> failwith "Unexpected"
+    | Var (var, v) :: env' -> if var.index = vid then v else lookup env'
+    | Abs _ :: env' -> lookup env'
+    | Frame :: _ -> failwith "End of frame"
   in
-  match List.find_map check_ev env with
-  | None -> failwith "Unreachable"
-  | Some v -> v
+  lookup env
 
 (** Retrieve a variable's value in an evaluation context *)
 let ctx_lookup_var_value (ctx : eval_ctx) (vid : VarId.id) : typed_value =
@@ -78,14 +80,19 @@ let ctx_lookup_var_value (ctx : eval_ctx) (vid : VarId.id) : typed_value =
     any check.
 *)
 let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
-  (* TOOD: we might want to stop at the end of the frame *)
-  let update_ev (ev : env_value) : env_value =
-    match ev with
-    | Var (var, v) -> if var.index = vid then Var (var, nv) else Var (var, v)
-    | Abs abs -> Abs abs
-    | Frame -> Frame
+  (* We take care to stop at the end of current frame: different variables
+     in different frames can have the same id!
+  *)
+  let rec update env =
+    match env with
+    | [] -> failwith "Unexpected"
+    | Var (var, v) :: env' ->
+        if var.index = vid then Var (var, nv) :: env'
+        else Var (var, v) :: update env'
+    | Abs abs :: env' -> Abs abs :: update env'
+    | Frame :: _ -> failwith "End of frame"
   in
-  List.map update_ev env
+  update env
 
 (** Update a variable's value in an evaluation context.
 

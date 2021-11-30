@@ -473,7 +473,7 @@ module Contexts = struct
   (** Split an [env] at every occurrence of [Frame], eliminating those elements.
           Also reorders the frames and the values in the frames according to the
           following order:
-          * frames: from the first pushed (oldest) to the last pushed (current frame)
+          * frames: from the current frame to the first pushed (oldest frame)
           * values: from the first pushed (oldest) to the last pushed
        *)
   let split_env_according_to_frames (env : C.env) : C.env list =
@@ -485,7 +485,7 @@ module Contexts = struct
       | ev :: env' -> split_aux frames (ev :: curr_frame) env'
     in
     let frames = split_aux [] [] env in
-    List.rev frames
+    frames
 
   let eval_ctx_to_string (ctx : C.eval_ctx) : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
@@ -688,7 +688,7 @@ module CfimAst = struct
         let cond = operand_to_string fmt a.A.cond in
         if a.A.expected then "assert(" ^ cond ^ ")"
         else "assert(¬" ^ cond ^ ")"
-    | A.Call call -> (
+    | A.Call call ->
         let ty_fmt = ast_to_etype_formatter fmt in
         let params =
           if List.length call.A.type_params > 0 then
@@ -698,15 +698,21 @@ module CfimAst = struct
             ^ ">"
           else ""
         in
-        match call.A.func with
-        | A.Local fid -> fmt.fun_def_id_to_string fid ^ params
-        | A.Assumed fid -> (
-            match fid with
-            | A.BoxNew -> "alloc::boxed::Box" ^ params ^ "::new"
-            | A.BoxDeref -> "core::ops::deref::Deref<Box" ^ params ^ ">::deref"
-            | A.BoxDerefMut ->
-                "core::ops::deref::DerefMut<Box" ^ params ^ ">::deref_mut"
-            | A.BoxFree -> "alloc::alloc::box_free<" ^ params ^ ">"))
+        let args = List.map (operand_to_string fmt) call.A.args in
+        let args = "(" ^ String.concat ", " args ^ ")" in
+        let name_params =
+          match call.A.func with
+          | A.Local fid -> fmt.fun_def_id_to_string fid ^ params
+          | A.Assumed fid -> (
+              match fid with
+              | A.BoxNew -> "alloc::boxed::Box" ^ params ^ "::new"
+              | A.BoxDeref ->
+                  "core::ops::deref::Deref<Box" ^ params ^ ">::deref"
+              | A.BoxDerefMut ->
+                  "core::ops::deref::DerefMut" ^ params ^ "::deref_mut"
+              | A.BoxFree -> "alloc::alloc::box_free" ^ params)
+        in
+        name_params ^ args
     | A.Panic -> "panic"
     | A.Return -> "return"
     | A.Break i -> "break " ^ string_of_int i
@@ -908,6 +914,14 @@ end
 
 (** Pretty-printing for ASTs (functions based on an evaluation context) *)
 module EvalCtxCfimAst = struct
+  let typed_value_to_string (ctx : C.eval_ctx) (v : V.typed_value) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PV.typed_value_to_string fmt v
+
+  let operand_to_string (ctx : C.eval_ctx) (op : E.operand) : string =
+    let fmt = PA.eval_ctx_to_ast_formatter ctx in
+    PA.operand_to_string fmt op
+
   let statement_to_string (ctx : C.eval_ctx) (s : A.statement) : string =
     let fmt = PA.eval_ctx_to_ast_formatter ctx in
     PA.statement_to_string fmt s
