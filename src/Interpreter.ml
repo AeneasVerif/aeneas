@@ -11,11 +11,6 @@ module L = Logging
 (* TODO: Change state-passing style to : st -> ... -> (st, v) *)
 (* TODO: check that the value types are correct when evaluating *)
 (* TODO: module Type = T, etc. *)
-(* TODO: is it a good idea to give indices to variables? For instance:
-   let ctx1 = .. in
-   let ctx2 = ... ctx1 in
-   ...
- *)
 (* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
    (rather than only env) *)
 
@@ -500,8 +495,8 @@ let rec end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer)
   | C.Var (x, v) :: env -> (
       match end_borrow_get_borrow_in_value config io l None v with
       | v', NotFound ->
-          let env', res = end_borrow_get_borrow_in_env config io l env in
-          (Var (x, v') :: env', res)
+          let env, res = end_borrow_get_borrow_in_env config io l env in
+          (Var (x, v') :: env, res)
       | v', res -> (Var (x, v') :: env, res))
   | C.Abs _ :: _ ->
       assert (config.mode = SymbolicMode);
@@ -731,13 +726,13 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
       env
   (* If we found outer borrows: end those borrows first *)
   | env, Outer outer_borrows ->
-      let env' =
+      let env =
         match outer_borrows with
         | Borrows bids -> end_borrows_in_env config io bids env
         | Borrow bid -> end_borrow_in_env config io bid env
       in
       (* Retry to end the borrow *)
-      end_borrow_in_env config io l env'
+      end_borrow_in_env config io l env
   (* If found mut: give the value back *)
   | env, FoundMut tv ->
       (* Check that the borrow is somewhere - purely a sanity check *)
@@ -1673,7 +1668,7 @@ let eval_operands (config : C.config) (ctx : C.eval_ctx) (ops : E.operand list)
 let eval_two_operands (config : C.config) (ctx : C.eval_ctx) (op1 : E.operand)
     (op2 : E.operand) : C.eval_ctx * V.typed_value * V.typed_value =
   match eval_operands config ctx [ op1; op2 ] with
-  | ctx', [ v1; v2 ] -> (ctx', v1, v2)
+  | ctx, [ v1; v2 ] -> (ctx, v1, v2)
   | _ -> failwith "Unreachable"
 
 let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : E.unop)
