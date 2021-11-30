@@ -1247,17 +1247,15 @@ let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
     to, say, [Cons Bottom Bottom] (note that field projection contains information
     about which variant we should project to, which is why we *can* set the
     variant index when writing one of its fields).
-
-    TODO: rename to express the fact that this function uses a projection
 *)
-let expand_bottom_value (config : C.config) (access : access_kind) (p : E.place)
-    (remaining_pes : int) (pe : E.projection_elem) (ty : T.ety)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+let expand_bottom_value_from_projection (config : C.config)
+    (access : access_kind) (p : E.place) (remaining_pes : int)
+    (pe : E.projection_elem) (ty : T.ety) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Debugging *)
   L.log#ldebug
     (lazy
-      ("expand_bottom_value:\n" ^ "pe: " ^ E.show_projection_elem pe ^ "\n"
-     ^ "ty: " ^ T.show_ety ty));
+      ("expand_bottom_value_from_projection:\n" ^ "pe: "
+     ^ E.show_projection_elem pe ^ "\n" ^ "ty: " ^ T.show_ety ty));
   (* Prepare the update: we need to take the proper prefix of the place
      during whose evaluation we got stuck *)
   let projection' =
@@ -1346,7 +1344,8 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
             raise Unimplemented
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
-            expand_bottom_value config access p remaining_pes pe ty ctx
+            expand_bottom_value_from_projection config access p remaining_pes pe
+              ty ctx
         | FailBorrow _ -> failwith "Could not write to a borrow"
       in
       update_ctx_along_write_place config access p ctx
@@ -1354,16 +1353,14 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
 exception UpdateCtx of C.eval_ctx
 (** Small utility used to break control-flow *)
 
-(** Collect the borrows at a given place: whenever we find a loan, end the
-    associated borrow.
-
-    TODO: rename?
+(** End the loans at a given place: read the value, if it contains a loan,
+    end this loan, repeat.
 
     This is used when reading, borrowing, writing to a value. We typically
     first call [update_ctx_along_read_place] or [update_ctx_along_write_place]
     to get access to the value, then call this function to "prepare" the value.
  *)
-let rec collect_borrows_at_place (config : C.config) (access : access_kind)
+let rec end_loans_at_place (config : C.config) (access : access_kind)
     (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
   (* First, retrieve the value *)
   match read_place config access p ctx with
@@ -1421,7 +1418,7 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
         inspect_update v;
         (* No context update required: return the current context *)
         ctx
-      with UpdateCtx ctx -> collect_borrows_at_place config access p ctx)
+      with UpdateCtx ctx -> end_loans_at_place config access p ctx)
 
 (** Drop (end) all the loans and borrows at a given place, which should be
     seen as an l-value (we will write to it later, but need to drop the borrows
@@ -1450,7 +1447,7 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
  *)
 let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
     (ctx : C.eval_ctx) : C.eval_ctx =
-  (* We do something similar to [collect_borrows_at_place].
+  (* We do something similar to [end_loans_at_place].
      First, retrieve the value *)
   match read_place config Write p ctx with
   | Error _ -> failwith "Unreachable"
@@ -1570,11 +1567,11 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
       (* We can only copy shared borrows *)
       match bc with
       | SharedBorrow bid ->
-          let ctx', bid' = C.fresh_borrow_id ctx in
+          let ctx, bid' = C.fresh_borrow_id ctx in
           (* TODO: clean indices *)
-          let env'' = reborrow_shared config bid bid' ctx'.env in
-          let ctx'' = { ctx' with env = env'' } in
-          (ctx'', { v with V.value = V.Borrow (SharedBorrow bid') })
+          let env = reborrow_shared config bid bid' ctx.env in
+          let ctx = { ctx with env } in
+          (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
       | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
       | V.InactivatedMutBorrow _ ->
           failwith "Can't copy an inactivated mut borrow")
@@ -1637,7 +1634,7 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
 let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
     (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
   let ctx = update_ctx_along_read_place config access p ctx in
-  let ctx = collect_borrows_at_place config access p ctx in
+  let ctx = end_loans_at_place config access p ctx in
   let v = read_place_unwrap config access p ctx in
   (ctx, v)
 
