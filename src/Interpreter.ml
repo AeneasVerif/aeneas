@@ -650,7 +650,7 @@ let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
     by a shared value, referenced by the [original_bid] argument.
  *)
 let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
-    (new_bid : V.BorrowId.id) (env : C.env) : C.env =
+    (new_bid : V.BorrowId.id) (ctx : C.eval_ctx) : C.eval_ctx =
   let rec reborrow_in_value (v : V.typed_value) : V.typed_value =
     match v.V.value with
     | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
@@ -694,7 +694,7 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
         C.Abs abs
     | C.Frame -> C.Frame
   in
-  List.map reborrow_in_ev env
+  { ctx with env = List.map reborrow_in_ev ctx.env }
 
 (** End a borrow identified by its borrow id in an environment
     
@@ -1569,8 +1569,7 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
       | SharedBorrow bid ->
           let ctx, bid' = C.fresh_borrow_id ctx in
           (* TODO: clean indices *)
-          let env = reborrow_shared config bid bid' ctx.env in
-          let ctx = { ctx with env } in
+          let ctx = reborrow_shared config bid bid' ctx in
           (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
       | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
       | V.InactivatedMutBorrow _ ->
