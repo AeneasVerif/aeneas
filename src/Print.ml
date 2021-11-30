@@ -422,6 +422,12 @@ module Contexts = struct
 
   type ctx_formatter = PV.value_formatter
 
+  let ctx_to_etype_formatter (fmt : ctx_formatter) : PT.etype_formatter =
+    PV.value_to_etype_formatter fmt
+
+  let ctx_to_rtype_formatter (fmt : ctx_formatter) : PT.rtype_formatter =
+    PV.value_to_rtype_formatter fmt
+
   let type_ctx_to_adt_variant_to_string_fun
       (ctx : T.type_def T.TypeDefId.vector) :
       T.TypeDefId.id -> T.VariantId.id -> string =
@@ -914,6 +920,16 @@ end
 
 (** Pretty-printing for ASTs (functions based on an evaluation context) *)
 module EvalCtxCfimAst = struct
+  let ety_to_string (ctx : C.eval_ctx) (t : T.ety) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_etype_formatter fmt in
+    PT.ety_to_string fmt t
+
+  let rty_to_string (ctx : C.eval_ctx) (t : T.rty) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_rtype_formatter fmt in
+    PT.rty_to_string fmt t
+
   let typed_value_to_string (ctx : C.eval_ctx) (v : V.typed_value) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     PV.typed_value_to_string fmt v

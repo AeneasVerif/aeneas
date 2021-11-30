@@ -23,6 +23,8 @@ module L = Logging
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 
+let ety_to_string = Print.EvalCtxCfimAst.ety_to_string
+
 let typed_value_to_string = Print.EvalCtxCfimAst.typed_value_to_string
 
 let operand_to_string = Print.EvalCtxCfimAst.operand_to_string
@@ -952,7 +954,14 @@ let rec access_projection (access : projection_access) (env : C.env)
   | [] ->
       let nv = update v in
       (* Type checking *)
-      assert (nv.ty = v.ty);
+      if nv.ty <> v.ty then (
+        L.log#lerror
+          (lazy
+            ("Not the same type:\n- nv.ty: " ^ T.show_ety nv.ty ^ "\n- v.ty: "
+           ^ T.show_ety v.ty));
+        failwith
+          "Assertion failed: new value doesn't have the same type as its \
+           destination");
       Ok (env, { read = v; updated = nv })
   | pe :: p' -> (
       (* Match on the projection element and the value *)
