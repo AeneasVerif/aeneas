@@ -19,6 +19,13 @@ module L = Logging
 (* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
    (rather than only env) *)
 
+(* TODO: it would be good to find a "core", which implements the rules (like
+   "end_borrow") and on top of which we build more complex functions which
+   chose in which order to apply the rules, etc. This way we would make very
+   explicit where we need to insert sanity checks, what the preconditions are,
+   where invariants might be broken, etc.
+ *)
+
 (** Some utilities *)
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
@@ -799,14 +806,34 @@ and end_borrows_in_env (config : C.config) (io : inner_outer)
 (** Same as [end_borrow_in_env], but operating on evaluation contexts *)
 let end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  L.log#ldebug
+    (lazy
+      ("end_borrow " ^ V.BorrowId.to_string l ^ ": context before:\n"
+     ^ eval_ctx_to_string ctx));
   let env = end_borrow_in_env config io l ctx.env in
-  { ctx with env }
+  let ctx = { ctx with env } in
+  L.log#ldebug
+    (lazy
+      ("end_borrow " ^ V.BorrowId.to_string l ^ ": context after:\n"
+     ^ eval_ctx_to_string ctx));
+  ctx
 
 (** Same as [end_borrows_in_env], but operating on evaluation contexts *)
 let end_borrows (config : C.config) (io : inner_outer) (lset : V.BorrowId.Set.t)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  L.log#ldebug
+    (lazy
+      ("end_borrows "
+      ^ V.BorrowId.set_to_string lset
+      ^ ": context before:\n" ^ eval_ctx_to_string ctx));
   let env = end_borrows_in_env config io lset ctx.env in
-  { ctx with env }
+  let ctx = { ctx with env } in
+  L.log#ldebug
+    (lazy
+      ("end_borrows "
+      ^ V.BorrowId.set_to_string lset
+      ^ ": context after:\n" ^ eval_ctx_to_string ctx));
+  ctx
 
 let end_outer_borrow config = end_borrow config Outer
 
@@ -1447,9 +1474,22 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
         ctx
       with UpdateCtx ctx -> collect_borrows_at_place config access p ctx)
 
-(** Drop (end) all the borrows at a given place, which should be seen as
-    an l-value (we will write to it later, but need to drop the borrows
+(** Drop (end) all the loans and borrows at a given place, which should be
+    seen as an l-value (we will write to it later, but need to drop the borrows
     before writing).
+
+    We start by only dropping the borrows, then we end the loans. The reason
+    is that some loan we find may be borrowed by another part of the subvalue.
+    In order to correctly handle the "outer borrow" priority (we should end
+    the outer borrows first) which is not really applied here (we are preparing
+    the value for override: we can end the borrows inside, without ending the
+    borrows we traversed to actually access the value) we first end the borrows
+    we find in the place, to make sure all the "local" loans are taken care of.
+    Then, if we find a loan, it means it is "externally" borrowed (the associated
+    borrow is not in a subvalue of the place under inspection).
+    Also note that whenever we end a loan, we might propagate back a value inside
+    the place under inspection: we must re-end all the borrows we find there,
+    before reconsidering loans.
 
     Repeat:
     - read the value at a given place
@@ -1459,9 +1499,8 @@ let rec collect_borrows_at_place (config : C.config) (access : access_kind)
     drop the value there to properly propagate back values which are not/can't
     be borrowed anymore).
  *)
-let rec drop_borrows_at_lplace (config : C.config) (p : E.place)
+let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
     (ctx : C.eval_ctx) : C.eval_ctx =
-  (* TODO: inner/outer + check drop_value *)
   (* We do something similar to [collect_borrows_at_place].
      First, retrieve the value *)
   match read_place config Write p ctx with
@@ -1513,13 +1552,13 @@ let rec drop_borrows_at_lplace (config : C.config) (p : E.place)
             | V.SharedBorrow bid | V.MutBorrow (bid, _) ->
                 L.log#ldebug
                   (lazy
-                    ("drop_borrows_at_lplace: dropping "
+                    ("drop_borrows_loans_at_lplace: dropping "
                    ^ V.BorrowId.to_string bid));
                 raise (UpdateCtx (end_inner_borrow config bid ctx))
             | V.InactivatedMutBorrow bid ->
                 L.log#ldebug
                   (lazy
-                    ("drop_borrows_at_lplace: activating "
+                    ("drop_borrows_loans_at_lplace: activating "
                    ^ V.BorrowId.to_string bid));
                 (* We need to activate inactivated borrows - later, we will
                  * actually end it *)
@@ -1528,8 +1567,10 @@ let rec drop_borrows_at_lplace (config : C.config) (p : E.place)
                 in
                 raise (UpdateCtx ctx))
         | V.Loan lc ->
-            if (* If we can, end the loans, otherwise ignore *)
-               end_loans then
+            if
+              (* If we can, end the loans, otherwise ignore: keep for later *)
+              end_loans
+            then
               (* We need to end all loans. Note that as all the borrows inside
                  the value at place p should already have ended, the borrows
                  associated to the loans we find here should be borrows from
@@ -1556,7 +1597,7 @@ let rec drop_borrows_at_lplace (config : C.config) (p : E.place)
         inspect_update true v;
         (* No context update required: return the current context *)
         ctx
-      with UpdateCtx ctx -> drop_borrows_at_lplace config p ctx)
+      with UpdateCtx ctx -> drop_borrows_loans_at_lplace config p ctx)
 
 (** Copy a value, and return the resulting value.
 
@@ -1926,10 +1967,8 @@ let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
   (* TODO *)
   let access = Write in
   let ctx = update_ctx_along_write_place config access p ctx in
-  (* End the loans *)
-  let ctx = collect_borrows_at_place config access p ctx in
-  (* End the borrows *)
-  let ctx = drop_borrows_at_lplace config p ctx in
+  (* End the borrows and loans, starting with the borrows *)
+  let ctx = drop_borrows_loans_at_lplace config p ctx in
   (* Read the value and check it *)
   let v = read_place_unwrap config access p ctx in
   (* Sanity checks *)
@@ -2003,6 +2042,7 @@ let ctx_push_frame (ctx : C.eval_ctx) : C.eval_ctx =
 (** Drop a value at a given place *)
 let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
     =
+  L.log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
   (* Prepare the place (by ending the loans, then the borrows) *)
   let ctx, v = prepare_lplace config p ctx in
   (* Replace the value with [Bottom] *)
