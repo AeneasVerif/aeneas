@@ -2,12 +2,19 @@ open Types
 open Values
 open CfimAst
 
+type binder = {
+  index : VarId.id;  (** Unique variable identifier *)
+  name : string option;  (** Possible name *)
+}
+[@@deriving show]
+(** A binder used in an environment, to map a variable to a value *)
+
 (** Environment value: mapping from variable to value, abstraction (only
     used in symbolic mode) or stack frame delimiter.
     
     TODO: rename? Environment element or something?
  *)
-type env_value = Var of var * typed_value | Abs of abs | Frame
+type env_value = Var of binder * typed_value | Abs of abs | Frame
 [@@deriving show]
 
 type env = env_value list [@@deriving show]
@@ -39,7 +46,7 @@ let fresh_borrow_id (ctx : eval_ctx) : eval_ctx * BorrowId.id =
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
 
-let ctx_lookup_var (ctx : eval_ctx) (vid : VarId.id) : var =
+let ctx_lookup_binder (ctx : eval_ctx) (vid : VarId.id) : binder =
   (* TOOD: we might want to stop at the end of the frame *)
   let rec lookup env =
     match env with
@@ -94,6 +101,8 @@ let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
   in
   update env
 
+let var_to_binder (var : var) : binder = { index = var.index; name = var.name }
+
 (** Update a variable's value in an evaluation context.
 
     This is a helper function: it can break invariants and doesn't perform
@@ -110,7 +119,8 @@ let ctx_update_var_value (ctx : eval_ctx) (vid : VarId.id) (nv : typed_value) :
 *)
 let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
   assert (var.var_ty = v.ty);
-  { ctx with env = Var (var, v) :: ctx.env }
+  let bv = var_to_binder var in
+  { ctx with env = Var (bv, v) :: ctx.env }
 
 (** Push a list of variables.
 
@@ -120,7 +130,9 @@ let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
 let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
     =
   assert (List.for_all (fun (var, value) -> var.var_ty = value.ty) vars);
-  let vars = List.map (fun (var, value) -> Var (var, value)) vars in
+  let vars =
+    List.map (fun (var, value) -> Var (var_to_binder var, value)) vars
+  in
   let vars = List.rev vars in
   { ctx with env = List.append vars ctx.env }
 

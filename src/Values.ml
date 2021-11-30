@@ -17,6 +17,7 @@ module AbstractionId = IdGen ()
 
 module RegionId = IdGen ()
 
+(* TODO: move *)
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;
@@ -26,6 +27,7 @@ type var = {
           function definitions *)
 }
 [@@deriving show]
+(** A variable, as used in a type definition *)
 
 (** A variable *)
 

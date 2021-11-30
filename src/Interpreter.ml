@@ -2059,15 +2059,13 @@ let eval_box_new (config : C.config) (region_params : T.erased_region list)
   | ( [],
       [ boxed_ty ],
       Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) ->
-      (* Sanity check for invariant *)
-      assert (input_var.var_ty = input_value.V.ty);
       (* Required type checking *)
       assert (input_value.V.ty = boxed_ty);
 
       (* Move the input value *)
       let ctx, moved_input_value =
         eval_operand config ctx
-          (E.Move (mk_place_from_var_id input_var.V.index))
+          (E.Move (mk_place_from_var_id input_var.C.index))
       in
 
       (* Create the box value *)
@@ -2107,8 +2105,6 @@ let eval_box_deref_mut_or_shared (config : C.config)
   | ( [],
       [ boxed_ty ],
       Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) -> (
-      (* Sanity check for invariant *)
-      assert (input_var.var_ty = input_value.V.ty);
       (* Required type checking. We must have:
          - input_value.ty == & (mut) Box<ty>
          - boxed_ty == ty
@@ -2121,7 +2117,7 @@ let eval_box_deref_mut_or_shared (config : C.config)
 
       (* Borrow the boxed value *)
       let p =
-        { E.var_id = input_var.V.index; projection = [ E.Deref; E.DerefBox ] }
+        { E.var_id = input_var.C.index; projection = [ E.Deref; E.DerefBox ] }
       in
       let borrow_kind = if is_mut then E.Mut else E.Shared in
       let rv = E.Ref (p, borrow_kind) in

@@ -400,11 +400,16 @@ module PV = Values (* local module *)
 
 (** Pretty-printing for contexts *)
 module Contexts = struct
+  let binder_to_string (bv : C.binder) : string =
+    match bv.name with
+    | None -> PV.var_id_to_string bv.index
+    | Some name -> name
+
   let env_value_to_string (fmt : PV.value_formatter) (ev : C.env_value) : string
       =
     match ev with
     | Var (var, tv) ->
-        PV.var_to_string var ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
+        binder_to_string var ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
     | Abs abs -> PV.abs_to_string fmt abs
     | Frame -> failwith "Can't print a Frame element"
 
@@ -456,8 +461,8 @@ module Contexts = struct
       type_ctx_to_adt_variant_to_string_fun ctx.type_context
     in
     let var_id_to_string vid =
-      let var = C.ctx_lookup_var ctx vid in
-      PV.var_to_string var
+      let bv = C.ctx_lookup_binder ctx vid in
+      binder_to_string bv
     in
     let adt_field_names = type_ctx_to_adt_field_names_fun ctx.C.type_context in
     {
