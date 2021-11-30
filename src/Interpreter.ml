@@ -1694,10 +1694,10 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
               assert (sv1.int_ty = sv2.int_ty);
               let b =
                 match binop with
-                | E.Lt -> Z.lt sv1.V.value sv1.V.value
-                | E.Le -> Z.leq sv1.V.value sv1.V.value
-                | E.Ge -> Z.geq sv1.V.value sv1.V.value
-                | E.Gt -> Z.gt sv1.V.value sv1.V.value
+                | E.Lt -> Z.lt sv1.V.value sv2.V.value
+                | E.Le -> Z.leq sv1.V.value sv2.V.value
+                | E.Ge -> Z.geq sv1.V.value sv2.V.value
+                | E.Gt -> Z.gt sv1.V.value sv2.V.value
                 | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
                 | E.BitOr | E.Shl | E.Shr | E.Ne | E.Eq ->
                     failwith "Unreachable"
@@ -2389,6 +2389,10 @@ let test_unit_function (type_defs : T.type_def T.TypeDefId.vector)
     unit eval_result =
   (* Retrieve the function declaration *)
   let fdef = A.FunDefId.nth fun_defs fid in
+
+  (* Debug *)
+  L.log#ldebug
+    (lazy ("test_unit_function: " ^ Print.Types.name_to_string fdef.A.name));
 
   (* Sanity check - *)
   assert (T.RegionVarId.length fdef.A.signature.region_params = 0);
