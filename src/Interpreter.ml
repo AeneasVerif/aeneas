@@ -1763,7 +1763,10 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           let ctx2, v = prepare_rplace config access p ctx in
           (* Compute the rvalue - simply a shared borrow with a fresh id *)
           let ctx3, bid = C.fresh_borrow_id ctx2 in
-          let rv_ty = T.Ref (T.Erased, v.ty, Shared) in
+          (* Note that the reference is *mutable* if we do a two-phase borrow *)
+          let rv_ty =
+            T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
+          in
           let bc =
             if bkind = E.Shared then V.SharedBorrow bid
             else V.InactivatedMutBorrow bid
