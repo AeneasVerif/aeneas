@@ -792,12 +792,7 @@ module CfimAst = struct
     in
 
     (* Arguments *)
-    let inputs = def.locals in
-    let ret_var, inputs =
-      match inputs with
-      | [] -> failwith "Inconsistent signature"
-      | ret_var :: inputs -> (ret_var, inputs)
-    in
+    let inputs = List.tl def.locals in
     let inputs, _aux_locals = Utilities.list_split_at inputs def.arg_count in
     let args = List.combine inputs sg.inputs in
     let args =
