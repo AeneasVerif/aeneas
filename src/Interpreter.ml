@@ -950,8 +950,8 @@ let rec access_projection (access : projection_access) (env : C.env)
   (* Debug *)
   L.log#ldebug
     (lazy
-      ("access_projection:\n" ^ "p: " ^ E.show_projection p ^ "\nv.ty: "
-     ^ T.show_ety v.V.ty));
+      ("access_projection:\n" ^ "- p: " ^ E.show_projection p ^ "\n- v: "
+     ^ V.show_typed_value v));
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -1084,7 +1084,11 @@ let rec access_projection (access : projection_access) (env : C.env)
               else Error (FailSharedLoan bids))
       | ( _,
           ( V.Concrete _ | V.Adt _ | V.Tuple _ | V.Bottom | V.Assumed _
-          | V.Borrow _ ) ) ->
+          | V.Borrow _ ) ) as r ->
+          let pe, v = r in
+          let pe = "- pe: " ^ E.show_projection_elem pe in
+          let v = "- v:\n" ^ V.show_value v in
+          L.log#serror ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v);
           failwith "Inconsistent projection")
 
 (** Generic function to access (read/write) the value at a given place.
@@ -2106,7 +2110,9 @@ let eval_box_deref_mut_or_shared (config : C.config)
        assert (input_ty = boxed_ty));
 
       (* Borrow the boxed value *)
-      let p = { E.var_id = input_var.V.index; projection = [ E.DerefBox ] } in
+      let p =
+        { E.var_id = input_var.V.index; projection = [ E.Deref; E.DerefBox ] }
+      in
       let borrow_kind = if is_mut then E.Mut else E.Shared in
       let rv = E.Ref (p, borrow_kind) in
       match eval_rvalue config ctx rv with
