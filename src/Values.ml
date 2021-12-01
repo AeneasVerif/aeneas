@@ -82,9 +82,12 @@ type value =
   | Concrete of constant_value  (** Concrete (non-symbolic) value *)
   | Adt of adt_value  (** Enumerations and structures *)
   | Tuple of typed_value list
-      (** Tuple - note that units are encoded as 0-tuples *)
+      (** Tuple - note that units are encoded as 0-tuples
+          TODO: merge with Adt?
+       *)
   | Bottom  (** No value (uninitialized or moved value) *)
-  | Assumed of assumed_value  (** Assumed types (Box, Vec, Cell...) *)
+  | Assumed of assumed_value
+      (** Value of an abstract type (Box, Vec, Cell...) *)
   | Borrow of borrow_content  (** A borrowed value *)
   | Loan of loan_content  (** A loaned value *)
   | Symbolic of symbolic_proj_comp  (** Unknown value *)
@@ -92,9 +95,12 @@ type value =
 
 and adt_value = {
   def_id : TypeDefId.id;
+  (* TODO: remove *)
   variant_id : VariantId.id option;
   regions : erased_region list;
+  (* TODO: remove *)
   types : ety list;
+  (* TODO: remove *)
   field_values : typed_value list;
 }
 [@@deriving show]
@@ -147,6 +153,7 @@ type avalue =
   | AAssumed of aassumed_value
   | AProj of aproj
 [@@deriving show]
+(*  TODO: merge with value *)
 
 and aadt_value = {
   adef_id : TypeDefId.id;
@@ -156,6 +163,7 @@ and aadt_value = {
   afield_values : typed_avalue list;
 }
 [@@deriving show]
+(* TODO: merge with adt_value *)
 
 and aloan_content =
   | AMutLoan of BorrowId.id * typed_avalue

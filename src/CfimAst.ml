@@ -58,6 +58,7 @@ type expression =
   | Switch of operand * switch_targets
   | Loop of expression
 [@@deriving show]
+(* TODO: merge with statement *)
 
 and switch_targets =
   | If of expression * expression  (** Gives the "if" and "else" blocks *)

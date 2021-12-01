@@ -75,6 +75,7 @@ type 'r ty =
   | Ref of 'r * 'r ty * ref_kind
   | Assumed of assumed_ty * 'r list * 'r ty list
 [@@deriving show]
+(* TODO: group Bool, Char, etc. in Constant *)
 
 type rty = RegionVarId.id region ty [@@deriving show]
 (** Type with *R*egions.

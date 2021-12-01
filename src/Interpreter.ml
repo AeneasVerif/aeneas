@@ -21,6 +21,8 @@ module L = Logging
    where invariants might be broken, etc.
  *)
 
+(* TODO: test with PLT-redex *)
+
 (** Some utilities *)
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
@@ -901,7 +903,10 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
 
 (** When we fail reading from or writing to a path, it might be because we
     need to update the environment by ending borrows, expanding symbolic
-    values, etc. The following type is used to convey this information. *)
+    values, etc. The following type is used to convey this information.
+    
+    TODO: compare with borrow_lres?
+*)
 type path_fail_kind =
   | FailSharedLoan of V.BorrowId.Set.t
       (** Failure because we couldn't go inside a shared loan *)
@@ -912,6 +917,7 @@ type path_fail_kind =
           (which should get activated) *)
   | FailSymbolic of (E.projection_elem * V.symbolic_proj_comp)
       (** Failure because we need to enter a symbolic value (and thus need to expand it) *)
+  (* TODO: Remove the parentheses *)
   | FailBottom of (int * E.projection_elem * T.ety)
       (** Failure because we need to enter an any value - we can expand Bottom
           values if they are left values. We return the number of elements which
@@ -1348,7 +1354,9 @@ exception UpdateCtx of C.eval_ctx
 
     This is used when reading, borrowing, writing to a value. We typically
     first call [update_ctx_along_read_place] or [update_ctx_along_write_place]
-    to get access to the value, then call this function to "prepare" the value.
+    to get access to the value, then call this function to "prepare" the value:
+    when moving values, we can't move a value which contains loans and thus need
+    to end them, etc.
  *)
 let rec end_loans_at_place (config : C.config) (access : access_kind)
     (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
@@ -1360,7 +1368,8 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
          In particular, we need to end the proper loans in the value.
          Also, we fail if the value contains any [Bottom].
 
-         We use exceptions to make it handy.
+         We use exceptions to make it handy: whenever we update the
+         context, we raise an exception wrapping the updated context.
       *)
       let rec inspect_update v : unit =
         match v.V.value with
@@ -1400,15 +1409,17 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
       in
       (* Inspect the value and update the context while doing so.
          If the context gets updated: perform a recursive call (many things
-         may have been updated in the context: first we need to retrieve the
-         proper updated value - and this value may actually not be accessible
-         anymore
+         may have been updated in the context: we need to re-read the value
+         at place [p] - and this value may actually not be accessible
+         anymore...)
       *)
       try
         inspect_update v;
         (* No context update required: return the current context *)
         ctx
-      with UpdateCtx ctx -> end_loans_at_place config access p ctx)
+      with UpdateCtx ctx ->
+        (* The context was updated: do a recursive call to reinspect the value *)
+        end_loans_at_place config access p ctx)
 
 (** Drop (end) all the loans and borrows at a given place, which should be
     seen as an l-value (we will write to it later, but need to drop the borrows
@@ -1878,12 +1889,12 @@ type statement_eval_res = Unit | Break of int | Continue of int | Return
 (** Small utility.
     
     Prepare a place which is to be used as the destination of an assignment:
-    update the environment along the paths, collect the borrows (to end the
-    loans) at the place, then drop the borrows.
+    update the environment along the paths, end the borrows and loans at
+    this place, etc.
 
-    Return the updated value at the end of the place. This value is likely
-    to contain [Bottom] values (as we drop borrows) but should not contain
-    any loan or borrow.
+    Return the updated context and the (updated) value at the end of the
+    place. This value should not contain any loan or borrow (and we check
+    it is the case). Note that it is very likely to contain [Bottom] values.
  *)
 let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
     C.eval_ctx * V.typed_value =
@@ -1901,7 +1912,12 @@ let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
   (ctx, v)
 
 (** Read the value at a given place.
-    As long as it is a loan, end the loan *)
+    As long as it is a loan, end the loan.
+    This function doesn't perform a recursive exploration:
+    it won't dive into the value to end all the inner
+    loans (contrary to [drop_borrows_loans_at_lplace] for
+    instance).
+ *)
 let rec end_loan_exactly_at_place (config : C.config) (access : access_kind)
     (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
   let v = read_place_unwrap config access p ctx in
@@ -1914,6 +1930,17 @@ let rec end_loan_exactly_at_place (config : C.config) (access : access_kind)
       end_loan_exactly_at_place config access p ctx
   | _ -> ctx
 
+(** Updates the discriminant of a value at a given place.
+
+    There are two situations:
+    - either the discriminant is already the proper one (in which case we
+      don't do anything)
+    - or it is not the proper one (because the variant is not the proper
+      one, or the value is actually [Bottom] - this happens when
+      initializing ADT values), in which case we replace the value with
+      a variant with all its fields set to [Bottom].
+      For instance, something like: `Cons Bottom Bottom`.
+ *)
 let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
     (variant_id : T.VariantId.id) :
     (C.eval_ctx * statement_eval_res) eval_result =
@@ -2466,6 +2493,8 @@ and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
 
 (** Test a unit function (taking no arguments) by evaluating it in an empty
     environment
+
+    TODO: put in a sub-module
  *)
 let test_unit_function (type_defs : T.type_def list) (fun_defs : A.fun_def list)
     (fid : A.FunDefId.id) : unit eval_result =
