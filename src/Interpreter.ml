@@ -1559,7 +1559,6 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
       match bc with
       | SharedBorrow bid ->
           let ctx, bid' = C.fresh_borrow_id ctx in
-          (* TODO: clean indices *)
           let ctx = reborrow_shared config bid bid' ctx in
           (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
       | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
