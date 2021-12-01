@@ -146,8 +146,8 @@ let call_substitute (tsubst : T.TypeVarId.id -> T.ety) (call : A.call) : A.call
   }
 
 (** Apply a type substitution to a statement *)
-let statement_substitute (tsubst : T.TypeVarId.id -> T.ety) (st : A.statement) :
-    A.statement =
+let rec statement_substitute (tsubst : T.TypeVarId.id -> T.ety)
+    (st : A.statement) : A.statement =
   match st with
   | A.Assign (p, rvalue) ->
       let p = place_substitute tsubst p in
@@ -169,42 +169,36 @@ let statement_substitute (tsubst : T.TypeVarId.id -> T.ety) (st : A.statement) :
       let call = call_substitute tsubst call in
       A.Call call
   | A.Panic | A.Return | A.Break _ | A.Continue _ | A.Nop -> st
-
-(** Apply a type substitution to an expression *)
-let rec expression_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (e : A.expression) : A.expression =
-  match e with
-  | A.Statement st -> A.Statement (statement_substitute tsubst st)
-  | A.Sequence (e1, e2) ->
+  | A.Sequence (st1, st2) ->
       A.Sequence
-        (expression_substitute tsubst e1, expression_substitute tsubst e2)
+        (statement_substitute tsubst st1, statement_substitute tsubst st2)
   | A.Switch (op, tgts) ->
       A.Switch
         (operand_substitute tsubst op, switch_targets_substitute tsubst tgts)
-  | A.Loop le -> A.Loop (expression_substitute tsubst le)
+  | A.Loop le -> A.Loop (statement_substitute tsubst le)
 
 (** Apply a type substitution to switch targets *)
 and switch_targets_substitute (tsubst : T.TypeVarId.id -> T.ety)
     (tgts : A.switch_targets) : A.switch_targets =
   match tgts with
-  | A.If (e1, e2) ->
-      A.If (expression_substitute tsubst e1, expression_substitute tsubst e2)
+  | A.If (st1, st2) ->
+      A.If (statement_substitute tsubst st1, statement_substitute tsubst st2)
   | A.SwitchInt (int_ty, tgts, otherwise) ->
       let tgts =
-        List.map (fun (sv, e) -> (sv, expression_substitute tsubst e)) tgts
+        List.map (fun (sv, st) -> (sv, statement_substitute tsubst st)) tgts
       in
-      let otherwise = expression_substitute tsubst otherwise in
+      let otherwise = statement_substitute tsubst otherwise in
       A.SwitchInt (int_ty, tgts, otherwise)
 
 (** Apply a type substitution to a function body. Return the local variables
     and the body. *)
 let fun_def_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
-    (def : A.fun_def) : V.var list * A.expression =
+    (def : A.fun_def) : V.var list * A.statement =
   let rsubst r = r in
   let locals =
     List.map
       (fun v -> { v with V.var_ty = ty_substitute rsubst tsubst v.V.var_ty })
       def.A.locals
   in
-  let body = expression_substitute tsubst def.body in
+  let body = statement_substitute tsubst def.body in
   (locals, body)

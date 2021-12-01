@@ -50,22 +50,17 @@ type statement =
       (** Continue to (outer) loop. The loop identifier works
           the same way as for [Break] *)
   | Nop
-[@@deriving show]
-
-type expression =
-  | Statement of statement
-  | Sequence of expression * expression
+  | Sequence of statement * statement
   | Switch of operand * switch_targets
-  | Loop of expression
+  | Loop of statement
 [@@deriving show]
-(* TODO: merge with statement *)
 
 and switch_targets =
-  | If of expression * expression  (** Gives the "if" and "else" blocks *)
-  | SwitchInt of integer_type * (scalar_value * expression) list * expression
+  | If of statement * statement  (** Gives the "if" and "else" blocks *)
+  | SwitchInt of integer_type * (scalar_value * statement) list * statement
       (** The targets for a switch over an integer are:
-          - the list `(matched value, expression to execute)`
-          - the "otherwise" expression.
+          - the list `(matched value, statement to execute)`
+          - the "otherwise" statement.
           Also note that we precise the type of the integer (uint32, int64, etc.)
           which we switch on. *)
 [@@deriving show]
@@ -77,6 +72,6 @@ type fun_def = {
   divergent : bool;
   arg_count : int;
   locals : var list;
-  body : expression;
+  body : statement;
 }
 [@@deriving show]

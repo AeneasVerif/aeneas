@@ -35,10 +35,8 @@ let place_to_string = Print.EvalCtxCfimAst.place_to_string
 
 let operand_to_string = Print.EvalCtxCfimAst.operand_to_string
 
-let statement_to_string = Print.EvalCtxCfimAst.statement_to_string
-
-let expression_to_string ctx =
-  Print.EvalCtxCfimAst.expression_to_string ctx "  " "  "
+let statement_to_string ctx =
+  Print.EvalCtxCfimAst.statement_to_string ctx "" "  "
 
 (* TODO: move *)
 let mk_unit_ty : T.ety = T.Tuple []
@@ -2326,6 +2324,68 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
   | A.Break i -> Ok (ctx, Break i)
   | A.Continue i -> Ok (ctx, Continue i)
   | A.Nop -> Ok (ctx, Unit)
+  | A.Sequence (st1, st2) -> (
+      (* Evaluate the first statement *)
+      match eval_statement config ctx st1 with
+      | Error err -> Error err
+      | Ok (ctx, Unit) ->
+          (* Evaluate the second statement *)
+          eval_statement config ctx st2
+      (* Control-flow break: transmit. We enumerate the cases on purpose *)
+      | Ok (ctx, Break i) -> Ok (ctx, Break i)
+      | Ok (ctx, Continue i) -> Ok (ctx, Continue i)
+      | Ok (ctx, Return) -> Ok (ctx, Return))
+  | A.Loop loop_body ->
+      (* Evaluate a loop body
+
+         We need a specific function for the [Continue] case: in case we continue,
+         we might have to reevaluate the current loop body with the new context
+         (and repeat this an indefinite number of times).
+      *)
+      let rec eval_loop_body (ctx : C.eval_ctx) :
+          (C.eval_ctx * statement_eval_res) eval_result =
+        (* Evaluate the loop body *)
+        match eval_statement config ctx loop_body with
+        | Error err -> Error err
+        | Ok (ctx, Unit) ->
+            (* We finished evaluating the statement in a "normal" manner *)
+            Ok (ctx, Unit)
+        (* Control-flow breaks *)
+        | Ok (ctx, Break i) ->
+            (* Decrease the break index *)
+            if i = 0 then Ok (ctx, Unit) else Ok (ctx, Break (i - 1))
+        | Ok (ctx, Continue i) ->
+            (* Decrease the continue index *)
+            if i = 0 then
+              (* We stop there. When we continue, we go back to the beginning
+                 of the loop: we must thus reevaluate the loop body (and
+                 recheck the result to know whether we must reevaluate again,
+                 etc. *)
+              eval_loop_body ctx
+            else (* We don't stop there: transmit *)
+              Ok (ctx, Continue (i - 1))
+        | Ok (ctx, Return) -> Ok (ctx, Return)
+      in
+      (* Apply *)
+      eval_loop_body ctx
+  | A.Switch (op, tgts) -> (
+      (* Evaluate the operand *)
+      let ctx, op_v = eval_operand config ctx op in
+      match tgts with
+      | A.If (st1, st2) -> (
+          match op_v.value with
+          | V.Concrete (V.Bool b) ->
+              if b then eval_statement config ctx st1
+              else eval_statement config ctx st2
+          | _ -> failwith "Inconsistent state")
+      | A.SwitchInt (int_ty, tgts, otherwise) -> (
+          match op_v.value with
+          | V.Concrete (V.Scalar sv) -> (
+              assert (sv.V.int_ty = int_ty);
+              match List.find_opt (fun (sv', _) -> sv = sv') tgts with
+              | None -> eval_statement config ctx otherwise
+              | Some (_, tgt) -> eval_statement config ctx tgt)
+          | _ -> failwith "Inconsistent state"))
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
@@ -2404,93 +2464,16 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
           Ok ctx)
   | SymbolicMode -> raise Unimplemented
 
-(** Evaluate an expression seen as a function body (auxiliary helper for
+(** Evaluate a statement seen as a function body (auxiliary helper for
     [eval_statement]) *)
 and eval_function_body (config : C.config) (ctx : C.eval_ctx)
-    (body : A.expression) : (C.eval_ctx, eval_error) result =
-  match eval_expression config ctx body with
+    (body : A.statement) : (C.eval_ctx, eval_error) result =
+  match eval_statement config ctx body with
   | Error err -> Error err
   | Ok (ctx, res) -> (
       match res with
       | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
       | Return -> Ok ctx)
-
-(** Evaluate an expression *)
-and eval_expression (config : C.config) (ctx : C.eval_ctx) (e : A.expression) :
-    (C.eval_ctx * statement_eval_res) eval_result =
-  (* Debugging *)
-  (match e with
-  | A.Statement _ | A.Sequence (_, _) -> ()
-  | A.Loop _ | A.Switch (_, _) ->
-      L.log#ldebug
-        (lazy
-          ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate expression: \n"
-         ^ expression_to_string ctx e ^ "\n")));
-  (* Evaluate *)
-  match e with
-  | A.Statement st -> eval_statement config ctx st
-  | A.Sequence (e1, e2) -> (
-      (* Evaluate the first expression *)
-      match eval_expression config ctx e1 with
-      | Error err -> Error err
-      | Ok (ctx, Unit) ->
-          (* Evaluate the second expression *)
-          eval_expression config ctx e2
-      (* Control-flow break: transmit. We enumerate the cases on purpose *)
-      | Ok (ctx, Break i) -> Ok (ctx, Break i)
-      | Ok (ctx, Continue i) -> Ok (ctx, Continue i)
-      | Ok (ctx, Return) -> Ok (ctx, Return))
-  | A.Loop loop_body ->
-      (* Evaluate a loop body
-
-         We need a specific function for the [Continue] case: in case we continue,
-         we might have to reevaluate the current loop body with the new context
-         (and repeat this an indefinite number of times).
-      *)
-      let rec eval_loop_body (ctx : C.eval_ctx) :
-          (C.eval_ctx * statement_eval_res) eval_result =
-        (* Evaluate the loop body *)
-        match eval_expression config ctx loop_body with
-        | Error err -> Error err
-        | Ok (ctx, Unit) ->
-            (* We finished evaluating the expression in a "normal" manner *)
-            Ok (ctx, Unit)
-        (* Control-flow breaks *)
-        | Ok (ctx, Break i) ->
-            (* Decrease the break index *)
-            if i = 0 then Ok (ctx, Unit) else Ok (ctx, Break (i - 1))
-        | Ok (ctx, Continue i) ->
-            (* Decrease the continue index *)
-            if i = 0 then
-              (* We stop there. When we continue, we go back to the beginning
-                 of the loop: we must thus reevaluate the loop body (and
-                 recheck the result to know whether we must reevaluate again,
-                 etc. *)
-              eval_loop_body ctx
-            else (* We don't stop there: transmit *)
-              Ok (ctx, Continue (i - 1))
-        | Ok (ctx, Return) -> Ok (ctx, Return)
-      in
-      (* Apply *)
-      eval_loop_body ctx
-  | A.Switch (op, tgts) -> (
-      (* Evaluate the operand *)
-      let ctx, op_v = eval_operand config ctx op in
-      match tgts with
-      | A.If (e1, e2) -> (
-          match op_v.value with
-          | V.Concrete (V.Bool b) ->
-              if b then eval_expression config ctx e1
-              else eval_expression config ctx e2
-          | _ -> failwith "Inconsistent state")
-      | A.SwitchInt (int_ty, tgts, otherwise) -> (
-          match op_v.value with
-          | V.Concrete (V.Scalar sv) -> (
-              assert (sv.V.int_ty = int_ty);
-              match List.find_opt (fun (sv', _) -> sv = sv') tgts with
-              | None -> eval_expression config ctx otherwise
-              | Some (_, tgt) -> eval_expression config ctx tgt)
-          | _ -> failwith "Inconsistent state"))
 
 (** Test a unit function (taking no arguments) by evaluating it in an empty
     environment

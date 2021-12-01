@@ -475,7 +475,7 @@ let call_of_json (js : json) : (A.call, string) result =
         Ok { A.func; region_params; type_params; args; dest }
     | _ -> Error "")
 
-let statement_of_json (js : json) : (A.statement, string) result =
+let rec statement_of_json (js : json) : (A.statement, string) result =
   combine_error_msgs js "statement_of_json"
     (match js with
     | `Assoc [ ("Assign", `List [ place; rvalue ]) ] ->
@@ -507,42 +507,34 @@ let statement_of_json (js : json) : (A.statement, string) result =
         let* i = int_of_json i in
         Ok (A.Continue i)
     | `String "Nop" -> Ok A.Nop
-    | _ -> Error "")
-
-let rec expression_of_json (js : json) : (A.expression, string) result =
-  combine_error_msgs js "expression_of_json"
-    (match js with
-    | `Assoc [ ("Statement", statement) ] ->
-        let* statement = statement_of_json statement in
-        Ok (A.Statement statement)
-    | `Assoc [ ("Sequence", `List [ e1; e2 ]) ] ->
-        let* e1 = expression_of_json e1 in
-        let* e2 = expression_of_json e2 in
-        Ok (A.Sequence (e1, e2))
+    | `Assoc [ ("Sequence", `List [ st1; st2 ]) ] ->
+        let* st1 = statement_of_json st1 in
+        let* st2 = statement_of_json st2 in
+        Ok (A.Sequence (st1, st2))
     | `Assoc [ ("Switch", `List [ op; tgt ]) ] ->
         let* op = operand_of_json op in
         let* tgt = switch_targets_of_json tgt in
         Ok (A.Switch (op, tgt))
-    | `Assoc [ ("Loop", e) ] ->
-        let* e = expression_of_json e in
-        Ok (A.Loop e)
+    | `Assoc [ ("Loop", st) ] ->
+        let* st = statement_of_json st in
+        Ok (A.Loop st)
     | _ -> Error "")
 
 and switch_targets_of_json (js : json) : (A.switch_targets, string) result =
   combine_error_msgs js "switch_targets_of_json"
     (match js with
-    | `Assoc [ ("If", `List [ e1; e2 ]) ] ->
-        let* e1 = expression_of_json e1 in
-        let* e2 = expression_of_json e2 in
-        Ok (A.If (e1, e2))
+    | `Assoc [ ("If", `List [ st1; st2 ]) ] ->
+        let* st1 = statement_of_json st1 in
+        let* st2 = statement_of_json st2 in
+        Ok (A.If (st1, st2))
     | `Assoc [ ("SwitchInt", `List [ int_ty; tgts; otherwise ]) ] ->
         let* int_ty = integer_type_of_json int_ty in
         let* tgts =
           list_of_json
-            (pair_of_json scalar_value_of_json expression_of_json)
+            (pair_of_json scalar_value_of_json statement_of_json)
             tgts
         in
-        let* otherwise = expression_of_json otherwise in
+        let* otherwise = statement_of_json otherwise in
         Ok (A.SwitchInt (int_ty, tgts, otherwise))
     | _ -> Error "")
 
@@ -565,7 +557,7 @@ let fun_def_of_json (js : json) : (A.fun_def, string) result =
         let* divergent = bool_of_json divergent in
         let* arg_count = int_of_json arg_count in
         let* locals = list_of_json var_of_json locals in
-        let* body = expression_of_json body in
+        let* body = statement_of_json body in
         Ok { A.def_id; name; signature; divergent; arg_count; locals; body }
     | _ -> Error "")
 

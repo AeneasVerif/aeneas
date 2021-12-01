@@ -677,21 +677,22 @@ module CfimAst = struct
             in
             variant_name ^ " " ^ fields)
 
-  let statement_to_string (fmt : ast_formatter) (st : A.statement) : string =
+  let rec statement_to_string (fmt : ast_formatter) (indent : string)
+      (indent_incr : string) (st : A.statement) : string =
     match st with
     | A.Assign (p, rv) ->
-        place_to_string fmt p ^ " := " ^ rvalue_to_string fmt rv
+        indent ^ place_to_string fmt p ^ " := " ^ rvalue_to_string fmt rv
     | A.FakeRead p -> "fake_read " ^ place_to_string fmt p
     | A.SetDiscriminant (p, variant_id) ->
         (* TODO: improve this to lookup the variant name by using the def id *)
-        "set_discriminant(" ^ place_to_string fmt p ^ ", "
+        indent ^ "set_discriminant(" ^ place_to_string fmt p ^ ", "
         ^ T.VariantId.to_string variant_id
         ^ ")"
     | A.Drop p -> "drop(" ^ place_to_string fmt p ^ ")"
     | A.Assert a ->
         let cond = operand_to_string fmt a.A.cond in
-        if a.A.expected then "assert(" ^ cond ^ ")"
-        else "assert(¬" ^ cond ^ ")"
+        if a.A.expected then indent ^ "assert(" ^ cond ^ ")"
+        else indent ^ "assert(¬" ^ cond ^ ")"
     | A.Call call ->
         let ty_fmt = ast_to_etype_formatter fmt in
         let params =
@@ -717,38 +718,33 @@ module CfimAst = struct
               | A.BoxFree -> "alloc::alloc::box_free" ^ params)
         in
         let dest = place_to_string fmt call.A.dest in
-        dest ^ " := move " ^ name_params ^ args
-    | A.Panic -> "panic"
-    | A.Return -> "return"
-    | A.Break i -> "break " ^ string_of_int i
-    | A.Continue i -> "continue " ^ string_of_int i
-    | A.Nop -> "nop"
-
-  let rec expression_to_string (fmt : ast_formatter) (indent : string)
-      (indent_incr : string) (e : A.expression) : string =
-    match e with
-    | A.Statement st -> indent ^ statement_to_string fmt st ^ ";"
-    | A.Sequence (e1, e2) ->
-        expression_to_string fmt indent indent_incr e1
+        indent ^ dest ^ " := move " ^ name_params ^ args
+    | A.Panic -> indent ^ "panic"
+    | A.Return -> indent ^ "return"
+    | A.Break i -> indent ^ "break " ^ string_of_int i
+    | A.Continue i -> indent ^ "continue " ^ string_of_int i
+    | A.Nop -> indent ^ "nop"
+    | A.Sequence (st1, st2) ->
+        statement_to_string fmt indent indent_incr st1
         ^ "\n"
-        ^ expression_to_string fmt indent indent_incr e2
+        ^ statement_to_string fmt indent indent_incr st2
     | A.Switch (op, tgts) -> (
         let op = operand_to_string fmt op in
         match tgts with
-        | A.If (true_e, false_e) ->
+        | A.If (true_st, false_st) ->
             let inner_indent = indent ^ indent_incr in
             let inner_to_string =
-              expression_to_string fmt inner_indent indent_incr
+              statement_to_string fmt inner_indent indent_incr
             in
-            let true_e = inner_to_string true_e in
-            let false_e = inner_to_string false_e in
-            indent ^ "if (" ^ op ^ ") {\n" ^ true_e ^ "\n" ^ indent ^ "}\n"
-            ^ indent ^ "else {\n" ^ false_e ^ "\n" ^ indent ^ "}"
+            let true_st = inner_to_string true_st in
+            let false_st = inner_to_string false_st in
+            indent ^ "if (" ^ op ^ ") {\n" ^ true_st ^ "\n" ^ indent ^ "}\n"
+            ^ indent ^ "else {\n" ^ false_st ^ "\n" ^ indent ^ "}"
         | A.SwitchInt (_ty, branches, otherwise) ->
             let indent1 = indent ^ indent_incr in
             let indent2 = indent1 ^ indent_incr in
             let inner_to_string2 =
-              expression_to_string fmt indent2 indent_incr
+              statement_to_string fmt indent2 indent_incr
             in
             let branches =
               List.map
@@ -764,9 +760,9 @@ module CfimAst = struct
               ^ inner_to_string2 otherwise ^ "\n" ^ indent1 ^ "}"
             in
             indent ^ "switch (" ^ op ^ ") {\n" ^ branches ^ "\n" ^ indent ^ "}")
-    | A.Loop loop_e ->
+    | A.Loop loop_st ->
         indent ^ "loop {\n"
-        ^ expression_to_string fmt (indent ^ indent_incr) indent_incr loop_e
+        ^ statement_to_string fmt (indent ^ indent_incr) indent_incr loop_st
         ^ "\n" ^ indent ^ "}"
 
   let fun_def_to_string (fmt : ast_formatter) (indent : string)
@@ -820,7 +816,7 @@ module CfimAst = struct
 
     (* Body *)
     let body =
-      expression_to_string fmt (indent ^ indent_incr) indent_incr def.body
+      statement_to_string fmt (indent ^ indent_incr) indent_incr def.body
     in
 
     (* Put everything together *)
@@ -929,12 +925,8 @@ module EvalCtxCfimAst = struct
     let fmt = PA.eval_ctx_to_ast_formatter ctx in
     PA.operand_to_string fmt op
 
-  let statement_to_string (ctx : C.eval_ctx) (s : A.statement) : string =
+  let statement_to_string (ctx : C.eval_ctx) (indent : string)
+      (indent_incr : string) (e : A.statement) : string =
     let fmt = PA.eval_ctx_to_ast_formatter ctx in
-    PA.statement_to_string fmt s
-
-  let expression_to_string (ctx : C.eval_ctx) (indent : string)
-      (indent_incr : string) (e : A.expression) : string =
-    let fmt = PA.eval_ctx_to_ast_formatter ctx in
-    PA.expression_to_string fmt indent indent_incr e
+    PA.statement_to_string fmt indent indent_incr e
 end
