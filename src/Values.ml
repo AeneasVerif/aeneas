@@ -69,51 +69,68 @@ type symbolic_proj_comp = {
 
     Parameterized by:
     - 'ty: type
+    - 'sv: symbolic value
     - 'bc: borrow content
     - 'lc: loan content
 
     Can be specialized for "regular" values or values in abstractions *)
-type ('ty, 'bc, 'lc) g_value =
+type ('r, 'sv, 'bc, 'lc) g_value =
   | Concrete of constant_value  (** Concrete (non-symbolic) value *)
-  | Adt of ('ty, 'bc, 'lc) g_adt_value  (** Enumerations and structures *)
-  | Tuple of ('ty, 'bc, 'lc) g_typed_value list
+  | Adt of ('r, 'sv, 'bc, 'lc) g_adt_value  (** Enumerations and structures *)
+  | Tuple of ('r, 'sv, 'bc, 'lc) g_typed_value list
       (** Tuple - note that units are encoded as 0-tuples
           TODO: merge with Adt?
        *)
   | Bottom  (** No value (uninitialized or moved value) *)
-  | Assumed of ('ty, 'bc, 'lc) g_assumed_value
+  | Assumed of ('r, 'sv, 'bc, 'lc) g_assumed_value
       (** Value of an abstract type (Box, Vec, Cell...) *)
   | Borrow of 'bc  (** A borrowed value *)
   | Loan of 'lc  (** A loaned value *)
-  | Symbolic of symbolic_proj_comp  (** Unknown value *)
+  | Symbolic of 'sv  (** Unknown value *)
 [@@deriving show]
 
-and ('ty, 'bc, 'lc) g_adt_value = {
+and ('r, 'sv, 'bc, 'lc) g_adt_value = {
   variant_id : VariantId.id option;
-  field_values : ('ty, 'bc, 'lc) g_typed_value list;
+  field_values : ('r, 'sv, 'bc, 'lc) g_typed_value list;
 }
 [@@deriving show]
 (** "Generic" ADT value (not "GADT" value) *)
 
-and ('ty, 'bc, 'lc) g_assumed_value = Box of ('ty, 'bc, 'lc) g_typed_value
+and ('r, 'sv, 'bc, 'lc) g_assumed_value =
+  | Box of ('r, 'sv, 'bc, 'lc) g_typed_value
 [@@deriving show]
 
-and ('ty, 'bc, 'lc) g_typed_value = {
-  value : ('ty, 'bc, 'lc) g_value;
-  ty : 'ty;
+and ('r, 'sv, 'bc, 'lc) g_typed_value = {
+  value : ('r, 'sv, 'bc, 'lc) g_value;
+  ty : 'r ty;
 }
 [@@deriving show]
 
-type value = (ety, borrow_content, loan_content) g_value [@@deriving show]
+type value =
+  (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_value
+[@@deriving show]
+(** "Regular" value *)
 
-and adt_value = (ety, borrow_content, loan_content) g_adt_value
+and adt_value =
+  (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_adt_value
 [@@deriving show]
 
-and assumed_value = (ety, borrow_content, loan_content) g_assumed_value
+and assumed_value =
+  ( erased_region,
+    symbolic_proj_comp,
+    borrow_content,
+    loan_content )
+  g_assumed_value
 [@@deriving show]
 
-and typed_value = (ety, borrow_content, loan_content) g_typed_value
+and typed_value =
+  ( erased_region,
+    symbolic_proj_comp,
+    borrow_content,
+    loan_content )
+  g_typed_value
 [@@deriving show]
+(** "Regular" typed value (we map variables to typed values) *)
 
 and borrow_content =
   | SharedBorrow of BorrowId.id  (** A shared value *)
@@ -143,33 +160,30 @@ type abstract_shared_borrows =
       (** TODO: explanations *)
 [@@deriving show]
 
+type aproj =
+  | AProjLoans of symbolic_value
+  | AProjBorrows of symbolic_value * rty
+[@@deriving show]
+
+type avalue =
+  (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_value
 (** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.
 
     When calling a function, we lose information about the borrow graph:
     part of it is thus "abstracted" away.
 *)
-type avalue =
-  | AConcrete of constant_value
-  | AAdt of aadt_value
-  | ATuple of typed_avalue list
-  | ABottom
-  | ALoan of aloan_content
-  | ABorrow of aborrow_content
-  | AAssumed of aassumed_value
-  | AProj of aproj
-[@@deriving show]
-(*  TODO: merge with value *)
 
-and aadt_value = {
-  adef_id : TypeDefId.id;
-  avariant_id : VariantId.id option;
-  aregions : erased_region list;
-  atypes : rty list;
-  afield_values : typed_avalue list;
-}
+and aadt_value =
+  (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_adt_value
+
+and aassumed_value =
+  (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_assumed_value
 [@@deriving show]
-(* TODO: merge with adt_value *)
+
+and typed_avalue =
+  (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_typed_value
+[@@deriving show]
 
 and aloan_content =
   | AMutLoan of BorrowId.id * typed_avalue
@@ -190,15 +204,6 @@ and aborrow_content =
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
   | AIgnoredSharedBorrow of abstract_shared_borrows
 [@@deriving show]
-
-and aassumed_value = ABox of typed_avalue [@@deriving show]
-
-and aproj =
-  | AProjLoans of symbolic_value
-  | AProjBorrows of symbolic_value * rty
-[@@deriving show]
-
-and typed_avalue = { avalue : avalue; aty : rty } [@@deriving show]
 
 type abs = {
   abs_id : AbstractionId.id;

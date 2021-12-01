@@ -199,9 +199,24 @@ module Values = struct
     let regions = V.RegionId.set_to_string sp.rset_ended in
     "proj_comp " ^ regions ^ " (" ^ symbolic_value_to_string fmt sp.svalue ^ ")"
 
-  let rec typed_value_to_string (fmt : value_formatter) (v : V.typed_value) :
-      string =
-    let ety_fmt = value_to_etype_formatter fmt in
+  type ('r, 'sv, 'bc, 'lc) gen_value_formatter = {
+    r_to_string : 'r -> string;
+    sv_to_string : 'sv -> string;
+    bc_to_string : 'bc -> string;
+    lc_to_string : 'lc -> string;
+  }
+  (** Auxiliary record: we use it to factorize value formatting *)
+
+  let rec g_typed_value_to_string (fmt : value_formatter)
+      (gfmt : ('r, 'sv, 'bc, 'lc) gen_value_formatter)
+      (v : ('r, 'sv, 'bc, 'lc) V.g_typed_value) : string =
+    let ty_fmt : 'r PT.type_formatter =
+      {
+        PT.r_to_string = gfmt.r_to_string;
+        PT.type_var_id_to_string = fmt.type_var_id_to_string;
+        PT.type_def_id_to_string = fmt.type_def_id_to_string;
+      }
+    in
     match v.value with
     | Concrete cv -> constant_value_to_string cv
     | Adt av ->
@@ -216,7 +231,7 @@ module Values = struct
           | None -> fmt.type_def_id_to_string def_id
         in
         let field_values =
-          List.map (typed_value_to_string fmt) av.field_values
+          List.map (g_typed_value_to_string fmt gfmt) av.field_values
         in
         if List.length field_values > 0 then
           match fmt.adt_field_names def_id av.V.variant_id with
@@ -235,16 +250,30 @@ module Values = struct
         else adt_ident
     | Tuple values ->
         let values =
-          String.concat ", " (List.map (typed_value_to_string fmt) values)
+          String.concat ", "
+            (List.map (g_typed_value_to_string fmt gfmt) values)
         in
         "(" ^ values ^ ")"
-    | Bottom -> "⊥ : " ^ PT.ety_to_string ety_fmt v.ty
+    | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
     | Assumed av -> (
-        match av with Box bv -> "@Box(" ^ typed_value_to_string fmt bv ^ ")")
-    | Borrow bc -> borrow_content_to_string fmt bc
-    | Loan lc -> loan_content_to_string fmt lc
-    | Symbolic sp ->
-        symbolic_proj_comp_to_string (value_to_rtype_formatter fmt) sp
+        match av with
+        | Box bv -> "@Box(" ^ g_typed_value_to_string fmt gfmt bv ^ ")")
+    | Borrow bc -> gfmt.bc_to_string bc
+    | Loan lc -> gfmt.lc_to_string lc
+    | Symbolic s -> gfmt.sv_to_string s
+
+  let rec typed_value_to_string (fmt : value_formatter) (v : V.typed_value) :
+      string =
+    let gfmt =
+      {
+        r_to_string = PT.erased_region_to_string;
+        sv_to_string =
+          symbolic_proj_comp_to_string (value_to_rtype_formatter fmt);
+        bc_to_string = borrow_content_to_string fmt;
+        lc_to_string = loan_content_to_string fmt;
+      }
+    in
+    g_typed_value_to_string fmt gfmt v
 
   and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
       string =
@@ -284,36 +313,26 @@ module Values = struct
         ^ " U "
         ^ abstract_shared_borrows_to_string fmt asb2
 
+  let aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
+    match pv with
+    | AProjLoans sv ->
+        "proj_loans ("
+        ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
+        ^ ")"
+    | AProjBorrows (sv, rty) ->
+        "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
+
   let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
       string =
-    let rty_fmt = value_to_rtype_formatter fmt in
-    match v.avalue with
-    | AConcrete cv -> constant_value_to_string cv
-    | AAdt av ->
-        let adt_ident =
-          match av.avariant_id with
-          | Some vid -> fmt.adt_variant_to_string av.adef_id vid
-          | None -> fmt.type_def_id_to_string av.adef_id
-        in
-        let field_values = av.afield_values in
-        if List.length field_values > 0 then
-          let field_values =
-            String.concat " "
-              (List.map (typed_avalue_to_string fmt) field_values)
-          in
-          adt_ident ^ " " ^ field_values
-        else adt_ident
-    | ATuple values ->
-        let values =
-          String.concat ", " (List.map (typed_avalue_to_string fmt) values)
-        in
-        "(" ^ values ^ ")"
-    | ABottom -> "⊥ : " ^ PT.rty_to_string rty_fmt v.aty
-    | ALoan lc -> aloan_content_to_string fmt lc
-    | ABorrow bc -> aborrow_content_to_string fmt bc
-    | AAssumed av -> (
-        match av with ABox bv -> "@Box(" ^ typed_avalue_to_string fmt bv ^ ")")
-    | AProj pv -> aproj_to_string fmt pv
+    let gfmt =
+      {
+        r_to_string = PT.region_to_string fmt.r_to_string;
+        sv_to_string = aproj_to_string fmt;
+        bc_to_string = aborrow_content_to_string fmt;
+        lc_to_string = aloan_content_to_string fmt;
+      }
+    in
+    g_typed_value_to_string fmt gfmt v
 
   and aloan_content_to_string (fmt : value_formatter) (lc : V.aloan_content) :
       string =
@@ -370,15 +389,6 @@ module Values = struct
         "@ignored_shared_borrow("
         ^ abstract_shared_borrows_to_string fmt sb
         ^ ")"
-
-  and aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
-    match pv with
-    | AProjLoans sv ->
-        "proj_loans ("
-        ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
-        ^ ")"
-    | AProjBorrows (sv, rty) ->
-        "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
 
   let abs_to_string (fmt : value_formatter) (abs : V.abs) : string =
     let avs =
