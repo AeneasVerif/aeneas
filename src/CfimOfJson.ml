@@ -27,7 +27,7 @@ let type_var_of_json (js : json) : (T.type_var, string) result =
     | `Assoc [ ("index", index); ("name", name) ] ->
         let* index = T.TypeVarId.id_of_json index in
         let* name = string_of_json name in
-        Ok { T.tv_index = index; tv_name = name }
+        Ok { T.index; name }
     | _ -> Error "")
 
 let region_var_of_json (js : json) : (T.region_var, string) result =
@@ -36,7 +36,7 @@ let region_var_of_json (js : json) : (T.region_var, string) result =
     | `Assoc [ ("index", index); ("name", name) ] ->
         let* index = T.RegionVarId.id_of_json index in
         let* name = string_option_of_json name in
-        Ok { T.rv_index = index; rv_name = name }
+        Ok { T.index; name }
     | _ -> Error "")
 
 let region_of_json (js : json) : (T.RegionVarId.id T.region, string) result =

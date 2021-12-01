@@ -61,7 +61,7 @@ let make_type_subst (var_ids : T.TypeVarId.id list) (tys : 'r T.ty list) :
 let type_def_get_instantiated_field_type (def : T.type_def)
     (opt_variant_id : T.VariantId.id option) (types : T.ety list) : T.ety list =
   let ty_subst =
-    make_type_subst (List.map (fun x -> x.T.tv_index) def.T.type_params) types
+    make_type_subst (List.map (fun x -> x.T.index) def.T.type_params) types
   in
   let fields = TU.type_def_get_fields def opt_variant_id in
   List.map

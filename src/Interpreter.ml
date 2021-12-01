@@ -2410,7 +2410,7 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
   | ConcreteMode -> (
       let tsubst =
         Subst.make_type_subst
-          (List.map (fun v -> v.T.tv_index) def.A.signature.type_params)
+          (List.map (fun v -> v.T.index) def.A.signature.type_params)
           type_params
       in
       let locals, body = Subst.fun_def_substitute_in_body tsubst def in

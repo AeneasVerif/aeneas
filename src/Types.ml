@@ -10,21 +10,15 @@ module FieldId = IdGen ()
 
 module RegionVarId = IdGen ()
 
-type type_var = {
-  tv_index : TypeVarId.id;
-      (** Unique index identifying the variable - TODO: may be redundant with
-          using indexed vectors *)
-  tv_name : string;  (** Variable name *)
+type ('id, 'name) indexed_var = {
+  index : 'id;  (** Unique index identifying the variable *)
+  name : 'name;  (** Variable name *)
 }
 [@@deriving show]
 
-type region_var = {
-  rv_index : RegionVarId.id;
-      (** Unique index identifying the region - TODO: may be redundant *)
-  rv_name : string option;  (** Region name *)
-}
-(* TODO: merge with type_var? (for the name collision issues) *)
-[@@deriving show]
+type type_var = (TypeVarId.id, string) indexed_var [@@deriving show]
+
+type region_var = (RegionVarId.id, string option) indexed_var [@@deriving show]
 
 (** A region.
     

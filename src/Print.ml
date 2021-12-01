@@ -11,12 +11,12 @@ module M = Modules
 
 (** Pretty-printing for types *)
 module Types = struct
-  let type_var_to_string (tv : T.type_var) : string = tv.tv_name
+  let type_var_to_string (tv : T.type_var) : string = tv.name
 
   let region_var_to_string (rv : T.region_var) : string =
-    match rv.rv_name with
+    match rv.name with
     | Some name -> name
-    | None -> T.RegionVarId.to_string rv.rv_index
+    | None -> T.RegionVarId.to_string rv.index
 
   let region_to_string (rid_to_string : 'rid -> string) (r : 'rid T.region) :
       string =
@@ -109,13 +109,13 @@ module Types = struct
     let regions = def.region_params in
     let types = def.type_params in
     let rid_to_string rid =
-      match List.find_opt (fun rv -> rv.T.rv_index = rid) regions with
+      match List.find_opt (fun rv -> rv.T.index = rid) regions with
       | Some rv -> region_var_to_string rv
       | None -> failwith "Unreachable"
     in
     let r_to_string = region_to_string rid_to_string in
     let type_var_id_to_string id =
-      match List.find_opt (fun tv -> tv.T.tv_index = id) types with
+      match List.find_opt (fun tv -> tv.T.index = id) types with
       | Some tv -> type_var_to_string tv
       | None -> failwith "Unreachable"
     in
@@ -449,7 +449,7 @@ module Contexts = struct
     let r_to_string _ = failwith "Unexpected use of r_to_string" in
     let type_var_id_to_string vid =
       let v = C.lookup_type_var ctx vid in
-      v.tv_name
+      v.name
     in
     let type_def_id_to_string def_id =
       let def = T.TypeDefId.nth ctx.type_context def_id in
