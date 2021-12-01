@@ -2,6 +2,7 @@
 
 open Identifiers
 module T = Types
+module TU = TypesUtils
 module V = Values
 module E = Expressions
 module A = CfimAst
@@ -438,7 +439,7 @@ module Contexts = struct
       T.TypeDefId.id -> T.VariantId.id option -> string list option =
    fun def_id opt_variant_id ->
     let def = T.TypeDefId.nth ctx def_id in
-    let fields = T.type_def_get_fields def opt_variant_id in
+    let fields = TU.type_def_get_fields def opt_variant_id in
     (* TODO: the field name should be optional?? *)
     let fields = List.map (fun f -> f.T.field_name) fields in
     Some fields
@@ -546,7 +547,7 @@ module CfimAst = struct
       T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string =
    fun def_id opt_variant_id field_id ->
     let def = T.TypeDefId.nth ctx def_id in
-    let fields = T.type_def_get_fields def opt_variant_id in
+    let fields = TU.type_def_get_fields def opt_variant_id in
     let field = T.FieldId.nth fields field_id in
     field.T.field_name
 
@@ -801,7 +802,7 @@ module CfimAst = struct
     (* Return type *)
     let ret_ty = sg.output in
     let ret_ty =
-      if T.ty_is_unit ret_ty then "" else " -> " ^ rty_to_string ret_ty
+      if TU.ty_is_unit ret_ty then "" else " -> " ^ rty_to_string ret_ty
     in
 
     (* All the locals (with erased regions) *)

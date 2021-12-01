@@ -7,6 +7,8 @@ module C = Contexts
 module Subst = Substitute
 module A = CfimAst
 module L = Logging
+open TypesUtils
+open ValuesUtils
 
 (* TODO: Change state-passing style to : st -> ... -> (st, v) *)
 (* TODO: check that the value types are correct when evaluating *)
@@ -21,7 +23,7 @@ module L = Logging
    where invariants might be broken, etc.
  *)
 
-(* TODO: test with PLT-redex *)
+(* TODO: intensively test with PLT-redex *)
 
 (** Some utilities *)
 
@@ -37,15 +39,6 @@ let operand_to_string = Print.EvalCtxCfimAst.operand_to_string
 
 let statement_to_string ctx =
   Print.EvalCtxCfimAst.statement_to_string ctx "" "  "
-
-(* TODO: move *)
-let mk_unit_ty : T.ety = T.Tuple []
-
-(* TODO: move *)
-let mk_unit_value : V.typed_value = { V.value = V.Tuple []; V.ty = mk_unit_ty }
-
-let mk_typed_value (ty : T.ety) (value : V.value) : V.typed_value =
-  { V.value; ty }
 
 (* TODO: move *)
 let mk_var (index : V.VarId.id) (name : string option) (var_ty : T.ety) : A.var

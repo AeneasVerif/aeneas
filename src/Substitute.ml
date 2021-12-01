@@ -3,6 +3,7 @@
  *)
 
 module T = Types
+module TU = TypesUtils
 module V = Values
 module E = Expressions
 module A = CfimAst
@@ -58,7 +59,7 @@ let type_def_get_instantiated_field_type (def : T.type_def)
   let ty_subst =
     make_type_subst (List.map (fun x -> x.T.tv_index) def.T.type_params) types
   in
-  let fields = T.type_def_get_fields def opt_variant_id in
+  let fields = TU.type_def_get_fields def opt_variant_id in
   List.map
     (fun f -> erase_regions_substitute_types ty_subst f.T.field_ty)
     fields
