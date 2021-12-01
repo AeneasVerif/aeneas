@@ -1191,16 +1191,7 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_def list)
   in
   (* Initialize the expanded value *)
   let fields = List.map (fun ty -> { V.value = Bottom; ty }) field_types in
-  let av =
-    V.Adt
-      {
-        def_id;
-        variant_id = opt_variant_id;
-        regions;
-        types;
-        field_values = fields;
-      }
-  in
+  let av = V.Adt { variant_id = opt_variant_id; field_values = fields } in
   let ty = T.Adt (def_id, regions, types) in
   { V.value = av; V.ty }
 
@@ -1600,10 +1591,7 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
             assert (List.length variant.fields = 0);
             Some variant_id
       in
-      let value =
-        V.Adt
-          { def_id; variant_id; regions = []; types = []; field_values = [] }
-      in
+      let value = V.Adt { variant_id; field_values = [] } in
       { value; ty }
   (* Scalar, boolean... *)
   | T.Bool, ConstantValue (Bool v) -> { V.value = V.Concrete (Bool v); ty }
@@ -1860,15 +1848,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           in
           assert (expected_field_types = List.map (fun v -> v.V.ty) values);
           (* Construct the value *)
-          let av =
-            {
-              V.def_id;
-              V.variant_id = opt_variant_id;
-              V.regions;
-              V.types;
-              V.field_values = values;
-            }
-          in
+          let av = { V.variant_id = opt_variant_id; V.field_values = values } in
           let aty = T.Adt (def_id, regions, types) in
           Ok (ctx, { V.value = Adt av; ty = aty }))
 

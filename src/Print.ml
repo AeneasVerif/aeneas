@@ -205,16 +205,21 @@ module Values = struct
     match v.value with
     | Concrete cv -> constant_value_to_string cv
     | Adt av ->
+        let def_id =
+          match v.ty with
+          | Adt (def_id, _, _) -> def_id
+          | _ -> failwith "Inconsistent value"
+        in
         let adt_ident =
           match av.variant_id with
-          | Some vid -> fmt.adt_variant_to_string av.def_id vid
-          | None -> fmt.type_def_id_to_string av.def_id
+          | Some vid -> fmt.adt_variant_to_string def_id vid
+          | None -> fmt.type_def_id_to_string def_id
         in
         let field_values =
           List.map (typed_value_to_string fmt) av.field_values
         in
         if List.length field_values > 0 then
-          match fmt.adt_field_names av.V.def_id av.V.variant_id with
+          match fmt.adt_field_names def_id av.V.variant_id with
           | None ->
               let field_values = String.concat ", " field_values in
               adt_ident ^ " (" ^ field_values ^ ")"

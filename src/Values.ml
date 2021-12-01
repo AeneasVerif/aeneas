@@ -82,13 +82,7 @@ type value =
 [@@deriving show]
 
 and adt_value = {
-  def_id : TypeDefId.id;
-  (* TODO: remove *)
   variant_id : VariantId.id option;
-  regions : erased_region list;
-  (* TODO: remove *)
-  types : ety list;
-  (* TODO: remove *)
   field_values : typed_value list;
 }
 [@@deriving show]
