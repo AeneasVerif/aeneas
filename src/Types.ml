@@ -23,6 +23,7 @@ type region_var = {
       (** Unique index identifying the region - TODO: may be redundant *)
   rv_name : string option;  (** Region name *)
 }
+(* TODO: merge with type_var? (for the name collision issues) *)
 [@@deriving show]
 
 (** A region.

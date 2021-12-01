@@ -2172,13 +2172,22 @@ let eval_box_deref_mut (config : C.config)
 
 (** Auxiliary function - see [eval_non_local_function_call].
 
-    Note that this function doesn't behave like the others: it does not expect
-    a stack frame to have been pushed, but rather simply behaves like [drop_value].
-    Followingly: it updates the box value (by calling [drop_value]) and updates
-    the destination (by setting it to `()`).
+    `Box::free` is not handled the same way as the other assumed functions:
+    - in the regular case, whenever we need to evaluate an assumed function,
+      we evaluate the operands, push a frame, call a dedicated function
+      to correctly update the variables in the frame (and mimic the execution
+      of a body) and finally pop the frame
+    - in the case of `Box::free`: the value given to this function is often
+      of the form `Box(⊥)` because we can move the value out of the
+      box before freeing the box. It makes it invalid to see box_free as a
+      "regular" function: it is not valid to call a function with arguments
+      which contain `⊥`. For this reason, we execute `Box::free` as drop_value,
+      but this is a bit annoying with regards to the semantics...
 
-    See the comments in [eval_non_local_function_call] for more explanations of
-    why we do this this way.
+    Followingly this function doesn't behave like the others: it does not expect
+    a stack frame to have been pushed, but rather simply behaves like [drop_value].
+    It thus updates the box value (by calling [drop_value]) and updates
+    the destination (by setting it to `()`).
 *)
 let eval_box_free (config : C.config) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place)
@@ -2223,17 +2232,9 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
        ^ dest));
 
   (* There are two cases (and this is extremely annoying):
-     - the function is not box_free: evaluate the operands, push a frame
-       and call a dedicated function to correctly update the variables
-       in the frame (and mimic the execution of a body), pop the frame
-     - the function is box_free: the value given to this function is often
-       of the form `Box(⊥)` because we generally move the value out of the
-       box before freeing the box. The annoying thing is that it makes it
-       invalid to see box_free as a "regular" function: it is not valid
-       to call a function with arguments which contain `⊥`. For this reason,
-       we translate box_free as drop_value, but this is a bit annoying with
-       regards to the semantics...
-     TODO: think about that, deeply
+     - the function is not box_free
+     - the function is box_free
+     See [eval_box_free]
   *)
   match fid with
   | A.BoxFree ->
