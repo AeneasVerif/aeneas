@@ -1,30 +1,5 @@
 open Types
 
-(** Convert an [rty] to an [ety] by erasing the region variables
-    
-    TODO: this can be done through a substitution
-*)
-let rec erase_regions (ty : rty) : ety =
-  match ty with
-  | Adt (def_id, regions, tys) ->
-      let regions = List.map (fun _ -> Erased) regions in
-      let tys = List.map erase_regions tys in
-      Adt (def_id, regions, tys)
-  | Tuple tys -> Tuple (List.map erase_regions tys)
-  | TypeVar vid -> TypeVar vid
-  | Bool -> Bool
-  | Char -> Char
-  | Never -> Never
-  | Integer int_ty -> Integer int_ty
-  | Str -> Str
-  | Array ty -> Array (erase_regions ty)
-  | Slice ty -> Slice (erase_regions ty)
-  | Ref (_, ty, ref_kind) -> Ref (Erased, erase_regions ty, ref_kind)
-  | Assumed (aty, regions, tys) ->
-      let regions = List.map (fun _ -> Erased) regions in
-      let tys = List.map erase_regions tys in
-      Assumed (aty, regions, tys)
-
 (** Retrieve the list of fields for the given variant of a [type_def].
 
     Raises [Invalid_argument] if the arguments are incorrect.
