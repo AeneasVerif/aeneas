@@ -5,6 +5,17 @@ open Expressions
 
 module FunDefId = IdGen ()
 
+type var = {
+  index : VarId.id;  (** Unique variable identifier *)
+  name : string option;
+  var_ty : ety;
+      (** The variable type - erased type, because variables are not used
+       ** in function signatures - TODO: useless? TODO: binder type for
+          function definitions *)
+}
+[@@deriving show]
+(** A variable, as used in a function definition *)
+
 type assumed_fun_id = BoxNew | BoxDeref | BoxDerefMut | BoxFree
 [@@deriving show]
 

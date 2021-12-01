@@ -193,11 +193,11 @@ and switch_targets_substitute (tsubst : T.TypeVarId.id -> T.ety)
 (** Apply a type substitution to a function body. Return the local variables
     and the body. *)
 let fun_def_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
-    (def : A.fun_def) : V.var list * A.statement =
+    (def : A.fun_def) : A.var list * A.statement =
   let rsubst r = r in
   let locals =
     List.map
-      (fun v -> { v with V.var_ty = ty_substitute rsubst tsubst v.V.var_ty })
+      (fun v -> { v with A.var_ty = ty_substitute rsubst tsubst v.A.var_ty })
       def.A.locals
   in
   let body = statement_substitute tsubst def.body in

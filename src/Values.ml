@@ -17,18 +17,6 @@ module AbstractionId = IdGen ()
 
 module RegionId = IdGen ()
 
-(* TODO: move? *)
-type var = {
-  index : VarId.id;  (** Unique variable identifier *)
-  name : string option;
-  var_ty : ety;
-      (** The variable type - erased type, because variables are not used
-       ** in function signatures - TODO: useless? TODO: binder type for
-          function definitions *)
-}
-[@@deriving show]
-(** A variable, as used in a type definition *)
-
 (** A variable *)
 
 type big_int = Z.t

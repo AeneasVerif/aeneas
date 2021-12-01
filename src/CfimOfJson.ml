@@ -172,14 +172,14 @@ let type_def_of_json (js : json) : (T.type_def, string) result =
         Ok { T.def_id; name; region_params; type_params; kind }
     | _ -> Error "")
 
-let var_of_json (js : json) : (V.var, string) result =
+let var_of_json (js : json) : (A.var, string) result =
   combine_error_msgs js "var_of_json"
     (match js with
     | `Assoc [ ("index", index); ("name", name); ("ty", ty) ] ->
         let* index = V.VarId.id_of_json index in
         let* name = string_option_of_json name in
         let* var_ty = ety_of_json ty in
-        Ok { V.index; name; var_ty }
+        Ok { A.index; name; var_ty }
     | _ -> Error "")
 
 let big_int_of_json (js : json) : (V.big_int, string) result =

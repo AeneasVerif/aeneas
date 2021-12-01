@@ -176,9 +176,6 @@ module Values = struct
   let var_id_to_string (id : V.VarId.id) : string =
     "var@" ^ V.VarId.to_string id
 
-  let var_to_string (v : V.var) : string =
-    match v.name with None -> var_id_to_string v.index | Some name -> name
-
   let big_int_to_string (bi : V.big_int) : string = Z.to_string bi
 
   let scalar_value_to_string (sv : V.scalar_value) : string =
@@ -765,6 +762,9 @@ module CfimAst = struct
         ^ statement_to_string fmt (indent ^ indent_incr) indent_incr loop_st
         ^ "\n" ^ indent ^ "}"
 
+  let var_to_string (v : A.var) : string =
+    match v.name with None -> PV.var_id_to_string v.index | Some name -> name
+
   let fun_def_to_string (fmt : ast_formatter) (indent : string)
       (indent_incr : string) (def : A.fun_def) : string =
     let rty_fmt = ast_to_rtype_formatter fmt in
@@ -793,7 +793,7 @@ module CfimAst = struct
     let args = List.combine inputs sg.inputs in
     let args =
       List.map
-        (fun (var, rty) -> PV.var_to_string var ^ " : " ^ rty_to_string rty)
+        (fun (var, rty) -> var_to_string var ^ " : " ^ rty_to_string rty)
         args
     in
     let args = String.concat ", " args in
@@ -808,7 +808,7 @@ module CfimAst = struct
     let locals =
       List.map
         (fun var ->
-          indent ^ indent_incr ^ PV.var_to_string var ^ " : "
+          indent ^ indent_incr ^ var_to_string var ^ " : "
           ^ ety_to_string var.var_ty ^ ";")
         def.locals
     in
@@ -860,7 +860,7 @@ module Module = struct
     in
     let var_id_to_string vid =
       let var = V.VarId.nth def.locals vid in
-      PV.var_to_string var
+      PA.var_to_string var
     in
     let adt_variant_to_string =
       PC.type_ctx_to_adt_variant_to_string_fun type_context

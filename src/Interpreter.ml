@@ -48,9 +48,9 @@ let mk_typed_value (ty : T.ety) (value : V.value) : V.typed_value =
   { V.value; ty }
 
 (* TODO: move *)
-let mk_var (index : V.VarId.id) (name : string option) (var_ty : T.ety) : V.var
+let mk_var (index : V.VarId.id) (name : string option) (var_ty : T.ety) : A.var
     =
-  { V.index; name; var_ty }
+  { A.index; name; var_ty }
 
 (** Small helper *)
 let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
