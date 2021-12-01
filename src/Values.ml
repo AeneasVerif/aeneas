@@ -76,14 +76,10 @@ type symbolic_proj_comp = {
     Can be specialized for "regular" values or values in abstractions *)
 type ('r, 'sv, 'bc, 'lc) g_value =
   | Concrete of constant_value  (** Concrete (non-symbolic) value *)
-  | Adt of ('r, 'sv, 'bc, 'lc) g_adt_value  (** Enumerations and structures *)
-  | Tuple of ('r, 'sv, 'bc, 'lc) g_typed_value list
-      (** Tuple - note that units are encoded as 0-tuples
-          TODO: merge with Adt?
-       *)
+  | Adt of ('r, 'sv, 'bc, 'lc) g_adt_value
+      (** Enumerations, structures, tuples, assumed types. Note that units
+          are encoded as 0-tuples  *)
   | Bottom  (** No value (uninitialized or moved value) *)
-  | Assumed of ('r, 'sv, 'bc, 'lc) g_assumed_value
-      (** Value of an abstract type (Box, Vec, Cell...) *)
   | Borrow of 'bc  (** A borrowed value *)
   | Loan of 'lc  (** A loaned value *)
   | Symbolic of 'sv  (** Unknown value *)
@@ -95,10 +91,6 @@ and ('r, 'sv, 'bc, 'lc) g_adt_value = {
 }
 [@@deriving show]
 (** "Generic" ADT value (not "GADT" value) *)
-
-and ('r, 'sv, 'bc, 'lc) g_assumed_value =
-  | Box of ('r, 'sv, 'bc, 'lc) g_typed_value
-[@@deriving show]
 
 and ('r, 'sv, 'bc, 'lc) g_typed_value = {
   value : ('r, 'sv, 'bc, 'lc) g_value;
@@ -113,14 +105,6 @@ type value =
 
 and adt_value =
   (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_adt_value
-[@@deriving show]
-
-and assumed_value =
-  ( erased_region,
-    symbolic_proj_comp,
-    borrow_content,
-    loan_content )
-  g_assumed_value
 [@@deriving show]
 
 and typed_value =
@@ -176,10 +160,6 @@ type avalue =
 
 and aadt_value =
   (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_adt_value
-
-and aassumed_value =
-  (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_assumed_value
-[@@deriving show]
 
 and typed_avalue =
   (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_typed_value

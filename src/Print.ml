@@ -51,11 +51,18 @@ module Types = struct
     | T.U64 -> "u64"
     | T.U128 -> "u128"
 
+  let type_id_to_string (fmt : 'r type_formatter) (id : T.type_id) : string =
+    match id with
+    | T.AdtId id -> fmt.type_def_id_to_string id
+    | T.Tuple -> ""
+    | T.Assumed aty -> ( match aty with Box -> "std::boxed::Box")
+
   let rec ty_to_string (fmt : 'r type_formatter) (ty : 'r T.ty) : string =
     match ty with
     | T.Adt (id, regions, tys) ->
-        let params = params_to_string fmt regions tys in
-        fmt.type_def_id_to_string id ^ params
+        let is_tuple = match id with T.Tuple -> true | _ -> false in
+        let params = params_to_string fmt is_tuple regions tys in
+        type_id_to_string fmt id ^ params
     | T.TypeVar tv -> fmt.type_var_id_to_string tv
     | T.Bool -> "bool"
     | T.Char -> "char"
@@ -70,19 +77,14 @@ module Types = struct
             "&" ^ fmt.r_to_string r ^ " mut (" ^ ty_to_string fmt rty ^ ")"
         | T.Shared ->
             "&" ^ fmt.r_to_string r ^ " (" ^ ty_to_string fmt rty ^ ")")
-    | T.Tuple tys ->
-        "(" ^ String.concat ",  " (List.map (ty_to_string fmt) tys) ^ ")"
-    | T.Assumed (aty, regions, tys) -> (
-        let params = params_to_string fmt regions tys in
-        match aty with Box -> "std::boxed::Box" ^ params)
 
-  and params_to_string (fmt : 'r type_formatter) (regions : 'r list)
-      (types : 'r T.ty list) : string =
-    if List.length regions + List.length types > 0 then
-      let regions = List.map fmt.r_to_string regions in
-      let types = List.map (ty_to_string fmt) types in
-      let params = String.concat ", " (List.append regions types) in
-      "<" ^ params ^ ">"
+  and params_to_string (fmt : 'r type_formatter) (is_tuple : bool)
+      (regions : 'r list) (types : 'r T.ty list) : string =
+    let regions = List.map fmt.r_to_string regions in
+    let types = List.map (ty_to_string fmt) types in
+    let params = String.concat ", " (List.append regions types) in
+    if is_tuple then "(" ^ params ^ ")"
+    else if List.length regions + List.length types > 0 then "<" ^ params ^ ">"
     else ""
 
   let rty_to_string fmt (ty : T.rty) : string = ty_to_string fmt ty
@@ -219,45 +221,44 @@ module Values = struct
     in
     match v.value with
     | Concrete cv -> constant_value_to_string cv
-    | Adt av ->
-        let def_id =
-          match v.ty with
-          | Adt (def_id, _, _) -> def_id
-          | _ -> failwith "Inconsistent value"
-        in
-        let adt_ident =
-          match av.variant_id with
-          | Some vid -> fmt.adt_variant_to_string def_id vid
-          | None -> fmt.type_def_id_to_string def_id
+    | Adt av -> (
+        let is_tuple =
+          match v.ty with T.Adt (T.Tuple, _, _) -> true | _ -> false
         in
         let field_values =
           List.map (g_typed_value_to_string fmt gfmt) av.field_values
         in
-        if List.length field_values > 0 then
-          match fmt.adt_field_names def_id av.V.variant_id with
-          | None ->
-              let field_values = String.concat ", " field_values in
-              adt_ident ^ " (" ^ field_values ^ ")"
-          | Some field_names ->
-              let field_values = List.combine field_names field_values in
-              let field_values =
-                List.map
-                  (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                  field_values
-              in
-              let field_values = String.concat " " field_values in
-              adt_ident ^ " { " ^ field_values ^ " }"
-        else adt_ident
-    | Tuple values ->
-        let values =
-          String.concat ", "
-            (List.map (g_typed_value_to_string fmt gfmt) values)
-        in
-        "(" ^ values ^ ")"
+        match v.ty with
+        | T.Adt (T.Tuple, _, _) ->
+            (* Tuple *)
+            "(" ^ String.concat ", " field_values ^ ")"
+        | T.Adt (T.AdtId def_id, _, _) ->
+            let adt_ident =
+              match av.variant_id with
+              | Some vid -> fmt.adt_variant_to_string def_id vid
+              | None -> fmt.type_def_id_to_string def_id
+            in
+            if List.length field_values > 0 then
+              match fmt.adt_field_names def_id av.V.variant_id with
+              | None ->
+                  let field_values = String.concat ", " field_values in
+                  adt_ident ^ " (" ^ field_values ^ ")"
+              | Some field_names ->
+                  let field_values = List.combine field_names field_values in
+                  let field_values =
+                    List.map
+                      (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                      field_values
+                  in
+                  let field_values = String.concat " " field_values in
+                  adt_ident ^ " { " ^ field_values ^ " }"
+            else adt_ident
+        | T.Adt (T.Assumed aty, _, _) -> (
+            match (aty, field_values) with
+            | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
+            | _ -> failwith "Inconsistent value")
+        | _ -> failwith "Inconsistent typed value")
     | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
-    | Assumed av -> (
-        match av with
-        | Box bv -> "@Box(" ^ g_typed_value_to_string fmt gfmt bv ^ ")")
     | Borrow bc -> gfmt.bc_to_string bc
     | Loan lc -> gfmt.lc_to_string lc
     | Symbolic s -> gfmt.sv_to_string s

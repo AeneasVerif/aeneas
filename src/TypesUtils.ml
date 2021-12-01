@@ -17,7 +17,7 @@ let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
 
 (** Return [true] if a [ty] is actually `unit` *)
 let ty_is_unit (ty : 'r ty) : bool =
-  match ty with Tuple tys -> List.length tys = 0 | _ -> false
+  match ty with Adt (Tuple, [], []) -> true | _ -> false
 
 (** The unit type *)
-let mk_unit_ty : ety = Tuple []
+let mk_unit_ty : ety = Adt (Tuple, [], [])

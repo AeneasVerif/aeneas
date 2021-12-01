@@ -56,9 +56,17 @@ type ref_kind = Mut | Shared [@@deriving show]
 
 type assumed_ty = Box [@@deriving show]
 
+(** Type identifier for ADTs.
+
+    ADTs are very general in our encoding: they account for "regular" ADTs,
+    tuples and also assumed types.
+*)
+type type_id = AdtId of TypeDefId.id | Tuple | Assumed of assumed_ty
+[@@deriving show]
+
 type 'r ty =
-  | Adt of TypeDefId.id * 'r list * 'r ty list
-  | Tuple of 'r ty list
+  | Adt of type_id * 'r list * 'r ty list
+      (** [Adt] encodes ADTs, tuples and assumed types *)
   | TypeVar of TypeVarId.id
   | Bool
   | Char
@@ -68,7 +76,6 @@ type 'r ty =
   | Array of 'r ty (* TODO: there should be a constant with the array *)
   | Slice of 'r ty
   | Ref of 'r * 'r ty * ref_kind
-  | Assumed of assumed_ty * 'r list * 'r ty list
 [@@deriving show]
 (* TODO: group Bool, Char, etc. in Constant *)
 

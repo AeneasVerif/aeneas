@@ -78,14 +78,28 @@ let assumed_ty_of_json (js : json) : (T.assumed_ty, string) result =
   combine_error_msgs js "assumed_ty_of_json"
     (match js with `String "Box" -> Ok T.Box | _ -> Error "")
 
+let type_id_of_json (js : json) : (T.type_id, string) result =
+  combine_error_msgs js "type_id_of_json"
+    (match js with
+    | `Assoc [ ("Adt", id) ] ->
+        let* id = T.TypeDefId.id_of_json id in
+        Ok (T.AdtId id)
+    | `String "Tuple" -> Ok T.Tuple
+    | `Assoc [ ("Assumed", aty) ] ->
+        let* aty = assumed_ty_of_json aty in
+        Ok (T.Assumed aty)
+    | _ -> Error "")
+
 let rec ty_of_json (r_of_json : json -> ('r, string) result) (js : json) :
     ('r T.ty, string) result =
   combine_error_msgs js "ty_of_json"
     (match js with
     | `Assoc [ ("Adt", `List [ id; regions; types ]) ] ->
-        let* id = T.TypeDefId.id_of_json id in
+        let* id = type_id_of_json id in
         let* regions = list_of_json r_of_json regions in
         let* types = list_of_json (ty_of_json r_of_json) types in
+        (* Sanity check *)
+        (match id with T.Tuple -> assert (List.length regions = 0) | _ -> ());
         Ok (T.Adt (id, regions, types))
     | `Assoc [ ("TypeVar", `List [ id ]) ] ->
         let* id = T.TypeVarId.id_of_json id in
@@ -108,14 +122,6 @@ let rec ty_of_json (r_of_json : json -> ('r, string) result) (js : json) :
         let* ty = ty_of_json r_of_json ty in
         let* ref_kind = ref_kind_of_json ref_kind in
         Ok (T.Ref (region, ty, ref_kind))
-    | `Assoc [ ("Tuple", `List [ types ]) ] ->
-        let* types = list_of_json (ty_of_json r_of_json) types in
-        Ok (T.Tuple types)
-    | `Assoc [ ("Assumed", `List [ assumed_ty; regions; types ]) ] ->
-        let* assumed_ty = assumed_ty_of_json assumed_ty in
-        let* regions = list_of_json r_of_json regions in
-        let* types = list_of_json (ty_of_json r_of_json) types in
-        Ok (T.Assumed (assumed_ty, regions, types))
     | _ -> Error "")
 
 let rty_of_json (js : json) : (T.rty, string) result =

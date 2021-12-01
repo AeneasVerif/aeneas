@@ -18,15 +18,12 @@ let rec ty_substitute (rsubst : 'r1 -> 'r2)
   match ty with
   | Adt (def_id, regions, tys) ->
       Adt (def_id, List.map rsubst regions, List.map subst tys)
-  | Tuple tys -> Tuple (List.map subst tys)
   | Array aty -> Array (subst aty)
   | Slice sty -> Slice (subst sty)
   | Ref (r, ref_ty, ref_kind) -> Ref (rsubst r, subst ref_ty, ref_kind)
-  | Assumed (aty, regions, tys) ->
-      Assumed (aty, List.map rsubst regions, List.map subst tys)
-      (* Below variants: we technically return the same value, but because
-         one has type ['r1 ty] and the other has type ['r2 ty] we need to
-         deconstruct then reconstruct *)
+  (* Below variants: we technically return the same value, but because
+     one has type ['r1 ty] and the other has type ['r2 ty], we need to
+     deconstruct then reconstruct *)
   | Bool -> Bool
   | Char -> Char
   | Never -> Never
