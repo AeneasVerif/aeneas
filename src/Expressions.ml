@@ -1,5 +1,3 @@
-(** TODO: the name "Expression" is not correct - change that *)
-
 open Types
 open Values
 

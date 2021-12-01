@@ -5,7 +5,7 @@
     different from what `serde_rs` generates (because it uses [Yojson.Safe.t]
     and not [Yojson.Basic.t]).
 
-    TODO: we should check that the integer values are in the proper range
+    TODO: we should check all that the integer values are in the proper range
  *)
 
 open Yojson.Basic

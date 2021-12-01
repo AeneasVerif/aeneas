@@ -12,7 +12,6 @@ open ValuesUtils
 
 (* TODO: Change state-passing style to : st -> ... -> (st, v) *)
 (* TODO: check that the value types are correct when evaluating *)
-(* TODO: module Type = T, etc. *)
 (* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
    (rather than only env) *)
 
@@ -2468,62 +2467,62 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
       | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
       | Return -> Ok ctx)
 
-(** Test a unit function (taking no arguments) by evaluating it in an empty
+module Test = struct
+  (** Test a unit function (taking no arguments) by evaluating it in an empty
     environment
-
-    TODO: put in a sub-module
  *)
-let test_unit_function (type_defs : T.type_def list) (fun_defs : A.fun_def list)
-    (fid : A.FunDefId.id) : unit eval_result =
-  (* Retrieve the function declaration *)
-  let fdef = A.FunDefId.nth fun_defs fid in
+  let test_unit_function (type_defs : T.type_def list)
+      (fun_defs : A.fun_def list) (fid : A.FunDefId.id) : unit eval_result =
+    (* Retrieve the function declaration *)
+    let fdef = A.FunDefId.nth fun_defs fid in
 
-  (* Debug *)
-  L.log#ldebug
-    (lazy ("test_unit_function: " ^ Print.Types.name_to_string fdef.A.name));
+    (* Debug *)
+    L.log#ldebug
+      (lazy ("test_unit_function: " ^ Print.Types.name_to_string fdef.A.name));
 
-  (* Sanity check - *)
-  assert (List.length fdef.A.signature.region_params = 0);
-  assert (List.length fdef.A.signature.type_params = 0);
-  assert (fdef.A.arg_count = 0);
+    (* Sanity check - *)
+    assert (List.length fdef.A.signature.region_params = 0);
+    assert (List.length fdef.A.signature.type_params = 0);
+    assert (fdef.A.arg_count = 0);
 
-  (* Create the evaluation context *)
-  let ctx =
-    {
-      C.type_context = type_defs;
-      C.fun_context = fun_defs;
-      C.type_vars = [];
-      C.env = [];
-      C.symbolic_counter = V.SymbolicValueId.generator_zero;
-      C.borrow_counter = V.BorrowId.generator_zero;
-    }
-  in
+    (* Create the evaluation context *)
+    let ctx =
+      {
+        C.type_context = type_defs;
+        C.fun_context = fun_defs;
+        C.type_vars = [];
+        C.env = [];
+        C.symbolic_counter = V.SymbolicValueId.generator_zero;
+        C.borrow_counter = V.BorrowId.generator_zero;
+      }
+    in
 
-  (* Put the (uninitialized) local variables *)
-  let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
+    (* Put the (uninitialized) local variables *)
+    let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
 
-  (* Evaluate the function *)
-  let config = { C.mode = C.ConcreteMode; C.check_invariants = true } in
-  match eval_function_body config ctx fdef.A.body with
-  | Error err -> Error err
-  | Ok _ -> Ok ()
+    (* Evaluate the function *)
+    let config = { C.mode = C.ConcreteMode; C.check_invariants = true } in
+    match eval_function_body config ctx fdef.A.body with
+    | Error err -> Error err
+    | Ok _ -> Ok ()
 
-(** Small helper: return true if the function is a unit function (no parameters,
+  (** Small helper: return true if the function is a unit function (no parameters,
     no arguments) - TODO: move *)
-let fun_def_is_unit (def : A.fun_def) : bool =
-  def.A.arg_count = 0
-  && List.length def.A.signature.region_params = 0
-  && List.length def.A.signature.type_params = 0
-  && List.length def.A.signature.inputs = 0
+  let fun_def_is_unit (def : A.fun_def) : bool =
+    def.A.arg_count = 0
+    && List.length def.A.signature.region_params = 0
+    && List.length def.A.signature.type_params = 0
+    && List.length def.A.signature.inputs = 0
 
-(** Test all the unit functions in a list of function definitions *)
-let test_all_unit_functions (type_defs : T.type_def list)
-    (fun_defs : A.fun_def list) : unit =
-  let test_fun (def : A.fun_def) : unit =
-    if fun_def_is_unit def then
-      match test_unit_function type_defs fun_defs def.A.def_id with
-      | Error _ -> failwith "Unit test failed"
-      | Ok _ -> ()
-    else ()
-  in
-  List.iter test_fun fun_defs
+  (** Test all the unit functions in a list of function definitions *)
+  let test_all_unit_functions (type_defs : T.type_def list)
+      (fun_defs : A.fun_def list) : unit =
+    let test_fun (def : A.fun_def) : unit =
+      if fun_def_is_unit def then
+        match test_unit_function type_defs fun_defs def.A.def_id with
+        | Error _ -> failwith "Unit test failed"
+        | Ok _ -> ()
+      else ()
+    in
+    List.iter test_fun fun_defs
+end

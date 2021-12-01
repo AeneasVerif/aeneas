@@ -1,5 +1,3 @@
-(* TODO: use one letter abbreviations for modules *)
-
 open Identifiers
 module T = Types
 module TU = TypesUtils
@@ -29,12 +27,9 @@ module Types = struct
 
   let assumed_ty_to_string (_ : T.assumed_ty) : string = "Box"
 
-  (* TODO: This is probably not the most OCaml-like way of doing this *)
   type 'r type_formatter = {
     r_to_string : 'r -> string;
-    (* TODO: remove this and put the name everywhere instead? *)
     type_var_id_to_string : T.TypeVarId.id -> string;
-    (* TODO: remove this and put the name everywhere instead? *)
     type_def_id_to_string : T.TypeDefId.id -> string;
   }
 
