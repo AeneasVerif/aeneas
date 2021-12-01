@@ -65,26 +65,54 @@ type symbolic_proj_comp = {
     regions *but* the ones which are listed in the projector.
  *)
 
-(** An untyped value, used in the environments *)
-type value =
+(** A generic, untyped value, used in the environments.
+
+    Parameterized by:
+    - 'ty: type
+    - 'bc: borrow content
+    - 'lc: loan content
+
+    Can be specialized for "regular" values or values in abstractions *)
+type ('ty, 'bc, 'lc) g_value =
   | Concrete of constant_value  (** Concrete (non-symbolic) value *)
-  | Adt of adt_value  (** Enumerations and structures *)
-  | Tuple of typed_value list
+  | Adt of ('ty, 'bc, 'lc) g_adt_value  (** Enumerations and structures *)
+  | Tuple of ('ty, 'bc, 'lc) g_typed_value list
       (** Tuple - note that units are encoded as 0-tuples
           TODO: merge with Adt?
        *)
   | Bottom  (** No value (uninitialized or moved value) *)
-  | Assumed of assumed_value
+  | Assumed of ('ty, 'bc, 'lc) g_assumed_value
       (** Value of an abstract type (Box, Vec, Cell...) *)
-  | Borrow of borrow_content  (** A borrowed value *)
-  | Loan of loan_content  (** A loaned value *)
+  | Borrow of 'bc  (** A borrowed value *)
+  | Loan of 'lc  (** A loaned value *)
   | Symbolic of symbolic_proj_comp  (** Unknown value *)
 [@@deriving show]
 
-and adt_value = {
+and ('ty, 'bc, 'lc) g_adt_value = {
   variant_id : VariantId.id option;
-  field_values : typed_value list;
+  field_values : ('ty, 'bc, 'lc) g_typed_value list;
 }
+[@@deriving show]
+(** "Generic" ADT value (not "GADT" value) *)
+
+and ('ty, 'bc, 'lc) g_assumed_value = Box of ('ty, 'bc, 'lc) g_typed_value
+[@@deriving show]
+
+and ('ty, 'bc, 'lc) g_typed_value = {
+  value : ('ty, 'bc, 'lc) g_value;
+  ty : 'ty;
+}
+[@@deriving show]
+
+type value = (ety, borrow_content, loan_content) g_value [@@deriving show]
+
+and adt_value = (ety, borrow_content, loan_content) g_adt_value
+[@@deriving show]
+
+and assumed_value = (ety, borrow_content, loan_content) g_assumed_value
+[@@deriving show]
+
+and typed_value = (ety, borrow_content, loan_content) g_typed_value
 [@@deriving show]
 
 and borrow_content =
@@ -107,10 +135,6 @@ and loan_content =
   | SharedLoan of BorrowId.set_t * typed_value
   | MutLoan of BorrowId.id
 [@@deriving show]
-
-and assumed_value = Box of typed_value [@@deriving show]
-
-and typed_value = { value : value; ty : ety } [@@deriving show]
 
 type abstract_shared_borrows =
   | AsbSet of BorrowId.set_t
