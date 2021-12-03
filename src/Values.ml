@@ -69,7 +69,7 @@ type symbolic_proj_comp = {
 class virtual ['self] iter_'r_ty_base =
   object (self : 'self)
     method visit_ty : 'env 'r. ('env -> 'r -> unit) -> 'env -> 'r ty -> unit =
-      fun visit_'r env ty -> ()
+      fun _visit_'r _env _ty -> ()
   end
 
 (** A generic, untyped value, used in the environments.
@@ -113,15 +113,15 @@ and ('r, 'sv, 'bc, 'lc) g_typed_value = {
         concrete = true;
       }]
 
-class virtual ['self] iter_typed_value_base =
+class ['self] iter_typed_value_base =
   object (self : 'self)
     inherit [_] iter_g_typed_value
 
     method visit_erased_region : 'env. 'env -> erased_region -> unit =
-      fun env _ -> ()
+      fun _env _ -> ()
 
     method visit_symbolic_proj_comp : 'env. 'env -> symbolic_proj_comp -> unit =
-      fun env _ -> ()
+      fun _env _ -> ()
   end
 
 type value =
@@ -144,8 +144,8 @@ and typed_value =
         name = "iter_typed_value";
         variety = "iter";
         ancestors = [ "iter_typed_value_base" ];
-        polymorphic = true;
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
       }]
 (** "Regular" typed value (we map variables to typed values) *)
 
@@ -182,8 +182,25 @@ type aproj =
   | AProjBorrows of symbolic_value * rty
 [@@deriving show]
 
-type avalue =
-  (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_value
+type region = RegionVarId.id Types.region [@@deriving show]
+
+class ['self] iter_typed_avalue_base =
+  object (self : 'self)
+    inherit [_] iter_g_typed_value
+
+    method visit_region : 'env. 'env -> region -> unit = fun _env _r -> ()
+
+    method visit_aproj : 'env. 'env -> aproj -> unit = fun env _ -> ()
+
+    method visit_typed_value : 'env. 'env -> typed_value -> unit =
+      fun _env _v -> ()
+
+    method visit_abstract_shared_borrows
+        : 'env. 'env -> abstract_shared_borrows -> unit =
+      fun _env _asb -> ()
+  end
+
+type avalue = (region, aproj, aborrow_content, aloan_content) g_value
 (** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.
 
@@ -191,28 +208,34 @@ type avalue =
     part of it is thus "abstracted" away.
 *)
 
-and aadt_value =
-  (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_adt_value
+and aadt_value = (region, aproj, aborrow_content, aloan_content) g_adt_value
 
-and typed_avalue =
-  (RegionVarId.id region, aproj, aborrow_content, aloan_content) g_typed_value
-[@@deriving show]
+and typed_avalue = (region, aproj, aborrow_content, aloan_content) g_typed_value
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_typed_avalue";
+        variety = "iter";
+        ancestors = [ "iter_typed_avalue_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
 
 and aloan_content =
-  | AMutLoan of BorrowId.id * typed_avalue
-  | ASharedLoan of BorrowId.set_t * typed_value * typed_avalue
+  | AMutLoan of (BorrowId.id[@opaque]) * typed_avalue
+  | ASharedLoan of (BorrowId.set_t[@opaque]) * typed_value * typed_avalue
   | AEndedMutLoan of { given_back : typed_value; child : typed_avalue }
   | AEndedSharedLoan of typed_value * typed_avalue
-  | AIgnoredMutLoan of BorrowId.id * typed_avalue
+  | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
   | AIgnoredSharedLoan of abstract_shared_borrows
-[@@deriving show]
 
 (** Note that when a borrow content is ended, it is replaced by Bottom (while
     we need to track ended loans more precisely, especially because of their
     children values) *)
 and aborrow_content =
-  | AMutBorrow of BorrowId.id * typed_avalue
-  | ASharedBorrow of BorrowId.id
+  | AMutBorrow of (BorrowId.id[@opaque]) * typed_avalue
+  | ASharedBorrow of (BorrowId.id[@opaque])
   | AIgnoredMutBorrow of typed_avalue
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
   | AIgnoredSharedBorrow of abstract_shared_borrows
