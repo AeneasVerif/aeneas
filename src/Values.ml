@@ -110,6 +110,7 @@ and ('r, 'sv, 'bc, 'lc) g_typed_value = {
         variety = "iter";
         ancestors = [ "iter_'r_ty_base" ];
         polymorphic = true;
+        (* Heirs expect a polymorphic class *)
         concrete = true;
       }]
 
