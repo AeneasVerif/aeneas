@@ -65,6 +65,13 @@ type symbolic_proj_comp = {
     regions *but* the ones which are listed in the projector.
  *)
 
+(** Polymorphic visitor *)
+class virtual ['self] iter_'r_ty_base =
+  object (self : 'self)
+    method visit_ty : 'env 'r. ('env -> 'r -> unit) -> 'env -> 'r ty -> unit =
+      fun visit_'r env ty -> ()
+  end
+
 (** A generic, untyped value, used in the environments.
 
     Parameterized by:
@@ -75,7 +82,7 @@ type symbolic_proj_comp = {
 
     Can be specialized for "regular" values or values in abstractions *)
 type ('r, 'sv, 'bc, 'lc) g_value =
-  | Concrete of constant_value  (** Concrete (non-symbolic) value *)
+  | Concrete of (constant_value[@opaque])  (** Concrete (non-symbolic) value *)
   | Adt of ('r, 'sv, 'bc, 'lc) g_adt_value
       (** Enumerations, structures, tuples, assumed types. Note that units
           are encoded as 0-tuples  *)
@@ -85,7 +92,7 @@ type ('r, 'sv, 'bc, 'lc) g_value =
   | Symbolic of 'sv  (** Unknown value *)
 
 and ('r, 'sv, 'bc, 'lc) g_adt_value = {
-  variant_id : VariantId.id option;
+  variant_id : VariantId.id option; [@opaque]
   field_values : ('r, 'sv, 'bc, 'lc) g_typed_value list;
 }
 
@@ -95,7 +102,26 @@ and ('r, 'sv, 'bc, 'lc) g_typed_value = {
   value : ('r, 'sv, 'bc, 'lc) g_value;
   ty : 'r ty;
 }
-[@@deriving show]
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_g_typed_value";
+        variety = "iter";
+        polymorphic = true;
+        ancestors = [ "iter_'r_ty_base" ];
+      }]
+
+class virtual ['self] iter_typed_value_base =
+  object (self : 'self)
+    inherit [_] iter_g_typed_value
+
+    method visit_erased_region : 'env. 'env -> erased_region -> unit =
+      fun env _ -> ()
+
+    method visit_symbolic_proj_comp : 'env. 'env -> symbolic_proj_comp -> unit =
+      fun env _ -> ()
+  end
 
 type value =
   (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_value
@@ -110,13 +136,23 @@ and typed_value =
     borrow_content,
     loan_content )
   g_typed_value
-[@@deriving show]
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_typed_value";
+        variety = "iter";
+        ancestors = [ "iter_typed_value_base" ];
+        polymorphic = true;
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+      }]
 (** "Regular" typed value (we map variables to typed values) *)
 
 and borrow_content =
-  | SharedBorrow of BorrowId.id  (** A shared value *)
-  | MutBorrow of BorrowId.id * typed_value  (** A mutably borrowed value *)
-  | InactivatedMutBorrow of BorrowId.id
+  | SharedBorrow of (BorrowId.id[@opaque])  (** A shared value *)
+  | MutBorrow of (BorrowId.id[@opaque]) * typed_value
+      (** A mutably borrowed value *)
+  | InactivatedMutBorrow of (BorrowId.id[@opaque])
       (** An inactivated mut borrow.
 
           This is used to model two-phase borrows. When evaluating a two-phase
@@ -129,8 +165,8 @@ and borrow_content =
        *)
 
 and loan_content =
-  | SharedLoan of BorrowId.set_t * typed_value
-  | MutLoan of BorrowId.id
+  | SharedLoan of (BorrowId.set_t[@opaque]) * typed_value
+  | MutLoan of (BorrowId.id[@opaque])
 [@@deriving show]
 
 type abstract_shared_borrows =
