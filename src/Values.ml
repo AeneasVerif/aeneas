@@ -83,13 +83,12 @@ type ('r, 'sv, 'bc, 'lc) g_value =
   | Borrow of 'bc  (** A borrowed value *)
   | Loan of 'lc  (** A loaned value *)
   | Symbolic of 'sv  (** Unknown value *)
-[@@deriving show]
 
 and ('r, 'sv, 'bc, 'lc) g_adt_value = {
   variant_id : VariantId.id option;
   field_values : ('r, 'sv, 'bc, 'lc) g_typed_value list;
 }
-[@@deriving show]
+
 (** "Generic" ADT value (not "GADT" value) *)
 
 and ('r, 'sv, 'bc, 'lc) g_typed_value = {
@@ -100,12 +99,10 @@ and ('r, 'sv, 'bc, 'lc) g_typed_value = {
 
 type value =
   (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_value
-[@@deriving show]
 (** "Regular" value *)
 
 and adt_value =
   (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_adt_value
-[@@deriving show]
 
 and typed_value =
   ( erased_region,
@@ -130,7 +127,6 @@ and borrow_content =
           is well typed) of this value and replace the inactivated borrow with a
           mutable borrow.
        *)
-[@@deriving show]
 
 and loan_content =
   | SharedLoan of BorrowId.set_t * typed_value
