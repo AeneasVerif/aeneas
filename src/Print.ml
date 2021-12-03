@@ -222,9 +222,6 @@ module Values = struct
     match v.value with
     | Concrete cv -> constant_value_to_string cv
     | Adt av -> (
-        let is_tuple =
-          match v.ty with T.Adt (T.Tuple, _, _) -> true | _ -> false
-        in
         let field_values =
           List.map (g_typed_value_to_string fmt gfmt) av.field_values
         in
@@ -233,6 +230,7 @@ module Values = struct
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
         | T.Adt (T.AdtId def_id, _, _) ->
+            (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
               | Some vid -> fmt.adt_variant_to_string def_id vid
@@ -254,6 +252,7 @@ module Values = struct
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
         | T.Adt (T.Assumed aty, _, _) -> (
+            (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
             | _ -> failwith "Inconsistent value")
