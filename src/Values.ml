@@ -131,24 +131,6 @@ type value =
 and adt_value =
   (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_adt_value
 
-and typed_value =
-  ( erased_region,
-    symbolic_proj_comp,
-    borrow_content,
-    loan_content )
-  g_typed_value
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_typed_value";
-        variety = "iter";
-        ancestors = [ "iter_typed_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        concrete = true;
-      }]
-(** "Regular" typed value (we map variables to typed values) *)
-
 and borrow_content =
   | SharedBorrow of (BorrowId.id[@opaque])  (** A shared value *)
   | MutBorrow of (BorrowId.id[@opaque]) * typed_value
@@ -168,7 +150,24 @@ and borrow_content =
 and loan_content =
   | SharedLoan of (BorrowId.set_t[@opaque]) * typed_value
   | MutLoan of (BorrowId.id[@opaque])
-[@@deriving show]
+
+and typed_value =
+  ( erased_region,
+    symbolic_proj_comp,
+    borrow_content,
+    loan_content )
+  g_typed_value
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_typed_value";
+        variety = "iter";
+        ancestors = [ "iter_typed_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
+(** "Regular" typed value (we map variables to typed values) *)
 
 type abstract_shared_borrows =
   | AsbSet of BorrowId.set_t
@@ -210,18 +209,6 @@ type avalue = (region, aproj, aborrow_content, aloan_content) g_value
 
 and aadt_value = (region, aproj, aborrow_content, aloan_content) g_adt_value
 
-and typed_avalue = (region, aproj, aborrow_content, aloan_content) g_typed_value
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_typed_avalue";
-        variety = "iter";
-        ancestors = [ "iter_typed_avalue_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        concrete = true;
-      }]
-
 and aloan_content =
   | AMutLoan of (BorrowId.id[@opaque]) * typed_avalue
   | ASharedLoan of (BorrowId.set_t[@opaque]) * typed_value * typed_avalue
@@ -239,7 +226,18 @@ and aborrow_content =
   | AIgnoredMutBorrow of typed_avalue
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
   | AIgnoredSharedBorrow of abstract_shared_borrows
-[@@deriving show]
+
+and typed_avalue = (region, aproj, aborrow_content, aloan_content) g_typed_value
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_typed_avalue";
+        variety = "iter";
+        ancestors = [ "iter_typed_avalue_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
 
 type abs = {
   abs_id : AbstractionId.id;
