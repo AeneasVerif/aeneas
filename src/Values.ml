@@ -108,8 +108,9 @@ and ('r, 'sv, 'bc, 'lc) g_typed_value = {
       {
         name = "iter_g_typed_value";
         variety = "iter";
-        polymorphic = true;
         ancestors = [ "iter_'r_ty_base" ];
+        polymorphic = true;
+        concrete = true;
       }]
 
 class virtual ['self] iter_typed_value_base =
