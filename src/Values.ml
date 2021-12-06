@@ -65,11 +65,23 @@ type symbolic_proj_comp = {
     regions *but* the ones which are listed in the projector.
  *)
 
-(** Polymorphic visitor *)
+(** Polymorphic iter visitor *)
 class virtual ['self] iter_'r_ty_base =
   object (self : 'self)
     method visit_ty : 'env 'r. ('env -> 'r -> unit) -> 'env -> 'r ty -> unit =
       fun _visit_'r _env _ty -> ()
+  end
+
+(** Polymorphic map visitor *)
+class virtual ['self] map_'r_ty_base =
+  object (self : 'self)
+    method visit_ty
+        : 'env 'r_0 'r_1. ('env -> 'r_0 -> 'r_1) -> 'env -> 'r_0 ty -> 'r_1 ty =
+      fun _visit_'r _env ty ->
+        (* We should use a ty visitor, but in practice we don't need to
+         * visit types, and for the non-generic visit methods (which will
+         * preserve 'r_0) we will override this method with identity *)
+        raise Errors.Unimplemented
   end
 
 (** A generic, untyped value, used in the environments.
@@ -112,7 +124,168 @@ and ('r, 'sv, 'bc, 'lc) g_typed_value = {
         polymorphic = true;
         (* Heirs expect a polymorphic class *)
         concrete = true;
+      },
+    visitors
+      {
+        name = "map_g_typed_value";
+        variety = "map";
+        ancestors = [ "map_'r_ty_base" ];
+        polymorphic = true;
+        (* Heirs expect a polymorphic class *)
+        concrete = true;
       }]
+
+(*class ['self] map_g_typed_value =
+    object (self : 'self)
+      inherit [_] VisitorsRuntime.map
+
+      inherit [_] map_'r_ty_base
+
+      method visit_Concrete
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            _ ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env _visitors_c0 ->
+          let _visitors_r0 =
+            (fun _visitors_this -> _visitors_this) _visitors_c0
+          in
+          Concrete _visitors_r0
+
+      method visit_Adt
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            ('r_0, 'sv_0, 'bc_0, 'lc_0) g_adt_value ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env _visitors_c0 ->
+          let _visitors_r0 =
+            self#visit_g_adt_value visit_'r visit_'sv visit_'bc visit_'lc env
+              _visitors_c0
+          in
+          Adt _visitors_r0
+
+      method visit_Bottom
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env -> Bottom
+
+      method visit_Borrow
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            'bc_0 ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env _visitors_c0 ->
+          let _visitors_r0 = visit_'bc env _visitors_c0 in
+          Borrow _visitors_r0
+
+      method visit_Loan
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            'lc_0 ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env _visitors_c0 ->
+          let _visitors_r0 = visit_'lc env _visitors_c0 in
+          Loan _visitors_r0
+
+      method visit_Symbolic
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            'sv_0 ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env _visitors_c0 ->
+          let _visitors_r0 = visit_'sv env _visitors_c0 in
+          Symbolic _visitors_r0
+
+      method visit_g_value
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            ('r_0, 'sv_0, 'bc_0, 'lc_0) g_value ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env _visitors_this ->
+          match _visitors_this with
+          | Concrete _visitors_c0 ->
+              self#visit_Concrete visit_'r visit_'sv visit_'bc visit_'lc env
+                _visitors_c0
+          | Adt _visitors_c0 ->
+              self#visit_Adt visit_'r visit_'sv visit_'bc visit_'lc env
+                _visitors_c0
+          | Bottom -> self#visit_Bottom visit_'r visit_'sv visit_'bc visit_'lc env
+          | Borrow _visitors_c0 ->
+              self#visit_Borrow visit_'r visit_'sv visit_'bc visit_'lc env
+                _visitors_c0
+          | Loan _visitors_c0 ->
+              self#visit_Loan visit_'r visit_'sv visit_'bc visit_'lc env
+                _visitors_c0
+          | Symbolic _visitors_c0 ->
+              self#visit_Symbolic visit_'r visit_'sv visit_'bc visit_'lc env
+                _visitors_c0
+
+      method visit_g_adt_value
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            ('r_0, 'sv_0, 'bc_0, 'lc_0) g_adt_value ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_adt_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env _visitors_this ->
+          let _visitors_r0 =
+            (fun _visitors_this -> _visitors_this) _visitors_this.variant_id
+          in
+          let _visitors_r1 =
+            self#visit_list
+              (self#visit_g_typed_value visit_'r visit_'sv visit_'bc visit_'lc)
+              env _visitors_this.field_values
+          in
+          { variant_id = _visitors_r0; field_values = _visitors_r1 }
+
+      method visit_g_typed_value
+          : 'env 'r_0 'r_1 'sv_0 'sv_1 'bc_0 'bc_1 'lc_0 'lc_1.
+            ('env -> 'r_0 -> 'r_1) ->
+            ('env -> 'sv_0 -> 'sv_1) ->
+            ('env -> 'bc_0 -> 'bc_1) ->
+            ('env -> 'lc_0 -> 'lc_1) ->
+            'env ->
+            ('r_0, 'sv_0, 'bc_0, 'lc_0) g_typed_value ->
+            ('r_1, 'sv_1, 'bc_1, 'lc_1) g_typed_value =
+        fun visit_'r visit_'sv visit_'bc visit_'lc env _visitors_this ->
+          let _visitors_r0 =
+            self#visit_g_value visit_'r visit_'sv visit_'bc visit_'lc env
+              _visitors_this.value
+          in
+          let _visitors_r1 = self#visit_ty visit_'r env _visitors_this.ty in
+          { value = _visitors_r0; ty = _visitors_r1 }
+  end*)
 
 class ['self] iter_typed_value_base =
   object (self : 'self)
@@ -123,6 +296,18 @@ class ['self] iter_typed_value_base =
 
     method visit_symbolic_proj_comp : 'env. 'env -> symbolic_proj_comp -> unit =
       fun _env _ -> ()
+  end
+
+class ['self] map_typed_value_base =
+  object (self : 'self)
+    inherit [_] map_g_typed_value
+
+    method visit_erased_region : 'env. 'env -> erased_region -> erased_region =
+      fun _env r -> r
+
+    method visit_symbolic_proj_comp
+        : 'env. 'env -> symbolic_proj_comp -> symbolic_proj_comp =
+      fun _env pc -> pc
   end
 
 type value =
@@ -167,8 +352,28 @@ and typed_value =
         ancestors = [ "iter_typed_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
+      },
+    visitors
+      {
+        name = "map_typed_value_incomplete";
+        variety = "map";
+        ancestors = [ "map_typed_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
       }]
 (** "Regular" typed value (we map variables to typed values) *)
+
+(** Override some undefined functions *)
+class ['self] map_typed_value =
+  object (self : 'self)
+    inherit [_] map_typed_value_incomplete as super
+
+    method! visit_typed_value (env : 'env) (tv : typed_value) : typed_value =
+      let value = super#visit_value env tv.value in
+      (* Ignore the type *)
+      let ty = tv.ty in
+      { value; ty }
+  end
 
 type abstract_shared_borrows =
   | AsbSet of BorrowId.set_t
@@ -198,6 +403,22 @@ class ['self] iter_typed_avalue_base =
     method visit_abstract_shared_borrows
         : 'env. 'env -> abstract_shared_borrows -> unit =
       fun _env _asb -> ()
+  end
+
+class ['self] map_typed_avalue_base =
+  object (self : 'self)
+    inherit [_] map_g_typed_value
+
+    method visit_region : 'env. 'env -> region -> region = fun _env r -> r
+
+    method visit_aproj : 'env. 'env -> aproj -> aproj = fun env p -> p
+
+    method visit_typed_value : 'env. 'env -> typed_value -> typed_value =
+      fun _env v -> v
+
+    method visit_abstract_shared_borrows
+        : 'env. 'env -> abstract_shared_borrows -> abstract_shared_borrows =
+      fun _env asb -> asb
   end
 
 type avalue = (region, aproj, aborrow_content, aloan_content) g_value
@@ -238,7 +459,27 @@ and typed_avalue = (region, aproj, aborrow_content, aloan_content) g_typed_value
         ancestors = [ "iter_typed_avalue_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
+      },
+    visitors
+      {
+        name = "map_typed_avalue_incomplete";
+        variety = "map";
+        ancestors = [ "map_typed_avalue_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
       }]
+
+(** Override some undefined functions *)
+class ['self] map_typed_avalue =
+  object (self : 'self)
+    inherit [_] map_typed_avalue_incomplete as super
+
+    method! visit_typed_avalue (env : 'env) (tv : typed_avalue) : typed_avalue =
+      let value = super#visit_avalue env tv.value in
+      (* Ignore the type *)
+      let ty = tv.ty in
+      { value; ty }
+  end
 
 type abs = {
   abs_id : AbstractionId.id;
