@@ -214,10 +214,10 @@ and typed_value =
 (** Override some undefined functions *)
 class ['self] map_typed_value =
   object (self : 'self)
-    inherit [_] map_typed_value_incomplete as super
+    inherit [_] map_typed_value_incomplete
 
     method! visit_typed_value (env : 'env) (tv : typed_value) : typed_value =
-      let value = super#visit_value env tv.value in
+      let value = self#visit_value env tv.value in
       (* Ignore the type *)
       let ty = tv.ty in
       { value; ty }
@@ -320,10 +320,10 @@ and typed_avalue = (region, aproj, aborrow_content, aloan_content) g_typed_value
 (** Override some undefined functions *)
 class ['self] map_typed_avalue =
   object (self : 'self)
-    inherit [_] map_typed_avalue_incomplete as super
+    inherit [_] map_typed_avalue_incomplete
 
     method! visit_typed_avalue (env : 'env) (tv : typed_avalue) : typed_avalue =
-      let value = super#visit_avalue env tv.value in
+      let value = self#visit_avalue env tv.value in
       (* Ignore the type *)
       let ty = tv.ty in
       { value; ty }

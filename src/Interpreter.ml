@@ -176,6 +176,42 @@ let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
   | None -> failwith "Unreachable"
   | Some lc -> lc
 
+(*
+TODO: use this
+(** Update a loan content in a value.
+
+    The loan is referred to by a borrow id.
+
+    This is a helper function: it might break invariants.
+ *)
+let update_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
+    (nlc : V.loan_content) (v : V.typed_value) : V.typed_value =
+  let obj =
+    object
+      inherit [_] V.map_typed_value as super
+
+      method! visit_MutBorrow env bid mv =
+        if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+        else V.MutBorrow (bid, mv)
+      (** Control the diving into mutable borrows *)
+
+      method! visit_SharedLoan env bids sv =
+        if V.BorrowId.Set.mem l bids then nlc
+        else if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
+        else V.SharedLoan (bids, sv)
+      (** Shared loan: checks if this is the loan we are looking for, and
+          control the dive.    
+      *)
+
+      method! visit_MutLoan env bid =
+        if bid = l then nlc else super#visit_MutLoan env bid
+      (** Mut loan: checks if this is the loan we are looking for
+      *)
+    end
+  in
+  (* We use exceptions *)
+obj#visit_typed_value () v*)
+
 (** Update a loan content in a value.
 
     The loan is referred to by a borrow id.
