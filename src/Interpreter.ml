@@ -20,7 +20,7 @@ open ValuesUtils
    chose in which order to apply the rules, etc. This way we would make very
    explicit where we need to insert sanity checks, what the preconditions are,
    where invariants might be broken, etc.
- *)
+*)
 
 (* TODO: intensively test with PLT-redex *)
 
@@ -62,58 +62,94 @@ type exploration_kind = {
     functions behave, by restraining the kind of therms they can enter.
 *)
 
-(** Apply a predicate to all the borrows in a value *)
-let rec check_borrows_in_value (check : V.borrow_content -> bool)
-    (v : V.typed_value) : bool =
-  match v.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> true
-  | V.Adt av -> List.for_all (check_borrows_in_value check) av.field_values
-  | V.Borrow bc -> (
-      check bc
-      &&
-      match bc with
-      | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> true
-      | V.MutBorrow (_, mv) -> check_borrows_in_value check mv)
-  | V.Loan lc -> (
-      match lc with
-      | V.SharedLoan (_, sv) -> check_borrows_in_value check sv
-      | V.MutLoan _ -> true)
+exception Found
+(** When looking for something, it can be easier to just throw an exception to
+    signal we found what we were looking for.
+ *)
 
-(** Apply a predicate to all the loans in a value *)
-let rec check_loans_in_value (check : V.loan_content -> bool)
-    (v : V.typed_value) : bool =
-  match v.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> true
-  | V.Adt av -> List.for_all (check_loans_in_value check) av.field_values
-  | V.Borrow bc -> (
-      match bc with
-      | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> true
-      | V.MutBorrow (_, mv) -> check_loans_in_value check mv)
-  | V.Loan lc -> (
-      check lc
-      &&
-      match lc with
-      | V.SharedLoan (_, sv) -> check_loans_in_value check sv
-      | V.MutLoan _ -> true)
+exception FoundBorrowContent of V.borrow_content
+(** Utility exception *)
+
+exception FoundLoanContent of V.loan_content
+(** Utility exception *)
+
+(** Check if a value contains a borrow *)
+let borrows_in_value (v : V.typed_value) : bool =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_borrow_content _env _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true
+
+(** Check if a value contains inactivated mutable borrows *)
+let inactivated_in_value (v : V.typed_value) : bool =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_InactivatedMutBorrow _env _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true
+
+(** Check if a value contains a loan *)
+let loans_in_value (v : V.typed_value) : bool =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_loan_content _env _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true
 
 (** Lookup a loan content in a value *)
-let rec lookup_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
+let lookup_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
     (v : V.typed_value) : V.loan_content option =
-  match v.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> None
-  | V.Adt av -> List.find_map (lookup_loan_in_value ek l) av.field_values
-  | V.Borrow bc -> (
-      match bc with
-      | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> None
-      | V.MutBorrow (_, mv) ->
-          if ek.enter_mut_borrows then lookup_loan_in_value ek l mv else None)
-  | V.Loan lc -> (
-      match lc with
-      | V.SharedLoan (bids, sv) ->
-          if V.BorrowId.Set.mem l bids then Some lc
-          else if ek.enter_shared_loans then lookup_loan_in_value ek l sv
-          else None
-      | V.MutLoan bid -> if bid = l then Some (V.MutLoan bid) else None)
+  let obj =
+    object
+      inherit [_] V.iter_typed_value as super
+
+      method! visit_MutBorrow env bid mv =
+        if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv else ()
+      (** Control the diving into mutable borrows *)
+
+      method! visit_SharedLoan env bids sv =
+        if V.BorrowId.Set.mem l bids then
+          raise (FoundLoanContent (V.SharedLoan (bids, sv)))
+        else if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
+        else ()
+      (** Shared loan: checks if this is the loan we are looking for, and
+          control the dive.    
+      *)
+
+      method! visit_MutLoan env bid =
+        if bid = l then raise (FoundLoanContent (V.MutLoan bid))
+        else super#visit_MutLoan env bid
+      (** Mut loan: checks if this is the loan we are looking for
+      *)
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    None
+  with FoundLoanContent lc -> Some lc
 
 (** Lookup a loan content.
 
@@ -316,22 +352,6 @@ let update_outer_borrows (io : inner_outer) opt x =
 
 let unwrap_res_to_outer_or opt default =
   match opt with Some x -> Outer x | None -> default
-
-(** Check if a value contains a borrow *)
-let borrows_in_value (v : V.typed_value) : bool =
-  not (check_borrows_in_value (fun _ -> false) v)
-
-(** Check if a value contains loans *)
-let rec loans_in_value (v : V.typed_value) : bool =
-  match v.V.value with
-  | V.Concrete _ -> false
-  | V.Adt av -> List.exists loans_in_value av.field_values
-  | V.Borrow bc -> (
-      match bc with
-      | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> false
-      | V.MutBorrow (_, bv) -> loans_in_value bv)
-  | V.Loan _ -> true
-  | V.Bottom | V.Symbolic _ -> false
 
 (** Return the first loan we find in a value *)
 let rec get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
@@ -819,10 +839,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
              ^ V.show_typed_value sv));
           assert (not (loans_in_value sv));
           assert (not (bottom_in_value sv));
-          let check_not_inactivated bc =
-            match bc with V.InactivatedMutBorrow _ -> false | _ -> true
-          in
-          assert (check_borrows_in_value check_not_inactivated sv);
+          assert (not (inactivated_in_value sv));
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = V.BorrowId.Set.remove l bids in
