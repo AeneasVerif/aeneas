@@ -176,8 +176,6 @@ let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
   | None -> failwith "Unreachable"
   | Some lc -> lc
 
-(*
-TODO: use this
 (** Update a loan content in a value.
 
     The loan is referred to by a borrow id.
@@ -209,44 +207,7 @@ let update_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
       *)
     end
   in
-  (* We use exceptions *)
-obj#visit_typed_value () v*)
-
-(** Update a loan content in a value.
-
-    The loan is referred to by a borrow id.
-
-    This is a helper function: it might break invariants.
- *)
-let rec update_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
-    (nlc : V.loan_content) (v : V.typed_value) : V.typed_value =
-  match v.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
-  | V.Adt av ->
-      let values = List.map (update_loan_in_value ek l nlc) av.field_values in
-      let av = { av with field_values = values } in
-      { v with value = Adt av }
-  | V.Borrow bc -> (
-      match bc with
-      | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> v
-      | V.MutBorrow (bid, mv) ->
-          if ek.enter_mut_borrows then
-            let v' =
-              V.Borrow (V.MutBorrow (bid, update_loan_in_value ek l nlc mv))
-            in
-            { v with value = v' }
-          else v)
-  | V.Loan lc -> (
-      match lc with
-      | V.SharedLoan (bids, sv) ->
-          if V.BorrowId.Set.mem l bids then { v with value = V.Loan nlc }
-          else if ek.enter_shared_loans then
-            let v' =
-              V.Loan (V.SharedLoan (bids, update_loan_in_value ek l nlc sv))
-            in
-            { v with value = v' }
-          else v
-      | V.MutLoan bid -> if bid = l then { v with value = V.Loan nlc } else v)
+  obj#visit_typed_value () v
 
 (** Update a loan content.
 
