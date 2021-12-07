@@ -72,18 +72,6 @@ class ['self] iter_'r_ty_base =
       fun _visit_'r _env _ty -> ()
   end
 
-(*(** Polymorphic map visitor *)
-  class ['self] map_'r_ty_base =
-    object (self : 'self)
-      method visit_ty
-          : 'env 'r_0 'r_1. ('env -> 'r_0 -> 'r_1) -> 'env -> 'r_0 ty -> 'r_1 ty =
-        fun _visit_'r _env ty ->
-          (* We should use a ty visitor, but in practice we don't need to
-           * visit types, and for the non-generic visit methods (which will
-           * preserve 'r_0) we will override this method with identity *)
-          raise Errors.Unimplemented
-  end*)
-
 (** A generic, untyped value, used in the environments.
 
     Parameterized by:
@@ -124,16 +112,7 @@ and ('r, 'sv, 'bc, 'lc) g_typed_value = {
         polymorphic = true;
         (* Heirs expect a polymorphic class *)
         concrete = true;
-      }
-  (* visitors
-     {
-       name = "map_g_typed_value";
-       variety = "map";
-       ancestors = [ "map_'r_ty_base" ];
-       polymorphic = true;
-       (* Heirs expect a polymorphic class *)
-       concrete = true;
-     }*)]
+      }]
 
 class ['self] iter_typed_value_base =
   object (self : 'self)
@@ -145,18 +124,6 @@ class ['self] iter_typed_value_base =
     method visit_symbolic_proj_comp : 'env. 'env -> symbolic_proj_comp -> unit =
       fun _env _ -> ()
   end
-
-(*class ['self] map_typed_value_base =
-    object (self : 'self)
-      inherit [_] map_g_typed_value
-
-      method visit_erased_region : 'env. 'env -> erased_region -> erased_region =
-        fun _env r -> r
-
-      method visit_symbolic_proj_comp
-          : 'env. 'env -> symbolic_proj_comp -> symbolic_proj_comp =
-        fun _env pc -> pc
-  end*)
 
 type value =
   (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_value
@@ -200,28 +167,8 @@ and typed_value =
         ancestors = [ "iter_typed_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
-      }
-  (* visitors
-     {
-       name = "map_typed_value_incomplete";
-       variety = "map";
-       ancestors = [ "map_typed_value_base" ];
-       nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-       concrete = true;
-     }*)]
+      }]
 (** "Regular" typed value (we map variables to typed values) *)
-
-(*(** Override some undefined functions *)
-  class ['self] map_typed_value =
-    object (self : 'self)
-      inherit [_] map_typed_value_incomplete
-
-      method! visit_typed_value (env : 'env) (tv : typed_value) : typed_value =
-        let value = self#visit_value env tv.value in
-        (* Ignore the type *)
-        let ty = tv.ty in
-        { value; ty }
-  end*)
 
 type abstract_shared_borrows =
   | AsbSet of BorrowId.set_t
@@ -252,22 +199,6 @@ class ['self] iter_typed_avalue_base =
         : 'env. 'env -> abstract_shared_borrows -> unit =
       fun _env _asb -> ()
   end
-
-(*class ['self] map_typed_avalue_base =
-    object (self : 'self)
-      inherit [_] map_g_typed_value
-
-      method visit_region : 'env. 'env -> region -> region = fun _env r -> r
-
-      method visit_aproj : 'env. 'env -> aproj -> aproj = fun env p -> p
-
-      method visit_typed_value : 'env. 'env -> typed_value -> typed_value =
-        fun _env v -> v
-
-      method visit_abstract_shared_borrows
-          : 'env. 'env -> abstract_shared_borrows -> abstract_shared_borrows =
-        fun _env asb -> asb
-  end*)
 
 type avalue = (region, aproj, aborrow_content, aloan_content) g_value
 (** Abstraction values are used inside of abstractions to properly model
@@ -308,27 +239,7 @@ and typed_avalue = (region, aproj, aborrow_content, aloan_content) g_typed_value
         ancestors = [ "iter_typed_avalue_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
-      }
-  (* visitors
-     {
-       name = "map_typed_avalue_incomplete";
-       variety = "map";
-       ancestors = [ "map_typed_avalue_base" ];
-       nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-       concrete = true;
-     }*)]
-
-(*(** Override some undefined functions *)
-  class ['self] map_typed_avalue =
-    object (self : 'self)
-      inherit [_] map_typed_avalue_incomplete
-
-      method! visit_typed_avalue (env : 'env) (tv : typed_avalue) : typed_avalue =
-        let value = self#visit_avalue env tv.value in
-        (* Ignore the type *)
-        let ty = tv.ty in
-        { value; ty }
-  end*)
+      }]
 
 type abs = {
   abs_id : AbstractionId.id;
@@ -363,17 +274,6 @@ class virtual ['self] map_g_typed_value =
         : 'env 'r 'sv 'bc 'lc.
           'env -> constant_value -> ('r, 'sv, 'bc, 'lc) g_value =
       fun _env cv -> Concrete cv
-
-    (* method visit_Adt
-           : ('env -> 'sv -> 'sv) ->
-             ('env -> 'bc -> 'bc) ->
-             ('env -> 'lc -> 'lc) ->
-             'env ->
-             ('r, 'sv, 'bc, 'lc) g_adt_value ->
-             ('r, 'sv, 'bc, 'lc) g_value =
-         fun visit_'sv visit_'bc visit_'lc env av ->
-           let av = self#visit_g_adt_value visit_'sv visit_'bc visit_'lc env av in
-           Adt av*)
 
     method visit_Bottom
         : 'env 'r 'sv 'bc 'lc. 'env -> ('r, 'sv, 'bc, 'lc) g_value =
