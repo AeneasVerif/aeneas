@@ -165,17 +165,18 @@ let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
   | None -> failwith "Unreachable"
   | Some lc -> lc
 
-(** Update a loan content in a value.
+(** Update a loan content.
 
     The loan is referred to by a borrow id.
 
     This is a helper function: it might break invariants.
  *)
-let update_loan_in_value (r : bool ref) (ek : exploration_kind)
-    (l : V.BorrowId.id) (nlc : V.loan_content) (v : V.typed_value) :
-    V.typed_value =
+let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
+    (nlc : V.loan_content) (env : C.env) : C.env =
   (* We use a reference to check that we update exactly one loan: when updating
-   * inside values, we check we don't update more than one loan. *)
+   * inside values, we check we don't update more than one loan. Then, upon
+   * returning we check that we updated at least once. *)
+  let r = ref false in
   let set_ref r =
     assert (not !r);
     r := true
@@ -183,7 +184,7 @@ let update_loan_in_value (r : bool ref) (ek : exploration_kind)
 
   let obj =
     object
-      inherit [_] V.map_typed_value as super
+      inherit [_] C.map_env_concrete as super
 
       method! visit_MutBorrow env bid mv =
         if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
@@ -209,30 +210,7 @@ let update_loan_in_value (r : bool ref) (ek : exploration_kind)
       *)
     end
   in
-  let v = obj#visit_typed_value r v in
-  v
-
-(** Update a loan content.
-
-    The loan is referred to by a borrow id.
-
-    This is a helper function: it might break invariants.
-
-    TODO: use visitors for environments.
- *)
-let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
-    (nlc : V.loan_content) (env : C.env) : C.env =
-  (* We use a reference to check that we update exactly one loan.
-   * [update_loan_in_value] checks that we update at most once.
-   * We then check that we updated at least once before returning. *)
-  let r = ref false in
-  let update_loan_in_env_value (ev : C.env_value) : C.env_value =
-    match ev with
-    | C.Var (vid, v) -> Var (vid, update_loan_in_value r ek l nlc v)
-    | C.Abs _ -> raise Unimplemented (* TODO *)
-    | C.Frame -> C.Frame
-  in
-  let env = List.map update_loan_in_env_value env in
+  let env = obj#visit_env r env in
   (* Check that we updated at least one loan *)
   assert !r;
   env
