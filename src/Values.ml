@@ -360,42 +360,48 @@ class virtual ['self] map_g_typed_value =
     inherit [_] VisitorsRuntime.map
 
     method visit_Concrete
-        : 'env -> constant_value -> ('r, 'sv, 'bc, 'lv) g_value =
+        : 'env 'r 'sv 'bc 'lc.
+          'env -> constant_value -> ('r, 'sv, 'bc, 'lc) g_value =
       fun _env cv -> Concrete cv
 
-    method visit_Adt
-        : ('env -> 'sv -> 'sv) ->
-          ('env -> 'bc -> 'bc) ->
-          ('env -> 'lc -> 'lc) ->
-          'env ->
-          ('r, 'sv, 'bc, 'lc) g_adt_value ->
-          ('r, 'sv, 'bc, 'lc) g_value =
-      fun visit_'sv visit_'bc visit_'lc env av ->
-        let av = self#visit_g_adt_value visit_'sv visit_'bc visit_'lc env av in
-        Adt av
+    (* method visit_Adt
+           : ('env -> 'sv -> 'sv) ->
+             ('env -> 'bc -> 'bc) ->
+             ('env -> 'lc -> 'lc) ->
+             'env ->
+             ('r, 'sv, 'bc, 'lc) g_adt_value ->
+             ('r, 'sv, 'bc, 'lc) g_value =
+         fun visit_'sv visit_'bc visit_'lc env av ->
+           let av = self#visit_g_adt_value visit_'sv visit_'bc visit_'lc env av in
+           Adt av*)
 
-    method visit_Bottom : 'env -> ('r, 'sv, 'bc, 'lv) g_value =
+    method visit_Bottom
+        : 'env 'r 'sv 'bc 'lc. 'env -> ('r, 'sv, 'bc, 'lc) g_value =
       fun _env -> Bottom
 
     method visit_Borrow
-        : ('env -> 'bc -> 'bc) -> 'env -> 'bc -> ('r, 'sv, 'bc, 'lv) g_value =
+        : 'env 'r 'sv 'bc 'lc.
+          ('env -> 'bc -> 'bc) -> 'env -> 'bc -> ('r, 'sv, 'bc, 'lc) g_value =
       fun visit_'bc env bc -> Borrow (visit_'bc env bc)
 
     method visit_Loan
-        : ('env -> 'lc -> 'lc) -> 'env -> 'lc -> ('r, 'sv, 'bc, 'lv) g_value =
+        : 'env 'r 'sv 'bc 'lc.
+          ('env -> 'lc -> 'lc) -> 'env -> 'lc -> ('r, 'sv, 'bc, 'lc) g_value =
       fun visit_'lc env lc -> Loan (visit_'lc env lc)
 
     method visit_Symbolic
-        : ('env -> 'sv -> 'sv) -> 'env -> 'sv -> ('r, 'sv, 'bc, 'lv) g_value =
+        : 'env 'r 'sv 'bc 'lc.
+          ('env -> 'sv -> 'sv) -> 'env -> 'sv -> ('r, 'sv, 'bc, 'lc) g_value =
       fun visit_'sv env sv -> Symbolic (visit_'sv env sv)
 
     method visit_g_value
-        : ('env -> 'sv -> 'sv) ->
+        : 'env 'r 'sv 'bc 'lc.
+          ('env -> 'sv -> 'sv) ->
           ('env -> 'bc -> 'bc) ->
           ('env -> 'lc -> 'lc) ->
           'env ->
-          ('r, 'sv, 'bc, 'lv) g_value ->
-          ('r, 'sv, 'bc, 'lv) g_value =
+          ('r, 'sv, 'bc, 'lc) g_value ->
+          ('r, 'sv, 'bc, 'lc) g_value =
       fun visit_'sv visit_'bc visit_'lc env v ->
         match v with
         | Concrete cv -> self#visit_Concrete env cv
@@ -407,12 +413,13 @@ class virtual ['self] map_g_typed_value =
         | Symbolic sv -> self#visit_Symbolic visit_'sv env sv
 
     method visit_g_adt_value
-        : ('env -> 'sv -> 'sv) ->
+        : 'env 'r 'sv 'bc 'lc.
+          ('env -> 'sv -> 'sv) ->
           ('env -> 'bc -> 'bc) ->
           ('env -> 'lc -> 'lc) ->
           'env ->
-          ('r, 'sv, 'bc, 'lv) g_adt_value ->
-          ('r, 'sv, 'bc, 'lv) g_adt_value =
+          ('r, 'sv, 'bc, 'lc) g_adt_value ->
+          ('r, 'sv, 'bc, 'lc) g_adt_value =
       fun visit_'sv visit_'bc visit_'lc env av ->
         let variant_id = av.variant_id in
         let field_values =
@@ -423,12 +430,13 @@ class virtual ['self] map_g_typed_value =
         { variant_id; field_values }
 
     method visit_g_typed_value
-        : ('env -> 'sv -> 'sv) ->
+        : 'env 'r 'sv 'bc 'lc.
+          ('env -> 'sv -> 'sv) ->
           ('env -> 'bc -> 'bc) ->
           ('env -> 'lc -> 'lc) ->
           'env ->
-          ('r, 'sv, 'bc, 'lv) g_typed_value ->
-          ('r, 'sv, 'bc, 'lv) g_typed_value =
+          ('r, 'sv, 'bc, 'lc) g_typed_value ->
+          ('r, 'sv, 'bc, 'lc) g_typed_value =
       fun visit_'sv visit_'bc visit_'lc env v ->
         let value =
           self#visit_g_value visit_'sv visit_'bc visit_'lc env v.value
@@ -436,7 +444,7 @@ class virtual ['self] map_g_typed_value =
         let ty = self#visit_ty env v.ty in
         { value; ty }
 
-    method visit_ty : 'env -> 'r ty -> 'r ty = fun _env ty -> ty
+    method visit_ty : 'env 'r. 'env -> 'r ty -> 'r ty = fun _env ty -> ty
   end
 
 class ['self] map_typed_value =
@@ -444,168 +452,151 @@ class ['self] map_typed_value =
     inherit [_] map_g_typed_value
 
     method visit_symbolic_proj_comp
-        : 'monomorphic. 'env -> symbolic_proj_comp -> symbolic_proj_comp =
+        : 'env -> symbolic_proj_comp -> symbolic_proj_comp =
       fun _env sv -> sv
 
-    method visit_borrow_content
-        : 'monomorphic. 'env -> borrow_content -> borrow_content =
+    method visit_borrow_content : 'env -> borrow_content -> borrow_content =
       fun env bc ->
         match bc with
         | SharedBorrow bid -> self#visit_SharedBorrow env bid
         | MutBorrow (bid, v) -> self#visit_MutBorrow env bid v
         | InactivatedMutBorrow bid -> self#visit_InactivatedMutBorrow env bid
 
-    method visit_SharedBorrow
-        : 'monomorphic. 'env -> BorrowId.id -> borrow_content =
+    method visit_SharedBorrow : 'env -> BorrowId.id -> borrow_content =
       fun _env bid -> SharedBorrow bid
 
     method visit_MutBorrow
-        : 'monomorphic. 'env -> BorrowId.id -> typed_value -> borrow_content =
+        : 'env -> BorrowId.id -> typed_value -> borrow_content =
       fun env bid v ->
         let v = self#visit_typed_value env v in
         MutBorrow (bid, v)
 
-    method visit_InactivatedMutBorrow
-        : 'monomorphic. 'env -> BorrowId.id -> borrow_content =
+    method visit_InactivatedMutBorrow : 'env -> BorrowId.id -> borrow_content =
       fun _env bid -> InactivatedMutBorrow bid
 
-    method visit_loan_content
-        : 'monomorphic. 'env -> loan_content -> loan_content =
+    method visit_loan_content : 'env -> loan_content -> loan_content =
       fun env lc ->
         match lc with
         | SharedLoan (bids, v) -> self#visit_SharedLoan env bids v
         | MutLoan bid -> self#visit_MutLoan env bid
 
     method visit_SharedLoan
-        : 'monomorphic. 'env -> BorrowId.set_t -> typed_value -> loan_content =
+        : 'env -> BorrowId.set_t -> typed_value -> loan_content =
       fun env bids v ->
         let v = self#visit_typed_value env v in
         SharedLoan (bids, v)
 
-    method visit_MutLoan : 'monomorphic. 'env -> BorrowId.id -> loan_content =
+    method visit_MutLoan : 'env -> BorrowId.id -> loan_content =
       fun _env bid -> MutLoan bid
 
-    method visit_typed_value : 'monomorphic. 'env -> typed_value -> typed_value
-        =
+    method visit_typed_value : 'env -> typed_value -> typed_value =
       fun env v ->
         self#visit_g_typed_value self#visit_symbolic_proj_comp
           self#visit_borrow_content self#visit_loan_content env v
 
-    method visit_adt_value : 'monomorphic. 'env -> adt_value -> adt_value =
+    method visit_adt_value : 'env -> adt_value -> adt_value =
       fun env v ->
         self#visit_g_adt_value self#visit_symbolic_proj_comp
           self#visit_borrow_content self#visit_loan_content env v
   end
 
-(*class ['self] map_typed_avalue =
-    object (self : 'self)
-      inherit [_] map_g_typed_value
+class ['self] map_typed_avalue =
+  object (self : 'self)
+    inherit [_] map_typed_value
 
-      method visit_'sv : 'monomorphic. 'env -> aproj -> aproj =
-        fun env sv -> self#visit_aproj env sv
+    method visit_aproj : 'env -> aproj -> aproj = fun _env sv -> sv
 
-      method visit_'bc : 'monomorphic. 'env -> aborrow_content -> aborrow_content
-          =
-        fun env bc -> self#visit_aborrow_content env bc
+    method visit_aborrow_content : 'env -> aborrow_content -> aborrow_content =
+      fun env bc ->
+        match bc with
+        | AMutBorrow (bid, v) -> self#visit_AMutBorrow env bid v
+        | ASharedBorrow bid -> self#visit_ASharedBorrow env bid
+        | AIgnoredMutBorrow v -> self#visit_AIgnoredMutBorrow env v
+        | AIgnoredSharedBorrow asb -> self#visit_AIgnoredSharedBorrow env asb
 
-      method visit_'lc : 'monomorphic. 'env -> aloan_content -> aloan_content =
-        fun env lc -> self#visit_aloan_content env lc
+    method visit_AMutBorrow
+        : 'env -> BorrowId.id -> typed_avalue -> aborrow_content =
+      fun env bid av ->
+        let av = self#visit_typed_avalue env av in
+        AMutBorrow (bid, av)
 
-      method visit_aproj : 'monomorphic. 'env -> aproj -> aproj =
-        fun _env sv -> sv
+    method visit_ASharedBorrow : 'env -> BorrowId.id -> aborrow_content =
+      fun _env bid -> ASharedBorrow bid
 
-      method visit_aborrow_content
-          : 'monomorphic. 'env -> aborrow_content -> aborrow_content =
-        fun env bc ->
-          match bc with
-          | AMutBorrow (bid, v) -> self#visit_AMutBorrow env bid v
-          | ASharedBorrow bid -> self#visit_ASharedBorrow env bid
-          | AIgnoredMutBorrow v -> self#visit_AIgnoredMutBorrow env v
-          | AIgnoredSharedBorrow asb -> self#visit_AIgnoredSharedBorrow env asb
+    method visit_AIgnoredMutBorrow : 'env -> typed_avalue -> aborrow_content =
+      fun env av ->
+        let av = self#visit_typed_avalue env av in
+        AIgnoredMutBorrow av
 
-      method visit_AMutBorrow
-          : 'monomorphic. 'env -> BorrowId.id -> typed_avalue -> borrow_content =
-        fun env bid av ->
-          let av = self#visit_typed_avalue env av in
-          AMutBorrow (bid, av)
+    method visit_AIgnoredSharedBorrow
+        : 'env -> abstract_shared_borrows -> aborrow_content =
+      fun _env asb -> AIgnoredSharedBorrow asb
 
-      method visit_ASharedBorrow
-          : 'monomorphic. 'env -> BorrowId.id -> borrow_content =
-        fun _env bid -> ASharedBorrow bid
+    method visit_aloan_content : 'env -> aloan_content -> aloan_content =
+      fun env lc ->
+        match lc with
+        | AMutLoan (bid, av) -> self#visit_AMutLoan env bid av
+        | ASharedLoan (bids, v, av) -> self#visit_ASharedLoan env bids v av
+        | AEndedMutLoan { given_back; child } ->
+            self#visit_AEndedMutLoan env given_back child
+        | AEndedSharedLoan (v, av) -> self#visit_AEndedSharedLoan env v av
+        | AIgnoredMutLoan (bids, v) -> self#visit_AIgnoredMutLoan env bids v
+        | AEndedIgnoredMutLoan { given_back; child } ->
+            self#visit_AEndedIgnoredMutLoan env given_back child
+        | AIgnoredSharedLoan asb -> self#visit_AIgnoredSharedLoan env asb
 
-      method visit_AIgnoredMutBorrow
-          : 'monomorphic. 'env -> typed_avalue -> borrow_content =
-        fun env av ->
-          let av = self#visit_typed_avalue env av in
-          AIgnoredMutBorrow av
+    method visit_AMutLoan : 'env -> BorrowId.id -> typed_avalue -> aloan_content
+        =
+      fun env bid av ->
+        let av = self#visit_typed_avalue env av in
+        AMutLoan (bid, av)
 
-      method visit_AIgnoredSharedBorrow
-          : 'monomorphic. 'env -> abstract_shared_borrows -> borrow_content =
-        fun _env asb -> AIgnoredSharedBorrow asb
+    method visit_ASharedLoan
+        : 'env -> BorrowId.set_t -> typed_value -> typed_avalue -> aloan_content
+        =
+      fun env bids v av ->
+        let v = self#visit_typed_value env v in
+        let av = self#visit_typed_avalue env av in
+        ASharedLoan (bids, v, av)
 
-      method visit_aloan_content
-          : 'monomorphic. 'env -> aloan_content -> aloan_content =
-        fun env lc ->
-          match lc with
-          | AMutLoan (bid, av) -> self#visit_AMutLoan env bids av
-          | ASharedLoan (bids, v, av) -> self#visit_ASharedLoan env bids v av
-          | AEndedMutLoan { given_back; child } ->
-              self#visit_AEndedMutLoan env given_back child
-          | AIgnoredMutLoan (bids, v) -> self#visit_AIgnoredMutLoan env bids v
-          | AEndedIgnoredMutLoan { given_back; child } ->
-              self#visit_AEndedIgnoredMutLoan env given_back child
-          | AIgnoredSharedLoan asb -> self#visit_AIgnoredSharedLoan env asb
+    method visit_AEndedMutLoan
+        : 'env -> typed_value -> typed_avalue -> aloan_content =
+      fun env given_back child ->
+        let given_back = self#visit_typed_value env given_back in
+        let child = self#visit_typed_avalue env child in
+        AEndedMutLoan { given_back; child }
 
-      method visit_AMutLoan
-          : 'monomorphic. 'env -> BorrowId.id -> typed_avalue -> loan_content =
-        fun env bid av ->
-          let av = self#visit_typed_avalue env av in
-          AMutLoan (bid, av)
+    method visit_AEndedSharedLoan
+        : 'env -> typed_value -> typed_avalue -> aloan_content =
+      fun env v av ->
+        let v = self#visit_typed_value env v in
+        let av = self#visit_typed_avalue env av in
+        AEndedSharedLoan (v, av)
 
-      method visit_ASharedLoan
-          : 'monomorphic.
-            'env -> BorrowId.set_t -> typed_value -> typed_avalue -> loan_content
-          =
-        fun env bids v av ->
-          let v = self#visit_typed_value env v in
-          let av = self#visit_typed_avalue env av in
-          ASharedLoan (bids, v, av)
+    method visit_AIgnoredMutLoan
+        : 'env -> BorrowId.id -> typed_avalue -> aloan_content =
+      fun env id av ->
+        let av = self#visit_typed_avalue env av in
+        AIgnoredMutLoan (id, av)
 
-      method visit_AEndedMutLoan
-          : 'monomorphic. 'env -> typed_value -> typed_avalue -> loan_content =
-        fun env given_back child ->
-          let given_back = self#visit_typed_value env given_back in
-          let child = self#visit_typed_avalue env child in
-          AEndedMutLoan { given_back; child }
+    method visit_AEndedIgnoredMutLoan
+        : 'env -> typed_avalue -> typed_avalue -> aloan_content =
+      fun env given_back child ->
+        let given_back = self#visit_typed_avalue env given_back in
+        let child = self#visit_typed_avalue env child in
+        AEndedIgnoredMutLoan { given_back; child }
 
-      method visit_AEndedSharedLoan
-          : 'monomorphic. 'env -> typed_value -> typed_avalue -> loan_content =
-        fun env v av ->
-          let v = self#visit_typed_value env v in
-          let av = self#visit_typed_avalue env av in
-          AEndedSharedLoan (v, av)
+    method visit_AIgnoredSharedLoan
+        : 'env -> abstract_shared_borrows -> aloan_content =
+      fun _env asb -> AIgnoredSharedLoan asb
 
-      method visit_AIgnoredMutLoan
-          : 'monomorphic. 'env -> BorrowId.id -> typed_avalue -> loan_content =
-        fun env id av ->
-          let av = self#visit_typed_avalue env av in
-          AIgnoredMutLoan (id, av)
+    method visit_typed_avalue : 'env -> typed_avalue -> typed_avalue =
+      fun env v ->
+        self#visit_g_typed_value self#visit_aproj self#visit_aborrow_content
+          self#visit_aloan_content env v
 
-      method visit_AEndedIgnoredMutLoan
-          : 'monomorphic. 'env -> typed_value -> typed_avalue -> loan_content =
-        fun env given_back child ->
-          let given_back = self#visit_typed_avalue env given_back in
-          let child = self#visit_typed_avalue env child in
-          AEndedIgnoredMutLoan { given_back; child }
-
-      method visit_AIgnoredSharedLoan
-          : 'monomorphic. 'env -> abstract_shared_borrows -> loan_content =
-        fun _env asb -> AIgnoredSharedLoan asb
-
-      method visit_typed_avalue
-          : 'monomorphic. 'env -> typed_avalue -> typed_avalue =
-        fun env v -> self#visit_g_typed_value env v
-
-      method visit_aadt_value : 'monomorphic. 'env -> aadt_value -> aadt_value =
-        fun env v -> self#visit_g_adt_value env v
-  end*)
+    method visit_aadt_value : 'env -> aadt_value -> aadt_value =
+      fun env v ->
+        self#visit_g_adt_value self#visit_aproj self#visit_aborrow_content
+          self#visit_aloan_content env v
+  end
