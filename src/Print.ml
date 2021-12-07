@@ -364,6 +364,12 @@ module Values = struct
         "@ignored_mut_loan(" ^ V.BorrowId.to_string bid ^ ", "
         ^ typed_avalue_to_string fmt av
         ^ ")"
+    | AEndedIgnoredMutLoan ml ->
+        "@ended_ignored_mut_borrow{ given_back="
+        ^ typed_avalue_to_string fmt ml.given_back
+        ^ "; child: "
+        ^ typed_avalue_to_string fmt ml.child
+        ^ "}"
     | AIgnoredSharedLoan asb ->
         "@ignored_shared_loan("
         ^ abstract_shared_borrows_to_string fmt asb
@@ -379,12 +385,6 @@ module Values = struct
     | ASharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
     | AIgnoredMutBorrow av ->
         "@ignored_mut_borrow(" ^ typed_avalue_to_string fmt av ^ ")"
-    | AEndedIgnoredMutLoan ml ->
-        "@ended_ignored_mut_borrow{ given_back="
-        ^ typed_avalue_to_string fmt ml.given_back
-        ^ "; child: "
-        ^ typed_avalue_to_string fmt ml.child
-        ^ "}"
     | AIgnoredSharedBorrow sb ->
         "@ignored_shared_borrow("
         ^ abstract_shared_borrows_to_string fmt sb
