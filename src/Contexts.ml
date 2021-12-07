@@ -1,6 +1,7 @@
 open Types
 open Values
 open CfimAst
+module V = Values
 
 type binder = {
   index : VarId.id;  (** Unique variable identifier *)
@@ -146,3 +147,22 @@ let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =
 let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in
   ctx_push_vars ctx vars
+
+(** Visitor to iterate over the values in a frame. *)
+class ['self] iter_frame_concrete =
+  object (self : 'self)
+    inherit [_] V.iter_typed_value
+
+    method visit_env_value_Var : 'acc -> binder -> typed_value -> unit =
+      fun acc vid v -> self#visit_typed_value acc v
+
+    method visit_env : 'acc -> env -> unit =
+      fun acc env ->
+        match env with
+        | [] -> ()
+        | Var (vid, v) :: env ->
+            self#visit_env_value_Var acc vid v;
+            self#visit_env acc env
+        | Abs _ :: _ -> raise Errors.Unimplemented (* TODO *)
+        | Frame :: _ -> (* We stop here *) ()
+  end
