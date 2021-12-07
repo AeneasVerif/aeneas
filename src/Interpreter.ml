@@ -215,36 +215,38 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
   assert !r;
   env
 
-(** Lookup a borrow content in a value *)
-let rec lookup_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
-    (v : V.typed_value) : V.borrow_content option =
-  match v.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> None
-  | V.Adt av -> List.find_map (lookup_borrow_in_value ek l) av.field_values
-  | V.Borrow bc -> (
-      match bc with
-      | V.SharedBorrow bid -> if l = bid then Some bc else None
-      | V.InactivatedMutBorrow bid -> if l = bid then Some bc else None
-      | V.MutBorrow (bid, mv) ->
-          if bid = l then Some bc
-          else if ek.enter_mut_borrows then lookup_borrow_in_value ek l mv
-          else None)
-  | V.Loan lc -> (
-      match lc with
-      | V.SharedLoan (_, sv) ->
-          if ek.enter_shared_loans then lookup_borrow_in_value ek l sv else None
-      | V.MutLoan _ -> None)
-
 (** Lookup a borrow content from a borrow id. *)
 let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
     : V.borrow_content option =
-  let lookup_borrow_in_env_value (ev : C.env_value) =
-    match ev with
-    | C.Var (_, v) -> lookup_borrow_in_value ek l v
-    | C.Abs _ -> raise Unimplemented (* TODO *)
-    | C.Frame -> None
+  let obj =
+    object
+      inherit [_] C.iter_env_concrete as super
+
+      method! visit_MutBorrow env bid mv =
+        if bid = l then raise (FoundBorrowContent (V.MutBorrow (bid, mv)))
+        else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+        else ()
+      (** Check the borrow id and control diving *)
+
+      method! visit_SharedBorrow env bid =
+        if bid = l then raise (FoundBorrowContent (V.SharedBorrow bid)) else ()
+      (** Check the borrow id *)
+
+      method! visit_InactivatedMutBorrow env bid =
+        if bid = l then raise (FoundBorrowContent (V.InactivatedMutBorrow bid))
+        else ()
+      (** Check the borrow id *)
+
+      method! visit_SharedLoan env bids sv =
+        if ek.enter_shared_loans then super#visit_SharedLoan env bids sv else ()
+      (** Control the diving *)
+    end
   in
-  List.find_map lookup_borrow_in_env_value env
+  (* We use exceptions *)
+  try
+    obj#visit_env () env;
+    None
+  with FoundBorrowContent lc -> Some lc
 
 (** Lookup a borrow content from a borrow id.
 
