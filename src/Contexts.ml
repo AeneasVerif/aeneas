@@ -167,7 +167,27 @@ class ['self] iter_frame_concrete =
         | Frame :: _ -> (* We stop here *) ()
   end
 
-(** Visitor to iterate over the values in the current frame *)
+(** Visitor to iterate over the values in an environment (we explore an
+    environment until we find the end of the current frame) *)
+class ['self] iter_env_concrete =
+  object (self : 'self)
+    inherit [_] V.iter_typed_value
+
+    method visit_env_value_Var : 'acc -> binder -> typed_value -> unit =
+      fun acc vid v -> self#visit_typed_value acc v
+
+    method visit_env : 'acc -> env -> unit =
+      fun acc env ->
+        match env with
+        | [] -> ()
+        | Var (vid, v) :: env ->
+            self#visit_env_value_Var acc vid v;
+            self#visit_env acc env
+        | Abs _ :: _ -> failwith "Unexpected abstraction"
+        | Frame :: env -> self#visit_env acc env
+  end
+
+(** Visitor to map over the values in the current frame *)
 class ['self] map_frame_concrete =
   object (self : 'self)
     inherit [_] V.map_typed_value
@@ -187,4 +207,27 @@ class ['self] map_frame_concrete =
             v :: env
         | Abs _ :: _ -> failwith "Unexpected abstraction"
         | Frame :: env -> (* We stop here *) Frame :: env
+  end
+
+(** Visitor to iterate over the values in an environment (we explore an
+    environment until we find the end of the current frame) *)
+class ['self] map_env_concrete =
+  object (self : 'self)
+    inherit [_] V.map_typed_value
+
+    method visit_env_value_Var : 'acc -> binder -> typed_value -> env_value =
+      fun acc vid v ->
+        let v = self#visit_typed_value acc v in
+        Var (vid, v)
+
+    method visit_env : 'acc -> env -> env =
+      fun acc env ->
+        match env with
+        | [] -> []
+        | Var (vid, v) :: env ->
+            let v = self#visit_env_value_Var acc vid v in
+            let env = self#visit_env acc env in
+            v :: env
+        | Abs _ :: _ -> failwith "Unexpected abstraction"
+        | Frame :: env -> Frame :: self#visit_env acc env
   end
