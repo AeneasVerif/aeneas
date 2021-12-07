@@ -1,8 +1,15 @@
-# The all target builds the project and runs it on a test file (whose path
-# is currently hardcoded in main.ml). In order to check that we don't alter
-# the behaviour of the interpreter while updating it, we check that the trace
-# remains unchanged.
-all:
+all: build-run-check-trace
+
+# Build the project and run the executable
+.PHONY: build-run
+build-run:
+	dune build src/main.exe && dune exec src/main.exe
+
+# Build the project and run the executable, then check that the behaviour
+# of the interpreter didn't change by comparing the newly generated trace
+# with a reference.
+.PHONY: build-run-check-trace
+build-run-check-trace:
 	dune build src/main.exe && \
 	dune exec src/main.exe > tests/trace_current.txt && \
 	cmp tests/trace_reference.txt tests/trace_current.txt && \
