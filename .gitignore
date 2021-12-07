@@ -32,3 +32,5 @@ _opam/
 *~
 nohup.out
 .ocamlformat
+*#
+*.lock
