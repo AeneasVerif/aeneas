@@ -182,8 +182,16 @@ let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
 
     This is a helper function: it might break invariants.
  *)
-let update_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
-    (nlc : V.loan_content) (v : V.typed_value) : V.typed_value =
+let update_loan_in_value (r : bool ref) (ek : exploration_kind)
+    (l : V.BorrowId.id) (nlc : V.loan_content) (v : V.typed_value) :
+    V.typed_value =
+  (* We use a reference to check that we update exactly one loan: when updating
+   * inside values, we check we don't update more than one loan. *)
+  let set_ref r =
+    assert (not !r);
+    r := true
+  in
+
   let obj =
     object
       inherit [_] V.map_typed_value as super
@@ -194,7 +202,9 @@ let update_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
       (** Control the diving into mutable borrows *)
 
       method! visit_SharedLoan env bids sv =
-        if V.BorrowId.Set.mem l bids then nlc
+        if V.BorrowId.Set.mem l bids then (
+          set_ref env;
+          nlc)
         else if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
         else V.SharedLoan (bids, sv)
       (** Shared loan: checks if this is the loan we are looking for, and
@@ -202,28 +212,41 @@ let update_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
       *)
 
       method! visit_MutLoan env bid =
-        if bid = l then nlc else super#visit_MutLoan env bid
+        if bid = l then (
+          set_ref env;
+          nlc)
+        else super#visit_MutLoan env bid
       (** Mut loan: checks if this is the loan we are looking for
       *)
     end
   in
-  obj#visit_typed_value () v
+  let v = obj#visit_typed_value r v in
+  v
 
 (** Update a loan content.
 
     The loan is referred to by a borrow id.
 
-    This is a helper function: it might break invariants.     
+    This is a helper function: it might break invariants.
+
+    TODO: use visitors for environments.
  *)
 let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
     (nlc : V.loan_content) (env : C.env) : C.env =
+  (* We use a reference to check that we update exactly one loan.
+   * [update_loan_in_value] checks that we update at most once.
+   * We then check that we updated at least once before returning. *)
+  let r = ref false in
   let update_loan_in_env_value (ev : C.env_value) : C.env_value =
     match ev with
-    | C.Var (vid, v) -> Var (vid, update_loan_in_value ek l nlc v)
+    | C.Var (vid, v) -> Var (vid, update_loan_in_value r ek l nlc v)
     | C.Abs _ -> raise Unimplemented (* TODO *)
     | C.Frame -> C.Frame
   in
-  List.map update_loan_in_env_value env
+  let env = List.map update_loan_in_env_value env in
+  (* Check that we updated at least one loan *)
+  assert !r;
+  env
 
 (** Lookup a borrow content in a value *)
 let rec lookup_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
