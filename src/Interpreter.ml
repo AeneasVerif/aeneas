@@ -118,12 +118,15 @@ let loans_in_value (v : V.typed_value) : bool =
     false
   with Found -> true
 
-(** Lookup a loan content in a value *)
-let lookup_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
-    (v : V.typed_value) : V.loan_content option =
+(** Lookup a loan content.
+
+    The loan is referred to by a borrow id.
+ *)
+let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
+    V.loan_content option =
   let obj =
     object
-      inherit [_] V.iter_typed_value as super
+      inherit [_] C.iter_env_concrete as super
 
       method! visit_MutBorrow env bid mv =
         if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv else ()
@@ -147,23 +150,9 @@ let lookup_loan_in_value (ek : exploration_kind) (l : V.BorrowId.id)
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_env () env;
     None
   with FoundLoanContent lc -> Some lc
-
-(** Lookup a loan content.
-
-    The loan is referred to by a borrow id.
- *)
-let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    V.loan_content option =
-  let lookup_loan_in_env_value (ev : C.env_value) : V.loan_content option =
-    match ev with
-    | C.Var (_, v) -> lookup_loan_in_value ek l v
-    | C.Abs _ -> raise Unimplemented (* TODO *)
-    | C.Frame -> None
-  in
-  List.find_map lookup_loan_in_env_value env
 
 (** Lookup a loan content.
 
