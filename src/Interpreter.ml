@@ -226,7 +226,7 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
         if bid = l then raise (FoundBorrowContent (V.MutBorrow (bid, mv)))
         else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
         else ()
-      (** Check the borrow id and control diving *)
+      (** Check the borrow id and control the diving *)
 
       method! visit_SharedBorrow env bid =
         if bid = l then raise (FoundBorrowContent (V.SharedBorrow bid)) else ()
