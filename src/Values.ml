@@ -253,15 +253,32 @@ and typed_avalue = { value : avalue; ty : rty }
       }]
 
 type abs = {
-  abs_id : AbstractionId.id;
-  parents : AbstractionId.set_t;  (** The parent abstractions *)
-  acc_regions : RegionId.set_t;
+  abs_id : (AbstractionId.id[@opaque]);
+  parents : (AbstractionId.set_t[@opaque]);  (** The parent abstractions *)
+  acc_regions : (RegionId.set_t[@opaque]);
       (** Union of the regions owned by the (transitive) parent abstractions and
           by the current abstraction *)
-  regions : RegionId.set_t;  (** Regions owned by this abstraction *)
+  regions : (RegionId.set_t[@opaque]);  (** Regions owned by this abstraction *)
   avalues : typed_avalue list;  (** The values in this abstraction *)
 }
-[@@deriving show]
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_abs";
+        variety = "iter";
+        ancestors = [ "iter_typed_avalue" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_abs";
+        variety = "map";
+        ancestors = [ "map_typed_avalue" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
 (** Abstractions model the parts in the borrow graph where the borrowing relations
     have been abstracted because of a function call.
     
