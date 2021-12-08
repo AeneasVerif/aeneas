@@ -210,6 +210,7 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
       *)
     end
   in
+
   let env = obj#visit_env r env in
   (* Check that we updated at least one loan *)
   assert !r;
@@ -258,43 +259,6 @@ let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
   | None -> failwith "Unreachable"
   | Some lc -> lc
 
-(** Update a borrow content in a value.
-
-    The borrow is referred to by a borrow id.
-
-    This is a helper function: it might break invariants.
- *)
-let rec update_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
-    (nbc : V.borrow_content) (v : V.typed_value) : V.typed_value =
-  match v.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
-  | V.Adt av ->
-      let values = List.map (update_borrow_in_value ek l nbc) av.field_values in
-      let av = { av with field_values = values } in
-      { v with value = Adt av }
-  | V.Borrow bc -> (
-      match bc with
-      | V.SharedBorrow bid | V.InactivatedMutBorrow bid ->
-          if bid = l then { v with value = V.Borrow nbc } else v
-      | V.MutBorrow (bid, mv) ->
-          if bid = l then { v with value = V.Borrow nbc }
-          else if ek.enter_mut_borrows then
-            let v' =
-              V.Borrow (V.MutBorrow (bid, update_borrow_in_value ek l nbc mv))
-            in
-            { v with value = v' }
-          else v)
-  | V.Loan lc -> (
-      match lc with
-      | V.SharedLoan (bids, sv) ->
-          if ek.enter_shared_loans then
-            let v' =
-              V.Loan (V.SharedLoan (bids, update_borrow_in_value ek l nbc sv))
-            in
-            { v with value = v' }
-          else v
-      | V.MutLoan _ -> v)
-
 (** Update a borrow content.
 
     The borrow is referred to by a borrow id.
@@ -303,13 +267,56 @@ let rec update_borrow_in_value (ek : exploration_kind) (l : V.BorrowId.id)
  *)
 let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
     (nbc : V.borrow_content) (env : C.env) : C.env =
-  let update_borrow_in_env_value (ev : C.env_value) : C.env_value =
-    match ev with
-    | C.Var (vid, v) -> Var (vid, update_borrow_in_value ek l nbc v)
-    | C.Abs _ -> raise Unimplemented (* TODO *)
-    | C.Frame -> C.Frame
+  (* We use a reference to check that we update exactly one borrow: when updating
+   * inside values, we check we don't update more than one borrow. Then, upon
+   * returning we check that we updated at least once. *)
+  let r = ref false in
+  let set_ref r =
+    assert (not !r);
+    r := true
   in
-  List.map update_borrow_in_env_value env
+
+  let obj =
+    object
+      inherit [_] C.map_env_concrete as super
+
+      method! visit_MutBorrow env bid mv =
+        if bid = l then (
+          set_ref env;
+          nbc)
+        else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+        else V.MutBorrow (bid, mv)
+      (** Check the id and control diving *)
+
+      method! visit_SharedBorrow env bid =
+        if bid = l then (
+          set_ref env;
+          nbc)
+        else super#visit_SharedBorrow env bid
+      (** Check the id *)
+
+      method! visit_InactivatedMutBorrow env bid =
+        if bid = l then (
+          set_ref env;
+          nbc)
+        else super#visit_InactivatedMutBorrow env bid
+      (** Check the id *)
+
+      method! visit_SharedLoan env bids sv =
+        if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
+        else V.SharedLoan (bids, sv)
+      (** Control the dive *)
+
+      method! visit_MutLoan env bid =
+        (* Nothing specific to do for mutable loans *)
+        super#visit_MutLoan env bid
+    end
+  in
+
+  let env = obj#visit_env r env in
+  (* Check that we updated at least one borrow *)
+  assert !r;
+  env
 
 (** The following type identifies the relative position of expressions (in
     particular borrows) in other expressions.
