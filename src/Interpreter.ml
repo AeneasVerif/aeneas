@@ -464,9 +464,8 @@ exception FoundOuter of borrow_ids
     borrows, we end them, before finally ending the borrow we wanted to end in the
     first place.
 *)
-let end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer)
-    (l : V.BorrowId.id) (env : C.env) :
-    (C.env * V.borrow_content option, borrow_ids) result =
+let end_borrow_get_borrow_in_env (io : inner_outer) (l : V.BorrowId.id)
+    (env : C.env) : (C.env * V.borrow_content option, borrow_ids) result =
   (* We use a reference to communicate the kind of borrow we found, if we
    * find one *)
   let replaced_bc : V.borrow_content option ref = ref None in
@@ -659,8 +658,8 @@ let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
     to an environment by inserting a new borrow id in the set of borrows tracked
     by a shared value, referenced by the [original_bid] argument.
  *)
-let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
-    (new_bid : V.BorrowId.id) (ctx : C.eval_ctx) : C.eval_ctx =
+let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* Keep track of changes *)
   let r = ref false in
   let set_ref () =
@@ -716,7 +715,7 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
   in
-  match end_borrow_get_borrow_in_env config io l env with
+  match end_borrow_get_borrow_in_env io l env with
   (* Two cases:
    * - error: we found outer borrows (end them first)
    * - success: we didn't find outer borrows when updating (but maybe we actually
@@ -1566,7 +1565,7 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
           let ctx, bid' = C.fresh_borrow_id ctx in
-          let ctx = reborrow_shared config bid bid' ctx in
+          let ctx = reborrow_shared bid bid' ctx in
           (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
       | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
       | V.InactivatedMutBorrow _ ->
