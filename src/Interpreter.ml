@@ -358,14 +358,6 @@ type inner_outer = Inner | Outer
 
 type borrow_ids = Borrows of V.BorrowId.Set.t | Borrow of V.BorrowId.id
 
-(** Borrow lookup result *)
-type borrow_lres =
-  | NotFound (* TODO: remove *)
-  | Outer of borrow_ids
-  | FoundMut of V.typed_value
-  | FoundShared
-  | FoundInactivatedMut
-
 let update_if_none opt x = match opt with None -> Some x | _ -> opt
 
 (** Auxiliary function: see its usage in [end_borrow_get_borrow_in_value] *)
@@ -375,10 +367,6 @@ let update_outer_borrows (io : inner_outer) opt x =
       (* If we can end inner borrows, we don't keep track of the outer borrows *)
       None
   | Outer -> update_if_none opt x
-
-(* TODO: remove? *)
-let unwrap_res_to_outer_or opt default =
-  match opt with Some x -> Outer x | None -> default
 
 (** Return the first loan we find in a value *)
 let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
@@ -423,7 +411,8 @@ exception FoundOuter of borrow_ids
     first place.
 *)
 let end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer)
-    (l : V.BorrowId.id) (env : C.env) : C.env * borrow_lres =
+    (l : V.BorrowId.id) (env : C.env) :
+    (C.env * V.borrow_content option, borrow_ids) result =
   (* We use a reference to communicate the kind of borrow we found, if we
    * find one *)
   let replaced_bc : V.borrow_content option ref = ref None in
@@ -488,15 +477,8 @@ let end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer)
   (* Catch the exceptions - raised if there are outer borrows *)
   try
     let env = obj#visit_env None env in
-    let res =
-      match !replaced_bc with
-      | None -> NotFound
-      | Some (V.MutBorrow (_, bv)) -> FoundMut bv
-      | Some (V.SharedBorrow _) -> FoundShared
-      | Some (V.InactivatedMutBorrow _) -> FoundInactivatedMut
-    in
-    (env, res)
-  with FoundOuter outers -> (env, Outer outers)
+    Ok (env, !replaced_bc)
+  with FoundOuter outers -> Error outers
 
 (** See [give_back_value]. *)
 let rec give_back_value_to_value config bid (v : V.typed_value)
@@ -687,19 +669,19 @@ let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
     otherwise we only allow ending outer borrows.
  *)
 let rec end_borrow_in_env (config : C.config) (io : inner_outer)
-    (l : V.BorrowId.id) (env0 : C.env) : C.env =
+    (l : V.BorrowId.id) (env : C.env) : C.env =
   (* This is used for sanity checks *)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
   in
-  match end_borrow_get_borrow_in_env config io l env0 with
-  (* It is possible that we can't find a borrow in symbolic mode (ending
-   * an abstraction may end several borrows at once *)
-  | env, NotFound ->
-      assert (config.mode = SymbolicMode);
-      env
-  (* If we found outer borrows: end those borrows first *)
-  | env, Outer outer_borrows ->
+  match end_borrow_get_borrow_in_env config io l env with
+  (* Two cases:
+   * - error: we found outer borrows (end them first)
+   * - success: we didn't find outer borrows when updating (but maybe we actually
+       didn't find the borrow we were looking for...)
+   *)
+  | Error outer_borrows ->
+      (* End the outer borrows *)
       let env =
         match outer_borrows with
         | Borrows bids -> end_borrows_in_env config io bids env
@@ -707,22 +689,30 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
       in
       (* Retry to end the borrow *)
       end_borrow_in_env config io l env
-  (* If found mut: give the value back *)
-  | env, FoundMut tv ->
-      (* Check that the borrow is somewhere - purely a sanity check *)
-      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
-      give_back_value config l tv env
-  (* If found shared or inactivated mut: remove the borrow id from the loan set of the shared value *)
-  | env, (FoundShared | FoundInactivatedMut) ->
-      (* Check that the borrow is somewhere - purely a sanity check *)
-      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
-      give_back_shared config l env
+  | Ok (env, None) ->
+      (* It is possible that we can't find a borrow in symbolic mode (ending
+       * an abstraction may end several borrows at once *)
+      assert (config.mode = SymbolicMode);
+      env
+  (* We found a borrow: give the value back (i.e., update the corresponding loan) *)
+  | Ok (env, Some bc) -> (
+      match bc with
+      | V.MutBorrow (_, tv) ->
+          (* Check that the corresponding loan is somewhere - purely a sanity check *)
+          assert (Option.is_some (lookup_loan_opt sanity_ek l env));
+          give_back_value config l tv env
+      | V.SharedBorrow l' | V.InactivatedMutBorrow l' ->
+          assert (l' = l);
+          (* Sanity check *)
+          (* Check that the borrow is somewhere - purely a sanity check *)
+          assert (Option.is_some (lookup_loan_opt sanity_ek l env));
+          give_back_shared config l env)
 
 and end_borrows_in_env (config : C.config) (io : inner_outer)
-    (lset : V.BorrowId.Set.t) (env0 : C.env) : C.env =
+    (lset : V.BorrowId.Set.t) (env : C.env) : C.env =
   V.BorrowId.Set.fold
     (fun id env -> end_borrow_in_env config io id env)
-    lset env0
+    lset env
 
 (** Same as [end_borrow_in_env], but operating on evaluation contexts *)
 let end_borrow (config : C.config) (io : inner_outer) (l : V.BorrowId.id)
