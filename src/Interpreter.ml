@@ -130,44 +130,37 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
     object
       inherit [_] C.iter_env_concrete as super
 
-      method! visit_MutBorrow env bid mv =
-        if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv else ()
-      (** Control the diving into mutable borrows *)
+      method! visit_borrow_content env bc =
+        match bc with
+        | V.SharedBorrow bid ->
+            (* Nothing specific to do *)
+            super#visit_SharedBorrow env bid
+        | V.InactivatedMutBorrow bid ->
+            (* Nothing specific to do *)
+            super#visit_InactivatedMutBorrow env bid
+        | V.MutBorrow (bid, mv) ->
+            (* Control the dive *)
+            if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+            else ()
 
-      (* TODO
-            method! visit_Loan env lc =
-              match lc with
-              | V.SharedLoan (bids, sv) ->
-                  (* Check if this is the loan we are looking for, and control the dive *)
-                  if V.BorrowId.Set.mem l bids then
-                    raise (FoundLoanContent (V.SharedLoan (bids, sv)))
-                  else if ek.enter_shared_loans then
-                    super#visit_SharedLoan env bids sv
-                  else ()
-              | V.MutLoan bid ->
-                  (* Check if this is the loan we are looking for *)
-                  if bid = l then raise (FoundLoanContent (V.MutLoan bid))
-                  else super#visit_MutLoan env bid
-            (** We reimplement [visit_Loan] (rather than the more precise functions
-                [visit_SharedLoan], etc.) on purpose: as we have an exhaustive match
-                below, we are more resilient to definition updates (the compiler
-                is our friend).
-            *)
-      *)
-      method! visit_SharedLoan env bids sv =
-        if V.BorrowId.Set.mem l bids then
-          raise (FoundLoanContent (V.SharedLoan (bids, sv)))
-        else if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
-        else ()
-      (** Shared loan: checks if this is the loan we are looking for, and
-          control the dive.    
-      *)
-
-      method! visit_MutLoan env bid =
-        if bid = l then raise (FoundLoanContent (V.MutLoan bid))
-        else super#visit_MutLoan env bid
-      (** Mut loan: checks if this is the loan we are looking for
-      *)
+      method! visit_loan_content env lc =
+        match lc with
+        | V.SharedLoan (bids, sv) ->
+            (* Check if this is the loan we are looking for, and control the dive *)
+            if V.BorrowId.Set.mem l bids then
+              raise (FoundLoanContent (V.SharedLoan (bids, sv)))
+            else if ek.enter_shared_loans then
+              super#visit_SharedLoan env bids sv
+            else ()
+        | V.MutLoan bid ->
+            (* Check if this is the loan we are looking for *)
+            if bid = l then raise (FoundLoanContent (V.MutLoan bid))
+            else super#visit_MutLoan env bid
+      (** We reimplement [visit_Loan] (rather than the more precise functions
+          [visit_SharedLoan], etc.) on purpose: as we have an exhaustive match
+          below, we are more resilient to definition updates (the compiler
+          is our friend).
+       *)
     end
   in
   (* We use exceptions *)
@@ -208,28 +201,35 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
     object
       inherit [_] C.map_env_concrete as super
 
-      method! visit_MutBorrow env bid mv =
-        if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
-        else V.MutBorrow (bid, mv)
-      (** Control the diving into mutable borrows *)
+      method! visit_borrow_content env bc =
+        match bc with
+        | V.SharedBorrow _ | V.InactivatedMutBorrow _ ->
+            (* Nothing specific to do *)
+            super#visit_borrow_content env bc
+        | V.MutBorrow (bid, mv) ->
+            (* Control the dive into mutable borrows *)
+            if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+            else V.MutBorrow (bid, mv)
 
-      method! visit_SharedLoan env bids sv =
-        if V.BorrowId.Set.mem l bids then (
-          set_ref env;
-          nlc)
-        else if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
-        else V.SharedLoan (bids, sv)
-      (** Shared loan: checks if this is the loan we are looking for, and
-          control the dive.    
-      *)
-
-      method! visit_MutLoan env bid =
-        if bid = l then (
-          set_ref env;
-          nlc)
-        else super#visit_MutLoan env bid
-      (** Mut loan: checks if this is the loan we are looking for
-      *)
+      method! visit_loan_content env lc =
+        match lc with
+        | V.SharedLoan (bids, sv) ->
+            (* Shared loan: check if this is the loan we are looking for, and
+               control the dive. *)
+            if V.BorrowId.Set.mem l bids then (
+              set_ref env;
+              nlc)
+            else if ek.enter_shared_loans then
+              super#visit_SharedLoan env bids sv
+            else V.SharedLoan (bids, sv)
+        | V.MutLoan bid ->
+            (* Mut loan: checks if this is the loan we are looking for *)
+            if bid = l then (
+              set_ref env;
+              nlc)
+            else super#visit_MutLoan env bid
+      (** We reimplement [visit_loan_content] (rather than one of the sub-
+          functions) on purpose: exhaustive matches are good for maintenance *)
     end
   in
 
@@ -245,24 +245,31 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
     object
       inherit [_] C.iter_env_concrete as super
 
-      method! visit_MutBorrow env bid mv =
-        if bid = l then raise (FoundBorrowContent (V.MutBorrow (bid, mv)))
-        else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
-        else ()
-      (** Check the borrow id and control the diving *)
+      method! visit_borrow_content env bc =
+        match bc with
+        | V.MutBorrow (bid, mv) ->
+            (* Check the borrow id and control the dive *)
+            if bid = l then raise (FoundBorrowContent (V.MutBorrow (bid, mv)))
+            else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+            else ()
+        | V.SharedBorrow bid ->
+            (* Check the borrow id *)
+            if bid = l then raise (FoundBorrowContent (V.SharedBorrow bid))
+            else ()
+        | V.InactivatedMutBorrow bid ->
+            (* Check the borrow id *)
+            if bid = l then
+              raise (FoundBorrowContent (V.InactivatedMutBorrow bid))
+            else ()
 
-      method! visit_SharedBorrow _env bid =
-        if bid = l then raise (FoundBorrowContent (V.SharedBorrow bid)) else ()
-      (** Check the borrow id *)
-
-      method! visit_InactivatedMutBorrow _env bid =
-        if bid = l then raise (FoundBorrowContent (V.InactivatedMutBorrow bid))
-        else ()
-      (** Check the borrow id *)
-
-      method! visit_SharedLoan env bids sv =
-        if ek.enter_shared_loans then super#visit_SharedLoan env bids sv else ()
-      (** Control the diving *)
+      method! visit_loan_content env lc =
+        match lc with
+        | V.MutLoan bid ->
+            (* Nothing special to do *) super#visit_MutLoan env bid
+        | V.SharedLoan (bids, sv) ->
+            (* Control the dive *)
+            if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
+            else ()
     end
   in
   (* We use exceptions *)
@@ -302,36 +309,37 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
     object
       inherit [_] C.map_env_concrete as super
 
-      method! visit_MutBorrow env bid mv =
-        if bid = l then (
-          set_ref env;
-          nbc)
-        else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
-        else V.MutBorrow (bid, mv)
-      (** Check the id and control diving *)
+      method! visit_borrow_content env bc =
+        match bc with
+        | V.MutBorrow (bid, mv) ->
+            (* Check the id and control dive *)
+            if bid = l then (
+              set_ref env;
+              nbc)
+            else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
+            else V.MutBorrow (bid, mv)
+        | V.SharedBorrow bid ->
+            (* Check the id *)
+            if bid = l then (
+              set_ref env;
+              nbc)
+            else super#visit_SharedBorrow env bid
+        | V.InactivatedMutBorrow bid ->
+            (* Check the id *)
+            if bid = l then (
+              set_ref env;
+              nbc)
+            else super#visit_InactivatedMutBorrow env bid
 
-      method! visit_SharedBorrow env bid =
-        if bid = l then (
-          set_ref env;
-          nbc)
-        else super#visit_SharedBorrow env bid
-      (** Check the id *)
-
-      method! visit_InactivatedMutBorrow env bid =
-        if bid = l then (
-          set_ref env;
-          nbc)
-        else super#visit_InactivatedMutBorrow env bid
-      (** Check the id *)
-
-      method! visit_SharedLoan env bids sv =
-        if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
-        else V.SharedLoan (bids, sv)
-      (** Control the dive *)
-
-      method! visit_MutLoan env bid =
-        (* Nothing specific to do for mutable loans *)
-        super#visit_MutLoan env bid
+      method! visit_loan_content env lc =
+        match lc with
+        | V.SharedLoan (bids, sv) ->
+            (* Control the dive *)
+            if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
+            else V.SharedLoan (bids, sv)
+        | V.MutLoan bid ->
+            (* Nothing specific to do *)
+            super#visit_MutLoan env bid
     end
   in
 
