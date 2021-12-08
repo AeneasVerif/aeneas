@@ -1542,96 +1542,45 @@ let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
  *)
 let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
     C.eval_ctx * V.typed_value =
-  (* Check that there are no inactivated/mutable borrows/loans in the value *)
-  assert (not (mut_inactivated_borrows_loans_in_value v));
-  (* No bottom *)
-  assert (not (bottom_in_value v));
-
-  (* We may need to update the context (to duplicated shared borrows) *)
-  let ctx_r = ref ctx in
-
-  let obj =
-    object
-      inherit [_] V.map_typed_value as super
-
-      method! visit_Bottom _ = failwith "Can't copy ⊥"
-
-      method! visit_ety env ty =
-        (* Sanity check: *)
-        (match ty with
-        | T.Adt (T.Assumed _, _, _) -> failwith "Can't copy an assumed value"
-        | _ -> () (* Ok *));
-        (* Ok: continue *)
-        super#visit_ety env ty
-
-      method! visit_borrow_content env bc =
-        (* We can only copy shared borrows *)
-        match bc with
-        | SharedBorrow bid ->
-            (* We need to create a new borrow id for the copied borrow, and
-             * update the context accordingly *)
-            let ctx, bid' = C.fresh_borrow_id !ctx_r in
-            let ctx = reborrow_shared config bid bid' ctx in
-            ctx_r := ctx;
-            SharedBorrow bid'
-        | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
-        | V.InactivatedMutBorrow _ ->
-            failwith "Can't copy an inactivated mut borrow"
-
-      method! visit_Loan env lc =
-        (* We can only copy shared loans *)
-        match lc with
-        | V.MutLoan _ -> failwith "Can't copy a mutable loan"
-        | V.SharedLoan (_, sv) ->
-            (* We don't copy the shared loan: only the shared value inside *)
-            let v : V.typed_value = super#visit_typed_value env sv in
-            v.V.value
-
-      method! visit_Symbolic _ _ =
-        (* TODO: check that the value is copyable *)
-        raise Unimplemented
-    end
-  in
-
-  (* Copy and update the context at the same time *)
-  let copied = obj#visit_typed_value () v in
-  (!ctx_r, copied)
-
-(* match v.V.value with
-      | V.Concrete _ -> (ctx, v)
-      | V.Adt av ->
-          (* Sanity check *)
-          (match v.V.ty with
-          | T.Adt (T.Assumed _, _, _) -> failwith "Can't copy an assumed value"
-          | T.Adt ((T.AdtId _ | T.Tuple), _, _) -> () (* Ok *)
-          | _ -> failwith "Unreachable");
-          let ctx, fields =
-            List.fold_left_map (copy_value config) ctx av.field_values
-          in
-          (ctx, { v with V.value = V.Adt { av with field_values = fields } })
-      | V.Bottom -> failwith "Can't copy ⊥"
-      | V.Borrow bc -> (
-          (* We can only copy shared borrows *)
-          match bc with
-          | SharedBorrow bid ->
-               (* We need to create a new borrow id for the copied borrow, and
-                * update the context accordingly *)
-              let ctx, bid' = C.fresh_borrow_id ctx in
-              let ctx = reborrow_shared config bid bid' ctx in
-              (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
-          | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
-          | V.InactivatedMutBorrow _ ->
-              failwith "Can't copy an inactivated mut borrow")
-      | V.Loan lc -> (
-          (* We can only copy shared loans *)
-          match lc with
-          | V.MutLoan _ -> failwith "Can't copy a mutable loan"
-          | V.SharedLoan (_, sv) ->
-   (* We don't copy the shared loan: only the shared value inside *)
-            copy_value config ctx sv)
-      | V.Symbolic _sp ->
-          (* TODO: check that the value is copyable *)
-          raise Unimplemented*)
+  (* Remark: at some point we rewrote this function to use iterators, but then
+   * we reverted the changes: the result was less clear actually. In particular,
+   * the fact that we have exhaustive matches below makes very obvious the cases
+   * in which we need to fail *)
+  match v.V.value with
+  | V.Concrete _ -> (ctx, v)
+  | V.Adt av ->
+      (* Sanity check *)
+      (match v.V.ty with
+      | T.Adt (T.Assumed _, _, _) -> failwith "Can't copy an assumed value"
+      | T.Adt ((T.AdtId _ | T.Tuple), _, _) -> () (* Ok *)
+      | _ -> failwith "Unreachable");
+      let ctx, fields =
+        List.fold_left_map (copy_value config) ctx av.field_values
+      in
+      (ctx, { v with V.value = V.Adt { av with field_values = fields } })
+  | V.Bottom -> failwith "Can't copy ⊥"
+  | V.Borrow bc -> (
+      (* We can only copy shared borrows *)
+      match bc with
+      | SharedBorrow bid ->
+          (* We need to create a new borrow id for the copied borrow, and
+           * update the context accordingly *)
+          let ctx, bid' = C.fresh_borrow_id ctx in
+          let ctx = reborrow_shared config bid bid' ctx in
+          (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
+      | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
+      | V.InactivatedMutBorrow _ ->
+          failwith "Can't copy an inactivated mut borrow")
+  | V.Loan lc -> (
+      (* We can only copy shared loans *)
+      match lc with
+      | V.MutLoan _ -> failwith "Can't copy a mutable loan"
+      | V.SharedLoan (_, sv) ->
+          (* We don't copy the shared loan: only the shared value inside *)
+          copy_value config ctx sv)
+  | V.Symbolic _sp ->
+      (* TODO: check that the value is copyable *)
+      raise Unimplemented
 
 (** Convert a constant operand value to a typed value *)
 let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
