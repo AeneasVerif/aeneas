@@ -13,10 +13,45 @@ type binder = {
 (** Environment value: mapping from variable to value, abstraction (only
     used in symbolic mode) or stack frame delimiter.
  *)
-type env_elem = Var of binder * typed_value | Abs of abs | Frame
-[@@deriving show]
+type env_elem = Var of (binder[@opaque]) * typed_value | Abs of abs | Frame
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_env_elem";
+        variety = "iter";
+        ancestors = [ "iter_abs" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_env_elem";
+        variety = "map";
+        ancestors = [ "map_abs" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
 
-type env = env_elem list [@@deriving show]
+type env = env_elem list
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_env";
+        variety = "iter";
+        ancestors = [ "iter_env_elem" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_env";
+        variety = "map";
+        ancestors = [ "map_env_elem" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
 
 type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 
