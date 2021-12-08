@@ -1318,51 +1318,45 @@ exception UpdateCtx of C.eval_ctx
  *)
 let rec end_loans_at_place (config : C.config) (access : access_kind)
     (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Iterator to explore a value and update the context whenever we find
+   * loans.
+   * We use exceptions to make it handy: whenever we update the
+   * context, we raise an exception wrapping the updated context.
+   * *)
+  let obj =
+    object
+      inherit [_] V.iter_typed_value as super
+
+      method! visit_borrow_content env bc =
+        match bc with
+        | V.SharedBorrow _ | V.MutBorrow (_, _) ->
+            (* Nothing special to do *) super#visit_borrow_content env bc
+        | V.InactivatedMutBorrow bid ->
+            (* We need to activate inactivated borrows *)
+            let ctx = activate_inactivated_mut_borrow config Inner bid ctx in
+            raise (UpdateCtx ctx)
+
+      method! visit_loan_content env lc =
+        match lc with
+        | V.SharedLoan (bids, v) -> (
+            (* End the loans if we need a modification access, otherwise dive into
+               the shared value *)
+            match access with
+            | Read -> super#visit_SharedLoan env bids v
+            | Write | Move ->
+                let ctx = end_outer_borrows config bids ctx in
+                raise (UpdateCtx ctx))
+        | V.MutLoan bid ->
+            (* We always need to end mutable borrows *)
+            let ctx = end_outer_borrow config bid ctx in
+            raise (UpdateCtx ctx)
+    end
+  in
+
   (* First, retrieve the value *)
   match read_place config access p ctx with
   | Error _ -> failwith "Unreachable"
   | Ok v -> (
-      (* Explore the value to check if we need to update the context.
-         In particular, we need to end the proper loans in the value.
-         Also, we fail if the value contains any [Bottom].
-
-         We use exceptions to make it handy: whenever we update the
-         context, we raise an exception wrapping the updated context.
-      *)
-      let rec inspect_update (v : V.typed_value) : unit =
-        match v.V.value with
-        | V.Concrete _ -> ()
-        | V.Bottom -> ()
-        | V.Symbolic _ ->
-            (* Nothing to do for symbolic values - note that if the value needs
-               to be copied, etc. we perform additional checks later *)
-            ()
-        | V.Adt adt -> List.iter inspect_update adt.field_values
-        | V.Borrow bc -> (
-            match bc with
-            | V.SharedBorrow _ -> ()
-            | V.MutBorrow (_, tv) -> inspect_update tv
-            | V.InactivatedMutBorrow bid ->
-                (* We need to activate inactivated borrows *)
-                let ctx =
-                  activate_inactivated_mut_borrow config Inner bid ctx
-                in
-                raise (UpdateCtx ctx))
-        | V.Loan lc -> (
-            match lc with
-            | V.SharedLoan (bids, ty) -> (
-                (* End the loans if we need a modification access, otherwise dive into
-                   the shared value *)
-                match access with
-                | Read -> inspect_update ty
-                | Write | Move ->
-                    let ctx = end_outer_borrows config bids ctx in
-                    raise (UpdateCtx ctx))
-            | V.MutLoan bid ->
-                (* We always need to end mutable borrows *)
-                let ctx = end_outer_borrow config bid ctx in
-                raise (UpdateCtx ctx))
-      in
       (* Inspect the value and update the context while doing so.
          If the context gets updated: perform a recursive call (many things
          may have been updated in the context: we need to re-read the value
@@ -1370,7 +1364,7 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
          anymore...)
       *)
       try
-        inspect_update v;
+        obj#visit_typed_value () v;
         (* No context update required: return the current context *)
         ctx
       with UpdateCtx ctx ->
