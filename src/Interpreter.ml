@@ -251,11 +251,11 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
         else ()
       (** Check the borrow id and control the diving *)
 
-      method! visit_SharedBorrow env bid =
+      method! visit_SharedBorrow _env bid =
         if bid = l then raise (FoundBorrowContent (V.SharedBorrow bid)) else ()
       (** Check the borrow id *)
 
-      method! visit_InactivatedMutBorrow env bid =
+      method! visit_InactivatedMutBorrow _env bid =
         if bid = l then raise (FoundBorrowContent (V.InactivatedMutBorrow bid))
         else ()
       (** Check the borrow id *)
@@ -372,7 +372,7 @@ let unwrap_res_to_outer_or opt default =
   match opt with Some x -> Outer x | None -> default
 
 (** Return the first loan we find in a value *)
-let rec get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
+let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
   let obj =
     object
       inherit [_] V.iter_typed_value
@@ -387,7 +387,7 @@ let rec get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
   with FoundLoanContent lc -> Some lc
 
 (** Check if a value contains ⊥ *)
-let rec bottom_in_value (v : V.typed_value) : bool =
+let bottom_in_value (v : V.typed_value) : bool =
   let obj =
     object
       inherit [_] V.iter_typed_value
@@ -1202,7 +1202,11 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_def list)
     Subst.type_def_get_instantiated_field_type def opt_variant_id types
   in
   (* Initialize the expanded value *)
-  let fields = List.map (fun ty -> { V.value = Bottom; ty }) field_types in
+  let fields =
+    List.map
+      (fun ty : V.typed_value -> ({ V.value = V.Bottom; ty } : V.typed_value))
+      field_types
+  in
   let av = V.Adt { variant_id = opt_variant_id; field_values = fields } in
   let ty = T.Adt (T.AdtId def_id, regions, types) in
   { V.value = av; V.ty }
@@ -1211,7 +1215,9 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_def list)
 let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
     V.typed_value =
   (* Generate the field values *)
-  let fields = List.map (fun ty -> { V.value = Bottom; ty }) field_types in
+  let fields =
+    List.map (fun ty : V.typed_value -> { V.value = Bottom; ty }) field_types
+  in
   let v = V.Adt { variant_id = None; field_values = fields } in
   let ty = T.Adt (T.Tuple, [], field_types) in
   { V.value = v; V.ty }
@@ -1366,7 +1372,7 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
          We use exceptions to make it handy: whenever we update the
          context, we raise an exception wrapping the updated context.
       *)
-      let rec inspect_update v : unit =
+      let rec inspect_update (v : V.typed_value) : unit =
         match v.V.value with
         | V.Concrete _ -> ()
         | V.Bottom -> ()
@@ -1463,7 +1469,7 @@ let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
 
          We use exceptions to make it handy.
       *)
-      let rec inspect_update (end_loans : bool) v : unit =
+      let rec inspect_update (end_loans : bool) (v : V.typed_value) : unit =
         match v.V.value with
         | V.Concrete _ -> ()
         | V.Bottom ->
@@ -1654,7 +1660,7 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       (* Move the value *)
       L.log#ldebug (lazy ("Value to move:\n" ^ typed_value_to_string ctx v));
       assert (not (bottom_in_value v));
-      let bottom = { V.value = Bottom; ty = v.ty } in
+      let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
       match write_place config access p bottom ctx with
       | Error _ -> failwith "Unreachable"
       | Ok ctx -> (ctx, v))
@@ -1723,7 +1729,8 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
                 | E.BitOr | E.Shl | E.Shr | E.Ne | E.Eq ->
                     failwith "Unreachable"
               in
-              Ok { V.value = V.Concrete (Bool b); ty = T.Bool }
+              Ok
+                ({ V.value = V.Concrete (Bool b); ty = T.Bool } : V.typed_value)
           | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
           | E.BitOr -> (
               (* The two operands must have the same type and the result is an integer *)
@@ -1783,7 +1790,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
             if bkind = E.Shared then V.SharedBorrow bid
             else V.InactivatedMutBorrow bid
           in
-          let rv = { V.value = V.Borrow bc; ty = rv_ty } in
+          let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
           (* Compute the value with which to replace the value at place p *)
           let nv =
             match v.V.value with
@@ -1809,7 +1816,9 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
           let ctx, bid = C.fresh_borrow_id ctx in
           let rv_ty = T.Ref (T.Erased, v.ty, Mut) in
-          let rv = { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty } in
+          let rv : V.typed_value =
+            { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty }
+          in
           (* Compute the value with which to replace the value at place p *)
           let nv = { v with V.value = V.Loan (V.MutLoan bid) } in
           (* Update the value in the context *)
@@ -1847,7 +1856,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
       (* Match on the aggregate kind *)
       match aggregate_kind with
       | E.AggregatedTuple ->
-          let tys = List.map (fun v -> v.V.ty) values in
+          let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
           let v = V.Adt { variant_id = None; field_values = values } in
           let ty = T.Adt (T.Tuple, [], tys) in
           Ok (ctx, { V.value = v; ty })
@@ -1859,9 +1868,13 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
             Subst.ctx_adt_get_instantiated_field_types ctx def_id opt_variant_id
               types
           in
-          assert (expected_field_types = List.map (fun v -> v.V.ty) values);
+          assert (
+            expected_field_types
+            = List.map (fun (v : V.typed_value) -> v.V.ty) values);
           (* Construct the value *)
-          let av = { V.variant_id = opt_variant_id; V.field_values = values } in
+          let av : V.adt_value =
+            { V.variant_id = opt_variant_id; V.field_values = values }
+          in
           let aty = T.Adt (T.AdtId def_id, regions, types) in
           Ok (ctx, { V.value = Adt av; ty = aty }))
 
@@ -2242,7 +2255,9 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
 
       (* Create and push the input variables *)
       let input_vars =
-        V.VarId.mapi_from1 (fun id v -> (mk_var id None v.V.ty, v)) args_vl
+        V.VarId.mapi_from1
+          (fun id (v : V.typed_value) -> (mk_var id None v.V.ty, v))
+          args_vl
       in
       let ctx = C.ctx_push_vars ctx input_vars in
 

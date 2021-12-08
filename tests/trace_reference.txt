@@ -6980,7 +6980,9 @@ move var@3
   (Values.Adt
      { Values.variant_id = <opaque>;
        field_values =
-       [{ Values.value = (Values.Concrete <opaque>);
+       [{ Values.value =
+          (Values.Concrete
+             (Values.Scalar { Values.value = 0; int_ty = Types.I32 }));
           ty = (Types.Integer Types.I32) }
          ]
        });
@@ -13292,7 +13294,9 @@ true
 move var@4
 
 [[32mDebug[39m] activate_inactivated_mut_borrow: resulting value:
-{ Values.value = (Values.Concrete <opaque>); ty = (Types.Integer Types.I32) }
+{ Values.value =
+  (Values.Concrete (Values.Scalar { Values.value = 0; int_ty = Types.I32 }));
+  ty = (Types.Integer Types.I32) }
 [[32mDebug[39m] end_borrows {}: context before:
 # 1 frame(s)
 
@@ -13379,7 +13383,9 @@ move var@4
 move var@6
 
 [[32mDebug[39m] activate_inactivated_mut_borrow: resulting value:
-{ Values.value = (Values.Concrete <opaque>); ty = (Types.Integer Types.I32) }
+{ Values.value =
+  (Values.Concrete (Values.Scalar { Values.value = 0; int_ty = Types.I32 }));
+  ty = (Types.Integer Types.I32) }
 [[32mDebug[39m] end_borrows {}: context before:
 # 1 frame(s)
 
@@ -16206,12 +16212,16 @@ move var@7
        [{ Values.value =
           (Values.Borrow
              (Values.MutBorrow (<opaque>,
-                { Values.value = (Values.Concrete <opaque>);
+                { Values.value =
+                  (Values.Concrete
+                     (Values.Scalar { Values.value = 0; int_ty = Types.U32 }));
                   ty = (Types.Integer Types.U32) }
                 )));
           ty =
           (Types.Ref (Types.Erased, (Types.Integer Types.U32), Types.Mut)) };
-         { Values.value = (Values.Concrete <opaque>);
+         { Values.value =
+           (Values.Concrete
+              (Values.Scalar { Values.value = 1; int_ty = Types.U32 }));
            ty = (Types.Integer Types.U32) }
          ]
        });

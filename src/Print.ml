@@ -201,29 +201,22 @@ module Values = struct
     let regions = V.RegionId.set_to_string sp.rset_ended in
     "proj_comp " ^ regions ^ " (" ^ symbolic_value_to_string fmt sp.svalue ^ ")"
 
-  type ('r, 'sv, 'bc, 'lc) gen_value_formatter = {
-    r_to_string : 'r -> string;
-    sv_to_string : 'sv -> string;
-    bc_to_string : 'bc -> string;
-    lc_to_string : 'lc -> string;
-  }
-  (** Auxiliary record: we use it to factorize value formatting *)
+  let symbolic_value_proj_to_string (fmt : value_formatter)
+      (sv : V.symbolic_value) (rty : T.rty) : string =
+    symbolic_value_id_to_string sv.sv_id
+    ^ " : "
+    ^ PT.ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
+    ^ " <: "
+    ^ PT.ty_to_string (value_to_rtype_formatter fmt) rty
 
-  let rec g_typed_value_to_string (fmt : value_formatter)
-      (gfmt : ('r, 'sv, 'bc, 'lc) gen_value_formatter)
-      (v : ('r, 'sv, 'bc, 'lc) V.g_typed_value) : string =
-    let ty_fmt : 'r PT.type_formatter =
-      {
-        PT.r_to_string = gfmt.r_to_string;
-        PT.type_var_id_to_string = fmt.type_var_id_to_string;
-        PT.type_def_id_to_string = fmt.type_def_id_to_string;
-      }
-    in
+  let rec typed_value_to_string (fmt : value_formatter) (v : V.typed_value) :
+      string =
+    let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
     match v.value with
     | Concrete cv -> constant_value_to_string cv
     | Adt av -> (
         let field_values =
-          List.map (g_typed_value_to_string fmt gfmt) av.field_values
+          List.map (typed_value_to_string fmt) av.field_values
         in
         match v.ty with
         | T.Adt (T.Tuple, _, _) ->
@@ -258,22 +251,10 @@ module Values = struct
             | _ -> failwith "Inconsistent value")
         | _ -> failwith "Inconsistent typed value")
     | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
-    | Borrow bc -> gfmt.bc_to_string bc
-    | Loan lc -> gfmt.lc_to_string lc
-    | Symbolic s -> gfmt.sv_to_string s
-
-  let rec typed_value_to_string (fmt : value_formatter) (v : V.typed_value) :
-      string =
-    let gfmt =
-      {
-        r_to_string = PT.erased_region_to_string;
-        sv_to_string =
-          symbolic_proj_comp_to_string (value_to_rtype_formatter fmt);
-        bc_to_string = borrow_content_to_string fmt;
-        lc_to_string = loan_content_to_string fmt;
-      }
-    in
-    g_typed_value_to_string fmt gfmt v
+    | Borrow bc -> borrow_content_to_string fmt bc
+    | Loan lc -> loan_content_to_string fmt lc
+    | Symbolic s ->
+        symbolic_proj_comp_to_string (value_to_rtype_formatter fmt) s
 
   and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
       string =
@@ -293,14 +274,6 @@ module Values = struct
         let loans = V.BorrowId.set_to_string loans in
         "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
     | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
-
-  let symbolic_value_proj_to_string (fmt : value_formatter)
-      (sv : V.symbolic_value) (rty : T.rty) : string =
-    symbolic_value_id_to_string sv.sv_id
-    ^ " : "
-    ^ PT.ty_to_string (value_to_rtype_formatter fmt) sv.sv_ty
-    ^ " <: "
-    ^ PT.ty_to_string (value_to_rtype_formatter fmt) rty
 
   let rec abstract_shared_borrows_to_string (fmt : value_formatter)
       (abs : V.abstract_shared_borrows) : string =
@@ -324,15 +297,49 @@ module Values = struct
 
   let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
       string =
-    let gfmt =
-      {
-        r_to_string = PT.region_to_string fmt.r_to_string;
-        sv_to_string = aproj_to_string fmt;
-        bc_to_string = aborrow_content_to_string fmt;
-        lc_to_string = aloan_content_to_string fmt;
-      }
-    in
-    g_typed_value_to_string fmt gfmt v
+    let ty_fmt : PT.rtype_formatter = value_to_rtype_formatter fmt in
+    match v.value with
+    | AConcrete cv -> constant_value_to_string cv
+    | AAdt av -> (
+        let field_values =
+          List.map (typed_avalue_to_string fmt) av.field_values
+        in
+        match v.ty with
+        | T.Adt (T.Tuple, _, _) ->
+            (* Tuple *)
+            "(" ^ String.concat ", " field_values ^ ")"
+        | T.Adt (T.AdtId def_id, _, _) ->
+            (* "Regular" ADT *)
+            let adt_ident =
+              match av.variant_id with
+              | Some vid -> fmt.adt_variant_to_string def_id vid
+              | None -> fmt.type_def_id_to_string def_id
+            in
+            if List.length field_values > 0 then
+              match fmt.adt_field_names def_id av.V.variant_id with
+              | None ->
+                  let field_values = String.concat ", " field_values in
+                  adt_ident ^ " (" ^ field_values ^ ")"
+              | Some field_names ->
+                  let field_values = List.combine field_names field_values in
+                  let field_values =
+                    List.map
+                      (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                      field_values
+                  in
+                  let field_values = String.concat " " field_values in
+                  adt_ident ^ " { " ^ field_values ^ " }"
+            else adt_ident
+        | T.Adt (T.Assumed aty, _, _) -> (
+            (* Assumed type *)
+            match (aty, field_values) with
+            | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
+            | _ -> failwith "Inconsistent value")
+        | _ -> failwith "Inconsistent typed value")
+    | ABottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
+    | ABorrow bc -> aborrow_content_to_string fmt bc
+    | ALoan lc -> aloan_content_to_string fmt lc
+    | ASymbolic s -> aproj_to_string fmt s
 
   and aloan_content_to_string (fmt : value_formatter) (lc : V.aloan_content) :
       string =

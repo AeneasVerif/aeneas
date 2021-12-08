@@ -63,79 +63,54 @@ type symbolic_proj_comp = {
     
     "Complementary" stands for the fact that it is a projector over all the
     regions *but* the ones which are listed in the projector.
- *)
-
-(** Polymorphic iter visitor *)
-class ['self] iter_'r_ty_base =
-  object (self : 'self)
-    method visit_ty : 'env 'r. ('env -> 'r -> unit) -> 'env -> 'r ty -> unit =
-      fun _visit_'r _env _ty -> ()
-  end
-
-(** A generic, untyped value, used in the environments.
-
-    Parameterized by:
-    - 'ty: type
-    - 'sv: symbolic value
-    - 'bc: borrow content
-    - 'lc: loan content
-
-    Can be specialized for "regular" values or values in abstractions.
-
-    TODO: unfactorize value and avalue. Making them instanciations of `g_value`
-    creates more problems than solutions, in particular when dealing with
-    visitors (which we can't automatically generate).
 *)
-type ('r, 'sv, 'bc, 'lc) g_value =
-  | Concrete of (constant_value[@opaque])  (** Concrete (non-symbolic) value *)
-  | Adt of ('r, 'sv, 'bc, 'lc) g_adt_value
-      (** Enumerations, structures, tuples, assumed types. Note that units
-          are encoded as 0-tuples  *)
-  | Bottom  (** No value (uninitialized or moved value) *)
-  | Borrow of 'bc  (** A borrowed value *)
-  | Loan of 'lc  (** A loaned value *)
-  | Symbolic of 'sv  (** Unknown value *)
 
-and ('r, 'sv, 'bc, 'lc) g_adt_value = {
-  variant_id : VariantId.id option; [@opaque]
-  field_values : ('r, 'sv, 'bc, 'lc) g_typed_value list;
-}
-
-(** "Generic" ADT value (not "GADT" value) *)
-
-and ('r, 'sv, 'bc, 'lc) g_typed_value = {
-  value : ('r, 'sv, 'bc, 'lc) g_value;
-  ty : 'r ty;
-}
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_g_typed_value";
-        variety = "iter";
-        ancestors = [ "iter_'r_ty_base" ];
-        polymorphic = true;
-        (* Heirs expect a polymorphic class *)
-        concrete = true;
-      }]
-
+(** Ancestor for iter visitor for [typed_value] *)
 class ['self] iter_typed_value_base =
   object (self : 'self)
-    inherit [_] iter_g_typed_value
+    inherit [_] VisitorsRuntime.iter
 
-    method visit_erased_region : 'env. 'env -> erased_region -> unit =
-      fun _env _ -> ()
+    method visit_constant_value : 'env -> constant_value -> unit = fun _ _ -> ()
 
-    method visit_symbolic_proj_comp : 'env. 'env -> symbolic_proj_comp -> unit =
-      fun _env _ -> ()
+    method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
+
+    method visit_symbolic_proj_comp : 'env -> symbolic_proj_comp -> unit =
+      fun _ _ -> ()
+
+    method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
   end
 
-type value =
-  (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_value
-(** "Regular" value *)
+(** Ancestor for map visitor for [typed_value] *)
+class ['self] map_typed_value_base =
+  object (self : 'self)
+    inherit [_] VisitorsRuntime.map
 
-and adt_value =
-  (erased_region, symbolic_proj_comp, borrow_content, loan_content) g_adt_value
+    method visit_constant_value : 'env -> constant_value -> constant_value =
+      fun _ cv -> cv
+
+    method visit_erased_region : 'env -> erased_region -> erased_region =
+      fun _ r -> r
+
+    method visit_symbolic_proj_comp
+        : 'env -> symbolic_proj_comp -> symbolic_proj_comp =
+      fun _ sv -> sv
+
+    method visit_ety : 'env -> ety -> ety = fun _ ty -> ty
+  end
+
+(** An untyped value, used in the environments *)
+type value =
+  | Concrete of constant_value  (** Concrete (non-symbolic) value *)
+  | Adt of adt_value  (** Enumerations and structures *)
+  | Bottom  (** No value (uninitialized or moved value) *)
+  | Borrow of borrow_content  (** A borrowed value *)
+  | Loan of loan_content  (** A loaned value *)
+  | Symbolic of symbolic_proj_comp  (** Unknown (symbolic) value *)
+
+and adt_value = {
+  variant_id : (VariantId.id option[@opaque]);
+  field_values : typed_value list;
+}
 
 and borrow_content =
   | SharedBorrow of (BorrowId.id[@opaque])  (** A shared value *)
@@ -157,12 +132,7 @@ and loan_content =
   | SharedLoan of (BorrowId.set_t[@opaque]) * typed_value
   | MutLoan of (BorrowId.id[@opaque])
 
-and typed_value =
-  ( erased_region,
-    symbolic_proj_comp,
-    borrow_content,
-    loan_content )
-  g_typed_value
+and typed_value = { value : value; ty : ety }
 [@@deriving
   show,
     visitors
@@ -170,6 +140,14 @@ and typed_value =
         name = "iter_typed_value";
         variety = "iter";
         ancestors = [ "iter_typed_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_typed_value";
+        variety = "map";
+        ancestors = [ "map_typed_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
       }]
@@ -189,24 +167,46 @@ type aproj =
 
 type region = RegionVarId.id Types.region [@@deriving show]
 
+(** Ancestor for iter visitor for [typed_avalue] *)
 class ['self] iter_typed_avalue_base =
   object (self : 'self)
-    inherit [_] iter_g_typed_value
+    inherit [_] iter_typed_value
 
-    method visit_region : 'env. 'env -> region -> unit = fun _env _r -> ()
+    method visit_region : 'env -> region -> unit = fun _ _ -> ()
 
-    method visit_aproj : 'env. 'env -> aproj -> unit = fun env _ -> ()
-
-    method visit_typed_value : 'env. 'env -> typed_value -> unit =
-      fun _env _v -> ()
+    method visit_aproj : 'env -> aproj -> unit = fun _ _ -> ()
 
     method visit_abstract_shared_borrows
-        : 'env. 'env -> abstract_shared_borrows -> unit =
-      fun _env _asb -> ()
+        : 'env -> abstract_shared_borrows -> unit =
+      fun _ _ -> ()
+
+    method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
   end
 
-type avalue = (region, aproj, aborrow_content, aloan_content) g_value
-(** Abstraction values are used inside of abstractions to properly model
+(** Ancestor for MAP visitor for [typed_avalue] *)
+class ['self] map_typed_avalue_base =
+  object (self : 'self)
+    inherit [_] map_typed_value
+
+    method visit_region : 'env -> region -> region = fun _ r -> r
+
+    method visit_aproj : 'env -> aproj -> aproj = fun _ p -> p
+
+    method visit_abstract_shared_borrows
+        : 'env -> abstract_shared_borrows -> abstract_shared_borrows =
+      fun _ asb -> asb
+
+    method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
+  end
+
+type avalue =
+  | AConcrete of constant_value
+  | AAdt of aadt_value
+  | ABottom
+  | ALoan of aloan_content
+  | ABorrow of aborrow_content
+  | ASymbolic of aproj
+      (** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.
 
     When calling a function, we lose information about the borrow graph:
@@ -214,7 +214,10 @@ type avalue = (region, aproj, aborrow_content, aloan_content) g_value
 *)
 
 (* TODO: rename to adt_avalue? *)
-and aadt_value = (region, aproj, aborrow_content, aloan_content) g_adt_value
+and aadt_value = {
+  variant_id : (VariantId.id option[@opaque]);
+  field_values : typed_avalue list;
+}
 
 and aloan_content =
   | AMutLoan of (BorrowId.id[@opaque]) * typed_avalue
@@ -234,7 +237,9 @@ and aborrow_content =
   | AIgnoredMutBorrow of typed_avalue
   | AIgnoredSharedBorrow of abstract_shared_borrows
 
-and typed_avalue = (region, aproj, aborrow_content, aloan_content) g_typed_value
+(* TODO: we may want to merge this with typed_value - would prevent some issues
+   when accessing fields... *)
+and typed_avalue = { value : avalue; ty : rty }
 [@@deriving
   show,
     visitors
@@ -242,6 +247,14 @@ and typed_avalue = (region, aproj, aborrow_content, aloan_content) g_typed_value
         name = "iter_typed_avalue";
         variety = "iter";
         ancestors = [ "iter_typed_avalue_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_typed_avalue";
+        variety = "map";
+        ancestors = [ "map_typed_avalue_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
       }]
@@ -263,6 +276,7 @@ type abs = {
     which are a special kind of value.
 *)
 
+(*
 (** Polymorphic version of the map visitor for [g_typed_value].
 
     The polymorphic visitor generated by the visitors macro caused some
@@ -575,3 +589,4 @@ class ['self] map_typed_avalue =
         : 'env -> abstract_shared_borrows -> aloan_content =
       fun _env asb -> AIgnoredSharedLoan asb
   end
+ *)

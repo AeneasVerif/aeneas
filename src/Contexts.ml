@@ -130,7 +130,10 @@ let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
 *)
 let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
     =
-  assert (List.for_all (fun (var, value) -> var.var_ty = value.ty) vars);
+  assert (
+    List.for_all
+      (fun (var, (value : typed_value)) -> var.var_ty = value.ty)
+      vars);
   let vars =
     List.map (fun (var, value) -> Var (var_to_binder var, value)) vars
   in
