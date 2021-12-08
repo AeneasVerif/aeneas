@@ -61,6 +61,17 @@ type exploration_kind = {
     functions behave, by restraining the kind of therms they can enter.
 *)
 
+(** We sometimes need to return a value whose type may vary depending on
+    whether we find it in a "concrete" value or an abstraction (ex.: loan
+    contents when we perform environment lookups by using borrow ids) *)
+type ('a, 'b) concrete_or_abs = Concrete of 'a | Abstract of 'b
+
+type g_loan_content = (V.loan_content, V.aloan_content) concrete_or_abs
+(** Generic loan content: concrete or abstract *)
+
+type g_borrow_content = (V.borrow_content, V.aborrow_content) concrete_or_abs
+(** Generic borrow content: concrete or abstract *)
+
 exception Found
 (** Utility exception
 
@@ -72,6 +83,12 @@ exception FoundBorrowContent of V.borrow_content
 (** Utility exception *)
 
 exception FoundLoanContent of V.loan_content
+(** Utility exception *)
+
+exception FoundGBorrowContent of g_borrow_content
+(** Utility exception *)
+
+exception FoundGLoanContent of g_loan_content
 (** Utility exception *)
 
 (** Check if a value contains a borrow *)
@@ -124,7 +141,7 @@ let loans_in_value (v : V.typed_value) : bool =
     The loan is referred to by a borrow id.
  *)
 let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    V.loan_content option =
+    g_loan_content option =
   let obj =
     object
       inherit [_] C.iter_env as super
@@ -147,13 +164,13 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
         | V.SharedLoan (bids, sv) ->
             (* Check if this is the loan we are looking for, and control the dive *)
             if V.BorrowId.Set.mem l bids then
-              raise (FoundLoanContent (V.SharedLoan (bids, sv)))
+              raise (FoundGLoanContent (Concrete (V.SharedLoan (bids, sv))))
             else if ek.enter_shared_loans then
               super#visit_SharedLoan env bids sv
             else ()
         | V.MutLoan bid ->
             (* Check if this is the loan we are looking for *)
-            if bid = l then raise (FoundLoanContent (V.MutLoan bid))
+            if bid = l then raise (FoundGLoanContent (Concrete (V.MutLoan bid)))
             else super#visit_MutLoan env bid
       (** We reimplement [visit_Loan] (rather than the more precise functions
           [visit_SharedLoan], etc.) on purpose: as we have an exhaustive match
@@ -168,7 +185,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
   try
     obj#visit_env () env;
     None
-  with FoundLoanContent lc -> Some lc
+  with FoundGLoanContent lc -> Some lc
 
 (** Lookup a loan content.
 
@@ -176,7 +193,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
     Raises an exception if no loan was found.
  *)
 let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    V.loan_content =
+    g_loan_content =
   match lookup_loan_opt ek l env with
   | None -> failwith "Unreachable"
   | Some lc -> lc
@@ -243,7 +260,7 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
 
 (** Lookup a borrow content from a borrow id. *)
 let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
-    : V.borrow_content option =
+    : g_borrow_content option =
   let obj =
     object
       inherit [_] C.iter_env as super
@@ -252,17 +269,20 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
         match bc with
         | V.MutBorrow (bid, mv) ->
             (* Check the borrow id and control the dive *)
-            if bid = l then raise (FoundBorrowContent (V.MutBorrow (bid, mv)))
+            if bid = l then
+              raise (FoundGBorrowContent (Concrete (V.MutBorrow (bid, mv))))
             else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
             else ()
         | V.SharedBorrow bid ->
             (* Check the borrow id *)
-            if bid = l then raise (FoundBorrowContent (V.SharedBorrow bid))
+            if bid = l then
+              raise (FoundGBorrowContent (Concrete (V.SharedBorrow bid)))
             else ()
         | V.InactivatedMutBorrow bid ->
             (* Check the borrow id *)
             if bid = l then
-              raise (FoundBorrowContent (V.InactivatedMutBorrow bid))
+              raise
+                (FoundGBorrowContent (Concrete (V.InactivatedMutBorrow bid)))
             else ()
 
       method! visit_loan_content env lc =
@@ -281,14 +301,14 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
   try
     obj#visit_env () env;
     None
-  with FoundBorrowContent lc -> Some lc
+  with FoundGBorrowContent lc -> Some lc
 
 (** Lookup a borrow content from a borrow id.
 
     Raise an exception if no loan was found
 *)
 let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    V.borrow_content =
+    g_borrow_content =
   match lookup_borrow_opt ek l env with
   | None -> failwith "Unreachable"
   | Some lc -> lc
@@ -773,8 +793,9 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
   match lookup_loan ek l ctx.env with
-  | V.MutLoan _ -> failwith "Expected a shared loan, found a mut loan"
-  | V.SharedLoan (bids, sv) ->
+  | Concrete (V.MutLoan _) ->
+      failwith "Expected a shared loan, found a mut loan"
+  | Concrete (V.SharedLoan (bids, sv)) ->
       (* Check that there is only one borrow id (l) and update the loan *)
       assert (V.BorrowId.Set.mem l bids && V.BorrowId.Set.cardinal bids = 1);
       (* We need to check that there aren't any loans in the value:
@@ -790,6 +811,7 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
       let ctx = { ctx with env } in
       (* Return *)
       (ctx, sv)
+  | Abstract _ -> raise Unimplemented
 
 (** Helper function: see [activate_inactivated_mut_borrow].
 
@@ -804,12 +826,13 @@ let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id)
     { enter_shared_loans = false; enter_mut_borrows = false; enter_abs = false }
   in
   match lookup_borrow ek l ctx.env with
-  | V.SharedBorrow _ | V.MutBorrow (_, _) ->
+  | Concrete (V.SharedBorrow _ | V.MutBorrow (_, _)) ->
       failwith "Expected an inactivated mutable borrow"
-  | V.InactivatedMutBorrow _ ->
+  | Concrete (V.InactivatedMutBorrow _) ->
       (* Update it *)
       let env = update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx.env in
       { ctx with env }
+  | Abstract _ -> raise Unimplemented
 
 (** Promote an inactivated mut borrow to a mut borrow.
 
@@ -822,8 +845,8 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
   match lookup_loan ek l ctx.env with
-  | V.MutLoan _ -> failwith "Unreachable"
-  | V.SharedLoan (bids, sv) -> (
+  | Concrete (V.MutLoan _) -> failwith "Unreachable"
+  | Concrete (V.SharedLoan (bids, sv)) -> (
       (* If there are loans inside the value, end them. Note that there can't be
          inactivated borrows inside the value.
          If we perform an update, do a recursive call to lookup the updated value *)
@@ -857,6 +880,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
              [promote_shared_loan_to_mut_loan]
           *)
           promote_inactivated_borrow_to_mut_borrow l borrowed_value ctx)
+  | Abstract _ -> raise Unimplemented
 
 (** Paths *)
 
@@ -1005,8 +1029,8 @@ let rec access_projection (access : projection_access) (env : C.env)
               (* Lookup the loan content, and explore from there *)
               if access.lookup_shared_borrows then
                 match lookup_loan ek bid env with
-                | V.MutLoan _ -> failwith "Expected a shared loan"
-                | V.SharedLoan (bids, sv) -> (
+                | Concrete (V.MutLoan _) -> failwith "Expected a shared loan"
+                | Concrete (V.SharedLoan (bids, sv)) -> (
                     (* Explore the shared value *)
                     match access_projection access env update p' sv with
                     | Error err -> Error err
@@ -1020,6 +1044,7 @@ let rec access_projection (access : projection_access) (env : C.env)
                         in
                         (* Return - note that we don't need to update the borrow itself *)
                         Ok (env, { res with updated = v }))
+                | Abstract _ -> raise Unimplemented
               else Error (FailBorrow bc)
           | V.InactivatedMutBorrow bid -> Error (FailInactivatedMutBorrow bid)
           | V.MutBorrow (bid, bv) ->
