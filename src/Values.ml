@@ -1,12 +1,6 @@
 open Identifiers
 open Types
 
-(** TODO: do we put the type variable/variable/region names everywhere
-    (to not have to perform lookups by using the ids?)
-    No: it is good not to duplicate and to use ids. This allows to split/
-    make very explicit the role of variables/identifiers/binders/etc.
- *)
-
 module VarId = IdGen ()
 
 module BorrowId = IdGen ()
@@ -199,22 +193,21 @@ class ['self] map_typed_avalue_base =
     method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
   end
 
-type avalue =
-  | AConcrete of constant_value
-  | AAdt of aadt_value
-  | ABottom
-  | ALoan of aloan_content
-  | ABorrow of aborrow_content
-  | ASymbolic of aproj
-      (** Abstraction values are used inside of abstractions to properly model
+(** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.
 
     When calling a function, we lose information about the borrow graph:
     part of it is thus "abstracted" away.
 *)
+type avalue =
+  | AConcrete of constant_value
+  | AAdt of adt_avalue
+  | ABottom
+  | ALoan of aloan_content
+  | ABorrow of aborrow_content
+  | ASymbolic of aproj
 
-(* TODO: rename to adt_avalue? *)
-and aadt_value = {
+and adt_avalue = {
   variant_id : (VariantId.id option[@opaque]);
   field_values : typed_avalue list;
 }

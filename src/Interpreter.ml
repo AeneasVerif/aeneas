@@ -90,23 +90,6 @@ let borrows_in_value (v : V.typed_value) : bool =
     false
   with Found -> true
 
-(** Check a predicate on all the loans in a value - TODO: remove? *)
-let forall_borrows_in_value (pred : V.borrow_content -> bool)
-    (v : V.typed_value) : bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_value as super
-
-      method! visit_borrow_content env lc =
-        if not (pred lc) then raise Found else super#visit_borrow_content env lc
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_value () v;
-    true
-  with Found -> false
-
 (** Check if a value contains inactivated mutable borrows *)
 let inactivated_in_value (v : V.typed_value) : bool =
   let obj =
@@ -129,43 +112,6 @@ let loans_in_value (v : V.typed_value) : bool =
       inherit [_] V.iter_typed_value
 
       method! visit_loan_content _env _ = raise Found
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_value () v;
-    false
-  with Found -> true
-
-(** Check a predicate on all the loans in a value - TODO: remove?*)
-let forall_loans_in_value (pred : V.loan_content -> bool) (v : V.typed_value) :
-    bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_value as super
-
-      method! visit_loan_content env lc =
-        if not (pred lc) then raise Found else super#visit_loan_content env lc
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_value () v;
-    true
-  with Found -> false
-
-(** Return true if there are mutable borrows/loans or inactivated mut borrows
-    in the value - TODO: remove? *)
-let mut_inactivated_borrows_loans_in_value (v : V.typed_value) : bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_value
-
-      method! visit_MutLoan _ _ = raise Found
-
-      method! visit_MutBorrow _ _ = raise Found
-
-      method! visit_InactivatedMutBorrow _ _ = raise Found
     end
   in
   (* We use exceptions *)
@@ -821,11 +767,13 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
       (* Check that there is only one borrow id (l) and update the loan *)
       assert (V.BorrowId.Set.mem l bids && V.BorrowId.Set.cardinal bids = 1);
       (* We need to check that there aren't any loans in the value:
-           we should have gotten rid of those already, but it is better
-           to do a sanity check. *)
+         we should have gotten rid of those already, but it is better
+         to do a sanity check. *)
       assert (not (loans_in_value sv));
-      (* Also need to check there isn't [Bottom] (this is actually an invariant *)
+      (* Check there isn't [Bottom] (this is actually an invariant *)
       assert (not (bottom_in_value sv));
+      (* Check there aren't inactivated borrows *)
+      assert (not (inactivated_in_value sv));
       (* Update the loan content *)
       let env = update_loan ek l (V.MutLoan l) ctx.env in
       let ctx = { ctx with env } in
@@ -1878,7 +1826,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
           let aty = T.Adt (T.AdtId def_id, regions, types) in
           Ok (ctx, { V.value = Adt av; ty = aty }))
 
-(** Result of evaluating a statement - TODO: add prefix *)
+(** Result of evaluating a statement *)
 type statement_eval_res = Unit | Break of int | Continue of int | Return
 
 (** Small utility.

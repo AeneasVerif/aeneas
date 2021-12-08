@@ -10,8 +10,8 @@ type var = {
   name : string option;
   var_ty : ety;
       (** The variable type - erased type, because variables are not used
-       ** in function signatures - TODO: useless? TODO: binder type for
-          function definitions *)
+       ** in function signatures: they are only used to declare the list of
+       ** variables manipulated by a function body *)
 }
 [@@deriving show]
 (** A variable, as used in a function definition *)
