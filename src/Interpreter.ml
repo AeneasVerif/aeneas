@@ -127,7 +127,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
     V.loan_content option =
   let obj =
     object
-      inherit [_] C.iter_env_concrete as super
+      inherit [_] C.iter_env as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -160,6 +160,8 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
           below, we are more resilient to definition updates (the compiler
           is our friend).
        *)
+
+      method! visit_Abs _ _ = raise Unimplemented
     end
   in
   (* We use exceptions *)
@@ -198,7 +200,7 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
 
   let obj =
     object
-      inherit [_] C.map_env_concrete as super
+      inherit [_] C.map_env as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -229,6 +231,8 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
             else super#visit_MutLoan env bid
       (** We reimplement [visit_loan_content] (rather than one of the sub-
           functions) on purpose: exhaustive matches are good for maintenance *)
+
+      method! visit_Abs _ _ = raise Unimplemented
     end
   in
 
@@ -242,7 +246,7 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
     : V.borrow_content option =
   let obj =
     object
-      inherit [_] C.iter_env_concrete as super
+      inherit [_] C.iter_env as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -269,6 +273,8 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
             (* Control the dive *)
             if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
             else ()
+
+      method! visit_Abs _ _ = raise Unimplemented
     end
   in
   (* We use exceptions *)
@@ -306,7 +312,7 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
 
   let obj =
     object
-      inherit [_] C.map_env_concrete as super
+      inherit [_] C.map_env as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -339,6 +345,8 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
         | V.MutLoan bid ->
             (* Nothing specific to do *)
             super#visit_MutLoan env bid
+
+      method! visit_Abs _ _ = raise Unimplemented
     end
   in
 
@@ -429,7 +437,7 @@ let end_borrow_get_borrow_in_env (io : inner_outer) (l : V.BorrowId.id)
   (* The environment is used to keep track of the outer loans *)
   let obj =
     object
-      inherit [_] C.map_env_concrete as super
+      inherit [_] C.map_env as super
 
       method! visit_Loan outer_borrows lc =
         match lc with
@@ -470,6 +478,8 @@ let end_borrow_get_borrow_in_env (io : inner_outer) (l : V.BorrowId.id)
                 update_outer_borrows io outer_borrows (Borrow l')
               in
               V.Borrow (super#visit_MutBorrow outer_borrows l' bv)
+
+      method! visit_Abs _ _ = raise Unimplemented
     end
   in
   (* Catch the exceptions - raised if there are outer borrows *)
@@ -614,7 +624,7 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
 
   let obj =
     object
-      inherit [_] C.map_env_concrete as super
+      inherit [_] C.map_env as super
 
       method! visit_SharedLoan env bids sv =
         (* Shared loan: check if the borrow id we are looking for is in the
@@ -625,6 +635,8 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
           let bids' = V.BorrowId.Set.add new_bid bids in
           V.SharedLoan (bids', sv))
         else super#visit_SharedLoan env bids sv
+
+      method! visit_Abs _ _ = raise Unimplemented
     end
   in
 

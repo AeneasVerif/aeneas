@@ -12,6 +12,8 @@ type binder = {
 
 (** Environment value: mapping from variable to value, abstraction (only
     used in symbolic mode) or stack frame delimiter.
+    
+    TODO: rename Var (-> Binding?)
  *)
 type env_elem = Var of (binder[@opaque]) * typed_value | Abs of abs | Frame
 [@@deriving
@@ -184,13 +186,17 @@ let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in
   ctx_push_vars ctx vars
 
-(** Visitor to iterate over the values in the current frame *)
-class ['self] iter_frame_concrete =
+(** Visitor to iterate over the values in the *current* frame *)
+class ['self] iter_frame =
   object (self : 'self)
-    inherit [_] V.iter_typed_value
+    inherit [_] V.iter_abs
 
+    (* TODO: remove "env_elem" from the name *)
     method visit_env_elem_Var : 'acc -> binder -> typed_value -> unit =
       fun acc vid v -> self#visit_typed_value acc v
+
+    method visit_env_elem_Abs : 'acc -> abs -> unit =
+      fun acc abs -> self#visit_abs acc abs
 
     method visit_env : 'acc -> env -> unit =
       fun acc env ->
@@ -199,39 +205,24 @@ class ['self] iter_frame_concrete =
         | Var (vid, v) :: env ->
             self#visit_env_elem_Var acc vid v;
             self#visit_env acc env
-        | Abs _ :: _ -> failwith "Unexpected abstraction"
+        | Abs abs :: env ->
+            self#visit_env_elem_Abs acc abs;
+            self#visit_env acc env
         | Frame :: _ -> (* We stop here *) ()
   end
 
-(** Visitor to iterate over the values in an environment (we explore an
-    environment until we find the end of the current frame) *)
-class ['self] iter_env_concrete =
-  object (self : 'self)
-    inherit [_] V.iter_typed_value
-
-    method visit_env_elem_Var : 'acc -> binder -> typed_value -> unit =
-      fun acc vid v -> self#visit_typed_value acc v
-
-    method visit_env : 'acc -> env -> unit =
-      fun acc env ->
-        match env with
-        | [] -> ()
-        | Var (vid, v) :: env ->
-            self#visit_env_elem_Var acc vid v;
-            self#visit_env acc env
-        | Abs _ :: _ -> failwith "Unexpected abstraction"
-        | Frame :: env -> self#visit_env acc env
-  end
-
-(** Visitor to map over the values in the current frame *)
+(** Visitor to map over the values in the *current* frame *)
 class ['self] map_frame_concrete =
   object (self : 'self)
-    inherit [_] V.map_typed_value
+    inherit [_] V.map_abs
 
     method visit_env_elem_Var : 'acc -> binder -> typed_value -> env_elem =
       fun acc vid v ->
         let v = self#visit_typed_value acc v in
         Var (vid, v)
+
+    method visit_env_elem_Abs : 'acc -> abs -> env_elem =
+      fun acc abs -> Abs (self#visit_abs acc abs)
 
     method visit_env : 'acc -> env -> env =
       fun acc env ->
@@ -241,29 +232,9 @@ class ['self] map_frame_concrete =
             let v = self#visit_env_elem_Var acc vid v in
             let env = self#visit_env acc env in
             v :: env
-        | Abs _ :: _ -> failwith "Unexpected abstraction"
+        | Abs abs :: env ->
+            let abs = self#visit_env_elem_Abs acc abs in
+            let env = self#visit_env acc env in
+            abs :: env
         | Frame :: env -> (* We stop here *) Frame :: env
-  end
-
-(** Visitor to iterate over the values in an environment (we explore an
-    environment until we find the end of the current frame) *)
-class ['self] map_env_concrete =
-  object (self : 'self)
-    inherit [_] V.map_typed_value
-
-    method visit_env_elem_Var : 'acc -> binder -> typed_value -> env_elem =
-      fun acc vid v ->
-        let v = self#visit_typed_value acc v in
-        Var (vid, v)
-
-    method visit_env : 'acc -> env -> env =
-      fun acc env ->
-        match env with
-        | [] -> []
-        | Var (vid, v) :: env ->
-            let v = self#visit_env_elem_Var acc vid v in
-            let env = self#visit_env acc env in
-            v :: env
-        | Abs _ :: _ -> failwith "Unexpected abstraction"
-        | Frame :: env -> Frame :: self#visit_env acc env
   end
