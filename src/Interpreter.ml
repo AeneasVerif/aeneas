@@ -52,10 +52,14 @@ type eval_error = Panic
 
 type 'a eval_result = ('a, eval_error) result
 
+(* TODO: cleanup this a bit, once we have a better understanding about what we need *)
 type exploration_kind = {
   enter_shared_loans : bool;
   enter_mut_borrows : bool;
   enter_abs : bool;
+      (** Note that if we allow to enter abs, we don't check whether we enter
+          mutable/shared loans or borrows: there are no use cases requiring
+          a finer control. *)
 }
 (** This record controls how some generic helper lookup/update
     functions behave, by restraining the kind of therms they can enter.
@@ -164,21 +168,42 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
         | V.SharedLoan (bids, sv) ->
             (* Check if this is the loan we are looking for, and control the dive *)
             if V.BorrowId.Set.mem l bids then
-              raise (FoundGLoanContent (Concrete (V.SharedLoan (bids, sv))))
+              raise (FoundGLoanContent (Concrete lc))
             else if ek.enter_shared_loans then
               super#visit_SharedLoan env bids sv
             else ()
         | V.MutLoan bid ->
             (* Check if this is the loan we are looking for *)
-            if bid = l then raise (FoundGLoanContent (Concrete (V.MutLoan bid)))
+            if bid = l then raise (FoundGLoanContent (Concrete lc))
             else super#visit_MutLoan env bid
       (** We reimplement [visit_Loan] (rather than the more precise functions
           [visit_SharedLoan], etc.) on purpose: as we have an exhaustive match
           below, we are more resilient to definition updates (the compiler
           is our friend).
-       *)
+      *)
 
-      method! visit_Abs _ _ = raise Unimplemented
+      method! visit_aloan_content env lc =
+        match lc with
+        | V.AMutLoan (bid, av) ->
+            if bid = l then raise (FoundGLoanContent (Abstract lc))
+            else super#visit_AMutLoan env bid av
+        | V.ASharedLoan (bids, v, av) ->
+            if V.BorrowId.Set.mem l bids then
+              raise (FoundGLoanContent (Abstract lc))
+            else super#visit_ASharedLoan env bids v av
+        | V.AEndedMutLoan { given_back; child } ->
+            super#visit_AEndedMutLoan env given_back child
+        | V.AEndedSharedLoan (v, av) -> super#visit_AEndedSharedLoan env v av
+        | V.AIgnoredMutLoan (bid, av) -> super#visit_AIgnoredMutLoan env bid av
+        | V.AEndedIgnoredMutLoan { given_back; child } ->
+            super#visit_AEndedIgnoredMutLoan env given_back child
+        | V.AIgnoredSharedLoan asb -> super#visit_AIgnoredSharedLoan env asb
+      (** Note that we don't control diving inside the abstractions: if we
+          allow to dive inside abstractions, we allow to go anywhere
+          (because there are no use cases requiring finer control) *)
+
+      method! visit_abs env abs =
+        if ek.enter_abs then super#visit_Abs env abs else ()
     end
   in
   (* We use exceptions *)
@@ -210,7 +235,7 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
    * inside values, we check we don't update more than one loan. Then, upon
    * returning we check that we updated at least once. *)
   let r = ref false in
-  let set_ref r =
+  let set_ref () =
     assert (not !r);
     r := true
   in
@@ -235,7 +260,7 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
             (* Shared loan: check if this is the loan we are looking for, and
                control the dive. *)
             if V.BorrowId.Set.mem l bids then (
-              set_ref env;
+              set_ref ();
               nlc)
             else if ek.enter_shared_loans then
               super#visit_SharedLoan env bids sv
@@ -243,17 +268,24 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
         | V.MutLoan bid ->
             (* Mut loan: checks if this is the loan we are looking for *)
             if bid = l then (
-              set_ref env;
+              set_ref ();
               nlc)
             else super#visit_MutLoan env bid
       (** We reimplement [visit_loan_content] (rather than one of the sub-
           functions) on purpose: exhaustive matches are good for maintenance *)
 
-      method! visit_Abs _ _ = raise Unimplemented
+      method! visit_abs env abs =
+        if ek.enter_abs then super#visit_abs env abs else abs
+      (** Note that once inside the abstractions, we don't control diving
+          (there are no use cases requiring finer control).
+          Also, as we give back a [loan_content] (and not an [aloan_content])
+          we don't need to do reimplement the visit functions for the values
+          inside the abstractions (rk.: there may be "concrete" values inside
+          abstractions, so there is a utility in diving inside). *)
     end
   in
 
-  let env = obj#visit_env r env in
+  let env = obj#visit_env () env in
   (* Check that we updated at least one loan *)
   assert !r;
   env
@@ -269,21 +301,15 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
         match bc with
         | V.MutBorrow (bid, mv) ->
             (* Check the borrow id and control the dive *)
-            if bid = l then
-              raise (FoundGBorrowContent (Concrete (V.MutBorrow (bid, mv))))
+            if bid = l then raise (FoundGBorrowContent (Concrete bc))
             else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
             else ()
         | V.SharedBorrow bid ->
             (* Check the borrow id *)
-            if bid = l then
-              raise (FoundGBorrowContent (Concrete (V.SharedBorrow bid)))
-            else ()
+            if bid = l then raise (FoundGBorrowContent (Concrete bc)) else ()
         | V.InactivatedMutBorrow bid ->
             (* Check the borrow id *)
-            if bid = l then
-              raise
-                (FoundGBorrowContent (Concrete (V.InactivatedMutBorrow bid)))
-            else ()
+            if bid = l then raise (FoundGBorrowContent (Concrete bc)) else ()
 
       method! visit_loan_content env lc =
         match lc with
@@ -294,7 +320,19 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
             if ek.enter_shared_loans then super#visit_SharedLoan env bids sv
             else ()
 
-      method! visit_Abs _ _ = raise Unimplemented
+      method! visit_aborrow_content env bc =
+        match bc with
+        | V.AMutBorrow (bid, av) ->
+            if bid = l then raise (FoundGBorrowContent (Abstract bc))
+            else super#visit_AMutBorrow env bid av
+        | V.ASharedBorrow bid ->
+            if bid = l then raise (FoundGBorrowContent (Abstract bc))
+            else super#visit_ASharedBorrow env bid
+        | V.AIgnoredMutBorrow av -> super#visit_AIgnoredMutBorrow env av
+        | V.AIgnoredSharedBorrow asb -> super#visit_AIgnoredSharedBorrow env asb
+
+      method! visit_abs env abs =
+        if ek.enter_abs then super#visit_abs env abs else ()
     end
   in
   (* We use exceptions *)
@@ -325,7 +363,7 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
    * inside values, we check we don't update more than one borrow. Then, upon
    * returning we check that we updated at least once. *)
   let r = ref false in
-  let set_ref r =
+  let set_ref () =
     assert (not !r);
     r := true
   in
@@ -339,20 +377,20 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
         | V.MutBorrow (bid, mv) ->
             (* Check the id and control dive *)
             if bid = l then (
-              set_ref env;
+              set_ref ();
               nbc)
             else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
             else V.MutBorrow (bid, mv)
         | V.SharedBorrow bid ->
             (* Check the id *)
             if bid = l then (
-              set_ref env;
+              set_ref ();
               nbc)
             else super#visit_SharedBorrow env bid
         | V.InactivatedMutBorrow bid ->
             (* Check the id *)
             if bid = l then (
-              set_ref env;
+              set_ref ();
               nbc)
             else super#visit_InactivatedMutBorrow env bid
 
@@ -366,11 +404,12 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
             (* Nothing specific to do *)
             super#visit_MutLoan env bid
 
-      method! visit_Abs _ _ = raise Unimplemented
+      method! visit_abs env abs =
+        if ek.enter_abs then super#visit_abs env abs else abs
     end
   in
 
-  let env = obj#visit_env r env in
+  let env = obj#visit_env () env in
   (* Check that we updated at least one borrow *)
   assert !r;
   env
