@@ -10,7 +10,6 @@ module L = Logging
 open TypesUtils
 open ValuesUtils
 
-(* TODO: Change state-passing style to : st -> ... -> (st, v) *)
 (* TODO: check that the value types are correct when evaluating *)
 (* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
    (rather than only env) *)
