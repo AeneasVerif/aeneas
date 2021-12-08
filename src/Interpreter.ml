@@ -63,8 +63,10 @@ type exploration_kind = {
 *)
 
 exception Found
-(** When looking for something, it can be easier to just throw an exception to
-    signal we found what we were looking for.
+(** Utility exception
+
+    When looking for something while exploring a term, it can be easier to
+    just throw an exception to signal we found what we were looking for.
  *)
 
 exception FoundBorrowContent of V.borrow_content
@@ -351,41 +353,33 @@ let unwrap_res_to_outer_or opt default =
 
 (** Return the first loan we find in a value *)
 let rec get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
-  match v.V.value with
-  | V.Concrete _ -> None
-  | V.Adt av -> get_first_loan_in_values av.field_values
-  | V.Borrow bc -> (
-      match bc with
-      | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> None
-      | V.MutBorrow (_, bv) -> get_first_loan_in_value bv)
-  | V.Loan lc -> Some lc
-  | V.Bottom | V.Symbolic _ -> None
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
 
-and get_first_loan_in_values (vl : V.typed_value list) : V.loan_content option =
-  match vl with
-  | [] -> None
-  | v :: vl' -> (
-      match get_first_loan_in_value v with
-      | Some lc -> Some lc
-      | None -> get_first_loan_in_values vl')
+      method! visit_loan_content _ lc = raise (FoundLoanContent lc)
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    None
+  with FoundLoanContent lc -> Some lc
 
 (** Check if a value contains ⊥ *)
 let rec bottom_in_value (v : V.typed_value) : bool =
-  match v.V.value with
-  | V.Concrete _ -> false
-  | V.Adt av -> List.exists bottom_in_value av.field_values
-  | V.Borrow bc -> (
-      match bc with
-      | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> false
-      | V.MutBorrow (_, bv) -> bottom_in_value bv)
-  | V.Loan lc -> (
-      match lc with
-      | V.SharedLoan (_, sv) -> bottom_in_value sv
-      | V.MutLoan _ -> false)
-  | V.Bottom -> true
-  | V.Symbolic _ ->
-      (* This depends on the regions which have ended *)
-      raise Unimplemented
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_Bottom _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true
 
 (** See [end_borrow_get_borrow_in_env] *)
 let rec end_borrow_get_borrow_in_value (config : C.config) (io : inner_outer)
