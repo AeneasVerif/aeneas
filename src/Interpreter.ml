@@ -607,45 +607,33 @@ let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
  *)
 let reborrow_shared (config : C.config) (original_bid : V.BorrowId.id)
     (new_bid : V.BorrowId.id) (ctx : C.eval_ctx) : C.eval_ctx =
-  let rec reborrow_in_value (v : V.typed_value) : V.typed_value =
-    match v.V.value with
-    | V.Concrete _ | V.Bottom | V.Symbolic _ -> v
-    | V.Adt av ->
-        let fields = List.map reborrow_in_value av.field_values in
-        { v with value = Adt { av with field_values = fields } }
-    | V.Borrow bc -> (
-        match bc with
-        | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> v
-        | V.MutBorrow (bid, bv) ->
-            {
-              v with
-              value = V.Borrow (V.MutBorrow (bid, reborrow_in_value bv));
-            })
-    | V.Loan lc -> (
-        match lc with
-        | V.MutLoan _ -> v
-        | V.SharedLoan (bids, sv) ->
-            (* Shared loan: check if the borrow id we are looking for is in the
-               set of borrow ids. If yes, insert the new borrow id, otherwise
-               explore inside the shared value *)
-            if V.BorrowId.Set.mem original_bid bids then
-              let bids' = V.BorrowId.Set.add new_bid bids in
-              { v with value = V.Loan (V.SharedLoan (bids', sv)) }
-            else
-              {
-                v with
-                value = V.Loan (V.SharedLoan (bids, reborrow_in_value sv));
-              })
+  (* Keep track of changes *)
+  let r = ref false in
+  let set_ref () =
+    assert (not !r);
+    r := true
   in
-  let reborrow_in_ev (ev : C.env_value) : C.env_value =
-    match ev with
-    | C.Var (vid, v) -> C.Var (vid, reborrow_in_value v)
-    | C.Abs abs ->
-        assert (config.mode = SymbolicMode);
-        C.Abs abs
-    | C.Frame -> C.Frame
+
+  let obj =
+    object
+      inherit [_] C.map_env_concrete as super
+
+      method! visit_SharedLoan env bids sv =
+        (* Shared loan: check if the borrow id we are looking for is in the
+           set of borrow ids. If yes, insert the new borrow id, otherwise
+           explore inside the shared value *)
+        if V.BorrowId.Set.mem original_bid bids then (
+          set_ref ();
+          let bids' = V.BorrowId.Set.add new_bid bids in
+          V.SharedLoan (bids', sv))
+        else super#visit_SharedLoan env bids sv
+    end
   in
-  { ctx with env = List.map reborrow_in_ev ctx.env }
+
+  let env = obj#visit_env () ctx.env in
+  (* Check that we reborrowed once *)
+  assert !r;
+  { ctx with env }
 
 (** End a borrow identified by its borrow id in an environment
     
