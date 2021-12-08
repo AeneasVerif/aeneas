@@ -209,6 +209,10 @@ module Values = struct
     ^ " <: "
     ^ PT.ty_to_string (value_to_rtype_formatter fmt) rty
 
+  (* TODO: it may be a good idea to try to factorize this function with
+   * typed_avalue_to_string. At some point we had done it, because [typed_value]
+   * and [typed_avalue] were instances of the same general type [g_typed_value],
+   * but then we removed this general type because it proved to be a bad idea. *)
   let rec typed_value_to_string (fmt : value_formatter) (v : V.typed_value) :
       string =
     let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
