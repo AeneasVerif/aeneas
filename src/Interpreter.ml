@@ -360,7 +360,7 @@ type borrow_ids = Borrows of V.BorrowId.Set.t | Borrow of V.BorrowId.id
 
 (** Borrow lookup result *)
 type borrow_lres =
-  | NotFound
+  | NotFound (* TODO: remove *)
   | Outer of borrow_ids
   | FoundMut of V.typed_value
   | FoundShared
@@ -376,6 +376,7 @@ let update_outer_borrows (io : inner_outer) opt x =
       None
   | Outer -> update_if_none opt x
 
+(* TODO: remove? *)
 let unwrap_res_to_outer_or opt default =
   match opt with Some x -> Outer x | None -> default
 
@@ -409,99 +410,8 @@ let bottom_in_value (v : V.typed_value) : bool =
     false
   with Found -> true
 
-(** See [end_borrow_get_borrow_in_env] *)
-let rec end_borrow_get_borrow_in_value (config : C.config) (io : inner_outer)
-    (l : V.BorrowId.id) (outer_borrows : borrow_ids option) (v0 : V.typed_value)
-    : V.typed_value * borrow_lres =
-  (* (* We use a reference to check if we update a borrow, and that we don't
-      * update more than one borrow. *)
-     let r = ref false in
-     let set_ref () =
-       assert (not !r);
-       r := true
-     in
-
-     (* The environment is used to keep track of the outer loans *)
-     let obj =
-       object
-         inherit [_] C.map_env_concrete as super
-
-         method! visit_MutLoan outer_borrows bid =
-           super#visit_MutLoan outer_borrows bid
-         (** Nothing particular to do *)
-
-         method! visit_SharedLoan outer_borrows bids v =
-           let outer_borrows = update_outer_borrows io outer_borrows (Borrows bids) in
-           super#visit_SharedLoan outer_borrows bids v
-         (** Update the outer borrows *)
-
-         method! visit_borrow_content outer_borrows bc =
-           match bc with
-           | V.SharedBorrow l' ->
-             if l = l' then (set_ref (); Bottom
-
-         method! visit_MutBorrow outer_borrows bid mv = *)
-  match v0.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> (v0, NotFound)
-  | V.Adt adt ->
-      (* Note that we allow assumed types (like boxes) to outlive their
-       * inner borrows. Also note that when using the symbolic mode,
-       * boxes will never be "opened" and will be manipulated solely
-       * through functions like new, deref, etc. which will enforce that
-       * we destroy boxes upon ending inner borrows *)
-      let values, res =
-        end_borrow_get_borrow_in_values config io l outer_borrows
-          adt.field_values
-      in
-      ({ v0 with value = Adt { adt with field_values = values } }, res)
-  | V.Loan (V.MutLoan _) -> (v0, NotFound)
-  | V.Loan (V.SharedLoan (borrows, v)) ->
-      (* Update the outer borrows, if necessary *)
-      let outer_borrows =
-        update_outer_borrows io outer_borrows (Borrows borrows)
-      in
-      let v', res =
-        end_borrow_get_borrow_in_value config io l outer_borrows v
-      in
-      ({ value = V.Loan (V.SharedLoan (borrows, v')); ty = v0.ty }, res)
-  | V.Borrow (SharedBorrow l') ->
-      if l = l' then
-        ( { v0 with value = Bottom },
-          unwrap_res_to_outer_or outer_borrows FoundInactivatedMut )
-      else (v0, NotFound)
-  | V.Borrow (InactivatedMutBorrow l') ->
-      if l = l' then
-        ( { v0 with value = Bottom },
-          unwrap_res_to_outer_or outer_borrows FoundInactivatedMut )
-      else (v0, NotFound)
-  | V.Borrow (V.MutBorrow (l', bv)) ->
-      if l = l' then
-        ( { v0 with value = Bottom },
-          unwrap_res_to_outer_or outer_borrows (FoundMut bv) )
-      else
-        (* Update the outer borrows, if necessary *)
-        let outer_borrows = update_outer_borrows io outer_borrows (Borrow l') in
-        let bv', res =
-          end_borrow_get_borrow_in_value config io l outer_borrows bv
-        in
-        ({ v0 with value = V.Borrow (V.MutBorrow (l', bv')) }, res)
-
-and end_borrow_get_borrow_in_values (config : C.config) (io : inner_outer)
-    (l : V.BorrowId.id) (outer_borrows : borrow_ids option)
-    (vl0 : V.typed_value list) : V.typed_value list * borrow_lres =
-  match vl0 with
-  | [] -> (vl0, NotFound)
-  | v :: vl -> (
-      let v', res =
-        end_borrow_get_borrow_in_value config io l outer_borrows v
-      in
-      match res with
-      | NotFound ->
-          let vl', res =
-            end_borrow_get_borrow_in_values config io l outer_borrows vl
-          in
-          (v' :: vl', res)
-      | _ -> (v' :: vl, res))
+exception FoundOuter of borrow_ids
+(** Utility exception *)
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
@@ -509,23 +419,84 @@ and end_borrow_get_borrow_in_values (config : C.config) (io : inner_outer)
     an outer borrow...) or return the reason why we couldn't update the borrow.
 
     [end_borrow] then simply performs a loop: as long as we need to end (outer)
-    borrows, we end them, and finally we end the borrow we wanted to end in the
+    borrows, we end them, before finally ending the borrow we wanted to end in the
     first place.
 *)
-let rec end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer)
-    (l : V.BorrowId.id) (env0 : C.env) : C.env * borrow_lres =
-  match env0 with
-  | [] -> ([], NotFound)
-  | C.Var (x, v) :: env -> (
-      match end_borrow_get_borrow_in_value config io l None v with
-      | v', NotFound ->
-          let env, res = end_borrow_get_borrow_in_env config io l env in
-          (Var (x, v') :: env, res)
-      | v', res -> (Var (x, v') :: env, res))
-  | C.Abs _ :: _ ->
-      assert (config.mode = SymbolicMode);
-      raise Unimplemented
-  | C.Frame :: env -> end_borrow_get_borrow_in_env config io l env
+let end_borrow_get_borrow_in_env (config : C.config) (io : inner_outer)
+    (l : V.BorrowId.id) (env : C.env) : C.env * borrow_lres =
+  (* We use a reference to communicate the kind of borrow we found, if we
+   * find one *)
+  let replaced_bc : V.borrow_content option ref = ref None in
+  let set_replaced_bc bc =
+    assert (Option.is_none !replaced_bc);
+    replaced_bc := Some bc
+  in
+  (* Raise an exception if there are outer borrows: this exception is caught
+   * in a wrapper function *)
+  let raise_if_outer outer_borrows =
+    match outer_borrows with
+    | Some borrows -> raise (FoundOuter borrows)
+    | None -> ()
+  in
+
+  (* The environment is used to keep track of the outer loans *)
+  let obj =
+    object
+      inherit [_] C.map_env_concrete as super
+
+      method! visit_Loan outer_borrows lc =
+        match lc with
+        | V.MutLoan bid -> V.Loan (super#visit_MutLoan outer_borrows bid)
+        | V.SharedLoan (bids, v) ->
+            (* Update the outer borrows before diving into the shared value *)
+            let outer_borrows =
+              update_outer_borrows io outer_borrows (Borrows bids)
+            in
+            V.Loan (super#visit_SharedLoan outer_borrows bids v)
+      (** We reimplement [visit_Loan] because we may have to update the
+             outer borrows *)
+
+      method! visit_Borrow outer_borrows bc =
+        match bc with
+        | SharedBorrow l' | InactivatedMutBorrow l' ->
+            (* Check if this is the borrow we are looking for *)
+            if l = l' then (
+              (* Check if there are outer borrows *)
+              raise_if_outer outer_borrows;
+              (* Register the update *)
+              set_replaced_bc bc;
+              (* Update the value *)
+              V.Bottom)
+            else super#visit_Borrow outer_borrows bc
+        | V.MutBorrow (l', bv) ->
+            (* Check if this is the borrow we are looking for *)
+            if l = l' then (
+              (* Check if there are outer borrows *)
+              raise_if_outer outer_borrows;
+              (* Register the update *)
+              set_replaced_bc bc;
+              (* Update the value *)
+              V.Bottom)
+            else
+              (* Update the outer borrows before diving into the borrowed value *)
+              let outer_borrows =
+                update_outer_borrows io outer_borrows (Borrow l')
+              in
+              V.Borrow (super#visit_MutBorrow outer_borrows l' bv)
+    end
+  in
+  (* Catch the exceptions - raised if there are outer borrows *)
+  try
+    let env = obj#visit_env None env in
+    let res =
+      match !replaced_bc with
+      | None -> NotFound
+      | Some (V.MutBorrow (_, bv)) -> FoundMut bv
+      | Some (V.SharedBorrow _) -> FoundShared
+      | Some (V.InactivatedMutBorrow _) -> FoundInactivatedMut
+    in
+    (env, res)
+  with FoundOuter outers -> (env, Outer outers)
 
 (** See [give_back_value]. *)
 let rec give_back_value_to_value config bid (v : V.typed_value)
