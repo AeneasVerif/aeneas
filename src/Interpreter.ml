@@ -134,6 +134,26 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
         if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv else ()
       (** Control the diving into mutable borrows *)
 
+      (* TODO
+            method! visit_Loan env lc =
+              match lc with
+              | V.SharedLoan (bids, sv) ->
+                  (* Check if this is the loan we are looking for, and control the dive *)
+                  if V.BorrowId.Set.mem l bids then
+                    raise (FoundLoanContent (V.SharedLoan (bids, sv)))
+                  else if ek.enter_shared_loans then
+                    super#visit_SharedLoan env bids sv
+                  else ()
+              | V.MutLoan bid ->
+                  (* Check if this is the loan we are looking for *)
+                  if bid = l then raise (FoundLoanContent (V.MutLoan bid))
+                  else super#visit_MutLoan env bid
+            (** We reimplement [visit_Loan] (rather than the more precise functions
+                [visit_SharedLoan], etc.) on purpose: as we have an exhaustive match
+                below, we are more resilient to definition updates (the compiler
+                is our friend).
+            *)
+      *)
       method! visit_SharedLoan env bids sv =
         if V.BorrowId.Set.mem l bids then
           raise (FoundLoanContent (V.SharedLoan (bids, sv)))
@@ -385,6 +405,34 @@ let rec bottom_in_value (v : V.typed_value) : bool =
 let rec end_borrow_get_borrow_in_value (config : C.config) (io : inner_outer)
     (l : V.BorrowId.id) (outer_borrows : borrow_ids option) (v0 : V.typed_value)
     : V.typed_value * borrow_lres =
+  (* (* We use a reference to check if we update a borrow, and that we don't
+      * update more than one borrow. *)
+     let r = ref false in
+     let set_ref () =
+       assert (not !r);
+       r := true
+     in
+
+     (* The environment is used to keep track of the outer loans *)
+     let obj =
+       object
+         inherit [_] C.map_env_concrete as super
+
+         method! visit_MutLoan outer_borrows bid =
+           super#visit_MutLoan outer_borrows bid
+         (** Nothing particular to do *)
+
+         method! visit_SharedLoan outer_borrows bids v =
+           let outer_borrows = update_outer_borrows io outer_borrows (Borrows bids) in
+           super#visit_SharedLoan outer_borrows bids v
+         (** Update the outer borrows *)
+
+         method! visit_borrow_content outer_borrows bc =
+           match bc with
+           | V.SharedBorrow l' ->
+             if l = l' then (set_ref (); Bottom
+
+         method! visit_MutBorrow outer_borrows bid mv = *)
   match v0.V.value with
   | V.Concrete _ | V.Bottom | V.Symbolic _ -> (v0, NotFound)
   | V.Adt adt ->
