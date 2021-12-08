@@ -4319,7 +4319,6 @@ move var@6
 
 [[32mDebug[39m] Value to move:
 &mut@3 (1: i32)
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 0
 [[32mDebug[39m] end_borrow 0: context before:
 # 1 frame(s)
 
@@ -7046,7 +7045,6 @@ move var@3
 
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [1]
 [[32mDebug[39m] drop_value: place: var@1
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 0
 [[32mDebug[39m] end_borrow 0: context before:
 # 2 frame(s)
 
@@ -7376,7 +7374,6 @@ move var@5
 
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [1]
 [[32mDebug[39m] drop_value: place: var@1
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 2
 [[32mDebug[39m] end_borrow 2: context before:
 # 2 frame(s)
 
@@ -9408,7 +9405,6 @@ About to evaluate statement: return
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [2,1]
 [[32mDebug[39m] drop_value: place: var@2
 [[32mDebug[39m] drop_value: place: l
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 1
 [[32mDebug[39m] end_borrow 1: context before:
 # 2 frame(s)
 
@@ -13802,7 +13798,6 @@ About to evaluate statement: return
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [4,3,2,1]
 [[32mDebug[39m] drop_value: place: var@4
 [[32mDebug[39m] drop_value: place: y
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 3
 [[32mDebug[39m] end_borrow 3: context before:
 # 2 frame(s)
 
@@ -13874,7 +13869,6 @@ About to evaluate statement: return
 }
 
 [[32mDebug[39m] drop_value: place: x
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 1
 [[32mDebug[39m] end_borrow 1: context before:
 # 2 frame(s)
 
@@ -16434,7 +16428,6 @@ About to evaluate statement: return
 
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [2,1]
 [[32mDebug[39m] drop_value: place: var@2
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 3
 [[32mDebug[39m] end_borrow 3: context before:
 # 2 frame(s)
 
@@ -16486,7 +16479,6 @@ About to evaluate statement: return
 }
 
 [[32mDebug[39m] drop_value: place: x
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 2
 [[32mDebug[39m] end_borrow 2: context before:
 # 2 frame(s)
 
@@ -16816,7 +16808,6 @@ move var@9
 
 [[32mDebug[39m] Value to move:
 &mut@6 (2: u32)
-[[32mDebug[39m] drop_borrows_loans_at_lplace: dropping 0
 [[32mDebug[39m] end_borrow 0: context before:
 # 1 frame(s)
 

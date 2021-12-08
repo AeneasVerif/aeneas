@@ -1398,86 +1398,74 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
  *)
 let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Iterator to explore a value and update the context whenever we find
+     borrows/loans.
+     We use exceptions to make it handy: whenever we update the
+     context, we raise an exception wrapping the updated context.
+
+     Note that we can end the borrows which are inside the value (while the
+     value itself might be inside a borrow/loan: we are thus ending inner
+     borrows). Because a loan inside the value may be linked to a borrow
+     somewhere else *also inside* the value (it's possible with adts),
+     we first end all the borrows we find - by using [Inner] to allow
+     ending inner borrows - then end all the loans we find. It is really
+     important to do this in two steps: the borrow linked to a loan may
+     be inside the value at place p, in which case this borrow may be
+     an inner borrow that we *can* end, but it may also be outside this
+     value, in which case we need to end all the outer borrows first...
+     Also, whenever the context is updated, we need to re-inspect
+     the value at place p *in two steps* again (end borrows, then end
+     loans).
+  *)
+  let obj =
+    object
+      inherit [_] V.iter_typed_value as super
+
+      method! visit_borrow_content end_loans bc =
+        (* Sanity check: we should have ended all the borrows before starting
+           to end loans *)
+        assert (not end_loans);
+
+        (* We need to end all borrows. Note that we ignore the outer borrows
+           when ending the borrows we find here (we call [end_inner_borrow(s)]:
+           the value at place p might be below a borrow/loan). Note however
+           that if we restrain ourselves at the value at place p, the borrow we
+           found here can be considered as an outer borrow.
+        *)
+        match bc with
+        | V.SharedBorrow bid | V.MutBorrow (bid, _) ->
+            raise (UpdateCtx (end_inner_borrow config bid ctx))
+        | V.InactivatedMutBorrow bid ->
+            (* We need to activate ithe nactivated borrow - later, we will
+             * actually end it - Rk.: we could actually end it straight away
+             * (this is not really important) *)
+            let ctx = activate_inactivated_mut_borrow config Inner bid ctx in
+            raise (UpdateCtx ctx)
+
+      method! visit_loan_content end_loans lc =
+        if
+          (* If we can, end the loans, otherwise ignore: keep for later *)
+          end_loans
+        then
+          (* We need to end all loans. Note that as all the borrows inside
+             the value at place p should already have ended, the borrows
+             associated to the loans we find here should be borrows from
+             outside this value: we need to call [end_outer_borrow(s)]
+             (we can't ignore outer borrows this time).
+          *)
+          match lc with
+          | V.SharedLoan (bids, _) ->
+              raise (UpdateCtx (end_outer_borrows config bids ctx))
+          | V.MutLoan bid -> raise (UpdateCtx (end_outer_borrow config bid ctx))
+        else super#visit_loan_content end_loans lc
+    end
+  in
+
   (* We do something similar to [end_loans_at_place].
      First, retrieve the value *)
   match read_place config Write p ctx with
   | Error _ -> failwith "Unreachable"
   | Ok v -> (
-      (* Explore the value to check if we need to update the environment.
-
-         Note that we can end the borrows which are inside the value (while the
-         value itself might be inside a borrow/loan: we are thus ending inner
-         borrows). Because a loan inside the value may be linked to a borrow
-         somewhere else *also inside* the value (it's possible with adts),
-         we first end all the borrows we find - by using [Inner] to allow
-         ending inner borrows - then end all the loans we find. It is really
-         important to do this in two steps: the borrow linked to a loan may
-         be inside the value at place p, in which case this borrow may be
-         an inner borrow that we *can* end, but it may also be outside this
-         value, in which case we need to end all the outer borrows first...
-         Also, whenever the environment is updated, we need to re-inspect
-         the value at place p *in two steps* again (end borrows, then end loans).
-
-         We use exceptions to make it handy.
-      *)
-      let rec inspect_update (end_loans : bool) (v : V.typed_value) : unit =
-        match v.V.value with
-        | V.Concrete _ -> ()
-        | V.Bottom ->
-            (* Note that we are going to *write* to the value: it is ok if this
-               value contains [Bottom] - and actually we introduce some
-               occurrences of [Bottom] by ending borrows *)
-            ()
-        | V.Symbolic _ ->
-            (* Nothing to do for symbolic values - TODO: not sure *)
-            raise Unimplemented
-        | V.Adt adt -> List.iter (inspect_update end_loans) adt.field_values
-        | V.Borrow bc -> (
-            assert (not end_loans);
-
-            (* Sanity check *)
-            (* We need to end all borrows. Note that we ignore the outer borrows
-               when ending the borrows we find here (we call [end_inner_borrow(s)]:
-               the value at place p might be below a borrow/loan. Note however
-               that the borrow we found here is an outer borrow, if we restrain
-               ourselves at the value at place p.
-            *)
-            match bc with
-            | V.SharedBorrow bid | V.MutBorrow (bid, _) ->
-                L.log#ldebug
-                  (lazy
-                    ("drop_borrows_loans_at_lplace: dropping "
-                   ^ V.BorrowId.to_string bid));
-                raise (UpdateCtx (end_inner_borrow config bid ctx))
-            | V.InactivatedMutBorrow bid ->
-                L.log#ldebug
-                  (lazy
-                    ("drop_borrows_loans_at_lplace: activating "
-                   ^ V.BorrowId.to_string bid));
-                (* We need to activate inactivated borrows - later, we will
-                 * actually end it *)
-                let ctx =
-                  activate_inactivated_mut_borrow config Inner bid ctx
-                in
-                raise (UpdateCtx ctx))
-        | V.Loan lc ->
-            if
-              (* If we can, end the loans, otherwise ignore: keep for later *)
-              end_loans
-            then
-              (* We need to end all loans. Note that as all the borrows inside
-                 the value at place p should already have ended, the borrows
-                 associated to the loans we find here should be borrows from
-                 outside this value: we need to call [end_outer_borrow(s)]
-                 (we can't ignore outer borrows this time).
-              *)
-              match lc with
-              | V.SharedLoan (bids, _) ->
-                  raise (UpdateCtx (end_outer_borrows config bids ctx))
-              | V.MutLoan bid ->
-                  raise (UpdateCtx (end_outer_borrow config bid ctx))
-            else ()
-      in
       (* Inspect the value and update the context while doing so.
          If the context gets updated: perform a recursive call (many things
          may have been updated in the context: first we need to retrieve the
@@ -1486,12 +1474,102 @@ let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
       *)
       try
         (* Inspect the value: end the borrows only *)
-        inspect_update false v;
+        obj#visit_typed_value false v;
         (* Inspect the value: end the loans *)
-        inspect_update true v;
+        obj#visit_typed_value true v;
         (* No context update required: return the current context *)
         ctx
       with UpdateCtx ctx -> drop_borrows_loans_at_lplace config p ctx)
+
+(* (* Explore the value to check if we need to update the environment.
+
+            Note that we can end the borrows which are inside the value (while the
+            value itself might be inside a borrow/loan: we are thus ending inner
+            borrows). Because a loan inside the value may be linked to a borrow
+            somewhere else *also inside* the value (it's possible with adts),
+            we first end all the borrows we find - by using [Inner] to allow
+            ending inner borrows - then end all the loans we find. It is really
+            important to do this in two steps: the borrow linked to a loan may
+            be inside the value at place p, in which case this borrow may be
+            an inner borrow that we *can* end, but it may also be outside this
+            value, in which case we need to end all the outer borrows first...
+            Also, whenever the environment is updated, we need to re-inspect
+            the value at place p *in two steps* again (end borrows, then end loans).
+
+            We use exceptions to make it handy.
+         *)
+         let rec inspect_update (end_loans : bool) (v : V.typed_value) : unit =
+           match v.V.value with
+           | V.Concrete _ -> ()
+           | V.Bottom ->
+               (* Note that we are going to *write* to the value: it is ok if this
+                  value contains [Bottom] - and actually we introduce some
+                  occurrences of [Bottom] by ending borrows *)
+               ()
+           | V.Symbolic _ ->
+               (* Nothing to do for symbolic values - TODO: not sure *)
+               raise Unimplemented
+           | V.Adt adt -> List.iter (inspect_update end_loans) adt.field_values
+           | V.Borrow bc -> (
+               assert (not end_loans);
+
+               (* Sanity check *)
+               (* We need to end all borrows. Note that we ignore the outer borrows
+                  when ending the borrows we find here (we call [end_inner_borrow(s)]:
+                  the value at place p might be below a borrow/loan. Note however
+                  that the borrow we found here is an outer borrow, if we restrain
+                  ourselves at the value at place p.
+               *)
+               match bc with
+               | V.SharedBorrow bid | V.MutBorrow (bid, _) ->
+                   L.log#ldebug
+                     (lazy
+                       ("drop_borrows_loans_at_lplace: dropping "
+                      ^ V.BorrowId.to_string bid));
+                   raise (UpdateCtx (end_inner_borrow config bid ctx))
+               | V.InactivatedMutBorrow bid ->
+                   L.log#ldebug
+                     (lazy
+                       ("drop_borrows_loans_at_lplace: activating "
+                      ^ V.BorrowId.to_string bid));
+                   (* We need to activate ithe nactivated borrow - later, we will
+                    * actually end it *)
+                   let ctx =
+                     activate_inactivated_mut_borrow config Inner bid ctx
+                   in
+                   raise (UpdateCtx ctx))
+           | V.Loan lc ->
+               if
+                 (* If we can, end the loans, otherwise ignore: keep for later *)
+                 end_loans
+               then
+                 (* We need to end all loans. Note that as all the borrows inside
+                    the value at place p should already have ended, the borrows
+                    associated to the loans we find here should be borrows from
+                    outside this value: we need to call [end_outer_borrow(s)]
+                    (we can't ignore outer borrows this time).
+                 *)
+                 match lc with
+                 | V.SharedLoan (bids, _) ->
+                     raise (UpdateCtx (end_outer_borrows config bids ctx))
+                 | V.MutLoan bid ->
+                     raise (UpdateCtx (end_outer_borrow config bid ctx))
+               else ()
+         in
+         (* Inspect the value and update the context while doing so.
+            If the context gets updated: perform a recursive call (many things
+            may have been updated in the context: first we need to retrieve the
+            proper updated value - and this value may actually not be accessible
+            anymore
+         *)
+         try
+           (* Inspect the value: end the borrows only *)
+           inspect_update false v;
+           (* Inspect the value: end the loans *)
+           inspect_update true v;
+           (* No context update required: return the current context *)
+           ctx
+   with UpdateCtx ctx -> drop_borrows_loans_at_lplace config p ctx)*)
 
 (** Copy a value, and return the resulting value.
 
