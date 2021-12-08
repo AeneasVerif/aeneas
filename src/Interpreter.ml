@@ -235,9 +235,10 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
    * inside values, we check we don't update more than one loan. Then, upon
    * returning we check that we updated at least once. *)
   let r = ref false in
-  let set_ref () =
+  let update () : V.loan_content =
     assert (not !r);
-    r := true
+    r := true;
+    nlc
   in
 
   let obj =
@@ -259,18 +260,13 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
         | V.SharedLoan (bids, sv) ->
             (* Shared loan: check if this is the loan we are looking for, and
                control the dive. *)
-            if V.BorrowId.Set.mem l bids then (
-              set_ref ();
-              nlc)
+            if V.BorrowId.Set.mem l bids then update ()
             else if ek.enter_shared_loans then
               super#visit_SharedLoan env bids sv
             else V.SharedLoan (bids, sv)
         | V.MutLoan bid ->
             (* Mut loan: checks if this is the loan we are looking for *)
-            if bid = l then (
-              set_ref ();
-              nlc)
-            else super#visit_MutLoan env bid
+            if bid = l then update () else super#visit_MutLoan env bid
       (** We reimplement [visit_loan_content] (rather than one of the sub-
           functions) on purpose: exhaustive matches are good for maintenance *)
 
@@ -282,6 +278,55 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
           we don't need to do reimplement the visit functions for the values
           inside the abstractions (rk.: there may be "concrete" values inside
           abstractions, so there is a utility in diving inside). *)
+    end
+  in
+
+  let env = obj#visit_env () env in
+  (* Check that we updated at least one loan *)
+  assert !r;
+  env
+
+(** Update a abstraction loan content.
+
+    The loan is referred to by a borrow id.
+
+    This is a helper function: it might break invariants.
+ *)
+let update_aloan (ek : exploration_kind) (l : V.BorrowId.id)
+    (nlc : V.aloan_content) (env : C.env) : C.env =
+  (* We use a reference to check that we update exactly one loan: when updating
+   * inside values, we check we don't update more than one loan. Then, upon
+   * returning we check that we updated at least once. *)
+  let r = ref false in
+  let update () : V.aloan_content =
+    assert (not !r);
+    r := true;
+    nlc
+  in
+
+  let obj =
+    object
+      inherit [_] C.map_env as super
+
+      method! visit_aloan_content env lc =
+        match lc with
+        | V.AMutLoan (bid, av) ->
+            if bid = l then update () else super#visit_AMutLoan env bid av
+        | V.ASharedLoan (bids, v, av) ->
+            if V.BorrowId.Set.mem l bids then update ()
+            else super#visit_ASharedLoan env bids v av
+        | V.AEndedMutLoan { given_back; child } ->
+            super#visit_AEndedMutLoan env given_back child
+        | V.AEndedSharedLoan (v, av) -> super#visit_AEndedSharedLoan env v av
+        | V.AIgnoredMutLoan (bid, av) -> super#visit_AIgnoredMutLoan env bid av
+        | V.AEndedIgnoredMutLoan { given_back; child } ->
+            super#visit_AEndedIgnoredMutLoan env given_back child
+        | V.AIgnoredSharedLoan asb -> super#visit_AIgnoredSharedLoan env asb
+
+      method! visit_abs env abs =
+        if ek.enter_abs then super#visit_abs env abs else abs
+      (** Note that once inside the abstractions, we don't control diving
+          (there are no use cases requiring finer control). *)
     end
   in
 
@@ -363,9 +408,10 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
    * inside values, we check we don't update more than one borrow. Then, upon
    * returning we check that we updated at least once. *)
   let r = ref false in
-  let set_ref () =
+  let update () : V.borrow_content =
     assert (not !r);
-    r := true
+    r := true;
+    nbc
   in
 
   let obj =
@@ -376,22 +422,15 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
         match bc with
         | V.MutBorrow (bid, mv) ->
             (* Check the id and control dive *)
-            if bid = l then (
-              set_ref ();
-              nbc)
+            if bid = l then update ()
             else if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
             else V.MutBorrow (bid, mv)
         | V.SharedBorrow bid ->
             (* Check the id *)
-            if bid = l then (
-              set_ref ();
-              nbc)
-            else super#visit_SharedBorrow env bid
+            if bid = l then update () else super#visit_SharedBorrow env bid
         | V.InactivatedMutBorrow bid ->
             (* Check the id *)
-            if bid = l then (
-              set_ref ();
-              nbc)
+            if bid = l then update ()
             else super#visit_InactivatedMutBorrow env bid
 
       method! visit_loan_content env lc =
@@ -403,6 +442,47 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
         | V.MutLoan bid ->
             (* Nothing specific to do *)
             super#visit_MutLoan env bid
+
+      method! visit_abs env abs =
+        if ek.enter_abs then super#visit_abs env abs else abs
+    end
+  in
+
+  let env = obj#visit_env () env in
+  (* Check that we updated at least one borrow *)
+  assert !r;
+  env
+
+(** Update an abstraction borrow content.
+
+    The borrow is referred to by a borrow id.
+
+    This is a helper function: it might break invariants.     
+ *)
+let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id)
+    (nbc : V.aborrow_content) (env : C.env) : C.env =
+  (* We use a reference to check that we update exactly one borrow: when updating
+   * inside values, we check we don't update more than one borrow. Then, upon
+   * returning we check that we updated at least once. *)
+  let r = ref false in
+  let update () : V.aborrow_content =
+    assert (not !r);
+    r := true;
+    nbc
+  in
+
+  let obj =
+    object
+      inherit [_] C.map_env as super
+
+      method! visit_aborrow_content env bc =
+        match bc with
+        | V.AMutBorrow (bid, av) ->
+            if bid = l then update () else super#visit_AMutBorrow env bid av
+        | V.ASharedBorrow bid ->
+            if bid = l then update () else super#visit_ASharedBorrow env bid
+        | V.AIgnoredMutBorrow av -> super#visit_AIgnoredMutBorrow env av
+        | V.AIgnoredSharedBorrow asb -> super#visit_AIgnoredSharedBorrow env asb
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs

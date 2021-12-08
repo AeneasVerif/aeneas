@@ -1,6 +1,10 @@
 open Identifiers
 open Types
 
+(* TODO: I often write "abstract" (value, borrow content, etc.) while I should
+ * write "abstraction" (because those values are not abstract, they simply are
+* inside abstractions) *)
+
 module VarId = IdGen ()
 
 module BorrowId = IdGen ()
