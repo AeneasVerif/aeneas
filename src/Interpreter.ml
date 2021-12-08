@@ -567,7 +567,7 @@ let give_back_shared_to_abs _config _bid _abs : V.abs =
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
     (v : V.typed_value) (env : C.env) : C.env =
-  let give_back_value_to_env_value ev : C.env_value =
+  let give_back_value_to_env_elem ev : C.env_elem =
     match ev with
     | C.Var (vid, destv) ->
         C.Var (vid, give_back_value_to_value config bid v destv)
@@ -576,7 +576,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
         C.Abs (give_back_value_to_abs config bid v abs)
     | C.Frame -> C.Frame
   in
-  List.map give_back_value_to_env_value env
+  List.map give_back_value_to_env_elem env
 
 (** Auxiliary function to end borrows.
     
@@ -588,7 +588,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     check must be independently done before.
  *)
 let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
-  let give_back_shared_to_env_value ev : C.env_value =
+  let give_back_shared_to_env_elem ev : C.env_elem =
     match ev with
     | C.Var (vid, destv) ->
         C.Var (vid, give_back_shared_to_value config bid destv)
@@ -597,7 +597,7 @@ let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
         C.Abs (give_back_shared_to_abs config bid abs)
     | C.Frame -> C.Frame
   in
-  List.map give_back_shared_to_env_value env
+  List.map give_back_shared_to_env_elem env
 
 (** When copying values, we duplicate the shared borrows. This is tantamount
     to reborrowing the shared value. The following function applies this change

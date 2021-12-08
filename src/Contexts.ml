@@ -12,13 +12,11 @@ type binder = {
 
 (** Environment value: mapping from variable to value, abstraction (only
     used in symbolic mode) or stack frame delimiter.
-    
-    TODO: rename? Environment element or something?
  *)
-type env_value = Var of binder * typed_value | Abs of abs | Frame
+type env_elem = Var of binder * typed_value | Abs of abs | Frame
 [@@deriving show]
 
-type env = env_value list [@@deriving show]
+type env = env_elem list [@@deriving show]
 
 type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 
@@ -156,7 +154,7 @@ class ['self] iter_frame_concrete =
   object (self : 'self)
     inherit [_] V.iter_typed_value
 
-    method visit_env_value_Var : 'acc -> binder -> typed_value -> unit =
+    method visit_env_elem_Var : 'acc -> binder -> typed_value -> unit =
       fun acc vid v -> self#visit_typed_value acc v
 
     method visit_env : 'acc -> env -> unit =
@@ -164,7 +162,7 @@ class ['self] iter_frame_concrete =
         match env with
         | [] -> ()
         | Var (vid, v) :: env ->
-            self#visit_env_value_Var acc vid v;
+            self#visit_env_elem_Var acc vid v;
             self#visit_env acc env
         | Abs _ :: _ -> failwith "Unexpected abstraction"
         | Frame :: _ -> (* We stop here *) ()
@@ -176,7 +174,7 @@ class ['self] iter_env_concrete =
   object (self : 'self)
     inherit [_] V.iter_typed_value
 
-    method visit_env_value_Var : 'acc -> binder -> typed_value -> unit =
+    method visit_env_elem_Var : 'acc -> binder -> typed_value -> unit =
       fun acc vid v -> self#visit_typed_value acc v
 
     method visit_env : 'acc -> env -> unit =
@@ -184,7 +182,7 @@ class ['self] iter_env_concrete =
         match env with
         | [] -> ()
         | Var (vid, v) :: env ->
-            self#visit_env_value_Var acc vid v;
+            self#visit_env_elem_Var acc vid v;
             self#visit_env acc env
         | Abs _ :: _ -> failwith "Unexpected abstraction"
         | Frame :: env -> self#visit_env acc env
@@ -195,7 +193,7 @@ class ['self] map_frame_concrete =
   object (self : 'self)
     inherit [_] V.map_typed_value
 
-    method visit_env_value_Var : 'acc -> binder -> typed_value -> env_value =
+    method visit_env_elem_Var : 'acc -> binder -> typed_value -> env_elem =
       fun acc vid v ->
         let v = self#visit_typed_value acc v in
         Var (vid, v)
@@ -205,7 +203,7 @@ class ['self] map_frame_concrete =
         match env with
         | [] -> []
         | Var (vid, v) :: env ->
-            let v = self#visit_env_value_Var acc vid v in
+            let v = self#visit_env_elem_Var acc vid v in
             let env = self#visit_env acc env in
             v :: env
         | Abs _ :: _ -> failwith "Unexpected abstraction"
@@ -218,7 +216,7 @@ class ['self] map_env_concrete =
   object (self : 'self)
     inherit [_] V.map_typed_value
 
-    method visit_env_value_Var : 'acc -> binder -> typed_value -> env_value =
+    method visit_env_elem_Var : 'acc -> binder -> typed_value -> env_elem =
       fun acc vid v ->
         let v = self#visit_typed_value acc v in
         Var (vid, v)
@@ -228,7 +226,7 @@ class ['self] map_env_concrete =
         match env with
         | [] -> []
         | Var (vid, v) :: env ->
-            let v = self#visit_env_value_Var acc vid v in
+            let v = self#visit_env_elem_Var acc vid v in
             let env = self#visit_env acc env in
             v :: env
         | Abs _ :: _ -> failwith "Unexpected abstraction"

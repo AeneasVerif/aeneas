@@ -424,8 +424,7 @@ module Contexts = struct
     | None -> PV.var_id_to_string bv.index
     | Some name -> name
 
-  let env_value_to_string (fmt : PV.value_formatter) (ev : C.env_value) : string
-      =
+  let env_elem_to_string (fmt : PV.value_formatter) (ev : C.env_elem) : string =
     match ev with
     | Var (var, tv) ->
         binder_to_string var ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
@@ -435,7 +434,7 @@ module Contexts = struct
   let env_to_string (fmt : PV.value_formatter) (env : C.env) : string =
     "{\n"
     ^ String.concat "\n"
-        (List.map (fun ev -> "  " ^ env_value_to_string fmt ev) env)
+        (List.map (fun ev -> "  " ^ env_elem_to_string fmt ev) env)
     ^ "\n}"
 
   type ctx_formatter = PV.value_formatter
