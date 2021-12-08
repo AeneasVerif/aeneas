@@ -80,7 +80,12 @@ class ['self] iter_'r_ty_base =
     - 'bc: borrow content
     - 'lc: loan content
 
-    Can be specialized for "regular" values or values in abstractions *)
+    Can be specialized for "regular" values or values in abstractions.
+
+    TODO: unfactorize value and avalue. Making them instanciations of `g_value`
+    creates more problems than solutions, in particular when dealing with
+    visitors (which we can't automatically generate).
+*)
 type ('r, 'sv, 'bc, 'lc) g_value =
   | Concrete of (constant_value[@opaque])  (** Concrete (non-symbolic) value *)
   | Adt of ('r, 'sv, 'bc, 'lc) g_adt_value
@@ -265,6 +270,8 @@ type abs = {
     type parameters (for instance the typed of `visit_'ty` was:
     `'env 'r_0 'r_1. 'env -> 'r_0 ty -> 'r_1 ty`, which prevented from
     initializing it as `fun ty -> ty`).
+
+    TODO: this is now useless...
 *)
 class virtual ['self] map_g_typed_value =
   object (self : 'self)
@@ -347,9 +354,57 @@ class virtual ['self] map_g_typed_value =
     method visit_ty : 'env 'r. 'env -> 'r ty -> 'r ty = fun _env ty -> ty
   end
 
+(** Map iterator for typed values.
+
+    Unfortunately, we can't rely on [map_g_typed_value]: polymorphic visitors
+    don't work in our case, because we sometimes have to reimplement methods
+    like `visit_Loan`. For instance, when implementing `update_borrow`, we
+    can't simply reimplement `visit_Borrow` because we need a method which
+    returns a value or a typed value.
+ *)
 class ['self] map_typed_value =
   object (self : 'self)
-    inherit [_] map_g_typed_value
+    inherit [_] VisitorsRuntime.map
+
+    method visit_Concrete : 'env -> constant_value -> value =
+      fun _env cv -> Concrete cv
+
+    method visit_Bottom : 'env -> value = fun _env -> Bottom
+
+    method visit_Borrow : 'env -> borrow_content -> value =
+      fun env bc -> Borrow (self#visit_borrow_content env bc)
+
+    method visit_Loan : 'env -> loan_content -> value =
+      fun env lc -> Loan (self#visit_loan_content env lc)
+
+    method visit_Symbolic : 'env -> symbolic_proj_comp -> value =
+      fun env sv -> Symbolic (self#visit_symbolic_proj_comp env sv)
+
+    method visit_value : 'env -> value -> value =
+      fun env v ->
+        match v with
+        | Concrete cv -> self#visit_Concrete env cv
+        | Adt av -> Adt (self#visit_adt_value env av)
+        | Bottom -> self#visit_Bottom env
+        | Borrow bc -> self#visit_Borrow env bc
+        | Loan lc -> self#visit_Loan env lc
+        | Symbolic sv -> self#visit_Symbolic env sv
+
+    method visit_adt_value : 'env -> adt_value -> adt_value =
+      fun env av ->
+        let variant_id = av.variant_id in
+        let field_values =
+          self#visit_list self#visit_typed_value env av.field_values
+        in
+        { variant_id; field_values }
+
+    method visit_typed_value : 'env -> typed_value -> typed_value =
+      fun env v ->
+        let value = self#visit_value env v.value in
+        let ty = self#visit_ety env v.ty in
+        { value; ty }
+
+    method visit_ety : 'env -> ety -> ety = fun _env ty -> ty
 
     method visit_symbolic_proj_comp
         : 'env -> symbolic_proj_comp -> symbolic_proj_comp =
@@ -388,21 +443,51 @@ class ['self] map_typed_value =
 
     method visit_MutLoan : 'env -> BorrowId.id -> loan_content =
       fun _env bid -> MutLoan bid
-
-    method visit_typed_value : 'env -> typed_value -> typed_value =
-      fun env v ->
-        self#visit_g_typed_value self#visit_symbolic_proj_comp
-          self#visit_borrow_content self#visit_loan_content env v
-
-    method visit_adt_value : 'env -> adt_value -> adt_value =
-      fun env v ->
-        self#visit_g_adt_value self#visit_symbolic_proj_comp
-          self#visit_borrow_content self#visit_loan_content env v
   end
 
 class ['self] map_typed_avalue =
   object (self : 'self)
     inherit [_] map_typed_value
+
+    method visit_a_Concrete : 'env -> constant_value -> avalue =
+      fun _env cv -> Concrete cv
+
+    method visit_a_Bottom : 'env -> avalue = fun _env -> Bottom
+
+    method visit_a_Borrow : 'env -> aborrow_content -> avalue =
+      fun env bc -> Borrow (self#visit_aborrow_content env bc)
+
+    method visit_a_Loan : 'env -> aloan_content -> avalue =
+      fun env lc -> Loan (self#visit_aloan_content env lc)
+
+    method visit_a_Symbolic : 'env -> aproj -> avalue =
+      fun env sv -> Symbolic (self#visit_aproj env sv)
+
+    method visit_avalue : 'env -> avalue -> avalue =
+      fun env v ->
+        match v with
+        | Concrete cv -> self#visit_a_Concrete env cv
+        | Adt av -> Adt (self#visit_aadt_value env av)
+        | Bottom -> self#visit_a_Bottom env
+        | Borrow bc -> self#visit_a_Borrow env bc
+        | Loan lc -> self#visit_a_Loan env lc
+        | Symbolic sv -> self#visit_a_Symbolic env sv
+
+    method visit_aadt_value : 'env -> aadt_value -> aadt_value =
+      fun env av ->
+        let variant_id = av.variant_id in
+        let field_values =
+          self#visit_list self#visit_typed_avalue env av.field_values
+        in
+        { variant_id; field_values }
+
+    method visit_typed_avalue : 'env -> typed_avalue -> typed_avalue =
+      fun env v ->
+        let value = self#visit_avalue env v.value in
+        let ty = self#visit_rty env v.ty in
+        { value; ty }
+
+    method visit_rty : 'env -> rty -> rty = fun _env ty -> ty
 
     method visit_aproj : 'env -> aproj -> aproj = fun _env sv -> sv
 
@@ -489,14 +574,4 @@ class ['self] map_typed_avalue =
     method visit_AIgnoredSharedLoan
         : 'env -> abstract_shared_borrows -> aloan_content =
       fun _env asb -> AIgnoredSharedLoan asb
-
-    method visit_typed_avalue : 'env -> typed_avalue -> typed_avalue =
-      fun env v ->
-        self#visit_g_typed_value self#visit_aproj self#visit_aborrow_content
-          self#visit_aloan_content env v
-
-    method visit_aadt_value : 'env -> aadt_value -> aadt_value =
-      fun env v ->
-        self#visit_g_adt_value self#visit_aproj self#visit_aborrow_content
-          self#visit_aloan_content env v
   end
