@@ -908,11 +908,15 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
            * we shouldn't need to end outer borrows if io=Inner, so we just
            * add the following assertion *)
           assert (io = Outer);
+          (* Note that we might get there with `allowed_abs <> None`: we might
+           * be trying to end a borrow inside an abstraction, but which is actually
+           * inside another borrow *)
           let allowed_abs' = None in
           let env = end_borrows_in_env config io allowed_abs' bids env in
           (* Retry to end the borrow *)
           end_borrow_in_env config io allowed_abs l env
       | OuterBorrows (Borrow bid) ->
+          (* See the comments for the previous case *)
           assert (io = Outer);
           let allowed_abs' = None in
           let env = end_borrow_in_env config io allowed_abs' bid env in
@@ -923,6 +927,7 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
            * loan is inside the same abstraction. If this is the case, we end
            * the borrow without ending the abstraction. If not, we need to
            * end the whole abstraction *)
+          (* Note that we can lookup the loan anywhere *)
           let ek =
             {
               enter_shared_loans = true;
@@ -939,16 +944,18 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
                 assert (Option.is_none (lookup_borrow_opt ek l env));
                 env)
               else
-                (* Not the same abstraction: we need to end the whole abstraction *)
+                (* Not the same abstraction: we need to end the whole abstraction.
+                 * By doing that we should have ended the target borrow (see the
+                 * below sanity check) *)
                 let env = end_abstraction_in_env config abs_id env in
-                (* Sanity check *)
+                (* Sanity check: we ended the target borrow *)
                 assert (Option.is_none (lookup_borrow_opt ek l env));
                 env
           | Var _, _ ->
               (* The loan is not inside the same abstraction (actually inside
                * a non-abstraction value): we need to end the whole abstraction *)
               let env = end_abstraction_in_env config abs_id env in
-              (* Sanity check *)
+              (* Sanity check: we ended the target borrow *)
               assert (Option.is_none (lookup_borrow_opt ek l env));
               env))
   | Ok (env, None) ->
