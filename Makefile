@@ -11,7 +11,7 @@ build-run:
 .PHONY: build-run-check-trace
 build-run-check-trace:
 	dune build src/main.exe && \
-	dune exec src/main.exe > tests/trace_current.txt && \
+	dune exec src/main.exe ../charon/charon/tests/test1.cfim > tests/trace_current.txt && \
 	cmp tests/trace_reference.txt tests/trace_current.txt && \
 	rm tests/trace_current.txt
 

@@ -8,13 +8,13 @@
     :standard
     -safe-string
     -g
-    -dsource
+    ;-dsource
     -warn-error -9-11-33-20-21-26-27-39
   ))
   (release (flags
     :standard
     -safe-string
     -g
-    -dsource
+    ;-dsource
     -warn-error -9-11-33-20-21-26-27-39
   )))
