@@ -174,7 +174,27 @@ fn test_neg1() {
   return
 }
 
-fn refs_test() {
+fn refs_test1() {
+  var@0 : ();
+  x : i32;
+  px : &'_ mut (i32);
+  ppx : &'_ mut (&'_ mut (i32));
+  var@4 : bool;
+  var@5 : bool;
+  var@6 : i32;
+
+  x := 0: i32
+  px := &mut x
+  ppx := &mut px
+  *(*(ppx)) := 1: i32
+  var@6 := copy x
+  var@5 := move var@6 == 1: i32
+  var@4 := ¬ move var@5
+  assert(¬move var@4)
+  return
+}
+
+fn refs_test2() {
   var@0 : ();
   x : i32;
   y : i32;
@@ -3684,7 +3704,485 @@ About to evaluate statement: y := -3: i32
 
 About to evaluate statement: return
 
-[[32mDebug[39m] test_unit_function: refs_test
+[[32mDebug[39m] test_unit_function: refs_test1
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⊥ : i32 ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: x := 0: i32
+px := &mut x
+ppx := &mut px
+*(*(ppx)) := 1: i32
+var@6 := copy x
+var@5 := move var@6 == 1: i32
+var@4 := ¬ move var@5
+assert(¬move var@4)
+return
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⊥ : i32 ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: x := 0: i32
+
+[[32mDebug[39m] eval_operand:
+- ctx:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⊥ : i32 ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+
+- op:
+0: i32
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 0: i32 ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: px := &mut x
+ppx := &mut px
+*(*(ppx)) := 1: i32
+var@6 := copy x
+var@5 := move var@6 == 1: i32
+var@4 := ¬ move var@5
+assert(¬move var@4)
+return
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 0: i32 ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: px := &mut x
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> &mut@0 (0: i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: ppx := &mut px
+*(*(ppx)) := 1: i32
+var@6 := copy x
+var@5 := move var@6 == 1: i32
+var@4 := ¬ move var@5
+assert(¬move var@4)
+return
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> &mut@0 (0: i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: ppx := &mut px
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (&mut@0 (0: i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: *(*(ppx)) := 1: i32
+var@6 := copy x
+var@5 := move var@6 == 1: i32
+var@4 := ¬ move var@5
+assert(¬move var@4)
+return
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (&mut@0 (0: i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: *(*(ppx)) := 1: i32
+
+[[32mDebug[39m] eval_operand:
+- ctx:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (&mut@0 (0: i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+
+- op:
+1: i32
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (&mut@0 (1: i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: var@6 := copy x
+var@5 := move var@6 == 1: i32
+var@4 := ¬ move var@5
+assert(¬move var@4)
+return
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (&mut@0 (1: i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: var@6 := copy x
+
+[[32mDebug[39m] eval_operand:
+- ctx:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (&mut@0 (1: i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+
+- op:
+copy x
+
+[[32mDebug[39m] end_borrow 0: context before:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> ⌊mut@0⌋ ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (&mut@0 (1: i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+[[32mDebug[39m] end_borrow 0: context after:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+[[32mDebug[39m] Value to copy:
+1: i32
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> 1: i32 ;
+}
+
+About to evaluate statement: var@5 := move var@6 == 1: i32
+var@4 := ¬ move var@5
+assert(¬move var@4)
+return
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> 1: i32 ;
+}
+
+About to evaluate statement: var@5 := move var@6 == 1: i32
+
+[[32mDebug[39m] eval_operand:
+- ctx:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> 1: i32 ;
+}
+
+
+- op:
+move var@6
+
+[[32mDebug[39m] Value to move:
+1: i32
+[[32mDebug[39m] eval_operand:
+- ctx:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+
+- op:
+1: i32
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> true ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: var@4 := ¬ move var@5
+assert(¬move var@4)
+return
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> true ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: var@4 := ¬ move var@5
+
+[[32mDebug[39m] eval_operand:
+- ctx:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> true ;
+  var@6 -> ⊥ : i32 ;
+}
+
+
+- op:
+move var@5
+
+[[32mDebug[39m] Value to move:
+true
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> false ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: assert(¬move var@4)
+return
+
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> false ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: assert(¬move var@4)
+
+[[32mDebug[39m] eval_operand:
+- ctx:
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> false ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+
+- op:
+move var@4
+
+[[32mDebug[39m] Value to move:
+false
+[[32mDebug[39m] 
+# 1 frame(s)
+
+# Frame 0:
+{
+  var@0 -> ⊥ : () ;
+  x -> 1: i32 ;
+  px -> ⌊mut@1⌋ ;
+  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  var@4 -> ⊥ : bool ;
+  var@5 -> ⊥ : bool ;
+  var@6 -> ⊥ : i32 ;
+}
+
+About to evaluate statement: return
+
+[[32mDebug[39m] test_unit_function: refs_test2
 [[32mDebug[39m] 
 # 1 frame(s)
 
