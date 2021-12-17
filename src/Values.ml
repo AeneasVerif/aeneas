@@ -242,7 +242,8 @@ and aloan_content =
     `AMutBorrow (_, AMutBorrow (_, ...)` (ignoring the types) really is
     to be seen like a `mut_borrow ... (mut_borrow ...)`.
     
-    TODO: be more precise about the ignored vlaues
+    TODO: be more precise about the ignored borrows (keep track of the borrow
+    ids)
 *)
 and aborrow_content =
   | AMutBorrow of (BorrowId.id[@opaque]) * typed_avalue
