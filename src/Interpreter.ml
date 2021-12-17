@@ -66,7 +66,7 @@ let borrow_in_asb (bid : V.BorrowId.id) (asb : V.abstract_shared_borrows) : bool
 
 (** TODO: move *)
 let remove_borrow_from_asb (bid : V.BorrowId.id)
-    (asb : V.abstract_shared_borrows) : bool =
+    (asb : V.abstract_shared_borrows) : V.abstract_shared_borrows =
   let removed = ref 0 in
   let asb =
     List.filter
@@ -680,7 +680,10 @@ let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
   let value : V.avalue =
     match (v.V.value, ty) with
     | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
-    | V.Adt v, T.Adt (id, regions, tys) -> raise Unimplemented
+    | V.Adt adt, T.Adt (id, regions, tys) ->
+        (* Retrieve the types of the fields *)
+        (* Explore the field values *)
+        raise Unimplemented
     | V.Bottom, _ -> failwith "Unreachable"
     | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
         if
@@ -848,7 +851,7 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
             V.ALoan (super#visit_AEndedIgnoredMutLoan outer given_back child)
         | V.AIgnoredSharedLoan asb ->
             (* Nothing special to do *)
-            ()
+            V.ALoan (super#visit_AIgnoredSharedLoan outer asb)
       (** We reimplement [visit_ALoan] because we may have to update the
           outer borrows *)
 
@@ -902,8 +905,8 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
               set_replaced_bc (Abstract bc);
               (* Update the value - note that we are necessarily in the second
                * of the two cases described above *)
-              let asb = removed_borrow_from_asb l asb in
-              V.AIgnoredSharedBorrow asb)
+              let asb = remove_borrow_from_asb l asb in
+              V.ABorrow (V.AIgnoredSharedBorrow asb))
             else
               (* Nothing special to do *)
               V.ABorrow (super#visit_AIgnoredSharedBorrow outer asb)
