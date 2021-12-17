@@ -241,6 +241,8 @@ and aloan_content =
     note independent of the parent avalues. For instance, a value
     `AMutBorrow (_, AMutBorrow (_, ...)` (ignoring the types) really is
     to be seen like a `mut_borrow ... (mut_borrow ...)`.
+    
+    TODO: be more precise about the ignored vlaues
 *)
 and aborrow_content =
   | AMutBorrow of (BorrowId.id[@opaque]) * typed_avalue

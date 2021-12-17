@@ -846,6 +846,18 @@ let give_back_shared_to_abs _config _bid _abs : V.abs =
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
     (v : V.typed_value) (env : C.env) : C.env =
+  (* TODO:
+     (* We use a reference to check that we updated exactly one borrow *)
+     let replaced : bool ref = ref false in
+     let set_replaced () =
+       assert (not !replaced);
+       replaced := true
+     in
+     let obj =
+       object
+         inherit [_] C.map_env
+       end
+        in*)
   let give_back_value_to_env_elem ev : C.env_elem =
     match ev with
     | C.Var (vid, destv) ->
