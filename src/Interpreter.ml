@@ -1082,7 +1082,13 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
           V.SharedLoan (bids', sv))
         else super#visit_SharedLoan env bids sv
 
-      method! visit_Abs _ _ = raise Unimplemented
+      method! visit_ASharedLoan env bids v av =
+        (* This case is similar to the [SharedLoan] case *)
+        if V.BorrowId.Set.mem original_bid bids then (
+          set_ref ();
+          let bids' = V.BorrowId.Set.add new_bid bids in
+          V.ASharedLoan (bids', v, av))
+        else super#visit_ASharedLoan env bids v av
     end
   in
 
