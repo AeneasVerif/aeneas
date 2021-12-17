@@ -972,26 +972,103 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
    * We might reimplement that in a more efficient manner by using maps. *)
   let reborrows = ref reborrows in
 
+  (* Check if a value is a mutable borrow, and return its identifier if
+     it is the case *)
+  let get_borrow_in_mut_borrow (v : V.typed_value) : V.BorrowId.id option =
+    match v.V.value with
+    | V.Borrow lc -> (
+        match lc with
+        | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> None
+        | V.MutBorrow (id, _) -> Some id)
+    | _ -> None
+  in
+
+  (* Add the proper reborrows to a set of borrow ids (for a shared loan) *)
+  let insert_reborrows bids =
+    (* Find the reborrows to apply *)
+    let insert, reborrows' =
+      List.partition (fun (bid, _) -> V.BorrowId.Set.mem bid bids) !reborrows
+    in
+    reborrows := reborrows';
+    let insert = List.map snd insert in
+    (* Insert the borrows *)
+    List.fold_left (fun bids bid -> V.BorrowId.Set.add bid bids) bids insert
+  in
+
+  (* Get the list of reborrows for a given borrow id *)
+  let get_reborrows_for_bid bid =
+    (* Find the reborrows to apply *)
+    let insert, reborrows' =
+      List.partition (fun (bid', _) -> bid' = bid) !reborrows
+    in
+    reborrows := reborrows';
+    List.map snd insert
+  in
+
+  let borrows_to_set bids =
+    List.fold_left
+      (fun bids bid -> V.BorrowId.Set.add bid bids)
+      V.BorrowId.Set.empty bids
+  in
+
+  let get_reborrows_for_asb (asb : V.abstract_shared_borrows) :
+      V.BorrowId.id list =
+    let get_reborrows_for_one (asb : V.abstract_shared_borrow) :
+        V.BorrowId.id list =
+      match asb with
+      | V.AsbBorrow bid -> get_reborrows_for_bid bid
+      | V.AsbProjReborrows (_, _) -> []
+    in
+    let insert = List.map get_reborrows_for_one asb in
+    List.concat insert
+  in
+
+  (* Insert reborrows for a given borrow id into a given set of borrows *)
+  let insert_reborrows_for_bid bids bid =
+    (* Find the reborrows to apply *)
+    let insert = get_reborrows_for_bid bid in
+    (* Insert the borrows *)
+    List.fold_left (fun bids bid -> V.BorrowId.Set.add bid bids) bids insert
+  in
+
   let obj =
     object
       inherit [_] C.map_eval_ctx as super
 
+      method! visit_typed_value env v =
+        match v.V.value with
+        | V.Borrow (V.MutBorrow (bid, bv)) ->
+            let insert = get_reborrows_for_bid bid in
+            let nbc = super#visit_MutBorrow env bid bv in
+            let nbc = { v with V.value = V.Borrow nbc } in
+            if insert = [] then (* No reborrows: do nothing special *)
+              nbc
+            else
+              (* There are reborrows: insert a shared loan *)
+              let insert = borrows_to_set insert in
+              let value = V.Loan (V.SharedLoan (insert, nbc)) in
+              let ty = v.V.ty in
+              { V.value; ty }
+        | _ -> super#visit_typed_value env v
+      (** We may need to reborrow mutable borrows. Note that this doesn't
+          happen for aborrows *)
+
       method! visit_loan_content env lc =
         match lc with
         | V.SharedLoan (bids, sv) ->
-            (* Retrieve the borrows to insert *)
-            let insert, reborrows' =
-              List.partition
-                (fun (bid, _) -> V.BorrowId.Set.mem bid bids)
-                !reborrows
-            in
-            reborrows := reborrows';
-            let insert = List.map snd insert in
-            (* Insert the borrows *)
+            (* Insert the reborrows *)
+            let bids = insert_reborrows bids in
+            (* Check if the contained value is a mutable borrow, in which
+             * case we might need to reborrow it by adding more borrow ids
+             * to the current set of borrows - by doing this small
+             * manipulation here, we accumulate the borrow ids in the same
+             * shared loan, right above the mutable borrow, and avoid
+             * stacking shared loans (note that doing this is not a problem
+             * from a soundness point of view, but it is a bit ugly...) *)
             let bids =
-              List.fold_left
-                (fun bids bid -> V.BorrowId.Set.add bid bids)
-                bids insert
+              match get_borrow_in_mut_borrow sv with
+              | None -> bids
+              | Some bid -> insert_reborrows_for_bid bids bid
             in
             (* Update and explore *)
             super#visit_SharedLoan env bids sv
@@ -1001,7 +1078,28 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
       (** We reimplement [visit_loan_content] (rather than one of the sub-
           functions) on purpose: exhaustive matches are good for maintenance *)
 
-      method! visit_aloan_content env lc = raise Unimplemented
+      method! visit_aloan_content env lc =
+        (* TODO: ashared_loan (amut_loan ) case *)
+        match lc with
+        | V.ASharedLoan (bids, v, av) ->
+            (* Insert the reborrows *)
+            let bids = insert_reborrows bids in
+            (* Update and explore *)
+            super#visit_ASharedLoan env bids v av
+        | V.AIgnoredSharedLoan asb ->
+            (* Insert the reborrows *)
+            let insert = get_reborrows_for_asb asb in
+            let insert = List.map (fun bid -> V.AsbBorrow bid) insert in
+            let asb = List.append insert asb in
+            (* Update and explore *)
+            super#visit_AIgnoredSharedLoan env asb
+        | V.AMutLoan (_, _)
+        | V.AEndedMutLoan { given_back = _; child = _ }
+        | V.AEndedSharedLoan (_, _)
+        | V.AIgnoredMutLoan (_, _)
+        | V.AEndedIgnoredMutLoan { given_back = _; child = _ } ->
+            (* Nothing particular to do *)
+            super#visit_aloan_content env lc
     end
   in
 
