@@ -16,6 +16,12 @@ module Types = struct
     | Some name -> name
     | None -> T.RegionVarId.to_string rv.index
 
+  let region_var_id_to_string (rid : T.RegionVarId.id) : string =
+    "rv@" ^ T.RegionVarId.to_string rid
+
+  let region_id_to_string (rid : T.RegionId.id) : string =
+    "r@" ^ T.RegionId.to_string rid
+
   let region_to_string (rid_to_string : 'rid -> string) (r : 'rid T.region) :
       string =
     match r with Static -> "'static" | Var rid -> rid_to_string rid
@@ -33,9 +39,11 @@ module Types = struct
     type_def_id_to_string : T.TypeDefId.id -> string;
   }
 
-  type etype_formatter = T.erased_region type_formatter
+  type stype_formatter = T.RegionVarId.id T.region type_formatter
 
-  type rtype_formatter = T.RegionVarId.id T.region type_formatter
+  type rtype_formatter = T.RegionId.id T.region type_formatter
+
+  type etype_formatter = T.erased_region type_formatter
 
   let integer_type_to_string = function
     | T.Isize -> "isize"
@@ -87,9 +95,14 @@ module Types = struct
     else if List.length regions + List.length types > 0 then "<" ^ params ^ ">"
     else ""
 
-  let rty_to_string fmt (ty : T.rty) : string = ty_to_string fmt ty
+  let sty_to_string (fmt : stype_formatter) (ty : T.sty) : string =
+    ty_to_string fmt ty
 
-  let ety_to_string fmt (ty : T.ety) : string = ty_to_string fmt ty
+  let rty_to_string (fmt : rtype_formatter) (ty : T.rty) : string =
+    ty_to_string fmt ty
+
+  let ety_to_string (fmt : etype_formatter) (ty : T.ety) : string =
+    ty_to_string fmt ty
 
   let field_to_string fmt (f : T.field) : string =
     f.field_name ^ " : " ^ ty_to_string fmt f.field_ty
@@ -148,7 +161,8 @@ module PT = Types (* local module *)
 (** Pretty-printing for values *)
 module Values = struct
   type value_formatter = {
-    r_to_string : T.RegionVarId.id -> string;
+    rvar_to_string : T.RegionVarId.id -> string;
+    r_to_string : T.RegionId.id -> string;
     type_var_id_to_string : T.TypeVarId.id -> string;
     type_def_id_to_string : T.TypeDefId.id -> string;
     adt_variant_to_string : T.TypeDefId.id -> T.VariantId.id -> string;
@@ -167,6 +181,13 @@ module Values = struct
   let value_to_rtype_formatter (fmt : value_formatter) : PT.rtype_formatter =
     {
       PT.r_to_string = PT.region_to_string fmt.r_to_string;
+      PT.type_var_id_to_string = fmt.type_var_id_to_string;
+      PT.type_def_id_to_string = fmt.type_def_id_to_string;
+    }
+
+  let value_to_stype_formatter (fmt : value_formatter) : PT.stype_formatter =
+    {
+      PT.r_to_string = PT.region_to_string fmt.rvar_to_string;
       PT.type_var_id_to_string = fmt.type_var_id_to_string;
       PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
@@ -191,14 +212,11 @@ module Values = struct
 
   let symbolic_value_to_string (fmt : PT.rtype_formatter)
       (sv : V.symbolic_value) : string =
-    symbolic_value_id_to_string sv.sv_id ^ " : " ^ PT.ty_to_string fmt sv.sv_ty
-
-  let region_id_to_string (rid : V.RegionId.id) : string =
-    "r@" ^ V.RegionId.to_string rid
+    symbolic_value_id_to_string sv.sv_id ^ " : " ^ PT.rty_to_string fmt sv.sv_ty
 
   let symbolic_proj_comp_to_string (fmt : PT.rtype_formatter)
       (sp : V.symbolic_proj_comp) : string =
-    let regions = V.RegionId.set_to_string sp.rset_ended in
+    let regions = T.RegionId.set_to_string sp.rset_ended in
     "proj_comp " ^ regions ^ " (" ^ symbolic_value_to_string fmt sp.svalue ^ ")"
 
   let symbolic_value_proj_to_string (fmt : value_formatter)
@@ -411,7 +429,7 @@ module Values = struct
     ^ "{parents="
     ^ V.AbstractionId.set_to_string abs.parents
     ^ "}" ^ "{regions="
-    ^ V.RegionId.set_to_string abs.regions
+    ^ T.RegionId.set_to_string abs.regions
     ^ "}" ^ " {\n" ^ avs ^ "\n}"
 end
 
@@ -465,8 +483,10 @@ module Contexts = struct
     Some fields
 
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
-    (* We shouldn't use r_to_string *)
-    let r_to_string _ = failwith "Unexpected use of r_to_string" in
+    (* We shouldn't use rvar_to_string *)
+    let rvar_to_string r = failwith "Unexpected use of rvar_to_string" in
+    let r_to_string r = PT.region_id_to_string r in
+
     let type_var_id_to_string vid =
       let v = C.lookup_type_var ctx vid in
       v.name
@@ -484,6 +504,7 @@ module Contexts = struct
     in
     let adt_field_names = type_ctx_to_adt_field_names_fun ctx.C.type_context in
     {
+      rvar_to_string;
       r_to_string;
       type_var_id_to_string;
       type_def_id_to_string;
@@ -527,7 +548,8 @@ module PC = Contexts (* local module *)
 (** Pretty-printing for contexts (generic functions) *)
 module CfimAst = struct
   type ast_formatter = {
-    r_to_string : T.RegionVarId.id -> string;
+    rvar_to_string : T.RegionVarId.id -> string;
+    r_to_string : T.RegionId.id -> string;
     type_var_id_to_string : T.TypeVarId.id -> string;
     type_def_id_to_string : T.TypeDefId.id -> string;
     adt_variant_to_string : T.TypeDefId.id -> T.VariantId.id -> string;
@@ -541,6 +563,7 @@ module CfimAst = struct
 
   let ast_to_ctx_formatter (fmt : ast_formatter) : PC.ctx_formatter =
     {
+      PV.rvar_to_string = fmt.rvar_to_string;
       PV.r_to_string = fmt.r_to_string;
       PV.type_var_id_to_string = fmt.type_var_id_to_string;
       PV.type_def_id_to_string = fmt.type_def_id_to_string;
@@ -563,6 +586,13 @@ module CfimAst = struct
       PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
+  let ast_to_stype_formatter (fmt : ast_formatter) : PT.stype_formatter =
+    {
+      PT.r_to_string = PT.region_to_string fmt.rvar_to_string;
+      PT.type_var_id_to_string = fmt.type_var_id_to_string;
+      PT.type_def_id_to_string = fmt.type_def_id_to_string;
+    }
+
   let type_ctx_to_adt_field_to_string_fun (ctx : T.type_def list) :
       T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string =
    fun def_id opt_variant_id field_id ->
@@ -581,6 +611,7 @@ module CfimAst = struct
       PT.name_to_string def.name
     in
     {
+      rvar_to_string = ctx_fmt.PV.rvar_to_string;
       r_to_string = ctx_fmt.PV.r_to_string;
       type_var_id_to_string = ctx_fmt.PV.type_var_id_to_string;
       type_def_id_to_string = ctx_fmt.PV.type_def_id_to_string;
@@ -790,6 +821,8 @@ module CfimAst = struct
       (indent_incr : string) (def : A.fun_def) : string =
     let rty_fmt = ast_to_rtype_formatter fmt in
     let rty_to_string = PT.rty_to_string rty_fmt in
+    let sty_fmt = ast_to_stype_formatter fmt in
+    let sty_to_string = PT.sty_to_string sty_fmt in
     let ety_fmt = ast_to_etype_formatter fmt in
     let ety_to_string = PT.ety_to_string ety_fmt in
     let sg = def.signature in
@@ -814,7 +847,7 @@ module CfimAst = struct
     let args = List.combine inputs sg.inputs in
     let args =
       List.map
-        (fun (var, rty) -> var_to_string var ^ " : " ^ rty_to_string rty)
+        (fun (var, rty) -> var_to_string var ^ " : " ^ sty_to_string rty)
         args
     in
     let args = String.concat ", " args in
@@ -822,7 +855,7 @@ module CfimAst = struct
     (* Return type *)
     let ret_ty = sg.output in
     let ret_ty =
-      if TU.ty_is_unit ret_ty then "" else " -> " ^ rty_to_string ret_ty
+      if TU.ty_is_unit ret_ty then "" else " -> " ^ sty_to_string ret_ty
     in
 
     (* All the locals (with erased regions) *)
@@ -863,9 +896,13 @@ module Module = struct
       with the variables local to a function's definition *)
   let def_ctx_to_ast_formatter (type_context : T.type_def list)
       (fun_context : A.fun_def list) (def : A.fun_def) : PA.ast_formatter =
-    let r_to_string vid =
+    let rvar_to_string vid =
       let var = T.RegionVarId.nth def.signature.region_params vid in
       PT.region_var_to_string var
+    in
+    let r_to_string vid =
+      (* TODO: we might want something more informative *)
+      PT.region_id_to_string vid
     in
     let type_var_id_to_string vid =
       let var = T.TypeVarId.nth def.signature.type_params vid in
@@ -891,6 +928,7 @@ module Module = struct
     in
     let adt_field_names = PC.type_ctx_to_adt_field_names_fun type_context in
     {
+      rvar_to_string;
       r_to_string;
       type_var_id_to_string;
       type_def_id_to_string;

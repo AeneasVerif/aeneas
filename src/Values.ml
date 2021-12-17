@@ -13,8 +13,6 @@ module SymbolicValueId = IdGen ()
 
 module AbstractionId = IdGen ()
 
-module RegionId = IdGen ()
-
 (** A variable *)
 
 type big_int = Z.t

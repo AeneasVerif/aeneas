@@ -9,6 +9,10 @@ module VariantId = IdGen ()
 module FieldId = IdGen ()
 
 module RegionVarId = IdGen ()
+(** Region variable ids. Used in function signatures. *)
+
+module RegionId = IdGen ()
+(** Region ids. Used for symbolic executions. *)
 
 type ('id, 'name) indexed_var = {
   index : 'id;  (** Unique index identifying the variable *)
@@ -79,10 +83,16 @@ type 'r ty =
 [@@deriving show]
 (* TODO: group Bool, Char, etc. in Constant *)
 
-type rty = RegionVarId.id region ty [@@deriving show]
-(** Type with *R*egions.
+type sty = RegionVarId.id region ty [@@deriving show]
+(** *S*ignature types.
 
     Used in function signatures and type definitions.
+ *)
+
+type rty = RegionId.id region ty [@@deriving show]
+(** Type with *R*egions.
+
+    Used during symbolic execution.
  *)
 
 type ety = erased_region ty [@@deriving show]
@@ -91,7 +101,7 @@ type ety = erased_region ty [@@deriving show]
     Used in function bodies, "general" value types, etc.
  *)
 
-type field = { field_name : string; field_ty : rty } [@@deriving show]
+type field = { field_name : string; field_ty : sty } [@@deriving show]
 
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 

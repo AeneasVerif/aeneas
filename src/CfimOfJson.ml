@@ -124,8 +124,8 @@ let rec ty_of_json (r_of_json : json -> ('r, string) result) (js : json) :
         Ok (T.Ref (region, ty, ref_kind))
     | _ -> Error "")
 
-let rty_of_json (js : json) : (T.rty, string) result =
-  combine_error_msgs js "rty_of_json" (ty_of_json region_of_json js)
+let sty_of_json (js : json) : (T.sty, string) result =
+  combine_error_msgs js "sty_of_json" (ty_of_json region_of_json js)
 
 let ety_of_json (js : json) : (T.ety, string) result =
   combine_error_msgs js "ety_of_json" (ty_of_json erased_region_of_json js)
@@ -135,7 +135,7 @@ let field_of_json (js : json) : (T.field, string) result =
     (match js with
     | `Assoc [ ("name", name); ("ty", ty) ] ->
         let* name = string_of_json name in
-        let* ty = rty_of_json ty in
+        let* ty = sty_of_json ty in
         Ok { T.field_name = name; field_ty = ty }
     | _ -> Error "")
 
@@ -450,8 +450,8 @@ let fun_sig_of_json (js : json) : (A.fun_sig, string) result =
         let* region_params = list_of_json region_var_of_json region_params in
         let* num_early_bound_regions = int_of_json num_early_bound_regions in
         let* type_params = list_of_json type_var_of_json type_params in
-        let* inputs = list_of_json rty_of_json inputs in
-        let* output = rty_of_json output in
+        let* inputs = list_of_json sty_of_json inputs in
+        let* output = sty_of_json output in
         Ok
           {
             A.region_params;

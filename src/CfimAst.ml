@@ -28,8 +28,8 @@ type fun_sig = {
   region_params : region_var list;
   num_early_bound_regions : int;
   type_params : type_var list;
-  inputs : rty list;
-  output : rty;
+  inputs : sty list;
+  output : sty;
 }
 [@@deriving show]
 

@@ -584,8 +584,12 @@ exception FoundOuter of outer_borrows_or_abs
     Note that the two abstractions have different views (in terms of regions)
     of the symbolic value (hence the two region types).
 *)
-let projections_intersect (ty1 : T.rty) (rset1 : V.RegionId.set_t) (ty2 : T.rty)
-    (rset2 : V.RegionId.set_t) : bool =
+let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
+    (ty2 : T.rty) (rset2 : T.RegionId.set_t) : bool =
+  let region_in_set (r : T.RegionId.id T.region) (rset : T.RegionId.set_t) :
+      bool =
+    match r with T.Static -> false | T.Var id -> T.RegionId.Set.mem id rset
+  in
   match (ty1, ty2) with
   | T.Bool, T.Bool | T.Char, T.Char | T.Str, T.Str -> false
   | T.Integer int_ty1, T.Integer int_ty2 ->
@@ -603,8 +607,7 @@ let projections_intersect (ty1 : T.rty) (rset1 : V.RegionId.set_t) (ty2 : T.rty)
       let regions = List.combine regions1 regions2 in
       let tys = List.combine tys1 tys2 in
       List.exists
-        (fun (r1, r2) ->
-          V.RegionId.Set.mem r1 rset1 && V.RegionId.Set.mem r2 rset2)
+        (fun (r1, r2) -> region_in_set r1 rset1 && region_in_set r2 rset2)
         regions
       || List.exists
            (fun (ty1, ty2) -> projections_intersect ty1 rset1 ty2 rset2)
@@ -616,7 +619,7 @@ let projections_intersect (ty1 : T.rty) (rset1 : V.RegionId.set_t) (ty2 : T.rty)
       assert (kind1 = kind2);
       (* The projections intersect if the borrows intersect or their contents
        * intersect *)
-      (V.RegionId.Set.mem r1 rset1 && V.RegionId.Set.mem r2 rset2)
+      (region_in_set r1 rset1 && region_in_set r2 rset2)
       || projections_intersect ty1 rset1 ty2 rset2
   | _ -> failwith "Unreachable"
 
@@ -628,7 +631,7 @@ let projections_intersect (ty1 : T.rty) (rset1 : V.RegionId.set_t) (ty2 : T.rty)
       map borrows to regions - or to interpret the borrows as belonging
       to some regions...)
 *)
-let apply_proj_borrows (regions : V.RegionId.set_t) (v : V.typed_value)
+let apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
     (ty : T.rty) : V.typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
