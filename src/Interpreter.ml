@@ -663,9 +663,48 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
               let outer_borrows = update_outer_borrows io outer (Borrow l') in
               V.Borrow (super#visit_MutBorrow outer l' bv)
 
-      method! visit_ALoan outer bc = raise Unimplemented
+      method! visit_ALoan outer lc =
+        (* Note that the children avalues are just other, independent loans,
+         * so we don't need to update the outer borrows when diving in.
+         * We keep track of the parents/children relationship only because we
+         * need it to properly instantiate the backward functions when generating
+         * the pure translation. *)
+        match lc with
+        | V.AMutLoan (bid, av) ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AMutLoan outer bid av)
+        | V.ASharedLoan (bids, v, av) ->
+            (* Explore the shared value - we need to update the outer borrows *)
+            let souter = update_outer_borrows io outer (Borrows bids) in
+            let v = super#visit_typed_value souter v in
+            (* Explore the child avalue - we keep the same outer borrows *)
+            let av = super#visit_typed_avalue outer av in
+            (* Reconstruct *)
+            V.ALoan (V.ASharedLoan (bids, v, av))
+        | V.AEndedMutLoan { given_back; child } ->
+            (* The loan has ended, so no need to update the outer borrows *)
+            V.ALoan (super#visit_AEndedMutLoan outer given_back child)
+        | V.AEndedSharedLoan (v, av) ->
+            (* The loan has ended, so no need to update the outer borrows *)
+            V.ALoan (super#visit_AEndedSharedLoan outer v av)
+        | V.AIgnoredMutLoan (bid, av) ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AIgnoredMutLoan outer bid av)
+        | V.AEndedIgnoredMutLoan { given_back; child } ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AEndedIgnoredMutLoan outer given_back child)
+        | V.AIgnoredSharedLoan asb ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AIgnoredSharedLoan outer asb)
+      (** We reimplement [visit_ALoan] because we may have to update the
+          outer borrows *)
 
-      method! visit_ABorrow outer bc = raise Unimplemented
+      method! visit_ABorrow outer bc =
+        match bc with
+        | V.AMutBorrow (bid, av) -> raise Unimplemented
+        | V.ASharedBorrow bid -> raise Unimplemented
+        | V.AIgnoredMutBorrow av -> raise Unimplemented
+        | V.AIgnoredSharedBorrow asb -> raise Unimplemented
 
       method! visit_abs outer abs =
         (* Update the outer abs *)

@@ -216,6 +216,14 @@ and adt_avalue = {
   field_values : typed_avalue list;
 }
 
+(** A loan content as stored in an abstraction.
+
+    Note that the children avalues are independent of the parent avalues.
+    For instance, the child avalue contained in an [AMutLoan] will likely
+    contain other, independent loans. We keep track of the hierarchy because
+    we need it to properly instantiate the backward functions when generating
+    the pure translation.
+*)
 and aloan_content =
   | AMutLoan of (BorrowId.id[@opaque]) * typed_avalue
   | ASharedLoan of (BorrowId.set_t[@opaque]) * typed_value * typed_avalue
@@ -227,7 +235,13 @@ and aloan_content =
 
 (** Note that when a borrow content is ended, it is replaced by Bottom (while
     we need to track ended loans more precisely, especially because of their
-    children values) *)
+    children values).
+    
+    Note that contrary to [aloan_content], here the children avalues are
+    note independent of the parent avalues. For instance, a value
+    `AMutBorrow (_, AMutBorrow (_, ...)` (ignoring the types) really is
+    to be seen like a `mut_borrow ... (mut_borrow ...)`.
+*)
 and aborrow_content =
   | AMutBorrow of (BorrowId.id[@opaque]) * typed_avalue
   | ASharedBorrow of (BorrowId.id[@opaque])
