@@ -149,12 +149,24 @@ and typed_value = { value : value; ty : ety }
       }]
 (** "Regular" typed value (we map variables to typed values) *)
 
-type abstract_shared_borrows =
-  | AsbSet of BorrowId.set_t
-  | AsbProjReborrows of symbolic_value * rty
-  | AsbUnion of abstract_shared_borrows * abstract_shared_borrows
-      (** TODO: explanations *)
+(** When giving shared borrows to functions (i.e., inserting shared borrows inside
+    abstractions) we need to reborrow the shared values. When doing so, we lookup
+    the shared values and apply some special projections to the shared value
+    (until we can't go further, i.e., we find symbolic values which may get
+    expanded upon reading them later), which don't generate avalues but
+    sets of borrow ids and symbolic values.
+    
+    Note that as shared values can't get modified it is ok to forget the
+    structure of the values we projected, and only keep the set of borrows
+    (and symbolic values).
+*)
+type abstract_shared_borrow =
+  | AsbBorrow of (BorrowId.id[@opaque])
+  | AsbProjReborrows of (symbolic_value[@opaque]) * (rty[@opaque])
 [@@deriving show]
+
+type abstract_shared_borrows = abstract_shared_borrow list
+(** A set of abstract shared borrows *)
 
 type aproj =
   | AProjLoans of symbolic_value
@@ -172,10 +184,6 @@ class ['self] iter_typed_avalue_base =
 
     method visit_aproj : 'env -> aproj -> unit = fun _ _ -> ()
 
-    method visit_abstract_shared_borrows
-        : 'env -> abstract_shared_borrows -> unit =
-      fun _ _ -> ()
-
     method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
   end
 
@@ -187,10 +195,6 @@ class ['self] map_typed_avalue_base =
     method visit_region : 'env -> region -> region = fun _ r -> r
 
     method visit_aproj : 'env -> aproj -> aproj = fun _ p -> p
-
-    method visit_abstract_shared_borrows
-        : 'env -> abstract_shared_borrows -> abstract_shared_borrows =
-      fun _ asb -> asb
 
     method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
   end
@@ -247,7 +251,8 @@ and aloan_content =
   | AEndedSharedLoan of typed_value * typed_avalue
   | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
-  | AIgnoredSharedLoan of abstract_shared_borrows
+  | AIgnoredSharedLoan of (abstract_shared_borrows[@opaque])
+      (** TODO: remove this one? *)
 
 (** Note that when a borrow content is ended, it is replaced by Bottom (while
     we need to track ended loans more precisely, especially because of their
@@ -265,7 +270,7 @@ and aborrow_content =
   | AMutBorrow of (BorrowId.id[@opaque]) * typed_avalue
   | ASharedBorrow of (BorrowId.id[@opaque])
   | AIgnoredMutBorrow of typed_avalue
-  | AIgnoredSharedBorrow of abstract_shared_borrows
+  | AIgnoredSharedBorrow of (abstract_shared_borrows[@opaque])
 
 (* TODO: we may want to merge this with typed_value - would prevent some issues
    when accessing fields... *)

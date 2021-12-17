@@ -673,9 +673,8 @@ let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
                 let bv = apply_proj_borrows regions bv ref_ty in
                 V.AIgnoredMutBorrow bv
             | V.SharedBorrow bid, T.Shared ->
-                (* TODO *)
+                (* TODO: we need the context to lookup the value *)
                 raise Unimplemented
-            (*              V.AIgnoredSharedBorrow bid*)
             | V.InactivatedMutBorrow _, _ ->
                 failwith
                   "Can't apply a proj_borrow over an inactivated mutable borrow"

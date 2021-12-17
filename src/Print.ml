@@ -297,16 +297,18 @@ module Values = struct
         "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
     | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
-  let rec abstract_shared_borrows_to_string (fmt : value_formatter)
-      (abs : V.abstract_shared_borrows) : string =
+  let rec abstract_shared_borrow_to_string (fmt : value_formatter)
+      (abs : V.abstract_shared_borrow) : string =
     match abs with
-    | AsbSet bs -> V.BorrowId.set_to_string bs
+    | AsbBorrow bid -> V.BorrowId.to_string bid
     | AsbProjReborrows (sv, rty) ->
         "{" ^ symbolic_value_proj_to_string fmt sv rty ^ "}"
-    | AsbUnion (asb1, asb2) ->
-        abstract_shared_borrows_to_string fmt asb1
-        ^ " U "
-        ^ abstract_shared_borrows_to_string fmt asb2
+
+  let rec abstract_shared_borrows_to_string (fmt : value_formatter)
+      (abs : V.abstract_shared_borrows) : string =
+    "{"
+    ^ String.concat "," (List.map (abstract_shared_borrow_to_string fmt) abs)
+    ^ "}"
 
   let aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
     match pv with
