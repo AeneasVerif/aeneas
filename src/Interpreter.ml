@@ -669,13 +669,18 @@ let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
     - [ty]: the type with regions which we use for the projection (to
       map borrows to regions - or to interpret the borrows as belonging
       to some regions...)
-
-    TODO: we might want to take as parameter a list of definitions rather
-    than a context ([apply_proj_borrows] is called in a map visitor which
-    operates over a context...)
+    
+    Also, when applying projections on shared values, we need to apply
+    reborrows. This is a bit annoying because, with the way we compute
+    the projection on borrows, we can't update the context immediately.
+    Instead, we remember the list of borrows we have to insert in the
+    context *afterwards*.
+    TODO: implement this.
 *)
-let rec apply_proj_borrows (ctx : C.eval_ctx) (regions : T.RegionId.set_t)
-    (v : V.typed_value) (ty : T.rty) : V.typed_avalue =
+let rec apply_proj_borrows (ctx : C.eval_ctx)
+    (reborrows : (V.BorrowId.id * V.BorrowId.id) list ref)
+    (regions : T.RegionId.set_t) (v : V.typed_value) (ty : T.rty) :
+    V.typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
@@ -706,7 +711,7 @@ let rec apply_proj_borrows (ctx : C.eval_ctx) (regions : T.RegionId.set_t)
         let fields_types = List.combine adt.V.field_values field_types in
         let proj_fields =
           List.map
-            (fun (fv, fty) -> apply_proj_borrows ctx regions fv fty)
+            (fun (fv, fty) -> apply_proj_borrows ctx reborrows regions fv fty)
             fields_types
         in
         V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
@@ -722,7 +727,7 @@ let rec apply_proj_borrows (ctx : C.eval_ctx) (regions : T.RegionId.set_t)
             match (bc, kind) with
             | V.MutBorrow (bid, bv), T.Mut ->
                 (* Apply the projection on the borrowed value *)
-                let bv = apply_proj_borrows ctx regions bv ref_ty in
+                let bv = apply_proj_borrows ctx reborrows regions bv ref_ty in
                 V.AMutBorrow (bid, bv)
             | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
             | V.InactivatedMutBorrow _, _ ->
@@ -737,7 +742,7 @@ let rec apply_proj_borrows (ctx : C.eval_ctx) (regions : T.RegionId.set_t)
             match (bc, kind) with
             | V.MutBorrow (bid, bv), T.Mut ->
                 (* Apply the projection on the borrowed value *)
-                let bv = apply_proj_borrows ctx regions bv ref_ty in
+                let bv = apply_proj_borrows ctx reborrows regions bv ref_ty in
                 V.AIgnoredMutBorrow bv
             | V.SharedBorrow bid, T.Shared ->
                 (* TODO: we need the context to lookup the value *)
@@ -953,6 +958,60 @@ let end_borrow_get_borrow (io : inner_outer)
     Ok (ctx, !replaced_bc)
   with FoundOuter outers -> Error outers
 
+(** Auxiliary function. See [give_back_value].
+
+    Apply reborrows to a context.
+
+    The [reborrows] input is a list of pairs (shared loan id, id to insert in the shared loan).
+*)
+let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* This is a bit brutal, but whenever we insert a reborrow, we remove
+   * it from the list. This allows us to check that all the reborrows were
+   * applied before returning.
+   * We might reimplement that in a more efficient manner by using maps. *)
+  let reborrows = ref reborrows in
+
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_loan_content env lc =
+        match lc with
+        | V.SharedLoan (bids, sv) ->
+            (* Retrieve the borrows to insert *)
+            let insert, reborrows' =
+              List.partition
+                (fun (bid, _) -> V.BorrowId.Set.mem bid bids)
+                !reborrows
+            in
+            reborrows := reborrows';
+            let insert = List.map snd insert in
+            (* Insert the borrows *)
+            let bids =
+              List.fold_left
+                (fun bids bid -> V.BorrowId.Set.add bid bids)
+                bids insert
+            in
+            (* Update and explore *)
+            super#visit_SharedLoan env bids sv
+        | V.MutLoan bid ->
+            (* Nothing special to do *)
+            super#visit_MutLoan env bid
+      (** We reimplement [visit_loan_content] (rather than one of the sub-
+          functions) on purpose: exhaustive matches are good for maintenance *)
+
+      method! visit_aloan_content env lc = raise Unimplemented
+    end
+  in
+
+  (* Visit *)
+  let ctx = obj#visit_eval_ctx () ctx in
+  (* Check that there are no reborrows remaining *)
+  assert (!reborrows = []);
+  (* Return *)
+  ctx
+
 (** Auxiliary function to end borrows. See [give_back_in_env].
     
     When we end a mutable borrow, we need to "give back" the value it contained
@@ -970,6 +1029,9 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     assert (not !replaced);
     replaced := true
   in
+  (* We sometimes need to reborrow values while giving a value back due *)
+  let reborrows : (V.BorrowId.id * V.BorrowId.id) list ref = ref [] in
+
   let obj =
     object (self)
       inherit [_] C.map_eval_ctx as super
@@ -1016,7 +1078,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Register the insertion *)
               set_replaced ();
               (* Apply the projection *)
-              let given_back = apply_proj_borrows ctx regions nv ty in
+              let given_back = apply_proj_borrows ctx reborrows regions nv ty in
               (* Return the new value *)
               V.ALoan (V.AEndedMutLoan { given_back; child }))
             else
@@ -1039,7 +1101,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * mut loan. Also, this is not the loan we are looking for *per se*:
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call [set_replaced]) *)
-              let given_back = apply_proj_borrows ctx regions nv ty in
+              let given_back = apply_proj_borrows ctx reborrows regions nv ty in
               V.ALoan (V.AEndedIgnoredMutLoan { given_back; child })
             else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
@@ -1064,6 +1126,15 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
   assert !replaced;
+  (* Apply the reborrows *)
+  let ctx =
+    match config.C.mode with
+    | C.ConcreteMode ->
+        (* Reborrows are introduced when applying projections in symbolic mode *)
+        assert (!reborrows = []);
+        ctx
+    | C.SymbolicMode -> apply_reborrows !reborrows ctx
+  in
   (* Return *)
   ctx
 
