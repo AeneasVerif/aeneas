@@ -159,6 +159,9 @@ and typed_value = { value : value; ty : ety }
     Note that as shared values can't get modified it is ok to forget the
     structure of the values we projected, and only keep the set of borrows
     (and symbolic values).
+    
+    TODO: we may actually need to remember the structure, in order to know
+    which borrows are inside which other borrows...
 *)
 type abstract_shared_borrow =
   | AsbBorrow of (BorrowId.id[@opaque])
