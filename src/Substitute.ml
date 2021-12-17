@@ -92,6 +92,27 @@ let ctx_adt_get_instantiated_field_rtypes (ctx : C.eval_ctx)
   let def = C.ctx_lookup_type_def ctx def_id in
   type_def_get_instantiated_field_rtypes def opt_variant_id regions types
 
+(** Return the types of the properly instantiated ADT value (note that
+    here, ADT is understood in its broad meaning: ADT, assumed value or tuple) *)
+let ctx_adt_value_get_instantiated_field_rtypes (ctx : C.eval_ctx)
+    (adt : V.adt_value) (id : T.type_id)
+    (region_params : T.RegionId.id T.region list) (type_params : T.rty list) :
+    T.rty list =
+  match id with
+  | T.AdtId id ->
+      (* Retrieve the types of the fields *)
+      ctx_adt_get_instantiated_field_rtypes ctx id adt.V.variant_id
+        region_params type_params
+  | T.Tuple ->
+      assert (List.length region_params = 0);
+      type_params
+  | T.Assumed aty -> (
+      match aty with
+      | T.Box ->
+          assert (List.length region_params = 0);
+          assert (List.length type_params = 1);
+          type_params)
+
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)
 let type_def_get_instantiated_field_etypes (def : T.type_def)
