@@ -192,17 +192,17 @@ class ['self] iter_frame =
     inherit [_] V.iter_abs
 
     (* TODO: remove "env_elem" from the name *)
-    method visit_env_elem_Var : 'acc -> binder -> typed_value -> unit =
+    method visit_Var : 'acc -> binder -> typed_value -> unit =
       fun acc vid v -> self#visit_typed_value acc v
 
-    method visit_env_elem_Abs : 'acc -> abs -> unit =
+    method visit_Abs : 'acc -> abs -> unit =
       fun acc abs -> self#visit_abs acc abs
 
     method visit_env_elem : 'acc -> env_elem -> unit =
       fun acc em ->
         match em with
-        | Var (vid, v) -> self#visit_env_elem_Var acc vid v
-        | Abs abs -> self#visit_env_elem_Abs acc abs
+        | Var (vid, v) -> self#visit_Var acc vid v
+        | Abs abs -> self#visit_Abs acc abs
         | Frame -> failwith "Unreachable"
 
     method visit_env : 'acc -> env -> unit =
@@ -220,19 +220,19 @@ class ['self] map_frame_concrete =
   object (self : 'self)
     inherit [_] V.map_abs
 
-    method visit_env_elem_Var : 'acc -> binder -> typed_value -> env_elem =
+    method visit_Var : 'acc -> binder -> typed_value -> env_elem =
       fun acc vid v ->
         let v = self#visit_typed_value acc v in
         Var (vid, v)
 
-    method visit_env_elem_Abs : 'acc -> abs -> env_elem =
+    method visit_Abs : 'acc -> abs -> env_elem =
       fun acc abs -> Abs (self#visit_abs acc abs)
 
     method visit_env_elem : 'acc -> env_elem -> env_elem =
       fun acc em ->
         match em with
-        | Var (vid, v) -> self#visit_env_elem_Var acc vid v
-        | Abs abs -> self#visit_env_elem_Abs acc abs
+        | Var (vid, v) -> self#visit_Var acc vid v
+        | Abs abs -> self#visit_Abs acc abs
         | Frame -> failwith "Unreachable"
 
     method visit_env : 'acc -> env -> env =
