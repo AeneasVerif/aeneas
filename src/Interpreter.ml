@@ -579,6 +579,9 @@ exception FoundOuter of outer_borrows_or_abs
 
 let apply_proj_borrows (regions : V.RegionId.set_t) (v : V.typed_value)
     (ty : T.rty) : V.typed_avalue =
+  (* Sanity check *)
+  let ety = Substitute.erase_regions ty in
+  assert (ety = v.V.ty);
   raise Unimplemented
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
@@ -762,52 +765,6 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
     Ok (env, !replaced_bc)
   with FoundOuter outers -> Error outers
 
-(** See [give_back_shared]. *)
-let rec give_back_shared_to_value (config : C.config) bid
-    (destv : V.typed_value) : V.typed_value =
-  match destv.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> destv
-  | V.Adt av ->
-      let field_values =
-        List.map (give_back_shared_to_value config bid) av.field_values
-      in
-      { destv with value = Adt { av with field_values } }
-  | V.Borrow bc ->
-      (* We may need to insert the value inside a borrowed value *)
-      let bc' =
-        match bc with
-        | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> bc
-        | V.MutBorrow (bid', destv') ->
-            MutBorrow (bid', give_back_shared_to_value config bid destv')
-      in
-      { destv with value = V.Borrow bc' }
-  | V.Loan lc -> (
-      match lc with
-      | V.SharedLoan (bids, shared_value) ->
-          if V.BorrowId.Set.mem bid bids then
-            if V.BorrowId.Set.cardinal bids = 1 then shared_value
-            else
-              {
-                destv with
-                value =
-                  V.Loan
-                    (V.SharedLoan (V.BorrowId.Set.remove bid bids, shared_value));
-              }
-          else
-            {
-              destv with
-              value =
-                V.Loan
-                  (V.SharedLoan
-                     (bids, give_back_shared_to_value config bid shared_value));
-            }
-      | V.MutLoan _ -> destv)
-
-(** See [give_back_shared]. *)
-let give_back_shared_to_abs _config _bid _abs : V.abs =
-  (* TODO *)
-  raise Unimplemented
-
 (** Auxiliary function to end borrows.
     
     When we end a mutable borrow, we need to "give back" the value it contained
@@ -819,7 +776,7 @@ let give_back_shared_to_abs _config _bid _abs : V.abs =
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
     (nv : V.typed_value) (env : C.env) : C.env =
-  (* We use a reference to check that we updated exactly one borrow *)
+  (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
     assert (not !replaced);
@@ -872,9 +829,6 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               set_replaced ();
               (* Apply the projection *)
               let given_back = apply_proj_borrows regions nv ty in
-              (* Explore the child - not necessary, but consistent to do (allows
-               * to check the invariants at the same time) *)
-              let child = self#visit_typed_avalue opt_abs child in
               (* Return the new value *)
               V.ALoan (V.AEndedMutLoan { given_back; child }))
             else
@@ -898,8 +852,6 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call [set_replaced]) *)
               let given_back = apply_proj_borrows regions nv ty in
-              (* We explore the child - not necessary, but consistent *)
-              let child = self#visit_typed_avalue opt_abs child in
               V.ALoan (V.AEndedIgnoredMutLoan { given_back; child })
             else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
@@ -920,6 +872,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     end
   in
 
+  (* Explore the environment *)
   let env = obj#visit_env None env in
   (* Check we gave back to exactly one loan *)
   assert !replaced;
@@ -936,16 +889,54 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     check must be independently done before.
  *)
 let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
-  let give_back_shared_to_env_elem ev : C.env_elem =
-    match ev with
-    | C.Var (vid, destv) ->
-        C.Var (vid, give_back_shared_to_value config bid destv)
-    | C.Abs abs ->
-        assert (config.mode = SymbolicMode);
-        C.Abs (give_back_shared_to_abs config bid abs)
-    | C.Frame -> C.Frame
+  (* We use a reference to check that we updated exactly one loan *)
+  let replaced : bool ref = ref false in
+  let set_replaced () =
+    assert (not !replaced);
+    replaced := true
   in
-  List.map give_back_shared_to_env_elem env
+  let obj =
+    object (self)
+      inherit [_] C.map_env as super
+
+      method! visit_Loan opt_abs lc =
+        match lc with
+        | V.SharedLoan (bids, shared_value) ->
+            if V.BorrowId.Set.mem bid bids then (
+              (* This is the loan we are looking for *)
+              set_replaced ();
+              (* If there remains exactly one borrow identifier, we need
+               * to end the loan. Otherwise, we just remove the current
+               * loan identifier *)
+              if V.BorrowId.Set.cardinal bids = 1 then shared_value.V.value
+              else
+                V.Loan
+                  (V.SharedLoan (V.BorrowId.Set.remove bid bids, shared_value)))
+            else
+              (* Not the loan we are looking for: continue exploring *)
+              V.Loan (super#visit_SharedLoan opt_abs bids shared_value)
+        | V.MutLoan bid' ->
+            (* We are giving back a *shared* borrow: nothing special to do *)
+            V.Loan (super#visit_MutLoan opt_abs bid')
+
+      method! visit_ALoan opt_abs lc =
+        match lc with
+        | V.AMutLoan (bid, av) -> raise Unimplemented
+        | V.ASharedLoan (bids, v, av) -> raise Unimplemented
+        | V.AEndedMutLoan { given_back; child } -> raise Unimplemented
+        | V.AEndedSharedLoan (v, av) -> raise Unimplemented
+        | V.AIgnoredMutLoan (bid, av) -> raise Unimplemented
+        | V.AEndedIgnoredMutLoan { given_back; child } -> raise Unimplemented
+        | V.AIgnoredSharedLoan asb -> raise Unimplemented
+    end
+  in
+
+  (* Explore the environment *)
+  let env = obj#visit_env None env in
+  (* Check we gave back to exactly one loan *)
+  assert !replaced;
+  (* Return *)
+  env
 
 (** When copying values, we duplicate the shared borrows. This is tantamount
     to reborrowing the shared value. The following function applies this change
