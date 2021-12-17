@@ -1888,7 +1888,7 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_def list)
   assert (List.length regions = List.length def.T.region_params);
   (* Compute the field types *)
   let field_types =
-    Subst.type_def_get_instantiated_field_etype def opt_variant_id types
+    Subst.type_def_get_instantiated_field_etypes def opt_variant_id types
   in
   (* Initialize the expanded value *)
   let fields =
