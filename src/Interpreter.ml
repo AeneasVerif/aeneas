@@ -758,37 +758,6 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
     Ok (env, !replaced_bc)
   with FoundOuter outers -> Error outers
 
-(** See [give_back_value]. *)
-let rec give_back_value_to_value config bid (v : V.typed_value)
-    (destv : V.typed_value) : V.typed_value =
-  match destv.V.value with
-  | V.Concrete _ | V.Bottom | V.Symbolic _ -> destv
-  | V.Adt av ->
-      let field_values =
-        List.map (give_back_value_to_value config bid v) av.field_values
-      in
-      { destv with value = Adt { av with field_values } }
-  | V.Borrow bc ->
-      (* We may need to insert the value inside a borrowed value *)
-      let bc' =
-        match bc with
-        | V.SharedBorrow _ | V.InactivatedMutBorrow _ -> bc
-        | V.MutBorrow (bid', destv') ->
-            MutBorrow (bid', give_back_value_to_value config bid v destv')
-      in
-      { destv with value = V.Borrow bc' }
-  | V.Loan lc -> (
-      match lc with
-      | V.SharedLoan (_, _) -> destv
-      | V.MutLoan bid' ->
-          if bid' = bid then v
-          else { destv with value = V.Loan (V.MutLoan bid') })
-
-(** See [give_back_value]. *)
-let give_back_value_to_abs (_config : C.config) _bid _v _abs : V.abs =
-  (* TODO *)
-  raise Unimplemented
-
 (** See [give_back_shared]. *)
 let rec give_back_shared_to_value (config : C.config) bid
     (destv : V.typed_value) : V.typed_value =
@@ -845,29 +814,39 @@ let give_back_shared_to_abs _config _bid _abs : V.abs =
     be independently done before.
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
-    (v : V.typed_value) (env : C.env) : C.env =
-  (* TODO:
-     (* We use a reference to check that we updated exactly one borrow *)
-     let replaced : bool ref = ref false in
-     let set_replaced () =
-       assert (not !replaced);
-       replaced := true
-     in
-     let obj =
-       object
-         inherit [_] C.map_env
-       end
-        in*)
-  let give_back_value_to_env_elem ev : C.env_elem =
-    match ev with
-    | C.Var (vid, destv) ->
-        C.Var (vid, give_back_value_to_value config bid v destv)
-    | C.Abs abs ->
-        assert (config.mode = SymbolicMode);
-        C.Abs (give_back_value_to_abs config bid v abs)
-    | C.Frame -> C.Frame
+    (nv : V.typed_value) (env : C.env) : C.env =
+  (* We use a reference to check that we updated exactly one borrow *)
+  let replaced : bool ref = ref false in
+  let set_replaced () =
+    assert (not !replaced);
+    replaced := true
   in
-  List.map give_back_value_to_env_elem env
+  let obj =
+    object
+      inherit [_] C.map_env as super
+
+      method! visit_Loan env lc =
+        match lc with
+        | V.SharedLoan (bids, v) ->
+            (* We are giving back a value (i.e., the content of a *mutable*
+             * borrow): nothing special to do *)
+            V.Loan (super#visit_SharedLoan env bids v)
+        | V.MutLoan bid' ->
+            (* Check if this is the loan we are looking for *)
+            if bid' = bid then (
+              set_replaced ();
+              nv.V.value)
+            else V.Loan (super#visit_MutLoan env bid')
+
+      method! visit_ALoan env lc = raise Unimplemented
+    end
+  in
+
+  let env = obj#visit_env () env in
+  (* Check we gave back to exactly one loan *)
+  assert !replaced;
+  (* Return *)
+  env
 
 (** Auxiliary function to end borrows.
     
