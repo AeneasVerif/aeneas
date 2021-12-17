@@ -255,7 +255,8 @@ and aloan_content =
   | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
   | AProjSharedLoan of (abstract_shared_borrows[@opaque])
-      (** A projected shared loan *)
+      (** A projected shared loan - TODO: remove? Does it make sense? Maybe
+          I should rename that to AIgnoredSharedLoan... *)
 
 (** Note that when a borrow content is ended, it is replaced by Bottom (while
     we need to track ended loans more precisely, especially because of their
