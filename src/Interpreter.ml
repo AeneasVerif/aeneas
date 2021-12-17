@@ -765,14 +765,14 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
     Ok (env, !replaced_bc)
   with FoundOuter outers -> Error outers
 
-(** Auxiliary function to end borrows.
+(** Auxiliary function to end borrows. See [give_back].
     
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
 
-    Note that this function doesn't check that there is actually a loan somewhere
-    to which we can give the value: if this has to be checked, the check must
-    be independently done before.
+    Note that this function checks that there is exactly one loan to which we
+    give the value back.
+    TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
     (nv : V.typed_value) (env : C.env) : C.env =
@@ -879,14 +879,103 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* Return *)
   env
 
+(** Auxiliary function to end borrows. See [give_back].
+
+    This function is similar to [give_back_value] but gives back an [avalue]
+    (coming from an abstraction).
+
+    It is used when ending a borrow inside an abstraction, when the corresponding
+    loan is inside the same abstraction (in which case we don't need to end the whole
+    abstraction).
+ *)
+let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
+    (nv : V.typed_avalue) (env : C.env) : C.env =
+  (* We use a reference to check that we updated exactly one loan *)
+  let replaced : bool ref = ref false in
+  let set_replaced () =
+    assert (not !replaced);
+    replaced := true
+  in
+  let obj =
+    object (self)
+      inherit [_] C.map_env as super
+
+      method! visit_typed_avalue opt_abs (av : V.typed_avalue) : V.typed_avalue
+          =
+        match av.V.value with
+        | V.ALoan lc ->
+            let value = self#visit_typed_ALoan opt_abs av.V.ty lc in
+            ({ av with V.value } : V.typed_avalue)
+        | _ -> super#visit_typed_avalue opt_abs av
+      (** This is a bit annoying, but as we need the type of the avalue we
+          are exploring, in order to be able to project the value we give
+          back, we need to reimplement [visit_typed_avalue] instead of
+          [visit_ALoan] *)
+
+      method visit_typed_ALoan (opt_abs : V.abs option) (ty : T.rty)
+          (lc : V.aloan_content) : V.avalue =
+        match lc with
+        | V.AMutLoan (bid', child) ->
+            if bid' = bid then (
+              (* This is the loan we are looking for: apply the projection to
+               * the value we give back and replaced this mutable loan with
+               * an ended loan *)
+              (* Register the insertion *)
+              set_replaced ();
+              (* Sanity check *)
+              assert (nv.V.ty = ty);
+              (* Return the new value *)
+              V.ALoan (V.AEndedMutLoan { given_back = nv; child }))
+            else
+              (* Continue exploring *)
+              V.ALoan (super#visit_AMutLoan opt_abs bid' child)
+        | V.ASharedLoan (bids, v, av) ->
+            (* We are giving back a value to a *mutable* loan: nothing special to do *)
+            V.ALoan (super#visit_ASharedLoan opt_abs bids v av)
+        | V.AEndedMutLoan { given_back; child } ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AEndedMutLoan opt_abs given_back child)
+        | V.AEndedSharedLoan (v, av) ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AEndedSharedLoan opt_abs v av)
+        | V.AIgnoredMutLoan (bid', child) ->
+            (* This loan is ignored, but we may have to project on a subvalue
+             * of the value which is given back *)
+            if bid' = bid then (
+              (* Note that we replace the ignored mut loan by an *ended* ignored
+               * mut loan. Also, this is not the loan we are looking for *per se*:
+               * we don't register the fact that we inserted the value somewhere
+               * (i.e., we don't call [set_replaced]) *)
+              (* Sanity check *)
+              assert (nv.V.ty = ty);
+              V.ALoan (V.AEndedIgnoredMutLoan { given_back = nv; child }))
+            else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
+        | V.AEndedIgnoredMutLoan { given_back; child } ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
+        | V.AIgnoredSharedLoan asb ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AIgnoredSharedLoan opt_abs asb)
+      (** We are not specializing an already existing method, but adding a
+          new method (for projections, we need type information) *)
+    end
+  in
+
+  (* Explore the environment *)
+  let env = obj#visit_env None env in
+  (* Check we gave back to exactly one loan *)
+  assert !replaced;
+  (* Return *)
+  env
+
 (** Auxiliary function to end borrows.
     
     When we end a shared borrow, we need to remove the borrow id from the list
     of borrows to the shared value.
 
-    Note that this function doesn't check that there is actually a loan somewhere
-    from which to remove the shared borrow id: if this has to be checked, the
-    check must be independently done before.
+    Note that this function checks that there is exactly one shared loan that
+    we update.
+    TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
 let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
   (* We use a reference to check that we updated exactly one loan *)
@@ -1010,17 +1099,36 @@ let give_back_in_env (config : C.config) (l : V.BorrowId.id)
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
   in
   match bc with
-  | Concrete (V.MutBorrow (_, tv)) ->
+  | Concrete (V.MutBorrow (l', tv)) ->
+      (* Sanity check *)
+      assert (l' = l);
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
       assert (Option.is_some (lookup_loan_opt sanity_ek l env));
+      (* Update the environment *)
       give_back_value config l tv env
   | Concrete (V.SharedBorrow l' | V.InactivatedMutBorrow l') ->
-      assert (l' = l);
       (* Sanity check *)
+      assert (l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
       assert (Option.is_some (lookup_loan_opt sanity_ek l env));
+      (* Update the environment *)
       give_back_shared config l env
-  | Abstract _ -> raise Unimplemented
+  | Abstract (V.AMutBorrow (l', av)) ->
+      (* Sanity check *)
+      assert (l' = l);
+      (* Check that the corresponding loan is somewhere - purely a sanity check *)
+      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
+      (* Update the environment *)
+      give_back_avalue config l av env
+  | Abstract (V.ASharedBorrow l') ->
+      (* Sanity check *)
+      assert (l' = l);
+      (* Check that the borrow is somewhere - purely a sanity check *)
+      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
+      (* Update the environment *)
+      give_back_shared config l env
+  | Abstract (V.AIgnoredMutBorrow _ | V.AIgnoredSharedBorrow _) ->
+      failwith "Unreachable"
 
 (** End a borrow identified by its borrow id in an environment
     
