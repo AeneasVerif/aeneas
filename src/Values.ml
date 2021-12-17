@@ -236,7 +236,7 @@ and aloan_content =
 (** Note that when a borrow content is ended, it is replaced by Bottom (while
     we need to track ended loans more precisely, especially because of their
     children values).
-    
+
     Note that contrary to [aloan_content], here the children avalues are
     note independent of the parent avalues. For instance, a value
     `AMutBorrow (_, AMutBorrow (_, ...)` (ignoring the types) really is

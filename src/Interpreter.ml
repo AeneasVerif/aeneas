@@ -701,8 +701,41 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
 
       method! visit_ABorrow outer bc =
         match bc with
-        | V.AMutBorrow (bid, av) -> raise Unimplemented
-        | V.ASharedBorrow bid -> raise Unimplemented
+        | V.AMutBorrow (bid, av) ->
+            (* Check if this is the borrow we are looking for *)
+            if bid = l then (
+              (* When ending a mut borrow, there are two cases:
+               * - in the general case, we have to end the whole abstraction
+               *   (and thus raise an exception to signal that to the caller)
+               * - in some situations, the associated loan is inside the same
+               *   abstraction as the borrow. In this situation, we can end
+               *   the borrow without ending the whole abstraction, and we
+               *   simply move the child avalue around.
+               *)
+              (* Check there are outer borrows, or if we need to end the whole
+               * abstraction *)
+              raise_if_outer outer;
+              (* Register the update *)
+              set_replaced_bc (Abstract bc);
+              (* Update the value - note that we are necessarily in the second
+               * of the two cases described above *)
+              V.ABottom)
+            else
+              (* Update the outer borrows before diving into the child avalue *)
+              let outer_borrows = update_outer_borrows io outer (Borrow bid) in
+              V.ABorrow (super#visit_AMutBorrow outer bid av)
+        | V.ASharedBorrow bid ->
+            (* Check if this is the borrow we are looking for *)
+            if bid = l then (
+              (* Check there are outer borrows, or if we need to end the whole
+               * abstraction *)
+              raise_if_outer outer;
+              (* Register the update *)
+              set_replaced_bc (Abstract bc);
+              (* Update the value - note that we are necessarily in the second
+               * of the two cases described above *)
+              V.ABottom)
+            else V.ABorrow (super#visit_ASharedBorrow outer bid)
         | V.AIgnoredMutBorrow av ->
             (* Nothing special to do *)
             V.ABorrow (super#visit_AIgnoredMutBorrow outer av)
