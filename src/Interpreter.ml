@@ -765,7 +765,7 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
     Ok (env, !replaced_bc)
   with FoundOuter outers -> Error outers
 
-(** Auxiliary function to end borrows. See [give_back].
+(** Auxiliary function to end borrows. See [give_back_in_env].
     
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
@@ -879,7 +879,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* Return *)
   env
 
-(** Auxiliary function to end borrows. See [give_back].
+(** Auxiliary function to end borrows. See [give_back_in_env].
 
     This function is similar to [give_back_value] but gives back an [avalue]
     (coming from an abstraction).
@@ -968,7 +968,7 @@ let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
   (* Return *)
   env
 
-(** Auxiliary function to end borrows.
+(** Auxiliary function to end borrows. See [give_back_in_env].
     
     When we end a shared borrow, we need to remove the borrow id from the list
     of borrows to the shared value.
