@@ -703,8 +703,12 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
         match bc with
         | V.AMutBorrow (bid, av) -> raise Unimplemented
         | V.ASharedBorrow bid -> raise Unimplemented
-        | V.AIgnoredMutBorrow av -> raise Unimplemented
-        | V.AIgnoredSharedBorrow asb -> raise Unimplemented
+        | V.AIgnoredMutBorrow av ->
+            (* Nothing special to do *)
+            V.ABorrow (super#visit_AIgnoredMutBorrow outer av)
+        | V.AIgnoredSharedBorrow asb ->
+            (* Nothing special to do *)
+            V.ABorrow (super#visit_AIgnoredSharedBorrow outer asb)
 
       method! visit_abs outer abs =
         (* Update the outer abs *)
