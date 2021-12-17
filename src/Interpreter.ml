@@ -577,6 +577,11 @@ type outer_borrows_or_abs =
 exception FoundOuter of outer_borrows_or_abs
 (** Utility exception *)
 
+(** Check if a region is in a set of regions *)
+let region_in_set (r : T.RegionId.id T.region) (rset : T.RegionId.set_t) : bool
+    =
+  match r with T.Static -> false | T.Var id -> T.RegionId.Set.mem id rset
+
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that
     the regions which are already ended inside the abstraction don't
@@ -586,10 +591,6 @@ exception FoundOuter of outer_borrows_or_abs
 *)
 let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
     (ty2 : T.rty) (rset2 : T.RegionId.set_t) : bool =
-  let region_in_set (r : T.RegionId.id T.region) (rset : T.RegionId.set_t) :
-      bool =
-    match r with T.Static -> false | T.Var id -> T.RegionId.Set.mem id rset
-  in
   match (ty1, ty2) with
   | T.Bool, T.Bool | T.Char, T.Char | T.Str, T.Str -> false
   | T.Integer int_ty1, T.Integer int_ty2 ->
@@ -631,25 +632,66 @@ let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
       map borrows to regions - or to interpret the borrows as belonging
       to some regions...)
 *)
-let apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
+let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
     (ty : T.rty) : V.typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
   assert (ety = v.V.ty);
   (* Match *)
-  match (v.V.value, ty) with
-  | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) ->
-      raise Unimplemented
-  | V.Adt v, T.Adt (id, regions, tys) -> raise Unimplemented
-  | V.Bottom, _ -> failwith "Unreachable"
-  | V.Borrow bc, _ -> raise Unimplemented
-  | V.Loan lc, _ -> failwith "Unreachable"
-  | V.Symbolic s, _ ->
-      (* Check that the symbolic value doesn't contain already ended regions *)
-      raise Unimplemented;
-      { V.value = V.ASymbolic (V.AProjBorrows (s.V.svalue, ty)); V.ty }
-  | _ -> failwith "Unreachable" raise Unimplemented
+  let value : V.avalue =
+    match (v.V.value, ty) with
+    | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
+    | V.Adt v, T.Adt (id, regions, tys) -> raise Unimplemented
+    | V.Bottom, _ -> failwith "Unreachable"
+    | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
+        if
+          (* Check if the region is in the set of projected regions (note that
+           * we never project over static regions) *)
+          region_in_set r regions
+        then
+          (* In the set *)
+          let bc =
+            match (bc, kind) with
+            | V.MutBorrow (bid, bv), T.Mut ->
+                (* Apply the projection on the borrowed value *)
+                let bv = apply_proj_borrows regions bv ref_ty in
+                V.AMutBorrow (bid, bv)
+            | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
+            | V.InactivatedMutBorrow _, _ ->
+                failwith
+                  "Can't apply a proj_borrow over an inactivated mutable borrow"
+            | _ -> failwith "Unreachable"
+          in
+          V.ABorrow bc
+        else
+          (* Not in the set: ignore *)
+          let bc =
+            match (bc, kind) with
+            | V.MutBorrow (bid, bv), T.Mut ->
+                (* Apply the projection on the borrowed value *)
+                let bv = apply_proj_borrows regions bv ref_ty in
+                V.AIgnoredMutBorrow bv
+            | V.SharedBorrow bid, T.Shared ->
+                (* TODO *)
+                raise Unimplemented
+            (*              V.AIgnoredSharedBorrow bid*)
+            | V.InactivatedMutBorrow _, _ ->
+                failwith
+                  "Can't apply a proj_borrow over an inactivated mutable borrow"
+            | _ -> failwith "Unreachable"
+          in
+          V.ABorrow bc
+    | V.Loan lc, _ -> failwith "Unreachable"
+    | V.Symbolic s, _ ->
+        (* Check that the symbolic value doesn't contain already ended regions *)
+        assert (
+          not
+            (projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty regions));
+        V.ASymbolic (V.AProjBorrows (s.V.svalue, ty))
+    | _ -> failwith "Unreachable"
+  in
+  { V.value; V.ty }
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
