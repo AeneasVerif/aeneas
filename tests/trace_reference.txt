@@ -3952,34 +3952,6 @@ About to evaluate statement: var@6 := copy x
 - op:
 copy x
 
-[[32mDebug[39m] end_borrow 0: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (&mut@0 (1: i32)) ;
-  var@4 -> ⊥ : bool ;
-  var@5 -> ⊥ : bool ;
-  var@6 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 0: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
-  var@4 -> ⊥ : bool ;
-  var@5 -> ⊥ : bool ;
-  var@6 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] Value to copy:
 1: i32
 [[32mDebug[39m] 
@@ -4817,58 +4789,6 @@ move var@6
 
 [[32mDebug[39m] Value to move:
 &mut@3 (1: i32)
-[[32mDebug[39m] end_borrow 0: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@1⌋ ;
-  px -> ⌊mut@2⌋ ;
-  py -> &mut@1 (⌊mut@3⌋) ;
-  ppx -> &mut@2 (&mut@0 (0: i32)) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : bool ;
-  var@9 -> ⊥ : i32 ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 0: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 0: i32 ;
-  y -> ⌊mut@1⌋ ;
-  px -> ⌊mut@2⌋ ;
-  py -> &mut@1 (⌊mut@3⌋) ;
-  ppx -> &mut@2 (⊥ : &'_ mut (i32)) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : bool ;
-  var@9 -> ⊥ : i32 ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] 
 # 1 frame(s)
 
@@ -5075,58 +4995,6 @@ About to evaluate statement: var@9 := copy *(px)
 
 - op:
 copy *(px)
-
-[[32mDebug[39m] end_borrow 2: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 0: i32 ;
-  y -> ⌊mut@1⌋ ;
-  px -> ⌊mut@2⌋ ;
-  py -> &mut@1 (⌊mut@3⌋) ;
-  ppx -> &mut@2 (&mut@3 (2: i32)) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : bool ;
-  var@9 -> ⊥ : i32 ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 2: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 0: i32 ;
-  y -> ⌊mut@1⌋ ;
-  px -> &mut@3 (2: i32) ;
-  py -> &mut@1 (⌊mut@3⌋) ;
-  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : bool ;
-  var@9 -> ⊥ : i32 ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
 
 [[32mDebug[39m] Value to copy:
 2: i32
@@ -5994,58 +5862,6 @@ About to evaluate statement: var@15 := copy *(py)
 - op:
 copy *(py)
 
-[[32mDebug[39m] end_borrow 3: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 0: i32 ;
-  y -> ⌊mut@1⌋ ;
-  px -> &mut@3 (2: i32) ;
-  py -> &mut@1 (⌊mut@3⌋) ;
-  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : bool ;
-  var@9 -> ⊥ : i32 ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 3: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 0: i32 ;
-  y -> ⌊mut@1⌋ ;
-  px -> ⊥ : &'_ mut (i32) ;
-  py -> &mut@1 (2: i32) ;
-  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : bool ;
-  var@9 -> ⊥ : i32 ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] Value to copy:
 2: i32
 [[32mDebug[39m] 
@@ -6454,58 +6270,6 @@ About to evaluate statement: var@18 := copy y
 
 - op:
 copy y
-
-[[32mDebug[39m] end_borrow 1: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 0: i32 ;
-  y -> ⌊mut@1⌋ ;
-  px -> ⊥ : &'_ mut (i32) ;
-  py -> &mut@1 (2: i32) ;
-  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : bool ;
-  var@9 -> ⊥ : i32 ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 1: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 0: i32 ;
-  y -> 2: i32 ;
-  px -> ⊥ : &'_ mut (i32) ;
-  py -> ⊥ : &'_ mut (i32) ;
-  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : bool ;
-  var@9 -> ⊥ : i32 ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
 
 [[32mDebug[39m] Value to copy:
 2: i32
@@ -7485,38 +7249,6 @@ move var@3
        });
   ty =
   (Types.Adt ((Types.Assumed Types.Box), [], [(Types.Integer Types.I32)])) }
-[[32mDebug[39m] end_borrows {}: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @shared_loan({0}, @Box(0: i32)) ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⌊inactivated_mut@0⌋ ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrows {}: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @shared_loan({0}, @Box(0: i32)) ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⌊inactivated_mut@0⌋ ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] Value to move:
 &mut@0 (@Box(0: i32))
 [[32mDebug[39m] ctx_pop_frame:
@@ -7543,50 +7275,6 @@ move var@3
 
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [1]
 [[32mDebug[39m] drop_value: place: var@1
-[[32mDebug[39m] end_borrow 0: context before:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> ⌊mut@0⌋ ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
-# Frame 1:
-{
-  @return -> &mut@1 (0: i32) ;
-  var@1 -> &mut@0 (@Box(⌊mut@1⌋)) ;
-}
-
-[[32mDebug[39m] end_borrow 0: context after:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @Box(⌊mut@1⌋) ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
-# Frame 1:
-{
-  @return -> &mut@1 (0: i32) ;
-  var@1 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-}
-
 [[32mDebug[39m] ctx_pop_frame: after dropping local variables:
 # 2 frame(s)
 
@@ -7746,38 +7434,6 @@ return
 
 About to evaluate statement: var@5 := &b
 
-[[32mDebug[39m] end_borrow 1: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @Box(⌊mut@1⌋) ;
-  x -> &mut@1 (1: i32) ;
-  var@3 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 1: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @Box(1: i32) ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] 
 # 1 frame(s)
 
@@ -7872,50 +7528,6 @@ move var@5
 
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [1]
 [[32mDebug[39m] drop_value: place: var@1
-[[32mDebug[39m] end_borrow 2: context before:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @shared_loan({2}, @Box(@shared_loan({3}, 1: i32))) ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
-# Frame 1:
-{
-  @return -> ⌊shared@3⌋ ;
-  var@1 -> ⌊shared@2⌋ ;
-}
-
-[[32mDebug[39m] end_borrow 2: context after:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @Box(@shared_loan({3}, 1: i32)) ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
-# Frame 1:
-{
-  @return -> ⌊shared@3⌋ ;
-  var@1 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-}
-
 [[32mDebug[39m] ctx_pop_frame: after dropping local variables:
 # 2 frame(s)
 
@@ -8276,38 +7888,6 @@ return
 About to evaluate statement: drop(b)
 
 [[32mDebug[39m] drop_value: place: b
-[[32mDebug[39m] end_borrows {3}: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @Box(@shared_loan({3}, 1: i32)) ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-  x -> ⌊shared@3⌋ ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrows {3}: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  b -> @Box(1: i32) ;
-  x -> ⊥ : &'_ mut (i32) ;
-  var@3 -> ⊥ : &'_ mut (std::boxed::Box<i32>) ;
-  x -> ⊥ : &'_ (i32) ;
-  var@5 -> ⊥ : &'_ (std::boxed::Box<i32>) ;
-  var@6 -> ⊥ : bool ;
-  var@7 -> ⊥ : bool ;
-  var@8 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] 
 # 1 frame(s)
 
@@ -9903,50 +9483,6 @@ About to evaluate statement: return
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [2,1]
 [[32mDebug[39m] drop_value: place: var@2
 [[32mDebug[39m] drop_value: place: l
-[[32mDebug[39m] end_borrow 1: context before:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  l -> @shared_loan({0, 1}, test1::List::Cons { 0 = 0: i32; 1 = @Box(test1::List::Nil); }) ;
-  var@2 -> ⊥ : std::boxed::Box<test1::List<i32>> ;
-  var@3 -> ⊥ : test1::List<i32> ;
-  var@4 -> ⊥ : bool ;
-  var@5 -> ⊥ : bool ;
-  var@6 -> ⊥ : &'_ (test1::List<i32>) ;
-  var@7 -> ⌊shared@0⌋ ;
-}
-
-# Frame 1:
-{
-  var@0 -> true ;
-  l -> ⌊shared@1⌋ ;
-  var@2 -> ⊥ : isize ;
-}
-
-[[32mDebug[39m] end_borrow 1: context after:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  l -> @shared_loan({0}, test1::List::Cons { 0 = 0: i32; 1 = @Box(test1::List::Nil); }) ;
-  var@2 -> ⊥ : std::boxed::Box<test1::List<i32>> ;
-  var@3 -> ⊥ : test1::List<i32> ;
-  var@4 -> ⊥ : bool ;
-  var@5 -> ⊥ : bool ;
-  var@6 -> ⊥ : &'_ (test1::List<i32>) ;
-  var@7 -> ⌊shared@0⌋ ;
-}
-
-# Frame 1:
-{
-  var@0 -> true ;
-  l -> ⊥ : &'_ (test1::List<i32>) ;
-  var@2 -> ⊥ : isize ;
-}
-
 [[32mDebug[39m] ctx_pop_frame: after dropping local variables:
 # 2 frame(s)
 
@@ -10151,36 +9687,6 @@ return
 About to evaluate statement: drop(l)
 
 [[32mDebug[39m] drop_value: place: l
-[[32mDebug[39m] end_borrows {0}: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  l -> @shared_loan({0}, test1::List::Cons { 0 = 0: i32; 1 = @Box(test1::List::Nil); }) ;
-  var@2 -> ⊥ : std::boxed::Box<test1::List<i32>> ;
-  var@3 -> ⊥ : test1::List<i32> ;
-  var@4 -> ⊥ : bool ;
-  var@5 -> ⊥ : bool ;
-  var@6 -> ⊥ : &'_ (test1::List<i32>) ;
-  var@7 -> ⌊shared@0⌋ ;
-}
-
-[[32mDebug[39m] end_borrows {0}: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  l -> test1::List::Cons { 0 = 0: i32; 1 = @Box(test1::List::Nil); } ;
-  var@2 -> ⊥ : std::boxed::Box<test1::List<i32>> ;
-  var@3 -> ⊥ : test1::List<i32> ;
-  var@4 -> ⊥ : bool ;
-  var@5 -> ⊥ : bool ;
-  var@6 -> ⊥ : &'_ (test1::List<i32>) ;
-  var@7 -> ⊥ : &'_ (test1::List<i32>) ;
-}
-
 [[32mDebug[39m] 
 # 1 frame(s)
 
@@ -13791,58 +13297,6 @@ move var@4
 { Values.value =
   (Values.Concrete (Values.Scalar { Values.value = 0; int_ty = Types.I32 }));
   ty = (Types.Integer Types.I32) }
-[[32mDebug[39m] end_borrows {}: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⌊inactivated_mut@1⌋ ;
-  var@5 -> &mut@0 (@shared_loan({1}, 0: i32)) ;
-  var@6 -> ⌊inactivated_mut@3⌋ ;
-  var@7 -> &mut@2 (@shared_loan({3}, 0: i32)) ;
-  var@8 -> ⊥ : i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrows {}: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⌊inactivated_mut@1⌋ ;
-  var@5 -> &mut@0 (@shared_loan({1}, 0: i32)) ;
-  var@6 -> ⌊inactivated_mut@3⌋ ;
-  var@7 -> &mut@2 (@shared_loan({3}, 0: i32)) ;
-  var@8 -> ⊥ : i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] Value to move:
 &mut@1 (0: i32)
 [[32mDebug[39m] eval_operand:
@@ -13880,58 +13334,6 @@ move var@6
 { Values.value =
   (Values.Concrete (Values.Scalar { Values.value = 0; int_ty = Types.I32 }));
   ty = (Types.Integer Types.I32) }
-[[32mDebug[39m] end_borrows {}: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> &mut@0 (⌊mut@1⌋) ;
-  var@6 -> ⌊inactivated_mut@3⌋ ;
-  var@7 -> &mut@2 (@shared_loan({3}, 0: i32)) ;
-  var@8 -> ⊥ : i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrows {}: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> &mut@0 (⌊mut@1⌋) ;
-  var@6 -> ⌊inactivated_mut@3⌋ ;
-  var@7 -> &mut@2 (@shared_loan({3}, 0: i32)) ;
-  var@8 -> ⊥ : i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] Value to move:
 &mut@3 (0: i32)
 [[32mDebug[39m] 
@@ -14296,147 +13698,7 @@ About to evaluate statement: return
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [4,3,2,1]
 [[32mDebug[39m] drop_value: place: var@4
 [[32mDebug[39m] drop_value: place: y
-[[32mDebug[39m] end_borrow 3: context before:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> &mut@0 (⌊mut@1⌋) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (⌊mut@3⌋) ;
-  var@8 -> ⊥ : i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-# Frame 1:
-{
-  var@0 -> &mut@4 (0: i32) ;
-  b -> true ;
-  x -> &mut@1 (⌊mut@4⌋) ;
-  y -> &mut@3 (0: i32) ;
-  var@4 -> ⊥ : bool ;
-}
-
-[[32mDebug[39m] end_borrow 3: context after:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> &mut@0 (⌊mut@1⌋) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (0: i32) ;
-  var@8 -> ⊥ : i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-# Frame 1:
-{
-  var@0 -> &mut@4 (0: i32) ;
-  b -> true ;
-  x -> &mut@1 (⌊mut@4⌋) ;
-  y -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : bool ;
-}
-
 [[32mDebug[39m] drop_value: place: x
-[[32mDebug[39m] end_borrow 1: context before:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> &mut@0 (⌊mut@1⌋) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (0: i32) ;
-  var@8 -> ⊥ : i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-# Frame 1:
-{
-  var@0 -> &mut@4 (0: i32) ;
-  b -> true ;
-  x -> &mut@1 (⌊mut@4⌋) ;
-  y -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : bool ;
-}
-
-[[32mDebug[39m] end_borrow 1: context after:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> &mut@0 (⌊mut@4⌋) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (0: i32) ;
-  var@8 -> ⊥ : i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-# Frame 1:
-{
-  var@0 -> &mut@4 (0: i32) ;
-  b -> true ;
-  x -> ⊥ : &'_ mut (i32) ;
-  y -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : bool ;
-}
-
 [[32mDebug[39m] drop_value: place: b
 [[32mDebug[39m] ctx_pop_frame: after dropping local variables:
 # 2 frame(s)
@@ -15275,110 +14537,6 @@ About to evaluate statement: var@15 := copy x
 - op:
 copy x
 
-[[32mDebug[39m] end_borrow 0: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> &mut@4 (1: i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> &mut@0 (⌊mut@4⌋) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (0: i32) ;
-  var@8 -> 0: i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 0: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@4⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> &mut@4 (1: i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> ⊥ : &'_ mut (i32) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (0: i32) ;
-  var@8 -> 0: i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 4: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@4⌋ ;
-  y -> ⌊mut@2⌋ ;
-  z -> &mut@4 (1: i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> ⊥ : &'_ mut (i32) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (0: i32) ;
-  var@8 -> 0: i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 4: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 1: i32 ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> ⊥ : &'_ mut (i32) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (0: i32) ;
-  var@8 -> 0: i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
 [[32mDebug[39m] Value to copy:
 1: i32
 [[32mDebug[39m] 
@@ -15787,58 +14945,6 @@ About to evaluate statement: var@18 := copy y
 
 - op:
 copy y
-
-[[32mDebug[39m] end_borrow 2: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 1: i32 ;
-  y -> ⌊mut@2⌋ ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> ⊥ : &'_ mut (i32) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> &mut@2 (0: i32) ;
-  var@8 -> 0: i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
-
-[[32mDebug[39m] end_borrow 2: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 1: i32 ;
-  y -> 0: i32 ;
-  z -> ⊥ : &'_ mut (i32) ;
-  var@4 -> ⊥ : &'_ mut (i32) ;
-  var@5 -> ⊥ : &'_ mut (i32) ;
-  var@6 -> ⊥ : &'_ mut (i32) ;
-  var@7 -> ⊥ : &'_ mut (i32) ;
-  var@8 -> 0: i32 ;
-  var@9 -> ⊥ : (i32, bool) ;
-  var@10 -> ⊥ : bool ;
-  var@11 -> ⊥ : bool ;
-  var@12 -> ⊥ : i32 ;
-  var@13 -> ⊥ : bool ;
-  var@14 -> ⊥ : bool ;
-  var@15 -> ⊥ : i32 ;
-  var@16 -> ⊥ : bool ;
-  var@17 -> ⊥ : bool ;
-  var@18 -> ⊥ : i32 ;
-}
 
 [[32mDebug[39m] Value to copy:
 0: i32
@@ -16723,42 +15829,6 @@ move var@7
        (Types.Integer Types.U32)]
      ))
   }
-[[32mDebug[39m] end_borrows {}: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  px -> ⊥ : &'_ mut (u32) ;
-  p -> ⌊mut@1⌋ ;
-  var@4 -> ⊥ : &'_ mut (u32) ;
-  pp0 -> &mut@1 (@shared_loan({2}, (&mut@0 (0: u32), 1: u32))) ;
-  pp1 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  var@7 -> ⌊inactivated_mut@2⌋ ;
-  y -> ⊥ : u32 ;
-  var@9 -> ⊥ : &'_ mut (u32) ;
-  var@10 -> ⊥ : &'_ mut (u32) ;
-}
-
-[[32mDebug[39m] end_borrows {}: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  px -> ⊥ : &'_ mut (u32) ;
-  p -> ⌊mut@1⌋ ;
-  var@4 -> ⊥ : &'_ mut (u32) ;
-  pp0 -> &mut@1 (@shared_loan({2}, (&mut@0 (0: u32), 1: u32))) ;
-  pp1 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  var@7 -> ⌊inactivated_mut@2⌋ ;
-  y -> ⊥ : u32 ;
-  var@9 -> ⊥ : &'_ mut (u32) ;
-  var@10 -> ⊥ : &'_ mut (u32) ;
-}
-
 [[32mDebug[39m] Value to move:
 &mut@2 ((&mut@0 (0: u32), 1: u32))
 [[32mDebug[39m] 
@@ -16926,107 +15996,7 @@ About to evaluate statement: return
 
 [[32mDebug[39m] ctx_pop_frame: locals to drop: [2,1]
 [[32mDebug[39m] drop_value: place: var@2
-[[32mDebug[39m] end_borrow 3: context before:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  px -> ⊥ : &'_ mut (u32) ;
-  p -> ⌊mut@1⌋ ;
-  var@4 -> ⊥ : &'_ mut (u32) ;
-  pp0 -> &mut@1 (⌊mut@2⌋) ;
-  pp1 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  var@7 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  y -> ⊥ : u32 ;
-  var@9 -> ⊥ : &'_ mut (u32) ;
-  var@10 -> ⊥ : &'_ mut (u32) ;
-}
-
-# Frame 1:
-{
-  var@0 -> &mut@4 ((&mut@0 (0: u32), 1: u32)) ;
-  x -> &mut@2 (⌊mut@3⌋) ;
-  var@2 -> &mut@3 (⌊mut@4⌋) ;
-}
-
-[[32mDebug[39m] end_borrow 3: context after:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  px -> ⊥ : &'_ mut (u32) ;
-  p -> ⌊mut@1⌋ ;
-  var@4 -> ⊥ : &'_ mut (u32) ;
-  pp0 -> &mut@1 (⌊mut@2⌋) ;
-  pp1 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  var@7 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  y -> ⊥ : u32 ;
-  var@9 -> ⊥ : &'_ mut (u32) ;
-  var@10 -> ⊥ : &'_ mut (u32) ;
-}
-
-# Frame 1:
-{
-  var@0 -> &mut@4 ((&mut@0 (0: u32), 1: u32)) ;
-  x -> &mut@2 (⌊mut@4⌋) ;
-  var@2 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-}
-
 [[32mDebug[39m] drop_value: place: x
-[[32mDebug[39m] end_borrow 2: context before:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  px -> ⊥ : &'_ mut (u32) ;
-  p -> ⌊mut@1⌋ ;
-  var@4 -> ⊥ : &'_ mut (u32) ;
-  pp0 -> &mut@1 (⌊mut@2⌋) ;
-  pp1 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  var@7 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  y -> ⊥ : u32 ;
-  var@9 -> ⊥ : &'_ mut (u32) ;
-  var@10 -> ⊥ : &'_ mut (u32) ;
-}
-
-# Frame 1:
-{
-  var@0 -> &mut@4 ((&mut@0 (0: u32), 1: u32)) ;
-  x -> &mut@2 (⌊mut@4⌋) ;
-  var@2 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-}
-
-[[32mDebug[39m] end_borrow 2: context after:
-# 2 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  px -> ⊥ : &'_ mut (u32) ;
-  p -> ⌊mut@1⌋ ;
-  var@4 -> ⊥ : &'_ mut (u32) ;
-  pp0 -> &mut@1 (⌊mut@4⌋) ;
-  pp1 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  var@7 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  y -> ⊥ : u32 ;
-  var@9 -> ⊥ : &'_ mut (u32) ;
-  var@10 -> ⊥ : &'_ mut (u32) ;
-}
-
-# Frame 1:
-{
-  var@0 -> &mut@4 ((&mut@0 (0: u32), 1: u32)) ;
-  x -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  var@2 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-}
-
 [[32mDebug[39m] ctx_pop_frame: after dropping local variables:
 # 2 frame(s)
 
@@ -17306,42 +16276,6 @@ move var@9
 
 [[32mDebug[39m] Value to move:
 &mut@6 (2: u32)
-[[32mDebug[39m] end_borrow 0: context before:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> ⌊mut@0⌋ ;
-  px -> ⊥ : &'_ mut (u32) ;
-  p -> ⌊mut@1⌋ ;
-  var@4 -> ⊥ : &'_ mut (u32) ;
-  pp0 -> &mut@1 (⌊mut@4⌋) ;
-  pp1 -> &mut@4 ((&mut@0 (0: u32), 1: u32)) ;
-  var@7 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  y -> ⌊mut@5⌋ ;
-  var@9 -> ⊥ : &'_ mut (u32) ;
-  var@10 -> &mut@5 (⌊mut@6⌋) ;
-}
-
-[[32mDebug[39m] end_borrow 0: context after:
-# 1 frame(s)
-
-# Frame 0:
-{
-  var@0 -> ⊥ : () ;
-  x -> 0: u32 ;
-  px -> ⊥ : &'_ mut (u32) ;
-  p -> ⌊mut@1⌋ ;
-  var@4 -> ⊥ : &'_ mut (u32) ;
-  pp0 -> &mut@1 (⌊mut@4⌋) ;
-  pp1 -> &mut@4 ((⊥ : &'_ mut (u32), 1: u32)) ;
-  var@7 -> ⊥ : &'_ mut ((&'_ mut (u32), u32)) ;
-  y -> ⌊mut@5⌋ ;
-  var@9 -> ⊥ : &'_ mut (u32) ;
-  var@10 -> &mut@5 (⌊mut@6⌋) ;
-}
-
 [[32mDebug[39m] 
 # 1 frame(s)
 

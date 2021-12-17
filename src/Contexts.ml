@@ -244,3 +244,23 @@ class ['self] map_frame_concrete =
             let env = self#visit_env acc env in
             em :: env
   end
+
+(** Visitor to iterate over the values in a context *)
+class ['self] iter_eval_ctx =
+  object (self : 'self)
+    inherit [_] iter_env as super
+
+    method visit_eval_ctx : 'acc -> eval_ctx -> unit =
+      fun acc ctx -> super#visit_env acc ctx.env
+  end
+
+(** Visitor to map the values in a context *)
+class ['self] map_eval_ctx =
+  object (self : 'self)
+    inherit [_] map_env as super
+
+    method visit_eval_ctx : 'acc -> eval_ctx -> eval_ctx =
+      fun acc ctx ->
+        let env = super#visit_env acc ctx.env in
+        { ctx with env }
+  end

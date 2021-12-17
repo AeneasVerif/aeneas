@@ -176,8 +176,8 @@ let loans_in_value (v : V.typed_value) : bool =
 
     TODO: group abs_or_var_id and g_loan_content. 
  *)
-let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    (abs_or_var_id * g_loan_content) option =
+let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
+    (ctx : C.eval_ctx) : (abs_or_var_id * g_loan_content) option =
   (* We store here whether we are inside an abstraction or a value - note that we
    * could also track that with the environment, it would probably be more idiomatic
    * and cleaner *)
@@ -185,7 +185,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
 
   let obj =
     object
-      inherit [_] C.iter_env as super
+      inherit [_] C.iter_eval_ctx as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -258,7 +258,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
   in
   (* We use exceptions *)
   try
-    obj#visit_env () env;
+    obj#visit_eval_ctx () ctx;
     None
   with FoundGLoanContent lc -> (
     match !abs_or_var with
@@ -270,9 +270,9 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
     The loan is referred to by a borrow id.
     Raises an exception if no loan was found.
  *)
-let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
+let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (ctx : C.eval_ctx) :
     abs_or_var_id * g_loan_content =
-  match lookup_loan_opt ek l env with
+  match lookup_loan_opt ek l ctx with
   | None -> failwith "Unreachable"
   | Some res -> res
 
@@ -283,7 +283,7 @@ let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
     This is a helper function: it might break invariants.
  *)
 let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
-    (nlc : V.loan_content) (env : C.env) : C.env =
+    (nlc : V.loan_content) (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we update exactly one loan: when updating
    * inside values, we check we don't update more than one loan. Then, upon
    * returning we check that we updated at least once. *)
@@ -296,7 +296,7 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
 
   let obj =
     object
-      inherit [_] C.map_env as super
+      inherit [_] C.map_eval_ctx as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -334,10 +334,10 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
     end
   in
 
-  let env = obj#visit_env () env in
+  let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one loan *)
   assert !r;
-  env
+  ctx
 
 (** Update a abstraction loan content.
 
@@ -346,7 +346,7 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
     This is a helper function: it might break invariants.
  *)
 let update_aloan (ek : exploration_kind) (l : V.BorrowId.id)
-    (nlc : V.aloan_content) (env : C.env) : C.env =
+    (nlc : V.aloan_content) (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we update exactly one loan: when updating
    * inside values, we check we don't update more than one loan. Then, upon
    * returning we check that we updated at least once. *)
@@ -359,7 +359,7 @@ let update_aloan (ek : exploration_kind) (l : V.BorrowId.id)
 
   let obj =
     object
-      inherit [_] C.map_env as super
+      inherit [_] C.map_eval_ctx as super
 
       method! visit_aloan_content env lc =
         match lc with
@@ -385,17 +385,17 @@ let update_aloan (ek : exploration_kind) (l : V.BorrowId.id)
     end
   in
 
-  let env = obj#visit_env () env in
+  let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one loan *)
   assert !r;
-  env
+  ctx
 
 (** Lookup a borrow content from a borrow id. *)
-let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
-    : g_borrow_content option =
+let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
+    (ctx : C.eval_ctx) : g_borrow_content option =
   let obj =
     object
-      inherit [_] C.iter_env as super
+      inherit [_] C.iter_eval_ctx as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -440,7 +440,7 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
   in
   (* We use exceptions *)
   try
-    obj#visit_env () env;
+    obj#visit_eval_ctx () ctx;
     None
   with FoundGBorrowContent lc -> Some lc
 
@@ -448,9 +448,9 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env)
 
     Raise an exception if no loan was found
 *)
-let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    g_borrow_content =
-  match lookup_borrow_opt ek l env with
+let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (ctx : C.eval_ctx)
+    : g_borrow_content =
+  match lookup_borrow_opt ek l ctx with
   | None -> failwith "Unreachable"
   | Some lc -> lc
 
@@ -461,7 +461,7 @@ let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
     This is a helper function: it might break invariants.   
  *)
 let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
-    (nbc : V.borrow_content) (env : C.env) : C.env =
+    (nbc : V.borrow_content) (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
    * inside values, we check we don't update more than one borrow. Then, upon
    * returning we check that we updated at least once. *)
@@ -474,7 +474,7 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
 
   let obj =
     object
-      inherit [_] C.map_env as super
+      inherit [_] C.map_eval_ctx as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -506,10 +506,10 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
     end
   in
 
-  let env = obj#visit_env () env in
+  let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one borrow *)
   assert !r;
-  env
+  ctx
 
 (** Update an abstraction borrow content.
 
@@ -518,7 +518,7 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
     This is a helper function: it might break invariants.     
  *)
 let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id)
-    (nbc : V.aborrow_content) (env : C.env) : C.env =
+    (nbc : V.aborrow_content) (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
    * inside values, we check we don't update more than one borrow. Then, upon
    * returning we check that we updated at least once. *)
@@ -531,7 +531,7 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id)
 
   let obj =
     object
-      inherit [_] C.map_env as super
+      inherit [_] C.map_eval_ctx as super
 
       method! visit_aborrow_content env bc =
         match bc with
@@ -549,10 +549,10 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id)
     end
   in
 
-  let env = obj#visit_env () env in
+  let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one borrow *)
   assert !r;
-  env
+  ctx
 
 (** The following type identifies the relative position of expressions (in
     particular borrows) in other expressions.
@@ -669,6 +669,8 @@ let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
     - [ty]: the type with regions which we use for the projection (to
       map borrows to regions - or to interpret the borrows as belonging
       to some regions...)
+
+    TODO: we need a context
 *)
 let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
     (ty : T.rty) : V.typed_avalue =
@@ -682,6 +684,7 @@ let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
     | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
     | V.Adt adt, T.Adt (id, regions, tys) ->
         (* Retrieve the types of the fields *)
+
         (* Explore the field values *)
         raise Unimplemented
     | V.Bottom, _ -> failwith "Unreachable"
@@ -747,9 +750,10 @@ let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
     as well. The [allowed_abs] parameter controls whether we allow to end borrows
     in an abstraction or not, and in which abstraction.
 *)
-let end_borrow_get_borrow_in_env (io : inner_outer)
-    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id) (env : C.env)
-    : (C.env * g_borrow_content option, outer_borrows_or_abs) result =
+let end_borrow_get_borrow (io : inner_outer)
+    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
+    (ctx : C.eval_ctx) :
+    (C.eval_ctx * g_borrow_content option, outer_borrows_or_abs) result =
   (* We use a reference to communicate the kind of borrow we found, if we
    * find one *)
   let replaced_bc : g_borrow_content option ref = ref None in
@@ -780,7 +784,7 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
   (* The environment is used to keep track of the outer loans *)
   let obj =
     object
-      inherit [_] C.map_env as super
+      inherit [_] C.map_eval_ctx as super
 
       method! visit_Loan (outer : V.AbstractionId.id option * borrow_ids option)
           lc =
@@ -922,8 +926,8 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
   in
   (* Catch the exceptions - raised if there are outer borrows *)
   try
-    let env = obj#visit_env (None, None) env in
-    Ok (env, !replaced_bc)
+    let ctx = obj#visit_eval_ctx (None, None) ctx in
+    Ok (ctx, !replaced_bc)
   with FoundOuter outers -> Error outers
 
 (** Auxiliary function to end borrows. See [give_back_in_env].
@@ -936,7 +940,7 @@ let end_borrow_get_borrow_in_env (io : inner_outer)
     TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
-    (nv : V.typed_value) (env : C.env) : C.env =
+    (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -945,7 +949,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   in
   let obj =
     object (self)
-      inherit [_] C.map_env as super
+      inherit [_] C.map_eval_ctx as super
 
       method! visit_Loan opt_abs lc =
         match lc with
@@ -1034,11 +1038,11 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   in
 
   (* Explore the environment *)
-  let env = obj#visit_env None env in
+  let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
   assert !replaced;
   (* Return *)
-  env
+  ctx
 
 (** Auxiliary function to end borrows. See [give_back_in_env].
 
@@ -1050,7 +1054,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     abstraction).
  *)
 let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
-    (nv : V.typed_avalue) (env : C.env) : C.env =
+    (nv : V.typed_avalue) (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -1059,7 +1063,7 @@ let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
   in
   let obj =
     object (self)
-      inherit [_] C.map_env as super
+      inherit [_] C.map_eval_ctx as super
 
       method! visit_typed_avalue opt_abs (av : V.typed_avalue) : V.typed_avalue
           =
@@ -1123,11 +1127,11 @@ let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
   in
 
   (* Explore the environment *)
-  let env = obj#visit_env None env in
+  let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
   assert !replaced;
   (* Return *)
-  env
+  ctx
 
 (** Auxiliary function to end borrows. See [give_back_in_env].
     
@@ -1138,7 +1142,8 @@ let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
     we update.
     TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
-let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
+let give_back_shared config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
+    C.eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -1147,7 +1152,7 @@ let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
   in
   let obj =
     object (self)
-      inherit [_] C.map_env as super
+      inherit [_] C.map_eval_ctx as super
 
       method! visit_Loan opt_abs lc =
         match lc with
@@ -1216,11 +1221,11 @@ let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
   in
 
   (* Explore the environment *)
-  let env = obj#visit_env None env in
+  let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
   assert !replaced;
   (* Return *)
-  env
+  ctx
 
 (** When copying values, we duplicate the shared borrows. This is tantamount
     to reborrowing the shared value. The following function applies this change
@@ -1268,8 +1273,8 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
   { ctx with env }
 
 (** Auxiliary function: see [end_borrow_in_env] *)
-let give_back_in_env (config : C.config) (l : V.BorrowId.id)
-    (bc : g_borrow_content) (env : C.env) : C.env =
+let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* This is used for sanity checks *)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -1279,39 +1284,39 @@ let give_back_in_env (config : C.config) (l : V.BorrowId.id)
       (* Sanity check *)
       assert (l' = l);
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
-      (* Update the environment *)
-      give_back_value config l tv env
+      assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
+      (* Update the context *)
+      give_back_value config l tv ctx
   | Concrete (V.SharedBorrow l' | V.InactivatedMutBorrow l') ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
-      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
-      (* Update the environment *)
-      give_back_shared config l env
+      assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
+      (* Update the context *)
+      give_back_shared config l ctx
   | Abstract (V.AMutBorrow (l', av)) ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
-      (* Update the environment *)
-      give_back_avalue config l av env
+      assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
+      (* Update the context *)
+      give_back_avalue config l av ctx
   | Abstract (V.ASharedBorrow l') ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
-      assert (Option.is_some (lookup_loan_opt sanity_ek l env));
-      (* Update the environment *)
-      give_back_shared config l env
+      assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
+      (* Update the context *)
+      give_back_shared config l ctx
   | Abstract (V.AIgnoredSharedBorrow _) -> raise Unimplemented
   | Abstract (V.AIgnoredMutBorrow _) -> failwith "Unreachable"
 
-(** End a borrow identified by its borrow id in an environment
+(** End a borrow identified by its borrow id in a context
     
-    First lookup the borrow in the environment and replace it with [Bottom].
-    Then, check that there is an associated loan in the environment. When moving
+    First lookup the borrow in the context and replace it with [Bottom].
+    Then, check that there is an associated loan in the context. When moving
     values, before putting the value in its destination, we get an
-    intermediate state where some values are "outside" the environment and thus
+    intermediate state where some values are "outside" the context and thus
     inaccessible. As [give_back_value] just performs a map for instance (TODO:
     not the case anymore), we need to check independently that there is indeed a
     loan ready to receive the value we give back (note that we also have other
@@ -1332,15 +1337,15 @@ let give_back_in_env (config : C.config) (l : V.BorrowId.id)
     if it is not `None`, we allow ending a borrow if it is inside the given
     abstraction. In practice, if the value is `Some abs_id`, we should have
     checked that the corresponding loan is inside the abstraction given by
-    `abs_id` before. In practice, only [end_borrow_in_env] should call itself
+    `abs_id` before. In practice, only [end_borrow] should call itself
     with `allowed_abs = Some ...`, all the other calls should use `allowed_abs = None`:
-    if you look ath the implementation details, `end_borrow_in_env` performs
+    if you look ath the implementation details, `end_borrow` performs
     all tne necessary checks in case a borrow is inside an abstraction.
  *)
-let rec end_borrow_in_env (config : C.config) (io : inner_outer)
-    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id) (env : C.env)
-    : C.env =
-  match end_borrow_get_borrow_in_env io allowed_abs l env with
+let rec end_borrow (config : C.config) (io : inner_outer)
+    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  match end_borrow_get_borrow io allowed_abs l ctx with
   (* Two cases:
    * - error: we found outer borrows (end them first)
    * - success: we didn't find outer borrows when updating (but maybe we actually
@@ -1359,16 +1364,16 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
            * be trying to end a borrow inside an abstraction, but which is actually
            * inside another borrow *)
           let allowed_abs' = None in
-          let env = end_borrows_in_env config io allowed_abs' bids env in
+          let ctx = end_borrows config io allowed_abs' bids ctx in
           (* Retry to end the borrow *)
-          end_borrow_in_env config io allowed_abs l env
+          end_borrow config io allowed_abs l ctx
       | OuterBorrows (Borrow bid) ->
           (* See the comments for the previous case *)
           assert (io = Outer);
           let allowed_abs' = None in
-          let env = end_borrow_in_env config io allowed_abs' bid env in
+          let ctx = end_borrow config io allowed_abs' bid ctx in
           (* Retry to end the borrow *)
-          end_borrow_in_env config io allowed_abs l env
+          end_borrow config io allowed_abs l ctx
       | OuterAbs abs_id -> (
           (* The borrow is inside an asbtraction: check if the corresponding
            * loan is inside the same abstraction. If this is the case, we end
@@ -1382,81 +1387,47 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
               enter_abs = true;
             }
           in
-          match lookup_loan ek l env with
+          match lookup_loan ek l ctx with
           | AbsId loan_abs_id, _ ->
               if loan_abs_id = abs_id then (
                 (* Same abstraction! We can end the borrow *)
-                let env = end_borrow_in_env config io (Some abs_id) l env in
+                let ctx = end_borrow config io (Some abs_id) l ctx in
                 (* Sanity check *)
-                assert (Option.is_none (lookup_borrow_opt ek l env));
-                env)
+                assert (Option.is_none (lookup_borrow_opt ek l ctx));
+                ctx)
               else
                 (* Not the same abstraction: we need to end the whole abstraction.
                  * By doing that we should have ended the target borrow (see the
                  * below sanity check) *)
-                let env = end_abstraction_in_env config abs_id env in
+                let ctx = end_abstraction config abs_id ctx in
                 (* Sanity check: we ended the target borrow *)
-                assert (Option.is_none (lookup_borrow_opt ek l env));
-                env
+                assert (Option.is_none (lookup_borrow_opt ek l ctx));
+                ctx
           | VarId _, _ ->
               (* The loan is not inside the same abstraction (actually inside
                * a non-abstraction value): we need to end the whole abstraction *)
-              let env = end_abstraction_in_env config abs_id env in
+              let ctx = end_abstraction config abs_id ctx in
               (* Sanity check: we ended the target borrow *)
-              assert (Option.is_none (lookup_borrow_opt ek l env));
-              env))
-  | Ok (env, None) ->
+              assert (Option.is_none (lookup_borrow_opt ek l ctx));
+              ctx))
+  | Ok (ctx, None) ->
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       assert (config.mode = SymbolicMode);
-      env
+      ctx
   (* We found a borrow: give the value back (i.e., update the corresponding loan) *)
-  | Ok (env, Some bc) -> give_back_in_env config l bc env
+  | Ok (ctx, Some bc) -> give_back config l bc ctx
 
-and end_borrows_in_env (config : C.config) (io : inner_outer)
+and end_borrows (config : C.config) (io : inner_outer)
     (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t)
-    (env : C.env) : C.env =
+    (ctx : C.eval_ctx) : C.eval_ctx =
   V.BorrowId.Set.fold
-    (fun id env -> end_borrow_in_env config io allowed_abs id env)
-    lset env
+    (fun id ctx -> end_borrow config io allowed_abs id ctx)
+    lset ctx
 
-and end_abstraction_in_env (config : C.config) (abs : V.AbstractionId.id)
-    (env : C.env) : C.env =
+and end_abstraction (config : C.config) (abs : V.AbstractionId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   raise Unimplemented
-
-(** Same as [end_borrow_in_env], but operating on evaluation contexts *)
-let end_borrow (config : C.config) (io : inner_outer)
-    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
-    (ctx : C.eval_ctx) : C.eval_ctx =
-  L.log#ldebug
-    (lazy
-      ("end_borrow " ^ V.BorrowId.to_string l ^ ": context before:\n"
-     ^ eval_ctx_to_string ctx));
-  let env = end_borrow_in_env config io allowed_abs l ctx.env in
-  let ctx = { ctx with env } in
-  L.log#ldebug
-    (lazy
-      ("end_borrow " ^ V.BorrowId.to_string l ^ ": context after:\n"
-     ^ eval_ctx_to_string ctx));
-  ctx
-
-(** Same as [end_borrows_in_env], but operating on evaluation contexts *)
-let end_borrows (config : C.config) (io : inner_outer)
-    (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t)
-    (ctx : C.eval_ctx) : C.eval_ctx =
-  L.log#ldebug
-    (lazy
-      ("end_borrows "
-      ^ V.BorrowId.set_to_string lset
-      ^ ": context before:\n" ^ eval_ctx_to_string ctx));
-  let env = end_borrows_in_env config io allowed_abs lset ctx.env in
-  let ctx = { ctx with env } in
-  L.log#ldebug
-    (lazy
-      ("end_borrows "
-      ^ V.BorrowId.set_to_string lset
-      ^ ": context after:\n" ^ eval_ctx_to_string ctx));
-  ctx
 
 let end_outer_borrow config = end_borrow config Outer None
 
@@ -1486,7 +1457,7 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
-  match lookup_loan ek l ctx.env with
+  match lookup_loan ek l ctx with
   | _, Concrete (V.MutLoan _) ->
       failwith "Expected a shared loan, found a mut loan"
   | _, Concrete (V.SharedLoan (bids, sv)) ->
@@ -1501,8 +1472,7 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
       (* Check there aren't inactivated borrows *)
       assert (not (inactivated_in_value sv));
       (* Update the loan content *)
-      let env = update_loan ek l (V.MutLoan l) ctx.env in
-      let ctx = { ctx with env } in
+      let ctx = update_loan ek l (V.MutLoan l) ctx in
       (* Return *)
       (ctx, sv)
   | _, Abstract _ -> raise Unimplemented
@@ -1519,13 +1489,12 @@ let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = false; enter_abs = false }
   in
-  match lookup_borrow ek l ctx.env with
+  match lookup_borrow ek l ctx with
   | Concrete (V.SharedBorrow _ | V.MutBorrow (_, _)) ->
       failwith "Expected an inactivated mutable borrow"
   | Concrete (V.InactivatedMutBorrow _) ->
       (* Update it *)
-      let env = update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx.env in
-      { ctx with env }
+      update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx
   | Abstract _ -> raise Unimplemented
 
 (** Promote an inactivated mut borrow to a mut borrow.
@@ -1538,7 +1507,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
-  match lookup_loan ek l ctx.env with
+  match lookup_loan ek l ctx with
   | _, Concrete (V.MutLoan _) -> failwith "Unreachable"
   | _, Concrete (V.SharedLoan (bids, sv)) -> (
       (* If there are loans inside the value, end them. Note that there can't be
@@ -1626,10 +1595,10 @@ type projection_access = {
     We return the (eventually) updated value, the value we read at the end of
     the place and the (eventually) updated environment.
  *)
-let rec access_projection (access : projection_access) (env : C.env)
+let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
     (* Function to (eventually) update the value we find *)
       (update : V.typed_value -> V.typed_value) (p : E.projection)
-    (v : V.typed_value) : (C.env * updated_read_value) path_access_result =
+    (v : V.typed_value) : (C.eval_ctx * updated_read_value) path_access_result =
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -1646,7 +1615,7 @@ let rec access_projection (access : projection_access) (env : C.env)
         failwith
           "Assertion failed: new value doesn't have the same type as its \
            destination");
-      Ok (env, { read = v; updated = nv })
+      Ok (ctx, { read = v; updated = nv })
   | pe :: p' -> (
       (* Match on the projection element and the value *)
       match (pe, v.V.value, v.V.ty) with
@@ -1662,31 +1631,31 @@ let rec access_projection (access : projection_access) (env : C.env)
           | _ -> failwith "Unreachable");
           (* Actually project *)
           let fv = T.FieldId.nth adt.field_values field_id in
-          match access_projection access env update p' fv with
+          match access_projection access ctx update p' fv with
           | Error err -> Error err
-          | Ok (env, res) ->
+          | Ok (ctx, res) ->
               (* Update the field value *)
               let nvalues =
                 T.FieldId.update_nth adt.field_values field_id res.updated
               in
               let nadt = V.Adt { adt with V.field_values = nvalues } in
               let updated = { v with value = nadt } in
-              Ok (env, { res with updated }))
+              Ok (ctx, { res with updated }))
       (* Tuples *)
       | Field (ProjTuple arity, field_id), V.Adt adt, T.Adt (T.Tuple, _, _) -> (
           assert (arity = List.length adt.field_values);
           let fv = T.FieldId.nth adt.field_values field_id in
           (* Project *)
-          match access_projection access env update p' fv with
+          match access_projection access ctx update p' fv with
           | Error err -> Error err
-          | Ok (env, res) ->
+          | Ok (ctx, res) ->
               (* Update the field value *)
               let nvalues =
                 T.FieldId.update_nth adt.field_values field_id res.updated
               in
               let ntuple = V.Adt { adt with field_values = nvalues } in
               let updated = { v with value = ntuple } in
-              Ok (env, { res with updated })
+              Ok (ctx, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *))
       | Field (ProjAdt (_, _), _), V.Bottom, _ ->
@@ -1706,9 +1675,9 @@ let rec access_projection (access : projection_access) (env : C.env)
            * it shouldn't happen due to user code, and we leverage it
            * when implementing box dereferencement for the concrete
            * interpreter *)
-          match access_projection access env update p' bv with
+          match access_projection access ctx update p' bv with
           | Error err -> Error err
-          | Ok (env, res) ->
+          | Ok (ctx, res) ->
               let nv =
                 {
                   v with
@@ -1716,44 +1685,44 @@ let rec access_projection (access : projection_access) (env : C.env)
                     V.Adt { variant_id = None; field_values = [ res.updated ] };
                 }
               in
-              Ok (env, { res with updated = nv }))
+              Ok (ctx, { res with updated = nv }))
       (* Borrows *)
       | Deref, V.Borrow bc, _ -> (
           match bc with
           | V.SharedBorrow bid ->
               (* Lookup the loan content, and explore from there *)
               if access.lookup_shared_borrows then
-                match lookup_loan ek bid env with
+                match lookup_loan ek bid ctx with
                 | _, Concrete (V.MutLoan _) -> failwith "Expected a shared loan"
                 | _, Concrete (V.SharedLoan (bids, sv)) -> (
                     (* Explore the shared value *)
-                    match access_projection access env update p' sv with
+                    match access_projection access ctx update p' sv with
                     | Error err -> Error err
-                    | Ok (env, res) ->
+                    | Ok (ctx, res) ->
                         (* Update the shared loan with the new value returned
                            by [access_projection] *)
-                        let env =
+                        let ctx =
                           update_loan ek bid
                             (V.SharedLoan (bids, res.updated))
-                            env
+                            ctx
                         in
                         (* Return - note that we don't need to update the borrow itself *)
-                        Ok (env, { res with updated = v }))
+                        Ok (ctx, { res with updated = v }))
                 | _, Abstract _ -> raise Unimplemented
               else Error (FailBorrow bc)
           | V.InactivatedMutBorrow bid -> Error (FailInactivatedMutBorrow bid)
           | V.MutBorrow (bid, bv) ->
               if access.enter_mut_borrows then
-                match access_projection access env update p' bv with
+                match access_projection access ctx update p' bv with
                 | Error err -> Error err
-                | Ok (env, res) ->
+                | Ok (ctx, res) ->
                     let nv =
                       {
                         v with
                         value = V.Borrow (V.MutBorrow (bid, res.updated));
                       }
                     in
-                    Ok (env, { res with updated = nv })
+                    Ok (ctx, { res with updated = nv })
               else Error (FailBorrow bc))
       | _, V.Loan lc, _ -> (
           match lc with
@@ -1763,16 +1732,16 @@ let rec access_projection (access : projection_access) (env : C.env)
                  to the fact that we need to reexplore the *whole* place (i.e,
                  we mustn't ignore the current projection element *)
               if access.enter_shared_loans then
-                match access_projection access env update (pe :: p') sv with
+                match access_projection access ctx update (pe :: p') sv with
                 | Error err -> Error err
-                | Ok (env, res) ->
+                | Ok (ctx, res) ->
                     let nv =
                       {
                         v with
                         value = V.Loan (V.SharedLoan (bids, res.updated));
                       }
                     in
-                    Ok (env, { res with updated = nv })
+                    Ok (ctx, { res with updated = nv })
               else Error (FailSharedLoan bids))
       | (_, (V.Concrete _ | V.Adt _ | V.Bottom | V.Borrow _), _) as r ->
           let pe, v, ty = r in
@@ -1790,18 +1759,18 @@ let rec access_projection (access : projection_access) (env : C.env)
  *)
 let access_place (access : projection_access)
     (* Function to (eventually) update the value we find *)
-      (update : V.typed_value -> V.typed_value) (p : E.place) (env : C.env) :
-    (C.env * V.typed_value) path_access_result =
+      (update : V.typed_value -> V.typed_value) (p : E.place) (ctx : C.eval_ctx)
+    : (C.eval_ctx * V.typed_value) path_access_result =
   (* Lookup the variable's value *)
-  let value = C.env_lookup_var_value env p.var_id in
+  let value = C.ctx_lookup_var_value ctx p.var_id in
   (* Apply the projection *)
-  match access_projection access env update p.projection value with
+  match access_projection access ctx update p.projection value with
   | Error err -> Error err
-  | Ok (env, res) ->
+  | Ok (ctx, res) ->
       (* Update the value *)
-      let env = C.env_update_var_value env p.var_id res.updated in
+      let ctx = C.ctx_update_var_value ctx p.var_id res.updated in
       (* Return *)
-      Ok (env, res.read)
+      Ok (ctx, res.read)
 
 type access_kind =
   | Read  (** We can go inside borrows and loans *)
@@ -1836,17 +1805,18 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
   let update v = v in
-  match access_place access update p ctx.env with
+  match access_place access update p ctx with
   | Error err -> Error err
-  | Ok (env1, read_value) ->
+  | Ok (ctx1, read_value) ->
       (* Note that we ignore the new environment: it should be the same as the
          original one.
       *)
       if config.check_invariants then
-        if env1 <> ctx.env then (
+        if ctx1 <> ctx then (
           let msg =
             "Unexpected environment update:\nNew environment:\n"
-            ^ C.show_env env1 ^ "\n\nOld environment:\n" ^ C.show_env ctx.env
+            ^ C.show_env ctx1.env ^ "\n\nOld environment:\n"
+            ^ C.show_env ctx.env
           in
           L.log#serror msg;
           failwith "Unexpected environment update");
@@ -1864,11 +1834,11 @@ let write_place (_config : C.config) (access : access_kind) (p : E.place)
   let access = access_kind_to_projection_access access in
   (* The update function substitutes the value with the new value *)
   let update _ = nv in
-  match access_place access update p ctx.env with
+  match access_place access update p ctx with
   | Error err -> Error err
-  | Ok (env, _) ->
+  | Ok (ctx, _) ->
       (* We ignore the read value *)
-      Ok { ctx with env }
+      Ok ctx
 
 let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
     (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
