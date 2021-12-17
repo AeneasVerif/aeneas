@@ -921,13 +921,40 @@ let give_back_shared config (bid : V.BorrowId.id) (env : C.env) : C.env =
 
       method! visit_ALoan opt_abs lc =
         match lc with
-        | V.AMutLoan (bid, av) -> raise Unimplemented
-        | V.ASharedLoan (bids, v, av) -> raise Unimplemented
-        | V.AEndedMutLoan { given_back; child } -> raise Unimplemented
-        | V.AEndedSharedLoan (v, av) -> raise Unimplemented
-        | V.AIgnoredMutLoan (bid, av) -> raise Unimplemented
-        | V.AEndedIgnoredMutLoan { given_back; child } -> raise Unimplemented
-        | V.AIgnoredSharedLoan asb -> raise Unimplemented
+        | V.AMutLoan (bid, av) ->
+            (* Nothing special to do (we are giving back a *shared* borrow) *)
+            V.ALoan (super#visit_AMutLoan opt_abs bid av)
+        | V.ASharedLoan (bids, shared_value, child) ->
+            if V.BorrowId.Set.mem bid bids then (
+              (* This is the loan we are looking for *)
+              set_replaced ();
+              (* If there remains exactly one borrow identifier, we need
+               * to end the loan. Otherwise, we just remove the current
+               * loan identifier *)
+              if V.BorrowId.Set.cardinal bids = 1 then
+                V.ALoan (V.AEndedSharedLoan (shared_value, child))
+              else
+                V.ALoan
+                  (V.ASharedLoan
+                     (V.BorrowId.Set.remove bid bids, shared_value, child)))
+            else
+              (* Not the loan we are looking for: continue exploring *)
+              V.ALoan (super#visit_ASharedLoan opt_abs bids shared_value child)
+        | V.AEndedMutLoan { given_back; child } ->
+            (* Nothing special to do (the loan has ended) *)
+            V.ALoan (super#visit_AEndedMutLoan opt_abs given_back child)
+        | V.AEndedSharedLoan (v, av) ->
+            (* Nothing special to do (the loan has ended) *)
+            V.ALoan (super#visit_AEndedSharedLoan opt_abs v av)
+        | V.AIgnoredMutLoan (bid, av) ->
+            (* Nothing special to do (we are giving back a *shared* borrow) *)
+            V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid av)
+        | V.AEndedIgnoredMutLoan { given_back; child } ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
+        | V.AIgnoredSharedLoan asb ->
+            (* Nothing special to do (the loan is ignored) *)
+            V.ALoan (super#visit_AIgnoredSharedLoan opt_abs asb)
     end
   in
 
