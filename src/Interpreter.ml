@@ -1507,7 +1507,11 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_shared config l ctx
-  | Abstract (V.AIgnoredSharedBorrow _) -> raise Unimplemented
+  | Abstract (V.AIgnoredSharedBorrow asb) ->
+      (* Sanity check *)
+      assert (borrow_in_asb l asb);
+      (* Update the context *)
+      give_back_shared config l ctx
   | Abstract (V.AIgnoredMutBorrow _) -> failwith "Unreachable"
 
 (** End a borrow identified by its borrow id in a context
