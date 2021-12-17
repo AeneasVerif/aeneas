@@ -1455,7 +1455,14 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
           V.ASharedLoan (bids', v, av))
         else super#visit_ASharedLoan env bids v av
 
-      method! visit_AIgnoredSharedLoan _ _ = raise Unimplemented
+      method! visit_AIgnoredSharedLoan env asb =
+        (* Check if the set of abstract shared borrows contains the borrow
+         * we want to duplicate *)
+        if borrow_in_asb original_bid asb then (
+          set_ref ();
+          let asb = V.AsbBorrow new_bid :: asb in
+          V.AIgnoredSharedLoan asb)
+        else super#visit_AIgnoredSharedLoan env asb
     end
   in
 
