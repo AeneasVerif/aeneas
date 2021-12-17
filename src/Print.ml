@@ -401,7 +401,7 @@ module Values = struct
         ^ "; child: "
         ^ typed_avalue_to_string fmt ml.child
         ^ "}"
-    | AIgnoredSharedLoan asb ->
+    | AProjSharedLoan asb ->
         "@ignored_shared_loan("
         ^ abstract_shared_borrows_to_string fmt asb
         ^ ")"
@@ -416,7 +416,7 @@ module Values = struct
     | ASharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
     | AIgnoredMutBorrow av ->
         "@ignored_mut_borrow(" ^ typed_avalue_to_string fmt av ^ ")"
-    | AIgnoredSharedBorrow sb ->
+    | AProjSharedBorrow sb ->
         "@ignored_shared_borrow("
         ^ abstract_shared_borrows_to_string fmt sb
         ^ ")"

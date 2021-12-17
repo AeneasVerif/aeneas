@@ -234,7 +234,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
         | V.AIgnoredMutLoan (bid, av) -> super#visit_AIgnoredMutLoan env bid av
         | V.AEndedIgnoredMutLoan { given_back; child } ->
             super#visit_AEndedIgnoredMutLoan env given_back child
-        | V.AIgnoredSharedLoan asb ->
+        | V.AProjSharedLoan asb ->
             (* Check the set of borrow ids *)
             if borrow_in_asb l asb then raise (FoundGLoanContent (Abstract lc))
             else ()
@@ -374,9 +374,9 @@ let update_aloan (ek : exploration_kind) (l : V.BorrowId.id)
         | V.AIgnoredMutLoan (bid, av) -> super#visit_AIgnoredMutLoan env bid av
         | V.AEndedIgnoredMutLoan { given_back; child } ->
             super#visit_AEndedIgnoredMutLoan env given_back child
-        | V.AIgnoredSharedLoan asb ->
+        | V.AProjSharedLoan asb ->
             if borrow_in_asb l asb then update ()
-            else super#visit_AIgnoredSharedLoan env asb
+            else super#visit_AProjSharedLoan env asb
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs
@@ -429,7 +429,7 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env bid
         | V.AIgnoredMutBorrow av -> super#visit_AIgnoredMutBorrow env av
-        | V.AIgnoredSharedBorrow asb ->
+        | V.AProjSharedBorrow asb ->
             if borrow_in_asb l asb then
               raise (FoundGBorrowContent (Abstract bc))
             else ()
@@ -540,9 +540,9 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id)
         | V.ASharedBorrow bid ->
             if bid = l then update () else super#visit_ASharedBorrow env bid
         | V.AIgnoredMutBorrow av -> super#visit_AIgnoredMutBorrow env av
-        | V.AIgnoredSharedBorrow asb ->
+        | V.AProjSharedBorrow asb ->
             if borrow_in_asb l asb then update ()
-            else super#visit_AIgnoredSharedBorrow env asb
+            else super#visit_AProjSharedBorrow env asb
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs
@@ -881,9 +881,9 @@ let end_borrow_get_borrow (io : inner_outer)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
             (* Nothing special to do *)
             V.ALoan (super#visit_AEndedIgnoredMutLoan outer given_back child)
-        | V.AIgnoredSharedLoan asb ->
+        | V.AProjSharedLoan asb ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AIgnoredSharedLoan outer asb)
+            V.ALoan (super#visit_AProjSharedLoan outer asb)
       (** We reimplement [visit_ALoan] because we may have to update the
           outer borrows *)
 
@@ -927,7 +927,7 @@ let end_borrow_get_borrow (io : inner_outer)
         | V.AIgnoredMutBorrow av ->
             (* Nothing special to do *)
             V.ABorrow (super#visit_AIgnoredMutBorrow outer av)
-        | V.AIgnoredSharedBorrow asb ->
+        | V.AProjSharedBorrow asb ->
             (* Check if the borrow we are looking for is in the asb *)
             if borrow_in_asb l asb then (
               (* Check there are outer borrows, or if we need to end the whole
@@ -938,10 +938,10 @@ let end_borrow_get_borrow (io : inner_outer)
               (* Update the value - note that we are necessarily in the second
                * of the two cases described above *)
               let asb = remove_borrow_from_asb l asb in
-              V.ABorrow (V.AIgnoredSharedBorrow asb))
+              V.ABorrow (V.AProjSharedBorrow asb))
             else
               (* Nothing special to do *)
-              V.ABorrow (super#visit_AIgnoredSharedBorrow outer asb)
+              V.ABorrow (super#visit_AProjSharedBorrow outer asb)
 
       method! visit_abs outer abs =
         (* Update the outer abs *)
@@ -1086,13 +1086,13 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
             let bids = insert_reborrows bids in
             (* Update and explore *)
             super#visit_ASharedLoan env bids v av
-        | V.AIgnoredSharedLoan asb ->
+        | V.AProjSharedLoan asb ->
             (* Insert the reborrows *)
             let insert = get_reborrows_for_asb asb in
             let insert = List.map (fun bid -> V.AsbBorrow bid) insert in
             let asb = List.append insert asb in
             (* Update and explore *)
-            super#visit_AIgnoredSharedLoan env asb
+            super#visit_AProjSharedLoan env asb
         | V.AMutLoan (_, _)
         | V.AEndedMutLoan { given_back = _; child = _ }
         | V.AEndedSharedLoan (_, _)
@@ -1205,9 +1205,9 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
             (* Nothing special to do *)
             V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
-        | V.AIgnoredSharedLoan asb ->
+        | V.AProjSharedLoan asb ->
             (* Nothing special to do: we are giving back a value to a *mutable* loan *)
-            V.ALoan (super#visit_AIgnoredSharedLoan opt_abs asb)
+            V.ALoan (super#visit_AProjSharedLoan opt_abs asb)
       (** We are not specializing an already existing method, but adding a
           new method (for projections, we need type information) *)
 
@@ -1310,9 +1310,9 @@ let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
             (* Nothing special to do *)
             V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
-        | V.AIgnoredSharedLoan asb ->
+        | V.AProjSharedLoan asb ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AIgnoredSharedLoan opt_abs asb)
+            V.ALoan (super#visit_AProjSharedLoan opt_abs asb)
       (** We are not specializing an already existing method, but adding a
           new method (for projections, we need type information) *)
     end
@@ -1399,16 +1399,16 @@ let give_back_shared config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
         | V.AEndedIgnoredMutLoan { given_back; child } ->
             (* Nothing special to do *)
             V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
-        | V.AIgnoredSharedLoan asb ->
+        | V.AProjSharedLoan asb ->
             (* Check if the loan id is in the asb *)
             if borrow_in_asb bid asb then (
               (* Yes: filter *)
               set_replaced ();
               let asb = remove_borrow_from_asb bid asb in
-              V.ALoan (V.AIgnoredSharedLoan asb))
+              V.ALoan (V.AProjSharedLoan asb))
             else
               (* No: nothing special to do *)
-              V.ALoan (super#visit_AIgnoredSharedLoan opt_abs asb)
+              V.ALoan (super#visit_AProjSharedLoan opt_abs asb)
     end
   in
 
@@ -1455,14 +1455,14 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
           V.ASharedLoan (bids', v, av))
         else super#visit_ASharedLoan env bids v av
 
-      method! visit_AIgnoredSharedLoan env asb =
+      method! visit_AProjSharedLoan env asb =
         (* Check if the set of abstract shared borrows contains the borrow
          * we want to duplicate *)
         if borrow_in_asb original_bid asb then (
           set_ref ();
           let asb = V.AsbBorrow new_bid :: asb in
-          V.AIgnoredSharedLoan asb)
-        else super#visit_AIgnoredSharedLoan env asb
+          V.AProjSharedLoan asb)
+        else super#visit_AProjSharedLoan env asb
     end
   in
 
@@ -1507,7 +1507,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_shared config l ctx
-  | Abstract (V.AIgnoredSharedBorrow asb) ->
+  | Abstract (V.AProjSharedBorrow asb) ->
       (* Sanity check *)
       assert (borrow_in_asb l asb);
       (* Update the context *)

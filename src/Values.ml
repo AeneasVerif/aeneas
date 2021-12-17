@@ -254,8 +254,8 @@ and aloan_content =
   | AEndedSharedLoan of typed_value * typed_avalue
   | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
-  | AIgnoredSharedLoan of (abstract_shared_borrows[@opaque])
-      (** TODO: rename. AProjSharedLoan? *)
+  | AProjSharedLoan of (abstract_shared_borrows[@opaque])
+      (** A projected shared loan *)
 
 (** Note that when a borrow content is ended, it is replaced by Bottom (while
     we need to track ended loans more precisely, especially because of their
@@ -273,8 +273,8 @@ and aborrow_content =
   | AMutBorrow of (BorrowId.id[@opaque]) * typed_avalue
   | ASharedBorrow of (BorrowId.id[@opaque])
   | AIgnoredMutBorrow of typed_avalue
-  | AIgnoredSharedBorrow of (abstract_shared_borrows[@opaque])
-      (** TODO: rename. AProjSharedBorrow? *)
+  | AProjSharedBorrow of (abstract_shared_borrows[@opaque])
+      (** A projected shared borrow *)
 
 (* TODO: we may want to merge this with typed_value - would prevent some issues
    when accessing fields... *)
