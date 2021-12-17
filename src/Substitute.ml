@@ -41,8 +41,23 @@ let erase_regions_substitute_types (tsubst : T.TypeVarId.id -> T.ety)
   let rsubst (_ : 'r T.region) : T.erased_region = T.Erased in
   ty_substitute rsubst tsubst ty
 
+(** Create a region substitution from a list of region variable ids and a list of
+    regions (with which to substitute the region variable ids *)
+let make_region_subst (var_ids : T.RegionVarId.id list)
+    (regions : 'r T.region list) : T.RegionVarId.id T.region -> 'r T.region =
+  let ls = List.combine var_ids regions in
+  let mp =
+    List.fold_left
+      (fun mp (k, v) -> T.RegionVarId.Map.add k v mp)
+      T.RegionVarId.Map.empty ls
+  in
+  fun r ->
+    match r with
+    | T.Static -> T.Static
+    | T.Var id -> T.RegionVarId.Map.find id mp
+
 (** Create a type substitution from a list of type variable ids and a list of
-    types (with which to substitute the type variable ids *)
+    types (with which to substitute the type variable ids) *)
 let make_type_subst (var_ids : T.TypeVarId.id list) (tys : 'r T.ty list) :
     T.TypeVarId.id -> 'r T.ty =
   let ls = List.combine var_ids tys in
@@ -52,6 +67,30 @@ let make_type_subst (var_ids : T.TypeVarId.id list) (tys : 'r T.ty list) :
       T.TypeVarId.Map.empty ls
   in
   fun id -> T.TypeVarId.Map.find id mp
+
+(** Instantiate the type variables in an ADT definition, and return the list
+    of types of the fields for the chosen variant *)
+let type_def_get_instantiated_field_rtype (def : T.type_def)
+    (opt_variant_id : T.VariantId.id option)
+    (regions : T.RegionId.id T.region list) (types : T.rty list) : T.rty list =
+  let r_subst =
+    make_region_subst
+      (List.map (fun x -> x.T.index) def.T.region_params)
+      regions
+  in
+  let ty_subst =
+    make_type_subst (List.map (fun x -> x.T.index) def.T.type_params) types
+  in
+  let fields = TU.type_def_get_fields def opt_variant_id in
+  List.map (fun f -> ty_substitute r_subst ty_subst f.T.field_ty) fields
+
+(** Return the types of the properly instantiated ADT's variant, provided a
+    context *)
+let ctx_adt_get_instantiated_field_rtypes (ctx : C.eval_ctx)
+    (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
+    (regions : T.RegionId.id T.region list) (types : T.rty list) : T.rty list =
+  let def = C.ctx_lookup_type_def ctx def_id in
+  type_def_get_instantiated_field_rtype def opt_variant_id regions types
 
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)
