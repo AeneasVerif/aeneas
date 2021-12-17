@@ -55,7 +55,7 @@ let make_type_subst (var_ids : T.TypeVarId.id list) (tys : 'r T.ty list) :
 
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)
-let type_def_get_instantiated_field_type (def : T.type_def)
+let type_def_get_instantiated_field_etype (def : T.type_def)
     (opt_variant_id : T.VariantId.id option) (types : T.ety list) : T.ety list =
   let ty_subst =
     make_type_subst (List.map (fun x -> x.T.index) def.T.type_params) types
@@ -67,11 +67,11 @@ let type_def_get_instantiated_field_type (def : T.type_def)
 
 (** Return the types of the properly instantiated ADT's variant, provided a
     context *)
-let ctx_adt_get_instantiated_field_types (ctx : C.eval_ctx)
+let ctx_adt_get_instantiated_field_etypes (ctx : C.eval_ctx)
     (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
     (types : T.ety list) : T.ety list =
   let def = C.ctx_lookup_type_def ctx def_id in
-  type_def_get_instantiated_field_type def opt_variant_id types
+  type_def_get_instantiated_field_etype def opt_variant_id types
 
 (** Apply a type substitution to a place *)
 let place_substitute (_tsubst : T.TypeVarId.id -> T.ety) (p : E.place) : E.place
