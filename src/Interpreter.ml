@@ -76,7 +76,7 @@ type g_loan_content = (V.loan_content, V.aloan_content) concrete_or_abs
 type g_borrow_content = (V.borrow_content, V.aborrow_content) concrete_or_abs
 (** Generic borrow content: concrete or abstract *)
 
-type abs_or_var = Abs of V.AbstractionId.id | Var of V.VarId.id
+type abs_or_var_id = AbsId of V.AbstractionId.id | VarId of V.VarId.id
 
 exception Found
 (** Utility exception
@@ -146,14 +146,14 @@ let loans_in_value (v : V.typed_value) : bool =
 
     The loan is referred to by a borrow id.
 
-    TODO: group abs_or_var and g_loan_content. 
+    TODO: group abs_or_var_id and g_loan_content. 
  *)
 let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    (abs_or_var * g_loan_content) option =
+    (abs_or_var_id * g_loan_content) option =
   (* We store here whether we are inside an abstraction or a value - note that we
    * could also track that with the environment, it would probably be more idiomatic
    * and cleaner *)
-  let abs_or_var : abs_or_var option ref = ref None in
+  let abs_or_var : abs_or_var_id option ref = ref None in
 
   let obj =
     object
@@ -213,14 +213,14 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
 
       method! visit_Var env bv v =
         assert (Option.is_none !abs_or_var);
-        abs_or_var := Some (Var bv.C.index);
+        abs_or_var := Some (VarId bv.C.index);
         super#visit_Var env bv v;
         abs_or_var := None
 
       method! visit_Abs env abs =
         assert (Option.is_none !abs_or_var);
         if ek.enter_abs then (
-          abs_or_var := Some (Abs abs.V.abs_id);
+          abs_or_var := Some (AbsId abs.V.abs_id);
           super#visit_Abs env abs)
         else ()
     end
@@ -240,7 +240,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
     Raises an exception if no loan was found.
  *)
 let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (env : C.env) :
-    abs_or_var * g_loan_content =
+    abs_or_var_id * g_loan_content =
   match lookup_loan_opt ek l env with
   | None -> failwith "Unreachable"
   | Some res -> res
@@ -825,24 +825,29 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     object
       inherit [_] C.map_env as super
 
-      method! visit_Loan env lc =
+      method! visit_Loan elem lc =
         match lc with
         | V.SharedLoan (bids, v) ->
             (* We are giving back a value (i.e., the content of a *mutable*
              * borrow): nothing special to do *)
-            V.Loan (super#visit_SharedLoan env bids v)
+            V.Loan (super#visit_SharedLoan elem bids v)
         | V.MutLoan bid' ->
             (* Check if this is the loan we are looking for *)
             if bid' = bid then (
               set_replaced ();
               nv.V.value)
-            else V.Loan (super#visit_MutLoan env bid')
+            else V.Loan (super#visit_MutLoan elem bid')
 
-      method! visit_ALoan env lc = raise Unimplemented
+      method! visit_ALoan elem lc = raise Unimplemented
+
+      method! visit_env_elem elem em =
+        assert (Option.is_none elem);
+        let elem = Some em in
+        super#visit_env_elem elem em
     end
   in
 
-  let env = obj#visit_env () env in
+  let env = obj#visit_env None env in
   (* Check we gave back to exactly one loan *)
   assert !replaced;
   (* Return *)
@@ -1003,7 +1008,7 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
             }
           in
           match lookup_loan ek l env with
-          | Abs loan_abs_id, _ ->
+          | AbsId loan_abs_id, _ ->
               if loan_abs_id = abs_id then (
                 (* Same abstraction! We can end the borrow *)
                 let env = end_borrow_in_env config io (Some abs_id) l env in
@@ -1018,7 +1023,7 @@ let rec end_borrow_in_env (config : C.config) (io : inner_outer)
                 (* Sanity check: we ended the target borrow *)
                 assert (Option.is_none (lookup_borrow_opt ek l env));
                 env
-          | Var _, _ ->
+          | VarId _, _ ->
               (* The loan is not inside the same abstraction (actually inside
                * a non-abstraction value): we need to end the whole abstraction *)
               let env = end_abstraction_in_env config abs_id env in

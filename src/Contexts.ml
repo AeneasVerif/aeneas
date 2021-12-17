@@ -198,17 +198,21 @@ class ['self] iter_frame =
     method visit_env_elem_Abs : 'acc -> abs -> unit =
       fun acc abs -> self#visit_abs acc abs
 
+    method visit_env_elem : 'acc -> env_elem -> unit =
+      fun acc em ->
+        match em with
+        | Var (vid, v) -> self#visit_env_elem_Var acc vid v
+        | Abs abs -> self#visit_env_elem_Abs acc abs
+        | Frame -> failwith "Unreachable"
+
     method visit_env : 'acc -> env -> unit =
       fun acc env ->
         match env with
         | [] -> ()
-        | Var (vid, v) :: env ->
-            self#visit_env_elem_Var acc vid v;
-            self#visit_env acc env
-        | Abs abs :: env ->
-            self#visit_env_elem_Abs acc abs;
-            self#visit_env acc env
         | Frame :: _ -> (* We stop here *) ()
+        | em :: env ->
+            self#visit_env_elem acc em;
+            self#visit_env acc env
   end
 
 (** Visitor to map over the values in the *current* frame *)
@@ -224,17 +228,20 @@ class ['self] map_frame_concrete =
     method visit_env_elem_Abs : 'acc -> abs -> env_elem =
       fun acc abs -> Abs (self#visit_abs acc abs)
 
+    method visit_env_elem : 'acc -> env_elem -> env_elem =
+      fun acc em ->
+        match em with
+        | Var (vid, v) -> self#visit_env_elem_Var acc vid v
+        | Abs abs -> self#visit_env_elem_Abs acc abs
+        | Frame -> failwith "Unreachable"
+
     method visit_env : 'acc -> env -> env =
       fun acc env ->
         match env with
         | [] -> []
-        | Var (vid, v) :: env ->
-            let v = self#visit_env_elem_Var acc vid v in
-            let env = self#visit_env acc env in
-            v :: env
-        | Abs abs :: env ->
-            let abs = self#visit_env_elem_Abs acc abs in
-            let env = self#visit_env acc env in
-            abs :: env
         | Frame :: env -> (* We stop here *) Frame :: env
+        | em :: env ->
+            let em = self#visit_env_elem acc em in
+            let env = self#visit_env acc env in
+            em :: env
   end
