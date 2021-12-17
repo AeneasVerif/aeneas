@@ -361,7 +361,7 @@ module Values = struct
         ^ ")"
     | AEndedMutLoan ml ->
         "@ended_mut_loan{ given_back="
-        ^ typed_value_to_string fmt ml.given_back
+        ^ typed_avalue_to_string fmt ml.given_back
         ^ "; child="
         ^ typed_avalue_to_string fmt ml.child
         ^ " }"

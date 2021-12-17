@@ -577,6 +577,10 @@ type outer_borrows_or_abs =
 exception FoundOuter of outer_borrows_or_abs
 (** Utility exception *)
 
+let apply_proj_borrows (regions : V.RegionId.set_t) (v : V.typed_value)
+    (ty : T.rty) : V.typed_avalue =
+  raise Unimplemented
+
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
     replaced by [Bottom])) if we can end the borrow (for instance, it is not
@@ -822,28 +826,97 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     replaced := true
   in
   let obj =
-    object
+    object (self)
       inherit [_] C.map_env as super
 
-      method! visit_Loan elem lc =
+      method! visit_Loan opt_abs lc =
         match lc with
         | V.SharedLoan (bids, v) ->
             (* We are giving back a value (i.e., the content of a *mutable*
              * borrow): nothing special to do *)
-            V.Loan (super#visit_SharedLoan elem bids v)
+            V.Loan (super#visit_SharedLoan opt_abs bids v)
         | V.MutLoan bid' ->
             (* Check if this is the loan we are looking for *)
             if bid' = bid then (
               set_replaced ();
               nv.V.value)
-            else V.Loan (super#visit_MutLoan elem bid')
+            else V.Loan (super#visit_MutLoan opt_abs bid')
 
-      method! visit_ALoan elem lc = raise Unimplemented
+      method! visit_typed_avalue opt_abs (av : V.typed_avalue) : V.typed_avalue
+          =
+        match av.V.value with
+        | V.ALoan lc ->
+            let value = self#visit_typed_ALoan opt_abs av.V.ty lc in
+            ({ av with V.value } : V.typed_avalue)
+        | _ -> super#visit_typed_avalue opt_abs av
+      (** This is a bit annoying, but as we need the type of the avalue we
+          are exploring, in order to be able to project the value we give
+          back, we need to reimplement [visit_typed_avalue] instead of
+          [visit_ALoan] *)
 
-      method! visit_env_elem elem em =
-        assert (Option.is_none elem);
-        let elem = Some em in
-        super#visit_env_elem elem em
+      method visit_typed_ALoan (opt_abs : V.abs option) (ty : T.rty)
+          (lc : V.aloan_content) : V.avalue =
+        (* Preparing a bit *)
+        let regions =
+          match opt_abs with
+          | None -> failwith "Unreachable"
+          | Some abs -> abs.V.regions
+        in
+        match lc with
+        | V.AMutLoan (bid', child) ->
+            if bid' = bid then (
+              (* This is the loan we are looking for: apply the projection to
+               * the value we give back and replaced this mutable loan with
+               * an ended loan *)
+              (* Register the insertion *)
+              set_replaced ();
+              (* Apply the projection *)
+              let given_back = apply_proj_borrows regions nv ty in
+              (* Explore the child - not necessary, but consistent to do (allows
+               * to check the invariants at the same time) *)
+              let child = self#visit_typed_avalue opt_abs child in
+              (* Return the new value *)
+              V.ALoan (V.AEndedMutLoan { given_back; child }))
+            else
+              (* Continue exploring *)
+              V.ALoan (super#visit_AMutLoan opt_abs bid' child)
+        | V.ASharedLoan (bids, v, av) ->
+            (* We are giving back a value to a *mutable* loan: nothing special to do *)
+            V.ALoan (super#visit_ASharedLoan opt_abs bids v av)
+        | V.AEndedMutLoan { given_back; child } ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AEndedMutLoan opt_abs given_back child)
+        | V.AEndedSharedLoan (v, av) ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AEndedSharedLoan opt_abs v av)
+        | V.AIgnoredMutLoan (bid', child) ->
+            (* This loan is ignored, but we may have to project on a subvalue
+             * of the value which is given back *)
+            if bid' = bid then
+              (* Note that we replace the ignored mut loan by an *ended* ignored
+               * mut loan. Also, this is not the loan we are looking for *per se*:
+               * we don't register the fact that we inserted the value somewhere
+               * (i.e., we don't call [set_replaced]) *)
+              let given_back = apply_proj_borrows regions nv ty in
+              (* We explore the child - not necessary, but consistent *)
+              let child = self#visit_typed_avalue opt_abs child in
+              V.ALoan (V.AEndedIgnoredMutLoan { given_back; child })
+            else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
+        | V.AEndedIgnoredMutLoan { given_back; child } ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
+        | V.AIgnoredSharedLoan asb ->
+            (* Nothing special to do *)
+            V.ALoan (super#visit_AIgnoredSharedLoan opt_abs asb)
+      (** We are not specializing an already existing method, but adding a
+          new method (for projections, we need type information) *)
+
+      method! visit_Abs opt_abs abs =
+        (* We remember in which abstraction we are before diving -
+         * this is necessary for projecting values: we need to know
+         * over which regions to project *)
+        assert (Option.is_none opt_abs);
+        super#visit_Abs (Some abs) abs
     end
   in
 

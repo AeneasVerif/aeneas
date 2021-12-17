@@ -227,7 +227,16 @@ and adt_avalue = {
 and aloan_content =
   | AMutLoan of (BorrowId.id[@opaque]) * typed_avalue
   | ASharedLoan of (BorrowId.set_t[@opaque]) * typed_value * typed_avalue
-  | AEndedMutLoan of { given_back : typed_value; child : typed_avalue }
+  | AEndedMutLoan of { given_back : typed_avalue; child : typed_avalue }
+      (** TODO: in the formalization, given_back was initially a typed value
+       (not an avalue). It seems more consistent to use a value, especially
+       because then the invariants about the borrows are simpler (otherwise,
+       there may be borrow ids duplicated in the context, which is very
+       annoying).
+       I think the original idea was that using values would make it
+       simple to instantiate the backward function (because projecting
+       deconstructs a bit the values with which we feed the function).
+    *)
   | AEndedSharedLoan of typed_value * typed_avalue
   | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }

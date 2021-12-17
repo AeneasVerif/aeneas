@@ -191,7 +191,6 @@ class ['self] iter_frame =
   object (self : 'self)
     inherit [_] V.iter_abs
 
-    (* TODO: remove "env_elem" from the name *)
     method visit_Var : 'acc -> binder -> typed_value -> unit =
       fun acc vid v -> self#visit_typed_value acc v
 
