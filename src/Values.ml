@@ -205,6 +205,15 @@ class ['self] map_typed_avalue_base =
 *)
 type avalue =
   | AConcrete of constant_value
+      (** Note that this case is not used in the projections to keep track of the
+          borrow graph (because there are no borrows in "concrete" values!) but
+          to correctly instantiate the backward functions (we may give back some
+          values at different moments: we need to remember what those values were
+          precisely). Also note that even though avalues and values are not the
+          same, once values are projected to avalues, those avalues still have
+          the structure of the original values (this is necessary, again, to
+          correctly instantiate the backward functions)
+       *)
   | AAdt of adt_avalue
   | ABottom
   | ALoan of aloan_content
