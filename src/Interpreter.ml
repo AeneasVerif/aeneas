@@ -670,10 +670,12 @@ let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
       map borrows to regions - or to interpret the borrows as belonging
       to some regions...)
 
-    TODO: we need a context
+    TODO: we might want to take as parameter a list of definitions rather
+    than a context ([apply_proj_borrows] is called in a map visitor which
+    operates over a context...)
 *)
-let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
-    (ty : T.rty) : V.typed_avalue =
+let rec apply_proj_borrows (ctx : C.eval_ctx) (regions : T.RegionId.set_t)
+    (v : V.typed_value) (ty : T.rty) : V.typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
@@ -682,11 +684,32 @@ let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
   let value : V.avalue =
     match (v.V.value, ty) with
     | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
-    | V.Adt adt, T.Adt (id, regions, tys) ->
+    | V.Adt adt, T.Adt (id, region_params, tys) ->
         (* Retrieve the types of the fields *)
-
-        (* Explore the field values *)
-        raise Unimplemented
+        let field_types =
+          match id with
+          | T.AdtId id ->
+              (* Retrieve the types of the fields *)
+              Subst.ctx_adt_get_instantiated_field_rtypes ctx id
+                adt.V.variant_id region_params tys
+          | T.Tuple ->
+              assert (List.length region_params = 0);
+              tys
+          | T.Assumed aty -> (
+              match aty with
+              | T.Box ->
+                  assert (List.length region_params = 0);
+                  assert (List.length tys = 1);
+                  tys)
+        in
+        (* Project over the field values *)
+        let fields_types = List.combine adt.V.field_values field_types in
+        let proj_fields =
+          List.map
+            (fun (fv, fty) -> apply_proj_borrows ctx regions fv fty)
+            fields_types
+        in
+        V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
     | V.Bottom, _ -> failwith "Unreachable"
     | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
         if
@@ -699,7 +722,7 @@ let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
             match (bc, kind) with
             | V.MutBorrow (bid, bv), T.Mut ->
                 (* Apply the projection on the borrowed value *)
-                let bv = apply_proj_borrows regions bv ref_ty in
+                let bv = apply_proj_borrows ctx regions bv ref_ty in
                 V.AMutBorrow (bid, bv)
             | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
             | V.InactivatedMutBorrow _, _ ->
@@ -714,7 +737,7 @@ let rec apply_proj_borrows (regions : T.RegionId.set_t) (v : V.typed_value)
             match (bc, kind) with
             | V.MutBorrow (bid, bv), T.Mut ->
                 (* Apply the projection on the borrowed value *)
-                let bv = apply_proj_borrows regions bv ref_ty in
+                let bv = apply_proj_borrows ctx regions bv ref_ty in
                 V.AIgnoredMutBorrow bv
             | V.SharedBorrow bid, T.Shared ->
                 (* TODO: we need the context to lookup the value *)
@@ -993,7 +1016,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Register the insertion *)
               set_replaced ();
               (* Apply the projection *)
-              let given_back = apply_proj_borrows regions nv ty in
+              let given_back = apply_proj_borrows ctx regions nv ty in
               (* Return the new value *)
               V.ALoan (V.AEndedMutLoan { given_back; child }))
             else
@@ -1016,7 +1039,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * mut loan. Also, this is not the loan we are looking for *per se*:
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call [set_replaced]) *)
-              let given_back = apply_proj_borrows regions nv ty in
+              let given_back = apply_proj_borrows ctx regions nv ty in
               V.ALoan (V.AEndedIgnoredMutLoan { given_back; child })
             else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
