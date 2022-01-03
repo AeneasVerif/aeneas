@@ -401,10 +401,8 @@ module Values = struct
         ^ "; child: "
         ^ typed_avalue_to_string fmt ml.child
         ^ "}"
-    | AProjSharedLoan asb ->
-        "@ignored_shared_loan("
-        ^ abstract_shared_borrows_to_string fmt asb
-        ^ ")"
+    | AIgnoredSharedLoan sl ->
+        "@ignored_shared_loan(" ^ typed_avalue_to_string fmt sl ^ ")"
 
   and aborrow_content_to_string (fmt : value_formatter) (bc : V.aborrow_content)
       : string =

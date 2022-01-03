@@ -337,9 +337,8 @@ and aloan_content =
        *)
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
       (** Similar to [AEndedMutLoan], for ignored loans *)
-  | AProjSharedLoan of (abstract_shared_borrows[@opaque])
+  | AIgnoredSharedLoan of typed_avalue
       (** An ignored shared loan.
-          TODO: rename and change fields to: typed_avalue
       
           Example:
           ========
