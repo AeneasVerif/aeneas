@@ -49,6 +49,26 @@ let mk_var (index : V.VarId.id) (name : string option) (var_ty : T.ety) : A.var
 let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
   { var_id; projection = [] }
 
+(** Deconstruct a type of the form `Box<T>` to retrieve the `T` inside *)
+let ty_get_box (box_ty : T.ety) : T.ety =
+  match box_ty with
+  | T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) -> boxed_ty
+  | _ -> failwith "Not a boxed type"
+
+(** Deconstruct a type of the form `&T` or `&mut T` to retrieve the `T` (and
+    the borrow kind, etc.)
+ *)
+let ty_get_ref (ty : T.ety) : T.erased_region * T.ety * T.ref_kind =
+  match ty with
+  | T.Ref (r, ty, ref_kind) -> (r, ty, ref_kind)
+  | _ -> failwith "Not a ref type"
+
+(** Box a value *)
+let mk_box_value (v : V.typed_value) : V.typed_value =
+  let box_ty = T.Adt (T.Assumed T.Box, [], [ v.V.ty ]) in
+  let box_v = V.Adt { variant_id = None; field_values = [ v ] } in
+  mk_typed_value box_ty box_v
+
 (** TODO: change the name *)
 type eval_error = Panic
 
@@ -2662,6 +2682,19 @@ let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
   let ty = T.Adt (T.Tuple, [], field_types) in
   (ctx, { V.value = v; V.ty })
 
+let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
+    (boxed_ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  (* Introduce a fresh symbolic value *)
+  let ctx, boxed_sv_id = C.fresh_symbolic_value_id ctx in
+  let boxed_sv = { V.sv_id = boxed_sv_id; V.sv_ty = boxed_ty } in
+  let boxed_sv = { V.svalue = boxed_sv; rset_ended = ended_regions } in
+  let boxed_value = V.Symbolic boxed_sv in
+  let boxed_value : V.typed_value =
+    { V.value = boxed_value; V.ty = Subst.erase_regions boxed_ty }
+  in
+  let box_value = mk_box_value boxed_value in
+  (ctx, box_value)
+
 (** Expand a symbolic value.
 
     Note that we return a list of contexts because when expanding enumerations
@@ -2695,7 +2728,8 @@ let expand_symbolic_value (config : C.config) (expand_enumerations : bool)
     (* Borrows *)
     | Deref, T.Ref (_, _, _) -> raise Unimplemented
     (* Boxes *)
-    | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) -> raise Unimplemented
+    | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
+        compute_expanded_symbolic_box_value sp.V.rset_ended boxed_ty ctx
     | _ ->
         failwith
           ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
@@ -3553,20 +3587,6 @@ let eval_box_new (config : C.config) (region_params : T.erased_region list)
       (* Return *)
       Ok ctx
   | _ -> failwith "Inconsistent state"
-
-(** Deconstruct a type of the form `Box<T>` to retrieve the `T` inside *)
-let ty_get_box (box_ty : T.ety) : T.ety =
-  match box_ty with
-  | T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) -> boxed_ty
-  | _ -> failwith "Not a boxed type"
-
-(** Deconstruct a type of the form `&T` or `&mut T` to retrieve the `T` (and
-    the borrow kind, etc.)
- *)
-let ty_get_ref (ty : T.ety) : T.erased_region * T.ety * T.ref_kind =
-  match ty with
-  | T.Ref (r, ty, ref_kind) -> (r, ty, ref_kind)
-  | _ -> failwith "Not a ref type"
 
 (** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
     and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
