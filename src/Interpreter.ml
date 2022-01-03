@@ -639,6 +639,7 @@ let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
       assert (int_ty1 = int_ty2);
       false
   | T.Adt (id1, regions1, tys1), T.Adt (id2, regions2, tys2) ->
+      assert (id1 = id2);
       (* The intersection set for the ADTs is very crude: 
        * we check if some arguments intersect. As all the type and region
        * parameters should be used somewhere in the ADT (otherwise rustc
@@ -682,7 +683,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
   assert (ety = v.V.ty);
   (* Project *)
   match (v.V.value, ty) with
-  | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> []
+  | V.Concrete _, (T.Bool | T.Char | T.Integer _ | T.Str) -> []
   | V.Adt adt, T.Adt (id, region_params, tys) ->
       (* Retrieve the types of the fields *)
       let field_types =
@@ -739,7 +740,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
         else asb
       in
       asb
-  | V.Loan lc, _ -> failwith "Unreachable"
+  | V.Loan _, _ -> failwith "Unreachable"
   | V.Symbolic s, _ ->
       (* Check that the symbolic value doesn't contain already ended regions *)
       assert (
@@ -815,7 +816,7 @@ let rec apply_proj_borrows (ctx : C.eval_ctx)
           (* Not in the set: ignore *)
           let bc =
             match (bc, kind) with
-            | V.MutBorrow (bid, bv), T.Mut ->
+            | V.MutBorrow (_bid, bv), T.Mut ->
                 (* Apply the projection on the borrowed value *)
                 let bv =
                   apply_proj_borrows ctx fresh_reborrow regions bv ref_ty
@@ -840,7 +841,7 @@ let rec apply_proj_borrows (ctx : C.eval_ctx)
             | _ -> failwith "Unreachable"
           in
           V.ABorrow bc
-    | V.Loan lc, _ -> failwith "Unreachable"
+    | V.Loan _, _ -> failwith "Unreachable"
     | V.Symbolic s, _ ->
         (* Check that the symbolic value doesn't contain already ended regions *)
         assert (
