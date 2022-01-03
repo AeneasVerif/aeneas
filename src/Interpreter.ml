@@ -601,7 +601,11 @@ let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
     None
   with FoundLoanContent lc -> Some lc
 
-(** Check if a [value] contains ⊥ *)
+(** Check if a [value] contains ⊥.
+
+    TODO: not general enough for symbolic values! We need to check if
+    the types contain already ended regions.
+ *)
 let bottom_in_value (v : V.typed_value) : bool =
   let obj =
     object
@@ -785,7 +789,6 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
       asb
   | V.Loan _, _ -> failwith "Unreachable"
   | V.Symbolic s, _ ->
-      (* Check that the symbolic value doesn't contain already ended regions *)
       assert (
         not (projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty regions));
       [ V.AsbProjReborrows (s.V.svalue, ty) ]
@@ -804,8 +807,21 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     the projection on borrows, we can't update the context immediately.
     Instead, we remember the list of borrows we have to insert in the
     context *afterwards*.
+
+    [check_symbolic_no_ended] controls whether we check or not whether
+    symbolic values don't contain already ended regions.
+    This check is activated when applying projectors upon calling a function
+    (because we need to check that function arguments don't contain ⊥),
+    but deactivated when expanding symbolic values:
+    ```
+    fn f<'a,'b>(x : &'a mut u32, y : &'b mut u32) -> (&'a mut u32, &'b mut u32);
+    
+    let p = f(&mut x, &mut y); // p -> @s0
+    assert(x == ...); // end 'a
+    let z = p.1; // HERE: the symbolic expansion of @s0 contains ended regions
+    ```
 *)
-let rec apply_proj_borrows (ctx : C.eval_ctx)
+let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
     (regions : T.RegionId.set_t) (v : V.typed_value) (ty : T.rty) :
     V.typed_avalue =
@@ -828,7 +844,8 @@ let rec apply_proj_borrows (ctx : C.eval_ctx)
         let proj_fields =
           List.map
             (fun (fv, fty) ->
-              apply_proj_borrows ctx fresh_reborrow regions fv fty)
+              apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                regions fv fty)
             fields_types
         in
         V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
@@ -845,7 +862,8 @@ let rec apply_proj_borrows (ctx : C.eval_ctx)
             | V.MutBorrow (bid, bv), T.Mut ->
                 (* Apply the projection on the borrowed value *)
                 let bv =
-                  apply_proj_borrows ctx fresh_reborrow regions bv ref_ty
+                  apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                    regions bv ref_ty
                 in
                 V.AMutBorrow (bid, bv)
             | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
@@ -862,7 +880,8 @@ let rec apply_proj_borrows (ctx : C.eval_ctx)
             | V.MutBorrow (_bid, bv), T.Mut ->
                 (* Apply the projection on the borrowed value *)
                 let bv =
-                  apply_proj_borrows ctx fresh_reborrow regions bv ref_ty
+                  apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                    regions bv ref_ty
                 in
                 V.AIgnoredMutBorrow bv
             | V.SharedBorrow bid, T.Shared ->
@@ -886,10 +905,13 @@ let rec apply_proj_borrows (ctx : C.eval_ctx)
           V.ABorrow bc
     | V.Loan _, _ -> failwith "Unreachable"
     | V.Symbolic s, _ ->
-        (* Check that the symbolic value doesn't contain already ended regions *)
-        assert (
-          not
-            (projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty regions));
+        (* Check that the symbolic value doesn't contain already ended regions,
+         * if necessary *)
+        if check_symbolic_no_ended then
+          assert (
+            not
+              (projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty
+                 regions));
         V.ASymbolic (V.AProjBorrows (s.V.svalue, ty))
     | _ -> failwith "Unreachable"
   in
@@ -1240,6 +1262,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     assert (not !replaced);
     replaced := true
   in
+  (* Whenever giving back symbolic values, they shouldn't contain already ended regions *)
+  let check_symbolic_no_ended = true in
   (* We sometimes need to reborrow values while giving a value back due *)
   let reborrows : (V.BorrowId.id * V.BorrowId.id) list ref = ref [] in
   let borrow_counter = ref ctx.C.borrow_counter in
@@ -1296,7 +1320,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               set_replaced ();
               (* Apply the projection *)
               let given_back =
-                apply_proj_borrows ctx fresh_reborrow regions nv ty
+                apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                  regions nv ty
               in
               (* Return the new value *)
               V.ALoan (V.AEndedMutLoan { given_back; child }))
@@ -1321,7 +1346,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call [set_replaced]) *)
               let given_back =
-                apply_proj_borrows ctx fresh_reborrow regions nv ty
+                apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                  regions nv ty
               in
               V.ALoan (V.AEndedIgnoredMutLoan { given_back; child })
             else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
