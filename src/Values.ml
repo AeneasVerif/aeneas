@@ -111,7 +111,7 @@ and adt_value = {
 and borrow_content =
   | SharedBorrow of (BorrowId.id[@opaque])  (** A shared value *)
   | MutBorrow of (BorrowId.id[@opaque]) * typed_value
-      (** A mutably borrowed value *)
+      (** A mutably borrowed value. *)
   | InactivatedMutBorrow of (BorrowId.id[@opaque])
       (** An inactivated mut borrow.
 
@@ -127,6 +127,9 @@ and borrow_content =
 and loan_content =
   | SharedLoan of (BorrowId.set_t[@opaque]) * typed_value
   | MutLoan of (BorrowId.id[@opaque])
+      (** TODO: we might want to add a set of borrow ids (useful for inactivated
+          borrows, and extremely useful when giving shared values to abstractions).
+       *)
 
 and typed_value = { value : value; ty : ety }
 [@@deriving
@@ -234,31 +237,123 @@ and adt_avalue = {
 
     Note that the children avalues are independent of the parent avalues.
     For instance, the child avalue contained in an [AMutLoan] will likely
-    contain other, independent loans. We keep track of the hierarchy because
-    we need it to properly instantiate the backward functions when generating
-    the pure translation.
+    contain other, independent loans.
+    Keeping track of the hierarchy is not necessary to maintain the borrow graph
+    (which is the primary role of the abstractions), but it is necessary
+    to properly instantiate the backward functions when generating the pure
+    translation.
 *)
 and aloan_content =
   | AMutLoan of (BorrowId.id[@opaque]) * typed_avalue
+      (** A mutable loan owned by an abstraction.
+         
+          Example:
+          ========
+          ```
+          fn f<'a>(...) -> &'a mut &'a mut u32;
+          
+          let px = f(...);
+          ```
+          
+          We get (after some symbolic exansion):
+          ```
+          abs0 {
+            a_mut_loan l0 (a_mut_loan l1)
+          }
+          px -> mut_borrow l0 (mut_borrow @s1)
+          ```
+       *)
   | ASharedLoan of (BorrowId.set_t[@opaque]) * typed_value * typed_avalue
-  | AEndedMutLoan of { given_back : typed_avalue; child : typed_avalue }
-      (** TODO: in the formalization, given_back was initially a typed value
-       (not an avalue). It seems more consistent to use a value, especially
-       because then the invariants about the borrows are simpler (otherwise,
-       there may be borrow ids duplicated in the context, which is very
-       annoying).
-       I think the original idea was that using values would make it
-       simple to instantiate the backward function (because projecting
-       deconstructs a bit the values with which we feed the function).
-    *)
-  | AEndedSharedLoan of typed_value * typed_avalue
-  | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
-  | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
-  | AProjSharedLoan of (abstract_shared_borrows[@opaque])
-      (** A projected shared loan - TODO: remove? Does it make sense? Maybe
-          I should rename that to AIgnoredSharedLoan... *)
+      (** A shared loan owned by an abstraction.
 
-(** Note that when a borrow content is ended, it is replaced by Bottom (while
+          Example:
+          ========
+          ```
+          fn f<'a>(...) -> &'a u32;
+          
+          let px = f(...);
+          ```
+          
+          We get:
+          ```
+          abs0 { a_shared_loan {l0} @s0 ⊥ }
+          px -> shared_loan l0
+          ```
+     *)
+  | AEndedMutLoan of { given_back : typed_avalue; child : typed_avalue }
+      (** An ended mutable loan in an abstraction.
+          We need it because abstractions must keep track of the values
+          we gave back to them, so that we can correctly instantiate
+          backward functions.
+      
+          Example:
+          ========
+          ```
+          abs0 { a_mut_loan l0 ⊥ }
+          x -> mut_borrow l0 (U32 3)
+          ```
+          
+          After ending `l0`:
+          
+          ```
+          abs0 { a_ended_mut_loan { given_back = U32 3; child = ⊥; }
+          x -> ⊥
+          ```
+      
+          TODO: in the formalization, given_back was initially a typed value
+          (not an avalue). It seems more consistent to use a value, especially
+          because then the invariants about the borrows are simpler (otherwise,
+          there may be borrow ids duplicated in the context, which is very
+          annoying).
+          I think the original idea was that using values would make it
+          simple to instantiate the backward function (because projecting
+          deconstructs a bit the values with which we feed the function).
+       *)
+  | AEndedSharedLoan of typed_value * typed_avalue
+      (** Similar to [AEndedMutLoan] but in this case there are no avalues to
+          give back. Actually, we could probably forget the shared value
+          altogether (and just keep the child avalue).
+       *)
+  | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
+      (** An ignored mutable loan.
+      
+          We need to keep track of ignored mutable loans, because we may have
+          to apply projections on the values given back to those loans (say
+          you have a borrow of type `&'a mut &'b mut`, in the abstraction 'b,
+          the outer loan is ignored, however you need to keep track of it so
+          that when ending the borrow corresponding to 'a you can correctly
+          project on the inner value).
+       
+          Example:
+          ========
+          ```
+          fn f<'a,'b>(...) -> &'a mut &'b mut u32;
+          let x = f(...);
+          
+          > abs'a { a_mut_loan l0 (a_ignored_mut_loan l1 ⊥) }
+          > abs'b { a_ignored_mut_loan l0 (a_mut_loan l1 ⊥) }
+          > x -> mut_borrow l0 (mut_borrow l1 @s1)
+          ```
+       *)
+  | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
+      (** Similar to [AEndedMutLoan], for ignored loans *)
+  | AProjSharedLoan of (abstract_shared_borrows[@opaque])
+      (** An ignored shared loan.
+          TODO: rename and change fields to: typed_avalue
+      
+          Example:
+          ========
+          ```
+          fn f<'a,'b>(...) -> &'a &'b u32;
+          let x = f(...);
+          
+          > abs'a { a_shared_loan {l0} (shared_borrow l1) (a_ignored_shared_loan ⊥) }
+          > abs'b { a_ignored_shared_loan (a_shared_loan {l1} @s1 ⊥) }
+          > x -> shared_borrow l0
+          ```
+       *)
+
+(** Note that when a borrow content is ended, it is replaced by ⊥ (while
     we need to track ended loans more precisely, especially because of their
     children values).
 
@@ -272,10 +367,98 @@ and aloan_content =
 *)
 and aborrow_content =
   | AMutBorrow of (BorrowId.id[@opaque]) * typed_avalue
+      (** A mutable borrow owned by an abstraction.
+      
+          Is used when an abstraction "consumes" borrows, when giving borrows
+          as arguments to a function.
+
+          Example:
+          ========
+          ```
+          fn f<'a>(px : &'a mut u32);
+          
+          > x -> mut_loan l0
+          > px -> mut_borrow l0 (U32 0)
+          
+          f(move px);
+          
+          > x -> mut_loan l0
+          > px -> ⊥
+          > abs0 { a_mut_borrow l0 (U32 0) }
+          ```
+     *)
   | ASharedBorrow of (BorrowId.id[@opaque])
+      (** A shared borrow owned by an abstraction.
+    
+          Example:
+          ========
+          ```
+          fn f<'a>(px : &'a u32);
+          
+          > x -> shared_loan {l0} (U32 0)
+          > px -> shared_borrow l0
+          
+          f(move px);
+          
+          > x -> shared_loan {l0} (U32 0)
+          > px -> ⊥
+          > abs0 { a_shared_bororw l0 }
+          ```
+     *)
   | AIgnoredMutBorrow of typed_avalue
+      (** An ignored mutable borrow.
+
+          This is mostly useful for typing concerns: when a borrow doesn't
+          belong to an abstraction, it would be weird to ignore it altogether.
+
+          Example:
+          ========
+          ```
+          fn f<'a,'b>(ppx : &'a mut &'b mut u32);
+          
+          > x -> mut_loan l0
+          > px -> mut_loan l1
+          > ppx -> mut_borrow l1 (mut_borrow l0 (U32 0))
+
+          f(move ppx);
+
+          > x -> mut_loan l0
+          > px -> mut_loan l1
+          > ppx -> ⊥
+          > abs'a { a_mut_borrow l1 ⊥ } // TODO: there might be an a_ignored_mut_borrow in the inner value
+          > abs'b { a_ignored_mut_borrow (a_mut_borrow l0 (U32 0)) }
+          ```
+       *)
   | AProjSharedBorrow of (abstract_shared_borrows[@opaque])
-      (** A projected shared borrow *)
+      (** A projected shared borrow.
+
+          When giving shared borrows as arguments to function calls, we
+          introduce new borrows to keep track of the fact that the function
+          might reborrow values inside.
+
+          Example:
+          ========
+          Below, when calling `f`, we need to introduce one shared borrow per
+          borrow in the argument.
+          ```
+          fn f<'a,'b>(pppx : &'a &'b &'c mut u32);
+
+          > x    -> mut_loan l0
+          > px   -> shared_loan {l1} (mut_borrow l0 (U32 0))
+          > ppx  -> shared_loan {l2} (shared_borrow l1)
+          > pppx -> shared_borrow l2
+
+          f(move pppx);
+
+          > x    -> mut_loan l0
+          > px   -> shared_loan {l1, l3, l4} (mut_borrow l0 (U32 0))
+          > ppx  -> shared_loan {l2} (shared_borrow l1)
+          > pppx -> ⊥
+          > abs'a { a_proj_shared_borrow {l2} }
+          > abs'b { a_proj_shared_borrow {l3} } // l3 reborrows l1
+          > abs'c { a_proj_shared_borrow {l4} } // l4 reborrows l0
+          ```
+       *)
 
 (* TODO: we may want to merge this with typed_value - would prevent some issues
    when accessing fields... *)
