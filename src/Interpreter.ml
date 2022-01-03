@@ -23,6 +23,8 @@ open ValuesUtils
 
 (* TODO: intensively test with PLT-redex *)
 
+(* TODO: remove the config parameters when they are useless *)
+
 (** Some utilities *)
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
@@ -599,7 +601,7 @@ let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
     None
   with FoundLoanContent lc -> Some lc
 
-(** Check if a value contains ⊥ *)
+(** Check if a [value] contains ⊥ *)
 let bottom_in_value (v : V.typed_value) : bool =
   let obj =
     object
@@ -614,6 +616,23 @@ let bottom_in_value (v : V.typed_value) : bool =
     false
   with Found -> true
 
+(** Check if an [avalue] contains ⊥ *)
+let bottom_in_avalue (v : V.typed_avalue) : bool =
+  let obj =
+    object
+      inherit [_] V.iter_typed_avalue
+
+      method! visit_Bottom _ = raise Found
+
+      method! visit_ABottom _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_avalue () v;
+    false
+  with Found -> true
+
 type outer_borrows_or_abs =
   | OuterBorrows of borrow_ids
   | OuterAbs of V.AbstractionId.id
@@ -625,6 +644,17 @@ exception FoundOuter of outer_borrows_or_abs
 let region_in_set (r : T.RegionId.id T.region) (rset : T.RegionId.set_t) : bool
     =
   match r with T.Static -> false | T.Var id -> T.RegionId.Set.mem id rset
+
+(** Return the set of regions in an rty *)
+let rty_regions (ty : T.rty) : T.RegionId.set_t =
+  let s = ref T.RegionId.Set.empty in
+  let add_region r = s := T.RegionId.Set.add r !s in
+
+  raise Unimplemented
+
+let rty_regions_intersect (ty : T.rty) (regions : T.RegionId.set_t) : bool =
+  let ty_regions = rty_regions ty in
+  not (T.RegionId.Set.disjoint ty_regions regions)
 
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that
@@ -642,7 +672,7 @@ let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
       false
   | T.Adt (id1, regions1, tys1), T.Adt (id2, regions2, tys2) ->
       assert (id1 = id2);
-      (* The intersection set for the ADTs is very crude: 
+      (* The intersection check for the ADTs is very crude: 
        * we check if some arguments intersect. As all the type and region
        * parameters should be used somewhere in the ADT (otherwise rustc
        * generates an error), it means that it should be equivalent to checking
@@ -1182,7 +1212,7 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
   (* Return *)
   ctx
 
-(** Auxiliary function to end borrows. See [give_back_in_env].
+(** Auxiliary function to end borrows. See [give_back].
     
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
@@ -1323,7 +1353,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* Return *)
   ctx
 
-(** Auxiliary function to end borrows. See [give_back_in_env].
+(** Auxiliary function to end borrows. See [give_back].
 
     This function is similar to [give_back_value] but gives back an [avalue]
     (coming from an abstraction).
@@ -1331,6 +1361,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     It is used when ending a borrow inside an abstraction, when the corresponding
     loan is inside the same abstraction (in which case we don't need to end the whole
     abstraction).
+    
+    REMARK: this function can't be used to give back the values borrowed by
+    end abstraction when ending this abstraction. When doing this, we need
+    to convert the [avalue] to a [value] by introducing the proper symbolic values.
  *)
 let give_back_avalue (_config : C.config) (bid : V.BorrowId.id)
     (nv : V.typed_avalue) (ctx : C.eval_ctx) : C.eval_ctx =
@@ -1412,7 +1446,7 @@ let give_back_avalue (_config : C.config) (bid : V.BorrowId.id)
   (* Return *)
   ctx
 
-(** Auxiliary function to end borrows. See [give_back_in_env].
+(** Auxiliary function to end borrows. See [give_back].
     
     When we end a shared borrow, we need to remove the borrow id from the list
     of borrows to the shared value.
@@ -1584,6 +1618,33 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       (* Update the context *)
       give_back_shared config l ctx
   | Abstract (V.AIgnoredMutBorrow _) -> failwith "Unreachable"
+
+(** Convert an [avalue] to a [value].
+
+    This function is used when ending abstractions: whenever we end a borrow
+    in an abstraction, we converted the borrowed [avalue] to a [value], then give
+    back this [value] to the context.
+    
+    There are two possibilities:
+    - either the borrowed [avalue] contains ended regions, in which case we return ⊥
+    - or it doesn't contain ⊥, in which case we simply return a newly introduced
+      symbolic value.
+    We return a new context because we may have to introduce a symbolic value.
+    
+    The `ended_regions` parameter is for the regions contained in the current
+    abstraction.
+ *)
+let convert_avalue_to_value (ended_regions : T.RegionId.set_t)
+    (av : V.typed_avalue) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  (* Convert the type *)
+  let ty = Subst.erase_regions av.V.ty in
+  (* Check if the avalue contains ended regions *)
+  if rty_regions_intersect av.V.ty ended_regions then
+    (* Contains ended regions: return ⊥ *)
+    (ctx, { V.value = V.Bottom; V.ty })
+  else
+    (* Doesn't contain ended regions: return a symbolic value *)
+    raise Unimplemented
 
 (** End a borrow identified by its borrow id in a context
     
@@ -1848,9 +1909,18 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
     (* Then give back the value *)
     let ctx =
       match bc with
-      | V.AMutBorrow (bid, av) -> raise Unimplemented
-      | V.ASharedBorrow bid -> raise Unimplemented
-      | V.AProjSharedBorrow asb -> raise Unimplemented
+      | V.AMutBorrow (bid, av) ->
+          (* First, convert the avalue to a value (by introducing the proper
+           * symbolic values). Note that we should probably use the regions owned
+           * by the abstraction for the ended_regions parameter, but for safety
+           * I'm using the accumulated regions (which include the ancestors'
+           * regions). Think a bit about that... *)
+          let ctx, v = convert_avalue_to_value abs.acc_regions av ctx in
+          give_back_value config bid v ctx
+      | V.ASharedBorrow bid -> give_back_shared config bid ctx
+      | V.AProjSharedBorrow _ ->
+          (* Nothing to do *)
+          ctx
       | V.AIgnoredMutBorrow _ -> failwith "Unexpected"
     in
     (* Reexplore *)

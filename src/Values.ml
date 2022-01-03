@@ -424,9 +424,24 @@ and aborrow_content =
           > x -> mut_loan l0
           > px -> mut_loan l1
           > ppx -> ⊥
-          > abs'a { a_mut_borrow l1 ⊥ } // TODO: there might be an a_ignored_mut_borrow in the inner value
+          > abs'a { a_mut_borrow l1 (a_ignored_mut_borrow (U32 0)) } // TODO: duplication
           > abs'b { a_ignored_mut_borrow (a_mut_borrow l0 (U32 0)) }
           ```
+          TODO: this is annoying, we are duplicating information. Maybe we
+          could introduce an "Ignored" value? We have to pay attention to
+          two things:
+          - introducing ⊥ when ignoring a value is not always possible, because
+            we check whether the borrowed value contains ⊥ when giving back a
+            borrowed value (if it is the case we give back ⊥, otherwise we
+            introduce a symbolic value). This is necessary when ending nested
+            borrows with the same lifetime: when ending the inner borrow we
+            actually give back a value, however when ending the outer borrow
+            we need to give back ⊥.
+            TODO: actually we don't do that anymore, we check if the borrowed
+            avalue contains ended regions (which is cleaner and more robust).
+          - we may need to remember the precise values given to the
+            abstraction so that we can properly call the backward functions
+            when generating the pure translation.
        *)
   | AProjSharedBorrow of (abstract_shared_borrows[@opaque])
       (** A projected shared borrow.
