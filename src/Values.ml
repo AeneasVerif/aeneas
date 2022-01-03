@@ -433,7 +433,8 @@ and aborrow_content =
 
           When giving shared borrows as arguments to function calls, we
           introduce new borrows to keep track of the fact that the function
-          might reborrow values inside.
+          might reborrow values inside. Note that as shared values are immutable,
+          we don't really need to remember the structure of the shared values.
 
           Example:
           ========

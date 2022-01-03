@@ -122,6 +122,9 @@ exception FoundBorrowContent of V.borrow_content
 exception FoundLoanContent of V.loan_content
 (** Utility exception *)
 
+exception FoundABorrowContent of V.aborrow_content
+(** Utility exception *)
+
 exception FoundGBorrowContent of g_borrow_content
 (** Utility exception *)
 
@@ -515,32 +518,35 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
 
     This is a helper function: it might break invariants.     
  *)
-let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id)
-    (nbc : V.aborrow_content) (ctx : C.eval_ctx) : C.eval_ctx =
+let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id) (nv : V.avalue)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
    * inside values, we check we don't update more than one borrow. Then, upon
    * returning we check that we updated at least once. *)
   let r = ref false in
-  let update () : V.aborrow_content =
+  let update () : V.avalue =
     assert (not !r);
     r := true;
-    nbc
+    nv
   in
 
   let obj =
     object
       inherit [_] C.map_eval_ctx as super
 
-      method! visit_aborrow_content env bc =
+      method! visit_ABorrow env bc =
         match bc with
         | V.AMutBorrow (bid, av) ->
-            if bid = l then update () else super#visit_AMutBorrow env bid av
+            if bid = l then update ()
+            else V.ABorrow (super#visit_AMutBorrow env bid av)
         | V.ASharedBorrow bid ->
-            if bid = l then update () else super#visit_ASharedBorrow env bid
-        | V.AIgnoredMutBorrow av -> super#visit_AIgnoredMutBorrow env av
+            if bid = l then update ()
+            else V.ABorrow (super#visit_ASharedBorrow env bid)
+        | V.AIgnoredMutBorrow av ->
+            V.ABorrow (super#visit_AIgnoredMutBorrow env av)
         | V.AProjSharedBorrow asb ->
             if borrow_in_asb l asb then update ()
-            else super#visit_AProjSharedBorrow env asb
+            else V.ABorrow (super#visit_AProjSharedBorrow env asb)
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs
@@ -1732,9 +1738,8 @@ and end_abstraction_loans (config : C.config) (abs_id : V.AbstractionId.id)
             super#visit_AEndedMutLoan env given_back child
         | V.AEndedSharedLoan (v, av) -> super#visit_AEndedSharedLoan env v av
         | V.AIgnoredMutLoan (bid, av) ->
-            (* Note that this loan might come from a child abstraction (it can't
-             * come from a parent abstraction, because we should have ended them
-             * already) *)
+            (* Note that this loan can't come from a parent abstraction, because
+             * we should have ended them already) *)
             super#visit_AIgnoredMutLoan env bid av
         | V.AEndedIgnoredMutLoan { given_back; child } ->
             super#visit_AEndedIgnoredMutLoan env given_back child
@@ -1758,8 +1763,98 @@ and end_abstraction_loans (config : C.config) (abs_id : V.AbstractionId.id)
 
 and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
-  (* The abstraction mustn't contain any loans *)
-  raise Unimplemented
+  (* Note that the abstraction mustn't contain any loans *)
+  (* We end the borrows, starting with the *inner* ones. This is important
+     when considering nested borrows which have the same lifetime.
+
+     For instance:
+     ```
+     x -> mut_loan l1
+     px -> mut_loan l0
+     abs0 { a_mut_borrow l0 (a_mut_borrow l1 (U32 3)) }
+     ```
+
+     becomes (`U32 3` doesn't contain ⊥, so we give back a symbolic value):
+     ```
+     x -> @s0
+     px -> mut_loan l0
+     abs0 { a_mut_borrow l0 ⊥ }
+     ```
+
+     then (the borrowed value contains ⊥, we give back ⊥):
+     ```
+     x -> @s0
+     px -> ⊥
+     abs0 { ⊥ }
+     ```
+  *)
+  (* We explore in-depth and use exceptions. When exploring a borrow, if
+   * the exploration didn't trigger an exception, it means there are no
+   * inner borrows to end: we can thus trigger an exception for the current
+   * borrow. *)
+  let obj =
+    object
+      inherit [_] V.iter_abs as super
+
+      method! visit_aborrow_content env bc =
+        (* In-depth exploration *)
+        super#visit_aborrow_content env bc;
+        (* No exception was raise: we can raise an exception for the
+         * current borrow *)
+        match bc with
+        | V.AMutBorrow (_, _) | V.ASharedBorrow _ ->
+            (* Raise an exception *)
+            raise (FoundABorrowContent bc)
+        | V.AProjSharedBorrow asb ->
+            (* Raise an exception only if the asb contains borrows *)
+            if
+              List.exists
+                (fun x -> match x with V.AsbBorrow _ -> true | _ -> false)
+                asb
+            then raise (FoundABorrowContent bc)
+            else ()
+        | V.AIgnoredMutBorrow _ ->
+            (* Nothing to do for ignored borrows *)
+            ()
+    end
+  in
+  (* Lookup the abstraction *)
+  let abs = C.ctx_lookup_abs ctx abs_id in
+  try
+    (* Explore the abstraction, looking for borrows *)
+    obj#visit_abs () abs;
+    (* No borrows: nothing to update *)
+    ctx
+  with
+  (* There are borrows: end them, then reexplore *)
+  | FoundABorrowContent bc ->
+    (* First, replace the borrow by ⊥ *)
+    let bid =
+      match bc with
+      | V.AMutBorrow (bid, _) | V.ASharedBorrow bid -> bid
+      | V.AProjSharedBorrow asb -> (
+          (* There should be at least one borrow identifier in the set, which we
+           * can use to identify the whole set *)
+          match
+            List.find
+              (fun x -> match x with V.AsbBorrow _ -> true | _ -> false)
+              asb
+          with
+          | V.AsbBorrow bid -> bid
+          | _ -> failwith "Unexpected")
+      | V.AIgnoredMutBorrow _ -> failwith "Unexpected"
+    in
+    let ctx = update_aborrow ek_all bid V.ABottom ctx in
+    (* Then give back the value *)
+    let ctx =
+      match bc with
+      | V.AMutBorrow (bid, av) -> raise Unimplemented
+      | V.ASharedBorrow bid -> raise Unimplemented
+      | V.AProjSharedBorrow asb -> raise Unimplemented
+      | V.AIgnoredMutBorrow _ -> failwith "Unexpected"
+    in
+    (* Reexplore *)
+    end_abstraction_borrows config abs_id ctx
 
 and end_abstraction_regions (config : C.config) (abs_id : V.AbstractionId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
