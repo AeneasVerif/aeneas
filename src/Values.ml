@@ -115,13 +115,28 @@ and borrow_content =
   | InactivatedMutBorrow of (BorrowId.id[@opaque])
       (** An inactivated mut borrow.
 
-          This is used to model two-phase borrows. When evaluating a two-phase
-          mutable borrow, we first introduce an inactivated borrow which behaves
-          like a shared borrow, until the moment we actually *use* the borrow:
-          at this point, we end all the other shared borrows (or inactivated borrows
-          - though there shouldn't be any other inactivated borrows if the program
+          This is used to model [two-phase borrows](https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html).
+          When evaluating a two-phase mutable borrow, we first introduce an inactivated
+          borrow which behaves like a shared borrow, until the moment we actually *use*
+          the borrow: at this point, we end all the other shared borrows (or inactivated
+          borrows - though there shouldn't be any other inactivated borrows if the program
           is well typed) of this value and replace the inactivated borrow with a
           mutable borrow.
+          
+          A simple use case of two-phase borrows:
+          ```
+          let mut v = Vec::new();
+          v.push(v.len());
+          ```
+          
+          This gets desugared to (something similar to) the following MIR:
+          ```
+          v = Vec::new();
+          v1 = &mut v;
+          v2 = &v; // We need this borrow, but v has already been mutably borrowed!
+          l = Vec::len(move v2);
+          Vec::push(move v1, move l); // In practice, v1 gets activated only here
+          ```
        *)
 
 and loan_content =

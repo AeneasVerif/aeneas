@@ -2118,7 +2118,12 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
       let ctx = update_loan ek l (V.MutLoan l) ctx in
       (* Return *)
       (ctx, sv)
-  | _, Abstract _ -> raise Unimplemented
+  | _, Abstract _ ->
+      (* I don't think it is possible to have two-phase borrows involving borrows
+       * returned by abstractions. I'm not sure how we could handle that anyway. *)
+      failwith
+        "Can't promote a shared loan to a mutable loan if the loan is inside \
+         an abstraction"
 
 (** Helper function: see [activate_inactivated_mut_borrow].
 
@@ -2138,7 +2143,11 @@ let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id)
   | Concrete (V.InactivatedMutBorrow _) ->
       (* Update it *)
       update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx
-  | Abstract _ -> raise Unimplemented
+  | Abstract _ ->
+      (* This can't happen for sure *)
+      failwith
+        "Can't promote a shared borrow to a mutable borrow if the borrow is \
+         inside an abstraction"
 
 (** Promote an inactivated mut borrow to a mut borrow.
 
@@ -2187,7 +2196,12 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
              [promote_shared_loan_to_mut_loan]
           *)
           promote_inactivated_borrow_to_mut_borrow l borrowed_value ctx)
-  | _, Abstract _ -> raise Unimplemented
+  | _, Abstract _ ->
+      (* I don't think it is possible to have two-phase borrows involving borrows
+       * returned by abstractions. I'm not sure how we could handle that anyway. *)
+      failwith
+        "Can't activate an inactivated mutable borrow referencing a loan inside\n\
+        \         an abstraction"
 
 (** Paths *)
 
