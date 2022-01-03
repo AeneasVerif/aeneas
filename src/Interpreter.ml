@@ -648,9 +648,20 @@ let region_in_set (r : T.RegionId.id T.region) (rset : T.RegionId.set_t) : bool
 (** Return the set of regions in an rty *)
 let rty_regions (ty : T.rty) : T.RegionId.set_t =
   let s = ref T.RegionId.Set.empty in
-  let add_region r = s := T.RegionId.Set.add r !s in
+  let add_region (r : T.RegionId.id T.region) =
+    match r with T.Static -> () | T.Var rid -> s := T.RegionId.Set.add rid !s
+  in
+  let obj =
+    object
+      inherit [_] T.iter_ty
 
-  raise Unimplemented
+      method! visit_'r _env r = add_region r
+    end
+  in
+  (* Explore the type *)
+  obj#visit_ty () ty;
+  (* Return the set of accumulated regions *)
+  !s
 
 let rty_regions_intersect (ty : T.rty) (regions : T.RegionId.set_t) : bool =
   let ty_regions = rty_regions ty in
