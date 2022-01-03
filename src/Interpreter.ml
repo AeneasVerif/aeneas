@@ -1644,7 +1644,16 @@ let convert_avalue_to_value (ended_regions : T.RegionId.set_t)
     (ctx, { V.value = V.Bottom; V.ty })
   else
     (* Doesn't contain ended regions: return a symbolic value *)
-    raise Unimplemented
+    let ctx, sv_id = C.fresh_symbolic_value_id ctx in
+    let svalue : V.symbolic_value = { V.sv_id; sv_ty = av.V.ty } in
+    let value : V.symbolic_proj_comp =
+      (* Note that the set of ended regions is empty: we shouldn't have to take
+       * into account any ended regions at this point, otherwise we would be in
+       * the first case where we should return ⊥ *)
+      { V.svalue; V.rset_ended = T.RegionId.Set.empty }
+    in
+    let value = V.Symbolic value in
+    (ctx, { V.value; V.ty })
 
 (** End a borrow identified by its borrow id in a context
     
