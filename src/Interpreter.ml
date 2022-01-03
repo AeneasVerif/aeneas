@@ -2695,6 +2695,11 @@ let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
   let box_value = mk_box_value boxed_value in
   (ctx, box_value)
 
+let compute_expanded_symbolic_ref_value (ended_regions : T.RegionId.set_t)
+    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind) :
+    C.eval_ctx * V.typed_value =
+  raise Unimplemented
+
 (** Expand a symbolic value.
 
     Note that we return a list of contexts because when expanding enumerations
@@ -2712,6 +2717,7 @@ let expand_symbolic_value (config : C.config) (expand_enumerations : bool)
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
   let rty = sp.V.svalue.V.sv_ty in
+  let ended_regions = sp.V.rset_ended in
   let ctx, nv =
     match (pe, rty) with
     (* "Regular" ADTs *)
@@ -2724,12 +2730,13 @@ let expand_symbolic_value (config : C.config) (expand_enumerations : bool)
     | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
         assert (arity = List.length tys);
         (* Generate the field values *)
-        compute_expanded_symbolic_tuple_value sp.V.rset_ended tys ctx
+        compute_expanded_symbolic_tuple_value ended_regions tys ctx
     (* Borrows *)
-    | Deref, T.Ref (_, _, _) -> raise Unimplemented
+    | Deref, T.Ref (region, ref_ty, rkind) ->
+        compute_expanded_symbolic_ref_value ended_regions region ref_ty rkind
     (* Boxes *)
     | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
-        compute_expanded_symbolic_box_value sp.V.rset_ended boxed_ty ctx
+        compute_expanded_symbolic_box_value ended_regions boxed_ty ctx
     | _ ->
         failwith
           ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
