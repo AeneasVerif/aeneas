@@ -2635,6 +2635,82 @@ let expand_bottom_value_from_projection (config : C.config)
   | Ok ctx -> ctx
   | Error _ -> failwith "Unreachable"
 
+let compute_expanded_symbolic_adt_value (tyctx : T.type_def list)
+    (expand_enumerations : bool) (def_id : T.TypeDefId.id)
+    (opt_variant_id : T.VariantId.id option)
+    (regions : T.RegionId.id T.region list) (types : T.rty list) :
+    C.eval_ctx * V.typed_value =
+  raise Unimplemented
+
+let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
+    (field_types : T.rty list) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  (* Generate the field values *)
+  let ctx, fields =
+    List.fold_left_map
+      (fun ctx sv_ty ->
+        let ctx, sv_id = C.fresh_symbolic_value_id ctx in
+        let svalue = { V.sv_id; V.sv_ty } in
+        let sv = { V.svalue; rset_ended = ended_regions } in
+        let value : V.value = V.Symbolic sv in
+        let ty : T.ety = Subst.erase_regions sv_ty in
+        let sv : V.typed_value = { V.value; ty } in
+        (ctx, sv))
+      ctx field_types
+  in
+  let v = V.Adt { variant_id = None; field_values = fields } in
+  let field_types = List.map Subst.erase_regions field_types in
+  let ty = T.Adt (T.Tuple, [], field_types) in
+  (ctx, { V.value = v; V.ty })
+
+(** Expand a symbolic value.
+
+    Note that we return a list of contexts because when expanding enumerations
+    we need one context per variant.
+    
+    [expand_enumerations] controls whether we allow to expand enumerations with
+    strictly more than one variant or not. This only allowed when evaluating a
+    [Discriminant] rvalue.
+    If [expand_enumerations] is false, then the function always returns
+    exactly one evaluation context.
+ *)
+let expand_symbolic_value (config : C.config) (expand_enumerations : bool)
+    (pe : E.projection_elem) (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) :
+    C.eval_ctx list =
+  (* Compute the expanded value - note that when doing so, we may introduce
+   * fresh symbolic values in the context (which thus gets updated) *)
+  let rty = sp.V.svalue.V.sv_ty in
+  let ctx, nv =
+    match (pe, rty) with
+    (* "Regular" ADTs *)
+    | ( Field (ProjAdt (def_id, opt_variant_id), _),
+        T.Adt (T.AdtId def_id', regions, types) ) ->
+        assert (def_id = def_id');
+        compute_expanded_symbolic_adt_value ctx.type_context expand_enumerations
+          def_id opt_variant_id regions types
+    (* Tuples *)
+    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
+        assert (arity = List.length tys);
+        (* Generate the field values *)
+        compute_expanded_symbolic_tuple_value sp.V.rset_ended tys ctx
+    (* Borrows *)
+    | Deref, T.Ref (_, _, _) -> raise Unimplemented
+    (* Boxes *)
+    | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) -> raise Unimplemented
+    | _ ->
+        failwith
+          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
+  in
+  (* Update the context *)
+  raise Unimplemented
+
+(** Expand a symbolic value which is not an enumeration with several variants *)
+let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
+    (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) : C.eval_ctx =
+  let expand_enumerations = false in
+  match expand_symbolic_value config expand_enumerations pe sp ctx with
+  | [ ctx ] -> ctx
+  | _ -> failwith "Unexpected"
+
 (** Update the environment to be able to read a place.
 
     When reading a place, we may be stuck along the way because some value
@@ -2655,9 +2731,9 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
         | FailMutLoan bid -> end_outer_borrow config bid ctx
         | FailInactivatedMutBorrow bid ->
             activate_inactivated_mut_borrow config Outer bid ctx
-        | FailSymbolic (_pe, _sp) ->
+        | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
-            raise Unimplemented
+            expand_symbolic_value_non_enum config pe sp ctx
         | FailBottom (_, _, _) ->
             (* We can't expand [Bottom] values while reading them *)
             failwith "Found [Bottom] while reading a place"
@@ -2682,9 +2758,9 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
         | FailMutLoan bid -> end_outer_borrow config bid ctx
         | FailInactivatedMutBorrow bid ->
             activate_inactivated_mut_borrow config Outer bid ctx
-        | FailSymbolic (_pe, _sp) ->
+        | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
-            raise Unimplemented
+            expand_symbolic_value_non_enum config pe sp ctx
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
             expand_bottom_value_from_projection config access p remaining_pes pe
