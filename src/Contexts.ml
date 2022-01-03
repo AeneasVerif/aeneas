@@ -192,7 +192,7 @@ class ['self] iter_frame =
     inherit [_] V.iter_abs
 
     method visit_Var : 'acc -> binder -> typed_value -> unit =
-      fun acc vid v -> self#visit_typed_value acc v
+      fun acc _vid v -> self#visit_typed_value acc v
 
     method visit_Abs : 'acc -> abs -> unit =
       fun acc abs -> self#visit_abs acc abs
@@ -247,7 +247,7 @@ class ['self] map_frame_concrete =
 
 (** Visitor to iterate over the values in a context *)
 class ['self] iter_eval_ctx =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] iter_env as super
 
     method visit_eval_ctx : 'acc -> eval_ctx -> unit =
@@ -256,7 +256,7 @@ class ['self] iter_eval_ctx =
 
 (** Visitor to map the values in a context *)
 class ['self] map_eval_ctx =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] map_env as super
 
     method visit_eval_ctx : 'acc -> eval_ctx -> eval_ctx =

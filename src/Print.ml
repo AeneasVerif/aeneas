@@ -297,14 +297,14 @@ module Values = struct
         "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
     | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
-  let rec abstract_shared_borrow_to_string (fmt : value_formatter)
+  let abstract_shared_borrow_to_string (fmt : value_formatter)
       (abs : V.abstract_shared_borrow) : string =
     match abs with
     | AsbBorrow bid -> V.BorrowId.to_string bid
     | AsbProjReborrows (sv, rty) ->
         "{" ^ symbolic_value_proj_to_string fmt sv rty ^ "}"
 
-  let rec abstract_shared_borrows_to_string (fmt : value_formatter)
+  let abstract_shared_borrows_to_string (fmt : value_formatter)
       (abs : V.abstract_shared_borrows) : string =
     "{"
     ^ String.concat "," (List.map (abstract_shared_borrow_to_string fmt) abs)
@@ -486,7 +486,7 @@ module Contexts = struct
 
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
     (* We shouldn't use rvar_to_string *)
-    let rvar_to_string r = failwith "Unexpected use of rvar_to_string" in
+    let rvar_to_string _r = failwith "Unexpected use of rvar_to_string" in
     let r_to_string r = PT.region_id_to_string r in
 
     let type_var_id_to_string vid =
@@ -821,8 +821,6 @@ module CfimAst = struct
 
   let fun_def_to_string (fmt : ast_formatter) (indent : string)
       (indent_incr : string) (def : A.fun_def) : string =
-    let rty_fmt = ast_to_rtype_formatter fmt in
-    let rty_to_string = PT.rty_to_string rty_fmt in
     let sty_fmt = ast_to_stype_formatter fmt in
     let sty_to_string = PT.sty_to_string sty_fmt in
     let ety_fmt = ast_to_etype_formatter fmt in
