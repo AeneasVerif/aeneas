@@ -935,7 +935,7 @@ let end_borrow_get_borrow (io : inner_outer)
               V.Bottom)
             else
               (* Update the outer borrows before diving into the borrowed value *)
-              let outer_borrows = update_outer_borrows io outer (Borrow l') in
+              let outer = update_outer_borrows io outer (Borrow l') in
               V.Borrow (super#visit_MutBorrow outer l' bv)
 
       method! visit_ALoan outer lc =
@@ -997,7 +997,7 @@ let end_borrow_get_borrow (io : inner_outer)
               V.ABottom)
             else
               (* Update the outer borrows before diving into the child avalue *)
-              let outer_borrows = update_outer_borrows io outer (Borrow bid) in
+              let outer = update_outer_borrows io outer (Borrow bid) in
               V.ABorrow (super#visit_AMutBorrow outer bid av)
         | V.ASharedBorrow bid ->
             (* Check if this is the borrow we are looking for *)
@@ -1347,7 +1347,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     loan is inside the same abstraction (in which case we don't need to end the whole
     abstraction).
  *)
-let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
+let give_back_avalue (_config : C.config) (bid : V.BorrowId.id)
     (nv : V.typed_avalue) (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
@@ -1436,7 +1436,7 @@ let give_back_avalue (config : C.config) (bid : V.BorrowId.id)
     we update.
     TODO: this was not the case before, so some sanity checks are not useful anymore.
  *)
-let give_back_shared config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
+let give_back_shared _config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
     C.eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
@@ -1445,7 +1445,7 @@ let give_back_shared config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
     replaced := true
   in
   let obj =
-    object (self)
+    object
       inherit [_] C.map_eval_ctx as super
 
       method! visit_Loan opt_abs lc =
@@ -1730,8 +1730,8 @@ and end_borrows (config : C.config) (io : inner_outer)
     (fun id ctx -> end_borrow config io allowed_abs id ctx)
     lset ctx
 
-and end_abstraction (config : C.config) (abs : V.AbstractionId.id)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+and end_abstraction (_config : C.config) (_abs : V.AbstractionId.id)
+    (_ctx : C.eval_ctx) : C.eval_ctx =
   raise Unimplemented
 
 let end_outer_borrow config = end_borrow config Outer None

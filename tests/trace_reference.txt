@@ -3961,8 +3961,8 @@ copy x
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> ⊥ : bool ;
   var@5 -> ⊥ : bool ;
   var@6 -> 1: i32 ;
@@ -3980,8 +3980,8 @@ return
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> ⊥ : bool ;
   var@5 -> ⊥ : bool ;
   var@6 -> 1: i32 ;
@@ -3997,8 +3997,8 @@ About to evaluate statement: var@5 := move var@6 == 1: i32
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> ⊥ : bool ;
   var@5 -> ⊥ : bool ;
   var@6 -> 1: i32 ;
@@ -4018,8 +4018,8 @@ move var@6
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> ⊥ : bool ;
   var@5 -> ⊥ : bool ;
   var@6 -> ⊥ : i32 ;
@@ -4036,8 +4036,8 @@ move var@6
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> ⊥ : bool ;
   var@5 -> true ;
   var@6 -> ⊥ : i32 ;
@@ -4054,8 +4054,8 @@ return
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> ⊥ : bool ;
   var@5 -> true ;
   var@6 -> ⊥ : i32 ;
@@ -4071,8 +4071,8 @@ About to evaluate statement: var@4 := ¬ move var@5
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> ⊥ : bool ;
   var@5 -> true ;
   var@6 -> ⊥ : i32 ;
@@ -4091,8 +4091,8 @@ true
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> false ;
   var@5 -> ⊥ : bool ;
   var@6 -> ⊥ : i32 ;
@@ -4108,8 +4108,8 @@ return
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> false ;
   var@5 -> ⊥ : bool ;
   var@6 -> ⊥ : i32 ;
@@ -4125,8 +4125,8 @@ About to evaluate statement: assert(¬move var@4)
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> false ;
   var@5 -> ⊥ : bool ;
   var@6 -> ⊥ : i32 ;
@@ -4145,8 +4145,8 @@ false
 {
   var@0 -> ⊥ : () ;
   x -> 1: i32 ;
-  px -> ⌊mut@1⌋ ;
-  ppx -> &mut@1 (⊥ : &'_ mut (i32)) ;
+  px -> ⊥ : &'_ mut (i32) ;
+  ppx -> ⊥ : &'_ mut (&'_ mut (i32)) ;
   var@4 -> ⊥ : bool ;
   var@5 -> ⊥ : bool ;
   var@6 -> ⊥ : i32 ;
