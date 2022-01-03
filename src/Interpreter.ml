@@ -2365,7 +2365,35 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                         in
                         (* Return - note that we don't need to update the borrow itself *)
                         Ok (ctx, { res with updated = v }))
-                | _, Abstract _ -> raise Unimplemented
+                | ( _,
+                    Abstract
+                      ( V.AMutLoan (_, _)
+                      | V.AEndedMutLoan { given_back = _; child = _ }
+                      | V.AEndedSharedLoan (_, _)
+                      | V.AIgnoredMutLoan (_, _)
+                      | V.AEndedIgnoredMutLoan { given_back = _; child = _ }
+                      | V.AIgnoredSharedLoan _ ) ) ->
+                    failwith "Expected a shared (abstraction) loan"
+                | _, Abstract (V.ASharedLoan (bids, sv, _av)) -> (
+                    (* Explore the shared value *)
+                    match access_projection access ctx update p' sv with
+                    | Error err -> Error err
+                    | Ok (ctx, res) ->
+                        (* Relookup the child avalue *)
+                        let av =
+                          match lookup_loan ek bid ctx with
+                          | _, Abstract (V.ASharedLoan (_, _, av)) -> av
+                          | _ -> failwith "Unexpected"
+                        in
+                        (* Update the shared loan with the new value returned
+                             by [access_projection] *)
+                        let ctx =
+                          update_aloan ek bid
+                            (V.ASharedLoan (bids, res.updated, av))
+                            ctx
+                        in
+                        (* Return - note that we don't need to update the borrow itself *)
+                        Ok (ctx, { res with updated = v }))
               else Error (FailBorrow bc)
           | V.InactivatedMutBorrow bid -> Error (FailInactivatedMutBorrow bid)
           | V.MutBorrow (bid, bv) ->
