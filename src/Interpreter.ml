@@ -601,49 +601,6 @@ let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
     None
   with FoundLoanContent lc -> Some lc
 
-(** Check if a [value] contains ⊥.
-
-    TODO: not general enough for symbolic values! We need to check if
-    the types contain already ended regions.
- *)
-let bottom_in_value (v : V.typed_value) : bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_value
-
-      method! visit_Bottom _ = raise Found
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_value () v;
-    false
-  with Found -> true
-
-(** Check if an [avalue] contains ⊥ *)
-let bottom_in_avalue (v : V.typed_avalue) : bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_avalue
-
-      method! visit_Bottom _ = raise Found
-
-      method! visit_ABottom _ = raise Found
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_avalue () v;
-    false
-  with Found -> true
-
-type outer_borrows_or_abs =
-  | OuterBorrows of borrow_ids
-  | OuterAbs of V.AbstractionId.id
-
-exception FoundOuter of outer_borrows_or_abs
-(** Utility exception *)
-
 (** Check if a region is in a set of regions *)
 let region_in_set (r : T.RegionId.id T.region) (rset : T.RegionId.set_t) : bool
     =
@@ -713,6 +670,80 @@ let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
       (region_in_set r1 rset1 && region_in_set r2 rset2)
       || projections_intersect ty1 rset1 ty2 rset2
   | _ -> failwith "Unreachable"
+
+(** Check if the ended regions of a comp projector over a symbolic value
+    intersect the regions listed in another projection *)
+let symbolic_proj_comp_ended_regions_intersect_proj (s : V.symbolic_proj_comp)
+    (ty : T.rty) (regions : T.RegionId.set_t) : bool =
+  projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty regions
+
+(** Check that a symbolic value doesn't contain ended regions.
+
+    Note that we don't check that the set of ended regions is empty: we
+    check that the set of ended regions doesn't intersect the set of
+    regions used in the type (this is more general).
+*)
+let symbolic_proj_comp_ended_regions (s : V.symbolic_proj_comp) : bool =
+  let regions = rty_regions s.V.svalue.V.sv_ty in
+  not (T.RegionId.Set.disjoint regions s.rset_ended)
+
+(** Check if a [value] contains ⊥.
+
+    Note that this function is very general: it also checks wether
+    symbolic values contain already ended regions.
+ *)
+let bottom_in_value (v : V.typed_value) : bool =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_Bottom _ = raise Found
+
+      method! visit_symbolic_proj_comp _ s =
+        if symbolic_proj_comp_ended_regions s then raise Found else ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true
+
+(** Check if an [avalue] contains ⊥.
+
+    Note that this function is very general: it also checks wether
+    symbolic values contain already ended regions.
+*)
+let bottom_in_avalue (v : V.typed_avalue) (abs_regions : T.RegionId.set_t) :
+    bool =
+  let obj =
+    object (self)
+      inherit [_] V.iter_typed_avalue
+
+      method! visit_Bottom _ = raise Found
+
+      method! visit_symbolic_proj_comp _ sv =
+        if symbolic_proj_comp_ended_regions sv then raise Found else ()
+
+      method! visit_aproj env ap =
+        (* Nothing to do actually *)
+        match ap with
+        | V.AProjLoans _sv -> ()
+        | V.AProjBorrows (_sv, _rty) -> ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_avalue () v;
+    false
+  with Found -> true
+
+type outer_borrows_or_abs =
+  | OuterBorrows of borrow_ids
+  | OuterAbs of V.AbstractionId.id
+
+exception FoundOuter of outer_borrows_or_abs
+(** Utility exception *)
 
 (** Auxiliary function.
 
@@ -789,8 +820,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
       asb
   | V.Loan _, _ -> failwith "Unreachable"
   | V.Symbolic s, _ ->
-      assert (
-        not (projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty regions));
+      assert (not (symbolic_proj_comp_ended_regions_intersect_proj s ty regions));
       [ V.AsbProjReborrows (s.V.svalue, ty) ]
   | _ -> failwith "Unreachable"
 
@@ -909,9 +939,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
          * if necessary *)
         if check_symbolic_no_ended then
           assert (
-            not
-              (projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty
-                 regions));
+            not (symbolic_proj_comp_ended_regions_intersect_proj s ty regions));
         V.ASymbolic (V.AProjBorrows (s.V.svalue, ty))
     | _ -> failwith "Unreachable"
   in
