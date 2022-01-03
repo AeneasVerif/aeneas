@@ -186,6 +186,19 @@ let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in
   ctx_push_vars ctx vars
 
+let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
+  let rec lookup env =
+    match env with
+    | [] -> failwith "Unexpected"
+    | Var (_, _) :: env' -> lookup env'
+    | Abs abs :: env' -> if abs.abs_id = abs_id then abs else lookup env'
+    | Frame :: env' -> lookup env'
+  in
+  lookup env
+
+let ctx_lookup_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) : V.abs =
+  env_lookup_abs ctx.env abs_id
+
 (** Visitor to iterate over the values in the *current* frame *)
 class ['self] iter_frame =
   object (self : 'self)

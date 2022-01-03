@@ -16,7 +16,7 @@ module type Id = sig
 
   val generator_zero : generator
 
-  (* TODO: this is stateful! - but we may want to be able to duplicated contexts... *)
+  (* TODO: this is stateful! - but we may want to be able to duplicate contexts... *)
   val fresh : generator -> id * generator
 
   val to_string : id -> string

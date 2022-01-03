@@ -562,6 +562,8 @@ type inner_outer = Inner | Outer
 
 type borrow_ids = Borrows of V.BorrowId.Set.t | Borrow of V.BorrowId.id
 
+exception FoundBorrowIds of borrow_ids
+
 let update_if_none opt x = match opt with None -> Some x | _ -> opt
 
 (** Auxiliary function: see its usage in [end_borrow_get_borrow_in_value] *)
@@ -1691,17 +1693,100 @@ and end_borrows (config : C.config) (io : inner_outer)
     (fun id ctx -> end_borrow config io allowed_abs id ctx)
     lset ctx
 
-and end_abstraction (_config : C.config) (_abs : V.AbstractionId.id)
-    (_ctx : C.eval_ctx) : C.eval_ctx =
+and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Lookup the abstraction *)
+  let abs = C.ctx_lookup_abs ctx abs_id in
+  (* End the parent abstractions first *)
+  let ctx = end_abstractions config abs.parents ctx in
+  (* End the loans inside the abstraction *)
+  let ctx = end_abstraction_loans config abs_id ctx in
+  (* End the abstraction itself by redistributing the borrows it contains *)
+  let ctx = end_abstraction_borrows config abs_id ctx in
+  (* End the regions owned by the abstraction *)
+  let ctx = end_abstraction_regions config abs_id ctx in
+  (* Remove all the references to the id of the current abstraction, and remove
+   * the abstraction itself *)
+  end_abstraction_remove_from_context config abs_id ctx
+
+and end_abstractions (config : C.config) (abs_ids : V.AbstractionId.set_t)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  V.AbstractionId.Set.fold
+    (fun id ctx -> end_abstraction config id ctx)
+    abs_ids ctx
+
+and end_abstraction_loans (config : C.config) (abs_id : V.AbstractionId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Lookup the abstraction *)
+  let abs = C.ctx_lookup_abs ctx abs_id in
+  (* End the first loan we find *)
+  let obj =
+    object
+      inherit [_] V.iter_abs as super
+
+      method! visit_aloan_content env lc =
+        match lc with
+        | V.AMutLoan (bid, _) -> raise (FoundBorrowIds (Borrow bid))
+        | V.ASharedLoan (bids, _, _) -> raise (FoundBorrowIds (Borrows bids))
+        | V.AEndedMutLoan { given_back; child } ->
+            super#visit_AEndedMutLoan env given_back child
+        | V.AEndedSharedLoan (v, av) -> super#visit_AEndedSharedLoan env v av
+        | V.AIgnoredMutLoan (bid, av) ->
+            (* Note that this loan might come from a child abstraction (it can't
+             * come from a parent abstraction, because we should have ended them
+             * already) *)
+            super#visit_AIgnoredMutLoan env bid av
+        | V.AEndedIgnoredMutLoan { given_back; child } ->
+            super#visit_AEndedIgnoredMutLoan env given_back child
+        | V.AIgnoredSharedLoan av -> super#visit_AIgnoredSharedLoan env av
+    end
+  in
+  try
+    (* Check if there are loans *)
+    obj#visit_abs () abs;
+    (* No loans: nothing to update *)
+    ctx
+  with (* There are loans: end them, then recheck *)
+  | FoundBorrowIds bids ->
+    let ctx =
+      match bids with
+      | Borrow bid -> end_outer_borrow config bid ctx
+      | Borrows bids -> end_outer_borrows config bids ctx
+    in
+    (* Recheck *)
+    end_abstraction_loans config abs_id ctx
+
+and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* The abstraction mustn't contain any loans *)
   raise Unimplemented
 
-let end_outer_borrow config = end_borrow config Outer None
+and end_abstraction_regions (config : C.config) (abs_id : V.AbstractionId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  raise Unimplemented
 
-let end_outer_borrows config = end_borrows config Outer None
+(** Remove an abstraction from the context, as well as all its references *)
+and end_abstraction_remove_from_context (_config : C.config)
+    (abs_id : V.AbstractionId.id) (ctx : C.eval_ctx) : C.eval_ctx =
+  let map_env_elem (ev : C.env_elem) : C.env_elem option =
+    match ev with
+    | C.Var (_, _) | C.Frame -> Some ev
+    | C.Abs abs ->
+        if abs.abs_id = abs_id then None
+        else
+          let parents = V.AbstractionId.Set.remove abs_id abs.parents in
+          Some (C.Abs { abs with V.parents })
+  in
+  let env = List.filter_map map_env_elem ctx.C.env in
+  { ctx with C.env }
 
-let end_inner_borrow config = end_borrow config Inner None
+and end_outer_borrow config = end_borrow config Outer None
 
-let end_inner_borrows config = end_borrows config Inner None
+and end_outer_borrows config = end_borrows config Outer None
+
+and end_inner_borrow config = end_borrow config Inner None
+
+and end_inner_borrows config = end_borrows config Inner None
 
 (** Helper function: see [activate_inactivated_mut_borrow].
 
