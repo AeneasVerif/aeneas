@@ -2251,6 +2251,8 @@ type projection_access = {
 
     We return the (eventually) updated value, the value we read at the end of
     the place and the (eventually) updated environment.
+    
+    TODO: use exceptions?
  *)
 let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
     (* Function to (eventually) update the value we find *)
