@@ -2416,14 +2416,52 @@ let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
      borrows). Because a loan inside the value may be linked to a borrow
      somewhere else *also inside* the value (it's possible with adts),
      we first end all the borrows we find - by using [Inner] to allow
-     ending inner borrows - then end all the loans we find. It is really
-     important to do this in two steps: the borrow linked to a loan may
-     be inside the value at place p, in which case this borrow may be
+     ending inner borrows - then end all the loans we find.
+
+     It is really important to do this in two steps: the borrow linked to a
+     loan may be inside the value at place p, in which case this borrow may be
      an inner borrow that we *can* end, but it may also be outside this
      value, in which case we need to end all the outer borrows first...
      Also, whenever the context is updated, we need to re-inspect
      the value at place p *in two steps* again (end borrows, then end
      loans).
+
+     Example:
+     =======
+     We want to end the borrows/loans at `*x` in the following environment:
+     ```
+     x -> mut_borrow l0 (mut_loan l1, mut_borrow l1 (Int 3), mut_loan l2)
+     y -> mut_borrow l2 (Bool true)
+     ```
+
+     We have to consider two things:
+     - the borrow `mut_borrow l1 (Int 3)` borrows a subvalue of `*x`
+     - the borrow corresponding to the loan `mut_loan l2` is outside of `*x`
+
+     We first end all the *borrows* (not the loans) inside of `*x`, which gives:
+     ```
+     x -> mut_borrow l0 (Int 3, ⊥, mut_loan l2)
+     y -> mut_borrow l2 (Bool true)
+     ```
+
+     Note that when ending the borrows, we can (and have to) ignore the outer
+     borrows (in this case `mut_borrow l0 ...`). Otherwise, we would have to end
+     the borrow `l0` which is incorrect (note that we might have to drop the
+     borrows/loans at `*x` if we evaluate, for instance, `*x = ...`).
+     It is ok to ignore outer borrows in this case because whenever
+     we end a borrow, it is an outer borrow locally to `*x` (i.e., we ignore
+     the outer borrows when accessing `*x`, but once examining the value at
+     `*x` we never dive into borrows: whenever we find one, we end it - it is thus
+     an outer borrow, in some way).
+
+     Then, we end the loans at `*x`. Note that as at this point `*x` doesn't
+     contain borrows (only loans), the borrows corresponding to those loans
+     are thus necessarily outside of `*x`: we mustn't ignore outer borrows this
+     time. This gives:
+     ```
+     x -> mut_borrow l0 (Int 3, ⊥, Bool true)
+     y -> ⊥
+     ```
   *)
   let obj =
     object
