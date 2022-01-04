@@ -69,12 +69,18 @@ let mk_box_value (v : V.typed_value) : V.typed_value =
   let box_v = V.Adt { variant_id = None; field_values = [ v ] } in
   mk_typed_value box_ty box_v
 
-(** Create a fresh symbolic value (as a complementary projector) *)
+(** Create a fresh symbolic proj comp *)
 let mk_fresh_symbolic_proj_comp (ended_regions : T.RegionId.set_t) (ty : T.rty)
-    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+    (ctx : C.eval_ctx) : C.eval_ctx * V.symbolic_proj_comp =
   let ctx, sv_id = C.fresh_symbolic_value_id ctx in
   let svalue = { V.sv_id; V.sv_ty = ty } in
   let sv = { V.svalue; rset_ended = ended_regions } in
+  (ctx, sv)
+
+(** Create a fresh symbolic value (as a complementary projector) *)
+let mk_fresh_symbolic_proj_comp_value (ended_regions : T.RegionId.set_t)
+    (ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  let ctx, sv = mk_fresh_symbolic_proj_comp ended_regions ty ctx in
   let value : V.value = V.Symbolic sv in
   let ty : T.ety = Subst.erase_regions ty in
   let sv : V.typed_value = { V.value; ty } in
@@ -2681,187 +2687,6 @@ let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
   | Error _ -> failwith "Unreachable"
   | Ok ctx -> ctx
 
-(** Compute an expanded ADT bottom value *)
-let compute_expanded_bottom_adt_value (tyctx : T.type_def list)
-    (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
-    (regions : T.erased_region list) (types : T.ety list) : V.typed_value =
-  (* Lookup the definition and check if it is an enumeration - it
-     should be an enumeration if and only if the projection element
-     is a field projection with *some* variant id. Retrieve the list
-     of fields at the same time. *)
-  let def = T.TypeDefId.nth tyctx def_id in
-  assert (List.length regions = List.length def.T.region_params);
-  (* Compute the field types *)
-  let field_types =
-    Subst.type_def_get_instantiated_field_etypes def opt_variant_id types
-  in
-  (* Initialize the expanded value *)
-  let fields =
-    List.map
-      (fun ty : V.typed_value -> ({ V.value = V.Bottom; ty } : V.typed_value))
-      field_types
-  in
-  let av = V.Adt { variant_id = opt_variant_id; field_values = fields } in
-  let ty = T.Adt (T.AdtId def_id, regions, types) in
-  { V.value = av; V.ty }
-
-(** Compute an expanded tuple bottom value *)
-let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
-    V.typed_value =
-  (* Generate the field values *)
-  let fields =
-    List.map (fun ty : V.typed_value -> { V.value = Bottom; ty }) field_types
-  in
-  let v = V.Adt { variant_id = None; field_values = fields } in
-  let ty = T.Adt (T.Tuple, [], field_types) in
-  { V.value = v; V.ty }
-
-(** Auxiliary helper to expand [Bottom] values.
-
-    During compilation, rustc desaggregates the ADT initializations. The
-    consequence is that the following rust code:
-    ```
-    let x = Cons a b;
-    ```
-
-    Looks like this in MIR:
-    ```
-    (x as Cons).0 = a;
-    (x as Cons).1 = b;
-    set_discriminant(x, 0); // If `Cons` is the variant of index 0
-    ```
-
-    The consequence is that we may sometimes need to write fields to values
-    which are currently [Bottom]. When doing this, we first expand the value
-    to, say, [Cons Bottom Bottom] (note that field projection contains information
-    about which variant we should project to, which is why we *can* set the
-    variant index when writing one of its fields).
-*)
-let expand_bottom_value_from_projection (config : C.config)
-    (access : access_kind) (p : E.place) (remaining_pes : int)
-    (pe : E.projection_elem) (ty : T.ety) (ctx : C.eval_ctx) : C.eval_ctx =
-  (* Debugging *)
-  L.log#ldebug
-    (lazy
-      ("expand_bottom_value_from_projection:\n" ^ "pe: "
-     ^ E.show_projection_elem pe ^ "\n" ^ "ty: " ^ T.show_ety ty));
-  (* Prepare the update: we need to take the proper prefix of the place
-     during whose evaluation we got stuck *)
-  let projection' =
-    fst
-      (Utilities.list_split_at p.projection
-         (List.length p.projection - remaining_pes))
-  in
-  let p' = { p with projection = projection' } in
-  (* Compute the expanded value.
-     The type of the [Bottom] value should be a tuple or an ADT.
-     Note that the projection element we got stuck at should be a
-     field projection, and gives the variant id if the [Bottom] value
-     is an enumeration value.
-     Also, the expanded value should be the proper ADT variant or a tuple
-     with the proper arity, with all the fields initialized to [Bottom]
-  *)
-  let nv =
-    match (pe, ty) with
-    (* "Regular" ADTs *)
-    | ( Field (ProjAdt (def_id, opt_variant_id), _),
-        T.Adt (T.AdtId def_id', regions, types) ) ->
-        assert (def_id = def_id');
-        compute_expanded_bottom_adt_value ctx.type_context def_id opt_variant_id
-          regions types
-    (* Tuples *)
-    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
-        assert (arity = List.length tys);
-        (* Generate the field values *)
-        compute_expanded_bottom_tuple_value tys
-    | _ ->
-        failwith
-          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_ety ty)
-  in
-  (* Update the context by inserting the expanded value at the proper place *)
-  match write_place config access p' nv ctx with
-  | Ok ctx -> ctx
-  | Error _ -> failwith "Unreachable"
-
-(** Compute the expansion of an adt value.
-
-    The function might return a list of contexts and values if the symbolic
-    value to expand is an enumeration.
-    
-    `expand_enumerations` controls the expansion of enumerations: if false, it
-    doesn't allow the expansion of enumerations *containing several variants*.
- *)
-let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
-    (ended_regions : T.RegionId.set_t) (def_id : T.TypeDefId.id)
-    (opt_variant_id : T.VariantId.id option)
-    (regions : T.RegionId.id T.region list) (types : T.rty list)
-    (ctx : C.eval_ctx) : (C.eval_ctx * V.typed_value) list =
-  (* Lookup the definition and check if it is an enumeration with several
-   * variants *)
-  let def = T.TypeDefId.nth ctx.type_context def_id in
-  assert (List.length regions = List.length def.T.region_params);
-  (* Retrieve, for every variant, the list of its instantiated field types *)
-  let variants_fields_types =
-    Subst.type_def_get_instantiated_variants_fields_rtypes def regions types
-  in
-  (* Check if there is strictly more than one variant *)
-  if List.length variants_fields_types > 1 && not expand_enumerations then
-    failwith "Not allowed to expand enumerations with several variants";
-  (* Initialize the expanded value for a given variant *)
-  let initialize (ctx : C.eval_ctx)
-      ((variant_id, field_types) : T.VariantId.id option * T.rty list) :
-      C.eval_ctx * V.typed_value =
-    let ctx, field_values =
-      List.fold_left_map
-        (fun ctx (ty : T.rty) ->
-          mk_fresh_symbolic_proj_comp ended_regions ty ctx)
-        ctx field_types
-    in
-    let av = V.Adt { variant_id; field_values } in
-    let ty = T.Adt (T.AdtId def_id, regions, types) in
-    let ty = Subst.erase_regions ty in
-    (ctx, { V.value = av; V.ty })
-  in
-  (* Initialize all the expanded values of all the variants *)
-  List.map (initialize ctx) variants_fields_types
-
-let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
-    (field_types : T.rty list) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
-  (* Generate the field values *)
-  let ctx, fields =
-    List.fold_left_map
-      (fun ctx sv_ty -> mk_fresh_symbolic_proj_comp ended_regions sv_ty ctx)
-      ctx field_types
-  in
-  let v = V.Adt { variant_id = None; field_values = fields } in
-  let field_types = List.map Subst.erase_regions field_types in
-  let ty = T.Adt (T.Tuple, [], field_types) in
-  (ctx, { V.value = v; V.ty })
-
-let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
-    (boxed_ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
-  (* Introduce a fresh symbolic value *)
-  let ctx, boxed_value =
-    mk_fresh_symbolic_proj_comp ended_regions boxed_ty ctx
-  in
-  let box_value = mk_box_value boxed_value in
-  (ctx, box_value)
-
-let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
-    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
-    (ctx : C.eval_ctx) : C.eval_ctx =
-  (* Check that we are allowed to expand the reference *)
-  assert (not (region_in_set region ended_regions));
-  (* Match on the reference kind *)
-  match rkind with
-  | T.Mut ->
-      (* Simple case: simply create a fresh symbolic value and a fresh
-       * borrow id *)
-      let ctx, sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
-      let ctx, bid = C.fresh_borrow_id ctx in
-      raise Unimplemented
-  | T.Shared -> raise Unimplemented
-
 (** Projector kind *)
 type proj_kind = LoanProj | BorrowProj
 
@@ -2995,6 +2820,185 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
   apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
     expansion ctx
 
+(** Compute an expanded ADT bottom value *)
+let compute_expanded_bottom_adt_value (tyctx : T.type_def list)
+    (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
+    (regions : T.erased_region list) (types : T.ety list) : V.typed_value =
+  (* Lookup the definition and check if it is an enumeration - it
+     should be an enumeration if and only if the projection element
+     is a field projection with *some* variant id. Retrieve the list
+     of fields at the same time. *)
+  let def = T.TypeDefId.nth tyctx def_id in
+  assert (List.length regions = List.length def.T.region_params);
+  (* Compute the field types *)
+  let field_types =
+    Subst.type_def_get_instantiated_field_etypes def opt_variant_id types
+  in
+  (* Initialize the expanded value *)
+  let fields =
+    List.map
+      (fun ty : V.typed_value -> ({ V.value = V.Bottom; ty } : V.typed_value))
+      field_types
+  in
+  let av = V.Adt { variant_id = opt_variant_id; field_values = fields } in
+  let ty = T.Adt (T.AdtId def_id, regions, types) in
+  { V.value = av; V.ty }
+
+(** Compute an expanded tuple bottom value *)
+let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
+    V.typed_value =
+  (* Generate the field values *)
+  let fields =
+    List.map (fun ty : V.typed_value -> { V.value = Bottom; ty }) field_types
+  in
+  let v = V.Adt { variant_id = None; field_values = fields } in
+  let ty = T.Adt (T.Tuple, [], field_types) in
+  { V.value = v; V.ty }
+
+(** Auxiliary helper to expand [Bottom] values.
+
+    During compilation, rustc desaggregates the ADT initializations. The
+    consequence is that the following rust code:
+    ```
+    let x = Cons a b;
+    ```
+
+    Looks like this in MIR:
+    ```
+    (x as Cons).0 = a;
+    (x as Cons).1 = b;
+    set_discriminant(x, 0); // If `Cons` is the variant of index 0
+    ```
+
+    The consequence is that we may sometimes need to write fields to values
+    which are currently [Bottom]. When doing this, we first expand the value
+    to, say, [Cons Bottom Bottom] (note that field projection contains information
+    about which variant we should project to, which is why we *can* set the
+    variant index when writing one of its fields).
+*)
+let expand_bottom_value_from_projection (config : C.config)
+    (access : access_kind) (p : E.place) (remaining_pes : int)
+    (pe : E.projection_elem) (ty : T.ety) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Debugging *)
+  L.log#ldebug
+    (lazy
+      ("expand_bottom_value_from_projection:\n" ^ "pe: "
+     ^ E.show_projection_elem pe ^ "\n" ^ "ty: " ^ T.show_ety ty));
+  (* Prepare the update: we need to take the proper prefix of the place
+     during whose evaluation we got stuck *)
+  let projection' =
+    fst
+      (Utilities.list_split_at p.projection
+         (List.length p.projection - remaining_pes))
+  in
+  let p' = { p with projection = projection' } in
+  (* Compute the expanded value.
+     The type of the [Bottom] value should be a tuple or an ADT.
+     Note that the projection element we got stuck at should be a
+     field projection, and gives the variant id if the [Bottom] value
+     is an enumeration value.
+     Also, the expanded value should be the proper ADT variant or a tuple
+     with the proper arity, with all the fields initialized to [Bottom]
+  *)
+  let nv =
+    match (pe, ty) with
+    (* "Regular" ADTs *)
+    | ( Field (ProjAdt (def_id, opt_variant_id), _),
+        T.Adt (T.AdtId def_id', regions, types) ) ->
+        assert (def_id = def_id');
+        compute_expanded_bottom_adt_value ctx.type_context def_id opt_variant_id
+          regions types
+    (* Tuples *)
+    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
+        assert (arity = List.length tys);
+        (* Generate the field values *)
+        compute_expanded_bottom_tuple_value tys
+    | _ ->
+        failwith
+          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_ety ty)
+  in
+  (* Update the context by inserting the expanded value at the proper place *)
+  match write_place config access p' nv ctx with
+  | Ok ctx -> ctx
+  | Error _ -> failwith "Unreachable"
+
+(** Compute the expansion of an adt value.
+
+    The function might return a list of contexts and values if the symbolic
+    value to expand is an enumeration.
+    
+    `expand_enumerations` controls the expansion of enumerations: if false, it
+    doesn't allow the expansion of enumerations *containing several variants*.
+ *)
+let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
+    (ended_regions : T.RegionId.set_t) (def_id : T.TypeDefId.id)
+    (opt_variant_id : T.VariantId.id option)
+    (regions : T.RegionId.id T.region list) (types : T.rty list)
+    (ctx : C.eval_ctx) : (C.eval_ctx * symbolic_expansion) list =
+  (* Lookup the definition and check if it is an enumeration with several
+   * variants *)
+  let def = T.TypeDefId.nth ctx.type_context def_id in
+  assert (List.length regions = List.length def.T.region_params);
+  (* Retrieve, for every variant, the list of its instantiated field types *)
+  let variants_fields_types =
+    Subst.type_def_get_instantiated_variants_fields_rtypes def regions types
+  in
+  (* Check if there is strictly more than one variant *)
+  if List.length variants_fields_types > 1 && not expand_enumerations then
+    failwith "Not allowed to expand enumerations with several variants";
+  (* Initialize the expanded value for a given variant *)
+  let initialize (ctx : C.eval_ctx)
+      ((variant_id, field_types) : T.VariantId.id option * T.rty list) :
+      C.eval_ctx * symbolic_expansion =
+    let ctx, field_values =
+      List.fold_left_map
+        (fun ctx (ty : T.rty) ->
+          mk_fresh_symbolic_proj_comp ended_regions ty ctx)
+        ctx field_types
+    in
+    let see = SeAdt (variant_id, field_values) in
+    (ctx, see)
+  in
+  (* Initialize all the expanded values of all the variants *)
+  List.map (initialize ctx) variants_fields_types
+
+let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
+    (field_types : T.rty list) (ctx : C.eval_ctx) :
+    C.eval_ctx * symbolic_expansion =
+  (* Generate the field values *)
+  let ctx, field_values =
+    List.fold_left_map
+      (fun ctx sv_ty -> mk_fresh_symbolic_proj_comp ended_regions sv_ty ctx)
+      ctx field_types
+  in
+  let variant_id = None in
+  let see = SeAdt (variant_id, field_values) in
+  (ctx, see)
+
+let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
+    (boxed_ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx * symbolic_expansion =
+  (* Introduce a fresh symbolic value *)
+  let ctx, boxed_value =
+    mk_fresh_symbolic_proj_comp ended_regions boxed_ty ctx
+  in
+  let see = SeAdt (None, [ boxed_value ]) in
+  (ctx, see)
+
+let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
+    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Check that we are allowed to expand the reference *)
+  assert (not (region_in_set region ended_regions));
+  (* Match on the reference kind *)
+  match rkind with
+  | T.Mut ->
+      (* Simple case: simply create a fresh symbolic value and a fresh
+       * borrow id *)
+      let ctx, sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
+      let ctx, bid = C.fresh_borrow_id ctx in
+      raise Unimplemented
+  | T.Shared -> raise Unimplemented
+
 (** Expand a symbolic value which is not an enumeration with several variants.
 
     This function is used when exploring a path.
@@ -3030,12 +3034,6 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
       in
       (* Apply in the context *)
       apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
-  (* Borrows *)
-  | Deref, T.Ref (region, ref_ty, rkind) ->
-      let _ =
-        expand_symbolic_value_borrow ended_regions region ref_ty rkind ctx
-      in
-      raise Unimplemented
   (* Boxes *)
   | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
       let ctx, nv =
@@ -3043,6 +3041,12 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
       in
       (* Apply in the context *)
       apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
+  (* Borrows *)
+  | Deref, T.Ref (region, ref_ty, rkind) ->
+      let _ =
+        expand_symbolic_value_borrow ended_regions region ref_ty rkind ctx
+      in
+      raise Unimplemented
   | _ ->
       failwith
         ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
