@@ -3,15 +3,11 @@
 
 module T = Types
 module V = Values
-open Scalars
 module E = Expressions
-open Errors
 module C = Contexts
 module Subst = Substitute
 module A = CfimAst
 module L = Logging
-open TypesUtils
-open ValuesUtils
 open InterpreterUtils
 
 let debug_invariants : bool ref = ref false
@@ -337,7 +333,7 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
   let info = { outer_borrow = false; outer_shared = false } in
   visitor#visit_eval_ctx info ctx
 
-let check_typing_invariant (ctx : C.eval_ctx) : unit = ()
+let check_typing_invariant (_ctx : C.eval_ctx) : unit = ()
 
 let check_invariants (ctx : C.eval_ctx) : unit =
   check_loans_borrows_relation_invariant ctx;

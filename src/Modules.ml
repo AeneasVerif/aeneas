@@ -1,9 +1,5 @@
 open Yojson.Basic
-open Identifiers
 open Types
-open OfJsonBasic
-open Scalars
-open Values
 open CfimAst
 
 (** Module declaration *)
