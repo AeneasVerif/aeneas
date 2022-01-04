@@ -31,6 +31,12 @@ type outer_borrow_info = {
   outer_shared : bool; (* true if the value is borrowed as shared *)
 }
 
+let set_outer_mut (info : outer_borrow_info) : outer_borrow_info =
+  { info with outer_borrow = true }
+
+let set_outer_shared (_info : outer_borrow_info) : outer_borrow_info =
+  { outer_borrow = true; outer_shared = true }
+
 let borrows_infos_to_string (infos : borrow_info V.BorrowId.Map.t) : string =
   let bindings = V.BorrowId.Map.bindings infos in
   let bindings = List.map (fun (_, info) -> show_borrow_info info) bindings in
@@ -112,11 +118,11 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_Var inside_abs binder v =
+      method! visit_Var _ binder v =
         let inside_abs = false in
         super#visit_Var inside_abs binder v
 
-      method! visit_Abs inside_abs abs =
+      method! visit_Abs _ abs =
         let inside_abs = true in
         super#visit_Abs inside_abs abs
 
@@ -124,7 +130,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
         (* Register the loan *)
         let _ =
           match lc with
-          | V.SharedLoan (bids, tv) -> register_shared_loan inside_abs bids
+          | V.SharedLoan (bids, _) -> register_shared_loan inside_abs bids
           | V.MutLoan bid -> register_mut_loan inside_abs bid
         in
         (* Continue exploring *)
@@ -237,7 +243,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
         ("\nAbout to check context invariant:\n" ^ eval_ctx_to_string ctx ^ "\n"));
     L.log#ldebug
       (lazy
-        ("\Borrows information:\n"
+        ("\nBorrows information:\n"
         ^ borrows_infos_to_string !borrows_infos
         ^ "\n")));
 
@@ -258,7 +264,78 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     - borrows/loans can't contain ⊥ or inactivated mut borrows
     - shared loans can't contain mutable loans
  *)
-let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit = ()
+let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
+  let visitor =
+    object
+      inherit [_] C.iter_eval_ctx as super
+
+      method! visit_Bottom info =
+        (* No ⊥ inside borrowed values *)
+        assert (not info.outer_borrow)
+
+      method! visit_ABottom _info =
+        (* ⊥ inside an abstraction is not the same as in a regular value *)
+        ()
+
+      method! visit_loan_content info lc =
+        (* Update the info *)
+        let info =
+          match lc with
+          | V.SharedLoan (_, _) -> set_outer_shared info
+          | V.MutLoan _ ->
+              (* No mutable loan inside a shared loan *)
+              assert (not info.outer_shared);
+              set_outer_mut info
+        in
+        (* Continue exploring *)
+        super#visit_loan_content info lc
+
+      method! visit_borrow_content info bc =
+        (* Update the info *)
+        let info =
+          match bc with
+          | V.SharedBorrow _ -> set_outer_shared info
+          | V.InactivatedMutBorrow _ ->
+              assert (not info.outer_borrow);
+              set_outer_shared info
+          | V.MutBorrow (_, _) -> set_outer_mut info
+        in
+        (* Continue exploring *)
+        super#visit_borrow_content info bc
+
+      method! visit_aloan_content info lc =
+        (* Update the info *)
+        let info =
+          match lc with
+          | V.AMutLoan (_, _) -> set_outer_mut info
+          | V.ASharedLoan (_, _, _) -> set_outer_shared info
+          | V.AEndedMutLoan { given_back = _; child = _ } -> set_outer_mut info
+          | V.AEndedSharedLoan (_, _) -> set_outer_shared info
+          | V.AIgnoredMutLoan (_, _) -> set_outer_mut info
+          | V.AEndedIgnoredMutLoan { given_back = _; child = _ } ->
+              set_outer_mut info
+          | V.AIgnoredSharedLoan _ -> set_outer_shared info
+        in
+        (* Continue exploring *)
+        super#visit_aloan_content info lc
+
+      method! visit_aborrow_content info bc =
+        (* Update the info *)
+        let info =
+          match bc with
+          | V.AMutBorrow (_, _) -> set_outer_mut info
+          | V.ASharedBorrow _ -> set_outer_shared info
+          | V.AIgnoredMutBorrow _ -> set_outer_mut info
+          | V.AProjSharedBorrow _ -> set_outer_shared info
+        in
+        (* Continue exploring *)
+        super#visit_aborrow_content info bc
+    end
+  in
+
+  (* Explore *)
+  let info = { outer_borrow = false; outer_shared = false } in
+  visitor#visit_eval_ctx info ctx
 
 let check_typing_invariant (ctx : C.eval_ctx) : unit = ()
 
