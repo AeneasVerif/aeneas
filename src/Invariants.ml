@@ -171,7 +171,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_abstract_shared_borrows env asb =
+      method! visit_abstract_shared_borrows _ asb =
         let visit asb =
           match asb with
           | V.AsbBorrow bid -> register_borrow Shared bid
