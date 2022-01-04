@@ -69,6 +69,17 @@ let mk_box_value (v : V.typed_value) : V.typed_value =
   let box_v = V.Adt { variant_id = None; field_values = [ v ] } in
   mk_typed_value box_ty box_v
 
+(** Create a fresh symbolic value (as a complementary projector) *)
+let mk_fresh_symbolic_comp_proj (ended_regions : T.RegionId.set_t) (ty : T.rty)
+    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  let ctx, sv_id = C.fresh_symbolic_value_id ctx in
+  let svalue = { V.sv_id; V.sv_ty = ty } in
+  let sv = { V.svalue; rset_ended = ended_regions } in
+  let value : V.value = V.Symbolic sv in
+  let ty : T.ety = Subst.erase_regions ty in
+  let sv : V.typed_value = { V.value; ty } in
+  (ctx, sv)
+
 (** TODO: change the name *)
 type eval_error = Panic
 
@@ -2667,14 +2678,7 @@ let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
   (* Generate the field values *)
   let ctx, fields =
     List.fold_left_map
-      (fun ctx sv_ty ->
-        let ctx, sv_id = C.fresh_symbolic_value_id ctx in
-        let svalue = { V.sv_id; V.sv_ty } in
-        let sv = { V.svalue; rset_ended = ended_regions } in
-        let value : V.value = V.Symbolic sv in
-        let ty : T.ety = Subst.erase_regions sv_ty in
-        let sv : V.typed_value = { V.value; ty } in
-        (ctx, sv))
+      (fun ctx sv_ty -> mk_fresh_symbolic_comp_proj ended_regions sv_ty ctx)
       ctx field_types
   in
   let v = V.Adt { variant_id = None; field_values = fields } in
@@ -2685,12 +2689,8 @@ let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
 let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
     (boxed_ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
   (* Introduce a fresh symbolic value *)
-  let ctx, boxed_sv_id = C.fresh_symbolic_value_id ctx in
-  let boxed_sv = { V.sv_id = boxed_sv_id; V.sv_ty = boxed_ty } in
-  let boxed_sv = { V.svalue = boxed_sv; rset_ended = ended_regions } in
-  let boxed_value = V.Symbolic boxed_sv in
-  let boxed_value : V.typed_value =
-    { V.value = boxed_value; V.ty = Subst.erase_regions boxed_ty }
+  let ctx, boxed_value =
+    mk_fresh_symbolic_comp_proj ended_regions boxed_ty ctx
   in
   let box_value = mk_box_value boxed_value in
   (ctx, box_value)
