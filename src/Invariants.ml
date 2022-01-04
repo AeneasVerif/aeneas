@@ -397,11 +397,14 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             match (bc, rkind) with
             | V.SharedBorrow bid, T.Shared | V.InactivatedMutBorrow bid, T.Mut
               ->
-                (* Lookup the borrowed value to check it has the proper type *)
-                raise Unimplemented
+                (* TODO: lookup the borrowed value to check it has the proper type *)
+                ()
             | V.MutBorrow (_, bv), T.Mut -> assert (bv.V.ty = ref_ty)
             | _ -> failwith "Erroneous typing")
-        | V.Loan lc, _ -> raise Unimplemented
+        | V.Loan lc, ty -> (
+            match lc with
+            | V.SharedLoan (_, sv) -> assert (sv.V.ty = ty)
+            | V.MutLoan _ -> ())
         | V.Symbolic spc, ty ->
             let ty' = Subst.erase_regions spc.V.svalue.V.sv_ty in
             assert (ty' = ty)
