@@ -196,7 +196,7 @@ type abstract_shared_borrow =
   | AsbProjReborrows of (symbolic_value[@opaque]) * (rty[@opaque])
 [@@deriving show]
 
-type abstract_shared_borrows = abstract_shared_borrow list
+type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
 (** A set of abstract shared borrows *)
 
 type aproj =
@@ -218,6 +218,10 @@ class ['self] iter_typed_avalue_base =
     method visit_aproj : 'env -> aproj -> unit = fun _ _ -> ()
 
     method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
+
+    method visit_abstract_shared_borrows
+        : 'env -> abstract_shared_borrows -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for MAP visitor for [typed_avalue] *)
@@ -230,6 +234,10 @@ class ['self] map_typed_avalue_base =
     method visit_aproj : 'env -> aproj -> aproj = fun _ p -> p
 
     method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
+
+    method visit_abstract_shared_borrows
+        : 'env -> abstract_shared_borrows -> abstract_shared_borrows =
+      fun _ asb -> asb
   end
 
 (** Abstraction values are used inside of abstractions to properly model
@@ -470,7 +478,7 @@ and aborrow_content =
             abstraction so that we can properly call the backward functions
             when generating the pure translation.
        *)
-  | AProjSharedBorrow of (abstract_shared_borrows[@opaque])
+  | AProjSharedBorrow of abstract_shared_borrows
       (** A projected shared borrow.
 
           When giving shared borrows as arguments to function calls, we
