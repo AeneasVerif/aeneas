@@ -346,14 +346,65 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
       inherit [_] C.iter_eval_ctx as super
 
       method! visit_typed_value info tv =
-        (* Check this pair (value, type) *)
+        (* Check the current pair (value, type) *)
         (match (tv.V.value, tv.V.ty) with
         | V.Concrete cv, ty -> check_constant_value_type cv ty
-        | V.Adt av, _ -> raise Unimplemented
+        (* ADT case *)
+        | V.Adt av, T.Adt (T.AdtId def_id, regions, tys) ->
+            (* Retrieve the definition to check the variant id, the number of
+             * parameters, etc. *)
+            let def = T.TypeDefId.nth ctx.type_context def_id in
+            (* Check the number of parameters *)
+            assert (List.length regions = List.length def.region_params);
+            assert (List.length tys = List.length def.type_params);
+            (* Check that the variant id is consistent *)
+            (match (av.V.variant_id, def.T.kind) with
+            | Some variant_id, T.Enum variants ->
+                assert (T.VariantId.to_int variant_id < List.length variants)
+            | None, T.Struct _ -> ()
+            | _ -> failwith "Erroneous typing");
+            (* Check that the field types are correct *)
+            let field_types =
+              Subst.type_def_get_instantiated_field_etypes def av.V.variant_id
+                tys
+            in
+            let fields_with_types =
+              List.combine av.V.field_values field_types
+            in
+            List.iter
+              (fun ((v, ty) : V.typed_value * T.ety) -> assert (v.V.ty = ty))
+              fields_with_types
+        (* Tuple case *)
+        | V.Adt av, T.Adt (T.Tuple, regions, tys) ->
+            assert (regions = []);
+            assert (av.V.variant_id = None);
+            (* Check that the fields have the proper values - and check that there
+             * are as many fields as field types at the same time *)
+            let fields_with_types = List.combine av.V.field_values tys in
+            List.iter
+              (fun ((v, ty) : V.typed_value * T.ety) -> assert (v.V.ty = ty))
+              fields_with_types
+        (* Assumed type case *)
+        | V.Adt av, T.Adt (T.Assumed aty_id, regions, tys) -> (
+            assert (av.V.variant_id = None);
+            match (aty_id, av.V.field_values, regions, tys) with
+            (* Box *)
+            | T.Box, [ boxed_value ], [], [ boxed_ty ] ->
+                assert (boxed_value.V.ty = boxed_ty)
+            | _ -> failwith "Erroneous type")
         | V.Bottom, _ -> (* Nothing to check *) ()
-        | V.Borrow bc, _ -> raise Unimplemented
+        | V.Borrow bc, T.Ref (_, ref_ty, rkind) -> (
+            match (bc, rkind) with
+            | V.SharedBorrow bid, T.Shared | V.InactivatedMutBorrow bid, T.Mut
+              ->
+                (* Lookup the borrowed value to check it has the proper type *)
+                raise Unimplemented
+            | V.MutBorrow (_, bv), T.Mut -> assert (bv.V.ty = ref_ty)
+            | _ -> failwith "Erroneous typing")
         | V.Loan lc, _ -> raise Unimplemented
-        | V.Symbolic spc, _ -> raise Unimplemented
+        | V.Symbolic spc, ty ->
+            let ty' = Subst.erase_regions spc.V.svalue.V.sv_ty in
+            assert (ty' = ty)
         | _ -> failwith "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_value info tv
