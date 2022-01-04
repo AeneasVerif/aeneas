@@ -72,7 +72,7 @@ type symbolic_proj_comp = {
 
 (** Ancestor for iter visitor for [typed_value] *)
 class ['self] iter_typed_value_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
 
     method visit_constant_value : 'env -> constant_value -> unit = fun _ _ -> ()
@@ -87,7 +87,7 @@ class ['self] iter_typed_value_base =
 
 (** Ancestor for map visitor for [typed_value] *)
 class ['self] map_typed_value_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] VisitorsRuntime.map
 
     method visit_constant_value : 'env -> constant_value -> constant_value =
@@ -210,7 +210,7 @@ type region = RegionVarId.id Types.region [@@deriving show]
 
 (** Ancestor for iter visitor for [typed_avalue] *)
 class ['self] iter_typed_avalue_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] iter_typed_value
 
     method visit_region : 'env -> region -> unit = fun _ _ -> ()
@@ -226,7 +226,7 @@ class ['self] iter_typed_avalue_base =
 
 (** Ancestor for MAP visitor for [typed_avalue] *)
 class ['self] map_typed_avalue_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] map_typed_value
 
     method visit_region : 'env -> region -> region = fun _ r -> r

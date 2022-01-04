@@ -9,6 +9,7 @@ module A = CfimAst
 module L = Logging
 open TypesUtils
 open ValuesUtils
+module Inv = Invariants
 
 (* TODO: check that the value types are correct when evaluating *)
 (* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
@@ -4247,6 +4248,8 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     (lazy
       ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate statement: "
      ^ statement_to_string ctx st ^ "\n"));
+  (* Sanity check *)
+  if config.C.check_invariants then Inv.check_invariants ctx;
   (* Evaluate *)
   match st with
   | A.Assign (p, rvalue) -> (
@@ -4423,6 +4426,8 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
   match eval_statement config ctx body with
   | Error err -> Error err
   | Ok (ctx, res) -> (
+      (* Sanity check *)
+      if config.C.check_invariants then Inv.check_invariants ctx;
       match res with
       | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
       | Return -> Ok ctx)
