@@ -334,6 +334,12 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
   let info = { outer_borrow = false; outer_shared = false } in
   visitor#visit_eval_ctx info ctx
 
+let check_constant_value_type (cv : V.constant_value) (ty : T.ety) : unit =
+  match (cv, ty) with
+  | V.Scalar sv, T.Integer int_ty -> assert (sv.int_ty = int_ty)
+  | V.Bool _, T.Bool | V.Char _, T.Char | V.String _, T.Str -> ()
+  | _ -> failwith "Erroneous typing"
+
 let check_typing_invariant (ctx : C.eval_ctx) : unit =
   let visitor =
     object
@@ -342,13 +348,13 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
       method! visit_typed_value info tv =
         (* Check this pair (value, type) *)
         (match (tv.V.value, tv.V.ty) with
-        | V.Concrete cv, _ -> raise Unimplemented
+        | V.Concrete cv, ty -> check_constant_value_type cv ty
         | V.Adt av, _ -> raise Unimplemented
         | V.Bottom, _ -> (* Nothing to check *) ()
         | V.Borrow bc, _ -> raise Unimplemented
         | V.Loan lc, _ -> raise Unimplemented
         | V.Symbolic spc, _ -> raise Unimplemented
-        | _ -> failwith "Inconsistent typing");
+        | _ -> failwith "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_value info tv
 
