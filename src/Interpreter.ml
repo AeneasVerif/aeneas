@@ -1422,7 +1422,7 @@ let prepare_reborrows (config : C.config) (allow_reborrows : bool)
   (* The function to generate and register fresh reborrows *)
   let fresh_reborrow (bid : V.BorrowId.id) : V.BorrowId.id =
     if allow_reborrows then (
-      let bid', cnt' = V.BorrowId.fresh ctx.borrow_counter in
+      let bid', cnt' = V.BorrowId.fresh !borrow_counter in
       borrow_counter := cnt';
       reborrows := (bid, bid') :: !reborrows;
       bid')
@@ -3001,6 +3001,46 @@ let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
   let see = SeAdt (None, [ boxed_value ]) in
   (ctx, see)
 
+let expand_symbolic_value_shared_borrow (config : C.config)
+    (original_sv : V.symbolic_value) (ended_regions : T.RegionId.set_t)
+    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* First, replace the symbolic values. The important point is that the
+   * symbolic value to expand may appear several times, if it has been
+   * copied. In this case, we need to introduce one fresh borrow id per
+   * instance.
+   *)
+  let borrows = ref V.BorrowId.Set.empty in
+  let borrow_counter = ref ctx.C.borrow_counter in
+  let fresh_borrow () =
+    let bid', cnt' = V.BorrowId.fresh !borrow_counter in
+    borrow_counter := cnt';
+    borrows := V.BorrowId.Set.add bid' !borrows;
+    bid'
+  in
+  (* Visitor to replace the symbolic values *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_Symbolic env sv =
+        if sv.V.svalue = original_sv then
+          let bid = fresh_borrow () in
+          V.Borrow (V.SharedBorrow bid)
+        else super#visit_Symbolic env sv
+    end
+  in
+  (* Call the visitor *)
+  let ctx = obj#visit_eval_ctx () ctx in
+  let ctx = { ctx with C.borrow_counter = !borrow_counter } in
+  (* Finally, replace the symbolic avalues *)
+  let bids = !borrows in
+  assert (not (V.BorrowId.Set.is_empty bids));
+  let ctx, shared_sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
+  let see = SeSharedRef (bids, shared_sv) in
+  let allow_reborrows = true in
+  apply_symbolic_expansion_to_avalues config allow_reborrows original_sv see ctx
+
 let expand_symbolic_value_borrow (config : C.config)
     (original_sv : V.symbolic_value) (ended_regions : T.RegionId.set_t)
     (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
@@ -3026,7 +3066,9 @@ let expand_symbolic_value_borrow (config : C.config)
       let allow_reborrows = true in
       apply_symbolic_expansion_to_avalues config allow_reborrows original_sv see
         ctx
-  | T.Shared -> raise Unimplemented
+  | T.Shared ->
+      expand_symbolic_value_shared_borrow config original_sv ended_regions
+        region ref_ty rkind ctx
 
 (** Expand a symbolic value which is not an enumeration with several variants.
 

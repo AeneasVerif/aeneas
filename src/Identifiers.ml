@@ -18,6 +18,7 @@ module type Id = sig
 
   (* TODO: this is stateful! - but we may want to be able to duplicate contexts... *)
   val fresh : generator -> id * generator
+  (* TODO: change the order of the returned types *)
 
   val to_string : id -> string
 
