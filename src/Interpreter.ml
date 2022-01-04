@@ -2787,6 +2787,38 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
   let ctx = apply_expansion BorrowProj ctx in
   ctx
 
+(** Auxiliary function.
+
+    Simply replace the symbolic values (*not avalues*) in the context with
+    a given value. Will break invariants if not used properly.
+*)
+let replace_symbolic_values (config : C.config) (at_most_once : bool)
+    (original_sv : V.symbolic_value) (nv : V.value) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  (* Count *)
+  let replaced = ref false in
+  let replace () =
+    if at_most_once then assert (not !replaced);
+    replaced := true;
+    nv
+  in
+  (* Visitor to apply the substitution *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_Symbolic env spc =
+        if spc.V.svalue = original_sv then replace ()
+        else super#visit_Symbolic env spc
+    end
+  in
+  (* Apply the substitution *)
+  let ctx = obj#visit_eval_ctx None ctx in
+  (* Check that we substituted *)
+  assert !replaced;
+  (* Return *)
+  ctx
+
 (** Apply a symbolic expansion to a context, by replacing the original
     symbolic value with its expanded value. Is valid only if the expansion
     is not a borrow (i.e., an adt...).
@@ -2794,27 +2826,12 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
 let apply_symbolic_expansion_non_borrow (config : C.config)
     (original_sv : V.symbolic_value) (expansion : symbolic_expansion)
     (ctx : C.eval_ctx) : C.eval_ctx =
-  (* Convert the expansion to a value *)
-  let nv = symbolic_expansion_non_borrow_to_value original_sv expansion in
-  (* Visitor to apply the expansion to *non-abstraction* values *)
-  let obj =
-    object
-      inherit [_] C.map_eval_ctx as super
-
-      method! visit_Symbolic env spc =
-        if spc.V.svalue = original_sv then nv.V.value
-        else super#visit_Symbolic env spc
-      (** Replace a symbolic value with its expansion.
-          Note that there may be several references to the same symbolic value
-          in the context, if the value has been copied. Expansion is then a bit
-          subtle in the case we expand shared borrows, in which case we need to
-          introduce a unique borrow identifier for every borrow (this is not
-          the case here: this function should NOT be used to expand borrows).
-      *)
-    end
-  in
   (* Apply the expansion to non-abstraction values *)
-  let ctx = obj#visit_eval_ctx None ctx in
+  let nv = symbolic_expansion_non_borrow_to_value original_sv expansion in
+  let at_most_once = false in
+  let ctx =
+    replace_symbolic_values config at_most_once original_sv nv.V.value ctx
+  in
   (* Apply the expansion to abstraction values *)
   let allow_reborrows = false in
   apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
@@ -2984,7 +3001,8 @@ let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
   let see = SeAdt (None, [ boxed_value ]) in
   (ctx, see)
 
-let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
+let expand_symbolic_value_borrow (config : C.config)
+    (original_sv : V.symbolic_value) (ended_regions : T.RegionId.set_t)
     (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Check that we are allowed to expand the reference *)
@@ -2996,7 +3014,18 @@ let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
        * borrow id *)
       let ctx, sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
       let ctx, bid = C.fresh_borrow_id ctx in
-      raise Unimplemented
+      let see = SeMutRef (bid, sv) in
+      (* Expand the symbolic values - we simply perform a substitution (and
+       * check that we perform exactly one substitution) *)
+      let nv = symbolic_expansion_to_value_with_borrows original_sv see in
+      let at_most_once = true in
+      let ctx =
+        replace_symbolic_values config at_most_once original_sv nv.V.value ctx
+      in
+      (* Expand the symbolic avalues *)
+      let allow_reborrows = true in
+      apply_symbolic_expansion_to_avalues config allow_reborrows original_sv see
+        ctx
   | T.Shared -> raise Unimplemented
 
 (** Expand a symbolic value which is not an enumeration with several variants.
@@ -3043,10 +3072,8 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
       apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
   (* Borrows *)
   | Deref, T.Ref (region, ref_ty, rkind) ->
-      let _ =
-        expand_symbolic_value_borrow ended_regions region ref_ty rkind ctx
-      in
-      raise Unimplemented
+      expand_symbolic_value_borrow config sp.V.svalue ended_regions region
+        ref_ty rkind ctx
   | _ ->
       failwith
         ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
