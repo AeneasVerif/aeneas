@@ -9,6 +9,7 @@ module Subst = Substitute
 module A = CfimAst
 module L = Logging
 open InterpreterUtils
+open Errors
 
 let debug_invariants : bool ref = ref false
 
@@ -333,7 +334,28 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
   let info = { outer_borrow = false; outer_shared = false } in
   visitor#visit_eval_ctx info ctx
 
-let check_typing_invariant (_ctx : C.eval_ctx) : unit = ()
+let check_typing_invariant (ctx : C.eval_ctx) : unit =
+  let visitor =
+    object
+      inherit [_] C.iter_eval_ctx as super
+
+      method! visit_typed_value info tv =
+        (* Check this pair (value, type) *)
+        (match (tv.V.value, tv.V.ty) with
+        | V.Concrete cv, _ -> raise Unimplemented
+        | V.Adt av, _ -> raise Unimplemented
+        | V.Bottom, _ -> (* Nothing to check *) ()
+        | V.Borrow bc, _ -> raise Unimplemented
+        | V.Loan lc, _ -> raise Unimplemented
+        | V.Symbolic spc, _ -> raise Unimplemented
+        | _ -> failwith "Inconsistent typing");
+        (* Continue exploring to inspect the subterms *)
+        super#visit_typed_value info tv
+
+      method! visit_typed_avalue info atv = raise Unimplemented
+    end
+  in
+  visitor#visit_eval_ctx () ctx
 
 let check_invariants (ctx : C.eval_ctx) : unit =
   check_loans_borrows_relation_invariant ctx;
