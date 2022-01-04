@@ -40,6 +40,9 @@ let operand_to_string = Print.EvalCtxCfimAst.operand_to_string
 let statement_to_string ctx =
   Print.EvalCtxCfimAst.statement_to_string ctx "" "  "
 
+let same_symbolic_id (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) : bool =
+  sv0.V.sv_id = sv1.V.sv_id
+
 (* TODO: move *)
 let mk_var (index : V.VarId.id) (name : string option) (var_ty : T.ety) : A.var
     =
@@ -1046,29 +1049,30 @@ let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
     TODO: detailed comments. See [apply_proj_borrows]
 *)
 let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
-    (see : symbolic_expansion) (ty : T.rty) : V.typed_avalue =
+    (see : symbolic_expansion) (original_sv_ty : T.rty) : V.typed_avalue =
   (* Match *)
-  let value : V.avalue =
-    match (see, ty) with
-    | SeConcrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
+  let (value, ty) : V.avalue * T.rty =
+    match (see, original_sv_ty) with
+    | SeConcrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) ->
+        (V.AConcrete cv, original_sv_ty)
     | SeAdt (variant_id, field_values), T.Adt (_id, _region_params, _tys) ->
         (* Project over the field values *)
         let field_values =
           List.map mk_aproj_loans_from_proj_comp field_values
         in
-        V.AAdt { V.variant_id; field_values }
-    | SeMutRef (bid, spc), T.Ref (r, _ref_ty, T.Mut) ->
+        (V.AAdt { V.variant_id; field_values }, original_sv_ty)
+    | SeMutRef (bid, spc), T.Ref (r, ref_ty, T.Mut) ->
         (* Apply the projector to the borrowed value *)
         let child_av = mk_aproj_loans_from_proj_comp spc in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)
         if region_in_set r regions then
           (* In the set: keep *)
-          V.ALoan (V.AMutLoan (bid, child_av))
+          (V.ALoan (V.AMutLoan (bid, child_av)), ref_ty)
         else
           (* Not in the set: ignore *)
-          V.ALoan (V.AIgnoredMutLoan (bid, child_av))
-    | SeSharedRef (bids, spc), T.Ref (r, _ref_ty, T.Shared) ->
+          (V.ALoan (V.AIgnoredMutLoan (bid, child_av)), ref_ty)
+    | SeSharedRef (bids, spc), T.Ref (r, ref_ty, T.Shared) ->
         (* Apply the projector to the borrowed value *)
         let child_av = mk_aproj_loans_from_proj_comp spc in
         (* Check if the region is in the set of projected regions (note that
@@ -1076,9 +1080,10 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
         if region_in_set r regions then
           (* In the set: keep *)
           let shared_value = mk_typed_value_from_proj_comp spc in
-          V.ALoan (V.ASharedLoan (bids, shared_value, child_av))
-        else (* Not in the set: ignore *)
-          V.ALoan (V.AIgnoredSharedLoan child_av)
+          (V.ALoan (V.ASharedLoan (bids, shared_value, child_av)), ref_ty)
+        else
+          (* Not in the set: ignore *)
+          (V.ALoan (V.AIgnoredSharedLoan child_av), ref_ty)
     | _ -> failwith "Unreachable"
   in
   { V.value; V.ty }
@@ -2748,11 +2753,11 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
         match (aproj, proj_kind) with
         | V.AProjLoans sv, LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
-            if sv = original_sv then
+            if same_symbolic_id sv original_sv then
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion proj_regions expansion
-                  sv.V.sv_ty
+                  original_sv.V.sv_ty
               in
               (* Replace *)
               projected_value.V.value
@@ -2761,10 +2766,12 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
               super#visit_ASymbolic (Some proj_regions) aproj
         | V.AProjBorrows (sv, proj_ty), BorrowProj ->
             (* Check if this is the symbolic value we are looking for *)
-            if sv = original_sv then
+            if same_symbolic_id sv original_sv then
               (* Convert the symbolic expansion to a value on which we can
                * apply a projector (if the expansion is a reference expansion,
                * convert it to a borrow) *)
+              (* WARNING: we mustn't get there if the expansion is for a shared
+               * reference. *)
               let expansion =
                 symbolic_expansion_non_shared_borrow_to_value original_sv
                   expansion
@@ -2825,7 +2832,7 @@ let replace_symbolic_values (at_most_once : bool)
       inherit [_] C.map_eval_ctx as super
 
       method! visit_Symbolic env spc =
-        if spc.V.svalue = original_sv then replace ()
+        if same_symbolic_id spc.V.svalue original_sv then replace ()
         else super#visit_Symbolic env spc
     end
   in
@@ -3037,7 +3044,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
    * `None` otherwise *)
   let reborrow_ashared proj_regions (sv : V.symbolic_value) (proj_ty : T.rty) :
       V.abstract_shared_borrows option =
-    if sv = original_sv then
+    if same_symbolic_id sv original_sv then
       match proj_ty with
       | T.Ref (r, ref_ty, T.Shared) ->
           (* Projector over the shared value *)
@@ -3058,7 +3065,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
       inherit [_] C.map_eval_ctx as super
 
       method! visit_Symbolic env sv =
-        if sv.V.svalue = original_sv then
+        if same_symbolic_id sv.V.svalue original_sv then
           let bid = fresh_borrow () in
           V.Borrow (V.SharedBorrow bid)
         else super#visit_Symbolic env sv

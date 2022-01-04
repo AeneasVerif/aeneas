@@ -47,7 +47,15 @@ type constant_value =
 
 type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
 [@@deriving show]
-(** Symbolic value *)
+(** Symbolic value.
+
+    TODO: a symbolic value may not always have the same type!!
+    For references:
+    - a projector on loans may see a symbolic value of id `sid` as having type `T`
+    - a projector on borrows may see it as having type `&mut T`
+    We need to make this clear and more consistant.
+    So [symbolic_value] is actually a projector. TODO: rename
+  *)
 
 (** TODO: make it clear that complementary projectors are projectors on borrows *)
 type symbolic_proj_comp = {
