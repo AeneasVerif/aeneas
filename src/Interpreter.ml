@@ -1015,6 +1015,20 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
   in
   { V.value; V.ty }
 
+(** Convert a symbolic expansion to a value.
+
+    If the expansion is a reference expansion, it converts it to a borrow.
+    This function is meant to be used when reducing projectors over borrows,
+    during a symbolic expansion.
+  *)
+let symbolic_expansion_to_value_with_borrows (sv : V.symbolic_value)
+    (see : symbolic_expansion) : V.typed_value =
+  match see with
+  | SeMutRef (_, _) -> raise Unimplemented
+  | SeSharedRef (_, _) ->
+      raise Unimplemented failwith "Unexpected symbolic borrow expansion"
+  | _ -> symbolic_expansion_non_borrow_to_value sv see
+
 (** Apply (and reduce) a projector over loans to a value.
 
     TODO: detailed comments. See [apply_proj_borrows]
@@ -2852,19 +2866,23 @@ let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
 type proj_kind = LoanProj | BorrowProj
 
 (** Auxiliary function.
-    Apply a symbolic expansion to avalues in a context.
+    Apply a symbolic expansion to avalues in a context, targetting a specific
+    kind of projectors.
     
     [proj_kind] controls whether we apply the expansion to projectors
-    on loans or projectors on borrows (when applying a symbolic expansion to
-    a borrow value, we need two different expansion values: one for the loans
-    and another for the borrows meaning we have to call this function twice
-    with different parameters for [expansion]). For instance, if we expand
-    a symbolic mutable ref to `s0`, we'll have to apply the loan projectors
-    on a loan `mut_loan l` and the borrow projectors to a borrow `mut_borrow l s1`.
+    on loans or projectors on borrows.
+    
+    When dealing with reference expansion, it is necessary to first apply the
+    expansion on loan projectors, then on borrow projectors. The reason is
+    that reducing the borrow projectors might require to perform some reborrows,
+    in which case we need to lookup the corresponding loans in the context.
+    
+    [allow_reborrows] controls whether we allow reborrows or not. It is useful
+    only if we target borrow projectors.
 *)
-let apply_symbolic_expansion_to_avalues (config : C.config)
+let apply_symbolic_expansion_to_target_avalues (config : C.config)
     (allow_reborrows : bool) (proj_kind : proj_kind)
-    (original_sv : V.symbolic_value) (expansion : V.typed_value)
+    (original_sv : V.symbolic_value) (expansion : symbolic_expansion)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Symbolic values contained in the expansion might contain already ended regions *)
   let check_symbolic_no_ended = false in
@@ -2892,8 +2910,8 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
             if sv = original_sv then
               (* Apply the projector *)
               let projected_value =
-                apply_proj_loans check_symbolic_no_ended ctx proj_regions
-                  expansion
+                apply_proj_loans_on_symbolic_expansion ctx proj_regions
+                  expansion sv.V.sv_ty
               in
               (* Replace *)
               projected_value.V.value
@@ -2903,6 +2921,12 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
         | V.AProjBorrows (sv, proj_ty), BorrowProj ->
             (* Check if this is the symbolic value we are looking for *)
             if sv = original_sv then
+              (* Convert the symbolic expansion to a value on which we can
+               * apply a projector (if the expansion is a reference expansion,
+               * convert it to a borrow) *)
+              let expansion =
+                symbolic_expansion_to_value_with_borrows original_sv expansion
+              in
               (* Apply the projector *)
               let projected_value =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
@@ -2923,6 +2947,21 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
   (* Apply the reborrows *)
   apply_registered_reborrows ctx
 
+(** Auxiliary function.
+    Apply a symbolic expansion to avalues in a context.
+*)
+let apply_symbolic_expansion_to_avalues (config : C.config)
+    (allow_reborrows : bool) (original_sv : V.symbolic_value)
+    (expansion : symbolic_expansion) (ctx : C.eval_ctx) : C.eval_ctx =
+  let apply_expansion proj_kind ctx =
+    apply_symbolic_expansion_to_target_avalues config allow_reborrows proj_kind
+      original_sv expansion ctx
+  in
+  (* First target the loan projectors, then the borrow projectors *)
+  let ctx = apply_expansion LoanProj ctx in
+  let ctx = apply_expansion BorrowProj ctx in
+  ctx
+
 (** Apply a symbolic expansion to a context, by replacing the original
     symbolic value with its expanded value. Is valid only if the expansion
     is not a borrow (i.e., an adt...).
@@ -2930,13 +2969,15 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
 let apply_symbolic_expansion_non_borrow (config : C.config)
     (original_sv : V.symbolic_value) (expansion : symbolic_expansion)
     (ctx : C.eval_ctx) : C.eval_ctx =
-  (* Visitor to apply the expansion to non-abstraction values *)
+  (* Convert the expansion to a value *)
+  let nv = symbolic_expansion_non_borrow_to_value original_sv expansion in
+  (* Visitor to apply the expansion to *non-abstraction* values *)
   let obj =
     object
       inherit [_] C.map_eval_ctx as super
 
       method! visit_Symbolic env spc =
-        if spc.V.svalue = original_sv then expansion.V.value
+        if spc.V.svalue = original_sv then nv.V.value
         else super#visit_Symbolic env spc
       (** Replace a symbolic value with its expansion.
           Note that there may be several references to the same symbolic value
@@ -2949,16 +2990,10 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
   in
   (* Apply the expansion to non-abstraction values *)
   let ctx = obj#visit_eval_ctx None ctx in
-  (* Apply the expansion to abstraction values, on loans then on borrows (the
-   * order is arbitrary: we just can't do both at once because of the way the
-   * function is written) *)
+  (* Apply the expansion to abstraction values *)
   let allow_reborrows = false in
-  let apply_to_avalues proj_kind ctx =
-    apply_symbolic_expansion_to_avalues config allow_reborrows proj_kind
-      original_sv expansion ctx
-  in
-  let ctx = apply_to_avalues LoanProj ctx in
-  apply_to_avalues BorrowProj ctx
+  apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
+    expansion ctx
 
 (** Expand a symbolic value which is not an enumeration with several variants.
 
