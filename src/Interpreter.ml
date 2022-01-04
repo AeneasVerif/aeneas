@@ -3814,6 +3814,7 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
                     ( ctx,
                       { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }
                     )))
+      | Symbolic _ -> raise Unimplemented
       | _ -> failwith "Invalid input for `discriminant`")
   | E.Aggregate (aggregate_kind, ops) -> (
       (* Evaluate the operands *)
