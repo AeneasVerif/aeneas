@@ -10,7 +10,8 @@ type test = Test [@@deriving show]
 let _ = show_test Test
 
 (* This is necessary to have a backtrace when raising exceptions - for some
- * reason, the -g option doesn't work *)
+ * reason, the -g option doesn't work.
+ * JP: are you running with OCAMLRUNPARAM=b=1? *)
 let () = Printexc.record_backtrace true
 
 let usage = Printf.sprintf {|Aenaes: verification of Rust programs by translation
