@@ -49,6 +49,7 @@ type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
 [@@deriving show]
 (** Symbolic value *)
 
+(** TODO: make it clear that complementary projectors are projectors on borrows *)
 type symbolic_proj_comp = {
   svalue : symbolic_value;  (** The symbolic value itself *)
   rset_ended : RegionId.set_t;
@@ -101,7 +102,8 @@ type value =
   | Bottom  (** No value (uninitialized or moved value) *)
   | Borrow of borrow_content  (** A borrowed value *)
   | Loan of loan_content  (** A loaned value *)
-  | Symbolic of symbolic_proj_comp  (** Unknown (symbolic) value *)
+  | Symbolic of symbolic_proj_comp
+      (** Unknown (symbolic) value. This is a projector on borrows (TODO: make this clearer). *)
 
 and adt_value = {
   variant_id : (VariantId.id option[@opaque]);

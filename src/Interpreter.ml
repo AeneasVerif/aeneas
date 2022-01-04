@@ -761,11 +761,13 @@ let bottom_in_value (v : V.typed_value) : bool =
 
     Note that this function is very general: it also checks wether
     symbolic values contain already ended regions.
+    
+    TODO: remove?
 *)
-let bottom_in_avalue (v : V.typed_avalue) (abs_regions : T.RegionId.set_t) :
+let bottom_in_avalue (v : V.typed_avalue) (_abs_regions : T.RegionId.set_t) :
     bool =
   let obj =
-    object (self)
+    object
       inherit [_] V.iter_typed_avalue
 
       method! visit_Bottom _ = raise Found
@@ -773,7 +775,7 @@ let bottom_in_avalue (v : V.typed_avalue) (abs_regions : T.RegionId.set_t) :
       method! visit_symbolic_proj_comp _ sv =
         if symbolic_proj_comp_ended_regions sv then raise Found else ()
 
-      method! visit_aproj env ap =
+      method! visit_aproj _ ap =
         (* Nothing to do actually *)
         match ap with
         | V.AProjLoans _sv -> ()
@@ -1017,36 +1019,39 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
         in
         V.Adt { V.variant_id; V.field_values }
     | SeMutRef (_, _) | SeSharedRef (_, _) ->
-        failwith "Unexpected symbolic borrow expansion"
+        failwith "Unexpected symbolic reference expansion"
   in
   { V.value; V.ty }
 
 (** Convert a symbolic expansion to a value.
 
-    If the expansion is a reference expansion, it converts it to a borrow.
+    If the expansion is a mutable reference expansion, it converts it to a borrow.
     This function is meant to be used when reducing projectors over borrows,
     during a symbolic expansion.
   *)
-let symbolic_expansion_to_value_with_borrows (sv : V.symbolic_value)
+let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
     (see : symbolic_expansion) : V.typed_value =
   match see with
-  | SeMutRef (_, _) -> raise Unimplemented
+  | SeMutRef (bid, bv) ->
+      let ty = Subst.erase_regions sv.V.sv_ty in
+      let bv = mk_typed_value_from_proj_comp bv in
+      let value = V.Borrow (V.MutBorrow (bid, bv)) in
+      { V.value; ty }
   | SeSharedRef (_, _) ->
-      raise Unimplemented failwith "Unexpected symbolic borrow expansion"
+      failwith "Unexpected symbolic shared reference expansion"
   | _ -> symbolic_expansion_non_borrow_to_value sv see
 
 (** Apply (and reduce) a projector over loans to a value.
 
     TODO: detailed comments. See [apply_proj_borrows]
 *)
-let apply_proj_loans_on_symbolic_expansion (ctx : C.eval_ctx)
-    (regions : T.RegionId.set_t) (see : symbolic_expansion) (ty : T.rty) :
-    V.typed_avalue =
+let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
+    (see : symbolic_expansion) (ty : T.rty) : V.typed_avalue =
   (* Match *)
   let value : V.avalue =
     match (see, ty) with
     | SeConcrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
-    | SeAdt (variant_id, field_values), T.Adt (id, _region_params, _tys) ->
+    | SeAdt (variant_id, field_values), T.Adt (_id, _region_params, _tys) ->
         (* Project over the field values *)
         let field_values =
           List.map mk_aproj_loans_from_proj_comp field_values
@@ -2160,7 +2165,7 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
     contains regions which we are ending.
     Of course, we ignore the abstraction we are currently ending...
  *)
-and end_abstraction_regions (config : C.config) (abs_id : V.AbstractionId.id)
+and end_abstraction_regions (_config : C.config) (abs_id : V.AbstractionId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Lookup the abstraction to retrieve the set of owned regions *)
   let abs = C.ctx_lookup_abs ctx abs_id in
@@ -2704,6 +2709,17 @@ type proj_kind = LoanProj | BorrowProj
     
     [allow_reborrows] controls whether we allow reborrows or not. It is useful
     only if we target borrow projectors.
+    
+    Also, if this function is called on an expansion for *shared references*,
+    the proj borrows should already have been expanded.
+    
+    TODO: the way this function is used is a bit complex, especially because of
+    the above condition. Maybe we should have:
+    1. a generic function to expand the loan projectors
+    2. a function to expand the borrow projectors for non-borrows
+    3. specialized functions for mut borrows and shared borrows
+    Note that 2. and 3. may have a little bit of duplicated code, but hopefully
+    it would make things clearer.
 *)
 let apply_symbolic_expansion_to_target_avalues (config : C.config)
     (allow_reborrows : bool) (proj_kind : proj_kind)
@@ -2735,8 +2751,8 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
             if sv = original_sv then
               (* Apply the projector *)
               let projected_value =
-                apply_proj_loans_on_symbolic_expansion ctx proj_regions
-                  expansion sv.V.sv_ty
+                apply_proj_loans_on_symbolic_expansion proj_regions expansion
+                  sv.V.sv_ty
               in
               (* Replace *)
               projected_value.V.value
@@ -2750,7 +2766,8 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
                * apply a projector (if the expansion is a reference expansion,
                * convert it to a borrow) *)
               let expansion =
-                symbolic_expansion_to_value_with_borrows original_sv expansion
+                symbolic_expansion_non_shared_borrow_to_value original_sv
+                  expansion
               in
               (* Apply the projector *)
               let projected_value =
@@ -2792,7 +2809,7 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
     Simply replace the symbolic values (*not avalues*) in the context with
     a given value. Will break invariants if not used properly.
 *)
-let replace_symbolic_values (config : C.config) (at_most_once : bool)
+let replace_symbolic_values (at_most_once : bool)
     (original_sv : V.symbolic_value) (nv : V.value) (ctx : C.eval_ctx) :
     C.eval_ctx =
   (* Count *)
@@ -2829,9 +2846,7 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
   (* Apply the expansion to non-abstraction values *)
   let nv = symbolic_expansion_non_borrow_to_value original_sv expansion in
   let at_most_once = false in
-  let ctx =
-    replace_symbolic_values config at_most_once original_sv nv.V.value ctx
-  in
+  let ctx = replace_symbolic_values at_most_once original_sv nv.V.value ctx in
   (* Apply the expansion to abstraction values *)
   let allow_reborrows = false in
   apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
@@ -2949,7 +2964,6 @@ let expand_bottom_value_from_projection (config : C.config)
  *)
 let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
     (ended_regions : T.RegionId.set_t) (def_id : T.TypeDefId.id)
-    (opt_variant_id : T.VariantId.id option)
     (regions : T.RegionId.id T.region list) (types : T.rty list)
     (ctx : C.eval_ctx) : (C.eval_ctx * symbolic_expansion) list =
   (* Lookup the definition and check if it is an enumeration with several
@@ -3003,12 +3017,11 @@ let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
 
 let expand_symbolic_value_shared_borrow (config : C.config)
     (original_sv : V.symbolic_value) (ended_regions : T.RegionId.set_t)
-    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
-    (ctx : C.eval_ctx) : C.eval_ctx =
-  (* First, replace the symbolic values. The important point is that the
-   * symbolic value to expand may appear several times, if it has been
-   * copied. In this case, we need to introduce one fresh borrow id per
-   * instance.
+    (ref_ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* First, replace the projectors on borrows (AProjBorrow and proj_comp)
+   * The important point is that the symbolic value to expand may appear
+   * several times, if it has been copied. In this case, we need to introduce
+   * one fresh borrow id per instance.
    *)
   let borrows = ref V.BorrowId.Set.empty in
   let borrow_counter = ref ctx.C.borrow_counter in
@@ -3018,7 +3031,28 @@ let expand_symbolic_value_shared_borrow (config : C.config)
     borrows := V.BorrowId.Set.add bid' !borrows;
     bid'
   in
-  (* Visitor to replace the symbolic values *)
+  (* Small utility used on shared borrows in abstractions (regular borrow
+   * projector and asb).
+   * Returns `Some` if the symbolic value has been expanded to an asb list,
+   * `None` otherwise *)
+  let reborrow_ashared proj_regions (sv : V.symbolic_value) (proj_ty : T.rty) :
+      V.abstract_shared_borrows option =
+    if sv = original_sv then
+      match proj_ty with
+      | T.Ref (r, ref_ty, T.Shared) ->
+          (* Projector over the shared value *)
+          let shared_asb = V.AsbProjReborrows (sv, ref_ty) in
+          (* Check if the region is in the set of projected regions *)
+          if region_in_set r proj_regions then
+            (* In the set: we need to reborrow *)
+            let bid = fresh_borrow () in
+            Some [ V.AsbBorrow bid; shared_asb ]
+          else (* Not in the set: ignore *)
+            Some [ shared_asb ]
+      | _ -> failwith "Unexpected"
+    else None
+  in
+  (* Visitor to replace the projectors on borrows *)
   let obj =
     object
       inherit [_] C.map_eval_ctx as super
@@ -3028,12 +3062,41 @@ let expand_symbolic_value_shared_borrow (config : C.config)
           let bid = fresh_borrow () in
           V.Borrow (V.SharedBorrow bid)
         else super#visit_Symbolic env sv
+
+      method! visit_Abs proj_regions abs =
+        assert (Option.is_none proj_regions);
+        let proj_regions = Some abs.V.regions in
+        super#visit_Abs proj_regions abs
+
+      method! visit_AProjSharedBorrow proj_regions asb =
+        let expand_asb (asb : V.abstract_shared_borrow) :
+            V.abstract_shared_borrows =
+          match asb with
+          | V.AsbBorrow _ -> [ asb ]
+          | V.AsbProjReborrows (sv, proj_ty) -> (
+              match reborrow_ashared (Option.get proj_regions) sv proj_ty with
+              | None -> [ asb ]
+              | Some asb -> asb)
+        in
+        let asb = List.concat (List.map expand_asb asb) in
+        V.AProjSharedBorrow asb
+
+      method! visit_ASymbolic proj_regions aproj =
+        match aproj with
+        | AProjLoans _ ->
+            (* Loans are handled later *)
+            super#visit_ASymbolic proj_regions aproj
+        | AProjBorrows (sv, proj_ty) -> (
+            (* Check if we need to reborrow *)
+            match reborrow_ashared (Option.get proj_regions) sv proj_ty with
+            | None -> super#visit_ASymbolic proj_regions aproj
+            | Some asb -> V.ABorrow (V.AProjSharedBorrow asb))
     end
   in
   (* Call the visitor *)
-  let ctx = obj#visit_eval_ctx () ctx in
+  let ctx = obj#visit_eval_ctx None ctx in
   let ctx = { ctx with C.borrow_counter = !borrow_counter } in
-  (* Finally, replace the symbolic avalues *)
+  (* Finally, replace the projectors on loans *)
   let bids = !borrows in
   assert (not (V.BorrowId.Set.is_empty bids));
   let ctx, shared_sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
@@ -3057,10 +3120,10 @@ let expand_symbolic_value_borrow (config : C.config)
       let see = SeMutRef (bid, sv) in
       (* Expand the symbolic values - we simply perform a substitution (and
        * check that we perform exactly one substitution) *)
-      let nv = symbolic_expansion_to_value_with_borrows original_sv see in
+      let nv = symbolic_expansion_non_shared_borrow_to_value original_sv see in
       let at_most_once = true in
       let ctx =
-        replace_symbolic_values config at_most_once original_sv nv.V.value ctx
+        replace_symbolic_values at_most_once original_sv nv.V.value ctx
       in
       (* Expand the symbolic avalues *)
       let allow_reborrows = true in
@@ -3068,7 +3131,7 @@ let expand_symbolic_value_borrow (config : C.config)
         ctx
   | T.Shared ->
       expand_symbolic_value_shared_borrow config original_sv ended_regions
-        region ref_ty rkind ctx
+        ref_ty ctx
 
 (** Expand a symbolic value which is not an enumeration with several variants.
 
@@ -3082,7 +3145,7 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
   let ended_regions = sp.V.rset_ended in
   match (pe, rty) with
   (* "Regular" ADTs *)
-  | ( Field (ProjAdt (def_id, opt_variant_id), _),
+  | ( Field (ProjAdt (def_id, _opt_variant_id), _),
       T.Adt (T.AdtId def_id', regions, types) ) -> (
       assert (def_id = def_id');
       (* Compute the expanded value - there should be exactly one because we
@@ -3090,7 +3153,7 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
       let expand_enumerations = false in
       match
         compute_expanded_symbolic_adt_value expand_enumerations ended_regions
-          def_id opt_variant_id regions types ctx
+          def_id regions types ctx
       with
       | [ (ctx, nv) ] ->
           (* Apply in the context *)
