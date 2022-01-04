@@ -396,15 +396,30 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.Borrow bc, T.Ref (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | V.SharedBorrow bid, T.Shared | V.InactivatedMutBorrow bid, T.Mut
-              ->
-                (* TODO: lookup the borrowed value to check it has the proper type *)
-                ()
-            | V.MutBorrow (_, bv), T.Mut -> assert (bv.V.ty = ref_ty)
+              -> (
+                (* Lookup the borrowed value to check it has the proper type *)
+                let _, glc = lookup_loan ek_all bid ctx in
+                match glc with
+                | Concrete (V.SharedLoan (_, sv))
+                | Abstract (V.ASharedLoan (_, sv, _)) ->
+                    assert (sv.V.ty = ref_ty)
+                | _ -> failwith "Inconsistent context")
+            | V.MutBorrow (bid, bv), T.Mut ->
+                assert (
+                  (* Check that the borrowed value has the proper type *)
+                  bv.V.ty = ref_ty)
             | _ -> failwith "Erroneous typing")
         | V.Loan lc, ty -> (
             match lc with
             | V.SharedLoan (_, sv) -> assert (sv.V.ty = ty)
-            | V.MutLoan _ -> ())
+            | V.MutLoan bid -> (
+                (* Lookup the borrowed value to check it has the proper type *)
+                let glc = lookup_borrow ek_all bid ctx in
+                match glc with
+                | Concrete (V.MutBorrow (_, bv)) -> assert (bv.V.ty = ty)
+                | Abstract (V.AMutBorrow (_, sv)) ->
+                    assert (Subst.erase_regions sv.V.ty = ty)
+                | _ -> failwith "Inconsistent context"))
         | V.Symbolic spc, ty ->
             let ty' = Subst.erase_regions spc.V.svalue.V.sv_ty in
             assert (ty' = ty)
