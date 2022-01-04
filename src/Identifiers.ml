@@ -31,7 +31,7 @@ module type Id = sig
 
   val to_int : id -> int
 
-  val of_int : id -> int
+  val of_int : int -> id
 
   val nth : 'a list -> id -> 'a
 

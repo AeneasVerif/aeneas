@@ -68,6 +68,34 @@ let make_type_subst (var_ids : T.TypeVarId.id list) (tys : 'r T.ty list) :
   in
   fun id -> T.TypeVarId.Map.find id mp
 
+(** Instantiate the type variables in an ADT definition, and return, for
+    every variant, the list of the types of its fields *)
+let type_def_get_instantiated_variants_fields_rtypes (def : T.type_def)
+    (regions : T.RegionId.id T.region list) (types : T.rty list) :
+    (T.VariantId.id option * T.rty list) list =
+  let r_subst =
+    make_region_subst
+      (List.map (fun x -> x.T.index) def.T.region_params)
+      regions
+  in
+  let ty_subst =
+    make_type_subst (List.map (fun x -> x.T.index) def.T.type_params) types
+  in
+  let (variants_fields : (T.VariantId.id option * T.field list) list) =
+    match def.T.kind with
+    | T.Enum variants ->
+        List.mapi
+          (fun i v -> (Some (T.VariantId.of_int i), v.T.fields))
+          variants
+    | T.Struct fields -> [ (None, fields) ]
+  in
+  List.map
+    (fun (id, fields) ->
+      ( id,
+        List.map (fun f -> ty_substitute r_subst ty_subst f.T.field_ty) fields
+      ))
+    variants_fields
+
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)
 let type_def_get_instantiated_field_rtypes (def : T.type_def)

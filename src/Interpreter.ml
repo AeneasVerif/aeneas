@@ -2666,12 +2666,47 @@ let expand_bottom_value_from_projection (config : C.config)
   | Ok ctx -> ctx
   | Error _ -> failwith "Unreachable"
 
-let compute_expanded_symbolic_adt_value (tyctx : T.type_def list)
-    (expand_enumerations : bool) (def_id : T.TypeDefId.id)
+(** Compute the expansion of an adt value.
+
+    The function might return a list of contexts and values if the symbolic
+    value to expand is an enumeration.
+    
+    `expand_enumerations` controls the expansion of enumerations: if false, it
+    doesn't allow the expansion of enumerations *containing several variants*.
+ *)
+let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
+    (ended_regions : T.RegionId.set_t) (def_id : T.TypeDefId.id)
     (opt_variant_id : T.VariantId.id option)
-    (regions : T.RegionId.id T.region list) (types : T.rty list) :
-    C.eval_ctx * V.typed_value =
-  raise Unimplemented
+    (regions : T.RegionId.id T.region list) (types : T.rty list)
+    (ctx : C.eval_ctx) : (C.eval_ctx * V.typed_value) list =
+  (* Lookup the definition and check if it is an enumeration with several
+   * variants *)
+  let def = T.TypeDefId.nth ctx.type_context def_id in
+  assert (List.length regions = List.length def.T.region_params);
+  (* Retrieve, for every variant, the list of its instantiated field types *)
+  let variants_fields_types =
+    Subst.type_def_get_instantiated_variants_fields_rtypes def regions types
+  in
+  (* Check if there is strictly more than one variant *)
+  if List.length variants_fields_types > 1 && not expand_enumerations then
+    failwith "Not allowed to expand enumerations with several variants";
+  (* Initialize the expanded value for a given variant *)
+  let initialize (ctx : C.eval_ctx)
+      ((variant_id, field_types) : T.VariantId.id option * T.rty list) :
+      C.eval_ctx * V.typed_value =
+    let ctx, field_values =
+      List.fold_left_map
+        (fun ctx (ty : T.rty) ->
+          mk_fresh_symbolic_comp_proj ended_regions ty ctx)
+        ctx field_types
+    in
+    let av = V.Adt { variant_id; field_values } in
+    let ty = T.Adt (T.AdtId def_id, regions, types) in
+    let ty = Subst.erase_regions ty in
+    (ctx, { V.value = av; V.ty })
+  in
+  (* Initialize all the expanded values of all the variants *)
+  List.map (initialize ctx) variants_fields_types
 
 let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
     (field_types : T.rty list) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
@@ -2700,20 +2735,12 @@ let compute_expanded_symbolic_ref_value (ended_regions : T.RegionId.set_t)
     C.eval_ctx * V.typed_value =
   raise Unimplemented
 
-(** Expand a symbolic value.
+(** Expand a symbolic value which is not an enumeration with several variants.
 
-    Note that we return a list of contexts because when expanding enumerations
-    we need one context per variant.
-    
-    [expand_enumerations] controls whether we allow to expand enumerations with
-    strictly more than one variant or not. This only allowed when evaluating a
-    [Discriminant] rvalue.
-    If [expand_enumerations] is false, then the function always returns
-    exactly one evaluation context.
+    This function is used when exploring a path.
  *)
-let expand_symbolic_value (config : C.config) (expand_enumerations : bool)
-    (pe : E.projection_elem) (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) :
-    C.eval_ctx list =
+let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
+    (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
   let rty = sp.V.svalue.V.sv_ty in
@@ -2722,10 +2749,17 @@ let expand_symbolic_value (config : C.config) (expand_enumerations : bool)
     match (pe, rty) with
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
-        T.Adt (T.AdtId def_id', regions, types) ) ->
+        T.Adt (T.AdtId def_id', regions, types) ) -> (
         assert (def_id = def_id');
-        compute_expanded_symbolic_adt_value ctx.type_context expand_enumerations
-          def_id opt_variant_id regions types
+        (* Compute the expanded value - there should be exactly one because we
+         * don't allow to expand enumerations with strictly more than one variant *)
+        let expand_enumerations = false in
+        match
+          compute_expanded_symbolic_adt_value expand_enumerations ended_regions
+            def_id opt_variant_id regions types ctx
+        with
+        | [ (ctx, nv) ] -> (ctx, nv)
+        | _ -> failwith "Unexpected")
     (* Tuples *)
     | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
         assert (arity = List.length tys);
@@ -2743,14 +2777,6 @@ let expand_symbolic_value (config : C.config) (expand_enumerations : bool)
   in
   (* Update the context *)
   raise Unimplemented
-
-(** Expand a symbolic value which is not an enumeration with several variants *)
-let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
-    (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) : C.eval_ctx =
-  let expand_enumerations = false in
-  match expand_symbolic_value config expand_enumerations pe sp ctx with
-  | [ ctx ] -> ctx
-  | _ -> failwith "Unexpected"
 
 (** Update the environment to be able to read a place.
 
