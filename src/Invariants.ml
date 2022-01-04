@@ -9,7 +9,6 @@ module Subst = Substitute
 module A = CfimAst
 module L = Logging
 open InterpreterUtils
-open Errors
 
 let debug_invariants : bool ref = ref false
 
@@ -404,7 +403,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 | Abstract (V.ASharedLoan (_, sv, _)) ->
                     assert (sv.V.ty = ref_ty)
                 | _ -> failwith "Inconsistent context")
-            | V.MutBorrow (bid, bv), T.Mut ->
+            | V.MutBorrow (_, bv), T.Mut ->
                 assert (
                   (* Check that the borrowed value has the proper type *)
                   bv.V.ty = ref_ty)
@@ -478,7 +477,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.ABottom, _ -> (* Nothing to check *) ()
         | V.ABorrow bc, T.Ref (_, ref_ty, rkind) -> (
             match (bc, rkind) with
-            | V.AMutBorrow (bid, av), T.Mut ->
+            | V.AMutBorrow (_, av), T.Mut ->
                 (* Check that the child value has the proper type *)
                 assert (av.V.ty = ref_ty)
             | V.ASharedBorrow bid, T.Shared -> (
