@@ -18,10 +18,18 @@ let debug_invariants : bool ref = ref false
 
 type borrow_info = {
   loan_kind : T.ref_kind;
+  loan_in_abs : bool;
+  (* true if the loan was found in an abstraction *)
   loan_ids : V.BorrowId.set_t;
   borrow_ids : V.BorrowId.set_t;
 }
 [@@deriving show]
+
+type outer_borrow_info = {
+  outer_borrow : bool;
+  (* true if the value is borrowed *)
+  outer_shared : bool; (* true if the value is borrowed as shared *)
+}
 
 let borrows_infos_to_string (infos : borrow_info V.BorrowId.Map.t) : string =
   let bindings = V.BorrowId.Map.bindings infos in
@@ -32,6 +40,7 @@ type borrow_kind = Mut | Shared | Inactivated
 
 (** Check that:
     - loans and borrows are correctly related
+    - a two-phase borrow can't point to a value inside an abstraction
  *)
 let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
   (* Link all the borrow ids to a representant - necessary because of shared
@@ -46,7 +55,8 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
 
   (* First, register all the loans *)
   (* Some utilities to register the loans *)
-  let register_shared_loan (bids : V.BorrowId.set_t) : unit =
+  let register_shared_loan (loan_in_abs : bool) (bids : V.BorrowId.set_t) : unit
+      =
     let reprs = !ids_reprs in
     let infos = !borrows_infos in
     (* Use the first borrow id as representant *)
@@ -64,6 +74,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     let info =
       {
         loan_kind = T.Shared;
+        loan_in_abs;
         loan_ids = bids;
         borrow_ids = V.BorrowId.Set.empty;
       }
@@ -74,7 +85,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     borrows_infos := infos
   in
 
-  let register_mut_loan (bid : V.BorrowId.id) : unit =
+  let register_mut_loan (loan_in_abs : bool) (bid : V.BorrowId.id) : unit =
     let reprs = !ids_reprs in
     let infos = !borrows_infos in
     (* Sanity checks *)
@@ -86,6 +97,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     let info =
       {
         loan_kind = T.Mut;
+        loan_in_abs;
         loan_ids = V.BorrowId.Set.singleton bid;
         borrow_ids = V.BorrowId.Set.empty;
       }
@@ -100,21 +112,29 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_loan_content env lc =
+      method! visit_Var inside_abs binder v =
+        let inside_abs = false in
+        super#visit_Var inside_abs binder v
+
+      method! visit_Abs inside_abs abs =
+        let inside_abs = true in
+        super#visit_Abs inside_abs abs
+
+      method! visit_loan_content inside_abs lc =
         (* Register the loan *)
         let _ =
           match lc with
-          | V.SharedLoan (bids, tv) -> register_shared_loan bids
-          | V.MutLoan bid -> register_mut_loan bid
+          | V.SharedLoan (bids, tv) -> register_shared_loan inside_abs bids
+          | V.MutLoan bid -> register_mut_loan inside_abs bid
         in
         (* Continue exploring *)
-        super#visit_loan_content env lc
+        super#visit_loan_content inside_abs lc
 
-      method! visit_aloan_content env lc =
+      method! visit_aloan_content inside_abs lc =
         let _ =
           match lc with
-          | V.AMutLoan (bid, _) -> register_mut_loan bid
-          | V.ASharedLoan (bids, _, _) -> register_shared_loan bids
+          | V.AMutLoan (bid, _) -> register_mut_loan inside_abs bid
+          | V.ASharedLoan (bids, _, _) -> register_shared_loan inside_abs bids
           | V.AEndedMutLoan { given_back = _; child = _ }
           | V.AEndedSharedLoan (_, _)
           | V.AIgnoredMutLoan (_, _) (* We might want to do something here *)
@@ -124,12 +144,13 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
               ()
         in
         (* Continue exploring *)
-        super#visit_aloan_content env lc
+        super#visit_aloan_content inside_abs lc
     end
   in
 
   (* Visit *)
-  loans_visitor#visit_eval_ctx () ctx;
+  let inside_abs = false in
+  loans_visitor#visit_eval_ctx inside_abs ctx;
 
   (* Then, register all the borrows *)
   (* Some utilities to register the borrows *)
@@ -159,6 +180,8 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     (match (info.loan_kind, kind) with
     | T.Shared, (Shared | Inactivated) | T.Mut, Mut -> ()
     | _ -> failwith "Invariant not satisfied");
+    (* An inactivated borrow can't point to a value inside an abstraction *)
+    assert (kind <> Inactivated || not info.loan_in_abs);
     (* Insert the borrow id *)
     let borrow_ids = info.borrow_ids in
     assert (not (V.BorrowId.Set.mem bid borrow_ids));
@@ -234,7 +257,6 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
 (** Check that:
     - borrows/loans can't contain ⊥ or inactivated mut borrows
     - shared loans can't contain mutable loans
-    - TODO: a two-phase borrow can't point to a value inside an abstraction
  *)
 let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit = ()
 
