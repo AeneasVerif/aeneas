@@ -427,7 +427,95 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_value info tv
 
-      method! visit_typed_avalue info atv = raise Unimplemented
+      method! visit_typed_avalue info atv =
+        (* Check the current pair (value, type) *)
+        (match (atv.V.value, atv.V.ty) with
+        | V.AConcrete cv, ty ->
+            check_constant_value_type cv (Subst.erase_regions ty)
+        (* ADT case *)
+        | V.AAdt av, T.Adt (T.AdtId def_id, regions, tys) ->
+            (* Retrieve the definition to check the variant id, the number of
+             * parameters, etc. *)
+            let def = T.TypeDefId.nth ctx.type_context def_id in
+            (* Check the number of parameters *)
+            assert (List.length regions = List.length def.region_params);
+            assert (List.length tys = List.length def.type_params);
+            (* Check that the variant id is consistent *)
+            (match (av.V.variant_id, def.T.kind) with
+            | Some variant_id, T.Enum variants ->
+                assert (T.VariantId.to_int variant_id < List.length variants)
+            | None, T.Struct _ -> ()
+            | _ -> failwith "Erroneous typing");
+            (* Check that the field types are correct *)
+            let field_types =
+              Subst.type_def_get_instantiated_field_rtypes def av.V.variant_id
+                regions tys
+            in
+            let fields_with_types =
+              List.combine av.V.field_values field_types
+            in
+            List.iter
+              (fun ((v, ty) : V.typed_avalue * T.rty) -> assert (v.V.ty = ty))
+              fields_with_types
+        (* Tuple case *)
+        | V.AAdt av, T.Adt (T.Tuple, regions, tys) ->
+            assert (regions = []);
+            assert (av.V.variant_id = None);
+            (* Check that the fields have the proper values - and check that there
+             * are as many fields as field types at the same time *)
+            let fields_with_types = List.combine av.V.field_values tys in
+            List.iter
+              (fun ((v, ty) : V.typed_avalue * T.rty) -> assert (v.V.ty = ty))
+              fields_with_types
+        (* Assumed type case *)
+        | V.AAdt av, T.Adt (T.Assumed aty_id, regions, tys) -> (
+            assert (av.V.variant_id = None);
+            match (aty_id, av.V.field_values, regions, tys) with
+            (* Box *)
+            | T.Box, [ boxed_value ], [], [ boxed_ty ] ->
+                assert (boxed_value.V.ty = boxed_ty)
+            | _ -> failwith "Erroneous type")
+        | V.ABottom, _ -> (* Nothing to check *) ()
+        | V.ABorrow bc, T.Ref (_, ref_ty, rkind) -> (
+            match (bc, rkind) with
+            | V.AMutBorrow (bid, av), T.Mut ->
+                (* Check that the child value has the proper type *)
+                assert (av.V.ty = ref_ty)
+            | V.ASharedBorrow bid, T.Shared -> (
+                (* Lookup the borrowed value to check it has the proper type *)
+                let _, glc = lookup_loan ek_all bid ctx in
+                match glc with
+                | Concrete (V.SharedLoan (_, sv))
+                | Abstract (V.ASharedLoan (_, sv, _)) ->
+                    assert (sv.V.ty = Subst.erase_regions ref_ty)
+                | _ -> failwith "Inconsistent context")
+            | V.AIgnoredMutBorrow av, T.Mut -> assert (av.V.ty = ref_ty)
+            | V.AProjSharedBorrow _, T.Shared -> ()
+            | _ -> failwith "Inconsistent context")
+        | V.ALoan lc, ty -> raise Unimplemented
+        (* (
+             match lc with
+             | V.SharedLoan (_, sv) -> assert (sv.V.ty = ty)
+             | V.MutLoan bid -> (
+                 (* Lookup the borrowed value to check it has the proper type *)
+                 let glc = lookup_borrow ek_all bid ctx in
+                 match glc with
+                 | Concrete (V.MutBorrow (_, bv)) -> assert (bv.V.ty = ty)
+                 | Abstract (V.AMutBorrow (_, sv)) ->
+                     assert (Subst.erase_regions sv.V.ty = ty)
+                 | _ -> failwith "Inconsistent context"))*)
+        | V.ASymbolic aproj, ty ->
+            let ty1 = Subst.erase_regions ty in
+            let ty2 =
+              match aproj with
+              | V.AProjLoans sv | V.AProjBorrows (sv, _) ->
+                  Subst.erase_regions sv.V.sv_ty
+            in
+            assert (ty1 = ty2)
+        | _ -> failwith "Erroneous typing");
+        (* Continue exploring to inspect the subterms *)
+        super#visit_typed_avalue info atv
+      (** TODO: there is a lot of duplication with [visit_typed_value]... *)
     end
   in
   visitor#visit_eval_ctx () ctx
