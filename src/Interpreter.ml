@@ -2780,7 +2780,7 @@ let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
   | T.Shared -> raise Unimplemented
 
 (** Auxiliary function.
-    Apply a symbolic expansion to avalues.
+    Apply a symbolic expansion to avalues in a context.
 *)
 let apply_symbolic_expansion_to_avalues (config : C.config)
     (allow_reborrows : bool) (original_sv : V.symbolic_value)
