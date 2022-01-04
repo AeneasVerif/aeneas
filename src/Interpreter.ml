@@ -80,6 +80,17 @@ let mk_fresh_symbolic_proj_comp (ended_regions : T.RegionId.set_t) (ty : T.rty)
   let sv : V.typed_value = { V.value; ty } in
   (ctx, sv)
 
+let mk_typed_value_from_proj_comp (sv : V.symbolic_proj_comp) : V.typed_value =
+  let ty = Subst.erase_regions sv.V.svalue.V.sv_ty in
+  let value = V.Symbolic sv in
+  { V.value; ty }
+
+let mk_aproj_loans_from_proj_comp (sv : V.symbolic_proj_comp) : V.typed_avalue =
+  let ty = sv.V.svalue.V.sv_ty in
+  let proj = V.AProjLoans sv.V.svalue in
+  let value = V.ASymbolic proj in
+  { V.value; ty }
+
 (** TODO: change the name *)
 type eval_error = Panic
 
@@ -981,13 +992,71 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
   in
   { V.value; V.ty }
 
+type symbolic_expansion =
+  | SeConcrete of V.constant_value
+  | SeAdt of (T.VariantId.id option * V.symbolic_proj_comp list)
+  | SeMutRef of V.BorrowId.id * V.symbolic_proj_comp
+  | SeSharedRef of V.BorrowId.set_t * V.symbolic_proj_comp
+
+(** Convert a symbolic expansion *which is not a borrow* to a value *)
+let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
+    (see : symbolic_expansion) : V.typed_value =
+  let ty = Subst.erase_regions sv.V.sv_ty in
+  let value =
+    match see with
+    | SeConcrete cv -> V.Concrete cv
+    | SeAdt (variant_id, field_values) ->
+        let field_values =
+          List.map mk_typed_value_from_proj_comp field_values
+        in
+        V.Adt { V.variant_id; V.field_values }
+    | SeMutRef (_, _) | SeSharedRef (_, _) ->
+        failwith "Unexpected symbolic borrow expansion"
+  in
+  { V.value; V.ty }
+
 (** Apply (and reduce) a projector over loans to a value.
 
     TODO: detailed comments. See [apply_proj_borrows]
 *)
-let rec apply_proj_loans (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
-    (regions : T.RegionId.set_t) (v : V.typed_value) : V.typed_avalue =
-  raise Unimplemented
+let apply_proj_loans_on_symbolic_expansion (ctx : C.eval_ctx)
+    (regions : T.RegionId.set_t) (see : symbolic_expansion) (ty : T.rty) :
+    V.typed_avalue =
+  (* Match *)
+  let value : V.avalue =
+    match (see, ty) with
+    | SeConcrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
+    | SeAdt (variant_id, field_values), T.Adt (id, _region_params, _tys) ->
+        (* Project over the field values *)
+        let field_values =
+          List.map mk_aproj_loans_from_proj_comp field_values
+        in
+        V.AAdt { V.variant_id; field_values }
+    | SeMutRef (bid, spc), T.Ref (r, _ref_ty, T.Mut) ->
+        (* Apply the projector to the borrowed value *)
+        let child_av = mk_aproj_loans_from_proj_comp spc in
+        (* Check if the region is in the set of projected regions (note that
+         * we never project over static regions) *)
+        if region_in_set r regions then
+          (* In the set: keep *)
+          V.ALoan (V.AMutLoan (bid, child_av))
+        else
+          (* Not in the set: ignore *)
+          V.ALoan (V.AIgnoredMutLoan (bid, child_av))
+    | SeSharedRef (bids, spc), T.Ref (r, _ref_ty, T.Shared) ->
+        (* Apply the projector to the borrowed value *)
+        let child_av = mk_aproj_loans_from_proj_comp spc in
+        (* Check if the region is in the set of projected regions (note that
+         * we never project over static regions) *)
+        if region_in_set r regions then
+          (* In the set: keep *)
+          let shared_value = mk_typed_value_from_proj_comp spc in
+          V.ALoan (V.ASharedLoan (bids, shared_value, child_av))
+        else (* Not in the set: ignore *)
+          V.ALoan (V.AIgnoredSharedLoan child_av)
+    | _ -> failwith "Unreachable"
+  in
+  { V.value; V.ty }
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
@@ -2859,7 +2928,7 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
     is not a borrow (i.e., an adt...).
 *)
 let apply_symbolic_expansion_non_borrow (config : C.config)
-    (original_sv : V.symbolic_value) (expansion : V.typed_value)
+    (original_sv : V.symbolic_value) (expansion : symbolic_expansion)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Visitor to apply the expansion to non-abstraction values *)
   let obj =
