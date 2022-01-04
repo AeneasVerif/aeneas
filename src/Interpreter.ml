@@ -70,7 +70,7 @@ let mk_box_value (v : V.typed_value) : V.typed_value =
   mk_typed_value box_ty box_v
 
 (** Create a fresh symbolic value (as a complementary projector) *)
-let mk_fresh_symbolic_comp_proj (ended_regions : T.RegionId.set_t) (ty : T.rty)
+let mk_fresh_symbolic_proj_comp (ended_regions : T.RegionId.set_t) (ty : T.rty)
     (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
   let ctx, sv_id = C.fresh_symbolic_value_id ctx in
   let svalue = { V.sv_id; V.sv_ty = ty } in
@@ -2697,7 +2697,7 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
     let ctx, field_values =
       List.fold_left_map
         (fun ctx (ty : T.rty) ->
-          mk_fresh_symbolic_comp_proj ended_regions ty ctx)
+          mk_fresh_symbolic_proj_comp ended_regions ty ctx)
         ctx field_types
     in
     let av = V.Adt { variant_id; field_values } in
@@ -2713,7 +2713,7 @@ let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
   (* Generate the field values *)
   let ctx, fields =
     List.fold_left_map
-      (fun ctx sv_ty -> mk_fresh_symbolic_comp_proj ended_regions sv_ty ctx)
+      (fun ctx sv_ty -> mk_fresh_symbolic_proj_comp ended_regions sv_ty ctx)
       ctx field_types
   in
   let v = V.Adt { variant_id = None; field_values = fields } in
@@ -2725,15 +2725,25 @@ let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
     (boxed_ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
   (* Introduce a fresh symbolic value *)
   let ctx, boxed_value =
-    mk_fresh_symbolic_comp_proj ended_regions boxed_ty ctx
+    mk_fresh_symbolic_proj_comp ended_regions boxed_ty ctx
   in
   let box_value = mk_box_value boxed_value in
   (ctx, box_value)
 
 let compute_expanded_symbolic_ref_value (ended_regions : T.RegionId.set_t)
-    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind) :
-    C.eval_ctx * V.typed_value =
-  raise Unimplemented
+    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
+    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  (* Check that we are allowed to expand the reference *)
+  assert (not (region_in_set region ended_regions));
+  (* Match on the reference kind *)
+  match rkind with
+  | T.Mut ->
+      (* Simple case: simply create a fresh symbolic value and a fresh
+       * borrow id *)
+      let ctx, sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
+      let ctx, bid = C.fresh_borrow_id ctx in
+      raise Unimplemented
+  | T.Shared -> raise Unimplemented
 
 (** Expand a symbolic value which is not an enumeration with several variants.
 
@@ -2768,6 +2778,7 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
     (* Borrows *)
     | Deref, T.Ref (region, ref_ty, rkind) ->
         compute_expanded_symbolic_ref_value ended_regions region ref_ty rkind
+          ctx
     (* Boxes *)
     | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
         compute_expanded_symbolic_box_value ended_regions boxed_ty ctx
