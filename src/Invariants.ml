@@ -12,12 +12,21 @@ module A = CfimAst
 module L = Logging
 open TypesUtils
 open ValuesUtils
+open InterpreterUtils
+
+let debug_invariants : bool ref = ref false
 
 type borrow_info = {
   loan_kind : T.ref_kind;
   loan_ids : V.BorrowId.set_t;
   borrow_ids : V.BorrowId.set_t;
 }
+[@@deriving show]
+
+let borrows_infos_to_string (infos : borrow_info V.BorrowId.Map.t) : string =
+  let bindings = V.BorrowId.Map.bindings infos in
+  let bindings = List.map (fun (_, info) -> show_borrow_info info) bindings in
+  String.concat "\n" bindings
 
 type borrow_kind = Mut | Shared | Inactivated
 
@@ -198,10 +207,25 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
   (* Visit *)
   borrows_visitor#visit_eval_ctx () ctx;
 
+  (* Debugging *)
+  if !debug_invariants then (
+    L.log#ldebug
+      (lazy
+        ("\nAbout to check context invariant:\n" ^ eval_ctx_to_string ctx ^ "\n"));
+    L.log#ldebug
+      (lazy
+        ("\Borrows information:\n"
+        ^ borrows_infos_to_string !borrows_infos
+        ^ "\n")));
+
   (* Finally, check that everything is consistant *)
   V.BorrowId.Map.iter
     (fun _ info ->
-      assert (info.loan_ids = info.borrow_ids);
+      (* Note that we can't directly compare the sets - I guess they are
+       * different depending on the order in which we add the elements... *)
+      assert (
+        V.BorrowId.Set.elements info.loan_ids
+        = V.BorrowId.Set.elements info.borrow_ids);
       match info.loan_kind with
       | T.Mut -> assert (V.BorrowId.Set.cardinal info.loan_ids = 1)
       | T.Shared -> ())
