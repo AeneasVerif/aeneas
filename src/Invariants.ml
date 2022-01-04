@@ -3,15 +3,11 @@
 
 module T = Types
 module V = Values
-open Scalars
 module E = Expressions
-open Errors
 module C = Contexts
 module Subst = Substitute
 module A = CfimAst
 module L = Logging
-open TypesUtils
-open ValuesUtils
 open InterpreterUtils
 
 let debug_invariants : bool ref = ref false
@@ -112,11 +108,11 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_Var inside_abs binder v =
+      method! visit_Var _inside_abs binder v =
         let inside_abs = false in
         super#visit_Var inside_abs binder v
 
-      method! visit_Abs inside_abs abs =
+      method! visit_Abs _inside_abs abs =
         let inside_abs = true in
         super#visit_Abs inside_abs abs
 
@@ -124,7 +120,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
         (* Register the loan *)
         let _ =
           match lc with
-          | V.SharedLoan (bids, tv) -> register_shared_loan inside_abs bids
+          | V.SharedLoan (bids, _tv) -> register_shared_loan inside_abs bids
           | V.MutLoan bid -> register_mut_loan inside_abs bid
         in
         (* Continue exploring *)
@@ -237,7 +233,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
         ("\nAbout to check context invariant:\n" ^ eval_ctx_to_string ctx ^ "\n"));
     L.log#ldebug
       (lazy
-        ("\Borrows information:\n"
+        ("Borrows information:\n"
         ^ borrows_infos_to_string !borrows_infos
         ^ "\n")));
 
@@ -258,9 +254,9 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     - borrows/loans can't contain ⊥ or inactivated mut borrows
     - shared loans can't contain mutable loans
  *)
-let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit = ()
+let check_borrowed_values_invariant (_ctx : C.eval_ctx) : unit = ()
 
-let check_typing_invariant (ctx : C.eval_ctx) : unit = ()
+let check_typing_invariant (_ctx : C.eval_ctx) : unit = ()
 
 let check_invariants (ctx : C.eval_ctx) : unit =
   check_loans_borrows_relation_invariant ctx;
