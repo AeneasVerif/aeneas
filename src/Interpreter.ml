@@ -859,9 +859,14 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
 
     - [regions]: the regions we project
     - [v]: the value over which we project
-    - [ty]: the type with regions which we use for the projection (to
-      map borrows to regions - or to interpret the borrows as belonging
-      to some regions...)
+    - [ty]: the projection type (is used to map borrows to regions, or to
+      interpret the borrows as belonging to some regions...). Remember that
+      `v` doesn't contain region information.
+      For instance, if we have:
+      `v <: ty` where:
+      - `v = mut_borrow l ...`
+      - `ty = Ref (r, ...)`
+      then we interpret the borrow `l` as belonging to region `r`
     
     Also, when applying projections on shared values, we need to apply
     reborrows. This is a bit annoying because, with the way we compute
@@ -975,6 +980,14 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     | _ -> failwith "Unreachable"
   in
   { V.value; V.ty }
+
+(** Apply (and reduce) a projector over loans to a value.
+
+    TODO: detailed comments. See [apply_proj_borrows]
+*)
+let rec apply_proj_loans (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
+    (regions : T.RegionId.set_t) (v : V.typed_value) : V.typed_avalue =
+  raise Unimplemented
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
@@ -2730,9 +2743,9 @@ let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
   let box_value = mk_box_value boxed_value in
   (ctx, box_value)
 
-let compute_expanded_symbolic_ref_value (ended_regions : T.RegionId.set_t)
+let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
     (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
-    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* Check that we are allowed to expand the reference *)
   assert (not (region_in_set region ended_regions));
   (* Match on the reference kind *)
@@ -2745,6 +2758,80 @@ let compute_expanded_symbolic_ref_value (ended_regions : T.RegionId.set_t)
       raise Unimplemented
   | T.Shared -> raise Unimplemented
 
+(** Apply a symbolic expansion to a context, by replacing the original
+    symbolic value with its expanded value. Is valid only if the expansion
+    is not a borrow (i.e., an adt...).
+*)
+let apply_symbolic_expansion_non_borrow (config : C.config)
+    (original_sv : V.symbolic_value) (expansion : V.typed_value)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* [apply_proj_borrows] needs a [fresh_reborrow] function, to generate
+     fresh identifiers and register reborrows, whenever needed. As we don't
+     expand borrows, we shouldn't have to apply reborrows. *)
+  let fresh_reborrow (_ : V.BorrowId.id) : V.BorrowId.id =
+    failwith "Unexpected reborrow"
+  in
+  (* For the projectors: it might happen that the expansion contains symbolic
+     variables with already ended regions.
+  *)
+  let check_symbolic_no_ended = false in
+  (* Visitor to apply the expansion *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_Symbolic env spc =
+        if spc.V.svalue = original_sv then expansion.V.value
+        else super#visit_Symbolic env spc
+      (** Replace a symbolic value with its expansion.
+          Note that there may be several references to the same symbolic value
+          in the context, if the value has been copied. Expansion is then a bit
+          subtle in the case we expand shared borrows, in which case we need to
+          introduce a unique borrow identifier for every borrow (this is not
+          the case here: this function should NOT be used to expand borrows).
+      *)
+
+      method! visit_abs proj_regions abs =
+        assert (Option.is_none proj_regions);
+        let proj_regions = Some abs.V.regions in
+        super#visit_abs proj_regions abs
+      (** When visiting an abstraction, we remember the regions it owns to be
+          able to properly reduce projectors when expanding symbolic values *)
+
+      method! visit_ASymbolic proj_regions aproj =
+        let proj_regions = Option.get proj_regions in
+        match aproj with
+        | V.AProjLoans sv ->
+            (* Check if this is the symbolic value we are looking for *)
+            if sv = original_sv then
+              (* Apply the projector *)
+              let projected_value =
+                apply_proj_loans check_symbolic_no_ended ctx proj_regions
+                  expansion
+              in
+              (* Replace *)
+              projected_value.V.value
+            else
+              (* Not the searched symbolic value: nothing to do *)
+              super#visit_ASymbolic (Some proj_regions) aproj
+        | V.AProjBorrows (sv, proj_ty) ->
+            (* Check if this is the symbolic value we are looking for *)
+            if sv = original_sv then
+              (* Apply the projector *)
+              let projected_value =
+                apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                  proj_regions expansion proj_ty
+              in
+              (* Replace *)
+              projected_value.V.value
+            else
+              (* Not the searched symbolic value: nothing to do *)
+              super#visit_ASymbolic (Some proj_regions) aproj
+    end
+  in
+  (* Apply the expansion *)
+  obj#visit_eval_ctx None ctx
+
 (** Expand a symbolic value which is not an enumeration with several variants.
 
     This function is used when exploring a path.
@@ -2755,39 +2842,47 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
    * fresh symbolic values in the context (which thus gets updated) *)
   let rty = sp.V.svalue.V.sv_ty in
   let ended_regions = sp.V.rset_ended in
-  let ctx, nv =
-    match (pe, rty) with
-    (* "Regular" ADTs *)
-    | ( Field (ProjAdt (def_id, opt_variant_id), _),
-        T.Adt (T.AdtId def_id', regions, types) ) -> (
-        assert (def_id = def_id');
-        (* Compute the expanded value - there should be exactly one because we
-         * don't allow to expand enumerations with strictly more than one variant *)
-        let expand_enumerations = false in
-        match
-          compute_expanded_symbolic_adt_value expand_enumerations ended_regions
-            def_id opt_variant_id regions types ctx
-        with
-        | [ (ctx, nv) ] -> (ctx, nv)
-        | _ -> failwith "Unexpected")
-    (* Tuples *)
-    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
-        assert (arity = List.length tys);
-        (* Generate the field values *)
+  match (pe, rty) with
+  (* "Regular" ADTs *)
+  | ( Field (ProjAdt (def_id, opt_variant_id), _),
+      T.Adt (T.AdtId def_id', regions, types) ) -> (
+      assert (def_id = def_id');
+      (* Compute the expanded value - there should be exactly one because we
+       * don't allow to expand enumerations with strictly more than one variant *)
+      let expand_enumerations = false in
+      match
+        compute_expanded_symbolic_adt_value expand_enumerations ended_regions
+          def_id opt_variant_id regions types ctx
+      with
+      | [ (ctx, nv) ] ->
+          (* Apply in the context *)
+          apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
+      | _ -> failwith "Unexpected")
+  (* Tuples *)
+  | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
+      assert (arity = List.length tys);
+      (* Generate the field values *)
+      let ctx, nv =
         compute_expanded_symbolic_tuple_value ended_regions tys ctx
-    (* Borrows *)
-    | Deref, T.Ref (region, ref_ty, rkind) ->
-        compute_expanded_symbolic_ref_value ended_regions region ref_ty rkind
-          ctx
-    (* Boxes *)
-    | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
+      in
+      (* Apply in the context *)
+      apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
+  (* Borrows *)
+  | Deref, T.Ref (region, ref_ty, rkind) ->
+      let _ =
+        expand_symbolic_value_borrow ended_regions region ref_ty rkind ctx
+      in
+      raise Unimplemented
+  (* Boxes *)
+  | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
+      let ctx, nv =
         compute_expanded_symbolic_box_value ended_regions boxed_ty ctx
-    | _ ->
-        failwith
-          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
-  in
-  (* Update the context *)
-  raise Unimplemented
+      in
+      (* Apply in the context *)
+      apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
+  | _ ->
+      failwith
+        ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
 
 (** Update the environment to be able to read a place.
 
