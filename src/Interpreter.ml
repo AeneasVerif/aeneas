@@ -1317,6 +1317,44 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
   (* Return *)
   ctx
 
+(** Auxiliary function to prepare reborrowing operations (used when
+    applying projectors).
+    
+    Returns two functions:
+    - a function to generate fresh re-borrow ids, and register the reborrows
+    - a function to apply the reborrows in a context
+    Those functions are of course stateful.
+ *)
+let prepare_reborrows (config : C.config) (allow_reborrows : bool)
+    (ctx : C.eval_ctx) :
+    (V.BorrowId.id -> V.BorrowId.id) * (C.eval_ctx -> C.eval_ctx) =
+  let reborrows : (V.BorrowId.id * V.BorrowId.id) list ref = ref [] in
+  let borrow_counter = ref ctx.C.borrow_counter in
+  (* The function to generate and register fresh reborrows *)
+  let fresh_reborrow (bid : V.BorrowId.id) : V.BorrowId.id =
+    if allow_reborrows then (
+      let bid', cnt' = V.BorrowId.fresh ctx.borrow_counter in
+      borrow_counter := cnt';
+      reborrows := (bid, bid') :: !reborrows;
+      bid')
+    else failwith "Unexpected reborrow"
+  in
+  (* The function to apply the reborrows in a context *)
+  let apply_registered_reborrows (ctx : C.eval_ctx) : C.eval_ctx =
+    match config.C.mode with
+    | C.ConcreteMode ->
+        (* Reborrows are introduced when applying projections in symbolic mode *)
+        assert (!borrow_counter = ctx.C.borrow_counter);
+        assert (!reborrows = []);
+        ctx
+    | C.SymbolicMode ->
+        (* Update the borrow counter *)
+        let ctx = { ctx with C.borrow_counter = !borrow_counter } in
+        (* Apply the reborrows *)
+        apply_reborrows !reborrows ctx
+  in
+  (fresh_reborrow, apply_registered_reborrows)
+
 (** Auxiliary function to end borrows. See [give_back].
     
     When we end a mutable borrow, we need to "give back" the value it contained
@@ -1336,15 +1374,12 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   in
   (* Whenever giving back symbolic values, they shouldn't contain already ended regions *)
   let check_symbolic_no_ended = true in
-  (* We sometimes need to reborrow values while giving a value back due *)
-  let reborrows : (V.BorrowId.id * V.BorrowId.id) list ref = ref [] in
-  let borrow_counter = ref ctx.C.borrow_counter in
-  let fresh_reborrow (bid : V.BorrowId.id) : V.BorrowId.id =
-    let bid', cnt' = V.BorrowId.fresh ctx.borrow_counter in
-    borrow_counter := cnt';
-    reborrows := (bid, bid') :: !reborrows;
-    bid'
+  (* We sometimes need to reborrow values while giving a value back due: prepare that *)
+  let allow_reborrows = true in
+  let fresh_reborrow, apply_registered_reborrows =
+    prepare_reborrows config allow_reborrows ctx
   in
+  (* The visitor to give back the values *)
   let obj =
     object (self)
       inherit [_] C.map_eval_ctx as super
@@ -1446,21 +1481,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* Check we gave back to exactly one loan *)
   assert !replaced;
   (* Apply the reborrows *)
-  let ctx =
-    match config.C.mode with
-    | C.ConcreteMode ->
-        (* Reborrows are introduced when applying projections in symbolic mode *)
-        assert (!borrow_counter = ctx.C.borrow_counter);
-        assert (!reborrows = []);
-        ctx
-    | C.SymbolicMode ->
-        (* Update the borrow counter *)
-        let ctx = { ctx with C.borrow_counter = !borrow_counter } in
-        (* Apply the reborrows *)
-        apply_reborrows !reborrows ctx
-  in
-  (* Return *)
-  ctx
+  apply_registered_reborrows ctx
 
 (** Auxiliary function to end borrows. See [give_back].
 
@@ -2758,38 +2779,22 @@ let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
       raise Unimplemented
   | T.Shared -> raise Unimplemented
 
-(** Apply a symbolic expansion to a context, by replacing the original
-    symbolic value with its expanded value. Is valid only if the expansion
-    is not a borrow (i.e., an adt...).
+(** Auxiliary function.
+    Apply a symbolic expansion to avalues.
 *)
-let apply_symbolic_expansion_non_borrow (config : C.config)
-    (original_sv : V.symbolic_value) (expansion : V.typed_value)
-    (ctx : C.eval_ctx) : C.eval_ctx =
-  (* [apply_proj_borrows] needs a [fresh_reborrow] function, to generate
-     fresh identifiers and register reborrows, whenever needed. As we don't
-     expand borrows, we shouldn't have to apply reborrows. *)
-  let fresh_reborrow (_ : V.BorrowId.id) : V.BorrowId.id =
-    failwith "Unexpected reborrow"
-  in
-  (* For the projectors: it might happen that the expansion contains symbolic
-     variables with already ended regions.
-  *)
+let apply_symbolic_expansion_to_avalues (config : C.config)
+    (allow_reborrows : bool) (original_sv : V.symbolic_value)
+    (expansion : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Symbolic values contained in the expansion might contain already ended regions *)
   let check_symbolic_no_ended = false in
+  (* Prepare reborrows registration *)
+  let fresh_reborrow, apply_registered_reborrows =
+    prepare_reborrows config allow_reborrows ctx
+  in
   (* Visitor to apply the expansion *)
   let obj =
     object
       inherit [_] C.map_eval_ctx as super
-
-      method! visit_Symbolic env spc =
-        if spc.V.svalue = original_sv then expansion.V.value
-        else super#visit_Symbolic env spc
-      (** Replace a symbolic value with its expansion.
-          Note that there may be several references to the same symbolic value
-          in the context, if the value has been copied. Expansion is then a bit
-          subtle in the case we expand shared borrows, in which case we need to
-          introduce a unique borrow identifier for every borrow (this is not
-          the case here: this function should NOT be used to expand borrows).
-      *)
 
       method! visit_abs proj_regions abs =
         assert (Option.is_none proj_regions);
@@ -2830,7 +2835,40 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
     end
   in
   (* Apply the expansion *)
-  obj#visit_eval_ctx None ctx
+  let ctx = obj#visit_eval_ctx None ctx in
+  (* Apply the reborrows *)
+  apply_registered_reborrows ctx
+
+(** Apply a symbolic expansion to a context, by replacing the original
+    symbolic value with its expanded value. Is valid only if the expansion
+    is not a borrow (i.e., an adt...).
+*)
+let apply_symbolic_expansion_non_borrow (config : C.config)
+    (original_sv : V.symbolic_value) (expansion : V.typed_value)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Visitor to apply the expansion to non-abstraction values *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_Symbolic env spc =
+        if spc.V.svalue = original_sv then expansion.V.value
+        else super#visit_Symbolic env spc
+      (** Replace a symbolic value with its expansion.
+          Note that there may be several references to the same symbolic value
+          in the context, if the value has been copied. Expansion is then a bit
+          subtle in the case we expand shared borrows, in which case we need to
+          introduce a unique borrow identifier for every borrow (this is not
+          the case here: this function should NOT be used to expand borrows).
+      *)
+    end
+  in
+  (* Apply the expansion to non-abstraction values *)
+  let ctx = obj#visit_eval_ctx None ctx in
+  (* Apply the expansion to abstraction values *)
+  let allow_reborrows = false in
+  apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
+    expansion ctx
 
 (** Expand a symbolic value which is not an enumeration with several variants.
 
