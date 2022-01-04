@@ -492,18 +492,30 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | V.AIgnoredMutBorrow av, T.Mut -> assert (av.V.ty = ref_ty)
             | V.AProjSharedBorrow _, T.Shared -> ()
             | _ -> failwith "Inconsistent context")
-        | V.ALoan lc, ty -> raise Unimplemented
-        (* (
-             match lc with
-             | V.SharedLoan (_, sv) -> assert (sv.V.ty = ty)
-             | V.MutLoan bid -> (
-                 (* Lookup the borrowed value to check it has the proper type *)
-                 let glc = lookup_borrow ek_all bid ctx in
-                 match glc with
-                 | Concrete (V.MutBorrow (_, bv)) -> assert (bv.V.ty = ty)
-                 | Abstract (V.AMutBorrow (_, sv)) ->
-                     assert (Subst.erase_regions sv.V.ty = ty)
-                 | _ -> failwith "Inconsistent context"))*)
+        | V.ALoan lc, aty -> (
+            match lc with
+            | V.AMutLoan (bid, child_av) | V.AIgnoredMutLoan (bid, child_av)
+              -> (
+                assert (child_av.V.ty = aty);
+                (* Lookup the borrowed value to check it has the proper type *)
+                let glc = lookup_borrow ek_all bid ctx in
+                match glc with
+                | Concrete (V.MutBorrow (_, bv)) ->
+                    assert (bv.V.ty = Subst.erase_regions aty)
+                | Abstract (V.AMutBorrow (_, sv)) ->
+                    assert (
+                      Subst.erase_regions sv.V.ty = Subst.erase_regions aty)
+                | _ -> failwith "Inconsistent context")
+            | V.ASharedLoan (_, sv, child_av) | V.AEndedSharedLoan (sv, child_av)
+              ->
+                let ty = Subst.erase_regions aty in
+                assert (sv.V.ty = ty);
+                assert (child_av.V.ty = aty)
+            | V.AEndedMutLoan { given_back; child }
+            | V.AEndedIgnoredMutLoan { given_back; child } ->
+                assert (given_back.V.ty = aty);
+                assert (child.V.ty = aty)
+            | V.AIgnoredSharedLoan child_av -> assert (child_av.V.ty = aty))
         | V.ASymbolic aproj, ty ->
             let ty1 = Subst.erase_regions ty in
             let ty2 =
