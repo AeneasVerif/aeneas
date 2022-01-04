@@ -192,6 +192,8 @@ type abstract_shared_borrows = abstract_shared_borrow list
 type aproj =
   | AProjLoans of symbolic_value
   | AProjBorrows of symbolic_value * rty
+      (** Note that an AProjBorrows only operates on a value which is not below
+          a shared loan: under a shared loan, we use [abstract_shared_borrow]. *)
 [@@deriving show]
 
 type region = RegionVarId.id Types.region [@@deriving show]

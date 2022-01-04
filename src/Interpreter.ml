@@ -2779,12 +2779,24 @@ let expand_symbolic_value_borrow (ended_regions : T.RegionId.set_t)
       raise Unimplemented
   | T.Shared -> raise Unimplemented
 
+(** Projector kind *)
+type proj_kind = LoanProj | BorrowProj
+
 (** Auxiliary function.
     Apply a symbolic expansion to avalues in a context.
+    
+    [proj_kind] controls whether we apply the expansion to projectors
+    on loans or projectors on borrows (when applying a symbolic expansion to
+    a borrow value, we need two different expansion values: one for the loans
+    and another for the borrows meaning we have to call this function twice
+    with different parameters for [expansion]). For instance, if we expand
+    a symbolic mutable ref to `s0`, we'll have to apply the loan projectors
+    on a loan `mut_loan l` and the borrow projectors to a borrow `mut_borrow l s1`.
 *)
 let apply_symbolic_expansion_to_avalues (config : C.config)
-    (allow_reborrows : bool) (original_sv : V.symbolic_value)
-    (expansion : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
+    (allow_reborrows : bool) (proj_kind : proj_kind)
+    (original_sv : V.symbolic_value) (expansion : V.typed_value)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* Symbolic values contained in the expansion might contain already ended regions *)
   let check_symbolic_no_ended = false in
   (* Prepare reborrows registration *)
@@ -2805,8 +2817,8 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
 
       method! visit_ASymbolic proj_regions aproj =
         let proj_regions = Option.get proj_regions in
-        match aproj with
-        | V.AProjLoans sv ->
+        match (aproj, proj_kind) with
+        | V.AProjLoans sv, LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
             if sv = original_sv then
               (* Apply the projector *)
@@ -2819,7 +2831,7 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some proj_regions) aproj
-        | V.AProjBorrows (sv, proj_ty) ->
+        | V.AProjBorrows (sv, proj_ty), BorrowProj ->
             (* Check if this is the symbolic value we are looking for *)
             if sv = original_sv then
               (* Apply the projector *)
@@ -2832,6 +2844,9 @@ let apply_symbolic_expansion_to_avalues (config : C.config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some proj_regions) aproj
+        | V.AProjLoans _, BorrowProj | V.AProjBorrows (_, _), LoanProj ->
+            (* Nothing to do *)
+            super#visit_ASymbolic (Some proj_regions) aproj
     end
   in
   (* Apply the expansion *)
@@ -2865,10 +2880,16 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
   in
   (* Apply the expansion to non-abstraction values *)
   let ctx = obj#visit_eval_ctx None ctx in
-  (* Apply the expansion to abstraction values *)
+  (* Apply the expansion to abstraction values, on loans then on borrows (the
+   * order is arbitrary: we just can't do both at once because of the way the
+   * function is written) *)
   let allow_reborrows = false in
-  apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
-    expansion ctx
+  let apply_to_avalues proj_kind ctx =
+    apply_symbolic_expansion_to_avalues config allow_reborrows proj_kind
+      original_sv expansion ctx
+  in
+  let ctx = apply_to_avalues LoanProj ctx in
+  apply_to_avalues BorrowProj ctx
 
 (** Expand a symbolic value which is not an enumeration with several variants.
 
