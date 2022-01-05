@@ -15,6 +15,8 @@ open InterpreterUtils
 (* TODO: the below functions have very "rough" signatures and do nothing: I
  * defined them so that the places where we should update the synthesized
  * program are clearly indicated in Interpreter.ml.
+ * Also, some of those functions will probably be split, and their call site
+ * will probably evolve.
  *
  * Small rk.: most functions should take an additional parameter for the
  * fresh symbolic value which stores the result of the computation.
