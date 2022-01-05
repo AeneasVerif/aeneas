@@ -86,9 +86,9 @@ type fun_def = {
   body : statement;
 }
 [@@deriving show]
-(** TODO: the type and function definitions contain information like `divergent`
-  * or `copyable`. I wonder if this information should be stored directly inside
-  * the definitions or inside separate maps/sets.
+(** TODO: function definitions (and maybe type definitions in the future)
+  * contain information like `divergent`. I wonder if this information should
+  * be stored directly inside the definitions or inside separate maps/sets.
   * Of course, if everything is stored in separate maps/sets, nothing
   * prevents us from computing this info in Charon (and thus exporting directly
   * it with the type/function defs), in which case we just have to implement special

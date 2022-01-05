@@ -2917,10 +2917,30 @@ let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
         ctx
       with UpdateCtx ctx -> drop_borrows_loans_at_lplace config p ctx)
 
+(** Return true if a type is "primitively copyable".
+  *
+  * "primitively copyable" means that copying instances of this type doesn't
+  * require calling dedicated functions defined through the Copy trait. It
+  * is the case for types like integers, shared borrows, etc.
+  *)
+let rec type_is_primitively_copyable (ty : T.ety) : bool =
+  match ty with
+  | T.Adt (_, _, _) | T.TypeVar _ | T.Never | T.Str | T.Array _ | T.Slice _ ->
+      false
+  | T.Bool | T.Char | T.Integer _ -> true
+  | T.Ref (_, _, T.Mut) -> false
+  | T.Ref (_, _, T.Shared) -> true
+
 (** Copy a value, and return the resulting value.
 
     Note that copying values might update the context. For instance, when
     copying shared borrows, we need to insert new shared borrows in the context.
+ 
+    Also, this function is actually more general than it should be: it allows
+    to copy ADTs, while ADT copy should be done through the Copy trait (i.e.,
+    by calling a dedicated function).
+    TODO: maybe we should disallow the copy of ADTs, or control it through
+    a boolean...
  *)
 let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
     C.eval_ctx * V.typed_value =
@@ -2960,9 +2980,19 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
       | V.SharedLoan (_, sv) ->
           (* We don't copy the shared loan: only the shared value inside *)
           copy_value config ctx sv)
-  | V.Symbolic _sp ->
-      (* TODO: check that the value is copyable *)
-      raise Unimplemented
+  | V.Symbolic sp ->
+      (* We can copy only if the type is "primitively" copyable.
+       * Note that in the general case, copy is a trait: copying values
+       * thus requires calling the proper function. Here, we copy values
+       * for very simple types such as integers, shared borrows, etc. *)
+      assert (
+        type_is_primitively_copyable (Subst.erase_regions sp.V.svalue.V.sv_ty));
+      (* If the type is copyable, we simply return the current value. Side
+       * remark: what is important to look at when copying symbolic values
+       * is symbolic expansion. The important subcase is the expansion of shared
+       * borrows: when doing so, every occurrence of the same symbolic value
+       * must use a fresh borrow id. *)
+      (ctx, v)
 
 (** Convert a constant operand value to a typed value *)
 let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
