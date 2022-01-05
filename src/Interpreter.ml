@@ -2651,30 +2651,28 @@ let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_proj_comp)
   let ended_regions = sp.V.rset_ended in
   match rty with
   (*  The value should be a "regular" ADTs *)
-  | T.Adt (T.AdtId def_id, regions, types) -> (
+  | T.Adt (T.AdtId def_id, regions, types) ->
       (* Compute the expanded value - there should be exactly one because we
        * don't allow to expand enumerations with strictly more than one variant *)
       let expand_enumerations = true in
-      match
+      let res =
         compute_expanded_symbolic_adt_value expand_enumerations ended_regions
           def_id regions types ctx
-      with
-      | res ->
-          (* Update the synthesized program *)
-          let seel = List.map (fun (_, x) -> x) res in
-          S.synthesize_symbolic_expansion_branching original_sv seel;
-          (* Apply in the context *)
-          let apply (ctx, see) : C.eval_ctx =
-            let ctx =
-              apply_symbolic_expansion_non_borrow config original_sv see ctx
-            in
-            (* Sanity check: the symbolic value has disappeared *)
-            assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
-            (* Return *)
-            ctx
-          in
-          List.map apply res
-      | _ -> failwith "Unexpected")
+      in
+      (* Update the synthesized program *)
+      let seel = List.map (fun (_, x) -> x) res in
+      S.synthesize_symbolic_expansion_branching original_sv seel;
+      (* Apply in the context *)
+      let apply (ctx, see) : C.eval_ctx =
+        let ctx =
+          apply_symbolic_expansion_non_borrow config original_sv see ctx
+        in
+        (* Sanity check: the symbolic value has disappeared *)
+        assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
+        (* Return *)
+        ctx
+      in
+      List.map apply res
   | _ -> failwith "Unexpected"
 
 (** Update the environment to be able to read a place.
@@ -3318,7 +3316,7 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
   let access = Read in
   let ctx, v = prepare_rplace config access p ctx in
   match v.V.value with
-  | Adt av -> [ eval_rvalue_discriminant_concrete config p ctx ]
+  | Adt _ -> [ eval_rvalue_discriminant_concrete config p ctx ]
   | Symbolic sv ->
       (* Expand the symbolic value - may lead to branching *)
       let ctxl = expand_symbolic_enum_value config sv ctx in
