@@ -52,9 +52,15 @@ let ty_get_ref (ty : T.ety) : T.erased_region * T.ety * T.ref_kind =
   | T.Ref (r, ty, ref_kind) -> (r, ty, ref_kind)
   | _ -> failwith "Not a ref type"
 
+let mk_ref_ty (r : 'r) (ty : 'r T.ty) (ref_kind : T.ref_kind) : 'r T.ty =
+  T.Ref (r, ty, ref_kind)
+
+(** Make a box type *)
+let mk_box_ty (ty : 'r T.ty) : 'r T.ty = T.Adt (T.Assumed T.Box, [], [ ty ])
+
 (** Box a value *)
 let mk_box_value (v : V.typed_value) : V.typed_value =
-  let box_ty = T.Adt (T.Assumed T.Box, [], [ v.V.ty ]) in
+  let box_ty = mk_box_ty v.V.ty in
   let box_v = V.Adt { variant_id = None; field_values = [ v ] } in
   mk_typed_value box_ty box_v
 
