@@ -3080,6 +3080,26 @@ let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
   let v = read_place_unwrap config access p ctx in
   (ctx, v)
 
+(** Prepare the evaluation of an operand. *)
+let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
+    : C.eval_ctx * V.typed_value =
+  let ctx, v =
+    match op with
+    | Expressions.Constant (ty, cv) ->
+        let v = constant_value_to_typed_value ctx ty cv in
+        (ctx, v)
+    | Expressions.Copy p ->
+        (* Access the value *)
+        let access = Read in
+        prepare_rplace config access p ctx
+    | Expressions.Move p ->
+        (* Access the value *)
+        let access = Move in
+        prepare_rplace config access p ctx
+  in
+  assert (not (bottom_in_value v));
+  (ctx, v)
+
 (** Evaluate an operand. *)
 let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
     C.eval_ctx * V.typed_value =
@@ -3847,6 +3867,15 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
           (* Return *)
           Ok ctx)
 
+(** Expand a symbolic value over which we perform a switch *)
+let expand_symbolic_switch_scrutinee (config : C.config) (ctx : C.eval_ctx)
+    (sv : V.symbolic_proj_comp) (tgts : A.switch_targets) : C.eval_ctx list =
+  (* (* Expand, depending on the switch kind *)
+     match tgts with
+     | A.If (_, _) ->
+       | A.SwitchInt (int_ty, tgts, otherwise) ->*)
+  raise Unimplemented
+
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result list =
@@ -3947,25 +3976,52 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       (* Apply *)
       eval_loop_body ctx
   | A.Switch (op, tgts) -> (
-      (* Evaluate the operand *)
-      let ctx, op_v = eval_operand config ctx op in
-      match tgts with
-      | A.If (st1, st2) -> (
-          match op_v.value with
-          | V.Concrete (V.Bool b) ->
-              if b then eval_statement config ctx st1
-              else eval_statement config ctx st2
-          | V.Symbolic _ -> raise Unimplemented
-          | _ -> failwith "Inconsistent state")
-      | A.SwitchInt (int_ty, tgts, otherwise) -> (
-          match op_v.value with
-          | V.Concrete (V.Scalar sv) -> (
-              assert (sv.V.int_ty = int_ty);
-              match List.find_opt (fun (sv', _) -> sv = sv') tgts with
-              | None -> eval_statement config ctx otherwise
-              | Some (_, tgt) -> eval_statement config ctx tgt)
-          | V.Symbolic _ -> raise Unimplemented
-          | _ -> failwith "Inconsistent state"))
+      (* We evaluate the operand in two steps:
+       * first we prepare it, then we check if its value is concrete or
+       * symbolic. If it is concrete, we can then evaluate the operand
+       * directly, otherwise we must first expand the value.
+       * Note that we can't fully evaluate the operand *then* expand the
+       * value if it is symbolic, because the value may have been move
+       * (and thus floating in thin air...)!
+       * *)
+      (* Prepare the operand *)
+      let ctx, op_v = eval_operand_prepare config ctx op in
+      (* Check if the operand is concrete or symbolic, expand it if necessary *)
+      match op_v.V.value with
+      | V.Symbolic sv ->
+          (* Expand the symbolic value *)
+          let ctxl = expand_symbolic_switch_scrutinee config ctx sv tgts in
+          (* The value under scrutinee is now concrete: we can evaluate the switch *)
+          List.concat (List.map (eval_switch_concrete config op tgts) ctxl)
+      | _ ->
+          (* Concrete *)
+          eval_switch_concrete config op tgts ctx)
+
+(** Evaluate a switch *over* a concrete value.
+
+    The caller must make sure to expand the value under scrutinee *before*
+    calling this function, if the value is symbolic.
+*)
+and eval_switch_concrete (config : C.config) (op : E.operand)
+    (tgts : A.switch_targets) (ctx : C.eval_ctx) :
+    (C.eval_ctx * statement_eval_res) eval_result list =
+  (* Evaluate the operand *)
+  let ctx, op_v = eval_operand config ctx op in
+  match tgts with
+  | A.If (st1, st2) -> (
+      match op_v.value with
+      | V.Concrete (V.Bool b) ->
+          if b then eval_statement config ctx st1
+          else eval_statement config ctx st2
+      | _ -> failwith "Inconsistent state")
+  | A.SwitchInt (int_ty, tgts, otherwise) -> (
+      match op_v.value with
+      | V.Concrete (V.Scalar sv) -> (
+          assert (sv.V.int_ty = int_ty);
+          match List.find_opt (fun (sv', _) -> sv = sv') tgts with
+          | None -> eval_statement config ctx otherwise
+          | Some (_, tgt) -> eval_statement config ctx tgt)
+      | _ -> failwith "Inconsistent state")
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
