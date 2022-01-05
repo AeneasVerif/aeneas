@@ -2936,14 +2936,13 @@ let rec type_is_primitively_copyable (ty : T.ety) : bool =
     Note that copying values might update the context. For instance, when
     copying shared borrows, we need to insert new shared borrows in the context.
  
-    Also, this function is actually more general than it should be: it allows
-    to copy ADTs, while ADT copy should be done through the Copy trait (i.e.,
-    by calling a dedicated function).
-    TODO: maybe we should disallow the copy of ADTs, or control it through
-    a boolean...
+    Also, this function is actually more general than it should be: it can be used
+    to copy concrete ADT values, while ADT copy should be done through the Copy
+    trait (i.e., by calling a dedicated function). This is why we added a parameter
+    to control this copy.
  *)
-let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
-    C.eval_ctx * V.typed_value =
+let rec copy_value (allow_adt_copy : bool) (config : C.config)
+    (ctx : C.eval_ctx) (v : V.typed_value) : C.eval_ctx * V.typed_value =
   (* Remark: at some point we rewrote this function to use iterators, but then
    * we reverted the changes: the result was less clear actually. In particular,
    * the fact that we have exhaustive matches below makes very obvious the cases
@@ -2951,13 +2950,16 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
   match v.V.value with
   | V.Concrete _ -> (ctx, v)
   | V.Adt av ->
+      assert allow_adt_copy;
       (* Sanity check *)
       (match v.V.ty with
       | T.Adt (T.Assumed _, _, _) -> failwith "Can't copy an assumed value"
       | T.Adt ((T.AdtId _ | T.Tuple), _, _) -> () (* Ok *)
       | _ -> failwith "Unreachable");
       let ctx, fields =
-        List.fold_left_map (copy_value config) ctx av.field_values
+        List.fold_left_map
+          (copy_value allow_adt_copy config)
+          ctx av.field_values
       in
       (ctx, { v with V.value = V.Adt { av with field_values = fields } })
   | V.Bottom -> failwith "Can't copy ⊥"
@@ -2979,7 +2981,7 @@ let rec copy_value (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value) :
       | V.MutLoan _ -> failwith "Can't copy a mutable loan"
       | V.SharedLoan (_, sv) ->
           (* We don't copy the shared loan: only the shared value inside *)
-          copy_value config ctx sv)
+          copy_value allow_adt_copy config ctx sv)
   | V.Symbolic sp ->
       (* We can copy only if the type is "primitively" copyable.
        * Note that in the general case, copy is a trait: copying values
@@ -3065,7 +3067,8 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       (* Copy the value *)
       L.log#ldebug (lazy ("Value to copy:\n" ^ typed_value_to_string ctx v));
       assert (not (bottom_in_value v));
-      copy_value config ctx v
+      let allow_adt_copy = false in
+      copy_value allow_adt_copy config ctx v
   | Expressions.Move p -> (
       (* Access the value *)
       let access = Move in
