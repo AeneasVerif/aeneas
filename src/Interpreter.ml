@@ -1267,38 +1267,34 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
 (** Convert an [avalue] to a [value].
 
     This function is used when ending abstractions: whenever we end a borrow
-    in an abstraction, we converted the borrowed [avalue] to a [value], then give
-    back this [value] to the context.
-    
-    There are two possibilities:
-    - either the borrowed [avalue] contains ended regions, in which case we return ⊥
-    - or it doesn't contain ⊥, in which case we simply return a newly introduced
-      symbolic value.
-    We return a new context because we may have to introduce a symbolic value.
-    
-    The `ended_regions` parameter is for the regions contained in the current
-    abstraction.
+    in an abstraction, we converted the borrowed [avalue] to a fresh symbolic
+    [value], then give back this [value] to the context.
+ 
+    Note that some regions may have ended in the symbolic value we generate.
+    For instance, consider the following function signature:
+    ```
+    fn f<'a>(x : &'a mut &'a mut u32);
+    ```
+    When ending the abstraction, the value given back for the outer borrow
+    should be ⊥. In practice, we will give back a symbolic value which can't
+    be expanded (because expanding this symbolic value would require expanding
+    a reference whose region has already ended).
  *)
-let convert_avalue_to_value (ended_regions : T.RegionId.set_t)
-    (av : V.typed_avalue) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+let convert_avalue_to_value (av : V.typed_avalue) (ctx : C.eval_ctx) :
+    C.eval_ctx * V.typed_value =
   (* Convert the type *)
   let ty = Subst.erase_regions av.V.ty in
-  (* Check if the avalue contains ended regions *)
-  if rty_regions_intersect av.V.ty ended_regions then
-    (* Contains ended regions: return ⊥ *)
-    (ctx, { V.value = V.Bottom; V.ty })
-  else
-    (* Doesn't contain ended regions: return a symbolic value *)
-    let ctx, sv_id = C.fresh_symbolic_value_id ctx in
-    let svalue : V.symbolic_value = { V.sv_id; sv_ty = av.V.ty } in
-    let value : V.symbolic_proj_comp =
-      (* Note that the set of ended regions is empty: we shouldn't have to take
-       * into account any ended regions at this point, otherwise we would be in
-       * the first case where we should return ⊥ *)
-      { V.svalue; V.rset_ended = T.RegionId.Set.empty }
-    in
-    let value = V.Symbolic value in
-    (ctx, { V.value; V.ty })
+  (* Generate the fresh a symbolic value *)
+  let ctx, sv_id = C.fresh_symbolic_value_id ctx in
+  let svalue : V.symbolic_value = { V.sv_id; sv_ty = av.V.ty } in
+  let value : V.symbolic_proj_comp =
+    (* Note that the set of ended regions is empty: we shouldn't have to take
+     * into account any ended regions at this point, otherwise we would be in
+     * the first case where we should return ⊥ *)
+    { V.svalue; V.rset_ended = T.RegionId.Set.empty }
+  in
+  let value = V.Symbolic value in
+  (ctx, { V.value; V.ty })
 
 (** End a borrow identified by its borrow id in a context
     
@@ -1564,12 +1560,8 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
     let ctx =
       match bc with
       | V.AMutBorrow (bid, av) ->
-          (* First, convert the avalue to a value (by introducing the proper
-           * symbolic values). Note that we should probably use the regions owned
-           * by the abstraction for the ended_regions parameter, but for safety
-           * I'm using the accumulated regions (which include the ancestors'
-           * regions). Think a bit about that... *)
-          let ctx, v = convert_avalue_to_value abs.acc_regions av ctx in
+          (* First, convert the avalue to a (fresh symbolic) value *)
+          let ctx, v = convert_avalue_to_value av ctx in
           give_back_value config bid v ctx
       | V.ASharedBorrow bid -> give_back_shared config bid ctx
       | V.AProjSharedBorrow _ ->
