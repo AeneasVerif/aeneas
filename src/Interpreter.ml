@@ -3540,7 +3540,14 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
       (ctx, Unit)
   | _, V.Symbolic _ ->
       assert (config.mode = SymbolicMode);
-      (* TODO *) raise Unimplemented
+      (* This is a bit annoying: in theory we should expand the symbolic value
+       * then set the discriminant, because in the case the discriminant is
+       * exactly the one we set, the fields are left untouched, and in the
+       * other cases they are set to Bottom.
+       * For now, we forbid setting the discriminant of a symbolic value:
+       * setting a discriminant should only be used to initialize a value,
+       * really. *)
+      failwith "Unexpected value"
   | _, (V.Adt _ | V.Bottom) -> failwith "Inconsistent state"
   | _, (V.Concrete _ | V.Borrow _ | V.Loan _) -> failwith "Unexpected value"
 
