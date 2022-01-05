@@ -3359,6 +3359,7 @@ let rec end_loan_exactly_at_place (config : C.config) (access : access_kind)
 let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
     (variant_id : T.VariantId.id) :
     (C.eval_ctx * statement_eval_res) eval_result =
+  S.synthesize_set_discriminant p variant_id;
   (* Access the value *)
   let access = Write in
   let ctx = update_ctx_along_read_place config access p ctx in
@@ -3633,6 +3634,9 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
        ^ "\n- type_params: " ^ type_params ^ "\n- args: " ^ args ^ "\n- dest: "
        ^ dest));
 
+  (* Synthesis *)
+  S.synthesize_non_local_function_call fid region_params type_params args dest;
+
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
      - the function is box_free
@@ -3816,9 +3820,10 @@ and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
 and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.FunDefId.id) (_region_params : T.erased_region list)
+    (fid : A.FunDefId.id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result =
+  S.synthesize_local_function_call fid region_params type_params args dest;
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_def ctx fid in
   match config.mode with
