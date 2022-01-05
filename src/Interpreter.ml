@@ -442,6 +442,11 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
   in
   { V.value; V.ty }
 
+let apply_proj_borrows_in_context (check_symbolic_no_ended : bool)
+    (ctx : C.eval_ctx) (regions : T.RegionId.set_t) (v : V.typed_value)
+    (ty : T.rty) : C.eval_ctx * V.typed_avalue =
+  raise Unimplemented
+
 (** Convert a symbolic expansion to a value.
 
     If the expansion is a mutable reference expansion, it converts it to a borrow.
@@ -4201,23 +4206,55 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   let inst_sg = Subst.substitute_signature asubst rsubst tsubst sg in
   (* Generate a fresh symbolic value for the result *)
   let res_sv_ty = inst_sg.A.output in
-  let ctx, res_sv =
+  let ctx, res_spc =
     mk_fresh_symbolic_proj_comp T.RegionId.Set.empty res_sv_ty ctx
   in
-  (* Generate the abstractions from the region groups *)
-  let generate_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) :
-      C.eval_ctx * V.abs =
-    raise Unimplemented
+  let res_value = mk_typed_value_from_proj_comp res_spc in
+  let res_av = V.ASymbolic (V.AProjLoans res_spc.V.svalue) in
+  let res_av : V.typed_avalue =
+    { V.value = res_av; V.ty = res_spc.V.svalue.V.sv_ty }
   in
-  let ctx, abs =
-    List.fold_left_map generate_abs ctx inst_sg.A.regions_hierarchy
+  (* Evaluate the input operands *)
+  let ctx, args = eval_operands config ctx args in
+  assert (List.length args = def.A.arg_count);
+  let args_with_rtypes = List.combine args rtype_params in
+  (* Generate the abstractions from the region groups and add them to the context *)
+  let gen_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =
+    let abs_id = rg.A.id in
+    let parents =
+      List.fold_left
+        (fun s pid -> V.AbstractionId.Set.add pid s)
+        V.AbstractionId.Set.empty rg.A.parents
+    in
+    let regions =
+      List.fold_left
+        (fun s rid -> T.RegionId.Set.add rid s)
+        T.RegionId.Set.empty rg.A.regions
+    in
+    (* Project over the input values *)
+    let check_symbolic_no_ended = true in
+    let ctx, args_projs =
+      List.fold_left_map
+        (fun ctx (arg, arg_rty) ->
+          apply_proj_borrows_in_context check_symbolic_no_ended ctx regions arg
+            arg_rty)
+        ctx args_with_rtypes
+    in
+    (* Group the input and output values *)
+    let avalues = List.append args_projs [ res_av ] in
+    (* Create the abstraction *)
+    let abs = { V.abs_id; parents; regions; avalues } in
+    (* Insert the abstraction in the context *)
+    let ctx = { ctx with env = Abs abs :: ctx.env } in
+    (* Return *)
+    ctx
   in
-  (* Add the abstractions to the context *)
-  let abs = List.rev (List.map (fun abs -> C.Abs abs) abs) in
-  let ctx = { ctx with C.env = List.append abs ctx.C.env } in
+  let ctx = List.fold_left gen_abs ctx inst_sg.A.regions_hierarchy in
+  (* Move the return value to its destination *)
+  let ctx = assign_to_place config ctx res_value dest in
   (* Synthesis *)
   S.synthesize_local_function_call fid region_params type_params args dest
-    res_sv.V.svalue;
+    res_spc.V.svalue;
   (* Return *)
   ctx
 

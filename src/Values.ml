@@ -542,9 +542,6 @@ and typed_avalue = { value : avalue; ty : rty }
 type abs = {
   abs_id : (AbstractionId.id[@opaque]);
   parents : (AbstractionId.set_t[@opaque]);  (** The parent abstractions *)
-  acc_regions : (RegionId.set_t[@opaque]);
-      (** Union of the regions owned by the (transitive) parent abstractions and
-          by the current abstraction. TODO: why do we need those? *)
   regions : (RegionId.set_t[@opaque]);  (** Regions owned by this abstraction *)
   avalues : typed_avalue list;  (** The values in this abstraction *)
 }

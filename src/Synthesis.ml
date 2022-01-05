@@ -70,5 +70,6 @@ let synthesize_non_local_function_call (fid : A.assumed_fun_id)
 
 let synthesize_local_function_call (fid : A.FunDefId.id)
     (region_params : T.erased_region list) (type_params : T.ety list)
-    (args : E.operand list) (dest : E.place) (res : V.symbolic_value) : unit =
+    (args : V.typed_value list) (dest : E.place) (res : V.symbolic_value) : unit
+    =
   ()
