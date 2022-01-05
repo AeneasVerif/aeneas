@@ -1,4 +1,5 @@
 open Types
+open Utils
 
 (** Retrieve the list of fields for the given variant of a [type_def].
 
@@ -22,6 +23,32 @@ let ty_is_unit (ty : 'r ty) : bool =
 (** The unit type *)
 let mk_unit_ty : ety = Adt (Tuple, [], [])
 
+(** Check if a region is in a set of regions *)
+let region_in_set (r : RegionId.id region) (rset : RegionId.set_t) : bool =
+  match r with Static -> false | Var id -> RegionId.Set.mem id rset
+
+(** Return the set of regions in an rty *)
+let rty_regions (ty : rty) : RegionId.set_t =
+  let s = ref RegionId.Set.empty in
+  let add_region (r : RegionId.id region) =
+    match r with Static -> () | Var rid -> s := RegionId.Set.add rid !s
+  in
+  let obj =
+    object
+      inherit [_] iter_ty
+
+      method! visit_'r _env r = add_region r
+    end
+  in
+  (* Explore the type *)
+  obj#visit_ty () ty;
+  (* Return the set of accumulated regions *)
+  !s
+
+let rty_regions_intersect (ty : rty) (regions : RegionId.set_t) : bool =
+  let ty_regions = rty_regions ty in
+  not (RegionId.Set.disjoint ty_regions regions)
+
 (** Convert an [ety], containing no region variables, to an [rty].
 
     In practice, it is the identity.
@@ -43,3 +70,21 @@ let rec ety_no_regions_to_rty (ty : ety) : rty =
       failwith
         "Can't convert a ref with erased regions to a ref with non-erased \
          regions"
+
+(** Check if a [ty] contains regions *)
+let rec ty_has_regions (ty : ety) : bool =
+  let obj =
+    object
+      inherit [_] iter_ty as super
+
+      method! visit_Adt env type_id regions tys =
+        if regions = [] then super#visit_Adt env type_id regions tys
+        else raise Found
+
+      method! visit_Ref _ _ _ _ = raise Found
+    end
+  in
+  try
+    obj#visit_ty () ty;
+    false
+  with Found -> true

@@ -12,6 +12,7 @@ open ValuesUtils
 module Inv = Invariants
 open InterpreterUtils
 module S = Synthesis
+open Utils
 
 (* TODO: check that the value types are correct when evaluating *)
 (* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
@@ -73,33 +74,6 @@ let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
     obj#visit_typed_value () v;
     None
   with FoundLoanContent lc -> Some lc
-
-(** Check if a region is in a set of regions *)
-let region_in_set (r : T.RegionId.id T.region) (rset : T.RegionId.set_t) : bool
-    =
-  match r with T.Static -> false | T.Var id -> T.RegionId.Set.mem id rset
-
-(** Return the set of regions in an rty *)
-let rty_regions (ty : T.rty) : T.RegionId.set_t =
-  let s = ref T.RegionId.Set.empty in
-  let add_region (r : T.RegionId.id T.region) =
-    match r with T.Static -> () | T.Var rid -> s := T.RegionId.Set.add rid !s
-  in
-  let obj =
-    object
-      inherit [_] T.iter_ty
-
-      method! visit_'r _env r = add_region r
-    end
-  in
-  (* Explore the type *)
-  obj#visit_ty () ty;
-  (* Return the set of accumulated regions *)
-  !s
-
-let rty_regions_intersect (ty : T.rty) (regions : T.RegionId.set_t) : bool =
-  let ty_regions = rty_regions ty in
-  not (T.RegionId.Set.disjoint ty_regions regions)
 
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that
@@ -3667,8 +3641,9 @@ let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
   ctx
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_new (config : C.config) (region_params : T.erased_region list)
-    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+let eval_box_new_concrete (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (ctx : C.eval_ctx) : C.eval_ctx eval_result =
   (* Check and retrieve the arguments *)
   match (region_params, type_params, ctx.env) with
   | ( [],
@@ -3700,7 +3675,7 @@ let eval_box_new (config : C.config) (region_params : T.erased_region list)
 
 (** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
     and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
-let eval_box_deref_mut_or_shared (config : C.config)
+let eval_box_deref_mut_or_shared_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (is_mut : bool) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
   (* Check the arguments *)
@@ -3735,17 +3710,20 @@ let eval_box_deref_mut_or_shared (config : C.config)
   | _ -> failwith "Inconsistent state"
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_deref (config : C.config) (region_params : T.erased_region list)
-    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+let eval_box_deref_concrete (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (ctx : C.eval_ctx) : C.eval_ctx eval_result =
   let is_mut = false in
-  eval_box_deref_mut_or_shared config region_params type_params is_mut ctx
+  eval_box_deref_mut_or_shared_concrete config region_params type_params is_mut
+    ctx
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_deref_mut (config : C.config)
+let eval_box_deref_mut_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (ctx : C.eval_ctx) : C.eval_ctx eval_result =
   let is_mut = true in
-  eval_box_deref_mut_or_shared config region_params type_params is_mut ctx
+  eval_box_deref_mut_or_shared_concrete config region_params type_params is_mut
+    ctx
 
 (** Auxiliary function - see [eval_non_local_function_call].
 
@@ -3768,7 +3746,7 @@ let eval_box_deref_mut (config : C.config)
 *)
 let eval_box_free (config : C.config) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place)
-    (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+    (ctx : C.eval_ctx) : C.eval_ctx =
   match (region_params, type_params, args) with
   | [], [ boxed_ty ], [ E.Move input_box_place ] ->
       (* Required type checking *)
@@ -3783,8 +3761,37 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
       let ctx = assign_to_place config ctx mk_unit_value dest in
 
       (* Return *)
-      Ok ctx
+      ctx
   | _ -> failwith "Inconsistent state"
+
+(** Auxiliary function - see [eval_non_local_function_call] *)
+let eval_box_new_symbolic (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  raise Unimplemented
+
+(** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
+    and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
+let eval_box_deref_mut_or_shared_symbolic (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (is_mut : bool) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  raise Unimplemented
+
+(** Auxiliary function - see [eval_non_local_function_call] *)
+let eval_box_deref_symbolic (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  let is_mut = false in
+  eval_box_deref_mut_or_shared_symbolic config region_params type_params is_mut
+    ctx
+
+(** Auxiliary function - see [eval_non_local_function_call] *)
+let eval_box_deref_mut_symbolic (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  let is_mut = true in
+  eval_box_deref_mut_or_shared_symbolic config region_params type_params is_mut
+    ctx
 
 (** Evaluate a non-local function call in concrete mode *)
 let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
@@ -3799,7 +3806,7 @@ let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
   match fid with
   | A.BoxFree ->
       (* Degenerate case: box_free *)
-      eval_box_free config region_params type_params args dest ctx
+      Ok (eval_box_free config region_params type_params args dest ctx)
   | _ -> (
       (* "Normal" case: not box_free *)
       (* Evaluate the operands *)
@@ -3830,10 +3837,11 @@ let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
          access to a body. *)
       let res =
         match fid with
-        | A.BoxNew -> eval_box_new config region_params type_params ctx
-        | A.BoxDeref -> eval_box_deref config region_params type_params ctx
+        | A.BoxNew -> eval_box_new_concrete config region_params type_params ctx
+        | A.BoxDeref ->
+            eval_box_deref_concrete config region_params type_params ctx
         | A.BoxDerefMut ->
-            eval_box_deref_mut config region_params type_params ctx
+            eval_box_deref_mut_concrete config region_params type_params ctx
         | A.BoxFree -> failwith "Unreachable"
         (* should have been treated above *)
       in
@@ -3855,11 +3863,45 @@ let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
 let eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx eval_result =
+    C.eval_ctx =
   (* Synthesis *)
   S.synthesize_non_local_function_call fid region_params type_params args dest;
 
-  raise Unimplemented
+  (* Sanity check: make sure the type parameters don't contain regions -
+   * this is a current limitation of our synthesis *)
+  assert (List.for_all (fun ty -> not (ty_has_regions ty)) type_params);
+
+  (* There are two cases (and this is extremely annoying):
+     - the function is not box_free
+     - the function is box_free
+     See [eval_box_free]
+  *)
+  match fid with
+  | A.BoxFree ->
+      (* Degenerate case: box_free *)
+      eval_box_free config region_params type_params args dest ctx
+  | _ ->
+      (* "Normal" case: not box_free *)
+      (* Evaluate the operands *)
+      let ctx, args_vl = eval_operands config ctx args in
+
+      (* Evaluate the function call *)
+      let ctx, ret_value =
+        match fid with
+        | A.BoxNew -> eval_box_new_symbolic config region_params type_params ctx
+        | A.BoxDeref ->
+            eval_box_deref_symbolic config region_params type_params ctx
+        | A.BoxDerefMut ->
+            eval_box_deref_mut_symbolic config region_params type_params ctx
+        | A.BoxFree -> failwith "Unreachable"
+        (* should have been treated above *)
+      in
+
+      (* Move the return value to its destination *)
+      let ctx = assign_to_place config ctx ret_value dest in
+
+      (* Return *)
+      ctx
 
 (** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
     (auxiliary helper for [eval_statement]) *)
@@ -3888,8 +3930,9 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
       eval_non_local_function_call_concrete config ctx fid region_params
         type_params args dest
   | C.SymbolicMode ->
-      eval_non_local_function_call_symbolic config ctx fid region_params
-        type_params args dest
+      Ok
+        (eval_non_local_function_call_symbolic config ctx fid region_params
+           type_params args dest)
 
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)

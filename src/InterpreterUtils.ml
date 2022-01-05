@@ -9,6 +9,7 @@ module A = CfimAst
 module L = Logging
 open TypesUtils
 open ValuesUtils
+open Utils
 
 (** Some utilities *)
 
@@ -146,13 +147,6 @@ type g_borrow_content = (V.borrow_content, V.aborrow_content) concrete_or_abs
 (** Generic borrow content: concrete or abstract *)
 
 type abs_or_var_id = AbsId of V.AbstractionId.id | VarId of V.VarId.id
-
-exception Found
-(** Utility exception
-
-    When looking for something while exploring a term, it can be easier to
-    just throw an exception to signal we found what we were looking for.
- *)
 
 exception FoundBorrowContent of V.borrow_content
 (** Utility exception *)
