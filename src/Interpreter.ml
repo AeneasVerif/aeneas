@@ -4262,17 +4262,6 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   in
   (* Substitute the signature *)
   let inst_sg = Subst.substitute_signature asubst rsubst tsubst sg in
-  (* TODO: cut from here *)
-  (* Generate a fresh symbolic value for the return value *)
-  let ret_sv_ty = inst_sg.A.output in
-  let ctx, ret_spc =
-    mk_fresh_symbolic_proj_comp T.RegionId.Set.empty ret_sv_ty ctx
-  in
-  let ret_value = mk_typed_value_from_proj_comp ret_spc in
-  let ret_av = V.ASymbolic (V.AProjLoans ret_spc.V.svalue) in
-  let ret_av : V.typed_avalue =
-    { V.value = ret_av; V.ty = ret_spc.V.svalue.V.sv_ty }
-  in
   (* Sanity check *)
   assert (List.length args = def.A.arg_count);
   (* Evaluate the function call *)
