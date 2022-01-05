@@ -3877,44 +3877,46 @@ let eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx =
-  (* Synthesis *)
-  S.synthesize_non_local_function_call fid region_params type_params args dest;
+  raise Unimplemented
 
-  (* Sanity check: make sure the type parameters don't contain regions -
-   * this is a current limitation of our synthesis *)
-  assert (List.for_all (fun ty -> not (ty_has_regions ty)) type_params);
+(* (* Synthesis *)
+     S.synthesize_function_call (A.Assumed fid) region_params type_params args dest;
 
-  (* There are two cases (and this is extremely annoying):
-     - the function is not box_free
-     - the function is box_free
-     See [eval_box_free]
-  *)
-  match fid with
-  | A.BoxFree ->
-      (* Degenerate case: box_free *)
-      eval_box_free config region_params type_params args dest ctx
-  | _ ->
-      (* "Normal" case: not box_free *)
-      (* Evaluate the operands *)
-      let ctx, args_vl = eval_operands config ctx args in
+     (* Sanity check: make sure the type parameters don't contain regions -
+      * this is a current limitation of our synthesis *)
+     assert (List.for_all (fun ty -> not (ty_has_regions ty)) type_params);
 
-      (* Evaluate the function call *)
-      let ctx, ret_value =
-        match fid with
-        | A.BoxNew -> eval_box_new_symbolic config region_params type_params ctx
-        | A.BoxDeref ->
-            eval_box_deref_symbolic config region_params type_params ctx
-        | A.BoxDerefMut ->
-            eval_box_deref_mut_symbolic config region_params type_params ctx
-        | A.BoxFree -> failwith "Unreachable"
-        (* should have been treated above *)
-      in
+     (* There are two cases (and this is extremely annoying):
+        - the function is not box_free
+        - the function is box_free
+        See [eval_box_free]
+     *)
+     match fid with
+     | A.BoxFree ->
+         (* Degenerate case: box_free *)
+         eval_box_free config region_params type_params args dest ctx
+     | _ ->
+         (* "Normal" case: not box_free *)
+         (* Evaluate the operands *)
+         let ctx, args_vl = eval_operands config ctx args in
 
-      (* Move the return value to its destination *)
-      let ctx = assign_to_place config ctx ret_value dest in
+         (* Evaluate the function call *)
+         let ctx, ret_value =
+           match fid with
+           | A.BoxNew -> eval_box_new_symbolic config region_params type_params ctx
+           | A.BoxDeref ->
+               eval_box_deref_symbolic config region_params type_params ctx
+           | A.BoxDerefMut ->
+               eval_box_deref_mut_symbolic config region_params type_params ctx
+           | A.BoxFree -> failwith "Unreachable"
+           (* should have been treated above *)
+         in
 
-      (* Return *)
-      ctx
+         (* Move the return value to its destination *)
+         let ctx = assign_to_place config ctx ret_value dest in
+
+         (* Return *)
+   ctx*)
 
 (** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
     (auxiliary helper for [eval_statement]) *)
@@ -4260,6 +4262,32 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   in
   (* Substitute the signature *)
   let inst_sg = Subst.substitute_signature asubst rsubst tsubst sg in
+  (* TODO: cut from here *)
+  (* Generate a fresh symbolic value for the return value *)
+  let ret_sv_ty = inst_sg.A.output in
+  let ctx, ret_spc =
+    mk_fresh_symbolic_proj_comp T.RegionId.Set.empty ret_sv_ty ctx
+  in
+  let ret_value = mk_typed_value_from_proj_comp ret_spc in
+  let ret_av = V.ASymbolic (V.AProjLoans ret_spc.V.svalue) in
+  let ret_av : V.typed_avalue =
+    { V.value = ret_av; V.ty = ret_spc.V.svalue.V.sv_ty }
+  in
+  (* Sanity check *)
+  assert (List.length args = def.A.arg_count);
+  (* Evaluate the function call *)
+  eval_function_call_symbolic_from_inst_sig config ctx (A.Local fid) inst_sg
+    region_params type_params args dest
+
+(** Evaluate a function call in symbolic mode by using the function signature.
+
+    This allows us to factorize the evaluation of local and non-local function
+    calls in symbolic mode: only their signatures matter.
+ *)
+and eval_function_call_symbolic_from_inst_sig (config : C.config)
+    (ctx : C.eval_ctx) (fid : A.fun_id) (inst_sg : A.inst_fun_sig)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (args : E.operand list) (dest : E.place) : C.eval_ctx =
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
   let ctx, ret_spc =
@@ -4272,8 +4300,7 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   in
   (* Evaluate the input operands *)
   let ctx, args = eval_operands config ctx args in
-  assert (List.length args = def.A.arg_count);
-  let args_with_rtypes = List.combine args rtype_params in
+  let args_with_rtypes = List.combine args inst_sg.A.inputs in
   (* Generate the abstractions from the region groups and add them to the context *)
   let gen_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =
     let abs_id = rg.A.id in
@@ -4307,7 +4334,7 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   (* Move the return value to its destination *)
   let ctx = assign_to_place config ctx ret_value dest in
   (* Synthesis *)
-  S.synthesize_local_function_call fid region_params type_params args dest
+  S.synthesize_function_call fid region_params type_params args dest
     ret_spc.V.svalue;
   (* Return *)
   ctx

@@ -63,12 +63,7 @@ let synthesize_eval_rvalue_aggregate (aggregate_kind : E.aggregate_kind)
     (ops : E.operand list) : unit =
   ()
 
-let synthesize_non_local_function_call (fid : A.assumed_fun_id)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (args : E.operand list) (dest : E.place) : unit =
-  ()
-
-let synthesize_local_function_call (fid : A.FunDefId.id)
+let synthesize_function_call (fid : A.fun_id)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (args : V.typed_value list) (dest : E.place) (res : V.symbolic_value) : unit
     =
