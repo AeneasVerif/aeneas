@@ -3247,7 +3247,7 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
   | C.SymbolicMode -> eval_binary_op_symbolic config ctx binop op1 op2
 
 let eval_rvalue_discriminant (config : C.config) (ctx : C.eval_ctx)
-    (p : E.place) : C.eval_ctx * V.typed_value =
+    (p : E.place) : (C.eval_ctx * V.typed_value) list =
   S.synthesize_eval_rvalue_discriminant p;
   (* Note that discriminant values have type `isize` *)
   (* Access the value *)
@@ -3265,8 +3265,9 @@ let eval_rvalue_discriminant (config : C.config) (ctx : C.eval_ctx)
               failwith "Disciminant id out of range"
               (* Should really never happen *)
           | Ok sv ->
-              (ctx, { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }))
-      )
+              [
+                (ctx, { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize });
+              ]))
   | Symbolic sv ->
       (* We need to perform a symbolic expansion *)
       raise Unimplemented
@@ -3355,19 +3356,39 @@ let eval_rvalue_aggregate (config : C.config) (ctx : C.eval_ctx)
       let aty = T.Adt (T.AdtId def_id, regions, types) in
       (ctx, { V.value = Adt av; ty = aty })
 
-(** Evaluate an rvalue in a given context: return the updated context and
-    the computed value
-*)
-let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
-    (C.eval_ctx * V.typed_value) eval_result =
+(** Evaluate an rvalue which is not a discriminant.
+
+    We define a function for this specific case, because evaluating
+    a discriminant might lead to branching (if we evaluate the discriminant
+    of a symbolic enumeration value), while it is not the case for the
+    other rvalues.
+ *)
+let eval_rvalue_non_discriminant (config : C.config) (ctx : C.eval_ctx)
+    (rvalue : E.rvalue) : (C.eval_ctx * V.typed_value) eval_result =
   match rvalue with
   | E.Use op -> Ok (eval_operand config ctx op)
   | E.Ref (p, bkind) -> Ok (eval_rvalue_ref config ctx p bkind)
   | E.UnaryOp (unop, op) -> eval_unary_op config ctx unop op
   | E.BinaryOp (binop, op1, op2) -> eval_binary_op config ctx binop op1 op2
-  | E.Discriminant p -> Ok (eval_rvalue_discriminant config ctx p)
   | E.Aggregate (aggregate_kind, ops) ->
       Ok (eval_rvalue_aggregate config ctx aggregate_kind ops)
+  | E.Discriminant _ -> failwith "Unreachable"
+
+(** Evaluate an rvalue in a given context: return the updated context and
+    the computed value.
+
+    Returns a list of pairs (new context, computed rvalue) because
+    `discriminant` might lead to a branching in case it is applied
+    on a symbolic enumeration value.
+*)
+let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
+    (C.eval_ctx * V.typed_value) list eval_result =
+  match rvalue with
+  | E.Discriminant p -> Ok (eval_rvalue_discriminant config ctx p)
+  | _ -> (
+      match eval_rvalue_non_discriminant config ctx rvalue with
+      | Error e -> Error e
+      | Ok res -> Ok [ res ])
 
 (** Result of evaluating a statement *)
 type statement_eval_res = Unit | Break of int | Continue of int | Return
@@ -3428,8 +3449,7 @@ let rec end_loan_exactly_at_place (config : C.config) (access : access_kind)
       For instance, something like: `Cons Bottom Bottom`.
  *)
 let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
-    (variant_id : T.VariantId.id) :
-    (C.eval_ctx * statement_eval_res) eval_result =
+    (variant_id : T.VariantId.id) : C.eval_ctx * statement_eval_res =
   S.synthesize_set_discriminant p variant_id;
   (* Access the value *)
   let access = Write in
@@ -3449,7 +3469,7 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
       | None -> failwith "Found a struct value while expected an enum"
       | Some variant_id' ->
           if variant_id' = variant_id then (* Nothing to do *)
-            Ok (ctx, Unit)
+            (ctx, Unit)
           else
             (* Replace the value *)
             let bottom_v =
@@ -3457,14 +3477,14 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
                 def_id (Some variant_id) regions types
             in
             let ctx = write_place_unwrap config access p bottom_v ctx in
-            Ok (ctx, Unit))
+            (ctx, Unit))
   | T.Adt (T.AdtId def_id, regions, types), V.Bottom ->
       let bottom_v =
         compute_expanded_bottom_adt_value ctx.type_context.type_defs def_id
           (Some variant_id) regions types
       in
       let ctx = write_place_unwrap config access p bottom_v ctx in
-      Ok (ctx, Unit)
+      (ctx, Unit)
   | _, V.Symbolic _ ->
       assert (config.mode = SymbolicMode);
       (* TODO *) raise Unimplemented
@@ -3622,7 +3642,8 @@ let eval_box_deref_mut_or_shared (config : C.config)
       in
       let borrow_kind = if is_mut then E.Mut else E.Shared in
       let rv = E.Ref (p, borrow_kind) in
-      match eval_rvalue config ctx rv with
+      (* Note that the rvalue can't be a discriminant value *)
+      match eval_rvalue_non_discriminant config ctx rv with
       | Error err -> Error err
       | Ok (ctx, borrowed_value) ->
           (* Move the borrowed value to its destination *)
@@ -3770,7 +3791,7 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
 
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
-    : (C.eval_ctx * statement_eval_res) eval_result =
+    : (C.eval_ctx * statement_eval_res) eval_result list =
   (* Debugging *)
   L.log#ldebug
     (lazy
@@ -3783,42 +3804,52 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
   | A.Assign (p, rvalue) -> (
       (* Evaluate the rvalue *)
       match eval_rvalue config ctx rvalue with
-      | Error err -> Error err
-      | Ok (ctx, rvalue) ->
+      | Error err -> [ Error err ]
+      | Ok res ->
           (* Assign *)
-          let ctx = assign_to_place config ctx rvalue p in
-          Ok (ctx, Unit))
+          let assign (ctx, rvalue) =
+            let ctx = assign_to_place config ctx rvalue p in
+            Ok (ctx, Unit)
+          in
+          List.map assign res)
   | A.FakeRead p ->
       let ctx, _ = prepare_rplace config Read p ctx in
-      Ok (ctx, Unit)
+      [ Ok (ctx, Unit) ]
   | A.SetDiscriminant (p, variant_id) ->
-      set_discriminant config ctx p variant_id
-  | A.Drop p -> Ok (drop_value config ctx p, Unit)
+      [ Ok (set_discriminant config ctx p variant_id) ]
+  | A.Drop p -> [ Ok (drop_value config ctx p, Unit) ]
   | A.Assert assertion -> (
       let ctx, v = eval_operand config ctx assertion.cond in
       assert (v.ty = T.Bool);
       match v.value with
       | Concrete (Bool b) ->
-          if b = assertion.expected then Ok (ctx, Unit) else Error Panic
+          if b = assertion.expected then [ Ok (ctx, Unit) ] else [ Error Panic ]
       | _ -> failwith "Expected a boolean")
   | A.Call call -> eval_function_call config ctx call
-  | A.Panic -> Error Panic
-  | A.Return -> Ok (ctx, Return)
-  | A.Break i -> Ok (ctx, Break i)
-  | A.Continue i -> Ok (ctx, Continue i)
-  | A.Nop -> Ok (ctx, Unit)
-  | A.Sequence (st1, st2) -> (
+  | A.Panic -> [ Error Panic ]
+  | A.Return -> [ Ok (ctx, Return) ]
+  | A.Break i -> [ Ok (ctx, Break i) ]
+  | A.Continue i -> [ Ok (ctx, Continue i) ]
+  | A.Nop -> [ Ok (ctx, Unit) ]
+  | A.Sequence (st1, st2) ->
       (* Evaluate the first statement *)
-      match eval_statement config ctx st1 with
-      | Error err -> Error err
-      | Ok (ctx, Unit) ->
-          (* Evaluate the second statement *)
-          eval_statement config ctx st2
-      (* Control-flow break: transmit. We enumerate the cases on purpose *)
-      | Ok (ctx, Break i) -> Ok (ctx, Break i)
-      | Ok (ctx, Continue i) -> Ok (ctx, Continue i)
-      | Ok (ctx, Return) -> Ok (ctx, Return))
+      let res1 = eval_statement config ctx st1 in
+      (* Evaluate the sequence *)
+      let eval_seq res1 =
+        match res1 with
+        | Error err -> [ Error err ]
+        | Ok (ctx, Unit) ->
+            (* Evaluate the second statement *)
+            eval_statement config ctx st2
+        (* Control-flow break: transmit. We enumerate the cases on purpose *)
+        | Ok (ctx, Break i) -> [ Ok (ctx, Break i) ]
+        | Ok (ctx, Continue i) -> [ Ok (ctx, Continue i) ]
+        | Ok (ctx, Return) -> [ Ok (ctx, Return) ]
+      in
+      List.concat (List.map eval_seq res1)
   | A.Loop loop_body ->
+      (* For now, we don't support loops in symbolic mode *)
+      assert (config.C.mode = C.ConcreteMode);
       (* Evaluate a loop body
 
          We need a specific function for the [Continue] case: in case we continue,
@@ -3826,28 +3857,34 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
          (and repeat this an indefinite number of times).
       *)
       let rec eval_loop_body (ctx : C.eval_ctx) :
-          (C.eval_ctx * statement_eval_res) eval_result =
+          (C.eval_ctx * statement_eval_res) eval_result list =
         (* Evaluate the loop body *)
-        match eval_statement config ctx loop_body with
-        | Error err -> Error err
-        | Ok (ctx, Unit) ->
-            (* We finished evaluating the statement in a "normal" manner *)
-            Ok (ctx, Unit)
-        (* Control-flow breaks *)
-        | Ok (ctx, Break i) ->
-            (* Decrease the break index *)
-            if i = 0 then Ok (ctx, Unit) else Ok (ctx, Break (i - 1))
-        | Ok (ctx, Continue i) ->
-            (* Decrease the continue index *)
-            if i = 0 then
-              (* We stop there. When we continue, we go back to the beginning
-                 of the loop: we must thus reevaluate the loop body (and
-                 recheck the result to know whether we must reevaluate again,
-                 etc. *)
-              eval_loop_body ctx
-            else (* We don't stop there: transmit *)
-              Ok (ctx, Continue (i - 1))
-        | Ok (ctx, Return) -> Ok (ctx, Return)
+        let body_res = eval_statement config ctx loop_body in
+        (* Evaluate the next steps *)
+        let eval res =
+          match res with
+          | Error err -> [ Error err ]
+          | Ok (ctx, Unit) ->
+              (* We finished evaluating the statement in a "normal" manner *)
+              [ Ok (ctx, Unit) ]
+          (* Control-flow breaks *)
+          | Ok (ctx, Break i) ->
+              (* Decrease the break index *)
+              if i = 0 then [ Ok (ctx, Unit) ] else [ Ok (ctx, Break (i - 1)) ]
+          | Ok (ctx, Continue i) ->
+              (* Decrease the continue index *)
+              if i = 0 then
+                (* We stop there. When we continue, we go back to the beginning
+                   of the loop: we must thus reevaluate the loop body (and
+                   recheck the result to know whether we must reevaluate again,
+                   etc. *)
+                eval_loop_body ctx
+              else
+                (* We don't stop there: transmit *)
+                [ Ok (ctx, Continue (i - 1)) ]
+          | Ok (ctx, Return) -> [ Ok (ctx, Return) ]
+        in
+        List.concat (List.map eval body_res)
       in
       (* Apply *)
       eval_loop_body ctx
@@ -3860,6 +3897,7 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
           | V.Concrete (V.Bool b) ->
               if b then eval_statement config ctx st1
               else eval_statement config ctx st2
+          | V.Symbolic _ -> raise Unimplemented
           | _ -> failwith "Inconsistent state")
       | A.SwitchInt (int_ty, tgts, otherwise) -> (
           match op_v.value with
@@ -3868,11 +3906,12 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
               match List.find_opt (fun (sv', _) -> sv = sv') tgts with
               | None -> eval_statement config ctx otherwise
               | Some (_, tgt) -> eval_statement config ctx tgt)
+          | V.Symbolic _ -> raise Unimplemented
           | _ -> failwith "Inconsistent state"))
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
-    (C.eval_ctx * statement_eval_res) eval_result =
+    (C.eval_ctx * statement_eval_res) eval_result list =
   (* There are two cases *
      - this is a local function, in which case we execute its body
      - this is a non-local function, in which case there is a special treatment
@@ -3883,22 +3922,27 @@ and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
         eval_local_function_call config ctx fid call.region_params
           call.type_params call.args call.dest
     | A.Assumed fid ->
-        eval_non_local_function_call config ctx fid call.region_params
-          call.type_params call.args call.dest
+        [
+          eval_non_local_function_call config ctx fid call.region_params
+            call.type_params call.args call.dest;
+        ]
   in
-  match res with Error err -> Error err | Ok ctx -> Ok (ctx, Unit)
+  List.map
+    (fun res ->
+      match res with Error err -> Error err | Ok ctx -> Ok (ctx, Unit))
+    res
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
 and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.FunDefId.id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx eval_result =
+    C.eval_ctx eval_result list =
   S.synthesize_local_function_call fid region_params type_params args dest;
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_def ctx fid in
   match config.mode with
-  | ConcreteMode -> (
+  | ConcreteMode ->
       let tsubst =
         Subst.make_type_subst
           (List.map (fun v -> v.T.index) def.A.signature.type_params)
@@ -3935,31 +3979,41 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
       let ctx = C.ctx_push_uninitialized_vars ctx locals in
 
       (* Execute the function body *)
-      match eval_function_body config ctx body with
-      | Error Panic -> Error Panic
-      | Ok ctx ->
-          (* Pop the stack frame and retrieve the return value *)
-          let ctx, ret_value = ctx_pop_frame config ctx in
+      let res = eval_function_body config ctx body in
 
-          (* Move the return value to its destination *)
-          let ctx = assign_to_place config ctx ret_value dest in
+      (* Pop the stack frame and move the return value to its destination *)
+      let finish res =
+        match res with
+        | Error Panic -> Error Panic
+        | Ok ctx ->
+            (* Pop the stack frame and retrieve the return value *)
+            let ctx, ret_value = ctx_pop_frame config ctx in
 
-          (* Return *)
-          Ok ctx)
+            (* Move the return value to its destination *)
+            let ctx = assign_to_place config ctx ret_value dest in
+
+            (* Return *)
+            Ok ctx
+      in
+      List.map finish res
   | SymbolicMode -> raise Unimplemented
 
 (** Evaluate a statement seen as a function body (auxiliary helper for
     [eval_statement]) *)
 and eval_function_body (config : C.config) (ctx : C.eval_ctx)
-    (body : A.statement) : (C.eval_ctx, eval_error) result =
-  match eval_statement config ctx body with
-  | Error err -> Error err
-  | Ok (ctx, res) -> (
-      (* Sanity check *)
-      if config.C.check_invariants then Inv.check_invariants ctx;
-      match res with
-      | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
-      | Return -> Ok ctx)
+    (body : A.statement) : (C.eval_ctx, eval_error) result list =
+  let res = eval_statement config ctx body in
+  let finish res =
+    match res with
+    | Error err -> Error err
+    | Ok (ctx, res) -> (
+        (* Sanity check *)
+        if config.C.check_invariants then Inv.check_invariants ctx;
+        match res with
+        | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
+        | Return -> Ok ctx)
+  in
+  List.map finish res
 
 module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
@@ -3997,8 +4051,11 @@ module Test = struct
     (* Evaluate the function *)
     let config = { C.mode = C.ConcreteMode; C.check_invariants = true } in
     match eval_function_body config ctx fdef.A.body with
-    | Error err -> Error err
-    | Ok _ -> Ok ()
+    | [ Ok _ ] -> Ok ()
+    | [ Error err ] -> Error err
+    | _ ->
+        (* We execute the concrete interpreter: there shouldn't be any branching *)
+        failwith "Unreachable"
 
   (** Small helper: return true if the function is a unit function (no parameters,
     no arguments) - TODO: move *)
