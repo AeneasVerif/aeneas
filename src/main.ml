@@ -1,15 +1,9 @@
 open CfimOfJson
 open Logging
 open Print
-open Contexts
 module T = Types
 module A = CfimAst
 module I = Interpreter
-module C = Contexts
-
-type test = Test [@@deriving show]
-
-let _ = show_test Test
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work *)
