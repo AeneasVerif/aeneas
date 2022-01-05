@@ -3521,7 +3521,6 @@ let rec end_loan_exactly_at_place (config : C.config) (access : access_kind)
  *)
 let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
     (variant_id : T.VariantId.id) : C.eval_ctx * statement_eval_res =
-  S.synthesize_set_discriminant p variant_id;
   (* Access the value *)
   let access = Write in
   let ctx = update_ctx_along_read_place config access p ctx in

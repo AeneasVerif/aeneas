@@ -63,10 +63,6 @@ let synthesize_eval_rvalue_aggregate (aggregate_kind : E.aggregate_kind)
     (ops : E.operand list) : unit =
   ()
 
-let synthesize_set_discriminant (p : E.place) (variant_id : T.VariantId.id) :
-    unit =
-  ()
-
 let synthesize_non_local_function_call (fid : A.assumed_fun_id)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (args : E.operand list) (dest : E.place) : unit =
