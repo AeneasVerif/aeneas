@@ -3098,7 +3098,7 @@ let eval_unary_op_concrete (config : C.config) (ctx : C.eval_ctx)
       match mk_scalar sv.int_ty i with
       | Error _ -> Error Panic
       | Ok sv -> Ok (ctx, { v with V.value = V.Concrete (V.Scalar sv) }))
-  | _ -> failwith "Invalid value for unop"
+  | _ -> failwith "Invalid input for unop"
 
 let eval_unary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
     (unop : E.unop) (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result
@@ -3111,7 +3111,7 @@ let eval_unary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
     match (unop, v.V.ty) with
     | E.Not, T.Bool -> T.Bool
     | E.Neg, T.Integer int_ty -> T.Integer int_ty
-    | _ -> failwith "Invalid parameters for unop"
+    | _ -> failwith "Invalid input for unop"
   in
   let res_sv = { V.sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Synthesize *)
@@ -3130,16 +3130,17 @@ let eval_binary_op_concrete (config : C.config) (ctx : C.eval_ctx)
     (C.eval_ctx * V.typed_value) eval_result =
   (* Evaluate the operands *)
   let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
-  if
-    (* Binary operations only apply on integer values, but when we check for
-     * equality *)
-    binop = Eq || binop = Ne
-  then (
-    (* Equality/inequality check is primitive only on primitive types *)
+  (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
+   * The remaining binops only operate on scalars. *)
+  if binop = Eq || binop = Ne then (
+    (* Equality operations *)
     assert (v1.ty = v2.ty);
+    (* Equality/inequality check is primitive only for a subset of types *)
+    assert (type_is_primitively_copyable v1.ty);
     let b = v1 = v2 in
     Ok (ctx, { V.value = V.Concrete (Bool b); ty = T.Bool }))
   else
+    (* For the non-equality operations, the input values are necessarily scalars *)
     match (v1.V.value, v2.V.value) with
     | V.Concrete (V.Scalar sv1), V.Concrete (V.Scalar sv2) -> (
         let res =
@@ -3203,8 +3204,38 @@ let eval_binary_op_concrete (config : C.config) (ctx : C.eval_ctx)
 let eval_binary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
     (binop : E.binop) (op1 : E.operand) (op2 : E.operand) :
     (C.eval_ctx * V.typed_value) eval_result =
-  S.synthesize_binary_op binop op1 op2;
-  raise Unimplemented
+  (* Evaluate the operands *)
+  let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
+  (* Generate a fresh symbolic value to store the result *)
+  let ctx, res_sv_id = C.fresh_symbolic_value_id ctx in
+  let res_sv_ty =
+    if binop = Eq || binop = Ne then (
+      (* Equality operations *)
+      assert (v1.ty = v2.ty);
+      (* Equality/inequality check is primitive only for a subset of types *)
+      assert (type_is_primitively_copyable v1.ty);
+      T.Bool)
+    else
+      (* Other operations: input types are integers *)
+      match (v1.V.ty, v2.V.ty) with
+      | T.Integer int_ty1, T.Integer int_ty2 -> (
+          match binop with
+          | E.Lt | E.Le | E.Ge | E.Gt ->
+              assert (int_ty1 = int_ty2);
+              T.Bool
+          | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
+          | E.BitOr ->
+              assert (int_ty1 = int_ty2);
+              T.Integer int_ty1
+          | E.Shl | E.Shr -> raise Unimplemented
+          | E.Ne | E.Eq -> failwith "Unreachable")
+      | _ -> failwith "Invalid inputs for binop"
+  in
+  let res_sv = { V.sv_id = res_sv_id; sv_ty = res_sv_ty } in
+  (* Synthesize *)
+  S.synthesize_binary_op binop v1 v2 res_sv;
+  (* Return *)
+  Ok (ctx, mk_typed_value_from_symbolic_value res_sv)
 
 let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
     (op1 : E.operand) (op2 : E.operand) :

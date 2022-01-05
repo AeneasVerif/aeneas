@@ -35,8 +35,8 @@ let synthesize_unary_op (unop : E.unop) (op : V.typed_value)
     (dest : V.symbolic_value) : unit =
   ()
 
-let synthesize_binary_op (binop : E.binop) (op1 : E.operand) (op2 : E.operand) :
-    unit =
+let synthesize_binary_op (binop : E.binop) (op1 : V.typed_value)
+    (op2 : V.typed_value) (dest : V.symbolic_value) : unit =
   ()
 
 (** Actually not sure if we need this, or a synthesize_symbolic_expansion_enum *)
