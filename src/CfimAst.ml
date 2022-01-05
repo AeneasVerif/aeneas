@@ -26,10 +26,10 @@ type fun_id = Local of FunDefId.id | Assumed of assumed_fun_id
 
 type assertion = { cond : operand; expected : bool } [@@deriving show]
 
-type region_group = {
-  id : RegionGroupId.id;
-  regions : RegionVarId.id list;
-  parents : RegionGroupId.id list;
+type ('id, 'r) g_region_group = {
+  id : 'id;
+  regions : 'r list;
+  parents : 'id list;
 }
 [@@deriving show]
 (** A group of regions.
@@ -40,17 +40,38 @@ type region_group = {
     proper constraints, when evaluating a function call in symbolic mode.
 *)
 
-type region_groups = region_group list [@@deriving show]
+type ('r, 'id) g_region_groups = ('r, 'id) g_region_group list [@@deriving show]
+
+type region_var_group = (RegionGroupId.id, RegionVarId.id) g_region_group
+[@@deriving show]
+
+type region_var_groups = (RegionGroupId.id, RegionVarId.id) g_region_groups
+[@@deriving show]
+
+type abs_region_group = (AbstractionId.id, RegionId.id) g_region_group
+[@@deriving show]
+
+type abs_region_groups = (AbstractionId.id, RegionId.id) g_region_groups
+[@@deriving show]
 
 type fun_sig = {
   region_params : region_var list;
   num_early_bound_regions : int;
-  regions_hierarchy : region_groups;
+  regions_hierarchy : region_var_groups;
   type_params : type_var list;
   inputs : sty list;
   output : sty;
 }
 [@@deriving show]
+(** A function signature, as used when declaring functions *)
+
+type inst_fun_sig = {
+  regions_hierarchy : abs_region_groups;
+  inputs : rty list;
+  output : rty;
+}
+[@@deriving show]
+(** A function signature, after instantiation *)
 
 type call = {
   func : fun_id;

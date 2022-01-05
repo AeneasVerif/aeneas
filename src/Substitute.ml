@@ -35,6 +35,38 @@ let rec ty_substitute (rsubst : 'r1 -> 'r2)
 let erase_regions (ty : T.rty) : T.ety =
   ty_substitute (fun _ -> T.Erased) (fun vid -> T.TypeVar vid) ty
 
+(** Generate fresh regions for region variables.
+
+    Return the list of new regions and appropriate substitutions from the
+    original region variables to the fresh regions.
+  *)
+let fresh_regions_with_substs (region_vars : T.region_var list)
+    (ctx : C.eval_ctx) :
+    C.eval_ctx
+    * T.RegionId.id list
+    * (T.RegionVarId.id -> T.RegionId.id)
+    * (T.RegionVarId.id T.region -> T.RegionId.id T.region) =
+  (* Generate fresh regions *)
+  let ctx, fresh_region_ids =
+    List.fold_left_map (fun ctx _ -> C.fresh_region_id ctx) ctx region_vars
+  in
+  let fresh_regions = List.map (fun rid -> T.Var rid) fresh_region_ids in
+  (* Generate the map from region var ids to regions *)
+  let ls = List.combine region_vars fresh_region_ids in
+  let rid_map =
+    List.fold_left
+      (fun mp (k, v) -> T.RegionVarId.Map.add k.T.index v mp)
+      T.RegionVarId.Map.empty ls
+  in
+  (* Generate the substitution from region var id to region *)
+  let rid_subst id = T.RegionVarId.Map.find id rid_map in
+  (* Generate the substitution from region to region *)
+  let rsubst r =
+    match r with T.Static -> T.Static | T.Var id -> T.Var (rid_subst id)
+  in
+  (* Return *)
+  (ctx, fresh_region_ids, rid_subst, rsubst)
+
 (** Erase the regions in a type and substitute the type variables *)
 let erase_regions_substitute_types (tsubst : T.TypeVarId.id -> T.ety)
     (ty : 'r T.region T.ty) : T.ety =
@@ -292,3 +324,21 @@ let fun_def_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
   in
   let body = statement_substitute tsubst def.body in
   (locals, body)
+
+(** Substitute a function signature *)
+let substitute_signature (asubst : A.RegionGroupId.id -> V.AbstractionId.id)
+    (rsubst : T.RegionVarId.id -> T.RegionId.id)
+    (tsubst : T.TypeVarId.id -> T.rty) (sg : A.fun_sig) : A.inst_fun_sig =
+  let rsubst' (r : T.RegionVarId.id T.region) : T.RegionId.id T.region =
+    match r with T.Static -> T.Static | T.Var rid -> T.Var (rsubst rid)
+  in
+  let inputs = List.map (ty_substitute rsubst' tsubst) sg.A.inputs in
+  let output = ty_substitute rsubst' tsubst sg.A.output in
+  let subst_region_group (rg : A.region_var_group) : A.abs_region_group =
+    let id = asubst rg.A.id in
+    let regions = List.map rsubst rg.A.regions in
+    let parents = List.map asubst rg.A.parents in
+    { A.id; regions; parents }
+  in
+  let regions_hierarchy = List.map subst_region_group sg.A.regions_hierarchy in
+  { A.regions_hierarchy; inputs; output }

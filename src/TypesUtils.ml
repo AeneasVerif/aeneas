@@ -21,3 +21,25 @@ let ty_is_unit (ty : 'r ty) : bool =
 
 (** The unit type *)
 let mk_unit_ty : ety = Adt (Tuple, [], [])
+
+(** Convert an [ety], containing no region variables, to an [rty].
+
+    In practice, it is the identity.
+ *)
+let rec ety_no_regions_to_rty (ty : ety) : rty =
+  match ty with
+  | Adt (type_id, regions, tys) ->
+      assert (regions = []);
+      Adt (type_id, [], List.map ety_no_regions_to_rty tys)
+  | TypeVar v -> TypeVar v
+  | Bool -> Bool
+  | Char -> Char
+  | Never -> Never
+  | Integer int_ty -> Integer int_ty
+  | Str -> Str
+  | Array ty -> Array (ety_no_regions_to_rty ty)
+  | Slice ty -> Slice (ety_no_regions_to_rty ty)
+  | Ref (_, _, _) ->
+      failwith
+        "Can't convert a ref with erased regions to a ref with non-erased \
+         regions"

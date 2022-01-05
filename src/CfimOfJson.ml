@@ -436,8 +436,8 @@ let assertion_of_json (js : json) : (A.assertion, string) result =
         Ok { A.cond; expected }
     | _ -> Error "")
 
-let region_group_of_json (js : json) : (A.region_group, string) result =
-  combine_error_msgs js "region_group_of_json"
+let region_var_group_of_json (js : json) : (A.region_var_group, string) result =
+  combine_error_msgs js "region_var_group_of_json"
     (match js with
     | `Assoc [ ("id", id); ("regions", regions); ("parents", parents) ] ->
         let* id = A.RegionGroupId.id_of_json id in
@@ -446,9 +446,10 @@ let region_group_of_json (js : json) : (A.region_group, string) result =
         Ok { A.id; regions; parents }
     | _ -> Error "")
 
-let region_groups_of_json (js : json) : (A.region_groups, string) result =
-  combine_error_msgs js "region_group_of_json"
-    (list_of_json region_group_of_json js)
+let region_var_groups_of_json (js : json) : (A.region_var_groups, string) result
+    =
+  combine_error_msgs js "region_var_group_of_json"
+    (list_of_json region_var_group_of_json js)
 
 let fun_sig_of_json (js : json) : (A.fun_sig, string) result =
   combine_error_msgs js "fun_sig_of_json"
@@ -464,7 +465,7 @@ let fun_sig_of_json (js : json) : (A.fun_sig, string) result =
         ] ->
         let* region_params = list_of_json region_var_of_json region_params in
         let* num_early_bound_regions = int_of_json num_early_bound_regions in
-        let* regions_hierarchy = region_groups_of_json regions_hierarchy in
+        let* regions_hierarchy = region_var_groups_of_json regions_hierarchy in
         let* type_params = list_of_json type_var_of_json type_params in
         let* inputs = list_of_json sty_of_json inputs in
         let* output = sty_of_json output in

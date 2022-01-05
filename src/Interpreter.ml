@@ -4158,8 +4158,68 @@ and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
 and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
     (fid : A.FunDefId.id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx eval_result list =
-  raise Unimplemented
+    C.eval_ctx =
+  (* Retrieve the (correctly instantiated) signature *)
+  let def = C.ctx_lookup_fun_def ctx fid in
+  let sg = def.A.signature in
+  (* Generate fresh abstraction ids and create a substitution from region
+   * group ids to abstraction ids *)
+  let ctx, rg_abs_ids_bindings =
+    List.fold_left_map
+      (fun ctx rg ->
+        let ctx, abs_id = C.fresh_abstraction_id ctx in
+        (ctx, (rg.A.id, abs_id)))
+      ctx sg.regions_hierarchy
+  in
+  let asubst_map : V.AbstractionId.id A.RegionGroupId.Map.t =
+    List.fold_left
+      (fun mp (rg_id, abs_id) -> A.RegionGroupId.Map.add rg_id abs_id mp)
+      A.RegionGroupId.Map.empty rg_abs_ids_bindings
+  in
+  let asubst (rg_id : A.RegionGroupId.id) : V.AbstractionId.id =
+    A.RegionGroupId.Map.find rg_id asubst_map
+  in
+  (* Generate fresh regions and their substitutions *)
+  let ctx, fresh_regions, rsubst, _ =
+    Subst.fresh_regions_with_substs sg.region_params ctx
+  in
+  (* Generate the type substitution
+   * Note that we need the substitution to map the type variables to
+   * [rty] types (not [ety]). In order to do that, we convert the
+   * type parameters to types with regions. This is possible only
+   * if those types don't contain any regions.
+   * This is a current limitation of the analysis: there is still some
+   * work to do to properly handle full type parametrization.
+   * *)
+  let rtype_params = List.map ety_no_regions_to_rty type_params in
+  let tsubst =
+    Subst.make_type_subst
+      (List.map (fun v -> v.T.index) sg.type_params)
+      rtype_params
+  in
+  (* Substitute the signature *)
+  let inst_sg = Subst.substitute_signature asubst rsubst tsubst sg in
+  (* Generate a fresh symbolic value for the result *)
+  let res_sv_ty = inst_sg.A.output in
+  let ctx, res_sv =
+    mk_fresh_symbolic_proj_comp T.RegionId.Set.empty res_sv_ty ctx
+  in
+  (* Generate the abstractions from the region groups *)
+  let generate_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) :
+      C.eval_ctx * V.abs =
+    raise Unimplemented
+  in
+  let ctx, abs =
+    List.fold_left_map generate_abs ctx inst_sg.A.regions_hierarchy
+  in
+  (* Add the abstractions to the context *)
+  let abs = List.rev (List.map (fun abs -> C.Abs abs) abs) in
+  let ctx = { ctx with C.env = List.append abs ctx.C.env } in
+  (* Synthesis *)
+  S.synthesize_local_function_call fid region_params type_params args dest
+    res_sv.V.svalue;
+  (* Return *)
+  ctx
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
@@ -4167,7 +4227,6 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.FunDefId.id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result list =
-  S.synthesize_local_function_call fid region_params type_params args dest;
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_def ctx fid in
   match config.mode with
@@ -4175,8 +4234,11 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
       eval_local_function_call_concrete config ctx fid region_params type_params
         args dest
   | SymbolicMode ->
-      eval_local_function_call_symbolic config ctx fid region_params type_params
-        args dest
+      [
+        Ok
+          (eval_local_function_call_symbolic config ctx fid region_params
+             type_params args dest);
+      ]
 
 (** Evaluate a statement seen as a function body (auxiliary helper for
     [eval_statement]) *)
@@ -4222,6 +4284,7 @@ module Test = struct
         C.env = [];
         C.symbolic_counter = V.SymbolicValueId.generator_zero;
         C.borrow_counter = V.BorrowId.generator_zero;
+        C.region_counter = T.RegionId.generator_zero;
         C.abstraction_counter = V.AbstractionId.generator_zero;
       }
     in

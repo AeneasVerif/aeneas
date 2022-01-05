@@ -71,6 +71,8 @@ type eval_ctx = {
   (* TODO: make this global? *)
   borrow_counter : BorrowId.generator;
   (* TODO: make this global? *)
+  region_counter : RegionId.generator;
+  (* TODO: make this global? *)
   abstraction_counter : AbstractionId.generator; (* TODO: make this global? *)
 }
 [@@deriving show]
@@ -83,6 +85,14 @@ let fresh_symbolic_value_id (ctx : eval_ctx) : eval_ctx * SymbolicValueId.id =
 let fresh_borrow_id (ctx : eval_ctx) : eval_ctx * BorrowId.id =
   let id, counter' = BorrowId.fresh ctx.borrow_counter in
   ({ ctx with borrow_counter = counter' }, id)
+
+let fresh_region_id (ctx : eval_ctx) : eval_ctx * RegionId.id =
+  let id, counter' = RegionId.fresh ctx.region_counter in
+  ({ ctx with region_counter = counter' }, id)
+
+let fresh_abstraction_id (ctx : eval_ctx) : eval_ctx * AbstractionId.id =
+  let id, counter' = AbstractionId.fresh ctx.abstraction_counter in
+  ({ ctx with abstraction_counter = counter' }, id)
 
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
