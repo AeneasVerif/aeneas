@@ -3778,9 +3778,8 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
   | _ -> failwith "Inconsistent state"
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_new_inst_sig (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list) :
-    A.inst_fun_sig =
+let eval_box_new_inst_sig (region_params : T.erased_region list)
+    (type_params : T.ety list) : A.inst_fun_sig =
   (* The signature is:
      `T -> Box<T>`
      where T is the type pram
@@ -3795,9 +3794,9 @@ let eval_box_new_inst_sig (config : C.config)
 
 (** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
     and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
-let eval_box_deref_mut_or_shared_inst_sig (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (is_mut : bool) (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig =
+let eval_box_deref_mut_or_shared_inst_sig (region_params : T.erased_region list)
+    (type_params : T.ety list) (is_mut : bool) (ctx : C.eval_ctx) :
+    C.eval_ctx * A.inst_fun_sig =
   (* The signature is:
      `&'a (mut) Box<T> -> &'a (mut) T`
      where T is the type param
@@ -3825,20 +3824,18 @@ let eval_box_deref_mut_or_shared_inst_sig (config : C.config)
   | _ -> failwith "Inconsistent state"
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_deref_inst_sig (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig =
+let eval_box_deref_inst_sig (region_params : T.erased_region list)
+    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig
+    =
   let is_mut = false in
-  eval_box_deref_mut_or_shared_inst_sig config region_params type_params is_mut
-    ctx
+  eval_box_deref_mut_or_shared_inst_sig region_params type_params is_mut ctx
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_deref_mut_inst_sig (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig =
+let eval_box_deref_mut_inst_sig (region_params : T.erased_region list)
+    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig
+    =
   let is_mut = true in
-  eval_box_deref_mut_or_shared_inst_sig config region_params type_params is_mut
-    ctx
+  eval_box_deref_mut_or_shared_inst_sig region_params type_params is_mut ctx
 
 (** Evaluate a non-local function call in concrete mode *)
 let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
@@ -4117,7 +4114,7 @@ and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.FunDefId.id) (region_params : T.erased_region list)
+    (fid : A.FunDefId.id) (_region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result list =
   (* Retrieve the (correctly instantiated) body *)
@@ -4317,12 +4314,10 @@ and eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
        * instantiated signatures, and delegate the work to an auxiliary function *)
       let ctx, inst_sig =
         match fid with
-        | A.BoxNew ->
-            (ctx, eval_box_new_inst_sig config region_params type_params)
-        | A.BoxDeref ->
-            eval_box_deref_inst_sig config region_params type_params ctx
+        | A.BoxNew -> (ctx, eval_box_new_inst_sig region_params type_params)
+        | A.BoxDeref -> eval_box_deref_inst_sig region_params type_params ctx
         | A.BoxDerefMut ->
-            eval_box_deref_mut_inst_sig config region_params type_params ctx
+            eval_box_deref_mut_inst_sig region_params type_params ctx
         | A.BoxFree -> failwith "Unreachable"
         (* should have been treated above *)
       in
