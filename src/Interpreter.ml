@@ -2917,8 +2917,9 @@ let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
   *)
 let rec type_is_primitively_copyable (ty : T.ety) : bool =
   match ty with
-  | T.Adt (_, _, _) | T.TypeVar _ | T.Never | T.Str | T.Array _ | T.Slice _ ->
-      false
+  | T.Adt ((T.AdtId _ | T.Assumed _), _, _) -> false
+  | T.Adt (T.Tuple, _, tys) -> List.for_all type_is_primitively_copyable tys
+  | T.TypeVar _ | T.Never | T.Str | T.Array _ | T.Slice _ -> false
   | T.Bool | T.Char | T.Integer _ -> true
   | T.Ref (_, _, T.Mut) -> false
   | T.Ref (_, _, T.Shared) -> true
@@ -2931,7 +2932,8 @@ let rec type_is_primitively_copyable (ty : T.ety) : bool =
     Also, this function is actually more general than it should be: it can be used
     to copy concrete ADT values, while ADT copy should be done through the Copy
     trait (i.e., by calling a dedicated function). This is why we added a parameter
-    to control this copy.
+    to control this copy. Note that here by ADT we mean the user-defined ADTs
+    (not tuples or assumed types).
  *)
 let rec copy_value (allow_adt_copy : bool) (config : C.config)
     (ctx : C.eval_ctx) (v : V.typed_value) : C.eval_ctx * V.typed_value =
@@ -2942,11 +2944,11 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
   match v.V.value with
   | V.Concrete _ -> (ctx, v)
   | V.Adt av ->
-      assert allow_adt_copy;
       (* Sanity check *)
       (match v.V.ty with
       | T.Adt (T.Assumed _, _, _) -> failwith "Can't copy an assumed value"
-      | T.Adt ((T.AdtId _ | T.Tuple), _, _) -> () (* Ok *)
+      | T.Adt (T.AdtId _, _, _) -> assert allow_adt_copy
+      | T.Adt (T.Tuple, _, _) -> () (* Ok *)
       | _ -> failwith "Unreachable");
       let ctx, fields =
         List.fold_left_map
