@@ -3906,75 +3906,6 @@ let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
           (* Return *)
           Ok ctx)
 
-(** Evaluate a non-local function call in concrete mode *)
-let eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx =
-  (* Sanity check: make sure the type parameters don't contain regions -
-   * this is a current limitation of our synthesis *)
-  assert (List.for_all (fun ty -> not (ty_has_regions ty)) type_params);
-
-  (* There are two cases (and this is extremely annoying):
-     - the function is not box_free
-     - the function is box_free
-       See [eval_box_free]
-  *)
-  match fid with
-  | A.BoxFree ->
-      (* Degenerate case: box_free - note that this is not really a function
-       * call *)
-      eval_box_free config region_params type_params args dest ctx
-  | _ ->
-      (* "Normal" case: not box_free *)
-      (* In symbolic mode, the behaviour of a function call is completely defined
-       * by the signature of the function: we thus simply generate correctly
-       * instantiated signatures, and delegate the work to an auxiliary function *)
-      let ctx, inst_sig =
-        match fid with
-        | A.BoxNew ->
-            (ctx, eval_box_new_inst_sig config region_params type_params)
-        | A.BoxDeref ->
-            eval_box_deref_inst_sig config region_params type_params ctx
-        | A.BoxDerefMut ->
-            eval_box_deref_mut_inst_sig config region_params type_params ctx
-        | A.BoxFree -> failwith "Unreachable"
-        (* should have been treated above *)
-      in
-
-      raise Unimplemented
-
-(** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
-    (auxiliary helper for [eval_statement]) *)
-let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx eval_result =
-  (* Debug *)
-  L.log#ldebug
-    (lazy
-      (let type_params =
-         "["
-         ^ String.concat ", " (List.map (ety_to_string ctx) type_params)
-         ^ "]"
-       in
-       let args =
-         "[" ^ String.concat ", " (List.map (operand_to_string ctx) args) ^ "]"
-       in
-       let dest = place_to_string ctx dest in
-       "eval_non_local_function_call:\n- fid:" ^ A.show_assumed_fun_id fid
-       ^ "\n- type_params: " ^ type_params ^ "\n- args: " ^ args ^ "\n- dest: "
-       ^ dest));
-
-  match config.mode with
-  | C.ConcreteMode ->
-      eval_non_local_function_call_concrete config ctx fid region_params
-        type_params args dest
-  | C.SymbolicMode ->
-      Ok
-        (eval_non_local_function_call_symbolic config ctx fid region_params
-           type_params args dest)
-
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result list =
@@ -4359,6 +4290,77 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     ret_spc.V.svalue;
   (* Return *)
   ctx
+
+(** Evaluate a non-local function call in symbolic mode *)
+and eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
+    C.eval_ctx =
+  (* Sanity check: make sure the type parameters don't contain regions -
+   * this is a current limitation of our synthesis *)
+  assert (List.for_all (fun ty -> not (ty_has_regions ty)) type_params);
+
+  (* There are two cases (and this is extremely annoying):
+     - the function is not box_free
+     - the function is box_free
+       See [eval_box_free]
+  *)
+  match fid with
+  | A.BoxFree ->
+      (* Degenerate case: box_free - note that this is not really a function
+       * call: no need to call a "synthesize_..." function *)
+      eval_box_free config region_params type_params args dest ctx
+  | _ ->
+      (* "Normal" case: not box_free *)
+      (* In symbolic mode, the behaviour of a function call is completely defined
+       * by the signature of the function: we thus simply generate correctly
+       * instantiated signatures, and delegate the work to an auxiliary function *)
+      let ctx, inst_sig =
+        match fid with
+        | A.BoxNew ->
+            (ctx, eval_box_new_inst_sig config region_params type_params)
+        | A.BoxDeref ->
+            eval_box_deref_inst_sig config region_params type_params ctx
+        | A.BoxDerefMut ->
+            eval_box_deref_mut_inst_sig config region_params type_params ctx
+        | A.BoxFree -> failwith "Unreachable"
+        (* should have been treated above *)
+      in
+
+      (* Evaluate the function call *)
+      eval_function_call_symbolic_from_inst_sig config ctx (A.Assumed fid)
+        inst_sig region_params type_params args dest
+
+(** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
+    (auxiliary helper for [eval_statement]) *)
+and eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
+    C.eval_ctx eval_result =
+  (* Debug *)
+  L.log#ldebug
+    (lazy
+      (let type_params =
+         "["
+         ^ String.concat ", " (List.map (ety_to_string ctx) type_params)
+         ^ "]"
+       in
+       let args =
+         "[" ^ String.concat ", " (List.map (operand_to_string ctx) args) ^ "]"
+       in
+       let dest = place_to_string ctx dest in
+       "eval_non_local_function_call:\n- fid:" ^ A.show_assumed_fun_id fid
+       ^ "\n- type_params: " ^ type_params ^ "\n- args: " ^ args ^ "\n- dest: "
+       ^ dest));
+
+  match config.mode with
+  | C.ConcreteMode ->
+      eval_non_local_function_call_concrete config ctx fid region_params
+        type_params args dest
+  | C.SymbolicMode ->
+      Ok
+        (eval_non_local_function_call_symbolic config ctx fid region_params
+           type_params args dest)
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
