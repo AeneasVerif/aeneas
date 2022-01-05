@@ -39,6 +39,8 @@ let erase_regions (ty : T.rty) : T.ety =
 
     Return the list of new regions and appropriate substitutions from the
     original region variables to the fresh regions.
+    
+    TODO: simplify? we only need the subst `T.RegionVarId.id -> T.RegionId.id`
   *)
 let fresh_regions_with_substs (region_vars : T.region_var list)
     (ctx : C.eval_ctx) :

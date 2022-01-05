@@ -4185,7 +4185,7 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
     A.RegionGroupId.Map.find rg_id asubst_map
   in
   (* Generate fresh regions and their substitutions *)
-  let ctx, fresh_regions, rsubst, _ =
+  let ctx, _, rsubst, _ =
     Subst.fresh_regions_with_substs sg.region_params ctx
   in
   (* Generate the type substitution
@@ -4204,15 +4204,15 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   in
   (* Substitute the signature *)
   let inst_sg = Subst.substitute_signature asubst rsubst tsubst sg in
-  (* Generate a fresh symbolic value for the result *)
-  let res_sv_ty = inst_sg.A.output in
-  let ctx, res_spc =
-    mk_fresh_symbolic_proj_comp T.RegionId.Set.empty res_sv_ty ctx
+  (* Generate a fresh symbolic value for the return value *)
+  let ret_sv_ty = inst_sg.A.output in
+  let ctx, ret_spc =
+    mk_fresh_symbolic_proj_comp T.RegionId.Set.empty ret_sv_ty ctx
   in
-  let res_value = mk_typed_value_from_proj_comp res_spc in
-  let res_av = V.ASymbolic (V.AProjLoans res_spc.V.svalue) in
-  let res_av : V.typed_avalue =
-    { V.value = res_av; V.ty = res_spc.V.svalue.V.sv_ty }
+  let ret_value = mk_typed_value_from_proj_comp ret_spc in
+  let ret_av = V.ASymbolic (V.AProjLoans ret_spc.V.svalue) in
+  let ret_av : V.typed_avalue =
+    { V.value = ret_av; V.ty = ret_spc.V.svalue.V.sv_ty }
   in
   (* Evaluate the input operands *)
   let ctx, args = eval_operands config ctx args in
@@ -4241,7 +4241,7 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
         ctx args_with_rtypes
     in
     (* Group the input and output values *)
-    let avalues = List.append args_projs [ res_av ] in
+    let avalues = List.append args_projs [ ret_av ] in
     (* Create the abstraction *)
     let abs = { V.abs_id; parents; regions; avalues } in
     (* Insert the abstraction in the context *)
@@ -4251,10 +4251,10 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   in
   let ctx = List.fold_left gen_abs ctx inst_sg.A.regions_hierarchy in
   (* Move the return value to its destination *)
-  let ctx = assign_to_place config ctx res_value dest in
+  let ctx = assign_to_place config ctx ret_value dest in
   (* Synthesis *)
   S.synthesize_local_function_call fid region_params type_params args dest
-    res_spc.V.svalue;
+    ret_spc.V.svalue;
   (* Return *)
   ctx
 
@@ -4264,8 +4264,6 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
     (fid : A.FunDefId.id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result list =
-  (* Retrieve the (correctly instantiated) body *)
-  let def = C.ctx_lookup_fun_def ctx fid in
   match config.mode with
   | ConcreteMode ->
       eval_local_function_call_concrete config ctx fid region_params type_params
