@@ -3098,14 +3098,26 @@ let eval_unary_op_concrete (config : C.config) (ctx : C.eval_ctx)
       match mk_scalar sv.int_ty i with
       | Error _ -> Error Panic
       | Ok sv -> Ok (ctx, { v with V.value = V.Concrete (V.Scalar sv) }))
-  | (E.Not | E.Neg), Symbolic _ -> raise Unimplemented (* TODO *)
   | _ -> failwith "Invalid value for unop"
 
 let eval_unary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
     (unop : E.unop) (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result
     =
-  S.synthesize_unary_op unop op;
-  raise Unimplemented
+  (* Evaluate the operand *)
+  let ctx, v = eval_operand config ctx op in
+  (* Generate a fresh symbolic value to store the result *)
+  let ctx, res_sv_id = C.fresh_symbolic_value_id ctx in
+  let res_sv_ty =
+    match (unop, v.V.ty) with
+    | E.Not, T.Bool -> T.Bool
+    | E.Neg, T.Integer int_ty -> T.Integer int_ty
+    | _ -> failwith "Invalid parameters for unop"
+  in
+  let res_sv = { V.sv_id = res_sv_id; sv_ty = res_sv_ty } in
+  (* Synthesize *)
+  S.synthesize_unary_op unop v res_sv;
+  (* Return *)
+  Ok (ctx, mk_typed_value_from_symbolic_value res_sv)
 
 let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : E.unop)
     (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result =

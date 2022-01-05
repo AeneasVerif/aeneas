@@ -79,6 +79,11 @@ let mk_typed_value_from_proj_comp (sv : V.symbolic_proj_comp) : V.typed_value =
   let value = V.Symbolic sv in
   { V.value; ty }
 
+let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
+    V.typed_value =
+  let spc = { V.svalue; rset_ended = T.RegionId.Set.empty } in
+  mk_typed_value_from_proj_comp spc
+
 let mk_aproj_loans_from_proj_comp (sv : V.symbolic_proj_comp) : V.typed_avalue =
   let ty = sv.V.svalue.V.sv_ty in
   let proj = V.AProjLoans sv.V.svalue in

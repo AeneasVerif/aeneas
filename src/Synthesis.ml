@@ -31,7 +31,9 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
     (see : symbolic_expansion) : unit =
   ()
 
-let synthesize_unary_op (unop : E.unop) (op : E.operand) : unit = ()
+let synthesize_unary_op (unop : E.unop) (op : V.typed_value)
+    (dest : V.symbolic_value) : unit =
+  ()
 
 let synthesize_binary_op (binop : E.binop) (op1 : E.operand) (op2 : E.operand) :
     unit =
