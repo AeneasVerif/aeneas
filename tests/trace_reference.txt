@@ -724,7 +724,7 @@ fn test_loop4(max : u32) -> u32 {
   var@18 : (u32, bool);
   var@19 : (u32, bool);
 
-  i := 0: u32
+  i := 1: u32
   j := 0: u32
   s := 0: u32
   loop {

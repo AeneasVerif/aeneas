@@ -5,6 +5,8 @@ open Expressions
 
 module FunDefId = IdGen ()
 
+module RegionGroupId = IdGen ()
+
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;
@@ -24,9 +26,26 @@ type fun_id = Local of FunDefId.id | Assumed of assumed_fun_id
 
 type assertion = { cond : operand; expected : bool } [@@deriving show]
 
+type region_group = {
+  id : RegionGroupId.id;
+  regions : RegionVarId.id list;
+  parents : RegionGroupId.id list;
+}
+[@@deriving show]
+(** A group of regions.
+
+    Results from a lifetime analysis: we group the regions with the same
+    lifetime together, and compute the hierarchy between the regions.
+    This is necessary to introduce the proper abstraction with the
+    proper constraints, when evaluating a function call in symbolic mode.
+*)
+
+type region_groups = region_group list [@@deriving show]
+
 type fun_sig = {
   region_params : region_var list;
   num_early_bound_regions : int;
+  regions_hierarchy : region_groups;
   type_params : type_var list;
   inputs : sty list;
   output : sty;
