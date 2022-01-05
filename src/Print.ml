@@ -492,17 +492,19 @@ module Contexts = struct
       v.name
     in
     let type_def_id_to_string def_id =
-      let def = T.TypeDefId.nth ctx.type_context def_id in
+      let def = T.TypeDefId.nth ctx.type_context.type_defs def_id in
       PT.name_to_string def.name
     in
     let adt_variant_to_string =
-      type_ctx_to_adt_variant_to_string_fun ctx.type_context
+      type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_defs
     in
     let var_id_to_string vid =
       let bv = C.ctx_lookup_binder ctx vid in
       binder_to_string bv
     in
-    let adt_field_names = type_ctx_to_adt_field_names_fun ctx.C.type_context in
+    let adt_field_names =
+      type_ctx_to_adt_field_names_fun ctx.type_context.type_defs
+    in
     {
       rvar_to_string;
       r_to_string;
@@ -604,7 +606,7 @@ module CfimAst = struct
   let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : ast_formatter =
     let ctx_fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let adt_field_to_string =
-      type_ctx_to_adt_field_to_string_fun ctx.type_context
+      type_ctx_to_adt_field_to_string_fun ctx.type_context.type_defs
     in
     let fun_def_id_to_string def_id =
       let def = A.FunDefId.nth ctx.fun_context def_id in

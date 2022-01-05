@@ -60,8 +60,10 @@ type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 type config = { mode : interpreter_mode; check_invariants : bool }
 [@@deriving show]
 
+type type_context = { type_defs : type_def list } [@@deriving show]
+
 type eval_ctx = {
-  type_context : type_def list;
+  type_context : type_context;
   fun_context : fun_def list;
   type_vars : type_var list;
   env : env;
@@ -94,7 +96,7 @@ let ctx_lookup_binder (ctx : eval_ctx) (vid : VarId.id) : binder =
   lookup ctx.env
 
 let ctx_lookup_type_def (ctx : eval_ctx) (tid : TypeDefId.id) : type_def =
-  TypeDefId.nth ctx.type_context tid
+  TypeDefId.nth ctx.type_context.type_defs tid
 
 let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
   FunDefId.nth ctx.fun_context fid

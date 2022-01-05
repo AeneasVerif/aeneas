@@ -2361,8 +2361,8 @@ let expand_bottom_value_from_projection (config : C.config)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         T.Adt (T.AdtId def_id', regions, types) ) ->
         assert (def_id = def_id');
-        compute_expanded_bottom_adt_value ctx.type_context def_id opt_variant_id
-          regions types
+        compute_expanded_bottom_adt_value ctx.type_context.type_defs def_id
+          opt_variant_id regions types
     (* Tuples *)
     | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
         assert (arity = List.length tys);
@@ -2391,7 +2391,7 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
     (ctx : C.eval_ctx) : (C.eval_ctx * symbolic_expansion) list =
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
-  let def = T.TypeDefId.nth ctx.type_context def_id in
+  let def = C.ctx_lookup_type_def ctx def_id in
   assert (List.length regions = List.length def.T.region_params);
   (* Retrieve, for every variant, the list of its instantiated field types *)
   let variants_fields_types =
@@ -2976,7 +2976,7 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
       assert (def_id = def_id');
       (* Check that the adt definition only has one variant with no fields,
          compute the variant id at the same time. *)
-      let def = T.TypeDefId.nth ctx.type_context def_id in
+      let def = C.ctx_lookup_type_def ctx def_id in
       assert (List.length def.region_params = 0);
       assert (List.length def.type_params = 0);
       let variant_id =
@@ -3382,14 +3382,14 @@ let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
           else
             (* Replace the value *)
             let bottom_v =
-              compute_expanded_bottom_adt_value ctx.type_context def_id
-                (Some variant_id) regions types
+              compute_expanded_bottom_adt_value ctx.type_context.type_defs
+                def_id (Some variant_id) regions types
             in
             let ctx = write_place_unwrap config access p bottom_v ctx in
             Ok (ctx, Unit))
   | T.Adt (T.AdtId def_id, regions, types), V.Bottom ->
       let bottom_v =
-        compute_expanded_bottom_adt_value ctx.type_context def_id
+        compute_expanded_bottom_adt_value ctx.type_context.type_defs def_id
           (Some variant_id) regions types
       in
       let ctx = write_place_unwrap config access p bottom_v ctx in
@@ -3894,7 +3894,7 @@ module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
     environment
  *)
-  let test_unit_function (type_defs : T.type_def list)
+  let test_unit_function (type_context : C.type_context)
       (fun_defs : A.fun_def list) (fid : A.FunDefId.id) : unit eval_result =
     (* Retrieve the function declaration *)
     let fdef = A.FunDefId.nth fun_defs fid in
@@ -3911,7 +3911,7 @@ module Test = struct
     (* Create the evaluation context *)
     let ctx =
       {
-        C.type_context = type_defs;
+        C.type_context;
         C.fun_context = fun_defs;
         C.type_vars = [];
         C.env = [];
@@ -3942,7 +3942,8 @@ module Test = struct
       (fun_defs : A.fun_def list) : unit =
     let test_fun (def : A.fun_def) : unit =
       if fun_def_is_unit def then
-        match test_unit_function type_defs fun_defs def.A.def_id with
+        let type_ctx = { C.type_defs } in
+        match test_unit_function type_ctx fun_defs def.A.def_id with
         | Error _ -> failwith "Unit test failed"
         | Ok _ -> ()
       else ()
