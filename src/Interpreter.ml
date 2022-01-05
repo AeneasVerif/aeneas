@@ -416,11 +416,6 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
   in
   { V.value; V.ty }
 
-let apply_proj_borrows_in_context (check_symbolic_no_ended : bool)
-    (ctx : C.eval_ctx) (regions : T.RegionId.set_t) (v : V.typed_value)
-    (ty : T.rty) : C.eval_ctx * V.typed_avalue =
-  raise Unimplemented
-
 (** Convert a symbolic expansion to a value.
 
     If the expansion is a mutable reference expansion, it converts it to a borrow.
@@ -848,6 +843,24 @@ let prepare_reborrows (config : C.config) (allow_reborrows : bool)
         apply_reborrows !reborrows ctx
   in
   (fresh_reborrow, apply_registered_reborrows)
+
+let apply_proj_borrows_on_input_value (config : C.config) (ctx : C.eval_ctx)
+    (regions : T.RegionId.set_t) (v : V.typed_value) (ty : T.rty) :
+    C.eval_ctx * V.typed_avalue =
+  let check_symbolic_no_ended = true in
+  let allow_reborrows = true in
+  (* Prepare the reborrows *)
+  let fresh_reborrow, apply_registered_reborrows =
+    prepare_reborrows config allow_reborrows ctx
+  in
+  (* Apply the projector *)
+  let av =
+    apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow regions v ty
+  in
+  (* Apply the reborrows *)
+  let ctx = apply_registered_reborrows ctx in
+  (* Return *)
+  (ctx, av)
 
 (** Auxiliary function to end borrows. See [give_back].
     
@@ -4275,12 +4288,10 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
         T.RegionId.Set.empty rg.A.regions
     in
     (* Project over the input values *)
-    let check_symbolic_no_ended = true in
     let ctx, args_projs =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_in_context check_symbolic_no_ended ctx regions arg
-            arg_rty)
+          apply_proj_borrows_on_input_value config ctx regions arg arg_rty)
         ctx args_with_rtypes
     in
     (* Group the input and output values *)
