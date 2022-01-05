@@ -2522,7 +2522,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
       ctx
   in
   (* Update the synthesized program *)
-  S.synthesize_symbolic_expansion original_sv see;
+  S.synthesize_symbolic_expansion_no_branching original_sv see;
   (* Return *)
   ctx
 
@@ -2554,19 +2554,21 @@ let expand_symbolic_value_borrow (config : C.config)
           see ctx
       in
       (* Update the synthesized program *)
-      S.synthesize_symbolic_expansion original_sv see;
+      S.synthesize_symbolic_expansion_no_branching original_sv see;
       (* Return *)
       ctx
   | T.Shared ->
       expand_symbolic_value_shared_borrow config original_sv ended_regions
         ref_ty ctx
 
-(** Expand a symbolic value which is not an enumeration with several variants.
+(** Expand a symbolic value which is not an enumeration with several variants
+    (i.e., in a situation where it doesn't lead to branching).
 
-    This function is used when exploring a path.
+    This function is used when exploring paths.
  *)
-let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
-    (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) : C.eval_ctx =
+let expand_symbolic_value_no_branching (config : C.config)
+    (pe : E.projection_elem) (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) :
+    C.eval_ctx =
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
   let original_sv = sp.V.svalue in
@@ -2591,7 +2593,7 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
               apply_symbolic_expansion_non_borrow config original_sv see ctx
             in
             (* Update the synthesized program *)
-            S.synthesize_symbolic_expansion original_sv see;
+            S.synthesize_symbolic_expansion_no_branching original_sv see;
             (* Return *)
             ctx
         | _ -> failwith "Unexpected")
@@ -2607,7 +2609,7 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
           apply_symbolic_expansion_non_borrow config original_sv see ctx
         in
         (* Update the synthesized program *)
-        S.synthesize_symbolic_expansion original_sv see;
+        S.synthesize_symbolic_expansion_no_branching original_sv see;
         (* Return *)
         ctx
     (* Boxes *)
@@ -2620,7 +2622,7 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
           apply_symbolic_expansion_non_borrow config original_sv see ctx
         in
         (* Update the synthesized program *)
-        S.synthesize_symbolic_expansion original_sv see;
+        S.synthesize_symbolic_expansion_no_branching original_sv see;
         (* Return *)
         ctx
     (* Borrows *)
@@ -2635,6 +2637,45 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
   assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
   (* Return *)
   ctx
+
+(** Expand a symbolic enumeration value.
+
+    This might lead to branching.
+ *)
+let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_proj_comp)
+    (ctx : C.eval_ctx) : C.eval_ctx list =
+  (* Compute the expanded value - note that when doing so, we may introduce
+   * fresh symbolic values in the context (which thus gets updated) *)
+  let original_sv = sp.V.svalue in
+  let rty = original_sv.V.sv_ty in
+  let ended_regions = sp.V.rset_ended in
+  match rty with
+  (*  The value should be a "regular" ADTs *)
+  | T.Adt (T.AdtId def_id, regions, types) -> (
+      (* Compute the expanded value - there should be exactly one because we
+       * don't allow to expand enumerations with strictly more than one variant *)
+      let expand_enumerations = true in
+      match
+        compute_expanded_symbolic_adt_value expand_enumerations ended_regions
+          def_id regions types ctx
+      with
+      | res ->
+          (* Update the synthesized program *)
+          let seel = List.map (fun (_, x) -> x) res in
+          S.synthesize_symbolic_expansion_branching original_sv seel;
+          (* Apply in the context *)
+          let apply (ctx, see) : C.eval_ctx =
+            let ctx =
+              apply_symbolic_expansion_non_borrow config original_sv see ctx
+            in
+            (* Sanity check: the symbolic value has disappeared *)
+            assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
+            (* Return *)
+            ctx
+          in
+          List.map apply res
+      | _ -> failwith "Unexpected")
+  | _ -> failwith "Unexpected"
 
 (** Update the environment to be able to read a place.
 
@@ -2658,7 +2699,7 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
             activate_inactivated_mut_borrow config Outer bid ctx
         | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_non_enum config pe sp ctx
+            expand_symbolic_value_no_branching config pe sp ctx
         | FailBottom (_, _, _) ->
             (* We can't expand [Bottom] values while reading them *)
             failwith "Found [Bottom] while reading a place"
@@ -2685,7 +2726,7 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
             activate_inactivated_mut_borrow config Outer bid ctx
         | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_non_enum config pe sp ctx
+            expand_symbolic_value_no_branching config pe sp ctx
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
             expand_bottom_value_from_projection config access p remaining_pes pe
@@ -3246,9 +3287,9 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
   | C.ConcreteMode -> eval_binary_op_concrete config ctx binop op1 op2
   | C.SymbolicMode -> eval_binary_op_symbolic config ctx binop op1 op2
 
-let eval_rvalue_discriminant (config : C.config) (ctx : C.eval_ctx)
-    (p : E.place) : (C.eval_ctx * V.typed_value) list =
-  S.synthesize_eval_rvalue_discriminant p;
+(** Evaluate the discriminant of a concrete (i.e., non symbolic) ADT value *)
+let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
+    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
   (* Note that discriminant values have type `isize` *)
   (* Access the value *)
   let access = Read in
@@ -3265,12 +3306,24 @@ let eval_rvalue_discriminant (config : C.config) (ctx : C.eval_ctx)
               failwith "Disciminant id out of range"
               (* Should really never happen *)
           | Ok sv ->
-              [
-                (ctx, { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize });
-              ]))
+              (ctx, { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }))
+      )
+  | _ -> failwith "Invalid input for `discriminant`"
+
+let eval_rvalue_discriminant (config : C.config) (p : E.place)
+    (ctx : C.eval_ctx) : (C.eval_ctx * V.typed_value) list =
+  S.synthesize_eval_rvalue_discriminant p;
+  (* Note that discriminant values have type `isize` *)
+  (* Access the value *)
+  let access = Read in
+  let ctx, v = prepare_rplace config access p ctx in
+  match v.V.value with
+  | Adt av -> [ eval_rvalue_discriminant_concrete config p ctx ]
   | Symbolic sv ->
-      (* We need to perform a symbolic expansion *)
-      raise Unimplemented
+      (* Expand the symbolic value - may lead to branching *)
+      let ctxl = expand_symbolic_enum_value config sv ctx in
+      (* This time the value is concrete: reevaluate *)
+      List.map (eval_rvalue_discriminant_concrete config p) ctxl
   | _ -> failwith "Invalid input for `discriminant`"
 
 let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
@@ -3384,7 +3437,7 @@ let eval_rvalue_non_discriminant (config : C.config) (ctx : C.eval_ctx)
 let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
     (C.eval_ctx * V.typed_value) list eval_result =
   match rvalue with
-  | E.Discriminant p -> Ok (eval_rvalue_discriminant config ctx p)
+  | E.Discriminant p -> Ok (eval_rvalue_discriminant config p ctx)
   | _ -> (
       match eval_rvalue_non_discriminant config ctx rvalue with
       | Error e -> Error e

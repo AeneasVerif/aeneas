@@ -26,9 +26,18 @@ open InterpreterUtils
  *   `s := op1 + op2`
  * *)
 
-(** TODO: rename to synthesize_symbolic_expansion_{non_enum,one_variant}? *)
-let synthesize_symbolic_expansion (sv : V.symbolic_value)
+(** Synthesize code for a symbolic expansion which doesn't lead to branching
+    (i.e., applied on a value which is not an enumeration with several variants).
+ *)
+let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
     (see : symbolic_expansion) : unit =
+  ()
+
+(** Synthesize code for a symbolic expansion which leads to branching
+    (for instance when evaluating the discriminant of a symbolic value).
+ *)
+let synthesize_symbolic_expansion_branching (sv : V.symbolic_value)
+    (seel : symbolic_expansion list) : unit =
   ()
 
 let synthesize_unary_op (unop : E.unop) (op : V.typed_value)
