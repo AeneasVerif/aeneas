@@ -69,7 +69,9 @@ type eval_ctx = {
   env : env;
   symbolic_counter : SymbolicValueId.generator;
   (* TODO: make this global? *)
-  borrow_counter : BorrowId.generator; (* TODO: make this global? *)
+  borrow_counter : BorrowId.generator;
+  (* TODO: make this global? *)
+  abstraction_counter : AbstractionId.generator; (* TODO: make this global? *)
 }
 [@@deriving show]
 (** Evaluation context *)

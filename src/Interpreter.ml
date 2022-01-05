@@ -3781,31 +3781,11 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
       Ok ctx
   | _ -> failwith "Inconsistent state"
 
-(** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
-    (auxiliary helper for [eval_statement]) *)
-let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
+(** Evaluate a non-local function call in concrete mode *)
+let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result =
-  (* Debug *)
-  L.log#ldebug
-    (lazy
-      (let type_params =
-         "["
-         ^ String.concat ", " (List.map (ety_to_string ctx) type_params)
-         ^ "]"
-       in
-       let args =
-         "[" ^ String.concat ", " (List.map (operand_to_string ctx) args) ^ "]"
-       in
-       let dest = place_to_string ctx dest in
-       "eval_non_local_function_call:\n- fid:" ^ A.show_assumed_fun_id fid
-       ^ "\n- type_params: " ^ type_params ^ "\n- args: " ^ args ^ "\n- dest: "
-       ^ dest));
-
-  (* Synthesis *)
-  S.synthesize_non_local_function_call fid region_params type_params args dest;
-
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
      - the function is box_free
@@ -3865,6 +3845,46 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
 
           (* Return *)
           Ok ctx)
+
+(** Evaluate a non-local function call in concrete mode *)
+let eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
+    C.eval_ctx eval_result =
+  (* Synthesis *)
+  S.synthesize_non_local_function_call fid region_params type_params args dest;
+
+  raise Unimplemented
+
+(** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
+    (auxiliary helper for [eval_statement]) *)
+let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
+    C.eval_ctx eval_result =
+  (* Debug *)
+  L.log#ldebug
+    (lazy
+      (let type_params =
+         "["
+         ^ String.concat ", " (List.map (ety_to_string ctx) type_params)
+         ^ "]"
+       in
+       let args =
+         "[" ^ String.concat ", " (List.map (operand_to_string ctx) args) ^ "]"
+       in
+       let dest = place_to_string ctx dest in
+       "eval_non_local_function_call:\n- fid:" ^ A.show_assumed_fun_id fid
+       ^ "\n- type_params: " ^ type_params ^ "\n- args: " ^ args ^ "\n- dest: "
+       ^ dest));
+
+  match config.mode with
+  | C.ConcreteMode ->
+      eval_non_local_function_call_concrete config ctx fid region_params
+        type_params args dest
+  | C.SymbolicMode ->
+      eval_non_local_function_call_symbolic config ctx fid region_params
+        type_params args dest
 
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
@@ -4075,6 +4095,72 @@ and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
       match res with Error err -> Error err | Ok ctx -> Ok (ctx, Unit))
     res
 
+(** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
+and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.FunDefId.id) (region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
+    C.eval_ctx eval_result list =
+  (* Retrieve the (correctly instantiated) body *)
+  let def = C.ctx_lookup_fun_def ctx fid in
+  let tsubst =
+    Subst.make_type_subst
+      (List.map (fun v -> v.T.index) def.A.signature.type_params)
+      type_params
+  in
+  let locals, body = Subst.fun_def_substitute_in_body tsubst def in
+
+  (* Evaluate the input operands *)
+  let ctx, args = eval_operands config ctx args in
+  assert (List.length args = def.A.arg_count);
+
+  (* Push a frame delimiter *)
+  let ctx = ctx_push_frame ctx in
+
+  (* Compute the initial values for the local variables *)
+  (* 1. Push the return value *)
+  let ret_var, locals =
+    match locals with
+    | ret_ty :: locals -> (ret_ty, locals)
+    | _ -> failwith "Unreachable"
+  in
+  let ctx = C.ctx_push_var ctx ret_var (C.mk_bottom ret_var.var_ty) in
+
+  (* 2. Push the input values *)
+  let input_locals, locals = Utilities.list_split_at locals def.A.arg_count in
+  let inputs = List.combine input_locals args in
+  (* Note that this function checks that the variables and their values
+     have the same type (this is important) *)
+  let ctx = C.ctx_push_vars ctx inputs in
+
+  (* 3. Push the remaining local variables (initialized as [Bottom]) *)
+  let ctx = C.ctx_push_uninitialized_vars ctx locals in
+
+  (* Execute the function body *)
+  let res = eval_function_body config ctx body in
+
+  (* Pop the stack frame and move the return value to its destination *)
+  let finish res =
+    match res with
+    | Error Panic -> Error Panic
+    | Ok ctx ->
+        (* Pop the stack frame and retrieve the return value *)
+        let ctx, ret_value = ctx_pop_frame config ctx in
+
+        (* Move the return value to its destination *)
+        let ctx = assign_to_place config ctx ret_value dest in
+
+        (* Return *)
+        Ok ctx
+  in
+  List.map finish res
+
+(** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
+and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
+    (fid : A.FunDefId.id) (region_params : T.erased_region list)
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
+    C.eval_ctx eval_result list =
+  raise Unimplemented
+
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
 and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
@@ -4086,60 +4172,11 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
   let def = C.ctx_lookup_fun_def ctx fid in
   match config.mode with
   | ConcreteMode ->
-      let tsubst =
-        Subst.make_type_subst
-          (List.map (fun v -> v.T.index) def.A.signature.type_params)
-          type_params
-      in
-      let locals, body = Subst.fun_def_substitute_in_body tsubst def in
-
-      (* Evaluate the input operands *)
-      let ctx, args = eval_operands config ctx args in
-      assert (List.length args = def.A.arg_count);
-
-      (* Push a frame delimiter *)
-      let ctx = ctx_push_frame ctx in
-
-      (* Compute the initial values for the local variables *)
-      (* 1. Push the return value *)
-      let ret_var, locals =
-        match locals with
-        | ret_ty :: locals -> (ret_ty, locals)
-        | _ -> failwith "Unreachable"
-      in
-      let ctx = C.ctx_push_var ctx ret_var (C.mk_bottom ret_var.var_ty) in
-
-      (* 2. Push the input values *)
-      let input_locals, locals =
-        Utilities.list_split_at locals def.A.arg_count
-      in
-      let inputs = List.combine input_locals args in
-      (* Note that this function checks that the variables and their values
-         have the same type (this is important) *)
-      let ctx = C.ctx_push_vars ctx inputs in
-
-      (* 3. Push the remaining local variables (initialized as [Bottom]) *)
-      let ctx = C.ctx_push_uninitialized_vars ctx locals in
-
-      (* Execute the function body *)
-      let res = eval_function_body config ctx body in
-
-      (* Pop the stack frame and move the return value to its destination *)
-      let finish res =
-        match res with
-        | Error Panic -> Error Panic
-        | Ok ctx ->
-            (* Pop the stack frame and retrieve the return value *)
-            let ctx, ret_value = ctx_pop_frame config ctx in
-
-            (* Move the return value to its destination *)
-            let ctx = assign_to_place config ctx ret_value dest in
-
-            (* Return *)
-            Ok ctx
-      in
-      List.map finish res
-  | SymbolicMode -> raise Unimplemented
+      eval_local_function_call_concrete config ctx fid region_params type_params
+        args dest
+  | SymbolicMode ->
+      eval_local_function_call_symbolic config ctx fid region_params type_params
+        args dest
 
 (** Evaluate a statement seen as a function body (auxiliary helper for
     [eval_statement]) *)
@@ -4185,6 +4222,7 @@ module Test = struct
         C.env = [];
         C.symbolic_counter = V.SymbolicValueId.generator_zero;
         C.borrow_counter = V.BorrowId.generator_zero;
+        C.abstraction_counter = V.AbstractionId.generator_zero;
       }
     in
 
