@@ -11,6 +11,7 @@ open TypesUtils
 open ValuesUtils
 module Inv = Invariants
 open InterpreterUtils
+module S = Synthesis
 
 (* TODO: check that the value types are correct when evaluating *)
 (* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
@@ -423,12 +424,6 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     | _ -> failwith "Unreachable"
   in
   { V.value; V.ty }
-
-type symbolic_expansion =
-  | SeConcrete of V.constant_value
-  | SeAdt of (T.VariantId.id option * V.symbolic_proj_comp list)
-  | SeMutRef of V.BorrowId.id * V.symbolic_proj_comp
-  | SeSharedRef of V.BorrowId.set_t * V.symbolic_proj_comp
 
 (** Convert a symbolic expansion *which is not a borrow* to a value *)
 let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
@@ -2530,7 +2525,14 @@ let expand_symbolic_value_shared_borrow (config : C.config)
   let ctx, shared_sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
   let see = SeSharedRef (bids, shared_sv) in
   let allow_reborrows = true in
-  apply_symbolic_expansion_to_avalues config allow_reborrows original_sv see ctx
+  let ctx =
+    apply_symbolic_expansion_to_avalues config allow_reborrows original_sv see
+      ctx
+  in
+  (* Update the synthesized program *)
+  S.synthesize_symbolic_expansion original_sv see;
+  (* Return *)
+  ctx
 
 let expand_symbolic_value_borrow (config : C.config)
     (original_sv : V.symbolic_value) (ended_regions : T.RegionId.set_t)
@@ -2555,8 +2557,14 @@ let expand_symbolic_value_borrow (config : C.config)
       in
       (* Expand the symbolic avalues *)
       let allow_reborrows = true in
-      apply_symbolic_expansion_to_avalues config allow_reborrows original_sv see
-        ctx
+      let ctx =
+        apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
+          see ctx
+      in
+      (* Update the synthesized program *)
+      S.synthesize_symbolic_expansion original_sv see;
+      (* Return *)
+      ctx
   | T.Shared ->
       expand_symbolic_value_shared_borrow config original_sv ended_regions
         ref_ty ctx
@@ -2569,7 +2577,8 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
     (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
-  let rty = sp.V.svalue.V.sv_ty in
+  let original_sv = sp.V.svalue in
+  let rty = original_sv.V.sv_ty in
   let ended_regions = sp.V.rset_ended in
   let ctx =
     match (pe, rty) with
@@ -2584,36 +2593,54 @@ let expand_symbolic_value_non_enum (config : C.config) (pe : E.projection_elem)
           compute_expanded_symbolic_adt_value expand_enumerations ended_regions
             def_id regions types ctx
         with
-        | [ (ctx, nv) ] ->
+        | [ (ctx, see) ] ->
             (* Apply in the context *)
-            apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
+            let ctx =
+              apply_symbolic_expansion_non_borrow config original_sv see ctx
+            in
+            (* Update the synthesized program *)
+            S.synthesize_symbolic_expansion original_sv see;
+            (* Return *)
+            ctx
         | _ -> failwith "Unexpected")
     (* Tuples *)
     | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
         assert (arity = List.length tys);
         (* Generate the field values *)
-        let ctx, nv =
+        let ctx, see =
           compute_expanded_symbolic_tuple_value ended_regions tys ctx
         in
         (* Apply in the context *)
-        apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
+        let ctx =
+          apply_symbolic_expansion_non_borrow config original_sv see ctx
+        in
+        (* Update the synthesized program *)
+        S.synthesize_symbolic_expansion original_sv see;
+        (* Return *)
+        ctx
     (* Boxes *)
     | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
-        let ctx, nv =
+        let ctx, see =
           compute_expanded_symbolic_box_value ended_regions boxed_ty ctx
         in
         (* Apply in the context *)
-        apply_symbolic_expansion_non_borrow config sp.V.svalue nv ctx
+        let ctx =
+          apply_symbolic_expansion_non_borrow config original_sv see ctx
+        in
+        (* Update the synthesized program *)
+        S.synthesize_symbolic_expansion original_sv see;
+        (* Return *)
+        ctx
     (* Borrows *)
     | Deref, T.Ref (region, ref_ty, rkind) ->
-        expand_symbolic_value_borrow config sp.V.svalue ended_regions region
+        expand_symbolic_value_borrow config original_sv ended_regions region
           ref_ty rkind ctx
     | _ ->
         failwith
           ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
   in
   (* Sanity check: the symbolic value has disappeared *)
-  assert (not (symbolic_value_id_in_ctx sp.V.svalue.V.sv_id ctx));
+  assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
   (* Return *)
   ctx
 
@@ -3032,8 +3059,9 @@ let eval_two_operands (config : C.config) (ctx : C.eval_ctx) (op1 : E.operand)
   | ctx, [ v1; v2 ] -> (ctx, v1, v2)
   | _ -> failwith "Unreachable"
 
-let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : E.unop)
-    (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result =
+let eval_unary_op_concrete (config : C.config) (ctx : C.eval_ctx)
+    (unop : E.unop) (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result
+    =
   (* Evaluate the operand *)
   let ctx, v = eval_operand config ctx op in
   (* Apply the unop *)
@@ -3048,8 +3076,20 @@ let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : E.unop)
   | (E.Not | E.Neg), Symbolic _ -> raise Unimplemented (* TODO *)
   | _ -> failwith "Invalid value for unop"
 
-let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
-    (op1 : E.operand) (op2 : E.operand) :
+let eval_unary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
+    (unop : E.unop) (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result
+    =
+  S.synthesize_unary_op unop op;
+  raise Unimplemented
+
+let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : E.unop)
+    (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result =
+  match config.mode with
+  | C.ConcreteMode -> eval_unary_op_concrete config ctx unop op
+  | C.SymbolicMode -> eval_unary_op_symbolic config ctx unop op
+
+let eval_binary_op_concrete (config : C.config) (ctx : C.eval_ctx)
+    (binop : E.binop) (op1 : E.operand) (op2 : E.operand) :
     (C.eval_ctx * V.typed_value) eval_result =
   (* Evaluate the operands *)
   let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
@@ -3122,6 +3162,19 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
         in
         match res with Error _ -> Error Panic | Ok v -> Ok (ctx, v))
     | _ -> failwith "Invalid inputs for binop"
+
+let eval_binary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
+    (binop : E.binop) (op1 : E.operand) (op2 : E.operand) :
+    (C.eval_ctx * V.typed_value) eval_result =
+  S.synthesize_binary_op binop op1 op2;
+  raise Unimplemented
+
+let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
+    (op1 : E.operand) (op2 : E.operand) :
+    (C.eval_ctx * V.typed_value) eval_result =
+  match config.mode with
+  | C.ConcreteMode -> eval_binary_op_concrete config ctx binop op1 op2
+  | C.SymbolicMode -> eval_binary_op_symbolic config ctx binop op1 op2
 
 (** Evaluate an rvalue in a given context: return the updated context and
     the computed value

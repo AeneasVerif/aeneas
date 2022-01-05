@@ -620,3 +620,10 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id) (nv : V.avalue)
   (* Check that we updated at least one borrow *)
   assert !r;
   ctx
+
+(** TODO: move to InterpreterSymbolic or sth *)
+type symbolic_expansion =
+  | SeConcrete of V.constant_value
+  | SeAdt of (T.VariantId.id option * V.symbolic_proj_comp list)
+  | SeMutRef of V.BorrowId.id * V.symbolic_proj_comp
+  | SeSharedRef of V.BorrowId.set_t * V.symbolic_proj_comp
