@@ -33,11 +33,17 @@ let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
     (see : symbolic_expansion) : unit =
   ()
 
-(** Synthesize code for a symbolic expansion which leads to branching
-    (for instance when evaluating the discriminant of a symbolic value).
+(** Synthesize code for a symbolic enum expansion (which leads to branching)
  *)
-let synthesize_symbolic_expansion_branching (sv : V.symbolic_value)
+let synthesize_symbolic_expansion_enum_branching (sv : V.symbolic_value)
     (seel : symbolic_expansion list) : unit =
+  ()
+
+let synthesize_symbolic_expansion_if_branching (sv : V.symbolic_value) : unit =
+  ()
+
+let synthesize_symbolic_expansion_switch_int_branching (sv : V.symbolic_value) :
+    unit =
   ()
 
 let synthesize_unary_op (unop : E.unop) (op : V.typed_value)

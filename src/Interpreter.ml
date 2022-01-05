@@ -2661,7 +2661,7 @@ let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_proj_comp)
       in
       (* Update the synthesized program *)
       let seel = List.map (fun (_, x) -> x) res in
-      S.synthesize_symbolic_expansion_branching original_sv seel;
+      S.synthesize_symbolic_expansion_enum_branching original_sv seel;
       (* Apply in the context *)
       let apply (ctx, see) : C.eval_ctx =
         let ctx =
@@ -3867,15 +3867,6 @@ let eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
           (* Return *)
           Ok ctx)
 
-(** Expand a symbolic value over which we perform a switch *)
-let expand_symbolic_switch_scrutinee (config : C.config) (ctx : C.eval_ctx)
-    (sv : V.symbolic_proj_comp) (tgts : A.switch_targets) : C.eval_ctx list =
-  (* (* Expand, depending on the switch kind *)
-     match tgts with
-     | A.If (_, _) ->
-       | A.SwitchInt (int_ty, tgts, otherwise) ->*)
-  raise Unimplemented
-
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result list =
@@ -3975,52 +3966,91 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       in
       (* Apply *)
       eval_loop_body ctx
-  | A.Switch (op, tgts) -> (
-      (* We evaluate the operand in two steps:
-       * first we prepare it, then we check if its value is concrete or
-       * symbolic. If it is concrete, we can then evaluate the operand
-       * directly, otherwise we must first expand the value.
-       * Note that we can't fully evaluate the operand *then* expand the
-       * value if it is symbolic, because the value may have been move
-       * (and thus floating in thin air...)!
-       * *)
-      (* Prepare the operand *)
-      let ctx, op_v = eval_operand_prepare config ctx op in
-      (* Check if the operand is concrete or symbolic, expand it if necessary *)
-      match op_v.V.value with
-      | V.Symbolic sv ->
-          (* Expand the symbolic value *)
-          let ctxl = expand_symbolic_switch_scrutinee config ctx sv tgts in
-          (* The value under scrutinee is now concrete: we can evaluate the switch *)
-          List.concat (List.map (eval_switch_concrete config op tgts) ctxl)
-      | _ ->
-          (* Concrete *)
-          eval_switch_concrete config op tgts ctx)
+  | A.Switch (op, tgts) -> eval_switch config op tgts ctx
 
-(** Evaluate a switch *over* a concrete value.
-
-    The caller must make sure to expand the value under scrutinee *before*
-    calling this function, if the value is symbolic.
-*)
-and eval_switch_concrete (config : C.config) (op : E.operand)
-    (tgts : A.switch_targets) (ctx : C.eval_ctx) :
-    (C.eval_ctx * statement_eval_res) eval_result list =
-  (* Evaluate the operand *)
-  let ctx, op_v = eval_operand config ctx op in
+(** Evaluate a switch *)
+and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets)
+    (ctx : C.eval_ctx) : (C.eval_ctx * statement_eval_res) eval_result list =
+  (* We evaluate the operand in two steps:
+   * first we prepare it, then we check if its value is concrete or
+   * symbolic. If it is concrete, we can then evaluate the operand
+   * directly, otherwise we must first expand the value.
+   * Note that we can't fully evaluate the operand *then* expand the
+   * value if it is symbolic, because the value may have been move
+   * (and would thus floating in thin air...)!
+   * *)
+  (* Prepare the operand *)
+  let ctx, op_v = eval_operand_prepare config ctx op in
+  (* Match on the targets *)
   match tgts with
   | A.If (st1, st2) -> (
       match op_v.value with
       | V.Concrete (V.Bool b) ->
+          (* Evaluate the operand *)
+          let ctx, op_v' = eval_operand config ctx op in
+          assert (op_v' = op_v);
+          (* Branch *)
           if b then eval_statement config ctx st1
           else eval_statement config ctx st2
+      | V.Symbolic sv ->
+          (* Synthesis *)
+          S.synthesize_symbolic_expansion_if_branching sv.V.svalue;
+          (* Expand the symbolic value to true or false *)
+          let see_true = SeConcrete (V.Bool true) in
+          let see_false = SeConcrete (V.Bool false) in
+          let expand_and_execute see st =
+            (* Apply the symbolic expansion *)
+            let ctx =
+              apply_symbolic_expansion_non_borrow config sv.V.svalue see ctx
+            in
+            (* Evaluate the operand *)
+            let ctx, _ = eval_operand config ctx op in
+            (* Evaluate the branch *)
+            eval_statement config ctx st
+          in
+          (* Execute the two branches *)
+          List.append
+            (expand_and_execute see_true st1)
+            (expand_and_execute see_false st2)
       | _ -> failwith "Inconsistent state")
   | A.SwitchInt (int_ty, tgts, otherwise) -> (
       match op_v.value with
       | V.Concrete (V.Scalar sv) -> (
+          (* Evaluate the operand *)
+          let ctx, op_v' = eval_operand config ctx op in
+          assert (op_v' = op_v);
+          (* Sanity check *)
           assert (sv.V.int_ty = int_ty);
+          (* Find the branch *)
           match List.find_opt (fun (sv', _) -> sv = sv') tgts with
           | None -> eval_statement config ctx otherwise
           | Some (_, tgt) -> eval_statement config ctx tgt)
+      | V.Symbolic sv ->
+          (* Synthesis *)
+          S.synthesize_symbolic_expansion_switch_int_branching sv.V.svalue;
+          (* For all the branches of the switch, we expand the symbolic value
+           * to the value given by the branch and execute the branch statement.
+           * For the otherwise branch, we leave the symbolic value as it is
+           * (because this branch doesn't precisely define which should be the
+           * value of the scrutinee...) and simply execute the otherwise statement.
+           *)
+          (* Branches other than "otherwise" *)
+          let exec_branch (switch_value, branch_st) =
+            let see = SeConcrete (V.Scalar switch_value) in
+            (* Apply the symbolic expansion *)
+            let ctx =
+              apply_symbolic_expansion_non_borrow config sv.V.svalue see ctx
+            in
+            (* Evaluate the operand *)
+            let ctx, _ = eval_operand config ctx op in
+            (* Evaluate the branch *)
+            eval_statement config ctx branch_st
+          in
+          let ctxl = List.map exec_branch tgts in
+          (* Otherwise branch *)
+          let ctx_otherwise = eval_statement config ctx otherwise in
+          (* Put everything together *)
+          List.append (List.concat ctxl) ctx_otherwise
       | _ -> failwith "Inconsistent state")
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
