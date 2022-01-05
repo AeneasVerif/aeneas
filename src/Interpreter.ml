@@ -3247,7 +3247,7 @@ let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
   | C.SymbolicMode -> eval_binary_op_symbolic config ctx binop op1 op2
 
 let eval_rvalue_discriminant (config : C.config) (ctx : C.eval_ctx)
-    (p : E.place) : (C.eval_ctx * V.typed_value) eval_result =
+    (p : E.place) : C.eval_ctx * V.typed_value =
   S.synthesize_eval_rvalue_discriminant p;
   (* Note that discriminant values have type `isize` *)
   (* Access the value *)
@@ -3265,14 +3265,15 @@ let eval_rvalue_discriminant (config : C.config) (ctx : C.eval_ctx)
               failwith "Disciminant id out of range"
               (* Should really never happen *)
           | Ok sv ->
-              Ok
-                (ctx, { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize })
-          ))
-  | Symbolic _ -> raise Unimplemented
+              (ctx, { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }))
+      )
+  | Symbolic sv ->
+      (* We need to perform a symbolic expansion *)
+      raise Unimplemented
   | _ -> failwith "Invalid input for `discriminant`"
 
 let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
-    (bkind : E.borrow_kind) : (C.eval_ctx * V.typed_value) eval_result =
+    (bkind : E.borrow_kind) : C.eval_ctx * V.typed_value =
   S.synthesize_eval_rvalue_ref p bkind;
   match bkind with
   | E.Shared | E.TwoPhaseMut ->
@@ -3305,7 +3306,7 @@ let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
       (* Update the value in the context *)
       let ctx = write_place_unwrap config access p nv ctx in
       (* Return *)
-      Ok (ctx, rv)
+      (ctx, rv)
   | E.Mut ->
       (* Access the value *)
       let access = Write in
@@ -3321,11 +3322,11 @@ let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
       (* Update the value in the context *)
       let ctx = write_place_unwrap config access p nv ctx in
       (* Return *)
-      Ok (ctx, rv)
+      (ctx, rv)
 
 let eval_rvalue_aggregate (config : C.config) (ctx : C.eval_ctx)
     (aggregate_kind : E.aggregate_kind) (ops : E.operand list) :
-    (C.eval_ctx * V.typed_value) eval_result =
+    C.eval_ctx * V.typed_value =
   S.synthesize_eval_rvalue_aggregate aggregate_kind ops;
   (* Evaluate the operands *)
   let ctx, values = eval_operands config ctx ops in
@@ -3335,7 +3336,7 @@ let eval_rvalue_aggregate (config : C.config) (ctx : C.eval_ctx)
       let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
       let v = V.Adt { variant_id = None; field_values = values } in
       let ty = T.Adt (T.Tuple, [], tys) in
-      Ok (ctx, { V.value = v; ty })
+      (ctx, { V.value = v; ty })
   | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
       (* Sanity checks *)
       let type_def = C.ctx_lookup_type_def ctx def_id in
@@ -3352,7 +3353,7 @@ let eval_rvalue_aggregate (config : C.config) (ctx : C.eval_ctx)
         { V.variant_id = opt_variant_id; V.field_values = values }
       in
       let aty = T.Adt (T.AdtId def_id, regions, types) in
-      Ok (ctx, { V.value = Adt av; ty = aty })
+      (ctx, { V.value = Adt av; ty = aty })
 
 (** Evaluate an rvalue in a given context: return the updated context and
     the computed value
@@ -3361,12 +3362,12 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
     (C.eval_ctx * V.typed_value) eval_result =
   match rvalue with
   | E.Use op -> Ok (eval_operand config ctx op)
-  | E.Ref (p, bkind) -> eval_rvalue_ref config ctx p bkind
+  | E.Ref (p, bkind) -> Ok (eval_rvalue_ref config ctx p bkind)
   | E.UnaryOp (unop, op) -> eval_unary_op config ctx unop op
   | E.BinaryOp (binop, op1, op2) -> eval_binary_op config ctx binop op1 op2
-  | E.Discriminant p -> eval_rvalue_discriminant config ctx p
+  | E.Discriminant p -> Ok (eval_rvalue_discriminant config ctx p)
   | E.Aggregate (aggregate_kind, ops) ->
-      eval_rvalue_aggregate config ctx aggregate_kind ops
+      Ok (eval_rvalue_aggregate config ctx aggregate_kind ops)
 
 (** Result of evaluating a statement *)
 type statement_eval_res = Unit | Break of int | Continue of int | Return
