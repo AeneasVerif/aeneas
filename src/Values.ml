@@ -54,10 +54,13 @@ type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
     - a projector on loans may see a symbolic value of id `sid` as having type `T`
     - a projector on borrows may see it as having type `&mut T`
     We need to make this clear and more consistant.
-    So [symbolic_value] is actually a projector. TODO: rename
+    So [symbolic_value] is actually a projector. TODO: rename to [symbolic_proj].
+    The kind of projector will then depend on the context.
   *)
 
-(** TODO: make it clear that complementary projectors are projectors on borrows *)
+(** TODO: make it clear that complementary projectors are projectors on borrows.
+ ** TODO: actually this is useless: the set of ended regions should be global!
+ ** (and thus stored in the context) *)
 type symbolic_proj_comp = {
   svalue : symbolic_value;  (** The symbolic value itself *)
   rset_ended : RegionId.set_t;
