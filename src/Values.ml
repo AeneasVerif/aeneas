@@ -56,6 +56,10 @@ type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
     We need to make this clear and more consistant.
     So [symbolic_value] is actually a projector. TODO: rename to [symbolic_proj].
     The kind of projector will then depend on the context.
+    Actually, maybe we shouldn't use this type. Or for abstractions we should
+    use different types. Something like:
+    - [proj_borrows] for values
+    - [aproj_loans], [aproj_borrows] for avalues
   *)
 
 (** TODO: make it clear that complementary projectors are projectors on borrows.
