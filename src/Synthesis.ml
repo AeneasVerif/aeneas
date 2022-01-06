@@ -1,15 +1,10 @@
 module T = Types
 module V = Values
-open Scalars
 module E = Expressions
-open Errors
 module C = Contexts
 module Subst = Substitute
 module A = CfimAst
 module L = Logging
-open TypesUtils
-open ValuesUtils
-module Inv = Invariants
 open InterpreterUtils
 
 (* TODO: the below functions have very "rough" signatures and do nothing: I
