@@ -45,5 +45,8 @@ let () =
       (* Print the module *)
       log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));
 
-      (* Test the unit functions *)
-      I.Test.test_unit_functions m.types m.functions
+      (* Test the unit functions with the concrete interpreter *)
+      I.Test.test_unit_functions m.types m.functions;
+
+      (* Evaluate the symbolic interpreter on the functions *)
+      I.Test.test_symbolic_functions m.types m.functions

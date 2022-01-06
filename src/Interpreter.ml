@@ -93,6 +93,7 @@ module Test = struct
       (* Return *)
       ctx
     in
+    let ctx = List.fold_left create_abs ctx inst_sg.regions_hierarchy in
     (* Split the variables between return var, inputs and remaining locals *)
     let ret_var = List.hd fdef.locals in
     let input_vars, local_vars =
@@ -162,8 +163,8 @@ module Test = struct
 
   (** Execute the symbolic interpreter on a function. *)
   let test_symbolic_function (type_context : C.type_context)
-      (fun_defs : A.fun_def list) (fid : A.FunDefId.id) : unit eval_result list
-      =
+      (fun_defs : A.fun_def list) (fid : A.FunDefId.id) :
+      C.eval_ctx eval_result list =
     (* Retrieve the function declaration *)
     let fdef = A.FunDefId.nth fun_defs fid in
 
@@ -178,22 +179,11 @@ module Test = struct
     assert (fdef.A.arg_count = 0);
 
     (* Create the evaluation context *)
-    let ctx = initialize_context type_context fun_defs in
+    let ctx = initialize_symbolic_context_for_fun type_context fun_defs fdef in
 
-    (* Initialize the inputs as symbolic values *)
-    raise Unimplemented
-
-  (* (* Initialize the remaining local variables as Bottom *)
-     let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
-
-     (* Evaluate the function *)
-     let config = { C.mode = C.ConcreteMode; C.check_invariants = true } in
-     match eval_function_body config ctx fdef.A.body with
-     | [ Ok _ ] -> Ok ()
-     | [ Error err ] -> Error err
-     | _ ->
-         (* We execute the concrete interpreter: there shouldn't be any branching *)
-         failwith "Unreachable"*)
+    (* Evaluate the function *)
+    let config = { C.mode = C.SymbolicMode; C.check_invariants = true } in
+    eval_function_body config ctx fdef.A.body
 
   (** Execute the symbolic interpreter on a list of functions.
 
@@ -209,5 +199,5 @@ module Test = struct
       if List.for_all Result.is_ok res then ()
       else failwith "Unit test failed (symbolic execution)"
     in
-    List.iter test_fun fun_defs
+    List.iter test_fun no_loop_funs
 end

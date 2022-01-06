@@ -906,7 +906,7 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
 (** Evaluate a statement seen as a function body (auxiliary helper for
     [eval_statement]) *)
 and eval_function_body (config : C.config) (ctx : C.eval_ctx)
-    (body : A.statement) : (C.eval_ctx, eval_error) result list =
+    (body : A.statement) : C.eval_ctx eval_result list =
   let res = eval_statement config ctx body in
   let finish res =
     match res with
