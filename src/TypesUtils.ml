@@ -23,6 +23,26 @@ let ty_is_unit (ty : 'r ty) : bool =
 (** The unit type *)
 let mk_unit_ty : ety = Adt (Tuple, [], [])
 
+(** Deconstruct a type of the form `Box<T>` to retrieve the `T` inside *)
+let ty_get_box (box_ty : ety) : ety =
+  match box_ty with
+  | Adt (Assumed Box, [], [ boxed_ty ]) -> boxed_ty
+  | _ -> failwith "Not a boxed type"
+
+(** Deconstruct a type of the form `&T` or `&mut T` to retrieve the `T` (and
+    the borrow kind, etc.)
+ *)
+let ty_get_ref (ty : ety) : erased_region * ety * ref_kind =
+  match ty with
+  | Ref (r, ty, ref_kind) -> (r, ty, ref_kind)
+  | _ -> failwith "Not a ref type"
+
+let mk_ref_ty (r : 'r) (ty : 'r ty) (ref_kind : ref_kind) : 'r ty =
+  Ref (r, ty, ref_kind)
+
+(** Make a box type *)
+let mk_box_ty (ty : 'r ty) : 'r ty = Adt (Assumed Box, [], [ ty ])
+
 (** Check if a region is in a set of regions *)
 let region_in_set (r : RegionId.id region) (rset : RegionId.set_t) : bool =
   match r with Static -> false | Var id -> RegionId.Set.mem id rset

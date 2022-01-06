@@ -5,6 +5,7 @@ module Subst = Substitute
 module L = Logging
 open Utils
 open InterpreterUtils
+open InterpreterBorrowsCore
 open InterpreterProjectors
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,

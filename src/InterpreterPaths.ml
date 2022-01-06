@@ -6,6 +6,7 @@ module Subst = Substitute
 module L = Logging
 module S = Synthesis
 open InterpreterUtils
+open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterExpansion
 

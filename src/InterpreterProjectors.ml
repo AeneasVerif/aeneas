@@ -8,6 +8,7 @@ open TypesUtils
 open ValuesUtils
 open Utils
 open InterpreterUtils
+open InterpreterBorrowsCore
 
 (** Auxiliary function.
 

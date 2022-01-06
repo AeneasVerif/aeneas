@@ -9,6 +9,7 @@ module Subst = Substitute
 module A = CfimAst
 module L = Logging
 open InterpreterUtils
+open InterpreterBorrowsCore
 
 let debug_invariants : bool ref = ref false
 
