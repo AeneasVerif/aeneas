@@ -26,6 +26,9 @@ let operand_to_string = Print.EvalCtxCfimAst.operand_to_string
 let statement_to_string ctx =
   Print.EvalCtxCfimAst.statement_to_string ctx "" "  "
 
+let statement_to_string_with_tab ctx =
+  Print.EvalCtxCfimAst.statement_to_string ctx "  " "  "
+
 let same_symbolic_id (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) : bool =
   sv0.V.sv_id = sv1.V.sv_id
 
@@ -65,6 +68,10 @@ let mk_typed_value_from_proj_comp (sv : V.symbolic_proj_comp) : V.typed_value =
   let value = V.Symbolic sv in
   { V.value; ty }
 
+(** Create a typed value from a symbolic value.
+
+    Initializes the set of ended regions with `empty`.
+ *)
 let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
     V.typed_value =
   let spc = { V.svalue; rset_ended = T.RegionId.Set.empty } in

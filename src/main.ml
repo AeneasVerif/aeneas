@@ -49,4 +49,4 @@ let () =
       I.Test.test_unit_functions m.types m.functions;
 
       (* Evaluate the symbolic interpreter on the functions *)
-      I.Test.test_symbolic_functions m.types m.functions
+      I.Test.test_functions_symbolic m.types m.functions

@@ -475,8 +475,9 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
   (* Debugging *)
   L.log#ldebug
     (lazy
-      ("\n" ^ eval_ctx_to_string ctx ^ "\nAbout to evaluate statement: "
-     ^ statement_to_string ctx st ^ "\n"));
+      ("\n**About to evaluate statement**: [\n"
+      ^ statement_to_string_with_tab ctx st
+      ^ "\n]\n\n**Context**:\n" ^ eval_ctx_to_string ctx ^ "\n\n"));
   (* Sanity check *)
   if config.C.check_invariants then Inv.check_invariants ctx;
   (* Evaluate *)
@@ -504,7 +505,7 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       match v.value with
       | Concrete (Bool b) ->
           if b = assertion.expected then [ Ok (ctx, Unit) ] else [ Error Panic ]
-      | _ -> failwith "Expected a boolean")
+      | _ -> failwith ("Expected a boolean, got: " ^ V.show_value v.value))
   | A.Call call -> eval_function_call config ctx call
   | A.Panic -> [ Error Panic ]
   | A.Return -> [ Ok (ctx, Return) ]
@@ -611,9 +612,9 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets)
             eval_statement config ctx st
           in
           (* Execute the two branches *)
-          List.append
-            (expand_and_execute see_true st1)
-            (expand_and_execute see_false st2)
+          let ctxl_true = expand_and_execute see_true st1 in
+          let ctxl_false = expand_and_execute see_false st2 in
+          List.append ctxl_true ctxl_false
       | _ -> failwith "Inconsistent state")
   | A.SwitchInt (int_ty, tgts, otherwise) -> (
       match op_v.value with

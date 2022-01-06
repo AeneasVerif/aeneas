@@ -162,7 +162,7 @@ module Test = struct
     List.iter test_unit_fun unit_funs
 
   (** Execute the symbolic interpreter on a function. *)
-  let test_symbolic_function (type_context : C.type_context)
+  let test_function_symbolic (type_context : C.type_context)
       (fun_defs : A.fun_def list) (fid : A.FunDefId.id) :
       C.eval_ctx eval_result list =
     (* Retrieve the function declaration *)
@@ -171,7 +171,7 @@ module Test = struct
     (* Debug *)
     L.log#ldebug
       (lazy
-        ("test_symbolic_function: " ^ Print.Types.name_to_string fdef.A.name));
+        ("test_function_symbolic: " ^ Print.Types.name_to_string fdef.A.name));
 
     (* Create the evaluation context *)
     let ctx = initialize_symbolic_context_for_fun type_context fun_defs fdef in
@@ -185,16 +185,18 @@ module Test = struct
       TODO: for now we ignore the functions which contain loops, because
       they are not supported by the symbolic interpreter.
    *)
-  let test_symbolic_functions (type_defs : T.type_def list)
+  let test_functions_symbolic (type_defs : T.type_def list)
       (fun_defs : A.fun_def list) : unit =
     let no_loop_funs =
       List.filter (fun f -> not (CfimAstUtils.fun_def_has_loops f)) fun_defs
     in
     let test_fun (def : A.fun_def) : unit =
       let type_ctx = { C.type_defs } in
-      let res = test_symbolic_function type_ctx fun_defs def.A.def_id in
-      if List.for_all Result.is_ok res then ()
-      else failwith "Unit test failed (symbolic execution)"
+      (* Execute the function - note that as the symbolic interpreter explores
+       * all the path, some executions are expected to "panic": we thus don't
+       * check the return value *)
+      let _ = test_function_symbolic type_ctx fun_defs def.A.def_id in
+      ()
     in
     List.iter test_fun no_loop_funs
 end
