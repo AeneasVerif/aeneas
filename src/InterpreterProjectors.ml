@@ -430,13 +430,20 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
           functions) on purpose: exhaustive matches are good for maintenance *)
 
       method! visit_aloan_content env lc =
-        (* TODO: ashared_loan (amut_loan ) case *)
         match lc with
-        | V.ASharedLoan (bids, v, av) ->
+        | V.ASharedLoan (bids, sv, av) ->
             (* Insert the reborrows *)
             let bids = insert_reborrows bids in
+            (* Similarly to the non-abstraction case: check if the shared
+             * value is a mutable borrow, to eventually insert more reborrows *)
             (* Update and explore *)
-            super#visit_ASharedLoan env bids v av
+            let bids =
+              match get_borrow_in_mut_borrow sv with
+              | None -> bids
+              | Some bid -> insert_reborrows_for_bid bids bid
+            in
+            (* Update and explore *)
+            super#visit_ASharedLoan env bids sv av
         | V.AIgnoredSharedLoan _
         | V.AMutLoan (_, _)
         | V.AEndedMutLoan { given_back = _; child = _ }
