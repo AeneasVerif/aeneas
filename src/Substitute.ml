@@ -42,16 +42,12 @@ let erase_regions (ty : T.rty) : T.ety =
     
     TODO: simplify? we only need the subst `T.RegionVarId.id -> T.RegionId.id`
   *)
-let fresh_regions_with_substs (region_vars : T.region_var list)
-    (ctx : C.eval_ctx) :
-    C.eval_ctx
-    * T.RegionId.id list
+let fresh_regions_with_substs (region_vars : T.region_var list) :
+    T.RegionId.id list
     * (T.RegionVarId.id -> T.RegionId.id)
     * (T.RegionVarId.id T.region -> T.RegionId.id T.region) =
   (* Generate fresh regions *)
-  let ctx, fresh_region_ids =
-    List.fold_left_map (fun ctx _ -> C.fresh_region_id ctx) ctx region_vars
-  in
+  let fresh_region_ids = List.map (fun _ -> C.fresh_region_id ()) region_vars in
   (* Generate the map from region var ids to regions *)
   let ls = List.combine region_vars fresh_region_ids in
   let rid_map =
@@ -66,7 +62,7 @@ let fresh_regions_with_substs (region_vars : T.region_var list)
     match r with T.Static -> T.Static | T.Var id -> T.Var (rid_subst id)
   in
   (* Return *)
-  (ctx, fresh_region_ids, rid_subst, rsubst)
+  (fresh_region_ids, rid_subst, rsubst)
 
 (** Erase the regions in a type and substitute the type variables *)
 let erase_regions_substitute_types (tsubst : T.TypeVarId.id -> T.ety)

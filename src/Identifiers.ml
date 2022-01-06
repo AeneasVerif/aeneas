@@ -16,6 +16,8 @@ module type Id = sig
 
   val generator_zero : generator
 
+  val fresh_stateful_generator : unit -> generator ref * (unit -> id)
+
   (* TODO: this is stateful! - but we may want to be able to duplicate contexts... *)
   val fresh : generator -> id * generator
   (* TODO: change the order of the returned types *)
@@ -83,6 +85,15 @@ module IdGen () : Id = struct
      * value - but we really want to make sure we detect overflows if
      * they happen *)
     if x == max_int then raise (Errors.IntegerOverflow ()) else x + 1
+
+  let fresh_stateful_generator () =
+    let g = ref 0 in
+    let fresh () =
+      let id = !g in
+      g := incr id;
+      id
+    in
+    (g, fresh)
 
   let fresh gen = (gen, incr gen)
 

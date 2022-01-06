@@ -362,9 +362,9 @@ let eval_box_deref_mut_or_shared_inst_sig (region_params : T.erased_region list)
      `&'a (mut) Box<T> -> &'a (mut) T`
      where T is the type param
   *)
-  let ctx, rid = C.fresh_region_id ctx in
+  let rid = C.fresh_region_id () in
   let r = T.Var rid in
-  let ctx, abs_id = C.fresh_abstraction_id ctx in
+  let abs_id = C.fresh_abstraction_id () in
   match (region_params, type_params) with
   | [], [ ty_param ] ->
       let ty_param = ety_no_regions_to_rty ty_param in
@@ -477,7 +477,7 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
   let ctx, rg_abs_ids_bindings =
     List.fold_left_map
       (fun ctx rg ->
-        let ctx, abs_id = C.fresh_abstraction_id ctx in
+        let abs_id = C.fresh_abstraction_id () in
         (ctx, (rg.A.id, abs_id)))
       ctx sg.regions_hierarchy
   in
@@ -490,9 +490,7 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
     A.RegionGroupId.Map.find rg_id asubst_map
   in
   (* Generate fresh regions and their substitutions *)
-  let ctx, _, rsubst, _ =
-    Subst.fresh_regions_with_substs sg.region_params ctx
-  in
+  let _, rsubst, _ = Subst.fresh_regions_with_substs sg.region_params in
   (* Generate the type substitution
    * Note that we need the substitution to map the type variables to
    * [rty] types (not [ety]). In order to do that, we convert the
@@ -804,7 +802,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (args : E.operand list) (dest : E.place) : C.eval_ctx =
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
-  let ctx, ret_spc = mk_fresh_symbolic_value ret_sv_ty ctx in
+  let ret_spc = mk_fresh_symbolic_value ret_sv_ty in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
   let ret_av = mk_aproj_loans_from_symbolic_value ret_spc in
   (* Evaluate the input operands *)

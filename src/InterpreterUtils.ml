@@ -45,11 +45,10 @@ let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
   { var_id; projection = [] }
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value (ty : T.rty) (ctx : C.eval_ctx) :
-    C.eval_ctx * V.symbolic_value =
-  let ctx, sv_id = C.fresh_symbolic_value_id ctx in
+let mk_fresh_symbolic_value (ty : T.rty) : V.symbolic_value =
+  let sv_id = C.fresh_symbolic_value_id () in
   let svalue = { V.sv_id; V.sv_ty = ty } in
-  (ctx, svalue)
+  svalue
 
 (** Create a typed value from a symbolic value. *)
 let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :

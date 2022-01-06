@@ -25,16 +25,13 @@ open InterpreterStatements
 module Test = struct
   let initialize_context (type_context : C.type_context)
       (fun_defs : A.fun_def list) (type_vars : T.type_var list) : C.eval_ctx =
+    C.reset_global_counters ();
     {
       C.type_context;
       C.fun_context = fun_defs;
       C.type_vars;
       C.env = [];
       C.ended_regions = T.RegionId.Set.empty;
-      C.symbolic_counter = V.SymbolicValueId.generator_zero;
-      C.borrow_counter = V.BorrowId.generator_zero;
-      C.region_counter = T.RegionId.generator_zero;
-      C.abstraction_counter = V.AbstractionId.generator_zero;
     }
 
   (** Initialize an evaluation context to execute a function.
@@ -67,10 +64,8 @@ module Test = struct
     in
     let ctx, inst_sg = instantiate_fun_sig type_params sg ctx in
     (* Create fresh symbolic values for the inputs *)
-    let ctx, input_svs =
-      List.fold_left_map
-        (fun ctx ty -> mk_fresh_symbolic_value ty ctx)
-        ctx inst_sg.inputs
+    let input_svs =
+      List.map (fun ty -> mk_fresh_symbolic_value ty) inst_sg.inputs
     in
     (* Create the abstractions and insert them in the context *)
     let create_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =

@@ -475,12 +475,10 @@ let prepare_reborrows (config : C.config) (allow_reborrows : bool)
     (ctx : C.eval_ctx) :
     (V.BorrowId.id -> V.BorrowId.id) * (C.eval_ctx -> C.eval_ctx) =
   let reborrows : (V.BorrowId.id * V.BorrowId.id) list ref = ref [] in
-  let borrow_counter = ref ctx.C.borrow_counter in
   (* The function to generate and register fresh reborrows *)
   let fresh_reborrow (bid : V.BorrowId.id) : V.BorrowId.id =
     if allow_reborrows then (
-      let bid', cnt' = V.BorrowId.fresh !borrow_counter in
-      borrow_counter := cnt';
+      let bid' = C.fresh_borrow_id () in
       reborrows := (bid, bid') :: !reborrows;
       bid')
     else failwith "Unexpected reborrow"
@@ -489,13 +487,9 @@ let prepare_reborrows (config : C.config) (allow_reborrows : bool)
   let apply_registered_reborrows (ctx : C.eval_ctx) : C.eval_ctx =
     match config.C.mode with
     | C.ConcreteMode ->
-        (* Reborrows are introduced when applying projections in symbolic mode *)
-        assert (!borrow_counter = ctx.C.borrow_counter);
         assert (!reborrows = []);
         ctx
     | C.SymbolicMode ->
-        (* Update the borrow counter *)
-        let ctx = { ctx with C.borrow_counter = !borrow_counter } in
         (* Apply the reborrows *)
         apply_reborrows !reborrows ctx
   in

@@ -183,16 +183,15 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
 
 (** Compute the expansion of an adt value.
 
-    The function might return a list of contexts and values if the symbolic
-    value to expand is an enumeration.
+    The function might return a list of values if the symbolic value to expand
+    is an enumeration.
     
     `expand_enumerations` controls the expansion of enumerations: if false, it
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
     (def_id : T.TypeDefId.id) (regions : T.RegionId.id T.region list)
-    (types : T.rty list) (ctx : C.eval_ctx) :
-    (C.eval_ctx * symbolic_expansion) list =
+    (types : T.rty list) (ctx : C.eval_ctx) : symbolic_expansion list =
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
   let def = C.ctx_lookup_type_def ctx def_id in
@@ -205,38 +204,34 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
   if List.length variants_fields_types > 1 && not expand_enumerations then
     failwith "Not allowed to expand enumerations with several variants";
   (* Initialize the expanded value for a given variant *)
-  let initialize (ctx : C.eval_ctx)
+  let initialize
       ((variant_id, field_types) : T.VariantId.id option * T.rty list) :
-      C.eval_ctx * symbolic_expansion =
-    let ctx, field_values =
-      List.fold_left_map
-        (fun ctx (ty : T.rty) -> mk_fresh_symbolic_value ty ctx)
-        ctx field_types
+      symbolic_expansion =
+    let field_values =
+      List.map (fun (ty : T.rty) -> mk_fresh_symbolic_value ty) field_types
     in
     let see = SeAdt (variant_id, field_values) in
-    (ctx, see)
+    see
   in
   (* Initialize all the expanded values of all the variants *)
-  List.map (initialize ctx) variants_fields_types
+  List.map initialize variants_fields_types
 
-let compute_expanded_symbolic_tuple_value (field_types : T.rty list)
-    (ctx : C.eval_ctx) : C.eval_ctx * symbolic_expansion =
+let compute_expanded_symbolic_tuple_value (field_types : T.rty list) :
+    symbolic_expansion =
   (* Generate the field values *)
-  let ctx, field_values =
-    List.fold_left_map
-      (fun ctx sv_ty -> mk_fresh_symbolic_value sv_ty ctx)
-      ctx field_types
+  let field_values =
+    List.map (fun sv_ty -> mk_fresh_symbolic_value sv_ty) field_types
   in
   let variant_id = None in
   let see = SeAdt (variant_id, field_values) in
-  (ctx, see)
+  see
 
-let compute_expanded_symbolic_box_value (boxed_ty : T.rty) (ctx : C.eval_ctx) :
-    C.eval_ctx * symbolic_expansion =
+let compute_expanded_symbolic_box_value (boxed_ty : T.rty) : symbolic_expansion
+    =
   (* Introduce a fresh symbolic value *)
-  let ctx, boxed_value = mk_fresh_symbolic_value boxed_ty ctx in
+  let boxed_value = mk_fresh_symbolic_value boxed_ty in
   let see = SeAdt (None, [ boxed_value ]) in
-  (ctx, see)
+  see
 
 let expand_symbolic_value_shared_borrow (config : C.config)
     (original_sv : V.symbolic_value) (ref_ty : T.rty) (ctx : C.eval_ctx) :
@@ -247,10 +242,8 @@ let expand_symbolic_value_shared_borrow (config : C.config)
    * one fresh borrow id per instance.
    *)
   let borrows = ref V.BorrowId.Set.empty in
-  let borrow_counter = ref ctx.C.borrow_counter in
   let fresh_borrow () =
-    let bid', cnt' = V.BorrowId.fresh !borrow_counter in
-    borrow_counter := cnt';
+    let bid' = C.fresh_borrow_id () in
     borrows := V.BorrowId.Set.add bid' !borrows;
     bid'
   in
@@ -318,11 +311,10 @@ let expand_symbolic_value_shared_borrow (config : C.config)
   in
   (* Call the visitor *)
   let ctx = obj#visit_eval_ctx None ctx in
-  let ctx = { ctx with C.borrow_counter = !borrow_counter } in
   (* Finally, replace the projectors on loans *)
   let bids = !borrows in
   assert (not (V.BorrowId.Set.is_empty bids));
-  let ctx, shared_sv = mk_fresh_symbolic_value ref_ty ctx in
+  let shared_sv = mk_fresh_symbolic_value ref_ty in
   let see = SeSharedRef (bids, shared_sv) in
   let allow_reborrows = true in
   let ctx =
@@ -344,8 +336,8 @@ let expand_symbolic_value_borrow (config : C.config)
   | T.Mut ->
       (* Simple case: simply create a fresh symbolic value and a fresh
        * borrow id *)
-      let ctx, sv = mk_fresh_symbolic_value ref_ty ctx in
-      let ctx, bid = C.fresh_borrow_id ctx in
+      let sv = mk_fresh_symbolic_value ref_ty in
+      let bid = C.fresh_borrow_id () in
       let see = SeMutRef (bid, sv) in
       (* Expand the symbolic values - we simply perform a substitution (and
        * check that we perform exactly one substitution) *)
@@ -392,7 +384,7 @@ let expand_symbolic_value_no_branching (config : C.config)
           compute_expanded_symbolic_adt_value expand_enumerations def_id regions
             types ctx
         with
-        | [ (ctx, see) ] ->
+        | [ see ] ->
             (* Apply in the context *)
             let ctx =
               apply_symbolic_expansion_non_borrow config original_sv see ctx
@@ -406,7 +398,7 @@ let expand_symbolic_value_no_branching (config : C.config)
     | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
         assert (arity = List.length tys);
         (* Generate the field values *)
-        let ctx, see = compute_expanded_symbolic_tuple_value tys ctx in
+        let see = compute_expanded_symbolic_tuple_value tys in
         (* Apply in the context *)
         let ctx =
           apply_symbolic_expansion_non_borrow config original_sv see ctx
@@ -417,7 +409,7 @@ let expand_symbolic_value_no_branching (config : C.config)
         ctx
     (* Boxes *)
     | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
-        let ctx, see = compute_expanded_symbolic_box_value boxed_ty ctx in
+        let see = compute_expanded_symbolic_box_value boxed_ty in
         (* Apply in the context *)
         let ctx =
           apply_symbolic_expansion_non_borrow config original_sv see ctx
@@ -454,15 +446,14 @@ let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_value)
       (* Compute the expanded value - there should be exactly one because we
        * don't allow to expand enumerations with strictly more than one variant *)
       let expand_enumerations = true in
-      let res =
+      let seel =
         compute_expanded_symbolic_adt_value expand_enumerations def_id regions
           types ctx
       in
       (* Update the synthesized program *)
-      let seel = List.map (fun (_, x) -> x) res in
       S.synthesize_symbolic_expansion_enum_branching original_sv seel;
       (* Apply in the context *)
-      let apply (ctx, see) : C.eval_ctx =
+      let apply see : C.eval_ctx =
         let ctx =
           apply_symbolic_expansion_non_borrow config original_sv see ctx
         in
@@ -471,5 +462,5 @@ let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_value)
         (* Return *)
         ctx
       in
-      List.map apply res
+      List.map apply seel
   | _ -> failwith "Unexpected"

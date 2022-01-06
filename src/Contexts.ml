@@ -3,6 +3,46 @@ open Values
 open CfimAst
 module V = Values
 
+(** Some global counters.
+ *
+ * Note that those counters were initially stored in [eval_ctx] values,
+ * but it proved better to make them global and stateful:
+ * - when branching (and thus executing on several paths with different
+ *   contexts) it is better to really have unique ids everywhere (and
+ *   not have fresh ids shared by several contexts even though introduced
+ *   after the branching) because at some point we might need to merge the
+ *   different contexts
+ * - also, it is a lot more convenient to not store those counters in contexts
+ *   objects
+ *)
+
+let symbolic_value_id_counter, fresh_symbolic_value_id =
+  SymbolicValueId.fresh_stateful_generator ()
+
+let borrow_id_counter, fresh_borrow_id = BorrowId.fresh_stateful_generator ()
+
+let region_id_counter, fresh_region_id = RegionId.fresh_stateful_generator ()
+
+let abstraction_id_counter, fresh_abstraction_id =
+  AbstractionId.fresh_stateful_generator ()
+
+(** We shouldn't need to reset the global counters, but it might be good to
+    to it from time to time, every time we evaluate/synthesize a function for
+    instance.
+    
+    The reasons are manifold:
+    - it might prevent the counters from overflowing (although this seems
+      extremely unlikely - as a side node: we have overflow checks to make
+      sure the synthesis doesn't get impacted by potential overflows)
+    - most importantly, it allows to always manipulate low values, which
+      is always a lot more readable when debugging
+ *)
+let reset_global_counters () =
+  symbolic_value_id_counter := SymbolicValueId.generator_zero;
+  borrow_id_counter := BorrowId.generator_zero;
+  region_id_counter := RegionId.generator_zero;
+  abstraction_id_counter := AbstractionId.generator_zero
+
 type binder = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)
@@ -68,32 +108,9 @@ type eval_ctx = {
   type_vars : type_var list;
   env : env;
   ended_regions : RegionId.set_t;
-  symbolic_counter : SymbolicValueId.generator;
-  (* TODO: make this global? *)
-  borrow_counter : BorrowId.generator;
-  (* TODO: make this global? *)
-  region_counter : RegionId.generator;
-  (* TODO: make this global? *)
-  abstraction_counter : AbstractionId.generator; (* TODO: make this global? *)
 }
 [@@deriving show]
 (** Evaluation context *)
-
-let fresh_symbolic_value_id (ctx : eval_ctx) : eval_ctx * SymbolicValueId.id =
-  let id, counter' = SymbolicValueId.fresh ctx.symbolic_counter in
-  ({ ctx with symbolic_counter = counter' }, id)
-
-let fresh_borrow_id (ctx : eval_ctx) : eval_ctx * BorrowId.id =
-  let id, counter' = BorrowId.fresh ctx.borrow_counter in
-  ({ ctx with borrow_counter = counter' }, id)
-
-let fresh_region_id (ctx : eval_ctx) : eval_ctx * RegionId.id =
-  let id, counter' = RegionId.fresh ctx.region_counter in
-  ({ ctx with region_counter = counter' }, id)
-
-let fresh_abstraction_id (ctx : eval_ctx) : eval_ctx * AbstractionId.id =
-  let id, counter' = AbstractionId.fresh ctx.abstraction_counter in
-  ({ ctx with abstraction_counter = counter' }, id)
 
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid

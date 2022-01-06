@@ -619,15 +619,14 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     be expanded (because expanding this symbolic value would require expanding
     a reference whose region has already ended).
  *)
-let convert_avalue_to_value (av : V.typed_avalue) (ctx : C.eval_ctx) :
-    C.eval_ctx * V.typed_value =
+let convert_avalue_to_value (av : V.typed_avalue) : V.typed_value =
   (* Convert the type *)
   let ty = Subst.erase_regions av.V.ty in
   (* Generate the fresh a symbolic value *)
-  let ctx, sv_id = C.fresh_symbolic_value_id ctx in
+  let sv_id = C.fresh_symbolic_value_id () in
   let svalue : V.symbolic_value = { V.sv_id; sv_ty = av.V.ty } in
   let value = V.Symbolic svalue in
-  (ctx, { V.value; V.ty })
+  { V.value; V.ty }
 
 (** End a borrow identified by its borrow id in a context
     
@@ -901,7 +900,7 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
       match bc with
       | V.AMutBorrow (bid, av) ->
           (* First, convert the avalue to a (fresh symbolic) value *)
-          let ctx, v = convert_avalue_to_value av ctx in
+          let v = convert_avalue_to_value av in
           give_back_value config bid v ctx
       | V.ASharedBorrow bid -> give_back_shared config bid ctx
       | V.AProjSharedBorrow _ ->

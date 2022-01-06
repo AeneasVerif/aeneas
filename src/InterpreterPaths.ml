@@ -756,7 +756,7 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
       | SharedBorrow bid ->
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
-          let ctx, bid' = C.fresh_borrow_id ctx in
+          let bid' = C.fresh_borrow_id () in
           let ctx = reborrow_shared bid bid' ctx in
           (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
       | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"

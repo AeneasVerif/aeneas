@@ -157,7 +157,7 @@ let eval_unary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
   (* Evaluate the operand *)
   let ctx, v = eval_operand config ctx op in
   (* Generate a fresh symbolic value to store the result *)
-  let ctx, res_sv_id = C.fresh_symbolic_value_id ctx in
+  let res_sv_id = C.fresh_symbolic_value_id () in
   let res_sv_ty =
     match (unop, v.V.ty) with
     | E.Not, T.Bool -> T.Bool
@@ -258,7 +258,7 @@ let eval_binary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
   (* Evaluate the operands *)
   let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
   (* Generate a fresh symbolic value to store the result *)
-  let ctx, res_sv_id = C.fresh_symbolic_value_id ctx in
+  let res_sv_id = C.fresh_symbolic_value_id () in
   let res_sv_ty =
     if binop = Eq || binop = Ne then (
       (* Equality operations *)
@@ -343,7 +343,7 @@ let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
       let access = if bkind = E.Shared then Read else Write in
       let ctx, v = prepare_rplace config access p ctx in
       (* Compute the rvalue - simply a shared borrow with a fresh id *)
-      let ctx, bid = C.fresh_borrow_id ctx in
+      let bid = C.fresh_borrow_id () in
       (* Note that the reference is *mutable* if we do a two-phase borrow *)
       let rv_ty =
         T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
@@ -374,7 +374,7 @@ let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
       let access = Write in
       let ctx, v = prepare_rplace config access p ctx in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
-      let ctx, bid = C.fresh_borrow_id ctx in
+      let bid = C.fresh_borrow_id () in
       let rv_ty = T.Ref (T.Erased, v.ty, Mut) in
       let rv : V.typed_value =
         { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty }
