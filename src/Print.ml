@@ -419,18 +419,20 @@ module Values = struct
         ^ abstract_shared_borrows_to_string fmt sb
         ^ ")"
 
-  let abs_to_string (fmt : value_formatter) (abs : V.abs) : string =
+  let abs_to_string (fmt : value_formatter) (indent : string)
+      (indent_incr : string) (abs : V.abs) : string =
+    let indent2 = indent ^ indent_incr in
     let avs =
-      List.map (fun av -> "  " ^ typed_avalue_to_string fmt av) abs.avalues
+      List.map (fun av -> indent2 ^ typed_avalue_to_string fmt av) abs.avalues
     in
     let avs = String.concat ",\n" avs in
-    "abs@"
+    indent ^ "abs@"
     ^ V.AbstractionId.to_string abs.abs_id
     ^ "{parents="
     ^ V.AbstractionId.set_to_string abs.parents
     ^ "}" ^ "{regions="
     ^ T.RegionId.set_to_string abs.regions
-    ^ "}" ^ " {\n" ^ avs ^ "\n}"
+    ^ "}" ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
 end
 
 module PV = Values (* local module *)
@@ -442,17 +444,20 @@ module Contexts = struct
     | None -> PV.var_id_to_string bv.index
     | Some name -> name
 
-  let env_elem_to_string (fmt : PV.value_formatter) (ev : C.env_elem) : string =
+  let env_elem_to_string (fmt : PV.value_formatter) (indent : string)
+      (indent_incr : string) (ev : C.env_elem) : string =
     match ev with
     | Var (var, tv) ->
-        binder_to_string var ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
-    | Abs abs -> PV.abs_to_string fmt abs
+        indent ^ binder_to_string var ^ " -> "
+        ^ PV.typed_value_to_string fmt tv
+        ^ " ;"
+    | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
     | Frame -> failwith "Can't print a Frame element"
 
   let env_to_string (fmt : PV.value_formatter) (env : C.env) : string =
     "{\n"
     ^ String.concat "\n"
-        (List.map (fun ev -> "  " ^ env_elem_to_string fmt ev) env)
+        (List.map (fun ev -> env_elem_to_string fmt "  " "  " ev) env)
     ^ "\n}"
 
   type ctx_formatter = PV.value_formatter

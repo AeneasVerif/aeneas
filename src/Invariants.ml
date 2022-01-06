@@ -496,6 +496,11 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             match lc with
             | V.AMutLoan (bid, child_av) | V.AIgnoredMutLoan (bid, child_av)
               -> (
+                L.log#ldebug
+                  (lazy
+                    ("- child_av.ty: "
+                    ^ rty_to_string ctx child_av.V.ty
+                    ^ "\n- aty: " ^ rty_to_string ctx aty));
                 assert (child_av.V.ty = aty);
                 (* Lookup the borrowed value to check it has the proper type *)
                 let glc = lookup_borrow ek_all bid ctx in
