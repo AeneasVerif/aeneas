@@ -15,5 +15,13 @@ build-run-check-trace:
 	cmp tests/trace_reference.txt tests/trace_current.txt && \
 	rm tests/trace_current.txt
 
+# Build the project and update the trace
+.PHONY: regen-trace
+regen-trace:
+	dune build src/main.exe && \
+	dune exec src/main.exe ../charon/charon/tests/test1.cfim > tests/trace_current.txt && \
+        rm tests/trace_reference.txt && \
+	mv tests/trace_current.txt tests/trace_reference.txt
+
 doc:
 	dune build @doc
