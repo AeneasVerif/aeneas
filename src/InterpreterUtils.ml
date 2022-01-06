@@ -632,3 +632,163 @@ type symbolic_expansion =
   | SeAdt of (T.VariantId.id option * V.symbolic_proj_comp list)
   | SeMutRef of V.BorrowId.id * V.symbolic_proj_comp
   | SeSharedRef of V.BorrowId.set_t * V.symbolic_proj_comp
+
+(** The following type identifies the relative position of expressions (in
+    particular borrows) in other expressions.
+    
+    For instance, it is used to control [end_borrow]: we usually only allow
+    to end "outer" borrows, unless we perform a drop.
+*)
+type inner_outer = Inner | Outer
+
+type borrow_ids = Borrows of V.BorrowId.Set.t | Borrow of V.BorrowId.id
+
+exception FoundBorrowIds of borrow_ids
+
+let update_if_none opt x = match opt with None -> Some x | _ -> opt
+
+(** Auxiliary function: see its usage in [end_borrow_get_borrow_in_value] *)
+let update_outer_borrows (io : inner_outer)
+    (outer : V.AbstractionId.id option * borrow_ids option) (x : borrow_ids) :
+    V.AbstractionId.id option * borrow_ids option =
+  match io with
+  | Inner ->
+      (* If we can end inner borrows, we don't keep track of the outer borrows *)
+      outer
+  | Outer ->
+      let abs, opt = outer in
+      (abs, update_if_none opt x)
+
+(** Return the first loan we find in a value *)
+let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_loan_content _ lc = raise (FoundLoanContent lc)
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    None
+  with FoundLoanContent lc -> Some lc
+
+(** Check if two different projections intersect. This is necessary when
+    giving a symbolic value to an abstraction: we need to check that
+    the regions which are already ended inside the abstraction don't
+    intersect the regions over which we project in the new abstraction.
+    Note that the two abstractions have different views (in terms of regions)
+    of the symbolic value (hence the two region types).
+*)
+let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
+    (ty2 : T.rty) (rset2 : T.RegionId.set_t) : bool =
+  match (ty1, ty2) with
+  | T.Bool, T.Bool | T.Char, T.Char | T.Str, T.Str -> false
+  | T.Integer int_ty1, T.Integer int_ty2 ->
+      assert (int_ty1 = int_ty2);
+      false
+  | T.Adt (id1, regions1, tys1), T.Adt (id2, regions2, tys2) ->
+      assert (id1 = id2);
+      (* The intersection check for the ADTs is very crude: 
+       * we check if some arguments intersect. As all the type and region
+       * parameters should be used somewhere in the ADT (otherwise rustc
+       * generates an error), it means that it should be equivalent to checking
+       * whether two fields intersect (and anyway comparing the field types is
+       * difficult in case of enumerations...).
+       * If we didn't have the above property enforced by the rust compiler,
+       * this check would still be a reasonable conservative approximation. *)
+      let regions = List.combine regions1 regions2 in
+      let tys = List.combine tys1 tys2 in
+      List.exists
+        (fun (r1, r2) -> region_in_set r1 rset1 && region_in_set r2 rset2)
+        regions
+      || List.exists
+           (fun (ty1, ty2) -> projections_intersect ty1 rset1 ty2 rset2)
+           tys
+  | T.Array ty1, T.Array ty2 | T.Slice ty1, T.Slice ty2 ->
+      projections_intersect ty1 rset1 ty2 rset2
+  | T.Ref (r1, ty1, kind1), T.Ref (r2, ty2, kind2) ->
+      (* Sanity check *)
+      assert (kind1 = kind2);
+      (* The projections intersect if the borrows intersect or their contents
+       * intersect *)
+      (region_in_set r1 rset1 && region_in_set r2 rset2)
+      || projections_intersect ty1 rset1 ty2 rset2
+  | _ -> failwith "Unreachable"
+
+(** Check if the ended regions of a comp projector over a symbolic value
+    intersect the regions listed in another projection *)
+let symbolic_proj_comp_ended_regions_intersect_proj (s : V.symbolic_proj_comp)
+    (ty : T.rty) (regions : T.RegionId.set_t) : bool =
+  projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty regions
+
+(** Check that a symbolic value doesn't contain ended regions.
+
+    Note that we don't check that the set of ended regions is empty: we
+    check that the set of ended regions doesn't intersect the set of
+    regions used in the type (this is more general).
+*)
+let symbolic_proj_comp_ended_regions (s : V.symbolic_proj_comp) : bool =
+  let regions = rty_regions s.V.svalue.V.sv_ty in
+  not (T.RegionId.Set.disjoint regions s.rset_ended)
+
+(** Check if a [value] contains ⊥.
+
+    Note that this function is very general: it also checks wether
+    symbolic values contain already ended regions.
+ *)
+let bottom_in_value (v : V.typed_value) : bool =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_Bottom _ = raise Found
+
+      method! visit_symbolic_proj_comp _ s =
+        if symbolic_proj_comp_ended_regions s then raise Found else ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true
+
+(** Check if an [avalue] contains ⊥.
+
+    Note that this function is very general: it also checks wether
+    symbolic values contain already ended regions.
+    
+    TODO: remove?
+*)
+let bottom_in_avalue (v : V.typed_avalue) (_abs_regions : T.RegionId.set_t) :
+    bool =
+  let obj =
+    object
+      inherit [_] V.iter_typed_avalue
+
+      method! visit_Bottom _ = raise Found
+
+      method! visit_symbolic_proj_comp _ sv =
+        if symbolic_proj_comp_ended_regions sv then raise Found else ()
+
+      method! visit_aproj _ ap =
+        (* Nothing to do actually *)
+        match ap with
+        | V.AProjLoans _sv -> ()
+        | V.AProjBorrows (_sv, _rty) -> ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_avalue () v;
+    false
+  with Found -> true
+
+type outer_borrows_or_abs =
+  | OuterBorrows of borrow_ids
+  | OuterAbs of V.AbstractionId.id
+
+exception FoundOuter of outer_borrows_or_abs
+(** Utility exception *)
