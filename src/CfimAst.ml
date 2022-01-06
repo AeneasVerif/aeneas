@@ -82,6 +82,38 @@ type call = {
 }
 [@@deriving show]
 
+(** Ancestor for [typed_value] iter visitor *)
+class ['self] iter_statement_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.iter
+
+    method visit_place : 'env -> place -> unit = fun _ _ -> ()
+
+    method visit_rvalue : 'env -> rvalue -> unit = fun _ _ -> ()
+
+    method visit_id : 'env -> VariantId.id -> unit = fun _ _ -> ()
+
+    method visit_assertion : 'env -> assertion -> unit = fun _ _ -> ()
+
+    method visit_call : 'env -> call -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for [typed_value] map visitor *)
+class ['self] map_statement_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.iter
+
+    method visit_place : 'env -> place -> place = fun _ x -> x
+
+    method visit_rvalue : 'env -> rvalue -> rvalue = fun _ x -> x
+
+    method visit_id : 'env -> VariantId.id -> VariantId.id = fun _ x -> x
+
+    method visit_assertion : 'env -> assertion -> assertion = fun _ x -> x
+
+    method visit_call : 'env -> call -> call = fun _ x -> x
+  end
+
 type statement =
   | Assign of place * rvalue
   | FakeRead of place
@@ -114,7 +146,24 @@ and switch_targets =
           - the "otherwise" statement.
           Also note that we precise the type of the integer (uint32, int64, etc.)
           which we switch on. *)
-[@@deriving show]
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_statement";
+        variety = "iter";
+        ancestors = [ "iter_statement_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_statement";
+        variety = "map";
+        ancestors = [ "map_statement_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
 
 type fun_def = {
   def_id : FunDefId.id;

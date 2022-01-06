@@ -77,7 +77,7 @@ type symbolic_proj_comp = {
     regions *but* the ones which are listed in the projector.
 *)
 
-(** Ancestor for iter visitor for [typed_value] *)
+(** Ancestor for [typed_value] iter visitor *)
 class ['self] iter_typed_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
@@ -92,7 +92,7 @@ class ['self] iter_typed_value_base =
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for map visitor for [typed_value] *)
+(** Ancestor for [typed_value] map visitor for *)
 class ['self] map_typed_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
@@ -215,7 +215,7 @@ type aproj =
 
 type region = RegionVarId.id Types.region [@@deriving show]
 
-(** Ancestor for iter visitor for [typed_avalue] *)
+(** Ancestor for [typed_avalue] iter visitor *)
 class ['self] iter_typed_avalue_base =
   object (_self : 'self)
     inherit [_] iter_typed_value
@@ -231,7 +231,7 @@ class ['self] iter_typed_avalue_base =
       fun _ _ -> ()
   end
 
-(** Ancestor for MAP visitor for [typed_avalue] *)
+(** Ancestor for [typed_avalue] map visitor *)
 class ['self] map_typed_avalue_base =
   object (_self : 'self)
     inherit [_] map_typed_value
