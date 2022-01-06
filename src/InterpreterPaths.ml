@@ -28,7 +28,7 @@ type path_fail_kind =
   | FailInactivatedMutBorrow of V.BorrowId.id
       (** Failure because we couldn't go inside an inactivated mutable borrow
           (which should get activated) *)
-  | FailSymbolic of (E.projection_elem * V.symbolic_proj_comp)
+  | FailSymbolic of (E.projection_elem * V.symbolic_value)
       (** Failure because we need to enter a symbolic value (and thus need to expand it) *)
   (* TODO: Remove the parentheses *)
   | FailBottom of (int * E.projection_elem * T.ety)
@@ -774,8 +774,7 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
        * Note that in the general case, copy is a trait: copying values
        * thus requires calling the proper function. Here, we copy values
        * for very simple types such as integers, shared borrows, etc. *)
-      assert (
-        type_is_primitively_copyable (Subst.erase_regions sp.V.svalue.V.sv_ty));
+      assert (type_is_primitively_copyable (Subst.erase_regions sp.V.sv_ty));
       (* If the type is copyable, we simply return the current value. Side
        * remark: what is important to look at when copying symbolic values
        * is symbolic expansion. The important subcase is the expansion of shared

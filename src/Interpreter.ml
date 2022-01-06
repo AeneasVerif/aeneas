@@ -30,6 +30,7 @@ module Test = struct
       C.fun_context = fun_defs;
       C.type_vars;
       C.env = [];
+      C.ended_regions = T.RegionId.Set.empty;
       C.symbolic_counter = V.SymbolicValueId.generator_zero;
       C.borrow_counter = V.BorrowId.generator_zero;
       C.region_counter = T.RegionId.generator_zero;

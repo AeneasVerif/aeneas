@@ -626,13 +626,7 @@ let convert_avalue_to_value (av : V.typed_avalue) (ctx : C.eval_ctx) :
   (* Generate the fresh a symbolic value *)
   let ctx, sv_id = C.fresh_symbolic_value_id ctx in
   let svalue : V.symbolic_value = { V.sv_id; sv_ty = av.V.ty } in
-  let value : V.symbolic_proj_comp =
-    (* Note that the set of ended regions is empty: we shouldn't have to take
-     * into account any ended regions at this point, otherwise we would be in
-     * the first case where we should return ⊥ *)
-    { V.svalue; V.rset_ended = T.RegionId.Set.empty }
-  in
-  let value = V.Symbolic value in
+  let value = V.Symbolic svalue in
   (ctx, { V.value; V.ty })
 
 (** End a borrow identified by its borrow id in a context
@@ -759,8 +753,15 @@ and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
   let ctx = end_abstraction_loans config abs_id ctx in
   (* End the abstraction itself by redistributing the borrows it contains *)
   let ctx = end_abstraction_borrows config abs_id ctx in
-  (* End the regions owned by the abstraction *)
-  let ctx = end_abstraction_regions config abs_id ctx in
+  (* End the regions owned by the abstraction - note that we don't need to
+   * relookup the abstraction: the set of regions in an abstraction never
+   * changes... *)
+  let ctx =
+    {
+      ctx with
+      ended_regions = T.RegionId.Set.union ctx.ended_regions abs.V.regions;
+    }
+  in
   (* Remove all the references to the id of the current abstraction, and remove
    * the abstraction itself *)
   end_abstraction_remove_from_context config abs_id ctx
@@ -911,63 +912,6 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
     (* Reexplore *)
     end_abstraction_borrows config abs_id ctx
 
-(** Update the symbolic values in a context to register the regions in the
-    abstraction we are ending as already ended.
-    Note that this function also checks that no symbolic value in an abstraction
-    contains regions which we are ending.
-    Of course, we ignore the abstraction we are currently ending...
- *)
-and end_abstraction_regions (_config : C.config) (abs_id : V.AbstractionId.id)
-    (ctx : C.eval_ctx) : C.eval_ctx =
-  (* Lookup the abstraction to retrieve the set of owned regions *)
-  let abs = C.ctx_lookup_abs ctx abs_id in
-  let ended_regions = abs.V.regions in
-  (* Update all the symbolic values in the context *)
-  let obj =
-    object
-      inherit [_] C.map_eval_ctx as super
-
-      method! visit_Symbolic _ sproj =
-        let sproj =
-          {
-            sproj with
-            V.rset_ended = T.RegionId.Set.union sproj.V.rset_ended ended_regions;
-          }
-        in
-        V.Symbolic sproj
-
-      method! visit_aproj (abs_regions : T.RegionId.set_t option) aproj =
-        (* Sanity check *)
-        (match aproj with
-        | V.AProjLoans _ -> ()
-        | V.AProjBorrows (sv, ty) -> (
-            match abs_regions with
-            | None -> failwith "Unexpected"
-            | Some abs_regions ->
-                assert (
-                  not
-                    (projections_intersect sv.V.sv_ty ended_regions ty
-                       abs_regions))));
-        (* Return - nothing to update *)
-        aproj
-
-      method! visit_abs (regions : T.RegionId.set_t option) abs =
-        if abs.V.abs_id = abs_id then abs
-        else (
-          assert (Option.is_none regions);
-          (* Check that we don't project over already ended regions *)
-          assert (T.RegionId.Set.disjoint ended_regions abs.V.regions);
-          (* Remember the set of regions owned by the abstraction *)
-          let regions = Some abs.V.regions in
-          super#visit_abs regions abs)
-      (** Whenever we dive in an abstraction, we need to keep track of the
-          set of regions owned by the abstraction.
-          Also: we don't dive in the abstraction we are currently ending... *)
-    end
-  in
-  (* Update the context *)
-  obj#visit_eval_ctx None ctx
-
 (** Remove an abstraction from the context, as well as all its references *)
 and end_abstraction_remove_from_context (_config : C.config)
     (abs_id : V.AbstractionId.id) (ctx : C.eval_ctx) : C.eval_ctx =
@@ -1022,7 +966,7 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
          to do a sanity check. *)
       assert (not (loans_in_value sv));
       (* Check there isn't [Bottom] (this is actually an invariant *)
-      assert (not (bottom_in_value sv));
+      assert (not (bottom_in_value ctx.ended_regions sv));
       (* Check there aren't inactivated borrows *)
       assert (not (inactivated_in_value sv));
       (* Update the loan content *)
@@ -1094,7 +1038,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
               ("activate_inactivated_mut_borrow: resulting value:\n"
              ^ V.show_typed_value sv));
           assert (not (loans_in_value sv));
-          assert (not (bottom_in_value sv));
+          assert (not (bottom_in_value ctx.ended_regions sv));
           assert (not (inactivated_in_value sv));
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)

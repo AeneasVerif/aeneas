@@ -67,6 +67,7 @@ type eval_ctx = {
   fun_context : fun_def list;
   type_vars : type_var list;
   env : env;
+  ended_regions : RegionId.set_t;
   symbolic_counter : SymbolicValueId.generator;
   (* TODO: make this global? *)
   borrow_counter : BorrowId.generator;

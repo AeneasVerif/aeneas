@@ -87,7 +87,7 @@ let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
         let access = Move in
         prepare_rplace config access p ctx
   in
-  assert (not (bottom_in_value v));
+  assert (not (bottom_in_value ctx.ended_regions v));
   (ctx, v)
 
 (** Evaluate an operand. *)
@@ -109,7 +109,7 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       let ctx, v = prepare_rplace config access p ctx in
       (* Copy the value *)
       L.log#ldebug (lazy ("Value to copy:\n" ^ typed_value_to_string ctx v));
-      assert (not (bottom_in_value v));
+      assert (not (bottom_in_value ctx.ended_regions v));
       let allow_adt_copy = false in
       copy_value allow_adt_copy config ctx v
   | Expressions.Move p -> (
@@ -118,7 +118,7 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       let ctx, v = prepare_rplace config access p ctx in
       (* Move the value *)
       L.log#ldebug (lazy ("Value to move:\n" ^ typed_value_to_string ctx v));
-      assert (not (bottom_in_value v));
+      assert (not (bottom_in_value ctx.ended_regions v));
       let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
       match write_place config access p bottom ctx with
       | Error _ -> failwith "Unreachable"

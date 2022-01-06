@@ -152,7 +152,7 @@ let replace_symbolic_values (at_most_once : bool)
       inherit [_] C.map_eval_ctx as super
 
       method! visit_Symbolic env spc =
-        if same_symbolic_id spc.V.svalue original_sv then replace ()
+        if same_symbolic_id spc original_sv then replace ()
         else super#visit_Symbolic env spc
     end
   in
@@ -190,9 +190,9 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
-    (ended_regions : T.RegionId.set_t) (def_id : T.TypeDefId.id)
-    (regions : T.RegionId.id T.region list) (types : T.rty list)
-    (ctx : C.eval_ctx) : (C.eval_ctx * symbolic_expansion) list =
+    (def_id : T.TypeDefId.id) (regions : T.RegionId.id T.region list)
+    (types : T.rty list) (ctx : C.eval_ctx) :
+    (C.eval_ctx * symbolic_expansion) list =
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
   let def = C.ctx_lookup_type_def ctx def_id in
@@ -210,8 +210,7 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
       C.eval_ctx * symbolic_expansion =
     let ctx, field_values =
       List.fold_left_map
-        (fun ctx (ty : T.rty) ->
-          mk_fresh_symbolic_proj_comp ended_regions ty ctx)
+        (fun ctx (ty : T.rty) -> mk_fresh_symbolic_value ty ctx)
         ctx field_types
     in
     let see = SeAdt (variant_id, field_values) in
@@ -220,32 +219,29 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
   (* Initialize all the expanded values of all the variants *)
   List.map (initialize ctx) variants_fields_types
 
-let compute_expanded_symbolic_tuple_value (ended_regions : T.RegionId.set_t)
-    (field_types : T.rty list) (ctx : C.eval_ctx) :
-    C.eval_ctx * symbolic_expansion =
+let compute_expanded_symbolic_tuple_value (field_types : T.rty list)
+    (ctx : C.eval_ctx) : C.eval_ctx * symbolic_expansion =
   (* Generate the field values *)
   let ctx, field_values =
     List.fold_left_map
-      (fun ctx sv_ty -> mk_fresh_symbolic_proj_comp ended_regions sv_ty ctx)
+      (fun ctx sv_ty -> mk_fresh_symbolic_value sv_ty ctx)
       ctx field_types
   in
   let variant_id = None in
   let see = SeAdt (variant_id, field_values) in
   (ctx, see)
 
-let compute_expanded_symbolic_box_value (ended_regions : T.RegionId.set_t)
-    (boxed_ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx * symbolic_expansion =
+let compute_expanded_symbolic_box_value (boxed_ty : T.rty) (ctx : C.eval_ctx) :
+    C.eval_ctx * symbolic_expansion =
   (* Introduce a fresh symbolic value *)
-  let ctx, boxed_value =
-    mk_fresh_symbolic_proj_comp ended_regions boxed_ty ctx
-  in
+  let ctx, boxed_value = mk_fresh_symbolic_value boxed_ty ctx in
   let see = SeAdt (None, [ boxed_value ]) in
   (ctx, see)
 
 let expand_symbolic_value_shared_borrow (config : C.config)
-    (original_sv : V.symbolic_value) (ended_regions : T.RegionId.set_t)
-    (ref_ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx =
-  (* First, replace the projectors on borrows (AProjBorrow and proj_comp)
+    (original_sv : V.symbolic_value) (ref_ty : T.rty) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  (* First, replace the projectors on borrows.
    * The important point is that the symbolic value to expand may appear
    * several times, if it has been copied. In this case, we need to introduce
    * one fresh borrow id per instance.
@@ -285,7 +281,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
       inherit [_] C.map_eval_ctx as super
 
       method! visit_Symbolic env sv =
-        if same_symbolic_id sv.V.svalue original_sv then
+        if same_symbolic_id sv original_sv then
           let bid = fresh_borrow () in
           V.Borrow (V.SharedBorrow bid)
         else super#visit_Symbolic env sv
@@ -326,7 +322,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
   (* Finally, replace the projectors on loans *)
   let bids = !borrows in
   assert (not (V.BorrowId.Set.is_empty bids));
-  let ctx, shared_sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
+  let ctx, shared_sv = mk_fresh_symbolic_value ref_ty ctx in
   let see = SeSharedRef (bids, shared_sv) in
   let allow_reborrows = true in
   let ctx =
@@ -339,17 +335,16 @@ let expand_symbolic_value_shared_borrow (config : C.config)
   ctx
 
 let expand_symbolic_value_borrow (config : C.config)
-    (original_sv : V.symbolic_value) (ended_regions : T.RegionId.set_t)
-    (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+    (original_sv : V.symbolic_value) (region : T.RegionId.id T.region)
+    (ref_ty : T.rty) (rkind : T.ref_kind) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Check that we are allowed to expand the reference *)
-  assert (not (region_in_set region ended_regions));
+  assert (not (region_in_set region ctx.ended_regions));
   (* Match on the reference kind *)
   match rkind with
   | T.Mut ->
       (* Simple case: simply create a fresh symbolic value and a fresh
        * borrow id *)
-      let ctx, sv = mk_fresh_symbolic_proj_comp ended_regions ref_ty ctx in
+      let ctx, sv = mk_fresh_symbolic_value ref_ty ctx in
       let ctx, bid = C.fresh_borrow_id ctx in
       let see = SeMutRef (bid, sv) in
       (* Expand the symbolic values - we simply perform a substitution (and
@@ -370,8 +365,7 @@ let expand_symbolic_value_borrow (config : C.config)
       (* Return *)
       ctx
   | T.Shared ->
-      expand_symbolic_value_shared_borrow config original_sv ended_regions
-        ref_ty ctx
+      expand_symbolic_value_shared_borrow config original_sv ref_ty ctx
 
 (** Expand a symbolic value which is not an enumeration with several variants
     (i.e., in a situation where it doesn't lead to branching).
@@ -379,13 +373,12 @@ let expand_symbolic_value_borrow (config : C.config)
     This function is used when exploring paths.
  *)
 let expand_symbolic_value_no_branching (config : C.config)
-    (pe : E.projection_elem) (sp : V.symbolic_proj_comp) (ctx : C.eval_ctx) :
+    (pe : E.projection_elem) (sp : V.symbolic_value) (ctx : C.eval_ctx) :
     C.eval_ctx =
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
-  let original_sv = sp.V.svalue in
+  let original_sv = sp in
   let rty = original_sv.V.sv_ty in
-  let ended_regions = sp.V.rset_ended in
   let ctx =
     match (pe, rty) with
     (* "Regular" ADTs *)
@@ -396,8 +389,8 @@ let expand_symbolic_value_no_branching (config : C.config)
          * don't allow to expand enumerations with strictly more than one variant *)
         let expand_enumerations = false in
         match
-          compute_expanded_symbolic_adt_value expand_enumerations ended_regions
-            def_id regions types ctx
+          compute_expanded_symbolic_adt_value expand_enumerations def_id regions
+            types ctx
         with
         | [ (ctx, see) ] ->
             (* Apply in the context *)
@@ -413,9 +406,7 @@ let expand_symbolic_value_no_branching (config : C.config)
     | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
         assert (arity = List.length tys);
         (* Generate the field values *)
-        let ctx, see =
-          compute_expanded_symbolic_tuple_value ended_regions tys ctx
-        in
+        let ctx, see = compute_expanded_symbolic_tuple_value tys ctx in
         (* Apply in the context *)
         let ctx =
           apply_symbolic_expansion_non_borrow config original_sv see ctx
@@ -426,9 +417,7 @@ let expand_symbolic_value_no_branching (config : C.config)
         ctx
     (* Boxes *)
     | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
-        let ctx, see =
-          compute_expanded_symbolic_box_value ended_regions boxed_ty ctx
-        in
+        let ctx, see = compute_expanded_symbolic_box_value boxed_ty ctx in
         (* Apply in the context *)
         let ctx =
           apply_symbolic_expansion_non_borrow config original_sv see ctx
@@ -439,8 +428,7 @@ let expand_symbolic_value_no_branching (config : C.config)
         ctx
     (* Borrows *)
     | Deref, T.Ref (region, ref_ty, rkind) ->
-        expand_symbolic_value_borrow config original_sv ended_regions region
-          ref_ty rkind ctx
+        expand_symbolic_value_borrow config original_sv region ref_ty rkind ctx
     | _ ->
         failwith
           ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
@@ -454,13 +442,12 @@ let expand_symbolic_value_no_branching (config : C.config)
 
     This might lead to branching.
  *)
-let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_proj_comp)
+let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_value)
     (ctx : C.eval_ctx) : C.eval_ctx list =
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
-  let original_sv = sp.V.svalue in
+  let original_sv = sp in
   let rty = original_sv.V.sv_ty in
-  let ended_regions = sp.V.rset_ended in
   match rty with
   (*  The value should be a "regular" ADTs *)
   | T.Adt (T.AdtId def_id, regions, types) ->
@@ -468,8 +455,8 @@ let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_proj_comp)
        * don't allow to expand enumerations with strictly more than one variant *)
       let expand_enumerations = true in
       let res =
-        compute_expanded_symbolic_adt_value expand_enumerations ended_regions
-          def_id regions types ctx
+        compute_expanded_symbolic_adt_value expand_enumerations def_id regions
+          types ctx
       in
       (* Update the synthesized program *)
       let seel = List.map (fun (_, x) -> x) res in

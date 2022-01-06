@@ -74,10 +74,8 @@ let eval_assertion (config : C.config) (ctx : C.eval_ctx)
        * `true` *)
       S.synthesize_assert v;
       let see = SeConcrete (V.Bool true) in
-      let ctx =
-        apply_symbolic_expansion_non_borrow config sv.V.svalue see ctx
-      in
-      S.synthesize_symbolic_expansion_no_branching sv.V.svalue see;
+      let ctx = apply_symbolic_expansion_non_borrow config sv see ctx in
+      S.synthesize_symbolic_expansion_no_branching sv see;
       (* We can finally fully evaluate the operand *)
       let ctx, _ = eval_operand config ctx assertion.cond in
       Ok ctx
@@ -641,15 +639,13 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets)
           else eval_statement config ctx st2
       | V.Symbolic sv ->
           (* Synthesis *)
-          S.synthesize_symbolic_expansion_if_branching sv.V.svalue;
+          S.synthesize_symbolic_expansion_if_branching sv;
           (* Expand the symbolic value to true or false *)
           let see_true = SeConcrete (V.Bool true) in
           let see_false = SeConcrete (V.Bool false) in
           let expand_and_execute see st =
             (* Apply the symbolic expansion *)
-            let ctx =
-              apply_symbolic_expansion_non_borrow config sv.V.svalue see ctx
-            in
+            let ctx = apply_symbolic_expansion_non_borrow config sv see ctx in
             (* Evaluate the operand *)
             let ctx, _ = eval_operand config ctx op in
             (* Evaluate the branch *)
@@ -674,7 +670,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets)
           | Some (_, tgt) -> eval_statement config ctx tgt)
       | V.Symbolic sv ->
           (* Synthesis *)
-          S.synthesize_symbolic_expansion_switch_int_branching sv.V.svalue;
+          S.synthesize_symbolic_expansion_switch_int_branching sv;
           (* For all the branches of the switch, we expand the symbolic value
            * to the value given by the branch and execute the branch statement.
            * For the otherwise branch, we leave the symbolic value as it is
@@ -685,9 +681,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets)
           let exec_branch (switch_value, branch_st) =
             let see = SeConcrete (V.Scalar switch_value) in
             (* Apply the symbolic expansion *)
-            let ctx =
-              apply_symbolic_expansion_non_borrow config sv.V.svalue see ctx
-            in
+            let ctx = apply_symbolic_expansion_non_borrow config sv see ctx in
             (* Evaluate the operand *)
             let ctx, _ = eval_operand config ctx op in
             (* Evaluate the branch *)
@@ -810,11 +804,9 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (args : E.operand list) (dest : E.place) : C.eval_ctx =
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
-  let ctx, ret_spc =
-    mk_fresh_symbolic_proj_comp T.RegionId.Set.empty ret_sv_ty ctx
-  in
-  let ret_value = mk_typed_value_from_proj_comp ret_spc in
-  let ret_av = mk_aproj_loans_from_symbolic_value ret_spc.V.svalue in
+  let ctx, ret_spc = mk_fresh_symbolic_value ret_sv_ty ctx in
+  let ret_value = mk_typed_value_from_symbolic_value ret_spc in
+  let ret_av = mk_aproj_loans_from_symbolic_value ret_spc in
   (* Evaluate the input operands *)
   let ctx, args = eval_operands config ctx args in
   let args_with_rtypes = List.combine args inst_sg.A.inputs in
@@ -857,8 +849,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   (* Move the return value to its destination *)
   let ctx = assign_to_place config ctx ret_value dest in
   (* Synthesis *)
-  S.synthesize_function_call fid region_params type_params args dest
-    ret_spc.V.svalue;
+  S.synthesize_function_call fid region_params type_params args dest ret_spc;
   (* Return *)
   ctx
 

@@ -214,11 +214,6 @@ module Values = struct
       (sv : V.symbolic_value) : string =
     symbolic_value_id_to_string sv.sv_id ^ " : " ^ PT.rty_to_string fmt sv.sv_ty
 
-  let symbolic_proj_comp_to_string (fmt : PT.rtype_formatter)
-      (sp : V.symbolic_proj_comp) : string =
-    let regions = T.RegionId.set_to_string sp.rset_ended in
-    "proj_comp " ^ regions ^ " (" ^ symbolic_value_to_string fmt sp.svalue ^ ")"
-
   let symbolic_value_proj_to_string (fmt : value_formatter)
       (sv : V.symbolic_value) (rty : T.rty) : string =
     symbolic_value_id_to_string sv.sv_id
@@ -275,8 +270,7 @@ module Values = struct
     | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
     | Borrow bc -> borrow_content_to_string fmt bc
     | Loan lc -> loan_content_to_string fmt lc
-    | Symbolic s ->
-        symbolic_proj_comp_to_string (value_to_rtype_formatter fmt) s
+    | Symbolic s -> symbolic_value_to_string (value_to_rtype_formatter fmt) s
 
   and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
       string =
@@ -539,6 +533,7 @@ module Contexts = struct
 
   let eval_ctx_to_string (ctx : C.eval_ctx) : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
+    let ended_regions = T.RegionId.set_to_string ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
     let frames =
@@ -547,7 +542,8 @@ module Contexts = struct
           "\n# Frame " ^ string_of_int i ^ ":\n" ^ env_to_string fmt f ^ "\n")
         frames
     in
-    "# " ^ string_of_int num_frames ^ " frame(s)\n" ^ String.concat "" frames
+    "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
+    ^ " frame(s)\n" ^ String.concat "" frames
 end
 
 module PC = Contexts (* local module *)

@@ -51,51 +51,19 @@ let mk_fresh_symbolic_value (ty : T.rty) (ctx : C.eval_ctx) :
   let svalue = { V.sv_id; V.sv_ty = ty } in
   (ctx, svalue)
 
-(** Create a fresh symbolic proj comp *)
-let mk_fresh_symbolic_proj_comp (ended_regions : T.RegionId.set_t) (ty : T.rty)
-    (ctx : C.eval_ctx) : C.eval_ctx * V.symbolic_proj_comp =
-  let ctx, svalue = mk_fresh_symbolic_value ty ctx in
-  let sv = { V.svalue; rset_ended = ended_regions } in
-  (ctx, sv)
-
-(** Create a fresh symbolic value (as a complementary projector) *)
-let mk_fresh_symbolic_proj_comp_value (ended_regions : T.RegionId.set_t)
-    (ty : T.rty) (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
-  let ctx, sv = mk_fresh_symbolic_proj_comp ended_regions ty ctx in
-  let value : V.value = V.Symbolic sv in
-  let ty : T.ety = Subst.erase_regions ty in
-  let sv : V.typed_value = { V.value; ty } in
-  (ctx, sv)
-
-let mk_typed_value_from_proj_comp (sv : V.symbolic_proj_comp) : V.typed_value =
-  let ty = Subst.erase_regions sv.V.svalue.V.sv_ty in
-  let value = V.Symbolic sv in
-  { V.value; ty }
-
-(** Create a typed value from a symbolic value.
-
-    Initializes the set of ended regions with `empty`.
- *)
+(** Create a typed value from a symbolic value. *)
 let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
     V.typed_value =
-  let spc = { V.svalue; rset_ended = T.RegionId.Set.empty } in
-  mk_typed_value_from_proj_comp spc
+  let av = V.Symbolic svalue in
+  let av : V.typed_value =
+    { V.value = av; V.ty = Subst.erase_regions svalue.V.sv_ty }
+  in
+  av
 
-let mk_aproj_loans_from_proj_comp (spc : V.symbolic_proj_comp) : V.typed_avalue
-    =
-  let ty = spc.V.svalue.V.sv_ty in
-  let proj = V.AProjLoans spc.V.svalue in
-  let value = V.ASymbolic proj in
-  { V.value; ty }
-
-(** Create a Loans projector from a symbolic value.
-
-    Initializes the set of ended regions with `empty`.
- *)
+(** Create a loans projector from a symbolic value. *)
 let mk_aproj_loans_from_symbolic_value (svalue : V.symbolic_value) :
     V.typed_avalue =
-  let spc = { V.svalue; rset_ended = T.RegionId.Set.empty } in
-  let av = V.ASymbolic (V.AProjLoans spc.V.svalue) in
+  let av = V.ASymbolic (V.AProjLoans svalue) in
   let av : V.typed_avalue = { V.value = av; V.ty = svalue.V.sv_ty } in
   av
 
@@ -162,7 +130,7 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
       inherit [_] C.iter_eval_ctx
 
       method! visit_Symbolic _ sv =
-        if sv.V.svalue.V.sv_id = sv_id then raise Found else ()
+        if sv.V.sv_id = sv_id then raise Found else ()
 
       method! visit_ASymbolic _ aproj =
         match aproj with
@@ -228,36 +196,33 @@ let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
       || projections_intersect ty1 rset1 ty2 rset2
   | _ -> failwith "Unreachable"
 
-(** Check if the ended regions of a comp projector over a symbolic value
-    intersect the regions listed in another projection *)
-let symbolic_proj_comp_ended_regions_intersect_proj (s : V.symbolic_proj_comp)
-    (ty : T.rty) (regions : T.RegionId.set_t) : bool =
-  projections_intersect s.V.svalue.V.sv_ty s.V.rset_ended ty regions
-
 (** Check that a symbolic value doesn't contain ended regions.
 
     Note that we don't check that the set of ended regions is empty: we
     check that the set of ended regions doesn't intersect the set of
     regions used in the type (this is more general).
 *)
-let symbolic_proj_comp_ended_regions (s : V.symbolic_proj_comp) : bool =
-  let regions = rty_regions s.V.svalue.V.sv_ty in
-  not (T.RegionId.Set.disjoint regions s.rset_ended)
+let symbolic_value_has_ended_regions (ended_regions : T.RegionId.set_t)
+    (s : V.symbolic_value) : bool =
+  let regions = rty_regions s.V.sv_ty in
+  not (T.RegionId.Set.disjoint regions ended_regions)
 
 (** Check if a [value] contains ⊥.
 
     Note that this function is very general: it also checks wether
     symbolic values contain already ended regions.
  *)
-let bottom_in_value (v : V.typed_value) : bool =
+let bottom_in_value (ended_regions : T.RegionId.set_t) (v : V.typed_value) :
+    bool =
   let obj =
     object
       inherit [_] V.iter_typed_value
 
       method! visit_Bottom _ = raise Found
 
-      method! visit_symbolic_proj_comp _ s =
-        if symbolic_proj_comp_ended_regions s then raise Found else ()
+      method! visit_symbolic_value _ s =
+        if symbolic_value_has_ended_regions ended_regions s then raise Found
+        else ()
     end
   in
   (* We use exceptions *)
@@ -273,7 +238,7 @@ let bottom_in_value (v : V.typed_value) : bool =
     
     TODO: remove?
 *)
-let bottom_in_avalue (v : V.typed_avalue) (_abs_regions : T.RegionId.set_t) :
+let bottom_in_avalue (ended_regions : T.RegionId.set_t) (v : V.typed_avalue) :
     bool =
   let obj =
     object
@@ -281,8 +246,9 @@ let bottom_in_avalue (v : V.typed_avalue) (_abs_regions : T.RegionId.set_t) :
 
       method! visit_Bottom _ = raise Found
 
-      method! visit_symbolic_proj_comp _ sv =
-        if symbolic_proj_comp_ended_regions sv then raise Found else ()
+      method! visit_symbolic_value _ sv =
+        if symbolic_value_has_ended_regions ended_regions sv then raise Found
+        else ()
 
       method! visit_aproj _ ap =
         (* Nothing to do actually *)

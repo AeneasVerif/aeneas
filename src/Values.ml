@@ -47,35 +47,7 @@ type constant_value =
 
 type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
 [@@deriving show]
-(** Symbolic value.
-
-    TODO: a symbolic value may not always have the same type!!
-    For references:
-    - a projector on loans may see a symbolic value of id `sid` as having type `T`
-    - a projector on borrows may see it as having type `&mut T`
-    We need to make this clear and more consistant.
-    So [symbolic_value] is actually a projector. TODO: rename to [symbolic_proj].
-    The kind of projector will then depend on the context.
-    Actually, maybe we shouldn't use this type. Or for abstractions we should
-    use different types. Something like:
-    - [proj_borrows] for values
-    - [aproj_loans], [aproj_borrows] for avalues
-  *)
-
-(** TODO: make it clear that complementary projectors are projectors on borrows.
- ** TODO: actually this is useless: the set of ended regions should be global!
- ** (and thus stored in the context) *)
-type symbolic_proj_comp = {
-  svalue : symbolic_value;  (** The symbolic value itself *)
-  rset_ended : RegionId.set_t;
-      (** The regions used in the symbolic value which have already ended *)
-}
-[@@deriving show]
-(** A complementary projector over a symbolic value.
-    
-    "Complementary" stands for the fact that it is a projector over all the
-    regions *but* the ones which are listed in the projector.
-*)
+(** A symbolic value *)
 
 (** Ancestor for [typed_value] iter visitor *)
 class ['self] iter_typed_value_base =
@@ -86,8 +58,7 @@ class ['self] iter_typed_value_base =
 
     method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
 
-    method visit_symbolic_proj_comp : 'env -> symbolic_proj_comp -> unit =
-      fun _ _ -> ()
+    method visit_symbolic_value : 'env -> symbolic_value -> unit = fun _ _ -> ()
 
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
   end
@@ -103,8 +74,7 @@ class ['self] map_typed_value_base =
     method visit_erased_region : 'env -> erased_region -> erased_region =
       fun _ r -> r
 
-    method visit_symbolic_proj_comp
-        : 'env -> symbolic_proj_comp -> symbolic_proj_comp =
+    method visit_symbolic_value : 'env -> symbolic_value -> symbolic_value =
       fun _ sv -> sv
 
     method visit_ety : 'env -> ety -> ety = fun _ ty -> ty
@@ -117,8 +87,13 @@ type value =
   | Bottom  (** No value (uninitialized or moved value) *)
   | Borrow of borrow_content  (** A borrowed value *)
   | Loan of loan_content  (** A loaned value *)
-  | Symbolic of symbolic_proj_comp
-      (** Unknown (symbolic) value. This is a projector on borrows (TODO: make this clearer). *)
+  | Symbolic of symbolic_value
+      (** Borrow projector over a symbolic value.
+      
+          Note that contrary to the abstraction-values case, symbolic values
+          appearing in regular values are interpreted as *borrow* projectors,
+          they can never be *loan* projectors.
+       *)
 
 and adt_value = {
   variant_id : (VariantId.id option[@opaque]);

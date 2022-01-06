@@ -433,8 +433,8 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 | Abstract (V.AMutBorrow (_, sv)) ->
                     assert (Subst.erase_regions sv.V.ty = ty)
                 | _ -> failwith "Inconsistent context"))
-        | V.Symbolic spc, ty ->
-            let ty' = Subst.erase_regions spc.V.svalue.V.sv_ty in
+        | V.Symbolic sv, ty ->
+            let ty' = Subst.erase_regions sv.V.sv_ty in
             assert (ty' = ty)
         | _ -> failwith "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
