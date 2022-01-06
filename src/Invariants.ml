@@ -35,6 +35,17 @@ let set_outer_mut (info : outer_borrow_info) : outer_borrow_info =
 let set_outer_shared (_info : outer_borrow_info) : outer_borrow_info =
   { outer_borrow = true; outer_shared = true }
 
+(* TODO: we need to factorize print functions for strings *)
+let ids_reprs_to_string (reprs : V.BorrowId.id V.BorrowId.Map.t) : string =
+  let bindings = V.BorrowId.Map.bindings reprs in
+  let bindings =
+    List.map
+      (fun (id, repr_id) ->
+        V.BorrowId.to_string id ^ " -> " ^ V.BorrowId.to_string repr_id)
+      bindings
+  in
+  String.concat "\n" bindings
+
 let borrows_infos_to_string (infos : borrow_info V.BorrowId.Map.t) : string =
   let bindings = V.BorrowId.Map.bindings infos in
   let bindings = List.map (fun (_, info) -> show_borrow_info info) bindings in
@@ -160,10 +171,23 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
   (* Some utilities to register the borrows *)
   let find_info (bid : V.BorrowId.id) : borrow_info =
     (* Find the representant *)
-    let repr_bid = V.BorrowId.Map.find bid !ids_reprs in
-    (* Lookup the info *)
-    V.BorrowId.Map.find repr_bid !borrows_infos
+    match V.BorrowId.Map.find_opt bid !ids_reprs with
+    | Some repr_bid ->
+        (* Lookup the info *)
+        V.BorrowId.Map.find repr_bid !borrows_infos
+    | None ->
+        let err =
+          "find_info: could not find the representant of borrow "
+          ^ V.BorrowId.to_string bid ^ "\n" ^ "\n- Context:\n"
+          ^ eval_ctx_to_string ctx ^ "\n- representants:\n"
+          ^ ids_reprs_to_string !ids_reprs
+          ^ "\n- info:\n"
+          ^ borrows_infos_to_string !borrows_infos
+        in
+        L.log#serror err;
+        failwith err
   in
+
   let update_info (bid : V.BorrowId.id) (info : borrow_info) : unit =
     (* Find the representant *)
     let repr_bid = V.BorrowId.Map.find bid !ids_reprs in
