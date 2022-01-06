@@ -1,3 +1,5 @@
+(* TODO: most of the definitions in this file need to be moved elsewhere *)
+
 module T = Types
 module V = Values
 open Scalars
@@ -792,3 +794,18 @@ type outer_borrows_or_abs =
 
 exception FoundOuter of outer_borrows_or_abs
 (** Utility exception *)
+
+(** Return true if a type is "primitively copyable".
+  *
+  * "primitively copyable" means that copying instances of this type doesn't
+  * require calling dedicated functions defined through the Copy trait. It
+  * is the case for types like integers, shared borrows, etc.
+  *)
+let rec type_is_primitively_copyable (ty : T.ety) : bool =
+  match ty with
+  | T.Adt ((T.AdtId _ | T.Assumed _), _, _) -> false
+  | T.Adt (T.Tuple, _, tys) -> List.for_all type_is_primitively_copyable tys
+  | T.TypeVar _ | T.Never | T.Str | T.Array _ | T.Slice _ -> false
+  | T.Bool | T.Char | T.Integer _ -> true
+  | T.Ref (_, _, T.Mut) -> false
+  | T.Ref (_, _, T.Shared) -> true
