@@ -5,6 +5,7 @@ module Subst = Substitute
 module L = Logging
 open Utils
 open ValuesUtils
+open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterProjectors
@@ -265,6 +266,11 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
           | None -> failwith "Unreachable"
           | Some abs -> abs.V.regions
         in
+        (* Rk.: there is a small issue with the types of the aloan values *)
+        let borrowed_value_aty =
+          let _, ty, _ = ty_get_ref ty in
+          ty
+        in
         match lc with
         | V.AMutLoan (bid', child) ->
             if bid' = bid then (
@@ -276,7 +282,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Apply the projection *)
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  regions nv ty
+                  regions nv borrowed_value_aty
               in
               (* Return the new value *)
               V.ALoan (V.AEndedMutLoan { given_back; child }))
@@ -302,7 +308,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * (i.e., we don't call [set_replaced]) *)
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  regions nv ty
+                  regions nv borrowed_value_aty
               in
               V.ALoan (V.AEndedIgnoredMutLoan { given_back; child })
             else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)

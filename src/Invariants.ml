@@ -523,14 +523,15 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 | _ -> failwith "Inconsistent context")
             | V.ASharedLoan (_, sv, child_av) | V.AEndedSharedLoan (sv, child_av)
               ->
-                let ty = Subst.erase_regions aty in
-                assert (sv.V.ty = ty);
+                let borrowed_aty = aloan_get_expected_child_type aty in
+                assert (sv.V.ty = Subst.erase_regions borrowed_aty);
                 (* TODO: the type of aloans doesn't make sense, see above *)
-                assert (child_av.V.ty = aloan_get_expected_child_type aty)
+                assert (child_av.V.ty = borrowed_aty)
             | V.AEndedMutLoan { given_back; child }
             | V.AEndedIgnoredMutLoan { given_back; child } ->
-                assert (given_back.V.ty = aloan_get_expected_child_type aty);
-                assert (child.V.ty = aloan_get_expected_child_type aty)
+                let borrowed_aty = aloan_get_expected_child_type aty in
+                assert (given_back.V.ty = borrowed_aty);
+                assert (child.V.ty = borrowed_aty)
             | V.AIgnoredSharedLoan child_av ->
                 assert (child_av.V.ty = aloan_get_expected_child_type aty))
         | V.ASymbolic aproj, ty ->
