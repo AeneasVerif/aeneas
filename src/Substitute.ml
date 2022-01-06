@@ -52,7 +52,6 @@ let fresh_regions_with_substs (region_vars : T.region_var list)
   let ctx, fresh_region_ids =
     List.fold_left_map (fun ctx _ -> C.fresh_region_id ctx) ctx region_vars
   in
-  let fresh_regions = List.map (fun rid -> T.Var rid) fresh_region_ids in
   (* Generate the map from region var ids to regions *)
   let ls = List.combine region_vars fresh_region_ids in
   let rid_map =

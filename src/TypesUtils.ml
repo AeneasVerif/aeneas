@@ -72,7 +72,7 @@ let rec ety_no_regions_to_rty (ty : ety) : rty =
          regions"
 
 (** Check if a [ty] contains regions *)
-let rec ty_has_regions (ty : ety) : bool =
+let ty_has_regions (ty : ety) : bool =
   let obj =
     object
       inherit [_] iter_ty as super
