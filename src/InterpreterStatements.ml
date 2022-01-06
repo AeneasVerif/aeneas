@@ -22,6 +22,26 @@ open InterpreterExpressions
 (** Result of evaluating a statement *)
 type statement_eval_res = Unit | Break of int | Continue of int | Return
 
+(** Drop a value at a given place *)
+let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
+    =
+  L.log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
+  (* Prepare the place (by ending the loans, then the borrows) *)
+  let ctx, v = prepare_lplace config p ctx in
+  (* Replace the value with [Bottom] *)
+  let nv = { v with value = V.Bottom } in
+  let ctx = write_place_unwrap config Write p nv ctx in
+  ctx
+
+(** Assign a value to a given place *)
+let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
+    (p : E.place) : C.eval_ctx =
+  (* Prepare the destination *)
+  let ctx, _ = prepare_lplace config p ctx in
+  (* Update the destination *)
+  let ctx = write_place_unwrap config Write p v ctx in
+  ctx
+
 (** Updates the discriminant of a value at a given place.
 
     There are two situations:

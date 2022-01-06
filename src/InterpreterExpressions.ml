@@ -31,26 +31,6 @@ let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
   let v = read_place_unwrap config access p ctx in
   (ctx, v)
 
-(** Drop a value at a given place *)
-let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
-    =
-  L.log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
-  (* Prepare the place (by ending the loans, then the borrows) *)
-  let ctx, v = prepare_lplace config p ctx in
-  (* Replace the value with [Bottom] *)
-  let nv = { v with value = V.Bottom } in
-  let ctx = write_place_unwrap config Write p nv ctx in
-  ctx
-
-(** Assign a value to a given place *)
-let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
-    (p : E.place) : C.eval_ctx =
-  (* Prepare the destination *)
-  let ctx, _ = prepare_lplace config p ctx in
-  (* Update the destination *)
-  let ctx = write_place_unwrap config Write p v ctx in
-  ctx
-
 (** Convert a constant operand value to a typed value *)
 let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
     (cv : E.operand_constant_value) : V.typed_value =
