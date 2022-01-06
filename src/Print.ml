@@ -739,7 +739,7 @@ module CfimAst = struct
         indent ^ "set_discriminant(" ^ place_to_string fmt p ^ ", "
         ^ T.VariantId.to_string variant_id
         ^ ")"
-    | A.Drop p -> "drop(" ^ place_to_string fmt p ^ ")"
+    | A.Drop p -> indent ^ "drop(" ^ place_to_string fmt p ^ ")"
     | A.Assert a ->
         let cond = operand_to_string fmt a.A.cond in
         if a.A.expected then indent ^ "assert(" ^ cond ^ ")"
@@ -777,7 +777,7 @@ module CfimAst = struct
     | A.Nop -> indent ^ "nop"
     | A.Sequence (st1, st2) ->
         statement_to_string fmt indent indent_incr st1
-        ^ "\n"
+        ^ ";\n"
         ^ statement_to_string fmt indent indent_incr st2
     | A.Switch (op, tgts) -> (
         let op = operand_to_string fmt op in
