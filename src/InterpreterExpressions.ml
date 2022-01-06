@@ -23,6 +23,34 @@ type eval_error = Panic
 
 type 'a eval_result = ('a, eval_error) result
 
+(** Small utility *)
+let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
+    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+  let ctx = update_ctx_along_read_place config access p ctx in
+  let ctx = end_loans_at_place config access p ctx in
+  let v = read_place_unwrap config access p ctx in
+  (ctx, v)
+
+(** Drop a value at a given place *)
+let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
+    =
+  L.log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
+  (* Prepare the place (by ending the loans, then the borrows) *)
+  let ctx, v = prepare_lplace config p ctx in
+  (* Replace the value with [Bottom] *)
+  let nv = { v with value = V.Bottom } in
+  let ctx = write_place_unwrap config Write p nv ctx in
+  ctx
+
+(** Assign a value to a given place *)
+let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
+    (p : E.place) : C.eval_ctx =
+  (* Prepare the destination *)
+  let ctx, _ = prepare_lplace config p ctx in
+  (* Update the destination *)
+  let ctx = write_place_unwrap config Write p v ctx in
+  ctx
+
 (** Convert a constant operand value to a typed value *)
 let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
     (cv : E.operand_constant_value) : V.typed_value =
@@ -65,14 +93,6 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
      (allows to catch errors at compilation if the definitions change) *)
   | _, Unit | _, ConstantAdt _ | _, ConstantValue _ ->
       failwith "Improperly typed constant value"
-
-(** Small utility *)
-let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
-    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
-  let ctx = update_ctx_along_read_place config access p ctx in
-  let ctx = end_loans_at_place config access p ctx in
-  let v = read_place_unwrap config access p ctx in
-  (ctx, v)
 
 (** Prepare the evaluation of an operand. *)
 let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
@@ -454,23 +474,3 @@ let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
       match eval_rvalue_non_discriminant config ctx rvalue with
       | Error e -> Error e
       | Ok res -> Ok [ res ])
-
-(** Drop a value at a given place *)
-let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
-    =
-  L.log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
-  (* Prepare the place (by ending the loans, then the borrows) *)
-  let ctx, v = prepare_lplace config p ctx in
-  (* Replace the value with [Bottom] *)
-  let nv = { v with value = V.Bottom } in
-  let ctx = write_place_unwrap config Write p nv ctx in
-  ctx
-
-(** Assign a value to a given place *)
-let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
-    (p : E.place) : C.eval_ctx =
-  (* Prepare the destination *)
-  let ctx, _ = prepare_lplace config p ctx in
-  (* Update the destination *)
-  let ctx = write_place_unwrap config Write p v ctx in
-  ctx
