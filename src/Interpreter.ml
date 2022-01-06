@@ -24,11 +24,11 @@ open InterpreterStatements
 
 module Test = struct
   let initialize_context (type_context : C.type_context)
-      (fun_defs : A.fun_def list) : C.eval_ctx =
+      (fun_defs : A.fun_def list) (type_vars : T.type_var list) : C.eval_ctx =
     {
       C.type_context;
       C.fun_context = fun_defs;
-      C.type_vars = [];
+      C.type_vars;
       C.env = [];
       C.symbolic_counter = V.SymbolicValueId.generator_zero;
       C.borrow_counter = V.BorrowId.generator_zero;
@@ -57,10 +57,10 @@ module Test = struct
      * for each of the backward functions. We do it only because we can
      * do it, and because it gives a bit of sanity.
      * *)
-    (* Create the context *)
-    let ctx = initialize_context type_context fun_defs in
-    (* Instantiate the signature *)
     let sg = fdef.signature in
+    (* Create the context *)
+    let ctx = initialize_context type_context fun_defs sg.type_params in
+    (* Instantiate the signature *)
     let type_params =
       List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params
     in
@@ -127,7 +127,7 @@ module Test = struct
     assert (fdef.A.arg_count = 0);
 
     (* Create the evaluation context *)
-    let ctx = initialize_context type_context fun_defs in
+    let ctx = initialize_context type_context fun_defs [] in
 
     (* Insert the (uninitialized) local variables *)
     let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
