@@ -1,12 +1,8 @@
 module T = Types
 module V = Values
-module E = Expressions
 module C = Contexts
 module Subst = Substitute
-module A = CfimAst
 module L = Logging
-module Inv = Invariants
-module S = Synthesis
 open Utils
 open InterpreterUtils
 open InterpreterProjectors

@@ -4,7 +4,6 @@ module E = Expressions
 module C = Contexts
 module Subst = Substitute
 module L = Logging
-module Inv = Invariants
 module S = Synthesis
 open InterpreterUtils
 open InterpreterBorrows

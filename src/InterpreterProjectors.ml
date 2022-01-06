@@ -3,12 +3,9 @@ module V = Values
 module E = Expressions
 module C = Contexts
 module Subst = Substitute
-module A = CfimAst
 module L = Logging
 open TypesUtils
 open ValuesUtils
-module Inv = Invariants
-module S = Synthesis
 open Utils
 open InterpreterUtils
 
@@ -24,7 +21,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     V.abstract_shared_borrows =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
-  let ety = Substitute.erase_regions ty in
+  let ety = Subst.erase_regions ty in
   assert (ety = v.V.ty);
   (* Project *)
   match (v.V.value, ty) with
