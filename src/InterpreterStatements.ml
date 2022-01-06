@@ -38,6 +38,51 @@ let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
   let ctx = write_place_unwrap config Write p v ctx in
   ctx
 
+(** Evaluates an assertion.
+    
+    In the case the boolean under scrutinee is symbolic, we synthesize
+    a call to `assert ...` then continue in the success branch (and thus
+    expand the boolean to `true`).
+ *)
+let eval_assertion (config : C.config) (ctx : C.eval_ctx)
+    (assertion : A.assertion) : C.eval_ctx eval_result =
+  (* There may be a symbolic expansion, so don't fully evaluate the operand
+   * (if we moved the value, we can't expand it because it is hanging in
+   * thin air, outside of the environment... *)
+  let ctx, v = eval_operand_prepare config ctx assertion.cond in
+  assert (v.ty = T.Bool);
+  let symbolic_mode = config.mode = C.SymbolicMode in
+  (* We make a choice here: we could completely decouple the concrete and
+   * symbolic executions here but choose not to. In the case where we
+   * know the concrete value of the boolean we test, we use this value
+   * even if we are in symbolic mode. Note that this case should be
+   * extremely rare... *)
+  match v.value with
+  | Concrete (Bool b) ->
+      (* There won't be any symbolic expansions: fully evaluate the operand *)
+      let ctx, v' = eval_operand config ctx assertion.cond in
+      assert (v' = v);
+      (* Branch *)
+      if b = assertion.expected then Ok ctx
+      else (
+        if symbolic_mode then S.synthesize_panic ();
+        Error Panic)
+  | Symbolic sv ->
+      (* We register the fact that we called an assertion (the synthesized
+       * code will then check that the assert succeeded) then continue
+       * with the succeeding branch: we thus expand the symbolic value with
+       * `true` *)
+      S.synthesize_assert v;
+      let see = SeConcrete (V.Bool true) in
+      let ctx =
+        apply_symbolic_expansion_non_borrow config sv.V.svalue see ctx
+      in
+      S.synthesize_symbolic_expansion_no_branching sv.V.svalue see;
+      (* We can finally fully evaluate the operand *)
+      let ctx, _ = eval_operand config ctx assertion.cond in
+      Ok ctx
+  | _ -> failwith ("Expected a boolean, got: " ^ V.show_value v.value)
+
 (** Updates the discriminant of a value at a given place.
 
     There are two situations:
@@ -500,12 +545,9 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       [ Ok (set_discriminant config ctx p variant_id) ]
   | A.Drop p -> [ Ok (drop_value config ctx p, Unit) ]
   | A.Assert assertion -> (
-      let ctx, v = eval_operand config ctx assertion.cond in
-      assert (v.ty = T.Bool);
-      match v.value with
-      | Concrete (Bool b) ->
-          if b = assertion.expected then [ Ok (ctx, Unit) ] else [ Error Panic ]
-      | _ -> failwith ("Expected a boolean, got: " ^ V.show_value v.value))
+      match eval_assertion config ctx assertion with
+      | Ok ctx -> [ Ok (ctx, Unit) ]
+      | Error e -> [ Error e ])
   | A.Call call -> eval_function_call config ctx call
   | A.Panic -> [ Error Panic ]
   | A.Return -> [ Ok (ctx, Return) ]

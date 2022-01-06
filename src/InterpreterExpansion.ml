@@ -166,6 +166,8 @@ let replace_symbolic_values (at_most_once : bool)
 (** Apply a symbolic expansion to a context, by replacing the original
     symbolic value with its expanded value. Is valid only if the expansion
     is not a borrow (i.e., an adt...).
+    
+    This function does update the synthesis.
 *)
 let apply_symbolic_expansion_non_borrow (config : C.config)
     (original_sv : V.symbolic_value) (expansion : symbolic_expansion)

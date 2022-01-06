@@ -23,6 +23,8 @@ open InterpreterProjectors
  *   `s := op1 + op2`
  * *)
 
+(* TODO: error Panic *)
+
 (** Synthesize code for a symbolic expansion which doesn't lead to branching
     (i.e., applied on a value which is not an enumeration with several variants).
  *)
@@ -66,3 +68,7 @@ let synthesize_function_call (_fid : A.fun_id)
     (_args : V.typed_value list) (_dest : E.place) (_res : V.symbolic_value) :
     unit =
   ()
+
+let synthesize_panic () : unit = ()
+
+let synthesize_assert (v : V.typed_value) : unit = ()
