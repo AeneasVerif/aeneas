@@ -173,11 +173,6 @@ module Test = struct
       (lazy
         ("test_symbolic_function: " ^ Print.Types.name_to_string fdef.A.name));
 
-    (* Sanity check - *)
-    assert (List.length fdef.A.signature.region_params = 0);
-    assert (List.length fdef.A.signature.type_params = 0);
-    assert (fdef.A.arg_count = 0);
-
     (* Create the evaluation context *)
     let ctx = initialize_symbolic_context_for_fun type_context fun_defs fdef in
 
@@ -192,7 +187,9 @@ module Test = struct
    *)
   let test_symbolic_functions (type_defs : T.type_def list)
       (fun_defs : A.fun_def list) : unit =
-    let no_loop_funs = List.filter CfimAstUtils.fun_def_has_loops fun_defs in
+    let no_loop_funs =
+      List.filter (fun f -> not (CfimAstUtils.fun_def_has_loops f)) fun_defs
+    in
     let test_fun (def : A.fun_def) : unit =
       let type_ctx = { C.type_defs } in
       let res = test_symbolic_function type_ctx fun_defs def.A.def_id in
