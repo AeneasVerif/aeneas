@@ -5,6 +5,8 @@ module C = Contexts
 module Subst = Substitute
 module L = Logging
 module S = Synthesis
+open TypesUtils
+open ValuesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterBorrows

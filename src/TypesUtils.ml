@@ -108,3 +108,18 @@ let ty_has_regions (ty : ety) : bool =
     obj#visit_ty () ty;
     false
   with Found -> true
+
+(** Return true if a type is "primitively copyable".
+  *
+  * "primitively copyable" means that copying instances of this type doesn't
+  * require calling dedicated functions defined through the Copy trait. It
+  * is the case for types like integers, shared borrows, etc.
+  *)
+let rec type_is_primitively_copyable (ty : ety) : bool =
+  match ty with
+  | Adt ((AdtId _ | Assumed _), _, _) -> false
+  | Adt (Tuple, _, tys) -> List.for_all type_is_primitively_copyable tys
+  | TypeVar _ | Never | Str | Array _ | Slice _ -> false
+  | Bool | Char | Integer _ -> true
+  | Ref (_, _, Mut) -> false
+  | Ref (_, _, Shared) -> true

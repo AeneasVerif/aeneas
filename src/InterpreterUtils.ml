@@ -126,51 +126,6 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 (** Utility exception *)
 
-(** Check if a value contains a borrow *)
-let borrows_in_value (v : V.typed_value) : bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_value
-
-      method! visit_borrow_content _env _ = raise Found
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_value () v;
-    false
-  with Found -> true
-
-(** Check if a value contains inactivated mutable borrows *)
-let inactivated_in_value (v : V.typed_value) : bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_value
-
-      method! visit_InactivatedMutBorrow _env _ = raise Found
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_value () v;
-    false
-  with Found -> true
-
-(** Check if a value contains a loan *)
-let loans_in_value (v : V.typed_value) : bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_value
-
-      method! visit_loan_content _env _ = raise Found
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_value () v;
-    false
-  with Found -> true
-
 let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     bool =
   let obj =
@@ -200,13 +155,6 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     obj#visit_eval_ctx () ctx;
     false
   with Found -> true
-
-(** TODO: move to InterpreterSymbolic or sth *)
-type symbolic_expansion =
-  | SeConcrete of V.constant_value
-  | SeAdt of (T.VariantId.id option * V.symbolic_proj_comp list)
-  | SeMutRef of V.BorrowId.id * V.symbolic_proj_comp
-  | SeSharedRef of V.BorrowId.set_t * V.symbolic_proj_comp
 
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that
@@ -319,18 +267,3 @@ let bottom_in_avalue (v : V.typed_avalue) (_abs_regions : T.RegionId.set_t) :
     obj#visit_typed_avalue () v;
     false
   with Found -> true
-
-(** Return true if a type is "primitively copyable".
-  *
-  * "primitively copyable" means that copying instances of this type doesn't
-  * require calling dedicated functions defined through the Copy trait. It
-  * is the case for types like integers, shared borrows, etc.
-  *)
-let rec type_is_primitively_copyable (ty : T.ety) : bool =
-  match ty with
-  | T.Adt ((T.AdtId _ | T.Assumed _), _, _) -> false
-  | T.Adt (T.Tuple, _, tys) -> List.for_all type_is_primitively_copyable tys
-  | T.TypeVar _ | T.Never | T.Str | T.Array _ | T.Slice _ -> false
-  | T.Bool | T.Char | T.Integer _ -> true
-  | T.Ref (_, _, T.Mut) -> false
-  | T.Ref (_, _, T.Shared) -> true

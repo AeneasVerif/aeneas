@@ -10,6 +10,13 @@ open Utils
 open InterpreterUtils
 open InterpreterBorrowsCore
 
+(** A symbolic expansion *)
+type symbolic_expansion =
+  | SeConcrete of V.constant_value
+  | SeAdt of (T.VariantId.id option * V.symbolic_proj_comp list)
+  | SeMutRef of V.BorrowId.id * V.symbolic_proj_comp
+  | SeSharedRef of V.BorrowId.set_t * V.symbolic_proj_comp
+
 (** Auxiliary function.
 
     Apply a proj_borrows on a shared borrow.

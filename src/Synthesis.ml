@@ -6,6 +6,8 @@ module Subst = Substitute
 module A = CfimAst
 module L = Logging
 open InterpreterUtils
+open InterpreterProjectors
+(* for symbolic_expansion definition *)
 
 (* TODO: the below functions have very "rough" signatures and do nothing: I
  * defined them so that the places where we should update the synthesized

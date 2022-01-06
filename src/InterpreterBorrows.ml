@@ -4,6 +4,7 @@ module C = Contexts
 module Subst = Substitute
 module L = Logging
 open Utils
+open ValuesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterProjectors

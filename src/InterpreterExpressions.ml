@@ -6,6 +6,7 @@ open Errors
 module C = Contexts
 module Subst = Substitute
 module L = Logging
+open TypesUtils
 open ValuesUtils
 module Inv = Invariants
 module S = Synthesis
