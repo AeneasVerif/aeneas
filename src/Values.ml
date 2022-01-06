@@ -47,30 +47,9 @@ type constant_value =
 
 type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
 [@@deriving show]
-(** Symbolic value.
+(** A symbolic value *)
 
-    TODO: a symbolic value may not always have the same type!!
-    For references:
-    - a projector on loans may see a symbolic value of id `sid` as having type `T`
-    - a projector on borrows may see it as having type `&mut T`
-    We need to make this clear and more consistant.
-    So [symbolic_value] is actually a projector. TODO: rename
-  *)
-
-(** TODO: make it clear that complementary projectors are projectors on borrows *)
-type symbolic_proj_comp = {
-  svalue : symbolic_value;  (** The symbolic value itself *)
-  rset_ended : RegionId.set_t;
-      (** The regions used in the symbolic value which have already ended *)
-}
-[@@deriving show]
-(** A complementary projector over a symbolic value.
-    
-    "Complementary" stands for the fact that it is a projector over all the
-    regions *but* the ones which are listed in the projector.
-*)
-
-(** Ancestor for iter visitor for [typed_value] *)
+(** Ancestor for [typed_value] iter visitor *)
 class ['self] iter_typed_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
@@ -79,13 +58,12 @@ class ['self] iter_typed_value_base =
 
     method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
 
-    method visit_symbolic_proj_comp : 'env -> symbolic_proj_comp -> unit =
-      fun _ _ -> ()
+    method visit_symbolic_value : 'env -> symbolic_value -> unit = fun _ _ -> ()
 
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for map visitor for [typed_value] *)
+(** Ancestor for [typed_value] map visitor for *)
 class ['self] map_typed_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
@@ -96,8 +74,7 @@ class ['self] map_typed_value_base =
     method visit_erased_region : 'env -> erased_region -> erased_region =
       fun _ r -> r
 
-    method visit_symbolic_proj_comp
-        : 'env -> symbolic_proj_comp -> symbolic_proj_comp =
+    method visit_symbolic_value : 'env -> symbolic_value -> symbolic_value =
       fun _ sv -> sv
 
     method visit_ety : 'env -> ety -> ety = fun _ ty -> ty
@@ -110,8 +87,13 @@ type value =
   | Bottom  (** No value (uninitialized or moved value) *)
   | Borrow of borrow_content  (** A borrowed value *)
   | Loan of loan_content  (** A loaned value *)
-  | Symbolic of symbolic_proj_comp
-      (** Unknown (symbolic) value. This is a projector on borrows (TODO: make this clearer). *)
+  | Symbolic of symbolic_value
+      (** Borrow projector over a symbolic value.
+      
+          Note that contrary to the abstraction-values case, symbolic values
+          appearing in regular values are interpreted as *borrow* projectors,
+          they can never be *loan* projectors.
+       *)
 
 and adt_value = {
   variant_id : (VariantId.id option[@opaque]);
@@ -208,7 +190,7 @@ type aproj =
 
 type region = RegionVarId.id Types.region [@@deriving show]
 
-(** Ancestor for iter visitor for [typed_avalue] *)
+(** Ancestor for [typed_avalue] iter visitor *)
 class ['self] iter_typed_avalue_base =
   object (_self : 'self)
     inherit [_] iter_typed_value
@@ -224,7 +206,7 @@ class ['self] iter_typed_avalue_base =
       fun _ _ -> ()
   end
 
-(** Ancestor for MAP visitor for [typed_avalue] *)
+(** Ancestor for [typed_avalue] map visitor *)
 class ['self] map_typed_avalue_base =
   object (_self : 'self)
     inherit [_] map_typed_value
@@ -511,7 +493,11 @@ and aborrow_content =
        *)
 
 (* TODO: we may want to merge this with typed_value - would prevent some issues
-   when accessing fields... *)
+   when accessing fields....
+
+   TODO: the type of avalues doesn't make sense for loan avalues: they currently
+   are typed as `& (mut) T` instead of `T`...
+*)
 and typed_avalue = { value : avalue; ty : rty }
 [@@deriving
   show,
@@ -535,9 +521,6 @@ and typed_avalue = { value : avalue; ty : rty }
 type abs = {
   abs_id : (AbstractionId.id[@opaque]);
   parents : (AbstractionId.set_t[@opaque]);  (** The parent abstractions *)
-  acc_regions : (RegionId.set_t[@opaque]);
-      (** Union of the regions owned by the (transitive) parent abstractions and
-          by the current abstraction *)
   regions : (RegionId.set_t[@opaque]);  (** Regions owned by this abstraction *)
   avalues : typed_avalue list;  (** The values in this abstraction *)
 }

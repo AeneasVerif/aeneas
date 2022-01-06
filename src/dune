@@ -9,12 +9,12 @@
     -safe-string
     -g
     ;-dsource
-    -warn-error -9-11-33-20-21-26-27-39
+    -warn-error -5-8-9-11-14-33-20-21-26-27-39
   ))
   (release (flags
     :standard
     -safe-string
     -g
     ;-dsource
-    -warn-error -9-11-33-20-21-26-27-39
+    -warn-error -5-8-9-11-14-33-20-21-26-27-39
   )))

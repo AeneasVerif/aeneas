@@ -214,11 +214,6 @@ module Values = struct
       (sv : V.symbolic_value) : string =
     symbolic_value_id_to_string sv.sv_id ^ " : " ^ PT.rty_to_string fmt sv.sv_ty
 
-  let symbolic_proj_comp_to_string (fmt : PT.rtype_formatter)
-      (sp : V.symbolic_proj_comp) : string =
-    let regions = T.RegionId.set_to_string sp.rset_ended in
-    "proj_comp " ^ regions ^ " (" ^ symbolic_value_to_string fmt sp.svalue ^ ")"
-
   let symbolic_value_proj_to_string (fmt : value_formatter)
       (sv : V.symbolic_value) (rty : T.rty) : string =
     symbolic_value_id_to_string sv.sv_id
@@ -275,8 +270,7 @@ module Values = struct
     | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
     | Borrow bc -> borrow_content_to_string fmt bc
     | Loan lc -> loan_content_to_string fmt lc
-    | Symbolic s ->
-        symbolic_proj_comp_to_string (value_to_rtype_formatter fmt) s
+    | Symbolic s -> symbolic_value_to_string (value_to_rtype_formatter fmt) s
 
   and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
       string =
@@ -419,18 +413,20 @@ module Values = struct
         ^ abstract_shared_borrows_to_string fmt sb
         ^ ")"
 
-  let abs_to_string (fmt : value_formatter) (abs : V.abs) : string =
+  let abs_to_string (fmt : value_formatter) (indent : string)
+      (indent_incr : string) (abs : V.abs) : string =
+    let indent2 = indent ^ indent_incr in
     let avs =
-      List.map (fun av -> "  " ^ typed_avalue_to_string fmt av) abs.avalues
+      List.map (fun av -> indent2 ^ typed_avalue_to_string fmt av) abs.avalues
     in
     let avs = String.concat ",\n" avs in
-    "abs@"
+    indent ^ "abs@"
     ^ V.AbstractionId.to_string abs.abs_id
     ^ "{parents="
     ^ V.AbstractionId.set_to_string abs.parents
     ^ "}" ^ "{regions="
     ^ T.RegionId.set_to_string abs.regions
-    ^ "}" ^ " {\n" ^ avs ^ "\n}"
+    ^ "}" ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
 end
 
 module PV = Values (* local module *)
@@ -442,17 +438,20 @@ module Contexts = struct
     | None -> PV.var_id_to_string bv.index
     | Some name -> name
 
-  let env_elem_to_string (fmt : PV.value_formatter) (ev : C.env_elem) : string =
+  let env_elem_to_string (fmt : PV.value_formatter) (indent : string)
+      (indent_incr : string) (ev : C.env_elem) : string =
     match ev with
     | Var (var, tv) ->
-        binder_to_string var ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
-    | Abs abs -> PV.abs_to_string fmt abs
+        indent ^ binder_to_string var ^ " -> "
+        ^ PV.typed_value_to_string fmt tv
+        ^ " ;"
+    | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
     | Frame -> failwith "Can't print a Frame element"
 
   let env_to_string (fmt : PV.value_formatter) (env : C.env) : string =
     "{\n"
     ^ String.concat "\n"
-        (List.map (fun ev -> "  " ^ env_elem_to_string fmt ev) env)
+        (List.map (fun ev -> env_elem_to_string fmt "  " "  " ev) env)
     ^ "\n}"
 
   type ctx_formatter = PV.value_formatter
@@ -492,17 +491,19 @@ module Contexts = struct
       v.name
     in
     let type_def_id_to_string def_id =
-      let def = T.TypeDefId.nth ctx.type_context def_id in
+      let def = T.TypeDefId.nth ctx.type_context.type_defs def_id in
       PT.name_to_string def.name
     in
     let adt_variant_to_string =
-      type_ctx_to_adt_variant_to_string_fun ctx.type_context
+      type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_defs
     in
     let var_id_to_string vid =
       let bv = C.ctx_lookup_binder ctx vid in
       binder_to_string bv
     in
-    let adt_field_names = type_ctx_to_adt_field_names_fun ctx.C.type_context in
+    let adt_field_names =
+      type_ctx_to_adt_field_names_fun ctx.type_context.type_defs
+    in
     {
       rvar_to_string;
       r_to_string;
@@ -532,6 +533,7 @@ module Contexts = struct
 
   let eval_ctx_to_string (ctx : C.eval_ctx) : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
+    let ended_regions = T.RegionId.set_to_string ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
     let frames =
@@ -540,7 +542,8 @@ module Contexts = struct
           "\n# Frame " ^ string_of_int i ^ ":\n" ^ env_to_string fmt f ^ "\n")
         frames
     in
-    "# " ^ string_of_int num_frames ^ " frame(s)\n" ^ String.concat "" frames
+    "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
+    ^ " frame(s)\n" ^ String.concat "" frames
 end
 
 module PC = Contexts (* local module *)
@@ -604,7 +607,7 @@ module CfimAst = struct
   let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : ast_formatter =
     let ctx_fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let adt_field_to_string =
-      type_ctx_to_adt_field_to_string_fun ctx.type_context
+      type_ctx_to_adt_field_to_string_fun ctx.type_context.type_defs
     in
     let fun_def_id_to_string def_id =
       let def = A.FunDefId.nth ctx.fun_context def_id in
@@ -737,7 +740,7 @@ module CfimAst = struct
         indent ^ "set_discriminant(" ^ place_to_string fmt p ^ ", "
         ^ T.VariantId.to_string variant_id
         ^ ")"
-    | A.Drop p -> "drop(" ^ place_to_string fmt p ^ ")"
+    | A.Drop p -> indent ^ "drop(" ^ place_to_string fmt p ^ ")"
     | A.Assert a ->
         let cond = operand_to_string fmt a.A.cond in
         if a.A.expected then indent ^ "assert(" ^ cond ^ ")"
@@ -775,7 +778,7 @@ module CfimAst = struct
     | A.Nop -> indent ^ "nop"
     | A.Sequence (st1, st2) ->
         statement_to_string fmt indent indent_incr st1
-        ^ "\n"
+        ^ ";\n"
         ^ statement_to_string fmt indent indent_incr st2
     | A.Switch (op, tgts) -> (
         let op = operand_to_string fmt op in
@@ -841,7 +844,7 @@ module CfimAst = struct
 
     (* Arguments *)
     let inputs = List.tl def.locals in
-    let inputs, _aux_locals = Utilities.list_split_at inputs def.arg_count in
+    let inputs, _aux_locals = Utils.list_split_at inputs def.arg_count in
     let args = List.combine inputs sg.inputs in
     let args =
       List.map
@@ -973,6 +976,10 @@ module EvalCtxCfimAst = struct
   let typed_value_to_string (ctx : C.eval_ctx) (v : V.typed_value) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     PV.typed_value_to_string fmt v
+
+  let typed_avalue_to_string (ctx : C.eval_ctx) (v : V.typed_avalue) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PV.typed_avalue_to_string fmt v
 
   let place_to_string (ctx : C.eval_ctx) (op : E.place) : string =
     let fmt = PA.eval_ctx_to_ast_formatter ctx in

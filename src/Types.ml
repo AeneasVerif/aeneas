@@ -135,13 +135,16 @@ type 'r ty =
       }]
 (* TODO: group Bool, Char, etc. in Constant *)
 
-type sty = RegionVarId.id region ty [@@deriving show]
+type 'r gr_ty = 'r region ty [@@deriving show]
+(** Generic type with regions *)
+
+type sty = RegionVarId.id gr_ty [@@deriving show]
 (** *S*ignature types.
 
     Used in function signatures and type definitions.
  *)
 
-type rty = RegionId.id region ty [@@deriving show]
+type rty = RegionId.id gr_ty [@@deriving show]
 (** Type with *R*egions.
 
     Used during symbolic execution.
