@@ -21,6 +21,8 @@ let rty_to_string = Print.EvalCtxCfimAst.rty_to_string
 
 let typed_value_to_string = Print.EvalCtxCfimAst.typed_value_to_string
 
+let typed_avalue_to_string = Print.EvalCtxCfimAst.typed_avalue_to_string
+
 let place_to_string = Print.EvalCtxCfimAst.place_to_string
 
 let operand_to_string = Print.EvalCtxCfimAst.operand_to_string

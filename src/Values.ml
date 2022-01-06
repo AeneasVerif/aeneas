@@ -518,7 +518,11 @@ and aborrow_content =
        *)
 
 (* TODO: we may want to merge this with typed_value - would prevent some issues
-   when accessing fields... *)
+   when accessing fields....
+
+   TODO: the type of avalues doesn't make sense for loan avalues: they currently
+   are typed as `& (mut) T` instead of `T`...
+*)
 and typed_avalue = { value : avalue; ty : rty }
 [@@deriving
   show,

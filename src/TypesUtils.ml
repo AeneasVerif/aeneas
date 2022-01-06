@@ -32,7 +32,7 @@ let ty_get_box (box_ty : ety) : ety =
 (** Deconstruct a type of the form `&T` or `&mut T` to retrieve the `T` (and
     the borrow kind, etc.)
  *)
-let ty_get_ref (ty : ety) : erased_region * ety * ref_kind =
+let ty_get_ref (ty : 'r ty) : 'r * 'r ty * ref_kind =
   match ty with
   | Ref (r, ty, ref_kind) -> (r, ty, ref_kind)
   | _ -> failwith "Not a ref type"

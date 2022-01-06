@@ -8,6 +8,7 @@ module C = Contexts
 module Subst = Substitute
 module A = CfimAst
 module L = Logging
+open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 
@@ -341,6 +342,18 @@ let check_constant_value_type (cv : V.constant_value) (ty : T.ety) : unit =
   | _ -> failwith "Erroneous typing"
 
 let check_typing_invariant (ctx : C.eval_ctx) : unit =
+  (* TODO: the type of aloans doens't make sense: they have a type
+   * of the shape `& (mut) T` where they should have type `T`...
+   * This messes a bit the type invariant checks when checking the
+   * children. In order to isolate the problem (for future modifications)
+   * we introduce function, so that we can easily spot all the involved
+   * places.
+   * *)
+  let aloan_get_expected_child_type (ty : 'r T.ty) : 'r T.ty =
+    let _, ty, _ = ty_get_ref ty in
+    ty
+  in
+
   let visitor =
     object
       inherit [_] C.iter_eval_ctx as super
@@ -496,31 +509,30 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             match lc with
             | V.AMutLoan (bid, child_av) | V.AIgnoredMutLoan (bid, child_av)
               -> (
-                L.log#ldebug
-                  (lazy
-                    ("- child_av.ty: "
-                    ^ rty_to_string ctx child_av.V.ty
-                    ^ "\n- aty: " ^ rty_to_string ctx aty));
-                assert (child_av.V.ty = aty);
+                let borrowed_aty = aloan_get_expected_child_type aty in
+                assert (child_av.V.ty = borrowed_aty);
                 (* Lookup the borrowed value to check it has the proper type *)
                 let glc = lookup_borrow ek_all bid ctx in
                 match glc with
                 | Concrete (V.MutBorrow (_, bv)) ->
-                    assert (bv.V.ty = Subst.erase_regions aty)
+                    assert (bv.V.ty = Subst.erase_regions borrowed_aty)
                 | Abstract (V.AMutBorrow (_, sv)) ->
                     assert (
-                      Subst.erase_regions sv.V.ty = Subst.erase_regions aty)
+                      Subst.erase_regions sv.V.ty
+                      = Subst.erase_regions borrowed_aty)
                 | _ -> failwith "Inconsistent context")
             | V.ASharedLoan (_, sv, child_av) | V.AEndedSharedLoan (sv, child_av)
               ->
                 let ty = Subst.erase_regions aty in
                 assert (sv.V.ty = ty);
-                assert (child_av.V.ty = aty)
+                (* TODO: the type of aloans doesn't make sense, see above *)
+                assert (child_av.V.ty = aloan_get_expected_child_type aty)
             | V.AEndedMutLoan { given_back; child }
             | V.AEndedIgnoredMutLoan { given_back; child } ->
-                assert (given_back.V.ty = aty);
-                assert (child.V.ty = aty)
-            | V.AIgnoredSharedLoan child_av -> assert (child_av.V.ty = aty))
+                assert (given_back.V.ty = aloan_get_expected_child_type aty);
+                assert (child.V.ty = aloan_get_expected_child_type aty)
+            | V.AIgnoredSharedLoan child_av ->
+                assert (child_av.V.ty = aloan_get_expected_child_type aty))
         | V.ASymbolic aproj, ty ->
             let ty1 = Subst.erase_regions ty in
             let ty2 =

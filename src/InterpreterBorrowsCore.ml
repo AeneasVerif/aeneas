@@ -128,7 +128,8 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
         assert (Option.is_none !abs_or_var);
         if ek.enter_abs then (
           abs_or_var := Some (AbsId abs.V.abs_id);
-          super#visit_Abs env abs)
+          super#visit_Abs env abs;
+          abs_or_var := None)
         else ()
     end
   in

@@ -275,6 +275,8 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
         in
         (V.AAdt { V.variant_id; field_values }, original_sv_ty)
     | SeMutRef (bid, spc), T.Ref (r, ref_ty, T.Mut) ->
+        (* Sanity check *)
+        assert (spc.V.svalue.V.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
         let child_av = mk_aproj_loans_from_proj_comp spc in
         (* Check if the region is in the set of projected regions (note that
@@ -286,6 +288,8 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
           (* Not in the set: ignore *)
           (V.ALoan (V.AIgnoredMutLoan (bid, child_av)), ref_ty)
     | SeSharedRef (bids, spc), T.Ref (r, ref_ty, T.Shared) ->
+        (* Sanity check *)
+        assert (spc.V.svalue.V.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
         let child_av = mk_aproj_loans_from_proj_comp spc in
         (* Check if the region is in the set of projected regions (note that
