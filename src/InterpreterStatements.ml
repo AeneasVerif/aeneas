@@ -421,6 +421,54 @@ let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
           (* Return *)
           Ok ctx)
 
+(** Instantiate a function signature, introducing fresh abstraction ids and
+    region ids. This is mostly used in preparation of function calls, when
+    evaluating in symbolic mode of course.
+    
+    Note: there are no region parameters, because they should be erased.
+ *)
+let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
+    (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig =
+  (* Generate fresh abstraction ids and create a substitution from region
+   * group ids to abstraction ids *)
+  let ctx, rg_abs_ids_bindings =
+    List.fold_left_map
+      (fun ctx rg ->
+        let ctx, abs_id = C.fresh_abstraction_id ctx in
+        (ctx, (rg.A.id, abs_id)))
+      ctx sg.regions_hierarchy
+  in
+  let asubst_map : V.AbstractionId.id A.RegionGroupId.Map.t =
+    List.fold_left
+      (fun mp (rg_id, abs_id) -> A.RegionGroupId.Map.add rg_id abs_id mp)
+      A.RegionGroupId.Map.empty rg_abs_ids_bindings
+  in
+  let asubst (rg_id : A.RegionGroupId.id) : V.AbstractionId.id =
+    A.RegionGroupId.Map.find rg_id asubst_map
+  in
+  (* Generate fresh regions and their substitutions *)
+  let ctx, _, rsubst, _ =
+    Subst.fresh_regions_with_substs sg.region_params ctx
+  in
+  (* Generate the type substitution
+   * Note that we need the substitution to map the type variables to
+   * [rty] types (not [ety]). In order to do that, we convert the
+   * type parameters to types with regions. This is possible only
+   * if those types don't contain any regions.
+   * This is a current limitation of the analysis: there is still some
+   * work to do to properly handle full type parametrization.
+   * *)
+  let rtype_params = List.map ety_no_regions_to_rty type_params in
+  let tsubst =
+    Subst.make_type_subst
+      (List.map (fun v -> v.T.index) sg.type_params)
+      rtype_params
+  in
+  (* Substitute the signature *)
+  let inst_sig = Subst.substitute_signature asubst rsubst tsubst sg in
+  (* Return *)
+  (ctx, inst_sig)
+
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result list =
@@ -661,7 +709,7 @@ and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
   let ctx = C.ctx_push_var ctx ret_var (C.mk_bottom ret_var.var_ty) in
 
   (* 2. Push the input values *)
-  let input_locals, locals = Utilities.list_split_at locals def.A.arg_count in
+  let input_locals, locals = Utils.list_split_at locals def.A.arg_count in
   let inputs = List.combine input_locals args in
   (* Note that this function checks that the variables and their values
      have the same type (this is important) *)
@@ -697,43 +745,9 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   (* Retrieve the (correctly instantiated) signature *)
   let def = C.ctx_lookup_fun_def ctx fid in
   let sg = def.A.signature in
-  (* Generate fresh abstraction ids and create a substitution from region
-   * group ids to abstraction ids *)
-  let ctx, rg_abs_ids_bindings =
-    List.fold_left_map
-      (fun ctx rg ->
-        let ctx, abs_id = C.fresh_abstraction_id ctx in
-        (ctx, (rg.A.id, abs_id)))
-      ctx sg.regions_hierarchy
-  in
-  let asubst_map : V.AbstractionId.id A.RegionGroupId.Map.t =
-    List.fold_left
-      (fun mp (rg_id, abs_id) -> A.RegionGroupId.Map.add rg_id abs_id mp)
-      A.RegionGroupId.Map.empty rg_abs_ids_bindings
-  in
-  let asubst (rg_id : A.RegionGroupId.id) : V.AbstractionId.id =
-    A.RegionGroupId.Map.find rg_id asubst_map
-  in
-  (* Generate fresh regions and their substitutions *)
-  let ctx, _, rsubst, _ =
-    Subst.fresh_regions_with_substs sg.region_params ctx
-  in
-  (* Generate the type substitution
-   * Note that we need the substitution to map the type variables to
-   * [rty] types (not [ety]). In order to do that, we convert the
-   * type parameters to types with regions. This is possible only
-   * if those types don't contain any regions.
-   * This is a current limitation of the analysis: there is still some
-   * work to do to properly handle full type parametrization.
-   * *)
-  let rtype_params = List.map ety_no_regions_to_rty type_params in
-  let tsubst =
-    Subst.make_type_subst
-      (List.map (fun v -> v.T.index) sg.type_params)
-      rtype_params
-  in
-  (* Substitute the signature *)
-  let inst_sg = Subst.substitute_signature asubst rsubst tsubst sg in
+  (* Instantiate the signature and introduce fresh abstraction and region ids
+   * while doing so *)
+  let ctx, inst_sg = instantiate_fun_sig type_params sg ctx in
   (* Sanity check *)
   assert (List.length args = def.A.arg_count);
   (* Evaluate the function call *)
@@ -755,10 +769,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     mk_fresh_symbolic_proj_comp T.RegionId.Set.empty ret_sv_ty ctx
   in
   let ret_value = mk_typed_value_from_proj_comp ret_spc in
-  let ret_av = V.ASymbolic (V.AProjLoans ret_spc.V.svalue) in
-  let ret_av : V.typed_avalue =
-    { V.value = ret_av; V.ty = ret_spc.V.svalue.V.sv_ty }
-  in
+  let ret_av = mk_aproj_loans_from_symbolic_value ret_spc.V.svalue in
   (* Evaluate the input operands *)
   let ctx, args = eval_operands config ctx args in
   let args_with_rtypes = List.combine args inst_sg.A.inputs in
@@ -768,8 +779,8 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
       (fun ((arg, rty) : V.typed_value * T.rty) ->
         arg.V.ty = Subst.erase_regions rty)
       args_with_rtypes);
-  (* Generate the abstractions from the region groups and add them to the context *)
-  let gen_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =
+  (* Create the abstractions from the region groups and add them to the context *)
+  let create_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =
     let abs_id = rg.A.id in
     let parents =
       List.fold_left
@@ -797,7 +808,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (* Return *)
     ctx
   in
-  let ctx = List.fold_left gen_abs ctx inst_sg.A.regions_hierarchy in
+  let ctx = List.fold_left create_abs ctx inst_sg.A.regions_hierarchy in
   (* Move the return value to its destination *)
   let ctx = assign_to_place config ctx ret_value dest in
   (* Synthesis *)

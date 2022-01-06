@@ -37,11 +37,17 @@ let mk_var (index : V.VarId.id) (name : string option) (var_ty : T.ety) : A.var
 let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
   { var_id; projection = [] }
 
+(** Create a fresh symbolic value *)
+let mk_fresh_symbolic_value (ty : T.rty) (ctx : C.eval_ctx) :
+    C.eval_ctx * V.symbolic_value =
+  let ctx, sv_id = C.fresh_symbolic_value_id ctx in
+  let svalue = { V.sv_id; V.sv_ty = ty } in
+  (ctx, svalue)
+
 (** Create a fresh symbolic proj comp *)
 let mk_fresh_symbolic_proj_comp (ended_regions : T.RegionId.set_t) (ty : T.rty)
     (ctx : C.eval_ctx) : C.eval_ctx * V.symbolic_proj_comp =
-  let ctx, sv_id = C.fresh_symbolic_value_id ctx in
-  let svalue = { V.sv_id; V.sv_ty = ty } in
+  let ctx, svalue = mk_fresh_symbolic_value ty ctx in
   let sv = { V.svalue; rset_ended = ended_regions } in
   (ctx, sv)
 
@@ -64,11 +70,23 @@ let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
   let spc = { V.svalue; rset_ended = T.RegionId.Set.empty } in
   mk_typed_value_from_proj_comp spc
 
-let mk_aproj_loans_from_proj_comp (sv : V.symbolic_proj_comp) : V.typed_avalue =
-  let ty = sv.V.svalue.V.sv_ty in
-  let proj = V.AProjLoans sv.V.svalue in
+let mk_aproj_loans_from_proj_comp (spc : V.symbolic_proj_comp) : V.typed_avalue
+    =
+  let ty = spc.V.svalue.V.sv_ty in
+  let proj = V.AProjLoans spc.V.svalue in
   let value = V.ASymbolic proj in
   { V.value; ty }
+
+(** Create a Loans projector from a symbolic value.
+
+    Initializes the set of ended regions with `empty`.
+ *)
+let mk_aproj_loans_from_symbolic_value (svalue : V.symbolic_value) :
+    V.typed_avalue =
+  let spc = { V.svalue; rset_ended = T.RegionId.Set.empty } in
+  let av = V.ASymbolic (V.AProjLoans spc.V.svalue) in
+  let av : V.typed_avalue = { V.value = av; V.ty = svalue.V.sv_ty } in
+  av
 
 (** TODO: move *)
 let borrow_is_asb (bid : V.BorrowId.id) (asb : V.abstract_shared_borrow) : bool

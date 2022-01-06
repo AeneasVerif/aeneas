@@ -1,4 +1,9 @@
+open Errors
 module L = Logging
+module T = Types
+module A = CfimAst
+open Utils
+open InterpreterUtils
 open InterpreterExpressions
 open InterpreterStatements
 
@@ -18,9 +23,94 @@ open InterpreterStatements
 (* TODO: remove the config parameters when they are useless *)
 
 module Test = struct
+  let initialize_context (type_context : C.type_context)
+      (fun_defs : A.fun_def list) : C.eval_ctx =
+    {
+      C.type_context;
+      C.fun_context = fun_defs;
+      C.type_vars = [];
+      C.env = [];
+      C.symbolic_counter = V.SymbolicValueId.generator_zero;
+      C.borrow_counter = V.BorrowId.generator_zero;
+      C.region_counter = T.RegionId.generator_zero;
+      C.abstraction_counter = V.AbstractionId.generator_zero;
+    }
+
+  (** Initialize an evaluation context to execute a function.
+
+      Introduces local variables initialized in the following manner:
+      - input arguments are initialized as symbolic values
+      - the remaining locals are initialized as ⊥
+      "Dummy" abstractions are introduced for the regions present in the
+      function signature.
+   *)
+  let initialize_symbolic_context_for_fun (type_context : C.type_context)
+      (fun_defs : A.fun_def list) (fdef : A.fun_def) : C.eval_ctx =
+    (* The abstractions are not initialized the same way as for function
+     * calls: they contain *loan* projectors, because they "provide" us
+     * with the input values (which behave as if they had been returned
+     * by some function calls...).
+     * Also, note that we properly set the set of parents of every abstraction:
+     * this should not be necessary, as those abstractions should never be
+     * *automatically* ended (because ending some borrows requires to end
+     * one of them), but rather selectively ended when generating code
+     * for each of the backward functions. We do it only because we can
+     * do it, and because it gives a bit of sanity.
+     * *)
+    (* Create the context *)
+    let ctx = initialize_context type_context fun_defs in
+    (* Instantiate the signature *)
+    let sg = fdef.signature in
+    let type_params =
+      List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params
+    in
+    let ctx, inst_sg = instantiate_fun_sig type_params sg ctx in
+    (* Create fresh symbolic values for the inputs *)
+    let ctx, input_svs =
+      List.fold_left_map
+        (fun ctx ty -> mk_fresh_symbolic_value ty ctx)
+        ctx inst_sg.inputs
+    in
+    (* Create the abstractions and insert them in the context *)
+    let create_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =
+      let abs_id = rg.A.id in
+      let parents =
+        List.fold_left
+          (fun s pid -> V.AbstractionId.Set.add pid s)
+          V.AbstractionId.Set.empty rg.A.parents
+      in
+      let regions =
+        List.fold_left
+          (fun s rid -> T.RegionId.Set.add rid s)
+          T.RegionId.Set.empty rg.A.regions
+      in
+      (* Project over the values - we use *loan* projectors, as explained above *)
+      let avalues = List.map mk_aproj_loans_from_symbolic_value input_svs in
+      (* Create the abstraction *)
+      let abs = { V.abs_id; parents; regions; avalues } in
+      (* Insert the abstraction in the context *)
+      let ctx = { ctx with env = Abs abs :: ctx.env } in
+      (* Return *)
+      ctx
+    in
+    (* Split the variables between return var, inputs and remaining locals *)
+    let ret_var = List.hd fdef.locals in
+    let input_vars, local_vars =
+      list_split_at (List.tl fdef.locals) fdef.arg_count
+    in
+    (* Push the return variable (initialized with ⊥) *)
+    let ctx = C.ctx_push_uninitialized_var ctx ret_var in
+    (* Push the input variables (initialized with symbolic values) *)
+    let input_values = List.map mk_typed_value_from_symbolic_value input_svs in
+    let ctx = C.ctx_push_vars ctx (List.combine input_vars input_values) in
+    (* Push the remaining local variables (initialized with ⊥) *)
+    let ctx = C.ctx_push_uninitialized_vars ctx local_vars in
+    (* Return *)
+    ctx
+
   (** Test a unit function (taking no arguments) by evaluating it in an empty
-    environment
- *)
+      environment.
+   *)
   let test_unit_function (type_context : C.type_context)
       (fun_defs : A.fun_def list) (fid : A.FunDefId.id) : unit eval_result =
     (* Retrieve the function declaration *)
@@ -36,20 +126,9 @@ module Test = struct
     assert (fdef.A.arg_count = 0);
 
     (* Create the evaluation context *)
-    let ctx =
-      {
-        C.type_context;
-        C.fun_context = fun_defs;
-        C.type_vars = [];
-        C.env = [];
-        C.symbolic_counter = V.SymbolicValueId.generator_zero;
-        C.borrow_counter = V.BorrowId.generator_zero;
-        C.region_counter = T.RegionId.generator_zero;
-        C.abstraction_counter = V.AbstractionId.generator_zero;
-      }
-    in
+    let ctx = initialize_context type_context fun_defs in
 
-    (* Put the (uninitialized) local variables *)
+    (* Insert the (uninitialized) local variables *)
     let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
 
     (* Evaluate the function *)
@@ -70,15 +149,65 @@ module Test = struct
     && List.length def.A.signature.inputs = 0
 
   (** Test all the unit functions in a list of function definitions *)
-  let test_all_unit_functions (type_defs : T.type_def list)
+  let test_unit_functions (type_defs : T.type_def list)
       (fun_defs : A.fun_def list) : unit =
+    let unit_funs = List.filter fun_def_is_unit fun_defs in
+    let test_unit_fun (def : A.fun_def) : unit =
+      let type_ctx = { C.type_defs } in
+      match test_unit_function type_ctx fun_defs def.A.def_id with
+      | Error _ -> failwith "Unit test failed (concrete execution)"
+      | Ok _ -> ()
+    in
+    List.iter test_unit_fun unit_funs
+
+  (** Execute the symbolic interpreter on a function. *)
+  let test_symbolic_function (type_context : C.type_context)
+      (fun_defs : A.fun_def list) (fid : A.FunDefId.id) : unit eval_result list
+      =
+    (* Retrieve the function declaration *)
+    let fdef = A.FunDefId.nth fun_defs fid in
+
+    (* Debug *)
+    L.log#ldebug
+      (lazy
+        ("test_symbolic_function: " ^ Print.Types.name_to_string fdef.A.name));
+
+    (* Sanity check - *)
+    assert (List.length fdef.A.signature.region_params = 0);
+    assert (List.length fdef.A.signature.type_params = 0);
+    assert (fdef.A.arg_count = 0);
+
+    (* Create the evaluation context *)
+    let ctx = initialize_context type_context fun_defs in
+
+    (* Initialize the inputs as symbolic values *)
+    raise Unimplemented
+
+  (* (* Initialize the remaining local variables as Bottom *)
+     let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
+
+     (* Evaluate the function *)
+     let config = { C.mode = C.ConcreteMode; C.check_invariants = true } in
+     match eval_function_body config ctx fdef.A.body with
+     | [ Ok _ ] -> Ok ()
+     | [ Error err ] -> Error err
+     | _ ->
+         (* We execute the concrete interpreter: there shouldn't be any branching *)
+         failwith "Unreachable"*)
+
+  (** Execute the symbolic interpreter on a list of functions.
+
+      TODO: for now we ignore the functions which contain loops, because
+      they are not supported by the symbolic interpreter.
+   *)
+  let test_symbolic_functions (type_defs : T.type_def list)
+      (fun_defs : A.fun_def list) : unit =
+    let no_loop_funs = List.filter CfimAstUtils.fun_def_has_loops fun_defs in
     let test_fun (def : A.fun_def) : unit =
-      if fun_def_is_unit def then
-        let type_ctx = { C.type_defs } in
-        match test_unit_function type_ctx fun_defs def.A.def_id with
-        | Error _ -> failwith "Unit test failed"
-        | Ok _ -> ()
-      else ()
+      let type_ctx = { C.type_defs } in
+      let res = test_symbolic_function type_ctx fun_defs def.A.def_id in
+      if List.for_all Result.is_ok res then ()
+      else failwith "Unit test failed (symbolic execution)"
     in
     List.iter test_fun fun_defs
 end

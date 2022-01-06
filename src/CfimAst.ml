@@ -95,13 +95,19 @@ class ['self] iter_statement_base =
 
     method visit_assertion : 'env -> assertion -> unit = fun _ _ -> ()
 
+    method visit_operand : 'env -> operand -> unit = fun _ _ -> ()
+
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
+
+    method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
+
+    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for [typed_value] map visitor *)
 class ['self] map_statement_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.iter
+    inherit [_] VisitorsRuntime.map
 
     method visit_place : 'env -> place -> place = fun _ x -> x
 
@@ -111,7 +117,15 @@ class ['self] map_statement_base =
 
     method visit_assertion : 'env -> assertion -> assertion = fun _ x -> x
 
+    method visit_operand : 'env -> operand -> operand = fun _ x -> x
+
     method visit_call : 'env -> call -> call = fun _ x -> x
+
+    method visit_integer_type : 'env -> integer_type -> integer_type =
+      fun _ x -> x
+
+    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
+      fun _ x -> x
   end
 
 type statement =
@@ -136,7 +150,6 @@ type statement =
   | Sequence of statement * statement
   | Switch of operand * switch_targets
   | Loop of statement
-[@@deriving show]
 
 and switch_targets =
   | If of statement * statement  (** Gives the "if" and "else" blocks *)

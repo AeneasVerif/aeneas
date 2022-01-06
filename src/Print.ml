@@ -843,7 +843,7 @@ module CfimAst = struct
 
     (* Arguments *)
     let inputs = List.tl def.locals in
-    let inputs, _aux_locals = Utilities.list_split_at inputs def.arg_count in
+    let inputs, _aux_locals = Utils.list_split_at inputs def.arg_count in
     let args = List.combine inputs sg.inputs in
     let args =
       List.map

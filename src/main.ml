@@ -46,4 +46,4 @@ let () =
       log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));
 
       (* Test the unit functions *)
-      I.Test.test_all_unit_functions m.types m.functions
+      I.Test.test_unit_functions m.types m.functions

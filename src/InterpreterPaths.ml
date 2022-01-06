@@ -410,7 +410,7 @@ let expand_bottom_value_from_projection (config : C.config)
      during whose evaluation we got stuck *)
   let projection' =
     fst
-      (Utilities.list_split_at p.projection
+      (Utils.list_split_at p.projection
          (List.length p.projection - remaining_pes))
   in
   let p' = { p with projection = projection' } in
