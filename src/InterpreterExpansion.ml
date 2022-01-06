@@ -10,7 +10,6 @@ module C = Contexts
 module Subst = Substitute
 module L = Logging
 open TypesUtils
-open ValuesUtils
 module Inv = Invariants
 module S = Synthesis
 open InterpreterUtils
@@ -54,7 +53,7 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
   let check_symbolic_no_ended = false in
   (* Prepare reborrows registration *)
   let fresh_reborrow, apply_registered_reborrows =
-    prepare_reborrows config allow_reborrows ctx
+    prepare_reborrows config allow_reborrows
   in
   (* Visitor to apply the expansion *)
   let obj =

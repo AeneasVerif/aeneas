@@ -7,7 +7,6 @@ module V = Values
 module C = Contexts
 module Subst = Substitute
 module L = Logging
-open Utils
 open InterpreterUtils
 
 (** TODO: cleanup this a bit, once we have a better understanding about

@@ -5,8 +5,6 @@ module C = Contexts
 module Subst = Substitute
 module L = Logging
 open TypesUtils
-open ValuesUtils
-open Utils
 open InterpreterUtils
 open InterpreterBorrowsCore
 
@@ -471,8 +469,7 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
     - a function to apply the reborrows in a context
     Those functions are of course stateful.
  *)
-let prepare_reborrows (config : C.config) (allow_reborrows : bool)
-    (ctx : C.eval_ctx) :
+let prepare_reborrows (config : C.config) (allow_reborrows : bool) :
     (V.BorrowId.id -> V.BorrowId.id) * (C.eval_ctx -> C.eval_ctx) =
   let reborrows : (V.BorrowId.id * V.BorrowId.id) list ref = ref [] in
   (* The function to generate and register fresh reborrows *)
@@ -502,7 +499,7 @@ let apply_proj_borrows_on_input_value (config : C.config) (ctx : C.eval_ctx)
   let allow_reborrows = true in
   (* Prepare the reborrows *)
   let fresh_reborrow, apply_registered_reborrows =
-    prepare_reborrows config allow_reborrows ctx
+    prepare_reborrows config allow_reborrows
   in
   (* Apply the projector *)
   let av =

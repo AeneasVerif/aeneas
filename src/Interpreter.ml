@@ -1,4 +1,3 @@
-open Errors
 module L = Logging
 module T = Types
 module A = CfimAst

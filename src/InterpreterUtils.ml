@@ -6,10 +6,8 @@ module E = Expressions
 module C = Contexts
 module Subst = Substitute
 module A = CfimAst
-module L = Logging
-open TypesUtils
-open ValuesUtils
 open Utils
+open TypesUtils
 
 (** Some utilities *)
 

@@ -3,7 +3,6 @@ module V = Values
 module C = Contexts
 module Subst = Substitute
 module L = Logging
-open Utils
 open ValuesUtils
 open TypesUtils
 open InterpreterUtils
@@ -226,7 +225,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* We sometimes need to reborrow values while giving a value back due: prepare that *)
   let allow_reborrows = true in
   let fresh_reborrow, apply_registered_reborrows =
-    prepare_reborrows config allow_reborrows ctx
+    prepare_reborrows config allow_reborrows
   in
   (* The visitor to give back the values *)
   let obj =

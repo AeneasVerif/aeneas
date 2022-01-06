@@ -27,8 +27,8 @@ let abstraction_id_counter, fresh_abstraction_id =
   AbstractionId.fresh_stateful_generator ()
 
 (** We shouldn't need to reset the global counters, but it might be good to
-    to it from time to time, every time we evaluate/synthesize a function for
-    instance.
+    do it from time to time, for instance every time we start evaluating/
+    synthesizing a function.
     
     The reasons are manifold:
     - it might prevent the counters from overflowing (although this seems

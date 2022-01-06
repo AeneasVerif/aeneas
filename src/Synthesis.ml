@@ -71,4 +71,4 @@ let synthesize_function_call (_fid : A.fun_id)
 
 let synthesize_panic () : unit = ()
 
-let synthesize_assert (v : V.typed_value) : unit = ()
+let synthesize_assert (_v : V.typed_value) : unit = ()
