@@ -549,7 +549,9 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       | Ok ctx -> [ Ok (ctx, Unit) ]
       | Error e -> [ Error e ])
   | A.Call call -> eval_function_call config ctx call
-  | A.Panic -> [ Error Panic ]
+  | A.Panic ->
+      S.synthesize_panic ();
+      [ Error Panic ]
   | A.Return -> [ Ok (ctx, Return) ]
   | A.Break i -> [ Ok (ctx, Break i) ]
   | A.Continue i -> [ Ok (ctx, Continue i) ]
