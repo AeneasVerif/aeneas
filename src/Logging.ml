@@ -15,12 +15,14 @@ let interpreter_log = L.get_logger "MainLogger.Interpreter"
 (** Logger for InterpreterStatements *)
 let statements_log = L.get_logger "MainLogger.Interpreter.Statements"
 
-(** Logger for InterpreterExpansion *)
-let expansion_log = L.get_logger "MainLogger.Interpreter.Statements.Expansion"
-
 (** Logger for InterpreterExpressions *)
-let expressions_log =
-  L.get_logger "MainLogger.Interpreter.Statements.Expressions"
+let expressions_log = L.get_logger "MainLogger.Interpreter.Expressions"
+
+(** Logger for InterpreterExpansion *)
+let expansion_log = L.get_logger "MainLogger.Interpreter.Expansion"
+
+(** Logger for InterpreterBorrows *)
+let borrows_log = L.get_logger "MainLogger.Interpreter.Borrows"
 
 (** Logger for Invariants *)
 let invariants_log = L.get_logger "MainLogger.Interpreter.Invariants"

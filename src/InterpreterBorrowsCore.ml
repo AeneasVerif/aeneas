@@ -9,6 +9,9 @@ module Subst = Substitute
 module L = Logging
 open InterpreterUtils
 
+(** The local logger *)
+let log = L.borrows_log
+
 (** TODO: cleanup this a bit, once we have a better understanding about
     what we need.
     TODO: I'm not sure in which file this should be moved... *)

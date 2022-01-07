@@ -743,12 +743,30 @@ and end_borrows (config : C.config) (io : inner_outer)
 
 and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Remember the original context for printing purposes *)
+  let ctx0 = ctx in
+  log#ldebug
+    (lazy
+      ("end_abstraction: "
+      ^ V.AbstractionId.to_string abs_id
+      ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
   (* Lookup the abstraction *)
   let abs = C.ctx_lookup_abs ctx abs_id in
   (* End the parent abstractions first *)
   let ctx = end_abstractions config abs.parents ctx in
+  log#ldebug
+    (lazy
+      ("end_abstraction: "
+      ^ V.AbstractionId.to_string abs_id
+      ^ "\n- context after parent abstractions ended:\n"
+      ^ eval_ctx_to_string ctx));
   (* End the loans inside the abstraction *)
   let ctx = end_abstraction_loans config abs_id ctx in
+  log#ldebug
+    (lazy
+      ("end_abstraction: "
+      ^ V.AbstractionId.to_string abs_id
+      ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx));
   (* End the abstraction itself by redistributing the borrows it contains *)
   let ctx = end_abstraction_borrows config abs_id ctx in
   (* End the regions owned by the abstraction - note that we don't need to
@@ -762,7 +780,16 @@ and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
   in
   (* Remove all the references to the id of the current abstraction, and remove
    * the abstraction itself *)
-  end_abstraction_remove_from_context config abs_id ctx
+  let ctx = end_abstraction_remove_from_context config abs_id ctx in
+  (* Debugging *)
+  log#ldebug
+    (lazy
+      ("end_abstraction: "
+      ^ V.AbstractionId.to_string abs_id
+      ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
+      ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx));
+  (* Return *)
+  ctx
 
 and end_abstractions (config : C.config) (abs_ids : V.AbstractionId.set_t)
     (ctx : C.eval_ctx) : C.eval_ctx =

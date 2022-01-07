@@ -36,7 +36,7 @@ let set_outer_mut (info : outer_borrow_info) : outer_borrow_info =
 let set_outer_shared (_info : outer_borrow_info) : outer_borrow_info =
   { outer_borrow = true; outer_shared = true }
 
-(* TODO: we need to factorize print functions for strings *)
+(* TODO: we need to factorize print functions for sets *)
 let ids_reprs_to_string (indent : string)
     (reprs : V.BorrowId.id V.BorrowId.Map.t) : string =
   let bindings = V.BorrowId.Map.bindings reprs in

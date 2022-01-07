@@ -43,8 +43,9 @@ let () =
   (* Set up the logging - for now we use default values - TODO: use the
    * command-line arguments *)
   statements_log#set_level EL.Debug;
-  expansion_log#set_level EL.Debug;
   expressions_log#set_level EL.Warning;
+  expansion_log#set_level EL.Debug;
+  borrows_log#set_level EL.Debug;
   invariants_log#set_level EL.Warning;
   (* Load the module *)
   let json = Yojson.Basic.from_file !filename in
