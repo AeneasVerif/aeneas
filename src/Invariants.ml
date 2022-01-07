@@ -12,7 +12,8 @@ open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 
-let debug_invariants : bool ref = ref false
+(** The local logger *)
+let log = L.invariants_log
 
 type borrow_info = {
   loan_kind : T.ref_kind;
@@ -36,19 +37,23 @@ let set_outer_shared (_info : outer_borrow_info) : outer_borrow_info =
   { outer_borrow = true; outer_shared = true }
 
 (* TODO: we need to factorize print functions for strings *)
-let ids_reprs_to_string (reprs : V.BorrowId.id V.BorrowId.Map.t) : string =
+let ids_reprs_to_string (indent : string)
+    (reprs : V.BorrowId.id V.BorrowId.Map.t) : string =
   let bindings = V.BorrowId.Map.bindings reprs in
   let bindings =
     List.map
       (fun (id, repr_id) ->
-        V.BorrowId.to_string id ^ " -> " ^ V.BorrowId.to_string repr_id)
+        indent ^ V.BorrowId.to_string id ^ " -> " ^ V.BorrowId.to_string repr_id)
       bindings
   in
   String.concat "\n" bindings
 
-let borrows_infos_to_string (infos : borrow_info V.BorrowId.Map.t) : string =
+let borrows_infos_to_string (indent : string)
+    (infos : borrow_info V.BorrowId.Map.t) : string =
   let bindings = V.BorrowId.Map.bindings infos in
-  let bindings = List.map (fun (_, info) -> show_borrow_info info) bindings in
+  let bindings =
+    List.map (fun (_, info) -> indent ^ show_borrow_info info) bindings
+  in
   String.concat "\n" bindings
 
 type borrow_kind = Mut | Shared | Inactivated
@@ -67,8 +72,14 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
   let borrows_infos : borrow_info V.BorrowId.Map.t ref =
     ref V.BorrowId.Map.empty
   in
+  let context_to_string () : string =
+    eval_ctx_to_string ctx ^ "- representants:\n"
+    ^ ids_reprs_to_string "  " !ids_reprs
+    ^ "\n- info:\n"
+    ^ borrows_infos_to_string "  " !borrows_infos
+  in
 
-  (* First, register all the loans *)
+  (* first, register all the loans *)
   (* Some utilities to register the loans *)
   let register_shared_loan (loan_in_abs : bool) (bids : V.BorrowId.set_t) : unit
       =
@@ -178,13 +189,9 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     | None ->
         let err =
           "find_info: could not find the representant of borrow "
-          ^ V.BorrowId.to_string bid ^ "\n" ^ "\n- Context:\n"
-          ^ eval_ctx_to_string ctx ^ "\n- representants:\n"
-          ^ ids_reprs_to_string !ids_reprs
-          ^ "\n- info:\n"
-          ^ borrows_infos_to_string !borrows_infos
+          ^ V.BorrowId.to_string bid ^ "\n" ^ context_to_string ()
         in
-        L.log#serror err;
+        log#serror err;
         failwith err
   in
 
@@ -259,15 +266,8 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
   borrows_visitor#visit_eval_ctx () ctx;
 
   (* Debugging *)
-  if !debug_invariants then (
-    L.log#ldebug
-      (lazy
-        ("\nAbout to check context invariant:\n" ^ eval_ctx_to_string ctx ^ "\n"));
-    L.log#ldebug
-      (lazy
-        ("\nBorrows information:\n"
-        ^ borrows_infos_to_string !borrows_infos
-        ^ "\n")));
+  log#ldebug
+    (lazy ("\nAbout to check context invariant:\n" ^ context_to_string ()));
 
   (* Finally, check that everything is consistant *)
   V.BorrowId.Map.iter

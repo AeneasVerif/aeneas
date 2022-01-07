@@ -9,14 +9,21 @@ let log = L.get_logger "MainLogger"
 (** Below, we create subgloggers for various submodules, so that we can precisely
     toggle logging on/off, depending on which information we need *)
 
+(** Logger for Interpreter *)
+let interpreter_log = L.get_logger "MainLogger.Interpreter"
+
 (** Logger for InterpreterStatements *)
-let statements_log = L.get_logger "MainLogger.Statements"
+let statements_log = L.get_logger "MainLogger.Interpreter.Statements"
 
 (** Logger for InterpreterExpansion *)
-let expansion_log = L.get_logger "MainLogger.Statements.Expansion"
+let expansion_log = L.get_logger "MainLogger.Interpreter.Statements.Expansion"
 
 (** Logger for InterpreterExpressions *)
-let expressions_log = L.get_logger "MainLogger.Statements.Expressions"
+let expressions_log =
+  L.get_logger "MainLogger.Interpreter.Statements.Expressions"
+
+(** Logger for Invariants *)
+let invariants_log = L.get_logger "MainLogger.Interpreter.Invariants"
 
 (** Terminal colors - TODO: comes from easy_logging (did not manage to reuse the module directly) *)
 type color =
