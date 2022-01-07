@@ -1130,7 +1130,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
-          L.log#ldebug
+          log#ldebug
             (lazy
               ("activate_inactivated_mut_borrow: resulting value:\n"
              ^ V.show_typed_value sv));

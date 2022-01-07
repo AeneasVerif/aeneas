@@ -15,13 +15,16 @@ open InterpreterExpansion
 open InterpreterPaths
 open InterpreterExpressions
 
+(** The local logger *)
+let log = L.statements_log
+
 (** Result of evaluating a statement *)
 type statement_eval_res = Unit | Break of int | Continue of int | Return
 
 (** Drop a value at a given place *)
 let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
     =
-  L.log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
+  log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
   (* Prepare the place (by ending the loans, then the borrows) *)
   let ctx, v = prepare_lplace config p ctx in
   (* Replace the value with [Bottom] *)
@@ -167,7 +170,7 @@ let get_non_local_function_return_type (fid : A.assumed_fun_id)
 let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
     C.eval_ctx * V.typed_value =
   (* Debug *)
-  L.log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
+  log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
   (* Eval *)
   let ret_vid = V.VarId.zero in
   (* List the local variables, but the return variable *)
@@ -182,7 +185,7 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
   in
   let locals = list_locals ctx.env in
   (* Debug *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       ("ctx_pop_frame: locals to drop: ["
       ^ String.concat "," (List.map V.VarId.to_string locals)
@@ -194,7 +197,7 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
       ctx locals
   in
   (* Debug *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       ("ctx_pop_frame: after dropping local variables:\n"
      ^ eval_ctx_to_string ctx));
@@ -514,7 +517,7 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result list =
   (* Debugging *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       ("\n**About to evaluate statement**: [\n"
       ^ statement_to_string_with_tab ctx st
@@ -909,7 +912,7 @@ and eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result =
   (* Debug *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       (let type_params =
          "["

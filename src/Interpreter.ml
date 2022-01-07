@@ -21,6 +21,9 @@ open InterpreterStatements
 
 (* TODO: remove the config parameters when they are useless *)
 
+(** The local logger *)
+let log = L.interpreter_log
+
 module Test = struct
   let initialize_context (type_context : C.type_context)
       (fun_defs : A.fun_def list) (type_vars : T.type_var list) : C.eval_ctx =
@@ -126,7 +129,7 @@ module Test = struct
     let fdef = A.FunDefId.nth fun_defs fid in
 
     (* Debug *)
-    L.log#ldebug
+    log#ldebug
       (lazy ("test_unit_function: " ^ Print.Types.name_to_string fdef.A.name));
 
     (* Sanity check - *)
@@ -177,7 +180,7 @@ module Test = struct
     let fdef = A.FunDefId.nth fun_defs fid in
 
     (* Debug *)
-    L.log#ldebug
+    log#ldebug
       (lazy
         ("test_function_symbolic: " ^ Print.Types.name_to_string fdef.A.name));
 
