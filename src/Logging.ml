@@ -3,7 +3,20 @@ module L = Easy_logging.Logging
 
 let _ = L.make_logger "MainLogger" Debug [ Cli Debug ]
 
+(** The main logger *)
 let log = L.get_logger "MainLogger"
+
+(** Below, we create subgloggers for various submodules, so that we can precisely
+    toggle logging on/off, depending on which information we need *)
+
+(** Logger for InterpreterStatements *)
+let statements_log = L.get_logger "MainLogger.Statements"
+
+(** Logger for InterpreterExpansion *)
+let expansion_log = L.get_logger "MainLogger.Statements.Expansion"
+
+(** Logger for InterpreterExpressions *)
+let expressions_log = L.get_logger "MainLogger.Statements.Expressions"
 
 (** Terminal colors - TODO: comes from easy_logging (did not manage to reuse the module directly) *)
 type color =

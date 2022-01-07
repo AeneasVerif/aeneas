@@ -16,6 +16,9 @@ open InterpreterUtils
 open InterpreterProjectors
 open InterpreterBorrows
 
+(** The local logger *)
+let log = L.expansion_log
+
 (** Projector kind *)
 type proj_kind = LoanProj | BorrowProj
 
@@ -366,6 +369,8 @@ let expand_symbolic_value_borrow (config : C.config)
 let expand_symbolic_value_no_branching (config : C.config)
     (pe : E.projection_elem) (sp : V.symbolic_value) (ctx : C.eval_ctx) :
     C.eval_ctx =
+  (* Remember the initial context for printing purposes *)
+  let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
   let original_sv = sp in
@@ -424,6 +429,14 @@ let expand_symbolic_value_no_branching (config : C.config)
         failwith
           ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
   in
+  (* Debugging *)
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("expand_symbolic_value: "
+      ^ symbolic_value_to_string ctx0 sp
+      ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
+      ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Sanity check: the symbolic value has disappeared *)
   assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
   (* Return *)

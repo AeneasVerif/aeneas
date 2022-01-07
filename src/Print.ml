@@ -390,7 +390,7 @@ module Values = struct
         ^ typed_avalue_to_string fmt av
         ^ ")"
     | AEndedIgnoredMutLoan ml ->
-        "@ended_ignored_mut_borrow{ given_back="
+        "@ended_ignored_mut_loan{ given_back="
         ^ typed_avalue_to_string fmt ml.given_back
         ^ "; child: "
         ^ typed_avalue_to_string fmt ml.child
@@ -972,6 +972,12 @@ module EvalCtxCfimAst = struct
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let fmt = PC.ctx_to_rtype_formatter fmt in
     PT.rty_to_string fmt t
+
+  let symbolic_value_to_string (ctx : C.eval_ctx) (sv : V.symbolic_value) :
+      string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    let fmt = PC.ctx_to_rtype_formatter fmt in
+    PV.symbolic_value_to_string fmt sv
 
   let typed_value_to_string (ctx : C.eval_ctx) (v : V.typed_value) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
