@@ -564,7 +564,8 @@ type abs = {
   parents : (AbstractionId.set_t[@opaque]);  (** The parent abstractions *)
   regions : (RegionId.set_t[@opaque]);  (** Regions owned by this abstraction *)
   ancestors_regions : (RegionId.set_t[@opaque]);
-      (** Union of the regions owned by this abstraction and its ancestors *)
+      (** Union of the regions owned by this abstraction's ancestors (not
+          including the regions of this abstraction itself) *)
   avalues : typed_avalue list;  (** The values in this abstraction *)
 }
 [@@deriving

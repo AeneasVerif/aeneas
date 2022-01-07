@@ -69,42 +69,23 @@ module Test = struct
     let input_svs =
       List.map (fun ty -> mk_fresh_symbolic_value ty) inst_sg.inputs
     in
-    (* Create the abstractions and insert them in the context *)
-    let abs_to_ancestors_regions : T.RegionId.set_t V.AbstractionId.Map.t ref =
-      ref V.AbstractionId.Map.empty
+    (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
+    let empty_absl =
+      create_empty_abstractions_from_abs_region_groups
+        inst_sg.A.regions_hierarchy
     in
-    let create_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =
-      let abs_id = rg.A.id in
-      let parents =
-        List.fold_left
-          (fun s pid -> V.AbstractionId.Set.add pid s)
-          V.AbstractionId.Set.empty rg.A.parents
-      in
-      let regions =
-        List.fold_left
-          (fun s rid -> T.RegionId.Set.add rid s)
-          T.RegionId.Set.empty rg.A.regions
-      in
-      let ancestors_regions =
-        List.fold_left
-          (fun acc parent_id ->
-            T.RegionId.Set.union acc
-              (V.AbstractionId.Map.find parent_id !abs_to_ancestors_regions))
-          regions rg.A.parents
-      in
-      abs_to_ancestors_regions :=
-        V.AbstractionId.Map.add abs_id ancestors_regions
-          !abs_to_ancestors_regions;
+    (* Add the avalues to the abstractions and insert them in the context *)
+    let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =
       (* Project over the values - we use *loan* projectors, as explained above *)
       let avalues = List.map mk_aproj_loans_from_symbolic_value input_svs in
-      (* Create the abstraction *)
-      let abs = { V.abs_id; parents; regions; ancestors_regions; avalues } in
+      (* Insert the avalues in the abstraction *)
+      let abs = { abs with avalues } in
       (* Insert the abstraction in the context *)
       let ctx = { ctx with env = Abs abs :: ctx.env } in
       (* Return *)
       ctx
     in
-    let ctx = List.fold_left create_abs ctx inst_sg.regions_hierarchy in
+    let ctx = List.fold_left insert_abs ctx empty_absl in
     (* Split the variables between return var, inputs and remaining locals *)
     let ret_var = List.hd fdef.locals in
     let input_vars, local_vars =
