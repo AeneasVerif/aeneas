@@ -473,6 +473,14 @@ and aborrow_content =
           > }
           
           ```
+
+          Note that we could use AIgnoredMutLoan in the case the borrow id is not
+          None, which would allow us to simplify the rules (to not have rules
+          to specifically handle the case of AIgnoredMutBorrow with Some borrow
+          id) and also remove the AEndedIgnoredMutBorrow variant.
+          For now, the rules are implemented and it allows us to make the avalues
+          more precise and clearer, so we will keep it that way.
+   
           TODO: this is annoying, we are duplicating information. Maybe we
           could introduce an "Ignored" value? We have to pay attention to
           two things:
