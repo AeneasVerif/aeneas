@@ -253,7 +253,8 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
           match bc with
           | V.AMutBorrow (bid, _) -> register_borrow Mut bid
           | V.ASharedBorrow bid -> register_borrow Shared bid
-          | V.AIgnoredMutBorrow _ | V.AProjSharedBorrow _ ->
+          | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _
+          | V.AProjSharedBorrow _ ->
               (* Do nothing *)
               ()
         in
@@ -347,7 +348,8 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
           match bc with
           | V.AMutBorrow (_, _) -> set_outer_mut info
           | V.ASharedBorrow _ -> set_outer_shared info
-          | V.AIgnoredMutBorrow _ -> set_outer_mut info
+          | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+              set_outer_mut info
           | V.AProjSharedBorrow _ -> set_outer_shared info
         in
         (* Continue exploring *)
@@ -526,7 +528,12 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 | Abstract (V.ASharedLoan (_, sv, _)) ->
                     assert (sv.V.ty = Subst.erase_regions ref_ty)
                 | _ -> failwith "Inconsistent context")
-            | V.AIgnoredMutBorrow av, T.Mut -> assert (av.V.ty = ref_ty)
+            | V.AIgnoredMutBorrow (_opt_bid, av), T.Mut ->
+                assert (av.V.ty = ref_ty)
+            | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child }, T.Mut
+              ->
+                assert (given_back_loans_proj.V.ty = ref_ty);
+                assert (child.V.ty = ref_ty)
             | V.AProjSharedBorrow _, T.Shared -> ()
             | _ -> failwith "Inconsistent context")
         | V.ALoan lc, aty -> (

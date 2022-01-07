@@ -195,6 +195,8 @@ class ['self] iter_typed_avalue_base =
   object (_self : 'self)
     inherit [_] iter_typed_value
 
+    method visit_id : 'env -> BorrowId.id -> unit = fun _ _ -> ()
+
     method visit_region : 'env -> region -> unit = fun _ _ -> ()
 
     method visit_aproj : 'env -> aproj -> unit = fun _ _ -> ()
@@ -210,6 +212,8 @@ class ['self] iter_typed_avalue_base =
 class ['self] map_typed_avalue_base =
   object (_self : 'self)
     inherit [_] map_typed_value
+
+    method visit_id : 'env -> BorrowId.id -> BorrowId.id = fun _ id -> id
 
     method visit_region : 'env -> region -> region = fun _ r -> r
 
@@ -421,11 +425,15 @@ and aborrow_content =
           > abs0 { a_shared_bororw l0 }
           ```
      *)
-  | AIgnoredMutBorrow of typed_avalue
+  | AIgnoredMutBorrow of BorrowId.id option * typed_avalue
       (** An ignored mutable borrow.
-
-          This is mostly useful for typing concerns: when a borrow doesn't
-          belong to an abstraction, it would be weird to ignore it altogether.
+      
+          We need to keep track of ignored mut borrows because when ending such
+          borrows, we need to project the loans of the given back value to
+          insert them in the proper abstractions.
+          
+          Note that we need to do so only for borrows consumed by parent
+          abstractions (hence the optional borrow id).
 
           Example:
           ========
@@ -441,8 +449,29 @@ and aborrow_content =
           > x -> mut_loan l0
           > px -> mut_loan l1
           > ppx -> ⊥
-          > abs'a { a_mut_borrow l1 (a_ignored_mut_borrow (U32 0)) } // TODO: duplication
-          > abs'b { a_ignored_mut_borrow (a_mut_borrow l0 (U32 0)) }
+          > abs'a { a_mut_borrow l1 (a_ignored_mut_borrow None (U32 0)) } // TODO: duplication
+          > abs'b {parents={abs'a}} { a_ignored_mut_borrow (Some l1) (a_mut_borrow l0 (U32 0)) }
+          
+          ... // abs'a ends
+          
+          > x -> mut_loan l0
+          > px -> @s0
+          > ppx -> ⊥
+          > abs'b {
+          >   a_ended_ignored_mut_borrow (a_proj_loans (@s0 <: &'b mut u32)) // <-- loan projector
+          >                              (a_mut_borrow l0 (U32 0))
+          > }
+          
+          ... // `@s0` gets expanded to `&mut l2 @s1`
+
+          > x -> mut_loan l0
+          > px -> &mut l2 @s1
+          > ppx -> ⊥
+          > abs'b {
+          >   a_ended_ignored_mut_borrow (a_mut_loan l2) // <-- loan l2 is here
+          >                              (a_mut_borrow l0 (U32 0))
+          > }
+          
           ```
           TODO: this is annoying, we are duplicating information. Maybe we
           could introduce an "Ignored" value? We have to pay attention to
@@ -460,6 +489,10 @@ and aborrow_content =
             abstraction so that we can properly call the backward functions
             when generating the pure translation.
        *)
+  | AEndedIgnoredMutBorrow of {
+      given_back_loans_proj : typed_avalue;
+      child : typed_avalue;
+    }  (** See the explanations for [AIgnoredMutBorrow] *)
   | AProjSharedBorrow of abstract_shared_borrows
       (** A projected shared borrow.
 
@@ -522,6 +555,8 @@ type abs = {
   abs_id : (AbstractionId.id[@opaque]);
   parents : (AbstractionId.set_t[@opaque]);  (** The parent abstractions *)
   regions : (RegionId.set_t[@opaque]);  (** Regions owned by this abstraction *)
+  ancestors_regions : (RegionId.set_t[@opaque]);
+      (** Union of the regions owned by this abstraction and its ancestors *)
   avalues : typed_avalue list;  (** The values in this abstraction *)
 }
 [@@deriving

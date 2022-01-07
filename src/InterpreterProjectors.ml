@@ -129,8 +129,8 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
 *)
 let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
-    (regions : T.RegionId.set_t) (v : V.typed_value) (ty : T.rty) :
-    V.typed_avalue =
+    (regions : T.RegionId.set_t) (ancestors_regions : T.RegionId.set_t)
+    (v : V.typed_value) (ty : T.rty) : V.typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
@@ -151,7 +151,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
           List.map
             (fun (fv, fty) ->
               apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                regions fv fty)
+                regions ancestors_regions fv fty)
             fields_types
         in
         V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
@@ -169,7 +169,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                 (* Apply the projection on the borrowed value *)
                 let bv =
                   apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                    regions bv ref_ty
+                    regions ancestors_regions bv ref_ty
                 in
                 V.AMutBorrow (bid, bv)
             | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
@@ -183,13 +183,19 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
           (* Not in the set: ignore *)
           let bc =
             match (bc, kind) with
-            | V.MutBorrow (_bid, bv), T.Mut ->
+            | V.MutBorrow (bid, bv), T.Mut ->
                 (* Apply the projection on the borrowed value *)
                 let bv =
                   apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                    regions bv ref_ty
+                    regions ancestors_regions bv ref_ty
                 in
-                V.AIgnoredMutBorrow bv
+                (* If the borrow id is in the ancestor's regions, we still need
+                 * to remember it *)
+                let opt_bid =
+                  if region_in_set r ancestors_regions then Some bid else None
+                in
+                (* Return *)
+                V.AIgnoredMutBorrow (opt_bid, bv)
             | V.SharedBorrow bid, T.Shared ->
                 (* Lookup the shared value *)
                 let ek = ek_all in
@@ -493,8 +499,8 @@ let prepare_reborrows (config : C.config) (allow_reborrows : bool) :
   (fresh_reborrow, apply_registered_reborrows)
 
 let apply_proj_borrows_on_input_value (config : C.config) (ctx : C.eval_ctx)
-    (regions : T.RegionId.set_t) (v : V.typed_value) (ty : T.rty) :
-    C.eval_ctx * V.typed_avalue =
+    (regions : T.RegionId.set_t) (ancestors_regions : T.RegionId.set_t)
+    (v : V.typed_value) (ty : T.rty) : C.eval_ctx * V.typed_avalue =
   let check_symbolic_no_ended = true in
   let allow_reborrows = true in
   (* Prepare the reborrows *)
@@ -503,7 +509,8 @@ let apply_proj_borrows_on_input_value (config : C.config) (ctx : C.eval_ctx)
   in
   (* Apply the projector *)
   let av =
-    apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow regions v ty
+    apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow regions
+      ancestors_regions v ty
   in
   (* Apply the reborrows *)
   let ctx = apply_registered_reborrows ctx in

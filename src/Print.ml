@@ -7,6 +7,9 @@ module A = CfimAst
 module C = Contexts
 module M = Modules
 
+let option_to_string (to_string : 'a -> string) (x : 'a option) : string =
+  match x with Some x -> "Some (" ^ to_string x ^ ")" | None -> "None"
+
 (** Pretty-printing for types *)
 module Types = struct
   let type_var_to_string (tv : T.type_var) : string = tv.name
@@ -406,8 +409,18 @@ module Values = struct
         ^ typed_avalue_to_string fmt av
         ^ ")"
     | ASharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
-    | AIgnoredMutBorrow av ->
-        "@ignored_mut_borrow(" ^ typed_avalue_to_string fmt av ^ ")"
+    | AIgnoredMutBorrow (opt_bid, av) ->
+        "@ignored_mut_borrow("
+        ^ option_to_string V.BorrowId.to_string opt_bid
+        ^ ", "
+        ^ typed_avalue_to_string fmt av
+        ^ ")"
+    | AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
+        "@ended_ignored_mut_borrow{ given_back_loans_proj="
+        ^ typed_avalue_to_string fmt given_back_loans_proj
+        ^ "; child="
+        ^ typed_avalue_to_string fmt child
+        ^ ")"
     | AProjSharedBorrow sb ->
         "@ignored_shared_borrow("
         ^ abstract_shared_borrows_to_string fmt sb

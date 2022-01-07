@@ -67,6 +67,9 @@ module Test = struct
       List.map (fun ty -> mk_fresh_symbolic_value ty) inst_sg.inputs
     in
     (* Create the abstractions and insert them in the context *)
+    let abs_to_ancestors_regions : T.RegionId.set_t V.AbstractionId.Map.t ref =
+      ref V.AbstractionId.Map.empty
+    in
     let create_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =
       let abs_id = rg.A.id in
       let parents =
@@ -79,10 +82,20 @@ module Test = struct
           (fun s rid -> T.RegionId.Set.add rid s)
           T.RegionId.Set.empty rg.A.regions
       in
+      let ancestors_regions =
+        List.fold_left
+          (fun acc parent_id ->
+            T.RegionId.Set.union acc
+              (V.AbstractionId.Map.find parent_id !abs_to_ancestors_regions))
+          regions rg.A.parents
+      in
+      abs_to_ancestors_regions :=
+        V.AbstractionId.Map.add abs_id ancestors_regions
+          !abs_to_ancestors_regions;
       (* Project over the values - we use *loan* projectors, as explained above *)
       let avalues = List.map mk_aproj_loans_from_symbolic_value input_svs in
       (* Create the abstraction *)
-      let abs = { V.abs_id; parents; regions; avalues } in
+      let abs = { V.abs_id; parents; regions; ancestors_regions; avalues } in
       (* Insert the abstraction in the context *)
       let ctx = { ctx with env = Abs abs :: ctx.env } in
       (* Return *)
