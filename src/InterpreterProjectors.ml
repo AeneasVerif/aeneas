@@ -18,8 +18,8 @@ type symbolic_expansion =
 type apply_proj_keep_borrow_info = {
   is_input_proj : bool;
   borrow_region_in_abs_regions : bool;
-  borrow_id_in_abs_owned_loans : bool;
-  borrow_id_in_other_abs_owned_loans : bool;
+  ended_and_current_loan_in_same_abs : bool;
+  ended_loan_in_abs : bool;
 }
 
 (** Auxiliary function used for projection borrows
@@ -28,26 +28,12 @@ type apply_proj_keep_borrow_info = {
     
     This function is "raw": it provides the rule for the mathematic formula.
     See [apply_proj_borrows_keep_borrow] for a higher-level function.
-    
-    The formula is:
-    (is_input_proj /\
-       borrow_region ∈ abs_owned_regions) \/
-    (¬is_input_proj /\
-       (borrow_id ∈ abs_owned_loans \/
-        (borrow_region ∈ abs_owned_regions /\
-        ¬(another abstraction owns borrow_id's loan))))
  *)
 let apply_proj_borrows_keep_borrow_from_bools
     (info : apply_proj_keep_borrow_info) : bool =
-  (* Sanity check *)
-  assert (
-    (not info.borrow_id_in_abs_owned_loans)
-    || not info.borrow_id_in_other_abs_owned_loans);
   if info.is_input_proj then info.borrow_region_in_abs_regions
-  else
-    info.borrow_id_in_abs_owned_loans
-    || info.borrow_region_in_abs_regions
-       && not info.borrow_id_in_other_abs_owned_loans
+  else if info.ended_and_current_loan_in_same_abs then info.ended_loan_in_abs
+  else info.borrow_region_in_abs_regions
 
 (**
     Determines whether a borrow should be projected or ignored.
@@ -59,25 +45,26 @@ let apply_proj_borrows_keep_borrow (ctx : C.eval_ctx)
     (vkind : V.proj_value_kind) (current_abs_id : V.AbstractionId.id)
     (abs_owned_regions : T.RegionId.set_t) (borrow_id : V.BorrowId.id)
     (borrow_region : T.RegionId.id T.region) : bool =
-  let is_input_proj =
-    match vkind with V.InputValue -> true | V.GivenBackValue -> false
+  let is_input_proj, ended_loan_abs =
+    match vkind with
+    | V.InputValue -> (true, None)
+    | V.GivenBackValue abs_id' -> (false, Some abs_id')
   in
   let borrow_region_in_abs_regions =
     region_in_set borrow_region abs_owned_regions
   in
-  let borrow_id_in_abs_owned_loans, borrow_id_in_other_abs_owned_loans =
+  let borrow_loan_abs =
     let abs_or_var_id, _ = lookup_loan ek_all borrow_id ctx in
-    match abs_or_var_id with
-    | AbsId abs_id' ->
-        if abs_id' = current_abs_id then (true, false) else (false, true)
-    | VarId _ -> (false, false)
+    match abs_or_var_id with AbsId abs_id' -> Some abs_id' | VarId _ -> None
   in
+  let ended_and_current_loan_in_same_abs = ended_loan_abs = borrow_loan_abs in
+  let ended_loan_in_abs = ended_loan_abs = Some current_abs_id in
   let info =
     {
       is_input_proj;
       borrow_region_in_abs_regions;
-      borrow_id_in_abs_owned_loans;
-      borrow_id_in_other_abs_owned_loans;
+      ended_and_current_loan_in_same_abs;
+      ended_loan_in_abs;
     }
   in
   apply_proj_borrows_keep_borrow_from_bools info
@@ -417,6 +404,9 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
 
 (** Return the id of the abstraction which will own the loan of a symbolic value
     whose type is `Ref ...`, provided we expand this symbolic value.
+    
+    Note that if a symbolic value has type `Ref`, then its expansion necessarily
+    generates exactly one (owned/non-ignored) loan in an abstraction.
  *)
 let get_symbolic_ref_loan_owner_opt (ctx : C.eval_ctx) (sv : V.symbolic_value) :
     V.AbstractionId.id option =

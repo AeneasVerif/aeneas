@@ -267,20 +267,22 @@ let expand_symbolic_value_shared_borrow (config : C.config)
           (* Projector over the shared value *)
           let shared_asb = V.AsbProjReborrows (vkind, sv, ref_ty) in
           (* Check if we need to reborrow *)
-          let is_input_proj =
-            match vkind with V.InputValue -> true | V.GivenBackValue -> false
+          let is_input_proj, ended_loan_abs =
+            match vkind with
+            | V.InputValue -> (true, None)
+            | V.GivenBackValue abs_id' -> (false, Some abs_id')
           in
+          let ended_and_current_loan_in_same_abs =
+            ended_loan_abs = Some owner_abs
+          in
+          let ended_loan_in_abs = ended_loan_abs = Some abs.abs_id in
           let borrow_region_in_abs_regions = region_in_set r abs.regions in
-          let borrow_id_in_abs_owned_loans = owner_abs = abs.abs_id in
-          let borrow_id_in_other_abs_owned_loans =
-            not borrow_id_in_abs_owned_loans
-          in
           let info =
             {
               is_input_proj;
               borrow_region_in_abs_regions;
-              borrow_id_in_abs_owned_loans;
-              borrow_id_in_other_abs_owned_loans;
+              ended_and_current_loan_in_same_abs;
+              ended_loan_in_abs;
             }
           in
           if apply_proj_borrows_keep_borrow_from_bools info then

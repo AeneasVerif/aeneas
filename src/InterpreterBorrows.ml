@@ -232,6 +232,13 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   let fresh_reborrow, apply_registered_reborrows =
     prepare_reborrows config allow_reborrows
   in
+  (* Find the original owner of the loan - in particular find if it is an
+   * abstraction, and which one if it is the case *)
+  let loan_owner_id : V.AbstractionId.id option =
+    match fst (lookup_loan ek_all bid ctx) with
+    | AbsId id -> Some id
+    | VarId _ -> None
+  in
   (* The visitor to give back the values *)
   let obj =
     object (self)
@@ -335,8 +342,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Apply the projection *)
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  V.GivenBackValue abs.abs_id regions ancestors_regions nv
-                  borrowed_value_aty
+                  (V.GivenBackValue (Option.get loan_owner_id))
+                  abs.abs_id regions ancestors_regions nv borrowed_value_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -365,8 +372,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Apply the projection *)
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  V.GivenBackValue abs.abs_id regions ancestors_regions nv
-                  borrowed_value_aty
+                  (V.GivenBackValue (Option.get loan_owner_id))
+                  abs.abs_id regions ancestors_regions nv borrowed_value_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -736,7 +743,7 @@ let rec end_borrow (config : C.config) (io : inner_outer)
     (ctx : C.eval_ctx) : C.eval_ctx =
   log#ldebug
     (lazy
-      ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- context:\n"
+      ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- original context:\n"
      ^ eval_ctx_to_string ctx));
   (* Utility function for the sanity checks: check that the borrow disappeared
    * from the context *)
@@ -839,6 +846,7 @@ let rec end_borrow (config : C.config) (io : inner_outer)
           (* Return *)
           ctx)
   | Ok (ctx, None) ->
+      log#ldebug (lazy "End borrow: borrow not found");
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       assert (config.mode = SymbolicMode);

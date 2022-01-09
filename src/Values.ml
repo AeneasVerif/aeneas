@@ -167,7 +167,14 @@ and typed_value = { value : value; ty : ety }
     We thus need to remember the kind of projection on partially reduced
     projectors (i.e., projectors which got stuck on symbolic values).
 *)
-type proj_value_kind = InputValue | GivenBackValue [@@deriving show]
+type proj_value_kind =
+  | InputValue  (** Projection over an input value *)
+  | GivenBackValue of AbstractionId.id
+      (** Projection which was given back because some borrow ended, whose
+          original abstraction we remember (if a given back value ends in
+          an abstraction, it is necessarily a borrow ended, whose corresponding
+          loan comes from an abstraction *)
+[@@deriving show]
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
     abstractions) we need to reborrow the shared values. When doing so, we lookup

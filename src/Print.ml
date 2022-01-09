@@ -297,7 +297,10 @@ module Values = struct
     | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
   let proj_value_kind_to_string (vk : V.proj_value_kind) : string =
-    match vk with V.InputValue -> "Input" | V.GivenBackValue -> "GivenBack"
+    match vk with
+    | V.InputValue -> "Input"
+    | V.GivenBackValue abs_id ->
+        "GivenBack(ended_loan_abs: " ^ V.AbstractionId.to_string abs_id ^ ")"
 
   let abstract_shared_borrow_to_string (fmt : value_formatter)
       (abs : V.abstract_shared_borrow) : string =
