@@ -738,6 +738,34 @@ let rec end_borrow (config : C.config) (io : inner_outer)
     (lazy
       ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- context:\n"
      ^ eval_ctx_to_string ctx));
+  (* Utility function for the sanity checks: check that the borrow disappeared
+   * from the context *)
+  let ctx0 = ctx in
+  let check_disappeared (ctx : C.eval_ctx) : unit =
+    let _ =
+      match lookup_borrow_opt ek_all l ctx with
+      | None -> () (* Ok *)
+      | Some _ ->
+          log#lerror
+            (lazy
+              ("end borrow: " ^ V.BorrowId.to_string l
+             ^ ": borrow didn't disappear:\n- original context:\n"
+             ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
+             ^ eval_ctx_to_string ctx));
+          failwith "Borrow not eliminated"
+    in
+    match lookup_loan_opt ek_all l ctx with
+    | None -> () (* Ok *)
+    | Some _ ->
+        log#lerror
+          (lazy
+            ("end borrow: " ^ V.BorrowId.to_string l
+           ^ ": loan didn't disappear:\n- original context:\n"
+           ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
+           ^ eval_ctx_to_string ctx));
+        failwith "Loan not eliminated"
+  in
+
   match end_borrow_get_borrow io allowed_abs l ctx with
   (* Two cases:
    * - error: we found outer borrows (end them first)
@@ -773,9 +801,8 @@ let rec end_borrow (config : C.config) (io : inner_outer)
           let ctx = end_borrow config io allowed_abs' bid ctx in
           (* Retry to end the borrow *)
           let ctx = end_borrow config io allowed_abs l ctx in
-          (* Sanity check: the borrow doesn't appear anywhere anymore *)
-          assert (Option.is_none (lookup_borrow_opt ek_all l ctx));
-          assert (Option.is_none (lookup_loan_opt ek_all l ctx));
+          (* Sanity check *)
+          check_disappeared ctx;
           (* Return *)
           ctx
       | OuterAbs abs_id ->
@@ -807,24 +834,23 @@ let rec end_borrow (config : C.config) (io : inner_outer)
                  * a non-abstraction value): we need to end the whole abstraction *)
                 end_abstraction config abs_id ctx
           in
-          (* Sanity check: the borrow doesn't appear anywhere anymore *)
-          assert (Option.is_none (lookup_borrow_opt ek_all l ctx));
-          assert (Option.is_none (lookup_loan_opt ek_all l ctx));
+          (* Sanity check *)
+          check_disappeared ctx;
           (* Return *)
           ctx)
   | Ok (ctx, None) ->
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       assert (config.mode = SymbolicMode);
-      (* Sanity check: the loans doesn't appear anywhere either *)
-      assert (Option.is_none (lookup_loan_opt ek_all l ctx));
+      (* Sanity check *)
+      check_disappeared ctx;
+      (* Return *)
       ctx
   (* We found a borrow: give the value back (i.e., update the corresponding loan) *)
   | Ok (ctx, Some bc) ->
       let ctx = give_back config l bc ctx in
-      (* Sanity check: the borrow doesn't appear anywhere anymore *)
-      assert (Option.is_none (lookup_borrow_opt ek_all l ctx));
-      assert (Option.is_none (lookup_loan_opt ek_all l ctx));
+      (* Sanity check *)
+      check_disappeared ctx;
       (* Return *)
       ctx
 
