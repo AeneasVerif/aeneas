@@ -75,13 +75,13 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
         let proj_regions = current_abs.regions in
         let ancestors_regions = current_abs.ancestors_regions in
         match (aproj, proj_kind) with
-        | V.AProjLoans (project_all, sv), LoanProj ->
+        | V.AProjLoans (proj_filter, sv), LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion proj_regions expansion
-                  project_all original_sv.V.sv_ty
+                  proj_filter original_sv.V.sv_ty
               in
               (* Replace *)
               projected_value.V.value

@@ -274,11 +274,28 @@ let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
 (** Apply (and reduce) a projector over loans to a value.
 
     TODO: detailed comments. See [apply_proj_borrows]
-    TODO: explain project_all
+    TODO: explain proj_filter
 *)
 let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
-    (see : symbolic_expansion) (project_all : bool) (original_sv_ty : T.rty) :
-    V.typed_avalue =
+    (see : symbolic_expansion) (proj_filter : V.proj_filter)
+    (original_sv_ty : T.rty) : V.typed_avalue =
+  (* Helper function to evaluate whether we should project or ignore a reference.
+   * We always project if proj_filter is "all"
+   * We never project if proj_filter is "none"
+   * Otherwise, we check if the projected region is in the set of owned regions.
+   * Finally, if we successfully project, the projected value should use projector
+   * "all", and if we failed it should use projector "none".
+   * We thus return a new projection filter at the same time.
+   * *)
+  let check_proj_condition r : bool * V.proj_filter =
+    match proj_filter with
+    | V.ProjAll -> (true, V.ProjAll)
+    | V.ProjNoFilter ->
+        let b = region_in_set r regions in
+        let nfilter = if b then V.ProjAll else V.ProjNone in
+        (b, nfilter)
+    | V.ProjNone -> (false, V.ProjNone)
+  in
   (* Match *)
   let (value, ty) : V.avalue * T.rty =
     match (see, original_sv_ty) with
@@ -286,39 +303,33 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
         (V.AConcrete cv, original_sv_ty)
     | SeAdt (variant_id, field_values), T.Adt (_id, _region_params, _tys) ->
         (* Project over the field values *)
-        let project_all = false in
         let field_values =
-          List.map (mk_aproj_loans_from_symbolic_value project_all) field_values
+          List.map (mk_aproj_loans_from_symbolic_value proj_filter) field_values
         in
         (V.AAdt { V.variant_id; field_values }, original_sv_ty)
     | SeMutRef (bid, spc), T.Ref (r, ref_ty, T.Mut) ->
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);
-        (* Project if [project_all] is true or if the region is in the set
-         * of projected regions (note that we never project over static
-         * regions). If we successfully project, we set projec_all to true
-         * for the introduced projectors. *)
-        if project_all || region_in_set r regions then
-          (* In the set: keep *)
-          (* Apply the projector to the borrowed value *)
-          let child_av = mk_aproj_loans_from_symbolic_value true spc in
-          (V.ALoan (V.AMutLoan (bid, child_av)), ref_ty)
-        else (* Not in the set: ignore *)
-          (V.ABottom, ref_ty)
+        (* Check if we project and get the new projection filter *)
+        let project, nproj_filter = check_proj_condition r in
+        (* Apply the projector to the borrowed value *)
+        let child_av = mk_aproj_loans_from_symbolic_value nproj_filter spc in
+        (* Actually project *)
+        if project then (V.ALoan (V.AMutLoan (bid, child_av)), ref_ty)
+        else (V.ALoan (V.AIgnoredMutLoan (bid, child_av)), ref_ty)
     | SeSharedRef (bids, spc), T.Ref (r, ref_ty, T.Shared) ->
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);
         (* Similar to the mut case *)
-        (* Check if the region is in the set of projected regions (note that
-         * we never project over static regions) *)
-        if project_all || region_in_set r regions then
-          (* In the set: keep *)
-          (* Apply the projector to the borrowed value *)
-          let child_av = mk_aproj_loans_from_symbolic_value true spc in
+        (* Check if we project and get the new projection filter *)
+        let project, nproj_filter = check_proj_condition r in
+        (* Apply the projector to the borrowed value *)
+        let child_av = mk_aproj_loans_from_symbolic_value nproj_filter spc in
+        (* Actually project *)
+        if project then
           let shared_value = mk_typed_value_from_symbolic_value spc in
           (V.ALoan (V.ASharedLoan (bids, shared_value, child_av)), ref_ty)
-        else (* Not in the set: ignore *)
-          (V.ABottom, ref_ty)
+        else (V.ALoan (V.AIgnoredSharedLoan child_av), ref_ty)
     | _ -> failwith "Unreachable"
   in
   { V.value; V.ty }

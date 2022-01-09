@@ -59,9 +59,9 @@ let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
   av
 
 (** Create a loans projector from a symbolic value. *)
-let mk_aproj_loans_from_symbolic_value (project_all : bool)
+let mk_aproj_loans_from_symbolic_value (proj_filter : V.proj_filter)
     (svalue : V.symbolic_value) : V.typed_avalue =
-  let av = V.ASymbolic (V.AProjLoans (project_all, svalue)) in
+  let av = V.ASymbolic (V.AProjLoans (proj_filter, svalue)) in
   let av : V.typed_avalue = { V.value = av; V.ty = svalue.V.sv_ty } in
   av
 
@@ -251,7 +251,7 @@ let bottom_in_avalue (ended_regions : T.RegionId.set_t) (v : V.typed_avalue) :
       method! visit_aproj _ ap =
         (* Nothing to do actually *)
         match ap with
-        | V.AProjLoans (_project_all, _sv) -> ()
+        | V.AProjLoans (_, _sv) -> ()
         | V.AProjBorrows (_sv, _rty) -> ()
     end
   in

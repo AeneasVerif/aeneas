@@ -293,9 +293,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               match nv.V.value with
               | V.Symbolic sv ->
                   (* The loan projector *)
-                  let project_all = false in
                   let given_back_loans_proj =
-                    mk_aproj_loans_from_symbolic_value project_all sv
+                    mk_aproj_loans_from_symbolic_value V.ProjNoFilter sv
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in

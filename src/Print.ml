@@ -309,10 +309,18 @@ module Values = struct
     ^ String.concat "," (List.map (abstract_shared_borrow_to_string fmt) abs)
     ^ "}"
 
+  let proj_filter_to_string (pf : V.proj_filter) : string =
+    match pf with
+    | V.ProjNoFilter -> "proj_no_filter"
+    | V.ProjAll -> "proj_all"
+    | V.ProjNone -> "proj_none"
+
   let aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
     match pv with
-    | AProjLoans (project_all, sv) ->
-        "proj_loans (project_all=" ^ bool_to_string project_all ^ ","
+    | AProjLoans (proj_filter, sv) ->
+        "proj_loans (proj_filter="
+        ^ proj_filter_to_string proj_filter
+        ^ ","
         ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
         ^ ")"
     | AProjBorrows (sv, rty) ->

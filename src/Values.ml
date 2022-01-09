@@ -181,10 +181,13 @@ type abstract_shared_borrow =
 type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
 (** A set of abstract shared borrows *)
 
+type proj_filter = ProjNoFilter | ProjAll | ProjNone [@@deriving show]
+
 type aproj =
-  | AProjLoans of bool * symbolic_value
-      (** The boolean controls whether we should projector all regions, or not
-        * (once we successfully projected a region, we project everything below) *)
+  | AProjLoans of proj_filter * symbolic_value
+      (** The boolean controls whether we should projector all regions, no
+        * regions, or do a regular projection base on the projected type and
+        * the owned regions. *)
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use [abstract_shared_borrow].
