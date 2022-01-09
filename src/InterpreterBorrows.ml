@@ -478,7 +478,9 @@ let give_back_avalue (_config : C.config) (bid : V.BorrowId.id)
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call [set_replaced]) *)
               (* Sanity check *)
-              assert (nv.V.ty = ty);
+              assert (
+                let _, ref_ty, _ = ty_get_ref ty in
+                nv.V.ty = ref_ty);
               V.ALoan (V.AEndedIgnoredMutLoan { given_back = nv; child }))
             else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
