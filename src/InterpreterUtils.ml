@@ -121,6 +121,8 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 (** Utility exception *)
 
+exception FoundAbsId of V.AbstractionId.id
+
 let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     bool =
   let obj =
@@ -132,14 +134,14 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
 
       method! visit_ASymbolic _ aproj =
         match aproj with
-        | AProjLoans (_, sv) | AProjBorrows (sv, _) ->
+        | AProjLoans (_, sv) | AProjBorrows (_, sv, _) ->
             if sv.V.sv_id = sv_id then raise Found else ()
 
       method! visit_abstract_shared_borrows _ asb =
         let visit (asb : V.abstract_shared_borrow) : unit =
           match asb with
           | V.AsbBorrow _ -> ()
-          | V.AsbProjReborrows (sv, _) ->
+          | V.AsbProjReborrows (_, sv, _) ->
               if sv.V.sv_id = sv_id then raise Found else ()
         in
         List.iter visit asb
@@ -250,9 +252,7 @@ let bottom_in_avalue (ended_regions : T.RegionId.set_t) (v : V.typed_avalue) :
 
       method! visit_aproj _ ap =
         (* Nothing to do actually *)
-        match ap with
-        | V.AProjLoans (_, _sv) -> ()
-        | V.AProjBorrows (_sv, _rty) -> ()
+        match ap with V.AProjLoans _ -> () | V.AProjBorrows _ -> ()
     end
   in
   (* We use exceptions *)

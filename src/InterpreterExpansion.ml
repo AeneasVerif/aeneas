@@ -88,7 +88,7 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) aproj
-        | V.AProjBorrows (sv, proj_ty), BorrowProj ->
+        | V.AProjBorrows (vkind, sv, proj_ty), BorrowProj ->
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then
               (* Convert the symbolic expansion to a value on which we can
@@ -101,20 +101,17 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
                   expansion
               in
               (* Apply the projector *)
-              (* TODO: we might want to compute this set once and for all before
-               * diving into the abstraction *)
-              let borrows_owned_by_abs = get_loans_in_abs current_abs in
               let projected_value =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  borrows_owned_by_abs proj_regions ancestors_regions expansion
-                  proj_ty
+                  vkind current_abs.abs_id proj_regions ancestors_regions
+                  expansion proj_ty
               in
               (* Replace *)
               projected_value.V.value
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) aproj
-        | V.AProjLoans _, BorrowProj | V.AProjBorrows (_, _), LoanProj ->
+        | V.AProjLoans _, BorrowProj | V.AProjBorrows _, LoanProj ->
             (* Nothing to do *)
             super#visit_ASymbolic (Some current_abs) aproj
     end
@@ -259,15 +256,34 @@ let expand_symbolic_value_shared_borrow (config : C.config)
    * projector and asb).
    * Returns `Some` if the symbolic value has been expanded to an asb list,
    * `None` otherwise *)
-  let reborrow_ashared proj_regions (sv : V.symbolic_value) (proj_ty : T.rty) :
+  (* First, let's find out which abstraction will own the new, expanded loan *)
+  let owner_abs = get_symbolic_ref_loan_owner ctx original_sv in
+  let reborrow_ashared (abs : V.abs) (vkind : V.proj_value_kind)
+      (sv : V.symbolic_value) (proj_ty : T.rty) :
       V.abstract_shared_borrows option =
     if same_symbolic_id sv original_sv then
       match proj_ty with
       | T.Ref (r, ref_ty, T.Shared) ->
           (* Projector over the shared value *)
-          let shared_asb = V.AsbProjReborrows (sv, ref_ty) in
-          (* Check if the region is in the set of projected regions *)
-          if region_in_set r proj_regions then
+          let shared_asb = V.AsbProjReborrows (vkind, sv, ref_ty) in
+          (* Check if we need to reborrow *)
+          let is_input_proj =
+            match vkind with V.InputValue -> true | V.GivenBackValue -> false
+          in
+          let borrow_region_in_abs_regions = region_in_set r abs.regions in
+          let borrow_id_in_abs_owned_loans = owner_abs = abs.abs_id in
+          let borrow_id_in_other_abs_owned_loans =
+            not borrow_id_in_abs_owned_loans
+          in
+          let info =
+            {
+              is_input_proj;
+              borrow_region_in_abs_regions;
+              borrow_id_in_abs_owned_loans;
+              borrow_id_in_other_abs_owned_loans;
+            }
+          in
+          if apply_proj_borrows_keep_borrow_from_bools info then
             (* In the set: we need to reborrow *)
             let bid = fresh_borrow () in
             Some [ V.AsbBorrow bid; shared_asb ]
@@ -287,33 +303,32 @@ let expand_symbolic_value_shared_borrow (config : C.config)
           V.Borrow (V.SharedBorrow bid)
         else super#visit_Symbolic env sv
 
-      method! visit_Abs proj_regions abs =
-        assert (Option.is_none proj_regions);
-        let proj_regions = Some abs.V.regions in
-        super#visit_Abs proj_regions abs
+      method! visit_Abs opt_abs abs =
+        assert (Option.is_none opt_abs);
+        super#visit_Abs (Some abs) abs
 
-      method! visit_AProjSharedBorrow proj_regions asb =
+      method! visit_AProjSharedBorrow opt_abs asb =
         let expand_asb (asb : V.abstract_shared_borrow) :
             V.abstract_shared_borrows =
           match asb with
           | V.AsbBorrow _ -> [ asb ]
-          | V.AsbProjReborrows (sv, proj_ty) -> (
-              match reborrow_ashared (Option.get proj_regions) sv proj_ty with
+          | V.AsbProjReborrows (vkind, sv, proj_ty) -> (
+              match reborrow_ashared (Option.get opt_abs) vkind sv proj_ty with
               | None -> [ asb ]
               | Some asb -> asb)
         in
         let asb = List.concat (List.map expand_asb asb) in
         V.AProjSharedBorrow asb
 
-      method! visit_ASymbolic proj_regions aproj =
+      method! visit_ASymbolic opt_abs aproj =
         match aproj with
         | AProjLoans _ ->
             (* Loans are handled later *)
-            super#visit_ASymbolic proj_regions aproj
-        | AProjBorrows (sv, proj_ty) -> (
+            super#visit_ASymbolic opt_abs aproj
+        | AProjBorrows (vkind, sv, proj_ty) -> (
             (* Check if we need to reborrow *)
-            match reborrow_ashared (Option.get proj_regions) sv proj_ty with
-            | None -> super#visit_ASymbolic proj_regions aproj
+            match reborrow_ashared (Option.get opt_abs) vkind sv proj_ty with
+            | None -> super#visit_ASymbolic opt_abs aproj
             | Some asb -> V.ABorrow (V.AProjSharedBorrow asb))
     end
   in

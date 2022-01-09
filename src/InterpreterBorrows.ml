@@ -333,12 +333,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Register the insertion *)
               set_replaced ();
               (* Apply the projection *)
-              (* TODO: we might want to compute this set once and for all before
-               * diving into the abstraction *)
-              let borrows_owned_by_abs = get_loans_in_abs abs in
+              let is_input_proj = false in
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  borrows_owned_by_abs regions ancestors_regions nv
+                  V.GivenBackValue abs.abs_id regions ancestors_regions nv
                   borrowed_value_aty
               in
               (* Continue giving back in the child value *)
@@ -365,12 +363,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * mut loan. Also, this is not the loan we are looking for *per se*:
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call [set_replaced]) *)
-              (* TODO: we might want to compute this set once and for all before
-               * diving into the abstraction *)
-              let borrows_owned_by_abs = get_loans_in_abs abs in
+              (* Apply the projection *)
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  borrows_owned_by_abs regions ancestors_regions nv
+                  V.GivenBackValue abs.abs_id regions ancestors_regions nv
                   borrowed_value_aty
               in
               (* Continue giving back in the child value *)

@@ -875,7 +875,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     let ctx, args_projs =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_on_input_value config ctx abs.regions
+          apply_proj_borrows_on_input_value config ctx abs.abs_id abs.regions
             abs.ancestors_regions arg arg_rty)
         ctx args_with_rtypes
     in

@@ -296,12 +296,19 @@ module Values = struct
         "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
     | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
+  let proj_value_kind_to_string (vk : V.proj_value_kind) : string =
+    match vk with V.InputValue -> "Input" | V.GivenBackValue -> "GivenBack"
+
   let abstract_shared_borrow_to_string (fmt : value_formatter)
       (abs : V.abstract_shared_borrow) : string =
     match abs with
     | AsbBorrow bid -> V.BorrowId.to_string bid
-    | AsbProjReborrows (sv, rty) ->
-        "{" ^ symbolic_value_proj_to_string fmt sv rty ^ "}"
+    | AsbProjReborrows (vkind, sv, rty) ->
+        "{["
+        ^ proj_value_kind_to_string vkind
+        ^ "] "
+        ^ symbolic_value_proj_to_string fmt sv rty
+        ^ "}"
 
   let abstract_shared_borrows_to_string (fmt : value_formatter)
       (abs : V.abstract_shared_borrows) : string =
@@ -323,8 +330,12 @@ module Values = struct
         ^ ","
         ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
         ^ ")"
-    | AProjBorrows (sv, rty) ->
-        "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
+    | AProjBorrows (vk, sv, rty) ->
+        "proj_borrows["
+        ^ proj_value_kind_to_string vk
+        ^ "]("
+        ^ symbolic_value_proj_to_string fmt sv rty
+        ^ ")"
 
   let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
       string =

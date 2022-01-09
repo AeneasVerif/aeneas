@@ -597,7 +597,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             let ty1 = Subst.erase_regions ty in
             let ty2 =
               match aproj with
-              | V.AProjLoans (_, sv) | V.AProjBorrows (sv, _) ->
+              | V.AProjLoans (_, sv) | V.AProjBorrows (_, sv, _) ->
                   Subst.erase_regions sv.V.sv_ty
             in
             assert (ty1 = ty2)

@@ -159,6 +159,16 @@ and typed_value = { value : value; ty : ety }
       }]
 (** "Regular" typed value (we map variables to typed values) *)
 
+(** When applying borrow projectors, the reduction is not the same depending on
+    whether the value on which they are applied are input values (i.e., the
+    projection was introduced following a function call) or given back values
+    (i.e., the projection was introduced after a borrow ended and was given
+    back to some loan).
+    We thus need to remember the kind of projection on partially reduced
+    projectors (i.e., projectors which got stuck on symbolic values).
+*)
+type proj_value_kind = InputValue | GivenBackValue [@@deriving show]
+
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
     abstractions) we need to reborrow the shared values. When doing so, we lookup
     the shared values and apply some special projections to the shared value
@@ -175,7 +185,8 @@ and typed_value = { value : value; ty : ety }
 *)
 type abstract_shared_borrow =
   | AsbBorrow of (BorrowId.id[@opaque])
-  | AsbProjReborrows of (symbolic_value[@opaque]) * (rty[@opaque])
+  | AsbProjReborrows of
+      proj_value_kind * (symbolic_value[@opaque]) * (rty[@opaque])
 [@@deriving show]
 
 type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
@@ -188,7 +199,7 @@ type aproj =
       (** The boolean controls whether we should projector all regions, no
         * regions, or do a regular projection base on the projected type and
         * the owned regions. *)
-  | AProjBorrows of symbolic_value * rty
+  | AProjBorrows of proj_value_kind * symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use [abstract_shared_borrow].
        *)
