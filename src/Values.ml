@@ -182,7 +182,9 @@ type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
 (** A set of abstract shared borrows *)
 
 type aproj =
-  | AProjLoans of symbolic_value
+  | AProjLoans of (bool * symbolic_value)
+      (** The boolean controls whether we should projector all regions, or not
+        * (once we successfully projected a region, we project everything below) *)
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use [abstract_shared_borrow]. *)
@@ -336,7 +338,7 @@ and aloan_content =
           altogether (and just keep the child avalue).
        *)
   | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
-      (** An ignored mutable loan.
+      (** An ignored mutable loan. TODO: not used anymore
       
           We need to keep track of ignored mutable loans, because we may have
           to apply projections on the values given back to those loans (say
@@ -357,9 +359,9 @@ and aloan_content =
           ```
        *)
   | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
-      (** Similar to [AEndedMutLoan], for ignored loans *)
+      (** Similar to [AEndedMutLoan], for ignored loans. TODO: not used anymore *)
   | AIgnoredSharedLoan of typed_avalue
-      (** An ignored shared loan.
+      (** An ignored shared loan. TODO: not used anymore
       
           Example:
           ========

@@ -855,7 +855,8 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   let ret_sv_ty = inst_sg.A.output in
   let ret_spc = mk_fresh_symbolic_value ret_sv_ty in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
-  let ret_av = mk_aproj_loans_from_symbolic_value ret_spc in
+  let project_all_loans = false in
+  let ret_av = mk_aproj_loans_from_symbolic_value project_all_loans ret_spc in
   (* Evaluate the input operands *)
   let ctx, args = eval_operands config ctx args in
   let args_with_rtypes = List.combine args inst_sg.A.inputs in

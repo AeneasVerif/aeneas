@@ -59,9 +59,9 @@ let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
   av
 
 (** Create a loans projector from a symbolic value. *)
-let mk_aproj_loans_from_symbolic_value (svalue : V.symbolic_value) :
-    V.typed_avalue =
-  let av = V.ASymbolic (V.AProjLoans svalue) in
+let mk_aproj_loans_from_symbolic_value (project_all : bool)
+    (svalue : V.symbolic_value) : V.typed_avalue =
+  let av = V.ASymbolic (V.AProjLoans (project_all, svalue)) in
   let av : V.typed_avalue = { V.value = av; V.ty = svalue.V.sv_ty } in
   av
 
@@ -132,7 +132,7 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
 
       method! visit_ASymbolic _ aproj =
         match aproj with
-        | AProjLoans sv | AProjBorrows (sv, _) ->
+        | AProjLoans (_, sv) | AProjBorrows (sv, _) ->
             if sv.V.sv_id = sv_id then raise Found else ()
 
       method! visit_abstract_shared_borrows _ asb =

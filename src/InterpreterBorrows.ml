@@ -293,8 +293,9 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               match nv.V.value with
               | V.Symbolic sv ->
                   (* The loan projector *)
+                  let project_all = false in
                   let given_back_loans_proj =
-                    mk_aproj_loans_from_symbolic_value sv
+                    mk_aproj_loans_from_symbolic_value project_all sv
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in
@@ -731,6 +732,10 @@ let convert_avalue_to_value (av : V.typed_avalue) : V.typed_value =
 let rec end_borrow (config : C.config) (io : inner_outer)
     (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  log#ldebug
+    (lazy
+      ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- context:\n"
+     ^ eval_ctx_to_string ctx));
   match end_borrow_get_borrow io allowed_abs l ctx with
   (* Two cases:
    * - error: we found outer borrows (end them first)
@@ -738,6 +743,12 @@ let rec end_borrow (config : C.config) (io : inner_outer)
        didn't find the borrow we were looking for...)
    *)
   | Error outer -> (
+      (* Debug *)
+      log#ldebug
+        (lazy
+          ("end borrow: " ^ V.BorrowId.to_string l
+         ^ ": found outer borrows/abs:"
+          ^ show_outer_borrows_or_abs outer));
       (* End the outer borrows, abstraction, then try again to end the target
        * borrow (if necessary) *)
       match outer with
@@ -759,8 +770,13 @@ let rec end_borrow (config : C.config) (io : inner_outer)
           let allowed_abs' = None in
           let ctx = end_borrow config io allowed_abs' bid ctx in
           (* Retry to end the borrow *)
-          end_borrow config io allowed_abs l ctx
-      | OuterAbs abs_id -> (
+          let ctx = end_borrow config io allowed_abs l ctx in
+          (* Sanity check: the borrow doesn't appear anywhere anymore *)
+          assert (Option.is_none (lookup_borrow_opt ek_all l ctx));
+          assert (Option.is_none (lookup_loan_opt ek_all l ctx));
+          (* Return *)
+          ctx
+      | OuterAbs abs_id ->
           (* The borrow is inside an asbtraction: check if the corresponding
            * loan is inside the same abstraction. If this is the case, we end
            * the borrow without ending the abstraction. If not, we need to
@@ -773,36 +789,42 @@ let rec end_borrow (config : C.config) (io : inner_outer)
               enter_abs = true;
             }
           in
-          match lookup_loan ek l ctx with
-          | AbsId loan_abs_id, _ ->
-              if loan_abs_id = abs_id then (
-                (* Same abstraction! We can end the borrow *)
-                let ctx = end_borrow config io (Some abs_id) l ctx in
-                (* Sanity check *)
-                assert (Option.is_none (lookup_borrow_opt ek l ctx));
-                ctx)
-              else
-                (* Not the same abstraction: we need to end the whole abstraction.
-                 * By doing that we should have ended the target borrow (see the
-                 * below sanity check) *)
-                let ctx = end_abstraction config abs_id ctx in
-                (* Sanity check: we ended the target borrow *)
-                assert (Option.is_none (lookup_borrow_opt ek l ctx));
-                ctx
-          | VarId _, _ ->
-              (* The loan is not inside the same abstraction (actually inside
-               * a non-abstraction value): we need to end the whole abstraction *)
-              let ctx = end_abstraction config abs_id ctx in
-              (* Sanity check: we ended the target borrow *)
-              assert (Option.is_none (lookup_borrow_opt ek l ctx));
-              ctx))
+          let ctx =
+            match lookup_loan ek l ctx with
+            | AbsId loan_abs_id, _ ->
+                if loan_abs_id = abs_id then
+                  (* Same abstraction! We can end the borrow *)
+                  end_borrow config io (Some abs_id) l ctx
+                else
+                  (* Not the same abstraction: we need to end the whole abstraction.
+                   * By doing that we should have ended the target borrow (see the
+                   * below sanity check) *)
+                  end_abstraction config abs_id ctx
+            | VarId _, _ ->
+                (* The loan is not inside the same abstraction (actually inside
+                 * a non-abstraction value): we need to end the whole abstraction *)
+                end_abstraction config abs_id ctx
+          in
+          (* Sanity check: the borrow doesn't appear anywhere anymore *)
+          assert (Option.is_none (lookup_borrow_opt ek_all l ctx));
+          assert (Option.is_none (lookup_loan_opt ek_all l ctx));
+          (* Return *)
+          ctx)
   | Ok (ctx, None) ->
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       assert (config.mode = SymbolicMode);
+      (* Sanity check: the loans doesn't appear anywhere either *)
+      assert (Option.is_none (lookup_loan_opt ek_all l ctx));
       ctx
   (* We found a borrow: give the value back (i.e., update the corresponding loan) *)
-  | Ok (ctx, Some bc) -> give_back config l bc ctx
+  | Ok (ctx, Some bc) ->
+      let ctx = give_back config l bc ctx in
+      (* Sanity check: the borrow doesn't appear anywhere anymore *)
+      assert (Option.is_none (lookup_borrow_opt ek_all l ctx));
+      assert (Option.is_none (lookup_loan_opt ek_all l ctx));
+      (* Return *)
+      ctx
 
 and end_borrows (config : C.config) (io : inner_outer)
     (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t)
@@ -817,7 +839,7 @@ and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
   let ctx0 = ctx in
   log#ldebug
     (lazy
-      ("end_abstraction: "
+      ("end abstraction: "
       ^ V.AbstractionId.to_string abs_id
       ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
   (* Lookup the abstraction *)
@@ -826,7 +848,7 @@ and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
   let ctx = end_abstractions config abs.parents ctx in
   log#ldebug
     (lazy
-      ("end_abstraction: "
+      ("end abstraction: "
       ^ V.AbstractionId.to_string abs_id
       ^ "\n- context after parent abstractions ended:\n"
       ^ eval_ctx_to_string ctx));
@@ -834,7 +856,7 @@ and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
   let ctx = end_abstraction_loans config abs_id ctx in
   log#ldebug
     (lazy
-      ("end_abstraction: "
+      ("end abstraction: "
       ^ V.AbstractionId.to_string abs_id
       ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx));
   (* End the abstraction itself by redistributing the borrows it contains *)
@@ -854,7 +876,7 @@ and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
   (* Debugging *)
   log#ldebug
     (lazy
-      ("end_abstraction: "
+      ("end abstraction: "
       ^ V.AbstractionId.to_string abs_id
       ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
       ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx));

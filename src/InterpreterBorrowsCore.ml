@@ -38,13 +38,15 @@ let ek_all : exploration_kind =
 *)
 type inner_outer = Inner | Outer
 
-type borrow_ids = Borrows of V.BorrowId.Set.t | Borrow of V.BorrowId.id
+type borrow_ids = Borrows of V.BorrowId.set_t | Borrow of V.BorrowId.id
+[@@deriving show]
 
 exception FoundBorrowIds of borrow_ids
 
 type outer_borrows_or_abs =
   | OuterBorrows of borrow_ids
   | OuterAbs of V.AbstractionId.id
+[@@deriving show]
 
 let update_if_none opt x = match opt with None -> Some x | _ -> opt
 

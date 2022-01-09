@@ -10,6 +10,8 @@ module M = Modules
 let option_to_string (to_string : 'a -> string) (x : 'a option) : string =
   match x with Some x -> "Some (" ^ to_string x ^ ")" | None -> "None"
 
+let bool_to_string (b : bool) : string = if b then "true" else "false"
+
 (** Pretty-printing for types *)
 module Types = struct
   let type_var_to_string (tv : T.type_var) : string = tv.name
@@ -309,8 +311,8 @@ module Values = struct
 
   let aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
     match pv with
-    | AProjLoans sv ->
-        "proj_loans ("
+    | AProjLoans (project_all, sv) ->
+        "proj_loans (project_all=" ^ bool_to_string project_all ^ ","
         ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
         ^ ")"
     | AProjBorrows (sv, rty) ->
