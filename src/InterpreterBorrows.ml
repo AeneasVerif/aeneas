@@ -316,11 +316,9 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
       method visit_typed_ALoan (opt_abs : V.abs option) (ty : T.rty)
           (lc : V.aloan_content) : V.avalue =
         (* Preparing a bit *)
-        let regions, ancestors_regions =
-          match opt_abs with
-          | None -> failwith "Unreachable"
-          | Some abs -> (abs.V.regions, abs.V.ancestors_regions)
-        in
+        let abs = Option.get opt_abs in
+        let regions = abs.V.regions in
+        let ancestors_regions = abs.V.ancestors_regions in
         (* Rk.: there is a small issue with the types of the aloan values.
          * See the comment at the level of definition of [typed_avalue] *)
         let borrowed_value_aty =
@@ -336,9 +334,13 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Register the insertion *)
               set_replaced ();
               (* Apply the projection *)
+              (* TODO: we might want to compute this set once and for all before
+               * diving into the abstraction *)
+              let borrows_owned_by_abs = get_loans_in_abs abs in
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  regions ancestors_regions nv borrowed_value_aty
+                  borrows_owned_by_abs regions ancestors_regions nv
+                  borrowed_value_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -364,9 +366,13 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * mut loan. Also, this is not the loan we are looking for *per se*:
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call [set_replaced]) *)
+              (* TODO: we might want to compute this set once and for all before
+               * diving into the abstraction *)
+              let borrows_owned_by_abs = get_loans_in_abs abs in
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  regions ancestors_regions nv borrowed_value_aty
+                  borrows_owned_by_abs regions ancestors_regions nv
+                  borrowed_value_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in

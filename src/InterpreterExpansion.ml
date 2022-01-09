@@ -101,9 +101,13 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
                   expansion
               in
               (* Apply the projector *)
+              (* TODO: we might want to compute this set once and for all before
+               * diving into the abstraction *)
+              let borrows_owned_by_abs = get_loans_in_abs current_abs in
               let projected_value =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  proj_regions ancestors_regions expansion proj_ty
+                  borrows_owned_by_abs proj_regions ancestors_regions expansion
+                  proj_ty
               in
               (* Replace *)
               projected_value.V.value

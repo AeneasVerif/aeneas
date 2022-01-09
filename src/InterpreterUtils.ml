@@ -251,7 +251,7 @@ let bottom_in_avalue (ended_regions : T.RegionId.set_t) (v : V.typed_avalue) :
       method! visit_aproj _ ap =
         (* Nothing to do actually *)
         match ap with
-        | V.AProjLoans _sv -> ()
+        | V.AProjLoans (_project_all, _sv) -> ()
         | V.AProjBorrows (_sv, _rty) -> ()
     end
   in
@@ -260,3 +260,45 @@ let bottom_in_avalue (ended_regions : T.RegionId.set_t) (v : V.typed_avalue) :
     obj#visit_typed_avalue () v;
     false
   with Found -> true
+
+(** Return the set of loans owned by an abstraction *)
+let get_loans_in_abs (abs : V.abs) : V.BorrowId.set_t =
+  (* Set up an accumulator and some helper functions *)
+  let loans = ref V.BorrowId.Set.empty in
+  let insert_loan (l : V.BorrowId.id) : unit =
+    loans := V.BorrowId.Set.add l !loans
+  in
+  let insert_loans (ll : V.BorrowId.set_t) : unit =
+    loans := V.BorrowId.Set.union ll !loans
+  in
+
+  (* The visitor object *)
+  let obj =
+    object
+      inherit [_] V.iter_abs as super
+
+      method! visit_Loan env lc =
+        (match lc with
+        | V.MutLoan bid -> insert_loan bid
+        | V.SharedLoan (bids, _) -> insert_loans bids);
+        (* Continue exploring *)
+        super#visit_Loan env lc
+
+      method! visit_ALoan env lc =
+        (match lc with
+        | V.AMutLoan (bid, _) -> insert_loan bid
+        | V.ASharedLoan (bids, _, _) -> insert_loans bids
+        | V.AEndedMutLoan _ | V.AEndedSharedLoan _ | V.AIgnoredMutLoan _
+        | V.AEndedIgnoredMutLoan _ | V.AIgnoredSharedLoan _ ->
+            (* Nothing special to do *)
+            ());
+        (* Continue exploring *)
+        super#visit_ALoan env lc
+    end
+  in
+
+  (* Visit *)
+  obj#visit_abs () abs;
+
+  (* Return the accumulated set *)
+  !loans

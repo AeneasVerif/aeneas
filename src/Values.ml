@@ -182,12 +182,13 @@ type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
 (** A set of abstract shared borrows *)
 
 type aproj =
-  | AProjLoans of (bool * symbolic_value)
+  | AProjLoans of bool * symbolic_value
       (** The boolean controls whether we should projector all regions, or not
         * (once we successfully projected a region, we project everything below) *)
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
-          a shared loan: under a shared loan, we use [abstract_shared_borrow]. *)
+          a shared loan: under a shared loan, we use [abstract_shared_borrow].
+       *)
 [@@deriving show]
 
 type region = RegionVarId.id Types.region [@@deriving show]

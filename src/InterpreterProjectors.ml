@@ -23,8 +23,8 @@ type symbolic_expansion =
 *)
 let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
-    (regions : T.RegionId.set_t) (v : V.typed_value) (ty : T.rty) :
-    V.abstract_shared_borrows =
+    (owned_borrows : V.BorrowId.set_t) (regions : T.RegionId.set_t)
+    (v : V.typed_value) (ty : T.rty) : V.abstract_shared_borrows =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
@@ -43,8 +43,8 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
       let proj_fields =
         List.map
           (fun (fv, fty) ->
-            apply_proj_borrows_on_shared_borrow ctx fresh_reborrow regions fv
-              fty)
+            apply_proj_borrows_on_shared_borrow ctx fresh_reborrow owned_borrows
+              regions fv fty)
           fields_types
       in
       List.concat proj_fields
@@ -52,13 +52,12 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
   | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
       (* Retrieve the bid of the borrow and the asb of the projected borrowed value *)
       let bid, asb =
-        (* Not in the set: dive *)
         match (bc, kind) with
         | V.MutBorrow (bid, bv), T.Mut ->
             (* Apply the projection on the borrowed value *)
             let asb =
-              apply_proj_borrows_on_shared_borrow ctx fresh_reborrow regions bv
-                ref_ty
+              apply_proj_borrows_on_shared_borrow ctx fresh_reborrow
+                owned_borrows regions bv ref_ty
             in
             (bid, asb)
         | V.SharedBorrow bid, T.Shared ->
@@ -69,8 +68,8 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
               match sv with
               | _, Concrete (V.SharedLoan (_, sv))
               | _, Abstract (V.ASharedLoan (_, sv, _)) ->
-                  apply_proj_borrows_on_shared_borrow ctx fresh_reborrow regions
-                    sv ref_ty
+                  apply_proj_borrows_on_shared_borrow ctx fresh_reborrow
+                    owned_borrows regions sv ref_ty
               | _ -> failwith "Unexpected"
             in
             (bid, asb)
@@ -81,8 +80,8 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
       in
       let asb =
         (* Check if the region is in the set of projected regions (note that
-         * we never project over static regions) *)
-        if region_in_set r regions then
+         * we never project over static regions) or in the owned borrows *)
+        if V.BorrowId.Set.mem bid owned_borrows || region_in_set r regions then
           let bid' = fresh_reborrow bid in
           V.AsbBorrow bid' :: asb
         else asb
@@ -129,8 +128,9 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
 *)
 let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
-    (regions : T.RegionId.set_t) (ancestors_regions : T.RegionId.set_t)
-    (v : V.typed_value) (ty : T.rty) : V.typed_avalue =
+    (owned_borrows : V.BorrowId.set_t) (regions : T.RegionId.set_t)
+    (ancestors_regions : T.RegionId.set_t) (v : V.typed_value) (ty : T.rty) :
+    V.typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
@@ -151,16 +151,25 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
           List.map
             (fun (fv, fty) ->
               apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                regions ancestors_regions fv fty)
+                owned_borrows regions ancestors_regions fv fty)
             fields_types
         in
         V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
     | V.Bottom, _ -> failwith "Unreachable"
     | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
+        (* Retrieve the borrow id *)
+        let bid =
+          match bc with
+          | V.MutBorrow (bid, _) | V.SharedBorrow bid -> bid
+          | V.InactivatedMutBorrow _ ->
+              failwith
+                "Can't apply a proj_borrow over an inactivated mutable borrow"
+        in
         if
           (* Check if the region is in the set of projected regions (note that
-           * we never project over static regions) *)
-          region_in_set r regions
+           * we never project over static regions) or if the borrow id is in the
+           * set of owned borrows *)
+          V.BorrowId.Set.mem bid owned_borrows || region_in_set r regions
         then
           (* In the set *)
           let bc =
@@ -169,7 +178,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                 (* Apply the projection on the borrowed value *)
                 let bv =
                   apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                    regions ancestors_regions bv ref_ty
+                    owned_borrows regions ancestors_regions bv ref_ty
                 in
                 V.AMutBorrow (bid, bv)
             | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
@@ -187,7 +196,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                 (* Apply the projection on the borrowed value *)
                 let bv =
                   apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                    regions ancestors_regions bv ref_ty
+                    owned_borrows regions ancestors_regions bv ref_ty
                 in
                 (* If the borrow id is in the ancestor's regions, we still need
                  * to remember it *)
@@ -205,7 +214,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                   | _, Concrete (V.SharedLoan (_, sv))
                   | _, Abstract (V.ASharedLoan (_, sv, _)) ->
                       apply_proj_borrows_on_shared_borrow ctx fresh_reborrow
-                        regions sv ref_ty
+                        owned_borrows regions sv ref_ty
                   | _ -> failwith "Unexpected"
                 in
                 V.AProjSharedBorrow asb
@@ -512,9 +521,10 @@ let apply_proj_borrows_on_input_value (config : C.config) (ctx : C.eval_ctx)
     prepare_reborrows config allow_reborrows
   in
   (* Apply the projector *)
+  let owned_borrows = V.BorrowId.Set.empty in
   let av =
-    apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow regions
-      ancestors_regions v ty
+    apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow owned_borrows
+      regions ancestors_regions v ty
   in
   (* Apply the reborrows *)
   let ctx = apply_registered_reborrows ctx in
