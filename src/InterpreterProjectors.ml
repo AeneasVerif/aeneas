@@ -428,7 +428,7 @@ let get_symbolic_ref_loan_owner_opt (ctx : C.eval_ctx) (sv : V.symbolic_value) :
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_abs opt_abs abs = super#visit_abs (Some abs) abs
+      method! visit_abs _opt_abs abs = super#visit_abs (Some abs) abs
 
       method! visit_ASymbolic abs aproj =
         (match aproj with

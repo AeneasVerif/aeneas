@@ -333,7 +333,6 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Register the insertion *)
               set_replaced ();
               (* Apply the projection *)
-              let is_input_proj = false in
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
                   V.GivenBackValue abs.abs_id regions ancestors_regions nv
