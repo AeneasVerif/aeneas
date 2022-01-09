@@ -23,7 +23,10 @@ let ty_is_unit (ty : 'r ty) : bool =
 (** The unit type *)
 let mk_unit_ty : ety = Adt (Tuple, [], [])
 
-(** Deconstruct a type of the form `Box<T>` to retrieve the `T` inside *)
+(** Deconstruct a type of the form `Box<T>` to retrieve the `T` inside.
+
+    TODO: rename to ty_as_box
+ *)
 let ty_get_box (box_ty : ety) : ety =
   match box_ty with
   | Adt (Assumed Box, [], [ boxed_ty ]) -> boxed_ty
@@ -31,6 +34,8 @@ let ty_get_box (box_ty : ety) : ety =
 
 (** Deconstruct a type of the form `&T` or `&mut T` to retrieve the `T` (and
     the borrow kind, etc.)
+    
+    TODO: rename to ty_as_ref
  *)
 let ty_get_ref (ty : 'r ty) : 'r * 'r ty * ref_kind =
   match ty with
