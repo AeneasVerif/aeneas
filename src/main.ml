@@ -4,6 +4,7 @@ open Print
 module T = Types
 module A = CfimAst
 module I = Interpreter
+module EL = Easy_logging.Logging
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
@@ -19,6 +20,7 @@ Usage: %s [OPTIONS] FILE
     Sys.argv.(0)
 
 let () =
+  (* Read the command line arguments *)
   let spec = [] in
   let spec = Arg.align spec in
   let filename = ref "" in
@@ -39,12 +41,23 @@ let () =
   if !filename = "" then (
     print_string usage;
     exit 1);
+  (* Set up the logging - for now we use default values - TODO: use the
+   * command-line arguments *)
+  Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
+  main_log#set_level EL.Debug;
+  interpreter_log#set_level EL.Debug;
+  statements_log#set_level EL.Debug;
+  expressions_log#set_level EL.Warning;
+  expansion_log#set_level EL.Debug;
+  borrows_log#set_level EL.Debug;
+  invariants_log#set_level EL.Warning;
+  (* Load the module *)
   let json = Yojson.Basic.from_file !filename in
   match cfim_module_of_json json with
-  | Error s -> log#error "error: %s\n" s
+  | Error s -> main_log#error "error: %s\n" s
   | Ok m ->
       (* Print the module *)
-      log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));
+      main_log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));
 
       (* Test the unit functions with the concrete interpreter *)
       I.Test.test_unit_functions m.types m.functions;

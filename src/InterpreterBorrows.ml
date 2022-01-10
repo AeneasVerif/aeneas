@@ -169,9 +169,14 @@ let end_borrow_get_borrow (io : inner_outer)
                * of the two cases described above *)
               V.ABottom)
             else V.ABorrow (super#visit_ASharedBorrow outer bid)
-        | V.AIgnoredMutBorrow av ->
+        | V.AIgnoredMutBorrow (opt_bid, av) ->
             (* Nothing special to do *)
-            V.ABorrow (super#visit_AIgnoredMutBorrow outer av)
+            V.ABorrow (super#visit_AIgnoredMutBorrow outer opt_bid av)
+        | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
+            (* Nothing special to do *)
+            V.ABorrow
+              (super#visit_AEndedIgnoredMutBorrow outer given_back_loans_proj
+                 child)
         | V.AProjSharedBorrow asb ->
             (* Check if the borrow we are looking for is in the asb *)
             if borrow_in_asb l asb then (
@@ -232,7 +237,18 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     object (self)
       inherit [_] C.map_eval_ctx as super
 
-      method! visit_Loan opt_abs lc =
+      method! visit_typed_value opt_abs (v : V.typed_value) : V.typed_value =
+        match v.V.value with
+        | V.Loan lc ->
+            let value = self#visit_typed_Loan opt_abs v.V.ty lc in
+            ({ v with V.value } : V.typed_value)
+        | _ -> super#visit_typed_value opt_abs v
+      (** This is a bit annoying, but as we need the type of the value we
+          are exploring, for sanity checks, we need to implement
+          [visit_typed_avalue] instead of
+          overriding [visit_ALoan] *)
+
+      method visit_typed_Loan opt_abs ty lc =
         match lc with
         | V.SharedLoan (bids, v) ->
             (* We are giving back a value (i.e., the content of a *mutable*
@@ -241,6 +257,15 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
         | V.MutLoan bid' ->
             (* Check if this is the loan we are looking for *)
             if bid' = bid then (
+              (* Sanity check *)
+              let expected_ty = ty in
+              if nv.V.ty <> expected_ty then (
+                log#serror
+                  ("give_back_value: improper type:\n- expected: "
+                 ^ ety_to_string ctx ty ^ "\n- received: "
+                 ^ ety_to_string ctx nv.V.ty);
+                failwith "Value given back doesn't have the proper type");
+              (* Replace *)
               set_replaced ();
               nv.V.value)
             else V.Loan (super#visit_MutLoan opt_abs bid')
@@ -257,15 +282,46 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
           back, we need to reimplement [visit_typed_avalue] instead of
           [visit_ALoan] *)
 
+      method! visit_ABorrow (opt_abs : V.abs option) (bc : V.aborrow_content)
+          : V.avalue =
+        match bc with
+        | V.AIgnoredMutBorrow (bid', child) ->
+            if bid' = Some bid then
+              (* Insert a loans projector - note that if this case happens,
+               * it is necessarily because we ended a parent abstraction,
+               * and the given back value is thus a symbolic value *)
+              match nv.V.value with
+              | V.Symbolic sv ->
+                  (* The loan projector *)
+                  let given_back_loans_proj =
+                    mk_aproj_loans_from_symbolic_value sv
+                  in
+                  (* Continue giving back in the child value *)
+                  let child = super#visit_typed_avalue opt_abs child in
+                  (* Return *)
+                  V.ABorrow
+                    (V.AEndedIgnoredMutBorrow { given_back_loans_proj; child })
+              | _ -> failwith "Unreachable"
+            else
+              (* Continue exploring *)
+              V.ABorrow (super#visit_AIgnoredMutBorrow opt_abs bid' child)
+        | _ ->
+            (* Continue exploring *)
+            super#visit_ABorrow opt_abs bc
+      (** We need to inspect ignored mutable borrows, to insert loan projectors
+          if necessary.
+       *)
+
       method visit_typed_ALoan (opt_abs : V.abs option) (ty : T.rty)
           (lc : V.aloan_content) : V.avalue =
         (* Preparing a bit *)
-        let regions =
+        let regions, ancestors_regions =
           match opt_abs with
           | None -> failwith "Unreachable"
-          | Some abs -> abs.V.regions
+          | Some abs -> (abs.V.regions, abs.V.ancestors_regions)
         in
-        (* Rk.: there is a small issue with the types of the aloan values *)
+        (* Rk.: there is a small issue with the types of the aloan values.
+         * See the comment at the level of definition of [typed_avalue] *)
         let borrowed_value_aty =
           let _, ty, _ = ty_get_ref ty in
           ty
@@ -281,8 +337,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Apply the projection *)
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  regions nv borrowed_value_aty
+                  regions ancestors_regions nv borrowed_value_aty
               in
+              (* Continue giving back in the child value *)
+              let child = super#visit_typed_avalue opt_abs child in
               (* Return the new value *)
               V.ALoan (V.AEndedMutLoan { given_back; child }))
             else
@@ -307,8 +365,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * (i.e., we don't call [set_replaced]) *)
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  regions nv borrowed_value_aty
+                  regions ancestors_regions nv borrowed_value_aty
               in
+              (* Continue giving back in the child value *)
+              let child = super#visit_typed_avalue opt_abs child in
               V.ALoan (V.AEndedIgnoredMutLoan { given_back; child })
             else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
@@ -378,13 +438,22 @@ let give_back_avalue (_config : C.config) (bid : V.BorrowId.id)
         match lc with
         | V.AMutLoan (bid', child) ->
             if bid' = bid then (
+              (* Sanity check - about why we need to call [ty_get_ref]
+               * (and don't do the same thing as in [give_back_value])
+               * see the comment at the level of the definition of
+               * [typed_avalue] *)
+              let _, expected_ty, _ = ty_get_ref ty in
+              if nv.V.ty <> expected_ty then (
+                log#serror
+                  ("give_back_avalue: improper type:\n- expected: "
+                 ^ rty_to_string ctx ty ^ "\n- received: "
+                 ^ rty_to_string ctx nv.V.ty);
+                failwith "Value given back doesn't have the proper type");
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
                * an ended loan *)
               (* Register the insertion *)
               set_replaced ();
-              (* Sanity check *)
-              assert (nv.V.ty = ty);
               (* Return the new value *)
               V.ALoan (V.AEndedMutLoan { given_back = nv; child }))
             else
@@ -600,7 +669,8 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       assert (borrow_in_asb l asb);
       (* Update the context *)
       give_back_shared config l ctx
-  | Abstract (V.AIgnoredMutBorrow _) -> failwith "Unreachable"
+  | Abstract (V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _) ->
+      failwith "Unreachable"
 
 (** Convert an [avalue] to a [value].
 
@@ -743,12 +813,30 @@ and end_borrows (config : C.config) (io : inner_outer)
 
 and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Remember the original context for printing purposes *)
+  let ctx0 = ctx in
+  log#ldebug
+    (lazy
+      ("end_abstraction: "
+      ^ V.AbstractionId.to_string abs_id
+      ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
   (* Lookup the abstraction *)
   let abs = C.ctx_lookup_abs ctx abs_id in
   (* End the parent abstractions first *)
   let ctx = end_abstractions config abs.parents ctx in
+  log#ldebug
+    (lazy
+      ("end_abstraction: "
+      ^ V.AbstractionId.to_string abs_id
+      ^ "\n- context after parent abstractions ended:\n"
+      ^ eval_ctx_to_string ctx));
   (* End the loans inside the abstraction *)
   let ctx = end_abstraction_loans config abs_id ctx in
+  log#ldebug
+    (lazy
+      ("end_abstraction: "
+      ^ V.AbstractionId.to_string abs_id
+      ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx));
   (* End the abstraction itself by redistributing the borrows it contains *)
   let ctx = end_abstraction_borrows config abs_id ctx in
   (* End the regions owned by the abstraction - note that we don't need to
@@ -762,7 +850,16 @@ and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
   in
   (* Remove all the references to the id of the current abstraction, and remove
    * the abstraction itself *)
-  end_abstraction_remove_from_context config abs_id ctx
+  let ctx = end_abstraction_remove_from_context config abs_id ctx in
+  (* Debugging *)
+  log#ldebug
+    (lazy
+      ("end_abstraction: "
+      ^ V.AbstractionId.to_string abs_id
+      ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
+      ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx));
+  (* Return *)
+  ctx
 
 and end_abstractions (config : C.config) (abs_ids : V.AbstractionId.set_t)
     (ctx : C.eval_ctx) : C.eval_ctx =
@@ -862,7 +959,7 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
                 asb
             then raise (FoundABorrowContent bc)
             else ()
-        | V.AIgnoredMutBorrow _ ->
+        | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
             (* Nothing to do for ignored borrows *)
             ()
     end
@@ -891,7 +988,8 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
           with
           | V.AsbBorrow bid -> bid
           | _ -> failwith "Unexpected")
-      | V.AIgnoredMutBorrow _ -> failwith "Unexpected"
+      | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+          failwith "Unexpected"
     in
     let ctx = update_aborrow ek_all bid V.ABottom ctx in
     (* Then give back the value *)
@@ -905,7 +1003,8 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
       | V.AProjSharedBorrow _ ->
           (* Nothing to do *)
           ctx
-      | V.AIgnoredMutBorrow _ -> failwith "Unexpected"
+      | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+          failwith "Unexpected"
     in
     (* Reexplore *)
     end_abstraction_borrows config abs_id ctx
@@ -1031,7 +1130,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
-          L.log#ldebug
+          log#ldebug
             (lazy
               ("activate_inactivated_mut_borrow: resulting value:\n"
              ^ V.show_typed_value sv));

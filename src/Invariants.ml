@@ -12,7 +12,8 @@ open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 
-let debug_invariants : bool ref = ref false
+(** The local logger *)
+let log = L.invariants_log
 
 type borrow_info = {
   loan_kind : T.ref_kind;
@@ -35,20 +36,24 @@ let set_outer_mut (info : outer_borrow_info) : outer_borrow_info =
 let set_outer_shared (_info : outer_borrow_info) : outer_borrow_info =
   { outer_borrow = true; outer_shared = true }
 
-(* TODO: we need to factorize print functions for strings *)
-let ids_reprs_to_string (reprs : V.BorrowId.id V.BorrowId.Map.t) : string =
+(* TODO: we need to factorize print functions for sets *)
+let ids_reprs_to_string (indent : string)
+    (reprs : V.BorrowId.id V.BorrowId.Map.t) : string =
   let bindings = V.BorrowId.Map.bindings reprs in
   let bindings =
     List.map
       (fun (id, repr_id) ->
-        V.BorrowId.to_string id ^ " -> " ^ V.BorrowId.to_string repr_id)
+        indent ^ V.BorrowId.to_string id ^ " -> " ^ V.BorrowId.to_string repr_id)
       bindings
   in
   String.concat "\n" bindings
 
-let borrows_infos_to_string (infos : borrow_info V.BorrowId.Map.t) : string =
+let borrows_infos_to_string (indent : string)
+    (infos : borrow_info V.BorrowId.Map.t) : string =
   let bindings = V.BorrowId.Map.bindings infos in
-  let bindings = List.map (fun (_, info) -> show_borrow_info info) bindings in
+  let bindings =
+    List.map (fun (_, info) -> indent ^ show_borrow_info info) bindings
+  in
   String.concat "\n" bindings
 
 type borrow_kind = Mut | Shared | Inactivated
@@ -67,9 +72,24 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
   let borrows_infos : borrow_info V.BorrowId.Map.t ref =
     ref V.BorrowId.Map.empty
   in
+  let context_to_string () : string =
+    eval_ctx_to_string ctx ^ "- representants:\n"
+    ^ ids_reprs_to_string "  " !ids_reprs
+    ^ "\n- info:\n"
+    ^ borrows_infos_to_string "  " !borrows_infos
+  in
+  (* Ignored loans - when we find an ignored loan while building the borrows_infos
+   * map, we register it in this list; once the borrows_infos map is completely
+   * built, we check that all the borrow ids of the ignored loans are in this
+   * map *)
+  let ignored_loans : (T.ref_kind * V.BorrowId.id) list ref = ref [] in
 
-  (* First, register all the loans *)
+  (* first, register all the loans *)
   (* Some utilities to register the loans *)
+  let register_ignored_loan (rkind : T.ref_kind) (bid : V.BorrowId.id) : unit =
+    ignored_loans := (rkind, bid) :: !ignored_loans
+  in
+
   let register_shared_loan (loan_in_abs : bool) (bids : V.BorrowId.set_t) : unit
       =
     let reprs = !ids_reprs in
@@ -150,11 +170,11 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
           match lc with
           | V.AMutLoan (bid, _) -> register_mut_loan inside_abs bid
           | V.ASharedLoan (bids, _, _) -> register_shared_loan inside_abs bids
+          | V.AIgnoredMutLoan (bid, _) -> register_ignored_loan T.Mut bid
+          | V.AIgnoredSharedLoan _
           | V.AEndedMutLoan { given_back = _; child = _ }
           | V.AEndedSharedLoan (_, _)
-          | V.AIgnoredMutLoan (_, _) (* We might want to do something here *)
-          | V.AEndedIgnoredMutLoan { given_back = _; child = _ }
-          | V.AIgnoredSharedLoan _ ->
+          | V.AEndedIgnoredMutLoan { given_back = _; child = _ } ->
               (* Do nothing *)
               ()
         in
@@ -178,13 +198,9 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     | None ->
         let err =
           "find_info: could not find the representant of borrow "
-          ^ V.BorrowId.to_string bid ^ "\n" ^ "\n- Context:\n"
-          ^ eval_ctx_to_string ctx ^ "\n- representants:\n"
-          ^ ids_reprs_to_string !ids_reprs
-          ^ "\n- info:\n"
-          ^ borrows_infos_to_string !borrows_infos
+          ^ V.BorrowId.to_string bid ^ "\n" ^ context_to_string ()
         in
-        L.log#serror err;
+        log#serror err;
         failwith err
   in
 
@@ -200,6 +216,8 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     in
     borrows_infos := infos
   in
+
+  let register_ignored_borrow = register_ignored_loan in
 
   let register_borrow (kind : borrow_kind) (bid : V.BorrowId.id) : unit =
     (* Lookup the info *)
@@ -246,7 +264,9 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
           match bc with
           | V.AMutBorrow (bid, _) -> register_borrow Mut bid
           | V.ASharedBorrow bid -> register_borrow Shared bid
-          | V.AIgnoredMutBorrow _ | V.AProjSharedBorrow _ ->
+          | V.AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow Mut bid
+          | V.AIgnoredMutBorrow (None, _)
+          | V.AEndedIgnoredMutBorrow _ | V.AProjSharedBorrow _ ->
               (* Do nothing *)
               ()
         in
@@ -259,17 +279,18 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
   borrows_visitor#visit_eval_ctx () ctx;
 
   (* Debugging *)
-  if !debug_invariants then (
-    L.log#ldebug
-      (lazy
-        ("\nAbout to check context invariant:\n" ^ eval_ctx_to_string ctx ^ "\n"));
-    L.log#ldebug
-      (lazy
-        ("\nBorrows information:\n"
-        ^ borrows_infos_to_string !borrows_infos
-        ^ "\n")));
+  log#ldebug
+    (lazy ("\nAbout to check context invariant:\n" ^ context_to_string ()));
 
   (* Finally, check that everything is consistant *)
+  (* First, check all the ignored loans are present at the proper place *)
+  List.iter
+    (fun (rkind, bid) ->
+      let info = find_info bid in
+      assert (info.loan_kind = rkind))
+    !ignored_loans;
+
+  (* Then, check the borrow infos *)
   V.BorrowId.Map.iter
     (fun _ info ->
       (* Note that we can't directly compare the sets - I guess they are
@@ -347,7 +368,8 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
           match bc with
           | V.AMutBorrow (_, _) -> set_outer_mut info
           | V.ASharedBorrow _ -> set_outer_shared info
-          | V.AIgnoredMutBorrow _ -> set_outer_mut info
+          | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+              set_outer_mut info
           | V.AProjSharedBorrow _ -> set_outer_shared info
         in
         (* Continue exploring *)
@@ -464,6 +486,14 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_value info tv
 
+      (* TODO: there is a lot of duplication with [visit_typed_value]
+       * which is quite annoying. There might be a way of factorizing
+       * that by factorizing the definitions of value and avalue, but
+       * the generation of visitors then doesn't work properly (TODO:
+       * report that). Still, it is actually not that problematic
+       * because this code shouldn't change a lot in the future,
+       * so the cost of maintenance should be pretty low.
+       * *)
       method! visit_typed_avalue info atv =
         (* Check the current pair (value, type) *)
         (match (atv.V.value, atv.V.ty) with
@@ -526,7 +556,12 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 | Abstract (V.ASharedLoan (_, sv, _)) ->
                     assert (sv.V.ty = Subst.erase_regions ref_ty)
                 | _ -> failwith "Inconsistent context")
-            | V.AIgnoredMutBorrow av, T.Mut -> assert (av.V.ty = ref_ty)
+            | V.AIgnoredMutBorrow (_opt_bid, av), T.Mut ->
+                assert (av.V.ty = ref_ty)
+            | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child }, T.Mut
+              ->
+                assert (given_back_loans_proj.V.ty = ref_ty);
+                assert (child.V.ty = ref_ty)
             | V.AProjSharedBorrow _, T.Shared -> ()
             | _ -> failwith "Inconsistent context")
         | V.ALoan lc, aty -> (
@@ -569,7 +604,6 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | _ -> failwith "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_avalue info atv
-      (** TODO: there is a lot of duplication with [visit_typed_value]... *)
     end
   in
   visitor#visit_eval_ctx () ctx

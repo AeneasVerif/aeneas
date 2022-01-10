@@ -15,13 +15,16 @@ open InterpreterExpansion
 open InterpreterPaths
 open InterpreterExpressions
 
+(** The local logger *)
+let log = L.statements_log
+
 (** Result of evaluating a statement *)
 type statement_eval_res = Unit | Break of int | Continue of int | Return
 
 (** Drop a value at a given place *)
 let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
     =
-  L.log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
+  log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
   (* Prepare the place (by ending the loans, then the borrows) *)
   let ctx, v = prepare_lplace config p ctx in
   (* Replace the value with [Bottom] *)
@@ -167,7 +170,7 @@ let get_non_local_function_return_type (fid : A.assumed_fun_id)
 let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
     C.eval_ctx * V.typed_value =
   (* Debug *)
-  L.log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
+  log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
   (* Eval *)
   let ret_vid = V.VarId.zero in
   (* List the local variables, but the return variable *)
@@ -182,7 +185,7 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
   in
   let locals = list_locals ctx.env in
   (* Debug *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       ("ctx_pop_frame: locals to drop: ["
       ^ String.concat "," (List.map V.VarId.to_string locals)
@@ -194,7 +197,7 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
       ctx locals
   in
   (* Debug *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       ("ctx_pop_frame: after dropping local variables:\n"
      ^ eval_ctx_to_string ctx));
@@ -510,11 +513,59 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
   (* Return *)
   (ctx, inst_sig)
 
+(** Helper
+ 
+    Create abstractions (with no avalues, which have to be inserted afterwards)
+    from a list of abs region groups.
+ *)
+let create_empty_abstractions_from_abs_region_groups
+    (rgl : A.abs_region_group list) : V.abs list =
+  (* We use a reference to progressively create a map from abstraction ids
+   * to set of ancestor regions. Note that abs_to_ancestors_regions[abs_id]
+   * returns the union of:
+   * - the regions of the ancestors of abs_id
+   * - the regions of abs_id
+   *)
+  let abs_to_ancestors_regions : T.RegionId.set_t V.AbstractionId.Map.t ref =
+    ref V.AbstractionId.Map.empty
+  in
+  (* Auxiliary function to create one abstraction *)
+  let create_abs (rg : A.abs_region_group) : V.abs =
+    let abs_id = rg.A.id in
+    let parents =
+      List.fold_left
+        (fun s pid -> V.AbstractionId.Set.add pid s)
+        V.AbstractionId.Set.empty rg.A.parents
+    in
+    let regions =
+      List.fold_left
+        (fun s rid -> T.RegionId.Set.add rid s)
+        T.RegionId.Set.empty rg.A.regions
+    in
+    let ancestors_regions =
+      List.fold_left
+        (fun acc parent_id ->
+          T.RegionId.Set.union acc
+            (V.AbstractionId.Map.find parent_id !abs_to_ancestors_regions))
+        T.RegionId.Set.empty rg.A.parents
+    in
+    let ancestors_regions_union_current_regions =
+      T.RegionId.Set.union ancestors_regions regions
+    in
+    abs_to_ancestors_regions :=
+      V.AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
+        !abs_to_ancestors_regions;
+    (* Create the abstraction *)
+    { V.abs_id; parents; regions; ancestors_regions; avalues = [] }
+  in
+  (* Apply *)
+  List.map create_abs rgl
+
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
     : (C.eval_ctx * statement_eval_res) eval_result list =
   (* Debugging *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       ("\n**About to evaluate statement**: [\n"
       ^ statement_to_string_with_tab ctx st
@@ -814,36 +865,30 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
       (fun ((arg, rty) : V.typed_value * T.rty) ->
         arg.V.ty = Subst.erase_regions rty)
       args_with_rtypes);
-  (* Create the abstractions from the region groups and add them to the context *)
-  let create_abs (ctx : C.eval_ctx) (rg : A.abs_region_group) : C.eval_ctx =
-    let abs_id = rg.A.id in
-    let parents =
-      List.fold_left
-        (fun s pid -> V.AbstractionId.Set.add pid s)
-        V.AbstractionId.Set.empty rg.A.parents
-    in
-    let regions =
-      List.fold_left
-        (fun s rid -> T.RegionId.Set.add rid s)
-        T.RegionId.Set.empty rg.A.regions
-    in
+  (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
+  let empty_absl =
+    create_empty_abstractions_from_abs_region_groups inst_sg.A.regions_hierarchy
+  in
+  (* Add the avalues to the abstractions and insert them in the context *)
+  let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =
     (* Project over the input values *)
     let ctx, args_projs =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_on_input_value config ctx regions arg arg_rty)
+          apply_proj_borrows_on_input_value config ctx abs.regions
+            abs.ancestors_regions arg arg_rty)
         ctx args_with_rtypes
     in
     (* Group the input and output values *)
     let avalues = List.append args_projs [ ret_av ] in
-    (* Create the abstraction *)
-    let abs = { V.abs_id; parents; regions; avalues } in
+    (* Add the avalues to the abstraction *)
+    let abs = { abs with avalues } in
     (* Insert the abstraction in the context *)
     let ctx = { ctx with env = Abs abs :: ctx.env } in
     (* Return *)
     ctx
   in
-  let ctx = List.fold_left create_abs ctx inst_sg.A.regions_hierarchy in
+  let ctx = List.fold_left insert_abs ctx empty_absl in
   (* Move the return value to its destination *)
   let ctx = assign_to_place config ctx ret_value dest in
   (* Synthesis *)
@@ -896,7 +941,7 @@ and eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result =
   (* Debug *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       (let type_params =
          "["

@@ -3,7 +3,32 @@ module L = Easy_logging.Logging
 
 let _ = L.make_logger "MainLogger" Debug [ Cli Debug ]
 
-let log = L.get_logger "MainLogger"
+(** The main logger *)
+let main_log = L.get_logger "MainLogger"
+
+(** Below, we create subgloggers for various submodules, so that we can precisely
+    toggle logging on/off, depending on which information we need *)
+
+(** Logger for Interpreter *)
+let interpreter_log = L.get_logger "MainLogger.Interpreter"
+
+(** Logger for InterpreterStatements *)
+let statements_log = L.get_logger "MainLogger.Interpreter.Statements"
+
+(** Logger for InterpreterExpressions *)
+let expressions_log = L.get_logger "MainLogger.Interpreter.Expressions"
+
+(** Logger for InterpreterPaths *)
+let paths_log = L.get_logger "MainLogger.Interpreter.Paths"
+
+(** Logger for InterpreterExpansion *)
+let expansion_log = L.get_logger "MainLogger.Interpreter.Expansion"
+
+(** Logger for InterpreterBorrows *)
+let borrows_log = L.get_logger "MainLogger.Interpreter.Borrows"
+
+(** Logger for Invariants *)
+let invariants_log = L.get_logger "MainLogger.Interpreter.Invariants"
 
 (** Terminal colors - TODO: comes from easy_logging (did not manage to reuse the module directly) *)
 type color =
@@ -109,7 +134,7 @@ let format_tags (tags : string list) =
       "[" ^ elems_str ^ "] "
 
 (* Change the formatters *)
-let _ =
+let main_logger_handler =
   (* TODO: comes from easy_logging *)
   let formatter (item : L.log_item) : string =
     let item_level_fmt =
@@ -125,5 +150,6 @@ let _ =
       item_msg_fmt
   in
   (* There should be exactly one handler *)
-  let handlers = log#get_handlers in
-  List.map (fun h -> H.set_formatter h formatter) handlers
+  let handlers = main_log#get_handlers in
+  List.iter (fun h -> H.set_formatter h formatter) handlers;
+  match handlers with [ handler ] -> handler | _ -> failwith "Unexpected"

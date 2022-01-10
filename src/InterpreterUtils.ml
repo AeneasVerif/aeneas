@@ -10,28 +10,29 @@ module L = Logging
 open ValuesUtils
 open Utils
 open TypesUtils
+module PA = Print.EvalCtxCfimAst
 
 (** Some utilities *)
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 
-let ety_to_string = Print.EvalCtxCfimAst.ety_to_string
+let ety_to_string = PA.ety_to_string
 
-let rty_to_string = Print.EvalCtxCfimAst.rty_to_string
+let rty_to_string = PA.rty_to_string
 
-let typed_value_to_string = Print.EvalCtxCfimAst.typed_value_to_string
+let symbolic_value_to_string = PA.symbolic_value_to_string
 
-let typed_avalue_to_string = Print.EvalCtxCfimAst.typed_avalue_to_string
+let typed_value_to_string = PA.typed_value_to_string
 
-let place_to_string = Print.EvalCtxCfimAst.place_to_string
+let typed_avalue_to_string = PA.typed_avalue_to_string
 
-let operand_to_string = Print.EvalCtxCfimAst.operand_to_string
+let place_to_string = PA.place_to_string
 
-let statement_to_string ctx =
-  Print.EvalCtxCfimAst.statement_to_string ctx "" "  "
+let operand_to_string = PA.operand_to_string
 
-let statement_to_string_with_tab ctx =
-  Print.EvalCtxCfimAst.statement_to_string ctx "  " "  "
+let statement_to_string ctx = PA.statement_to_string ctx "" "  "
+
+let statement_to_string_with_tab ctx = PA.statement_to_string ctx "  " "  "
 
 let same_symbolic_id (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) : bool =
   sv0.V.sv_id = sv1.V.sv_id

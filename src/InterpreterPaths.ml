@@ -12,6 +12,9 @@ open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterExpansion
 
+(** The local logger *)
+let log = L.paths_log
+
 (** Paths *)
 
 (** When we fail reading from or writing to a path, it might be because we
@@ -76,7 +79,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
       let nv = update v in
       (* Type checking *)
       if nv.ty <> v.ty then (
-        L.log#lerror
+        log#lerror
           (lazy
             ("Not the same type:\n- nv.ty: " ^ T.show_ety nv.ty ^ "\n- v.ty: "
            ^ T.show_ety v.ty));
@@ -244,7 +247,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
           let pe = "- pe: " ^ E.show_projection_elem pe in
           let v = "- v:\n" ^ V.show_value v in
           let ty = "- ty:\n" ^ T.show_ety ty in
-          L.log#serror ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty);
+          log#serror ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty);
           failwith "Inconsistent projection")
 
 (** Generic function to access (read/write) the value at a given place.
@@ -314,7 +317,7 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
             ^ C.show_env ctx1.env ^ "\n\nOld environment:\n"
             ^ C.show_env ctx.env
           in
-          L.log#serror msg;
+          log#serror msg;
           failwith "Unexpected environment update");
       Ok read_value
 
@@ -402,7 +405,7 @@ let expand_bottom_value_from_projection (config : C.config)
     (access : access_kind) (p : E.place) (remaining_pes : int)
     (pe : E.projection_elem) (ty : T.ety) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Debugging *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       ("expand_bottom_value_from_projection:\n" ^ "pe: "
      ^ E.show_projection_elem pe ^ "\n" ^ "ty: " ^ T.show_ety ty));

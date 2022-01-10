@@ -9,6 +9,9 @@ module Subst = Substitute
 module L = Logging
 open InterpreterUtils
 
+(** The local logger *)
+let log = L.borrows_log
+
 (** TODO: cleanup this a bit, once we have a better understanding about
     what we need.
     TODO: I'm not sure in which file this should be moved... *)
@@ -302,7 +305,10 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
         | V.ASharedBorrow bid ->
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env bid
-        | V.AIgnoredMutBorrow av -> super#visit_AIgnoredMutBorrow env av
+        | V.AIgnoredMutBorrow (opt_bid, av) ->
+            super#visit_AIgnoredMutBorrow env opt_bid av
+        | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
+            super#visit_AEndedIgnoredMutBorrow env given_back_loans_proj child
         | V.AProjSharedBorrow asb ->
             if borrow_in_asb l asb then
               raise (FoundGBorrowContent (Abstract bc))
@@ -415,8 +421,12 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id) (nv : V.avalue)
         | V.ASharedBorrow bid ->
             if bid = l then update ()
             else V.ABorrow (super#visit_ASharedBorrow env bid)
-        | V.AIgnoredMutBorrow av ->
-            V.ABorrow (super#visit_AIgnoredMutBorrow env av)
+        | V.AIgnoredMutBorrow (opt_bid, av) ->
+            V.ABorrow (super#visit_AIgnoredMutBorrow env opt_bid av)
+        | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
+            V.ABorrow
+              (super#visit_AEndedIgnoredMutBorrow env given_back_loans_proj
+                 child)
         | V.AProjSharedBorrow asb ->
             if borrow_in_asb l asb then update ()
             else V.ABorrow (super#visit_AProjSharedBorrow env asb)

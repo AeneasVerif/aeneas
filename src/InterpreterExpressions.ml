@@ -14,6 +14,9 @@ open InterpreterUtils
 open InterpreterExpansion
 open InterpreterPaths
 
+(** The local logger *)
+let log = L.expressions_log
+
 (** TODO: change the name *)
 type eval_error = Panic
 
@@ -70,7 +73,37 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
   | _, Unit | _, ConstantAdt _ | _, ConstantValue _ ->
       failwith "Improperly typed constant value"
 
-(** Prepare the evaluation of an operand. *)
+(** Prepare the evaluation of an operand.
+
+    Evaluating an operand requires updating the context to get access to a
+    given place (by ending borrows, expanding symbolic values...) then
+    applying the operand operation (move, copy, etc.).
+    
+    Sometimes, we want to decouple the two operations.
+    Consider the following example:
+    ```
+    context = {
+      x -> shared_borrow l0
+      y -> shared_loan {l0} v
+    }
+    
+    dest <- f(move x, move y);
+    ...
+    ```
+    Because of the way end_borrow is implemented, when giving back the borrow
+    `l0` upon evaluating `move y`, we won't notice that `shared_borrow l0` has
+    disappeared from the environment (it has been moved and not assigned yet,
+    and so is hanging in "thin air").
+    
+    By first "preparing" the operands evaluation, we make sure no such thing
+    happens. To be more precise, we make sure all the updates to borrows triggered
+    by access *and* move operations have already been applied.
+    
+    As a side note: doing this is actually not completely necessary because when
+    generating MIR, rustc introduces intermediate assignments for all the function
+    parameters. Still, it is better for soundness purposes, and corresponds to
+    what we do in the formal semantics.
+ *)
 let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
     : C.eval_ctx * V.typed_value =
   let ctx, v =
@@ -94,7 +127,7 @@ let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
 let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
     C.eval_ctx * V.typed_value =
   (* Debug *)
-  L.log#ldebug
+  log#ldebug
     (lazy
       ("eval_operand:\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n\n- op:\n"
      ^ operand_to_string ctx op ^ "\n"));
@@ -108,7 +141,6 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       let access = Read in
       let ctx, v = prepare_rplace config access p ctx in
       (* Copy the value *)
-      L.log#ldebug (lazy ("Value to copy:\n" ^ typed_value_to_string ctx v));
       assert (not (bottom_in_value ctx.ended_regions v));
       let allow_adt_copy = false in
       copy_value allow_adt_copy config ctx v
@@ -117,16 +149,24 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       let access = Move in
       let ctx, v = prepare_rplace config access p ctx in
       (* Move the value *)
-      L.log#ldebug (lazy ("Value to move:\n" ^ typed_value_to_string ctx v));
       assert (not (bottom_in_value ctx.ended_regions v));
       let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
       match write_place config access p bottom ctx with
       | Error _ -> failwith "Unreachable"
       | Ok ctx -> (ctx, v))
 
+(** Small utility.
+
+    See [eval_operand_prepare].
+ *)
+let eval_operands_prepare (config : C.config) (ctx : C.eval_ctx)
+    (ops : E.operand list) : C.eval_ctx * V.typed_value list =
+  List.fold_left_map (fun ctx op -> eval_operand_prepare config ctx op) ctx ops
+
 (** Evaluate several operands. *)
 let eval_operands (config : C.config) (ctx : C.eval_ctx) (ops : E.operand list)
     : C.eval_ctx * V.typed_value list =
+  let ctx, _ = eval_operands_prepare config ctx ops in
   List.fold_left_map (fun ctx op -> eval_operand config ctx op) ctx ops
 
 let eval_two_operands (config : C.config) (ctx : C.eval_ctx) (op1 : E.operand)

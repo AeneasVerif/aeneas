@@ -16,6 +16,9 @@ open InterpreterUtils
 open InterpreterProjectors
 open InterpreterBorrows
 
+(** The local logger *)
+let log = L.expansion_log
+
 (** Projector kind *)
 type proj_kind = LoanProj | BorrowProj
 
@@ -60,15 +63,17 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
     object
       inherit [_] C.map_eval_ctx as super
 
-      method! visit_abs proj_regions abs =
-        assert (Option.is_none proj_regions);
-        let proj_regions = Some abs.V.regions in
-        super#visit_abs proj_regions abs
+      method! visit_abs current_abs abs =
+        assert (Option.is_none current_abs);
+        let current_abs = Some abs in
+        super#visit_abs current_abs abs
       (** When visiting an abstraction, we remember the regions it owns to be
           able to properly reduce projectors when expanding symbolic values *)
 
-      method! visit_ASymbolic proj_regions aproj =
-        let proj_regions = Option.get proj_regions in
+      method! visit_ASymbolic current_abs aproj =
+        let current_abs = Option.get current_abs in
+        let proj_regions = current_abs.regions in
+        let ancestors_regions = current_abs.ancestors_regions in
         match (aproj, proj_kind) with
         | V.AProjLoans sv, LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
@@ -82,7 +87,7 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
               projected_value.V.value
             else
               (* Not the searched symbolic value: nothing to do *)
-              super#visit_ASymbolic (Some proj_regions) aproj
+              super#visit_ASymbolic (Some current_abs) aproj
         | V.AProjBorrows (sv, proj_ty), BorrowProj ->
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then
@@ -98,16 +103,16 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
               (* Apply the projector *)
               let projected_value =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                  proj_regions expansion proj_ty
+                  proj_regions ancestors_regions expansion proj_ty
               in
               (* Replace *)
               projected_value.V.value
             else
               (* Not the searched symbolic value: nothing to do *)
-              super#visit_ASymbolic (Some proj_regions) aproj
+              super#visit_ASymbolic (Some current_abs) aproj
         | V.AProjLoans _, BorrowProj | V.AProjBorrows (_, _), LoanProj ->
             (* Nothing to do *)
-            super#visit_ASymbolic (Some proj_regions) aproj
+            super#visit_ASymbolic (Some current_abs) aproj
     end
   in
   (* Apply the expansion *)
@@ -366,6 +371,8 @@ let expand_symbolic_value_borrow (config : C.config)
 let expand_symbolic_value_no_branching (config : C.config)
     (pe : E.projection_elem) (sp : V.symbolic_value) (ctx : C.eval_ctx) :
     C.eval_ctx =
+  (* Remember the initial context for printing purposes *)
+  let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
   let original_sv = sp in
@@ -424,6 +431,14 @@ let expand_symbolic_value_no_branching (config : C.config)
         failwith
           ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
   in
+  (* Debugging *)
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("expand_symbolic_value: "
+      ^ symbolic_value_to_string ctx0 sp
+      ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
+      ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Sanity check: the symbolic value has disappeared *)
   assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
   (* Return *)
