@@ -466,7 +466,7 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
         | FailSharedLoan bids -> end_outer_borrows config bids ctx
         | FailMutLoan bid -> end_outer_borrow config bid ctx
         | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config Outer bid ctx
+            activate_inactivated_mut_borrow config bid ctx
         | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
             expand_symbolic_value_no_branching config pe sp ctx
@@ -493,7 +493,7 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
         | FailSharedLoan bids -> end_outer_borrows config bids ctx
         | FailMutLoan bid -> end_outer_borrow config bid ctx
         | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config Outer bid ctx
+            activate_inactivated_mut_borrow config bid ctx
         | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
             expand_symbolic_value_no_branching config pe sp ctx
@@ -534,7 +534,7 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
             (* Nothing special to do *) super#visit_borrow_content env bc
         | V.InactivatedMutBorrow bid ->
             (* We need to activate inactivated borrows *)
-            let ctx = activate_inactivated_mut_borrow config Inner bid ctx in
+            let ctx = activate_inactivated_mut_borrow config bid ctx in
             raise (UpdateCtx ctx)
 
       method! visit_loan_content env lc =
@@ -627,7 +627,7 @@ let drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
               end_outer_borrow config bid ctx
           | BorrowContent (V.InactivatedMutBorrow bid) ->
               (* First activate the borrow *)
-              activate_inactivated_mut_borrow config Outer bid ctx
+              activate_inactivated_mut_borrow config bid ctx
         in
         (* Retry *)
         drop ctx

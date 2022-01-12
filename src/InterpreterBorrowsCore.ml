@@ -30,14 +30,6 @@ type exploration_kind = {
 let ek_all : exploration_kind =
   { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
 
-(** The following type identifies the relative position of expressions (in
-    particular borrows) in other expressions.
-    
-    For instance, it is used to control [end_borrow]: we usually only allow
-    to end "outer" borrows, unless we perform a drop.
-*)
-type inner_outer = Inner | Outer
-
 type borrow_ids = Borrows of V.BorrowId.set_t | Borrow of V.BorrowId.id
 [@@deriving show]
 
@@ -452,16 +444,10 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id) (nv : V.avalue)
   ctx
 
 (** Auxiliary function: see its usage in [end_borrow_get_borrow_in_value] *)
-let update_outer_borrows (io : inner_outer)
-    (outer : V.AbstractionId.id option * borrow_ids option) (x : borrow_ids) :
-    V.AbstractionId.id option * borrow_ids option =
-  match io with
-  | Inner ->
-      (* If we can end inner borrows, we don't keep track of the outer borrows *)
-      outer
-  | Outer ->
-      let abs, opt = outer in
-      (abs, update_if_none opt x)
+let update_outer_borrows (outer : V.AbstractionId.id option * borrow_ids option)
+    (x : borrow_ids) : V.AbstractionId.id option * borrow_ids option =
+  let abs, opt = outer in
+  (abs, update_if_none opt x)
 
 (** Return the first loan we find in a value *)
 let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =

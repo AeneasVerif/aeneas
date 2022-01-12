@@ -23,9 +23,8 @@ open InterpreterProjectors
     as well. The [allowed_abs] parameter controls whether we allow to end borrows
     in an abstraction or not, and in which abstraction.
 *)
-let end_borrow_get_borrow (io : inner_outer)
-    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
-    (ctx : C.eval_ctx) :
+let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
+    (l : V.BorrowId.id) (ctx : C.eval_ctx) :
     (C.eval_ctx * g_borrow_content option, priority_borrows_or_abs) result =
   (* We use a reference to communicate the kind of borrow we found, if we
    * find one *)
@@ -81,7 +80,7 @@ let end_borrow_get_borrow (io : inner_outer)
         | V.MutLoan bid -> V.Loan (super#visit_MutLoan outer bid)
         | V.SharedLoan (bids, v) ->
             (* Update the outer borrows before diving into the shared value *)
-            let outer = update_outer_borrows io outer (Borrows bids) in
+            let outer = update_outer_borrows outer (Borrows bids) in
             V.Loan (super#visit_SharedLoan outer bids v)
       (** We reimplement [visit_Loan] because we may have to update the
           outer borrows *)
@@ -109,7 +108,7 @@ let end_borrow_get_borrow (io : inner_outer)
               V.Bottom)
             else
               (* Update the outer borrows before diving into the borrowed value *)
-              let outer = update_outer_borrows io outer (Borrow l') in
+              let outer = update_outer_borrows outer (Borrow l') in
               V.Borrow (super#visit_MutBorrow outer l' bv)
 
       method! visit_ALoan outer lc =
@@ -124,7 +123,7 @@ let end_borrow_get_borrow (io : inner_outer)
             V.ALoan (super#visit_AMutLoan outer bid av)
         | V.ASharedLoan (bids, v, av) ->
             (* Explore the shared value - we need to update the outer borrows *)
-            let souter = update_outer_borrows io outer (Borrows bids) in
+            let souter = update_outer_borrows outer (Borrows bids) in
             let v = super#visit_typed_value souter v in
             (* Explore the child avalue - we keep the same outer borrows *)
             let av = super#visit_typed_avalue outer av in
@@ -171,7 +170,7 @@ let end_borrow_get_borrow (io : inner_outer)
               V.ABottom)
             else
               (* Update the outer borrows before diving into the child avalue *)
-              let outer = update_outer_borrows io outer (Borrow bid) in
+              let outer = update_outer_borrows outer (Borrow bid) in
               V.ABorrow (super#visit_AMutBorrow outer bid av)
         | V.ASharedBorrow bid ->
             (* Check if this is the borrow we are looking for *)
@@ -768,9 +767,8 @@ let convert_avalue_to_value (av : V.typed_avalue) : V.typed_value =
     perform anything smart and is trusted, and another function for the
     book-keeping.
  *)
-let rec end_borrow (config : C.config) (io : inner_outer)
-    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+let rec end_borrow (config : C.config) (allowed_abs : V.AbstractionId.id option)
+    (l : V.BorrowId.id) (ctx : C.eval_ctx) : C.eval_ctx =
   log#ldebug
     (lazy
       ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- original context:\n"
@@ -803,7 +801,7 @@ let rec end_borrow (config : C.config) (io : inner_outer)
         failwith "Loan not eliminated"
   in
 
-  match end_borrow_get_borrow io allowed_abs l ctx with
+  match end_borrow_get_borrow allowed_abs l ctx with
   (* Two cases:
    * - error: we found outer borrows (end them first)
    * - success: we didn't find outer borrows when updating (but maybe we actually
@@ -820,24 +818,18 @@ let rec end_borrow (config : C.config) (io : inner_outer)
        * borrow (if necessary) *)
       match outer with
       | OuterBorrows (Borrows bids) | InnerLoans (Borrows bids) ->
-          (* Note that when ending outer borrows, we use io=Outer. However,
-           * we shouldn't need to end outer borrows if io=Inner, so we just
-           * add the following assertion *)
-          assert (io = Outer);
           (* Note that we might get there with `allowed_abs <> None`: we might
            * be trying to end a borrow inside an abstraction, but which is actually
            * inside another borrow *)
           let allowed_abs' = None in
-          let ctx = end_borrows config io allowed_abs' bids ctx in
+          let ctx = end_borrows config allowed_abs' bids ctx in
           (* Retry to end the borrow *)
-          end_borrow config io allowed_abs l ctx
+          end_borrow config allowed_abs l ctx
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
-          (* See the comments for the previous case *)
-          assert (io = Outer);
           let allowed_abs' = None in
-          let ctx = end_borrow config io allowed_abs' bid ctx in
+          let ctx = end_borrow config allowed_abs' bid ctx in
           (* Retry to end the borrow *)
-          let ctx = end_borrow config io allowed_abs l ctx in
+          let ctx = end_borrow config allowed_abs l ctx in
           (* Sanity check *)
           check_disappeared ctx;
           (* Return *)
@@ -860,7 +852,7 @@ let rec end_borrow (config : C.config) (io : inner_outer)
             | AbsId loan_abs_id, _ ->
                 if loan_abs_id = abs_id then
                   (* Same abstraction! We can end the borrow *)
-                  end_borrow config io (Some abs_id) l ctx
+                  end_borrow config (Some abs_id) l ctx
                 else
                   (* Not the same abstraction: we need to end the whole abstraction.
                    * By doing that we should have ended the target borrow (see the
@@ -898,11 +890,10 @@ let rec end_borrow (config : C.config) (io : inner_outer)
       (* Return *)
       ctx
 
-and end_borrows (config : C.config) (io : inner_outer)
-    (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+and end_borrows (config : C.config) (allowed_abs : V.AbstractionId.id option)
+    (lset : V.BorrowId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
   V.BorrowId.Set.fold
-    (fun id ctx -> end_borrow config io allowed_abs id ctx)
+    (fun id ctx -> end_borrow config allowed_abs id ctx)
     lset ctx
 
 and end_abstraction (config : C.config) (abs_id : V.AbstractionId.id)
@@ -1118,13 +1109,13 @@ and end_abstraction_remove_from_context (_config : C.config)
   let env = List.filter_map map_env_elem ctx.C.env in
   { ctx with C.env }
 
-and end_outer_borrow config = end_borrow config Outer None
+and end_outer_borrow config = end_borrow config None
 
-and end_outer_borrows config = end_borrows config Outer None
+and end_outer_borrows config = end_borrows config None
 
-and end_inner_borrow config = end_borrow config Inner None
+and end_inner_borrow config = end_borrow config None
 
-and end_inner_borrows config = end_borrows config Inner None
+and end_inner_borrows config = end_borrows config None
 
 (** Helper function: see [activate_inactivated_mut_borrow].
 
@@ -1199,8 +1190,8 @@ let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id)
 
     The borrow must point to a shared value which is borrowed exactly once.
  *)
-let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
-    (l : V.BorrowId.id) (ctx : C.eval_ctx) : C.eval_ctx =
+let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* Lookup the value *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
@@ -1220,7 +1211,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
             | V.MutLoan bid -> end_outer_borrow config bid ctx
           in
           (* Recursive call *)
-          activate_inactivated_mut_borrow config io l ctx
+          activate_inactivated_mut_borrow config l ctx
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
@@ -1235,7 +1226,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
              the borrow we want to promote *)
           let bids = V.BorrowId.Set.remove l bids in
           let allowed_abs = None in
-          let ctx = end_borrows config io allowed_abs bids ctx in
+          let ctx = end_borrows config allowed_abs bids ctx in
           (* Promote the loan *)
           let ctx, borrowed_value = promote_shared_loan_to_mut_loan l ctx in
           (* Promote the borrow - the value should have been checked by
