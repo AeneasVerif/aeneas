@@ -16,6 +16,11 @@
 * remove the rule which says that we can end a borrow under an abstraction if
   the corresponding loan is in the same abstraction
 
+* add a `allow_borrow_overwrites` in the loan projectors.
+
+* add option for: `allow_borrow_overwrites_on_input_values`
+  (but always disallow borrow overwrites on returned values)
+
 * During printing, contexts are often big, with many variables containing "bottom".
   Some variables also actually never get assigned, especially when they are used
   for auxiliary assignments which don't exist anymore (because they were merged

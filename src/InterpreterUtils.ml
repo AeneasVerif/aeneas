@@ -105,7 +105,7 @@ type g_loan_content = (V.loan_content, V.aloan_content) concrete_or_abs
 type g_borrow_content = (V.borrow_content, V.aborrow_content) concrete_or_abs
 (** Generic borrow content: concrete or abstract *)
 
-type abs_or_var_id = AbsId of V.AbstractionId.id | VarId of V.VarId.id
+type abs_or_var_id = AbsId of V.AbstractionId.id | VarId of V.VarId.id option
 
 exception FoundBorrowContent of V.borrow_content
 (** Utility exception *)

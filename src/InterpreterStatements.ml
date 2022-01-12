@@ -35,9 +35,14 @@ let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
 (** Assign a value to a given place *)
 let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
     (p : E.place) : C.eval_ctx =
+  (* Push the rvalue to a dummy variable, for bookkeeping *)
+  let ctx = C.ctx_push_dummy_var ctx v in
   (* Prepare the destination *)
-  (* TODO: there might be a problem because the value to assign is hanging in the air ! *)
   let ctx, _ = prepare_lplace config p ctx in
+  (* Retrieve the dummy variable *)
+  let ctx, v = C.ctx_pop_dummy_var ctx in
+  (* Checks *)
+  assert (not (bottom_in_value ctx.ended_regions v));
   (* Update the destination *)
   let ctx = write_place_unwrap config Write p v ctx in
   ctx
@@ -180,6 +185,8 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
     | [] -> failwith "Inconsistent environment"
     | C.Abs _ :: env -> list_locals env
     | C.Var (var, _) :: env ->
+        (* There shouldn't be dummy variables *)
+        let var = Option.get var in
         let locals = list_locals env in
         if var.index <> ret_vid then var.index :: locals else locals
     | C.Frame :: _ -> []
@@ -226,7 +233,8 @@ let eval_box_new_concrete (config : C.config)
   match (region_params, type_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
-      Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) ->
+      Var (Some input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ )
+    ->
       (* Required type checking *)
       assert (input_value.V.ty = boxed_ty);
 
@@ -260,7 +268,8 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
   match (region_params, type_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
-      Var (input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ ) -> (
+      Var (Some input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ )
+    -> (
       (* Required type checking. We must have:
          - input_value.ty == & (mut) Box<ty>
          - boxed_ty == ty

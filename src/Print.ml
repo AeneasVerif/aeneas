@@ -455,7 +455,9 @@ module Contexts = struct
       (indent_incr : string) (ev : C.env_elem) : string =
     match ev with
     | Var (var, tv) ->
-        indent ^ binder_to_string var ^ " -> "
+        indent
+        ^ option_to_string binder_to_string var
+        ^ " -> "
         ^ PV.typed_value_to_string fmt tv
         ^ " ;"
     | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
