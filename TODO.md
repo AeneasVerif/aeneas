@@ -1,9 +1,3 @@
-* update assign_to_place: problem with the value to assign which is hanging in
-  the air.
-  Maybe: push it to a dummy variable?...
-  TODO: x = move x where x contains borrows.
-  I think we should move the operands to specific "temporary" variables.
-
 * Check what happens when symbolic borrows are not expanded (when looking for
   borrows/abstractions to end).
 
