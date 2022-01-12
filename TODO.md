@@ -13,6 +13,9 @@
   * `apply_proj_borrows_on_input_values` : ... -> value -> rty -> avalue
   * `apply_proj_borrows_on_given_back_values` : ... -> value -> avalue -> avalue
 
+* remove the rule which says that we can end a borrow under an abstraction if
+  the corresponding loan is in the same abstraction
+
 * During printing, contexts are often big, with many variables containing "bottom".
   Some variables also actually never get assigned, especially when they are used
   for auxiliary assignments which don't exist anymore (because they were merged
