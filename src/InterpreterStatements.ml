@@ -32,7 +32,13 @@ let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
   let ctx = write_place_unwrap config Write p nv ctx in
   ctx
 
-(** Assign a value to a given place *)
+(** Assign a value to a given place.
+
+    Note that this function first pushes the value to assign in a dummy variable,
+    then prepares the destination (by ending borrows, etc.) before popping the
+    dummy variable and putting in its destination (after having checked that
+    preparing the destination didn't introduce ⊥).
+ *)
 let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
     (p : E.place) : C.eval_ctx =
   (* Push the rvalue to a dummy variable, for bookkeeping *)
@@ -826,9 +832,6 @@ and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
     | Ok ctx ->
         (* Pop the stack frame and retrieve the return value *)
         let ctx, ret_value = ctx_pop_frame config ctx in
-
-        (* TODO: there might be a problem because the return value
-         * if hanging in the air while we assign to place! *)
 
         (* Move the return value to its destination *)
         let ctx = assign_to_place config ctx ret_value dest in
