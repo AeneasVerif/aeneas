@@ -730,6 +730,8 @@ let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
     trait (i.e., by calling a dedicated function). This is why we added a parameter
     to control this copy. Note that here by ADT we mean the user-defined ADTs
     (not tuples or assumed types).
+    
+    TODO: move
  *)
 let rec copy_value (allow_adt_copy : bool) (config : C.config)
     (ctx : C.eval_ctx) (v : V.typed_value) : C.eval_ctx * V.typed_value =

@@ -36,6 +36,7 @@ let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
 let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
     (p : E.place) : C.eval_ctx =
   (* Prepare the destination *)
+  (* TODO: there might be a problem because the value to assign is hanging in the air ! *)
   let ctx, _ = prepare_lplace config p ctx in
   (* Update the destination *)
   let ctx = write_place_unwrap config Write p v ctx in
@@ -816,6 +817,9 @@ and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
     | Ok ctx ->
         (* Pop the stack frame and retrieve the return value *)
         let ctx, ret_value = ctx_pop_frame config ctx in
+
+        (* TODO: there might be a problem because the return value
+         * if hanging in the air while we assign to place! *)
 
         (* Move the return value to its destination *)
         let ctx = assign_to_place config ctx ret_value dest in

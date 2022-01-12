@@ -422,7 +422,7 @@ and aborrow_content =
           
           > x -> shared_loan {l0} (U32 0)
           > px -> ⊥
-          > abs0 { a_shared_bororw l0 }
+          > abs0 { a_shared_borrow l0 }
           ```
      *)
   | AIgnoredMutBorrow of BorrowId.id option * typed_avalue
