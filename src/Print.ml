@@ -988,6 +988,25 @@ module EvalCtxCfimAst = struct
     let fmt = PC.ctx_to_rtype_formatter fmt in
     PT.rty_to_string fmt t
 
+  let borrow_content_to_string (ctx : C.eval_ctx) (bc : V.borrow_content) :
+      string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PV.borrow_content_to_string fmt bc
+
+  let loan_content_to_string (ctx : C.eval_ctx) (lc : V.loan_content) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PV.loan_content_to_string fmt lc
+
+  let aborrow_content_to_string (ctx : C.eval_ctx) (bc : V.aborrow_content) :
+      string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PV.aborrow_content_to_string fmt bc
+
+  let aloan_content_to_string (ctx : C.eval_ctx) (lc : V.aloan_content) : string
+      =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PV.aloan_content_to_string fmt lc
+
   let symbolic_value_to_string (ctx : C.eval_ctx) (sv : V.symbolic_value) :
       string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in

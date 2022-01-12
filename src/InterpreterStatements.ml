@@ -810,7 +810,7 @@ and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
     | ret_ty :: locals -> (ret_ty, locals)
     | _ -> failwith "Unreachable"
   in
-  let ctx = C.ctx_push_var ctx ret_var (C.mk_bottom ret_var.var_ty) in
+  let ctx = C.ctx_push_var ctx ret_var (mk_bottom ret_var.var_ty) in
 
   (* 2. Push the input values *)
   let input_locals, locals = Utils.list_split_at locals def.A.arg_count in

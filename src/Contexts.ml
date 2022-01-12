@@ -2,6 +2,7 @@ open Types
 open Values
 open CfimAst
 module V = Values
+open ValuesUtils
 
 (** Some global counters.
  *
@@ -223,7 +224,7 @@ let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
 let ctx_push_dummy_var (ctx : eval_ctx) (v : typed_value) : eval_ctx =
   { ctx with env = Var (None, v) :: ctx.env }
 
-(** Pop the first dummy variable from the context's environment. *)
+(** Pop the first dummy variable from a context's environment. *)
 let ctx_pop_dummy_var (ctx : eval_ctx) : eval_ctx * typed_value =
   let rec pop_var (env : env) : env * typed_value =
     match env with
@@ -236,8 +237,15 @@ let ctx_pop_dummy_var (ctx : eval_ctx) : eval_ctx * typed_value =
   let env, v = pop_var ctx.env in
   ({ ctx with env }, v)
 
-(* TODO: move *)
-let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
+(** Read the first dummy variable in a context's environment. *)
+let ctx_read_first_dummy_var (ctx : eval_ctx) : typed_value =
+  let rec read_var (env : env) : typed_value =
+    match env with
+    | [] -> failwith "Could not find a dummy variable"
+    | Var (None, v) :: _env -> v
+    | _ :: env -> read_var env
+  in
+  read_var ctx.env
 
 (** Push an uninitialized variable (which thus maps to [Bottom]) *)
 let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =

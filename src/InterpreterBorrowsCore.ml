@@ -38,18 +38,26 @@ let ek_all : exploration_kind =
 *)
 type inner_outer = Inner | Outer
 
-type borrow_ids = Borrows of V.BorrowId.Set.t | Borrow of V.BorrowId.id
+type borrow_ids = Borrows of V.BorrowId.set_t | Borrow of V.BorrowId.id
+[@@deriving show]
 
 exception FoundBorrowIds of borrow_ids
 
-type outer_borrows_or_abs =
+type priority_borrows_or_abs =
   | OuterBorrows of borrow_ids
   | OuterAbs of V.AbstractionId.id
+  | InnerLoans of borrow_ids
+[@@deriving show]
 
 let update_if_none opt x = match opt with None -> Some x | _ -> opt
 
-exception FoundOuter of outer_borrows_or_abs
+exception FoundPriority of priority_borrows_or_abs
 (** Utility exception *)
+
+type loan_or_borrow_content =
+  | LoanContent of V.loan_content
+  | BorrowContent of V.borrow_content
+[@@deriving show]
 
 (** Lookup a loan content.
 
@@ -469,3 +477,39 @@ let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
     obj#visit_typed_value () v;
     None
   with FoundLoanContent lc -> Some lc
+
+(** Return the first borrow we find in a value *)
+let get_first_borrow_in_value (v : V.typed_value) : V.borrow_content option =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_borrow_content _ bc = raise (FoundBorrowContent bc)
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    None
+  with FoundBorrowContent bc -> Some bc
+
+(** Return the first loan or borrow content we find in a value (starting with
+    the outer ones) *)
+let get_first_loan_or_borrow_in_value (v : V.typed_value) :
+    loan_or_borrow_content option =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+
+      method! visit_borrow_content _ bc = raise (FoundBorrowContent bc)
+
+      method! visit_loan_content _ lc = raise (FoundLoanContent lc)
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    None
+  with
+  | FoundLoanContent lc -> Some (LoanContent lc)
+  | FoundBorrowContent bc -> Some (BorrowContent bc)

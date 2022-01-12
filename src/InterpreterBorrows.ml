@@ -26,7 +26,7 @@ open InterpreterProjectors
 let end_borrow_get_borrow (io : inner_outer)
     (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
     (ctx : C.eval_ctx) :
-    (C.eval_ctx * g_borrow_content option, outer_borrows_or_abs) result =
+    (C.eval_ctx * g_borrow_content option, priority_borrows_or_abs) result =
   (* We use a reference to communicate the kind of borrow we found, if we
    * find one *)
   let replaced_bc : g_borrow_content option ref = ref None in
@@ -34,24 +34,40 @@ let end_borrow_get_borrow (io : inner_outer)
     assert (Option.is_none !replaced_bc);
     replaced_bc := Some bc
   in
-  (* Raise an exception if there are outer borrows or if we are inside an
-   * abstraction: this exception is caught in a wrapper function *)
-  let raise_if_outer (outer : V.AbstractionId.id option * borrow_ids option) =
+  (* Raise an exception if:
+   * - there are outer borrows
+   * - if we are inside an abstraction
+   * - there are inner loans
+   * this exception is caught in a wrapper function *)
+  let raise_if_priority (outer : V.AbstractionId.id option * borrow_ids option)
+      (borrowed_value : V.typed_value option) =
+    (* First, look for outer borrows or abstraction *)
     let outer_abs, outer_borrows = outer in
-    match outer_abs with
+    (match outer_abs with
     | Some abs -> (
         if
           (* Check if we can end borrows inside this abstraction *)
           Some abs <> allowed_abs
-        then raise (FoundOuter (OuterAbs abs))
+        then raise (FoundPriority (OuterAbs abs))
         else
           match outer_borrows with
-          | Some borrows -> raise (FoundOuter (OuterBorrows borrows))
+          | Some borrows -> raise (FoundPriority (OuterBorrows borrows))
           | None -> ())
     | None -> (
         match outer_borrows with
-        | Some borrows -> raise (FoundOuter (OuterBorrows borrows))
-        | None -> ())
+        | Some borrows -> raise (FoundPriority (OuterBorrows borrows))
+        | None -> ()));
+    (* Then check if there are inner loans *)
+    match borrowed_value with
+    | None -> ()
+    | Some v -> (
+        match get_first_loan_in_value v with
+        | None -> ()
+        | Some c -> (
+            match c with
+            | V.SharedLoan (bids, _) ->
+                raise (FoundPriority (InnerLoans (Borrows bids)))
+            | V.MutLoan bid -> raise (FoundPriority (InnerLoans (Borrow bid)))))
   in
 
   (* The environment is used to keep track of the outer loans *)
@@ -76,7 +92,7 @@ let end_borrow_get_borrow (io : inner_outer)
             (* Check if this is the borrow we are looking for *)
             if l = l' then (
               (* Check if there are outer borrows or if we are inside an abstraction *)
-              raise_if_outer outer;
+              raise_if_priority outer None;
               (* Register the update *)
               set_replaced_bc (Concrete bc);
               (* Update the value *)
@@ -86,7 +102,7 @@ let end_borrow_get_borrow (io : inner_outer)
             (* Check if this is the borrow we are looking for *)
             if l = l' then (
               (* Check if there are outer borrows or if we are inside an abstraction *)
-              raise_if_outer outer;
+              raise_if_priority outer (Some bv);
               (* Register the update *)
               set_replaced_bc (Concrete bc);
               (* Update the value *)
@@ -147,7 +163,7 @@ let end_borrow_get_borrow (io : inner_outer)
                *)
               (* Check there are outer borrows, or if we need to end the whole
                * abstraction *)
-              raise_if_outer outer;
+              raise_if_priority outer None;
               (* Register the update *)
               set_replaced_bc (Abstract bc);
               (* Update the value - note that we are necessarily in the second
@@ -162,7 +178,7 @@ let end_borrow_get_borrow (io : inner_outer)
             if bid = l then (
               (* Check there are outer borrows, or if we need to end the whole
                * abstraction *)
-              raise_if_outer outer;
+              raise_if_priority outer None;
               (* Register the update *)
               set_replaced_bc (Abstract bc);
               (* Update the value - note that we are necessarily in the second
@@ -182,7 +198,7 @@ let end_borrow_get_borrow (io : inner_outer)
             if borrow_in_asb l asb then (
               (* Check there are outer borrows, or if we need to end the whole
                * abstraction *)
-              raise_if_outer outer;
+              raise_if_priority outer None;
               (* Register the update *)
               set_replaced_bc (Abstract bc);
               (* Update the value - note that we are necessarily in the second
@@ -206,7 +222,7 @@ let end_borrow_get_borrow (io : inner_outer)
   try
     let ctx = obj#visit_eval_ctx (None, None) ctx in
     Ok (ctx, !replaced_bc)
-  with FoundOuter outers -> Error outers
+  with FoundPriority outers -> Error outers
 
 (** Auxiliary function to end borrows. See [give_back].
     
@@ -219,6 +235,15 @@ let end_borrow_get_borrow (io : inner_outer)
  *)
 let give_back_value (config : C.config) (bid : V.BorrowId.id)
     (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Sanity check *)
+  assert (not (loans_in_value nv));
+  assert (not (bottom_in_value ctx.ended_regions nv));
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("give_back_value:\n- bid: " ^ V.BorrowId.to_string bid ^ "\n- value: "
+      ^ typed_value_to_string ctx nv
+      ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -631,6 +656,16 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
 (** Auxiliary function: see [end_borrow_in_env] *)
 let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      (let bc =
+         match bc with
+         | Concrete bc -> borrow_content_to_string ctx bc
+         | Abstract bc -> aborrow_content_to_string ctx bc
+       in
+       "give_back:\n- bid: " ^ V.BorrowId.to_string l ^ "\n- content: " ^ bc
+       ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* This is used for sanity checks *)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -639,6 +674,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
   | Concrete (V.MutBorrow (l', tv)) ->
       (* Sanity check *)
       assert (l' = l);
+      assert (not (loans_in_value tv));
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
@@ -727,10 +763,46 @@ let convert_avalue_to_value (av : V.typed_avalue) : V.typed_value =
     with `allowed_abs = Some ...`, all the other calls should use `allowed_abs = None`:
     if you look ath the implementation details, `end_borrow` performs
     all tne necessary checks in case a borrow is inside an abstraction.
+    
+    TODO: we should split this function in two: one function which doesn't
+    perform anything smart and is trusted, and another function for the
+    book-keeping.
  *)
 let rec end_borrow (config : C.config) (io : inner_outer)
     (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
+  log#ldebug
+    (lazy
+      ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- original context:\n"
+     ^ eval_ctx_to_string ctx));
+  (* Utility function for the sanity checks: check that the borrow disappeared
+   * from the context *)
+  let ctx0 = ctx in
+  let check_disappeared (ctx : C.eval_ctx) : unit =
+    let _ =
+      match lookup_borrow_opt ek_all l ctx with
+      | None -> () (* Ok *)
+      | Some _ ->
+          log#lerror
+            (lazy
+              ("end borrow: " ^ V.BorrowId.to_string l
+             ^ ": borrow didn't disappear:\n- original context:\n"
+             ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
+             ^ eval_ctx_to_string ctx));
+          failwith "Borrow not eliminated"
+    in
+    match lookup_loan_opt ek_all l ctx with
+    | None -> () (* Ok *)
+    | Some _ ->
+        log#lerror
+          (lazy
+            ("end borrow: " ^ V.BorrowId.to_string l
+           ^ ": loan didn't disappear:\n- original context:\n"
+           ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
+           ^ eval_ctx_to_string ctx));
+        failwith "Loan not eliminated"
+  in
+
   match end_borrow_get_borrow io allowed_abs l ctx with
   (* Two cases:
    * - error: we found outer borrows (end them first)
@@ -738,10 +810,16 @@ let rec end_borrow (config : C.config) (io : inner_outer)
        didn't find the borrow we were looking for...)
    *)
   | Error outer -> (
-      (* End the outer borrows, abstraction, then try again to end the target
+      (* Debug *)
+      log#ldebug
+        (lazy
+          ("end borrow: " ^ V.BorrowId.to_string l
+         ^ ": found outer borrows/abs:"
+          ^ show_priority_borrows_or_abs outer));
+      (* End the priority borrows, abstraction, then try again to end the target
        * borrow (if necessary) *)
       match outer with
-      | OuterBorrows (Borrows bids) ->
+      | OuterBorrows (Borrows bids) | InnerLoans (Borrows bids) ->
           (* Note that when ending outer borrows, we use io=Outer. However,
            * we shouldn't need to end outer borrows if io=Inner, so we just
            * add the following assertion *)
@@ -753,14 +831,18 @@ let rec end_borrow (config : C.config) (io : inner_outer)
           let ctx = end_borrows config io allowed_abs' bids ctx in
           (* Retry to end the borrow *)
           end_borrow config io allowed_abs l ctx
-      | OuterBorrows (Borrow bid) ->
+      | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           (* See the comments for the previous case *)
           assert (io = Outer);
           let allowed_abs' = None in
           let ctx = end_borrow config io allowed_abs' bid ctx in
           (* Retry to end the borrow *)
-          end_borrow config io allowed_abs l ctx
-      | OuterAbs abs_id -> (
+          let ctx = end_borrow config io allowed_abs l ctx in
+          (* Sanity check *)
+          check_disappeared ctx;
+          (* Return *)
+          ctx
+      | OuterAbs abs_id ->
           (* The borrow is inside an asbtraction: check if the corresponding
            * loan is inside the same abstraction. If this is the case, we end
            * the borrow without ending the abstraction. If not, we need to
@@ -773,36 +855,48 @@ let rec end_borrow (config : C.config) (io : inner_outer)
               enter_abs = true;
             }
           in
-          match lookup_loan ek l ctx with
-          | AbsId loan_abs_id, _ ->
-              if loan_abs_id = abs_id then (
-                (* Same abstraction! We can end the borrow *)
-                let ctx = end_borrow config io (Some abs_id) l ctx in
-                (* Sanity check *)
-                assert (Option.is_none (lookup_borrow_opt ek l ctx));
-                ctx)
-              else
-                (* Not the same abstraction: we need to end the whole abstraction.
-                 * By doing that we should have ended the target borrow (see the
-                 * below sanity check) *)
-                let ctx = end_abstraction config abs_id ctx in
-                (* Sanity check: we ended the target borrow *)
-                assert (Option.is_none (lookup_borrow_opt ek l ctx));
-                ctx
-          | VarId _, _ ->
-              (* The loan is not inside the same abstraction (actually inside
-               * a non-abstraction value): we need to end the whole abstraction *)
-              let ctx = end_abstraction config abs_id ctx in
-              (* Sanity check: we ended the target borrow *)
-              assert (Option.is_none (lookup_borrow_opt ek l ctx));
-              ctx))
+          let ctx =
+            match lookup_loan ek l ctx with
+            | AbsId loan_abs_id, _ ->
+                if loan_abs_id = abs_id then
+                  (* Same abstraction! We can end the borrow *)
+                  end_borrow config io (Some abs_id) l ctx
+                else
+                  (* Not the same abstraction: we need to end the whole abstraction.
+                   * By doing that we should have ended the target borrow (see the
+                   * below sanity check) *)
+                  end_abstraction config abs_id ctx
+            | VarId _, _ ->
+                (* The loan is not inside the same abstraction (actually inside
+                 * a non-abstraction value): we need to end the whole abstraction *)
+                end_abstraction config abs_id ctx
+          in
+          (* Sanity check *)
+          check_disappeared ctx;
+          (* Return *)
+          ctx)
   | Ok (ctx, None) ->
+      log#ldebug (lazy "End borrow: borrow not found");
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       assert (config.mode = SymbolicMode);
+      (* Sanity check *)
+      check_disappeared ctx;
+      (* Return *)
       ctx
-  (* We found a borrow: give the value back (i.e., update the corresponding loan) *)
-  | Ok (ctx, Some bc) -> give_back config l bc ctx
+  (* We found a borrow: give it back (i.e., update the corresponding loan) *)
+  | Ok (ctx, Some bc) ->
+      (* Sanity check: the borrowed value shouldn't contain loans *)
+      (match bc with
+      | Concrete (V.MutBorrow (_, bv)) ->
+          assert (Option.is_none (get_first_loan_in_value bv))
+      | _ -> ());
+      (* Give back the value *)
+      let ctx = give_back config l bc ctx in
+      (* Sanity check *)
+      check_disappeared ctx;
+      (* Return *)
+      ctx
 
 and end_borrows (config : C.config) (io : inner_outer)
     (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t)
@@ -1133,7 +1227,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (io : inner_outer)
           log#ldebug
             (lazy
               ("activate_inactivated_mut_borrow: resulting value:\n"
-             ^ V.show_typed_value sv));
+              ^ typed_value_to_string ctx sv));
           assert (not (loans_in_value sv));
           assert (not (bottom_in_value ctx.ended_regions sv));
           assert (not (inactivated_in_value sv));

@@ -47,7 +47,7 @@ let () =
   main_log#set_level EL.Debug;
   interpreter_log#set_level EL.Debug;
   statements_log#set_level EL.Debug;
-  expressions_log#set_level EL.Warning;
+  expressions_log#set_level EL.Debug;
   expansion_log#set_level EL.Debug;
   borrows_log#set_level EL.Debug;
   invariants_log#set_level EL.Warning;

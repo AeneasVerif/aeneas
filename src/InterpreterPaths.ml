@@ -576,149 +576,71 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
     seen as an l-value (we will write to it later, but need to drop the borrows
     before writing).
 
-    We start by only dropping the borrows, then we end the loans. The reason
-    is that some loan we find may be borrowed by another part of the subvalue.
-    In order to correctly handle the "outer borrow" priority (we should end
-    the outer borrows first) which is not really applied here (we are preparing
-    the value for override: we can end the borrows inside, without ending the
-    borrows we traversed to actually access the value) we first end the borrows
-    we find in the place, to make sure all the "local" loans are taken care of.
-    Then, if we find a loan, it means it is "externally" borrowed (the associated
-    borrow is not in a subvalue of the place under inspection).
-    Also note that whenever we end a loan, we might propagate back a value inside
-    the place under inspection: we must re-end all the borrows we find there,
-    before reconsidering loans.
-
-    Repeat:
-    - read the value at a given place
-    - as long as we find a loan or a borrow, end it
-
     This is used to drop values (when we need to write to a place, we first
     drop the value there to properly propagate back values which are not/can't
     be borrowed anymore).
+    
+    Note that we don't do what is defined in the formalization: we move the
+    value to a temporary dummy value, then explore this value and end the
+    loans/borrows inside as long as we find some, starting with the outer
+    ones.
+    
+    TODO: rewrite that. Consider the following example:
+    Example:
+    =======
+    We want to end the borrows/loans at `*x` in the following environment:
+    ```
+    x -> mut_borrow l0 (mut_loan l1, mut_borrow l1 (Int 3),
+                        mut_loan l2, mut_borrow l2 (mut_loan l3))
+    y -> mut_borrow l3 (Bool true)
+    ```
+    We have to consider several things:
+    - the borrows `mut_borrow l1 (Int 3)` `mut_borrow l2 ...` borrow subvalues of `*x`
+    - we can't immediately end `mut_borrow l2 ...` because it contains a loan
+    - the borrow corresponding to the loan `mut_loan l3` is outside of `*x`
  *)
-let rec drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
+let drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
     (ctx : C.eval_ctx) : C.eval_ctx =
-  (* Iterator to explore a value and update the context whenever we find
-     borrows/loans.
-     We use exceptions to make it handy: whenever we update the
-     context, we raise an exception wrapping the updated context.
-
-     Note that we can end the borrows which are inside the value (while the
-     value itself might be inside a borrow/loan: we are thus ending inner
-     borrows). Because a loan inside the value may be linked to a borrow
-     somewhere else *also inside* the value (it's possible with adts),
-     we first end all the borrows we find - by using [Inner] to allow
-     ending inner borrows - then end all the loans we find.
-
-     It is really important to do this in two steps: the borrow linked to a
-     loan may be inside the value at place p, in which case this borrow may be
-     an inner borrow that we *can* end, but it may also be outside this
-     value, in which case we need to end all the outer borrows first...
-     Also, whenever the context is updated, we need to re-inspect
-     the value at place p *in two steps* again (end borrows, then end
-     loans).
-
-     Example:
-     =======
-     We want to end the borrows/loans at `*x` in the following environment:
-     ```
-     x -> mut_borrow l0 (mut_loan l1, mut_borrow l1 (Int 3), mut_loan l2)
-     y -> mut_borrow l2 (Bool true)
-     ```
-
-     We have to consider two things:
-     - the borrow `mut_borrow l1 (Int 3)` borrows a subvalue of `*x`
-     - the borrow corresponding to the loan `mut_loan l2` is outside of `*x`
-
-     We first end all the *borrows* (not the loans) inside of `*x`, which gives:
-     ```
-     x -> mut_borrow l0 (Int 3, ⊥, mut_loan l2)
-     y -> mut_borrow l2 (Bool true)
-     ```
-
-     Note that when ending the borrows, we can (and have to) ignore the outer
-     borrows (in this case `mut_borrow l0 ...`). Otherwise, we would have to end
-     the borrow `l0` which is incorrect (note that we might have to drop the
-     borrows/loans at `*x` if we evaluate, for instance, `*x = ...`).
-     It is ok to ignore outer borrows in this case because whenever
-     we end a borrow, it is an outer borrow locally to `*x` (i.e., we ignore
-     the outer borrows when accessing `*x`, but once examining the value at
-     `*x` we never dive into borrows: whenever we find one, we end it - it is thus
-     an outer borrow, in some way).
-
-     Then, we end the loans at `*x`. Note that as at this point `*x` doesn't
-     contain borrows (only loans), the borrows corresponding to those loans
-     are thus necessarily outside of `*x`: we mustn't ignore outer borrows this
-     time. This gives:
-     ```
-     x -> mut_borrow l0 (Int 3, ⊥, Bool true)
-     y -> ⊥
-     ```
-  *)
-  let obj =
-    object
-      inherit [_] V.iter_typed_value as super
-
-      method! visit_borrow_content end_loans bc =
-        (* Sanity check: we should have ended all the borrows before starting
-           to end loans *)
-        assert (not end_loans);
-
-        (* We need to end all borrows. Note that we ignore the outer borrows
-           when ending the borrows we find here (we call [end_inner_borrow(s)]:
-           the value at place p might be below a borrow/loan). Note however
-           that if we restrain ourselves at the value at place p, the borrow we
-           found here can be considered as an outer borrow.
-        *)
-        match bc with
-        | V.SharedBorrow bid | V.MutBorrow (bid, _) ->
-            raise (UpdateCtx (end_inner_borrow config bid ctx))
-        | V.InactivatedMutBorrow bid ->
-            (* We need to activate ithe nactivated borrow - later, we will
-             * actually end it - Rk.: we could actually end it straight away
-             * (this is not really important) *)
-            let ctx = activate_inactivated_mut_borrow config Inner bid ctx in
-            raise (UpdateCtx ctx)
-
-      method! visit_loan_content end_loans lc =
-        if
-          (* If we can, end the loans, otherwise ignore: keep for later *)
-          end_loans
-        then
-          (* We need to end all loans. Note that as all the borrows inside
-             the value at place p should already have ended, the borrows
-             associated to the loans we find here should be borrows from
-             outside this value: we need to call [end_outer_borrow(s)]
-             (we can't ignore outer borrows this time).
-          *)
-          match lc with
-          | V.SharedLoan (bids, _) ->
-              raise (UpdateCtx (end_outer_borrows config bids ctx))
-          | V.MutLoan bid -> raise (UpdateCtx (end_outer_borrow config bid ctx))
-        else super#visit_loan_content end_loans lc
-    end
-  in
-
-  (* We do something similar to [end_loans_at_place].
-     First, retrieve the value *)
-  match read_place config Write p ctx with
-  | Error _ -> failwith "Unreachable"
-  | Ok v -> (
-      (* Inspect the value and update the context while doing so.
-         If the context gets updated: perform a recursive call (many things
-         may have been updated in the context: first we need to retrieve the
-         proper updated value - and this value may actually not be accessible
-         anymore
-      *)
-      try
-        (* Inspect the value: end the borrows only *)
-        obj#visit_typed_value false v;
-        (* Inspect the value: end the loans *)
-        obj#visit_typed_value true v;
-        (* No context update required: return the current context *)
+  (* Move the current value in the place outside of this place and into
+   * a dummy variable *)
+  let access = Write in
+  let v = read_place_unwrap config access p ctx in
+  let ctx = write_place_unwrap config access p (mk_bottom v.V.ty) ctx in
+  let ctx = C.ctx_push_dummy_var ctx v in
+  (* Auxiliary function *)
+  let rec drop (ctx : C.eval_ctx) : C.eval_ctx =
+    (* Read the value *)
+    let v = C.ctx_read_first_dummy_var ctx in
+    (* Check if there are loans or borrows to end *)
+    match get_first_loan_or_borrow_in_value v with
+    | None ->
+        (* We are done *)
         ctx
-      with UpdateCtx ctx -> drop_borrows_loans_at_lplace config p ctx)
+    | Some c ->
+        (* There are: end them then retry *)
+        let ctx =
+          match c with
+          | LoanContent (V.SharedLoan (bids, _)) ->
+              end_outer_borrows config bids ctx
+          | LoanContent (V.MutLoan bid)
+          | BorrowContent (V.MutBorrow (bid, _) | SharedBorrow bid) ->
+              end_outer_borrow config bid ctx
+          | BorrowContent (V.InactivatedMutBorrow bid) ->
+              (* First activate the borrow *)
+              activate_inactivated_mut_borrow config Outer bid ctx
+        in
+        (* Retry *)
+        drop ctx
+  in
+  (* Apply *)
+  let ctx = drop ctx in
+  (* Pop the temporary value *)
+  let ctx, v = C.ctx_pop_dummy_var ctx in
+  (* Sanity check *)
+  assert (not (loans_in_value v));
+  assert (not (borrows_in_value v));
+  (* Return *)
+  ctx
 
 (** Copy a value, and return the resulting value.
 

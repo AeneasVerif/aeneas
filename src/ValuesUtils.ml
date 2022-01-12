@@ -8,6 +8,8 @@ let mk_unit_value : typed_value =
 
 let mk_typed_value (ty : ety) (value : value) : typed_value = { value; ty }
 
+let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
+
 (** Box a value *)
 let mk_box_value (v : typed_value) : typed_value =
   let box_ty = mk_box_ty v.ty in

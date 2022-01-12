@@ -8,12 +8,14 @@
   * `apply_proj_borrows_on_given_back_values` : ... -> value -> avalue -> avalue
 
 * remove the rule which says that we can end a borrow under an abstraction if
-  the corresponding loan is in the same abstraction
+  the corresponding loan is in the same abstraction.
+  Also remove the io parameter from "end_borrow".
 
 * add a `allow_borrow_overwrites` in the loan projectors.
 
 * add option for: `allow_borrow_overwrites_on_input_values`
   (but always disallow borrow overwrites on returned values)
+
 
 * During printing, contexts are often big, with many variables containing "bottom".
   Some variables also actually never get assigned, especially when they are used

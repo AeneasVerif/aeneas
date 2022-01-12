@@ -21,6 +21,14 @@ let rty_to_string = PA.rty_to_string
 
 let symbolic_value_to_string = PA.symbolic_value_to_string
 
+let borrow_content_to_string = PA.borrow_content_to_string
+
+let loan_content_to_string = PA.loan_content_to_string
+
+let aborrow_content_to_string = PA.aborrow_content_to_string
+
+let aloan_content_to_string = PA.aloan_content_to_string
+
 let typed_value_to_string = PA.typed_value_to_string
 
 let typed_avalue_to_string = PA.typed_avalue_to_string
