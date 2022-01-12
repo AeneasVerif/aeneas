@@ -6,6 +6,7 @@ module E = Expressions
 module C = Contexts
 module Subst = Substitute
 module A = CfimAst
+module L = Logging
 open Utils
 open TypesUtils
 module PA = Print.EvalCtxCfimAst

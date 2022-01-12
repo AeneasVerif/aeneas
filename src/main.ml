@@ -7,7 +7,8 @@ module I = Interpreter
 module EL = Easy_logging.Logging
 
 (* This is necessary to have a backtrace when raising exceptions - for some
- * reason, the -g option doesn't work *)
+ * reason, the -g option doesn't work.
+ * JP: are you running with OCAMLRUNPARAM=b=1? *)
 let () = Printexc.record_backtrace true
 
 let usage =
