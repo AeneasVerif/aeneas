@@ -185,47 +185,21 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
   log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
   (* Eval *)
   let ret_vid = V.VarId.zero in
-  (* List the local variables, but the return variable *)
-  let rec list_locals env =
-    match env with
-    | [] -> failwith "Inconsistent environment"
-    | C.Abs _ :: env -> list_locals env
-    | C.Var (var, _) :: env ->
-        (* There shouldn't be dummy variables *)
-        let var = Option.get var in
-        let locals = list_locals env in
-        if var.index <> ret_vid then var.index :: locals else locals
-    | C.Frame :: _ -> []
-  in
-  let locals = list_locals ctx.env in
-  (* Debug *)
-  log#ldebug
-    (lazy
-      ("ctx_pop_frame: locals to drop: ["
-      ^ String.concat "," (List.map V.VarId.to_string locals)
-      ^ "]"));
-  (* Drop the local variables *)
-  let ctx =
-    List.fold_left
-      (fun ctx lid -> drop_value config ctx (mk_place_from_var_id lid))
-      ctx locals
-  in
-  (* Debug *)
-  log#ldebug
-    (lazy
-      ("ctx_pop_frame: after dropping local variables:\n"
-     ^ eval_ctx_to_string ctx));
   (* Move the return value out of the return variable *)
   let ctx, ret_value =
     eval_operand config ctx (E.Move (mk_place_from_var_id ret_vid))
   in
-  (* Pop the frame *)
+  (* We musn't drop the local variables (because otherwise we might end
+   * some borrows in the return value!) but must reintroduce them instead
+   * in the context as dummy variables. *)
+  (* Pop the frame - we remove the `Frame` delimiter, and reintroduce all
+   * the local variables as dummy variables in the caller frame *)
   let rec pop env =
     match env with
     | [] -> failwith "Inconsistent environment"
     | C.Abs abs :: env -> C.Abs abs :: pop env
-    | C.Var (_, _) :: env -> pop env
-    | C.Frame :: env -> env
+    | C.Var (_, v) :: env -> C.Var (None, v) :: pop env
+    | C.Frame :: env -> (* Stop here *) env
   in
   let env = pop ctx.env in
   let ctx = { ctx with env } in
