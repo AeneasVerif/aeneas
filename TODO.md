@@ -2,10 +2,6 @@
 
 * write an interesting example to study with Jonathan
 
-* update the assignment to move the destination value (which will be overriden)
-  to a dummy variable, and end all the outer borrows.
-  Also update pop_frame.
-
 * add option for: `allow_borrow_overwrites_on_input_values`
   (rather: `will_overwrite_input_borrows`)
   (but always disallow borrow overwrites on returned values)
@@ -73,3 +69,7 @@
 
 
 # DONE
+
+* update the assignment to move the destination value (which will be overriden)
+  to a dummy variable, and end all the outer borrows.
+  Also update pop_frame.
