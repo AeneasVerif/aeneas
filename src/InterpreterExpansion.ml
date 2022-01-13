@@ -75,6 +75,7 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
         let proj_regions = current_abs.regions in
         let ancestors_regions = current_abs.ancestors_regions in
         match (aproj, proj_kind) with
+        | (V.AEndedProjLoans | V.AEndedProjBorrows), _ -> V.ASymbolic aproj
         | V.AProjLoans sv, LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then
@@ -311,6 +312,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
             match reborrow_ashared (Option.get proj_regions) sv proj_ty with
             | None -> super#visit_ASymbolic proj_regions aproj
             | Some asb -> V.ABorrow (V.AProjSharedBorrow asb))
+        | AEndedProjLoans | AEndedProjBorrows -> V.ASymbolic aproj
     end
   in
   (* Call the visitor *)

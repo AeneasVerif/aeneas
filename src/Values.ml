@@ -186,6 +186,8 @@ type aproj =
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use [abstract_shared_borrow]. *)
+  | AEndedProjLoans
+  | AEndedProjBorrows
 [@@deriving show]
 
 type region = RegionVarId.id Types.region [@@deriving show]

@@ -315,6 +315,8 @@ module Values = struct
         ^ ")"
     | AProjBorrows (sv, rty) ->
         "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
+    | AEndedProjLoans -> "ended_proj_loans"
+    | AEndedProjBorrows -> "ended_proj_borrows"
 
   let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
       string =

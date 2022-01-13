@@ -976,7 +976,7 @@ and end_abstraction_loans (config : C.config) (abs_id : V.AbstractionId.id)
             super#visit_AEndedIgnoredMutLoan env given_back child
         | V.AIgnoredSharedLoan av -> super#visit_AIgnoredSharedLoan env av
 
-      method! visit_ASymbolic env sproj =
+      method! visit_ASymbolic _ sproj =
         match sproj with
         | V.AProjBorrows (_, _) -> ()
         | V.AProjLoans sv -> raise (FoundSymbolicValue sv)
@@ -1007,6 +1007,7 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
+     TODO: is that really important?
 
      For instance:
      ```
@@ -1057,6 +1058,12 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
         | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
             (* Nothing to do for ignored borrows *)
             ()
+
+      method! visit_ASymbolic _ sproj =
+        match sproj with
+        | V.AProjLoans _ -> failwith "Unexpected"
+        | V.AProjBorrows (sv, proj_ty) ->
+            raise (FoundAProjBorrows (sv, proj_ty))
     end
   in
   (* Lookup the abstraction *)
@@ -1067,42 +1074,44 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
     (* No borrows: nothing to update *)
     ctx
   with
-  (* There are borrows: end them, then reexplore *)
+  (* There are concrete borrows: end them, then reexplore *)
   | FoundABorrowContent bc ->
-    (* First, replace the borrow by ⊥ *)
-    let bid =
-      match bc with
-      | V.AMutBorrow (bid, _) | V.ASharedBorrow bid -> bid
-      | V.AProjSharedBorrow asb -> (
-          (* There should be at least one borrow identifier in the set, which we
-           * can use to identify the whole set *)
-          match
-            List.find
-              (fun x -> match x with V.AsbBorrow _ -> true | _ -> false)
-              asb
-          with
-          | V.AsbBorrow bid -> bid
-          | _ -> failwith "Unexpected")
-      | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
-          failwith "Unexpected"
-    in
-    let ctx = update_aborrow ek_all bid V.ABottom ctx in
-    (* Then give back the value *)
-    let ctx =
-      match bc with
-      | V.AMutBorrow (bid, av) ->
-          (* First, convert the avalue to a (fresh symbolic) value *)
-          let v = convert_avalue_to_value av in
-          give_back_value config bid v ctx
-      | V.ASharedBorrow bid -> give_back_shared config bid ctx
-      | V.AProjSharedBorrow _ ->
-          (* Nothing to do *)
-          ctx
-      | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
-          failwith "Unexpected"
-    in
-    (* Reexplore *)
-    end_abstraction_borrows config abs_id ctx
+      (* First, replace the borrow by ⊥ *)
+      let bid =
+        match bc with
+        | V.AMutBorrow (bid, _) | V.ASharedBorrow bid -> bid
+        | V.AProjSharedBorrow asb -> (
+            (* There should be at least one borrow identifier in the set, which we
+             * can use to identify the whole set *)
+            match
+              List.find
+                (fun x -> match x with V.AsbBorrow _ -> true | _ -> false)
+                asb
+            with
+            | V.AsbBorrow bid -> bid
+            | _ -> failwith "Unexpected")
+        | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+            failwith "Unexpected"
+      in
+      let ctx = update_aborrow ek_all bid V.ABottom ctx in
+      (* Then give back the value *)
+      let ctx =
+        match bc with
+        | V.AMutBorrow (bid, av) ->
+            (* First, convert the avalue to a (fresh symbolic) value *)
+            let v = convert_avalue_to_value av in
+            give_back_value config bid v ctx
+        | V.ASharedBorrow bid -> give_back_shared config bid ctx
+        | V.AProjSharedBorrow _ ->
+            (* Nothing to do *)
+            ctx
+        | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+            failwith "Unexpected"
+      in
+      (* Reexplore *)
+      end_abstraction_borrows config abs_id ctx
+  (* There are symbolic borrows: end them, then reexplore *)
+  | FoundAProjBorrows (_sv, _proj_ty) -> raise Errors.Unimplemented
 
 (** Remove an abstraction from the context, as well as all its references *)
 and end_abstraction_remove_from_context (_config : C.config)
@@ -1133,8 +1142,8 @@ and end_abstraction_remove_from_context (_config : C.config)
         intersecting proj_borrows, either in the concrete context or in an
         abstraction
 *)
-and end_proj_loans_symbolic (config : C.config) (abs_id : V.AbstractionId.id)
-    (regions : T.RegionId.set_t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
+and end_proj_loans_symbolic (_config : C.config) (_abs_id : V.AbstractionId.id)
+    (_regions : T.RegionId.set_t) (_sv : V.symbolic_value) (_ctx : C.eval_ctx) :
     C.eval_ctx =
   raise Errors.Unimplemented
 

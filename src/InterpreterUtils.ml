@@ -133,6 +133,9 @@ exception FoundGLoanContent of g_loan_content
 exception FoundSymbolicValue of V.symbolic_value
 (** Utility exception *)
 
+exception FoundAProjBorrows of V.symbolic_value * T.rty
+(** Utility exception *)
+
 let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     bool =
   let obj =
@@ -146,6 +149,7 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
         match aproj with
         | AProjLoans sv | AProjBorrows (sv, _) ->
             if sv.V.sv_id = sv_id then raise Found else ()
+        | AEndedProjLoans | AEndedProjBorrows -> ()
 
       method! visit_abstract_shared_borrows _ asb =
         let visit (asb : V.abstract_shared_borrow) : unit =
