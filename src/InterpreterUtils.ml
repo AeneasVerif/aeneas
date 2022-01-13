@@ -160,49 +160,6 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     false
   with Found -> true
 
-(** Check if two different projections intersect. This is necessary when
-    giving a symbolic value to an abstraction: we need to check that
-    the regions which are already ended inside the abstraction don't
-    intersect the regions over which we project in the new abstraction.
-    Note that the two abstractions have different views (in terms of regions)
-    of the symbolic value (hence the two region types).
-*)
-let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
-    (ty2 : T.rty) (rset2 : T.RegionId.set_t) : bool =
-  match (ty1, ty2) with
-  | T.Bool, T.Bool | T.Char, T.Char | T.Str, T.Str -> false
-  | T.Integer int_ty1, T.Integer int_ty2 ->
-      assert (int_ty1 = int_ty2);
-      false
-  | T.Adt (id1, regions1, tys1), T.Adt (id2, regions2, tys2) ->
-      assert (id1 = id2);
-      (* The intersection check for the ADTs is very crude: 
-       * we check if some arguments intersect. As all the type and region
-       * parameters should be used somewhere in the ADT (otherwise rustc
-       * generates an error), it means that it should be equivalent to checking
-       * whether two fields intersect (and anyway comparing the field types is
-       * difficult in case of enumerations...).
-       * If we didn't have the above property enforced by the rust compiler,
-       * this check would still be a reasonable conservative approximation. *)
-      let regions = List.combine regions1 regions2 in
-      let tys = List.combine tys1 tys2 in
-      List.exists
-        (fun (r1, r2) -> region_in_set r1 rset1 && region_in_set r2 rset2)
-        regions
-      || List.exists
-           (fun (ty1, ty2) -> projections_intersect ty1 rset1 ty2 rset2)
-           tys
-  | T.Array ty1, T.Array ty2 | T.Slice ty1, T.Slice ty2 ->
-      projections_intersect ty1 rset1 ty2 rset2
-  | T.Ref (r1, ty1, kind1), T.Ref (r2, ty2, kind2) ->
-      (* Sanity check *)
-      assert (kind1 = kind2);
-      (* The projections intersect if the borrows intersect or their contents
-       * intersect *)
-      (region_in_set r1 rset1 && region_in_set r2 rset2)
-      || projections_intersect ty1 rset1 ty2 rset2
-  | _ -> failwith "Unreachable"
-
 (** Check that a symbolic value doesn't contain ended regions.
 
     Note that we don't check that the set of ended regions is empty: we

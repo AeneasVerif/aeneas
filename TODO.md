@@ -9,7 +9,6 @@
 
 * remove the rule which says that we can end a borrow under an abstraction if
   the corresponding loan is in the same abstraction.
-  Also remove the io parameter from "end_borrow".
 
 * add a `allow_borrow_overwrites` in the loan projectors.
 

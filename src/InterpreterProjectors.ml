@@ -219,11 +219,28 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     | V.Symbolic s, _ ->
         (* Check that the projection doesn't contain already ended regions,
          * if necessary *)
-        if check_symbolic_no_ended then
-          assert (
-            not (projections_intersect s.V.sv_ty ctx.ended_regions ty regions));
+        if check_symbolic_no_ended then (
+          let ty1 = s.V.sv_ty in
+          let rset1 = ctx.ended_regions in
+          let ty2 = ty in
+          let rset2 = regions in
+          log#ldebug
+            (lazy
+              ("projections_intersect:" ^ "\n- ty1: " ^ rty_to_string ctx ty1
+             ^ "\n- rset1: "
+              ^ T.RegionId.set_to_string rset1
+              ^ "\n- ty2: " ^ rty_to_string ctx ty2 ^ "\n- rset2: "
+              ^ T.RegionId.set_to_string rset2
+              ^ "\n"));
+          assert (not (projections_intersect ty1 rset1 ty2 rset2)));
         V.ASymbolic (V.AProjBorrows (s, ty))
-    | _ -> failwith "Unreachable"
+    | _ ->
+        log#lerror
+          (lazy
+            ("apply_proj_borrows: unexpected inputs:\n- input value: "
+            ^ typed_value_to_string ctx v
+            ^ "\n- proj rty: " ^ rty_to_string ctx ty));
+        failwith "Unreachable"
   in
   { V.value; V.ty }
 

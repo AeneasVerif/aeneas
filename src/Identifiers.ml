@@ -63,6 +63,8 @@ module type Id = sig
 
   module Map : Map.S with type key = id
 
+  (* TODO: map_to_string *)
+
   val id_of_json : Yojson.Basic.t -> (id, string) result
 end
 
