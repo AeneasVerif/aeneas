@@ -404,6 +404,8 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
 
+      method! visit_abs _ abs = super#visit_abs (Some abs) abs
+
       method! visit_typed_value info tv =
         (* Check the current pair (value, type) *)
         (match (tv.V.value, tv.V.ty) with
@@ -598,7 +600,11 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             match aproj with
             | V.AProjLoans sv | V.AProjBorrows (sv, _) ->
                 let ty2 = Subst.erase_regions sv.V.sv_ty in
-                assert (ty1 = ty2)
+                assert (ty1 = ty2);
+                (* Also check that the symbolic values contain regions of interest -
+                 * otherwise they should have been reduced to `_` *)
+                let abs = Option.get info in
+                assert (ty_has_regions_in_set abs.regions sv.V.sv_ty)
             | V.AEndedProjLoans | V.AEndedProjBorrows -> ())
         | V.AIgnored, _ -> ()
         | _ -> failwith "Erroneous typing");
@@ -606,7 +612,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         super#visit_typed_avalue info atv
     end
   in
-  visitor#visit_eval_ctx () ctx
+  visitor#visit_eval_ctx (None : V.abs option) ctx
 
 let check_invariants (ctx : C.eval_ctx) : unit =
   check_loans_borrows_relation_invariant ctx;
