@@ -130,6 +130,9 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 (** Utility exception *)
 
+exception FoundSymbolicValue of V.symbolic_value
+(** Utility exception *)
+
 let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     bool =
   let obj =

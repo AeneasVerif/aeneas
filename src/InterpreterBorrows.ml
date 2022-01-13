@@ -803,20 +803,20 @@ let rec end_borrow (config : C.config) (allowed_abs : V.AbstractionId.id option)
 
   match end_borrow_get_borrow allowed_abs l ctx with
   (* Two cases:
-   * - error: we found outer borrows (end them first)
+   * - error: we found outer borrows or inner loans (end them first)
    * - success: we didn't find outer borrows when updating (but maybe we actually
        didn't find the borrow we were looking for...)
    *)
-  | Error outer -> (
+  | Error priority -> (
       (* Debug *)
       log#ldebug
         (lazy
           ("end borrow: " ^ V.BorrowId.to_string l
-         ^ ": found outer borrows/abs:"
-          ^ show_priority_borrows_or_abs outer));
+         ^ ": found outer borrows/abs or inner loans:"
+          ^ show_priority_borrows_or_abs priority));
       (* End the priority borrows, abstraction, then try again to end the target
        * borrow (if necessary) *)
-      match outer with
+      match priority with
       | OuterBorrows (Borrows bids) | InnerLoans (Borrows bids) ->
           (* Note that we might get there with `allowed_abs <> None`: we might
            * be trying to end a borrow inside an abstraction, but which is actually
@@ -975,6 +975,11 @@ and end_abstraction_loans (config : C.config) (abs_id : V.AbstractionId.id)
         | V.AEndedIgnoredMutLoan { given_back; child } ->
             super#visit_AEndedIgnoredMutLoan env given_back child
         | V.AIgnoredSharedLoan av -> super#visit_AIgnoredSharedLoan env av
+
+      method! visit_ASymbolic env sproj =
+        match sproj with
+        | V.AProjBorrows (_, _) -> ()
+        | V.AProjLoans sv -> raise (FoundSymbolicValue sv)
     end
   in
   try
@@ -982,15 +987,20 @@ and end_abstraction_loans (config : C.config) (abs_id : V.AbstractionId.id)
     obj#visit_abs () abs;
     (* No loans: nothing to update *)
     ctx
-  with (* There are loans: end them, then recheck *)
+  with
+  (* There are loans: end them, then recheck *)
   | FoundBorrowIds bids ->
-    let ctx =
-      match bids with
-      | Borrow bid -> end_outer_borrow config bid ctx
-      | Borrows bids -> end_outer_borrows config bids ctx
-    in
-    (* Recheck *)
-    end_abstraction_loans config abs_id ctx
+      let ctx =
+        match bids with
+        | Borrow bid -> end_outer_borrow config bid ctx
+        | Borrows bids -> end_outer_borrows config bids ctx
+      in
+      (* Recheck *)
+      end_abstraction_loans config abs_id ctx
+  | FoundSymbolicValue sv ->
+      (* There is a proj_loans over a symbolic value: end the proj_borrows
+       * which intersect this proj_loans *)
+      end_proj_loans_symbolic config abs_id abs.regions sv ctx
 
 and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
     (ctx : C.eval_ctx) : C.eval_ctx =
@@ -1108,6 +1118,25 @@ and end_abstraction_remove_from_context (_config : C.config)
   in
   let env = List.filter_map map_env_elem ctx.C.env in
   { ctx with C.env }
+
+(** End the proj_borrows which intersect a given proj_loans over a symbolic
+    value.
+    
+    Rk.:
+    - if this symbolic value is primitively copiable, then:
+      - either proj_borrows are only present in the concrete context
+      - or there is only one intersecting proj_borrow present in an
+        abstraction
+    - otherwise, this symbolic value is not primitively copiable:
+      - there may be proj_borrows_shared over this value
+      - if we put aside the proj_borrows_shared, there should be exactly one
+        intersecting proj_borrows, either in the concrete context or in an
+        abstraction
+*)
+and end_proj_loans_symbolic (config : C.config) (abs_id : V.AbstractionId.id)
+    (regions : T.RegionId.set_t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  raise Errors.Unimplemented
 
 and end_outer_borrow config = end_borrow config None
 
