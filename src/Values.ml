@@ -236,7 +236,8 @@ class ['self] map_typed_avalue_base =
 *)
 type avalue =
   | AConcrete of constant_value
-      (** Note that this case is not used in the projections to keep track of the
+      (** TODO: remove
+          Note that this case is not used in the projections to keep track of the
           borrow graph (because there are no borrows in "concrete" values!) but
           to correctly instantiate the backward functions (we may give back some
           values at different moments: we need to remember what those values were
@@ -250,7 +251,9 @@ type avalue =
   | ALoan of aloan_content
   | ABorrow of aborrow_content
   | ASymbolic of aproj
-  | AIgnored  (** A value we don't own and thus ignore *)
+  | AIgnored
+      (** A value which doesn't contain borrows, or which borrows we
+          don't own and thus ignore *)
 
 and adt_avalue = {
   variant_id : (VariantId.id option[@opaque]);

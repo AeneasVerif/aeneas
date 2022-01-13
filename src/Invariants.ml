@@ -600,6 +600,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 let ty2 = Subst.erase_regions sv.V.sv_ty in
                 assert (ty1 = ty2)
             | V.AEndedProjLoans | V.AEndedProjBorrows -> ())
+        | V.AIgnored, _ -> ()
         | _ -> failwith "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_avalue info atv

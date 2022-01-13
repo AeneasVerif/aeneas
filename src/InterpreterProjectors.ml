@@ -18,8 +18,8 @@ type symbolic_expansion =
 (** Auxiliary function.
 
     Apply a proj_borrows on a shared borrow.
-    In the case of shared borrows, we return [abstract_shared_borrows],
-    not avalues.
+    Note that when projecting over shared values, we generate
+    [abstract_shared_borrows], not avalues.
 *)
 let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
@@ -29,71 +29,74 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
   assert (ety = v.V.ty);
-  (* Project *)
-  match (v.V.value, ty) with
-  | V.Concrete _, (T.Bool | T.Char | T.Integer _ | T.Str) -> []
-  | V.Adt adt, T.Adt (id, region_params, tys) ->
-      (* Retrieve the types of the fields *)
-      let field_types =
-        Subst.ctx_adt_value_get_instantiated_field_rtypes ctx adt id
-          region_params tys
-      in
-      (* Project over the field values *)
-      let fields_types = List.combine adt.V.field_values field_types in
-      let proj_fields =
-        List.map
-          (fun (fv, fty) ->
-            apply_proj_borrows_on_shared_borrow ctx fresh_reborrow regions fv
-              fty)
-          fields_types
-      in
-      List.concat proj_fields
-  | V.Bottom, _ -> failwith "Unreachable"
-  | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
-      (* Retrieve the bid of the borrow and the asb of the projected borrowed value *)
-      let bid, asb =
-        (* Not in the set: dive *)
-        match (bc, kind) with
-        | V.MutBorrow (bid, bv), T.Mut ->
-            (* Apply the projection on the borrowed value *)
-            let asb =
-              apply_proj_borrows_on_shared_borrow ctx fresh_reborrow regions bv
-                ref_ty
-            in
-            (bid, asb)
-        | V.SharedBorrow bid, T.Shared ->
-            (* Lookup the shared value *)
-            let ek = ek_all in
-            let sv = lookup_loan ek bid ctx in
-            let asb =
-              match sv with
-              | _, Concrete (V.SharedLoan (_, sv))
-              | _, Abstract (V.ASharedLoan (_, sv, _)) ->
-                  apply_proj_borrows_on_shared_borrow ctx fresh_reborrow regions
-                    sv ref_ty
-              | _ -> failwith "Unexpected"
-            in
-            (bid, asb)
-        | V.InactivatedMutBorrow _, _ ->
-            failwith
-              "Can't apply a proj_borrow over an inactivated mutable borrow"
-        | _ -> failwith "Unreachable"
-      in
-      let asb =
-        (* Check if the region is in the set of projected regions (note that
-         * we never project over static regions) *)
-        if region_in_set r regions then
-          let bid' = fresh_reborrow bid in
-          V.AsbBorrow bid' :: asb
-        else asb
-      in
-      asb
-  | V.Loan _, _ -> failwith "Unreachable"
-  | V.Symbolic s, _ ->
-      (* Check that the projection doesn't contain ended regions *)
-      assert (not (projections_intersect s.V.sv_ty ctx.ended_regions ty regions));
-      [ V.AsbProjReborrows (s, ty) ]
-  | _ -> failwith "Unreachable"
+  (* Project - if there are no regions from the abstraction in the type, return `_` *)
+  if not (ty_has_regions_in_set regions ty) then []
+  else
+    match (v.V.value, ty) with
+    | V.Concrete _, (T.Bool | T.Char | T.Integer _ | T.Str) -> []
+    | V.Adt adt, T.Adt (id, region_params, tys) ->
+        (* Retrieve the types of the fields *)
+        let field_types =
+          Subst.ctx_adt_value_get_instantiated_field_rtypes ctx adt id
+            region_params tys
+        in
+        (* Project over the field values *)
+        let fields_types = List.combine adt.V.field_values field_types in
+        let proj_fields =
+          List.map
+            (fun (fv, fty) ->
+              apply_proj_borrows_on_shared_borrow ctx fresh_reborrow regions fv
+                fty)
+            fields_types
+        in
+        List.concat proj_fields
+    | V.Bottom, _ -> failwith "Unreachable"
+    | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
+        (* Retrieve the bid of the borrow and the asb of the projected borrowed value *)
+        let bid, asb =
+          (* Not in the set: dive *)
+          match (bc, kind) with
+          | V.MutBorrow (bid, bv), T.Mut ->
+              (* Apply the projection on the borrowed value *)
+              let asb =
+                apply_proj_borrows_on_shared_borrow ctx fresh_reborrow regions
+                  bv ref_ty
+              in
+              (bid, asb)
+          | V.SharedBorrow bid, T.Shared ->
+              (* Lookup the shared value *)
+              let ek = ek_all in
+              let sv = lookup_loan ek bid ctx in
+              let asb =
+                match sv with
+                | _, Concrete (V.SharedLoan (_, sv))
+                | _, Abstract (V.ASharedLoan (_, sv, _)) ->
+                    apply_proj_borrows_on_shared_borrow ctx fresh_reborrow
+                      regions sv ref_ty
+                | _ -> failwith "Unexpected"
+              in
+              (bid, asb)
+          | V.InactivatedMutBorrow _, _ ->
+              failwith
+                "Can't apply a proj_borrow over an inactivated mutable borrow"
+          | _ -> failwith "Unreachable"
+        in
+        let asb =
+          (* Check if the region is in the set of projected regions (note that
+           * we never project over static regions) *)
+          if region_in_set r regions then
+            let bid' = fresh_reborrow bid in
+            V.AsbBorrow bid' :: asb
+          else asb
+        in
+        asb
+    | V.Loan _, _ -> failwith "Unreachable"
+    | V.Symbolic s, _ ->
+        (* Check that the projection doesn't contain ended regions *)
+        assert (
+          not (projections_intersect s.V.sv_ty ctx.ended_regions ty regions));
+        [ V.AsbProjReborrows (s, ty) ]
+    | _ -> failwith "Unreachable"
 
 (** Apply (and reduce) a projector over borrows to a value.
 
@@ -135,114 +138,118 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
   assert (ety = v.V.ty);
-  (* Match *)
-  let value : V.avalue =
-    match (v.V.value, ty) with
-    | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
-    | V.Adt adt, T.Adt (id, region_params, tys) ->
-        (* Retrieve the types of the fields *)
-        let field_types =
-          Subst.ctx_adt_value_get_instantiated_field_rtypes ctx adt id
-            region_params tys
-        in
-        (* Project over the field values *)
-        let fields_types = List.combine adt.V.field_values field_types in
-        let proj_fields =
-          List.map
-            (fun (fv, fty) ->
-              apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                regions ancestors_regions fv fty)
-            fields_types
-        in
-        V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
-    | V.Bottom, _ -> failwith "Unreachable"
-    | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
-        if
-          (* Check if the region is in the set of projected regions (note that
-           * we never project over static regions) *)
-          region_in_set r regions
-        then
-          (* In the set *)
-          let bc =
-            match (bc, kind) with
-            | V.MutBorrow (bid, bv), T.Mut ->
-                (* Apply the projection on the borrowed value *)
-                let bv =
-                  apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                    regions ancestors_regions bv ref_ty
-                in
-                V.AMutBorrow (bid, bv)
-            | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
-            | V.InactivatedMutBorrow _, _ ->
-                failwith
-                  "Can't apply a proj_borrow over an inactivated mutable borrow"
-            | _ -> failwith "Unreachable"
+  (* Project - if there are no regions from the abstraction in the type, return `_` *)
+  if not (ty_has_regions_in_set regions ty) then { V.value = V.AIgnored; ty }
+  else
+    let value : V.avalue =
+      match (v.V.value, ty) with
+      | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
+      | V.Adt adt, T.Adt (id, region_params, tys) ->
+          (* Retrieve the types of the fields *)
+          let field_types =
+            Subst.ctx_adt_value_get_instantiated_field_rtypes ctx adt id
+              region_params tys
           in
-          V.ABorrow bc
-        else
-          (* Not in the set: ignore *)
-          let bc =
-            match (bc, kind) with
-            | V.MutBorrow (bid, bv), T.Mut ->
-                (* Apply the projection on the borrowed value *)
-                let bv =
-                  apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
-                    regions ancestors_regions bv ref_ty
-                in
-                (* If the borrow id is in the ancestor's regions, we still need
-                 * to remember it *)
-                let opt_bid =
-                  if region_in_set r ancestors_regions then Some bid else None
-                in
-                (* Return *)
-                V.AIgnoredMutBorrow (opt_bid, bv)
-            | V.SharedBorrow bid, T.Shared ->
-                (* Lookup the shared value *)
-                let ek = ek_all in
-                let sv = lookup_loan ek bid ctx in
-                let asb =
-                  match sv with
-                  | _, Concrete (V.SharedLoan (_, sv))
-                  | _, Abstract (V.ASharedLoan (_, sv, _)) ->
-                      apply_proj_borrows_on_shared_borrow ctx fresh_reborrow
-                        regions sv ref_ty
-                  | _ -> failwith "Unexpected"
-                in
-                V.AProjSharedBorrow asb
-            | V.InactivatedMutBorrow _, _ ->
-                failwith
-                  "Can't apply a proj_borrow over an inactivated mutable borrow"
-            | _ -> failwith "Unreachable"
+          (* Project over the field values *)
+          let fields_types = List.combine adt.V.field_values field_types in
+          let proj_fields =
+            List.map
+              (fun (fv, fty) ->
+                apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
+                  regions ancestors_regions fv fty)
+              fields_types
           in
-          V.ABorrow bc
-    | V.Loan _, _ -> failwith "Unreachable"
-    | V.Symbolic s, _ ->
-        (* Check that the projection doesn't contain already ended regions,
-         * if necessary *)
-        if check_symbolic_no_ended then (
-          let ty1 = s.V.sv_ty in
-          let rset1 = ctx.ended_regions in
-          let ty2 = ty in
-          let rset2 = regions in
-          log#ldebug
+          V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
+      | V.Bottom, _ -> failwith "Unreachable"
+      | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
+          if
+            (* Check if the region is in the set of projected regions (note that
+             * we never project over static regions) *)
+            region_in_set r regions
+          then
+            (* In the set *)
+            let bc =
+              match (bc, kind) with
+              | V.MutBorrow (bid, bv), T.Mut ->
+                  (* Apply the projection on the borrowed value *)
+                  let bv =
+                    apply_proj_borrows check_symbolic_no_ended ctx
+                      fresh_reborrow regions ancestors_regions bv ref_ty
+                  in
+                  V.AMutBorrow (bid, bv)
+              | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
+              | V.InactivatedMutBorrow _, _ ->
+                  failwith
+                    "Can't apply a proj_borrow over an inactivated mutable \
+                     borrow"
+              | _ -> failwith "Unreachable"
+            in
+            V.ABorrow bc
+          else
+            (* Not in the set: ignore *)
+            let bc =
+              match (bc, kind) with
+              | V.MutBorrow (bid, bv), T.Mut ->
+                  (* Apply the projection on the borrowed value *)
+                  let bv =
+                    apply_proj_borrows check_symbolic_no_ended ctx
+                      fresh_reborrow regions ancestors_regions bv ref_ty
+                  in
+                  (* If the borrow id is in the ancestor's regions, we still need
+                   * to remember it *)
+                  let opt_bid =
+                    if region_in_set r ancestors_regions then Some bid else None
+                  in
+                  (* Return *)
+                  V.AIgnoredMutBorrow (opt_bid, bv)
+              | V.SharedBorrow bid, T.Shared ->
+                  (* Lookup the shared value *)
+                  let ek = ek_all in
+                  let sv = lookup_loan ek bid ctx in
+                  let asb =
+                    match sv with
+                    | _, Concrete (V.SharedLoan (_, sv))
+                    | _, Abstract (V.ASharedLoan (_, sv, _)) ->
+                        apply_proj_borrows_on_shared_borrow ctx fresh_reborrow
+                          regions sv ref_ty
+                    | _ -> failwith "Unexpected"
+                  in
+                  V.AProjSharedBorrow asb
+              | V.InactivatedMutBorrow _, _ ->
+                  failwith
+                    "Can't apply a proj_borrow over an inactivated mutable \
+                     borrow"
+              | _ -> failwith "Unreachable"
+            in
+            V.ABorrow bc
+      | V.Loan _, _ -> failwith "Unreachable"
+      | V.Symbolic s, _ ->
+          (* Check that the projection doesn't contain already ended regions,
+           * if necessary *)
+          if check_symbolic_no_ended then (
+            let ty1 = s.V.sv_ty in
+            let rset1 = ctx.ended_regions in
+            let ty2 = ty in
+            let rset2 = regions in
+            log#ldebug
+              (lazy
+                ("projections_intersect:" ^ "\n- ty1: " ^ rty_to_string ctx ty1
+               ^ "\n- rset1: "
+                ^ T.RegionId.set_to_string rset1
+                ^ "\n- ty2: " ^ rty_to_string ctx ty2 ^ "\n- rset2: "
+                ^ T.RegionId.set_to_string rset2
+                ^ "\n"));
+            assert (not (projections_intersect ty1 rset1 ty2 rset2)));
+          V.ASymbolic (V.AProjBorrows (s, ty))
+      | _ ->
+          log#lerror
             (lazy
-              ("projections_intersect:" ^ "\n- ty1: " ^ rty_to_string ctx ty1
-             ^ "\n- rset1: "
-              ^ T.RegionId.set_to_string rset1
-              ^ "\n- ty2: " ^ rty_to_string ctx ty2 ^ "\n- rset2: "
-              ^ T.RegionId.set_to_string rset2
-              ^ "\n"));
-          assert (not (projections_intersect ty1 rset1 ty2 rset2)));
-        V.ASymbolic (V.AProjBorrows (s, ty))
-    | _ ->
-        log#lerror
-          (lazy
-            ("apply_proj_borrows: unexpected inputs:\n- input value: "
-            ^ typed_value_to_string ctx v
-            ^ "\n- proj rty: " ^ rty_to_string ctx ty));
-        failwith "Unreachable"
-  in
-  { V.value; V.ty }
+              ("apply_proj_borrows: unexpected inputs:\n- input value: "
+              ^ typed_value_to_string ctx v
+              ^ "\n- proj rty: " ^ rty_to_string ctx ty));
+          failwith "Unreachable"
+    in
+    { V.value; V.ty }
 
 (** Convert a symbolic expansion *which is not a borrow* to a value *)
 let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
@@ -285,22 +292,25 @@ let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
 *)
 let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
     (see : symbolic_expansion) (original_sv_ty : T.rty) : V.typed_avalue =
+  (* Sanity check: if we have a proj_loans over a symbolic value, it should
+   * contain regions which we will project *)
+  assert (ty_has_regions_in_set regions original_sv_ty);
   (* Match *)
   let (value, ty) : V.avalue * T.rty =
     match (see, original_sv_ty) with
-    | SeConcrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) ->
-        (V.AConcrete cv, original_sv_ty)
+    | SeConcrete _, (T.Bool | T.Char | T.Integer _ | T.Str) ->
+        (V.AIgnored, original_sv_ty)
     | SeAdt (variant_id, field_values), T.Adt (_id, _region_params, _tys) ->
         (* Project over the field values *)
         let field_values =
-          List.map mk_aproj_loans_from_symbolic_value field_values
+          List.map (mk_aproj_loans_from_symbolic_value regions) field_values
         in
         (V.AAdt { V.variant_id; field_values }, original_sv_ty)
     | SeMutRef (bid, spc), T.Ref (r, ref_ty, T.Mut) ->
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
-        let child_av = mk_aproj_loans_from_symbolic_value spc in
+        let child_av = mk_aproj_loans_from_symbolic_value regions spc in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)
         if region_in_set r regions then
@@ -313,7 +323,7 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
-        let child_av = mk_aproj_loans_from_symbolic_value spc in
+        let child_av = mk_aproj_loans_from_symbolic_value regions spc in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)
         if region_in_set r regions then

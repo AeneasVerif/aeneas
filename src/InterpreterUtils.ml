@@ -67,12 +67,18 @@ let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
   in
   av
 
-(** Create a loans projector from a symbolic value. *)
-let mk_aproj_loans_from_symbolic_value (svalue : V.symbolic_value) :
-    V.typed_avalue =
-  let av = V.ASymbolic (V.AProjLoans svalue) in
-  let av : V.typed_avalue = { V.value = av; V.ty = svalue.V.sv_ty } in
-  av
+(** Create a loans projector from a symbolic value.
+    
+    Checks if the projector will actually project some regions. If not,
+    returns [AIgnored] (`_`).
+ *)
+let mk_aproj_loans_from_symbolic_value (regions : T.RegionId.Set.t)
+    (svalue : V.symbolic_value) : V.typed_avalue =
+  if ty_has_regions_in_set regions svalue.sv_ty then
+    let av = V.ASymbolic (V.AProjLoans svalue) in
+    let av : V.typed_avalue = { V.value = av; V.ty = svalue.V.sv_ty } in
+    av
+  else { V.value = V.AIgnored; ty = svalue.V.sv_ty }
 
 (** TODO: move *)
 let borrow_is_asb (bid : V.BorrowId.id) (asb : V.abstract_shared_borrow) : bool

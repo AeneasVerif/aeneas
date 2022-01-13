@@ -316,9 +316,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * and the given back value is thus a symbolic value *)
               match nv.V.value with
               | V.Symbolic sv ->
+                  let abs = Option.get opt_abs in
                   (* The loan projector *)
                   let given_back_loans_proj =
-                    mk_aproj_loans_from_symbolic_value sv
+                    mk_aproj_loans_from_symbolic_value abs.regions sv
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in

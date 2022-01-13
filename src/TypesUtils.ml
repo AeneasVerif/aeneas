@@ -109,6 +109,26 @@ let ty_has_regions (ty : ety) : bool =
     false
   with Found -> true
 
+(** Check if a [ty] contains regions from a given set *)
+let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : rty) : bool =
+  let obj =
+    object
+      inherit [_] iter_ty as super
+
+      method! visit_Adt env type_id regions tys =
+        List.iter (fun r -> if region_in_set r rset then raise Found) regions;
+        super#visit_Adt env type_id regions tys
+
+      method! visit_Ref env r ty rkind =
+        if region_in_set r rset then raise Found
+        else super#visit_Ref env r ty rkind
+    end
+  in
+  try
+    obj#visit_ty () ty;
+    false
+  with Found -> true
+
 (** Return true if a type is "primitively copyable".
   *
   * "primitively copyable" means that copying instances of this type doesn't
