@@ -532,14 +532,20 @@ let get_first_borrow_in_value (v : V.typed_value) : V.borrow_content option =
   with FoundBorrowContent bc -> Some bc
 
 (** Return the first loan or borrow content we find in a value (starting with
-    the outer ones) *)
-let get_first_loan_or_borrow_in_value (v : V.typed_value) :
-    loan_or_borrow_content option =
+    the outer ones).
+    
+    [with_borrows]:
+    - if true: return the first loan or borrow we find
+    - if false: return the first loan we find, do not dive into borrowed values
+ *)
+let get_first_outer_loan_or_borrow_in_value (with_borrows : bool)
+    (v : V.typed_value) : loan_or_borrow_content option =
   let obj =
     object
       inherit [_] V.iter_typed_value
 
-      method! visit_borrow_content _ bc = raise (FoundBorrowContent bc)
+      method! visit_borrow_content _ bc =
+        if with_borrows then raise (FoundBorrowContent bc) else ()
 
       method! visit_loan_content _ lc = raise (FoundLoanContent lc)
     end

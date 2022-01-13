@@ -572,14 +572,20 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
         (* The context was updated: do a recursive call to reinspect the value *)
         end_loans_at_place config access p ctx)
 
-(** Drop (end) all the loans and borrows at a given place, which should be
-    seen as an l-value (we will write to it later, but need to drop the borrows
-    before writing).
+(** Drop (end) loans and borrows at a given place, which should be
+    seen as an l-value (we will write to it later, but need to drop
+    the borrows before writing).
 
     This is used to drop values (when we need to write to a place, we first
     drop the value there to properly propagate back values which are not/can't
     be borrowed anymore).
     
+    [end_borrows]:
+    - if true: end all the loans and borrows we find. This is used for instance
+      by [drop_value].
+    - if false: only end the outer loans. This is used by [assign_to_place]
+      or to drop the loans in the local variables when popping a frame.
+
     Note that we don't do what is defined in the formalization: we move the
     value to a temporary dummy value, then explore this value and end the
     loans/borrows inside as long as we find some, starting with the outer
@@ -599,8 +605,8 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
     - we can't immediately end `mut_borrow l2 ...` because it contains a loan
     - the borrow corresponding to the loan `mut_loan l3` is outside of `*x`
  *)
-let drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+let drop_outer_borrows_loans_at_lplace (config : C.config) (end_borrows : bool)
+    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Move the current value in the place outside of this place and into
    * a dummy variable *)
   let access = Write in
@@ -612,7 +618,7 @@ let drop_borrows_loans_at_lplace (config : C.config) (p : E.place)
     (* Read the value *)
     let v = C.ctx_read_first_dummy_var ctx in
     (* Check if there are loans or borrows to end *)
-    match get_first_loan_or_borrow_in_value v with
+    match get_first_outer_loan_or_borrow_in_value end_borrows v with
     | None ->
         (* We are done *)
         ctx
@@ -712,20 +718,23 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
 (** Small utility.
     
     Prepare a place which is to be used as the destination of an assignment:
-    update the environment along the paths, end the borrows and loans at
-    this place, etc.
+    update the environment along the paths, end  loans at this place, etc.
 
     Return the updated context and the (updated) value at the end of the
     place. This value should not contain any loan or borrow (and we check
-    it is the case). Note that it is very likely to contain [Bottom] values.
+    it is the case). Note that this value is very likely to contain [Bottom]
+    subvalues.
+    
+    [end_borrows]: if false, we only end the outer loans we find. If true, we
+    end all the loans and the borrows we find.
  *)
-let prepare_lplace (config : C.config) (p : E.place) (ctx : C.eval_ctx) :
-    C.eval_ctx * V.typed_value =
+let prepare_lplace (config : C.config) (end_borrows : bool) (p : E.place)
+    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
   (* TODO *)
   let access = Write in
   let ctx = update_ctx_along_write_place config access p ctx in
   (* End the borrows and loans, starting with the borrows *)
-  let ctx = drop_borrows_loans_at_lplace config p ctx in
+  let ctx = drop_outer_borrows_loans_at_lplace config end_borrows p ctx in
   (* Read the value and check it *)
   let v = read_place_unwrap config access p ctx in
   (* Sanity checks *)

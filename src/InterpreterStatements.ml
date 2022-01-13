@@ -25,8 +25,9 @@ type statement_eval_res = Unit | Break of int | Continue of int | Return
 let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
     =
   log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
-  (* Prepare the place (by ending the loans, then the borrows) *)
-  let ctx, v = prepare_lplace config p ctx in
+  (* Prepare the place (by ending the outer loans) *)
+  let end_borrows = true in
+  let ctx, v = prepare_lplace config end_borrows p ctx in
   (* Replace the value with [Bottom] *)
   let nv = { v with value = V.Bottom } in
   let ctx = write_place_unwrap config Write p nv ctx in
@@ -44,10 +45,11 @@ let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
   (* Push the rvalue to a dummy variable, for bookkeeping *)
   let ctx = C.ctx_push_dummy_var ctx v in
   (* Prepare the destination *)
-  let ctx, _ = prepare_lplace config p ctx in
+  let end_borrows = false in
+  let ctx, _ = prepare_lplace config end_borrows p ctx in
   (* Retrieve the dummy variable *)
   let ctx, v = C.ctx_pop_dummy_var ctx in
-  (* Checks *)
+  (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
   assert (not (bottom_in_value ctx.ended_regions v));
   (* Update the destination *)
   let ctx = write_place_unwrap config Write p v ctx in
@@ -189,6 +191,8 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
   let ctx, ret_value =
     eval_operand config ctx (E.Move (mk_place_from_var_id ret_vid))
   in
+  (* Sanity check *)
+  assert (not (bottom_in_value ctx.ended_regions ret_value));
   (* We musn't drop the local variables (because otherwise we might end
    * some borrows in the return value!) but must reintroduce them instead
    * in the context as dummy variables. *)
