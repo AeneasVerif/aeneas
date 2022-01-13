@@ -7,6 +7,7 @@ module V = Values
 module C = Contexts
 module Subst = Substitute
 module L = Logging
+open Utils
 open TypesUtils
 open InterpreterUtils
 
@@ -557,3 +558,147 @@ let get_first_outer_loan_or_borrow_in_value (with_borrows : bool)
   with
   | FoundLoanContent lc -> Some (LoanContent lc)
   | FoundBorrowContent bc -> Some (BorrowContent bc)
+
+type gproj_borrows =
+  | AProjBorrows of V.AbstractionId.id * V.symbolic_value
+  | ProjBorrows of V.symbolic_value
+
+let proj_borrows_intersects_proj_loans
+    (proj_borrows : T.RegionId.Set.t * V.symbolic_value * T.rty)
+    (proj_loans : T.RegionId.Set.t * V.symbolic_value) : bool =
+  let b_regions, b_sv, b_ty = proj_borrows in
+  let l_regions, l_sv = proj_loans in
+  if same_symbolic_id b_sv l_sv then
+    projections_intersect l_sv.V.sv_ty l_regions b_ty b_regions
+  else false
+
+(** Lookup the first aproj_borrows (including aproj_shared_borrows) over a
+    symbolic value which intersects a given set of regions.
+    
+    Note that there should be **at most one** (one reason is that we force
+    the expansion of primitively copyable values before giving them to
+    abstractions).
+    
+    Returns the id of the owning abstraction, the projection type used in
+    this abstraction and a boolean indicating whether the projector is
+    over a mutable value (`true` is "mutable", `false` is "shared").
+    
+    [explore_shared]: if `true` also explore projectors over shared values,
+    otherwise ignore.
+*)
+let lookup_first_intersecting_aproj_borrows_opt (explore_shared : bool)
+    (regions : T.RegionId.Set.t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
+    (V.AbstractionId.id * T.rty * bool) option =
+  let found = ref None in
+  let set r =
+    assert (Option.is_none !found);
+    found := Some r
+  in
+  let check_proj_borrows_and_raise abs sv' proj_ty =
+    if
+      proj_borrows_intersects_proj_loans
+        (abs.V.regions, sv', proj_ty)
+        (regions, sv)
+    then (
+      let is_mut = false in
+      set (abs.abs_id, proj_ty, is_mut);
+      raise Found)
+    else ()
+  in
+  let obj =
+    object
+      inherit [_] C.iter_eval_ctx as super
+
+      method! visit_abs _ abs = super#visit_abs (Some abs) abs
+
+      method! visit_abstract_shared_borrows abs asb =
+        if explore_shared then
+          let abs = Option.get abs in
+          let check asb =
+            match asb with
+            | V.AsbBorrow _ -> ()
+            | V.AsbProjReborrows (sv', proj_ty) ->
+                check_proj_borrows_and_raise abs sv' proj_ty
+          in
+          List.iter check asb
+        else ()
+
+      method! visit_ASymbolic abs sproj =
+        let abs = Option.get abs in
+        match sproj with
+        | AProjLoans _ | AEndedProjLoans | AEndedProjBorrows -> ()
+        | AProjBorrows (sv', proj_rty) ->
+            check_proj_borrows_and_raise abs sv' proj_rty
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_eval_ctx None ctx;
+    None
+  with Found ->
+    (* Return - while checking that the result is indeed `Some ...` *)
+    let res = Option.get !found in
+    Some res
+
+(** Lookup the aproj_borrows (not aproj_borrows_shared!) over a symbolic
+    value which intersects a given set of regions.
+    
+    Note that there should be **at most one** (one reason is that we force
+    the expansion of primitively copyable values before giving them to
+    abstractions).
+    
+    Returns the id of the owning abstraction, and the projection type used in
+    this abstraction.
+*)
+let lookup_intersecting_aproj_borrows_not_shared_opt
+    (regions : T.RegionId.Set.t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
+    (V.AbstractionId.id * T.rty) option =
+  let explore_shared = false in
+  match
+    lookup_first_intersecting_aproj_borrows_opt explore_shared regions sv ctx
+  with
+  | None -> None
+  | Some (abs_id, rty, is_mut) ->
+      assert is_mut;
+      Some (abs_id, rty)
+
+(** Similar to [lookup_intersecting_aproj_borrows_not_shared_opt], but updates the
+    value.
+ *)
+let update_intersecting_aproj_borrows_not_shared (regions : T.RegionId.Set.t)
+    (sv : V.symbolic_value) (nv : V.typed_avalue) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  (* Small helpers to make sure we update the context exactly once *)
+  let found = ref false in
+  let set () : V.avalue =
+    assert (not !found);
+    found := true;
+    nv.V.value
+  in
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_abs _ abs = super#visit_abs (Some abs) abs
+
+      method! visit_ASymbolic abs sproj =
+        match sproj with
+        | AProjLoans _ | AEndedProjLoans | AEndedProjBorrows ->
+            super#visit_ASymbolic abs sproj
+        | AProjBorrows (sv', proj_rty) ->
+            let abs = Option.get abs in
+            if
+              proj_borrows_intersects_proj_loans
+                (abs.regions, sv', proj_rty)
+                (regions, sv)
+            then set ()
+            else super#visit_ASymbolic (Some abs) sproj
+    end
+  in
+  (* Apply *)
+  let ctx = obj#visit_eval_ctx None ctx in
+  (* Check that we updated the context at least once *)
+  assert !found;
+  (* Return *)
+  ctx

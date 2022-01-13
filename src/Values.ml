@@ -188,6 +188,7 @@ type aproj =
           a shared loan: under a shared loan, we use [abstract_shared_borrow]. *)
   | AEndedProjLoans
   | AEndedProjBorrows
+(* TODO: remove AEndedProjBorrows? *)
 [@@deriving show]
 
 type region = RegionVarId.id Types.region [@@deriving show]

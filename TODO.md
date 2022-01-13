@@ -7,6 +7,8 @@
   (but always disallow borrow overwrites on returned values)
   at the level of abstractions (not at the level of loans!)
 
+* check that no borrow_overwrites upon ending abstractions
+
 * set of types with mutable borrows (what to do when type variables appear under
   shared borrows?)
   necessary to know what to return.

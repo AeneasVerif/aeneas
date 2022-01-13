@@ -421,6 +421,11 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* Apply the reborrows *)
   apply_registered_reborrows ctx
 
+(** TODO: *)
+let give_back_symbolic_value (_config : C.config) (_regions : T.RegionId.set_t)
+    (_sv : V.symbolic_value) (_ctx : C.eval_ctx) : C.eval_ctx =
+  raise Errors.Unimplemented
+
 (** Auxiliary function to end borrows. See [give_back].
 
     This function is similar to [give_back_value] but gives back an [avalue]
@@ -1130,8 +1135,8 @@ and end_abstraction_remove_from_context (_config : C.config)
   let env = List.filter_map map_env_elem ctx.C.env in
   { ctx with C.env }
 
-(** End the proj_borrows which intersect a given proj_loans over a symbolic
-    value.
+(** End a proj_loan over a symbolic value by ending the proj_borrows which
+    intersect this proj_loans.
     
     Rk.:
     - if this symbolic value is primitively copiable, then:
@@ -1144,10 +1149,27 @@ and end_abstraction_remove_from_context (_config : C.config)
         intersecting proj_borrows, either in the concrete context or in an
         abstraction
 *)
-and end_proj_loans_symbolic (_config : C.config) (_abs_id : V.AbstractionId.id)
-    (_regions : T.RegionId.set_t) (_sv : V.symbolic_value) (_ctx : C.eval_ctx) :
+and end_proj_loans_symbolic (config : C.config) (abs_id : V.AbstractionId.id)
+    (regions : T.RegionId.set_t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
     C.eval_ctx =
-  raise Errors.Unimplemented
+  (* Find the first proj_borrows which intersects the proj_loans *)
+  let explore_shared = true in
+  match
+    lookup_first_intersecting_aproj_borrows_opt explore_shared regions sv ctx
+  with
+  | None ->
+      (* We couldn't find any in the context: it means that the symbolic value
+       * is in the concrete environment (or that we dropped it, in which case
+       * it is completely absent) *)
+      (* Update the loans depending on the current symbolic value - it is
+       * left unchanged *)
+      give_back_symbolic_value config regions sv ctx
+  | Some (abs_id', proj_ty, mutable_proj) ->
+      (* We found one in the context: if it comes from this abstraction, we can
+       * end it directly, otherwise we need to end the abstraction where it
+       * came from first *)
+      if abs_id' = abs_id then raise Errors.Unimplemented
+      else raise Errors.Unimplemented
 
 and end_outer_borrow config = end_borrow config None
 
