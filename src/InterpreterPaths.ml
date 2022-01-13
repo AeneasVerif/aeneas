@@ -642,9 +642,13 @@ let drop_outer_borrows_loans_at_lplace (config : C.config) (end_borrows : bool)
   let ctx = drop ctx in
   (* Pop the temporary value *)
   let ctx, v = C.ctx_pop_dummy_var ctx in
+  (* Reinsert the value *)
+  let ctx = write_place_unwrap config access p v ctx in
   (* Sanity check *)
-  assert (not (loans_in_value v));
-  assert (not (borrows_in_value v));
+  if end_borrows then (
+    assert (not (loans_in_value v));
+    assert (not (borrows_in_value v)))
+  else assert (not (outer_loans_in_value v));
   (* Return *)
   ctx
 
@@ -718,7 +722,7 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
 (** Small utility.
     
     Prepare a place which is to be used as the destination of an assignment:
-    update the environment along the paths, end  loans at this place, etc.
+    update the environment along the paths, end the loans at this place, etc.
 
     Return the updated context and the (updated) value at the end of the
     place. This value should not contain any loan or borrow (and we check
@@ -738,8 +742,10 @@ let prepare_lplace (config : C.config) (end_borrows : bool) (p : E.place)
   (* Read the value and check it *)
   let v = read_place_unwrap config access p ctx in
   (* Sanity checks *)
-  assert (not (loans_in_value v));
-  assert (not (borrows_in_value v));
+  if end_borrows then (
+    assert (not (loans_in_value v));
+    assert (not (borrows_in_value v)))
+  else assert (not (outer_loans_in_value v));
   (* Return *)
   (ctx, v)
 

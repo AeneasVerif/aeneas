@@ -60,3 +60,21 @@ let loans_in_value (v : typed_value) : bool =
     obj#visit_typed_value () v;
     false
   with Found -> true
+
+(** Check if a value contains outer loans (i.e., loans which are not in borrwed
+    values. *)
+let outer_loans_in_value (v : typed_value) : bool =
+  let obj =
+    object
+      inherit [_] iter_typed_value
+
+      method! visit_loan_content _env _ = raise Found
+
+      method! visit_borrow_content _ _ = ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true

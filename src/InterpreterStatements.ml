@@ -51,8 +51,12 @@ let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
   let ctx, v = C.ctx_pop_dummy_var ctx in
   (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
   assert (not (bottom_in_value ctx.ended_regions v));
+  (* Move the value at destination to a dummy variable *)
+  let mv = read_place_unwrap config Write p ctx in
+  let ctx = C.ctx_push_dummy_var ctx mv in
   (* Update the destination *)
   let ctx = write_place_unwrap config Write p v ctx in
+  (* Return *)
   ctx
 
 (** Evaluates an assertion.
@@ -193,11 +197,41 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
   in
   (* Sanity check *)
   assert (not (bottom_in_value ctx.ended_regions ret_value));
-  (* We musn't drop the local variables (because otherwise we might end
-   * some borrows in the return value!) but must reintroduce them instead
-   * in the context as dummy variables. *)
+  (* List the local variables, but the return variable *)
+  let rec list_locals env =
+    match env with
+    | [] -> failwith "Inconsistent environment"
+    | C.Abs _ :: env -> list_locals env
+    | C.Var (None, _) :: env -> list_locals env
+    | C.Var (Some var, _) :: env ->
+        let locals = list_locals env in
+        if var.index <> ret_vid then var.index :: locals else locals
+    | C.Frame :: _ -> []
+  in
+  let locals = list_locals ctx.env in
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("ctx_pop_frame: locals in which to drop the outer loans: ["
+      ^ String.concat "," (List.map V.VarId.to_string locals)
+      ^ "]"));
+  (* Drop the outer *loans* in the local variables *)
+  let ctx =
+    let end_borrows = false in
+    List.fold_left
+      (fun ctx lid ->
+        drop_outer_borrows_loans_at_lplace config end_borrows
+          (mk_place_from_var_id lid) ctx)
+      ctx locals
+  in
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("ctx_pop_frame: after dropping outer loans in local variables:\n"
+     ^ eval_ctx_to_string ctx));
   (* Pop the frame - we remove the `Frame` delimiter, and reintroduce all
-   * the local variables as dummy variables in the caller frame *)
+   * the local variables (which may still contain borrow permissions - but
+   * no outer loans - as dummy variables in the caller frame *)
   let rec pop env =
     match env with
     | [] -> failwith "Inconsistent environment"
