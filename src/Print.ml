@@ -363,6 +363,7 @@ module Values = struct
     | ABorrow bc -> aborrow_content_to_string fmt bc
     | ALoan lc -> aloan_content_to_string fmt lc
     | ASymbolic s -> aproj_to_string fmt s
+    | AIgnored -> "_"
 
   and aloan_content_to_string (fmt : value_formatter) (lc : V.aloan_content) :
       string =

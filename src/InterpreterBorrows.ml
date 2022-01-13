@@ -978,7 +978,7 @@ and end_abstraction_loans (config : C.config) (abs_id : V.AbstractionId.id)
 
       method! visit_ASymbolic _ sproj =
         match sproj with
-        | V.AProjBorrows (_, _) -> ()
+        | V.AProjBorrows (_, _) | V.AEndedProjLoans | V.AEndedProjBorrows -> ()
         | V.AProjLoans sv -> raise (FoundSymbolicValue sv)
     end
   in
@@ -1064,6 +1064,7 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
         | V.AProjLoans _ -> failwith "Unexpected"
         | V.AProjBorrows (sv, proj_ty) ->
             raise (FoundAProjBorrows (sv, proj_ty))
+        | V.AEndedProjLoans | V.AEndedProjBorrows -> ()
     end
   in
   (* Lookup the abstraction *)

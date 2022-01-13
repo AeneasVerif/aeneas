@@ -593,14 +593,13 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 assert (child.V.ty = borrowed_aty)
             | V.AIgnoredSharedLoan child_av ->
                 assert (child_av.V.ty = aloan_get_expected_child_type aty))
-        | V.ASymbolic aproj, ty ->
+        | V.ASymbolic aproj, ty -> (
             let ty1 = Subst.erase_regions ty in
-            let ty2 =
-              match aproj with
-              | V.AProjLoans sv | V.AProjBorrows (sv, _) ->
-                  Subst.erase_regions sv.V.sv_ty
-            in
-            assert (ty1 = ty2)
+            match aproj with
+            | V.AProjLoans sv | V.AProjBorrows (sv, _) ->
+                let ty2 = Subst.erase_regions sv.V.sv_ty in
+                assert (ty1 = ty2)
+            | V.AEndedProjLoans | V.AEndedProjBorrows -> ())
         | _ -> failwith "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_avalue info atv

@@ -250,6 +250,7 @@ type avalue =
   | ALoan of aloan_content
   | ABorrow of aborrow_content
   | ASymbolic of aproj
+  | AIgnored  (** A value we don't own and thus ignore *)
 
 and adt_avalue = {
   variant_id : (VariantId.id option[@opaque]);

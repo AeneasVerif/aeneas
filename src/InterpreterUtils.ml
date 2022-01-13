@@ -226,6 +226,7 @@ let bottom_in_avalue (ended_regions : T.RegionId.set_t) (v : V.typed_avalue) :
         match ap with
         | V.AProjLoans _sv -> ()
         | V.AProjBorrows (_sv, _rty) -> ()
+        | V.AEndedProjLoans | V.AEndedProjBorrows -> ()
     end
   in
   (* We use exceptions *)
