@@ -29,9 +29,6 @@
   shared borrows?)
   necessary to know what to return.
 
-* invariant: if a symbolic value is present multiple times in the concrete environment,
-  it means it is primitively copyable
-  
 * invariant: if there is a `proj_loans rset1 (s:rty)` where `s` contains mutable
   borrows, then:
   * either there is exactly one `s` in the current context
@@ -90,3 +87,7 @@
   function arguments or putting them in the return value, in order to deduplicate
   those values.
   Completion: we expand those values only upon copying them (that's enough).
+
+* invariant: if a symbolic value is present multiple times in the concrete environment,
+  it means it is primitively copyable
+  
