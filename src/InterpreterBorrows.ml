@@ -429,19 +429,18 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     Otherwise, we give back the same symbolic value, to signify the fact that
     it was left unchanged.
   *)
-let give_back_symbolic_value (_config : C.config) (sv : V.symbolic_value)
+let give_back_symbolic_value (_config : C.config)
+    (proj_regions : T.RegionId.set_t) (proj_ty : T.rty) (sv : V.symbolic_value)
     (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
-  let subst local_regions =
+  let subst local_regions local_ty =
     let child_proj =
       if sv.sv_id = nsv.sv_id then None
       else
-        Some (mk_aproj_borrows_from_symbolic_value local_regions nsv sv.V.sv_ty)
+        Some (mk_aproj_borrows_from_symbolic_value local_regions nsv local_ty)
     in
     V.AEndedProjLoans child_proj
   in
-  (* TODO: we need to use the regions!! *)
-  raise Errors.Unimplemented;
-  substitute_aproj_loans_with_id sv subst ctx
+  update_intersecting_aproj_loans proj_regions proj_ty sv subst ctx
 
 (** Auxiliary function to end borrows. See [give_back].
 
@@ -1150,7 +1149,9 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       in
       (* Give back a fresh symbolic value *)
       let nsv = mk_fresh_symbolic_value proj_ty in
-      let ctx = give_back_symbolic_value config sv nsv ctx in
+      let ctx =
+        give_back_symbolic_value config abs.regions proj_ty sv nsv ctx
+      in
       (* Reexplore *)
       end_abstraction_borrows config chain abs_id ctx
 
@@ -1195,7 +1196,7 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
        * it is completely absent) *)
       (* Update the loans depending on the current symbolic value - it is
        * left unchanged *)
-      give_back_symbolic_value config sv sv ctx
+      give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx
   | Some (SharedProjs projs) ->
       (* We found projectors over shared values - split between the projectors
            * which belong to the current *)
@@ -1222,7 +1223,7 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         (* All the proj_borrows are owned: simply erase them *)
         let ctx = remove_intersecting_aproj_borrows_shared regions sv ctx in
         (* Remove the proj_loans - note that the symbolic value was left unchanged *)
-        give_back_symbolic_value config sv sv ctx
+        give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx
   | Some (NonSharedProj (abs_id', _proj_ty)) ->
       (* We found one in the context: if it comes from this abstraction, we can
        * end it directly, otherwise we need to end the abstraction where it
@@ -1235,7 +1236,7 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         in
         (* Replace the proj_loans - note that the loaned (symbolic) value
          * was left unchanged *)
-        give_back_symbolic_value config sv sv ctx
+        give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx
       else
         (* End the abstraction.
          * Don't retry ending the current proj_loans after ending the abstraction:

@@ -596,14 +596,6 @@ let proj_borrows_intersects_proj_loans
     projections_intersect l_sv.V.sv_ty l_regions b_ty b_regions
   else false
 
-let proj_loans_intersect (proj_loans : T.RegionId.Set.t * V.symbolic_value)
-    (proj_loans' : T.RegionId.Set.t * V.symbolic_value) : bool =
-  let regions, sv = proj_loans in
-  let regions', sv' = proj_loans' in
-  if same_symbolic_id sv sv' then
-    projections_intersect sv.V.sv_ty regions sv'.V.sv_ty regions'
-  else false
-
 (** Result of looking up aproj_borrows which intersect a given aproj_loans in
     the context.
 
@@ -825,14 +817,33 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
   update_intersecting_aproj_borrows can_update_shared update_shared
     update_non_shared regions sv ctx
 
-(** Substitute the proj_loans based an a symbolic id *)
-let substitute_aproj_loans_with_id (sv : V.symbolic_value)
-    (subst : T.RegionId.Set.t -> V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
+(** Updates the proj_loans intersecting some projection.
+
+    Note that in practice, when we update a proj_loans, we always update exactly
+    one aproj_loans, in a specific abstraction.
+    
+    We make this function more general, by checking projection intersections
+    (rather than simply checking the abstraction and symbolic value ids)
+    for sanity checking: we check whether we need to update a loan based
+    on intersection criteria, but also check at the same time that we update
+    *exactly one* projector.
+    
+    Note that the new value [nv] with which to replace the proj_loans could
+    be untyped: we request a typed value for sanity checking.
+    
+    [subst]: takes as parameters the projection regions and the projection type
+    where we perform the substitution.
+ *)
+let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
+    (proj_ty : T.rty) (sv : V.symbolic_value)
+    (subst : T.RegionId.Set.t -> T.rty -> V.aproj) (ctx : C.eval_ctx) :
+    C.eval_ctx =
   (* Small helpers for sanity checks *)
   let updated = ref false in
-  let update regions : V.aproj =
+  let update local_regions local_proj_ty : V.aproj =
+    assert (not !updated);
     updated := true;
-    subst regions
+    subst local_regions local_proj_ty
   in
   (* The visitor *)
   let obj =
@@ -848,7 +859,13 @@ let substitute_aproj_loans_with_id (sv : V.symbolic_value)
             super#visit_aproj abs sproj
         | AProjLoans sv' ->
             let abs = Option.get abs in
-            if same_symbolic_id sv sv' then update abs.regions
+            if same_symbolic_id sv sv' then (
+              assert (sv.sv_ty = sv'.sv_ty);
+              if
+                projections_intersect proj_ty proj_regions sv'.V.sv_ty
+                  abs.regions
+              then update abs.regions sv'.V.sv_ty
+              else super#visit_aproj (Some abs) sproj)
             else super#visit_aproj (Some abs) sproj
     end
   in
@@ -858,3 +875,47 @@ let substitute_aproj_loans_with_id (sv : V.symbolic_value)
   assert !updated;
   (* Return *)
   ctx
+
+(*
+let proj_loans_intersect (proj_loans : T.RegionId.Set.t * V.symbolic_value)
+    (proj_loans' : T.RegionId.Set.t * V.symbolic_value) : bool =
+  let regions, sv = proj_loans in
+  let regions', sv' = proj_loans' in
+  if same_symbolic_id sv sv' then
+    projections_intersect sv.V.sv_ty regions sv'.V.sv_ty regions'
+  else false
+
+*)
+(*(** Substitute the proj_loans based an a symbolic id *)
+  let substitute_aproj_loans_with_id (sv : V.symbolic_value)
+      (subst : T.RegionId.Set.t -> V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
+    (* Small helpers for sanity checks *)
+    let updated = ref false in
+    let update regions : V.aproj =
+      updated := true;
+      subst regions
+    in
+    (* The visitor *)
+    let obj =
+      object
+        inherit [_] C.map_eval_ctx as super
+
+        method! visit_abs _ abs = super#visit_abs (Some abs) abs
+
+        method! visit_aproj abs sproj =
+          match sproj with
+          | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows
+          | AIgnoredProjBorrows ->
+              super#visit_aproj abs sproj
+          | AProjLoans sv' ->
+              let abs = Option.get abs in
+              if same_symbolic_id sv sv' then update abs.regions
+              else super#visit_aproj (Some abs) sproj
+      end
+    in
+    (* Apply *)
+    let ctx = obj#visit_eval_ctx None ctx in
+    (* Check that we updated the context at least once *)
+    assert !updated;
+    (* Return *)
+  ctx*)
