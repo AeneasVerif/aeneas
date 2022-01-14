@@ -454,8 +454,9 @@ let give_back_symbolic_value (_config : C.config) (sv : V.symbolic_value)
     end abstraction when ending this abstraction. When doing this, we need
     to convert the [avalue] to a [value] by introducing the proper symbolic values.
  *)
-let give_back_avalue (_config : C.config) (bid : V.BorrowId.id)
-    (nv : V.typed_avalue) (ctx : C.eval_ctx) : C.eval_ctx =
+let give_back_avalue_to_same_abstraction (_config : C.config)
+    (bid : V.BorrowId.id) (nv : V.typed_avalue) (ctx : C.eval_ctx) : C.eval_ctx
+    =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -490,8 +491,8 @@ let give_back_avalue (_config : C.config) (bid : V.BorrowId.id)
               let _, expected_ty, _ = ty_get_ref ty in
               if nv.V.ty <> expected_ty then (
                 log#serror
-                  ("give_back_avalue: improper type:\n- expected: "
-                 ^ rty_to_string ctx ty ^ "\n- received: "
+                  ("give_back_avalue_to_same_abstraction: improper type:\n\
+                    - expected: " ^ rty_to_string ctx ty ^ "\n- received: "
                  ^ rty_to_string ctx nv.V.ty);
                 failwith "Value given back doesn't have the proper type");
               (* This is the loan we are looking for: apply the projection to
@@ -712,7 +713,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
-      give_back_avalue config l av ctx
+      give_back_avalue_to_same_abstraction config l av ctx
   | Abstract (V.ASharedBorrow l') ->
       (* Sanity check *)
       assert (l' = l);
@@ -745,13 +746,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     a reference whose region has already ended).
  *)
 let convert_avalue_to_value (av : V.typed_avalue) : V.typed_value =
-  (* Convert the type *)
-  let ty = Subst.erase_regions av.V.ty in
-  (* Generate the fresh a symbolic value *)
-  let sv_id = C.fresh_symbolic_value_id () in
-  let svalue : V.symbolic_value = { V.sv_id; sv_ty = av.V.ty } in
-  let value = V.Symbolic svalue in
-  { V.value; V.ty }
+  mk_fresh_symbolic_typed_value av.V.sv_ty
 
 (** End a borrow identified by its borrow id in a context
     
@@ -1138,7 +1133,17 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
       (* Reexplore *)
       end_abstraction_borrows config abs_id ctx
   (* There are symbolic borrows: end them, then reexplore *)
-  | FoundAProjBorrows (_sv, _proj_ty) -> raise Errors.Unimplemented
+  | FoundAProjBorrows (sv, proj_ty) ->
+      (* Replace the proj_borrows - there should be exactly one *)
+      let ctx =
+        update_intersecting_aproj_borrows_non_shared regions sv
+          V.AEndedProjBorrows ctx
+      in
+      (* Give back a fresh symbolic value *)
+      let nsv = mk_fresh_symbolic_typed_value proj_ty in
+      let ctx = give_back_symbolic_value config sv nsv ctx in
+      (* Reexplore *)
+      end_abstraction_borrows config abs_id ctx
 
 (** Remove an abstraction from the context, as well as all its references *)
 and end_abstraction_remove_from_context (_config : C.config)

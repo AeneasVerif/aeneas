@@ -800,53 +800,6 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
   update_intersecting_aproj_borrows can_update_shared update_shared
     update_non_shared regions sv ctx
 
-(*
-(** Updates the proj_loans intersecting some projection.
-
-    Note that in practice, when we update a proj_loans, we always update exactly
-    one aproj_loans, in a specific abstraction.
-    
-    We make this function more general, by checking projection intersections
-    (rather than simply checking the abstraction and symbolic value ids)
-    for sanity checking: we check whether we need to update a loan based
-    on intersection criteria, but also check at the same time that we update
-    *exactly one* projector.
- *)
-let update_intersecting_aproj_loans (regions : T.RegionId.Set.t)
-    (sv : V.symbolic_value) (nv : V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
-  (* Small helpers for sanity checks *)
-  let updated = ref false in
-  let update () : V.aproj =
-    assert (not !updated);
-    updated := true;
-    nv
-  in
-  (* The visitor *)
-  let obj =
-    object
-      inherit [_] C.map_eval_ctx as super
-
-      method! visit_abs _ abs = super#visit_abs (Some abs) abs
-
-      method! visit_aproj abs sproj =
-        match sproj with
-        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows ->
-            super#visit_aproj abs sproj
-        | AProjLoans sv' ->
-            let abs = Option.get abs in
-            if proj_loans_intersect (regions, sv) (abs.regions, sv') then
-              update ()
-            else super#visit_aproj (Some abs) sproj
-    end
-  in
-  (* Apply *)
-  let ctx = obj#visit_eval_ctx None ctx in
-  (* Check that we updated the context at least once *)
-  assert !updated;
-  (* Return *)
-  ctx
- *)
-
 (** Substitute the proj_loans based an a symbolic id *)
 let substitute_aproj_loans_with_id (sv : V.symbolic_value)
     (subst : T.RegionId.Set.t -> V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
