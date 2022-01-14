@@ -36,7 +36,6 @@
 * remove the rule which says that we can end a borrow under an abstraction if
   the corresponding loan is in the same abstraction.
   Actually: update the rule, rather.
-* Reduce projectors to `_` (ignored) when there are no region intersections
 
 * update end_borrow_get_borrow to keep track of the ignored borrows/loans as
   outer borrows, and track the ids of the ignored shared loans?
@@ -90,3 +89,5 @@
   * `apply_proj_borrows_on_input_values` : ... -> value -> rty -> avalue
   * `apply_proj_borrows_on_given_back_values` : ... -> value -> avalue -> avalue
   Actually: didn't do it: bad idea.
+
+* Reduce projectors to `_` (ignored) when there are no region intersections
