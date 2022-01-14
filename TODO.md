@@ -1,18 +1,15 @@
 # TODO
 
-2. add a switch to allow general symbolic values (containing references, etc.)
-  or not.
-
-3. add a check in function inputs: ok to take as parameters symbolic values with
+1. add a check in function inputs: ok to take as parameters symbolic values with
   borrow parameters *if* they come from the "input abstractions".
   In order to do this, add a symbolic value kind (would make things easier than
   adding ad-hoc lookups...): `FunRet`, `FunGivenBack`, `SynthInput`, `SynthGivenBack`
   Rk.: pay attention: we can't give borrows of borrows to functions, but borrows
   are ok.
 
-5. add `mvalue` (meta values) stored in abstractions when ending loans
+2. add `mvalue` (meta values) stored in abstractions when ending loans
 
-7. fix the static regions (with projectors)
+3. fix the static regions (with projectors)
 
 * write an interesting example to study with Jonathan
 
@@ -35,11 +32,6 @@
   However, one `proj_borrows s` may intersect several `proj_loans` (in which
   case we will need to split the value given back - for now: disallow this
   behaviour?).
-
-* split `apply_proj_borrows` into two:
-  * `apply_proj_borrows_on_input_values` : ... -> value -> rty -> avalue
-  * `apply_proj_borrows_on_given_back_values` : ... -> value -> avalue -> avalue
-  TODO: actually not sure
 
 * remove the rule which says that we can end a borrow under an abstraction if
   the corresponding loan is in the same abstraction.
@@ -90,3 +82,11 @@
   it means it is primitively copyable
 
 * update the printing of mut_borrows and mut_loans ([s@0 <: ...]) and (s@0)
+
+* add a switch to allow general symbolic values (containing references, etc.)
+  or not.
+
+* split `apply_proj_borrows` into two:
+  * `apply_proj_borrows_on_input_values` : ... -> value -> rty -> avalue
+  * `apply_proj_borrows_on_given_back_values` : ... -> value -> avalue -> avalue
+  Actually: didn't do it: bad idea.
