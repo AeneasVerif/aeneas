@@ -7,8 +7,6 @@
   function arguments or putting them in the return value, in order to deduplicate
   those values.
 
-3. Detect loops in end_borrow/end_abstraction
-
 4. add a check in function inputs: ok to take as parameters symbolic values with
   borrow parameters *if* they come from the "input abstractions".
   In order to do this, add a symbolic value kind (would make things easier than
@@ -82,3 +80,4 @@
 * Check what happens when symbolic borrows are not expanded (when looking for
   borrows/abstractions to end).
 
+* Detect loops in end_borrow/end_abstraction

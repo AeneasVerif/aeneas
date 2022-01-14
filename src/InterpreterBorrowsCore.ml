@@ -52,6 +52,31 @@ type loan_or_borrow_content =
   | BorrowContent of V.borrow_content
 [@@deriving show]
 
+type borrow_or_abs_id =
+  | BorrowId of V.BorrowId.id
+  | AbsId of V.AbstractionId.id
+
+type borrow_or_abs_ids = borrow_or_abs_id list
+
+let borrow_or_abs_id_to_string (id : borrow_or_abs_id) : string =
+  match id with
+  | AbsId id -> "abs@" ^ V.AbstractionId.to_string id
+  | BorrowId id -> "l@" ^ V.BorrowId.to_string id
+
+let borrow_or_abs_ids_chain_to_string (ids : borrow_or_abs_ids) : string =
+  let ids = List.rev ids in
+  let ids = List.map borrow_or_abs_id_to_string ids in
+  String.concat " -> " ids
+
+(** Add a borrow or abs id to a chain of ids, while checking that we don't loop *)
+let add_borrow_or_abs_id_to_chain (msg : string) (id : borrow_or_abs_id)
+    (ids : borrow_or_abs_ids) : borrow_or_abs_ids =
+  if List.mem id ids then
+    failwith
+      (msg ^ "detected a loop in the chain of ids: "
+      ^ borrow_or_abs_ids_chain_to_string (id :: ids))
+  else id :: ids
+
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that
     the regions which are already ended inside the abstraction don't
