@@ -469,7 +469,8 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
             activate_inactivated_mut_borrow config bid ctx
         | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching config pe sp ctx
+            expand_symbolic_value_no_branching_from_projection_elem config pe sp
+              ctx
         | FailBottom (_, _, _) ->
             (* We can't expand [Bottom] values while reading them *)
             failwith "Found [Bottom] while reading a place"
@@ -496,7 +497,8 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
             activate_inactivated_mut_borrow config bid ctx
         | FailSymbolic (pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching config pe sp ctx
+            expand_symbolic_value_no_branching_from_projection_elem config pe sp
+              ctx
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
             expand_bottom_value_from_projection config access p remaining_pes pe

@@ -1,13 +1,13 @@
 # TODO
 
-1. add a switch to allow general symbolic values (containing references, etc.)
-  or not.
-
-2. expand symbolic values which are primitively copyable upon using them as
+1. expand symbolic values which are primitively copyable upon using them as
   function arguments or putting them in the return value, in order to deduplicate
   those values.
 
-4. add a check in function inputs: ok to take as parameters symbolic values with
+2. add a switch to allow general symbolic values (containing references, etc.)
+  or not.
+
+3. add a check in function inputs: ok to take as parameters symbolic values with
   borrow parameters *if* they come from the "input abstractions".
   In order to do this, add a symbolic value kind (would make things easier than
   adding ad-hoc lookups...): `FunRet`, `FunGivenBack`, `SynthInput`, `SynthGivenBack`

@@ -621,7 +621,16 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
   in
   visitor#visit_eval_ctx (None : V.abs option) ctx
 
+(** TODO:
+    
+    - a symbolic value can't be both in proj_borrows and in the concrete env
+      (this is why we preemptively expand copyable symbolic values)
+
+ *)
+let check_symbolic_values (ctx : C.eval_ctx) : unit = raise Errors.Unimplemented
+
 let check_invariants (ctx : C.eval_ctx) : unit =
   check_loans_borrows_relation_invariant ctx;
   check_borrowed_values_invariant ctx;
-  check_typing_invariant ctx
+  check_typing_invariant ctx;
+  check_symbolic_values ctx

@@ -59,8 +59,16 @@ let () =
       (* Print the module *)
       main_log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));
 
+      (* Some options for the execution *)
+      let config =
+        {
+          C.check_invariants = true;
+          greedy_expand_symbolics_with_borrows = false;
+        }
+      in
+
       (* Test the unit functions with the concrete interpreter *)
-      I.Test.test_unit_functions m.types m.functions;
+      I.Test.test_unit_functions config m;
 
       (* Evaluate the symbolic interpreter on the functions *)
-      I.Test.test_functions_symbolic m.types m.functions
+      I.Test.test_functions_symbolic config m

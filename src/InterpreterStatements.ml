@@ -598,6 +598,9 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
       ("\n**About to evaluate statement**: [\n"
       ^ statement_to_string_with_tab ctx st
       ^ "\n]\n\n**Context**:\n" ^ eval_ctx_to_string ctx ^ "\n\n"));
+  (* Expand the symbolic values if necessary - we need to do that before
+   * checking the invariants *)
+  let ctx = greedy_expand_symbolic_values config ctx in
   (* Sanity check *)
   if config.C.check_invariants then Inv.check_invariants ctx;
   (* Evaluate *)
@@ -888,6 +891,8 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   in
   (* Evaluate the input operands *)
   let ctx, args = eval_operands config ctx args in
+  (* TODO: expand the primitively copyable symbolic values *)
+  raise Errors.Unimplemented;
   let args_with_rtypes = List.combine args inst_sg.A.inputs in
   (* Check the type of the input arguments *)
   assert (
@@ -1021,6 +1026,9 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
     match res with
     | Error err -> Error err
     | Ok (ctx, res) -> (
+        (* Expand the symbolic values if necessary - we need to do that before
+         * checking the invariants *)
+        let ctx = greedy_expand_symbolic_values config ctx in
         (* Sanity check *)
         if config.C.check_invariants then Inv.check_invariants ctx;
         match res with

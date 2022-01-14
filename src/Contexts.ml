@@ -3,6 +3,7 @@ open Values
 open CfimAst
 module V = Values
 open ValuesUtils
+module M = Modules
 
 (** Some global counters.
  *
@@ -104,10 +105,42 @@ type env = env_elem list
 
 type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 
-type config = { mode : interpreter_mode; check_invariants : bool }
+type config = {
+  mode : interpreter_mode;
+      (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
+  check_invariants : bool;
+      (** Check that invariants are maintained whenever we execute a statement *)
+  greedy_expand_symbolics_with_borrows : bool;
+      (** Expand all symbolic values containing borrows upon introduction - allows
+          to use restrict ourselves to a simpler model for the projectors over
+          symbolic values.
+          The interpreter fails if doing this requires to do a branching (because
+          we need to expand an enumeration with strictly more than one variant)
+          or if we need to expand a recursive type (because this leads to looping).
+       *)
+}
 [@@deriving show]
 
-type type_context = { type_defs : type_def list } [@@deriving show]
+type partial_config = {
+  check_invariants : bool;
+  greedy_expand_symbolics_with_borrows : bool;
+}
+(** See [config] *)
+
+let config_of_partial (mode : interpreter_mode) (config : partial_config) :
+    config =
+  {
+    mode;
+    check_invariants = config.check_invariants;
+    greedy_expand_symbolics_with_borrows =
+      config.greedy_expand_symbolics_with_borrows;
+  }
+
+type type_context = {
+  type_defs_groups : M.types_decl_group TypeDefId.map_t;
+  type_defs : type_def list;
+}
+[@@deriving show]
 
 type eval_ctx = {
   type_context : type_context;
@@ -137,9 +170,11 @@ let ctx_lookup_binder (ctx : eval_ctx) (vid : VarId.id) : binder =
   in
   lookup ctx.env
 
+(** TODO: make this more efficient with maps *)
 let ctx_lookup_type_def (ctx : eval_ctx) (tid : TypeDefId.id) : type_def =
   TypeDefId.nth ctx.type_context.type_defs tid
 
+(** TODO: make this more efficient with maps *)
 let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
   FunDefId.nth ctx.fun_context fid
 
@@ -268,6 +303,10 @@ let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
 
 let ctx_lookup_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) : V.abs =
   env_lookup_abs ctx.env abs_id
+
+let ctx_type_def_is_rec (ctx : eval_ctx) (id : TypeDefId.id) : bool =
+  let decl_group = TypeDefId.Map.find id ctx.type_context.type_defs_groups in
+  match decl_group with M.Rec _ -> true | M.NonRec _ -> false
 
 (** Visitor to iterate over the values in the *current* frame *)
 class ['self] iter_frame =

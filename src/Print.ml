@@ -10,6 +10,8 @@ module M = Modules
 let option_to_string (to_string : 'a -> string) (x : 'a option) : string =
   match x with Some x -> "Some (" ^ to_string x ^ ")" | None -> "None"
 
+let name_to_string (name : name) : string = String.concat "::" name
+
 (** Pretty-printing for types *)
 module Types = struct
   let type_var_to_string (tv : T.type_var) : string = tv.name
@@ -114,8 +116,6 @@ module Types = struct
     v.variant_name ^ "("
     ^ String.concat ", " (List.map (field_to_string fmt) v.fields)
     ^ ")"
-
-  let name_to_string (name : name) : string = String.concat "::" name
 
   let type_def_to_string (type_def_id_to_string : T.TypeDefId.id -> string)
       (def : T.type_def) : string =
@@ -492,7 +492,7 @@ module Contexts = struct
     | Struct _ -> failwith "Unreachable"
     | Enum variants ->
         let variant = T.VariantId.nth variants variant_id in
-        PT.name_to_string def.name ^ "::" ^ variant.variant_name
+        name_to_string def.name ^ "::" ^ variant.variant_name
 
   let type_ctx_to_adt_field_names_fun (ctx : T.type_def list) :
       T.TypeDefId.id -> T.VariantId.id option -> string list option =
@@ -514,7 +514,7 @@ module Contexts = struct
     in
     let type_def_id_to_string def_id =
       let def = T.TypeDefId.nth ctx.type_context.type_defs def_id in
-      PT.name_to_string def.name
+      name_to_string def.name
     in
     let adt_variant_to_string =
       type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_defs
@@ -633,7 +633,7 @@ module CfimAst = struct
     in
     let fun_def_id_to_string def_id =
       let def = A.FunDefId.nth ctx.fun_context def_id in
-      PT.name_to_string def.name
+      name_to_string def.name
     in
     {
       rvar_to_string = ctx_fmt.PV.rvar_to_string;
@@ -851,7 +851,7 @@ module CfimAst = struct
     let sg = def.signature in
 
     (* Function name *)
-    let name = PT.name_to_string def.A.name in
+    let name = name_to_string def.A.name in
 
     (* Region/type parameters *)
     let regions = sg.region_params in
@@ -911,7 +911,7 @@ module Module = struct
       string =
     let type_def_id_to_string (id : T.TypeDefId.id) : string =
       let def = T.TypeDefId.nth type_context id in
-      PT.name_to_string def.name
+      name_to_string def.name
     in
     PT.type_def_to_string type_def_id_to_string def
 
@@ -933,11 +933,11 @@ module Module = struct
     in
     let type_def_id_to_string def_id =
       let def = T.TypeDefId.nth type_context def_id in
-      PT.name_to_string def.name
+      name_to_string def.name
     in
     let fun_def_id_to_string def_id =
       let def = A.FunDefId.nth fun_context def_id in
-      PT.name_to_string def.name
+      name_to_string def.name
     in
     let var_id_to_string vid =
       let var = V.VarId.nth def.locals vid in

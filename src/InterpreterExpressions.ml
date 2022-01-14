@@ -114,6 +114,8 @@ let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
     | Expressions.Copy p ->
         (* Access the value *)
         let access = Read in
+        (* TODO: expand the value if it is a symbolic value *)
+        raise Unimplemented;
         prepare_rplace config access p ctx
     | Expressions.Move p ->
         (* Access the value *)
@@ -139,6 +141,8 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
+      (* TODO: expand the value if it is a symbolic value *)
+      raise Unimplemented;
       let ctx, v = prepare_rplace config access p ctx in
       (* Copy the value *)
       assert (not (bottom_in_value ctx.ended_regions v));

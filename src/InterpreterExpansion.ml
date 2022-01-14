@@ -406,12 +406,9 @@ let expand_symbolic_value_borrow (config : C.config)
 
 (** Expand a symbolic value which is not an enumeration with several variants
     (i.e., in a situation where it doesn't lead to branching).
-
-    This function is used when exploring paths.
  *)
 let expand_symbolic_value_no_branching (config : C.config)
-    (pe : E.projection_elem) (sp : V.symbolic_value) (ctx : C.eval_ctx) :
-    C.eval_ctx =
+    (sp : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Remember the initial context for printing purposes *)
   let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
@@ -419,11 +416,9 @@ let expand_symbolic_value_no_branching (config : C.config)
   let original_sv = sp in
   let rty = original_sv.V.sv_ty in
   let ctx =
-    match (pe, rty) with
+    match rty with
     (* "Regular" ADTs *)
-    | ( Field (ProjAdt (def_id, _opt_variant_id), _),
-        T.Adt (T.AdtId def_id', regions, types) ) -> (
-        assert (def_id = def_id');
+    | T.Adt (T.AdtId def_id, regions, types) -> (
         (* Compute the expanded value - there should be exactly one because we
          * don't allow to expand enumerations with strictly more than one variant *)
         let expand_enumerations = false in
@@ -440,10 +435,12 @@ let expand_symbolic_value_no_branching (config : C.config)
             S.synthesize_symbolic_expansion_no_branching original_sv see;
             (* Return *)
             ctx
-        | _ -> failwith "Unexpected")
+        | _ ->
+            failwith
+              "expand_symbolic_value_no_branching: the expansion lead to \
+               branching")
     (* Tuples *)
-    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
-        assert (arity = List.length tys);
+    | T.Adt (T.Tuple, [], tys) ->
         (* Generate the field values *)
         let see = compute_expanded_symbolic_tuple_value tys in
         (* Apply in the context *)
@@ -455,7 +452,7 @@ let expand_symbolic_value_no_branching (config : C.config)
         (* Return *)
         ctx
     (* Boxes *)
-    | DerefBox, T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
+    | T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
         let see = compute_expanded_symbolic_box_value boxed_ty in
         (* Apply in the context *)
         let ctx =
@@ -466,11 +463,11 @@ let expand_symbolic_value_no_branching (config : C.config)
         (* Return *)
         ctx
     (* Borrows *)
-    | Deref, T.Ref (region, ref_ty, rkind) ->
+    | T.Ref (region, ref_ty, rkind) ->
         expand_symbolic_value_borrow config original_sv region ref_ty rkind ctx
     | _ ->
         failwith
-          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
+          ("expand_symbolic_value_no_branching: unreachable: " ^ T.show_rty rty)
   in
   (* Debugging *)
   (* Debug *)
@@ -484,6 +481,36 @@ let expand_symbolic_value_no_branching (config : C.config)
   assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
   (* Return *)
   ctx
+
+(** Expand a symbolic value which is not an enumeration with several variants
+    (i.e., in a situation where it doesn't lead to branching).
+
+    This function is used when exploring paths. It simply performs a few
+    sanity checks before calling [expand_symbolic_value_no_branching].
+ *)
+let expand_symbolic_value_no_branching_from_projection_elem (config : C.config)
+    (pe : E.projection_elem) (sp : V.symbolic_value) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  (* Sanity checks *)
+  let rty = sp.V.sv_ty in
+  let _ =
+    match (pe, rty) with
+    (* "Regular" ADTs *)
+    | Field (ProjAdt (def_id, _), _), T.Adt (T.AdtId def_id', _, _) ->
+        assert (def_id = def_id')
+    (* Tuples *)
+    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
+        assert (arity = List.length tys)
+    (* Boxes *)
+    | DerefBox, T.Adt (T.Assumed T.Box, [], [ _ ]) -> ()
+    (* Borrows *)
+    | Deref, T.Ref (_, _, _) -> ()
+    | _ ->
+        failwith
+          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
+  in
+  (* Perform the expansion *)
+  expand_symbolic_value_no_branching config sp ctx
 
 (** Expand a symbolic enumeration value.
 
@@ -519,3 +546,80 @@ let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_value)
       in
       List.map apply seel
   | _ -> failwith "Unexpected"
+
+(** Expand all the symbolic values which contain borrows.
+    Allows us to restrict ourselves to a simpler model for the projectors over
+    symbolic values.
+    
+    Fails if doing this requires to do a branching (because we need to expand
+    an enumeration with strictly more than one variant, a slice, etc.) or if
+    we need to expand a recursive type (because this leads to looping).
+ *)
+let greedy_expand_symbolics_with_borrows (config : C.config) (ctx : C.eval_ctx)
+    : C.eval_ctx =
+  (* The visitor object, to look for symbolic values in the concrete environment *)
+  let obj =
+    object
+      inherit [_] C.iter_eval_ctx
+
+      method! visit_Symbolic _ sv =
+        if ty_has_regions (Subst.erase_regions sv.V.sv_ty) then
+          raise (FoundSymbolicValue sv)
+        else ()
+
+      method! visit_abs _ _ = ()
+      (** Don't enter abstractions *)
+    end
+  in
+
+  let rec expand (ctx : C.eval_ctx) : C.eval_ctx =
+    try
+      obj#visit_eval_ctx () ctx;
+      ctx
+    with FoundSymbolicValue sv ->
+      (* Expand and recheck the environment *)
+      let ctx =
+        match sv.V.sv_ty with
+        | T.Adt (AdtId def_id, _, _) ->
+            (* [expand_symbolic_value_no_branching] checks if there are branchings,
+             * but we prefer to also check it here - this leads to cleaner messages
+             * and debugging *)
+            let def = C.ctx_lookup_type_def ctx def_id in
+            (match def.kind with
+            | T.Struct _ | T.Enum ([] | [ _ ]) -> ()
+            | T.Enum (_ :: _) ->
+                failwith
+                  ("Attempted to greedily expand a symbolic enumeration with > \
+                    1 variants (option [greedy_expand_symbolics_with_borrows] \
+                    of [config]): "
+                  ^ Print.name_to_string def.name));
+            (* Also, we need to check if the definition is recursive *)
+            if C.ctx_type_def_is_rec ctx def_id then
+              failwith
+                ("Attempted to greedily expand a recursive definition (option \
+                  [greedy_expand_symbolics_with_borrows] of [config]): "
+                ^ Print.name_to_string def.name)
+            else expand_symbolic_value_no_branching config sv ctx
+        | T.Adt ((Tuple | Assumed Box), _, _) | T.Ref (_, _, _) ->
+            (* Ok *)
+            expand_symbolic_value_no_branching config sv ctx
+        | T.Array _ -> raise Errors.Unimplemented
+        | T.Slice _ -> failwith "Can't expand symbolic slices"
+        | T.TypeVar _ | Bool | Char | Never | Integer _ | Str ->
+            failwith "Unreachable"
+      in
+      expand ctx
+  in
+  expand ctx
+
+(** If this mode is activated through the [config], greedily expand the symbolic
+    values which need to be expanded. See [config] for more information.
+ *)
+let greedy_expand_symbolic_values (config : C.config) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  let ctx =
+    if config.greedy_expand_symbolics_with_borrows then
+      greedy_expand_symbolics_with_borrows config ctx
+    else ctx
+  in
+  ctx

@@ -12,6 +12,8 @@ module type Id = sig
 
   type set_t
 
+  type +!'a map_t
+
   val zero : id
 
   val generator_zero : generator
@@ -55,13 +57,18 @@ module type Id = sig
 
   val show_set_t : set_t -> string
 
+  val pp_map_t :
+    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a map_t -> unit
+
+  val show_map_t : ('a -> string) -> 'a map_t -> string
+
   module Ord : Map.OrderedType with type t = id
 
   module Set : Set.S with type elt = id with type t = set_t
 
   val set_to_string : Set.t -> string
 
-  module Map : Map.S with type key = id
+  module Map : Map.S with type key = id with type 'a t = 'a map_t
 
   (* TODO: map_to_string *)
 
@@ -134,12 +141,37 @@ module IdGen () : Id = struct
 
   type set_t = Set.t
 
+  type +!'a map_t = 'a Map.t
+
   let show_set_t s =
     let ids = Set.fold (fun id s -> to_string id :: s) s [] in
     let ids = List.rev ids in
     "{" ^ String.concat "," ids ^ "}"
 
-  let pp_set_t fmt s = Format.pp_print_string fmt (show_set_t s)
+  let pp_set_t fmt s =
+    let pp_string = Format.pp_print_string fmt in
+    pp_string "{";
+    Set.iter (fun id -> pp_string (to_string id ^ ",")) s;
+    pp_string "}"
+
+  let show_map_t show_a s =
+    let ids =
+      Map.fold (fun id x s -> (to_string id ^ " -> " ^ show_a x) :: s) s []
+    in
+    let ids = List.rev ids in
+    "{" ^ String.concat "," ids ^ "}"
+
+  let pp_map_t (pp_a : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
+      (m : 'a map_t) : unit =
+    let pp_string = Format.pp_print_string fmt in
+    pp_string "{";
+    Map.iter
+      (fun id x ->
+        pp_string (to_string id ^ " -> ");
+        pp_a fmt x;
+        pp_string ",")
+      m;
+    pp_string "}"
 
   let set_to_string ids =
     let ids = Set.fold (fun id ids -> to_string id :: ids) ids [] in

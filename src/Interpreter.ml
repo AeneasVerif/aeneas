@@ -1,6 +1,7 @@
 module L = Logging
 module T = Types
 module A = CfimAst
+module M = Modules
 open Utils
 open InterpreterUtils
 open InterpreterExpressions
@@ -25,12 +26,16 @@ open InterpreterStatements
 let log = L.interpreter_log
 
 module Test = struct
-  let initialize_context (type_context : C.type_context)
-      (fun_defs : A.fun_def list) (type_vars : T.type_var list) : C.eval_ctx =
+  let initialize_context (m : M.cfim_module) (type_vars : T.type_var list) :
+      C.eval_ctx =
+    let type_defs_groups, _funs_defs_groups =
+      M.split_declarations_to_group_maps m.declarations
+    in
+    let type_context = { C.type_defs_groups; type_defs = m.types } in
     C.reset_global_counters ();
     {
       C.type_context;
-      C.fun_context = fun_defs;
+      C.fun_context = m.functions;
       C.type_vars;
       C.env = [];
       C.ended_regions = T.RegionId.Set.empty;
@@ -44,8 +49,8 @@ module Test = struct
       "Dummy" abstractions are introduced for the regions present in the
       function signature.
    *)
-  let initialize_symbolic_context_for_fun (type_context : C.type_context)
-      (fun_defs : A.fun_def list) (fdef : A.fun_def) : C.eval_ctx =
+  let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def)
+      : C.eval_ctx =
     (* The abstractions are not initialized the same way as for function
      * calls: they contain *loan* projectors, because they "provide" us
      * with the input values (which behave as if they had been returned
@@ -59,7 +64,7 @@ module Test = struct
      * *)
     let sg = fdef.signature in
     (* Create the context *)
-    let ctx = initialize_context type_context fun_defs sg.type_params in
+    let ctx = initialize_context m sg.type_params in
     (* Instantiate the signature *)
     let type_params =
       List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params
@@ -108,14 +113,14 @@ module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
       environment.
    *)
-  let test_unit_function (type_context : C.type_context)
-      (fun_defs : A.fun_def list) (fid : A.FunDefId.id) : unit eval_result =
+  let test_unit_function (config : C.partial_config) (m : M.cfim_module)
+      (fid : A.FunDefId.id) : unit eval_result =
     (* Retrieve the function declaration *)
-    let fdef = A.FunDefId.nth fun_defs fid in
+    let fdef = A.FunDefId.nth m.functions fid in
 
     (* Debug *)
     log#ldebug
-      (lazy ("test_unit_function: " ^ Print.Types.name_to_string fdef.A.name));
+      (lazy ("test_unit_function: " ^ Print.name_to_string fdef.A.name));
 
     (* Sanity check - *)
     assert (List.length fdef.A.signature.region_params = 0);
@@ -123,13 +128,13 @@ module Test = struct
     assert (fdef.A.arg_count = 0);
 
     (* Create the evaluation context *)
-    let ctx = initialize_context type_context fun_defs [] in
+    let ctx = initialize_context m [] in
 
     (* Insert the (uninitialized) local variables *)
     let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
 
     (* Evaluate the function *)
-    let config = { C.mode = C.ConcreteMode; C.check_invariants = true } in
+    let config = C.config_of_partial C.ConcreteMode config in
     match eval_function_body config ctx fdef.A.body with
     | [ Ok _ ] -> Ok ()
     | [ Error err ] -> Error err
@@ -146,34 +151,31 @@ module Test = struct
     && List.length def.A.signature.inputs = 0
 
   (** Test all the unit functions in a list of function definitions *)
-  let test_unit_functions (type_defs : T.type_def list)
-      (fun_defs : A.fun_def list) : unit =
-    let unit_funs = List.filter fun_def_is_unit fun_defs in
+  let test_unit_functions (config : C.partial_config) (m : M.cfim_module) : unit
+      =
+    let unit_funs = List.filter fun_def_is_unit m.functions in
     let test_unit_fun (def : A.fun_def) : unit =
-      let type_ctx = { C.type_defs } in
-      match test_unit_function type_ctx fun_defs def.A.def_id with
+      match test_unit_function config m def.A.def_id with
       | Error _ -> failwith "Unit test failed (concrete execution)"
       | Ok _ -> ()
     in
     List.iter test_unit_fun unit_funs
 
   (** Execute the symbolic interpreter on a function. *)
-  let test_function_symbolic (type_context : C.type_context)
-      (fun_defs : A.fun_def list) (fid : A.FunDefId.id) :
-      C.eval_ctx eval_result list =
+  let test_function_symbolic (config : C.partial_config) (m : M.cfim_module)
+      (fid : A.FunDefId.id) : C.eval_ctx eval_result list =
     (* Retrieve the function declaration *)
-    let fdef = A.FunDefId.nth fun_defs fid in
+    let fdef = A.FunDefId.nth m.functions fid in
 
     (* Debug *)
     log#ldebug
-      (lazy
-        ("test_function_symbolic: " ^ Print.Types.name_to_string fdef.A.name));
+      (lazy ("test_function_symbolic: " ^ Print.name_to_string fdef.A.name));
 
     (* Create the evaluation context *)
-    let ctx = initialize_symbolic_context_for_fun type_context fun_defs fdef in
+    let ctx = initialize_symbolic_context_for_fun m fdef in
 
     (* Evaluate the function *)
-    let config = { C.mode = C.SymbolicMode; C.check_invariants = true } in
+    let config = C.config_of_partial C.SymbolicMode config in
     eval_function_body config ctx fdef.A.body
 
   (** Execute the symbolic interpreter on a list of functions.
@@ -181,17 +183,16 @@ module Test = struct
       TODO: for now we ignore the functions which contain loops, because
       they are not supported by the symbolic interpreter.
    *)
-  let test_functions_symbolic (type_defs : T.type_def list)
-      (fun_defs : A.fun_def list) : unit =
+  let test_functions_symbolic (config : C.partial_config) (m : M.cfim_module) :
+      unit =
     let no_loop_funs =
-      List.filter (fun f -> not (CfimAstUtils.fun_def_has_loops f)) fun_defs
+      List.filter (fun f -> not (CfimAstUtils.fun_def_has_loops f)) m.functions
     in
     let test_fun (def : A.fun_def) : unit =
-      let type_ctx = { C.type_defs } in
       (* Execute the function - note that as the symbolic interpreter explores
        * all the path, some executions are expected to "panic": we thus don't
        * check the return value *)
-      let _ = test_function_symbolic type_ctx fun_defs def.A.def_id in
+      let _ = test_function_symbolic config m def.A.def_id in
       ()
     in
     List.iter test_fun no_loop_funs
