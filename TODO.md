@@ -1,11 +1,5 @@
 # TODO
 
-0. TODO: recheck give_back_symbolic_value (use regions!)
-
-1. expand symbolic values which are primitively copyable upon using them as
-  function arguments or putting them in the return value, in order to deduplicate
-  those values.
-
 2. add a switch to allow general symbolic values (containing references, etc.)
   or not.
 
@@ -89,3 +83,10 @@
   borrows/abstractions to end).
 
 * Detect loops in end_borrow/end_abstraction
+
+* recheck give_back_symbolic_value (use regions!)
+
+* expand symbolic values which are primitively copyable upon using them as
+  function arguments or putting them in the return value, in order to deduplicate
+  those values.
+  Completion: we expand those values only upon copying them (that's enough).
