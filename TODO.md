@@ -9,6 +9,9 @@
 
 * check that no borrow_overwrites upon ending abstractions
 
+* add a switch to allow general symbolic values (containing references, etc.)
+  or not.
+
 * set of types with mutable borrows (what to do when type variables appear under
   shared borrows?)
   necessary to know what to return.
