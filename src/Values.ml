@@ -339,7 +339,7 @@ and aloan_content =
           px -> shared_loan l0
           ```
      *)
-  | AEndedMutLoan of { given_back : typed_avalue; child : typed_avalue }
+  | AEndedMutLoan of { child : typed_avalue; given_back : typed_avalue }
       (** An ended mutable loan in an abstraction.
           We need it because abstractions must keep track of the values
           we gave back to them, so that we can correctly instantiate
@@ -394,7 +394,7 @@ and aloan_content =
           > x -> mut_borrow l0 (mut_borrow l1 @s1)
           ```
        *)
-  | AEndedIgnoredMutLoan of { given_back : typed_avalue; child : typed_avalue }
+  | AEndedIgnoredMutLoan of { child : typed_avalue; given_back : typed_avalue }
       (** Similar to [AEndedMutLoan], for ignored loans *)
   | AIgnoredSharedLoan of typed_avalue
       (** An ignored shared loan.
@@ -536,8 +536,8 @@ and aborrow_content =
             when generating the pure translation.
        *)
   | AEndedIgnoredMutBorrow of {
-      given_back_loans_proj : typed_avalue;
       child : typed_avalue;
+      given_back_loans_proj : typed_avalue;
     }  (** See the explanations for [AIgnoredMutBorrow] *)
   | AProjSharedBorrow of abstract_shared_borrows
       (** A projected shared borrow.

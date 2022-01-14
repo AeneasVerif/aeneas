@@ -12,8 +12,6 @@
 
 5. add `mvalue` (meta values) stored in abstractions when ending loans
 
-6. update the printing of mut_borrows and mut_loans ([s@0 <: ...]) and (s@0)
-
 7. fix the static regions (with projectors)
 
 * write an interesting example to study with Jonathan
@@ -90,4 +88,5 @@
 
 * invariant: if a symbolic value is present multiple times in the concrete environment,
   it means it is primitively copyable
-  
+
+* update the printing of mut_borrows and mut_loans ([s@0 <: ...]) and (s@0)

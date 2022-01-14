@@ -310,16 +310,14 @@ module Values = struct
   let rec aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
     match pv with
     | AProjLoans sv ->
-        "proj_loans ("
-        ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
-        ^ ")"
+        "[" ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv ^ "]"
     | AProjBorrows (sv, rty) ->
-        "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
-    | AEndedProjLoans aproj_opt ->
-        "ended_proj_loans ("
-        ^ option_to_string (aproj_to_string fmt) aproj_opt
-        ^ ")"
-    | AEndedProjBorrows -> "ended_proj_borrows"
+        "(" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
+    | AEndedProjLoans aproj_opt -> (
+        match aproj_opt with
+        | None -> "_"
+        | Some aproj -> aproj_to_string fmt aproj)
+    | AEndedProjBorrows -> "_"
     | AIgnoredProjBorrows -> "_"
 
   let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
@@ -384,10 +382,10 @@ module Values = struct
         ^ typed_avalue_to_string fmt av
         ^ ")"
     | AEndedMutLoan ml ->
-        "@ended_mut_loan{ given_back="
-        ^ typed_avalue_to_string fmt ml.given_back
-        ^ "; child="
+        "@ended_mut_loan{"
         ^ typed_avalue_to_string fmt ml.child
+        ^ "; "
+        ^ typed_avalue_to_string fmt ml.given_back
         ^ " }"
     | AEndedSharedLoan (v, av) ->
         "@ended_shared_loan("
@@ -400,10 +398,10 @@ module Values = struct
         ^ typed_avalue_to_string fmt av
         ^ ")"
     | AEndedIgnoredMutLoan ml ->
-        "@ended_ignored_mut_loan{ given_back="
-        ^ typed_avalue_to_string fmt ml.given_back
-        ^ "; child: "
+        "@ended_ignored_mut_loan{ "
         ^ typed_avalue_to_string fmt ml.child
+        ^ "; "
+        ^ typed_avalue_to_string fmt ml.given_back
         ^ "}"
     | AIgnoredSharedLoan sl ->
         "@ignored_shared_loan(" ^ typed_avalue_to_string fmt sl ^ ")"
@@ -423,10 +421,10 @@ module Values = struct
         ^ typed_avalue_to_string fmt av
         ^ ")"
     | AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
-        "@ended_ignored_mut_borrow{ given_back_loans_proj="
-        ^ typed_avalue_to_string fmt given_back_loans_proj
-        ^ "; child="
+        "@ended_ignored_mut_borrow{ "
         ^ typed_avalue_to_string fmt child
+        ^ "; "
+        ^ typed_avalue_to_string fmt given_back_loans_proj
         ^ ")"
     | AProjSharedBorrow sb ->
         "@ignored_shared_borrow("
