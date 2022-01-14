@@ -51,7 +51,9 @@
 * `ended_proj_loans` (with ghost value)
 
 * add a check in function inputs: ok to take as parameters symbolic values with
-  borrow parameters *if* they come from the "input abstractions"
+  borrow parameters *if* they come from the "input abstractions".
+  In order to do this, add a symbolic value kind (would make things easier than
+  adding ad-hoc lookups...): FunRet, FunGivenBack, SynthInput, SynthGivenBack
 
 * make the projected shared borrows more structured? I don't think that's necessary
 

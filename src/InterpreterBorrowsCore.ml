@@ -572,37 +572,60 @@ let proj_borrows_intersects_proj_loans
     projections_intersect l_sv.V.sv_ty l_regions b_ty b_regions
   else false
 
-(** Lookup the first aproj_borrows (including aproj_shared_borrows) over a
-    symbolic value which intersects a given set of regions.
+let proj_loans_intersect (proj_loans : T.RegionId.Set.t * V.symbolic_value)
+    (proj_loans' : T.RegionId.Set.t * V.symbolic_value) : bool =
+  let regions, sv = proj_loans in
+  let regions', sv' = proj_loans in
+  if same_symbolic_id sv sv' then
+    projections_intersect sv.V.sv_ty regions sv'.V.sv_ty regions'
+  else false
+
+(** Result of looking up aproj_borrows which intersect a given aproj_loans in
+    the context.
+
+    Note that because we we force the expansion of primitively copyable values
+    before giving them to abstractions, we only have the following possibilities:
+    - no aproj_borrows, in which case the symbolic value was either dropped
+      or is in the context
+    - exactly one aproj_borrows over a non-shared value
+    - potentially several aproj_borrows over shared values
     
-    Note that there should be **at most one** (one reason is that we force
-    the expansion of primitively copyable values before giving them to
-    abstractions).
-    
-    Returns the id of the owning abstraction, the projection type used in
-    this abstraction and a boolean indicating whether the projector is
-    over a mutable value (`true` is "mutable", `false` is "shared").
-    
-    [explore_shared]: if `true` also explore projectors over shared values,
+    The result contains the ids of the abstractions in which the projectors were
+    found, as well as the projection types used in those abstractions.
+*)
+type looked_up_aproj_borrows =
+  | NonSharedProj of V.AbstractionId.id * T.rty
+  | SharedProjs of (V.AbstractionId.id * T.rty) list
+
+(** Lookup the aproj_borrows (including aproj_shared_borrows) over a
+    symbolic value which intersect a given set of regions.
+        
+    [lookup_shared]: if `true` also explore projectors over shared values,
     otherwise ignore.
 *)
-let lookup_first_intersecting_aproj_borrows_opt (explore_shared : bool)
+let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
     (regions : T.RegionId.Set.t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
-    (V.AbstractionId.id * T.rty * bool) option =
-  let found = ref None in
-  let set r =
-    assert (Option.is_none !found);
-    found := Some r
+    looked_up_aproj_borrows option =
+  let found : looked_up_aproj_borrows option ref = ref None in
+  let set_non_shared ((id, ty) : V.AbstractionId.id * T.rty) : unit =
+    match !found with
+    | None -> found := Some (NonSharedProj (id, ty))
+    | Some _ -> failwith "Unreachable"
   in
-  let check_proj_borrows_and_raise abs sv' proj_ty =
+  let add_shared (x : V.AbstractionId.id * T.rty) : unit =
+    match !found with
+    | None -> found := Some (SharedProjs [ x ])
+    | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
+    | Some (NonSharedProj _) -> failwith "Unreachable"
+  in
+  let check_add_proj_borrows (is_shared : bool) abs sv' proj_ty =
     if
       proj_borrows_intersects_proj_loans
         (abs.V.regions, sv', proj_ty)
         (regions, sv)
-    then (
-      let is_mut = false in
-      set (abs.abs_id, proj_ty, is_mut);
-      raise Found)
+    then
+      let x = (abs.abs_id, proj_ty) in
+      if is_shared then add_shared x else set_non_shared x
     else ()
   in
   let obj =
@@ -612,13 +635,19 @@ let lookup_first_intersecting_aproj_borrows_opt (explore_shared : bool)
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
       method! visit_abstract_shared_borrows abs asb =
-        if explore_shared then
+        (* Sanity check *)
+        (match !found with
+        | Some (NonSharedProj _) -> failwith "Unreachable"
+        | _ -> ());
+        (* Explore *)
+        if lookup_shared then
           let abs = Option.get abs in
           let check asb =
             match asb with
             | V.AsbBorrow _ -> ()
             | V.AsbProjReborrows (sv', proj_ty) ->
-                check_proj_borrows_and_raise abs sv' proj_ty
+                let is_shared = true in
+                check_add_proj_borrows is_shared abs sv' proj_ty
           in
           List.iter check asb
         else ()
@@ -628,17 +657,14 @@ let lookup_first_intersecting_aproj_borrows_opt (explore_shared : bool)
         match sproj with
         | AProjLoans _ | AEndedProjLoans | AEndedProjBorrows -> ()
         | AProjBorrows (sv', proj_rty) ->
-            check_proj_borrows_and_raise abs sv' proj_rty
+            let is_shared = true in
+            check_add_proj_borrows false abs sv' proj_rty
     end
   in
-  (* We use exceptions *)
-  try
-    obj#visit_eval_ctx None ctx;
-    None
-  with Found ->
-    (* Return - while checking that the result is indeed `Some ...` *)
-    let res = Option.get !found in
-    Some res
+  (* Visit *)
+  obj#visit_eval_ctx None ctx;
+  (* Return *)
+  !found
 
 (** Lookup the aproj_borrows (not aproj_borrows_shared!) over a symbolic
     value which intersects a given set of regions.
@@ -653,26 +679,153 @@ let lookup_first_intersecting_aproj_borrows_opt (explore_shared : bool)
 let lookup_intersecting_aproj_borrows_not_shared_opt
     (regions : T.RegionId.Set.t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
     (V.AbstractionId.id * T.rty) option =
-  let explore_shared = false in
-  match
-    lookup_first_intersecting_aproj_borrows_opt explore_shared regions sv ctx
-  with
+  let lookup_shared = false in
+  match lookup_intersecting_aproj_borrows_opt lookup_shared regions sv ctx with
   | None -> None
-  | Some (abs_id, rty, is_mut) ->
-      assert is_mut;
-      Some (abs_id, rty)
+  | Some (NonSharedProj (abs_id, rty)) -> Some (abs_id, rty)
+  | _ -> failwith "Unexpected"
 
-(** Similar to [lookup_intersecting_aproj_borrows_not_shared_opt], but updates the
-    value.
+(** Similar to [lookup_intersecting_aproj_borrows_opt], but updates the
+    values.
+    
+    Note that the [update_non_shared] function could return a non-typed value:
+    we make it typed for sanity checks.
  *)
-let update_intersecting_aproj_borrows_not_shared (regions : T.RegionId.Set.t)
+let update_intersecting_aproj_borrows (can_update_shared : bool)
+    (update_shared : V.AbstractionId.id -> T.rty -> V.abstract_shared_borrows)
+    (update_non_shared : V.AbstractionId.id -> T.rty -> V.typed_avalue)
+    (regions : T.RegionId.Set.t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  (* Small helpers for sanity checks *)
+  let shared = ref None in
+  let add_shared () =
+    match !shared with None -> shared := Some true | Some b -> assert b
+  in
+  let set_non_shared () =
+    match !shared with
+    | None -> shared := Some false
+    | Some _ -> failwith "Found unexpected intersecting proj_borrows"
+  in
+  let check_proj_borrows is_shared abs sv' proj_ty =
+    if
+      proj_borrows_intersects_proj_loans
+        (abs.V.regions, sv', proj_ty)
+        (regions, sv)
+    then (
+      if is_shared then add_shared () else set_non_shared ();
+      true)
+    else false
+  in
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_abs _ abs = super#visit_abs (Some abs) abs
+
+      method! visit_abstract_shared_borrows abs asb =
+        (* Sanity check *)
+        (match !shared with Some b -> assert b | _ -> ());
+        (* Explore *)
+        if can_update_shared then
+          let abs = Option.get abs in
+          let update (asb : V.abstract_shared_borrow) :
+              V.abstract_shared_borrows =
+            match asb with
+            | V.AsbBorrow _ -> [ asb ]
+            | V.AsbProjReborrows (sv', proj_ty) ->
+                let is_shared = true in
+                if check_proj_borrows is_shared abs sv' proj_ty then
+                  update_shared abs.abs_id proj_ty
+                else [ asb ]
+          in
+          List.concat (List.map update asb)
+        else asb
+
+      method! visit_ASymbolic abs sproj =
+        match sproj with
+        | AProjLoans _ | AEndedProjLoans | AEndedProjBorrows ->
+            super#visit_ASymbolic abs sproj
+        | AProjBorrows (sv', proj_rty) ->
+            let abs = Option.get abs in
+            let is_shared = true in
+            if check_proj_borrows is_shared abs sv' proj_rty then (
+              let nv = update_non_shared abs.abs_id proj_rty in
+              assert (nv.V.ty = sv'.V.sv_ty);
+              nv.V.value)
+            else super#visit_ASymbolic (Some abs) sproj
+    end
+  in
+  (* Apply *)
+  let ctx = obj#visit_eval_ctx None ctx in
+  (* Check that we updated the context at least once *)
+  assert (Option.is_some !shared);
+  (* Return *)
+  ctx
+
+(** Simply calls [update_intersecting_aproj_borrows] to update a
+    proj_borrows over a non-shared value.
+    
+    We check that we update exactly one proj_borrows.
+ *)
+let update_intersecting_aproj_borrows_non_shared (regions : T.RegionId.Set.t)
     (sv : V.symbolic_value) (nv : V.typed_avalue) (ctx : C.eval_ctx) :
     C.eval_ctx =
-  (* Small helpers to make sure we update the context exactly once *)
-  let found = ref false in
-  let set () : V.avalue =
-    assert (not !found);
-    found := true;
+  (* Small helpers *)
+  let can_update_shared = false in
+  let update_shared _ _ = failwith "Unexpected" in
+  let updated = ref false in
+  let update_non_shared _ _ =
+    assert (not !updated);
+    updated := true;
+    nv
+  in
+  (* Update *)
+  let ctx =
+    update_intersecting_aproj_borrows can_update_shared update_shared
+      update_non_shared regions sv ctx
+  in
+  (* Check that we updated at least once *)
+  assert !updated;
+  (* Return *)
+  ctx
+
+(** Simply calls [update_intersecting_aproj_borrows] to remove the
+    proj_borrows over shared values.
+ *)
+let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
+    (sv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Small helpers *)
+  let can_update_shared = true in
+  let update_shared _ _ = [] in
+  let update_non_shared _ _ = failwith "Unexpected" in
+  (* Update *)
+  update_intersecting_aproj_borrows can_update_shared update_shared
+    update_non_shared regions sv ctx
+
+(** Updates the proj_loans intersecting some projection.
+
+    Note that in practice, when we update a proj_loans, we always update exactly
+    one aproj_loans, in a specific abstraction.
+    
+    We make this function more general, by checking projection intersections
+    (rather than simply checking the abstraction and symbolic value ids)
+    for sanity checking: we check whether we need to update a loan based
+    on intersection criteria, but also check at the same time that we update
+    *exactly one* projector.
+    
+    Note that the new value [nv] with which to replace the proj_loans could
+    be untyped: we request a typed value for sanity checking.
+ *)
+let update_intersecting_aproj_loans (regions : T.RegionId.Set.t)
+    (sv : V.symbolic_value) (nv : V.typed_avalue) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  (* Small helpers for sanity checks *)
+  let updated = ref false in
+  let update ty : V.avalue =
+    assert (not !updated);
+    updated := true;
+    assert (nv.V.ty = ty);
     nv.V.value
   in
   (* The visitor *)
@@ -684,21 +837,18 @@ let update_intersecting_aproj_borrows_not_shared (regions : T.RegionId.Set.t)
 
       method! visit_ASymbolic abs sproj =
         match sproj with
-        | AProjLoans _ | AEndedProjLoans | AEndedProjBorrows ->
+        | AProjBorrows _ | AEndedProjLoans | AEndedProjBorrows ->
             super#visit_ASymbolic abs sproj
-        | AProjBorrows (sv', proj_rty) ->
+        | AProjLoans sv' ->
             let abs = Option.get abs in
-            if
-              proj_borrows_intersects_proj_loans
-                (abs.regions, sv', proj_rty)
-                (regions, sv)
-            then set ()
+            if proj_loans_intersect (regions, sv) (abs.regions, sv') then
+              update sv'.V.sv_ty
             else super#visit_ASymbolic (Some abs) sproj
     end
   in
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
-  assert !found;
+  assert !updated;
   (* Return *)
   ctx

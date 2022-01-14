@@ -423,7 +423,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
 
 (** TODO: *)
 let give_back_symbolic_value (_config : C.config) (_regions : T.RegionId.set_t)
-    (_sv : V.symbolic_value) (_ctx : C.eval_ctx) : C.eval_ctx =
+    (_sv : V.symbolic_value) (_nsv : V.symbolic_value) (_ctx : C.eval_ctx) :
+    C.eval_ctx =
   raise Errors.Unimplemented
 
 (** Auxiliary function to end borrows. See [give_back].
@@ -1154,22 +1155,64 @@ and end_proj_loans_symbolic (config : C.config) (abs_id : V.AbstractionId.id)
     C.eval_ctx =
   (* Find the first proj_borrows which intersects the proj_loans *)
   let explore_shared = true in
-  match
-    lookup_first_intersecting_aproj_borrows_opt explore_shared regions sv ctx
-  with
+  match lookup_intersecting_aproj_borrows_opt explore_shared regions sv ctx with
   | None ->
       (* We couldn't find any in the context: it means that the symbolic value
        * is in the concrete environment (or that we dropped it, in which case
        * it is completely absent) *)
       (* Update the loans depending on the current symbolic value - it is
        * left unchanged *)
-      give_back_symbolic_value config regions sv ctx
-  | Some (abs_id', proj_ty, mutable_proj) ->
+      give_back_symbolic_value config regions sv sv ctx
+  | Some (SharedProjs projs) ->
+      (* We found projectors over shared values - split between the projectors
+           * which belong to the current *)
+      (* TODO: we might want to allow ending shared projectors/borrows in
+       * abstractions without ending the abstractions themselves, if we end
+       * those abstractions immediately after: some abstractions may be mutually
+       * dependent, which is ok when it is about shared values *)
+      let _owned_projs, external_projs =
+        List.partition (fun (abs_id', _) -> abs_id' = abs_id) projs
+      in
+      if external_projs = [] then
+        (* There are external projs: end the corresponding abstractions *)
+        let abs_ids = List.map fst external_projs in
+        let abs_ids =
+          List.fold_left
+            (fun s id -> V.AbstractionId.Set.add id s)
+            V.AbstractionId.Set.empty abs_ids
+        in
+        let ctx = end_abstractions config abs_ids ctx in
+        (* We could end the owned projections, but it is simpler to simply return
+         * and let the caller recheck if there are proj_loans to end *)
+        ctx
+      else
+        (* All the proj_borrows are owned: simply erase them *)
+        let ctx = remove_intersecting_aproj_borrows_shared regions sv ctx in
+        (* Remove the proj_loans - note that the symbolic value was left unchanged *)
+        give_back_symbolic_value config regions sv sv ctx
+  | Some (NonSharedProj (abs_id', _proj_ty)) ->
       (* We found one in the context: if it comes from this abstraction, we can
        * end it directly, otherwise we need to end the abstraction where it
        * came from first *)
-      if abs_id' = abs_id then raise Errors.Unimplemented
-      else raise Errors.Unimplemented
+      if abs_id' = abs_id then
+        (* Replace the proj_borrows *)
+        let pb_nv =
+          { V.value = V.ASymbolic V.AEndedProjBorrows; V.ty = sv.V.sv_ty }
+        in
+        let ctx =
+          update_intersecting_aproj_borrows_non_shared regions sv pb_nv ctx
+        in
+        (* Replace the proj_loans - note that the loaned (symbolic) value
+         * was left unchanged *)
+        give_back_symbolic_value config regions sv sv ctx
+      else
+        (* End the abstraction.
+         * Don't retry ending the current proj_loans after ending the abstraction:
+         * it may have been eliminated (if it is a proj over mutable value),
+         * or maybe not (if it is a proj over shared values): simply return,
+         * as the caller function will recheck if there are loans to end in the
+         * current abstraction *)
+        end_abstraction config abs_id' ctx
 
 and end_outer_borrow config = end_borrow config None
 
