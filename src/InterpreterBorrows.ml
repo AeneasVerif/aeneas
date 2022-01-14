@@ -746,7 +746,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     a reference whose region has already ended).
  *)
 let convert_avalue_to_value (av : V.typed_avalue) : V.typed_value =
-  mk_fresh_symbolic_typed_value av.V.sv_ty
+  mk_fresh_symbolic_typed_value av.V.ty
 
 (** End a borrow identified by its borrow id in a context
     
@@ -1136,11 +1136,11 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
   | FoundAProjBorrows (sv, proj_ty) ->
       (* Replace the proj_borrows - there should be exactly one *)
       let ctx =
-        update_intersecting_aproj_borrows_non_shared regions sv
+        update_intersecting_aproj_borrows_non_shared abs.regions sv
           V.AEndedProjBorrows ctx
       in
       (* Give back a fresh symbolic value *)
-      let nsv = mk_fresh_symbolic_typed_value proj_ty in
+      let nsv = mk_fresh_symbolic_value proj_ty in
       let ctx = give_back_symbolic_value config sv nsv ctx in
       (* Reexplore *)
       end_abstraction_borrows config abs_id ctx

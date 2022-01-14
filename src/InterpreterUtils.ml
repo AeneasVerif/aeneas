@@ -59,11 +59,11 @@ let mk_fresh_symbolic_value (ty : T.rty) : V.symbolic_value =
   svalue
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value (rty : T.rty) : V.symbolic_value =
-  let ty = Subst.erase_regions ty in
+let mk_fresh_symbolic_typed_value (rty : T.rty) : V.typed_value =
+  let ty = Subst.erase_regions rty in
   (* Generate the fresh a symbolic value *)
   let value = mk_fresh_symbolic_value rty in
-  let value = V.Symbolic svalue in
+  let value = V.Symbolic value in
   { V.value; V.ty }
 
 (** Create a typed value from a symbolic value. *)
