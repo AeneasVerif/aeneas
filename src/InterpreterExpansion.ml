@@ -60,7 +60,7 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
   in
   (* Visitor to apply the expansion *)
   let obj =
-    object
+    object (self)
       inherit [_] C.map_eval_ctx as super
 
       method! visit_abs current_abs abs =
@@ -70,12 +70,31 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
       (** When visiting an abstraction, we remember the regions it owns to be
           able to properly reduce projectors when expanding symbolic values *)
 
+      method! visit_aproj current_abs aproj =
+        (match aproj with
+        | AProjLoans sv | AProjBorrows (sv, _) ->
+            assert (not (same_symbolic_id sv original_sv))
+        | AEndedProjLoans _ | AEndedProjBorrows | AIgnoredProjBorrows -> ());
+        super#visit_aproj current_abs aproj
+      (** We carefully updated [visit_ASymbolic] so that [visit_aproj] is called
+          only on child projections (i.e., projections which appear in [AEndedProjLoans]).
+          The role of visit_aproj is then to check we don't have to expand symbolic
+          values in child projections, because it should never happen
+        *)
+
       method! visit_ASymbolic current_abs aproj =
         let current_abs = Option.get current_abs in
         let proj_regions = current_abs.regions in
         let ancestors_regions = current_abs.ancestors_regions in
+        (* Explore in depth first - we won't update anything: we simply
+         * want to check we don't have to expand inner symbolic value *)
         match (aproj, proj_kind) with
-        | (V.AEndedProjLoans | V.AEndedProjBorrows), _ -> V.ASymbolic aproj
+        | V.AEndedProjLoans None, _ | V.AEndedProjBorrows, _ ->
+            V.ASymbolic aproj
+        | V.AEndedProjLoans (Some child_proj), _ ->
+            (* Explore the child projection to make sure we don't have to expand
+             * anything in there *)
+            V.ASymbolic (self#visit_aproj (Some current_abs) child_proj)
         | V.AProjLoans sv, LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
             if same_symbolic_id sv original_sv then
@@ -111,9 +130,11 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) aproj
-        | V.AProjLoans _, BorrowProj | V.AProjBorrows (_, _), LoanProj ->
+        | V.AProjLoans _, BorrowProj
+        | V.AProjBorrows (_, _), LoanProj
+        | V.AIgnoredProjBorrows, _ ->
             (* Nothing to do *)
-            super#visit_ASymbolic (Some current_abs) aproj
+            V.ASymbolic aproj
     end
   in
   (* Apply the expansion *)
@@ -275,7 +296,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
   in
   (* Visitor to replace the projectors on borrows *)
   let obj =
-    object
+    object (self)
       inherit [_] C.map_eval_ctx as super
 
       method! visit_Symbolic env sv =
@@ -302,17 +323,35 @@ let expand_symbolic_value_shared_borrow (config : C.config)
         let asb = List.concat (List.map expand_asb asb) in
         V.AProjSharedBorrow asb
 
+      method! visit_aproj proj_regions aproj =
+        (match aproj with
+        | AProjLoans sv | AProjBorrows (sv, _) ->
+            assert (not (same_symbolic_id sv original_sv))
+        | AEndedProjLoans _ | AEndedProjBorrows | AIgnoredProjBorrows -> ());
+        super#visit_aproj proj_regions aproj
+      (** We carefully updated [visit_ASymbolic] so that [visit_aproj] is called
+          only on child projections (i.e., projections which appear in [AEndedProjLoans]).
+          The role of visit_aproj is then to check we don't have to expand symbolic
+          values in child projections, because it should never happen
+        *)
+
       method! visit_ASymbolic proj_regions aproj =
         match aproj with
+        | AEndedProjBorrows | AIgnoredProjBorrows ->
+            (* We ignore borrows *) V.ASymbolic aproj
         | AProjLoans _ ->
             (* Loans are handled later *)
-            super#visit_ASymbolic proj_regions aproj
+            V.ASymbolic aproj
         | AProjBorrows (sv, proj_ty) -> (
             (* Check if we need to reborrow *)
             match reborrow_ashared (Option.get proj_regions) sv proj_ty with
             | None -> super#visit_ASymbolic proj_regions aproj
             | Some asb -> V.ABorrow (V.AProjSharedBorrow asb))
-        | AEndedProjLoans | AEndedProjBorrows -> V.ASymbolic aproj
+        | AEndedProjLoans None -> V.ASymbolic aproj
+        | AEndedProjLoans (Some child_aproj) ->
+            (* Sanity check: make sure there is nothing to expand inside children
+             * projections *)
+            V.ASymbolic (self#visit_aproj proj_regions child_aproj)
     end
   in
   (* Call the visitor *)

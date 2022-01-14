@@ -303,14 +303,16 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
     | SeAdt (variant_id, field_values), T.Adt (_id, _region_params, _tys) ->
         (* Project over the field values *)
         let field_values =
-          List.map (mk_aproj_loans_from_symbolic_value regions) field_values
+          List.map
+            (mk_aproj_loans_value_from_symbolic_value regions)
+            field_values
         in
         (V.AAdt { V.variant_id; field_values }, original_sv_ty)
     | SeMutRef (bid, spc), T.Ref (r, ref_ty, T.Mut) ->
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
-        let child_av = mk_aproj_loans_from_symbolic_value regions spc in
+        let child_av = mk_aproj_loans_value_from_symbolic_value regions spc in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)
         if region_in_set r regions then
@@ -323,7 +325,7 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
-        let child_av = mk_aproj_loans_from_symbolic_value regions spc in
+        let child_av = mk_aproj_loans_value_from_symbolic_value regions spc in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)
         if region_in_set r regions then

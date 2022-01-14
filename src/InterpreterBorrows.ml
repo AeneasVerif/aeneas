@@ -319,7 +319,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                   let abs = Option.get opt_abs in
                   (* The loan projector *)
                   let given_back_loans_proj =
-                    mk_aproj_loans_from_symbolic_value abs.regions sv
+                    mk_aproj_loans_value_from_symbolic_value abs.regions sv
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in
@@ -421,11 +421,26 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* Apply the reborrows *)
   apply_registered_reborrows ctx
 
-(** TODO: *)
+(** Give back a symbolic value.
+
+    When we give back a symbolic value, we replace the symbolic value with
+    a new symbolic value if we found an intersecting projection over the
+    borrows of this symbolic value inside a different abstraction.
+    Otherwise, we give back the same symbolic value, to signify the fact that
+    it was left unchanged.
+  *)
 let give_back_symbolic_value (_config : C.config) (_regions : T.RegionId.set_t)
-    (_sv : V.symbolic_value) (_nsv : V.symbolic_value) (_ctx : C.eval_ctx) :
+    (sv : V.symbolic_value) (nsv : V.symbolic_value) (ctx : C.eval_ctx) :
     C.eval_ctx =
-  raise Errors.Unimplemented
+  let subst local_regions =
+    let child_proj =
+      if sv.sv_id = nsv.sv_id then None
+      else
+        Some (mk_aproj_borrows_from_symbolic_value local_regions nsv sv.V.sv_ty)
+    in
+    V.AEndedProjLoans child_proj
+  in
+  substitute_aproj_loans_with_id sv subst ctx
 
 (** Auxiliary function to end borrows. See [give_back].
 
@@ -983,10 +998,13 @@ and end_abstraction_loans (config : C.config) (abs_id : V.AbstractionId.id)
             super#visit_AEndedIgnoredMutLoan env given_back child
         | V.AIgnoredSharedLoan av -> super#visit_AIgnoredSharedLoan env av
 
-      method! visit_ASymbolic _ sproj =
-        match sproj with
-        | V.AProjBorrows (_, _) | V.AEndedProjLoans | V.AEndedProjBorrows -> ()
-        | V.AProjLoans sv -> raise (FoundSymbolicValue sv)
+      method! visit_aproj env sproj =
+        (match sproj with
+        | V.AProjBorrows (_, _)
+        | V.AEndedProjLoans _ | V.AEndedProjBorrows | V.AIgnoredProjBorrows ->
+            ()
+        | V.AProjLoans sv -> raise (FoundSymbolicValue sv));
+        super#visit_aproj env sproj
     end
   in
   try
@@ -1066,12 +1084,14 @@ and end_abstraction_borrows (config : C.config) (abs_id : V.AbstractionId.id)
             (* Nothing to do for ignored borrows *)
             ()
 
-      method! visit_ASymbolic _ sproj =
-        match sproj with
+      method! visit_aproj env sproj =
+        (match sproj with
         | V.AProjLoans _ -> failwith "Unexpected"
         | V.AProjBorrows (sv, proj_ty) ->
             raise (FoundAProjBorrows (sv, proj_ty))
-        | V.AEndedProjLoans | V.AEndedProjBorrows -> ()
+        | V.AEndedProjLoans _ | V.AEndedProjBorrows | V.AIgnoredProjBorrows ->
+            ());
+        super#visit_aproj env sproj
     end
   in
   (* Lookup the abstraction *)
@@ -1196,11 +1216,9 @@ and end_proj_loans_symbolic (config : C.config) (abs_id : V.AbstractionId.id)
        * came from first *)
       if abs_id' = abs_id then
         (* Replace the proj_borrows *)
-        let pb_nv =
-          { V.value = V.ASymbolic V.AEndedProjBorrows; V.ty = sv.V.sv_ty }
-        in
+        let npb = V.AEndedProjBorrows in
         let ctx =
-          update_intersecting_aproj_borrows_non_shared regions sv pb_nv ctx
+          update_intersecting_aproj_borrows_non_shared regions sv npb ctx
         in
         (* Replace the proj_loans - note that the loaned (symbolic) value
          * was left unchanged *)

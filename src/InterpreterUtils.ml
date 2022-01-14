@@ -67,18 +67,25 @@ let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
   in
   av
 
-(** Create a loans projector from a symbolic value.
+(** Create a loans projector value from a symbolic value.
     
     Checks if the projector will actually project some regions. If not,
     returns [AIgnored] (`_`).
  *)
-let mk_aproj_loans_from_symbolic_value (regions : T.RegionId.Set.t)
+let mk_aproj_loans_value_from_symbolic_value (regions : T.RegionId.Set.t)
     (svalue : V.symbolic_value) : V.typed_avalue =
   if ty_has_regions_in_set regions svalue.sv_ty then
     let av = V.ASymbolic (V.AProjLoans svalue) in
     let av : V.typed_avalue = { V.value = av; V.ty = svalue.V.sv_ty } in
     av
   else { V.value = V.AIgnored; ty = svalue.V.sv_ty }
+
+(** Create a borrows projector from a symbolic value *)
+let mk_aproj_borrows_from_symbolic_value (proj_regions : T.RegionId.Set.t)
+    (svalue : V.symbolic_value) (proj_ty : T.rty) : V.aproj =
+  if ty_has_regions_in_set proj_regions proj_ty then
+    V.AProjBorrows (svalue, proj_ty)
+  else V.AIgnoredProjBorrows
 
 (** TODO: move *)
 let borrow_is_asb (bid : V.BorrowId.id) (asb : V.abstract_shared_borrow) : bool
@@ -146,16 +153,17 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     bool =
   let obj =
     object
-      inherit [_] C.iter_eval_ctx
+      inherit [_] C.iter_eval_ctx as super
 
       method! visit_Symbolic _ sv =
         if sv.V.sv_id = sv_id then raise Found else ()
 
-      method! visit_ASymbolic _ aproj =
-        match aproj with
+      method! visit_aproj env aproj =
+        (match aproj with
         | AProjLoans sv | AProjBorrows (sv, _) ->
             if sv.V.sv_id = sv_id then raise Found else ()
-        | AEndedProjLoans | AEndedProjBorrows -> ()
+        | AEndedProjLoans _ | AEndedProjBorrows | AIgnoredProjBorrows -> ());
+        super#visit_aproj env aproj
 
       method! visit_abstract_shared_borrows _ asb =
         let visit (asb : V.abstract_shared_borrow) : unit =
@@ -205,38 +213,5 @@ let bottom_in_value (ended_regions : T.RegionId.set_t) (v : V.typed_value) :
   (* We use exceptions *)
   try
     obj#visit_typed_value () v;
-    false
-  with Found -> true
-
-(** Check if an [avalue] contains ⊥.
-
-    Note that this function is very general: it also checks wether
-    symbolic values contain already ended regions.
-    
-    TODO: remove?
-*)
-let bottom_in_avalue (ended_regions : T.RegionId.set_t) (v : V.typed_avalue) :
-    bool =
-  let obj =
-    object
-      inherit [_] V.iter_typed_avalue
-
-      method! visit_Bottom _ = raise Found
-
-      method! visit_symbolic_value _ sv =
-        if symbolic_value_has_ended_regions ended_regions sv then raise Found
-        else ()
-
-      method! visit_aproj _ ap =
-        (* Nothing to do actually *)
-        match ap with
-        | V.AProjLoans _sv -> ()
-        | V.AProjBorrows (_sv, _rty) -> ()
-        | V.AEndedProjLoans | V.AEndedProjBorrows -> ()
-    end
-  in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_avalue () v;
     false
   with Found -> true

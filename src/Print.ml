@@ -307,7 +307,7 @@ module Values = struct
     ^ String.concat "," (List.map (abstract_shared_borrow_to_string fmt) abs)
     ^ "}"
 
-  let aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
+  let rec aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
     match pv with
     | AProjLoans sv ->
         "proj_loans ("
@@ -315,8 +315,12 @@ module Values = struct
         ^ ")"
     | AProjBorrows (sv, rty) ->
         "proj_borrows (" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
-    | AEndedProjLoans -> "ended_proj_loans"
+    | AEndedProjLoans aproj_opt ->
+        "ended_proj_loans ("
+        ^ option_to_string (aproj_to_string fmt) aproj_opt
+        ^ ")"
     | AEndedProjBorrows -> "ended_proj_borrows"
+    | AIgnoredProjBorrows -> "_"
 
   let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
       string =

@@ -7,7 +7,6 @@ module V = Values
 module C = Contexts
 module Subst = Substitute
 module L = Logging
-open Utils
 open TypesUtils
 open InterpreterUtils
 
@@ -575,7 +574,7 @@ let proj_borrows_intersects_proj_loans
 let proj_loans_intersect (proj_loans : T.RegionId.Set.t * V.symbolic_value)
     (proj_loans' : T.RegionId.Set.t * V.symbolic_value) : bool =
   let regions, sv = proj_loans in
-  let regions', sv' = proj_loans in
+  let regions', sv' = proj_loans' in
   if same_symbolic_id sv sv' then
     projections_intersect sv.V.sv_ty regions sv'.V.sv_ty regions'
   else false
@@ -652,13 +651,16 @@ let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
           List.iter check asb
         else ()
 
-      method! visit_ASymbolic abs sproj =
-        let abs = Option.get abs in
-        match sproj with
-        | AProjLoans _ | AEndedProjLoans | AEndedProjBorrows -> ()
-        | AProjBorrows (sv', proj_rty) ->
-            let is_shared = true in
-            check_add_proj_borrows false abs sv' proj_rty
+      method! visit_aproj abs sproj =
+        (let abs = Option.get abs in
+         match sproj with
+         | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows
+         | AIgnoredProjBorrows ->
+             ()
+         | AProjBorrows (sv', proj_rty) ->
+             let is_shared = false in
+             check_add_proj_borrows is_shared abs sv' proj_rty);
+        super#visit_aproj abs sproj
     end
   in
   (* Visit *)
@@ -687,13 +689,10 @@ let lookup_intersecting_aproj_borrows_not_shared_opt
 
 (** Similar to [lookup_intersecting_aproj_borrows_opt], but updates the
     values.
-    
-    Note that the [update_non_shared] function could return a non-typed value:
-    we make it typed for sanity checks.
  *)
 let update_intersecting_aproj_borrows (can_update_shared : bool)
     (update_shared : V.AbstractionId.id -> T.rty -> V.abstract_shared_borrows)
-    (update_non_shared : V.AbstractionId.id -> T.rty -> V.typed_avalue)
+    (update_non_shared : V.AbstractionId.id -> T.rty -> V.aproj)
     (regions : T.RegionId.Set.t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
     C.eval_ctx =
   (* Small helpers for sanity checks *)
@@ -742,18 +741,17 @@ let update_intersecting_aproj_borrows (can_update_shared : bool)
           List.concat (List.map update asb)
         else asb
 
-      method! visit_ASymbolic abs sproj =
+      method! visit_aproj abs sproj =
         match sproj with
-        | AProjLoans _ | AEndedProjLoans | AEndedProjBorrows ->
-            super#visit_ASymbolic abs sproj
+        | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows
+        | AIgnoredProjBorrows ->
+            super#visit_aproj abs sproj
         | AProjBorrows (sv', proj_rty) ->
             let abs = Option.get abs in
             let is_shared = true in
-            if check_proj_borrows is_shared abs sv' proj_rty then (
-              let nv = update_non_shared abs.abs_id proj_rty in
-              assert (nv.V.ty = sv'.V.sv_ty);
-              nv.V.value)
-            else super#visit_ASymbolic (Some abs) sproj
+            if check_proj_borrows is_shared abs sv' proj_rty then
+              update_non_shared abs.abs_id proj_rty
+            else super#visit_aproj (Some abs) sproj
     end
   in
   (* Apply *)
@@ -769,8 +767,7 @@ let update_intersecting_aproj_borrows (can_update_shared : bool)
     We check that we update exactly one proj_borrows.
  *)
 let update_intersecting_aproj_borrows_non_shared (regions : T.RegionId.Set.t)
-    (sv : V.symbolic_value) (nv : V.typed_avalue) (ctx : C.eval_ctx) :
-    C.eval_ctx =
+    (sv : V.symbolic_value) (nv : V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Small helpers *)
   let can_update_shared = false in
   let update_shared _ _ = failwith "Unexpected" in
@@ -803,6 +800,7 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
   update_intersecting_aproj_borrows can_update_shared update_shared
     update_non_shared regions sv ctx
 
+(*
 (** Updates the proj_loans intersecting some projection.
 
     Note that in practice, when we update a proj_loans, we always update exactly
@@ -813,20 +811,15 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
     for sanity checking: we check whether we need to update a loan based
     on intersection criteria, but also check at the same time that we update
     *exactly one* projector.
-    
-    Note that the new value [nv] with which to replace the proj_loans could
-    be untyped: we request a typed value for sanity checking.
  *)
 let update_intersecting_aproj_loans (regions : T.RegionId.Set.t)
-    (sv : V.symbolic_value) (nv : V.typed_avalue) (ctx : C.eval_ctx) :
-    C.eval_ctx =
+    (sv : V.symbolic_value) (nv : V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Small helpers for sanity checks *)
   let updated = ref false in
-  let update ty : V.avalue =
+  let update () : V.aproj =
     assert (not !updated);
     updated := true;
-    assert (nv.V.ty = ty);
-    nv.V.value
+    nv
   in
   (* The visitor *)
   let obj =
@@ -835,15 +828,50 @@ let update_intersecting_aproj_loans (regions : T.RegionId.Set.t)
 
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
-      method! visit_ASymbolic abs sproj =
+      method! visit_aproj abs sproj =
         match sproj with
-        | AProjBorrows _ | AEndedProjLoans | AEndedProjBorrows ->
-            super#visit_ASymbolic abs sproj
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows ->
+            super#visit_aproj abs sproj
         | AProjLoans sv' ->
             let abs = Option.get abs in
             if proj_loans_intersect (regions, sv) (abs.regions, sv') then
-              update sv'.V.sv_ty
-            else super#visit_ASymbolic (Some abs) sproj
+              update ()
+            else super#visit_aproj (Some abs) sproj
+    end
+  in
+  (* Apply *)
+  let ctx = obj#visit_eval_ctx None ctx in
+  (* Check that we updated the context at least once *)
+  assert !updated;
+  (* Return *)
+  ctx
+ *)
+
+(** Substitute the proj_loans based an a symbolic id *)
+let substitute_aproj_loans_with_id (sv : V.symbolic_value)
+    (subst : T.RegionId.Set.t -> V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Small helpers for sanity checks *)
+  let updated = ref false in
+  let update regions : V.aproj =
+    updated := true;
+    subst regions
+  in
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_abs _ abs = super#visit_abs (Some abs) abs
+
+      method! visit_aproj abs sproj =
+        match sproj with
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows
+        | AIgnoredProjBorrows ->
+            super#visit_aproj abs sproj
+        | AProjLoans sv' ->
+            let abs = Option.get abs in
+            if same_symbolic_id sv sv' then update abs.regions
+            else super#visit_aproj (Some abs) sproj
     end
   in
   (* Apply *)

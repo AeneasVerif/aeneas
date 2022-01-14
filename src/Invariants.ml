@@ -605,7 +605,14 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                  * otherwise they should have been reduced to `_` *)
                 let abs = Option.get info in
                 assert (ty_has_regions_in_set abs.regions sv.V.sv_ty)
-            | V.AEndedProjLoans | V.AEndedProjBorrows -> ())
+            | V.AEndedProjLoans (Some proj) -> (
+                match proj with
+                | V.AProjBorrows (_sv, ty') -> assert (ty' = ty)
+                | V.AEndedProjBorrows -> ()
+                | _ -> failwith "Unexpected")
+            | V.AEndedProjLoans None
+            | V.AEndedProjBorrows | V.AIgnoredProjBorrows ->
+                ())
         | V.AIgnored, _ -> ()
         | _ -> failwith "Erroneous typing");
         (* Continue exploring to inspect the subterms *)

@@ -78,7 +78,9 @@ module Test = struct
     let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =
       (* Project over the values - we use *loan* projectors, as explained above *)
       let avalues =
-        List.map (mk_aproj_loans_from_symbolic_value abs.regions) input_svs
+        List.map
+          (mk_aproj_loans_value_from_symbolic_value abs.regions)
+          input_svs
       in
       (* Insert the avalues in the abstraction *)
       let abs = { abs with avalues } in

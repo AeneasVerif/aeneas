@@ -181,30 +181,65 @@ type abstract_shared_borrow =
 type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
 (** A set of abstract shared borrows *)
 
+(** Ancestor for [aproj] iter visitor *)
+class ['self] iter_aproj_base =
+  object (_self : 'self)
+    inherit [_] iter_typed_value
+
+    method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for [aproj] map visitor *)
+class ['self] map_aproj_base =
+  object (_self : 'self)
+    inherit [_] map_typed_value
+
+    method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
+  end
+
 type aproj =
   | AProjLoans of symbolic_value
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use [abstract_shared_borrow]. *)
-  | AEndedProjLoans
+  | AEndedProjLoans of aproj option
+      (** When ending a proj_loans over a symbolic value, we may need to insert
+          (and keep track of) a proj_borrows over the given back value, if the
+          symbolic value was consumed by an abstraction then updated.
+       *)
   | AEndedProjBorrows
-(* TODO: remove AEndedProjBorrows? *)
-[@@deriving show]
+  (* TODO: remove AEndedProjBorrows? We might need it for synthesis, to contain
+   * meta values *)
+  | AIgnoredProjBorrows
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_aproj";
+        variety = "iter";
+        ancestors = [ "iter_aproj_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_aproj";
+        variety = "map";
+        ancestors = [ "map_aproj_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
 
 type region = RegionVarId.id Types.region [@@deriving show]
 
 (** Ancestor for [typed_avalue] iter visitor *)
 class ['self] iter_typed_avalue_base =
   object (_self : 'self)
-    inherit [_] iter_typed_value
+    inherit [_] iter_aproj
 
     method visit_id : 'env -> BorrowId.id -> unit = fun _ _ -> ()
 
     method visit_region : 'env -> region -> unit = fun _ _ -> ()
-
-    method visit_aproj : 'env -> aproj -> unit = fun _ _ -> ()
-
-    method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
 
     method visit_abstract_shared_borrows
         : 'env -> abstract_shared_borrows -> unit =
@@ -214,15 +249,11 @@ class ['self] iter_typed_avalue_base =
 (** Ancestor for [typed_avalue] map visitor *)
 class ['self] map_typed_avalue_base =
   object (_self : 'self)
-    inherit [_] map_typed_value
+    inherit [_] map_aproj
 
     method visit_id : 'env -> BorrowId.id -> BorrowId.id = fun _ id -> id
 
     method visit_region : 'env -> region -> region = fun _ r -> r
-
-    method visit_aproj : 'env -> aproj -> aproj = fun _ p -> p
-
-    method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
 
     method visit_abstract_shared_borrows
         : 'env -> abstract_shared_borrows -> abstract_shared_borrows =
