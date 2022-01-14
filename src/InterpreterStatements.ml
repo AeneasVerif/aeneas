@@ -891,8 +891,6 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   in
   (* Evaluate the input operands *)
   let ctx, args = eval_operands config ctx args in
-  (* TODO: expand the primitively copyable symbolic values *)
-  raise Errors.Unimplemented;
   let args_with_rtypes = List.combine args inst_sg.A.inputs in
   (* Check the type of the input arguments *)
   assert (

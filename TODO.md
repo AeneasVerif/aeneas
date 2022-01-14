@@ -11,8 +11,12 @@
   borrow parameters *if* they come from the "input abstractions".
   In order to do this, add a symbolic value kind (would make things easier than
   adding ad-hoc lookups...): `FunRet`, `FunGivenBack`, `SynthInput`, `SynthGivenBack`
+  Rk.: pay attention: we can't give borrows of borrows to functions, but borrows
+  are ok.
 
 5. add `mvalue` (meta values) stored in abstractions when ending loans
+
+6. update the printing of mut_borrows and mut_loans ([s@0 <: ...]) and (s@0)
 
 * write an interesting example to study with Jonathan
 
