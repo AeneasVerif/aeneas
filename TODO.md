@@ -1,5 +1,19 @@
 # TODO
 
+1. add a switch to allow general symbolic values (containing references, etc.)
+  or not.
+
+2. expand symbolic values which are primitively copyable upon using them as
+  function arguments or putting them in the return value, in order to deduplicate
+  those values.
+
+3. Detect loops in end_borrow/end_abstraction
+
+4. add a check in function inputs: ok to take as parameters symbolic values with
+  borrow parameters *if* they come from the "input abstractions".
+  In order to do this, add a symbolic value kind (would make things easier than
+  adding ad-hoc lookups...): `FunRet`, `FunGivenBack`, `SynthInput`, `SynthGivenBack`
+
 * write an interesting example to study with Jonathan
 
 * add option for: `allow_borrow_overwrites_on_input_values`
@@ -9,19 +23,9 @@
 
 * check that no borrow_overwrites upon ending abstractions
 
-* add a switch to allow general symbolic values (containing references, etc.)
-  or not.
-
 * set of types with mutable borrows (what to do when type variables appear under
   shared borrows?)
   necessary to know what to return.
-
-* Check what happens when symbolic borrows are not expanded (when looking for
-  borrows/abstractions to end).
-
-* expand symbolic values which are primitively copyable upon using them as
-  function arguments or putting them in the return value, in order to deduplicate
-  those values.
 
 * invariant: if a symbolic value is present multiple times in the concrete environment,
   it means it is primitively copyable
@@ -50,17 +54,9 @@
   or: make sure there are no parent abstractions when ending inner loans in
   abstractions.
 
-
 * `ended_proj_loans` (with ghost value)
 
-* add a check in function inputs: ok to take as parameters symbolic values with
-  borrow parameters *if* they come from the "input abstractions".
-  In order to do this, add a symbolic value kind (would make things easier than
-  adding ad-hoc lookups...): FunRet, FunGivenBack, SynthInput, SynthGivenBack
-
 * make the projected shared borrows more structured? I don't think that's necessary
-
-* Detect loops in end_borrow/end_abstraction
 
 * add a `allow_borrow_overwrites` in the loan projectors.
 
@@ -80,3 +76,7 @@
 * update the assignment to move the destination value (which will be overriden)
   to a dummy variable, and end all the outer borrows.
   Also update pop_frame.
+
+* Check what happens when symbolic borrows are not expanded (when looking for
+  borrows/abstractions to end).
+
