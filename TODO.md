@@ -14,6 +14,8 @@
   In order to do this, add a symbolic value kind (would make things easier than
   adding ad-hoc lookups...): `FunRet`, `FunGivenBack`, `SynthInput`, `SynthGivenBack`
 
+5. add `mvalue` (meta values) stored in abstractions when ending loans
+
 * write an interesting example to study with Jonathan
 
 * add option for: `allow_borrow_overwrites_on_input_values`
