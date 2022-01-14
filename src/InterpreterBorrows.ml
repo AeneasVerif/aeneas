@@ -429,9 +429,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     Otherwise, we give back the same symbolic value, to signify the fact that
     it was left unchanged.
   *)
-let give_back_symbolic_value (_config : C.config) (_regions : T.RegionId.set_t)
-    (sv : V.symbolic_value) (nsv : V.symbolic_value) (ctx : C.eval_ctx) :
-    C.eval_ctx =
+let give_back_symbolic_value (_config : C.config) (sv : V.symbolic_value)
+    (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
   let subst local_regions =
     let child_proj =
       if sv.sv_id = nsv.sv_id then None
@@ -1182,7 +1181,7 @@ and end_proj_loans_symbolic (config : C.config) (abs_id : V.AbstractionId.id)
        * it is completely absent) *)
       (* Update the loans depending on the current symbolic value - it is
        * left unchanged *)
-      give_back_symbolic_value config regions sv sv ctx
+      give_back_symbolic_value config sv sv ctx
   | Some (SharedProjs projs) ->
       (* We found projectors over shared values - split between the projectors
            * which belong to the current *)
@@ -1209,7 +1208,7 @@ and end_proj_loans_symbolic (config : C.config) (abs_id : V.AbstractionId.id)
         (* All the proj_borrows are owned: simply erase them *)
         let ctx = remove_intersecting_aproj_borrows_shared regions sv ctx in
         (* Remove the proj_loans - note that the symbolic value was left unchanged *)
-        give_back_symbolic_value config regions sv sv ctx
+        give_back_symbolic_value config sv sv ctx
   | Some (NonSharedProj (abs_id', _proj_ty)) ->
       (* We found one in the context: if it comes from this abstraction, we can
        * end it directly, otherwise we need to end the abstraction where it
@@ -1222,7 +1221,7 @@ and end_proj_loans_symbolic (config : C.config) (abs_id : V.AbstractionId.id)
         in
         (* Replace the proj_loans - note that the loaned (symbolic) value
          * was left unchanged *)
-        give_back_symbolic_value config regions sv sv ctx
+        give_back_symbolic_value config sv sv ctx
       else
         (* End the abstraction.
          * Don't retry ending the current proj_loans after ending the abstraction:
