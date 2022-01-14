@@ -47,10 +47,11 @@ let () =
   main_log#set_level EL.Debug;
   interpreter_log#set_level EL.Debug;
   statements_log#set_level EL.Debug;
+  paths_log#set_level EL.Debug;
   expressions_log#set_level EL.Debug;
   expansion_log#set_level EL.Debug;
   borrows_log#set_level EL.Debug;
-  invariants_log#set_level EL.Warning;
+  invariants_log#set_level EL.Debug;
   (* Load the module *)
   let json = Yojson.Basic.from_file !filename in
   match cfim_module_of_json json with

@@ -1,5 +1,7 @@
 # TODO
 
+0. TODO: recheck give_back_symbolic_value (use regions!)
+
 1. expand symbolic values which are primitively copyable upon using them as
   function arguments or putting them in the return value, in order to deduplicate
   those values.
@@ -17,6 +19,8 @@
 5. add `mvalue` (meta values) stored in abstractions when ending loans
 
 6. update the printing of mut_borrows and mut_loans ([s@0 <: ...]) and (s@0)
+
+7. fix the static regions (with projectors)
 
 * write an interesting example to study with Jonathan
 

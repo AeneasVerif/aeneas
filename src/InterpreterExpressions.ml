@@ -22,11 +22,43 @@ type eval_error = Panic
 
 type 'a eval_result = ('a, eval_error) result
 
-(** Small utility *)
-let prepare_rplace (config : C.config) (access : access_kind) (p : E.place)
-    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+(** As long as there are symbolic values at a given place (potentially in subalues)
+    which contain borrows and are primitively copyable, expand them.
+    
+    We use this function before copying values.
+    
+    Note that the place should have been prepared so that there are no remaining
+    loans.
+*)
+let expand_primitively_copyable_at_place (config : C.config)
+    (access : access_kind) (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Small helper *)
+  let rec expand ctx =
+    let v = read_place_unwrap config access p ctx in
+    match find_first_primitively_copyable_sv v with
+    | None -> ctx
+    | Some sv ->
+        let ctx = expand_symbolic_value_no_branching config sv ctx in
+        expand ctx
+  in
+  (* Apply *)
+  expand ctx
+
+(** Small utility.
+
+    [expand_prim_copy]: if true, expand the symbolic values which are primitively
+    copyable and contain borrows.
+ *)
+let prepare_rplace (config : C.config) (expand_prim_copy : bool)
+    (access : access_kind) (p : E.place) (ctx : C.eval_ctx) :
+    C.eval_ctx * V.typed_value =
   let ctx = update_ctx_along_read_place config access p ctx in
   let ctx = end_loans_at_place config access p ctx in
+  let ctx =
+    if expand_prim_copy then
+      expand_primitively_copyable_at_place config access p ctx
+    else ctx
+  in
   let v = read_place_unwrap config access p ctx in
   (ctx, v)
 
@@ -114,13 +146,14 @@ let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
     | Expressions.Copy p ->
         (* Access the value *)
         let access = Read in
-        (* TODO: expand the value if it is a symbolic value *)
-        raise Unimplemented;
-        prepare_rplace config access p ctx
+        (* Expand the symbolic values, if necessary *)
+        let expand_prim_copy = true in
+        prepare_rplace config expand_prim_copy access p ctx
     | Expressions.Move p ->
         (* Access the value *)
         let access = Move in
-        prepare_rplace config access p ctx
+        let expand_prim_copy = false in
+        prepare_rplace config expand_prim_copy access p ctx
   in
   assert (not (bottom_in_value ctx.ended_regions v));
   (ctx, v)
@@ -131,8 +164,8 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
   (* Debug *)
   log#ldebug
     (lazy
-      ("eval_operand:\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n\n- op:\n"
-     ^ operand_to_string ctx op ^ "\n"));
+      ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
+     ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
   | Expressions.Constant (ty, cv) ->
@@ -141,17 +174,18 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
-      (* TODO: expand the value if it is a symbolic value *)
-      raise Unimplemented;
-      let ctx, v = prepare_rplace config access p ctx in
+      let expand_prim_copy = true in
+      let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
       (* Copy the value *)
       assert (not (bottom_in_value ctx.ended_regions v));
+      assert (Option.is_none (find_first_primitively_copyable_sv v));
       let allow_adt_copy = false in
       copy_value allow_adt_copy config ctx v
   | Expressions.Move p -> (
       (* Access the value *)
       let access = Move in
-      let ctx, v = prepare_rplace config access p ctx in
+      let expand_prim_copy = false in
+      let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
       (* Move the value *)
       assert (not (bottom_in_value ctx.ended_regions v));
       let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
@@ -345,7 +379,8 @@ let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
   (* Note that discriminant values have type `isize` *)
   (* Access the value *)
   let access = Read in
-  let ctx, v = prepare_rplace config access p ctx in
+  let expand_prim_copy = false in
+  let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
   match v.V.value with
   | Adt av -> (
       match av.variant_id with
@@ -368,7 +403,8 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
   (* Note that discriminant values have type `isize` *)
   (* Access the value *)
   let access = Read in
-  let ctx, v = prepare_rplace config access p ctx in
+  let expand_prim_copy = false in
+  let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
   match v.V.value with
   | Adt _ -> [ eval_rvalue_discriminant_concrete config p ctx ]
   | Symbolic sv ->
@@ -385,7 +421,8 @@ let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
   | E.Shared | E.TwoPhaseMut ->
       (* Access the value *)
       let access = if bkind = E.Shared then Read else Write in
-      let ctx, v = prepare_rplace config access p ctx in
+      let expand_prim_copy = false in
+      let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
       (* Compute the rvalue - simply a shared borrow with a fresh id *)
       let bid = C.fresh_borrow_id () in
       (* Note that the reference is *mutable* if we do a two-phase borrow *)
@@ -416,7 +453,8 @@ let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
   | E.Mut ->
       (* Access the value *)
       let access = Write in
-      let ctx, v = prepare_rplace config access p ctx in
+      let expand_prim_copy = false in
+      let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
       let bid = C.fresh_borrow_id () in
       let rv_ty = T.Ref (T.Erased, v.ty, Mut) in

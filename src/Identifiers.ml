@@ -66,11 +66,21 @@ module type Id = sig
 
   module Set : Set.S with type elt = id with type t = set_t
 
-  val set_to_string : Set.t -> string
+  val set_to_string : string option -> Set.t -> string
+  (** Convert a set to a string.
+      
+      Takes an indentation as parameter, in case you want to insert a breakline
+      for every binding.
+   *)
 
   module Map : Map.S with type key = id with type 'a t = 'a map_t
 
-  (* TODO: map_to_string *)
+  val map_to_string : string option -> ('a -> string) -> 'a map_t -> string
+  (** Convert a map to a string.
+      
+      Takes an indentation as parameter, in case you want to insert a breakline
+      for every binding.
+   *)
 
   val id_of_json : Yojson.Basic.t -> (id, string) result
 end
@@ -173,9 +183,28 @@ module IdGen () : Id = struct
       m;
     pp_string "}"
 
-  let set_to_string ids =
-    let ids = Set.fold (fun id ids -> to_string id :: ids) ids [] in
-    "{" ^ String.concat ", " (List.rev ids) ^ "}"
+  let set_to_string indent_opt ids =
+    let indent, sep =
+      match indent_opt with Some indent -> (indent, ",\n") | None -> ("", ",")
+    in
+    let ids = Set.fold (fun id ids -> (indent ^ to_string id) :: ids) ids [] in
+    match ids with
+    | [] -> "{}"
+    | _ -> "{\n" ^ String.concat sep (List.rev ids) ^ "\n}"
+
+  let map_to_string indent_opt a_to_string ids =
+    let indent, sep =
+      match indent_opt with Some indent -> (indent, ",\n") | None -> ("", ",")
+    in
+    let ids =
+      Map.fold
+        (fun id v ids ->
+          (indent ^ to_string id ^ " -> " ^ a_to_string v) :: ids)
+        ids []
+    in
+    match ids with
+    | [] -> "{}"
+    | _ -> "{\n" ^ String.concat sep (List.rev ids) ^ "\n}"
 
   let id_of_json js =
     (* TODO: check boundaries ? *)

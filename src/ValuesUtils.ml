@@ -3,6 +3,9 @@ open TypesUtils
 open Types
 open Values
 
+exception FoundSymbolicValue of symbolic_value
+(** Utility exception *)
+
 let mk_unit_value : typed_value =
   { value = Adt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
@@ -15,6 +18,12 @@ let mk_box_value (v : typed_value) : typed_value =
   let box_ty = mk_box_ty v.ty in
   let box_v = Adt { variant_id = None; field_values = [ v ] } in
   mk_typed_value box_ty box_v
+
+let is_symbolic (v : value) : bool =
+  match v with Symbolic _ -> true | _ -> false
+
+let as_symbolic (v : value) : symbolic_value =
+  match v with Symbolic s -> s | _ -> failwith "Unexpected"
 
 (** Check if a value contains a borrow *)
 let borrows_in_value (v : typed_value) : bool =
@@ -78,3 +87,23 @@ let outer_loans_in_value (v : typed_value) : bool =
     obj#visit_typed_value () v;
     false
   with Found -> true
+
+let find_first_primitively_copyable_sv (v : typed_value) : symbolic_value option
+    =
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] iter_typed_value
+
+      method! visit_Symbolic _ sv =
+        let ty = sv.sv_ty in
+        if type_is_primitively_copyable ty && ty_has_regions ty then
+          raise (FoundSymbolicValue sv)
+        else ()
+    end
+  in
+  (* Small helper *)
+  try
+    obj#visit_typed_value () v;
+    None
+  with FoundSymbolicValue sv -> Some sv

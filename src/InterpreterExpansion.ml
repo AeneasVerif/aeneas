@@ -12,6 +12,7 @@ module L = Logging
 open TypesUtils
 module Inv = Invariants
 module S = Synthesis
+open ValuesUtils
 open InterpreterUtils
 open InterpreterProjectors
 open InterpreterBorrows
@@ -481,36 +482,6 @@ let expand_symbolic_value_no_branching (config : C.config)
   assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
   (* Return *)
   ctx
-
-(** Expand a symbolic value which is not an enumeration with several variants
-    (i.e., in a situation where it doesn't lead to branching).
-
-    This function is used when exploring paths. It simply performs a few
-    sanity checks before calling [expand_symbolic_value_no_branching].
- *)
-let expand_symbolic_value_no_branching_from_projection_elem (config : C.config)
-    (pe : E.projection_elem) (sp : V.symbolic_value) (ctx : C.eval_ctx) :
-    C.eval_ctx =
-  (* Sanity checks *)
-  let rty = sp.V.sv_ty in
-  let _ =
-    match (pe, rty) with
-    (* "Regular" ADTs *)
-    | Field (ProjAdt (def_id, _), _), T.Adt (T.AdtId def_id', _, _) ->
-        assert (def_id = def_id')
-    (* Tuples *)
-    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
-        assert (arity = List.length tys)
-    (* Boxes *)
-    | DerefBox, T.Adt (T.Assumed T.Box, [], [ _ ]) -> ()
-    (* Borrows *)
-    | Deref, T.Ref (_, _, _) -> ()
-    | _ ->
-        failwith
-          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_rty rty)
-  in
-  (* Perform the expansion *)
-  expand_symbolic_value_no_branching config sp ctx
 
 (** Expand a symbolic enumeration value.
 

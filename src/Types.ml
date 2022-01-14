@@ -29,6 +29,11 @@ type region_var = (RegionVarId.id, string option) indexed_var [@@deriving show]
     Regions are used in function signatures (in which case we use region variable
     ids) and in symbolic variables and projections (in which case we use region
     ids).
+    
+    TODO: use this only in the signatures. During interpretation, we need
+    a uniform treatment of regions as variables (otherwise the projectors
+    don't work: they always ignore the static regions...). By convention,
+    use region with id 0 as the static region.
  *)
 type 'rid region =
   | Static  (** Static region *)

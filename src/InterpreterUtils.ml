@@ -151,9 +151,6 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 (** Utility exception *)
 
-exception FoundSymbolicValue of V.symbolic_value
-(** Utility exception *)
-
 exception FoundAProjBorrows of V.symbolic_value * T.rty
 (** Utility exception *)
 

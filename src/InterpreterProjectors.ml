@@ -235,9 +235,9 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
               (lazy
                 ("projections_intersect:" ^ "\n- ty1: " ^ rty_to_string ctx ty1
                ^ "\n- rset1: "
-                ^ T.RegionId.set_to_string rset1
+                ^ T.RegionId.set_to_string None rset1
                 ^ "\n- ty2: " ^ rty_to_string ctx ty2 ^ "\n- rset2: "
-                ^ T.RegionId.set_to_string rset2
+                ^ T.RegionId.set_to_string None rset2
                 ^ "\n"));
             assert (not (projections_intersect ty1 rset1 ty2 rset2)));
           V.ASymbolic (V.AProjBorrows (s, ty))

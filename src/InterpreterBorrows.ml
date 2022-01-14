@@ -439,6 +439,8 @@ let give_back_symbolic_value (_config : C.config) (sv : V.symbolic_value)
     in
     V.AEndedProjLoans child_proj
   in
+  (* TODO: we need to use the regions!! *)
+  raise Errors.Unimplemented;
   substitute_aproj_loans_with_id sv subst ctx
 
 (** Auxiliary function to end borrows. See [give_back].

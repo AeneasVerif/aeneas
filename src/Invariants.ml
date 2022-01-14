@@ -39,22 +39,11 @@ let set_outer_shared (_info : outer_borrow_info) : outer_borrow_info =
 (* TODO: we need to factorize print functions for sets *)
 let ids_reprs_to_string (indent : string)
     (reprs : V.BorrowId.id V.BorrowId.Map.t) : string =
-  let bindings = V.BorrowId.Map.bindings reprs in
-  let bindings =
-    List.map
-      (fun (id, repr_id) ->
-        indent ^ V.BorrowId.to_string id ^ " -> " ^ V.BorrowId.to_string repr_id)
-      bindings
-  in
-  String.concat "\n" bindings
+  V.BorrowId.map_to_string (Some indent) V.BorrowId.to_string reprs
 
 let borrows_infos_to_string (indent : string)
     (infos : borrow_info V.BorrowId.Map.t) : string =
-  let bindings = V.BorrowId.Map.bindings infos in
-  let bindings =
-    List.map (fun (_, info) -> indent ^ show_borrow_info info) bindings
-  in
-  String.concat "\n" bindings
+  V.BorrowId.map_to_string (Some indent) show_borrow_info infos
 
 type borrow_kind = Mut | Shared | Inactivated
 
@@ -621,16 +610,110 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
   in
   visitor#visit_eval_ctx (None : V.abs option) ctx
 
-(** TODO:
+type proj_borrows_info = {
+  abs_id : V.AbstractionId.id;
+  regions : T.RegionId.set_t;
+  proj_ty : T.rty;
+  as_shared_value : bool;  (** True if the value is below a shared borrow *)
+}
+[@@deriving show]
+
+type proj_loans_info = {
+  abs_id : V.AbstractionId.id;
+  regions : T.RegionId.set_t;
+}
+[@@deriving show]
+
+type sv_info = {
+  ty : T.rty;
+  env_count : int;
+  aproj_borrows : proj_borrows_info list;
+  aproj_loans : proj_loans_info list;
+}
+[@@deriving show]
+
+(** Check the invariants over the symbolic values.
     
     - a symbolic value can't be both in proj_borrows and in the concrete env
       (this is why we preemptively expand copyable symbolic values)
-
+    - if a symbolic value contains regions: there is at most one occurrence
+      of this value in the concrete env
  *)
-let check_symbolic_values (ctx : C.eval_ctx) : unit = raise Errors.Unimplemented
+let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
+  (* Small utility *)
+  let module M = V.SymbolicValueId.Map in
+  let infos : sv_info M.t ref = ref M.empty in
+  let lookup_info (sv : V.symbolic_value) : sv_info =
+    match M.find_opt sv.V.sv_id !infos with
+    | Some info -> info
+    | None ->
+        { ty = sv.sv_ty; env_count = 0; aproj_borrows = []; aproj_loans = [] }
+  in
+  let update_info (sv : V.symbolic_value) (info : sv_info) =
+    infos := M.add sv.sv_id info !infos
+  in
+  let add_env_sv (sv : V.symbolic_value) : unit =
+    let info = lookup_info sv in
+    let info = { info with env_count = info.env_count + 1 } in
+    update_info sv info
+  in
+  let add_aproj_borrows (sv : V.symbolic_value) abs_id regions proj_ty
+      as_shared_value : unit =
+    let info = lookup_info sv in
+    let binfo = { abs_id; regions; proj_ty; as_shared_value } in
+    let info = { info with aproj_borrows = binfo :: info.aproj_borrows } in
+    update_info sv info
+  in
+  let add_aproj_loans (sv : V.symbolic_value) abs_id regions : unit =
+    let info = lookup_info sv in
+    let linfo = { abs_id; regions } in
+    let info = { info with aproj_loans = linfo :: info.aproj_loans } in
+    update_info sv info
+  in
+  (* Visitor *)
+  let obj =
+    object
+      inherit [_] C.iter_eval_ctx as super
 
-let check_invariants (ctx : C.eval_ctx) : unit =
+      method! visit_abs _ abs = super#visit_abs (Some abs) abs
+
+      method! visit_Symbolic _ sv = add_env_sv sv
+
+      method! visit_abstract_shared_borrows abs asb =
+        let abs = Option.get abs in
+        let visit asb =
+          match asb with
+          | V.AsbBorrow _ -> ()
+          | AsbProjReborrows (sv, proj_ty) ->
+              add_aproj_borrows sv abs.abs_id abs.regions proj_ty true
+        in
+        List.iter visit asb
+
+      method! visit_aproj abs aproj =
+        (let abs = Option.get abs in
+         match aproj with
+         | AProjLoans sv -> add_aproj_loans sv abs.abs_id abs.regions
+         | AProjBorrows (sv, proj_ty) ->
+             add_aproj_borrows sv abs.abs_id abs.regions proj_ty false
+         | AEndedProjLoans _ | AEndedProjBorrows | AIgnoredProjBorrows -> ());
+        super#visit_aproj abs aproj
+    end
+  in
+  (* Collect the information *)
+  obj#visit_eval_ctx None ctx;
+  log#ldebug
+    (lazy
+      ("check_symbolic_values: collected information:\n"
+      ^ V.SymbolicValueId.map_to_string (Some "  ") show_sv_info !infos));
+  (* Check *)
+  let check_info _id info =
+    assert (info.env_count = 0 || info.aproj_borrows = []);
+    if ty_has_regions info.ty then assert (info.env_count <= 1)
+  in
+  M.iter check_info !infos
+
+let check_invariants (config : C.config) (ctx : C.eval_ctx) : unit =
   check_loans_borrows_relation_invariant ctx;
   check_borrowed_values_invariant ctx;
   check_typing_invariant ctx;
-  check_symbolic_values ctx
+  check_symbolic_values config ctx

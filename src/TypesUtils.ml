@@ -91,8 +91,11 @@ let rec ety_no_regions_to_rty (ty : ety) : rty =
         "Can't convert a ref with erased regions to a ref with non-erased \
          regions"
 
-(** Check if a [ty] contains regions *)
-let ty_has_regions (ty : ety) : bool =
+(** Check if a [ty] contains regions.
+
+    TODO: rename to "has_borrows"?
+  *)
+let ty_has_regions (ty : 'r ty) : bool =
   let obj =
     object
       inherit [_] iter_ty as super
@@ -135,7 +138,7 @@ let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : rty) : bool =
   * require calling dedicated functions defined through the Copy trait. It
   * is the case for types like integers, shared borrows, etc.
   *)
-let rec type_is_primitively_copyable (ty : ety) : bool =
+let rec type_is_primitively_copyable (ty : 'r ty) : bool =
   match ty with
   | Adt ((AdtId _ | Assumed _), _, _) -> false
   | Adt (Tuple, _, tys) -> List.for_all type_is_primitively_copyable tys

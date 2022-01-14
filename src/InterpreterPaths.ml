@@ -467,10 +467,9 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
         | FailMutLoan bid -> end_outer_borrow config bid ctx
         | FailInactivatedMutBorrow bid ->
             activate_inactivated_mut_borrow config bid ctx
-        | FailSymbolic (pe, sp) ->
+        | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching_from_projection_elem config pe sp
-              ctx
+            expand_symbolic_value_no_branching config sp ctx
         | FailBottom (_, _, _) ->
             (* We can't expand [Bottom] values while reading them *)
             failwith "Found [Bottom] while reading a place"
@@ -495,10 +494,9 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
         | FailMutLoan bid -> end_outer_borrow config bid ctx
         | FailInactivatedMutBorrow bid ->
             activate_inactivated_mut_borrow config bid ctx
-        | FailSymbolic (pe, sp) ->
+        | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching_from_projection_elem config pe sp
-              ctx
+            expand_symbolic_value_no_branching config sp ctx
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
             expand_bottom_value_from_projection config access p remaining_pes pe
@@ -669,6 +667,11 @@ let drop_outer_borrows_loans_at_lplace (config : C.config) (end_borrows : bool)
  *)
 let rec copy_value (allow_adt_copy : bool) (config : C.config)
     (ctx : C.eval_ctx) (v : V.typed_value) : C.eval_ctx * V.typed_value =
+  log#ldebug
+    (lazy
+      ("copy_value: "
+      ^ typed_value_to_string ctx v
+      ^ "\n- context:\n" ^ eval_ctx_to_string ctx));
   (* Remark: at some point we rewrote this function to use iterators, but then
    * we reverted the changes: the result was less clear actually. In particular,
    * the fact that we have exhaustive matches below makes very obvious the cases

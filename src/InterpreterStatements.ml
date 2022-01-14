@@ -602,7 +602,7 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
    * checking the invariants *)
   let ctx = greedy_expand_symbolic_values config ctx in
   (* Sanity check *)
-  if config.C.check_invariants then Inv.check_invariants ctx;
+  if config.C.check_invariants then Inv.check_invariants config ctx;
   (* Evaluate *)
   match st with
   | A.Assign (p, rvalue) -> (
@@ -617,7 +617,8 @@ let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
           in
           List.map assign res)
   | A.FakeRead p ->
-      let ctx, _ = prepare_rplace config Read p ctx in
+      let expand_prim_copy = false in
+      let ctx, _ = prepare_rplace config expand_prim_copy Read p ctx in
       [ Ok (ctx, Unit) ]
   | A.SetDiscriminant (p, variant_id) ->
       [ Ok (set_discriminant config ctx p variant_id) ]
@@ -1028,7 +1029,7 @@ and eval_function_body (config : C.config) (ctx : C.eval_ctx)
          * checking the invariants *)
         let ctx = greedy_expand_symbolic_values config ctx in
         (* Sanity check *)
-        if config.C.check_invariants then Inv.check_invariants ctx;
+        if config.C.check_invariants then Inv.check_invariants config ctx;
         match res with
         | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
         | Return -> Ok ctx)
