@@ -45,7 +45,33 @@ type constant_value =
   | String of string
 [@@deriving show]
 
-type symbolic_value = { sv_id : SymbolicValueId.id; sv_ty : rty }
+(** The kind of a symbolic value, which precises how the value was generated *)
+type sv_kind =
+  | FunCallRet  (** The value is the return value of a function call *)
+  | FunCallGivenBack
+      (** The value is a borrowed value given back by an abstraction
+          (happens when giving a borrow to a function: when the abstraction
+          introduced to model the function call ends we reintroduce a symbolic
+          value in the context for the value modified by the abstraction through
+          the borrow).
+       *)
+  | SynthInput
+      (** The value is an input value of the function whose body we are
+          currently synthesizing.
+       *)
+  | SynthGivenBack
+      (** The value is a borrowed value that the function whose body we are
+          synthesizing returned, and which was given back because we ended
+          one of the lifetimes of this function (we do this to synthesize
+          the backward functions).
+       *)
+[@@deriving show]
+
+type symbolic_value = {
+  sv_kind : sv_kind;
+  sv_id : SymbolicValueId.id;
+  sv_ty : rty;
+}
 [@@deriving show]
 (** A symbolic value *)
 

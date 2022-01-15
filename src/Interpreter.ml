@@ -67,7 +67,9 @@ module Test = struct
     let ctx, inst_sg = instantiate_fun_sig type_params sg ctx in
     (* Create fresh symbolic values for the inputs *)
     let input_svs =
-      List.map (fun ty -> mk_fresh_symbolic_value ty) inst_sg.inputs
+      List.map
+        (fun ty -> mk_fresh_symbolic_value V.SynthInput ty)
+        inst_sg.inputs
     in
     (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
     let empty_absl =

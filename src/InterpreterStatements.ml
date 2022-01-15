@@ -885,7 +885,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (args : E.operand list) (dest : E.place) : C.eval_ctx =
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
-  let ret_spc = mk_fresh_symbolic_value ret_sv_ty in
+  let ret_spc = mk_fresh_symbolic_value V.FunCallRet ret_sv_ty in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
   let ret_av regions =
     mk_aproj_loans_value_from_symbolic_value regions ret_spc

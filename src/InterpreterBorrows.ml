@@ -746,8 +746,8 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     be expanded (because expanding this symbolic value would require expanding
     a reference whose region has already ended).
  *)
-let convert_avalue_to_value (av : V.typed_avalue) : V.typed_value =
-  mk_fresh_symbolic_typed_value av.V.ty
+let convert_avalue_to_given_back_value (av : V.typed_avalue) : V.typed_value =
+  mk_fresh_symbolic_typed_value V.FunCallGivenBack av.V.ty
 
 (** End a borrow identified by its borrow id in a context
     
@@ -1129,7 +1129,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         match bc with
         | V.AMutBorrow (bid, av) ->
             (* First, convert the avalue to a (fresh symbolic) value *)
-            let v = convert_avalue_to_value av in
+            let v = convert_avalue_to_given_back_value av in
             give_back_value config bid v ctx
         | V.ASharedBorrow bid -> give_back_shared config bid ctx
         | V.AProjSharedBorrow _ ->
@@ -1148,7 +1148,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
           V.AEndedProjBorrows ctx
       in
       (* Give back a fresh symbolic value *)
-      let nsv = mk_fresh_symbolic_value proj_ty in
+      let nsv = mk_fresh_symbolic_value V.FunCallGivenBack proj_ty in
       let ctx =
         give_back_symbolic_value config abs.regions proj_ty sv nsv ctx
       in

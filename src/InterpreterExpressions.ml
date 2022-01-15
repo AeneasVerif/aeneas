@@ -242,7 +242,9 @@ let eval_unary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
     | E.Neg, T.Integer int_ty -> T.Integer int_ty
     | _ -> failwith "Invalid input for unop"
   in
-  let res_sv = { V.sv_id = res_sv_id; sv_ty = res_sv_ty } in
+  let res_sv =
+    { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
+  in
   (* Synthesize *)
   S.synthesize_unary_op unop v res_sv;
   (* Return *)
@@ -360,7 +362,9 @@ let eval_binary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
           | E.Ne | E.Eq -> failwith "Unreachable")
       | _ -> failwith "Invalid inputs for binop"
   in
-  let res_sv = { V.sv_id = res_sv_id; sv_ty = res_sv_ty } in
+  let res_sv =
+    { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
+  in
   (* Synthesize *)
   S.synthesize_binary_op binop v1 v2 res_sv;
   (* Return *)

@@ -53,16 +53,18 @@ let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
   { var_id; projection = [] }
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value (ty : T.rty) : V.symbolic_value =
+let mk_fresh_symbolic_value (sv_kind : V.sv_kind) (ty : T.rty) :
+    V.symbolic_value =
   let sv_id = C.fresh_symbolic_value_id () in
-  let svalue = { V.sv_id; V.sv_ty = ty } in
+  let svalue = { V.sv_kind; V.sv_id; V.sv_ty = ty } in
   svalue
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_typed_value (rty : T.rty) : V.typed_value =
+let mk_fresh_symbolic_typed_value (sv_kind : V.sv_kind) (rty : T.rty) :
+    V.typed_value =
   let ty = Subst.erase_regions rty in
   (* Generate the fresh a symbolic value *)
-  let value = mk_fresh_symbolic_value rty in
+  let value = mk_fresh_symbolic_value sv_kind rty in
   let value = V.Symbolic value in
   { V.value; V.ty }
 
