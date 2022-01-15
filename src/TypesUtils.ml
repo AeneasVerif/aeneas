@@ -44,11 +44,11 @@ let mk_ref_ty (r : 'r) (ty : 'r ty) (ref_kind : ref_kind) : 'r ty =
 let mk_box_ty (ty : 'r ty) : 'r ty = Adt (Assumed Box, [], [ ty ])
 
 (** Check if a region is in a set of regions *)
-let region_in_set (r : RegionId.id region) (rset : RegionId.set_t) : bool =
+let region_in_set (r : RegionId.id region) (rset : RegionId.Set.t) : bool =
   match r with Static -> false | Var id -> RegionId.Set.mem id rset
 
 (** Return the set of regions in an rty *)
-let rty_regions (ty : rty) : RegionId.set_t =
+let rty_regions (ty : rty) : RegionId.Set.t =
   let s = ref RegionId.Set.empty in
   let add_region (r : RegionId.id region) =
     match r with Static -> () | Var rid -> s := RegionId.Set.add rid !s
@@ -65,7 +65,7 @@ let rty_regions (ty : rty) : RegionId.set_t =
   (* Return the set of accumulated regions *)
   !s
 
-let rty_regions_intersect (ty : rty) (regions : RegionId.set_t) : bool =
+let rty_regions_intersect (ty : rty) (regions : RegionId.Set.t) : bool =
   let ty_regions = rty_regions ty in
   not (RegionId.Set.disjoint ty_regions regions)
 

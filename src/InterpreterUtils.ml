@@ -192,7 +192,7 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     check that the set of ended regions doesn't intersect the set of
     regions used in the type (this is more general).
 *)
-let symbolic_value_has_ended_regions (ended_regions : T.RegionId.set_t)
+let symbolic_value_has_ended_regions (ended_regions : T.RegionId.Set.t)
     (s : V.symbolic_value) : bool =
   let regions = rty_regions s.V.sv_ty in
   not (T.RegionId.Set.disjoint regions ended_regions)
@@ -202,7 +202,7 @@ let symbolic_value_has_ended_regions (ended_regions : T.RegionId.set_t)
     Note that this function is very general: it also checks wether
     symbolic values contain already ended regions.
  *)
-let bottom_in_value (ended_regions : T.RegionId.set_t) (v : V.typed_value) :
+let bottom_in_value (ended_regions : T.RegionId.Set.t) (v : V.typed_value) :
     bool =
   let obj =
     object

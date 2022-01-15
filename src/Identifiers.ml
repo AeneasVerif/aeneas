@@ -1,4 +1,4 @@
-open Collections
+module C = Collections
 
 (** Signature for a module describing an identifier.
     
@@ -12,25 +12,26 @@ module type Id = sig
   type generator
   (** Id generator - simply a counter *)
 
-  type set_t
-
-  type +!'a map_t
-
   val zero : id
 
   val generator_zero : generator
 
   val fresh_stateful_generator : unit -> generator ref * (unit -> id)
 
-  (* TODO: this is stateful! - but we may want to be able to duplicate contexts... *)
+  (* TODO: this should be stateful! - but we may want to be able to duplicate
+     contexts...
+     Maybe we could have a `fresh` and a `global_fresh`
+     TODO: change the order of the returned types
+  *)
   val fresh : generator -> id * generator
-  (* TODO: change the order of the returned types *)
 
   val to_string : id -> string
 
   val pp_id : Format.formatter -> id -> unit
 
   val show_id : id -> string
+
+  val id_of_json : Yojson.Basic.t -> (id, string) result
 
   val pp_generator : Format.formatter -> generator -> unit
 
@@ -53,38 +54,16 @@ module type Id = sig
   val mapi : (id -> 'a -> 'b) -> 'a list -> 'b list
 
   val mapi_from1 : (id -> 'a -> 'b) -> 'a list -> 'b list
-  (** Same as [mapi], but where the indices start with 1 *)
-
-  val pp_set_t : Format.formatter -> set_t -> unit
-
-  val show_set_t : set_t -> string
-
-  val pp_map_t :
-    (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a map_t -> unit
-
-  val show_map_t : ('a -> string) -> 'a map_t -> string
-
-  module Ord : Map.OrderedType with type t = id
-
-  module Set : Set.S with type elt = id with type t = set_t
-
-  val set_to_string : string option -> Set.t -> string
-  (** Convert a set to a string.
-      
-      Takes an indentation as parameter, in case you want to insert a breakline
-      for every binding.
+  (** Same as [mapi], but where the indices start with 1.
+       
+      TODO: generalize to `map_from_i`
    *)
 
-  module Map : Map.S with type key = id with type 'a t = 'a map_t
+  module Ord : C.OrderedType with type t = id
 
-  val map_to_string : string option -> ('a -> string) -> 'a map_t -> string
-  (** Convert a map to a string.
-      
-      Takes an indentation as parameter, in case you want to insert a breakline
-      for every binding.
-   *)
+  module Set : C.Set with type elt = id
 
-  val id_of_json : Yojson.Basic.t -> (id, string) result
+  module Map : C.Map with type key = id
 end
 
 (** Generative functor for identifiers.
@@ -124,6 +103,12 @@ module IdGen () : Id = struct
 
   let of_int x = x
 
+  let id_of_json js =
+    (* TODO: check boundaries ? *)
+    match js with
+    | `Int i -> Ok i
+    | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)
+
   let nth v id = List.nth v id
 
   let nth_opt v id = List.nth_opt v id
@@ -146,73 +131,16 @@ module IdGen () : Id = struct
     type t = id
 
     let compare = compare
+
+    let to_string = to_string
+
+    let pp_t = pp_id
+
+    let show_t = show_id
   end
 
-  module Set = Set.Make (Ord)
-  module Map = Map.Make (Ord)
-
-  type set_t = Set.t
-
-  type +!'a map_t = 'a Map.t
-
-  let show_set_t s =
-    let ids = Set.fold (fun id s -> to_string id :: s) s [] in
-    let ids = List.rev ids in
-    "{" ^ String.concat "," ids ^ "}"
-
-  let pp_set_t fmt s =
-    let pp_string = Format.pp_print_string fmt in
-    pp_string "{";
-    Set.iter (fun id -> pp_string (to_string id ^ ",")) s;
-    pp_string "}"
-
-  let show_map_t show_a s =
-    let ids =
-      Map.fold (fun id x s -> (to_string id ^ " -> " ^ show_a x) :: s) s []
-    in
-    let ids = List.rev ids in
-    "{" ^ String.concat "," ids ^ "}"
-
-  let pp_map_t (pp_a : Format.formatter -> 'a -> unit) (fmt : Format.formatter)
-      (m : 'a map_t) : unit =
-    let pp_string = Format.pp_print_string fmt in
-    pp_string "{";
-    Map.iter
-      (fun id x ->
-        pp_string (to_string id ^ " -> ");
-        pp_a fmt x;
-        pp_string ",")
-      m;
-    pp_string "}"
-
-  let set_to_string indent_opt ids =
-    let indent, sep =
-      match indent_opt with Some indent -> (indent, ",\n") | None -> ("", ",")
-    in
-    let ids = Set.fold (fun id ids -> (indent ^ to_string id) :: ids) ids [] in
-    match ids with
-    | [] -> "{}"
-    | _ -> "{\n" ^ String.concat sep (List.rev ids) ^ "\n}"
-
-  let map_to_string indent_opt a_to_string ids =
-    let indent, sep =
-      match indent_opt with Some indent -> (indent, ",\n") | None -> ("", ",")
-    in
-    let ids =
-      Map.fold
-        (fun id v ids ->
-          (indent ^ to_string id ^ " -> " ^ a_to_string v) :: ids)
-        ids []
-    in
-    match ids with
-    | [] -> "{}"
-    | _ -> "{\n" ^ String.concat sep (List.rev ids) ^ "\n}"
-
-  let id_of_json js =
-    (* TODO: check boundaries ? *)
-    match js with
-    | `Int i -> Ok i
-    | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)
+  module Set = C.MakeSet (Ord)
+  module Map = C.MakeMap (Ord)
 end
 
 type name = string list [@@deriving show]

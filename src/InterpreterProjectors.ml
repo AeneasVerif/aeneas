@@ -13,7 +13,7 @@ type symbolic_expansion =
   | SeConcrete of V.constant_value
   | SeAdt of (T.VariantId.id option * V.symbolic_value list)
   | SeMutRef of V.BorrowId.id * V.symbolic_value
-  | SeSharedRef of V.BorrowId.set_t * V.symbolic_value
+  | SeSharedRef of V.BorrowId.Set.t * V.symbolic_value
 
 (** Auxiliary function.
 
@@ -23,7 +23,7 @@ type symbolic_expansion =
 *)
 let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
-    (regions : T.RegionId.set_t) (v : V.typed_value) (ty : T.rty) :
+    (regions : T.RegionId.Set.t) (v : V.typed_value) (ty : T.rty) :
     V.abstract_shared_borrows =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
@@ -132,7 +132,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
 *)
 let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
-    (regions : T.RegionId.set_t) (ancestors_regions : T.RegionId.set_t)
+    (regions : T.RegionId.Set.t) (ancestors_regions : T.RegionId.Set.t)
     (v : V.typed_value) (ty : T.rty) : V.typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
@@ -235,9 +235,9 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
               (lazy
                 ("projections_intersect:" ^ "\n- ty1: " ^ rty_to_string ctx ty1
                ^ "\n- rset1: "
-                ^ T.RegionId.set_to_string None rset1
+                ^ T.RegionId.Set.to_string None rset1
                 ^ "\n- ty2: " ^ rty_to_string ctx ty2 ^ "\n- rset2: "
-                ^ T.RegionId.set_to_string None rset2
+                ^ T.RegionId.Set.to_string None rset2
                 ^ "\n"));
             assert (not (projections_intersect ty1 rset1 ty2 rset2)));
           V.ASymbolic (V.AProjBorrows (s, ty))
@@ -290,7 +290,7 @@ let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
 
     TODO: detailed comments. See [apply_proj_borrows]
 *)
-let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.set_t)
+let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
     (see : symbolic_expansion) (original_sv_ty : T.rty) : V.typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
@@ -528,7 +528,7 @@ let prepare_reborrows (config : C.config) (allow_reborrows : bool) :
   (fresh_reborrow, apply_registered_reborrows)
 
 let apply_proj_borrows_on_input_value (config : C.config) (ctx : C.eval_ctx)
-    (regions : T.RegionId.set_t) (ancestors_regions : T.RegionId.set_t)
+    (regions : T.RegionId.Set.t) (ancestors_regions : T.RegionId.Set.t)
     (v : V.typed_value) (ty : T.rty) : C.eval_ctx * V.typed_avalue =
   let check_symbolic_no_ended = true in
   let allow_reborrows = true in

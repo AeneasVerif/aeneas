@@ -290,7 +290,7 @@ module Values = struct
       string =
     match lc with
     | SharedLoan (loans, v) ->
-        let loans = V.BorrowId.set_to_string None loans in
+        let loans = V.BorrowId.Set.to_string None loans in
         "@shared_loan(" ^ loans ^ ", " ^ typed_value_to_string fmt v ^ ")"
     | MutLoan bid -> "⌊mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
@@ -375,7 +375,7 @@ module Values = struct
         ^ typed_avalue_to_string fmt av
         ^ "⌋"
     | ASharedLoan (loans, v, av) ->
-        let loans = V.BorrowId.set_to_string None loans in
+        let loans = V.BorrowId.Set.to_string None loans in
         "@shared_loan(" ^ loans ^ ", "
         ^ typed_value_to_string fmt v
         ^ ", "
@@ -441,9 +441,9 @@ module Values = struct
     indent ^ "abs@"
     ^ V.AbstractionId.to_string abs.abs_id
     ^ "{parents="
-    ^ V.AbstractionId.set_to_string None abs.parents
+    ^ V.AbstractionId.Set.to_string None abs.parents
     ^ "}" ^ "{regions="
-    ^ T.RegionId.set_to_string None abs.regions
+    ^ T.RegionId.Set.to_string None abs.regions
     ^ "}" ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
 end
 
@@ -552,7 +552,7 @@ module Contexts = struct
 
   let eval_ctx_to_string (ctx : C.eval_ctx) : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
-    let ended_regions = T.RegionId.set_to_string None ctx.ended_regions in
+    let ended_regions = T.RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
     let frames =

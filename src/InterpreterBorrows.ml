@@ -430,7 +430,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
     it was left unchanged.
   *)
 let give_back_symbolic_value (_config : C.config)
-    (proj_regions : T.RegionId.set_t) (proj_ty : T.rty) (sv : V.symbolic_value)
+    (proj_regions : T.RegionId.Set.t) (proj_ty : T.rty) (sv : V.symbolic_value)
     (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
   let subst local_regions local_ty =
     let child_proj =
@@ -971,7 +971,7 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
   ctx
 
 and end_abstractions (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_ids : V.AbstractionId.set_t) (ctx : C.eval_ctx) : C.eval_ctx =
+    (abs_ids : V.AbstractionId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
   V.AbstractionId.Set.fold
     (fun id ctx -> end_abstraction config chain id ctx)
     abs_ids ctx
@@ -1185,7 +1185,7 @@ and end_abstraction_remove_from_context (_config : C.config)
         abstraction
 *)
 and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_id : V.AbstractionId.id) (regions : T.RegionId.set_t)
+    (abs_id : V.AbstractionId.id) (regions : T.RegionId.Set.t)
     (sv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Find the first proj_borrows which intersects the proj_loans *)
   let explore_shared = true in

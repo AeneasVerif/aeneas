@@ -31,7 +31,7 @@ type exploration_kind = {
 let ek_all : exploration_kind =
   { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
 
-type borrow_ids = Borrows of V.BorrowId.set_t | Borrow of V.BorrowId.id
+type borrow_ids = Borrows of V.BorrowId.Set.t | Borrow of V.BorrowId.id
 [@@deriving show]
 
 exception FoundBorrowIds of borrow_ids
@@ -84,8 +84,8 @@ let add_borrow_or_abs_id_to_chain (msg : string) (id : borrow_or_abs_id)
     Note that the two abstractions have different views (in terms of regions)
     of the symbolic value (hence the two region types).
 *)
-let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.set_t)
-    (ty2 : T.rty) (rset2 : T.RegionId.set_t) : bool =
+let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.Set.t)
+    (ty2 : T.rty) (rset2 : T.RegionId.Set.t) : bool =
   match (ty1, ty2) with
   | T.Bool, T.Bool | T.Char, T.Char | T.Str, T.Str -> false
   | T.Integer int_ty1, T.Integer int_ty2 ->

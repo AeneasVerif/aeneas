@@ -132,7 +132,7 @@ and borrow_content =
        *)
 
 and loan_content =
-  | SharedLoan of (BorrowId.set_t[@opaque]) * typed_value
+  | SharedLoan of (BorrowId.Set.t[@opaque]) * typed_value
   | MutLoan of (BorrowId.id[@opaque])
       (** TODO: we might want to add a set of borrow ids (useful for inactivated
           borrows, and extremely useful when giving shared values to abstractions).
@@ -322,7 +322,7 @@ and aloan_content =
           px -> mut_borrow l0 (mut_borrow @s1)
           ```
        *)
-  | ASharedLoan of (BorrowId.set_t[@opaque]) * typed_value * typed_avalue
+  | ASharedLoan of (BorrowId.Set.t[@opaque]) * typed_value * typed_avalue
       (** A shared loan owned by an abstraction.
 
           Example:
@@ -599,9 +599,9 @@ and typed_avalue = { value : avalue; ty : rty }
 
 type abs = {
   abs_id : (AbstractionId.id[@opaque]);
-  parents : (AbstractionId.set_t[@opaque]);  (** The parent abstractions *)
-  regions : (RegionId.set_t[@opaque]);  (** Regions owned by this abstraction *)
-  ancestors_regions : (RegionId.set_t[@opaque]);
+  parents : (AbstractionId.Set.t[@opaque]);  (** The parent abstractions *)
+  regions : (RegionId.Set.t[@opaque]);  (** Regions owned by this abstraction *)
+  ancestors_regions : (RegionId.Set.t[@opaque]);
       (** Union of the regions owned by this abstraction's ancestors (not
           including the regions of this abstraction itself) *)
   avalues : typed_avalue list;  (** The values in this abstraction *)

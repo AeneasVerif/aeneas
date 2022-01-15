@@ -554,7 +554,7 @@ let create_empty_abstractions_from_abs_region_groups
    * - the regions of the ancestors of abs_id
    * - the regions of abs_id
    *)
-  let abs_to_ancestors_regions : T.RegionId.set_t V.AbstractionId.Map.t ref =
+  let abs_to_ancestors_regions : T.RegionId.Set.t V.AbstractionId.Map.t ref =
     ref V.AbstractionId.Map.empty
   in
   (* Auxiliary function to create one abstraction *)

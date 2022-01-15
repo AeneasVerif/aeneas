@@ -19,8 +19,8 @@ type borrow_info = {
   loan_kind : T.ref_kind;
   loan_in_abs : bool;
   (* true if the loan was found in an abstraction *)
-  loan_ids : V.BorrowId.set_t;
-  borrow_ids : V.BorrowId.set_t;
+  loan_ids : V.BorrowId.Set.t;
+  borrow_ids : V.BorrowId.Set.t;
 }
 [@@deriving show]
 
@@ -36,14 +36,13 @@ let set_outer_mut (info : outer_borrow_info) : outer_borrow_info =
 let set_outer_shared (_info : outer_borrow_info) : outer_borrow_info =
   { outer_borrow = true; outer_shared = true }
 
-(* TODO: we need to factorize print functions for sets *)
 let ids_reprs_to_string (indent : string)
     (reprs : V.BorrowId.id V.BorrowId.Map.t) : string =
-  V.BorrowId.map_to_string (Some indent) V.BorrowId.to_string reprs
+  V.BorrowId.Map.to_string (Some indent) V.BorrowId.to_string reprs
 
 let borrows_infos_to_string (indent : string)
     (infos : borrow_info V.BorrowId.Map.t) : string =
-  V.BorrowId.map_to_string (Some indent) show_borrow_info infos
+  V.BorrowId.Map.to_string (Some indent) show_borrow_info infos
 
 type borrow_kind = Mut | Shared | Inactivated
 
@@ -79,7 +78,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     ignored_loans := (rkind, bid) :: !ignored_loans
   in
 
-  let register_shared_loan (loan_in_abs : bool) (bids : V.BorrowId.set_t) : unit
+  let register_shared_loan (loan_in_abs : bool) (bids : V.BorrowId.Set.t) : unit
       =
     let reprs = !ids_reprs in
     let infos = !borrows_infos in
@@ -612,7 +611,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
 
 type proj_borrows_info = {
   abs_id : V.AbstractionId.id;
-  regions : T.RegionId.set_t;
+  regions : T.RegionId.Set.t;
   proj_ty : T.rty;
   as_shared_value : bool;  (** True if the value is below a shared borrow *)
 }
@@ -620,7 +619,7 @@ type proj_borrows_info = {
 
 type proj_loans_info = {
   abs_id : V.AbstractionId.id;
-  regions : T.RegionId.set_t;
+  regions : T.RegionId.Set.t;
 }
 [@@deriving show]
 
@@ -704,7 +703,7 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
   log#ldebug
     (lazy
       ("check_symbolic_values: collected information:\n"
-      ^ V.SymbolicValueId.map_to_string (Some "  ") show_sv_info !infos));
+      ^ V.SymbolicValueId.Map.to_string (Some "  ") show_sv_info !infos));
   (* Check *)
   let check_info _id info =
     assert (info.env_count = 0 || info.aproj_borrows = []);
