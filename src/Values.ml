@@ -623,8 +623,18 @@ and typed_avalue = { value : avalue; ty : rty }
         concrete = true;
       }]
 
+(** The kind of an abstraction, which keeps track of its origin *)
+type abs_kind =
+  | FunCall  (** The abstraction was introduced because of a function call *)
+  | Synth
+      (** The abstraction is used to keep track of the input/return value of
+       the function we are currently synthesizing.
+    *)
+[@@deriving show]
+
 type abs = {
   abs_id : (AbstractionId.id[@opaque]);
+  kind : (abs_kind[@opaque]);
   parents : (AbstractionId.Set.t[@opaque]);  (** The parent abstractions *)
   regions : (RegionId.Set.t[@opaque]);  (** Regions owned by this abstraction *)
   ancestors_regions : (RegionId.Set.t[@opaque]);

@@ -546,7 +546,7 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
     Create abstractions (with no avalues, which have to be inserted afterwards)
     from a list of abs region groups.
  *)
-let create_empty_abstractions_from_abs_region_groups
+let create_empty_abstractions_from_abs_region_groups (kind : V.abs_kind)
     (rgl : A.abs_region_group list) : V.abs list =
   (* We use a reference to progressively create a map from abstraction ids
    * to set of ancestor regions. Note that abs_to_ancestors_regions[abs_id]
@@ -584,7 +584,7 @@ let create_empty_abstractions_from_abs_region_groups
       V.AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
         !abs_to_ancestors_regions;
     (* Create the abstraction *)
-    { V.abs_id; parents; regions; ancestors_regions; avalues = [] }
+    { V.abs_id; kind; parents; regions; ancestors_regions; avalues = [] }
   in
   (* Apply *)
   List.map create_abs rgl
@@ -901,7 +901,8 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
       args_with_rtypes);
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
-    create_empty_abstractions_from_abs_region_groups inst_sg.A.regions_hierarchy
+    create_empty_abstractions_from_abs_region_groups V.FunCall
+      inst_sg.A.regions_hierarchy
   in
   (* Add the avalues to the abstractions and insert them in the context *)
   let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =

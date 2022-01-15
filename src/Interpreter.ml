@@ -73,7 +73,7 @@ module Test = struct
     in
     (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
     let empty_absl =
-      create_empty_abstractions_from_abs_region_groups
+      create_empty_abstractions_from_abs_region_groups V.Synth
         inst_sg.A.regions_hierarchy
     in
     (* Add the avalues to the abstractions and insert them in the context *)
