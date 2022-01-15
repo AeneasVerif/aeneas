@@ -1,3 +1,5 @@
+open Collections
+
 (** Signature for a module describing an identifier.
     
     We often need identifiers (for definitions, variables, etc.) and in

@@ -2,14 +2,9 @@ module L = Logging
 module T = Types
 module A = CfimAst
 module M = Modules
-open Utils
 open InterpreterUtils
 open InterpreterExpressions
 open InterpreterStatements
-
-(* TODO: check that the value types are correct when evaluating *)
-(* TODO: for debugging purposes, we might want to put use eval_ctx everywhere
-   (rather than only env) *)
 
 (* TODO: it would be good to find a "core", which implements the rules (like
    "end_borrow") and on top of which we build more complex functions which
@@ -98,7 +93,7 @@ module Test = struct
     (* Split the variables between return var, inputs and remaining locals *)
     let ret_var = List.hd fdef.locals in
     let input_vars, local_vars =
-      list_split_at (List.tl fdef.locals) fdef.arg_count
+      Collections.List.split_at (List.tl fdef.locals) fdef.arg_count
     in
     (* Push the return variable (initialized with ⊥) *)
     let ctx = C.ctx_push_uninitialized_var ctx ret_var in

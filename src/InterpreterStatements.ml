@@ -829,7 +829,7 @@ and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
   let ctx = C.ctx_push_var ctx ret_var (mk_bottom ret_var.var_ty) in
 
   (* 2. Push the input values *)
-  let input_locals, locals = Utils.list_split_at locals def.A.arg_count in
+  let input_locals, locals = Collections.List.split_at locals def.A.arg_count in
   let inputs = List.combine input_locals args in
   (* Note that this function checks that the variables and their values
      have the same type (this is important) *)

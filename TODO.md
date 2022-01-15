@@ -11,6 +11,8 @@
 
 3. fix the static regions (with projectors)
 
+4. Add a `Collections.ml` file, with `Map` and `Set`
+
 * write an interesting example to study with Jonathan
 
 * add option for: `allow_borrow_overwrites_on_input_values`
@@ -58,6 +60,15 @@
 * Some variables have the same name. It might be good to also print their id
   to disambiguate?
 
+* it would be good to find a "core", which implements the rules (like
+  "end_borrow") and on top of which we build more complex functions which
+  chose in which order to apply the rules, etc. This way we would make very
+  explicit where we need to insert sanity checks, what the preconditions are,
+  where invariants might be broken, etc.
+
+* intensively test with PLT-redex
+
+* remove the config parameters when they are useless
 
 # DONE
 
