@@ -1,30 +1,44 @@
 # TODO
 
-1. add a check in function inputs: ok to take as parameters symbolic values with
+0. derive [ord] for types
+
+0. compute the region constraints for the type definitions
+
+1. stateful maps/sets modules (hashtbl?)
+
+2. set of types with mutable borrows (what to do when type variables appear under
+  shared borrows?), nested borrows...
+  necessary to know what to return.
+
+3. in MIR, erased regions are completely erased (no list of erased regions...):
+  update functions like `ty_has_regions` (and rename to `ty_has_borrows`)
+
+4. check that no borrow_overwrites upon ending abstractions
+
+5. add a check in function inputs: ok to take as parameters symbolic values with
   borrow parameters *if* they come from the "input abstractions".
   In order to do this, add a symbolic value kind (would make things easier than
   adding ad-hoc lookups...): `FunRet`, `FunGivenBack`, `SynthInput`, `SynthGivenBack`
   Rk.: pay attention: we can't give borrows of borrows to functions, but borrows
   are ok.
 
-2. add `mvalue` (meta values) stored in abstractions when ending loans
+6. add `mvalue` (meta values) stored in abstractions when ending loans
 
-3. fix the static regions (with projectors)
+7. fix the static regions (with projectors)
 
-4. Add a `Collections.ml` file, with `Map` and `Set`
-
+* write a function to check that the code we are about to synthesize is in the proper
+  subset. In particular:
+  * borrow overwrites
+  * type parameters instantiation
+  * uniform polymorphism
+  Also, write nice debug messages which refer to the original code in case
+  something fails.
 * write an interesting example to study with Jonathan
 
 * add option for: `allow_borrow_overwrites_on_input_values`
   (rather: `will_overwrite_input_borrows`)
   (but always disallow borrow overwrites on returned values)
   at the level of abstractions (not at the level of loans!)
-
-* check that no borrow_overwrites upon ending abstractions
-
-* set of types with mutable borrows (what to do when type variables appear under
-  shared borrows?)
-  necessary to know what to return.
 
 * invariant: if there is a `proj_loans rset1 (s:rty)` where `s` contains mutable
   borrows, then:
@@ -102,3 +116,5 @@
   Actually: didn't do it: bad idea.
 
 * Reduce projectors to `_` (ignored) when there are no region intersections
+
+* Add a `Collections.ml` file, with `Map` and `Set`
