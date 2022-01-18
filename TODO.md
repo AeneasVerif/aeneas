@@ -2,9 +2,9 @@
 
 0. derive [ord] for types
 
-0. compute the region constraints for the type definitions
-
 1. stateful maps/sets modules (hashtbl?)
+
+0. compute the region constraints for the type definitions
 
 2. set of types with mutable borrows (what to do when type variables appear under
   shared borrows?), nested borrows...

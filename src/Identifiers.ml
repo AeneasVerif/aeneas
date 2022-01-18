@@ -33,6 +33,8 @@ module type Id = sig
 
   val id_of_json : Yojson.Basic.t -> (id, string) result
 
+  val compare_id : id -> id -> int
+
   val pp_generator : Format.formatter -> generator -> unit
 
   val show_generator : generator -> string
@@ -108,6 +110,8 @@ module IdGen () : Id = struct
     match js with
     | `Int i -> Ok i
     | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)
+
+  let compare_id = compare
 
   let nth v id = List.nth v id
 

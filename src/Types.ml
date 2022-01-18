@@ -40,13 +40,13 @@ type region_var = (RegionVarId.id, string option) indexed_var [@@deriving show]
 type 'rid region =
   | Static  (** Static region *)
   | Var of 'rid  (** Non-static region *)
-[@@deriving show]
+[@@deriving show, ord]
 
 (** The type of erased regions.
     
     We could use unit, but having a dedicated type makes things more explicit.
  *)
-type erased_region = Erased [@@deriving show]
+type erased_region = Erased [@@deriving show, ord]
 
 type ('id, 'r) g_region_group = {
   id : 'id;
@@ -83,11 +83,11 @@ type integer_type =
   | U32
   | U64
   | U128
-[@@deriving show]
+[@@deriving show, ord]
 
-type ref_kind = Mut | Shared [@@deriving show]
+type ref_kind = Mut | Shared [@@deriving show, ord]
 
-type assumed_ty = Box [@@deriving show]
+type assumed_ty = Box [@@deriving show, ord]
 
 (** Type identifier for ADTs.
 
@@ -95,7 +95,7 @@ type assumed_ty = Box [@@deriving show]
     tuples and also assumed types.
 *)
 type type_id = AdtId of TypeDefId.id | Tuple | Assumed of assumed_ty
-[@@deriving show]
+[@@deriving show, ord]
 
 (** Ancestor for iter visitor for [ty] *)
 class ['self] iter_ty_base =
@@ -144,6 +144,7 @@ type 'r ty =
   | Ref of 'r * 'r ty * ref_kind
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_ty";
@@ -164,22 +165,22 @@ type 'r ty =
       }]
 (* TODO: group Bool, Char, etc. in Constant *)
 
-type 'r gr_ty = 'r region ty [@@deriving show]
+type 'r gr_ty = 'r region ty [@@deriving show, ord]
 (** Generic type with regions *)
 
-type sty = RegionVarId.id gr_ty [@@deriving show]
+type sty = RegionVarId.id gr_ty [@@deriving show, ord]
 (** *S*ignature types.
 
     Used in function signatures and type definitions.
  *)
 
-type rty = RegionId.id gr_ty [@@deriving show]
+type rty = RegionId.id gr_ty [@@deriving show, ord]
 (** Type with *R*egions.
 
     Used during symbolic execution.
  *)
 
-type ety = erased_region ty [@@deriving show]
+type ety = erased_region ty [@@deriving show, ord]
 (** Type with *E*rased regions.
     
     Used in function bodies, "general" value types, etc.
