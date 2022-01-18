@@ -945,7 +945,10 @@ and eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
     C.eval_ctx =
   (* Sanity check: make sure the type parameters don't contain regions -
    * this is a current limitation of our synthesis *)
-  assert (List.for_all (fun ty -> not (ty_has_regions ty)) type_params);
+  assert (
+    List.for_all
+      (fun ty -> not (ty_has_borrows ctx.type_context.type_infos ty))
+      type_params);
 
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free

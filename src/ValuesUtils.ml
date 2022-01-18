@@ -2,6 +2,7 @@ open Utils
 open TypesUtils
 open Types
 open Values
+module TA = TypesAnalysis
 
 exception FoundSymbolicValue of symbolic_value
 (** Utility exception *)
@@ -88,8 +89,8 @@ let outer_loans_in_value (v : typed_value) : bool =
     false
   with Found -> true
 
-let find_first_primitively_copyable_sv (v : typed_value) : symbolic_value option
-    =
+let find_first_primitively_copyable_sv_with_borrows (type_infos : TA.type_infos)
+    (v : typed_value) : symbolic_value option =
   (* The visitor *)
   let obj =
     object
@@ -97,7 +98,7 @@ let find_first_primitively_copyable_sv (v : typed_value) : symbolic_value option
 
       method! visit_Symbolic _ sv =
         let ty = sv.sv_ty in
-        if ty_is_primitively_copyable ty && ty_has_regions ty then
+        if ty_is_primitively_copyable ty && ty_has_borrows type_infos ty then
           raise (FoundSymbolicValue sv)
         else ()
     end

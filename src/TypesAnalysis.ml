@@ -80,8 +80,9 @@ let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
     param_infos = ();
   }
 
-let analyze_full_ty (updated : bool ref) (infos : type_infos)
-    (ty_info : partial_type_info) (ty : 'r gr_ty) : partial_type_info =
+let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
+    (infos : type_infos) (ty_info : partial_type_info) (ty : 'r ty) :
+    partial_type_info =
   (* Small utility *)
   let check_update_bool (original : bool) (nv : bool) : bool =
     if nv && not original then (
@@ -107,7 +108,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
 
   (* The recursive function which explores the type *)
   let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
-      (ty : 'r gr_ty) : partial_type_info =
+      (ty : 'r ty) : partial_type_info =
     match ty with
     | Bool | Char | Never | Integer _ | Str -> ty_info
     | TypeVar var_id -> (
@@ -142,7 +143,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         in
         (* Set `contains_static` *)
         let contains_static =
-          check_update_bool ty_info.contains_static (r = Static)
+          check_update_bool ty_info.contains_static (r_is_static r)
         in
         let ty_info = { ty_info with contains_static } in
         (* Update the type info *)
@@ -164,7 +165,7 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
               {
                 ty_info with
                 contains_static =
-                  check_update_bool ty_info.contains_static (r = Static);
+                  check_update_bool ty_info.contains_static (r_is_static r);
               })
             ty_info regions
         in
@@ -207,11 +208,13 @@ let analyze_type_def (updated : bool ref) (infos : type_infos) (def : type_def)
           (List.map (fun v -> List.map (fun f -> f.field_ty) v.fields) variants)
   in
   (* Explore the types and accumulate information *)
+  let r_is_static r = r = Static in
   let type_def_info = TypeDefId.Map.find def.def_id infos in
   let type_def_info = type_def_info_to_partial_type_info type_def_info in
   let type_def_info =
     List.fold_left
-      (fun type_def_info ty -> analyze_full_ty updated infos type_def_info ty)
+      (fun type_def_info ty ->
+        analyze_full_ty r_is_static updated infos type_def_info ty)
       type_def_info fields_tys
   in
   let type_def_info = partial_type_info_to_type_def_info type_def_info in
@@ -263,10 +266,12 @@ let analyze_type_declarations (type_defs : type_def TypeDefId.Map.t)
 (** Analyze a type to check whether it contains borrows, etc., provided
     we have already analyzed the type definitions in the context.
  *)
-let analyze_ty (infos : type_infos) (ty : 'r gr_ty) : ty_info =
+let analyze_ty (infos : type_infos) (ty : 'r ty) : ty_info =
   (* We don't use `updated` but need to give it as parameter *)
   let updated = ref false in
+  (* We don't need to compute whether the type contains 'static or not *)
+  let r_is_static _ = false in
   let ty_info = initialize_g_type_info None in
-  let ty_info = analyze_full_ty updated infos ty_info ty in
+  let ty_info = analyze_full_ty r_is_static updated infos ty_info ty in
   (* Convert the ty_info *)
   partial_type_info_to_ty_info ty_info

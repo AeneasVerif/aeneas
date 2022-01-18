@@ -92,29 +92,6 @@ let rec ety_no_regions_to_rty (ty : ety) : rty =
         "Can't convert a ref with erased regions to a ref with non-erased \
          regions"
 
-(** Check if a [ty] contains regions.
-
-    TODO: rename to "has_borrows"?
-    TODO: update, and check the usage.
-  *)
-let ty_has_regions (ty : 'r ty) : bool =
-  let obj =
-    object
-      inherit [_] iter_ty as super
-
-      method! visit_Adt env type_id regions tys =
-        if regions = [] then super#visit_Adt env type_id regions tys
-        else raise Found
-
-      method! visit_Ref _ _ _ _ = raise Found
-    end
-  in
-  raise Errors.Unimplemented;
-  try
-    obj#visit_ty () ty;
-    false
-  with Found -> true
-
 (** Retuns true if a type contains borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes

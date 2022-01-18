@@ -81,6 +81,8 @@ let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
     
     Checks if the projector will actually project some regions. If not,
     returns [AIgnored] (`_`).
+    
+    TODO: update to handle 'static
  *)
 let mk_aproj_loans_value_from_symbolic_value (regions : T.RegionId.Set.t)
     (svalue : V.symbolic_value) : V.typed_avalue =

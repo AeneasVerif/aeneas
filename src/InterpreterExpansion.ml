@@ -535,7 +535,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) (ctx : C.eval_ctx)
       inherit [_] C.iter_eval_ctx
 
       method! visit_Symbolic _ sv =
-        if ty_has_regions (Subst.erase_regions sv.V.sv_ty) then
+        if ty_has_borrows ctx.type_context.type_infos sv.V.sv_ty then
           raise (FoundSymbolicValue sv)
         else ()
 

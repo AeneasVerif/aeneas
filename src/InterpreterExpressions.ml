@@ -35,7 +35,10 @@ let expand_primitively_copyable_at_place (config : C.config)
   (* Small helper *)
   let rec expand ctx =
     let v = read_place_unwrap config access p ctx in
-    match find_first_primitively_copyable_sv v with
+    match
+      find_first_primitively_copyable_sv_with_borrows
+        ctx.type_context.type_infos v
+    with
     | None -> ctx
     | Some sv ->
         let ctx = expand_symbolic_value_no_branching config sv ctx in
@@ -178,7 +181,10 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
       let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
       (* Copy the value *)
       assert (not (bottom_in_value ctx.ended_regions v));
-      assert (Option.is_none (find_first_primitively_copyable_sv v));
+      assert (
+        Option.is_none
+          (find_first_primitively_copyable_sv_with_borrows
+             ctx.type_context.type_infos v));
       let allow_adt_copy = false in
       copy_value allow_adt_copy config ctx v
   | Expressions.Move p -> (

@@ -707,7 +707,8 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
   (* Check *)
   let check_info _id info =
     assert (info.env_count = 0 || info.aproj_borrows = []);
-    if ty_has_regions info.ty then assert (info.env_count <= 1);
+    if ty_has_borrows ctx.type_context.type_infos info.ty then
+      assert (info.env_count <= 1);
     assert (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
   in
   M.iter check_info !infos
