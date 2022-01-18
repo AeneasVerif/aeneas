@@ -140,10 +140,10 @@ let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : rty) : bool =
   * require calling dedicated functions defined through the Copy trait. It
   * is the case for types like integers, shared borrows, etc.
   *)
-let rec type_is_primitively_copyable (ty : 'r ty) : bool =
+let rec ty_is_primitively_copyable (ty : 'r ty) : bool =
   match ty with
   | Adt ((AdtId _ | Assumed _), _, _) -> false
-  | Adt (Tuple, _, tys) -> List.for_all type_is_primitively_copyable tys
+  | Adt (Tuple, _, tys) -> List.for_all ty_is_primitively_copyable tys
   | TypeVar _ | Never | Str | Array _ | Slice _ -> false
   | Bool | Char | Integer _ -> true
   | Ref (_, _, Mut) -> false

@@ -97,7 +97,7 @@ let find_first_primitively_copyable_sv (v : typed_value) : symbolic_value option
 
       method! visit_Symbolic _ sv =
         let ty = sv.sv_ty in
-        if type_is_primitively_copyable ty && ty_has_regions ty then
+        if ty_is_primitively_copyable ty && ty_has_regions ty then
           raise (FoundSymbolicValue sv)
         else ()
     end

@@ -267,7 +267,7 @@ let eval_binary_op_concrete (config : C.config) (ctx : C.eval_ctx)
     (* Equality operations *)
     assert (v1.ty = v2.ty);
     (* Equality/inequality check is primitive only for a subset of types *)
-    assert (type_is_primitively_copyable v1.ty);
+    assert (ty_is_primitively_copyable v1.ty);
     let b = v1 = v2 in
     Ok (ctx, { V.value = V.Concrete (Bool b); ty = T.Bool }))
   else
@@ -344,7 +344,7 @@ let eval_binary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
       (* Equality operations *)
       assert (v1.ty = v2.ty);
       (* Equality/inequality check is primitive only for a subset of types *)
-      assert (type_is_primitively_copyable v1.ty);
+      assert (ty_is_primitively_copyable v1.ty);
       T.Bool)
     else
       (* Other operations: input types are integers *)
