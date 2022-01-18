@@ -1,6 +1,4 @@
 open Types
-open Utils
-open TypesUtils
 open Modules
 
 type subtype_info = {
@@ -77,6 +75,22 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
       nv)
     else original
   in
+
+  let update_ty_info_from_expl_info (ty_info : partial_type_info)
+      (expl_info : expl_info) : partial_type_info =
+    (* Set `contains_borrow` *)
+    let contains_borrow =
+      check_update_bool ty_info.contains_borrow expl_info.under_borrow
+    in
+    (* Set `contains_nested_borrows` *)
+    let contains_nested_borrows =
+      check_update_bool ty_info.contains_nested_borrows
+        expl_info.under_nested_borrows
+    in
+    (* Update ty_info *)
+    { ty_info with contains_borrow; contains_nested_borrows }
+  in
+
   (* The recursive function which explores the type *)
   let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
       (ty : 'r gr_ty) : partial_type_info =
@@ -89,23 +103,16 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         | Some param_infos ->
             let param_info = TypeVarId.nth param_infos var_id in
             (* Set `under_borrow` *)
-            let param_info =
-              {
-                param_info with
-                under_borrow =
-                  check_update_bool param_info.under_borrow
-                    expl_info.under_borrow;
-              }
+            let under_borrow =
+              check_update_bool param_info.under_borrow expl_info.under_borrow
             in
             (* Set `under_nested_borrows` *)
-            let param_info =
-              {
-                param_info with
-                under_nested_borrows =
-                  check_update_bool param_info.under_nested_borrows
-                    expl_info.under_nested_borrows;
-              }
+            let under_nested_borrows =
+              check_update_bool param_info.under_nested_borrows
+                expl_info.under_nested_borrows
             in
+            (* Update param_info *)
+            let param_info = { under_borrow; under_nested_borrows } in
             let param_infos =
               TypeVarId.update_nth param_infos var_id param_info
             in
@@ -119,31 +126,13 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         let expl_info =
           { under_borrow = true; under_nested_borrows = expl_info.under_borrow }
         in
-        (* Update the type info *)
         (* Set `contains_static` *)
-        let ty_info =
-          {
-            ty_info with
-            contains_static =
-              check_update_bool ty_info.contains_static (r = Static);
-          }
+        let contains_static =
+          check_update_bool ty_info.contains_static (r = Static)
         in
-        (* Set `contains_borrow` *)
-        let ty_info =
-          {
-            ty_info with
-            contains_borrow = check_update_bool ty_info.contains_borrow true;
-          }
-        in
-        (* Set `contains_nested_borrows` *)
-        let ty_info =
-          {
-            ty_info with
-            contains_nested_borrows =
-              check_update_bool ty_info.contains_nested_borrows
-                expl_info.under_nested_borrows;
-          }
-        in
+        let ty_info = { ty_info with contains_static } in
+        (* Update the type info *)
+        let ty_info = update_ty_info_from_expl_info ty_info expl_info in
         (* Continue exploring *)
         analyze expl_info ty_info rty
     | Adt ((Tuple | Assumed Box), _, tys) ->
@@ -151,11 +140,44 @@ let analyze_full_ty (updated : bool ref) (infos : type_infos)
         List.fold_left
           (fun ty_info ty -> analyze expl_info ty_info ty)
           ty_info tys
-    | Adt (AdtId adt_id, _, tys) ->
+    | Adt (AdtId adt_id, regions, tys) ->
         (* Lookup the information for this type definition *)
         let adt_info = TypeDefId.Map.find adt_id infos in
-        (* Update the *)
-        failwith ""
+        (* Check if 'static appears *)
+        let ty_info =
+          List.fold_left
+            (fun ty_info r ->
+              {
+                ty_info with
+                contains_static =
+                  check_update_bool ty_info.contains_static (r = Static);
+              })
+            ty_info regions
+        in
+        (* For every instantiated type parameter: update the exploration info
+         * then explore the type *)
+        let params_tys = List.combine adt_info.param_infos tys in
+        let ty_info =
+          List.fold_left
+            (fun ty_info (param_info, ty) ->
+              (* Update the exploration info *)
+              let expl_info =
+                {
+                  under_borrow =
+                    expl_info.under_borrow || param_info.under_borrow;
+                  under_nested_borrows =
+                    expl_info.under_nested_borrows
+                    || param_info.under_nested_borrows;
+                }
+              in
+              (* Propagate the updates to the ty info *)
+              let ty_info = update_ty_info_from_expl_info ty_info expl_info in
+              (* Continue exploring *)
+              analyze expl_info ty_info ty)
+            ty_info params_tys
+        in
+        (* Return *)
+        ty_info
   in
   (* Explore *)
   analyze expl_info_init ty_info ty
@@ -188,11 +210,6 @@ let analyze_type_declaration_group (type_defs : type_def TypeDefId.Map.t)
     (infos : type_infos) (decl : type_declaration_group) : type_infos =
   (* Collect the identifiers used in the declaration group *)
   let ids = match decl with NonRec id -> [ id ] | Rec ids -> ids in
-  let ids_set : TypeDefId.Set.t =
-    List.fold_left
-      (fun set id -> TypeDefId.Set.add id set)
-      TypeDefId.Set.empty ids
-  in
   (* Retrieve the type definitions *)
   let decl_defs = List.map (fun id -> TypeDefId.Map.find id type_defs) ids in
   (* Initialize the type information for the current definitions *)
@@ -217,6 +234,7 @@ let analyze_type_declaration_group (type_defs : type_def TypeDefId.Map.t)
   in
   analyze infos
 
+(** Compute the type information for every type definition in a list of declarations *)
 let analyze_type_declarations (type_defs : type_def TypeDefId.Map.t)
     (decls : type_declaration_group list) : type_infos =
   List.fold_left
