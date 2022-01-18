@@ -34,15 +34,18 @@ type partial_type_info = type_param_info list option g_type_info
     Allows us to factorize code: [analyze_full_ty] is used both to analyze
     type definitions and types. *)
 
-let initialize_type_def_info (def : type_def) : type_def_info =
-  let param_info = { under_borrow = false; under_nested_borrows = false } in
-  let param_infos = List.map (fun _ -> param_info) def.type_params in
+let initialize_g_type_info (param_infos : 'p) : 'p g_type_info =
   {
     contains_static = false;
     contains_borrow = false;
     contains_nested_borrows = false;
     param_infos;
   }
+
+let initialize_type_def_info (def : type_def) : type_def_info =
+  let param_info = { under_borrow = false; under_nested_borrows = false } in
+  let param_infos = List.map (fun _ -> param_info) def.type_params in
+  initialize_g_type_info param_infos
 
 let type_def_info_to_partial_type_info (info : type_def_info) :
     partial_type_info =
@@ -60,6 +63,14 @@ let partial_type_info_to_type_def_info (info : partial_type_info) :
     contains_borrow = info.contains_borrow;
     contains_nested_borrows = info.contains_nested_borrows;
     param_infos = Option.get info.param_infos;
+  }
+
+let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
+  {
+    contains_static = info.contains_static;
+    contains_borrow = info.contains_borrow;
+    contains_nested_borrows = info.contains_nested_borrows;
+    param_infos = ();
   }
 
 type type_infos = type_def_info TypeDefId.Map.t
@@ -234,9 +245,25 @@ let analyze_type_declaration_group (type_defs : type_def TypeDefId.Map.t)
   in
   analyze infos
 
-(** Compute the type information for every type definition in a list of declarations *)
+(** Compute the type information for every *type definition* in a list of
+    declarations. This type definition information is later used to easily
+    compute the information of arbitrary types.
+    
+    Rk.: pay attention to the difference between type definitions and types!
+ *)
 let analyze_type_declarations (type_defs : type_def TypeDefId.Map.t)
     (decls : type_declaration_group list) : type_infos =
   List.fold_left
     (fun infos decl -> analyze_type_declaration_group type_defs infos decl)
     TypeDefId.Map.empty decls
+
+(** Analyze a type to check whether it contains borrows, etc., provided
+    we have already analyzed the type definitions in the context.
+ *)
+let analyze_ty (infos : type_infos) (ty : 'r gr_ty) : ty_info =
+  (* We don't use `updated` but need to give it as parameter *)
+  let updated = ref false in
+  let ty_info = initialize_g_type_info None in
+  let ty_info = analyze_full_ty updated infos ty_info ty in
+  (* Convert the ty_info *)
+  partial_type_info_to_ty_info ty_info
