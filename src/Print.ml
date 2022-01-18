@@ -481,20 +481,20 @@ module Contexts = struct
   let ctx_to_rtype_formatter (fmt : ctx_formatter) : PT.rtype_formatter =
     PV.value_to_rtype_formatter fmt
 
-  let type_ctx_to_adt_variant_to_string_fun (ctx : T.type_def list) :
-      T.TypeDefId.id -> T.VariantId.id -> string =
+  let type_ctx_to_adt_variant_to_string_fun (ctx : T.type_def T.TypeDefId.Map.t)
+      : T.TypeDefId.id -> T.VariantId.id -> string =
    fun def_id variant_id ->
-    let def = T.TypeDefId.nth ctx def_id in
+    let def = T.TypeDefId.Map.find def_id ctx in
     match def.kind with
     | Struct _ -> failwith "Unreachable"
     | Enum variants ->
         let variant = T.VariantId.nth variants variant_id in
         name_to_string def.name ^ "::" ^ variant.variant_name
 
-  let type_ctx_to_adt_field_names_fun (ctx : T.type_def list) :
+  let type_ctx_to_adt_field_names_fun (ctx : T.type_def T.TypeDefId.Map.t) :
       T.TypeDefId.id -> T.VariantId.id option -> string list option =
    fun def_id opt_variant_id ->
-    let def = T.TypeDefId.nth ctx def_id in
+    let def = T.TypeDefId.Map.find def_id ctx in
     let fields = TU.type_def_get_fields def opt_variant_id in
     (* TODO: the field name should be optional?? *)
     let fields = List.map (fun f -> f.T.field_name) fields in
@@ -510,7 +510,7 @@ module Contexts = struct
       v.name
     in
     let type_def_id_to_string def_id =
-      let def = T.TypeDefId.nth ctx.type_context.type_defs def_id in
+      let def = C.ctx_lookup_type_def ctx def_id in
       name_to_string def.name
     in
     let adt_variant_to_string =
@@ -615,10 +615,10 @@ module CfimAst = struct
       PT.type_def_id_to_string = fmt.type_def_id_to_string;
     }
 
-  let type_ctx_to_adt_field_to_string_fun (ctx : T.type_def list) :
+  let type_ctx_to_adt_field_to_string_fun (ctx : T.type_def T.TypeDefId.Map.t) :
       T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string =
    fun def_id opt_variant_id field_id ->
-    let def = T.TypeDefId.nth ctx def_id in
+    let def = T.TypeDefId.Map.find def_id ctx in
     let fields = TU.type_def_get_fields def opt_variant_id in
     let field = T.FieldId.nth fields field_id in
     field.T.field_name
@@ -629,7 +629,7 @@ module CfimAst = struct
       type_ctx_to_adt_field_to_string_fun ctx.type_context.type_defs
     in
     let fun_def_id_to_string def_id =
-      let def = A.FunDefId.nth ctx.fun_context def_id in
+      let def = C.ctx_lookup_fun_def ctx def_id in
       name_to_string def.name
     in
     {
@@ -904,18 +904,19 @@ module PA = CfimAst (* local module *)
 module Module = struct
   (** This function pretty-prints a type definition by using a definition
       context *)
-  let type_def_to_string (type_context : T.type_def list) (def : T.type_def) :
-      string =
+  let type_def_to_string (type_context : T.type_def T.TypeDefId.Map.t)
+      (def : T.type_def) : string =
     let type_def_id_to_string (id : T.TypeDefId.id) : string =
-      let def = T.TypeDefId.nth type_context id in
+      let def = T.TypeDefId.Map.find id type_context in
       name_to_string def.name
     in
     PT.type_def_to_string type_def_id_to_string def
 
   (** Generate an [ast_formatter] by using a definition context in combination
       with the variables local to a function's definition *)
-  let def_ctx_to_ast_formatter (type_context : T.type_def list)
-      (fun_context : A.fun_def list) (def : A.fun_def) : PA.ast_formatter =
+  let def_ctx_to_ast_formatter (type_context : T.type_def T.TypeDefId.Map.t)
+      (fun_context : A.fun_def A.FunDefId.Map.t) (def : A.fun_def) :
+      PA.ast_formatter =
     let rvar_to_string vid =
       let var = T.RegionVarId.nth def.signature.region_params vid in
       PT.region_var_to_string var
@@ -929,11 +930,11 @@ module Module = struct
       PT.type_var_to_string var
     in
     let type_def_id_to_string def_id =
-      let def = T.TypeDefId.nth type_context def_id in
+      let def = T.TypeDefId.Map.find def_id type_context in
       name_to_string def.name
     in
     let fun_def_id_to_string def_id =
-      let def = A.FunDefId.nth fun_context def_id in
+      let def = A.FunDefId.Map.find def_id fun_context in
       name_to_string def.name
     in
     let var_id_to_string vid =
@@ -961,18 +962,20 @@ module Module = struct
 
   (** This function pretty-prints a function definition by using a definition
       context *)
-  let fun_def_to_string (type_context : T.type_def list)
-      (fun_context : A.fun_def list) (def : A.fun_def) : string =
+  let fun_def_to_string (type_context : T.type_def T.TypeDefId.Map.t)
+      (fun_context : A.fun_def A.FunDefId.Map.t) (def : A.fun_def) : string =
     let fmt = def_ctx_to_ast_formatter type_context fun_context def in
     PA.fun_def_to_string fmt "" "  " def
 
   let module_to_string (m : M.cfim_module) : string =
+    let types_defs_map, funs_defs_map = M.compute_defs_maps m in
+
     (* The types *)
-    let type_defs = List.map (type_def_to_string m.M.types) m.M.types in
+    let type_defs = List.map (type_def_to_string types_defs_map) m.M.types in
 
     (* The functions *)
     let fun_defs =
-      List.map (fun_def_to_string m.M.types m.M.functions) m.M.functions
+      List.map (fun_def_to_string types_defs_map funs_defs_map) m.M.functions
     in
 
     (* Put everything together *)

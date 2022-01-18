@@ -138,13 +138,14 @@ let config_of_partial (mode : interpreter_mode) (config : partial_config) :
 
 type type_context = {
   type_defs_groups : M.type_declaration_group TypeDefId.Map.t;
-  type_defs : type_def list;
+  type_defs : type_def TypeDefId.Map.t;
+  type_infos : TypesAnalysis.type_infos;
 }
 [@@deriving show]
 
 type eval_ctx = {
   type_context : type_context;
-  fun_context : fun_def list;
+  fun_context : fun_def FunDefId.Map.t;
   type_vars : type_var list;
   env : env;
   ended_regions : RegionId.Set.t;
@@ -172,11 +173,11 @@ let ctx_lookup_binder (ctx : eval_ctx) (vid : VarId.id) : binder =
 
 (** TODO: make this more efficient with maps *)
 let ctx_lookup_type_def (ctx : eval_ctx) (tid : TypeDefId.id) : type_def =
-  TypeDefId.nth ctx.type_context.type_defs tid
+  TypeDefId.Map.find tid ctx.type_context.type_defs
 
 (** TODO: make this more efficient with maps *)
 let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
-  FunDefId.nth ctx.fun_context fid
+  FunDefId.Map.find fid ctx.fun_context
 
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =

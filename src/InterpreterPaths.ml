@@ -346,14 +346,14 @@ let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
   | Ok ctx -> ctx
 
 (** Compute an expanded ADT bottom value *)
-let compute_expanded_bottom_adt_value (tyctx : T.type_def list)
+let compute_expanded_bottom_adt_value (tyctx : T.type_def T.TypeDefId.Map.t)
     (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
     (regions : T.erased_region list) (types : T.ety list) : V.typed_value =
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
-  let def = T.TypeDefId.nth tyctx def_id in
+  let def = T.TypeDefId.Map.find def_id tyctx in
   assert (List.length regions = List.length def.T.region_params);
   (* Compute the field types *)
   let field_types =

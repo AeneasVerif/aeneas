@@ -23,14 +23,19 @@ let log = L.interpreter_log
 module Test = struct
   let initialize_context (m : M.cfim_module) (type_vars : T.type_var list) :
       C.eval_ctx =
+    let type_decls, _ = M.split_declarations m.declarations in
+    let type_defs, fun_defs = M.compute_defs_maps m in
     let type_defs_groups, _funs_defs_groups =
       M.split_declarations_to_group_maps m.declarations
     in
-    let type_context = { C.type_defs_groups; type_defs = m.types } in
+    let type_infos =
+      TypesAnalysis.analyze_type_declarations type_defs type_decls
+    in
+    let type_context = { C.type_defs_groups; type_defs; type_infos } in
     C.reset_global_counters ();
     {
       C.type_context;
-      C.fun_context = m.functions;
+      C.fun_context = fun_defs;
       C.type_vars;
       C.env = [];
       C.ended_regions = T.RegionId.Set.empty;

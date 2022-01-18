@@ -5,11 +5,12 @@ type subtype_info = {
   under_borrow : bool;  (** Are we inside a borrow? *)
   under_nested_borrows : bool;  (** Are we inside nested borrows? *)
 }
+[@@deriving show]
 
-type type_param_info = subtype_info
+type type_param_info = subtype_info [@@deriving show]
 (** See [type_def_info] *)
 
-type expl_info = subtype_info
+type expl_info = subtype_info [@@deriving show]
 
 type 'p g_type_info = {
   contains_static : bool;
@@ -20,19 +21,25 @@ type 'p g_type_info = {
       (** Does the type (transitively) contains nested borrows? *)
   param_infos : 'p;  (** Gives information about the type parameters *)
 }
+[@@deriving show]
 (** Generic definition *)
 
-type type_def_info = type_param_info list g_type_info
+type type_def_info = type_param_info list g_type_info [@@deriving show]
 (** Information about a type definition. *)
 
-type ty_info = unit g_type_info
+type ty_info = unit g_type_info [@@deriving show]
 (** Information about a type. *)
 
 type partial_type_info = type_param_info list option g_type_info
+[@@deriving show]
 (** Helper definition.
 
     Allows us to factorize code: [analyze_full_ty] is used both to analyze
     type definitions and types. *)
+
+type type_infos = type_def_info TypeDefId.Map.t [@@deriving show]
+
+let expl_info_init = { under_borrow = false; under_nested_borrows = false }
 
 let initialize_g_type_info (param_infos : 'p) : 'p g_type_info =
   {
@@ -72,10 +79,6 @@ let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
     contains_nested_borrows = info.contains_nested_borrows;
     param_infos = ();
   }
-
-type type_infos = type_def_info TypeDefId.Map.t
-
-let expl_info_init = { under_borrow = false; under_nested_borrows = false }
 
 let analyze_full_ty (updated : bool ref) (infos : type_infos)
     (ty_info : partial_type_info) (ty : 'r gr_ty) : partial_type_info =

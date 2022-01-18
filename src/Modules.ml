@@ -21,6 +21,20 @@ type cfim_module = {
 }
 (** CFIM module *)
 
+let compute_defs_maps (m : cfim_module) :
+    type_def TypeDefId.Map.t * fun_def FunDefId.Map.t =
+  let types_map =
+    List.fold_left
+      (fun m (def : type_def) -> TypeDefId.Map.add def.def_id def m)
+      TypeDefId.Map.empty m.types
+  in
+  let funs_map =
+    List.fold_left
+      (fun m (def : fun_def) -> FunDefId.Map.add def.def_id def m)
+      FunDefId.Map.empty m.functions
+  in
+  (types_map, funs_map)
+
 (** Split a module's declarations between types and functions *)
 let split_declarations (decls : declaration_group list) :
     type_declaration_group list * fun_declaration_group list =
