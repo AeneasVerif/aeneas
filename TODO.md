@@ -10,8 +10,11 @@
   shared borrows?), nested borrows...
   necessary to know what to return.
 
+2. check types are not "infinite"
+
 3. in MIR, erased regions are completely erased (no list of erased regions...):
-  update functions like `ty_has_regions` (and rename to `ty_has_borrows`)
+  update functions like `ty_has_regions` (and rename to `ty_has_borrows`),
+  `erase_regions`
 
 4. check that no borrow_overwrites upon ending abstractions
 
@@ -25,6 +28,7 @@
 6. add `mvalue` (meta values) stored in abstractions when ending loans
 
 7. fix the static regions (with projectors)
+   Before that, introduce a sanity check to make sure we don't use static regions.
 
 * write a function to check that the code we are about to synthesize is in the proper
   subset. In particular:

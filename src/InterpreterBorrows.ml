@@ -432,11 +432,14 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
 let give_back_symbolic_value (_config : C.config)
     (proj_regions : T.RegionId.Set.t) (proj_ty : T.rty) (sv : V.symbolic_value)
     (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
-  let subst local_regions local_ty =
+  let subst (abs : V.abs) abs_proj_ty =
+    (* TODO: check that we can consume this symbolic value - this is not
+     * a precondition, purely a sanity check *)
+    raise Errors.Unimplemented;
     let child_proj =
       if sv.sv_id = nsv.sv_id then None
       else
-        Some (mk_aproj_borrows_from_symbolic_value local_regions nsv local_ty)
+        Some (mk_aproj_borrows_from_symbolic_value abs.regions nsv abs_proj_ty)
     in
     V.AEndedProjLoans child_proj
   in

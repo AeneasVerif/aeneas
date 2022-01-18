@@ -137,7 +137,7 @@ let config_of_partial (mode : interpreter_mode) (config : partial_config) :
   }
 
 type type_context = {
-  type_defs_groups : M.types_decl_group TypeDefId.Map.t;
+  type_defs_groups : M.type_declaration_group TypeDefId.Map.t;
   type_defs : type_def list;
 }
 [@@deriving show]

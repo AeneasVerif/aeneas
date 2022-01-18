@@ -14,6 +14,8 @@ module RegionVarId = IdGen ()
 module RegionId = IdGen ()
 (** Region ids. Used for symbolic executions. *)
 
+module RegionGroupId = IdGen ()
+
 type ('id, 'name) indexed_var = {
   index : 'id;  (** Unique index identifying the variable *)
   name : 'name;  (** Variable name *)
@@ -45,6 +47,28 @@ type 'rid region =
     We could use unit, but having a dedicated type makes things more explicit.
  *)
 type erased_region = Erased [@@deriving show]
+
+type ('id, 'r) g_region_group = {
+  id : 'id;
+  regions : 'r list;
+  parents : 'id list;
+}
+[@@deriving show]
+(** A group of regions.
+
+    Results from a lifetime analysis: we group the regions with the same
+    lifetime together, and compute the hierarchy between the regions.
+    This is necessary to introduce the proper abstraction with the
+    proper constraints, when evaluating a function call in symbolic mode.
+*)
+
+type ('r, 'id) g_region_groups = ('r, 'id) g_region_group list [@@deriving show]
+
+type region_var_group = (RegionGroupId.id, RegionVarId.id) g_region_group
+[@@deriving show]
+
+type region_var_groups = (RegionGroupId.id, RegionVarId.id) g_region_groups
+[@@deriving show]
 
 type integer_type =
   | Isize
@@ -174,5 +198,8 @@ type type_def = {
   region_params : region_var list;
   type_params : type_var list;
   kind : type_def_kind;
+  regions_hierarchy : region_var_groups;
+      (** Stored the hierarchy between the regions (which regions have the same lifetime,
+          what is the hierarchy between the lifetimes) *)
 }
 [@@deriving show]

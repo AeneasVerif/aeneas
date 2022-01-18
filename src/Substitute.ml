@@ -323,7 +323,7 @@ let fun_def_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
   (locals, body)
 
 (** Substitute a function signature *)
-let substitute_signature (asubst : A.RegionGroupId.id -> V.AbstractionId.id)
+let substitute_signature (asubst : T.RegionGroupId.id -> V.AbstractionId.id)
     (rsubst : T.RegionVarId.id -> T.RegionId.id)
     (tsubst : T.TypeVarId.id -> T.rty) (sg : A.fun_sig) : A.inst_fun_sig =
   let rsubst' (r : T.RegionVarId.id T.region) : T.RegionId.id T.region =
@@ -331,11 +331,11 @@ let substitute_signature (asubst : A.RegionGroupId.id -> V.AbstractionId.id)
   in
   let inputs = List.map (ty_substitute rsubst' tsubst) sg.A.inputs in
   let output = ty_substitute rsubst' tsubst sg.A.output in
-  let subst_region_group (rg : A.region_var_group) : A.abs_region_group =
-    let id = asubst rg.A.id in
-    let regions = List.map rsubst rg.A.regions in
-    let parents = List.map asubst rg.A.parents in
-    { A.id; regions; parents }
+  let subst_region_group (rg : T.region_var_group) : A.abs_region_group =
+    let id = asubst rg.id in
+    let regions = List.map rsubst rg.regions in
+    let parents = List.map asubst rg.parents in
+    { id; regions; parents }
   in
   let regions_hierarchy = List.map subst_region_group sg.A.regions_hierarchy in
   { A.regions_hierarchy; inputs; output }

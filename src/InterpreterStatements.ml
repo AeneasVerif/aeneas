@@ -406,7 +406,7 @@ let eval_box_deref_mut_or_shared_inst_sig (region_params : T.erased_region list)
 
       let output = mk_ref_ty r ty_param ref_kind in
 
-      let regions = { A.id = abs_id; regions = [ rid ]; parents = [] } in
+      let regions = { T.id = abs_id; regions = [ rid ]; parents = [] } in
 
       let inst_sg =
         { A.regions_hierarchy = [ regions ]; inputs = [ input ]; output }
@@ -509,16 +509,16 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
     List.fold_left_map
       (fun ctx rg ->
         let abs_id = C.fresh_abstraction_id () in
-        (ctx, (rg.A.id, abs_id)))
+        (ctx, (rg.T.id, abs_id)))
       ctx sg.regions_hierarchy
   in
-  let asubst_map : V.AbstractionId.id A.RegionGroupId.Map.t =
+  let asubst_map : V.AbstractionId.id T.RegionGroupId.Map.t =
     List.fold_left
-      (fun mp (rg_id, abs_id) -> A.RegionGroupId.Map.add rg_id abs_id mp)
-      A.RegionGroupId.Map.empty rg_abs_ids_bindings
+      (fun mp (rg_id, abs_id) -> T.RegionGroupId.Map.add rg_id abs_id mp)
+      T.RegionGroupId.Map.empty rg_abs_ids_bindings
   in
-  let asubst (rg_id : A.RegionGroupId.id) : V.AbstractionId.id =
-    A.RegionGroupId.Map.find rg_id asubst_map
+  let asubst (rg_id : T.RegionGroupId.id) : V.AbstractionId.id =
+    T.RegionGroupId.Map.find rg_id asubst_map
   in
   (* Generate fresh regions and their substitutions *)
   let _, rsubst, _ = Subst.fresh_regions_with_substs sg.region_params in
@@ -559,23 +559,23 @@ let create_empty_abstractions_from_abs_region_groups (kind : V.abs_kind)
   in
   (* Auxiliary function to create one abstraction *)
   let create_abs (rg : A.abs_region_group) : V.abs =
-    let abs_id = rg.A.id in
+    let abs_id = rg.T.id in
     let parents =
       List.fold_left
         (fun s pid -> V.AbstractionId.Set.add pid s)
-        V.AbstractionId.Set.empty rg.A.parents
+        V.AbstractionId.Set.empty rg.parents
     in
     let regions =
       List.fold_left
         (fun s rid -> T.RegionId.Set.add rid s)
-        T.RegionId.Set.empty rg.A.regions
+        T.RegionId.Set.empty rg.regions
     in
     let ancestors_regions =
       List.fold_left
         (fun acc parent_id ->
           T.RegionId.Set.union acc
             (V.AbstractionId.Map.find parent_id !abs_to_ancestors_regions))
-        T.RegionId.Set.empty rg.A.parents
+        T.RegionId.Set.empty rg.parents
     in
     let ancestors_regions_union_current_regions =
       T.RegionId.Set.union ancestors_regions regions
@@ -800,9 +800,10 @@ and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.FunDefId.id) (_region_params : T.erased_region list)
+    (fid : A.FunDefId.id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
     C.eval_ctx eval_result list =
+  assert (region_params = []);
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_def ctx fid in
   let tsubst =
@@ -883,6 +884,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (ctx : C.eval_ctx) (fid : A.fun_id) (inst_sg : A.inst_fun_sig)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (args : E.operand list) (dest : E.place) : C.eval_ctx =
+  assert (region_params = []);
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
   let ret_spc = mk_fresh_symbolic_value V.FunCallRet ret_sv_ty in
@@ -899,6 +901,11 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
       (fun ((arg, rty) : V.typed_value * T.rty) ->
         arg.V.ty = Subst.erase_regions rty)
       args_with_rtypes);
+  (* Check that the input arguments don't contain symbolic values that can't 
+   * be fed to functions (i.e., symbolic values output from function return
+   * values and which contain borrows of borrows can't be used as function
+   * inputs *)
+  raise Errors.Unimplemented;
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
     create_empty_abstractions_from_abs_region_groups V.FunCall
