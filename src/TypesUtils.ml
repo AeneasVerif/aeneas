@@ -94,6 +94,7 @@ let rec ety_no_regions_to_rty (ty : ety) : rty =
 (** Check if a [ty] contains regions.
 
     TODO: rename to "has_borrows"?
+    TODO: update, and check the usage.
   *)
 let ty_has_regions (ty : 'r ty) : bool =
   let obj =
@@ -107,6 +108,7 @@ let ty_has_regions (ty : 'r ty) : bool =
       method! visit_Ref _ _ _ _ = raise Found
     end
   in
+  raise Errors.Unimplemented;
   try
     obj#visit_ty () ty;
     false
