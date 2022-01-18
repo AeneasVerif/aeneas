@@ -1,5 +1,6 @@
 open Types
 open Utils
+module TA = TypesAnalysis
 
 (** Retrieve the list of fields for the given variant of a [type_def].
 
@@ -113,6 +114,26 @@ let ty_has_regions (ty : 'r ty) : bool =
     obj#visit_ty () ty;
     false
   with Found -> true
+
+(** Retuns true if a type contains borrows.
+
+    Note that we can't simply explore the type and look for regions: sometimes
+    we erase the lists of regions (by replacing them with `[]` when using `ety`,
+    and when a type uses 'static this region doesn't appear in the region parameters.
+ *)
+let ty_has_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
+  let info = TA.analyze_ty infos ty in
+  info.TA.contains_borrow
+
+(** Retuns true if a type contains nested borrows.
+
+    Note that we can't simply explore the type and look for regions: sometimes
+    we erase the lists of regions (by replacing them with `[]` when using `ety`,
+    and when a type uses 'static this region doesn't appear in the region parameters.
+ *)
+let ty_has_nested_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
+  let info = TA.analyze_ty infos ty in
+  info.TA.contains_nested_borrows
 
 (** Check if a [ty] contains regions from a given set *)
 let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : rty) : bool =
