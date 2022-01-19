@@ -440,48 +440,60 @@ let eval_binary_op (config : C.config) (binop : E.binop) (op1 : E.operand)
 
 (** Evaluate the discriminant of a concrete (i.e., non symbolic) ADT value *)
 let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
-    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
+    (cf : V.typed_value -> m_fun) : m_fun =
   (* Note that discriminant values have type `isize` *)
   (* Access the value *)
   let access = Read in
   let expand_prim_copy = false in
-  let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
-  match v.V.value with
-  | Adt av -> (
-      match av.variant_id with
-      | None ->
-          failwith "Invalid input for `discriminant`: structure instead of enum"
-      | Some variant_id -> (
-          let id = Z.of_int (T.VariantId.to_int variant_id) in
-          match mk_scalar Isize id with
-          | Error _ ->
-              failwith "Disciminant id out of range"
-              (* Should really never happen *)
-          | Ok sv ->
-              (ctx, { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }))
-      )
-  | _ -> failwith "Invalid input for `discriminant`"
+  let prepare = prepare_rplace config expand_prim_copy access p in
+  (* Read the value *)
+  let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
+    match v.V.value with
+    | Adt av -> (
+        match av.variant_id with
+        | None ->
+            failwith
+              "Invalid input for `discriminant`: structure instead of enum"
+        | Some variant_id -> (
+            let id = Z.of_int (T.VariantId.to_int variant_id) in
+            match mk_scalar Isize id with
+            | Error _ -> failwith "Disciminant id out of range"
+            (* Should really never happen *)
+            | Ok sv ->
+                cf { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }))
+    | _ -> failwith "Invalid input for `discriminant`"
+  in
+  (* Compose and apply *)
+  comp prepare read cf
 
+(** Evaluate the discriminant of an ADT value.
+
+    Might lead to branching, if the value is symbolic.
+ *)
 let eval_rvalue_discriminant (config : C.config) (p : E.place)
-    (ctx : C.eval_ctx) : (C.eval_ctx * V.typed_value) list =
-  S.synthesize_eval_rvalue_discriminant p;
+    (cf : V.typed_value -> m_fun) : m_fun =
   (* Note that discriminant values have type `isize` *)
   (* Access the value *)
   let access = Read in
   let expand_prim_copy = false in
-  let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
-  match v.V.value with
-  | Adt _ -> [ eval_rvalue_discriminant_concrete config p ctx ]
-  | Symbolic sv ->
-      (* Expand the symbolic value - may lead to branching *)
-      let ctxl = expand_symbolic_enum_value config sv ctx in
-      (* This time the value is concrete: reevaluate *)
-      List.map (eval_rvalue_discriminant_concrete config p) ctxl
-  | _ -> failwith "Invalid input for `discriminant`"
+  let prepare = prepare_rplace config expand_prim_copy access p in
+  (* Read the value *)
+  let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
+    match v.V.value with
+    | Adt _ -> eval_rvalue_discriminant_concrete config p cf
+    | Symbolic sv ->
+        (* Expand the symbolic value - may lead to branching *)
+        let allow_branching = true in
+        let cc = expand_symbolic_value config allow_branching sv in
+        (* This time the value is concrete: reevaluate *)
+        comp cc (eval_rvalue_discriminant_concrete config p) cf
+    | _ -> failwith "Invalid input for `discriminant`"
+  in
+  (* Compose and apply *)
+  comp prepare read cf
 
 let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
     (bkind : E.borrow_kind) : C.eval_ctx * V.typed_value =
-  S.synthesize_eval_rvalue_ref p bkind;
   match bkind with
   | E.Shared | E.TwoPhaseMut ->
       (* Access the value *)
