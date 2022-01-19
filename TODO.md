@@ -33,6 +33,24 @@
 7. fix the static regions (with projectors)
    Before that, introduce a sanity check to make sure we don't use static regions.
 
+8. The following doesn't work:
+  ```
+  fn f1<'c, T>(p : (&'c mut T, &'c mut T)) -> (&'c mut T, &'c mut T)
+
+  fn f2<'a, 'b, T>(p: (&'a mut T, &'b mut T)) -> (&'a mut T, &'b mut T)
+
+  let p1 = f1<'c>(p0);
+  let p2 = f2<'a, 'b>(p1);
+  ```
+  (end borrows)
+  I think we should change the proj_loans to:
+  `AProjLoans of symbolic_value * (mvalue * aproj) list`
+  (to accumulate the given back values)
+  Then, once we collected all the borrows, we would convert it to:
+  `AEndedProjLoans of (mvalue * aproj) list`
+  If the list is empty, it means the value was not modified.
+  
+
 * write a function to check that the code we are about to synthesize is in the proper
   subset. In particular:
   * borrow overwrites
