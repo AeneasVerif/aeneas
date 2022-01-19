@@ -22,7 +22,7 @@ type eval_error = Panic
 
 type 'a eval_result = ('a, eval_error) result
 
-(** As long as there are symbolic values at a given place (potentially in subalues)
+(** As long as there are symbolic values at a given place (potentially in subvalues)
     which contain borrows and are primitively copyable, expand them.
     
     We use this function before copying values.
