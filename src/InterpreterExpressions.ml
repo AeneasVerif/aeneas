@@ -301,11 +301,12 @@ let eval_unary_op (config : C.config) (unop : E.unop) (op : E.operand)
   | C.ConcreteMode -> eval_unary_op_concrete config unop op cf
   | C.SymbolicMode -> eval_unary_op_symbolic config unop op cf
 
-let eval_binary_op_concrete (config : C.config) (binop : E.binop)
-    (op1 : E.operand) (op2 : E.operand)
-    (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
-  (* Evaluate the operands *)
-  let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
+(** Small helper for [eval_binary_op_concrete]: computes the result of applying
+    the binop *after* the operands have been successfully evaluated
+ *)
+let eval_binary_op_concrete_compute (config : C.config) (binop : E.binop)
+    (v1 : V.typed_value) (v2 : V.typed_value) :
+    (V.typed_value, eval_error) result =
   (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
    * The remaining binops only operate on scalars. *)
   if binop = Eq || binop = Ne then (
@@ -314,112 +315,128 @@ let eval_binary_op_concrete (config : C.config) (binop : E.binop)
     (* Equality/inequality check is primitive only for a subset of types *)
     assert (ty_is_primitively_copyable v1.ty);
     let b = v1 = v2 in
-    Ok (ctx, { V.value = V.Concrete (Bool b); ty = T.Bool }))
+    Ok { V.value = V.Concrete (Bool b); ty = T.Bool })
   else
     (* For the non-equality operations, the input values are necessarily scalars *)
     match (v1.V.value, v2.V.value) with
     | V.Concrete (V.Scalar sv1), V.Concrete (V.Scalar sv2) -> (
-        let res =
-          (* There are binops which require the two operands to have the same
-             type, and binops for which it is not the case.
-             There are also binops which return booleans, and binops which
-             return integers.
-          *)
-          match binop with
-          | E.Lt | E.Le | E.Ge | E.Gt ->
-              (* The two operands must have the same type and the result is a boolean *)
-              assert (sv1.int_ty = sv2.int_ty);
-              let b =
-                match binop with
-                | E.Lt -> Z.lt sv1.V.value sv2.V.value
-                | E.Le -> Z.leq sv1.V.value sv2.V.value
-                | E.Ge -> Z.geq sv1.V.value sv2.V.value
-                | E.Gt -> Z.gt sv1.V.value sv2.V.value
-                | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
-                | E.BitOr | E.Shl | E.Shr | E.Ne | E.Eq ->
-                    failwith "Unreachable"
-              in
-              Ok
-                ({ V.value = V.Concrete (Bool b); ty = T.Bool } : V.typed_value)
-          | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
-          | E.BitOr -> (
-              (* The two operands must have the same type and the result is an integer *)
-              assert (sv1.int_ty = sv2.int_ty);
-              let res =
-                match binop with
-                | E.Div ->
-                    if sv2.V.value = Z.zero then Error ()
-                    else mk_scalar sv1.int_ty (Z.div sv1.V.value sv2.V.value)
-                | E.Rem ->
-                    (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
-                    if sv2.V.value = Z.zero then Error ()
-                    else mk_scalar sv1.int_ty (Z.rem sv1.V.value sv2.V.value)
-                | E.Add -> mk_scalar sv1.int_ty (Z.add sv1.V.value sv2.V.value)
-                | E.Sub -> mk_scalar sv1.int_ty (Z.sub sv1.V.value sv2.V.value)
-                | E.Mul -> mk_scalar sv1.int_ty (Z.mul sv1.V.value sv2.V.value)
-                | E.BitXor -> raise Unimplemented
-                | E.BitAnd -> raise Unimplemented
-                | E.BitOr -> raise Unimplemented
-                | E.Lt | E.Le | E.Ge | E.Gt | E.Shl | E.Shr | E.Ne | E.Eq ->
-                    failwith "Unreachable"
-              in
-              match res with
-              | Error err -> Error err
-              | Ok sv ->
-                  Ok
-                    {
-                      V.value = V.Concrete (V.Scalar sv);
-                      ty = Integer sv1.int_ty;
-                    })
-          | E.Shl | E.Shr -> raise Unimplemented
-          | E.Ne | E.Eq -> failwith "Unreachable"
-        in
-        match res with Error _ -> Error Panic | Ok v -> Ok (ctx, v))
+        (* There are binops which require the two operands to have the same
+           type, and binops for which it is not the case.
+           There are also binops which return booleans, and binops which
+           return integers.
+        *)
+        match binop with
+        | E.Lt | E.Le | E.Ge | E.Gt ->
+            (* The two operands must have the same type and the result is a boolean *)
+            assert (sv1.int_ty = sv2.int_ty);
+            let b =
+              match binop with
+              | E.Lt -> Z.lt sv1.V.value sv2.V.value
+              | E.Le -> Z.leq sv1.V.value sv2.V.value
+              | E.Ge -> Z.geq sv1.V.value sv2.V.value
+              | E.Gt -> Z.gt sv1.V.value sv2.V.value
+              | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
+              | E.BitOr | E.Shl | E.Shr | E.Ne | E.Eq ->
+                  failwith "Unreachable"
+            in
+            Ok ({ V.value = V.Concrete (Bool b); ty = T.Bool } : V.typed_value)
+        | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd | E.BitOr
+          -> (
+            (* The two operands must have the same type and the result is an integer *)
+            assert (sv1.int_ty = sv2.int_ty);
+            let res =
+              match binop with
+              | E.Div ->
+                  if sv2.V.value = Z.zero then Error ()
+                  else mk_scalar sv1.int_ty (Z.div sv1.V.value sv2.V.value)
+              | E.Rem ->
+                  (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
+                  if sv2.V.value = Z.zero then Error ()
+                  else mk_scalar sv1.int_ty (Z.rem sv1.V.value sv2.V.value)
+              | E.Add -> mk_scalar sv1.int_ty (Z.add sv1.V.value sv2.V.value)
+              | E.Sub -> mk_scalar sv1.int_ty (Z.sub sv1.V.value sv2.V.value)
+              | E.Mul -> mk_scalar sv1.int_ty (Z.mul sv1.V.value sv2.V.value)
+              | E.BitXor -> raise Unimplemented
+              | E.BitAnd -> raise Unimplemented
+              | E.BitOr -> raise Unimplemented
+              | E.Lt | E.Le | E.Ge | E.Gt | E.Shl | E.Shr | E.Ne | E.Eq ->
+                  failwith "Unreachable"
+            in
+            match res with
+            | Error _ -> Error EPanic
+            | Ok sv ->
+                Ok
+                  {
+                    V.value = V.Concrete (V.Scalar sv);
+                    ty = Integer sv1.int_ty;
+                  })
+        | E.Shl | E.Shr -> raise Unimplemented
+        | E.Ne | E.Eq -> failwith "Unreachable")
     | _ -> failwith "Invalid inputs for binop"
 
-let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
-    (op1 : E.operand) (op2 : E.operand) :
-    (C.eval_ctx * V.typed_value) eval_result =
+let eval_binary_op_concrete (config : C.config) (binop : E.binop)
+    (op1 : E.operand) (op2 : E.operand)
+    (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
   (* Evaluate the operands *)
-  let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
-  (* Generate a fresh symbolic value to store the result *)
-  let res_sv_id = C.fresh_symbolic_value_id () in
-  let res_sv_ty =
-    if binop = Eq || binop = Ne then (
-      (* Equality operations *)
-      assert (v1.ty = v2.ty);
-      (* Equality/inequality check is primitive only for a subset of types *)
-      assert (ty_is_primitively_copyable v1.ty);
-      T.Bool)
-    else
-      (* Other operations: input types are integers *)
-      match (v1.V.ty, v2.V.ty) with
-      | T.Integer int_ty1, T.Integer int_ty2 -> (
-          match binop with
-          | E.Lt | E.Le | E.Ge | E.Gt ->
-              assert (int_ty1 = int_ty2);
-              T.Bool
-          | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
-          | E.BitOr ->
-              assert (int_ty1 = int_ty2);
-              T.Integer int_ty1
-          | E.Shl | E.Shr -> raise Unimplemented
-          | E.Ne | E.Eq -> failwith "Unreachable")
-      | _ -> failwith "Invalid inputs for binop"
+  let eval_ops = eval_two_operands config op1 op2 in
+  (* Compute the result of the binop *)
+  let compute cf (res : V.typed_value * V.typed_value) =
+    let v1, v2 = res in
+    cf (eval_binary_op_concrete_compute config binop v1 v2)
   in
-  let res_sv =
-    { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
+  (* Compose and apply *)
+  comp eval_ops compute cf
+
+let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
+    (op1 : E.operand) (op2 : E.operand)
+    (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
+  (* Evaluate the operands *)
+  let eval_ops = eval_two_operands config op1 op2 in
+  (* Compute the result of applying the binop *)
+  let compute cf ((v1, v2) : V.typed_value * V.typed_value) : m_fun =
+    (* Generate a fresh symbolic value to store the result *)
+    let res_sv_id = C.fresh_symbolic_value_id () in
+    let res_sv_ty =
+      if binop = Eq || binop = Ne then (
+        (* Equality operations *)
+        assert (v1.ty = v2.ty);
+        (* Equality/inequality check is primitive only for a subset of types *)
+        assert (ty_is_primitively_copyable v1.ty);
+        T.Bool)
+      else
+        (* Other operations: input types are integers *)
+        match (v1.V.ty, v2.V.ty) with
+        | T.Integer int_ty1, T.Integer int_ty2 -> (
+            match binop with
+            | E.Lt | E.Le | E.Ge | E.Gt ->
+                assert (int_ty1 = int_ty2);
+                T.Bool
+            | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
+            | E.BitOr ->
+                assert (int_ty1 = int_ty2);
+                T.Integer int_ty1
+            | E.Shl | E.Shr -> raise Unimplemented
+            | E.Ne | E.Eq -> failwith "Unreachable")
+        | _ -> failwith "Invalid inputs for binop"
+    in
+    let res_sv =
+      { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
+    in
+    (* Synthesize *)
+    S.synthesize_binary_op binop v1 v2 res_sv;
+    (* Call the continuattion *)
+    let v = mk_typed_value_from_symbolic_value res_sv in
+    cf (Ok v)
   in
-  (* Synthesize *)
-  S.synthesize_binary_op binop v1 v2 res_sv;
-  (* Return *)
-  Ok (ctx, mk_typed_value_from_symbolic_value res_sv)
+  (* Compose and apply *)
+  comp eval_ops compute cf
 
 let eval_binary_op (config : C.config) (binop : E.binop) (op1 : E.operand)
-    (op2 : E.operand) : (C.eval_ctx * V.typed_value) eval_result =
+    (op2 : E.operand) (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun
+    =
   match config.mode with
-  | C.ConcreteMode -> eval_binary_op_concrete config ctx binop op1 op2
-  | C.SymbolicMode -> eval_binary_op_symbolic config ctx binop op1 op2
+  | C.ConcreteMode -> eval_binary_op_concrete config binop op1 op2 cf
+  | C.SymbolicMode -> eval_binary_op_symbolic config binop op1 op2 cf
 
 (** Evaluate the discriminant of a concrete (i.e., non symbolic) ADT value *)
 let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
