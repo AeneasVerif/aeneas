@@ -432,14 +432,39 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
 let give_back_symbolic_value (_config : C.config)
     (proj_regions : T.RegionId.Set.t) (proj_ty : T.rty) (sv : V.symbolic_value)
     (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
-  let subst (abs : V.abs) abs_proj_ty =
-    (* TODO: check that we can consume this symbolic value - this is not
-     * a precondition, purely a sanity check *)
-    raise Errors.Unimplemented;
+  let subst (_abs : V.abs) _abs_proj_ty =
+    (* Compute the projection over the given back value *)
     let child_proj =
+      (* If it is the same symbolic value, it means it was left unchanged:
+       * we don't have to project it *)
       if sv.sv_id = nsv.sv_id then None
-      else
-        Some (mk_aproj_borrows_from_symbolic_value abs.regions nsv abs_proj_ty)
+      else (
+        (* Not the same symbolic value: it was updated (because given to a
+         * function or returned) *)
+        (* For now, we can only have the following case *)
+        assert (nsv.sv_kind = V.SynthGivenBack);
+        match nsv.sv_kind with
+        | V.SynthGivenBack ->
+            (* The given back value comes from the return value of the function
+             * we are currently synthesizing (as it is given back, it means
+             * we ended one of the regions appearing in the signature: we are
+             * currently synthesizing one of the backward functions *)
+            (* As we don't allow borrow overwrites on returned value, we can
+             * (and MUST) forget the borrows *)
+            None
+        | V.FunCallGivenBack ->
+            (* The value was fed as input to a function, and was given back *)
+            (* For now, we don't allow borrow overwrites on returned values,
+             * meaning the given back value can't have borrows below mutable
+             * borrows. *)
+            let has_borrow_below_mut =
+              ty_has_borrow_below_mut ctx.type_context.type_infos nsv.sv_ty
+            in
+            assert (not has_borrow_below_mut);
+            (* We don't allow overwrites: we must thus not project over the
+             * given back value *)
+            None
+        | _ -> failwith "Unreachable")
     in
     V.AEndedProjLoans child_proj
   in

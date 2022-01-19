@@ -905,7 +905,11 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
    * be fed to functions (i.e., symbolic values output from function return
    * values and which contain borrows of borrows can't be used as function
    * inputs *)
-  raise Errors.Unimplemented;
+  assert (
+    List.for_all
+      (fun arg ->
+        not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
+      args);
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
     create_empty_abstractions_from_abs_region_groups V.FunCall

@@ -232,6 +232,10 @@ type aproj =
       (** When ending a proj_loans over a symbolic value, we may need to insert
           (and keep track of) a proj_borrows over the given back value, if the
           symbolic value was consumed by an abstraction then updated.
+          
+          Rk.: for now this is useless, because we forbid borrow overwrites on
+          returned values. A consequence is that when a proj_loans over a symbolic
+          value ends, we don't project the given back value.
        *)
   | AEndedProjBorrows
   (* TODO: remove AEndedProjBorrows? We might need it for synthesis, to contain

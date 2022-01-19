@@ -92,7 +92,7 @@ let rec ety_no_regions_to_rty (ty : ety) : rty =
         "Can't convert a ref with erased regions to a ref with non-erased \
          regions"
 
-(** Retuns true if a type contains borrows.
+(** Retuns true if the type contains borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes
     we erase the lists of regions (by replacing them with `[]` when using `ety`,
@@ -102,7 +102,7 @@ let ty_has_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
   let info = TA.analyze_ty infos ty in
   info.TA.contains_borrow
 
-(** Retuns true if a type contains nested borrows.
+(** Retuns true if the type contains nested borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes
     we erase the lists of regions (by replacing them with `[]` when using `ety`,
@@ -111,6 +111,10 @@ let ty_has_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
 let ty_has_nested_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
   let info = TA.analyze_ty infos ty in
   info.TA.contains_nested_borrows
+
+(** Retuns true if the type contains a borrow below a mutable borrow *)
+let ty_has_borrow_below_mut (infos : TA.type_infos) (ty : 'r ty) : bool =
+  raise Errors.Unimplemented
 
 (** Check if a [ty] contains regions from a given set *)
 let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : rty) : bool =
