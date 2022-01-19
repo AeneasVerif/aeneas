@@ -234,7 +234,7 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
       method! visit_symbolic_value _ s =
         match s.sv_kind with
         | V.FunCallRet ->
-            if ty_has_borrow_below_mut ctx.type_context.type_infos s.sv_ty then
+            if ty_has_borrow_under_mut ctx.type_context.type_infos s.sv_ty then
               raise Found
             else ()
         | V.SynthInput -> ()

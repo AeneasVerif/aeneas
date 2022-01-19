@@ -112,9 +112,10 @@ let ty_has_nested_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
   let info = TA.analyze_ty infos ty in
   info.TA.contains_nested_borrows
 
-(** Retuns true if the type contains a borrow below a mutable borrow *)
-let ty_has_borrow_below_mut (infos : TA.type_infos) (ty : 'r ty) : bool =
-  raise Errors.Unimplemented
+(** Retuns true if the type contains a borrow under a mutable borrow *)
+let ty_has_borrow_under_mut (infos : TA.type_infos) (ty : 'r ty) : bool =
+  let info = TA.analyze_ty infos ty in
+  info.TA.contains_borrow_under_mut
 
 (** Check if a [ty] contains regions from a given set *)
 let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : rty) : bool =

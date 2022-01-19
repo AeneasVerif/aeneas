@@ -458,7 +458,7 @@ let give_back_symbolic_value (_config : C.config)
              * meaning the given back value can't have borrows below mutable
              * borrows. *)
             let has_borrow_below_mut =
-              ty_has_borrow_below_mut ctx.type_context.type_infos nsv.sv_ty
+              ty_has_borrow_under_mut ctx.type_context.type_infos nsv.sv_ty
             in
             assert (not has_borrow_below_mut);
             (* We don't allow overwrites: we must thus not project over the

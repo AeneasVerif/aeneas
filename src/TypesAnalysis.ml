@@ -3,7 +3,7 @@ open Modules
 
 type subtype_info = {
   under_borrow : bool;  (** Are we inside a borrow? *)
-  under_nested_borrows : bool;  (** Are we inside nested borrows? *)
+  under_mut_borrow : bool;  (** Are we inside a mut borrow? *)
 }
 [@@deriving show]
 
@@ -12,13 +12,20 @@ type type_param_info = subtype_info [@@deriving show]
 
 type expl_info = subtype_info [@@deriving show]
 
-type 'p g_type_info = {
+type type_borrows_info = {
   contains_static : bool;
       (** Does the type (transitively) contains a static borrow? *)
   contains_borrow : bool;
       (** Does the type (transitively) contains a borrow? *)
   contains_nested_borrows : bool;
       (** Does the type (transitively) contains nested borrows? *)
+  contains_borrow_under_mut : bool;
+}
+[@@deriving show]
+
+type 'p g_type_info = {
+  borrows_info : type_borrows_info;
+      (** Various informations about the borrows *)
   param_infos : 'p;  (** Gives information about the type parameters *)
 }
 [@@deriving show]
@@ -27,7 +34,7 @@ type 'p g_type_info = {
 type type_def_info = type_param_info list g_type_info [@@deriving show]
 (** Information about a type definition. *)
 
-type ty_info = unit g_type_info [@@deriving show]
+type ty_info = type_borrows_info [@@deriving show]
 (** Information about a type. *)
 
 type partial_type_info = type_param_info list option g_type_info
@@ -39,46 +46,37 @@ type partial_type_info = type_param_info list option g_type_info
 
 type type_infos = type_def_info TypeDefId.Map.t [@@deriving show]
 
-let expl_info_init = { under_borrow = false; under_nested_borrows = false }
+let expl_info_init = { under_borrow = false; under_mut_borrow = false }
 
-let initialize_g_type_info (param_infos : 'p) : 'p g_type_info =
+let type_borrows_info_init : type_borrows_info =
   {
     contains_static = false;
     contains_borrow = false;
     contains_nested_borrows = false;
-    param_infos;
+    contains_borrow_under_mut = false;
   }
 
+let initialize_g_type_info (param_infos : 'p) : 'p g_type_info =
+  { borrows_info = type_borrows_info_init; param_infos }
+
 let initialize_type_def_info (def : type_def) : type_def_info =
-  let param_info = { under_borrow = false; under_nested_borrows = false } in
+  let param_info = { under_borrow = false; under_mut_borrow = false } in
   let param_infos = List.map (fun _ -> param_info) def.type_params in
   initialize_g_type_info param_infos
 
 let type_def_info_to_partial_type_info (info : type_def_info) :
     partial_type_info =
-  {
-    contains_static = info.contains_static;
-    contains_borrow = info.contains_borrow;
-    contains_nested_borrows = info.contains_nested_borrows;
-    param_infos = Some info.param_infos;
-  }
+  { borrows_info = info.borrows_info; param_infos = Some info.param_infos }
 
 let partial_type_info_to_type_def_info (info : partial_type_info) :
     type_def_info =
   {
-    contains_static = info.contains_static;
-    contains_borrow = info.contains_borrow;
-    contains_nested_borrows = info.contains_nested_borrows;
+    borrows_info = info.borrows_info;
     param_infos = Option.get info.param_infos;
   }
 
 let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
-  {
-    contains_static = info.contains_static;
-    contains_borrow = info.contains_borrow;
-    contains_nested_borrows = info.contains_nested_borrows;
-    param_infos = ();
-  }
+  info.borrows_info
 
 let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
     (infos : type_infos) (ty_info : partial_type_info) (ty : 'r ty) :
@@ -91,19 +89,33 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
     else original
   in
 
-  let update_ty_info_from_expl_info (ty_info : partial_type_info)
-      (expl_info : expl_info) : partial_type_info =
-    (* Set `contains_borrow` *)
+  (* Update a partial_type_info, while registering if we actually performed an update *)
+  let update_ty_info (ty_info : partial_type_info)
+      (ty_b_info : type_borrows_info) : partial_type_info =
+    let original = ty_info.borrows_info in
+    let contains_static =
+      check_update_bool original.contains_static ty_b_info.contains_static
+    in
     let contains_borrow =
-      check_update_bool ty_info.contains_borrow expl_info.under_borrow
+      check_update_bool original.contains_borrow ty_b_info.contains_borrow
     in
-    (* Set `contains_nested_borrows` *)
     let contains_nested_borrows =
-      check_update_bool ty_info.contains_nested_borrows
-        expl_info.under_nested_borrows
+      check_update_bool original.contains_nested_borrows
+        ty_b_info.contains_nested_borrows
     in
-    (* Update ty_info *)
-    { ty_info with contains_borrow; contains_nested_borrows }
+    let contains_borrow_under_mut =
+      check_update_bool original.contains_borrow_under_mut
+        ty_b_info.contains_borrow_under_mut
+    in
+    let updated_borrows_info =
+      {
+        contains_static;
+        contains_borrow;
+        contains_nested_borrows;
+        contains_borrow_under_mut;
+      }
+    in
+    { ty_info with borrows_info = updated_borrows_info }
   in
 
   (* The recursive function which explores the type *)
@@ -122,12 +134,12 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
               check_update_bool param_info.under_borrow expl_info.under_borrow
             in
             (* Set `under_nested_borrows` *)
-            let under_nested_borrows =
-              check_update_bool param_info.under_nested_borrows
-                expl_info.under_nested_borrows
+            let under_mut_borrow =
+              check_update_bool param_info.under_mut_borrow
+                expl_info.under_mut_borrow
             in
             (* Update param_info *)
-            let param_info = { under_borrow; under_nested_borrows } in
+            let param_info = { under_borrow; under_mut_borrow } in
             let param_infos =
               TypeVarId.update_nth param_infos var_id param_info
             in
@@ -136,18 +148,28 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
     | Array ty | Slice ty ->
         (* Just dive in *)
         analyze expl_info ty_info ty
-    | Ref (r, rty, _) ->
+    | Ref (r, rty, rkind) ->
+        (* Update the type info *)
+        let contains_static = r_is_static r in
+        let contains_borrow = true in
+        let contains_nested_borrows = expl_info.under_borrow in
+        let contains_borrow_under_mut = expl_info.under_mut_borrow in
+        let ty_b_info =
+          {
+            contains_static;
+            contains_borrow;
+            contains_nested_borrows;
+            contains_borrow_under_mut;
+          }
+        in
+        let ty_info = update_ty_info ty_info ty_b_info in
         (* Update the exploration info *)
         let expl_info =
-          { under_borrow = true; under_nested_borrows = expl_info.under_borrow }
+          {
+            under_borrow = true;
+            under_mut_borrow = expl_info.under_mut_borrow || rkind = Mut;
+          }
         in
-        (* Set `contains_static` *)
-        let contains_static =
-          check_update_bool ty_info.contains_static (r_is_static r)
-        in
-        let ty_info = { ty_info with contains_static } in
-        (* Update the type info *)
-        let ty_info = update_ty_info_from_expl_info ty_info expl_info in
         (* Continue exploring *)
         analyze expl_info ty_info rty
     | Adt ((Tuple | Assumed Box), _, tys) ->
@@ -158,35 +180,54 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
     | Adt (AdtId adt_id, regions, tys) ->
         (* Lookup the information for this type definition *)
         let adt_info = TypeDefId.Map.find adt_id infos in
-        (* Check if 'static appears *)
-        let ty_info =
-          List.fold_left
-            (fun ty_info r ->
-              {
-                ty_info with
-                contains_static =
-                  check_update_bool ty_info.contains_static (r_is_static r);
-              })
-            ty_info regions
+        (* Update the type info with the information from the adt *)
+        let ty_info = update_ty_info ty_info adt_info.borrows_info in
+        (* Check if 'static appears in the region parameters *)
+        let found_static = List.exists r_is_static regions in
+        let borrows_info = ty_info.borrows_info in
+        let borrows_info =
+          {
+            borrows_info with
+            contains_static =
+              check_update_bool borrows_info.contains_static found_static;
+          }
         in
+        let ty_info = { ty_info with borrows_info } in
         (* For every instantiated type parameter: update the exploration info
          * then explore the type *)
         let params_tys = List.combine adt_info.param_infos tys in
         let ty_info =
           List.fold_left
             (fun ty_info (param_info, ty) ->
+              (* Update the type info *)
+              (* Below: we use only the information which we learn only
+               * by taking the type parameter into account. *)
+              let contains_static = false in
+              let contains_borrow = param_info.under_borrow in
+              let contains_nested_borrows =
+                expl_info.under_borrow && param_info.under_borrow
+              in
+              let contains_borrow_under_mut =
+                expl_info.under_mut_borrow && param_info.under_borrow
+              in
+              let ty_b_info =
+                {
+                  contains_static;
+                  contains_borrow;
+                  contains_nested_borrows;
+                  contains_borrow_under_mut;
+                }
+              in
+              let ty_info = update_ty_info ty_info ty_b_info in
               (* Update the exploration info *)
               let expl_info =
                 {
                   under_borrow =
                     expl_info.under_borrow || param_info.under_borrow;
-                  under_nested_borrows =
-                    expl_info.under_nested_borrows
-                    || param_info.under_nested_borrows;
+                  under_mut_borrow =
+                    expl_info.under_mut_borrow || param_info.under_mut_borrow;
                 }
               in
-              (* Propagate the updates to the ty info *)
-              let ty_info = update_ty_info_from_expl_info ty_info expl_info in
               (* Continue exploring *)
               analyze expl_info ty_info ty)
             ty_info params_tys
