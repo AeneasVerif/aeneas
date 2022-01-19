@@ -428,34 +428,29 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
    fun cf ctx ->
     match rty with
     (* "Regular" ADTs *)
-    | T.Adt (T.AdtId def_id, regions, types) -> (
+    | T.Adt (T.AdtId def_id, regions, types) ->
         (* Compute the expanded value - there should be exactly one because we
          * don't allow to expand enumerations with strictly more than one variant *)
         let expand_enumerations = false in
-        match
+        let seel =
           compute_expanded_symbolic_adt_value expand_enumerations sp.sv_kind
             def_id regions types ctx
-        with
-        | seel ->
-            (* Check for branching *)
-            assert (List.length seel <= 1 || allow_branching);
-            (* Apply in the context *)
-            let ctxl =
-              List.map
-                (fun see ->
-                  apply_symbolic_expansion_non_borrow config original_sv see ctx)
-                seel
-            in
-            (* Continue *)
-            let resl = List.map (fun ctx -> Option.get (cf ctx)) ctxl in
-            (* Synthesize *)
-            let res = S.synthesize_symbolic_expansion original_sv resl in
-            (* Return *)
-            Some res
-        | _ ->
-            failwith
-              "expand_symbolic_value_no_branching: the expansion lead to \
-               branching")
+        in
+        (* Check for branching *)
+        assert (List.length seel <= 1 || allow_branching);
+        (* Apply in the context *)
+        let ctxl =
+          List.map
+            (fun see ->
+              apply_symbolic_expansion_non_borrow config original_sv see ctx)
+            seel
+        in
+        (* Continue *)
+        let resl = List.map (fun ctx -> Option.get (cf ctx)) ctxl in
+        (* Synthesize *)
+        let res = S.synthesize_symbolic_expansion original_sv resl in
+        (* Return *)
+        Some res
     (* Tuples *)
     | T.Adt (T.Tuple, [], tys) ->
         (* Generate the field values *)

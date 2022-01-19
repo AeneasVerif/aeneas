@@ -952,9 +952,11 @@ and end_borrows (config : C.config) (chain : borrow_or_abs_ids)
     (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t) : cm_fun
     =
  fun cf ->
-  V.BorrowId.Set.fold
-    (fun id cf -> end_borrow config chain allowed_abs id cf)
-    lset cf
+  (* This is not necessary, but we prefer to reorder the borrow ids,
+   * so that we actually end from the smallest id to the highest id - just
+   * a matter of taste, and may make debugging easier *)
+  let ids = V.BorrowId.Set.fold (fun id ids -> id :: ids) lset [] in
+  List.fold_left (fun cf id -> end_borrow config chain allowed_abs id cf) cf ids
 
 and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
     (abs_id : V.AbstractionId.id) : cm_fun =
@@ -1035,9 +1037,11 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
 and end_abstractions (config : C.config) (chain : borrow_or_abs_ids)
     (abs_ids : V.AbstractionId.Set.t) : cm_fun =
  fun cf ->
-  V.AbstractionId.Set.fold
-    (fun id cf -> end_abstraction config chain id cf)
-    abs_ids cf
+  (* This is not necessary, but we prefer to reorder the abstraction ids,
+   * so that we actually end from the smallest id to the highest id - just
+   * a matter of taste, and may make debugging easier *)
+  let abs_ids = V.AbstractionId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
+  List.fold_left (fun cf id -> end_abstraction config chain id cf) cf abs_ids
 
 and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
     (abs_id : V.AbstractionId.id) : cm_fun =
