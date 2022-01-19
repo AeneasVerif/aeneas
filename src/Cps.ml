@@ -6,15 +6,17 @@ module V = Values
 module C = Contexts
 
 (** Result of evaluating a statement *)
-type statement_eval_res = Unit | Break of int | Continue of int | Return
+type statement_eval_res =
+  | Unit
+  | Break of int
+  | Continue of int
+  | Return
+  | Panic
 
 (** Synthesized expresssion - dummy for now *)
 type sexpr = SExpr
 
-(** TODO: change the name *)
-type eval_error = Panic
-
-type eval_result = (sexpr option, eval_error) Result.result
+type eval_result = sexpr option
 
 type m_fun = C.eval_ctx -> eval_result
 (** Monadic function *)
