@@ -855,11 +855,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
            ^ eval_ctx_to_string ctx));
         failwith "Loan not eliminated"
   in
-  let cf_check_disappeared : cm_fun =
-   fun cf ctx ->
-    check_disappeared ctx;
-    cf ctx
-  in
+  let cf_check_disappeared : cm_fun = unit_to_cm_fun check_disappeared in
 
   (* Start by getting the borrow *)
   match end_borrow_get_borrow allowed_abs l ctx with
@@ -884,19 +880,19 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
            * inside another borrow *)
           let allowed_abs' = None in
           (* End the outer borrows *)
-          let cf_end_outer = end_borrows config chain allowed_abs' bids in
+          let cc = end_borrows config chain allowed_abs' bids in
           (* Retry to end the borrow *)
-          let cf_retry = end_borrow config chain0 allowed_abs l in
-          (* Compose *)
-          cf_end_outer (cf_retry cf) ctx
+          let cc = comp cc (end_borrow config chain0 allowed_abs l) in
+          (* Check and apply *)
+          comp cc cf_check_disappeared cf ctx
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           let allowed_abs' = None in
           (* End the outer borrow *)
-          let cf_end_outer = end_borrow config chain allowed_abs' bid in
+          let cc = end_borrow config chain allowed_abs' bid in
           (* Retry to end the borrow *)
-          let cf_retry = end_borrow config chain0 allowed_abs l in
-          (* Compose *)
-          cf_end_outer (cf_retry (cf_check_disappeared cf)) ctx
+          let cc = comp cc (end_borrow config chain0 allowed_abs l) in
+          (* Check and apply *)
+          comp cc cf_check_disappeared cf ctx
       | OuterAbs abs_id ->
           (* The borrow is inside an asbtraction: check if the corresponding
            * loan is inside the same abstraction. If this is the case, we end
@@ -911,24 +907,23 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
             }
           in
           let cf_end_abs : cm_fun =
-           fun cf ctx ->
             match lookup_loan ek l ctx with
             | AbsId loan_abs_id, _ ->
                 if loan_abs_id = abs_id then
                   (* Same abstraction! We can end the borrow *)
-                  end_borrow config chain0 (Some abs_id) l cf ctx
+                  end_borrow config chain0 (Some abs_id) l
                 else
                   (* Not the same abstraction: we need to end the whole abstraction.
                    * By doing that we should have ended the target borrow (see the
                    * below sanity check) *)
-                  end_abstraction config chain abs_id cf ctx
+                  end_abstraction config chain abs_id
             | VarId _, _ ->
                 (* The loan is not inside the same abstraction (actually inside
                  * a non-abstraction value): we need to end the whole abstraction *)
-                end_abstraction config chain abs_id cf ctx
+                end_abstraction config chain abs_id
           in
           (* Compose with a sanity check *)
-          cf_end_abs (cf_check_disappeared cf) ctx)
+          comp cf_end_abs cf_check_disappeared cf ctx)
   | Ok (ctx, None) ->
       log#ldebug (lazy "End borrow: borrow not found");
       (* It is possible that we can't find a borrow in symbolic mode (ending
@@ -973,14 +968,11 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
       ^ V.AbstractionId.to_string abs_id
       ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
 
-  (* Initialize the continuation composition *)
-  let cc = id_cm_fun in
-
   (* Lookup the abstraction *)
   let abs = C.ctx_lookup_abs ctx abs_id in
 
   (* End the parent abstractions first *)
-  let cc = comp cc (end_abstractions config chain abs.parents) in
+  let cc = end_abstractions config chain abs.parents in
   let cc =
     comp_unit cc (fun ctx ->
         log#ldebug
