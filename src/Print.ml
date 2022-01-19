@@ -313,11 +313,11 @@ module Values = struct
         "[" ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv ^ "]"
     | AProjBorrows (sv, rty) ->
         "(" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
-    | AEndedProjLoans aproj_opt -> (
+    | AEndedProjLoans (_mv, aproj_opt) -> (
         match aproj_opt with
         | None -> "_"
         | Some aproj -> aproj_to_string fmt aproj)
-    | AEndedProjBorrows -> "_"
+    | AEndedProjBorrows _mv -> "_"
     | AIgnoredProjBorrows -> "_"
 
   let rec typed_avalue_to_string (fmt : value_formatter) (v : V.typed_avalue) :
@@ -409,7 +409,7 @@ module Values = struct
   and aborrow_content_to_string (fmt : value_formatter) (bc : V.aborrow_content)
       : string =
     match bc with
-    | AMutBorrow (bid, av) ->
+    | AMutBorrow (_, bid, av) ->
         "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_avalue_to_string fmt av
         ^ ")"
@@ -420,7 +420,10 @@ module Values = struct
         ^ ", "
         ^ typed_avalue_to_string fmt av
         ^ ")"
-    | AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
+    | AEndedMutBorrow (_mv, child) ->
+        "@ended_mut_borrow(" ^ typed_avalue_to_string fmt child ^ ")"
+    | AEndedIgnoredMutBorrow
+        { child; given_back_loans_proj; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
         ^ typed_avalue_to_string fmt child
         ^ "; "

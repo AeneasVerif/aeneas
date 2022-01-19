@@ -185,6 +185,14 @@ and typed_value = { value : value; ty : ety }
       }]
 (** "Regular" typed value (we map variables to typed values) *)
 
+type mvalue = typed_value [@@deriving show]
+(** "Meta"-value: information we store for the synthesis.
+
+     Note that we never automatically visit the meta-values with the
+     visitors: they really are meta information, and shouldn't be considered
+     as part of the environment during a symbolic execution.
+ *)
+
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
     abstractions) we need to reborrow the shared values. When doing so, we lookup
     the shared values and apply some special projections to the shared value
@@ -213,6 +221,8 @@ class ['self] iter_aproj_base =
     inherit [_] iter_typed_value
 
     method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
+
+    method visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for [aproj] map visitor *)
@@ -221,6 +231,8 @@ class ['self] map_aproj_base =
     inherit [_] map_typed_value
 
     method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
+
+    method visit_mvalue : 'env -> mvalue -> mvalue = fun _ v -> v
   end
 
 type aproj =
@@ -228,18 +240,22 @@ type aproj =
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use [abstract_shared_borrow]. *)
-  | AEndedProjLoans of aproj option
+  | AEndedProjLoans of mvalue * aproj option
       (** When ending a proj_loans over a symbolic value, we may need to insert
           (and keep track of) a proj_borrows over the given back value, if the
           symbolic value was consumed by an abstraction then updated.
           
-          Rk.: for now this is useless, because we forbid borrow overwrites on
+          Rk.: for now the option is useless, because we forbid borrow overwrites on
           returned values. A consequence is that when a proj_loans over a symbolic
           value ends, we don't project the given back value.
+          
+          The meta-value is the value which was given back (and thus consumed by
+          the loan when it ended).
        *)
-  | AEndedProjBorrows
-  (* TODO: remove AEndedProjBorrows? We might need it for synthesis, to contain
-   * meta values *)
+  | AEndedProjBorrows of mvalue
+      (** The only purpose of [AEndedProjBorrows] is to store the (symbolic) value
+          which was generated upon ending the borrow (this is useful for synthesis)
+       *)
   | AIgnoredProjBorrows
 [@@deriving
   show,
@@ -369,11 +385,19 @@ and aloan_content =
           px -> shared_loan l0
           ```
      *)
-  | AEndedMutLoan of { child : typed_avalue; given_back : typed_avalue }
+  | AEndedMutLoan of {
+      child : typed_avalue;
+      given_back : typed_avalue;
+      given_back_meta : mvalue;
+    }
       (** An ended mutable loan in an abstraction.
           We need it because abstractions must keep track of the values
           we gave back to them, so that we can correctly instantiate
           backward functions.
+          
+          Rk.: *DO NOT* use [visit_AEndedMutLoan]. If we update the order of
+          the arguments and you forget to swap them at the level of
+          [visit_AEndedMutLoan], you will not notice it.          
       
           Example:
           ========
@@ -388,15 +412,6 @@ and aloan_content =
           abs0 { a_ended_mut_loan { given_back = U32 3; child = ⊥; }
           x -> ⊥
           ```
-      
-          TODO: in the formalization, given_back was initially a typed value
-          (not an avalue). It seems more consistent to use a value, especially
-          because then the invariants about the borrows are simpler (otherwise,
-          there may be borrow ids duplicated in the context, which is very
-          annoying).
-          I think the original idea was that using values would make it
-          simple to instantiate the backward function (because projecting
-          deconstructs a bit the values with which we feed the function).
        *)
   | AEndedSharedLoan of typed_value * typed_avalue
       (** Similar to [AEndedMutLoan] but in this case there are no avalues to
@@ -424,8 +439,16 @@ and aloan_content =
           > x -> mut_borrow l0 (mut_borrow l1 @s1)
           ```
        *)
-  | AEndedIgnoredMutLoan of { child : typed_avalue; given_back : typed_avalue }
-      (** Similar to [AEndedMutLoan], for ignored loans *)
+  | AEndedIgnoredMutLoan of {
+      child : typed_avalue;
+      given_back : typed_avalue;
+      given_back_meta : mvalue;
+    }
+      (** Similar to [AEndedMutLoan], for ignored loans.
+
+           Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan].
+           See the comment for [AEndedMutLoan].
+       *)
   | AIgnoredSharedLoan of typed_avalue
       (** An ignored shared loan.
       
@@ -446,7 +469,7 @@ and aloan_content =
     children values).
 
     Note that contrary to [aloan_content], here the children avalues are
-    note independent of the parent avalues. For instance, a value
+    not independent of the parent avalues. For instance, a value
     `AMutBorrow (_, AMutBorrow (_, ...)` (ignoring the types) really is
     to be seen like a `mut_borrow ... (mut_borrow ...)`.
     
@@ -454,7 +477,7 @@ and aloan_content =
     ids)?
 *)
 and aborrow_content =
-  | AMutBorrow of (BorrowId.id[@opaque]) * typed_avalue
+  | AMutBorrow of mvalue * (BorrowId.id[@opaque]) * typed_avalue
       (** A mutable borrow owned by an abstraction.
       
           Is used when an abstraction "consumes" borrows, when giving borrows
@@ -474,6 +497,11 @@ and aborrow_content =
           > px -> ⊥
           > abs0 { a_mut_borrow l0 (U32 0) }
           ```
+          
+          The meta-value stores the initial value on which the projector was
+          applied, which reduced to this mut borrow. This meta-information
+          is only used for the synthesis.
+          TODO: do we really use it actually?
      *)
   | ASharedBorrow of (BorrowId.id[@opaque])
       (** A shared borrow owned by an abstraction.
@@ -565,9 +593,24 @@ and aborrow_content =
             abstraction so that we can properly call the backward functions
             when generating the pure translation.
        *)
+  | AEndedMutBorrow of mvalue * typed_avalue
+      (** The sole purpose of [AEndedMutBorrow] is to store the (symbolic) value
+          that we gave back as a meta-value, to help with the synthesis.
+          We also remember the child [avalue] because this structural information
+          is useful for the synthesis (but not for the symbolic execution):
+          in practice the child value should only contain ended borrows, ignored
+          values, bottom values, etc.
+       *)
   | AEndedIgnoredMutBorrow of {
       child : typed_avalue;
       given_back_loans_proj : typed_avalue;
+      given_back_meta : mvalue;
+          (** [given_back_meta] is used to store the (symbolic) value we gave back
+              upon ending the borrow.
+
+              Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan].
+              See the comment for [AEndedMutLoan].
+          *)
     }  (** See the explanations for [AIgnoredMutBorrow] *)
   | AProjSharedBorrow of abstract_shared_borrows
       (** A projected shared borrow.
@@ -601,10 +644,7 @@ and aborrow_content =
           ```
        *)
 
-(* TODO: we may want to merge this with typed_value - would prevent some issues
-   when accessing fields....
-
-   TODO: the type of avalues doesn't make sense for loan avalues: they currently
+(* TODO: the type of avalues doesn't make sense for loan avalues: they currently
    are typed as `& (mut) T` instead of `T`...
 *)
 and typed_avalue = { value : avalue; ty : rty }

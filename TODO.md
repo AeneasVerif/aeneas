@@ -4,6 +4,9 @@
 
 1. stateful maps/sets modules (hashtbl?)
 
+1. Check the occurrence of visitors like visit_AEndedMutLoan: the parameters are
+   sometimes inverted!
+
 0. compute the region constraints for the type definitions
 
 2. set of types with mutable borrows (what to do when type variables appear under

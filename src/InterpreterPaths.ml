@@ -182,10 +182,12 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                 | ( _,
                     Abstract
                       ( V.AMutLoan (_, _)
-                      | V.AEndedMutLoan { given_back = _; child = _ }
+                      | V.AEndedMutLoan
+                          { given_back = _; child = _; given_back_meta = _ }
                       | V.AEndedSharedLoan (_, _)
                       | V.AIgnoredMutLoan (_, _)
-                      | V.AEndedIgnoredMutLoan { given_back = _; child = _ }
+                      | V.AEndedIgnoredMutLoan
+                          { given_back = _; child = _; given_back_meta = _ }
                       | V.AIgnoredSharedLoan _ ) ) ->
                     failwith "Expected a shared (abstraction) loan"
                 | _, Abstract (V.ASharedLoan (bids, sv, _av)) -> (

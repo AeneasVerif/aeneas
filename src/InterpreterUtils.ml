@@ -171,7 +171,7 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
         (match aproj with
         | AProjLoans sv | AProjBorrows (sv, _) ->
             if sv.V.sv_id = sv_id then raise Found else ()
-        | AEndedProjLoans _ | AEndedProjBorrows | AIgnoredProjBorrows -> ());
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj env aproj
 
       method! visit_abstract_shared_borrows _ asb =

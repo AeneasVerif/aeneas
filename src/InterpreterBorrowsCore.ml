@@ -186,13 +186,13 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
             if V.BorrowId.Set.mem l bids then
               raise (FoundGLoanContent (Abstract lc))
             else super#visit_ASharedLoan env bids v av
-        | V.AEndedMutLoan { given_back; child } ->
-            super#visit_AEndedMutLoan env given_back child
-        | V.AEndedSharedLoan (v, av) -> super#visit_AEndedSharedLoan env v av
-        | V.AIgnoredMutLoan (bid, av) -> super#visit_AIgnoredMutLoan env bid av
-        | V.AEndedIgnoredMutLoan { given_back; child } ->
-            super#visit_AEndedIgnoredMutLoan env given_back child
-        | V.AIgnoredSharedLoan av -> super#visit_AIgnoredSharedLoan env av
+        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | V.AEndedSharedLoan (_, _)
+        | V.AIgnoredMutLoan (_, _)
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ }
+        | V.AIgnoredSharedLoan _ ->
+            super#visit_aloan_content env lc
       (** Note that we don't control diving inside the abstractions: if we
           allow to dive inside abstractions, we allow to go anywhere
           (because there are no use cases requiring finer control) *)
@@ -326,13 +326,13 @@ let update_aloan (ek : exploration_kind) (l : V.BorrowId.id)
         | V.ASharedLoan (bids, v, av) ->
             if V.BorrowId.Set.mem l bids then update ()
             else super#visit_ASharedLoan env bids v av
-        | V.AEndedMutLoan { given_back; child } ->
-            super#visit_AEndedMutLoan env given_back child
-        | V.AEndedSharedLoan (v, av) -> super#visit_AEndedSharedLoan env v av
-        | V.AIgnoredMutLoan (bid, av) -> super#visit_AIgnoredMutLoan env bid av
-        | V.AEndedIgnoredMutLoan { given_back; child } ->
-            super#visit_AEndedIgnoredMutLoan env given_back child
-        | V.AIgnoredSharedLoan av -> super#visit_AIgnoredSharedLoan env av
+        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | V.AEndedSharedLoan (_, _)
+        | V.AIgnoredMutLoan (_, _)
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ }
+        | V.AIgnoredSharedLoan _ ->
+            super#visit_aloan_content env lc
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs
@@ -378,16 +378,17 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
 
       method! visit_aborrow_content env bc =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | V.AMutBorrow (mv, bid, av) ->
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
-            else super#visit_AMutBorrow env bid av
+            else super#visit_AMutBorrow env mv bid av
         | V.ASharedBorrow bid ->
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env bid
-        | V.AIgnoredMutBorrow (opt_bid, av) ->
-            super#visit_AIgnoredMutBorrow env opt_bid av
-        | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
-            super#visit_AEndedIgnoredMutBorrow env given_back_loans_proj child
+        | V.AIgnoredMutBorrow (_, _)
+        | V.AEndedMutBorrow _
+        | V.AEndedIgnoredMutBorrow
+            { given_back_loans_proj = _; child = _; given_back_meta = _ } ->
+            super#visit_aborrow_content env bc
         | V.AProjSharedBorrow asb ->
             if borrow_in_asb l asb then
               raise (FoundGBorrowContent (Abstract bc))
@@ -494,18 +495,15 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id) (nv : V.avalue)
 
       method! visit_ABorrow env bc =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | V.AMutBorrow (mv, bid, av) ->
             if bid = l then update ()
-            else V.ABorrow (super#visit_AMutBorrow env bid av)
+            else V.ABorrow (super#visit_AMutBorrow env mv bid av)
         | V.ASharedBorrow bid ->
             if bid = l then update ()
             else V.ABorrow (super#visit_ASharedBorrow env bid)
-        | V.AIgnoredMutBorrow (opt_bid, av) ->
-            V.ABorrow (super#visit_AIgnoredMutBorrow env opt_bid av)
-        | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
-            V.ABorrow
-              (super#visit_AEndedIgnoredMutBorrow env given_back_loans_proj
-                 child)
+        | V.AIgnoredMutBorrow _ | V.AEndedMutBorrow _
+        | V.AEndedIgnoredMutBorrow _ ->
+            super#visit_ABorrow env bc
         | V.AProjSharedBorrow asb ->
             if borrow_in_asb l asb then update ()
             else V.ABorrow (super#visit_AProjSharedBorrow env asb)
@@ -671,7 +669,7 @@ let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
       method! visit_aproj abs sproj =
         (let abs = Option.get abs in
          match sproj with
-         | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows
+         | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _
          | AIgnoredProjBorrows ->
              ()
          | AProjBorrows (sv', proj_rty) ->
@@ -760,7 +758,7 @@ let update_intersecting_aproj_borrows (can_update_shared : bool)
 
       method! visit_aproj abs sproj =
         match sproj with
-        | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows
+        | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _
         | AIgnoredProjBorrows ->
             super#visit_aproj abs sproj
         | AProjBorrows (sv', proj_rty) ->
@@ -853,7 +851,7 @@ let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
 
       method! visit_aproj abs sproj =
         match sproj with
-        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _
         | AIgnoredProjBorrows ->
             super#visit_aproj abs sproj
         | AProjLoans sv' ->

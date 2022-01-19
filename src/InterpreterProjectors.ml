@@ -171,12 +171,14 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
             let bc =
               match (bc, kind) with
               | V.MutBorrow (bid, bv), T.Mut ->
+                  (* Remember the borrowed value we are about to project as a meta-value *)
+                  let mv = bv in
                   (* Apply the projection on the borrowed value *)
                   let bv =
                     apply_proj_borrows check_symbolic_no_ended ctx
                       fresh_reborrow regions ancestors_regions bv ref_ty
                   in
-                  V.AMutBorrow (bid, bv)
+                  V.AMutBorrow (mv, bid, bv)
               | V.SharedBorrow bid, T.Shared -> V.ASharedBorrow bid
               | V.InactivatedMutBorrow _, _ ->
                   failwith
@@ -480,10 +482,11 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
             super#visit_ASharedLoan env bids sv av
         | V.AIgnoredSharedLoan _
         | V.AMutLoan (_, _)
-        | V.AEndedMutLoan { given_back = _; child = _ }
+        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | V.AEndedSharedLoan (_, _)
         | V.AIgnoredMutLoan (_, _)
-        | V.AEndedIgnoredMutLoan { given_back = _; child = _ } ->
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ } ->
             (* Nothing particular to do *)
             super#visit_aloan_content env lc
     end

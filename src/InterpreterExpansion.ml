@@ -75,7 +75,7 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
         (match aproj with
         | AProjLoans sv | AProjBorrows (sv, _) ->
             assert (not (same_symbolic_id sv original_sv))
-        | AEndedProjLoans _ | AEndedProjBorrows | AIgnoredProjBorrows -> ());
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj current_abs aproj
       (** We carefully updated [visit_ASymbolic] so that [visit_aproj] is called
           only on child projections (i.e., projections which appear in [AEndedProjLoans]).
@@ -90,9 +90,9 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
         (* Explore in depth first - we won't update anything: we simply
          * want to check we don't have to expand inner symbolic value *)
         match (aproj, proj_kind) with
-        | V.AEndedProjLoans None, _ | V.AEndedProjBorrows, _ ->
+        | V.AEndedProjLoans (_, None), _ | V.AEndedProjBorrows _, _ ->
             V.ASymbolic aproj
-        | V.AEndedProjLoans (Some child_proj), _ ->
+        | V.AEndedProjLoans (_, Some child_proj), _ ->
             (* Explore the child projection to make sure we don't have to expand
              * anything in there *)
             V.ASymbolic (self#visit_aproj (Some current_abs) child_proj)
@@ -329,7 +329,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
         (match aproj with
         | AProjLoans sv | AProjBorrows (sv, _) ->
             assert (not (same_symbolic_id sv original_sv))
-        | AEndedProjLoans _ | AEndedProjBorrows | AIgnoredProjBorrows -> ());
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj proj_regions aproj
       (** We carefully updated [visit_ASymbolic] so that [visit_aproj] is called
           only on child projections (i.e., projections which appear in [AEndedProjLoans]).
@@ -339,7 +339,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
 
       method! visit_ASymbolic proj_regions aproj =
         match aproj with
-        | AEndedProjBorrows | AIgnoredProjBorrows ->
+        | AEndedProjBorrows _ | AIgnoredProjBorrows ->
             (* We ignore borrows *) V.ASymbolic aproj
         | AProjLoans _ ->
             (* Loans are handled later *)
@@ -349,8 +349,8 @@ let expand_symbolic_value_shared_borrow (config : C.config)
             match reborrow_ashared (Option.get proj_regions) sv proj_ty with
             | None -> super#visit_ASymbolic proj_regions aproj
             | Some asb -> V.ABorrow (V.AProjSharedBorrow asb))
-        | AEndedProjLoans None -> V.ASymbolic aproj
-        | AEndedProjLoans (Some child_aproj) ->
+        | AEndedProjLoans (_, None) -> V.ASymbolic aproj
+        | AEndedProjLoans (_, Some child_aproj) ->
             (* Sanity check: make sure there is nothing to expand inside children
              * projections *)
             V.ASymbolic (self#visit_aproj proj_regions child_aproj)

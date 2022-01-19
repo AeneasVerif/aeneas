@@ -118,9 +118,9 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
          * need it to properly instantiate the backward functions when generating
          * the pure translation. *)
         match lc with
-        | V.AMutLoan (bid, av) ->
+        | V.AMutLoan (_, _) ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AMutLoan outer bid av)
+            super#visit_ALoan outer lc
         | V.ASharedLoan (bids, v, av) ->
             (* Explore the shared value - we need to update the outer borrows *)
             let souter = update_outer_borrows outer (Borrows bids) in
@@ -129,27 +129,22 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
             let av = super#visit_typed_avalue outer av in
             (* Reconstruct *)
             V.ALoan (V.ASharedLoan (bids, v, av))
-        | V.AEndedMutLoan { given_back; child } ->
-            (* The loan has ended, so no need to update the outer borrows *)
-            V.ALoan (super#visit_AEndedMutLoan outer given_back child)
-        | V.AEndedSharedLoan (v, av) ->
-            (* The loan has ended, so no need to update the outer borrows *)
-            V.ALoan (super#visit_AEndedSharedLoan outer v av)
-        | V.AIgnoredMutLoan (bid, av) ->
+        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | V.AEndedSharedLoan _
+        (* The loan has ended, so no need to update the outer borrows *)
+        | V.AIgnoredMutLoan _ (* Nothing special to do *)
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ }
+        (* Nothing special to do *)
+        | V.AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AIgnoredMutLoan outer bid av)
-        | V.AEndedIgnoredMutLoan { given_back; child } ->
-            (* Nothing special to do *)
-            V.ALoan (super#visit_AEndedIgnoredMutLoan outer given_back child)
-        | V.AIgnoredSharedLoan av ->
-            (* Nothing special to do *)
-            V.ALoan (super#visit_AIgnoredSharedLoan outer av)
+            super#visit_ALoan outer lc
       (** We reimplement [visit_ALoan] because we may have to update the
           outer borrows *)
 
       method! visit_ABorrow outer bc =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | V.AMutBorrow (_, bid, _) ->
             (* Check if this is the borrow we are looking for *)
             if bid = l then (
               (* When ending a mut borrow, there are two cases:
@@ -166,12 +161,15 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
               (* Register the update *)
               set_replaced_bc (Abstract bc);
               (* Update the value - note that we are necessarily in the second
-               * of the two cases described above *)
+               * of the two cases described above.
+               * Also note that, as we are moving the borrowed value inside the
+               * abstraction (and not really giving the value back to the context)
+               * we do not insert [AEndedMutBorrow] but rather [ABottom] *)
               V.ABottom)
             else
               (* Update the outer borrows before diving into the child avalue *)
               let outer = update_outer_borrows outer (Borrow bid) in
-              V.ABorrow (super#visit_AMutBorrow outer bid av)
+              super#visit_ABorrow outer bc
         | V.ASharedBorrow bid ->
             (* Check if this is the borrow we are looking for *)
             if bid = l then (
@@ -183,15 +181,13 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
               (* Update the value - note that we are necessarily in the second
                * of the two cases described above *)
               V.ABottom)
-            else V.ABorrow (super#visit_ASharedBorrow outer bid)
-        | V.AIgnoredMutBorrow (opt_bid, av) ->
+            else super#visit_ABorrow outer bc
+        | V.AIgnoredMutBorrow (_, _)
+        | V.AEndedMutBorrow _
+        | V.AEndedIgnoredMutBorrow
+            { given_back_loans_proj = _; child = _; given_back_meta = _ } ->
             (* Nothing special to do *)
-            V.ABorrow (super#visit_AIgnoredMutBorrow outer opt_bid av)
-        | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child } ->
-            (* Nothing special to do *)
-            V.ABorrow
-              (super#visit_AEndedIgnoredMutBorrow outer given_back_loans_proj
-                 child)
+            super#visit_ABorrow outer bc
         | V.AProjSharedBorrow asb ->
             (* Check if the borrow we are looking for is in the asb *)
             if borrow_in_asb l asb then (
@@ -204,9 +200,8 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
                * of the two cases described above *)
               let asb = remove_borrow_from_asb l asb in
               V.ABorrow (V.AProjSharedBorrow asb))
-            else
-              (* Nothing special to do *)
-              V.ABorrow (super#visit_AProjSharedBorrow outer asb)
+            else (* Nothing special to do *)
+              super#visit_ABorrow outer bc
 
       method! visit_abs outer abs =
         (* Update the outer abs *)
@@ -317,6 +312,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               match nv.V.value with
               | V.Symbolic sv ->
                   let abs = Option.get opt_abs in
+                  (* Remember the given back value as a meta-value *)
+                  let given_back_meta = nv in
                   (* The loan projector *)
                   let given_back_loans_proj =
                     mk_aproj_loans_value_from_symbolic_value abs.regions sv
@@ -325,7 +322,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                   let child = super#visit_typed_avalue opt_abs child in
                   (* Return *)
                   V.ABorrow
-                    (V.AEndedIgnoredMutBorrow { given_back_loans_proj; child })
+                    (V.AEndedIgnoredMutBorrow
+                       { given_back_loans_proj; child; given_back_meta })
               | _ -> failwith "Unreachable"
             else
               (* Continue exploring *)
@@ -359,6 +357,8 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                * an ended loan *)
               (* Register the insertion *)
               set_replaced ();
+              (* Remember the given back value as a meta-value *)
+              let given_back_meta = nv in
               (* Apply the projection *)
               let given_back =
                 apply_proj_borrows check_symbolic_no_ended ctx fresh_reborrow
@@ -367,23 +367,22 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
               (* Return the new value *)
-              V.ALoan (V.AEndedMutLoan { given_back; child }))
-            else
-              (* Continue exploring *)
-              V.ALoan (super#visit_AMutLoan opt_abs bid' child)
-        | V.ASharedLoan (bids, v, av) ->
+              V.ALoan (V.AEndedMutLoan { child; given_back; given_back_meta }))
+            else (* Continue exploring *)
+              super#visit_ALoan opt_abs lc
+        | V.ASharedLoan (_, _, _) ->
             (* We are giving back a value to a *mutable* loan: nothing special to do *)
-            V.ALoan (super#visit_ASharedLoan opt_abs bids v av)
-        | V.AEndedMutLoan { given_back; child } ->
+            super#visit_ALoan opt_abs lc
+        | V.AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
+        | V.AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AEndedMutLoan opt_abs given_back child)
-        | V.AEndedSharedLoan (v, av) ->
-            (* Nothing special to do *)
-            V.ALoan (super#visit_AEndedSharedLoan opt_abs v av)
+            super#visit_ALoan opt_abs lc
         | V.AIgnoredMutLoan (bid', child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
             if bid' = bid then
+              (* Remember the given back value as a meta-value *)
+              let given_back_meta = nv in
               (* Note that we replace the ignored mut loan by an *ended* ignored
                * mut loan. Also, this is not the loan we are looking for *per se*:
                * we don't register the fact that we inserted the value somewhere
@@ -394,14 +393,14 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
-              V.ALoan (V.AEndedIgnoredMutLoan { given_back; child })
-            else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
-        | V.AEndedIgnoredMutLoan { given_back; child } ->
+              V.ALoan
+                (V.AEndedIgnoredMutLoan { given_back; child; given_back_meta })
+            else super#visit_ALoan opt_abs lc
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ }
+        | V.AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
-        | V.AIgnoredSharedLoan av ->
-            (* Nothing special to do *)
-            V.ALoan (super#visit_AIgnoredSharedLoan opt_abs av)
+            super#visit_ALoan opt_abs lc
       (** We are not specializing an already existing method, but adding a
           new method (for projections, we need type information) *)
 
@@ -432,6 +431,9 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
 let give_back_symbolic_value (_config : C.config)
     (proj_regions : T.RegionId.Set.t) (proj_ty : T.rty) (sv : V.symbolic_value)
     (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Store the given-back value as a meta-value for synthesis purposes *)
+  let mv = mk_typed_value_from_symbolic_value nsv in
+  (* Substitution function, to replace the borrow projectors over symbolic values *)
   let subst (_abs : V.abs) _abs_proj_ty =
     (* Compute the projection over the given back value *)
     let child_proj =
@@ -466,7 +468,7 @@ let give_back_symbolic_value (_config : C.config)
             None
         | _ -> failwith "Unreachable")
     in
-    V.AEndedProjLoans child_proj
+    V.AEndedProjLoans (mv, child_proj)
   in
   update_intersecting_aproj_loans proj_regions proj_ty sv subst ctx
 
@@ -484,8 +486,8 @@ let give_back_symbolic_value (_config : C.config)
     to convert the [avalue] to a [value] by introducing the proper symbolic values.
  *)
 let give_back_avalue_to_same_abstraction (_config : C.config)
-    (bid : V.BorrowId.id) (nv : V.typed_avalue) (ctx : C.eval_ctx) : C.eval_ctx
-    =
+    (bid : V.BorrowId.id) (mv : V.mvalue) (nv : V.typed_avalue)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -530,19 +532,17 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
               (* Register the insertion *)
               set_replaced ();
               (* Return the new value *)
-              V.ALoan (V.AEndedMutLoan { given_back = nv; child }))
-            else
-              (* Continue exploring *)
-              V.ALoan (super#visit_AMutLoan opt_abs bid' child)
-        | V.ASharedLoan (bids, v, av) ->
-            (* We are giving back a value to a *mutable* loan: nothing special to do *)
-            V.ALoan (super#visit_ASharedLoan opt_abs bids v av)
-        | V.AEndedMutLoan { given_back; child } ->
+              V.ALoan
+                (V.AEndedMutLoan
+                   { given_back = nv; child; given_back_meta = mv }))
+            else (* Continue exploring *)
+              super#visit_ALoan opt_abs lc
+        | V.ASharedLoan (_, _, _)
+        (* We are giving back a value to a *mutable* loan: nothing special to do *)
+        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | V.AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AEndedMutLoan opt_abs given_back child)
-        | V.AEndedSharedLoan (v, av) ->
-            (* Nothing special to do *)
-            V.ALoan (super#visit_AEndedSharedLoan opt_abs v av)
+            super#visit_ALoan opt_abs lc
         | V.AIgnoredMutLoan (bid', child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
@@ -553,14 +553,15 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
                * (i.e., we don't call [set_replaced]) *)
               (* Sanity check *)
               assert (nv.V.ty = ty);
-              V.ALoan (V.AEndedIgnoredMutLoan { given_back = nv; child }))
-            else V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid' child)
-        | V.AEndedIgnoredMutLoan { given_back; child } ->
+              V.ALoan
+                (V.AEndedIgnoredMutLoan
+                   { given_back = nv; child; given_back_meta = mv }))
+            else super#visit_ALoan opt_abs lc
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ }
+        | V.AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
-        | V.AIgnoredSharedLoan av ->
-            (* Nothing special to do *)
-            V.ALoan (super#visit_AIgnoredSharedLoan opt_abs av)
+            super#visit_ALoan opt_abs lc
       (** We are not specializing an already existing method, but adding a
           new method (for projections, we need type information) *)
     end
@@ -634,22 +635,19 @@ let give_back_shared _config (bid : V.BorrowId.id) (ctx : C.eval_ctx) :
                      (V.BorrowId.Set.remove bid bids, shared_value, child)))
             else
               (* Not the loan we are looking for: continue exploring *)
-              V.ALoan (super#visit_ASharedLoan opt_abs bids shared_value child)
-        | V.AEndedMutLoan { given_back; child } ->
-            (* Nothing special to do (the loan has ended) *)
-            V.ALoan (super#visit_AEndedMutLoan opt_abs given_back child)
-        | V.AEndedSharedLoan (v, av) ->
-            (* Nothing special to do (the loan has ended) *)
-            V.ALoan (super#visit_AEndedSharedLoan opt_abs v av)
-        | V.AIgnoredMutLoan (bid, av) ->
-            (* Nothing special to do (we are giving back a *shared* borrow) *)
-            V.ALoan (super#visit_AIgnoredMutLoan opt_abs bid av)
-        | V.AEndedIgnoredMutLoan { given_back; child } ->
+              super#visit_ALoan opt_abs lc
+        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        (* Nothing special to do (the loan has ended) *)
+        | V.AEndedSharedLoan (_, _)
+        (* Nothing special to do (the loan has ended) *)
+        | V.AIgnoredMutLoan (_, _)
+        (* Nothing special to do (we are giving back a *shared* borrow) *)
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ }
+        (* Nothing special to do *)
+        | V.AIgnoredSharedLoan _ ->
             (* Nothing special to do *)
-            V.ALoan (super#visit_AEndedIgnoredMutLoan opt_abs given_back child)
-        | V.AIgnoredSharedLoan av ->
-            (* Nothing special to do *)
-            V.ALoan (super#visit_AIgnoredSharedLoan opt_abs av)
+            super#visit_ALoan opt_abs lc
     end
   in
 
@@ -736,13 +734,13 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_shared config l ctx
-  | Abstract (V.AMutBorrow (l', av)) ->
+  | Abstract (V.AMutBorrow (mv, l', av)) ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
-      give_back_avalue_to_same_abstraction config l av ctx
+      give_back_avalue_to_same_abstraction config l mv av ctx
   | Abstract (V.ASharedBorrow l') ->
       (* Sanity check *)
       assert (l' = l);
@@ -755,7 +753,9 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       assert (borrow_in_asb l asb);
       (* Update the context *)
       give_back_shared config l ctx
-  | Abstract (V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _) ->
+  | Abstract
+      (V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _)
+    ->
       failwith "Unreachable"
 
 (** Convert an [avalue] to a [value].
@@ -1017,21 +1017,22 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
         match lc with
         | V.AMutLoan (bid, _) -> raise (FoundBorrowIds (Borrow bid))
         | V.ASharedLoan (bids, _, _) -> raise (FoundBorrowIds (Borrows bids))
-        | V.AEndedMutLoan { given_back; child } ->
-            super#visit_AEndedMutLoan env given_back child
-        | V.AEndedSharedLoan (v, av) -> super#visit_AEndedSharedLoan env v av
-        | V.AIgnoredMutLoan (bid, av) ->
+        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | V.AEndedSharedLoan (_, _) ->
+            super#visit_aloan_content env lc
+        | V.AIgnoredMutLoan (_, _) ->
             (* Note that this loan can't come from a parent abstraction, because
              * we should have ended them already) *)
-            super#visit_AIgnoredMutLoan env bid av
-        | V.AEndedIgnoredMutLoan { given_back; child } ->
-            super#visit_AEndedIgnoredMutLoan env given_back child
-        | V.AIgnoredSharedLoan av -> super#visit_AIgnoredSharedLoan env av
+            super#visit_aloan_content env lc
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ }
+        | V.AIgnoredSharedLoan _ ->
+            super#visit_aloan_content env lc
 
       method! visit_aproj env sproj =
         (match sproj with
         | V.AProjBorrows (_, _)
-        | V.AEndedProjLoans _ | V.AEndedProjBorrows | V.AIgnoredProjBorrows ->
+        | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
             ()
         | V.AProjLoans sv -> raise (FoundSymbolicValue sv));
         super#visit_aproj env sproj
@@ -1062,28 +1063,11 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
-     TODO: is that really important?
-
-     For instance:
-     ```
-     x -> mut_loan l1
-     px -> mut_loan l0
-     abs0 { a_mut_borrow l0 (a_mut_borrow l1 (U32 3)) }
-     ```
-
-     becomes (`U32 3` doesn't contain ⊥, so we give back a symbolic value):
-     ```
-     x -> @s0
-     px -> mut_loan l0
-     abs0 { a_mut_borrow l0 ⊥ }
-     ```
-
-     then (the borrowed value contains ⊥, we give back ⊥):
-     ```
-     x -> @s0
-     px -> ⊥
-     abs0 { ⊥ }
-     ```
+     TODO: is that really important? Initially, there was a concern about
+     whether we should give back ⊥ or not, but everything is handled by
+     the symbolic value expansion... Also, now we use the AEndedMutBorrow
+     values to store the children avalues (which was not the case before - we
+     initially replaced the ended mut borrows with ⊥).
   *)
   (* We explore in-depth and use exceptions. When exploring a borrow, if
    * the exploration didn't trigger an exception, it means there are no
@@ -1099,7 +1083,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         (* No exception was raise: we can raise an exception for the
          * current borrow *)
         match bc with
-        | V.AMutBorrow (_, _) | V.ASharedBorrow _ ->
+        | V.AMutBorrow (_, _, _) | V.ASharedBorrow _ ->
             (* Raise an exception *)
             raise (FoundABorrowContent bc)
         | V.AProjSharedBorrow asb ->
@@ -1110,7 +1094,8 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
                 asb
             then raise (FoundABorrowContent bc)
             else ()
-        | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+        | V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _
+        | V.AEndedIgnoredMutBorrow _ ->
             (* Nothing to do for ignored borrows *)
             ()
 
@@ -1119,7 +1104,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         | V.AProjLoans _ -> failwith "Unexpected"
         | V.AProjBorrows (sv, proj_ty) ->
             raise (FoundAProjBorrows (sv, proj_ty))
-        | V.AEndedProjLoans _ | V.AEndedProjBorrows | V.AIgnoredProjBorrows ->
+        | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
             ());
         super#visit_aproj env sproj
     end
@@ -1134,49 +1119,64 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
   with
   (* There are concrete borrows: end them, then reexplore *)
   | FoundABorrowContent bc ->
-      (* First, replace the borrow by ⊥ *)
-      let bid =
-        match bc with
-        | V.AMutBorrow (bid, _) | V.ASharedBorrow bid -> bid
-        | V.AProjSharedBorrow asb -> (
-            (* There should be at least one borrow identifier in the set, which we
-             * can use to identify the whole set *)
-            match
-              List.find
-                (fun x -> match x with V.AsbBorrow _ -> true | _ -> false)
-                asb
-            with
-            | V.AsbBorrow bid -> bid
-            | _ -> failwith "Unexpected")
-        | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
-            failwith "Unexpected"
-      in
-      let ctx = update_aborrow ek_all bid V.ABottom ctx in
-      (* Then give back the value *)
       let ctx =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | V.AMutBorrow (_, bid, av) ->
             (* First, convert the avalue to a (fresh symbolic) value *)
             let v = convert_avalue_to_given_back_value av in
+            (* Replace the mut borrow to register the fact that we ended
+             * it and store with it the freshly generated given back value *)
+            let ended_borrow = V.ABorrow (V.AEndedMutBorrow (v, av)) in
+            let ctx = update_aborrow ek_all bid ended_borrow ctx in
+            (* Give the value back *)
             give_back_value config bid v ctx
-        | V.ASharedBorrow bid -> give_back_shared config bid ctx
-        | V.AProjSharedBorrow _ ->
-            (* Nothing to do *)
+        | V.ASharedBorrow bid ->
+            (* Replace the shared borrow with bottom *)
+            let ctx = update_aborrow ek_all bid V.ABottom ctx in
+            (* Give back *)
+            give_back_shared config bid ctx
+        | V.AProjSharedBorrow asb ->
+            (* Retrieve the borrow ids *)
+            let bids =
+              List.filter_map
+                (fun asb ->
+                  match asb with
+                  | V.AsbBorrow bid -> Some bid
+                  | V.AsbProjReborrows (_, _) -> None)
+                asb
+            in
+            (* There should be at least one borrow identifier in the set, which we
+             * can use to identify the whole set *)
+            let repr_bid = List.hd bids in
+            (* Replace the shared borrow with Bottom *)
+            let ctx = update_aborrow ek_all repr_bid V.ABottom ctx in
+            (* Give back the shared borrows *)
+            let ctx =
+              List.fold_left
+                (fun ctx bid -> give_back_shared config bid ctx)
+                ctx bids
+            in
+            (* Continue *)
             ctx
-        | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+        | V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _
+        | V.AEndedIgnoredMutBorrow _ ->
             failwith "Unexpected"
       in
       (* Reexplore *)
       end_abstraction_borrows config chain abs_id ctx
   (* There are symbolic borrows: end them, then reexplore *)
   | FoundAProjBorrows (sv, proj_ty) ->
-      (* Replace the proj_borrows - there should be exactly one *)
-      let ctx =
-        update_intersecting_aproj_borrows_non_shared abs.regions sv
-          V.AEndedProjBorrows ctx
-      in
-      (* Give back a fresh symbolic value *)
+      (* Generate a fresh symbolic value *)
       let nsv = mk_fresh_symbolic_value V.FunCallGivenBack proj_ty in
+      (* Replace the proj_borrows - there should be exactly one *)
+      let ended_borrow =
+        V.AEndedProjBorrows (mk_typed_value_from_symbolic_value nsv)
+      in
+      let ctx =
+        update_intersecting_aproj_borrows_non_shared abs.regions sv ended_borrow
+          ctx
+      in
+      (* Give back the symbolic value *)
       let ctx =
         give_back_symbolic_value config abs.regions proj_ty sv nsv ctx
       in
@@ -1257,14 +1257,17 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
        * end it directly, otherwise we need to end the abstraction where it
        * came from first *)
       if abs_id' = abs_id then
+        (* As the symbolic value was left unchanged, we give it back *)
+        let given_back_sv = sv in
         (* Replace the proj_borrows *)
-        let npb = V.AEndedProjBorrows in
+        let given_back = mk_typed_value_from_symbolic_value given_back_sv in
+        let npb = V.AEndedProjBorrows given_back in
         let ctx =
           update_intersecting_aproj_borrows_non_shared regions sv npb ctx
         in
         (* Replace the proj_loans - note that the loaned (symbolic) value
          * was left unchanged *)
-        give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx
+        give_back_symbolic_value config regions sv.V.sv_ty sv given_back_sv ctx
       else
         (* End the abstraction.
          * Don't retry ending the current proj_loans after ending the abstraction:

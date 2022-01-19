@@ -160,9 +160,10 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
           | V.ASharedLoan (bids, _, _) -> register_shared_loan inside_abs bids
           | V.AIgnoredMutLoan (bid, _) -> register_ignored_loan T.Mut bid
           | V.AIgnoredSharedLoan _
-          | V.AEndedMutLoan { given_back = _; child = _ }
+          | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
           | V.AEndedSharedLoan (_, _)
-          | V.AEndedIgnoredMutLoan { given_back = _; child = _ } ->
+          | V.AEndedIgnoredMutLoan
+              { given_back = _; child = _; given_back_meta = _ } ->
               (* Do nothing *)
               ()
         in
@@ -250,11 +251,12 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
       method! visit_aborrow_content env bc =
         let _ =
           match bc with
-          | V.AMutBorrow (bid, _) -> register_borrow Mut bid
+          | V.AMutBorrow (_, bid, _) -> register_borrow Mut bid
           | V.ASharedBorrow bid -> register_borrow Shared bid
           | V.AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow Mut bid
           | V.AIgnoredMutBorrow (None, _)
-          | V.AEndedIgnoredMutBorrow _ | V.AProjSharedBorrow _ ->
+          | V.AEndedMutBorrow _ | V.AEndedIgnoredMutBorrow _
+          | V.AProjSharedBorrow _ ->
               (* Do nothing *)
               ()
         in
@@ -340,10 +342,13 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
           match lc with
           | V.AMutLoan (_, _) -> set_outer_mut info
           | V.ASharedLoan (_, _, _) -> set_outer_shared info
-          | V.AEndedMutLoan { given_back = _; child = _ } -> set_outer_mut info
+          | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+            ->
+              set_outer_mut info
           | V.AEndedSharedLoan (_, _) -> set_outer_shared info
           | V.AIgnoredMutLoan (_, _) -> set_outer_mut info
-          | V.AEndedIgnoredMutLoan { given_back = _; child = _ } ->
+          | V.AEndedIgnoredMutLoan
+              { given_back = _; child = _; given_back_meta = _ } ->
               set_outer_mut info
           | V.AIgnoredSharedLoan _ -> set_outer_shared info
         in
@@ -354,9 +359,10 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
         (* Update the info *)
         let info =
           match bc with
-          | V.AMutBorrow (_, _) -> set_outer_mut info
+          | V.AMutBorrow (_, _, _) -> set_outer_mut info
           | V.ASharedBorrow _ -> set_outer_shared info
-          | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _ ->
+          | V.AIgnoredMutBorrow _ | V.AEndedMutBorrow _
+          | V.AEndedIgnoredMutBorrow _ ->
               set_outer_mut info
           | V.AProjSharedBorrow _ -> set_outer_shared info
         in
@@ -466,7 +472,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 let glc = lookup_borrow ek_all bid ctx in
                 match glc with
                 | Concrete (V.MutBorrow (_, bv)) -> assert (bv.V.ty = ty)
-                | Abstract (V.AMutBorrow (_, sv)) ->
+                | Abstract (V.AMutBorrow (_, _, sv)) ->
                     assert (Subst.erase_regions sv.V.ty = ty)
                 | _ -> failwith "Inconsistent context"))
         | V.Symbolic sv, ty ->
@@ -535,7 +541,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.ABottom, _ -> (* Nothing to check *) ()
         | V.ABorrow bc, T.Ref (_, ref_ty, rkind) -> (
             match (bc, rkind) with
-            | V.AMutBorrow (_, av), T.Mut ->
+            | V.AMutBorrow (_, _, av), T.Mut ->
                 (* Check that the child value has the proper type *)
                 assert (av.V.ty = ref_ty)
             | V.ASharedBorrow bid, T.Shared -> (
@@ -548,8 +554,9 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 | _ -> failwith "Inconsistent context")
             | V.AIgnoredMutBorrow (_opt_bid, av), T.Mut ->
                 assert (av.V.ty = ref_ty)
-            | V.AEndedIgnoredMutBorrow { given_back_loans_proj; child }, T.Mut
-              ->
+            | ( V.AEndedIgnoredMutBorrow
+                  { given_back_loans_proj; child; given_back_meta = _ },
+                T.Mut ) ->
                 assert (given_back_loans_proj.V.ty = ref_ty);
                 assert (child.V.ty = ref_ty)
             | V.AProjSharedBorrow _, T.Shared -> ()
@@ -565,7 +572,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 match glc with
                 | Concrete (V.MutBorrow (_, bv)) ->
                     assert (bv.V.ty = Subst.erase_regions borrowed_aty)
-                | Abstract (V.AMutBorrow (_, sv)) ->
+                | Abstract (V.AMutBorrow (_, _, sv)) ->
                     assert (
                       Subst.erase_regions sv.V.ty
                       = Subst.erase_regions borrowed_aty)
@@ -576,8 +583,9 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 assert (sv.V.ty = Subst.erase_regions borrowed_aty);
                 (* TODO: the type of aloans doesn't make sense, see above *)
                 assert (child_av.V.ty = borrowed_aty)
-            | V.AEndedMutLoan { given_back; child }
-            | V.AEndedIgnoredMutLoan { given_back; child } ->
+            | V.AEndedMutLoan { given_back; child; given_back_meta = _ }
+            | V.AEndedIgnoredMutLoan { given_back; child; given_back_meta = _ }
+              ->
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 assert (given_back.V.ty = borrowed_aty);
                 assert (child.V.ty = borrowed_aty)
@@ -593,13 +601,13 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                  * otherwise they should have been reduced to `_` *)
                 let abs = Option.get info in
                 assert (ty_has_regions_in_set abs.regions sv.V.sv_ty)
-            | V.AEndedProjLoans (Some proj) -> (
+            | V.AEndedProjLoans (_, Some proj) -> (
                 match proj with
                 | V.AProjBorrows (_sv, ty') -> assert (ty' = ty)
-                | V.AEndedProjBorrows -> ()
+                | V.AEndedProjBorrows _ -> ()
                 | _ -> failwith "Unexpected")
-            | V.AEndedProjLoans None
-            | V.AEndedProjBorrows | V.AIgnoredProjBorrows ->
+            | V.AEndedProjLoans (_, None)
+            | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
                 ())
         | V.AIgnored, _ -> ()
         | _ -> failwith "Erroneous typing");
@@ -694,7 +702,7 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
          | AProjLoans sv -> add_aproj_loans sv abs.abs_id abs.regions
          | AProjBorrows (sv, proj_ty) ->
              add_aproj_borrows sv abs.abs_id abs.regions proj_ty false
-         | AEndedProjLoans _ | AEndedProjBorrows | AIgnoredProjBorrows -> ());
+         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj abs aproj
     end
   in
