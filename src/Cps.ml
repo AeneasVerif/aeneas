@@ -89,3 +89,11 @@ let fold_left_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
         comp (f x) (fun cf v -> eval_list inputs cf (v :: outputs)) cf ctx
   in
   eval_list inputs cf []
+
+(** Unit test/example for [fold_left_apply_continuation] *)
+let _ =
+  fold_left_apply_continuation
+    (fun x cf () -> cf (10 + x) ())
+    [ 0; 1; 2; 3; 4 ]
+    (fun values () -> assert (values = [ 10; 11; 12; 13; 14 ]))
+    ()
