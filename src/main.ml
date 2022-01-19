@@ -6,6 +6,7 @@ module A = CfimAst
 module I = Interpreter
 module EL = Easy_logging.Logging
 module TA = TypesAnalysis
+module P = Pure
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
