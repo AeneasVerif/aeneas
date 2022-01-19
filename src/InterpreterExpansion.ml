@@ -12,6 +12,7 @@ module L = Logging
 open TypesUtils
 module Inv = Invariants
 module S = Synthesis
+open Cps
 open ValuesUtils
 open InterpreterUtils
 open InterpreterProjectors
@@ -262,8 +263,8 @@ let compute_expanded_symbolic_box_value (kind : V.sv_kind) (boxed_ty : T.rty) :
   see
 
 let expand_symbolic_value_shared_borrow (config : C.config)
-    (original_sv : V.symbolic_value) (ref_ty : T.rty) (ctx : C.eval_ctx) :
-    C.eval_ctx =
+    (original_sv : V.symbolic_value) (ref_ty : T.rty) : cm_fun =
+ fun cf ctx ->
   (* First, replace the projectors on borrows.
    * The important point is that the symbolic value to expand may appear
    * several times, if it has been copied. In this case, we need to introduce
@@ -370,12 +371,14 @@ let expand_symbolic_value_shared_borrow (config : C.config)
   in
   (* Update the synthesized program *)
   S.synthesize_symbolic_expansion_no_branching original_sv see;
-  (* Return *)
-  ctx
+  (* Continue *)
+  cf ctx
 
+(** TODO: simplify and merge with the other expansion function *)
 let expand_symbolic_value_borrow (config : C.config)
     (original_sv : V.symbolic_value) (region : T.RegionId.id T.region)
-    (ref_ty : T.rty) (rkind : T.ref_kind) (ctx : C.eval_ctx) : C.eval_ctx =
+    (ref_ty : T.rty) (rkind : T.ref_kind) : cm_fun =
+ fun cf ctx ->
   (* Check that we are allowed to expand the reference *)
   assert (not (region_in_set region ctx.ended_regions));
   (* Match on the reference kind *)
@@ -401,23 +404,28 @@ let expand_symbolic_value_borrow (config : C.config)
       in
       (* Update the synthesized program *)
       S.synthesize_symbolic_expansion_no_branching original_sv see;
-      (* Return *)
-      ctx
+      (* Continue *)
+      cf ctx
   | T.Shared ->
-      expand_symbolic_value_shared_borrow config original_sv ref_ty ctx
+      expand_symbolic_value_shared_borrow config original_sv ref_ty cf ctx
 
 (** Expand a symbolic value which is not an enumeration with several variants
     (i.e., in a situation where it doesn't lead to branching).
+    
+    [allow_branching]: if `true` we can branch (by expanding enumerations with
+    stricly more than one variant), otherwise we can't.
  *)
-let expand_symbolic_value_no_branching (config : C.config)
-    (sp : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
+let expand_symbolic_value (config : C.config) (allow_branching : bool)
+    (sp : V.symbolic_value) : cm_fun =
+ fun cf ctx ->
   (* Remember the initial context for printing purposes *)
   let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
   let original_sv = sp in
   let rty = original_sv.V.sv_ty in
-  let ctx =
+  let cc : cm_fun =
+   fun cf ctx ->
     match rty with
     (* "Regular" ADTs *)
     | T.Adt (T.AdtId def_id, regions, types) -> (
@@ -428,15 +436,22 @@ let expand_symbolic_value_no_branching (config : C.config)
           compute_expanded_symbolic_adt_value expand_enumerations sp.sv_kind
             def_id regions types ctx
         with
-        | [ see ] ->
+        | seel ->
+            (* Check for branching *)
+            assert (List.length seel <= 1 || allow_branching);
             (* Apply in the context *)
-            let ctx =
-              apply_symbolic_expansion_non_borrow config original_sv see ctx
+            let ctxl =
+              List.map
+                (fun see ->
+                  apply_symbolic_expansion_non_borrow config original_sv see ctx)
+                seel
             in
-            (* Update the synthesized program *)
-            S.synthesize_symbolic_expansion_no_branching original_sv see;
+            (* Continue *)
+            let resl = List.map (fun ctx -> Option.get (cf ctx)) ctxl in
+            (* Synthesize *)
+            let res = S.synthesize_symbolic_expansion original_sv resl in
             (* Return *)
-            ctx
+            Some res
         | _ ->
             failwith
               "expand_symbolic_value_no_branching: the expansion lead to \
@@ -451,8 +466,8 @@ let expand_symbolic_value_no_branching (config : C.config)
         in
         (* Update the synthesized program *)
         S.synthesize_symbolic_expansion_no_branching original_sv see;
-        (* Return *)
-        ctx
+        (* Continue *)
+        cf ctx
     (* Boxes *)
     | T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
         let see = compute_expanded_symbolic_box_value sp.sv_kind boxed_ty in
@@ -462,62 +477,36 @@ let expand_symbolic_value_no_branching (config : C.config)
         in
         (* Update the synthesized program *)
         S.synthesize_symbolic_expansion_no_branching original_sv see;
-        (* Return *)
-        ctx
+        (* Continue *)
+        cf ctx
     (* Borrows *)
     | T.Ref (region, ref_ty, rkind) ->
-        expand_symbolic_value_borrow config original_sv region ref_ty rkind ctx
+        expand_symbolic_value_borrow config original_sv region ref_ty rkind cf
+          ctx
     | _ ->
         failwith
           ("expand_symbolic_value_no_branching: unreachable: " ^ T.show_rty rty)
   in
-  (* Debugging *)
   (* Debug *)
-  log#ldebug
-    (lazy
-      ("expand_symbolic_value: "
-      ^ symbolic_value_to_string ctx0 sp
-      ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
-      ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
-  (* Sanity check: the symbolic value has disappeared *)
-  assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
-  (* Return *)
-  ctx
-
-(** Expand a symbolic enumeration value.
-
-    This might lead to branching.
- *)
-let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_value)
-    (ctx : C.eval_ctx) : C.eval_ctx list =
-  (* Compute the expanded value - note that when doing so, we may introduce
-   * fresh symbolic values in the context (which thus gets updated) *)
-  let original_sv = sp in
-  let rty = original_sv.V.sv_ty in
-  match rty with
-  (*  The value should be a "regular" ADTs *)
-  | T.Adt (T.AdtId def_id, regions, types) ->
-      (* Compute the expanded value - there should be exactly one because we
-       * don't allow to expand enumerations with strictly more than one variant *)
-      let expand_enumerations = true in
-      let seel =
-        compute_expanded_symbolic_adt_value expand_enumerations sp.sv_kind
-          def_id regions types ctx
-      in
-      (* Update the synthesized program *)
-      S.synthesize_symbolic_expansion_enum_branching original_sv seel;
-      (* Apply in the context *)
-      let apply see : C.eval_ctx =
-        let ctx =
-          apply_symbolic_expansion_non_borrow config original_sv see ctx
-        in
+  let cc =
+    comp_unit cc (fun ctx ->
+        log#ldebug
+          (lazy
+            ("expand_symbolic_value_no_branching: "
+            ^ symbolic_value_to_string ctx0 sp
+            ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
+            ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
         (* Sanity check: the symbolic value has disappeared *)
-        assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx));
-        (* Return *)
-        ctx
-      in
-      List.map apply seel
-  | _ -> failwith "Unexpected"
+        assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx)))
+  in
+  (* Continue *)
+  cc cf ctx
+
+(** See [expand_symbolic_value] *)
+let expand_symbolic_value_no_branching (config : C.config)
+    (sp : V.symbolic_value) : cm_fun =
+  let allow_branching = false in
+  expand_symbolic_value config allow_branching sp
 
 (** Expand all the symbolic values which contain borrows.
     Allows us to restrict ourselves to a simpler model for the projectors over
@@ -527,8 +516,8 @@ let expand_symbolic_enum_value (config : C.config) (sp : V.symbolic_value)
     an enumeration with strictly more than one variant, a slice, etc.) or if
     we need to expand a recursive type (because this leads to looping).
  *)
-let greedy_expand_symbolics_with_borrows (config : C.config) (ctx : C.eval_ctx)
-    : C.eval_ctx =
+let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
+ fun cf ctx ->
   (* The visitor object, to look for symbolic values in the concrete environment *)
   let obj =
     object
@@ -544,13 +533,15 @@ let greedy_expand_symbolics_with_borrows (config : C.config) (ctx : C.eval_ctx)
     end
   in
 
-  let rec expand (ctx : C.eval_ctx) : C.eval_ctx =
+  let rec expand : cm_fun =
+   fun cf ctx ->
     try
       obj#visit_eval_ctx () ctx;
-      ctx
+      (* Nothing to expand: continue *)
+      cf ctx
     with FoundSymbolicValue sv ->
       (* Expand and recheck the environment *)
-      let ctx =
+      let cc : cm_fun =
         match sv.V.sv_ty with
         | T.Adt (AdtId def_id, _, _) ->
             (* [expand_symbolic_value_no_branching] checks if there are branchings,
@@ -571,27 +562,26 @@ let greedy_expand_symbolics_with_borrows (config : C.config) (ctx : C.eval_ctx)
                 ("Attempted to greedily expand a recursive definition (option \
                   [greedy_expand_symbolics_with_borrows] of [config]): "
                 ^ Print.name_to_string def.name)
-            else expand_symbolic_value_no_branching config sv ctx
+            else expand_symbolic_value_no_branching config sv
         | T.Adt ((Tuple | Assumed Box), _, _) | T.Ref (_, _, _) ->
             (* Ok *)
-            expand_symbolic_value_no_branching config sv ctx
+            expand_symbolic_value_no_branching config sv
         | T.Array _ -> raise Errors.Unimplemented
         | T.Slice _ -> failwith "Can't expand symbolic slices"
         | T.TypeVar _ | Bool | Char | Never | Integer _ | Str ->
             failwith "Unreachable"
       in
-      expand ctx
+      (* Compose and continue *)
+      comp cc expand cf ctx
   in
-  expand ctx
+  (* Apply *)
+  expand cf ctx
 
 (** If this mode is activated through the [config], greedily expand the symbolic
     values which need to be expanded. See [config] for more information.
  *)
-let greedy_expand_symbolic_values (config : C.config) (ctx : C.eval_ctx) :
-    C.eval_ctx =
-  let ctx =
-    if config.greedy_expand_symbolics_with_borrows then
-      greedy_expand_symbolics_with_borrows config ctx
-    else ctx
-  in
-  ctx
+let greedy_expand_symbolic_values (config : C.config) : cm_fun =
+ fun cf ctx ->
+  if config.greedy_expand_symbolics_with_borrows then
+    greedy_expand_symbolics_with_borrows config cf ctx
+  else cf ctx

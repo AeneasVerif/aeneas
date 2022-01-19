@@ -5,6 +5,7 @@ module C = Contexts
 module Subst = Substitute
 module L = Logging
 module S = Synthesis
+open Cps
 open TypesUtils
 open ValuesUtils
 open InterpreterUtils
@@ -458,69 +459,78 @@ let expand_bottom_value_from_projection (config : C.config)
     expanding symbolic values) until we manage to fully read the place.
  *)
 let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
-    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
+    (p : E.place) : cm_fun =
+ fun cf ctx ->
   (* Attempt to read the place: if it fails, update the environment and retry *)
   match read_place config access p ctx with
-  | Ok _ -> ctx
+  | Ok _ -> cf ctx
   | Error err ->
-      let ctx =
+      let cc =
         match err with
-        | FailSharedLoan bids -> end_outer_borrows config bids ctx
-        | FailMutLoan bid -> end_outer_borrow config bid ctx
+        | FailSharedLoan bids -> end_outer_borrows config bids
+        | FailMutLoan bid -> end_outer_borrow config bid
         | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config bid ctx
+            activate_inactivated_mut_borrow config bid
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching config sp ctx
+            expand_symbolic_value_no_branching config sp
         | FailBottom (_, _, _) ->
             (* We can't expand [Bottom] values while reading them *)
             failwith "Found [Bottom] while reading a place"
         | FailBorrow _ -> failwith "Could not read a borrow"
       in
-      update_ctx_along_read_place config access p ctx
+      comp cc (update_ctx_along_read_place config access p) cf ctx
 
 (** Update the environment to be able to write to a place.
 
     See [update_env_alond_read_place].
 *)
 let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
-    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
-  (* Attempt to *read* (yes, "read": we check the access to the place, and
+    (p : E.place) : cm_fun =
+ fun cf ctx ->
+  (* Attempt to *read* (yes, *read*: we check the access to the place, and
      write to it later) the place: if it fails, update the environment and retry *)
   match read_place config access p ctx with
-  | Ok _ -> ctx
+  | Ok _ -> cf ctx
   | Error err ->
-      let ctx =
+      (* Update the context *)
+      let cc =
         match err with
-        | FailSharedLoan bids -> end_outer_borrows config bids ctx
-        | FailMutLoan bid -> end_outer_borrow config bid ctx
+        | FailSharedLoan bids -> end_outer_borrows config bids
+        | FailMutLoan bid -> end_outer_borrow config bid
         | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config bid ctx
+            activate_inactivated_mut_borrow config bid
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching config sp ctx
+            expand_symbolic_value_no_branching config sp
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
-            expand_bottom_value_from_projection config access p remaining_pes pe
-              ty ctx
+            fun cf ctx ->
+             let ctx =
+               expand_bottom_value_from_projection config access p remaining_pes
+                 pe ty ctx
+             in
+             cf ctx
         | FailBorrow _ -> failwith "Could not write to a borrow"
       in
-      update_ctx_along_write_place config access p ctx
+      (* Retry *)
+      comp cc (update_ctx_along_write_place config access p) cf ctx
 
-exception UpdateCtx of C.eval_ctx
+exception UpdateCtx of cm_fun
 (** Small utility used to break control-flow *)
 
 (** End the loans at a given place: read the value, if it contains a loan,
     end this loan, repeat.
 
-    This is used when reading, borrowing, writing to a value. We typically
+    This is used when reading or borrowing values. We typically
     first call [update_ctx_along_read_place] or [update_ctx_along_write_place]
     to get access to the value, then call this function to "prepare" the value:
     when moving values, we can't move a value which contains loans and thus need
     to end them, etc.
  *)
 let rec end_loans_at_place (config : C.config) (access : access_kind)
-    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
+    (p : E.place) : cm_fun =
+ fun cf ctx ->
   (* Iterator to explore a value and update the context whenever we find
    * loans.
    * We use exceptions to make it handy: whenever we update the
@@ -536,8 +546,8 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
             (* Nothing special to do *) super#visit_borrow_content env bc
         | V.InactivatedMutBorrow bid ->
             (* We need to activate inactivated borrows *)
-            let ctx = activate_inactivated_mut_borrow config bid ctx in
-            raise (UpdateCtx ctx)
+            let cc = activate_inactivated_mut_borrow config bid in
+            raise (UpdateCtx cc)
 
       method! visit_loan_content env lc =
         match lc with
@@ -547,12 +557,12 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
             match access with
             | Read -> super#visit_SharedLoan env bids v
             | Write | Move ->
-                let ctx = end_outer_borrows config bids ctx in
-                raise (UpdateCtx ctx))
+                let cc = end_outer_borrows config bids in
+                raise (UpdateCtx cc))
         | V.MutLoan bid ->
             (* We always need to end mutable borrows *)
-            let ctx = end_outer_borrow config bid ctx in
-            raise (UpdateCtx ctx)
+            let cc = end_outer_borrow config bid in
+            raise (UpdateCtx cc)
     end
   in
 
@@ -568,11 +578,12 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
       *)
       try
         obj#visit_typed_value () v;
-        (* No context update required: return the current context *)
-        ctx
-      with UpdateCtx ctx ->
-        (* The context was updated: do a recursive call to reinspect the value *)
-        end_loans_at_place config access p ctx)
+        (* No context update required: apply the continuation *)
+        cf ctx
+      with UpdateCtx cc ->
+        (* We need to update the context: compose the caugth continuation with
+         * a recursive call to reinspect the value *)
+        comp cc (end_loans_at_place config access p) cf ctx)
 
 (** Drop (end) loans and borrows at a given place, which should be
     seen as an l-value (we will write to it later, but need to drop
@@ -608,7 +619,8 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
     - the borrow corresponding to the loan `mut_loan l3` is outside of `*x`
  *)
 let drop_outer_borrows_loans_at_lplace (config : C.config) (end_borrows : bool)
-    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
+    (p : E.place) : cm_fun =
+ fun cf ctx ->
   (* Move the current value in the place outside of this place and into
    * a dummy variable *)
   let access = Write in
@@ -616,43 +628,50 @@ let drop_outer_borrows_loans_at_lplace (config : C.config) (end_borrows : bool)
   let ctx = write_place_unwrap config access p (mk_bottom v.V.ty) ctx in
   let ctx = C.ctx_push_dummy_var ctx v in
   (* Auxiliary function *)
-  let rec drop (ctx : C.eval_ctx) : C.eval_ctx =
+  let rec drop : cm_fun =
+   fun cf ctx ->
     (* Read the value *)
     let v = C.ctx_read_first_dummy_var ctx in
     (* Check if there are loans or borrows to end *)
     match get_first_outer_loan_or_borrow_in_value end_borrows v with
     | None ->
-        (* We are done *)
-        ctx
+        (* We are done: simply call the continuation *)
+        cf ctx
     | Some c ->
         (* There are: end them then retry *)
-        let ctx =
+        let cc =
           match c with
           | LoanContent (V.SharedLoan (bids, _)) ->
-              end_outer_borrows config bids ctx
+              end_outer_borrows config bids
           | LoanContent (V.MutLoan bid)
           | BorrowContent (V.MutBorrow (bid, _) | SharedBorrow bid) ->
-              end_outer_borrow config bid ctx
+              end_outer_borrow config bid
           | BorrowContent (V.InactivatedMutBorrow bid) ->
               (* First activate the borrow *)
-              activate_inactivated_mut_borrow config bid ctx
+              activate_inactivated_mut_borrow config bid
         in
         (* Retry *)
-        drop ctx
+        comp cc drop cf ctx
   in
-  (* Apply *)
-  let ctx = drop ctx in
-  (* Pop the temporary value *)
-  let ctx, v = C.ctx_pop_dummy_var ctx in
-  (* Reinsert the value *)
-  let ctx = write_place_unwrap config access p v ctx in
-  (* Sanity check *)
-  if end_borrows then (
-    assert (not (loans_in_value v));
-    assert (not (borrows_in_value v)))
-  else assert (not (outer_loans_in_value v));
-  (* Return *)
-  ctx
+  (* Apply the drop function *)
+  let cc = drop in
+  (* Pop the temporary value and reinsert it *)
+  let cc =
+    comp cc (fun cf ctx ->
+        (* Pop *)
+        let ctx, v = C.ctx_pop_dummy_var ctx in
+        (* Reinsert *)
+        let ctx = write_place_unwrap config access p v ctx in
+        (* Sanity check *)
+        if end_borrows then (
+          assert (not (loans_in_value v));
+          assert (not (borrows_in_value v)))
+        else assert (not (outer_loans_in_value v));
+        (* Continue *)
+        cf ctx)
+  in
+  (* Continue *)
+  cc cf ctx
 
 (** Copy a value, and return the resulting value.
 
@@ -740,37 +759,24 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
     end all the loans and the borrows we find.
  *)
 let prepare_lplace (config : C.config) (end_borrows : bool) (p : E.place)
-    (ctx : C.eval_ctx) : C.eval_ctx * V.typed_value =
-  (* TODO *)
+    (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
+  (* Access the place *)
   let access = Write in
-  let ctx = update_ctx_along_write_place config access p ctx in
+  let cc = update_ctx_along_write_place config access p in
   (* End the borrows and loans, starting with the borrows *)
-  let ctx = drop_outer_borrows_loans_at_lplace config end_borrows p ctx in
+  let cc = comp cc (drop_outer_borrows_loans_at_lplace config end_borrows p) in
   (* Read the value and check it *)
-  let v = read_place_unwrap config access p ctx in
-  (* Sanity checks *)
-  if end_borrows then (
-    assert (not (loans_in_value v));
-    assert (not (borrows_in_value v)))
-  else assert (not (outer_loans_in_value v));
-  (* Return *)
-  (ctx, v)
-
-(** Read the value at a given place.
-    As long as it is a loan, end the loan.
-    This function doesn't perform a recursive exploration:
-    it won't dive into the value to end all the inner
-    loans (contrary to [drop_borrows_loans_at_lplace] for
-    instance).
- *)
-let rec end_loan_exactly_at_place (config : C.config) (access : access_kind)
-    (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
-  let v = read_place_unwrap config access p ctx in
-  match v.V.value with
-  | V.Loan (V.SharedLoan (bids, _)) ->
-      let ctx = end_outer_borrows config bids ctx in
-      end_loan_exactly_at_place config access p ctx
-  | V.Loan (V.MutLoan bid) ->
-      let ctx = end_outer_borrow config bid ctx in
-      end_loan_exactly_at_place config access p ctx
-  | _ -> ctx
+  let read_check cf : m_fun =
+   fun ctx ->
+    let v = read_place_unwrap config access p ctx in
+    (* Sanity checks *)
+    if end_borrows then (
+      assert (not (loans_in_value v));
+      assert (not (borrows_in_value v)))
+    else assert (not (outer_loans_in_value v));
+    (* Continue *)
+    cf v ctx
+  in
+  (* Compose and apply the continuations *)
+  comp cc read_check cf ctx

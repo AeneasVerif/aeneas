@@ -14,7 +14,7 @@ type statement_eval_res =
   | Panic
 
 (** Synthesized expresssion - dummy for now *)
-type sexpr = SExpr
+type sexpr = SOne | SList of sexpr list
 
 type eval_result = sexpr option
 
@@ -53,6 +53,9 @@ let comp_update (f : cm_fun) (g : C.eval_ctx -> C.eval_ctx) : cm_fun =
 (** This is just a test, to check that [comp] is general enough to handle a case
     where a function must compute a value and give it to the continuation.
     It happens for functions like [eval_operand].
+
+    Keeping this here also makes it a good reference, when one wants to figure
+    out the signatures he should use for such a composition.
  *)
 let comp_ret_val (f : (V.typed_value -> m_fun) -> m_fun)
     (g : m_fun -> V.typed_value -> m_fun) : cm_fun =
