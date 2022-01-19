@@ -3,6 +3,7 @@ module V = Values
 module C = Contexts
 module Subst = Substitute
 module L = Logging
+open Cps
 open ValuesUtils
 open TypesUtils
 open InterpreterUtils
@@ -777,7 +778,11 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
 let convert_avalue_to_given_back_value (av : V.typed_avalue) : V.typed_value =
   mk_fresh_symbolic_typed_value V.FunCallGivenBack av.V.ty
 
-(** End a borrow identified by its borrow id in a context
+(** End a borrow identified by its borrow id in a context.
+
+    Rk.: from now onwards, the functions are written in continuation passing style.
+    The reason is that when ending borrows we may end abstractions, which results
+    in synthesized code.
     
     First lookup the borrow in the context and replace it with [Bottom].
     Then, check that there is an associated loan in the context. When moving
@@ -813,14 +818,16 @@ let convert_avalue_to_given_back_value (av : V.typed_avalue) : V.typed_value =
     book-keeping.
  *)
 let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
-    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+    (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id) : cm_fun =
+ fun cf ctx ->
+  (* Check that we don't loop *)
   let chain0 = chain in
   let chain = add_borrow_or_abs_id_to_chain "end_borrow: " (BorrowId l) chain in
   log#ldebug
     (lazy
       ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- original context:\n"
      ^ eval_ctx_to_string ctx));
+
   (* Utility function for the sanity checks: check that the borrow disappeared
    * from the context *)
   let ctx0 = ctx in
@@ -848,7 +855,13 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
            ^ eval_ctx_to_string ctx));
         failwith "Loan not eliminated"
   in
+  let cf_check_disappeared : cm_fun =
+   fun cf ctx ->
+    check_disappeared ctx;
+    cf ctx
+  in
 
+  (* Start by getting the borrow *)
   match end_borrow_get_borrow allowed_abs l ctx with
   (* Two cases:
    * - error: we found outer borrows or inner loans (end them first)
@@ -870,18 +883,20 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
            * be trying to end a borrow inside an abstraction, but which is actually
            * inside another borrow *)
           let allowed_abs' = None in
-          let ctx = end_borrows config chain allowed_abs' bids ctx in
+          (* End the outer borrows *)
+          let cf_end_outer = end_borrows config chain allowed_abs' bids in
           (* Retry to end the borrow *)
-          end_borrow config chain0 allowed_abs l ctx
+          let cf_retry = end_borrow config chain0 allowed_abs l in
+          (* Compose *)
+          cf_end_outer (cf_retry cf) ctx
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           let allowed_abs' = None in
-          let ctx = end_borrow config chain allowed_abs' bid ctx in
+          (* End the outer borrow *)
+          let cf_end_outer = end_borrow config chain allowed_abs' bid in
           (* Retry to end the borrow *)
-          let ctx = end_borrow config chain0 allowed_abs l ctx in
-          (* Sanity check *)
-          check_disappeared ctx;
-          (* Return *)
-          ctx
+          let cf_retry = end_borrow config chain0 allowed_abs l in
+          (* Compose *)
+          cf_end_outer (cf_retry (cf_check_disappeared cf)) ctx
       | OuterAbs abs_id ->
           (* The borrow is inside an asbtraction: check if the corresponding
            * loan is inside the same abstraction. If this is the case, we end
@@ -895,35 +910,32 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
               enter_abs = true;
             }
           in
-          let ctx =
+          let cf_end_abs : cm_fun =
+           fun cf ctx ->
             match lookup_loan ek l ctx with
             | AbsId loan_abs_id, _ ->
                 if loan_abs_id = abs_id then
                   (* Same abstraction! We can end the borrow *)
-                  end_borrow config chain0 (Some abs_id) l ctx
+                  end_borrow config chain0 (Some abs_id) l cf ctx
                 else
                   (* Not the same abstraction: we need to end the whole abstraction.
                    * By doing that we should have ended the target borrow (see the
                    * below sanity check) *)
-                  end_abstraction config chain abs_id ctx
+                  end_abstraction config chain abs_id cf ctx
             | VarId _, _ ->
                 (* The loan is not inside the same abstraction (actually inside
                  * a non-abstraction value): we need to end the whole abstraction *)
-                end_abstraction config chain abs_id ctx
+                end_abstraction config chain abs_id cf ctx
           in
-          (* Sanity check *)
-          check_disappeared ctx;
-          (* Return *)
-          ctx)
+          (* Compose with a sanity check *)
+          cf_end_abs (cf_check_disappeared cf) ctx)
   | Ok (ctx, None) ->
       log#ldebug (lazy "End borrow: borrow not found");
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       assert (config.mode = SymbolicMode);
-      (* Sanity check *)
-      check_disappeared ctx;
-      (* Return *)
-      ctx
+      (* Do a sanity check and continue *)
+      cf_check_disappeared cf ctx
   (* We found a borrow: give it back (i.e., update the corresponding loan) *)
   | Ok (ctx, Some bc) ->
       (* Sanity check: the borrowed value shouldn't contain loans *)
@@ -933,20 +945,21 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
       | _ -> ());
       (* Give back the value *)
       let ctx = give_back config l bc ctx in
-      (* Sanity check *)
-      check_disappeared ctx;
-      (* Return *)
-      ctx
+      (* Do a sanity check and continue *)
+      cf_check_disappeared cf ctx
 
 and end_borrows (config : C.config) (chain : borrow_or_abs_ids)
-    (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+    (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t) : cm_fun
+    =
+ fun cf ->
   V.BorrowId.Set.fold
-    (fun id ctx -> end_borrow config chain allowed_abs id ctx)
-    lset ctx
+    (fun id cf -> end_borrow config chain allowed_abs id cf)
+    lset cf
 
 and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_id : V.AbstractionId.id) (ctx : C.eval_ctx) : C.eval_ctx =
+    (abs_id : V.AbstractionId.id) : cm_fun =
+ fun cf ctx ->
+  (* Check that we don't loop *)
   let chain =
     add_borrow_or_abs_id_to_chain "end_abstraction: " (AbsId abs_id) chain
   in
@@ -957,55 +970,78 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
       ("end_abstraction: "
       ^ V.AbstractionId.to_string abs_id
       ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
+
+  (* Initialize the continuation composition *)
+  let cc = id_cm_fun in
+
   (* Lookup the abstraction *)
   let abs = C.ctx_lookup_abs ctx abs_id in
+
   (* End the parent abstractions first *)
-  let ctx = end_abstractions config chain abs.parents ctx in
-  log#ldebug
-    (lazy
-      ("end_abstraction: "
-      ^ V.AbstractionId.to_string abs_id
-      ^ "\n- context after parent abstractions ended:\n"
-      ^ eval_ctx_to_string ctx));
+  let cc = comp cc (end_abstractions config chain abs.parents) in
+  let cc =
+    comp_unit cc (fun ctx ->
+        log#ldebug
+          (lazy
+            ("end_abstraction: "
+            ^ V.AbstractionId.to_string abs_id
+            ^ "\n- context after parent abstractions ended:\n"
+            ^ eval_ctx_to_string ctx)))
+  in
+
   (* End the loans inside the abstraction *)
-  let ctx = end_abstraction_loans config chain abs_id ctx in
-  log#ldebug
-    (lazy
-      ("end_abstraction: "
-      ^ V.AbstractionId.to_string abs_id
-      ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx));
+  let cc = comp cc (end_abstraction_loans config chain abs_id) in
+  let cc =
+    comp_unit cc (fun ctx ->
+        log#ldebug
+          (lazy
+            ("end_abstraction: "
+            ^ V.AbstractionId.to_string abs_id
+            ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx)))
+  in
+
   (* End the abstraction itself by redistributing the borrows it contains *)
-  let ctx = end_abstraction_borrows config chain abs_id ctx in
+  let cc = comp cc (end_abstraction_borrows config chain abs_id) in
+
   (* End the regions owned by the abstraction - note that we don't need to
    * relookup the abstraction: the set of regions in an abstraction never
    * changes... *)
-  let ctx =
-    {
-      ctx with
-      ended_regions = T.RegionId.Set.union ctx.ended_regions abs.V.regions;
-    }
+  let cc =
+    comp_update cc (fun ctx ->
+        let ended_regions =
+          T.RegionId.Set.union ctx.ended_regions abs.V.regions
+        in
+        { ctx with ended_regions })
   in
+
   (* Remove all the references to the id of the current abstraction, and remove
    * the abstraction itself *)
-  let ctx = end_abstraction_remove_from_context config abs_id ctx in
+  let cc = comp cc (end_abstraction_remove_from_context config abs_id) in
+
   (* Debugging *)
-  log#ldebug
-    (lazy
-      ("end_abstraction: "
-      ^ V.AbstractionId.to_string abs_id
-      ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
-      ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx));
-  (* Return *)
-  ctx
+  let cc =
+    comp_unit cc (fun ctx ->
+        log#ldebug
+          (lazy
+            ("end_abstraction: "
+            ^ V.AbstractionId.to_string abs_id
+            ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
+            ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx)))
+  in
+
+  (* Apply the continuation *)
+  cc cf ctx
 
 and end_abstractions (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_ids : V.AbstractionId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
+    (abs_ids : V.AbstractionId.Set.t) : cm_fun =
+ fun cf ->
   V.AbstractionId.Set.fold
-    (fun id ctx -> end_abstraction config chain id ctx)
-    abs_ids ctx
+    (fun id cf -> end_abstraction config chain id cf)
+    abs_ids cf
 
 and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_id : V.AbstractionId.id) (ctx : C.eval_ctx) : C.eval_ctx =
+    (abs_id : V.AbstractionId.id) : cm_fun =
+ fun cf ctx ->
   (* Lookup the abstraction *)
   let abs = C.ctx_lookup_abs ctx abs_id in
   (* End the first loan we find *)
@@ -1042,24 +1078,28 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
     (* Check if there are loans *)
     obj#visit_abs () abs;
     (* No loans: nothing to update *)
-    ctx
+    cf ctx
   with
   (* There are loans: end them, then recheck *)
   | FoundBorrowIds bids ->
-      let ctx =
+      (* End the outer borrows *)
+      let cc : cm_fun =
         match bids with
-        | Borrow bid -> end_outer_borrow config bid ctx
-        | Borrows bids -> end_outer_borrows config bids ctx
+        | Borrow bid -> end_outer_borrow config bid
+        | Borrows bids -> end_outer_borrows config bids
       in
-      (* Recheck *)
-      end_abstraction_loans config chain abs_id ctx
+      (* Retry *)
+      let cc = comp cc (end_abstraction_loans config chain abs_id) in
+      (* Continue *)
+      cc cf ctx
   | FoundSymbolicValue sv ->
       (* There is a proj_loans over a symbolic value: end the proj_borrows
        * which intersect this proj_loans *)
-      end_proj_loans_symbolic config chain abs_id abs.regions sv ctx
+      end_proj_loans_symbolic config chain abs_id abs.regions sv cf ctx
 
 and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
-    (abs_id : V.AbstractionId.id) (ctx : C.eval_ctx) : C.eval_ctx =
+    (abs_id : V.AbstractionId.id) : cm_fun =
+ fun cf ctx ->
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
@@ -1115,7 +1155,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
     (* Explore the abstraction, looking for borrows *)
     obj#visit_abs () abs;
     (* No borrows: nothing to update *)
-    ctx
+    cf ctx
   with
   (* There are concrete borrows: end them, then reexplore *)
   | FoundABorrowContent bc ->
@@ -1163,7 +1203,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             failwith "Unexpected"
       in
       (* Reexplore *)
-      end_abstraction_borrows config chain abs_id ctx
+      end_abstraction_borrows config chain abs_id cf ctx
   (* There are symbolic borrows: end them, then reexplore *)
   | FoundAProjBorrows (sv, proj_ty) ->
       (* Generate a fresh symbolic value *)
@@ -1181,11 +1221,12 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         give_back_symbolic_value config abs.regions proj_ty sv nsv ctx
       in
       (* Reexplore *)
-      end_abstraction_borrows config chain abs_id ctx
+      end_abstraction_borrows config chain abs_id cf ctx
 
 (** Remove an abstraction from the context, as well as all its references *)
 and end_abstraction_remove_from_context (_config : C.config)
-    (abs_id : V.AbstractionId.id) (ctx : C.eval_ctx) : C.eval_ctx =
+    (abs_id : V.AbstractionId.id) : cm_fun =
+ fun cf ctx ->
   let map_env_elem (ev : C.env_elem) : C.env_elem option =
     match ev with
     | C.Var (_, _) | C.Frame -> Some ev
@@ -1196,7 +1237,9 @@ and end_abstraction_remove_from_context (_config : C.config)
           Some (C.Abs { abs with V.parents })
   in
   let env = List.filter_map map_env_elem ctx.C.env in
-  { ctx with C.env }
+  let ctx = { ctx with C.env } in
+  (* Continue *)
+  cf ctx
 
 (** End a proj_loan over a symbolic value by ending the proj_borrows which
     intersect this proj_loans.
@@ -1214,7 +1257,8 @@ and end_abstraction_remove_from_context (_config : C.config)
 *)
 and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
     (abs_id : V.AbstractionId.id) (regions : T.RegionId.Set.t)
-    (sv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
+    (sv : V.symbolic_value) : cm_fun =
+ fun cf ctx ->
   (* Find the first proj_borrows which intersects the proj_loans *)
   let explore_shared = true in
   match lookup_intersecting_aproj_borrows_opt explore_shared regions sv ctx with
@@ -1224,7 +1268,9 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
        * it is completely absent) *)
       (* Update the loans depending on the current symbolic value - it is
        * left unchanged *)
-      give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx
+      let ctx = give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx in
+      (* Continue *)
+      cf ctx
   | Some (SharedProjs projs) ->
       (* We found projectors over shared values - split between the projectors
            * which belong to the current *)
@@ -1243,15 +1289,18 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
             (fun s id -> V.AbstractionId.Set.add id s)
             V.AbstractionId.Set.empty abs_ids
         in
-        let ctx = end_abstractions config chain abs_ids ctx in
         (* We could end the owned projections, but it is simpler to simply return
          * and let the caller recheck if there are proj_loans to end *)
-        ctx
+        end_abstractions config chain abs_ids cf ctx
       else
         (* All the proj_borrows are owned: simply erase them *)
         let ctx = remove_intersecting_aproj_borrows_shared regions sv ctx in
         (* Remove the proj_loans - note that the symbolic value was left unchanged *)
-        give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx
+        let ctx =
+          give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx
+        in
+        (* Continue *)
+        cf ctx
   | Some (NonSharedProj (abs_id', _proj_ty)) ->
       (* We found one in the context: if it comes from this abstraction, we can
        * end it directly, otherwise we need to end the abstraction where it
@@ -1267,7 +1316,12 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         in
         (* Replace the proj_loans - note that the loaned (symbolic) value
          * was left unchanged *)
-        give_back_symbolic_value config regions sv.V.sv_ty sv given_back_sv ctx
+        let ctx =
+          give_back_symbolic_value config regions sv.V.sv_ty sv given_back_sv
+            ctx
+        in
+        (* Continue *)
+        cf ctx
       else
         (* End the abstraction.
          * Don't retry ending the current proj_loans after ending the abstraction:
@@ -1275,15 +1329,13 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
          * or maybe not (if it is a proj over shared values): simply return,
          * as the caller function will recheck if there are loans to end in the
          * current abstraction *)
-        end_abstraction config chain abs_id' ctx
+        end_abstraction config chain abs_id' cf ctx
 
-and end_outer_borrow config = end_borrow config [] None
+and end_outer_borrow config : V.BorrowId.id -> cm_fun =
+  end_borrow config [] None
 
-and end_outer_borrows config = end_borrows config [] None
-
-and end_inner_borrow config = end_borrow config [] None
-
-and end_inner_borrows config = end_borrows config [] None
+and end_outer_borrows config : V.BorrowId.Set.t -> cm_fun =
+  end_borrows config [] None
 
 (** Helper function: see [activate_inactivated_mut_borrow].
 
@@ -1299,8 +1351,9 @@ and end_inner_borrows config = end_borrows config [] None
     TODO: this kind of checks should be put in an auxiliary helper, because
     they are redundant
  *)
-let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
-    C.eval_ctx * V.typed_value =
+let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
+    (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
   (* Lookup the shared loan *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
@@ -1321,8 +1374,8 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
       assert (not (inactivated_in_value sv));
       (* Update the loan content *)
       let ctx = update_loan ek l (V.MutLoan l) ctx in
-      (* Return *)
-      (ctx, sv)
+      (* Continue *)
+      cf sv ctx
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
@@ -1334,32 +1387,38 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id) (ctx : C.eval_ctx) :
 
     This function updates a shared borrow to a mutable borrow.
  *)
-let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id)
-    (borrowed_value : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
+let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
+    (borrowed_value : V.typed_value) : m_fun =
+ fun ctx ->
   (* Lookup the inactivated borrow - note that we don't go inside borrows/loans:
      there can't be inactivated borrows inside other borrows/loans
   *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = false; enter_abs = false }
   in
-  match lookup_borrow ek l ctx with
-  | Concrete (V.SharedBorrow _ | V.MutBorrow (_, _)) ->
-      failwith "Expected an inactivated mutable borrow"
-  | Concrete (V.InactivatedMutBorrow _) ->
-      (* Update it *)
-      update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx
-  | Abstract _ ->
-      (* This can't happen for sure *)
-      failwith
-        "Can't promote a shared borrow to a mutable borrow if the borrow is \
-         inside an abstraction"
+  let ctx =
+    match lookup_borrow ek l ctx with
+    | Concrete (V.SharedBorrow _ | V.MutBorrow (_, _)) ->
+        failwith "Expected an inactivated mutable borrow"
+    | Concrete (V.InactivatedMutBorrow _) ->
+        (* Update it *)
+        update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx
+    | Abstract _ ->
+        (* This can't happen for sure *)
+        failwith
+          "Can't promote a shared borrow to a mutable borrow if the borrow is \
+           inside an abstraction"
+  in
+  (* Continue *)
+  cf ctx
 
 (** Promote an inactivated mut borrow to a mut borrow.
 
     The borrow must point to a shared value which is borrowed exactly once.
  *)
 let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+    : cm_fun =
+ fun cf ctx ->
   (* Lookup the value *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
@@ -1373,13 +1432,15 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
       match get_first_loan_in_value sv with
       | Some lc ->
           (* End the loans *)
-          let ctx =
+          let cc =
             match lc with
-            | V.SharedLoan (bids, _) -> end_outer_borrows config bids ctx
-            | V.MutLoan bid -> end_outer_borrow config bid ctx
+            | V.SharedLoan (bids, _) -> end_outer_borrows config bids
+            | V.MutLoan bid -> end_outer_borrow config bid
           in
           (* Recursive call *)
-          activate_inactivated_mut_borrow config l ctx
+          let cc = comp cc (activate_inactivated_mut_borrow config l) in
+          (* Continue *)
+          cc cf ctx
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
@@ -1393,13 +1454,19 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = V.BorrowId.Set.remove l bids in
-          let ctx = end_outer_borrows config bids ctx in
+          let cc = end_outer_borrows config bids in
           (* Promote the loan *)
-          let ctx, borrowed_value = promote_shared_loan_to_mut_loan l ctx in
+          let cc = comp cc (promote_shared_loan_to_mut_loan l) in
+          (*          let ctx, borrowed_value = promote_shared_loan_to_mut_loan l ctx in *)
           (* Promote the borrow - the value should have been checked by
              [promote_shared_loan_to_mut_loan]
           *)
-          promote_inactivated_borrow_to_mut_borrow l borrowed_value ctx)
+          let cc =
+            comp cc (fun cf borrowed_value ctx ->
+                promote_inactivated_borrow_to_mut_borrow l cf borrowed_value ctx)
+          in
+          (* Continue *)
+          cc cf ctx)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)

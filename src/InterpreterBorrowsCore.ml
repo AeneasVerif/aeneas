@@ -616,6 +616,8 @@ type looked_up_aproj_borrows =
         
     [lookup_shared]: if `true` also explore projectors over shared values,
     otherwise ignore.
+    
+    This is a helper function: it might break invariants.
 *)
 let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
     (regions : T.RegionId.Set.t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
@@ -704,6 +706,8 @@ let lookup_intersecting_aproj_borrows_not_shared_opt
 
 (** Similar to [lookup_intersecting_aproj_borrows_opt], but updates the
     values.
+
+    This is a helper function: it might break invariants.
  *)
 let update_intersecting_aproj_borrows (can_update_shared : bool)
     (update_shared : V.AbstractionId.id -> T.rty -> V.abstract_shared_borrows)
@@ -780,6 +784,8 @@ let update_intersecting_aproj_borrows (can_update_shared : bool)
     proj_borrows over a non-shared value.
     
     We check that we update exactly one proj_borrows.
+
+    This is a helper function: it might break invariants.
  *)
 let update_intersecting_aproj_borrows_non_shared (regions : T.RegionId.Set.t)
     (sv : V.symbolic_value) (nv : V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
@@ -804,6 +810,8 @@ let update_intersecting_aproj_borrows_non_shared (regions : T.RegionId.Set.t)
 
 (** Simply calls [update_intersecting_aproj_borrows] to remove the
     proj_borrows over shared values.
+
+    This is a helper function: it might break invariants.
  *)
 let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
     (sv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
@@ -816,6 +824,8 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
     update_non_shared regions sv ctx
 
 (** Updates the proj_loans intersecting some projection.
+
+    This is a helper function: it might break invariants.
 
     Note that in practice, when we update a proj_loans, we always update exactly
     one aproj_loans, in a specific abstraction.
