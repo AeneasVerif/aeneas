@@ -10,6 +10,7 @@ open TypesUtils
 open ValuesUtils
 module Inv = Invariants
 module S = Synthesis
+open Cps
 open InterpreterUtils
 open InterpreterExpansion
 open InterpreterPaths
@@ -17,10 +18,7 @@ open InterpreterPaths
 (** The local logger *)
 let log = L.expressions_log
 
-(** TODO: change the name *)
-type eval_error = Panic
-
-type 'a eval_result = ('a, eval_error) result
+(*type 'a eval_result = ('a, eval_error) result*)
 
 (** As long as there are symbolic values at a given place (potentially in subvalues)
     which contain borrows and are primitively copyable, expand them.
@@ -31,21 +29,23 @@ type 'a eval_result = ('a, eval_error) result
     loans.
 *)
 let expand_primitively_copyable_at_place (config : C.config)
-    (access : access_kind) (p : E.place) (ctx : C.eval_ctx) : C.eval_ctx =
+    (access : access_kind) (p : E.place) : cm_fun =
+ fun cf ctx ->
   (* Small helper *)
-  let rec expand ctx =
+  let rec expand : cm_fun =
+   fun cf ctx ->
     let v = read_place_unwrap config access p ctx in
     match
       find_first_primitively_copyable_sv_with_borrows
         ctx.type_context.type_infos v
     with
-    | None -> ctx
+    | None -> cf ctx
     | Some sv ->
-        let ctx = expand_symbolic_value_no_branching config sv ctx in
-        expand ctx
+        let cc = expand_symbolic_value_no_branching config sv in
+        comp cc expand cf ctx
   in
   (* Apply *)
-  expand ctx
+  expand cf ctx
 
 (** Small utility.
 
@@ -53,17 +53,21 @@ let expand_primitively_copyable_at_place (config : C.config)
     copyable and contain borrows.
  *)
 let prepare_rplace (config : C.config) (expand_prim_copy : bool)
-    (access : access_kind) (p : E.place) (ctx : C.eval_ctx) :
-    C.eval_ctx * V.typed_value =
-  let ctx = update_ctx_along_read_place config access p ctx in
-  let ctx = end_loans_at_place config access p ctx in
-  let ctx =
+    (access : access_kind) (p : E.place) (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
+  let cc = update_ctx_along_read_place config access p in
+  let cc = comp cc (end_loans_at_place config access p) in
+  let cc =
     if expand_prim_copy then
-      expand_primitively_copyable_at_place config access p ctx
-    else ctx
+      comp cc (expand_primitively_copyable_at_place config access p)
+    else cc
   in
-  let v = read_place_unwrap config access p ctx in
-  (ctx, v)
+  let read_place cf : m_fun =
+   fun ctx ->
+    let v = read_place_unwrap config access p ctx in
+    cf v ctx
+  in
+  comp cc read_place cf ctx
 
 (** Convert a constant operand value to a typed value *)
 let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
@@ -139,31 +143,40 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
     parameters. Still, it is better for soundness purposes, and corresponds to
     what we do in the formal semantics.
  *)
-let eval_operand_prepare (config : C.config) (ctx : C.eval_ctx) (op : E.operand)
-    : C.eval_ctx * V.typed_value =
-  let ctx, v =
+let eval_operand_prepare (config : C.config) (op : E.operand)
+    (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
+  let prepare (cf : V.typed_value -> m_fun) : m_fun =
+   fun ctx ->
     match op with
     | Expressions.Constant (ty, cv) ->
         let v = constant_value_to_typed_value ctx ty cv in
-        (ctx, v)
+        cf v ctx
     | Expressions.Copy p ->
         (* Access the value *)
         let access = Read in
         (* Expand the symbolic values, if necessary *)
         let expand_prim_copy = true in
-        prepare_rplace config expand_prim_copy access p ctx
+        prepare_rplace config expand_prim_copy access p cf ctx
     | Expressions.Move p ->
         (* Access the value *)
         let access = Move in
         let expand_prim_copy = false in
-        prepare_rplace config expand_prim_copy access p ctx
+        prepare_rplace config expand_prim_copy access p cf ctx
   in
-  assert (not (bottom_in_value ctx.ended_regions v));
-  (ctx, v)
+  (* Sanity check *)
+  let check cf v : m_fun =
+   fun ctx ->
+    assert (not (bottom_in_value ctx.ended_regions v));
+    cf v ctx
+  in
+  (* Compose and apply *)
+  comp prepare check cf ctx
 
 (** Evaluate an operand. *)
-let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
-    C.eval_ctx * V.typed_value =
+let eval_operand (config : C.config) (op : E.operand)
+    (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
   (* Debug *)
   log#ldebug
     (lazy
@@ -173,98 +186,124 @@ let eval_operand (config : C.config) (ctx : C.eval_ctx) (op : E.operand) :
   match op with
   | Expressions.Constant (ty, cv) ->
       let v = constant_value_to_typed_value ctx ty cv in
-      (ctx, v)
+      cf v ctx
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
       let expand_prim_copy = true in
-      let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
+      let cc = prepare_rplace config expand_prim_copy access p in
       (* Copy the value *)
-      assert (not (bottom_in_value ctx.ended_regions v));
-      assert (
-        Option.is_none
-          (find_first_primitively_copyable_sv_with_borrows
-             ctx.type_context.type_infos v));
-      let allow_adt_copy = false in
-      copy_value allow_adt_copy config ctx v
-  | Expressions.Move p -> (
+      let copy cf v : m_fun =
+       fun ctx ->
+        (* Sanity checks *)
+        assert (not (bottom_in_value ctx.ended_regions v));
+        assert (
+          Option.is_none
+            (find_first_primitively_copyable_sv_with_borrows
+               ctx.type_context.type_infos v));
+        let allow_adt_copy = false in
+        (* Actually perform the copy *)
+        let ctx, v = copy_value allow_adt_copy config ctx v in
+        (* Continue *)
+        cf v ctx
+      in
+      (* Compose and apply *)
+      comp cc copy cf ctx
+  | Expressions.Move p ->
       (* Access the value *)
       let access = Move in
       let expand_prim_copy = false in
-      let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
+      let cc = prepare_rplace config expand_prim_copy access p in
       (* Move the value *)
-      assert (not (bottom_in_value ctx.ended_regions v));
-      let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
-      match write_place config access p bottom ctx with
-      | Error _ -> failwith "Unreachable"
-      | Ok ctx -> (ctx, v))
+      let move cf v : m_fun =
+       fun ctx ->
+        assert (not (bottom_in_value ctx.ended_regions v));
+        let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
+        match write_place config access p bottom ctx with
+        | Error _ -> failwith "Unreachable"
+        | Ok ctx -> cf v ctx
+      in
+      (* Compose and apply *)
+      comp cc move cf ctx
 
 (** Small utility.
 
     See [eval_operand_prepare].
  *)
-let eval_operands_prepare (config : C.config) (ctx : C.eval_ctx)
-    (ops : E.operand list) : C.eval_ctx * V.typed_value list =
-  List.fold_left_map (fun ctx op -> eval_operand_prepare config ctx op) ctx ops
+let eval_operands_prepare (config : C.config) (ops : E.operand list)
+    (cf : V.typed_value list -> m_fun) : m_fun =
+  fold_left_apply_continuation (eval_operand_prepare config) ops cf
 
 (** Evaluate several operands. *)
-let eval_operands (config : C.config) (ctx : C.eval_ctx) (ops : E.operand list)
-    : C.eval_ctx * V.typed_value list =
-  let ctx, _ = eval_operands_prepare config ctx ops in
-  List.fold_left_map (fun ctx op -> eval_operand config ctx op) ctx ops
+let eval_operands (config : C.config) (ops : E.operand list)
+    (cf : V.typed_value list -> m_fun) : m_fun =
+ fun ctx ->
+  (* Prepare the operands *)
+  let prepare = eval_operands_prepare config ops in
+  (* Evaluate the operands *)
+  let eval = fold_left_apply_continuation (eval_operand config) ops in
+  (* Compose and apply *)
+  comp prepare (fun cf (_ : V.typed_value list) -> eval cf) cf ctx
 
-let eval_two_operands (config : C.config) (ctx : C.eval_ctx) (op1 : E.operand)
-    (op2 : E.operand) : C.eval_ctx * V.typed_value * V.typed_value =
-  match eval_operands config ctx [ op1; op2 ] with
-  | ctx, [ v1; v2 ] -> (ctx, v1, v2)
-  | _ -> failwith "Unreachable"
+let eval_two_operands (config : C.config) (op1 : E.operand) (op2 : E.operand)
+    (cf : V.typed_value * V.typed_value -> m_fun) : m_fun =
+  let eval_op = eval_operands config [ op1; op2 ] in
+  let use_res cf res =
+    match res with [ v1; v2 ] -> cf (v1, v2) | _ -> failwith "Unreachable"
+  in
+  comp eval_op use_res cf
 
-let eval_unary_op_concrete (config : C.config) (ctx : C.eval_ctx)
-    (unop : E.unop) (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result
-    =
+let eval_unary_op_concrete (config : C.config) (unop : E.unop) (op : E.operand)
+    (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
   (* Evaluate the operand *)
-  let ctx, v = eval_operand config ctx op in
+  let eval_op = eval_operand config op in
   (* Apply the unop *)
-  match (unop, v.V.value) with
-  | E.Not, V.Concrete (Bool b) ->
-      Ok (ctx, { v with V.value = V.Concrete (Bool (not b)) })
-  | E.Neg, V.Concrete (V.Scalar sv) -> (
-      let i = Z.neg sv.V.value in
-      match mk_scalar sv.int_ty i with
-      | Error _ -> Error Panic
-      | Ok sv -> Ok (ctx, { v with V.value = V.Concrete (V.Scalar sv) }))
-  | _ -> failwith "Invalid input for unop"
-
-let eval_unary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
-    (unop : E.unop) (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result
-    =
-  (* Evaluate the operand *)
-  let ctx, v = eval_operand config ctx op in
-  (* Generate a fresh symbolic value to store the result *)
-  let res_sv_id = C.fresh_symbolic_value_id () in
-  let res_sv_ty =
-    match (unop, v.V.ty) with
-    | E.Not, T.Bool -> T.Bool
-    | E.Neg, T.Integer int_ty -> T.Integer int_ty
+  let apply cf (v : V.typed_value) : m_fun =
+    match (unop, v.V.value) with
+    | E.Not, V.Concrete (Bool b) ->
+        cf (Ok { v with V.value = V.Concrete (Bool (not b)) })
+    | E.Neg, V.Concrete (V.Scalar sv) -> (
+        let i = Z.neg sv.V.value in
+        match mk_scalar sv.int_ty i with
+        | Error _ -> cf (Error EPanic)
+        | Ok sv -> cf (Ok { v with V.value = V.Concrete (V.Scalar sv) }))
     | _ -> failwith "Invalid input for unop"
   in
-  let res_sv =
-    { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
+  comp eval_op apply cf
+
+let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
+    (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
+  (* Evaluate the operand *)
+  let eval_op = eval_operand config op in
+  (* Generate a fresh symbolic value to store the result *)
+  let apply cf (v : V.typed_value) : m_fun =
+    let res_sv_id = C.fresh_symbolic_value_id () in
+    let res_sv_ty =
+      match (unop, v.V.ty) with
+      | E.Not, T.Bool -> T.Bool
+      | E.Neg, T.Integer int_ty -> T.Integer int_ty
+      | _ -> failwith "Invalid input for unop"
+    in
+    let res_sv =
+      { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
+    in
+    (* Synthesize *)
+    S.synthesize_unary_op unop v res_sv;
+    (* Call the continuation *)
+    cf (Ok (mk_typed_value_from_symbolic_value res_sv))
   in
-  (* Synthesize *)
-  S.synthesize_unary_op unop v res_sv;
-  (* Return *)
-  Ok (ctx, mk_typed_value_from_symbolic_value res_sv)
+  (* Compose and apply *)
+  comp eval_op apply cf
 
-let eval_unary_op (config : C.config) (ctx : C.eval_ctx) (unop : E.unop)
-    (op : E.operand) : (C.eval_ctx * V.typed_value) eval_result =
+let eval_unary_op (config : C.config) (unop : E.unop) (op : E.operand)
+    (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
   match config.mode with
-  | C.ConcreteMode -> eval_unary_op_concrete config ctx unop op
-  | C.SymbolicMode -> eval_unary_op_symbolic config ctx unop op
+  | C.ConcreteMode -> eval_unary_op_concrete config unop op cf
+  | C.SymbolicMode -> eval_unary_op_symbolic config unop op cf
 
-let eval_binary_op_concrete (config : C.config) (ctx : C.eval_ctx)
-    (binop : E.binop) (op1 : E.operand) (op2 : E.operand) :
-    (C.eval_ctx * V.typed_value) eval_result =
+let eval_binary_op_concrete (config : C.config) (binop : E.binop)
+    (op1 : E.operand) (op2 : E.operand)
+    (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
   (* Evaluate the operands *)
   let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
   (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
@@ -338,8 +377,8 @@ let eval_binary_op_concrete (config : C.config) (ctx : C.eval_ctx)
         match res with Error _ -> Error Panic | Ok v -> Ok (ctx, v))
     | _ -> failwith "Invalid inputs for binop"
 
-let eval_binary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
-    (binop : E.binop) (op1 : E.operand) (op2 : E.operand) :
+let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
+    (op1 : E.operand) (op2 : E.operand) :
     (C.eval_ctx * V.typed_value) eval_result =
   (* Evaluate the operands *)
   let ctx, v1, v2 = eval_two_operands config ctx op1 op2 in
@@ -376,9 +415,8 @@ let eval_binary_op_symbolic (config : C.config) (ctx : C.eval_ctx)
   (* Return *)
   Ok (ctx, mk_typed_value_from_symbolic_value res_sv)
 
-let eval_binary_op (config : C.config) (ctx : C.eval_ctx) (binop : E.binop)
-    (op1 : E.operand) (op2 : E.operand) :
-    (C.eval_ctx * V.typed_value) eval_result =
+let eval_binary_op (config : C.config) (binop : E.binop) (op1 : E.operand)
+    (op2 : E.operand) : (C.eval_ctx * V.typed_value) eval_result =
   match config.mode with
   | C.ConcreteMode -> eval_binary_op_concrete config ctx binop op1 op2
   | C.SymbolicMode -> eval_binary_op_symbolic config ctx binop op1 op2
@@ -516,8 +554,8 @@ let eval_rvalue_aggregate (config : C.config) (ctx : C.eval_ctx)
     of a symbolic enumeration value), while it is not the case for the
     other rvalues.
  *)
-let eval_rvalue_non_discriminant (config : C.config) (ctx : C.eval_ctx)
-    (rvalue : E.rvalue) : (C.eval_ctx * V.typed_value) eval_result =
+let eval_rvalue_non_discriminant (config : C.config) (rvalue : E.rvalue) :
+    (C.eval_ctx * V.typed_value) eval_result =
   match rvalue with
   | E.Use op -> Ok (eval_operand config ctx op)
   | E.Ref (p, bkind) -> Ok (eval_rvalue_ref config ctx p bkind)
@@ -534,7 +572,7 @@ let eval_rvalue_non_discriminant (config : C.config) (ctx : C.eval_ctx)
     `discriminant` might lead to a branching in case it is applied
     on a symbolic enumeration value.
 *)
-let eval_rvalue (config : C.config) (ctx : C.eval_ctx) (rvalue : E.rvalue) :
+let eval_rvalue (config : C.config) (rvalue : E.rvalue) :
     (C.eval_ctx * V.typed_value) list eval_result =
   match rvalue with
   | E.Discriminant p -> Ok (eval_rvalue_discriminant config p ctx)

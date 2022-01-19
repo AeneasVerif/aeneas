@@ -5,6 +5,9 @@ module T = Types
 module V = Values
 module C = Contexts
 
+(** TODO: change the name *)
+type eval_error = EPanic
+
 (** Result of evaluating a statement *)
 type statement_eval_res =
   | Unit
@@ -64,3 +67,25 @@ let comp_ret_val (f : (V.typed_value -> m_fun) -> m_fun)
 let apply (f : cm_fun) (g : m_fun) : m_fun = fun ctx -> f g ctx
 
 let id_cm_fun : cm_fun = fun cf ctx -> cf ctx
+
+(** If we have a list of [inputs] of type `'a list` and a function [f] which
+    evaluates one element of type `'a` to compute a result of type `'b` before
+    giving it to a continuation, the following function performs a fold operation:
+    it evaluates all the inputs one by one by accumulating the results in a list,
+    and gives the list to a continuation.
+    
+    Note that we make sure that the results are listed in the order in
+    which they were computed (the first element of the list is the result
+    of applying [f] to the first element of the inputs).
+ *)
+let fold_left_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
+    (inputs : 'a list) (cf : 'b list -> 'c -> 'd) : 'c -> 'd =
+  let rec eval_list (inputs : 'a list) (cf : 'b list -> 'c -> 'd)
+      (outputs : 'b list) : 'c -> 'd =
+   fun ctx ->
+    match inputs with
+    | [] -> cf (List.rev outputs) ctx
+    | x :: inputs ->
+        comp (f x) (fun cf v -> eval_list inputs cf (v :: outputs)) cf ctx
+  in
+  eval_list inputs cf []
