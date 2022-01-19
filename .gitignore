@@ -28,6 +28,9 @@ setup.log
 # Local OPAM switch
 _opam/
 
+# Rust working directory
+rust-tests/target/
+
 # Misc
 *~
 nohup.out
