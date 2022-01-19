@@ -1457,13 +1457,12 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
           let cc = end_outer_borrows config bids in
           (* Promote the loan *)
           let cc = comp cc (promote_shared_loan_to_mut_loan l) in
-          (*          let ctx, borrowed_value = promote_shared_loan_to_mut_loan l ctx in *)
           (* Promote the borrow - the value should have been checked by
              [promote_shared_loan_to_mut_loan]
           *)
           let cc =
-            comp cc (fun cf borrowed_value ctx ->
-                promote_inactivated_borrow_to_mut_borrow l cf borrowed_value ctx)
+            comp cc (fun cf borrowed_value ->
+                promote_inactivated_borrow_to_mut_borrow l cf borrowed_value)
           in
           (* Continue *)
           cc cf ctx)
