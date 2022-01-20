@@ -18,8 +18,6 @@ open InterpreterPaths
 (** The local logger *)
 let log = L.expressions_log
 
-(*type 'a eval_result = ('a, eval_error) result*)
-
 (** As long as there are symbolic values at a given place (potentially in subvalues)
     which contain borrows and are primitively copyable, expand them.
     
@@ -304,9 +302,8 @@ let eval_unary_op (config : C.config) (unop : E.unop) (op : E.operand)
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
     the binop *after* the operands have been successfully evaluated
  *)
-let eval_binary_op_concrete_compute (config : C.config) (binop : E.binop)
-    (v1 : V.typed_value) (v2 : V.typed_value) :
-    (V.typed_value, eval_error) result =
+let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
+    (v2 : V.typed_value) : (V.typed_value, eval_error) result =
   (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
    * The remaining binops only operate on scalars. *)
   if binop = Eq || binop = Ne then (
@@ -382,7 +379,7 @@ let eval_binary_op_concrete (config : C.config) (binop : E.binop)
   (* Compute the result of the binop *)
   let compute cf (res : V.typed_value * V.typed_value) =
     let v1, v2 = res in
-    cf (eval_binary_op_concrete_compute config binop v1 v2)
+    cf (eval_binary_op_concrete_compute binop v1 v2)
   in
   (* Compose and apply *)
   comp eval_ops compute cf
