@@ -963,10 +963,9 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDefId.id)
   cc cf ctx
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
-and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.FunDefId.id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    st_cm_fun =
+and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDefId.id)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
   (* Retrieve the (correctly instantiated) signature *)
   let def = C.ctx_lookup_fun_def ctx fid in
@@ -977,7 +976,7 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   (* Sanity check *)
   assert (List.length args = def.A.arg_count);
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config ctx (A.Local fid) inst_sg
+  eval_function_call_symbolic_from_inst_sig config (A.Local fid) inst_sg
     region_params type_params args dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
@@ -986,7 +985,7 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
     calls in symbolic mode: only their signatures matter.
  *)
 and eval_function_call_symbolic_from_inst_sig (config : C.config)
-    (ctx : C.eval_ctx) (fid : A.fun_id) (inst_sg : A.inst_fun_sig)
+    (fid : A.fun_id) (inst_sg : A.inst_fun_sig)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
@@ -998,55 +997,74 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   let ret_av regions =
     mk_aproj_loans_value_from_symbolic_value regions ret_spc
   in
+
   (* Evaluate the input operands *)
-  let ctx, args = eval_operands config ctx args in
-  let args_with_rtypes = List.combine args inst_sg.A.inputs in
-  (* Check the type of the input arguments *)
-  assert (
-    List.for_all
-      (fun ((arg, rty) : V.typed_value * T.rty) ->
-        arg.V.ty = Subst.erase_regions rty)
-      args_with_rtypes);
-  (* Check that the input arguments don't contain symbolic values that can't 
-   * be fed to functions (i.e., symbolic values output from function return
-   * values and which contain borrows of borrows can't be used as function
-   * inputs *)
-  assert (
-    List.for_all
-      (fun arg ->
-        not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
-      args);
-  (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
-  let empty_absl =
-    create_empty_abstractions_from_abs_region_groups V.FunCall
-      inst_sg.A.regions_hierarchy
-  in
-  (* Add the avalues to the abstractions and insert them in the context *)
-  let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =
-    (* Project over the input values *)
-    let ctx, args_projs =
-      List.fold_left_map
-        (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_on_input_value config ctx abs.regions
-            abs.ancestors_regions arg arg_rty)
-        ctx args_with_rtypes
+  let cc = eval_operands config args in
+
+  (* Generate the abstractions and insert them in the context *)
+  let cf_call cf (args : V.typed_value list) : m_fun =
+   fun ctx ->
+    let args_with_rtypes = List.combine args inst_sg.A.inputs in
+
+    (* Check the type of the input arguments *)
+    assert (
+      List.for_all
+        (fun ((arg, rty) : V.typed_value * T.rty) ->
+          arg.V.ty = Subst.erase_regions rty)
+        args_with_rtypes);
+    (* Check that the input arguments don't contain symbolic values that can't 
+     * be fed to functions (i.e., symbolic values output from function return
+     * values and which contain borrows of borrows can't be used as function
+     * inputs *)
+    assert (
+      List.for_all
+        (fun arg ->
+          not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
+        args);
+
+    (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
+    let empty_absl =
+      create_empty_abstractions_from_abs_region_groups V.FunCall
+        inst_sg.A.regions_hierarchy
     in
-    (* Group the input and output values *)
-    let avalues = List.append args_projs [ ret_av abs.regions ] in
-    (* Add the avalues to the abstraction *)
-    let abs = { abs with avalues } in
-    (* Insert the abstraction in the context *)
-    let ctx = { ctx with env = Abs abs :: ctx.env } in
-    (* Return *)
-    ctx
+
+    (* Add the avalues to the abstractions and insert them in the context *)
+    let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =
+      (* Project over the input values *)
+      let ctx, args_projs =
+        List.fold_left_map
+          (fun ctx (arg, arg_rty) ->
+            apply_proj_borrows_on_input_value config ctx abs.regions
+              abs.ancestors_regions arg arg_rty)
+          ctx args_with_rtypes
+      in
+      (* Group the input and output values *)
+      let avalues = List.append args_projs [ ret_av abs.regions ] in
+      (* Add the avalues to the abstraction *)
+      let abs = { abs with avalues } in
+      (* Insert the abstraction in the context *)
+      let ctx = { ctx with env = Abs abs :: ctx.env } in
+      (* Return *)
+      ctx
+    in
+    let ctx = List.fold_left insert_abs ctx empty_absl in
+
+    (* Synthesis *)
+    S.synthesize_function_call fid region_params type_params args dest ret_spc;
+
+    (* Continue *)
+    cf ctx
   in
-  let ctx = List.fold_left insert_abs ctx empty_absl in
+  let cc = comp cc cf_call in
+
   (* Move the return value to its destination *)
-  let ctx = assign_to_place config ctx ret_value dest in
-  (* Synthesis *)
-  S.synthesize_function_call fid region_params type_params args dest ret_spc;
-  (* Return *)
-  ctx
+  let cc = comp cc (assign_to_place config ret_value dest) in
+
+  (* Continue - note that we do as if the function call has been successful,
+   * by giving [Unit] to the continuation, because we place us in the case
+   * where we haven't panicked. Of course, the translation needs to take the
+   * panic case into account... *)
+  cc (cf Unit) ctx
 
 (** Evaluate a non-local function call in symbolic mode *)
 and eval_non_local_function_call_symbolic (config : C.config)
@@ -1070,25 +1088,24 @@ and eval_non_local_function_call_symbolic (config : C.config)
   | A.BoxFree ->
       (* Degenerate case: box_free - note that this is not really a function
        * call: no need to call a "synthesize_..." function *)
-      eval_box_free config region_params type_params args dest ctx
+      eval_box_free config region_params type_params args dest (cf Unit) ctx
   | _ ->
       (* "Normal" case: not box_free *)
       (* In symbolic mode, the behaviour of a function call is completely defined
        * by the signature of the function: we thus simply generate correctly
        * instantiated signatures, and delegate the work to an auxiliary function *)
-      let ctx, inst_sig =
+      let inst_sig =
         match fid with
-        | A.BoxNew -> (ctx, eval_box_new_inst_sig region_params type_params)
-        | A.BoxDeref -> eval_box_deref_inst_sig region_params type_params ctx
-        | A.BoxDerefMut ->
-            eval_box_deref_mut_inst_sig region_params type_params ctx
+        | A.BoxNew -> eval_box_new_inst_sig region_params type_params
+        | A.BoxDeref -> eval_box_deref_inst_sig region_params type_params
+        | A.BoxDerefMut -> eval_box_deref_mut_inst_sig region_params type_params
         | A.BoxFree -> failwith "Unreachable"
         (* should have been treated above *)
       in
 
       (* Evaluate the function call *)
-      eval_function_call_symbolic_from_inst_sig config ctx (A.Assumed fid)
-        inst_sig region_params type_params args dest
+      eval_function_call_symbolic_from_inst_sig config (A.Assumed fid) inst_sig
+        region_params type_params args dest cf ctx
 
 (** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
     (auxiliary helper for [eval_statement]) *)
@@ -1114,46 +1131,45 @@ and eval_non_local_function_call (config : C.config) (fid : A.assumed_fun_id)
 
   match config.mode with
   | C.ConcreteMode ->
-      eval_non_local_function_call_concrete config ctx fid region_params
-        type_params args dest
+      eval_non_local_function_call_concrete config fid region_params type_params
+        args dest (cf Unit) ctx
   | C.SymbolicMode ->
-      Ok
-        (eval_non_local_function_call_symbolic config ctx fid region_params
-           type_params args dest)
+      eval_non_local_function_call_symbolic config fid region_params type_params
+        args dest cf ctx
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
 and eval_local_function_call (config : C.config) (fid : A.FunDefId.id)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
- fun cf ctx ->
   match config.mode with
   | ConcreteMode ->
-      eval_local_function_call_concrete config ctx fid region_params type_params
+      eval_local_function_call_concrete config fid region_params type_params
         args dest
   | SymbolicMode ->
-      [
-        Ok
-          (eval_local_function_call_symbolic config ctx fid region_params
-             type_params args dest);
-      ]
+      eval_local_function_call_symbolic config fid region_params type_params
+        args dest
 
 (** Evaluate a statement seen as a function body (auxiliary helper for
     [eval_statement]) *)
 and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =
  fun cf ctx ->
-  let res = eval_statement config ctx body in
-  let finish res =
-    match res with
-    | Error err -> Error err
-    | Ok (ctx, res) -> (
-        (* Expand the symbolic values if necessary - we need to do that before
-         * checking the invariants *)
-        let ctx = greedy_expand_symbolic_values config ctx in
-        (* Sanity check *)
-        if config.C.check_invariants then Inv.check_invariants config ctx;
-        match res with
-        | Unit | Break _ | Continue _ -> failwith "Inconsistent state"
-        | Return -> Ok ctx)
+  let cc = eval_statement config body in
+  let cf_finish cf res =
+    (* Note that we *don't* check the result ([Panic], [Return], etc.): we
+     * delegate the check to the caller. *)
+    (* Expand the symbolic values if necessary - we need to do that before
+     * checking the invariants *)
+    let cc = greedy_expand_symbolic_values config in
+    (* Sanity check *)
+    let cc =
+      if config.C.check_invariants then
+        comp_check_ctx cc (Inv.check_invariants config)
+      else cc
+    in
+
+    (* Continue *)
+    cc (cf res)
   in
-  List.map finish res
+  (* Compose and continue *)
+  comp cc cf_finish cf ctx

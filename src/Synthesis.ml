@@ -75,7 +75,6 @@ let synthesize_eval_rvalue_aggregate (_aggregate_kind : E.aggregate_kind)
     (_ops : E.operand list) : unit =
   ()
 
-(*
 let synthesize_function_call (_fid : A.fun_id)
     (_region_params : T.erased_region list) (_type_params : T.ety list)
     (_args : V.typed_value list) (_dest : E.place) (_res : V.symbolic_value) :
@@ -83,6 +82,3 @@ let synthesize_function_call (_fid : A.fun_id)
   ()
 
 (*let synthesize_panic () : unit = ()*)
-
-let synthesize_assert (_v : V.typed_value) : unit = ()
- *)
