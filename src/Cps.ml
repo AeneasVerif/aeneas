@@ -22,13 +22,18 @@ type sexpr = SOne | SList of sexpr list
 type eval_result = sexpr option
 
 type m_fun = C.eval_ctx -> eval_result
-(** Monadic function *)
+(** Continuation function *)
 
 type cm_fun = m_fun -> m_fun
-(** Monadic function with continuation *)
+(** Continuation taking another continuation as parameter *)
+
+type typed_value_m_fun = V.typed_value -> m_fun
+(** Continuation taking a typed value as parameter - TODO: use more *)
 
 type typed_value_cm_fun = V.typed_value -> cm_fun
-(** Monadic function with continuation and receiving a typed value *)
+(** Continuation taking another continuation as parameter and a typed
+    value as parameter.
+ *)
 
 (** Convert a unit function to a cm function *)
 let unit_to_cm_fun (f : C.eval_ctx -> unit) : cm_fun =

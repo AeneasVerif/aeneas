@@ -492,120 +492,129 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
   (* Compose and apply *)
   comp prepare read cf
 
-let eval_rvalue_ref (config : C.config) (ctx : C.eval_ctx) (p : E.place)
-    (bkind : E.borrow_kind) : C.eval_ctx * V.typed_value =
+let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
+    (cf : V.typed_value -> m_fun) : m_fun =
   match bkind with
   | E.Shared | E.TwoPhaseMut ->
       (* Access the value *)
       let access = if bkind = E.Shared then Read else Write in
       let expand_prim_copy = false in
-      let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
-      (* Compute the rvalue - simply a shared borrow with a fresh id *)
-      let bid = C.fresh_borrow_id () in
-      (* Note that the reference is *mutable* if we do a two-phase borrow *)
-      let rv_ty =
-        T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
+      let prepare = prepare_rplace config expand_prim_copy access p in
+      (* Evaluate the borrowing operation *)
+      let eval (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
+       fun ctx ->
+        (* Compute the rvalue - simply a shared borrow with a fresh id *)
+        let bid = C.fresh_borrow_id () in
+        (* Note that the reference is *mutable* if we do a two-phase borrow *)
+        let rv_ty =
+          T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
+        in
+        let bc =
+          if bkind = E.Shared then V.SharedBorrow bid
+          else V.InactivatedMutBorrow bid
+        in
+        let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
+        (* Compute the value with which to replace the value at place p *)
+        let nv =
+          match v.V.value with
+          | V.Loan (V.SharedLoan (bids, sv)) ->
+              (* Shared loan: insert the new borrow id *)
+              let bids1 = V.BorrowId.Set.add bid bids in
+              { v with V.value = V.Loan (V.SharedLoan (bids1, sv)) }
+          | _ ->
+              (* Not a shared loan: add a wrapper *)
+              let v' =
+                V.Loan (V.SharedLoan (V.BorrowId.Set.singleton bid, v))
+              in
+              { v with V.value = v' }
+        in
+        (* Update the value in the context *)
+        let ctx = write_place_unwrap config access p nv ctx in
+        (* Continue *)
+        cf rv ctx
       in
-      let bc =
-        if bkind = E.Shared then V.SharedBorrow bid
-        else V.InactivatedMutBorrow bid
-      in
-      let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
-      (* Compute the value with which to replace the value at place p *)
-      let nv =
-        match v.V.value with
-        | V.Loan (V.SharedLoan (bids, sv)) ->
-            (* Shared loan: insert the new borrow id *)
-            let bids1 = V.BorrowId.Set.add bid bids in
-            { v with V.value = V.Loan (V.SharedLoan (bids1, sv)) }
-        | _ ->
-            (* Not a shared loan: add a wrapper *)
-            let v' = V.Loan (V.SharedLoan (V.BorrowId.Set.singleton bid, v)) in
-            { v with V.value = v' }
-      in
-      (* Update the value in the context *)
-      let ctx = write_place_unwrap config access p nv ctx in
-      (* Return *)
-      (ctx, rv)
+      (* Compose and apply *)
+      comp prepare eval cf
   | E.Mut ->
       (* Access the value *)
       let access = Write in
       let expand_prim_copy = false in
-      let ctx, v = prepare_rplace config expand_prim_copy access p ctx in
-      (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
-      let bid = C.fresh_borrow_id () in
-      let rv_ty = T.Ref (T.Erased, v.ty, Mut) in
-      let rv : V.typed_value =
-        { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty }
+      let prepare = prepare_rplace config expand_prim_copy access p in
+      (* Evaluate the borrowing operation *)
+      let eval (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
+       fun ctx ->
+        (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
+        let bid = C.fresh_borrow_id () in
+        let rv_ty = T.Ref (T.Erased, v.ty, Mut) in
+        let rv : V.typed_value =
+          { V.value = V.Borrow (V.MutBorrow (bid, v)); ty = rv_ty }
+        in
+        (* Compute the value with which to replace the value at place p *)
+        let nv = { v with V.value = V.Loan (V.MutLoan bid) } in
+        (* Update the value in the context *)
+        let ctx = write_place_unwrap config access p nv ctx in
+        (* Continue *)
+        cf rv ctx
       in
-      (* Compute the value with which to replace the value at place p *)
-      let nv = { v with V.value = V.Loan (V.MutLoan bid) } in
-      (* Update the value in the context *)
-      let ctx = write_place_unwrap config access p nv ctx in
-      (* Return *)
-      (ctx, rv)
+      (* Compose and apply *)
+      comp prepare eval cf
 
-let eval_rvalue_aggregate (config : C.config) (ctx : C.eval_ctx)
-    (aggregate_kind : E.aggregate_kind) (ops : E.operand list) :
-    C.eval_ctx * V.typed_value =
+let eval_rvalue_aggregate (config : C.config)
+    (aggregate_kind : E.aggregate_kind) (ops : E.operand list)
+    (cf : V.typed_value -> m_fun) : m_fun =
   S.synthesize_eval_rvalue_aggregate aggregate_kind ops;
   (* Evaluate the operands *)
-  let ctx, values = eval_operands config ctx ops in
-  (* Match on the aggregate kind *)
-  match aggregate_kind with
-  | E.AggregatedTuple ->
-      let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
-      let v = V.Adt { variant_id = None; field_values = values } in
-      let ty = T.Adt (T.Tuple, [], tys) in
-      (ctx, { V.value = v; ty })
-  | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
-      (* Sanity checks *)
-      let type_def = C.ctx_lookup_type_def ctx def_id in
-      assert (List.length type_def.region_params = List.length regions);
-      let expected_field_types =
-        Subst.ctx_adt_get_instantiated_field_etypes ctx def_id opt_variant_id
-          types
-      in
-      assert (
-        expected_field_types
-        = List.map (fun (v : V.typed_value) -> v.V.ty) values);
-      (* Construct the value *)
-      let av : V.adt_value =
-        { V.variant_id = opt_variant_id; V.field_values = values }
-      in
-      let aty = T.Adt (T.AdtId def_id, regions, types) in
-      (ctx, { V.value = Adt av; ty = aty })
+  let eval_ops = eval_operands config ops in
+  (* Compute the value *)
+  let compute (cf : V.typed_value -> m_fun) (values : V.typed_value list) :
+      m_fun =
+   fun ctx ->
+    (* Match on the aggregate kind *)
+    match aggregate_kind with
+    | E.AggregatedTuple ->
+        let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
+        let v = V.Adt { variant_id = None; field_values = values } in
+        let ty = T.Adt (T.Tuple, [], tys) in
+        cf { V.value = v; ty } ctx
+    | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
+        (* Sanity checks *)
+        let type_def = C.ctx_lookup_type_def ctx def_id in
+        assert (List.length type_def.region_params = List.length regions);
+        let expected_field_types =
+          Subst.ctx_adt_get_instantiated_field_etypes ctx def_id opt_variant_id
+            types
+        in
+        assert (
+          expected_field_types
+          = List.map (fun (v : V.typed_value) -> v.V.ty) values);
+        (* Construct the value *)
+        let av : V.adt_value =
+          { V.variant_id = opt_variant_id; V.field_values = values }
+        in
+        let aty = T.Adt (T.AdtId def_id, regions, types) in
+        cf { V.value = Adt av; ty = aty } ctx
+  in
+  (* Compose and apply *)
+  comp eval_ops compute cf
 
-(** Evaluate an rvalue which is not a discriminant.
+(** Evaluate an rvalue.
 
-    We define a function for this specific case, because evaluating
-    a discriminant might lead to branching (if we evaluate the discriminant
-    of a symbolic enumeration value), while it is not the case for the
-    other rvalues.
+    Transmits the computed rvalue to the received continuation.
  *)
-let eval_rvalue_non_discriminant (config : C.config) (rvalue : E.rvalue) :
-    (C.eval_ctx * V.typed_value) eval_result =
+let eval_rvalue_non_discriminant (config : C.config) (rvalue : E.rvalue)
+    (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
+  (* Small helpers *)
+  let wrap_in_result (cf : (V.typed_value, eval_error) result -> m_fun)
+      (v : V.typed_value) : m_fun =
+    cf (Ok v)
+  in
+  let comp_wrap f = comp f wrap_in_result cf in
+  (* Delegate to the proper auxiliary function *)
   match rvalue with
-  | E.Use op -> Ok (eval_operand config ctx op)
-  | E.Ref (p, bkind) -> Ok (eval_rvalue_ref config ctx p bkind)
-  | E.UnaryOp (unop, op) -> eval_unary_op config ctx unop op
-  | E.BinaryOp (binop, op1, op2) -> eval_binary_op config ctx binop op1 op2
+  | E.Use op -> comp_wrap (eval_operand config op)
+  | E.Ref (p, bkind) -> comp_wrap (eval_rvalue_ref config p bkind)
+  | E.UnaryOp (unop, op) -> eval_unary_op config unop op cf
+  | E.BinaryOp (binop, op1, op2) -> eval_binary_op config binop op1 op2 cf
   | E.Aggregate (aggregate_kind, ops) ->
-      Ok (eval_rvalue_aggregate config ctx aggregate_kind ops)
-  | E.Discriminant _ -> failwith "Unreachable"
-
-(** Evaluate an rvalue in a given context: return the updated context and
-    the computed value.
-
-    Returns a list of pairs (new context, computed rvalue) because
-    `discriminant` might lead to a branching in case it is applied
-    on a symbolic enumeration value.
-*)
-let eval_rvalue (config : C.config) (rvalue : E.rvalue) :
-    (C.eval_ctx * V.typed_value) list eval_result =
-  match rvalue with
-  | E.Discriminant p -> Ok (eval_rvalue_discriminant config p ctx)
-  | _ -> (
-      match eval_rvalue_non_discriminant config ctx rvalue with
-      | Error e -> Error e
-      | Ok res -> Ok [ res ])
+      comp_wrap (eval_rvalue_aggregate config aggregate_kind ops)
+  | E.Discriminant p -> comp_wrap (eval_rvalue_discriminant config p)
