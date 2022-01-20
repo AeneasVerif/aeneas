@@ -271,6 +271,7 @@ let eval_unary_op_concrete (config : C.config) (unop : E.unop) (op : E.operand)
 
 let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
     (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
+ fun ctx ->
   (* Evaluate the operand *)
   let eval_op = eval_operand config op in
   (* Generate a fresh symbolic value to store the result *)
@@ -291,7 +292,7 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
     cf (Ok (mk_typed_value_from_symbolic_value res_sv))
   in
   (* Compose and apply *)
-  comp eval_op apply cf
+  comp eval_op apply cf ctx
 
 let eval_unary_op (config : C.config) (unop : E.unop) (op : E.operand)
     (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
@@ -387,6 +388,7 @@ let eval_binary_op_concrete (config : C.config) (binop : E.binop)
 let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
     (op1 : E.operand) (op2 : E.operand)
     (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
+ fun ctx ->
   (* Evaluate the operands *)
   let eval_ops = eval_two_operands config op1 op2 in
   (* Compute the result of applying the binop *)
@@ -426,7 +428,7 @@ let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
     cf (Ok v)
   in
   (* Compose and apply *)
-  comp eval_ops compute cf
+  comp eval_ops compute cf ctx
 
 let eval_binary_op (config : C.config) (binop : E.binop) (op1 : E.operand)
     (op2 : E.operand) (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun
@@ -491,6 +493,7 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
 
 let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
     (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
   match bkind with
   | E.Shared | E.TwoPhaseMut ->
       (* Access the value *)
@@ -531,7 +534,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         cf rv ctx
       in
       (* Compose and apply *)
-      comp prepare eval cf
+      comp prepare eval cf ctx
   | E.Mut ->
       (* Access the value *)
       let access = Write in
@@ -554,7 +557,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         cf rv ctx
       in
       (* Compose and apply *)
-      comp prepare eval cf
+      comp prepare eval cf ctx
 
 let eval_rvalue_aggregate (config : C.config)
     (aggregate_kind : E.aggregate_kind) (ops : E.operand list)

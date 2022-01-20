@@ -16,6 +16,33 @@ module M = Modules
  *   different contexts
  * - also, it is a lot more convenient to not store those counters in contexts
  *   objects
+ *
+ * =============
+ * **WARNNING**:
+ * =============
+ * Pay attention when playing with the function type abbreviations,
+ * as they may make you not always generate fresh identifiers. For
+ * instance, consider the following:
+ * ```
+ * type fun_type = unit -> ...
+ * fn f x : fun_type =
+ *   let id = fresh_id () in
+ *   ...
+ *
+ * let g = f x in   // <-- the fresh identifier gets generated here
+ * let x1 = g () in // <-- no fresh generation here
+ * let x2 = g () in
+ * ...
+ * ```
+ *
+ * This is one, in such cases, we often introduce all the inputs, even
+ * when they are not used (which happens!).
+ * ```
+ * fn f x : fun_type =
+ *  fun .. ->
+ *   let id = fresh_id () in
+ *   ...
+ * ```
  *)
 
 let symbolic_value_id_counter, fresh_symbolic_value_id =
