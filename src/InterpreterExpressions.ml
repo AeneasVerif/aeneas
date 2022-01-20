@@ -598,7 +598,7 @@ let eval_rvalue_aggregate (config : C.config)
 
     Transmits the computed rvalue to the received continuation.
  *)
-let eval_rvalue_non_discriminant (config : C.config) (rvalue : E.rvalue)
+let eval_rvalue (config : C.config) (rvalue : E.rvalue)
     (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
   (* Small helpers *)
   let wrap_in_result (cf : (V.typed_value, eval_error) result -> m_fun)

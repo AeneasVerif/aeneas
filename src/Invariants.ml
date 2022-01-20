@@ -8,6 +8,7 @@ module C = Contexts
 module Subst = Substitute
 module A = CfimAst
 module L = Logging
+open Cps
 open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
@@ -726,3 +727,9 @@ let check_invariants (config : C.config) (ctx : C.eval_ctx) : unit =
   check_borrowed_values_invariant ctx;
   check_typing_invariant ctx;
   check_symbolic_values config ctx
+
+(** Same as [check_invariants], but written in CPS *)
+let cf_check_invariants (config : C.config) : cm_fun =
+ fun cf ctx ->
+  check_invariants config ctx;
+  cf ctx

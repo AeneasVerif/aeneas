@@ -9,29 +9,68 @@ open TypesUtils
 open ValuesUtils
 module Inv = Invariants
 module S = Synthesis
+open Cps
 open InterpreterUtils
 open InterpreterProjectors
 open InterpreterExpansion
 open InterpreterPaths
 open InterpreterExpressions
+open Errors
 
 (** The local logger *)
 let log = L.statements_log
 
-(** Result of evaluating a statement *)
-type statement_eval_res = Unit | Break of int | Continue of int | Return
-
 (** Drop a value at a given place *)
-let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
-    =
+let drop_value (config : C.config) (p : E.place) : cm_fun =
+ fun cf ctx ->
   log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
-  (* Prepare the place (by ending the outer loans) *)
+  (* Prepare the place (by ending the outer loans and the borrows) *)
   let end_borrows = true in
-  let ctx, v = prepare_lplace config end_borrows p ctx in
+  let prepare = prepare_lplace config end_borrows p in
   (* Replace the value with [Bottom] *)
-  let nv = { v with value = V.Bottom } in
-  let ctx = write_place_unwrap config Write p nv ctx in
-  ctx
+  let replace cf (v : V.typed_value) ctx =
+    let nv = { v with value = V.Bottom } in
+    let ctx = write_place_unwrap config Write p nv ctx in
+    cf ctx
+  in
+  (* Compose and apply *)
+  comp prepare replace cf ctx
+
+(** Push a dummy variable to the environment *)
+let push_dummy_var (v : V.typed_value) : cm_fun =
+ fun cf ctx ->
+  let ctx = C.ctx_push_dummy_var ctx v in
+  cf ctx
+
+(** Pop a dummy variable from the environment *)
+let pop_dummy_var (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
+  let ctx, v = C.ctx_pop_dummy_var ctx in
+  cf v ctx
+
+(** Push an uninitialized variable to the environment *)
+let push_uninitialized_var (var : A.var) : cm_fun =
+ fun cf ctx ->
+  let ctx = C.ctx_push_uninitialized_var ctx var in
+  cf ctx
+
+(** Push a list of uninitialized variables to the environment *)
+let push_uninitialized_vars (vars : A.var list) : cm_fun =
+ fun cf ctx ->
+  let ctx = C.ctx_push_uninitialized_vars ctx vars in
+  cf ctx
+
+(** Push a variable to the environment *)
+let push_var (var : A.var) (v : V.typed_value) : cm_fun =
+ fun cf ctx ->
+  let ctx = C.ctx_push_var ctx var v in
+  cf ctx
+
+(** Push a list of variables to the environment *)
+let push_vars (vars : (A.var * V.typed_value) list) : cm_fun =
+ fun cf ctx ->
+  let ctx = C.ctx_push_vars ctx vars in
+  cf ctx
 
 (** Assign a value to a given place.
 
@@ -40,24 +79,50 @@ let drop_value (config : C.config) (ctx : C.eval_ctx) (p : E.place) : C.eval_ctx
     dummy variable and putting in its destination (after having checked that
     preparing the destination didn't introduce ⊥).
  *)
-let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
-    (p : E.place) : C.eval_ctx =
+let assign_to_place (config : C.config) (rv : V.typed_value) (p : E.place) :
+    cm_fun =
+ fun cf ctx ->
   (* Push the rvalue to a dummy variable, for bookkeeping *)
-  let ctx = C.ctx_push_dummy_var ctx v in
+  let cc = push_dummy_var rv in
   (* Prepare the destination *)
   let end_borrows = false in
-  let ctx, _ = prepare_lplace config end_borrows p ctx in
-  (* Retrieve the dummy variable *)
-  let ctx, v = C.ctx_pop_dummy_var ctx in
-  (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
-  assert (not (bottom_in_value ctx.ended_regions v));
-  (* Move the value at destination to a dummy variable *)
-  let mv = read_place_unwrap config Write p ctx in
-  let ctx = C.ctx_push_dummy_var ctx mv in
+  let cc = comp cc (prepare_lplace config end_borrows p) in
+  (* Retrieve the rvalue from the dummy variable *)
+  let cc = comp cc (fun cf _lv -> pop_dummy_var cf) in
   (* Update the destination *)
-  let ctx = write_place_unwrap config Write p v ctx in
-  (* Return *)
-  ctx
+  let move_dest cf (rv : V.typed_value) : m_fun =
+   fun ctx ->
+    (* Move the value at destination (that we will overwrite) to a dummy variable
+     * to preserve the borrows *)
+    let mv = read_place_unwrap config Write p ctx in
+    let ctx = C.ctx_push_dummy_var ctx mv in
+    (* Write to the destination *)
+    (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
+    assert (not (bottom_in_value ctx.ended_regions rv));
+    (* Update the destination *)
+    let ctx = write_place_unwrap config Write p rv ctx in
+    (* Continue *)
+    cf ctx
+  in
+  (* Compose and apply *)
+  comp cc move_dest cf ctx
+
+(** Evaluate an assertion, when the scrutinee is not symbolic *)
+let eval_assertion_concrete (config : C.config) (assertion : A.assertion) :
+    st_cm_fun =
+ fun cf ctx ->
+  (* There won't be any symbolic expansions: fully evaluate the operand *)
+  let eval_op = eval_operand config assertion.cond in
+  let eval_assert cf (v : V.typed_value) : m_fun =
+   fun ctx ->
+    match v.value with
+    | Concrete (Bool b) ->
+        (* Branch *)
+        if b = assertion.expected then cf Unit ctx else cf Panic ctx
+    | _ -> failwith ("Expected a boolean, got: " ^ typed_value_to_string ctx v)
+  in
+  (* Compose and apply *)
+  comp eval_op eval_assert cf ctx
 
 (** Evaluates an assertion.
     
@@ -65,42 +130,38 @@ let assign_to_place (config : C.config) (ctx : C.eval_ctx) (v : V.typed_value)
     a call to `assert ...` then continue in the success branch (and thus
     expand the boolean to `true`).
  *)
-let eval_assertion (config : C.config) (ctx : C.eval_ctx)
-    (assertion : A.assertion) : C.eval_ctx eval_result =
+let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
+ fun cf ctx ->
   (* There may be a symbolic expansion, so don't fully evaluate the operand
    * (if we moved the value, we can't expand it because it is hanging in
-   * thin air, outside of the environment... *)
-  let ctx, v = eval_operand_prepare config ctx assertion.cond in
-  assert (v.ty = T.Bool);
-  let symbolic_mode = config.mode = C.SymbolicMode in
-  (* We make a choice here: we could completely decouple the concrete and
-   * symbolic executions here but choose not to. In the case where we
-   * know the concrete value of the boolean we test, we use this value
-   * even if we are in symbolic mode. Note that this case should be
-   * extremely rare... *)
-  match v.value with
-  | Concrete (Bool b) ->
-      (* There won't be any symbolic expansions: fully evaluate the operand *)
-      let ctx, v' = eval_operand config ctx assertion.cond in
-      assert (v' = v);
-      (* Branch *)
-      if b = assertion.expected then Ok ctx
-      else (
-        if symbolic_mode then S.synthesize_panic ();
-        Error Panic)
-  | Symbolic sv ->
-      (* We register the fact that we called an assertion (the synthesized
-       * code will then check that the assert succeeded) then continue
-       * with the succeeding branch: we thus expand the symbolic value with
-       * `true` *)
-      S.synthesize_assert v;
-      let see = SeConcrete (V.Bool true) in
-      let ctx = apply_symbolic_expansion_non_borrow config sv see ctx in
-      S.synthesize_symbolic_expansion_no_branching sv see;
-      (* We can finally fully evaluate the operand *)
-      let ctx, _ = eval_operand config ctx assertion.cond in
-      Ok ctx
-  | _ -> failwith ("Expected a boolean, got: " ^ V.show_value v.value)
+   * thin air, outside of the environment...): simply update the environment
+   * to make sure we have access to the value we want to check. *)
+  let prepare = eval_operand_prepare config assertion.cond in
+  (* Evaluate the assertion *)
+  let eval cf (v : V.typed_value) : m_fun =
+   fun ctx ->
+    assert (v.ty = T.Bool);
+    let symbolic_mode = config.mode = C.SymbolicMode in
+    (* We make a choice here: we could completely decouple the concrete and
+     * symbolic executions here but choose not to. In the case where we
+     * know the concrete value of the boolean we test, we use this value
+     * even if we are in symbolic mode. Note that this case should be
+     * extremely rare... *)
+    match v.value with
+    | Concrete (Bool _) ->
+        (* Delegate to the concrete evaluation function *)
+        eval_assertion_concrete config assertion cf ctx
+    | Symbolic sv ->
+        assert (sv.V.sv_ty = T.Bool);
+        (* Expand the symbolic value, then call the evaluation function for the
+         * non-symbolic case *)
+        let allow_branching = true in
+        let expand = expand_symbolic_value config allow_branching sv in
+        comp expand (eval_assertion_concrete config assertion) cf ctx
+    | _ -> failwith ("Expected a boolean, got: " ^ typed_value_to_string ctx v)
+  in
+  (* Compose and apply *)
+  comp prepare eval cf ctx
 
 (** Updates the discriminant of a value at a given place.
 
@@ -113,58 +174,65 @@ let eval_assertion (config : C.config) (ctx : C.eval_ctx)
       a variant with all its fields set to [Bottom].
       For instance, something like: `Cons Bottom Bottom`.
  *)
-let set_discriminant (config : C.config) (ctx : C.eval_ctx) (p : E.place)
-    (variant_id : T.VariantId.id) : C.eval_ctx * statement_eval_res =
+let set_discriminant (config : C.config) (p : E.place)
+    (variant_id : T.VariantId.id) : st_cm_fun =
+ fun cf ctx ->
   (* Access the value *)
   let access = Write in
-  let ctx = update_ctx_along_read_place config access p ctx in
-  let ctx = end_loan_exactly_at_place config access p ctx in
-  let v = read_place_unwrap config access p ctx in
+  let cc = update_ctx_along_read_place config access p in
+  let end_borrows = false in
+  let cc = comp cc (prepare_lplace config end_borrows p) in
   (* Update the value *)
-  match (v.V.ty, v.V.value) with
-  | T.Adt (T.AdtId def_id, regions, types), V.Adt av -> (
-      (* There are two situations:
-         - either the discriminant is already the proper one (in which case we
-           don't do anything)
-         - or it is not the proper one, in which case we replace the value with
-           a variant with all its fields set to [Bottom]
-      *)
-      match av.variant_id with
-      | None -> failwith "Found a struct value while expected an enum"
-      | Some variant_id' ->
-          if variant_id' = variant_id then (* Nothing to do *)
-            (ctx, Unit)
-          else
-            (* Replace the value *)
-            let bottom_v =
-              compute_expanded_bottom_adt_value ctx.type_context.type_defs
-                def_id (Some variant_id) regions types
-            in
-            let ctx = write_place_unwrap config access p bottom_v ctx in
-            (ctx, Unit))
-  | T.Adt (T.AdtId def_id, regions, types), V.Bottom ->
-      let bottom_v =
-        compute_expanded_bottom_adt_value ctx.type_context.type_defs def_id
-          (Some variant_id) regions types
-      in
-      let ctx = write_place_unwrap config access p bottom_v ctx in
-      (ctx, Unit)
-  | _, V.Symbolic _ ->
-      assert (config.mode = SymbolicMode);
-      (* This is a bit annoying: in theory we should expand the symbolic value
-       * then set the discriminant, because in the case the discriminant is
-       * exactly the one we set, the fields are left untouched, and in the
-       * other cases they are set to Bottom.
-       * For now, we forbid setting the discriminant of a symbolic value:
-       * setting a discriminant should only be used to initialize a value,
-       * really. *)
-      failwith "Unexpected value"
-  | _, (V.Adt _ | V.Bottom) -> failwith "Inconsistent state"
-  | _, (V.Concrete _ | V.Borrow _ | V.Loan _) -> failwith "Unexpected value"
+  let update_value cf (v : V.typed_value) : m_fun =
+   fun ctx ->
+    match (v.V.ty, v.V.value) with
+    | T.Adt (T.AdtId def_id, regions, types), V.Adt av -> (
+        (* There are two situations:
+           - either the discriminant is already the proper one (in which case we
+             don't do anything)
+           - or it is not the proper one, in which case we replace the value with
+             a variant with all its fields set to [Bottom]
+        *)
+        match av.variant_id with
+        | None -> failwith "Found a struct value while expected an enum"
+        | Some variant_id' ->
+            if variant_id' = variant_id then (* Nothing to do *)
+              cf Unit ctx
+            else
+              (* Replace the value *)
+              let bottom_v =
+                compute_expanded_bottom_adt_value ctx.type_context.type_defs
+                  def_id (Some variant_id) regions types
+              in
+              assign_to_place config bottom_v p (cf Unit) ctx)
+    | T.Adt (T.AdtId def_id, regions, types), V.Bottom ->
+        let bottom_v =
+          compute_expanded_bottom_adt_value ctx.type_context.type_defs def_id
+            (Some variant_id) regions types
+        in
+        assign_to_place config bottom_v p (cf Unit) ctx
+    | _, V.Symbolic _ ->
+        assert (config.mode = SymbolicMode);
+        (* This is a bit annoying: in theory we should expand the symbolic value
+         * then set the discriminant, because in the case the discriminant is
+         * exactly the one we set, the fields are left untouched, and in the
+         * other cases they are set to Bottom.
+         * For now, we forbid setting the discriminant of a symbolic value:
+         * setting a discriminant should only be used to initialize a value,
+         * or reset an already initialized value, really. *)
+        failwith "Unexpected value"
+    | _, (V.Adt _ | V.Bottom) -> failwith "Inconsistent state"
+    | _, (V.Concrete _ | V.Borrow _ | V.Loan _) -> failwith "Unexpected value"
+  in
+  (* Compose and apply *)
+  comp cc update_value cf ctx
 
 (** Push a frame delimiter in the context's environment *)
 let ctx_push_frame (ctx : C.eval_ctx) : C.eval_ctx =
   { ctx with env = Frame :: ctx.env }
+
+(** Push a frame delimiter in the context's environment *)
+let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
 
 (** Small helper: compute the type of the return value for a specific
     instantiation of a non-local function.
@@ -183,21 +251,17 @@ let get_non_local_function_return_type (fid : A.assumed_fun_id)
     Drop all the local variables but the return variable, move the return
     value out of the return variable, remove all the local variables (but not the
     abstractions!) from the context, remove the [Frame] indicator delimiting the
-    current frame and return the return value and the updated context.
+    current frame and handle the return value to the continuation.
+    
+    TODO: rename (remove the "ctx_")
  *)
-let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
-    C.eval_ctx * V.typed_value =
+let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
   (* Debug *)
   log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
-  (* Eval *)
-  let ret_vid = V.VarId.zero in
-  (* Move the return value out of the return variable *)
-  let ctx, ret_value =
-    eval_operand config ctx (E.Move (mk_place_from_var_id ret_vid))
-  in
-  (* Sanity check *)
-  assert (not (bottom_in_value ctx.ended_regions ret_value));
+
   (* List the local variables, but the return variable *)
+  let ret_vid = V.VarId.zero in
   let rec list_locals env =
     match env with
     | [] -> failwith "Inconsistent environment"
@@ -208,30 +272,52 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
         if var.index <> ret_vid then var.index :: locals else locals
     | C.Frame :: _ -> []
   in
-  let locals = list_locals ctx.env in
+  let locals : V.VarId.id list = list_locals ctx.env in
   (* Debug *)
   log#ldebug
     (lazy
       ("ctx_pop_frame: locals in which to drop the outer loans: ["
       ^ String.concat "," (List.map V.VarId.to_string locals)
       ^ "]"));
-  (* Drop the outer *loans* in the local variables *)
-  let ctx =
-    let end_borrows = false in
-    List.fold_left
-      (fun ctx lid ->
-        drop_outer_borrows_loans_at_lplace config end_borrows
-          (mk_place_from_var_id lid) ctx)
-      ctx locals
+
+  (* Move the return value out of the return variable *)
+  let cc = eval_operand config (E.Move (mk_place_from_var_id ret_vid)) in
+  (* Sanity check *)
+  let cc =
+    comp cc (fun cf ret_value ->
+        assert (not (bottom_in_value ctx.ended_regions ret_value));
+        cf ret_value)
   in
+
+  (* Drop the outer *loans* we find in the local variables *)
+  let cf_drop_loans_in_locals cf (ret_value : V.typed_value) : m_fun =
+    (* Drop the loans *)
+    let end_borrows = false in
+    let locals = List.rev locals in
+    let cf_drop =
+      List.fold_left
+        (fun cf lid ->
+          drop_outer_borrows_loans_at_lplace config end_borrows
+            (mk_place_from_var_id lid) cf)
+        (cf ret_value) locals
+    in
+    (* Apply *)
+    cf_drop
+  in
+  let cc = comp cc cf_drop_loans_in_locals in
   (* Debug *)
-  log#ldebug
-    (lazy
-      ("ctx_pop_frame: after dropping outer loans in local variables:\n"
-     ^ eval_ctx_to_string ctx));
+  let cc =
+    comp cc (fun cf ret_value ctx ->
+        log#ldebug
+          (lazy
+            ("ctx_pop_frame: after dropping outer loans in local variables:\n"
+           ^ eval_ctx_to_string ctx));
+        cf ret_value ctx)
+  in
+
   (* Pop the frame - we remove the `Frame` delimiter, and reintroduce all
    * the local variables (which may still contain borrow permissions - but
-   * no outer loans - as dummy variables in the caller frame *)
+   * no outer loans) as dummy variables in the caller frame *)
   let rec pop env =
     match env with
     | [] -> failwith "Inconsistent environment"
@@ -239,14 +325,27 @@ let ctx_pop_frame (config : C.config) (ctx : C.eval_ctx) :
     | C.Var (_, v) :: env -> C.Var (None, v) :: pop env
     | C.Frame :: env -> (* Stop here *) env
   in
-  let env = pop ctx.env in
-  let ctx = { ctx with env } in
-  (ctx, ret_value)
+  let cf_pop cf (ret_value : V.typed_value) : m_fun =
+   fun ctx ->
+    let env = pop ctx.env in
+    let ctx = { ctx with env } in
+    cf ret_value ctx
+  in
+  (* Compose and apply *)
+  comp cc cf_pop cf ctx
+
+(** Pop the current frame and assign the returned value to its destination. *)
+let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
+  let cf_pop = ctx_pop_frame config in
+  let cf_assign cf ret_value : m_fun =
+    assign_to_place config ret_value dest cf
+  in
+  comp cf_pop cf_assign
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_new_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
+ fun cf ctx ->
   (* Check and retrieve the arguments *)
   match (region_params, type_params, ctx.env) with
   | ( [],
@@ -257,37 +356,43 @@ let eval_box_new_concrete (config : C.config)
       assert (input_value.V.ty = boxed_ty);
 
       (* Move the input value *)
-      let ctx, moved_input_value =
-        eval_operand config ctx
-          (E.Move (mk_place_from_var_id input_var.C.index))
+      let cf_move =
+        eval_operand config (E.Move (mk_place_from_var_id input_var.C.index))
       in
 
-      (* Create the box value *)
-      let box_ty = T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) in
-      let box_v =
-        V.Adt { variant_id = None; field_values = [ moved_input_value ] }
+      (* Create the new box *)
+      let cf_create cf (moved_input_value : V.typed_value) : m_fun =
+        (* Create the box value *)
+        let box_ty = T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) in
+        let box_v =
+          V.Adt { variant_id = None; field_values = [ moved_input_value ] }
+        in
+        let box_v = mk_typed_value box_ty box_v in
+
+        (* Move this value to the return variable *)
+        let dest = mk_place_from_var_id V.VarId.zero in
+        let cf_assign = assign_to_place config box_v dest in
+
+        (* Continue *)
+        cf_assign cf
       in
-      let box_v = mk_typed_value box_ty box_v in
 
-      (* Move this value to the return variable *)
-      let dest = mk_place_from_var_id V.VarId.zero in
-      let ctx = assign_to_place config ctx box_v dest in
-
-      (* Return *)
-      Ok ctx
+      (* Compose and apply *)
+      comp cf_move cf_create cf ctx
   | _ -> failwith "Inconsistent state"
 
 (** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
     and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
 let eval_box_deref_mut_or_shared_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
-    (is_mut : bool) (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+    (is_mut : bool) : cm_fun =
+ fun cf ctx ->
   (* Check the arguments *)
   match (region_params, type_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
       Var (Some input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ )
-    -> (
+    ->
       (* Required type checking. We must have:
          - input_value.ty == & (mut) Box<ty>
          - boxed_ty == ty
@@ -304,31 +409,35 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
       in
       let borrow_kind = if is_mut then E.Mut else E.Shared in
       let rv = E.Ref (p, borrow_kind) in
-      (* Note that the rvalue can't be a discriminant value *)
-      match eval_rvalue_non_discriminant config ctx rv with
-      | Error err -> Error err
-      | Ok (ctx, borrowed_value) ->
-          (* Move the borrowed value to its destination *)
-          let destp = mk_place_from_var_id V.VarId.zero in
-          let ctx = assign_to_place config ctx borrowed_value destp in
-          Ok ctx)
+      let cf_borrow = eval_rvalue config rv in
+
+      (* Move the borrow to its destination *)
+      let cf_move cf res : m_fun =
+        match res with
+        | Error EPanic ->
+            (* We can't get there by borrowing a value *)
+            failwith "Unreachable"
+        | Ok borrowed_value ->
+            (* Move and continue *)
+            let destp = mk_place_from_var_id V.VarId.zero in
+            assign_to_place config borrowed_value destp cf
+      in
+
+      (* Compose and apply *)
+      comp cf_borrow cf_move cf ctx
   | _ -> failwith "Inconsistent state"
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_deref_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
   let is_mut = false in
   eval_box_deref_mut_or_shared_concrete config region_params type_params is_mut
-    ctx
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_deref_mut_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list)
-    (ctx : C.eval_ctx) : C.eval_ctx eval_result =
+    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
   let is_mut = true in
   eval_box_deref_mut_or_shared_concrete config region_params type_params is_mut
-    ctx
 
 (** Auxiliary function - see [eval_non_local_function_call].
 
@@ -350,8 +459,9 @@ let eval_box_deref_mut_concrete (config : C.config)
     the destination (by setting it to `()`).
 *)
 let eval_box_free (config : C.config) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place)
-    (ctx : C.eval_ctx) : C.eval_ctx =
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) : cm_fun
+    =
+ fun cf ctx ->
   match (region_params, type_params, args) with
   | [], [ boxed_ty ], [ E.Move input_box_place ] ->
       (* Required type checking *)
@@ -360,13 +470,13 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
        assert (input_ty = boxed_ty));
 
       (* Drop the value *)
-      let ctx = drop_value config ctx input_box_place in
+      let cc = drop_value config input_box_place in
 
       (* Update the destination by setting it to `()` *)
-      let ctx = assign_to_place config ctx mk_unit_value dest in
+      let cc = comp cc (assign_to_place config mk_unit_value dest) in
 
-      (* Return *)
-      ctx
+      (* Continue *)
+      cc cf ctx
   | _ -> failwith "Inconsistent state"
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
@@ -387,8 +497,7 @@ let eval_box_new_inst_sig (region_params : T.erased_region list)
 (** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
     and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
 let eval_box_deref_mut_or_shared_inst_sig (region_params : T.erased_region list)
-    (type_params : T.ety list) (is_mut : bool) (ctx : C.eval_ctx) :
-    C.eval_ctx * A.inst_fun_sig =
+    (type_params : T.ety list) (is_mut : bool) : A.inst_fun_sig =
   (* The signature is:
      `&'a (mut) Box<T> -> &'a (mut) T`
      where T is the type param
@@ -412,28 +521,26 @@ let eval_box_deref_mut_or_shared_inst_sig (region_params : T.erased_region list)
         { A.regions_hierarchy = [ regions ]; inputs = [ input ]; output }
       in
 
-      (ctx, inst_sg)
+      inst_sg
   | _ -> failwith "Inconsistent state"
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_deref_inst_sig (region_params : T.erased_region list)
-    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig
-    =
+    (type_params : T.ety list) : A.inst_fun_sig =
   let is_mut = false in
-  eval_box_deref_mut_or_shared_inst_sig region_params type_params is_mut ctx
+  eval_box_deref_mut_or_shared_inst_sig region_params type_params is_mut
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_deref_mut_inst_sig (region_params : T.erased_region list)
-    (type_params : T.ety list) (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig
-    =
+    (type_params : T.ety list) : A.inst_fun_sig =
   let is_mut = true in
-  eval_box_deref_mut_or_shared_inst_sig region_params type_params is_mut ctx
+  eval_box_deref_mut_or_shared_inst_sig region_params type_params is_mut
 
 (** Evaluate a non-local function call in concrete mode *)
-let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
+let eval_non_local_function_call_concrete (config : C.config)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx eval_result =
+    (type_params : T.ety list) (args : E.operand list) (dest : E.place) : cm_fun
+    =
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
      - the function is box_free
@@ -442,58 +549,59 @@ let eval_non_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
   match fid with
   | A.BoxFree ->
       (* Degenerate case: box_free *)
-      Ok (eval_box_free config region_params type_params args dest ctx)
-  | _ -> (
+      eval_box_free config region_params type_params args dest
+  | _ ->
       (* "Normal" case: not box_free *)
       (* Evaluate the operands *)
-      let ctx, args_vl = eval_operands config ctx args in
+      (*      let ctx, args_vl = eval_operands config ctx args in *)
+      let cf_eval_ops = eval_operands config args in
 
-      (* Push the stack frame: we initialize the frame with the return variable,
-         and one variable per input argument *)
-      let ctx = ctx_push_frame ctx in
+      (* Evaluate the call *)
+      let cf_eval_call cf (args_vl : V.typed_value list) : m_fun =
+        (* Push the stack frame: we initialize the frame with the return variable,
+           and one variable per input argument *)
+        let cc = push_frame in
 
-      (* Create and push the return variable *)
-      let ret_vid = V.VarId.zero in
-      let ret_ty =
-        get_non_local_function_return_type fid region_params type_params
+        (* Create and push the return variable *)
+        let ret_vid = V.VarId.zero in
+        let ret_ty =
+          get_non_local_function_return_type fid region_params type_params
+        in
+        let ret_var = mk_var ret_vid (Some "@return") ret_ty in
+        let cc = comp cc (push_uninitialized_var ret_var) in
+
+        (* Create and push the input variables *)
+        let input_vars =
+          V.VarId.mapi_from1
+            (fun id (v : V.typed_value) -> (mk_var id None v.V.ty, v))
+            args_vl
+        in
+        let cc = comp cc (push_vars input_vars) in
+
+        (* "Execute" the function body. As the functions are assumed, here we call
+         * custom functions to perform the proper manipulations: we don't have
+         * access to a body. *)
+        let cf_eval_body : cm_fun =
+          match fid with
+          | A.BoxNew -> eval_box_new_concrete config region_params type_params
+          | A.BoxDeref ->
+              eval_box_deref_concrete config region_params type_params
+          | A.BoxDerefMut ->
+              eval_box_deref_mut_concrete config region_params type_params
+          | A.BoxFree ->
+              (* Should have been treated above *) failwith "Unreachable"
+        in
+
+        let cc = comp cc cf_eval_body in
+
+        (* Pop the frame *)
+        let cc = comp cc (pop_frame_assign config dest) in
+
+        (* Continue *)
+        cc cf
       in
-      let ret_var = mk_var ret_vid (Some "@return") ret_ty in
-      let ctx = C.ctx_push_uninitialized_var ctx ret_var in
-
-      (* Create and push the input variables *)
-      let input_vars =
-        V.VarId.mapi_from1
-          (fun id (v : V.typed_value) -> (mk_var id None v.V.ty, v))
-          args_vl
-      in
-      let ctx = C.ctx_push_vars ctx input_vars in
-
-      (* "Execute" the function body. As the functions are assumed, here we call
-         custom functions to perform the proper manipulations: we don't have
-         access to a body. *)
-      let res =
-        match fid with
-        | A.BoxNew -> eval_box_new_concrete config region_params type_params ctx
-        | A.BoxDeref ->
-            eval_box_deref_concrete config region_params type_params ctx
-        | A.BoxDerefMut ->
-            eval_box_deref_mut_concrete config region_params type_params ctx
-        | A.BoxFree -> failwith "Unreachable"
-        (* should have been treated above *)
-      in
-
-      (* Check if the function body evaluated correctly *)
-      match res with
-      | Error err -> Error err
-      | Ok ctx ->
-          (* Pop the stack frame and retrieve the return value *)
-          let ctx, ret_value = ctx_pop_frame config ctx in
-
-          (* Move the return value to its destination *)
-          let ctx = assign_to_place config ctx ret_value dest in
-
-          (* Return *)
-          Ok ctx)
+      (* Compose and apply *)
+      comp cf_eval_ops cf_eval_call
 
 (** Instantiate a function signature, introducing fresh abstraction ids and
     region ids. This is mostly used in preparation of function calls, when
@@ -590,113 +698,112 @@ let create_empty_abstractions_from_abs_region_groups (kind : V.abs_kind)
   List.map create_abs rgl
 
 (** Evaluate a statement *)
-let rec eval_statement (config : C.config) (ctx : C.eval_ctx) (st : A.statement)
-    : (C.eval_ctx * statement_eval_res) eval_result list =
+let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
+ fun cf ctx ->
   (* Debugging *)
   log#ldebug
     (lazy
       ("\n**About to evaluate statement**: [\n"
       ^ statement_to_string_with_tab ctx st
       ^ "\n]\n\n**Context**:\n" ^ eval_ctx_to_string ctx ^ "\n\n"));
+
   (* Expand the symbolic values if necessary - we need to do that before
    * checking the invariants *)
-  let ctx = greedy_expand_symbolic_values config ctx in
+  let cc = greedy_expand_symbolic_values config in
   (* Sanity check *)
-  if config.C.check_invariants then Inv.check_invariants config ctx;
-  (* Evaluate *)
-  match st with
-  | A.Assign (p, rvalue) -> (
-      (* Evaluate the rvalue *)
-      match eval_rvalue config ctx rvalue with
-      | Error err -> [ Error err ]
-      | Ok res ->
-          (* Assign *)
-          let assign (ctx, rvalue) =
-            let ctx = assign_to_place config ctx rvalue p in
-            Ok (ctx, Unit)
-          in
-          List.map assign res)
-  | A.FakeRead p ->
-      let expand_prim_copy = false in
-      let ctx, _ = prepare_rplace config expand_prim_copy Read p ctx in
-      [ Ok (ctx, Unit) ]
-  | A.SetDiscriminant (p, variant_id) ->
-      [ Ok (set_discriminant config ctx p variant_id) ]
-  | A.Drop p -> [ Ok (drop_value config ctx p, Unit) ]
-  | A.Assert assertion -> (
-      match eval_assertion config ctx assertion with
-      | Ok ctx -> [ Ok (ctx, Unit) ]
-      | Error e -> [ Error e ])
-  | A.Call call -> eval_function_call config ctx call
-  | A.Panic ->
-      S.synthesize_panic ();
-      [ Error Panic ]
-  | A.Return -> [ Ok (ctx, Return) ]
-  | A.Break i -> [ Ok (ctx, Break i) ]
-  | A.Continue i -> [ Ok (ctx, Continue i) ]
-  | A.Nop -> [ Ok (ctx, Unit) ]
-  | A.Sequence (st1, st2) ->
-      (* Evaluate the first statement *)
-      let res1 = eval_statement config ctx st1 in
-      (* Evaluate the sequence *)
-      let eval_seq res1 =
-        match res1 with
-        | Error err -> [ Error err ]
-        | Ok (ctx, Unit) ->
-            (* Evaluate the second statement *)
-            eval_statement config ctx st2
-        (* Control-flow break: transmit. We enumerate the cases on purpose *)
-        | Ok (ctx, Break i) -> [ Ok (ctx, Break i) ]
-        | Ok (ctx, Continue i) -> [ Ok (ctx, Continue i) ]
-        | Ok (ctx, Return) -> [ Ok (ctx, Return) ]
-      in
-      List.concat (List.map eval_seq res1)
-  | A.Loop loop_body ->
-      (* For now, we don't support loops in symbolic mode *)
-      assert (config.C.mode = C.ConcreteMode);
-      (* Evaluate a loop body
+  let cc =
+    if config.C.check_invariants then comp cc (Inv.cf_check_invariants config)
+    else cc
+  in
 
-         We need a specific function for the [Continue] case: in case we continue,
-         we might have to reevaluate the current loop body with the new context
-         (and repeat this an indefinite number of times).
-      *)
-      let rec eval_loop_body (ctx : C.eval_ctx) :
-          (C.eval_ctx * statement_eval_res) eval_result list =
-        (* Evaluate the loop body *)
-        let body_res = eval_statement config ctx loop_body in
-        (* Evaluate the next steps *)
-        let eval res =
+  (* Evaluate *)
+  let cf_eval_st cf : m_fun =
+    match st with
+    | A.Assign (p, rvalue) ->
+        (* Evaluate the rvalue *)
+        let cf_eval_rvalue = eval_rvalue config rvalue in
+        (* Assign *)
+        let cf_assign cf (res : (V.typed_value, eval_error) result) =
           match res with
-          | Error err -> [ Error err ]
-          | Ok (ctx, Unit) ->
-              (* We finished evaluating the statement in a "normal" manner *)
-              [ Ok (ctx, Unit) ]
-          (* Control-flow breaks *)
-          | Ok (ctx, Break i) ->
-              (* Decrease the break index *)
-              if i = 0 then [ Ok (ctx, Unit) ] else [ Ok (ctx, Break (i - 1)) ]
-          | Ok (ctx, Continue i) ->
-              (* Decrease the continue index *)
-              if i = 0 then
-                (* We stop there. When we continue, we go back to the beginning
-                   of the loop: we must thus reevaluate the loop body (and
-                   recheck the result to know whether we must reevaluate again,
-                   etc. *)
-                eval_loop_body ctx
-              else
-                (* We don't stop there: transmit *)
-                [ Ok (ctx, Continue (i - 1)) ]
-          | Ok (ctx, Return) -> [ Ok (ctx, Return) ]
+          | Error EPanic -> cf Panic
+          | Ok rvalue -> assign_to_place config rvalue p (cf Unit)
         in
-        List.concat (List.map eval body_res)
-      in
-      (* Apply *)
-      eval_loop_body ctx
-  | A.Switch (op, tgts) -> eval_switch config op tgts ctx
+        (* Compose and apply *)
+        comp cf_eval_rvalue cf_assign cf
+    | A.FakeRead p ->
+        let expand_prim_copy = false in
+        let cf_prepare = prepare_rplace config expand_prim_copy Read p in
+        let cf_continue cf _ = cf in
+        comp cf_prepare cf_continue (cf Unit)
+    | A.SetDiscriminant (p, variant_id) ->
+        set_discriminant config p variant_id cf
+    | A.Drop p -> drop_value config p (cf Unit)
+    | A.Assert assertion -> eval_assertion config assertion cf
+    | A.Call call -> eval_function_call config call cf
+    | A.Panic -> cf Panic
+    | A.Return -> cf Return
+    | A.Break i -> cf (Break i)
+    | A.Continue i -> cf (Continue i)
+    | A.Nop -> cf Unit
+    | A.Sequence (st1, st2) ->
+        (* Evaluate the first statement *)
+        let cf_st1 = eval_statement config st1 in
+        (* Evaluate the sequence *)
+        let cf_st2 cf res =
+          match res with
+          (* Evaluation successful: evaluate the second statement *)
+          | Unit -> eval_statement config st2 cf
+          (* Control-flow break: transmit. We enumerate the cases on purpose *)
+          | Panic | Break _ | Continue _ | Return -> cf res
+        in
+        (* Compose and apply *)
+        comp cf_st1 cf_st2 cf
+    | A.Loop loop_body ->
+        (* For now, we don't support loops in symbolic mode *)
+        assert (config.C.mode = C.ConcreteMode);
+        (* Continuation for after we evaluate the loop body: depending the result
+           of doing one loop iteration:
+           - redoes a loop iteration
+           - exits the loop
+           - other...
+
+           We need a specific function because of the [Continue] case: in case we
+           continue, we might have to reevaluate the current loop body with the
+           new context (and repeat this an indefinite number of times).
+        *)
+        let rec reeval_loop_body res : m_fun =
+          match res with
+          | Return | Panic -> cf res
+          | Break i ->
+              (* Break out of the loop by calling the continuation *)
+              let res = if i = 0 then Unit else Break (i - 1) in
+              cf res
+          | Continue 0 ->
+              (* Re-evaluate the loop body *)
+              eval_statement config loop_body reeval_loop_body
+          | Continue i ->
+              (* Continue to an outer loop *)
+              cf (Continue (i - 1))
+          | Unit ->
+              (* We can't get there.
+               * Note that if we decide not to fail here but rather do
+               * the same thing as for [Continue 0], we could make the
+               * code slightly simpler: calling [reeval_loop_body] with
+               * [Unit] would account for the first iteration of the loop.
+               * We prefer to write it this way for consistency and sanity,
+               * though. *)
+              failwith "Unreachable"
+        in
+        (* Apply *)
+        eval_statement config loop_body reeval_loop_body
+    | A.Switch (op, tgts) -> eval_switch config op tgts cf
+  in
+  (* Compose and apply *)
+  comp cc cf_eval_st cf ctx
 
 (** Evaluate a switch *)
-and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets)
-    (ctx : C.eval_ctx) : (C.eval_ctx * statement_eval_res) eval_result list =
+and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
+    st_cm_fun =
   (* We evaluate the operand in two steps:
    * first we prepare it, then we check if its value is concrete or
    * symbolic. If it is concrete, we can then evaluate the operand
@@ -706,104 +813,91 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets)
    * (and would thus floating in thin air...)!
    * *)
   (* Prepare the operand *)
-  let ctx, op_v = eval_operand_prepare config ctx op in
+  let cf_prepare_op cf : m_fun = eval_operand_prepare config op cf in
   (* Match on the targets *)
-  match tgts with
-  | A.If (st1, st2) -> (
-      match op_v.value with
-      | V.Concrete (V.Bool b) ->
-          (* Evaluate the operand *)
-          let ctx, op_v' = eval_operand config ctx op in
-          assert (op_v' = op_v);
-          (* Branch *)
-          if b then eval_statement config ctx st1
-          else eval_statement config ctx st2
-      | V.Symbolic sv ->
-          (* Synthesis *)
-          S.synthesize_symbolic_expansion_if_branching sv;
-          (* Expand the symbolic value to true or false *)
-          let see_true = SeConcrete (V.Bool true) in
-          let see_false = SeConcrete (V.Bool false) in
-          let expand_and_execute see st =
-            (* Apply the symbolic expansion *)
-            let ctx = apply_symbolic_expansion_non_borrow config sv see ctx in
+  let cf_match (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
+    match tgts with
+    | A.If (st1, st2) -> (
+        match op_v.value with
+        | V.Concrete (V.Bool b) ->
             (* Evaluate the operand *)
-            let ctx, _ = eval_operand config ctx op in
-            (* Evaluate the branch *)
-            eval_statement config ctx st
-          in
-          (* Execute the two branches *)
-          let ctxl_true = expand_and_execute see_true st1 in
-          let ctxl_false = expand_and_execute see_false st2 in
-          List.append ctxl_true ctxl_false
-      | _ -> failwith "Inconsistent state")
-  | A.SwitchInt (int_ty, tgts, otherwise) -> (
-      match op_v.value with
-      | V.Concrete (V.Scalar sv) -> (
-          (* Evaluate the operand *)
-          let ctx, op_v' = eval_operand config ctx op in
-          assert (op_v' = op_v);
-          (* Sanity check *)
-          assert (sv.V.int_ty = int_ty);
-          (* Find the branch *)
-          match List.find_opt (fun (sv', _) -> sv = sv') tgts with
-          | None -> eval_statement config ctx otherwise
-          | Some (_, tgt) -> eval_statement config ctx tgt)
-      | V.Symbolic sv ->
-          (* Synthesis *)
-          S.synthesize_symbolic_expansion_switch_int_branching sv;
-          (* For all the branches of the switch, we expand the symbolic value
-           * to the value given by the branch and execute the branch statement.
-           * For the otherwise branch, we leave the symbolic value as it is
-           * (because this branch doesn't precisely define which should be the
-           * value of the scrutinee...) and simply execute the otherwise statement.
-           *)
-          (* Branches other than "otherwise" *)
-          let exec_branch (switch_value, branch_st) =
-            let see = SeConcrete (V.Scalar switch_value) in
-            (* Apply the symbolic expansion *)
-            let ctx = apply_symbolic_expansion_non_borrow config sv see ctx in
+            let cf_eval_op cf : m_fun = eval_operand config op cf in
+            (* Evaluate the if and the branch body *)
+            let cf_branch cf op_v' : m_fun =
+              assert (op_v' = op_v);
+              (* Branch *)
+              if b then eval_statement config st1 cf
+              else eval_statement config st2 cf
+            in
+            (* Compose the continuations *)
+            comp cf_eval_op cf_branch cf
+        | V.Symbolic sv ->
+            (* Expand the symbolic value *)
+            let allows_branching = true in
+            let cf_expand cf =
+              expand_symbolic_value config allows_branching sv cf
+            in
+            (* Retry *)
+            let cf_eval_if cf = eval_switch config op tgts cf in
+            (* Compose *)
+            comp cf_expand cf_eval_if cf
+        | _ -> failwith "Inconsistent state")
+    | A.SwitchInt (int_ty, stgts, otherwise) -> (
+        match op_v.value with
+        | V.Concrete (V.Scalar sv) ->
             (* Evaluate the operand *)
-            let ctx, _ = eval_operand config ctx op in
+            let cf_eval_op cf = eval_operand config op cf in
             (* Evaluate the branch *)
-            eval_statement config ctx branch_st
-          in
-          let ctxl = List.map exec_branch tgts in
-          (* Otherwise branch *)
-          let ctx_otherwise = eval_statement config ctx otherwise in
-          (* Put everything together *)
-          List.append (List.concat ctxl) ctx_otherwise
-      | _ -> failwith "Inconsistent state")
+            let cf_eval_branch cf op_v' =
+              (* Sanity check *)
+              assert (op_v' = op_v);
+              assert (sv.V.int_ty = int_ty);
+              (* Find the branch *)
+              match List.find_opt (fun (sv', _) -> sv = sv') stgts with
+              | None -> eval_statement config otherwise cf
+              | Some (_, tgt) -> eval_statement config tgt cf
+            in
+            (* Compose *)
+            comp cf_eval_op cf_eval_branch cf
+        | V.Symbolic sv ->
+            (* Expand the symbolic value - note that contrary to the boolean
+             * case, we can't expand then retry, because when switching over
+             * arbitrary integers we need to have an `otherwise` case, in
+             * which the scrutinee remains symbolic: if we expand the symbolic,
+             * reevaluate the switch, we loop... *)
+            let stgts =
+              List.map
+                (fun (cv, tgt_st) -> (cv, eval_statement config tgt_st cf))
+                stgts
+            in
+            let otherwise = eval_statement config otherwise cf in
+            expand_symbolic_int config sv int_ty stgts otherwise
+        | _ -> failwith "Inconsistent state")
+  in
+  (* Compose the continuations *)
+  comp cf_prepare_op cf_match
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
-and eval_function_call (config : C.config) (ctx : C.eval_ctx) (call : A.call) :
-    (C.eval_ctx * statement_eval_res) eval_result list =
-  (* There are two cases *
+and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
+  (* There are two cases:
      - this is a local function, in which case we execute its body
      - this is a non-local function, in which case there is a special treatment
   *)
-  let res =
-    match call.func with
-    | A.Local fid ->
-        eval_local_function_call config ctx fid call.region_params
-          call.type_params call.args call.dest
-    | A.Assumed fid ->
-        [
-          eval_non_local_function_call config ctx fid call.region_params
-            call.type_params call.args call.dest;
-        ]
-  in
-  List.map
-    (fun res ->
-      match res with Error err -> Error err | Ok ctx -> Ok (ctx, Unit))
-    res
+  match call.func with
+  | A.Local fid ->
+      eval_local_function_call config fid call.region_params call.type_params
+        call.args call.dest
+  | A.Assumed fid ->
+      eval_non_local_function_call config fid call.region_params
+        call.type_params call.args call.dest
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
-and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.FunDefId.id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx eval_result list =
+and eval_local_function_call_concrete (config : C.config) (fid : A.FunDefId.id)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (args : E.operand list) (dest : E.place) : st_cm_fun =
+ fun cf ctx ->
   assert (region_params = []);
+
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_def ctx fid in
   let tsubst =
@@ -814,11 +908,13 @@ and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
   let locals, body = Subst.fun_def_substitute_in_body tsubst def in
 
   (* Evaluate the input operands *)
-  let ctx, args = eval_operands config ctx args in
   assert (List.length args = def.A.arg_count);
+  let cc = eval_operands config args in
 
-  (* Push a frame delimiter *)
-  let ctx = ctx_push_frame ctx in
+  (* Push a frame delimiter - we use [comp_transmit] to transmit the result
+   * of the operands evaluation from above to the functions afterwards, while
+   * ignoring it in this function *)
+  let cc = comp_transmit cc push_frame in
 
   (* Compute the initial values for the local variables *)
   (* 1. Push the return value *)
@@ -827,42 +923,47 @@ and eval_local_function_call_concrete (config : C.config) (ctx : C.eval_ctx)
     | ret_ty :: locals -> (ret_ty, locals)
     | _ -> failwith "Unreachable"
   in
-  let ctx = C.ctx_push_var ctx ret_var (mk_bottom ret_var.var_ty) in
+  let cc = comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty)) in
 
   (* 2. Push the input values *)
-  let input_locals, locals = Collections.List.split_at locals def.A.arg_count in
-  let inputs = List.combine input_locals args in
-  (* Note that this function checks that the variables and their values
-     have the same type (this is important) *)
-  let ctx = C.ctx_push_vars ctx inputs in
+  let cf_push_inputs cf args =
+    let input_locals, locals =
+      Collections.List.split_at locals def.A.arg_count
+    in
+    let inputs = List.combine input_locals args in
+    (* Note that this function checks that the variables and their values
+     * have the same type (this is important) *)
+    push_vars inputs cf
+  in
+  let cc = comp cc cf_push_inputs in
 
   (* 3. Push the remaining local variables (initialized as [Bottom]) *)
-  let ctx = C.ctx_push_uninitialized_vars ctx locals in
+  let cc = comp cc (push_uninitialized_vars locals) in
 
   (* Execute the function body *)
-  let res = eval_function_body config ctx body in
+  let cc = comp cc (eval_function_body config body) in
 
   (* Pop the stack frame and move the return value to its destination *)
-  let finish res =
+  let cf_finish cf res =
     match res with
-    | Error Panic -> Error Panic
-    | Ok ctx ->
-        (* Pop the stack frame and retrieve the return value *)
-        let ctx, ret_value = ctx_pop_frame config ctx in
-
-        (* Move the return value to its destination *)
-        let ctx = assign_to_place config ctx ret_value dest in
-
-        (* Return *)
-        Ok ctx
+    | Panic -> cf Panic
+    | Break _ | Continue _ | Unit -> failwith "Unreachable"
+    | Return ->
+        (* Pop the stack frame, retrieve the return value, move it to
+         * its destination and continue *)
+        pop_frame_assign config dest (cf Unit)
   in
-  List.map finish res
+  let cc = comp cc cf_finish in
+
+  (* Continue *)
+  cc cf ctx
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
 and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
     (fid : A.FunDefId.id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx =
+    st_cm_fun =
+ fun cf ctx ->
   (* Retrieve the (correctly instantiated) signature *)
   let def = C.ctx_lookup_fun_def ctx fid in
   let sg = def.A.signature in
@@ -873,7 +974,7 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
   assert (List.length args = def.A.arg_count);
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config ctx (A.Local fid) inst_sg
-    region_params type_params args dest
+    region_params type_params args dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -883,7 +984,8 @@ and eval_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
 and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (ctx : C.eval_ctx) (fid : A.fun_id) (inst_sg : A.inst_fun_sig)
     (region_params : T.erased_region list) (type_params : T.ety list)
-    (args : E.operand list) (dest : E.place) : C.eval_ctx =
+    (args : E.operand list) (dest : E.place) : st_cm_fun =
+ fun cf ctx ->
   assert (region_params = []);
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
@@ -943,10 +1045,11 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   ctx
 
 (** Evaluate a non-local function call in symbolic mode *)
-and eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
+and eval_non_local_function_call_symbolic (config : C.config)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx =
+    st_cm_fun =
+ fun cf ctx ->
   (* Sanity check: make sure the type parameters don't contain regions -
    * this is a current limitation of our synthesis *)
   assert (
@@ -985,10 +1088,10 @@ and eval_non_local_function_call_symbolic (config : C.config) (ctx : C.eval_ctx)
 
 (** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
     (auxiliary helper for [eval_statement]) *)
-and eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx eval_result =
+and eval_non_local_function_call (config : C.config) (fid : A.assumed_fun_id)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (args : E.operand list) (dest : E.place) : st_cm_fun =
+ fun cf ctx ->
   (* Debug *)
   log#ldebug
     (lazy
@@ -1016,10 +1119,10 @@ and eval_non_local_function_call (config : C.config) (ctx : C.eval_ctx)
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
-and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
-    (fid : A.FunDefId.id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
-    C.eval_ctx eval_result list =
+and eval_local_function_call (config : C.config) (fid : A.FunDefId.id)
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (args : E.operand list) (dest : E.place) : st_cm_fun =
+ fun cf ctx ->
   match config.mode with
   | ConcreteMode ->
       eval_local_function_call_concrete config ctx fid region_params type_params
@@ -1033,8 +1136,8 @@ and eval_local_function_call (config : C.config) (ctx : C.eval_ctx)
 
 (** Evaluate a statement seen as a function body (auxiliary helper for
     [eval_statement]) *)
-and eval_function_body (config : C.config) (ctx : C.eval_ctx)
-    (body : A.statement) : C.eval_ctx eval_result list =
+and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =
+ fun cf ctx ->
   let res = eval_statement config ctx body in
   let finish res =
     match res with

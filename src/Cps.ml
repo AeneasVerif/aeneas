@@ -35,7 +35,10 @@ type typed_value_cm_fun = V.typed_value -> cm_fun
     value as parameter.
  *)
 
-type st_cm_fun = statement_eval_res -> cm_fun
+type st_m_fun = statement_eval_res -> m_fun
+(** Type of a continuation used when evaluating a statement *)
+
+type st_cm_fun = st_m_fun -> m_fun
 (** Type of a continuation used when evaluating a statement *)
 
 (** Convert a unit function to a cm function *)
@@ -50,7 +53,7 @@ let update_to_cm_fun (f : C.eval_ctx -> C.eval_ctx) : cm_fun =
   let ctx = f ctx in
   cf ctx
 
-(** Composition of functions taking continuations as paramters.
+(** Composition of functions taking continuations as parameters.
     We tried to make this as general as possible. *)
 let comp (f : 'c -> 'd -> 'e) (g : ('a -> 'b) -> 'c) : ('a -> 'b) -> 'd -> 'e =
  fun cf ctx -> f (g cf) ctx
@@ -85,6 +88,8 @@ let id_cm_fun : cm_fun = fun cf ctx -> cf ctx
     Note that we make sure that the results are listed in the order in
     which they were computed (the first element of the list is the result
     of applying [f] to the first element of the inputs).
+    
+    See the unit test below for an illustration.
  *)
 let fold_left_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
     (inputs : 'a list) (cf : 'b list -> 'c -> 'd) : 'c -> 'd =
@@ -101,7 +106,39 @@ let fold_left_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
 (** Unit test/example for [fold_left_apply_continuation] *)
 let _ =
   fold_left_apply_continuation
-    (fun x cf () -> cf (10 + x) ())
+    (fun x cf (ctx : unit) -> cf (10 + x) ctx)
     [ 0; 1; 2; 3; 4 ]
-    (fun values () -> assert (values = [ 10; 11; 12; 13; 14 ]))
+    (fun values _ctx -> assert (values = [ 10; 11; 12; 13; 14 ]))
     ()
+
+(** Composition of functions taking continuations as parameters.
+
+    We sometimes have the following situation, where we want to compose three
+    functions `send`, `transmit` and `receive` such that:
+    - those three functions take continuations as parameters
+    - `send` generates a value and gives it to its continuation
+    - `receive` expects a value (so we can compose `send` and `receive` like
+      so: `comp send receive`)
+    - `transmit` doesn't expect any value and needs to be called between `send`
+      and `receive`
+    
+    In this situation, we need to take the value given by `send` and "transmit"
+    it to `receive`.
+
+    This is what this function does (see the unit test below for an illustration).
+    
+    TODO: use more!
+ *)
+let comp_transmit (f : ('v -> 'm) -> 'n) (g : 'm -> 'm) : ('v -> 'm) -> 'n =
+ fun cf -> f (fun v -> g (cf v))
+
+let () =
+  let return3 (cf : int -> unit -> unit) (ctx : unit) = cf 3 ctx in
+  let do_nothing (cf : unit -> unit) (ctx : unit) = cf ctx in
+  let consume3 (x : int) (ctx : unit) : unit =
+    assert (x = 3);
+    ctx
+  in
+  let cc = comp_transmit return3 do_nothing in
+  let cc = cc consume3 in
+  cc ()
