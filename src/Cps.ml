@@ -126,12 +126,11 @@ let _ =
     it to `receive`.
 
     This is what this function does (see the unit test below for an illustration).
-    
-    TODO: use more!
  *)
 let comp_transmit (f : ('v -> 'm) -> 'n) (g : 'm -> 'm) : ('v -> 'm) -> 'n =
  fun cf -> f (fun v -> g (cf v))
 
+(** Example of use of [comp_transmit] *)
 let () =
   let return3 (cf : int -> unit -> unit) (ctx : unit) = cf 3 ctx in
   let do_nothing (cf : unit -> unit) (ctx : unit) = cf ctx in
@@ -143,6 +142,9 @@ let () =
   let cc = cc consume3 in
   cc ()
 
+(** Sometimes, we want to compose a function with a continuation which checks
+    its computed value and its updated context, before transmitting them
+ *)
 let comp_check_value (f : ('v -> 'ctx -> 'a) -> 'ctx -> 'b)
     (g : 'v -> 'ctx -> unit) : ('v -> 'ctx -> 'a) -> 'ctx -> 'b =
  fun cf ->
@@ -150,6 +152,9 @@ let comp_check_value (f : ('v -> 'ctx -> 'a) -> 'ctx -> 'b)
       g v ctx;
       cf v ctx)
 
+(** This case is similar to [comp_check_value], but even simpler (we only check
+    the context)
+ *)
 let comp_check_ctx (f : ('ctx -> 'a) -> 'ctx -> 'b) (g : 'ctx -> unit) :
     ('ctx -> 'a) -> 'ctx -> 'b =
  fun cf ->
