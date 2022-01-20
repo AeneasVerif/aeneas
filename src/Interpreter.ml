@@ -2,8 +2,8 @@ module L = Logging
 module T = Types
 module A = CfimAst
 module M = Modules
+open Cps
 open InterpreterUtils
-open InterpreterExpressions
 open InterpreterStatements
 
 (* TODO: it would be good to find a "core", which implements the rules (like
@@ -116,7 +116,7 @@ module Test = struct
       environment.
    *)
   let test_unit_function (config : C.partial_config) (m : M.cfim_module)
-      (fid : A.FunDefId.id) : unit eval_result =
+      (fid : A.FunDefId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = A.FunDefId.nth m.functions fid in
 
@@ -135,14 +135,20 @@ module Test = struct
     (* Insert the (uninitialized) local variables *)
     let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
 
+    (* Create the continuation to check the function's result *)
+    let cf_check res _ =
+      match res with
+      | Return -> (* Ok *) None
+      | _ ->
+          failwith
+            ("Unit test failed (concrete execution) on: "
+            ^ Print.name_to_string fdef.A.name)
+    in
+
     (* Evaluate the function *)
     let config = C.config_of_partial C.ConcreteMode config in
-    match eval_function_body config ctx fdef.A.body with
-    | [ Ok _ ] -> Ok ()
-    | [ Error err ] -> Error err
-    | _ ->
-        (* We execute the concrete interpreter: there shouldn't be any branching *)
-        failwith "Unreachable"
+    let _ = eval_function_body config fdef.A.body cf_check ctx in
+    ()
 
   (** Small helper: return true if the function is a unit function (no parameters,
     no arguments) - TODO: move *)
@@ -157,15 +163,13 @@ module Test = struct
       =
     let unit_funs = List.filter fun_def_is_unit m.functions in
     let test_unit_fun (def : A.fun_def) : unit =
-      match test_unit_function config m def.A.def_id with
-      | Error _ -> failwith "Unit test failed (concrete execution)"
-      | Ok _ -> ()
+      test_unit_function config m def.A.def_id
     in
     List.iter test_unit_fun unit_funs
 
   (** Execute the symbolic interpreter on a function. *)
   let test_function_symbolic (config : C.partial_config) (m : M.cfim_module)
-      (fid : A.FunDefId.id) : C.eval_ctx eval_result list =
+      (fid : A.FunDefId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = A.FunDefId.nth m.functions fid in
 
@@ -176,9 +180,23 @@ module Test = struct
     (* Create the evaluation context *)
     let ctx = initialize_symbolic_context_for_fun m fdef in
 
+    (* Create the continuation to check the function's result *)
+    let cf_check res _ =
+      match res with
+      | Return | Panic ->
+          (* Note that as we explore all the execution branches, one of
+           * the executions can lead to a panic *)
+          None
+      | _ ->
+          failwith
+            ("Unit test failed (symbolic execution) on: "
+            ^ Print.name_to_string fdef.A.name)
+    in
+
     (* Evaluate the function *)
     let config = C.config_of_partial C.SymbolicMode config in
-    eval_function_body config ctx fdef.A.body
+    let _ = eval_function_body config fdef.A.body cf_check ctx in
+    ()
 
   (** Execute the symbolic interpreter on a list of functions.
 
@@ -194,8 +212,7 @@ module Test = struct
       (* Execute the function - note that as the symbolic interpreter explores
        * all the path, some executions are expected to "panic": we thus don't
        * check the return value *)
-      let _ = test_function_symbolic config m def.A.def_id in
-      ()
+      test_function_symbolic config m def.A.def_id
     in
     List.iter test_fun no_loop_funs
 end

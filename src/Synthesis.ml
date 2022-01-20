@@ -34,9 +34,9 @@ type synth_function = C.eval_ctx -> synth_function_res
     in a continuation passing style. *)
 *)
 
-let synthesize_symbolic_expansion (_sv : V.symbolic_value) (resl : sexpr list) :
-    sexpr =
-  SList resl
+let synthesize_symbolic_expansion (_sv : V.symbolic_value)
+    (resl : sexpr list option) : sexpr option =
+  match resl with None -> None | Some resl -> Some (SList resl)
 
 (** Synthesize code for a symbolic expansion which doesn't lead to branching
     (i.e., applied on a value which is not an enumeration with several variants).

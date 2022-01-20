@@ -421,6 +421,7 @@ let apply_branching_symbolic_expansions_non_borrow (config : C.config)
     (sv : V.symbolic_value)
     (see_cf_l : (symbolic_expansion option * m_fun) list) : m_fun =
  fun ctx ->
+  assert (see_cf_l <> []);
   (* Apply the symbolic expansion in in the context and call the continuation *)
   let resl =
     List.map
@@ -432,13 +433,21 @@ let apply_branching_symbolic_expansions_non_borrow (config : C.config)
           | Some see -> apply_symbolic_expansion_non_borrow config sv see ctx
         in
         (* Continuation *)
-        Option.get (cf ctx))
+        cf ctx)
       see_cf_l
   in
-  (* Synthesize *)
-  let res = S.synthesize_symbolic_expansion sv resl in
-  (* Return *)
-  Some res
+  (* Collect the result: either we computed no subterm, or we computed all
+   * of them *)
+  let subterms =
+    match resl with
+    | Some _ :: _ -> Some (List.map Option.get resl)
+    | None :: _ ->
+        List.iter (fun res -> assert (res = None)) resl;
+        None
+    | _ -> failwith "Unreachable"
+  in
+  (* Synthesize and return *)
+  S.synthesize_symbolic_expansion sv subterms
 
 (** Expand a symbolic value which is not an enumeration with several variants
     (i.e., in a situation where it doesn't lead to branching).
