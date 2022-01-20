@@ -460,6 +460,8 @@ let apply_branching_symbolic_expansions_non_borrow (config : C.config)
 let expand_symbolic_value (config : C.config) (allow_branching : bool)
     (sp : V.symbolic_value) : cm_fun =
  fun cf ctx ->
+  (* Debug *)
+  log#ldebug (lazy ("expand_symbolic_value:" ^ symbolic_value_to_string ctx sp));
   (* Remember the initial context for printing purposes *)
   let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
@@ -471,12 +473,10 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     match rty with
     (* "Regular" ADTs *)
     | T.Adt (T.AdtId def_id, regions, types) ->
-        (* Compute the expanded value - there should be exactly one because we
-         * don't allow to expand enumerations with strictly more than one variant *)
-        let expand_enumerations = false in
+        (* Compute the expanded value *)
         let seel =
-          compute_expanded_symbolic_adt_value expand_enumerations sp.sv_kind
-            def_id regions types ctx
+          compute_expanded_symbolic_adt_value allow_branching sp.sv_kind def_id
+            regions types ctx
         in
         (* Check for branching *)
         assert (List.length seel <= 1 || allow_branching);
@@ -530,7 +530,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     comp_unit cc (fun ctx ->
         log#ldebug
           (lazy
-            ("expand_symbolic_value_no_branching: "
+            ("expand_symbolic_value: "
             ^ symbolic_value_to_string ctx0 sp
             ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
             ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
@@ -669,6 +669,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
  *)
 let greedy_expand_symbolic_values (config : C.config) : cm_fun =
  fun cf ctx ->
-  if config.greedy_expand_symbolics_with_borrows then
-    greedy_expand_symbolics_with_borrows config cf ctx
+  if config.greedy_expand_symbolics_with_borrows then (
+    log#ldebug (lazy "greedy_expand_symbolic_values");
+    greedy_expand_symbolics_with_borrows config cf ctx)
   else cf ctx

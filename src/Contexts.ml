@@ -49,6 +49,8 @@ module M = Modules
  * independentely of each other). Still, it is always a good idea to be
  * defensive.
  *
+ * However, the same problem arises with logging. 
+ *
  * Also, a more defensive way would be to not use global references, and
  * store the counters in the evaluation context. This is actually what was
  * originally done, before we updated the code to use global counters because

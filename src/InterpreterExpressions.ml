@@ -471,6 +471,8 @@ let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
  *)
 let eval_rvalue_discriminant (config : C.config) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
+  log#ldebug (lazy "eval_rvalue_discriminant");
   (* Note that discriminant values have type `isize` *)
   (* Access the value *)
   let access = Read in
@@ -478,18 +480,19 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
   let prepare = prepare_rplace config expand_prim_copy access p in
   (* Read the value *)
   let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
+   fun ctx ->
     match v.V.value with
-    | Adt _ -> eval_rvalue_discriminant_concrete config p cf
+    | Adt _ -> eval_rvalue_discriminant_concrete config p cf ctx
     | Symbolic sv ->
         (* Expand the symbolic value - may lead to branching *)
         let allow_branching = true in
         let cc = expand_symbolic_value config allow_branching sv in
         (* This time the value is concrete: reevaluate *)
-        comp cc (eval_rvalue_discriminant_concrete config p) cf
+        comp cc (eval_rvalue_discriminant_concrete config p) cf ctx
     | _ -> failwith "Invalid input for `discriminant`"
   in
   (* Compose and apply *)
-  comp prepare read cf
+  comp prepare read cf ctx
 
 let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
     (cf : V.typed_value -> m_fun) : m_fun =
@@ -603,6 +606,8 @@ let eval_rvalue_aggregate (config : C.config)
  *)
 let eval_rvalue (config : C.config) (rvalue : E.rvalue)
     (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
+ fun ctx ->
+  log#ldebug (lazy "eval_rvalue");
   (* Small helpers *)
   let wrap_in_result (cf : (V.typed_value, eval_error) result -> m_fun)
       (v : V.typed_value) : m_fun =
@@ -611,10 +616,10 @@ let eval_rvalue (config : C.config) (rvalue : E.rvalue)
   let comp_wrap f = comp f wrap_in_result cf in
   (* Delegate to the proper auxiliary function *)
   match rvalue with
-  | E.Use op -> comp_wrap (eval_operand config op)
-  | E.Ref (p, bkind) -> comp_wrap (eval_rvalue_ref config p bkind)
-  | E.UnaryOp (unop, op) -> eval_unary_op config unop op cf
-  | E.BinaryOp (binop, op1, op2) -> eval_binary_op config binop op1 op2 cf
+  | E.Use op -> comp_wrap (eval_operand config op) ctx
+  | E.Ref (p, bkind) -> comp_wrap (eval_rvalue_ref config p bkind) ctx
+  | E.UnaryOp (unop, op) -> eval_unary_op config unop op cf ctx
+  | E.BinaryOp (binop, op1, op2) -> eval_binary_op config binop op1 op2 cf ctx
   | E.Aggregate (aggregate_kind, ops) ->
-      comp_wrap (eval_rvalue_aggregate config aggregate_kind ops)
-  | E.Discriminant p -> comp_wrap (eval_rvalue_discriminant config p)
+      comp_wrap (eval_rvalue_aggregate config aggregate_kind ops) ctx
+  | E.Discriminant p -> comp_wrap (eval_rvalue_discriminant config p) ctx
