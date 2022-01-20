@@ -18,11 +18,11 @@ module M = Modules
  *   objects
  *
  * =============
- * **WARNNING**:
+ * **WARNING**:
  * =============
- * Pay attention when playing with the function type abbreviations,
- * as they may make you not always generate fresh identifiers. For
- * instance, consider the following:
+ * Pay attention when playing with closures, as you may not always generate
+ * fresh identifiers without noticing it, especially when using type abbreviations.
+ * For instance, consider the following:
  * ```
  * type fun_type = unit -> ...
  * fn f x : fun_type =
@@ -43,6 +43,17 @@ module M = Modules
  *   let id = fresh_id () in
  *   ...
  * ```
+ *
+ * Note that in practice, we never reuse closures, except when evaluating
+ * a branching in the execution (which is fine, because the branches evaluate
+ * independentely of each other). Still, it is always a good idea to be
+ * defensive.
+ *
+ * Also, a more defensive way would be to not use global references, and
+ * store the counters in the evaluation context. This is actually what was
+ * originally done, before we updated the code to use global counters because
+ * it proved more convenient (and even before updating the code of the
+ * interpreter to use CPS).
  *)
 
 let symbolic_value_id_counter, fresh_symbolic_value_id =
