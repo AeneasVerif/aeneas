@@ -35,6 +35,9 @@ type typed_value_cm_fun = V.typed_value -> cm_fun
     value as parameter.
  *)
 
+type st_cm_fun = statement_eval_res -> cm_fun
+(** Type of a continuation used when evaluating a statement *)
+
 (** Convert a unit function to a cm function *)
 let unit_to_cm_fun (f : C.eval_ctx -> unit) : cm_fun =
  fun cf ctx ->

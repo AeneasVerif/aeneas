@@ -409,11 +409,44 @@ let expand_symbolic_value_borrow (config : C.config)
   | T.Shared ->
       expand_symbolic_value_shared_borrow config original_sv ref_ty cf ctx
 
+(** A small helper.
+
+    Apply a branching symbolic expansion to a context and execute all the
+    branches. Note that the expansion is optional for every branch (this is
+    used for integer expansion: see [expand_symbolic_int]).
+    
+    [see_cf_l]: list of pairs (optional symbolic expansion, continuation)
+*)
+let apply_branching_symbolic_expansions_non_borrow (config : C.config)
+    (sv : V.symbolic_value)
+    (see_cf_l : (symbolic_expansion option * m_fun) list) : m_fun =
+ fun ctx ->
+  (* Apply the symbolic expansion in in the context and call the continuation *)
+  let resl =
+    List.map
+      (fun (see_opt, cf) ->
+        (* Expansion *)
+        let ctx =
+          match see_opt with
+          | None -> ctx
+          | Some see -> apply_symbolic_expansion_non_borrow config sv see ctx
+        in
+        (* Continuation *)
+        Option.get (cf ctx))
+      see_cf_l
+  in
+  (* Synthesize *)
+  let res = S.synthesize_symbolic_expansion sv resl in
+  (* Return *)
+  Some res
+
 (** Expand a symbolic value which is not an enumeration with several variants
     (i.e., in a situation where it doesn't lead to branching).
     
     [allow_branching]: if `true` we can branch (by expanding enumerations with
     stricly more than one variant), otherwise we can't.
+    
+    TODO: rename [sp] to [sv]
  *)
 let expand_symbolic_value (config : C.config) (allow_branching : bool)
     (sp : V.symbolic_value) : cm_fun =
@@ -438,19 +471,10 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
         in
         (* Check for branching *)
         assert (List.length seel <= 1 || allow_branching);
-        (* Apply in the context *)
-        let ctxl =
-          List.map
-            (fun see ->
-              apply_symbolic_expansion_non_borrow config original_sv see ctx)
-            seel
-        in
-        (* Continue *)
-        let resl = List.map (fun ctx -> Option.get (cf ctx)) ctxl in
-        (* Synthesize *)
-        let res = S.synthesize_symbolic_expansion original_sv resl in
-        (* Return *)
-        Some res
+        (* Apply *)
+        let seel = List.map (fun see -> (Some see, cf)) seel in
+        apply_branching_symbolic_expansions_non_borrow config original_sv seel
+          ctx
     (* Tuples *)
     | T.Adt (T.Tuple, [], tys) ->
         (* Generate the field values *)
@@ -478,9 +502,19 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     | T.Ref (region, ref_ty, rkind) ->
         expand_symbolic_value_borrow config original_sv region ref_ty rkind cf
           ctx
-    | _ ->
-        failwith
-          ("expand_symbolic_value_no_branching: unreachable: " ^ T.show_rty rty)
+    (* Booleans *)
+    | T.Bool ->
+        assert allow_branching;
+        (* Synthesis *)
+        S.synthesize_symbolic_expansion_if_branching original_sv;
+        (* Expand the symbolic value to true or false and continue execution *)
+        let see_true = SeConcrete (V.Bool true) in
+        let see_false = SeConcrete (V.Bool false) in
+        let seel = [ see_true; see_false ] in
+        let seel = List.map (fun see -> (Some see, cf)) seel in
+        apply_branching_symbolic_expansions_non_borrow config original_sv seel
+          ctx
+    | _ -> failwith ("expand_symbolic_value: unexpected type: " ^ T.show_rty rty)
   in
   (* Debug *)
   let cc =
@@ -496,6 +530,55 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
   in
   (* Continue *)
   cc cf ctx
+
+(** Symbolic integers are expanded upon evaluating a `switch`, when the integer
+    is not an enumeration discriminant.
+    Note that a discriminant is never symbolic: we evaluate discriminant values
+    upon evaluating `eval_discriminant`, which always generates a concrete value
+    (because if we call it on a symbolic enumeration, we expand the enumeration
+    *then* evaluate the discriminant). This is how we can spot "regular" switches
+    over integers.
+
+
+    When expanding a boolean upon evaluating an `if ... then ... else ...`,
+    or an enumeration just before matching over it, we can simply expand the
+    boolean/enumeration (generating a list of contexts from which to execute)
+    then retry evaluating the `if ... then ... else ...` or the `match`: as
+    the scrutinee will then have a concrete value, the interpreter will switch
+    to the proper branch.
+    
+    However, when expanding a "regular" integer for a switch, there is always an
+    *otherwise* branch that we can take, for which the integer must remain symbolic
+    (because in this branch the scrutinee can take a range of values). We thus
+    can't simply expand then retry to evaluate the `switch`, because then we
+    would loop...
+    
+    For this reason, we take the list of branches to execute as parameters, and
+    directly jump to those branches after the expansion, without reevaluating the
+    switch. The continuation is thus for the execution *after* the switch.
+*)
+let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
+    (int_type : T.integer_type) (tgts : (V.scalar_value * m_fun) list)
+    (otherwise : m_fun) : m_fun =
+  (* Synthesis *)
+  S.synthesize_symbolic_expansion_switch_int_branching sv;
+  (* Sanity check *)
+  assert (sv.V.sv_ty = T.Integer int_type);
+  (* For all the branches of the switch, we expand the symbolic value
+   * to the value given by the branch and execute the branch statement.
+   * For the otherwise branch, we leave the symbolic value as it is
+   * (because this branch doesn't precisely define which should be the
+   * value of the scrutinee...) and simply execute the otherwise statement.
+   *
+   * First, generate the list of pairs:
+   * (optional expansion, statement to execute)
+   *)
+  let tgts =
+    List.map (fun (v, cf) -> (Some (SeConcrete (V.Scalar v)), cf)) tgts
+  in
+  let tgts = List.append tgts [ (None, otherwise) ] in
+  (* Then expand and evaluate *)
+  apply_branching_symbolic_expansions_non_borrow config sv tgts
 
 (** See [expand_symbolic_value] *)
 let expand_symbolic_value_no_branching (config : C.config)
