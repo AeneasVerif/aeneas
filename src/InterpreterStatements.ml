@@ -15,7 +15,6 @@ open InterpreterProjectors
 open InterpreterExpansion
 open InterpreterPaths
 open InterpreterExpressions
-open Errors
 
 (** The local logger *)
 let log = L.statements_log
@@ -141,7 +140,6 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
   let eval cf (v : V.typed_value) : m_fun =
    fun ctx ->
     assert (v.ty = T.Bool);
-    let symbolic_mode = config.mode = C.SymbolicMode in
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
      * know the concrete value of the boolean we test, we use this value
@@ -152,6 +150,7 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
         (* Delegate to the concrete evaluation function *)
         eval_assertion_concrete config assertion cf ctx
     | Symbolic sv ->
+        assert (config.mode = C.SymbolicMode);
         assert (sv.V.sv_ty = T.Bool);
         (* Expand the symbolic value, then call the evaluation function for the
          * non-symbolic case *)
@@ -306,7 +305,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
   let cc = comp cc cf_drop_loans_in_locals in
   (* Debug *)
   let cc =
-    comp_check_value cc (fun ret_value ctx ->
+    comp_check_value cc (fun _ ctx ->
         log#ldebug
           (lazy
             ("ctx_pop_frame: after dropping outer loans in local variables:\n"
@@ -927,13 +926,12 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDefId.id)
     | ret_ty :: locals -> (ret_ty, locals)
     | _ -> failwith "Unreachable"
   in
+  let input_locals, locals = Collections.List.split_at locals def.A.arg_count in
+
   let cc = comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty)) in
 
   (* 2. Push the input values *)
   let cf_push_inputs cf args =
-    let input_locals, locals =
-      Collections.List.split_at locals def.A.arg_count
-    in
     let inputs = List.combine input_locals args in
     (* Note that this function checks that the variables and their values
      * have the same type (this is important) *)

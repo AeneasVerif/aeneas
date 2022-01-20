@@ -1,5 +1,7 @@
 # TODO
 
+0. improve the use of [comp] for composition of functions with continuations
+
 0. derive [ord] for types
 
 1. stateful maps/sets modules (hashtbl?)
