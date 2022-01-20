@@ -35,7 +35,7 @@ module M = Modules
  * ...
  * ```
  *
- * This is one, in such cases, we often introduce all the inputs, even
+ * This is why, in such cases, we often introduce all the inputs, even
  * when they are not used (which happens!).
  * ```
  * fn f x : fun_type =
