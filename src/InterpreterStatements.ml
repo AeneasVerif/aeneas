@@ -284,9 +284,8 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
   let cc = eval_operand config (E.Move (mk_place_from_var_id ret_vid)) in
   (* Sanity check *)
   let cc =
-    comp cc (fun cf ret_value ->
-        assert (not (bottom_in_value ctx.ended_regions ret_value));
-        cf ret_value)
+    comp_check_value cc (fun ret_value ctx ->
+        assert (not (bottom_in_value ctx.ended_regions ret_value)))
   in
 
   (* Drop the outer *loans* we find in the local variables *)
@@ -307,12 +306,11 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
   let cc = comp cc cf_drop_loans_in_locals in
   (* Debug *)
   let cc =
-    comp cc (fun cf ret_value ctx ->
+    comp_check_value cc (fun ret_value ctx ->
         log#ldebug
           (lazy
             ("ctx_pop_frame: after dropping outer loans in local variables:\n"
-           ^ eval_ctx_to_string ctx));
-        cf ret_value ctx)
+           ^ eval_ctx_to_string ctx)))
   in
 
   (* Pop the frame - we remove the `Frame` delimiter, and reintroduce all
@@ -556,7 +554,13 @@ let eval_non_local_function_call_concrete (config : C.config)
       (*      let ctx, args_vl = eval_operands config ctx args in *)
       let cf_eval_ops = eval_operands config args in
 
-      (* Evaluate the call *)
+      (* Evaluate the call
+       *
+       * Style note: at some point we used [comp_transmit] to
+       * transmit the result of [eval_operands] above down to [push_vars]
+       * below, without having to introduce an intermediary function call,
+       * but it made it less clear where the computed values came from,
+       * so we reversed the modifications. *)
       let cf_eval_call cf (args_vl : V.typed_value list) : m_fun =
         (* Push the stack frame: we initialize the frame with the return variable,
            and one variable per input argument *)

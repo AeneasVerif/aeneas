@@ -142,3 +142,17 @@ let () =
   let cc = comp_transmit return3 do_nothing in
   let cc = cc consume3 in
   cc ()
+
+let comp_check_value (f : ('v -> 'ctx -> 'a) -> 'ctx -> 'b)
+    (g : 'v -> 'ctx -> unit) : ('v -> 'ctx -> 'a) -> 'ctx -> 'b =
+ fun cf ->
+  f (fun v ctx ->
+      g v ctx;
+      cf v ctx)
+
+let comp_check_ctx (f : ('ctx -> 'a) -> 'ctx -> 'b) (g : 'ctx -> unit) :
+    ('ctx -> 'a) -> 'ctx -> 'b =
+ fun cf ->
+  f (fun ctx ->
+      g ctx;
+      cf ctx)
