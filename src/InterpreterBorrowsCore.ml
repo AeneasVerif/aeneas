@@ -78,6 +78,75 @@ let add_borrow_or_abs_id_to_chain (msg : string) (id : borrow_or_abs_id)
       ^ borrow_or_abs_ids_chain_to_string (id :: ids))
   else id :: ids
 
+(** Helper function.
+  
+    This function allows to define in a generic way a comparison of region types.
+    See [projections_interesect] for instance.
+    
+    [default]: default boolean to return, when comparing types with no regions
+    [combine]: how to combine booleans
+    [compare_regions]: how to compare regions
+ *)
+let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
+    (compare_regions : T.RegionId.id T.region -> T.RegionId.id T.region -> bool)
+    (ty1 : T.rty) (ty2 : T.rty) : bool =
+  let compare = compare_rtys default combine compare_regions in
+  match (ty1, ty2) with
+  | T.Bool, T.Bool | T.Char, T.Char | T.Str, T.Str -> default
+  | T.Integer int_ty1, T.Integer int_ty2 ->
+      assert (int_ty1 = int_ty2);
+      default
+  | T.Adt (id1, regions1, tys1), T.Adt (id2, regions2, tys2) ->
+      assert (id1 = id2);
+
+      (* The check for the ADTs is very crude: we simply compare the arguments
+       * two by two.
+       *
+       * For instance, when checking if some projections intersect, we simply
+       * check if some arguments intersect. As all the type and region
+       * parameters should be used somewhere in the ADT (otherwise rustc
+       * generates an error), it means that it should be equivalent to checking
+       * whether two fields intersect (and anyway comparing the field types is
+       * difficult in case of enumerations...).
+       * If we didn't have the above property enforced by the rust compiler,
+       * this check would still be a reasonable conservative approximation. *)
+
+      (* Check the region parameters *)
+      let regions = List.combine regions1 regions2 in
+      let params_b =
+        List.fold_left
+          (fun b (r1, r2) -> combine b (compare_regions r1 r2))
+          default regions
+      in
+      (* Check the type parameters *)
+      let tys = List.combine tys1 tys2 in
+      let tys_b =
+        List.fold_left
+          (fun b (ty1, ty2) -> combine b (compare ty1 ty2))
+          default tys
+      in
+      (* Combine *)
+      combine params_b tys_b
+  | T.Array ty1, T.Array ty2 | T.Slice ty1, T.Slice ty2 -> compare ty1 ty2
+  | T.Ref (r1, ty1, kind1), T.Ref (r2, ty2, kind2) ->
+      (* Sanity check *)
+      assert (kind1 = kind2);
+      (* Explanation for the case where we check if projections intersect:
+       * the projections intersect if the borrows intersect or their contents
+       * intersect. *)
+      let regions_b = compare_regions r1 r2 in
+      let tys_b = compare ty1 ty2 in
+      combine regions_b tys_b
+  | T.TypeVar id1, T.TypeVar id2 ->
+      assert (id1 = id2);
+      default
+  | _ ->
+      log#lerror
+        (lazy
+          ("compare_rtys: unexpected inputs:" ^ "\n- ty1: " ^ T.show_rty ty1
+         ^ "\n- ty2: " ^ T.show_rty ty2));
+      failwith "Unreachable"
+
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that
     the regions which are already ended inside the abstraction don't
@@ -85,49 +154,26 @@ let add_borrow_or_abs_id_to_chain (msg : string) (id : borrow_or_abs_id)
     Note that the two abstractions have different views (in terms of regions)
     of the symbolic value (hence the two region types).
 *)
-let rec projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.Set.t)
-    (ty2 : T.rty) (rset2 : T.RegionId.Set.t) : bool =
-  match (ty1, ty2) with
-  | T.Bool, T.Bool | T.Char, T.Char | T.Str, T.Str -> false
-  | T.Integer int_ty1, T.Integer int_ty2 ->
-      assert (int_ty1 = int_ty2);
-      false
-  | T.Adt (id1, regions1, tys1), T.Adt (id2, regions2, tys2) ->
-      assert (id1 = id2);
-      (* The intersection check for the ADTs is very crude: 
-       * we check if some arguments intersect. As all the type and region
-       * parameters should be used somewhere in the ADT (otherwise rustc
-       * generates an error), it means that it should be equivalent to checking
-       * whether two fields intersect (and anyway comparing the field types is
-       * difficult in case of enumerations...).
-       * If we didn't have the above property enforced by the rust compiler,
-       * this check would still be a reasonable conservative approximation. *)
-      let regions = List.combine regions1 regions2 in
-      let tys = List.combine tys1 tys2 in
-      List.exists
-        (fun (r1, r2) -> region_in_set r1 rset1 && region_in_set r2 rset2)
-        regions
-      || List.exists
-           (fun (ty1, ty2) -> projections_intersect ty1 rset1 ty2 rset2)
-           tys
-  | T.Array ty1, T.Array ty2 | T.Slice ty1, T.Slice ty2 ->
-      projections_intersect ty1 rset1 ty2 rset2
-  | T.Ref (r1, ty1, kind1), T.Ref (r2, ty2, kind2) ->
-      (* Sanity check *)
-      assert (kind1 = kind2);
-      (* The projections intersect if the borrows intersect or their contents
-       * intersect *)
-      (region_in_set r1 rset1 && region_in_set r2 rset2)
-      || projections_intersect ty1 rset1 ty2 rset2
-  | T.TypeVar id1, T.TypeVar id2 ->
-      assert (id1 = id2);
-      false
-  | _ ->
-      log#lerror
-        (lazy
-          ("projections_intersect: unexpected inputs:" ^ "\n- ty1: "
-         ^ T.show_rty ty1 ^ "\n- ty2: " ^ T.show_rty ty2));
-      failwith "Unreachable"
+let projections_intersect (ty1 : T.rty) (rset1 : T.RegionId.Set.t) (ty2 : T.rty)
+    (rset2 : T.RegionId.Set.t) : bool =
+  let default = false in
+  let combine b1 b2 = b1 || b2 in
+  let compare_regions r1 r2 =
+    region_in_set r1 rset1 && region_in_set r2 rset2
+  in
+  compare_rtys default combine compare_regions ty1 ty2
+
+(** Check if the first projection contains the second projection.
+    We use this function when checking invariants.
+*)
+let projection_contains (ty1 : T.rty) (rset1 : T.RegionId.Set.t) (ty2 : T.rty)
+    (rset2 : T.RegionId.Set.t) : bool =
+  let default = true in
+  let combine b1 b2 = b1 && b2 in
+  let compare_regions r1 r2 =
+    region_in_set r1 rset1 || not (region_in_set r2 rset2)
+  in
+  compare_rtys default combine compare_regions ty1 ty2
 
 (** Lookup a loan content.
 

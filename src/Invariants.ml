@@ -721,9 +721,14 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
      * - the borrows are mutually disjoint
      * - the unions of the loans/borrows give everything
      *)
+    (* A symbolic value can't be both in the regular environment and inside
+     * projectors of borrows in abstractions *)
     assert (info.env_count = 0 || info.aproj_borrows = []);
+    (* A symbolic value containing borrows can't be duplicated (i.e., copied):
+     * it must be expanded first *)
     if ty_has_borrows ctx.type_context.type_infos info.ty then
       assert (info.env_count <= 1);
+    (* A duplicated symbolic value is necessarily primitively copyable *)
     assert (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
   in
 
