@@ -9,7 +9,7 @@ module L = Logging
 open TypesUtils
 open ValuesUtils
 module Inv = Invariants
-module S = Synthesis
+module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
 open InterpreterExpansion
@@ -276,6 +276,7 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
   let eval_op = eval_operand config op in
   (* Generate a fresh symbolic value to store the result *)
   let apply cf (v : V.typed_value) : m_fun =
+   fun ctx ->
     let res_sv_id = C.fresh_symbolic_value_id () in
     let res_sv_ty =
       match (unop, v.V.ty) with
@@ -286,10 +287,10 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
     let res_sv =
       { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
     in
-    (* Synthesize *)
-    S.synthesize_unary_op unop v res_sv;
     (* Call the continuation *)
-    cf (Ok (mk_typed_value_from_symbolic_value res_sv))
+    let expr = cf (Ok (mk_typed_value_from_symbolic_value res_sv)) ctx in
+    (* Synthesize the symbolic AST *)
+    S.synthesize_unary_op unop v res_sv expr
   in
   (* Compose and apply *)
   comp eval_op apply cf ctx
@@ -393,6 +394,7 @@ let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
   let eval_ops = eval_two_operands config op1 op2 in
   (* Compute the result of applying the binop *)
   let compute cf ((v1, v2) : V.typed_value * V.typed_value) : m_fun =
+   fun ctx ->
     (* Generate a fresh symbolic value to store the result *)
     let res_sv_id = C.fresh_symbolic_value_id () in
     let res_sv_ty =
@@ -421,11 +423,11 @@ let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
     let res_sv =
       { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
     in
-    (* Synthesize *)
-    S.synthesize_binary_op binop v1 v2 res_sv;
     (* Call the continuattion *)
     let v = mk_typed_value_from_symbolic_value res_sv in
-    cf (Ok v)
+    let expr = cf (Ok v) ctx in
+    (* Synthesize the symbolic AST *)
+    S.synthesize_binary_op binop v1 v2 res_sv expr
   in
   (* Compose and apply *)
   comp eval_ops compute cf ctx
@@ -565,7 +567,6 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
 let eval_rvalue_aggregate (config : C.config)
     (aggregate_kind : E.aggregate_kind) (ops : E.operand list)
     (cf : V.typed_value -> m_fun) : m_fun =
-  S.synthesize_eval_rvalue_aggregate aggregate_kind ops;
   (* Evaluate the operands *)
   let eval_ops = eval_operands config ops in
   (* Compute the value *)
@@ -578,7 +579,11 @@ let eval_rvalue_aggregate (config : C.config)
         let tys = List.map (fun (v : V.typed_value) -> v.V.ty) values in
         let v = V.Adt { variant_id = None; field_values = values } in
         let ty = T.Adt (T.Tuple, [], tys) in
-        cf { V.value = v; ty } ctx
+        let aggregated : V.typed_value = { V.value = v; ty } in
+        (* Call the continuation *)
+        let expr = cf aggregated ctx in
+        (* Synthesize the symbolic AST *)
+        S.synthesize_aggregated_value aggregated expr
     | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
         (* Sanity checks *)
         let type_def = C.ctx_lookup_type_def ctx def_id in
@@ -595,7 +600,11 @@ let eval_rvalue_aggregate (config : C.config)
           { V.variant_id = opt_variant_id; V.field_values = values }
         in
         let aty = T.Adt (T.AdtId def_id, regions, types) in
-        cf { V.value = Adt av; ty = aty } ctx
+        let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
+        (* Call the continuation *)
+        let expr = cf aggregated ctx in
+        (* Synthesize the symbolic AST *)
+        S.synthesize_aggregated_value aggregated expr
   in
   (* Compose and apply *)
   comp eval_ops compute cf

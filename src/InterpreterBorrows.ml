@@ -3,6 +3,7 @@ module V = Values
 module C = Contexts
 module Subst = Substitute
 module L = Logging
+module S = SynthesizeSymbolic
 open Cps
 open ValuesUtils
 open TypesUtils
@@ -996,7 +997,8 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
   in
 
   (* Remove all the references to the id of the current abstraction, and remove
-   * the abstraction itself *)
+   * the abstraction itself.
+   * **Rk.**: this is where we synthesize the updated symbolic AST *)
   let cc = comp cc (end_abstraction_remove_from_context config abs_id) in
 
   (* Debugging *)
@@ -1214,19 +1216,27 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
 and end_abstraction_remove_from_context (_config : C.config)
     (abs_id : V.AbstractionId.id) : cm_fun =
  fun cf ctx ->
-  let map_env_elem (ev : C.env_elem) : C.env_elem option =
-    match ev with
-    | C.Var (_, _) | C.Frame -> Some ev
-    | C.Abs abs ->
-        if abs.abs_id = abs_id then None
+  let rec remove_from_env (env : C.env) : C.env * V.abs option =
+    match env with
+    | [] -> failwith "Unreachable"
+    | C.Frame :: _ -> (env, None)
+    | Var (bv, v) :: env ->
+        let env, abs_opt = remove_from_env env in
+        (Var (bv, v) :: env, abs_opt)
+    | C.Abs abs :: env ->
+        if abs.abs_id = abs_id then (env, Some abs)
         else
+          let env, abs_opt = remove_from_env env in
           let parents = V.AbstractionId.Set.remove abs_id abs.parents in
-          Some (C.Abs { abs with V.parents })
+          (C.Abs { abs with V.parents } :: env, abs_opt)
   in
-  let env = List.filter_map map_env_elem ctx.C.env in
+  let env, abs = remove_from_env ctx.C.env in
   let ctx = { ctx with C.env } in
-  (* Continue *)
-  cf ctx
+  let abs = Option.get abs in
+  (* Apply the continuation *)
+  let expr = cf ctx in
+  (* Synthesize the symbolic AST *)
+  S.synthesize_end_abstraction abs expr
 
 (** End a proj_loan over a symbolic value by ending the proj_borrows which
     intersect this proj_loans.

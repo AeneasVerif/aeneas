@@ -77,8 +77,10 @@ module Test = struct
         inst_sg.inputs
     in
     (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
+    let call_id = C.fresh_fun_call_id () in
+    assert (call_id = V.FunCallId.zero);
     let empty_absl =
-      create_empty_abstractions_from_abs_region_groups V.Synth
+      create_empty_abstractions_from_abs_region_groups call_id V.Synth
         inst_sg.A.regions_hierarchy
     in
     (* Add the avalues to the abstractions and insert them in the context *)

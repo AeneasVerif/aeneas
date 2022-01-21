@@ -8,7 +8,7 @@ module L = Logging
 open TypesUtils
 open ValuesUtils
 module Inv = Invariants
-module S = Synthesis
+module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
 open InterpreterProjectors
@@ -657,8 +657,8 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
     Create abstractions (with no avalues, which have to be inserted afterwards)
     from a list of abs region groups.
  *)
-let create_empty_abstractions_from_abs_region_groups (kind : V.abs_kind)
-    (rgl : A.abs_region_group list) : V.abs list =
+let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
+    (kind : V.abs_kind) (rgl : A.abs_region_group list) : V.abs list =
   (* We use a reference to progressively create a map from abstraction ids
    * to set of ancestor regions. Note that abs_to_ancestors_regions[abs_id]
    * returns the union of:
@@ -668,9 +668,6 @@ let create_empty_abstractions_from_abs_region_groups (kind : V.abs_kind)
   let abs_to_ancestors_regions : T.RegionId.Set.t V.AbstractionId.Map.t ref =
     ref V.AbstractionId.Map.empty
   in
-  (* We generate *one* fresh call identifier for all the introduced abstractions
-   * (it links them together) *)
-  let call_id = C.fresh_fun_call_id () in
   (* Auxiliary function to create one abstraction *)
   let create_abs (back_id : V.BackwardFunctionId.id) (rg : A.abs_region_group) :
       V.abs =
@@ -1032,8 +1029,9 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
         args);
 
     (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
+    let call_id = C.fresh_fun_call_id () in
     let empty_absl =
-      create_empty_abstractions_from_abs_region_groups V.FunCall
+      create_empty_abstractions_from_abs_region_groups call_id V.FunCall
         inst_sg.A.regions_hierarchy
     in
 
@@ -1058,11 +1056,11 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     in
     let ctx = List.fold_left insert_abs ctx empty_absl in
 
-    (* Synthesis *)
-    S.synthesize_function_call fid region_params type_params args dest ret_spc;
+    (* Apply the continuation *)
+    let expr = cf ctx in
 
-    (* Continue *)
-    cf ctx
+    (* Synthesize the symbolic AST *)
+    S.synthesize_regular_function_call fid call_id type_params args ret_spc expr
   in
   let cc = comp cc cf_call in
 

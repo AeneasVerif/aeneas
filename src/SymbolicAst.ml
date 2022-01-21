@@ -9,15 +9,14 @@ module V = Values
 module E = Expressions
 module A = CfimAst
 
-type fun_id =
-  | Fun of A.fun_id
+type call_id =
+  | Fun of A.fun_id * V.FunCallId.id
       (** A "regular" function (i.e., a function which is not a primitive operation) *)
   | Unop of E.unop
   | Binop of E.binop
 
 type call = {
-  call_id : V.FunCallId.id;
-  func : A.fun_id;
+  call_id : call_id;
   type_params : T.ety list;
   args : V.typed_value list;
   dest : V.symbolic_value;
@@ -29,6 +28,7 @@ type expression =
   | FunCall of call * expression
   | EndAbstraction of V.abs * expression
   | Expansion of V.symbolic_value * expansion
+  | Meta of meta * expression  (** Meta information *)
 
 and expansion =
   | ExpandNoBranch of V.symbolic_expansion * expression
@@ -45,3 +45,9 @@ and expansion =
       T.integer_type * (V.scalar_value * expression) list * expression
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
+
+(** Meta information, not necessary for synthesis but useful to guide it to
+    generate a pretty output.
+ *)
+
+and meta = Aggregate of V.typed_value  (** We generated an aggregate value *)

@@ -4,7 +4,6 @@ module E = Expressions
 module C = Contexts
 module Subst = Substitute
 module L = Logging
-module S = Synthesis
 open Cps
 open TypesUtils
 open ValuesUtils
