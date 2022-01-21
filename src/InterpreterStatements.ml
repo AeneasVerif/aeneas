@@ -714,10 +714,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
    * checking the invariants *)
   let cc = greedy_expand_symbolic_values config in
   (* Sanity check *)
-  let cc =
-    if config.C.check_invariants then comp cc (Inv.cf_check_invariants config)
-    else cc
-  in
+  let cc = comp cc (Inv.cf_check_invariants config) in
 
   (* Evaluate *)
   let cf_eval_st cf : m_fun =
@@ -1160,12 +1157,7 @@ and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =
      * checking the invariants *)
     let cc = greedy_expand_symbolic_values config in
     (* Sanity check *)
-    let cc =
-      if config.C.check_invariants then
-        comp_check_ctx cc (Inv.check_invariants config)
-      else cc
-    in
-
+    let cc = comp_check_ctx cc (Inv.check_invariants config) in
     (* Continue *)
     cc (cf res)
   in

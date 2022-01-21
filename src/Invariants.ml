@@ -766,10 +766,13 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
   M.iter check_info !infos
 
 let check_invariants (config : C.config) (ctx : C.eval_ctx) : unit =
-  check_loans_borrows_relation_invariant ctx;
-  check_borrowed_values_invariant ctx;
-  check_typing_invariant ctx;
-  check_symbolic_values config ctx
+  if config.C.check_invariants then (
+    log#ldebug (lazy "Checking invariants");
+    check_loans_borrows_relation_invariant ctx;
+    check_borrowed_values_invariant ctx;
+    check_typing_invariant ctx;
+    check_symbolic_values config ctx)
+  else log#ldebug (lazy "Not checking invariants (check is not activated)")
 
 (** Same as [check_invariants], but written in CPS *)
 let cf_check_invariants (config : C.config) : cm_fun =
