@@ -87,7 +87,7 @@ let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
 let mk_aproj_loans_value_from_symbolic_value (regions : T.RegionId.Set.t)
     (svalue : V.symbolic_value) : V.typed_avalue =
   if ty_has_regions_in_set regions svalue.sv_ty then
-    let av = V.ASymbolic (V.AProjLoans svalue) in
+    let av = V.ASymbolic (V.AProjLoans (svalue, [])) in
     let av : V.typed_avalue = { V.value = av; V.ty = svalue.V.sv_ty } in
     av
   else { V.value = V.AIgnored; ty = svalue.V.sv_ty }
@@ -169,7 +169,7 @@ let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
 
       method! visit_aproj env aproj =
         (match aproj with
-        | AProjLoans sv | AProjBorrows (sv, _) ->
+        | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
             if sv.V.sv_id = sv_id then raise Found else ()
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj env aproj
@@ -238,7 +238,7 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
               raise Found
             else ()
         | V.SynthInput -> ()
-        | V.FunCallGivenBack | V.SynthGivenBack -> failwith "Unreachable"
+        | V.FunCallGivenBack | V.SynthRetGivenBack -> failwith "Unreachable"
     end
   in
   (* We use exceptions *)

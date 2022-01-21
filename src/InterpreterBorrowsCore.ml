@@ -7,6 +7,7 @@ module V = Values
 module C = Contexts
 module Subst = Substitute
 module L = Logging
+open Utils
 open TypesUtils
 open InterpreterUtils
 
@@ -617,7 +618,7 @@ type looked_up_aproj_borrows =
     [lookup_shared]: if `true` also explore projectors over shared values,
     otherwise ignore.
     
-    This is a helper function: it might break invariants.
+    This is a helper function.
 *)
 let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
     (regions : T.RegionId.Set.t) (sv : V.symbolic_value) (ctx : C.eval_ctx) :
@@ -783,7 +784,7 @@ let update_intersecting_aproj_borrows (can_update_shared : bool)
 (** Simply calls [update_intersecting_aproj_borrows] to update a
     proj_borrows over a non-shared value.
     
-    We check that we update exactly one proj_borrows.
+    We check that we update *at least* one proj_borrows.
 
     This is a helper function: it might break invariants.
  *)
@@ -794,7 +795,7 @@ let update_intersecting_aproj_borrows_non_shared (regions : T.RegionId.Set.t)
   let update_shared _ _ = failwith "Unexpected" in
   let updated = ref false in
   let update_non_shared _ _ =
-    assert (not !updated);
+    (* We can update more than one borrow! *)
     updated := true;
     nv
   in
@@ -826,31 +827,42 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
 (** Updates the proj_loans intersecting some projection.
 
     This is a helper function: it might break invariants.
+    
+    Note that we can update more than one projector of loans! Consider the
+    following example:
+    ```
+    fn f<'a, 'b>(...) -> (&'a mut u32, &'b mut u32));
+    fn g<'c>(&'c mut u32, &'c mut u32);
 
-    Note that in practice, when we update a proj_loans, we always update exactly
-    one aproj_loans, in a specific abstraction.
+    let p = f(...);
+    g(move p);
+
+    // Symbolic context after the call to g:
+    // abs'a {'a} { [s@0 <: (&'a mut u32, &'b mut u32)] }
+    // abs'b {'b} { [s@0 <: (&'a mut u32, &'b mut u32)] }
+    //
+    // abs'c {'c} { (s@0 <: (&'c mut u32, &'c mut u32)) }
+    ```
     
-    We make this function more general, by checking projection intersections
-    (rather than simply checking the abstraction and symbolic value ids)
-    for sanity checking: we check whether we need to update a loan based
-    on intersection criteria, but also check at the same time that we update
-    *exactly one* projector.
-    
-    Note that the new value [nv] with which to replace the proj_loans could
-    be untyped: we request a typed value for sanity checking.
-    
-    [subst]: takes as parameters the abstraction and the projection type
-    where we perform the substitution.
+    Note that for sanity, this function checks that we update *at least* one
+    projector of loans.
+        
+    [subst]: takes as parameters the abstraction in which we perform the
+    substitution and the list of given back values at the projector of
+    loans where we perform the substitution (see the fields in [AProjLoans]).
+    Note that the symbolic value at this place is necessarily equal to [sv],
+    which is why we don't give it as parameters.
  *)
 let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
     (proj_ty : T.rty) (sv : V.symbolic_value)
-    (subst : V.abs -> T.rty -> V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
+    (subst : V.abs -> (V.typed_value * V.aproj) list -> V.aproj)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* Small helpers for sanity checks *)
   let updated = ref false in
-  let update abs local_proj_ty : V.aproj =
-    assert (not !updated);
+  let update abs local_given_back : V.aproj =
+    (* Note that we can update more than once! *)
     updated := true;
-    subst abs local_proj_ty
+    subst abs local_given_back
   in
   (* The visitor *)
   let obj =
@@ -864,14 +876,14 @@ let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
         | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _
         | AIgnoredProjBorrows ->
             super#visit_aproj abs sproj
-        | AProjLoans sv' ->
+        | AProjLoans (sv', given_back) ->
             let abs = Option.get abs in
             if same_symbolic_id sv sv' then (
               assert (sv.sv_ty = sv'.sv_ty);
               if
                 projections_intersect proj_ty proj_regions sv'.V.sv_ty
                   abs.regions
-              then update abs sv'.V.sv_ty
+              then update abs given_back
               else super#visit_aproj (Some abs) sproj)
             else super#visit_aproj (Some abs) sproj
     end
@@ -882,3 +894,181 @@ let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
   assert !updated;
   (* Return *)
   ctx
+
+(** Helper function: lookup an [AProjLoans] by using an abstraction id and a
+    symbolic value.
+    
+    We return the information from the looked up projector of loans. See the
+    fields in [AProjLoans] (we don't return the symbolic value, because it
+    is equal to [sv]).
+    
+    Sanity check: we check that there is exactly one projector which corresponds
+    to the couple (abstraction id, symbolic value).
+ *)
+let lookup_aproj_loans (abs_id : V.AbstractionId.id) (sv : V.symbolic_value)
+    (ctx : C.eval_ctx) : (V.mvalue * V.aproj) list =
+  (* Small helpers for sanity checks *)
+  let found = ref None in
+  let set_found x =
+    (* There is at most one projector which corresponds to the description *)
+    assert (Option.is_none !found);
+    found := Some x
+  in
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] C.iter_eval_ctx as super
+
+      method! visit_abs _ abs =
+        if abs.abs_id = abs_id then super#visit_abs (Some abs) abs else ()
+
+      method! visit_aproj (abs : V.abs option) sproj =
+        (match sproj with
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _
+        | AIgnoredProjBorrows ->
+            super#visit_aproj abs sproj
+        | AProjLoans (sv', given_back) ->
+            let abs = Option.get abs in
+            assert (abs.abs_id = abs_id);
+            if sv'.sv_id = sv.sv_id then (
+              assert (sv' = sv);
+              set_found given_back)
+            else ());
+        super#visit_aproj abs sproj
+    end
+  in
+  (* Apply *)
+  obj#visit_eval_ctx None ctx;
+  (* Return *)
+  Option.get !found
+
+(** Helper function: might break invariants.
+
+    Update a projector over loans. The projector is identified by a symbolic
+    value and an abstraction id.
+
+    Sanity check: we check that there is exactly one projector which corresponds
+    to the couple (abstraction id, symbolic value).
+ *)
+let update_aproj_loans (abs_id : V.AbstractionId.id) (sv : V.symbolic_value)
+    (nproj : V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Small helpers for sanity checks *)
+  let found = ref false in
+  let update () =
+    (* We update at most once *)
+    assert (not !found);
+    found := true;
+    nproj
+  in
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_abs _ abs =
+        if abs.abs_id = abs_id then super#visit_abs (Some abs) abs else abs
+
+      method! visit_aproj (abs : V.abs option) sproj =
+        match sproj with
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _
+        | AIgnoredProjBorrows ->
+            super#visit_aproj abs sproj
+        | AProjLoans (sv', _) ->
+            let abs = Option.get abs in
+            assert (abs.abs_id = abs_id);
+            if sv'.sv_id = sv.sv_id then (
+              assert (sv' = sv);
+              update ())
+            else super#visit_aproj (Some abs) sproj
+    end
+  in
+  (* Apply *)
+  let ctx = obj#visit_eval_ctx None ctx in
+  (* Sanity check *)
+  assert !found;
+  (* Return *)
+  ctx
+
+(** Helper function: might break invariants.
+
+    Update a projector over borrows. The projector is identified by a symbolic
+    value and an abstraction id.
+
+    Sanity check: we check that there is exactly one projector which corresponds
+    to the couple (abstraction id, symbolic value).
+    
+    TODO: factorize with [update_aproj_loans]?
+ *)
+let update_aproj_borrows (abs_id : V.AbstractionId.id) (sv : V.symbolic_value)
+    (nproj : V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Small helpers for sanity checks *)
+  let found = ref false in
+  let update () =
+    (* We update at most once *)
+    assert (not !found);
+    found := true;
+    nproj
+  in
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] C.map_eval_ctx as super
+
+      method! visit_abs _ abs =
+        if abs.abs_id = abs_id then super#visit_abs (Some abs) abs else abs
+
+      method! visit_aproj (abs : V.abs option) sproj =
+        match sproj with
+        | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _
+        | AIgnoredProjBorrows ->
+            super#visit_aproj abs sproj
+        | AProjBorrows (sv', _proj_ty) ->
+            let abs = Option.get abs in
+            assert (abs.abs_id = abs_id);
+            if sv'.sv_id = sv.sv_id then (
+              assert (sv' = sv);
+              update ())
+            else super#visit_aproj (Some abs) sproj
+    end
+  in
+  (* Apply *)
+  let ctx = obj#visit_eval_ctx None ctx in
+  (* Sanity check *)
+  assert !found;
+  (* Return *)
+  ctx
+
+(** Helper function: might break invariants.
+
+    Converts an [AProjLoans] to an [AEndedProjLoans]. The projector is identified
+    by a symbolic value and an abstraction id.
+ *)
+let update_aproj_loans_to_ended (abs_id : V.AbstractionId.id)
+    (sv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Lookup the projector of loans *)
+  let given_back = lookup_aproj_loans abs_id sv ctx in
+  (* Create the new value for the projector *)
+  let nproj = V.AEndedProjLoans given_back in
+  (* Insert it *)
+  let ctx = update_aproj_loans abs_id sv nproj ctx in
+  (* Return *)
+  ctx
+
+let no_aproj_over_symbolic_in_context (sv : V.symbolic_value) (ctx : C.eval_ctx)
+    : unit =
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] C.iter_eval_ctx as super
+
+      method! visit_aproj env sproj =
+        (match sproj with
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
+        | AProjLoans (sv', _) | AProjBorrows (sv', _) ->
+            if sv'.sv_id = sv.sv_id then raise Found else ());
+        super#visit_aproj env sproj
+    end
+  in
+  (* Apply *)
+  try obj#visit_eval_ctx () ctx
+  with Found -> failwith "update_aproj_loans_to_ended: failed"

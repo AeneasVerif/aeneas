@@ -421,55 +421,37 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
   (* Apply the reborrows *)
   apply_registered_reborrows ctx
 
-(** Give back a symbolic value.
-
-    When we give back a symbolic value, we replace the symbolic value with
-    a new symbolic value if we found an intersecting projection over the
-    borrows of this symbolic value inside a different abstraction.
-    Otherwise, we give back the same symbolic value, to signify the fact that
-    it was left unchanged.
-  *)
+(** Give back a *modified* symbolic value. *)
 let give_back_symbolic_value (_config : C.config)
     (proj_regions : T.RegionId.Set.t) (proj_ty : T.rty) (sv : V.symbolic_value)
     (nsv : V.symbolic_value) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Sanity checks *)
+  assert (sv.sv_id <> nsv.sv_id);
+  (match nsv.sv_kind with
+  | V.SynthRetGivenBack | V.FunCallGivenBack -> ()
+  | V.FunCallRet | V.SynthInput -> failwith "Unrechable");
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = mk_typed_value_from_symbolic_value nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
-  let subst (_abs : V.abs) _abs_proj_ty =
+  let subst (_abs : V.abs) local_given_back =
     (* Compute the projection over the given back value *)
     let child_proj =
-      (* If it is the same symbolic value, it means it was left unchanged:
-       * we don't have to project it *)
-      if sv.sv_id = nsv.sv_id then None
-      else (
-        (* Not the same symbolic value: it was updated (because given to a
-         * function or returned) *)
-        (* For now, we can only have the following case *)
-        assert (nsv.sv_kind = V.SynthGivenBack);
-        match nsv.sv_kind with
-        | V.SynthGivenBack ->
-            (* The given back value comes from the return value of the function
-             * we are currently synthesizing (as it is given back, it means
-             * we ended one of the regions appearing in the signature: we are
-             * currently synthesizing one of the backward functions *)
-            (* As we don't allow borrow overwrites on returned value, we can
-             * (and MUST) forget the borrows *)
-            None
-        | V.FunCallGivenBack ->
-            (* The value was fed as input to a function, and was given back *)
-            (* For now, we don't allow borrow overwrites on returned values,
-             * meaning the given back value can't have borrows below mutable
-             * borrows. *)
-            let has_borrow_below_mut =
-              ty_has_borrow_under_mut ctx.type_context.type_infos nsv.sv_ty
-            in
-            assert (not has_borrow_below_mut);
-            (* We don't allow overwrites: we must thus not project over the
-             * given back value *)
-            None
-        | _ -> failwith "Unreachable")
+      match nsv.sv_kind with
+      | V.SynthRetGivenBack ->
+          (* The given back value comes from the return value of the function
+           * we are currently synthesizing (as it is given back, it means
+           * we ended one of the regions appearing in the signature: we are
+           * currently synthesizing one of the backward functions).
+           * 
+           * As we don't allow borrow overwrites on returned value, we can
+           * (and MUST) forget the borrows *)
+          V.AIgnoredProjBorrows
+      | V.FunCallGivenBack ->
+          (* The value was fed as input to a function, and was given back *)
+          V.AProjBorrows (nsv, sv.V.sv_ty)
+      | _ -> failwith "Unreachable"
     in
-    V.AEndedProjLoans (mv, child_proj)
+    V.AProjLoans (sv, (mv, child_proj) :: local_given_back)
   in
   update_intersecting_aproj_loans proj_regions proj_ty sv subst ctx
 
@@ -1066,7 +1048,7 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
         | V.AProjBorrows (_, _)
         | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
             ()
-        | V.AProjLoans sv -> raise (FoundSymbolicValue sv));
+        | V.AProjLoans (sv, _) -> raise (FoundSymbolicValue sv));
         super#visit_aproj env sproj
     end
   in
@@ -1078,20 +1060,24 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
   with
   (* There are loans: end them, then recheck *)
   | FoundBorrowIds bids ->
-      (* End the outer borrows *)
+      (* End the corresponding borrows *)
       let cc : cm_fun =
         match bids with
         | Borrow bid -> end_outer_borrow config bid
         | Borrows bids -> end_outer_borrows config bids
       in
-      (* Retry *)
+      (* Reexplore, looking for loans *)
       let cc = comp cc (end_abstraction_loans config chain abs_id) in
       (* Continue *)
       cc cf ctx
   | FoundSymbolicValue sv ->
       (* There is a proj_loans over a symbolic value: end the proj_borrows
-       * which intersect this proj_loans *)
-      end_proj_loans_symbolic config chain abs_id abs.regions sv cf ctx
+       * which intersect this proj_loans, then end the proj_loans itself *)
+      let cc = end_proj_loans_symbolic config chain abs_id abs.regions sv in
+      (* Reexplore, looking for loans *)
+      let cc = comp cc (end_abstraction_loans config chain abs_id) in
+      (* Continue *)
+      cc cf ctx
 
 and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
     (abs_id : V.AbstractionId.id) : cm_fun =
@@ -1208,10 +1194,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       let ended_borrow =
         V.AEndedProjBorrows (mk_typed_value_from_symbolic_value nsv)
       in
-      let ctx =
-        update_intersecting_aproj_borrows_non_shared abs.regions sv ended_borrow
-          ctx
-      in
+      let ctx = update_aproj_borrows abs.abs_id sv ended_borrow ctx in
       (* Give back the symbolic value *)
       let ctx =
         give_back_symbolic_value config abs.regions proj_ty sv nsv ctx
@@ -1255,77 +1238,127 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
     (abs_id : V.AbstractionId.id) (regions : T.RegionId.Set.t)
     (sv : V.symbolic_value) : cm_fun =
  fun cf ctx ->
+  (* Small helpers for sanity checks *)
+  let check ctx = no_aproj_over_symbolic_in_context sv ctx in
+  let cf_check (cf : m_fun) : m_fun =
+   fun ctx ->
+    check ctx;
+    cf ctx
+  in
   (* Find the first proj_borrows which intersects the proj_loans *)
   let explore_shared = true in
   match lookup_intersecting_aproj_borrows_opt explore_shared regions sv ctx with
   | None ->
       (* We couldn't find any in the context: it means that the symbolic value
        * is in the concrete environment (or that we dropped it, in which case
-       * it is completely absent) *)
-      (* Update the loans depending on the current symbolic value - it is
-       * left unchanged *)
-      let ctx = give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx in
+       * it is completely absent). We thus simply need to replace the loans
+       * projector with an ended projector. *)
+      let ctx = update_aproj_loans_to_ended abs_id sv ctx in
+      (* Sanity check *)
+      check ctx;
       (* Continue *)
       cf ctx
   | Some (SharedProjs projs) ->
       (* We found projectors over shared values - split between the projectors
-           * which belong to the current *)
-      (* TODO: we might want to allow ending shared projectors/borrows in
-       * abstractions without ending the abstractions themselves, if we end
-       * those abstractions immediately after: some abstractions may be mutually
-       * dependent, which is ok when it is about shared values *)
+       * which belong to the current abstraction and the others.
+       * The context looks like this:
+       * ```
+       * abs'0 {
+       *   // The loan was initially like this:
+       *   // `shared_loan lids (s <: ...) [s]`
+       *   // but if we get there it means it was already ended:
+       *   ended_shared_loan (s <: ...) [s]
+       *   proj_shared_borrows [...; (s <: ...); ...]
+       *   proj_shared_borrows [...; (s <: ...); ...]
+       *   ...
+       * }
+       *
+       * abs'1 [
+       *   proj_shared_borrows [...; (s <: ...); ...]
+       *   ...
+       * }
+       *
+       * ...
+       *
+       * // No `s` outside of abstractions
+       * 
+       * ```
+       *)
       let _owned_projs, external_projs =
         List.partition (fun (abs_id', _) -> abs_id' = abs_id) projs
       in
-      if external_projs = [] then
-        (* There are external projs: end the corresponding abstractions *)
+      (* End the external borrow projectors (end their abstractions) *)
+      let cf_end_external : cm_fun =
+       fun cf ctx ->
         let abs_ids = List.map fst external_projs in
         let abs_ids =
           List.fold_left
             (fun s id -> V.AbstractionId.Set.add id s)
             V.AbstractionId.Set.empty abs_ids
         in
-        (* We could end the owned projections, but it is simpler to simply return
-         * and let the caller recheck if there are proj_loans to end *)
+        (* End the abstractions and continue *)
         end_abstractions config chain abs_ids cf ctx
-      else
+      in
+      (* End the internal borrows projectors and the loans projector *)
+      let cf_end_internal : cm_fun =
+       fun cf ctx ->
         (* All the proj_borrows are owned: simply erase them *)
         let ctx = remove_intersecting_aproj_borrows_shared regions sv ctx in
-        (* Remove the proj_loans - note that the symbolic value was left unchanged *)
-        let ctx =
-          give_back_symbolic_value config regions sv.V.sv_ty sv sv ctx
-        in
+        (* End the loan itself *)
+        let ctx = update_aproj_loans_to_ended abs_id sv ctx in
+        (* Sanity check *)
+        check ctx;
         (* Continue *)
         cf ctx
+      in
+      (* Compose and apply *)
+      let cc = comp cf_end_external cf_end_internal in
+      cc cf ctx
   | Some (NonSharedProj (abs_id', _proj_ty)) ->
-      (* We found one in the context: if it comes from this abstraction, we can
-       * end it directly, otherwise we need to end the abstraction where it
-       * came from first *)
-      if abs_id' = abs_id then
-        (* As the symbolic value was left unchanged, we give it back *)
-        let given_back_sv = sv in
-        (* Replace the proj_borrows *)
-        let given_back = mk_typed_value_from_symbolic_value given_back_sv in
-        let npb = V.AEndedProjBorrows given_back in
-        let ctx =
-          update_intersecting_aproj_borrows_non_shared regions sv npb ctx
-        in
-        (* Replace the proj_loans - note that the loaned (symbolic) value
-         * was left unchanged *)
-        let ctx =
-          give_back_symbolic_value config regions sv.V.sv_ty sv given_back_sv
-            ctx
-        in
+      (* We found one projector of borrows in an abstraction: if it comes
+       * from this abstraction, we can end it directly, otherwise we need
+       * to end the abstraction where it came from first *)
+      if abs_id' = abs_id then (
+        (* Note that it happens when a function returns a `&mut ...` which gets
+         * expanded to `mut_borrow l s`, and we end the borrow `l` (so `s` gets
+         * reinjected in the parent abstraction without having been modified).
+         *
+         * The context looks like this:
+         * ```
+         * abs'0 {
+         *   [s <: ...]
+         *   (s <: ...)
+         * }
+         *
+         * // Note that `s` can't appear in other abstractions or in the
+         * // regular environment (because we forbid the duplication of
+         * // symbolic values which contain borrows).
+         * ```
+         *)
+        (* End the projector of borrows - TODO: not completely sure what to
+         * replace it with... Maybe we should introduce an ABottomProj? *)
+        let ctx = update_aproj_borrows abs_id sv V.AIgnoredProjBorrows ctx in
+        (* Sanity check: no other occurrence of an intersecting projector of borrows *)
+        assert (
+          Option.is_none
+            (lookup_intersecting_aproj_borrows_opt explore_shared regions sv ctx));
+        (* End the projector of loans *)
+        let ctx = update_aproj_loans_to_ended abs_id sv ctx in
+        (* Sanity check *)
+        check ctx;
         (* Continue *)
-        cf ctx
+        cf ctx)
       else
-        (* End the abstraction.
-         * Don't retry ending the current proj_loans after ending the abstraction:
-         * it may have been eliminated (if it is a proj over mutable value),
-         * or maybe not (if it is a proj over shared values): simply return,
-         * as the caller function will recheck if there are loans to end in the
-         * current abstraction *)
-        end_abstraction config chain abs_id' cf ctx
+        (* The borrows proj comes from a different abstraction: end it. *)
+        let cc = end_abstraction config chain abs_id' in
+        (* Retry ending the projector of loans *)
+        let cc =
+          comp cc (end_proj_loans_symbolic config chain abs_id regions sv)
+        in
+        (* Sanity check *)
+        let cc = comp cc cf_check in
+        (* Continue *)
+        cc cf ctx
 
 and end_outer_borrow config : V.BorrowId.id -> cm_fun =
   end_borrow config [] None

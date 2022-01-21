@@ -309,14 +309,25 @@ module Values = struct
 
   let rec aproj_to_string (fmt : value_formatter) (pv : V.aproj) : string =
     match pv with
-    | AProjLoans sv ->
-        "[" ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv ^ "]"
+    | AProjLoans (sv, given_back) ->
+        let given_back =
+          if given_back = [] then ""
+          else
+            let given_back = List.map snd given_back in
+            let given_back = List.map (aproj_to_string fmt) given_back in
+            " (" ^ String.concat "," given_back ^ ") "
+        in
+        "["
+        ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
+        ^ given_back ^ "]"
     | AProjBorrows (sv, rty) ->
         "(" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
-    | AEndedProjLoans (_mv, aproj_opt) -> (
-        match aproj_opt with
-        | None -> "_"
-        | Some aproj -> aproj_to_string fmt aproj)
+    | AEndedProjLoans given_back ->
+        if given_back = [] then "_"
+        else
+          let given_back = List.map snd given_back in
+          let given_back = List.map (aproj_to_string fmt) given_back in
+          "ended_aproj_loans (" ^ String.concat "," given_back ^ ")"
     | AEndedProjBorrows _mv -> "_"
     | AIgnoredProjBorrows -> "_"
 

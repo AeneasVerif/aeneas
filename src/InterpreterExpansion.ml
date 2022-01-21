@@ -74,7 +74,7 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
 
       method! visit_aproj current_abs aproj =
         (match aproj with
-        | AProjLoans sv | AProjBorrows (sv, _) ->
+        | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
             assert (not (same_symbolic_id sv original_sv))
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj current_abs aproj
@@ -91,22 +91,23 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
         (* Explore in depth first - we won't update anything: we simply
          * want to check we don't have to expand inner symbolic value *)
         match (aproj, proj_kind) with
-        | V.AEndedProjLoans (_, None), _ | V.AEndedProjBorrows _, _ ->
-            V.ASymbolic aproj
-        | V.AEndedProjLoans (_, Some child_proj), _ ->
-            (* Explore the child projection to make sure we don't have to expand
+        | V.AEndedProjBorrows _, _ -> V.ASymbolic aproj
+        | V.AEndedProjLoans _, _ ->
+            (* Explore the given back values to make sure we don't have to expand
              * anything in there *)
-            V.ASymbolic (self#visit_aproj (Some current_abs) child_proj)
-        | V.AProjLoans sv, LoanProj ->
+            V.ASymbolic (self#visit_aproj (Some current_abs) aproj)
+        | V.AProjLoans (sv, given_back), LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
-            if same_symbolic_id sv original_sv then
+            if same_symbolic_id sv original_sv then (
+              (* There mustn't be any given back values *)
+              assert (given_back = []);
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion proj_regions expansion
                   original_sv.V.sv_ty
               in
               (* Replace *)
-              projected_value.V.value
+              projected_value.V.value)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) aproj
@@ -328,7 +329,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
 
       method! visit_aproj proj_regions aproj =
         (match aproj with
-        | AProjLoans sv | AProjBorrows (sv, _) ->
+        | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
             assert (not (same_symbolic_id sv original_sv))
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj proj_regions aproj
@@ -350,11 +351,10 @@ let expand_symbolic_value_shared_borrow (config : C.config)
             match reborrow_ashared (Option.get proj_regions) sv proj_ty with
             | None -> super#visit_ASymbolic proj_regions aproj
             | Some asb -> V.ABorrow (V.AProjSharedBorrow asb))
-        | AEndedProjLoans (_, None) -> V.ASymbolic aproj
-        | AEndedProjLoans (_, Some child_aproj) ->
-            (* Sanity check: make sure there is nothing to expand inside children
-             * projections *)
-            V.ASymbolic (self#visit_aproj proj_regions child_aproj)
+        | AEndedProjLoans _ ->
+            (* Sanity check: make sure there is nothing to expand inside the
+             * children projections *)
+            V.ASymbolic (self#visit_aproj proj_regions aproj)
     end
   in
   (* Call the visitor *)

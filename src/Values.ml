@@ -59,11 +59,13 @@ type sv_kind =
       (** The value is an input value of the function whose body we are
           currently synthesizing.
        *)
-  | SynthGivenBack
+  | SynthRetGivenBack
       (** The value is a borrowed value that the function whose body we are
           synthesizing returned, and which was given back because we ended
           one of the lifetimes of this function (we do this to synthesize
           the backward functions).
+          
+          TODO: add a SynthInputGivenBack
        *)
 [@@deriving show]
 
@@ -236,25 +238,57 @@ class ['self] map_aproj_base =
   end
 
 type aproj =
-  | AProjLoans of symbolic_value
+  | AProjLoans of symbolic_value * (mvalue * aproj) list
+      (** A projector of loans over a symbolic value.
+      
+          Note that the borrows of a symbolic value may be spread between
+          different abstractions, meaning that the projector of loans might
+          receive *several* (symbolic) given back values.
+          
+          This is the case in the following example:
+          ```
+          fn f<'a> (...) -> (&'a mut u32, &'a mut u32);
+          fn g<'b, 'c>(p : (&'b mut u32, &'c mut u32));
+          
+          let p = f(...);
+          g(move p);
+          
+          // Symbolic context after the call to g:
+          // abs'a {'a} { [s@0 <: (&'a mut u32, &'a mut u32)] }
+          //
+          // abs'b {'b} { (s@0 <: (&'b mut u32, &'c mut u32)) }
+          // abs'c {'c} { (s@0 <: (&'b mut u32, &'c mut u32)) }
+          ```
+          
+          Upon evaluating the call to `f`, we introduce a symbolic value `s@0`
+          and a projector of loans (projector loans from the region 'c).
+          This projector will later receive two given back values: one for
+          'a and one for 'b.
+          
+          We accumulate those values in the list of projections (note that
+          the meta value stores the value which was given back).
+          
+          We can later end the projector of loans if `s@0` is not referenced
+          anywhere in the context below a projector of borrows which intersects
+          this projector of loans.
+       *)
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
-          a shared loan: under a shared loan, we use [abstract_shared_borrow]. *)
-  | AEndedProjLoans of mvalue * aproj option
-      (** When ending a proj_loans over a symbolic value, we may need to insert
-          (and keep track of) a proj_borrows over the given back value, if the
-          symbolic value was consumed by an abstraction then updated.
+          a shared loan: under a shared loan, we use [abstract_shared_borrow].
           
-          Rk.: for now the option is useless, because we forbid borrow overwrites on
-          returned values. A consequence is that when a proj_loans over a symbolic
-          value ends, we don't project the given back value.
-          
-          The meta-value is the value which was given back (and thus consumed by
-          the loan when it ended).
+          Also note that once given to a borrow projection, a symbolic value
+          can't get updated/expanded: this means that we don't need to save
+          any meta-value here.
+       *)
+  | AEndedProjLoans of (mvalue * aproj) list
+      (** An ended projector of loans over a symbolic value.
+      
+          See the explanations for [AProjLoans]
        *)
   | AEndedProjBorrows of mvalue
-      (** The only purpose of [AEndedProjBorrows] is to store the (symbolic) value
-          which was generated upon ending the borrow (this is useful for synthesis)
+      (** The only purpose of [AEndedProjBorrows] is to store, for synthesis
+          purposes, the symbolic value which was generated and given back upon
+          ending the borrow.
        *)
   | AIgnoredProjBorrows
 [@@deriving
@@ -415,8 +449,8 @@ and aloan_content =
        *)
   | AEndedSharedLoan of typed_value * typed_avalue
       (** Similar to [AEndedMutLoan] but in this case there are no avalues to
-          give back. Actually, we could probably forget the shared value
-          altogether (and just keep the child avalue).
+          give back. We keep the shared value because it now behaves as a
+          "regular" value (which contains borrows we might want to end...).
        *)
   | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
       (** An ignored mutable loan.

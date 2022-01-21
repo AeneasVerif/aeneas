@@ -595,21 +595,22 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.ASymbolic aproj, ty -> (
             let ty1 = Subst.erase_regions ty in
             match aproj with
-            | V.AProjLoans sv | V.AProjBorrows (sv, _) ->
+            | V.AProjLoans (sv, _) | V.AProjBorrows (sv, _) ->
                 let ty2 = Subst.erase_regions sv.V.sv_ty in
                 assert (ty1 = ty2);
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to `_` *)
                 let abs = Option.get info in
                 assert (ty_has_regions_in_set abs.regions sv.V.sv_ty)
-            | V.AEndedProjLoans (_, Some proj) -> (
-                match proj with
-                | V.AProjBorrows (_sv, ty') -> assert (ty' = ty)
-                | V.AEndedProjBorrows _ -> ()
-                | _ -> failwith "Unexpected")
-            | V.AEndedProjLoans (_, None)
-            | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
-                ())
+            | V.AEndedProjLoans given_back_ls ->
+                List.iter
+                  (fun (_, proj) ->
+                    match proj with
+                    | V.AProjBorrows (_sv, ty') -> assert (ty' = ty)
+                    | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows -> ()
+                    | _ -> failwith "Unexpected")
+                  given_back_ls
+            | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows -> ())
         | V.AIgnored, _ -> ()
         | _ -> failwith "Erroneous typing");
         (* Continue exploring to inspect the subterms *)
@@ -700,7 +701,7 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
       method! visit_aproj abs aproj =
         (let abs = Option.get abs in
          match aproj with
-         | AProjLoans sv -> add_aproj_loans sv abs.abs_id abs.regions
+         | AProjLoans (sv, _) -> add_aproj_loans sv abs.abs_id abs.regions
          | AProjBorrows (sv, proj_ty) ->
              add_aproj_borrows sv abs.abs_id abs.regions proj_ty false
          | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
@@ -715,11 +716,17 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
       ^ V.SymbolicValueId.Map.to_string (Some "  ") show_sv_info !infos));
   (* Check *)
   let check_info _id info =
+    (* TODO: check that:
+     * - the loans are mutually disjoint
+     * - the borrows are mutually disjoint
+     * - the unions of the loans/borrows give everything
+     *)
     assert (info.env_count = 0 || info.aproj_borrows = []);
     if ty_has_borrows ctx.type_context.type_infos info.ty then
       assert (info.env_count <= 1);
     assert (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
   in
+
   M.iter check_info !infos
 
 let check_invariants (config : C.config) (ctx : C.eval_ctx) : unit =
