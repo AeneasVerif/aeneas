@@ -9,6 +9,8 @@ module List = struct
   
       `split_at ls i` splits `ls` into two lists where the first list has
       length `i`.
+      
+      Raise `Failure` if the list is too short.
   *)
   let rec split_at (ls : 'a list) (i : int) =
     if i < 0 then raise (Invalid_argument "split_at take positive integers")
@@ -21,6 +23,18 @@ module List = struct
       | x :: ls' ->
           let ls1, ls2 = split_at ls' (i - 1) in
           (x :: ls1, ls2)
+
+  (** Pop the last element of a list
+     
+      Raise `Failure` if the list is empty.
+   *)
+  let rec pop_last (ls : 'a list) : 'a list * 'a =
+    match ls with
+    | [] -> raise (Failure "The list is empty")
+    | [ x ] -> ([], x)
+    | x :: ls ->
+        let ls, last = pop_last ls in
+        (x :: ls, last)
 end
 
 module type OrderedType = sig

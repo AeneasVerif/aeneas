@@ -42,13 +42,13 @@ let synthesize_symbolic_expansion (_sv : V.symbolic_value)
     (i.e., applied on a value which is not an enumeration with several variants).
  *)
 let synthesize_symbolic_expansion_no_branching (_sv : V.symbolic_value)
-    (_see : symbolic_expansion) : unit =
+    (_see : V.symbolic_expansion) : unit =
   ()
 
 (** Synthesize code for a symbolic enum expansion (which leads to branching)
  *)
 let synthesize_symbolic_expansion_enum_branching (_sv : V.symbolic_value)
-    (_seel : symbolic_expansion list) : unit =
+    (_seel : V.symbolic_expansion list) : unit =
   ()
 
 let synthesize_symbolic_expansion_if_branching (_sv : V.symbolic_value) : unit =

@@ -8,13 +8,6 @@ open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 
-(** A symbolic expansion *)
-type symbolic_expansion =
-  | SeConcrete of V.constant_value
-  | SeAdt of (T.VariantId.id option * V.symbolic_value list)
-  | SeMutRef of V.BorrowId.id * V.symbolic_value
-  | SeSharedRef of V.BorrowId.Set.t * V.symbolic_value
-
 (** Auxiliary function.
 
     Apply a proj_borrows on a shared borrow.
@@ -255,7 +248,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
 
 (** Convert a symbolic expansion *which is not a borrow* to a value *)
 let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
-    (see : symbolic_expansion) : V.typed_value =
+    (see : V.symbolic_expansion) : V.typed_value =
   let ty = Subst.erase_regions sv.V.sv_ty in
   let value =
     match see with
@@ -277,7 +270,7 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
     during a symbolic expansion.
   *)
 let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
-    (see : symbolic_expansion) : V.typed_value =
+    (see : V.symbolic_expansion) : V.typed_value =
   match see with
   | SeMutRef (bid, bv) ->
       let ty = Subst.erase_regions sv.V.sv_ty in
@@ -293,7 +286,7 @@ let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
     TODO: detailed comments. See [apply_proj_borrows]
 *)
 let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
-    (see : symbolic_expansion) (original_sv_ty : T.rty) : V.typed_avalue =
+    (see : V.symbolic_expansion) (original_sv_ty : T.rty) : V.typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
   assert (ty_has_regions_in_set regions original_sv_ty);

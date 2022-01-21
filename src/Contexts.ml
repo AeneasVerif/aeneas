@@ -68,6 +68,9 @@ let region_id_counter, fresh_region_id = RegionId.fresh_stateful_generator ()
 let abstraction_id_counter, fresh_abstraction_id =
   AbstractionId.fresh_stateful_generator ()
 
+let fun_call_id_counter, fresh_fun_call_id =
+  FunCallId.fresh_stateful_generator ()
+
 (** We shouldn't need to reset the global counters, but it might be good to
     do it from time to time, for instance every time we start evaluating/
     synthesizing a function.
@@ -83,7 +86,8 @@ let reset_global_counters () =
   symbolic_value_id_counter := SymbolicValueId.generator_zero;
   borrow_id_counter := BorrowId.generator_zero;
   region_id_counter := RegionId.generator_zero;
-  abstraction_id_counter := AbstractionId.generator_zero
+  abstraction_id_counter := AbstractionId.generator_zero;
+  fun_call_id_counter := FunCallId.generator_zero
 
 type binder = {
   index : VarId.id;  (** Unique variable identifier *)

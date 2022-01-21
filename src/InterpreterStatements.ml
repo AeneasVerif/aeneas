@@ -668,9 +668,14 @@ let create_empty_abstractions_from_abs_region_groups (kind : V.abs_kind)
   let abs_to_ancestors_regions : T.RegionId.Set.t V.AbstractionId.Map.t ref =
     ref V.AbstractionId.Map.empty
   in
+  (* We generate *one* fresh call identifier for all the introduced abstractions
+   * (it links them together) *)
+  let call_id = C.fresh_fun_call_id () in
   (* Auxiliary function to create one abstraction *)
-  let create_abs (rg : A.abs_region_group) : V.abs =
+  let create_abs (back_id : V.BackwardFunctionId.id) (rg : A.abs_region_group) :
+      V.abs =
     let abs_id = rg.T.id in
+    let back_id = Some back_id in
     let parents =
       List.fold_left
         (fun s pid -> V.AbstractionId.Set.add pid s)
@@ -695,10 +700,19 @@ let create_empty_abstractions_from_abs_region_groups (kind : V.abs_kind)
       V.AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
         !abs_to_ancestors_regions;
     (* Create the abstraction *)
-    { V.abs_id; kind; parents; regions; ancestors_regions; avalues = [] }
+    {
+      V.abs_id;
+      call_id;
+      back_id;
+      kind;
+      parents;
+      regions;
+      ancestors_regions;
+      avalues = [];
+    }
   in
   (* Apply *)
-  List.map create_abs rgl
+  V.BackwardFunctionId.mapi create_abs rgl
 
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =

@@ -4,6 +4,7 @@
 module T = Types
 module V = Values
 module C = Contexts
+module SA = SymbolicAst
 
 (** TODO: change the name *)
 type eval_error = EPanic
@@ -19,7 +20,7 @@ type statement_eval_res =
 (** Synthesized expresssion - dummy for now *)
 type sexpr = SOne | SList of sexpr list
 
-type eval_result = sexpr option
+type eval_result = SA.expression option
 
 type m_fun = C.eval_ctx -> eval_result
 (** Continuation function *)
