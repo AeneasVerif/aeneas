@@ -647,6 +647,12 @@ type sv_info = {
       (this is why we preemptively expand copyable symbolic values)
     - if a symbolic value contains regions: there is at most one occurrence
       of this value in the concrete env
+    - if there is an aproj_borrows in the environment, there must also be a
+      corresponding aproj_loans
+    - aproj_loans are mutually disjoint
+    - TODO: aproj_borrows are mutually disjoint
+    - the union of the aproj_loans contains the aproj_borrows applied on the
+      same symbolic values
  *)
 let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
   (* Small utility *)
@@ -717,9 +723,7 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
   (* Check *)
   let check_info _id info =
     (* TODO: check that:
-     * - the loans are mutually disjoint
      * - the borrows are mutually disjoint
-     * - the unions of the loans/borrows give everything
      *)
     (* A symbolic value can't be both in the regular environment and inside
      * projectors of borrows in abstractions *)
@@ -729,7 +733,34 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
     if ty_has_borrows ctx.type_context.type_infos info.ty then
       assert (info.env_count <= 1);
     (* A duplicated symbolic value is necessarily primitively copyable *)
-    assert (info.env_count <= 1 || ty_is_primitively_copyable info.ty)
+    assert (info.env_count <= 1 || ty_is_primitively_copyable info.ty);
+
+    assert (info.aproj_borrows = [] || info.aproj_loans <> []);
+    (* At the same time:
+     * - check that the loans don't intersect
+     * - compute the set of regions for which we project loans
+     *)
+    (* Check that the loan projectors contain the region projectors *)
+    let loan_regions =
+      List.fold_left
+        (fun regions linfo ->
+          let regions =
+            T.RegionId.Set.fold
+              (fun rid regions ->
+                assert (not (T.RegionId.Set.mem rid regions));
+                T.RegionId.Set.add rid regions)
+              regions linfo.regions
+          in
+          regions)
+        T.RegionId.Set.empty info.aproj_loans
+    in
+    (* Check that the union of the loan projectors contains the borrow projections. *)
+    List.iter
+      (fun binfo ->
+        assert (
+          projection_contains info.ty loan_regions binfo.proj_ty binfo.regions))
+      info.aproj_borrows;
+    ()
   in
 
   M.iter check_info !infos
