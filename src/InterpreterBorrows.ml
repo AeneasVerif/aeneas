@@ -838,6 +838,11 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
         failwith "Loan not eliminated"
   in
   let cf_check_disappeared : cm_fun = unit_to_cm_fun check_disappeared in
+  (* The complete sanity check: also check that after we ended a borrow,
+   * the invariant is preserved *)
+  let cf_check : cm_fun =
+    comp cf_check_disappeared (Invariants.cf_check_invariants config)
+  in
 
   (* Start by getting the borrow *)
   match end_borrow_get_borrow allowed_abs l ctx with
@@ -866,7 +871,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
           (* Retry to end the borrow *)
           let cc = comp cc (end_borrow config chain0 allowed_abs l) in
           (* Check and apply *)
-          comp cc cf_check_disappeared cf ctx
+          comp cc cf_check cf ctx
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           let allowed_abs' = None in
           (* End the outer borrow *)
@@ -874,7 +879,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
           (* Retry to end the borrow *)
           let cc = comp cc (end_borrow config chain0 allowed_abs l) in
           (* Check and apply *)
-          comp cc cf_check_disappeared cf ctx
+          comp cc cf_check cf ctx
       | OuterAbs abs_id ->
           (* The borrow is inside an asbtraction: check if the corresponding
            * loan is inside the same abstraction. If this is the case, we end
@@ -905,14 +910,14 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
                 end_abstraction config chain abs_id
           in
           (* Compose with a sanity check *)
-          comp cf_end_abs cf_check_disappeared cf ctx)
+          comp cf_end_abs cf_check cf ctx)
   | Ok (ctx, None) ->
       log#ldebug (lazy "End borrow: borrow not found");
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       assert (config.mode = SymbolicMode);
       (* Do a sanity check and continue *)
-      cf_check_disappeared cf ctx
+      cf_check cf ctx
   (* We found a borrow: give it back (i.e., update the corresponding loan) *)
   | Ok (ctx, Some bc) ->
       (* Sanity check: the borrowed value shouldn't contain loans *)
@@ -923,7 +928,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
       (* Give back the value *)
       let ctx = give_back config l bc ctx in
       (* Do a sanity check and continue *)
-      cf_check_disappeared cf ctx
+      cf_check cf ctx
 
 and end_borrows (config : C.config) (chain : borrow_or_abs_ids)
     (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t) : cm_fun
@@ -1004,6 +1009,9 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
             ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
             ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx)))
   in
+
+  (* Sanity check: ending an abstraction must preserve the invariants *)
+  let cc = comp cc (Invariants.cf_check_invariants config) in
 
   (* Apply the continuation *)
   cc cf ctx
