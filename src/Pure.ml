@@ -3,6 +3,7 @@ module T = Types
 module V = Values
 module E = Expressions
 module A = CfimAst
+module TypeDefId = T.TypeDefId
 module TypeVarId = T.TypeVarId
 module RegionId = T.RegionId
 module VariantId = T.VariantId
@@ -30,6 +31,24 @@ type ty =
   | Str
   | Array of ty (* TODO: there should be a constant with the array *)
   | Slice of ty
+[@@deriving show]
+
+type field = { field_name : string; field_ty : ty } [@@deriving show]
+
+type variant = { variant_name : string; fields : field list } [@@deriving show]
+
+type type_def_kind = Struct of field list | Enum of variant list
+[@@deriving show]
+
+type type_var = T.type_var [@@deriving show]
+
+type type_def = {
+  def_id : TypeDefId.id;
+  name : name;
+  type_params : type_var list;
+  kind : type_def_kind;
+}
+[@@deriving show]
 
 type scalar_value = V.scalar_value
 

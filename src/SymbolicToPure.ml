@@ -4,7 +4,9 @@ module T = Types
 module V = Values
 module E = Expressions
 module A = CfimAst
+module M = Modules
 module S = SymbolicAst
+open Pure
 
 type name =
   | FunName of A.FunDefId.id * V.BackwardFunctionId.id option
@@ -89,3 +91,83 @@ let fun_to_name (fdef : A.fun_def) (bid : V.BackwardFunctionId.id option) :
     | x :: n -> x :: add_to_last n
   in
   add_to_last fdef.name
+
+(** Generates a name for a type (simply reuses the name in the definition) *)
+let type_to_name (def : T.type_def) : Id.name = def.T.name
+
+type type_context = { type_defs : type_def TypeDefId.Map.t }
+
+type fun_context = unit
+(** TODO *)
+
+type synth_ctx = {
+  names : NameMap.t;
+  type_context : type_context;
+  fun_context : fun_context;
+  declarations : M.declaration_group list;
+}
+
+let rec translate_sty (ctx : synth_ctx) (ty : T.sty) : ty =
+  let translate = translate_sty ctx in
+  match ty with
+  | T.Adt (type_id, regions, tys) ->
+      assert (regions = []);
+      let tys = List.map translate tys in
+      Adt (type_id, tys)
+  | TypeVar vid -> TypeVar vid
+  | Bool -> Bool
+  | Char -> Char
+  | Never -> failwith "Unreachable"
+  | Integer int_ty -> Integer int_ty
+  | Str -> Str
+  | Array ty -> Array (translate ty)
+  | Slice ty -> Slice (translate ty)
+  | Ref (_, rty, _) -> translate rty
+
+let translate_field (ctx : synth_ctx) (f : T.field) : field =
+  let field_name = f.field_name in
+  let field_ty = translate_sty ctx f.field_ty in
+  { field_name; field_ty }
+
+let translate_fields (ctx : synth_ctx) (fl : T.field list) : field list =
+  List.map (translate_field ctx) fl
+
+let translate_variant (ctx : synth_ctx) (v : T.variant) : variant =
+  let variant_name = v.variant_name in
+  let fields = translate_fields ctx v.fields in
+  { variant_name; fields }
+
+let translate_variants (ctx : synth_ctx) (vl : T.variant list) : variant list =
+  List.map (translate_variant ctx) vl
+
+(** Translate a type def kind to IM *)
+let translate_type_def_kind (ctx : synth_ctx) (kind : T.type_def_kind) :
+    type_def_kind =
+  match kind with
+  | T.Struct fields -> Struct (translate_fields ctx fields)
+  | T.Enum variants -> Enum (translate_variants ctx variants)
+
+(** Translate a type definition from IM 
+
+    TODO: this is not symbolic to pure but IM to pure. Still, I don't see the
+    point of moving this definition for now.
+ *)
+let translate_type_def (ctx : synth_ctx) (def : T.type_def) :
+    synth_ctx * type_def =
+  (* Translate *)
+  let def_id = def.T.def_id in
+  let name = type_to_name def in
+  let type_params = def.type_params in
+  let kind = translate_type_def_kind ctx def.T.kind in
+  let def = { def_id; name; type_params; kind } in
+  (* Insert in the context *)
+  (* type context *)
+  let type_context = ctx.type_context in
+  let type_defs = type_context.type_defs in
+  let type_defs = TypeDefId.Map.add def_id def type_defs in
+  let type_context = { type_defs } in
+  (* names map *)
+  let names = NameMap.add (TypeName def_id) name ctx.names in
+  (* update the fields *)
+  let ctx = { ctx with type_context; names } in
+  (ctx, def)

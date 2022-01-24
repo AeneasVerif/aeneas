@@ -151,7 +151,7 @@ type name = string list [@@deriving show, ord]
 (** A name such as: `std::collections::vector` (which would be represented as
     [["std"; "collections"; "vector"]]) *)
 
-module NameOrderedType : C.OrderedType = struct
+module NameOrderedType : C.OrderedType with type t = name = struct
   type t = name
 
   let compare = compare_name
