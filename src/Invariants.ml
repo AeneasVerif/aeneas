@@ -602,7 +602,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                  * otherwise they should have been reduced to `_` *)
                 let abs = Option.get info in
                 assert (ty_has_regions_in_set abs.regions sv.V.sv_ty)
-            | V.AEndedProjLoans given_back_ls ->
+            | V.AEndedProjLoans (_msv, given_back_ls) ->
                 List.iter
                   (fun (_, proj) ->
                     match proj with

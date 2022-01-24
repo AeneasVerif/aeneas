@@ -322,7 +322,7 @@ module Values = struct
         ^ given_back ^ "]"
     | AProjBorrows (sv, rty) ->
         "(" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
-    | AEndedProjLoans given_back ->
+    | AEndedProjLoans (_, given_back) ->
         if given_back = [] then "_"
         else
           let given_back = List.map snd given_back in
@@ -997,7 +997,7 @@ module Module = struct
     String.concat "\n\n" all_defs
 end
 
-(** Pretty-printing for ASTs (functions based on an evaluation context) *)
+(** Pretty-printing for CFIM ASTs (functions based on an evaluation context) *)
 module EvalCtxCfimAst = struct
   let ety_to_string (ctx : C.eval_ctx) (t : T.ety) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in

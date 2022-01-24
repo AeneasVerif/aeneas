@@ -199,6 +199,12 @@ type mvalue = typed_value [@@deriving show]
      as part of the environment during a symbolic execution.
  *)
 
+type msymbolic_value = symbolic_value [@@deriving show]
+(** "Meta"-symbolic value.
+
+     See the explanations for [mvalue]
+ *)
+
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
     abstractions) we need to reborrow the shared values. When doing so, we lookup
     the shared values and apply some special projections to the shared value
@@ -229,6 +235,9 @@ class ['self] iter_aproj_base =
     method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
 
     method visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
+
+    method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for [aproj] map visitor *)
@@ -239,6 +248,9 @@ class ['self] map_aproj_base =
     method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
 
     method visit_mvalue : 'env -> mvalue -> mvalue = fun _ v -> v
+
+    method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
+      fun _ m -> m
   end
 
 type aproj =
@@ -284,10 +296,12 @@ type aproj =
           can't get updated/expanded: this means that we don't need to save
           any meta-value here.
        *)
-  | AEndedProjLoans of (mvalue * aproj) list
+  | AEndedProjLoans of msymbolic_value * (mvalue * aproj) list
       (** An ended projector of loans over a symbolic value.
       
           See the explanations for [AProjLoans]
+          
+          Note that we keep the original symbolic value as a meta-value.
        *)
   | AEndedProjBorrows of mvalue
       (** The only purpose of [AEndedProjBorrows] is to store, for synthesis

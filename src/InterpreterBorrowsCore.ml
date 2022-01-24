@@ -1094,7 +1094,7 @@ let update_aproj_loans_to_ended (abs_id : V.AbstractionId.id)
   (* Lookup the projector of loans *)
   let given_back = lookup_aproj_loans abs_id sv ctx in
   (* Create the new value for the projector *)
-  let nproj = V.AEndedProjLoans given_back in
+  let nproj = V.AEndedProjLoans (sv, given_back) in
   (* Insert it *)
   let ctx = update_aproj_loans abs_id sv nproj ctx in
   (* Return *)
