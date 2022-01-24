@@ -14,6 +14,7 @@ type call_id =
       (** A "regular" function (i.e., a function which is not a primitive operation) *)
   | Unop of E.unop
   | Binop of E.binop
+[@@deriving show, ord]
 
 type call = {
   call_id : call_id;

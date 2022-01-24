@@ -19,7 +19,7 @@ type place = { var_id : VarId.id; projection : projection } [@@deriving show]
 
 type borrow_kind = Shared | Mut | TwoPhaseMut [@@deriving show]
 
-type unop = Not | Neg [@@deriving show]
+type unop = Not | Neg [@@deriving show, ord]
 
 (** A binary operation
 
@@ -45,7 +45,7 @@ type binop =
   | Mul
   | Shl
   | Shr
-[@@deriving show]
+[@@deriving show, ord]
 
 (** Constant value for an operand
 

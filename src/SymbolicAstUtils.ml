@@ -55,7 +55,15 @@ let get_top_owned_ended_loans_borrows (abs : V.abs) : ended_loan_or_borrow list
         | AEndedMutLoan { child = _; given_back = _; given_back_meta } ->
             (* Add the meta-value and stop the exploration *)
             add_cloan given_back_meta
-        | AEndedSharedLoan (_, _) -> raise Unimplemented
+        | AEndedSharedLoan (_, _) ->
+            (* We don't dive into shared loans: there is nothing to give back
+             * inside (note that there could be a mutable borrow in the shared
+             * value, pointing to a mutable loan in the child avalue, but this
+             * borrow is in practice immutable *)
+            ()
+        | AIgnoredMutLoan (_, _) ->
+            (* There can be *inner* mutable loans, but not outer ones *)
+            failwith "Unreachable"
         | AEndedIgnoredMutLoan _ ->
             (* Dive in *)
             super#visit_aloan_content env lc

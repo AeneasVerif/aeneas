@@ -17,10 +17,10 @@ type var = {
 (** A variable, as used in a function definition *)
 
 type assumed_fun_id = BoxNew | BoxDeref | BoxDerefMut | BoxFree
-[@@deriving show]
+[@@deriving show, ord]
 
 type fun_id = Local of FunDefId.id | Assumed of assumed_fun_id
-[@@deriving show]
+[@@deriving show, ord]
 
 type assertion = { cond : operand; expected : bool } [@@deriving show]
 
