@@ -1,19 +1,9 @@
 # TODO
 
-0. improve the use of [comp] for composition of functions with continuations
-
-0. derive [ord] for types
-
 1. stateful maps/sets modules (hashtbl?)
 
 1. Check the occurrence of visitors like visit_AEndedMutLoan: the parameters are
    sometimes inverted!
-
-0. compute the region constraints for the type definitions
-
-2. set of types with mutable borrows (what to do when type variables appear under
-  shared borrows?), nested borrows...
-  necessary to know what to return.
 
 2. check types are not "infinite"
 
@@ -32,9 +22,6 @@
 
 6. add `mvalue` (meta values) stored in abstractions when ending loans
 
-7. fix the static regions (with projectors)
-   Before that, introduce a sanity check to make sure we don't use static regions.
-
 8. The following doesn't work:
   ```
   fn f1<'c, T>(p : (&'c mut T, &'c mut T)) -> (&'c mut T, &'c mut T)
@@ -52,7 +39,6 @@
   `AEndedProjLoans of (mvalue * aproj) list`
   If the list is empty, it means the value was not modified.
   
-
 * write a function to check that the code we are about to synthesize is in the proper
   subset. In particular:
   * borrow overwrites
@@ -145,3 +131,16 @@
 * Reduce projectors to `_` (ignored) when there are no region intersections
 
 * Add a `Collections.ml` file, with `Map` and `Set`
+
+* improve the use of [comp] for composition of functions with continuations
+
+* derive [ord] for types
+
+* compute the region constraints for the type definitions
+
+* set of types with mutable borrows (what to do when type variables appear under
+  shared borrows?), nested borrows...
+  necessary to know what to return.
+
+* fix the static regions (with projectors)
+  Before that, introduce a sanity check to make sure we don't use static regions.
