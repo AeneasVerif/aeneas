@@ -47,6 +47,17 @@ module type OrderedType = sig
   val show_t : t -> string
 end
 
+(** Ordered string *)
+module OrderedString : OrderedType with type t = string = struct
+  include String
+
+  let to_string s = s
+
+  let pp_t fmt s = Format.pp_print_string fmt s
+
+  let show_t s = s
+end
+
 module type Map = sig
   include Map.S
 
@@ -154,4 +165,200 @@ module MakeSet (Ord : OrderedType) : Set with type elt = Ord.t = struct
     pp_string "}"
 
   let show s = to_string None s
+end
+
+(** A map where the bindings are injective (i.e., if two keys are distinct,
+    their bindings are distinct).
+    
+    This is useful for instance when generating mappings from our internal
+    identifiers to names (i.e., strings) when generating code, in order to
+    make sure that we don't have potentially dangerous collisions.
+ *)
+module type MapInj = sig
+  type key
+
+  type elem
+
+  type t
+
+  val empty : t
+
+  val is_empty : t -> bool
+
+  val mem : key -> t -> bool
+
+  val add : key -> elem -> t -> t
+
+  val singleton : key -> elem -> t
+
+  val remove : key -> t -> t
+
+  val compare : (elem -> elem -> int) -> t -> t -> int
+
+  val equal : (elem -> elem -> bool) -> t -> t -> bool
+
+  val iter : (key -> elem -> unit) -> t -> unit
+
+  val fold : (key -> elem -> 'b -> 'b) -> t -> 'b -> 'b
+
+  val for_all : (key -> elem -> bool) -> t -> bool
+
+  val exists : (key -> elem -> bool) -> t -> bool
+
+  val filter : (key -> elem -> bool) -> t -> t
+
+  val partition : (key -> elem -> bool) -> t -> t * t
+
+  val cardinal : t -> int
+
+  val bindings : t -> (key * elem) list
+
+  val min_binding : t -> key * elem
+
+  val min_binding_opt : t -> (key * elem) option
+
+  val max_binding : t -> key * elem
+
+  val max_binding_opt : t -> (key * elem) option
+
+  val choose : t -> key * elem
+
+  val choose_opt : t -> (key * elem) option
+
+  val split : key -> t -> t * elem option * t
+
+  val find : key -> t -> elem
+
+  val find_opt : key -> t -> elem option
+
+  val find_first : (key -> bool) -> t -> key * elem
+
+  val find_first_opt : (key -> bool) -> t -> (key * elem) option
+
+  val find_last : (key -> bool) -> t -> key * elem
+
+  val find_last_opt : (key -> bool) -> t -> (key * elem) option
+
+  val to_seq : t -> (key * elem) Seq.t
+
+  val to_seq_from : key -> t -> (key * elem) Seq.t
+
+  val add_seq : (key * elem) Seq.t -> t -> t
+
+  val of_seq : (key * elem) Seq.t -> t
+end
+
+(** See [MapInj] *)
+module MakeMapInj (Key : OrderedType) (Elem : OrderedType) :
+  MapInj with type key = Key.t with type elem = Elem.t = struct
+  module Map = MakeMap (Key)
+  module Set = MakeSet (Elem)
+
+  type key = Key.t
+
+  type elem = Elem.t
+
+  type t = { map : elem Map.t; elems : Set.t }
+
+  let empty = { map = Map.empty; elems = Set.empty }
+
+  let is_empty m = Map.is_empty m.map
+
+  let mem k m = Map.mem k m.map
+
+  let add k e m =
+    assert (not (Set.mem e m.elems));
+    { map = Map.add k e m.map; elems = Set.add e m.elems }
+
+  let singleton k e = { map = Map.singleton k e; elems = Set.singleton e }
+
+  let remove k m =
+    match Map.find_opt k m.map with
+    | None -> m
+    | Some x -> { map = Map.remove k m.map; elems = Set.remove x m.elems }
+
+  let compare f m1 m2 = Map.compare f m1.map m2.map
+
+  let equal f m1 m2 = Map.equal f m1.map m2.map
+
+  let iter f m = Map.iter f m.map
+
+  let fold f m x = Map.fold f m.map x
+
+  let for_all f m = Map.for_all f m.map
+
+  let exists f m = Map.exists f m.map
+
+  (** Small helper *)
+  let bindings_to_elems_set (bls : (key * elem) list) : Set.t =
+    let elems = List.map snd bls in
+    let elems = List.fold_left (fun s e -> Set.add e s) Set.empty elems in
+    elems
+
+  (** Small helper *)
+  let map_to_elems_set (map : elem Map.t) : Set.t =
+    bindings_to_elems_set (Map.bindings map)
+
+  (** Small helper *)
+  let map_to_t (map : elem Map.t) : t =
+    let elems = map_to_elems_set map in
+    { map; elems }
+
+  let filter f m =
+    let map = Map.filter f m.map in
+    let elems = map_to_elems_set map in
+    { map; elems }
+
+  let partition f m =
+    let map1, map2 = Map.partition f m.map in
+    (map_to_t map1, map_to_t map2)
+
+  let cardinal m = Map.cardinal m.map
+
+  let bindings m = Map.bindings m.map
+
+  let min_binding m = Map.min_binding m.map
+
+  let min_binding_opt m = Map.min_binding_opt m.map
+
+  let max_binding m = Map.max_binding m.map
+
+  let max_binding_opt m = Map.max_binding_opt m.map
+
+  let choose m = Map.choose m.map
+
+  let choose_opt m = Map.choose_opt m.map
+
+  let split k m =
+    let l, data, r = Map.split k m.map in
+    let l = map_to_t l in
+    let r = map_to_t r in
+    (l, data, r)
+
+  let find k m = Map.find k m.map
+
+  let find_opt k m = Map.find_opt k m.map
+
+  let find_first k m = Map.find_first k m.map
+
+  let find_first_opt k m = Map.find_first_opt k m.map
+
+  let find_last k m = Map.find_last k m.map
+
+  let find_last_opt k m = Map.find_last_opt k m.map
+
+  let to_seq m = Map.to_seq m.map
+
+  let to_seq_from k m = Map.to_seq_from k m.map
+
+  let rec add_seq s m =
+    (* Note that it is important to check that we don't add bindings mapping
+     * to the same element *)
+    match s () with
+    | Seq.Nil -> m
+    | Seq.Cons ((k, e), s) ->
+        let m = add k e m in
+        add_seq s m
+
+  let of_seq s = add_seq s empty
 end

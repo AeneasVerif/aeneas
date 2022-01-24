@@ -2,6 +2,8 @@
 
 0. update the end borrows internal to abstractions to not introduce a Bottom
 
+1. reorder the branches of matches
+
 1. stateful maps/sets modules (hashtbl?)
 
 1. Check the occurrence of visitors like visit_AEndedMutLoan: the parameters are

@@ -147,6 +147,21 @@ module IdGen () : Id = struct
   module Map = C.MakeMap (Ord)
 end
 
-type name = string list [@@deriving show]
+type name = string list [@@deriving show, ord]
 (** A name such as: `std::collections::vector` (which would be represented as
     [["std"; "collections"; "vector"]]) *)
+
+module NameOrderedType : C.OrderedType = struct
+  type t = name
+
+  let compare = compare_name
+
+  let to_string = String.concat "::"
+
+  let pp_t = pp_name
+
+  let show_t = show_name
+end
+
+module NameMap = C.MakeMap (NameOrderedType)
+module NameSet = C.MakeSet (NameOrderedType)
