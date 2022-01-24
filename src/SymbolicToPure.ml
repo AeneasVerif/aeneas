@@ -111,6 +111,7 @@ let rec translate_sty (ctx : synth_ctx) (ty : T.sty) : ty =
   let translate = translate_sty ctx in
   match ty with
   | T.Adt (type_id, regions, tys) ->
+      (* Can't translate types with regions for now *)
       assert (regions = []);
       let tys = List.map translate tys in
       Adt (type_id, tys)
@@ -157,6 +158,8 @@ let translate_type_def (ctx : synth_ctx) (def : T.type_def) :
   (* Translate *)
   let def_id = def.T.def_id in
   let name = type_to_name def in
+  (* Can't translate types with regions for now *)
+  assert (def.region_params = []);
   let type_params = def.type_params in
   let kind = translate_type_def_kind ctx def.T.kind in
   let def = { def_id; name; type_params; kind } in
