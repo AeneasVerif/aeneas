@@ -21,6 +21,22 @@ let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
 let ty_is_unit (ty : 'r ty) : bool =
   match ty with Adt (Tuple, [], []) -> true | _ -> false
 
+let ty_is_adt (ty : 'r ty) : bool =
+  match ty with Adt (_, _, _) -> true | _ -> false
+
+let ty_as_adt (ty : 'r ty) : type_id * 'r list * 'r ty list =
+  match ty with
+  | Adt (id, regions, tys) -> (id, regions, tys)
+  | _ -> failwith "Unreachable"
+
+let ty_is_custom_adt (ty : 'r ty) : bool =
+  match ty with Adt (AdtId _, _, _) -> true | _ -> false
+
+let ty_as_custom_adt (ty : 'r ty) : TypeDefId.id * 'r list * 'r ty list =
+  match ty with
+  | Adt (AdtId id, regions, tys) -> (id, regions, tys)
+  | _ -> failwith "Unreachable"
+
 (** The unit type *)
 let mk_unit_ty : ety = Adt (Tuple, [], [])
 

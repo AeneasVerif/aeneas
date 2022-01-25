@@ -49,29 +49,22 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             assert (otherwise_see = None);
             (* Return *)
             ExpandInt (int_ty, branches, otherwise)
-        | T.Adt (_, _, _) -> (
-            (* An ADT expansion can lead to branching: check if this is the case *)
-            match ls with
-            | [] -> failwith "Ill-formed ADT expansion"
-            | [ (see, exp) ] ->
-                (* No branching *)
-                ExpandNoBranch (Option.get see, exp)
-            | ls ->
-                (* Branching: it is necessarily an enumeration expansion *)
-                let get_variant (see : V.symbolic_expansion option) :
-                    T.VariantId.id option * V.symbolic_value list =
-                  match see with
-                  | Some (V.SeAdt (vid, fields)) -> (vid, fields)
-                  | _ -> failwith "Ill-formed branching ADT expansion"
-                in
-                let exp =
-                  List.map
-                    (fun (see, exp) ->
-                      let vid, fields = get_variant see in
-                      (vid, fields, exp))
-                    ls
-                in
-                ExpandEnum exp)
+        | T.Adt (_, _, _) ->
+            (* Branching: it is necessarily an enumeration expansion *)
+            let get_variant (see : V.symbolic_expansion option) :
+                T.VariantId.id option * V.symbolic_value list =
+              match see with
+              | Some (V.SeAdt (vid, fields)) -> (vid, fields)
+              | _ -> failwith "Ill-formed branching ADT expansion"
+            in
+            let exp =
+              List.map
+                (fun (see, exp) ->
+                  let vid, fields = get_variant see in
+                  (vid, fields, exp))
+                ls
+            in
+            ExpandAdt exp
         | T.Ref (_, _, _) -> (
             (* Reference expansion: there should be one branch *)
             match ls with

@@ -66,6 +66,7 @@ type symbolic_value = {
           symbolic value was introduced.
        *)
 }
+(** TODO: remove? *)
 
 type value = Concrete of constant_value | Adt of adt_value
 
@@ -114,11 +115,22 @@ type left_value = unit
 type let_bindings =
   | Call of var_or_dummy list * call
       (** The called function and the tuple of returned values *)
-  | Assignment of var * place
+  | Assignment of var * operand
       (** Variable assignment: the introduced variable and the place we read *)
-  | ExpandEnum of var_or_dummy list * TypeDefId.id * VariantId.id * place
-      (** When expanding an enumeration with exactly one variant, we first
-          introduce something like this (with [ExpandEnum]):
+  | Deconstruct of
+      var_or_dummy list * (TypeDefId.id * VariantId.id) option * operand
+      (** This is used in two cases.
+
+          1. When deconstructing a tuple:
+          ```
+          let (x, y) = p in ...
+          ```
+          (not all languages have syntax like `p.0`, `p.1`... and it is more
+          readable anyway).
+          
+          2. When expanding an enumeration with one variant.
+          
+          In this case, [Deconstruct] has to be understood as:
           ```
           let Cons x tl = ls in
           ...
@@ -134,8 +146,8 @@ type let_bindings =
           
           Note that we prefer not handling this case through a match.
           TODO: actually why not encoding it as a match internally, then
-          generating the `let Cons ... = ... in ...` if we check there
-          is exactly one variant?...
+          generating the `let Cons ... = ... in ...` upon outputting the
+          code if we detect there is exactly one variant?...
        *)
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
@@ -156,7 +168,7 @@ and switch_body =
 
 and match_branch = {
   variant_id : VariantId.id;
-  vars : symbolic_value list;
+  vars : var_or_dummy list;
   branch : expression;
 }
 

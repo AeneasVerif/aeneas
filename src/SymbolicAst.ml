@@ -40,12 +40,15 @@ type expression =
 and expansion =
   | ExpandNoBranch of V.symbolic_expansion * expression
       (** A symbolic expansion which doesn't generate a branching.
-          Includes: expansion of borrows, structures, enumerations with
-          exactly one variant... *)
-  | ExpandEnum of
+          Includes:
+          - concrete expansion
+          - borrow expansion
+          *Doesn't* include:
+          - expansion of ADTs with one variant
+       *)
+  | ExpandAdt of
       (T.VariantId.id option * V.symbolic_value list * expression) list
-      (** A symbolic expansion of an ADT value which leads to branching (i.e.,
-          a match over an enumeration with strictly more than one variant *)
+      (** ADT expansion *)
   | ExpandBool of expression * expression
       (** A boolean expansion (i.e, an `if ... then ... else ...`) *)
   | ExpandInt of
