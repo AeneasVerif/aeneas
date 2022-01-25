@@ -23,8 +23,14 @@ type call = {
   dest : V.symbolic_value;
 }
 
+(** **Rk.:** here, [expression] is not at all equivalent to the expressions
+    used in CFIM: they are a first step towards lambda-calculus expressions.
+ *)
 type expression =
-  | Return
+  | Return of V.typed_value
+      (** The typed value stored in [Return] is the value contained in the return
+          variable upon returning
+       *)
   | Panic
   | FunCall of call * expression
   | EndAbstraction of V.abs * expression
@@ -34,8 +40,8 @@ type expression =
 and expansion =
   | ExpandNoBranch of V.symbolic_expansion * expression
       (** A symbolic expansion which doesn't generate a branching.
-          Includes: expansion of borrows, structures, enumerations with one
-          variants... *)
+          Includes: expansion of borrows, structures, enumerations with
+          exactly one variant... *)
   | ExpandEnum of
       (T.VariantId.id option * V.symbolic_value list * expression) list
       (** A symbolic expansion of an ADT value which leads to branching (i.e.,

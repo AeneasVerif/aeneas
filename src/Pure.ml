@@ -9,6 +9,7 @@ module RegionId = T.RegionId
 module VariantId = T.VariantId
 module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
+module FunDefId = A.FunDefId
 
 module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward
@@ -16,6 +17,9 @@ module SynthPhaseId = IdGen ()
 
 module BackwardFunId = IdGen ()
 (** Every backward function has its identifier *)
+
+module VarId = IdGen ()
+(** Pay attention to the fact that we also define a [VarId] module in Values *)
 
 type ty =
   | Adt of T.type_id * ty list
@@ -26,7 +30,6 @@ type ty =
   | TypeVar of TypeVarId.id
   | Bool
   | Char
-  | Never
   | Integer of T.integer_type
   | Str
   | Array of ty (* TODO: there should be a constant with the array *)
@@ -64,10 +67,7 @@ type symbolic_value = {
        *)
 }
 
-type value =
-  | Concrete of constant_value
-  | Adt of adt_value
-  | Symbolic of symbolic_value
+type value = Concrete of constant_value | Adt of adt_value
 
 and adt_value = {
   variant_id : (VariantId.id option[@opaque]);
@@ -76,13 +76,27 @@ and adt_value = {
 
 and typed_value = { value : value; ty : ty }
 
+type var = { id : VarId.id; ty : ty }
+(** Because we introduce a lot of temporary variables, the list of variables
+    is not fixed: we thus must carry all its information with the variable
+    itself
+ *)
+
+(** Sometimes, when introducing several variables in an assignment (because
+    deconstructing a tuple) we can ignore some of the values: in such situation
+    we introduce dummy variables (extracted to "_").
+ *)
+type var_or_dummy = Var of var | Dummy
+
 type projection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 
 type projection = projection_elem list
 
-type operand = typed_value
+type place = { var : VarId.id; projection : projection }
 
-type assertion = { cond : operand; expected : bool }
+type operand = Value of typed_value | Place of place
+
+(* type assertion = { cond : operand; expected : bool } *)
 
 type fun_id =
   | Local of A.FunDefId.id * BackwardFunId.id option
@@ -94,20 +108,45 @@ type fun_id =
 
 type call = { func : fun_id; type_params : ty list; args : operand list }
 
-type let_bindings = { call : call; bindings : symbolic_value list }
+type left_value = unit
+(** TODO: assignment left value *)
+
+type let_bindings =
+  | Call of var_or_dummy list * call
+      (** The called function and the tuple of returned values *)
+  | Assignment of var * place
+      (** Variable assignment: the introduced variable and the place we read *)
+  | ExpandEnum of var_or_dummy list * TypeDefId.id * VariantId.id * place
+      (** When expanding an enumeration with exactly one variant, we first
+          introduce something like this (with [ExpandEnum]):
+          ```
+          let Cons x tl = ls in
+          ...
+          ```
+          
+          Later, depending on the language we extract to, we can eventually
+          update it to something like this (for F*, for instance):
+          ```
+          let x = Cons?.v ls in
+          let tl = Cons?.tl ls in
+          ...
+          ```
+          
+          Note that we prefer not handling this case through a match.
+          TODO: actually why not encoding it as a match internally, then
+          generating the `let Cons ... = ... in ...` if we check there
+          is exactly one variant?...
+       *)
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM. They are lambda-calculus expressions, and are thus actually
     more general than the CFIM statements, in a sense.
  *)
 type expression =
+  | Return of operand
+  | Panic
   | Let of let_bindings * expression
       (** Let bindings include the let-bindings introduced because of function calls *)
-  | Assert of assertion
-  | Return of typed_value
-  | Panic of SynthPhaseId.id
-  | Nop
-  | Sequence of expression * expression
   | Switch of operand * switch_body
 
 and switch_body =
@@ -119,4 +158,27 @@ and match_branch = {
   variant_id : VariantId.id;
   vars : symbolic_value list;
   branch : expression;
+}
+
+type fun_sig = {
+  type_params : type_var list;
+  inputs : ty list;
+  outputs : ty list;
+      (** The list of outputs.
+
+          In case of a forward function, the list will have length = 1.
+          However, in case of backward function, the list may have length > 1.
+          If the length is > 1, it gets extracted to a tuple type. Followingly,
+          we could not use a list because we can encode tuples, but here we
+          want to account for the fact that we immediately deconstruct the tuple
+          upon calling the backward function (because the backward function is
+          called to update a set of values in the environment).
+       *)
+}
+
+type fun_def = {
+  def_id : FunDefId.id;
+  name : name;
+  signature : fun_sig;
+  body : expression;
 }

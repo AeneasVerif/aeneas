@@ -2,6 +2,7 @@ module L = Logging
 module T = Types
 module A = CfimAst
 module M = Modules
+module SA = SymbolicAst
 open Cps
 open InterpreterUtils
 open InterpreterStatements
@@ -170,8 +171,8 @@ module Test = struct
     List.iter test_unit_fun unit_funs
 
   (** Execute the symbolic interpreter on a function. *)
-  let test_function_symbolic (config : C.partial_config) (m : M.cfim_module)
-      (fid : A.FunDefId.id) : unit =
+  let test_function_symbolic (config : C.partial_config) (synthesize : bool)
+      (m : M.cfim_module) (fid : A.FunDefId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = A.FunDefId.nth m.functions fid in
 
@@ -185,10 +186,11 @@ module Test = struct
     (* Create the continuation to check the function's result *)
     let cf_check res _ =
       match res with
-      | Return | Panic ->
+      | Return -> if synthesize then raise Errors.Unimplemented else None
+      | Panic ->
           (* Note that as we explore all the execution branches, one of
            * the executions can lead to a panic *)
-          None
+          if synthesize then Some SA.Panic else None
       | _ ->
           failwith
             ("Unit test failed (symbolic execution) on: "
@@ -205,8 +207,8 @@ module Test = struct
       TODO: for now we ignore the functions which contain loops, because
       they are not supported by the symbolic interpreter.
    *)
-  let test_functions_symbolic (config : C.partial_config) (m : M.cfim_module) :
-      unit =
+  let test_functions_symbolic (config : C.partial_config) (synthesize : bool)
+      (m : M.cfim_module) : unit =
     let no_loop_funs =
       List.filter (fun f -> not (CfimAstUtils.fun_def_has_loops f)) m.functions
     in
@@ -214,7 +216,7 @@ module Test = struct
       (* Execute the function - note that as the symbolic interpreter explores
        * all the path, some executions are expected to "panic": we thus don't
        * check the return value *)
-      test_function_symbolic config m def.A.def_id
+      test_function_symbolic config synthesize m def.A.def_id
     in
     List.iter test_fun no_loop_funs
 end

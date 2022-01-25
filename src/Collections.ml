@@ -61,6 +61,10 @@ end
 module type Map = sig
   include Map.S
 
+  val add_list : (key * 'a) list -> 'a t -> 'a t
+
+  val of_list : (key * 'a) list -> 'a t
+
   val to_string : string option -> ('a -> string) -> 'a t -> string
   (** "Simple" pretty printing function.
   
@@ -79,6 +83,10 @@ end
 module MakeMap (Ord : OrderedType) : Map with type key = Ord.t = struct
   module Map = Map.Make (Ord)
   include Map
+
+  let add_list bl m = List.fold_left (fun s (key, e) -> add key e s) m bl
+
+  let of_list bl = add_list bl empty
 
   let to_string indent_opt a_to_string m =
     let indent, break =
@@ -121,6 +129,10 @@ end
 module type Set = sig
   include Set.S
 
+  val add_list : elt list -> t -> t
+
+  val of_list : elt list -> t
+
   val to_string : string option -> t -> string
   (** "Simple" pretty printing function.
   
@@ -139,6 +151,10 @@ end
 module MakeSet (Ord : OrderedType) : Set with type elt = Ord.t = struct
   module Set = Set.Make (Ord)
   include Set
+
+  let add_list bl s = List.fold_left (fun s e -> add e s) s bl
+
+  let of_list bl = add_list bl empty
 
   let to_string indent_opt m =
     let indent, break =
@@ -246,6 +262,10 @@ module type MapInj = sig
   val add_seq : (key * elem) Seq.t -> t -> t
 
   val of_seq : (key * elem) Seq.t -> t
+
+  val add_list : (key * elem) list -> t -> t
+
+  val of_list : (key * elem) list -> t
 end
 
 (** See [MapInj] *)
@@ -361,4 +381,8 @@ module MakeMapInj (Key : OrderedType) (Elem : OrderedType) :
         add_seq s m
 
   let of_seq s = add_seq s empty
+
+  let add_list ls m = List.fold_left (fun m (key, elem) -> add key elem m) m ls
+
+  let of_list ls = add_list ls empty
 end
