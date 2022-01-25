@@ -589,17 +589,31 @@ let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
 let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
     typed_rvalue option =
   let translate = typed_avalue_to_consumed ctx in
-  let value =
-    match av.value with
-    | AConcrete _ -> failwith "Unreachable"
-    | AAdt av -> raise Unimplemented
-    | ABottom -> raise Unimplemented
-    | ALoan lc -> aloan_content_to_consumed ctx lc
-    | ABorrow bc -> aborrow_content_to_consumed ctx bc
-    | ASymbolic aproj -> aproj_to_consumed ctx aproj
-    | AIgnored -> None
-  in
-  raise Unimplemented
+  match av.value with
+  | AConcrete _ -> failwith "Unreachable"
+  | AAdt adt_v -> (
+      (* Translate the field values *)
+      let field_values = List.filter_map translate adt_v.field_values in
+      (* For now, only tuples can contain borrows *)
+      let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
+      match adt_id with
+      | T.AdtId _ | T.Assumed T.Box ->
+          assert (field_values = []);
+          None
+      | T.Tuple ->
+          (* Return *)
+          let variant_id = adt_v.variant_id in
+          if field_values = [] then None
+          else
+            let value = RvAdt { variant_id; field_values } in
+            let ty = translate_fwd_ty ctx av.ty in
+            let rv = { value; ty } in
+            Some rv)
+  | ABottom -> failwith "Unreachable"
+  | ALoan lc -> aloan_content_to_consumed ctx lc
+  | ABorrow bc -> aborrow_content_to_consumed ctx bc
+  | ASymbolic aproj -> aproj_to_consumed ctx aproj
+  | AIgnored -> None
 
 and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
     typed_rvalue option =
