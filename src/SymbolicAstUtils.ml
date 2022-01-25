@@ -21,6 +21,8 @@ type ended_loan_or_borrow =
     loans/borrows of an abstraction
     
     We expect an abstraction where all the loans/borrows have ended.
+    
+    TODO: remove
  *)
 let get_top_owned_ended_loans_borrows (abs : V.abs) : ended_loan_or_borrow list
     =

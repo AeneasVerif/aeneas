@@ -105,6 +105,7 @@ let mk_typed_rvalue_from_var (v : var) : typed_rvalue =
   let ty = v.ty in
   { value; ty }
 
+(* TODO: move *)
 let mk_typed_lvalue_from_var (v : var) : typed_lvalue =
   let value = LvVar (Var v) in
   let ty = v.ty in
@@ -113,12 +114,6 @@ let mk_typed_lvalue_from_var (v : var) : typed_lvalue =
 (* TODO: move *)
 let type_def_is_enum (def : T.type_def) : bool =
   match def.kind with T.Struct _ -> false | Enum _ -> true
-
-(* TODO: move *)
-let mk_typed_lvalue_from_var (v : var) : typed_lvalue =
-  let value = LvVar (Var v) in
-  let ty = v.ty in
-  { value; ty }
 
 type type_context = {
   types_infos : TA.type_infos;
@@ -155,6 +150,12 @@ type bs_ctx = {
   fun_context : fun_context;
   fun_def : A.fun_def;
   bid : T.RegionGroupId.id option;
+  sv_to_var : var V.SymbolicValueId.Map.t;
+      (** Whenever we encounter a new symbolic value (introduced because of
+      a symbolic expansion or upon ending an abstraction, for instance)
+      we introduce a new variable (with a let-binding).
+   *)
+  var_counter : VarId.generator;
   forward_inputs : var list;
       (** The input parameters for the forward function *)
   backward_inputs : var list T.RegionGroupId.Map.t;
@@ -192,11 +193,15 @@ let fs_ctx_to_bs_ctx (fs_ctx : fs_ctx) : bs_ctx =
   } =
     fs_ctx
   in
+  let sv_to_var = V.SymbolicValueId.Map.empty in
+  let var_counter = VarId.generator_zero in
   let calls = V.FunCallId.Map.empty in
   let abstractions = V.AbstractionId.Map.empty in
   {
     fun_def;
     bid;
+    sv_to_var;
+    var_counter;
     type_context;
     fun_context;
     forward_inputs;
@@ -509,7 +514,29 @@ let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
   (* Return *)
   { type_params; inputs; outputs }
 
+let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
+    bs_ctx * var =
+  (* Generate the fresh variable *)
+  let id, var_counter = VarId.fresh ctx.var_counter in
+  let ty = translate_fwd_ty ctx sv.sv_ty in
+  let var = { id; ty } in
+  (* Insert in the map *)
+  let sv_to_var = V.SymbolicValueId.Map.add sv.sv_id var ctx.sv_to_var in
+  (* Update the context *)
+  let ctx = { ctx with var_counter; sv_to_var } in
+  (* Return *)
+  (ctx, var)
+
+let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
+    : bs_ctx * var list =
+  List.fold_left_map (fun ctx sv -> fresh_var_for_symbolic_value sv ctx) ctx svl
+
+let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
+  V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
+
 (** Translate a typed value.
+
+    It is used, for instance, on values used as inputs for function calls.
 
     **IMPORTANT**: this function makes the assumption that the typed value
     doesn't contain ⊥. This means in particular that symbolic values don't
@@ -524,17 +551,6 @@ let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
  *)
 let translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
     typed_rvalue =
-  raise Unimplemented
-
-let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
-    bs_ctx * var =
-  raise Unimplemented
-
-let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
-    : bs_ctx * var list =
-  List.fold_left_map (fun ctx sv -> fresh_var_for_symbolic_value sv ctx) ctx svl
-
-let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   raise Unimplemented
 
 let typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
