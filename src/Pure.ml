@@ -54,17 +54,6 @@ type scalar_value = V.scalar_value
 
 type constant_value = V.constant_value
 
-type symbolic_value = {
-  sv_id : SymbolicValueId.id;
-  sv_ty : ty;
-  sv_rty : T.rty;
-  sv_ended_regions : RegionId.Set.t;
-      (** We need to remember what was the set of ended regions at the time the
-          symbolic value was introduced.
-       *)
-}
-(** TODO: remove *)
-
 type value = Concrete of constant_value | Adt of adt_value
 
 and adt_value = {
@@ -96,8 +85,8 @@ type projection = projection_elem list
 type place = { var : VarId.id; projection : projection }
 
 type rvalue =
-  | RvPlace of place
   | RvConcrete of constant_value
+  | RvPlace of place
   | RvAdt of adt_rvalue
 
 and adt_rvalue = {

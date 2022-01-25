@@ -543,15 +543,40 @@ let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
     contain ended regions.
     
     TODO: we might want to remember in the symbolic AST the set of ended
-    regions, at the points where we need it, for sanity checks.
+    regions, at the points where we need it, for sanity checks (though the
+    sanity checks in the symbolic interpreter should be enough).
     The points where we need this set so far:
     - function call
     - end abstraction
     - return
+    
+    TODO: we need the evaluation context to lookup shared borrows!!!
  *)
-let translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
+let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
     typed_rvalue =
-  raise Unimplemented
+  let translate = translate_typed_value_to_rvalue ctx in
+  let value =
+    match v.value with
+    | V.Concrete cv -> RvConcrete cv
+    | Adt av -> raise Unimplemented
+    | Bottom -> failwith "Unreachable"
+    | Loan lc -> (
+        match lc with
+        | SharedLoan (_, v) -> (translate v).value
+        | MutLoan _ -> failwith "Unreachable")
+    | Borrow bc -> (
+        match bc with
+        | V.SharedBorrow _ -> raise Unimplemented
+        | V.InactivatedMutBorrow _ -> failwith "Unreachable"
+        | V.MutBorrow (_, v) ->
+            (* Borrows are the identity in the extraction *)
+            (translate v).value)
+    | Symbolic sv ->
+        (* TODO: add sanity checks *)
+        raise Unimplemented
+  in
+  let ty = translate_fwd_ty ctx v.ty in
+  { value; ty }
 
 let typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
     typed_rvalue option =
