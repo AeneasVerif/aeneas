@@ -722,10 +722,12 @@ and typed_avalue = { value : avalue; ty : rty }
 (** The kind of an abstraction, which keeps track of its origin *)
 type abs_kind =
   | FunCall  (** The abstraction was introduced because of a function call *)
-  | Synth
-      (** The abstraction is used to keep track of the input/return value of
-       the function we are currently synthesizing.
-    *)
+  | SynthInput
+      (** The abstraction keeps track of the input values of the function
+          we are currently synthesizing. *)
+  | SynthRet
+      (** The abstraction "absorbed" the value returned by the function we
+          are currently synthesizing *)
 [@@deriving show]
 
 type abs = {

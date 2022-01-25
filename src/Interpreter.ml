@@ -81,7 +81,7 @@ module Test = struct
     let call_id = C.fresh_fun_call_id () in
     assert (call_id = V.FunCallId.zero);
     let empty_absl =
-      create_empty_abstractions_from_abs_region_groups call_id V.Synth
+      create_empty_abstractions_from_abs_region_groups call_id V.SynthInput
         inst_sg.A.regions_hierarchy
     in
     (* Add the avalues to the abstractions and insert them in the context *)

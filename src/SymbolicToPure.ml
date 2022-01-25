@@ -273,6 +273,18 @@ let rec list_parent_region_groups (def : A.fun_def) (gid : T.RegionGroupId.id) :
   in
   parents
 
+(** Small utility: same as [list_parent_region_groups], but returns an ordered list *)
+let list_ordered_parent_region_groups (def : A.fun_def)
+    (gid : T.RegionGroupId.id) : T.RegionGroupId.id list =
+  let pset = list_parent_region_groups def gid in
+  let parents =
+    List.filter
+      (fun (rg : T.region_var_group) -> T.RegionGroupId.Set.mem rg.id pset)
+      def.signature.regions_hierarchy
+  in
+  let parents = List.map (fun (rg : T.region_var_group) -> rg.id) parents in
+  parents
+
 let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
     (bid : V.BackwardFunctionId.id option) : fun_sig =
   let sg = def.signature in
@@ -348,6 +360,19 @@ let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
   (* Return *)
   { type_params; inputs; outputs }
 
+(** Translate a typed value.
+
+    **IMPORTANT**: this function makes the assumption that the typed value
+    doesn't contain ⊥. This means in particular that symbolic values don't
+    contain ended regions.
+    
+    TODO: we might want to remember in the symbolic AST the set of ended
+    regions, at the points where we need it, for sanity checks.
+    The points where we need this set so far:
+    - function call
+    - end abstraction
+    - return
+ *)
 let translate_typed_value (ctx : bs_ctx) (v : V.typed_value) : typed_value =
   raise Unimplemented
 
@@ -368,6 +393,29 @@ let mk_place_from_var (v : var) : place = { var = v.id; projection = [] }
 (* TODO: move *)
 let type_def_is_enum (def : type_def) : bool =
   match def.kind with Struct _ -> false | Enum _ -> true
+
+let typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
+    typed_value option =
+  raise Unimplemented
+
+let typed_avalue_to_given_back (ctx : bs_ctx) (av : V.typed_avalue) :
+    typed_value option =
+  raise Unimplemented
+
+let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_value list =
+  List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
+
+let abs_to_given_back (ctx : bs_ctx) (abs : V.abs) : typed_value list =
+  List.filter_map (typed_avalue_to_given_back ctx) abs.avalues
+
+(** Return the ordered list of the (transitive) parents of a given abstraction.
+
+    Is used for instance when collecting the input values given to all the
+    parent functions, in order to properly instantiate an 
+ *)
+let get_abs_ordered_parents (ctx : bs_ctx) (call_id : S.call_id)
+    (gid : T.RegionGroupId.id) : S.call * V.abs list =
+  raise Unimplemented
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
   match e with
@@ -393,11 +441,31 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
       let e = translate_expression e ctx in
       (* Put together *)
       Let (Call ([ Var dest ], call), e)
-  | EndAbstraction (abs, e) -> raise Unimplemented
+  | EndAbstraction (abs, e) -> translate_end_abstraction abs e
   | Expansion (sv, exp) -> translate_expansion sv exp ctx
   | Meta (_, e) ->
       (* We ignore the meta information *)
       translate_expression e ctx
+
+and translate_end_abstraction (abs : V.abs) (e : S.expression) : expression =
+  match abs.kind with
+  | V.SynthInput ->
+      (* There are no nested borrows for now: we shouldn't get there *)
+      raise Unimplemented
+  | V.FunCall ->
+      (* Retrive the orignal call and the parent abstractions *)
+      (* Retrieve the values consumed when we called the forward function and
+       * ended the parent backward functions: those give us part of the input
+       * values *)
+      (* Retrieve the values consumed upon ending the loans inside this
+       * abstraction: those give us the remaining input values *)
+      (* Retrieve the values given back by this function: those are the output
+       * values *)
+      (* Put everything together *)
+      raise Unimplemented
+  | V.SynthRet ->
+      (* *)
+      raise Unimplemented
 
 and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
     (ctx : bs_ctx) : expression =
