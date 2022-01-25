@@ -457,7 +457,9 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
                     let field_proj = gen_field_proj fid in
                     Let (Assignment (var, field_proj), e))
                   id_var_pairs branch
-          | T.Tuple -> raise Unimplemented
+          | T.Tuple ->
+              let vars = List.map (fun x -> Var x) vars in
+              Let (Deconstruct (vars, None, scrutinee), branch)
           | T.Assumed T.Box ->
               (* There should be exactly one variable *)
               let var =
