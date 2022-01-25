@@ -237,8 +237,9 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
             if ty_has_borrow_under_mut ctx.type_context.type_infos s.sv_ty then
               raise Found
             else ()
-        | V.SynthInput -> ()
-        | V.FunCallGivenBack | V.SynthRetGivenBack -> failwith "Unreachable"
+        | V.SynthInput | V.SynthInputGivenBack | V.FunCallGivenBack
+        | V.SynthRetGivenBack ->
+            ()
     end
   in
   (* We use exceptions *)

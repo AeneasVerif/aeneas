@@ -429,7 +429,7 @@ let give_back_symbolic_value (_config : C.config)
   (* Sanity checks *)
   assert (sv.sv_id <> nsv.sv_id);
   (match nsv.sv_kind with
-  | V.SynthRetGivenBack | V.FunCallGivenBack -> ()
+  | V.SynthInputGivenBack | V.SynthRetGivenBack | V.FunCallGivenBack -> ()
   | V.FunCallRet | V.SynthInput -> failwith "Unrechable");
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = mk_typed_value_from_symbolic_value nsv in
@@ -758,8 +758,15 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     be expanded (because expanding this symbolic value would require expanding
     a reference whose region has already ended).
  *)
-let convert_avalue_to_given_back_value (av : V.typed_avalue) : V.typed_value =
-  mk_fresh_symbolic_typed_value V.FunCallGivenBack av.V.ty
+let convert_avalue_to_given_back_value (abs_kind : V.abs_kind)
+    (av : V.typed_avalue) : V.typed_value =
+  let sv_kind =
+    match abs_kind with
+    | V.FunCall -> V.FunCallGivenBack
+    | V.SynthRet -> V.SynthRetGivenBack
+    | V.SynthInput -> V.SynthInputGivenBack
+  in
+  mk_fresh_symbolic_typed_value sv_kind av.V.ty
 
 (** End a borrow identified by its borrow id in a context.
 
@@ -1155,7 +1162,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         match bc with
         | V.AMutBorrow (_, bid, av) ->
             (* First, convert the avalue to a (fresh symbolic) value *)
-            let v = convert_avalue_to_given_back_value av in
+            let v = convert_avalue_to_given_back_value abs.kind av in
             (* Replace the mut borrow to register the fact that we ended
              * it and store with it the freshly generated given back value *)
             let ended_borrow = V.ABorrow (V.AEndedMutBorrow (v, av)) in

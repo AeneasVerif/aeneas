@@ -66,9 +66,9 @@ type sv_kind =
           synthesizing returned, and which was given back because we ended
           one of the lifetimes of this function (we do this to synthesize
           the backward functions).
-          
-          TODO: add a SynthInputGivenBack
        *)
+  | SynthInputGivenBack
+      (** The value was given back upon ending one of the input abstractions *)
 [@@deriving show]
 
 type symbolic_value = {
