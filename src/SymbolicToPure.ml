@@ -105,6 +105,11 @@ let mk_typed_rvalue_from_var (v : var) : typed_rvalue =
   let ty = v.ty in
   { value; ty }
 
+let mk_typed_lvalue_from_var (v : var) : typed_lvalue =
+  let value = LvVar (Var v) in
+  let ty = v.ty in
+  { value; ty }
+
 (* TODO: move *)
 let type_def_is_enum (def : T.type_def) : bool =
   match def.kind with T.Struct _ -> false | Enum _ -> true
@@ -670,7 +675,22 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       (* First, retrieve the list of variables used for the inputs for the
        * backward function *)
       let inputs = T.RegionGroupId.Map.find abs.back_id ctx.backward_inputs in
-      raise Unimplemented
+      (* Retrieve the values consumed upon ending the loans inside this
+       * abstraction: as there are no nested borrows, there should be none. *)
+      let consumed = abs_to_consumed ctx abs in
+      assert (consumed = []);
+      (* Retrieve the values given back upon ending this abstraction *)
+      let ctx, given_back = abs_to_given_back abs ctx in
+      (* Link the inputs to those given back values - note that we must
+       * have the same number of values *)
+      let given_back_inputs = List.combine given_back inputs in
+      (* Translate the next expression *)
+      let e = translate_expression e ctx in
+      (* Generate the assignments *)
+      List.fold_right
+        (fun (given_back, input_var) e ->
+          Let (Assign (given_back, mk_typed_rvalue_from_var input_var), e))
+        given_back_inputs e
 
 and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
     (ctx : bs_ctx) : expression =
@@ -690,7 +710,7 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
            * introduce an reassignment *)
           let ctx, var = fresh_var_for_symbolic_value sv ctx in
           let e = translate_expression e ctx in
-          Let (Assignment (var, scrutinee), e)
+          Let (Assign (mk_typed_lvalue_from_var var, scrutinee), e)
       | SeAdt _ ->
           (* Should be in the [ExpandAdt] case *)
           failwith "Unreachable")
@@ -733,7 +753,7 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
                 List.fold_right
                   (fun (fid, var) e ->
                     let field_proj = gen_field_proj fid var in
-                    Let (Assignment (var, field_proj), e))
+                    Let (Assign (mk_typed_lvalue_from_var var, field_proj), e))
                   id_var_pairs branch
           | T.Tuple ->
               let vars = List.map (fun x -> Var x) vars in
@@ -745,7 +765,7 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
               in
               (* We simply introduce an assignment - the box type is the
                * identity when extracted (`box a == a`) *)
-              Let (Assignment (var, scrutinee), branch))
+              Let (Assign (mk_typed_lvalue_from_var var, scrutinee), branch))
       | branches ->
           let translate_branch (variant_id : T.VariantId.id option)
               (svl : V.symbolic_value list) (branch : S.expression) :

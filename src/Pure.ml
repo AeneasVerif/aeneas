@@ -126,8 +126,8 @@ type left_value = unit
 type let_bindings =
   | Call of typed_lvalue list * call
       (** The called function and the tuple of returned values. *)
-  | Assignment of var * typed_rvalue
-      (** Variable assignment: the introduced variable and the place we read *)
+  | Assign of typed_lvalue * typed_rvalue
+      (** Variable assignment: the introduced pattern and the place we read *)
   | Deconstruct of
       var_or_dummy list * (TypeDefId.id * VariantId.id) option * typed_rvalue
       (** This is used in two cases.
