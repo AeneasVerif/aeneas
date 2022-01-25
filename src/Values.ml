@@ -285,6 +285,8 @@ type aproj =
           We can later end the projector of loans if `s@0` is not referenced
           anywhere in the context below a projector of borrows which intersects
           this projector of loans.
+          
+          TODO: we should use an msymbolic_value, not an mvalue
        *)
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
@@ -300,6 +302,8 @@ type aproj =
           See the explanations for [AProjLoans]
           
           Note that we keep the original symbolic value as a meta-value.
+
+          TODO: we should use an msymbolic_value, not an mvalue
        *)
   | AEndedProjBorrows of mvalue
       (** The only purpose of [AEndedProjBorrows] is to store, for synthesis
@@ -364,7 +368,9 @@ class ['self] map_typed_avalue_base =
 *)
 type avalue =
   | AConcrete of constant_value
-      (** TODO: remove
+      (** TODO: remove. We actually don't use that for the synthesis, but the
+          meta-values.
+       
           Note that this case is not used in the projections to keep track of the
           borrow graph (because there are no borrows in "concrete" values!) but
           to correctly instantiate the backward functions (we may give back some

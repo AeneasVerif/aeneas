@@ -584,9 +584,52 @@ let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
   let ty = translate_fwd_ty ctx v.ty in
   { value; ty }
 
-let typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
+let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
     typed_rvalue option =
+  let translate = typed_avalue_to_consumed ctx in
+  let value =
+    match av.value with
+    | AConcrete _ -> failwith "Unreachable"
+    | AAdt av -> raise Unimplemented
+    | ABottom -> raise Unimplemented
+    | ALoan lc -> raise Unimplemented
+    | ABorrow bc -> raise Unimplemented
+    | ASymbolic aproj -> raise Unimplemented
+    | AIgnored -> None
+  in
   raise Unimplemented
+
+and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
+  let translate = aproj_to_consumed ctx in
+  match aproj with
+  | V.AEndedProjLoans (msv, []) ->
+      (* The symbolic value was left unchanged *)
+      let var = get_var_for_symbolic_value msv ctx in
+      Some (mk_typed_rvalue_from_var var)
+  | V.AEndedProjLoans (_, [ (mnv, AIgnoredProjBorrows) ]) ->
+      (* The symbolic value was updated *)
+      let var = get_var_for_symbolic_value mnv ctx in
+      Some (mk_typed_rvalue_from_var var)
+  | AEndedProjBorrows _ -> (* We consider consumed values *) None
+  | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
+      failwith "Unreachable"
+
+(*
+  | V.AEndedProjLoans (_, _) ->
+      (* The symbolic value was through values given back by several abstractions *)
+      raise Unimplemented
+  | V.AEndedSharedLoan (_, _) ->
+      (* Shared loans don't consume anything *)
+      None
+  | AIgnoredMutLoan (_, _) ->
+      (* There can be *inner* mutable loans, but not outer ones *)
+      failwith "Unreachable"
+  | AEndedIgnoredMutLoan { child = _; given_back = _; given_back_meta = _ } ->
+      (* No nested borrows for now *)
+      raise Unimplemented
+  | AIgnoredSharedLoan _ ->
+      (* Ignore *)
+None*)
 
 let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_rvalue list =
   List.filter_map (typed_avalue_to_consumed ctx) abs.avalues

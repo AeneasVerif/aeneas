@@ -1,5 +1,7 @@
 # TODO
 
+0. add a meta-value in shared borrows to carry the shared value
+
 0. update the end borrows internal to abstractions to not introduce a Bottom
 
 1. reorder the branches of matches
