@@ -301,7 +301,7 @@ type aproj =
           
           Note that we keep the original symbolic value as a meta-value.
        *)
-  | AEndedProjBorrows of mvalue
+  | AEndedProjBorrows of msymbolic_value
       (** The only purpose of [AEndedProjBorrows] is to store, for synthesis
           purposes, the symbolic value which was generated and given back upon
           ending the borrow.

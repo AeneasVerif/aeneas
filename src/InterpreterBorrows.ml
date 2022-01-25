@@ -1208,9 +1208,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       (* Generate a fresh symbolic value *)
       let nsv = mk_fresh_symbolic_value V.FunCallGivenBack proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
-      let ended_borrow =
-        V.AEndedProjBorrows (mk_typed_value_from_symbolic_value nsv)
-      in
+      let ended_borrow = V.AEndedProjBorrows nsv in
       let ctx = update_aproj_borrows abs.abs_id sv ended_borrow ctx in
       (* Give back the symbolic value *)
       let ctx =
