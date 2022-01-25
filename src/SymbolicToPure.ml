@@ -150,10 +150,55 @@ type bs_ctx = {
   fun_context : fun_context;
   fun_def : A.fun_def;
   bid : T.RegionGroupId.id option;
+  forward_inputs : var list;
+      (** The input parameters for the forward function *)
+  backward_inputs : var list T.RegionGroupId.Map.t;
+      (** The input parameters for the backward functions *)
   calls : call_info V.FunCallId.Map.t;
+      (** The function calls we encountered so far *)
   abstractions : V.abs V.AbstractionId.Map.t;
+      (** The ended abstractions we encountered so far *)
 }
 (** Body synthesis context *)
+
+type fs_ctx = {
+  fun_def : A.fun_def;
+  bid : T.RegionGroupId.id option;
+  type_context : type_context;
+  fun_context : fun_context;
+  forward_inputs : var list;
+      (** The input parameters for the forward function *)
+  backward_inputs : var list T.RegionGroupId.Map.t;
+      (** The input parameters for the backward functions *)
+}
+(** Function synthesis context
+
+    TODO: merge with bs_ctx?
+ *)
+
+let fs_ctx_to_bs_ctx (fs_ctx : fs_ctx) : bs_ctx =
+  let {
+    fun_def;
+    bid;
+    type_context;
+    fun_context;
+    forward_inputs;
+    backward_inputs;
+  } =
+    fs_ctx
+  in
+  let calls = V.FunCallId.Map.empty in
+  let abstractions = V.AbstractionId.Map.empty in
+  {
+    fun_def;
+    bid;
+    type_context;
+    fun_context;
+    forward_inputs;
+    backward_inputs;
+    calls;
+    abstractions;
+  }
 
 (*let bs_ctx_lookup_type_def (id : TypeDefId.id) (ctx : bs_ctx) : type_def =
   TypeDefId.Map.find id ctx.type_context.type_defs*)
@@ -593,7 +638,40 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       let call = { func; type_params; args = inputs } in
       Let (Call (outputs, call), e)
   | V.SynthRet ->
-      (* *)
+      (* If we end the abstraction which consumed the return value of the function
+       * we are synthesizing, we get back the borrows which were inside. Those borrows
+       * are actually input arguments of the backward function we are synthesizing.
+       * So we simply need to introduce proper let bindings.
+       * 
+       * For instance:
+       * ```
+       * fn id<'a>(x : &'a mut u32) -> &'a mut u32 {
+       *   x
+       * }
+       * ```
+       *
+       * Upon ending the return abstraction for 'a, we get back the borrow for `x`.
+       * This new value is the second argument of the backward function:
+       * ```
+       * let id_back x nx = nx
+       * ```
+       *
+       * In practice, upon ending this abstraction we introduce a useless
+       * let-binding:
+       * ```
+       * let id_back x nx =
+       *   let s = nx in // the name `s` is not important (only collision matters)
+       *   ...
+       * ```
+       *
+       * This let-binding later gets inlined, during a micro-pass.
+       * 
+       * *)
+      (* First, retrieve the list of variables used for the inputs for the
+       * backward function *)
+      let inputs =
+        T.RegionGroupId.Map.find (Option.get abs.back_id) ctx.backward_inputs
+      in
       raise Unimplemented
 
 and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
@@ -703,14 +781,10 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
       let otherwise = translate_expression otherwise ctx in
       Switch (scrutinee, SwitchInt (int_ty, branches, otherwise))
 
-let translate_fun_def (type_context : type_context) (fun_context : fun_context)
-    (def : A.fun_def) (bid : T.RegionGroupId.id option) (body : S.expression) :
-    fun_def =
-  let calls = V.FunCallId.Map.empty in
-  let abstractions = V.AbstractionId.Map.empty in
-  let bs_ctx =
-    { type_context; fun_context; fun_def = def; bid; calls; abstractions }
-  in
+let translate_fun_def (fs_ctx : fs_ctx) (body : S.expression) : fun_def =
+  let def = fs_ctx.fun_def in
+  let bid = fs_ctx.bid in
+  let bs_ctx = fs_ctx_to_bs_ctx fs_ctx in
   (* Translate the function *)
   let def_id = def.A.def_id in
   let name = translate_fun_name def bid in
