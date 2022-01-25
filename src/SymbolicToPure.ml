@@ -550,7 +550,8 @@ let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
     - end abstraction
     - return
     
-    TODO: we need the evaluation context to lookup shared borrows!!!
+    TODO: we have a problem with shared borrows. I think the shared borrows
+    should carry the shared value as a meta-value.
  *)
 let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
     typed_rvalue =
@@ -558,7 +559,10 @@ let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
   let value =
     match v.value with
     | V.Concrete cv -> RvConcrete cv
-    | Adt av -> raise Unimplemented
+    | Adt av ->
+        let variant_id = av.variant_id in
+        let field_values = List.map translate av.field_values in
+        RvAdt { variant_id; field_values }
     | Bottom -> failwith "Unreachable"
     | Loan lc -> (
         match lc with
@@ -566,14 +570,16 @@ let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
         | MutLoan _ -> failwith "Unreachable")
     | Borrow bc -> (
         match bc with
-        | V.SharedBorrow _ -> raise Unimplemented
+        | V.SharedBorrow _ ->
+            (* TODO: *)
+            raise Unimplemented
         | V.InactivatedMutBorrow _ -> failwith "Unreachable"
         | V.MutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
             (translate v).value)
     | Symbolic sv ->
-        (* TODO: add sanity checks *)
-        raise Unimplemented
+        let var = get_var_for_symbolic_value sv ctx in
+        (mk_typed_rvalue_from_var var).value
   in
   let ty = translate_fwd_ty ctx v.ty in
   { value; ty }
