@@ -18,6 +18,7 @@ type call_id =
 
 type call = {
   call_id : call_id;
+  abstractions : V.AbstractionId.id list;
   type_params : T.ety list;
   args : V.typed_value list;
   dest : V.symbolic_value;

@@ -95,6 +95,7 @@ type projection = projection_elem list
 
 type place = { var : VarId.id; projection : projection }
 
+(* TODO: this doesn't make sense: value can contain variables... *)
 type operand = Value of typed_value | Place of place
 
 (* type assertion = { cond : operand; expected : bool } *)
@@ -112,9 +113,12 @@ type call = { func : fun_id; type_params : ty list; args : operand list }
 type left_value = unit
 (** TODO: assignment left value *)
 
+type lvalue = typed_value
+(* TODO: define that *)
+
 type let_bindings =
-  | Call of var_or_dummy list * call
-      (** The called function and the tuple of returned values *)
+  | Call of lvalue list * call
+      (** The called function and the tuple of returned values. *)
   | Assignment of var * operand
       (** Variable assignment: the introduced variable and the place we read *)
   | Deconstruct of

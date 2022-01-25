@@ -81,29 +81,32 @@ let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
   let exprl = match expr with None -> None | Some expr -> Some [ expr ] in
   synthesize_symbolic_expansion sv [ Some see ] exprl
 
-let synthesize_function_call (call_id : call_id) (type_params : T.ety list)
+let synthesize_function_call (call_id : call_id)
+    (abstractions : V.AbstractionId.id list) (type_params : T.ety list)
     (args : V.typed_value list) (dest : V.symbolic_value)
     (expr : expression option) : expression option =
   match expr with
   | None -> None
   | Some expr ->
-      let call = { call_id; type_params; args; dest } in
+      let call = { call_id; abstractions; type_params; args; dest } in
       Some (FunCall (call, expr))
 
 let synthesize_regular_function_call (fun_id : A.fun_id)
-    (call_id : V.FunCallId.id) (type_params : T.ety list)
-    (args : V.typed_value list) (dest : V.symbolic_value)
-    (expr : expression option) : expression option =
-  synthesize_function_call (Fun (fun_id, call_id)) type_params args dest expr
+    (call_id : V.FunCallId.id) (abstractions : V.AbstractionId.id list)
+    (type_params : T.ety list) (args : V.typed_value list)
+    (dest : V.symbolic_value) (expr : expression option) : expression option =
+  synthesize_function_call
+    (Fun (fun_id, call_id))
+    abstractions type_params args dest expr
 
 let synthesize_unary_op (unop : E.unop) (arg : V.typed_value)
     (dest : V.symbolic_value) (expr : expression option) : expression option =
-  synthesize_function_call (Unop unop) [] [ arg ] dest expr
+  synthesize_function_call (Unop unop) [] [] [ arg ] dest expr
 
 let synthesize_binary_op (binop : E.binop) (arg0 : V.typed_value)
     (arg1 : V.typed_value) (dest : V.symbolic_value) (expr : expression option)
     : expression option =
-  synthesize_function_call (Binop binop) [] [ arg0; arg1 ] dest expr
+  synthesize_function_call (Binop binop) [] [] [ arg0; arg1 ] dest expr
 
 let synthesize_aggregated_value (aggr_v : V.typed_value)
     (expr : expression option) : expression option =

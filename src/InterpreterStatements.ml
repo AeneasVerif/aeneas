@@ -673,6 +673,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
       V.abs =
     let abs_id = rg.T.id in
     let back_id = Some back_id in
+    let original_parents = rg.parents in
     let parents =
       List.fold_left
         (fun s pid -> V.AbstractionId.Set.add pid s)
@@ -703,6 +704,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
       back_id;
       kind;
       parents;
+      original_parents;
       regions;
       ancestors_regions;
       avalues = [];
@@ -1060,7 +1062,9 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     let expr = cf ctx in
 
     (* Synthesize the symbolic AST *)
-    S.synthesize_regular_function_call fid call_id type_params args ret_spc expr
+    let abs_ids = List.map (fun rg -> rg.T.id) inst_sg.regions_hierarchy in
+    S.synthesize_regular_function_call fid call_id abs_ids type_params args
+      ret_spc expr
   in
   let cc = comp cc cf_call in
 
