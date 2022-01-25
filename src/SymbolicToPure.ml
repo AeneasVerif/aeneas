@@ -11,7 +11,7 @@ open Pure
 
 (** TODO: move this, it is not useful for symbolic -> pure *)
 type name =
-  | FunName of A.FunDefId.id * V.BackwardFunctionId.id option
+  | FunName of A.FunDefId.id * T.RegionVarId.id option
   | TypeName of T.TypeDefId.id
 [@@deriving show, ord]
 
@@ -40,8 +40,8 @@ module NameMap = Collections.MakeMapInj (NameOrderedType) (Id.NameOrderedType)
     generation with collision in mind, it is always good to have such checks.
  *)
 
-let translate_fun_name (fdef : A.fun_def) (bid : V.BackwardFunctionId.id option)
-    : Id.name =
+let translate_fun_name (fdef : A.fun_def) (bid : T.RegionGroupId.id option) :
+    Id.name =
   let sg = fdef.signature in
   (* General function to generate a suffix for a region group
    * (i.e., an abstraction)*)
@@ -82,7 +82,7 @@ let translate_fun_name (fdef : A.fun_def) (bid : V.BackwardFunctionId.id option)
             (* Several backward functions - note that **we use the backward function id
              * as if it were a region group id** (there is a direct mapping between the
              * two - TODO: merge them) *)
-            let rg = V.BackwardFunctionId.nth sg.regions_hierarchy bid in
+            let rg = T.RegionGroupId.nth sg.regions_hierarchy bid in
             "_back" ^ rg_to_string rg)
   in
   (* Final name *)
@@ -116,7 +116,7 @@ type synth_ctx = {
 type bs_ctx = {
   type_context : type_context;
   fun_def : A.fun_def;
-  bid : V.BackwardFunctionId.id option;
+  bid : T.RegionGroupId.id option;
 }
 (** Body synthesis context *)
 
@@ -286,16 +286,15 @@ let list_ordered_parent_region_groups (def : A.fun_def)
   parents
 
 let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
-    (bid : V.BackwardFunctionId.id option) : fun_sig =
+    (bid : T.RegionGroupId.id option) : fun_sig =
   let sg = def.signature in
   (* Retrieve the list of parent backward functions *)
   let gid, parents =
     match bid with
     | None -> (None, T.RegionGroupId.Set.empty)
     | Some bid ->
-        let gid = T.RegionGroupId.of_int (V.BackwardFunctionId.to_int bid) in
-        let parents = list_parent_region_groups def gid in
-        (Some gid, parents)
+        let parents = list_parent_region_groups def bid in
+        (Some bid, parents)
   in
   (* List the inputs for:
    * - the forward function
@@ -570,7 +569,7 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
       Switch (scrutinee, SwitchInt (int_ty, branches, otherwise))
 
 let translate_fun_def (type_context : type_context) (def : A.fun_def)
-    (bid : V.BackwardFunctionId.id option) (body : S.expression) : fun_def =
+    (bid : T.RegionGroupId.id option) (body : S.expression) : fun_def =
   let bs_ctx = { type_context; fun_def = def; bid } in
   (* Translate the function *)
   let def_id = def.A.def_id in

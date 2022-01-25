@@ -669,7 +669,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     ref V.AbstractionId.Map.empty
   in
   (* Auxiliary function to create one abstraction *)
-  let create_abs (back_id : V.BackwardFunctionId.id) (rg : A.abs_region_group) :
+  let create_abs (back_id : T.RegionGroupId.id) (rg : A.abs_region_group) :
       V.abs =
     let abs_id = rg.T.id in
     let back_id = Some back_id in
@@ -709,7 +709,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     }
   in
   (* Apply *)
-  V.BackwardFunctionId.mapi create_abs rgl
+  T.RegionGroupId.mapi create_abs rgl
 
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
