@@ -552,6 +552,8 @@ let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
     
     TODO: we have a problem with shared borrows. I think the shared borrows
     should carry the shared value as a meta-value.
+    
+    TODO: rename: remove the "translate_" prefix
  *)
 let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
     typed_rvalue =
@@ -592,12 +594,50 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
     | AConcrete _ -> failwith "Unreachable"
     | AAdt av -> raise Unimplemented
     | ABottom -> raise Unimplemented
-    | ALoan lc -> raise Unimplemented
-    | ABorrow bc -> raise Unimplemented
-    | ASymbolic aproj -> raise Unimplemented
+    | ALoan lc -> aloan_content_to_consumed ctx lc
+    | ABorrow bc -> aborrow_content_to_consumed ctx bc
+    | ASymbolic aproj -> aproj_to_consumed ctx aproj
     | AIgnored -> None
   in
   raise Unimplemented
+
+and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
+    typed_rvalue option =
+  match lc with
+  | AMutLoan (_, _) | ASharedLoan (_, _, _) -> failwith "Unreachable"
+  | AEndedMutLoan { child = _; given_back = _; given_back_meta } ->
+      (* Return the meta-value *)
+      Some (translate_typed_value_to_rvalue ctx given_back_meta)
+  | AEndedSharedLoan (_, _) ->
+      (* We don't dive into shared loans: there is nothing to give back
+       * inside (note that there could be a mutable borrow in the shared
+       * value, pointing to a mutable loan in the child avalue, but this
+       * borrow is in practice immutable) *)
+      None
+  | AIgnoredMutLoan (_, _) ->
+      (* There can be *inner* mutable loans, but not outer ones *)
+      failwith "Unreachable"
+  | AEndedIgnoredMutLoan _ ->
+      (* This happens with nested borrows: we need to dive in *)
+      raise Unimplemented
+  | AIgnoredSharedLoan _ ->
+      (* Ignore *)
+      None
+
+and aborrow_content_to_consumed (ctx : bs_ctx) (bc : V.aborrow_content) :
+    typed_rvalue option =
+  match bc with
+  | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
+      failwith "Unreachable"
+  | AEndedMutBorrow (mv, _) ->
+      (* Return the meta-value *)
+      Some (translate_typed_value_to_rvalue ctx mv)
+  | AEndedIgnoredMutBorrow _ ->
+      (* This happens with nested borrows: we need to dive in *)
+      raise Unimplemented
+  | AProjSharedBorrow _ ->
+      (* Ignore *)
+      None
 
 and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
   let translate = aproj_to_consumed ctx in
@@ -606,30 +646,18 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
       (* The symbolic value was left unchanged *)
       let var = get_var_for_symbolic_value msv ctx in
       Some (mk_typed_rvalue_from_var var)
-  | V.AEndedProjLoans (_, [ (mnv, AIgnoredProjBorrows) ]) ->
+  | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
+      assert (child_aproj = AIgnoredProjBorrows);
       (* The symbolic value was updated *)
       let var = get_var_for_symbolic_value mnv ctx in
       Some (mk_typed_rvalue_from_var var)
+  | V.AEndedProjLoans (_, _) ->
+      (* The symbolic value was updated, and the given back values come from sevearl
+       * abstractions *)
+      raise Unimplemented
   | AEndedProjBorrows _ -> (* We consider consumed values *) None
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
       failwith "Unreachable"
-
-(*
-  | V.AEndedProjLoans (_, _) ->
-      (* The symbolic value was through values given back by several abstractions *)
-      raise Unimplemented
-  | V.AEndedSharedLoan (_, _) ->
-      (* Shared loans don't consume anything *)
-      None
-  | AIgnoredMutLoan (_, _) ->
-      (* There can be *inner* mutable loans, but not outer ones *)
-      failwith "Unreachable"
-  | AEndedIgnoredMutLoan { child = _; given_back = _; given_back_meta = _ } ->
-      (* No nested borrows for now *)
-      raise Unimplemented
-  | AIgnoredSharedLoan _ ->
-      (* Ignore *)
-None*)
 
 let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_rvalue list =
   List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
