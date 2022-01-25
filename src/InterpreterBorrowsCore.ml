@@ -901,7 +901,7 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
  *)
 let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
     (proj_ty : T.rty) (sv : V.symbolic_value)
-    (subst : V.abs -> (V.typed_value * V.aproj) list -> V.aproj)
+    (subst : V.abs -> (V.msymbolic_value * V.aproj) list -> V.aproj)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Small helpers for sanity checks *)
   let updated = ref false in
@@ -952,7 +952,7 @@ let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
     to the couple (abstraction id, symbolic value).
  *)
 let lookup_aproj_loans (abs_id : V.AbstractionId.id) (sv : V.symbolic_value)
-    (ctx : C.eval_ctx) : (V.mvalue * V.aproj) list =
+    (ctx : C.eval_ctx) : (V.msymbolic_value * V.aproj) list =
   (* Small helpers for sanity checks *)
   let found = ref None in
   let set_found x =

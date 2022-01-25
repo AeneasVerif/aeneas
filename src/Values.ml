@@ -252,7 +252,7 @@ class ['self] map_aproj_base =
   end
 
 type aproj =
-  | AProjLoans of symbolic_value * (mvalue * aproj) list
+  | AProjLoans of symbolic_value * (msymbolic_value * aproj) list
       (** A projector of loans over a symbolic value.
       
           Note that the borrows of a symbolic value may be spread between
@@ -285,8 +285,6 @@ type aproj =
           We can later end the projector of loans if `s@0` is not referenced
           anywhere in the context below a projector of borrows which intersects
           this projector of loans.
-          
-          TODO: we should use an msymbolic_value, not an mvalue
        *)
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
@@ -296,14 +294,12 @@ type aproj =
           can't get updated/expanded: this means that we don't need to save
           any meta-value here.
        *)
-  | AEndedProjLoans of msymbolic_value * (mvalue * aproj) list
+  | AEndedProjLoans of msymbolic_value * (msymbolic_value * aproj) list
       (** An ended projector of loans over a symbolic value.
       
           See the explanations for [AProjLoans]
           
           Note that we keep the original symbolic value as a meta-value.
-
-          TODO: we should use an msymbolic_value, not an mvalue
        *)
   | AEndedProjBorrows of mvalue
       (** The only purpose of [AEndedProjBorrows] is to store, for synthesis

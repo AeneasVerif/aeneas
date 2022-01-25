@@ -432,7 +432,7 @@ let give_back_symbolic_value (_config : C.config)
   | V.SynthInputGivenBack | V.SynthRetGivenBack | V.FunCallGivenBack -> ()
   | V.FunCallRet | V.SynthInput -> failwith "Unrechable");
   (* Store the given-back value as a meta-value for synthesis purposes *)
-  let mv = mk_typed_value_from_symbolic_value nsv in
+  let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
   let subst (_abs : V.abs) local_given_back =
     (* Compute the projection over the given back value *)

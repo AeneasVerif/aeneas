@@ -9,9 +9,9 @@ open InterpreterUtils
 
 type ('c, 's) ended = EndedConcrete of 'c | EndedSymbolic of 's
 
-type ended_loan = (V.mvalue, V.mvalue list) ended
+type ended_loan = (V.typed_value, V.msymbolic_value list) ended
 
-type ended_borrow = (V.mvalue, V.mvalue) ended
+type ended_borrow = (V.typed_value, V.typed_value) ended
 
 type ended_loan_or_borrow =
   | EndedLoan of ended_loan
@@ -45,7 +45,7 @@ let get_top_owned_ended_loans_borrows (abs : V.abs) : ended_loan_or_borrow list
         match aproj with
         | AEndedProjLoans (msv, []) ->
             (* The symbolic value was left unchanged *)
-            add_sloan [ mk_typed_value_from_symbolic_value msv ]
+            add_sloan [ msv ]
         | AEndedProjLoans (_, mvl) -> add_sloan (List.map fst mvl)
         | AEndedProjBorrows mv -> add_sborrow mv
         | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
