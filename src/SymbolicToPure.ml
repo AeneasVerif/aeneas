@@ -220,7 +220,7 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
 let bs_ctx_register_backward_call (abs : V.abs) (ctx : bs_ctx) : bs_ctx * fun_id
     =
   (* Insert the abstraction in the call informations *)
-  let back_id = Option.get abs.back_id in
+  let back_id = abs.back_id in
   let info = V.FunCallId.Map.find abs.call_id ctx.calls in
   assert (not (T.RegionGroupId.Map.mem back_id info.backwards));
   let backwards = T.RegionGroupId.Map.add back_id abs info.backwards in
@@ -233,7 +233,7 @@ let bs_ctx_register_backward_call (abs : V.abs) (ctx : bs_ctx) : bs_ctx * fun_id
   (* Retrieve the fun_id *)
   let fun_id =
     match info.forward.call_id with
-    | S.Fun (fid, _) -> Regular (fid, Some (Option.get abs.back_id))
+    | S.Fun (fid, _) -> Regular (fid, Some abs.back_id)
     | S.Unop _ | S.Binop _ -> failwith "Unreachable"
   in
   (* Update the context and return *)
@@ -669,9 +669,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
        * *)
       (* First, retrieve the list of variables used for the inputs for the
        * backward function *)
-      let inputs =
-        T.RegionGroupId.Map.find (Option.get abs.back_id) ctx.backward_inputs
-      in
+      let inputs = T.RegionGroupId.Map.find abs.back_id ctx.backward_inputs in
       raise Unimplemented
 
 and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)

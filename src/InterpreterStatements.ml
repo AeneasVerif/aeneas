@@ -672,7 +672,6 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
   let create_abs (back_id : T.RegionGroupId.id) (rg : A.abs_region_group) :
       V.abs =
     let abs_id = rg.T.id in
-    let back_id = Some back_id in
     let original_parents = rg.parents in
     let parents =
       List.fold_left
