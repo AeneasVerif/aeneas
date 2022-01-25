@@ -406,7 +406,21 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
   let scrutinee = Place (mk_place_from_var scrutinee_var) in
   (* Translate the branches *)
   match exp with
-  | ExpandNoBranch (_, _) -> raise Unimplemented
+  | ExpandNoBranch (sexp, e) -> (
+      match sexp with
+      | V.SeConcrete _ ->
+          (* Actually, we don't *register* symbolic expansions to constant
+           * values in the symbolic ADT *)
+          failwith "Unreachable"
+      | SeMutRef (_, sv) | SeSharedRef (_, sv) ->
+          (* The (mut/shared) borrow type is extracted to identity: we thus simply
+           * introduce an reassignment *)
+          let ctx, var = fresh_var_for_symbolic_value sv ctx in
+          let e = translate_expression e ctx in
+          Let (Assignment (var, scrutinee), e)
+      | SeAdt _ ->
+          (* Should be in the [ExpandAdt] case *)
+          failwith "Unreachable")
   | ExpandAdt branches -> (
       (* We don't do the same thing if there is a branching or not *)
       match branches with
