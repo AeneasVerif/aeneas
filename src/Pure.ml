@@ -15,9 +15,6 @@ module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
 
-module BackwardFunId = IdGen ()
-(** Every backward function has its identifier *)
-
 module VarId = IdGen ()
 (** Pay attention to the fact that we also define a [VarId] module in Values *)
 
@@ -66,7 +63,7 @@ type symbolic_value = {
           symbolic value was introduced.
        *)
 }
-(** TODO: remove? *)
+(** TODO: remove *)
 
 type value = Concrete of constant_value | Adt of adt_value
 
@@ -83,11 +80,14 @@ type var = { id : VarId.id; ty : ty }
     itself
  *)
 
-(** Sometimes, when introducing several variables in an assignment (because
-    deconstructing a tuple) we can ignore some of the values: in such situation
-    we introduce dummy variables (extracted to "_").
- *)
-type var_or_dummy = Var of var | Dummy
+type var_or_dummy = Var of var | Dummy  (** Ignored value: `_` *)
+
+(** A left value (which appears on the left of assignments *)
+type lvalue =
+  | LvVar of var_or_dummy
+  | LvTuple of lvalue list  (** Rk.: for now we don't support general ADTs *)
+
+and typed_lvalue = { value : lvalue; ty : ty }
 
 type projection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 
@@ -95,34 +95,41 @@ type projection = projection_elem list
 
 type place = { var : VarId.id; projection : projection }
 
-(* TODO: this doesn't make sense: value can contain variables... *)
-type operand = Value of typed_value | Place of place
+type rvalue =
+  | RvPlace of place
+  | RvConcrete of constant_value
+  | RvAdt of adt_rvalue
 
-(* type assertion = { cond : operand; expected : bool } *)
+and adt_rvalue = {
+  variant_id : (VariantId.id option[@opaque]);
+  field_values : typed_rvalue list;
+}
+
+and typed_rvalue = { value : rvalue; ty : ty }
+(** In most situations we won't use the type in [typed_rvalue].
+    Note that it is still necessary to have some useful informations
+    about ADTs, though.
+ *)
 
 type fun_id =
-  | Local of A.FunDefId.id * BackwardFunId.id option
+  | Regular of A.fun_id * T.RegionGroupId.id option
       (** Backward id: `Some` if the function is a backward function, `None`
           if it is a forward function *)
-  | Assumed of A.assumed_fun_id
   | Unop of E.unop
   | Binop of E.binop
 
-type call = { func : fun_id; type_params : ty list; args : operand list }
+type call = { func : fun_id; type_params : ty list; args : typed_rvalue list }
 
 type left_value = unit
 (** TODO: assignment left value *)
 
-type lvalue = typed_value
-(* TODO: define that *)
-
 type let_bindings =
-  | Call of lvalue list * call
+  | Call of typed_lvalue list * call
       (** The called function and the tuple of returned values. *)
-  | Assignment of var * operand
+  | Assignment of var * typed_rvalue
       (** Variable assignment: the introduced variable and the place we read *)
   | Deconstruct of
-      var_or_dummy list * (TypeDefId.id * VariantId.id) option * operand
+      var_or_dummy list * (TypeDefId.id * VariantId.id) option * typed_rvalue
       (** This is used in two cases.
 
           1. When deconstructing a tuple:
@@ -159,11 +166,11 @@ type let_bindings =
     more general than the CFIM statements, in a sense.
  *)
 type expression =
-  | Return of operand
+  | Return of typed_rvalue
   | Panic
   | Let of let_bindings * expression
       (** Let bindings include the let-bindings introduced because of function calls *)
-  | Switch of operand * switch_body
+  | Switch of typed_rvalue * switch_body
 
 and switch_body =
   | If of expression * expression

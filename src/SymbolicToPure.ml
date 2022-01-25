@@ -97,6 +97,24 @@ let translate_fun_name (fdef : A.fun_def) (bid : T.RegionGroupId.id option) :
 (** Generates a name for a type (simply reuses the name in the definition) *)
 let translate_type_name (def : T.type_def) : Id.name = def.T.name
 
+(* TODO: move *)
+let mk_place_from_var (v : var) : place = { var = v.id; projection = [] }
+
+let mk_typed_rvalue_from_var (v : var) : typed_rvalue =
+  let value = RvPlace (mk_place_from_var v) in
+  let ty = v.ty in
+  { value; ty }
+
+(* TODO: move *)
+let type_def_is_enum (def : T.type_def) : bool =
+  match def.kind with T.Struct _ -> false | Enum _ -> true
+
+(* TODO: move *)
+let mk_typed_lvalue_from_var (v : var) : typed_lvalue =
+  let value = LvVar (Var v) in
+  let ty = v.ty in
+  { value; ty }
+
 type type_context = {
   types_infos : TA.type_infos;
   cfim_type_defs : T.type_def TypeDefId.Map.t;
@@ -154,7 +172,8 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
   let calls = V.FunCallId.Map.add call_id info calls in
   { ctx with calls }
 
-let bs_ctx_register_backward_call (abs : V.abs) (ctx : bs_ctx) : bs_ctx =
+let bs_ctx_register_backward_call (abs : V.abs) (ctx : bs_ctx) : bs_ctx * fun_id
+    =
   (* Insert the abstraction in the call informations *)
   let back_id = Option.get abs.back_id in
   let info = V.FunCallId.Map.find abs.call_id ctx.calls in
@@ -166,8 +185,14 @@ let bs_ctx_register_backward_call (abs : V.abs) (ctx : bs_ctx) : bs_ctx =
   let abstractions = ctx.abstractions in
   assert (not (V.AbstractionId.Map.mem abs.abs_id abstractions));
   let abstractions = V.AbstractionId.Map.add abs.abs_id abs abstractions in
-  (* Update the context *)
-  { ctx with calls; abstractions }
+  (* Retrieve the fun_id *)
+  let fun_id =
+    match info.forward.call_id with
+    | S.Fun (fid, _) -> Regular (fid, Some (Option.get abs.back_id))
+    | S.Unop _ | S.Binop _ -> failwith "Unreachable"
+  in
+  (* Update the context and return *)
+  ({ ctx with calls; abstractions }, fun_id)
 
 let rec translate_sty (ty : T.sty) : ty =
   let translate = translate_sty in
@@ -447,7 +472,8 @@ let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
     - end abstraction
     - return
  *)
-let translate_typed_value (ctx : bs_ctx) (v : V.typed_value) : typed_value =
+let translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
+    typed_rvalue =
   raise Unimplemented
 
 let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
@@ -461,25 +487,19 @@ let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
 let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   raise Unimplemented
 
-(* TODO: move *)
-let mk_place_from_var (v : var) : place = { var = v.id; projection = [] }
-
-(* TODO: move *)
-let type_def_is_enum (def : T.type_def) : bool =
-  match def.kind with T.Struct _ -> false | Enum _ -> true
-
 let typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
-    typed_value option =
+    typed_rvalue option =
   raise Unimplemented
 
-let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_value list =
+let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_rvalue list =
   List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
 
 let typed_avalue_to_given_back (av : V.typed_avalue) (ctx : bs_ctx) :
-    bs_ctx * lvalue option =
+    bs_ctx * typed_lvalue option =
   raise Unimplemented
 
-let abs_to_given_back (abs : V.abs) (ctx : bs_ctx) : bs_ctx * lvalue list =
+let abs_to_given_back (abs : V.abs) (ctx : bs_ctx) : bs_ctx * typed_lvalue list
+    =
   let ctx, values =
     List.fold_left_map
       (fun ctx av -> typed_avalue_to_given_back av ctx)
@@ -501,8 +521,8 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
   match e with
   | S.Return v ->
-      let v = translate_typed_value ctx v in
-      Return (Value v)
+      let v = translate_typed_value_to_rvalue ctx v in
+      Return v
   | Panic -> Panic
   | FunCall (call, e) -> translate_function_call call e ctx
   | EndAbstraction (abs, e) -> translate_end_abstraction abs e ctx
@@ -515,8 +535,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     expression =
   (* Translate the function call *)
   let type_params = List.map (translate_fwd_ty ctx) call.type_params in
-  let args = List.map (translate_typed_value ctx) call.args in
-  let args = List.map (fun v -> Value v) args in
+  let args = List.map (translate_typed_value_to_rvalue ctx) call.args in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
   (* Retrieve the function id, and register the function call in the context
    * if necessary *)
@@ -524,11 +543,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     match call.call_id with
     | S.Fun (fid, call_id) ->
         let ctx = bs_ctx_register_forward_call call_id call ctx in
-        let func =
-          match fid with
-          | A.Local fid -> Local (fid, None)
-          | A.Assumed fid -> Assumed fid
-        in
+        let func = Regular (fid, None) in
         (ctx, func)
     | S.Unop unop -> (ctx, Unop unop)
     | S.Binop binop -> (ctx, Binop binop)
@@ -537,7 +552,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   (* Translate the next expression *)
   let e = translate_expression e ctx in
   (* Put together *)
-  Let (Call ([ Var dest ], call), e)
+  Let (Call ([ mk_typed_lvalue_from_var dest ], call), e)
 
 and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
     expression =
@@ -546,24 +561,32 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       (* There are no nested borrows for now: we shouldn't get there *)
       raise Unimplemented
   | V.FunCall ->
+      let call_info = V.FunCallId.Map.find abs.call_id ctx.calls in
+      let call = call_info.forward in
+      let type_params = List.map (translate_fwd_ty ctx) call.type_params in
       (* Retrive the orignal call and the parent abstractions *)
       let forward, backwards = get_abs_ancestors ctx abs in
       (* Retrieve the values consumed when we called the forward function and
        * ended the parent backward functions: those give us part of the input
        * values *)
-      let fwd_inputs = List.map (translate_typed_value ctx) forward.args in
+      let fwd_inputs =
+        List.map (translate_typed_value_to_rvalue ctx) forward.args
+      in
       let back_ancestors_inputs =
-        List.concat (List.map abs_to_consumed backwards)
+        List.concat (List.map (abs_to_consumed ctx) backwards)
       in
       (* Retrieve the values consumed upon ending the loans inside this
        * abstraction: those give us the remaining input values *)
-      let back_inputs = abs_to_consumed abs in
+      let back_inputs = abs_to_consumed ctx abs in
       let inputs =
         List.concat [ fwd_inputs; back_ancestors_inputs; back_inputs ]
       in
       (* Retrieve the values given back by this function: those are the output
        * values *)
       let ctx, outputs = abs_to_given_back abs ctx in
+      (* Retrieve the function id, and register the function call in the context
+       * if necessary *)
+      let ctx, func = bs_ctx_register_backward_call abs ctx in
       (* Translate the next expression *)
       let e = translate_expression e ctx in
       (* Put everything together *)
@@ -577,7 +600,7 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
     (ctx : bs_ctx) : expression =
   (* Translate the scrutinee *)
   let scrutinee_var = get_var_for_symbolic_value sv ctx in
-  let scrutinee = Place (mk_place_from_var scrutinee_var) in
+  let scrutinee = mk_typed_rvalue_from_var scrutinee_var in
   (* Translate the branches *)
   match exp with
   | ExpandNoBranch (sexp, e) -> (
@@ -617,18 +640,23 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
                     branch )
               else
                 (* This is not an enumeration: introduce let-bindings for every
-                 * field *)
-                let gen_field_proj (field_id : FieldId.id) : operand =
+                 * field.
+                 * We use the [dest] variable in order not to have to recompute
+                 * the type of the result of the projection... *)
+                let gen_field_proj (field_id : FieldId.id) (dest : var) :
+                    typed_rvalue =
                   let pkind = E.ProjAdt (adt_id, None) in
                   let pe : projection_elem = { pkind; field_id } in
                   let projection = [ pe ] in
                   let place = { var = scrutinee_var.id; projection } in
-                  Place place
+                  let value = RvPlace place in
+                  let ty = dest.ty in
+                  { value; ty }
                 in
                 let id_var_pairs = FieldId.mapi (fun fid v -> (fid, v)) vars in
                 List.fold_right
                   (fun (fid, var) e ->
-                    let field_proj = gen_field_proj fid in
+                    let field_proj = gen_field_proj fid var in
                     Let (Assignment (var, field_proj), e))
                   id_var_pairs branch
           | T.Tuple ->
