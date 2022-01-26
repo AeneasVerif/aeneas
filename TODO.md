@@ -56,6 +56,13 @@
   Then, once we collected all the borrows, we would convert it to:
   `AEndedProjLoans of (mvalue * aproj) list`
   If the list is empty, it means the value was not modified.
+
+9. The way we currently give back symbolic values to symbolic values (inside
+   abstractions) is wrong.
+   We get things like :
+   `AProjLoans (s0 <: &'a mut T) [AProjBorrows (s1 <: &'a mut T)]`
+   while in the case of `s1` we should ignore the outer borrow (we
+   gave back something because this borrow ended...).
   
 * write a function to check that the code we are about to synthesize is in the proper
   subset. In particular:

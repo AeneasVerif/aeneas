@@ -55,7 +55,7 @@ let () =
   expressions_log#set_level EL.Debug;
   expansion_log#set_level EL.Debug;
   borrows_log#set_level EL.Debug;
-  invariants_log#set_level EL.Warning;
+  invariants_log#set_level EL.Debug;
   (* Load the module *)
   let json = Yojson.Basic.from_file !filename in
   match cfim_module_of_json json with
@@ -68,7 +68,7 @@ let () =
       let config =
         {
           C.check_invariants = true;
-          greedy_expand_symbolics_with_borrows = false;
+          greedy_expand_symbolics_with_borrows = true;
         }
       in
 

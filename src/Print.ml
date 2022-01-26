@@ -317,9 +317,9 @@ module Values = struct
             let given_back = List.map (aproj_to_string fmt) given_back in
             " (" ^ String.concat "," given_back ^ ") "
         in
-        "["
+        "⌊"
         ^ symbolic_value_to_string (value_to_rtype_formatter fmt) sv
-        ^ given_back ^ "]"
+        ^ given_back ^ "⌋"
     | AProjBorrows (sv, rty) ->
         "(" ^ symbolic_value_proj_to_string fmt sv rty ^ ")"
     | AEndedProjLoans (_, given_back) ->

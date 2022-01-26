@@ -454,6 +454,7 @@ let give_back_symbolic_value (_config : C.config)
           V.AProjBorrows (nsv, sv.V.sv_ty)
       | _ -> failwith "Unreachable"
     in
+    (* TODO: this actually doesn't work, or at least there is something subtle... *)
     V.AProjLoans (sv, (mv, child_proj) :: local_given_back)
   in
   update_intersecting_aproj_loans proj_regions proj_ty sv subst ctx
