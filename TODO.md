@@ -10,8 +10,11 @@
 
 0. micro-passes for pure:
    - remove unused variables
-   - remove useless function calls *if* they are followed by associated
-     backward calls (because they may panic!)
+   - remove useless function calls:
+     - calls which don't introduce values *if* they are followed by associated
+       backward calls (because they may panic!)
+     - calls which don't take inputs (can happen with backward functions - for
+       instance, if a rust function only returns shared borrows)
 
 1. reorder the branches of matches
 
