@@ -188,7 +188,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     | None ->
         let err =
           "find_info: could not find the representant of borrow "
-          ^ V.BorrowId.to_string bid ^ "\n" ^ context_to_string ()
+          ^ V.BorrowId.to_string bid ^ ":\nContext:\n" ^ context_to_string ()
         in
         log#serror err;
         failwith err
