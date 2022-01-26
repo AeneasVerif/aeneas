@@ -601,7 +601,6 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to `_` *)
                 let abs = Option.get info in
-                log#ldebug (lazy (symbolic_value_to_string ctx sv));
                 assert (ty_has_regions_in_set abs.regions sv.V.sv_ty)
             | V.AProjBorrows (sv, proj_ty) ->
                 let ty2 = Subst.erase_regions sv.V.sv_ty in
@@ -609,7 +608,6 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to `_` *)
                 let abs = Option.get info in
-                log#ldebug (lazy (symbolic_value_to_string ctx sv));
                 assert (ty_has_regions_in_set abs.regions proj_ty)
             | V.AEndedProjLoans (_msv, given_back_ls) ->
                 List.iter
