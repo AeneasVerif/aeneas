@@ -1,12 +1,17 @@
 # TODO
 
-0. add a meta-value in shared borrows to carry the shared value
+0. sanity checks in symbolic to pure!
 
 0. update the end borrows internal to abstractions to not introduce a Bottom
 
 0. remove AConcrete from avalue
 
 0. remove ABottom from avalue
+
+0. micro-passes for pure:
+   - remove unused variables
+   - remove useless function calls *if* they are followed by associated
+     backward calls (because they may panic!)
 
 1. reorder the branches of matches
 
@@ -154,3 +159,5 @@
 
 * fix the static regions (with projectors)
   Before that, introduce a sanity check to make sure we don't use static regions.
+
+* add a meta-value in shared borrows to carry the shared value

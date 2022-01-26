@@ -47,8 +47,8 @@ module Test = struct
       Introduces local variables initialized in the following manner:
       - input arguments are initialized as symbolic values
       - the remaining locals are initialized as ⊥
-      "Dummy" abstractions are introduced for the regions present in the
-      function signature.
+      Abstractions are introduced for the regions present in the function
+      signature.
    *)
   let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def)
       : C.eval_ctx =

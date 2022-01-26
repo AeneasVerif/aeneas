@@ -856,9 +856,11 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       let inputs =
         List.concat [ fwd_inputs; back_ancestors_inputs; back_inputs ]
       in
+      (* TODO: check that the inputs have the proper number and the proper type *)
       (* Retrieve the values given back by this function: those are the output
        * values *)
       let ctx, outputs = abs_to_given_back abs ctx in
+      (* TODO: check that the outputs have the proper number and the proper type *)
       (* Retrieve the function id, and register the function call in the context
        * if necessary *)
       let ctx, func = bs_ctx_register_backward_call abs ctx in
@@ -906,9 +908,14 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       assert (consumed = []);
       (* Retrieve the values given back upon ending this abstraction *)
       let ctx, given_back = abs_to_given_back abs ctx in
-      (* Link the inputs to those given back values - note that we must
-       * have the same number of values *)
+      (* Link the inputs to those given back values - note that this also
+       * checks we have the same number of values, of course *)
       let given_back_inputs = List.combine given_back inputs in
+      (* Sanity check *)
+      List.iter
+        (fun ((given_back, input) : typed_lvalue * var) ->
+          assert (given_back.ty = input.ty))
+        given_back_inputs;
       (* Translate the next expression *)
       let e = translate_expression e ctx in
       (* Generate the assignments *)
