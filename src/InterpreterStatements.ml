@@ -15,7 +15,6 @@ open InterpreterProjectors
 open InterpreterExpansion
 open InterpreterPaths
 open InterpreterExpressions
-open Assumed
 
 (** The local logger *)
 let log = L.statements_log
@@ -556,8 +555,8 @@ let eval_non_local_function_call_concrete (config : C.config)
     
     Note: there are no region parameters, because they should be erased.
  *)
-let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
-    (ctx : C.eval_ctx) : A.inst_fun_sig =
+let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
+    A.inst_fun_sig =
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let rg_abs_ids_bindings =
@@ -923,7 +922,7 @@ and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDefId.id)
   let sg = def.A.signature in
   (* Instantiate the signature and introduce fresh abstraction and region ids
    * while doing so *)
-  let inst_sg = instantiate_fun_sig type_params sg ctx in
+  let inst_sg = instantiate_fun_sig type_params sg in
   (* Sanity check *)
   assert (List.length args = def.A.arg_count);
   (* Evaluate the function call *)
@@ -1050,11 +1049,11 @@ and eval_non_local_function_call_symbolic (config : C.config)
        * instantiated signatures, and delegate the work to an auxiliary function *)
       let inst_sig =
         match fid with
-        | A.BoxNew -> instantiate_fun_sig type_params Assumed.box_new_sig ctx
+        | A.BoxNew -> instantiate_fun_sig type_params Assumed.box_new_sig
         | A.BoxDeref ->
-            instantiate_fun_sig type_params Assumed.box_deref_shared_sig ctx
+            instantiate_fun_sig type_params Assumed.box_deref_shared_sig
         | A.BoxDerefMut ->
-            instantiate_fun_sig type_params Assumed.box_deref_mut_sig ctx
+            instantiate_fun_sig type_params Assumed.box_deref_mut_sig
         | A.BoxFree -> failwith "Unreachable"
         (* should have been treated above *)
       in

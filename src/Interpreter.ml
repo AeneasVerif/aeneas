@@ -70,7 +70,7 @@ module Test = struct
     let type_params =
       List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params
     in
-    let inst_sg = instantiate_fun_sig type_params sg ctx in
+    let inst_sg = instantiate_fun_sig type_params sg in
     (* Create fresh symbolic values for the inputs *)
     let input_svs =
       List.map
