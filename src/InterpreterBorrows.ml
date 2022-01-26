@@ -1063,7 +1063,7 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
         | V.AIgnoredSharedLoan _ ->
             super#visit_aloan_content env lc
 
-      method! visit_loan_content env lc =
+      method! visit_loan_content _ lc =
         match lc with
         | V.MutLoan _ ->
             (* The mut loan linked to the mutable borrow present in a shared
@@ -1159,9 +1159,12 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             ());
         super#visit_aproj env sproj
 
-      method! visit_borrow_content env bc =
-        (* TODO: this happens because of shared values *)
-        raise Errors.Unimplemented
+      method! visit_borrow_content _ bc =
+        match bc with
+        | V.SharedBorrow (_, _) | V.MutBorrow (_, _) ->
+            raise (FoundBorrowContent bc)
+        | V.InactivatedMutBorrow _ -> failwith "Unreachable"
+      (** We may need to end borrows in "regular" values, because of shared values *)
     end
   in
   (* Lookup the abstraction *)
@@ -1172,7 +1175,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
     (* No borrows: nothing to update *)
     cf ctx
   with
-  (* There are concrete borrows: end them, then reexplore *)
+  (* There are concrete (i.e., not symbolic) borrows: end them, then reexplore *)
   | FoundABorrowContent bc ->
       let ctx =
         match bc with
@@ -1230,6 +1233,29 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       (* Give back the symbolic value *)
       let ctx =
         give_back_symbolic_value config abs.regions proj_ty sv nsv ctx
+      in
+      (* Reexplore *)
+      end_abstraction_borrows config chain abs_id cf ctx
+  (* There are concrete (i.e., not symbolic) borrows in shared values: end them, then reexplore *)
+  | FoundBorrowContent bc ->
+      let ctx =
+        match bc with
+        | V.SharedBorrow (_, bid) -> (
+            (* Replace the shared borrow with bottom *)
+            match end_borrow_get_borrow (Some abs_id) bid ctx with
+            | Error _ -> failwith "Unreachable"
+            | Ok (ctx, _) ->
+                (* Give back *)
+                give_back_shared config bid ctx)
+        | V.MutBorrow (bid, v) -> (
+            (* Replace the mut borrow with bottom *)
+            match end_borrow_get_borrow (Some abs_id) bid ctx with
+            | Error _ -> failwith "Unreachable"
+            | Ok (ctx, _) ->
+                (* Give the value back - note that the mut borrow was below a
+                 * shared borrow: the value is thus unchanged *)
+                give_back_value config bid v ctx)
+        | V.InactivatedMutBorrow _ -> failwith "Unreachable"
       in
       (* Reexplore *)
       end_abstraction_borrows config chain abs_id cf ctx
