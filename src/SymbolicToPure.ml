@@ -533,9 +533,6 @@ let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
     - function call
     - end abstraction
     - return
-    
-    TODO: we have a problem with shared borrows. I think the shared borrows
-    should carry the shared value as a meta-value.
  *)
 let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
     =
@@ -554,9 +551,10 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
         | MutLoan _ -> failwith "Unreachable")
     | Borrow bc -> (
         match bc with
-        | V.SharedBorrow _ ->
-            (* TODO: *)
-            raise Unimplemented
+        | V.SharedBorrow (mv, _) ->
+            (* The meta-value stored in the shared borrow was added especially
+             * for this case (because we can't use the borrow id for lookups) *)
+            (translate mv).value
         | V.InactivatedMutBorrow _ -> failwith "Unreachable"
         | V.MutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
