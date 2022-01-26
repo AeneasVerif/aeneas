@@ -17,7 +17,7 @@ let () = Printexc.record_backtrace true
 
 let usage =
   Printf.sprintf
-    {|Aenaes: verification of Rust programs by translation
+    {|Aeneas: verification of Rust programs by translation
 
 Usage: %s [OPTIONS] FILE
 |}
