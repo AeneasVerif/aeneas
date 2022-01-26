@@ -201,6 +201,8 @@ type bs_ctx = {
       (** The input parameters for the forward function *)
   backward_inputs : var list T.RegionGroupId.Map.t;
       (** The input parameters for the backward functions *)
+  backward_outputs : var list T.RegionGroupId.Map.t;
+      (** The variables that the backward functions will output *)
   calls : call_info V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
   abstractions : V.abs V.AbstractionId.Map.t;
@@ -217,6 +219,8 @@ type fs_ctx = {
       (** The input parameters for the forward function *)
   backward_inputs : var list T.RegionGroupId.Map.t;
       (** The input parameters for the backward functions *)
+  backward_outputs : var list T.RegionGroupId.Map.t;
+      (** The variables that the backward functions will output *)
 }
 (** Function synthesis context
 
@@ -231,6 +235,7 @@ let fs_ctx_to_bs_ctx (fs_ctx : fs_ctx) : bs_ctx =
     fun_context;
     forward_inputs;
     backward_inputs;
+    backward_outputs;
   } =
     fs_ctx
   in
@@ -246,6 +251,7 @@ let fs_ctx_to_bs_ctx (fs_ctx : fs_ctx) : bs_ctx =
     fun_context;
     forward_inputs;
     backward_inputs;
+    backward_outputs;
     calls;
     abstractions;
   }
@@ -897,8 +903,53 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
     expression =
   match abs.kind with
   | V.SynthInput ->
-      (* There are no nested borrows for now: we shouldn't get there *)
-      raise Unimplemented
+      (* When we end an input abstraction, this input abstraction gets back
+       * the borrows which it introduced in the context through the input
+       * values: by listing those values, we get the values which are given
+       * back by one of the backward functions we are synthesizing. *)
+      (* Note that we don't support nested borrows for now: if we find
+       * an ended synthesized input abstraction, it must be the one corresponding
+       * to the backward function wer are synthesizing, it can't be the one
+       * for a parent backward function.
+       *)
+      let bid = Option.get ctx.bid in
+      assert (abs.back_id = bid);
+
+      (* The translation is done as follows:
+       * - for a given backward function, we choose a set of variables `v_i`
+       * - when we detect the ended input abstraction which corresponds
+       *   to the backward function, and which consumed the values `consumed_i`,
+       *   we introduce:
+       *   ```
+       *   let v_i = consumed_i in
+       *   ...
+       *   ```
+       *   Then, when we reach the `Return` node, we introduce:
+       *   ```
+       *   (v_i)
+       *   ```
+       * *)
+      (* First, get the given back variables *)
+      let given_back_variables =
+        T.RegionGroupId.Map.find bid ctx.backward_outputs
+      in
+      (* Get the list of values consumed by the abstraction upon ending *)
+      let consumed_values = abs_to_consumed ctx abs in
+      (* Group the two lists *)
+      let variables_values =
+        List.combine given_back_variables consumed_values
+      in
+      (* Sanity check: the two lists match (same types) *)
+      List.iter
+        (fun (var, v) -> assert ((var : var).ty = (v : typed_rvalue).ty))
+        variables_values;
+      (* Translate the next expression *)
+      let e = translate_expression e ctx in
+      (* Generate the assignemnts *)
+      List.fold_right
+        (fun (var, value) e ->
+          Let (Assign (mk_typed_lvalue_from_var var, value), e))
+        variables_values e
   | V.FunCall ->
       let call_info = V.FunCallId.Map.find abs.call_id ctx.calls in
       let call = call_info.forward in
