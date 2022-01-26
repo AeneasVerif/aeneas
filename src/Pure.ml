@@ -34,7 +34,28 @@ type ty =
   | Str
   | Array of ty (* TODO: there should be a constant with the array *)
   | Slice of ty
-[@@deriving show]
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_ty";
+        variety = "iter";
+        ancestors = [ "T.iter_ty_base" ];
+        (* Reusing the visitor from Types.ml *)
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "map_ty";
+        variety = "map";
+        ancestors = [ "T.map_ty_base" ];
+        (* Reusing the visitor from Types.ml *)
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      }]
 
 type field = { field_name : string; field_ty : ty } [@@deriving show]
 
@@ -104,12 +125,14 @@ and typed_rvalue = { value : rvalue; ty : ty }
     about ADTs, though.
  *)
 
+type unop = Not | Neg of T.integer_type
+
 type fun_id =
   | Regular of A.fun_id * T.RegionGroupId.id option
       (** Backward id: `Some` if the function is a backward function, `None`
           if it is a forward function *)
-  | Unop of E.unop
-  | Binop of E.binop
+  | Unop of unop
+  | Binop of E.binop * T.integer_type
 
 type call = { func : fun_id; type_params : ty list; args : typed_rvalue list }
 
@@ -188,6 +211,8 @@ type fun_sig = {
           called to update a set of values in the environment).
        *)
 }
+
+type inst_fun_sig = { inputs : ty list; outputs : ty list }
 
 type fun_def = {
   def_id : FunDefId.id;

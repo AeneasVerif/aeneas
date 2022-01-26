@@ -9,7 +9,10 @@ module E = Expressions
 module A = CfimAst
 module C = Contexts
 
-(** Substitute types variables and regions in a type *)
+(** Substitute types variables and regions in a type.
+
+    TODO: we can reimplement that with visitors.
+ *)
 let rec ty_substitute (rsubst : 'r1 -> 'r2)
     (tsubst : T.TypeVarId.id -> 'r2 T.ty) (ty : 'r1 T.ty) : 'r2 T.ty =
   let open T in
