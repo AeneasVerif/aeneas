@@ -15,6 +15,7 @@ open InterpreterProjectors
 open InterpreterExpansion
 open InterpreterPaths
 open InterpreterExpressions
+open Assumed
 
 (** The local logger *)
 let log = L.statements_log
@@ -481,7 +482,7 @@ let eval_box_new_inst_sig (region_params : T.erased_region list)
     (type_params : T.ety list) : A.inst_fun_sig =
   (* The signature is:
      `T -> Box<T>`
-     where T is the type pram
+     where T is the type param
   *)
   match (region_params, type_params) with
   | [], [ ty_param ] ->
