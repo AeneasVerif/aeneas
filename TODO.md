@@ -61,8 +61,8 @@
    abstractions) is wrong.
    We get things like :
    `AProjLoans (s0 <: &'a mut T) [AProjBorrows (s1 <: &'a mut T)]`
-   while in the case of `s1` we should ignore the outer borrow (we
-   gave back something because this borrow ended...).
+   while in the case of `s1` we should ignore the outer borrow (what we give
+   back actually has type `T`...)
   
 * write a function to check that the code we are about to synthesize is in the proper
   subset. In particular:

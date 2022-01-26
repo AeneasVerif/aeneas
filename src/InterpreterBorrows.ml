@@ -437,6 +437,8 @@ let give_back_symbolic_value (_config : C.config)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
   let subst (_abs : V.abs) local_given_back =
+    (* See the below comments: there is something wrong here *)
+    let _ = raise Errors.Unimplemented in
     (* Compute the projection over the given back value *)
     let child_proj =
       match nsv.sv_kind with
@@ -450,11 +452,21 @@ let give_back_symbolic_value (_config : C.config)
            * (and MUST) forget the borrows *)
           V.AIgnoredProjBorrows
       | V.FunCallGivenBack ->
-          (* The value was fed as input to a function, and was given back *)
+          (* TODO: there is something wrong here.
+           * Consider this:
+           * ```
+           * abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
+           * abs1 {'b} { AProjBorrows (s0 : &'a mut T <: &'b mut T) }
+           * ```
+           *
+           * Upon ending abs1, we give back some fresh symbolic value `s1`,
+           * that we reinsert where the loan for `s0` is. However, the mutable
+           * borrow in the type `&'a mut T` was ended: we give back a value of
+           * type `T`! We thus *mustn't* introduce a projector here.
+           *)
           V.AProjBorrows (nsv, sv.V.sv_ty)
       | _ -> failwith "Unreachable"
     in
-    (* TODO: this actually doesn't work, or at least there is something subtle... *)
     V.AProjLoans (sv, (mv, child_proj) :: local_given_back)
   in
   update_intersecting_aproj_loans proj_regions proj_ty sv subst ctx
