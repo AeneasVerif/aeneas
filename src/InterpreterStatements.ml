@@ -245,6 +245,13 @@ let get_non_local_function_return_type (fid : A.assumed_fun_id)
   | A.BoxFree, [], [ _ ] -> mk_unit_ty
   | _ -> failwith "Inconsistent state"
 
+let move_return_value (config : C.config) (cf : V.typed_value -> m_fun) : m_fun
+    =
+ fun ctx ->
+  let ret_vid = V.VarId.zero in
+  let cc = eval_operand config (E.Move (mk_place_from_var_id ret_vid)) in
+  cc cf ctx
+
 (** Pop the current frame.
     
     Drop all the local variables but the return variable, move the return
@@ -280,7 +287,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
       ^ "]"));
 
   (* Move the return value out of the return variable *)
-  let cc = eval_operand config (E.Move (mk_place_from_var_id ret_vid)) in
+  let cc = move_return_value config in
   (* Sanity check *)
   let cc =
     comp_check_value cc (fun ret_value ctx ->
@@ -655,6 +662,41 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
   (* Apply *)
   T.RegionGroupId.mapi create_abs rgl
 
+(** Helper.
+
+    Create a list of abstractions from a list of regions groups, and insert
+    them in the context.
+    
+    [compute_abs_avalues]: this function must compute, given an initialized,
+    empty (i.e., with no avalues) abstraction, compute the avalues which
+    should be inserted in this abstraction before we insert it in the context.
+    Note that this function may update the context: it is necessary when
+    computing borrow projections, for instance.
+*)
+let create_push_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
+    (kind : V.abs_kind) (rgl : A.abs_region_group list)
+    (compute_abs_avalues :
+      V.abs -> C.eval_ctx -> C.eval_ctx * V.typed_avalue list)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
+  let empty_absl =
+    create_empty_abstractions_from_abs_region_groups call_id kind rgl
+  in
+
+  (* Compute and add the avalues to the abstractions, the insert the abstractions
+   * in the context. *)
+  let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =
+    (* Compute the values to insert in the abstraction *)
+    let ctx, avalues = compute_abs_avalues abs ctx in
+    (* Add the avalues to the abstraction *)
+    let abs = { abs with avalues } in
+    (* Insert the abstraction in the context *)
+    let ctx = { ctx with env = Abs abs :: ctx.env } in
+    (* Return *)
+    ctx
+  in
+  List.fold_left insert_abs ctx empty_absl
+
 (** Evaluate a statement *)
 let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
  fun cf ctx ->
@@ -972,15 +1014,12 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
           not (value_has_ret_symbolic_value_with_borrow_under_mut ctx arg))
         args);
 
-    (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
-    let call_id = C.fresh_fun_call_id () in
-    let empty_absl =
-      create_empty_abstractions_from_abs_region_groups call_id V.FunCall
-        inst_sg.A.regions_hierarchy
-    in
-
-    (* Add the avalues to the abstractions and insert them in the context *)
-    let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =
+    (* Initialize the abstractions and push them in the context.
+     * First, we define the function which, given an initialized, empty
+     * abstraction, computes the avalues which should be inserted inside.
+     *)
+    let compute_abs_avalues (abs : V.abs) (ctx : C.eval_ctx) :
+        C.eval_ctx * V.typed_avalue list =
       (* Project over the input values *)
       let ctx, args_projs =
         List.fold_left_map
@@ -990,15 +1029,14 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
           ctx args_with_rtypes
       in
       (* Group the input and output values *)
-      let avalues = List.append args_projs [ ret_av abs.regions ] in
-      (* Add the avalues to the abstraction *)
-      let abs = { abs with avalues } in
-      (* Insert the abstraction in the context *)
-      let ctx = { ctx with env = Abs abs :: ctx.env } in
-      (* Return *)
-      ctx
+      (ctx, List.append args_projs [ ret_av abs.regions ])
     in
-    let ctx = List.fold_left insert_abs ctx empty_absl in
+    (* Actually initialize and insert the abstractions *)
+    let call_id = C.fresh_fun_call_id () in
+    let ctx =
+      create_push_abstractions_from_abs_region_groups call_id V.FunCall
+        inst_sg.A.regions_hierarchy compute_abs_avalues ctx
+    in
 
     (* Apply the continuation *)
     let expr = cf ctx in

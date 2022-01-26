@@ -1,12 +1,15 @@
+open Cps
+open InterpreterUtils
+open InterpreterProjectors
+open InterpreterBorrows
+open InterpreterExpressions
+open InterpreterStatements
+open CfimAstUtils
 module L = Logging
 module T = Types
 module A = CfimAst
 module M = Modules
 module SA = SymbolicAst
-open Cps
-open InterpreterUtils
-open InterpreterExpressions
-open InterpreterStatements
 
 (** The local logger *)
 let log = L.interpreter_log
@@ -65,24 +68,18 @@ let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def) :
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = C.fresh_fun_call_id () in
   assert (call_id = V.FunCallId.zero);
-  let empty_absl =
-    create_empty_abstractions_from_abs_region_groups call_id V.SynthInput
-      inst_sg.A.regions_hierarchy
-  in
-  (* Add the avalues to the abstractions and insert them in the context *)
-  let insert_abs (ctx : C.eval_ctx) (abs : V.abs) : C.eval_ctx =
+  let compute_abs_avalues (abs : V.abs) (ctx : C.eval_ctx) :
+      C.eval_ctx * V.typed_avalue list =
     (* Project over the values - we use *loan* projectors, as explained above *)
     let avalues =
       List.map (mk_aproj_loans_value_from_symbolic_value abs.regions) input_svs
     in
-    (* Insert the avalues in the abstraction *)
-    let abs = { abs with avalues } in
-    (* Insert the abstraction in the context *)
-    let ctx = { ctx with env = Abs abs :: ctx.env } in
-    (* Return *)
-    ctx
+    (ctx, avalues)
   in
-  let ctx = List.fold_left insert_abs ctx empty_absl in
+  let ctx =
+    create_push_abstractions_from_abs_region_groups call_id V.SynthInput
+      inst_sg.A.regions_hierarchy compute_abs_avalues ctx
+  in
   (* Split the variables between return var, inputs and remaining locals *)
   let ret_var = List.hd fdef.locals in
   let input_vars, local_vars =
@@ -97,6 +94,78 @@ let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def) :
   let ctx = C.ctx_push_uninitialized_vars ctx local_vars in
   (* Return *)
   ctx
+
+(** Small helper.
+
+*)
+let evaluate_function_symbolic_synthesize_backward_from_return
+    (config : C.config) (m : M.cfim_module) (fdef : A.fun_def)
+    (inst_sg : A.inst_fun_sig) (back_id : T.RegionGroupId.id) (ctx : C.eval_ctx)
+    : SA.expression option =
+  (* We need to instantiate the function signature - to retrieve
+   * the return type. Note that it is important to re-generate
+   * an instantiation of the signature, so that we use fresh
+   * region ids for the return abstractions. *)
+  let sg = fdef.signature in
+  let type_params = List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params in
+  let ret_inst_sg = instantiate_fun_sig type_params sg in
+  let ret_rty = ret_inst_sg.output in
+  (* Move the return value out of the return variable *)
+  let cf_move_ret = move_return_value config in
+
+  (* Insert the return value in the return abstractions (by applying
+   * borrow projections) *)
+  let cf_consume_ret ret_value ctx =
+    let ret_call_id = C.fresh_fun_call_id () in
+    let compute_abs_avalues (abs : V.abs) (ctx : C.eval_ctx) :
+        C.eval_ctx * V.typed_avalue list =
+      let ctx, avalue =
+        apply_proj_borrows_on_input_value config ctx abs.regions
+          abs.ancestors_regions ret_value ret_rty
+      in
+      (ctx, [ avalue ])
+    in
+    (* Initialize and insert the abstractions in the context *)
+    let ctx =
+      create_push_abstractions_from_abs_region_groups ret_call_id V.SynthRet
+        ret_inst_sg.A.regions_hierarchy compute_abs_avalues ctx
+    in
+
+    (* We now need to end the proper *input* abstractions - pay attention
+     * to the fact that we end the *input* abstractions, not the *return*
+     * abstractions (of course, the corresponding return abstractions will
+     * automatically be ended, because they consumed values coming from the
+     * input abstractions...) *)
+    let parent_rgs = list_parent_region_groups sg back_id in
+    let parent_input_abs_ids =
+      T.RegionGroupId.mapi
+        (fun rg_id rg ->
+          if T.RegionGroupId.Set.mem rg_id parent_rgs then Some rg.T.id
+          else None)
+        inst_sg.regions_hierarchy
+    in
+    let parent_input_abs_ids =
+      List.filter_map (fun x -> x) parent_input_abs_ids
+    in
+    (* End the parent abstractions and the current abstraction - note that we
+     * end them in an order which follows the regions hierarchy: it should lead
+     * to generated code which has a better consistency between the parent
+     * and children backward functions *)
+    let current_abs_id =
+      (T.RegionGroupId.nth inst_sg.regions_hierarchy back_id).id
+    in
+    let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
+    let cf_end_target_abs cf =
+      List.fold_left
+        (fun cf id -> end_abstraction config [] id cf)
+        cf target_abs_ids
+    in
+    (* Generate the Return node *)
+    let cf_return : m_fun = fun _ -> Some (SA.Return None) in
+    (* Apply *)
+    cf_end_target_abs cf_return ctx
+  in
+  cf_move_ret cf_consume_ret ctx
 
 (** Evaluate a function with the symbolic interpreter *)
 let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
@@ -133,10 +202,7 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
           | None ->
               (* Forward translation *)
               (* Move the return value *)
-              let ret_vid = V.VarId.zero in
-              let cf_move =
-                eval_operand config (E.Move (mk_place_from_var_id ret_vid))
-              in
+              let cf_move = move_return_value config in
               (* Generate the Return node *)
               let cf_return ret_value : m_fun =
                fun _ -> Some (SA.Return ret_value)
@@ -144,7 +210,9 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
               (* Apply *)
               cf_move cf_return ctx
           | Some back_id ->
-              (* Backward translation *) raise Errors.Unimplemented
+              (* Backward translation *)
+              evaluate_function_symbolic_synthesize_backward_from_return config
+                m fdef inst_sg back_id ctx
         else None
     | Panic ->
         (* Note that as we explore all the execution branches, one of
