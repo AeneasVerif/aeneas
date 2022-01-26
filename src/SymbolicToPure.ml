@@ -336,7 +336,7 @@ let rec translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
   (* A small helper for "leave" types *)
   let wrap ty = if inside_mut then Some ty else None in
   match ty with
-  | T.Adt (type_id, regions, tys) -> (
+  | T.Adt (type_id, _, tys) -> (
       match type_id with
       | T.AdtId _ | Assumed _ ->
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
@@ -633,7 +633,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
       (* Ignore *)
       None
 
-and aborrow_content_to_consumed (ctx : bs_ctx) (bc : V.aborrow_content) :
+and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
     typed_rvalue option =
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
@@ -649,7 +649,6 @@ and aborrow_content_to_consumed (ctx : bs_ctx) (bc : V.aborrow_content) :
       None
 
 and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
-  let translate = aproj_to_consumed ctx in
   match aproj with
   | V.AEndedProjLoans (msv, []) ->
       (* The symbolic value was left unchanged *)
@@ -707,6 +706,7 @@ let rec typed_avalue_to_given_back (av : V.typed_avalue) (ctx : bs_ctx) :
       | T.Tuple ->
           (* Return *)
           let variant_id = adt_v.variant_id in
+          assert (variant_id = None);
           if field_values = [] then (ctx, None)
           else
             let value = LvTuple field_values in
