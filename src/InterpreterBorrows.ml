@@ -314,8 +314,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
               match nv.V.value with
               | V.Symbolic sv ->
                   let abs = Option.get opt_abs in
-                  (* Remember the given back value as a meta-value *)
-                  let given_back_meta = nv in
+                  (* Remember the given back value as a meta-value
+                   * TODO: it is a bit annoying to have to deconstruct
+                   * the value... Think about a more elegant way. *)
+                  let given_back_meta = as_symbolic nv.value in
                   (* The loan projector *)
                   let given_back_loans_proj =
                     mk_aproj_loans_value_from_symbolic_value abs.regions sv
@@ -759,14 +761,14 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     a reference whose region has already ended).
  *)
 let convert_avalue_to_given_back_value (abs_kind : V.abs_kind)
-    (av : V.typed_avalue) : V.typed_value =
+    (av : V.typed_avalue) : V.symbolic_value =
   let sv_kind =
     match abs_kind with
     | V.FunCall -> V.FunCallGivenBack
     | V.SynthRet -> V.SynthRetGivenBack
     | V.SynthInput -> V.SynthInputGivenBack
   in
-  mk_fresh_symbolic_typed_value sv_kind av.V.ty
+  mk_fresh_symbolic_value sv_kind av.V.ty
 
 (** End a borrow identified by its borrow id in a context.
 
@@ -1168,6 +1170,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             let ended_borrow = V.ABorrow (V.AEndedMutBorrow (v, av)) in
             let ctx = update_aborrow ek_all bid ended_borrow ctx in
             (* Give the value back *)
+            let v = mk_typed_value_from_symbolic_value v in
             give_back_value config bid v ctx
         | V.ASharedBorrow bid ->
             (* Replace the shared borrow with bottom *)

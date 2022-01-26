@@ -195,12 +195,18 @@ type mvalue = typed_value [@@deriving show]
      Note that we never automatically visit the meta-values with the
      visitors: they really are meta information, and shouldn't be considered
      as part of the environment during a symbolic execution.
+     
+     TODO: we may want to create wrappers, to prevent mixing meta values
+     and regular values.
  *)
 
 type msymbolic_value = symbolic_value [@@deriving show]
 (** "Meta"-symbolic value.
 
      See the explanations for [mvalue]
+
+     TODO: we may want to create wrappers, to prevent mixing meta values
+     and regular values.
  *)
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
@@ -645,7 +651,7 @@ and aborrow_content =
             abstraction so that we can properly call the backward functions
             when generating the pure translation.
        *)
-  | AEndedMutBorrow of mvalue * typed_avalue
+  | AEndedMutBorrow of msymbolic_value * typed_avalue
       (** The sole purpose of [AEndedMutBorrow] is to store the (symbolic) value
           that we gave back as a meta-value, to help with the synthesis.
           We also remember the child [avalue] because this structural information
@@ -656,7 +662,7 @@ and aborrow_content =
   | AEndedIgnoredMutBorrow of {
       child : typed_avalue;
       given_back_loans_proj : typed_avalue;
-      given_back_meta : mvalue;
+      given_back_meta : msymbolic_value;
           (** [given_back_meta] is used to store the (symbolic) value we gave back
               upon ending the borrow.
 

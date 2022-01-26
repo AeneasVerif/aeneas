@@ -11,7 +11,7 @@ type ('c, 's) ended = EndedConcrete of 'c | EndedSymbolic of 's
 
 type ended_loan = (V.mvalue, V.msymbolic_value list) ended
 
-type ended_borrow = (V.mvalue, V.msymbolic_value) ended
+type ended_borrow = (V.msymbolic_value, V.msymbolic_value) ended
 
 type ended_loan_or_borrow =
   | EndedLoan of ended_loan
