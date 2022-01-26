@@ -99,9 +99,8 @@ let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def) :
 
 *)
 let evaluate_function_symbolic_synthesize_backward_from_return
-    (config : C.config) (m : M.cfim_module) (fdef : A.fun_def)
-    (inst_sg : A.inst_fun_sig) (back_id : T.RegionGroupId.id) (ctx : C.eval_ctx)
-    : SA.expression option =
+    (config : C.config) (fdef : A.fun_def) (inst_sg : A.inst_fun_sig)
+    (back_id : T.RegionGroupId.id) (ctx : C.eval_ctx) : SA.expression option =
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
@@ -212,7 +211,7 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
           | Some back_id ->
               (* Backward translation *)
               evaluate_function_symbolic_synthesize_backward_from_return config
-                m fdef inst_sg back_id ctx
+                fdef inst_sg back_id ctx
         else None
     | Panic ->
         (* Note that as we explore all the execution branches, one of
@@ -292,8 +291,17 @@ module Test = struct
     log#ldebug
       (lazy ("test_function_symbolic: " ^ Print.name_to_string fdef.A.name));
 
-    (* Execute *)
-    let _ = evaluate_function_symbolic config synthesize m fid None in
+    (* Evaluate *)
+    let evaluate = evaluate_function_symbolic config synthesize m fid in
+    (* Execute the forward function *)
+    let _ = evaluate None in
+    (* Execute the backward functions *)
+    let _ =
+      T.RegionGroupId.iteri
+        (fun gid _ -> evaluate (Some gid))
+        fdef.signature.regions_hierarchy
+    in
+
     ()
 
   (** Execute the symbolic interpreter on a list of functions.

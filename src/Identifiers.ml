@@ -61,6 +61,8 @@ module type Id = sig
       TODO: generalize to `map_from_i`
    *)
 
+  val iteri : (id -> 'a -> unit) -> 'a list -> unit
+
   module Ord : C.OrderedType with type t = id
 
   module Set : C.Set with type elt = id
@@ -130,6 +132,8 @@ module IdGen () : Id = struct
       match ls with [] -> [] | x :: ls' -> f i x :: aux (i + 1) ls'
     in
     aux 1 ls
+
+  let iteri = List.iteri
 
   module Ord = struct
     type t = id
