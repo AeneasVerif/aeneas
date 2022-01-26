@@ -7,7 +7,6 @@ module I = Interpreter
 module EL = Easy_logging.Logging
 module TA = TypesAnalysis
 module P = Pure
-open SymbolicAstUtils
 open PrintSymbolicAst
 open SymbolicToPure
 

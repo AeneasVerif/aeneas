@@ -15,7 +15,6 @@ module A = CfimAst
 module C = Contexts
 module M = Modules
 open SymbolicAst
-open SymbolicAstUtils
 module P = Print
 module PT = Print.Types
 
