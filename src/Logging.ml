@@ -9,6 +9,12 @@ let main_log = L.get_logger "MainLogger"
 (** Below, we create subgloggers for various submodules, so that we can precisely
     toggle logging on/off, depending on which information we need *)
 
+(** Logger for Translate *)
+let translate_log = L.get_logger "MainLogger.Translate"
+
+(** Logger for SymbolicToPure *)
+let symbolic_to_pure_log = L.get_logger "MainLogger.SymbolicToPure"
+
 (** Logger for Interpreter *)
 let interpreter_log = L.get_logger "MainLogger.Interpreter"
 

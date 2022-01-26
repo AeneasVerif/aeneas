@@ -1,4 +1,3 @@
-module T = Types
 (** This module contains various utilities for the assumed functions.
 
     Note that `Box::free` is peculiar: we don't really handle it as a function,
@@ -8,6 +7,7 @@ module T = Types
     not as a function call, and thus never need its signature.
  *)
 
+module T = Types
 module A = CfimAst
 open TypesUtils
 
@@ -56,3 +56,14 @@ let box_deref_shared_sig = box_deref_sig false
 
 (** `&'a mut Box<T> -> &'a mut T` *)
 let box_deref_mut_sig = box_deref_sig true
+
+(** The list of assumed functions, and their signatures.
+
+    Rk.: following what is written above, we don't include `Box::free`.
+ *)
+let assumed_functions : (A.assumed_fun_id * A.fun_sig) list =
+  [
+    (BoxNew, box_new_sig);
+    (BoxDeref, box_deref_shared_sig);
+    (BoxDerefMut, box_deref_mut_sig);
+  ]

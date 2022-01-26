@@ -7,7 +7,11 @@ module A = CfimAst
 module M = Modules
 module S = SymbolicAst
 module TA = TypesAnalysis
+module L = Logging
 open Pure
+
+(** The local logger *)
+let log = L.symbolic_to_pure_log
 
 (** TODO: move this, it is not useful for symbolic -> pure *)
 type name =
@@ -353,9 +357,8 @@ let translate_type_def (def : T.type_def) : type_def =
     (preserve all borrows, etc.)
 *)
 
-let rec translate_fwd_ty (ctx : bs_ctx) (ty : 'r T.ty) : ty =
-  let translate = translate_fwd_ty ctx in
-  let types_infos = ctx.type_context.types_infos in
+let rec translate_fwd_ty (types_infos : TA.type_infos) (ty : 'r T.ty) : ty =
+  let translate = translate_fwd_ty types_infos in
   match ty with
   | T.Adt (type_id, regions, tys) ->
       (* Can't translate types with regions for now *)
@@ -379,16 +382,20 @@ let rec translate_fwd_ty (ctx : bs_ctx) (ty : 'r T.ty) : ty =
       Slice (translate ty)
   | Ref (_, rty, _) -> translate rty
 
+(** Simply calls [translate_fwd_ty] *)
+let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : 'r T.ty) : ty =
+  let types_infos = ctx.type_context.types_infos in
+  translate_fwd_ty types_infos ty
+
 (** Translate a type, when some regions may have ended.
     
     We return an option, because the translated type may be empty.
     
     [inside_mut]: are we inside a mutable borrow?
  *)
-let rec translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
-    (inside_mut : bool) (ty : 'r T.ty) : ty option =
-  let translate = translate_back_ty ctx keep_region inside_mut in
-  let types_infos = ctx.type_context.types_infos in
+let rec translate_back_ty (types_infos : TA.type_infos)
+    (keep_region : 'r -> bool) (inside_mut : bool) (ty : 'r T.ty) : ty option =
+  let translate = translate_back_ty types_infos keep_region inside_mut in
   (* A small helper for "leave" types *)
   let wrap ty = if inside_mut then Some ty else None in
   match ty with
@@ -422,20 +429,27 @@ let rec translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
       | T.Mut ->
           (* Dive in, remembering the fact that we are inside a mutable borrow *)
           let inside_mut = true in
-          if keep_region r then translate_back_ty ctx keep_region inside_mut rty
+          if keep_region r then
+            translate_back_ty types_infos keep_region inside_mut rty
           else None)
+
+(** Simply calls [translate_back_ty] *)
+let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
+    (inside_mut : bool) (ty : 'r T.ty) : ty option =
+  let types_infos = ctx.type_context.types_infos in
+  translate_back_ty types_infos keep_region inside_mut ty
 
 (** Small utility: list the transitive parents of a region var group.
     We don't do that in an efficient manner, but it doesn't matter.
  *)
-let rec list_parent_region_groups (def : A.fun_def) (gid : T.RegionGroupId.id) :
+let rec list_parent_region_groups (sg : A.fun_sig) (gid : T.RegionGroupId.id) :
     T.RegionGroupId.Set.t =
-  let rg = T.RegionGroupId.nth def.signature.regions_hierarchy gid in
+  let rg = T.RegionGroupId.nth sg.regions_hierarchy gid in
   let parents =
     List.fold_left
       (fun s gid ->
         (* Compute the parents *)
-        let parents = list_parent_region_groups def gid in
+        let parents = list_parent_region_groups sg gid in
         (* Parents U current region *)
         let parents = T.RegionGroupId.Set.add gid parents in
         (* Make the union with the accumulator *)
@@ -445,13 +459,13 @@ let rec list_parent_region_groups (def : A.fun_def) (gid : T.RegionGroupId.id) :
   parents
 
 (** Small utility: same as [list_parent_region_groups], but returns an ordered list.  *)
-let list_ordered_parent_region_groups (def : A.fun_def)
+let list_ordered_parent_region_groups (sg : A.fun_sig)
     (gid : T.RegionGroupId.id) : T.RegionGroupId.id list =
-  let pset = list_parent_region_groups def gid in
+  let pset = list_parent_region_groups sg gid in
   let parents =
     List.filter
       (fun (rg : T.region_var_group) -> T.RegionGroupId.Set.mem rg.id pset)
-      def.signature.regions_hierarchy
+      sg.regions_hierarchy
   in
   let parents = List.map (fun (rg : T.region_var_group) -> rg.id) parents in
   parents
@@ -480,15 +494,14 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) : V.abs list =
   let abs_ids = list_ancestor_abstractions_ids ctx abs in
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 
-let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
+let translate_fun_sig (types_infos : TA.type_infos) (sg : A.fun_sig)
     (bid : T.RegionGroupId.id option) : fun_sig =
-  let sg = def.signature in
   (* Retrieve the list of parent backward functions *)
   let gid, parents =
     match bid with
     | None -> (None, T.RegionGroupId.Set.empty)
     | Some bid ->
-        let parents = list_parent_region_groups def bid in
+        let parents = list_parent_region_groups sg bid in
         (Some bid, parents)
   in
   (* List the inputs for:
@@ -496,7 +509,7 @@ let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
    * - the parent backward functions, in proper order
    * - the current backward function (if it is a backward function)
    *)
-  let fwd_inputs = List.map (translate_fwd_ty ctx) sg.inputs in
+  let fwd_inputs = List.map (translate_fwd_ty types_infos) sg.inputs in
   (* For the backward functions: for now we don't supported nested borrows,
    * so just check that there aren't parent regions *)
   assert (T.RegionGroupId.Set.is_empty parents);
@@ -511,7 +524,7 @@ let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
       | T.Var r -> T.RegionVarId.Set.mem r regions
     in
     let inside_mut = false in
-    translate_back_ty ctx keep_region inside_mut
+    translate_back_ty types_infos keep_region inside_mut
   in
   (* Compute the additinal inputs for the current function, if it is a backward
    * function *)
@@ -536,7 +549,7 @@ let translate_fun_sig (ctx : bs_ctx) (def : A.fun_def)
     match gid with
     | None ->
         (* This is a forward function: there is one output *)
-        [ translate_fwd_ty ctx sg.output ]
+        [ translate_fwd_ty types_infos sg.output ]
     | Some gid ->
         (* This is a backward function: there might be several outputs.
          * The outputs are the borrows inside the regions of the abstractions
@@ -558,7 +571,7 @@ let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
     bs_ctx * var =
   (* Generate the fresh variable *)
   let id, var_counter = VarId.fresh ctx.var_counter in
-  let ty = translate_fwd_ty ctx sv.sv_ty in
+  let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
   let var = { id; ty } in
   (* Insert in the map *)
   let sv_to_var = V.SymbolicValueId.Map.add sv.sv_id var ctx.sv_to_var in
@@ -619,7 +632,7 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
         let var = lookup_var_for_symbolic_value sv ctx in
         (mk_typed_rvalue_from_var var).value
   in
-  let ty = translate_fwd_ty ctx v.ty in
+  let ty = ctx_translate_fwd_ty ctx v.ty in
   { value; ty }
 
 (** Explore an abstraction value and convert it to a consumed value
@@ -657,7 +670,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
           if field_values = [] then None
           else
             let value = RvAdt { variant_id; field_values } in
-            let ty = translate_fwd_ty ctx av.ty in
+            let ty = ctx_translate_fwd_ty ctx av.ty in
             let rv = { value; ty } in
             Some rv)
   | ABottom -> failwith "Unreachable"
@@ -766,7 +779,7 @@ let rec typed_avalue_to_given_back (av : V.typed_avalue) (ctx : bs_ctx) :
           if field_values = [] then (ctx, None)
           else
             let value = LvTuple field_values in
-            let ty = translate_fwd_ty ctx av.ty in
+            let ty = ctx_translate_fwd_ty ctx av.ty in
             let lv : typed_lvalue = { value; ty } in
             (ctx, Some lv))
   | ABottom -> failwith "Unreachable"
@@ -867,7 +880,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     expression =
   (* Translate the function call *)
-  let type_params = List.map (translate_fwd_ty ctx) call.type_params in
+  let type_params = List.map (ctx_translate_fwd_ty ctx) call.type_params in
   let args = List.map (typed_value_to_rvalue ctx) call.args in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
   (* Retrieve the function id, and register the function call in the context
@@ -909,7 +922,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
   | V.FunCall ->
       let call_info = V.FunCallId.Map.find abs.call_id ctx.calls in
       let call = call_info.forward in
-      let type_params = List.map (translate_fwd_ty ctx) call.type_params in
+      let type_params = List.map (ctx_translate_fwd_ty ctx) call.type_params in
       (* Retrive the orignal call and the parent abstractions *)
       let forward, backwards = get_abs_ancestors ctx abs in
       (* Retrieve the values consumed when we called the forward function and
@@ -1122,6 +1135,48 @@ let translate_fun_def (fs_ctx : fs_ctx) (body : S.expression) : fun_def =
   (* Translate the function *)
   let def_id = def.A.def_id in
   let name = translate_fun_name def bid in
-  let signature = translate_fun_sig bs_ctx def bid in
+  (* TODO: the signature should already have been translated.
+   * Do we need it actually? *)
+  let signature =
+    translate_fun_sig bs_ctx.type_context.types_infos def.signature bid
+  in
   let body = translate_expression body bs_ctx in
   { def_id; name; signature; body }
+
+let translate_type_defs (type_defs : T.type_def list) : type_def TypeDefId.Map.t
+    =
+  List.fold_left
+    (fun tdefs def ->
+      let tdef = translate_type_def def in
+      TypeDefId.Map.add def.def_id tdef tdefs)
+    TypeDefId.Map.empty type_defs
+
+let translate_fun_signatures (types_infos : TA.type_infos)
+    (functions : (A.fun_id * A.fun_sig) list) : fun_sig RegularFunIdMap.t =
+  (* For every function, translate the signatures of:
+     - the forward function
+     - the backward functions
+  *)
+  let translate_one (fun_id : A.fun_id) (sg : A.fun_sig) :
+      (regular_fun_id * fun_sig) list =
+    (* The forward function *)
+    let fwd_sg = translate_fun_sig types_infos sg None in
+    let fwd_id = { fun_id; back_id = None } in
+    (* The backward functions *)
+    let back_sgs =
+      List.map
+        (fun (rg : T.region_var_group) ->
+          let tsg = translate_fun_sig types_infos sg (Some rg.id) in
+          let id = { fun_id; back_id = Some rg.id } in
+          (id, tsg))
+        sg.regions_hierarchy
+    in
+    (* Return *)
+    (fwd_id, fwd_sg) :: back_sgs
+  in
+  let translated =
+    List.concat (List.map (fun (id, sg) -> translate_one id sg) functions)
+  in
+  List.fold_left
+    (fun m (id, sg) -> RegularFunIdMap.add id sg m)
+    RegularFunIdMap.empty translated
