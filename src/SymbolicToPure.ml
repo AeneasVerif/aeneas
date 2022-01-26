@@ -587,6 +587,21 @@ let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
   let ty = translate_fwd_ty ctx v.ty in
   { value; ty }
 
+(** Explore an abstraction value and convert it to a consumed value
+    by collecting all the meta-values from the ended *loans*.
+
+    Consumed values are rvalues, because when an abstraction ends, we
+    introduce a call to a backward function in the synthesized program,
+    which takes as inputs those consumed values:
+    ```
+    // Rust:
+    fn choose<'a>(b: bool, x : &'a mut u32, y : &'a mut u32) -> &'a mut u32;
+    
+    // Synthesis:
+    let ... = choose_back b x y nz in
+                                ^^
+    ```
+ *)
 let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
     typed_rvalue option =
   let translate = typed_avalue_to_consumed ctx in
@@ -674,9 +689,24 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
       failwith "Unreachable"
 
+(** Convert the abstraction values in an abstraction to consumed values.
+
+    See [typed_avalue_to_consumed].
+ *)
 let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_rvalue list =
   List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
 
+(** Explore an abstraction value and convert it to a given back value
+    by collecting all the meta-values from the ended *borrows*.
+
+    Given back values are lvalues, because when an abstraction ends, we
+    introduce a call to a backward function in the synthesized program,
+    which introduces new values:
+    ```
+    let (nx, ny) = f_back ... in
+        ^^^^^^^^
+    ```
+ *)
 let rec typed_avalue_to_given_back (av : V.typed_avalue) (ctx : bs_ctx) :
     bs_ctx * typed_lvalue option =
   match av.value with
@@ -762,6 +792,10 @@ and aproj_to_given_back (aproj : V.aproj) (ctx : bs_ctx) :
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
       failwith "Unreachable"
 
+(** Convert the abstraction values in an abstraction to given back values.
+
+    See [typed_avalue_to_given_back].
+ *)
 let abs_to_given_back (abs : V.abs) (ctx : bs_ctx) : bs_ctx * typed_lvalue list
     =
   let ctx, values =
