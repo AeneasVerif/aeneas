@@ -79,9 +79,7 @@ let translate_fun_name (fdef : A.fun_def) (bid : T.RegionGroupId.id option) :
             (* Exactly one backward function *)
             "_back"
         | _ ->
-            (* Several backward functions - note that **we use the backward function id
-             * as if it were a region group id** (there is a direct mapping between the
-             * two - TODO: merge them) *)
+            (* Several backward functions *)
             let rg = T.RegionGroupId.nth sg.regions_hierarchy bid in
             "_back" ^ rg_to_string rg)
   in
@@ -124,15 +122,6 @@ type type_context = {
 type fun_context = {
   cfim_fun_defs : A.fun_def FunDefId.Map.t;
   fun_defs : fun_def FunDefId.Map.t;
-}
-
-(* TODO: do we really need that actually? *)
-type synth_ctx = {
-  names : NameMap.t;
-  (* TODO: remove? *)
-  type_context : type_context;
-  fun_context : fun_context;
-  declarations : M.declaration_group list;
 }
 
 type call_info = {
@@ -382,8 +371,6 @@ let rec translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
 
 (** Small utility: list the transitive parents of a region var group.
     We don't do that in an efficient manner, but it doesn't matter.
-    
-    TODO: remove?
  *)
 let rec list_parent_region_groups (def : A.fun_def) (gid : T.RegionGroupId.id) :
     T.RegionGroupId.Set.t =
@@ -401,10 +388,7 @@ let rec list_parent_region_groups (def : A.fun_def) (gid : T.RegionGroupId.id) :
   in
   parents
 
-(** Small utility: same as [list_parent_region_groups], but returns an ordered list.
-
-    TODO: remove?
- *)
+(** Small utility: same as [list_parent_region_groups], but returns an ordered list.  *)
 let list_ordered_parent_region_groups (def : A.fun_def)
     (gid : T.RegionGroupId.id) : T.RegionGroupId.id list =
   let pset = list_parent_region_groups def gid in
@@ -531,8 +515,7 @@ let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
     : bs_ctx * var list =
   List.fold_left_map (fun ctx sv -> fresh_var_for_symbolic_value sv ctx) ctx svl
 
-(* TODO: rename *)
-let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
+let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
 
 (** Translate a typed value.
@@ -553,12 +536,10 @@ let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
     
     TODO: we have a problem with shared borrows. I think the shared borrows
     should carry the shared value as a meta-value.
-    
-    TODO: rename: remove the "translate_" prefix
  *)
-let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
-    typed_rvalue =
-  let translate = translate_typed_value_to_rvalue ctx in
+let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
+    =
+  let translate = typed_value_to_rvalue ctx in
   let value =
     match v.value with
     | V.Concrete cv -> RvConcrete cv
@@ -581,7 +562,7 @@ let rec translate_typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) :
             (* Borrows are the identity in the extraction *)
             (translate v).value)
     | Symbolic sv ->
-        let var = get_var_for_symbolic_value sv ctx in
+        let var = lookup_var_for_symbolic_value sv ctx in
         (mk_typed_rvalue_from_var var).value
   in
   let ty = translate_fwd_ty ctx v.ty in
@@ -637,7 +618,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
   | AMutLoan (_, _) | ASharedLoan (_, _, _) -> failwith "Unreachable"
   | AEndedMutLoan { child = _; given_back = _; given_back_meta } ->
       (* Return the meta-value *)
-      Some (translate_typed_value_to_rvalue ctx given_back_meta)
+      Some (typed_value_to_rvalue ctx given_back_meta)
   | AEndedSharedLoan (_, _) ->
       (* We don't dive into shared loans: there is nothing to give back
        * inside (note that there could be a mutable borrow in the shared
@@ -674,12 +655,12 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
   match aproj with
   | V.AEndedProjLoans (msv, []) ->
       (* The symbolic value was left unchanged *)
-      let var = get_var_for_symbolic_value msv ctx in
+      let var = lookup_var_for_symbolic_value msv ctx in
       Some (mk_typed_rvalue_from_var var)
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
       assert (child_aproj = AIgnoredProjBorrows);
       (* The symbolic value was updated *)
-      let var = get_var_for_symbolic_value mnv ctx in
+      let var = lookup_var_for_symbolic_value mnv ctx in
       Some (mk_typed_rvalue_from_var var)
   | V.AEndedProjLoans (_, _) ->
       (* The symbolic value was updated, and the given back values come from sevearl
@@ -819,7 +800,7 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
   match e with
   | S.Return v ->
-      let v = translate_typed_value_to_rvalue ctx v in
+      let v = typed_value_to_rvalue ctx v in
       Return v
   | Panic -> Panic
   | FunCall (call, e) -> translate_function_call call e ctx
@@ -833,7 +814,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     expression =
   (* Translate the function call *)
   let type_params = List.map (translate_fwd_ty ctx) call.type_params in
-  let args = List.map (translate_typed_value_to_rvalue ctx) call.args in
+  let args = List.map (typed_value_to_rvalue ctx) call.args in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
   (* Retrieve the function id, and register the function call in the context
    * if necessary *)
@@ -867,9 +848,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       (* Retrieve the values consumed when we called the forward function and
        * ended the parent backward functions: those give us part of the input
        * values *)
-      let fwd_inputs =
-        List.map (translate_typed_value_to_rvalue ctx) forward.args
-      in
+      let fwd_inputs = List.map (typed_value_to_rvalue ctx) forward.args in
       let back_ancestors_inputs =
         List.concat (List.map (abs_to_consumed ctx) backwards)
       in
@@ -943,7 +922,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
 and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
     (ctx : bs_ctx) : expression =
   (* Translate the scrutinee *)
-  let scrutinee_var = get_var_for_symbolic_value sv ctx in
+  let scrutinee_var = lookup_var_for_symbolic_value sv ctx in
   let scrutinee = mk_typed_rvalue_from_var scrutinee_var in
   (* Translate the branches *)
   match exp with

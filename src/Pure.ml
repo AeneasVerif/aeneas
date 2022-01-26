@@ -22,7 +22,10 @@ type ty =
   | Adt of T.type_id * ty list
       (** [Adt] encodes ADTs, tuples and assumed types.
        
-          TODO: what about the ended regions?
+          TODO: what about the ended regions? (ADTs may be parameterized
+          with several region variables. When giving back an ADT value, we may
+          be able to only give back part of the ADT. We need a way to encode
+          such "partial" ADTs.
        *)
   | TypeVar of TypeVarId.id
   | Bool
@@ -109,9 +112,6 @@ type fun_id =
   | Binop of E.binop
 
 type call = { func : fun_id; type_params : ty list; args : typed_rvalue list }
-
-type left_value = unit
-(** TODO: assignment left value *)
 
 type let_bindings =
   | Call of typed_lvalue list * call
