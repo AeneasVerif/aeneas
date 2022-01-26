@@ -531,6 +531,7 @@ let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
     : bs_ctx * var list =
   List.fold_left_map (fun ctx sv -> fresh_var_for_symbolic_value sv ctx) ctx svl
 
+(* TODO: rename *)
 let get_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
 
@@ -629,7 +630,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
        * borrow is in practice immutable) *)
       None
   | AIgnoredMutLoan (_, _) ->
-      (* There can be *inner* mutable loans, but not outer ones *)
+      (* There can be *inner* not ended mutable loans, but not outer ones *)
       failwith "Unreachable"
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
@@ -643,9 +644,9 @@ and aborrow_content_to_consumed (ctx : bs_ctx) (bc : V.aborrow_content) :
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
       failwith "Unreachable"
-  | AEndedMutBorrow (mv, _) ->
-      (* Return the meta-value *)
-      Some (translate_typed_value_to_rvalue ctx mv)
+  | AEndedMutBorrow (_, _) ->
+      (* We collect consumed values: ignore *)
+      None
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -676,9 +677,90 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
 let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_rvalue list =
   List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
 
-let typed_avalue_to_given_back (av : V.typed_avalue) (ctx : bs_ctx) :
+let rec typed_avalue_to_given_back (av : V.typed_avalue) (ctx : bs_ctx) :
     bs_ctx * typed_lvalue option =
-  raise Unimplemented
+  match av.value with
+  | AConcrete _ -> failwith "Unreachable"
+  | AAdt adt_v -> (
+      (* Translate the field values *)
+      let ctx, field_values =
+        List.fold_left_map
+          (fun ctx fv -> typed_avalue_to_given_back fv ctx)
+          ctx adt_v.field_values
+      in
+      let field_values = List.filter_map (fun x -> x) field_values in
+      (* For now, only tuples can contain borrows *)
+      let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
+      match adt_id with
+      | T.AdtId _ | T.Assumed T.Box ->
+          assert (field_values = []);
+          (ctx, None)
+      | T.Tuple ->
+          (* Return *)
+          let variant_id = adt_v.variant_id in
+          if field_values = [] then (ctx, None)
+          else
+            let value = LvTuple field_values in
+            let ty = translate_fwd_ty ctx av.ty in
+            let lv : typed_lvalue = { value; ty } in
+            (ctx, Some lv))
+  | ABottom -> failwith "Unreachable"
+  | ALoan lc -> aloan_content_to_given_back lc ctx
+  | ABorrow bc -> aborrow_content_to_given_back bc ctx
+  | ASymbolic aproj -> aproj_to_given_back aproj ctx
+  | AIgnored -> (ctx, None)
+
+and aloan_content_to_given_back (lc : V.aloan_content) (ctx : bs_ctx) :
+    bs_ctx * typed_lvalue option =
+  match lc with
+  | AMutLoan (_, _) | ASharedLoan (_, _, _) -> failwith "Unreachable"
+  | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
+  | AEndedSharedLoan (_, _) ->
+      (* We consider given back values, and thus ignore those *)
+      (ctx, None)
+  | AIgnoredMutLoan (_, _) ->
+      (* There can be *inner* not ended mutable loans, but not outer ones *)
+      failwith "Unreachable"
+  | AEndedIgnoredMutLoan _ ->
+      (* This happens with nested borrows: we need to dive in *)
+      raise Unimplemented
+  | AIgnoredSharedLoan _ ->
+      (* Ignore *)
+      (ctx, None)
+
+and aborrow_content_to_given_back (bc : V.aborrow_content) (ctx : bs_ctx) :
+    bs_ctx * typed_lvalue option =
+  match bc with
+  | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
+      failwith "Unreachable"
+  | AEndedMutBorrow (mv, _) ->
+      (* Return the meta-value *)
+      let ctx, var = fresh_var_for_symbolic_value mv ctx in
+      (ctx, Some (mk_typed_lvalue_from_var var))
+  | AEndedIgnoredMutBorrow _ ->
+      (* This happens with nested borrows: we need to dive in *)
+      raise Unimplemented
+  | AProjSharedBorrow _ ->
+      (* Ignore *)
+      (ctx, None)
+
+and aproj_to_given_back (aproj : V.aproj) (ctx : bs_ctx) :
+    bs_ctx * typed_lvalue option =
+  match aproj with
+  | V.AEndedProjLoans (_, child_projs) ->
+      (* There may be children borrow projections in case of nested borrows,
+       * in which case we need to dive in - we disallow nested borrows for now *)
+      assert (
+        List.for_all
+          (fun (_, aproj) -> aproj = V.AIgnoredProjBorrows)
+          child_projs);
+      (ctx, None)
+  | AEndedProjBorrows mv ->
+      (* Return the meta-value *)
+      let ctx, var = fresh_var_for_symbolic_value mv ctx in
+      (ctx, Some (mk_typed_lvalue_from_var var))
+  | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
+      failwith "Unreachable"
 
 let abs_to_given_back (abs : V.abs) (ctx : bs_ctx) : bs_ctx * typed_lvalue list
     =

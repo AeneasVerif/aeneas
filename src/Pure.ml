@@ -74,7 +74,8 @@ type var_or_dummy = Var of var | Dummy  (** Ignored value: `_` *)
 (** A left value (which appears on the left of assignments *)
 type lvalue =
   | LvVar of var_or_dummy
-  | LvTuple of lvalue list  (** Rk.: for now we don't support general ADTs *)
+  | LvTuple of typed_lvalue list
+      (** Rk.: for now we don't support general ADTs *)
 
 and typed_lvalue = { value : lvalue; ty : ty }
 

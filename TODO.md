@@ -4,6 +4,10 @@
 
 0. update the end borrows internal to abstractions to not introduce a Bottom
 
+0. remove AConcrete from avalue
+
+0. remove ABottom from avalue
+
 1. reorder the branches of matches
 
 1. stateful maps/sets modules (hashtbl?)
