@@ -131,7 +131,17 @@ and adt_value = {
 }
 
 and borrow_content =
-  | SharedBorrow of (BorrowId.id[@opaque])  (** A shared value *)
+  | SharedBorrow of mvalue * (BorrowId.id[@opaque])
+      (** A shared borrow.
+      
+          We remember the shared value which was borrowed as a meta value.
+          This is necessary for synthesis: upon translating to "pure" values,
+          we can't perform any lookup because we don't have an environment
+          anymore. Note that it is ok to keep the shared value and copy
+          the shared value this way, because shared values are immutable
+          for as long as they are shared (i.e., as long as we can use the
+          shared borrow).
+       *)
   | MutBorrow of (BorrowId.id[@opaque]) * typed_value
       (** A mutably borrowed value. *)
   | InactivatedMutBorrow of (BorrowId.id[@opaque])
@@ -168,12 +178,23 @@ and loan_content =
           borrows, and extremely useful when giving shared values to abstractions).
        *)
 
+and mvalue = typed_value
+(** "Meta"-value: information we store for the synthesis.
+
+     Note that we never automatically visit the meta-values with the
+     visitors: they really are meta information, and shouldn't be considered
+     as part of the environment during a symbolic execution.
+     
+     TODO: we may want to create wrappers, to prevent accidently mixing meta
+     values and regular values.
+ *)
+
 and typed_value = { value : value; ty : ety }
 [@@deriving
   show,
     visitors
       {
-        name = "iter_typed_value";
+        name = "iter_typed_value_visit_mvalue";
         variety = "iter";
         ancestors = [ "iter_typed_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
@@ -181,7 +202,7 @@ and typed_value = { value : value; ty : ety }
       },
     visitors
       {
-        name = "map_typed_value";
+        name = "map_typed_value_visit_mvalue";
         variety = "map";
         ancestors = [ "map_typed_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
@@ -189,16 +210,21 @@ and typed_value = { value : value; ty : ety }
       }]
 (** "Regular" typed value (we map variables to typed values) *)
 
-type mvalue = typed_value [@@deriving show]
-(** "Meta"-value: information we store for the synthesis.
+(** We have to override the [visit_mvalue] method, to ignore meta-values *)
+class ['self] iter_typed_value =
+  object (_self : 'self)
+    inherit [_] iter_typed_value_visit_mvalue
 
-     Note that we never automatically visit the meta-values with the
-     visitors: they really are meta information, and shouldn't be considered
-     as part of the environment during a symbolic execution.
-     
-     TODO: we may want to create wrappers, to prevent mixing meta values
-     and regular values.
- *)
+    method! visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
+  end
+
+(** We have to override the [visit_mvalue] method, to ignore meta-values *)
+class ['self] map_typed_value =
+  object (_self : 'self)
+    inherit [_] map_typed_value_visit_mvalue
+
+    method! visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
+  end
 
 type msymbolic_value = symbolic_value [@@deriving show]
 (** "Meta"-symbolic value.
@@ -238,8 +264,6 @@ class ['self] iter_aproj_base =
 
     method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
 
-    method visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
-
     method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
       fun _ _ -> ()
   end
@@ -250,8 +274,6 @@ class ['self] map_aproj_base =
     inherit [_] map_typed_value
 
     method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
-
-    method visit_mvalue : 'env -> mvalue -> mvalue = fun _ v -> v
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
       fun _ m -> m

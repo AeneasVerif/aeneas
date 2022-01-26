@@ -160,7 +160,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
       (* Borrows *)
       | Deref, V.Borrow bc, _ -> (
           match bc with
-          | V.SharedBorrow bid ->
+          | V.SharedBorrow (_, bid) ->
               (* Lookup the loan content, and explore from there *)
               if access.lookup_shared_borrows then
                 match lookup_loan ek bid ctx with
@@ -643,7 +643,7 @@ let drop_outer_borrows_loans_at_lplace (config : C.config) (end_borrows : bool)
           | LoanContent (V.SharedLoan (bids, _)) ->
               end_outer_borrows config bids
           | LoanContent (V.MutLoan bid)
-          | BorrowContent (V.MutBorrow (bid, _) | SharedBorrow bid) ->
+          | BorrowContent (V.MutBorrow (bid, _) | SharedBorrow (_, bid)) ->
               end_outer_borrow config bid
           | BorrowContent (V.InactivatedMutBorrow bid) ->
               (* First activate the borrow *)
@@ -715,12 +715,12 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
   | V.Borrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
-      | SharedBorrow bid ->
+      | SharedBorrow (mv, bid) ->
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
           let bid' = C.fresh_borrow_id () in
           let ctx = reborrow_shared bid bid' ctx in
-          (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
+          (ctx, { v with V.value = V.Borrow (SharedBorrow (mv, bid')) })
       | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
       | V.InactivatedMutBorrow _ ->
           failwith "Can't copy an inactivated mut borrow")

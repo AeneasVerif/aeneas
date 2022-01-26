@@ -298,6 +298,8 @@ let expand_symbolic_value_shared_borrow (config : C.config)
       | _ -> failwith "Unexpected"
     else None
   in
+  (* The fresh symbolic value for the shared value *)
+  let shared_sv = mk_fresh_symbolic_value original_sv.sv_kind ref_ty in
   (* Visitor to replace the projectors on borrows *)
   let obj =
     object (self)
@@ -306,7 +308,8 @@ let expand_symbolic_value_shared_borrow (config : C.config)
       method! visit_Symbolic env sv =
         if same_symbolic_id sv original_sv then
           let bid = fresh_borrow () in
-          V.Borrow (V.SharedBorrow bid)
+          V.Borrow
+            (V.SharedBorrow (mk_typed_value_from_symbolic_value shared_sv, bid))
         else super#visit_Symbolic env sv
 
       method! visit_Abs proj_regions abs =
@@ -362,7 +365,6 @@ let expand_symbolic_value_shared_borrow (config : C.config)
   (* Finally, replace the projectors on loans *)
   let bids = !borrows in
   assert (not (V.BorrowId.Set.is_empty bids));
-  let shared_sv = mk_fresh_symbolic_value original_sv.sv_kind ref_ty in
   let see = V.SeSharedRef (bids, shared_sv) in
   let allow_reborrows = true in
   let ctx =

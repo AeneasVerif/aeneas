@@ -508,33 +508,34 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
       (* Evaluate the borrowing operation *)
       let eval (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
        fun ctx ->
-        (* Compute the rvalue - simply a shared borrow with a fresh id *)
+        (* Generate the fresh borrow id *)
         let bid = C.fresh_borrow_id () in
-        (* Note that the reference is *mutable* if we do a two-phase borrow *)
-        let rv_ty =
-          T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
-        in
-        let bc =
-          if bkind = E.Shared then V.SharedBorrow bid
-          else V.InactivatedMutBorrow bid
-        in
-        let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
-        (* Compute the value with which to replace the value at place p *)
-        let nv =
+        (* Compute the loan value, with which to replace the value at place p *)
+        let nv, shared_mvalue =
           match v.V.value with
           | V.Loan (V.SharedLoan (bids, sv)) ->
               (* Shared loan: insert the new borrow id *)
               let bids1 = V.BorrowId.Set.add bid bids in
-              { v with V.value = V.Loan (V.SharedLoan (bids1, sv)) }
+              ({ v with V.value = V.Loan (V.SharedLoan (bids1, sv)) }, sv)
           | _ ->
               (* Not a shared loan: add a wrapper *)
               let v' =
                 V.Loan (V.SharedLoan (V.BorrowId.Set.singleton bid, v))
               in
-              { v with V.value = v' }
+              ({ v with V.value = v' }, v)
         in
-        (* Update the value in the context *)
+        (* Update the borrowed value in the context *)
         let ctx = write_place_unwrap config access p nv ctx in
+        (* Compute the rvalue - simply a shared borrow with a the fresh id.
+         * Note that the reference is *mutable* if we do a two-phase borrow *)
+        let rv_ty =
+          T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
+        in
+        let bc =
+          if bkind = E.Shared then V.SharedBorrow (shared_mvalue, bid)
+          else V.InactivatedMutBorrow bid
+        in
+        let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
         (* Continue *)
         cf rv ctx
       in

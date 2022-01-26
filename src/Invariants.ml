@@ -242,7 +242,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
         (* Register the loan *)
         let _ =
           match bc with
-          | V.SharedBorrow bid -> register_borrow Shared bid
+          | V.SharedBorrow (_, bid) -> register_borrow Shared bid
           | V.MutBorrow (bid, _) -> register_borrow Mut bid
           | V.InactivatedMutBorrow bid -> register_borrow Inactivated bid
         in
@@ -451,8 +451,8 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.Bottom, _ -> (* Nothing to check *) ()
         | V.Borrow bc, T.Ref (_, ref_ty, rkind) -> (
             match (bc, rkind) with
-            | V.SharedBorrow bid, T.Shared | V.InactivatedMutBorrow bid, T.Mut
-              -> (
+            | V.SharedBorrow (_, bid), T.Shared
+            | V.InactivatedMutBorrow bid, T.Mut -> (
                 (* Lookup the borrowed value to check it has the proper type *)
                 let _, glc = lookup_loan ek_all bid ctx in
                 match glc with

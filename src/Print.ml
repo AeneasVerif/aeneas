@@ -278,7 +278,7 @@ module Values = struct
   and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
       string =
     match bc with
-    | SharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | SharedBorrow (_, bid) -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
     | MutBorrow (bid, tv) ->
         "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_value_to_string fmt tv
