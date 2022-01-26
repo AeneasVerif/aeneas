@@ -1063,6 +1063,15 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
         | V.AIgnoredSharedLoan _ ->
             super#visit_aloan_content env lc
 
+      method! visit_loan_content env lc =
+        match lc with
+        | V.MutLoan _ ->
+            (* The mut loan linked to the mutable borrow present in a shared
+             * value in an abstraction should be in an AProjBorrows *)
+            failwith "Unreachable"
+        | V.SharedLoan (bids, _) -> raise (FoundBorrowIds (Borrows bids))
+      (** We may need to visit loan contents because of shared values *)
+
       method! visit_aproj env sproj =
         (match sproj with
         | V.AProjBorrows (_, _)
@@ -1149,6 +1158,10 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
             ());
         super#visit_aproj env sproj
+
+      method! visit_borrow_content env bc =
+        (* TODO: this happens because of shared values *)
+        raise Errors.Unimplemented
     end
   in
   (* Lookup the abstraction *)
