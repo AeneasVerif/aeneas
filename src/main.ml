@@ -76,5 +76,5 @@ let () =
       I.Test.test_unit_functions config m;
 
       (* Evaluate the symbolic interpreter on the functions *)
-      let synthesize = false in
+      let synthesize = true in
       I.Test.test_functions_symbolic config synthesize m
