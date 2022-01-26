@@ -1,5 +1,10 @@
 all: build-run-check-trace
 
+CHARON_HOME=../charon/charon
+CHARON_TESTS_DIR=$(CHARON_HOME)/tests
+RS_TEST_FILE=tests/no_nested_borrows.rs
+CFIM_TEST_FILE=$(CHARON_TESTS_DIR)/no_nested_borrows.cfim
+
 # Build the project and run the executable
 .PHONY: build-run
 build-run:
@@ -11,7 +16,7 @@ build-run:
 .PHONY: build-run-check-trace
 build-run-check-trace: generate-cfim
 	dune build src/main.exe && \
-	dune exec src/main.exe ../charon/charon/tests/test1.cfim > tests/trace_current.txt && \
+	dune exec src/main.exe $(CFIM_TEST_FILE) > tests/trace_current.txt && \
 	cmp tests/trace_reference.txt tests/trace_current.txt && \
 	rm tests/trace_current.txt
 
@@ -19,13 +24,13 @@ build-run-check-trace: generate-cfim
 .PHONY: regen-trace
 regen-trace: generate-cfim
 	dune build src/main.exe && \
-	dune exec src/main.exe ../charon/charon/tests/test1.cfim > tests/trace_current.txt && \
+	dune exec src/main.exe $(CFIM_TEST_FILE) > tests/trace_current.txt && \
         rm tests/trace_reference.txt && \
 	mv tests/trace_current.txt tests/trace_reference.txt
 
 .PHONY: generate-cfim
 generate-cfim:
-	cd ../charon/charon && cargo run tests/test1.rs
+	cd ../charon/charon && cargo run $(RS_TEST_FILE)
 
 doc:
 	dune build @doc
