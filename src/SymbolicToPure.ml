@@ -190,7 +190,7 @@ type call_info = {
 type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
-  bid : T.RegionGroupId.id option;
+  bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sv_to_var : var V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of
       a symbolic expansion or upon ending an abstraction, for instance)
@@ -834,9 +834,7 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
   match e with
-  | S.Return v ->
-      let v = typed_value_to_rvalue ctx v in
-      Return v
+  | S.Return opt_v -> translate_return opt_v ctx
   | Panic -> Panic
   | FunCall (call, e) -> translate_function_call call e ctx
   | EndAbstraction (abs, e) -> translate_end_abstraction abs e ctx
@@ -844,6 +842,20 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
   | Meta (_, e) ->
       (* We ignore the meta information *)
       translate_expression e ctx
+
+and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : expression
+    =
+  (* There are two cases:
+     - either we are translating a forward function, in which case the optional
+       value should be `Some` (it is the returned value)
+     - or we are translating a backward function, in which case it should be `None`
+  *)
+  match ctx.bid with
+  | None ->
+      let v = Option.get opt_v in
+      let v = typed_value_to_rvalue ctx v in
+      Return v
+  | Some bid -> raise Unimplemented
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     expression =

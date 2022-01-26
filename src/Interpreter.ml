@@ -43,7 +43,7 @@ let initialize_context (m : M.cfim_module) (type_vars : T.type_var list) :
       signature.
  *)
 let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def) :
-    C.eval_ctx =
+    C.eval_ctx * A.inst_fun_sig =
   (* The abstractions are not initialized the same way as for function
    * calls: they contain *loan* projectors, because they "provide" us
    * with the input values (which behave as if they had been returned
@@ -93,7 +93,7 @@ let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def) :
   (* Push the remaining local variables (initialized with ⊥) *)
   let ctx = C.ctx_push_uninitialized_vars ctx local_vars in
   (* Return *)
-  ctx
+  (ctx, inst_sg)
 
 (** Small helper.
 
@@ -184,7 +184,7 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
   log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
 
   (* Create the evaluation context *)
-  let ctx = initialize_symbolic_context_for_fun m fdef in
+  let ctx, inst_sg = initialize_symbolic_context_for_fun m fdef in
 
   (* Create the continuation to finish the evaluation *)
   let config = C.config_of_partial C.SymbolicMode config in
@@ -205,7 +205,7 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
               let cf_move = move_return_value config in
               (* Generate the Return node *)
               let cf_return ret_value : m_fun =
-               fun _ -> Some (SA.Return ret_value)
+               fun _ -> Some (SA.Return (Some ret_value))
               in
               (* Apply *)
               cf_move cf_return ctx

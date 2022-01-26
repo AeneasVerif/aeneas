@@ -28,9 +28,11 @@ type call = {
     used in CFIM: they are a first step towards lambda-calculus expressions.
  *)
 type expression =
-  | Return of V.typed_value
-      (** The typed value stored in [Return] is the value contained in the return
-          variable upon returning
+  | Return of V.typed_value option
+      (** There are two cases:
+          - the AST is for a forward function: the typed value should contain
+            the value which was in the return variable
+          - the AST is for a backward function: the typed value should be `None`
        *)
   | Panic
   | FunCall of call * expression
