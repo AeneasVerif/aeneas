@@ -1083,8 +1083,8 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
       (* End the corresponding borrows *)
       let cc : cm_fun =
         match bids with
-        | Borrow bid -> end_outer_borrow config bid
-        | Borrows bids -> end_outer_borrows config bids
+        | Borrow bid -> end_borrow config chain None bid
+        | Borrows bids -> end_borrows config chain None bids
       in
       (* Reexplore, looking for loans *)
       let cc = comp cc (end_abstraction_loans config chain abs_id) in
@@ -1387,10 +1387,10 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         (* Continue *)
         cc cf ctx
 
-and end_outer_borrow config : V.BorrowId.id -> cm_fun =
+let end_outer_borrow config : V.BorrowId.id -> cm_fun =
   end_borrow config [] None
 
-and end_outer_borrows config : V.BorrowId.Set.t -> cm_fun =
+let end_outer_borrows config : V.BorrowId.Set.t -> cm_fun =
   end_borrows config [] None
 
 (** Helper function: see [activate_inactivated_mut_borrow].
