@@ -7,17 +7,6 @@ open Cps
 open InterpreterUtils
 open InterpreterStatements
 
-(* TODO: it would be good to find a "core", which implements the rules (like
-   "end_borrow") and on top of which we build more complex functions which
-   chose in which order to apply the rules, etc. This way we would make very
-   explicit where we need to insert sanity checks, what the preconditions are,
-   where invariants might be broken, etc.
-*)
-
-(* TODO: intensively test with PLT-redex *)
-
-(* TODO: remove the config parameters when they are useless *)
-
 (** The local logger *)
 let log = L.interpreter_log
 
