@@ -1,5 +1,12 @@
 module T = Types
-(** This module contains various utilities for the assumed functions *)
+(** This module contains various utilities for the assumed functions.
+
+    Note that `Box::free` is peculiar: we don't really handle it as a function,
+    because it is legal to free a box whose boxed value is `⊥` (it often
+    happens that we move a value out of a box before freeing this box).
+    Semantically speaking, we thus handle `Box::free` as a value drop and
+    not as a function call, and thus never need its signature.
+ *)
 
 module A = CfimAst
 open TypesUtils
