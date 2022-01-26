@@ -477,63 +477,6 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
       cc cf ctx
   | _ -> failwith "Inconsistent state"
 
-(** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_new_inst_sig (region_params : T.erased_region list)
-    (type_params : T.ety list) : A.inst_fun_sig =
-  (* The signature is:
-     `T -> Box<T>`
-     where T is the type param
-  *)
-  match (region_params, type_params) with
-  | [], [ ty_param ] ->
-      let input = ety_no_regions_to_rty ty_param in
-      let output = mk_box_ty ty_param in
-      let output = ety_no_regions_to_rty output in
-      { A.regions_hierarchy = []; inputs = [ input ]; output }
-  | _ -> failwith "Inconsistent state"
-
-(** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
-    and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
-let eval_box_deref_mut_or_shared_inst_sig (region_params : T.erased_region list)
-    (type_params : T.ety list) (is_mut : bool) : A.inst_fun_sig =
-  (* The signature is:
-     `&'a (mut) Box<T> -> &'a (mut) T`
-     where T is the type param
-  *)
-  let rid = C.fresh_region_id () in
-  let r = T.Var rid in
-  let abs_id = C.fresh_abstraction_id () in
-  match (region_params, type_params) with
-  | [], [ ty_param ] ->
-      let ty_param = ety_no_regions_to_rty ty_param in
-      let ref_kind = if is_mut then T.Mut else T.Shared in
-
-      let input = mk_box_ty ty_param in
-      let input = mk_ref_ty r input ref_kind in
-
-      let output = mk_ref_ty r ty_param ref_kind in
-
-      let regions = { T.id = abs_id; regions = [ rid ]; parents = [] } in
-
-      let inst_sg =
-        { A.regions_hierarchy = [ regions ]; inputs = [ input ]; output }
-      in
-
-      inst_sg
-  | _ -> failwith "Inconsistent state"
-
-(** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_deref_inst_sig (region_params : T.erased_region list)
-    (type_params : T.ety list) : A.inst_fun_sig =
-  let is_mut = false in
-  eval_box_deref_mut_or_shared_inst_sig region_params type_params is_mut
-
-(** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_box_deref_mut_inst_sig (region_params : T.erased_region list)
-    (type_params : T.ety list) : A.inst_fun_sig =
-  let is_mut = true in
-  eval_box_deref_mut_or_shared_inst_sig region_params type_params is_mut
-
 (** Evaluate a non-local function call in concrete mode *)
 let eval_non_local_function_call_concrete (config : C.config)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
@@ -614,15 +557,15 @@ let eval_non_local_function_call_concrete (config : C.config)
     Note: there are no region parameters, because they should be erased.
  *)
 let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
-    (ctx : C.eval_ctx) : C.eval_ctx * A.inst_fun_sig =
+    (ctx : C.eval_ctx) : A.inst_fun_sig =
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
-  let ctx, rg_abs_ids_bindings =
-    List.fold_left_map
-      (fun ctx rg ->
+  let rg_abs_ids_bindings =
+    List.map
+      (fun rg ->
         let abs_id = C.fresh_abstraction_id () in
-        (ctx, (rg.T.id, abs_id)))
-      ctx sg.regions_hierarchy
+        (rg.T.id, abs_id))
+      sg.regions_hierarchy
   in
   let asubst_map : V.AbstractionId.id T.RegionGroupId.Map.t =
     List.fold_left
@@ -651,7 +594,7 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig)
   (* Substitute the signature *)
   let inst_sig = Subst.substitute_signature asubst rsubst tsubst sg in
   (* Return *)
-  (ctx, inst_sig)
+  inst_sig
 
 (** Helper
  
@@ -980,7 +923,7 @@ and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDefId.id)
   let sg = def.A.signature in
   (* Instantiate the signature and introduce fresh abstraction and region ids
    * while doing so *)
-  let ctx, inst_sg = instantiate_fun_sig type_params sg ctx in
+  let inst_sg = instantiate_fun_sig type_params sg ctx in
   (* Sanity check *)
   assert (List.length args = def.A.arg_count);
   (* Evaluate the function call *)
@@ -1107,9 +1050,11 @@ and eval_non_local_function_call_symbolic (config : C.config)
        * instantiated signatures, and delegate the work to an auxiliary function *)
       let inst_sig =
         match fid with
-        | A.BoxNew -> eval_box_new_inst_sig region_params type_params
-        | A.BoxDeref -> eval_box_deref_inst_sig region_params type_params
-        | A.BoxDerefMut -> eval_box_deref_mut_inst_sig region_params type_params
+        | A.BoxNew -> instantiate_fun_sig type_params Assumed.box_new_sig ctx
+        | A.BoxDeref ->
+            instantiate_fun_sig type_params Assumed.box_deref_shared_sig ctx
+        | A.BoxDerefMut ->
+            instantiate_fun_sig type_params Assumed.box_deref_mut_sig ctx
         | A.BoxFree -> failwith "Unreachable"
         (* should have been treated above *)
       in
