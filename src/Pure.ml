@@ -134,7 +134,19 @@ type fun_id =
   | Unop of unop
   | Binop of E.binop * T.integer_type
 
-type call = { func : fun_id; type_params : ty list; args : typed_rvalue list }
+type call = {
+  func : fun_id;
+  type_params : ty list;
+  args : typed_rvalue list;
+      (** Note that at this point, some functions have no arguments. For instance:
+          ```
+          fn f();
+          ```
+
+          In the extracted code, we add a unit argument. This is unit argument is
+          added later, when going from the "pure" AST to the "extracted" AST.
+       *)
+}
 
 type let_bindings =
   | Call of typed_lvalue list * call
@@ -216,7 +228,12 @@ type inst_fun_sig = { inputs : ty list; outputs : ty list }
 
 type fun_def = {
   def_id : FunDefId.id;
-  name : name;
+  basename : name;
+      (** The "base" name of the function.
+  
+          The base name is the original name of the Rust function. We add suffixes
+          (to identify the forward/backward functions) later.
+       *)
   signature : fun_sig;
   body : expression;
 }

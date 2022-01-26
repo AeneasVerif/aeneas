@@ -5,6 +5,7 @@ module M = Modules
 module SA = SymbolicAst
 open Cps
 open InterpreterUtils
+open InterpreterExpressions
 open InterpreterStatements
 
 (** The local logger *)
@@ -97,6 +98,66 @@ let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def) :
   (* Return *)
   ctx
 
+(** Evaluate a function with the symbolic interpreter *)
+let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
+    (m : M.cfim_module) (fid : A.FunDefId.id)
+    (back_id : T.RegionGroupId.id option) : unit =
+  (* Retrieve the function declaration *)
+  let fdef = A.FunDefId.nth m.functions fid in
+
+  (* Debug *)
+  let name_to_string () =
+    Print.name_to_string fdef.A.name
+    ^ " ("
+    ^ Print.option_to_string T.RegionGroupId.to_string back_id
+    ^ ")"
+  in
+  log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
+
+  (* Create the evaluation context *)
+  let ctx = initialize_symbolic_context_for_fun m fdef in
+
+  (* Create the continuation to finish the evaluation *)
+  let config = C.config_of_partial C.SymbolicMode config in
+  let cf_finish res ctx =
+    match res with
+    | Return ->
+        if synthesize then
+          (* There are two cases:
+           * - if this is a forward translation, we retrieve the returned value.
+           * - if this is a backward translation, we introduce "return"
+           *   abstractions to consume the return value, then end all the
+           *   abstractions up to the one in which we are interested.
+           *)
+          match back_id with
+          | None ->
+              (* Forward translation *)
+              (* Move the return value *)
+              let ret_vid = V.VarId.zero in
+              let cf_move =
+                eval_operand config (E.Move (mk_place_from_var_id ret_vid))
+              in
+              (* Generate the Return node *)
+              let cf_return ret_value : m_fun =
+               fun _ -> Some (SA.Return ret_value)
+              in
+              (* Apply *)
+              cf_move cf_return ctx
+          | Some back_id ->
+              (* Backward translation *) raise Errors.Unimplemented
+        else None
+    | Panic ->
+        (* Note that as we explore all the execution branches, one of
+         * the executions can lead to a panic *)
+        if synthesize then Some SA.Panic else None
+    | _ ->
+        failwith ("evaluate_function_symbolic failed on: " ^ name_to_string ())
+  in
+
+  (* Evaluate the function *)
+  let _ = eval_function_body config fdef.A.body cf_finish ctx in
+  ()
+
 module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
       environment.
@@ -163,26 +224,8 @@ module Test = struct
     log#ldebug
       (lazy ("test_function_symbolic: " ^ Print.name_to_string fdef.A.name));
 
-    (* Create the evaluation context *)
-    let ctx = initialize_symbolic_context_for_fun m fdef in
-
-    (* Create the continuation to check the function's result *)
-    let cf_check res _ =
-      match res with
-      | Return -> if synthesize then raise Errors.Unimplemented else None
-      | Panic ->
-          (* Note that as we explore all the execution branches, one of
-           * the executions can lead to a panic *)
-          if synthesize then Some SA.Panic else None
-      | _ ->
-          failwith
-            ("Unit test failed (symbolic execution) on: "
-            ^ Print.name_to_string fdef.A.name)
-    in
-
-    (* Evaluate the function *)
-    let config = C.config_of_partial C.SymbolicMode config in
-    let _ = eval_function_body config fdef.A.body cf_check ctx in
+    (* Execute *)
+    let _ = evaluate_function_symbolic config synthesize m fid None in
     ()
 
   (** Execute the symbolic interpreter on a list of functions.

@@ -1,4 +1,6 @@
 open Errors
+open Pure
+open CfimAstUtils
 module Id = Identifiers
 module T = Types
 module V = Values
@@ -8,7 +10,6 @@ module M = Modules
 module S = SymbolicAst
 module TA = TypesAnalysis
 module L = Logging
-open Pure
 
 (** The local logger *)
 let log = L.symbolic_to_pure_log
@@ -148,7 +149,7 @@ let fun_sig_substitute (tsubst : TypeVarId.id -> ty) (sg : fun_sig) :
   let outputs = List.map subst sg.outputs in
   { inputs; outputs }
 
-type regular_fun_id = { fun_id : A.fun_id; back_id : T.RegionGroupId.id option }
+type regular_fun_id = A.fun_id * T.RegionGroupId.id option
 [@@deriving show, ord]
 (** We use this type as a key for lookups *)
 
@@ -189,7 +190,6 @@ type call_info = {
 type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
-  fun_def : A.fun_def;
   bid : T.RegionGroupId.id option;
   sv_to_var : var V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of
@@ -239,7 +239,6 @@ let fs_ctx_to_bs_ctx (fs_ctx : fs_ctx) : bs_ctx =
   let calls = V.FunCallId.Map.empty in
   let abstractions = V.AbstractionId.Map.empty in
   {
-    fun_def;
     bid;
     sv_to_var;
     var_counter;
@@ -255,7 +254,7 @@ let get_instantiated_fun_sig (fun_id : A.fun_id)
     (back_id : T.RegionGroupId.id option) (tys : ty list) (ctx : bs_ctx) :
     inst_fun_sig =
   (* Lookup the non-instantiated function signature *)
-  let sg = RegularFunIdMap.find { fun_id; back_id } ctx.fun_context.fun_sigs in
+  let sg = RegularFunIdMap.find (fun_id, back_id) ctx.fun_context.fun_sigs in
   (* Create the substitution *)
   let tsubst = make_type_subst sg.type_params tys in
   (* Apply *)
@@ -438,37 +437,6 @@ let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
     (inside_mut : bool) (ty : 'r T.ty) : ty option =
   let types_infos = ctx.type_context.types_infos in
   translate_back_ty types_infos keep_region inside_mut ty
-
-(** Small utility: list the transitive parents of a region var group.
-    We don't do that in an efficient manner, but it doesn't matter.
- *)
-let rec list_parent_region_groups (sg : A.fun_sig) (gid : T.RegionGroupId.id) :
-    T.RegionGroupId.Set.t =
-  let rg = T.RegionGroupId.nth sg.regions_hierarchy gid in
-  let parents =
-    List.fold_left
-      (fun s gid ->
-        (* Compute the parents *)
-        let parents = list_parent_region_groups sg gid in
-        (* Parents U current region *)
-        let parents = T.RegionGroupId.Set.add gid parents in
-        (* Make the union with the accumulator *)
-        T.RegionGroupId.Set.union s parents)
-      T.RegionGroupId.Set.empty rg.parents
-  in
-  parents
-
-(** Small utility: same as [list_parent_region_groups], but returns an ordered list.  *)
-let list_ordered_parent_region_groups (sg : A.fun_sig)
-    (gid : T.RegionGroupId.id) : T.RegionGroupId.id list =
-  let pset = list_parent_region_groups sg gid in
-  let parents =
-    List.filter
-      (fun (rg : T.region_var_group) -> T.RegionGroupId.Set.mem rg.id pset)
-      sg.regions_hierarchy
-  in
-  let parents = List.map (fun (rg : T.region_var_group) -> rg.id) parents in
-  parents
 
 let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs) :
     V.AbstractionId.id list =
@@ -1128,20 +1096,22 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
       let otherwise = translate_expression otherwise ctx in
       Switch (scrutinee, SwitchInt (int_ty, branches, otherwise))
 
+(* TODO: move *)
+let bs_ctx_lookup_local_function_sig (def_id : FunDefId.id)
+    (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
+  let id = (A.Local def_id, back_id) in
+  RegularFunIdMap.find id ctx.fun_context.fun_sigs
+
 let translate_fun_def (fs_ctx : fs_ctx) (body : S.expression) : fun_def =
   let def = fs_ctx.fun_def in
   let bid = fs_ctx.bid in
   let bs_ctx = fs_ctx_to_bs_ctx fs_ctx in
   (* Translate the function *)
   let def_id = def.A.def_id in
-  let name = translate_fun_name def bid in
-  (* TODO: the signature should already have been translated.
-   * Do we need it actually? *)
-  let signature =
-    translate_fun_sig bs_ctx.type_context.types_infos def.signature bid
-  in
+  let basename = def.name in
+  let signature = bs_ctx_lookup_local_function_sig def_id bid bs_ctx in
   let body = translate_expression body bs_ctx in
-  { def_id; name; signature; body }
+  { def_id; basename; signature; body }
 
 let translate_type_defs (type_defs : T.type_def list) : type_def TypeDefId.Map.t
     =
@@ -1161,13 +1131,13 @@ let translate_fun_signatures (types_infos : TA.type_infos)
       (regular_fun_id * fun_sig) list =
     (* The forward function *)
     let fwd_sg = translate_fun_sig types_infos sg None in
-    let fwd_id = { fun_id; back_id = None } in
+    let fwd_id = (fun_id, None) in
     (* The backward functions *)
     let back_sgs =
       List.map
         (fun (rg : T.region_var_group) ->
           let tsg = translate_fun_sig types_infos sg (Some rg.id) in
-          let id = { fun_id; back_id = Some rg.id } in
+          let id = (fun_id, Some rg.id) in
           (id, tsg))
         sg.regions_hierarchy
     in
