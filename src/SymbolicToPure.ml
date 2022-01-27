@@ -892,7 +892,7 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
   match e with
   | S.Return opt_v -> translate_return opt_v ctx
-  | Panic -> Panic
+  | Panic -> Fail
   | FunCall (call, e) -> translate_function_call call e ctx
   | EndAbstraction (abs, e) -> translate_end_abstraction abs e ctx
   | Expansion (sv, exp) -> translate_expansion sv exp ctx

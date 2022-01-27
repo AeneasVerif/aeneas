@@ -188,10 +188,15 @@ type let_bindings =
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM. They are lambda-calculus expressions, and are thus actually
     more general than the CFIM statements, in a sense.
+    
+    TODO: actually when I defined [expression] I still had Rust in mind, so
+    it is not a "textbook" lambda calculus expression (still quite constrained).
+    As we want to do transformations on it, through micro-passes, it would be
+    good to update it and make it more "regular".
  *)
 type expression =
   | Return of typed_rvalue
-  | Panic
+  | Fail
   | Let of let_bindings * expression
       (** Let bindings include the let-bindings introduced because of function calls *)
   | Switch of typed_rvalue * switch_body

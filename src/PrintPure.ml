@@ -328,7 +328,7 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : expression) : string =
   match e with
   | Return v -> indent ^ "return " ^ typed_rvalue_to_string fmt v
-  | Panic -> indent ^ "panic"
+  | Fail -> indent ^ "fail"
   | Let (lb, e) -> let_to_string fmt indent indent_incr lb e
   | Switch (scrutinee, body) ->
       switch_to_string fmt indent indent_incr scrutinee body
