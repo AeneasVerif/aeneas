@@ -187,9 +187,11 @@ type type_context = {
 }
 [@@deriving show]
 
+type fun_context = { fun_defs : fun_def FunDefId.Map.t } [@@deriving show]
+
 type eval_ctx = {
   type_context : type_context;
-  fun_context : fun_def FunDefId.Map.t;
+  fun_context : fun_context;
   type_vars : type_var list;
   env : env;
   ended_regions : RegionId.Set.t;
@@ -221,7 +223,7 @@ let ctx_lookup_type_def (ctx : eval_ctx) (tid : TypeDefId.id) : type_def =
 
 (** TODO: make this more efficient with maps *)
 let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
-  FunDefId.Map.find fid ctx.fun_context
+  FunDefId.Map.find fid ctx.fun_context.fun_defs
 
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =

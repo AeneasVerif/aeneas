@@ -14,8 +14,8 @@ module SA = SymbolicAst
 (** The local logger *)
 let log = L.interpreter_log
 
-let initialize_context (m : M.cfim_module) (type_vars : T.type_var list) :
-    C.eval_ctx =
+let compute_type_fun_contexts (m : M.cfim_module) :
+    C.type_context * C.fun_context =
   let type_decls, _ = M.split_declarations m.declarations in
   let type_defs, fun_defs = M.compute_defs_maps m in
   let type_defs_groups, _funs_defs_groups =
@@ -25,10 +25,16 @@ let initialize_context (m : M.cfim_module) (type_vars : T.type_var list) :
     TypesAnalysis.analyze_type_declarations type_defs type_decls
   in
   let type_context = { C.type_defs_groups; type_defs; type_infos } in
+  let fun_context = { C.fun_defs } in
+  (type_context, fun_context)
+
+let initialize_eval_context (m : M.cfim_module) (type_vars : T.type_var list) :
+    C.eval_ctx =
   C.reset_global_counters ();
+  let type_context, fun_context = compute_type_fun_contexts m in
   {
     C.type_context;
-    C.fun_context = fun_defs;
+    C.fun_context;
     C.type_vars;
     C.env = [];
     C.ended_regions = T.RegionId.Set.empty;
@@ -57,7 +63,7 @@ let initialize_symbolic_context_for_fun (m : M.cfim_module) (fdef : A.fun_def) :
    * *)
   let sg = fdef.signature in
   (* Create the context *)
-  let ctx = initialize_context m sg.type_params in
+  let ctx = initialize_eval_context m sg.type_params in
   (* Instantiate the signature *)
   let type_params = List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params in
   let inst_sg = instantiate_fun_sig type_params sg in
@@ -243,7 +249,7 @@ module Test = struct
     assert (fdef.A.arg_count = 0);
 
     (* Create the evaluation context *)
-    let ctx = initialize_context m [] in
+    let ctx = initialize_eval_context m [] in
 
     (* Insert the (uninitialized) local variables *)
     let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
