@@ -57,6 +57,12 @@ let ast_to_type_formatter (fmt : ast_formatter) : type_formatter =
   let fmt = ast_to_value_formatter fmt in
   value_to_type_formatter fmt
 
+let name_to_string = Print.name_to_string
+
+let option_to_string = Print.option_to_string
+
+let type_var_to_string = Print.Types.type_var_to_string
+
 (* TODO: there is a bit of duplication with Print.fun_def_to_ast_formatter.
 
    TODO: use the pure defs as inputs? Note that it is a bit annoying for the
@@ -67,11 +73,11 @@ let fun_def_to_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
     (fun_defs : A.fun_def FunDefId.Map.t) (fdef : A.fun_def) : ast_formatter =
   let type_var_id_to_string vid =
     let var = T.TypeVarId.nth fdef.signature.type_params vid in
-    Print.Types.type_var_to_string var
+    type_var_to_string var
   in
   let type_def_id_to_string def_id =
     let def = T.TypeDefId.Map.find def_id type_defs in
-    Print.name_to_string def.name
+    name_to_string def.name
   in
   let adt_variant_to_string =
     Print.Contexts.type_ctx_to_adt_variant_to_string_fun type_defs
@@ -88,7 +94,7 @@ let fun_def_to_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
   in
   let fun_def_id_to_string def_id =
     let def = A.FunDefId.Map.find def_id fun_defs in
-    Print.name_to_string def.name
+    name_to_string def.name
   in
   {
     type_var_id_to_string;
@@ -107,8 +113,6 @@ let type_id_to_string (fmt : type_formatter) (id : T.type_id) : string =
   | T.Assumed aty -> (
       match aty with
       | Box -> (* Boxes should have been eliminated *) failwith "Unreachable")
-
-let type_var_to_string = Print.Types.type_var_to_string
 
 let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
   match ty with
@@ -144,7 +148,7 @@ let type_def_to_string (type_def_id_to_string : TypeDefId.id -> string)
     | None -> failwith "Unreachable"
   in
   let fmt = { type_var_id_to_string; type_def_id_to_string } in
-  let name = Print.name_to_string def.name in
+  let name = name_to_string def.name in
   let params =
     if types = [] then ""
     else " " ^ String.concat " " (List.map type_var_to_string types)
@@ -246,3 +250,17 @@ let rec typed_rvalue_to_string (fmt : ast_formatter) (v : typed_rvalue) : string
               (* Box values should have been eliminated *)
               failwith "Unreachable")
       | _ -> failwith "Inconsistent typed value")
+
+let fun_sig_to_string (fmt : ast_formatter) (sg : fun_sig) : string =
+  let ty_fmt = ast_to_type_formatter fmt in
+  let type_params = List.map type_var_to_string sg.type_params in
+  let inputs = List.map (ty_to_string ty_fmt) sg.inputs in
+  let outputs = List.map (ty_to_string ty_fmt) sg.outputs in
+  let outputs =
+    match outputs with
+    | [] -> "()"
+    | [ out ] -> out
+    | outputs -> "(" ^ String.concat " * " outputs ^ ")"
+  in
+  let all_types = List.concat [ type_params; inputs; [ outputs ] ] in
+  String.concat " -> " all_types
