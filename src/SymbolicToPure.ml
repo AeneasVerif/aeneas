@@ -193,8 +193,8 @@ type bs_ctx = {
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sv_to_var : var V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of
-      a symbolic expansion or upon ending an abstraction, for instance)
-      we introduce a new variable (with a let-binding).
+          a symbolic expansion or upon ending an abstraction, for instance)
+          we introduce a new variable (with a let-binding).
    *)
   var_counter : VarId.generator;
   forward_inputs : var list;
@@ -1190,7 +1190,27 @@ let translate_fun_def (fs_ctx : fs_ctx) (body : S.expression) : fun_def =
   let basename = def.name in
   let signature = bs_ctx_lookup_local_function_sig def_id bid bs_ctx in
   let body = translate_expression body bs_ctx in
-  { def_id; basename; signature; body }
+  (* Compute the list of (properly ordered) input variables *)
+  let backward_inputs : var list =
+    match bid with
+    | None -> []
+    | Some back_id ->
+        let parents_ids =
+          list_ordered_parent_region_groups def.signature back_id
+        in
+        let backward_ids = List.append parents_ids [ back_id ] in
+        List.concat
+          (List.map
+             (fun id -> T.RegionGroupId.Map.find id bs_ctx.backward_inputs)
+             backward_ids)
+  in
+  let inputs = List.append bs_ctx.forward_inputs backward_inputs in
+  (* Sanity check *)
+  assert (
+    List.for_all
+      (fun (var, ty) -> (var : var).ty = ty)
+      (List.combine inputs signature.inputs));
+  { def_id; basename; signature; inputs; body }
 
 let translate_type_defs (type_defs : T.type_def list) : type_def TypeDefId.Map.t
     =

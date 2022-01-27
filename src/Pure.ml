@@ -226,5 +226,6 @@ type fun_def = {
           (to identify the forward/backward functions) later.
        *)
   signature : fun_sig;
+  inputs : var list;
   body : expression;
 }
