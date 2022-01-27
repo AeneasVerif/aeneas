@@ -111,6 +111,14 @@ type projection = projection_elem list
 
 type place = { var : VarId.id; projection : projection }
 
+type mplace = { name : string option; projection : projection }
+(** "Meta" place.
+
+    Meta-data retrieved from the symbolic execution, which gives provenance
+    information about the values. We use this to generate names for the variables
+    we introduce.
+ *)
+
 type rvalue =
   | RvConcrete of constant_value
   | RvPlace of place
@@ -148,15 +156,19 @@ type call = {
           In the extracted code, we add a unit argument. This is unit argument is
           added later, when going from the "pure" AST to the "extracted" AST.
        *)
+  args_mplaces : mplace option list;  (** Meta data *)
 }
 
 type let_bindings =
-  | Call of typed_lvalue list * call
+  | Call of (typed_lvalue * mplace option) list * call
       (** The called function and the tuple of returned values. *)
-  | Assign of typed_lvalue * typed_rvalue
+  | Assign of typed_lvalue * mplace option * typed_rvalue * mplace option
       (** Variable assignment: the introduced pattern and the place we read *)
   | Deconstruct of
-      var_or_dummy list * (TypeDefId.id * VariantId.id) option * typed_rvalue
+      (var_or_dummy * mplace option) list
+      * (TypeDefId.id * VariantId.id) option
+      * typed_rvalue
+      * mplace option
       (** This is used in two cases.
 
           1. When deconstructing a tuple:
@@ -202,7 +214,7 @@ type expression =
   | Fail
   | Let of let_bindings * expression
       (** Let bindings include the let-bindings introduced because of function calls *)
-  | Switch of typed_rvalue * switch_body
+  | Switch of typed_rvalue * mplace option * switch_body
 
 and switch_body =
   | If of expression * expression

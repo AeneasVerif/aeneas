@@ -34,6 +34,9 @@ let value_to_type_formatter (fmt : value_formatter) : type_formatter =
     type_def_id_to_string = fmt.type_def_id_to_string;
   }
 
+(* TODO: we need to store which variables we have encountered so far, and
+   remove [var_id_to_string].
+*)
 type ast_formatter = {
   type_var_id_to_string : TypeVarId.id -> string;
   type_def_id_to_string : TypeDefId.id -> string;
@@ -101,8 +104,8 @@ let mk_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
     Print.Contexts.type_ctx_to_adt_variant_to_string_fun type_defs
   in
   let var_id_to_string vid =
-    (* TODO: lookup in the context *)
-    VarId.to_string vid
+    (* TODO: somehow lookup in the context *)
+    "@" ^ VarId.to_string vid
   in
   let adt_field_names =
     Print.Contexts.type_ctx_to_adt_field_names_fun type_defs
@@ -183,7 +186,12 @@ let type_def_to_string (fmt : type_formatter) (def : type_def) : string =
       "enum " ^ name ^ params ^ " =\n" ^ variants
 
 let var_to_string (fmt : type_formatter) (v : var) : string =
-  "(@" ^ VarId.to_string v.id ^ " : " ^ ty_to_string fmt v.ty ^ ")"
+  let varname =
+    match v.basename with
+    | Some name -> name ^ "^" ^ VarId.to_string v.id
+    | None -> "@" ^ VarId.to_string v.id
+  in
+  "(" ^ varname ^ " : " ^ ty_to_string fmt v.ty ^ ")"
 
 let var_or_dummy_to_string (fmt : value_formatter) (v : var_or_dummy) : string =
   match v with
@@ -218,6 +226,7 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
               "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
 
 let place_to_string (fmt : ast_formatter) (p : place) : string =
+  (* TODO: improve that *)
   let var = "@" ^ fmt.var_id_to_string p.var in
   projection_to_string fmt var p.projection
 
@@ -330,7 +339,7 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
   | Return v -> indent ^ "return " ^ typed_rvalue_to_string fmt v
   | Fail -> indent ^ "fail"
   | Let (lb, e) -> let_to_string fmt indent indent_incr lb e
-  | Switch (scrutinee, body) ->
+  | Switch (scrutinee, _, body) ->
       switch_to_string fmt indent indent_incr scrutinee body
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
@@ -339,7 +348,9 @@ and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
   let val_fmt = ast_to_value_formatter fmt in
   match lb with
   | Call (lvs, call) ->
-      let lvs = List.map (typed_lvalue_to_string val_fmt) lvs in
+      let lvs =
+        List.map (fun (lv, _) -> typed_lvalue_to_string val_fmt lv) lvs
+      in
       let lvs =
         match lvs with
         | [] ->
@@ -359,13 +370,15 @@ and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
         else fun_id ^ " " ^ String.concat " " all_args
       in
       indent ^ "let " ^ lvs ^ " = " ^ call ^ " in\n" ^ e
-  | Assign (lv, rv) ->
+  | Assign (lv, _, rv, _) ->
       let lv = typed_lvalue_to_string val_fmt lv in
       let rv = typed_rvalue_to_string fmt rv in
       indent ^ "let " ^ lv ^ " = " ^ rv ^ " in\n" ^ e
-  | Deconstruct (lvs, opt_adt_id, rv) ->
+  | Deconstruct (lvs, opt_adt_id, rv, _) ->
       let rv = typed_rvalue_to_string fmt rv in
-      let lvs = List.map (var_or_dummy_to_string val_fmt) lvs in
+      let lvs =
+        List.map (fun (lv, _) -> var_or_dummy_to_string val_fmt lv) lvs
+      in
       let lvs =
         match opt_adt_id with
         | None -> "(" ^ String.concat ", " lvs ^ ")"
