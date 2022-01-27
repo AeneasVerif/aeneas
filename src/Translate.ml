@@ -90,6 +90,7 @@ let translate_function_to_pure (config : C.partial_config)
       var_counter;
       type_context;
       fun_context;
+      fun_def = fdef;
       forward_inputs = [];
       (* Empty for now *)
       backward_inputs = T.RegionGroupId.Map.empty;
@@ -116,7 +117,7 @@ let translate_function_to_pure (config : C.partial_config)
 
   (* Translate the forward function *)
   let pure_forward =
-    SymbolicToPure.translate_fun_def fdef
+    SymbolicToPure.translate_fun_def
       (add_forward_inputs (fst symbolic_forward) ctx)
       (snd symbolic_forward)
   in
@@ -155,7 +156,7 @@ let translate_function_to_pure (config : C.partial_config)
     in
 
     (* Translate *)
-    SymbolicToPure.translate_fun_def fdef ctx symbolic
+    SymbolicToPure.translate_fun_def ctx symbolic
   in
   let pure_backwards =
     List.map translate_backward fdef.signature.regions_hierarchy

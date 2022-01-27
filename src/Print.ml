@@ -583,6 +583,11 @@ module PC = Contexts (* local module *)
 
 (** Pretty-printing for contexts (generic functions) *)
 module CfimAst = struct
+  let var_to_string (var : A.var) : string =
+    match var.name with
+    | None -> V.VarId.to_string var.index
+    | Some name -> name
+
   type ast_formatter = {
     rvar_to_string : T.RegionVarId.id -> string;
     r_to_string : T.RegionId.id -> string;
@@ -607,6 +612,9 @@ module CfimAst = struct
       PV.var_id_to_string = fmt.var_id_to_string;
       PV.adt_field_names = fmt.adt_field_names;
     }
+
+  let ast_to_value_formatter (fmt : ast_formatter) : PV.value_formatter =
+    ast_to_ctx_formatter fmt
 
   let ast_to_etype_formatter (fmt : ast_formatter) : PT.etype_formatter =
     {
@@ -654,6 +662,48 @@ module CfimAst = struct
       adt_variant_to_string = ctx_fmt.PV.adt_variant_to_string;
       var_id_to_string = ctx_fmt.PV.var_id_to_string;
       adt_field_names = ctx_fmt.PV.adt_field_names;
+      adt_field_to_string;
+      fun_def_id_to_string;
+    }
+
+  let fun_def_to_ast_formatter (type_defs : T.type_def T.TypeDefId.Map.t)
+      (fun_defs : A.fun_def A.FunDefId.Map.t) (fdef : A.fun_def) : ast_formatter
+      =
+    let rvar_to_string r =
+      let rvar = T.RegionVarId.nth fdef.signature.region_params r in
+      PT.region_var_to_string rvar
+    in
+    let r_to_string r = PT.region_id_to_string r in
+
+    let type_var_id_to_string vid =
+      let var = T.TypeVarId.nth fdef.signature.type_params vid in
+      PT.type_var_to_string var
+    in
+    let type_def_id_to_string def_id =
+      let def = T.TypeDefId.Map.find def_id type_defs in
+      name_to_string def.name
+    in
+    let adt_variant_to_string =
+      PC.type_ctx_to_adt_variant_to_string_fun type_defs
+    in
+    let var_id_to_string vid =
+      let var = V.VarId.nth fdef.locals vid in
+      var_to_string var
+    in
+    let adt_field_names = PC.type_ctx_to_adt_field_names_fun type_defs in
+    let adt_field_to_string = type_ctx_to_adt_field_to_string_fun type_defs in
+    let fun_def_id_to_string def_id =
+      let def = A.FunDefId.Map.find def_id fun_defs in
+      name_to_string def.name
+    in
+    {
+      rvar_to_string;
+      r_to_string;
+      type_var_id_to_string;
+      type_def_id_to_string;
+      adt_variant_to_string;
+      var_id_to_string;
+      adt_field_names;
       adt_field_to_string;
       fun_def_id_to_string;
     }

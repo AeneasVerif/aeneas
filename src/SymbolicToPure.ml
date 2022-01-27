@@ -190,6 +190,7 @@ type call_info = {
 type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
+  fun_def : A.fun_def;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sv_to_var : var V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of
@@ -209,6 +210,19 @@ type bs_ctx = {
       (** The ended abstractions we encountered so far *)
 }
 (** Body synthesis context *)
+
+(* TODO: move *)
+let bs_ctx_to_value_formatter (ctx : bs_ctx) : Print.CfimAst.ast_formatter =
+  Print.CfimAst.fun_def_to_ast_formatter ctx.type_context.cfim_type_defs
+    ctx.fun_context.cfim_fun_defs ctx.fun_def
+
+(* TODO: move *)
+let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
+  let fmt = bs_ctx_to_value_formatter ctx in
+  let fmt = Print.CfimAst.ast_to_value_formatter fmt in
+  let indent = "" in
+  let indent_incr = "  " in
+  Print.Values.abs_to_string fmt indent indent_incr abs
 
 let get_instantiated_fun_sig (fun_id : A.fun_id)
     (back_id : T.RegionGroupId.id option) (tys : ty list) (ctx : bs_ctx) :
@@ -692,6 +706,7 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
     See [typed_avalue_to_consumed].
  *)
 let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_rvalue list =
+  log#ldebug (lazy ("abs_to_consumed:\n" ^ abs_to_string ctx abs));
   List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
 
 (** Explore an abstraction value and convert it to a given back value
@@ -1162,8 +1177,8 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
       let otherwise = translate_expression otherwise ctx in
       Switch (scrutinee, SwitchInt (int_ty, branches, otherwise))
 
-let translate_fun_def (def : A.fun_def) (ctx : bs_ctx) (body : S.expression) :
-    fun_def =
+let translate_fun_def (ctx : bs_ctx) (body : S.expression) : fun_def =
+  let def = ctx.fun_def in
   let bid = ctx.bid in
   log#ldebug
     (lazy
