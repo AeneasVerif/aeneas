@@ -15,6 +15,11 @@
        backward calls (because they may panic!)
      - calls which don't take inputs (can happen with backward functions - for
        instance, if a rust function only returns shared borrows)
+   - monadic lets to matches
+   - no tuple deconstruction on returned monadic values (introduce intermediate
+     variables to deconstruct in two times)
+   - matching on values (ex.: `let Cons hd tl = ls in` ~~>
+     `match ls with | Nil -> Panic | Cons hd tl -> ...`)
 
 1. reorder the branches of matches
 
@@ -64,6 +69,8 @@
    while in the case of `s1` we should ignore the outer borrow (what we give
    back actually has type `T`...)
   
+10. Write "bodies" for the assumed functions.
+
 * write a function to check that the code we are about to synthesize is in the proper
   subset. In particular:
   * borrow overwrites

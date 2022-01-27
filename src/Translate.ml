@@ -1,4 +1,3 @@
-open Errors
 open InterpreterStatements
 open Interpreter
 module L = Logging
@@ -41,10 +40,14 @@ let translate_function_to_symbolics (config : C.partial_config)
   (forward, backwards)
 
 (** Translate a function, by generating its forward and backward translations. *)
-let translate_function (config : C.partial_config)
+let translate_function_to_pure (config : C.partial_config)
     (type_context : C.type_context) (fun_context : C.fun_context)
     (fun_sigs : Pure.fun_sig SymbolicToPure.RegularFunIdMap.t)
     (fdef : A.fun_def) : pure_fun_translation =
+  (* Debug *)
+  log#ldebug
+    (lazy ("translate_function_to_pure: " ^ Print.name_to_string fdef.A.name));
+
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs *)
@@ -144,6 +147,9 @@ let translate_function (config : C.partial_config)
 
 let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
     Pure.type_def T.TypeDefId.Map.t * pure_fun_translation A.FunDefId.Map.t =
+  (* Debug *)
+  log#ldebug (lazy "translate_module_to_pure");
+
   (* Compute the type and function contexts *)
   let type_context, fun_context = compute_type_fun_contexts m in
 
@@ -165,11 +171,12 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
   in
 
   (* Translate all the functions *)
-  let translations =
+  let pure_translations =
     List.map
       (fun (fdef : A.fun_def) ->
         ( fdef.def_id,
-          translate_function config type_context fun_context fun_sigs fdef ))
+          translate_function_to_pure config type_context fun_context fun_sigs
+            fdef ))
       m.functions
   in
 
@@ -177,7 +184,7 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
   let fun_defs =
     List.fold_left
       (fun m (def_id, trans) -> A.FunDefId.Map.add def_id trans m)
-      A.FunDefId.Map.empty translations
+      A.FunDefId.Map.empty pure_translations
   in
 
   (* Return *)

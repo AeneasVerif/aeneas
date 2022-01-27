@@ -54,6 +54,8 @@ let () =
   expansion_log#set_level EL.Debug;
   borrows_log#set_level EL.Debug;
   invariants_log#set_level EL.Warning;
+  symbolic_to_pure_log#set_level EL.Debug;
+  translate_log#set_level EL.Debug;
   (* Load the module *)
   let json = Yojson.Basic.from_file !filename in
   match cfim_module_of_json json with
@@ -73,7 +75,8 @@ let () =
       (* Test the unit functions with the concrete interpreter *)
       I.Test.test_unit_functions config m;
 
-      (* Evaluate the symbolic interpreter on the functions - TODO: remove *)
+      (* Evaluate the symbolic interpreter on the functions, ignoring the
+       * functions which contain loops - TODO: remove *)
       let synthesize = true in
       I.Test.test_functions_symbolic config synthesize m;
 
