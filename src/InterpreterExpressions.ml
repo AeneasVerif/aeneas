@@ -592,9 +592,7 @@ let eval_rvalue_aggregate (config : C.config)
         let ty = T.Adt (T.Tuple, [], tys) in
         let aggregated : V.typed_value = { V.value = v; ty } in
         (* Call the continuation *)
-        let expr = cf aggregated ctx in
-        (* Synthesize the symbolic AST *)
-        S.synthesize_aggregated_value aggregated None expr
+        cf aggregated ctx
     | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
         (* Sanity checks *)
         let type_def = C.ctx_lookup_type_def ctx def_id in
@@ -613,9 +611,7 @@ let eval_rvalue_aggregate (config : C.config)
         let aty = T.Adt (T.AdtId def_id, regions, types) in
         let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
         (* Call the continuation *)
-        let expr = cf aggregated ctx in
-        (* Synthesize the symbolic AST *)
-        S.synthesize_aggregated_value aggregated None expr
+        cf aggregated ctx
   in
   (* Compose and apply *)
   comp eval_ops compute cf

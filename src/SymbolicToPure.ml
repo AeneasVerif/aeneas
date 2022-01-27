@@ -1246,10 +1246,6 @@ and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
   let e = translate_expression e ctx in
   let meta =
     match meta with
-    | S.Aggregate (p, rv) ->
-        let p = translate_opt_mplace p in
-        let rv = typed_value_to_rvalue ctx rv in
-        Aggregate (p, rv)
     | S.Assignment (p, rv) ->
         let p = translate_mplace p in
         let rv = typed_value_to_rvalue ctx rv in

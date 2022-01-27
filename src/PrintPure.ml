@@ -340,9 +340,6 @@ let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
 let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   let meta =
     match meta with
-    | Aggregate (p, rv) ->
-        let p = match p with None -> "_" | Some p -> mplace_to_string fmt p in
-        "@aggregate(" ^ p ^ " := " ^ typed_rvalue_to_string fmt rv ^ ")"
     | Assignment (p, rv) ->
         "@assign(" ^ mplace_to_string fmt p ^ " := "
         ^ typed_rvalue_to_string fmt rv

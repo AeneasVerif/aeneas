@@ -201,9 +201,7 @@ type let_bindings =
        *)
 
 (** Meta-information stored in the AST *)
-type meta =
-  | Aggregate of mplace option * typed_rvalue
-  | Assignment of mplace * typed_rvalue
+type meta = Assignment of mplace * typed_rvalue
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM. They are lambda-calculus expressions, and are thus actually

@@ -139,12 +139,6 @@ let synthesize_binary_op (binop : E.binop) (arg0 : V.typed_value)
   synthesize_function_call (Binop binop) [] [] [ arg0; arg1 ]
     [ arg0_place; arg1_place ] dest dest_place expr
 
-let synthesize_aggregated_value (aggr_v : V.typed_value) (place : mplace option)
-    (expr : expression option) : expression option =
-  match expr with
-  | None -> None
-  | Some expr -> Some (Meta (Aggregate (place, aggr_v), expr))
-
 let synthesize_end_abstraction (abs : V.abs) (expr : expression option) :
     expression option =
   match expr with

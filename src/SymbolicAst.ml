@@ -50,8 +50,6 @@ type call = {
  *)
 
 type meta =
-  | Aggregate of mplace option * V.typed_value
-      (** We generated an aggregate value *)
   | Assignment of mplace * V.typed_value
       (** We generated an assignment (destination, assigned value) *)
 
