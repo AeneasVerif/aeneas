@@ -44,6 +44,7 @@ module type Id = sig
   val of_int : int -> id
 
   val nth : 'a list -> id -> 'a
+  (* TODO: change the signature (invert the index and the list *)
 
   val nth_opt : 'a list -> id -> 'a option
 

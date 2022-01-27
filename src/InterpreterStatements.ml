@@ -561,6 +561,9 @@ let eval_non_local_function_call_concrete (config : C.config)
     evaluating in symbolic mode of course.
     
     Note: there are no region parameters, because they should be erased.
+    
+    **Rk.:** this function is **stateful** and generates fresh abstraction ids
+    for the region groups.
  *)
 let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
     A.inst_fun_sig =

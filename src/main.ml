@@ -9,6 +9,7 @@ module TA = TypesAnalysis
 module P = Pure
 open PrintSymbolicAst
 open SymbolicToPure
+open Translate
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.

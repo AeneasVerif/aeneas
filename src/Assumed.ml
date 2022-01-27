@@ -61,7 +61,7 @@ let box_deref_mut_sig = box_deref_sig true
 
     Rk.: following what is written above, we don't include `Box::free`.
  *)
-let assumed_functions : (A.assumed_fun_id * A.fun_sig) list =
+let assumed_sigs : (A.assumed_fun_id * A.fun_sig) list =
   [
     (BoxNew, box_new_sig);
     (BoxDeref, box_deref_shared_sig);

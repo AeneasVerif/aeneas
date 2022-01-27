@@ -224,7 +224,7 @@ type fs_ctx = {
 }
 (** Function synthesis context
 
-    TODO: merge with bs_ctx?
+    TODO: remove
  *)
 
 let fs_ctx_to_bs_ctx (fs_ctx : fs_ctx) : bs_ctx =
@@ -272,6 +272,12 @@ let bs_ctx_lookup_cfim_type_def (id : TypeDefId.id) (ctx : bs_ctx) : T.type_def
 
 let bs_ctx_lookup_cfim_fun_def (id : FunDefId.id) (ctx : bs_ctx) : A.fun_def =
   FunDefId.Map.find id ctx.fun_context.cfim_fun_defs
+
+(* TODO: move *)
+let bs_ctx_lookup_local_function_sig (def_id : FunDefId.id)
+    (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
+  let id = (A.Local def_id, back_id) in
+  RegularFunIdMap.find id ctx.fun_context.fun_sigs
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (ctx : bs_ctx) : bs_ctx =
@@ -557,6 +563,19 @@ let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
 let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
     : bs_ctx * var list =
   List.fold_left_map (fun ctx sv -> fresh_var_for_symbolic_value sv ctx) ctx svl
+
+(** This generates a fresh variable **which is not to be linked to any symbolic value** *)
+let fresh_var (ty : ty) (ctx : bs_ctx) : bs_ctx * var =
+  (* Generate the fresh variable *)
+  let id, var_counter = VarId.fresh ctx.var_counter in
+  let var = { id; ty } in
+  (* Update the context *)
+  let ctx = { ctx with var_counter } in
+  (* Return *)
+  (ctx, var)
+
+let fresh_vars (tys : ty list) (ctx : bs_ctx) : bs_ctx * var list =
+  List.fold_left_map (fun ctx ty -> fresh_var ty ctx) ctx tys
 
 let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
@@ -1175,21 +1194,14 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
       let otherwise = translate_expression otherwise ctx in
       Switch (scrutinee, SwitchInt (int_ty, branches, otherwise))
 
-(* TODO: move *)
-let bs_ctx_lookup_local_function_sig (def_id : FunDefId.id)
-    (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
-  let id = (A.Local def_id, back_id) in
-  RegularFunIdMap.find id ctx.fun_context.fun_sigs
-
-let translate_fun_def (fs_ctx : fs_ctx) (body : S.expression) : fun_def =
-  let def = fs_ctx.fun_def in
-  let bid = fs_ctx.bid in
-  let bs_ctx = fs_ctx_to_bs_ctx fs_ctx in
+let translate_fun_def (def : A.fun_def) (ctx : bs_ctx) (body : S.expression) :
+    fun_def =
+  let bid = ctx.bid in
   (* Translate the function *)
   let def_id = def.A.def_id in
   let basename = def.name in
-  let signature = bs_ctx_lookup_local_function_sig def_id bid bs_ctx in
-  let body = translate_expression body bs_ctx in
+  let signature = bs_ctx_lookup_local_function_sig def_id bid ctx in
+  let body = translate_expression body ctx in
   (* Compute the list of (properly ordered) input variables *)
   let backward_inputs : var list =
     match bid with
@@ -1201,10 +1213,10 @@ let translate_fun_def (fs_ctx : fs_ctx) (body : S.expression) : fun_def =
         let backward_ids = List.append parents_ids [ back_id ] in
         List.concat
           (List.map
-             (fun id -> T.RegionGroupId.Map.find id bs_ctx.backward_inputs)
+             (fun id -> T.RegionGroupId.Map.find id ctx.backward_inputs)
              backward_ids)
   in
-  let inputs = List.append bs_ctx.forward_inputs backward_inputs in
+  let inputs = List.append ctx.forward_inputs backward_inputs in
   (* Sanity check *)
   assert (
     List.for_all
