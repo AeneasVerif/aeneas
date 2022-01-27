@@ -156,3 +156,64 @@ let type_def_to_string (type_def_id_to_string : TypeDefId.id -> string)
       in
       let variants = String.concat "\n" variants in
       "enum " ^ name ^ params ^ " =\n" ^ variants
+
+let var_to_string (fmt : type_formatter) (v : var) : string =
+  "(" ^ VarId.to_string v.id ^ " : " ^ ty_to_string fmt v.ty ^ ")"
+
+let var_or_dummy_to_string (fmt : value_formatter) (v : var_or_dummy) : string =
+  match v with
+  | Var v -> var_to_string (value_to_type_formatter fmt) v
+  | Dummy -> "_"
+
+let rec typed_lvalue_to_string (fmt : value_formatter) (v : typed_lvalue) :
+    string =
+  match v.value with
+  | LvVar var -> var_or_dummy_to_string fmt var
+  | LvTuple values ->
+      "("
+      ^ String.concat ", " (List.map (typed_lvalue_to_string fmt) values)
+      ^ ")"
+
+(*let rec typed_lvalue_to_string (fmt : value_formatter) (v : V.typed_value) :
+      string =
+    let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
+    match v.value with
+    | Concrete cv -> constant_value_to_string cv
+    | Adt av -> (
+        let field_values = List.map (typed_value_to_string fmt) av.field_values in
+        match v.ty with
+        | T.Adt (T.Tuple, _, _) ->
+            (* Tuple *)
+            "(" ^ String.concat ", " field_values ^ ")"
+        | T.Adt (T.AdtId def_id, _, _) ->
+            (* "Regular" ADT *)
+            let adt_ident =
+              match av.variant_id with
+              | Some vid -> fmt.adt_variant_to_string def_id vid
+              | None -> fmt.type_def_id_to_string def_id
+            in
+            if List.length field_values > 0 then
+              match fmt.adt_field_names def_id av.V.variant_id with
+              | None ->
+                  let field_values = String.concat ", " field_values in
+                  adt_ident ^ " (" ^ field_values ^ ")"
+              | Some field_names ->
+                  let field_values = List.combine field_names field_values in
+                  let field_values =
+                    List.map
+                      (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                      field_values
+                  in
+                  let field_values = String.concat " " field_values in
+                  adt_ident ^ " { " ^ field_values ^ " }"
+            else adt_ident
+        | T.Adt (T.Assumed aty, _, _) -> (
+            (* Assumed type *)
+            match (aty, field_values) with
+            | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
+            | _ -> failwith "Inconsistent value")
+        | _ -> failwith "Inconsistent typed value")
+    | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
+    | Borrow bc -> borrow_content_to_string fmt bc
+    | Loan lc -> loan_content_to_string fmt lc
+  | Symbolic s -> symbolic_value_to_string (value_to_rtype_formatter fmt) s*)

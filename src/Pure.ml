@@ -81,7 +81,9 @@ type constant_value = V.constant_value
 type var = { id : VarId.id; ty : ty }
 (** Because we introduce a lot of temporary variables, the list of variables
     is not fixed: we thus must carry all its information with the variable
-    itself
+    itself.
+    
+    TODO: add a field for the basename.
  *)
 
 type var_or_dummy = Var of var | Dummy  (** Ignored value: `_` *)
