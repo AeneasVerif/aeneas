@@ -12,6 +12,8 @@ module SA = SymbolicAst
 (** The local logger *)
 let log = L.translate_log
 
+type pure_fun_translation = Pure.fun_def * Pure.fun_def list
+
 (** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
     for the forward function and the backward functions.
  *)
@@ -49,7 +51,7 @@ let translate_function_to_symbolics (config : C.partial_config)
 let translate_function (config : C.partial_config) (m : M.cfim_module)
     (type_context : C.type_context) (fun_context : C.fun_context)
     (fun_sigs : Pure.fun_sig SymbolicToPure.RegularFunIdMap.t)
-    (fdef : A.fun_def) : Pure.fun_def * Pure.fun_def list =
+    (fdef : A.fun_def) : pure_fun_translation =
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs *)
@@ -147,7 +149,8 @@ let translate_function (config : C.partial_config) (m : M.cfim_module)
   (* Return *)
   (pure_forward, pure_backwards)
 
-let translate_module (config : C.partial_config) (m : M.cfim_module) : unit =
+let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
+    Pure.type_def T.TypeDefId.Map.t * pure_fun_translation A.FunDefId.Map.t =
   (* Compute the type and function contexts *)
   let type_context, fun_context = compute_type_fun_contexts m in
 
@@ -169,11 +172,20 @@ let translate_module (config : C.partial_config) (m : M.cfim_module) : unit =
   in
 
   (* Translate all the functions *)
-  let fun_defs =
+  let translations =
     List.map
       (fun (fdef : A.fun_def) ->
         ( fdef.def_id,
-          translate_function config m type_context fun_context fun_sigs ))
+          translate_function config m type_context fun_context fun_sigs fdef ))
       m.functions
   in
-  raise Unimplemented
+
+  (* Put the translated functions in a map *)
+  let fun_defs =
+    List.fold_left
+      (fun m (def_id, trans) -> A.FunDefId.Map.add def_id trans m)
+      A.FunDefId.Map.empty translations
+  in
+
+  (* Return *)
+  (type_defs, fun_defs)
