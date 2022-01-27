@@ -2,7 +2,6 @@ open Cps
 open InterpreterUtils
 open InterpreterProjectors
 open InterpreterBorrows
-open InterpreterExpressions
 open InterpreterStatements
 open CfimAstUtils
 module L = Logging

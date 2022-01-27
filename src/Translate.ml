@@ -1,6 +1,4 @@
 open Errors
-open Cps
-open InterpreterUtils
 open InterpreterStatements
 open Interpreter
 module L = Logging

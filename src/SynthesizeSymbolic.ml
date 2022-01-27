@@ -1,5 +1,3 @@
-open Errors
-open Identifiers
 module C = Collections
 module T = Types
 module V = Values
