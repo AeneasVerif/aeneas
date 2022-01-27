@@ -18,11 +18,8 @@ type pure_fun_translation = Pure.fun_def * Pure.fun_def list
     for the forward function and the backward functions.
  *)
 let translate_function_to_symbolics (config : C.partial_config)
-    (m : M.cfim_module) (fid : A.FunDefId.id) :
-    SA.expression * SA.expression list =
-  (* Retrieve the function declaration *)
-  let fdef = A.FunDefId.nth m.functions fid in
-
+    (type_context : C.type_context) (fun_context : C.fun_context)
+    (fdef : A.fun_def) : SA.expression * SA.expression list =
   (* Debug *)
   log#ldebug
     (lazy
@@ -30,7 +27,9 @@ let translate_function_to_symbolics (config : C.partial_config)
 
   (* Evaluate *)
   let synthesize = true in
-  let evaluate = evaluate_function_symbolic config synthesize m fid in
+  let evaluate =
+    evaluate_function_symbolic config synthesize type_context fun_context fdef
+  in
   (* Execute the forward function *)
   let forward = Option.get (evaluate None) in
   (* Execute the backward functions *)
@@ -43,12 +42,8 @@ let translate_function_to_symbolics (config : C.partial_config)
   (* Return *)
   (forward, backwards)
 
-(** Translate a function, by generating its forward and backward translations.
-
-    TODO: we shouldn't need to take m as parameter (we actually recompute the
-    type and function contexts in [translate_function_to_symbolics]...)
- *)
-let translate_function (config : C.partial_config) (m : M.cfim_module)
+(** Translate a function, by generating its forward and backward translations. *)
+let translate_function (config : C.partial_config)
     (type_context : C.type_context) (fun_context : C.fun_context)
     (fun_sigs : Pure.fun_sig SymbolicToPure.RegularFunIdMap.t)
     (fdef : A.fun_def) : pure_fun_translation =
@@ -56,7 +51,7 @@ let translate_function (config : C.partial_config) (m : M.cfim_module)
 
   (* Compute the symbolic ASTs *)
   let symbolic_forward, symbolic_backwards =
-    translate_function_to_symbolics config m fdef.def_id
+    translate_function_to_symbolics config type_context fun_context fdef
   in
 
   (* Convert the symbolic ASTs to pure ASTs: *)
@@ -176,7 +171,7 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
     List.map
       (fun (fdef : A.fun_def) ->
         ( fdef.def_id,
-          translate_function config m type_context fun_context fun_sigs fdef ))
+          translate_function config type_context fun_context fun_sigs fdef ))
       m.functions
   in
 
