@@ -78,15 +78,6 @@ type scalar_value = V.scalar_value
 
 type constant_value = V.constant_value
 
-type value = Concrete of constant_value | Adt of adt_value
-
-and adt_value = {
-  variant_id : (VariantId.id option[@opaque]);
-  field_values : typed_value list;
-}
-
-and typed_value = { value : value; ty : ty }
-
 type var = { id : VarId.id; ty : ty }
 (** Because we introduce a lot of temporary variables, the list of variables
     is not fixed: we thus must carry all its information with the variable

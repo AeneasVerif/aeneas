@@ -858,10 +858,26 @@ and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : expression
   *)
   match ctx.bid with
   | None ->
+      (* Forward function *)
       let v = Option.get opt_v in
       let v = typed_value_to_rvalue ctx v in
       Return v
-  | Some bid -> raise Unimplemented
+  | Some bid ->
+      (* Backward function *)
+      (* Sanity check *)
+      assert (opt_v = None);
+      (* We simply need to return the variables in which we stored the values
+       * we need to give back.
+       * See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
+      let backward_outputs =
+        T.RegionGroupId.Map.find bid ctx.backward_outputs
+      in
+      let field_values = List.map mk_typed_rvalue_from_var backward_outputs in
+      let ret_value = RvAdt { variant_id = None; field_values } in
+      let ret_tys = List.map (fun (v : typed_rvalue) -> v.ty) field_values in
+      let ret_ty = Adt (T.Tuple, ret_tys) in
+      let ret_value : typed_rvalue = { value = ret_value; ty = ret_ty } in
+      Return ret_value
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     expression =
