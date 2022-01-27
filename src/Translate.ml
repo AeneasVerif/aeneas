@@ -11,46 +11,37 @@ open InterpreterStatements
 (** The local logger *)
 let log = L.translate_log
 
-(** Execute the symbolic interpreter on a function to generate a symbolic AST. *)
-let translate_function_to_symbolic (config : C.partial_config)
-    (m : M.cfim_module) (fid : A.FunDefId.id)
-    (back_id : T.RegionGroupId.id option) : unit =
+(** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
+    for the forward function and the backward functions. *)
+let translate_function_to_symbolics (config : C.partial_config)
+    (m : M.cfim_module) (fid : A.FunDefId.id) :
+    SA.expression * SA.expression list =
   (* Retrieve the function declaration *)
   let fdef = A.FunDefId.nth m.functions fid in
 
   (* Debug *)
   log#ldebug
     (lazy
-      ("translate_function_to_pure: "
-      ^ Print.name_to_string fdef.A.name
-      ^ " ("
-      ^ Print.option_to_string T.RegionGroupId.to_string back_id
-      ^ ")"));
+      ("translate_function_to_symbolics: " ^ Print.name_to_string fdef.A.name));
 
-  (* Create the evaluation context *)
-  let ctx = initialize_symbolic_context_for_fun m fdef in
-
-  (* Create the continuation to check the function's result *)
-  let cf_check res _ =
-    match res with
-    | Return -> raise Errors.Unimplemented
-    | Panic ->
-        (* Note that as we explore all the execution branches, one of
-         * the executions can lead to a panic *)
-        if synthesize then Some SA.Panic else None
-    | _ ->
-        failwith
-          ("Unit test failed (symbolic execution) on: "
-          ^ Print.name_to_string fdef.A.name)
+  (* Evaluate *)
+  let evaluate = evaluate_function_symbolic config synthesize m fid in
+  (* Execute the forward function *)
+  let forward = evaluate None in
+  (* Execute the backward functions *)
+  let backwards =
+    T.RegionGroupId.mapi
+      (fun gid _ -> evaluate (Some gid))
+      fdef.signature.regions_hierarchy
   in
 
-  (* Evaluate the function *)
-  let config = C.config_of_partial C.SymbolicMode config in
-  let _ = eval_function_body config fdef.A.body cf_check ctx in
-  ()
+  (* Return *)
+  (forward, backwards)
 
-let translate (config : C.partial_config) (m : M.cfim_module) : unit =
-  (* Translate all the type definitions *)
+(*let translate (config : C.partial_config) (m : M.cfim_module) : unit =
+    (* Translate all the type definitions *)
+    let type_defs = SymbolicToPure.translate_type_defs m.type_defs in
 
-  (* Translate all the function signatures *)
-  raise Unimplemented
+    (* Translate all the function signatures *)
+    let fun_defs = SymbolicToPure.translate_fun_signatures types_infos
+  raise Unimplemented*)

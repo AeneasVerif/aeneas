@@ -169,7 +169,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
 (** Evaluate a function with the symbolic interpreter *)
 let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
     (m : M.cfim_module) (fid : A.FunDefId.id)
-    (back_id : T.RegionGroupId.id option) : unit =
+    (back_id : T.RegionGroupId.id option) : SA.expression option =
   (* Retrieve the function declaration *)
   let fdef = A.FunDefId.nth m.functions fid in
 
@@ -222,8 +222,7 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
   in
 
   (* Evaluate the function *)
-  let _ = eval_function_body config fdef.A.body cf_finish ctx in
-  ()
+  eval_function_body config fdef.A.body cf_finish ctx
 
 module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
@@ -297,7 +296,7 @@ module Test = struct
     let _ = evaluate None in
     (* Execute the backward functions *)
     let _ =
-      T.RegionGroupId.iteri
+      T.RegionGroupId.mapi
         (fun gid _ -> evaluate (Some gid))
         fdef.signature.regions_hierarchy
     in
