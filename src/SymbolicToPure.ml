@@ -168,8 +168,8 @@ end
 module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
 
 type type_context = {
-  types_infos : TA.type_infos;
   cfim_type_defs : T.type_def TypeDefId.Map.t;
+  types_infos : TA.type_infos; (* TODO: rename to type_infos *)
 }
 
 type fun_context = {
@@ -209,52 +209,6 @@ type bs_ctx = {
       (** The ended abstractions we encountered so far *)
 }
 (** Body synthesis context *)
-
-type fs_ctx = {
-  fun_def : A.fun_def;
-  bid : T.RegionGroupId.id option;
-  type_context : type_context;
-  fun_context : fun_context;
-  forward_inputs : var list;
-      (** The input parameters for the forward function *)
-  backward_inputs : var list T.RegionGroupId.Map.t;
-      (** The input parameters for the backward functions *)
-  backward_outputs : var list T.RegionGroupId.Map.t;
-      (** The variables that the backward functions will output *)
-}
-(** Function synthesis context
-
-    TODO: remove
- *)
-
-let fs_ctx_to_bs_ctx (fs_ctx : fs_ctx) : bs_ctx =
-  let {
-    fun_def;
-    bid;
-    type_context;
-    fun_context;
-    forward_inputs;
-    backward_inputs;
-    backward_outputs;
-  } =
-    fs_ctx
-  in
-  let sv_to_var = V.SymbolicValueId.Map.empty in
-  let var_counter = VarId.generator_zero in
-  let calls = V.FunCallId.Map.empty in
-  let abstractions = V.AbstractionId.Map.empty in
-  {
-    bid;
-    sv_to_var;
-    var_counter;
-    type_context;
-    fun_context;
-    forward_inputs;
-    backward_inputs;
-    backward_outputs;
-    calls;
-    abstractions;
-  }
 
 let get_instantiated_fun_sig (fun_id : A.fun_id)
     (back_id : T.RegionGroupId.id option) (tys : ty list) (ctx : bs_ctx) :
@@ -415,7 +369,10 @@ let rec translate_back_ty (types_infos : TA.type_infos)
       | T.AdtId _ | Assumed _ ->
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows types_infos ty));
-          None
+          if inside_mut then
+            let tys_t = List.filter_map translate tys in
+            Some (Adt (type_id, tys_t))
+          else None
       | T.Tuple -> (
           (* Tuples can contain borrows (which we eliminated) *)
           let tys_t = List.filter_map translate tys in
@@ -450,6 +407,7 @@ let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
   let types_infos = ctx.type_context.types_infos in
   translate_back_ty types_infos keep_region inside_mut ty
 
+(** List the ancestors of an abstraction *)
 let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs) :
     V.AbstractionId.id list =
   (* We could do something more "elegant" without references, but it is
@@ -462,7 +420,7 @@ let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs) :
       let abs = V.AbstractionId.Map.find abs_id ctx.abstractions in
       List.iter gather abs.original_parents)
   in
-  gather abs.abs_id;
+  List.iter gather abs.original_parents;
   let ids = !abs_set in
   (* List the ancestors, in the proper order *)
   let call_info = V.FunCallId.Map.find abs.call_id ctx.calls in
@@ -535,7 +493,7 @@ let translate_fun_sig (types_infos : TA.type_infos) (sg : A.fun_sig)
          * The outputs are the borrows inside the regions of the abstractions
          * and which are present in the input values. For instance, see:
          * ```
-         * fn f<'a>(x : 'a mut u32) -> ...;
+         * fn f<'a>(x : &'a mut u32) -> ...;
          * ```
          * Upon ending the abstraction for 'a, we give back the borrow which
          * was consumed through the `x` parameter.
@@ -936,6 +894,10 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
 
 and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
     expression =
+  log#ldebug
+    (lazy
+      ("translate_end_abstraction: abstraction kind: "
+     ^ V.show_abs_kind abs.kind));
   match abs.kind with
   | V.SynthInput ->
       (* When we end an input abstraction, this input abstraction gets back
@@ -1021,6 +983,12 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       List.iter
         (fun (x, ty) -> assert ((x : typed_rvalue).ty = ty))
         (List.combine inputs inst_sg.inputs);
+      log#ldebug
+        (lazy
+          ("\n- outputs: "
+          ^ string_of_int (List.length outputs)
+          ^ "\n- expected outputs: "
+          ^ string_of_int (List.length inst_sg.outputs)));
       List.iter
         (fun (x, ty) -> assert ((x : typed_lvalue).ty = ty))
         (List.combine outputs inst_sg.outputs);
@@ -1197,6 +1165,14 @@ and translate_expansion (sv : V.symbolic_value) (exp : S.expansion)
 let translate_fun_def (def : A.fun_def) (ctx : bs_ctx) (body : S.expression) :
     fun_def =
   let bid = ctx.bid in
+  log#ldebug
+    (lazy
+      ("SymbolicToPure.translate_fun_def: "
+      ^ Print.name_to_string def.A.name
+      ^ " ("
+      ^ Print.option_to_string T.RegionGroupId.to_string bid
+      ^ ")"));
+
   (* Translate the function *)
   let def_id = def.A.def_id in
   let basename = def.name in

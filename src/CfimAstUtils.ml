@@ -21,6 +21,8 @@ let fun_def_has_loops (fd : fun_def) : bool = statement_has_loops fd.body
 
 (** Small utility: list the transitive parents of a region var group.
     We don't do that in an efficient manner, but it doesn't matter.
+    
+    TODO: rename to "list_ancestors_..."
  *)
 let rec list_parent_region_groups (sg : fun_sig) (gid : T.RegionGroupId.id) :
     T.RegionGroupId.Set.t =
