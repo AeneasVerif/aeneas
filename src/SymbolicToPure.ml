@@ -173,9 +173,23 @@ type type_context = {
   types_infos : TA.type_infos; (* TODO: rename to type_infos *)
 }
 
+type fun_sig_named_outputs = {
+  sg : fun_sig;  (** A function signature *)
+  output_names : string option list;
+      (** In case the signature is for a backward function, we may provides names
+    for the outputs. The reason is that the outputs of backward functions
+    come from (in case there are no nested borrows) borrows present in the
+    inputs of the original rust function. In this situation, we can use the
+    names of those inputs to name the outputs. Those names are very useful
+    to generate beautiful codes (we may need to introduce temporary variables
+    in the bodies of the backward functions to store the returned values, in
+    which case we use those names).
+ *)
+}
+
 type fun_context = {
   cfim_fun_defs : A.fun_def FunDefId.Map.t;
-  fun_sigs : fun_sig RegularFunIdMap.t;
+  fun_sigs : fun_sig_named_outputs RegularFunIdMap.t;  (** *)
 }
 
 type call_info = {
@@ -260,7 +274,9 @@ let get_instantiated_fun_sig (fun_id : A.fun_id)
     (back_id : T.RegionGroupId.id option) (tys : ty list) (ctx : bs_ctx) :
     inst_fun_sig =
   (* Lookup the non-instantiated function signature *)
-  let sg = RegularFunIdMap.find (fun_id, back_id) ctx.fun_context.fun_sigs in
+  let sg =
+    (RegularFunIdMap.find (fun_id, back_id) ctx.fun_context.fun_sigs).sg
+  in
   (* Create the substitution *)
   let tsubst = make_type_subst sg.type_params tys in
   (* Apply *)
@@ -277,7 +293,7 @@ let bs_ctx_lookup_cfim_fun_def (id : FunDefId.id) (ctx : bs_ctx) : A.fun_def =
 let bs_ctx_lookup_local_function_sig (def_id : FunDefId.id)
     (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
   let id = (A.Local def_id, back_id) in
-  RegularFunIdMap.find id ctx.fun_context.fun_sigs
+  (RegularFunIdMap.find id ctx.fun_context.fun_sigs).sg
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (ctx : bs_ctx) : bs_ctx =
@@ -493,8 +509,16 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) : V.abs list =
   let abs_ids = list_ancestor_abstractions_ids ctx abs in
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 
+(** Translate a function signature.
+
+    Note that the function also takes a list of names for the inputs, and
+    computes, for every output for the backward functions, a corresponding
+    name (outputs for backward functions come from borrows in the inputs
+    of the forward function).
+ *)
 let translate_fun_sig (types_infos : TA.type_infos) (sg : A.fun_sig)
-    (bid : T.RegionGroupId.id option) : fun_sig =
+    (input_names : string option list) (bid : T.RegionGroupId.id option) :
+    fun_sig_named_outputs =
   (* Retrieve the list of parent backward functions *)
   let gid, parents =
     match bid with
@@ -544,11 +568,11 @@ let translate_fun_sig (types_infos : TA.type_infos) (sg : A.fun_sig)
   in
   let inputs = List.append fwd_inputs back_inputs in
   (* Outputs *)
-  let outputs : ty list =
+  let output_names, outputs =
     match gid with
     | None ->
-        (* This is a forward function: there is one output *)
-        [ translate_fwd_ty types_infos sg.output ]
+        (* This is a forward function: there is one (unnamed) output *)
+        ([ None ], [ translate_fwd_ty types_infos sg.output ])
     | Some gid ->
         (* This is a backward function: there might be several outputs.
          * The outputs are the borrows inside the regions of the abstractions
@@ -559,12 +583,26 @@ let translate_fun_sig (types_infos : TA.type_infos) (sg : A.fun_sig)
          * Upon ending the abstraction for 'a, we give back the borrow which
          * was consumed through the `x` parameter.
          *)
-        List.filter_map (translate_back_ty_for_gid gid) sg.inputs
+        let outputs =
+          List.map
+            (fun (name, input_ty) ->
+              (name, translate_back_ty_for_gid gid input_ty))
+            (List.combine input_names sg.inputs)
+        in
+        (* Filter *)
+        let outputs =
+          List.filter (fun (_, opt_ty) -> Option.is_some opt_ty) outputs
+        in
+        let outputs =
+          List.map (fun (name, opt_ty) -> (name, Option.get opt_ty)) outputs
+        in
+        List.split outputs
   in
   (* Type parameters *)
   let type_params = sg.type_params in
   (* Return *)
-  { type_params; inputs; outputs }
+  let sg = { type_params; inputs; outputs } in
+  { sg; output_names }
 
 let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
     bs_ctx * var =
@@ -584,17 +622,19 @@ let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
   List.fold_left_map (fun ctx sv -> fresh_var_for_symbolic_value sv ctx) ctx svl
 
 (** This generates a fresh variable **which is not to be linked to any symbolic value** *)
-let fresh_var (ty : ty) (ctx : bs_ctx) : bs_ctx * var =
+let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) : bs_ctx * var
+    =
   (* Generate the fresh variable *)
   let id, var_counter = VarId.fresh ctx.var_counter in
-  let var = { id; basename = None; ty } in
+  let var = { id; basename; ty } in
   (* Update the context *)
   let ctx = { ctx with var_counter } in
   (* Return *)
   (ctx, var)
 
-let fresh_vars (tys : ty list) (ctx : bs_ctx) : bs_ctx * var list =
-  List.fold_left_map (fun ctx ty -> fresh_var ty ctx) ctx tys
+let fresh_vars (vars : (string option * ty) list) (ctx : bs_ctx) :
+    bs_ctx * var list =
+  List.fold_left_map (fun ctx (name, ty) -> fresh_var name ty ctx) ctx vars
 
 let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
@@ -1331,22 +1371,35 @@ let translate_type_defs (type_defs : T.type_def list) : type_def TypeDefId.Map.t
       TypeDefId.Map.add def.def_id tdef tdefs)
     TypeDefId.Map.empty type_defs
 
+(** Translates function signatures.
+
+    Takes as input a list of function information containing:
+    - the function id
+    - a list of optional names for the inputs
+    - the function signature
+    
+    Returns a map from forward/backward functions identifiers to:
+    - translated function signatures
+    - optional names for the outputs values (we derive them for the backward
+      functions)
+ *)
 let translate_fun_signatures (types_infos : TA.type_infos)
-    (functions : (A.fun_id * A.fun_sig) list) : fun_sig RegularFunIdMap.t =
+    (functions : (A.fun_id * string option list * A.fun_sig) list) :
+    fun_sig_named_outputs RegularFunIdMap.t =
   (* For every function, translate the signatures of:
      - the forward function
      - the backward functions
   *)
-  let translate_one (fun_id : A.fun_id) (sg : A.fun_sig) :
-      (regular_fun_id * fun_sig) list =
+  let translate_one (fun_id : A.fun_id) (input_names : string option list)
+      (sg : A.fun_sig) : (regular_fun_id * fun_sig_named_outputs) list =
     (* The forward function *)
-    let fwd_sg = translate_fun_sig types_infos sg None in
+    let fwd_sg = translate_fun_sig types_infos sg input_names None in
     let fwd_id = (fun_id, None) in
     (* The backward functions *)
     let back_sgs =
       List.map
         (fun (rg : T.region_var_group) ->
-          let tsg = translate_fun_sig types_infos sg (Some rg.id) in
+          let tsg = translate_fun_sig types_infos sg input_names (Some rg.id) in
           let id = (fun_id, Some rg.id) in
           (id, tsg))
         sg.regions_hierarchy
@@ -1355,7 +1408,8 @@ let translate_fun_signatures (types_infos : TA.type_infos)
     (fwd_id, fwd_sg) :: back_sgs
   in
   let translated =
-    List.concat (List.map (fun (id, sg) -> translate_one id sg) functions)
+    List.concat
+      (List.map (fun (id, names, sg) -> translate_one id names sg) functions)
   in
   List.fold_left
     (fun m (id, sg) -> RegularFunIdMap.add id sg m)

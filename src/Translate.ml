@@ -72,10 +72,16 @@ let translate_function_to_symbolics (config : C.partial_config)
   (* Return *)
   (forward, backwards)
 
-(** Translate a function, by generating its forward and backward translations. *)
+(** Translate a function, by generating its forward and backward translations.
+
+    [fun_sigs]: maps the forward/backward functions to their signatures. In case
+    of backward functions, we also provide names for the outputs.
+    TODO: maybe we should introduce a record for this.
+ *)
 let translate_function_to_pure (config : C.partial_config)
     (type_context : C.type_context) (fun_context : C.fun_context)
-    (fun_sigs : Pure.fun_sig SymbolicToPure.RegularFunIdMap.t)
+    (fun_sigs :
+      SymbolicToPure.fun_sig_named_outputs SymbolicToPure.RegularFunIdMap.t)
     (fdef : A.fun_def) : pure_fun_translation =
   (* Debug *)
   log#ldebug
@@ -133,7 +139,16 @@ let translate_function_to_pure (config : C.partial_config)
     in
     { ctx with forward_inputs }
   in
-  let ctx, forward_inputs = SymbolicToPure.fresh_vars forward_sg.inputs ctx in
+  let forward_input_vars, _ =
+    Collections.List.split_at fdef.locals fdef.arg_count
+  in
+  let forward_input_varnames =
+    List.map (fun (v : A.var) -> v.name) forward_input_vars
+  in
+  let forward_inputs =
+    List.combine forward_input_varnames forward_sg.sg.inputs
+  in
+  let ctx, forward_inputs = SymbolicToPure.fresh_vars forward_inputs ctx in
 
   let ctx = { ctx with forward_inputs } in
 
@@ -158,10 +173,22 @@ let translate_function_to_pure (config : C.partial_config)
       RegularFunIdMap.find (A.Local def_id, Some back_id) fun_sigs
     in
     let _, backward_inputs =
-      Collections.List.split_at backward_sg.inputs (List.length forward_inputs)
+      Collections.List.split_at backward_sg.sg.inputs
+        (List.length forward_inputs)
+    in
+    (* As we forbid nested borrows, the additional inputs for the backward
+     * functions come from the borrows in the return value of the rust function:
+     * we thus use the name "ret" for those inputs *)
+    let backward_inputs =
+      List.map (fun ty -> (Some "ret", ty)) backward_inputs
     in
     let ctx, backward_inputs = SymbolicToPure.fresh_vars backward_inputs ctx in
-    let backward_outputs = backward_sg.outputs in
+    (* The outputs for the backward functions, however, come from borrows
+     * present in the input values of the rust function: for those we reuse
+     * the names of the  input values. *)
+    let backward_outputs =
+      List.combine backward_sg.output_names backward_sg.sg.outputs
+    in
     let ctx, backward_outputs =
       SymbolicToPure.fresh_vars backward_outputs ctx
     in
@@ -200,11 +227,19 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
 
   (* Translate all the function *signatures* *)
   let assumed_sigs =
-    List.map (fun (id, sg) -> (A.Assumed id, sg)) Assumed.assumed_sigs
+    List.map
+      (fun (id, sg) ->
+        (A.Assumed id, List.map (fun _ -> None) (sg : A.fun_sig).inputs, sg))
+      Assumed.assumed_sigs
   in
   let local_sigs =
     List.map
-      (fun (fdef : A.fun_def) -> (A.Local fdef.def_id, fdef.signature))
+      (fun (fdef : A.fun_def) ->
+        ( A.Local fdef.def_id,
+          List.map
+            (fun (v : A.var) -> v.name)
+            (Collections.List.prefix fdef.arg_count fdef.locals),
+          fdef.signature ))
       m.functions
   in
   let sigs = List.append assumed_sigs local_sigs in

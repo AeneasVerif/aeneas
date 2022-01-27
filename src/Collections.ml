@@ -35,6 +35,9 @@ module List = struct
     | x :: ls ->
         let ls, last = pop_last ls in
         (x :: ls, last)
+
+  (** Return the n first elements of the list *)
+  let prefix (n : int) (ls : 'a list) : 'a list = fst (split_at ls n)
 end
 
 module type OrderedType = sig
