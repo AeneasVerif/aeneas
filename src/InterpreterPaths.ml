@@ -32,13 +32,16 @@ type path_fail_kind =
   | FailInactivatedMutBorrow of V.BorrowId.id
       (** Failure because we couldn't go inside an inactivated mutable borrow
           (which should get activated) *)
-  | FailSymbolic of (E.projection_elem * V.symbolic_value)
-      (** Failure because we need to enter a symbolic value (and thus need to expand it) *)
-  (* TODO: Remove the parentheses *)
-  | FailBottom of (int * E.projection_elem * T.ety)
+  | FailSymbolic of int * V.symbolic_value
+      (** Failure because we need to enter a symbolic value (and thus need to
+          expand it).
+          We return the number of elements which remained in the path when we
+          reached the error - this allows to retrieve the path prefix, which
+          is useful for the synthesis. *)
+  | FailBottom of int * E.projection_elem * T.ety
       (** Failure because we need to enter an any value - we can expand Bottom
           values if they are left values. We return the number of elements which
-          were remaining in the path when we reached the error - this allows to
+          remained in the path when we reached the error - this allows to
           properly update the Bottom value, if needs be.
        *)
   | FailBorrow of V.borrow_content
@@ -137,7 +140,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
       (* Symbolic value: needs to be expanded *)
       | _, Symbolic sp, _ ->
           (* Expand the symbolic value *)
-          Error (FailSymbolic (pe, sp))
+          Error (FailSymbolic (1 + List.length p', sp))
       (* Box dereferencement *)
       | ( DerefBox,
           Adt { variant_id = None; field_values = [ bv ] },
@@ -471,10 +474,15 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
         | FailMutLoan bid -> end_outer_borrow config bid
         | FailInactivatedMutBorrow bid ->
             activate_inactivated_mut_borrow config bid
-        | FailSymbolic (_pe, sp) ->
+        | FailSymbolic (i, sp) ->
             (* Expand the symbolic value *)
+            let proj, _ =
+              Collections.List.split_at p.projection
+                (List.length p.projection - i)
+            in
+            let prefix = { p with projection = proj } in
             expand_symbolic_value_no_branching config sp
-              (Some (Synth.mk_place p ctx))
+              (Some (Synth.mk_place prefix ctx))
         | FailBottom (_, _, _) ->
             (* We can't expand [Bottom] values while reading them *)
             failwith "Found [Bottom] while reading a place"
