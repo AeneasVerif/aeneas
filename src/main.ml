@@ -7,7 +7,6 @@ module I = Interpreter
 module EL = Easy_logging.Logging
 module TA = TypesAnalysis
 module P = Pure
-open Translate
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
@@ -74,6 +73,11 @@ let () =
       (* Test the unit functions with the concrete interpreter *)
       I.Test.test_unit_functions config m;
 
-      (* Evaluate the symbolic interpreter on the functions *)
+      (* Evaluate the symbolic interpreter on the functions - TODO: remove *)
       let synthesize = true in
-      I.Test.test_functions_symbolic config synthesize m
+      I.Test.test_functions_symbolic config synthesize m;
+
+      (* Translate the functions *)
+      let _ = Translate.translate_module_to_pure config m in
+
+      ()
