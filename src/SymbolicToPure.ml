@@ -571,7 +571,7 @@ let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
   (* Generate the fresh variable *)
   let id, var_counter = VarId.fresh ctx.var_counter in
   let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
-  let var = { id; ty } in
+  let var = { id; basename = None; ty } in
   (* Insert in the map *)
   let sv_to_var = V.SymbolicValueId.Map.add sv.sv_id var ctx.sv_to_var in
   (* Update the context *)
@@ -587,7 +587,7 @@ let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
 let fresh_var (ty : ty) (ctx : bs_ctx) : bs_ctx * var =
   (* Generate the fresh variable *)
   let id, var_counter = VarId.fresh ctx.var_counter in
-  let var = { id; ty } in
+  let var = { id; basename = None; ty } in
   (* Update the context *)
   let ctx = { ctx with var_counter } in
   (* Return *)

@@ -82,17 +82,20 @@ type scalar_value = V.scalar_value
 
 type constant_value = V.constant_value
 
-type var = { id : VarId.id; ty : ty }
+type var = {
+  id : VarId.id;
+  basename : string option;
+      (** The "basename" is used to generate a meaningful name for the variable
+          (by potentially adding an index to uniquely identify it).
+       *)
+  ty : ty;
+}
 (** Because we introduce a lot of temporary variables, the list of variables
     is not fixed: we thus must carry all its information with the variable
     itself.
-    
-    TODO: add a field for the basename.
  *)
 
-type var_or_dummy =
-  | Var of var  (** TODO: use var_id, not var *)
-  | Dummy  (** Ignored value: `_`. *)
+type var_or_dummy = Var of var | Dummy  (** Ignored value: `_`. *)
 
 (** A left value (which appears on the left of assignments *)
 type lvalue =
