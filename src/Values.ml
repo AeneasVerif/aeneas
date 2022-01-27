@@ -681,6 +681,10 @@ and aborrow_content =
           in practice the child value should only contain ended borrows, ignored
           values, bottom values, etc.
        *)
+  | AEndedSharedBorrow
+      (** We don't really need [AEndedSharedBorrow]: we simply want to be
+          precise, and not insert ⊥ when ending borrows.
+       *)
   | AEndedIgnoredMutBorrow of {
       child : typed_avalue;
       given_back_loans_proj : typed_avalue;

@@ -440,6 +440,7 @@ module Values = struct
         ^ "; "
         ^ typed_avalue_to_string fmt given_back_loans_proj
         ^ ")"
+    | AEndedSharedBorrow -> "@ended_shared_borrow"
     | AProjSharedBorrow sb ->
         "@ignored_shared_borrow("
         ^ abstract_shared_borrows_to_string fmt sb

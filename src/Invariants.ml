@@ -257,7 +257,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
           | V.AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow Mut bid
           | V.AIgnoredMutBorrow (None, _)
           | V.AEndedMutBorrow _ | V.AEndedIgnoredMutBorrow _
-          | V.AProjSharedBorrow _ ->
+          | V.AEndedSharedBorrow | V.AProjSharedBorrow _ ->
               (* Do nothing *)
               ()
         in
@@ -361,7 +361,7 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
         let info =
           match bc with
           | V.AMutBorrow (_, _, _) -> set_outer_mut info
-          | V.ASharedBorrow _ -> set_outer_shared info
+          | V.ASharedBorrow _ | V.AEndedSharedBorrow -> set_outer_shared info
           | V.AIgnoredMutBorrow _ | V.AEndedMutBorrow _
           | V.AEndedIgnoredMutBorrow _ ->
               set_outer_mut info

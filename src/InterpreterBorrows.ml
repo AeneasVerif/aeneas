@@ -187,7 +187,8 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
         | V.AIgnoredMutBorrow (_, _)
         | V.AEndedMutBorrow _
         | V.AEndedIgnoredMutBorrow
-            { given_back_loans_proj = _; child = _; given_back_meta = _ } ->
+            { given_back_loans_proj = _; child = _; given_back_meta = _ }
+        | V.AEndedSharedBorrow ->
             (* Nothing special to do *)
             super#visit_ABorrow outer bc
         | V.AProjSharedBorrow asb ->
@@ -753,8 +754,8 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       (* Update the context *)
       give_back_shared config l ctx
   | Abstract
-      (V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _)
-    ->
+      ( V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _
+      | V.AEndedSharedBorrow ) ->
       failwith "Unreachable"
 
 (** Convert an [avalue] to a [value].
@@ -1158,7 +1159,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             then raise (FoundABorrowContent bc)
             else ()
         | V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _
-        | V.AEndedIgnoredMutBorrow _ ->
+        | V.AEndedIgnoredMutBorrow _ | V.AEndedSharedBorrow ->
             (* Nothing to do for ignored borrows *)
             ()
 
@@ -1202,8 +1203,9 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             let v = mk_typed_value_from_symbolic_value v in
             give_back_value config bid v ctx
         | V.ASharedBorrow bid ->
-            (* Replace the shared borrow with bottom *)
-            let ctx = update_aborrow ek_all bid V.ABottom ctx in
+            (* Replace the shared borrow to account for the fact it ended *)
+            let ended_borrow = V.ABorrow V.AEndedSharedBorrow in
+            let ctx = update_aborrow ek_all bid ended_borrow ctx in
             (* Give back *)
             give_back_shared config bid ctx
         | V.AProjSharedBorrow asb ->
@@ -1230,7 +1232,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             (* Continue *)
             ctx
         | V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _
-        | V.AEndedIgnoredMutBorrow _ ->
+        | V.AEndedIgnoredMutBorrow _ | V.AEndedSharedBorrow ->
             failwith "Unexpected"
       in
       (* Reexplore *)

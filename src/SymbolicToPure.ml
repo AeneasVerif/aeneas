@@ -678,7 +678,7 @@ and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
-  | AProjSharedBorrow _ ->
+  | AEndedSharedBorrow | AProjSharedBorrow _ ->
       (* Ignore *)
       None
 
@@ -784,7 +784,7 @@ and aborrow_content_to_given_back (bc : V.aborrow_content) (ctx : bs_ctx) :
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
-  | AProjSharedBorrow _ ->
+  | AEndedSharedBorrow | AProjSharedBorrow _ ->
       (* Ignore *)
       (ctx, None)
 

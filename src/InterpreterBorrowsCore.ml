@@ -434,7 +434,8 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
         | V.AIgnoredMutBorrow (_, _)
         | V.AEndedMutBorrow _
         | V.AEndedIgnoredMutBorrow
-            { given_back_loans_proj = _; child = _; given_back_meta = _ } ->
+            { given_back_loans_proj = _; child = _; given_back_meta = _ }
+        | V.AEndedSharedBorrow ->
             super#visit_aborrow_content env bc
         | V.AProjSharedBorrow asb ->
             if borrow_in_asb l asb then
@@ -548,7 +549,7 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id) (nv : V.avalue)
         | V.ASharedBorrow bid ->
             if bid = l then update ()
             else V.ABorrow (super#visit_ASharedBorrow env bid)
-        | V.AIgnoredMutBorrow _ | V.AEndedMutBorrow _
+        | V.AIgnoredMutBorrow _ | V.AEndedMutBorrow _ | V.AEndedSharedBorrow
         | V.AEndedIgnoredMutBorrow _ ->
             super#visit_ABorrow env bc
         | V.AProjSharedBorrow asb ->
