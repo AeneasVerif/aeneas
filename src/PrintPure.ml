@@ -437,4 +437,4 @@ let fun_def_to_string (fmt : ast_formatter) (def : fun_def) : string =
     if inputs = [] then "" else "  fun " ^ String.concat " " inputs ^ " ->\n"
   in
   let body = expression_to_string fmt "  " "  " def.body in
-  "let " ^ name ^ " : " ^ signature ^ " =\n" ^ inputs ^ body
+  "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body

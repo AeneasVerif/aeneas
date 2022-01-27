@@ -220,6 +220,14 @@ let type_def_to_string (ctx : bs_ctx) (def : type_def) : string =
   PrintPure.type_def_to_string fmt def
 
 (* TODO: move *)
+let typed_rvalue_to_string (ctx : bs_ctx) (v : typed_rvalue) : string =
+  let type_params = ctx.fun_def.signature.type_params in
+  let type_defs = ctx.type_context.cfim_type_defs in
+  let fun_defs = ctx.fun_context.cfim_fun_defs in
+  let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
+  PrintPure.typed_rvalue_to_string fmt v
+
+(* TODO: move *)
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let type_params = sg.type_params in
   let type_defs = ctx.type_context.cfim_type_defs in
@@ -591,6 +599,15 @@ let fresh_vars (tys : ty list) (ctx : bs_ctx) : bs_ctx * var list =
 let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
 
+(** Peel boxes as long as the value is of the form `Box<T>` *)
+let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
+  match (v.value, v.ty) with
+  | V.Adt av, T.Adt (T.Assumed T.Box, _, _) -> (
+      match av.field_values with
+      | [ bv ] -> unbox_typed_value bv
+      | _ -> failwith "Unreachable")
+  | _ -> v
+
 (** Translate a typed value.
 
     It is used, for instance, on values used as inputs for function calls.
@@ -609,6 +626,8 @@ let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
  *)
 let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
     =
+  (* We need to ignore boxes *)
+  let v = unbox_typed_value v in
   let translate = typed_value_to_rvalue ctx in
   let value =
     match v.value with
@@ -637,7 +656,8 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
         (mk_typed_rvalue_from_var var).value
   in
   let ty = ctx_translate_fwd_ty ctx v.ty in
-  { value; ty }
+  let value = { value; ty } in
+  value
 
 (** Explore an abstraction value and convert it to a consumed value
     by collecting all the meta-values from the ended *loans*.
