@@ -265,7 +265,7 @@ let compute_expanded_symbolic_box_value (kind : V.sv_kind) (boxed_ty : T.rty) :
   see
 
 let expand_symbolic_value_shared_borrow (config : C.config)
-    (original_sv : V.symbolic_value) (original_sv_place : SA.place option)
+    (original_sv : V.symbolic_value) (original_sv_place : SA.mplace option)
     (ref_ty : T.rty) : cm_fun =
  fun cf ctx ->
   (* First, replace the projectors on borrows.
@@ -381,7 +381,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
 
 (** TODO: simplify and merge with the other expansion function *)
 let expand_symbolic_value_borrow (config : C.config)
-    (original_sv : V.symbolic_value) (original_sv_place : SA.place option)
+    (original_sv : V.symbolic_value) (original_sv_place : SA.mplace option)
     (region : T.RegionId.id T.region) (ref_ty : T.rty) (rkind : T.ref_kind) :
     cm_fun =
  fun cf ctx ->
@@ -426,7 +426,7 @@ let expand_symbolic_value_borrow (config : C.config)
     [see_cf_l]: list of pairs (optional symbolic expansion, continuation)
 *)
 let apply_branching_symbolic_expansions_non_borrow (config : C.config)
-    (sv : V.symbolic_value) (sv_place : SA.place option)
+    (sv : V.symbolic_value) (sv_place : SA.mplace option)
     (see_cf_l : (V.symbolic_expansion option * m_fun) list) : m_fun =
  fun ctx ->
   assert (see_cf_l <> []);
@@ -467,7 +467,7 @@ let apply_branching_symbolic_expansions_non_borrow (config : C.config)
     TODO: rename [sp] to [sv]
  *)
 let expand_symbolic_value (config : C.config) (allow_branching : bool)
-    (sp : V.symbolic_value) (sp_place : SA.place option) : cm_fun =
+    (sp : V.symbolic_value) (sp_place : SA.mplace option) : cm_fun =
  fun cf ctx ->
   (* Debug *)
   log#ldebug (lazy ("expand_symbolic_value:" ^ symbolic_value_to_string ctx sp));
@@ -578,7 +578,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     switch. The continuation is thus for the execution *after* the switch.
 *)
 let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
-    (sv_place : SA.place option) (int_type : T.integer_type)
+    (sv_place : SA.mplace option) (int_type : T.integer_type)
     (tgts : (V.scalar_value * m_fun) list) (otherwise : m_fun) : m_fun =
   (* Sanity check *)
   assert (sv.V.sv_ty = T.Integer int_type);
@@ -600,7 +600,7 @@ let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
 
 (** See [expand_symbolic_value] *)
 let expand_symbolic_value_no_branching (config : C.config)
-    (sv : V.symbolic_value) (sv_place : SA.place option) : cm_fun =
+    (sv : V.symbolic_value) (sv_place : SA.mplace option) : cm_fun =
   let allow_branching = false in
   expand_symbolic_value config allow_branching sv sv_place
 

@@ -743,12 +743,12 @@ let translate_mprojection (p : E.projection) : projection =
   List.filter_map translate_mprojection_elem p
 
 (** Translate a "meta"-place *)
-let translate_mplace (p : S.place) : mplace =
+let translate_mplace (p : S.mplace) : mplace =
   let name = p.bv.name in
   let projection = translate_mprojection p.projection in
   { name; projection }
 
-let translate_opt_mplace (p : S.place option) : mplace option =
+let translate_opt_mplace (p : S.mplace option) : mplace option =
   match p with None -> None | Some p -> Some (translate_mplace p)
 
 (** Explore an abstraction value and convert it to a given back value
@@ -1118,7 +1118,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
               e ))
         given_back_inputs e
 
-and translate_expansion (p : S.place option) (sv : V.symbolic_value)
+and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
     (exp : S.expansion) (ctx : bs_ctx) : expression =
   (* Translate the scrutinee *)
   let scrutinee_var = lookup_var_for_symbolic_value sv ctx in

@@ -482,7 +482,7 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
             in
             let prefix = { p with projection = proj } in
             expand_symbolic_value_no_branching config sp
-              (Some (Synth.mk_place prefix ctx))
+              (Some (Synth.mk_mplace prefix ctx))
         | FailBottom (_, _, _) ->
             (* We can't expand [Bottom] values while reading them *)
             failwith "Found [Bottom] while reading a place"
@@ -512,7 +512,7 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
             expand_symbolic_value_no_branching config sp
-              (Some (Synth.mk_place p ctx))
+              (Some (Synth.mk_mplace p ctx))
         | FailBottom (remaining_pes, pe, ty) ->
             (* Expand the [Bottom] value *)
             fun cf ctx ->

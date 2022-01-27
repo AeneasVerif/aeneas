@@ -1002,7 +1002,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     mk_aproj_loans_value_from_symbolic_value regions ret_spc
   in
   let args_places = List.map (fun p -> S.mk_opt_place_from_op p ctx) args in
-  let dest_place = Some (S.mk_place dest ctx) in
+  let dest_place = Some (S.mk_mplace dest ctx) in
 
   (* Evaluate the input operands *)
   let cc = eval_operands config args in

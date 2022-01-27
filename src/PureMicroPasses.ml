@@ -33,11 +33,30 @@ open Pure
         }
       }
       ```
-      If `ls` maps to a symbolic value upon evaluating the match in symbolic
+      If `ls` maps to a symbolic value `s0` upon evaluating the match in symbolic
       mode, we expand this value upon evaluating `tmp = discriminant(ls)`.
       However, at this point, we don't know which should be the names of
-      the symbolic values we introduce for the fields of `Cons`! Still,
+      the symbolic values we introduce for the fields of `Cons`!
+      Let's imagine we have (for the `Cons` branch): `s0 ~~> Cons s1 s2`.
+      The assigments lead to the following binding in the evaluation context:
+      ```
+      x -> s1
+      hd -> s2
+      ```
+      
+      If at any moment we use `x` (as an operand to a function, to return,
+      etc.) we ...
+      TODO: finish explanations
+      TODO: meta-information for:
+      - unop
+      - binop
+      - assignments
+      - discriminant
+      - ...
+      
       the subsequent assignments actually give us the naming information we
       were looking for.
+   - TODO: temporaries for binops which can fail/have preconditions
+   - TODO: reborrows just before calling functions.
  *)
 let compute_pretty_names () = ()

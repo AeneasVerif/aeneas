@@ -40,7 +40,8 @@ let expand_primitively_copyable_at_place (config : C.config)
     | None -> cf ctx
     | Some sv ->
         let cc =
-          expand_symbolic_value_no_branching config sv (Some (S.mk_place p ctx))
+          expand_symbolic_value_no_branching config sv
+            (Some (S.mk_mplace p ctx))
         in
         comp cc expand cf ctx
   in
@@ -496,7 +497,7 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
         let allow_branching = true in
         let cc =
           expand_symbolic_value config allow_branching sv
-            (Some (S.mk_place p ctx))
+            (Some (S.mk_mplace p ctx))
         in
         (* This time the value is concrete: reevaluate *)
         comp cc (eval_rvalue_discriminant_concrete config p) cf ctx

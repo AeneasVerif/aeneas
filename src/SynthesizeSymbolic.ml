@@ -5,22 +5,23 @@ module E = Expressions
 module A = CfimAst
 open SymbolicAst
 
-let mk_place (p : E.place) (ctx : Contexts.eval_ctx) : place =
+let mk_mplace (p : E.place) (ctx : Contexts.eval_ctx) : mplace =
   let bv = Contexts.ctx_lookup_binder ctx p.var_id in
   { bv; projection = p.projection }
 
-let mk_opt_place (p : E.place option) (ctx : Contexts.eval_ctx) : place option =
-  match p with None -> None | Some p -> Some (mk_place p ctx)
+let mk_opt_mplace (p : E.place option) (ctx : Contexts.eval_ctx) : mplace option
+    =
+  match p with None -> None | Some p -> Some (mk_mplace p ctx)
 
 let mk_opt_place_from_op (op : E.operand) (ctx : Contexts.eval_ctx) :
-    place option =
+    mplace option =
   match op with
-  | E.Copy p | E.Move p -> Some (mk_place p ctx)
+  | E.Copy p | E.Move p -> Some (mk_mplace p ctx)
   | E.Constant _ -> None
 
-let synthesize_symbolic_expansion (sv : V.symbolic_value) (place : place option)
-    (seel : V.symbolic_expansion option list) (exprl : expression list option) :
-    expression option =
+let synthesize_symbolic_expansion (sv : V.symbolic_value)
+    (place : mplace option) (seel : V.symbolic_expansion option list)
+    (exprl : expression list option) : expression option =
   match exprl with
   | None -> None
   | Some exprl ->
@@ -87,15 +88,15 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value) (place : place option)
       Some (Expansion (place, sv, expansion))
 
 let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
-    (place : place option) (see : V.symbolic_expansion)
+    (place : mplace option) (see : V.symbolic_expansion)
     (expr : expression option) : expression option =
   let exprl = match expr with None -> None | Some expr -> Some [ expr ] in
   synthesize_symbolic_expansion sv place [ Some see ] exprl
 
 let synthesize_function_call (call_id : call_id)
     (abstractions : V.AbstractionId.id list) (type_params : T.ety list)
-    (args : V.typed_value list) (args_places : place option list)
-    (dest : V.symbolic_value) (dest_place : place option)
+    (args : V.typed_value list) (args_places : mplace option list)
+    (dest : V.symbolic_value) (dest_place : mplace option)
     (expr : expression option) : expression option =
   match expr with
   | None -> None
@@ -116,26 +117,29 @@ let synthesize_function_call (call_id : call_id)
 let synthesize_regular_function_call (fun_id : A.fun_id)
     (call_id : V.FunCallId.id) (abstractions : V.AbstractionId.id list)
     (type_params : T.ety list) (args : V.typed_value list)
-    (args_places : place option list) (dest : V.symbolic_value)
-    (dest_place : place option) (expr : expression option) : expression option =
+    (args_places : mplace option list) (dest : V.symbolic_value)
+    (dest_place : mplace option) (expr : expression option) : expression option
+    =
   synthesize_function_call
     (Fun (fun_id, call_id))
     abstractions type_params args args_places dest dest_place expr
 
 let synthesize_unary_op (unop : E.unop) (arg : V.typed_value)
-    (arg_place : place option) (dest : V.symbolic_value)
-    (dest_place : place option) (expr : expression option) : expression option =
+    (arg_place : mplace option) (dest : V.symbolic_value)
+    (dest_place : mplace option) (expr : expression option) : expression option
+    =
   synthesize_function_call (Unop unop) [] [] [ arg ] [ arg_place ] dest
     dest_place expr
 
 let synthesize_binary_op (binop : E.binop) (arg0 : V.typed_value)
-    (arg0_place : place option) (arg1 : V.typed_value)
-    (arg1_place : place option) (dest : V.symbolic_value)
-    (dest_place : place option) (expr : expression option) : expression option =
+    (arg0_place : mplace option) (arg1 : V.typed_value)
+    (arg1_place : mplace option) (dest : V.symbolic_value)
+    (dest_place : mplace option) (expr : expression option) : expression option
+    =
   synthesize_function_call (Binop binop) [] [] [ arg0; arg1 ]
     [ arg0_place; arg1_place ] dest dest_place expr
 
-let synthesize_aggregated_value (aggr_v : V.typed_value) (place : place option)
+let synthesize_aggregated_value (aggr_v : V.typed_value) (place : mplace option)
     (expr : expression option) : expression option =
   match expr with
   | None -> None

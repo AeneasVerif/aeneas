@@ -9,7 +9,7 @@ module V = Values
 module E = Expressions
 module A = CfimAst
 
-type place = {
+type mplace = {
   bv : Contexts.binder;
       (** It is important that we store the binder, and not just the variable id,
           because the most important information in a place is the name of the
@@ -18,7 +18,7 @@ type place = {
   projection : E.projection;
       (** We store the projection because we can, but it is actually not that useful *)
 }
-(** In this module, [place] is meta information.
+(** "Meta"-place: a place stored as meta-data.
 
     Whenever we need to introduce new symbolic variables, for instance because
     of symbolic expansions, we try to store a "place", which gives information
@@ -40,9 +40,9 @@ type call = {
   abstractions : V.AbstractionId.id list;
   type_params : T.ety list;
   args : V.typed_value list;
-  args_places : place option list;  (** Meta information *)
+  args_places : mplace option list;  (** Meta information *)
   dest : V.symbolic_value;
-  dest_place : place option;  (** Meta information *)
+  dest_place : mplace option;  (** Meta information *)
 }
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
@@ -58,7 +58,7 @@ type expression =
   | Panic
   | FunCall of call * expression
   | EndAbstraction of V.abs * expression
-  | Expansion of place option * V.symbolic_value * expansion
+  | Expansion of mplace option * V.symbolic_value * expansion
       (** Expansion of a symbolic value.
     
           The place is "meta": it gives the path to the symbolic value (if available)
@@ -93,5 +93,5 @@ and expansion =
  *)
 
 and meta =
-  | Aggregate of place option * V.typed_value
+  | Aggregate of mplace option * V.typed_value
       (** We generated an aggregate value *)
