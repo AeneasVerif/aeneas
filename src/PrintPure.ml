@@ -1,5 +1,6 @@
 (** This module defines printing functions for the types defined in Pure.ml *)
 
+open Errors
 open Identifiers
 open Pure
 module T = Types
@@ -62,6 +63,8 @@ let name_to_string = Print.name_to_string
 let option_to_string = Print.option_to_string
 
 let type_var_to_string = Print.Types.type_var_to_string
+
+let scalar_value_to_string = Print.Values.scalar_value_to_string
 
 (* TODO: there is a bit of duplication with Print.fun_def_to_ast_formatter.
 
@@ -277,3 +280,68 @@ let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
   in
   let all_types = List.append inputs [ outputs ] in
   String.concat " -> " all_types
+
+let rec expression_to_string (fmt : ast_formatter) (indent : string)
+    (indent_incr : string) (e : expression) : string =
+  match e with
+  | Return v -> indent ^ "return " ^ typed_rvalue_to_string fmt v
+  | Panic -> indent ^ "panic"
+  | Let (lb, e) -> let_to_string fmt indent indent_incr lb e
+  | Switch (scrutinee, body) ->
+      switch_to_string fmt indent indent_incr scrutinee body
+
+and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
+    (lb : let_bindings) (e : expression) : string =
+  raise Unimplemented
+
+and switch_to_string (fmt : ast_formatter) (indent : string)
+    (indent_incr : string) (scrutinee : typed_rvalue) (body : switch_body) :
+    string =
+  let scrut = typed_rvalue_to_string fmt scrutinee in
+  let indent1 = indent ^ indent_incr in
+  match body with
+  | If (e_true, e_false) ->
+      let e_true = expression_to_string fmt indent1 indent_incr e_true in
+      let e_false = expression_to_string fmt indent1 indent_incr e_false in
+      indent ^ "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ e_true ^ "\n" ^ indent
+      ^ "else\n" ^ e_false
+  | SwitchInt (_, branches, otherwise) ->
+      let branches =
+        List.map
+          (fun (v, be) ->
+            indent ^ "| " ^ scalar_value_to_string v ^ " ->\n"
+            ^ expression_to_string fmt indent1 indent_incr be)
+          branches
+      in
+      let otherwise =
+        indent ^ "| _ ->\n"
+        ^ expression_to_string fmt indent1 indent_incr otherwise
+      in
+      let all_branches = List.append branches [ otherwise ] in
+      indent ^ "switch " ^ scrut ^ " with\n" ^ String.concat "\n" all_branches
+  | Match branches ->
+      let val_fmt = ast_to_value_formatter fmt in
+      let branch_to_string (b : match_branch) : string =
+        let adt_id =
+          match scrutinee.ty with
+          | Adt (type_id, _) -> (
+              match type_id with
+              | T.AdtId id -> id
+              | T.Tuple | T.Assumed T.Box ->
+                  (* We can't match over a tuple or a box value *)
+                  failwith "Unreachable")
+          | _ -> failwith "Unreachable"
+        in
+        let cons = fmt.adt_variant_to_string adt_id b.variant_id in
+        let pats =
+          if b.vars = [] then ""
+          else
+            " "
+            ^ String.concat " "
+                (List.map (var_or_dummy_to_string val_fmt) b.vars)
+        in
+        indent ^ "| " ^ cons ^ pats ^ " ->\n"
+        ^ expression_to_string fmt indent1 indent_incr b.branch
+      in
+      let branches = List.map branch_to_string branches in
+      indent ^ "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
