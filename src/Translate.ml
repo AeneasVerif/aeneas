@@ -5,6 +5,7 @@ module T = Types
 module A = CfimAst
 module M = Modules
 module SA = SymbolicAst
+module Micro = PureMicroPasses
 
 (** The local logger *)
 let log = L.translate_log

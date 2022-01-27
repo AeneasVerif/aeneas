@@ -227,7 +227,7 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
 
 let place_to_string (fmt : ast_formatter) (p : place) : string =
   (* TODO: improve that *)
-  let var = "@" ^ fmt.var_id_to_string p.var in
+  let var = fmt.var_id_to_string p.var in
   projection_to_string fmt var p.projection
 
 let rec typed_rvalue_to_string (fmt : ast_formatter) (v : typed_rvalue) : string
