@@ -213,6 +213,29 @@ type bs_ctx = {
 (** Body synthesis context *)
 
 (* TODO: move *)
+let type_def_to_string (ctx : bs_ctx) (def : type_def) : string =
+  let type_params = def.type_params in
+  let type_defs = ctx.type_context.cfim_type_defs in
+  let fmt = PrintPure.mk_type_formatter type_defs type_params in
+  PrintPure.type_def_to_string fmt def
+
+(* TODO: move *)
+let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
+  let type_params = sg.type_params in
+  let type_defs = ctx.type_context.cfim_type_defs in
+  let fun_defs = ctx.fun_context.cfim_fun_defs in
+  let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
+  PrintPure.fun_sig_to_string fmt sg
+
+(* TODO: move *)
+let fun_def_to_string (ctx : bs_ctx) (def : Pure.fun_def) : string =
+  let type_params = def.signature.type_params in
+  let type_defs = ctx.type_context.cfim_type_defs in
+  let fun_defs = ctx.fun_context.cfim_fun_defs in
+  let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
+  PrintPure.fun_def_to_string fmt def
+
+(* TODO: move *)
 let bs_ctx_to_value_formatter (ctx : bs_ctx) : Print.CfimAst.ast_formatter =
   Print.CfimAst.fun_def_to_ast_formatter ctx.type_context.cfim_type_defs
     ctx.fun_context.cfim_fun_defs ctx.fun_def
@@ -340,14 +363,21 @@ let translate_type_def (def : T.type_def) : type_def =
 let rec translate_fwd_ty (types_infos : TA.type_infos) (ty : 'r T.ty) : ty =
   let translate = translate_fwd_ty types_infos in
   match ty with
-  | T.Adt (type_id, regions, tys) ->
+  | T.Adt (type_id, regions, tys) -> (
       (* Can't translate types with regions for now *)
       assert (regions = []);
       (* No general parametricity for now *)
       assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
       (* Translate the type parameters *)
       let tys = List.map translate tys in
-      Adt (type_id, tys)
+      (* Eliminate boxes *)
+      match type_id with
+      | T.AdtId _ | Tuple -> Adt (type_id, tys)
+      | T.Assumed T.Box -> (
+          match tys with
+          | [ bty ] -> bty
+          | _ ->
+              failwith "Unreachable: boxes receive exactly one type parameter"))
   | TypeVar vid -> TypeVar vid
   | Bool -> Bool
   | Char -> Char
@@ -381,13 +411,21 @@ let rec translate_back_ty (types_infos : TA.type_infos)
   match ty with
   | T.Adt (type_id, _, tys) -> (
       match type_id with
-      | T.AdtId _ | Assumed _ ->
+      | T.AdtId _ ->
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows types_infos ty));
           if inside_mut then
             let tys_t = List.filter_map translate tys in
             Some (Adt (type_id, tys_t))
           else None
+      | Assumed T.Box -> (
+          (* Don't accept ADTs (which are not tuples) with borrows for now *)
+          assert (not (TypesUtils.ty_has_borrows types_infos ty));
+          (* Eliminate the box *)
+          match tys with
+          | [ bty ] -> translate bty
+          | _ ->
+              failwith "Unreachable: boxes receive exactly one type parameter")
       | T.Tuple -> (
           (* Tuples can contain borrows (which we eliminated) *)
           let tys_t = List.filter_map translate tys in
@@ -1214,7 +1252,14 @@ let translate_fun_def (ctx : bs_ctx) (body : S.expression) : fun_def =
     List.for_all
       (fun (var, ty) -> (var : var).ty = ty)
       (List.combine inputs signature.inputs));
-  { def_id; basename; signature; inputs; body }
+  let def = { def_id; back_id = bid; basename; signature; inputs; body } in
+  (* Debugging *)
+  log#ldebug
+    (lazy
+      ("SymbolicToPure.translate_fun_def: translated:\n"
+     ^ fun_def_to_string ctx def));
+  (* return *)
+  def
 
 let translate_type_defs (type_defs : T.type_def list) : type_def TypeDefId.Map.t
     =

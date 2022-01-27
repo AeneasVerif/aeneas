@@ -59,7 +59,9 @@ let () =
   (* Load the module *)
   let json = Yojson.Basic.from_file !filename in
   match cfim_module_of_json json with
-  | Error s -> main_log#error "error: %s\n" s
+  | Error s ->
+      main_log#error "error: %s\n" s;
+      exit 1
   | Ok m ->
       (* Print the module *)
       main_log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));

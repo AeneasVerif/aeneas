@@ -12,10 +12,15 @@ let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
   | Enum variants, Some variant_id -> (VariantId.nth variants variant_id).fields
   | Struct fields, None -> fields
   | _ ->
+      let opt_variant_id =
+        match opt_variant_id with None -> "None" | Some _ -> "Some"
+      in
       raise
         (Invalid_argument
-           "The variant id should be [Some] if and only if the definition is \
-            an enumeration")
+           ("The variant id should be [Some] if and only if the definition is \
+             an enumeration:\n\
+             - def: " ^ show_type_def def ^ "\n- opt_variant_id: "
+          ^ opt_variant_id))
 
 (** Return [true] if a [ty] is actually `unit` *)
 let ty_is_unit (ty : 'r ty) : bool =

@@ -68,16 +68,29 @@ let integer_type_to_string = Print.Types.integer_type_to_string
 
 let scalar_value_to_string = Print.Values.scalar_value_to_string
 
+let mk_type_formatter (type_defs : T.type_def TypeDefId.Map.t)
+    (type_params : type_var list) : type_formatter =
+  let type_var_id_to_string vid =
+    let var = T.TypeVarId.nth type_params vid in
+    type_var_to_string var
+  in
+  let type_def_id_to_string def_id =
+    let def = T.TypeDefId.Map.find def_id type_defs in
+    name_to_string def.name
+  in
+  { type_var_id_to_string; type_def_id_to_string }
+
 (* TODO: there is a bit of duplication with Print.fun_def_to_ast_formatter.
 
    TODO: use the pure defs as inputs? Note that it is a bit annoying for the
    functions (there is a difference between the forward/backward functions...)
    while we only need those definitions to lookup proper names for the def ids.
 *)
-let fun_def_to_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
-    (fun_defs : A.fun_def FunDefId.Map.t) (fdef : A.fun_def) : ast_formatter =
+let mk_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
+    (fun_defs : A.fun_def FunDefId.Map.t) (type_params : type_var list) :
+    ast_formatter =
   let type_var_id_to_string vid =
-    let var = T.TypeVarId.nth fdef.signature.type_params vid in
+    let var = T.TypeVarId.nth type_params vid in
     type_var_to_string var
   in
   let type_def_id_to_string def_id =
@@ -117,7 +130,9 @@ let type_id_to_string (fmt : type_formatter) (id : T.type_id) : string =
   | T.Tuple -> ""
   | T.Assumed aty -> (
       match aty with
-      | Box -> (* Boxes should have been eliminated *) failwith "Unreachable")
+      | Box ->
+          (* Boxes should have been eliminated *)
+          failwith "Unreachable: boxes should have been eliminated")
 
 let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
   match ty with
@@ -144,15 +159,8 @@ let variant_to_string fmt (v : variant) : string =
   ^ String.concat ", " (List.map (field_to_string fmt) v.fields)
   ^ ")"
 
-let type_def_to_string (type_def_id_to_string : TypeDefId.id -> string)
-    (def : type_def) : string =
+let type_def_to_string (fmt : type_formatter) (def : type_def) : string =
   let types = def.type_params in
-  let type_var_id_to_string id =
-    match List.find_opt (fun tv -> tv.T.index = id) types with
-    | Some tv -> type_var_to_string tv
-    | None -> failwith "Unreachable"
-  in
-  let fmt = { type_var_id_to_string; type_def_id_to_string } in
   let name = name_to_string def.name in
   let params =
     if types = [] then ""
@@ -297,6 +305,11 @@ let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : A.fun_id) : string
       | A.BoxDerefMut -> "core::ops::deref::DerefMut::deref_mut"
       | A.BoxFree -> "alloc::alloc::box_free")
 
+let fun_suffix (rg_id : T.RegionGroupId.id option) : string =
+  match rg_id with
+  | None -> ""
+  | Some rg_id -> "@" ^ T.RegionGroupId.to_string rg_id
+
 let unop_to_string (unop : unop) : string =
   match unop with Not -> "¬" | Neg _ -> "-"
 
@@ -304,11 +317,9 @@ let binop_to_string = Print.CfimAst.binop_to_string
 
 let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   match fun_id with
-  | Regular (fun_id, rg_id) -> (
+  | Regular (fun_id, rg_id) ->
       let f = regular_fun_id_to_string fmt fun_id in
-      match rg_id with
-      | None -> f
-      | Some rg_id -> f ^ "@" ^ T.RegionGroupId.to_string rg_id)
+      f ^ fun_suffix rg_id
   | Unop unop -> unop_to_string unop
   | Binop (binop, int_ty) ->
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
@@ -416,3 +427,14 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       in
       let branches = List.map branch_to_string branches in
       indent ^ "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
+
+let fun_def_to_string (fmt : ast_formatter) (def : fun_def) : string =
+  let type_fmt = ast_to_type_formatter fmt in
+  let name = name_to_string def.basename ^ fun_suffix def.back_id in
+  let signature = fun_sig_to_string fmt def.signature in
+  let inputs = List.map (var_to_string type_fmt) def.inputs in
+  let inputs =
+    if inputs = [] then "" else "  fun " ^ String.concat " " inputs ^ " ->\n"
+  in
+  let body = expression_to_string fmt "  " "  " def.body in
+  "let " ^ name ^ " : " ^ signature ^ " =\n" ^ inputs ^ body

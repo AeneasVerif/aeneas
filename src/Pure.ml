@@ -227,6 +227,7 @@ type inst_fun_sig = { inputs : ty list; outputs : ty list }
 
 type fun_def = {
   def_id : FunDefId.id;
+  back_id : T.RegionGroupId.id option;
   basename : name;
       (** The "base" name of the function.
   
