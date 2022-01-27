@@ -26,6 +26,10 @@ type ty =
           with several region variables. When giving back an ADT value, we may
           be able to only give back part of the ADT. We need a way to encode
           such "partial" ADTs.
+          
+          TODO: we may want to redefine type_id here, to remove some types like
+          boxe. But on the other hand, it might introduce a lot of administrative
+          manipulations just to remove boxe...
        *)
   | TypeVar of TypeVarId.id
   | Bool
@@ -86,7 +90,9 @@ type var = { id : VarId.id; ty : ty }
     TODO: add a field for the basename.
  *)
 
-type var_or_dummy = Var of var | Dummy  (** Ignored value: `_` *)
+type var_or_dummy =
+  | Var of var  (** TODO: use var_id, not var *)
+  | Dummy  (** Ignored value: `_`. *)
 
 (** A left value (which appears on the left of assignments *)
 type lvalue =
