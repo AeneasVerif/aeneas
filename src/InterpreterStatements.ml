@@ -721,33 +721,37 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
 
   (* Evaluate *)
   let cf_eval_st cf : m_fun =
+   fun ctx ->
     match st with
     | A.Assign (p, rvalue) ->
         (* Evaluate the rvalue *)
         let cf_eval_rvalue = eval_rvalue config rvalue in
         (* Assign *)
-        let cf_assign cf (res : (V.typed_value, eval_error) result) =
+        let cf_assign cf (res : (V.typed_value, eval_error) result) ctx =
           match res with
-          | Error EPanic -> cf Panic
-          | Ok rvalue -> assign_to_place config rvalue p (cf Unit)
+          | Error EPanic -> cf Panic ctx
+          | Ok rvalue ->
+              let expr = assign_to_place config rvalue p (cf Unit) ctx in
+              (* Update the synthesized AST - here we store meta-information *)
+              S.synthesize_assignment (S.mk_mplace p ctx) rvalue expr
         in
         (* Compose and apply *)
-        comp cf_eval_rvalue cf_assign cf
+        comp cf_eval_rvalue cf_assign cf ctx
     | A.FakeRead p ->
         let expand_prim_copy = false in
         let cf_prepare = prepare_rplace config expand_prim_copy Read p in
         let cf_continue cf _ = cf in
-        comp cf_prepare cf_continue (cf Unit)
+        comp cf_prepare cf_continue (cf Unit) ctx
     | A.SetDiscriminant (p, variant_id) ->
-        set_discriminant config p variant_id cf
-    | A.Drop p -> drop_value config p (cf Unit)
-    | A.Assert assertion -> eval_assertion config assertion cf
-    | A.Call call -> eval_function_call config call cf
-    | A.Panic -> cf Panic
-    | A.Return -> cf Return
-    | A.Break i -> cf (Break i)
-    | A.Continue i -> cf (Continue i)
-    | A.Nop -> cf Unit
+        set_discriminant config p variant_id cf ctx
+    | A.Drop p -> drop_value config p (cf Unit) ctx
+    | A.Assert assertion -> eval_assertion config assertion cf ctx
+    | A.Call call -> eval_function_call config call cf ctx
+    | A.Panic -> cf Panic ctx
+    | A.Return -> cf Return ctx
+    | A.Break i -> cf (Break i) ctx
+    | A.Continue i -> cf (Continue i) ctx
+    | A.Nop -> cf Unit ctx
     | A.Sequence (st1, st2) ->
         (* Evaluate the first statement *)
         let cf_st1 = eval_statement config st1 in
@@ -760,7 +764,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
           | Panic | Break _ | Continue _ | Return -> cf res
         in
         (* Compose and apply *)
-        comp cf_st1 cf_st2 cf
+        comp cf_st1 cf_st2 cf ctx
     | A.Loop loop_body ->
         (* For now, we don't support loops in symbolic mode *)
         assert (config.C.mode = C.ConcreteMode);
@@ -798,8 +802,8 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
               failwith "Unreachable"
         in
         (* Apply *)
-        eval_statement config loop_body reeval_loop_body
-    | A.Switch (op, tgts) -> eval_switch config op tgts cf
+        eval_statement config loop_body reeval_loop_body ctx
+    | A.Switch (op, tgts) -> eval_switch config op tgts cf ctx
   in
   (* Compose and apply *)
   comp cc cf_eval_st cf ctx

@@ -150,3 +150,9 @@ let synthesize_end_abstraction (abs : V.abs) (expr : expression option) :
   match expr with
   | None -> None
   | Some expr -> Some (EndAbstraction (abs, expr))
+
+let synthesize_assignment (place : mplace) (rvalue : V.typed_value)
+    (expr : expression option) : expression option =
+  match expr with
+  | None -> None
+  | Some expr -> Some (Meta (Assignment (place, rvalue), expr))
