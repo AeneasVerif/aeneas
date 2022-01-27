@@ -45,6 +45,16 @@ type call = {
   dest_place : mplace option;  (** Meta information *)
 }
 
+(** Meta information, not necessary for synthesis but useful to guide it to
+    generate a pretty output.
+ *)
+
+type meta =
+  | Aggregate of mplace option * V.typed_value
+      (** We generated an aggregate value *)
+  | Assignment of mplace * V.typed_value
+      (** We generated an assignment (destination, assigned value) *)
+
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM: they are a first step towards lambda-calculus expressions.
  *)
@@ -87,13 +97,3 @@ and expansion =
       T.integer_type * (V.scalar_value * expression) list * expression
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
-
-(** Meta information, not necessary for synthesis but useful to guide it to
-    generate a pretty output.
- *)
-
-and meta =
-  | Aggregate of mplace option * V.typed_value
-      (** We generated an aggregate value *)
-  | Assignment of mplace * V.typed_value
-      (** We generated an assignment (destination, assigned value) *)

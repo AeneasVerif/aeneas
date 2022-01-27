@@ -879,9 +879,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : expression =
   | FunCall (call, e) -> translate_function_call call e ctx
   | EndAbstraction (abs, e) -> translate_end_abstraction abs e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
-  | Meta (_, e) ->
-      (* We ignore the meta information *)
-      translate_expression e ctx
+  | Meta (meta, e) -> translate_meta meta e ctx
 
 and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : expression
     =
@@ -1242,6 +1240,22 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let otherwise = translate_expression otherwise ctx in
       Switch
         (scrutinee, scrutinee_mplace, SwitchInt (int_ty, branches, otherwise))
+
+and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
+    expression =
+  let e = translate_expression e ctx in
+  let meta =
+    match meta with
+    | S.Aggregate (p, rv) ->
+        let p = translate_opt_mplace p in
+        let rv = typed_value_to_rvalue ctx rv in
+        Aggregate (p, rv)
+    | S.Assignment (p, rv) ->
+        let p = translate_mplace p in
+        let rv = typed_value_to_rvalue ctx rv in
+        Assignment (p, rv)
+  in
+  Meta (meta, e)
 
 let translate_fun_def (ctx : bs_ctx) (body : S.expression) : fun_def =
   let def = ctx.fun_def in

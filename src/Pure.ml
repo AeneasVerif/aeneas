@@ -200,6 +200,11 @@ type let_bindings =
           code if we detect there is exactly one variant?...
        *)
 
+(** Meta-information stored in the AST *)
+type meta =
+  | Aggregate of mplace option * typed_rvalue
+  | Assignment of mplace * typed_rvalue
+
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM. They are lambda-calculus expressions, and are thus actually
     more general than the CFIM statements, in a sense.
@@ -215,6 +220,7 @@ type expression =
   | Let of let_bindings * expression
       (** Let bindings include the let-bindings introduced because of function calls *)
   | Switch of typed_rvalue * mplace option * switch_body
+  | Meta of meta * expression  (** Meta-information *)
 
 and switch_body =
   | If of expression * expression

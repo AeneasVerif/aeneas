@@ -333,6 +333,23 @@ let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   | Binop (binop, int_ty) ->
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
 
+let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
+  let name = match p.name with None -> "_" | Some name -> name in
+  projection_to_string fmt name p.projection
+
+let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
+  let meta =
+    match meta with
+    | Aggregate (p, rv) ->
+        let p = match p with None -> "_" | Some p -> mplace_to_string fmt p in
+        "@aggregate(" ^ p ^ " := " ^ typed_rvalue_to_string fmt rv ^ ")"
+    | Assignment (p, rv) ->
+        "@assign(" ^ mplace_to_string fmt p ^ " := "
+        ^ typed_rvalue_to_string fmt rv
+        ^ ")"
+  in
+  "@meta[" ^ meta ^ "]"
+
 let rec expression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : expression) : string =
   match e with
@@ -341,6 +358,10 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
   | Let (lb, e) -> let_to_string fmt indent indent_incr lb e
   | Switch (scrutinee, _, body) ->
       switch_to_string fmt indent indent_incr scrutinee body
+  | Meta (meta, e) ->
+      let meta = meta_to_string fmt meta in
+      let e = expression_to_string fmt indent indent_incr e in
+      indent ^ meta ^ "\n" ^ e
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
     (lb : let_bindings) (e : expression) : string =

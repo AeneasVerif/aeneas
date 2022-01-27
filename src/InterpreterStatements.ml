@@ -730,11 +730,22 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
         let cf_assign cf (res : (V.typed_value, eval_error) result) ctx =
           match res with
           | Error EPanic -> cf Panic ctx
-          | Ok rvalue ->
-              let expr = assign_to_place config rvalue p (cf Unit) ctx in
-              (* Update the synthesized AST - here we store meta-information *)
-              S.synthesize_assignment (S.mk_mplace p ctx) rvalue expr
+          | Ok rv -> (
+              let expr = assign_to_place config rv p (cf Unit) ctx in
+              (* Update the synthesized AST - here we store meta-information.
+               * We do it only in specific cases (it is not always useful, and
+               * also it can lead to issues - for instance, if we borrow an
+               * inactivated borrow, we later can't translate it to pure values...) *)
+              match rvalue with
+              | E.Use _
+              | E.Ref (_, (E.Shared | E.Mut))
+              | E.UnaryOp _ | E.BinaryOp _ | E.Discriminant _ | E.Aggregate _ ->
+                  S.synthesize_assignment (S.mk_mplace p ctx) rv expr
+              | E.Ref (_, E.TwoPhaseMut) ->
+                  (* Two-phase borrow: don't synthesize meta-information *)
+                  expr)
         in
+
         (* Compose and apply *)
         comp cf_eval_rvalue cf_assign cf ctx
     | A.FakeRead p ->
