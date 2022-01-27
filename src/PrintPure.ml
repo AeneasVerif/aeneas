@@ -105,7 +105,7 @@ let mk_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
   in
   let var_id_to_string vid =
     (* TODO: somehow lookup in the context *)
-    "@" ^ VarId.to_string vid
+    "^" ^ VarId.to_string vid
   in
   let adt_field_names =
     Print.Contexts.type_ctx_to_adt_field_names_fun type_defs

@@ -51,3 +51,7 @@ let list_ordered_parent_region_groups (sg : fun_sig) (gid : T.RegionGroupId.id)
   in
   let parents = List.map (fun (rg : T.region_var_group) -> rg.id) parents in
   parents
+
+let fun_def_get_input_vars (fdef : fun_def) : var list =
+  let locals = List.tl fdef.locals in
+  Collections.List.prefix fdef.arg_count locals

@@ -518,12 +518,12 @@ let translate_fun_sig (types_infos : TA.type_infos) (sg : A.fun_sig)
   let sg = { type_params; inputs; outputs } in
   { sg; output_names }
 
-let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
-    bs_ctx * var =
+let fresh_named_var_for_symbolic_value (basename : string option)
+    (sv : V.symbolic_value) (ctx : bs_ctx) : bs_ctx * var =
   (* Generate the fresh variable *)
   let id, var_counter = VarId.fresh ctx.var_counter in
   let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
-  let var = { id; basename = None; ty } in
+  let var = { id; basename; ty } in
   (* Insert in the map *)
   let sv_to_var = V.SymbolicValueId.Map.add sv.sv_id var ctx.sv_to_var in
   (* Update the context *)
@@ -531,9 +531,20 @@ let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
   (* Return *)
   (ctx, var)
 
+let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
+    bs_ctx * var =
+  fresh_named_var_for_symbolic_value None sv ctx
+
 let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
     : bs_ctx * var list =
   List.fold_left_map (fun ctx sv -> fresh_var_for_symbolic_value sv ctx) ctx svl
+
+let fresh_named_vars_for_symbolic_values
+    (svl : (string option * V.symbolic_value) list) (ctx : bs_ctx) :
+    bs_ctx * var list =
+  List.fold_left_map
+    (fun ctx (name, sv) -> fresh_named_var_for_symbolic_value name sv ctx)
+    ctx svl
 
 (** This generates a fresh variable **which is not to be linked to any symbolic value** *)
 let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) : bs_ctx * var

@@ -134,24 +134,25 @@ let translate_function_to_pure (config : C.partial_config)
   (* We need to initialize the input/output variables *)
   let module RegularFunIdMap = SymbolicToPure.RegularFunIdMap in
   let forward_sg = RegularFunIdMap.find (A.Local def_id, None) fun_sigs in
-  let add_forward_inputs input_svs ctx =
-    let ctx, forward_inputs =
-      SymbolicToPure.fresh_vars_for_symbolic_values input_svs ctx
-    in
-    { ctx with forward_inputs }
-  in
-  let forward_input_vars, _ =
-    Collections.List.split_at fdef.locals fdef.arg_count
-  in
+  let forward_input_vars = CfimAstUtils.fun_def_get_input_vars fdef in
   let forward_input_varnames =
     List.map (fun (v : A.var) -> v.name) forward_input_vars
   in
-  let forward_inputs =
-    List.combine forward_input_varnames forward_sg.sg.inputs
+  let num_forward_inputs = fdef.arg_count in
+  let add_forward_inputs input_svs ctx =
+    let input_svs = List.combine forward_input_varnames input_svs in
+    let ctx, forward_inputs =
+      SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
+    in
+    { ctx with forward_inputs }
   in
-  let ctx, forward_inputs = SymbolicToPure.fresh_vars forward_inputs ctx in
 
-  let ctx = { ctx with forward_inputs } in
+  (* let forward_inputs =
+       List.combine forward_input_varnames forward_sg.sg.inputs
+     in
+     let ctx, forward_inputs = SymbolicToPure.fresh_vars forward_inputs ctx in
+
+       let ctx = { ctx with forward_inputs } in*)
 
   (* Translate the forward function *)
   let pure_forward =
@@ -174,8 +175,7 @@ let translate_function_to_pure (config : C.partial_config)
       RegularFunIdMap.find (A.Local def_id, Some back_id) fun_sigs
     in
     let _, backward_inputs =
-      Collections.List.split_at backward_sg.sg.inputs
-        (List.length forward_inputs)
+      Collections.List.split_at backward_sg.sg.inputs num_forward_inputs
     in
     (* As we forbid nested borrows, the additional inputs for the backward
      * functions come from the borrows in the return value of the rust function:
@@ -239,7 +239,7 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
         ( A.Local fdef.def_id,
           List.map
             (fun (v : A.var) -> v.name)
-            (Collections.List.prefix fdef.arg_count fdef.locals),
+            (CfimAstUtils.fun_def_get_input_vars fdef),
           fdef.signature ))
       m.functions
   in
