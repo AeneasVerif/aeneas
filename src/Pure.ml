@@ -20,7 +20,7 @@ module VarId = IdGen ()
 
 type ty =
   | Adt of T.type_id * ty list
-      (** [Adt] encodes ADTs, tuples and assumed types.
+      (** [Adt] encodes ADTs and tuples and assumed types.
        
           TODO: what about the ended regions? (ADTs may be parameterized
           with several region variables. When giving back an ADT value, we may

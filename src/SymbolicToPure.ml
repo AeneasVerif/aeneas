@@ -10,6 +10,7 @@ module M = Modules
 module S = SymbolicAst
 module TA = TypesAnalysis
 module L = Logging
+module PP = PrintPure
 
 (** The local logger *)
 let log = L.symbolic_to_pure_log
