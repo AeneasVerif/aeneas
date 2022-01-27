@@ -9,6 +9,12 @@ module SA = SymbolicAst
 (** The local logger *)
 let log = L.translate_log
 
+type symbolic_fun_translation = V.symbolic_value list * SA.expression
+(** The result of running the symbolic interpreter on a function:
+    - the list of symbolic values used for the input values
+    - the generated symbolic AST
+ *)
+
 type pure_fun_translation = Pure.fun_def * Pure.fun_def list
 
 (** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
@@ -16,7 +22,8 @@ type pure_fun_translation = Pure.fun_def * Pure.fun_def list
  *)
 let translate_function_to_symbolics (config : C.partial_config)
     (type_context : C.type_context) (fun_context : C.fun_context)
-    (fdef : A.fun_def) : SA.expression * SA.expression list =
+    (fdef : A.fun_def) :
+    symbolic_fun_translation * symbolic_fun_translation list =
   (* Debug *)
   log#ldebug
     (lazy
@@ -24,15 +31,19 @@ let translate_function_to_symbolics (config : C.partial_config)
 
   (* Evaluate *)
   let synthesize = true in
-  let evaluate =
-    evaluate_function_symbolic config synthesize type_context fun_context fdef
+  let evaluate gid =
+    let inputs, symb =
+      evaluate_function_symbolic config synthesize type_context fun_context fdef
+        gid
+    in
+    (inputs, Option.get symb)
   in
   (* Execute the forward function *)
-  let forward = Option.get (evaluate None) in
+  let forward = evaluate None in
   (* Execute the backward functions *)
   let backwards =
     T.RegionGroupId.mapi
-      (fun gid _ -> Option.get (evaluate (Some gid)))
+      (fun gid _ -> evaluate (Some gid))
       fdef.signature.regions_hierarchy
   in
 
@@ -90,17 +101,24 @@ let translate_function_to_pure (config : C.partial_config)
     }
   in
 
-  (* We need to initialize the input/output variables. First, the inputs
-   * for the forward function *)
+  (* We need to initialize the input/output variables *)
   let module RegularFunIdMap = SymbolicToPure.RegularFunIdMap in
   let forward_sg = RegularFunIdMap.find (A.Local def_id, None) fun_sigs in
+  let add_forward_inputs input_svs ctx =
+    let ctx, forward_inputs =
+      SymbolicToPure.fresh_vars_for_symbolic_values input_svs ctx
+    in
+    { ctx with forward_inputs }
+  in
   let ctx, forward_inputs = SymbolicToPure.fresh_vars forward_sg.inputs ctx in
 
   let ctx = { ctx with forward_inputs } in
 
   (* Translate the forward function *)
   let pure_forward =
-    SymbolicToPure.translate_fun_def fdef ctx symbolic_forward
+    SymbolicToPure.translate_fun_def fdef
+      (add_forward_inputs (fst symbolic_forward) ctx)
+      (snd symbolic_forward)
   in
 
   (* Translate the backward functions *)
@@ -109,8 +127,10 @@ let translate_function_to_pure (config : C.partial_config)
      * there are no nested borrows for now, and so that the region groups
      * can't have parents *)
     assert (rg.parents = []);
-    (* TODO: the computation of the backward inputs is a bit awckward... *)
     let back_id = rg.id in
+    let input_svs, symbolic = T.RegionGroupId.nth symbolic_backwards back_id in
+    let ctx = add_forward_inputs input_svs ctx in
+    (* TODO: the computation of the backward inputs is a bit awckward... *)
     let backward_sg =
       RegularFunIdMap.find (A.Local def_id, Some back_id) fun_sigs
     in
@@ -135,7 +155,6 @@ let translate_function_to_pure (config : C.partial_config)
     in
 
     (* Translate *)
-    let symbolic = T.RegionGroupId.nth symbolic_backwards back_id in
     SymbolicToPure.translate_fun_def fdef ctx symbolic
   in
   let pure_backwards =
