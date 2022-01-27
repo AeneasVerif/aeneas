@@ -39,7 +39,9 @@ let expand_primitively_copyable_at_place (config : C.config)
     with
     | None -> cf ctx
     | Some sv ->
-        let cc = expand_symbolic_value_no_branching config sv in
+        let cc =
+          expand_symbolic_value_no_branching config sv (Some (S.mk_place p ctx))
+        in
         comp cc expand cf ctx
   in
   (* Apply *)
@@ -290,7 +292,9 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
     (* Call the continuation *)
     let expr = cf (Ok (mk_typed_value_from_symbolic_value res_sv)) ctx in
     (* Synthesize the symbolic AST *)
-    S.synthesize_unary_op unop v res_sv expr
+    S.synthesize_unary_op unop v
+      (S.mk_opt_place_from_op op ctx)
+      res_sv None expr
   in
   (* Compose and apply *)
   comp eval_op apply cf ctx
@@ -427,7 +431,9 @@ let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
     let v = mk_typed_value_from_symbolic_value res_sv in
     let expr = cf (Ok v) ctx in
     (* Synthesize the symbolic AST *)
-    S.synthesize_binary_op binop v1 v2 res_sv expr
+    let p1 = S.mk_opt_place_from_op op1 ctx in
+    let p2 = S.mk_opt_place_from_op op2 ctx in
+    S.synthesize_binary_op binop v1 p1 v2 p2 res_sv None expr
   in
   (* Compose and apply *)
   comp eval_ops compute cf ctx
@@ -488,7 +494,10 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
     | Symbolic sv ->
         (* Expand the symbolic value - may lead to branching *)
         let allow_branching = true in
-        let cc = expand_symbolic_value config allow_branching sv in
+        let cc =
+          expand_symbolic_value config allow_branching sv
+            (Some (S.mk_place p ctx))
+        in
         (* This time the value is concrete: reevaluate *)
         comp cc (eval_rvalue_discriminant_concrete config p) cf ctx
     | _ -> failwith "Invalid input for `discriminant`"
@@ -584,7 +593,7 @@ let eval_rvalue_aggregate (config : C.config)
         (* Call the continuation *)
         let expr = cf aggregated ctx in
         (* Synthesize the symbolic AST *)
-        S.synthesize_aggregated_value aggregated expr
+        S.synthesize_aggregated_value aggregated None expr
     | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
         (* Sanity checks *)
         let type_def = C.ctx_lookup_type_def ctx def_id in
@@ -605,7 +614,7 @@ let eval_rvalue_aggregate (config : C.config)
         (* Call the continuation *)
         let expr = cf aggregated ctx in
         (* Synthesize the symbolic AST *)
-        S.synthesize_aggregated_value aggregated expr
+        S.synthesize_aggregated_value aggregated None expr
   in
   (* Compose and apply *)
   comp eval_ops compute cf

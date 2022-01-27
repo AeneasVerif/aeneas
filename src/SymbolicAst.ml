@@ -9,6 +9,25 @@ module V = Values
 module E = Expressions
 module A = CfimAst
 
+type place = {
+  bv : Contexts.binder;
+      (** It is important that we store the binder, and not just the variable id,
+          because the most important information in a place is the name of the
+          variable!
+       *)
+  projection : E.projection;
+      (** We store the projection because we can, but it is actually not that useful *)
+}
+(** In this module, [place] is meta information.
+
+    Whenever we need to introduce new symbolic variables, for instance because
+    of symbolic expansions, we try to store a "place", which gives information
+    about the origin of the values (this place information comes from assignment
+    information, etc.).
+    We later use this place information to generate meaningful name, to prettify
+    the generated code.
+ *)
+
 type call_id =
   | Fun of A.fun_id * V.FunCallId.id
       (** A "regular" function (i.e., a function which is not a primitive operation) *)
@@ -21,7 +40,9 @@ type call = {
   abstractions : V.AbstractionId.id list;
   type_params : T.ety list;
   args : V.typed_value list;
+  args_places : place option list;  (** Meta information *)
   dest : V.symbolic_value;
+  dest_place : place option;  (** Meta information *)
 }
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
@@ -37,7 +58,15 @@ type expression =
   | Panic
   | FunCall of call * expression
   | EndAbstraction of V.abs * expression
-  | Expansion of V.symbolic_value * expansion
+  | Expansion of place option * V.symbolic_value * expansion
+      (** Expansion of a symbolic value.
+    
+          The place is "meta": it gives the path to the symbolic value (if available)
+          which got expanded (this path is available when the symbolic expansion
+          comes from a path evaluation, during an assignment for instance).
+          We use it to compute meaningful names for the variables we introduce,
+          to prettify the generated code.
+       *)
   | Meta of meta * expression  (** Meta information *)
 
 and expansion =
@@ -63,4 +92,6 @@ and expansion =
     generate a pretty output.
  *)
 
-and meta = Aggregate of V.typed_value  (** We generated an aggregate value *)
+and meta =
+  | Aggregate of place option * V.typed_value
+      (** We generated an aggregate value *)

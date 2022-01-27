@@ -183,7 +183,7 @@ let type_def_to_string (fmt : type_formatter) (def : type_def) : string =
       "enum " ^ name ^ params ^ " =\n" ^ variants
 
 let var_to_string (fmt : type_formatter) (v : var) : string =
-  "(" ^ VarId.to_string v.id ^ " : " ^ ty_to_string fmt v.ty ^ ")"
+  "(@" ^ VarId.to_string v.id ^ " : " ^ ty_to_string fmt v.ty ^ ")"
 
 let var_or_dummy_to_string (fmt : value_formatter) (v : var_or_dummy) : string =
   match v with
@@ -218,7 +218,7 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
               "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
 
 let place_to_string (fmt : ast_formatter) (p : place) : string =
-  let var = fmt.var_id_to_string p.var in
+  let var = "@" ^ fmt.var_id_to_string p.var in
   projection_to_string fmt var p.projection
 
 let rec typed_rvalue_to_string (fmt : ast_formatter) (v : typed_rvalue) : string

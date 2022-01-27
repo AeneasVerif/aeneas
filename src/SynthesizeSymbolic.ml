@@ -5,7 +5,20 @@ module E = Expressions
 module A = CfimAst
 open SymbolicAst
 
-let synthesize_symbolic_expansion (sv : V.symbolic_value)
+let mk_place (p : E.place) (ctx : Contexts.eval_ctx) : place =
+  let bv = Contexts.ctx_lookup_binder ctx p.var_id in
+  { bv; projection = p.projection }
+
+let mk_opt_place (p : E.place option) (ctx : Contexts.eval_ctx) : place option =
+  match p with None -> None | Some p -> Some (mk_place p ctx)
+
+let mk_opt_place_from_op (op : E.operand) (ctx : Contexts.eval_ctx) :
+    place option =
+  match op with
+  | E.Copy p | E.Move p -> Some (mk_place p ctx)
+  | E.Constant _ -> None
+
+let synthesize_symbolic_expansion (sv : V.symbolic_value) (place : place option)
     (seel : V.symbolic_expansion option list) (exprl : expression list option) :
     expression option =
   match exprl with
@@ -71,46 +84,62 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
         | T.TypeVar _ | Char | Never | Str | Array _ | Slice _ ->
             failwith "Ill-formed symbolic expansion"
       in
-      Some (Expansion (sv, expansion))
+      Some (Expansion (place, sv, expansion))
 
 let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
-    (see : V.symbolic_expansion) (expr : expression option) : expression option
-    =
+    (place : place option) (see : V.symbolic_expansion)
+    (expr : expression option) : expression option =
   let exprl = match expr with None -> None | Some expr -> Some [ expr ] in
-  synthesize_symbolic_expansion sv [ Some see ] exprl
+  synthesize_symbolic_expansion sv place [ Some see ] exprl
 
 let synthesize_function_call (call_id : call_id)
     (abstractions : V.AbstractionId.id list) (type_params : T.ety list)
-    (args : V.typed_value list) (dest : V.symbolic_value)
+    (args : V.typed_value list) (args_places : place option list)
+    (dest : V.symbolic_value) (dest_place : place option)
     (expr : expression option) : expression option =
   match expr with
   | None -> None
   | Some expr ->
-      let call = { call_id; abstractions; type_params; args; dest } in
+      let call =
+        {
+          call_id;
+          abstractions;
+          type_params;
+          args;
+          dest;
+          args_places;
+          dest_place;
+        }
+      in
       Some (FunCall (call, expr))
 
 let synthesize_regular_function_call (fun_id : A.fun_id)
     (call_id : V.FunCallId.id) (abstractions : V.AbstractionId.id list)
     (type_params : T.ety list) (args : V.typed_value list)
-    (dest : V.symbolic_value) (expr : expression option) : expression option =
+    (args_places : place option list) (dest : V.symbolic_value)
+    (dest_place : place option) (expr : expression option) : expression option =
   synthesize_function_call
     (Fun (fun_id, call_id))
-    abstractions type_params args dest expr
+    abstractions type_params args args_places dest dest_place expr
 
 let synthesize_unary_op (unop : E.unop) (arg : V.typed_value)
-    (dest : V.symbolic_value) (expr : expression option) : expression option =
-  synthesize_function_call (Unop unop) [] [] [ arg ] dest expr
+    (arg_place : place option) (dest : V.symbolic_value)
+    (dest_place : place option) (expr : expression option) : expression option =
+  synthesize_function_call (Unop unop) [] [] [ arg ] [ arg_place ] dest
+    dest_place expr
 
 let synthesize_binary_op (binop : E.binop) (arg0 : V.typed_value)
-    (arg1 : V.typed_value) (dest : V.symbolic_value) (expr : expression option)
-    : expression option =
-  synthesize_function_call (Binop binop) [] [] [ arg0; arg1 ] dest expr
+    (arg0_place : place option) (arg1 : V.typed_value)
+    (arg1_place : place option) (dest : V.symbolic_value)
+    (dest_place : place option) (expr : expression option) : expression option =
+  synthesize_function_call (Binop binop) [] [] [ arg0; arg1 ]
+    [ arg0_place; arg1_place ] dest dest_place expr
 
-let synthesize_aggregated_value (aggr_v : V.typed_value)
+let synthesize_aggregated_value (aggr_v : V.typed_value) (place : place option)
     (expr : expression option) : expression option =
   match expr with
   | None -> None
-  | Some expr -> Some (Meta (Aggregate aggr_v, expr))
+  | Some expr -> Some (Meta (Aggregate (place, aggr_v), expr))
 
 let synthesize_end_abstraction (abs : V.abs) (expr : expression option) :
     expression option =

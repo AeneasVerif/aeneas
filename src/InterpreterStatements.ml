@@ -155,7 +155,10 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
         (* Expand the symbolic value, then call the evaluation function for the
          * non-symbolic case *)
         let allow_branching = true in
-        let expand = expand_symbolic_value config allow_branching sv in
+        let expand =
+          expand_symbolic_value config allow_branching sv
+            (S.mk_opt_place_from_op assertion.cond ctx)
+        in
         comp expand (eval_assertion_concrete config assertion) cf ctx
     | _ -> failwith ("Expected a boolean, got: " ^ typed_value_to_string ctx v)
   in
@@ -804,6 +807,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
 (** Evaluate a switch *)
 and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
     st_cm_fun =
+ fun cf ctx ->
   (* We evaluate the operand in two steps:
    * first we prepare it, then we check if its value is concrete or
    * symbolic. If it is concrete, we can then evaluate the operand
@@ -816,6 +820,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
   let cf_prepare_op cf : m_fun = eval_operand_prepare config op cf in
   (* Match on the targets *)
   let cf_match (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
+   fun ctx ->
     match tgts with
     | A.If (st1, st2) -> (
         match op_v.value with
@@ -830,17 +835,19 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
               else eval_statement config st2 cf
             in
             (* Compose the continuations *)
-            comp cf_eval_op cf_branch cf
+            comp cf_eval_op cf_branch cf ctx
         | V.Symbolic sv ->
             (* Expand the symbolic value *)
             let allows_branching = true in
             let cf_expand cf =
-              expand_symbolic_value config allows_branching sv cf
+              expand_symbolic_value config allows_branching sv
+                (S.mk_opt_place_from_op op ctx)
+                cf
             in
             (* Retry *)
             let cf_eval_if cf = eval_switch config op tgts cf in
             (* Compose *)
-            comp cf_expand cf_eval_if cf
+            comp cf_expand cf_eval_if cf ctx
         | _ -> failwith "Inconsistent state")
     | A.SwitchInt (int_ty, stgts, otherwise) -> (
         match op_v.value with
@@ -858,7 +865,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
               | Some (_, tgt) -> eval_statement config tgt cf
             in
             (* Compose *)
-            comp cf_eval_op cf_eval_branch cf
+            comp cf_eval_op cf_eval_branch cf ctx
         | V.Symbolic sv ->
             (* Expand the symbolic value - note that contrary to the boolean
              * case, we can't expand then retry, because when switching over
@@ -871,11 +878,13 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
                 stgts
             in
             let otherwise = eval_statement config otherwise cf in
-            expand_symbolic_int config sv int_ty stgts otherwise
+            expand_symbolic_int config sv
+              (S.mk_opt_place_from_op op ctx)
+              int_ty stgts otherwise ctx
         | _ -> failwith "Inconsistent state")
   in
   (* Compose the continuations *)
-  comp cf_prepare_op cf_match
+  comp cf_prepare_op cf_match cf ctx
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
@@ -992,6 +1001,8 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   let ret_av regions =
     mk_aproj_loans_value_from_symbolic_value regions ret_spc
   in
+  let args_places = List.map (fun p -> S.mk_opt_place_from_op p ctx) args in
+  let dest_place = Some (S.mk_place dest ctx) in
 
   (* Evaluate the input operands *)
   let cc = eval_operands config args in
@@ -1047,7 +1058,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (* Synthesize the symbolic AST *)
     let abs_ids = List.map (fun rg -> rg.T.id) inst_sg.regions_hierarchy in
     S.synthesize_regular_function_call fid call_id abs_ids type_params args
-      ret_spc expr
+      args_places ret_spc dest_place expr
   in
   let cc = comp cc cf_call in
 
