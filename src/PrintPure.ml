@@ -64,6 +64,8 @@ let option_to_string = Print.option_to_string
 
 let type_var_to_string = Print.Types.type_var_to_string
 
+let integer_type_to_string = Print.Types.integer_type_to_string
+
 let scalar_value_to_string = Print.Values.scalar_value_to_string
 
 (* TODO: there is a bit of duplication with Print.fun_def_to_ast_formatter.
@@ -129,7 +131,7 @@ let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
   | TypeVar tv -> fmt.type_var_id_to_string tv
   | Bool -> "bool"
   | Char -> "char"
-  | Integer int_ty -> Print.Types.integer_type_to_string int_ty
+  | Integer int_ty -> integer_type_to_string int_ty
   | Str -> "str"
   | Array aty -> "[" ^ ty_to_string fmt aty ^ "; ?]"
   | Slice sty -> "[" ^ ty_to_string fmt sty ^ "]"
@@ -261,7 +263,10 @@ let fun_sig_to_string (fmt : ast_formatter) (sg : fun_sig) : string =
   let outputs = List.map (ty_to_string ty_fmt) sg.outputs in
   let outputs =
     match outputs with
-    | [] -> "()"
+    | [] ->
+        (* Can happen with backward functions which don't give back
+         * anything (shared borrows only) *)
+        "()"
     | [ out ] -> out
     | outputs -> "(" ^ String.concat " * " outputs ^ ")"
   in
@@ -281,6 +286,33 @@ let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
   let all_types = List.append inputs [ outputs ] in
   String.concat " -> " all_types
 
+let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : A.fun_id) : string
+    =
+  match fun_id with
+  | A.Local fid -> fmt.fun_def_id_to_string fid
+  | A.Assumed fid -> (
+      match fid with
+      | A.BoxNew -> "alloc::boxed::Box::new"
+      | A.BoxDeref -> "core::ops::deref::Deref::deref"
+      | A.BoxDerefMut -> "core::ops::deref::DerefMut::deref_mut"
+      | A.BoxFree -> "alloc::alloc::box_free")
+
+let unop_to_string (unop : unop) : string =
+  match unop with Not -> "¬" | Neg _ -> "-"
+
+let binop_to_string = Print.CfimAst.binop_to_string
+
+let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
+  match fun_id with
+  | Regular (fun_id, rg_id) -> (
+      let f = regular_fun_id_to_string fmt fun_id in
+      match rg_id with
+      | None -> f
+      | Some rg_id -> f ^ "@" ^ T.RegionGroupId.to_string rg_id)
+  | Unop unop -> unop_to_string unop
+  | Binop (binop, int_ty) ->
+      binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
+
 let rec expression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : expression) : string =
   match e with
@@ -292,7 +324,46 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
     (lb : let_bindings) (e : expression) : string =
-  raise Unimplemented
+  let e = expression_to_string fmt indent indent_incr e in
+  let val_fmt = ast_to_value_formatter fmt in
+  match lb with
+  | Call (lvs, call) ->
+      let lvs = List.map (typed_lvalue_to_string val_fmt) lvs in
+      let lvs =
+        match lvs with
+        | [] ->
+            (* Can happen with backward functions which don't give back
+             * anything (shared borrows only) *)
+            "()"
+        | [ lv ] -> lv
+        | lvs -> "(" ^ String.concat " " lvs ^ ")"
+      in
+      let ty_fmt = ast_to_type_formatter fmt in
+      let tys = List.map (ty_to_string ty_fmt) call.type_params in
+      let args = List.map (typed_rvalue_to_string fmt) call.args in
+      let all_args = List.append tys args in
+      let fun_id = fun_id_to_string fmt call.func in
+      let call =
+        if all_args = [] then fun_id
+        else fun_id ^ " " ^ String.concat " " all_args
+      in
+      indent ^ "let " ^ lvs ^ " = " ^ call ^ " in\n" ^ e
+  | Assign (lv, rv) ->
+      let lv = typed_lvalue_to_string val_fmt lv in
+      let rv = typed_rvalue_to_string fmt rv in
+      indent ^ "let " ^ lv ^ " = " ^ rv ^ " in\n" ^ e
+  | Deconstruct (lvs, opt_adt_id, rv) ->
+      let rv = typed_rvalue_to_string fmt rv in
+      let lvs = List.map (var_or_dummy_to_string val_fmt) lvs in
+      let lvs =
+        match opt_adt_id with
+        | None -> "(" ^ String.concat ", " lvs ^ ")"
+        | Some (adt_id, variant_id) ->
+            let cons = fmt.adt_variant_to_string adt_id variant_id in
+            let lvs = if lvs = [] then "" else " " ^ String.concat " " lvs in
+            cons ^ lvs
+      in
+      indent ^ "let " ^ lvs ^ " = " ^ rv ^ " in\n" ^ e
 
 and switch_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (scrutinee : typed_rvalue) (body : switch_body) :
