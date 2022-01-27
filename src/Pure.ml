@@ -203,6 +203,55 @@ type let_bindings =
 (** Meta-information stored in the AST *)
 type meta = Assignment of mplace * typed_rvalue
 
+(** Ancestor for [iter_expression] iter visitor *)
+class ['self] iter_expression_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.iter
+
+    method visit_typed_rvalue : 'env -> typed_rvalue -> unit = fun _ _ -> ()
+
+    method visit_let_bindings : 'env -> let_bindings -> unit = fun _ _ -> ()
+
+    method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
+
+    method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
+
+    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
+
+    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
+
+    method visit_id : 'env -> VariantId.id -> unit = fun _ _ -> ()
+
+    method visit_var_or_dummy : 'env -> var_or_dummy -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for [map_expression] map visitor *)
+class ['self] map_expression_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.map
+
+    method visit_typed_rvalue : 'env -> typed_rvalue -> typed_rvalue =
+      fun _ x -> x
+
+    method visit_let_bindings : 'env -> let_bindings -> let_bindings =
+      fun _ x -> x
+
+    method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
+
+    method visit_meta : 'env -> meta -> meta = fun _ x -> x
+
+    method visit_integer_type : 'env -> T.integer_type -> T.integer_type =
+      fun _ x -> x
+
+    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
+      fun _ x -> x
+
+    method visit_id : 'env -> VariantId.id -> VariantId.id = fun _ x -> x
+
+    method visit_var_or_dummy : 'env -> var_or_dummy -> var_or_dummy =
+      fun _ x -> x
+  end
+
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM. They are lambda-calculus expressions, and are thus actually
     more general than the CFIM statements, in a sense.
@@ -230,6 +279,24 @@ and match_branch = {
   vars : var_or_dummy list;
   branch : expression;
 }
+[@@deriving
+  visitors
+    {
+      name = "iter_expression";
+      variety = "iter";
+      ancestors = [ "iter_expression_base" ];
+      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+      concrete = true;
+    },
+    visitors
+      {
+        name = "map_expression";
+        variety = "map";
+        ancestors = [ "map_expression_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
+(** "Regular" typed value (we map variables to typed values) *)
 
 type fun_sig = {
   type_params : type_var list;
