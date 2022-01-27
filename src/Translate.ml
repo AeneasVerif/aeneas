@@ -133,7 +133,6 @@ let translate_function_to_pure (config : C.partial_config)
 
   (* We need to initialize the input/output variables *)
   let module RegularFunIdMap = SymbolicToPure.RegularFunIdMap in
-  let forward_sg = RegularFunIdMap.find (A.Local def_id, None) fun_sigs in
   let forward_input_vars = CfimAstUtils.fun_def_get_input_vars fdef in
   let forward_input_varnames =
     List.map (fun (v : A.var) -> v.name) forward_input_vars
@@ -146,13 +145,6 @@ let translate_function_to_pure (config : C.partial_config)
     in
     { ctx with forward_inputs }
   in
-
-  (* let forward_inputs =
-       List.combine forward_input_varnames forward_sg.sg.inputs
-     in
-     let ctx, forward_inputs = SymbolicToPure.fresh_vars forward_inputs ctx in
-
-       let ctx = { ctx with forward_inputs } in*)
 
   (* Translate the forward function *)
   let pure_forward =
