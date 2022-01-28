@@ -189,7 +189,7 @@ let var_to_string (fmt : type_formatter) (v : var) : string =
   let varname =
     match v.basename with
     | Some name -> name ^ "^" ^ VarId.to_string v.id
-    | None -> "@" ^ VarId.to_string v.id
+    | None -> "^" ^ VarId.to_string v.id
   in
   "(" ^ varname ^ " : " ^ ty_to_string fmt v.ty ^ ")"
 

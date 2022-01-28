@@ -13,6 +13,8 @@ let log = L.translate_log
 
 type trans_ctx = { type_context : C.type_context; fun_context : C.fun_context }
 
+type pure_fun_translation = Pure.fun_def * Pure.fun_def list
+
 let type_def_to_string (ctx : trans_ctx) (def : Pure.type_def) : string =
   let type_params = def.type_params in
   let type_defs = ctx.type_context.type_defs in

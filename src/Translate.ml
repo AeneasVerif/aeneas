@@ -17,19 +17,18 @@ type symbolic_fun_translation = V.symbolic_value list * SA.expression
     - the generated symbolic AST
  *)
 
-type pure_fun_translation = Pure.fun_def * Pure.fun_def list
-
 (** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
     for the forward function and the backward functions.
  *)
 let translate_function_to_symbolics (config : C.partial_config)
-    (type_context : C.type_context) (fun_context : C.fun_context)
-    (fdef : A.fun_def) :
+    (trans_ctx : trans_ctx) (fdef : A.fun_def) :
     symbolic_fun_translation * symbolic_fun_translation list =
   (* Debug *)
   log#ldebug
     (lazy
       ("translate_function_to_symbolics: " ^ Print.name_to_string fdef.A.name));
+
+  let { type_context; fun_context } = trans_ctx in
 
   (* Evaluate *)
   let synthesize = true in
@@ -59,7 +58,7 @@ let translate_function_to_symbolics (config : C.partial_config)
     TODO: maybe we should introduce a record for this.
  *)
 let translate_function_to_pure (config : C.partial_config)
-    (type_context : C.type_context) (fun_context : C.fun_context)
+    (trans_ctx : trans_ctx)
     (fun_sigs :
       SymbolicToPure.fun_sig_named_outputs SymbolicToPure.RegularFunIdMap.t)
     (fdef : A.fun_def) : pure_fun_translation =
@@ -67,11 +66,12 @@ let translate_function_to_pure (config : C.partial_config)
   log#ldebug
     (lazy ("translate_function_to_pure: " ^ Print.name_to_string fdef.A.name));
 
+  let { type_context; fun_context } = trans_ctx in
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs *)
   let symbolic_forward, symbolic_backwards =
-    translate_function_to_symbolics config type_context fun_context fdef
+    translate_function_to_symbolics config trans_ctx fdef
   in
 
   (* Convert the symbolic ASTs to pure ASTs: *)
@@ -193,6 +193,7 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
 
   (* Compute the type and function contexts *)
   let type_context, fun_context = compute_type_fun_contexts m in
+  let trans_ctx = { type_context; fun_context } in
 
   (* Translate all the type definitions *)
   let type_defs = SymbolicToPure.translate_type_defs m.types in
@@ -221,13 +222,15 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
 
   (* Translate all the functions *)
   let pure_translations =
-    List.map
-      (translate_function_to_pure config type_context fun_context fun_sigs)
-      m.functions
+    List.map (translate_function_to_pure config trans_ctx fun_sigs) m.functions
   in
 
-  (* (* Apply the micro-passes *)
-     let pure_translations = List.map (Micro.apply_passes_to_def ctx)*)
+  (* Apply the micro-passes *)
+  let pure_translations =
+    List.map
+      (Micro.apply_passes_to_pure_fun_translation trans_ctx)
+      pure_translations
+  in
 
   (* Return *)
   (type_defs, pure_translations)

@@ -307,6 +307,15 @@ let remove_meta (def : fun_def) : fun_def =
     [ctx]: used only for printing.
  *)
 let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("PureMicroPasses.apply_passes_to_def: "
+      ^ Print.name_to_string def.basename
+      ^ " ("
+      ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
+      ^ ")"));
+
   (* First, find names for the variables which are unnamed *)
   let def = compute_pretty_names def in
   log#ldebug (lazy ("compute_pretty_name:\n" ^ fun_def_to_string ctx def));
@@ -317,3 +326,10 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
 
   (* We are done *)
   def
+
+let apply_passes_to_pure_fun_translation (ctx : trans_ctx)
+    (trans : pure_fun_translation) : pure_fun_translation =
+  let forward, backwards = trans in
+  let forward = apply_passes_to_def ctx forward in
+  let backwards = List.map (apply_passes_to_def ctx) backwards in
+  (forward, backwards)
