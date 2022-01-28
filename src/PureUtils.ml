@@ -58,6 +58,18 @@ let mk_result_return_rvalue (v : typed_rvalue) : typed_rvalue =
   in
   { value; ty }
 
+let mk_result_fail_lvalue (ty : ty) : typed_lvalue =
+  let ty = Adt (Assumed Result, [ ty ]) in
+  let value = LvAdt { variant_id = Some result_fail_id; field_values = [] } in
+  { value; ty }
+
+let mk_result_return_lvalue (v : typed_lvalue) : typed_lvalue =
+  let ty = Adt (Assumed Result, [ v.ty ]) in
+  let value =
+    LvAdt { variant_id = Some result_return_id; field_values = [ v ] }
+  in
+  { value; ty }
+
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
 (** Type substitution *)

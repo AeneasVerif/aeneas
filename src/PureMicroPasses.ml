@@ -485,7 +485,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
 
 (** Filter the unused assignments (removes the unused variables, filters
     the function calls) *)
-let filter_unused_assignments (filter_monadic_calls : bool) (ctx : trans_ctx)
+let filter_unused (filter_monadic_calls : bool) (ctx : trans_ctx)
     (def : fun_def) : fun_def =
   (* We first need a transformation on *left-values*, which filters the unused
    * variables and tells us whether the value contains any variable which has
@@ -667,7 +667,25 @@ let unit_vars_to_unit (def : fun_def) : fun_def =
 
 (** Unfold the monadic let-bindings to explicit matches. *)
 let unfold_monadic_let_bindings (ctx : trans_ctx) (def : fun_def) : fun_def =
-  raise Unimplemented
+  def
+(* (* It is a very simple map *)
+     let obj =
+       object
+         inherit [_] map_expression as super
+
+         method! visit_Let env monadic lv e re =
+          if not monadic then super#visit_Let env monadic lv e re
+          else
+            let fail_pat = mk_result_fail_lvalue lv.ty in
+            let success_pat = mk_result_return_lvalue lv in
+            let e = Switch
+
+       end
+     in
+     (* Update the body *)
+     let body = obj#visit_expression () def.body in
+     (* Return *)
+   { def with body}*)
 
 (** Apply all the micro-passes to a function.
 
@@ -718,13 +736,9 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
     (lazy
       ("inline_useless_var_assignments:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
-  (* Filter the unused assignments (removes the unused variables, filters
-   * the function calls) *)
-  let def =
-    filter_unused_assignments config.filter_unused_monadic_calls ctx def
-  in
-  log#ldebug
-    (lazy ("filter_unused_assignments:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+  (* Filter the unused variables, assignments, function calls, etc. *)
+  let def = filter_unused config.filter_unused_monadic_calls ctx def in
+  log#ldebug (lazy ("filter_unused:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
   (* Unfold the monadic let-bindings *)
   let def =
