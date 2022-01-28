@@ -445,7 +445,7 @@ class virtual ['self] mapreduce_expression_base =
 type expression =
   | Value of typed_rvalue * mplace option
   | Call of call
-  | Let of bool * typed_lvalue * expression * expression
+  | Let of bool * typed_lvalue * texpression * texpression
       (** Let binding.
       
           The boolean controls whether the let is monadic or not.
@@ -479,13 +479,13 @@ type expression =
           ...
           ```
        *)
-  | Switch of expression * switch_body
-  | Meta of meta * expression  (** Meta-information *)
+  | Switch of texpression * switch_body
+  | Meta of meta * texpression  (** Meta-information *)
 
 and call = {
   func : fun_id;
   type_params : ty list;
-  args : expression list;
+  args : texpression list;
       (** Note that immediately after we converted the symbolic AST to a pure AST,
           some functions may have no arguments. For instance:
           ```
@@ -496,11 +496,14 @@ and call = {
 }
 
 and switch_body =
-  | If of expression * expression
-  | SwitchInt of T.integer_type * (scalar_value * expression) list * expression
+  | If of texpression * texpression
+  | SwitchInt of
+      T.integer_type * (scalar_value * texpression) list * texpression
   | Match of match_branch list
 
-and match_branch = { pat : typed_lvalue; branch : expression }
+and match_branch = { pat : typed_lvalue; branch : texpression }
+
+and texpression = { e : expression; ty : ty }
 [@@deriving
   visitors
     {
@@ -570,5 +573,5 @@ type fun_def = {
   inputs_lvs : typed_lvalue list;
       (** The inputs seen as lvalues. Allows to make transformations, for example
           to replace unused variables by `_` *)
-  body : expression;
+  body : texpression;
 }

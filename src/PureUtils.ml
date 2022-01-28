@@ -72,6 +72,17 @@ let mk_result_return_lvalue (v : typed_lvalue) : typed_lvalue =
 
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
+let mk_value_expression (v : typed_rvalue) (mp : mplace option) : texpression =
+  let e = Value (v, mp) in
+  let ty = v.ty in
+  { e; ty }
+
+let mk_let (monadic : bool) (lv : typed_lvalue) (re : texpression)
+    (next_e : texpression) : texpression =
+  let e = Let (monadic, lv, re, next_e) in
+  let ty = next_e.ty in
+  { e; ty }
+
 (** Type substitution *)
 let ty_substitute (tsubst : TypeVarId.id -> ty) (ty : ty) : ty =
   let obj =

@@ -365,8 +365,12 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
       switch_to_string fmt indent indent_incr scrutinee body
   | Meta (meta, e) ->
       let meta = meta_to_string fmt meta in
-      let e = expression_to_string fmt indent indent_incr e in
+      let e = texpression_to_string fmt indent indent_incr e in
       indent ^ meta ^ "\n" ^ e
+
+and texpression_to_string (fmt : ast_formatter) (indent : string)
+    (indent_incr : string) (e : texpression) : string =
+  expression_to_string fmt indent indent_incr e.e
 
 and call_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (call : call) : string =
@@ -376,35 +380,35 @@ and call_to_string (fmt : ast_formatter) (indent : string)
    * those expressions will in most cases just be values) *)
   let indent1 = indent ^ indent_incr in
   let args =
-    List.map (expression_to_string fmt indent1 indent_incr) call.args
+    List.map (texpression_to_string fmt indent1 indent_incr) call.args
   in
   let all_args = List.append tys args in
   let fun_id = fun_id_to_string fmt call.func in
   if all_args = [] then fun_id else fun_id ^ " " ^ String.concat " " all_args
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
-    (monadic : bool) (lv : typed_lvalue) (re : expression) (e : expression) :
+    (monadic : bool) (lv : typed_lvalue) (re : texpression) (e : texpression) :
     string =
   let indent1 = indent ^ indent_incr in
   let val_fmt = ast_to_value_formatter fmt in
-  let re = expression_to_string fmt indent1 indent_incr re in
-  let e = expression_to_string fmt indent indent_incr e in
+  let re = texpression_to_string fmt indent1 indent_incr re in
+  let e = texpression_to_string fmt indent indent_incr e in
   let lv = typed_lvalue_to_string val_fmt lv in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
 and switch_to_string (fmt : ast_formatter) (indent : string)
-    (indent_incr : string) (scrutinee : expression) (body : switch_body) :
+    (indent_incr : string) (scrutinee : texpression) (body : switch_body) :
     string =
   let indent1 = indent ^ indent_incr in
   (* Printing can mess up on the scrutinee, because it is an expression - but
    * in most situations it will be a value or a function call, so it should be
    * ok*)
-  let scrut = expression_to_string fmt indent1 indent_incr scrutinee in
+  let scrut = texpression_to_string fmt indent1 indent_incr scrutinee in
   match body with
   | If (e_true, e_false) ->
-      let e_true = expression_to_string fmt indent1 indent_incr e_true in
-      let e_false = expression_to_string fmt indent1 indent_incr e_false in
+      let e_true = texpression_to_string fmt indent1 indent_incr e_true in
+      let e_false = texpression_to_string fmt indent1 indent_incr e_false in
       "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent ^ e_true ^ "\n" ^ indent
       ^ "else\n" ^ indent ^ e_false
   | SwitchInt (_, branches, otherwise) ->
@@ -412,12 +416,12 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
         List.map
           (fun (v, be) ->
             indent ^ "| " ^ scalar_value_to_string v ^ " ->\n" ^ indent1
-            ^ expression_to_string fmt indent1 indent_incr be)
+            ^ texpression_to_string fmt indent1 indent_incr be)
           branches
       in
       let otherwise =
         indent ^ "| _ ->\n" ^ indent1
-        ^ expression_to_string fmt indent1 indent_incr otherwise
+        ^ texpression_to_string fmt indent1 indent_incr otherwise
       in
       let all_branches = List.append branches [ otherwise ] in
       "switch " ^ scrut ^ " with\n" ^ String.concat "\n" all_branches
@@ -426,7 +430,7 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       let branch_to_string (b : match_branch) : string =
         let pat = typed_lvalue_to_string val_fmt b.pat in
         indent ^ "| " ^ pat ^ " ->\n" ^ indent1
-        ^ expression_to_string fmt indent1 indent_incr b.branch
+        ^ texpression_to_string fmt indent1 indent_incr b.branch
       in
       let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
@@ -439,5 +443,5 @@ let fun_def_to_string (fmt : ast_formatter) (def : fun_def) : string =
   let inputs =
     if inputs = [] then "" else "  fun " ^ String.concat " " inputs ^ " ->\n"
   in
-  let body = expression_to_string fmt "  " "  " def.body in
+  let body = texpression_to_string fmt "  " "  " def.body in
   "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ "  " ^ body
