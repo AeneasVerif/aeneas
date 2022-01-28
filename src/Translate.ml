@@ -16,11 +16,11 @@ type symbolic_fun_translation = V.symbolic_value list * SA.expression
 (** The result of running the symbolic interpreter on a function:
     - the list of symbolic values used for the input values
     - the generated symbolic AST
- *)
+*)
 
 (** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
     for the forward function and the backward functions.
- *)
+*)
 let translate_function_to_symbolics (config : C.partial_config)
     (trans_ctx : trans_ctx) (fdef : A.fun_def) :
     symbolic_fun_translation * symbolic_fun_translation list =
@@ -57,7 +57,7 @@ let translate_function_to_symbolics (config : C.partial_config)
     [fun_sigs]: maps the forward/backward functions to their signatures. In case
     of backward functions, we also provide names for the outputs.
     TODO: maybe we should introduce a record for this.
- *)
+*)
 let translate_function_to_pure (config : C.partial_config)
     (trans_ctx : trans_ctx)
     (fun_sigs :
@@ -245,9 +245,16 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
   in
 
   (* Apply the micro-passes *)
+  (* TODO: move the configuration *)
+  let passes_config =
+    {
+      Micro.unfold_monadic_let_bindings = true;
+      filter_unused_monadic_calls = true;
+    }
+  in
   let pure_translations =
     List.map
-      (Micro.apply_passes_to_pure_fun_translation trans_ctx)
+      (Micro.apply_passes_to_pure_fun_translation passes_config trans_ctx)
       pure_translations
   in
 

@@ -8,6 +8,26 @@ open TranslateCore
 (** The local logger *)
 let log = L.pure_micro_passes_log
 
+type config = {
+  unfold_monadic_let_bindings : bool;
+      (** Controls the unfolding of monadic let-bindings to explicit matches:
+          `y <-- f x; ...`
+          becomes:
+          `match f x with | Failure -> Failure | Return y -> ...`
+     
+          This is useful when extracting to F*: the support for monadic
+          definitions is not super powerful.
+       *)
+  filter_unused_monadic_calls : bool;
+      (** Controls whether we try to filter the calls to monadic functions
+          (which can fail) when their outputs are not used.
+          
+          See the comments for [expression_contains_child_call_in_all_paths]
+          for additional explanations.
+       *)
+}
+(** A configuration to control the application of the passes *)
+
 (** Small utility.
 
     We sometimes have to insert new fresh variables in a function body, in which
@@ -465,7 +485,8 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
 
 (** Filter the unused assignments (removes the unused variables, filters
     the function calls) *)
-let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
+let filter_unused_assignments (filter_monadic_calls : bool) (ctx : trans_ctx)
+    (def : fun_def) : fun_def =
   (* We first need a transformation on *left-values*, which filters the unused
    * variables and tells us whether the value contains any variable which has
    * not been replaced by `_` (in which case we need to keep the assignment,
@@ -544,8 +565,8 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
                 (* Monadic let-binding: trickier.
                  * We can filter if the right-expression is a function call,
                  * under some conditions. *)
-                match re with
-                | Call call ->
+                match (filter_monadic_calls, re) with
+                | true, Call call ->
                     (* We need to check if there is a child call - see
                      * the comments for:
                      * [expression_contains_child_call_in_all_paths] *)
@@ -557,7 +578,7 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
                     else (* No child call: don't filter *)
                       dont_filter ()
                 | _ ->
-                    (* Not a call: we can't filter *)
+                    (* Not a call or not allowed to filter: we can't filter *)
                     dont_filter ()
             else (* There are used variables: don't filter *)
               dont_filter ()
@@ -644,11 +665,16 @@ let unit_vars_to_unit (def : fun_def) : fun_def =
   (* Return *)
   { def with body; inputs_lvs }
 
+(** Unfold the monadic let-bindings to explicit matches. *)
+let unfold_monadic_let_bindings (ctx : trans_ctx) (def : fun_def) : fun_def =
+  raise Unimplemented
+
 (** Apply all the micro-passes to a function.
 
     [ctx]: used only for printing.
  *)
-let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
+let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
+    fun_def =
   (* Debug *)
   log#ldebug
     (lazy
@@ -694,18 +720,32 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
 
   (* Filter the unused assignments (removes the unused variables, filters
    * the function calls) *)
-  let def = filter_unused_assignments ctx def in
+  let def =
+    filter_unused_assignments config.filter_unused_monadic_calls ctx def
+  in
   log#ldebug
     (lazy ("filter_unused_assignments:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
-  (* TODO: deconstruct the monadic bindings into matches *)
+  (* Unfold the monadic let-bindings *)
+  let def =
+    if config.unfold_monadic_let_bindings then (
+      let def = unfold_monadic_let_bindings ctx def in
+      log#ldebug
+        (lazy
+          ("unfold_monadic_let_bindings:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+      def)
+    else (
+      log#ldebug
+        (lazy "ignoring unfold_monadic_let_bindings due to the configuration\n");
+      def)
+  in
 
   (* We are done *)
   def
 
-let apply_passes_to_pure_fun_translation (ctx : trans_ctx)
+let apply_passes_to_pure_fun_translation (config : config) (ctx : trans_ctx)
     (trans : pure_fun_translation) : pure_fun_translation =
   let forward, backwards = trans in
-  let forward = apply_passes_to_def ctx forward in
-  let backwards = List.map (apply_passes_to_def ctx) backwards in
+  let forward = apply_passes_to_def config ctx forward in
+  let backwards = List.map (apply_passes_to_def config ctx) backwards in
   (forward, backwards)
