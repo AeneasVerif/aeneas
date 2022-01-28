@@ -213,8 +213,20 @@ let compute_pretty_names (def : fun_def) : fun_def =
           List.map (fun (v, mp) -> (update_typed_lvalue ctx v, mp)) lvs
         in
         (ctx, Let (Call (lvs, call), e))
-    | Assign (lv, lmp, rv, rmp) -> raise Unimplemented
-    | Deconstruct (lvs, opt_variant_id, rv, rmp) -> raise Unimplemented
+    | Assign (lv, lmp, rv, rmp) ->
+        let ctx = add_left_constraint_typed_value lmp lv ctx in
+        let ctx = add_opt_right_constraint rmp rv ctx in
+        let ctx, e = update_expression e ctx in
+        let lv = update_typed_lvalue ctx lv in
+        (ctx, Let (Assign (lv, lmp, rv, rmp), e))
+    | Deconstruct (lvs, opt_variant_id, rv, rmp) ->
+        let ctx = add_left_constraint_var_or_dummy_list ctx lvs in
+        let ctx = add_opt_right_constraint rmp rv ctx in
+        let ctx, e = update_expression e ctx in
+        let lvs =
+          List.map (fun (v, mp) -> (update_var_or_dummy ctx v, mp)) lvs
+        in
+        (ctx, Let (Deconstruct (lvs, opt_variant_id, rv, rmp), e))
   (* *)
   and update_switch_body (scrut : typed_rvalue) (mp : mplace option)
       (body : switch_body) (ctx : pn_ctx) : pn_ctx * expression =
