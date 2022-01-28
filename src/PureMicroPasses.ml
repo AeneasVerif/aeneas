@@ -669,22 +669,31 @@ let unit_vars_to_unit (def : fun_def) : fun_def =
 let unfold_monadic_let_bindings (ctx : trans_ctx) (def : fun_def) : fun_def =
   def
 (* (* It is a very simple map *)
-     let obj =
-       object
-         inherit [_] map_expression as super
+        let obj =
+          object
+            inherit [_] map_expression as super
 
-         method! visit_Let env monadic lv e re =
-          if not monadic then super#visit_Let env monadic lv e re
-          else
-            let fail_pat = mk_result_fail_lvalue lv.ty in
-            let success_pat = mk_result_return_lvalue lv in
-            let e = Switch
+            method! visit_Let env monadic lv re e =
+             if not monadic then super#visit_Let env monadic lv re e
+             else
+               let fail_pat = mk_result_fail_lvalue lv.ty in
+               let fail_value = mk_result_fail_rvalue .. in
+               let fail_branch = {pat=fail_pat; branch=Value(fail_value,None)} in
+               let success_pat = mk_result_return_lvalue lv in
+               let success_branch = {pat=success_pat; branch=e} in
+               let switch_body =
+               Match [ fail_branch; success_branch
 
-       end
-     in
-     (* Update the body *)
-     let body = obj#visit_expression () def.body in
-     (* Return *)
+               ]
+               in
+               let e = Switch (lv, switch_body) in
+               self#visit_expression e
+
+          end
+        in
+        (* Update the body *)
+        let body = obj#visit_expression () def.body in
+        (* Return *)
    { def with body}*)
 
 (** Apply all the micro-passes to a function.
