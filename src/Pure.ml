@@ -346,7 +346,7 @@ and typed_rvalue = { value : rvalue; ty : ty }
         polymorphic = false;
       }]
 
-type unop = Not | Neg of T.integer_type
+type unop = Not | Neg of T.integer_type [@@deriving show]
 
 type fun_id =
   | Regular of A.fun_id * T.RegionGroupId.id option
@@ -354,6 +354,7 @@ type fun_id =
           if it is a forward function *)
   | Unop of unop
   | Binop of E.binop * T.integer_type
+[@@deriving show]
 
 (** Meta-information stored in the AST *)
 type meta = Assignment of mplace * typed_rvalue

@@ -33,3 +33,6 @@ let fun_def_to_string (ctx : trans_ctx) (def : Pure.fun_def) : string =
   let fun_defs = ctx.fun_context.fun_defs in
   let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
   PrintPure.fun_def_to_string fmt def
+
+let fun_def_id_to_string (ctx : trans_ctx) (id : Pure.FunDefId.id) : string =
+  Print.name_to_string (Pure.FunDefId.Map.find id ctx.fun_context.fun_defs).name

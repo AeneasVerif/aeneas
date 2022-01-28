@@ -336,6 +336,17 @@ let inline_useless_var_reassignments (inline_named : bool) (def : fun_def) :
   let body = obj#visit_expression VarId.Map.empty def.body in
   { def with body }
 
+(* TODO: move *)
+let lookup_fun_sig (fun_id : A.fun_id) (fun_defs : A.fun_def FunDefId.Map.t) :
+    A.fun_sig =
+  match fun_id with
+  | Local id -> (FunDefId.Map.find id fun_defs).signature
+  | Assumed aid ->
+      let _, sg =
+        List.find (fun (aid', _) -> aid = aid') Assumed.assumed_sigs
+      in
+      sg
+
 (** Given a forward or backward function call, is there, for every execution
     path, a child backward function called later with exactly the same input
     list prefix? We use this to filter useless function calls: if there are
@@ -361,9 +372,105 @@ let inline_useless_var_reassignments (inline_named : bool) (def : fun_def) :
 
     In this situation, we can remove the call `f x`.
  *)
-let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call : call)
+let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
     (e : expression) : bool =
-  raise Unimplemented
+  let check_call call1 : bool =
+    (* Check the func_ids, to see if call1's function is a child of call0's function *)
+    match (call0.func, call1.func) with
+    | Regular (id0, rg_id0), Regular (id1, rg_id1) ->
+        (* Both are "regular" calls: check if they come from the same rust function *)
+        if id0 = id1 then
+          (* Same rust functions: check the regions hierarchy *)
+          let call1_is_child =
+            match (rg_id0, rg_id1) with
+            | None, _ ->
+                (* The function used in call0 is the forward function: the one
+                 * used in call1 is necessarily a child *)
+                true
+            | Some _, None ->
+                (* Opposite of previous case *)
+                false
+            | Some rg_id0, Some rg_id1 ->
+                if rg_id0 = rg_id1 then true
+                else
+                  (* We need to use the regions hierarchy *)
+                  (* First, lookup the signature of the CFIM function *)
+                  let sg = lookup_fun_sig id0 ctx.fun_context.fun_defs in
+                  (* Compute the set of ancestors of the function in call1 *)
+                  let call1_ancestors =
+                    CfimAstUtils.list_parent_region_groups sg rg_id1
+                  in
+                  (* Check if the function used in call0 is inside *)
+                  T.RegionGroupId.Set.mem rg_id0 call1_ancestors
+          in
+          (* If call1 is a child, then we need to check if the input arguments
+           * used in call0 are a prefix of the input arguments used in call1
+           * (note call1 being a child, it will likely consume strictly more
+           * given back values).
+           * *)
+          if call1_is_child then
+            let call1_args =
+              Collections.List.prefix (List.length call0.args) call1.args
+            in
+            let args = List.combine call0.args call1_args in
+            (* Note that the input values are expressions, *which may contain
+             * meta-values* (which we need to ignore). We only consider the
+             * case where both expressions are actually values. *)
+            let input_eq (v0, v1) =
+              match (v0, v1) with
+              | Value (v0, _), Value (v1, _) -> v0 = v1
+              | _ -> false
+            in
+            call0.type_params = call1.type_params && List.for_all input_eq args
+          else (* Not a child *)
+            false
+        else (* Not the same function *)
+          false
+    | _ -> false
+  in
+
+  let visitor =
+    object (self)
+      inherit [_] reduce_expression
+
+      method zero _ = false
+
+      method plus b0 b1 _ = b0 () && b1 ()
+
+      method! visit_expression env e =
+        match e with
+        | Value (_, _) -> fun _ -> false
+        | Let (_, _, Call call1, e) ->
+            let call_is_child = check_call call1 in
+            if call_is_child then fun () -> true
+            else self#visit_expression env e
+        | Let (_, _, re, e) ->
+            fun () ->
+              self#visit_expression env re () && self#visit_expression env e ()
+        | Call call1 -> fun () -> check_call call1
+        | Meta (_, e) -> self#visit_expression env e
+        | Switch (_, _, body) -> self#visit_switch_body env body
+      (** We need to reimplement the way we compose the booleans *)
+
+      method! visit_switch_body env body =
+        match body with
+        | If (e1, e2) ->
+            fun () ->
+              self#visit_expression env e1 () && self#visit_expression env e2 ()
+        | SwitchInt (_, branches, otherwise) ->
+            fun () ->
+              List.for_all
+                (fun (_, br) -> self#visit_expression env br ())
+                branches
+              && self#visit_expression env otherwise ()
+        | Match branches ->
+            fun () ->
+              List.for_all
+                (fun br -> self#visit_expression env br.branch ())
+                branches
+    end
+  in
+  visitor#visit_expression () e ()
 
 (** Filter the unused assignments (removes the unused variables, filters
     the function calls) *)
@@ -418,6 +525,9 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
 
       method plus s0 s1 _ = VarId.Set.union (s0 ()) (s1 ())
 
+      method! visit_place _ p = (p, fun _ -> VarId.Set.singleton p.var)
+      (** Whenever we visit a place, we need to register the used variable *)
+
       method! visit_expression env e =
         match e with
         | Value (_, _) | Call _ | Switch (_, _, _) | Meta (_, _) ->
@@ -440,7 +550,9 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
                 (* Not a monadic let-binding: simple case *)
                 (e, fun _ -> used)
               else
-                (* Monadic let-binding: trickier *)
+                (* Monadic let-binding: trickier.
+                 * We can filter if the right-expression is a function call,
+                 * under some conditions. *)
                 match re with
                 | Call call ->
                     (* We need to check if there is a child call - see
@@ -451,12 +563,12 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
                     in
                     if has_child_call then (* Filter *)
                       (e, fun _ -> used)
-                    else (* Don't filter *)
+                    else (* No child call: don't filter *)
                       dont_filter ()
                 | _ ->
-                    (* We can't filter *)
+                    (* Not a call: we can't filter *)
                     dont_filter ()
-            else (* Don't filter *)
+            else (* There are used variables: don't filter *)
               dont_filter ()
     end
   in
