@@ -6,31 +6,10 @@ module A = CfimAst
 module M = Modules
 module SA = SymbolicAst
 module Micro = PureMicroPasses
+open TranslateCore
 
 (** The local logger *)
-let log = L.translate_log
-
-type trans_ctx = { type_context : C.type_context; fun_context : C.fun_context }
-
-let type_def_to_string (ctx : trans_ctx) (def : Pure.type_def) : string =
-  let type_params = def.type_params in
-  let type_defs = ctx.type_context.type_defs in
-  let fmt = PrintPure.mk_type_formatter type_defs type_params in
-  PrintPure.type_def_to_string fmt def
-
-let fun_sig_to_string (ctx : trans_ctx) (sg : Pure.fun_sig) : string =
-  let type_params = sg.type_params in
-  let type_defs = ctx.type_context.type_defs in
-  let fun_defs = ctx.fun_context.fun_defs in
-  let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
-  PrintPure.fun_sig_to_string fmt sg
-
-let fun_def_to_string (ctx : trans_ctx) (def : Pure.fun_def) : string =
-  let type_params = def.signature.type_params in
-  let type_defs = ctx.type_context.type_defs in
-  let fun_defs = ctx.fun_context.fun_defs in
-  let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
-  PrintPure.fun_def_to_string fmt def
+let log = TranslateCore.log
 
 type symbolic_fun_translation = V.symbolic_value list * SA.expression
 (** The result of running the symbolic interpreter on a function:
@@ -208,7 +187,7 @@ let translate_function_to_pure (config : C.partial_config)
   (pure_forward, pure_backwards)
 
 let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
-    Pure.type_def T.TypeDefId.Map.t * pure_fun_translation A.FunDefId.Map.t =
+    Pure.type_def list * pure_fun_translation list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
 
@@ -243,19 +222,12 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
   (* Translate all the functions *)
   let pure_translations =
     List.map
-      (fun (fdef : A.fun_def) ->
-        ( fdef.def_id,
-          translate_function_to_pure config type_context fun_context fun_sigs
-            fdef ))
+      (translate_function_to_pure config type_context fun_context fun_sigs)
       m.functions
   in
 
-  (* Put the translated functions in a map *)
-  let fun_defs =
-    List.fold_left
-      (fun m (def_id, trans) -> A.FunDefId.Map.add def_id trans m)
-      A.FunDefId.Map.empty pure_translations
-  in
+  (* (* Apply the micro-passes *)
+     let pure_translations = List.map (Micro.apply_passes_to_def ctx)*)
 
   (* Return *)
-  (type_defs, fun_defs)
+  (type_defs, pure_translations)

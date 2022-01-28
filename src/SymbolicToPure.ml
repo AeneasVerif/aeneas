@@ -1298,13 +1298,8 @@ let translate_fun_def (ctx : bs_ctx) (body : S.expression) : fun_def =
   (* return *)
   def
 
-let translate_type_defs (type_defs : T.type_def list) : type_def TypeDefId.Map.t
-    =
-  List.fold_left
-    (fun tdefs def ->
-      let tdef = translate_type_def def in
-      TypeDefId.Map.add def.def_id tdef tdefs)
-    TypeDefId.Map.empty type_defs
+let translate_type_defs (type_defs : T.type_def list) : type_def list =
+  List.map translate_type_def type_defs
 
 (** Translates function signatures.
 

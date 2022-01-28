@@ -2,6 +2,10 @@
 
 open Errors
 open Pure
+open TranslateCore
+
+(** The local logger *)
+let log = L.pure_micro_passes_log
 
 type pn_ctx = string VarId.Map.t
 (** "pretty-name context": see [compute_pretty_names] *)
@@ -297,3 +301,19 @@ let remove_meta (def : fun_def) : fun_def =
   in
   let body = obj#visit_expression () def.body in
   { def with body }
+
+(** Apply all the micro-passes to a function.
+
+    [ctx]: used only for printing.
+ *)
+let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
+  (* First, find names for the variables which are unnamed *)
+  let def = compute_pretty_names def in
+  log#ldebug (lazy ("compute_pretty_name:\n" ^ fun_def_to_string ctx def));
+
+  (* The meta-information is now useless: remove it *)
+  let def = remove_meta def in
+  log#ldebug (lazy ("remove_meta:\n" ^ fun_def_to_string ctx def));
+
+  (* We are done *)
+  def

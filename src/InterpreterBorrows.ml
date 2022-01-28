@@ -11,6 +11,9 @@ open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterProjectors
 
+(** The local logger *)
+let log = InterpreterBorrowsCore.log
+
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
     replaced by [Bottom])) if we can end the borrow (for instance, it is not
