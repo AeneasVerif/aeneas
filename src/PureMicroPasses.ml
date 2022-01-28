@@ -133,11 +133,6 @@ let compute_pretty_names (def : fun_def) : fun_def =
       (ctx : pn_ctx) : pn_ctx =
     match mp with None -> ctx | Some mp -> add_right_constraint mp rv ctx
   in
-  let add_opt_right_constraint_list ctx rvs =
-    List.fold_left
-      (fun ctx (mp, rv) -> add_opt_right_constraint mp rv ctx)
-      ctx rvs
-  in
   let add_left_constraint (lv : typed_lvalue) (ctx : pn_ctx) : pn_ctx =
     let obj =
       object (self)
@@ -171,10 +166,12 @@ let compute_pretty_names (def : fun_def) : fun_def =
     (ctx, Value (v, mp))
   (* *)
   and update_call (call : call) (ctx : pn_ctx) : pn_ctx * expression =
-    let ctx =
-      add_opt_right_constraint_list ctx
-        (List.combine call.args_mplaces call.args)
+    let ctx, args =
+      List.fold_left_map
+        (fun ctx arg -> update_expression arg ctx)
+        ctx call.args
     in
+    let call = { call with args } in
     (ctx, Call call)
   (* *)
   and update_let (lv : typed_lvalue) (re : expression) (e : expression)

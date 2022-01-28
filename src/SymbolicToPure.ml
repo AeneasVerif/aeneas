@@ -954,7 +954,10 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             (ctx, Binop (binop, int_ty0))
         | _ -> failwith "Unreachable")
   in
-  let call = { func; type_params; args; args_mplaces } in
+  let args =
+    List.map (fun (arg, mp) -> Value (arg, mp)) (List.combine args args_mplaces)
+  in
+  let call = { func; type_params; args } in
   let call = Call call in
   (* Translate the next expression *)
   let e = translate_expression e ctx in
@@ -1069,7 +1072,12 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       let e = translate_expression e ctx in
       (* Put everything together *)
       let args_mplaces = List.map (fun _ -> None) inputs in
-      let call = { func; type_params; args = inputs; args_mplaces } in
+      let args =
+        List.map
+          (fun (arg, mp) -> Value (arg, mp))
+          (List.combine inputs args_mplaces)
+      in
+      let call = { func; type_params; args } in
       Let (output, Call call, e)
   | V.SynthRet ->
       (* If we end the abstraction which consumed the return value of the function

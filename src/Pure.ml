@@ -307,40 +307,6 @@ class ['self] map_expression_base =
     method visit_fun_id : 'env -> fun_id -> fun_id = fun _ x -> x
   end
 
-type call = {
-  func : fun_id;
-  type_params : ty list;
-  args : typed_rvalue list;
-      (** Note that immediately after we converted the symbolic AST to a pure AST,
-          some functions may have no arguments. For instance:
-          ```
-          fn f();
-          ```
-          We later add a unit argument.
-          
-          TODO: we should use expressions...
-       *)
-  args_mplaces : mplace option list;  (** Meta data *)
-}
-[@@deriving
-  visitors
-    {
-      name = "iter_call";
-      variety = "iter";
-      ancestors = [ "iter_expression_base" ];
-      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-      concrete = true;
-    },
-    visitors
-      {
-        name = "map_call";
-        variety = "map";
-        ancestors = [ "map_expression_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        concrete = true;
-      }]
-(** "Regular" typed value (we map variables to typed values) *)
-
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM. They are lambda-calculus expressions, and are thus actually
     more general than the CFIM statements, in a sense.
@@ -394,6 +360,19 @@ type expression =
   | Switch of typed_rvalue * mplace option * switch_body
   | Meta of meta * expression  (** Meta-information *)
 
+and call = {
+  func : fun_id;
+  type_params : ty list;
+  args : expression list;
+      (** Note that immediately after we converted the symbolic AST to a pure AST,
+          some functions may have no arguments. For instance:
+          ```
+          fn f();
+          ```
+          We later add a unit argument.
+       *)
+}
+
 and switch_body =
   | If of expression * expression
   | SwitchInt of T.integer_type * (scalar_value * expression) list * expression
@@ -405,7 +384,7 @@ and match_branch = { pat : typed_lvalue; branch : expression }
     {
       name = "iter_expression";
       variety = "iter";
-      ancestors = [ "iter_call" ];
+      ancestors = [ "iter_expression_base" ];
       nude = true (* Don't inherit [VisitorsRuntime.iter] *);
       concrete = true;
     },
@@ -413,11 +392,10 @@ and match_branch = { pat : typed_lvalue; branch : expression }
       {
         name = "map_expression";
         variety = "map";
-        ancestors = [ "map_call" ];
+        ancestors = [ "map_expression_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
       }]
-(** "Regular" typed value (we map variables to typed values) *)
 
 type fun_sig = {
   type_params : type_var list;

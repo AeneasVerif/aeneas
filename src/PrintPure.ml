@@ -353,22 +353,13 @@ let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   in
   "@meta[" ^ meta ^ "]"
 
-let call_to_string (fmt : ast_formatter) (call : call) : string =
-  let val_fmt = ast_to_value_formatter fmt in
-  let ty_fmt = ast_to_type_formatter fmt in
-  let tys = List.map (ty_to_string ty_fmt) call.type_params in
-  let args = List.map (typed_rvalue_to_string fmt) call.args in
-  let all_args = List.append tys args in
-  let fun_id = fun_id_to_string fmt call.func in
-  if all_args = [] then fun_id else fun_id ^ " " ^ String.concat " " all_args
-
 let rec expression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : expression) : string =
   match e with
   | Return v -> "return " ^ typed_rvalue_to_string fmt v
   | Fail -> "fail"
   | Value (v, _) -> typed_rvalue_to_string fmt v
-  | Call call -> call_to_string fmt call
+  | Call call -> call_to_string fmt indent indent_incr call
   | Let (lv, re, e) -> let_to_string fmt indent indent_incr lv re e
   | Switch (scrutinee, _, body) ->
       switch_to_string fmt indent indent_incr scrutinee body
@@ -376,6 +367,19 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
       let meta = meta_to_string fmt meta in
       let e = expression_to_string fmt indent indent_incr e in
       indent ^ meta ^ "\n" ^ e
+
+and call_to_string (fmt : ast_formatter) (indent : string)
+    (indent_incr : string) (call : call) : string =
+  let val_fmt = ast_to_value_formatter fmt in
+  let ty_fmt = ast_to_type_formatter fmt in
+  let tys = List.map (ty_to_string ty_fmt) call.type_params in
+  (* The arguments are expressions, so this may not be perfect... (though
+   * those expressions will in most cases be values) *)
+  let indent1 = indent ^ indent_incr in
+  let args = List.map (expression_to_string fmt indent indent_incr) call.args in
+  let all_args = List.append tys args in
+  let fun_id = fun_id_to_string fmt call.func in
+  if all_args = [] then fun_id else fun_id ^ " " ^ String.concat " " all_args
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
     (lv : typed_lvalue) (re : expression) (e : expression) : string =
