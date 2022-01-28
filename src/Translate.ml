@@ -6,6 +6,7 @@ module A = CfimAst
 module M = Modules
 module SA = SymbolicAst
 module Micro = PureMicroPasses
+open PureUtils
 open TranslateCore
 
 (** The local logger *)
@@ -175,7 +176,7 @@ let translate_function_to_pure (config : C.partial_config)
     let backward_output_tys =
       List.map (fun (v : Pure.var) -> v.ty) backward_outputs
     in
-    let backward_ret_ty = SymbolicToPure.mk_tuple_ty backward_output_tys in
+    let backward_ret_ty = mk_tuple_ty backward_output_tys in
     let backward_inputs =
       T.RegionGroupId.Map.singleton back_id backward_inputs
     in

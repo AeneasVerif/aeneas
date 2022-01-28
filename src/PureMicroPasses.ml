@@ -2,6 +2,7 @@
 
 open Errors
 open Pure
+open PureUtils
 open TranslateCore
 
 (** The local logger *)
@@ -299,7 +300,7 @@ let to_monadic (def : fun_def) : fun_def =
       method! visit_call env call =
         (* If no arguments, introduce unit *)
         if call.args = [] then
-          let args = [ Value (SymbolicToPure.unit_rvalue, None) ] in
+          let args = [ Value (unit_rvalue, None) ] in
           { call with args } (* Otherwise: nothing to do *)
         else super#visit_call env call
     end
@@ -311,12 +312,10 @@ let to_monadic (def : fun_def) : fun_def =
   let def =
     if def.inputs = [] then (
       assert (def.signature.inputs = []);
-      let signature =
-        { def.signature with inputs = [ SymbolicToPure.unit_ty ] }
-      in
+      let signature = { def.signature with inputs = [ unit_ty ] } in
       let var_cnt = get_expression_min_var_counter def.body in
       let id, _ = VarId.fresh var_cnt in
-      let var = { id; basename = None; ty = SymbolicToPure.unit_ty } in
+      let var = { id; basename = None; ty = unit_ty } in
       let inputs = [ var ] in
       { def with signature; inputs })
     else def
@@ -326,10 +325,10 @@ let to_monadic (def : fun_def) : fun_def =
     match (def.back_id, def.signature.outputs) with
     | None, [ out_ty ] ->
         (* Forward function: there is always exactly one output *)
-        SymbolicToPure.mk_result_ty out_ty
+        mk_result_ty out_ty
     | Some _, outputs ->
         (* Backward function: we have to group them *)
-        SymbolicToPure.mk_result_ty (SymbolicToPure.mk_tuple_ty outputs)
+        mk_result_ty (mk_tuple_ty outputs)
     | _ -> failwith "Unreachable"
   in
   let outputs = [ output_ty ] in
