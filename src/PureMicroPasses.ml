@@ -383,9 +383,26 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
    * appears at the left of a let-binding, this binding might potentially be
    * removed).
    *)
+  let lv_visitor =
+    object
+      inherit [_] mapreduce_typed_lvalue
+
+      method zero _ = true
+
+      method plus b0 b1 _ = b0 () && b1 ()
+
+      method! visit_var_or_dummy env v =
+        match v with
+        | Dummy -> (Dummy, fun _ -> true)
+        | Var (v, mp) ->
+            if VarId.Set.mem v.id env then (Var (v, mp), fun _ -> false)
+            else (Dummy, fun _ -> true)
+    end
+  in
   let filter_typed_lvalue (used_vars : VarId.Set.t) (lv : typed_lvalue) :
       typed_lvalue * bool =
-    raise Unimplemented
+    let lv, all_dummies = lv_visitor#visit_typed_lvalue used_vars lv in
+    (lv, all_dummies ())
   in
 
   (* We then implement the transformation on *expressions* through a mapreduce.
@@ -393,7 +410,7 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
    * The map filters the unused assignments, the reduce computes the set of
    * used variables.
    *)
-  let obj =
+  let expr_visitor =
     object (self)
       inherit [_] mapreduce_expression as super
 
@@ -433,7 +450,7 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
                       expression_contains_child_call_in_all_paths ctx call e
                     in
                     if has_child_call then (* Filter *)
-                      raise Unimplemented
+                      (e, fun _ -> used)
                     else (* Don't filter *)
                       dont_filter ()
                 | _ ->
@@ -444,7 +461,7 @@ let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
     end
   in
   (* Visit the body *)
-  let body, used_vars = obj#visit_expression () def.body in
+  let body, used_vars = expr_visitor#visit_expression () def.body in
   (* Visit the parameters *)
   let used_vars = used_vars () in
   let inputs_lvs =
