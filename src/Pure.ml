@@ -146,12 +146,16 @@ type mplace = { name : string option; projection : projection }
 
 type place = { var : VarId.id; projection : projection }
 
-(** Ancestor for [iter_var_or_dummy] iter visitor *)
+(** Ancestor for [iter_var_or_dummy] visitor *)
 class ['self] iter_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
 
+    method visit_constant_value : 'env -> constant_value -> unit = fun _ _ -> ()
+
     method visit_var : 'env -> var -> unit = fun _ _ -> ()
+
+    method visit_place : 'env -> place -> unit = fun _ _ -> ()
 
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
 
@@ -163,7 +167,12 @@ class ['self] map_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
 
+    method visit_constant_value : 'env -> constant_value -> constant_value =
+      fun _ x -> x
+
     method visit_var : 'env -> var -> var = fun _ x -> x
+
+    method visit_place : 'env -> place -> place = fun _ x -> x
 
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
 
@@ -175,7 +184,12 @@ class virtual ['self] reduce_value_base =
   object (self : 'self)
     inherit [_] VisitorsRuntime.reduce
 
+    method visit_constant_value : 'env -> constant_value -> 'a =
+      fun _ _ -> self#zero
+
     method visit_var : 'env -> var -> 'a = fun _ _ -> self#zero
+
+    method visit_place : 'env -> place -> 'a = fun _ _ -> self#zero
 
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
 
@@ -261,10 +275,33 @@ and adt_rvalue = {
 }
 
 and typed_rvalue = { value : rvalue; ty : ty }
-(** In most situations we won't use the type in [typed_rvalue].
-    Note that it is still necessary to have some useful informations
-    about ADTs, though.
- *)
+[@@deriving
+  visitors
+    {
+      name = "iter_typed_rvalue";
+      variety = "iter";
+      ancestors = [ "iter_typed_lvalue" ];
+      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+      concrete = true;
+      polymorphic = false;
+    },
+    visitors
+      {
+        name = "map_typed_rvalue";
+        variety = "map";
+        ancestors = [ "map_typed_lvalue" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "reduce_typed_rvalue";
+        variety = "reduce";
+        ancestors = [ "reduce_typed_lvalue" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        polymorphic = false;
+      }]
 
 type unop = Not | Neg of T.integer_type
 
@@ -278,18 +315,10 @@ type fun_id =
 (** Meta-information stored in the AST *)
 type meta = Assignment of mplace * typed_rvalue
 
-(** Ancestor for [iter_expression] iter visitor *)
+(** Ancestor for [iter_expression] visitor *)
 class ['self] iter_expression_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.iter
-
-    method visit_ty : 'env -> ty -> unit = fun _ _ -> ()
-
-    method visit_typed_rvalue : 'env -> typed_rvalue -> unit = fun _ _ -> ()
-
-    method visit_typed_lvalue : 'env -> typed_lvalue -> unit = fun _ _ -> ()
-
-    method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
+    inherit [_] iter_typed_rvalue
 
     method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
 
@@ -302,20 +331,10 @@ class ['self] iter_expression_base =
     method visit_fun_id : 'env -> fun_id -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for [map_expression] map visitor *)
+(** Ancestor for [map_expression] visitor *)
 class ['self] map_expression_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.map
-
-    method visit_ty : 'env -> ty -> ty = fun _ x -> x
-
-    method visit_typed_rvalue : 'env -> typed_rvalue -> typed_rvalue =
-      fun _ x -> x
-
-    method visit_typed_lvalue : 'env -> typed_lvalue -> typed_lvalue =
-      fun _ x -> x
-
-    method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
+    inherit [_] map_typed_rvalue
 
     method visit_meta : 'env -> meta -> meta = fun _ x -> x
 
@@ -328,6 +347,22 @@ class ['self] map_expression_base =
     method visit_id : 'env -> VariantId.id -> VariantId.id = fun _ x -> x
 
     method visit_fun_id : 'env -> fun_id -> fun_id = fun _ x -> x
+  end
+
+(** Ancestor for [reduce_expression] visitor *)
+class virtual ['self] reduce_expression_base =
+  object (_self : 'self)
+    inherit [_] reduce_typed_rvalue
+
+    method visit_meta : 'env -> meta -> 'a = fun _ _ -> ()
+
+    method visit_integer_type : 'env -> T.integer_type -> 'a = fun _ _ -> ()
+
+    method visit_scalar_value : 'env -> scalar_value -> 'a = fun _ _ -> ()
+
+    method visit_id : 'env -> VariantId.id -> 'a = fun _ _ -> ()
+
+    method visit_fun_id : 'env -> fun_id -> 'a = fun _ _ -> ()
   end
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
@@ -416,6 +451,13 @@ and match_branch = { pat : typed_lvalue; branch : expression }
         ancestors = [ "map_expression_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
+      },
+    visitors
+      {
+        name = "reduce_expression";
+        variety = "reduce";
+        ancestors = [ "reduce_expression_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
       }]
 
 type fun_sig = {

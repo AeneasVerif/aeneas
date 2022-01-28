@@ -7,6 +7,17 @@ open TranslateCore
 (** The local logger *)
 let log = L.pure_micro_passes_log
 
+(** Small utility.
+
+    We sometimes have to insert new fresh variables in a function body, in which
+    case we need to make their indices greater than the indices of all the variables
+    in the body.
+    TODO: things would be simpler if we used a better representation of the
+    variables indices...
+ *)
+let get_expression_min_var_counter (e : expression) : VarId.generator =
+  raise Unimplemented
+
 type pn_ctx = string VarId.Map.t
 (** "pretty-name context": see [compute_pretty_names] *)
 
@@ -266,8 +277,34 @@ let filter_unused_assignments (def : fun_def) : fun_def =
 
 (** Add unit arguments for functions with no arguments, and change their return type. *)
 let to_monadic (def : fun_def) : fun_def =
-  (* TODO *)
-  def
+  (* Update the body *)
+  let obj =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_call env call =
+        (* If no arguments, introduce unit *)
+        if call.args = [] then
+          let args = [ Value (SymbolicToPure.unit_rvalue, None) ] in
+          { call with args } (* Otherwise: nothing to do *)
+        else super#visit_call env call
+    end
+  in
+  let body = obj#visit_expression () def.body in
+  let def = { def with body } in
+
+  (* Update the signature *)
+  if def.inputs = [] then (
+    assert (def.signature.inputs = []);
+    let signature =
+      { def.signature with inputs = [ SymbolicToPure.unit_ty ] }
+    in
+    let var_cnt = get_expression_min_var_counter def.body in
+    let id, _ = VarId.fresh var_cnt in
+    let var = { id; basename = None; ty = SymbolicToPure.unit_ty } in
+    let inputs = [ var ] in
+    { def with signature; inputs })
+  else def
 
 (** Apply all the micro-passes to a function.
 
@@ -296,6 +333,12 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
   let def = remove_meta def in
   log#ldebug (lazy ("remove_meta:\n" ^ fun_def_to_string ctx def));
 
+  (* Add unit arguments for functions with no arguments, and change their return type.
+   * **Rk.**: from now onwards, the types in the AST are correct (until now,
+   * functions had return type `t` where they should have return type `result t`) *)
+  (* let def = to_monadic def in
+     log#ldebug (lazy ("to_monadic:\n" ^ fun_def_to_string ctx def));*)
+
   (* Inline the useless variable reassignments *)
   let def = inline_useless_var_reassignments def in
   log#ldebug
@@ -307,11 +350,6 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
   log#ldebug (lazy ("filter_unused_assignments:\n" ^ fun_def_to_string ctx def));
 
   (* TODO: deconstruct the monadic bindings into matches *)
-
-  (* Add unit arguments for functions with no arguments, and change their return type.
-   * TODO: move that at the beginning? *)
-  let def = to_monadic def in
-  log#ldebug (lazy ("to_monadic:\n" ^ fun_def_to_string ctx def));
 
   (* We are done *)
   def

@@ -27,6 +27,13 @@ let mk_place_from_var (v : var) : place = { var = v.id; projection = [] }
 
 let mk_tuple_ty (tys : ty list) : ty = Adt (Tuple, tys)
 
+let unit_ty : ty = Adt (Tuple, [])
+
+let unit_rvalue : typed_rvalue =
+  let value = RvAdt { variant_id = None; field_values = [] } in
+  let ty = unit_ty in
+  { value; ty }
+
 let mk_typed_rvalue_from_var (v : var) : typed_rvalue =
   let value = RvPlace (mk_place_from_var v) in
   let ty = v.ty in
