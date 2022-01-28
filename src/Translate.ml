@@ -77,6 +77,13 @@ let translate_function_to_pure (config : C.partial_config)
   (* Convert the symbolic ASTs to pure ASTs: *)
 
   (* Initialize the context *)
+  let module RegularFunIdMap = SymbolicToPure.RegularFunIdMap in
+  let forward_sig = RegularFunIdMap.find (A.Local def_id, None) fun_sigs in
+  let forward_ret_ty =
+    match forward_sig.sg.outputs with
+    | [ ty ] -> ty
+    | _ -> failwith "Unreachable"
+  in
   let sv_to_var = V.SymbolicValueId.Map.empty in
   let var_counter = Pure.VarId.generator_zero in
   let calls = V.FunCallId.Map.empty in
@@ -94,6 +101,8 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.bid = None;
       (* Dummy for now *)
+      ret_ty = forward_ret_ty;
+      (* Will need to be updated for the backward functions *)
       sv_to_var;
       var_counter;
       type_context;
@@ -111,7 +120,6 @@ let translate_function_to_pure (config : C.partial_config)
   in
 
   (* We need to initialize the input/output variables *)
-  let module RegularFunIdMap = SymbolicToPure.RegularFunIdMap in
   let forward_input_vars = CfimAstUtils.fun_def_get_input_vars fdef in
   let forward_input_varnames =
     List.map (fun (v : A.var) -> v.name) forward_input_vars
@@ -164,6 +172,10 @@ let translate_function_to_pure (config : C.partial_config)
     let ctx, backward_outputs =
       SymbolicToPure.fresh_vars backward_outputs ctx
     in
+    let backward_output_tys =
+      List.map (fun (v : Pure.var) -> v.ty) backward_outputs
+    in
+    let backward_ret_ty = SymbolicToPure.mk_tuple_ty backward_output_tys in
     let backward_inputs =
       T.RegionGroupId.Map.singleton back_id backward_inputs
     in
@@ -173,7 +185,13 @@ let translate_function_to_pure (config : C.partial_config)
 
     (* Put everything in the context *)
     let ctx =
-      { ctx with bid = Some back_id; backward_inputs; backward_outputs }
+      {
+        ctx with
+        bid = Some back_id;
+        ret_ty = backward_ret_ty;
+        backward_inputs;
+        backward_outputs;
+      }
     in
 
     (* Translate *)

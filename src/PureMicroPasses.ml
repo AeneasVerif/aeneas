@@ -153,10 +153,9 @@ let compute_pretty_names (def : fun_def) : fun_def =
   let rec update_expression (e : expression) (ctx : pn_ctx) :
       pn_ctx * expression =
     match e with
-    | Return _ | Fail -> (ctx, e)
     | Value (v, mp) -> update_value v mp ctx
     | Call call -> update_call call ctx
-    | Let (lb, re, e) -> update_let lb re e ctx
+    | Let (monadic, lb, re, e) -> update_let monadic lb re e ctx
     | Switch (scrut, mp, body) -> update_switch_body scrut mp body ctx
     | Meta (meta, e) -> update_meta meta e ctx
   (* *)
@@ -174,13 +173,13 @@ let compute_pretty_names (def : fun_def) : fun_def =
     let call = { call with args } in
     (ctx, Call call)
   (* *)
-  and update_let (lv : typed_lvalue) (re : expression) (e : expression)
-      (ctx : pn_ctx) : pn_ctx * expression =
+  and update_let (monadic : bool) (lv : typed_lvalue) (re : expression)
+      (e : expression) (ctx : pn_ctx) : pn_ctx * expression =
     let ctx = add_left_constraint lv ctx in
     let ctx, re = update_expression re ctx in
     let ctx, e = update_expression e ctx in
     let lv = update_typed_lvalue ctx lv in
-    (ctx, Let (lv, re, e))
+    (ctx, Let (monadic, lv, re, e))
   (* *)
   and update_switch_body (scrut : typed_rvalue) (mp : mplace option)
       (body : switch_body) (ctx : pn_ctx) : pn_ctx * expression =
@@ -265,8 +264,8 @@ let filter_unused_assignments (def : fun_def) : fun_def =
   (* TODO *)
   def
 
-(** Add unit arguments for functions with no arguments *)
-let add_unit_arguments (def : fun_def) : fun_def =
+(** Add unit arguments for functions with no arguments, and change their return type. *)
+let to_monadic (def : fun_def) : fun_def =
   (* TODO *)
   def
 
@@ -309,9 +308,10 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
 
   (* TODO: deconstruct the monadic bindings into matches *)
 
-  (* Add unit arguments for functions with no arguments *)
-  let def = add_unit_arguments def in
-  log#ldebug (lazy ("add_unit_arguments:\n" ^ fun_def_to_string ctx def));
+  (* Add unit arguments for functions with no arguments, and change their return type.
+   * TODO: move that at the beginning? *)
+  let def = to_monadic def in
+  log#ldebug (lazy ("to_monadic:\n" ^ fun_def_to_string ctx def));
 
   (* We are done *)
   def

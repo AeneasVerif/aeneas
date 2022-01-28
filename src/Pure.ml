@@ -18,32 +18,57 @@ module SynthPhaseId = IdGen ()
 module VarId = IdGen ()
 (** Pay attention to the fact that we also define a [VarId] module in Values *)
 
-(* TODO
-   (** The assumed types for the pure AST.
+type assumed_ty =
+  | Result
+      (** The assumed types for the pure AST.
 
-       In comparison with CFIM:
-       - we removed `Box` (because it is translated as the identity: `Box T == T`)
-       - we added `Result`, which is the type used in the error monad. This allows
-         us to have a unified treatment of expressions.
-     *)
-   type assumed_ty = unit
+          In comparison with CFIM:
+          - we removed `Box` (because it is translated as the identity: `Box T == T`)
+          - we added `Result`, which is the type used in the error monad. This allows
+            us to have a unified treatment of expressions.
+        *)
+[@@deriving show, ord]
 
-   type type_id = AdtId of TypeDefId.id | Tuple | Assumed of assumed_ty
-   [@@deriving show, ord]
-*)
+let result_return_id = VariantId.of_int 0
+
+let result_fail_id = VariantId.of_int 1
+
+type type_id = AdtId of TypeDefId.id | Tuple | Assumed of assumed_ty
+[@@deriving show, ord]
+
+(** Ancestor for iter visitor for [ty] *)
+class ['self] iter_ty_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.iter
+
+    method visit_id : 'env -> TypeVarId.id -> unit = fun _ _ -> ()
+
+    method visit_type_id : 'env -> type_id -> unit = fun _ _ -> ()
+
+    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for map visitor for [ty] *)
+class ['self] map_ty_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.map
+
+    method visit_id : 'env -> TypeVarId.id -> TypeVarId.id = fun _ id -> id
+
+    method visit_type_id : 'env -> type_id -> type_id = fun _ id -> id
+
+    method visit_integer_type : 'env -> T.integer_type -> T.integer_type =
+      fun _ ity -> ity
+  end
 
 type ty =
-  | Adt of T.type_id * ty list
+  | Adt of type_id * ty list
       (** [Adt] encodes ADTs and tuples and assumed types.
        
           TODO: what about the ended regions? (ADTs may be parameterized
           with several region variables. When giving back an ADT value, we may
           be able to only give back part of the ADT. We need a way to encode
           such "partial" ADTs.
-          
-          TODO: we may want to redefine type_id here, to remove some types like
-          boxe. But on the other hand, it might introduce a lot of administrative
-          manipulations just to remove boxe...
        *)
   | TypeVar of TypeVarId.id
   | Bool
@@ -58,8 +83,7 @@ type ty =
       {
         name = "iter_ty";
         variety = "iter";
-        ancestors = [ "T.iter_ty_base" ];
-        (* Reusing the visitor from Types.ml *)
+        ancestors = [ "iter_ty_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
         polymorphic = false;
@@ -68,8 +92,7 @@ type ty =
       {
         name = "map_ty";
         variety = "map";
-        ancestors = [ "T.map_ty_base" ];
-        (* Reusing the visitor from Types.ml *)
+        ancestors = [ "map_ty_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
         polymorphic = false;
@@ -319,14 +342,12 @@ class ['self] map_expression_base =
     TODO: remove `Return` and `Fail` (they should be "normal" values, I think)
  *)
 type expression =
-  | Return of typed_rvalue
-  | Fail
   | Value of typed_rvalue * mplace option
   | Call of call
-  | Let of typed_lvalue * expression * expression
+  | Let of bool * typed_lvalue * expression * expression
       (** Let binding.
       
-          TODO: add a boolean to control whether the let is monadic or not.
+          The boolean controls whether the let is monadic or not.
           For instance, in F*:
           - non-monadic: `let x = ... in ...`
           - monadic:     `x <-- ...; ...`

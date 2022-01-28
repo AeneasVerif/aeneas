@@ -127,23 +127,19 @@ let mk_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
     fun_def_id_to_string;
   }
 
-let type_id_to_string (fmt : type_formatter) (id : T.type_id) : string =
+let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
-  | T.AdtId id -> fmt.type_def_id_to_string id
-  | T.Tuple -> ""
-  | T.Assumed aty -> (
-      match aty with
-      | Box ->
-          (* Boxes should have been eliminated *)
-          failwith "Unreachable: boxes should have been eliminated")
+  | AdtId id -> fmt.type_def_id_to_string id
+  | Tuple -> ""
+  | Assumed aty -> ( match aty with Result -> "Result")
 
 let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
   match ty with
   | Adt (id, tys) -> (
       let tys = List.map (ty_to_string fmt) tys in
       match id with
-      | T.Tuple -> "(" ^ String.concat " * " tys ^ ")"
-      | T.AdtId _ | T.Assumed _ ->
+      | Tuple -> "(" ^ String.concat " * " tys ^ ")"
+      | AdtId _ | Assumed _ ->
           let tys = if tys = [] then "" else " " ^ String.concat " " tys in
           type_id_to_string fmt id ^ tys)
   | TypeVar tv -> fmt.type_var_id_to_string tv
@@ -226,10 +222,10 @@ let adt_g_value_to_string (fmt : value_formatter)
     (field_values : 'v list) (ty : ty) : string =
   let field_values = List.map value_to_string field_values in
   match ty with
-  | Adt (T.Tuple, _) ->
+  | Adt (Tuple, _) ->
       (* Tuple *)
       "(" ^ String.concat ", " field_values ^ ")"
-  | Adt (T.AdtId def_id, _) ->
+  | Adt (AdtId def_id, _) ->
       (* "Regular" ADT *)
       let adt_ident =
         match variant_id with
@@ -251,12 +247,19 @@ let adt_g_value_to_string (fmt : value_formatter)
             let field_values = String.concat " " field_values in
             adt_ident ^ " { " ^ field_values ^ " }"
       else adt_ident
-  | Adt (T.Assumed aty, _) -> (
+  | Adt (Assumed aty, _) -> (
       (* Assumed type *)
       match aty with
-      | Box ->
-          (* Box values should have been eliminated *)
-          failwith "Unreachable")
+      | Result ->
+          let variant_id = Option.get variant_id in
+          if variant_id = result_return_id then
+            match field_values with
+            | [ v ] -> "@Result::Return " ^ v
+            | _ -> failwith "Result::Return takes exactly one value"
+          else if variant_id = result_fail_id then (
+            assert (field_values = []);
+            "@Result::Fail")
+          else failwith "Unreachable: improper variant id for result type")
   | _ -> failwith "Inconsistent typed value"
 
 let rec typed_lvalue_to_string (fmt : value_formatter) (v : typed_lvalue) :
@@ -356,11 +359,10 @@ let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
 let rec expression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : expression) : string =
   match e with
-  | Return v -> "return " ^ typed_rvalue_to_string fmt v
-  | Fail -> "fail"
   | Value (v, _) -> typed_rvalue_to_string fmt v
   | Call call -> call_to_string fmt indent indent_incr call
-  | Let (lv, re, e) -> let_to_string fmt indent indent_incr lv re e
+  | Let (monadic, lv, re, e) ->
+      let_to_string fmt indent indent_incr monadic lv re e
   | Switch (scrutinee, _, body) ->
       switch_to_string fmt indent indent_incr scrutinee body
   | Meta (meta, e) ->
@@ -382,13 +384,15 @@ and call_to_string (fmt : ast_formatter) (indent : string)
   if all_args = [] then fun_id else fun_id ^ " " ^ String.concat " " all_args
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
-    (lv : typed_lvalue) (re : expression) (e : expression) : string =
+    (monadic : bool) (lv : typed_lvalue) (re : expression) (e : expression) :
+    string =
   let indent1 = indent ^ indent_incr in
   let val_fmt = ast_to_value_formatter fmt in
   let re = expression_to_string fmt indent1 indent_incr re in
   let e = expression_to_string fmt indent indent_incr e in
   let lv = typed_lvalue_to_string val_fmt lv in
-  "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
+  if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
+  else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
 and switch_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (scrutinee : typed_rvalue) (body : switch_body) :
@@ -410,7 +414,7 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
           branches
       in
       let otherwise =
-        indent ^ "| _ ->\n"
+        indent ^ "| _ ->\n" ^ indent1
         ^ expression_to_string fmt indent1 indent_incr otherwise
       in
       let all_branches = List.append branches [ otherwise ] in
