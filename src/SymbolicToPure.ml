@@ -955,10 +955,11 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         | _ -> failwith "Unreachable")
   in
   let call = { func; type_params; args; args_mplaces } in
+  let call = Call call in
   (* Translate the next expression *)
   let e = translate_expression e ctx in
   (* Put together *)
-  Let (Call (mk_typed_lvalue_from_var dest dest_mplace, call), e)
+  Let (mk_typed_lvalue_from_var dest dest_mplace, call, e)
 
 and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
     expression =
@@ -1013,7 +1014,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       (* Generate the assignemnts *)
       List.fold_right
         (fun (var, value) e ->
-          Let (Assign (mk_typed_lvalue_from_var var None, value, None), e))
+          Let (mk_typed_lvalue_from_var var None, Value (value, None), e))
         variables_values e
   | V.FunCall ->
       let call_info = V.FunCallId.Map.find abs.call_id ctx.calls in
@@ -1069,7 +1070,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       (* Put everything together *)
       let args_mplaces = List.map (fun _ -> None) inputs in
       let call = { func; type_params; args = inputs; args_mplaces } in
-      Let (Call (output, call), e)
+      Let (output, Call call, e)
   | V.SynthRet ->
       (* If we end the abstraction which consumed the return value of the function
        * we are synthesizing, we get back the borrows which were inside. Those borrows
@@ -1122,7 +1123,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       (* Generate the assignments *)
       List.fold_right
         (fun (given_back, input_var) e ->
-          Let (Assign (given_back, mk_typed_rvalue_from_var input_var, None), e))
+          Let (given_back, Value (mk_typed_rvalue_from_var input_var, None), e))
         given_back_inputs e
 
 and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
@@ -1145,8 +1146,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let ctx, var = fresh_var_for_symbolic_value nsv ctx in
           let e = translate_expression e ctx in
           Let
-            ( Assign
-                (mk_typed_lvalue_from_var var None, scrutinee, scrutinee_mplace),
+            ( mk_typed_lvalue_from_var var None,
+              Value (scrutinee, scrutinee_mplace),
               e )
       | SeAdt _ ->
           (* Should be in the [ExpandAdt] case *)
@@ -1171,7 +1172,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
                   List.map (fun v -> mk_typed_lvalue_from_var v None) vars
                 in
                 let lv = mk_adt_lvalue scrutinee.ty variant_id lvars in
-                Let (Assign (lv, scrutinee, scrutinee_mplace), branch)
+                Let (lv, Value (scrutinee, scrutinee_mplace), branch)
               else
                 (* This is not an enumeration: introduce let-bindings for every
                  * field.
@@ -1192,8 +1193,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
                   (fun (fid, var) e ->
                     let field_proj = gen_field_proj fid var in
                     Let
-                      ( Assign
-                          (mk_typed_lvalue_from_var var None, field_proj, None),
+                      ( mk_typed_lvalue_from_var var None,
+                        Value (field_proj, None),
                         e ))
                   id_var_pairs branch
           | T.Tuple ->
@@ -1201,7 +1202,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
                 List.map (fun x -> mk_typed_lvalue_from_var x None) vars
               in
               Let
-                ( Assign (mk_tuple_lvalue vars, scrutinee, scrutinee_mplace),
+                ( mk_tuple_lvalue vars,
+                  Value (scrutinee, scrutinee_mplace),
                   branch )
           | T.Assumed T.Box ->
               (* There should be exactly one variable *)
@@ -1211,10 +1213,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
               (* We simply introduce an assignment - the box type is the
                * identity when extracted (`box a == a`) *)
               Let
-                ( Assign
-                    ( mk_typed_lvalue_from_var var None,
-                      scrutinee,
-                      scrutinee_mplace ),
+                ( mk_typed_lvalue_from_var var None,
+                  Value (scrutinee, scrutinee_mplace),
                   branch ))
       | branches ->
           let translate_branch (variant_id : T.VariantId.id option)

@@ -159,28 +159,31 @@ let compute_pretty_names (def : fun_def) : fun_def =
       pn_ctx * expression =
     match e with
     | Return _ | Fail -> (ctx, e)
-    | Let (lb, e) -> update_let lb e ctx
+    | Value (v, mp) -> update_value v mp ctx
+    | Call call -> update_call call ctx
+    | Let (lb, re, e) -> update_let lb re e ctx
     | Switch (scrut, mp, body) -> update_switch_body scrut mp body ctx
     | Meta (meta, e) -> update_meta meta e ctx
   (* *)
-  and update_let (lb : let_bindings) (e : expression) (ctx : pn_ctx) :
+  and update_value (v : typed_rvalue) (mp : mplace option) (ctx : pn_ctx) :
       pn_ctx * expression =
-    match lb with
-    | Call (lv, call) ->
-        let ctx =
-          add_opt_right_constraint_list ctx
-            (List.combine call.args_mplaces call.args)
-        in
-        let ctx = add_left_constraint lv ctx in
-        let ctx, e = update_expression e ctx in
-        let lv = update_typed_lvalue ctx lv in
-        (ctx, Let (Call (lv, call), e))
-    | Assign (lv, rv, rmp) ->
-        let ctx = add_left_constraint lv ctx in
-        let ctx = add_opt_right_constraint rmp rv ctx in
-        let ctx, e = update_expression e ctx in
-        let lv = update_typed_lvalue ctx lv in
-        (ctx, Let (Assign (lv, rv, rmp), e))
+    let ctx = add_opt_right_constraint mp v ctx in
+    (ctx, Value (v, mp))
+  (* *)
+  and update_call (call : call) (ctx : pn_ctx) : pn_ctx * expression =
+    let ctx =
+      add_opt_right_constraint_list ctx
+        (List.combine call.args_mplaces call.args)
+    in
+    (ctx, Call call)
+  (* *)
+  and update_let (lv : typed_lvalue) (re : expression) (e : expression)
+      (ctx : pn_ctx) : pn_ctx * expression =
+    let ctx = add_left_constraint lv ctx in
+    let ctx, re = update_expression re ctx in
+    let ctx, e = update_expression e ctx in
+    let lv = update_typed_lvalue ctx lv in
+    (ctx, Let (lv, re, e))
   (* *)
   and update_switch_body (scrut : typed_rvalue) (mp : mplace option)
       (body : switch_body) (ctx : pn_ctx) : pn_ctx * expression =
@@ -303,6 +306,8 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
   log#ldebug (lazy ("filter_unused_assignments:\n" ^ fun_def_to_string ctx def));
 
   (* TODO: deconstruct the monadic bindings into matches *)
+
+  (* TODO: add unit arguments for functions with no arguments *)
 
   (* We are done *)
   def

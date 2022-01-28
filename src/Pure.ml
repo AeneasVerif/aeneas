@@ -18,6 +18,20 @@ module SynthPhaseId = IdGen ()
 module VarId = IdGen ()
 (** Pay attention to the fact that we also define a [VarId] module in Values *)
 
+(* TODO
+   (** The assumed types for the pure AST.
+
+       In comparison with CFIM:
+       - we removed `Box` (because it is translated as the identity: `Box T == T`)
+       - we added `Result`, which is the type used in the error monad. This allows
+         us to have a unified treatment of expressions.
+     *)
+   type assumed_ty = unit
+
+   type type_id = AdtId of TypeDefId.id | Tuple | Assumed of assumed_ty
+   [@@deriving show, ord]
+*)
+
 type ty =
   | Adt of T.type_id * ty list
       (** [Adt] encodes ADTs and tuples and assumed types.
@@ -238,30 +252,121 @@ type fun_id =
   | Unop of unop
   | Binop of E.binop * T.integer_type
 
+(** Meta-information stored in the AST *)
+type meta = Assignment of mplace * typed_rvalue
+
+(** Ancestor for [iter_expression] iter visitor *)
+class ['self] iter_expression_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.iter
+
+    method visit_ty : 'env -> ty -> unit = fun _ _ -> ()
+
+    method visit_typed_rvalue : 'env -> typed_rvalue -> unit = fun _ _ -> ()
+
+    method visit_typed_lvalue : 'env -> typed_lvalue -> unit = fun _ _ -> ()
+
+    method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
+
+    method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
+
+    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
+
+    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
+
+    method visit_id : 'env -> VariantId.id -> unit = fun _ _ -> ()
+
+    method visit_fun_id : 'env -> fun_id -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for [map_expression] map visitor *)
+class ['self] map_expression_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.map
+
+    method visit_ty : 'env -> ty -> ty = fun _ x -> x
+
+    method visit_typed_rvalue : 'env -> typed_rvalue -> typed_rvalue =
+      fun _ x -> x
+
+    method visit_typed_lvalue : 'env -> typed_lvalue -> typed_lvalue =
+      fun _ x -> x
+
+    method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
+
+    method visit_meta : 'env -> meta -> meta = fun _ x -> x
+
+    method visit_integer_type : 'env -> T.integer_type -> T.integer_type =
+      fun _ x -> x
+
+    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
+      fun _ x -> x
+
+    method visit_id : 'env -> VariantId.id -> VariantId.id = fun _ x -> x
+
+    method visit_fun_id : 'env -> fun_id -> fun_id = fun _ x -> x
+  end
+
 type call = {
   func : fun_id;
   type_params : ty list;
   args : typed_rvalue list;
-      (** Note that at this point, some functions have no arguments. For instance:
+      (** Note that immediately after we converted the symbolic AST to a pure AST,
+          some functions may have no arguments. For instance:
           ```
           fn f();
           ```
-
-          In the extracted code, we add a unit argument. This is unit argument is
-          added later, when going from the "pure" AST to the "extracted" AST.
+          We later add a unit argument.
+          
+          TODO: we should use expressions...
        *)
   args_mplaces : mplace option list;  (** Meta data *)
 }
+[@@deriving
+  visitors
+    {
+      name = "iter_call";
+      variety = "iter";
+      ancestors = [ "iter_expression_base" ];
+      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+      concrete = true;
+    },
+    visitors
+      {
+        name = "map_call";
+        variety = "map";
+        ancestors = [ "map_expression_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      }]
+(** "Regular" typed value (we map variables to typed values) *)
 
-(* TODO: we might want to merge Call and Assign *)
-type let_bindings =
-  | Call of typed_lvalue * call
-      (** The called function and the tuple of returned values. *)
-  | Assign of typed_lvalue * typed_rvalue * mplace option
-      (** Variable assignment: the introduced pattern and the place we read.
+(** **Rk.:** here, [expression] is not at all equivalent to the expressions
+    used in CFIM. They are lambda-calculus expressions, and are thus actually
+    more general than the CFIM statements, in a sense.
+    
+    TODO: actually when I defined [expression] I still had Rust in mind, so
+    it is not a "textbook" lambda calculus expression (still quite constrained).
+    As we want to do transformations on it, through micro-passes, it would be
+    good to update it and make it more "regular".
+    
+    TODO: remove `Return` and `Fail` (they should be "normal" values, I think)
+ *)
+type expression =
+  | Return of typed_rvalue
+  | Fail
+  | Value of typed_rvalue * mplace option
+  | Call of call
+  | Let of typed_lvalue * expression * expression
+      (** Let binding.
       
-          We are quite general for the left-value on purpose; this is used
-          in several situations:
+          TODO: add a boolean to control whether the let is monadic or not.
+          For instance, in F*:
+          - non-monadic: `let x = ... in ...`
+          - monadic:     `x <-- ...; ...`
+
+          Note that we are quite general for the left-value on purpose; this
+          is used in several situations:
 
           1. When deconstructing a tuple:
           ```
@@ -286,78 +391,6 @@ type let_bindings =
           ...
           ```
        *)
-
-(** Meta-information stored in the AST *)
-type meta = Assignment of mplace * typed_rvalue
-
-(** Ancestor for [iter_expression] iter visitor *)
-class ['self] iter_expression_base =
-  object (_self : 'self)
-    inherit [_] VisitorsRuntime.iter
-
-    method visit_typed_rvalue : 'env -> typed_rvalue -> unit = fun _ _ -> ()
-
-    method visit_typed_lvalue : 'env -> typed_lvalue -> unit = fun _ _ -> ()
-
-    method visit_let_bindings : 'env -> let_bindings -> unit = fun _ _ -> ()
-
-    method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-
-    method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
-
-    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
-
-    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
-
-    method visit_id : 'env -> VariantId.id -> unit = fun _ _ -> ()
-
-    method visit_var_or_dummy : 'env -> var_or_dummy -> unit = fun _ _ -> ()
-  end
-
-(** Ancestor for [map_expression] map visitor *)
-class ['self] map_expression_base =
-  object (_self : 'self)
-    inherit [_] VisitorsRuntime.map
-
-    method visit_typed_rvalue : 'env -> typed_rvalue -> typed_rvalue =
-      fun _ x -> x
-
-    method visit_typed_lvalue : 'env -> typed_lvalue -> typed_lvalue =
-      fun _ x -> x
-
-    method visit_let_bindings : 'env -> let_bindings -> let_bindings =
-      fun _ x -> x
-
-    method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
-
-    method visit_meta : 'env -> meta -> meta = fun _ x -> x
-
-    method visit_integer_type : 'env -> T.integer_type -> T.integer_type =
-      fun _ x -> x
-
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
-      fun _ x -> x
-
-    method visit_id : 'env -> VariantId.id -> VariantId.id = fun _ x -> x
-
-    method visit_var_or_dummy : 'env -> var_or_dummy -> var_or_dummy =
-      fun _ x -> x
-  end
-
-(** **Rk.:** here, [expression] is not at all equivalent to the expressions
-    used in CFIM. They are lambda-calculus expressions, and are thus actually
-    more general than the CFIM statements, in a sense.
-    
-    TODO: actually when I defined [expression] I still had Rust in mind, so
-    it is not a "textbook" lambda calculus expression (still quite constrained).
-    As we want to do transformations on it, through micro-passes, it would be
-    good to update it and make it more "regular".
- *)
-type expression =
-  | Return of typed_rvalue
-  | Fail
-  | Let of let_bindings * expression
-      (** Let bindings include the let-bindings introduced because of function calls *)
   | Switch of typed_rvalue * mplace option * switch_body
   | Meta of meta * expression  (** Meta-information *)
 
@@ -372,7 +405,7 @@ and match_branch = { pat : typed_lvalue; branch : expression }
     {
       name = "iter_expression";
       variety = "iter";
-      ancestors = [ "iter_expression_base" ];
+      ancestors = [ "iter_call" ];
       nude = true (* Don't inherit [VisitorsRuntime.iter] *);
       concrete = true;
     },
@@ -380,7 +413,7 @@ and match_branch = { pat : typed_lvalue; branch : expression }
       {
         name = "map_expression";
         variety = "map";
-        ancestors = [ "map_expression_base" ];
+        ancestors = [ "map_call" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
       }]

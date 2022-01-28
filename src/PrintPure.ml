@@ -353,12 +353,23 @@ let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   in
   "@meta[" ^ meta ^ "]"
 
+let call_to_string (fmt : ast_formatter) (call : call) : string =
+  let val_fmt = ast_to_value_formatter fmt in
+  let ty_fmt = ast_to_type_formatter fmt in
+  let tys = List.map (ty_to_string ty_fmt) call.type_params in
+  let args = List.map (typed_rvalue_to_string fmt) call.args in
+  let all_args = List.append tys args in
+  let fun_id = fun_id_to_string fmt call.func in
+  if all_args = [] then fun_id else fun_id ^ " " ^ String.concat " " all_args
+
 let rec expression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : expression) : string =
   match e with
-  | Return v -> indent ^ "return " ^ typed_rvalue_to_string fmt v
-  | Fail -> indent ^ "fail"
-  | Let (lb, e) -> let_to_string fmt indent indent_incr lb e
+  | Return v -> "return " ^ typed_rvalue_to_string fmt v
+  | Fail -> "fail"
+  | Value (v, _) -> typed_rvalue_to_string fmt v
+  | Call call -> call_to_string fmt call
+  | Let (lv, re, e) -> let_to_string fmt indent indent_incr lv re e
   | Switch (scrutinee, _, body) ->
       switch_to_string fmt indent indent_incr scrutinee body
   | Meta (meta, e) ->
@@ -367,26 +378,13 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
       indent ^ meta ^ "\n" ^ e
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
-    (lb : let_bindings) (e : expression) : string =
-  let e = expression_to_string fmt indent indent_incr e in
+    (lv : typed_lvalue) (re : expression) (e : expression) : string =
+  let indent1 = indent ^ indent_incr in
   let val_fmt = ast_to_value_formatter fmt in
-  match lb with
-  | Call (lv, call) ->
-      let lv = typed_lvalue_to_string val_fmt lv in
-      let ty_fmt = ast_to_type_formatter fmt in
-      let tys = List.map (ty_to_string ty_fmt) call.type_params in
-      let args = List.map (typed_rvalue_to_string fmt) call.args in
-      let all_args = List.append tys args in
-      let fun_id = fun_id_to_string fmt call.func in
-      let call =
-        if all_args = [] then fun_id
-        else fun_id ^ " " ^ String.concat " " all_args
-      in
-      indent ^ "let " ^ lv ^ " = " ^ call ^ " in\n" ^ e
-  | Assign (lv, rv, _) ->
-      let lv = typed_lvalue_to_string val_fmt lv in
-      let rv = typed_rvalue_to_string fmt rv in
-      indent ^ "let " ^ lv ^ " = " ^ rv ^ " in\n" ^ e
+  let re = expression_to_string fmt indent1 indent_incr re in
+  let e = expression_to_string fmt indent indent_incr e in
+  let lv = typed_lvalue_to_string val_fmt lv in
+  "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
 and switch_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (scrutinee : typed_rvalue) (body : switch_body) :
@@ -397,13 +395,13 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
   | If (e_true, e_false) ->
       let e_true = expression_to_string fmt indent1 indent_incr e_true in
       let e_false = expression_to_string fmt indent1 indent_incr e_false in
-      indent ^ "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ e_true ^ "\n" ^ indent
-      ^ "else\n" ^ e_false
+      "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent ^ e_true ^ "\n" ^ indent
+      ^ "else\n" ^ indent ^ e_false
   | SwitchInt (_, branches, otherwise) ->
       let branches =
         List.map
           (fun (v, be) ->
-            indent ^ "| " ^ scalar_value_to_string v ^ " ->\n"
+            indent ^ "| " ^ scalar_value_to_string v ^ " ->\n" ^ indent1
             ^ expression_to_string fmt indent1 indent_incr be)
           branches
       in
@@ -412,16 +410,16 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
         ^ expression_to_string fmt indent1 indent_incr otherwise
       in
       let all_branches = List.append branches [ otherwise ] in
-      indent ^ "switch " ^ scrut ^ " with\n" ^ String.concat "\n" all_branches
+      "switch " ^ scrut ^ " with\n" ^ String.concat "\n" all_branches
   | Match branches ->
       let val_fmt = ast_to_value_formatter fmt in
       let branch_to_string (b : match_branch) : string =
         let pat = typed_lvalue_to_string val_fmt b.pat in
-        indent ^ "| " ^ pat ^ " ->\n"
+        indent ^ "| " ^ pat ^ " ->\n" ^ indent1
         ^ expression_to_string fmt indent1 indent_incr b.branch
       in
       let branches = List.map branch_to_string branches in
-      indent ^ "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
+      "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
 
 let fun_def_to_string (fmt : ast_formatter) (def : fun_def) : string =
   let type_fmt = ast_to_type_formatter fmt in
@@ -432,4 +430,4 @@ let fun_def_to_string (fmt : ast_formatter) (def : fun_def) : string =
     if inputs = [] then "" else "  fun " ^ String.concat " " inputs ^ " ->\n"
   in
   let body = expression_to_string fmt "  " "  " def.body in
-  "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body
+  "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ "  " ^ body
