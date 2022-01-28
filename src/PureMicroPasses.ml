@@ -368,13 +368,90 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call : call)
 (** Filter the unused assignments (removes the unused variables, filters
     the function calls) *)
 let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
-  (* let add_used_vars = () in
-     let filter_in_expr (e : expression) : VarId.Set.t =
-       match e with
-       | Value (v, _ ) -> let ctx = add_used_vars v ctx
-       | Call call ->
-       in*)
-  raise Unimplemented
+  (* We first need a transformation on *left-values*, which filters the unused
+   * variables and tells us whether the value contains any variable which has
+   * not been replaced by `_` (in which case we need to keep the assignment,
+   * etc.).
+   * 
+   * This is implemented as a map-reduce.
+   *
+   * Returns: ( filtered_left_value, *all_dummies* )
+   *
+   * `all_dummies`:
+   * If the returned boolean is true, it means that all the variables appearing
+   * in the filtered left-value are *dummies* (meaning that if this left-value
+   * appears at the left of a let-binding, this binding might potentially be
+   * removed).
+   *)
+  let filter_typed_lvalue (used_vars : VarId.Set.t) (lv : typed_lvalue) :
+      typed_lvalue * bool =
+    raise Unimplemented
+  in
+
+  (* We then implement the transformation on *expressions* through a mapreduce.
+   * Note that the transformation is bottom-up.
+   * The map filters the unused assignments, the reduce computes the set of
+   * used variables.
+   *)
+  let obj =
+    object (self)
+      inherit [_] mapreduce_expression as super
+
+      method zero _ = VarId.Set.empty
+
+      method plus s0 s1 _ = VarId.Set.union (s0 ()) (s1 ())
+
+      method! visit_expression env e =
+        match e with
+        | Value (_, _) | Call _ | Switch (_, _, _) | Meta (_, _) ->
+            super#visit_expression env e
+        | Let (monadic, lv, re, e) ->
+            (* Compute the set of values used in the next expression *)
+            let e, used = self#visit_expression env e in
+            let used = used () in
+            (* Filter the left values *)
+            let lv, all_dummies = filter_typed_lvalue used lv in
+            (* Small utility - called if we can't filter the let-binding *)
+            let dont_filter () =
+              let re, used_re = self#visit_expression env re in
+              let used = VarId.Set.union used (used_re ()) in
+              (Let (monadic, lv, re, e), fun _ -> used)
+            in
+            (* Potentially filter the let-binding *)
+            if all_dummies then
+              if not monadic then
+                (* Not a monadic let-binding: simple case *)
+                (e, fun _ -> used)
+              else
+                (* Monadic let-binding: trickier *)
+                match re with
+                | Call call ->
+                    (* We need to check if there is a child call - see
+                     * the comments for:
+                     * [expression_contains_child_call_in_all_paths] *)
+                    let has_child_call =
+                      expression_contains_child_call_in_all_paths ctx call e
+                    in
+                    if has_child_call then (* Filter *)
+                      raise Unimplemented
+                    else (* Don't filter *)
+                      dont_filter ()
+                | _ ->
+                    (* We can't filter *)
+                    dont_filter ()
+            else (* Don't filter *)
+              dont_filter ()
+    end
+  in
+  (* Visit the body *)
+  let body, used_vars = obj#visit_expression () def.body in
+  (* Visit the parameters *)
+  let used_vars = used_vars () in
+  let inputs_lvs =
+    List.map (fun lv -> fst (filter_typed_lvalue used_vars lv)) def.inputs_lvs
+  in
+  (* Return *)
+  { def with body; inputs_lvs }
 
 (** Add unit arguments for functions with no arguments, and change their return type. *)
 let to_monadic (def : fun_def) : fun_def =
