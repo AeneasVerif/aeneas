@@ -1,7 +1,5 @@
 (** This module defines printing functions for the types defined in Pure.ml *)
 
-open Errors
-open Identifiers
 open Pure
 module T = Types
 module V = Values
@@ -372,13 +370,14 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
 
 and call_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (call : call) : string =
-  let val_fmt = ast_to_value_formatter fmt in
   let ty_fmt = ast_to_type_formatter fmt in
   let tys = List.map (ty_to_string ty_fmt) call.type_params in
-  (* The arguments are expressions, so this may not be perfect... (though
-   * those expressions will in most cases be values) *)
+  (* The arguments are expressions, so indentation might get weird... (though
+   * those expressions will in most cases just be values) *)
   let indent1 = indent ^ indent_incr in
-  let args = List.map (expression_to_string fmt indent indent_incr) call.args in
+  let args =
+    List.map (expression_to_string fmt indent1 indent_incr) call.args
+  in
   let all_args = List.append tys args in
   let fun_id = fun_id_to_string fmt call.func in
   if all_args = [] then fun_id else fun_id ^ " " ^ String.concat " " all_args

@@ -1,4 +1,3 @@
-open Identifiers
 open Pure
 
 (* TODO : move *)

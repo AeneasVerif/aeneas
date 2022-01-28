@@ -1,7 +1,6 @@
 (** Some utilities for the translation *)
 
 open InterpreterStatements
-open Interpreter
 module L = Logging
 module T = Types
 module A = CfimAst

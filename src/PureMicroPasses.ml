@@ -430,7 +430,8 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
 
   (* First, find names for the variables which are unnamed *)
   let def = compute_pretty_names def in
-  log#ldebug (lazy ("compute_pretty_name:\n" ^ fun_def_to_string ctx def));
+  log#ldebug
+    (lazy ("compute_pretty_name:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
   (* TODO: we might want to leverage more the assignment meta-data, for
    * aggregates for instance. *)
@@ -439,30 +440,33 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
 
   (* The meta-information is now useless: remove it *)
   let def = remove_meta def in
-  log#ldebug (lazy ("remove_meta:\n" ^ fun_def_to_string ctx def));
+  log#ldebug (lazy ("remove_meta:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
   (* Add unit arguments for functions with no arguments, and change their return type.
    * **Rk.**: from now onwards, the types in the AST are correct (until now,
    * functions had return type `t` where they should have return type `result t`).
    * Also, from now onwards, the outputs list has length 1. x*)
   let def = to_monadic def in
-  log#ldebug (lazy ("to_monadic:\n" ^ fun_def_to_string ctx def));
+  log#ldebug (lazy ("to_monadic:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
   (* Convert the unit variables to `()` if they are used as right-values or
    * `_` if they are used as left values. *)
   let def = unit_vars_to_unit def in
-  log#ldebug (lazy ("unit_vars_to_unit:\n" ^ fun_def_to_string ctx def));
+  log#ldebug
+    (lazy ("unit_vars_to_unit:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
   (* Inline the useless variable reassignments *)
   let inline_named_vars = true in
   let def = inline_useless_var_reassignments inline_named_vars def in
   log#ldebug
-    (lazy ("inline_useless_var_assignments:\n" ^ fun_def_to_string ctx def));
+    (lazy
+      ("inline_useless_var_assignments:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
   (* Filter the unused assignments (removes the unused variables, filters
    * the function calls) *)
   let def = filter_unused_assignments def in
-  log#ldebug (lazy ("filter_unused_assignments:\n" ^ fun_def_to_string ctx def));
+  log#ldebug
+    (lazy ("filter_unused_assignments:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
   (* TODO: deconstruct the monadic bindings into matches *)
 
