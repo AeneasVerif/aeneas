@@ -496,5 +496,8 @@ type fun_def = {
        *)
   signature : fun_sig;
   inputs : var list;
+  inputs_lvs : typed_lvalue list;
+      (** The inputs seen as lvalues. Allows to make transformations, for example
+          to replace unused variables by `_` *)
   body : expression;
 }

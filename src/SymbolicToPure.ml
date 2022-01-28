@@ -1292,12 +1292,15 @@ let translate_fun_def (ctx : bs_ctx) (body : S.expression) : fun_def =
              backward_ids)
   in
   let inputs = List.append ctx.forward_inputs backward_inputs in
+  let inputs_lvs = List.map (fun v -> mk_typed_lvalue_from_var v None) inputs in
   (* Sanity check *)
   assert (
     List.for_all
       (fun (var, ty) -> (var : var).ty = ty)
       (List.combine inputs signature.inputs));
-  let def = { def_id; back_id = bid; basename; signature; inputs; body } in
+  let def =
+    { def_id; back_id = bid; basename; signature; inputs; inputs_lvs; body }
+  in
   (* Debugging *)
   log#ldebug
     (lazy
