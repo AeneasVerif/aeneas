@@ -196,22 +196,24 @@ class virtual ['self] reduce_value_base =
     method visit_ty : 'env -> ty -> 'a = fun _ _ -> self#zero
   end
 
-(*(** Ancestor for [mapreduce_var_or_dummy] visitor *)
-  class virtual ['self] mapreduce_value_base =
-    object (self : 'self)
-      inherit [_] VisitorsRuntime.mapreduce
+(** Ancestor for [mapreduce_var_or_dummy] visitor *)
+class virtual ['self] mapreduce_value_base =
+  object (self : 'self)
+    inherit [_] VisitorsRuntime.mapreduce
 
-      method visit_constant_value : 'env -> constant_value -> constant_vlaue * 'a =
-        fun _ _ -> self#zero
+    method visit_constant_value : 'env -> constant_value -> constant_value * 'a
+        =
+      fun _ x -> (x, self#zero)
 
-      method visit_var : 'env -> var -> va * 'a = fun _ _ -> self#zero
+    method visit_var : 'env -> var -> var * 'a = fun _ x -> (x, self#zero)
 
-      method visit_place : 'env -> place -> place * 'a = fun _ _ -> self#zero
+    method visit_place : 'env -> place -> place * 'a = fun _ x -> (x, self#zero)
 
-      method visit_mplace : 'env -> mplace -> mplace * 'a = fun _ _ -> self#zero
+    method visit_mplace : 'env -> mplace -> mplace * 'a =
+      fun _ x -> (x, self#zero)
 
-      method visit_ty : 'env -> ty -> ty * 'a = fun _ _ -> self#zero
-  end*)
+    method visit_ty : 'env -> ty -> ty * 'a = fun _ x -> (x, self#zero)
+  end
 
 type var_or_dummy =
   | Var of var * mplace option
@@ -240,6 +242,14 @@ type var_or_dummy =
         name = "reduce_var_or_dummy";
         variety = "reduce";
         ancestors = [ "reduce_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "mapreduce_var_or_dummy";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
         polymorphic = false;
       }]
@@ -279,6 +289,14 @@ and typed_lvalue = { value : lvalue; ty : ty }
         ancestors = [ "reduce_var_or_dummy" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         polymorphic = false;
+      },
+    visitors
+      {
+        name = "mapreduce_typed_lvalue";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_var_or_dummy" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        polymorphic = false;
       }]
 
 type rvalue =
@@ -316,6 +334,14 @@ and typed_rvalue = { value : rvalue; ty : ty }
         name = "reduce_typed_rvalue";
         variety = "reduce";
         ancestors = [ "reduce_typed_lvalue" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "mapreduce_typed_rvalue";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_typed_lvalue" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         polymorphic = false;
       }]
@@ -382,6 +408,26 @@ class virtual ['self] reduce_expression_base =
     method visit_id : 'env -> VariantId.id -> 'a = fun _ _ -> self#zero
 
     method visit_fun_id : 'env -> fun_id -> 'a = fun _ _ -> self#zero
+  end
+
+(** Ancestor for [mapreduce_expression] visitor *)
+class virtual ['self] mapreduce_expression_base =
+  object (self : 'self)
+    inherit [_] mapreduce_typed_rvalue
+
+    method visit_meta : 'env -> meta -> meta * 'a = fun _ x -> (x, self#zero)
+
+    method visit_integer_type : 'env -> T.integer_type -> T.integer_type * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_id : 'env -> VariantId.id -> VariantId.id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_fun_id : 'env -> fun_id -> fun_id * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
@@ -476,6 +522,13 @@ and match_branch = { pat : typed_lvalue; branch : expression }
         name = "reduce_expression";
         variety = "reduce";
         ancestors = [ "reduce_expression_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+      },
+    visitors
+      {
+        name = "mapreduce_expression";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_expression_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
       }]
 
