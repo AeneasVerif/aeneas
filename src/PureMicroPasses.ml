@@ -21,16 +21,15 @@ let get_expression_min_var_counter (e : expression) : VarId.generator =
     object
       inherit [_] reduce_expression
 
-      method zero _ _ = VarId.zero
+      method zero _ = VarId.zero
 
-      (* TODO: why 2 parameters??? I don't understand what's going on... *)
-      method plus id0 id1 _ _ = VarId.max (id0 () ()) (id1 () ())
+      method plus id0 id1 _ = VarId.max (id0 ()) (id1 ())
       (* Get the maximum *)
 
-      method! visit_var _ v _ () = v.id
+      method! visit_var _ v _ = v.id
     end
   in
-  let id = obj#visit_expression () e () () in
+  let id = obj#visit_expression () e () in
   VarId.generator_from_incr_id id
 
 type pn_ctx = string VarId.Map.t
@@ -337,11 +336,45 @@ let inline_useless_var_reassignments (inline_named : bool) (def : fun_def) :
   let body = obj#visit_expression VarId.Map.empty def.body in
   { def with body }
 
+(** Given a forward or backward function call, is there, for every execution
+    path, a child backward function called later with exactly the same input
+    list prefix? We use this to filter useless function calls: if there are
+    such child calls, we can remove this one (in case its outputs are not
+    used).
+    We do this check because we can't simply remove function calls whose
+    outputs are not used, as they might fail. However, if a function fails,
+    its children backward functions then fail on the same inputs (ignoring
+    the additional inputs those receive).
+    
+    For instance, if we have:
+    ```
+    fn f<'a>(x : &'a mut T);
+    ```
+    
+    We often have  things like this in the synthesized code:
+    ```
+    _ <-- f x;
+    ...
+    nx <-- f@back'a x y;
+    ...
+    ```
+
+    In this situation, we can remove the call `f x`.
+ *)
+let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call : call)
+    (e : expression) : bool =
+  raise Unimplemented
+
 (** Filter the unused assignments (removes the unused variables, filters
     the function calls) *)
-let filter_unused_assignments (def : fun_def) : fun_def =
-  (* TODO *)
-  def
+let filter_unused_assignments (ctx : trans_ctx) (def : fun_def) : fun_def =
+  (* let add_used_vars = () in
+     let filter_in_expr (e : expression) : VarId.Set.t =
+       match e with
+       | Value (v, _ ) -> let ctx = add_used_vars v ctx
+       | Call call ->
+       in*)
+  raise Unimplemented
 
 (** Add unit arguments for functions with no arguments, and change their return type. *)
 let to_monadic (def : fun_def) : fun_def =
@@ -464,7 +497,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
 
   (* Filter the unused assignments (removes the unused variables, filters
    * the function calls) *)
-  let def = filter_unused_assignments def in
+  let def = filter_unused_assignments ctx def in
   log#ldebug
     (lazy ("filter_unused_assignments:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 

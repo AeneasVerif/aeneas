@@ -196,6 +196,23 @@ class virtual ['self] reduce_value_base =
     method visit_ty : 'env -> ty -> 'a = fun _ _ -> self#zero
   end
 
+(*(** Ancestor for [mapreduce_var_or_dummy] visitor *)
+  class virtual ['self] mapreduce_value_base =
+    object (self : 'self)
+      inherit [_] VisitorsRuntime.mapreduce
+
+      method visit_constant_value : 'env -> constant_value -> constant_vlaue * 'a =
+        fun _ _ -> self#zero
+
+      method visit_var : 'env -> var -> va * 'a = fun _ _ -> self#zero
+
+      method visit_place : 'env -> place -> place * 'a = fun _ _ -> self#zero
+
+      method visit_mplace : 'env -> mplace -> mplace * 'a = fun _ _ -> self#zero
+
+      method visit_ty : 'env -> ty -> ty * 'a = fun _ _ -> self#zero
+  end*)
+
 type var_or_dummy =
   | Var of var * mplace option
   | Dummy  (** Ignored value: `_`. *)
