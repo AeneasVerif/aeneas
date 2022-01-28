@@ -336,10 +336,30 @@ let to_monadic (def : fun_def) : fun_def =
   { def with signature }
 
 (** Convert the unit variables to `()` if they are used as right-values or
-    `_` if they are used as left values. *)
+    `_` if they are used as left values in patterns. *)
 let unit_vars_to_unit (def : fun_def) : fun_def =
-  (* TODO *)
-  def
+  (* The map visitor *)
+  let obj =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_var_or_dummy _ v =
+        match v with
+        | Dummy -> Dummy
+        | Var (v, mp) -> if v.ty = unit_ty then Dummy else Var (v, mp)
+      (** Replace in lvalues *)
+
+      method! visit_typed_rvalue env rv =
+        if rv.ty = unit_ty then unit_rvalue else super#visit_typed_rvalue env rv
+      (** Replace in rvalues *)
+    end
+  in
+  (* Update the body *)
+  let body = obj#visit_expression () def.body in
+  (* Update the input parameters *)
+  let inputs_lvs = List.map (obj#visit_typed_lvalue ()) def.inputs_lvs in
+  (* Return *)
+  { def with body; inputs_lvs }
 
 (** Apply all the micro-passes to a function.
 
