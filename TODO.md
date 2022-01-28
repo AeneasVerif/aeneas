@@ -1,5 +1,9 @@
 # TODO
 
+0. For variables pretty names: we could try to use the meta places used for the
+   forward function input vars to compute pretty names for the backward functions
+   output vars.
+
 0. sanity checks in symbolic to pure!
 
 0. update the end borrows internal to abstractions to not introduce a Bottom

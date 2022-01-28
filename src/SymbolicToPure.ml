@@ -806,16 +806,23 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
     let (nx, ny) = f_back ... in
         ^^^^^^^^
     ```
+    
+    [mp]: it is possible to provide some meta-place information, to guide
+    the heuristics which later find pretty names for the variables.
  *)
-let rec typed_avalue_to_given_back (av : V.typed_avalue) (ctx : bs_ctx) :
-    bs_ctx * typed_lvalue option =
+let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
+    (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
   match av.value with
   | AConcrete _ -> failwith "Unreachable"
   | AAdt adt_v -> (
       (* Translate the field values *)
+      (* For now we forget the meta-place information so that it doesn't get used
+       * by several fields (which would then all have the same name...), but we
+       * might want to do something smarter *)
+      let mp = None in
       let ctx, field_values =
         List.fold_left_map
-          (fun ctx fv -> typed_avalue_to_given_back fv ctx)
+          (fun ctx fv -> typed_avalue_to_given_back mp fv ctx)
           ctx adt_v.field_values
       in
       let field_values = List.filter_map (fun x -> x) field_values in
@@ -836,13 +843,13 @@ let rec typed_avalue_to_given_back (av : V.typed_avalue) (ctx : bs_ctx) :
             let lv : typed_lvalue = { value; ty } in
             (ctx, Some lv))
   | ABottom -> failwith "Unreachable"
-  | ALoan lc -> aloan_content_to_given_back lc ctx
-  | ABorrow bc -> aborrow_content_to_given_back bc ctx
-  | ASymbolic aproj -> aproj_to_given_back aproj ctx
+  | ALoan lc -> aloan_content_to_given_back mp lc ctx
+  | ABorrow bc -> aborrow_content_to_given_back mp bc ctx
+  | ASymbolic aproj -> aproj_to_given_back mp aproj ctx
   | AIgnored -> (ctx, None)
 
-and aloan_content_to_given_back (lc : V.aloan_content) (ctx : bs_ctx) :
-    bs_ctx * typed_lvalue option =
+and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
+    (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) -> failwith "Unreachable"
   | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
@@ -859,15 +866,15 @@ and aloan_content_to_given_back (lc : V.aloan_content) (ctx : bs_ctx) :
       (* Ignore *)
       (ctx, None)
 
-and aborrow_content_to_given_back (bc : V.aborrow_content) (ctx : bs_ctx) :
-    bs_ctx * typed_lvalue option =
+and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
+    (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
       failwith "Unreachable"
   | AEndedMutBorrow (mv, _) ->
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
-      (ctx, Some (mk_typed_lvalue_from_var var None))
+      (ctx, Some (mk_typed_lvalue_from_var var mp))
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -875,7 +882,7 @@ and aborrow_content_to_given_back (bc : V.aborrow_content) (ctx : bs_ctx) :
       (* Ignore *)
       (ctx, None)
 
-and aproj_to_given_back (aproj : V.aproj) (ctx : bs_ctx) :
+and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
     bs_ctx * typed_lvalue option =
   match aproj with
   | V.AEndedProjLoans (_, child_projs) ->
@@ -889,7 +896,7 @@ and aproj_to_given_back (aproj : V.aproj) (ctx : bs_ctx) :
   | AEndedProjBorrows mv ->
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
-      (ctx, Some (mk_typed_lvalue_from_var var None))
+      (ctx, Some (mk_typed_lvalue_from_var var mp))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
       failwith "Unreachable"
 
@@ -897,15 +904,22 @@ and aproj_to_given_back (aproj : V.aproj) (ctx : bs_ctx) :
 
     See [typed_avalue_to_given_back].
  *)
-let abs_to_given_back (abs : V.abs) (ctx : bs_ctx) : bs_ctx * typed_lvalue list
-    =
+let abs_to_given_back (mpl : mplace option list) (abs : V.abs) (ctx : bs_ctx) :
+    bs_ctx * typed_lvalue list =
+  let avalues = List.combine mpl abs.avalues in
   let ctx, values =
     List.fold_left_map
-      (fun ctx av -> typed_avalue_to_given_back av ctx)
-      ctx abs.avalues
+      (fun ctx (mp, av) -> typed_avalue_to_given_back mp av ctx)
+      ctx avalues
   in
   let values = List.filter_map (fun x -> x) values in
   (ctx, values)
+
+(** Simply calls [abs_to_given_back] *)
+let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) :
+    bs_ctx * typed_lvalue list =
+  let mpl = List.map (fun _ -> None) abs.avalues in
+  abs_to_given_back mpl abs ctx
 
 (** Return the ordered list of the (transitive) parents of a given abstraction.
 
@@ -1078,8 +1092,13 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
         List.concat [ fwd_inputs; back_ancestors_inputs; back_inputs ]
       in
       (* Retrieve the values given back by this function: those are the output
-       * values *)
-      let ctx, outputs = abs_to_given_back abs ctx in
+       * values. We rely on the fact that there are no nested borrows to use the
+       * meta-place information from the input values given to the forward function
+       * (we need to add `None` for the return avalue) *)
+      let output_mpl =
+        List.append (List.map translate_opt_mplace call.args_places) [ None ]
+      in
+      let ctx, outputs = abs_to_given_back output_mpl abs ctx in
       let output = mk_tuple_lvalue outputs in
       (* Sanity check: the inputs and outputs have the proper number and the proper type *)
       let fun_id =
@@ -1156,8 +1175,10 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
        * abstraction: as there are no nested borrows, there should be none. *)
       let consumed = abs_to_consumed ctx abs in
       assert (consumed = []);
-      (* Retrieve the values given back upon ending this abstraction *)
-      let ctx, given_back = abs_to_given_back abs ctx in
+      (* Retrieve the values given back upon ending this abstraction - note that
+       * we don't provide meta-place information, because those assignments will
+       * be inlined anyway... *)
+      let ctx, given_back = abs_to_given_back_no_mp abs ctx in
       (* Link the inputs to those given back values - note that this also
        * checks we have the same number of values, of course *)
       let given_back_inputs = List.combine given_back inputs in
