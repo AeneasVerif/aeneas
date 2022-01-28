@@ -7,6 +7,7 @@ module I = Interpreter
 module EL = Easy_logging.Logging
 module TA = TypesAnalysis
 open PureToExtract
+open ExtractAst
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.

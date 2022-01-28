@@ -1,5 +1,7 @@
 # TODO
 
+0. Rename Pure -> PureAst
+
 0. For variables pretty names: we could try to use the meta places used for the
    forward function input vars to compute pretty names for the backward functions
    output vars.

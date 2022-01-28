@@ -434,17 +434,16 @@ class virtual ['self] mapreduce_expression_base =
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM. They are lambda-calculus expressions, and are thus actually
     more general than the CFIM statements, in a sense.
-    
-    TODO: actually when I defined [expression] I still had Rust in mind, so
-    it is not a "textbook" lambda calculus expression (still quite constrained).
-    As we want to do transformations on it, through micro-passes, it would be
-    good to update it and make it more "regular".
-    
-    TODO: remove `Return` and `Fail` (they should be "normal" values, I think)
  *)
 type expression =
   | Value of typed_rvalue * mplace option
   | Call of call
+      (** The function calls are still quite structured.
+          Change that?... We might want to have a "normal" lambda calculus
+          app (with head and argument): this would allow us to replace some
+          field accesses with calls to projectors over fields (when there
+          are clashes of field names, some provers like F* get pretty bad...)
+       *)
   | Let of bool * typed_lvalue * texpression * texpression
       (** Let binding.
       
@@ -500,6 +499,7 @@ and switch_body =
   | SwitchInt of
       T.integer_type * (scalar_value * texpression) list * texpression
   | Match of match_branch list
+(* TODO: we could (should?) merge SwitchInt and Match *)
 
 and match_branch = { pat : typed_lvalue; branch : texpression }
 
