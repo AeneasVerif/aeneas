@@ -195,9 +195,9 @@ type let_bindings =
           ```
           
           Note that we prefer not handling this case through a match.
-          TODO: actually why not encoding it as a match internally, then
-          generating the `let Cons ... = ... in ...` upon outputting the
-          code if we detect there is exactly one variant?...
+          
+          TODO: why don't we merge this with Assign? It would make things a lot
+          simpler (before: introduce general ADTs in lvalue).
        *)
 
 (** Meta-information stored in the AST *)

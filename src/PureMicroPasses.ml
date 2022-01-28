@@ -12,7 +12,7 @@ type pn_ctx = string VarId.Map.t
 
 (** This function computes pretty names for the variables in the pure AST. It
     relies on the "meta"-place information in the AST to generate naming
-    constraints.
+    constraints, and then uses those to compute the names.
     
     The way it works is as follows:
     - we only modify the names of the unnamed variables
@@ -65,34 +65,6 @@ type pn_ctx = string VarId.Map.t
       | Cons x hd -> ...
       | ...
       ```
-   - If we write the following in Rust:
-     ```
-     let x = y + z;
-     ```
-     
-     We get the following MIR:
-     ```
-     let tmp = y + z;
-     ```
-     TODO: finish...
-   - If we write the following in Rust:
-     ```
-     let px = &mut x;
-     f(px);
-     ```
-     
-     Rustc generates the following MIR:
-     ```
-     px := &mut x;
-     tmp := &mut ( *px ); // "tmp" is actually an anonymous variable
-     f(move tmp);
-     ```
-
-     As borrows and dereferencements are ignored in the pure paths we generate
-     (because they are extracted to the identity), we save as meta-data that
-     at some point we assign the value of `px` to `tmp`.
-     
-     TODO: actually useless, because `tmp` later gets inlined.
    - TODO: inputs and end abstraction...
  *)
 let compute_pretty_names (def : fun_def) : fun_def =
@@ -302,6 +274,19 @@ let remove_meta (def : fun_def) : fun_def =
   let body = obj#visit_expression () def.body in
   { def with body }
 
+(** Inline the useless variable reassignments (a lot of variable assignments
+    like `let x = y in ...ÿ` are introduced through the compilation to MIR
+    and by the translation, and the variable used on the left is often unnamed *)
+let inline_useless_var_reassignments (def : fun_def) : fun_def =
+  (* TODO *)
+  def
+
+(** Filter the unused assignments (removes the unused variables, filters
+    the function calls) *)
+let filter_unused_assignments (def : fun_def) : fun_def =
+  (* TODO *)
+  def
+
 (** Apply all the micro-passes to a function.
 
     [ctx]: used only for printing.
@@ -320,9 +305,26 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
   let def = compute_pretty_names def in
   log#ldebug (lazy ("compute_pretty_name:\n" ^ fun_def_to_string ctx def));
 
+  (* TODO: we might want to leverage more the assignment meta-data, for
+   * aggregates for instance. *)
+
+  (* TODO: reorder the branches of the matches/switches *)
+
   (* The meta-information is now useless: remove it *)
   let def = remove_meta def in
   log#ldebug (lazy ("remove_meta:\n" ^ fun_def_to_string ctx def));
+
+  (* Inline the useless variable reassignments *)
+  let def = inline_useless_var_reassignments def in
+  log#ldebug
+    (lazy ("inline_useless_var_assignments:\n" ^ fun_def_to_string ctx def));
+
+  (* Filter the unused assignments (removes the unused variables, filters
+   * the function calls) *)
+  let def = filter_unused_assignments def in
+  log#ldebug (lazy ("filter_unused_assignments:\n" ^ fun_def_to_string ctx def));
+
+  (* TODO: deconstruct the monadic bindings into matches *)
 
   (* We are done *)
   def
