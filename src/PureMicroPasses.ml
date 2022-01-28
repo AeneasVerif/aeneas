@@ -27,7 +27,7 @@ let get_expression_min_var_counter (e : expression) : VarId.generator =
       method plus id0 id1 _ _ = VarId.max (id0 () ()) (id1 () ())
       (* Get the maximum *)
 
-      method! visit_var _ v mp () = v.id
+      method! visit_var _ v _ () = v.id
     end
   in
   let id = obj#visit_expression () e () () in
@@ -279,10 +279,63 @@ let remove_meta (def : fun_def) : fun_def =
 
 (** Inline the useless variable reassignments (a lot of variable assignments
     like `let x = y in ...ÿ` are introduced through the compilation to MIR
-    and by the translation, and the variable used on the left is often unnamed *)
-let inline_useless_var_reassignments (def : fun_def) : fun_def =
-  (* TODO *)
-  def
+    and by the translation, and the variable used on the left is often unnamed.
+
+    [inline_named]: if `true`, inline all the assignments of the form
+    `let VAR = VAR in ...`, otherwise inline only the ones where the variable
+    on the left is anonymous.
+ *)
+let inline_useless_var_reassignments (inline_named : bool) (def : fun_def) :
+    fun_def =
+  (* Register a substitution.
+     When registering that we need to substitute v0 with v1, we check
+     if v1 is itself substituted by v2, in which case we register:
+     `v0 --> v2` instead of `v0 --> v1`
+  *)
+  let add_subst v0 v1 m =
+    match VarId.Map.find_opt v1 m with
+    | None -> VarId.Map.add v0 v1 m
+    | Some v2 -> VarId.Map.add v0 v2 m
+  in
+
+  let obj =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_Let env monadic lv re e =
+        (* Check that:
+         * - the let-binding is not monadic
+         * - the left-value is a variable
+         * - the assigned expression is a value *)
+        match (monadic, lv.value, re) with
+        | false, LvVar (Var (lv_var, _)), Value (rv, _) -> (
+            (* Check that:
+             * - the left variable is unnamed or that [inline_named] is true
+             * - the right-value is a variable
+             *)
+            match ((inline_named, lv_var.basename), rv.value) with
+            | (true, _ | false, None), RvPlace { var; projection = [] } ->
+                (* Update the environment and explore the next expression
+                 * (dropping the currrent let) *)
+                let env = add_subst lv_var.id var env in
+                super#visit_expression env e
+            | _ -> super#visit_Let env monadic lv re e)
+        | _ -> super#visit_Let env monadic lv re e
+      (** Visit the let-bindings to filter the useless ones (and update
+          the substitution map while doing so *)
+
+      method! visit_place env p =
+        (* Check if we need to substitute *)
+        match VarId.Map.find_opt p.var env with
+        | None -> (* No substitution *) p
+        | Some nv ->
+            (* Substitute *)
+            { p with var = nv }
+      (** Visit the places used as rvalues, to substitute them if necessary *)
+    end
+  in
+  let body = obj#visit_expression VarId.Map.empty def.body in
+  { def with body }
 
 (** Filter the unused assignments (removes the unused variables, filters
     the function calls) *)
@@ -401,7 +454,8 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
   log#ldebug (lazy ("unit_vars_to_unit:\n" ^ fun_def_to_string ctx def));
 
   (* Inline the useless variable reassignments *)
-  let def = inline_useless_var_reassignments def in
+  let inline_named_vars = true in
+  let def = inline_useless_var_reassignments inline_named_vars def in
   log#ldebug
     (lazy ("inline_useless_var_assignments:\n" ^ fun_def_to_string ctx def));
 
