@@ -3,6 +3,9 @@
 open Errors
 open Pure
 
+type pn_ctx = string VarId.Map.t
+(** "pretty-name context": see [compute_pretty_names] *)
+
 (** This function computes pretty names for the variables in the pure AST. It
     relies on the "meta"-place information in the AST to generate naming
     constraints.
@@ -12,6 +15,9 @@ open Pure
     - whenever we see an rvalue/lvalue which is exactly an unnamed variable,
       and this value is linked to some meta-place information which contains
       a name and an empty path, we consider we should use this name
+      
+    Something important is that, for every variable we find, the name of this
+    variable is influenced by the information we find *below* in the AST.
 
     For instance, the following situations happen:
     
@@ -85,10 +91,140 @@ open Pure
      TODO: actually useless, because `tmp` later gets inlined.
    - TODO: inputs and end abstraction...
  *)
-let compute_pretty_names () = ()
+let compute_pretty_names (def : fun_def) : fun_def =
+  (* Small helpers *)
+  let add_constraint (mp : mplace) (rv : typed_rvalue) (ctx : pn_ctx) : pn_ctx =
+    match (mp.name, mp.projection, rv.value) with
+    | Some name, [], RvPlace { var = var_id; projection = [] } ->
+        (* Check if the variable already has a name - if not: insert the new name *)
+        if VarId.Map.mem var_id ctx then ctx else VarId.Map.add var_id name ctx
+    | _ -> ctx
+  in
+  let add_opt_constraint (mp : mplace option) (rv : typed_rvalue) (ctx : pn_ctx)
+      : pn_ctx =
+    match mp with None -> ctx | Some mp -> add_constraint mp rv ctx
+  in
+  let add_var (ctx : pn_ctx) (v : var) : pn_ctx =
+    assert (not (VarId.Map.mem v.id ctx));
+    match v.basename with
+    | None -> ctx
+    | Some name -> VarId.Map.add v.id name ctx
+  in
+  let add_var_or_dummy (ctx : pn_ctx) (v : var_or_dummy) : pn_ctx =
+    match v with Dummy -> ctx | Var v -> add_var ctx v
+  in
+  let add_var_or_dummy_list ctx ls = List.fold_left add_var_or_dummy ctx ls in
+  let update_var (ctx : pn_ctx) (v : var) : var =
+    match v.basename with
+    | Some _ -> v
+    | None -> (
+        match VarId.Map.find_opt v.id ctx with
+        | None -> v
+        | Some basename -> { v with basename = Some basename })
+  in
+  let update_var_or_dummy (ctx : pn_ctx) (v : var_or_dummy) : var_or_dummy =
+    match v with Dummy -> Dummy | Var v -> Var (update_var ctx v)
+  in
+  let update_var_or_dummy_list ctx = List.map (update_var_or_dummy ctx) in
+
+  (* 
+   * When we do branchings, we need to merge (the constraints saved in) the
+   * contexts returned by the different branches.
+   *
+   * Note that by doing so, some mappings from var id to name
+   * in one context may be overriden by the ones in the other context.
+   *
+   * This should be ok because:
+   * - generally, the overriden variables should have been introduced *inside*
+   *   the branches, in which case we don't care
+   * - or they were introduced before, in which case the naming should generally
+   *   be consistent? In the worse case, it isn't, but it leads only to less
+   *   readable code, not to unsoundness. This case should be pretty rare,
+   *   also.
+   *)
+  let merge_ctxs (ctx0 : pn_ctx) (ctx1 : pn_ctx) : pn_ctx =
+    VarId.Map.fold (fun id name ctx -> VarId.Map.add id name ctx) ctx0 ctx1
+  in
+  let merge_ctxs_ls (ctxs : pn_ctx list) : pn_ctx =
+    List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) VarId.Map.empty ctxs
+  in
+
+  (* *)
+  let rec update_expression (e : expression) (ctx : pn_ctx) :
+      pn_ctx * expression =
+    match e with
+    | Return _ | Fail -> (ctx, e)
+    | Let (lb, e) -> update_let lb e ctx
+    | Switch (scrut, mp, body) -> update_switch_body scrut mp body ctx
+    | Meta (meta, e) -> update_meta meta e ctx
+  (* *)
+  and update_let (lb : let_bindings) (e : expression) (ctx : pn_ctx) :
+      pn_ctx * expression =
+    match lb with
+    | Call (lvs, call) -> raise Unimplemented
+    | Assign (lv, lmp, rv, rmp) -> raise Unimplemented
+    | Deconstruct (lvs, opt_variant_id, rv, rmp) -> raise Unimplemented
+  (* *)
+  and update_switch_body (scrut : typed_rvalue) (mp : mplace option)
+      (body : switch_body) (ctx : pn_ctx) : pn_ctx * expression =
+    let ctx = add_opt_constraint mp scrut ctx in
+
+    let ctx, body =
+      match body with
+      | If (e_true, e_false) ->
+          let ctx1, e_true = update_expression e_true ctx in
+          let ctx2, e_false = update_expression e_false ctx in
+          let ctx = merge_ctxs ctx1 ctx2 in
+          (ctx, If (e_true, e_false))
+      | SwitchInt (int_ty, branches, otherwise) ->
+          let ctx_branches_ls =
+            List.map
+              (fun (v, br) ->
+                let ctx, br = update_expression br ctx in
+                (ctx, (v, br)))
+              branches
+          in
+          let ctx, otherwise = update_expression otherwise ctx in
+          let ctxs, branches = List.split ctx_branches_ls in
+          let ctxs = merge_ctxs_ls ctxs in
+          let ctx = merge_ctxs ctx ctxs in
+          (ctx, SwitchInt (int_ty, branches, otherwise))
+      | Match branches ->
+          let ctx_branches_ls =
+            List.map
+              (fun br ->
+                let ctx = add_var_or_dummy_list ctx br.vars in
+                let ctx, branch = update_expression br.branch ctx in
+                let vars = update_var_or_dummy_list ctx br.vars in
+                (ctx, { br with branch; vars }))
+              branches
+          in
+          let ctxs, branches = List.split ctx_branches_ls in
+          let ctx = merge_ctxs_ls ctxs in
+          (ctx, Match branches)
+    in
+    (ctx, Switch (scrut, mp, body))
+  (* *)
+  and update_meta (meta : meta) (e : expression) (ctx : pn_ctx) :
+      pn_ctx * expression =
+    match meta with
+    | Assignment (mp, rvalue) ->
+        let ctx = add_constraint mp rvalue ctx in
+        update_expression e ctx
+  in
+
+  let input_names =
+    List.filter_map
+      (fun (v : var) ->
+        match v.basename with None -> None | Some name -> Some (v.id, name))
+      def.inputs
+  in
+  let ctx = VarId.Map.of_list input_names in
+  let _, body = update_expression def.body ctx in
+  { def with body }
 
 (** Remove the meta-information *)
-let remove_meta (e : expression) : expression =
+let remove_meta (def : fun_def) : fun_def =
   let obj =
     object
       inherit [_] map_expression as super
@@ -96,4 +232,5 @@ let remove_meta (e : expression) : expression =
       method! visit_Meta env meta e = super#visit_expression env e
     end
   in
-  obj#visit_expression () e
+  let body = obj#visit_expression () def.body in
+  { def with body }
