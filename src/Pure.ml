@@ -95,21 +95,9 @@ type var = {
     itself.
  *)
 
-type var_or_dummy = Var of var | Dummy  (** Ignored value: `_`. *)
-
-(** A left value (which appears on the left of assignments *)
-type lvalue =
-  | LvVar of var_or_dummy
-  | LvTuple of typed_lvalue list
-      (** Rk.: for now we don't support general ADTs *)
-
-and typed_lvalue = { value : lvalue; ty : ty }
-
 type projection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 
 type projection = projection_elem list
-
-type place = { var : VarId.id; projection : projection }
 
 type mplace = { name : string option; projection : projection }
 (** "Meta" place.
@@ -118,6 +106,112 @@ type mplace = { name : string option; projection : projection }
     information about the values. We use this to generate names for the variables
     we introduce.
  *)
+
+type place = { var : VarId.id; projection : projection }
+
+(** Ancestor for [iter_var_or_dummy] iter visitor *)
+class ['self] iter_value_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.iter
+
+    method visit_var : 'env -> var -> unit = fun _ _ -> ()
+
+    method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
+
+    method visit_ty : 'env -> ty -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for [map_var_or_dummy] visitor *)
+class ['self] map_value_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.map
+
+    method visit_var : 'env -> var -> var = fun _ x -> x
+
+    method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
+
+    method visit_ty : 'env -> ty -> ty = fun _ x -> x
+  end
+
+(** Ancestor for [reduce_var_or_dummy] visitor *)
+class virtual ['self] reduce_value_base =
+  object (self : 'self)
+    inherit [_] VisitorsRuntime.reduce
+
+    method visit_var : 'env -> var -> 'a = fun _ _ -> self#zero
+
+    method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
+
+    method visit_ty : 'env -> ty -> 'a = fun _ _ -> self#zero
+  end
+
+type var_or_dummy =
+  | Var of var * mplace option
+  | Dummy  (** Ignored value: `_`. *)
+[@@deriving
+  visitors
+    {
+      name = "iter_var_or_dummy";
+      variety = "iter";
+      ancestors = [ "iter_value_base" ];
+      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+      concrete = true;
+      polymorphic = false;
+    },
+    visitors
+      {
+        name = "map_var_or_dummy";
+        variety = "map";
+        ancestors = [ "map_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.map] *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "reduce_var_or_dummy";
+        variety = "reduce";
+        ancestors = [ "reduce_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
+        polymorphic = false;
+      }]
+
+(** A left value (which appears on the left of assignments *)
+type lvalue = LvVar of var_or_dummy | LvAdt of adt_lvalue
+
+and adt_lvalue = {
+  variant_id : (VariantId.id option[@opaque]);
+  field_values : typed_lvalue list;
+}
+
+and typed_lvalue = { value : lvalue; ty : ty }
+[@@deriving
+  visitors
+    {
+      name = "iter_typed_lvalue";
+      variety = "iter";
+      ancestors = [ "iter_var_or_dummy" ];
+      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+      concrete = true;
+      polymorphic = false;
+    },
+    visitors
+      {
+        name = "map_typed_lvalue";
+        variety = "map";
+        ancestors = [ "map_var_or_dummy" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "reduce_typed_lvalue";
+        variety = "reduce";
+        ancestors = [ "reduce_var_or_dummy" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        polymorphic = false;
+      }]
 
 type rvalue =
   | RvConcrete of constant_value
@@ -159,17 +253,15 @@ type call = {
   args_mplaces : mplace option list;  (** Meta data *)
 }
 
+(* TODO: we might want to merge Call and Assign *)
 type let_bindings =
-  | Call of (typed_lvalue * mplace option) list * call
+  | Call of typed_lvalue * call
       (** The called function and the tuple of returned values. *)
-  | Assign of typed_lvalue * mplace option * typed_rvalue * mplace option
-      (** Variable assignment: the introduced pattern and the place we read *)
-  | Deconstruct of
-      (var_or_dummy * mplace option) list
-      * (TypeDefId.id * VariantId.id) option
-      * typed_rvalue
-      * mplace option
-      (** This is used in two cases.
+  | Assign of typed_lvalue * typed_rvalue * mplace option
+      (** Variable assignment: the introduced pattern and the place we read.
+      
+          We are quite general for the left-value on purpose; this is used
+          in several situations:
 
           1. When deconstructing a tuple:
           ```
@@ -186,18 +278,13 @@ type let_bindings =
           ...
           ```
           
-          Later, depending on the language we extract to, we can eventually
-          update it to something like this (for F*, for instance):
+          Note that later, depending on the language we extract to, we can
+          eventually update it to something like this (for F*, for instance):
           ```
           let x = Cons?.v ls in
           let tl = Cons?.tl ls in
           ...
           ```
-          
-          Note that we prefer not handling this case through a match.
-          
-          TODO: why don't we merge this with Assign? It would make things a lot
-          simpler (before: introduce general ADTs in lvalue).
        *)
 
 (** Meta-information stored in the AST *)
@@ -209,6 +296,8 @@ class ['self] iter_expression_base =
     inherit [_] VisitorsRuntime.iter
 
     method visit_typed_rvalue : 'env -> typed_rvalue -> unit = fun _ _ -> ()
+
+    method visit_typed_lvalue : 'env -> typed_lvalue -> unit = fun _ _ -> ()
 
     method visit_let_bindings : 'env -> let_bindings -> unit = fun _ _ -> ()
 
@@ -231,6 +320,9 @@ class ['self] map_expression_base =
     inherit [_] VisitorsRuntime.map
 
     method visit_typed_rvalue : 'env -> typed_rvalue -> typed_rvalue =
+      fun _ x -> x
+
+    method visit_typed_lvalue : 'env -> typed_lvalue -> typed_lvalue =
       fun _ x -> x
 
     method visit_let_bindings : 'env -> let_bindings -> let_bindings =
@@ -274,11 +366,7 @@ and switch_body =
   | SwitchInt of T.integer_type * (scalar_value * expression) list * expression
   | Match of match_branch list
 
-and match_branch = {
-  variant_id : VariantId.id;
-  vars : var_or_dummy list;
-  branch : expression;
-}
+and match_branch = { pat : typed_lvalue; branch : expression }
 [@@deriving
   visitors
     {

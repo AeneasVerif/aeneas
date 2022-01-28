@@ -195,17 +195,8 @@ let var_to_string (fmt : type_formatter) (v : var) : string =
 
 let var_or_dummy_to_string (fmt : value_formatter) (v : var_or_dummy) : string =
   match v with
-  | Var v -> var_to_string (value_to_type_formatter fmt) v
+  | Var (v, _) -> var_to_string (value_to_type_formatter fmt) v
   | Dummy -> "_"
-
-let rec typed_lvalue_to_string (fmt : value_formatter) (v : typed_lvalue) :
-    string =
-  match v.value with
-  | LvVar var -> var_or_dummy_to_string fmt var
-  | LvTuple values ->
-      "("
-      ^ String.concat ", " (List.map (typed_lvalue_to_string fmt) values)
-      ^ ")"
 
 let rec projection_to_string (fmt : ast_formatter) (inside : string)
     (p : projection) : string =
@@ -230,48 +221,63 @@ let place_to_string (fmt : ast_formatter) (p : place) : string =
   let var = fmt.var_id_to_string p.var in
   projection_to_string fmt var p.projection
 
+let adt_g_value_to_string (fmt : value_formatter)
+    (value_to_string : 'v -> string) (variant_id : VariantId.id option)
+    (field_values : 'v list) (ty : ty) : string =
+  let field_values = List.map value_to_string field_values in
+  match ty with
+  | Adt (T.Tuple, _) ->
+      (* Tuple *)
+      "(" ^ String.concat ", " field_values ^ ")"
+  | Adt (T.AdtId def_id, _) ->
+      (* "Regular" ADT *)
+      let adt_ident =
+        match variant_id with
+        | Some vid -> fmt.adt_variant_to_string def_id vid
+        | None -> fmt.type_def_id_to_string def_id
+      in
+      if field_values <> [] then
+        match fmt.adt_field_names def_id variant_id with
+        | None ->
+            let field_values = String.concat ", " field_values in
+            adt_ident ^ " (" ^ field_values ^ ")"
+        | Some field_names ->
+            let field_values = List.combine field_names field_values in
+            let field_values =
+              List.map
+                (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                field_values
+            in
+            let field_values = String.concat " " field_values in
+            adt_ident ^ " { " ^ field_values ^ " }"
+      else adt_ident
+  | Adt (T.Assumed aty, _) -> (
+      (* Assumed type *)
+      match aty with
+      | Box ->
+          (* Box values should have been eliminated *)
+          failwith "Unreachable")
+  | _ -> failwith "Inconsistent typed value"
+
+let rec typed_lvalue_to_string (fmt : value_formatter) (v : typed_lvalue) :
+    string =
+  match v.value with
+  | LvVar var -> var_or_dummy_to_string fmt var
+  | LvAdt av ->
+      adt_g_value_to_string fmt
+        (typed_lvalue_to_string fmt)
+        av.variant_id av.field_values v.ty
+
 let rec typed_rvalue_to_string (fmt : ast_formatter) (v : typed_rvalue) : string
     =
   match v.value with
   | RvConcrete cv -> Print.Values.constant_value_to_string cv
   | RvPlace p -> place_to_string fmt p
-  | RvAdt av -> (
-      let field_values =
-        List.map (typed_rvalue_to_string fmt) av.field_values
-      in
-      match v.ty with
-      | Adt (T.Tuple, _) ->
-          (* Tuple *)
-          "(" ^ String.concat ", " field_values ^ ")"
-      | Adt (T.AdtId def_id, _) ->
-          (* "Regular" ADT *)
-          let adt_ident =
-            match av.variant_id with
-            | Some vid -> fmt.adt_variant_to_string def_id vid
-            | None -> fmt.type_def_id_to_string def_id
-          in
-          if field_values <> [] then
-            match fmt.adt_field_names def_id av.variant_id with
-            | None ->
-                let field_values = String.concat ", " field_values in
-                adt_ident ^ " (" ^ field_values ^ ")"
-            | Some field_names ->
-                let field_values = List.combine field_names field_values in
-                let field_values =
-                  List.map
-                    (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                    field_values
-                in
-                let field_values = String.concat " " field_values in
-                adt_ident ^ " { " ^ field_values ^ " }"
-          else adt_ident
-      | Adt (T.Assumed aty, _) -> (
-          (* Assumed type *)
-          match aty with
-          | Box ->
-              (* Box values should have been eliminated *)
-              failwith "Unreachable")
-      | _ -> failwith "Inconsistent typed value")
+  | RvAdt av ->
+      adt_g_value_to_string
+        (ast_to_value_formatter fmt)
+        (typed_rvalue_to_string fmt)
+        av.variant_id av.field_values v.ty
 
 let fun_sig_to_string (fmt : ast_formatter) (sg : fun_sig) : string =
   let ty_fmt = ast_to_type_formatter fmt in
@@ -365,19 +371,8 @@ and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
   let e = expression_to_string fmt indent indent_incr e in
   let val_fmt = ast_to_value_formatter fmt in
   match lb with
-  | Call (lvs, call) ->
-      let lvs =
-        List.map (fun (lv, _) -> typed_lvalue_to_string val_fmt lv) lvs
-      in
-      let lvs =
-        match lvs with
-        | [] ->
-            (* Can happen with backward functions which don't give back
-             * anything (shared borrows only) *)
-            "()"
-        | [ lv ] -> lv
-        | lvs -> "(" ^ String.concat " " lvs ^ ")"
-      in
+  | Call (lv, call) ->
+      let lv = typed_lvalue_to_string val_fmt lv in
       let ty_fmt = ast_to_type_formatter fmt in
       let tys = List.map (ty_to_string ty_fmt) call.type_params in
       let args = List.map (typed_rvalue_to_string fmt) call.args in
@@ -387,25 +382,11 @@ and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
         if all_args = [] then fun_id
         else fun_id ^ " " ^ String.concat " " all_args
       in
-      indent ^ "let " ^ lvs ^ " = " ^ call ^ " in\n" ^ e
-  | Assign (lv, _, rv, _) ->
+      indent ^ "let " ^ lv ^ " = " ^ call ^ " in\n" ^ e
+  | Assign (lv, rv, _) ->
       let lv = typed_lvalue_to_string val_fmt lv in
       let rv = typed_rvalue_to_string fmt rv in
       indent ^ "let " ^ lv ^ " = " ^ rv ^ " in\n" ^ e
-  | Deconstruct (lvs, opt_adt_id, rv, _) ->
-      let rv = typed_rvalue_to_string fmt rv in
-      let lvs =
-        List.map (fun (lv, _) -> var_or_dummy_to_string val_fmt lv) lvs
-      in
-      let lvs =
-        match opt_adt_id with
-        | None -> "(" ^ String.concat ", " lvs ^ ")"
-        | Some (adt_id, variant_id) ->
-            let cons = fmt.adt_variant_to_string adt_id variant_id in
-            let lvs = if lvs = [] then "" else " " ^ String.concat " " lvs in
-            cons ^ lvs
-      in
-      indent ^ "let " ^ lvs ^ " = " ^ rv ^ " in\n" ^ e
 
 and switch_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (scrutinee : typed_rvalue) (body : switch_body) :
@@ -435,25 +416,8 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
   | Match branches ->
       let val_fmt = ast_to_value_formatter fmt in
       let branch_to_string (b : match_branch) : string =
-        let adt_id =
-          match scrutinee.ty with
-          | Adt (type_id, _) -> (
-              match type_id with
-              | T.AdtId id -> id
-              | T.Tuple | T.Assumed T.Box ->
-                  (* We can't match over a tuple or a box value *)
-                  failwith "Unreachable")
-          | _ -> failwith "Unreachable"
-        in
-        let cons = fmt.adt_variant_to_string adt_id b.variant_id in
-        let pats =
-          if b.vars = [] then ""
-          else
-            " "
-            ^ String.concat " "
-                (List.map (var_or_dummy_to_string val_fmt) b.vars)
-        in
-        indent ^ "| " ^ cons ^ pats ^ " ->\n"
+        let pat = typed_lvalue_to_string val_fmt b.pat in
+        indent ^ "| " ^ pat ^ " ->\n"
         ^ expression_to_string fmt indent1 indent_incr b.branch
       in
       let branches = List.map branch_to_string branches in

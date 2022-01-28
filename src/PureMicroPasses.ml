@@ -69,16 +69,34 @@ type pn_ctx = string VarId.Map.t
  *)
 let compute_pretty_names (def : fun_def) : fun_def =
   (* Small helpers *)
+  (* 
+   * When we do branchings, we need to merge (the constraints saved in) the
+   * contexts returned by the different branches.
+   *
+   * Note that by doing so, some mappings from var id to name
+   * in one context may be overriden by the ones in the other context.
+   *
+   * This should be ok because:
+   * - generally, the overriden variables should have been introduced *inside*
+   *   the branches, in which case we don't care
+   * - or they were introduced before, in which case the naming should generally
+   *   be consistent? In the worse case, it isn't, but it leads only to less
+   *   readable code, not to unsoundness. This case should be pretty rare,
+   *   also.
+   *)
+  let merge_ctxs (ctx0 : pn_ctx) (ctx1 : pn_ctx) : pn_ctx =
+    VarId.Map.fold (fun id name ctx -> VarId.Map.add id name ctx) ctx0 ctx1
+  in
+  let merge_ctxs_ls (ctxs : pn_ctx list) : pn_ctx =
+    List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) VarId.Map.empty ctxs
+  in
+
   let add_var (ctx : pn_ctx) (v : var) : pn_ctx =
     assert (not (VarId.Map.mem v.id ctx));
     match v.basename with
     | None -> ctx
     | Some name -> VarId.Map.add v.id name ctx
   in
-  let add_var_or_dummy (ctx : pn_ctx) (v : var_or_dummy) : pn_ctx =
-    match v with Dummy -> ctx | Var v -> add_var ctx v
-  in
-  let add_var_or_dummy_list ctx ls = List.fold_left add_var_or_dummy ctx ls in
   let update_var (ctx : pn_ctx) (v : var) : var =
     match v.basename with
     | Some _ -> v
@@ -87,17 +105,15 @@ let compute_pretty_names (def : fun_def) : fun_def =
         | None -> v
         | Some basename -> { v with basename = Some basename })
   in
-  let update_var_or_dummy (ctx : pn_ctx) (v : var_or_dummy) : var_or_dummy =
-    match v with Dummy -> Dummy | Var v -> Var (update_var ctx v)
-  in
-  let update_var_or_dummy_list ctx = List.map (update_var_or_dummy ctx) in
-  let update_typed_lvalue ctx (lv : typed_lvalue) =
-    let value =
-      match lv.value with
-      | LvVar v -> LvVar (update_var_or_dummy ctx v)
-      | v -> v
+  let update_typed_lvalue ctx (lv : typed_lvalue) : typed_lvalue =
+    let obj =
+      object
+        inherit [_] map_typed_lvalue
+
+        method! visit_var _ v = update_var ctx v
+      end
     in
-    { lv with value }
+    obj#visit_typed_lvalue () lv
   in
 
   let add_constraint (mp : mplace) (var_id : VarId.id) (ctx : pn_ctx) : pn_ctx =
@@ -122,48 +138,20 @@ let compute_pretty_names (def : fun_def) : fun_def =
       (fun ctx (mp, rv) -> add_opt_right_constraint mp rv ctx)
       ctx rvs
   in
-  let add_left_constraint_var_or_dummy (mp : mplace option) (v : var_or_dummy)
-      (ctx : pn_ctx) : pn_ctx =
-    let ctx = add_var_or_dummy ctx v in
-    match (v, mp) with Var v, Some mp -> add_constraint mp v.id ctx | _ -> ctx
-  in
-  let add_left_constraint_typed_value (mp : mplace option) (lv : typed_lvalue)
-      (ctx : pn_ctx) : pn_ctx =
-    match lv.value with
-    | LvTuple _ | LvVar Dummy -> ctx
-    | LvVar v -> add_left_constraint_var_or_dummy mp v ctx
-  in
-  let add_left_constraint_var_or_dummy_list ctx lvs =
-    List.fold_left
-      (fun ctx (v, mp) -> add_left_constraint_var_or_dummy mp v ctx)
-      ctx lvs
-  in
-  let add_left_constraint_typed_value_list ctx lvs =
-    List.fold_left
-      (fun ctx (v, mp) -> add_left_constraint_typed_value mp v ctx)
-      ctx lvs
-  in
+  let add_left_constraint (lv : typed_lvalue) (ctx : pn_ctx) : pn_ctx =
+    let obj =
+      object (self)
+        inherit [_] reduce_typed_lvalue
 
-  (* 
-   * When we do branchings, we need to merge (the constraints saved in) the
-   * contexts returned by the different branches.
-   *
-   * Note that by doing so, some mappings from var id to name
-   * in one context may be overriden by the ones in the other context.
-   *
-   * This should be ok because:
-   * - generally, the overriden variables should have been introduced *inside*
-   *   the branches, in which case we don't care
-   * - or they were introduced before, in which case the naming should generally
-   *   be consistent? In the worse case, it isn't, but it leads only to less
-   *   readable code, not to unsoundness. This case should be pretty rare,
-   *   also.
-   *)
-  let merge_ctxs (ctx0 : pn_ctx) (ctx1 : pn_ctx) : pn_ctx =
-    VarId.Map.fold (fun id name ctx -> VarId.Map.add id name ctx) ctx0 ctx1
-  in
-  let merge_ctxs_ls (ctxs : pn_ctx list) : pn_ctx =
-    List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) VarId.Map.empty ctxs
+        method zero _ = VarId.Map.empty
+
+        method plus ctx0 ctx1 _ = merge_ctxs (ctx0 ()) (ctx1 ())
+
+        method! visit_var _ v () = add_var (self#zero ()) v
+      end
+    in
+    let ctx1 = obj#visit_typed_lvalue () lv () in
+    merge_ctxs ctx ctx1
   in
 
   (* *)
@@ -178,31 +166,21 @@ let compute_pretty_names (def : fun_def) : fun_def =
   and update_let (lb : let_bindings) (e : expression) (ctx : pn_ctx) :
       pn_ctx * expression =
     match lb with
-    | Call (lvs, call) ->
+    | Call (lv, call) ->
         let ctx =
           add_opt_right_constraint_list ctx
             (List.combine call.args_mplaces call.args)
         in
-        let ctx = add_left_constraint_typed_value_list ctx lvs in
+        let ctx = add_left_constraint lv ctx in
         let ctx, e = update_expression e ctx in
-        let lvs =
-          List.map (fun (v, mp) -> (update_typed_lvalue ctx v, mp)) lvs
-        in
-        (ctx, Let (Call (lvs, call), e))
-    | Assign (lv, lmp, rv, rmp) ->
-        let ctx = add_left_constraint_typed_value lmp lv ctx in
+        let lv = update_typed_lvalue ctx lv in
+        (ctx, Let (Call (lv, call), e))
+    | Assign (lv, rv, rmp) ->
+        let ctx = add_left_constraint lv ctx in
         let ctx = add_opt_right_constraint rmp rv ctx in
         let ctx, e = update_expression e ctx in
         let lv = update_typed_lvalue ctx lv in
-        (ctx, Let (Assign (lv, lmp, rv, rmp), e))
-    | Deconstruct (lvs, opt_variant_id, rv, rmp) ->
-        let ctx = add_left_constraint_var_or_dummy_list ctx lvs in
-        let ctx = add_opt_right_constraint rmp rv ctx in
-        let ctx, e = update_expression e ctx in
-        let lvs =
-          List.map (fun (v, mp) -> (update_var_or_dummy ctx v, mp)) lvs
-        in
-        (ctx, Let (Deconstruct (lvs, opt_variant_id, rv, rmp), e))
+        (ctx, Let (Assign (lv, rv, rmp), e))
   (* *)
   and update_switch_body (scrut : typed_rvalue) (mp : mplace option)
       (body : switch_body) (ctx : pn_ctx) : pn_ctx * expression =
@@ -232,10 +210,10 @@ let compute_pretty_names (def : fun_def) : fun_def =
           let ctx_branches_ls =
             List.map
               (fun br ->
-                let ctx = add_var_or_dummy_list ctx br.vars in
+                let ctx = add_left_constraint br.pat ctx in
                 let ctx, branch = update_expression br.branch ctx in
-                let vars = update_var_or_dummy_list ctx br.vars in
-                (ctx, { br with branch; vars }))
+                let pat = update_typed_lvalue ctx br.pat in
+                (ctx, { pat; branch }))
               branches
           in
           let ctxs, branches = List.split ctx_branches_ls in
@@ -268,7 +246,7 @@ let remove_meta (def : fun_def) : fun_def =
     object
       inherit [_] map_expression as super
 
-      method! visit_Meta env meta e = super#visit_expression env e
+      method! visit_Meta env _ e = super#visit_expression env e
     end
   in
   let body = obj#visit_expression () def.body in
