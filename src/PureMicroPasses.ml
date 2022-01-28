@@ -268,6 +268,11 @@ let filter_unused_assignments (def : fun_def) : fun_def =
   (* TODO *)
   def
 
+(** Add unit arguments for functions with no arguments *)
+let add_unit_arguments (def : fun_def) : fun_def =
+  (* TODO *)
+  def
+
 (** Apply all the micro-passes to a function.
 
     [ctx]: used only for printing.
@@ -307,7 +312,9 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
 
   (* TODO: deconstruct the monadic bindings into matches *)
 
-  (* TODO: add unit arguments for functions with no arguments *)
+  (* Add unit arguments for functions with no arguments *)
+  let def = add_unit_arguments def in
+  log#ldebug (lazy ("add_unit_arguments:\n" ^ fun_def_to_string ctx def));
 
   (* We are done *)
   def
