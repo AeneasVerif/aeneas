@@ -93,17 +93,6 @@ type pn_ctx = string VarId.Map.t
  *)
 let compute_pretty_names (def : fun_def) : fun_def =
   (* Small helpers *)
-  let add_constraint (mp : mplace) (rv : typed_rvalue) (ctx : pn_ctx) : pn_ctx =
-    match (mp.name, mp.projection, rv.value) with
-    | Some name, [], RvPlace { var = var_id; projection = [] } ->
-        (* Check if the variable already has a name - if not: insert the new name *)
-        if VarId.Map.mem var_id ctx then ctx else VarId.Map.add var_id name ctx
-    | _ -> ctx
-  in
-  let add_opt_constraint (mp : mplace option) (rv : typed_rvalue) (ctx : pn_ctx)
-      : pn_ctx =
-    match mp with None -> ctx | Some mp -> add_constraint mp rv ctx
-  in
   let add_var (ctx : pn_ctx) (v : var) : pn_ctx =
     assert (not (VarId.Map.mem v.id ctx));
     match v.basename with
@@ -126,6 +115,58 @@ let compute_pretty_names (def : fun_def) : fun_def =
     match v with Dummy -> Dummy | Var v -> Var (update_var ctx v)
   in
   let update_var_or_dummy_list ctx = List.map (update_var_or_dummy ctx) in
+  let update_typed_lvalue ctx (lv : typed_lvalue) =
+    let value =
+      match lv.value with
+      | LvVar v -> LvVar (update_var_or_dummy ctx v)
+      | v -> v
+    in
+    { lv with value }
+  in
+
+  let add_constraint (mp : mplace) (var_id : VarId.id) (ctx : pn_ctx) : pn_ctx =
+    match (mp.name, mp.projection) with
+    | Some name, [] ->
+        (* Check if the variable already has a name - if not: insert the new name *)
+        if VarId.Map.mem var_id ctx then ctx else VarId.Map.add var_id name ctx
+    | _ -> ctx
+  in
+  let add_right_constraint (mp : mplace) (rv : typed_rvalue) (ctx : pn_ctx) :
+      pn_ctx =
+    match rv.value with
+    | RvPlace { var = var_id; projection = [] } -> add_constraint mp var_id ctx
+    | _ -> ctx
+  in
+  let add_opt_right_constraint (mp : mplace option) (rv : typed_rvalue)
+      (ctx : pn_ctx) : pn_ctx =
+    match mp with None -> ctx | Some mp -> add_right_constraint mp rv ctx
+  in
+  let add_opt_right_constraint_list ctx rvs =
+    List.fold_left
+      (fun ctx (mp, rv) -> add_opt_right_constraint mp rv ctx)
+      ctx rvs
+  in
+  let add_left_constraint_var_or_dummy (mp : mplace option) (v : var_or_dummy)
+      (ctx : pn_ctx) : pn_ctx =
+    let ctx = add_var_or_dummy ctx v in
+    match (v, mp) with Var v, Some mp -> add_constraint mp v.id ctx | _ -> ctx
+  in
+  let add_left_constraint_typed_value (mp : mplace option) (lv : typed_lvalue)
+      (ctx : pn_ctx) : pn_ctx =
+    match lv.value with
+    | LvTuple _ | LvVar Dummy -> ctx
+    | LvVar v -> add_left_constraint_var_or_dummy mp v ctx
+  in
+  let add_left_constraint_var_or_dummy_list ctx lvs =
+    List.fold_left
+      (fun ctx (v, mp) -> add_left_constraint_var_or_dummy mp v ctx)
+      ctx lvs
+  in
+  let add_left_constraint_typed_value_list ctx lvs =
+    List.fold_left
+      (fun ctx (v, mp) -> add_left_constraint_typed_value mp v ctx)
+      ctx lvs
+  in
 
   (* 
    * When we do branchings, we need to merge (the constraints saved in) the
@@ -161,13 +202,23 @@ let compute_pretty_names (def : fun_def) : fun_def =
   and update_let (lb : let_bindings) (e : expression) (ctx : pn_ctx) :
       pn_ctx * expression =
     match lb with
-    | Call (lvs, call) -> raise Unimplemented
+    | Call (lvs, call) ->
+        let ctx =
+          add_opt_right_constraint_list ctx
+            (List.combine call.args_mplaces call.args)
+        in
+        let ctx = add_left_constraint_typed_value_list ctx lvs in
+        let ctx, e = update_expression e ctx in
+        let lvs =
+          List.map (fun (v, mp) -> (update_typed_lvalue ctx v, mp)) lvs
+        in
+        (ctx, Let (Call (lvs, call), e))
     | Assign (lv, lmp, rv, rmp) -> raise Unimplemented
     | Deconstruct (lvs, opt_variant_id, rv, rmp) -> raise Unimplemented
   (* *)
   and update_switch_body (scrut : typed_rvalue) (mp : mplace option)
       (body : switch_body) (ctx : pn_ctx) : pn_ctx * expression =
-    let ctx = add_opt_constraint mp scrut ctx in
+    let ctx = add_opt_right_constraint mp scrut ctx in
 
     let ctx, body =
       match body with
@@ -209,7 +260,7 @@ let compute_pretty_names (def : fun_def) : fun_def =
       pn_ctx * expression =
     match meta with
     | Assignment (mp, rvalue) ->
-        let ctx = add_constraint mp rvalue ctx in
+        let ctx = add_right_constraint mp rvalue ctx in
         update_expression e ctx
   in
 
