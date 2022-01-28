@@ -22,6 +22,7 @@ let get_expression_min_var_counter (e : expression) : VarId.generator =
 
       method zero _ _ = VarId.zero
 
+      (* TODO: why 2 parameters??? I don't understand what's going on... *)
       method plus id0 id1 _ _ = VarId.max (id0 () ()) (id1 () ())
       (* Get the maximum *)
 
