@@ -16,7 +16,20 @@ let log = L.pure_micro_passes_log
     variables indices...
  *)
 let get_expression_min_var_counter (e : expression) : VarId.generator =
-  raise Unimplemented
+  let obj =
+    object
+      inherit [_] reduce_expression
+
+      method zero _ _ = VarId.zero
+
+      method plus id0 id1 _ _ = VarId.max (id0 () ()) (id1 () ())
+      (* Get the maximum *)
+
+      method! visit_var _ v mp () = v.id
+    end
+  in
+  let id = obj#visit_expression () e () () in
+  VarId.generator_from_incr_id id
 
 type pn_ctx = string VarId.Map.t
 (** "pretty-name context": see [compute_pretty_names] *)
@@ -336,8 +349,8 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
   (* Add unit arguments for functions with no arguments, and change their return type.
    * **Rk.**: from now onwards, the types in the AST are correct (until now,
    * functions had return type `t` where they should have return type `result t`) *)
-  (* let def = to_monadic def in
-     log#ldebug (lazy ("to_monadic:\n" ^ fun_def_to_string ctx def));*)
+  let def = to_monadic def in
+  log#ldebug (lazy ("to_monadic:\n" ^ fun_def_to_string ctx def));
 
   (* Inline the useless variable reassignments *)
   let def = inline_useless_var_reassignments def in

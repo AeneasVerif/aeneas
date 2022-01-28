@@ -16,7 +16,11 @@ module type Id = sig
 
   val generator_zero : generator
 
+  val generator_from_incr_id : id -> generator
+
   val fresh_stateful_generator : unit -> generator ref * (unit -> id)
+
+  val incr : id -> id
 
   (* TODO: this should be stateful! - but we may want to be able to duplicate
      contexts...
@@ -34,6 +38,10 @@ module type Id = sig
   val id_of_json : Yojson.Basic.t -> (id, string) result
 
   val compare_id : id -> id -> int
+
+  val max : id -> id -> id
+
+  val min : id -> id -> id
 
   val pp_generator : Format.formatter -> generator -> unit
 
@@ -91,6 +99,10 @@ module IdGen () : Id = struct
      * they happen *)
     if x == max_int then raise (Errors.IntegerOverflow ()) else x + 1
 
+  let generator_from_incr_id id =
+    let id = incr id in
+    id
+
   let fresh_stateful_generator () =
     let g = ref 0 in
     let fresh () =
@@ -115,6 +127,10 @@ module IdGen () : Id = struct
     | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)
 
   let compare_id = compare
+
+  let max id0 id1 = if id0 > id1 then id0 else id1
+
+  let min id0 id1 = if id0 < id1 then id0 else id1
 
   let nth v id = List.nth v id
 

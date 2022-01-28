@@ -351,18 +351,20 @@ class ['self] map_expression_base =
 
 (** Ancestor for [reduce_expression] visitor *)
 class virtual ['self] reduce_expression_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] reduce_typed_rvalue
 
-    method visit_meta : 'env -> meta -> 'a = fun _ _ -> ()
+    method visit_meta : 'env -> meta -> 'a = fun _ _ -> self#zero
 
-    method visit_integer_type : 'env -> T.integer_type -> 'a = fun _ _ -> ()
+    method visit_integer_type : 'env -> T.integer_type -> 'a =
+      fun _ _ -> self#zero
 
-    method visit_scalar_value : 'env -> scalar_value -> 'a = fun _ _ -> ()
+    method visit_scalar_value : 'env -> scalar_value -> 'a =
+      fun _ _ -> self#zero
 
-    method visit_id : 'env -> VariantId.id -> 'a = fun _ _ -> ()
+    method visit_id : 'env -> VariantId.id -> 'a = fun _ _ -> self#zero
 
-    method visit_fun_id : 'env -> fun_id -> 'a = fun _ _ -> ()
+    method visit_fun_id : 'env -> fun_id -> 'a = fun _ _ -> self#zero
   end
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
