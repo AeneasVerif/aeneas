@@ -468,6 +468,8 @@ type fun_sig = {
   outputs : ty list;
       (** The list of outputs.
 
+          Immediately after the translation from symbolic to pure we have this
+          the following:
           In case of a forward function, the list will have length = 1.
           However, in case of backward function, the list may have length > 1.
           If the length is > 1, it gets extracted to a tuple type. Followingly,
@@ -475,6 +477,9 @@ type fun_sig = {
           want to account for the fact that we immediately deconstruct the tuple
           upon calling the backward function (because the backward function is
           called to update a set of values in the environment).
+          
+          After the "to monadic" pass, the list has size exactly one (and we
+          use the `Result` type).
        *)
 }
 

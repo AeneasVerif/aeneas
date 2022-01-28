@@ -307,18 +307,40 @@ let to_monadic (def : fun_def) : fun_def =
   let body = obj#visit_expression () def.body in
   let def = { def with body } in
 
-  (* Update the signature *)
-  if def.inputs = [] then (
-    assert (def.signature.inputs = []);
-    let signature =
-      { def.signature with inputs = [ SymbolicToPure.unit_ty ] }
-    in
-    let var_cnt = get_expression_min_var_counter def.body in
-    let id, _ = VarId.fresh var_cnt in
-    let var = { id; basename = None; ty = SymbolicToPure.unit_ty } in
-    let inputs = [ var ] in
-    { def with signature; inputs })
-  else def
+  (* Update the signature: first the input types *)
+  let def =
+    if def.inputs = [] then (
+      assert (def.signature.inputs = []);
+      let signature =
+        { def.signature with inputs = [ SymbolicToPure.unit_ty ] }
+      in
+      let var_cnt = get_expression_min_var_counter def.body in
+      let id, _ = VarId.fresh var_cnt in
+      let var = { id; basename = None; ty = SymbolicToPure.unit_ty } in
+      let inputs = [ var ] in
+      { def with signature; inputs })
+    else def
+  in
+  (* Then the output type *)
+  let output_ty =
+    match (def.back_id, def.signature.outputs) with
+    | None, [ out_ty ] ->
+        (* Forward function: there is always exactly one output *)
+        SymbolicToPure.mk_result_ty out_ty
+    | Some _, outputs ->
+        (* Backward function: we have to group them *)
+        SymbolicToPure.mk_result_ty (SymbolicToPure.mk_tuple_ty outputs)
+    | _ -> failwith "Unreachable"
+  in
+  let outputs = [ output_ty ] in
+  let signature = { def.signature with outputs } in
+  { def with signature }
+
+(** Convert the unit variables to `()` if they are used as right-values or
+    `_` if they are used as left values. *)
+let unit_vars_to_unit (def : fun_def) : fun_def =
+  (* TODO *)
+  def
 
 (** Apply all the micro-passes to a function.
 
@@ -349,9 +371,15 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_def) : fun_def =
 
   (* Add unit arguments for functions with no arguments, and change their return type.
    * **Rk.**: from now onwards, the types in the AST are correct (until now,
-   * functions had return type `t` where they should have return type `result t`) *)
+   * functions had return type `t` where they should have return type `result t`).
+   * Also, from now onwards, the outputs list has length 1. x*)
   let def = to_monadic def in
   log#ldebug (lazy ("to_monadic:\n" ^ fun_def_to_string ctx def));
+
+  (* Convert the unit variables to `()` if they are used as right-values or
+   * `_` if they are used as left values. *)
+  let def = unit_vars_to_unit def in
+  log#ldebug (lazy ("unit_vars_to_unit:\n" ^ fun_def_to_string ctx def));
 
   (* Inline the useless variable reassignments *)
   let def = inline_useless_var_reassignments def in

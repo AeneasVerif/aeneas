@@ -75,6 +75,8 @@ let mk_result_return_rvalue (v : typed_rvalue) : typed_rvalue =
   in
   { value; ty }
 
+let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
+
 (** Type substitution *)
 let ty_substitute (tsubst : TypeVarId.id -> ty) (ty : ty) : ty =
   let obj =
