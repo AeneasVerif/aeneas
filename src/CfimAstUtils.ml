@@ -19,6 +19,16 @@ let statement_has_loops (st : statement) : bool =
 (** Check if a [fun_def] contains loops *)
 let fun_def_has_loops (fd : fun_def) : bool = statement_has_loops fd.body
 
+let lookup_fun_sig (fun_id : fun_id) (fun_defs : fun_def FunDefId.Map.t) :
+    fun_sig =
+  match fun_id with
+  | Local id -> (FunDefId.Map.find id fun_defs).signature
+  | Assumed aid ->
+      let _, sg =
+        List.find (fun (aid', _) -> aid = aid') Assumed.assumed_sigs
+      in
+      sg
+
 (** Small utility: list the transitive parents of a region var group.
     We don't do that in an efficient manner, but it doesn't matter.
     

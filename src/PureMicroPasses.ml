@@ -336,17 +336,6 @@ let inline_useless_var_reassignments (inline_named : bool) (def : fun_def) :
   let body = obj#visit_expression VarId.Map.empty def.body in
   { def with body }
 
-(* TODO: move *)
-let lookup_fun_sig (fun_id : A.fun_id) (fun_defs : A.fun_def FunDefId.Map.t) :
-    A.fun_sig =
-  match fun_id with
-  | Local id -> (FunDefId.Map.find id fun_defs).signature
-  | Assumed aid ->
-      let _, sg =
-        List.find (fun (aid', _) -> aid = aid') Assumed.assumed_sigs
-      in
-      sg
-
 (** Given a forward or backward function call, is there, for every execution
     path, a child backward function called later with exactly the same input
     list prefix? We use this to filter useless function calls: if there are
@@ -395,7 +384,9 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
                 else
                   (* We need to use the regions hierarchy *)
                   (* First, lookup the signature of the CFIM function *)
-                  let sg = lookup_fun_sig id0 ctx.fun_context.fun_defs in
+                  let sg =
+                    CfimAstUtils.lookup_fun_sig id0 ctx.fun_context.fun_defs
+                  in
                   (* Compute the set of ancestors of the function in call1 *)
                   let call1_ancestors =
                     CfimAstUtils.list_parent_region_groups sg rg_id1
