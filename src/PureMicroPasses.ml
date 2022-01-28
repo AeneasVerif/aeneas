@@ -201,7 +201,7 @@ let compute_pretty_names (def : fun_def) : fun_def =
     | Value (v, mp) -> update_value v mp ctx
     | Call call -> update_call call ctx
     | Let (monadic, lb, re, e) -> update_let monadic lb re e ctx
-    | Switch (scrut, mp, body) -> update_switch_body scrut mp body ctx
+    | Switch (scrut, body) -> update_switch_body scrut body ctx
     | Meta (meta, e) -> update_meta meta e ctx
   (* *)
   and update_value (v : typed_rvalue) (mp : mplace option) (ctx : pn_ctx) :
@@ -226,9 +226,9 @@ let compute_pretty_names (def : fun_def) : fun_def =
     let lv = update_typed_lvalue ctx lv in
     (ctx, Let (monadic, lv, re, e))
   (* *)
-  and update_switch_body (scrut : typed_rvalue) (mp : mplace option)
-      (body : switch_body) (ctx : pn_ctx) : pn_ctx * expression =
-    let ctx = add_opt_right_constraint mp scrut ctx in
+  and update_switch_body (scrut : expression) (body : switch_body)
+      (ctx : pn_ctx) : pn_ctx * expression =
+    let ctx, scrut = update_expression scrut ctx in
 
     let ctx, body =
       match body with
@@ -264,7 +264,7 @@ let compute_pretty_names (def : fun_def) : fun_def =
           let ctx = merge_ctxs_ls ctxs in
           (ctx, Match branches)
     in
-    (ctx, Switch (scrut, mp, body))
+    (ctx, Switch (scrut, body))
   (* *)
   and update_meta (meta : meta) (e : expression) (ctx : pn_ctx) :
       pn_ctx * expression =
@@ -460,7 +460,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
               self#visit_expression env re () && self#visit_expression env e ()
         | Call call1 -> fun () -> check_call call1
         | Meta (_, e) -> self#visit_expression env e
-        | Switch (_, _, body) -> self#visit_switch_body env body
+        | Switch (_, body) -> self#visit_switch_body env body
       (** We need to reimplement the way we compose the booleans *)
 
       method! visit_switch_body env body =
@@ -542,7 +542,7 @@ let filter_unused (filter_monadic_calls : bool) (ctx : trans_ctx)
 
       method! visit_expression env e =
         match e with
-        | Value (_, _) | Call _ | Switch (_, _, _) | Meta (_, _) ->
+        | Value (_, _) | Call _ | Switch (_, _) | Meta (_, _) ->
             super#visit_expression env e
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)

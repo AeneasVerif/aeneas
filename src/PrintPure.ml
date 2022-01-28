@@ -361,7 +361,7 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
   | Call call -> call_to_string fmt indent indent_incr call
   | Let (monadic, lv, re, e) ->
       let_to_string fmt indent indent_incr monadic lv re e
-  | Switch (scrutinee, _, body) ->
+  | Switch (scrutinee, body) ->
       switch_to_string fmt indent indent_incr scrutinee body
   | Meta (meta, e) ->
       let meta = meta_to_string fmt meta in
@@ -394,10 +394,13 @@ and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
 and switch_to_string (fmt : ast_formatter) (indent : string)
-    (indent_incr : string) (scrutinee : typed_rvalue) (body : switch_body) :
+    (indent_incr : string) (scrutinee : expression) (body : switch_body) :
     string =
-  let scrut = typed_rvalue_to_string fmt scrutinee in
   let indent1 = indent ^ indent_incr in
+  (* Printing can mess up on the scrutinee, because it is an expression - but
+   * in most situations it will be a value or a function call, so it should be
+   * ok*)
+  let scrut = expression_to_string fmt indent1 indent_incr scrutinee in
   match body with
   | If (e_true, e_false) ->
       let e_true = expression_to_string fmt indent1 indent_incr e_true in

@@ -39,13 +39,13 @@ type fun_sig_named_outputs = {
   sg : fun_sig;  (** A function signature *)
   output_names : string option list;
       (** In case the signature is for a backward function, we may provides names
-    for the outputs. The reason is that the outputs of backward functions
-    come from (in case there are no nested borrows) borrows present in the
-    inputs of the original rust function. In this situation, we can use the
-    names of those inputs to name the outputs. Those names are very useful
-    to generate beautiful codes (we may need to introduce temporary variables
-    in the bodies of the backward functions to store the returned values, in
-    which case we use those names).
+          for the outputs. The reason is that the outputs of backward functions
+          come from (in case there are no nested borrows) borrows present in the
+          inputs of the original rust function. In this situation, we can use the
+          names of those inputs to name the outputs. Those names are very useful
+          to generate beautiful codes (we may need to introduce temporary variables
+          in the bodies of the backward functions to store the returned values, in
+          which case we use those names).
  *)
 }
 
@@ -1229,13 +1229,13 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let branches =
             List.map (fun (vid, svl, e) -> translate_branch vid svl e) branches
           in
-          Switch (scrutinee, scrutinee_mplace, Match branches))
+          Switch (Value (scrutinee, scrutinee_mplace), Match branches))
   | ExpandBool (true_e, false_e) ->
       (* We don't need to update the context: we don't introduce any
        * new values/variables *)
       let true_e = translate_expression true_e ctx in
       let false_e = translate_expression false_e ctx in
-      Switch (scrutinee, scrutinee_mplace, If (true_e, false_e))
+      Switch (Value (scrutinee, scrutinee_mplace), If (true_e, false_e))
   | ExpandInt (int_ty, branches, otherwise) ->
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :
           scalar_value * expression =
@@ -1247,7 +1247,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let branches = List.map translate_branch branches in
       let otherwise = translate_expression otherwise ctx in
       Switch
-        (scrutinee, scrutinee_mplace, SwitchInt (int_ty, branches, otherwise))
+        ( Value (scrutinee, scrutinee_mplace),
+          SwitchInt (int_ty, branches, otherwise) )
 
 and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
     expression =

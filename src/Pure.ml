@@ -479,7 +479,7 @@ type expression =
           ...
           ```
        *)
-  | Switch of typed_rvalue * mplace option * switch_body
+  | Switch of expression * switch_body
   | Meta of meta * expression  (** Meta-information *)
 
 and call = {
