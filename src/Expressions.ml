@@ -25,8 +25,8 @@ type unop = Not | Neg [@@deriving show, ord]
 
     Note that we merge checked binops and unchecked binops: we perform a
     micro-pass on the MIR AST to remove the assertions introduced by rustc,
-    and use monadic functions for the binops which can fail (addition,
-    substraction, etc.) or have preconditions (division, remainder...)
+    and later extract the binops which can fail (addition, substraction, etc.)
+    or have preconditions (division, remainder...) to monadic functions.
  *)
 type binop =
   | BitXor
@@ -49,16 +49,15 @@ type binop =
 
 (** Constant value for an operand
 
-    It is a bit annoying, but Rust treats some ADT and tuple instances as
-    constants.
-    For instance, an enumeration with one variant and no fields is a constant.
-    A structure with no field is a constant.
+    It is a bit annoying, but rustc treats some ADT and tuple instances as
+    constants when generating MIR:
+    - an enumeration with one variant and no fields is a constant.
+    - a structure with no field is a constant.
 
     For our translation, we use the following enumeration to encode those
     special cases in assignments. They are converted to "normal" values
     when evaluating the assignment (which is why we don't put them in the
-    [ConstantValue] enumeration.
-
+    [ConstantValue] enumeration).
  *)
 type operand_constant_value =
   | ConstantValue of constant_value
@@ -72,6 +71,27 @@ type operand =
   | Constant of ety * operand_constant_value
 [@@deriving show]
 
+(** An aggregated ADT.
+
+    Note that ADTs are desaggregated at some point in MIR. For instance, if
+    we have in Rust:
+    ```
+    let ls = Cons(hd, tl);
+    ```
+    
+    In MIR we have (yes, the discriminant update happens *at the end* for some
+    reason):
+    ```
+    (ls as Cons).0 = move hd;
+    (ls as Cons).1 = move tl;
+    discriminant(ls) = 0; // assuming `Cons` is the variant of index 0
+    ```
+    
+    Note that in our semantics, we handle both cases (in case of desaggregated
+    initialization, `ls` is initialized to `⊥`, then this `⊥` is expanded to
+    `Cons (⊥, ⊥)` upon the first assignment, at which point we can initialize
+    the field 0, etc.).
+ *)
 type aggregate_kind =
   | AggregatedTuple
   | AggregatedAdt of
