@@ -4,7 +4,24 @@ open Errors
 open Pure
 open TranslateCore
 open PureToExtract
+open StringUtils
 module F = Format
+
+(*
+let mk_name_formatter =
+{
+  bool_name : string;
+  char_name : string;
+  int_name : integer_type -> string;
+  str_name : string;
+  field_name : name -> string option -> string;
+  variant_name : name -> string -> string;
+  type_name : name -> string;
+  fun_name : A.fun_id -> name -> int -> region_group_info option -> string;
+  var_basename : StringSet.t -> ty -> string;
+  type_var_basename : StringSet.t -> string;
+  append_index : string -> int -> string;
+}*)
 
 (** [inside] constrols whether we should add parentheses or not around type
     application (if `true` we add parentheses).
