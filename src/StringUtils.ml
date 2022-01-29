@@ -54,22 +54,20 @@ let string_to_chars (s : string) : char list =
 
 (** This operates on ASCII *)
 let to_camel_case (s : string) : string =
-  (* There are no [fold_left_map] in [String]... *)
-  let mk_upper = ref true in
-  (* TODO: remove '_' *)
-  let apply (c : char) : char =
-    if !mk_upper then (
-      mk_upper := c = '_';
-      uppercase_ascii c)
-    else (
-      mk_upper := c = '_';
-      c)
+  (* Note that we rebuild the string in reverse order *)
+  let apply ((prev_is_under, acc) : bool * char list) (c : char) :
+      bool * char list =
+    if c = '_' then (true, acc)
+    else
+      let c = if prev_is_under then uppercase_ascii c else c in
+      (false, c :: acc)
   in
-  String.map apply s
+  let _, chars = List.fold_left apply (true, []) (string_to_chars s) in
+  string_of_chars (List.rev chars)
 
 (** This operates on ASCII *)
 let to_snake_case (s : string) : string =
-  (* Note that we rebuild the string in invert order *)
+  (* Note that we rebuild the string in reverse order *)
   let apply ((prev_is_low, prev_is_digit, acc) : bool * bool * char list)
       (c : char) : bool * bool * char list =
     let acc =
@@ -90,7 +88,6 @@ let to_snake_case (s : string) : string =
 
 (** Unit tests *)
 let _ =
-  assert (is_digit_ascii '3');
-  assert (is_digit_ascii '6');
+  assert (to_camel_case "hello_world" = "HelloWorld");
   assert (to_snake_case "HelloWorld36Hello" = "hello_world36_hello");
   assert (to_snake_case "HELLO" = "hello")
