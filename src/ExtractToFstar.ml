@@ -94,18 +94,27 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   raise Unimplemented
 
 let rec extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : type_def) : unit =
-  let name = ctx_find_local_type def.def_id ctx in
-  let ctx, type_params = ctx_add_type_params def.type_params ctx in
+    (def : type_def) : extraction_ctx =
+  (* Compute and register the type def name *)
+  let ctx, def_name = ctx_add_type_def def ctx in
+  (* Compute and register the variant names, if this is an enumeration *)
+  let ctx, variant_names =
+    match def.kind with
+    | Struct _ -> (ctx, [])
+    | Enum variants ->
+        ctx_add_variants def (VariantId.mapi (fun id v -> (id, v)) variants) ctx
+  in
+  (* Add the type params - note that we remember those bindings only for the
+   * body translation: the updated ctx we return at the end of the function
+   * only contains the registered type def and variant names *)
+  let ctx_body, type_params = ctx_add_type_params def.type_params ctx in
   (* > "type TYPE_NAME =" *)
   F.pp_print_string fmt "type";
   F.pp_print_space fmt ();
-  F.pp_print_string fmt name;
-  match def.kind with
+  F.pp_print_string fmt def_name;
+  (match def.kind with
   | Struct fields ->
-      extract_type_def_struct_body ctx fmt name type_params fields
+      extract_type_def_struct_body ctx_body fmt def_name type_params fields
   | Enum variants ->
-      extract_type_def_enum_body ctx fmt name type_params variants
-
-(*let rec extract_field (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (ty : ty) : unit =*)
+      extract_type_def_enum_body ctx_body fmt def_name type_params variants);
+  ctx
