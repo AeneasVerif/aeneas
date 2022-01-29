@@ -35,7 +35,7 @@ type name_formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
-  field_name : string -> string -> string;
+  field_name : name -> string -> string;
       (** Inputs:
           - type name
           - field name
@@ -160,6 +160,11 @@ type id =
       (** If often happens that variant names must be unique (it is the case in
           F* ) which is why we register them here.
        *)
+  | FieldId of TypeDefId.id * FieldId.id
+      (** If often happens that in the case of structures, the field names
+          must be unique (it is the case in F* ) which is why we register
+          them here.
+       *)
   | TypeVarId of TypeVarId.id
   | VarId of VarId.id
   | UnknownId
@@ -207,29 +212,29 @@ let names_map_add (id : id) (name : string) (nm : names_map) : names_map =
   { id_to_name; name_to_id; names_set }
 
 (* TODO: remove those functions? We use the ones of extraction_ctx *)
-let names_map_find (id : id) (nm : names_map) : string =
+let names_map_get (id : id) (nm : names_map) : string =
   IdMap.find id nm.id_to_name
 
-let names_map_find_function (id : A.fun_id) (rg : RegionGroupId.id option)
+let names_map_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
     (nm : names_map) : string =
-  names_map_find (FunId (id, rg)) nm
+  names_map_get (FunId (id, rg)) nm
 
-let names_map_find_local_function (id : FunDefId.id)
+let names_map_get_local_function (id : FunDefId.id)
     (rg : RegionGroupId.id option) (nm : names_map) : string =
-  names_map_find_function (A.Local id) rg nm
+  names_map_get_function (A.Local id) rg nm
 
-let names_map_find_type (id : type_id) (nm : names_map) : string =
+let names_map_get_type (id : type_id) (nm : names_map) : string =
   assert (id <> Tuple);
-  names_map_find (TypeId id) nm
+  names_map_get (TypeId id) nm
 
-let names_map_find_local_type (id : TypeDefId.id) (nm : names_map) : string =
-  names_map_find_type (AdtId id) nm
+let names_map_get_local_type (id : TypeDefId.id) (nm : names_map) : string =
+  names_map_get_type (AdtId id) nm
 
-let names_map_find_var (id : VarId.id) (nm : names_map) : string =
-  names_map_find (VarId id) nm
+let names_map_get_var (id : VarId.id) (nm : names_map) : string =
+  names_map_get (VarId id) nm
 
-let names_map_find_type_var (id : TypeVarId.id) (nm : names_map) : string =
-  names_map_find (TypeVarId id) nm
+let names_map_get_type_var (id : TypeVarId.id) (nm : names_map) : string =
+  names_map_get (TypeVarId id) nm
 
 (** Make a (variable) basename unique (by adding an index).
 
@@ -266,37 +271,54 @@ let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   let names_map = names_map_add id name ctx.names_map in
   { ctx with names_map }
 
-let ctx_find (id : id) (ctx : extraction_ctx) : string =
+let ctx_get (id : id) (ctx : extraction_ctx) : string =
   IdMap.find id ctx.names_map.id_to_name
 
-let ctx_find_function (id : A.fun_id) (rg : RegionGroupId.id option)
+let ctx_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
-  ctx_find (FunId (id, rg)) ctx
+  ctx_get (FunId (id, rg)) ctx
 
-let ctx_find_local_function (id : FunDefId.id) (rg : RegionGroupId.id option)
+let ctx_get_local_function (id : FunDefId.id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
-  ctx_find_function (A.Local id) rg ctx
+  ctx_get_function (A.Local id) rg ctx
 
-let ctx_find_type (id : type_id) (ctx : extraction_ctx) : string =
+let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> Tuple);
-  ctx_find (TypeId id) ctx
+  ctx_get (TypeId id) ctx
 
-let ctx_find_local_type (id : TypeDefId.id) (ctx : extraction_ctx) : string =
-  ctx_find_type (AdtId id) ctx
+let ctx_get_local_type (id : TypeDefId.id) (ctx : extraction_ctx) : string =
+  ctx_get_type (AdtId id) ctx
 
-let ctx_find_var (id : VarId.id) (ctx : extraction_ctx) : string =
-  ctx_find (VarId id) ctx
+let ctx_get_var (id : VarId.id) (ctx : extraction_ctx) : string =
+  ctx_get (VarId id) ctx
 
-let ctx_find_type_var (id : TypeVarId.id) (ctx : extraction_ctx) : string =
-  ctx_find (TypeVarId id) ctx
+let ctx_get_type_var (id : TypeVarId.id) (ctx : extraction_ctx) : string =
+  ctx_get (TypeVarId id) ctx
 
-(** Generate a unique type variable name and add to the context *)
+let ctx_get_field (def_id : TypeDefId.id) (field_id : FieldId.id)
+    (ctx : extraction_ctx) : string =
+  ctx_get (FieldId (def_id, field_id)) ctx
+
+let ctx_get_variant (def_id : TypeDefId.id) (variant_id : VariantId.id)
+    (ctx : extraction_ctx) : string =
+  ctx_get (VariantId (def_id, variant_id)) ctx
+
+(** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name =
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
   in
   let ctx = ctx_add (TypeVarId id) name ctx in
+  (ctx, name)
+
+(** Generate a unique variable name and add it to the context *)
+let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
+    extraction_ctx * string =
+  let name =
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+  in
+  let ctx = ctx_add (VarId id) name ctx in
   (ctx, name)
 
 (** See [ctx_add_type_var] *)
@@ -317,6 +339,18 @@ let ctx_add_type_def (def : type_def) (ctx : extraction_ctx) :
   let def_name = ctx.fmt.type_name def.name in
   let ctx = ctx_add (TypeId (AdtId def.def_id)) def_name ctx in
   (ctx, def_name)
+
+let ctx_add_field (def : type_def) (field_id : FieldId.id) (field : field)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let name = ctx.fmt.field_name def.name field.field_name in
+  let ctx = ctx_add (FieldId (def.def_id, field_id)) name ctx in
+  (ctx, name)
+
+let ctx_add_fields (def : type_def) (fields : (FieldId.id * field) list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (vid, v) -> ctx_add_field def vid v ctx)
+    ctx fields
 
 let ctx_add_variant (def : type_def) (variant_id : VariantId.id)
     (variant : variant) (ctx : extraction_ctx) : extraction_ctx * string =

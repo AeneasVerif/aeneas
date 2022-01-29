@@ -1,5 +1,8 @@
 # TODO
 
+0. when going from symbolic to pure, remove the useless tuples (as some fields
+   might be erased).
+
 0. Update the high-level comments, in particular in Values.ml
 
 0. Rename Pure -> PureAst
