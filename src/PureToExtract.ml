@@ -13,18 +13,6 @@ module RegionVarId = T.RegionVarId
 (** The local logger *)
 let log = L.pure_to_extract_log
 
-type extraction_ctx = {
-  type_context : C.type_context;
-  fun_context : C.fun_context;
-}
-(** Extraction context.
-
-    Note that the extraction context contains information coming from the
-    CFIM AST (not only the pure AST). This is useful for naming, for instance:
-    we use the region information to generate the names of the backward
-    functions, etc.
- *)
-
 type region_group_info = {
   id : RegionGroupId.id;
       (** The id of the region group.
@@ -47,6 +35,16 @@ type name_formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
+  field_name : string -> string -> string;
+      (** Inputs:
+          - type name
+          - field name
+       *)
+  variant_name : string -> string -> string;
+      (** Inputs:
+          - type name
+          - variant name
+       *)
   type_name : name -> string;  (** Provided a basename, compute a type name. *)
   fun_name : A.fun_id -> name -> int -> region_group_info option -> string;
       (** Inputs:
@@ -69,6 +67,14 @@ type name_formatter = {
           Note that once the formatter generated a basename, we add an index
           if necessary to prevent name clashes: the burden of name clashes checks
           is thus on the caller's side.
+       *)
+  type_var_basename : StringSet.t -> string;
+      (** Generates a type variable basename. *)
+  append_index : string -> int -> string;
+      (** Appends an index to a name - we use this to generate unique
+          names: when doing so, the role of the formatter is just to concatenate
+          indices to names, the responsability of finding a proper index is
+          delegated to helper functions.
        *)
 }
 (** A name formatter's role is to come up with name suggestions.
@@ -124,7 +130,7 @@ let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
     the name for a backward function, we try to use the names of the regions
     to 
  *)
-let compute_fun_def_name (ctx : extraction_ctx) (fmt : name_formatter)
+let compute_fun_def_name (ctx : trans_ctx) (fmt : name_formatter)
     (fun_id : A.fun_id) (rg_id : RegionGroupId.id option) : string =
   (* Lookup the function CFIM signature (we need the region information) *)
   let sg = CfimAstUtils.lookup_fun_sig fun_id ctx.fun_context.fun_defs in
@@ -150,6 +156,7 @@ let compute_fun_def_name (ctx : extraction_ctx) (fmt : name_formatter)
 type id =
   | FunId of A.fun_id * RegionGroupId.id option
   | TypeId of type_id
+  | TypeVarId of TypeVarId.id
   | VarId of VarId.id
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
@@ -195,6 +202,7 @@ let names_map_add (id : id) (name : string) (nm : names_map) : names_map =
   let names_set = StringSet.add name nm.names_set in
   { id_to_name; name_to_id; names_set }
 
+(* TODO: remove those functions? We use the ones of extraction_ctx *)
 let names_map_find (id : id) (nm : names_map) : string =
   IdMap.find id nm.id_to_name
 
@@ -213,17 +221,88 @@ let names_map_find_type (id : type_id) (nm : names_map) : string =
 let names_map_find_local_type (id : TypeDefId.id) (nm : names_map) : string =
   names_map_find_type (AdtId id) nm
 
-(** Make a basename unique (by adding an index).
+let names_map_find_var (id : VarId.id) (nm : names_map) : string =
+  names_map_find (VarId id) nm
+
+let names_map_find_type_var (id : TypeVarId.id) (nm : names_map) : string =
+  names_map_find (TypeVarId id) nm
+
+(** Make a (variable) basename unique (by adding an index).
 
     We do this in an inefficient manner (by testing all indices starting from
     0) but it shouldn't be a bottleneck.
     
-    [add_index]: concatenates a given index to the variable's basename.
+    [append]: appends an index to a string
  *)
-let var_basename_to_unique (names_set : StringSet.t) (add_index : int -> string)
-    : string =
+let basename_to_unique (names_set : StringSet.t)
+    (append : string -> int -> string) (basename : string) : string =
   let rec gen (i : int) : string =
-    let s = add_index i in
+    let s = append basename i in
     if StringSet.mem s names_set then gen (i + 1) else s
   in
-  gen 0
+  if StringSet.mem basename names_set then gen 0 else basename
+
+type extraction_ctx = {
+  trans_ctx : trans_ctx;
+  names_map : names_map;
+  fmt : name_formatter;
+  indent_incr : int;
+      (** The indent increment we insert whenever we need to indent more *)
+}
+(** Extraction context.
+
+    Note that the extraction context contains information coming from the
+    CFIM AST (not only the pure AST). This is useful for naming, for instance:
+    we use the region information to generate the names of the backward
+    functions, etc.
+ *)
+
+let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
+  let names_map = names_map_add id name ctx.names_map in
+  { ctx with names_map }
+
+let ctx_find (id : id) (ctx : extraction_ctx) : string =
+  IdMap.find id ctx.names_map.id_to_name
+
+let ctx_find_function (id : A.fun_id) (rg : RegionGroupId.id option)
+    (ctx : extraction_ctx) : string =
+  ctx_find (FunId (id, rg)) ctx
+
+let ctx_find_local_function (id : FunDefId.id) (rg : RegionGroupId.id option)
+    (ctx : extraction_ctx) : string =
+  ctx_find_function (A.Local id) rg ctx
+
+let ctx_find_type (id : type_id) (ctx : extraction_ctx) : string =
+  assert (id <> Tuple);
+  ctx_find (TypeId id) ctx
+
+let ctx_find_local_type (id : TypeDefId.id) (ctx : extraction_ctx) : string =
+  ctx_find_type (AdtId id) ctx
+
+let ctx_find_var (id : VarId.id) (ctx : extraction_ctx) : string =
+  ctx_find (VarId id) ctx
+
+let ctx_find_type_var (id : TypeVarId.id) (ctx : extraction_ctx) : string =
+  ctx_find (TypeVarId id) ctx
+
+(** Generate a unique type variable name and add to the context *)
+let ctx_add_type_var (basename : string) (id : TypeVarId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let name =
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+  in
+  let ctx = ctx_add (TypeVarId id) name ctx in
+  (ctx, name)
+
+(** See [ctx_add_type_var] *)
+let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (name, id) -> ctx_add_type_var name id ctx)
+    ctx vars
+
+let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (var : type_var) -> ctx_add_type_var var.name var.index ctx)
+    ctx vars
