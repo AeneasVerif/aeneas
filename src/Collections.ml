@@ -38,6 +38,23 @@ module List = struct
 
   (** Return the n first elements of the list *)
   let prefix (n : int) (ls : 'a list) : 'a list = fst (split_at ls n)
+
+  (** Iter and link the iterations.
+
+    Iterate over a list, but call a function between every two elements
+    (but not before the first element, and not after the last).
+ *)
+  let iter_link (link : unit -> unit) (f : 'a -> unit) (ls : 'a list) : unit =
+    let rec iter ls =
+      match ls with
+      | [] -> ()
+      | [ x ] -> f x
+      | x :: y :: ls ->
+          f x;
+          link ();
+          iter (y :: ls)
+    in
+    iter ls
 end
 
 module type OrderedType = sig

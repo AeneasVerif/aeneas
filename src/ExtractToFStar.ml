@@ -6,23 +6,6 @@ open TranslateCore
 open PureToExtract
 module F = Format
 
-(** Iter "between".
-
-    Iterate over a list, but call a function between every two elements
-    (but not before the first element, and not after the last).
- *)
-let list_iterb (between : unit -> unit) (f : 'a -> unit) (ls : 'a list) : unit =
-  let rec iter ls =
-    match ls with
-    | [] -> ()
-    | [ x ] -> f x
-    | x :: y :: ls ->
-        f x;
-        between ();
-        iter (y :: ls)
-  in
-  iter ls
-
 (** [inside] constrols whether we should add parentheses or not around type
     application (if `true` we add parentheses).
  *)
@@ -33,13 +16,15 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       match type_id with
       | Tuple ->
           F.pp_print_string fmt "(";
-          list_iterb (F.pp_print_space fmt) (extract_ty ctx fmt true) tys;
+          Collections.List.iter_link (F.pp_print_space fmt)
+            (extract_ty ctx fmt true) tys;
           F.pp_print_string fmt ")"
       | AdtId _ | Assumed _ ->
           if inside then F.pp_print_string fmt "(";
           F.pp_print_string fmt (ctx_get_type type_id ctx);
           if tys <> [] then F.pp_print_space fmt ();
-          list_iterb (F.pp_print_space fmt) (extract_ty ctx fmt true) tys;
+          Collections.List.iter_link (F.pp_print_space fmt)
+            (extract_ty ctx fmt true) tys;
           if inside then F.pp_print_string fmt ")")
   | TypeVar vid -> F.pp_print_string fmt (ctx_get_type_var vid ctx)
   | Bool -> F.pp_print_string fmt ctx.fmt.bool_name
