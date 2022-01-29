@@ -632,14 +632,16 @@ let cfim_module_of_json (js : json) : (M.cfim_module, string) result =
     (match js with
     | `Assoc
         [
+          ("name", name);
           ("declarations", declarations);
           ("types", types);
           ("functions", functions);
         ] ->
+        let* name = string_of_json name in
         let* declarations =
           list_of_json declaration_group_of_json declarations
         in
         let* types = list_of_json type_def_of_json types in
         let* functions = list_of_json fun_def_of_json functions in
-        Ok { M.declarations; types; functions }
+        Ok { M.name; declarations; types; functions }
     | _ -> Error "")

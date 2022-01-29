@@ -15,6 +15,7 @@ type declaration_group =
 [@@deriving show]
 
 type cfim_module = {
+  name : string;
   declarations : declaration_group list;
   types : type_def list;
   functions : fun_def list;
