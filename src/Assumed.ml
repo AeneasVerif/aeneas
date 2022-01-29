@@ -89,3 +89,10 @@ let assumed_sigs : (A.assumed_fun_id * A.fun_sig) list =
     (BoxDeref, box_deref_shared_sig);
     (BoxDerefMut, box_deref_mut_sig);
   ]
+
+let assumed_names : (A.assumed_fun_id * Identifiers.name) list =
+  [
+    (BoxNew, [ "alloc"; "boxed"; "Box"; "new" ]);
+    (BoxDeref, [ "core"; "ops"; "deref"; "Deref"; "deref" ]);
+    (BoxDerefMut, [ "core"; "ops"; "deref"; "DerefMut"; "deref_mut" ]);
+  ]

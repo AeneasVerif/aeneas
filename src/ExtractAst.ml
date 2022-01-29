@@ -2,6 +2,8 @@
     This AST is voluntarily as simple as possible, so that the extraction
     can focus on pretty-printing and on the syntax specific to the different
     provers.
+    
+    TODO: we don't use this...
  *)
 
 type constant_value = Pure.constant_value

@@ -5,7 +5,7 @@ module E = Expressions
 module A = CfimAst
 module TypeDefId = T.TypeDefId
 module TypeVarId = T.TypeVarId
-module RegionId = T.RegionId
+module RegionGroupId = T.RegionGroupId
 module VariantId = T.VariantId
 module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
@@ -17,6 +17,8 @@ module SynthPhaseId = IdGen ()
 
 module VarId = IdGen ()
 (** Pay attention to the fact that we also define a [VarId] module in Values *)
+
+type integer_type = T.integer_type [@@deriving show, ord]
 
 type assumed_ty =
   | Result
@@ -45,7 +47,7 @@ class ['self] iter_ty_base =
 
     method visit_type_id : 'env -> type_id -> unit = fun _ _ -> ()
 
-    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
+    method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
@@ -57,7 +59,7 @@ class ['self] map_ty_base =
 
     method visit_type_id : 'env -> type_id -> type_id = fun _ id -> id
 
-    method visit_integer_type : 'env -> T.integer_type -> T.integer_type =
+    method visit_integer_type : 'env -> integer_type -> integer_type =
       fun _ ity -> ity
   end
 
@@ -73,10 +75,10 @@ type ty =
   | TypeVar of TypeVarId.id
   | Bool
   | Char
-  | Integer of T.integer_type
+  | Integer of integer_type
   | Str
-  | Array of ty (* TODO: there should be a constant with the array *)
-  | Slice of ty
+  | Array of ty (* TODO: this should be an assumed type?... *)
+  | Slice of ty (* TODO: this should be an assumed type?... *)
 [@@deriving
   show,
     visitors
@@ -346,14 +348,16 @@ and typed_rvalue = { value : rvalue; ty : ty }
         polymorphic = false;
       }]
 
-type unop = Not | Neg of T.integer_type [@@deriving show]
+type unop = Not | Neg of integer_type [@@deriving show]
+
+(* TODO: redefine assumed_fun_id (we need to get rid of box! *)
 
 type fun_id =
   | Regular of A.fun_id * T.RegionGroupId.id option
       (** Backward id: `Some` if the function is a backward function, `None`
           if it is a forward function *)
   | Unop of unop
-  | Binop of E.binop * T.integer_type
+  | Binop of E.binop * integer_type
 [@@deriving show]
 
 (** Meta-information stored in the AST *)
@@ -366,7 +370,7 @@ class ['self] iter_expression_base =
 
     method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
 
-    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
+    method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
 
     method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
 
@@ -382,7 +386,7 @@ class ['self] map_expression_base =
 
     method visit_meta : 'env -> meta -> meta = fun _ x -> x
 
-    method visit_integer_type : 'env -> T.integer_type -> T.integer_type =
+    method visit_integer_type : 'env -> integer_type -> integer_type =
       fun _ x -> x
 
     method visit_scalar_value : 'env -> scalar_value -> scalar_value =
@@ -400,7 +404,7 @@ class virtual ['self] reduce_expression_base =
 
     method visit_meta : 'env -> meta -> 'a = fun _ _ -> self#zero
 
-    method visit_integer_type : 'env -> T.integer_type -> 'a =
+    method visit_integer_type : 'env -> integer_type -> 'a =
       fun _ _ -> self#zero
 
     method visit_scalar_value : 'env -> scalar_value -> 'a =
@@ -418,7 +422,7 @@ class virtual ['self] mapreduce_expression_base =
 
     method visit_meta : 'env -> meta -> meta * 'a = fun _ x -> (x, self#zero)
 
-    method visit_integer_type : 'env -> T.integer_type -> T.integer_type * 'a =
+    method visit_integer_type : 'env -> integer_type -> integer_type * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
@@ -496,8 +500,7 @@ and call = {
 
 and switch_body =
   | If of texpression * texpression
-  | SwitchInt of
-      T.integer_type * (scalar_value * texpression) list * texpression
+  | SwitchInt of integer_type * (scalar_value * texpression) list * texpression
   | Match of match_branch list
 (* TODO: we could (should?) merge SwitchInt and Match *)
 
