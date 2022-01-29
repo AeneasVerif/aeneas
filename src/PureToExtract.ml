@@ -349,7 +349,7 @@ let ctx_add_type_def (def : type_def) (ctx : extraction_ctx) :
 
 let ctx_add_field (def : type_def) (field_id : FieldId.id) (field : field)
     (ctx : extraction_ctx) : extraction_ctx * string =
-  let name = ctx.fmt.field_name def.name field.field_name in
+  let name = ctx.fmt.field_name def.name field_id field.field_name in
   let ctx = ctx_add (FieldId (def.def_id, field_id)) name ctx in
   (ctx, name)
 
