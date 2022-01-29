@@ -610,6 +610,8 @@ and aborrow_content =
           
           Note that we need to do so only for borrows consumed by parent
           abstractions (hence the optional borrow id).
+          
+          TODO: the below explanations are obsolete
 
           Example:
           ========

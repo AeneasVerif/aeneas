@@ -1,5 +1,7 @@
 # TODO
 
+0. Update the high-level comments, in particular in Values.ml
+
 0. Rename Pure -> PureAst
 
 0. For variables pretty names: we could try to use the meta places used for the

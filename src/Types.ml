@@ -31,11 +31,6 @@ type region_var = (RegionVarId.id, string option) indexed_var [@@deriving show]
     Regions are used in function signatures (in which case we use region variable
     ids) and in symbolic variables and projections (in which case we use region
     ids).
-    
-    TODO: use this only in the signatures. During interpretation, we need
-    a uniform treatment of regions as variables (otherwise the projectors
-    don't work: they always ignore the static regions...). By convention,
-    use region with id 0 as the static region.
  *)
 type 'rid region =
   | Static  (** Static region *)
@@ -177,13 +172,14 @@ type sty = RegionVarId.id gr_ty [@@deriving show, ord]
 type rty = RegionId.id gr_ty [@@deriving show, ord]
 (** Type with *R*egions.
 
-    Used during symbolic execution.
+    Used to project borrows/loans inside of abstractions, during symbolic
+    execution.
  *)
 
 type ety = erased_region ty [@@deriving show, ord]
 (** Type with *E*rased regions.
     
-    Used in function bodies, "general" value types, etc.
+    Used in function bodies, "regular" value types, etc.
  *)
 
 type field = { field_name : string; field_ty : sty } [@@deriving show]
@@ -200,7 +196,8 @@ type type_def = {
   type_params : type_var list;
   kind : type_def_kind;
   regions_hierarchy : region_var_groups;
-      (** Stored the hierarchy between the regions (which regions have the same lifetime,
-          what is the hierarchy between the lifetimes) *)
+      (** Stores the hierarchy between the regions (which regions have the
+          same lifetime, which lifetime should end before which other lifetime,
+          etc.) *)
 }
 [@@deriving show]
