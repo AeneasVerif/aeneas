@@ -35,9 +35,10 @@ type name_formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
-  field_name : name -> string option -> string;
+  field_name : name -> FieldId.id -> string option -> string;
       (** Inputs:
           - type name
+          - field id
           - field name
           
           Note that fields don't always have names, but we still need to

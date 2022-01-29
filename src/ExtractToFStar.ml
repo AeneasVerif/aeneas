@@ -7,21 +7,51 @@ open PureToExtract
 open StringUtils
 module F = Format
 
-(*
-let mk_name_formatter =
-{
-  bool_name : string;
-  char_name : string;
-  int_name : integer_type -> string;
-  str_name : string;
-  field_name : name -> string option -> string;
-  variant_name : name -> string -> string;
-  type_name : name -> string;
-  fun_name : A.fun_id -> name -> int -> region_group_info option -> string;
-  var_basename : StringSet.t -> ty -> string;
-  type_var_basename : StringSet.t -> string;
-  append_index : string -> int -> string;
-}*)
+(*let mk_name_formatter =
+    let int_name (int_ty : integer_type)  =
+      match int_ty with
+      | Isize -> "isize"
+      | I8 -> "i8"
+      | I16 -> "i16"
+      | I32 -> "i32"
+      | I64 -> "i64"
+      | I128 -> "i128"
+      | Usize -> "usize"
+      | U8 -> "u8"
+      | U16 -> "u16"
+      | U32 -> "u32"
+      | U64 -> "u64"
+      | U128 -> "u128"
+    in
+    (* For now, we treat only the case where the type name is:
+     * `Module::Type`
+     * *)
+    let type_name name =
+      let name = Collections.List.pop_last name in
+      to_snake_case name
+    in
+    let field_name (def_name : name) (field_id : FieldId.id) (field_name : string option) : string =
+      let def_name = type_name def_name in
+      match field_name with
+      | Some field_name -> def_name ^ "_" ^ field_name
+      | None -> def_name ^ "_f" ^ FieldId.to_string field_id
+    in
+    let variant_name (def_name :name) (variant : string) : string =
+      type_name def_name ^ to_camel_case variant
+    in
+    {
+      bool_name : "bool";
+      char_name : "char";
+      int_name;
+      str_name : "string";
+      field_name;
+      variant_name;
+      type_name;
+      fun_name : A.fun_id -> name -> int -> region_group_info option -> string;
+      var_basename : StringSet.t -> ty -> string;
+      type_var_basename : StringSet.t -> string;
+      append_index : string -> int -> string;
+  }*)
 
 (** [inside] constrols whether we should add parentheses or not around type
     application (if `true` we add parentheses).
