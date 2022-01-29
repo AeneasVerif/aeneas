@@ -12,24 +12,6 @@ module PP = PrintPure
 (** The local logger *)
 let log = L.symbolic_to_pure_log
 
-type regular_fun_id = A.fun_id * T.RegionGroupId.id option
-[@@deriving show, ord]
-(** We use this type as a key for lookups *)
-
-module RegularFunIdOrderedType = struct
-  type t = regular_fun_id
-
-  let compare = compare_regular_fun_id
-
-  let to_string = show_regular_fun_id
-
-  let pp_t = pp_regular_fun_id
-
-  let show_t = show_regular_fun_id
-end
-
-module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
-
 type type_context = {
   cfim_type_defs : T.type_def TypeDefId.Map.t;
   types_infos : TA.type_infos; (* TODO: rename to type_infos *)

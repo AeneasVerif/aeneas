@@ -1,5 +1,23 @@
 open Pure
 
+type regular_fun_id = A.fun_id * T.RegionGroupId.id option
+[@@deriving show, ord]
+(** We use this type as a key for lookups *)
+
+module RegularFunIdOrderedType = struct
+  type t = regular_fun_id
+
+  let compare = compare_regular_fun_id
+
+  let to_string = show_regular_fun_id
+
+  let pp_t = pp_regular_fun_id
+
+  let show_t = show_regular_fun_id
+end
+
+module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
+
 (* TODO : move *)
 let binop_can_fail (binop : E.binop) : bool =
   match binop with

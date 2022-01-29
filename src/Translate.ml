@@ -60,8 +60,7 @@ let translate_function_to_symbolics (config : C.partial_config)
 *)
 let translate_function_to_pure (config : C.partial_config)
     (trans_ctx : trans_ctx)
-    (fun_sigs :
-      SymbolicToPure.fun_sig_named_outputs SymbolicToPure.RegularFunIdMap.t)
+    (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
     (fdef : A.fun_def) : pure_fun_translation =
   (* Debug *)
   log#ldebug
@@ -78,7 +77,6 @@ let translate_function_to_pure (config : C.partial_config)
   (* Convert the symbolic ASTs to pure ASTs: *)
 
   (* Initialize the context *)
-  let module RegularFunIdMap = SymbolicToPure.RegularFunIdMap in
   let forward_sig = RegularFunIdMap.find (A.Local def_id, None) fun_sigs in
   let forward_ret_ty =
     match forward_sig.sg.outputs with

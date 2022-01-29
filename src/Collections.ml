@@ -193,7 +193,7 @@ end
     identifiers to names (i.e., strings) when generating code, in order to
     make sure that we don't have potentially dangerous collisions.
  *)
-module type MapInj = sig
+module type InjMap = sig
   type key
 
   type elem
@@ -271,9 +271,9 @@ module type MapInj = sig
   val of_list : (key * elem) list -> t
 end
 
-(** See [MapInj] *)
-module MakeMapInj (Key : OrderedType) (Elem : OrderedType) :
-  MapInj with type key = Key.t with type elem = Elem.t = struct
+(** See [InjMap] *)
+module MakeInjMap (Key : OrderedType) (Elem : OrderedType) :
+  InjMap with type key = Key.t with type elem = Elem.t = struct
   module Map = MakeMap (Key)
   module Set = MakeSet (Elem)
 
