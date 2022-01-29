@@ -8,7 +8,7 @@ module EL = Easy_logging.Logging
 module TA = TypesAnalysis
 open PureToExtract
 open ExtractAst
-open ExtractToFstar
+open ExtractToFStar
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
