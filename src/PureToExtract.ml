@@ -35,10 +35,16 @@ type name_formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
-  field_name : name -> string -> string;
+  field_name : name -> string option -> string;
       (** Inputs:
           - type name
           - field name
+          
+          Note that fields don't always have names, but we still need to
+          generate some names if we want to extract the structures to records...
+          We might want to extract such structures to tuples, later, but field
+          access then causes trouble because not all provers accept syntax like
+          `x.3` where `x` is a tuple.
        *)
   variant_name : name -> string -> string;
       (** Inputs:

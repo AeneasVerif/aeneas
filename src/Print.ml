@@ -110,7 +110,9 @@ module Types = struct
     ty_to_string fmt ty
 
   let field_to_string fmt (f : T.field) : string =
-    f.field_name ^ " : " ^ ty_to_string fmt f.field_ty
+    match f.field_name with
+    | Some field_name -> field_name ^ " : " ^ ty_to_string fmt f.field_ty
+    | None -> ty_to_string fmt f.field_ty
 
   let variant_to_string fmt (v : T.variant) : string =
     v.variant_name ^ "("
@@ -511,9 +513,15 @@ module Contexts = struct
    fun def_id opt_variant_id ->
     let def = T.TypeDefId.Map.find def_id ctx in
     let fields = TU.type_def_get_fields def opt_variant_id in
-    (* TODO: the field name should be optional?? *)
-    let fields = List.map (fun f -> f.T.field_name) fields in
-    Some fields
+    (* There are two cases: either all the fields have names, or none of them
+     * has names *)
+    let has_names =
+      List.exists (fun f -> Option.is_some f.T.field_name) fields
+    in
+    if has_names then
+      let fields = List.map (fun f -> Option.get f.T.field_name) fields in
+      Some fields
+    else None
 
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
     (* We shouldn't use rvar_to_string *)
@@ -596,7 +604,7 @@ module CfimAst = struct
     type_def_id_to_string : T.TypeDefId.id -> string;
     adt_variant_to_string : T.TypeDefId.id -> T.VariantId.id -> string;
     adt_field_to_string :
-      T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string;
+      T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string option;
     var_id_to_string : V.VarId.id -> string;
     adt_field_names :
       T.TypeDefId.id -> T.VariantId.id option -> string list option;
@@ -639,7 +647,7 @@ module CfimAst = struct
     }
 
   let type_ctx_to_adt_field_to_string_fun (ctx : T.type_def T.TypeDefId.Map.t) :
-      T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string =
+      T.TypeDefId.id -> T.VariantId.id option -> T.FieldId.id -> string option =
    fun def_id opt_variant_id field_id ->
     let def = T.TypeDefId.Map.find def_id ctx in
     let fields = TU.type_def_get_fields def opt_variant_id in
@@ -722,7 +730,9 @@ module CfimAst = struct
             "(" ^ s ^ ")." ^ T.FieldId.to_string fid
         | E.Field (E.ProjAdt (adt_id, opt_variant_id), fid) -> (
             let field_name =
-              fmt.adt_field_to_string adt_id opt_variant_id fid
+              match fmt.adt_field_to_string adt_id opt_variant_id fid with
+              | Some field_name -> field_name
+              | None -> T.FieldId.to_string fid
             in
             match opt_variant_id with
             | None -> "(" ^ s ^ ")." ^ field_name

@@ -89,7 +89,7 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ()
 
 let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : type_def) (type_name : string) (type_params : string list)
+    (def : type_def) (def_name : string) (type_params : string list)
     (variants : variant list) : unit =
   (* We want to generate a definition which looks like this:
    * ```
@@ -151,17 +151,17 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
             let var_id = VarId.of_int (FieldId.to_int fid) in
             let ctx, field_name = ctx_add_var field_name var_id ctx in
             F.pp_print_string fmt (field_name ^ " :");
-            F.pp_space fmt ();
+            F.pp_print_space fmt ();
             ctx
       in
       (* Print the field type *)
       extract_ty ctx fmt false f.field_ty;
       (* Print the arrow `->`*)
-      F.pp_space fmt ();
-      F.pp_print_string "->";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "->";
       (* Close the field box *)
       F.pp_close_box fmt ();
-      F.pp_space fmt ();
+      F.pp_print_space fmt ();
       (* Return *)
       ctx
     in
@@ -171,14 +171,14 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
       List.fold_left (fun ctx (fid, f) -> print_field fid f ctx) ctx fields
     in
     (* Print the final type *)
-    F.pp_open_hovbox fmt ();
-    F.pp_string fmt def_name;
+    F.pp_open_hovbox fmt 0;
+    F.pp_print_string fmt def_name;
     List.iter
       (fun type_param ->
-        F.pp_space fmt ();
-        F.pp_string fmt type_param)
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt type_param)
       type_params;
-    F.pp_close_hovbox fmt ();
+    F.pp_close_box fmt ();
     (* Close the variant box *)
     F.pp_close_box fmt ()
   in
@@ -216,7 +216,7 @@ let rec extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
   F.pp_print_string fmt def_name;
   (match def.kind with
-  | Struct fields -> extract_type_def_struct_body ctx_body fmt fields
+  | Struct fields -> extract_type_def_struct_body ctx_body fmt def fields
   | Enum variants ->
       extract_type_def_enum_body ctx_body fmt def def_name type_params variants);
   ctx

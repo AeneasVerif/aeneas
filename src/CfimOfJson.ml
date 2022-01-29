@@ -134,7 +134,7 @@ let field_of_json (js : json) : (T.field, string) result =
   combine_error_msgs js "field_of_json"
     (match js with
     | `Assoc [ ("name", name); ("ty", ty) ] ->
-        let* name = string_of_json name in
+        let* name = option_of_json string_of_json name in
         let* ty = sty_of_json ty in
         Ok { T.field_name = name; field_ty = ty }
     | _ -> Error "")

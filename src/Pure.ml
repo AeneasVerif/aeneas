@@ -100,7 +100,7 @@ type ty =
         polymorphic = false;
       }]
 
-type field = { field_name : string; field_ty : ty } [@@deriving show]
+type field = { field_name : string option; field_ty : ty } [@@deriving show]
 
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 

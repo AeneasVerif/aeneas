@@ -41,7 +41,7 @@ type ast_formatter = {
   adt_variant_to_string : TypeDefId.id -> VariantId.id -> string;
   var_id_to_string : VarId.id -> string;
   adt_field_to_string :
-    TypeDefId.id -> VariantId.id option -> FieldId.id -> string;
+    TypeDefId.id -> VariantId.id option -> FieldId.id -> string option;
   adt_field_names : TypeDefId.id -> VariantId.id option -> string list option;
   fun_def_id_to_string : A.FunDefId.id -> string;
 }
@@ -149,7 +149,9 @@ let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
   | Slice sty -> "[" ^ ty_to_string fmt sty ^ "]"
 
 let field_to_string fmt (f : field) : string =
-  f.field_name ^ " : " ^ ty_to_string fmt f.field_ty
+  match f.field_name with
+  | None -> ty_to_string fmt f.field_ty
+  | Some field_name -> field_name ^ " : " ^ ty_to_string fmt f.field_ty
 
 let variant_to_string fmt (v : variant) : string =
   v.variant_name ^ "("
@@ -202,7 +204,9 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
       | E.ProjTuple _ -> "(" ^ s ^ ")." ^ T.FieldId.to_string pe.field_id
       | E.ProjAdt (adt_id, opt_variant_id) -> (
           let field_name =
-            fmt.adt_field_to_string adt_id opt_variant_id pe.field_id
+            match fmt.adt_field_to_string adt_id opt_variant_id pe.field_id with
+            | Some field_name -> field_name
+            | None -> T.FieldId.to_string pe.field_id
           in
           match opt_variant_id with
           | None -> "(" ^ s ^ ")." ^ field_name

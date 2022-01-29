@@ -182,7 +182,7 @@ type ety = erased_region ty [@@deriving show, ord]
     Used in function bodies, "regular" value types, etc.
  *)
 
-type field = { field_name : string; field_ty : sty } [@@deriving show]
+type field = { field_name : string option; field_ty : sty } [@@deriving show]
 
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 
