@@ -62,11 +62,12 @@ type name_formatter = {
           - region group information in case of a backward function
             (`None` if forward function)
        *)
-  var_basename : StringSet.t -> ty -> string;
+  var_basename : StringSet.t -> string option -> ty -> string;
       (** Generates a variable basename.
       
           Inputs:
           - the set of names used in the context so far
+          - the basename we got from the symbolic execution, if we have one
           - the type of the variable (can be useful for heuristics, in order
             not to always use "x" for instance, whenever naming anonymous
             variables)
@@ -75,7 +76,7 @@ type name_formatter = {
           if necessary to prevent name clashes: the burden of name clashes checks
           is thus on the caller's side.
        *)
-  type_var_basename : StringSet.t -> string;
+  type_var_basename : StringSet.t -> string option -> string;
       (** Generates a type variable basename. *)
   append_index : string -> int -> string;
       (** Appends an index to a name - we use this to generate unique
@@ -104,16 +105,17 @@ let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
     : string =
   (* There are several cases:
      - [rg] is `Some`: this is a forward function:
-       - if there are no region groups (i.e., no backward functions) we don't
-         add any suffix
-       - if there are region gruops, we add "_fwd"
+       - we add "_fwd"
      - [rg] is `None`: this is a backward function:
        - this function has one region group: we add "_back"
        - this function has several backward function: we add "_back" and an
          additional suffix to identify the precise backward function
+     Note that we always add a suffix (in case there are no region groups,
+     we could not add the "_fwd" suffix) to prevent name clashes between
+     definitions (in particular between type and function definitions).
   *)
   match rg with
-  | None -> if num_region_groups = 0 then "" else "_fwd"
+  | None -> "_fwd"
   | Some rg ->
       assert (num_region_groups > 0);
       if num_region_groups = 1 then (* Exactly one backward function *)

@@ -7,51 +7,155 @@ open PureToExtract
 open StringUtils
 module F = Format
 
-(*let mk_name_formatter =
-    let int_name (int_ty : integer_type)  =
-      match int_ty with
-      | Isize -> "isize"
-      | I8 -> "i8"
-      | I16 -> "i16"
-      | I32 -> "i32"
-      | I64 -> "i64"
-      | I128 -> "i128"
-      | Usize -> "usize"
-      | U8 -> "u8"
-      | U16 -> "u16"
-      | U32 -> "u32"
-      | U64 -> "u64"
-      | U128 -> "u128"
-    in
-    (* For now, we treat only the case where the type name is:
-     * `Module::Type`
-     * *)
-    let type_name name =
-      let name = Collections.List.pop_last name in
-      to_snake_case name
-    in
-    let field_name (def_name : name) (field_id : FieldId.id) (field_name : string option) : string =
-      let def_name = type_name def_name in
-      match field_name with
-      | Some field_name -> def_name ^ "_" ^ field_name
-      | None -> def_name ^ "_f" ^ FieldId.to_string field_id
-    in
-    let variant_name (def_name :name) (variant : string) : string =
-      type_name def_name ^ to_camel_case variant
-    in
-    {
-      bool_name : "bool";
-      char_name : "char";
-      int_name;
-      str_name : "string";
-      field_name;
-      variant_name;
-      type_name;
-      fun_name : A.fun_id -> name -> int -> region_group_info option -> string;
-      var_basename : StringSet.t -> ty -> string;
-      type_var_basename : StringSet.t -> string;
-      append_index : string -> int -> string;
-  }*)
+(**
+ * [ctx]: we use the context to lookup type definitions, to retrieve type names.
+ * This is used to compute variable names, when they have no basenames: in this
+ * case we use the first letter of the type name.
+ *
+ * [variant_concatenate_type_name]: if true, add the type name as a prefix
+ * to the variant names.
+ * Ex.:
+ * In Rust:
+ *   ```
+ *   enum List = {
+ *     Cons(u32, Box<List>),
+ *     Nil,
+ *   }
+ *   ```
+ *
+ * F*, if option activated:
+ *   ```
+ *   type list =
+ *   | ListCons : u32 -> list -> list
+ *   | ListNil : list
+ *   ```
+ *
+ * F*, if option not activated:
+ *   ```
+ *   type list =
+ *   | Cons : u32 -> list -> list
+ *   | Nil : list
+ *   ```
+ *
+ * Rk.: this should be true by default, because in Rust all the variant names
+ * are actively uniquely identifier by the type name `List::Cons(...)`, while
+ * in other languages it is not necessarily the case, and thus clashes can mess
+ * up type checking. Note that some languages actually forbids the name clashes
+ * (it is the case of F* ).
+ *)
+let mk_name_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
+  let int_name (int_ty : integer_type) =
+    match int_ty with
+    | Isize -> "isize"
+    | I8 -> "i8"
+    | I16 -> "i16"
+    | I32 -> "i32"
+    | I64 -> "i64"
+    | I128 -> "i128"
+    | Usize -> "usize"
+    | U8 -> "u8"
+    | U16 -> "u16"
+    | U32 -> "u32"
+    | U64 -> "u64"
+    | U128 -> "u128"
+  in
+  (* For now, we treat only the case where type and function names are of the
+   * form: `Module::Type` and `Module:function`.
+   *)
+  let get_name (name : name) : string =
+    match name with [ _module; name ] -> name | _ -> failwith "Unexpected"
+  in
+  let type_name_to_camel_case name =
+    let name = get_name name in
+    to_snake_case name
+  in
+  let type_name_to_snake_case name =
+    let name = get_name name in
+    to_snake_case name
+  in
+  let type_name name = type_name_to_camel_case name ^ "_t" in
+  let field_name (def_name : name) (field_id : FieldId.id)
+      (field_name : string option) : string =
+    let def_name = type_name_to_snake_case def_name ^ "_" in
+    match field_name with
+    | Some field_name -> def_name ^ "_" ^ field_name
+    | None -> def_name ^ FieldId.to_string field_id
+  in
+  let variant_name (def_name : name) (variant : string) : string =
+    let variant = to_camel_case variant in
+    if variant_concatenate_type_name then
+      type_name_to_camel_case def_name ^ variant
+    else variant
+  in
+  (* For now, we only treat the case where the type name is:
+   * `Module::Type`
+   *)
+  let fun_name (_fid : A.fun_id) (fname : name) (num_rgs : int)
+      (rg : region_group_info option) : string =
+    let fname = get_name fname in
+    (* Converting to snake case should be a no-op, but it doesn't cost much *)
+    let fname = to_snake_case fname in
+    (* Compute the suffix *)
+    let suffix = default_fun_suffix num_rgs rg in
+    (* Concatenate *)
+    fname ^ suffix
+  in
+  let var_basename (_varset : StringSet.t) (basename : string option) (ty : ty)
+      : string =
+    (* If there is a basename, we use it *)
+    match basename with
+    | Some basename ->
+        (* This should be a no-op *)
+        to_snake_case basename
+    | None -> (
+        (* No basename: we use the first letter of the type *)
+        match ty with
+        | Adt (type_id, tys) -> (
+            match type_id with
+            | Tuple ->
+                (* The "pair" case is frequent enough to have its special treatment *)
+                if List.length tys = 2 then "p" else "t"
+            | Assumed Result -> "r"
+            | AdtId adt_id ->
+                let def =
+                  TypeDefId.Map.find adt_id ctx.type_context.type_defs
+                in
+                StringUtils.string_of_chars [ (get_name def.name).[0] ])
+        | TypeVar _ -> "x" (* lacking imagination here... *)
+        | Bool -> "b"
+        | Char -> "c"
+        | Integer _ -> "i"
+        | Str -> "s"
+        | Array _ | Slice _ -> raise Unimplemented)
+  in
+  let type_var_basename (_varset : StringSet.t) (basename : string option) :
+      string =
+    (* If there is a basename, we use it *)
+    match basename with
+    | Some basename ->
+        (* This is *not* a no-op: type variables in Rust often start with
+         * a capital letter *)
+        to_snake_case basename
+    | None ->
+        (* For no, we use "a" *)
+        "a"
+  in
+  let append_index (basename : string) (i : int) : string =
+    basename ^ string_of_int i
+  in
+  {
+    bool_name = "bool";
+    char_name = "char";
+    int_name;
+    str_name = "string";
+    field_name;
+    variant_name;
+    type_name;
+    fun_name;
+    var_basename;
+    type_var_basename;
+    append_index;
+  }
 
 (** [inside] constrols whether we should add parentheses or not around type
     application (if `true` we add parentheses).
@@ -199,7 +303,7 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     in
     (* Print the fields *)
     let fields = FieldId.mapi (fun fid f -> (fid, f)) variant.fields in
-    let ctx =
+    let _ =
       List.fold_left (fun ctx (fid, f) -> print_field fid f ctx) ctx fields
     in
     (* Print the final type *)
@@ -220,8 +324,8 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   (* Close the body box *)
   F.pp_close_box fmt ()
 
-let rec extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : type_def) : extraction_ctx =
+let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
+    : extraction_ctx =
   (* Compute and register the type def name *)
   let ctx, def_name = ctx_add_type_def def ctx in
   (* Compute and register:
