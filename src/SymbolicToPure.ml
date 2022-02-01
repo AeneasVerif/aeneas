@@ -1053,7 +1053,27 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       let call = { func; type_params; args } in
       let call_ty = mk_result_ty output.ty in
       let call = { e = Call call; ty = call_ty } in
-      mk_let monadic output call next_e
+      (* **Optimization**:
+       * =================
+       * We do a small optimization here: if the backward function doesn't
+       * have any output, we don't introduce any function call. This case
+       * happens if the function only takes *shared* borrows as inputs,
+       * and is thus pretty common. We might want to move the optimization
+       * to the micro-passes code, but it is really super easy to do it
+       * here. Note that we are allowed to do it only because in this case,
+       * the backward function *fails exactly when the forward function fails*
+       * (they actually do exactly the same thing, the only difference being
+       * that the forward function can potentially return a value), and we
+       * know that we called the forward function before.
+       *)
+      if outputs = [] then (
+        (* No outputs - we do a small sanity check: the backward function
+         * should have exactly the same number of inputs as the forward:
+         * this number can be different only if the forward function returned
+         * a value containing mutable borrows, which can't be the case... *)
+        assert (List.length inputs = List.length fwd_inputs);
+        next_e)
+      else mk_let monadic output call next_e
   | V.SynthRet ->
       (* If we end the abstraction which consumed the return value of the function
        * we are synthesizing, we get back the borrows which were inside. Those borrows
