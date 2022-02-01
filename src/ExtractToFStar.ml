@@ -285,6 +285,10 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
         | None -> ctx
         | Some field_name ->
             let var_id = VarId.of_int (FieldId.to_int fid) in
+            let field_name =
+              ctx.fmt.var_basename ctx.names_map.names_set (Some field_name)
+                f.field_ty
+            in
             let ctx, field_name = ctx_add_var field_name var_id ctx in
             F.pp_print_string fmt (field_name ^ " :");
             F.pp_print_space fmt ();
