@@ -330,6 +330,10 @@ let translate_module (filename : string) (config : C.partial_config)
   Format.pp_print_break fmt 0 0;
   Format.pp_print_string fmt ("module " ^ module_name);
   Format.pp_print_break fmt 0 0;
+  Format.pp_print_string fmt "open FStar.Mul";
+  Format.pp_print_break fmt 0 0;
+  Format.pp_print_break fmt 0 0;
+  Format.pp_print_string fmt "#set-options \"--z3rlimit 50 --fuel 0 --ifuel 1\"";
   Format.pp_print_break fmt 0 0;
 
   (* Export the definition groups to the file, in the proper order *)

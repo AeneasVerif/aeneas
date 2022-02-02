@@ -386,6 +386,8 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
    * body translation: the updated ctx we return at the end of the function
    * only contains the registered type def and variant names *)
   let ctx_body, type_params = ctx_add_type_params def.type_params ctx in
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   F.pp_print_string fmt ("(** [" ^ Print.name_to_string def.name ^ "] *)");
   F.pp_print_space fmt ();
@@ -419,5 +421,4 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
-  F.pp_print_break fmt 0 0;
   F.pp_print_break fmt 0 0
