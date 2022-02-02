@@ -205,7 +205,8 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
    *
    * Or if there isn't enough space on one line:
    * ```
-   * type t = {
+   * type t =
+   * {
    *   x : int;
    *   y : bool;
    * }
@@ -222,7 +223,6 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ();
     F.pp_print_string fmt "{";
     (* The body itself *)
-    F.pp_open_hvbox fmt 0;
     F.pp_open_hvbox fmt ctx.indent_incr;
     F.pp_print_space fmt ();
     (* Print the fields *)
@@ -242,8 +242,8 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter (fun (fid, f) -> print_field fid f) fields;
     (* Close *)
     F.pp_close_box fmt ();
-    F.pp_print_string fmt "}";
-    F.pp_close_box fmt ())
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "}")
 
 let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     (def : type_def) (def_name : string) (type_params : string list)
@@ -408,7 +408,9 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
         F.pp_print_string fmt pname;
         F.pp_print_space fmt ())
       def.type_params;
-    F.pp_print_string fmt " : Type0)");
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "Type0)");
   (* Print the "=" *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt "=";
