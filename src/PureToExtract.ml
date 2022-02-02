@@ -211,6 +211,19 @@ type names_map = {
       We use it for lookups (during the translation) and to check for name clashes.
   *)
 
+(** Initialize a names map with a proper set of keywords/names coming from the
+    target language/prover. *)
+let initialize_names_map (keywords : string list) : names_map =
+  let name_to_id =
+    StringMap.of_list (List.map (fun x -> (x, UnknownId)) keywords)
+  in
+  let names_set = StringSet.of_list keywords in
+  (* We initialize [id_to_name] as empty, because the id of a keyword is [UnknownId].
+   * Also note that we don't need this mapping for keywords: we insert keywords only
+   * to check collisions. *)
+  let id_to_name = IdMap.empty in
+  { id_to_name; name_to_id; names_set }
+
 let names_map_add (id : id) (name : string) (nm : names_map) : names_map =
   (* Sanity check: no clashes *)
   assert (not (StringSet.mem name nm.names_set));

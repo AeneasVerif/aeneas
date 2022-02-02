@@ -86,6 +86,4 @@ let () =
       I.Test.test_functions_symbolic config synthesize m;
 
       (* Translate the functions *)
-      let _ = Translate.translate_module_to_pure config m in
-
-      ()
+      Translate.translate_module !filename config m

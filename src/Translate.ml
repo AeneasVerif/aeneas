@@ -204,7 +204,7 @@ let translate_function_to_pure (config : C.partial_config)
   (pure_forward, pure_backwards)
 
 let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
-    Pure.type_def list * pure_fun_translation list =
+    trans_ctx * Pure.type_def list * pure_fun_translation list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
 
@@ -257,4 +257,86 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
   in
 
   (* Return *)
-  (type_defs, pure_translations)
+  (trans_ctx, type_defs, pure_translations)
+
+(** Translate a module and write the synthesized code to an output file *)
+let translate_module (filename : string) (config : C.partial_config)
+    (m : M.cfim_module) : unit =
+  (* Translate the module to the pure AST *)
+  let trans_ctx, trans_types, trans_funs = translate_module_to_pure config m in
+
+  (* Initialize the extraction context - for now we extract only to F* *)
+  let names_map =
+    PureToExtract.initialize_names_map ExtractToFStar.fstar_keywords
+  in
+  let variant_concatenate_type_name = true in
+  let fstar_fmt =
+    ExtractToFStar.mk_name_formatter trans_ctx variant_concatenate_type_name
+  in
+  let extract_ctx =
+    { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }
+  in
+
+  (* Register unique names for all the top-level types and functions.
+   * Note that the order in which we generate the names doesn't matter:
+   * we just need to generate a mapping from identifier to name, and make
+   * sure there are no name clashes. *)
+  let extract_ctx =
+    List.fold_left
+      (fun extract_ctx def ->
+        ExtractToFStar.extract_type_def_register_names extract_ctx def)
+      extract_ctx trans_types
+  in
+
+  (* TODO: register the functions *)
+
+  (* Open the output file *)
+  (* First compute the filename by replacing the extension *)
+  let filename =
+    match Filename.chop_suffix_opt ~suffix:".cfim" filename with
+    | None ->
+        (* Note that we already checked the suffix upon opening the file *)
+        failwith "Unreachable"
+    | Some filename ->
+        (* We add the extension for F* *)
+        filename ^ ".fst"
+  in
+  let out = open_out filename in
+  let fmt = Format.formatter_of_out_channel out in
+
+  (* Put the translated definitions in maps *)
+  let trans_types =
+    Pure.TypeDefId.Map.of_list
+      (List.map (fun (d : Pure.type_def) -> (d.def_id, d)) trans_types)
+  in
+  let trans_funs =
+    Pure.FunDefId.Map.of_list
+      (List.map
+         (fun ((fd, bdl) : pure_fun_translation) -> (fd.def_id, (fd, bdl)))
+         trans_funs)
+  in
+
+  (* Create a vertical box *)
+  Format.pp_open_vbox fmt 0;
+
+  (* Export the definition groups to the file, in the proper order *)
+  let export_type (id : Pure.TypeDefId.id) : unit =
+    let def = Pure.TypeDefId.Map.find id trans_types in
+    ExtractToFStar.extract_type_def extract_ctx fmt def
+  in
+  let export_function (id : Pure.FunDefId.id) : unit =
+    (* TODO *)
+    ()
+  in
+  let export_decl (decl : M.declaration_group) : unit =
+    match decl with
+    | Type (NonRec id) -> export_type id
+    | Type (Rec ids) -> List.iter export_type ids
+    | Fun (NonRec id) -> export_function id
+    | Fun (Rec ids) -> List.iter export_function ids
+  in
+  List.iter export_decl m.declarations;
+
+  (* Close the box and end the formatting *)
+  Format.pp_close_box fmt ();
+  Format.pp_print_newline fmt ()

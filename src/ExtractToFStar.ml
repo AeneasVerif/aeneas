@@ -7,6 +7,24 @@ open PureToExtract
 open StringUtils
 module F = Format
 
+(** A list of keywords/identifiers used in F* and with which we want to check
+    collision. *)
+let fstar_keywords =
+  [
+    "let";
+    "rec";
+    "in";
+    "fn";
+    "int";
+    "list";
+    "FStar";
+    "FStar.Mul";
+    "type";
+    "match";
+    "with";
+    "assert";
+  ]
+
 (**
  * [ctx]: we use the context to lookup type definitions, to retrieve type names.
  * This is used to compute variable names, when they have no basenames: in this
@@ -328,14 +346,20 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   (* Close the body box *)
   F.pp_close_box fmt ()
 
-let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
-    : extraction_ctx =
+(** Compute the names for all the top-level identifiers used in a type
+    definition (type name, variant names, field names, etc. but not type
+    parameters).
+    
+    We need to do this preemptively, beforce extracting any definition,
+    because of recursive definitions.
+ *)
+let extract_type_def_register_names (ctx : extraction_ctx) (def : type_def) :
+    extraction_ctx =
   (* Compute and register the type def name *)
   let ctx, def_name = ctx_add_type_def def ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
-   * We do this because in F*, they have to be unique at the top-level.
    *)
   let ctx =
     match def.kind with
@@ -347,10 +371,24 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
              (VariantId.mapi (fun id v -> (id, v)) variants)
              ctx)
   in
+  (* Return *)
+  ctx
+
+(** Extract a type definition.
+
+    Note that all the names used for extraction should already have been
+    registered.
+ *)
+let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
+    : unit =
+  (* Retrieve the definition name *)
+  let def_name = ctx_get_local_type def.def_id ctx in
   (* Add the type params - note that we remember those bindings only for the
    * body translation: the updated ctx we return at the end of the function
    * only contains the registered type def and variant names *)
   let ctx_body, type_params = ctx_add_type_params def.type_params ctx in
+  (* Open a box for the definition *)
+  F.pp_open_hovbox fmt 0;
   (* > "type TYPE_NAME =" *)
   F.pp_print_string fmt "type";
   F.pp_print_space fmt ();
@@ -359,4 +397,8 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
   | Struct fields -> extract_type_def_struct_body ctx_body fmt def fields
   | Enum variants ->
       extract_type_def_enum_body ctx_body fmt def def_name type_params variants);
-  ctx
+  (* Close the box for the definition *)
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0;
+  F.pp_print_break fmt 0 0
