@@ -350,10 +350,20 @@ let translate_module (filename : string) (config : C.partial_config)
     let def = Pure.TypeDefId.Map.find id trans_types in
     ExtractToFStar.extract_type_def extract_ctx fmt qualif def
   in
-  let export_function (id : Pure.FunDefId.id) : unit =
-    (* TODO *)
-    (*    let pure_defs = Pure.FunDefId.Map.find id trans_funs in *)
-    ()
+  (* In case of recursive functions, we always extract the forward and
+   * backward functions as mutually recursive functions.
+   * There are many situations where they are actually not mutually recursive:
+   * we could detect such cases. TODO *)
+  let export_functions (is_rec : bool) (fls : Pure.fun_def list) : unit =
+    List.iteri
+      (fun i def ->
+        let qualif =
+          if not is_rec then ExtractToFStar.Let
+          else if i = 0 then ExtractToFStar.LetRec
+          else ExtractToFStar.And
+        in
+        ExtractToFStar.extract_fun_def extract_ctx fmt qualif def)
+      fls
   in
   let export_decl (decl : M.declaration_group) : unit =
     match decl with
@@ -366,9 +376,23 @@ let translate_module (filename : string) (config : C.partial_config)
             in
             export_type qualif id)
           ids
-    | Fun (NonRec id) -> export_function id
-    | Fun (Rec ids) -> List.iter export_function ids
+    | Fun (NonRec id) ->
+        (* Concatenate *)
+        let fwd, back_ls = Pure.FunDefId.Map.find id trans_funs in
+        let fls = fwd :: back_ls in
+        (* Translate *)
+        export_functions false fls
+    | Fun (Rec ids) ->
+        (* Concatenate *)
+        let compute_fun_id_list (id : Pure.FunDefId.id) : Pure.fun_def list =
+          let fwd, back_ls = Pure.FunDefId.Map.find id trans_funs in
+          fwd :: back_ls
+        in
+        let fls = List.concat (List.map compute_fun_id_list ids) in
+        (* Translate *)
+        export_functions true fls
   in
+
   List.iter export_decl m.declarations;
 
   (* Close the box and end the formatting *)

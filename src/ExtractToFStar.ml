@@ -469,3 +469,13 @@ let extract_fun_def_register_names (ctx : extraction_ctx)
   in
   (* Return *)
   ctx
+
+(** Extract a function definition.
+
+    Note that all the names used for extraction should already have been
+    registered.
+ *)
+let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
+    (qualif : fun_def_qualif) (def : fun_def) : unit =
+  (* TODO *)
+  ()
