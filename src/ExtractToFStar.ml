@@ -203,7 +203,15 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
    * type t = { x : int; y : bool; }
    * ```
    *
-   * Or if there isn't enough space on one line:
+   * If there isn't enough space on one line:
+   * ```
+   * type t =
+   * {
+   *   x : int; y : bool;
+   * }
+   * ```
+   * 
+   * And if there is even less space:
    * ```
    * type t =
    * {
@@ -211,11 +219,11 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
    *   y : bool;
    * }
    * ```
-   * Note that we already printed: `type t =`
    *
    * Also, in case there are no fields, we need to define the type as `unit`
    * (`type t = {}` doesn't work in F* ).
    *)
+  (* Note that we already printed: `type t =` *)
   if fields = [] then (
     F.pp_print_space fmt ();
     F.pp_print_string fmt "unit")
