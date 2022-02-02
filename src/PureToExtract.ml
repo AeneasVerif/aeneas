@@ -386,3 +386,29 @@ let ctx_add_variants (def : type_def) (variants : (VariantId.id * variant) list)
   List.fold_left_map
     (fun ctx (vid, v) -> ctx_add_variant def vid v ctx)
     ctx variants
+
+let ctx_add_fun_def (def : fun_def) (ctx : extraction_ctx) : extraction_ctx =
+  (* Lookup the CFIM def to compute the region group information *)
+  let def_id = def.def_id in
+  let cfim_def = FunDefId.Map.find def_id ctx.trans_ctx.fun_context.fun_defs in
+  let sg = cfim_def.signature in
+  let num_rgs = List.length sg.regions_hierarchy in
+  let rg_info =
+    match def.back_id with
+    | None -> None
+    | Some rg_id ->
+        let rg = T.RegionGroupId.nth sg.regions_hierarchy rg_id in
+        let regions =
+          List.map
+            (fun rid -> T.RegionVarId.nth sg.region_params rid)
+            rg.regions
+        in
+        let region_names =
+          List.map (fun (r : T.region_var) -> r.name) regions
+        in
+        Some { id = rg_id; region_names }
+  in
+  let def_id = A.Local def_id in
+  let name = ctx.fmt.fun_name def_id def.basename num_rgs rg_info in
+  let ctx = ctx_add (FunId (def_id, def.back_id)) name ctx in
+  ctx

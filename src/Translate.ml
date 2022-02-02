@@ -288,7 +288,12 @@ let translate_module (filename : string) (config : C.partial_config)
       extract_ctx trans_types
   in
 
-  (* TODO: register the functions *)
+  let extract_ctx =
+    List.fold_left
+      (fun extract_ctx def ->
+        ExtractToFStar.extract_fun_def_register_names extract_ctx def)
+      extract_ctx trans_funs
+  in
 
   (* Open the output file *)
   (* First compute the filename by replacing the extension and converting the
@@ -340,18 +345,27 @@ let translate_module (filename : string) (config : C.partial_config)
   Format.pp_print_break fmt 0 0;
 
   (* Export the definition groups to the file, in the proper order *)
-  let export_type (id : Pure.TypeDefId.id) : unit =
+  let export_type (qualif : ExtractToFStar.type_def_qualif)
+      (id : Pure.TypeDefId.id) : unit =
     let def = Pure.TypeDefId.Map.find id trans_types in
-    ExtractToFStar.extract_type_def extract_ctx fmt def
+    ExtractToFStar.extract_type_def extract_ctx fmt qualif def
   in
   let export_function (id : Pure.FunDefId.id) : unit =
     (* TODO *)
+    (*    let pure_defs = Pure.FunDefId.Map.find id trans_funs in *)
     ()
   in
   let export_decl (decl : M.declaration_group) : unit =
     match decl with
-    | Type (NonRec id) -> export_type id
-    | Type (Rec ids) -> List.iter export_type ids
+    | Type (NonRec id) -> export_type ExtractToFStar.Type id
+    | Type (Rec ids) ->
+        List.iteri
+          (fun i id ->
+            let qualif =
+              if i = 0 then ExtractToFStar.Type else ExtractToFStar.And
+            in
+            export_type qualif id)
+          ids
     | Fun (NonRec id) -> export_function id
     | Fun (Rec ids) -> List.iter export_function ids
   in
