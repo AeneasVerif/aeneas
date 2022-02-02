@@ -350,17 +350,18 @@ let translate_module (filename : string) (config : C.partial_config)
     let def = Pure.TypeDefId.Map.find id trans_types in
     ExtractToFStar.extract_type_def extract_ctx fmt qualif def
   in
-  (* In case of recursive functions, we always extract the forward and
-   * backward functions as mutually recursive functions.
-   * There are many situations where they are actually not mutually recursive:
-   * we could detect such cases. TODO *)
-  let export_functions (is_rec : bool) (fls : Pure.fun_def list) : unit =
+  (* In case of (non-mutually) recursive functions, we use a simple procedure to
+   * check if the forward and backward functions are mutually recursive.
+   *)
+  let export_functions (is_rec : bool) (is_mut_rec : bool)
+      (fls : Pure.fun_def list) : unit =
     List.iteri
       (fun i def ->
         let qualif =
           if not is_rec then ExtractToFStar.Let
-          else if i = 0 then ExtractToFStar.LetRec
-          else ExtractToFStar.And
+          else if is_mut_rec then
+            if i = 0 then ExtractToFStar.LetRec else ExtractToFStar.And
+          else ExtractToFStar.LetRec
         in
         ExtractToFStar.extract_fun_def extract_ctx fmt qualif def)
       fls
@@ -381,8 +382,18 @@ let translate_module (filename : string) (config : C.partial_config)
         let fwd, back_ls = Pure.FunDefId.Map.find id trans_funs in
         let fls = fwd :: back_ls in
         (* Translate *)
-        export_functions false fls
+        export_functions false false fls
+    | Fun (Rec [ id ]) ->
+        (* Simply recursive functions *)
+        (* Concatenate *)
+        let fwd, back_ls = Pure.FunDefId.Map.find id trans_funs in
+        let fls = fwd :: back_ls in
+        (* Check if mutually rec *)
+        let is_mut_rec = not (PureUtils.functions_not_mutually_recursive fls) in
+        (* Translate *)
+        export_functions true is_mut_rec fls
     | Fun (Rec ids) ->
+        (* General case of mutually recursive functions *)
         (* Concatenate *)
         let compute_fun_id_list (id : Pure.FunDefId.id) : Pure.fun_def list =
           let fwd, back_ls = Pure.FunDefId.Map.find id trans_funs in
@@ -390,7 +401,7 @@ let translate_module (filename : string) (config : C.partial_config)
         in
         let fls = List.concat (List.map compute_fun_id_list ids) in
         (* Translate *)
-        export_functions true fls
+        export_functions true true fls
   in
 
   List.iter export_decl m.declarations;

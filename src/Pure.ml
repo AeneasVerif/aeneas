@@ -348,7 +348,7 @@ and typed_rvalue = { value : rvalue; ty : ty }
         polymorphic = false;
       }]
 
-type unop = Not | Neg of integer_type [@@deriving show]
+type unop = Not | Neg of integer_type [@@deriving show, ord]
 
 (* TODO: redefine assumed_fun_id (we need to get rid of box! *)
 
@@ -358,7 +358,7 @@ type fun_id =
           if it is a forward function *)
   | Unop of unop
   | Binop of E.binop * integer_type
-[@@deriving show]
+[@@deriving show, ord]
 
 (** Meta-information stored in the AST *)
 type meta = Assignment of mplace * typed_rvalue
