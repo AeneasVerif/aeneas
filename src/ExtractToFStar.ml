@@ -23,6 +23,7 @@ let fstar_keywords =
     "match";
     "with";
     "assert";
+    "Type0";
   ]
 
 (**
@@ -233,6 +234,8 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
     extract_ty ctx fmt false f.field_ty;
+    F.pp_print_string fmt ";";
+    F.pp_print_space fmt ();
     F.pp_close_box fmt ()
   in
   let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
@@ -389,10 +392,29 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
   let ctx_body, type_params = ctx_add_type_params def.type_params ctx in
   (* Open a box for the definition *)
   F.pp_open_hovbox fmt 0;
-  (* > "type TYPE_NAME =" *)
-  F.pp_print_string fmt "type";
+  (* Print a comment to link the extracted type to its original rust definition *)
+  F.pp_print_string fmt ("(** [" ^ Print.name_to_string def.name ^ "] *)");
   F.pp_print_space fmt ();
-  F.pp_print_string fmt def_name;
+  (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  (* > "type TYPE_NAME" *)
+  F.pp_print_string fmt ("type " ^ def_name);
+  (* Print the type parameters *)
+  if def.type_params <> [] then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "(";
+    List.iter
+      (fun (p : type_var) ->
+        let pname = ctx_get_type_var p.index ctx_body in
+        F.pp_print_string fmt pname;
+        F.pp_print_space fmt ())
+      def.type_params;
+    F.pp_print_string fmt " : Type0)");
+  (* Print the "=" *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "=";
+  (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
+  F.pp_close_box fmt ();
   (match def.kind with
   | Struct fields -> extract_type_def_struct_body ctx_body fmt def fields
   | Enum variants ->

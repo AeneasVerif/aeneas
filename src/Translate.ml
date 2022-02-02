@@ -291,17 +291,23 @@ let translate_module (filename : string) (config : C.partial_config)
   (* TODO: register the functions *)
 
   (* Open the output file *)
-  (* First compute the filename by replacing the extension *)
-  let filename =
+  (* First compute the filename by replacing the extension and converting the
+   * case (rust module names are snake case) *)
+  let module_name, extract_filename =
     match Filename.chop_suffix_opt ~suffix:".cfim" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
         failwith "Unreachable"
     | Some filename ->
+        (* Split between basename and dirname *)
+        let dirname = Filename.dirname filename in
+        let basename = Filename.basename filename in
+        (* Convert the case *)
+        let module_name = StringUtils.to_camel_case basename in
         (* We add the extension for F* *)
-        filename ^ ".fst"
+        (module_name, Filename.concat dirname (module_name ^ ".fst"))
   in
-  let out = open_out filename in
+  let out = open_out extract_filename in
   let fmt = Format.formatter_of_out_channel out in
 
   (* Put the translated definitions in maps *)
@@ -318,6 +324,13 @@ let translate_module (filename : string) (config : C.partial_config)
 
   (* Create a vertical box *)
   Format.pp_open_vbox fmt 0;
+
+  (* Add the module name *)
+  Format.pp_print_string fmt ("(** " ^ m.M.name ^ " *)");
+  Format.pp_print_break fmt 0 0;
+  Format.pp_print_string fmt ("module " ^ module_name);
+  Format.pp_print_break fmt 0 0;
+  Format.pp_print_break fmt 0 0;
 
   (* Export the definition groups to the file, in the proper order *)
   let export_type (id : Pure.TypeDefId.id) : unit =
@@ -338,5 +351,4 @@ let translate_module (filename : string) (config : C.partial_config)
   List.iter export_decl m.declarations;
 
   (* Close the box and end the formatting *)
-  Format.pp_close_box fmt ();
-  Format.pp_print_newline fmt ()
+  Format.pp_close_box fmt ()
