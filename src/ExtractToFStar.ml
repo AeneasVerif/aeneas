@@ -280,8 +280,6 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
    *
    * Note that we already printed: `type s =`
    *)
-  (* Open the body box *)
-  F.pp_open_hvbox fmt 0;
   (* Print the variants *)
   let print_variant (variant_id : VariantId.id) (variant : variant) : unit =
     let variant_name = ctx_get_variant def.def_id variant_id ctx in
@@ -345,9 +343,7 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   in
   (* Print the variants *)
   let variants = VariantId.mapi (fun vid v -> (vid, v)) variants in
-  List.iter (fun (vid, v) -> print_variant vid v) variants;
-  (* Close the body box *)
-  F.pp_close_box fmt ()
+  List.iter (fun (vid, v) -> print_variant vid v) variants
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type
@@ -390,11 +386,12 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter) (def : type_def)
    * body translation: the updated ctx we return at the end of the function
    * only contains the registered type def and variant names *)
   let ctx_body, type_params = ctx_add_type_params def.type_params ctx in
-  (* Open a box for the definition *)
-  F.pp_open_hovbox fmt 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   F.pp_print_string fmt ("(** [" ^ Print.name_to_string def.name ^ "] *)");
   F.pp_print_space fmt ();
+  (* Open a box for the definition, so that whenever possible it gets printed on
+   * one line *)
+  F.pp_open_hvbox fmt 0;
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
