@@ -322,6 +322,9 @@ let translate_module (filename : string) (config : C.partial_config)
          trans_funs)
   in
 
+  (* Set the margin *)
+  Format.pp_set_margin fmt 80;
+
   (* Create a vertical box *)
   Format.pp_open_vbox fmt 0;
 

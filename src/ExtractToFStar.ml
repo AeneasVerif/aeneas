@@ -222,9 +222,9 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
   else (
     F.pp_print_space fmt ();
     F.pp_print_string fmt "{";
+    F.pp_print_break fmt 1 ctx.indent_incr;
     (* The body itself *)
-    F.pp_open_hvbox fmt ctx.indent_incr;
-    F.pp_print_space fmt ();
+    F.pp_open_hvbox fmt 0;
     (* Print the fields *)
     let print_field (field_id : FieldId.id) (f : field) : unit =
       let field_name = ctx_get_field def.def_id field_id ctx in
@@ -235,11 +235,12 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       extract_ty ctx fmt false f.field_ty;
       F.pp_print_string fmt ";";
-      F.pp_print_space fmt ();
       F.pp_close_box fmt ()
     in
     let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
-    List.iter (fun (fid, f) -> print_field fid f) fields;
+    Collections.List.iter_link (F.pp_print_space fmt)
+      (fun (fid, f) -> print_field fid f)
+      fields;
     (* Close *)
     F.pp_close_box fmt ();
     F.pp_print_space fmt ();
