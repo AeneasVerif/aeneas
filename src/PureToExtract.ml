@@ -76,7 +76,7 @@ type name_formatter = {
           if necessary to prevent name clashes: the burden of name clashes checks
           is thus on the caller's side.
        *)
-  type_var_basename : StringSet.t -> string option -> string;
+  type_var_basename : StringSet.t -> string -> string;
       (** Generates a type variable basename. *)
   append_index : string -> int -> string;
       (** Appends an index to a name - we use this to generate unique
@@ -328,8 +328,9 @@ let ctx_get_variant (def_id : TypeDefId.id) (variant_id : VariantId.id)
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
+  let name = ctx.fmt.type_var_basename ctx.names_map.names_set basename in
   let name =
-    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index basename
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index name
   in
   let ctx = ctx_add (TypeVarId id) name ctx in
   (ctx, name)

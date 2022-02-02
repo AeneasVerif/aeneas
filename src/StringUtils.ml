@@ -90,4 +90,6 @@ let to_snake_case (s : string) : string =
 let _ =
   assert (to_camel_case "hello_world" = "HelloWorld");
   assert (to_snake_case "HelloWorld36Hello" = "hello_world36_hello");
-  assert (to_snake_case "HELLO" = "hello")
+  assert (to_snake_case "HELLO" = "hello");
+  assert (to_snake_case "T1" = "t1");
+  assert (to_camel_case "list" = "List")

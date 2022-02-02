@@ -86,18 +86,18 @@ let mk_name_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
   in
   let type_name_to_camel_case name =
     let name = get_name name in
-    to_snake_case name
+    to_camel_case name
   in
   let type_name_to_snake_case name =
     let name = get_name name in
     to_snake_case name
   in
-  let type_name name = type_name_to_camel_case name ^ "_t" in
+  let type_name name = type_name_to_snake_case name ^ "_t" in
   let field_name (def_name : name) (field_id : FieldId.id)
       (field_name : string option) : string =
     let def_name = type_name_to_snake_case def_name ^ "_" in
     match field_name with
-    | Some field_name -> def_name ^ "_" ^ field_name
+    | Some field_name -> def_name ^ field_name
     | None -> def_name ^ FieldId.to_string field_id
   in
   let variant_name (def_name : name) (variant : string) : string =
@@ -147,17 +147,10 @@ let mk_name_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
         | Str -> "s"
         | Array _ | Slice _ -> raise Unimplemented)
   in
-  let type_var_basename (_varset : StringSet.t) (basename : string option) :
-      string =
-    (* If there is a basename, we use it *)
-    match basename with
-    | Some basename ->
-        (* This is *not* a no-op: type variables in Rust often start with
-         * a capital letter *)
-        to_snake_case basename
-    | None ->
-        (* For no, we use "a" *)
-        "a"
+  let type_var_basename (_varset : StringSet.t) (basename : string) : string =
+    (* This is *not* a no-op: type variables in Rust often start with
+     * a capital letter *)
+    to_snake_case basename
   in
   let append_index (basename : string) (i : int) : string =
     basename ^ string_of_int i
@@ -218,32 +211,39 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
    * }
    * ```
    * Note that we already printed: `type t =`
+   *
+   * Also, in case there are no fields, we need to define the type as `unit`
+   * (`type t = {}` doesn't work in F* ).
    *)
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "{";
-  (* The body itself *)
-  F.pp_open_hvbox fmt 0;
-  F.pp_open_hvbox fmt ctx.indent_incr;
-  F.pp_print_space fmt ();
-  (* Print the fields *)
-  let print_field (field_id : FieldId.id) (f : field) : unit =
-    let field_name = ctx_get_field def.def_id field_id ctx in
-    F.pp_open_box fmt ctx.indent_incr;
-    F.pp_print_string fmt field_name;
+  if fields = [] then (
     F.pp_print_space fmt ();
-    F.pp_print_string fmt ":";
+    F.pp_print_string fmt "unit")
+  else (
     F.pp_print_space fmt ();
-    extract_ty ctx fmt false f.field_ty;
-    F.pp_print_string fmt ";";
+    F.pp_print_string fmt "{";
+    (* The body itself *)
+    F.pp_open_hvbox fmt 0;
+    F.pp_open_hvbox fmt ctx.indent_incr;
     F.pp_print_space fmt ();
-    F.pp_close_box fmt ()
-  in
-  let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
-  List.iter (fun (fid, f) -> print_field fid f) fields;
-  (* Close *)
-  F.pp_close_box fmt ();
-  F.pp_print_string fmt "}";
-  F.pp_close_box fmt ()
+    (* Print the fields *)
+    let print_field (field_id : FieldId.id) (f : field) : unit =
+      let field_name = ctx_get_field def.def_id field_id ctx in
+      F.pp_open_box fmt ctx.indent_incr;
+      F.pp_print_string fmt field_name;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      extract_ty ctx fmt false f.field_ty;
+      F.pp_print_string fmt ";";
+      F.pp_print_space fmt ();
+      F.pp_close_box fmt ()
+    in
+    let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
+    List.iter (fun (fid, f) -> print_field fid f) fields;
+    (* Close *)
+    F.pp_close_box fmt ();
+    F.pp_print_string fmt "}";
+    F.pp_close_box fmt ())
 
 let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     (def : type_def) (def_name : string) (type_params : string list)

@@ -351,4 +351,5 @@ let translate_module (filename : string) (config : C.partial_config)
   List.iter export_decl m.declarations;
 
   (* Close the box and end the formatting *)
-  Format.pp_close_box fmt ()
+  Format.pp_close_box fmt ();
+  Format.pp_print_newline fmt ()
