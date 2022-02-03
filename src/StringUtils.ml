@@ -71,9 +71,11 @@ let to_snake_case (s : string) : string =
   let apply ((prev_is_low, prev_is_digit, acc) : bool * bool * char list)
       (c : char) : bool * bool * char list =
     let acc =
-      if prev_is_digit then if is_letter_ascii c then '_' :: acc else acc
+      if c = '_' then acc
+      else if prev_is_digit then if is_letter_ascii c then '_' :: acc else acc
       else if prev_is_low then
-        if is_lowercase_ascii c || is_digit_ascii c then acc else '_' :: acc
+        if (is_lowercase_ascii c || is_digit_ascii c) && c <> '_' then acc
+        else '_' :: acc
       else acc
     in
     let prev_is_low = is_lowercase_ascii c in
@@ -101,4 +103,5 @@ let _ =
   assert (to_snake_case "HelloWorld36Hello" = "hello_world36_hello");
   assert (to_snake_case "HELLO" = "hello");
   assert (to_snake_case "T1" = "t1");
-  assert (to_camel_case "list" = "List")
+  assert (to_camel_case "list" = "List");
+  assert (to_snake_case "is_cons" = "is_cons")
