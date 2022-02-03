@@ -9,6 +9,9 @@ type result (a : Type0) : Type0 =
 | Return : a -> result a
 | Fail : result a
 
+(*** Misc *)
+type char = FStar.Char.char
+
 (*** Scalars *)
 /// Rk.: most of the following code was at least partially generated
 let isize_min : int = -9223372036854775808

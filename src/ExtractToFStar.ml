@@ -310,7 +310,11 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
           if tys = [] then F.pp_print_string fmt "unit"
           else (
             F.pp_print_string fmt "(";
-            Collections.List.iter_link (F.pp_print_space fmt)
+            Collections.List.iter_link
+              (fun () ->
+                F.pp_print_space fmt ();
+                F.pp_print_string fmt "&";
+                F.pp_print_space fmt ())
               (extract_ty ctx fmt true) tys;
             F.pp_print_string fmt ")")
       | AdtId _ | Assumed _ ->
@@ -956,6 +960,11 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
         ctx)
       ctx def.inputs_lvs
   in
+  (* Print the return type *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt ":";
+  F.pp_print_space fmt ();
+  extract_ty ctx fmt false (Collections.List.to_cons_nil def.signature.outputs);
   (* Print the "=" *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt "=";
