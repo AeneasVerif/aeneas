@@ -240,31 +240,6 @@ let names_map_add_assumed_function (fid : A.assumed_fun_id)
     names_map =
   names_map_add (FunId (A.Assumed fid, rg_id)) name nm
 
-(* TODO: remove those functions? We use the ones of extraction_ctx *)
-let names_map_get (id : id) (nm : names_map) : string =
-  IdMap.find id nm.id_to_name
-
-let names_map_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
-    (nm : names_map) : string =
-  names_map_get (FunId (id, rg)) nm
-
-let names_map_get_local_function (id : FunDefId.id)
-    (rg : RegionGroupId.id option) (nm : names_map) : string =
-  names_map_get_function (A.Local id) rg nm
-
-let names_map_get_type (id : type_id) (nm : names_map) : string =
-  assert (id <> Tuple);
-  names_map_get (TypeId id) nm
-
-let names_map_get_local_type (id : TypeDefId.id) (nm : names_map) : string =
-  names_map_get_type (AdtId id) nm
-
-let names_map_get_var (id : VarId.id) (nm : names_map) : string =
-  names_map_get (VarId id) nm
-
-let names_map_get_type_var (id : TypeVarId.id) (nm : names_map) : string =
-  names_map_get (TypeVarId id) nm
-
 (** Make a (variable) basename unique (by adding an index).
 
     We do this in an inefficient manner (by testing all indices starting from

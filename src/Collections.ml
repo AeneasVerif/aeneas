@@ -72,6 +72,11 @@ module List = struct
           fold acc (y :: ls)
     in
     fold init ls
+
+  let to_cons_nil (ls : 'a list) : 'a =
+    match ls with
+    | [ x ] -> x
+    | _ -> raise (Failure "The list should have length exactly one")
 end
 
 module type OrderedType = sig

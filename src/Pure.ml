@@ -117,9 +117,9 @@ type type_def = {
 }
 [@@deriving show]
 
-type scalar_value = V.scalar_value
+type scalar_value = V.scalar_value [@@deriving show]
 
-type constant_value = V.constant_value
+type constant_value = V.constant_value [@@deriving show]
 
 type var = {
   id : VarId.id;
@@ -129,6 +129,7 @@ type var = {
        *)
   ty : ty;
 }
+[@@deriving show]
 (** Because we introduce a lot of temporary variables, the list of variables
     is not fixed: we thus must carry all its information with the variable
     itself.
@@ -138,10 +139,12 @@ type var = {
  * on enumerations.
  * Also: tuples... *)
 type projection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
+[@@deriving show]
 
-type projection = projection_elem list
+type projection = projection_elem list [@@deriving show]
 
 type mplace = { name : string option; projection : projection }
+[@@deriving show]
 (** "Meta" place.
 
     Meta-data retrieved from the symbolic execution, which gives provenance
@@ -149,7 +152,7 @@ type mplace = { name : string option; projection : projection }
     we introduce.
  *)
 
-type place = { var : VarId.id; projection : projection }
+type place = { var : VarId.id; projection : projection } [@@deriving show]
 
 (** Ancestor for [iter_var_or_dummy] visitor *)
 class ['self] iter_value_base =
@@ -224,15 +227,16 @@ type var_or_dummy =
   | Var of var * mplace option
   | Dummy  (** Ignored value: `_`. *)
 [@@deriving
-  visitors
-    {
-      name = "iter_var_or_dummy";
-      variety = "iter";
-      ancestors = [ "iter_value_base" ];
-      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-      concrete = true;
-      polymorphic = false;
-    },
+  show,
+    visitors
+      {
+        name = "iter_var_or_dummy";
+        variety = "iter";
+        ancestors = [ "iter_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      },
     visitors
       {
         name = "map_var_or_dummy";
@@ -269,15 +273,16 @@ and adt_lvalue = {
 
 and typed_lvalue = { value : lvalue; ty : ty }
 [@@deriving
-  visitors
-    {
-      name = "iter_typed_lvalue";
-      variety = "iter";
-      ancestors = [ "iter_var_or_dummy" ];
-      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-      concrete = true;
-      polymorphic = false;
-    },
+  show,
+    visitors
+      {
+        name = "iter_typed_lvalue";
+        variety = "iter";
+        ancestors = [ "iter_var_or_dummy" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      },
     visitors
       {
         name = "map_typed_lvalue";
@@ -316,15 +321,16 @@ and adt_rvalue = {
 
 and typed_rvalue = { value : rvalue; ty : ty }
 [@@deriving
-  visitors
-    {
-      name = "iter_typed_rvalue";
-      variety = "iter";
-      ancestors = [ "iter_typed_lvalue" ];
-      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-      concrete = true;
-      polymorphic = false;
-    },
+  show,
+    visitors
+      {
+        name = "iter_typed_rvalue";
+        variety = "iter";
+        ancestors = [ "iter_typed_lvalue" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      },
     visitors
       {
         name = "map_typed_rvalue";
@@ -353,8 +359,6 @@ and typed_rvalue = { value : rvalue; ty : ty }
 
 type unop = Not | Neg of integer_type [@@deriving show, ord]
 
-(* TODO: redefine assumed_fun_id (we need to get rid of box! *)
-
 type fun_id =
   | Regular of A.fun_id * T.RegionGroupId.id option
       (** Backward id: `Some` if the function is a backward function, `None`
@@ -364,7 +368,7 @@ type fun_id =
 [@@deriving show, ord]
 
 (** Meta-information stored in the AST *)
-type meta = Assignment of mplace * typed_rvalue
+type meta = Assignment of mplace * typed_rvalue [@@deriving show]
 
 (** Ancestor for [iter_expression] visitor *)
 class ['self] iter_expression_base =
@@ -512,14 +516,15 @@ and match_branch = { pat : typed_lvalue; branch : texpression }
 
 and texpression = { e : expression; ty : ty }
 [@@deriving
-  visitors
-    {
-      name = "iter_expression";
-      variety = "iter";
-      ancestors = [ "iter_expression_base" ];
-      nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-      concrete = true;
-    },
+  show,
+    visitors
+      {
+        name = "iter_expression";
+        variety = "iter";
+        ancestors = [ "iter_expression_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+      },
     visitors
       {
         name = "map_expression";

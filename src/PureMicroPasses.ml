@@ -677,6 +677,56 @@ let unit_vars_to_unit (def : fun_def) : fun_def =
   (* Return *)
   { def with body; inputs_lvs }
 
+(** Eliminate the box functions like `Box::new`, `Box::deref`, etc. Most of them
+    are translated to identity, and `Box::free` is translated to `()`.
+
+    Note that the box types have already been eliminated during the translation
+    from symbolic to pure.
+    The reason why we don't eliminate the box functions at the same time is
+    that we would need to eliminate them in two different places: when translating
+    function calls, and when translating end abstractions. Here, we can do
+    something simpler, in one micro-pass.
+ *)
+let eliminate_box_functions (_ctx : trans_ctx) (def : fun_def) : fun_def =
+  (* The map visitor *)
+  let obj =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_Call env call =
+        match call.func with
+        | Regular (A.Assumed aid, rg_id) -> (
+            match (aid, rg_id) with
+            | A.BoxNew, _ ->
+                let arg = Collections.List.to_cons_nil call.args in
+                arg.e
+            | A.BoxDeref, None ->
+                (* `Box::deref` forward is the identity *)
+                let arg = Collections.List.to_cons_nil call.args in
+                arg.e
+            | A.BoxDeref, Some _ ->
+                (* `Box::deref` backward is `()` (doesn't give back anything) *)
+                (mk_value_expression unit_rvalue None).e
+            | A.BoxDerefMut, None ->
+                (* `Box::deref_mut` forward is the identity *)
+                let arg = Collections.List.to_cons_nil call.args in
+                arg.e
+            | A.BoxDerefMut, Some _ ->
+                (* `Box::deref_mut` back is the identity *)
+                let arg =
+                  match call.args with
+                  | [ _; given_back ] -> given_back
+                  | _ -> failwith "Unreachable"
+                in
+                arg.e
+            | A.BoxFree, _ -> (mk_value_expression unit_rvalue None).e)
+        | _ -> super#visit_Call env call
+    end
+  in
+  (* Update the body *)
+  let body = obj#visit_texpression () def.body in
+  { def with body }
+
 (** Unfold the monadic let-bindings to explicit matches. *)
 let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_def) : fun_def =
   (* It is a very simple map *)
@@ -752,6 +802,11 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
   log#ldebug
     (lazy
       ("inline_useless_var_assignments:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+
+  (* Eliminate the box functions *)
+  let def = eliminate_box_functions ctx def in
+  log#ldebug
+    (lazy ("eliminate_box_functions:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
   (* Filter the unused variables, assignments, function calls, etc. *)
   let def = filter_unused config.filter_unused_monadic_calls ctx def in
