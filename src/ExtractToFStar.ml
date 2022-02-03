@@ -961,10 +961,18 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
       ctx def.inputs_lvs
   in
   (* Print the return type *)
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt ":";
-  F.pp_print_space fmt ();
-  extract_ty ctx fmt false (Collections.List.to_cons_nil def.signature.outputs);
+  let _ =
+    F.pp_print_space fmt ();
+    (* Open a box for the return type *)
+    F.pp_open_hovbox fmt 0;
+    (* Print the return type *)
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
+    extract_ty ctx fmt false
+      (Collections.List.to_cons_nil def.signature.outputs);
+    (* Close the box for the return type *)
+    F.pp_close_box fmt ()
+  in
   (* Print the "=" *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt "=";

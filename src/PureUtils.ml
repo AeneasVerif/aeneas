@@ -186,6 +186,7 @@ let functions_not_mutually_recursive (funs : fun_def list) : bool =
 
 (** We use this to check whether we need to add parentheses around expressions.
     We only look for outer monadic let-bindings.
+    This is used when printing the branches of `if ... then ... else ...`.
  *)
 let rec expression_requires_parentheses (e : texpression) : bool =
   match e.e with
