@@ -505,7 +505,8 @@ and switch_body =
   | If of texpression * texpression
   | SwitchInt of integer_type * (scalar_value * texpression) list * texpression
   | Match of match_branch list
-(* TODO: we could (should?) merge SwitchInt and Match *)
+(* TODO: merge SwitchInt and Match. In order to do that,
+ * we need to add constants to lvalues. *)
 
 and match_branch = { pat : typed_lvalue; branch : texpression }
 

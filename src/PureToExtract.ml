@@ -31,7 +31,7 @@ module StringMap = Collections.MakeMap (Collections.OrderedString)
 
 type name = Identifiers.name
 
-type 'ctx g_formatter = {
+type formatter = {
   bool_name : string;
   char_name : string;
   int_name : integer_type -> string;
@@ -106,13 +106,12 @@ type 'ctx g_formatter = {
             if it is made of an application (ex.: `U32 3`)
        *)
   extract_unop :
-    'ctx ->
+    (bool -> texpression -> unit) ->
     F.formatter ->
-    ('ctx -> F.formatter -> bool -> texpression -> 'ctx) ->
     bool ->
     unop ->
     texpression ->
-    'ctx;
+    unit;
       (** Format a unary operation
       
           Inputs:
@@ -124,15 +123,14 @@ type 'ctx g_formatter = {
           - argument
        *)
   extract_binop :
-    'ctx ->
+    (bool -> texpression -> unit) ->
     F.formatter ->
-    ('ctx -> F.formatter -> bool -> texpression -> 'ctx) ->
     bool ->
     E.binop ->
     integer_type ->
     texpression ->
     texpression ->
-    'ctx;
+    unit;
       (** Format a binary operation
       
           Inputs:
@@ -297,8 +295,6 @@ type extraction_ctx = {
     we use the region information to generate the names of the backward
     functions, etc.
  *)
-
-and formatter = extraction_ctx g_formatter
 
 let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   (* TODO : nice debugging message if collision *)
