@@ -17,7 +17,8 @@ build-run:
 build-run-check-trace: generate-cfim
 	dune build src/main.exe && \
 	dune exec src/main.exe $(CFIM_TEST_FILE) > tests/trace_current.txt && \
-	cmp tests/trace_reference.txt tests/trace_current.txt
+	cmp tests/trace_reference.txt tests/trace_current.txt && \
+        cp fstar/Primitives.fst $(CHARON_TESTS_DIR)
 
 # Build the project and update the trace
 .PHONY: regen-trace
@@ -25,7 +26,8 @@ regen-trace: generate-cfim
 	dune build src/main.exe && \
 	dune exec src/main.exe $(CFIM_TEST_FILE) > tests/trace_current.txt && \
         rm -f tests/trace_reference.txt && \
-	cp tests/trace_current.txt tests/trace_reference.txt
+	cp tests/trace_current.txt tests/trace_reference.txt \
+        cp fstar/Primitives.fst $(CHARON_TESTS_DIR)
 
 .PHONY: generate-cfim
 generate-cfim:

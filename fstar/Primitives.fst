@@ -2,7 +2,7 @@
 module Primitives
 open FStar.Mul
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 15 --fuel 0 --ifuel 1"
 
 (*** Result *)
 type result (a : Type0) : Type0 =
