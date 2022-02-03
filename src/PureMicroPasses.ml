@@ -633,7 +633,9 @@ let to_monadic (def : fun_def) : fun_def =
       let id, _ = VarId.fresh var_cnt in
       let var = { id; basename = None; ty = unit_ty } in
       let inputs = [ var ] in
-      { def with signature; inputs })
+      let input_lv = mk_typed_lvalue_from_var var None in
+      let inputs_lvs = [ input_lv ] in
+      { def with signature; inputs; inputs_lvs })
     else def
   in
   (* Then the output type *)

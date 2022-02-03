@@ -37,6 +37,7 @@ let fstar_keywords =
     "with";
     "assert";
     "Type0";
+    "unit";
   ]
 
 let fstar_int_name (int_ty : integer_type) =
@@ -304,10 +305,14 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   | Adt (type_id, tys) -> (
       match type_id with
       | Tuple ->
-          F.pp_print_string fmt "(";
-          Collections.List.iter_link (F.pp_print_space fmt)
-            (extract_ty ctx fmt true) tys;
-          F.pp_print_string fmt ")"
+          (* This is a bit annoying, but in F* `()` is not the unit type:
+           * we have to write `unit`... *)
+          if tys = [] then F.pp_print_string fmt "unit"
+          else (
+            F.pp_print_string fmt "(";
+            Collections.List.iter_link (F.pp_print_space fmt)
+              (extract_ty ctx fmt true) tys;
+            F.pp_print_string fmt ")")
       | AdtId _ | Assumed _ ->
           if inside then F.pp_print_string fmt "(";
           F.pp_print_string fmt (ctx_get_type type_id ctx);
