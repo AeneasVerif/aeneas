@@ -80,6 +80,9 @@ type integer_type =
   | U128
 [@@deriving show, ord]
 
+let all_integer_types =
+  [ Isize; I8; I16; I32; I64; I128; Usize; U8; U16; U32; U64; U128 ]
+
 type ref_kind = Mut | Shared [@@deriving show, ord]
 
 type assumed_ty = Box [@@deriving show, ord]

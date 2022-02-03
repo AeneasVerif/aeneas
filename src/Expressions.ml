@@ -47,6 +47,26 @@ type binop =
   | Shr
 [@@deriving show, ord]
 
+let all_binops =
+  [
+    BitXor;
+    BitAnd;
+    BitOr;
+    Eq;
+    Lt;
+    Le;
+    Ne;
+    Ge;
+    Gt;
+    Div;
+    Rem;
+    Add;
+    Sub;
+    Mul;
+    Shl;
+    Shr;
+  ]
+
 (** Constant value for an operand
 
     It is a bit annoying, but rustc treats some ADT and tuple instances as

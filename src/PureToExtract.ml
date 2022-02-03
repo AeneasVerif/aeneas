@@ -31,7 +31,7 @@ module StringMap = Collections.MakeMap (Collections.OrderedString)
 
 type name = Identifiers.name
 
-type formatter = {
+type 'ctx g_formatter = {
   bool_name : string;
   char_name : string;
   int_name : integer_type -> string;
@@ -105,6 +105,45 @@ type formatter = {
           - [inside]: if `true`, the value should be wrapped in parentheses
             if it is made of an application (ex.: `U32 3`)
        *)
+  extract_unop :
+    'ctx ->
+    F.formatter ->
+    ('ctx -> F.formatter -> bool -> texpression -> 'ctx) ->
+    bool ->
+    unop ->
+    texpression ->
+    'ctx;
+      (** Format a unary operation
+      
+          Inputs:
+          - extraction context (see below)
+          - formatter
+          - expression formatter
+          - [inside]
+          - unop
+          - argument
+       *)
+  extract_binop :
+    'ctx ->
+    F.formatter ->
+    ('ctx -> F.formatter -> bool -> texpression -> 'ctx) ->
+    bool ->
+    E.binop ->
+    integer_type ->
+    texpression ->
+    texpression ->
+    'ctx;
+      (** Format a binary operation
+      
+          Inputs:
+          - extraction context (see below)
+          - formatter
+          - expression formatter
+          - [inside]
+          - binop
+          - argument 0
+          - argument 1
+       *)
 }
 (** A formatter's role is twofold:
     1. Come up with name suggestions.
@@ -117,73 +156,6 @@ type formatter = {
     
     2. Format some specific terms, like constants.
  *)
-
-let compute_type_def_name (fmt : formatter) (def : type_def) : string =
-  fmt.type_name def.name
-
-(** A helper function: generates a function suffix from a region group
-    information.
-    TODO: move all those helpers.
-*)
-let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
-    : string =
-  (* There are several cases:
-     - [rg] is `Some`: this is a forward function:
-       - we add "_fwd"
-     - [rg] is `None`: this is a backward function:
-       - this function has one region group: we add "_back"
-       - this function has several backward function: we add "_back" and an
-         additional suffix to identify the precise backward function
-     Note that we always add a suffix (in case there are no region groups,
-     we could not add the "_fwd" suffix) to prevent name clashes between
-     definitions (in particular between type and function definitions).
-  *)
-  match rg with
-  | None -> "_fwd"
-  | Some rg ->
-      assert (num_region_groups > 0);
-      if num_region_groups = 1 then (* Exactly one backward function *)
-        "_back"
-      else if
-        (* Several region groups/backward functions:
-           - if all the regions in the group have names, we use those names
-           - otherwise we use an index
-        *)
-        List.for_all Option.is_some rg.region_names
-      then
-        (* Concatenate the region names *)
-        "_back" ^ String.concat "" (List.map Option.get rg.region_names)
-      else (* Use the region index *)
-        "_back" ^ RegionGroupId.to_string rg.id
-
-(** Extract information from a function, and give this information to a
-    [formatter] to generate a function's name.
-    
-    Note that we need region information coming from CFIM (when generating
-    the name for a backward function, we try to use the names of the regions
-    to 
- *)
-let compute_fun_def_name (ctx : trans_ctx) (fmt : formatter) (fun_id : A.fun_id)
-    (rg_id : RegionGroupId.id option) : string =
-  (* Lookup the function CFIM signature (we need the region information) *)
-  let sg = CfimAstUtils.lookup_fun_sig fun_id ctx.fun_context.fun_defs in
-  let basename = CfimAstUtils.lookup_fun_name fun_id ctx.fun_context.fun_defs in
-  (* Compute the regions information *)
-  let num_region_groups = List.length sg.regions_hierarchy in
-  let rg_info =
-    match rg_id with
-    | None -> None
-    | Some rg_id ->
-        let rg = RegionGroupId.nth sg.regions_hierarchy rg_id in
-        let regions =
-          List.map (fun rid -> RegionVarId.nth sg.region_params rid) rg.regions
-        in
-        let region_names =
-          List.map (fun (r : T.region_var) -> r.name) regions
-        in
-        Some { id = rg.id; region_names }
-  in
-  fmt.fun_name fun_id basename num_region_groups rg_info
 
 (** We use identifiers to look for name clashes *)
 type id =
@@ -266,6 +238,11 @@ let names_map_add_assumed_variant (id : assumed_ty) (variant_id : VariantId.id)
     (name : string) (nm : names_map) : names_map =
   names_map_add (VariantId (Assumed id, variant_id)) name nm
 
+let names_map_add_assumed_function (fid : A.assumed_fun_id)
+    (rg_id : RegionGroupId.id option) (name : string) (nm : names_map) :
+    names_map =
+  names_map_add (FunId (A.Assumed fid, rg_id)) name nm
+
 (* TODO: remove those functions? We use the ones of extraction_ctx *)
 let names_map_get (id : id) (nm : names_map) : string =
   IdMap.find id nm.id_to_name
@@ -320,6 +297,8 @@ type extraction_ctx = {
     we use the region information to generate the names of the backward
     functions, etc.
  *)
+
+and formatter = extraction_ctx g_formatter
 
 let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   (* TODO : nice debugging message if collision *)
@@ -472,6 +451,7 @@ type names_map_init = {
   assumed_adts : (assumed_ty * string) list;
   assumed_structs : (assumed_ty * string) list;
   assumed_variants : (assumed_ty * VariantId.id * string) list;
+  assumed_functions : (A.assumed_fun_id * RegionGroupId.id option * string) list;
 }
 
 (** Initialize a names map with a proper set of keywords/names coming from the
@@ -490,6 +470,7 @@ let initialize_names_map (init : names_map_init) : names_map =
    * - the assumed types
    * - the assumed struct constructors
    * - the assumed variants
+   * - the assumed functions
    *)
   let nm =
     List.fold_left
@@ -507,5 +488,78 @@ let initialize_names_map (init : names_map_init) : names_map =
         names_map_add_assumed_variant type_id variant_id name nm)
       nm init.assumed_variants
   in
+  let nm =
+    List.fold_left
+      (fun nm (fun_id, rg_id, name) ->
+        names_map_add_assumed_function fun_id rg_id name nm)
+      nm init.assumed_functions
+  in
   (* Return *)
   nm
+
+let compute_type_def_name (fmt : formatter) (def : type_def) : string =
+  fmt.type_name def.name
+
+(** A helper function: generates a function suffix from a region group
+    information.
+    TODO: move all those helpers.
+*)
+let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
+    : string =
+  (* There are several cases:
+     - [rg] is `Some`: this is a forward function:
+       - we add "_fwd"
+     - [rg] is `None`: this is a backward function:
+       - this function has one region group: we add "_back"
+       - this function has several backward function: we add "_back" and an
+         additional suffix to identify the precise backward function
+     Note that we always add a suffix (in case there are no region groups,
+     we could not add the "_fwd" suffix) to prevent name clashes between
+     definitions (in particular between type and function definitions).
+  *)
+  match rg with
+  | None -> "_fwd"
+  | Some rg ->
+      assert (num_region_groups > 0);
+      if num_region_groups = 1 then (* Exactly one backward function *)
+        "_back"
+      else if
+        (* Several region groups/backward functions:
+           - if all the regions in the group have names, we use those names
+           - otherwise we use an index
+        *)
+        List.for_all Option.is_some rg.region_names
+      then
+        (* Concatenate the region names *)
+        "_back" ^ String.concat "" (List.map Option.get rg.region_names)
+      else (* Use the region index *)
+        "_back" ^ RegionGroupId.to_string rg.id
+
+(** Extract information from a function, and give this information to a
+    [formatter] to generate a function's name.
+    
+    Note that we need region information coming from CFIM (when generating
+    the name for a backward function, we try to use the names of the regions
+    to 
+ *)
+let compute_fun_def_name (ctx : trans_ctx) (fmt : formatter) (fun_id : A.fun_id)
+    (rg_id : RegionGroupId.id option) : string =
+  (* Lookup the function CFIM signature (we need the region information) *)
+  let sg = CfimAstUtils.lookup_fun_sig fun_id ctx.fun_context.fun_defs in
+  let basename = CfimAstUtils.lookup_fun_name fun_id ctx.fun_context.fun_defs in
+  (* Compute the regions information *)
+  let num_region_groups = List.length sg.regions_hierarchy in
+  let rg_info =
+    match rg_id with
+    | None -> None
+    | Some rg_id ->
+        let rg = RegionGroupId.nth sg.regions_hierarchy rg_id in
+        let regions =
+          List.map (fun rid -> RegionVarId.nth sg.region_params rid) rg.regions
+        in
+        let region_names =
+          List.map (fun (r : T.region_var) -> r.name) regions
+        in
+        Some { id = rg.id; region_names }
+  in
+  fmt.fun_name fun_id basename num_region_groups rg_info

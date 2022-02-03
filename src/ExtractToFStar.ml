@@ -39,6 +39,21 @@ let fstar_keywords =
     "Type0";
   ]
 
+let fstar_int_name (int_ty : integer_type) =
+  match int_ty with
+  | Isize -> "isize"
+  | I8 -> "i8"
+  | I16 -> "i16"
+  | I32 -> "i32"
+  | I64 -> "i64"
+  | I128 -> "i128"
+  | Usize -> "usize"
+  | U8 -> "u8"
+  | U16 -> "u16"
+  | U32 -> "u32"
+  | U64 -> "u64"
+  | U128 -> "u128"
+
 let fstar_assumed_adts : (assumed_ty * string) list = [ (Result, "result") ]
 
 let fstar_assumed_structs : (assumed_ty * string) list = []
@@ -46,13 +61,75 @@ let fstar_assumed_structs : (assumed_ty * string) list = []
 let fstar_assumed_variants : (assumed_ty * VariantId.id * string) list =
   [ (Result, result_return_id, "Return"); (Result, result_fail_id, "Fail") ]
 
+let fstar_assumed_functions :
+    (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
+  []
+
 let fstar_names_map_init =
   {
     keywords = fstar_keywords;
     assumed_adts = fstar_assumed_adts;
     assumed_structs = fstar_assumed_structs;
     assumed_variants = fstar_assumed_variants;
+    assumed_functions = fstar_assumed_functions;
   }
+
+let fstar_extract_unop (ctx : extraction_ctx) (fmt : F.formatter)
+    (extract_expr :
+      extraction_ctx -> F.formatter -> bool -> texpression -> extraction_ctx)
+    (inside : bool) (unop : unop) (arg : texpression) : extraction_ctx =
+  let unop =
+    match unop with
+    | Not -> "not"
+    | Neg int_ty -> fstar_int_name int_ty ^ "_neg"
+  in
+  if inside then F.pp_print_string fmt "(";
+  F.pp_print_string fmt unop;
+  F.pp_print_space fmt ();
+  let ctx = extract_expr ctx fmt true arg in
+  if inside then F.pp_print_string fmt ")";
+  ctx
+
+let fstar_extract_binop (ctx : extraction_ctx) (fmt : F.formatter)
+    (extract_expr :
+      extraction_ctx -> F.formatter -> bool -> texpression -> extraction_ctx)
+    (inside : bool) (binop : E.binop) (int_ty : integer_type)
+    (arg0 : texpression) (arg1 : texpression) : extraction_ctx =
+  if inside then F.pp_print_string fmt "(";
+  let ctx =
+    match binop with
+    | Eq ->
+        let ctx = extract_expr ctx fmt false arg0 in
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "=";
+        F.pp_print_space fmt ();
+        let ctx = extract_expr ctx fmt false arg1 in
+        ctx
+    | _ ->
+        let binop =
+          match binop with
+          | Eq -> failwith "Unreachable"
+          | Lt -> "lt"
+          | Le -> "le"
+          | Ne -> "ne"
+          | Ge -> "ge"
+          | Gt -> "gt"
+          | Div -> "div"
+          | Rem -> "rem"
+          | Add -> "add"
+          | Sub -> "sub"
+          | Mul -> "mul"
+          | BitXor | BitAnd | BitOr | Shl | Shr -> raise Unimplemented
+        in
+        F.pp_print_string fmt (fstar_int_name int_ty ^ "_" ^ binop);
+        F.pp_print_space fmt ();
+        let ctx = extract_expr ctx fmt false arg0 in
+        F.pp_print_space fmt ();
+        let ctx = extract_expr ctx fmt false arg1 in
+        ctx
+  in
+  if inside then F.pp_print_string fmt ")";
+  ctx
 
 (**
  * [ctx]: we use the context to lookup type definitions, to retrieve type names.
@@ -90,22 +167,10 @@ let fstar_names_map_init =
  * up type checking. Note that some languages actually forbids the name clashes
  * (it is the case of F* ).
  *)
-let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
-  let int_name (int_ty : integer_type) =
-    match int_ty with
-    | Isize -> "isize"
-    | I8 -> "i8"
-    | I16 -> "i16"
-    | I32 -> "i32"
-    | I64 -> "i64"
-    | I128 -> "i128"
-    | Usize -> "usize"
-    | U8 -> "u8"
-    | U16 -> "u16"
-    | U32 -> "u32"
-    | U64 -> "u64"
-    | U128 -> "u128"
-  in
+let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
+    formatter =
+  let int_name = fstar_int_name in
+
   (* For now, we treat only the case where type names are of the
    * form: `Module::Type`
    *)
@@ -158,6 +223,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
     (* Concatenate *)
     fname ^ suffix
   in
+
   let var_basename (_varset : StringSet.t) (basename : string option) (ty : ty)
       : string =
     (* If there is a basename, we use it *)
@@ -194,6 +260,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
   let append_index (basename : string) (i : int) : string =
     basename ^ string_of_int i
   in
+
   let extract_constant_value (fmt : F.formatter) (_inside : bool)
       (cv : constant_value) : unit =
     match cv with
@@ -225,6 +292,8 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
     type_var_basename;
     append_index;
     extract_constant_value;
+    extract_unop = fstar_extract_unop;
+    extract_binop = fstar_extract_binop;
   }
 
 (** [inside] constrols whether we should add parentheses or not around type
@@ -628,7 +697,38 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (e : texpression) : extraction_ctx =
   match e.e with
   | Value (rv, _) -> extract_typed_rvalue ctx fmt inside rv
-  | Call call -> raise Unimplemented
+  | Call call -> (
+      match (call.func, call.args) with
+      | Unop unop, [ arg ] ->
+          ctx.fmt.extract_unop ctx fmt extract_texpression inside unop arg
+      | Binop (binop, int_ty), [ arg0; arg1 ] ->
+          ctx.fmt.extract_binop ctx fmt extract_texpression inside binop int_ty
+            arg0 arg1
+      | Regular (fun_id, rg_id), _ ->
+          if inside then F.pp_print_string fmt "(";
+          (* Open a box for the function call *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          (* Print the function name *)
+          let fun_name = ctx_get_function fun_id rg_id ctx in
+          F.pp_print_string fmt fun_name;
+          (* Print the type parameters *)
+          List.iter
+            (fun ty ->
+              F.pp_print_space fmt ();
+              extract_ty ctx fmt true ty)
+            call.type_params;
+          (* Print the input values *)
+          let ctx =
+            List.fold_left
+              (fun ctx ve -> extract_texpression ctx fmt true ve)
+              ctx call.args
+          in
+          (* Close the box for the function call *)
+          F.pp_close_box fmt ();
+          (* Return *)
+          if inside then F.pp_print_string fmt ")";
+          ctx
+      | _ -> failwith "Unreachable")
   | Let (monadic, lv, re, next_e) ->
       (* Open a box for the let-binding *)
       F.pp_open_hovbox fmt ctx.indent_incr;
@@ -729,8 +829,8 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_open_hvbox fmt 0;
   (* Extract the body *)
   let _ = extract_texpression ctx fmt false def.body in
-  F.pp_close_box fmt ();
   (* Close the box for the body *)
+  F.pp_close_box fmt ();
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
