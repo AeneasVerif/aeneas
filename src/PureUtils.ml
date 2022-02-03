@@ -183,3 +183,14 @@ let functions_not_mutually_recursive (funs : fun_def list) : bool =
     with Utils.Found -> false
   in
   List.for_all body_only_calls_itself funs
+
+(** We use this to check whether we need to add parentheses around expressions.
+    We only look for outer monadic let-bindings.
+ *)
+let rec expression_requires_parentheses (e : texpression) : bool =
+  match e.e with
+  | Value _ | Call _ -> false
+  | Let (monadic, _, _, next_e) ->
+      if monadic then true else expression_requires_parentheses next_e
+  | Switch (_, _) -> false
+  | Meta (_, next_e) -> expression_requires_parentheses next_e

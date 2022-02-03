@@ -759,7 +759,42 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_close_box fmt ();
       (* Print the next expression *)
       extract_texpression ctx fmt inside next_e
-  | Switch (e, body) -> raise Unimplemented
+  | Switch (scrut, body) -> (
+      match body with
+      | If (e_then, e_else) ->
+          (* Open a box for the whole `if ... then ... else ...` *)
+          F.pp_open_hvbox fmt 0;
+          (* Open a box for the `if` *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          F.pp_print_string fmt "if";
+          F.pp_print_space fmt ();
+          let ctx = extract_texpression ctx fmt false scrut in
+          (* Close the box for the `if` *)
+          F.pp_close_box fmt ();
+          let extract_branch (is_then : bool) (e_branch : texpression) :
+              extraction_ctx =
+            F.pp_print_space fmt ();
+            (* Open a box for the branch *)
+            F.pp_open_hovbox fmt ctx.indent_incr;
+            let then_or_else = if is_then then "then" else "else" in
+            F.pp_print_string fmt then_or_else;
+            F.pp_print_space fmt ();
+            let parenth = PureUtils.expression_requires_parentheses e_branch in
+            if parenth then F.pp_print_string fmt "(";
+            let ctx = extract_texpression ctx fmt false e_branch in
+            if parenth then F.pp_print_string fmt ")";
+            (* Close the box for the branch *)
+            F.pp_close_box fmt ();
+            ctx
+          in
+          let ctx = extract_branch false e_then in
+          let ctx = extract_branch false e_else in
+          (* Close the box for the whole `if ... then ... else ...` *)
+          F.pp_close_box fmt ();
+          (* Return *)
+          ctx
+      | SwitchInt (_, branches, otherwise) -> raise Unimplemented
+      | Match branches -> raise Unimplemented)
   | Meta (_, e) -> extract_texpression ctx fmt inside e
 
 (** Extract a function definition.
