@@ -625,8 +625,42 @@ let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** [inside]: see [extract_ty] *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (e : texpression) : unit =
-  raise Unimplemented
+    (inside : bool) (e : texpression) : extraction_ctx =
+  match e.e with
+  | Value (rv, _) -> extract_typed_rvalue ctx fmt inside rv
+  | Call call -> raise Unimplemented
+  | Let (monadic, lv, re, next_e) ->
+      (* Open a box for the let-binding *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      let ctx =
+        if monadic then (
+          (* Note that in F*, the left value of a monadic let-binding can only be
+           * a variable *)
+          let ctx = extract_typed_lvalue ctx fmt true lv in
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "<--";
+          F.pp_print_space fmt ();
+          let ctx = extract_texpression ctx fmt false re in
+          F.pp_print_string fmt ";";
+          ctx)
+        else (
+          F.pp_print_string fmt "let";
+          F.pp_print_space fmt ();
+          let ctx = extract_typed_lvalue ctx fmt true lv in
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "=";
+          F.pp_print_space fmt ();
+          let ctx = extract_texpression ctx fmt false re in
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "in";
+          ctx)
+      in
+      (* Close the box for the let-binding *)
+      F.pp_close_box fmt ();
+      (* Print the next expression *)
+      extract_texpression ctx fmt inside next_e
+  | Switch (e, body) -> raise Unimplemented
+  | Meta (_, e) -> extract_texpression ctx fmt inside e
 
 (** Extract a function definition.
 
@@ -694,7 +728,7 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for the body *)
   F.pp_open_hvbox fmt 0;
   (* Extract the body *)
-  extract_texpression ctx fmt false def.body;
+  let _ = extract_texpression ctx fmt false def.body in
   F.pp_close_box fmt ();
   (* Close the box for the body *)
   (* Close the box for the definition *)
