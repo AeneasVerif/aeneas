@@ -267,7 +267,7 @@ let translate_module (filename : string) (config : C.partial_config)
 
   (* Initialize the extraction context - for now we extract only to F* *)
   let names_map =
-    PureToExtract.initialize_names_map ExtractToFStar.fstar_keywords
+    PureToExtract.initialize_names_map ExtractToFStar.fstar_names_map_init
   in
   let variant_concatenate_type_name = true in
   let fstar_fmt =

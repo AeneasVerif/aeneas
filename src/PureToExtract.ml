@@ -52,6 +52,18 @@ type name_formatter = {
           - type name
           - variant name
        *)
+  struct_constructor : name -> string;
+      (** Structure constructors are used when constructing structure values.
+      
+          For instance, in F*:
+          ```
+          type pair = { x : nat; y : nat }
+          let p : pair = Mkpair 0 1
+          ```
+          
+          Inputs:
+          - type name
+       *)
   type_name : name -> string;  (** Provided a basename, compute a type name. *)
   fun_name : A.fun_id -> name -> int -> region_group_info option -> string;
       (** Inputs:
@@ -165,11 +177,21 @@ let compute_fun_def_name (ctx : trans_ctx) (fmt : name_formatter)
 type id =
   | FunId of A.fun_id * RegionGroupId.id option
   | TypeId of type_id
-  | VariantId of TypeDefId.id * VariantId.id
+  | StructId of type_id
+      (** We use this when we manipulate the names of the structure
+          constructors.
+          
+          For instance, in F*:
+          ```
+          type pair = { x: nat; y : nat }
+          let p : pair = Mkpair 0 1
+          ```
+       *)
+  | VariantId of type_id * VariantId.id
       (** If often happens that variant names must be unique (it is the case in
           F* ) which is why we register them here.
        *)
-  | FieldId of TypeDefId.id * FieldId.id
+  | FieldId of type_id * FieldId.id
       (** If often happens that in the case of structures, the field names
           must be unique (it is the case in F* ) which is why we register
           them here.
@@ -211,19 +233,6 @@ type names_map = {
       We use it for lookups (during the translation) and to check for name clashes.
   *)
 
-(** Initialize a names map with a proper set of keywords/names coming from the
-    target language/prover. *)
-let initialize_names_map (keywords : string list) : names_map =
-  let name_to_id =
-    StringMap.of_list (List.map (fun x -> (x, UnknownId)) keywords)
-  in
-  let names_set = StringSet.of_list keywords in
-  (* We initialize [id_to_name] as empty, because the id of a keyword is [UnknownId].
-   * Also note that we don't need this mapping for keywords: we insert keywords only
-   * to check collisions. *)
-  let id_to_name = IdMap.empty in
-  { id_to_name; name_to_id; names_set }
-
 let names_map_add (id : id) (name : string) (nm : names_map) : names_map =
   (* Sanity check: no clashes *)
   assert (not (StringSet.mem name nm.names_set));
@@ -232,6 +241,18 @@ let names_map_add (id : id) (name : string) (nm : names_map) : names_map =
   let name_to_id = StringMap.add name id nm.name_to_id in
   let names_set = StringSet.add name nm.names_set in
   { id_to_name; name_to_id; names_set }
+
+let names_map_add_assumed_type (id : assumed_ty) (name : string)
+    (nm : names_map) : names_map =
+  names_map_add (TypeId (Assumed id)) name nm
+
+let names_map_add_assumed_struct (id : assumed_ty) (name : string)
+    (nm : names_map) : names_map =
+  names_map_add (StructId (Assumed id)) name nm
+
+let names_map_add_assumed_variant (id : assumed_ty) (variant_id : VariantId.id)
+    (name : string) (nm : names_map) : names_map =
+  names_map_add (VariantId (Assumed id, variant_id)) name nm
 
 (* TODO: remove those functions? We use the ones of extraction_ctx *)
 let names_map_get (id : id) (nm : names_map) : string =
@@ -311,17 +332,23 @@ let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
 let ctx_get_local_type (id : TypeDefId.id) (ctx : extraction_ctx) : string =
   ctx_get_type (AdtId id) ctx
 
+let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
+  ctx_get_type (Assumed id) ctx
+
 let ctx_get_var (id : VarId.id) (ctx : extraction_ctx) : string =
   ctx_get (VarId id) ctx
 
 let ctx_get_type_var (id : TypeVarId.id) (ctx : extraction_ctx) : string =
   ctx_get (TypeVarId id) ctx
 
-let ctx_get_field (def_id : TypeDefId.id) (field_id : FieldId.id)
+let ctx_get_field (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
-  ctx_get (FieldId (def_id, field_id)) ctx
+  ctx_get (FieldId (type_id, field_id)) ctx
 
-let ctx_get_variant (def_id : TypeDefId.id) (variant_id : VariantId.id)
+let ctx_get_struct (def_id : type_id) (ctx : extraction_ctx) : string =
+  ctx_get (StructId def_id) ctx
+
+let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
     (ctx : extraction_ctx) : string =
   ctx_get (VariantId (def_id, variant_id)) ctx
 
@@ -366,6 +393,12 @@ let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :
     (fun ctx (var : type_var) -> ctx_add_type_var var.name var.index ctx)
     ctx vars
 
+let ctx_add_type_def_struct (def : type_def) (ctx : extraction_ctx) :
+    extraction_ctx * string =
+  let cons_name = ctx.fmt.struct_constructor def.name in
+  let ctx = ctx_add (StructId (AdtId def.def_id)) cons_name ctx in
+  (ctx, cons_name)
+
 let ctx_add_type_def (def : type_def) (ctx : extraction_ctx) :
     extraction_ctx * string =
   let def_name = ctx.fmt.type_name def.name in
@@ -375,7 +408,7 @@ let ctx_add_type_def (def : type_def) (ctx : extraction_ctx) :
 let ctx_add_field (def : type_def) (field_id : FieldId.id) (field : field)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name = ctx.fmt.field_name def.name field_id field.field_name in
-  let ctx = ctx_add (FieldId (def.def_id, field_id)) name ctx in
+  let ctx = ctx_add (FieldId (AdtId def.def_id, field_id)) name ctx in
   (ctx, name)
 
 let ctx_add_fields (def : type_def) (fields : (FieldId.id * field) list)
@@ -387,7 +420,7 @@ let ctx_add_fields (def : type_def) (fields : (FieldId.id * field) list)
 let ctx_add_variant (def : type_def) (variant_id : VariantId.id)
     (variant : variant) (ctx : extraction_ctx) : extraction_ctx * string =
   let name = ctx.fmt.variant_name def.name variant.variant_name in
-  let ctx = ctx_add (VariantId (def.def_id, variant_id)) name ctx in
+  let ctx = ctx_add (VariantId (AdtId def.def_id, variant_id)) name ctx in
   (ctx, name)
 
 let ctx_add_variants (def : type_def) (variants : (VariantId.id * variant) list)
@@ -421,3 +454,46 @@ let ctx_add_fun_def (def : fun_def) (ctx : extraction_ctx) : extraction_ctx =
   let name = ctx.fmt.fun_name def_id def.basename num_rgs rg_info in
   let ctx = ctx_add (FunId (def_id, def.back_id)) name ctx in
   ctx
+
+type names_map_init = {
+  keywords : string list;
+  assumed_adts : (assumed_ty * string) list;
+  assumed_structs : (assumed_ty * string) list;
+  assumed_variants : (assumed_ty * VariantId.id * string) list;
+}
+
+(** Initialize a names map with a proper set of keywords/names coming from the
+    target language/prover. *)
+let initialize_names_map (init : names_map_init) : names_map =
+  let name_to_id =
+    StringMap.of_list (List.map (fun x -> (x, UnknownId)) init.keywords)
+  in
+  let names_set = StringSet.of_list init.keywords in
+  (* We fist initialize [id_to_name] as empty, because the id of a keyword is [UnknownId].
+   * Also note that we don't need this mapping for keywords: we insert keywords only
+   * to check collisions. *)
+  let id_to_name = IdMap.empty in
+  let nm = { id_to_name; name_to_id; names_set } in
+  (* Then we add:
+   * - the assumed types
+   * - the assumed struct constructors
+   * - the assumed variants
+   *)
+  let nm =
+    List.fold_left
+      (fun nm (type_id, name) -> names_map_add_assumed_type type_id name nm)
+      nm init.assumed_adts
+  in
+  let nm =
+    List.fold_left
+      (fun nm (type_id, name) -> names_map_add_assumed_struct type_id name nm)
+      nm init.assumed_structs
+  in
+  let nm =
+    List.fold_left
+      (fun nm (type_id, variant_id, name) ->
+        names_map_add_assumed_variant type_id variant_id name nm)
+      nm init.assumed_variants
+  in
+  (* Return *)
+  nm

@@ -41,9 +41,9 @@ module List = struct
 
   (** Iter and link the iterations.
 
-    Iterate over a list, but call a function between every two elements
-    (but not before the first element, and not after the last).
- *)
+      Iterate over a list, but call a function between every two elements
+      (but not before the first element, and not after the last).
+   *)
   let iter_link (link : unit -> unit) (f : 'a -> unit) (ls : 'a list) : unit =
     let rec iter ls =
       match ls with
@@ -55,6 +55,23 @@ module List = struct
           iter (y :: ls)
     in
     iter ls
+
+  (** Fold and link the iterations.
+
+      Similar to [iter_link] but for fold left operations.
+   *)
+  let fold_left_link (link : unit -> unit) (f : 'a -> 'b -> 'a) (init : 'a)
+      (ls : 'b list) : 'a =
+    let rec fold (acc : 'a) (ls : 'b list) : 'a =
+      match ls with
+      | [] -> acc
+      | [ x ] -> f acc x
+      | x :: y :: ls ->
+          let acc = f acc x in
+          link ();
+          fold acc (y :: ls)
+    in
+    fold init ls
 end
 
 module type OrderedType = sig
