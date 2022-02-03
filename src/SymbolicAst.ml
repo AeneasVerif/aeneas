@@ -3,7 +3,6 @@
     the symbolic execution: we later apply transformations to generate the
     pure AST that we export. *)
 
-open Identifiers
 module T = Types
 module V = Values
 module E = Expressions

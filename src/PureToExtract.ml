@@ -4,7 +4,6 @@
     backends we target.
  *)
 
-open Errors
 open Pure
 open TranslateCore
 module C = Contexts
@@ -386,11 +385,10 @@ let ctx_add_type_def_struct (def : type_def) (ctx : extraction_ctx) :
   let ctx = ctx_add (StructId (AdtId def.def_id)) cons_name ctx in
   (ctx, cons_name)
 
-let ctx_add_type_def (def : type_def) (ctx : extraction_ctx) :
-    extraction_ctx * string =
+let ctx_add_type_def (def : type_def) (ctx : extraction_ctx) : extraction_ctx =
   let def_name = ctx.fmt.type_name def.name in
   let ctx = ctx_add (TypeId (AdtId def.def_id)) def_name ctx in
-  (ctx, def_name)
+  ctx
 
 let ctx_add_field (def : type_def) (field_id : FieldId.id) (field : field)
     (ctx : extraction_ctx) : extraction_ctx * string =

@@ -1,6 +1,5 @@
 (** The following module defines micro-passes which operate on the pure AST *)
 
-open Errors
 open Pure
 open PureUtils
 open TranslateCore
@@ -605,7 +604,9 @@ let filter_unused (filter_monadic_calls : bool) (ctx : trans_ctx)
   (* Return *)
   { def with body; inputs_lvs }
 
-(** Add unit arguments for functions with no arguments, and change their return type. *)
+(** Add unit arguments for functions with no arguments, and change their return type.
+    TODO: filter the backward functions with no outputs.
+ *)
 let to_monadic (def : fun_def) : fun_def =
   (* Update the body *)
   let obj =
@@ -677,7 +678,7 @@ let unit_vars_to_unit (def : fun_def) : fun_def =
   { def with body; inputs_lvs }
 
 (** Unfold the monadic let-bindings to explicit matches. *)
-let unfold_monadic_let_bindings (ctx : trans_ctx) (def : fun_def) : fun_def =
+let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_def) : fun_def =
   (* It is a very simple map *)
   let obj =
     object (self)

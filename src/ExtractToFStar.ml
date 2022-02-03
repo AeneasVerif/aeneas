@@ -324,7 +324,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 let extract_type_def_register_names (ctx : extraction_ctx) (def : type_def) :
     extraction_ctx =
   (* Compute and register the type def name *)
-  let ctx, def_name = ctx_add_type_def def ctx in
+  let ctx = ctx_add_type_def def ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -597,12 +597,13 @@ let extract_adt_g_value
        * We could update the code to print something of the form:
        * `{ field0=...; ...; fieldn=...; }` in case of structures.
        *)
-      let adt_ident =
+      let cons =
         match variant_id with
         | Some vid -> ctx_get_variant adt_id vid ctx
         | None -> ctx_get_struct adt_id ctx
       in
       if inside && field_values <> [] then F.pp_print_string fmt "(";
+      F.pp_print_string fmt cons;
       let ctx =
         Collections.List.fold_left_link
           (fun () -> F.pp_print_space fmt ())
@@ -875,7 +876,7 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
-  let ctx, type_params = ctx_add_type_params def.signature.type_params ctx in
+  let ctx, _ = ctx_add_type_params def.signature.type_params ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
