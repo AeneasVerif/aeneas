@@ -77,6 +77,53 @@ fn main() {
     }
     println!("\n");
 
+    // Generate the code to print the scalar ranges in F*
+    for s in &ints_lower {
+        println!("println!(\"let {}_min : int = {{}}\", {}::MIN);", s, s);
+        println!("println!(\"let {}_max : int = {{}}\", {}::MAX);", s, s);
+    }
+    println!("\n");
+
+    // Generate the F* definitions for the ranges - this code is
+    // generated (comes from the above)
+    println!("let isize_min : int = {}", isize::MIN);
+    println!("let isize_max : int = {}", isize::MAX);
+    println!("let i8_min : int = {}", i8::MIN);
+    println!("let i8_max : int = {}", i8::MAX);
+    println!("let i16_min : int = {}", i16::MIN);
+    println!("let i16_max : int = {}", i16::MAX);
+    println!("let i32_min : int = {}", i32::MIN);
+    println!("let i32_max : int = {}", i32::MAX);
+    println!("let i64_min : int = {}", i64::MIN);
+    println!("let i64_max : int = {}", i64::MAX);
+    println!("let i128_min : int = {}", i128::MIN);
+    println!("let i128_max : int = {}", i128::MAX);
+    println!("let usize_min : int = {}", usize::MIN);
+    println!("let usize_max : int = {}", usize::MAX);
+    println!("let u8_min : int = {}", u8::MIN);
+    println!("let u8_max : int = {}", u8::MAX);
+    println!("let u16_min : int = {}", u16::MIN);
+    println!("let u16_max : int = {}", u16::MAX);
+    println!("let u32_min : int = {}", u32::MIN);
+    println!("let u32_max : int = {}", u32::MAX);
+    println!("let u64_min : int = {}", u64::MIN);
+    println!("let u64_max : int = {}", u64::MAX);
+    println!("let u128_min : int = {}", u128::MIN);
+    println!("let u128_max : int = {}", u128::MAX);
+    println!("\n");
+
+    // Generate the body for the ScalarTy definition
+    for (_lo, up) in &ints_pairs {
+        println!("| {}", up);
+    }
+    println!("\n");
+
+    // Generate the body for the max/min F* functions
+    for (lo, up) in &ints_pairs {
+        println!("| {} -> {}_min", up, lo);
+    }
+    println!("\n");
+
     // Modulo tests
     test_modulo(1, 2);
     test_modulo(-1, 2);
