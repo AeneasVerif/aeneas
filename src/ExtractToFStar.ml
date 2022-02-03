@@ -605,9 +605,10 @@ let extract_adt_g_value
       if inside && field_values <> [] then F.pp_print_string fmt "(";
       F.pp_print_string fmt cons;
       let ctx =
-        Collections.List.fold_left_link
-          (fun () -> F.pp_print_space fmt ())
-          (fun ctx v -> extract_value ctx true v)
+        Collections.List.fold_left
+          (fun ctx v ->
+            F.pp_print_space fmt ();
+            extract_value ctx true v)
           ctx field_values
       in
       if inside && field_values <> [] then F.pp_print_string fmt ")";
@@ -744,6 +745,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           extract_texpression ctx fmt false re;
           F.pp_print_space fmt ();
           F.pp_print_string fmt "in";
+          F.pp_print_space fmt ();
           ctx)
       in
       (* Close the box for the let-binding *)
@@ -777,7 +779,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
             (* Close the box for the branch *)
             F.pp_close_box fmt ()
           in
-          extract_branch false e_then;
+          extract_branch true e_then;
           extract_branch false e_else;
           (* Close the box for the whole `if ... then ... else ...` *)
           F.pp_close_box fmt ()
@@ -788,6 +790,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_open_hovbox fmt ctx.indent_incr;
           (* Print the `match ... with` *)
           F.pp_print_string fmt "begin match";
+          F.pp_print_space fmt ();
           extract_texpression ctx fmt false scrut;
           F.pp_print_space fmt ();
           F.pp_print_string fmt "with";
@@ -833,6 +836,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_open_hovbox fmt ctx.indent_incr;
           (* Print the `match ... with` *)
           F.pp_print_string fmt "begin match";
+          F.pp_print_space fmt ();
           extract_texpression ctx fmt false scrut;
           F.pp_print_space fmt ();
           F.pp_print_string fmt "with";
@@ -912,6 +916,7 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   let ctx =
     List.fold_left
       (fun ctx (lv : typed_lvalue) ->
+        F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
         let ctx = extract_typed_lvalue ctx fmt false lv in
         F.pp_print_space fmt ();
@@ -919,7 +924,6 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         extract_ty ctx fmt false lv.ty;
         F.pp_print_string fmt ")";
-        F.pp_print_space fmt ();
         ctx)
       ctx def.inputs_lvs
   in
