@@ -32,6 +32,7 @@ _opam/
 rust-tests/target/
 
 # Misc
+/fstar-tests
 *~
 nohup.out
 .ocamlformat
@@ -39,3 +40,4 @@ nohup.out
 *.lock
 *.txt
 */.#*
+*.smt2
