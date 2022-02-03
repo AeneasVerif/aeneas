@@ -335,6 +335,13 @@ let ctx_add_type_var (basename : string) (id : TypeVarId.id)
   let ctx = ctx_add (TypeVarId id) name ctx in
   (ctx, name)
 
+(** See [ctx_add_type_var] *)
+let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (name, id) -> ctx_add_type_var name id ctx)
+    ctx vars
+
 (** Generate a unique variable name and add it to the context *)
 let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
     extraction_ctx * string =
@@ -344,11 +351,13 @@ let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
   let ctx = ctx_add (VarId id) name ctx in
   (ctx, name)
 
-(** See [ctx_add_type_var] *)
-let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
+(** See [ctx_add_var] *)
+let ctx_add_vars (vars : var list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
   List.fold_left_map
-    (fun ctx (name, id) -> ctx_add_type_var name id ctx)
+    (fun ctx (v : var) ->
+      let name = ctx.fmt.var_basename ctx.names_map.names_set v.basename v.ty in
+      ctx_add_var name v.id ctx)
     ctx vars
 
 let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :

@@ -411,9 +411,8 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
     (qualif : type_def_qualif) (def : type_def) : unit =
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.def_id ctx in
-  (* Add the type params - note that we remember those bindings only for the
-   * body translation: the updated ctx we return at the end of the function
-   * only contains the registered type def and variant names *)
+  (* Add the type params - note that we need those bindings only for the
+   * body translation (they are not top-level) *)
   let ctx_body, type_params = ctx_add_type_params def.type_params ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
@@ -470,6 +469,21 @@ let extract_fun_def_register_names (ctx : extraction_ctx)
   (* Return *)
   ctx
 
+(** [inside]: see [extract_ty] *)
+let rec extract_typed_lvalue (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (v : typed_lvalue) : unit =
+  raise Unimplemented
+
+(** [inside]: see [extract_ty] *)
+let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (v : typed_rvalue) : unit =
+  raise Unimplemented
+
+(** [inside]: see [extract_ty] *)
+let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (e : texpression) : unit =
+  raise Unimplemented
+
 (** Extract a function definition.
 
     Note that all the names used for extraction should already have been
@@ -477,5 +491,74 @@ let extract_fun_def_register_names (ctx : extraction_ctx)
  *)
 let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     (qualif : fun_def_qualif) (def : fun_def) : unit =
-  (* TODO *)
-  ()
+  (* Retrieve the function name *)
+  let def_name = ctx_get_local_function def.def_id def.back_id ctx in
+  (* Add the parameters - note that we need those bindings only for the
+   * body translation (they are not top-level) *)
+  let ctx_body, type_params =
+    ctx_add_type_params def.signature.type_params ctx
+  in
+  (* Note that some of the input parameters might not be used, in which case
+   * they could be ignored (they will be printed as `_` and thus won't appear,
+   * but if we don't ignore them they will still be used to check for name
+   * clashes, and  will have an influence on the computation of indices for
+   * the local variables). This is mostly a detail, though. *)
+  let ctx_body, input_params = ctx_add_vars def.inputs ctx in
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Print a comment to link the extracted type to its original rust definition *)
+  F.pp_print_string fmt ("(** [" ^ Print.name_to_string def.basename ^ "] *)");
+  F.pp_print_space fmt ();
+  (* Open a box for the definition, so that whenever possible it gets printed on
+   * one line *)
+  F.pp_open_hvbox fmt 0;
+  (* Open a box for "let FUN_NAME (PARAMS) =" *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  (* > "let FUN_NAME" *)
+  let qualif =
+    match qualif with Let -> "let" | LetRec -> "let rec" | And -> "and"
+  in
+  F.pp_print_string fmt (qualif ^ " " ^ def_name);
+  (* Print the parameters - rk.: we should have filtered the functions
+   * with no input parameters *)
+  (* The type parameters *)
+  if def.signature.type_params <> [] then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "(";
+    List.iter
+      (fun (p : type_var) ->
+        let pname = ctx_get_type_var p.index ctx_body in
+        F.pp_print_string fmt pname;
+        F.pp_print_space fmt ())
+      def.signature.type_params;
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "Type0)");
+  (* The input parameters *)
+  List.iter
+    (fun (lv : typed_lvalue) ->
+      F.pp_print_string fmt "(";
+      extract_typed_lvalue ctx_body fmt false lv;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      extract_ty ctx_body fmt false lv.ty;
+      F.pp_print_string fmt ")";
+      F.pp_print_space fmt ())
+    def.inputs_lvs;
+  (* Print the "=" *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "=";
+  (* Close the box for "let FUN_NAME (PARAMS) =" *)
+  F.pp_close_box fmt ();
+  F.pp_print_break fmt 1 ctx.indent_incr;
+  (* Open a box for the body *)
+  F.pp_open_hvbox fmt 0;
+  (* Extract the body *)
+  extract_texpression ctx_body fmt false def.body;
+  F.pp_close_box fmt ();
+  (* Close the box for the body *)
+  (* Close the box for the definition *)
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
