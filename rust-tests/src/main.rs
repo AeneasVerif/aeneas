@@ -13,6 +13,8 @@ fn main() {
         "Isize", "I8", "I16", "I32", "I64", "I128", "Usize", "U8", "U16", "U32", "U64", "U128",
     ];
 
+    let can_fail_binops_lower = ["div", "rem", "add", "sub", "mul"];
+
     let mut ints_pairs = vec![];
     for i in 0..ints_lower.len() {
         ints_pairs.push((&ints_lower[i], &ints_upper[i]));
@@ -124,8 +126,25 @@ fn main() {
     }
     println!("\n");
 
+    // Generate the scalar types for F*
+    for (lo, up) in &ints_pairs {
+        println!("type {} = scalar {}", lo, up);
+    }
+    println!("\n");
+
+    // Generate the unops (rk.: we need to manually filter `-` applied on
+    // unisgned numbers)
+    for binop in &can_fail_binops_lower {
+        for (lo, up) in &ints_pairs {
+            println!("let {}_{} = scalar_{} #{}", lo, binop, binop, up);
+        }
+        println!("");
+    }
+    println!("\n");
+
     // Modulo tests
     test_modulo(1, 2);
     test_modulo(-1, 2);
+    test_modulo(1, -2);
     test_modulo(-1, -2);
 }

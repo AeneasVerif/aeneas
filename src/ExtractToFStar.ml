@@ -92,34 +92,40 @@ let fstar_extract_binop (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (binop : E.binop)
     (int_ty : integer_type) (arg0 : texpression) (arg1 : texpression) : unit =
   if inside then F.pp_print_string fmt "(";
+  (* Some binary operations have a special treatment *)
   (match binop with
-  | Eq ->
-      extract_expr false arg0;
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt "=";
-      F.pp_print_space fmt ();
-      extract_expr false arg1
-  | _ ->
+  | Eq | Lt | Le | Ne | Ge | Gt ->
       let binop =
         match binop with
-        | Eq -> failwith "Unreachable"
-        | Lt -> "lt"
-        | Le -> "le"
-        | Ne -> "ne"
-        | Ge -> "ge"
-        | Gt -> "gt"
+        | Eq -> "="
+        | Lt -> "<"
+        | Le -> "<="
+        | Ne -> "<>"
+        | Ge -> ">="
+        | Gt -> ">"
+        | _ -> failwith "Unreachable"
+      in
+      extract_expr false arg0;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt binop;
+      F.pp_print_space fmt ();
+      extract_expr false arg1
+  | Div | Rem | Add | Sub | Mul ->
+      let binop =
+        match binop with
         | Div -> "div"
         | Rem -> "rem"
         | Add -> "add"
         | Sub -> "sub"
         | Mul -> "mul"
-        | BitXor | BitAnd | BitOr | Shl | Shr -> raise Unimplemented
+        | _ -> failwith "Unreachable"
       in
       F.pp_print_string fmt (fstar_int_name int_ty ^ "_" ^ binop);
       F.pp_print_space fmt ();
       extract_expr false arg0;
       F.pp_print_space fmt ();
-      extract_expr false arg1);
+      extract_expr false arg1
+  | BitXor | BitAnd | BitOr | Shl | Shr -> raise Unimplemented);
   if inside then F.pp_print_string fmt ")"
 
 (**
