@@ -9,6 +9,7 @@ open Pure
 open TranslateCore
 module C = Contexts
 module RegionVarId = T.RegionVarId
+module F = Format
 
 (** The local logger *)
 let log = L.pure_to_extract_log
@@ -30,7 +31,7 @@ module StringMap = Collections.MakeMap (Collections.OrderedString)
 
 type name = Identifiers.name
 
-type name_formatter = {
+type formatter = {
   bool_name : string;
   char_name : string;
   int_name : integer_type -> string;
@@ -96,17 +97,28 @@ type name_formatter = {
           indices to names, the responsability of finding a proper index is
           delegated to helper functions.
        *)
+  extract_constant_value : F.formatter -> bool -> constant_value -> unit;
+      (** Format a constant value.
+      
+          Inputs:
+          - formatter
+          - [inside]: if `true`, the value should be wrapped in parentheses
+            if it is made of an application (ex.: `U32 3`)
+       *)
 }
-(** A name formatter's role is to come up with name suggestions.
+(** A formatter's role is twofold:
+    1. Come up with name suggestions.
     For instance, provided some information about a function (its basename,
     information about the region group, etc.) it should come up with an
     appropriate name for the forward/backward function.
     
     It can of course apply many transformations, like changing to camel case/
     snake case, adding prefixes/suffixes, etc.
+    
+    2. Format some specific terms, like constants.
  *)
 
-let compute_type_def_name (fmt : name_formatter) (def : type_def) : string =
+let compute_type_def_name (fmt : formatter) (def : type_def) : string =
   fmt.type_name def.name
 
 (** A helper function: generates a function suffix from a region group
@@ -145,14 +157,14 @@ let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
         "_back" ^ RegionGroupId.to_string rg.id
 
 (** Extract information from a function, and give this information to a
-    [name_formatter] to generate a function's name.
+    [formatter] to generate a function's name.
     
     Note that we need region information coming from CFIM (when generating
     the name for a backward function, we try to use the names of the regions
     to 
  *)
-let compute_fun_def_name (ctx : trans_ctx) (fmt : name_formatter)
-    (fun_id : A.fun_id) (rg_id : RegionGroupId.id option) : string =
+let compute_fun_def_name (ctx : trans_ctx) (fmt : formatter) (fun_id : A.fun_id)
+    (rg_id : RegionGroupId.id option) : string =
   (* Lookup the function CFIM signature (we need the region information) *)
   let sg = CfimAstUtils.lookup_fun_sig fun_id ctx.fun_context.fun_defs in
   let basename = CfimAstUtils.lookup_fun_name fun_id ctx.fun_context.fun_defs in
@@ -297,7 +309,7 @@ let basename_to_unique (names_set : StringSet.t)
 type extraction_ctx = {
   trans_ctx : trans_ctx;
   names_map : names_map;
-  fmt : name_formatter;
+  fmt : formatter;
   indent_incr : int;
       (** The indent increment we insert whenever we need to indent more *)
 }

@@ -86,6 +86,15 @@ let to_snake_case (s : string) : string =
   in
   string_of_chars (List.rev chars)
 
+(** Applies a map operation.
+
+    This is very inefficient, but shouldn't be used much.
+ *)
+let map (f : char -> string) (s : string) : string =
+  let sl = List.map f (string_to_chars s) in
+  let sl = List.map string_to_chars sl in
+  string_of_chars (List.concat sl)
+
 (** Unit tests *)
 let _ =
   assert (to_camel_case "hello_world" = "HelloWorld");

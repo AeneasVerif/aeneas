@@ -271,7 +271,7 @@ let translate_module (filename : string) (config : C.partial_config)
   in
   let variant_concatenate_type_name = true in
   let fstar_fmt =
-    ExtractToFStar.mk_name_formatter trans_ctx variant_concatenate_type_name
+    ExtractToFStar.mk_formatter trans_ctx variant_concatenate_type_name
   in
   let extract_ctx =
     { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }

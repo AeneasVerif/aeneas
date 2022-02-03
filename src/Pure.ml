@@ -134,6 +134,9 @@ type var = {
     itself.
  *)
 
+(* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
+ * on enumerations.
+ * Also: tuples... *)
 type projection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 
 type projection = projection_elem list

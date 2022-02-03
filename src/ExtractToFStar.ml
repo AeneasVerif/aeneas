@@ -65,7 +65,7 @@ let fstar_names_map_init =
  * In Rust:
  *   ```
  *   enum List = {
- *     Cons(u32, Box<List>),
+ *     Cons(u32, Box<List>),x
  *     Nil,
  *   }
  *   ```
@@ -90,7 +90,7 @@ let fstar_names_map_init =
  * up type checking. Note that some languages actually forbids the name clashes
  * (it is the case of F* ).
  *)
-let mk_name_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
+let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
   let int_name (int_ty : integer_type) =
     match int_ty with
     | Isize -> "isize"
@@ -194,6 +194,23 @@ let mk_name_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
   let append_index (basename : string) (i : int) : string =
     basename ^ string_of_int i
   in
+  let extract_constant_value (fmt : F.formatter) (_inside : bool)
+      (cv : constant_value) : unit =
+    match cv with
+    | Scalar sv -> F.pp_print_string fmt (Z.to_string sv.V.value)
+    | Bool b ->
+        let b = if b then "true" else "false" in
+        F.pp_print_string fmt b
+    | Char c -> F.pp_print_string fmt ("'" ^ String.make 1 c ^ "'")
+    | String s ->
+        (* We need to replace all the line breaks *)
+        let s =
+          StringUtils.map
+            (fun c -> if c = '\n' then "\n" else String.make 1 c)
+            s
+        in
+        F.pp_print_string fmt ("\"" ^ s ^ "\"")
+  in
   {
     bool_name = "bool";
     char_name = "char";
@@ -207,6 +224,7 @@ let mk_name_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) =
     var_basename;
     type_var_basename;
     append_index;
+    extract_constant_value;
   }
 
 (** [inside] constrols whether we should add parentheses or not around type
@@ -558,10 +576,52 @@ let rec extract_typed_lvalue (ctx : extraction_ctx) (fmt : F.formatter)
       extract_adt_g_value extract_value fmt ctx inside av.variant_id
         av.field_values v.ty
 
+let extract_place (ctx : extraction_ctx) (fmt : F.formatter) (p : place) : unit
+    =
+  let rec extract_projection (pl : projection) : unit =
+    match pl with
+    | [] ->
+        (* No projection element left: print the variable *)
+        let var_name = ctx_get_var p.var ctx in
+        F.pp_print_string fmt var_name
+    | pe :: pl ->
+        (* Extract the interior of the projection *)
+        extract_projection pl;
+        (* Match on the projection element *)
+        let def_id =
+          match pe.pkind with
+          | E.ProjAdt (def_id, None) -> def_id
+          | E.ProjAdt (_, Some _) | E.ProjTuple _ ->
+              (* We can't have field accesses on enumerations (variables for
+               * the fields are introduced upon the moment we match over the
+               * enumeration). We also forbid field access on tuples, because
+               * we don't have the syntax to translate that... We thus
+               * deconstruct the tuples whenever we need to have access:
+               * `let (x, y) = p in ...` *)
+              failwith "Unreachable"
+        in
+        let field_name = ctx_get_field (AdtId def_id) pe.field_id ctx in
+        (* We allow to break where the "." appears *)
+        F.pp_print_break fmt 0 0;
+        F.pp_print_string fmt ".";
+        F.pp_print_string fmt field_name
+  in
+  extract_projection p.projection
+
 (** [inside]: see [extract_ty] *)
 let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (v : typed_rvalue) : unit =
-  raise Unimplemented
+    (inside : bool) (v : typed_rvalue) : extraction_ctx =
+  match v.value with
+  | RvConcrete cv ->
+      ctx.fmt.extract_constant_value fmt inside cv;
+      ctx
+  | RvPlace p ->
+      extract_place ctx fmt p;
+      ctx
+  | RvAdt av ->
+      let extract_value ctx inside v = extract_typed_rvalue ctx fmt inside v in
+      extract_adt_g_value extract_value fmt ctx inside av.variant_id
+        av.field_values v.ty
 
 (** [inside]: see [extract_ty] *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
