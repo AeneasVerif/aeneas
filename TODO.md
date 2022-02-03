@@ -1,5 +1,9 @@
 # TODO
 
+0. merge the "read determinant" and the "switch" occurrences to "match"
+
+0. reaggregate the ADTs
+
 0. when going from symbolic to pure, remove the useless tuples (as some fields
    might be erased).
 
