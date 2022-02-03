@@ -825,6 +825,16 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
   let abs_ancestors = list_ancestor_abstractions ctx abs in
   (call_info.forward, abs_ancestors)
 
+(** Small utility.
+
+    Return true if a function return type is monadic.
+    Always true, at the exception of some assumed functions.
+ *)
+let fun_is_monadic (fun_id : A.fun_id) : bool =
+  match fun_id with
+  | A.Local _ -> true
+  | A.Assumed (A.BoxNew | BoxDeref | BoxDerefMut | BoxFree) -> false
+
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
   | S.Return opt_v -> translate_return opt_v ctx
@@ -892,7 +902,8 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     | S.Fun (fid, call_id) ->
         let ctx = bs_ctx_register_forward_call call_id call ctx in
         let func = Regular (fid, None) in
-        (ctx, func, true)
+        let monadic = fun_is_monadic fid in
+        (ctx, func, monadic)
     | S.Unop E.Not -> (ctx, Unop Not, false)
     | S.Unop E.Neg -> (
         match args with
@@ -1049,7 +1060,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
           (fun (arg, mp) -> mk_value_expression arg mp)
           (List.combine inputs args_mplaces)
       in
-      let monadic = true in
+      let monadic = fun_is_monadic fun_id in
       let call = { func; type_params; args } in
       let call_ty = mk_result_ty output.ty in
       let call = { e = Call call; ty = call_ty } in
