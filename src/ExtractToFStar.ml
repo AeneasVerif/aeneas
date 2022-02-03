@@ -745,12 +745,12 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           extract_texpression ctx fmt false re;
           F.pp_print_space fmt ();
           F.pp_print_string fmt "in";
-          F.pp_print_space fmt ();
           ctx)
       in
       (* Close the box for the let-binding *)
       F.pp_close_box fmt ();
       (* Print the next expression *)
+      F.pp_print_space fmt ();
       extract_texpression ctx fmt inside next_e
   | Switch (scrut, body) -> (
       match body with
@@ -801,7 +801,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           let extract_branch (sv : scalar_value option) (e_branch : texpression)
               : unit =
             F.pp_print_space fmt ();
-            (* Open a box for the branch *)
+            (* Open a box for the pattern+branch *)
             F.pp_open_hovbox fmt ctx.indent_incr;
             F.pp_print_string fmt "|";
             (* Print the pattern *)
@@ -811,10 +811,14 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
             | None -> F.pp_print_string fmt "_");
             F.pp_print_space fmt ();
             F.pp_print_string fmt "->";
-            (* Print the branch itself *)
             F.pp_print_space fmt ();
+            (* Open a box for the branch *)
+            F.pp_open_hvbox fmt 0;
+            (* Print the branch itself *)
             extract_texpression ctx fmt false e_branch;
             (* Close the box for the branch *)
+            F.pp_close_box fmt ();
+            (* Close the box for the pattern+branch *)
             F.pp_close_box fmt ()
           in
 
@@ -846,7 +850,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           (* Extract the branches *)
           let extract_branch (br : match_branch) : unit =
             F.pp_print_space fmt ();
-            (* Open a box for the branch *)
+            (* Open a box for the pattern+branch *)
             F.pp_open_hovbox fmt ctx.indent_incr;
             F.pp_print_string fmt "|";
             (* Print the pattern *)
@@ -854,10 +858,14 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
             let ctx = extract_typed_lvalue ctx fmt false br.pat in
             F.pp_print_space fmt ();
             F.pp_print_string fmt "->";
-            (* Print the branch itself *)
             F.pp_print_space fmt ();
+            (* Open a box for the branch *)
+            F.pp_open_hvbox fmt 0;
+            (* Print the branch itself *)
             extract_texpression ctx fmt false br.branch;
             (* Close the box for the branch *)
+            F.pp_close_box fmt ();
+            (* Close the box for the pattern+branch *)
             F.pp_close_box fmt ()
           in
 
