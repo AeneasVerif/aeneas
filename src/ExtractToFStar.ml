@@ -793,8 +793,8 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_close_box fmt ();
 
           (* Extract the branches *)
-          let extract_branch (ctx : extraction_ctx) (sv : scalar_value option)
-              (e_branch : texpression) : unit =
+          let extract_branch (sv : scalar_value option) (e_branch : texpression)
+              : unit =
             F.pp_print_space fmt ();
             (* Open a box for the branch *)
             F.pp_open_hovbox fmt ctx.indent_incr;
@@ -817,16 +817,51 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
             List.map (fun (sv, br) -> (Some sv, br)) branches
           in
           let all_branches = List.append all_branches [ (None, otherwise) ] in
-          let ctx =
-            List.iter (fun (sv, br) -> extract_branch ctx sv br) all_branches
-          in
+          List.iter (fun (sv, br) -> extract_branch sv br) all_branches;
 
           (* End the match *)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "end";
           (* Close the box for the whole match *)
           F.pp_close_box fmt ()
-      | Match branches -> raise Unimplemented)
+      | Match branches ->
+          (* Open a box for the whole match *)
+          F.pp_open_hvbox fmt 0;
+          (* Open a box for the `match ... with` *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          (* Print the `match ... with` *)
+          F.pp_print_string fmt "begin match";
+          extract_texpression ctx fmt false scrut;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "with";
+          (* Close the box for the `match ... with` *)
+          F.pp_close_box fmt ();
+
+          (* Extract the branches *)
+          let extract_branch (br : match_branch) : unit =
+            F.pp_print_space fmt ();
+            (* Open a box for the branch *)
+            F.pp_open_hovbox fmt ctx.indent_incr;
+            F.pp_print_string fmt "|";
+            (* Print the pattern *)
+            F.pp_print_space fmt ();
+            let ctx = extract_typed_lvalue ctx fmt false br.pat in
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "->";
+            (* Print the branch itself *)
+            F.pp_print_space fmt ();
+            extract_texpression ctx fmt false br.branch;
+            (* Close the box for the branch *)
+            F.pp_close_box fmt ()
+          in
+
+          List.iter extract_branch branches;
+
+          (* End the match *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "end";
+          (* Close the box for the whole match *)
+          F.pp_close_box fmt ())
   | Meta (_, e) -> extract_texpression ctx fmt inside e
 
 (** Extract a function definition.
