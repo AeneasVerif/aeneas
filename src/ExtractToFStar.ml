@@ -773,16 +773,20 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           (* Extract the branches *)
           let extract_branch (is_then : bool) (e_branch : texpression) : unit =
             F.pp_print_space fmt ();
-            (* Open a box for the branch *)
+            (* Open a box for the then/else+branch *)
             F.pp_open_hovbox fmt ctx.indent_incr;
             let then_or_else = if is_then then "then" else "else" in
             F.pp_print_string fmt then_or_else;
             F.pp_print_space fmt ();
+            (* Open a box for the branch *)
+            F.pp_open_hvbox fmt 0;
             let parenth = PureUtils.expression_requires_parentheses e_branch in
             if parenth then F.pp_print_string fmt "(";
             extract_texpression ctx fmt false e_branch;
             if parenth then F.pp_print_string fmt ")";
             (* Close the box for the branch *)
+            F.pp_close_box fmt ();
+            (* Close the box for the then/else+branch *)
             F.pp_close_box fmt ()
           in
           extract_branch true e_then;
