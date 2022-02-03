@@ -235,7 +235,9 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
                 let def =
                   TypeDefId.Map.find adt_id ctx.type_context.type_defs
                 in
-                StringUtils.string_of_chars [ (get_type_name def.name).[0] ])
+                let c = (get_type_name def.name).[0] in
+                let c = StringUtils.lowercase_ascii c in
+                String.make 1 c)
         | TypeVar _ -> "x" (* lacking imagination here... *)
         | Bool -> "b"
         | Char -> "c"
@@ -715,7 +717,11 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
               extract_ty ctx fmt true ty)
             call.type_params;
           (* Print the input values *)
-          List.iter (fun ve -> extract_texpression ctx fmt true ve) call.args;
+          List.iter
+            (fun ve ->
+              F.pp_print_space fmt ();
+              extract_texpression ctx fmt true ve)
+            call.args;
           (* Close the box for the function call *)
           F.pp_close_box fmt ();
           (* Return *)
