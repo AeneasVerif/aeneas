@@ -710,7 +710,6 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
       let _ = extract_typed_rvalue ctx fmt inside rv in
       ()
   | Call call -> (
-      log#ldebug (lazy ("ctx_get_function: " ^ show_fun_id call.func));
       match (call.func, call.args) with
       | Unop unop, [ arg ] ->
           ctx.fmt.extract_unop (extract_texpression ctx fmt) fmt inside unop arg
