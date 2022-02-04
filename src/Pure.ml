@@ -264,7 +264,12 @@ type var_or_dummy =
       }]
 
 (** A left value (which appears on the left of assignments *)
-type lvalue = LvVar of var_or_dummy | LvAdt of adt_lvalue
+type lvalue =
+  | LvConcrete of constant_value
+      (** [LvConcrete] is necessary because we merge the switches over integer
+        values and the matches over enumerations *)
+  | LvVar of var_or_dummy
+  | LvAdt of adt_lvalue
 
 and adt_lvalue = {
   variant_id : (VariantId.id option[@opaque]);
@@ -505,12 +510,7 @@ and call = {
        *)
 }
 
-and switch_body =
-  | If of texpression * texpression
-  | SwitchInt of integer_type * (scalar_value * texpression) list * texpression
-  | Match of match_branch list
-(* TODO: merge SwitchInt and Match. In order to do that,
- * we need to add constants to lvalues. *)
+and switch_body = If of texpression * texpression | Match of match_branch list
 
 and match_branch = { pat : typed_lvalue; branch : texpression }
 

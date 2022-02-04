@@ -665,6 +665,9 @@ let extract_adt_g_value
 let rec extract_typed_lvalue (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (v : typed_lvalue) : extraction_ctx =
   match v.value with
+  | LvConcrete cv ->
+      ctx.fmt.extract_constant_value fmt inside cv;
+      ctx
   | LvVar (Var (v, _)) ->
       let vname =
         ctx.fmt.var_basename ctx.names_map.names_set v.basename v.ty
@@ -831,56 +834,6 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           extract_branch true e_then;
           extract_branch false e_else;
           (* Close the box for the whole `if ... then ... else ...` *)
-          F.pp_close_box fmt ()
-      | SwitchInt (_, branches, otherwise) ->
-          (* Open a box for the whole match *)
-          F.pp_open_hvbox fmt 0;
-          (* Open a box for the `match ... with` *)
-          F.pp_open_hovbox fmt ctx.indent_incr;
-          (* Print the `match ... with` *)
-          F.pp_print_string fmt "begin match";
-          F.pp_print_space fmt ();
-          extract_texpression ctx fmt false scrut;
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "with";
-          (* Close the box for the `match ... with` *)
-          F.pp_close_box fmt ();
-
-          (* Extract the branches *)
-          let extract_branch (sv : scalar_value option) (e_branch : texpression)
-              : unit =
-            F.pp_print_space fmt ();
-            (* Open a box for the pattern+branch *)
-            F.pp_open_hovbox fmt ctx.indent_incr;
-            F.pp_print_string fmt "|";
-            (* Print the pattern *)
-            F.pp_print_space fmt ();
-            (match sv with
-            | Some sv -> ctx.fmt.extract_constant_value fmt false (V.Scalar sv)
-            | None -> F.pp_print_string fmt "_");
-            F.pp_print_space fmt ();
-            F.pp_print_string fmt "->";
-            F.pp_print_space fmt ();
-            (* Open a box for the branch *)
-            F.pp_open_hvbox fmt 0;
-            (* Print the branch itself *)
-            extract_texpression ctx fmt false e_branch;
-            (* Close the box for the branch *)
-            F.pp_close_box fmt ();
-            (* Close the box for the pattern+branch *)
-            F.pp_close_box fmt ()
-          in
-
-          let all_branches =
-            List.map (fun (sv, br) -> (Some sv, br)) branches
-          in
-          let all_branches = List.append all_branches [ (None, otherwise) ] in
-          List.iter (fun (sv, br) -> extract_branch sv br) all_branches;
-
-          (* End the match *)
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "end";
-          (* Close the box for the whole match *)
           F.pp_close_box fmt ()
       | Match branches ->
           (* Open a box for the whole match *)

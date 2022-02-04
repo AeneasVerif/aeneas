@@ -127,6 +127,17 @@ let mk_result_return_lvalue (v : typed_lvalue) : typed_lvalue =
 
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
+let compute_constant_value_ty (cv : constant_value) : ty =
+  match cv with
+  | V.Scalar sv -> Integer sv.V.int_ty
+  | Bool _ -> Bool
+  | Char _ -> Char
+  | String _ -> Str
+
+let mk_typed_lvalue_from_constant_value (cv : constant_value) : typed_lvalue =
+  let ty = compute_constant_value_ty cv in
+  { value = LvConcrete cv; ty }
+
 let mk_value_expression (v : typed_rvalue) (mp : mplace option) : texpression =
   let e = Value (v, mp) in
   let ty = v.ty in

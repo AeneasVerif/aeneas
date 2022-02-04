@@ -267,6 +267,7 @@ let adt_g_value_to_string (fmt : value_formatter)
 let rec typed_lvalue_to_string (fmt : value_formatter) (v : typed_lvalue) :
     string =
   match v.value with
+  | LvConcrete cv -> Print.Values.constant_value_to_string cv
   | LvVar var -> var_or_dummy_to_string fmt var
   | LvAdt av ->
       adt_g_value_to_string fmt
@@ -415,20 +416,6 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       let e_false = texpression_to_string fmt indent1 indent_incr e_false in
       "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent ^ e_true ^ "\n" ^ indent
       ^ "else\n" ^ indent ^ e_false
-  | SwitchInt (_, branches, otherwise) ->
-      let branches =
-        List.map
-          (fun (v, be) ->
-            indent ^ "| " ^ scalar_value_to_string v ^ " ->\n" ^ indent1
-            ^ texpression_to_string fmt indent1 indent_incr be)
-          branches
-      in
-      let otherwise =
-        indent ^ "| _ ->\n" ^ indent1
-        ^ texpression_to_string fmt indent1 indent_incr otherwise
-      in
-      let all_branches = List.append branches [ otherwise ] in
-      "switch " ^ scrut ^ " with\n" ^ String.concat "\n" all_branches
   | Match branches ->
       let val_fmt = ast_to_value_formatter fmt in
       let branch_to_string (b : match_branch) : string =

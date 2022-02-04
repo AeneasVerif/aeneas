@@ -1305,21 +1305,28 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :
-          scalar_value * texpression =
+          match_branch =
         (* We don't need to update the context: we don't introduce any
          * new values/variables *)
-        let branch_e = translate_expression branch_e ctx in
-        (v, branch_e)
+        let branch = translate_expression branch_e ctx in
+        let pat = mk_typed_lvalue_from_constant_value (V.Scalar v) in
+        { pat; branch }
       in
       let branches = List.map translate_branch branches in
       let otherwise = translate_expression otherwise ctx in
+      let pat_ty = Integer int_ty in
+      let otherwise_pat : typed_lvalue = { value = LvVar Dummy; ty = pat_ty } in
+      let otherwise : match_branch =
+        { pat = otherwise_pat; branch = otherwise }
+      in
+      let all_branches = List.append branches [ otherwise ] in
       let e =
         Switch
-          ( mk_value_expression scrutinee scrutinee_mplace,
-            SwitchInt (int_ty, branches, otherwise) )
+          (mk_value_expression scrutinee scrutinee_mplace, Match all_branches)
       in
-      let ty = otherwise.ty in
-      assert (List.for_all (fun (_, br) -> br.ty = ty) branches);
+      let ty = otherwise.branch.ty in
+      assert (
+        List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches);
       { e; ty }
 
 and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :

@@ -240,19 +240,6 @@ let compute_pretty_names (def : fun_def) : fun_def =
           let ctx2, e_false = update_texpression e_false ctx in
           let ctx = merge_ctxs ctx1 ctx2 in
           (ctx, If (e_true, e_false))
-      | SwitchInt (int_ty, branches, otherwise) ->
-          let ctx_branches_ls =
-            List.map
-              (fun (v, br) ->
-                let ctx, br = update_texpression br ctx in
-                (ctx, (v, br)))
-              branches
-          in
-          let ctx, otherwise = update_texpression otherwise ctx in
-          let ctxs, branches = List.split ctx_branches_ls in
-          let ctxs = merge_ctxs_ls ctxs in
-          let ctx = merge_ctxs ctx ctxs in
-          (ctx, SwitchInt (int_ty, branches, otherwise))
       | Match branches ->
           let ctx_branches_ls =
             List.map
@@ -478,12 +465,6 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
             fun () ->
               self#visit_texpression env e1 ()
               && self#visit_texpression env e2 ()
-        | SwitchInt (_, branches, otherwise) ->
-            fun () ->
-              List.for_all
-                (fun (_, br) -> self#visit_texpression env br ())
-                branches
-              && self#visit_texpression env otherwise ()
         | Match branches ->
             fun () ->
               List.for_all
