@@ -55,6 +55,7 @@ let () =
   invariants_log#set_level EL.Warning;
   symbolic_to_pure_log#set_level EL.Debug;
   pure_micro_passes_log#set_level EL.Debug;
+  pure_to_extract_log#set_level EL.Debug;
   translate_log#set_level EL.Debug;
   (* Load the module *)
   let json = Yojson.Basic.from_file !filename in
