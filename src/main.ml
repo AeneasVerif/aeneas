@@ -15,7 +15,7 @@ let () = Printexc.record_backtrace true
 
 let usage =
   Printf.sprintf
-    {|Aeneas: verification of Rust programs by translation
+    {|Aeneas: verification of Rust programs by translation to pure lambda calculus
 
 Usage: %s [OPTIONS] FILE
 |}
@@ -23,26 +23,62 @@ Usage: %s [OPTIONS] FILE
 
 let () =
   (* Read the command line arguments *)
-  let spec = [] in
+  let dest_dir = ref "" in
+  let decompose_monads = ref false in
+  let unfold_monads = ref true in
+  let filter_unused_calls = ref true in
+
+  let spec =
+    [
+      ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
+      ( "-decompose-monads",
+        Arg.Set decompose_monads,
+        " Decompose the monadic let-bindings.\n\n\
+        \         Introduces a temporary variable which is later decomposed,\n\
+        \         when the pattern on the left of the monadic let is not a \n\
+        \         variable.\n\
+        \         \n\
+        \         Example:\n\
+        \         `(x, y) <-- f (); ...` ~~>\n\
+        \         `tmp <-- f (); let (x, y) = tmp in ...`\n\
+        \        " );
+      ( "-unfold-monads",
+        Arg.Set unfold_monads,
+        " Unfold the monadic let-bindings to matches" );
+      ( "-filter-unused-calls",
+        Arg.Set filter_unused_calls,
+        " Filter the unused function calls, when possible" );
+    ]
+  in
   let spec = Arg.align spec in
-  let filename = ref "" in
+  let filenames = ref [] in
+  let add_filename f = filenames := f :: !filenames in
+  Arg.parse spec add_filename usage;
   let fail () =
     print_string usage;
     exit 1
   in
-  Arg.parse spec
-    (fun f ->
-      if not (Filename.check_suffix f ".cfim") then (
-        print_string "Unrecognized file extension";
-        fail ())
-      else if not (Sys.file_exists f) then (
-        print_string "File not found";
-        fail ())
-      else filename := f)
-    usage;
-  if !filename = "" then (
-    print_string usage;
-    exit 1);
+  (* Retrieve and check the filename *)
+  let filename =
+    match !filenames with
+    | [ f ] ->
+        if not (Filename.check_suffix f ".cfim") then (
+          print_string "Unrecognized file extension";
+          fail ())
+        else if not (Sys.file_exists f) then (
+          print_string "File not found";
+          fail ())
+        else f
+    | _ ->
+        (* For now, we only process one file at a time *)
+        print_string usage;
+        exit 1
+  in
+  (* Check the destination directory *)
+  let dest_dir =
+    if !dest_dir = "" then Filename.dirname filename else !dest_dir
+  in
+
   (* Set up the logging - for now we use default values - TODO: use the
    * command-line arguments *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
@@ -59,7 +95,7 @@ let () =
   pure_to_extract_log#set_level EL.Debug;
   translate_log#set_level EL.Debug;
   (* Load the module *)
-  let json = Yojson.Basic.from_file !filename in
+  let json = Yojson.Basic.from_file filename in
   match cfim_module_of_json json with
   | Error s ->
       main_log#error "error: %s\n" s;
@@ -88,10 +124,10 @@ let () =
       let test_unit_functions = true in
       let micro_passes_config =
         {
-          Micro.decompose_monadic_let_bindings = false;
-          unfold_monadic_let_bindings = true;
-          filter_unused_monadic_calls = true;
+          Micro.decompose_monadic_let_bindings = !decompose_monads;
+          unfold_monadic_let_bindings = !unfold_monads;
+          filter_unused_monadic_calls = !filter_unused_calls;
         }
       in
-      Translate.translate_module !filename config micro_passes_config
+      Translate.translate_module filename dest_dir config micro_passes_config
         test_unit_functions m

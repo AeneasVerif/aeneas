@@ -262,9 +262,9 @@ let translate_module_to_pure (config : C.partial_config)
     let _ = assert_norm (FUNCTION () = Success ())
     ```
  *)
-let translate_module (filename : string) (config : C.partial_config)
-    (mp_config : Micro.config) (test_unit_functions : bool) (m : M.cfim_module)
-    : unit =
+let translate_module (filename : string) (dest_dir : string)
+    (config : C.partial_config) (mp_config : Micro.config)
+    (test_unit_functions : bool) (m : M.cfim_module) : unit =
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs =
     translate_module_to_pure config mp_config m
@@ -309,13 +309,12 @@ let translate_module (filename : string) (config : C.partial_config)
         (* Note that we already checked the suffix upon opening the file *)
         failwith "Unreachable"
     | Some filename ->
-        (* Split between basename and dirname *)
-        let dirname = Filename.dirname filename in
+        (* Retrieve the file basename *)
         let basename = Filename.basename filename in
         (* Convert the case *)
         let module_name = StringUtils.to_camel_case basename in
         (* We add the extension for F* *)
-        (module_name, Filename.concat dirname (module_name ^ ".fst"))
+        (module_name, Filename.concat dest_dir (module_name ^ ".fst"))
   in
   let out = open_out extract_filename in
   let fmt = Format.formatter_of_out_channel out in
