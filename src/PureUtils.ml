@@ -101,6 +101,8 @@ let ty_as_integer (t : ty) : T.integer_type =
 let type_def_is_enum (def : T.type_def) : bool =
   match def.kind with T.Struct _ -> false | Enum _ -> true
 
+let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
+
 let mk_result_fail_rvalue (ty : ty) : typed_rvalue =
   let ty = Adt (Assumed Result, [ ty ]) in
   let value = RvAdt { variant_id = Some result_fail_id; field_values = [] } in
@@ -124,8 +126,6 @@ let mk_result_return_lvalue (v : typed_lvalue) : typed_lvalue =
     LvAdt { variant_id = Some result_return_id; field_values = [ v ] }
   in
   { value; ty }
-
-let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
 let compute_constant_value_ty (cv : constant_value) : ty =
   match cv with
