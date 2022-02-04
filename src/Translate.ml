@@ -259,9 +259,17 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
   (* Return *)
   (trans_ctx, type_defs, pure_translations)
 
-(** Translate a module and write the synthesized code to an output file *)
+(** Translate a module and write the synthesized code to an output file.
+
+    [test_unit_functions]: if true, insert tests in the generated files to
+    check that the unit functions normalize to `Success _`. For instance,
+    in F* it generates code like this:
+    ```
+    let _ = assert_norm (FUNCTION () = Success ())
+    ```
+ *)
 let translate_module (filename : string) (config : C.partial_config)
-    (m : M.cfim_module) : unit =
+    (test_unit_functions : bool) (m : M.cfim_module) : unit =
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs = translate_module_to_pure config m in
 
@@ -350,11 +358,17 @@ let translate_module (filename : string) (config : C.partial_config)
     let def = Pure.TypeDefId.Map.find id trans_types in
     ExtractToFStar.extract_type_def extract_ctx fmt qualif def
   in
+
   (* In case of (non-mutually) recursive functions, we use a simple procedure to
    * check if the forward and backward functions are mutually recursive.
    *)
-  let export_functions (is_rec : bool) (is_mut_rec : bool)
-      (fls : Pure.fun_def list) : unit =
+  let export_functions (is_rec : bool) (pure_ls : pure_fun_translation list) :
+      unit =
+    (* Generate the function definitions *)
+    let is_mut_rec = is_rec && pure_ls <> [] in
+    let fls =
+      List.concat (List.map (fun (fwd, back_ls) -> fwd :: back_ls) pure_ls)
+    in
     List.iteri
       (fun i def ->
         let qualif =
@@ -364,8 +378,15 @@ let translate_module (filename : string) (config : C.partial_config)
           else ExtractToFStar.LetRec
         in
         ExtractToFStar.extract_fun_def extract_ctx fmt qualif def)
-      fls
+      fls;
+    (* Insert unit tests if necessary *)
+    if test_unit_functions then
+      List.iter
+        (fun (fwd, _) ->
+          ExtractToFStar.extract_unit_test_if_unit_fun extract_ctx fmt fwd)
+        pure_ls
   in
+
   let export_decl (decl : M.declaration_group) : unit =
     match decl with
     | Type (NonRec id) -> export_type ExtractToFStar.Type id
@@ -378,30 +399,18 @@ let translate_module (filename : string) (config : C.partial_config)
             export_type qualif id)
           ids
     | Fun (NonRec id) ->
-        (* Concatenate *)
-        let fwd, back_ls = Pure.FunDefId.Map.find id trans_funs in
-        let fls = fwd :: back_ls in
+        (* Lookup *)
+        let pure_fun = Pure.FunDefId.Map.find id trans_funs in
         (* Translate *)
-        export_functions false false fls
-    | Fun (Rec [ id ]) ->
-        (* Simply recursive functions *)
-        (* Concatenate *)
-        let fwd, back_ls = Pure.FunDefId.Map.find id trans_funs in
-        let fls = fwd :: back_ls in
-        (* Check if mutually rec *)
-        let is_mut_rec = not (PureUtils.functions_not_mutually_recursive fls) in
-        (* Translate *)
-        export_functions true is_mut_rec fls
+        export_functions false [ pure_fun ]
     | Fun (Rec ids) ->
         (* General case of mutually recursive functions *)
-        (* Concatenate *)
-        let compute_fun_id_list (id : Pure.FunDefId.id) : Pure.fun_def list =
-          let fwd, back_ls = Pure.FunDefId.Map.find id trans_funs in
-          fwd :: back_ls
+        (* Lookup *)
+        let pure_funs =
+          List.map (fun id -> Pure.FunDefId.Map.find id trans_funs) ids
         in
-        let fls = List.concat (List.map compute_fun_id_list ids) in
         (* Translate *)
-        export_functions true true fls
+        export_functions true pure_funs
   in
 
   List.iter export_decl m.declarations;

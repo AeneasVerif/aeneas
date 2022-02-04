@@ -2,6 +2,7 @@
 
 open Errors
 open Pure
+open PureUtils
 open TranslateCore
 open PureToExtract
 open StringUtils
@@ -85,6 +86,7 @@ let fstar_keywords =
       "match";
       "with";
       "assert";
+      "assert_norm";
       "Type0";
       "unit";
       "not";
@@ -966,3 +968,52 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
+
+(** Extract a unit test, if the function is a unit function (takes no
+    parameters, returns unit).
+    
+    A unit test simply checks that the function normalizes to `Return ()`:
+    ```
+    let _ = assert_norm (FUNCTION () = Return ())
+    ```
+ *)
+let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
+    (def : fun_def) : unit =
+  (* We only insert unit tests for forward functions *)
+  assert (def.back_id = None);
+  (* Check if this is a unit function *)
+  let sg = def.signature in
+  if
+    sg.type_params = []
+    && sg.inputs = [ unit_ty ]
+    && sg.outputs = [ mk_result_ty unit_ty ]
+  then (
+    (* Add a break before *)
+    F.pp_print_break fmt 0 0;
+    (* Print a comment *)
+    F.pp_print_string fmt
+      ("(** Unit test for [" ^ Print.name_to_string def.basename ^ "] *)");
+    F.pp_print_space fmt ();
+    (* Open a box for the test *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
+    (* Print the test *)
+    F.pp_print_string fmt "let _ =";
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "assert_norm";
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "(";
+    let fun_name = ctx_get_local_function def.def_id def.back_id ctx in
+    F.pp_print_string fmt fun_name;
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "()";
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "=";
+    F.pp_print_space fmt ();
+    let success = ctx_get_variant (Assumed Result) result_return_id ctx in
+    F.pp_print_string fmt (success ^ " ())");
+    (* Close the box for the test *)
+    F.pp_close_box fmt ();
+    (* Add a break after *)
+    F.pp_print_break fmt 0 0)
+  else (* Do nothing *)
+    ()
