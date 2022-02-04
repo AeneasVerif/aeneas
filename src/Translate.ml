@@ -338,8 +338,6 @@ let translate_module (filename : string) (config : C.partial_config)
   Format.pp_print_break fmt 0 0;
   Format.pp_print_string fmt ("module " ^ module_name);
   Format.pp_print_break fmt 0 0;
-  Format.pp_print_string fmt "open FStar.Mul";
-  Format.pp_print_break fmt 0 0;
   Format.pp_print_string fmt "open Primitives";
   Format.pp_print_break fmt 0 0;
   Format.pp_print_break fmt 0 0;
