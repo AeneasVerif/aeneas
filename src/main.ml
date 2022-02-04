@@ -48,10 +48,10 @@ let () =
   main_log#set_level EL.Debug;
   interpreter_log#set_level EL.Debug;
   statements_log#set_level EL.Debug;
-  paths_log#set_level EL.Debug;
-  expressions_log#set_level EL.Debug;
-  expansion_log#set_level EL.Debug;
-  borrows_log#set_level EL.Debug;
+  paths_log#set_level EL.Warning;
+  expressions_log#set_level EL.Warning;
+  expansion_log#set_level EL.Warning;
+  borrows_log#set_level EL.Warning;
   invariants_log#set_level EL.Warning;
   symbolic_to_pure_log#set_level EL.Debug;
   pure_micro_passes_log#set_level EL.Debug;
