@@ -203,7 +203,8 @@ let translate_function_to_pure (config : C.partial_config)
   (* Return *)
   (pure_forward, pure_backwards)
 
-let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
+let translate_module_to_pure (config : C.partial_config)
+    (mp_config : Micro.config) (m : M.cfim_module) :
     trans_ctx * Pure.type_def list * pure_fun_translation list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
@@ -243,16 +244,9 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
   in
 
   (* Apply the micro-passes *)
-  (* TODO: move the configuration *)
-  let passes_config =
-    {
-      Micro.unfold_monadic_let_bindings = true;
-      filter_unused_monadic_calls = true;
-    }
-  in
   let pure_translations =
     List.map
-      (Micro.apply_passes_to_pure_fun_translation passes_config trans_ctx)
+      (Micro.apply_passes_to_pure_fun_translation mp_config trans_ctx)
       pure_translations
   in
 
@@ -269,9 +263,12 @@ let translate_module_to_pure (config : C.partial_config) (m : M.cfim_module) :
     ```
  *)
 let translate_module (filename : string) (config : C.partial_config)
-    (test_unit_functions : bool) (m : M.cfim_module) : unit =
+    (mp_config : Micro.config) (test_unit_functions : bool) (m : M.cfim_module)
+    : unit =
   (* Translate the module to the pure AST *)
-  let trans_ctx, trans_types, trans_funs = translate_module_to_pure config m in
+  let trans_ctx, trans_types, trans_funs =
+    translate_module_to_pure config mp_config m
+  in
 
   (* Initialize the extraction context - for now we extract only to F* *)
   let names_map =

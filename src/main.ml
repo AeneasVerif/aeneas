@@ -6,6 +6,7 @@ module A = CfimAst
 module I = Interpreter
 module EL = Easy_logging.Logging
 module TA = TypesAnalysis
+module Micro = PureMicroPasses
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
@@ -85,4 +86,11 @@ let () =
 
       (* Translate the functions *)
       let test_unit_functions = true in
-      Translate.translate_module !filename config test_unit_functions m
+      let micro_passes_config =
+        {
+          Micro.unfold_monadic_let_bindings = true;
+          filter_unused_monadic_calls = true;
+        }
+      in
+      Translate.translate_module !filename config micro_passes_config
+        test_unit_functions m
