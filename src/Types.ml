@@ -80,8 +80,11 @@ type integer_type =
   | U128
 [@@deriving show, ord]
 
-let all_integer_types =
-  [ Isize; I8; I16; I32; I64; I128; Usize; U8; U16; U32; U64; U128 ]
+let all_signed_int_types = [ Isize; I8; I16; I32; I64; I128 ]
+
+let all_unsigned_int_types = [ Usize; U8; U16; U32; U64; U128 ]
+
+let all_int_types = List.append all_signed_int_types all_unsigned_int_types
 
 type ref_kind = Mut | Shared [@@deriving show, ord]
 

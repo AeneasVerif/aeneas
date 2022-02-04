@@ -20,26 +20,7 @@ type type_def_qualif = Type | And
  *)
 type fun_def_qualif = Let | LetRec | And
 
-(** A list of keywords/identifiers used in F* and with which we want to check
-    collision. *)
-let fstar_keywords =
-  [
-    "let";
-    "rec";
-    "in";
-    "fn";
-    "int";
-    "list";
-    "FStar";
-    "FStar.Mul";
-    "type";
-    "match";
-    "with";
-    "assert";
-    "Type0";
-    "unit";
-  ]
-
+(** Small helper to compute the name of an int type *)
 let fstar_int_name (int_ty : integer_type) =
   match int_ty with
   | Isize -> "isize"
@@ -54,6 +35,62 @@ let fstar_int_name (int_ty : integer_type) =
   | U32 -> "u32"
   | U64 -> "u64"
   | U128 -> "u128"
+
+(** Small helper to compute the name of a unary operation *)
+let fstar_unop_name (unop : unop) : string =
+  match unop with Not -> "not" | Neg int_ty -> fstar_int_name int_ty ^ "_neg"
+
+(** Small helper to compute the name of a binary operation (note that many
+    binary operations like "less than" are extracted to primitive operations,
+    like `<`.
+ *)
+let fstar_named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
+  let binop =
+    match binop with
+    | Div -> "div"
+    | Rem -> "rem"
+    | Add -> "add"
+    | Sub -> "sub"
+    | Mul -> "mul"
+    | _ -> failwith "Unreachable"
+  in
+  fstar_int_name int_ty ^ "_" ^ binop
+
+(** A list of keywords/identifiers used in F* and with which we want to check
+    collision. *)
+let fstar_keywords =
+  let named_unops =
+    fstar_unop_name Not
+    :: List.map (fun it -> fstar_unop_name (Neg it)) T.all_signed_int_types
+  in
+  let named_binops = [ E.Div; Rem; Add; Sub; Mul ] in
+  let named_binops =
+    List.concat
+      (List.map
+         (fun bn ->
+           List.map (fun it -> fstar_named_binop_name bn it) T.all_int_types)
+         named_binops)
+  in
+  let misc =
+    [
+      "let";
+      "rec";
+      "in";
+      "fn";
+      "int";
+      "list";
+      "FStar";
+      "FStar.Mul";
+      "type";
+      "match";
+      "with";
+      "assert";
+      "Type0";
+      "unit";
+      "not";
+    ]
+  in
+  List.concat [ named_unops; named_binops; misc ]
 
 let fstar_assumed_adts : (assumed_ty * string) list = [ (Result, "result") ]
 
@@ -78,11 +115,7 @@ let fstar_names_map_init =
 let fstar_extract_unop (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpression) : unit
     =
-  let unop =
-    match unop with
-    | Not -> "not"
-    | Neg int_ty -> fstar_int_name int_ty ^ "_neg"
-  in
+  let unop = fstar_unop_name unop in
   if inside then F.pp_print_string fmt "(";
   F.pp_print_string fmt unop;
   F.pp_print_space fmt ();
@@ -112,16 +145,8 @@ let fstar_extract_binop (extract_expr : bool -> texpression -> unit)
       F.pp_print_space fmt ();
       extract_expr false arg1
   | Div | Rem | Add | Sub | Mul ->
-      let binop =
-        match binop with
-        | Div -> "div"
-        | Rem -> "rem"
-        | Add -> "add"
-        | Sub -> "sub"
-        | Mul -> "mul"
-        | _ -> failwith "Unreachable"
-      in
-      F.pp_print_string fmt (fstar_int_name int_ty ^ "_" ^ binop);
+      let binop = fstar_named_binop_name binop int_ty in
+      F.pp_print_string fmt binop;
       F.pp_print_space fmt ();
       extract_expr false arg0;
       F.pp_print_space fmt ();
