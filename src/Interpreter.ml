@@ -107,6 +107,9 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
 
 (** Small helper.
 
+    This is a continuation function called by the symbolic interpreter upon
+    reaching the `return` instruction: this continuation takes care of doing
+    the proper manipulations to finish synthesizing backward functions.
 *)
 let evaluate_function_symbolic_synthesize_backward_from_return
     (config : C.config) (fdef : A.fun_def) (inst_sg : A.inst_fun_sig)

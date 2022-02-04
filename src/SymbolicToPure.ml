@@ -72,9 +72,20 @@ type bs_ctx = {
 (** Body synthesis context *)
 
 (* TODO: move *)
-let bs_ctx_to_value_formatter (ctx : bs_ctx) : Print.CfimAst.ast_formatter =
+let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.CfimAst.ast_formatter =
   Print.CfimAst.fun_def_to_ast_formatter ctx.type_context.cfim_type_defs
     ctx.fun_context.cfim_fun_defs ctx.fun_def
+
+let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
+  let type_params = ctx.fun_def.signature.type_params in
+  let type_defs = ctx.type_context.cfim_type_defs in
+  let fun_defs = ctx.fun_context.cfim_fun_defs in
+  PrintPure.mk_ast_formatter type_defs fun_defs type_params
+
+let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
+  let fmt = bs_ctx_to_pp_ast_formatter ctx in
+  let fmt = PrintPure.ast_to_type_formatter fmt in
+  PrintPure.ty_to_string fmt ty
 
 let type_def_to_string (ctx : bs_ctx) (def : type_def) : string =
   let type_params = def.type_params in
@@ -83,10 +94,7 @@ let type_def_to_string (ctx : bs_ctx) (def : type_def) : string =
   PrintPure.type_def_to_string fmt def
 
 let typed_rvalue_to_string (ctx : bs_ctx) (v : typed_rvalue) : string =
-  let type_params = ctx.fun_def.signature.type_params in
-  let type_defs = ctx.type_context.cfim_type_defs in
-  let fun_defs = ctx.fun_context.cfim_fun_defs in
-  let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
+  let fmt = bs_ctx_to_pp_ast_formatter ctx in
   PrintPure.typed_rvalue_to_string fmt v
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
@@ -105,7 +113,7 @@ let fun_def_to_string (ctx : bs_ctx) (def : Pure.fun_def) : string =
 
 (* TODO: move *)
 let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
-  let fmt = bs_ctx_to_value_formatter ctx in
+  let fmt = bs_ctx_to_ast_formatter ctx in
   let fmt = Print.CfimAst.ast_to_value_formatter fmt in
   let indent = "" in
   let indent_incr = "  " in
@@ -237,16 +245,19 @@ let rec translate_fwd_ty (types_infos : TA.type_infos) (ty : 'r T.ty) : ty =
   | T.Adt (type_id, regions, tys) -> (
       (* Can't translate types with regions for now *)
       assert (regions = []);
-      (* No general parametricity for now *)
-      assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
       (* Translate the type parameters *)
-      let tys = List.map translate tys in
+      let t_tys = List.map translate tys in
       (* Eliminate boxes *)
       match type_id with
-      | AdtId adt_id -> Adt (AdtId adt_id, tys)
-      | Tuple -> Adt (Tuple, tys)
+      | AdtId adt_id ->
+          (* No general parametricity for now *)
+          assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
+          Adt (AdtId adt_id, t_tys)
+      | Tuple -> Adt (Tuple, t_tys)
       | T.Assumed T.Box -> (
-          match tys with
+          (* No general parametricity for now *)
+          assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
+          match t_tys with
           | [ bty ] -> bty
           | _ ->
               failwith "Unreachable: boxes receive exactly one type parameter"))
@@ -598,7 +609,11 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
           if field_values = [] then None
           else
             let value = RvAdt { variant_id; field_values } in
-            let ty = ctx_translate_fwd_ty ctx av.ty in
+            let tys =
+              List.map (fun (fv : typed_rvalue) -> fv.ty) field_values
+            in
+            (* TODO: don't use a tuple wrapper if exactly one value *)
+            let ty = Adt (Tuple, tys) in
             let rv = { value; ty } in
             Some rv)
   | ABottom -> failwith "Unreachable"
@@ -733,7 +748,11 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
           if field_values = [] then (ctx, None)
           else
             let value = LvAdt { variant_id = None; field_values } in
-            let ty = ctx_translate_fwd_ty ctx av.ty in
+            let tys =
+              List.map (fun (fv : typed_lvalue) -> fv.ty) field_values
+            in
+            (* TODO: don't use a tuple wrapper if exactly one value *)
+            let ty = Adt (Tuple, tys) in
             let lv : typed_lvalue = { value; ty } in
             (ctx, Some lv))
   | ABottom -> failwith "Unreachable"
@@ -1125,6 +1144,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       (* Retrieve the values given back upon ending this abstraction - note that
        * we don't provide meta-place information, because those assignments will
        * be inlined anyway... *)
+      log#ldebug (lazy ("abs: " ^ abs_to_string ctx abs));
       let ctx, given_back = abs_to_given_back_no_mp abs ctx in
       (* Link the inputs to those given back values - note that this also
        * checks we have the same number of values, of course *)
@@ -1132,6 +1152,11 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       (* Sanity check *)
       List.iter
         (fun ((given_back, input) : typed_lvalue * var) ->
+          log#ldebug
+            (lazy
+              ("\n- given_back ty: "
+              ^ ty_to_string ctx given_back.ty
+              ^ "\n- sig input ty: " ^ ty_to_string ctx input.ty));
           assert (given_back.ty = input.ty))
         given_back_inputs;
       (* Translate the next expression *)
