@@ -604,9 +604,13 @@ let filter_unused (filter_monadic_calls : bool) (ctx : trans_ctx)
   (* Return *)
   { def with body; inputs_lvs }
 
-(** Add unit arguments for functions with no arguments, and change their return type.
-    TODO: filter the backward functions with no outputs.
- *)
+(** Return `None` if the function is a backward function with no outputs (so
+    that we eliminate the definition which is useless) *)
+let filter_if_backward_with_no_outputs (def : fun_def) : fun_def option =
+  if Option.is_some def.back_id && def.signature.outputs = [] then None
+  else Some def
+
+(** Add unit arguments for functions with no arguments, and change their return type *)
 let to_monadic (def : fun_def) : fun_def =
   (* Update the body *)
   let obj =
@@ -758,10 +762,12 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_def) : fun_def =
 
 (** Apply all the micro-passes to a function.
 
+    Will return `None` if the function is a backward function with no outputs.
+
     [ctx]: used only for printing.
  *)
 let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
-    fun_def =
+    fun_def option =
   (* Debug *)
   log#ldebug
     (lazy
@@ -785,55 +791,69 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
   let def = remove_meta def in
   log#ldebug (lazy ("remove_meta:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
-  (* Add unit arguments for functions with no arguments, and change their return type.
-   * **Rk.**: from now onwards, the types in the AST are correct (until now,
-   * functions had return type `t` where they should have return type `result t`).
-   * Also, from now onwards, the outputs list has length 1. x*)
-  let def = to_monadic def in
-  log#ldebug (lazy ("to_monadic:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+  (* Remove the backward functions with no outputs.
+   * Note that the calls to those functions should already have been removed,
+   * when translating from symbolic to pure. Here, we remove the definitions
+   * altogether, because they are now useless *)
+  let def = filter_if_backward_with_no_outputs def in
 
-  (* Convert the unit variables to `()` if they are used as right-values or
-   * `_` if they are used as left values. *)
-  let def = unit_vars_to_unit def in
-  log#ldebug
-    (lazy ("unit_vars_to_unit:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+  match def with
+  | None -> None
+  | Some def ->
+      (* Add unit arguments for functions with no arguments, and change their return type.
+       * **Rk.**: from now onwards, the types in the AST are correct (until now,
+       * functions had return type `t` where they should have return type `result t`).
+       * Also, from now onwards, the outputs list has length 1. x*)
+      let def = to_monadic def in
+      log#ldebug (lazy ("to_monadic:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
-  (* Inline the useless variable reassignments *)
-  let inline_named_vars = true in
-  let def = inline_useless_var_reassignments inline_named_vars def in
-  log#ldebug
-    (lazy
-      ("inline_useless_var_assignments:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+      (* Convert the unit variables to `()` if they are used as right-values or
+       * `_` if they are used as left values. *)
+      let def = unit_vars_to_unit def in
+      log#ldebug
+        (lazy ("unit_vars_to_unit:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
-  (* Eliminate the box functions *)
-  let def = eliminate_box_functions ctx def in
-  log#ldebug
-    (lazy ("eliminate_box_functions:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
-
-  (* Filter the unused variables, assignments, function calls, etc. *)
-  let def = filter_unused config.filter_unused_monadic_calls ctx def in
-  log#ldebug (lazy ("filter_unused:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
-
-  (* Unfold the monadic let-bindings *)
-  let def =
-    if config.unfold_monadic_let_bindings then (
-      let def = unfold_monadic_let_bindings ctx def in
+      (* Inline the useless variable reassignments *)
+      let inline_named_vars = true in
+      let def = inline_useless_var_reassignments inline_named_vars def in
       log#ldebug
         (lazy
-          ("unfold_monadic_let_bindings:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
-      def)
-    else (
-      log#ldebug
-        (lazy "ignoring unfold_monadic_let_bindings due to the configuration\n");
-      def)
-  in
+          ("inline_useless_var_assignments:\n\n" ^ fun_def_to_string ctx def
+         ^ "\n"));
 
-  (* We are done *)
-  def
+      (* Eliminate the box functions *)
+      let def = eliminate_box_functions ctx def in
+      log#ldebug
+        (lazy
+          ("eliminate_box_functions:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+
+      (* Filter the unused variables, assignments, function calls, etc. *)
+      let def = filter_unused config.filter_unused_monadic_calls ctx def in
+      log#ldebug
+        (lazy ("filter_unused:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+
+      (* Unfold the monadic let-bindings *)
+      let def =
+        if config.unfold_monadic_let_bindings then (
+          let def = unfold_monadic_let_bindings ctx def in
+          log#ldebug
+            (lazy
+              ("unfold_monadic_let_bindings:\n\n" ^ fun_def_to_string ctx def
+             ^ "\n"));
+          def)
+        else (
+          log#ldebug
+            (lazy
+              "ignoring unfold_monadic_let_bindings due to the configuration\n");
+          def)
+      in
+
+      (* We are done *)
+      Some def
 
 let apply_passes_to_pure_fun_translation (config : config) (ctx : trans_ctx)
     (trans : pure_fun_translation) : pure_fun_translation =
   let forward, backwards = trans in
-  let forward = apply_passes_to_def config ctx forward in
-  let backwards = List.map (apply_passes_to_def config ctx) backwards in
+  let forward = Option.get (apply_passes_to_def config ctx forward) in
+  let backwards = List.filter_map (apply_passes_to_def config ctx) backwards in
   (forward, backwards)
