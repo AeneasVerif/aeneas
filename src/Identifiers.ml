@@ -20,6 +20,8 @@ module type Id = sig
 
   val fresh_stateful_generator : unit -> generator ref * (unit -> id)
 
+  val mk_stateful_generator : generator -> generator ref * (unit -> id)
+
   val incr : id -> id
 
   (* TODO: this should be stateful! - but we may want to be able to duplicate
@@ -103,14 +105,16 @@ module IdGen () : Id = struct
     let id = incr id in
     id
 
-  let fresh_stateful_generator () =
-    let g = ref 0 in
+  let mk_stateful_generator g =
+    let g = ref g in
     let fresh () =
       let id = !g in
       g := incr id;
       id
     in
     (g, fresh)
+
+  let fresh_stateful_generator () = mk_stateful_generator 0
 
   let fresh gen = (gen, incr gen)
 

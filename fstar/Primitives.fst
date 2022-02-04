@@ -9,6 +9,16 @@ type result (a : Type0) : Type0 =
 | Return : a -> result a
 | Fail : result a
 
+// Monadic bind and return (allows us to use the monadic notations like `y <-- f x;`
+let return (#a : Type0) (x:a) : result a = Return x
+let bind (#a #b : Type0) (m : result a) (f : a -> result b) : result b =
+    match m with
+    | Return x -> f x
+    | Fail -> Fail
+
+// Monadic assert(...)
+let massert (b:bool) : result unit = if b then Return () else Fail
+
 (*** Misc *)
 type char = FStar.Char.char
 

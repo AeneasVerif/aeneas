@@ -8,14 +8,38 @@ open TranslateCore
 let log = L.pure_micro_passes_log
 
 type config = {
+  decompose_monadic_let_bindings : bool;
+      (** Some provers like F* don't support the decomposition of return values
+          in monadic let-bindings:
+          ```
+          // NOT supported in F*
+          let (x, y) <-- f ();
+          ...
+          ```
+
+          In such situations, we might want to introduce an intermediate
+          assignment:
+          ```
+          let tmp <-- f ();
+          let (x, y) = tmp in
+          ...
+          ```
+       *)
   unfold_monadic_let_bindings : bool;
       (** Controls the unfolding of monadic let-bindings to explicit matches:
+          
           `y <-- f x; ...`
+
           becomes:
+          
           `match f x with | Failure -> Failure | Return y -> ...`
-     
+
+          
           This is useful when extracting to F*: the support for monadic
           definitions is not super powerful.
+          Note that when [undolf_monadic_let_bindings] is true, setting
+          [decompose_monadic_let_bindings] to true and only makes the code
+          more verbose.
        *)
   filter_unused_monadic_calls : bool;
       (** Controls whether we try to filter the calls to monadic functions
@@ -714,6 +738,51 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_def) : fun_def =
   let body = obj#visit_texpression () def.body in
   { def with body }
 
+(** Decompose the monadic let-bindings.
+
+    See the explanations in [config].
+ *)
+let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_def) : fun_def
+    =
+  (* Set up the var id generator *)
+  let cnt = get_expression_min_var_counter def.body.e in
+  let _, fresh_id = VarId.mk_stateful_generator cnt in
+  (* It is a very simple map *)
+  let obj =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_Let env monadic lv re next_e =
+        if not monadic then super#visit_Let env monadic lv re next_e
+        else
+          (* If monadic, we need to check if the left-value is a variable:
+           * - if yes, don't decompose
+           * - if not, make the decomposition in two steps
+           *)
+          match lv.value with
+          | LvVar _ ->
+              (* Variable: nothing to do *)
+              super#visit_Let env monadic lv re next_e
+          | _ ->
+              (* Not a variable: decompose *)
+              (* Introduce a temporary variable to receive the value of the
+               * monadic binding *)
+              let vid = fresh_id () in
+              let tmp : var = { id = vid; basename = None; ty = lv.ty } in
+              let ltmp = mk_typed_lvalue_from_var tmp None in
+              let rtmp = mk_typed_rvalue_from_var tmp in
+              let rtmp = mk_value_expression rtmp None in
+              (* Visit the next expression *)
+              let next_e = self#visit_texpression env next_e in
+              (* Create the let-bindings *)
+              (mk_let true ltmp re (mk_let false lv rtmp next_e)).e
+    end
+  in
+  (* Update the body *)
+  let body = obj#visit_texpression () def.body in
+  (* Return *)
+  { def with body }
+
 (** Unfold the monadic let-bindings to explicit matches. *)
 let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_def) : fun_def =
   (* It is a very simple map *)
@@ -812,6 +881,22 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
       let def = filter_unused config.filter_unused_monadic_calls ctx def in
       log#ldebug
         (lazy ("filter_unused:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+
+      (* Decompose the monadic let-bindings *)
+      let def =
+        if config.decompose_monadic_let_bindings then (
+          let def = decompose_monadic_let_bindings ctx def in
+          log#ldebug
+            (lazy
+              ("decompose_monadic_let_bindings:\n\n" ^ fun_def_to_string ctx def
+             ^ "\n"));
+          def)
+        else (
+          log#ldebug
+            (lazy
+              "ignoring decompose_monadic_let_bindings due to the configuration\n");
+          def)
+      in
 
       (* Unfold the monadic let-bindings *)
       let def =

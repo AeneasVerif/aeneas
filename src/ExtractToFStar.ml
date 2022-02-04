@@ -824,15 +824,23 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_space fmt ();
             (* Open a box for the branch *)
             F.pp_open_hvbox fmt 0;
+            (* Print the `begin` if necessary *)
             let parenth = PureUtils.expression_requires_parentheses e_branch in
-            if parenth then F.pp_print_string fmt "(";
+            if parenth then (
+              F.pp_print_string fmt "begin";
+              F.pp_print_space fmt ());
+            (* Print the branch expression *)
             extract_texpression ctx fmt false e_branch;
-            if parenth then F.pp_print_string fmt ")";
+            (* Close the `begin ... end ` *)
+            if parenth then (
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt "end");
             (* Close the box for the branch *)
             F.pp_close_box fmt ();
             (* Close the box for the then/else+branch *)
             F.pp_close_box fmt ()
           in
+
           extract_branch true e_then;
           extract_branch false e_else;
           (* Close the box for the whole `if ... then ... else ...` *)

@@ -88,7 +88,8 @@ let () =
       let test_unit_functions = true in
       let micro_passes_config =
         {
-          Micro.unfold_monadic_let_bindings = true;
+          Micro.decompose_monadic_let_bindings = false;
+          unfold_monadic_let_bindings = true;
           filter_unused_monadic_calls = true;
         }
       in
