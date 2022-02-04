@@ -42,7 +42,12 @@ let binop_can_fail (binop : E.binop) : bool =
 
 let mk_place_from_var (v : var) : place = { var = v.id; projection = [] }
 
-let mk_tuple_ty (tys : ty list) : ty = Adt (Tuple, tys)
+(** Make a "simplified" tuple type from a list of types:
+    - if there is exactly one type, just return it
+    - if there is > one type: wrap them in a tuple
+ *)
+let mk_simpl_tuple_ty (tys : ty list) : ty =
+  match tys with [ ty ] -> ty | _ -> Adt (Tuple, tys)
 
 let unit_ty : ty = Adt (Tuple, [])
 
@@ -61,11 +66,28 @@ let mk_typed_lvalue_from_var (v : var) (mp : mplace option) : typed_lvalue =
   let ty = v.ty in
   { value; ty }
 
-let mk_tuple_lvalue (vl : typed_lvalue list) : typed_lvalue =
-  let tys = List.map (fun (v : typed_lvalue) -> v.ty) vl in
-  let ty = Adt (Tuple, tys) in
-  let value = LvAdt { variant_id = None; field_values = vl } in
-  { value; ty }
+(** Make a "simplified" tuple value from a list of values:
+    - if there is exactly one value, just return it
+    - if there is > one value: wrap them in a tuple
+ *)
+let mk_simpl_tuple_lvalue (vl : typed_lvalue list) : typed_lvalue =
+  match vl with
+  | [ v ] -> v
+  | _ ->
+      let tys = List.map (fun (v : typed_lvalue) -> v.ty) vl in
+      let ty = Adt (Tuple, tys) in
+      let value = LvAdt { variant_id = None; field_values = vl } in
+      { value; ty }
+
+(** Similar to [mk_simpl_tuple_lvalue] *)
+let mk_simpl_tuple_rvalue (vl : typed_rvalue list) : typed_rvalue =
+  match vl with
+  | [ v ] -> v
+  | _ ->
+      let tys = List.map (fun (v : typed_rvalue) -> v.ty) vl in
+      let ty = Adt (Tuple, tys) in
+      let value = RvAdt { variant_id = None; field_values = vl } in
+      { value; ty }
 
 let mk_adt_lvalue (adt_ty : ty) (variant_id : VariantId.id)
     (vl : typed_lvalue list) : typed_lvalue =

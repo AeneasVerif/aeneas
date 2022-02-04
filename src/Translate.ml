@@ -174,7 +174,7 @@ let translate_function_to_pure (config : C.partial_config)
     let backward_output_tys =
       List.map (fun (v : Pure.var) -> v.ty) backward_outputs
     in
-    let backward_ret_ty = mk_tuple_ty backward_output_tys in
+    let backward_ret_ty = mk_simpl_tuple_ty backward_output_tys in
     let backward_inputs =
       T.RegionGroupId.Map.singleton back_id backward_inputs
     in

@@ -183,7 +183,7 @@ let rec translate_sty (ty : T.sty) : ty =
       let tys = List.map translate tys in
       match type_id with
       | T.AdtId adt_id -> Adt (AdtId adt_id, tys)
-      | T.Tuple -> Adt (Tuple, tys)
+      | T.Tuple -> mk_simpl_tuple_ty tys
       | T.Assumed T.Box -> (
           match tys with
           | [ ty ] -> ty
@@ -253,7 +253,10 @@ let rec translate_fwd_ty (types_infos : TA.type_infos) (ty : 'r T.ty) : ty =
           (* No general parametricity for now *)
           assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
           Adt (AdtId adt_id, t_tys)
-      | Tuple -> Adt (Tuple, t_tys)
+      | Tuple ->
+          (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
+             identity *)
+          mk_simpl_tuple_ty t_tys
       | T.Assumed T.Box -> (
           (* No general parametricity for now *)
           assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
@@ -317,7 +320,12 @@ let rec translate_back_ty (types_infos : TA.type_infos)
       | T.Tuple -> (
           (* Tuples can contain borrows (which we eliminated) *)
           let tys_t = List.filter_map translate tys in
-          match tys_t with [] -> None | _ -> Some (Adt (Tuple, tys_t))))
+          match tys_t with
+          | [] -> None
+          | _ ->
+              (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
+               * is the identity *)
+              Some (mk_simpl_tuple_ty tys_t)))
   | TypeVar vid -> wrap (TypeVar vid)
   | Bool -> wrap Bool
   | Char -> wrap Char
@@ -605,16 +613,11 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
           None
       | T.Tuple ->
           (* Return *)
-          let variant_id = adt_v.variant_id in
           if field_values = [] then None
           else
-            let value = RvAdt { variant_id; field_values } in
-            let tys =
-              List.map (fun (fv : typed_rvalue) -> fv.ty) field_values
-            in
-            (* TODO: don't use a tuple wrapper if exactly one value *)
-            let ty = Adt (Tuple, tys) in
-            let rv = { value; ty } in
+            (* Note that if there is exactly one field value,
+             * [mk_simpl_tuple_rvalue] is the identity *)
+            let rv = mk_simpl_tuple_rvalue field_values in
             Some rv)
   | ABottom -> failwith "Unreachable"
   | ALoan lc -> aloan_content_to_consumed ctx lc
@@ -747,13 +750,9 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
           assert (variant_id = None);
           if field_values = [] then (ctx, None)
           else
-            let value = LvAdt { variant_id = None; field_values } in
-            let tys =
-              List.map (fun (fv : typed_lvalue) -> fv.ty) field_values
-            in
-            (* TODO: don't use a tuple wrapper if exactly one value *)
-            let ty = Adt (Tuple, tys) in
-            let lv : typed_lvalue = { value; ty } in
+            (* Note that if there is exactly one field value, [mk_simpl_tuple_lvalue]
+             * is the identity *)
+            let lv = mk_simpl_tuple_lvalue field_values in
             (ctx, Some lv))
   | ABottom -> failwith "Unreachable"
   | ALoan lc -> aloan_content_to_given_back mp lc ctx
@@ -897,10 +896,7 @@ and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : texpression
         T.RegionGroupId.Map.find bid ctx.backward_outputs
       in
       let field_values = List.map mk_typed_rvalue_from_var backward_outputs in
-      let ret_value = RvAdt { variant_id = None; field_values } in
-      let ret_tys = List.map (fun (v : typed_rvalue) -> v.ty) field_values in
-      let ret_ty = Adt (Tuple, ret_tys) in
-      let ret_value : typed_rvalue = { value = ret_value; ty = ret_ty } in
+      let ret_value = mk_simpl_tuple_rvalue field_values in
       let ret_value = mk_result_return_rvalue ret_value in
       let e = Value (ret_value, None) in
       let ty = ret_value.ty in
@@ -1043,7 +1039,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
         List.append (List.map translate_opt_mplace call.args_places) [ None ]
       in
       let ctx, outputs = abs_to_given_back output_mpl abs ctx in
-      let output = mk_tuple_lvalue outputs in
+      let output = mk_simpl_tuple_lvalue outputs in
       (* Sanity check: the inputs and outputs have the proper number and the proper type *)
       let fun_id =
         match call.call_id with
@@ -1252,7 +1248,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
                 List.map (fun x -> mk_typed_lvalue_from_var x None) vars
               in
               let monadic = false in
-              mk_let monadic (mk_tuple_lvalue vars)
+              mk_let monadic
+                (mk_simpl_tuple_lvalue vars)
                 (mk_value_expression scrutinee scrutinee_mplace)
                 branch
           | T.Assumed T.Box ->

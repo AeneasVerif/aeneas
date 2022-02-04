@@ -1,5 +1,11 @@
 # TODO
 
+0. In SymbolicToPure we do a few simplifications on types and values (simplification
+   of box type, removal of tuples which contain exactly one field - some fields
+   may have been filtered for the backward functions...): there are already a
+   few sanity checks, but we may to add more of them, which would type check
+   entire expressions for instance.
+
 0. merge the "read determinant" and the "switch" occurrences to "match"
 
 0. reaggregate the ADTs

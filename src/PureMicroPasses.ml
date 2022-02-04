@@ -650,7 +650,7 @@ let to_monadic (def : fun_def) : fun_def =
         mk_result_ty out_ty
     | Some _, outputs ->
         (* Backward function: we have to group them *)
-        mk_result_ty (mk_tuple_ty outputs)
+        mk_result_ty (mk_simpl_tuple_ty outputs)
     | _ -> failwith "Unreachable"
   in
   let outputs = [ output_ty ] in
