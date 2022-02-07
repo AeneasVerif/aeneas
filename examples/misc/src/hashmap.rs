@@ -166,3 +166,18 @@ impl<T> HashMap<T> {
         HashMap::remove_from_list(key, self.slots.get_mut(hash_mod).unwrap())
     }
 }
+
+#[test]
+fn test1() {
+    let mut hm: HashMap<u64> = HashMap::new();
+    hm.insert(0, 42);
+    hm.insert(128, 18);
+    hm.insert(1024, 138);
+    assert!(*hm.get(&128).unwrap() == 18);
+    let x = hm.get_mut(&1024).unwrap();
+    *x = 56;
+    assert!(*hm.get(&1024).unwrap() == 56);
+    assert!(hm.get(&10).is_none());
+    let x = hm.remove(&1024).unwrap();
+    assert!(x == 56);
+}
