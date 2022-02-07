@@ -173,6 +173,7 @@ fn test1() {
     hm.insert(0, 42);
     hm.insert(128, 18);
     hm.insert(1024, 138);
+    hm.insert(1056, 256);
     assert!(*hm.get(&128).unwrap() == 18);
     let x = hm.get_mut(&1024).unwrap();
     *x = 56;
@@ -180,4 +181,7 @@ fn test1() {
     assert!(hm.get(&10).is_none());
     let x = hm.remove(&1024).unwrap();
     assert!(x == 56);
+    assert!(*hm.get(&0).unwrap() == 42);
+    assert!(*hm.get(&128).unwrap() == 18);
+    assert!(*hm.get(&1056).unwrap() == 256);
 }
