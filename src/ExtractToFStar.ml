@@ -235,7 +235,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
    *)
   let get_fun_name (name : name) : string =
     match name with
-    | [ name ] -> name
+    | [ _module; name ] -> name
     | _ -> failwith ("Unexpected name shape: " ^ Print.name_to_string name)
   in
   let fun_name (_fid : A.fun_id) (fname : name) (num_rgs : int)
