@@ -211,11 +211,27 @@ type names_map = {
 }
 (** The names map stores the mappings from names to identifiers and vice-versa.
 
-      We use it for lookups (during the translation) and to check for name clashes.
+    We use it for lookups (during the translation) and to check for name clashes.
+    
+    [id_to_string] is for debugging.
   *)
 
-let names_map_add (id : id) (name : string) (nm : names_map) : names_map =
-  (* Sanity check: no clashes *)
+let names_map_add (id_to_string : id -> string) (id : id) (name : string)
+    (nm : names_map) : names_map =
+  (* Check if there is a clash *)
+  (match StringMap.find_opt name nm.name_to_id with
+  | None -> () (* Ok *)
+  | Some clash ->
+      (* There is a clash: print a nice debugging message for the user *)
+      let id1 = "\n- " ^ id_to_string clash in
+      let id2 = "\n- " ^ id_to_string id in
+      let err =
+        "Name clash detected: the following identifiers are bound to the same \
+         name \"" ^ name ^ "\":" ^ id1 ^ id2
+      in
+      log#serror err;
+      failwith err);
+  (* Sanity check *)
   assert (not (StringSet.mem name nm.names_set));
   (* Insert *)
   let id_to_name = IdMap.add id name nm.id_to_name in
@@ -223,22 +239,23 @@ let names_map_add (id : id) (name : string) (nm : names_map) : names_map =
   let names_set = StringSet.add name nm.names_set in
   { id_to_name; name_to_id; names_set }
 
-let names_map_add_assumed_type (id : assumed_ty) (name : string)
-    (nm : names_map) : names_map =
-  names_map_add (TypeId (Assumed id)) name nm
-
-let names_map_add_assumed_struct (id : assumed_ty) (name : string)
-    (nm : names_map) : names_map =
-  names_map_add (StructId (Assumed id)) name nm
-
-let names_map_add_assumed_variant (id : assumed_ty) (variant_id : VariantId.id)
+let names_map_add_assumed_type (id_to_string : id -> string) (id : assumed_ty)
     (name : string) (nm : names_map) : names_map =
-  names_map_add (VariantId (Assumed id, variant_id)) name nm
+  names_map_add id_to_string (TypeId (Assumed id)) name nm
 
-let names_map_add_assumed_function (fid : A.assumed_fun_id)
-    (rg_id : RegionGroupId.id option) (name : string) (nm : names_map) :
-    names_map =
-  names_map_add (FunId (A.Assumed fid, rg_id)) name nm
+let names_map_add_assumed_struct (id_to_string : id -> string) (id : assumed_ty)
+    (name : string) (nm : names_map) : names_map =
+  names_map_add id_to_string (StructId (Assumed id)) name nm
+
+let names_map_add_assumed_variant (id_to_string : id -> string)
+    (id : assumed_ty) (variant_id : VariantId.id) (name : string)
+    (nm : names_map) : names_map =
+  names_map_add id_to_string (VariantId (Assumed id, variant_id)) name nm
+
+let names_map_add_assumed_function (id_to_string : id -> string)
+    (fid : A.assumed_fun_id) (rg_id : RegionGroupId.id option) (name : string)
+    (nm : names_map) : names_map =
+  names_map_add id_to_string (FunId (A.Assumed fid, rg_id)) name nm
 
 (** Make a (variable) basename unique (by adding an index).
 
@@ -271,8 +288,79 @@ type extraction_ctx = {
  *)
 
 let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
-  (* TODO : nice debugging message if collision *)
-  let names_map = names_map_add id name ctx.names_map in
+  (* The id_to_string function to print nice debugging messages if there are
+   * collisions *)
+  let id_to_string (id : id) : string =
+    let fun_defs = ctx.trans_ctx.fun_context.fun_defs in
+    let type_defs = ctx.trans_ctx.type_context.type_defs in
+    (* TODO: factorize the pretty-printing with what is in PrintPure *)
+    let get_type_name (id : type_id) : string =
+      match id with
+      | AdtId id ->
+          let def = TypeDefId.Map.find id type_defs in
+          Print.name_to_string def.name
+      | Assumed aty -> show_assumed_ty aty
+      | Tuple -> failwith "Unreachable"
+    in
+    match id with
+    | FunId (fid, rg_id) ->
+        let fun_name =
+          match fid with
+          | A.Local fid ->
+              Print.name_to_string (FunDefId.Map.find fid fun_defs).name
+          | A.Assumed aid -> A.show_assumed_fun_id aid
+        in
+        let fun_kind =
+          match rg_id with
+          | None -> "forward"
+          | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
+        in
+        "fun name (" ^ fun_kind ^ "): " ^ fun_name
+    | TypeId id -> "type name: " ^ get_type_name id
+    | StructId id -> "struct constructor of: " ^ get_type_name id
+    | VariantId (id, variant_id) ->
+        let variant_name =
+          match id with
+          | Tuple -> failwith "Unreachable"
+          | Assumed Result ->
+              if variant_id = result_return_id then "@result::Return"
+              else if variant_id = result_fail_id then "@result::Fail"
+              else failwith "Unreachable"
+          | AdtId id -> (
+              let def = TypeDefId.Map.find id type_defs in
+              match def.kind with
+              | Struct _ -> failwith "Unreachable"
+              | Enum variants ->
+                  let variant = VariantId.nth variants variant_id in
+                  Print.name_to_string def.name ^ "::" ^ variant.variant_name)
+        in
+        "variant name: " ^ variant_name
+    | FieldId (id, field_id) ->
+        let field_name =
+          match id with
+          | Tuple -> failwith "Unreachable"
+          | Assumed Result -> failwith "Unreachable"
+          | AdtId id -> (
+              let def = TypeDefId.Map.find id type_defs in
+              match def.kind with
+              | Enum _ -> failwith "Unreachable"
+              | Struct fields ->
+                  let field = FieldId.nth fields field_id in
+                  let field_name =
+                    match field.field_name with
+                    | None -> FieldId.to_string field_id
+                    | Some name -> name
+                  in
+                  Print.name_to_string def.name ^ "." ^ field_name)
+        in
+        "field name: " ^ field_name
+    | UnknownId -> "keyword"
+    | TypeVarId _ | VarId _ ->
+        (* We should never get there: we add indices to make sure variable
+         * names are unique *)
+        failwith "Unreachable"
+  in
+  let names_map = names_map_add id_to_string id name ctx.names_map in
   { ctx with names_map }
 
 let ctx_get (id : id) (ctx : extraction_ctx) : string =
@@ -435,6 +523,10 @@ let initialize_names_map (init : names_map_init) : names_map =
    * to check collisions. *)
   let id_to_name = IdMap.empty in
   let nm = { id_to_name; name_to_id; names_set } in
+  (* For debugging - we are creating bindings for assumed types and functions, so
+   * it is ok if we simply use the "show" function (those aren't simply identified
+   * by numbers) *)
+  let id_to_string = show_id in
   (* Then we add:
    * - the assumed types
    * - the assumed struct constructors
@@ -443,24 +535,26 @@ let initialize_names_map (init : names_map_init) : names_map =
    *)
   let nm =
     List.fold_left
-      (fun nm (type_id, name) -> names_map_add_assumed_type type_id name nm)
+      (fun nm (type_id, name) ->
+        names_map_add_assumed_type id_to_string type_id name nm)
       nm init.assumed_adts
   in
   let nm =
     List.fold_left
-      (fun nm (type_id, name) -> names_map_add_assumed_struct type_id name nm)
+      (fun nm (type_id, name) ->
+        names_map_add_assumed_struct id_to_string type_id name nm)
       nm init.assumed_structs
   in
   let nm =
     List.fold_left
       (fun nm (type_id, variant_id, name) ->
-        names_map_add_assumed_variant type_id variant_id name nm)
+        names_map_add_assumed_variant id_to_string type_id variant_id name nm)
       nm init.assumed_variants
   in
   let nm =
     List.fold_left
       (fun nm (fun_id, rg_id, name) ->
-        names_map_add_assumed_function fun_id rg_id name nm)
+        names_map_add_assumed_function id_to_string fun_id rg_id name nm)
       nm init.assumed_functions
   in
   (* Return *)
