@@ -9,7 +9,9 @@ type result (a : Type0) : Type0 =
 | Return : a -> result a
 | Fail : result a
 
-// Monadic bind and return (allows us to use the monadic notations like `y <-- f x;`
+// Monadic bind and return.
+// Re-definining those allows us to customize the result of the monadic notations
+// like: `y <-- f x;`
 let return (#a : Type0) (x:a) : result a = Return x
 let bind (#a #b : Type0) (m : result a) (f : a -> result b) : result b =
     match m with
