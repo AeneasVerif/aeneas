@@ -24,6 +24,7 @@ type char = FStar.Char.char
 
 (*** Scalars *)
 /// Rk.: most of the following code was at least partially generated
+
 let isize_min : int = -9223372036854775808
 let isize_max : int = 9223372036854775807
 let i8_min : int = -128
@@ -37,7 +38,7 @@ let i64_max : int = 9223372036854775807
 let i128_min : int = -170141183460469231731687303715884105728
 let i128_max : int = 170141183460469231731687303715884105727
 let usize_min : int = 0
-let usize_max : int = 18446744073709551615
+let usize_max : int = 4294967295 // being conservative here: [u32_max] instead of [u64_max]
 let u8_min : int = 0
 let u8_max : int = 255
 let u16_min : int = 0
