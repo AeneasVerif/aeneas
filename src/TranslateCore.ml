@@ -20,6 +20,12 @@ let type_def_to_string (ctx : trans_ctx) (def : Pure.type_def) : string =
   let fmt = PrintPure.mk_type_formatter type_defs type_params in
   PrintPure.type_def_to_string fmt def
 
+let type_id_to_string (ctx : trans_ctx) (def : Pure.type_def) : string =
+  let type_params = def.type_params in
+  let type_defs = ctx.type_context.type_defs in
+  let fmt = PrintPure.mk_type_formatter type_defs type_params in
+  PrintPure.type_def_to_string fmt def
+
 let fun_sig_to_string (ctx : trans_ctx) (sg : Pure.fun_sig) : string =
   let type_params = sg.type_params in
   let type_defs = ctx.type_context.type_defs in

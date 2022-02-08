@@ -19,9 +19,9 @@ type var = {
 type assumed_fun_id =
   | Replace  (** `core::mem::replace` *)
   | BoxNew
-  | BoxDeref  (** `core::ops::deref::Deref::<alloc::boxed::Box::>::deref` *)
+  | BoxDeref  (** `core::ops::deref::Deref::<alloc::boxed::Box<T>>::deref` *)
   | BoxDerefMut
-      (** `core::ops::deref::DerefMut::<alloc::boxed::Box::>::deref_mut` *)
+      (** `core::ops::deref::DerefMut::<alloc::boxed::Box<T>>::deref_mut` *)
   | BoxFree
   | VecNew
   | VecPush
