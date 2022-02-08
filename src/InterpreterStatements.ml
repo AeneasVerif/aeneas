@@ -85,6 +85,12 @@ let push_vars (vars : (A.var * V.typed_value) list) : cm_fun =
 let assign_to_place (config : C.config) (rv : V.typed_value) (p : E.place) :
     cm_fun =
  fun cf ctx ->
+  log#ldebug
+    (lazy
+      ("assign_to_place:" ^ "\n- rv: "
+      ^ typed_value_to_string ctx rv
+      ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
+      ^ eval_ctx_to_string ctx));
   (* Push the rvalue to a dummy variable, for bookkeeping *)
   let cc = push_dummy_var rv in
   (* Prepare the destination *)
@@ -104,6 +110,13 @@ let assign_to_place (config : C.config) (rv : V.typed_value) (p : E.place) :
     assert (not (bottom_in_value ctx.ended_regions rv));
     (* Update the destination *)
     let ctx = write_place_unwrap config Write p rv ctx in
+    (* Debug *)
+    log#ldebug
+      (lazy
+        ("assign_to_place:" ^ "\n- rv: "
+        ^ typed_value_to_string ctx rv
+        ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Final context:\n"
+        ^ eval_ctx_to_string ctx));
     (* Continue *)
     cf ctx
   in
@@ -759,6 +772,10 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
         let cf_eval_rvalue = eval_rvalue config rvalue in
         (* Assign *)
         let cf_assign cf (res : (V.typed_value, eval_error) result) ctx =
+          log#ldebug
+            (lazy
+              ("about to assign to place: " ^ place_to_string ctx p
+             ^ "\n- Context:\n" ^ eval_ctx_to_string ctx));
           match res with
           | Error EPanic -> cf Panic ctx
           | Ok rv -> (

@@ -27,6 +27,8 @@ let aborrow_content_to_string = PA.aborrow_content_to_string
 
 let aloan_content_to_string = PA.aloan_content_to_string
 
+let aproj_to_string = PA.aproj_to_string
+
 let typed_value_to_string = PA.typed_value_to_string
 
 let typed_avalue_to_string = PA.typed_avalue_to_string

@@ -98,7 +98,7 @@ let () =
   expressions_log#set_level EL.Debug;
   expansion_log#set_level EL.Debug;
   borrows_log#set_level EL.Debug;
-  invariants_log#set_level EL.Debug;
+  invariants_log#set_level EL.Warning;
   symbolic_to_pure_log#set_level EL.Debug;
   pure_micro_passes_log#set_level EL.Debug;
   pure_to_extract_log#set_level EL.Debug;
@@ -121,6 +121,7 @@ let () =
         {
           C.check_invariants = true;
           greedy_expand_symbolics_with_borrows = true;
+          allow_bottom_below_borrow = true;
         }
       in
 

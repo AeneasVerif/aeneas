@@ -162,12 +162,30 @@ type config = {
           we need to expand an enumeration with strictly more than one variant)
           or if we need to expand a recursive type (because this leads to looping).
        *)
+  allow_bottom_below_borrow : bool;
+      (** Experimental.
+  
+          We sometimes want to temporarily break the invariant that there is no
+          bottom value below a borrow. If this value is true, we don't check
+          the invariant, and the rule becomes: we can't end a borrow *if* it contains
+          a bottom value. The consequence is that it becomes ok to temporarily
+          have bottom below a borrow, if we put something else inside before ending
+          the borrow.
+          
+          For instance, when evaluating an assignment, we move the value which
+          will be overwritten then do some administrative tasks with the borrows,
+          then move the rvalue to its destination. We currently want to be able
+          to check the invariants every time we end a borrow/an abstraction,
+          meaning at intermediate steps of the assignment where the invariants
+          might actually be broken.
+       *)
 }
 [@@deriving show]
 
 type partial_config = {
   check_invariants : bool;
   greedy_expand_symbolics_with_borrows : bool;
+  allow_bottom_below_borrow : bool;
 }
 (** See [config] *)
 
@@ -178,6 +196,7 @@ let config_of_partial (mode : interpreter_mode) (config : partial_config) :
     check_invariants = config.check_invariants;
     greedy_expand_symbolics_with_borrows =
       config.greedy_expand_symbolics_with_borrows;
+    allow_bottom_below_borrow = config.allow_bottom_below_borrow;
   }
 
 type type_context = {

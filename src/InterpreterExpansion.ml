@@ -637,6 +637,10 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
       cf ctx
     with FoundSymbolicValue sv ->
       (* Expand and recheck the environment *)
+      log#ldebug
+        (lazy
+          ("greedy_expand_symbolics_with_borrows: about to expand: "
+          ^ symbolic_value_to_string ctx sv));
       let cc : cm_fun =
         match sv.V.sv_ty with
         | T.Adt (AdtId def_id, _, _) ->

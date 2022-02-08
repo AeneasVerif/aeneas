@@ -1127,6 +1127,9 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
 and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
     (abs_id : V.AbstractionId.id) : cm_fun =
  fun cf ctx ->
+  log#ldebug
+    (lazy
+      ("end_abstraction_borrows: abs_id: " ^ V.AbstractionId.to_string abs_id));
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
@@ -1193,6 +1196,10 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
   with
   (* There are concrete (i.e., not symbolic) borrows: end them, then reexplore *)
   | FoundABorrowContent bc ->
+      log#ldebug
+        (lazy
+          ("end_abstraction_borrows: found aborrow content: "
+          ^ aborrow_content_to_string ctx bc));
       let ctx =
         match bc with
         | V.AMutBorrow (_, bid, av) ->
@@ -1242,6 +1249,10 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       end_abstraction_borrows config chain abs_id cf ctx
   (* There are symbolic borrows: end them, then reexplore *)
   | FoundAProjBorrows (sv, proj_ty) ->
+      log#ldebug
+        (lazy
+          ("end_abstraction_borrows: found aproj borrows: "
+          ^ aproj_to_string ctx (V.AProjBorrows (sv, proj_ty))));
       (* Generate a fresh symbolic value *)
       let nsv = mk_fresh_symbolic_value V.FunCallGivenBack proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
@@ -1255,6 +1266,10 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       end_abstraction_borrows config chain abs_id cf ctx
   (* There are concrete (i.e., not symbolic) borrows in shared values: end them, then reexplore *)
   | FoundBorrowContent bc ->
+      log#ldebug
+        (lazy
+          ("end_abstraction_borrows: found borrow content: "
+          ^ borrow_content_to_string ctx bc));
       let ctx =
         match bc with
         | V.SharedBorrow (_, bid) -> (

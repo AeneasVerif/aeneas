@@ -1138,6 +1138,10 @@ module EvalCtxCfimAst = struct
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     PV.aloan_content_to_string fmt lc
 
+  let aproj_to_string (ctx : C.eval_ctx) (p : V.aproj) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PV.aproj_to_string fmt p
+
   let symbolic_value_to_string (ctx : C.eval_ctx) (sv : V.symbolic_value) :
       string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in

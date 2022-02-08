@@ -783,6 +783,10 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
 let prepare_lplace (config : C.config) (end_borrows : bool) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
+  log#ldebug
+    (lazy
+      ("prepare_lplace:" ^ "\n- p: " ^ place_to_string ctx p
+     ^ "\n- Initial context:\n" ^ eval_ctx_to_string ctx));
   (* Access the place *)
   let access = Write in
   let cc = update_ctx_along_write_place config access p in
