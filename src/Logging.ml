@@ -15,6 +15,9 @@ let pre_passes_log = L.get_logger "MainLogger.PrePasses"
 (** Logger for Translate *)
 let translate_log = L.get_logger "MainLogger.Translate"
 
+(** Logger for PureUtils *)
+let pure_utils_log = L.get_logger "MainLogger.PureUtils"
+
 (** Logger for SymbolicToPure *)
 let symbolic_to_pure_log = L.get_logger "MainLogger.SymbolicToPure"
 

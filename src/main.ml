@@ -92,6 +92,7 @@ let () =
    * command-line arguments *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
   main_log#set_level EL.Debug;
+  pre_passes_log#set_level EL.Debug;
   interpreter_log#set_level EL.Debug;
   statements_log#set_level EL.Debug;
   paths_log#set_level EL.Debug;
@@ -99,6 +100,7 @@ let () =
   expansion_log#set_level EL.Debug;
   borrows_log#set_level EL.Debug;
   invariants_log#set_level EL.Warning;
+  pure_utils_log#set_level EL.Debug;
   symbolic_to_pure_log#set_level EL.Debug;
   pure_micro_passes_log#set_level EL.Debug;
   pure_to_extract_log#set_level EL.Debug;

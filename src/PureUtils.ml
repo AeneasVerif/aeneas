@@ -1,5 +1,8 @@
 open Pure
 
+(** Default logger *)
+let log = Logging.pure_utils_log
+
 type regular_fun_id = A.fun_id * T.RegionGroupId.id option
 [@@deriving show, ord]
 (** We use this type as a key for lookups *)
@@ -270,7 +273,6 @@ module TypeCheck = struct
   let check_adt_g_value (ctx : tc_ctx) (check_value : ty -> 'v -> unit)
       (variant_id : VariantId.id option) (field_values : 'v list) (ty : ty) :
       unit =
-    (*    let field_values = List.map value_to_string field_values in *)
     (* Retrieve the field types *)
     let field_tys =
       match ty with
@@ -312,17 +314,23 @@ module TypeCheck = struct
       (List.combine field_tys field_values)
 
   let rec check_typed_lvalue (ctx : tc_ctx) (v : typed_lvalue) : unit =
+    log#ldebug (lazy ("check_typed_lvalue: " ^ show_typed_lvalue v));
     match v.value with
     | LvConcrete cv -> check_constant_value v.ty cv
     | LvVar _ -> ()
     | LvAdt av ->
         check_adt_g_value ctx
           (fun ty (v : typed_lvalue) ->
-            assert (ty = v.ty);
+            if ty <> v.ty then (
+              log#serror
+                ("check_typed_lvalue: not the same types:" ^ "\n- ty: "
+               ^ show_ty ty ^ "\n- v.ty: " ^ show_ty v.ty);
+              raise (Failure "Inconsistent types"));
             check_typed_lvalue ctx v)
           av.variant_id av.field_values v.ty
 
   let rec check_typed_rvalue (ctx : tc_ctx) (v : typed_rvalue) : unit =
+    log#ldebug (lazy ("check_typed_rvalue: " ^ show_typed_rvalue v));
     match v.value with
     | RvConcrete cv -> check_constant_value v.ty cv
     | RvPlace _ ->
@@ -331,7 +339,11 @@ module TypeCheck = struct
     | RvAdt av ->
         check_adt_g_value ctx
           (fun ty (v : typed_rvalue) ->
-            assert (ty = v.ty);
+            if ty <> v.ty then (
+              log#serror
+                ("check_typed_rvalue: not the same types:" ^ "\n- ty: "
+               ^ show_ty ty ^ "\n- v.ty: " ^ show_ty v.ty);
+              raise (Failure "Inconsistent types"));
             check_typed_rvalue ctx v)
           av.variant_id av.field_values v.ty
 end

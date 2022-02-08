@@ -200,7 +200,10 @@ let rec translate_sty (ty : T.sty) : ty =
       | T.Tuple -> mk_simpl_tuple_ty tys
       | T.Assumed aty -> (
           match aty with
-          | T.Box | T.Vec | T.Option -> (
+          | T.Vec -> Adt (Assumed Vec, tys)
+          | T.Option -> Adt (Assumed Option, tys)
+          | T.Box -> (
+              (* Eliminate the boxes *)
               match tys with
               | [ ty ] -> ty
               | _ ->
@@ -265,17 +268,25 @@ let rec translate_fwd_ty (types_infos : TA.type_infos) (ty : 'r T.ty) : ty =
       assert (regions = []);
       (* Translate the type parameters *)
       let t_tys = List.map translate tys in
-      (* Eliminate boxes *)
+      (* Eliminate boxes and simplify tuples *)
       match type_id with
-      | AdtId adt_id ->
+      | AdtId _ | T.Assumed (T.Vec | T.Option) ->
           (* No general parametricity for now *)
           assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
-          Adt (AdtId adt_id, t_tys)
+          let type_id =
+            match type_id with
+            | AdtId adt_id -> AdtId adt_id
+            | T.Assumed T.Vec -> Assumed Vec
+            | T.Assumed T.Option -> Assumed Option
+            | _ -> raise (Failure "Unreachable")
+          in
+          Adt (type_id, t_tys)
       | Tuple ->
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
              identity *)
           mk_simpl_tuple_ty t_tys
-      | T.Assumed (T.Box | T.Vec | T.Option) -> (
+      | T.Assumed T.Box -> (
+          (* We eliminate boxes *)
           (* No general parametricity for now *)
           assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
           match t_tys with
@@ -317,20 +328,21 @@ let rec translate_back_ty (types_infos : TA.type_infos)
   match ty with
   | T.Adt (type_id, _, tys) -> (
       match type_id with
-      | T.AdtId _ ->
+      | T.AdtId _ | Assumed (T.Vec | T.Option) ->
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows types_infos ty));
           let type_id =
             match type_id with
             | T.AdtId id -> AdtId id
-            | T.Tuple | T.Assumed (T.Box | T.Vec | T.Option) ->
-                failwith "Unreachable"
+            | T.Assumed T.Vec -> Assumed Vec
+            | T.Assumed T.Option -> Assumed Option
+            | T.Tuple | T.Assumed T.Box -> failwith "Unreachable"
           in
           if inside_mut then
             let tys_t = List.filter_map translate tys in
             Some (Adt (type_id, tys_t))
           else None
-      | Assumed (T.Box | T.Vec | T.Option) -> (
+      | Assumed T.Box -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows types_infos ty));
           (* Eliminate the box *)
@@ -576,10 +588,15 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
   let value =
     match v.value with
     | V.Concrete cv -> RvConcrete cv
-    | Adt av ->
+    | Adt av -> (
         let variant_id = av.variant_id in
         let field_values = List.map translate av.field_values in
-        RvAdt { variant_id; field_values }
+        (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
+        match v.ty with
+        | T.Adt (T.Tuple, _, _) ->
+            assert (variant_id = None);
+            (mk_simpl_tuple_rvalue field_values).value
+        | _ -> RvAdt { variant_id; field_values })
     | Bottom -> failwith "Unreachable"
     | Loan lc -> (
         match lc with
@@ -601,6 +618,11 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
   in
   let ty = ctx_translate_fwd_ty ctx v.ty in
   let value = { value; ty } in
+  (* Debugging *)
+  log#ldebug
+    (lazy
+      ("typed_value_to_rvalue: result:" ^ "\n- input:\n" ^ V.show_typed_value v
+     ^ "\n- typed rvalue:\n" ^ show_typed_rvalue value));
   (* Sanity check *)
   type_check_rvalue ctx value;
   (* Return *)
