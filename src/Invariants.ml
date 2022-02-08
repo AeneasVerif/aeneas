@@ -442,11 +442,19 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
               fields_with_types
         (* Assumed type case *)
         | V.Adt av, T.Adt (T.Assumed aty_id, regions, tys) -> (
-            assert (av.V.variant_id = None);
+            assert (av.V.variant_id = None || aty_id = T.Option);
             match (aty_id, av.V.field_values, regions, tys) with
             (* Box *)
-            | T.Box, [ boxed_value ], [], [ boxed_ty ] ->
-                assert (boxed_value.V.ty = boxed_ty)
+            | T.Box, [ inner_value ], [], [ inner_ty ]
+            | T.Option, [ inner_value ], [], [ inner_ty ] ->
+                assert (inner_value.V.ty = inner_ty)
+            | T.Option, _, [], [ _ ] ->
+                (* Option::None: nothing to check *)
+                ()
+            | T.Vec, fvs, [], [ vec_ty ] ->
+                List.iter
+                  (fun (v : V.typed_value) -> assert (v.ty = vec_ty))
+                  fvs
             | _ -> failwith "Erroneous type")
         | V.Bottom, _ -> (* Nothing to check *) ()
         | V.Borrow bc, T.Ref (_, ref_ty, rkind) -> (
