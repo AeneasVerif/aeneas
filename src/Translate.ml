@@ -371,9 +371,18 @@ let translate_module (filename : string) (dest_dir : string)
   let export_functions (is_rec : bool) (pure_ls : pure_fun_translation list) :
       unit =
     (* Generate the function definitions *)
-    let is_mut_rec = is_rec && pure_ls <> [] in
     let fls =
       List.concat (List.map (fun (fwd, back_ls) -> fwd :: back_ls) pure_ls)
+    in
+    (* Check if the functions are mutually recursive - this really works
+     * to check if the forward and backward translations of a single
+     * recursive function are mutually recursive *)
+    let is_mut_rec =
+      if is_rec then
+        if List.length pure_ls <= 1 then
+          not (PureUtils.functions_not_mutually_recursive fls)
+        else true
+      else false
     in
     List.iteri
       (fun i def ->
