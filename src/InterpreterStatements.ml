@@ -200,6 +200,12 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
 let set_discriminant (config : C.config) (p : E.place)
     (variant_id : T.VariantId.id) : st_cm_fun =
  fun cf ctx ->
+  log#ldebug
+    (lazy
+      ("set_discriminant:" ^ "\n- p: " ^ place_to_string ctx p
+     ^ "\n- variant id: "
+      ^ T.VariantId.to_string variant_id
+      ^ "\n- initial context:\n" ^ eval_ctx_to_string ctx));
   (* Access the value *)
   let access = Write in
   let cc = update_ctx_along_read_place config access p in
@@ -236,10 +242,18 @@ let set_discriminant (config : C.config) (p : E.place)
                 | _ -> raise (Failure "Unreachable")
               in
               assign_to_place config bottom_v p (cf Unit) ctx)
-    | T.Adt (T.AdtId def_id, regions, types), V.Bottom ->
+    | ( T.Adt (((T.AdtId _ | T.Assumed T.Option) as type_id), regions, types),
+        V.Bottom ) ->
         let bottom_v =
-          compute_expanded_bottom_adt_value ctx.type_context.type_defs def_id
-            (Some variant_id) regions types
+          match type_id with
+          | T.AdtId def_id ->
+              compute_expanded_bottom_adt_value ctx.type_context.type_defs
+                def_id (Some variant_id) regions types
+          | T.Assumed T.Option ->
+              assert (regions = []);
+              compute_expanded_bottom_option_value variant_id
+                (Collections.List.to_cons_nil types)
+          | _ -> raise (Failure "Unreachable")
         in
         assign_to_place config bottom_v p (cf Unit) ctx
     | _, V.Symbolic _ ->
