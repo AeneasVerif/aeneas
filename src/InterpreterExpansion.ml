@@ -247,6 +247,17 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
   (* Initialize all the expanded values of all the variants *)
   List.map initialize variants_fields_types
 
+(** Compute the expansion of an Option value.
+ *)
+let compute_expanded_symbolic_option_value (expand_enumerations : bool)
+    (kind : V.sv_kind) (ty : T.rty) : V.symbolic_expansion list =
+  assert expand_enumerations;
+  let some_se =
+    V.SeAdt (Some T.option_some_id, [ mk_fresh_symbolic_value kind ty ])
+  in
+  let none_se = V.SeAdt (Some T.option_none_id, []) in
+  [ none_se; some_se ]
+
 let compute_expanded_symbolic_tuple_value (kind : V.sv_kind)
     (field_types : T.rty list) : V.symbolic_expansion =
   (* Generate the field values *)
@@ -481,6 +492,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
   let cc : cm_fun =
    fun cf ctx ->
     match rty with
+    (* TODO: I think it is possible to factorize a lot the below match *)
     (* "Regular" ADTs *)
     | T.Adt (T.AdtId def_id, regions, types) ->
         (* Compute the expanded value *)
@@ -488,6 +500,22 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
           compute_expanded_symbolic_adt_value allow_branching sp.sv_kind def_id
             regions types ctx
         in
+        (* Check for branching *)
+        assert (List.length seel <= 1 || allow_branching);
+        (* Apply *)
+        let seel = List.map (fun see -> (Some see, cf)) seel in
+        apply_branching_symbolic_expansions_non_borrow config original_sv
+          original_sv_place seel ctx
+    (* Options *)
+    | T.Adt (T.Assumed Option, regions, types) ->
+        (* Sanity check *)
+        assert (regions = []);
+        let ty = Collections.List.to_cons_nil types in
+        (* Compute the expanded value *)
+        let seel =
+          compute_expanded_symbolic_option_value allow_branching sp.sv_kind ty
+        in
+
         (* Check for branching *)
         assert (List.length seel <= 1 || allow_branching);
         (* Apply *)
