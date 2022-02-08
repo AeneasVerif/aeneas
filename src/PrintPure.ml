@@ -129,7 +129,8 @@ let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
   | AdtId id -> fmt.type_def_id_to_string id
   | Tuple -> ""
-  | Assumed aty -> ( match aty with Result -> "Result")
+  | Assumed aty -> (
+      match aty with Result -> "Result" | Option -> "Option" | Vec -> "Vec")
 
 let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
   match ty with

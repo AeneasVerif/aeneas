@@ -33,6 +33,8 @@ let typed_value_to_string = PA.typed_value_to_string
 
 let typed_avalue_to_string = PA.typed_avalue_to_string
 
+let operand_constant_value_to_string = PA.operand_constant_value_to_string
+
 let place_to_string = PA.place_to_string
 
 let operand_to_string = PA.operand_to_string

@@ -366,7 +366,7 @@ let rec operand_constant_value_of_json (js : json) :
     (E.operand_constant_value, string) result =
   combine_error_msgs js "operand_constant_value_of_json"
     (match js with
-    | `Assoc [ ("ConstantValue", cv) ] ->
+    | `Assoc [ ("ConstantValue", `List [ cv ]) ] ->
         let* cv = constant_value_of_json cv in
         Ok (E.ConstantValue cv)
     | `Assoc [ ("ConstantAdt", `List [ variant_id; field_values ]) ] ->

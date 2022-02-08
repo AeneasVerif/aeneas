@@ -287,92 +287,98 @@ type extraction_ctx = {
     functions, etc.
  *)
 
+(** Debugging function *)
+let id_to_string (id : id) (ctx : extraction_ctx) : string =
+  let fun_defs = ctx.trans_ctx.fun_context.fun_defs in
+  let type_defs = ctx.trans_ctx.type_context.type_defs in
+  (* TODO: factorize the pretty-printing with what is in PrintPure *)
+  let get_type_name (id : type_id) : string =
+    match id with
+    | AdtId id ->
+        let def = TypeDefId.Map.find id type_defs in
+        Print.name_to_string def.name
+    | Assumed aty -> show_assumed_ty aty
+    | Tuple -> failwith "Unreachable"
+  in
+  match id with
+  | FunId (fid, rg_id) ->
+      let fun_name =
+        match fid with
+        | A.Local fid ->
+            Print.name_to_string (FunDefId.Map.find fid fun_defs).name
+        | A.Assumed aid -> A.show_assumed_fun_id aid
+      in
+      let fun_kind =
+        match rg_id with
+        | None -> "forward"
+        | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
+      in
+      "fun name (" ^ fun_kind ^ "): " ^ fun_name
+  | TypeId id -> "type name: " ^ get_type_name id
+  | StructId id -> "struct constructor of: " ^ get_type_name id
+  | VariantId (id, variant_id) ->
+      let variant_name =
+        match id with
+        | Tuple -> failwith "Unreachable"
+        | Assumed Result ->
+            if variant_id = result_return_id then "@result::Return"
+            else if variant_id = result_fail_id then "@result::Fail"
+            else failwith "Unreachable"
+        | Assumed Option ->
+            if variant_id = option_some_id then "@option::Some"
+            else if variant_id = option_none_id then "@option::None"
+            else failwith "Unreachable"
+        | Assumed Vec -> failwith "Unreachable"
+        | AdtId id -> (
+            let def = TypeDefId.Map.find id type_defs in
+            match def.kind with
+            | Struct _ -> failwith "Unreachable"
+            | Enum variants ->
+                let variant = VariantId.nth variants variant_id in
+                Print.name_to_string def.name ^ "::" ^ variant.variant_name)
+      in
+      "variant name: " ^ variant_name
+  | FieldId (id, field_id) ->
+      let field_name =
+        match id with
+        | Tuple -> failwith "Unreachable"
+        | Assumed (Result | Option) -> failwith "Unreachable"
+        | Assumed Vec ->
+            (* We can't directly have access to the fields of a vector *)
+            failwith "Unreachable"
+        | AdtId id -> (
+            let def = TypeDefId.Map.find id type_defs in
+            match def.kind with
+            | Enum _ -> failwith "Unreachable"
+            | Struct fields ->
+                let field = FieldId.nth fields field_id in
+                let field_name =
+                  match field.field_name with
+                  | None -> FieldId.to_string field_id
+                  | Some name -> name
+                in
+                Print.name_to_string def.name ^ "." ^ field_name)
+      in
+      "field name: " ^ field_name
+  | UnknownId -> "keyword"
+  | TypeVarId _ | VarId _ ->
+      (* We should never get there: we add indices to make sure variable
+       * names are unique *)
+      failwith "Unreachable"
+
 let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   (* The id_to_string function to print nice debugging messages if there are
    * collisions *)
-  let id_to_string (id : id) : string =
-    let fun_defs = ctx.trans_ctx.fun_context.fun_defs in
-    let type_defs = ctx.trans_ctx.type_context.type_defs in
-    (* TODO: factorize the pretty-printing with what is in PrintPure *)
-    let get_type_name (id : type_id) : string =
-      match id with
-      | AdtId id ->
-          let def = TypeDefId.Map.find id type_defs in
-          Print.name_to_string def.name
-      | Assumed aty -> show_assumed_ty aty
-      | Tuple -> failwith "Unreachable"
-    in
-    match id with
-    | FunId (fid, rg_id) ->
-        let fun_name =
-          match fid with
-          | A.Local fid ->
-              Print.name_to_string (FunDefId.Map.find fid fun_defs).name
-          | A.Assumed aid -> A.show_assumed_fun_id aid
-        in
-        let fun_kind =
-          match rg_id with
-          | None -> "forward"
-          | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
-        in
-        "fun name (" ^ fun_kind ^ "): " ^ fun_name
-    | TypeId id -> "type name: " ^ get_type_name id
-    | StructId id -> "struct constructor of: " ^ get_type_name id
-    | VariantId (id, variant_id) ->
-        let variant_name =
-          match id with
-          | Tuple -> failwith "Unreachable"
-          | Assumed Result ->
-              if variant_id = result_return_id then "@result::Return"
-              else if variant_id = result_fail_id then "@result::Fail"
-              else failwith "Unreachable"
-          | Assumed Option ->
-              if variant_id = option_some_id then "@option::Some"
-              else if variant_id = option_none_id then "@option::None"
-              else failwith "Unreachable"
-          | Assumed Vec -> failwith "Unreachable"
-          | AdtId id -> (
-              let def = TypeDefId.Map.find id type_defs in
-              match def.kind with
-              | Struct _ -> failwith "Unreachable"
-              | Enum variants ->
-                  let variant = VariantId.nth variants variant_id in
-                  Print.name_to_string def.name ^ "::" ^ variant.variant_name)
-        in
-        "variant name: " ^ variant_name
-    | FieldId (id, field_id) ->
-        let field_name =
-          match id with
-          | Tuple -> failwith "Unreachable"
-          | Assumed (Result | Option) -> failwith "Unreachable"
-          | Assumed Vec ->
-              (* We can't directly have access to the fields of a vector *)
-              failwith "Unreachable"
-          | AdtId id -> (
-              let def = TypeDefId.Map.find id type_defs in
-              match def.kind with
-              | Enum _ -> failwith "Unreachable"
-              | Struct fields ->
-                  let field = FieldId.nth fields field_id in
-                  let field_name =
-                    match field.field_name with
-                    | None -> FieldId.to_string field_id
-                    | Some name -> name
-                  in
-                  Print.name_to_string def.name ^ "." ^ field_name)
-        in
-        "field name: " ^ field_name
-    | UnknownId -> "keyword"
-    | TypeVarId _ | VarId _ ->
-        (* We should never get there: we add indices to make sure variable
-         * names are unique *)
-        failwith "Unreachable"
-  in
+  let id_to_string (id : id) : string = id_to_string id ctx in
   let names_map = names_map_add id_to_string id name ctx.names_map in
   { ctx with names_map }
 
 let ctx_get (id : id) (ctx : extraction_ctx) : string =
-  IdMap.find id ctx.names_map.id_to_name
+  match IdMap.find_opt id ctx.names_map.id_to_name with
+  | Some s -> s
+  | None ->
+      log#serror ("Could not find: " ^ id_to_string id ctx);
+      raise Not_found
 
 let ctx_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
@@ -484,6 +490,12 @@ let ctx_add_variants (def : type_def) (variants : (VariantId.id * variant) list)
   List.fold_left_map
     (fun ctx (vid, v) -> ctx_add_variant def vid v ctx)
     ctx variants
+
+let ctx_add_struct (def : type_def) (ctx : extraction_ctx) :
+    extraction_ctx * string =
+  let name = ctx.fmt.struct_constructor def.name in
+  let ctx = ctx_add (StructId (AdtId def.def_id)) name ctx in
+  (ctx, name)
 
 let ctx_add_fun_def (def : fun_def) (ctx : extraction_ctx) : extraction_ctx =
   (* Lookup the CFIM def to compute the region group information *)

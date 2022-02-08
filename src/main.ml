@@ -95,7 +95,7 @@ let () =
   interpreter_log#set_level EL.Debug;
   statements_log#set_level EL.Debug;
   paths_log#set_level EL.Warning;
-  expressions_log#set_level EL.Warning;
+  expressions_log#set_level EL.Debug;
   expansion_log#set_level EL.Warning;
   borrows_log#set_level EL.Warning;
   invariants_log#set_level EL.Warning;

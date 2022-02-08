@@ -75,16 +75,26 @@ let rec operand_constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
     (cv : E.operand_constant_value) : V.typed_value =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
+  log#ldebug
+    (lazy
+      ("operand_constant_value_to_typed_value:" ^ "\n- ty: "
+     ^ ety_to_string ctx ty ^ "\n- cv: "
+      ^ operand_constant_value_to_string ctx cv));
   match (ty, cv) with
   (* Adt *)
-  | ( T.Adt (T.AdtId def_id, region_params, type_params),
+  | ( T.Adt (adt_id, region_params, type_params),
       ConstantAdt (variant_id, field_values) ) ->
       assert (region_params = []);
       (* Compute the types of the fields *)
-      let def = C.ctx_lookup_type_def ctx def_id in
-      assert (def.region_params = []);
       let field_tys =
-        Subst.type_def_get_instantiated_field_etypes def variant_id type_params
+        match adt_id with
+        | T.AdtId def_id ->
+            let def = C.ctx_lookup_type_def ctx def_id in
+            assert (def.region_params = []);
+            Subst.type_def_get_instantiated_field_etypes def variant_id
+              type_params
+        | T.Tuple -> type_params
+        | T.Assumed _ -> failwith "Unreachable"
       in
       (* Compute the field values *)
       let field_values =

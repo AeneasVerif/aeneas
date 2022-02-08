@@ -95,7 +95,7 @@ let fstar_keywords =
   List.concat [ named_unops; named_binops; misc ]
 
 let fstar_assumed_adts : (assumed_ty * string) list =
-  [ (Result, "result"); (Option, "option") ]
+  [ (Result, "result"); (Option, "option"); (Vec, "vec") ]
 
 let fstar_assumed_structs : (assumed_ty * string) list = []
 
@@ -397,7 +397,13 @@ let extract_type_def_register_names (ctx : extraction_ctx) (def : type_def) :
   let ctx =
     match def.kind with
     | Struct fields ->
-        fst (ctx_add_fields def (FieldId.mapi (fun id f -> (id, f)) fields) ctx)
+        (* Add the fields *)
+        let ctx =
+          fst
+            (ctx_add_fields def (FieldId.mapi (fun id f -> (id, f)) fields) ctx)
+        in
+        (* Add the constructor name *)
+        fst (ctx_add_struct def ctx)
     | Enum variants ->
         fst
           (ctx_add_variants def

@@ -1142,6 +1142,11 @@ module EvalCtxCfimAst = struct
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     PV.typed_avalue_to_string fmt v
 
+  let operand_constant_value_to_string (ctx : C.eval_ctx)
+      (cv : E.operand_constant_value) : string =
+    let fmt = PA.eval_ctx_to_ast_formatter ctx in
+    PA.operand_constant_value_to_string fmt cv
+
   let place_to_string (ctx : C.eval_ctx) (op : E.place) : string =
     let fmt = PA.eval_ctx_to_ast_formatter ctx in
     PA.place_to_string fmt op
