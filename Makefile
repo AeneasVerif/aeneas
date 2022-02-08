@@ -14,7 +14,7 @@ build:
 # Build the project and run the executable
 .PHONY: build-run
 build-run: build
-	dune exec -- src/main.exe $(CFIM_TEST_FILE1) -dest $(DEST_DIR) > tests/trace_current.txt
+	dune exec -- src/main.exe $(CFIM_TEST_FILE1) -dest $(DEST_DIR) -test-units -test-trans-units > tests/trace_current.txt
 
 # Build the project and run the executable, then check that the behaviour
 # of the interpreter didn't change by comparing the newly generated trace

@@ -55,8 +55,8 @@ let () =
         " Test the unit functions with the concrete interpreter" );
       ( "-test-trans-units",
         Arg.Set test_trans_units,
-        " Test the translated unit functions with the target theorem prover's \
-         normalizer" );
+        " Test the translated unit functions with the target theorem\n\
+        \                        prover's normalizer" );
     ]
   in
   let spec = Arg.align spec in
