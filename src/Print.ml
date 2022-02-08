@@ -274,6 +274,16 @@ module Values = struct
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
+            | Option, _ ->
+                if av.variant_id = Some T.option_some_id then
+                  "@Option::Some("
+                  ^ Collections.List.to_cons_nil field_values
+                  ^ ")"
+                else if av.variant_id = Some T.option_none_id then (
+                  assert (field_values = []);
+                  "@Option::None")
+                else failwith "Unreachable"
+            | Vec, _ -> "@Vec[" ^ String.concat ", " field_values ^ "]"
             | _ -> failwith "Inconsistent value")
         | _ -> failwith "Inconsistent typed value")
     | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
