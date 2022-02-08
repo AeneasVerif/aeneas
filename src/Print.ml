@@ -68,7 +68,11 @@ module Types = struct
     match id with
     | T.AdtId id -> fmt.type_def_id_to_string id
     | T.Tuple -> ""
-    | T.Assumed aty -> ( match aty with Box -> "std::boxed::Box")
+    | T.Assumed aty -> (
+        match aty with
+        | Box -> "alloc::boxed::Box"
+        | Vec -> "alloc::vec::Vec"
+        | Option -> "core::option::Option")
 
   let rec ty_to_string (fmt : 'r type_formatter) (ty : 'r T.ty) : string =
     match ty with
@@ -726,6 +730,10 @@ module CfimAst = struct
         match pe with
         | E.Deref -> "*(" ^ s ^ ")"
         | E.DerefBox -> "deref_box(" ^ s ^ ")"
+        | E.Field (E.ProjOption variant_id, fid) ->
+            assert (variant_id == T.option_some_id);
+            assert (fid == T.FieldId.zero);
+            "(" ^ s ^ "as Option::Some)." ^ T.FieldId.to_string fid
         | E.Field (E.ProjTuple _, fid) ->
             "(" ^ s ^ ")." ^ T.FieldId.to_string fid
         | E.Field (E.ProjAdt (adt_id, opt_variant_id), fid) -> (
@@ -768,18 +776,38 @@ module CfimAst = struct
     | E.Shl -> "<<"
     | E.Shr -> ">>"
 
-  let operand_constant_value_to_string (fmt : ast_formatter)
+  let rec operand_constant_value_to_string (fmt : ast_formatter)
       (cv : E.operand_constant_value) : string =
     match cv with
     | E.ConstantValue cv -> PV.constant_value_to_string cv
-    | E.ConstantAdt def_id -> fmt.type_def_id_to_string def_id
-    | E.Unit -> "()"
+    | E.ConstantAdt (variant_id, field_values) ->
+        (* This is a bit annoying, because we don't have context information
+         * to convert the ADT to a value, so we do the best we can in the
+         * simplest manner. Anyway, those printing utilitites are only used
+         * for debugging, and complex constant values are not common.
+         * We might want to store type information in the operand constant values
+         * in the future.
+         *)
+        let variant_id = option_to_string T.VariantId.to_string variant_id in
+        let field_values =
+          List.map (operand_constant_value_to_string fmt) field_values
+        in
+        "ConstantAdt " ^ variant_id ^ " {"
+        ^ String.concat ", " field_values
+        ^ "}"
 
   let operand_to_string (fmt : ast_formatter) (op : E.operand) : string =
     match op with
     | E.Copy p -> "copy " ^ place_to_string fmt p
     | E.Move p -> "move " ^ place_to_string fmt p
-    | E.Constant (_ty, cv) -> operand_constant_value_to_string fmt cv
+    | E.Constant (ty, cv) ->
+        (* For clarity, we also print the typing information: see the comment in
+         * [operand_constant_value_to_string] *)
+        "("
+        ^ operand_constant_value_to_string fmt cv
+        ^ " : "
+        ^ PT.ety_to_string (ast_to_etype_formatter fmt) ty
+        ^ ")"
 
   let rvalue_to_string (fmt : ast_formatter) (rv : E.rvalue) : string =
     match rv with
@@ -856,12 +884,23 @@ module CfimAst = struct
           | A.Local fid -> fmt.fun_def_id_to_string fid ^ params
           | A.Assumed fid -> (
               match fid with
+              | A.Replace -> "core::mem::replace" ^ params
               | A.BoxNew -> "alloc::boxed::Box" ^ params ^ "::new"
               | A.BoxDeref ->
                   "core::ops::deref::Deref<Box" ^ params ^ ">::deref"
               | A.BoxDerefMut ->
                   "core::ops::deref::DerefMut" ^ params ^ "::deref_mut"
-              | A.BoxFree -> "alloc::alloc::box_free" ^ params)
+              | A.BoxFree -> "alloc::alloc::box_free" ^ params
+              | A.VecNew -> "alloc::vec::Vec" ^ params ^ "::new"
+              | A.VecPush -> "alloc::vec::Vec" ^ params ^ "::push"
+              | A.VecInsert -> "alloc::vec::Vec" ^ params ^ "::insert"
+              | A.VecLen -> "alloc::vec::Vec" ^ params ^ "::len"
+              | A.VecIndex ->
+                  "core::ops::index::Index<alloc::vec::Vec" ^ params
+                  ^ ">::index"
+              | A.VecIndexMut ->
+                  "core::ops::index::IndexMut<alloc::vec::Vec" ^ params
+                  ^ ">::index_mut")
         in
         let dest = place_to_string fmt call.A.dest in
         indent ^ dest ^ " := move " ^ name_params ^ args

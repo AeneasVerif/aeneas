@@ -362,17 +362,19 @@ let binop_of_json (js : json) : (E.binop, string) result =
   | `String "Shr" -> Ok E.Shr
   | _ -> Error ("binop_of_json failed on:" ^ show js)
 
-let operand_constant_value_of_json (js : json) :
+let rec operand_constant_value_of_json (js : json) :
     (E.operand_constant_value, string) result =
   combine_error_msgs js "operand_constant_value_of_json"
     (match js with
     | `Assoc [ ("ConstantValue", cv) ] ->
         let* cv = constant_value_of_json cv in
         Ok (E.ConstantValue cv)
-    | `Assoc [ ("ConstantAdt", id) ] ->
-        let* id = T.TypeDefId.id_of_json id in
-        Ok (E.ConstantAdt id)
-    | `String "Unit" -> Ok E.Unit
+    | `Assoc [ ("ConstantAdt", `List [ variant_id; field_values ]) ] ->
+        let* variant_id = option_of_json T.VariantId.id_of_json variant_id in
+        let* field_values =
+          list_of_json operand_constant_value_of_json field_values
+        in
+        Ok (E.ConstantAdt (variant_id, field_values))
     | _ -> Error "")
 
 let operand_of_json (js : json) : (E.operand, string) result =

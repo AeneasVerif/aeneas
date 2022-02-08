@@ -43,7 +43,10 @@ let ty_as_custom_adt (ty : 'r ty) : TypeDefId.id * 'r list * 'r ty list =
   | _ -> failwith "Unreachable"
 
 (** The unit type *)
-let mk_unit_ty : ety = Adt (Tuple, [], [])
+let mk_unit_ty : 'r ty = Adt (Tuple, [], [])
+
+(** The usize type *)
+let mk_usize_ty : 'r ty = Integer Usize
 
 (** Deconstruct a type of the form `Box<T>` to retrieve the `T` inside *)
 let ty_get_box (box_ty : ety) : ety =
@@ -64,6 +67,9 @@ let mk_ref_ty (r : 'r) (ty : 'r ty) (ref_kind : ref_kind) : 'r ty =
 
 (** Make a box type *)
 let mk_box_ty (ty : 'r ty) : 'r ty = Adt (Assumed Box, [], [ ty ])
+
+(** Make a vec type *)
+let mk_vec_ty (ty : 'r ty) : 'r ty = Adt (Assumed Vec, [], [ ty ])
 
 (** Check if a region is in a set of regions *)
 let region_in_set (r : RegionId.id region) (rset : RegionId.Set.t) : bool =

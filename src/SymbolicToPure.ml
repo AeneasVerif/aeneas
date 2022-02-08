@@ -184,10 +184,14 @@ let rec translate_sty (ty : T.sty) : ty =
       match type_id with
       | T.AdtId adt_id -> Adt (AdtId adt_id, tys)
       | T.Tuple -> mk_simpl_tuple_ty tys
-      | T.Assumed T.Box -> (
-          match tys with
-          | [ ty ] -> ty
-          | _ -> failwith "Box type with incorrect number of arguments"))
+      | T.Assumed aty -> (
+          match aty with
+          | T.Box | T.Vec | T.Option -> (
+              match tys with
+              | [ ty ] -> ty
+              | _ ->
+                  failwith
+                    "Box/vec/option type with incorrect number of arguments")))
   | TypeVar vid -> TypeVar vid
   | Bool -> Bool
   | Char -> Char
@@ -257,13 +261,15 @@ let rec translate_fwd_ty (types_infos : TA.type_infos) (ty : 'r T.ty) : ty =
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
              identity *)
           mk_simpl_tuple_ty t_tys
-      | T.Assumed T.Box -> (
+      | T.Assumed (T.Box | T.Vec | T.Option) -> (
           (* No general parametricity for now *)
           assert (not (List.exists (TypesUtils.ty_has_borrows types_infos) tys));
           match t_tys with
           | [ bty ] -> bty
           | _ ->
-              failwith "Unreachable: boxes receive exactly one type parameter"))
+              failwith
+                "Unreachable: box/vec/option receives exactly one type \
+                 parameter"))
   | TypeVar vid -> TypeVar vid
   | Bool -> Bool
   | Char -> Char
@@ -303,13 +309,14 @@ let rec translate_back_ty (types_infos : TA.type_infos)
           let type_id =
             match type_id with
             | T.AdtId id -> AdtId id
-            | T.Tuple | T.Assumed T.Box -> failwith "Unreachable"
+            | T.Tuple | T.Assumed (T.Box | T.Vec | T.Option) ->
+                failwith "Unreachable"
           in
           if inside_mut then
             let tys_t = List.filter_map translate tys in
             Some (Adt (type_id, tys_t))
           else None
-      | Assumed T.Box -> (
+      | Assumed (T.Box | T.Vec | T.Option) -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows types_infos ty));
           (* Eliminate the box *)
@@ -608,7 +615,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
       (* For now, only tuples can contain borrows *)
       let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
       match adt_id with
-      | T.AdtId _ | T.Assumed T.Box ->
+      | T.AdtId _ | T.Assumed (T.Box | T.Vec | T.Option) ->
           assert (field_values = []);
           None
       | T.Tuple ->
@@ -738,10 +745,12 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
           ctx adt_v.field_values
       in
       let field_values = List.filter_map (fun x -> x) field_values in
-      (* For now, only tuples can contain borrows *)
+      (* For now, only tuples can contain borrows - note that if we gave
+       * something like a `&mut Vec` to a function, we give give back the
+       * vector value upon visiting the "abstraction borrow" node *)
       let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
       match adt_id with
-      | T.AdtId _ | T.Assumed T.Box ->
+      | T.AdtId _ | T.Assumed (T.Box | T.Vec | T.Option) ->
           assert (field_values = []);
           (ctx, None)
       | T.Tuple ->
@@ -851,7 +860,11 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
 let fun_is_monadic (fun_id : A.fun_id) : bool =
   match fun_id with
   | A.Local _ -> true
-  | A.Assumed (A.BoxNew | BoxDeref | BoxDerefMut | BoxFree) -> false
+  | A.Assumed
+      ( A.Replace | A.BoxNew | BoxDeref | BoxDerefMut | BoxFree | VecNew
+      | VecPush | VecLen ) ->
+      false
+  | A.Assumed (A.VecInsert | VecIndex | VecIndexMut) -> true
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
@@ -1198,6 +1211,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       match branches with
       | [] -> failwith "Unreachable"
       | [ (variant_id, svl, branch) ] -> (
+          (* There is exactly one branch: no branching *)
           let type_id, _, _ = TypesUtils.ty_as_adt sv.V.sv_ty in
           let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
           let branch = translate_expression branch ctx in
@@ -1263,7 +1277,17 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
               mk_let monadic
                 (mk_typed_lvalue_from_var var None)
                 (mk_value_expression scrutinee scrutinee_mplace)
-                branch)
+                branch
+          | T.Assumed T.Vec ->
+              (* We can't expand vector values: we can access the fields only
+               * through the functions provided by the API (note that we don't
+               * know how to expand a vector, because it has a variable number
+               * of fields!) *)
+              failwith "Can't expand a vector value"
+          | T.Assumed T.Option ->
+              (* We shouldn't get there in the "one-branch" case: options have
+               * two variants *)
+              failwith "Unreachable")
       | branches ->
           let translate_branch (variant_id : T.VariantId.id option)
               (svl : V.symbolic_value list) (branch : S.expression) :

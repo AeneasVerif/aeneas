@@ -70,34 +70,30 @@ let prepare_rplace (config : C.config) (expand_prim_copy : bool)
   in
   comp cc read_place cf ctx
 
-(** Convert a constant operand value to a typed value *)
-let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
+(** Convert an operand constant operand value to a typed value *)
+let rec operand_constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
     (cv : E.operand_constant_value) : V.typed_value =
-  (* Check the type while converting *)
+  (* Check the type while converting - we actually need some information
+   * contained in the type *)
   match (ty, cv) with
-  (* Unit *)
-  | T.Adt (T.Tuple, [], []), Unit -> mk_unit_value
-  (* Adt with one variant and no fields *)
-  | T.Adt (T.AdtId def_id, [], []), ConstantAdt def_id' ->
-      assert (def_id = def_id');
-      (* Check that the adt definition only has one variant with no fields,
-         compute the variant id at the same time. *)
+  (* Adt *)
+  | ( T.Adt (T.AdtId def_id, region_params, type_params),
+      ConstantAdt (variant_id, field_values) ) ->
+      assert (region_params = []);
+      (* Compute the types of the fields *)
       let def = C.ctx_lookup_type_def ctx def_id in
-      assert (List.length def.region_params = 0);
-      assert (List.length def.type_params = 0);
-      let variant_id =
-        match def.kind with
-        | Struct fields ->
-            assert (List.length fields = 0);
-            None
-        | Enum variants ->
-            assert (List.length variants = 1);
-            let variant_id = T.VariantId.zero in
-            let variant = T.VariantId.nth variants variant_id in
-            assert (List.length variant.fields = 0);
-            Some variant_id
+      assert (def.region_params = []);
+      let field_tys =
+        Subst.type_def_get_instantiated_field_etypes def variant_id type_params
       in
-      let value = V.Adt { variant_id; field_values = [] } in
+      (* Compute the field values *)
+      let field_values =
+        List.map
+          (fun (ty, v) -> operand_constant_value_to_typed_value ctx ty v)
+          (List.combine field_tys field_values)
+      in
+      (* Put together *)
+      let value = V.Adt { variant_id; field_values } in
       { value; ty }
   (* Scalar, boolean... *)
   | T.Bool, ConstantValue (Bool v) -> { V.value = V.Concrete (Bool v); ty }
@@ -110,7 +106,7 @@ let constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
       { V.value = V.Concrete (V.Scalar v); ty }
   (* Remaining cases (invalid) - listing as much as we can on purpose
      (allows to catch errors at compilation if the definitions change) *)
-  | _, Unit | _, ConstantAdt _ | _, ConstantValue _ ->
+  | _, ConstantAdt _ | _, ConstantValue _ ->
       failwith "Improperly typed constant value"
 
 (** Prepare the evaluation of an operand.
@@ -151,7 +147,7 @@ let eval_operand_prepare (config : C.config) (op : E.operand)
    fun ctx ->
     match op with
     | Expressions.Constant (ty, cv) ->
-        let v = constant_value_to_typed_value ctx ty cv in
+        let v = operand_constant_value_to_typed_value ctx ty cv in
         cf v ctx
     | Expressions.Copy p ->
         (* Access the value *)
@@ -186,7 +182,7 @@ let eval_operand (config : C.config) (op : E.operand)
   (* Evaluate *)
   match op with
   | Expressions.Constant (ty, cv) ->
-      let v = constant_value_to_typed_value ctx ty cv in
+      let v = operand_constant_value_to_typed_value ctx ty cv in
       cf v ctx
   | Expressions.Copy p ->
       (* Access the value *)

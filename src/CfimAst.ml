@@ -16,7 +16,20 @@ type var = {
 [@@deriving show]
 (** A variable, as used in a function definition *)
 
-type assumed_fun_id = BoxNew | BoxDeref | BoxDerefMut | BoxFree
+type assumed_fun_id =
+  | Replace  (** `core::mem::replace` *)
+  | BoxNew
+  | BoxDeref  (** `core::ops::deref::Deref::<alloc::boxed::Box::>::deref` *)
+  | BoxDerefMut
+      (** `core::ops::deref::DerefMut::<alloc::boxed::Box::>::deref_mut` *)
+  | BoxFree
+  | VecNew
+  | VecPush
+  | VecInsert
+  | VecLen
+  | VecIndex  (** `core::ops::index::Index::index<alloc::vec::Vec<T>, usize>` *)
+  | VecIndexMut
+      (** `core::ops::index::IndexMut::index_mut<alloc::vec::Vec<T>, usize>` *)
 [@@deriving show, ord]
 
 type fun_id = Local of FunDefId.id | Assumed of assumed_fun_id

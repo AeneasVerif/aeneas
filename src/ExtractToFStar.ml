@@ -94,16 +94,35 @@ let fstar_keywords =
   in
   List.concat [ named_unops; named_binops; misc ]
 
-let fstar_assumed_adts : (assumed_ty * string) list = [ (Result, "result") ]
+let fstar_assumed_adts : (assumed_ty * string) list =
+  [ (Result, "result"); (Option, "option") ]
 
 let fstar_assumed_structs : (assumed_ty * string) list = []
 
 let fstar_assumed_variants : (assumed_ty * VariantId.id * string) list =
-  [ (Result, result_return_id, "Return"); (Result, result_fail_id, "Fail") ]
+  [
+    (Result, result_return_id, "Return");
+    (Result, result_fail_id, "Fail");
+    (Option, option_some_id, "Some");
+    (Option, option_none_id, "None");
+  ]
 
 let fstar_assumed_functions :
     (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
-  []
+  let rg0 = Some T.RegionGroupId.zero in
+  [
+    (Replace, None, "mem_replace_fwd");
+    (Replace, rg0, "mem_replace_back");
+    (VecNew, None, "vec_new");
+    (VecPush, None, "vec_push_fwd") (* Shouldn't be used *);
+    (VecPush, rg0, "vec_push_back");
+    (VecInsert, None, "vec_insert_fwd") (* Shouldn't be used *);
+    (VecInsert, rg0, "vec_insert_back");
+    (VecLen, None, "vec_len");
+    (VecIndex, rg0, "vec_index");
+    (VecIndexMut, None, "vec_index_mut_fwd");
+    (VecIndexMut, rg0, "vec_index_mut_back");
+  ]
 
 let fstar_names_map_init =
   {

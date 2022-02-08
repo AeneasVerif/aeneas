@@ -25,6 +25,7 @@ pub struct HashMap<T> {
     /// The current number of values in the table
     num_values: usize,
     /// The max load factor, expressed as a fraction
+    /// TODO: use
     max_load_factor: (usize, usize),
     /// The table itself
     slots: Vec<List<T>>,
@@ -89,14 +90,15 @@ impl<T> HashMap<T> {
     pub fn insert(&mut self, key: Key, value: T) {
         let hash = hash_key(&key);
         let hash_mod = hash % self.slots.len();
-        HashMap::insert_in_list(key, value, self.slots.get_mut(hash_mod).unwrap());
+        // We may want to use slots[...] instead of get_mut...
+        HashMap::insert_in_list(key, value, &mut self.slots[hash_mod]);
     }
 
     fn get_in_list<'l, 'k>(key: &'k Key, ls: &'l List<T>) -> Option<&'l T> {
         match ls {
             List::Nil => None,
             List::Cons(ckey, cvalue, ls) => {
-                if ckey == key {
+                if *ckey == *key {
                     Some(cvalue)
                 } else {
                     HashMap::get_in_list(key, ls)
@@ -111,14 +113,14 @@ impl<T> HashMap<T> {
     pub fn get<'l, 'k>(&'l self, key: &'k Key) -> Option<&'l T> {
         let hash = hash_key(key);
         let hash_mod = hash % self.slots.len();
-        HashMap::get_in_list(key, self.slots.get(hash_mod).unwrap())
+        HashMap::get_in_list(key, &self.slots[hash_mod])
     }
 
     fn get_mut_in_list<'l, 'k>(key: &'k Key, ls: &'l mut List<T>) -> Option<&'l mut T> {
         match ls {
             List::Nil => None,
             List::Cons(ckey, cvalue, ls) => {
-                if ckey == key {
+                if *ckey == *key {
                     Some(cvalue)
                 } else {
                     HashMap::get_mut_in_list(key, ls)
@@ -131,14 +133,14 @@ impl<T> HashMap<T> {
     pub fn get_mut<'l, 'k>(&'l mut self, key: &'k Key) -> Option<&'l mut T> {
         let hash = hash_key(key);
         let hash_mod = hash % self.slots.len();
-        HashMap::get_mut_in_list(key, self.slots.get_mut(hash_mod).unwrap())
+        HashMap::get_mut_in_list(key, &mut self.slots[hash_mod])
     }
 
     fn remove_from_list(key: &Key, ls: &mut List<T>) -> Option<T> {
         match ls {
             List::Nil => None,
-            List::Cons(ckey, cvalue, tl) => {
-                if ckey == key {
+            List::Cons(ckey, _, tl) => {
+                if *ckey == *key {
                     // We have to move under borrows, so we need to use
                     // [std::mem::replace] in several steps.
                     // Retrieve the tail
@@ -163,7 +165,7 @@ impl<T> HashMap<T> {
     pub fn remove(&mut self, key: &Key) -> Option<T> {
         let hash = hash_key(key);
         let hash_mod = hash % self.slots.len();
-        HashMap::remove_from_list(key, self.slots.get_mut(hash_mod).unwrap())
+        HashMap::remove_from_list(key, &mut self.slots[hash_mod])
     }
 }
 

@@ -350,6 +350,11 @@ let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
   comp cf_pop cf_assign
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
+let eval_replace_concrete (config : C.config)
+    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
+ fun cf ctx -> raise Unimplemented
+
+(** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_new_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
  fun cf ctx ->
@@ -486,6 +491,11 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
       cc cf ctx
   | _ -> failwith "Inconsistent state"
 
+(** Auxiliary function - see [eval_non_local_function_call] *)
+let eval_vec_function_concrete (config : C.config) (fid : A.assumed_fun id)
+    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
+ fun cf ctx -> raise Unimplemented
+
 (** Evaluate a non-local function call in concrete mode *)
 let eval_non_local_function_call_concrete (config : C.config)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
@@ -539,13 +549,15 @@ let eval_non_local_function_call_concrete (config : C.config)
          * access to a body. *)
         let cf_eval_body : cm_fun =
           match fid with
-          | A.BoxNew -> eval_box_new_concrete config region_params type_params
-          | A.BoxDeref ->
-              eval_box_deref_concrete config region_params type_params
-          | A.BoxDerefMut ->
+          | A.Replace -> eval_replace config region_params type_params
+          | BoxNew -> eval_box_new_concrete config region_params type_params
+          | BoxDeref -> eval_box_deref_concrete config region_params type_params
+          | BoxDerefMut ->
               eval_box_deref_mut_concrete config region_params type_params
-          | A.BoxFree ->
+          | BoxFree ->
               (* Should have been treated above *) failwith "Unreachable"
+          | VecNew | VecPush | VecInsert | VecLen | VecIndex | VecIndexMut ->
+              eval_vec_function_concrete config fid region_params type_params
         in
 
         let cc = comp cc cf_eval_body in

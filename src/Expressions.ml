@@ -3,6 +3,8 @@ open Values
 
 type field_proj_kind =
   | ProjAdt of TypeDefId.id * VariantId.id option
+  | ProjOption of VariantId.id
+      (** Option is an assumed type, coming from the standard library *)
   | ProjTuple of int
 [@@deriving show]
 (* arity of the tuple *)
@@ -73,6 +75,8 @@ let all_binops =
     constants when generating MIR:
     - an enumeration with one variant and no fields is a constant.
     - a structure with no field is a constant.
+    - sometimes, Rust stores the initialization of an ADT as a constant
+      (if all the fields are constant) rather than as an aggregated value
 
     For our translation, we use the following enumeration to encode those
     special cases in assignments. They are converted to "normal" values
@@ -81,8 +85,7 @@ let all_binops =
  *)
 type operand_constant_value =
   | ConstantValue of constant_value
-  | ConstantAdt of TypeDefId.id
-  | Unit
+  | ConstantAdt of VariantId.id option * operand_constant_value list
 [@@deriving show]
 
 type operand =

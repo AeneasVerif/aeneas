@@ -201,6 +201,10 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
   | pe :: p' -> (
       let s = projection_to_string fmt inside p' in
       match pe.pkind with
+      | E.ProjOption variant_id ->
+          assert (variant_id == T.option_some_id);
+          assert (pe.field_id == T.FieldId.zero);
+          "(" ^ s ^ "as Option::Some)." ^ T.FieldId.to_string pe.field_id
       | E.ProjTuple _ -> "(" ^ s ^ ")." ^ T.FieldId.to_string pe.field_id
       | E.ProjAdt (adt_id, opt_variant_id) -> (
           let field_name =
@@ -321,10 +325,18 @@ let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : A.fun_id) : string
   | A.Local fid -> fmt.fun_def_id_to_string fid
   | A.Assumed fid -> (
       match fid with
+      | A.Replace -> "core::mem::replace"
       | A.BoxNew -> "alloc::boxed::Box::new"
       | A.BoxDeref -> "core::ops::deref::Deref::deref"
       | A.BoxDerefMut -> "core::ops::deref::DerefMut::deref_mut"
-      | A.BoxFree -> "alloc::alloc::box_free")
+      | A.BoxFree -> "alloc::alloc::box_free"
+      | A.VecNew -> "alloc::vec::Vec::new"
+      | A.VecPush -> "alloc::vec::Vec::push"
+      | A.VecInsert -> "alloc::vec::Vec::insert"
+      | A.VecLen -> "alloc::vec::Vec::len"
+      | A.VecIndex -> "core::ops::index::Index<alloc::vec::Vec>::index"
+      | A.VecIndexMut ->
+          "core::ops::index::IndexMut<alloc::vec::Vec>::index_mut")
 
 let fun_suffix (rg_id : T.RegionGroupId.id option) : string =
   match rg_id with
