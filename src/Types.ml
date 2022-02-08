@@ -90,11 +90,11 @@ type ref_kind = Mut | Shared [@@deriving show, ord]
 
 type assumed_ty = Box | Vec | Option [@@deriving show, ord]
 
-(** The variant id for `Option::Some` *)
-let option_some_id = VariantId.of_int 0
-
 (** The variant id for `Option::None` *)
-let option_none_id = VariantId.of_int 1
+let option_none_id = VariantId.of_int 0
+
+(** The variant id for `Option::Some` *)
+let option_some_id = VariantId.of_int 1
 
 (** Type identifier for ADTs.
 

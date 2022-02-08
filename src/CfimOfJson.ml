@@ -76,7 +76,11 @@ let ref_kind_of_json (js : json) : (T.ref_kind, string) result =
 
 let assumed_ty_of_json (js : json) : (T.assumed_ty, string) result =
   combine_error_msgs js "assumed_ty_of_json"
-    (match js with `String "Box" -> Ok T.Box | _ -> Error "")
+    (match js with
+    | `String "Box" -> Ok T.Box
+    | `String "Vec" -> Ok T.Vec
+    | `String "Option" -> Ok T.Option
+    | _ -> Error "")
 
 let type_id_of_json (js : json) : (T.type_id, string) result =
   combine_error_msgs js "type_id_of_json"
@@ -303,6 +307,9 @@ let field_proj_kind_of_json (js : json) : (E.field_proj_kind, string) result =
     | `Assoc [ ("ProjTuple", i) ] ->
         let* i = int_of_json i in
         Ok (E.ProjTuple i)
+    | `Assoc [ ("ProjOption", variant_id) ] ->
+        let* variant_id = T.VariantId.id_of_json variant_id in
+        Ok (E.ProjOption variant_id)
     | _ -> Error "")
 
 let projection_elem_of_json (js : json) : (E.projection_elem, string) result =
@@ -437,10 +444,17 @@ let rvalue_of_json (js : json) : (E.rvalue, string) result =
 
 let assumed_fun_id_of_json (js : json) : (A.assumed_fun_id, string) result =
   match js with
+  | `String "Replace" -> Ok A.Replace
   | `String "BoxNew" -> Ok A.BoxNew
   | `String "BoxDeref" -> Ok A.BoxDeref
   | `String "BoxDerefMut" -> Ok A.BoxDerefMut
   | `String "BoxFree" -> Ok A.BoxFree
+  | `String "VecNew" -> Ok A.VecNew
+  | `String "VecPush" -> Ok A.VecPush
+  | `String "VecInsert" -> Ok A.VecInsert
+  | `String "VecLen" -> Ok A.VecLen
+  | `String "VecIndex" -> Ok A.VecIndex
+  | `String "VecIndexMut" -> Ok A.VecIndexMut
   | _ -> Error ("assumed_fun_id_of_json failed on:" ^ show js)
 
 let fun_id_of_json (js : json) : (A.fun_id, string) result =
