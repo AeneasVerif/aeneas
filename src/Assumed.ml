@@ -245,6 +245,9 @@ let assumed_sigs : (A.assumed_fun_id * A.fun_sig) list =
     (VecIndexMut, Sig.vec_index_mut_sig);
   ]
 
+let get_assumed_sig (id : A.assumed_fun_id) : A.fun_sig =
+  snd (List.find (fun (id', _) -> id = id') assumed_sigs)
+
 let assumed_names : (A.assumed_fun_id * Identifiers.name) list =
   [
     (Replace, [ "core"; "mem"; "replace" ]);

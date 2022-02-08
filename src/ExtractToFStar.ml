@@ -284,6 +284,8 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
                 (* The "pair" case is frequent enough to have its special treatment *)
                 if List.length tys = 2 then "p" else "t"
             | Assumed Result -> "r"
+            | Assumed Option -> "opt"
+            | Assumed Vec -> "v"
             | AdtId adt_id ->
                 let def =
                   TypeDefId.Map.find adt_id ctx.type_context.type_defs
@@ -719,7 +721,7 @@ let extract_place (ctx : extraction_ctx) (fmt : F.formatter) (p : place) : unit
         let def_id =
           match pe.pkind with
           | E.ProjAdt (def_id, None) -> def_id
-          | E.ProjAdt (_, Some _) | E.ProjTuple _ ->
+          | E.ProjAdt (_, Some _) | E.ProjOption _ | E.ProjTuple _ ->
               (* We can't have field accesses on enumerations (variables for
                * the fields are introduced upon the moment we match over the
                * enumeration). We also forbid field access on tuples, because

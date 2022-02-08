@@ -326,6 +326,11 @@ let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
               if variant_id = result_return_id then "@result::Return"
               else if variant_id = result_fail_id then "@result::Fail"
               else failwith "Unreachable"
+          | Assumed Option ->
+              if variant_id = option_some_id then "@option::Some"
+              else if variant_id = option_none_id then "@option::None"
+              else failwith "Unreachable"
+          | Assumed Vec -> failwith "Unreachable"
           | AdtId id -> (
               let def = TypeDefId.Map.find id type_defs in
               match def.kind with
@@ -339,7 +344,10 @@ let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
         let field_name =
           match id with
           | Tuple -> failwith "Unreachable"
-          | Assumed Result -> failwith "Unreachable"
+          | Assumed (Result | Option) -> failwith "Unreachable"
+          | Assumed Vec ->
+              (* We can't directly have access to the fields of a vector *)
+              failwith "Unreachable"
           | AdtId id -> (
               let def = TypeDefId.Map.find id type_defs in
               match def.kind with

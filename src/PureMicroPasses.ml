@@ -730,7 +730,11 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_def) : fun_def =
                   | _ -> failwith "Unreachable"
                 in
                 arg.e
-            | A.BoxFree, _ -> (mk_value_expression unit_rvalue None).e)
+            | A.BoxFree, _ -> (mk_value_expression unit_rvalue None).e
+            | ( ( A.Replace | A.VecNew | A.VecPush | A.VecInsert | A.VecLen
+                | A.VecIndex | A.VecIndexMut ),
+                _ ) ->
+                super#visit_Call env call)
         | _ -> super#visit_Call env call
     end
   in

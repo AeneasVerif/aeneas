@@ -27,6 +27,8 @@ let () =
   let decompose_monads = ref false in
   let unfold_monads = ref true in
   let filter_unused_calls = ref true in
+  let test_units = ref false in
+  let test_trans_units = ref false in
 
   let spec =
     [
@@ -48,6 +50,13 @@ let () =
       ( "-filter-unused-calls",
         Arg.Set filter_unused_calls,
         " Filter the unused function calls, when possible" );
+      ( "-test-units",
+        Arg.Set test_units,
+        " Test the unit functions with the concrete interpreter" );
+      ( "-test-trans-units",
+        Arg.Set test_trans_units,
+        " Test the translated unit functions with the target theorem prover's \
+         normalizer" );
     ]
   in
   let spec = Arg.align spec in
@@ -113,7 +122,7 @@ let () =
       in
 
       (* Test the unit functions with the concrete interpreter *)
-      I.Test.test_unit_functions config m;
+      if !test_units then I.Test.test_unit_functions config m;
 
       (* Evaluate the symbolic interpreter on the functions, ignoring the
        * functions which contain loops - TODO: remove *)
@@ -121,7 +130,7 @@ let () =
       I.Test.test_functions_symbolic config synthesize m;
 
       (* Translate the functions *)
-      let test_unit_functions = true in
+      let test_unit_functions = !test_trans_units in
       let micro_passes_config =
         {
           Micro.decompose_monadic_let_bindings = !decompose_monads;

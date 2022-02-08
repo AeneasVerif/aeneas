@@ -9,6 +9,7 @@ open TypesUtils
 open ValuesUtils
 module Inv = Invariants
 module S = SynthesizeSymbolic
+open Errors
 open Cps
 open InterpreterUtils
 open InterpreterProjectors
@@ -350,9 +351,10 @@ let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
   comp cf_pop cf_assign
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_replace_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
- fun cf ctx -> raise Unimplemented
+let eval_replace_concrete (_config : C.config)
+    (_region_params : T.erased_region list) (_type_params : T.ety list) : cm_fun
+    =
+ fun _cf _ctx -> raise Unimplemented
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_new_concrete (config : C.config)
@@ -492,9 +494,10 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
   | _ -> failwith "Inconsistent state"
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
-let eval_vec_function_concrete (config : C.config) (fid : A.assumed_fun id)
-    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
- fun cf ctx -> raise Unimplemented
+let eval_vec_function_concrete (_config : C.config) (_fid : A.assumed_fun_id)
+    (_region_params : T.erased_region list) (_type_params : T.ety list) : cm_fun
+    =
+ fun _cf _ctx -> raise Unimplemented
 
 (** Evaluate a non-local function call in concrete mode *)
 let eval_non_local_function_call_concrete (config : C.config)
@@ -549,7 +552,7 @@ let eval_non_local_function_call_concrete (config : C.config)
          * access to a body. *)
         let cf_eval_body : cm_fun =
           match fid with
-          | A.Replace -> eval_replace config region_params type_params
+          | A.Replace -> eval_replace_concrete config region_params type_params
           | BoxNew -> eval_box_new_concrete config region_params type_params
           | BoxDeref -> eval_box_deref_concrete config region_params type_params
           | BoxDerefMut ->
@@ -1128,13 +1131,10 @@ and eval_non_local_function_call_symbolic (config : C.config)
        * instantiated signatures, and delegate the work to an auxiliary function *)
       let inst_sig =
         match fid with
-        | A.BoxNew -> instantiate_fun_sig type_params Assumed.box_new_sig
-        | A.BoxDeref ->
-            instantiate_fun_sig type_params Assumed.box_deref_shared_sig
-        | A.BoxDerefMut ->
-            instantiate_fun_sig type_params Assumed.box_deref_mut_sig
-        | A.BoxFree -> failwith "Unreachable"
-        (* should have been treated above *)
+        | A.BoxFree ->
+            (* should have been treated above *)
+            failwith "Unreachable"
+        | _ -> instantiate_fun_sig type_params (Assumed.get_assumed_sig fid)
       in
 
       (* Evaluate the function call *)

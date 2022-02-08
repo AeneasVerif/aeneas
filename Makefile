@@ -1,9 +1,9 @@
 all: build-run-check-trace
 
 CHARON_HOME=../charon/charon
-CHARON_TESTS_DIR=$(CHARON_HOME)/tests
-RS_TEST_FILE=tests/no_nested_borrows.rs
-CFIM_TEST_FILE=$(CHARON_TESTS_DIR)/no_nested_borrows.cfim
+CHARON_TESTS_DIR=$(CHARON_HOME)/tests/src
+RS_TEST_FILE1=tests/src/no_nested_borrows.rs
+CFIM_TEST_FILE1=$(CHARON_TESTS_DIR)/no_nested_borrows.cfim
 DEST_DIR=tests/
 
 # Build the project
@@ -14,7 +14,7 @@ build:
 # Build the project and run the executable
 .PHONY: build-run
 build-run: build
-	dune exec -- src/main.exe $(CFIM_TEST_FILE) -dest $(DEST_DIR) > tests/trace_current.txt
+	dune exec -- src/main.exe $(CFIM_TEST_FILE1) -dest $(DEST_DIR) > tests/trace_current.txt
 
 # Build the project and run the executable, then check that the behaviour
 # of the interpreter didn't change by comparing the newly generated trace
@@ -33,7 +33,7 @@ regen-trace: generate-cfim build-run
 
 .PHONY: generate-cfim
 generate-cfim:
-	cd ../charon/charon && cargo run $(RS_TEST_FILE)
+	cd ../charon/charon && cargo run $(RS_TEST_FILE1)
 
 doc:
 	dune build @doc

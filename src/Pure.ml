@@ -20,20 +20,22 @@ module VarId = IdGen ()
 
 type integer_type = T.integer_type [@@deriving show, ord]
 
-type assumed_ty =
-  | Result
-      (** The assumed types for the pure AST.
+(** The assumed types for the pure AST.
 
-          In comparison with CFIM:
-          - we removed `Box` (because it is translated as the identity: `Box T == T`)
-          - we added `Result`, which is the type used in the error monad. This allows
-            us to have a unified treatment of expressions.
-        *)
-[@@deriving show, ord]
+    In comparison with CFIM:
+    - we removed `Box` (because it is translated as the identity: `Box T == T`)
+    - we added `Result`, which is the type used in the error monad. This allows
+      us to have a unified treatment of expressions.
+  *)
+type assumed_ty = Result | Vec | Option [@@deriving show, ord]
 
 let result_return_id = VariantId.of_int 0
 
 let result_fail_id = VariantId.of_int 1
+
+let option_some_id = T.option_some_id
+
+let option_none_id = T.option_none_id
 
 type type_id = AdtId of TypeDefId.id | Tuple | Assumed of assumed_ty
 [@@deriving show, ord]
