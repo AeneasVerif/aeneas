@@ -733,7 +733,7 @@ module CfimAst = struct
         | E.Field (E.ProjOption variant_id, fid) ->
             assert (variant_id == T.option_some_id);
             assert (fid == T.FieldId.zero);
-            "(" ^ s ^ "as Option::Some)." ^ T.FieldId.to_string fid
+            "(" ^ s ^ " as Option::Some)." ^ T.FieldId.to_string fid
         | E.Field (E.ProjTuple _, fid) ->
             "(" ^ s ^ ")." ^ T.FieldId.to_string fid
         | E.Field (E.ProjAdt (adt_id, opt_variant_id), fid) -> (

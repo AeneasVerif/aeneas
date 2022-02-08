@@ -1,5 +1,3 @@
-(* TODO: most of the definitions in this file need to be moved elsewhere *)
-
 module T = Types
 module V = Values
 module E = Expressions

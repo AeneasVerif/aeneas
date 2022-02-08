@@ -113,6 +113,9 @@ let () =
       (* Print the module *)
       main_log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));
 
+      (* Apply the pre-passes *)
+      let m = PrePasses.apply_passes m in
+
       (* Some options for the execution *)
       let config =
         {
