@@ -24,13 +24,16 @@ let log = L.statements_log
 let drop_value (config : C.config) (p : E.place) : cm_fun =
  fun cf ctx ->
   log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
-  (* Prepare the place (by ending the outer loans and the borrows) *)
+  (* Prepare the place (by ending the outer loans and the borrows).
+   * Note that [prepare_lplace] will use the `Write` access kind:
+   * it is ok, because when updating the value with [Bottom] below,
+   * we will use the `Move` access *)
   let end_borrows = true in
   let prepare = prepare_lplace config end_borrows p in
   (* Replace the value with [Bottom] *)
   let replace cf (v : V.typed_value) ctx =
     let nv = { v with value = V.Bottom } in
-    let ctx = write_place_unwrap config Write p nv ctx in
+    let ctx = write_place_unwrap config Move p nv ctx in
     cf ctx
   in
   (* Compose and apply *)
