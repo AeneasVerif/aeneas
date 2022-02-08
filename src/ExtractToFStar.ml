@@ -53,7 +53,7 @@ let fstar_named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
     | Add -> "add"
     | Sub -> "sub"
     | Mul -> "mul"
-    | _ -> failwith "Unreachable"
+    | _ -> raise (Failure "Unreachable")
   in
   fstar_int_name int_ty ^ "_" ^ binop
 
@@ -119,7 +119,8 @@ let fstar_assumed_functions :
     (VecInsert, None, "vec_insert_fwd") (* Shouldn't be used *);
     (VecInsert, rg0, "vec_insert_back");
     (VecLen, None, "vec_len");
-    (VecIndex, rg0, "vec_index");
+    (VecIndex, None, "vec_index_fwd");
+    (VecIndex, rg0, "vec_index_back") (* shouldn't be used *);
     (VecIndexMut, None, "vec_index_mut_fwd");
     (VecIndexMut, rg0, "vec_index_mut_back");
   ]
@@ -158,7 +159,7 @@ let fstar_extract_binop (extract_expr : bool -> texpression -> unit)
         | Ne -> "<>"
         | Ge -> ">="
         | Gt -> ">"
-        | _ -> failwith "Unreachable"
+        | _ -> raise (Failure "Unreachable")
       in
       extract_expr false arg0;
       F.pp_print_space fmt ();
@@ -221,7 +222,8 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
   let get_type_name (name : name) : string =
     match name with
     | [ _module; name ] -> name
-    | _ -> failwith ("Unexpected name shape: " ^ Print.name_to_string name)
+    | _ ->
+        raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
   in
   let type_name_to_camel_case name =
     let name = get_type_name name in
@@ -250,12 +252,16 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     "Mk" ^ tname
   in
   (* For now, we treat only the case where function names are of the
-   * form: `function` (no module prefix)
+   * form:
+   * `module::function` (if top function)
+   * `module::Type::function` (for implementations)
    *)
   let get_fun_name (name : name) : string =
     match name with
     | [ _module; name ] -> name
-    | _ -> failwith ("Unexpected name shape: " ^ Print.name_to_string name)
+    | [ _module; ty; name ] -> to_snake_case ty ^ "_" ^ name
+    | _ ->
+        raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
   in
   let fun_name (_fid : A.fun_id) (fname : name) (num_rgs : int)
       (rg : region_group_info option) : string =
@@ -684,7 +690,7 @@ let extract_adt_g_value
       in
       if inside && field_values <> [] then F.pp_print_string fmt ")";
       ctx
-  | _ -> failwith "Inconsistent typed value"
+  | _ -> raise (Failure "Inconsistent typed value")
 
 (** [inside]: see [extract_ty].
 
@@ -734,7 +740,7 @@ let extract_place (ctx : extraction_ctx) (fmt : F.formatter) (p : place) : unit
                * we don't have the syntax to translate that... We thus
                * deconstruct the tuples whenever we need to have access:
                * `let (x, y) = p in ...` *)
-              failwith "Unreachable"
+              raise (Failure "Unreachable")
         in
         let field_name = ctx_get_field (AdtId def_id) pe.field_id ctx in
         (* We allow to break where the "." appears *)
@@ -797,7 +803,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_close_box fmt ();
           (* Return *)
           if inside then F.pp_print_string fmt ")"
-      | _ -> failwith "Unreachable")
+      | _ -> raise (Failure "Unreachable"))
   | Let (monadic, lv, re, next_e) ->
       (* Open a box for the let-binding *)
       F.pp_open_hovbox fmt ctx.indent_incr;
