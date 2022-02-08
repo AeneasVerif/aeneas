@@ -94,11 +94,11 @@ let () =
   main_log#set_level EL.Debug;
   interpreter_log#set_level EL.Debug;
   statements_log#set_level EL.Debug;
-  paths_log#set_level EL.Warning;
+  paths_log#set_level EL.Debug;
   expressions_log#set_level EL.Debug;
-  expansion_log#set_level EL.Warning;
-  borrows_log#set_level EL.Warning;
-  invariants_log#set_level EL.Warning;
+  expansion_log#set_level EL.Debug;
+  borrows_log#set_level EL.Debug;
+  invariants_log#set_level EL.Debug;
   symbolic_to_pure_log#set_level EL.Debug;
   pure_micro_passes_log#set_level EL.Debug;
   pure_to_extract_log#set_level EL.Debug;

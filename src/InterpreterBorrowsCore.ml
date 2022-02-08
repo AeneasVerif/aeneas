@@ -268,7 +268,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
   with FoundGLoanContent lc -> (
     match !abs_or_var with
     | Some abs_or_var -> Some (abs_or_var, lc)
-    | None -> failwith "Inconsistent state")
+    | None -> raise (Failure "Inconsistent state"))
 
 (** Lookup a loan content.
 

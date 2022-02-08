@@ -1,5 +1,8 @@
 # TODO
 
+0. replace all the `failwith` with `raise (Failure ...)`: in CPS, it messes
+   up with provenance tracking
+
 0. In SymbolicToPure we do a few simplifications on types and values (simplification
    of box type, removal of tuples which contain exactly one field - some fields
    may have been filtered for the backward functions...): there are already a

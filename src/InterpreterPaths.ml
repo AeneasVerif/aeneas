@@ -373,12 +373,15 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_def T.TypeDefId.Map.t)
 (** Compute an expanded Option bottom value *)
 let compute_expanded_bottom_option_value (variant_id : T.VariantId.id)
     (param_ty : T.ety) : V.typed_value =
-  (* The variant should be `Some` - `None` has no field, so there is no way
-   * we expand an Option bottom value to `None` (it happens when writing a field) *)
+  (* Note that the variant can be `Some` or `None`: we expand bottom values
+   * when writing to fields or setting discriminants *)
   assert (variant_id = T.option_some_id);
-
-  let av = mk_bottom param_ty in
-  let av = V.Adt { variant_id = Some variant_id; field_values = [ av ] } in
+  let field_values =
+    if variant_id = T.option_some_id then [ mk_bottom param_ty ]
+    else if variant_id = T.option_none_id then []
+    else raise (Failure "Unreachable")
+  in
+  let av = V.Adt { variant_id = Some variant_id; field_values } in
   let ty = T.Adt (T.Assumed T.Option, [], [ param_ty ]) in
   { V.value = av; ty }
 

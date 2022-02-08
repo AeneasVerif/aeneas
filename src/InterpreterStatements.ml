@@ -122,7 +122,9 @@ let eval_assertion_concrete (config : C.config) (assertion : A.assertion) :
     | Concrete (Bool b) ->
         (* Branch *)
         if b = assertion.expected then cf Unit ctx else cf Panic ctx
-    | _ -> failwith ("Expected a boolean, got: " ^ typed_value_to_string ctx v)
+    | _ ->
+        raise
+          (Failure ("Expected a boolean, got: " ^ typed_value_to_string ctx v))
   in
   (* Compose and apply *)
   comp eval_op eval_assert cf ctx
@@ -164,7 +166,9 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
             (S.mk_opt_place_from_op assertion.cond ctx)
         in
         comp expand (eval_assertion_concrete config assertion) cf ctx
-    | _ -> failwith ("Expected a boolean, got: " ^ typed_value_to_string ctx v)
+    | _ ->
+        raise
+          (Failure ("Expected a boolean, got: " ^ typed_value_to_string ctx v))
   in
   (* Compose and apply *)
   comp prepare eval cf ctx
@@ -192,7 +196,8 @@ let set_discriminant (config : C.config) (p : E.place)
   let update_value cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match (v.V.ty, v.V.value) with
-    | T.Adt (T.AdtId def_id, regions, types), V.Adt av -> (
+    | ( T.Adt (((T.AdtId _ | T.Assumed T.Option) as type_id), regions, types),
+        V.Adt av ) -> (
         (* There are two situations:
            - either the discriminant is already the proper one (in which case we
              don't do anything)
@@ -200,15 +205,22 @@ let set_discriminant (config : C.config) (p : E.place)
              a variant with all its fields set to [Bottom]
         *)
         match av.variant_id with
-        | None -> failwith "Found a struct value while expected an enum"
+        | None -> raise (Failure "Found a struct value while expected an enum")
         | Some variant_id' ->
             if variant_id' = variant_id then (* Nothing to do *)
               cf Unit ctx
             else
               (* Replace the value *)
               let bottom_v =
-                compute_expanded_bottom_adt_value ctx.type_context.type_defs
-                  def_id (Some variant_id) regions types
+                match type_id with
+                | T.AdtId def_id ->
+                    compute_expanded_bottom_adt_value ctx.type_context.type_defs
+                      def_id (Some variant_id) regions types
+                | T.Assumed T.Option ->
+                    assert (regions = []);
+                    compute_expanded_bottom_option_value variant_id
+                      (Collections.List.to_cons_nil types)
+                | _ -> raise (Failure "Unreachable")
               in
               assign_to_place config bottom_v p (cf Unit) ctx)
     | T.Adt (T.AdtId def_id, regions, types), V.Bottom ->
@@ -226,9 +238,10 @@ let set_discriminant (config : C.config) (p : E.place)
          * For now, we forbid setting the discriminant of a symbolic value:
          * setting a discriminant should only be used to initialize a value,
          * or reset an already initialized value, really. *)
-        failwith "Unexpected value"
-    | _, (V.Adt _ | V.Bottom) -> failwith "Inconsistent state"
-    | _, (V.Concrete _ | V.Borrow _ | V.Loan _) -> failwith "Unexpected value"
+        raise (Failure "Unexpected value")
+    | _, (V.Adt _ | V.Bottom) -> raise (Failure "Inconsistent state")
+    | _, (V.Concrete _ | V.Borrow _ | V.Loan _) ->
+        raise (Failure "Unexpected value")
   in
   (* Compose and apply *)
   comp cc update_value cf ctx
@@ -250,7 +263,7 @@ let get_non_local_function_return_type (fid : A.assumed_fun_id)
   | A.BoxDeref, [], [ bty ] -> T.Ref (T.Erased, bty, T.Shared)
   | A.BoxDerefMut, [], [ bty ] -> T.Ref (T.Erased, bty, T.Mut)
   | A.BoxFree, [], [ _ ] -> mk_unit_ty
-  | _ -> failwith "Inconsistent state"
+  | _ -> raise (Failure "Inconsistent state")
 
 let move_return_value (config : C.config) (cf : V.typed_value -> m_fun) : m_fun
     =
@@ -277,7 +290,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
   let ret_vid = V.VarId.zero in
   let rec list_locals env =
     match env with
-    | [] -> failwith "Inconsistent environment"
+    | [] -> raise (Failure "Inconsistent environment")
     | C.Abs _ :: env -> list_locals env
     | C.Var (None, _) :: env -> list_locals env
     | C.Var (Some var, _) :: env ->
@@ -331,7 +344,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
    * no outer loans) as dummy variables in the caller frame *)
   let rec pop env =
     match env with
-    | [] -> failwith "Inconsistent environment"
+    | [] -> raise (Failure "Inconsistent environment")
     | C.Abs abs :: env -> C.Abs abs :: pop env
     | C.Var (_, v) :: env -> C.Var (None, v) :: pop env
     | C.Frame :: env -> (* Stop here *) env
@@ -396,7 +409,7 @@ let eval_box_new_concrete (config : C.config)
 
       (* Compose and apply *)
       comp cf_move cf_create cf ctx
-  | _ -> failwith "Inconsistent state"
+  | _ -> raise (Failure "Inconsistent state")
 
 (** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
     and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
@@ -433,7 +446,7 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
         match res with
         | Error EPanic ->
             (* We can't get there by borrowing a value *)
-            failwith "Unreachable"
+            raise (Failure "Unreachable")
         | Ok borrowed_value ->
             (* Move and continue *)
             let destp = mk_place_from_var_id V.VarId.zero in
@@ -442,7 +455,7 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
 
       (* Compose and apply *)
       comp cf_borrow cf_move cf ctx
-  | _ -> failwith "Inconsistent state"
+  | _ -> raise (Failure "Inconsistent state")
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_box_deref_concrete (config : C.config)
@@ -494,7 +507,7 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
 
       (* Continue *)
       cc cf ctx
-  | _ -> failwith "Inconsistent state"
+  | _ -> raise (Failure "Inconsistent state")
 
 (** Auxiliary function - see [eval_non_local_function_call] *)
 let eval_vec_function_concrete (_config : C.config) (_fid : A.assumed_fun_id)
@@ -561,7 +574,7 @@ let eval_non_local_function_call_concrete (config : C.config)
           | BoxDerefMut ->
               eval_box_deref_mut_concrete config region_params type_params
           | BoxFree ->
-              (* Should have been treated above *) failwith "Unreachable"
+              (* Should have been treated above *) raise (Failure "Unreachable")
           | VecNew | VecPush | VecInsert | VecLen | VecIndex | VecIndexMut ->
               eval_vec_function_concrete config fid region_params type_params
         in
@@ -828,7 +841,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
                * [Unit] would account for the first iteration of the loop.
                * We prefer to write it this way for consistency and sanity,
                * though. *)
-              failwith "Unreachable"
+              raise (Failure "Unreachable")
         in
         (* Apply *)
         eval_statement config loop_body reeval_loop_body ctx
@@ -881,7 +894,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
             let cf_eval_if cf = eval_switch config op tgts cf in
             (* Compose *)
             comp cf_expand cf_eval_if cf ctx
-        | _ -> failwith "Inconsistent state")
+        | _ -> raise (Failure "Inconsistent state"))
     | A.SwitchInt (int_ty, stgts, otherwise) -> (
         match op_v.value with
         | V.Concrete (V.Scalar sv) ->
@@ -914,7 +927,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
             expand_symbolic_int config sv
               (S.mk_opt_place_from_op op ctx)
               int_ty stgts otherwise ctx
-        | _ -> failwith "Inconsistent state")
+        | _ -> raise (Failure "Inconsistent state"))
   in
   (* Compose the continuations *)
   comp cf_prepare_op cf_match cf ctx
@@ -963,7 +976,7 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDefId.id)
   let ret_var, locals =
     match locals with
     | ret_ty :: locals -> (ret_ty, locals)
-    | _ -> failwith "Unreachable"
+    | _ -> raise (Failure "Unreachable")
   in
   let input_locals, locals = Collections.List.split_at locals def.A.arg_count in
 
@@ -988,7 +1001,7 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDefId.id)
   let cf_finish cf res =
     match res with
     | Panic -> cf Panic
-    | Break _ | Continue _ | Unit -> failwith "Unreachable"
+    | Break _ | Continue _ | Unit -> raise (Failure "Unreachable")
     | Return ->
         (* Pop the stack frame, retrieve the return value, move it to
          * its destination and continue *)
@@ -1136,7 +1149,7 @@ and eval_non_local_function_call_symbolic (config : C.config)
         match fid with
         | A.BoxFree ->
             (* should have been treated above *)
-            failwith "Unreachable"
+            raise (Failure "Unreachable")
         | _ -> instantiate_fun_sig type_params (Assumed.get_assumed_sig fid)
       in
 
