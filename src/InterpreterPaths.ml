@@ -94,15 +94,16 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
   | pe :: p' -> (
       (* Match on the projection element and the value *)
       match (pe, v.V.value, v.V.ty) with
-      (* Field projection - ADTs *)
-      | ( Field (ProjAdt (def_id, opt_variant_id), field_id),
+      | ( Field (((ProjAdt (_, _) | ProjOption _) as proj_kind), field_id),
           V.Adt adt,
-          T.Adt (T.AdtId def_id', _, _) ) -> (
-          assert (def_id = def_id');
-          (* Check that the projection is consistent with the current value *)
-          (match (opt_variant_id, adt.variant_id) with
-          | None, None -> ()
-          | Some vid, Some vid' -> if vid <> vid' then failwith "Unreachable"
+          T.Adt (type_id, _, _) ) -> (
+          (* Check consistency *)
+          (match (proj_kind, type_id) with
+          | ProjAdt (def_id, opt_variant_id), T.AdtId def_id' ->
+              assert (def_id = def_id');
+              assert (opt_variant_id = adt.variant_id)
+          | ProjOption variant_id, T.Assumed T.Option ->
+              assert (Some variant_id = adt.variant_id)
           | _ -> failwith "Unreachable");
           (* Actually project *)
           let fv = T.FieldId.nth adt.field_values field_id in
@@ -133,9 +134,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               Ok (ctx, { res with updated })
           (* If we reach Bottom, it may mean we need to expand an uninitialized
            * enumeration value *))
-      | Field (ProjAdt (_, _), _), V.Bottom, _ ->
-          Error (FailBottom (1 + List.length p', pe, v.ty))
-      | Field (ProjTuple _, _), V.Bottom, _ ->
+      | Field ((ProjAdt (_, _) | ProjTuple _ | ProjOption _), _), V.Bottom, _ ->
           Error (FailBottom (1 + List.length p', pe, v.ty))
       (* Symbolic value: needs to be expanded *)
       | _, Symbolic sp, _ ->
@@ -366,22 +365,28 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_def T.TypeDefId.Map.t)
     Subst.type_def_get_instantiated_field_etypes def opt_variant_id types
   in
   (* Initialize the expanded value *)
-  let fields =
-    List.map
-      (fun ty : V.typed_value -> ({ V.value = V.Bottom; ty } : V.typed_value))
-      field_types
-  in
+  let fields = List.map mk_bottom field_types in
   let av = V.Adt { variant_id = opt_variant_id; field_values = fields } in
   let ty = T.Adt (T.AdtId def_id, regions, types) in
   { V.value = av; V.ty }
+
+(** Compute an expanded Option bottom value *)
+let compute_expanded_bottom_option_value (variant_id : T.VariantId.id)
+    (param_ty : T.ety) : V.typed_value =
+  (* The variant should be `Some` - `None` has no field, so there is no way
+   * we expand an Option bottom value to `None` (it happens when writing a field) *)
+  assert (variant_id = T.option_some_id);
+
+  let av = mk_bottom param_ty in
+  let av = V.Adt { variant_id = Some variant_id; field_values = [ av ] } in
+  let ty = T.Adt (T.Assumed T.Option, [], [ param_ty ]) in
+  { V.value = av; ty }
 
 (** Compute an expanded tuple bottom value *)
 let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
     V.typed_value =
   (* Generate the field values *)
-  let fields =
-    List.map (fun ty : V.typed_value -> { V.value = Bottom; ty }) field_types
-  in
+  let fields = List.map mk_bottom field_types in
   let v = V.Adt { variant_id = None; field_values = fields } in
   let ty = T.Adt (T.Tuple, [], field_types) in
   { V.value = v; V.ty }
@@ -439,6 +444,10 @@ let expand_bottom_value_from_projection (config : C.config)
         assert (def_id = def_id');
         compute_expanded_bottom_adt_value ctx.type_context.type_defs def_id
           opt_variant_id regions types
+    (* Option *)
+    | Field (ProjOption variant_id, _), T.Adt (T.Assumed T.Option, [], [ ty ])
+      ->
+        compute_expanded_bottom_option_value variant_id ty
     (* Tuples *)
     | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
         assert (arity = List.length tys);
