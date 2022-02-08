@@ -23,21 +23,13 @@ let lookup_fun_sig (fun_id : fun_id) (fun_defs : fun_def FunDefId.Map.t) :
     fun_sig =
   match fun_id with
   | Local id -> (FunDefId.Map.find id fun_defs).signature
-  | Assumed aid ->
-      let _, sg =
-        List.find (fun (aid', _) -> aid = aid') Assumed.assumed_sigs
-      in
-      sg
+  | Assumed aid -> Assumed.get_assumed_sig aid
 
 let lookup_fun_name (fun_id : fun_id) (fun_defs : fun_def FunDefId.Map.t) :
     Identifiers.name =
   match fun_id with
   | Local id -> (FunDefId.Map.find id fun_defs).name
-  | Assumed aid ->
-      let _, sg =
-        List.find (fun (aid', _) -> aid = aid') Assumed.assumed_names
-      in
-      sg
+  | Assumed aid -> Assumed.get_assumed_name aid
 
 (** Small utility: list the transitive parents of a region var group.
     We don't do that in an efficient manner, but it doesn't matter.

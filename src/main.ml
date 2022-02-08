@@ -142,6 +142,7 @@ let () =
           Micro.decompose_monadic_let_bindings = !decompose_monads;
           unfold_monadic_let_bindings = !unfold_monads;
           filter_unused_monadic_calls = !filter_unused_calls;
+          add_unit_args = false;
         }
       in
       Translate.translate_module filename dest_dir config micro_passes_config

@@ -48,6 +48,8 @@ type config = {
           See the comments for [expression_contains_child_call_in_all_paths]
           for additional explanations.
        *)
+  add_unit_args : bool;
+      (** Add unit input arguments to functions with no arguments. *)
 }
 (** A configuration to control the application of the passes *)
 
@@ -615,16 +617,15 @@ let filter_if_backward_with_no_outputs (def : fun_def) : fun_def option =
   if Option.is_some def.back_id && def.signature.outputs = [] then None
   else Some def
 
-(** Add unit arguments for functions with no arguments, and change their return type *)
-let to_monadic (def : fun_def) : fun_def =
+(** Add unit arguments (optionally) for functions with no arguments, and change their return type *)
+let to_monadic (add_unit_args : bool) (def : fun_def) : fun_def =
   (* Update the body *)
   let obj =
     object
       inherit [_] map_expression as super
 
       method! visit_call env call =
-        (* If no arguments, introduce unit *)
-        if call.args = [] then
+        if call.args = [] && add_unit_args then
           let args = [ mk_value_expression unit_rvalue None ] in
           { call with args } (* Otherwise: nothing to do *)
         else super#visit_call env call
@@ -635,7 +636,7 @@ let to_monadic (def : fun_def) : fun_def =
 
   (* Update the signature: first the input types *)
   let def =
-    if def.inputs = [] then (
+    if def.inputs = [] && add_unit_args then (
       assert (def.signature.inputs = []);
       let signature = { def.signature with inputs = [ unit_ty ] } in
       let var_cnt = get_expression_min_var_counter def.body.e in
@@ -858,7 +859,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
        * **Rk.**: from now onwards, the types in the AST are correct (until now,
        * functions had return type `t` where they should have return type `result t`).
        * Also, from now onwards, the outputs list has length 1. x*)
-      let def = to_monadic def in
+      let def = to_monadic config.add_unit_args def in
       log#ldebug (lazy ("to_monadic:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
       (* Convert the unit variables to `()` if they are used as right-values or

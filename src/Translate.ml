@@ -227,9 +227,9 @@ let translate_module_to_pure (config : C.partial_config)
   (* Translate all the function *signatures* *)
   let assumed_sigs =
     List.map
-      (fun (id, sg) ->
+      (fun (id, sg, _, _) ->
         (A.Assumed id, List.map (fun _ -> None) (sg : A.fun_sig).inputs, sg))
-      Assumed.assumed_sigs
+      Assumed.assumed_infos
   in
   let local_sigs =
     List.map

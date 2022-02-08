@@ -913,11 +913,7 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
 let fun_is_monadic (fun_id : A.fun_id) : bool =
   match fun_id with
   | A.Local _ -> true
-  | A.Assumed
-      ( A.Replace | A.BoxNew | BoxDeref | BoxDerefMut | BoxFree | VecNew
-      | VecPush | VecLen ) ->
-      false
-  | A.Assumed (A.VecInsert | VecIndex | VecIndexMut) -> true
+  | A.Assumed aid -> Assumed.assumed_is_monadic aid
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with

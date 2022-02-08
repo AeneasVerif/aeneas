@@ -1,8 +1,18 @@
 /// This file lists primitive and assumed functions and types
 module Primitives
 open FStar.Mul
+open FStar.List.Tot
 
 #set-options "--z3rlimit 15 --fuel 0 --ifuel 1"
+
+(*** Utilities *)
+val list_update (#a : Type0) (ls : list a) (i : nat{i < length ls}) (x : a) :
+  ls':list a{length ls' = length ls}
+#push-options "--fuel 1"
+let rec list_update #a ls i x =
+  match ls with
+  | x' :: ls -> if i = 0 then x :: ls else x' :: list_update ls (i-1) x
+#pop-options
 
 (*** Result *)
 type result (a : Type0) : Type0 =
@@ -23,6 +33,10 @@ let massert (b:bool) : result unit = if b then Return () else Fail
 
 (*** Misc *)
 type char = FStar.Char.char
+type string = string
+
+let mem_replace_fwd (a : Type0) (x : a) (y : a) : a = x
+let mem_replace_back (a : Type0) (x : a) (y : a) : a = y
 
 (*** Scalars *)
 /// Rk.: most of the following code was at least partially generated
@@ -219,3 +233,38 @@ let u16_mul = scalar_mul #U16
 let u32_mul = scalar_mul #U32
 let u64_mul = scalar_mul #U64
 let u128_mul = scalar_mul #U128
+
+(*** Vector *)
+type vec (a : Type0) = v:list a{length v <= usize_max}
+
+let vec_new (a  : Type0) : vec a = assert_norm(length #a [] == 0); []
+let vec_len (a : Type0) (v : vec a) : usize = length v
+
+// The **forward** function shouldn't be used
+let vec_push_fwd (a  : Type0) (v : vec a) (x : a) : unit = ()
+let vec_push_back (a  : Type0) (v : vec a) (x : a) : result (vec a) =
+  if length v < usize_max then begin
+    (**) assert_norm(length [x] == 1);
+    (**) append_length v [x];
+    (**) assert(length (append v [x]) = length v + 1);
+    Return (append v [x])
+    end
+  else Fail
+
+// The **forward** function shouldn't be used
+let vec_insert_fwd (a : Type0) (v : vec a) (i : usize) (x : a) : result unit =
+  if i < length v then Return () else Fail
+let vec_insert_back (a : Type0) (v : vec a) (i : usize) (x : a) : result (vec a) =
+  if i < length v then Return (list_update v i x) else Fail
+
+// The **backward** function shouldn't be used
+let vec_index_fwd (a : Type0) (v : vec a) (i : usize) : result a =
+  if i < length v then Return (index v i) else Fail
+let vec_index_back (a : Type0) (v : vec a) (i : usize) (x : a) : result unit =
+  if i < length v then Return () else Fail
+
+let vec_index_mut_fwd (a : Type0) (v : vec a) (i : usize) : result a =
+  if i < length v then Return (index v i) else Fail
+let vec_index_mut_back (a : Type0) (v : vec a) (i : usize) (nx : a) : result (vec a) =
+  if i < length v then Return (list_update v i nx) else Fail
+
