@@ -662,6 +662,9 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
         | T.Adt ((Tuple | Assumed Box), _, _) | T.Ref (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config sv None
+        | T.Adt (Assumed (Vec | Option), _, _) ->
+            (* We can't expand those *)
+            failwith "Attempted to greedily expand a Vec or an Option "
         | T.Array _ -> raise Errors.Unimplemented
         | T.Slice _ -> failwith "Can't expand symbolic slices"
         | T.TypeVar _ | Bool | Char | Never | Integer _ | Str ->
