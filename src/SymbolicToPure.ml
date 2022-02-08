@@ -14,6 +14,12 @@ let log = L.symbolic_to_pure_log
 
 type type_context = {
   cfim_type_defs : T.type_def TypeDefId.Map.t;
+  type_defs : type_def TypeDefId.Map.t;
+      (** We use this for type-checking (for sanity checks) when translating
+          values and functions.
+          This map is empty when we translate the types, then contains all
+          the translated types when we translate the functions.
+       *)
   types_infos : TA.type_infos; (* TODO: rename to type_infos *)
 }
 
@@ -70,6 +76,14 @@ type bs_ctx = {
       (** The ended abstractions we encountered so far *)
 }
 (** Body synthesis context *)
+
+let type_check_rvalue (ctx : bs_ctx) (v : typed_rvalue) : unit =
+  let ctx = { TypeCheck.type_defs = ctx.type_context.type_defs } in
+  TypeCheck.check_typed_rvalue ctx v
+
+let type_check_lvalue (ctx : bs_ctx) (v : typed_lvalue) : unit =
+  let ctx = { TypeCheck.type_defs = ctx.type_context.type_defs } in
+  TypeCheck.check_typed_lvalue ctx v
 
 (* TODO: move *)
 let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.CfimAst.ast_formatter =
@@ -587,6 +601,9 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
   in
   let ty = ctx_translate_fwd_ty ctx v.ty in
   let value = { value; ty } in
+  (* Sanity check *)
+  type_check_rvalue ctx value;
+  (* Return *)
   value
 
 (** Explore an abstraction value and convert it to a consumed value
@@ -607,30 +624,37 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
 let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
     typed_rvalue option =
   let translate = typed_avalue_to_consumed ctx in
-  match av.value with
-  | AConcrete _ -> failwith "Unreachable"
-  | AAdt adt_v -> (
-      (* Translate the field values *)
-      let field_values = List.filter_map translate adt_v.field_values in
-      (* For now, only tuples can contain borrows *)
-      let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
-      match adt_id with
-      | T.AdtId _ | T.Assumed (T.Box | T.Vec | T.Option) ->
-          assert (field_values = []);
-          None
-      | T.Tuple ->
-          (* Return *)
-          if field_values = [] then None
-          else
-            (* Note that if there is exactly one field value,
-             * [mk_simpl_tuple_rvalue] is the identity *)
-            let rv = mk_simpl_tuple_rvalue field_values in
-            Some rv)
-  | ABottom -> failwith "Unreachable"
-  | ALoan lc -> aloan_content_to_consumed ctx lc
-  | ABorrow bc -> aborrow_content_to_consumed ctx bc
-  | ASymbolic aproj -> aproj_to_consumed ctx aproj
-  | AIgnored -> None
+  let value =
+    match av.value with
+    | AConcrete _ -> failwith "Unreachable"
+    | AAdt adt_v -> (
+        (* Translate the field values *)
+        let field_values = List.filter_map translate adt_v.field_values in
+        (* For now, only tuples can contain borrows *)
+        let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
+        match adt_id with
+        | T.AdtId _ | T.Assumed (T.Box | T.Vec | T.Option) ->
+            assert (field_values = []);
+            None
+        | T.Tuple ->
+            (* Return *)
+            if field_values = [] then None
+            else
+              (* Note that if there is exactly one field value,
+               * [mk_simpl_tuple_rvalue] is the identity *)
+              let rv = mk_simpl_tuple_rvalue field_values in
+              Some rv)
+    | ABottom -> failwith "Unreachable"
+    | ALoan lc -> aloan_content_to_consumed ctx lc
+    | ABorrow bc -> aborrow_content_to_consumed ctx bc
+    | ASymbolic aproj -> aproj_to_consumed ctx aproj
+    | AIgnored -> None
+  in
+  (* Sanity check - Rk.: we do this at every recursive call, which is a bit
+   * expansive... *)
+  (match value with None -> () | Some value -> type_check_rvalue ctx value);
+  (* Return *)
+  value
 
 and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
     typed_rvalue option =
@@ -731,43 +755,50 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
  *)
 let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
     (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
-  match av.value with
-  | AConcrete _ -> failwith "Unreachable"
-  | AAdt adt_v -> (
-      (* Translate the field values *)
-      (* For now we forget the meta-place information so that it doesn't get used
-       * by several fields (which would then all have the same name...), but we
-       * might want to do something smarter *)
-      let mp = None in
-      let ctx, field_values =
-        List.fold_left_map
-          (fun ctx fv -> typed_avalue_to_given_back mp fv ctx)
-          ctx adt_v.field_values
-      in
-      let field_values = List.filter_map (fun x -> x) field_values in
-      (* For now, only tuples can contain borrows - note that if we gave
-       * something like a `&mut Vec` to a function, we give give back the
-       * vector value upon visiting the "abstraction borrow" node *)
-      let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
-      match adt_id with
-      | T.AdtId _ | T.Assumed (T.Box | T.Vec | T.Option) ->
-          assert (field_values = []);
-          (ctx, None)
-      | T.Tuple ->
-          (* Return *)
-          let variant_id = adt_v.variant_id in
-          assert (variant_id = None);
-          if field_values = [] then (ctx, None)
-          else
-            (* Note that if there is exactly one field value, [mk_simpl_tuple_lvalue]
-             * is the identity *)
-            let lv = mk_simpl_tuple_lvalue field_values in
-            (ctx, Some lv))
-  | ABottom -> failwith "Unreachable"
-  | ALoan lc -> aloan_content_to_given_back mp lc ctx
-  | ABorrow bc -> aborrow_content_to_given_back mp bc ctx
-  | ASymbolic aproj -> aproj_to_given_back mp aproj ctx
-  | AIgnored -> (ctx, None)
+  let ctx, value =
+    match av.value with
+    | AConcrete _ -> failwith "Unreachable"
+    | AAdt adt_v -> (
+        (* Translate the field values *)
+        (* For now we forget the meta-place information so that it doesn't get used
+         * by several fields (which would then all have the same name...), but we
+         * might want to do something smarter *)
+        let mp = None in
+        let ctx, field_values =
+          List.fold_left_map
+            (fun ctx fv -> typed_avalue_to_given_back mp fv ctx)
+            ctx adt_v.field_values
+        in
+        let field_values = List.filter_map (fun x -> x) field_values in
+        (* For now, only tuples can contain borrows - note that if we gave
+         * something like a `&mut Vec` to a function, we give give back the
+         * vector value upon visiting the "abstraction borrow" node *)
+        let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
+        match adt_id with
+        | T.AdtId _ | T.Assumed (T.Box | T.Vec | T.Option) ->
+            assert (field_values = []);
+            (ctx, None)
+        | T.Tuple ->
+            (* Return *)
+            let variant_id = adt_v.variant_id in
+            assert (variant_id = None);
+            if field_values = [] then (ctx, None)
+            else
+              (* Note that if there is exactly one field value, [mk_simpl_tuple_lvalue]
+               * is the identity *)
+              let lv = mk_simpl_tuple_lvalue field_values in
+              (ctx, Some lv))
+    | ABottom -> failwith "Unreachable"
+    | ALoan lc -> aloan_content_to_given_back mp lc ctx
+    | ABorrow bc -> aborrow_content_to_given_back mp bc ctx
+    | ASymbolic aproj -> aproj_to_given_back mp aproj ctx
+    | AIgnored -> (ctx, None)
+  in
+  (* Sanity check - Rk.: we do this at every recursive call, which is a bit
+   * expansive... *)
+  (match value with None -> () | Some value -> type_check_lvalue ctx value);
+  (* Return *)
+  (ctx, value)
 
 and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
     (ctx : bs_ctx) : bs_ctx * typed_lvalue option =

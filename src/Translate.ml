@@ -61,7 +61,8 @@ let translate_function_to_symbolics (config : C.partial_config)
 let translate_function_to_pure (config : C.partial_config)
     (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
-    (fdef : A.fun_def) : pure_fun_translation =
+    (pure_type_defs : Pure.type_def Pure.TypeDefId.Map.t) (fdef : A.fun_def) :
+    pure_fun_translation =
   (* Debug *)
   log#ldebug
     (lazy ("translate_function_to_pure: " ^ Print.name_to_string fdef.A.name));
@@ -91,6 +92,7 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.types_infos = type_context.type_infos;
       cfim_type_defs = type_context.type_defs;
+      type_defs = pure_type_defs;
     }
   in
   let fun_context =
@@ -216,6 +218,12 @@ let translate_module_to_pure (config : C.partial_config)
   (* Translate all the type definitions *)
   let type_defs = SymbolicToPure.translate_type_defs m.types in
 
+  (* Compute the type definition map *)
+  let type_defs_map =
+    Pure.TypeDefId.Map.of_list
+      (List.map (fun (def : Pure.type_def) -> (def.def_id, def)) type_defs)
+  in
+
   (* Translate all the function *signatures* *)
   let assumed_sigs =
     List.map
@@ -240,7 +248,9 @@ let translate_module_to_pure (config : C.partial_config)
 
   (* Translate all the functions *)
   let pure_translations =
-    List.map (translate_function_to_pure config trans_ctx fun_sigs) m.functions
+    List.map
+      (translate_function_to_pure config trans_ctx fun_sigs type_defs_map)
+      m.functions
   in
 
   (* Apply the micro-passes *)

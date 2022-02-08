@@ -262,28 +262,36 @@ let adt_g_value_to_string (fmt : value_formatter)
           if variant_id = result_return_id then
             match field_values with
             | [ v ] -> "@Result::Return " ^ v
-            | _ -> failwith "Result::Return takes exactly one value"
+            | _ -> raise (Failure "Result::Return takes exactly one value")
           else if variant_id = result_fail_id then (
             assert (field_values = []);
             "@Result::Fail")
-          else failwith "Unreachable: improper variant id for result type"
+          else
+            raise (Failure "Unreachable: improper variant id for result type")
       | Option ->
           let variant_id = Option.get variant_id in
           if variant_id = option_some_id then
             match field_values with
             | [ v ] -> "@Option::Some " ^ v
-            | _ -> failwith "Option::Some takes exactly one value"
+            | _ -> raise (Failure "Option::Some takes exactly one value")
           else if variant_id = option_none_id then (
             assert (field_values = []);
             "@Option::None")
-          else failwith "Unreachable: improper variant id for result type"
+          else
+            raise (Failure "Unreachable: improper variant id for result type")
       | Vec ->
           assert (variant_id = None);
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in
           "Vec [" ^ String.concat "; " field_values ^ "]")
-  | _ -> failwith "Inconsistent typed value"
+  | _ ->
+      let fmt = value_to_type_formatter fmt in
+      raise
+        (Failure
+           ("Inconsistently typed value: expected ADT type but found:"
+          ^ "\n- ty: " ^ ty_to_string fmt ty ^ "\n- variant_id: "
+           ^ Print.option_to_string VariantId.to_string variant_id))
 
 let rec typed_lvalue_to_string (fmt : value_formatter) (v : typed_lvalue) :
     string =
