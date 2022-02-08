@@ -233,7 +233,7 @@ let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
   in
   (* Check if there is strictly more than one variant *)
   if List.length variants_fields_types > 1 && not expand_enumerations then
-    failwith "Not allowed to expand enumerations with several variants";
+    raise (Failure "Not allowed to expand enumerations with several variants");
   (* Initialize the expanded value for a given variant *)
   let initialize
       ((variant_id, field_types) : T.VariantId.id option * T.rty list) :
@@ -297,7 +297,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
             Some [ V.AsbBorrow bid; shared_asb ]
           else (* Not in the set: ignore *)
             Some [ shared_asb ]
-      | _ -> failwith "Unexpected"
+      | _ -> raise (Failure "Unexpected")
     else None
   in
   (* The fresh symbolic value for the shared value *)
@@ -452,7 +452,7 @@ let apply_branching_symbolic_expansions_non_borrow (config : C.config)
     | None :: _ ->
         List.iter (fun res -> assert (res = None)) resl;
         None
-    | _ -> failwith "Unreachable"
+    | _ -> raise (Failure "Unreachable")
   in
   (* Synthesize and return *)
   let seel = List.map fst see_cf_l in
@@ -534,7 +534,9 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
         (* Apply the symbolic expansion (this also outputs the updated symbolic AST) *)
         apply_branching_symbolic_expansions_non_borrow config original_sv
           original_sv_place seel ctx
-    | _ -> failwith ("expand_symbolic_value: unexpected type: " ^ T.show_rty rty)
+    | _ ->
+        raise
+          (Failure ("expand_symbolic_value: unexpected type: " ^ T.show_rty rty))
   in
   (* Debug *)
   let cc =
@@ -651,28 +653,31 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
             (match def.kind with
             | T.Struct _ | T.Enum ([] | [ _ ]) -> ()
             | T.Enum (_ :: _) ->
-                failwith
-                  ("Attempted to greedily expand a symbolic enumeration with > \
-                    1 variants (option [greedy_expand_symbolics_with_borrows] \
-                    of [config]): "
-                  ^ Print.name_to_string def.name));
+                raise
+                  (Failure
+                     ("Attempted to greedily expand a symbolic enumeration \
+                       with > 1 variants (option \
+                       [greedy_expand_symbolics_with_borrows] of [config]): "
+                     ^ Print.name_to_string def.name)));
             (* Also, we need to check if the definition is recursive *)
             if C.ctx_type_def_is_rec ctx def_id then
-              failwith
-                ("Attempted to greedily expand a recursive definition (option \
-                  [greedy_expand_symbolics_with_borrows] of [config]): "
-                ^ Print.name_to_string def.name)
+              raise
+                (Failure
+                   ("Attempted to greedily expand a recursive definition \
+                     (option [greedy_expand_symbolics_with_borrows] of \
+                     [config]): "
+                   ^ Print.name_to_string def.name))
             else expand_symbolic_value_no_branching config sv None
         | T.Adt ((Tuple | Assumed Box), _, _) | T.Ref (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config sv None
         | T.Adt (Assumed (Vec | Option), _, _) ->
             (* We can't expand those *)
-            failwith "Attempted to greedily expand a Vec or an Option "
+            raise (Failure "Attempted to greedily expand a Vec or an Option ")
         | T.Array _ -> raise Errors.Unimplemented
-        | T.Slice _ -> failwith "Can't expand symbolic slices"
+        | T.Slice _ -> raise (Failure "Can't expand symbolic slices")
         | T.TypeVar _ | Bool | Char | Never | Integer _ | Str ->
-            failwith "Unreachable"
+            raise (Failure "Unreachable")
       in
       (* Compose and continue *)
       comp cc expand cf ctx
