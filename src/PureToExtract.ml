@@ -65,12 +65,18 @@ type formatter = {
           - type name
        *)
   type_name : name -> string;  (** Provided a basename, compute a type name. *)
-  fun_name : A.fun_id -> name -> int -> region_group_info option -> string;
+  fun_name :
+    A.fun_id -> name -> int -> region_group_info option -> bool * int -> string;
       (** Inputs:
           - function id: this is especially useful to identify whether the
             function is an assumed function or a local function
           - function basename
           - number of region groups
+          - pair:
+            - do we generate the forward function (it may have been filtered)?
+            - the number of extracted backward functions (not necessarily equal
+              to the number of region groups, because we may have filtered
+              some of them)
           - region group information in case of a backward function
             (`None` if forward function)
        *)
@@ -497,12 +503,15 @@ let ctx_add_struct (def : type_def) (ctx : extraction_ctx) :
   let ctx = ctx_add (StructId (AdtId def.def_id)) name ctx in
   (ctx, name)
 
-let ctx_add_fun_def (def : fun_def) (ctx : extraction_ctx) : extraction_ctx =
+let ctx_add_fun_def (trans_group : bool * pure_fun_translation) (def : fun_def)
+    (ctx : extraction_ctx) : extraction_ctx =
   (* Lookup the CFIM def to compute the region group information *)
   let def_id = def.def_id in
   let cfim_def = FunDefId.Map.find def_id ctx.trans_ctx.fun_context.fun_defs in
   let sg = cfim_def.signature in
   let num_rgs = List.length sg.regions_hierarchy in
+  let keep_fwd, (_, backs) = trans_group in
+  let num_backs = List.length backs in
   let rg_info =
     match def.back_id with
     | None -> None
@@ -519,7 +528,9 @@ let ctx_add_fun_def (def : fun_def) (ctx : extraction_ctx) : extraction_ctx =
         Some { id = rg_id; region_names }
   in
   let def_id = A.Local def_id in
-  let name = ctx.fmt.fun_name def_id def.basename num_rgs rg_info in
+  let name =
+    ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
+  in
   let ctx = ctx_add (FunId (def_id, def.back_id)) name ctx in
   ctx
 
@@ -588,13 +599,17 @@ let compute_type_def_name (fmt : formatter) (def : type_def) : string =
     TODO: move all those helpers.
 *)
 let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
-    : string =
+    ((keep_fwd, num_backs) : bool * int) : string =
   (* There are several cases:
      - [rg] is `Some`: this is a forward function:
        - we add "_fwd"
      - [rg] is `None`: this is a backward function:
-       - this function has one region group: we add "_back"
-       - this function has several backward function: we add "_back" and an
+       - this function has one extracted backward function:
+         - if the forward function has been filtered, we add "_fwd_back":
+           the forward function is useless, so the unique backward function
+           takes its place, in a way
+         - otherwise we add "_back"
+       - this function has several backward functions: we add "_back" and an
          additional suffix to identify the precise backward function
      Note that we always add a suffix (in case there are no region groups,
      we could not add the "_fwd" suffix) to prevent name clashes between
@@ -603,9 +618,10 @@ let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
   match rg with
   | None -> "_fwd"
   | Some rg ->
-      assert (num_region_groups > 0);
-      if num_region_groups = 1 then (* Exactly one backward function *)
-        "_back"
+      assert (num_region_groups > 0 && num_backs > 0);
+      if num_backs = 1 then
+        (* Exactly one backward function *)
+        if not keep_fwd then "_fwd_back" else "_back"
       else if
         (* Several region groups/backward functions:
            - if all the regions in the group have names, we use those names
@@ -617,32 +633,3 @@ let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
         "_back" ^ String.concat "" (List.map Option.get rg.region_names)
       else (* Use the region index *)
         "_back" ^ RegionGroupId.to_string rg.id
-
-(** Extract information from a function, and give this information to a
-    [formatter] to generate a function's name.
-    
-    Note that we need region information coming from CFIM (when generating
-    the name for a backward function, we try to use the names of the regions
-    to 
- *)
-let compute_fun_def_name (ctx : trans_ctx) (fmt : formatter) (fun_id : A.fun_id)
-    (rg_id : RegionGroupId.id option) : string =
-  (* Lookup the function CFIM signature (we need the region information) *)
-  let sg = CfimAstUtils.lookup_fun_sig fun_id ctx.fun_context.fun_defs in
-  let basename = CfimAstUtils.lookup_fun_name fun_id ctx.fun_context.fun_defs in
-  (* Compute the regions information *)
-  let num_region_groups = List.length sg.regions_hierarchy in
-  let rg_info =
-    match rg_id with
-    | None -> None
-    | Some rg_id ->
-        let rg = RegionGroupId.nth sg.regions_hierarchy rg_id in
-        let regions =
-          List.map (fun rid -> RegionVarId.nth sg.region_params rid) rg.regions
-        in
-        let region_names =
-          List.map (fun (r : T.region_var) -> r.name) regions
-        in
-        Some { id = rg.id; region_names }
-  in
-  fmt.fun_name fun_id basename num_region_groups rg_info

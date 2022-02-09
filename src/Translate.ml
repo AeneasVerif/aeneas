@@ -314,8 +314,8 @@ let translate_module (filename : string) (dest_dir : string)
 
   let extract_ctx =
     List.fold_left
-      (fun extract_ctx (_, def) ->
-        ExtractToFStar.extract_fun_def_register_names extract_ctx def)
+      (fun extract_ctx (keep_fwd, def) ->
+        ExtractToFStar.extract_fun_def_register_names extract_ctx keep_fwd def)
       extract_ctx trans_funs
   in
 

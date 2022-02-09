@@ -264,12 +264,12 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
         raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
   in
   let fun_name (_fid : A.fun_id) (fname : name) (num_rgs : int)
-      (rg : region_group_info option) : string =
+      (rg : region_group_info option) (filter_info : bool * int) : string =
     let fname = get_fun_name fname in
     (* Converting to snake case should be a no-op, but it doesn't cost much *)
     let fname = to_snake_case fname in
     (* Compute the suffix *)
-    let suffix = default_fun_suffix num_rgs rg in
+    let suffix = default_fun_suffix num_rgs rg filter_info in
     (* Concatenate *)
     fname ^ suffix
   in
@@ -632,14 +632,16 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
 (** Compute the names for all the pure functions generated from a rust function
     (forward function and backward functions).
  *)
-let extract_fun_def_register_names (ctx : extraction_ctx)
+let extract_fun_def_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     (def : pure_fun_translation) : extraction_ctx =
   let fwd, back_ls = def in
   (* Register the forward function name *)
-  let ctx = ctx_add_fun_def fwd ctx in
+  let ctx = ctx_add_fun_def (keep_fwd, def) fwd ctx in
   (* Register the backward functions' names *)
   let ctx =
-    List.fold_left (fun ctx back -> ctx_add_fun_def back ctx) ctx back_ls
+    List.fold_left
+      (fun ctx back -> ctx_add_fun_def (keep_fwd, def) back ctx)
+      ctx back_ls
   in
   (* Return *)
   ctx
