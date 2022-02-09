@@ -1,30 +1,40 @@
-all: build-run
+all: build-test
 
 CHARON_HOME=../charon/charon
 CHARON_TESTS_DIR=$(CHARON_HOME)/tests/src
 DEST_DIR=tests/
 
-RS_TEST_FILE1=tests/src/no_nested_borrows.rs
-CFIM_TEST_FILE1=$(CHARON_TESTS_DIR)/no_nested_borrows.cfim
+# Default translation options:
+# - insert calls to the normalizer in the translated code to test the
+#   generated unit functions
+TRANS_OPTIONS=-test-trans-units
 
-RS_TEST_FILE2=tests/src/hashmap.rs
-CFIM_TEST_FILE2=$(CHARON_TESTS_DIR)/hashmap.cfim
+# Build the project and test it
+.PHONY: build-test
+build-test: build test
 
 # Build the project
 .PHONY: build
 build:
 	dune build src/main.exe
 
-# Build the project and run the executable
-.PHONY: build-run
-build-run: build
-	dune exec -- src/main.exe $(CFIM_TEST_FILE1) -dest $(DEST_DIR) -test-units -test-trans-units
-	dune exec -- src/main.exe $(CFIM_TEST_FILE2) -dest $(DEST_DIR) -test-trans-units
+# Test the project
+.PHONY: test
+test: build translate-no_nested_borrows translate-hashmap
 
-.PHONY: generate-cfim
-generate-cfim:
-	cd ../charon/charon && cargo run $(RS_TEST_FILE1)
-	cd ../charon/charon && cargo run $(RS_TEST_FILE2)
+# Add specific options to some tests
+translate-no_nested_borrows: OPTIONS := $(OPTIONS) -test-units
 
+# Generic rule to extract the CFIM from a rust file
+.PHONY: gen-cfim-%
+gen-cfim-%: build
+	cd ../charon/charon && cargo run tests/src/$*.rs
+
+# Generic rule to test the translation on a CFIM file
+.PHONY: translate-%
+translate-%: gen-cfim-%
+	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.cfim -dest $(DEST_DIR) $(TRANS_OPTIONS)
+
+.PHONY: doc
 doc:
 	dune build @doc
