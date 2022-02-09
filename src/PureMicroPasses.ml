@@ -617,7 +617,9 @@ let filter_if_backward_with_no_outputs (def : fun_def) : fun_def option =
   if Option.is_some def.back_id && def.signature.outputs = [] then None
   else Some def
 
-(** Add unit arguments (optionally) for functions with no arguments, and change their return type *)
+(** Add unit arguments (optionally) to functions with no arguments, and
+    change their output type to use `result`
+  *)
 let to_monadic (add_unit_args : bool) (def : fun_def) : fun_def =
   (* Update the body *)
   let obj =
