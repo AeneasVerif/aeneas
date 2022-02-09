@@ -27,6 +27,7 @@ let () =
   let decompose_monads = ref false in
   let unfold_monads = ref true in
   let filter_unused_calls = ref true in
+  let filter_useless_functions = ref true in
   let test_units = ref false in
   let test_trans_units = ref false in
 
@@ -50,6 +51,9 @@ let () =
       ( "-filter-unused-calls",
         Arg.Set filter_unused_calls,
         " Filter the unused function calls, when possible" );
+      ( "-filter-useless-funs",
+        Arg.Set filter_useless_functions,
+        " Filter the useless forward/backward functions" );
       ( "-test-units",
         Arg.Set test_units,
         " Test the unit functions with the concrete interpreter" );
@@ -142,6 +146,7 @@ let () =
           Micro.decompose_monadic_let_bindings = !decompose_monads;
           unfold_monadic_let_bindings = !unfold_monads;
           filter_unused_monadic_calls = !filter_unused_calls;
+          filter_useless_functions = !filter_useless_functions;
           add_unit_args = false;
         }
       in

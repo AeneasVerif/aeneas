@@ -47,6 +47,20 @@ type config = {
           
           See the comments for [expression_contains_child_call_in_all_paths]
           for additional explanations.
+          
+          TODO: rename to [filter_useless_monadic_calls]
+       *)
+  filter_useless_functions : bool;
+      (** If [filter_unused_monadic_calls] is activated, some functions
+          become useless: if this option is true, we don't extract them.
+
+          The calls to functions which always get filtered are:
+          - the forward functions with unit return value
+          - the backward functions which don't output anything (backward
+            functions coming from rust functions with no mutable borrows
+            as input values - note that if a function doesn't take mutable
+            borrows as inputs, it can't return mutable borrows; we actually
+            dynamically check for that).
        *)
   add_unit_args : bool;
       (** Add unit input arguments to functions with no arguments. *)
@@ -612,10 +626,46 @@ let filter_unused (filter_monadic_calls : bool) (ctx : trans_ctx)
   { def with body; inputs_lvs }
 
 (** Return `None` if the function is a backward function with no outputs (so
-    that we eliminate the definition which is useless) *)
-let filter_if_backward_with_no_outputs (def : fun_def) : fun_def option =
-  if Option.is_some def.back_id && def.signature.outputs = [] then None
+    that we eliminate the definition which is useless).
+
+    Note that the calls to such functions are filtered when translating from
+    symbolic to pure. Here, we remove the definitions altogether, because they
+    are now useless
+  *)
+let filter_if_backward_with_no_outputs (config : config) (def : fun_def) :
+    fun_def option =
+  if
+    config.filter_useless_functions && Option.is_some def.back_id
+    && def.signature.outputs = []
+  then None
   else Some def
+
+(** Return `false` if the forward function is useless and should be filtered.
+
+    - a forward function with no output (comes from a Rust function with
+      unit return type)
+    - the function has mutable borrows as inputs (which is materialized
+      by the fact we generated backward functions which were not filtered).
+
+    In such situation, every call to the Rust function will be translated to:
+    - a call to the forward function which returns nothing
+    - calls to the backward functions
+    As a failing backward function implies the forward function also fails,
+    we can filter the calls to the forward function, which thus becomes
+    useless.
+    In such situation, we can remove the forward function definition
+    altogether.
+  *)
+let keep_forward (config : config) (trans : pure_fun_translation) : bool =
+  let fwd, backs = trans in
+  (* Note that at this point, the output types are no longer seen as tuples:
+   * they should be lists of length 1. *)
+  if
+    config.filter_useless_functions
+    && fwd.signature.outputs = [ mk_result_ty unit_ty ]
+    && backs <> []
+  then false
+  else true
 
 (** Add unit arguments (optionally) to functions with no arguments, and
     change their output type to use `result`
@@ -852,7 +902,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
    * Note that the calls to those functions should already have been removed,
    * when translating from symbolic to pure. Here, we remove the definitions
    * altogether, because they are now useless *)
-  let def = filter_if_backward_with_no_outputs def in
+  let def = filter_if_backward_with_no_outputs config def in
 
   match def with
   | None -> None
@@ -924,9 +974,21 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
       (* We are done *)
       Some def
 
+(** Return the forward/backward translations on which we applied the micro-passes.
+
+    Also returns a boolean indicating whether the forward function should be kept
+    or not (because useful/useless - `true` means we need to keep the forward
+    function).
+    Note that we don't "filter" the forward function and return a boolean instead,
+    because this function contains useful information to extract the backward
+    functions: keeping it is not necessary but more convenient.
+ *)
 let apply_passes_to_pure_fun_translation (config : config) (ctx : trans_ctx)
-    (trans : pure_fun_translation) : pure_fun_translation =
+    (trans : pure_fun_translation) : bool * pure_fun_translation =
+  (* Apply the passes to the individual functions *)
   let forward, backwards = trans in
   let forward = Option.get (apply_passes_to_def config ctx forward) in
   let backwards = List.filter_map (apply_passes_to_def config ctx) backwards in
-  (forward, backwards)
+  let trans = (forward, backwards) in
+  (* Compute whether we need to filter the forward function or not *)
+  (keep_forward config trans, trans)

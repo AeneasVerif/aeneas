@@ -59,7 +59,7 @@ let translate_function_to_symbolics (config : C.partial_config)
     TODO: maybe we should introduce a record for this.
 *)
 let translate_function_to_pure (config : C.partial_config)
-    (trans_ctx : trans_ctx)
+    (mp_config : Micro.config) (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
     (pure_type_defs : Pure.type_def Pure.TypeDefId.Map.t) (fdef : A.fun_def) :
     pure_fun_translation =
@@ -134,9 +134,17 @@ let translate_function_to_pure (config : C.partial_config)
     { ctx with forward_inputs }
   in
 
+  (* The symbolic to pure config *)
+  let sp_config =
+    {
+      SymbolicToPure.filter_useless_back_calls =
+        mp_config.filter_unused_monadic_calls;
+    }
+  in
+
   (* Translate the forward function *)
   let pure_forward =
-    SymbolicToPure.translate_fun_def
+    SymbolicToPure.translate_fun_def sp_config
       (add_forward_inputs (fst symbolic_forward) ctx)
       (snd symbolic_forward)
   in
@@ -196,7 +204,7 @@ let translate_function_to_pure (config : C.partial_config)
     in
 
     (* Translate *)
-    SymbolicToPure.translate_fun_def ctx symbolic
+    SymbolicToPure.translate_fun_def sp_config ctx symbolic
   in
   let pure_backwards =
     List.map translate_backward fdef.signature.regions_hierarchy
@@ -207,7 +215,7 @@ let translate_function_to_pure (config : C.partial_config)
 
 let translate_module_to_pure (config : C.partial_config)
     (mp_config : Micro.config) (m : M.cfim_module) :
-    trans_ctx * Pure.type_def list * pure_fun_translation list =
+    trans_ctx * Pure.type_def list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
 
@@ -249,7 +257,8 @@ let translate_module_to_pure (config : C.partial_config)
   (* Translate all the functions *)
   let pure_translations =
     List.map
-      (translate_function_to_pure config trans_ctx fun_sigs type_defs_map)
+      (translate_function_to_pure config mp_config trans_ctx fun_sigs
+         type_defs_map)
       m.functions
   in
 
@@ -305,7 +314,7 @@ let translate_module (filename : string) (dest_dir : string)
 
   let extract_ctx =
     List.fold_left
-      (fun extract_ctx def ->
+      (fun extract_ctx (_, def) ->
         ExtractToFStar.extract_fun_def_register_names extract_ctx def)
       extract_ctx trans_funs
   in
@@ -337,7 +346,8 @@ let translate_module (filename : string) (dest_dir : string)
   let trans_funs =
     Pure.FunDefId.Map.of_list
       (List.map
-         (fun ((fd, bdl) : pure_fun_translation) -> (fd.def_id, (fd, bdl)))
+         (fun ((keep_fwd, (fd, bdl)) : bool * pure_fun_translation) ->
+           (fd.def_id, (keep_fwd, (fd, bdl))))
          trans_funs)
   in
 
@@ -368,11 +378,16 @@ let translate_module (filename : string) (dest_dir : string)
   (* In case of (non-mutually) recursive functions, we use a simple procedure to
    * check if the forward and backward functions are mutually recursive.
    *)
-  let export_functions (is_rec : bool) (pure_ls : pure_fun_translation list) :
-      unit =
-    (* Generate the function definitions *)
+  let export_functions (is_rec : bool)
+      (pure_ls : (bool * pure_fun_translation) list) : unit =
+    (* Generate the function definitions, filtering the uselss forward
+     * functions. *)
     let fls =
-      List.concat (List.map (fun (fwd, back_ls) -> fwd :: back_ls) pure_ls)
+      List.concat
+        (List.map
+           (fun (keep_fwd, (fwd, back_ls)) ->
+             if keep_fwd then fwd :: back_ls else back_ls)
+           pure_ls)
     in
     (* Check if the functions are mutually recursive - this really works
      * to check if the forward and backward translations of a single
@@ -397,8 +412,9 @@ let translate_module (filename : string) (dest_dir : string)
     (* Insert unit tests if necessary *)
     if test_unit_functions then
       List.iter
-        (fun (fwd, _) ->
-          ExtractToFStar.extract_unit_test_if_unit_fun extract_ctx fmt fwd)
+        (fun (keep_fwd, (fwd, _)) ->
+          if keep_fwd then
+            ExtractToFStar.extract_unit_test_if_unit_fun extract_ctx fmt fwd)
         pure_ls
   in
 
