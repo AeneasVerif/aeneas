@@ -347,6 +347,15 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
              if keep_fwd then (fwd, fwd) :: back_ls else back_ls)
            pure_ls)
     in
+    (* Extract the decrease clauses template bodies *)
+    if config.extract_template_decrease_clauses then
+      List.iter
+        (fun (_, (fwd, _)) ->
+          let has_decr_clause = has_decrease_clause fwd in
+          if has_decr_clause then
+            ExtractToFStar.extract_template_decrease_clause ctx.extract_ctx fmt
+              fwd)
+        pure_ls;
     (* Extract the function definitions *)
     (if config.extract_fun_defs then
      (* Check if the functions are mutually recursive - this really works
