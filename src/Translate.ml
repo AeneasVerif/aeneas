@@ -592,7 +592,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let types_module = module_name ^ ".Types" in
     let types_config = { base_gen_config with extract_types = true } in
     extract_file types_config gen_ctx types_filename m.M.name types_module
-      ": types definitions" [] [];
+      ": type definitions" [] [];
 
     (* Extract the template clauses *)
     (if
