@@ -18,6 +18,9 @@ module M = Modules
 module E = Expressions
 module A = CfimAst
 
+(* The default logger *)
+let log = Logging.cfim_of_json_logger
+
 let name_of_json (js : json) : (name, string) result =
   combine_error_msgs js "name_of_json" (list_of_json string_of_json js)
 
@@ -234,40 +237,40 @@ let scalar_value_of_json (js : json) : (V.scalar_value, string) result =
   let res =
     combine_error_msgs js "scalar_value_of_json"
       (match js with
-      | `Assoc [ ("Isize", bi) ] ->
+      | `Assoc [ ("Isize", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = Isize }
-      | `Assoc [ ("I8", bi) ] ->
+      | `Assoc [ ("I8", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = I8 }
-      | `Assoc [ ("I16", bi) ] ->
+      | `Assoc [ ("I16", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = I16 }
-      | `Assoc [ ("I32", bi) ] ->
+      | `Assoc [ ("I32", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = I32 }
-      | `Assoc [ ("I64", bi) ] ->
+      | `Assoc [ ("I64", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = I64 }
-      | `Assoc [ ("I128", bi) ] ->
+      | `Assoc [ ("I128", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = I128 }
-      | `Assoc [ ("Usize", bi) ] ->
+      | `Assoc [ ("Usize", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = Usize }
-      | `Assoc [ ("U8", bi) ] ->
+      | `Assoc [ ("U8", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = U8 }
-      | `Assoc [ ("U16", bi) ] ->
+      | `Assoc [ ("U16", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = U16 }
-      | `Assoc [ ("U32", bi) ] ->
+      | `Assoc [ ("U32", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = U32 }
-      | `Assoc [ ("U64", bi) ] ->
+      | `Assoc [ ("U64", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = U64 }
-      | `Assoc [ ("U128", bi) ] ->
+      | `Assoc [ ("U128", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
           Ok { V.value = bi; int_ty = U128 }
       | _ -> Error "")
@@ -275,7 +278,9 @@ let scalar_value_of_json (js : json) : (V.scalar_value, string) result =
   match res with
   | Error _ -> res
   | Ok sv ->
-      assert (S.check_scalar_value_in_range sv);
+      if not (S.check_scalar_value_in_range sv) then (
+        log#serror ("Scalar value not in range: " ^ V.show_scalar_value sv);
+        raise (Failure ("Scalar value not in range: " ^ V.show_scalar_value sv)));
       res
 
 let constant_value_of_json (js : json) : (V.constant_value, string) result =

@@ -115,6 +115,7 @@ let () =
    * command-line arguments *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Info;
   main_log#set_level EL.Info;
+  cfim_of_json_logger#set_level EL.Info;
   pre_passes_log#set_level EL.Info;
   interpreter_log#set_level EL.Info;
   statements_log#set_level EL.Info;
