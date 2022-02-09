@@ -286,6 +286,103 @@ let translate_module_to_pure (config : C.partial_config)
   (* Return *)
   (trans_ctx, type_defs, pure_translations)
 
+type gen_ctx = {
+  m : M.cfim_module;
+  extract_ctx : PureToExtract.extraction_ctx;
+  trans_types : Pure.type_def Pure.TypeDefId.Map.t;
+  trans_funs : (bool * pure_fun_translation) Pure.FunDefId.Map.t;
+  extract_types : bool;
+  functions_with_decrease_clause : Pure.FunDefId.Set.t;
+  extract_decrease_clauses : bool;
+  extract_template_decrease_clauses : bool;
+  extract_functions : bool;
+  test_unit_functions : bool;
+}
+(** Extraction context *)
+
+(** A generic utility to generate the extracted definitions: as we may want to
+    split the definitions between different files (or not), we can control
+    what is precisely extracted.
+ *)
+let extract_definitions (fmt : Format.formatter) (ctx : gen_ctx) : unit =
+  (* Export the definition groups to the file, in the proper order *)
+  let export_type (qualif : ExtractToFStar.type_def_qualif)
+      (id : Pure.TypeDefId.id) : unit =
+    let def = Pure.TypeDefId.Map.find id ctx.trans_types in
+    ExtractToFStar.extract_type_def ctx.extract_ctx fmt qualif def
+  in
+
+  (* In case of (non-mutually) recursive functions, we use a simple procedure to
+   * check if the forward and backward functions are mutually recursive.
+   *)
+  let export_functions (is_rec : bool)
+      (pure_ls : (bool * pure_fun_translation) list) : unit =
+    (* Generate the function definitions, filtering the uselss forward
+     * functions. *)
+    let fls =
+      List.concat
+        (List.map
+           (fun (keep_fwd, (fwd, back_ls)) ->
+             if keep_fwd then fwd :: back_ls else back_ls)
+           pure_ls)
+    in
+    (* Check if the functions are mutually recursive - this really works
+     * to check if the forward and backward translations of a single
+     * recursive function are mutually recursive *)
+    let is_mut_rec =
+      if is_rec then
+        if List.length pure_ls <= 1 then
+          not (PureUtils.functions_not_mutually_recursive fls)
+        else true
+      else false
+    in
+    List.iteri
+      (fun i def ->
+        let qualif =
+          if not is_rec then ExtractToFStar.Let
+          else if is_mut_rec then
+            if i = 0 then ExtractToFStar.LetRec else ExtractToFStar.And
+          else ExtractToFStar.LetRec
+        in
+        ExtractToFStar.extract_fun_def ctx.extract_ctx fmt qualif def)
+      fls;
+    (* Insert unit tests if necessary *)
+    if ctx.test_unit_functions then
+      List.iter
+        (fun (keep_fwd, (fwd, _)) ->
+          if keep_fwd then
+            ExtractToFStar.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
+        pure_ls
+  in
+
+  let export_decl (decl : M.declaration_group) : unit =
+    match decl with
+    | Type (NonRec id) -> export_type ExtractToFStar.Type id
+    | Type (Rec ids) ->
+        List.iteri
+          (fun i id ->
+            let qualif =
+              if i = 0 then ExtractToFStar.Type else ExtractToFStar.And
+            in
+            export_type qualif id)
+          ids
+    | Fun (NonRec id) ->
+        (* Lookup *)
+        let pure_fun = Pure.FunDefId.Map.find id ctx.trans_funs in
+        (* Translate *)
+        export_functions false [ pure_fun ]
+    | Fun (Rec ids) ->
+        (* General case of mutually recursive functions *)
+        (* Lookup *)
+        let pure_funs =
+          List.map (fun id -> Pure.FunDefId.Map.find id ctx.trans_funs) ids
+        in
+        (* Translate *)
+        export_functions true pure_funs
+  in
+
+  List.iter export_decl ctx.m.declarations
+
 (** Translate a module and write the synthesized code to an output file. *)
 let translate_module (filename : string) (dest_dir : string) (config : config)
     (m : M.cfim_module) : unit =
@@ -302,7 +399,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   let fstar_fmt =
     ExtractToFStar.mk_formatter trans_ctx variant_concatenate_type_name
   in
-  let extract_ctx =
+  let ctx =
     { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }
   in
 
@@ -320,23 +417,22 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
    * Note that the order in which we generate the names doesn't matter:
    * we just need to generate a mapping from identifier to name, and make
    * sure there are no name clashes. *)
-  let extract_ctx =
+  let ctx =
     List.fold_left
-      (fun extract_ctx def ->
-        ExtractToFStar.extract_type_def_register_names extract_ctx def)
-      extract_ctx trans_types
+      (fun ctx def -> ExtractToFStar.extract_type_def_register_names ctx def)
+      ctx trans_types
   in
 
-  let extract_ctx =
+  let ctx =
     List.fold_left
-      (fun extract_ctx (keep_fwd, def) ->
+      (fun ctx (keep_fwd, def) ->
         (* Note that we generate a decrease clause for all the recursive functions *)
         let gen_decr_clause =
           Pure.FunDefId.Set.mem (fst def).Pure.def_id rec_functions
         in
-        ExtractToFStar.extract_fun_def_register_names extract_ctx keep_fwd
+        ExtractToFStar.extract_fun_def_register_names ctx keep_fwd
           gen_decr_clause def)
-      extract_ctx trans_funs
+      ctx trans_funs
   in
 
   (* Open the output file *)
@@ -393,83 +489,22 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   Format.pp_print_string fmt "#set-options \"--z3rlimit 50 --fuel 0 --ifuel 1\"";
   Format.pp_print_break fmt 0 0;
 
-  (* Export the definition groups to the file, in the proper order *)
-  let export_type (qualif : ExtractToFStar.type_def_qualif)
-      (id : Pure.TypeDefId.id) : unit =
-    let def = Pure.TypeDefId.Map.find id trans_types in
-    ExtractToFStar.extract_type_def extract_ctx fmt qualif def
+  (* Extract the definitions *)
+  let gen_ctx =
+    {
+      m;
+      extract_ctx = ctx;
+      trans_types;
+      trans_funs;
+      extract_types = true;
+      functions_with_decrease_clause = rec_functions;
+      extract_decrease_clauses = true;
+      extract_template_decrease_clauses = false;
+      extract_functions = true;
+      test_unit_functions = config.test_unit_functions;
+    }
   in
-
-  (* In case of (non-mutually) recursive functions, we use a simple procedure to
-   * check if the forward and backward functions are mutually recursive.
-   *)
-  let export_functions (is_rec : bool)
-      (pure_ls : (bool * pure_fun_translation) list) : unit =
-    (* Generate the function definitions, filtering the uselss forward
-     * functions. *)
-    let fls =
-      List.concat
-        (List.map
-           (fun (keep_fwd, (fwd, back_ls)) ->
-             if keep_fwd then fwd :: back_ls else back_ls)
-           pure_ls)
-    in
-    (* Check if the functions are mutually recursive - this really works
-     * to check if the forward and backward translations of a single
-     * recursive function are mutually recursive *)
-    let is_mut_rec =
-      if is_rec then
-        if List.length pure_ls <= 1 then
-          not (PureUtils.functions_not_mutually_recursive fls)
-        else true
-      else false
-    in
-    List.iteri
-      (fun i def ->
-        let qualif =
-          if not is_rec then ExtractToFStar.Let
-          else if is_mut_rec then
-            if i = 0 then ExtractToFStar.LetRec else ExtractToFStar.And
-          else ExtractToFStar.LetRec
-        in
-        ExtractToFStar.extract_fun_def extract_ctx fmt qualif def)
-      fls;
-    (* Insert unit tests if necessary *)
-    if config.test_unit_functions then
-      List.iter
-        (fun (keep_fwd, (fwd, _)) ->
-          if keep_fwd then
-            ExtractToFStar.extract_unit_test_if_unit_fun extract_ctx fmt fwd)
-        pure_ls
-  in
-
-  let export_decl (decl : M.declaration_group) : unit =
-    match decl with
-    | Type (NonRec id) -> export_type ExtractToFStar.Type id
-    | Type (Rec ids) ->
-        List.iteri
-          (fun i id ->
-            let qualif =
-              if i = 0 then ExtractToFStar.Type else ExtractToFStar.And
-            in
-            export_type qualif id)
-          ids
-    | Fun (NonRec id) ->
-        (* Lookup *)
-        let pure_fun = Pure.FunDefId.Map.find id trans_funs in
-        (* Translate *)
-        export_functions false [ pure_fun ]
-    | Fun (Rec ids) ->
-        (* General case of mutually recursive functions *)
-        (* Lookup *)
-        let pure_funs =
-          List.map (fun id -> Pure.FunDefId.Map.find id trans_funs) ids
-        in
-        (* Translate *)
-        export_functions true pure_funs
-  in
-
-  List.iter export_decl m.declarations;
+  extract_definitions fmt gen_ctx;
 
   (* Close the box and end the formatting *)
   Format.pp_close_box fmt ();
