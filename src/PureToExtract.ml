@@ -30,6 +30,7 @@ module StringMap = Collections.MakeMap (Collections.OrderedString)
 
 type name = Identifiers.name
 
+(* TODO: this should a module we give to a functor! *)
 type formatter = {
   bool_name : string;
   char_name : string;
