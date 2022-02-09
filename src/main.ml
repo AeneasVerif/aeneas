@@ -30,8 +30,8 @@ let () =
   let filter_useless_functions = ref true in
   let test_units = ref false in
   let test_trans_units = ref false in
-  let no_decrease_clauses = ref false in
-  let template_decrease_clauses = ref false in
+  let no_decreases_clauses = ref false in
+  let template_decreases_clauses = ref false in
   let no_split = ref false in
 
   let spec =
@@ -64,15 +64,15 @@ let () =
         Arg.Set test_trans_units,
         " Test the translated unit functions with the target theorem\n\
         \                        prover's normalizer" );
-      ( "-no-decrease-clauses",
-        Arg.Set no_decrease_clauses,
+      ( "-no-decreases-clauses",
+        Arg.Set no_decreases_clauses,
         " Do not add decrease clauses to the recursive definitions" );
       ( "-template-clauses",
-        Arg.Set template_decrease_clauses,
-        " Generate templates for the required decrease clauses, in a\n\
+        Arg.Set template_decreases_clauses,
+        " Generate templates for the required decreases clauses, in a\n\
          `\n\
         \                                dedicated file. Incompatible with \
-         -no-decrease-clauses" );
+         -no-decreases-clauses" );
       ( "-no-split",
         Arg.Set no_split,
         " Don't split the definitions between different files for types, \
@@ -80,7 +80,7 @@ let () =
     ]
   in
   (* Sanity check: -template-clauses ==> not -no-decrease-clauses *)
-  assert ((not !no_decrease_clauses) || not !template_decrease_clauses);
+  assert ((not !no_decreases_clauses) || not !template_decreases_clauses);
 
   let spec = Arg.align spec in
   let filenames = ref [] in
@@ -176,8 +176,8 @@ let () =
           mp_config = micro_passes_config;
           split_files = not !no_split;
           test_unit_functions;
-          extract_decrease_clauses = not !no_decrease_clauses;
-          extract_template_decrease_clauses = !template_decrease_clauses;
+          extract_decreases_clauses = not !no_decreases_clauses;
+          extract_template_decreases_clauses = !template_decreases_clauses;
         }
       in
       Translate.translate_module filename dest_dir trans_config m

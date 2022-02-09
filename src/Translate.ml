@@ -29,12 +29,12 @@ type config = {
           let _ = assert_norm (FUNCTION () = Success ())
           ```
        *)
-  extract_decrease_clauses : bool;
-      (** If true, insert `decrease` clauses for all the recursive definitions.
+  extract_decreases_clauses : bool;
+      (** If true, insert `decreases` clauses for all the recursive definitions.
 
           The body of such clauses must be defined by the user.
        *)
-  extract_template_decrease_clauses : bool;
+  extract_template_decreases_clauses : bool;
       (** In order to help the user, we can generate "template" decrease clauses
           (i.e., definitions with proper signatures but dummy bodies) in a
           dedicated file.
@@ -306,14 +306,14 @@ type gen_ctx = {
   extract_ctx : PureToExtract.extraction_ctx;
   trans_types : Pure.type_def Pure.TypeDefId.Map.t;
   trans_funs : (bool * pure_fun_translation) Pure.FunDefId.Map.t;
-  functions_with_decrease_clause : Pure.FunDefId.Set.t;
+  functions_with_decreases_clause : Pure.FunDefId.Set.t;
 }
 (** Extraction context *)
 
 type gen_config = {
   extract_types : bool;
-  extract_decrease_clauses : bool;
-  extract_template_decrease_clauses : bool;
+  extract_decreases_clauses : bool;
+  extract_template_decreases_clauses : bool;
   extract_fun_defs : bool;
   test_unit_functions : bool;
 }
@@ -332,8 +332,8 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   in
 
   (* Utility to check a function has a decrease clause *)
-  let has_decrease_clause (def : Pure.fun_def) : bool =
-    Pure.FunDefId.Set.mem def.def_id ctx.functions_with_decrease_clause
+  let has_decreases_clause (def : Pure.fun_def) : bool =
+    Pure.FunDefId.Set.mem def.def_id ctx.functions_with_decreases_clause
   in
 
   (* In case of (non-mutually) recursive functions, we use a simple procedure to
@@ -353,12 +353,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
            pure_ls)
     in
     (* Extract the decrease clauses template bodies *)
-    if config.extract_template_decrease_clauses then
+    if config.extract_template_decreases_clauses then
       List.iter
         (fun (_, (fwd, _)) ->
-          let has_decr_clause = has_decrease_clause fwd in
+          let has_decr_clause = has_decreases_clause fwd in
           if has_decr_clause then
-            ExtractToFStar.extract_template_decrease_clause ctx.extract_ctx fmt
+            ExtractToFStar.extract_template_decreases_clause ctx.extract_ctx fmt
               fwd)
         pure_ls;
     (* Extract the function definitions *)
@@ -382,7 +382,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
            else ExtractToFStar.LetRec
          in
          let has_decr_clause =
-           has_decrease_clause def && config.extract_decrease_clauses
+           has_decreases_clause def && config.extract_decreases_clauses
          in
          ExtractToFStar.extract_fun_def ctx.extract_ctx fmt qualif
            has_decr_clause fwd_def def)
@@ -571,7 +571,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       extract_ctx = ctx;
       trans_types;
       trans_funs;
-      functions_with_decrease_clause = rec_functions;
+      functions_with_decreases_clause = rec_functions;
     }
   in
 
@@ -580,8 +580,8 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let base_gen_config =
       {
         extract_types = false;
-        extract_decrease_clauses = config.extract_decrease_clauses;
-        extract_template_decrease_clauses = false;
+        extract_decreases_clauses = config.extract_decreases_clauses;
+        extract_template_decreases_clauses = false;
         extract_fun_defs = false;
         test_unit_functions = false;
       }
@@ -596,15 +596,17 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
 
     (* Extract the template clauses *)
     (if
-     config.extract_decrease_clauses && config.extract_template_decrease_clauses
+     config.extract_decreases_clauses
+     && config.extract_template_decreases_clauses
     then
      let clauses_filename = extract_filebasename ^ ".Clauses.Template.fst" in
      let clauses_module = module_name ^ ".Clauses.Template" in
      let clauses_config =
-       { base_gen_config with extract_template_decrease_clauses = true }
+       { base_gen_config with extract_template_decreases_clauses = true }
      in
      extract_file clauses_config gen_ctx clauses_filename m.M.name
-       clauses_module ": templates for the decrease clauses" [ types_module ] []);
+       clauses_module ": templates for the decreases clauses" [ types_module ]
+       []);
 
     (* Extract the functions *)
     let fun_filename = extract_filebasename ^ ".Funs.fst" in
@@ -624,9 +626,9 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let gen_config =
       {
         extract_types = true;
-        extract_decrease_clauses = config.extract_decrease_clauses;
-        extract_template_decrease_clauses =
-          config.extract_template_decrease_clauses;
+        extract_decreases_clauses = config.extract_decreases_clauses;
+        extract_template_decreases_clauses =
+          config.extract_template_decreases_clauses;
         extract_fun_defs = true;
         test_unit_functions = config.test_unit_functions;
       }

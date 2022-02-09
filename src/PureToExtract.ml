@@ -81,7 +81,7 @@ type formatter = {
             (`None` if forward function)
           TODO: use the fun id for the assumed functions.
        *)
-  decrease_clause_name : FunDefId.id -> name -> string;
+  decreases_clause_name : FunDefId.id -> name -> string;
       (** Generates the name of the definition used to prove/reason about
           termination. The generated code uses this clause where needed,
           but its body must be defined by the user.
@@ -174,8 +174,8 @@ type formatter = {
 (** We use identifiers to look for name clashes *)
 type id =
   | FunId of A.fun_id * RegionGroupId.id option
-  | DecreaseClauseId of A.fun_id
-      (** The definition which provides the decrease/termination clause.
+  | DecreasesClauseId of A.fun_id
+      (** The definition which provides the decreases/termination clause.
           We insert calls to this clause to prove/reason about termination:
           the body of those clauses must be defined by the user, in the
           proper files.
@@ -337,14 +337,14 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
         | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
       in
       "fun name (" ^ fun_kind ^ "): " ^ fun_name
-  | DecreaseClauseId fid ->
+  | DecreasesClauseId fid ->
       let fun_name =
         match fid with
         | A.Local fid ->
             Print.name_to_string (FunDefId.Map.find fid fun_defs).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
-      "decrease clause for function: " ^ fun_name
+      "decreases clause for function: " ^ fun_name
   | TypeId id -> "type name: " ^ get_type_name id
   | StructId id -> "struct constructor of: " ^ get_type_name id
   | VariantId (id, variant_id) ->
@@ -446,9 +446,9 @@ let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
     (ctx : extraction_ctx) : string =
   ctx_get (VariantId (def_id, variant_id)) ctx
 
-let ctx_get_decrease_clause (def_id : FunDefId.id) (ctx : extraction_ctx) :
+let ctx_get_decreases_clause (def_id : FunDefId.id) (ctx : extraction_ctx) :
     string =
-  ctx_get (DecreaseClauseId (A.Local def_id)) ctx
+  ctx_get (DecreasesClauseId (A.Local def_id)) ctx
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
@@ -532,10 +532,10 @@ let ctx_add_struct (def : type_def) (ctx : extraction_ctx) :
   let ctx = ctx_add (StructId (AdtId def.def_id)) name ctx in
   (ctx, name)
 
-let ctx_add_decrase_clause (def : fun_def) (ctx : extraction_ctx) :
+let ctx_add_decrases_clause (def : fun_def) (ctx : extraction_ctx) :
     extraction_ctx =
-  let name = ctx.fmt.decrease_clause_name def.def_id def.basename in
-  ctx_add (DecreaseClauseId (A.Local def.def_id)) name ctx
+  let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
+  ctx_add (DecreasesClauseId (A.Local def.def_id)) name ctx
 
 let ctx_add_fun_def (trans_group : bool * pure_fun_translation) (def : fun_def)
     (ctx : extraction_ctx) : extraction_ctx =

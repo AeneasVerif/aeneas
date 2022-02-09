@@ -274,12 +274,12 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     fname ^ suffix
   in
 
-  let decrease_clause_name (_fid : FunDefId.id) (fname : name) : string =
+  let decreases_clause_name (_fid : FunDefId.id) (fname : name) : string =
     let fname = get_fun_name fname in
     (* Converting to snake case should be a no-op, but it doesn't cost much *)
     let fname = to_snake_case fname in
     (* Compute the suffix *)
-    let suffix = "_decrease" in
+    let suffix = "_decreases" in
     (* Concatenate *)
     fname ^ suffix
   in
@@ -352,7 +352,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     struct_constructor;
     type_name;
     fun_name;
-    decrease_clause_name;
+    decreases_clause_name;
     var_basename;
     type_var_basename;
     append_index;
@@ -644,11 +644,12 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
     (forward function and backward functions).
  *)
 let extract_fun_def_register_names (ctx : extraction_ctx) (keep_fwd : bool)
-    (has_decrease_clause : bool) (def : pure_fun_translation) : extraction_ctx =
+    (has_decreases_clause : bool) (def : pure_fun_translation) : extraction_ctx
+    =
   let fwd, back_ls = def in
   (* Register the decrease clause, if necessary *)
   let ctx =
-    if has_decrease_clause then ctx_add_decrase_clause fwd ctx else ctx
+    if has_decreases_clause then ctx_add_decrases_clause fwd ctx else ctx
   in
   (* Register the forward function name *)
   let ctx = ctx_add_fun_def (keep_fwd, def) fwd ctx in
@@ -997,15 +998,15 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     let f_fwd (t : Type0) (x : t) : Tot ... (decreases (f_decrease t x)) = ...
     ```
  *)
-let extract_template_decrease_clause (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_def) : unit =
   (* Retrieve the function name *)
-  let def_name = ctx_get_decrease_clause def.def_id ctx in
+  let def_name = ctx_get_decreases_clause def.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   F.pp_print_string fmt
-    ("(** [" ^ Print.name_to_string def.basename ^ "]: decrease clause *)");
+    ("(** [" ^ Print.name_to_string def.basename ^ "]: decreases clause *)");
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line - TODO: remove? *)
@@ -1043,7 +1044,7 @@ let extract_template_decrease_clause (ctx : extraction_ctx) (fmt : F.formatter)
     it is useful for the decrease clause.
  *)
 let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : fun_def_qualif) (has_decrease_clause : bool) (fwd_def : fun_def)
+    (qualif : fun_def_qualif) (has_decreases_clause : bool) (fwd_def : fun_def)
     (def : fun_def) : unit =
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
@@ -1066,36 +1067,6 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   let ctx, ctx_body = extract_fun_parameters ctx fmt def in
-  (*(* Print the parameters - rk.: we should have filtered the functions
-   * with no input parameters *)
-  (* The type parameters *)
-  if def.signature.type_params <> [] then (
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt "(";
-    List.iter
-      (fun (p : type_var) ->
-        let pname = ctx_get_type_var p.index ctx in
-        F.pp_print_string fmt pname;
-        F.pp_print_space fmt ())
-      def.signature.type_params;
-    F.pp_print_string fmt ":";
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt "Type0)");
-  (* The input parameters - note that doing this adds bindings to the context *)
-  let ctx_body =
-    List.fold_left
-      (fun ctx (lv : typed_lvalue) ->
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "(";
-        let ctx = extract_typed_lvalue ctx fmt false lv in
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt ":";
-        F.pp_print_space fmt ();
-        extract_ty ctx fmt false lv.ty;
-        F.pp_print_string fmt ")";
-        ctx)
-      ctx def.inputs_lvs
-  in*)
   (* Print the return type - note that we have to be careful when
    * printing the input values for the decrease clause, because
    * it introduces bindings in the context... We thus "forget"
@@ -1109,15 +1080,15 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
     (* `Tot` *)
-    if has_decrease_clause then (
+    if has_decreases_clause then (
       F.pp_print_string fmt "Tot";
       F.pp_print_space fmt ());
-    extract_ty ctx fmt has_decrease_clause
+    extract_ty ctx fmt has_decreases_clause
       (Collections.List.to_cons_nil def.signature.outputs);
     (* Close the box for the return type *)
     F.pp_close_box fmt ();
     (* Print the decrease clause *)
-    if has_decrease_clause then (
+    if has_decreases_clause then (
       F.pp_print_space fmt ();
       (* Open a box for the decrease clause *)
       F.pp_open_hovbox fmt 0;
@@ -1126,7 +1097,7 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt "(";
       (* The name of the decrease clause *)
-      let decr_name = ctx_get_decrease_clause def.def_id ctx in
+      let decr_name = ctx_get_decreases_clause def.def_id ctx in
       F.pp_print_string fmt decr_name;
       (* Print the type parameters *)
       List.iter
