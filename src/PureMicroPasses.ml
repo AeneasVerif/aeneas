@@ -935,7 +935,8 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
           ("inline_useless_var_assignments:\n\n" ^ fun_def_to_string ctx def
          ^ "\n"));
 
-      (* Eliminate the box functions *)
+      (* Eliminate the box functions - note that the "box" types were eliminated
+       * during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
       let def = eliminate_box_functions ctx def in
       log#ldebug
         (lazy
