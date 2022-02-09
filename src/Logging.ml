@@ -122,15 +122,16 @@ let style_to_codes s =
   | Fg c -> (to_fg_code c, to_fg_code Default)
   | Bg c -> (to_bg_code c, to_bg_code Default)
 
-(** TODO: comes from easy_logging (did not manage to reuse the module directly) *)
+(** TODO: comes from easy_logging (did not manage to reuse the module directly)
+    I made a minor modifications, though. *)
 let level_to_color (lvl : L.level) =
   match lvl with
   | L.Flash -> LMagenta
   | Error -> LRed
   | Warning -> LYellow
-  | Info -> LBlue
+  | Info -> LGreen
   | Trace -> Cyan
-  | Debug -> Green
+  | Debug -> LBlue
   | NoLevel -> Default
 
 (** [format styles str] formats [str] to the given [styles] -

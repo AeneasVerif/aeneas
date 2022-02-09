@@ -446,6 +446,10 @@ let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
     (ctx : extraction_ctx) : string =
   ctx_get (VariantId (def_id, variant_id)) ctx
 
+let ctx_get_decrease_clause (def_id : FunDefId.id) (ctx : extraction_ctx) :
+    string =
+  ctx_get (DecreaseClauseId (A.Local def_id)) ctx
+
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =

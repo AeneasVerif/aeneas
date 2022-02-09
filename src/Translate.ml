@@ -326,18 +326,25 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     ExtractToFStar.extract_type_def ctx.extract_ctx fmt qualif def
   in
 
+  (* Utility to check a function has a decrease clause *)
+  let has_decrease_clause (def : Pure.fun_def) : bool =
+    Pure.FunDefId.Set.mem def.def_id ctx.functions_with_decrease_clause
+  in
+
   (* In case of (non-mutually) recursive functions, we use a simple procedure to
    * check if the forward and backward functions are mutually recursive.
    *)
   let export_functions (is_rec : bool)
       (pure_ls : (bool * pure_fun_translation) list) : unit =
     (* Concatenate the function definitions, filtering the useless forward
-     * functions. *)
+     * functions. We also make pairs: (forward function, backward function)
+     * (the forward function contains useful information that we want to keep) *)
     let fls =
       List.concat
         (List.map
            (fun (keep_fwd, (fwd, back_ls)) ->
-             if keep_fwd then fwd :: back_ls else back_ls)
+             let back_ls = List.map (fun back -> (fwd, back)) back_ls in
+             if keep_fwd then (fwd, fwd) :: back_ls else back_ls)
            pure_ls)
     in
     (* Extract the function definitions *)
@@ -348,19 +355,23 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
      let is_mut_rec =
        if is_rec then
          if List.length pure_ls <= 1 then
-           not (PureUtils.functions_not_mutually_recursive fls)
+           not (PureUtils.functions_not_mutually_recursive (List.map fst fls))
          else true
        else false
      in
      List.iteri
-       (fun i def ->
+       (fun i (fwd_def, def) ->
          let qualif =
            if not is_rec then ExtractToFStar.Let
            else if is_mut_rec then
              if i = 0 then ExtractToFStar.LetRec else ExtractToFStar.And
            else ExtractToFStar.LetRec
          in
-         ExtractToFStar.extract_fun_def ctx.extract_ctx fmt qualif def)
+         let has_decr_clause =
+           has_decrease_clause def && config.extract_decrease_clauses
+         in
+         ExtractToFStar.extract_fun_def ctx.extract_ctx fmt qualif
+           has_decr_clause fwd_def def)
        fls);
     (* Insert unit tests if necessary *)
     if config.test_unit_functions then
@@ -520,8 +531,9 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   let gen_config =
     {
       extract_types = true;
-      extract_decrease_clauses = true;
-      extract_template_decrease_clauses = false;
+      extract_decrease_clauses = config.extract_decrease_clauses;
+      extract_template_decrease_clauses =
+        config.extract_template_decrease_clauses;
       extract_fun_defs = true;
       test_unit_functions = config.test_unit_functions;
     }

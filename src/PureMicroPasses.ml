@@ -617,10 +617,14 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
   in
   (* Visit the body *)
   let body, used_vars = expr_visitor#visit_texpression () def.body in
-  (* Visit the parameters *)
+  (* Visit the parameters - TODO: update: we need filter only if the definition
+   * is not recursive (otherwise it might mess up with the decrease clauses).
+   * For now we deactivate the filtering *)
   let used_vars = used_vars () in
   let inputs_lvs =
-    List.map (fun lv -> fst (filter_typed_lvalue used_vars lv)) def.inputs_lvs
+    if false then
+      List.map (fun lv -> fst (filter_typed_lvalue used_vars lv)) def.inputs_lvs
+    else def.inputs_lvs
   in
   (* Return *)
   { def with body; inputs_lvs }

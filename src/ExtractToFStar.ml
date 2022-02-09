@@ -944,9 +944,14 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
 
     Note that all the names used for extraction should already have been
     registered.
+    
+    We take the definition of the forward translation as parameter (which is
+    equal to the definition to extract, if we extract a forward function) because
+    it is useful for the decrease clause.
  *)
 let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : fun_def_qualif) (def : fun_def) : unit =
+    (qualif : fun_def_qualif) (has_decrease_clause : bool) (fwd_def : fun_def)
+    (def : fun_def) : unit =
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* Add the type parameters - note that we need those bindings only for the
@@ -982,8 +987,8 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
     F.pp_print_string fmt "Type0)");
-  (* The input parameters - note that doing this adds bindings in the context *)
-  let ctx =
+  (* The input parameters - note that doing this adds bindings to the context *)
+  let ctx_body =
     List.fold_left
       (fun ctx (lv : typed_lvalue) ->
         F.pp_print_space fmt ();
@@ -997,7 +1002,11 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
         ctx)
       ctx def.inputs_lvs
   in
-  (* Print the return type *)
+  (* Print the return type - note that we have to be careful when
+   * printing the input values for the decrease clause, because
+   * it introduces bindings in the context... We thus "forget"
+   * the bindings we introduced above.
+   * TODO: figure out a cleaner way *)
   let _ =
     F.pp_print_space fmt ();
     (* Open a box for the return type *)
@@ -1005,21 +1014,64 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     (* Print the return type *)
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
-    extract_ty ctx fmt false
+    (* `Tot` *)
+    if has_decrease_clause then (
+      F.pp_print_string fmt "Tot";
+      F.pp_print_space fmt ());
+    extract_ty ctx fmt has_decrease_clause
       (Collections.List.to_cons_nil def.signature.outputs);
     (* Close the box for the return type *)
-    F.pp_close_box fmt ()
+    F.pp_close_box fmt ();
+    (* Print the decrease clause *)
+    if has_decrease_clause then (
+      F.pp_print_space fmt ();
+      (* Open a box for the decrease clause *)
+      F.pp_open_hovbox fmt 0;
+      (* *)
+      F.pp_print_string fmt "(decreases";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "(";
+      (* The name of the decrease clause *)
+      let decr_name = ctx_get_decrease_clause def.def_id ctx in
+      F.pp_print_string fmt decr_name;
+      (* Print the type parameters *)
+      List.iter
+        (fun (p : type_var) ->
+          let pname = ctx_get_type_var p.index ctx in
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt pname)
+        def.signature.type_params;
+      (* Print the input values: we have to be careful here to print
+       * only the input values which are in common with the *forward*
+       * function (the additional input values "given back" to the
+       * backward functions have no influence on termination: we thus
+       * share the decrease clauses between the forward and the backward
+       * functions) *)
+      let inputs_lvs =
+        Collections.List.prefix (List.length fwd_def.inputs_lvs) def.inputs_lvs
+      in
+      let _ =
+        List.fold_left
+          (fun ctx (lv : typed_lvalue) ->
+            F.pp_print_space fmt ();
+            let ctx = extract_typed_lvalue ctx fmt false lv in
+            ctx)
+          ctx inputs_lvs
+      in
+      F.pp_print_string fmt "))";
+      (* Close the box for the decrease clause *)
+      F.pp_close_box fmt ())
   in
   (* Print the "=" *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt "=";
   (* Close the box for "let FUN_NAME (PARAMS) =" *)
   F.pp_close_box fmt ();
-  F.pp_print_break fmt 1 ctx.indent_incr;
+  F.pp_print_break fmt 1 ctx_body.indent_incr;
   (* Open a box for the body *)
   F.pp_open_hvbox fmt 0;
   (* Extract the body *)
-  let _ = extract_texpression ctx fmt false def.body in
+  let _ = extract_texpression ctx_body fmt false def.body in
   (* Close the box for the body *)
   F.pp_close_box fmt ();
   (* Close the box for the definition *)
