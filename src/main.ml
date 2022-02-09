@@ -30,6 +30,8 @@ let () =
   let filter_useless_functions = ref true in
   let test_units = ref false in
   let test_trans_units = ref false in
+  let no_decrease_clauses = ref false in
+  let template_decrease_clauses = ref false in
 
   let spec =
     [
@@ -61,8 +63,20 @@ let () =
         Arg.Set test_trans_units,
         " Test the translated unit functions with the target theorem\n\
         \                        prover's normalizer" );
+      ( "-no-decrease-clauses",
+        Arg.Set no_decrease_clauses,
+        " Do not add decrease clauses to the recursive definitions" );
+      ( "-template-clauses",
+        Arg.Set template_decrease_clauses,
+        " Generate templates for the required decrease clauses, in a\n\
+         `\n\
+        \                                dedicated file. Incompatible with \
+         -no-decrease-clauses" );
     ]
   in
+  (* Sanity check: -template-clauses ==> not -no-decrease-clauses *)
+  assert ((not !no_decrease_clauses) || not !template_decrease_clauses);
+
   let spec = Arg.align spec in
   let filenames = ref [] in
   let add_filename f = filenames := f :: !filenames in
@@ -156,6 +170,8 @@ let () =
           Translate.eval_config;
           mp_config = micro_passes_config;
           test_unit_functions;
+          extract_decrease_clauses = not !no_decrease_clauses;
+          extract_template_decrease_clauses = !template_decrease_clauses;
         }
       in
       Translate.translate_module filename dest_dir trans_config m

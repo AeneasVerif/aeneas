@@ -23,8 +23,8 @@ build:
 test: build translate-no_nested_borrows translate-hashmap
 
 # Add specific options to some tests
-translate-no_nested_borrows: TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units
-translate-hashmap: TRANS_OPTIONS:=$(TRANS_OPTIONS)
+translate-no_nested_borrows: TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units -no-decrease-clauses
+translate-hashmap: TRANS_OPTIONS:=$(TRANS_OPTIONS) -template-clauses
 
 # Generic rule to extract the CFIM from a rust file
 .PHONY: gen-cfim-%

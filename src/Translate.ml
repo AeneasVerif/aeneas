@@ -24,6 +24,16 @@ type config = {
           let _ = assert_norm (FUNCTION () = Success ())
           ```
        *)
+  extract_decrease_clauses : bool;
+      (** If true, insert `decrease` clauses for all the recursive definitions.
+
+          The body of such clauses must be defined by the user.
+       *)
+  extract_template_decrease_clauses : bool;
+      (** In order to help the user, we can generate "template" decrease clauses
+          (i.e., definitions with proper signatures but dummy bodies) in a
+          dedicated file.
+       *)
 }
 
 type symbolic_fun_translation = V.symbolic_value list * SA.expression
