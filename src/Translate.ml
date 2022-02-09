@@ -342,7 +342,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* Open the output file *)
   (* First compute the filename by replacing the extension and converting the
    * case (rust module names are snake case) *)
-  let module_name, extract_filename =
+  let module_name, extract_filebasename =
     match Filename.chop_suffix_opt ~suffix:".cfim" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
@@ -352,9 +352,11 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         let basename = Filename.basename filename in
         (* Convert the case *)
         let module_name = StringUtils.to_camel_case basename in
-        (* We add the extension for F* *)
-        (module_name, Filename.concat dest_dir (module_name ^ ".fst"))
+        (* Concatenate *)
+        (module_name, Filename.concat dest_dir module_name)
   in
+  (* Add the extension for F* *)
+  let extract_filename = extract_filebasename ^ ".fst" in
   let out = open_out extract_filename in
   let fmt = Format.formatter_of_out_channel out in
 
@@ -471,4 +473,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
 
   (* Close the box and end the formatting *)
   Format.pp_close_box fmt ();
-  Format.pp_print_newline fmt ()
+  Format.pp_print_newline fmt ();
+
+  (* Some logging *)
+  log#linfo (lazy ("Generated: " ^ extract_filename))

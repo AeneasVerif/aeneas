@@ -94,21 +94,21 @@ let () =
 
   (* Set up the logging - for now we use default values - TODO: use the
    * command-line arguments *)
-  Easy_logging.Handlers.set_level main_logger_handler EL.Warning;
-  main_log#set_level EL.Warning;
-  pre_passes_log#set_level EL.Warning;
-  interpreter_log#set_level EL.Warning;
-  statements_log#set_level EL.Warning;
-  paths_log#set_level EL.Warning;
-  expressions_log#set_level EL.Warning;
-  expansion_log#set_level EL.Warning;
-  borrows_log#set_level EL.Warning;
-  invariants_log#set_level EL.Warning;
-  pure_utils_log#set_level EL.Warning;
-  symbolic_to_pure_log#set_level EL.Warning;
-  pure_micro_passes_log#set_level EL.Warning;
-  pure_to_extract_log#set_level EL.Warning;
-  translate_log#set_level EL.Warning;
+  Easy_logging.Handlers.set_level main_logger_handler EL.Info;
+  main_log#set_level EL.Info;
+  pre_passes_log#set_level EL.Info;
+  interpreter_log#set_level EL.Info;
+  statements_log#set_level EL.Info;
+  paths_log#set_level EL.Info;
+  expressions_log#set_level EL.Info;
+  expansion_log#set_level EL.Info;
+  borrows_log#set_level EL.Info;
+  invariants_log#set_level EL.Info;
+  pure_utils_log#set_level EL.Info;
+  symbolic_to_pure_log#set_level EL.Info;
+  pure_micro_passes_log#set_level EL.Info;
+  pure_to_extract_log#set_level EL.Info;
+  translate_log#set_level EL.Info;
   (* Load the module *)
   let json = Yojson.Basic.from_file filename in
   match cfim_module_of_json json with
@@ -116,7 +116,8 @@ let () =
       main_log#error "error: %s\n" s;
       exit 1
   | Ok m ->
-      (* Print the module *)
+      (* Logging *)
+      main_log#linfo (lazy ("Imported: " ^ filename));
       main_log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));
 
       (* Apply the pre-passes *)
