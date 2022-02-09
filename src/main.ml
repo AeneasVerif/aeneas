@@ -32,6 +32,7 @@ let () =
   let test_trans_units = ref false in
   let no_decrease_clauses = ref false in
   let template_decrease_clauses = ref false in
+  let no_split = ref false in
 
   let spec =
     [
@@ -72,6 +73,10 @@ let () =
          `\n\
         \                                dedicated file. Incompatible with \
          -no-decrease-clauses" );
+      ( "-no-split",
+        Arg.Set no_split,
+        " Don't split the definitions between different files for types, \
+         functions, etc." );
     ]
   in
   (* Sanity check: -template-clauses ==> not -no-decrease-clauses *)
@@ -169,6 +174,7 @@ let () =
         {
           Translate.eval_config;
           mp_config = micro_passes_config;
+          split_files = not !no_split;
           test_unit_functions;
           extract_decrease_clauses = not !no_decrease_clauses;
           extract_template_decrease_clauses = !template_decrease_clauses;
