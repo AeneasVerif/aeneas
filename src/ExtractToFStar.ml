@@ -1011,6 +1011,9 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line - TODO: remove? *)
   F.pp_open_hvbox fmt 0;
+  (* Add the `unfold` keyword *)
+  F.pp_print_string fmt "unfold";
+  F.pp_print_space fmt ();
   (* Open a box for "let FUN_NAME (PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)

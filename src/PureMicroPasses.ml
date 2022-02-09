@@ -617,9 +617,12 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
   in
   (* Visit the body *)
   let body, used_vars = expr_visitor#visit_texpression () def.body in
-  (* Visit the parameters - TODO: update: we need filter only if the definition
-   * is not recursive (otherwise it might mess up with the decrease clauses).
-   * For now we deactivate the filtering *)
+  (* Visit the parameters - TODO: update: we can filter only if the definition
+   * is not recursive (otherwise it might mess up with the decrease clauses:
+   * the decrease clauses uses all the inputs given to the function, if some
+   * inputs are replaced by '_' we can't give it to the function used in the
+   * decreases clause).
+   * For now we deactivate the filtering. *)
   let used_vars = used_vars () in
   let inputs_lvs =
     if false then
