@@ -1026,7 +1026,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
   let sg = def.signature in
   if
     sg.type_params = []
-    && sg.inputs = [ unit_ty ]
+    && (sg.inputs = [ unit_ty ] || sg.inputs = [])
     && sg.outputs = [ mk_result_ty unit_ty ]
   then (
     (* Add a break before *)
@@ -1045,8 +1045,9 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt "(";
     let fun_name = ctx_get_local_function def.def_id def.back_id ctx in
     F.pp_print_string fmt fun_name;
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt "()";
+    if sg.inputs <> [] then (
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "()");
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=";
     F.pp_print_space fmt ();
