@@ -7,7 +7,7 @@ DEST_DIR=tests/
 # Default translation options:
 # - insert calls to the normalizer in the translated code to test the
 #   generated unit functions
-TRANS_OPTIONS=-test-trans-units
+TRANS_OPTIONS:=-test-trans-units
 
 # Build the project and test it
 .PHONY: build-test
@@ -23,7 +23,8 @@ build:
 test: build translate-no_nested_borrows translate-hashmap
 
 # Add specific options to some tests
-translate-no_nested_borrows: OPTIONS := $(OPTIONS) -test-units
+translate-no_nested_borrows: TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units
+translate-hashmap: TRANS_OPTIONS:=$(TRANS_OPTIONS)
 
 # Generic rule to extract the CFIM from a rust file
 .PHONY: gen-cfim-%
