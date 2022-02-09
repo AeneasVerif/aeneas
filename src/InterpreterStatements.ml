@@ -285,12 +285,19 @@ let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
  *)
 let get_non_local_function_return_type (fid : A.assumed_fun_id)
     (region_params : T.erased_region list) (type_params : T.ety list) : T.ety =
+  (* `Box::free` has a special treatment *)
   match (fid, region_params, type_params) with
-  | A.BoxNew, [], [ bty ] -> T.Adt (T.Assumed T.Box, [], [ bty ])
-  | A.BoxDeref, [], [ bty ] -> T.Ref (T.Erased, bty, T.Shared)
-  | A.BoxDerefMut, [], [ bty ] -> T.Ref (T.Erased, bty, T.Mut)
   | A.BoxFree, [], [ _ ] -> mk_unit_ty
-  | _ -> raise (Failure "Inconsistent state")
+  | _ ->
+      (* Retrieve the function's signature *)
+      let sg = Assumed.get_assumed_sig fid in
+      (* Instantiate the return type  *)
+      let tsubst =
+        Subst.make_type_subst
+          (List.map (fun v -> v.T.index) sg.type_params)
+          type_params
+      in
+      Subst.erase_regions_substitute_types tsubst sg.output
 
 let move_return_value (config : C.config) (cf : V.typed_value -> m_fun) : m_fun
     =
