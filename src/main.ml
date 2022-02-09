@@ -26,7 +26,7 @@ let () =
   let dest_dir = ref "" in
   let decompose_monads = ref false in
   let unfold_monads = ref true in
-  let filter_unused_calls = ref true in
+  let filter_useless_calls = ref true in
   let filter_useless_functions = ref true in
   let test_units = ref false in
   let test_trans_units = ref false in
@@ -48,9 +48,9 @@ let () =
       ( "-unfold-monads",
         Arg.Set unfold_monads,
         " Unfold the monadic let-bindings to matches" );
-      ( "-filter-unused-calls",
-        Arg.Set filter_unused_calls,
-        " Filter the unused function calls, when possible" );
+      ( "-filter-useless-calls",
+        Arg.Set filter_useless_calls,
+        " Filter the useless function calls, when possible" );
       ( "-filter-useless-funs",
         Arg.Set filter_useless_functions,
         " Filter the useless forward/backward functions" );
@@ -145,7 +145,7 @@ let () =
         {
           Micro.decompose_monadic_let_bindings = !decompose_monads;
           unfold_monadic_let_bindings = !unfold_monads;
-          filter_unused_monadic_calls = !filter_unused_calls;
+          filter_useless_monadic_calls = !filter_useless_calls;
           filter_useless_functions = !filter_useless_functions;
           add_unit_args = false;
         }

@@ -41,7 +41,7 @@ type config = {
           [decompose_monadic_let_bindings] to true and only makes the code
           more verbose.
        *)
-  filter_unused_monadic_calls : bool;
+  filter_useless_monadic_calls : bool;
       (** Controls whether we try to filter the calls to monadic functions
           (which can fail) when their outputs are not used.
           
@@ -51,7 +51,7 @@ type config = {
           TODO: rename to [filter_useless_monadic_calls]
        *)
   filter_useless_functions : bool;
-      (** If [filter_unused_monadic_calls] is activated, some functions
+      (** If [filter_useless_monadic_calls] is activated, some functions
           become useless: if this option is true, we don't extract them.
 
           The calls to functions which always get filtered are:
@@ -514,11 +514,11 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
   in
   visitor#visit_texpression () e ()
 
-(** Filter the unused assignments (removes the unused variables, filters
+(** Filter the useless assignments (removes the useless variables, filters
     the function calls) *)
-let filter_unused (filter_monadic_calls : bool) (ctx : trans_ctx)
+let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
     (def : fun_def) : fun_def =
-  (* We first need a transformation on *left-values*, which filters the unused
+  (* We first need a transformation on *left-values*, which filters the useless
    * variables and tells us whether the value contains any variable which has
    * not been replaced by `_` (in which case we need to keep the assignment,
    * etc.).
@@ -557,7 +557,7 @@ let filter_unused (filter_monadic_calls : bool) (ctx : trans_ctx)
 
   (* We then implement the transformation on *expressions* through a mapreduce.
    * Note that the transformation is bottom-up.
-   * The map filters the unused assignments, the reduce computes the set of
+   * The map filters the useless assignments, the reduce computes the set of
    * used variables.
    *)
   let expr_visitor =
@@ -934,10 +934,10 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
         (lazy
           ("eliminate_box_functions:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
-      (* Filter the unused variables, assignments, function calls, etc. *)
-      let def = filter_unused config.filter_unused_monadic_calls ctx def in
+      (* Filter the useless variables, assignments, function calls, etc. *)
+      let def = filter_useless config.filter_useless_monadic_calls ctx def in
       log#ldebug
-        (lazy ("filter_unused:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+        (lazy ("filter_useless:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
       (* Decompose the monadic let-bindings *)
       let def =

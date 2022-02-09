@@ -138,7 +138,7 @@ let translate_function_to_pure (config : C.partial_config)
   let sp_config =
     {
       SymbolicToPure.filter_useless_back_calls =
-        mp_config.filter_unused_monadic_calls;
+        mp_config.filter_useless_monadic_calls;
     }
   in
 
