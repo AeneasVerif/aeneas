@@ -123,7 +123,7 @@ let () =
       let m = PrePasses.apply_passes m in
 
       (* Some options for the execution *)
-      let config =
+      let eval_config =
         {
           C.check_invariants = true;
           greedy_expand_symbolics_with_borrows = true;
@@ -132,12 +132,12 @@ let () =
       in
 
       (* Test the unit functions with the concrete interpreter *)
-      if !test_units then I.Test.test_unit_functions config m;
+      if !test_units then I.Test.test_unit_functions eval_config m;
 
       (* Evaluate the symbolic interpreter on the functions, ignoring the
        * functions which contain loops - TODO: remove *)
       let synthesize = true in
-      I.Test.test_functions_symbolic config synthesize m;
+      I.Test.test_functions_symbolic eval_config synthesize m;
 
       (* Translate the functions *)
       let test_unit_functions = !test_trans_units in
@@ -150,5 +150,11 @@ let () =
           add_unit_args = false;
         }
       in
-      Translate.translate_module filename dest_dir config micro_passes_config
-        test_unit_functions m
+      let trans_config =
+        {
+          Translate.eval_config;
+          mp_config = micro_passes_config;
+          test_unit_functions;
+        }
+      in
+      Translate.translate_module filename dest_dir trans_config m

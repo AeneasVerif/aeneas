@@ -12,6 +12,20 @@ open TranslateCore
 (** The local logger *)
 let log = TranslateCore.log
 
+type config = {
+  eval_config : Contexts.partial_config;
+  mp_config : Micro.config;
+  test_unit_functions : bool;
+      (** If true, insert tests in the generated files to check that the
+          unit functions normalize to `Success _`.
+          
+          For instance, in F* it generates code like this:
+          ```
+          let _ = assert_norm (FUNCTION () = Success ())
+          ```
+       *)
+}
+
 type symbolic_fun_translation = V.symbolic_value list * SA.expression
 (** The result of running the symbolic interpreter on a function:
     - the list of symbolic values used for the input values
@@ -272,21 +286,12 @@ let translate_module_to_pure (config : C.partial_config)
   (* Return *)
   (trans_ctx, type_defs, pure_translations)
 
-(** Translate a module and write the synthesized code to an output file.
-
-    [test_unit_functions]: if true, insert tests in the generated files to
-    check that the unit functions normalize to `Success _`. For instance,
-    in F* it generates code like this:
-    ```
-    let _ = assert_norm (FUNCTION () = Success ())
-    ```
- *)
-let translate_module (filename : string) (dest_dir : string)
-    (config : C.partial_config) (mp_config : Micro.config)
-    (test_unit_functions : bool) (m : M.cfim_module) : unit =
+(** Translate a module and write the synthesized code to an output file. *)
+let translate_module (filename : string) (dest_dir : string) (config : config)
+    (m : M.cfim_module) : unit =
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs =
-    translate_module_to_pure config mp_config m
+    translate_module_to_pure config.eval_config config.mp_config m
   in
 
   (* Initialize the extraction context - for now we extract only to F* *)
@@ -413,7 +418,7 @@ let translate_module (filename : string) (dest_dir : string)
         ExtractToFStar.extract_fun_def extract_ctx fmt qualif def)
       fls;
     (* Insert unit tests if necessary *)
-    if test_unit_functions then
+    if config.test_unit_functions then
       List.iter
         (fun (keep_fwd, (fwd, _)) ->
           if keep_fwd then
