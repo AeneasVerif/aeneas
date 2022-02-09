@@ -306,6 +306,16 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }
   in
 
+  (* We need to compute which functions are recursive, in order to know
+   * whether we should generate a decrease clause or not. *)
+  let rec_functions =
+    Pure.FunDefId.Set.of_list
+      (List.concat
+         (List.map
+            (fun decl -> match decl with M.Fun (Rec ids) -> ids | _ -> [])
+            m.declarations))
+  in
+
   (* Register unique names for all the top-level types and functions.
    * Note that the order in which we generate the names doesn't matter:
    * we just need to generate a mapping from identifier to name, and make
@@ -320,7 +330,12 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   let extract_ctx =
     List.fold_left
       (fun extract_ctx (keep_fwd, def) ->
-        ExtractToFStar.extract_fun_def_register_names extract_ctx keep_fwd def)
+        (* Note that we generate a decrease clause for all the recursive functions *)
+        let gen_decr_clause =
+          Pure.FunDefId.Set.mem (fst def).Pure.def_id rec_functions
+        in
+        ExtractToFStar.extract_fun_def_register_names extract_ctx keep_fwd
+          gen_decr_clause def)
       extract_ctx trans_funs
   in
 

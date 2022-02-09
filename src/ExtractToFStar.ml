@@ -274,6 +274,16 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     fname ^ suffix
   in
 
+  let decrease_clause_name (_fid : FunDefId.id) (fname : name) : string =
+    let fname = get_fun_name fname in
+    (* Converting to snake case should be a no-op, but it doesn't cost much *)
+    let fname = to_snake_case fname in
+    (* Compute the suffix *)
+    let suffix = "_decrease" in
+    (* Concatenate *)
+    fname ^ suffix
+  in
+
   let var_basename (_varset : StringSet.t) (basename : string option) (ty : ty)
       : string =
     (* If there is a basename, we use it *)
@@ -342,6 +352,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     struct_constructor;
     type_name;
     fun_name;
+    decrease_clause_name;
     var_basename;
     type_var_basename;
     append_index;
@@ -633,8 +644,12 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
     (forward function and backward functions).
  *)
 let extract_fun_def_register_names (ctx : extraction_ctx) (keep_fwd : bool)
-    (def : pure_fun_translation) : extraction_ctx =
+    (has_decrease_clause : bool) (def : pure_fun_translation) : extraction_ctx =
   let fwd, back_ls = def in
+  (* Register the decrease clause, if necessary *)
+  let ctx =
+    if has_decrease_clause then ctx_add_decrase_clause fwd ctx else ctx
+  in
   (* Register the forward function name *)
   let ctx = ctx_add_fun_def (keep_fwd, def) fwd ctx in
   (* Register the backward functions' names *)

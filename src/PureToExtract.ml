@@ -79,6 +79,17 @@ type formatter = {
               some of them)
           - region group information in case of a backward function
             (`None` if forward function)
+          TODO: use the fun id for the assumed functions.
+       *)
+  decrease_clause_name : FunDefId.id -> name -> string;
+      (** Generates the name of the definition used to prove/reason about
+          termination. The generated code uses this clause where needed,
+          but its body must be defined by the user.
+      
+          Inputs:
+          - function id: this is especially useful to identify whether the
+            function is an assumed function or a local function
+          - function basename
        *)
   var_basename : StringSet.t -> string option -> ty -> string;
       (** Generates a variable basename.
@@ -163,6 +174,12 @@ type formatter = {
 (** We use identifiers to look for name clashes *)
 type id =
   | FunId of A.fun_id * RegionGroupId.id option
+  | DecreaseClauseId of A.fun_id
+      (** The definition which provides the decrease/termination clause.
+          We insert calls to this clause to prove/reason about termination:
+          the body of those clauses must be defined by the user, in the
+          proper files.
+       *)
   | TypeId of type_id
   | StructId of type_id
       (** We use this when we manipulate the names of the structure
@@ -320,6 +337,14 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
         | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
       in
       "fun name (" ^ fun_kind ^ "): " ^ fun_name
+  | DecreaseClauseId fid ->
+      let fun_name =
+        match fid with
+        | A.Local fid ->
+            Print.name_to_string (FunDefId.Map.find fid fun_defs).name
+        | A.Assumed aid -> A.show_assumed_fun_id aid
+      in
+      "decrease clause for function: " ^ fun_name
   | TypeId id -> "type name: " ^ get_type_name id
   | StructId id -> "struct constructor of: " ^ get_type_name id
   | VariantId (id, variant_id) ->
@@ -503,6 +528,11 @@ let ctx_add_struct (def : type_def) (ctx : extraction_ctx) :
   let ctx = ctx_add (StructId (AdtId def.def_id)) name ctx in
   (ctx, name)
 
+let ctx_add_decrase_clause (def : fun_def) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let name = ctx.fmt.decrease_clause_name def.def_id def.basename in
+  ctx_add (DecreaseClauseId (A.Local def.def_id)) name ctx
+
 let ctx_add_fun_def (trans_group : bool * pure_fun_translation) (def : fun_def)
     (ctx : extraction_ctx) : extraction_ctx =
   (* Lookup the CFIM def to compute the region group information *)
@@ -531,6 +561,7 @@ let ctx_add_fun_def (trans_group : bool * pure_fun_translation) (def : fun_def)
   let name =
     ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
   in
+  (* Add the function name *)
   let ctx = ctx_add (FunId (def_id, def.back_id)) name ctx in
   ctx
 
