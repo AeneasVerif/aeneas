@@ -1033,13 +1033,16 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_string fmt ":";
   F.pp_print_space fmt ();
   F.pp_print_string fmt "nat";
-  (* Print the body *)
+  (* Print the "=" *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt "=";
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "admit ()";
   (* Close the box for "let FUN_NAME (PARAMS) =" *)
   F.pp_close_box fmt ();
+  (* Add a space before the "admit" and increment the indentation if we need
+   * to break line *)
+  F.pp_print_break fmt 1 ctx.indent_incr;
+  (* Print the "admit ()" *)
+  F.pp_print_string fmt "admit ()";
   (* Close the box for the whole definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
