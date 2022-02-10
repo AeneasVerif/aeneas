@@ -2,7 +2,7 @@ all: build-test
 
 CHARON_HOME=../charon/charon
 CHARON_TESTS_DIR=$(CHARON_HOME)/tests/src
-DEST_DIR=tests/
+DEST_DIR=tests
 
 # Default translation options:
 # - insert calls to the normalizer in the translated code to test the

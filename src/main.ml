@@ -33,6 +33,7 @@ let () =
   let no_decreases_clauses = ref false in
   let template_decreases_clauses = ref false in
   let no_split = ref false in
+  let no_check_inv = ref false in
 
   let spec =
     [
@@ -63,20 +64,23 @@ let () =
       ( "-test-trans-units",
         Arg.Set test_trans_units,
         " Test the translated unit functions with the target theorem\n\
-        \                        prover's normalizer" );
+        \                         prover's normalizer" );
       ( "-no-decreases-clauses",
         Arg.Set no_decreases_clauses,
         " Do not add decrease clauses to the recursive definitions" );
       ( "-template-clauses",
         Arg.Set template_decreases_clauses,
         " Generate templates for the required decreases clauses, in a\n\
-         `\n\
-        \                                dedicated file. Incompatible with \
+        \                         dedicated file. Incompatible with \
          -no-decreases-clauses" );
       ( "-no-split",
         Arg.Set no_split,
-        " Don't split the definitions between different files for types, \
-         functions, etc." );
+        " Don't split the definitions between different files for types,\n\
+        \                         functions, etc." );
+      ( "-no-check-inv",
+        Arg.Set no_check_inv,
+        " Deactivate the invariant sanity checks performed at every step of\n\
+        \                         evaluation. Dramatically saves speed." );
     ]
   in
   (* Sanity check: -template-clauses ==> not -no-decrease-clauses *)
@@ -146,7 +150,7 @@ let () =
       (* Some options for the execution *)
       let eval_config =
         {
-          C.check_invariants = true;
+          C.check_invariants = not !no_check_inv;
           greedy_expand_symbolics_with_borrows = true;
           allow_bottom_below_borrow = true;
         }
