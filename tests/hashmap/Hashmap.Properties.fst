@@ -187,8 +187,8 @@ let rec hash_map_allocate_slots_fwd_lem t slots n =
     end
 #pop-options
 
-(**** new *)
-/// Under proper conditions, [new] doesn't fail and returns an empty hash map.
+(**** new_with_capacity *)
+/// Under proper conditions, [new_with_capacity] doesn't fail and returns an empty hash map.
 val hash_map_new_with_capacity_fwd_lem
   (t : Type0) (capacity : usize)
   (max_load_dividend : usize) (max_load_divisor : usize) :
@@ -229,6 +229,16 @@ let hash_map_new_with_capacity_fwd_lem (t : Type0) (capacity : usize)
   end
 #pop-options
 
+(**** new *)
+/// [new] doesn't fail and returns an empty hash map.
+val hash_map_new_fwd_lem (t : Type0) :
+  Lemma
+  (ensures (
+    match hash_map_new_fwd t with
+    | Fail -> False
+    | Return hm -> hash_map_t_inv hm []))
+
+let hash_map_new_fwd_lem t = hash_map_new_with_capacity_fwd_lem t 32 4 5
 
 (**** clear_slots *)
 
