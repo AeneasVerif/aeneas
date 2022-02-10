@@ -7,7 +7,10 @@ open FStar.List.Tot
 
 (*** Utilities *)
 val list_update (#a : Type0) (ls : list a) (i : nat{i < length ls}) (x : a) :
-  ls':list a{length ls' = length ls}
+  ls':list a{
+    length ls' = length ls /\
+    index ls' i == x
+  }
 #push-options "--fuel 1"
 let rec list_update #a ls i x =
   match ls with
@@ -239,9 +242,6 @@ type vec (a : Type0) = v:list a{length v <= usize_max}
 
 let vec_new (a  : Type0) : vec a = assert_norm(length #a [] == 0); []
 let vec_len (a : Type0) (v : vec a) : usize = length v
-
-// The **forward** function shouldn't be used
-let vec_push_fwd (a  : Type0) (v : vec a) (x : a) : unit = ()
 
 // The **forward** function shouldn't be used
 let vec_push_fwd (a  : Type0) (v : vec a) (x : a) : unit = ()

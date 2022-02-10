@@ -6,10 +6,6 @@ open Hashmap.Types
 
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 
-(*** Utilities *)
-
-(*** The clauses *)
-
 (** [hashmap::HashMap::allocate_slots]: decreases clause *)
 unfold
 let hash_map_allocate_slots_decreases (t : Type0) (slots : vec (list_t t))

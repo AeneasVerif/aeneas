@@ -7,7 +7,30 @@ open Hashmap.Types
 open Hashmap.Clauses
 open Hashmap.Funs
 
+// To help with the proofs
+module InteractiveHelpers = FStar.InteractiveHelpers
+
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+
+(*** Lemmas about Primitives *)
+/// TODO: move those lemmas
+
+val list_update_index_dif_lem
+  (#a : Type0) (ls : list a) (i : nat{i < length ls}) (x : a)
+  (j : nat{j < length ls}) :
+  Lemma (requires (j <> i))
+  (ensures (index (list_update ls i x) j == index ls j))
+  [SMTPat (index (list_update ls i x) j)]
+#push-options "--fuel 1"
+let rec list_update_index_dif_lem #a ls i x j =
+  match ls with
+  | x' :: ls ->
+    if i = 0 then ()
+    else if j = 0 then ()
+    else
+     list_update_index_dif_lem ls (i-1) x (j-1)
+#pop-options
+
 
 (*** Utilities *)
 
@@ -122,7 +145,7 @@ let hash_map_t_base_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   end
 
 /// Invariant for the hashmap
-let hash_map_t_inv_simpl (#t : Type0) (hm : hash_map_t t) : Type0 =
+let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   // Base invariant
   hash_map_t_base_inv hm /\
   // The hash map is either: not overloaded, or we can't resize it
@@ -137,11 +160,14 @@ let hash_map_t_is_al (#t : Type0) (hm : hash_map_t t) (al : assoc_list t) : Type
   assoc_list_equiv hm_al al
 
 /// The invariant we reveal to the user
-let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) (al : assoc_list t) : Type0 =
+let hash_map_t_inv_repr (#t : Type0) (hm : hash_map_t t) (al : assoc_list t) : Type0 =
   // The hash map invariant is satisfied
-  hash_map_t_inv_simpl hm /\
+  hash_map_t_inv hm /\
   // And it can be seen as the given associative list
   hash_map_t_is_al hm al
+
+let hash_map_len (#t : Type0) (hm : hash_map_t t) : nat =
+  hm.hash_map_num_entries
 
 (*** Proofs *)
 (**** allocate_slots *)
@@ -201,7 +227,7 @@ val hash_map_new_with_capacity_fwd_lem
   (ensures (
     match hash_map_new_with_capacity_fwd t capacity max_load_dividend max_load_divisor with
     | Fail -> False
-    | Return hm -> hash_map_t_inv hm []))
+    | Return hm -> hash_map_t_inv_repr hm []))
 
 #push-options "--fuel 1"
 let hash_map_new_with_capacity_fwd_lem (t : Type0) (capacity : usize)
@@ -222,7 +248,7 @@ let hash_map_new_with_capacity_fwd_lem (t : Type0) (capacity : usize)
           // The base invariant
           let al = hash_map_t_v hm in
           assert(hash_map_t_base_inv hm);
-          assert(hash_map_t_inv_simpl hm);
+          assert(hash_map_t_inv hm);
           assert(hash_map_t_is_al hm [])
       end
     end
@@ -236,10 +262,119 @@ val hash_map_new_fwd_lem (t : Type0) :
   (ensures (
     match hash_map_new_fwd t with
     | Fail -> False
-    | Return hm -> hash_map_t_inv hm []))
+    | Return hm -> hash_map_t_inv_repr hm []))
 
 let hash_map_new_fwd_lem t = hash_map_new_with_capacity_fwd_lem t 32 4 5
 
 (**** clear_slots *)
+/// [clear_slots] doesn't fail and simply clears the slots starting at index i
+#push-options "--fuel 1"
+let rec hash_map_clear_slots_fwd_back_lem
+  (t : Type0) (slots : vec (list_t t)) (i : usize) :
+  Lemma
+  (ensures (
+    match hash_map_clear_slots_fwd_back t slots i with
+    | Fail -> False
+    | Return slots' ->
+      // The length is preserved
+      length slots' == length slots /\
+      // The slots before i are left unchanged
+      (forall (j:nat{j < i /\ j < length slots}). index slots' j == index slots j) /\
+      // The slots after i are set to ListNil
+      (forall (j:nat{i <= j /\ j < length slots}). index slots' j == ListNil)))
+  (decreases (hash_map_clear_slots_decreases t slots i))
+  =
+  let i0 = vec_len (list_t t) slots in
+  let b = i < i0 in
+  if b
+  then
+    begin match vec_index_mut_back (list_t t) slots i ListNil with
+    | Fail -> ()
+    | Return v ->
+      begin match usize_add i 1 with
+      | Fail -> ()
+      | Return i1 ->
+        hash_map_clear_slots_fwd_back_lem t v i1;
+        begin match hash_map_clear_slots_fwd_back t v i1 with
+        | Fail -> ()
+        | Return slots1 ->
+          assert(length slots1 == length slots);
+          assert(forall (j:nat{i+1 <= j /\ j < length slots}). index slots1 j == ListNil);
+          assert(index slots1 i == ListNil)
+        end
+      end
+    end
+  else ()
+#pop-options
+
+/// Auxiliary lemma:
+/// if all the slots in a vector are [ListNil], then this vector viewed as a list
+/// is empty.
+#push-options "--fuel 1"
+let rec slots_t_v_all_nil_is_empty_lem (#t : Type0) (slots : slots_t t) :
+  Lemma (requires (forall (i:nat{i < length slots}). index slots i == ListNil))
+  (ensures (slots_t_v slots == []))
+  =
+  match slots with
+  | [] -> ()
+  | s :: slots' ->
+    (* The following assert helps the instantiation of quantifiers... *)
+    assert(forall (i:nat{i < length slots'}). index slots' i == index slots (i+1));
+    slots_t_v_all_nil_is_empty_lem slots';
+    assert(slots_t_v slots == flatten (map list_t_v (s :: slots')));
+    assert(slots_t_v slots == flatten (list_t_v s :: map list_t_v slots'));
+    assert(slots_t_v slots == append (list_t_v s) (flatten (map list_t_v slots')));
+    assert(slots_t_v slots == append (list_t_v s) (flatten (map list_t_v slots')));
+    assert(slots_t_v slots == append (list_t_v s) []);
+    assert(slots_t_v slots == (list_t_v s) @ []); // Triggers an SMT pat
+    assert(slots_t_v slots == list_t_v s);
+    assert(index slots 0 == s);
+    assert(slots_t_v slots == [])
+#pop-options
 
 (**** clear *)
+/// [clear] doesn't fail and turns the hash map into an empty map
+val hash_map_clear_fwd_back_lem
+  (t : Type0) (self : hash_map_t t) :
+  Lemma
+  (requires (hash_map_t_inv self))
+  (ensures (
+    match hash_map_clear_fwd_back t self with
+    | Fail -> False
+    | Return hm ->
+      hash_map_t_inv_repr hm []))
+
+// Being lazy: fuel 1 helps a lot...
+#push-options "--fuel 1"
+let hash_map_clear_fwd_back_lem t self =
+  let p = self.hash_map_max_load_factor in
+  let i = self.hash_map_max_load in
+  let v = self.hash_map_slots in
+  hash_map_clear_slots_fwd_back_lem t v 0;
+  begin match hash_map_clear_slots_fwd_back t v 0 with
+  | Fail -> ()
+  | Return slots1 ->
+    slots_t_v_all_nil_is_empty_lem slots1;
+    let hm1 = Mkhash_map_t 0 p i slots1 in
+    assert(hash_map_t_base_inv hm1);
+    assert(hash_map_t_inv hm1);
+    assert(hash_map_t_is_al hm1 []);
+    assert(hash_map_t_inv_repr hm1 [])
+  end
+#pop-options
+
+(**** len *)
+
+/// [len]: we link it to a non-failing function.
+/// Rk.: we might want to make an analysis to not use an error monad to translate
+/// functions which statically can't fail.
+val hash_map_len_fwd_lem (t : Type0) (self : hash_map_t t) :
+  Lemma (
+    match hash_map_len_fwd t self with
+    | Fail -> False
+    | Return l -> l = hash_map_len self)
+
+let hash_map_len_fwd_lem t self = ()
+
+
+(**** insert_in_list *)
