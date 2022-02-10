@@ -1074,8 +1074,8 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
-  F.pp_open_hvbox fmt 0;
-  (* Open a box for "let FUN_NAME (PARAMS) =" *)
+  F.pp_open_hvbox fmt ctx.indent_incr;
+  (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
   let qualif =
@@ -1083,7 +1083,13 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   F.pp_print_space fmt ();
+  (* Open a box for "(PARAMS) : EFFECT =" *)
+  F.pp_open_hvbox fmt 0;
+  (* Open a box for "(PARAMS)" *)
+  F.pp_open_hovbox fmt 0;
   let ctx, ctx_body = extract_fun_parameters ctx fmt def in
+  (* Close the box for "(PARAMS)" *)
+  F.pp_close_box fmt ();
   (* Print the return type - note that we have to be careful when
    * printing the input values for the decrease clause, because
    * it introduces bindings in the context... We thus "forget"
@@ -1092,8 +1098,10 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   let _ =
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
+    (* Open a box for the EFFECT *)
+    F.pp_open_hvbox fmt 0;
     (* Open a box for the return type *)
-    F.pp_open_hovbox fmt 0;
+    F.pp_open_hovbox fmt ctx.indent_incr;
     (* Print the return type *)
     (* `Tot` *)
     if has_decreases_clause then (
@@ -1141,14 +1149,18 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
       in
       F.pp_print_string fmt "))";
       (* Close the box for the decrease clause *)
-      F.pp_close_box fmt ())
+      F.pp_close_box fmt ());
+    (* Close the box for the EFFECT *)
+    F.pp_close_box fmt ()
   in
   (* Print the "=" *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt "=";
-  (* Close the box for "let FUN_NAME (PARAMS) =" *)
+  (* Close the box for "(PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
-  F.pp_print_break fmt 1 ctx_body.indent_incr;
+  (* Close the box for "let FUN_NAME (PARAMS) : EFFECT =" *)
+  F.pp_close_box fmt ();
+  F.pp_print_space fmt ();
   (* Open a box for the body *)
   F.pp_open_hvbox fmt 0;
   (* Extract the body *)
