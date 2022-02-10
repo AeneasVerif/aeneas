@@ -34,6 +34,20 @@ let rec list_update_index_dif_lem #a ls i x j =
 
 (*** Utilities *)
 
+val find_update:
+     #a:Type
+  -> f:(a -> Tot bool)
+  -> ls:list a
+  -> x:a
+  -> ls':list a{length ls' == length ls}
+#push-options "--fuel 1"
+let rec find_update #a f ls x =
+  match ls with
+  | [] -> []
+  | hd::tl ->
+    if f hd then x :: tl else hd :: find_update f tl x
+#pop-options
+
 val pairwise_distinct : #a:eqtype -> ls:list a -> Tot bool
 let rec pairwise_distinct (#a : eqtype) (ls : list a) : Tot bool =
   match ls with
@@ -78,13 +92,24 @@ let rec flatten_append (#a : Type) (l1 l2: list (list a)) :
 let fst_is_disctinct (#a : eqtype) (#b : Type0) (p0 : a & b) (p1 : a & b) : Type0 =
   fst p0 <> fst p1
 
-(*** Invariants, representants *)
+(*** Invariants, models *)
 
 /// "Natural" length function for [list_t]
+/// TODO: remove? we can reason simply with [list_t_v]
 let rec list_t_len (#t : Type0) (ls : list_t t) : nat =
   match ls with
   | ListNil -> 0
   | ListCons _ _ tl -> 1 + list_t_len tl
+
+/// "Natural" append function for [list_t]
+/// TODO: remove? we can reason simply with [list_t_v]
+#push-options "--fuel 1"
+let rec list_t_append (#t : Type0) (ls0 ls1 : list_t t) :
+  ls:list_t t{list_t_len ls = list_t_len ls0 + list_t_len ls1} =
+  match ls0 with
+  | ListNil -> ls1
+  | ListCons x v tl -> ListCons x v (list_t_append tl ls1)
+#pop-options
 
 /// The "key" type
 type key = usize
@@ -118,6 +143,14 @@ let has_same_binding (#t : Type0) (al : assoc_list t) ((k,v) : binding t) : Type
   match find (same_key k) al with
   | None -> False
   | Some (k',v') -> v' == v
+
+let hash_map_t_mem (#t : Type0) (hm : hash_map_t t) (k : key) : bool =
+  existsb (same_key k) (hash_map_t_v hm)
+
+let hash_map_t_find (#t : Type0) (hm : hash_map_t t) (k : key) : option t =
+ match find (same_key k) (hash_map_t_v hm) with
+ | None -> None
+ | Some (_, v) -> Some v
 
 /// Auxiliary function stating that two associative lists are "equivalent"
 let assoc_list_equiv (#t : Type0) (al0 al1 : assoc_list t) : Type0 =
@@ -363,6 +396,7 @@ let hash_map_clear_fwd_back_lem t self =
   end
 #pop-options
 
+
 (**** len *)
 
 /// [len]: we link it to a non-failing function.
@@ -378,3 +412,187 @@ let hash_map_len_fwd_lem t self = ()
 
 
 (**** insert_in_list *)
+
+/// [insert_in_list_fwd]: returns true iff the key is not in the list
+val hash_map_insert_in_list_fwd_lem
+  (t : Type0) (key : usize) (value : t) (ls : list_t t) :
+  Lemma
+  (ensures (
+    match hash_map_insert_in_list_fwd t key value ls with
+    | Fail -> False
+    | Return b ->
+      b <==> (find (same_key key) (list_t_v ls) == None)))
+  (decreases (hash_map_insert_in_list_decreases t key value ls))
+
+#push-options "--fuel 1"
+let rec hash_map_insert_in_list_fwd_lem t key value ls =
+  begin match ls with
+  | ListCons ckey cvalue ls0 ->
+    let b = ckey = key in
+    if b
+    then ()
+    else
+      begin
+      hash_map_insert_in_list_fwd_lem t key value ls0;
+      match hash_map_insert_in_list_fwd t key value ls0 with
+      | Fail -> ()
+      | Return b0 -> ()
+      end
+  | ListNil ->
+    assert(list_t_v ls == []);
+    assert_norm(find (same_key #t key) [] == None)
+  end
+#pop-options
+
+/// The proofs about [insert_in_list] backward are easier to do in several steps:
+/// extrinsic proofs to the rescue!
+
+/// [insert_in_list]: if the key is not in the map, appends a new bindings
+val hash_map_insert_in_list_back_lem_append
+  (t : Type0) (key : usize) (value : t) (ls : list_t t) :
+  Lemma
+  (requires (
+    find (same_key key) (list_t_v ls) == None))
+  (ensures (
+    match hash_map_insert_in_list_back t key value ls with
+    | Fail -> False
+    | Return ls' ->
+      list_t_v ls' == list_t_v ls @ [(key,value)]))
+  (decreases (hash_map_insert_in_list_decreases t key value ls))
+
+#push-options "--fuel 1"
+let rec hash_map_insert_in_list_back_lem_append t key value ls =
+  begin match ls with
+  | ListCons ckey cvalue ls0 ->
+    let b = ckey = key in
+    if b
+    then () //let ls1 = ListCons ckey value ls0 in Return ls1
+    else
+      begin
+      hash_map_insert_in_list_back_lem_append t key value ls0;
+      match hash_map_insert_in_list_back t key value ls0 with
+      | Fail -> ()
+      | Return l -> ()
+      end
+  | ListNil -> ()
+  end
+#pop-options
+
+/// [insert_in_list]: if the key is in the map, we update the binding
+val hash_map_insert_in_list_back_lem_update
+  (t : Type0) (key : usize) (value : t) (ls : list_t t) :
+  Lemma
+  (requires (
+    Some? (find (same_key key) (list_t_v ls))))
+  (ensures (
+    match hash_map_insert_in_list_back t key value ls with
+    | Fail -> False
+    | Return ls' ->
+      list_t_v ls' == find_update (same_key key) (list_t_v ls) (key,value)))
+  (decreases (hash_map_insert_in_list_decreases t key value ls))
+
+#push-options "--fuel 1"
+let rec hash_map_insert_in_list_back_lem_update t key value ls =
+  begin match ls with
+  | ListCons ckey cvalue ls0 ->
+    let b = ckey = key in
+    if b
+    then ()
+    else
+      begin
+      hash_map_insert_in_list_back_lem_update t key value ls0;
+      match hash_map_insert_in_list_back t key value ls0 with
+      | Fail -> ()
+      | Return l -> ()
+      end
+  | ListNil -> ()
+  end
+#pop-options
+
+(**** insert_no_resize *)
+
+/// Same as for [insert_in_list]: we do the proofs in several, modular steps.
+/// The strategy is to study the two disjoint cases:
+/// - the key is already in the map (we update the binding)
+/// - the key is not in the map (we add a binding)
+///
+/// We gradually prove that the resulting map, in the two cases, can be seen
+/// as the result of:
+/// - filtering the bindings for the key we want to insert
+/// - pushing the new binding at the front
+///
+/// We then prove a less "functional" variant of the result, which states that,
+/// after the insertion:
+/// - [key] maps to [value]
+/// - forall key' <> key, the binding is unchanged
+/// 
+/// This way, we have a consistent, high-level description of the insertion.
+///
+/// Rk.: with multimaps the high-level spec would be even simpler: we would push
+/// an element to the front of the list.
+
+/// [insert_no_resize]: if the key is in the map, we succeed and update the binding.
+val hash_map_insert_no_resize_fwd_back_lem_update
+  (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
+  Lemma
+  (requires (
+    hash_map_t_inv self /\
+    // The key is in the map
+    Some? (find (same_key key) (hash_map_t_v self))))
+  (ensures (
+    match hash_map_insert_no_resize_fwd_back t self key value with
+    | Fail -> False
+    | Return hm ->
+      // The invariant is preserved
+      hash_map_t_inv hm /\
+      // The map has been updated
+      hash_map_t_v hm == find_update (same_key key) (hash_map_t_v self) (key,value)))
+
+let hash_map_insert_no_resize_fwd_back_lem_update t self key value =
+  begin match hash_key_fwd key with
+  | Fail -> ()
+  | Return i ->
+    let i0 = self.hash_map_num_entries in
+    let p = self.hash_map_max_load_factor in
+    let i1 = self.hash_map_max_load in
+    let v = self.hash_map_slots in
+    let i2 = vec_len (list_t t) v in
+    begin match usize_rem i i2 with
+    | Fail -> ()
+    | Return hash_mod ->
+      begin match vec_index_mut_fwd (list_t t) v hash_mod with
+      | Fail -> ()
+      | Return l ->
+        // The key must be in the slot - TODO: update invariant
+        assume(Some? (find (same_key key) (list_t_v l)));
+        hash_map_insert_in_list_fwd_lem t key value l;
+        begin match hash_map_insert_in_list_fwd t key value l with
+        | Fail -> ()
+        | Return b ->
+          assert(not b);
+          if b then assert(False)
+          else
+            begin
+            hash_map_insert_in_list_back_lem_update t key value l;
+            match hash_map_insert_in_list_back t key value l with
+            | Fail -> ()
+            | Return l0 ->
+              begin
+              match vec_index_mut_back (list_t t) v hash_mod l0 with
+              | Fail -> ()
+              | Return v0 ->
+                let hm1 = Mkhash_map_t i0 p i1 v0 in
+                assume(hash_map_t_inv hm1);
+                assume(hash_map_t_v hm1 == find_update (same_key key) (hash_map_t_v self) (key,value))
+              end
+            end
+        end
+      end
+    end
+  end
+
+
+/// [insert_in_list]: inserting a binding is equivalent to:
+/// - filtering the list
+/// - pushing the binding to the front
+
