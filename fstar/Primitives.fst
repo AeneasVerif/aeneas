@@ -242,7 +242,16 @@ let vec_len (a : Type0) (v : vec a) : usize = length v
 
 // The **forward** function shouldn't be used
 let vec_push_fwd (a  : Type0) (v : vec a) (x : a) : unit = ()
-let vec_push_back (a  : Type0) (v : vec a) (x : a) : result (vec a) =
+
+// The **forward** function shouldn't be used
+let vec_push_fwd (a  : Type0) (v : vec a) (x : a) : unit = ()
+let vec_push_back (a  : Type0) (v : vec a) (x : a) :
+  Pure (result (vec a))
+  (requires True)
+  (ensures (fun res ->
+    match res with
+    | Fail -> True
+    | Return v' -> length v' = length v + 1)) =
   if length v < usize_max then begin
     (**) assert_norm(length [x] == 1);
     (**) append_length v [x];
