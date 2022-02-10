@@ -957,6 +957,8 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
   (* The type parameters *)
   if def.signature.type_params <> [] then (
     F.pp_print_space fmt ();
+    (* Open a box for the type parameters *)
+    F.pp_open_hovbox fmt 0;
     F.pp_print_string fmt "(";
     List.iter
       (fun (p : type_var) ->
@@ -966,12 +968,16 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
       def.signature.type_params;
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
-    F.pp_print_string fmt "Type0)");
+    F.pp_print_string fmt "Type0)";
+    (* Close the box for the type parameters *)
+    F.pp_close_box fmt ());
   (* The input parameters - note that doing this adds bindings to the context *)
   let ctx_body =
     List.fold_left
       (fun ctx (lv : typed_lvalue) ->
         F.pp_print_space fmt ();
+        (* Open a box for the input parameter *)
+        F.pp_open_hovbox fmt 0;
         F.pp_print_string fmt "(";
         let ctx = extract_typed_lvalue ctx fmt false lv in
         F.pp_print_space fmt ();
@@ -979,6 +985,8 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         extract_ty ctx fmt false lv.ty;
         F.pp_print_string fmt ")";
+        (* Close the box for the input parameters *)
+        F.pp_close_box fmt ();
         ctx)
       ctx def.inputs_lvs
   in
