@@ -1088,11 +1088,11 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
    * TODO: figure out a cleaner way *)
   let _ =
     F.pp_print_space fmt ();
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
     (* Open a box for the return type *)
     F.pp_open_hovbox fmt 0;
     (* Print the return type *)
-    F.pp_print_string fmt ":";
-    F.pp_print_space fmt ();
     (* `Tot` *)
     if has_decreases_clause then (
       F.pp_print_string fmt "Tot";
