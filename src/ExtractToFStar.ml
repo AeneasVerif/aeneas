@@ -956,7 +956,6 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
    * with no input parameters *)
   (* The type parameters *)
   if def.signature.type_params <> [] then (
-    F.pp_print_space fmt ();
     (* Open a box for the type parameters *)
     F.pp_open_hovbox fmt 0;
     F.pp_print_string fmt "(";
@@ -970,12 +969,12 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ();
     F.pp_print_string fmt "Type0)";
     (* Close the box for the type parameters *)
-    F.pp_close_box fmt ());
+    F.pp_close_box fmt ();
+    F.pp_print_space fmt ());
   (* The input parameters - note that doing this adds bindings to the context *)
   let ctx_body =
     List.fold_left
       (fun ctx (lv : typed_lvalue) ->
-        F.pp_print_space fmt ();
         (* Open a box for the input parameter *)
         F.pp_open_hovbox fmt 0;
         F.pp_print_string fmt "(";
@@ -987,6 +986,7 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt ")";
         (* Close the box for the input parameters *)
         F.pp_close_box fmt ();
+        F.pp_print_space fmt ();
         ctx)
       ctx def.inputs_lvs
   in
@@ -1017,32 +1017,34 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     ("(** [" ^ Print.name_to_string def.basename ^ "]: decreases clause *)");
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
-   * one line - TODO: remove? *)
+   * one line *)
   F.pp_open_hvbox fmt 0;
   (* Add the `unfold` keyword *)
   F.pp_print_string fmt "unfold";
   F.pp_print_space fmt ();
-  (* Open a box for "let FUN_NAME (PARAMS) =" *)
+  (* Open a box for "let FUN_NAME (PARAMS) : EFFECT = admit()" *)
+  F.pp_open_hvbox fmt ctx.indent_incr;
+  (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
   F.pp_print_string fmt ("let " ^ def_name);
+  F.pp_print_space fmt ();
   (* Extract the parameters *)
   let _, _ = extract_fun_parameters ctx fmt def in
-  (* Print the signature *)
-  F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
+  (* Print the signature *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt "nat";
   (* Print the "=" *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt "=";
-  (* Close the box for "let FUN_NAME (PARAMS) =" *)
+  (* Close the box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
-  (* Add a space before the "admit" and increment the indentation if we need
-   * to break line *)
-  F.pp_print_break fmt 1 ctx.indent_incr;
+  F.pp_print_space fmt ();
   (* Print the "admit ()" *)
   F.pp_print_string fmt "admit ()";
+  (* Close the box for "let FUN_NAME (PARAMS) : EFFECT = admit()" *)
+  F.pp_close_box fmt ();
   (* Close the box for the whole definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
@@ -1080,6 +1082,7 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     match qualif with Let -> "let" | LetRec -> "let rec" | And -> "and"
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
+  F.pp_print_space fmt ();
   let ctx, ctx_body = extract_fun_parameters ctx fmt def in
   (* Print the return type - note that we have to be careful when
    * printing the input values for the decrease clause, because
@@ -1087,7 +1090,6 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
    * the bindings we introduced above.
    * TODO: figure out a cleaner way *)
   let _ =
-    F.pp_print_space fmt ();
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
     (* Open a box for the return type *)
