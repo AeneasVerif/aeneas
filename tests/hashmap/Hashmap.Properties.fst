@@ -466,6 +466,15 @@ let slot_t_inv_from_funs_lem
   ()
 *)
 
+// TODO: use more
+type slot_s (t : Type0) = list (binding t)
+type slots_s (t : Type0) = list (slot_s t)
+
+let slots_inv (#t : Type0) (slots : slots_s t{length slots <= usize_max}) : Type0 =
+  forall(i:nat{i < length slots}).
+  {:pattern index slots i}
+  slot_inv (length slots) i (index slots i)
+
 let slots_t_inv (#t : Type0) (slots : slots_t t{length slots <= usize_max}) : Type0 =
   forall(i:nat{i < length slots}).
   {:pattern index slots i}
@@ -493,6 +502,12 @@ let slots_t_from_fun
   in
   ()
 *)
+
+// TODO: hash_map_slots -> hash_map_slots_s
+let hash_map_slots_inv (#t : Type0) (hm : hash_map_slots t) : Type0 =
+  length hm <= usize_max /\
+  length hm > 0 /\
+  slots_inv hm
 
 /// Base invariant for the hashmap (the complete invariant can be temporarily
 /// broken between the moment we inserted an element and the moment we resize)
@@ -1186,6 +1201,7 @@ let hash_map_insert_in_list_back_lem t len key value ls =
 
 (**** insert_no_resize *)
 
+(***** Refinement proof *)
 /// Same strategy as for [insert_in_list]: we introduce a high-level version of
 /// the function, and reason about it.
 /// We work on [hash_map_slots] (we use a higher-level view of the hash-map, but
@@ -1229,7 +1245,6 @@ val hash_map_insert_no_resize_fwd_back_lem
     | _ -> False
     end))
 
-#push-options "--z3rlimit 200"
 let hash_map_insert_no_resize_fwd_back_lem t self key value =
   begin match hash_key_fwd key with
   | Fail -> ()
@@ -1298,7 +1313,59 @@ let hash_map_insert_no_resize_fwd_back_lem t self key value =
       end
     end
   end
-#pop-options  
+
+(***** find after insert *)
+/// Lemmas about what happens if we call [find] after an insertion
+
+val hash_map_insert_no_resize_s_get_same_lem
+  (#t : Type0) (hm : hash_map_slots t)
+  (key : usize) (value : t) :
+  Lemma (requires (hash_map_slots_inv hm))
+  (ensures (
+    match hash_map_insert_no_resize_s hm key value with
+    | Fail -> True
+    | Return hm' ->
+      hash_map_slots_find_s hm' key == Some value))
+
+let hash_map_insert_no_resize_s_get_same_lem #t hm key value =
+  let num_entries = length (flatten hm) in
+  if None? (hash_map_slots_find_s hm key) && num_entries = usize_max then ()
+  else
+    begin
+    let hm' = Return?.v (hash_map_insert_no_resize_s hm key value) in
+    let len = length hm in
+    let i = hash_mod_key key len in
+    let slot = index hm i in
+    hash_map_insert_in_list_s_lem t len key value slot
+   end
+
+val hash_map_insert_no_resize_s_get_diff_lem
+  (#t : Type0) (hm : hash_map_slots t)
+  (key : usize) (value : t) (key' : usize{key' <> key}) :
+  Lemma (requires (hash_map_slots_inv hm))
+  (ensures (
+    match hash_map_insert_no_resize_s hm key value with
+    | Fail -> True
+    | Return hm' ->
+      hash_map_slots_find_s hm' key' == hash_map_slots_find_s hm key'))
+
+let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
+  let num_entries = length (flatten hm) in
+  if None? (hash_map_slots_find_s hm key) && num_entries = usize_max then ()
+  else
+    begin
+    let hm' = Return?.v (hash_map_insert_no_resize_s hm key value) in
+    let len = length hm in
+    let i = hash_mod_key key len in
+    let slot = index hm i in
+    hash_map_insert_in_list_s_lem t len key value slot;
+    let i' = hash_mod_key key' len in
+    if i <> i' then ()
+    else
+      begin
+      ()
+      end
+   end
 
 (*
 /// We also do a disjunction over the cases
