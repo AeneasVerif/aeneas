@@ -902,7 +902,7 @@ val hash_map_insert_in_list_back_lem_append_fun
   (t : Type0) (key : usize) (value : t) (ls : list_t t) :
   Lemma
   (requires (
-    find (same_key key) (list_t_v ls) == None))
+    slot_t_find key ls == None))
   (ensures (
     match hash_map_insert_in_list_back t key value ls with
     | Fail -> False
@@ -1015,7 +1015,7 @@ val hash_map_insert_in_list_back_lem_append
   Lemma
   (requires (
     slot_t_inv len (hash_mod_key key len) ls /\
-    find (same_key key) (list_t_v ls) == None))
+    slot_t_find key ls == None))
   (ensures (
     match hash_map_insert_in_list_back t key value ls with
     | Fail -> False
@@ -1035,6 +1035,70 @@ let hash_map_insert_in_list_back_lem_append t len key value ls =
   | Return ls' ->
     assert(list_t_v ls' == list_t_v ls @ [(key,value)]);
     slot_t_v_inv_not_find_append_end_inv_lem t len key value (list_t_v ls)
+
+/// [insert_in_list]: if the key is in the map, update the bindings (quantifiers)
+val hash_map_insert_in_list_back_lem_update
+  (t : Type0) (len : usize{len > 0}) (key : usize) (value : t) (ls : list_t t) :
+  Lemma
+  (requires (
+    slot_t_inv len (hash_mod_key key len) ls /\
+    Some? (slot_t_find key ls)))
+  (ensures (
+    match hash_map_insert_in_list_back t key value ls with
+    | Fail -> False
+    | Return ls' ->
+      let als = list_t_v ls in
+      let i = find_index (same_key key) als in
+      list_t_v ls' == list_update als i (key,value) /\
+      // The invariant is preserved
+      slot_t_inv len (hash_mod_key key len) ls' /\
+      // [key] maps to [value]
+      slot_t_find key ls' == Some value /\
+      // The other bindings are preserved
+      (forall k'. k' <> key ==> slot_t_find k' ls' == slot_t_find k' ls)))
+
+let hash_map_insert_in_list_back_lem_update t len key value ls =
+  admit()
+(*  hash_map_insert_in_list_back_lem_append_fun t key value ls;
+  match hash_map_insert_in_list_back t key value ls with
+  | Fail -> ()
+  | Return ls' ->
+    assert(list_t_v ls' == list_t_v ls @ [(key,value)]);
+    slot_t_v_inv_not_find_append_end_inv_lem t len key value (list_t_v ls)*)
+
+/// [insert_in_list]
+val hash_map_insert_in_list_back_lem
+  (t : Type0) (len : usize{len > 0}) (key : usize) (value : t) (ls : list_t t) :
+  Lemma
+  (requires (slot_t_inv len (hash_mod_key key len) ls))
+  (ensures (
+    match hash_map_insert_in_list_back t key value ls with
+    | Fail -> False
+    | Return ls' ->
+      // The invariant is preserved
+      slot_t_inv len (hash_mod_key key len) ls' /\
+      // [key] maps to [value]
+      slot_t_find key ls' == Some value /\
+      // The other bindings are preserved
+      (forall k'. k' <> key ==> slot_t_find k' ls' == slot_t_find k' ls) /\
+      // The length is incremented, iff we inserted a new key
+      (match slot_t_find key ls with
+       | None ->
+         list_t_v ls' == list_t_v ls @ [(key,value)] /\
+         list_t_len ls' = list_t_len ls + 1
+       | Some _ ->
+         let i = find_index (same_key key) (list_t_v ls) in
+         list_t_v ls' == list_update (list_t_v ls) i (key,value) /\
+         list_t_len ls' = list_t_len ls)))
+  (decreases (hash_map_insert_in_list_decreases t key value ls))
+
+let hash_map_insert_in_list_back_lem t len key value ls =
+  match slot_t_find key ls with
+  | None ->
+    assert_norm(length [(key,value)] = 1);
+    hash_map_insert_in_list_back_lem_append t len key value ls
+  | Some _ ->
+    hash_map_insert_in_list_back_lem_update t len key value ls
 
 (*
 (**** insert_no_resize *)
