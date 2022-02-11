@@ -133,6 +133,38 @@ let rec map_list_update_lem #a #b f ls i x =
     else map_list_update_lem f ls' (i-1) x
 #pop-options
 
+val length_flatten_update :
+     #a:Type
+  -> ls:list (list a)
+  -> i:nat{i < length ls}
+  -> x:list a ->
+  Lemma (
+    // length (flatten (list_update ls i x)) =
+    //   length (flatten ls) - length (index ls i) + length x
+    length (flatten (list_update ls i x)) + length (index ls i) =
+    length (flatten ls) + length x)
+
+#push-options "--fuel 1"
+let rec length_flatten_update #a ls i x =
+  match ls with
+  | x' :: ls' ->
+    assert(flatten ls == x' @ flatten ls'); // Triggers patterns
+    assert(length (flatten ls) == length x' + length (flatten ls'));
+    if i = 0 then
+      begin
+      let ls1 = x :: ls' in
+      assert(list_update ls i x == ls1);
+      assert(flatten ls1 == x @ flatten ls'); // Triggers patterns
+      assert(length (flatten ls1) == length x + length (flatten ls'));
+      ()
+      end
+    else
+      begin
+      length_flatten_update ls' (i-1) x;
+      let ls1 = x' :: list_update ls' (i-1) x in
+      assert(flatten ls1 == x' @ flatten (list_update ls' (i-1) x)) // Triggers patterns
+      end
+#pop-options
 
 (*** Utilities *)
 // TODO: filter the utilities
@@ -1240,7 +1272,8 @@ let hash_map_insert_no_resize_fwd_back_lem t self key value =
                   assert(hm_v == list_update self_v hash_mod (list_t_v l0));
                   assert_norm(length [(key,value)] = 1);
                   assert(length (list_t_v l0) = length (list_t_v l) + 1);
-                  assume(hash_map_slots_len_s hm_v = hash_map_t_len_s hm)
+                  length_flatten_update self_v hash_mod (list_t_v l0);
+                  assert(hash_map_slots_len_s hm_v = hash_map_t_len_s hm)
                 end
               end
             end
@@ -1257,7 +1290,8 @@ let hash_map_insert_no_resize_fwd_back_lem t self key value =
                 let hm_v = hash_map_t_slots_v hm in
                 assert(hm_v == list_update self_v hash_mod (list_t_v l0));
                 assert(length (list_t_v l0) = length (list_t_v l));
-                assume(hash_map_slots_len_s hm_v = hash_map_t_len_s hm)
+                length_flatten_update self_v hash_mod (list_t_v l0);
+                assert(hash_map_slots_len_s hm_v = hash_map_t_len_s hm)
               end
             end
         end
