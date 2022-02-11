@@ -19,7 +19,7 @@ let rec list_update #a ls i x =
 
 (*** Result *)
 type result (a : Type0) : Type0 =
-| Return : a -> result a
+| Return : v:a -> result a
 | Fail : result a
 
 // Monadic bind and return.
@@ -113,7 +113,7 @@ let scalar_max (ty : scalar_ty) : int =
   | U64 -> u64_max
   | U128 -> u128_max
 
-type scalar (ty : scalar_ty) : Type0 = x:int{scalar_min ty <= x && x <= scalar_max ty}
+type scalar (ty : scalar_ty) : eqtype = x:int{scalar_min ty <= x && x <= scalar_max ty}
 
 let mk_scalar (ty : scalar_ty) (x : int) : result (scalar ty) =
   if scalar_min ty <= x && scalar_max ty >= x then Return x else Fail
@@ -146,18 +146,18 @@ let scalar_mul (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scala
   mk_scalar ty (x * y)
 
 /// The scalar types
-type isize = scalar Isize
-type i8 = scalar I8
-type i16 = scalar I16
-type i32 = scalar I32
-type i64 = scalar I64
-type i128 = scalar I128
-type usize = scalar Usize
-type u8 = scalar U8
-type u16 = scalar U16
-type u32 = scalar U32
-type u64 = scalar U64
-type u128 = scalar U128
+type isize : eqtype = scalar Isize
+type i8 : eqtype = scalar I8
+type i16 : eqtype = scalar I16
+type i32 : eqtype = scalar I32
+type i64 : eqtype = scalar I64
+type i128 : eqtype = scalar I128
+type usize : eqtype = scalar Usize
+type u8 : eqtype = scalar U8
+type u16 : eqtype = scalar U16
+type u32 : eqtype = scalar U32
+type u64 : eqtype = scalar U64
+type u128 : eqtype = scalar U128
 
 /// Negation
 let isize_neg = scalar_neg #Isize
