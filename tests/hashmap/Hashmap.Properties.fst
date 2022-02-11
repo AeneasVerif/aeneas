@@ -123,7 +123,7 @@ let rec pairwise_rel #a pred ls =
   match ls with
   | [] -> true
   | x :: ls' ->
-    List.Tot.for_all (pred x) ls' && pairwise_rel pred ls' 
+    for_all (pred x) ls' && pairwise_rel pred ls' 
 
 /// The lack of lemmas about list manipulation is really annoying...
 
@@ -886,6 +886,11 @@ let hash_map_insert_no_resize_fwd_back_lem t self key value =
 /// The proofs about [insert_in_list] backward are easier to do in several steps:
 /// extrinsic proofs to the rescue!
 /// Rk.: those proofs actually caused a lot of trouble because:
+/// - F* doesn't encode closures properly, the result being that it is very
+///   awkward to reason about functions like `map` or `find`, because we have
+///   to introduce auxiliary definitions for the parameters we give to those
+///   functions (if we use anonymous lambda functions, we're screwed by the
+///   encoding).
 /// - F* is extremely bad at reasoning with quantifiers, which is made worse by
 ///   the fact we are blind when making proofs. This forced us to be extremely
 ///   careful about the way we wrote our specs/invariants (by writing "functional"
@@ -965,6 +970,8 @@ let rec hash_map_insert_in_list_back_lem_update_fun t key value ls =
 /// to Coq, which makes it a bit cumbersome to prove auxiliary results like the
 /// following ones...
 
+(** Auxiliary lemmas: append case *)
+
 val slot_t_v_for_all_binding_neq_append_lem
   (t : Type0) (key : usize) (value : t) (ls : list (binding t)) (b : binding t) :
   Lemma
@@ -1036,6 +1043,84 @@ let hash_map_insert_in_list_back_lem_append t len key value ls =
     assert(list_t_v ls' == list_t_v ls @ [(key,value)]);
     slot_t_v_inv_not_find_append_end_inv_lem t len key value (list_t_v ls)
 
+(** Auxiliary lemmas: update case *)
+
+val slot_t_v_find_update_for_all_binding_neq_append_lem
+  (t : Type0) (key : usize) (value : t) (ls : list (binding t)) (b : binding t) :
+  Lemma
+  (requires (
+    fst b <> key /\
+    for_all (binding_neq b) ls /\
+    True
+//    slot_t_v_find key ls == None
+    ))
+  (ensures (
+    let ls' = find_update (same_key key) ls (key, value) in
+    for_all (binding_neq b) ls'))
+
+#push-options "--fuel 1"
+let rec slot_t_v_find_update_for_all_binding_neq_append_lem t key value ls b =
+  match ls with
+  | [] -> ()
+  | (ck, cv) :: cls ->
+    slot_t_v_find_update_for_all_binding_neq_append_lem t key value cls b
+#pop-options
+
+/// Annoying auxiliary lemma we have to prove because there is no way to reason
+/// properly about closures.
+/// I'm really enjoying my time.
+val for_all_binding_neq_value_indep
+  (#t : Type0) (key : key) (v0 v1 : t) (ls : list (binding t)) :
+  Lemma (for_all (binding_neq (key,v0)) ls = for_all (binding_neq (key,v1)) ls)
+
+#push-options "--fuel 1"
+let rec for_all_binding_neq_value_indep #t key v0 v1 ls =
+  match ls with
+  | [] -> ()
+  | _ :: ls' -> for_all_binding_neq_value_indep #t key v0 v1 ls'
+#pop-options
+
+val slot_t_v_inv_find_append_end_inv_lem
+  (t : Type0) (len : usize{len > 0}) (key : usize) (value : t) (ls : list (binding t)) :
+  Lemma
+  (requires (
+    slot_t_v_inv len (hash_mod_key key len) ls /\
+    Some? (slot_t_v_find key ls)))
+  (ensures (
+    let ls' = find_update (same_key key) ls (key, value) in
+    slot_t_v_inv len (hash_mod_key key len) ls' /\
+    (slot_t_v_find key ls' == Some value) /\
+    (forall k'. k' <> key ==> slot_t_v_find k' ls' == slot_t_v_find k' ls)))
+
+#push-options "--z3rlimit 50 --fuel 1"
+let rec slot_t_v_inv_find_append_end_inv_lem t len key value ls =
+  match ls with
+  | [] -> ()
+  | (ck, cv) :: cls ->
+    let h = hash_mod_key key len in
+    let ls' = find_update (same_key key) ls (key, value) in
+    if ck = key then
+      begin
+      assert(ls' == (ck,value) :: cls);
+      assert(for_all (same_hash_mod_key len h) ls');
+      // For pairwise_rel: binding_neq (ck, value) is actually independent
+      // of `value`. Slightly annoying to prove in F*...
+      assert(for_all (binding_neq (ck,cv)) cls);
+      for_all_binding_neq_value_indep key cv value cls;
+      assert(for_all (binding_neq (ck,value)) cls);
+      assert(pairwise_rel binding_neq ls');
+      assert(slot_t_v_inv len (hash_mod_key key len) ls')
+      end
+    else
+      begin
+      slot_t_v_inv_find_append_end_inv_lem t len key value cls;
+      assert(for_all (same_hash_mod_key len h) ls');
+      slot_t_v_find_update_for_all_binding_neq_append_lem t key value cls (ck, cv);
+      assert(pairwise_rel binding_neq ls');
+      assert(slot_t_v_inv len h ls')
+      end
+#pop-options
+
 /// [insert_in_list]: if the key is in the map, update the bindings (quantifiers)
 val hash_map_insert_in_list_back_lem_update
   (t : Type0) (len : usize{len > 0}) (key : usize) (value : t) (ls : list_t t) :
@@ -1048,8 +1133,7 @@ val hash_map_insert_in_list_back_lem_update
     | Fail -> False
     | Return ls' ->
       let als = list_t_v ls in
-      let i = find_index (same_key key) als in
-      list_t_v ls' == list_update als i (key,value) /\
+      list_t_v ls' == find_update (same_key key) als (key,value) /\
       // The invariant is preserved
       slot_t_inv len (hash_mod_key key len) ls' /\
       // [key] maps to [value]
@@ -1058,13 +1142,13 @@ val hash_map_insert_in_list_back_lem_update
       (forall k'. k' <> key ==> slot_t_find k' ls' == slot_t_find k' ls)))
 
 let hash_map_insert_in_list_back_lem_update t len key value ls =
-  admit()
-(*  hash_map_insert_in_list_back_lem_append_fun t key value ls;
+  hash_map_insert_in_list_back_lem_update_fun t key value ls;
   match hash_map_insert_in_list_back t key value ls with
   | Fail -> ()
   | Return ls' ->
-    assert(list_t_v ls' == list_t_v ls @ [(key,value)]);
-    slot_t_v_inv_not_find_append_end_inv_lem t len key value (list_t_v ls)*)
+    slot_t_v_inv_find_append_end_inv_lem t len key value (list_t_v ls)
+
+(** Final lemma about [insert_in_list] *)
 
 /// [insert_in_list]
 val hash_map_insert_in_list_back_lem
@@ -1087,8 +1171,7 @@ val hash_map_insert_in_list_back_lem
          list_t_v ls' == list_t_v ls @ [(key,value)] /\
          list_t_len ls' = list_t_len ls + 1
        | Some _ ->
-         let i = find_index (same_key key) (list_t_v ls) in
-         list_t_v ls' == list_update (list_t_v ls) i (key,value) /\
+         list_t_v ls' == find_update (same_key key) (list_t_v ls) (key,value) /\
          list_t_len ls' = list_t_len ls)))
   (decreases (hash_map_insert_in_list_decreases t key value ls))
 
