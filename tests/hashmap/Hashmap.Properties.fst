@@ -287,19 +287,23 @@ let list_t_index (#t : Type0) (ls : list_t t) (i : nat{i < list_t_len ls}) : bin
 let slots_t_v (#t : Type0) (slots : slots_t t) : assoc_list t =
   flatten (map list_t_v slots)
 
+// TODO: use more
+type slot_s (t : Type0) = list (binding t)
+type slots_s (t : Type0) = list (slot_s t)
+
 /// High-level type for the hash-map, seen as a list of associative lists (one
 /// list per slot)
-type hash_map_slots t = list (assoc_list t)
+type hash_map_slots t = list (slot_s t)
 
 /// High-level type for the hash-map, seen as a an associative list
-type hash_map t = assoc_list t
+type hash_map_s t = assoc_list t
 
 /// Representation function for [hash_map_t] as a list of slots
 let hash_map_t_slots_v (#t : Type0) (hm : hash_map_t t) : hash_map_slots t =
   map list_t_v hm.hash_map_slots
 
 /// Representation function for [hash_map_t]
-let hash_map_t_v (#t : Type0) (hm : hash_map_t t) : hash_map t =
+let hash_map_t_v (#t : Type0) (hm : hash_map_t t) : hash_map_s t =
   flatten (hash_map_t_slots_v hm)
 
 let hash_key (k : key) : hash =
@@ -466,10 +470,6 @@ let slot_t_inv_from_funs_lem
   ()
 *)
 
-// TODO: use more
-type slot_s (t : Type0) = list (binding t)
-type slots_s (t : Type0) = list (slot_s t)
-
 let slots_inv (#t : Type0) (slots : slots_s t{length slots <= usize_max}) : Type0 =
   forall(i:nat{i < length slots}).
   {:pattern index slots i}
@@ -553,8 +553,7 @@ let hash_map_t_inv_repr (#t : Type0) (hm : hash_map_t t) (al : assoc_list t) : T
   hash_map_t_is_al hm al
 *)
 
-(*** Proofs *)
-(**** allocate_slots *)
+(*** allocate_slots *)
 
 /// Auxiliary lemma
 val slots_t_all_nil_inv_lem
@@ -624,7 +623,7 @@ let rec hash_map_allocate_slots_fwd_lem t slots n =
   end
 #pop-options
 
-(**** new_with_capacity *)
+(*** new_with_capacity *)
 /// Under proper conditions, [new_with_capacity] doesn't fail and returns an empty hash map.
 val hash_map_new_with_capacity_fwd_lem
   (t : Type0) (capacity : usize)
@@ -671,7 +670,7 @@ let hash_map_new_with_capacity_fwd_lem (t : Type0) (capacity : usize)
   end
 #pop-options
 
-(**** new *)
+(*** new *)
 /// [new] doesn't fail and returns an empty hash map
 val hash_map_new_fwd_lem_fun (t : Type0) :
   Lemma
@@ -695,7 +694,7 @@ let hash_map_new_fwd_lem_fun t =
     slots_t_v_all_nil_is_empty_lem hm.hash_map_slots
 #pop-options
 
-(**** clear_slots *)
+(*** clear_slots *)
 /// [clear_slots] doesn't fail and simply clears the slots starting at index i
 #push-options "--fuel 1"
 let rec hash_map_clear_slots_fwd_back_lem
@@ -736,7 +735,7 @@ let rec hash_map_clear_slots_fwd_back_lem
   else ()
 #pop-options
 
-(**** clear *)
+(*** clear *)
 /// [clear] doesn't fail and turns the hash map into an empty map
 val hash_map_clear_fwd_back_lem_fun
   (t : Type0) (self : hash_map_t t) :
@@ -771,7 +770,7 @@ let hash_map_clear_fwd_back_lem_fun t self =
   end
 #pop-options
 
-(**** len *)
+(*** len *)
 
 /// [len]: we link it to a non-failing function.
 /// Rk.: we might want to make an analysis to not use an error monad to translate
@@ -785,9 +784,9 @@ val hash_map_len_fwd_lem (t : Type0) (self : hash_map_t t) :
 let hash_map_len_fwd_lem t self = ()
 
 
-(**** insert_in_list *)
+(*** insert_in_list *)
 
-(***** insert_in_list'fwd *)
+(**** insert_in_list'fwd *)
 
 /// [insert_in_list_fwd]: returns true iff the key is not in the list (functional version)
 val hash_map_insert_in_list_fwd_lem
@@ -820,7 +819,7 @@ let rec hash_map_insert_in_list_fwd_lem t key value ls =
   end
 #pop-options
 
-(***** insert_in_list'back *)
+(**** insert_in_list'back *)
 
 /// The proofs about [insert_in_list] backward are easier to do in several steps:
 /// extrinsic proofs to the rescue!
@@ -919,7 +918,7 @@ let hash_map_insert_in_list_back_lem_s t key value ls =
   | None -> hash_map_insert_in_list_back_lem_append_s t key value ls
   | Some _ -> hash_map_insert_in_list_back_lem_update_s t key value ls
 
-(***** Invariants of insert_in_list_s *)
+(**** Invariants of insert_in_list_s *)
 
 /// Auxiliary lemmas
 /// We work on [hash_map_insert_in_list_s], the "high-level" version of [insert_in_list'back].
@@ -1199,9 +1198,9 @@ let hash_map_insert_in_list_back_lem t len key value ls =
   hash_map_insert_in_list_back_lem_s t key value ls;
   hash_map_insert_in_list_s_lem t len key value (list_t_v ls)
 
-(**** insert_no_resize *)
+(*** insert_no_resize *)
 
-(***** Refinement proof *)
+(**** Refinement proof *)
 /// Same strategy as for [insert_in_list]: we introduce a high-level version of
 /// the function, and reason about it.
 /// We work on [hash_map_slots] (we use a higher-level view of the hash-map, but
@@ -1314,7 +1313,7 @@ let hash_map_insert_no_resize_fwd_back_lem t self key value =
     end
   end
 
-(***** find after insert *)
+(**** find after insert *)
 /// Lemmas about what happens if we call [find] after an insertion
 
 val hash_map_insert_no_resize_s_get_same_lem
@@ -1367,173 +1366,32 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
       end
    end
 
-(*
-/// We also do a disjunction over the cases
+(*** remove_elements_from_list *)
 
-/// [insert_no_resize]: if the key is not in the map, we insert a new binding
-val hash_map_insert_no_resize_fwd_back_lem_insert
-  (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
-  Lemma
-  (requires (
-    hash_map_t_inv self /\
-    // The key is not in the map
-    None? (hash_map_t_find_s self key)))
-  (ensures (
-    match hash_map_insert_no_resize_fwd_back t self key value with
-    | Fail -> False // Can't fail
+type hash_map_slots_res (t : Type0) = res:result (hash_map_slots t){
+    match res with
+    | Fail -> True
     | Return hm ->
-      // The invariant is preserved
-      hash_map_t_inv hm /\
-      // The number of elements is the same
-      hash_map_t_len_s hm = hash_map_t_len_s self /\
-      // The map has been updated with the new binding
-      (hash_map_t_find_s self key == Some value) /\
-      // The other bindings are left unchanged
-      hash_map_t_v hm == find_update (same_key key) (hash_map_t_v self) (key,value)))
+      length hm <= usize_max /\
+      length hm > 0
+  }
 
-/// The following function captures the "essence" of what [insert_no_resize] does
-let hash_map_t_insert_no_resize
-  (#t : Type0) (hm : hash_map_t t) (key : usize) (value : t) :
-  result hash_map_t t
-  // Check if we need to add an element but reached saturation
-  if None? (hash_map_t_find_s self key) && hash_map_t_len_s self = usize_max then Fail
-  else
-    // We didn't saturate: we can insert the element
-    match hash_map_insert_no_resize_fwd_back_lem_insert with
-    | Fail -> Fail // Shouldn't get there, but taken care of by proofs below
-    | 
-    
-  match hash_map_t_find_s self key with
-  | None ->
-    hash_map_t_len_s self = usize_max
-
-      None? (hash_map_t_find_s self key) /\
-      hash_map_t_len_s self = usize_max
-
-/// [insert_no_resize]: we prove a simple "functional" version of what happens,
-/// to simplify further reasoning.
-val hash_map_insert_no_resize_fwd_back_lem_fun
-  (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
-  Lemma
-  (ensures (
-    match hash_map_insert_no_resize_fwd_back t self key value with
-    | Fail ->
-      // It can fail only if the key is not in the map, and we reached saturation
-      None? (hash_map_t_find_s self key) /\
-      hash_map_t_len_s self = usize_max
+let hash_map_move_elements_from_list_s
+  (t : Type0) (hm : hash_map_slots t{length hm <= usize_max /\ length hm > 0})
+  (ls : slot t) :
+  Pure (result (hash_map_slots t))
+  (requires True)
+  (ensures (fun res ->
+    match res with
+    | Fail -> True
+    | Return hm' -> length hm' = length hm)) =
+  let add_elem (hm_res : result hash_map_slots t) (value,key) :
+    Pure (res=
+    match hm_res with
+    | Fail -> Fail
     | Return hm ->
-      // If we succeeded, we simply updated the proper slot
-      let len = 
-      let i = hash_mod_key key 
-      let slots' = 
-      // The invariant is preserved
-      hash_map_t_inv hm /\
-      // The map has been updated
-      hash_map_t_v hm == find_update (same_key key) (hash_map_t_v self) (key,value)))
-
-/// [insert_no_resize]: if the key is in the map, we succeed and update the binding.
-val hash_map_insert_no_resize_fwd_back_lem_update
-  (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
-  Lemma
-  (requires (
-    hash_map_t_inv self /\
-    // The key is in the map
-    Some? (find (same_key key) (hash_map_t_v self))))
-  (ensures (
-    match hash_map_insert_no_resize_fwd_back t self key value with
-    | Fail -> False
-    | Return hm ->
-      // The invariant is preserved
-      hash_map_t_inv hm /\
-      // The map has been updated
-      hash_map_t_v hm == find_update (same_key key) (hash_map_t_v self) (key,value)))
-
-
-(*
-(**** insert_no_resize *)
-
-/// Same as for [insert_in_list]: we do the proofs in several, modular steps.
-/// The strategy is to study the two disjoint cases:
-/// - the key is already in the map (we update the binding)
-/// - the key is not in the map (we add a binding)
-///
-/// We gradually prove that the resulting map, in the two cases, can be seen
-/// as the result of:
-/// - filtering the bindings for the key we want to insert
-/// - pushing the new binding at the front
-///
-/// We then prove a less "functional" variant of the result, which states that,
-/// after the insertion:
-/// - [key] maps to [value]
-/// - forall key' <> key, the binding is unchanged
-/// 
-/// This way, we have a consistent, high-level description of the insertion.
-///
-/// Rk.: with multimaps the high-level spec would be even simpler: we would push
-/// an element to the front of the list.
-
-/// [insert_no_resize]: if the key is in the map, we succeed and update the binding.
-val hash_map_insert_no_resize_fwd_back_lem_update
-  (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
-  Lemma
-  (requires (
-    hash_map_t_inv self /\
-    // The key is in the map
-    Some? (find (same_key key) (hash_map_t_v self))))
-  (ensures (
-    match hash_map_insert_no_resize_fwd_back t self key value with
-    | Fail -> False
-    | Return hm ->
-      // The invariant is preserved
-      hash_map_t_inv hm /\
-      // The map has been updated
-      hash_map_t_v hm == find_update (same_key key) (hash_map_t_v self) (key,value)))
-
-let hash_map_insert_no_resize_fwd_back_lem_update t self key value =
-  begin match hash_key_fwd key with
-  | Fail -> ()
-  | Return i ->
-    let i0 = self.hash_map_num_entries in
-    let p = self.hash_map_max_load_factor in
-    let i1 = self.hash_map_max_load in
-    let v = self.hash_map_slots in
-    let i2 = vec_len (list_t t) v in
-    begin match usize_rem i i2 with
-    | Fail -> ()
-    | Return hash_mod ->
-      begin match vec_index_mut_fwd (list_t t) v hash_mod with
-      | Fail -> ()
-      | Return l ->
-        // The key must be in the slot - TODO: update invariant
-        assume(Some? (find (same_key key) (list_t_v l)));
-        hash_map_insert_in_list_fwd_lem t key value l;
-        begin match hash_map_insert_in_list_fwd t key value l with
-        | Fail -> ()
-        | Return b ->
-          assert(not b);
-          if b then assert(False)
-          else
-            begin
-            hash_map_insert_in_list_back_lem_update t key value l;
-            match hash_map_insert_in_list_back t key value l with
-            | Fail -> ()
-            | Return l0 ->
-              begin
-              match vec_index_mut_back (list_t t) v hash_mod l0 with
-              | Fail -> ()
-              | Return v0 ->
-                let hm1 = Mkhash_map_t i0 p i1 v0 in
-                assume(hash_map_t_inv hm1);
-                assume(hash_map_t_v hm1 == find_update (same_key key) (hash_map_t_v self) (key,value))
-              end
-            end
-        end
-      end
-    end
-  end
-
-
-/// [insert_in_list]: inserting a binding is equivalent to:
-/// - filtering the list
-/// - pushing the binding to the front
-
+      hash_map_insert_no_resize_s hm
+  fold_left (fun hm_res (value,key) ->
+  match ls with
+  | [] -> Return hm
+  | 
