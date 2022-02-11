@@ -1237,7 +1237,7 @@ let hash_map_insert_no_resize_s
 
 /// Prove that [hash_map_insert_no_resize_s] is a refinement of
 /// [hash_map_insert_no_resize'fwd_back]
-val hash_map_insert_no_resize_fwd_back_lem
+val hash_map_insert_no_resize_fwd_back_lem_s
   (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
   Lemma
   (requires (
@@ -1250,13 +1250,13 @@ val hash_map_insert_no_resize_fwd_back_lem
     with
     | Fail, Fail -> True
     | Return hm, Return hm_v ->
+      hash_map_t_inv hm /\
       hash_map_t_slots_v hm == hm_v /\
-      hash_map_slots_s_len hm_v = hash_map_t_len_s hm /\
-      True
+      hash_map_slots_s_len hm_v = hash_map_t_len_s hm
     | _ -> False
     end))
 
-let hash_map_insert_no_resize_fwd_back_lem t self key value =
+let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
   begin match hash_key_fwd key with
   | Fail -> ()
   | Return i ->
@@ -1265,6 +1265,7 @@ let hash_map_insert_no_resize_fwd_back_lem t self key value =
     let i1 = self.hash_map_max_load in
     let v = self.hash_map_slots in
     let i2 = vec_len (list_t t) v in
+    let len = length v in
     begin match usize_rem i i2 with
     | Fail -> ()
     | Return hash_mod ->
@@ -1279,7 +1280,7 @@ let hash_map_insert_no_resize_fwd_back_lem t self key value =
         | Fail -> ()
         | Return b ->
           assert(b = None? (slot_find key (list_t_v l)));
-          hash_map_insert_in_list_back_lem_s t key value l;
+          hash_map_insert_in_list_back_lem t len key value l;
           if b
           then
             begin match usize_add i0 1 with
@@ -1324,6 +1325,7 @@ let hash_map_insert_no_resize_fwd_back_lem t self key value =
       end
     end
   end
+
 
 (**** find after insert *)
 /// Lemmas about what happens if we call [find] after an insertion
@@ -1378,6 +1380,7 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
       end
    end
 
+
 (*** move_elements_from_list *)
 
 type hash_map_slots_s_res (t : Type0) = res:result (hash_map_slots_s t){
@@ -1386,19 +1389,17 @@ type hash_map_slots_s_res (t : Type0) = res:result (hash_map_slots_s t){
     | Return hm -> is_pos_usize (length hm)
   }
 
-let hash_map_move_elements_from_list_s
+let rec hash_map_move_elements_from_list_s
   (t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
   (ls : slot_s t) :
-  Tot (hash_map_slots_s_res t) =
-  let add_elem (hm_res : hash_map_slots_s_res t) (b : binding t) :
-    hash_map_slots_s_res t =
-    match hm_res with
+  Tot (hash_map_slots_s_res t) (decreases ls) =
+  match ls with
+  | [] -> Return hm
+  | (key, value) :: ls' ->
+    match hash_map_insert_no_resize_s hm key value with
     | Fail -> Fail
-    | Return hm ->
-      let (key,value) = b in
-      hash_map_insert_no_resize_s hm key value
-  in
-  fold_left add_elem (Return hm) ls
+    | Return hm' ->
+      hash_map_move_elements_from_list_s t hm' ls'
 
 /// Refinement lemma
 val hash_map_move_elements_from_list_fwd_back_lem
@@ -1415,24 +1416,30 @@ val hash_map_move_elements_from_list_fwd_back_lem
     | _ -> False))
   (decreases (hash_map_move_elements_from_list_decreases t ntable ls))
 
-#push-options "--z3rlimit 100 --fuel 1"
+#push-options "--fuel 1"
 let rec hash_map_move_elements_from_list_fwd_back_lem t ntable ls =
   begin match ls with
   | ListCons k v tl ->
-    hash_map_insert_no_resize_fwd_back_lem t ntable k v;
+    assert(list_t_v ls == (k, v) :: list_t_v tl);
+    let ls_v = list_t_v ls in
+    let (_,_) :: tl_v = ls_v in
+    hash_map_insert_no_resize_fwd_back_lem_s t ntable k v;
     begin match hash_map_insert_no_resize_fwd_back t ntable k v with
-    | Fail -> admit()
+    | Fail -> ()
     | Return h ->
+      let h_v = Return?.v (hash_map_insert_no_resize_s (hash_map_t_slots_v ntable) k v) in
+      assert(hash_map_t_slots_v h == h_v);
       hash_map_move_elements_from_list_fwd_back_lem t h tl;
       begin match hash_map_move_elements_from_list_fwd_back t h tl with
-      | Fail -> admit()
-      | Return h0 -> admit()
+      | Fail -> ()
+      | Return h0 -> ()
       end
     end
   | ListNil -> ()
   end
 #pop-options
 
+(*
 /// Refinement lemma
 val hash_map_move_elements_fwd_back_lem
   (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
