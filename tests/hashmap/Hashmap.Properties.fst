@@ -291,6 +291,10 @@ let slots_t_v (#t : Type0) (slots : slots_t t) : assoc_list t =
 type slot_s (t : Type0) = list (binding t)
 type slots_s (t : Type0) = list (slot_s t)
 
+// TODO: use more
+type slot_t (t : Type0) = list_t t
+let slot_t_v (#t : Type0) (slot : slot_t t) : slot_s t = list_t_v slot
+
 /// High-level type for the hash-map, seen as a list of associative lists (one
 /// list per slot)
 type hash_map_slots_s t = list (slot_s t)
@@ -305,6 +309,14 @@ let hash_map_t_slots_v (#t : Type0) (hm : hash_map_t t) : hash_map_slots_s t =
 /// Representation function for [hash_map_t]
 let hash_map_t_v (#t : Type0) (hm : hash_map_t t) : hash_map_s t =
   flatten (hash_map_t_slots_v hm)
+
+// TODO: move
+let is_pos_usize (n : nat) : Type0 = 0 < n /\ n <= usize_max
+
+// 'ne': "non-empty slots"
+// TODO: use more
+type hash_map_t_nes (t : Type0) : Type0 =
+  hm:hash_map_t t{is_pos_usize (length hm.hash_map_slots)}
 
 let hash_key (k : key) : hash =
   Return?.v (hash_key_fwd k)
@@ -532,10 +544,10 @@ let hash_map_t_base_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
 /// Invariant for the hashmap
 let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   // Base invariant
-  hash_map_t_base_inv hm /\
+  hash_map_t_base_inv hm
   // The hash map is either: not overloaded, or we can't resize it
-  (hm.hash_map_num_entries <= hm.hash_map_max_load
-   || length hm.hash_map_slots * 2 > usize_max)
+//  (hm.hash_map_num_entries <= hm.hash_map_max_load
+//   || length hm.hash_map_slots * 2 > usize_max)
 
 /// The following predicate links the hashmap to an associative list.
 /// Note that it does not compute the representant: different (permuted)
@@ -1366,33 +1378,102 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
       end
    end
 
-(*** remove_elements_from_list *)
+(*** move_elements_from_list *)
 
-(*
-type hash_map_slots_res (t : Type0) = res:result (hash_map_slots t){
+type hash_map_slots_s_res (t : Type0) = res:result (hash_map_slots_s t){
     match res with
     | Fail -> True
-    | Return hm ->
-      length hm <= usize_max /\
-      length hm > 0
+    | Return hm -> is_pos_usize (length hm)
   }
 
 let hash_map_move_elements_from_list_s
-  (t : Type0) (hm : hash_map_slots t{length hm <= usize_max /\ length hm > 0})
-  (ls : slot t) :
-  Pure (result (hash_map_slots t))
-  (requires True)
-  (ensures (fun res ->
-    match res with
-    | Fail -> True
-    | Return hm' -> length hm' = length hm)) =
-  let add_elem (hm_res : result hash_map_slots t) (value,key) :
-    Pure (res=
+  (t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
+  (ls : slot_s t) :
+  Tot (hash_map_slots_s_res t) =
+  let add_elem (hm_res : hash_map_slots_s_res t) (b : binding t) :
+    hash_map_slots_s_res t =
     match hm_res with
     | Fail -> Fail
     | Return hm ->
-      hash_map_insert_no_resize_s hm
-  fold_left (fun hm_res (value,key) ->
-  match ls with
-  | [] -> Return hm
-  | 
+      let (key,value) = b in
+      hash_map_insert_no_resize_s hm key value
+  in
+  fold_left add_elem (Return hm) ls
+
+/// Refinement lemma
+val hash_map_move_elements_from_list_fwd_back_lem
+  (t : Type0) (ntable : hash_map_t_nes t) (ls : list_t t) :
+  Lemma (requires (hash_map_t_inv ntable))
+  (ensures (
+    match hash_map_move_elements_from_list_fwd_back t ntable ls,
+          hash_map_move_elements_from_list_s t (hash_map_t_slots_v ntable) (slot_t_v ls)
+    with
+    | Fail, Fail -> True
+    | Return hm', Return hm_v ->
+      hash_map_t_inv hm' /\
+      hash_map_t_slots_v hm' == hm_v
+    | _ -> False))
+  (decreases (hash_map_move_elements_from_list_decreases t ntable ls))
+
+#push-options "--z3rlimit 100 --fuel 1"
+let rec hash_map_move_elements_from_list_fwd_back_lem t ntable ls =
+  begin match ls with
+  | ListCons k v tl ->
+    hash_map_insert_no_resize_fwd_back_lem t ntable k v;
+    begin match hash_map_insert_no_resize_fwd_back t ntable k v with
+    | Fail -> admit()
+    | Return h ->
+      hash_map_move_elements_from_list_fwd_back_lem t h tl;
+      begin match hash_map_move_elements_from_list_fwd_back t h tl with
+      | Fail -> admit()
+      | Return h0 -> admit()
+      end
+    end
+  | ListNil -> ()
+  end
+#pop-options
+
+/// Refinement lemma
+val hash_map_move_elements_fwd_back_lem
+  (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
+  Lemma (requires (is_pos_usize (ntable.hash_map_num_entries)))
+  (ensures (
+    match hash_map_move_elements_fwd_back t ntable slots i,
+          hash_map_move_elements_from_list_s t ntable slots 
+    with
+    | Fail -> 
+  ))
+  (decreases (hash_map_move_elements_decreases t ntable slots i))
+
+let rec hash_map_move_elements_fwd_back
+  (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
+  Tot (result ((hash_map_t t) & (vec (list_t t))))
+  (decreases (hash_map_move_elements_decreases t ntable slots i))
+  =
+  let i0 = vec_len (list_t t) slots in
+  let b = i < i0 in
+  if b
+  then
+    begin match vec_index_mut_fwd (list_t t) slots i with
+    | Fail -> Fail
+    | Return l ->
+      let l0 = mem_replace_fwd (list_t t) l ListNil in
+      begin match hash_map_move_elements_from_list_fwd_back t ntable l0 with
+      | Fail -> Fail
+      | Return h ->
+        let l1 = mem_replace_back (list_t t) l ListNil in
+        begin match vec_index_mut_back (list_t t) slots i l1 with
+        | Fail -> Fail
+        | Return v ->
+          begin match usize_add i 1 with
+          | Fail -> Fail
+          | Return i1 ->
+            begin match hash_map_move_elements_fwd_back t h v i1 with
+            | Fail -> Fail
+            | Return (h0, v0) -> Return (h0, v0)
+            end
+          end
+        end
+      end
+    end
+  else Return (ntable, slots)
