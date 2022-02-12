@@ -1,5 +1,9 @@
 # TODO
 
+0. borrows which are never ended? Drop locals in *symbolic* modes upon return
+
+0. improve variable names generation: "hash_map" -> "hm" (and not just "h")
+
 0. replace all the `failwith` with `raise (Failure ...)`: in CPS, it messes
    up with provenance tracking
 
