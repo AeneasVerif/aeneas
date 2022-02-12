@@ -680,7 +680,9 @@ let hash_map_slots_s_inv (#t : Type0) (hm : hash_map_slots_s t) : Type0 =
 let hash_map_t_base_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   let al = hash_map_t_v hm in
   // [num_entries] correctly tracks the number of entries in the table
-  // Note that it gives us that the length of the slots array is <= usize_max
+  // Note that it gives us that the length of the slots array is <= usize_max:
+  // [> length <= usize_max
+  // (because hash_map_num_entries has type `usize`)
   hm.hash_map_num_entries = length al /\
   // Slots invariant
   slots_t_inv hm.hash_map_slots /\
@@ -700,8 +702,9 @@ let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   // Base invariant
   hash_map_t_base_inv hm /\
   // The hash map is either: not overloaded, or we can't resize it
-  (hm.hash_map_num_entries <= hm.hash_map_max_load
-   || length hm.hash_map_slots * 2 > usize_max)
+  (let (dividend, divisor) = hm.hash_map_max_load_factor in
+   hm.hash_map_num_entries <= hm.hash_map_max_load
+   || length hm.hash_map_slots * 2 * dividend > usize_max)
 
 /// The following predicate links the hashmap to an associative list.
 /// Note that it does not compute the representant: different (permuted)
@@ -810,6 +813,8 @@ val hash_map_new_with_capacity_fwd_lem
     match hash_map_new_with_capacity_fwd t capacity max_load_dividend max_load_divisor with
     | Fail -> False
     | Return hm ->
+      // The hash map invariant is satisfied
+      hash_map_t_inv hm /\
       // The hash map has the specified capacity - we need to reveal this
       // otherwise the pre of [hash_map_t_find_s] is not satisfied.
       length hm.hash_map_slots = capacity /\
@@ -836,7 +841,8 @@ let hash_map_new_with_capacity_fwd_lem (t : Type0) (capacity : usize)
       | Fail -> assert(False)
       | Return i0 ->
           let hm = Mkhash_map_t 0 (max_load_dividend, max_load_divisor) i0 v0 in
-          slots_t_all_nil_inv_lem v0
+          slots_t_all_nil_inv_lem v0;
+          slots_t_al_v_all_nil_is_empty_lem hm.hash_map_slots
       end
     end
   end
@@ -862,8 +868,7 @@ let hash_map_new_fwd_lem_fun t =
   hash_map_new_with_capacity_fwd_lem t 32 4 5;
   match hash_map_new_with_capacity_fwd t 32 4 5 with
   | Fail -> ()
-  | Return hm ->
-    slots_t_al_v_all_nil_is_empty_lem hm.hash_map_slots
+  | Return hm -> ()
 #pop-options
 
 (*** clear_slots *)
@@ -2260,6 +2265,8 @@ val hash_map_move_elements_fwd_back_lem
     | Return (ntable', _), Return ntable'_v ->
       // The invariant is preserved
       hash_map_t_base_inv ntable' /\
+      // We preserved the parameters
+      hash_map_same_params ntable' ntable /\
       // The table has the same number of slots
       length ntable'.hash_map_slots = length ntable.hash_map_slots /\
       // The count is good
@@ -2333,7 +2340,7 @@ let hash_map_try_resize_s
   (ensures (fun _ -> True)) =
   let capacity = length hm.hash_map_slots in
   let (divid, divis) = hm.hash_map_max_load_factor in
-  if capacity <= usize_max / 2 && capacity <= usize_max / divid then
+  if capacity <= (usize_max / 2) / divid then
     let ncapacity : usize = capacity * 2 in
     begin match hash_map_new_with_capacity_fwd t ncapacity divid divis with
     | Fail -> Fail
@@ -2376,48 +2383,37 @@ val hash_map_try_resize_fwd_back_lem_refin
     | Return hm1, Return hm2 -> hm1 == hm2
     | _ -> False))
 
-let hash_map_try_resize_fwd_back_lem_refin t self =
-  let i = self.hash_map_num_entries in
-  let p = self.hash_map_max_load_factor in
-  let i0 = self.hash_map_max_load in
-  let v = self.hash_map_slots in
-  let i1 = vec_len (list_t t) v in
-  assert(usize_max = 4294967295);
-  begin match usize_div 4294967295 2 with
-  | Fail -> ()
-  | Return i2 ->
-    let b = i1 <= i2 in
-    if b
-    then
-      let (i3, i4) = p in
-      begin match usize_div 4294967295 i3 with
-      | Fail -> ()
-      | Return i5 ->
-        let b0 = i1 <= i5 in
-        if b0
-        then
-          begin match usize_mul i1 2 with
-          | Fail -> ()
-          | Return i6 ->
-            begin match hash_map_new_with_capacity_fwd t i6 i3 i4 with
-            | Fail -> ()
-            | Return h ->
-              begin match hash_map_move_elements_fwd_back t h v 0 with
-              | Fail -> ()
-              | Return (h0, v0) ->
-                let i7 = h0.hash_map_max_load in
-                let v1 = h0.hash_map_slots in
-                let v2 = mem_replace_back (vec (list_t t)) v0 v1 in
-                let self0 = Mkhash_map_t i (i3, i4) i7 v2 in
-                ()
-              end
-            end
-          end
-        else let self0 = Mkhash_map_t i (i3, i4) i0 v in ()
-      end
-    else let self0 = Mkhash_map_t i p i0 v in ()
-  end
+let hash_map_try_resize_fwd_back_lem_refin t self = ()
 
+/// Isolating arithmetic proofs
+
+let gt_lem0 (n m q : nat) :
+  Lemma (requires (m > 0 /\ n > q))
+  (ensures (n * m > q * m)) = ()
+
+let ge_lem0 (n m q : nat) :
+  Lemma (requires (m > 0 /\ n >= q))
+  (ensures (n * m >= q * m)) = ()
+
+let gt_ge_trans (n m p : nat) :
+  Lemma (requires (n > m /\ m >= p)) (ensures (n > p)) = ()
+
+#push-options "--z3rlimit 200"
+let gt_lem1 (n m q : nat) :
+  Lemma (requires (m > 0 /\ n > q / m))
+  (ensures (n * m > q)) =
+  assert(n >= q / m + 1);
+  ge_lem0 n m (q / m + 1);
+  assert(n * m >= (q / m) * m + m)
+#pop-options
+
+let gt_lem2 (n m p q : nat) :
+  Lemma (requires (m > 0 /\ p > 0 /\ n > (q / m) / p))
+  (ensures (
+    n * m * p > q)) =
+  gt_lem1 n p (q / m);
+  assert(n * p > q / m);
+  gt_lem1 (n * p) m q
 
 val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
@@ -2433,55 +2429,70 @@ val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
       // It contains the same bindings as the initial map
       (forall (k:key). hash_map_t_find_s hm' k == hash_map_t_find_s hm k)))
 
-(*
+#restart-solver
+#push-options "--z3rlimit 400"
 let hash_map_try_resize_s_lem #t hm =
   let capacity = length hm.hash_map_slots in
   let (divid, divis) = hm.hash_map_max_load_factor in
-  if capacity <= usize_max / 2 && capacity <= usize_max / divid then
+  if capacity <= (usize_max / 2) / divid then
+    begin
     let ncapacity : usize = capacity * 2 in
-    assume(ncapacity * divid <= usize_max);
+    let ncapacity : usize = capacity * 2 in
+    assert(ncapacity * divid <= usize_max);
     hash_map_new_with_capacity_fwd_lem t ncapacity divid divis;
-    begin match hash_map_new_with_capacity_fwd t ncapacity divid divis with
+    match hash_map_new_with_capacity_fwd t ncapacity divid divis with
     | Fail -> ()
     | Return ntable ->
+      let slots = hm.hash_map_slots in
+      let al = flatten (slots_t_v slots) in
+      // Proving that: length al = hm.hash_map_num_entries
+      assert(al == flatten (map slot_t_v slots));
+      assume(al == flatten (map list_t_v slots)); // THIS REQUIRES A LEMMA!!!!
+      assert(hash_map_t_v hm == flatten (hash_map_t_slots_v hm));
+      assert(hash_map_t_v hm == flatten (map list_t_v hm.hash_map_slots));
+      assert(al == hash_map_t_v hm);
+      assert(hash_map_t_base_inv ntable);
+      assert(length al = hm.hash_map_num_entries);
+      assert(length al <= usize_max);
+      hash_map_t_base_inv_implies_assoc_list_lem hm;
+      assert(assoc_list_inv al);
+      assert(hash_map_t_len_s ntable = 0);
+      assert(forall (k:key). hash_map_t_find_s ntable k  == None);
       hash_map_move_elements_fwd_back_lem t ntable hm.hash_map_slots;
       match hash_map_move_elements_fwd_back t ntable hm.hash_map_slots 0 with
       | Fail -> ()
       | Return (ntable', _) ->
         assume(hash_map_is_assoc_list hm (hash_map_t_v hm));
-        let hm =
+        let hm' =
           { hm with hash_map_slots = ntable'.hash_map_slots;
                     hash_map_max_load = ntable'.hash_map_max_load }
         in
-        ()
+        assert(hash_map_t_base_inv ntable');
+        assert(hash_map_t_base_inv hm');
+        assume(hash_map_t_inv hm')
     end
-  else ()
-
-let hash_map_is_assoc_list
-  (#t : Type0) (ntable : hash_map_t t{length ntable.hash_map_slots > 0})
-  (al : assoc_list t) : Type0 =
-  (forall (k:key). hash_map_t_find_s ntable k == assoc_list_find k al)
-
-
-  Pure  (result (hash_map_t t))
-  (requires (
-    let (divid, divis) = hm.hash_map_max_load_factor in
-    divid > 0 /\ divis > 0))
-  (ensures (fun _ -> True)) =
-  let capacity = length hm.hash_map_slots in
-  let (divid, divis) = hm.hash_map_max_load_factor in
-  if capacity <= usize_max / 2 && capacity <= usize_max / divid then
-    let ncapacity : usize = capacity * 2 in
-    begin match hash_map_new_with_capacity_fwd t ncapacity divid divis with
-    | Fail -> Fail
-    | Return ntable ->
-      match hash_map_move_elements_fwd_back t ntable hm.hash_map_slots 0 with
-      | Fail -> Fail
-      | Return (ntable', _) ->
-        let hm =
-          { hm with hash_map_slots = ntable'.hash_map_slots;
-                    hash_map_max_load = ntable'.hash_map_max_load }
-        in
-        Return hm
+  else
+    begin
+    gt_lem2 capacity 2 divid usize_max;
+    assert(capacity * 2 * divid > usize_max)
     end
-  else Return hm
+#pop-options
+
+/// The final lemma about [try_resize]
+val hash_map_try_resize_fwd_back_lem (#t : Type0) (hm : hash_map_t t) :
+  Lemma
+  (requires (hash_map_t_base_inv hm))
+  (ensures (
+    match hash_map_try_resize_fwd_back t hm with
+    | Fail -> False
+    | Return hm' ->
+      // The full invariant is now satisfied (the full invariant is "base
+      // invariant" + the map is not overloaded (or can't be resized because
+      // already too big)
+      hash_map_t_inv hm' /\
+      // It contains the same bindings as the initial map
+      (forall (k:key). hash_map_t_find_s hm' k == hash_map_t_find_s hm k)))
+
+let hash_map_try_resize_fwd_back_lem #t hm =
+  hash_map_try_resize_fwd_back_lem_refin t hm;
+  hash_map_try_resize_s_lem hm
