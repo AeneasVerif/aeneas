@@ -1687,13 +1687,20 @@ val hash_map_move_elements_fwd_back_lem_refin
 // the unfolded postconditions (meaning I would probably need to increase
 // the ifuel to unreasonable amounts).
 //
+// Finally, as I had succeeded in fixing the proof, I thought that maybe the
+// initial problem with the type abbreviations fixed: I thus tried to use
+// them. Of course, it made the proof fail again, and this time no ifuel setting
+// seemed to work (maybe my initial guess about the type inferencer was right?...).
+//
+// At this point I was just fed up and leave things as they were, without trying
+// to cleanup the previous definitions.
+//
 // The terrible thing is that this refinement proof is conceptually super simple:
 // - there are maybe two arithmetic proofs, which are directly solved by the
 //   precondition
 // - we need to refine the call to [hash_map_move_elements_from_list_fwd_back]:
 //   this is proven by another refinement lemma we proved above
 // - there is the recursive call (trivial)
-// Huge waste of time...
 #restart-solver
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 4"
 let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
