@@ -1953,7 +1953,8 @@ val hash_map_move_elements_s_flat_lem
       // The invariant is preserved
       hash_map_slots_s_inv hm' /\
       // The new hash map is the union of the two maps
-      (forall (k:key). hash_map_slots_s_find hm' k == find_in_union_hm_al hm al k)))
+      (forall (k:key). hash_map_slots_s_find hm' k == find_in_union_hm_al hm al k) /\
+      hash_map_slots_s_len hm' = hash_map_slots_s_len hm + length al))
   (decreases al)
 
 #restart-solver
@@ -2109,6 +2110,8 @@ val hash_map_move_elements_fwd_back_lem
     | _ -> False // We can only succeed
     ))
 
+#restart-solver
+#push-options "--z3rlimit 200"
 let hash_map_move_elements_fwd_back_lem t ntable slots =
   let ntable_v = hash_map_t_slots_v ntable in
   let slots_v = slots_t_v slots in
@@ -2122,7 +2125,14 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
   | Return (ntable', _), Return ntable'_v ->
     assert(hash_map_t_inv ntable');
     assume(length ntable'.hash_map_slots = length ntable.hash_map_slots); // TODO
-    assume(hash_map_t_len_s ntable' = length al); // TODO
+    // Adding the following let binding makes the proof fails even with a huge
+    // rlitmit. Really having fun here...
+    // let ntable'_v = hash_map_t_slots_v ntable' in
+//    assume(hash_map_slots_s_len ntable'_v == hash_map_t_len_s ntable'); // TODO
+    assert(hash_map_slots_s_len (hash_map_t_slots_v ntable') == hash_map_t_len_s ntable');
+    assume(hash_map_slots_s_len (hash_map_t_slots_v ntable') == length al); // TODO
+    assert(hash_map_t_len_s ntable' = length al);
     assume(hash_map_t_slots_v ntable' == ntable'_v); // TODO
     assert(hash_map_is_assoc_list ntable' al)
   | _ -> assume(False)
+#pop-options
