@@ -1391,19 +1391,24 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
 
 (*** move_elements_from_list *)
 
+/// Having a great time here: if we use `result (hash_map_slots_s_res t)` as the
+/// return type for [hash_map_move_elements_from_list_s] instead of having this
+/// awkward match, the proof of [hash_map_move_elements_fwd_back_lem] fails.
+/// I guess it comes from F*'s poor subtyping.
+/// Followingly, I'm not taking any change and using [result_hash_map_slots_s]
+/// everywhere.
+type result_hash_map_slots_s_nes (t : Type0) : Type0 =
+  res:result (hash_map_slots_s t) {
+    match res with
+    | Fail -> True
+    | Return hm -> is_pos_usize (length hm)
+  }
+
 let rec hash_map_move_elements_from_list_s
   (#t : Type0) (hm : hash_map_slots_s_nes t)
   (ls : slot_s t) :
-  Pure (result (hash_map_slots_s t))
-  (requires (True))
-  (ensures (fun res ->
-    // Having a great time here: if we use `result (hash_map_slots_s_res t)`
-    // as the return type, instead of having this awkward match, the proof
-    // of [hash_map_move_elements_fwd_back_lem] fails. I guess it comes from
-    // F*'s poor subtyping.
-    match res with
-    | Fail -> True
-    | Return hm -> is_pos_usize (length hm)))
+  // Do *NOT* use `result (hash_map_slots_s t)`
+  Tot (result_hash_map_slots_s_nes t)
   (decreases ls) =
   match ls with
   | [] -> Return hm
@@ -1453,13 +1458,18 @@ let rec hash_map_move_elements_from_list_fwd_back_lem t ntable ls =
 
 (*** move_elements *)
 
+(**** move_elements: refinement 1 *)
+/// We prove a first refinement lemma: calling [move_elements] refines a function
+/// which, for every slot, moves the element out of the slot. This first version is
+/// almost exactly the translated function, it just uses `list` instead of `list_t`.
+
 // Note that we ignore the returned slots (we thus don't return a pair:
 // only the new hash map in which we moved the elements from the slots):
 // this returned value is not used.
 let rec hash_map_move_elements_s
   (#t : Type0) (hm : hash_map_slots_s_nes t)
   (slots : slots_s t) (i : usize{i <= length slots /\ length slots <= usize_max}) :
-  Tot (result (hash_map_slots_s_nes t))
+  Tot (result_hash_map_slots_s_nes t)
   (decreases (length slots - i)) =
   let len = length slots in
   if i < len then
@@ -1527,3 +1537,254 @@ let rec hash_map_move_elements_fwd_back_lem t ntable slots i =
   else ()
 #pop-options
 
+
+(**** move_elements: refinement 2 *)
+/// We prove a second refinement lemma: calling [move_elements] refines a function
+/// which which moves every binding of the hash map seen as *one* associative list
+/// (and not a list of lists).
+
+/// [ntable] is the hash map to which we move the elements
+/// [slots] is the current hash map, from which we remove the elements, and seen
+///         as a "flat" associative list (and not a list of lists)
+/// This is actually exactly [hash_map_move_elements_from_list_s]...
+let rec hash_map_move_elements_s_flat
+  (#t : Type0) (ntable : hash_map_slots_s_nes t)
+  (slots : hash_map_s t) :
+  Tot (result_hash_map_slots_s_nes t)
+  (decreases slots) =
+  match slots with
+  | [] -> Return ntable
+  | (k,v) :: slots' ->
+    match hash_map_insert_no_resize_s ntable k v with
+    | Fail -> Fail
+    | Return ntable' ->
+      hash_map_move_elements_s_flat ntable' slots'
+
+/// The refinment lemmas
+/// First, auxiliary helpers.
+
+/// Flatten a list of lists, starting at index i
+val flatten_i :
+     #a:Type
+  -> l:list (list a)
+  -> i:nat{i <= length l}
+  -> Tot (list a) (decreases (length l - i))
+
+let rec flatten_i l i =
+  if i < length l then
+    index l i @ flatten_i l (i+1)
+  else []
+
+let _ = assert(let l = [1;2] in l == hd l :: tl l)
+
+val flatten_i_incr :
+     #a:Type
+  -> l:list (list a)
+  -> i:nat{Cons? l /\ i+1 <= length l} ->
+  Lemma
+  (ensures (
+    (**) assert_norm(length (hd l :: tl l) == 1 + length (tl l));
+    flatten_i l (i+1) == flatten_i (tl l) i))
+  (decreases (length l - (i+1)))
+
+#push-options "--fuel 1"
+let rec flatten_i_incr l i =
+  let x :: tl = l in
+  if i + 1 < length l then
+    begin
+    assert(flatten_i l (i+1) == index l (i+1) @ flatten_i l (i+2));
+    flatten_i_incr l (i+1);
+    assert(flatten_i l (i+2) == flatten_i tl (i+1));
+    assert(index l (i+1) == index tl i)
+    end
+  else ()
+#pop-options
+
+val flatten_0_is_flatten :
+     #a:Type
+  -> l:list (list a) ->
+  Lemma
+  (ensures (flatten_i l 0 == flatten l))
+
+#push-options "--fuel 1"
+let rec flatten_0_is_flatten #a l =
+  match l with
+  | [] -> ()
+  | x :: l' ->
+    flatten_i_incr l 0;
+    flatten_0_is_flatten l'
+#pop-options
+
+/// Auxiliary lemma
+val flatten_nil_prefix_as_flatten_i :
+     #a:Type
+  -> l:list (list a)
+  -> i:nat{i <= length l} ->
+  Lemma (requires (forall (j:nat{j < i}). index l j == []))
+  (ensures (flatten l == flatten_i l i))
+
+#push-options "--fuel 1"
+let rec flatten_nil_prefix_as_flatten_i #a l i =
+  if i = 0 then flatten_0_is_flatten l
+  else
+    begin
+    let x :: l' = l in
+    assert(index l 0 == []);
+    assert(x == []);
+    assert(flatten l == flatten l');
+    flatten_i_incr l (i-1);
+    assert(flatten_i l i == flatten_i l' (i-1));
+    assert(forall (j:nat{j < length l'}). index l' j == index l (j+1));
+    flatten_nil_prefix_as_flatten_i l' (i-1);
+    assert(flatten l' == flatten_i l' (i-1))
+    end
+#pop-options
+
+/// The proof is trivial, the functions are the same.
+/// Just keeping two definitions to allow changes...
+val hash_map_move_elements_from_list_s_as_flat_lem
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (ls : slot_s t) :
+  Lemma
+  (ensures (
+    hash_map_move_elements_from_list_s hm ls ==
+    hash_map_move_elements_s_flat hm ls))
+  (decreases ls)
+
+#push-options "--fuel 1"
+let rec hash_map_move_elements_from_list_s_as_flat_lem #t hm ls =
+  match ls with
+  | [] -> ()
+  | (key, value) :: ls' ->
+    match hash_map_insert_no_resize_s hm key value with
+    | Fail -> ()
+    | Return hm' ->
+      hash_map_move_elements_from_list_s_as_flat_lem hm' ls'
+#pop-options
+
+/// Composition of two calls to [hash_map_move_elements_s_flat]
+let hash_map_move_elements_s_flat_comp
+  (#t : Type0) (hm : hash_map_slots_s_nes t) (slot0 slot1 : slot_s t) :
+  Tot (result_hash_map_slots_s_nes t) =
+  match hash_map_move_elements_s_flat hm slot0 with
+  | Fail -> Fail
+  | Return hm1 -> hash_map_move_elements_s_flat hm1 slot1
+
+/// High-level desc:
+/// move_elements (move_elements hm slot0) slo1 == move_elements hm (slot0 @ slot1)
+val hash_map_move_elements_s_flat_append_lem
+  (#t : Type0) (hm : hash_map_slots_s_nes t) (slot0 slot1 : slot_s t) :
+  Lemma
+  (ensures (
+    match hash_map_move_elements_s_flat_comp hm slot0 slot1,
+          hash_map_move_elements_s_flat hm (slot0 @ slot1)
+    with
+    | Fail, Fail -> True
+    | Return hm1, Return hm2 -> hm1 == hm2
+    | _ -> False))
+  (decreases (slot0))
+
+#push-options "--fuel 1"
+let rec hash_map_move_elements_s_flat_append_lem #t hm slot0 slot1 =
+  match slot0 with
+  | [] -> ()
+  | (k,v) :: slot0' ->
+    match hash_map_insert_no_resize_s hm k v with
+    | Fail -> ()
+    | Return hm' ->
+      hash_map_move_elements_s_flat_append_lem hm' slot0' slot1
+#pop-options
+
+val flatten_i_same_suffix (#a : Type) (l0 l1 : list (list a)) (i : nat) :
+  Lemma
+  (requires (
+    i <= length l0 /\
+    length l0 = length l1 /\
+    (forall (j:nat{i <= j /\ j < length l0}). index l0 j == index l1 j)))
+  (ensures (flatten_i l0 i == flatten_i l1 i))
+
+let rec flatten_i_same_suffix #a l0 l1 i = admit()
+
+/// Refinement lemma:
+/// [hash_map_move_elements_s] refines [hash_map_move_elements_s_flat]
+val hash_map_move_elements_s_flat_lem
+  (#t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
+  (slots : slots_s t)
+  (i : nat{i <= length slots /\ length slots <= usize_max}) :
+  Lemma
+  (ensures (
+    match hash_map_move_elements_s hm slots i,
+          hash_map_move_elements_s_flat hm (flatten_i slots i)
+    with
+    | Fail, Fail -> True
+    | Return hm, Return hm' -> hm == hm'
+    | _ -> False))
+  (decreases (length slots - i))
+
+#push-options "--fuel 1"
+let rec hash_map_move_elements_s_flat_lem #t hm slots i =
+  let len = length slots in
+  if i < len then
+    begin
+    let slot = index slots i in
+    hash_map_move_elements_from_list_s_as_flat_lem hm slot;
+    match hash_map_move_elements_from_list_s hm slot with
+    | Fail ->
+      assert(flatten_i slots i == slot @ flatten_i slots (i+1));
+      hash_map_move_elements_s_flat_append_lem hm slot (flatten_i slots (i+1));
+      assert(hash_map_move_elements_s_flat hm (flatten_i slots i) == Fail)
+    | Return hm' ->
+      let slots' = list_update slots i [] in
+      flatten_i_same_suffix slots slots' (i+1);
+      hash_map_move_elements_s_flat_lem hm' slots' (i+1);
+      hash_map_move_elements_s_flat_append_lem hm slot (flatten_i slots' (i+1));
+      ()
+    end
+  else ()
+#pop-options
+
+(*
+
+/// [nhm]: the new hash map (in which we insert elements)
+/// [slot]: the current slot we are emptying
+/// [ohm]: the old hash map, which we are moving to [nhm]
+/// [i]: the index of [slot] in [ohm]
+val hash_map_move_elements_s_flat_lem
+  (#t : Type0) (nhm : hash_map_slots_s t{is_pos_usize (length hm)})
+  (slots : slots_s t)
+  (i : nat{i <= length slots /\ length slots <= usize_max}) :
+  Lemma
+  (requires (
+    index ohm i == slot /\
+    (forall (j:nat{j < i}). index j ohm == [])))
+  (ensures (
+    match hash_map_move_elements_from_list_s
+
+let rec hash_map_move_elements_from_list_s
+  (#t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
+  (ls : slot_s t) :
+  Tot (hash_map_slots_s_nes t) (decreases ls) =
+  match ls with
+  | [] -> Return hm
+  | (key, value) :: ls' ->
+    match hash_map_insert_no_resize_s hm key value with
+    | Fail -> Fail
+    | Return hm' ->
+      hash_map_move_elements_from_list_s hm' ls'
+
+let rec hash_map_move_elements_s
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (slots : slots_s t) (i : usize{i <= length slots /\ length slots <= usize_max}) :
+  Tot (result (hash_map_slots_s_nes t))
+  (decreases (length slots - i)) =
+  let len = length slots in
+  if i < len then
+    begin
+    let slot = index slots i in
+    match hash_map_move_elements_from_list_s hm slot with
+    | Fail -> Fail
+    | Return hm' ->
+      let slots' = list_update slots i [] in
+      hash_map_move_elements_s hm' slots' (i+1)
+    end
+  else Return hm
