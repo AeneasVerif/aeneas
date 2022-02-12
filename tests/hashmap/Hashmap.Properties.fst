@@ -12,7 +12,34 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 
-/// The proofs actually caused a lot more trouble than expected, because:
+/// The proofs actually caused a lot more trouble than expected, because of the
+/// below points. All those are problems I already encountered in the past, but:
+///
+/// - the fact that I spent 9 months mostly focusing on Aeneas made me forget them
+///   a bit
+/// - they seem exacerbated by the fact that they really matter when doing
+///   functional correctness proofs, while Aeneas allows me to focus on the
+///   functional behaviour of my programs.
+/// 
+///   As a simple example, when I implemented linked lists (with loops) in Low*
+///   for Noise*, most of the work consisted in making the Low* proofs work
+///   (which was painful).
+/// 
+///   There was a bit of functional reasoning (for which I already encountered the
+///   below issues), but it was pretty simple and shadowed by the memory management
+///   part. In the current situation, as we got rid of the memory management annoyance,
+///   we could move on to the more the complex hash maps where the functional correctness
+///   proofs *actually* require some work, making extremely obvious the problems F* has
+///   when dealing with this kind of proofs.
+///
+/// Here, I would like to emphasize the fact that if hash maps *do* have interesting
+/// functional properties to study, I don't believe those properties are *intrinsically*
+/// complex. In particular, I am very eager to try to do the same proofs in Coq or
+/// HOL4, which I believe are more suited to this kind of proofs, and see how things go.
+/// I'm aware that those provers also suffer from drawbacks, but I believe those are
+/// less severe than F* in the present case.
+///
+/// The problems I encountered (once again, all this is well known):
 /// 
 /// - we are blind when doing the proofs. After a very intensive use of F* I got
 ///   used to it meaning I *can* do proofs in F*, but it still takes me a tremendous
@@ -25,22 +52,51 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 /// - F* is extremely bad at reasoning with quantifiers, which is made worse by
 ///   the fact we are blind when making proofs. This forced me to be extremely
 ///   careful about the way I wrote the specs/invariants (by writing "functional"
-///   specs and invariants, mostly, so as not to manipulate quantifiers), ending
-///   up proofs which are not written in the most natural and efficient manner.
+///   specs and invariants, mostly, so as not to manipulate quantifiers).
+///   
 ///   In particular, I had to cut the proofs into many steps just for this reason,
 ///   while if I had been able to properly use quantifiers (I tried: in many
 ///   situations I manage to massage F* to make it work, but in the below proofs
 ///   it was horrific) I would have proven many results in one go.
 ///   
+///   More specifically: the hash map has an invariant stating that all the keys
+///   are pairwise disjoint. This invariant is extremely simple to write with
+///   forall quantifiers and looks like the following:
+///   `forall i j. i <> j ==> key_at i hm <> key_at j hm`
+///   
+///   If you can easily manipulate forall quantifiers, you can prove that the
+///   invariant is maintained by, say, the insertion functions in one go.
+///   
+///   However here, because I couldn't make the quantification work (and I really
+///   tried hard, because this is a very natural way of doing the proofs), I had
+///   to resort to invariants written in terms of [pairwise_rel]. This is
+///   extremely annoying, because then the process becomes:
+///   - prove that the insertion, etc. functions refine some higher level functions
+///     (that I have to introduce)
+///   - prove that those higher level functions preserve the invariants
+///   
+///   All this results in a huge amount of intermediary lemmas and definitions...
+///   Of course, I'm totally fine with introducing refinements steps when the
+///   proofs are *actually* intrinsically complex, but here we are studying hash
+///   maps, so come on!!
+///
+/// - the abundance of intermediate definitions and lemmas causes a real problem
+///   because we then have to remember them, find naming conventions (otherwise
+///   it is a mess) and go look for them. All in all, it takes engineering time,
+///   and it can quickly cause scaling issues...
+///   
 /// - F* doesn't encode closures properly, the result being that it is very
-///   awkward to reason about functions like `map` or `find`, because we have
+///   awkward to reason about functions like [map] or [find], because we have
 ///   to introduce auxiliary definitions for the parameters we give to those
 ///   functions (if we use anonymous lambda functions, we're screwed by the
 ///   encoding).
+///   See all the definitions like [same_key], [binding_neq], etc. which cluter
+///   the file and worsen the problem mentionned in the previous point.
 ///   
-/// - we can't prove intermediate results which require a recursive proofs
+/// - we can't prove intermediate results which require a *recursive* proof
 ///   inside of other proofs, meaning that whenever we need such a result we need
 ///   to write an intermediate lemma, which is extremely cumbersome.
+///
 ///   What is extremely frustrating is that in most situations, those intermediate
 ///   lemmas are extremely simple to prove: they would simply need 2 or 3 tactic
 ///   calls in Coq or HOL4, and in F* the proof is reduced to a recursive call.
@@ -48,25 +104,36 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   non-negligible time, which is made worse by the fact that, once again,
 ///   we don't have proof contexts to stare at which would help figuring out
 ///   how to write such lemmas.
+///
+///   Simple example: see [for_all_binding_neq_find_lem]. This lemma states that:
+///   "if a key is not in a map, then looking up this key returns None".
+///   This lemma is used in *exactly* one place, and simply needs a recursive call.
+///   Stating the lemma took a lot more time (and place) than proving it.
+///
+/// - more generally, it can be difficult to figure out which intermediate results
+///   to prove. In an interactive theorem prover based on tactics, it often happens
+///   that we start proving the theorem we target, then get stuck on a proof obligation
+///   for which we realize we need to prove an intermediate result.
+/// 
+///   This process is a lot more difficult in F*, and I have to spend a lot of energy
+///   figuring out what I *might* need in the future. While this is probably a good
+///   habit, there are many situations where it is really a constraint: I'm often
+///   reluctant before starting a new proof in F*, because I anticipate on this very
+///   annoying loop: try to prove something, get an unknown assertion failed error,
+///   insert a lot of assertions or think *really* deeply to figure out what might
+///   have happened, etc. All this seems a lot more natural when working with tactics.
 ///   
 /// - the proofs often fail or succeed for extremely unpredictable reasons, and are
-///   extremely hard to debug. See [hash_map_slots_s_nes] below: it is simply a
-///   definition with a refinment. For some reason, at some places if we use this
-///   type abbreviation some proofs break, meaning we have to write the unfolded
-///   version.
-///   I guess it has something to do with the fact that F*'s type inference yields
-///   a different result, in combination with the poor support for subtyping. The
-///   problem is that it is extremely hard to debug, and I definitely don't want
-///   to waste time with this kind of boring, tedious proofs.
+///   extremely hard to debug.
 ///
-/// The result is that I had to poor a lot more thinking than I expected in the below
-/// proofs, in particular to:
-/// - write invariants and specs that I could *manage* in F*
-/// - subdivide all the theorems into very small, modular lemmas that I could reason
-///   about independently, in a small context, and with quick responses from F*.
-/// 
-/// Finally, I strongly that in a theorem prover with tactics, most of the below proof
-/// would have been extremely straightforward.
+///   See [hash_map_slots_s_nes] below: it is simply a definition with a refinment.
+///   For some reason, at some places if we use this type abbreviation some proofs
+///   break, meaning we have to write the unfolded version instead.
+///   
+///   I guess this specific type has something to do with the fact that F*'s type
+///   inference yields a different result, in combination with the poor support for
+///   subtyping. The problem is that it is extremely hard to debug, and I definitely
+///   don't want to waste any more time with this kind of boring, tedious proofs.
 
 
 (*** List lemmas *)
@@ -1913,6 +1980,31 @@ let rec hash_map_move_elements_s_flat_lem #t hm al =
       assert(hash_map_slots_s_len hm' + length al' <= usize_max);
       hash_map_move_elements_s_flat_lem hm' al'
 #pop-options
+
+/// We need to prove that the invariants on the "low-level" representations of
+/// the hash map imply the invariants on the "high-level" representations.
+val slots_t_inv_implies_slots_s_inv
+  (#t : Type0) (slots : slots_t t{length slots <= usize_max}) :
+  Lemma (requires (slots_t_inv slots))
+  (ensures (slots_s_inv (slots_t_v slots)))
+
+let slots_t_inv_implies_slots_s_inv #t slots =
+  
+
+let slots_s_inv (#t : Type0) (slots : slots_s t{length slots <= usize_max}) : Type0 =
+  forall(i:nat{i < length slots}).
+  {:pattern index slots i}
+  slot_s_inv (length slots) i (index slots i)
+
+let slots_t_inv (#t : Type0) (slots : slots_t t{length slots <= usize_max}) : Type0 =
+  forall(i:nat{i < length slots}).
+  {:pattern index slots i}
+  slot_t_inv (length slots) i (index slots i)
+
+hash_map_t_inv
+hash_map_slot_s_inv
+
+val slots_t_inv_implies_assoc_list_lem (#t : Type0) (hm : hash_map_t)
 
 (*
 let rec hash_map_move_elements_s_flat
