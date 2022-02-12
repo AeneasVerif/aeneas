@@ -133,6 +133,7 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   1. See [hash_map_slots_s_nes] below: it is simply a definition with a refinment.
 ///   For some reason, at some places if we use this type abbreviation some proofs
 ///   break, meaning we have to write the unfolded version instead.
+///   In particular, it made [hash_map_move_elements_fwd_back_lem_refin] annoying.
 ///   
 ///   I guess this specific type has something to do with the fact that F*'s type
 ///   inference yields a different result, in combination with the poor support for
@@ -663,10 +664,10 @@ let hash_map_t_base_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
 /// Invariant for the hashmap
 let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   // Base invariant
-  hash_map_t_base_inv hm
+  hash_map_t_base_inv hm /\
   // The hash map is either: not overloaded, or we can't resize it
-//  (hm.hash_map_num_entries <= hm.hash_map_max_load
-//   || length hm.hash_map_slots * 2 > usize_max)
+  (hm.hash_map_num_entries <= hm.hash_map_max_load
+   || length hm.hash_map_slots * 2 > usize_max)
 
 /// The following predicate links the hashmap to an associative list.
 /// Note that it does not compute the representant: different (permuted)
@@ -877,13 +878,15 @@ let rec hash_map_clear_slots_fwd_back_lem
 val hash_map_clear_fwd_back_lem_fun
   (t : Type0) (self : hash_map_t t) :
   Lemma
-  (requires (hash_map_t_inv self))
+  (requires (hash_map_t_base_inv self))
   (ensures (
     match hash_map_clear_fwd_back t self with
     | Fail -> False
     | Return hm ->
       // The hash map invariant is satisfied
-      hash_map_t_inv hm /\
+      hash_map_t_base_inv hm /\
+      // We preserved the parameters
+      hash_map_same_params hm self /\
       // The hash map has 0 values
       hash_map_t_len_s hm = 0 /\
       // It contains no bindings
@@ -1367,7 +1370,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
   (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
   Lemma
   (requires (
-    hash_map_t_inv self /\
+    hash_map_t_base_inv self /\
     hash_map_slots_s_len (hash_map_t_slots_v self) = hash_map_t_len_s self))
   (ensures (
     begin
@@ -1376,7 +1379,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
     with
     | Fail, Fail -> True
     | Return hm, Return hm_v ->
-      hash_map_t_inv hm /\
+      hash_map_t_base_inv hm /\
       hash_map_same_params hm self /\
       hash_map_t_slots_v hm == hm_v /\
       hash_map_slots_s_len hm_v == hash_map_t_len_s hm
@@ -1580,14 +1583,14 @@ let rec hash_map_move_elements_from_list_s
 /// Refinement lemma
 val hash_map_move_elements_from_list_fwd_back_lem
   (t : Type0) (ntable : hash_map_t_nes t) (ls : list_t t) :
-  Lemma (requires (hash_map_t_inv ntable))
+  Lemma (requires (hash_map_t_base_inv ntable))
   (ensures (
     match hash_map_move_elements_from_list_fwd_back t ntable ls,
           hash_map_move_elements_from_list_s (hash_map_t_slots_v ntable) (slot_t_v ls)
     with
     | Fail, Fail -> True
     | Return hm', Return hm_v ->
-      hash_map_t_inv hm' /\
+      hash_map_t_base_inv hm' /\
       hash_map_t_slots_v hm' == hm_v /\
       hash_map_same_params hm' ntable
     | _ -> False))
@@ -1648,14 +1651,14 @@ val hash_map_move_elements_fwd_back_lem_refin
   (slots : vec (list_t t)) (i : usize{i <= length slots}) :
   Lemma
   (requires (
-    hash_map_t_inv ntable))
+    hash_map_t_base_inv ntable))
   (ensures (
     match hash_map_move_elements_fwd_back t ntable slots i,
           hash_map_move_elements_s (hash_map_t_slots_v ntable) (slots_t_v slots) i
     with
     | Fail, Fail -> True // We will prove later that this is not possible
     | Return (ntable', _), Return ntable'_v ->
-      hash_map_t_inv ntable' /\
+      hash_map_t_base_inv ntable' /\
       hash_map_t_slots_v ntable' == ntable'_v /\
       hash_map_same_params ntable' ntable
     | _ -> False))
@@ -1663,13 +1666,37 @@ val hash_map_move_elements_fwd_back_lem_refin
 
 // Rk.: if above we update some definitions to use [hash_map_slots_s_nes]
 // instead of writing refinements explicitly, it makes the proof breaks.
-// I guess it is because F* does a different type inference, which combines
-// poorly with its poor support for subtyping. Problem is: I have no idea
-// where this happens and it is extremely hard to debug.
+// I guess it is because
+//
+// This proof was super unstable for some reasons.
+// 
+// For instance, a type abbreviation instead of the same type but expanded
+// led to a failure. This behaviour led me to the hypothesis that maybe it
+// it made F*'s type inference end up with a different result, which combined
+// with its poor support for subtyping made the proof failed.
+//
+// However, later, unwrapping a definition led to another failure.
+// 
+// I thus tried to manually unfold some postconditions because it
+// seemed to work for [hash_map_move_elements_fwd_back_lem] but it didn't
+// succeed.
+//
+// I tried to increase the ifuel to 2, 3: it didn't work, and I fell back to
+// other methods. Finally out of angriness I swiched the ifuel to 4 for some
+// reason: everything worked fine.
+// I have *no clue* why 4 is the magic number.
+//
+// The terrible thing is that this refinement proof is conceptually super simple:
+// - there are maybe two arithmetic proofs, which are directly solved by the
+//   precondition
+// - we need to refine the call to [hash_map_move_elements_from_list_fwd_back]:
+//   this is proven by another refinement lemma we proved above
+// - there is the recursive call (trivial)
+// Huge waste of time...
 #restart-solver
-#push-options "--z3rlimit 200 --fuel 1"
+#push-options "--z3rlimit 300 --fuel 1 --ifuel 4"
 let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
-  assert(hash_map_t_inv ntable);
+  assert(hash_map_t_base_inv ntable);
   let i0 = vec_len (list_t t) slots in
   let b = i < i0 in
   if b
@@ -1680,6 +1707,17 @@ let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
       let l0 = mem_replace_fwd (list_t t) l ListNil in
       assert(l0 == l);
       hash_map_move_elements_from_list_fwd_back_lem t ntable l0;
+      begin
+      match hash_map_move_elements_from_list_fwd_back t ntable l0,
+            hash_map_move_elements_from_list_s (hash_map_t_slots_v ntable) (slot_t_v l0)
+      with
+      | Fail, Fail -> ()
+      | Return hm', Return hm_v ->
+        assert(hash_map_t_base_inv hm');
+        assert(hash_map_t_slots_v hm' == hm_v);
+        assert(hash_map_same_params hm' ntable)
+      | _ -> assert(False)
+      end;
       begin match hash_map_move_elements_from_list_fwd_back t ntable l0 with
       | Fail -> ()
       | Return h ->
@@ -1692,9 +1730,28 @@ let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
           | Fail -> ()
           | Return i1 ->
             hash_map_move_elements_fwd_back_lem_refin t h v i1;
+            begin
+            match hash_map_move_elements_fwd_back t h v i1,
+                  hash_map_move_elements_s (hash_map_t_slots_v h) (slots_t_v v) i1
+            with
+            | Fail, Fail -> ()
+            | Return (ntable', _), Return ntable'_v ->
+              assert(hash_map_t_base_inv ntable');
+              assert(hash_map_t_slots_v ntable' == ntable'_v);
+              assert(hash_map_same_params ntable' ntable)
+            | _ -> assert(False)
+            end;
             begin match hash_map_move_elements_fwd_back t h v i1 with
-            | Fail -> ()
-            | Return (h0, v0) -> ()
+            | Fail ->
+              assert(hash_map_move_elements_fwd_back t ntable slots i == Fail);
+              ()
+            | Return (ntable', v0) ->
+              begin
+              // Trying to prove the postcondition
+              match hash_map_move_elements_fwd_back t ntable slots i with
+              | Fail -> assert(False)
+              | Return (ntable'', _) -> assert(ntable'' == ntable')
+              end
             end
           end
         end
@@ -2017,12 +2074,12 @@ let slots_t_inv_implies_slots_s_inv #t slots =
   // Problem is: I can never really predict for sure with F*...
   ()
 
-val hash_map_t_inv_implies_hash_map_slots_s_inv
+val hash_map_t_base_inv_implies_hash_map_slots_s_inv
   (#t : Type0) (hm : hash_map_t t) :
-  Lemma (requires (hash_map_t_inv hm))
+  Lemma (requires (hash_map_t_base_inv hm))
   (ensures (hash_map_slots_s_inv (hash_map_t_slots_v hm)))
 
-let hash_map_t_inv_implies_hash_map_slots_s_inv #t hm = () // same as previous
+let hash_map_t_base_inv_implies_hash_map_slots_s_inv #t hm = () // same as previous
 
 /// Introducing a "partial" version of the hash map invariant, which operates on
 /// a suffix of the hash map.
@@ -2076,12 +2133,12 @@ val hash_map_slots_s_inv_implies_assoc_list_lem
 let hash_map_slots_s_inv_implies_assoc_list_lem #t hm =
   partial_hash_map_slots_s_inv_implies_assoc_list_lem (length hm) 0 hm
 
-val hash_map_t_inv_implies_assoc_list_lem
+val hash_map_t_base_inv_implies_assoc_list_lem
   (#t : Type0) (hm : hash_map_t t):
-  Lemma (requires (hash_map_t_inv hm))
+  Lemma (requires (hash_map_t_base_inv hm))
   (ensures (assoc_list_inv (hash_map_t_v hm)))
 
-let hash_map_t_inv_implies_assoc_list_lem #t hm =
+let hash_map_t_base_inv_implies_assoc_list_lem #t hm =
   hash_map_slots_s_inv_implies_assoc_list_lem (hash_map_t_slots_v hm)
 
 /// For some reason, we can't write the below [forall] directly in the [ensures]
@@ -2099,7 +2156,7 @@ val hash_map_move_elements_fwd_back_lem
   Lemma
   (requires (
     let al = flatten (slots_t_v slots) in
-    hash_map_t_inv ntable /\
+    hash_map_t_base_inv ntable /\
     length al <= usize_max /\
     assoc_list_inv al /\
     // The table is empty
@@ -2112,7 +2169,7 @@ val hash_map_move_elements_fwd_back_lem
     with
     | Return (ntable', _), Return ntable'_v ->
       // The invariant is preserved
-      hash_map_t_inv ntable' /\
+      hash_map_t_base_inv ntable' /\
       // The table has the same number of slots
       length ntable'.hash_map_slots = length ntable.hash_map_slots /\
       // The count is good
@@ -2144,7 +2201,7 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
   with
   | Fail, Fail -> ()
   | Return (ntable', _), Return ntable'_v ->
-    assert(hash_map_t_inv ntable');
+    assert(hash_map_t_base_inv ntable');
     assert(hash_map_t_slots_v ntable' == ntable'_v)
   | _ -> assert(False)
   end;
@@ -2163,7 +2220,7 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
         hash_map_move_elements_s_flat ntable_v al
   with
   | Return (ntable', _), Return ntable'_v ->
-    assert(hash_map_t_inv ntable');
+    assert(hash_map_t_base_inv ntable');
     assert(length ntable'.hash_map_slots = length ntable.hash_map_slots);
     // Rk.: Adding the following let binding makes the proof fails even with a huge
     // rlitmit. Really having fun here...
