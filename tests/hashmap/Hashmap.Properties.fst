@@ -50,7 +50,13 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   which is something very specific to working with F*.
 ///
 ///   About the fact that we are blind: see [hash_map_try_resize_fwd_back_lem_refin]
-///   
+///
+/// - the fact that we don't reason with tactics but with the SMT solver with an
+///   "intrinsic" style of proofs makes it a bit awkward to reason about pure
+///   functions in a modular manner, because every proof requires to basically
+///   copy-paste the function we are studying. As a consequence, this file is
+///   very verbose (look at the number of lines of code...).
+/// 
 /// - F* is extremely bad at reasoning with quantifiers, which is made worse by
 ///   the fact we are blind when making proofs. This forced me to be extremely
 ///   careful about the way I wrote the specs/invariants (by writing "functional"
@@ -799,7 +805,7 @@ val hash_map_new_with_capacity_fwd_lem
     0 < max_load_dividend /\
     max_load_dividend < max_load_divisor /\
     0 < capacity /\
-    capacity * max_load_dividend < usize_max))
+    capacity * max_load_dividend <= usize_max))
   (ensures (
     match hash_map_new_with_capacity_fwd t capacity max_load_dividend max_load_divisor with
     | Fail -> False
@@ -2412,3 +2418,70 @@ let hash_map_try_resize_fwd_back_lem_refin t self =
     else let self0 = Mkhash_map_t i p i0 v in ()
   end
 
+
+val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
+  Lemma
+  (requires (hash_map_t_base_inv hm))
+  (ensures (
+    match hash_map_try_resize_s hm with
+    | Fail -> False
+    | Return hm' ->
+      // The full invariant is now satisfied (the full invariant is "base
+      // invariant" + the map is not overloaded (or can't be resized because
+      // already too big)
+      hash_map_t_inv hm' /\
+      // It contains the same bindings as the initial map
+      (forall (k:key). hash_map_t_find_s hm' k == hash_map_t_find_s hm k)))
+
+(*
+let hash_map_try_resize_s_lem #t hm =
+  let capacity = length hm.hash_map_slots in
+  let (divid, divis) = hm.hash_map_max_load_factor in
+  if capacity <= usize_max / 2 && capacity <= usize_max / divid then
+    let ncapacity : usize = capacity * 2 in
+    assume(ncapacity * divid <= usize_max);
+    hash_map_new_with_capacity_fwd_lem t ncapacity divid divis;
+    begin match hash_map_new_with_capacity_fwd t ncapacity divid divis with
+    | Fail -> ()
+    | Return ntable ->
+      hash_map_move_elements_fwd_back_lem t ntable hm.hash_map_slots;
+      match hash_map_move_elements_fwd_back t ntable hm.hash_map_slots 0 with
+      | Fail -> ()
+      | Return (ntable', _) ->
+        assume(hash_map_is_assoc_list hm (hash_map_t_v hm));
+        let hm =
+          { hm with hash_map_slots = ntable'.hash_map_slots;
+                    hash_map_max_load = ntable'.hash_map_max_load }
+        in
+        ()
+    end
+  else ()
+
+let hash_map_is_assoc_list
+  (#t : Type0) (ntable : hash_map_t t{length ntable.hash_map_slots > 0})
+  (al : assoc_list t) : Type0 =
+  (forall (k:key). hash_map_t_find_s ntable k == assoc_list_find k al)
+
+
+  Pure  (result (hash_map_t t))
+  (requires (
+    let (divid, divis) = hm.hash_map_max_load_factor in
+    divid > 0 /\ divis > 0))
+  (ensures (fun _ -> True)) =
+  let capacity = length hm.hash_map_slots in
+  let (divid, divis) = hm.hash_map_max_load_factor in
+  if capacity <= usize_max / 2 && capacity <= usize_max / divid then
+    let ncapacity : usize = capacity * 2 in
+    begin match hash_map_new_with_capacity_fwd t ncapacity divid divis with
+    | Fail -> Fail
+    | Return ntable ->
+      match hash_map_move_elements_fwd_back t ntable hm.hash_map_slots 0 with
+      | Fail -> Fail
+      | Return (ntable', _) ->
+        let hm =
+          { hm with hash_map_slots = ntable'.hash_map_slots;
+                    hash_map_max_load = ntable'.hash_map_max_load }
+        in
+        Return hm
+    end
+  else Return hm
