@@ -204,6 +204,17 @@ let rec find_index #a f ls =
     else 1 + find_index f ls'
 #pop-options
 
+val for_all_append (#a : Type0) (f : a -> Tot bool) (ls0 ls1 : list a) :
+  Lemma (for_all f (ls0 @ ls1) = (for_all f ls0 && for_all f ls1))
+
+#push-options "--fuel 1"
+let rec for_all_append #a f ls0 ls1 =
+  match ls0 with
+  | [] -> ()
+  | x :: ls0' ->
+    for_all_append f ls0' ls1
+#pop-options
+
 
 (*** Lemmas about Primitives *)
 /// TODO: move those lemmas
@@ -271,6 +282,21 @@ let rec length_flatten_update #a ls i x =
       let ls1 = x' :: list_update ls' (i-1) x in
       assert(flatten ls1 == x' @ flatten (list_update ls' (i-1) x)) // Triggers patterns
       end
+#pop-options
+
+val forall_index_equiv_list_for_all
+  (#a : Type) (pred : a -> Tot bool) (ls : list a) :
+  Lemma ((forall (i:nat{i < length ls}). pred (index ls i)) <==> for_all pred ls)
+
+#push-options "--fuel 1"
+let rec forall_index_equiv_list_for_all pred ls =
+  match ls with
+  | [] -> ()
+  | x :: ls' ->
+    assert(forall (i:nat{i < length ls'}). index ls' i == index ls (i+1));
+    assert(forall (i:nat{0 < i /\ i < length ls}). index ls i == index ls' (i-1));
+    assert(index ls 0 == x);
+    forall_index_equiv_list_for_all pred ls'
 #pop-options
 
 (*** Utilities *)
@@ -2094,9 +2120,51 @@ let hash_map_t_base_inv_implies_hash_map_slots_s_inv #t hm = () // same as previ
 let partial_hash_map_slots_s_inv
   (#t : Type0) (len : usize{len > 0}) (offset : usize)
   (hm : hash_map_slots_s t{offset + length hm <= usize_max}) : Type0 =
-  forall(i:nat{i < length hm}).
-  {:pattern index hm i}
-  slot_s_inv len (offset + i) (index hm i)
+  forall(i:nat{i < length hm}). {:pattern index hm i} slot_s_inv len (offset + i) (index hm i)
+
+/// Auxiliary lemma.
+/// If a binding comes from a slot i, then its key is different from the keys
+/// of the bindings in the other slots (because the hashes of the keys are distinct).
+val binding_in_previous_slot_implies_neq
+  (#t : Type0) (len : usize{len > 0})
+  (i : usize) (b : binding t)
+  (offset : usize{i < offset})
+  (slots : hash_map_slots_s t{offset + length slots <= usize_max}) :
+  Lemma
+  (requires (
+    // The binding comes from a slot not in [slots]
+    hash_mod_key (fst b) len = i /\
+    // The slots are the well-formed suffix of a hash map
+    partial_hash_map_slots_s_inv len offset slots))
+  (ensures (
+    for_all (binding_neq b) (flatten slots)))
+  (decreases slots)
+
+#push-options "--z3rlimit 100 --fuel 1"
+let rec binding_in_previous_slot_implies_neq #t len i b offset slots =
+  match slots with
+  | [] -> ()
+  | s :: slots' ->
+    assert(slot_s_inv len offset (index slots 0)); // Triggers patterns
+    assert(slot_s_inv len offset s);
+    // Proving TARGET. We use quantifiers.
+    assert(for_all (same_hash_mod_key len offset) s);
+    forall_index_equiv_list_for_all (same_hash_mod_key len offset) s;
+    assert(forall (i:nat{i < length s}). same_hash_mod_key len offset (index s i));
+    let aux (i:nat{i < length s}) :
+      Lemma
+      (requires (same_hash_mod_key len offset (index s i)))
+      (ensures (binding_neq b (index s i)))
+      [SMTPat (index s i)] = ()
+    in
+    assert(forall (i:nat{i < length s}). binding_neq b (index s i));
+    forall_index_equiv_list_for_all (binding_neq b) s;
+    assert(for_all (binding_neq b) s); // TARGET
+    //
+    assert(forall (i:nat{i < length slots'}). index slots' i == index slots (i+1)); // Triggers instantiations
+    binding_in_previous_slot_implies_neq len i b (offset+1) slots';
+    for_all_append (binding_neq b) s (flatten slots')    
+#pop-options
 
 val partial_hash_map_slots_s_inv_implies_assoc_list_lem
   (#t : Type0) (len : usize{len > 0}) (offset : usize)
@@ -2107,30 +2175,36 @@ val partial_hash_map_slots_s_inv_implies_assoc_list_lem
   (ensures (assoc_list_inv (flatten hm)))
   (decreases (length hm + length (flatten hm)))
 
-// Ah! this lemma requires some work (it was obvious, though...)
 #push-options "--fuel 1"
 let rec partial_hash_map_slots_s_inv_implies_assoc_list_lem #t len offset hm =
   match hm with
   | [] -> ()
   | slot :: hm' ->
     assert(flatten hm == slot @ flatten hm');
-    assert(forall (i:nat{i < length hm'}). index hm' i == index hm (i+1));
+    assert(forall (i:nat{i < length hm'}). index hm' i == index hm (i+1)); // Triggers instantiations
     match slot with
     | [] ->
       assert(flatten hm == flatten hm');
-      assert(partial_hash_map_slots_s_inv len (offset+1) hm');
+      assert(partial_hash_map_slots_s_inv len (offset+1) hm'); // Triggers instantiations
       partial_hash_map_slots_s_inv_implies_assoc_list_lem len (offset+1) hm'
     | x :: slot' ->
       assert(flatten (slot' :: hm') == slot' @ flatten hm');
       let hm'' = slot' :: hm' in
-      assert(forall (i:nat{0 < i /\ i < length hm''}). index hm'' i == index hm i); // Triggers quantifications
+      assert(forall (i:nat{0 < i /\ i < length hm''}). index hm'' i == index hm i); // Triggers instantiations
       assert(forall (i:nat{0 < i /\ i < length hm''}). slot_s_inv len (offset + i) (index hm'' i));
-      assert(index hm 0 == slot); // Triggers quantifications
+      assert(index hm 0 == slot); // Triggers instantiations
       assert(slot_s_inv len offset slot);
       assert(slot_s_inv len offset slot');
       assert(partial_hash_map_slots_s_inv len offset hm'');
       partial_hash_map_slots_s_inv_implies_assoc_list_lem len offset (slot' :: hm');
-      assume(for_all (binding_neq x) (flatten (slot' :: hm')))
+      // Proving that the key in `x` is different from all the other keys in
+      // the flattened map
+      assert(for_all (binding_neq x) slot');
+      for_all_append (binding_neq x) slot' (flatten hm');
+      assert(partial_hash_map_slots_s_inv len (offset+1) hm');
+      binding_in_previous_slot_implies_neq #t len offset x (offset+1) hm';
+      assert(for_all (binding_neq x) (flatten hm'));
+      assert(for_all (binding_neq x) (flatten (slot' :: hm')))
 #pop-options
 
 val hash_map_slots_s_inv_implies_assoc_list_lem
