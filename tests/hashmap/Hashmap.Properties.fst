@@ -7,7 +7,7 @@ open Hashmap.Types
 open Hashmap.Clauses
 open Hashmap.Funs
 
-// To help with the proofs
+// To help with the proofs - TODO: remove
 module InteractiveHelpers = FStar.InteractiveHelpers
 
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
@@ -122,6 +122,10 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   annoying loop: try to prove something, get an unknown assertion failed error,
 ///   insert a lot of assertions or think *really* deeply to figure out what might
 ///   have happened, etc. All this seems a lot more natural when working with tactics.
+///
+///   Simple example: see [slots_t_inv_implies_slots_s_inv]. This lemma is super
+///   simple and was probably not required (it is proven with `()`). But I often feel
+///   forced to anticipate on problems, otherwise proofs become too painful.
 ///   
 /// - the proofs often fail or succeed for extremely unpredictable reasons, and are
 ///   extremely hard to debug.
@@ -1983,86 +1987,66 @@ let rec hash_map_move_elements_s_flat_lem #t hm al =
 
 /// We need to prove that the invariants on the "low-level" representations of
 /// the hash map imply the invariants on the "high-level" representations.
+
 val slots_t_inv_implies_slots_s_inv
   (#t : Type0) (slots : slots_t t{length slots <= usize_max}) :
   Lemma (requires (slots_t_inv slots))
   (ensures (slots_s_inv (slots_t_v slots)))
 
 let slots_t_inv_implies_slots_s_inv #t slots =
-  
+  // Ok, works fine: this lemma was useless.
+  // Problem is: I can never really predict for sure with F*...
+  ()
 
-let slots_s_inv (#t : Type0) (slots : slots_s t{length slots <= usize_max}) : Type0 =
-  forall(i:nat{i < length slots}).
-  {:pattern index slots i}
-  slot_s_inv (length slots) i (index slots i)
+val hash_map_t_inv_implies_hash_map_slots_s_inv
+  (#t : Type0) (hm : hash_map_t t) :
+  Lemma (requires (hash_map_t_inv hm))
+  (ensures (hash_map_slots_s_inv (hash_map_t_slots_v hm)))
 
-let slots_t_inv (#t : Type0) (slots : slots_t t{length slots <= usize_max}) : Type0 =
-  forall(i:nat{i < length slots}).
-  {:pattern index slots i}
-  slot_t_inv (length slots) i (index slots i)
+let hash_map_t_inv_implies_hash_map_slots_s_inv #t hm = () // same as previous
 
-hash_map_t_inv
-hash_map_slot_s_inv
+/// Introducing a "partial" version of the hash map invariant, which operates on
+/// a suffix of the hash map.
+let partial_hash_map_slots_s_inv
+  (#t : Type0) (len : usize{len > 0}) (offset : usize)
+  (hm : hash_map_slots_s t{offset + length hm <= usize_max}) : Type0 =
+  forall(i:nat{i < length hm}).
+  {:pattern index hm i}
+  slot_s_inv len (offset + i) (index hm i)
 
-val slots_t_inv_implies_assoc_list_lem (#t : Type0) (hm : hash_map_t)
-
-(*
-let rec hash_map_move_elements_s_flat
-  (#t : Type0) (ntable : hash_map_slots_s_nes t)
-  (slots : hash_map_s t) :
-  Tot (result_hash_map_slots_s_nes t)
-  (decreases slots) =
-  match slots with
-  | [] -> Return ntable
-  | (k,v) :: slots' ->
-    match hash_map_insert_no_resize_s ntable k v with
-    | Fail -> Fail
-    | Return ntable' ->
-      hash_map_move_elements_s_flat ntable' slots'
-
-
-(*
-
-/// [nhm]: the new hash map (in which we insert elements)
-/// [slot]: the current slot we are emptying
-/// [ohm]: the old hash map, which we are moving to [nhm]
-/// [i]: the index of [slot] in [ohm]
-val hash_map_move_elements_s_flat_lem
-  (#t : Type0) (nhm : hash_map_slots_s t{is_pos_usize (length hm)})
-  (slots : slots_s t)
-  (i : nat{i <= length slots /\ length slots <= usize_max}) :
+val partial_hash_map_slots_s_inv_implies_assoc_list_lem
+  (#t : Type0) (len : usize{len > 0}) (offset : usize)
+  (hm : hash_map_slots_s t{offset + length hm <= usize_max}) :
   Lemma
   (requires (
-    index ohm i == slot /\
-    (forall (j:nat{j < i}). index j ohm == [])))
-  (ensures (
-    match hash_map_move_elements_from_list_s
+    partial_hash_map_slots_s_inv len offset hm))
+  (ensures (assoc_list_inv (flatten hm)))
+  (decreases (length hm + length (flatten hm)))
 
-let rec hash_map_move_elements_from_list_s
-  (#t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
-  (ls : slot_s t) :
-  Tot (hash_map_slots_s_nes t) (decreases ls) =
-  match ls with
-  | [] -> Return hm
-  | (key, value) :: ls' ->
-    match hash_map_insert_no_resize_s hm key value with
-    | Fail -> Fail
-    | Return hm' ->
-      hash_map_move_elements_from_list_s hm' ls'
+// Ah! this lemma requires some work (it was obvious, though...)
+#push-options "--fuel 1"
+let rec partial_hash_map_slots_s_inv_implies_assoc_list_lem #t len offset hm =
+  match hm with
+  | [] -> ()
+  | slot :: hm' ->
+    assert(flatten hm == slot @ flatten hm');
+    assert(forall (i:nat{i < length hm'}). index hm' i == index hm (i+1));
+    match slot with
+    | [] ->
+      assert(flatten hm == flatten hm');
+      assert(partial_hash_map_slots_s_inv len (offset+1) hm');
+      partial_hash_map_slots_s_inv_implies_assoc_list_lem len (offset+1) hm'
+    | x :: slot' ->
+      assert(flatten (slot' :: hm') == slot' @ flatten hm');      
+      assume(partial_hash_map_slots_s_inv len offset (slot' :: hm'));
+      partial_hash_map_slots_s_inv_implies_assoc_list_lem len offset (slot' :: hm');
+      assume(for_all (binding_neq x) (flatten (slot' :: hm')))
+#pop-options
 
-let rec hash_map_move_elements_s
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
-  (slots : slots_s t) (i : usize{i <= length slots /\ length slots <= usize_max}) :
-  Tot (result (hash_map_slots_s_nes t))
-  (decreases (length slots - i)) =
-  let len = length slots in
-  if i < len then
-    begin
-    let slot = index slots i in
-    match hash_map_move_elements_from_list_s hm slot with
-    | Fail -> Fail
-    | Return hm' ->
-      let slots' = list_update slots i [] in
-      hash_map_move_elements_s hm' slots' (i+1)
-    end
-  else Return hm
+val hash_map_slots_s_inv_implies_assoc_list_lem
+  (#t : Type0) (hm : hash_map_slots_s t) :
+  Lemma (requires (hash_map_slots_s_inv hm))
+  (ensures (assoc_list_inv (flatten hm)))
+
+let hash_map_slots_s_inv_implies_assoc_list_lem #t hm =
+  partial_hash_map_slots_s_inv_implies_assoc_list_lem (length hm) 0 hm
