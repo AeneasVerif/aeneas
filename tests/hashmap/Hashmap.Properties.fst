@@ -2417,7 +2417,19 @@ let gt_lem2 (n m p q : nat) :
 
 val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
-  (requires (hash_map_t_base_inv hm))
+  (requires (
+    // The base invariant is satisfied
+    hash_map_t_base_inv hm /\
+    // However, the "full" invariant is broken, as we call [try_resize]
+    // only if the current number of entries is > the max load.
+    // 
+    // There are two situations:
+    // - either we just reached the max load
+    // - or we were already saturated and can't resize
+    (let (dividend, divisor) = hm.hash_map_max_load_factor in
+     hm.hash_map_num_entries == hm.hash_map_max_load + 1 \/
+     length hm.hash_map_slots * 2 * dividend > usize_max)
+  ))
   (ensures (
     match hash_map_try_resize_s hm with
     | Fail -> False
@@ -2469,7 +2481,9 @@ let hash_map_try_resize_s_lem #t hm =
         in
         assert(hash_map_t_base_inv ntable');
         assert(hash_map_t_base_inv hm');
-        assume(hash_map_t_inv hm')
+        assert(hash_map_t_len_s hm' = hash_map_t_len_s hm);
+        assume(hash_map_t_len_s hm' <= hm'.hash_map_max_load);
+        assert(hash_map_t_inv hm')
     end
   else
     begin
