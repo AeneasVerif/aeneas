@@ -131,9 +131,9 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   extremely hard to debug.
 ///
 ///   1. See the comments for [hash_map_move_elements_fwd_back_lem_refin], which
-///   are believe are quite instructive: I rarely note down the process of finding
-///   a proof, but the comments for this one describe an experience which is very
-///   similar to experiences I had before.
+///   describe the various breakages I encountered, and the different attempts I
+///   made to fix them (the result is that it now works, but I don't know why, and
+///   there are still issues so it is maybe unstable)..
 ///
 ///   Also, I still don't understand why the proof currently works, and failed
 ///   before. One problem I encountered is that when trying to figure out why F*
