@@ -130,15 +130,14 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 /// - the proofs often fail or succeed for extremely unpredictable reasons, and are
 ///   extremely hard to debug.
 ///
-///   1. See [hash_map_slots_s_nes] below: it is simply a definition with a refinment.
-///   For some reason, at some places if we use this type abbreviation some proofs
-///   break, meaning we have to write the unfolded version instead.
-///   In particular, it made [hash_map_move_elements_fwd_back_lem_refin] annoying.
-///   
-///   I guess this specific type has something to do with the fact that F*'s type
-///   inference yields a different result, in combination with the poor support for
-///   subtyping. The problem is that it is extremely hard to debug, and I definitely
-///   don't want to waste any more time with this kind of boring, tedious proofs.
+///   1. See the comments for [hash_map_move_elements_fwd_back_lem_refin], which
+///   are believe are quite instructive: I rarely note down the process of finding
+///   a proof, but the comments for this one describe an experience which is very
+///   similar to experiences I had before.
+///
+///   Also, I still don't understand why the proof currently works, and failed
+///   before. One problem I encountered is that when trying to figure out why F*
+///   fails (and playing with Z3's parameters), we are constantly shooting in the dark.
 ///
 ///   2. See [hash_map_is_assoc_list] and [hash_map_move_elements_fwd_back_lem].
 ///   For this one, I have no clue what's going on.
@@ -146,8 +145,9 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   3. [hash_map_move_elements_fwd_back_lem] was very painful, with assertions
 ///   directly given by some postconditions which failed for no reasons, or
 ///   "unknown assertion failed" which forced us to manually unfold postconditions...
-///   And we are in a pure setting!! Imagine having to deal with Low*/separation logic
-///   at the same time.
+///
+///   Finally: remember (again) that we are in a pure setting. Imagine having to
+///   deal with Low*/separation logic at the same time.
 
 
 (*** List lemmas *)
@@ -1664,16 +1664,14 @@ val hash_map_move_elements_fwd_back_lem_refin
     | _ -> False))
  (decreases (length slots - i))
 
-// Rk.: if above we update some definitions to use [hash_map_slots_s_nes]
-// instead of writing refinements explicitly, it makes the proof breaks.
-// I guess it is because
-//
 // This proof was super unstable for some reasons.
 // 
-// For instance, a type abbreviation instead of the same type but expanded
-// led to a failure. This behaviour led me to the hypothesis that maybe it
-// it made F*'s type inference end up with a different result, which combined
-// with its poor support for subtyping made the proof failed.
+// For instance, using the [hash_map_slots_s_nes] type abbreviation
+// in some of the above definitions led to a failure (while it was just a type
+// abbreviation: the signatures were the same if we unfolded this type). This
+// behaviour led me to the hypothesis that maybe it made F*'s type inference
+// end up with a different result, which combined with its poor support for
+// subtyping made the proof failed.
 //
 // However, later, unwrapping a definition led to another failure.
 // 
@@ -1682,9 +1680,12 @@ val hash_map_move_elements_fwd_back_lem_refin
 // succeed.
 //
 // I tried to increase the ifuel to 2, 3: it didn't work, and I fell back to
-// other methods. Finally out of angriness I swiched the ifuel to 4 for some
-// reason: everything worked fine.
-// I have *no clue* why 4 is the magic number.
+// other methods. Finally out of angriness I swiched the ifuel to 4 for no
+// specific reason: everything worked fine.
+// 
+// I have *no clue* why 4 is the magic number. Also: it fails if I remove
+// the unfolded postconditions (meaning I would probably need to increase
+// the ifuel to unreasonable amounts).
 //
 // The terrible thing is that this refinement proof is conceptually super simple:
 // - there are maybe two arithmetic proofs, which are directly solved by the
