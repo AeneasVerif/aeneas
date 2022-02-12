@@ -130,7 +130,7 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 /// - the proofs often fail or succeed for extremely unpredictable reasons, and are
 ///   extremely hard to debug.
 ///
-///   See [hash_map_slots_s_nes] below: it is simply a definition with a refinment.
+///   1. See [hash_map_slots_s_nes] below: it is simply a definition with a refinment.
 ///   For some reason, at some places if we use this type abbreviation some proofs
 ///   break, meaning we have to write the unfolded version instead.
 ///   
@@ -138,6 +138,9 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   inference yields a different result, in combination with the poor support for
 ///   subtyping. The problem is that it is extremely hard to debug, and I definitely
 ///   don't want to waste any more time with this kind of boring, tedious proofs.
+///
+///   2. See [hash_map_is_assoc_list] and [hash_map_move_elements_fwd_back_lem].
+///   For this one, I have no clue what's going on.
 
 
 (*** List lemmas *)
@@ -1536,7 +1539,7 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
 
 /// Having a great time here: if we use `result (hash_map_slots_s_res t)` as the
 /// return type for [hash_map_move_elements_from_list_s] instead of having this
-/// awkward match, the proof of [hash_map_move_elements_fwd_back_lem] fails.
+/// awkward match, the proof of [hash_map_move_elements_fwd_back_lem_refin] fails.
 /// I guess it comes from F*'s poor subtyping.
 /// Followingly, I'm not taking any change and using [result_hash_map_slots_s]
 /// everywhere.
@@ -1626,7 +1629,7 @@ let rec hash_map_move_elements_s
     end
   else Return hm
 
-val hash_map_move_elements_fwd_back_lem
+val hash_map_move_elements_fwd_back_lem_refin
   (t : Type0) (ntable : hash_map_t t)
   (slots : vec (list_t t)) (i : usize{i <= length slots}) :
   Lemma
@@ -1650,7 +1653,7 @@ val hash_map_move_elements_fwd_back_lem
 // where this happens and it is extremely hard to debug.
 #restart-solver
 #push-options "--z3rlimit 200 --fuel 1"
-let rec hash_map_move_elements_fwd_back_lem t ntable slots i =
+let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
   assert(hash_map_t_inv ntable);
   let i0 = vec_len (list_t t) slots in
   let b = i < i0 in
@@ -1673,7 +1676,7 @@ let rec hash_map_move_elements_fwd_back_lem t ntable slots i =
           begin match usize_add i 1 with
           | Fail -> ()
           | Return i1 ->
-            hash_map_move_elements_fwd_back_lem t h v i1;
+            hash_map_move_elements_fwd_back_lem_refin t h v i1;
             begin match hash_map_move_elements_fwd_back t h v i1 with
             | Fail -> ()
             | Return (h0, v0) -> ()
@@ -2037,8 +2040,14 @@ let rec partial_hash_map_slots_s_inv_implies_assoc_list_lem #t len offset hm =
       assert(partial_hash_map_slots_s_inv len (offset+1) hm');
       partial_hash_map_slots_s_inv_implies_assoc_list_lem len (offset+1) hm'
     | x :: slot' ->
-      assert(flatten (slot' :: hm') == slot' @ flatten hm');      
-      assume(partial_hash_map_slots_s_inv len offset (slot' :: hm'));
+      assert(flatten (slot' :: hm') == slot' @ flatten hm');
+      let hm'' = slot' :: hm' in
+      assert(forall (i:nat{0 < i /\ i < length hm''}). index hm'' i == index hm i); // Triggers quantifications
+      assert(forall (i:nat{0 < i /\ i < length hm''}). slot_s_inv len (offset + i) (index hm'' i));
+      assert(index hm 0 == slot); // Triggers quantifications
+      assert(slot_s_inv len offset slot);
+      assert(slot_s_inv len offset slot');
+      assert(partial_hash_map_slots_s_inv len offset hm'');
       partial_hash_map_slots_s_inv_implies_assoc_list_lem len offset (slot' :: hm');
       assume(for_all (binding_neq x) (flatten (slot' :: hm')))
 #pop-options
@@ -2050,3 +2059,70 @@ val hash_map_slots_s_inv_implies_assoc_list_lem
 
 let hash_map_slots_s_inv_implies_assoc_list_lem #t hm =
   partial_hash_map_slots_s_inv_implies_assoc_list_lem (length hm) 0 hm
+
+val hash_map_t_inv_implies_assoc_list_lem
+  (#t : Type0) (hm : hash_map_t t):
+  Lemma (requires (hash_map_t_inv hm))
+  (ensures (assoc_list_inv (hash_map_t_v hm)))
+
+let hash_map_t_inv_implies_assoc_list_lem #t hm =
+  hash_map_slots_s_inv_implies_assoc_list_lem (hash_map_t_slots_v hm)
+
+/// For some reason, we can't write the below [forall] directly in the [ensures]
+/// clause of the next lemma: it makes Z3 fails even with a huge rlimit.
+/// I have no idea what's going on.
+let hash_map_is_assoc_list
+  (#t : Type0) (ntable : hash_map_t t{length ntable.hash_map_slots > 0})
+  (al : assoc_list t) : Type0 =
+  (forall (k:key). hash_map_t_find_s ntable k == assoc_list_find k al)
+
+/// The final lemma about [move_elements]: calling it on an empty hash table moves
+/// all the elements to this empty table.
+val hash_map_move_elements_fwd_back_lem
+  (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) :
+  Lemma
+  (requires (
+    let al = flatten (slots_t_v slots) in
+    hash_map_t_inv ntable /\
+    length al <= usize_max /\
+    assoc_list_inv al /\
+    // The table is empty
+    hash_map_t_len_s ntable = 0 /\
+    (forall (k:key). hash_map_t_find_s ntable k  == None)))
+  (ensures (
+    let al = flatten (slots_t_v slots) in
+    match hash_map_move_elements_fwd_back t ntable slots 0,
+          hash_map_move_elements_s_flat (hash_map_t_slots_v ntable) al
+    with
+    | Return (ntable', _), Return ntable'_v ->
+      // The invariant is preserved
+      hash_map_t_inv ntable' /\
+      // The table has the same number of slots
+      length ntable'.hash_map_slots = length ntable.hash_map_slots /\
+      // The count is good
+      hash_map_t_len_s ntable' = length al /\
+      // The table can be linked to its model (not really necessary anymore)
+      hash_map_t_slots_v ntable' == ntable'_v /\
+      // The new table contains exactly all the bindings from the slots
+      // Rk.: see the comment for [hash_map_is_assoc_list]
+      hash_map_is_assoc_list ntable' al
+    | _ -> False // We can only succeed
+    ))
+
+let hash_map_move_elements_fwd_back_lem t ntable slots =
+  let ntable_v = hash_map_t_slots_v ntable in
+  let slots_v = slots_t_v slots in
+  let al = flatten slots_v in
+  hash_map_move_elements_fwd_back_lem_refin t ntable slots 0;
+  hash_map_move_elements_s_lem_refin_flat ntable_v slots_v 0;
+  hash_map_move_elements_s_flat_lem ntable_v al;
+  match hash_map_move_elements_fwd_back t ntable slots 0,
+        hash_map_move_elements_s_flat ntable_v al
+  with
+  | Return (ntable', _), Return ntable'_v ->
+    assert(hash_map_t_inv ntable');
+    assume(length ntable'.hash_map_slots = length ntable.hash_map_slots); // TODO
+    assume(hash_map_t_len_s ntable' = length al); // TODO
+    assume(hash_map_t_slots_v ntable' == ntable'_v); // TODO
+    assert(hash_map_is_assoc_list ntable' al)
+  | _ -> assume(False)
