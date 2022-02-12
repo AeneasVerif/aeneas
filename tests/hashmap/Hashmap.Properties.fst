@@ -1391,16 +1391,20 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
 
 (*** move_elements_from_list *)
 
-type hash_map_slots_s_res (t : Type0) = res:result (hash_map_slots_s t){
+let rec hash_map_move_elements_from_list_s
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (ls : slot_s t) :
+  Pure (result (hash_map_slots_s t))
+  (requires (True))
+  (ensures (fun res ->
+    // Having a great time here: if we use `result (hash_map_slots_s_res t)`
+    // as the return type, instead of having this awkward match, the proof
+    // of [hash_map_move_elements_fwd_back_lem] fails. I guess it comes from
+    // F*'s poor subtyping.
     match res with
     | Fail -> True
-    | Return hm -> is_pos_usize (length hm)
-  }
-
-let rec hash_map_move_elements_from_list_s
-  (#t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
-  (ls : slot_s t) :
-  Tot (hash_map_slots_s_res t) (decreases ls) =
+    | Return hm -> is_pos_usize (length hm)))
+  (decreases ls) =
   match ls with
   | [] -> Return hm
   | (key, value) :: ls' ->
