@@ -815,6 +815,9 @@ val hash_map_new_with_capacity_fwd_lem
     | Return hm ->
       // The hash map invariant is satisfied
       hash_map_t_inv hm /\
+      // The parameters are correct
+      hm.hash_map_max_load_factor = (max_load_dividend, max_load_divisor) /\
+      hm.hash_map_max_load = (capacity * max_load_dividend) / max_load_divisor /\
       // The hash map has the specified capacity - we need to reveal this
       // otherwise the pre of [hash_map_t_find_s] is not satisfied.
       length hm.hash_map_slots = capacity /\
@@ -2415,6 +2418,24 @@ let gt_lem2 (n m p q : nat) :
   assert(n * p > q / m);
   gt_lem1 (n * p) m q
 
+let new_max_load_lem
+  (len : usize) (capacity : usize{capacity > 0})
+  (divid : usize{divid > 0}) (divis : usize{divis > 0}) :
+  Lemma
+  (requires (
+    let max_load = (capacity * divid) / divis in
+    let ncapacity = 2 * capacity in
+    let nmax_load = (ncapacity * divid) / divis in
+    capacity > 0 /\ 0 < divid /\ divid < divis /\
+    len = max_load + 1))
+  (ensures (
+    let max_load = (capacity * divid) / divis in
+    let ncapacity = 2 * capacity in
+    let nmax_load = (ncapacity * divid) / divis in
+    len <= nmax_load)) =
+ // Probably needs: capacity * divid > divis
+ admit()
+
 val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
   (requires (
@@ -2449,8 +2470,9 @@ let hash_map_try_resize_s_lem #t hm =
   if capacity <= (usize_max / 2) / divid then
     begin
     let ncapacity : usize = capacity * 2 in
-    let ncapacity : usize = capacity * 2 in
     assert(ncapacity * divid <= usize_max);
+    assert(hash_map_t_len_s hm = hm.hash_map_max_load + 1);
+    new_max_load_lem (hash_map_t_len_s hm) capacity divid divis;
     hash_map_new_with_capacity_fwd_lem t ncapacity divid divis;
     match hash_map_new_with_capacity_fwd t ncapacity divid divis with
     | Fail -> ()
@@ -2482,7 +2504,8 @@ let hash_map_try_resize_s_lem #t hm =
         assert(hash_map_t_base_inv ntable');
         assert(hash_map_t_base_inv hm');
         assert(hash_map_t_len_s hm' = hash_map_t_len_s hm);
-        assume(hash_map_t_len_s hm' <= hm'.hash_map_max_load);
+        new_max_load_lem (hash_map_t_len_s hm') capacity divid divis;
+        assert(hash_map_t_len_s hm' <= hm'.hash_map_max_load); // Requires a lemma
         assert(hash_map_t_inv hm')
     end
   else
