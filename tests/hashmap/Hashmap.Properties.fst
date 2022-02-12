@@ -282,11 +282,6 @@ let list_t_len (#t : Type0) (ls : list_t t) : nat = length (list_t_v ls)
 let list_t_index (#t : Type0) (ls : list_t t) (i : nat{i < list_t_len ls}) : binding t =
   index (list_t_v ls) i
 
-/// Representation function for the slots.
-/// TODO: remove?
-let slots_t_v (#t : Type0) (slots : slots_t t) : assoc_list t =
-  flatten (map list_t_v slots)
-
 // TODO: use more
 type slot_s (t : Type0) = list (binding t)
 type slots_s (t : Type0) = list (slot_s t)
@@ -294,6 +289,14 @@ type slots_s (t : Type0) = list (slot_s t)
 // TODO: use more
 type slot_t (t : Type0) = list_t t
 let slot_t_v (#t : Type0) (slot : slot_t t) : slot_s t = list_t_v slot
+
+/// Representation function for the slots.
+let slots_t_v (#t : Type0) (slots : slots_t t) : slots_s t =
+  map slot_t_v slots
+
+/// TODO: remove?
+let slots_t_al_v (#t : Type0) (slots : slots_t t) : assoc_list t =
+  flatten (map list_t_v slots)
 
 /// High-level type for the hash-map, seen as a list of associative lists (one
 /// list per slot)
@@ -582,20 +585,20 @@ val slots_t_all_nil_inv_lem
 let slots_t_all_nil_inv_lem #t slots = ()
 #pop-options
 
-val slots_t_v_all_nil_is_empty_lem
+val slots_t_al_v_all_nil_is_empty_lem
   (#t : Type0) (slots : vec (list_t t)) :
   Lemma (requires (forall (i:nat{i < length slots}). index slots i == ListNil))
-  (ensures (slots_t_v slots == []))
+  (ensures (slots_t_al_v slots == []))
 
 #push-options "--fuel 1"
-let rec slots_t_v_all_nil_is_empty_lem #t slots =
+let rec slots_t_al_v_all_nil_is_empty_lem #t slots =
  match slots with
  | [] -> ()
  | s :: slots' ->
    assert(forall (i:nat{i < length slots'}). index slots' i == index slots (i+1));
-   slots_t_v_all_nil_is_empty_lem #t slots';
-   assert(slots_t_v slots == list_t_v s @ slots_t_v slots');
-   assert(slots_t_v slots == list_t_v s);
+   slots_t_al_v_all_nil_is_empty_lem #t slots';
+   assert(slots_t_al_v slots == list_t_v s @ slots_t_al_v slots');
+   assert(slots_t_al_v slots == list_t_v s);
    assert(index slots 0 == ListNil)
 #pop-options
 
@@ -708,7 +711,7 @@ let hash_map_new_fwd_lem_fun t =
   match hash_map_new_with_capacity_fwd t 32 4 5 with
   | Fail -> ()
   | Return hm ->
-    slots_t_v_all_nil_is_empty_lem hm.hash_map_slots
+    slots_t_al_v_all_nil_is_empty_lem hm.hash_map_slots
 #pop-options
 
 (*** clear_slots *)
@@ -779,7 +782,7 @@ let hash_map_clear_fwd_back_lem_fun t self =
   begin match hash_map_clear_slots_fwd_back t v 0 with
   | Fail -> ()
   | Return slots1 ->
-    slots_t_v_all_nil_is_empty_lem slots1;
+    slots_t_al_v_all_nil_is_empty_lem slots1;
     let hm1 = Mkhash_map_t 0 p i slots1 in
     assert(hash_map_t_base_inv hm1);
     assert(hash_map_t_inv hm1);
@@ -1466,52 +1469,57 @@ let rec hash_map_move_elements_s
     end
   else Return hm
 
-(*
-val hash_map_move_elements_fwd_back
+val hash_map_move_elements_fwd_back_lem
   (t : Type0) (ntable : hash_map_t t)
-  (slots : vec (list_t t)) (i : usize{i <= length ntable.hash_map_slots}) :
-  Lemma (requires (hash_map_t_inv ntable))
+  (slots : vec (list_t t)) (i : usize{i <= length slots}) :
+  Lemma
+  (requires (
+    hash_map_t_inv ntable))
   (ensures (
     match hash_map_move_elements_fwd_back t ntable slots i,
           hash_map_move_elements_s (hash_map_t_slots_v ntable) (slots_t_v slots) i
     with
     | Fail, Fail -> True // We will prove later that this is not possible
-    | Return hm, Return hm_v ->
-      hash_map_t_inv hm /\
-      hash_map_t_slots_v hm))
+    | Return (ntable', _), Return ntable'_v ->
+      hash_map_t_inv ntable' /\
+      hash_map_t_slots_v ntable' == ntable'_v
+    | _ -> False))
+ (decreases (length slots - i))
 
-  Tot (result ((hash_map_t t) & (vec (list_t t))))
-  (decreases (hash_map_move_elements_decreases t ntable slots i))
-
-let rec hash_map_move_elements_fwd_back
-  (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
-  Tot (result ((hash_map_t t) & (vec (list_t t))))
-  (decreases (hash_map_move_elements_decreases t ntable slots i))
-  =
+#restart-solver
+#push-options "--z3rlimit 200 --fuel 1"
+let rec hash_map_move_elements_fwd_back_lem t ntable slots i =
+  assert(hash_map_t_inv ntable);
   let i0 = vec_len (list_t t) slots in
   let b = i < i0 in
   if b
   then
     begin match vec_index_mut_fwd (list_t t) slots i with
-    | Fail -> Fail
+    | Fail -> ()
     | Return l ->
       let l0 = mem_replace_fwd (list_t t) l ListNil in
+      assert(l0 == l);
+      hash_map_move_elements_from_list_fwd_back_lem t ntable l0;
       begin match hash_map_move_elements_from_list_fwd_back t ntable l0 with
-      | Fail -> Fail
+      | Fail -> ()
       | Return h ->
         let l1 = mem_replace_back (list_t t) l ListNil in
+        assert(l1 == ListNil);
         begin match vec_index_mut_back (list_t t) slots i l1 with
-        | Fail -> Fail
+        | Fail -> ()
         | Return v ->
           begin match usize_add i 1 with
-          | Fail -> Fail
+          | Fail -> ()
           | Return i1 ->
+            hash_map_move_elements_fwd_back_lem t h v i1;
             begin match hash_map_move_elements_fwd_back t h v i1 with
-            | Fail -> Fail
-            | Return (h0, v0) -> Return (h0, v0)
+            | Fail -> ()
+            | Return (h0, v0) -> ()
             end
           end
         end
       end
     end
-  else Return (ntable, slots)
+  else ()
+#pop-options
+
