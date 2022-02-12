@@ -675,6 +675,12 @@ let hash_map_t_is_al (#t : Type0) (hm : hash_map_t t) (al : assoc_list t) : Type
   let hm_al = hash_map_t_v hm in
   assoc_list_equiv hm_al al
 
+/// We often need to frame some values
+let hash_map_same_params (#t : Type0) (hm0 hm1 : hash_map_t t) : Type0 =
+  length hm0.hash_map_slots = length hm1.hash_map_slots /\
+  hm0.hash_map_max_load = hm1.hash_map_max_load /\
+  hm0.hash_map_max_load_factor = hm1.hash_map_max_load_factor
+  
 (*
 /// The invariant we reveal to the user
 let hash_map_t_inv_repr (#t : Type0) (hm : hash_map_t t) (al : assoc_list t) : Type0 =
@@ -1581,7 +1587,8 @@ val hash_map_move_elements_from_list_fwd_back_lem
     | Fail, Fail -> True
     | Return hm', Return hm_v ->
       hash_map_t_inv hm' /\
-      hash_map_t_slots_v hm' == hm_v
+      hash_map_t_slots_v hm' == hm_v /\
+      hash_map_same_params hm' ntable
     | _ -> False))
   (decreases (hash_map_move_elements_from_list_decreases t ntable ls))
 
@@ -1648,7 +1655,8 @@ val hash_map_move_elements_fwd_back_lem_refin
     | Fail, Fail -> True // We will prove later that this is not possible
     | Return (ntable', _), Return ntable'_v ->
       hash_map_t_inv ntable' /\
-      hash_map_t_slots_v ntable' == ntable'_v
+      hash_map_t_slots_v ntable' == ntable'_v /\
+      hash_map_same_params ntable' ntable
     | _ -> False))
  (decreases (length slots - i))
 
@@ -2123,7 +2131,7 @@ val hash_map_move_elements_fwd_back_lem
 // I think manually unfolding the postconditions allowed to account for the
 // lack of ifuel (this kind of proofs is annoying, really).
 #restart-solver
-#push-options "--z3rlimit 200"
+#push-options "--z3rlimit 100"
 let hash_map_move_elements_fwd_back_lem t ntable slots =
   let ntable_v = hash_map_t_slots_v ntable in
   let slots_v = slots_t_v slots in
@@ -2155,7 +2163,7 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
   with
   | Return (ntable', _), Return ntable'_v ->
     assert(hash_map_t_inv ntable');
-    assume(length ntable'.hash_map_slots = length ntable.hash_map_slots); // TODO
+    assert(length ntable'.hash_map_slots = length ntable.hash_map_slots);
     // Rk.: Adding the following let binding makes the proof fails even with a huge
     // rlitmit. Really having fun here...
     assert(hash_map_t_len_s ntable' = length al);
