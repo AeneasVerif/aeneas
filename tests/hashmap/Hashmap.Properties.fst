@@ -48,6 +48,8 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   I actually often write assertions that I assume just to *check* that those
 ///   assertions make the proofs pass and are thus indeed the ones I want to prove,
 ///   which is something very specific to working with F*.
+///
+///   About the fact that we are blind: see [hash_map_try_resize_fwd_back_lem_refin]
 ///   
 /// - F* is extremely bad at reasoning with quantifiers, which is made worse by
 ///   the fact we are blind when making proofs. This forced me to be extremely
@@ -2304,10 +2306,109 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
   | Return (ntable', _), Return ntable'_v ->
     assert(hash_map_t_base_inv ntable');
     assert(length ntable'.hash_map_slots = length ntable.hash_map_slots);
-    // Rk.: Adding the following let binding makes the proof fails even with a huge
-    // rlitmit. Really having fun here...
     assert(hash_map_t_len_s ntable' = length al);
     assert(hash_map_t_slots_v ntable' == ntable'_v);
     assert(hash_map_is_assoc_list ntable' al)
   | _ -> assert(False)
 #pop-options
+
+(*** try_resize *)
+
+/// Refinement.
+/// This one is slightly "crude": we just simplify a bit the function.
+
+let hash_map_try_resize_s
+  (#t : Type0)
+  (hm : hash_map_t t) :
+  Pure  (result (hash_map_t t))
+  (requires (
+    let (divid, divis) = hm.hash_map_max_load_factor in
+    divid > 0 /\ divis > 0))
+  (ensures (fun _ -> True)) =
+  let capacity = length hm.hash_map_slots in
+  let (divid, divis) = hm.hash_map_max_load_factor in
+  if capacity <= usize_max / 2 && capacity <= usize_max / divid then
+    let ncapacity : usize = capacity * 2 in
+    begin match hash_map_new_with_capacity_fwd t ncapacity divid divis with
+    | Fail -> Fail
+    | Return ntable ->
+      match hash_map_move_elements_fwd_back t ntable hm.hash_map_slots 0 with
+      | Fail -> Fail
+      | Return (ntable', _) ->
+        let hm =
+          { hm with hash_map_slots = ntable'.hash_map_slots;
+                    hash_map_max_load = ntable'.hash_map_max_load }
+        in
+        Return hm
+    end
+  else Return hm
+
+// I had made a mistake when writing the above definition: I had used `ntable`
+// instead of `ntable'` in the last assignments. Of course, Z3 failed to prove
+// the equality `hm1 == hm2`, and as I couldn't spot immediately the mistake,
+// I had to resort to the good old "test every field" trick, by replacing
+// `hm1 == hm2` with:
+//   ```
+//    hm1.hash_map_num_entries == hm2.hash_map_num_entries /\
+//    hm1.hash_map_max_load_factor == hm2.hash_map_max_load_factor /\
+//    hm1.hash_map_max_load == hm2.hash_map_max_load /\
+//    hm1.hash_map_slots == hm2.hash_map_slots
+//    ```
+// Once again, if I had had access to a context, I would have seen the error
+// immediately.
+val hash_map_try_resize_fwd_back_lem_refin
+  (t : Type0) (self : hash_map_t t) :
+  Lemma
+  (requires (
+    let (divid, divis) = self.hash_map_max_load_factor in
+    divid > 0 /\ divis > 0))
+  (ensures (
+    match hash_map_try_resize_fwd_back t self,
+          hash_map_try_resize_s self
+    with
+    | Fail, Fail -> True
+    | Return hm1, Return hm2 -> hm1 == hm2
+    | _ -> False))
+
+let hash_map_try_resize_fwd_back_lem_refin t self =
+  let i = self.hash_map_num_entries in
+  let p = self.hash_map_max_load_factor in
+  let i0 = self.hash_map_max_load in
+  let v = self.hash_map_slots in
+  let i1 = vec_len (list_t t) v in
+  assert(usize_max = 4294967295);
+  begin match usize_div 4294967295 2 with
+  | Fail -> ()
+  | Return i2 ->
+    let b = i1 <= i2 in
+    if b
+    then
+      let (i3, i4) = p in
+      begin match usize_div 4294967295 i3 with
+      | Fail -> ()
+      | Return i5 ->
+        let b0 = i1 <= i5 in
+        if b0
+        then
+          begin match usize_mul i1 2 with
+          | Fail -> ()
+          | Return i6 ->
+            begin match hash_map_new_with_capacity_fwd t i6 i3 i4 with
+            | Fail -> ()
+            | Return h ->
+              begin match hash_map_move_elements_fwd_back t h v 0 with
+              | Fail -> ()
+              | Return (h0, v0) ->
+                let i7 = h0.hash_map_max_load in
+                let v1 = h0.hash_map_slots in
+                let v2 = mem_replace_back (vec (list_t t)) v0 v1 in
+                let self0 = Mkhash_map_t i (i3, i4) i7 v2 in
+                ()
+              end
+            end
+          end
+        else let self0 = Mkhash_map_t i (i3, i4) i0 v in ()
+      end
+    else let self0 = Mkhash_map_t i p i0 v in ()
+  end
+
