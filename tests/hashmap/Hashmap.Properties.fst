@@ -13,25 +13,51 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 
 /// The proofs actually caused a lot more trouble than expected, because:
+/// 
 /// - we are blind when doing the proofs. After a very intensive use of F* I got
-///   used to it meaning I can *do* proofs in F*, but it still takes me a tremendous
+///   used to it meaning I *can* do proofs in F*, but it still takes me a tremendous
 ///   amout of energy to visualize the context in my head and, for instance,
 ///   properly instantiate the lemmas or insert the necessary assertions in the code.
 ///   I actually often write assertions that I assume just to *check* that those
 ///   assertions make the proofs pass and are thus indeed the ones I want to prove,
 ///   which is something very specific to working with F*.
+///   
 /// - F* is extremely bad at reasoning with quantifiers, which is made worse by
 ///   the fact we are blind when making proofs. This forced me to be extremely
 ///   careful about the way I wrote the specs/invariants (by writing "functional"
-///   specs and invariants, mostly, so as not to manipulate quantifiers)
+///   specs and invariants, mostly, so as not to manipulate quantifiers), ending
+///   up proofs which are not written in the most natural and efficient manner.
+///   In particular, I had to cut the proofs into many steps just for this reason,
+///   while if I had been able to properly use quantifiers (I tried: in many
+///   situations I manage to massage F* to make it work, but in the below proofs
+///   it was horrific) I would have proven many results in one go.
+///   
 /// - F* doesn't encode closures properly, the result being that it is very
 ///   awkward to reason about functions like `map` or `find`, because we have
 ///   to introduce auxiliary definitions for the parameters we give to those
 ///   functions (if we use anonymous lambda functions, we're screwed by the
 ///   encoding).
-/// - we can't easily prove intermediate results which require a recursive proofs
+///   
+/// - we can't prove intermediate results which require a recursive proofs
 ///   inside of other proofs, meaning that whenever we need such a result we need
 ///   to write an intermediate lemma, which is extremely cumbersome.
+///   What is extremely frustrating is that in most situations, those intermediate
+///   lemmas are extremely simple to prove: they would simply need 2 or 3 tactic
+///   calls in Coq or HOL4, and in F* the proof is reduced to a recursive call.
+///   Isolating the lemma (i.e., writing its signature), however, takes some
+///   non-negligible time, which is made worse by the fact that, once again,
+///   we don't have proof contexts to stare at which would help figuring out
+///   how to write such lemmas.
+///   
+/// - the proofs often fail or succeed for extremely unpredictable reasons, and are
+///   extremely hard to debug. See [hash_map_slots_s_nes] below: it is simply a
+///   definition with a refinment. For some reason, at some places if we use this
+///   type abbreviation some proofs break, meaning we have to write the unfolded
+///   version.
+///   I guess it has something to do with the fact that F*'s type inference yields
+///   a different result, in combination with the poor support for subtyping. The
+///   problem is that it is extremely hard to debug, and I definitely don't want
+///   to waste time with this kind of boring, tedious proofs.
 ///
 /// The result is that I had to poor a lot more thinking than I expected in the below
 /// proofs, in particular to:
@@ -39,8 +65,8 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 /// - subdivide all the theorems into very small, modular lemmas that I could reason
 ///   about independently, in a small context, and with quick responses from F*.
 /// 
-/// Note that in a theorem prover with tactics, most of the below proof would have
-/// been extremely straightforward.
+/// Finally, I strongly that in a theorem prover with tactics, most of the below proof
+/// would have been extremely straightforward.
 
 
 (*** List lemmas *)
@@ -359,6 +385,9 @@ let slot_find (#t : Type0) (k : key) (slot : list (binding t)) : option t =
   | None -> None
   | Some (_, v) -> Some v
 
+let assoc_list_find (#t : Type0) (k : key) (slot : assoc_list t) : option t =
+  slot_find k slot
+
 let slot_t_find_s (#t : Type0) (k : key) (slot : list_t t) : option t =
   match find (same_key k) (list_t_v slot) with
   | None -> None
@@ -367,6 +396,7 @@ let slot_t_find_s (#t : Type0) (k : key) (slot : list_t t) : option t =
 // This is a simpler version of the "find" function, which captures the essence
 // of what happens and operates on [hash_map_slots_s].
 // TODO: useful?
+// TODO: at some point I used hash_map_slots_s_nes and it broke proofs...
 let hash_map_slots_s_find
   (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0})
   (k : key) : option t =
@@ -374,6 +404,7 @@ let hash_map_slots_s_find
   let slot = index hm i in
   slot_find k slot
 
+// TODO: at some point I used hash_map_slots_s_nes and it broke proofs...
 let hash_map_slots_s_len
   (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0}) :
   nat =
@@ -432,7 +463,7 @@ type slot_t_inv_not_same_keys_f (#t : Type0) (i : usize) (slot : list_t t) =
 /// Invariants for the slots
 
 let slot_s_inv
-(#t : Type0) (len : usize{len > 0}) (i : usize) (slot : list (binding t)) : bool =
+  (#t : Type0) (len : usize{len > 0}) (i : usize) (slot : list (binding t)) : bool =
   // All the bindings are in the proper slot
   for_all (same_hash_mod_key len i) slot &&
   // All the keys are pairwise distinct
@@ -1226,6 +1257,7 @@ let hash_map_insert_in_list_back_lem t len key value ls =
 /// We work on [hash_map_slots_s] (we use a higher-level view of the hash-map, but
 /// not too high).
 
+// TODO: at some point I used hash_map_slots_s_nes and it broke proofs...x
 let hash_map_insert_no_resize_s
   (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0})
   (key : usize) (value : t) :
@@ -1260,7 +1292,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
     | Return hm, Return hm_v ->
       hash_map_t_inv hm /\
       hash_map_t_slots_v hm == hm_v /\
-      hash_map_slots_s_len hm_v = hash_map_t_len_s hm
+      hash_map_slots_s_len hm_v == hash_map_t_len_s hm
     | _ -> False
     end))
 
@@ -1333,6 +1365,46 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
       end
     end
   end
+
+(**** insert_no_resize: invariants *)
+
+val hash_map_insert_no_resize_s_lem
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (key : usize) (value : t) :
+  Lemma
+  (requires (
+    hash_map_slots_s_inv hm))
+  (ensures (
+    match hash_map_insert_no_resize_s hm key value with
+    | Fail ->
+      // Can fail only if we need to create a new binding in
+      // an already saturated map
+      hash_map_slots_s_len hm = usize_max /\
+      None? (hash_map_slots_s_find hm key)
+    | Return hm' ->
+      // The invariant is preserved
+      hash_map_slots_s_inv hm' /\
+      // [key] maps to [value]
+      hash_map_slots_s_find hm' key == Some value /\
+      // The other bindings are preserved
+      (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k') /\
+      // The length is incremented, iff we inserted a new key
+      (match hash_map_slots_s_find hm key with
+       | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
+       | Some _ -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm)))
+
+let hash_map_insert_no_resize_s_lem #t hm key value =
+  let num_entries = length (flatten hm) in
+  if None? (hash_map_slots_s_find hm key) && num_entries = usize_max then ()
+  else
+    begin
+    let len = length hm in
+    let i = hash_mod_key key len in
+    let slot = index hm i in
+    hash_map_insert_in_list_s_lem t len key value slot;
+    let slot' = hash_map_insert_in_list_s key value slot in
+    length_flatten_update hm i slot'
+    end
 
 
 (**** find after insert *)
@@ -1500,6 +1572,11 @@ val hash_map_move_elements_fwd_back_lem
     | _ -> False))
  (decreases (length slots - i))
 
+// Rk.: if above we update some definitions to use [hash_map_slots_s_nes]
+// instead of writing refinements explicitly, it makes the proof breaks.
+// I guess it is because F* does a different type inference, which combines
+// poorly with its poor support for subtyping. Problem is: I have no idea
+// where this happens and it is extremely hard to debug.
 #restart-solver
 #push-options "--z3rlimit 200 --fuel 1"
 let rec hash_map_move_elements_fwd_back_lem t ntable slots i =
@@ -1713,8 +1790,8 @@ let rec flatten_i_same_suffix #a l0 l1 i =
 
 /// Refinement lemma:
 /// [hash_map_move_elements_s] refines [hash_map_move_elements_s_flat]
-val hash_map_move_elements_s_flat_lem
-  (#t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
+val hash_map_move_elements_s_lem_refin_flat
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
   (slots : slots_s t)
   (i : nat{i <= length slots /\ length slots <= usize_max}) :
   Lemma
@@ -1728,7 +1805,7 @@ val hash_map_move_elements_s_flat_lem
   (decreases (length slots - i))
 
 #push-options "--fuel 1"
-let rec hash_map_move_elements_s_flat_lem #t hm slots i =
+let rec hash_map_move_elements_s_lem_refin_flat #t hm slots i =
   let len = length slots in
   if i < len then
     begin
@@ -1742,12 +1819,114 @@ let rec hash_map_move_elements_s_flat_lem #t hm slots i =
     | Return hm' ->
       let slots' = list_update slots i [] in
       flatten_i_same_suffix slots slots' (i+1);
-      hash_map_move_elements_s_flat_lem hm' slots' (i+1);
+      hash_map_move_elements_s_lem_refin_flat hm' slots' (i+1);
       hash_map_move_elements_s_flat_append_lem hm slot (flatten_i slots' (i+1));
       ()
     end
   else ()
 #pop-options
+
+let assoc_list_inv (#t : Type0) (al : assoc_list t) : Type0 =
+  // All the keys are pairwise distinct
+  pairwise_rel binding_neq al
+
+let disjoint_hm_al_on_key
+  (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) (k : key) : Type0 =
+  match hash_map_slots_s_find hm k, find (same_key k) al with
+  | Some _, None
+  | None, Some _
+  | None, None -> True
+  | Some _, Some _ -> False
+
+/// Playing a dangerous game here: using forall quantifiers
+let disjoint_hm_al (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) : Type0 =
+  forall (k:key). disjoint_hm_al_on_key hm al k
+
+let find_in_union_hm_al
+  (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) (k : key) :
+  option t =
+  match hash_map_slots_s_find hm k with
+  | Some b -> Some b
+  | None -> assoc_list_find k al
+
+val hash_map_move_elements_s_flat_lem
+  (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) :
+  Lemma
+  (requires (
+    // Invariants
+    hash_map_slots_s_inv hm /\
+    assoc_list_inv al /\
+    // The two are disjoint
+    disjoint_hm_al hm al /\
+    // We can add all the elements to the hashmap
+    hash_map_slots_s_len hm + length al <= usize_max))
+  (ensures (
+    match hash_map_move_elements_s_flat hm al with
+    | Fail -> False // We can't fail
+    | Return hm' ->
+      // The invariant is preserved
+      hash_map_slots_s_inv hm' /\
+      // The new hash map is the union of the two maps
+      (forall (k:key). hash_map_slots_s_find hm' k == find_in_union_hm_al hm al k)))
+  (decreases al)
+
+// TODO: here
+#push-options "--z3rlimit 200 --fuel 1"
+let rec hash_map_move_elements_s_flat_lem #t hm al =
+  match al with
+  | [] -> ()
+  | (k,v) :: al' ->
+    hash_map_insert_no_resize_s_lem hm k v;
+    match hash_map_insert_no_resize_s hm k v with
+    | Fail -> ()
+    | Return hm' ->
+      assert(hash_map_slots_s_inv hm');
+      assert(assoc_list_inv al');
+      assume(disjoint_hm_al hm' al');
+      assume(hash_map_slots_s_len hm' + length al' <= usize_max);
+      hash_map_move_elements_s_flat_lem hm' al';
+      admit()
+#pop-options
+
+val hash_map_insert_no_resize_s_lem
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (key : usize) (value : t) :
+  Lemma
+  (requires (
+    hash_map_slots_s_inv hm))
+  (ensures (
+    match hash_map_insert_no_resize_s hm key value with
+    | Fail ->
+      // Can fail only if we need to create a new binding in
+      // an already saturated map
+      hash_map_slots_s_len hm = usize_max /\
+      None? (hash_map_slots_s_find hm key)
+    | Return hm' ->
+      // The invariant is preserved
+      hash_map_slots_s_inv hm' /\
+      // [key] maps to [value]
+      hash_map_slots_s_find hm' key == Some value /\
+      // The other bindings are preserved
+      (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k') /\
+      // The length is incremented, iff we inserted a new key
+      (match hash_map_slots_s_find hm key with
+       | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
+       | Some _ -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm)))
+
+(*
+let rec hash_map_move_elements_s_flat
+  (#t : Type0) (ntable : hash_map_slots_s_nes t)
+  (slots : hash_map_s t) :
+  Tot (result_hash_map_slots_s_nes t)
+  (decreases slots) =
+  match slots with
+  | [] -> Return ntable
+  | (k,v) :: slots' ->
+    match hash_map_insert_no_resize_s ntable k v with
+    | Fail -> Fail
+    | Return ntable' ->
+      hash_map_move_elements_s_flat ntable' slots'
+
 
 (*
 
