@@ -1377,6 +1377,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
     | Fail, Fail -> True
     | Return hm, Return hm_v ->
       hash_map_t_inv hm /\
+      hash_map_same_params hm self /\
       hash_map_t_slots_v hm == hm_v /\
       hash_map_slots_s_len hm_v == hash_map_t_len_s hm
     | _ -> False
