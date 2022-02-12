@@ -302,6 +302,14 @@ type hash_map_slots_s t = list (slot_s t)
 /// High-level type for the hash-map, seen as a an associative list
 type hash_map_s t = assoc_list t
 
+// TODO: move
+let is_pos_usize (n : nat) : Type0 = 0 < n /\ n <= usize_max
+
+// 'nes': "non-empty slots"
+// TODO: use more
+type hash_map_slots_s_nes (t : Type0) : Type0 =
+  hm:hash_map_slots_s t{is_pos_usize (length hm)}
+
 /// Representation function for [hash_map_t] as a list of slots
 let hash_map_t_slots_v (#t : Type0) (hm : hash_map_t t) : hash_map_slots_s t =
   map list_t_v hm.hash_map_slots
@@ -310,10 +318,7 @@ let hash_map_t_slots_v (#t : Type0) (hm : hash_map_t t) : hash_map_slots_s t =
 let hash_map_t_v (#t : Type0) (hm : hash_map_t t) : hash_map_s t =
   flatten (hash_map_t_slots_v hm)
 
-// TODO: move
-let is_pos_usize (n : nat) : Type0 = 0 < n /\ n <= usize_max
-
-// 'ne': "non-empty slots"
+// 'nes': "non-empty slots"
 // TODO: use more
 type hash_map_t_nes (t : Type0) : Type0 =
   hm:hash_map_t t{is_pos_usize (length hm.hash_map_slots)}
@@ -1390,7 +1395,7 @@ type hash_map_slots_s_res (t : Type0) = res:result (hash_map_slots_s t){
   }
 
 let rec hash_map_move_elements_from_list_s
-  (t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
+  (#t : Type0) (hm : hash_map_slots_s t{is_pos_usize (length hm)})
   (ls : slot_s t) :
   Tot (hash_map_slots_s_res t) (decreases ls) =
   match ls with
@@ -1399,7 +1404,7 @@ let rec hash_map_move_elements_from_list_s
     match hash_map_insert_no_resize_s hm key value with
     | Fail -> Fail
     | Return hm' ->
-      hash_map_move_elements_from_list_s t hm' ls'
+      hash_map_move_elements_from_list_s hm' ls'
 
 /// Refinement lemma
 val hash_map_move_elements_from_list_fwd_back_lem
@@ -1407,7 +1412,7 @@ val hash_map_move_elements_from_list_fwd_back_lem
   Lemma (requires (hash_map_t_inv ntable))
   (ensures (
     match hash_map_move_elements_from_list_fwd_back t ntable ls,
-          hash_map_move_elements_from_list_s t (hash_map_t_slots_v ntable) (slot_t_v ls)
+          hash_map_move_elements_from_list_s (hash_map_t_slots_v ntable) (slot_t_v ls)
     with
     | Fail, Fail -> True
     | Return hm', Return hm_v ->
@@ -1439,17 +1444,43 @@ let rec hash_map_move_elements_from_list_fwd_back_lem t ntable ls =
   end
 #pop-options
 
+(*** move_elements *)
+
+// Note that we ignore the returned slots (we thus don't return a pair:
+// only the new hash map in which we moved the elements from the slots):
+// this returned value is not used.
+let rec hash_map_move_elements_s
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (slots : slots_s t) (i : usize{i <= length slots /\ length slots <= usize_max}) :
+  Tot (result (hash_map_slots_s_nes t))
+  (decreases (length slots - i)) =
+  let len = length slots in
+  if i < len then
+    begin
+    let slot = index slots i in
+    match hash_map_move_elements_from_list_s hm slot with
+    | Fail -> Fail
+    | Return hm' ->
+      let slots' = list_update slots i [] in
+      hash_map_move_elements_s hm' slots' (i+1)
+    end
+  else Return hm
+
 (*
-/// Refinement lemma
-val hash_map_move_elements_fwd_back_lem
-  (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
-  Lemma (requires (is_pos_usize (ntable.hash_map_num_entries)))
+val hash_map_move_elements_fwd_back
+  (t : Type0) (ntable : hash_map_t t)
+  (slots : vec (list_t t)) (i : usize{i <= length ntable.hash_map_slots}) :
+  Lemma (requires (hash_map_t_inv ntable))
   (ensures (
     match hash_map_move_elements_fwd_back t ntable slots i,
-          hash_map_move_elements_from_list_s t ntable slots 
+          hash_map_move_elements_s (hash_map_t_slots_v ntable) (slots_t_v slots) i
     with
-    | Fail -> 
-  ))
+    | Fail, Fail -> True // We will prove later that this is not possible
+    | Return hm, Return hm_v ->
+      hash_map_t_inv hm /\
+      hash_map_t_slots_v hm))
+
+  Tot (result ((hash_map_t t) & (vec (list_t t))))
   (decreases (hash_map_move_elements_decreases t ntable slots i))
 
 let rec hash_map_move_elements_fwd_back
