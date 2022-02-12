@@ -1832,7 +1832,7 @@ let assoc_list_inv (#t : Type0) (al : assoc_list t) : Type0 =
 
 let disjoint_hm_al_on_key
   (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) (k : key) : Type0 =
-  match hash_map_slots_s_find hm k, find (same_key k) al with
+  match hash_map_slots_s_find hm k, assoc_list_find k al with
   | Some _, None
   | None, Some _
   | None, None -> True
@@ -1848,6 +1848,18 @@ let find_in_union_hm_al
   match hash_map_slots_s_find hm k with
   | Some b -> Some b
   | None -> assoc_list_find k al
+
+/// Auxiliary lemma
+val for_all_binding_neq_find_lem (#t : Type0) (k : key) (v : t) (al : assoc_list t) :
+  Lemma (requires (for_all (binding_neq (k,v)) al))
+  (ensures (assoc_list_find k al == None))
+
+#push-options "--fuel 1"
+let rec for_all_binding_neq_find_lem #t k v al =
+  match al with
+  | [] -> ()
+  | b :: al' -> for_all_binding_neq_find_lem k v al'
+#pop-options
 
 val hash_map_move_elements_s_flat_lem
   (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) :
@@ -1870,7 +1882,7 @@ val hash_map_move_elements_s_flat_lem
       (forall (k:key). hash_map_slots_s_find hm' k == find_in_union_hm_al hm al k)))
   (decreases al)
 
-// TODO: here
+#restart-solver
 #push-options "--z3rlimit 200 --fuel 1"
 let rec hash_map_move_elements_s_flat_lem #t hm al =
   match al with
@@ -1882,36 +1894,25 @@ let rec hash_map_move_elements_s_flat_lem #t hm al =
     | Return hm' ->
       assert(hash_map_slots_s_inv hm');
       assert(assoc_list_inv al');
-      assume(disjoint_hm_al hm' al');
-      assume(hash_map_slots_s_len hm' + length al' <= usize_max);
-      hash_map_move_elements_s_flat_lem hm' al';
-      admit()
+      let disjoint_lem (k' : key) :
+        Lemma (disjoint_hm_al_on_key hm' al' k')
+        [SMTPat (disjoint_hm_al_on_key hm' al' k')] =
+        if k' = k then
+          begin
+          assert(hash_map_slots_s_find hm' k' == Some v);
+          for_all_binding_neq_find_lem k v al';
+          assert(assoc_list_find k' al' == None)
+          end
+        else
+          begin
+          assert(hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k');
+          assert(assoc_list_find k' al' == assoc_list_find k' al)
+          end
+      in
+      assert(disjoint_hm_al hm' al');
+      assert(hash_map_slots_s_len hm' + length al' <= usize_max);
+      hash_map_move_elements_s_flat_lem hm' al'
 #pop-options
-
-val hash_map_insert_no_resize_s_lem
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
-  (key : usize) (value : t) :
-  Lemma
-  (requires (
-    hash_map_slots_s_inv hm))
-  (ensures (
-    match hash_map_insert_no_resize_s hm key value with
-    | Fail ->
-      // Can fail only if we need to create a new binding in
-      // an already saturated map
-      hash_map_slots_s_len hm = usize_max /\
-      None? (hash_map_slots_s_find hm key)
-    | Return hm' ->
-      // The invariant is preserved
-      hash_map_slots_s_inv hm' /\
-      // [key] maps to [value]
-      hash_map_slots_s_find hm' key == Some value /\
-      // The other bindings are preserved
-      (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k') /\
-      // The length is incremented, iff we inserted a new key
-      (match hash_map_slots_s_find hm key with
-       | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
-       | Some _ -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm)))
 
 (*
 let rec hash_map_move_elements_s_flat
