@@ -141,6 +141,12 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///
 ///   2. See [hash_map_is_assoc_list] and [hash_map_move_elements_fwd_back_lem].
 ///   For this one, I have no clue what's going on.
+///
+///   3. [hash_map_move_elements_fwd_back_lem] was very painful, with assertions
+///   directly given by some postconditions which failed for no reasons, or
+///   "unknown assertion failed" which forced us to manually unfold postconditions...
+///   And we are in a pure setting!! Imagine having to deal with Low*/separation logic
+///   at the same time.
 
 
 (*** List lemmas *)
@@ -2110,6 +2116,12 @@ val hash_map_move_elements_fwd_back_lem
     | _ -> False // We can only succeed
     ))
 
+// Weird, dirty things happen below.
+// Manually unfolding some postconditions allowed to make the proof pass,
+// and also revealed the reason why some proofs failed with "Unknown assertion
+// failed" (resulting in the call to [flatten_0_is_flatten] for instance).
+// I think manually unfolding the postconditions allowed to account for the
+// lack of ifuel (this kind of proofs is annoying, really).
 #restart-solver
 #push-options "--z3rlimit 200"
 let hash_map_move_elements_fwd_back_lem t ntable slots =
@@ -2117,7 +2129,26 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
   let slots_v = slots_t_v slots in
   let al = flatten slots_v in
   hash_map_move_elements_fwd_back_lem_refin t ntable slots 0;
+  begin
+  match hash_map_move_elements_fwd_back t ntable slots 0,
+        hash_map_move_elements_s ntable_v slots_v 0
+  with
+  | Fail, Fail -> ()
+  | Return (ntable', _), Return ntable'_v ->
+    assert(hash_map_t_inv ntable');
+    assert(hash_map_t_slots_v ntable' == ntable'_v)
+  | _ -> assert(False)
+  end;
   hash_map_move_elements_s_lem_refin_flat ntable_v slots_v 0;
+  begin
+  match hash_map_move_elements_s ntable_v slots_v 0,
+        hash_map_move_elements_s_flat ntable_v (flatten_i slots_v 0)
+  with
+  | Fail, Fail -> ()
+  | Return hm, Return hm' -> assert(hm == hm')
+  | _ -> assert(False)
+  end;
+  flatten_0_is_flatten slots_v; // flatten_i slots_v 0 == flatten slots_v
   hash_map_move_elements_s_flat_lem ntable_v al;
   match hash_map_move_elements_fwd_back t ntable slots 0,
         hash_map_move_elements_s_flat ntable_v al
@@ -2125,14 +2156,10 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
   | Return (ntable', _), Return ntable'_v ->
     assert(hash_map_t_inv ntable');
     assume(length ntable'.hash_map_slots = length ntable.hash_map_slots); // TODO
-    // Adding the following let binding makes the proof fails even with a huge
+    // Rk.: Adding the following let binding makes the proof fails even with a huge
     // rlitmit. Really having fun here...
-    // let ntable'_v = hash_map_t_slots_v ntable' in
-//    assume(hash_map_slots_s_len ntable'_v == hash_map_t_len_s ntable'); // TODO
-    assert(hash_map_slots_s_len (hash_map_t_slots_v ntable') == hash_map_t_len_s ntable');
-    assume(hash_map_slots_s_len (hash_map_t_slots_v ntable') == length al); // TODO
     assert(hash_map_t_len_s ntable' = length al);
-    assume(hash_map_t_slots_v ntable' == ntable'_v); // TODO
+    assert(hash_map_t_slots_v ntable' == ntable'_v);
     assert(hash_map_is_assoc_list ntable' al)
-  | _ -> assume(False)
+  | _ -> assert(False)
 #pop-options
