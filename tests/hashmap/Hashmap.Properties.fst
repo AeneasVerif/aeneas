@@ -1702,8 +1702,14 @@ val flatten_i_same_suffix (#a : Type) (l0 l1 : list (list a)) (i : nat) :
     length l0 = length l1 /\
     (forall (j:nat{i <= j /\ j < length l0}). index l0 j == index l1 j)))
   (ensures (flatten_i l0 i == flatten_i l1 i))
+  (decreases (length l0 - i))
 
-let rec flatten_i_same_suffix #a l0 l1 i = admit()
+#push-options "--fuel 1"
+let rec flatten_i_same_suffix #a l0 l1 i =
+  if i < length l0 then
+    flatten_i_same_suffix l0 l1 (i+1)
+  else ()
+#pop-options
 
 /// Refinement lemma:
 /// [hash_map_move_elements_s] refines [hash_map_move_elements_s_flat]
