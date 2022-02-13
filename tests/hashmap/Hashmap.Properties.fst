@@ -247,6 +247,14 @@ let rec map_same_f_eq #a #b f g ls =
   | x :: ls' -> map_same_f_eq f g ls'
 #pop-options
 
+/// Filter a list, stopping after we removed one element
+val filter_one (#a : Type) (f : a -> bool) (ls : list a) : list a
+
+let rec filter_one #a f ls =
+  match ls with
+  | [] -> []
+  | x :: ls' -> if f x then x :: filter_one f ls' else ls'
+
 (*** Lemmas about Primitives *)
 /// TODO: move those lemmas
 
@@ -517,6 +525,7 @@ let hash_key (k : key) : hash =
 let hash_mod_key (k : key) (len : usize{len > 0}) : hash =
   (hash_key k) % len
 
+let not_same_key (#t : Type0) (k : key) (b : binding t) : bool = fst b <> k
 let same_key (#t : Type0) (k : key) (b : binding t) : bool = fst b = k
 
 // We take a [nat] instead of a [hash] on purpose
@@ -1454,7 +1463,7 @@ let hash_map_insert_no_resize_s
   if None? (hash_map_slots_s_find hm key) && num_entries = usize_max then Fail
   else Return (hash_map_insert_no_fail_s hm key value)
 
-/// Prove that [hash_map_insert_no_resize_s] is a refinement of
+/// Prove that [hash_map_insert_no_resize_s] is refined by
 /// [hash_map_insert_no_resize'fwd_back]
 val hash_map_insert_no_resize_fwd_back_lem_s
   (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
@@ -1665,7 +1674,7 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
 /// return type for [hash_map_move_elements_from_list_s] instead of having this
 /// awkward match, the proof of [hash_map_move_elements_fwd_back_lem_refin] fails.
 /// I guess it comes from F*'s poor subtyping.
-/// Followingly, I'm not taking any change and using [result_hash_map_slots_s]
+/// Followingly, I'm not taking any chance and using [result_hash_map_slots_s]
 /// everywhere.
 type result_hash_map_slots_s_nes (t : Type0) : Type0 =
   res:result (hash_map_slots_s t) {
@@ -1742,7 +1751,7 @@ let rec hash_map_move_elements_from_list_fwd_back_lem t ntable ls =
 /// [hash_map_move_elements_fwd] refines this function, which is actually almost
 /// the same (just a little bit shorter and cleaner, and has a pre).
 ///
-/// The way I wrote the refinement is the following:
+/// The way I wrote the high-level model is the following:
 /// - I copy-pasted the definition of [hash_map_move_elements_fwd], wrote the
 ///   signature which links this new definition to [hash_map_move_elements_fwd] and
 ///   checked that the proof passed
@@ -1777,7 +1786,7 @@ let rec hash_map_move_elements_s_simpl
 
 (**** move_elements: refinement 1 *)
 /// We prove a second refinement lemma: calling [move_elements] refines a function
-/// which, for every slot, moves the element out of the slot. This first version is
+/// which, for every slot, moves the element out of the slot. This first model is
 /// almost exactly the translated function, it just uses `list` instead of `list_t`.
 
 // Note that we ignore the returned slots (we thus don't return a pair:
@@ -1861,8 +1870,8 @@ val hash_map_move_elements_fwd_back_lem_refin
 // The terrible thing is that this refinement proof is conceptually super simple:
 // - there are maybe two arithmetic proofs, which are directly solved by the
 //   precondition
-// - we need to refine the call to [hash_map_move_elements_from_list_fwd_back]:
-//   this is proven by another refinement lemma we proved above
+// - we need to prove the call to [hash_map_move_elements_from_list_fwd_back]
+//   refines its model: this is proven by another refinement lemma we proved above
 // - there is the recursive call (trivial)
 #restart-solver
 #push-options "--fuel 1"
@@ -2080,6 +2089,7 @@ let rec flatten_i_same_suffix #a l0 l1 i =
 
 /// Refinement lemma:
 /// [hash_map_move_elements_s] refines [hash_map_move_elements_s_flat]
+/// (actually the functions are equal on all inputs).
 val hash_map_move_elements_s_lem_refin_flat
   (#t : Type0) (hm : hash_map_slots_s_nes t)
   (slots : slots_s t)
@@ -2426,8 +2436,8 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
 
 (*** try_resize *)
 
-/// Refinement 1.
-/// This one is slightly "crude": we just simplify a bit the function.
+/// High-level model 1.
+/// This is one is slightly "crude": we just simplify a bit the function.
 
 let hash_map_try_resize_s_simpl
   (#t : Type0)
@@ -2684,7 +2694,7 @@ let hash_map_try_resize_fwd_back_lem #t hm =
 
 (*** insert *)
 
-/// The refinement (very close to the original function: we don't need something
+/// The high-level model (very close to the original function: we don't need something
 /// very high level, just to clean it a bit)
 let hash_map_insert_s
   (#t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
@@ -2725,9 +2735,6 @@ val hash_map_insert_fwd_back_lem
       hash_map_t_inv hm' /\
       // [key] maps to [value] and the other bindings are preserved
       hash_map_t_updated_binding (hash_map_t_slots_v self) key value (hash_map_t_slots_v hm') /\
-//      hash_map_t_find_s hm' key == Some value /\
-      // The other bindings are preserved- TODO
-//      (forall k'. k' <> key ==> hash_map_t_find_s hm' k' == hash_map_t_find_s self k') /\
       // The length is incremented, iff we inserted a new key
       (match hash_map_t_find_s self key with
        | None -> hash_map_t_len_s hm' = hash_map_t_len_s self + 1
@@ -3172,3 +3179,121 @@ let hash_map_remove_fwd_lem t self key =
   end
 
 (*** remove'back *)
+
+/// High-level model for [remove_from_list'back]
+let hash_map_remove_from_list_s
+  (#t : Type0) (key : usize) (ls : slot_s t) :
+  slot_s t =
+  filter_one (not_same_key key) ls
+
+/// Refinement lemma
+val hash_map_remove_from_list_back_lem
+  (#t : Type0) (key : usize) (ls : list_t t) :
+  Lemma
+  (ensures (
+    match hash_map_remove_from_list_back t key ls with
+    | Fail -> False
+    | Return ls' -> list_t_v ls' == hash_map_remove_from_list_s key (list_t_v ls)))
+
+#push-options "--fuel 1"
+let rec hash_map_remove_from_list_back_lem #t key ls =
+  begin match ls with
+  | ListCons ckey x tl ->
+    let b = ckey = key in
+    if b
+    then
+      let mv_ls = mem_replace_fwd (list_t t) (ListCons ckey x tl) ListNil in
+      begin match mv_ls with
+      | ListCons i cvalue tl0 -> ()
+      | ListNil -> ()
+      end
+    else
+      begin
+      hash_map_remove_from_list_back_lem key tl;
+      match hash_map_remove_from_list_back t key tl with
+      | Fail -> ()
+      | Return l -> let ls0 = ListCons ckey x l in ()
+      end
+  | ListNil -> ()
+  end
+#pop-options
+
+/// High-level model for [remove_from_list'back]
+let hash_map_remove_s
+  (#t : Type0) (self : hash_map_slots_s_nes t) (key : usize) :
+  hash_map_slots_s t =
+  let len = length self in
+  let hash = hash_mod_key key len in
+  let slot = index self hash in
+  let slot' = hash_map_remove_from_list_s key slot in
+  list_update self hash slot'
+
+/// Refinement lemma
+val hash_map_remove_back_lem
+  (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
+  Lemma
+  (requires (
+    // We need the invariant to prove that upon decrementing the entries counter,
+    // the counter doesn't become negative
+    hash_map_t_inv self))
+  (ensures (
+    match hash_map_remove_back t self key with
+    | Fail -> False
+    | Return hm' -> hash_map_t_slots_v hm' == hash_map_remove_s (hash_map_t_slots_v self) key))
+
+let hash_map_remove_back_lem #t self key =
+  begin match hash_key_fwd key with
+  | Fail -> ()
+  | Return i ->
+    let i0 = self.hash_map_num_entries in
+    let p = self.hash_map_max_load_factor in
+    let i1 = self.hash_map_max_load in
+    let v = self.hash_map_slots in
+    let i2 = vec_len (list_t t) v in
+    begin match usize_rem i i2 with
+    | Fail -> ()
+    | Return hash_mod ->
+      begin match vec_index_mut_fwd (list_t t) v hash_mod with
+      | Fail -> ()
+      | Return l ->
+        begin
+        hash_map_remove_from_list_fwd_lem key l;
+        match hash_map_remove_from_list_fwd t key l with
+        | Fail -> ()
+        | Return x ->
+          begin match x with
+          | None ->
+            begin
+            hash_map_remove_from_list_back_lem key l;
+            match hash_map_remove_from_list_back t key l with
+            | Fail -> ()
+            | Return l0 ->
+              begin match vec_index_mut_back (list_t t) v hash_mod l0 with
+              | Fail -> ()
+              | Return v0 -> ()
+              end
+            end
+          | Some x0 ->
+            begin
+            assert(l == index v hash_mod);
+            assert(length (list_t_v #t l) > 0);
+            length_flatten_index (hash_map_t_slots_v self) hash_mod;
+            match usize_sub i0 1 with
+            | Fail -> ()
+            | Return i3 ->
+              begin
+              hash_map_remove_from_list_back_lem key l;
+              match hash_map_remove_from_list_back t key l with
+              | Fail -> ()
+              | Return l0 ->
+                begin match vec_index_mut_back (list_t t) v hash_mod l0 with
+                | Fail -> ()
+                | Return v0 -> ()
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
