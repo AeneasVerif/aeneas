@@ -151,6 +151,10 @@ open Hashmap.Funs
 ///   directly given by some postconditions which failed for no reasons, or
 ///   "unknown assertion failed" which forced us to manually unfold postconditions...
 ///
+///   4. As usual, the unstable arithmetic proofs are a lot of fun. We have a few
+///   of them because we prove that the table is never over-loaded (it resizes itself
+///   in order to respect the max load factor). See [new_max_load_lem] for instance.
+///
 ///   Finally: remember (again) that we are in a pure setting. Imagine having to
 ///   deal with Low*/separation logic at the same time.
 ///
@@ -542,7 +546,10 @@ let slots_s_inv (#t : Type0) (slots : slots_s t{length slots <= usize_max}) : Ty
   {:pattern index slots i}
   slot_s_inv (length slots) i (index slots i)
 
-// TODO: write that in terms of slots_s_inv
+// At some point we tried to rewrite this in terms of [slots_s_inv]. However it
+// made a lot of proofs fail because those proofs relied on the [index_map_lem]
+// pattern. We tried writing others lemmas with patterns (like [slots_s_inv]
+// implies [slots_t_inv]) but it didn't succeed, so we keep things as they are.
 let slots_t_inv (#t : Type0) (slots : slots_t t{length slots <= usize_max}) : Type0 =
   forall(i:nat{i < length slots}).
   {:pattern index slots i}
@@ -2474,7 +2481,6 @@ let times_divid_lem (n m p : pos) : Lemma ((n * m) / p >= n * (m / p))
 #pop-options
 
 /// The good old arithmetic proofs and their unstability...
-/// It seems OK now that I moved an assertion (I ran `quake 100`).
 #restart-solver
 #push-options "--z3rlimit 200 --z3cliopt smt.arith.nl=false"
 let new_max_load_lem
@@ -2497,7 +2503,10 @@ let new_max_load_lem
   let ncapacity = 2 * capacity in
   let nmax_load = (ncapacity * divid) / divis in
   FStar.Math.Lemmas.paren_mul_left 2 capacity divid;
-  assert(2 * (capacity * divid) == 2 * capacity * divid); // Often broke (though given by lemma above): we moved it up
+  // The following assertion often breaks though it is given by the above
+  // lemma. I really don't know what to do (I deactivated non-linear
+  // arithmetic and added the previous lemma, moved the lemma up...).
+  assert(2 * (capacity * divid) == 2 * capacity * divid);
   assert(nmax_load = (2 * capacity * divid) / divis);
   times_divid_lem 2 (capacity * divid) divis;
   assert((2 * (capacity * divid)) / divis >= 2 * ((capacity * divid) / divis));
