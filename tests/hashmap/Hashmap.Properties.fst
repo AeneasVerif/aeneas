@@ -2656,6 +2656,8 @@ let hash_map_insert_fwd_back_lem t self key value =
       end
     else ()
 
+(*** contains *)
+
 (*** get *)
 
 (*** get_mut'fwd *)
