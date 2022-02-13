@@ -415,7 +415,6 @@ let rec map_list_update_lem #a #b f ls i x =
 
 (*** Invariants, models *)
 
-(**** Internals *)
 /// The following invariants, models, representation functions... are mostly
 /// for the purpose of the proofs.
 
@@ -595,7 +594,6 @@ let hash_map_t_same_params (#t : Type0) (hm0 hm1 : hash_map_t t) : Type0 =
   hm0.hash_map_max_load = hm1.hash_map_max_load /\
   hm0.hash_map_max_load_factor = hm1.hash_map_max_load_factor
 
-(**** Invariant, models: revealed *)
 /// The following invariants, etc. are meant to be revealed to the user through
 /// the .fsti.
 
@@ -608,60 +606,6 @@ let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   let (dividend, divisor) = hm.hash_map_max_load_factor in
   hm.hash_map_num_entries <= hm.hash_map_max_load
   || length hm.hash_map_slots * 2 * dividend > usize_max
-  end
-
-/// The high-level representation we give to the user
-type map_s (t : Type0) = {
-  slots : hash_map_s t;
-  max_load_divid : usize;
-  max_load_divis : usize;
-}
-
-(*
-val to_v (#t : Type0) (hm : hash_map_t t) : map_s t
-let to_v #t hm =
-  let slots = hash_map_t_v hm in
-  let (max_load_divid, max_load_divis) = hm.hash_map_max_load_factor in
-  {
-     slots;
-     max_load_divid;
-     max_load_divis;
-  }
-
-val len_s (#t : Type0) (m : map_s t) : nat
-let len_s #t m = hash_map_s_len m.slots
-
-val find_s (#t : Type0) (m : map_s t) (k : key) : option t
-let find_s #t m k = hash_map_s_find m.slots k
-*)
-
-let map_s_max_load (#t : Type0) (m : map_s t{m.max_load_divis > 0}) : nat =
-  let capacity = length m.slots in
-  let dividend = m.max_load_divid in
-  let divisor = m.max_load_divis in
-  (capacity * dividend) / divisor
-
-let map_s_base_inv (#t : Type0) (m : map_s t) : Type0 =
-  hash_map_s_inv m.slots /\
-  // Load computation
-  begin
-  let capacity = length m.slots in
-  let dividend = m.max_load_divid in
-  let divisor = m.max_load_divis in
-  0 < dividend /\ dividend < divisor /\
-  capacity * dividend >= divisor
-  end
-
-let map_s_inv (#t : Type0) (m : map_s t) : Type0 =
-  map_s_base_inv m /\
-  // The hash map is either: not overloaded, or we can't resize it
-  begin
-  let capacity = length m.slots in
-  let dividend = m.max_load_divid in
-  let divisor = m.max_load_divis in
-  let num_entries = len_s m in
-  let max_load = map_s_max_load m in
-  num_entries <= max_load || capacity * 2 * dividend > usize_max
   end
 
 (*** allocate_slots *)
@@ -2572,10 +2516,16 @@ val new_max_load_lem
     let nmax_load = (ncapacity * divid) / divis in
     len <= nmax_load))
 
+let mul_assoc (a b c : nat) : Lemma (a * b * c == a * (b * c)) = ()
+
+let ge_lem2 (a b c d : nat) : Lemma (requires (a >= b + c /\ c >= d)) (ensures (a >= b + d)) = ()
+let ge_div_lem1 (a b : nat) : Lemma (requires (a >= b /\ b > 0)) (ensures (a / b >= 1)) = ()
+
 #restart-solver
-#push-options "--z3rlimit 1000 --z3cliopt smt.arith.nl=false"
+#push-options "--z3rlimit 100 --z3cliopt smt.arith.nl=false"
 let new_max_load_lem len capacity divid divis =
   FStar.Math.Lemmas.paren_mul_left 2 capacity divid;
+  mul_assoc 2 capacity divid;
   // The following assertion often breaks though it is given by the above
   // lemma. I really don't know what to do (I deactivated non-linear
   // arithmetic and added the previous lemma call, moved the assertion up,
@@ -2590,6 +2540,8 @@ let new_max_load_lem len capacity divid divis =
   assert(nmax_load >= 2 * ((capacity * divid) / divis));
   assert(nmax_load >= 2 * max_load);
   assert(nmax_load >= max_load + max_load);
+  ge_div_lem1 (capacity * divid) divis;
+  ge_lem2 nmax_load max_load max_load 1;
   assert(nmax_load >= max_load + 1)
 #pop-options
 
