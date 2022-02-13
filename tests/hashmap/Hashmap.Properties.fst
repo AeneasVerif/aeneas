@@ -445,6 +445,7 @@ let slot_t_v #t = list_t_v #t
 let slots_t_v (#t : Type0) (slots : slots_t t) : slots_s t =
   map slot_t_v slots
 
+/// Representation function for the slots, seen as an associative list.
 let slots_t_al_v (#t : Type0) (slots : slots_t t) : assoc_list t =
   flatten (map list_t_v slots)
 
@@ -452,21 +453,18 @@ let slots_t_al_v (#t : Type0) (slots : slots_t t) : assoc_list t =
 /// list per slot). This is the representation we use most, internally. Note that
 /// we later introduce a [map_s] representation, which is the one used in the
 /// lemmas shown to the user.
-type hash_map_slots_s t = list (slot_s t)
-
-/// High-level type for the hash-map, seen as a an associative list
-type hash_map_s t = assoc_list t
+type hash_map_s t = list (slot_s t)
 
 // 'nes': "non-empty slots"
-type hash_map_slots_s_nes (t : Type0) : Type0 =
-  hm:hash_map_slots_s t{is_pos_usize (length hm)}
+type hash_map_s_nes (t : Type0) : Type0 =
+  hm:hash_map_s t{is_pos_usize (length hm)}
 
 /// Representation function for [hash_map_t] as a list of slots
-let hash_map_t_v (#t : Type0) (hm : hash_map_t t) : hash_map_slots_s t =
+let hash_map_t_v (#t : Type0) (hm : hash_map_t t) : hash_map_s t =
   map list_t_v hm.hash_map_slots
 
 /// Representation function for [hash_map_t] as an associative list
-let hash_map_t_al_v (#t : Type0) (hm : hash_map_t t) : hash_map_s t =
+let hash_map_t_al_v (#t : Type0) (hm : hash_map_t t) : assoc_list t =
   flatten (hash_map_t_v hm)
 
 // 'nes': "non-empty slots"
@@ -491,36 +489,34 @@ let binding_neq (#t : Type0) (b0 b1 : binding t) : bool = fst b0 <> fst b1
 let hash_map_t_len_s (#t : Type0) (hm : hash_map_t t) : nat =
   hm.hash_map_num_entries
 
-let slot_s_find (#t : Type0) (k : key) (slot : list (binding t)) : option t =
+let assoc_list_find (#t : Type0) (k : key) (slot : assoc_list t) : option t =
   match find (same_key k) slot with
   | None -> None
   | Some (_, v) -> Some v
 
-let assoc_list_find (#t : Type0) (k : key) (slot : assoc_list t) : option t =
-  slot_s_find k slot
+let slot_s_find (#t : Type0) (k : key) (slot : list (binding t)) : option t =
+  assoc_list_find k slot
 
 let slot_t_find_s (#t : Type0) (k : key) (slot : list_t t) : option t =
-  match find (same_key k) (list_t_v slot) with
-  | None -> None
-  | Some (_, v) -> Some v
+  slot_s_find k (slot_t_v slot)
 
 // This is a simpler version of the "find" function, which captures the essence
-// of what happens and operates on [hash_map_slots_s].
-let hash_map_slots_s_find
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+// of what happens and operates on [hash_map_s].
+let hash_map_s_find
+  (#t : Type0) (hm : hash_map_s_nes t)
   (k : key) : option t =
   let i = hash_mod_key k (length hm) in
   let slot = index hm i in
   slot_s_find k slot
 
-let hash_map_slots_s_len
-  (#t : Type0) (hm : hash_map_slots_s_nes t) :
+let hash_map_s_len
+  (#t : Type0) (hm : hash_map_s_nes t) :
   nat =
   length (flatten hm)
 
 // Same as above, but operates on [hash_map_t]
 // Note that we don't reuse the above function on purpose: converting to a
-// [hash_map_slots_s] then looking up an element is not the same as what we
+// [hash_map_s] then looking up an element is not the same as what we
 // wrote below.
 let hash_map_t_find_s
   (#t : Type0) (hm : hash_map_t t{length hm.hash_map_slots > 0}) (k : key) : option t =
@@ -539,22 +535,20 @@ let slot_s_inv
   pairwise_rel binding_neq slot
 
 let slot_t_inv (#t : Type0) (len : usize{len > 0}) (i : usize) (slot : list_t t) : bool =
-  // All the bindings are in the proper slot
-  for_all (same_hash_mod_key len i) (list_t_v slot) &&
-  // All the keys are pairwise distinct
-  pairwise_rel binding_neq (list_t_v slot)
+  slot_s_inv len i (slot_t_v slot)
 
 let slots_s_inv (#t : Type0) (slots : slots_s t{length slots <= usize_max}) : Type0 =
   forall(i:nat{i < length slots}).
   {:pattern index slots i}
   slot_s_inv (length slots) i (index slots i)
 
+// TODO: write that in terms of slots_s_inv
 let slots_t_inv (#t : Type0) (slots : slots_t t{length slots <= usize_max}) : Type0 =
   forall(i:nat{i < length slots}).
   {:pattern index slots i}
   slot_t_inv (length slots) i (index slots i)
 
-let hash_map_slots_s_inv (#t : Type0) (hm : hash_map_slots_s t) : Type0 =
+let hash_map_s_inv (#t : Type0) (hm : hash_map_s t) : Type0 =
   length hm <= usize_max /\
   length hm > 0 /\
   slots_s_inv hm
@@ -1254,14 +1248,14 @@ let hash_map_insert_in_list_back_lem t len key value ls =
 (**** Refinement proof *)
 /// Same strategy as for [insert_in_list]: we introduce a high-level version of
 /// the function, and reason about it.
-/// We work on [hash_map_slots_s] (we use a higher-level view of the hash-map, but
+/// We work on [hash_map_s] (we use a higher-level view of the hash-map, but
 /// not too high).
 
 /// A high-level version of insert, which doesn't check if the table is saturated
 let hash_map_insert_no_fail_s
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (#t : Type0) (hm : hash_map_s_nes t)
   (key : usize) (value : t) :
-  hash_map_slots_s t =
+  hash_map_s t =
   let len = length hm in
   let i = hash_mod_key key len in
   let slot = index hm i in
@@ -1269,14 +1263,14 @@ let hash_map_insert_no_fail_s
   let hm' = list_update hm i slot' in
   hm'
 
-// TODO: at some point I used hash_map_slots_s_nes and it broke proofs...x
+// TODO: at some point I used hash_map_s_nes and it broke proofs...x
 let hash_map_insert_no_resize_s
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (#t : Type0) (hm : hash_map_s_nes t)
   (key : usize) (value : t) :
-  result (hash_map_slots_s t) =
+  result (hash_map_s t) =
   // Check if the table is saturated (too many entries, and we need to insert one)
   let num_entries = length (flatten hm) in
-  if None? (hash_map_slots_s_find hm key) && num_entries = usize_max then Fail
+  if None? (hash_map_s_find hm key) && num_entries = usize_max then Fail
   else Return (hash_map_insert_no_fail_s hm key value)
 
 /// Prove that [hash_map_insert_no_resize_s] is refined by
@@ -1286,7 +1280,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
   Lemma
   (requires (
     hash_map_t_base_inv self /\
-    hash_map_slots_s_len (hash_map_t_v self) = hash_map_t_len_s self))
+    hash_map_s_len (hash_map_t_v self) = hash_map_t_len_s self))
   (ensures (
     begin
     match hash_map_insert_no_resize_fwd_back t self key value,
@@ -1297,7 +1291,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
       hash_map_t_base_inv hm /\
       hash_map_same_params hm self /\
       hash_map_t_v hm == hm_v /\
-      hash_map_slots_s_len hm_v == hash_map_t_len_s hm
+      hash_map_s_len hm_v == hash_map_t_len_s hm
     | _ -> False
     end))
 
@@ -1345,7 +1339,7 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
                   assert_norm(length [(key,value)] = 1);
                   assert(length (list_t_v l0) = length (list_t_v l) + 1);
                   length_flatten_update self_v hash_mod (list_t_v l0);
-                  assert(hash_map_slots_s_len hm_v = hash_map_t_len_s hm)
+                  assert(hash_map_s_len hm_v = hash_map_t_len_s hm)
                 end
               end
             end
@@ -1363,7 +1357,7 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
                 assert(hm_v == list_update self_v hash_mod (list_t_v l0));
                 assert(length (list_t_v l0) = length (list_t_v l));
                 length_flatten_update self_v hash_mod (list_t_v l0);
-                assert(hash_map_slots_s_len hm_v = hash_map_t_len_s hm)
+                assert(hash_map_s_len hm_v = hash_map_t_len_s hm)
               end
             end
         end
@@ -1373,30 +1367,30 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
 
 (**** insert_{no_fail,no_resize}: invariants *)
 
-let hash_map_slots_s_updated_binding
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
-  (key : usize) (opt_value : option t) (hm' : hash_map_slots_s_nes t) : Type0 =
+let hash_map_s_updated_binding
+  (#t : Type0) (hm : hash_map_s_nes t)
+  (key : usize) (opt_value : option t) (hm' : hash_map_s_nes t) : Type0 =
   // [key] maps to [value]
-  hash_map_slots_s_find hm' key == opt_value /\
+  hash_map_s_find hm' key == opt_value /\
   // The other bindings are preserved
-  (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k')
+  (forall k'. k' <> key ==> hash_map_s_find hm' k' == hash_map_s_find hm k')
 
-let insert_post (#t : Type0) (hm : hash_map_slots_s_nes t)
-  (key : usize) (value : t) (hm' : hash_map_slots_s_nes t) : Type0 =
+let insert_post (#t : Type0) (hm : hash_map_s_nes t)
+  (key : usize) (value : t) (hm' : hash_map_s_nes t) : Type0 =
   // The invariant is preserved
-  hash_map_slots_s_inv hm' /\
+  hash_map_s_inv hm' /\
   // [key] maps to [value] and the other bindings are preserved
-  hash_map_slots_s_updated_binding hm key (Some value) hm' /\
+  hash_map_s_updated_binding hm key (Some value) hm' /\
   // The length is incremented, iff we inserted a new key
-  (match hash_map_slots_s_find hm key with
-   | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
-   | Some _ -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm)
+  (match hash_map_s_find hm key with
+   | None -> hash_map_s_len hm' = hash_map_s_len hm + 1
+   | Some _ -> hash_map_s_len hm' = hash_map_s_len hm)
 
 val hash_map_insert_no_fail_s_lem
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (#t : Type0) (hm : hash_map_s_nes t)
   (key : usize) (value : t) :
   Lemma
-  (requires (hash_map_slots_s_inv hm))
+  (requires (hash_map_s_inv hm))
   (ensures (
     let hm' = hash_map_insert_no_fail_s hm key value in
     insert_post hm key value hm'))
@@ -1410,23 +1404,23 @@ let hash_map_insert_no_fail_s_lem #t hm key value =
   length_flatten_update hm i slot'
 
 val hash_map_insert_no_resize_s_lem
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (#t : Type0) (hm : hash_map_s_nes t)
   (key : usize) (value : t) :
   Lemma
-  (requires (hash_map_slots_s_inv hm))
+  (requires (hash_map_s_inv hm))
   (ensures (
     match hash_map_insert_no_resize_s hm key value with
     | Fail ->
       // Can fail only if we need to create a new binding in
       // an already saturated map
-      hash_map_slots_s_len hm = usize_max /\
-      None? (hash_map_slots_s_find hm key)
+      hash_map_s_len hm = usize_max /\
+      None? (hash_map_s_find hm key)
     | Return hm' ->
       insert_post hm key value hm'))
 
 let hash_map_insert_no_resize_s_lem #t hm key value =
   let num_entries = length (flatten hm) in
-  if None? (hash_map_slots_s_find hm key) && num_entries = usize_max then ()
+  if None? (hash_map_s_find hm key) && num_entries = usize_max then ()
   else hash_map_insert_no_fail_s_lem hm key value
 
 
@@ -1434,18 +1428,18 @@ let hash_map_insert_no_resize_s_lem #t hm key value =
 /// Lemmas about what happens if we call [find] after an insertion
 
 val hash_map_insert_no_resize_s_get_same_lem
-  (#t : Type0) (hm : hash_map_slots_s t)
+  (#t : Type0) (hm : hash_map_s t)
   (key : usize) (value : t) :
-  Lemma (requires (hash_map_slots_s_inv hm))
+  Lemma (requires (hash_map_s_inv hm))
   (ensures (
     match hash_map_insert_no_resize_s hm key value with
     | Fail -> True
     | Return hm' ->
-      hash_map_slots_s_find hm' key == Some value))
+      hash_map_s_find hm' key == Some value))
 
 let hash_map_insert_no_resize_s_get_same_lem #t hm key value =
   let num_entries = length (flatten hm) in
-  if None? (hash_map_slots_s_find hm key) && num_entries = usize_max then ()
+  if None? (hash_map_s_find hm key) && num_entries = usize_max then ()
   else
     begin
     let hm' = Return?.v (hash_map_insert_no_resize_s hm key value) in
@@ -1456,18 +1450,18 @@ let hash_map_insert_no_resize_s_get_same_lem #t hm key value =
    end
 
 val hash_map_insert_no_resize_s_get_diff_lem
-  (#t : Type0) (hm : hash_map_slots_s t)
+  (#t : Type0) (hm : hash_map_s t)
   (key : usize) (value : t) (key' : usize{key' <> key}) :
-  Lemma (requires (hash_map_slots_s_inv hm))
+  Lemma (requires (hash_map_s_inv hm))
   (ensures (
     match hash_map_insert_no_resize_s hm key value with
     | Fail -> True
     | Return hm' ->
-      hash_map_slots_s_find hm' key' == hash_map_slots_s_find hm key'))
+      hash_map_s_find hm' key' == hash_map_s_find hm key'))
 
 let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
   let num_entries = length (flatten hm) in
-  if None? (hash_map_slots_s_find hm key) && num_entries = usize_max then ()
+  if None? (hash_map_s_find hm key) && num_entries = usize_max then ()
   else
     begin
     let hm' = Return?.v (hash_map_insert_no_resize_s hm key value) in
@@ -1486,24 +1480,24 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
 
 (*** move_elements_from_list *)
 
-/// Having a great time here: if we use `result (hash_map_slots_s_res t)` as the
+/// Having a great time here: if we use `result (hash_map_s_res t)` as the
 /// return type for [hash_map_move_elements_from_list_s] instead of having this
 /// awkward match, the proof of [hash_map_move_elements_fwd_back_lem_refin] fails.
 /// I guess it comes from F*'s poor subtyping.
-/// Followingly, I'm not taking any chance and using [result_hash_map_slots_s]
+/// Followingly, I'm not taking any chance and using [result_hash_map_s]
 /// everywhere.
-type result_hash_map_slots_s_nes (t : Type0) : Type0 =
-  res:result (hash_map_slots_s t) {
+type result_hash_map_s_nes (t : Type0) : Type0 =
+  res:result (hash_map_s t) {
     match res with
     | Fail -> True
     | Return hm -> is_pos_usize (length hm)
   }
 
 let rec hash_map_move_elements_from_list_s
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (#t : Type0) (hm : hash_map_s_nes t)
   (ls : slot_s t) :
-  // Do *NOT* use `result (hash_map_slots_s t)`
-  Tot (result_hash_map_slots_s_nes t)
+  // Do *NOT* use `result (hash_map_s t)`
+  Tot (result_hash_map_s_nes t)
   (decreases ls) =
   match ls with
   | [] -> Return hm
@@ -1609,9 +1603,9 @@ let rec hash_map_move_elements_s_simpl
 // only the new hash map in which we moved the elements from the slots):
 // this returned value is not used.
 let rec hash_map_move_elements_s
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (#t : Type0) (hm : hash_map_s_nes t)
   (slots : slots_s t) (i : usize{i <= length slots /\ length slots <= usize_max}) :
-  Tot (result_hash_map_slots_s_nes t)
+  Tot (result_hash_map_s_nes t)
   (decreases (length slots - i)) =
   let len = length slots in
   if i < len then
@@ -1645,7 +1639,7 @@ val hash_map_move_elements_fwd_back_lem_refin
 
 // This proof was super unstable for some reasons.
 // 
-// For instance, using the [hash_map_slots_s_nes] type abbreviation
+// For instance, using the [hash_map_s_nes] type abbreviation
 // in some of the above definitions led to a failure (while it was just a type
 // abbreviation: the signatures were the same if we unfolded this type). This
 // behaviour led me to the hypothesis that maybe it made F*'s type inference
@@ -1740,9 +1734,9 @@ let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
 ///         as a "flat" associative list (and not a list of lists)
 /// This is actually exactly [hash_map_move_elements_from_list_s]...
 let rec hash_map_move_elements_s_flat
-  (#t : Type0) (ntable : hash_map_slots_s_nes t)
-  (slots : hash_map_s t) :
-  Tot (result_hash_map_slots_s_nes t)
+  (#t : Type0) (ntable : hash_map_s_nes t)
+  (slots : assoc_list t) :
+  Tot (result_hash_map_s_nes t)
   (decreases slots) =
   match slots with
   | [] -> Return ntable
@@ -1835,7 +1829,7 @@ let rec flatten_nil_prefix_as_flatten_i #a l i =
 /// The proof is trivial, the functions are the same.
 /// Just keeping two definitions to allow changes...
 val hash_map_move_elements_from_list_s_as_flat_lem
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (#t : Type0) (hm : hash_map_s_nes t)
   (ls : slot_s t) :
   Lemma
   (ensures (
@@ -1856,8 +1850,8 @@ let rec hash_map_move_elements_from_list_s_as_flat_lem #t hm ls =
 
 /// Composition of two calls to [hash_map_move_elements_s_flat]
 let hash_map_move_elements_s_flat_comp
-  (#t : Type0) (hm : hash_map_slots_s_nes t) (slot0 slot1 : slot_s t) :
-  Tot (result_hash_map_slots_s_nes t) =
+  (#t : Type0) (hm : hash_map_s_nes t) (slot0 slot1 : slot_s t) :
+  Tot (result_hash_map_s_nes t) =
   match hash_map_move_elements_s_flat hm slot0 with
   | Fail -> Fail
   | Return hm1 -> hash_map_move_elements_s_flat hm1 slot1
@@ -1865,7 +1859,7 @@ let hash_map_move_elements_s_flat_comp
 /// High-level desc:
 /// move_elements (move_elements hm slot0) slo1 == move_elements hm (slot0 @ slot1)
 val hash_map_move_elements_s_flat_append_lem
-  (#t : Type0) (hm : hash_map_slots_s_nes t) (slot0 slot1 : slot_s t) :
+  (#t : Type0) (hm : hash_map_s_nes t) (slot0 slot1 : slot_s t) :
   Lemma
   (ensures (
     match hash_map_move_elements_s_flat_comp hm slot0 slot1,
@@ -1907,7 +1901,7 @@ let rec flatten_i_same_suffix #a l0 l1 i =
 /// [hash_map_move_elements_s] refines [hash_map_move_elements_s_flat]
 /// (actually the functions are equal on all inputs).
 val hash_map_move_elements_s_lem_refin_flat
-  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (#t : Type0) (hm : hash_map_s_nes t)
   (slots : slots_s t)
   (i : nat{i <= length slots /\ length slots <= usize_max}) :
   Lemma
@@ -1947,21 +1941,21 @@ let assoc_list_inv (#t : Type0) (al : assoc_list t) : Type0 =
   pairwise_rel binding_neq al
 
 let disjoint_hm_al_on_key
-  (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) (k : key) : Type0 =
-  match hash_map_slots_s_find hm k, assoc_list_find k al with
+  (#t : Type0) (hm : hash_map_s_nes t) (al : assoc_list t) (k : key) : Type0 =
+  match hash_map_s_find hm k, assoc_list_find k al with
   | Some _, None
   | None, Some _
   | None, None -> True
   | Some _, Some _ -> False
 
 /// Playing a dangerous game here: using forall quantifiers
-let disjoint_hm_al (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) : Type0 =
+let disjoint_hm_al (#t : Type0) (hm : hash_map_s_nes t) (al : assoc_list t) : Type0 =
   forall (k:key). disjoint_hm_al_on_key hm al k
 
 let find_in_union_hm_al
-  (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) (k : key) :
+  (#t : Type0) (hm : hash_map_s_nes t) (al : assoc_list t) (k : key) :
   option t =
-  match hash_map_slots_s_find hm k with
+  match hash_map_s_find hm k with
   | Some b -> Some b
   | None -> assoc_list_find k al
 
@@ -1978,25 +1972,25 @@ let rec for_all_binding_neq_find_lem #t k v al =
 #pop-options
 
 val hash_map_move_elements_s_flat_lem
-  (#t : Type0) (hm : hash_map_slots_s_nes t) (al : assoc_list t) :
+  (#t : Type0) (hm : hash_map_s_nes t) (al : assoc_list t) :
   Lemma
   (requires (
     // Invariants
-    hash_map_slots_s_inv hm /\
+    hash_map_s_inv hm /\
     assoc_list_inv al /\
     // The two are disjoint
     disjoint_hm_al hm al /\
     // We can add all the elements to the hashmap
-    hash_map_slots_s_len hm + length al <= usize_max))
+    hash_map_s_len hm + length al <= usize_max))
   (ensures (
     match hash_map_move_elements_s_flat hm al with
     | Fail -> False // We can't fail
     | Return hm' ->
       // The invariant is preserved
-      hash_map_slots_s_inv hm' /\
+      hash_map_s_inv hm' /\
       // The new hash map is the union of the two maps
-      (forall (k:key). hash_map_slots_s_find hm' k == find_in_union_hm_al hm al k) /\
-      hash_map_slots_s_len hm' = hash_map_slots_s_len hm + length al))
+      (forall (k:key). hash_map_s_find hm' k == find_in_union_hm_al hm al k) /\
+      hash_map_s_len hm' = hash_map_s_len hm + length al))
   (decreases al)
 
 #restart-solver
@@ -2009,25 +2003,25 @@ let rec hash_map_move_elements_s_flat_lem #t hm al =
     match hash_map_insert_no_resize_s hm k v with
     | Fail -> ()
     | Return hm' ->
-      assert(hash_map_slots_s_inv hm');
+      assert(hash_map_s_inv hm');
       assert(assoc_list_inv al');
       let disjoint_lem (k' : key) :
         Lemma (disjoint_hm_al_on_key hm' al' k')
         [SMTPat (disjoint_hm_al_on_key hm' al' k')] =
         if k' = k then
           begin
-          assert(hash_map_slots_s_find hm' k' == Some v);
+          assert(hash_map_s_find hm' k' == Some v);
           for_all_binding_neq_find_lem k v al';
           assert(assoc_list_find k' al' == None)
           end
         else
           begin
-          assert(hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k');
+          assert(hash_map_s_find hm' k' == hash_map_s_find hm k');
           assert(assoc_list_find k' al' == assoc_list_find k' al)
           end
       in
       assert(disjoint_hm_al hm' al');
-      assert(hash_map_slots_s_len hm' + length al' <= usize_max);
+      assert(hash_map_s_len hm' + length al' <= usize_max);
       hash_map_move_elements_s_flat_lem hm' al'
 #pop-options
 
@@ -2044,18 +2038,18 @@ let slots_t_inv_implies_slots_s_inv #t slots =
   // Problem is: I can never really predict for sure with F*...
   ()
 
-val hash_map_t_base_inv_implies_hash_map_slots_s_inv
+val hash_map_t_base_inv_implies_hash_map_s_inv
   (#t : Type0) (hm : hash_map_t t) :
   Lemma (requires (hash_map_t_base_inv hm))
-  (ensures (hash_map_slots_s_inv (hash_map_t_v hm)))
+  (ensures (hash_map_s_inv (hash_map_t_v hm)))
 
-let hash_map_t_base_inv_implies_hash_map_slots_s_inv #t hm = () // same as previous
+let hash_map_t_base_inv_implies_hash_map_s_inv #t hm = () // same as previous
 
 /// Introducing a "partial" version of the hash map invariant, which operates on
 /// a suffix of the hash map.
-let partial_hash_map_slots_s_inv
+let partial_hash_map_s_inv
   (#t : Type0) (len : usize{len > 0}) (offset : usize)
-  (hm : hash_map_slots_s t{offset + length hm <= usize_max}) : Type0 =
+  (hm : hash_map_s t{offset + length hm <= usize_max}) : Type0 =
   forall(i:nat{i < length hm}). {:pattern index hm i} slot_s_inv len (offset + i) (index hm i)
 
 /// Auxiliary lemma.
@@ -2065,13 +2059,13 @@ val binding_in_previous_slot_implies_neq
   (#t : Type0) (len : usize{len > 0})
   (i : usize) (b : binding t)
   (offset : usize{i < offset})
-  (slots : hash_map_slots_s t{offset + length slots <= usize_max}) :
+  (slots : hash_map_s t{offset + length slots <= usize_max}) :
   Lemma
   (requires (
     // The binding comes from a slot not in [slots]
     hash_mod_key (fst b) len = i /\
     // The slots are the well-formed suffix of a hash map
-    partial_hash_map_slots_s_inv len offset slots))
+    partial_hash_map_s_inv len offset slots))
   (ensures (
     for_all (binding_neq b) (flatten slots)))
   (decreases slots)
@@ -2102,17 +2096,17 @@ let rec binding_in_previous_slot_implies_neq #t len i b offset slots =
     for_all_append (binding_neq b) s (flatten slots')    
 #pop-options
 
-val partial_hash_map_slots_s_inv_implies_assoc_list_lem
+val partial_hash_map_s_inv_implies_assoc_list_lem
   (#t : Type0) (len : usize{len > 0}) (offset : usize)
-  (hm : hash_map_slots_s t{offset + length hm <= usize_max}) :
+  (hm : hash_map_s t{offset + length hm <= usize_max}) :
   Lemma
   (requires (
-    partial_hash_map_slots_s_inv len offset hm))
+    partial_hash_map_s_inv len offset hm))
   (ensures (assoc_list_inv (flatten hm)))
   (decreases (length hm + length (flatten hm)))
 
 #push-options "--fuel 1"
-let rec partial_hash_map_slots_s_inv_implies_assoc_list_lem #t len offset hm =
+let rec partial_hash_map_s_inv_implies_assoc_list_lem #t len offset hm =
   match hm with
   | [] -> ()
   | slot :: hm' ->
@@ -2121,8 +2115,8 @@ let rec partial_hash_map_slots_s_inv_implies_assoc_list_lem #t len offset hm =
     match slot with
     | [] ->
       assert(flatten hm == flatten hm');
-      assert(partial_hash_map_slots_s_inv len (offset+1) hm'); // Triggers instantiations
-      partial_hash_map_slots_s_inv_implies_assoc_list_lem len (offset+1) hm'
+      assert(partial_hash_map_s_inv len (offset+1) hm'); // Triggers instantiations
+      partial_hash_map_s_inv_implies_assoc_list_lem len (offset+1) hm'
     | x :: slot' ->
       assert(flatten (slot' :: hm') == slot' @ flatten hm');
       let hm'' = slot' :: hm' in
@@ -2131,25 +2125,25 @@ let rec partial_hash_map_slots_s_inv_implies_assoc_list_lem #t len offset hm =
       assert(index hm 0 == slot); // Triggers instantiations
       assert(slot_s_inv len offset slot);
       assert(slot_s_inv len offset slot');
-      assert(partial_hash_map_slots_s_inv len offset hm'');
-      partial_hash_map_slots_s_inv_implies_assoc_list_lem len offset (slot' :: hm');
+      assert(partial_hash_map_s_inv len offset hm'');
+      partial_hash_map_s_inv_implies_assoc_list_lem len offset (slot' :: hm');
       // Proving that the key in `x` is different from all the other keys in
       // the flattened map
       assert(for_all (binding_neq x) slot');
       for_all_append (binding_neq x) slot' (flatten hm');
-      assert(partial_hash_map_slots_s_inv len (offset+1) hm');
+      assert(partial_hash_map_s_inv len (offset+1) hm');
       binding_in_previous_slot_implies_neq #t len offset x (offset+1) hm';
       assert(for_all (binding_neq x) (flatten hm'));
       assert(for_all (binding_neq x) (flatten (slot' :: hm')))
 #pop-options
 
-val hash_map_slots_s_inv_implies_assoc_list_lem
-  (#t : Type0) (hm : hash_map_slots_s t) :
-  Lemma (requires (hash_map_slots_s_inv hm))
+val hash_map_s_inv_implies_assoc_list_lem
+  (#t : Type0) (hm : hash_map_s t) :
+  Lemma (requires (hash_map_s_inv hm))
   (ensures (assoc_list_inv (flatten hm)))
 
-let hash_map_slots_s_inv_implies_assoc_list_lem #t hm =
-  partial_hash_map_slots_s_inv_implies_assoc_list_lem (length hm) 0 hm
+let hash_map_s_inv_implies_assoc_list_lem #t hm =
+  partial_hash_map_s_inv_implies_assoc_list_lem (length hm) 0 hm
 
 val hash_map_t_base_inv_implies_assoc_list_lem
   (#t : Type0) (hm : hash_map_t t):
@@ -2157,7 +2151,7 @@ val hash_map_t_base_inv_implies_assoc_list_lem
   (ensures (assoc_list_inv (hash_map_t_al_v hm)))
 
 let hash_map_t_base_inv_implies_assoc_list_lem #t hm =
-  hash_map_slots_s_inv_implies_assoc_list_lem (hash_map_t_v hm)
+  hash_map_s_inv_implies_assoc_list_lem (hash_map_t_v hm)
 
 /// For some reason, we can't write the below [forall] directly in the [ensures]
 /// clause of the next lemma: it makes Z3 fails even with a huge rlimit.
@@ -2167,9 +2161,9 @@ let hash_map_is_assoc_list
   (al : assoc_list t) : Type0 =
   (forall (k:key). hash_map_t_find_s ntable k == assoc_list_find k al)
 
-let partial_hash_map_slots_s_find
+let partial_hash_map_s_find
   (#t : Type0) (len : usize{len > 0}) (offset : usize)
-  (hm : hash_map_slots_s_nes t{offset + length hm = len})
+  (hm : hash_map_s_nes t{offset + length hm = len})
   (k : key{hash_mod_key k len >= offset}) : option t =
   let i = hash_mod_key k len in
   let slot = index hm (i - offset) in
@@ -2199,13 +2193,13 @@ val key_in_previous_slot_implies_not_found
   (#t : Type0) (len : usize{len > 0})
   (k : key)
   (offset : usize)
-  (slots : hash_map_slots_s t{offset + length slots = len}) :
+  (slots : hash_map_s t{offset + length slots = len}) :
   Lemma
   (requires (
     // The binding comes from a slot not in [slots]
     hash_mod_key k len < offset /\
     // The slots are the well-formed suffix of a hash map
-    partial_hash_map_slots_s_inv len offset slots))
+    partial_hash_map_s_inv len offset slots))
   (ensures (
     assoc_list_find k (flatten slots) == None))
   (decreases slots)
@@ -2223,20 +2217,20 @@ let rec key_in_previous_slot_implies_not_found #t len k offset slots =
     key_in_previous_slot_implies_not_found len k (offset+1) slots'
 #pop-options  
 
-val partial_hash_map_slots_s_is_assoc_list_lem
+val partial_hash_map_s_is_assoc_list_lem
   (#t : Type0) (len : usize{len > 0}) (offset : usize)
-  (hm : hash_map_slots_s_nes t{offset + length hm = len})
+  (hm : hash_map_s_nes t{offset + length hm = len})
   (k : key{hash_mod_key k len >= offset}) :
   Lemma
   (requires (
-    partial_hash_map_slots_s_inv len offset hm))
+    partial_hash_map_s_inv len offset hm))
   (ensures (
-    partial_hash_map_slots_s_find len offset hm k == assoc_list_find k (flatten hm)))
+    partial_hash_map_s_find len offset hm k == assoc_list_find k (flatten hm)))
   (decreases hm)
 //  (decreases (length hm + length (flatten hm)))
 
 #push-options "--fuel 1"
-let rec partial_hash_map_slots_s_is_assoc_list_lem #t len offset hm k =
+let rec partial_hash_map_s_is_assoc_list_lem #t len offset hm k =
   match hm with
   | [] -> ()
   | slot :: hm' ->
@@ -2245,7 +2239,7 @@ let rec partial_hash_map_slots_s_is_assoc_list_lem #t len offset hm k =
     if i = 0 then
       begin
       // We must look in the current slot
-      assert(partial_hash_map_slots_s_find len offset hm k == slot_s_find k slot);
+      assert(partial_hash_map_s_find len offset hm k == slot_s_find k slot);
       find_append (same_key k) slot (flatten hm');
       assert(forall (i:nat{i < length hm'}). index hm' i == index hm (i+1)); // Triggers instantiations
       key_in_previous_slot_implies_not_found #t len k (offset+1) hm';
@@ -2264,13 +2258,13 @@ let rec partial_hash_map_slots_s_is_assoc_list_lem #t len offset hm k =
     else
       begin
       // We must ignore the current slot
-      assert(partial_hash_map_slots_s_find len offset hm k ==
-             partial_hash_map_slots_s_find len (offset+1) hm' k);
+      assert(partial_hash_map_s_find len offset hm k ==
+             partial_hash_map_s_find len (offset+1) hm' k);
       find_append (same_key k) slot (flatten hm');
       assert(index hm 0 == slot); // Triggers instantiations
       not_same_hash_key_not_found_in_slot #t len k offset slot;
       assert(forall (i:nat{i < length hm'}). index hm' i == index hm (i+1)); // Triggers instantiations
-      partial_hash_map_slots_s_is_assoc_list_lem #t len (offset+1) hm' k
+      partial_hash_map_s_is_assoc_list_lem #t len (offset+1) hm' k
       end
 #pop-options
 
@@ -2284,7 +2278,7 @@ let hash_map_is_assoc_list_lem #t hm =
     [SMTPat (hash_map_t_find_s hm k)] =
     let hm_v = hash_map_t_v hm in
     let len = length hm_v in
-    partial_hash_map_slots_s_is_assoc_list_lem #t len 0 hm_v k
+    partial_hash_map_s_is_assoc_list_lem #t len 0 hm_v k
   in
   ()
 
@@ -2669,7 +2663,7 @@ val hash_map_insert_fwd_back_lem
       // The invariant is preserved
       hash_map_t_inv hm' /\
       // [key] maps to [value] and the other bindings are preserved
-      hash_map_slots_s_updated_binding (hash_map_t_v self) key (Some value) (hash_map_t_v hm') /\
+      hash_map_s_updated_binding (hash_map_t_v self) key (Some value) (hash_map_t_v hm') /\
       // The length is incremented, iff we inserted a new key
       (match hash_map_t_find_s self key with
        | None -> hash_map_t_len_s hm' = hash_map_t_len_s self + 1
@@ -2680,11 +2674,11 @@ let hash_map_insert_fwd_back_bindings_lem
   (hm' hm'' : hash_map_t_nes t) :
   Lemma
   (requires (
-     hash_map_slots_s_updated_binding (hash_map_t_v self) key
+     hash_map_s_updated_binding (hash_map_t_v self) key
                                       (Some value) (hash_map_t_v hm') /\
      hash_map_t_same_bindings hm' hm''))
   (ensures (
-     hash_map_slots_s_updated_binding (hash_map_t_v self) key
+     hash_map_s_updated_binding (hash_map_t_v self) key
                                       (Some value) (hash_map_t_v hm'')))
   = ()
 
@@ -2702,15 +2696,15 @@ let hash_map_insert_fwd_back_lem t self key value =
     assert(hash_map_t_base_inv hm');
     assert(hash_map_same_params hm' self);
     assert(hash_map_t_v hm' == hm'_v);
-    assert(hash_map_slots_s_len hm'_v == hash_map_t_len_s hm');
+    assert(hash_map_s_len hm'_v == hash_map_t_len_s hm');
     // Expanding the post of [hash_map_insert_no_resize_s_lem]
     assert(insert_post self_v key value hm'_v);
     // Expanding [insert_post]
-    assert(hash_map_slots_s_inv hm'_v);
+    assert(hash_map_s_inv hm'_v);
     assert(
-      match hash_map_slots_s_find self_v key with
-      | None -> hash_map_slots_s_len hm'_v = hash_map_slots_s_len self_v + 1
-      | Some _ -> hash_map_slots_s_len hm'_v = hash_map_slots_s_len self_v);
+      match hash_map_s_find self_v key with
+      | None -> hash_map_s_len hm'_v = hash_map_s_len self_v + 1
+      | Some _ -> hash_map_s_len hm'_v = hash_map_s_len self_v);
     if hash_map_t_len_s hm' > hm'.hash_map_max_load then
       begin
       hash_map_try_resize_fwd_back_lem hm';
@@ -3166,8 +3160,8 @@ let rec hash_map_remove_from_list_back_lem_refin #t key ls =
 
 /// High-level model for [remove_from_list'back]
 let hash_map_remove_s
-  (#t : Type0) (self : hash_map_slots_s_nes t) (key : usize) :
-  hash_map_slots_s t =
+  (#t : Type0) (self : hash_map_s_nes t) (key : usize) :
+  hash_map_s t =
   let len = length self in
   let hash = hash_mod_key key len in
   let slot = index self hash in
@@ -3293,15 +3287,15 @@ let rec hash_map_remove_from_list_s_lem #t key slot len i =
 #pop-options
 
 val hash_map_remove_s_lem
-  (#t : Type0) (self : hash_map_slots_s_nes t) (key : usize) :
+  (#t : Type0) (self : hash_map_s_nes t) (key : usize) :
   Lemma
-  (requires (hash_map_slots_s_inv self))
+  (requires (hash_map_s_inv self))
   (ensures (
     let hm' = hash_map_remove_s self key in
     // The invariant is preserved
-    hash_map_slots_s_inv hm' /\
+    hash_map_s_inv hm' /\
     // We updated the binding
-    hash_map_slots_s_updated_binding self key None hm'))
+    hash_map_s_updated_binding self key None hm'))
 
 let hash_map_remove_s_lem #t self key =
   let len = length self in
@@ -3310,7 +3304,7 @@ let hash_map_remove_s_lem #t self key =
   hash_map_remove_from_list_s_lem key slot len hash;
   let slot' = hash_map_remove_from_list_s key slot in
   let hm' = list_update self hash slot' in
-  assert(hash_map_slots_s_inv self)
+  assert(hash_map_s_inv self)
 
 /// Final lemma about [remove'back]
 val hash_map_remove_back_lem
