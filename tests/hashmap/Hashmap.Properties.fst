@@ -2593,3 +2593,65 @@ val hash_map_try_resize_fwd_back_lem (#t : Type0) (hm : hash_map_t t) :
 let hash_map_try_resize_fwd_back_lem #t hm =
   hash_map_try_resize_fwd_back_lem_refin t hm;
   hash_map_try_resize_s_lem hm
+
+(*** insert *)
+
+/// The refinement (very close to the original function: we don't need something
+/// very high level, just to clean it a bit)
+let hash_map_insert_s
+  (#t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
+  result (hash_map_t t) =
+  match hash_map_insert_no_resize_fwd_back t self key value with
+  | Fail -> Fail
+  | Return hm' ->
+    if hash_map_t_len_s hm' > hm'.hash_map_max_load then
+      hash_map_try_resize_fwd_back t hm'
+    else Return hm'
+
+val hash_map_insert_fwd_back_lem_refin
+  (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
+  Lemma (requires True)
+  (ensures (
+    match hash_map_insert_fwd_back t self key value,
+          hash_map_insert_s self key value
+    with
+    | Fail, Fail -> True
+    | Return hm1, Return hm2 -> hm1 == hm2
+    | _ -> False))
+
+let hash_map_insert_fwd_back_lem_refin t self key value = ()
+
+val hash_map_insert_fwd_back_lem
+  (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
+  Lemma (requires (hash_map_t_inv self))
+  (ensures (
+    match hash_map_insert_fwd_back t self key value with
+    | Fail ->
+      // We can fail only if:
+      // - the key is not in the map and we need to add it
+      // - we are already saturated
+      hash_map_t_len_s self = usize_max /\
+      None? (hash_map_t_find_s self key)
+    | Return hm' ->
+      // The invariant is preserved
+      hash_map_t_inv hm' /\
+      // [key] maps to [value]
+      hash_map_t_find_s hm' key == Some value /\
+      // The other bindings are preserved
+      (forall k'. k' <> key ==> hash_map_t_find_s hm' k' == hash_map_t_find_s hm' k') /\
+      // The length is incremented, iff we inserted a new key
+      (match hash_map_t_find_s self key with
+       | None -> hash_map_t_len_s hm' = hash_map_t_len_s self + 1
+       | Some _ -> hash_map_t_len_s hm' = hash_map_t_len_s self)))
+
+let hash_map_insert_fwd_back_lem t self key value =
+  hash_map_insert_no_resize_fwd_back_lem_s t self key value;
+  hash_map_insert_no_resize_s_lem (hash_map_t_slots_v self) key value;
+  match hash_map_insert_no_resize_fwd_back t self key value with
+  | Fail -> ()
+  | Return hm' ->
+    if hash_map_t_len_s hm' > hm'.hash_map_max_load then
+      begin
+      hash_map_try_resize_fwd_back_lem hm'
+      end
+    else ()
