@@ -522,17 +522,15 @@ let slot_t_find_s (#t : Type0) (k : key) (slot : list_t t) : option t =
 // This is a simpler version of the "find" function, which captures the essence
 // of what happens and operates on [hash_map_slots_s].
 // TODO: useful?
-// TODO: at some point I used hash_map_slots_s_nes and it broke proofs...
 let hash_map_slots_s_find
-  (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0})
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
   (k : key) : option t =
   let i = hash_mod_key k (length hm) in
   let slot = index hm i in
   slot_find k slot
 
-// TODO: at some point I used hash_map_slots_s_nes and it broke proofs...
 let hash_map_slots_s_len
-  (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0}) :
+  (#t : Type0) (hm : hash_map_slots_s_nes t) :
   nat =
   length (flatten hm)
 
@@ -1403,7 +1401,7 @@ let hash_map_insert_in_list_back_lem t len key value ls =
 
 /// A high-level version of insert, which doesn't check if the table is saturated
 let hash_map_insert_no_fail_s
-  (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0})
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
   (key : usize) (value : t) :
   hash_map_slots_s t =
   let len = length hm in
@@ -1415,7 +1413,7 @@ let hash_map_insert_no_fail_s
 
 // TODO: at some point I used hash_map_slots_s_nes and it broke proofs...x
 let hash_map_insert_no_resize_s
-  (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0})
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
   (key : usize) (value : t) :
   result (hash_map_slots_s t) =
   // Check if the table is saturated (too many entries, and we need to insert one)
