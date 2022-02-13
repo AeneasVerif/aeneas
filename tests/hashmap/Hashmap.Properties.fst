@@ -156,6 +156,18 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///
 ///   Finally: remember (again) that we are in a pure setting. Imagine having to
 ///   deal with Low*/separation logic at the same time.
+///
+/// - debugging a proof can be difficult, especially when Z3 simply answers with
+///   "Unknown assertion failed". Rolling admits work reasonably well, though time
+///   consuming, but they cause trouble when the failing proof obligation is in the
+///   postcondition of the function: in this situation we need to copy-paste the
+///   postcondition in order to be able to do the rolling admit. As we may need to
+///   rename some variables, this implies copying the post, instantiating it (by hand),
+///   checking that it is correct (by assuming it and making sure the proofs pass),
+///   then doing the rolling admit, assertion by assertion. This is tedious and,
+///   combined with F*'s answer time, very time consuming (and boring!).
+///   
+///   See [hash_map_insert_fwd_back_lem] for instance.
 
 
 (*** List lemmas *)
@@ -1515,14 +1527,20 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
 
 (**** insert_{no_fail,no_resize}: invariants *)
 
+let hash_map_t_updated_binding
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (key : usize) (value : t) (hm' : hash_map_slots_s_nes t) : Type0 =
+  // [key] maps to [value]
+  hash_map_slots_s_find hm' key == Some value /\
+  // The other bindings are preserved
+  (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k')
+
 let insert_post (#t : Type0) (hm : hash_map_slots_s_nes t)
   (key : usize) (value : t) (hm' : hash_map_slots_s_nes t) : Type0 =
   // The invariant is preserved
   hash_map_slots_s_inv hm' /\
-  // [key] maps to [value]
-  hash_map_slots_s_find hm' key == Some value /\
-  // The other bindings are preserved
-  (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k') /\
+  // [key] maps to [value] and the other bindings are preserved
+  hash_map_t_updated_binding hm key value hm' /\
   // The length is incremented, iff we inserted a new key
   (match hash_map_slots_s_find hm key with
    | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
@@ -1868,7 +1886,7 @@ let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
 
 (**** move_elements: refinement 2 *)
 /// We prove a second refinement lemma: calling [move_elements] refines a function
-/// which which moves every binding of the hash map seen as *one* associative list
+/// which moves every binding of the hash map seen as *one* associative list
 /// (and not a list of lists).
 
 /// [ntable] is the hash map to which we move the elements
@@ -2329,7 +2347,9 @@ val hash_map_move_elements_fwd_back_lem
       length ntable'.hash_map_slots = length ntable.hash_map_slots /\
       // The count is good
       hash_map_t_len_s ntable' = length al /\
-      // The table can be linked to its model (not really necessary anymore)
+      // The table can be linked to its model (we need this only to reveal
+      // "pretty" functional lemmas to the user in the fsti - so that we
+      // can write lemmas with SMT patterns - this is very F* specific)
       hash_map_t_slots_v ntable' == ntable'_v /\
       // The new table contains exactly all the bindings from the slots
       // Rk.: see the comment for [hash_map_is_assoc_list]
@@ -2385,10 +2405,10 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
 
 (*** try_resize *)
 
-/// Refinement.
+/// Refinement 1.
 /// This one is slightly "crude": we just simplify a bit the function.
 
-let hash_map_try_resize_s
+let hash_map_try_resize_s_simpl
   (#t : Type0)
   (hm : hash_map_t t) :
   Pure  (result (hash_map_t t))
@@ -2435,7 +2455,7 @@ val hash_map_try_resize_fwd_back_lem_refin
     divid > 0 /\ divis > 0))
   (ensures (
     match hash_map_try_resize_fwd_back t self,
-          hash_map_try_resize_s self
+          hash_map_try_resize_s_simpl self
     with
     | Fail, Fail -> True
     | Return hm1, Return hm2 -> hm1 == hm2
@@ -2526,7 +2546,7 @@ val hash_map_is_assoc_list_lem (#t : Type0) (hm : hash_map_t t) :
 
 let hash_map_is_assoc_list_lem #t hm = admit()
 
-val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
+val hash_map_try_resize_s_simpl_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
   (requires (
     // The base invariant is satisfied
@@ -2542,7 +2562,7 @@ val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
      length hm.hash_map_slots * 2 * dividend > usize_max)
   ))
   (ensures (
-    match hash_map_try_resize_s hm with
+    match hash_map_try_resize_s_simpl hm with
     | Fail -> False
     | Return hm' ->
       // The full invariant is now satisfied (the full invariant is "base
@@ -2554,7 +2574,7 @@ val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
 
 #restart-solver
 #push-options "--z3rlimit 400"
-let hash_map_try_resize_s_lem #t hm =
+let hash_map_try_resize_s_simpl_lem #t hm =
   let capacity = length hm.hash_map_slots in
   let (divid, divis) = hm.hash_map_max_load_factor in
   if capacity <= (usize_max / 2) / divid then
@@ -2607,6 +2627,9 @@ let hash_map_try_resize_s_lem #t hm =
     end
 #pop-options
 
+let hash_map_t_same_bindings  (#t : Type0) (hm hm' : hash_map_t_nes t) : Type0 =
+  forall (k:key). hash_map_t_find_s hm k == hash_map_t_find_s hm' k
+
 /// The final lemma about [try_resize]
 val hash_map_try_resize_fwd_back_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
@@ -2629,12 +2652,14 @@ val hash_map_try_resize_fwd_back_lem (#t : Type0) (hm : hash_map_t t) :
       // invariant" + the map is not overloaded (or can't be resized because
       // already too big)
       hash_map_t_inv hm' /\
+      // The length is the same
+      hash_map_t_len_s hm' = hash_map_t_len_s hm /\
       // It contains the same bindings as the initial map
-      (forall (k:key). hash_map_t_find_s hm' k == hash_map_t_find_s hm k)))
+      hash_map_t_same_bindings hm' hm))
 
 let hash_map_try_resize_fwd_back_lem #t hm =
   hash_map_try_resize_fwd_back_lem_refin t hm;
-  hash_map_try_resize_s_lem hm
+  hash_map_try_resize_s_simpl_lem hm
 
 (*** insert *)
 
@@ -2677,26 +2702,70 @@ val hash_map_insert_fwd_back_lem
     | Return hm' ->
       // The invariant is preserved
       hash_map_t_inv hm' /\
-      // [key] maps to [value]
-      hash_map_t_find_s hm' key == Some value /\
-      // The other bindings are preserved
-      (forall k'. k' <> key ==> hash_map_t_find_s hm' k' == hash_map_t_find_s hm' k') /\
+      // [key] maps to [value] and the other bindings are preserved
+      hash_map_t_updated_binding (hash_map_t_slots_v self) key value (hash_map_t_slots_v hm') /\
+//      hash_map_t_find_s hm' key == Some value /\
+      // The other bindings are preserved- TODO
+//      (forall k'. k' <> key ==> hash_map_t_find_s hm' k' == hash_map_t_find_s self k') /\
       // The length is incremented, iff we inserted a new key
       (match hash_map_t_find_s self key with
        | None -> hash_map_t_len_s hm' = hash_map_t_len_s self + 1
        | Some _ -> hash_map_t_len_s hm' = hash_map_t_len_s self)))
 
+let hash_map_insert_fwd_back_bindings_lem
+  (t : Type0) (self : hash_map_t_nes t) (key : usize) (value : t)
+  (hm' hm'' : hash_map_t_nes t) :
+  Lemma
+  (requires (
+     hash_map_t_updated_binding (hash_map_t_slots_v self) key value (hash_map_t_slots_v hm') /\
+     hash_map_t_same_bindings hm' hm''))
+  (ensures (
+     hash_map_t_updated_binding (hash_map_t_slots_v self) key value (hash_map_t_slots_v hm'')))
+  = ()
+
+#restart-solver
+#push-options "--z3rlimit 500"
 let hash_map_insert_fwd_back_lem t self key value =
   hash_map_insert_no_resize_fwd_back_lem_s t self key value;
   hash_map_insert_no_resize_s_lem (hash_map_t_slots_v self) key value;
   match hash_map_insert_no_resize_fwd_back t self key value with
   | Fail -> ()
   | Return hm' ->
+    // Expanding the post of [hash_map_insert_no_resize_fwd_back_lem_s]
+    let self_v = hash_map_t_slots_v self in
+    let hm'_v = Return?.v (hash_map_insert_no_resize_s self_v key value) in
+    assert(hash_map_t_base_inv hm');
+    assert(hash_map_same_params hm' self);
+    assert(hash_map_t_slots_v hm' == hm'_v);
+    assert(hash_map_slots_s_len hm'_v == hash_map_t_len_s hm');
+    // Expanding the post of [hash_map_insert_no_resize_s_lem]
+    assert(insert_post self_v key value hm'_v);
+    // Expanding [insert_post]
+    assert(hash_map_slots_s_inv hm'_v);
+    assert(
+      match hash_map_slots_s_find self_v key with
+      | None -> hash_map_slots_s_len hm'_v = hash_map_slots_s_len self_v + 1
+      | Some _ -> hash_map_slots_s_len hm'_v = hash_map_slots_s_len self_v);
     if hash_map_t_len_s hm' > hm'.hash_map_max_load then
       begin
-      hash_map_try_resize_fwd_back_lem hm'
+      hash_map_try_resize_fwd_back_lem hm';
+      // Expanding the post of [hash_map_try_resize_fwd_back_lem]
+      let hm'' = Return?.v (hash_map_try_resize_fwd_back t hm') in
+      assert(hash_map_t_inv hm'');
+      let hm''_v = hash_map_t_slots_v hm'' in
+      assert(forall k. hash_map_t_find_s hm'' k == hash_map_t_find_s hm' k);
+      assert(hash_map_t_len_s hm'' = hash_map_t_len_s hm'); // TODO
+      // Proving the post
+      assert(hash_map_t_inv hm'');
+      hash_map_insert_fwd_back_bindings_lem t self key value hm' hm'';
+      assert(
+        match hash_map_t_find_s self key with
+         | None -> hash_map_t_len_s hm'' = hash_map_t_len_s self + 1
+         | Some _ -> hash_map_t_len_s hm'' = hash_map_t_len_s self)
       end
     else ()
+#pop-options
+
 
 (*** contains_key *)
 
@@ -2999,4 +3068,30 @@ let hash_map_get_mut_back_lem #t hm key ret =
     hash_map_insert_no_fail_s_lem hm_v key ret
 
 
-(*** remove *)
+(*** remove'fwd *)
+
+
+(*
+(** [hashmap::HashMap::remove_from_list] *)
+let rec hash_map_remove_from_list_fwd
+  (t : Type0) (key : usize) (ls : list_t t) :
+  Tot (result (option t))
+  (decreases (hash_map_remove_from_list_decreases t key ls))
+  =
+  begin match ls with
+  | ListCons ckey x tl ->
+    let b = ckey = key in
+    if b
+    then
+      let mv_ls = mem_replace_fwd (list_t t) (ListCons ckey x tl) ListNil in
+      begin match mv_ls with
+      | ListCons i cvalue tl0 -> Return (Some cvalue)
+      | ListNil -> Fail
+      end
+    else
+      begin match hash_map_remove_from_list_fwd t key tl with
+      | Fail -> Fail
+      | Return opt -> Return opt
+      end
+  | ListNil -> Return None
+  end
