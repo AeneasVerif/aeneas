@@ -2828,7 +2828,7 @@ let hash_map_get_fwd_lem #t self key =
 (*** get_mut'fwd *)
 
 
-(**** get_mut_in_list *)
+(**** get_mut_in_list'fwd *)
 
 val hash_map_get_mut_in_list_fwd_lem
   (#t : Type0) (key : usize) (ls : list_t t) :
@@ -2857,7 +2857,7 @@ let rec hash_map_get_mut_in_list_fwd_lem #t key ls =
   end
 #pop-options
 
-(**** get_mut *)
+(**** get_mut'fwd *)
 
 val hash_map_get_mut_fwd_lem
   (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
@@ -2893,7 +2893,7 @@ let hash_map_get_mut_fwd_lem #t self key =
 
 (*** get_mut'back *)
 
-(**** get_mut_in_list *)
+(**** get_mut_in_list'back *)
 
 val hash_map_get_mut_in_list_back_lem
   (#t : Type0) (key : usize) (ls : list_t t) (ret : t) :
@@ -2923,7 +2923,7 @@ let rec hash_map_get_mut_in_list_back_lem #t key ls ret =
   end
 #pop-options
 
-(**** get_mut *)
+(**** get_mut'back *)
 
 /// Refinement lemma
 val hash_map_get_mut_back_lem_refin
