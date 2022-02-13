@@ -288,8 +288,11 @@ val length_flatten_update :
   -> i:nat{i < length ls}
   -> x:list a ->
   Lemma (
+    // We want this property:
+    // ```
     // length (flatten (list_update ls i x)) =
     //   length (flatten ls) - length (index ls i) + length x
+    // ```
     length (flatten (list_update ls i x)) + length (index ls i) =
     length (flatten ls) + length x)
 
@@ -313,6 +316,24 @@ let rec length_flatten_update #a ls i x =
       let ls1 = x' :: list_update ls' (i-1) x in
       assert(flatten ls1 == x' @ flatten (list_update ls' (i-1) x)) // Triggers patterns
       end
+#pop-options
+
+
+val length_flatten_index :
+     #a:Type
+  -> ls:list (list a)
+  -> i:nat{i < length ls} ->
+  Lemma (
+    length (flatten ls) >= length (index ls i))
+
+#push-options "--fuel 1"
+let rec length_flatten_index #a ls i =
+  match ls with
+  | x' :: ls' ->
+    assert(flatten ls == x' @ flatten ls'); // Triggers patterns
+    assert(length (flatten ls) == length x' + length (flatten ls'));
+    if i = 0 then ()
+    else length_flatten_index ls' (i-1)
 #pop-options
 
 val forall_index_equiv_list_for_all
@@ -3070,14 +3091,18 @@ let hash_map_get_mut_back_lem #t hm key ret =
 
 (*** remove'fwd *)
 
+val hash_map_remove_from_list_fwd_lem
+  (#t : Type0) (key : usize) (ls : list_t t) :
+  Lemma
+  (ensures (
+    match hash_map_remove_from_list_fwd t key ls with
+    | Fail -> False
+    | Return opt_x ->
+      opt_x == slot_t_find_s key ls /\
+      (Some? opt_x ==> length (slot_t_v ls) > 0)))
 
-(*
-(** [hashmap::HashMap::remove_from_list] *)
-let rec hash_map_remove_from_list_fwd
-  (t : Type0) (key : usize) (ls : list_t t) :
-  Tot (result (option t))
-  (decreases (hash_map_remove_from_list_decreases t key ls))
-  =
+#push-options "--fuel 1"
+let rec hash_map_remove_from_list_fwd_lem #t key ls =
   begin match ls with
   | ListCons ckey x tl ->
     let b = ckey = key in
@@ -3085,13 +3110,65 @@ let rec hash_map_remove_from_list_fwd
     then
       let mv_ls = mem_replace_fwd (list_t t) (ListCons ckey x tl) ListNil in
       begin match mv_ls with
-      | ListCons i cvalue tl0 -> Return (Some cvalue)
-      | ListNil -> Fail
+      | ListCons i cvalue tl0 -> ()
+      | ListNil -> ()
       end
     else
-      begin match hash_map_remove_from_list_fwd t key tl with
-      | Fail -> Fail
-      | Return opt -> Return opt
+      begin
+      hash_map_remove_from_list_fwd_lem key tl;
+      match hash_map_remove_from_list_fwd t key tl with
+      | Fail -> ()
+      | Return opt -> ()
       end
-  | ListNil -> Return None
+  | ListNil -> ()
   end
+#pop-options
+
+val hash_map_remove_fwd_lem
+  (t : Type0) (self : hash_map_t t) (key : usize) :
+  Lemma
+  (requires (
+    // We need the invariant to prove that upon decrementing the entries counter,
+    // the counter doesn't become negative
+    hash_map_t_inv self))
+  (ensures (
+    match hash_map_remove_fwd t self key with
+    | Fail -> False
+    | Return opt_x -> opt_x == hash_map_t_find_s self key))
+
+let hash_map_remove_fwd_lem t self key =
+  begin match hash_key_fwd key with
+  | Fail -> ()
+  | Return i ->
+    let i0 = self.hash_map_num_entries in
+    let v = self.hash_map_slots in
+    let i1 = vec_len (list_t t) v in
+    begin match usize_rem i i1 with
+    | Fail -> ()
+    | Return hash_mod ->
+      begin match vec_index_mut_fwd (list_t t) v hash_mod with
+      | Fail -> ()
+      | Return l ->
+        begin
+        hash_map_remove_from_list_fwd_lem key l;
+        match hash_map_remove_from_list_fwd t key l with
+        | Fail -> ()
+        | Return x ->
+          begin match x with
+          | None -> ()
+          | Some x0 ->
+            begin
+            assert(l == index v hash_mod);
+            assert(length (list_t_v #t l) > 0);
+            length_flatten_index (hash_map_t_slots_v self) hash_mod;
+            match usize_sub i0 1 with
+            | Fail -> ()
+            | Return _ -> ()
+            end
+          end
+        end
+      end
+    end
+  end
+
+(*** remove'back *)
