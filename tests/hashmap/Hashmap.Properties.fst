@@ -170,6 +170,22 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   See [hash_map_insert_fwd_back_lem] for instance.
 
 
+/// The proof strategy is to do exactly as with Low* proofs (we initially tried to
+/// prove more properties in one go, but it was a mistake):
+/// - prove that, under some preconditions, the low-level functions translated
+///   from Rust refine some higher-level functions
+/// - do functional proofs about those high-level functions to prove interesting
+///   properties about the hash map operations, and invariant preservation
+/// - combine everything
+///
+/// The fact that we work in a pure setting allows us to be more modular than when
+/// working with effects. For instance we can do a case disjunction (see the proofs
+/// for insert, which study the cases where the key is already/not in the hash map
+/// in separate proofs). We can also easily prove a refinement lemma, study the
+/// model, and combine those to also prove that the low-level function preserves
+/// the invariants.
+
+
 (*** List lemmas *)
 
 val index_append_lem (#a : Type0) (ls0 ls1 : list a) (i : nat{i < length ls0 + length ls1}) :
@@ -1559,9 +1575,9 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
 
 let hash_map_t_updated_binding
   (#t : Type0) (hm : hash_map_slots_s_nes t)
-  (key : usize) (value : t) (hm' : hash_map_slots_s_nes t) : Type0 =
+  (key : usize) (opt_value : option t) (hm' : hash_map_slots_s_nes t) : Type0 =
   // [key] maps to [value]
-  hash_map_slots_s_find hm' key == Some value /\
+  hash_map_slots_s_find hm' key == opt_value /\
   // The other bindings are preserved
   (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k')
 
@@ -1570,7 +1586,7 @@ let insert_post (#t : Type0) (hm : hash_map_slots_s_nes t)
   // The invariant is preserved
   hash_map_slots_s_inv hm' /\
   // [key] maps to [value] and the other bindings are preserved
-  hash_map_t_updated_binding hm key value hm' /\
+  hash_map_t_updated_binding hm key (Some value) hm' /\
   // The length is incremented, iff we inserted a new key
   (match hash_map_slots_s_find hm key with
    | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
@@ -2734,7 +2750,7 @@ val hash_map_insert_fwd_back_lem
       // The invariant is preserved
       hash_map_t_inv hm' /\
       // [key] maps to [value] and the other bindings are preserved
-      hash_map_t_updated_binding (hash_map_t_slots_v self) key value (hash_map_t_slots_v hm') /\
+      hash_map_t_updated_binding (hash_map_t_slots_v self) key (Some value) (hash_map_t_slots_v hm') /\
       // The length is incremented, iff we inserted a new key
       (match hash_map_t_find_s self key with
        | None -> hash_map_t_len_s hm' = hash_map_t_len_s self + 1
@@ -2745,10 +2761,10 @@ let hash_map_insert_fwd_back_bindings_lem
   (hm' hm'' : hash_map_t_nes t) :
   Lemma
   (requires (
-     hash_map_t_updated_binding (hash_map_t_slots_v self) key value (hash_map_t_slots_v hm') /\
+     hash_map_t_updated_binding (hash_map_t_slots_v self) key (Some value) (hash_map_t_slots_v hm') /\
      hash_map_t_same_bindings hm' hm''))
   (ensures (
-     hash_map_t_updated_binding (hash_map_t_slots_v self) key value (hash_map_t_slots_v hm'')))
+     hash_map_t_updated_binding (hash_map_t_slots_v self) key (Some value) (hash_map_t_slots_v hm'')))
   = ()
 
 #restart-solver
@@ -3180,23 +3196,51 @@ let hash_map_remove_fwd_lem t self key =
 
 (*** remove'back *)
 
+(**** Refinement proofs *)
+
 /// High-level model for [remove_from_list'back]
 let hash_map_remove_from_list_s
   (#t : Type0) (key : usize) (ls : slot_s t) :
   slot_s t =
   filter_one (not_same_key key) ls
 
+(*
+// TODO: remove?
+val filter_one_find (#a : Type) (f g : a -> bool) (ls : list a) :
+  Lemma
+  (requires (forall x. f x <> g x))
+  (ensures (
+    let ls' = filter_one f ls in
+    match find g ls with
+    | None -> length ls' = length ls
+    | Some _ -> length ls' + 1 = length ls))
+
+#push-options "--fuel 1"
+let rec filter_one_find #a f g ls =
+  match ls with
+  | [] -> ()
+  | x :: ls' -> filter_one_find f g ls'
+#pop-options
+*)
+
 /// Refinement lemma
-val hash_map_remove_from_list_back_lem
+val hash_map_remove_from_list_back_lem_refin
   (#t : Type0) (key : usize) (ls : list_t t) :
   Lemma
   (ensures (
     match hash_map_remove_from_list_back t key ls with
     | Fail -> False
-    | Return ls' -> list_t_v ls' == hash_map_remove_from_list_s key (list_t_v ls)))
+    | Return ls' ->
+      list_t_v ls' == hash_map_remove_from_list_s key (list_t_v ls) /\
+      // The length is decremented, iff the key was in the slot
+      (let len = length (list_t_v ls) in
+       let len' = length (list_t_v ls') in
+       match slot_find key (list_t_v ls) with
+       | None -> len = len'
+       | Some _ -> len = len' + 1)))
 
 #push-options "--fuel 1"
-let rec hash_map_remove_from_list_back_lem #t key ls =
+let rec hash_map_remove_from_list_back_lem_refin #t key ls =
   begin match ls with
   | ListCons ckey x tl ->
     let b = ckey = key in
@@ -3209,7 +3253,7 @@ let rec hash_map_remove_from_list_back_lem #t key ls =
       end
     else
       begin
-      hash_map_remove_from_list_back_lem key tl;
+      hash_map_remove_from_list_back_lem_refin key tl;
       match hash_map_remove_from_list_back t key tl with
       | Fail -> ()
       | Return l -> let ls0 = ListCons ckey x l in ()
@@ -3229,7 +3273,7 @@ let hash_map_remove_s
   list_update self hash slot'
 
 /// Refinement lemma
-val hash_map_remove_back_lem
+val hash_map_remove_back_lem_refin
   (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
   Lemma
   (requires (
@@ -3239,9 +3283,17 @@ val hash_map_remove_back_lem
   (ensures (
     match hash_map_remove_back t self key with
     | Fail -> False
-    | Return hm' -> hash_map_t_slots_v hm' == hash_map_remove_s (hash_map_t_slots_v self) key))
+    | Return hm' ->
+      hash_map_same_params hm' self /\
+      hash_map_t_slots_v hm' == hash_map_remove_s (hash_map_t_slots_v self) key /\
+      // The length is decremented iff the key was in the map
+      (let len = hash_map_t_len_s self in
+       let len' = hash_map_t_len_s hm' in
+       match hash_map_t_find_s self key with
+       | None -> len = len'
+       | Some _ -> len = len' + 1)))
 
-let hash_map_remove_back_lem #t self key =
+let hash_map_remove_back_lem_refin #t self key =
   begin match hash_key_fwd key with
   | Fail -> ()
   | Return i ->
@@ -3264,11 +3316,13 @@ let hash_map_remove_back_lem #t self key =
           begin match x with
           | None ->
             begin
-            hash_map_remove_from_list_back_lem key l;
+            hash_map_remove_from_list_back_lem_refin key l;
             match hash_map_remove_from_list_back t key l with
             | Fail -> ()
             | Return l0 ->
-              begin match vec_index_mut_back (list_t t) v hash_mod l0 with
+              begin
+              length_flatten_update (slots_t_v v) hash_mod (list_t_v l0);
+              match vec_index_mut_back (list_t t) v hash_mod l0 with
               | Fail -> ()
               | Return v0 -> ()
               end
@@ -3282,11 +3336,13 @@ let hash_map_remove_back_lem #t self key =
             | Fail -> ()
             | Return i3 ->
               begin
-              hash_map_remove_from_list_back_lem key l;
+              hash_map_remove_from_list_back_lem_refin key l;
               match hash_map_remove_from_list_back t key l with
               | Fail -> ()
               | Return l0 ->
-                begin match vec_index_mut_back (list_t t) v hash_mod l0 with
+                begin
+                length_flatten_update (slots_t_v v) hash_mod (list_t_v l0);
+                match vec_index_mut_back (list_t t) v hash_mod l0 with
                 | Fail -> ()
                 | Return v0 -> ()
                 end
@@ -3297,3 +3353,61 @@ let hash_map_remove_back_lem #t self key =
       end
     end
   end
+
+(**** Invariants, high-level properties *)
+
+val hash_map_remove_from_list_s_lem
+  (#t : Type0) (k : usize) (slot : slot_s t) (len : usize{len > 0}) (i : usize) :
+  Lemma
+  (requires (slot_s_inv len i slot))
+  (ensures (
+    let slot' = hash_map_remove_from_list_s k slot in
+    slot_s_inv len i slot' /\
+    slot_find k slot' == None /\
+    (forall (k':key{k' <> k}). slot_find k' slot' == slot_find k' slot) /\
+    // This postcondition is necessary to prove that the invariant is preserved
+    // in the recursive calls. This allows us to do the proof in one go.
+    (forall (b:binding t). for_all (binding_neq b) slot ==> for_all (binding_neq b) slot')
+  ))
+
+#push-options "--fuel 1"
+let rec hash_map_remove_from_list_s_lem #t key slot len i =
+  match slot with
+  | [] -> ()
+  | (k',v) :: slot' ->
+    if k' <> key then
+      begin
+      hash_map_remove_from_list_s_lem key slot' len i;
+      let slot'' = hash_map_remove_from_list_s key slot' in
+      assert(for_all (same_hash_mod_key len i) ((k',v)::slot''));
+      assert(for_all (binding_neq (k',v)) slot'); // Triggers instanciation
+      assert(for_all (binding_neq (k',v)) slot'')
+      end
+    else
+      begin
+      assert(for_all (binding_neq (k',v)) slot');
+      for_all_binding_neq_find_lem key v slot'
+      end
+#pop-options
+
+// TODO: rename hash_map_t_updated_binding to hash_map_slots_updated_binding
+
+val hash_map_remove_s_lem
+  (#t : Type0) (self : hash_map_slots_s_nes t) (key : usize) :
+  Lemma
+  (requires (hash_map_slots_s_inv self))
+  (ensures (
+    let hm' = hash_map_remove_s self key in
+    // The invariant is preserved
+    hash_map_slots_s_inv hm' /\
+    // We updated the binding
+    hash_map_t_updated_binding self key None hm'))
+
+let hash_map_remove_s_lem #t self key =
+  let len = length self in
+  let hash = hash_mod_key key len in
+  let slot = index self hash in
+  hash_map_remove_from_list_s_lem key slot len hash;
+  let slot' = hash_map_remove_from_list_s key slot in
+  let hm' = list_update self hash slot' in
+  assert(hash_map_slots_s_inv self)
