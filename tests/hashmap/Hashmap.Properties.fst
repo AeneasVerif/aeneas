@@ -1401,6 +1401,18 @@ let hash_map_insert_in_list_back_lem t len key value ls =
 /// We work on [hash_map_slots_s] (we use a higher-level view of the hash-map, but
 /// not too high).
 
+/// A high-level version of insert, which doesn't check if the table is saturated
+let hash_map_insert_no_fail_s
+  (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0})
+  (key : usize) (value : t) :
+  hash_map_slots_s t =
+  let len = length hm in
+  let i = hash_mod_key key len in
+  let slot = index hm i in
+  let slot' = hash_map_insert_in_list_s key value slot in
+  let hm' = list_update hm i slot' in
+  hm'
+
 // TODO: at some point I used hash_map_slots_s_nes and it broke proofs...x
 let hash_map_insert_no_resize_s
   (#t : Type0) (hm : hash_map_slots_s t{length hm <= usize_max /\ length hm > 0})
@@ -1409,15 +1421,7 @@ let hash_map_insert_no_resize_s
   // Check if the table is saturated (too many entries, and we need to insert one)
   let num_entries = length (flatten hm) in
   if None? (hash_map_slots_s_find hm key) && num_entries = usize_max then Fail
-  else
-    begin
-    let len = length hm in
-    let i = hash_mod_key key len in
-    let slot = index hm i in
-    let slot' = hash_map_insert_in_list_s key value slot in
-    let hm' = list_update hm i slot' in
-    Return hm'
-    end
+  else Return (hash_map_insert_no_fail_s hm key value)
 
 /// Prove that [hash_map_insert_no_resize_s] is a refinement of
 /// [hash_map_insert_no_resize'fwd_back]
@@ -1676,8 +1680,54 @@ let rec hash_map_move_elements_from_list_fwd_back_lem t ntable ls =
 
 (*** move_elements *)
 
+(**** move_elements: refinement 0 *)
+/// The proof for [hash_map_move_elements_fwd_back_lem_refin] broke so many times
+/// (while it is supposed to be super simple!) that we decided to add one refinement
+/// level, to really do things step by step...
+/// Doing this refinement layer made me notice that maybe the problem came from
+/// the fact that at some point we have to prove `list_t_v ListNil == []`: I
+/// added the corresponding assert to help Z3 and everything became stable.
+/// I finally didn't use this "simple" refinement lemma, but I still keep it here
+/// because it allows for easy comparisons with [hash_map_move_elements_s].
+
+/// [hash_map_move_elements_fwd] refines this function, which is actually almost
+/// the same (just a little bit shorter and cleaner, and has a pre).
+///
+/// The way I wrote the refinement is the following:
+/// - I copy-pasted the definition of [hash_map_move_elements_fwd], wrote the
+///   signature which links this new definition to [hash_map_move_elements_fwd] and
+///   checked that the proof passed
+/// - I gradually simplified it, while making sure the proof still passes
+#push-options "--fuel 1"
+let rec hash_map_move_elements_s_simpl
+  (t : Type0) (ntable : hash_map_t t)
+  (slots : vec (list_t t))
+  (i : usize{i <= length slots /\ length slots <= usize_max}) :
+  Pure (result ((hash_map_t t) & (vec (list_t t))))
+  (requires (True))
+  (ensures (fun res ->
+    match res, hash_map_move_elements_fwd_back t ntable slots i with
+    | Fail, Fail -> True
+    | Return (ntable1, slots1), Return (ntable2, slots2) ->
+      ntable1 == ntable2 /\
+      slots1 == slots2
+    | _ -> False))
+  (decreases (hash_map_move_elements_decreases t ntable slots i))
+  =
+  if i < length slots
+  then
+    let slot = index slots i in
+    begin match hash_map_move_elements_from_list_fwd_back t ntable slot with
+    | Fail -> Fail
+    | Return hm' ->
+      let slots' = list_update slots i ListNil in
+      hash_map_move_elements_s_simpl t hm' slots' (i+1)
+    end
+  else Return (ntable, slots)
+#pop-options
+
 (**** move_elements: refinement 1 *)
-/// We prove a first refinement lemma: calling [move_elements] refines a function
+/// We prove a second refinement lemma: calling [move_elements] refines a function
 /// which, for every slot, moves the element out of the slot. This first version is
 /// almost exactly the translated function, it just uses `list` instead of `list_t`.
 
@@ -1743,12 +1793,21 @@ val hash_map_move_elements_fwd_back_lem_refin
 // the ifuel to unreasonable amounts).
 //
 // Finally, as I had succeeded in fixing the proof, I thought that maybe the
-// initial problem with the type abbreviations fixed: I thus tried to use
+// initial problem with the type abbreviations was fixed: I thus tried to use
 // them. Of course, it made the proof fail again, and this time no ifuel setting
-// seemed to work (maybe my initial guess about the type inferencer was right?...).
+// seemed to work.
 //
 // At this point I was just fed up and leave things as they were, without trying
 // to cleanup the previous definitions.
+//
+// Finally, even later it broke, again, at which point I had no choice but to
+// introduce an even simpler refinement proof (with [hash_map_move_elements_s_simpl]).
+// Doing this allowed me to see that maybe the problem came from the fact that
+// Z3 had to prove that `list_t_v ListNil == []` at some point, so I added the
+// corresponding assertion and miraculously everything becamse stable... I then
+// removed all the postconditions I had manually instanciated and inserted in
+// the proof, and which took a lot of place.
+// I still have no clue why `ifuel 4` made it work earlier.
 //
 // The terrible thing is that this refinement proof is conceptually super simple:
 // - there are maybe two arithmetic proofs, which are directly solved by the
@@ -1757,7 +1816,7 @@ val hash_map_move_elements_fwd_back_lem_refin
 //   this is proven by another refinement lemma we proved above
 // - there is the recursive call (trivial)
 #restart-solver
-#push-options "--z3rlimit 300 --fuel 1 --ifuel 4"
+#push-options "--fuel 1"
 let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
   assert(hash_map_t_base_inv ntable);
   let i0 = vec_len (list_t t) slots in
@@ -1770,22 +1829,12 @@ let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
       let l0 = mem_replace_fwd (list_t t) l ListNil in
       assert(l0 == l);
       hash_map_move_elements_from_list_fwd_back_lem t ntable l0;
-      begin
-      match hash_map_move_elements_from_list_fwd_back t ntable l0,
-            hash_map_move_elements_from_list_s (hash_map_t_slots_v ntable) (slot_t_v l0)
-      with
-      | Fail, Fail -> ()
-      | Return hm', Return hm_v ->
-        assert(hash_map_t_base_inv hm');
-        assert(hash_map_t_slots_v hm' == hm_v);
-        assert(hash_map_same_params hm' ntable)
-      | _ -> assert(False)
-      end;
       begin match hash_map_move_elements_from_list_fwd_back t ntable l0 with
       | Fail -> ()
       | Return h ->
         let l1 = mem_replace_back (list_t t) l ListNil in
         assert(l1 == ListNil);
+        assert(slot_t_v #t ListNil == []); // THIS IS IMPORTANT
         begin match vec_index_mut_back (list_t t) slots i l1 with
         | Fail -> ()
         | Return v ->
@@ -1793,28 +1842,11 @@ let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
           | Fail -> ()
           | Return i1 ->
             hash_map_move_elements_fwd_back_lem_refin t h v i1;
-            begin
-            match hash_map_move_elements_fwd_back t h v i1,
-                  hash_map_move_elements_s (hash_map_t_slots_v h) (slots_t_v v) i1
-            with
-            | Fail, Fail -> ()
-            | Return (ntable', _), Return ntable'_v ->
-              assert(hash_map_t_base_inv ntable');
-              assert(hash_map_t_slots_v ntable' == ntable'_v);
-              assert(hash_map_same_params ntable' ntable)
-            | _ -> assert(False)
-            end;
             begin match hash_map_move_elements_fwd_back t h v i1 with
             | Fail ->
               assert(hash_map_move_elements_fwd_back t ntable slots i == Fail);
               ()
-            | Return (ntable', v0) ->
-              begin
-              // Trying to prove the postcondition
-              match hash_map_move_elements_fwd_back t ntable slots i with
-              | Fail -> assert(False)
-              | Return (ntable'', _) -> assert(ntable'' == ntable')
-              end
+            | Return (ntable', v0) -> ()
             end
           end
         end
@@ -2656,10 +2688,264 @@ let hash_map_insert_fwd_back_lem t self key value =
       end
     else ()
 
-(*** contains *)
+(*** contains_key *)
+
+(**** contains_key_in_list *)
+
+val hash_map_contains_key_in_list_fwd_lem
+  (#t : Type0) (key : usize) (ls : list_t t) :
+  Lemma
+  (ensures (
+    match hash_map_contains_key_in_list_fwd t key ls with
+    | Fail -> False
+    | Return b ->
+      b = Some? (slot_t_find_s key ls)))
+
+
+#push-options "--fuel 1"
+let rec hash_map_contains_key_in_list_fwd_lem #t key ls =
+  match ls with
+  | ListCons ckey x ls0 ->
+    let b = ckey = key in
+    if b
+    then ()
+    else
+      begin
+      hash_map_contains_key_in_list_fwd_lem key ls0;
+      match hash_map_contains_key_in_list_fwd t key ls0 with
+      | Fail -> ()
+      | Return b0 -> ()
+      end
+  | ListNil -> ()
+#pop-options
+
+(**** contains_key *)
+
+val hash_map_contains_key_fwd_lem
+  (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
+  Lemma
+  (ensures (
+    match hash_map_contains_key_fwd t self key with
+    | Fail -> False
+    | Return b -> b = Some? (hash_map_t_find_s self key)))
+
+let hash_map_contains_key_fwd_lem #t self key =
+  begin match hash_key_fwd key with
+  | Fail -> ()
+  | Return i ->
+    let v = self.hash_map_slots in
+    let i0 = vec_len (list_t t) v in
+    begin match usize_rem i i0 with
+    | Fail -> ()
+    | Return hash_mod ->
+      begin match vec_index_fwd (list_t t) v hash_mod with
+      | Fail -> ()
+      | Return l ->
+        hash_map_contains_key_in_list_fwd_lem key l;
+        begin match hash_map_contains_key_in_list_fwd t key l with
+        | Fail -> ()
+        | Return b -> ()
+        end
+      end
+    end
+  end
 
 (*** get *)
 
+(**** get_in_list *)
+
+val hash_map_get_in_list_fwd_lem
+  (#t : Type0) (key : usize) (ls : list_t t) :
+  Lemma
+  (ensures (
+    match hash_map_get_in_list_fwd t key ls, slot_t_find_s key ls with
+    | Fail, None -> True
+    | Return x, Some x' -> x == x'
+    | _ -> False))
+
+#push-options "--fuel 1"
+let rec hash_map_get_in_list_fwd_lem #t key ls =
+  begin match ls with
+  | ListCons ckey cvalue ls0 ->
+    let b = ckey = key in
+    if b
+    then ()
+    else
+      begin
+      hash_map_get_in_list_fwd_lem key ls0;
+      match hash_map_get_in_list_fwd t key ls0 with
+      | Fail -> ()
+      | Return x -> ()
+      end
+  | ListNil -> ()
+  end
+#pop-options
+
+(**** get *)
+
+val hash_map_get_fwd_lem
+  (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
+  Lemma
+  (ensures (
+    match hash_map_get_fwd t self key, hash_map_t_find_s self key with
+    | Fail, None -> True
+    | Return x, Some x' -> x == x'
+    | _ -> False))
+
+let hash_map_get_fwd_lem #t self key =
+  begin match hash_key_fwd key with
+  | Fail -> ()
+  | Return i ->
+    let v = self.hash_map_slots in
+    let i0 = vec_len (list_t t) v in
+    begin match usize_rem i i0 with
+    | Fail -> ()
+    | Return hash_mod ->
+      begin match vec_index_fwd (list_t t) v hash_mod with
+      | Fail -> ()
+      | Return l ->
+        begin
+        hash_map_get_in_list_fwd_lem key l;
+        match hash_map_get_in_list_fwd t key l with
+        | Fail -> ()
+        | Return x -> ()
+        end
+      end
+    end
+  end
+
+
 (*** get_mut'fwd *)
 
+
+(**** get_mut_in_list *)
+
+val hash_map_get_mut_in_list_fwd_lem
+  (#t : Type0) (key : usize) (ls : list_t t) :
+  Lemma
+  (ensures (
+    match hash_map_get_mut_in_list_fwd t key ls, slot_t_find_s key ls with
+    | Fail, None -> True
+    | Return x, Some x' -> x == x'
+    | _ -> False))
+
+#push-options "--fuel 1"
+let rec hash_map_get_mut_in_list_fwd_lem #t key ls =
+  begin match ls with
+  | ListCons ckey cvalue ls0 ->
+    let b = ckey = key in
+    if b
+    then ()
+    else
+      begin
+      hash_map_get_mut_in_list_fwd_lem key ls0;
+      match hash_map_get_mut_in_list_fwd t key ls0 with
+      | Fail -> ()
+      | Return x -> ()
+      end
+  | ListNil -> ()
+  end
+#pop-options
+
+(**** get_mut *)
+
+val hash_map_get_mut_fwd_lem
+  (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
+  Lemma
+  (ensures (
+    match hash_map_get_mut_fwd t self key, hash_map_t_find_s self key with
+    | Fail, None -> True
+    | Return x, Some x' -> x == x'
+    | _ -> False))
+
+let hash_map_get_mut_fwd_lem #t self key =
+  begin match hash_key_fwd key with
+  | Fail -> ()
+  | Return i ->
+    let v = self.hash_map_slots in
+    let i0 = vec_len (list_t t) v in
+    begin match usize_rem i i0 with
+    | Fail -> ()
+    | Return hash_mod ->
+      begin match vec_index_fwd (list_t t) v hash_mod with
+      | Fail -> ()
+      | Return l ->
+        begin
+        hash_map_get_mut_in_list_fwd_lem key l;
+        match hash_map_get_mut_in_list_fwd t key l with
+        | Fail -> ()
+        | Return x -> ()
+        end
+      end
+    end
+  end
+
+
 (*** get_mut'back *)
+
+(**** get_mut_in_list *)
+
+val hash_map_get_mut_in_list_back_lem
+  (#t : Type0) (key : usize) (ls : list_t t) (ret : t) :
+  Lemma
+  (requires (Some? (slot_t_find_s key ls)))
+  (ensures (
+    match hash_map_get_mut_in_list_back t key ls ret with
+    | Fail -> False
+    | Return ls' -> list_t_v ls' == find_update (same_key key) (list_t_v ls) (key,ret)
+    | _ -> False))
+
+#push-options "--fuel 1"
+let rec hash_map_get_mut_in_list_back_lem #t key ls ret =
+  begin match ls with
+  | ListCons ckey cvalue ls0 ->
+    let b = ckey = key in
+    if b
+    then let ls1 = ListCons ckey ret ls0 in ()
+    else
+      begin
+      hash_map_get_mut_in_list_back_lem key ls0 ret;
+      match hash_map_get_mut_in_list_back t key ls0 ret with
+      | Fail -> ()
+      | Return l -> let ls1 = ListCons ckey cvalue l in ()
+      end
+  | ListNil -> ()
+  end
+#pop-options
+
+(**** get_mut *)
+
+val hash_map_get_mut_back_lem
+  (#t : Type0) (self : hash_map_t t) (key : usize) (ret : t) :
+  Lemma
+  (requires (Some? (hash_map_t_find_s self key))
+  (ensures (
+    match hash_map_get_mut_back t self key ret with
+    | Fail -> False
+    | Return hm' -> hash_map_t_slots_v hm' == hash_map_insert_no_fail hm key ret))
+
+let hash_map_get_mut_back_lem #t self key =
+  begin match hash_key_back key with
+  | Fail -> ()
+  | Return i ->
+    let v = self.hash_map_slots in
+    let i0 = vec_len (list_t t) v in
+    begin match usize_rem i i0 with
+    | Fail -> ()
+    | Return hash_mod ->
+      begin match vec_index_back (list_t t) v hash_mod with
+      | Fail -> ()
+      | Return l ->
+        begin
+        hash_map_get_mut_in_list_back_lem key l;
+        match hash_map_get_mut_in_list_back t key l with
+        | Fail -> ()
+        | Return x -> ()
+        end
+      end
+    end
+  end
+
+
+
+//val hash_map_insert_no_resize_s_lem

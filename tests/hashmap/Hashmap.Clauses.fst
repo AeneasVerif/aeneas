@@ -35,6 +35,12 @@ let hash_map_move_elements_decreases (t : Type0) (ntable : hash_map_t t)
   (slots : vec (list_t t)) (i : usize) : nat =
   if i < length slots then length slots - i else 0
 
+(** [hashmap::HashMap::contains_key_in_list]: decreases clause *)
+unfold
+let hash_map_contains_key_in_list_decreases (t : Type0) (key : usize)
+  (ls : list_t t) : list_t t =
+  ls
+
 (** [hashmap::HashMap::get_in_list]: decreases clause *)
 unfold
 let hash_map_get_in_list_decreases (t : Type0) (key : usize) (ls : list_t t) :

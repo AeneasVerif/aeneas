@@ -310,6 +310,47 @@ let hash_map_insert_fwd_back
     end
   end
 
+(** [hashmap::HashMap::contains_key_in_list] *)
+let rec hash_map_contains_key_in_list_fwd
+  (t : Type0) (key : usize) (ls : list_t t) :
+  Tot (result bool)
+  (decreases (hash_map_contains_key_in_list_decreases t key ls))
+  =
+  begin match ls with
+  | ListCons ckey x ls0 ->
+    let b = ckey = key in
+    if b
+    then Return true
+    else
+      begin match hash_map_contains_key_in_list_fwd t key ls0 with
+      | Fail -> Fail
+      | Return b0 -> Return b0
+      end
+  | ListNil -> Return false
+  end
+
+(** [hashmap::HashMap::contains_key] *)
+let hash_map_contains_key_fwd
+  (t : Type0) (self : hash_map_t t) (key : usize) : result bool =
+  begin match hash_key_fwd key with
+  | Fail -> Fail
+  | Return i ->
+    let v = self.hash_map_slots in
+    let i0 = vec_len (list_t t) v in
+    begin match usize_rem i i0 with
+    | Fail -> Fail
+    | Return hash_mod ->
+      begin match vec_index_fwd (list_t t) v hash_mod with
+      | Fail -> Fail
+      | Return l ->
+        begin match hash_map_contains_key_in_list_fwd t key l with
+        | Fail -> Fail
+        | Return b -> Return b
+        end
+      end
+    end
+  end
+
 (** [hashmap::HashMap::get_in_list] *)
 let rec hash_map_get_in_list_fwd
   (t : Type0) (key : usize) (ls : list_t t) :
