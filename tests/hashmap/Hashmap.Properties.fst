@@ -9,6 +9,8 @@ open Hashmap.Funs
 
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 
+let _align_fsti = ()
+
 /// The proofs actually caused a lot more trouble than expected, because of the
 /// below points. All those are problems I already encountered in the past, but:
 ///
@@ -415,16 +417,12 @@ let rec map_list_update_lem #a #b f ls i x =
 
 (*** Invariants, models *)
 
+(**** Internals *)
 /// The following invariants, models, representation functions... are mostly
 /// for the purpose of the proofs.
 
 let is_pos_usize (n : nat) : Type0 = 0 < n /\ n <= usize_max
 type pos_usize = x:usize{x > 0}
-
-/// The "key" type
-type key : eqtype = usize
-
-type hash : eqtype = usize
 
 type binding (t : Type0) = key & t
 
@@ -608,6 +606,16 @@ let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   || length hm.hash_map_slots * 2 * dividend > usize_max
   end
 
+(*** .fsti *)
+/// We reveal slightly different version of the above functions to the user
+
+let len_s (#t : Type0) (hm : hash_map_t t) : nat = hash_map_t_len_s hm
+
+/// This version doesn't take any precondition (contrary to [hash_map_t_find_s])
+let find_s (#t : Type0) (hm : hash_map_t t) (k : key) : option t =
+  if length hm.hash_map_slots = 0 then None
+  else hash_map_t_find_s hm k
+
 (*** allocate_slots *)
 
 /// Auxiliary lemma
@@ -733,8 +741,9 @@ let hash_map_new_with_capacity_fwd_lem (t : Type0) (capacity : usize)
 #pop-options
 
 (*** new *)
+
 /// [new] doesn't fail and returns an empty hash map
-val hash_map_new_fwd_lem_fun (t : Type0) :
+val hash_map_new_fwd_lem_aux (t : Type0) :
   Lemma
   (ensures (
     match hash_map_new_fwd t with
@@ -748,12 +757,15 @@ val hash_map_new_fwd_lem_fun (t : Type0) :
       (forall k. hash_map_t_find_s hm k == None)))
 
 #push-options "--fuel 1"
-let hash_map_new_fwd_lem_fun t =
+let hash_map_new_fwd_lem_aux t =
   hash_map_new_with_capacity_fwd_lem t 32 4 5;
   match hash_map_new_with_capacity_fwd t 32 4 5 with
   | Fail -> ()
   | Return hm -> ()
 #pop-options
+
+/// The lemma we reveal in the .fsti
+let hash_map_new_fwd_lem t = hash_map_new_fwd_lem_aux t
 
 (*** clear_slots *)
 /// [clear_slots] doesn't fail and simply clears the slots starting at index i
@@ -798,8 +810,8 @@ let rec hash_map_clear_slots_fwd_back_lem
 
 (*** clear *)
 /// [clear] doesn't fail and turns the hash map into an empty map
-val hash_map_clear_fwd_back_lem_fun
-  (t : Type0) (self : hash_map_t t) :
+val hash_map_clear_fwd_back_lem_aux
+  (#t : Type0) (self : hash_map_t t) :
   Lemma
   (requires (hash_map_t_base_inv self))
   (ensures (
@@ -817,7 +829,7 @@ val hash_map_clear_fwd_back_lem_fun
 
 // Being lazy: fuel 1 helps a lot...
 #push-options "--fuel 1"
-let hash_map_clear_fwd_back_lem_fun t self =
+let hash_map_clear_fwd_back_lem_aux #t self =
   let p = self.hash_map_max_load_factor in
   let i = self.hash_map_max_load in
   let v = self.hash_map_slots in
@@ -832,18 +844,14 @@ let hash_map_clear_fwd_back_lem_fun t self =
   end
 #pop-options
 
+let hash_map_clear_fwd_back_lem #t self = hash_map_clear_fwd_back_lem_aux #t self
+
 (*** len *)
 
 /// [len]: we link it to a non-failing function.
 /// Rk.: we might want to make an analysis to not use an error monad to translate
 /// functions which statically can't fail.
-val hash_map_len_fwd_lem (t : Type0) (self : hash_map_t t) :
-  Lemma (
-    match hash_map_len_fwd t self with
-    | Fail -> False
-    | Return l -> l = hash_map_t_len_s self)
-
-let hash_map_len_fwd_lem t self = ()
+let hash_map_len_fwd_lem #t self = ()
 
 
 (*** insert_in_list *)
@@ -2686,8 +2694,22 @@ val hash_map_insert_fwd_back_lem_refin
 
 let hash_map_insert_fwd_back_lem_refin t self key value = ()
 
-val hash_map_insert_fwd_back_lem
-  (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
+/// Helper
+let hash_map_insert_fwd_back_bindings_lem
+  (t : Type0) (self : hash_map_t_nes t) (key : usize) (value : t)
+  (hm' hm'' : hash_map_t_nes t) :
+  Lemma
+  (requires (
+     hash_map_s_updated_binding (hash_map_t_v self) key
+                                (Some value) (hash_map_t_v hm') /\
+     hash_map_t_same_bindings hm' hm''))
+  (ensures (
+     hash_map_s_updated_binding (hash_map_t_v self) key
+                                (Some value) (hash_map_t_v hm'')))
+  = ()
+
+val hash_map_insert_fwd_back_lem_aux
+  (#t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
   Lemma (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_insert_fwd_back t self key value with
@@ -2707,22 +2729,9 @@ val hash_map_insert_fwd_back_lem
        | None -> hash_map_t_len_s hm' = hash_map_t_len_s self + 1
        | Some _ -> hash_map_t_len_s hm' = hash_map_t_len_s self)))
 
-let hash_map_insert_fwd_back_bindings_lem
-  (t : Type0) (self : hash_map_t_nes t) (key : usize) (value : t)
-  (hm' hm'' : hash_map_t_nes t) :
-  Lemma
-  (requires (
-     hash_map_s_updated_binding (hash_map_t_v self) key
-                                      (Some value) (hash_map_t_v hm') /\
-     hash_map_t_same_bindings hm' hm''))
-  (ensures (
-     hash_map_s_updated_binding (hash_map_t_v self) key
-                                      (Some value) (hash_map_t_v hm'')))
-  = ()
-
 #restart-solver
-#push-options "--z3rlimit 500"
-let hash_map_insert_fwd_back_lem t self key value =
+#push-options "--z3rlimit 200"
+let hash_map_insert_fwd_back_lem_aux #t self key value =
   hash_map_insert_no_resize_fwd_back_lem_s t self key value;
   hash_map_insert_no_resize_s_lem (hash_map_t_v self) key value;
   match hash_map_insert_no_resize_fwd_back t self key value with
@@ -2763,6 +2772,8 @@ let hash_map_insert_fwd_back_lem t self key value =
     else ()
 #pop-options
 
+let hash_map_insert_fwd_back_lem #t self key value =
+  hash_map_insert_fwd_back_lem_aux #t self key value
 
 (*** contains_key *)
 
@@ -2797,7 +2808,7 @@ let rec hash_map_contains_key_in_list_fwd_lem #t key ls =
 
 (**** contains_key *)
 
-val hash_map_contains_key_fwd_lem
+val hash_map_contains_key_fwd_lem_aux
   (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
   Lemma
   (ensures (
@@ -2805,7 +2816,7 @@ val hash_map_contains_key_fwd_lem
     | Fail -> False
     | Return b -> b = Some? (hash_map_t_find_s self key)))
 
-let hash_map_contains_key_fwd_lem #t self key =
+let hash_map_contains_key_fwd_lem_aux #t self key =
   begin match hash_key_fwd key with
   | Fail -> ()
   | Return i ->
@@ -2825,6 +2836,10 @@ let hash_map_contains_key_fwd_lem #t self key =
       end
     end
   end
+
+/// The lemma in the .fsti
+let hash_map_contains_key_fwd_lem #t self key =
+  hash_map_contains_key_fwd_lem_aux #t self key
 
 (*** get *)
 
@@ -2859,7 +2874,7 @@ let rec hash_map_get_in_list_fwd_lem #t key ls =
 
 (**** get *)
 
-val hash_map_get_fwd_lem
+val hash_map_get_fwd_lem_aux
   (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
   Lemma
   (ensures (
@@ -2868,7 +2883,7 @@ val hash_map_get_fwd_lem
     | Return x, Some x' -> x == x'
     | _ -> False))
 
-let hash_map_get_fwd_lem #t self key =
+let hash_map_get_fwd_lem_aux #t self key =
   begin match hash_key_fwd key with
   | Fail -> ()
   | Return i ->
@@ -2890,6 +2905,8 @@ let hash_map_get_fwd_lem #t self key =
     end
   end
 
+/// .fsti
+let hash_map_get_fwd_lem #t self key = hash_map_get_fwd_lem_aux #t self key
 
 (*** get_mut'fwd *)
 
@@ -2925,7 +2942,7 @@ let rec hash_map_get_mut_in_list_fwd_lem #t key ls =
 
 (**** get_mut'fwd *)
 
-val hash_map_get_mut_fwd_lem
+val hash_map_get_mut_fwd_lem_aux
   (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
   Lemma
   (ensures (
@@ -2934,7 +2951,7 @@ val hash_map_get_mut_fwd_lem
     | Return x, Some x' -> x == x'
     | _ -> False))
 
-let hash_map_get_mut_fwd_lem #t self key =
+let hash_map_get_mut_fwd_lem_aux #t self key =
   begin match hash_key_fwd key with
   | Fail -> ()
   | Return i ->
@@ -2956,6 +2973,8 @@ let hash_map_get_mut_fwd_lem #t self key =
     end
   end
 
+let hash_map_get_mut_fwd_lem #t self key =
+  hash_map_get_mut_fwd_lem_aux #t self key
 
 (*** get_mut'back *)
 
@@ -3033,20 +3052,19 @@ let hash_map_get_mut_back_lem_refin #t self key ret =
   end
 
 /// Final lemma
-val hash_map_get_mut_back_lem
-  (#t : Type0) (hm : hash_map_t t{length hm.hash_map_slots > 0})
+val hash_map_get_mut_back_lem_aux
+  (#t : Type0) (hm : hash_map_t t)
   (key : usize) (ret : t) :
   Lemma
   (requires (
-    Some? (hash_map_t_find_s hm key) /\
-    hash_map_t_inv hm))
+    hash_map_t_inv hm /\
+    Some? (hash_map_t_find_s hm key)))
   (ensures (
     match hash_map_get_mut_back t hm key ret with
     | Fail -> False
     | Return hm' ->
       // Functional spec
-      hash_map_t_v hm' ==
-       hash_map_insert_no_fail_s (hash_map_t_v hm) key ret /\
+      hash_map_t_v hm' == hash_map_insert_no_fail_s (hash_map_t_v hm) key ret /\
      // The invariant is preserved
      hash_map_t_inv hm' /\
      // The length is preserved
@@ -3056,7 +3074,7 @@ val hash_map_get_mut_back_lem
      // The other bindings are preserved
      (forall k'. k' <> key ==> hash_map_t_find_s hm' k' == hash_map_t_find_s hm k')))
 
-let hash_map_get_mut_back_lem #t hm key ret =
+let hash_map_get_mut_back_lem_aux #t hm key ret =
   let hm_v = hash_map_t_v hm in
   hash_map_get_mut_back_lem_refin hm key ret;
   match hash_map_get_mut_back t hm key ret with
@@ -3064,6 +3082,8 @@ let hash_map_get_mut_back_lem #t hm key ret =
   | Return hm' ->
     hash_map_insert_no_fail_s_lem hm_v key ret
 
+/// .fsti
+let hash_map_get_mut_back_lem #t hm key ret = hash_map_get_mut_back_lem_aux hm key ret
 
 (*** remove'fwd *)
 
@@ -3100,8 +3120,8 @@ let rec hash_map_remove_from_list_fwd_lem #t key ls =
   end
 #pop-options
 
-val hash_map_remove_fwd_lem
-  (t : Type0) (self : hash_map_t t) (key : usize) :
+val hash_map_remove_fwd_lem_aux
+  (#t : Type0) (self : hash_map_t t) (key : usize) :
   Lemma
   (requires (
     // We need the invariant to prove that upon decrementing the entries counter,
@@ -3112,7 +3132,7 @@ val hash_map_remove_fwd_lem
     | Fail -> False
     | Return opt_x -> opt_x == hash_map_t_find_s self key))
 
-let hash_map_remove_fwd_lem t self key =
+let hash_map_remove_fwd_lem_aux #t self key =
   begin match hash_key_fwd key with
   | Fail -> ()
   | Return i ->
@@ -3146,6 +3166,9 @@ let hash_map_remove_fwd_lem t self key =
       end
     end
   end
+
+/// .fsti
+let hash_map_remove_fwd_lem #t self key = hash_map_remove_fwd_lem_aux #t self key
 
 (*** remove'back *)
 
@@ -3345,8 +3368,8 @@ let hash_map_remove_s_lem #t self key =
   assert(hash_map_s_inv self)
 
 /// Final lemma about [remove'back]
-val hash_map_remove_back_lem
-  (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
+val hash_map_remove_back_lem_aux
+  (#t : Type0) (self : hash_map_t t) (key : usize) :
   Lemma
   (requires (hash_map_t_inv self))
   (ensures (
@@ -3355,6 +3378,8 @@ val hash_map_remove_back_lem
     | Return hm' ->
       hash_map_t_inv self /\
       hash_map_t_same_params hm' self /\
+      // We updated the binding
+      hash_map_s_updated_binding (hash_map_t_v self) key None (hash_map_t_v hm') /\
       hash_map_t_v hm' == hash_map_remove_s (hash_map_t_v self) key /\
       // The length is decremented iff the key was in the map
       (let len = hash_map_t_len_s self in
@@ -3363,6 +3388,10 @@ val hash_map_remove_back_lem
        | None -> len = len'
        | Some _ -> len = len' + 1)))
 
-let hash_map_remove_back_lem #t self key =
+let hash_map_remove_back_lem_aux #t self key =
   hash_map_remove_back_lem_refin self key;
   hash_map_remove_s_lem (hash_map_t_v self) key
+
+/// .fsti
+let hash_map_remove_back_lem #t self key =
+  hash_map_remove_back_lem_aux #t self key
