@@ -7,9 +7,6 @@ open Hashmap.Types
 open Hashmap.Clauses
 open Hashmap.Funs
 
-// To help with the proofs - TODO: remove
-module InteractiveHelpers = FStar.InteractiveHelpers
-
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 
 /// The proofs actually caused a lot more trouble than expected, because of the
@@ -218,28 +215,6 @@ let rec index_map_lem #a #b f ls i =
     else index_map_lem f ls' (i-1)
 #pop-options
 
-// TODO: remove?
-// Returns the index of the value which satisfies the predicate
-val find_index :
-    #a:Type
-  -> f:(a -> Tot bool)
-  -> ls:list a{Some? (find f ls)}
-  -> Tot (i:nat{
-    i < length ls /\
-    begin match find f ls with
-    | None -> False
-    | Some x -> x == index ls i
-    end})
-
-#push-options "--fuel 1"
-let rec find_index #a f ls =
-  match ls with
-  | [] -> assert(False); 0
-  | x :: ls' ->
-    if f x then 0
-    else 1 + find_index f ls'
-#pop-options
-
 val for_all_append (#a : Type0) (f : a -> Tot bool) (ls0 ls1 : list a) :
   Lemma (for_all f (ls0 @ ls1) = (for_all f ls0 && for_all f ls1))
 
@@ -368,7 +343,6 @@ let rec length_flatten_update #a ls i x =
       end
 #pop-options
 
-
 val length_flatten_index :
      #a:Type
   -> ls:list (list a)
@@ -424,12 +398,15 @@ let rec pairwise_distinct (#a : eqtype) (ls : list a) : Tot bool =
   | [] -> true
   | x :: ls' -> List.Tot.for_all (fun y -> x <> y) ls' && pairwise_distinct ls'
 
+(*
 val for_allP: #a:Type -> f:(a -> Tot Type0) -> list a -> Tot Type0
 let rec for_allP (f : 'a -> Tot Type0) (l : list 'a) : Tot Type0 =
   match l with
   | [] -> True
   | hd::tl -> f hd /\ for_allP f tl
+*)
 
+(*
 val for_all_i_aux: #a:Type -> f:(nat -> a -> Tot bool) -> list a -> nat -> Tot bool
 let rec for_all_i_aux (f : nat -> 'a -> Tot bool) (l : list 'a) (i : nat) : Tot bool =
   match l with
@@ -439,13 +416,15 @@ let rec for_all_i_aux (f : nat -> 'a -> Tot bool) (l : list 'a) (i : nat) : Tot 
 val for_all_i: #a:Type -> f:(nat -> a -> Tot bool) -> list a -> Tot bool
 let for_all_i (f : nat -> 'a -> Tot bool) (l : list 'a) : Tot bool =
   for_all_i_aux f l 0
+*)
 
-val pairwise_relP : #a:Type -> pred:(a -> a -> Tot Type0) -> ls:list a -> Tot Type0
+(*val pairwise_relP : #a:Type -> pred:(a -> a -> Tot Type0) -> ls:list a -> Tot Type0
 let rec pairwise_relP #a pred ls =
   match ls with
   | [] -> True
   | x :: ls' ->
     for_allP (pred x) ls' /\ pairwise_relP pred ls'
+*)
 
 val pairwise_rel : #a:Type -> pred:(a -> a -> Tot bool) -> ls:list a -> Tot bool
 let rec pairwise_rel #a pred ls =
@@ -574,9 +553,6 @@ let same_key (#t : Type0) (k : key) (b : binding t) : bool = fst b = k
 let same_hash_mod_key (#t : Type0) (len : usize{len > 0}) (h : nat) (b : binding t) : bool =
   hash_mod_key (fst b) len = h
 
-// We take a [nat] instead of a [hash] on purpose
-(*let same_hash (#t : Type0) (h : nat) (b : binding t) : bool = hash_key (fst b) = h *)
-
 let binding_neq (#t : Type0) (b0 b1 : binding t) : bool = fst b0 <> fst b1
 
 let has_same_binding (#t : Type0) (al : assoc_list t) ((k,v) : binding t) : Type0 =
@@ -605,7 +581,6 @@ let slot_t_find_s (#t : Type0) (k : key) (slot : list_t t) : option t =
 
 // This is a simpler version of the "find" function, which captures the essence
 // of what happens and operates on [hash_map_slots_s].
-// TODO: useful?
 let hash_map_slots_s_find
   (#t : Type0) (hm : hash_map_slots_s_nes t)
   (k : key) : option t =
@@ -629,45 +604,6 @@ let hash_map_t_find_s
   let slot = index slots i in
   slot_t_find_s k slot
 
-(*let hash_map_t_find_s (#t : Type0) (hm : hash_map_t t) (k : key) : option t =
- match find (same_key k) (hash_map_t_v hm) with
- | None -> None
- | Some (_, v) -> Some v*)
-
-/// Auxiliary function stating that two associative lists are "equivalent"
-let assoc_list_equiv (#t : Type0) (al0 al1 : assoc_list t) : Type0 =
-  // All the bindings in al0 can be found in al1
-  for_allP (has_same_binding al1) al0 /\
-  // And the reverse is true
-  for_allP (has_same_binding al0) al1
-
-(*
-// Introducing auxiliary definitions to help deal with the quantifiers
-
-let not_same_keys_at_j_k
-  (#t : Type0) (ls : list_t t) (j:nat{j < list_t_len ls}) (k:nat{k < list_t_len ls}) :
-  Type0 =
-  fst (list_t_index ls j) <> fst (list_t_index ls k)
-
-(*let not_same_keys_at_j_k
-  (#t : Type0) (ls : list_t t) (j:nat{j < list_t_len ls}) (k:nat{k < list_t_len ls}) :
-  Type0 =
-  fst (list_t_index ls j) <> fst (list_t_index ls k)*)
-
-type slot_t_inv_hash_key_f (#t : Type0) (len : usize{len > 0}) (i : usize) (slot : list_t t) =
-  (j:nat{j < list_t_len slot}) ->
-  Lemma (hash_mod_key (fst (list_t_index slot j)) len = i)
-  [SMTPat (hash_mod_key (fst (list_t_index slot j)) len)]
-  
-type slot_t_inv_not_same_keys_f (#t : Type0) (i : usize) (slot : list_t t) =
-     (j:nat{j < list_t_len slot})
-  -> (k:nat{k < list_t_len slot /\ j < k})
-  -> Lemma (not_same_keys_at_j_k slot j k)
-  [SMTPat (not_same_keys_at_j_k slot j k)]
-*)
-
-(**)
-
 /// Invariants for the slots
 
 let slot_s_inv
@@ -683,52 +619,6 @@ let slot_t_inv (#t : Type0) (len : usize{len > 0}) (i : usize) (slot : list_t t)
   // All the keys are pairwise distinct
   pairwise_rel binding_neq (list_t_v slot)
 
-(*
-/// Invariants for the slots
-/// Rk.: making sure the quantifiers instantiations work was painful. As always.
-let slot_t_inv (#t : Type0) (len : usize{len > 0}) (i : usize) (slot : list_t t) : Type0 =
-  // All the hashes of the keys are equal to the current hash
-  (forall (j:nat{j < list_t_len slot}).
-    {:pattern (list_t_index slot j)}
-    hash_mod_key (fst (list_t_index slot j)) len = i) /\
-  // All the keys are pairwise distinct
-  (forall (j:nat{j < list_t_len slot}) (k:nat{k < list_t_len slot /\ j < k}).
-    {:pattern not_same_keys_at_j_k slot j k}
-    k <> j ==> not_same_keys_at_j_k slot j k)
-
-/// Helpers to deal with the quantifier proofs
-let slot_t_inv_to_funs
-  (#t : Type0) (len : usize{len > 0}) (i : usize) (slot : list_t t{slot_t_inv len i slot}) :
-  slot_t_inv_hash_key_f len i slot & slot_t_inv_not_same_keys_f i slot =
-  let f : slot_t_inv_hash_key_f len i slot =
-    fun j -> ()
-  in
-  let g : slot_t_inv_not_same_keys_f i slot =
-    fun j k -> ()
-  in
-  (f, g)
-
-let slot_t_inv_from_funs_lem
-  (#t : Type0) (len : usize{len > 0}) (i : usize) (slot : list_t t)
-  (f : slot_t_inv_hash_key_f len i slot)
-  (g : slot_t_inv_not_same_keys_f i slot) :
-  Lemma (slot_t_inv len i slot) =
-  // Dealing with quantifiers is annoying, like always
-  let f' (j:nat{j < list_t_len slot}) :
-    Lemma (hash_mod_key (fst (list_t_index slot j)) len = i)
-    [SMTPat (hash_mod_key (fst (list_t_index slot j)) len)]
-    =
-    f j
-  in
-  let g' (j:nat{j < list_t_len slot}) (k:nat{k < list_t_len slot /\ j < k}) :
-    Lemma (not_same_keys_at_j_k slot j k)
-    [SMTPat (not_same_keys_at_j_k slot j k)]
-    =
-    g j k
-  in
-  ()
-*)
-
 let slots_s_inv (#t : Type0) (slots : slots_s t{length slots <= usize_max}) : Type0 =
   forall(i:nat{i < length slots}).
   {:pattern index slots i}
@@ -739,30 +629,6 @@ let slots_t_inv (#t : Type0) (slots : slots_t t{length slots <= usize_max}) : Ty
   {:pattern index slots i}
   slot_t_inv (length slots) i (index slots i)
 
-(*
-type slots_t_inv_f (#t : Type0) (slots : slots_t t{length slots <= usize_max}) =
-  (i:nat{i < length slots}) ->
-  Lemma (slot_t_inv (length slots) i (index slots i))
-
-let slots_t_inv_to_fun
-  (#t : Type0) (slots : slots_t t{length slots <= usize_max /\ slots_t_inv slots}) :
-  slots_t_inv_f slots =
-  fun i -> ()
-
-let slots_t_from_fun
-  (#t : Type0) (slots : slots_t t{length slots <= usize_max})
-  (f : slots_t_inv_f slots) :
-  Lemma (slots_t_inv slots) =
-  let f' (i:nat{i < length slots}) :
-    Lemma (slot_t_inv (length slots) i (index slots i))
-    [SMTPat (slot_t_inv (length slots) i (index slots i))]
-    =
-    f i
-  in
-  ()
-*)
-
-// TODO: hash_map_slots -> hash_map_slots_s
 let hash_map_slots_s_inv (#t : Type0) (hm : hash_map_slots_s t) : Type0 =
   length hm <= usize_max /\
   length hm > 0 /\
@@ -800,28 +666,12 @@ let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
    hm.hash_map_num_entries <= hm.hash_map_max_load
    || length hm.hash_map_slots * 2 * dividend > usize_max)
 
-/// The following predicate links the hashmap to an associative list.
-/// Note that it does not compute the representant: different (permuted)
-/// lists can be used to represent the same hashmap!
-let hash_map_t_is_al (#t : Type0) (hm : hash_map_t t) (al : assoc_list t) : Type0 =
-  let hm_al = hash_map_t_v hm in
-  assoc_list_equiv hm_al al
-
 /// We often need to frame some values
 let hash_map_same_params (#t : Type0) (hm0 hm1 : hash_map_t t) : Type0 =
   length hm0.hash_map_slots = length hm1.hash_map_slots /\
   hm0.hash_map_max_load = hm1.hash_map_max_load /\
   hm0.hash_map_max_load_factor = hm1.hash_map_max_load_factor
   
-(*
-/// The invariant we reveal to the user
-let hash_map_t_inv_repr (#t : Type0) (hm : hash_map_t t) (al : assoc_list t) : Type0 =
-  // The hash map invariant is satisfied
-  hash_map_t_inv hm /\
-  // And it can be seen as the given associative list
-  hash_map_t_is_al hm al
-*)
-
 (*** allocate_slots *)
 
 /// Auxiliary lemma
@@ -1042,8 +892,7 @@ let hash_map_clear_fwd_back_lem_fun t self =
     slots_t_al_v_all_nil_is_empty_lem slots1;
     let hm1 = Mkhash_map_t 0 p i slots1 in
     assert(hash_map_t_base_inv hm1);
-    assert(hash_map_t_inv hm1);
-    assert(hash_map_t_is_al hm1 [])
+    assert(hash_map_t_inv hm1)
   end
 #pop-options
 
@@ -1599,7 +1448,7 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
 
 (**** insert_{no_fail,no_resize}: invariants *)
 
-let hash_map_t_updated_binding
+let hash_map_slots_s_updated_binding
   (#t : Type0) (hm : hash_map_slots_s_nes t)
   (key : usize) (opt_value : option t) (hm' : hash_map_slots_s_nes t) : Type0 =
   // [key] maps to [value]
@@ -1612,7 +1461,7 @@ let insert_post (#t : Type0) (hm : hash_map_slots_s_nes t)
   // The invariant is preserved
   hash_map_slots_s_inv hm' /\
   // [key] maps to [value] and the other bindings are preserved
-  hash_map_t_updated_binding hm key (Some value) hm' /\
+  hash_map_slots_s_updated_binding hm key (Some value) hm' /\
   // The length is incremented, iff we inserted a new key
   (match hash_map_slots_s_find hm key with
    | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
@@ -2708,7 +2557,7 @@ let times_divid_lem (n m p : pos) :
   assert(((n * (m / p)) * p) / p = n * (m / p))
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 100 --z3cliopt smt.arith.nl=false"
 let new_max_load_lem
   (len : usize) (capacity : usize{capacity > 0})
   (divid : usize{divid > 0}) (divis : usize{divis > 0}) :
@@ -2718,7 +2567,7 @@ let new_max_load_lem
     let ncapacity = 2 * capacity in
     let nmax_load = (ncapacity * divid) / divis in
     capacity > 0 /\ 0 < divid /\ divid < divis /\
-    capacity * divid >= divis /\ // TODO: add to invariant
+    capacity * divid >= divis /\
     len = max_load + 1))
   (ensures (
     let max_load = (capacity * divid) / divis in
@@ -2731,7 +2580,9 @@ let new_max_load_lem
   assert(nmax_load = (2 * capacity * divid) / divis);
   times_divid_lem 2 (capacity * divid) divis;
   assert(nmax_load >= 2 * ((capacity * divid) / divis));
-  assert(nmax_load >= 2 * max_load)
+  assert(nmax_load >= 2 * max_load);
+  assert(nmax_load >= max_load + max_load);
+  assert(nmax_load >= max_load + 1)
 #pop-options
 
 val hash_map_try_resize_s_simpl_lem (#t : Type0) (hm : hash_map_t t) :
@@ -2891,7 +2742,7 @@ val hash_map_insert_fwd_back_lem
       // The invariant is preserved
       hash_map_t_inv hm' /\
       // [key] maps to [value] and the other bindings are preserved
-      hash_map_t_updated_binding (hash_map_t_slots_v self) key (Some value) (hash_map_t_slots_v hm') /\
+      hash_map_slots_s_updated_binding (hash_map_t_slots_v self) key (Some value) (hash_map_t_slots_v hm') /\
       // The length is incremented, iff we inserted a new key
       (match hash_map_t_find_s self key with
        | None -> hash_map_t_len_s hm' = hash_map_t_len_s self + 1
@@ -2902,10 +2753,12 @@ let hash_map_insert_fwd_back_bindings_lem
   (hm' hm'' : hash_map_t_nes t) :
   Lemma
   (requires (
-     hash_map_t_updated_binding (hash_map_t_slots_v self) key (Some value) (hash_map_t_slots_v hm') /\
+     hash_map_slots_s_updated_binding (hash_map_t_slots_v self) key
+                                      (Some value) (hash_map_t_slots_v hm') /\
      hash_map_t_same_bindings hm' hm''))
   (ensures (
-     hash_map_t_updated_binding (hash_map_t_slots_v self) key (Some value) (hash_map_t_slots_v hm'')))
+     hash_map_slots_s_updated_binding (hash_map_t_slots_v self) key
+                                      (Some value) (hash_map_t_slots_v hm'')))
   = ()
 
 #restart-solver
@@ -3345,25 +3198,6 @@ let hash_map_remove_from_list_s
   slot_s t =
   filter_one (not_same_key key) ls
 
-(*
-// TODO: remove?
-val filter_one_find (#a : Type) (f g : a -> bool) (ls : list a) :
-  Lemma
-  (requires (forall x. f x <> g x))
-  (ensures (
-    let ls' = filter_one f ls in
-    match find g ls with
-    | None -> length ls' = length ls
-    | Some _ -> length ls' + 1 = length ls))
-
-#push-options "--fuel 1"
-let rec filter_one_find #a f g ls =
-  match ls with
-  | [] -> ()
-  | x :: ls' -> filter_one_find f g ls'
-#pop-options
-*)
-
 /// Refinement lemma
 val hash_map_remove_from_list_back_lem_refin
   (#t : Type0) (key : usize) (ls : list_t t) :
@@ -3531,8 +3365,6 @@ let rec hash_map_remove_from_list_s_lem #t key slot len i =
       end
 #pop-options
 
-// TODO: rename hash_map_t_updated_binding to hash_map_slots_updated_binding
-
 val hash_map_remove_s_lem
   (#t : Type0) (self : hash_map_slots_s_nes t) (key : usize) :
   Lemma
@@ -3542,7 +3374,7 @@ val hash_map_remove_s_lem
     // The invariant is preserved
     hash_map_slots_s_inv hm' /\
     // We updated the binding
-    hash_map_t_updated_binding self key None hm'))
+    hash_map_slots_s_updated_binding self key None hm'))
 
 let hash_map_remove_s_lem #t self key =
   let len = length self in
