@@ -2467,6 +2467,7 @@ let ge_lem1 (n m q : nat) :
   (ensures (n / q >= m / q)) =
   FStar.Math.Lemmas.lemma_div_le m n q
 
+#restart-solver
 #push-options "--z3rlimit 200"
 let times_divid_lem (n m p : pos) : Lemma ((n * m) / p >= n * (m / p))
   =
@@ -2481,9 +2482,14 @@ let times_divid_lem (n m p : pos) : Lemma ((n * m) / p >= n * (m / p))
 #pop-options
 
 /// The good old arithmetic proofs and their unstability...
-#restart-solver
-#push-options "--z3rlimit 200 --z3cliopt smt.arith.nl=false"
-let new_max_load_lem
+/// At some point I thought it was stable because it worked with `--quake 100`.
+/// Of course, it broke the next time I checked the file...
+/// It seems things are ok when we check this proof on its own, but not when
+/// it is sent at the same time as the one above (though we put #restart-solver!).
+/// I also tried `--quake 1/100` to no avail: it seems that when Z3 decides to
+/// fail the first one, it fails them all. I inserted #restart-solver before
+/// the previous lemma to see if it had an effect (of course not).
+val new_max_load_lem
   (len : usize) (capacity : usize{capacity > 0})
   (divid : usize{divid > 0}) (divis : usize{divis > 0}) :
   Lemma
@@ -2498,15 +2504,20 @@ let new_max_load_lem
     let max_load = (capacity * divid) / divis in
     let ncapacity = 2 * capacity in
     let nmax_load = (ncapacity * divid) / divis in
-    len <= nmax_load)) =
-  let max_load = (capacity * divid) / divis in
-  let ncapacity = 2 * capacity in
-  let nmax_load = (ncapacity * divid) / divis in
+    len <= nmax_load))
+
+#restart-solver
+#push-options "--z3rlimit 1000 --z3cliopt smt.arith.nl=false"
+let new_max_load_lem len capacity divid divis =
   FStar.Math.Lemmas.paren_mul_left 2 capacity divid;
   // The following assertion often breaks though it is given by the above
   // lemma. I really don't know what to do (I deactivated non-linear
-  // arithmetic and added the previous lemma, moved the lemma up...).
-  assert(2 * (capacity * divid) == 2 * capacity * divid);
+  // arithmetic and added the previous lemma call, moved the assertion up,
+  // boosted the rlimit...).
+  assert(2 * capacity * divid == 2 * (capacity * divid));
+  let max_load = (capacity * divid) / divis in
+  let ncapacity = 2 * capacity in
+  let nmax_load = (ncapacity * divid) / divis in
   assert(nmax_load = (2 * capacity * divid) / divis);
   times_divid_lem 2 (capacity * divid) divis;
   assert((2 * (capacity * divid)) / divis >= 2 * ((capacity * divid) / divis));
