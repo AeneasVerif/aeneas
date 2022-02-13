@@ -3411,3 +3411,26 @@ let hash_map_remove_s_lem #t self key =
   let slot' = hash_map_remove_from_list_s key slot in
   let hm' = list_update self hash slot' in
   assert(hash_map_slots_s_inv self)
+
+/// Final lemma about [remove'back]
+val hash_map_remove_back_lem
+  (#t : Type0) (self : hash_map_t_nes t) (key : usize) :
+  Lemma
+  (requires (hash_map_t_inv self))
+  (ensures (
+    match hash_map_remove_back t self key with
+    | Fail -> False
+    | Return hm' ->
+      hash_map_t_inv self /\
+      hash_map_same_params hm' self /\
+      hash_map_t_slots_v hm' == hash_map_remove_s (hash_map_t_slots_v self) key /\
+      // The length is decremented iff the key was in the map
+      (let len = hash_map_t_len_s self in
+       let len' = hash_map_t_len_s hm' in
+       match hash_map_t_find_s self key with
+       | None -> len = len'
+       | Some _ -> len = len' + 1)))
+
+let hash_map_remove_back_lem #t self key =
+  hash_map_remove_back_lem_refin self key;
+  hash_map_remove_s_lem (hash_map_t_slots_v self) key
