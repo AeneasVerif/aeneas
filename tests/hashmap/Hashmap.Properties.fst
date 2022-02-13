@@ -464,6 +464,7 @@ let slots_t_al_v (#t : Type0) (slots : slots_t t) : assoc_list t =
 /// lemmas shown to the user.
 type hash_map_s t = list (slot_s t)
 
+// TODO: why not always have the condition on the length?
 // 'nes': "non-empty slots"
 type hash_map_s_nes (t : Type0) : Type0 =
   hm:hash_map_s t{is_pos_usize (length hm)}
@@ -616,6 +617,7 @@ type map_s (t : Type0) = {
   max_load_divis : usize;
 }
 
+(*
 val to_v (#t : Type0) (hm : hash_map_t t) : map_s t
 let to_v #t hm =
   let slots = hash_map_t_v hm in
@@ -628,6 +630,10 @@ let to_v #t hm =
 
 val len_s (#t : Type0) (m : map_s t) : nat
 let len_s #t m = hash_map_s_len m.slots
+
+val find_s (#t : Type0) (m : map_s t) (k : key) : option t
+let find_s #t m k = hash_map_s_find m.slots k
+*)
 
 let map_s_max_load (#t : Type0) (m : map_s t{m.max_load_divis > 0}) : nat =
   let capacity = length m.slots in
