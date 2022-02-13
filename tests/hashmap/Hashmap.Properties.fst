@@ -415,7 +415,12 @@ let rec map_list_update_lem #a #b f ls i x =
 
 (*** Invariants, models *)
 
+(**** Internals *)
+/// The following invariants, models, representation functions... are mostly
+/// for the purpose of the proofs.
+
 let is_pos_usize (n : nat) : Type0 = 0 < n /\ n <= usize_max
+type pos_usize = x:usize{x > 0}
 
 /// The "key" type
 type key : eqtype = usize
@@ -514,7 +519,7 @@ let hash_map_s_find
   slot_s_find k slot
 
 let hash_map_s_len
-  (#t : Type0) (hm : hash_map_s_nes t) :
+  (#t : Type0) (hm : hash_map_s t) :
   nat =
   length (flatten hm)
 
@@ -583,21 +588,76 @@ let hash_map_t_base_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   hm.hash_map_max_load = (capacity * dividend) / divisor
   end
 
+/// We often need to frame some values
+let hash_map_t_same_params (#t : Type0) (hm0 hm1 : hash_map_t t) : Type0 =
+  length hm0.hash_map_slots = length hm1.hash_map_slots /\
+  hm0.hash_map_max_load = hm1.hash_map_max_load /\
+  hm0.hash_map_max_load_factor = hm1.hash_map_max_load_factor
+
+(**** Invariant, models: revealed *)
+/// The following invariants, etc. are meant to be revealed to the user through
+/// the .fsti.
+
 /// Invariant for the hashmap
 let hash_map_t_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   // Base invariant
   hash_map_t_base_inv hm /\
   // The hash map is either: not overloaded, or we can't resize it
-  (let (dividend, divisor) = hm.hash_map_max_load_factor in
-   hm.hash_map_num_entries <= hm.hash_map_max_load
-   || length hm.hash_map_slots * 2 * dividend > usize_max)
+  begin
+  let (dividend, divisor) = hm.hash_map_max_load_factor in
+  hm.hash_map_num_entries <= hm.hash_map_max_load
+  || length hm.hash_map_slots * 2 * dividend > usize_max
+  end
 
-/// We often need to frame some values
-let hash_map_same_params (#t : Type0) (hm0 hm1 : hash_map_t t) : Type0 =
-  length hm0.hash_map_slots = length hm1.hash_map_slots /\
-  hm0.hash_map_max_load = hm1.hash_map_max_load /\
-  hm0.hash_map_max_load_factor = hm1.hash_map_max_load_factor
-  
+/// The high-level representation we give to the user
+type map_s (t : Type0) = {
+  slots : hash_map_s t;
+  max_load_divid : usize;
+  max_load_divis : usize;
+}
+
+val to_v (#t : Type0) (hm : hash_map_t t) : map_s t
+let to_v #t hm =
+  let slots = hash_map_t_v hm in
+  let (max_load_divid, max_load_divis) = hm.hash_map_max_load_factor in
+  {
+     slots;
+     max_load_divid;
+     max_load_divis;
+  }
+
+val len_s (#t : Type0) (m : map_s t) : nat
+let len_s #t m = hash_map_s_len m.slots
+
+let map_s_max_load (#t : Type0) (m : map_s t{m.max_load_divis > 0}) : nat =
+  let capacity = length m.slots in
+  let dividend = m.max_load_divid in
+  let divisor = m.max_load_divis in
+  (capacity * dividend) / divisor
+
+let map_s_base_inv (#t : Type0) (m : map_s t) : Type0 =
+  hash_map_s_inv m.slots /\
+  // Load computation
+  begin
+  let capacity = length m.slots in
+  let dividend = m.max_load_divid in
+  let divisor = m.max_load_divis in
+  0 < dividend /\ dividend < divisor /\
+  capacity * dividend >= divisor
+  end
+
+let map_s_inv (#t : Type0) (m : map_s t) : Type0 =
+  map_s_base_inv m /\
+  // The hash map is either: not overloaded, or we can't resize it
+  begin
+  let capacity = length m.slots in
+  let dividend = m.max_load_divid in
+  let divisor = m.max_load_divis in
+  let num_entries = len_s m in
+  let max_load = map_s_max_load m in
+  num_entries <= max_load || capacity * 2 * dividend > usize_max
+  end
+
 (*** allocate_slots *)
 
 /// Auxiliary lemma
@@ -799,7 +859,7 @@ val hash_map_clear_fwd_back_lem_fun
       // The hash map invariant is satisfied
       hash_map_t_base_inv hm /\
       // We preserved the parameters
-      hash_map_same_params hm self /\
+      hash_map_t_same_params hm self /\
       // The hash map has 0 values
       hash_map_t_len_s hm = 0 /\
       // It contains no bindings
@@ -1296,7 +1356,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
     | Fail, Fail -> True
     | Return hm, Return hm_v ->
       hash_map_t_base_inv hm /\
-      hash_map_same_params hm self /\
+      hash_map_t_same_params hm self /\
       hash_map_t_v hm == hm_v /\
       hash_map_s_len hm_v == hash_map_t_len_s hm
     | _ -> False
@@ -1526,7 +1586,7 @@ val hash_map_move_elements_from_list_fwd_back_lem
     | Return hm', Return hm_v ->
       hash_map_t_base_inv hm' /\
       hash_map_t_v hm' == hm_v /\
-      hash_map_same_params hm' ntable
+      hash_map_t_same_params hm' ntable
     | _ -> False))
   (decreases (hash_map_move_elements_from_list_decreases t ntable ls))
 
@@ -1640,7 +1700,7 @@ val hash_map_move_elements_fwd_back_lem_refin
     | Return (ntable', _), Return ntable'_v ->
       hash_map_t_base_inv ntable' /\
       hash_map_t_v ntable' == ntable'_v /\
-      hash_map_same_params ntable' ntable
+      hash_map_t_same_params ntable' ntable
     | _ -> False))
  (decreases (length slots - i))
 
@@ -2311,7 +2371,7 @@ val hash_map_move_elements_fwd_back_lem
       // The invariant is preserved
       hash_map_t_base_inv ntable' /\
       // We preserved the parameters
-      hash_map_same_params ntable' ntable /\
+      hash_map_t_same_params ntable' ntable /\
       // The table has the same number of slots
       length ntable'.hash_map_slots = length ntable.hash_map_slots /\
       // The count is good
@@ -2714,7 +2774,7 @@ let hash_map_insert_fwd_back_lem t self key value =
     let self_v = hash_map_t_v self in
     let hm'_v = Return?.v (hash_map_insert_no_resize_s self_v key value) in
     assert(hash_map_t_base_inv hm');
-    assert(hash_map_same_params hm' self);
+    assert(hash_map_t_same_params hm' self);
     assert(hash_map_t_v hm' == hm'_v);
     assert(hash_map_s_len hm'_v == hash_map_t_len_s hm');
     // Expanding the post of [hash_map_insert_no_resize_s_lem]
@@ -3200,7 +3260,7 @@ val hash_map_remove_back_lem_refin
     match hash_map_remove_back t self key with
     | Fail -> False
     | Return hm' ->
-      hash_map_same_params hm' self /\
+      hash_map_t_same_params hm' self /\
       hash_map_t_v hm' == hash_map_remove_s (hash_map_t_v self) key /\
       // The length is decremented iff the key was in the map
       (let len = hash_map_t_len_s self in
@@ -3336,7 +3396,7 @@ val hash_map_remove_back_lem
     | Fail -> False
     | Return hm' ->
       hash_map_t_inv self /\
-      hash_map_same_params hm' self /\
+      hash_map_t_same_params hm' self /\
       hash_map_t_v hm' == hash_map_remove_s (hash_map_t_v self) key /\
       // The length is decremented iff the key was in the map
       (let len = hash_map_t_len_s self in
