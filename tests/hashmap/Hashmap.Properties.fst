@@ -1513,14 +1513,43 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
     end
   end
 
-(**** insert_no_resize: invariants *)
+(**** insert_{no_fail,no_resize}: invariants *)
+
+let insert_post (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (key : usize) (value : t) (hm' : hash_map_slots_s_nes t) : Type0 =
+  // The invariant is preserved
+  hash_map_slots_s_inv hm' /\
+  // [key] maps to [value]
+  hash_map_slots_s_find hm' key == Some value /\
+  // The other bindings are preserved
+  (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k') /\
+  // The length is incremented, iff we inserted a new key
+  (match hash_map_slots_s_find hm key with
+   | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
+   | Some _ -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm)
+
+val hash_map_insert_no_fail_s_lem
+  (#t : Type0) (hm : hash_map_slots_s_nes t)
+  (key : usize) (value : t) :
+  Lemma
+  (requires (hash_map_slots_s_inv hm))
+  (ensures (
+    let hm' = hash_map_insert_no_fail_s hm key value in
+    insert_post hm key value hm'))
+
+let hash_map_insert_no_fail_s_lem #t hm key value =
+  let len = length hm in
+  let i = hash_mod_key key len in
+  let slot = index hm i in
+  hash_map_insert_in_list_s_lem t len key value slot;
+  let slot' = hash_map_insert_in_list_s key value slot in
+  length_flatten_update hm i slot'
 
 val hash_map_insert_no_resize_s_lem
   (#t : Type0) (hm : hash_map_slots_s_nes t)
   (key : usize) (value : t) :
   Lemma
-  (requires (
-    hash_map_slots_s_inv hm))
+  (requires (hash_map_slots_s_inv hm))
   (ensures (
     match hash_map_insert_no_resize_s hm key value with
     | Fail ->
@@ -1529,29 +1558,12 @@ val hash_map_insert_no_resize_s_lem
       hash_map_slots_s_len hm = usize_max /\
       None? (hash_map_slots_s_find hm key)
     | Return hm' ->
-      // The invariant is preserved
-      hash_map_slots_s_inv hm' /\
-      // [key] maps to [value]
-      hash_map_slots_s_find hm' key == Some value /\
-      // The other bindings are preserved
-      (forall k'. k' <> key ==> hash_map_slots_s_find hm' k' == hash_map_slots_s_find hm k') /\
-      // The length is incremented, iff we inserted a new key
-      (match hash_map_slots_s_find hm key with
-       | None -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm + 1
-       | Some _ -> hash_map_slots_s_len hm' = hash_map_slots_s_len hm)))
+      insert_post hm key value hm'))
 
 let hash_map_insert_no_resize_s_lem #t hm key value =
   let num_entries = length (flatten hm) in
   if None? (hash_map_slots_s_find hm key) && num_entries = usize_max then ()
-  else
-    begin
-    let len = length hm in
-    let i = hash_mod_key key len in
-    let slot = index hm i in
-    hash_map_insert_in_list_s_lem t len key value slot;
-    let slot' = hash_map_insert_in_list_s key value slot in
-    length_flatten_update hm i slot'
-    end
+  else hash_map_insert_no_fail_s_lem hm key value
 
 
 (**** find after insert *)
@@ -2913,7 +2925,7 @@ let rec hash_map_get_mut_in_list_back_lem #t key ls ret =
 
 (**** get_mut *)
 
-val hash_map_get_mut_back_lem
+val hash_map_get_mut_back_lem_refin
   (#t : Type0) (self : hash_map_t t{length self.hash_map_slots > 0})
   (key : usize) (ret : t) :
   Lemma
@@ -2924,7 +2936,7 @@ val hash_map_get_mut_back_lem
     | Return hm' ->
       hash_map_t_slots_v hm' == hash_map_insert_no_fail_s (hash_map_t_slots_v self) key ret))
 
-let hash_map_get_mut_back_lem #t self key ret =
+let hash_map_get_mut_back_lem_refin #t self key ret =
   begin match hash_key_fwd key with
   | Fail -> ()
   | Return i ->
