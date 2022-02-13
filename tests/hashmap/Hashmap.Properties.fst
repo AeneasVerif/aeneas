@@ -2655,3 +2655,9 @@ let hash_map_insert_fwd_back_lem t self key value =
       hash_map_try_resize_fwd_back_lem hm'
       end
     else ()
+
+(*** get *)
+
+(*** get_mut'fwd *)
+
+(*** get_mut'back *)
