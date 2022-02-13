@@ -2925,6 +2925,7 @@ let rec hash_map_get_mut_in_list_back_lem #t key ls ret =
 
 (**** get_mut *)
 
+/// Refinement lemma
 val hash_map_get_mut_back_lem_refin
   (#t : Type0) (self : hash_map_t t{length self.hash_map_slots > 0})
   (key : usize) (ret : t) :
@@ -2965,6 +2966,37 @@ let hash_map_get_mut_back_lem_refin #t self key ret =
     end
   end
 
+/// Final lemma
+val hash_map_get_mut_back_lem
+  (#t : Type0) (hm : hash_map_t t{length hm.hash_map_slots > 0})
+  (key : usize) (ret : t) :
+  Lemma
+  (requires (
+    Some? (hash_map_t_find_s hm key) /\
+    hash_map_t_inv hm))
+  (ensures (
+    match hash_map_get_mut_back t hm key ret with
+    | Fail -> False
+    | Return hm' ->
+      // Functional spec
+      hash_map_t_slots_v hm' ==
+       hash_map_insert_no_fail_s (hash_map_t_slots_v hm) key ret /\
+     // The invariant is preserved
+     hash_map_t_inv hm' /\
+     // The length is preserved
+     hash_map_t_len_s hm' = hash_map_t_len_s hm /\
+     // [key] maps to [value]
+     hash_map_t_find_s hm' key == Some ret /\
+     // The other bindings are preserved
+     (forall k'. k' <> key ==> hash_map_t_find_s hm' k' == hash_map_t_find_s hm k')))
+
+let hash_map_get_mut_back_lem #t hm key ret =
+  let hm_v = hash_map_t_slots_v hm in
+  hash_map_get_mut_back_lem_refin hm key ret;
+  match hash_map_get_mut_back t hm key ret with
+  | Fail -> assert(False)
+  | Return hm' ->
+    hash_map_insert_no_fail_s_lem hm_v key ret
 
 
-//val hash_map_insert_no_resize_s_lem
+(*** remove *)
