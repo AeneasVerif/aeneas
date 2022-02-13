@@ -226,18 +226,6 @@ let rec for_all_append #a f ls0 ls1 =
     for_all_append f ls0' ls1
 #pop-options
 
-/// So annoying...
-val map_same_f_eq (#a #b : Type) (f g : a -> Tot b) (ls : list a) :
-  Lemma (requires (forall x. f x == g x))
-  (ensures (map f ls == map g ls))
-
-#push-options "--fuel 1"
-let rec map_same_f_eq #a #b f g ls =
-  match ls with
-  | [] -> ()
-  | x :: ls' -> map_same_f_eq f g ls'
-#pop-options
-
 /// Filter a list, stopping after we removed one element
 val filter_one (#a : Type) (f : a -> bool) (ls : list a) : list a
 
@@ -453,27 +441,6 @@ let fst_is_disctinct (#a : eqtype) (#b : Type0) (p0 : a & b) (p1 : a & b) : Type
 
 (*** Invariants, models *)
 
-(*
-/// "Natural" length function for [list_t]
-/// TODO: remove? we can reason simply with [list_t_v]
-let rec list_t_len (#t : Type0) (ls : list_t t) : nat =
-  match ls with
-  | ListNil -> 0
-  | ListCons _ _ tl -> 1 + list_t_len tl
-*)
-
-(*
-/// "Natural" append function for [list_t]
-/// TODO: remove? we can reason simply with [list_t_v]
-#push-options "--fuel 1"
-let rec list_t_append (#t : Type0) (ls0 ls1 : list_t t) :
-  ls:list_t t{list_t_len ls = list_t_len ls0 + list_t_len ls1} =
-  match ls0 with
-  | ListNil -> ls1
-  | ListCons x v tl -> ListCons x v (list_t_append tl ls1)
-#pop-options
-*)
-
 /// The "key" type
 type key : eqtype = usize
 
@@ -502,7 +469,7 @@ type slots_s (t : Type0) = list (slot_s t)
 
 // TODO: use more
 type slot_t (t : Type0) = list_t t
-let slot_t_v (#t : Type0) (slot : slot_t t) : slot_s t = list_t_v slot
+let slot_t_v #t = list_t_v #t
 
 /// Representation function for the slots.
 let slots_t_v (#t : Type0) (slots : slots_t t) : slots_s t =
@@ -2524,17 +2491,14 @@ let ge_trans (n m p : nat) :
 
 #push-options "--z3rlimit 200"
 let gt_lem1 (n m q : nat) :
-  Lemma (requires (m > 0 /\ n > q / m))
-  (ensures (n * m > q)) =
+  Lemma (requires (m > 0 /\ n > q / m)) (ensures (n * m > q)) =
   assert(n >= q / m + 1);
   ge_lem0 n m (q / m + 1);
   assert(n * m >= (q / m) * m + m)
 #pop-options
 
 let gt_lem2 (n m p q : nat) :
-  Lemma (requires (m > 0 /\ p > 0 /\ n > (q / m) / p))
-  (ensures (
-    n * m * p > q)) =
+  Lemma (requires (m > 0 /\ p > 0 /\ n > (q / m) / p)) (ensures (n * m * p > q)) =
   gt_lem1 n p (q / m);
   assert(n * p > q / m);
   gt_lem1 (n * p) m q
@@ -2545,8 +2509,8 @@ let ge_lem1 (n m q : nat) :
   FStar.Math.Lemmas.lemma_div_le m n q
 
 #push-options "--z3rlimit 200"
-let times_divid_lem (n m p : pos) :
-  Lemma ((n * m) / p >= n * (m / p)) =
+let times_divid_lem (n m p : pos) : Lemma ((n * m) / p >= n * (m / p))
+  =
   FStar.Math.Lemmas.multiply_fractions m p;
   assert(m >= (m / p) * p);
   assert(n * m >= n * (m / p) * p); //
@@ -2557,6 +2521,8 @@ let times_divid_lem (n m p : pos) :
   assert(((n * (m / p)) * p) / p = n * (m / p))
 #pop-options
 
+/// The good old arithmetic proofs and their unstability...
+#restart-solver
 #push-options "--z3rlimit 100 --z3cliopt smt.arith.nl=false"
 let new_max_load_lem
   (len : usize) (capacity : usize{capacity > 0})
@@ -2579,6 +2545,9 @@ let new_max_load_lem
   let nmax_load = (ncapacity * divid) / divis in
   assert(nmax_load = (2 * capacity * divid) / divis);
   times_divid_lem 2 (capacity * divid) divis;
+  assert((2 * (capacity * divid)) / divis >= 2 * ((capacity * divid) / divis));
+  FStar.Math.Lemmas.paren_mul_left 2 capacity divid;
+  assert(2 * (capacity * divid) == (2 * capacity * divid));
   assert(nmax_load >= 2 * ((capacity * divid) / divis));
   assert(nmax_load >= 2 * max_load);
   assert(nmax_load >= max_load + max_load);
@@ -2630,7 +2599,6 @@ let hash_map_try_resize_s_simpl_lem #t hm =
       let al = flatten (slots_t_v slots) in
       // Proving that: length al = hm.hash_map_num_entries
       assert(al == flatten (map slot_t_v slots));
-      map_same_f_eq slot_t_v list_t_v slots;
       assert(al == flatten (map list_t_v slots));
       assert(hash_map_t_v hm == flatten (hash_map_t_slots_v hm));
       assert(hash_map_t_v hm == flatten (map list_t_v hm.hash_map_slots));
