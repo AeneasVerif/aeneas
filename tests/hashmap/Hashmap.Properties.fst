@@ -223,6 +223,17 @@ let rec for_all_append #a f ls0 ls1 =
     for_all_append f ls0' ls1
 #pop-options
 
+/// So annoying...
+val map_same_f_eq (#a #b : Type) (f g : a -> Tot b) (ls : list a) :
+  Lemma (requires (forall x. f x == g x))
+  (ensures (map f ls == map g ls))
+
+#push-options "--fuel 1"
+let rec map_same_f_eq #a #b f g ls =
+  match ls with
+  | [] -> ()
+  | x :: ls' -> map_same_f_eq f g ls'
+#pop-options
 
 (*** Lemmas about Primitives *)
 /// TODO: move those lemmas
@@ -694,6 +705,7 @@ let hash_map_t_base_inv (#t : Type0) (hm : hash_map_t t) : Type0 =
   let capacity = length hm.hash_map_slots in
   let (dividend, divisor) = hm.hash_map_max_load_factor in
   0 < dividend /\ dividend < divisor /\
+  capacity * dividend >= divisor /\
   hm.hash_map_max_load = (capacity * dividend) / divisor
   end
 
@@ -808,6 +820,7 @@ val hash_map_new_with_capacity_fwd_lem
     0 < max_load_dividend /\
     max_load_dividend < max_load_divisor /\
     0 < capacity /\
+    capacity * max_load_dividend >= max_load_divisor /\
     capacity * max_load_dividend <= usize_max))
   (ensures (
     match hash_map_new_with_capacity_fwd t capacity max_load_dividend max_load_divisor with
@@ -2418,6 +2431,12 @@ let gt_lem2 (n m p q : nat) :
   assert(n * p > q / m);
   gt_lem1 (n * p) m q
 
+#push-options "--z3rlimit 100"
+let times_divid_lem (n m p : pos) :
+  Lemma ((n * m) / p >= n * (m / p)) = admit()
+#pop-options
+
+#push-options "--z3rlimit 100"
 let new_max_load_lem
   (len : usize) (capacity : usize{capacity > 0})
   (divid : usize{divid > 0}) (divis : usize{divis > 0}) :
@@ -2427,14 +2446,21 @@ let new_max_load_lem
     let ncapacity = 2 * capacity in
     let nmax_load = (ncapacity * divid) / divis in
     capacity > 0 /\ 0 < divid /\ divid < divis /\
+    capacity * divid >= divis /\ // TODO: add to invariant
     len = max_load + 1))
   (ensures (
     let max_load = (capacity * divid) / divis in
     let ncapacity = 2 * capacity in
     let nmax_load = (ncapacity * divid) / divis in
     len <= nmax_load)) =
- // Probably needs: capacity * divid > divis
- admit()
+  let max_load = (capacity * divid) / divis in
+  let ncapacity = 2 * capacity in
+  let nmax_load = (ncapacity * divid) / divis in
+  assert(nmax_load = (2 * capacity * divid) / divis);
+  times_divid_lem 2 (capacity * divid) divis;
+  assert(nmax_load >= 2 * ((capacity * divid) / divis));
+  assert(nmax_load >= 2 * max_load)
+#pop-options
 
 val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
@@ -2481,7 +2507,8 @@ let hash_map_try_resize_s_lem #t hm =
       let al = flatten (slots_t_v slots) in
       // Proving that: length al = hm.hash_map_num_entries
       assert(al == flatten (map slot_t_v slots));
-      assume(al == flatten (map list_t_v slots)); // THIS REQUIRES A LEMMA!!!!
+      map_same_f_eq slot_t_v list_t_v slots;
+      assert(al == flatten (map list_t_v slots));
       assert(hash_map_t_v hm == flatten (hash_map_t_slots_v hm));
       assert(hash_map_t_v hm == flatten (map list_t_v hm.hash_map_slots));
       assert(al == hash_map_t_v hm);
@@ -2518,7 +2545,17 @@ let hash_map_try_resize_s_lem #t hm =
 /// The final lemma about [try_resize]
 val hash_map_try_resize_fwd_back_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
-  (requires (hash_map_t_base_inv hm))
+  (requires (
+    hash_map_t_base_inv hm /\
+    // However, the "full" invariant is broken, as we call [try_resize]
+    // only if the current number of entries is > the max load.
+    // 
+    // There are two situations:
+    // - either we just reached the max load
+    // - or we were already saturated and can't resize
+    (let (dividend, divisor) = hm.hash_map_max_load_factor in
+     hm.hash_map_num_entries == hm.hash_map_max_load + 1 \/
+     length hm.hash_map_slots * 2 * dividend > usize_max)))
   (ensures (
     match hash_map_try_resize_fwd_back t hm with
     | Fail -> False
