@@ -2914,31 +2914,40 @@ let rec hash_map_get_mut_in_list_back_lem #t key ls ret =
 (**** get_mut *)
 
 val hash_map_get_mut_back_lem
-  (#t : Type0) (self : hash_map_t t) (key : usize) (ret : t) :
+  (#t : Type0) (self : hash_map_t t{length self.hash_map_slots > 0})
+  (key : usize) (ret : t) :
   Lemma
-  (requires (Some? (hash_map_t_find_s self key))
+  (requires (Some? (hash_map_t_find_s self key)))
   (ensures (
     match hash_map_get_mut_back t self key ret with
     | Fail -> False
-    | Return hm' -> hash_map_t_slots_v hm' == hash_map_insert_no_fail hm key ret))
+    | Return hm' ->
+      hash_map_t_slots_v hm' == hash_map_insert_no_fail_s (hash_map_t_slots_v self) key ret))
 
-let hash_map_get_mut_back_lem #t self key =
-  begin match hash_key_back key with
+let hash_map_get_mut_back_lem #t self key ret =
+  begin match hash_key_fwd key with
   | Fail -> ()
   | Return i ->
+    let i0 = self.hash_map_num_entries in
+    let p = self.hash_map_max_load_factor in
+    let i1 = self.hash_map_max_load in
     let v = self.hash_map_slots in
-    let i0 = vec_len (list_t t) v in
-    begin match usize_rem i i0 with
+    let i2 = vec_len (list_t t) v in
+    begin match usize_rem i i2 with
     | Fail -> ()
     | Return hash_mod ->
-      begin match vec_index_back (list_t t) v hash_mod with
+      begin match vec_index_mut_fwd (list_t t) v hash_mod with
       | Fail -> ()
       | Return l ->
         begin
-        hash_map_get_mut_in_list_back_lem key l;
-        match hash_map_get_mut_in_list_back t key l with
+        hash_map_get_mut_in_list_back_lem key l ret;
+        match hash_map_get_mut_in_list_back t key l ret with
         | Fail -> ()
-        | Return x -> ()
+        | Return l0 ->
+          begin match vec_index_mut_back (list_t t) v hash_mod l0 with
+          | Fail -> ()
+          | Return v0 -> let self0 = Mkhash_map_t i0 p i1 v0 in ()
+          end
         end
       end
     end
