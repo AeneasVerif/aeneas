@@ -89,7 +89,7 @@ module InteractiveHelpers = FStar.InteractiveHelpers
 ///   maps, so come on!!
 ///
 /// - the abundance of intermediate definitions and lemmas causes a real problem
-///   because we then have to remember them, find naming conventions (otherwise
+///   because we then have to remember them, findnaming conventions (otherwise
 ///   it is a mess) and go look for them. All in all, it takes engineering time,
 ///   and it can quickly cause scaling issues...
 ///   
@@ -270,6 +270,32 @@ let rec filter_one #a f ls =
   match ls with
   | [] -> []
   | x :: ls' -> if f x then x :: filter_one f ls' else ls'
+
+val find_append (#a : Type) (f : a -> bool) (ls0 ls1 : list a) :
+  Lemma (
+    find f (ls0 @ ls1) ==
+    begin match find f ls0 with
+    | Some x -> Some x
+    | None -> find f ls1
+    end)
+
+#push-options "--fuel 1"
+let rec find_append #a f ls0 ls1 =
+  match ls0 with
+  | [] -> ()
+  | x :: ls0' ->
+    if f x then
+    begin
+      assert(ls0 @ ls1 == x :: (ls0' @ ls1));
+      assert(find f (ls0 @ ls1) == find f (x :: (ls0' @ ls1)));
+      // Why do I have to do this?! Is it because of subtyping??
+      assert(
+        match find f (ls0 @ ls1) with
+        | Some x' -> x' == x
+        | None -> False)
+    end
+    else find_append f ls0' ls1
+#pop-options
 
 (*** Lemmas about Primitives *)
 /// TODO: move those lemmas
@@ -2367,6 +2393,127 @@ let hash_map_is_assoc_list
   (al : assoc_list t) : Type0 =
   (forall (k:key). hash_map_t_find_s ntable k == assoc_list_find k al)
 
+let partial_hash_map_slots_s_find
+  (#t : Type0) (len : usize{len > 0}) (offset : usize)
+  (hm : hash_map_slots_s_nes t{offset + length hm = len})
+  (k : key{hash_mod_key k len >= offset}) : option t =
+  let i = hash_mod_key k len in
+  let slot = index hm (i - offset) in
+  slot_find k slot
+
+val not_same_hash_key_not_found_in_slot
+  (#t : Type0) (len : usize{len > 0})
+  (k : key)
+  (i : usize)
+  (slot : slot_s t) :
+  Lemma
+  (requires (
+    hash_mod_key k len <> i /\
+    slot_s_inv len i slot))
+  (ensures (slot_find k slot == None))
+
+#push-options "--fuel 1"
+let rec not_same_hash_key_not_found_in_slot #t len k i slot =
+  match slot with
+  | [] -> ()
+  | (k',v) :: slot' -> not_same_hash_key_not_found_in_slot len k i slot'
+#pop-options
+
+/// Small variation of [binding_in_previous_slot_implies_neq]: if the hash of
+/// a key links it to a previous slot, it can't be found in the slots after.
+val key_in_previous_slot_implies_not_found
+  (#t : Type0) (len : usize{len > 0})
+  (k : key)
+  (offset : usize)
+  (slots : hash_map_slots_s t{offset + length slots = len}) :
+  Lemma
+  (requires (
+    // The binding comes from a slot not in [slots]
+    hash_mod_key k len < offset /\
+    // The slots are the well-formed suffix of a hash map
+    partial_hash_map_slots_s_inv len offset slots))
+  (ensures (
+    assoc_list_find k (flatten slots) == None))
+  (decreases slots)
+
+#push-options "--fuel 1"
+let rec key_in_previous_slot_implies_not_found #t len k offset slots =
+  match slots with
+  | [] -> ()
+  | slot :: slots' ->
+    find_append (same_key k) slot (flatten slots');
+    assert(index slots 0 == slot); // Triggers instantiations
+    not_same_hash_key_not_found_in_slot #t len k offset slot;
+    assert(assoc_list_find k slot == None);
+    assert(forall (i:nat{i < length slots'}). index slots' i == index slots (i+1)); // Triggers instantiations
+    key_in_previous_slot_implies_not_found len k (offset+1) slots'
+#pop-options  
+
+val partial_hash_map_slots_s_is_assoc_list_lem
+  (#t : Type0) (len : usize{len > 0}) (offset : usize)
+  (hm : hash_map_slots_s_nes t{offset + length hm = len})
+  (k : key{hash_mod_key k len >= offset}) :
+  Lemma
+  (requires (
+    partial_hash_map_slots_s_inv len offset hm))
+  (ensures (
+    partial_hash_map_slots_s_find len offset hm k == assoc_list_find k (flatten hm)))
+  (decreases hm)
+//  (decreases (length hm + length (flatten hm)))
+
+#push-options "--fuel 1"
+let rec partial_hash_map_slots_s_is_assoc_list_lem #t len offset hm k =
+  match hm with
+  | [] -> ()
+  | slot :: hm' ->
+    let h = hash_mod_key k len in
+    let i = h - offset in
+    if i = 0 then
+      begin
+      // We must look in the current slot
+      assert(partial_hash_map_slots_s_find len offset hm k == slot_find k slot);
+      find_append (same_key k) slot (flatten hm');
+      assert(forall (i:nat{i < length hm'}). index hm' i == index hm (i+1)); // Triggers instantiations
+      key_in_previous_slot_implies_not_found #t len k (offset+1) hm';
+      assert( // Of course, writing `== None` doesn't work...
+        match find (same_key k) (flatten hm') with
+        | None -> True
+        | Some _ -> False);
+      assert(
+        find (same_key k) (flatten hm) ==
+        begin match find (same_key k) slot with
+        | Some x -> Some x
+        | None -> find (same_key k) (flatten hm')
+        end);
+      ()
+      end
+    else
+      begin
+      // We must ignore the current slot
+      assert(partial_hash_map_slots_s_find len offset hm k ==
+             partial_hash_map_slots_s_find len (offset+1) hm' k);
+      find_append (same_key k) slot (flatten hm');
+      assert(index hm 0 == slot); // Triggers instantiations
+      not_same_hash_key_not_found_in_slot #t len k offset slot;
+      assert(forall (i:nat{i < length hm'}). index hm' i == index hm (i+1)); // Triggers instantiations
+      partial_hash_map_slots_s_is_assoc_list_lem #t len (offset+1) hm' k
+      end
+#pop-options
+
+val hash_map_is_assoc_list_lem (#t : Type0) (hm : hash_map_t t) :
+  Lemma (requires (hash_map_t_base_inv hm))
+  (ensures (hash_map_is_assoc_list hm (hash_map_t_v hm)))
+
+let hash_map_is_assoc_list_lem #t hm =
+  let aux (k:key) :
+    Lemma (hash_map_t_find_s hm k == assoc_list_find k (hash_map_t_v hm))
+    [SMTPat (hash_map_t_find_s hm k)] =
+    let hm_v = hash_map_t_slots_v hm in
+    let len = length hm_v in
+    partial_hash_map_slots_s_is_assoc_list_lem #t len 0 hm_v k
+  in
+  ()
+
 /// The final lemma about [move_elements]: calling it on an empty hash table moves
 /// all the elements to this empty table.
 val hash_map_move_elements_fwd_back_lem
@@ -2586,12 +2733,6 @@ let new_max_load_lem
   assert(nmax_load >= 2 * ((capacity * divid) / divis));
   assert(nmax_load >= 2 * max_load)
 #pop-options
-
-val hash_map_is_assoc_list_lem (#t : Type0) (hm : hash_map_t t) :
-  Lemma (requires (hash_map_t_base_inv hm))
-  (ensures (hash_map_is_assoc_list hm (hash_map_t_v hm)))
-
-let hash_map_is_assoc_list_lem #t hm = admit()
 
 val hash_map_try_resize_s_simpl_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
