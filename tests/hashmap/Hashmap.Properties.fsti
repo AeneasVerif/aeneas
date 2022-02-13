@@ -24,7 +24,7 @@ val len_s (#t : Type0) (hm : hash_map_t t) : nat
 
 val find_s (#t : Type0) (hm : hash_map_t t) (k : key) : option t
 
-(*** new *)
+(*** [new'fwd] *)
 
 /// [new] doesn't fail and returns an empty hash map
 val hash_map_new_fwd_lem (t : Type0) :
