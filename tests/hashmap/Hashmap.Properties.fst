@@ -2414,6 +2414,9 @@ let ge_lem0 (n m q : nat) :
 let gt_ge_trans (n m p : nat) :
   Lemma (requires (n > m /\ m >= p)) (ensures (n > p)) = ()
 
+let ge_trans (n m p : nat) :
+  Lemma (requires (n >= m /\ m >= p)) (ensures (n >= p)) = ()
+
 #push-options "--z3rlimit 200"
 let gt_lem1 (n m q : nat) :
   Lemma (requires (m > 0 /\ n > q / m))
@@ -2431,9 +2434,22 @@ let gt_lem2 (n m p q : nat) :
   assert(n * p > q / m);
   gt_lem1 (n * p) m q
 
-#push-options "--z3rlimit 100"
+let ge_lem1 (n m q : nat) :
+  Lemma (requires (n >= m /\ q > 0))
+  (ensures (n / q >= m / q)) =
+  FStar.Math.Lemmas.lemma_div_le m n q
+
+#push-options "--z3rlimit 200"
 let times_divid_lem (n m p : pos) :
-  Lemma ((n * m) / p >= n * (m / p)) = admit()
+  Lemma ((n * m) / p >= n * (m / p)) =
+  FStar.Math.Lemmas.multiply_fractions m p;
+  assert(m >= (m / p) * p);
+  assert(n * m >= n * (m / p) * p); //
+  ge_lem1 (n * m) (n * (m / p) * p) p;
+  assert((n * m) / p >= (n * (m / p) * p) / p);
+  assert(n * (m / p) * p = (n * (m / p)) * p);
+  FStar.Math.Lemmas.cancel_mul_div (n * (m / p)) p;
+  assert(((n * (m / p)) * p) / p = n * (m / p))
 #pop-options
 
 #push-options "--z3rlimit 100"
@@ -2461,6 +2477,12 @@ let new_max_load_lem
   assert(nmax_load >= 2 * ((capacity * divid) / divis));
   assert(nmax_load >= 2 * max_load)
 #pop-options
+
+val hash_map_is_assoc_list_lem (#t : Type0) (hm : hash_map_t t) :
+  Lemma (requires (hash_map_t_base_inv hm))
+  (ensures (hash_map_is_assoc_list hm (hash_map_t_v hm)))
+
+let hash_map_is_assoc_list_lem #t hm = admit()
 
 val hash_map_try_resize_s_lem (#t : Type0) (hm : hash_map_t t) :
   Lemma
@@ -2523,7 +2545,8 @@ let hash_map_try_resize_s_lem #t hm =
       match hash_map_move_elements_fwd_back t ntable hm.hash_map_slots 0 with
       | Fail -> ()
       | Return (ntable', _) ->
-        assume(hash_map_is_assoc_list hm (hash_map_t_v hm));
+        hash_map_is_assoc_list_lem hm;
+        assert(hash_map_is_assoc_list hm (hash_map_t_v hm));
         let hm' =
           { hm with hash_map_slots = ntable'.hash_map_slots;
                     hash_map_max_load = ntable'.hash_map_max_load }
