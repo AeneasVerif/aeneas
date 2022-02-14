@@ -42,7 +42,8 @@ val hash_map_not_overloaded_lem (#t : Type0) (hm : hash_map_t t) :
     // if there are more entries than a given fraction of the number of slots,
     // we resize the slots vector to limit the hash collisions
     let (dividend, divisor) = hm.hash_map_max_load_factor in
-    // This postcondition won't typecheck if we don't reveal that divisor > 0
+    // technicality: this postcondition won't typecheck if we don't reveal
+    // that divisor > 0 (because of the division)
     divisor > 0 /\
     begin
     // The max load, computed as a fraction of the capacity
@@ -53,8 +54,8 @@ val hash_map_not_overloaded_lem (#t : Type0) (hm : hash_map_t t) :
     // We prove that:
     // - either the number of entries is <= than the max load threshold
     len <= max_load
-    // - or we couldn't resize the map, because then it would overflow
-    //   (note that we always multiply the number of slots by 2)
+    // - or we couldn't resize the map, because then the arithmetic computations
+    //   would overflow (note that we always multiply the number of slots by 2)
     || 2* capacity * dividend > usize_max
     end))
 
