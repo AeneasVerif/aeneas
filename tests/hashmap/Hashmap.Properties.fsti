@@ -108,10 +108,11 @@ val hash_map_len_fwd_lem (#t : Type0) (self : hash_map_t t) :
 
 (**** [insert'fwd_back] *)
 
-/// The backward function for [insert] (note it is named "...'fwd_back" because
-/// the forward function doesn't return anything, and is was thus filtered - in a
+/// The backward function for [insert] (note it is named "...insert'fwd_back" because
+/// the forward function doesn't return anything, and was thus filtered - in a
 /// sense the effect of applying the forward function then the backward function is
-/// entirely given by the backward function alone).
+/// entirely encompassed by the effect of the backward function alone).
+/// 
 /// [insert'fwd_back] simply inserts a binding.
 val hash_map_insert_fwd_back_lem
   (#t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
@@ -142,7 +143,7 @@ val hash_map_insert_fwd_back_lem
 
 (**** [contains_key] *)
 
-/// [contains_key'fwd] can't fail and return `true` if and only if there is
+/// [contains_key'fwd] can't fail and returns `true` if and only if there is
 /// a binding for key [key]
 val hash_map_contains_key_fwd_lem
   (#t : Type0) (self : hash_map_t t) (key : usize) :
@@ -168,7 +169,12 @@ val hash_map_get_fwd_lem
 
 (**** [get_mut'fwd] *)
 
-/// [get_mut'fwd] returns (mutable borrows to) the binding for key [key].
+/// [get_mut'fwd] returns (a mutable borrow to) the binding for key [key].
+/// 
+/// The *forward* function models the action of getting a borrow to an element
+/// in Rust, which gives the possibility of modifying this element in place. Then,
+/// upon ending the borrow, the effect of the modification is modelled in the
+/// translation through a call to the backward function.
 val hash_map_get_mut_fwd_lem
   (#t : Type0) (self : hash_map_t t) (key : usize) :
   Lemma
@@ -193,6 +199,15 @@ val hash_map_get_mut_back_lem
     hash_map_t_inv hm /\
     // A call to the backward function must follow a call to the forward
     // function, whose success gives us that there is a binding for the key.
+    // In the case of *forward* functions, "success" has to be understood as
+    // the absence of panics. When translating code from Rust to pure lambda
+    // calculus, we have the property that the generated calls to the backward
+    // functions can't fail (because their are preceded by calls to forward
+    // functions, which must then have succeeded before): for a backward function,
+    // "failure" is to be understood as the semantics getting stuck.
+    // This is of course true unless we filtered the call to the forward function
+    // because its effect is encompassed by the backward function, as with
+    // [hash_map_clear_fwd_back]).
     Some? (find_s hm key)))
   (ensures (
     match hash_map_get_mut_back t hm key ret with
@@ -210,7 +225,9 @@ val hash_map_get_mut_back_lem
 (**** [remove'fwd] *)
 
 /// [remove'fwd] returns the (optional) element which has been removed from the map
-/// (the rust function *moves* it out of the map).
+/// (the rust function *moves* it out of the map). Note that the effect of the update
+/// on the map is modelles through the call to [remove'back] ([remove] takes a
+/// mutable borrow to the hash map as parameter).
 val hash_map_remove_fwd_lem
   (#t : Type0) (self : hash_map_t t) (key : usize) :
   Lemma
