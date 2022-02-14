@@ -24,7 +24,41 @@ val len_s (#t : Type0) (hm : hash_map_t t) : nat
 
 val find_s (#t : Type0) (hm : hash_map_t t) (k : key) : option t
 
-(*** [new'fwd] *)
+(*** Overloading *)
+
+/// Upon inserting *new* entries in the hash map, the slots vector is resized
+/// whenever we reach the max load, unless we can't resize anymore because
+/// there are already too many entries. This way, we maintain performance by
+/// limiting the hash collisions.
+/// This is embodied by the following property, which is maintained by the
+/// invariant.
+val hash_map_not_overloaded_lem (#t : Type0) (hm : hash_map_t t) :
+  Lemma (requires (hash_map_t_inv hm))
+  (ensures (
+    // The capacity is the number of slots
+    let capacity = length hm.hash_map_slots in
+    // The max load factor defines a threshold on the number of entries:
+    // if there are more entries than a given fraction of the number of slots,
+    // we resize the slots vector to limit the hash collisions
+    let (dividend, divisor) = hm.hash_map_max_load_factor in
+    // This postcondition won't typecheck if we don't reveal that divisor > 0
+    divisor > 0 /\
+    begin
+    // The max load, computed as a fraction of the capacity
+    let max_load = (capacity * dividend) / divisor in
+    // The number of entries inserted in the map is given by [len_s] (see
+    // the functional correctness lemmas, which state how this number evolves):
+    let len = len_s hm in
+    // We prove that:
+    // - either the number of entries is <= than the max load threshold
+    len <= max_load
+    // - or we couldn't resize the map, because then it would overflow
+    //   (note that we always multiply the number of slots by 2)
+    || 2* capacity * dividend > usize_max
+    end))
+
+(*** Functional correctness *)
+(**** [new'fwd] *)
 
 /// [new] doesn't fail and returns an empty hash map
 val hash_map_new_fwd_lem (t : Type0) :
@@ -40,7 +74,7 @@ val hash_map_new_fwd_lem (t : Type0) :
       // It contains no bindings
       (forall k. find_s hm k == None)))
 
-(*** [clear] *)
+(**** [clear] *)
 
 /// [clear] doesn't fail and turns the hash map into an empty map
 val hash_map_clear_fwd_back_lem
@@ -58,7 +92,7 @@ val hash_map_clear_fwd_back_lem
       // It contains no bindings
       (forall k. find_s hm k == None)))
 
-(*** [len] *)
+(**** [len] *)
 
 /// [len] can't fail and returns the length (the number of elements) of the hash map
 val hash_map_len_fwd_lem (#t : Type0) (self : hash_map_t t) :
@@ -70,7 +104,7 @@ val hash_map_len_fwd_lem (#t : Type0) (self : hash_map_t t) :
     | Return l -> l = len_s self))
 
 
-(*** [insert'fwd_back] *)
+(**** [insert'fwd_back] *)
 
 /// The backward function for [insert] (note it is named "...'fwd_back" because
 /// the forward function doesn't return anything, and is was thus filtered - in a
@@ -104,7 +138,7 @@ val hash_map_insert_fwd_back_lem
       end))
 
 
-(*** [contains_key] *)
+(**** [contains_key] *)
 
 /// [contains_key'fwd] can't fail and return `true` if and only if there is
 /// a binding for key [key]
@@ -117,7 +151,7 @@ val hash_map_contains_key_fwd_lem
     | Fail -> False
     | Return b -> b = Some? (find_s self key)))
 
-(*** [get'fwd] *)
+(**** [get'fwd] *)
 
 /// [get] returns (a shared borrow to) the binding for key [key]
 val hash_map_get_fwd_lem
@@ -130,7 +164,7 @@ val hash_map_get_fwd_lem
     | Return x, Some x' -> x == x'
     | _ -> False))
 
-(*** [get_mut'fwd] *)
+(**** [get_mut'fwd] *)
 
 /// [get_mut'fwd] returns (mutable borrows to) the binding for key [key].
 val hash_map_get_mut_fwd_lem
@@ -144,7 +178,7 @@ val hash_map_get_mut_fwd_lem
     | _ -> False))
 
 
-(*** [get_mut'back] *)
+(**** [get_mut'back] *)
 
 /// [get_mut'back] updates the binding for key [key], without failing.
 /// A call to [get_mut'back] must follow a call to [get_mut'fwd], which gives
@@ -171,7 +205,7 @@ val hash_map_get_mut_back_lem
      // The other bindings are preserved
      (forall k'. k' <> key ==> find_s hm' k' == find_s hm k')))
 
-(*** [remove'fwd] *)
+(**** [remove'fwd] *)
 
 /// [remove'fwd] returns the (optional) element which has been removed from the map
 /// (the rust function *moves* it out of the map).
@@ -185,7 +219,7 @@ val hash_map_remove_fwd_lem
     | Return opt_x -> opt_x == find_s self key))
 
 
-(*** [remove'back] *)
+(**** [remove'back] *)
 
 /// The hash map given as parameter to [remove] is given through a mutable borrow:
 /// hence the backward function which gives back the updated map, without the

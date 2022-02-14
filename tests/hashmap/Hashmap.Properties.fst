@@ -11,6 +11,9 @@ open Hashmap.Funs
 
 let _align_fsti = ()
 
+/// Issues encountered with F*:
+/// ===========================
+///
 /// The proofs actually caused a lot more trouble than expected, because of the
 /// below points. All those are problems I already encountered in the past, but:
 ///
@@ -88,7 +91,7 @@ let _align_fsti = ()
 ///   maps, so come on!!
 ///
 /// - the abundance of intermediate definitions and lemmas causes a real problem
-///   because we then have to remember them, findnaming conventions (otherwise
+///   because we then have to remember them, find naming conventions (otherwise
 ///   it is a mess) and go look for them. All in all, it takes engineering time,
 ///   and it can quickly cause scaling issues...
 ///   
@@ -109,11 +112,12 @@ let _align_fsti = ()
 ///   calls in Coq or HOL4, and in F* the proof is reduced to a recursive call.
 ///   Isolating the lemma (i.e., writing its signature), however, takes some
 ///   non-negligible time, which is made worse by the fact that, once again,
-///   we don't have proof contexts to stare at which would help figuring out
+///   we don't have proof contexts to stare at which would help figure out
 ///   how to write such lemmas.
 ///
 ///   Simple example: see [for_all_binding_neq_find_lem]. This lemma states that:
-///   "if a key is not in a map, then looking up this key returns None".
+///   "if a key is not in a map, then looking up this key returns None" (and those
+///   properties are stated in two different styles, hence the need for a proof).
 ///   This lemma is used in *exactly* one place, and simply needs a recursive call.
 ///   Stating the lemma took a lot more time (and place) than proving it.
 ///
@@ -139,19 +143,22 @@ let _align_fsti = ()
 ///
 ///   1. See the comments for [hash_map_move_elements_fwd_back_lem_refin], which
 ///   describe the various breakages I encountered, and the different attempts I
-///   made to fix them (the result is that it now works, but I don't know why, and
-///   there are still issues so it is maybe unstable)..
+///   made to fix them. As explained in those comments, the frustrating part is that
+///   the proof is a very simple refinement step: this is not the kind of place where
+///   I expected to spend time.
 ///
-///   Also, I still don't understand why the proof currently works, and failed
-///   before. One problem I encountered is that when trying to figure out why F*
-///   fails (and playing with Z3's parameters), we are constantly shooting in the dark.
+///   Also, now that I know why it was brittle in the first place, I don't understand
+///   why it worked at some point. One big issue is that when trying to figure out
+///   why F* (or rather Z3) fails (for instance when playing with Z3's parameters), we
+///   are constantly shooting in the dark.
 ///
 ///   2. See [hash_map_is_assoc_list] and [hash_map_move_elements_fwd_back_lem].
-///   For this one, I have no clue what's going on.
 ///
-///   3. [hash_map_move_elements_fwd_back_lem] was very painful, with assertions
-///   directly given by some postconditions which failed for no reasons, or
-///   "unknown assertion failed" which forced us to manually unfold postconditions...
+///   In particular, [hash_map_move_elements_fwd_back_lem] was very painful, with
+///   assertions directly given by some postconditions which failed for no reasons,
+///   or "unknown assertion failed" which forced us to manually insert
+///   the postconditions given by the lemmas we called (resulting in a verbose
+///   proof)...
 ///
 ///   4. As usual, the unstable arithmetic proofs are a lot of fun. We have a few
 ///   of them because we prove that the table is never over-loaded (it resizes itself
@@ -169,10 +176,33 @@ let _align_fsti = ()
 ///   checking that it is correct (by assuming it and making sure the proofs pass),
 ///   then doing the rolling admit, assertion by assertion. This is tedious and,
 ///   combined with F*'s answer time, very time consuming (and boring!).
-///   
+///
 ///   See [hash_map_insert_fwd_back_lem] for instance.
+///
+///   As a sub-issue, I often encountered in my experience with F* the problem of
+///   failing to prove the equality between two records, in which case F* just
+///   tells you that Z3 was not able to prove the *whole* equality, but doesn't
+///   give you information about the precise fields. In a prover with tactics
+///   you immediately see which fields is problematic, because you get stuck with
+///   a goal like:
+///   ```
+///   Cons x y z == Cons x' y z
+///   ```
+///
+///   In F* you have to manually expand the equality to a conjunction of field
+///   equalities. See [hash_map_try_resize_fwd_back_lem_refin] for an illustration.
+///
+/// - overall, there are many things we have to do to debug the failing proofs
+///   which are very tedious, repetitive, manual and boring (which is kind of
+///   ironic for computer scientists), are specific to F* and require *writing
+///   a lot*. For instance, taking items from the above points:
+///   - inserting assertions
+///   - copy-pasting pre/postconditions to apply a rolling admit technique
+///   - expanding a record equality to a conjunction of field equalities
 
-
+/// The proofs:
+/// ===========
+/// 
 /// The proof strategy is to do exactly as with Low* proofs (we initially tried to
 /// prove more properties in one go, but it was a mistake):
 /// - prove that, under some preconditions, the low-level functions translated
@@ -184,9 +214,14 @@ let _align_fsti = ()
 /// The fact that we work in a pure setting allows us to be more modular than when
 /// working with effects. For instance we can do a case disjunction (see the proofs
 /// for insert, which study the cases where the key is already/not in the hash map
-/// in separate proofs). We can also easily prove a refinement lemma, study the
-/// model, and combine those to also prove that the low-level function preserves
-/// the invariants.
+/// in separate proofs - we had initially tried to do them in one step: it is doable
+/// but requires some work, and the F* response time quickly becomes annoying while
+/// making progress, so we split them). We can also easily prove a refinement lemma,
+/// study the model, *then* combine those to also prove that the low-level function
+/// preserves the invariants, rather than do everything at once as is usually the
+/// case when doing intrinsic proofs with effects (I remember that having to prove
+/// invariants in one go *and* a refinement step, even small, can be extremely
+/// difficult in Low*).
 
 
 (*** Utilities *)
@@ -615,6 +650,10 @@ let len_s (#t : Type0) (hm : hash_map_t t) : nat = hash_map_t_len_s hm
 let find_s (#t : Type0) (hm : hash_map_t t) (k : key) : option t =
   if length hm.hash_map_slots = 0 then None
   else hash_map_t_find_s hm k
+
+(*** Overloading *)
+
+let hash_map_not_overloaded_lem #t hm = ()
 
 (*** allocate_slots *)
 
