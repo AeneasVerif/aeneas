@@ -30,10 +30,11 @@ val find_s (#t : Type0) (hm : hash_map_t t) (k : key) : option t
 /// whenever we reach the max load, unless we can't resize anymore because
 /// there are already too many entries. This way, we maintain performance by
 /// limiting the hash collisions.
-/// This is embodied by the following property, which is maintained by the
-/// invariant.
+/// This is expressed by the following property, which is maintained in the hash
+/// map invariant.
 val hash_map_not_overloaded_lem (#t : Type0) (hm : hash_map_t t) :
-  Lemma (requires (hash_map_t_inv hm))
+  Lemma
+  (requires (hash_map_t_inv hm))
   (ensures (
     // The capacity is the number of slots
     let capacity = length hm.hash_map_slots in
