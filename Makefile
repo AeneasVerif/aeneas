@@ -21,11 +21,11 @@ build:
 
 # Test the project
 .PHONY: test
-test: build translate-no_nested_borrows translate-hashmap
+test: build translate-no_nested_borrows translate-hashmap translate-paper
 
 # Add specific options to some tests
-translate-no_nested_borrows: TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units -no-split -no-decreases-clauses
-translate-no_nested_borrows: SUBDIR:=misc
+translate-no_nested_borrows translate-paper: TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units -no-split -no-decreases-clauses
+translate-no_nested_borrows translate-paper: SUBDIR:=misc
 translate-hashmap: TRANS_OPTIONS:=$(TRANS_OPTIONS) -template-clauses
 translate-hashmap: SUBDIR:=hashmap
 
