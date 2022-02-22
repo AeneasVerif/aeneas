@@ -34,7 +34,7 @@ let initialize_eval_context (type_context : C.type_context)
     C.type_context;
     C.fun_context;
     C.type_vars;
-    C.env = [];
+    C.env = [ C.Frame ];
     C.ended_regions = T.RegionId.Set.empty;
   }
 
@@ -108,8 +108,9 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
 (** Small helper.
 
     This is a continuation function called by the symbolic interpreter upon
-    reaching the `return` instruction: this continuation takes care of doing
-    the proper manipulations to finish synthesizing backward functions.
+    reaching the `return` instruction when synthesizing a *backward* function:
+    this continuation takes care of doing the proper manipulations to finish
+    the synthesis (mostly by ending abstractions).
 *)
 let evaluate_function_symbolic_synthesize_backward_from_return
     (config : C.config) (fdef : A.fun_def) (inst_sg : A.inst_fun_sig)
@@ -123,7 +124,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
   let ret_inst_sg = instantiate_fun_sig type_params sg in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
-  let cf_move_ret = move_return_value config in
+  let cf_pop_frame = ctx_pop_frame config in
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
@@ -177,7 +178,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
     (* Apply *)
     cf_end_target_abs cf_return ctx
   in
-  cf_move_ret cf_consume_ret ctx
+  cf_pop_frame cf_consume_ret ctx
 
 (** Evaluate a function with the symbolic interpreter.
 
@@ -219,14 +220,14 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
           match back_id with
           | None ->
               (* Forward translation *)
-              (* Move the return value *)
-              let cf_move = move_return_value config in
+              (* Pop the frame and retrieve the returned value at the same time*)
+              let cf_pop = ctx_pop_frame config in
               (* Generate the Return node *)
               let cf_return ret_value : m_fun =
                fun _ -> Some (SA.Return (Some ret_value))
               in
               (* Apply *)
-              cf_move cf_return ctx
+              cf_pop cf_return ctx
           | Some back_id ->
               (* Backward translation *)
               evaluate_function_symbolic_synthesize_backward_from_return config
@@ -272,9 +273,12 @@ module Test = struct
     let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
 
     (* Create the continuation to check the function's result *)
-    let cf_check res _ =
+    let config = C.config_of_partial C.ConcreteMode config in
+    let cf_check res ctx =
       match res with
-      | Return -> (* Ok *) None
+      | Return ->
+          (* Ok: drop the local variables and finish *)
+          ctx_pop_frame config (fun _ _ -> None) ctx
       | _ ->
           failwith
             ("Unit test failed (concrete execution) on: "
@@ -282,7 +286,6 @@ module Test = struct
     in
 
     (* Evaluate the function *)
-    let config = C.config_of_partial C.ConcreteMode config in
     let _ = eval_function_body config fdef.A.body cf_check ctx in
     ()
 
