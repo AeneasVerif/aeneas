@@ -3,6 +3,7 @@ all: build-test
 CHARON_HOME=../charon
 CHARON_EXEC=$(CHARON_HOME)/charon
 CHARON_TESTS_DIR=$(CHARON_HOME)/tests/cfim
+CHARON_OPTIONS= --dest ../tests/cfim --no-code-duplication
 DEST_DIR=tests
 
 # Default translation options:
@@ -33,7 +34,7 @@ translate-hashmap: SUBDIR:=hashmap
 # Generic rule to extract the CFIM from a rust file
 .PHONY: gen-cfim-%
 gen-cfim-%: build
-	cd $(CHARON_HOME)/charon && cargo run ../tests/src/$*.rs --dest ../tests/cfim
+	cd $(CHARON_HOME)/charon && cargo run ../tests/src/$*.rs $(CHARON_OPTIONS)
 
 # Generic rule to test the translation on a CFIM file
 .PHONY: translate-%

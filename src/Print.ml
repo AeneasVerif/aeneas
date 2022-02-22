@@ -943,10 +943,13 @@ module CfimAst = struct
             in
             let branches =
               List.map
-                (fun (sv, be) ->
-                  indent1
-                  ^ PV.scalar_value_to_string sv
-                  ^ " => {\n" ^ inner_to_string2 be ^ "\n" ^ indent1 ^ "}")
+                (fun (svl, be) ->
+                  let svl =
+                    List.map (fun sv -> "| " ^ PV.scalar_value_to_string sv) svl
+                  in
+                  let svl = String.concat " " svl in
+                  indent1 ^ svl ^ " => {\n" ^ inner_to_string2 be ^ "\n"
+                  ^ indent1 ^ "}")
                 branches
             in
             let branches = String.concat "\n" branches in

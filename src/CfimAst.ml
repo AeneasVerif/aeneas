@@ -142,10 +142,12 @@ type statement =
 
 and switch_targets =
   | If of statement * statement  (** Gives the "if" and "else" blocks *)
-  | SwitchInt of integer_type * (scalar_value * statement) list * statement
+  | SwitchInt of integer_type * (scalar_value list * statement) list * statement
       (** The targets for a switch over an integer are:
-          - the list `(matched value, statement to execute)`
-          - the "otherwise" statement.
+          - the list `(matched values, statement to execute)`
+            We need a list for the matched values in case we do something like this:
+            `switch n { 0 | 1 => ..., _ => ... }
+          - the "otherwise" statement
           Also note that we precise the type of the integer (uint32, int64, etc.)
           which we switch on. *)
 [@@deriving

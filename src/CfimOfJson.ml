@@ -586,7 +586,7 @@ and switch_targets_of_json (js : json) : (A.switch_targets, string) result =
         let* int_ty = integer_type_of_json int_ty in
         let* tgts =
           list_of_json
-            (pair_of_json scalar_value_of_json statement_of_json)
+            (pair_of_json (list_of_json scalar_value_of_json) statement_of_json)
             tgts
         in
         let* otherwise = statement_of_json otherwise in

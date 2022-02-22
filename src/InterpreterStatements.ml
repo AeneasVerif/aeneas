@@ -944,7 +944,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
               assert (op_v' = op_v);
               assert (sv.V.int_ty = int_ty);
               (* Find the branch *)
-              match List.find_opt (fun (sv', _) -> sv = sv') stgts with
+              match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
               | None -> eval_statement config otherwise cf
               | Some (_, tgt) -> eval_statement config tgt cf
             in
@@ -961,7 +961,19 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
                 (fun (cv, tgt_st) -> (cv, eval_statement config tgt_st cf))
                 stgts
             in
+            (* Several branches may be grouped together: every branch is described
+             * by a pair (list of values, branch expression).
+             * In order to do a symbolic evaluation, we make this "flat" by
+             * de-grouping the branches. *)
+            let stgts =
+              List.concat
+                (List.map
+                   (fun (vl, st) -> List.map (fun v -> (v, st)) vl)
+                   stgts)
+            in
+            (* Translate the otherwise branch *)
             let otherwise = eval_statement config otherwise cf in
+            (* Expand and continue *)
             expand_symbolic_int config sv
               (S.mk_opt_place_from_op op ctx)
               int_ty stgts otherwise ctx
