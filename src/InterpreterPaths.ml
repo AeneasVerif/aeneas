@@ -606,38 +606,25 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
          * a recursive call to reinspect the value *)
         comp cc (end_loans_at_place config access p) cf ctx)
 
-(** Drop (end) loans and borrows at a given place, which should be
+(** Drop (end) outer loans and borrows at a given place, which should be
     seen as an l-value (we will write to it later, but need to drop
     the borrows before writing).
 
-    This is used to drop values (when we need to write to a place, we first
-    drop the value there to properly propagate back values which are not/can't
-    be borrowed anymore).
+    This is used to drop values when evaluating the drop statement or before
+    writing to a place.
     
     [end_borrows]:
-    - if true: end all the loans and borrows we find. This is used for instance
-      by [drop_value].
+    - if true: end all the loans and borrows we find, starting with the outer
+      ones. This is used when evaluating the `drop` statement (see [drop_value])
     - if false: only end the outer loans. This is used by [assign_to_place]
       or to drop the loans in the local variables when popping a frame.
 
     Note that we don't do what is defined in the formalization: we move the
     value to a temporary dummy value, then explore this value and end the
     loans/borrows inside as long as we find some, starting with the outer
-    ones.
-    
-    TODO: rewrite that. Consider the following example:
-    Example:
-    =======
-    We want to end the borrows/loans at `*x` in the following environment:
-    ```
-    x -> mut_borrow l0 (mut_loan l1, mut_borrow l1 (Int 3),
-                        mut_loan l2, mut_borrow l2 (mut_loan l3))
-    y -> mut_borrow l3 (Bool true)
-    ```
-    We have to consider several things:
-    - the borrows `mut_borrow l1 (Int 3)` `mut_borrow l2 ...` borrow subvalues of `*x`
-    - we can't immediately end `mut_borrow l2 ...` because it contains a loan
-    - the borrow corresponding to the loan `mut_loan l3` is outside of `*x`
+    ones, then move the resulting value back to where it was. This shouldn't
+    make any difference, really (note that the place is *inside* a borrow,
+    if we end the borrow, we won't be able to reinsert the value back).
  *)
 let drop_outer_borrows_loans_at_lplace (config : C.config) (end_borrows : bool)
     (p : E.place) : cm_fun =
