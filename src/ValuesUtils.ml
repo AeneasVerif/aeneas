@@ -20,6 +20,8 @@ let mk_box_value (v : typed_value) : typed_value =
   let box_v = Adt { variant_id = None; field_values = [ v ] } in
   mk_typed_value box_ty box_v
 
+let is_bottom (v : value) : bool = match v with Bottom -> true | _ -> false
+
 let is_symbolic (v : value) : bool =
   match v with Symbolic _ -> true | _ -> false
 

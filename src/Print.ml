@@ -2,6 +2,7 @@ open Identifiers
 module T = Types
 module TU = TypesUtils
 module V = Values
+module VU = ValuesUtils
 module E = Expressions
 module A = CfimAst
 module C = Contexts
@@ -498,10 +499,56 @@ module Contexts = struct
     | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
     | Frame -> failwith "Can't print a Frame element"
 
-  let env_to_string (fmt : PV.value_formatter) (env : C.env) : string =
+  let opt_env_elem_to_string (fmt : PV.value_formatter) (indent : string)
+      (indent_incr : string) (ev : C.env_elem option) : string =
+    match ev with
+    | None -> indent ^ "..."
+    | Some ev -> env_elem_to_string fmt indent indent_incr ev
+
+  (** Filters "dummy" bindings from an environment, to gain space and clarity/
+      See [env_to_string]. *)
+  let filter_env (env : C.env) : C.env_elem option list =
+    (* We filter:
+     * - non-dummy bindings which point to ⊥
+     * - dummy bindings which don't contain loans nor borrows
+     * Note that the first case can sometimes be confusing: we may try to improve
+     * it...
+     *)
+    let filter_elem (ev : C.env_elem) : C.env_elem option =
+      match ev with
+      | Var (Some _, tv) ->
+          (* Not a dummy binding: check if the value is ⊥ *)
+          if VU.is_bottom tv.value then None else Some ev
+      | Var (None, tv) ->
+          (* Dummy binding: check if the value contains borrows or loans *)
+          if VU.borrows_in_value tv || VU.loans_in_value tv then Some ev
+          else None
+      | _ -> Some ev
+    in
+    let env = List.map filter_elem env in
+    (* We collapse groups of filtered values - so that we can print one
+     * single "..." for a whole group of filtered values *)
+    let rec group_filtered (env : C.env_elem option list) :
+        C.env_elem option list =
+      match env with
+      | [] -> []
+      | None :: None :: env -> group_filtered (None :: env)
+      | x :: env -> x :: group_filtered env
+    in
+    group_filtered env
+
+  (** Environments can have a lot of dummy or uninitialized values: [filter]
+      allows to filter them when printing, replacing groups of such bindings with
+      "..." to gain space and clarity.
+   *)
+  let env_to_string (filter : bool) (fmt : PV.value_formatter) (env : C.env) :
+      string =
+    let env =
+      if filter then filter_env env else List.map (fun ev -> Some ev) env
+    in
     "{\n"
     ^ String.concat "\n"
-        (List.map (fun ev -> env_elem_to_string fmt "  " "  " ev) env)
+        (List.map (fun ev -> opt_env_elem_to_string fmt "  " "  " ev) env)
     ^ "\n}"
 
   type ctx_formatter = PV.value_formatter
@@ -595,7 +642,22 @@ module Contexts = struct
     let frames =
       List.mapi
         (fun i f ->
-          "\n# Frame " ^ string_of_int i ^ ":\n" ^ env_to_string fmt f ^ "\n")
+          let num_bindings = ref 0 in
+          let num_dummies = ref 0 in
+          let num_abs = ref 0 in
+          List.iter
+            (fun ev ->
+              match ev with
+              | C.Var (None, _) -> num_dummies := !num_abs + 1
+              | C.Var (Some _, _) -> num_bindings := !num_bindings + 1
+              | C.Abs _ -> num_abs := !num_abs + 1
+              | _ -> raise (Failure "Unreachable"))
+            f;
+          "\n# Frame " ^ string_of_int i ^ ":" ^ "\n- locals: "
+          ^ string_of_int !num_bindings
+          ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
+          ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
+          ^ env_to_string true fmt f ^ "\n")
         frames
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames

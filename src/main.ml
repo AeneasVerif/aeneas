@@ -117,7 +117,7 @@ let () =
 
   (* Set up the logging - for now we use default values - TODO: use the
    * command-line arguments *)
-  Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
+  Easy_logging.Handlers.set_level main_logger_handler EL.Info;
   main_log#set_level EL.Info;
   cfim_of_json_logger#set_level EL.Info;
   pre_passes_log#set_level EL.Info;
