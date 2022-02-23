@@ -29,12 +29,6 @@ type config = {
           let _ = assert_norm (FUNCTION () = Success ())
           ```
        *)
-  use_state_monad : bool;
-      (** If `true`, use a state-error monad.
-          If `false`, only use an error monad.
-          
-          Using a state-error monad is necessary when modelling I/O, for instance.
-       *)
   extract_decreases_clauses : bool;
       (** If `true`, insert `decreases` clauses for all the recursive definitions.
 

@@ -98,11 +98,13 @@ let mk_adt_lvalue (adt_ty : ty) (variant_id : VariantId.id)
   { value; ty = adt_ty }
 
 let ty_as_integer (t : ty) : T.integer_type =
-  match t with Integer int_ty -> int_ty | _ -> failwith "Unreachable"
+  match t with Integer int_ty -> int_ty | _ -> raise (Failure "Unreachable")
 
 (* TODO: move *)
 let type_def_is_enum (def : T.type_def) : bool =
   match def.kind with T.Struct _ -> false | Enum _ -> true
+
+let mk_state_ty : ty = Adt (Assumed State, [])
 
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
@@ -129,6 +131,13 @@ let mk_result_return_lvalue (v : typed_lvalue) : typed_lvalue =
     LvAdt { variant_id = Some result_return_id; field_values = [ v ] }
   in
   { value; ty }
+
+let mk_arrow_ty (arg_ty : ty) (ret_ty : ty) : ty = Arrow (arg_ty, ret_ty)
+
+let dest_arrow_ty (ty : ty) : ty * ty =
+  match ty with
+  | Arrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
+  | _ -> raise (Failure "Unreachable")
 
 let compute_constant_value_ty (cv : constant_value) : ty =
   match cv with

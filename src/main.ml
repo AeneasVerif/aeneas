@@ -177,15 +177,20 @@ let () =
           filter_useless_monadic_calls = !filter_useless_calls;
           filter_useless_functions = !filter_useless_functions;
           add_unit_args = false;
+          use_state_monad = not !no_state;
         }
       in
+      (* Small issue: the monadic `bind` only works for the error-monad, not
+       * the state-error monad (there are definitions to write and piping to do) *)
+      assert (
+        (not micro_passes_config.use_state_monad)
+        || micro_passes_config.unfold_monadic_let_bindings);
       let trans_config =
         {
           Translate.eval_config;
           mp_config = micro_passes_config;
           split_files = not !no_split_files;
           test_unit_functions;
-          use_state_monad = not !no_state;
           extract_decreases_clauses = not !no_decreases_clauses;
           extract_template_decreases_clauses = !template_decreases_clauses;
         }

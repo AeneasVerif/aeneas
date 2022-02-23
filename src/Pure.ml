@@ -471,6 +471,11 @@ type expression =
   | Let of bool * typed_lvalue * texpression * texpression
       (** Let binding.
       
+          TODO: the boolean should be replaced by an enum: sometimes we use
+          the error-monad, sometimes we use the state-error monad (and we
+          do this an a per-function basis! For instance, arithmetic functions
+          are always in the error monad).
+
           The boolean controls whether the let is monadic or not.
           For instance, in F*:
           - non-monadic: `let x = ... in ...`

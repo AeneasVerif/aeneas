@@ -95,7 +95,7 @@ let fstar_keywords =
   List.concat [ named_unops; named_binops; misc ]
 
 let fstar_assumed_adts : (assumed_ty * string) list =
-  [ (Result, "result"); (Option, "option"); (Vec, "vec") ]
+  [ (State, "state"); (Result, "result"); (Option, "option"); (Vec, "vec") ]
 
 let fstar_assumed_structs : (assumed_ty * string) list = []
 
@@ -394,12 +394,13 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
               (extract_ty ctx fmt true) tys;
             F.pp_print_string fmt ")")
       | AdtId _ | Assumed _ ->
-          if inside then F.pp_print_string fmt "(";
+          let print_paren = inside && tys <> [] in
+          if print_paren then F.pp_print_string fmt "(";
           F.pp_print_string fmt (ctx_get_type type_id ctx);
           if tys <> [] then F.pp_print_space fmt ();
           Collections.List.iter_link (F.pp_print_space fmt)
             (extract_ty ctx fmt true) tys;
-          if inside then F.pp_print_string fmt ")")
+          if print_paren then F.pp_print_string fmt ")")
   | TypeVar vid -> F.pp_print_string fmt (ctx_get_type_var vid ctx)
   | Bool -> F.pp_print_string fmt ctx.fmt.bool_name
   | Char -> F.pp_print_string fmt ctx.fmt.char_name
