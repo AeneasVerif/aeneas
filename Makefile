@@ -6,10 +6,13 @@ CHARON_TESTS_DIR=$(CHARON_HOME)/tests/cfim
 CHARON_OPTIONS= --dest ../tests/cfim --no-code-duplication
 DEST_DIR=tests
 
+# The user can specify additional translation options for Aeneas:
+OPTIONS ?=
+
 # Default translation options:
 # - insert calls to the normalizer in the translated code to test the
 #   generated unit functions
-TRANS_OPTIONS:=-test-trans-units
+TRANS_OPTIONS:=-test-trans-units $(OPTIONS)
 SUBDIR:=
 
 # Build the project and test it
