@@ -1,10 +1,10 @@
 all: build-test
 
-CHARON_HOME=../charon
-CHARON_EXEC=$(CHARON_HOME)/charon
-CHARON_TESTS_DIR=$(CHARON_HOME)/tests/cfim
-CHARON_OPTIONS= --dest ../tests/cfim --no-code-duplication
-DEST_DIR=tests
+CHARON_HOME = ../charon
+CHARON_EXEC = $(CHARON_HOME)/charon
+CHARON_TESTS_DIR = $(CHARON_HOME)/tests/cfim
+CHARON_OPTIONS = --dest ../tests/cfim --no-code-duplication
+DEST_DIR = tests
 
 # The user can specify additional translation options for Aeneas:
 OPTIONS ?=
@@ -12,8 +12,8 @@ OPTIONS ?=
 # Default translation options:
 # - insert calls to the normalizer in the translated code to test the
 #   generated unit functions
-TRANS_OPTIONS:=-test-trans-units $(OPTIONS)
-SUBDIR:=
+TRANS_OPTIONS := -test-trans-units $(OPTIONS)
+SUBDIR :=
 
 # Build the project and test it
 .PHONY: build-test
@@ -29,9 +29,10 @@ build:
 test: build translate-no_nested_borrows translate-hashmap translate-paper
 
 # Add specific options to some tests
-translate-no_nested_borrows translate-paper: TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units -no-split -no-decreases-clauses
+translate-no_nested_borrows translate-paper: \
+	TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units -no-split-files -no-decreases-clauses
 translate-no_nested_borrows translate-paper: SUBDIR:=misc
-translate-hashmap: TRANS_OPTIONS:=$(TRANS_OPTIONS) -template-clauses
+translate-hashmap: TRANS_OPTIONS:=$(TRANS_OPTIONS) -template-clauses -no-state
 translate-hashmap: SUBDIR:=hashmap
 
 # Generic rule to extract the CFIM from a rust file

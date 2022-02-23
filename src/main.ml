@@ -31,8 +31,9 @@ let () =
   let test_units = ref false in
   let test_trans_units = ref false in
   let no_decreases_clauses = ref false in
+  let no_state = ref false in
   let template_decreases_clauses = ref false in
-  let no_split = ref false in
+  let no_split_files = ref false in
   let no_check_inv = ref false in
 
   let spec =
@@ -68,13 +69,16 @@ let () =
       ( "-no-decreases-clauses",
         Arg.Set no_decreases_clauses,
         " Do not add decrease clauses to the recursive definitions" );
+      ( "-no-state",
+        Arg.Set no_state,
+        " Do not use state-error monads, simply use error monads" );
       ( "-template-clauses",
         Arg.Set template_decreases_clauses,
         " Generate templates for the required decreases clauses, in a\n\
         \                         dedicated file. Incompatible with \
          -no-decreases-clauses" );
-      ( "-no-split",
-        Arg.Set no_split,
+      ( "-no-split-files",
+        Arg.Set no_split_files,
         " Don't split the definitions between different files for types,\n\
         \                         functions, etc." );
       ( "-no-check-inv",
@@ -179,8 +183,9 @@ let () =
         {
           Translate.eval_config;
           mp_config = micro_passes_config;
-          split_files = not !no_split;
+          split_files = not !no_split_files;
           test_unit_functions;
+          use_state_monad = not !no_state;
           extract_decreases_clauses = not !no_decreases_clauses;
           extract_template_decreases_clauses = !template_decreases_clauses;
         }
