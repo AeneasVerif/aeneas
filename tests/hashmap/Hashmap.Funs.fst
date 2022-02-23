@@ -58,7 +58,7 @@ let hash_map_new_with_capacity_fwd
 let hash_map_new_fwd (t : Type0) : result (hash_map_t t) =
   begin match hash_map_new_with_capacity_fwd t 32 4 5 with
   | Fail -> Fail
-  | Return h -> Return h
+  | Return hm -> Return hm
   end
 
 (** [hashmap::HashMap::clear_slots] *)
@@ -200,10 +200,10 @@ let rec hash_map_move_elements_from_list_fwd_back
   | ListCons k v tl ->
     begin match hash_map_insert_no_resize_fwd_back t ntable k v with
     | Fail -> Fail
-    | Return h ->
-      begin match hash_map_move_elements_from_list_fwd_back t h tl with
+    | Return hm ->
+      begin match hash_map_move_elements_from_list_fwd_back t hm tl with
       | Fail -> Fail
-      | Return h0 -> Return h0
+      | Return hm0 -> Return hm0
       end
     end
   | ListNil -> Return ntable
@@ -224,7 +224,7 @@ let rec hash_map_move_elements_fwd_back
       let l0 = mem_replace_fwd (list_t t) l ListNil in
       begin match hash_map_move_elements_from_list_fwd_back t ntable l0 with
       | Fail -> Fail
-      | Return h ->
+      | Return hm ->
         let l1 = mem_replace_back (list_t t) l ListNil in
         begin match vec_index_mut_back (list_t t) slots i l1 with
         | Fail -> Fail
@@ -232,9 +232,9 @@ let rec hash_map_move_elements_fwd_back
           begin match usize_add i 1 with
           | Fail -> Fail
           | Return i1 ->
-            begin match hash_map_move_elements_fwd_back t h v i1 with
+            begin match hash_map_move_elements_fwd_back t hm v i1 with
             | Fail -> Fail
-            | Return (h0, v0) -> Return (h0, v0)
+            | Return (hm0, v0) -> Return (hm0, v0)
             end
           end
         end
@@ -260,14 +260,15 @@ let hash_map_try_resize_fwd_back
         | Return i3 ->
           begin match hash_map_new_with_capacity_fwd t i3 i0 i1 with
           | Fail -> Fail
-          | Return h ->
+          | Return hm ->
             begin match
-              hash_map_move_elements_fwd_back t h self.hash_map_slots 0 with
+              hash_map_move_elements_fwd_back t hm self.hash_map_slots 0 with
             | Fail -> Fail
-            | Return (h0, v) ->
-              let v0 = mem_replace_back (vec (list_t t)) v h0.hash_map_slots in
+            | Return (hm0, v) ->
+              let v0 = mem_replace_back (vec (list_t t)) v hm0.hash_map_slots
+                in
               Return (Mkhash_map_t self.hash_map_num_entries (i0, i1)
-                h0.hash_map_max_load v0)
+                hm0.hash_map_max_load v0)
             end
           end
         end
@@ -284,22 +285,22 @@ let hash_map_insert_fwd_back
   =
   begin match hash_map_insert_no_resize_fwd_back t self key value with
   | Fail -> Fail
-  | Return h ->
-    begin match hash_map_len_fwd t h with
+  | Return hm ->
+    begin match hash_map_len_fwd t hm with
     | Fail -> Fail
     | Return i ->
-      if i > h.hash_map_max_load
+      if i > hm.hash_map_max_load
       then
         begin match
-          hash_map_try_resize_fwd_back t (Mkhash_map_t h.hash_map_num_entries
-            h.hash_map_max_load_factor h.hash_map_max_load h.hash_map_slots)
+          hash_map_try_resize_fwd_back t (Mkhash_map_t hm.hash_map_num_entries
+            hm.hash_map_max_load_factor hm.hash_map_max_load hm.hash_map_slots)
           with
         | Fail -> Fail
-        | Return h0 -> Return h0
+        | Return hm0 -> Return hm0
         end
       else
-        Return (Mkhash_map_t h.hash_map_num_entries h.hash_map_max_load_factor
-          h.hash_map_max_load h.hash_map_slots)
+        Return (Mkhash_map_t hm.hash_map_num_entries
+          hm.hash_map_max_load_factor hm.hash_map_max_load hm.hash_map_slots)
     end
   end
 
@@ -603,35 +604,35 @@ let hash_map_remove_back
 let test1_fwd : result unit =
   begin match hash_map_new_fwd u64 with
   | Fail -> Fail
-  | Return h ->
-    begin match hash_map_insert_fwd_back u64 h 0 42 with
+  | Return hm ->
+    begin match hash_map_insert_fwd_back u64 hm 0 42 with
     | Fail -> Fail
-    | Return h0 ->
-      begin match hash_map_insert_fwd_back u64 h0 128 18 with
+    | Return hm0 ->
+      begin match hash_map_insert_fwd_back u64 hm0 128 18 with
       | Fail -> Fail
-      | Return h1 ->
-        begin match hash_map_insert_fwd_back u64 h1 1024 138 with
+      | Return hm1 ->
+        begin match hash_map_insert_fwd_back u64 hm1 1024 138 with
         | Fail -> Fail
-        | Return h2 ->
-          begin match hash_map_insert_fwd_back u64 h2 1056 256 with
+        | Return hm2 ->
+          begin match hash_map_insert_fwd_back u64 hm2 1056 256 with
           | Fail -> Fail
-          | Return h3 ->
-            begin match hash_map_get_fwd u64 h3 128 with
+          | Return hm3 ->
+            begin match hash_map_get_fwd u64 hm3 128 with
             | Fail -> Fail
             | Return i ->
               if not (i = 18)
               then Fail
               else
-                begin match hash_map_get_mut_back u64 h3 1024 56 with
+                begin match hash_map_get_mut_back u64 hm3 1024 56 with
                 | Fail -> Fail
-                | Return h4 ->
-                  begin match hash_map_get_fwd u64 h4 1024 with
+                | Return hm4 ->
+                  begin match hash_map_get_fwd u64 hm4 1024 with
                   | Fail -> Fail
                   | Return i0 ->
                     if not (i0 = 56)
                     then Fail
                     else
-                      begin match hash_map_remove_fwd u64 h4 1024 with
+                      begin match hash_map_remove_fwd u64 hm4 1024 with
                       | Fail -> Fail
                       | Return x ->
                         begin match x with
@@ -640,22 +641,22 @@ let test1_fwd : result unit =
                           if not (x0 = 56)
                           then Fail
                           else
-                            begin match hash_map_remove_back u64 h4 1024 with
+                            begin match hash_map_remove_back u64 hm4 1024 with
                             | Fail -> Fail
-                            | Return h5 ->
-                              begin match hash_map_get_fwd u64 h5 0 with
+                            | Return hm5 ->
+                              begin match hash_map_get_fwd u64 hm5 0 with
                               | Fail -> Fail
                               | Return i1 ->
                                 if not (i1 = 42)
                                 then Fail
                                 else
-                                  begin match hash_map_get_fwd u64 h5 128 with
+                                  begin match hash_map_get_fwd u64 hm5 128 with
                                   | Fail -> Fail
                                   | Return i2 ->
                                     if not (i2 = 18)
                                     then Fail
                                     else
-                                      begin match hash_map_get_fwd u64 h5 1056
+                                      begin match hash_map_get_fwd u64 hm5 1056
                                         with
                                       | Fail -> Fail
                                       | Return i3 ->

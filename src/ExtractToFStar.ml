@@ -306,9 +306,21 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
                 let def =
                   TypeDefId.Map.find adt_id ctx.type_context.type_defs
                 in
-                let c = (get_type_name def.name).[0] in
-                let c = StringUtils.lowercase_ascii c in
-                String.make 1 c)
+                (* We do the following:
+                 * - convert to snake_case
+                 * - take the first letter of every "letter group"
+                 * Ex.: "TypeVar" -> "type_var" -> "tv"
+                 *)
+                let cl = get_type_name def.name in
+                let cl = StringUtils.to_snake_case cl in
+                let cl = String.split_on_char '_' cl in
+                let cl = List.filter (fun s -> String.length s > 0) cl in
+                assert (List.length cl > 0);
+                let cl = List.map (fun s -> s.[0]) cl in
+                StringUtils.string_of_chars cl
+                (* let c = (get_type_name def.name).[0] in
+                   let c = StringUtils.lowercase_ascii c in
+                     String.make 1 c *))
         | TypeVar _ -> "x" (* lacking imagination here... *)
         | Bool -> "b"
         | Char -> "c"

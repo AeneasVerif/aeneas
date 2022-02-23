@@ -476,29 +476,29 @@ let new_pair1_fwd : result (struct_with_pair_t u32 u32) =
 let test_constants_fwd : result unit =
   begin match new_tuple1_fwd with
   | Fail -> Fail
-  | Return s ->
-    let (i, _) = s.struct_with_tuple_p in
+  | Return swt ->
+    let (i, _) = swt.struct_with_tuple_p in
     if not (i = 1)
     then Fail
     else
       begin match new_tuple2_fwd with
       | Fail -> Fail
-      | Return s0 ->
-        let (i0, _) = s0.struct_with_tuple_p in
+      | Return swt0 ->
+        let (i0, _) = swt0.struct_with_tuple_p in
         if not (i0 = 1)
         then Fail
         else
           begin match new_tuple3_fwd with
           | Fail -> Fail
-          | Return s1 ->
-            let (i1, _) = s1.struct_with_tuple_p in
+          | Return swt1 ->
+            let (i1, _) = swt1.struct_with_tuple_p in
             if not (i1 = 1)
             then Fail
             else
               begin match new_pair1_fwd with
               | Fail -> Fail
-              | Return s2 ->
-                let p = s2.struct_with_pair_p in
+              | Return swp ->
+                let p = swp.struct_with_pair_p in
                 if not (p.pair_x = 1) then Fail else Return ()
               end
           end
