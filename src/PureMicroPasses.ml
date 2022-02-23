@@ -1008,6 +1008,31 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
             let switch_body = Match [ fail_branch; success_branch ] in
             let e = Switch (re, switch_body) in
             self#visit_expression state_var e
+
+      method! visit_Value state_var rv mp =
+        if config.use_state_monad then
+          match rv.ty with
+          | Adt (Assumed Result, _) -> (
+              match rv.value with
+              | RvAdt av ->
+                  (* We only need to replace the content of `Return ...` *)
+                  (* TODO: type checking is completely broken at this point... *)
+                  let variant_id = Option.get av.variant_id in
+                  if variant_id = result_return_id then
+                    let res_v = Collections.List.to_cons_nil av.field_values in
+                    let state_value = mk_typed_rvalue_from_var state_var in
+                    let res = mk_simpl_tuple_rvalue [ state_value; res_v ] in
+                    let res = mk_result_return_rvalue res in
+                    (mk_value_expression res None).e
+                  else super#visit_Value state_var rv mp
+              | _ -> raise (Failure "Unrechable"))
+          | _ -> super#visit_Value state_var rv mp
+        else super#visit_Value state_var rv mp
+      (** We also need to update values, in case this value is `Return ...`.
+
+            TODO: this is super ugly... We need to use the monadic functions
+           `fail` and `return` instead.
+         *)
     end
   in
   (* Update the body *)

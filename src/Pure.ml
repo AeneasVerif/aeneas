@@ -34,6 +34,9 @@ type integer_type = T.integer_type [@@deriving show, ord]
   *)
 type assumed_ty = State | Result | Vec | Option [@@deriving show, ord]
 
+(* TODO: we should never directly manipulate `Return` and `Fail`, but rather
+ * the monadic functions `return` and `fail` (makes treatment of error and
+ * state-error monads more uniform) *)
 let result_return_id = VariantId.of_int 0
 
 let result_fail_id = VariantId.of_int 1
@@ -375,7 +378,15 @@ type unop = Not | Neg of integer_type [@@deriving show, ord]
 type fun_id =
   | Regular of A.fun_id * T.RegionGroupId.id option
       (** Backward id: `Some` if the function is a backward function, `None`
-          if it is a forward function *)
+          if it is a forward function.
+
+          TODO: we need to redefine A.fun_id here, to add `fail` and
+          `return` (important to get a unified treatment of the state-error
+          monad). For now, when using the state-error monad: extraction
+          works only if we unfold all the monadic let-bindings, and we
+          then replace the content of the occurrences of `Return` to also
+          return the state (which is really super ugly).
+       *)
   | Unop of unop
   | Binop of E.binop * integer_type
 [@@deriving show, ord]

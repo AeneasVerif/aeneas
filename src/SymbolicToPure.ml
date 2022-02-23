@@ -972,6 +972,9 @@ and translate_return (_config : config) (opt_v : V.typed_value option)
       (* Forward function *)
       let v = Option.get opt_v in
       let v = typed_value_to_rvalue ctx v in
+      (* TODO: we need to use a `return` function (otherwise we have problems
+       * with the state-error monad). We also need to update the type when using
+       * a state-error monad. *)
       let v = mk_result_return_rvalue v in
       let e = Value (v, None) in
       let ty = v.ty in
