@@ -286,7 +286,24 @@ let names_map_add_assumed_function (id_to_string : id -> string)
     We do this in an inefficient manner (by testing all indices starting from
     0) but it shouldn't be a bottleneck.
     
-    [append]: appends an index to a string
+    Also note that at some point, we thought about trying to reuse names of
+    variables which are not used anymore, like here:
+    ```
+    let x = ... in
+    ...
+    let x0 = ... in // We could use the name "x" if `x` is not used below
+    ...
+    ```
+    
+    However it is a good idea to keep things as they are for F*: as F* is
+    designed for extrinsic proofs, a proof about a function follows this
+    function's structure. The consequence is that we often end up
+    copy-pasting function bodies. As in the proofs (in assertions and
+    when calling lemmas) we often need to talk about the "past" (i.e.,
+    previous values), it is very useful to generate code where all variable
+    names are assigned at most once.
+    
+    [append]: function to append an index to a string
  *)
 let basename_to_unique (names_set : StringSet.t)
     (append : string -> int -> string) (basename : string) : string =
