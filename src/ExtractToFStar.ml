@@ -766,7 +766,11 @@ let extract_place (ctx : extraction_ctx) (fmt : F.formatter) (p : place) : unit
         F.pp_print_string fmt ".";
         F.pp_print_string fmt field_name
   in
-  extract_projection p.projection
+  (* We allow to break where "." appears, but we try to prevent that by
+   * wrapping in a box *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  extract_projection p.projection;
+  F.pp_close_box fmt ()
 
 (** [inside]: see [extract_ty] *)
 let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
@@ -783,20 +787,33 @@ let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
       extract_adt_g_value extract_value fmt ctx inside av.variant_id
         av.field_values v.ty
 
-(** [inside]: see [extract_ty] *)
+(** [inner]: "inner-expression": controls how we break *value* expressions over
+    several lines. If `false`, we wrap the expression in an hovbox. Otherwise,
+    we don't wrap.
+    This is important when we have an expression like `Return (...)`: we want
+    to wrap it in an hovbox. However, when formatting function arguments, we
+    to want to introduce any additional box (because the whole function call
+    itself is in a box).
+
+    [inside]: controls the introduction of parentheses. See [extract_ty]
+ *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (e : texpression) : unit =
+    (inner : bool) (inside : bool) (e : texpression) : unit =
   match e.e with
   | Value (rv, _) ->
+      if not inner then F.pp_open_hovbox fmt ctx.indent_incr;
       let _ = extract_typed_rvalue ctx fmt inside rv in
+      if not inner then F.pp_close_box fmt ();
       ()
   | Call call -> (
       match (call.func, call.args) with
       | Unop unop, [ arg ] ->
-          ctx.fmt.extract_unop (extract_texpression ctx fmt) fmt inside unop arg
+          ctx.fmt.extract_unop
+            (extract_texpression ctx fmt true)
+            fmt inside unop arg
       | Binop (binop, int_ty), [ arg0; arg1 ] ->
           ctx.fmt.extract_binop
-            (extract_texpression ctx fmt)
+            (extract_texpression ctx fmt true)
             fmt inside binop int_ty arg0 arg1
       | Regular (fun_id, rg_id), _ ->
           if inside then F.pp_print_string fmt "(";
@@ -815,7 +832,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           List.iter
             (fun ve ->
               F.pp_print_space fmt ();
-              extract_texpression ctx fmt true ve)
+              extract_texpression ctx fmt true true ve)
             call.args;
           (* Close the box for the function call *)
           F.pp_close_box fmt ();
@@ -833,7 +850,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "<--";
           F.pp_print_space fmt ();
-          extract_texpression ctx fmt false re;
+          extract_texpression ctx fmt true false re;
           F.pp_print_string fmt ";";
           ctx)
         else (
@@ -843,7 +860,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "=";
           F.pp_print_space fmt ();
-          extract_texpression ctx fmt false re;
+          extract_texpression ctx fmt true false re;
           F.pp_print_space fmt ();
           F.pp_print_string fmt "in";
           ctx)
@@ -852,7 +869,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_close_box fmt ();
       (* Print the next expression *)
       F.pp_print_space fmt ();
-      extract_texpression ctx fmt inside next_e
+      extract_texpression ctx fmt inner inside next_e
   | Switch (scrut, body) -> (
       match body with
       | If (e_then, e_else) ->
@@ -862,7 +879,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_open_hovbox fmt ctx.indent_incr;
           F.pp_print_string fmt "if";
           F.pp_print_space fmt ();
-          extract_texpression ctx fmt false scrut;
+          extract_texpression ctx fmt true false scrut;
           (* Close the box for the `if` *)
           F.pp_close_box fmt ();
           (* Extract the branches *)
@@ -881,7 +898,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
               F.pp_print_string fmt "begin";
               F.pp_print_space fmt ());
             (* Print the branch expression *)
-            extract_texpression ctx fmt false e_branch;
+            extract_texpression ctx fmt false false e_branch;
             (* Close the `begin ... end ` *)
             if parenth then (
               F.pp_print_space fmt ();
@@ -904,7 +921,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           (* Print the `match ... with` *)
           F.pp_print_string fmt "begin match";
           F.pp_print_space fmt ();
-          extract_texpression ctx fmt false scrut;
+          extract_texpression ctx fmt true false scrut;
           F.pp_print_space fmt ();
           F.pp_print_string fmt "with";
           (* Close the box for the `match ... with` *)
@@ -925,7 +942,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
             (* Open a box for the branch *)
             F.pp_open_hvbox fmt 0;
             (* Print the branch itself *)
-            extract_texpression ctx fmt false br.branch;
+            extract_texpression ctx fmt false false br.branch;
             (* Close the box for the branch *)
             F.pp_close_box fmt ();
             (* Close the box for the pattern+branch *)
@@ -939,7 +956,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_string fmt "end";
           (* Close the box for the whole match *)
           F.pp_close_box fmt ())
-  | Meta (_, e) -> extract_texpression ctx fmt inside e
+  | Meta (_, e) -> extract_texpression ctx fmt inner inside e
 
 (** A small utility to print the parameters of a function signature.
 
@@ -1164,7 +1181,7 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for the body *)
   F.pp_open_hvbox fmt 0;
   (* Extract the body *)
-  let _ = extract_texpression ctx_body fmt false def.body in
+  let _ = extract_texpression ctx_body fmt false false def.body in
   (* Close the box for the body *)
   F.pp_close_box fmt ();
   (* Close the box for the definition *)

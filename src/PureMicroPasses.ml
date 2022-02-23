@@ -429,7 +429,20 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
                 else if p.projection = [] then self#visit_expression env ne.e
                 else super#visit_Value env v mp)
         | _ -> (* No substitution *) super#visit_Value env v mp
-      (** Visit the places used as rvalues, to substitute them if necessary *)
+      (** Visit the values, to substitute them if possible *)
+
+      method! visit_RvPlace env p =
+        if p.projection = [] then
+          match VarId.Map.find_opt p.var env with
+          | None -> (* No substitution *) super#visit_RvPlace env p
+          | Some ne -> (
+              (* Substitute if the new expression is a value *)
+              match ne.e with
+              | Value (nv, _) -> super#visit_rvalue env nv.value
+              | _ -> (* Not a value *) super#visit_RvPlace env p)
+        else (* TODO: project *)
+          super#visit_RvPlace env p
+      (** Visit the places used as rvalues, to substitute them if possible *)
     end
   in
   let body = obj#visit_texpression VarId.Map.empty def.body in

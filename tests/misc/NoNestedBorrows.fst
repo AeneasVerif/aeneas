@@ -157,10 +157,7 @@ let _ = assert_norm (test_is_cons_fwd = Return ())
 
 (** [no_nested_borrows::split_list] *)
 let split_list_fwd (t : Type0) (l : list_t t) : result (t & (list_t t)) =
-  begin match l with
-  | ListCons hd tl -> let l0 = tl in Return (hd, l0)
-  | ListNil -> Fail
-  end
+  begin match l with | ListCons hd tl -> Return (hd, tl) | ListNil -> Fail end
 
 (** [no_nested_borrows::test_split_list] *)
 let test_split_list_fwd : result unit =
@@ -175,14 +172,12 @@ let _ = assert_norm (test_split_list_fwd = Return ())
 
 (** [no_nested_borrows::get_elem] *)
 let get_elem_fwd (t : Type0) (b : bool) (x : t) (y : t) : result t =
-  let x0 = y in let x1 = x in if b then Return x1 else Return x0
+  if b then Return x else Return y
 
 (** [no_nested_borrows::get_elem] *)
 let get_elem_back
   (t : Type0) (b : bool) (x : t) (y : t) (ret : t) : result (t & t) =
-  if b
-  then let x0 = ret in let y0 = y in Return (x0, y0)
-  else let x0 = x in let y0 = ret in Return (x0, y0)
+  if b then Return (ret, y) else Return (x, ret)
 
 (** [no_nested_borrows::get_elem_test] *)
 let get_elem_test_fwd : result unit =
@@ -300,7 +295,7 @@ let rec list_nth_shared_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
       | Return i0 ->
         begin match list_nth_shared_fwd t tl i0 with
         | Fail -> Fail
-        | Return x0 -> let x1 = x0 in Return x1
+        | Return x0 -> Return x0
         end
       end
     end
@@ -319,7 +314,7 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
       | Return i0 ->
         begin match list_nth_mut_fwd t tl i0 with
         | Fail -> Fail
-        | Return x0 -> let x1 = x0 in Return x1
+        | Return x0 -> Return x0
         end
       end
     end
@@ -332,14 +327,14 @@ let rec list_nth_mut_back
   begin match l with
   | ListCons x tl ->
     begin match i with
-    | 0 -> let x0 = ret in let l0 = ListCons x0 tl in Return l0
+    | 0 -> Return (ListCons ret tl)
     | _ ->
       begin match u32_sub i 1 with
       | Fail -> Fail
       | Return i0 ->
         begin match list_nth_mut_back t tl i0 ret with
         | Fail -> Fail
-        | Return l0 -> let l1 = ListCons x l0 in Return l1
+        | Return l0 -> Return (ListCons x l0)
         end
       end
     end
@@ -408,49 +403,49 @@ let _ = assert_norm (test_list_functions_fwd = Return ())
 
 (** [no_nested_borrows::id_mut_pair1] *)
 let id_mut_pair1_fwd (t1 t2 : Type0) (x : t1) (y : t2) : result (t1 & t2) =
-  let x0 = y in let x1 = x in Return (x1, x0)
+  Return (x, y)
 
 (** [no_nested_borrows::id_mut_pair1] *)
 let id_mut_pair1_back
   (t1 t2 : Type0) (x : t1) (y : t2) (ret : (t1 & t2)) : result (t1 & t2) =
-  let (x0, x1) = ret in let x2 = x0 in let y0 = x1 in Return (x2, y0)
+  let (x0, x1) = ret in Return (x0, x1)
 
 (** [no_nested_borrows::id_mut_pair2] *)
 let id_mut_pair2_fwd (t1 t2 : Type0) (p : (t1 & t2)) : result (t1 & t2) =
-  let (x, x0) = p in let x1 = x in let x2 = x0 in Return (x1, x2)
+  let (x, x0) = p in Return (x, x0)
 
 (** [no_nested_borrows::id_mut_pair2] *)
 let id_mut_pair2_back
   (t1 t2 : Type0) (p : (t1 & t2)) (ret : (t1 & t2)) : result (t1 & t2) =
-  let (x, x0) = ret in let p0 = (x, x0) in Return p0
+  let (x, x0) = ret in Return (x, x0)
 
 (** [no_nested_borrows::id_mut_pair3] *)
 let id_mut_pair3_fwd (t1 t2 : Type0) (x : t1) (y : t2) : result (t1 & t2) =
-  let x0 = y in let x1 = x in Return (x1, x0)
+  Return (x, y)
 
 (** [no_nested_borrows::id_mut_pair3] *)
 let id_mut_pair3_back'a
   (t1 t2 : Type0) (x : t1) (y : t2) (ret : t1) : result t1 =
-  let x0 = ret in Return x0
+  Return ret
 
 (** [no_nested_borrows::id_mut_pair3] *)
 let id_mut_pair3_back'b
   (t1 t2 : Type0) (x : t1) (y : t2) (ret : t2) : result t2 =
-  let y0 = ret in Return y0
+  Return ret
 
 (** [no_nested_borrows::id_mut_pair4] *)
 let id_mut_pair4_fwd (t1 t2 : Type0) (p : (t1 & t2)) : result (t1 & t2) =
-  let (x, x0) = p in let x1 = x in let x2 = x0 in Return (x1, x2)
+  let (x, x0) = p in Return (x, x0)
 
 (** [no_nested_borrows::id_mut_pair4] *)
 let id_mut_pair4_back'a
   (t1 t2 : Type0) (p : (t1 & t2)) (ret : t1) : result t1 =
-  let p0 = ret in Return p0
+  Return ret
 
 (** [no_nested_borrows::id_mut_pair4] *)
 let id_mut_pair4_back'b
   (t1 t2 : Type0) (p : (t1 & t2)) (ret : t2) : result t2 =
-  let p0 = ret in Return p0
+  Return ret
 
 (** [no_nested_borrows::StructWithTuple] *)
 type struct_with_tuple_t (t1 t2 : Type0) = { struct_with_tuple_p : (t1 & t2); }
@@ -521,6 +516,5 @@ let _ = assert_norm (test_weird_borrows1_fwd = Return ())
 
 (** [no_nested_borrows::test_mem_replace] *)
 let test_mem_replace_fwd_back (px : u32) : result u32 =
-  let i = mem_replace_fwd u32 px 1 in
-  if not (i = 0) then Fail else let px0 = 2 in Return px0
+  let i = mem_replace_fwd u32 px 1 in if not (i = 0) then Fail else Return 2
 

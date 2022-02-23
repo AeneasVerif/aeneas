@@ -8,7 +8,7 @@ include Hashmap.Clauses
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 
 (** [hashmap::hash_key] *)
-let hash_key_fwd (k : usize) : result usize = let i = k in Return i
+let hash_key_fwd (k : usize) : result usize = Return k
 
 (** [hashmap::HashMap::allocate_slots] *)
 let rec hash_map_allocate_slots_fwd
@@ -78,25 +78,25 @@ let rec hash_map_clear_slots_fwd_back
       | Return i1 ->
         begin match hash_map_clear_slots_fwd_back t v i1 with
         | Fail -> Fail
-        | Return v0 -> let slots0 = v0 in Return slots0
+        | Return v0 -> Return v0
         end
       end
     end
-  else let slots0 = slots in Return slots0
+  else Return slots
 
 (** [hashmap::HashMap::clear] *)
 let hash_map_clear_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
-  let p = self.hash_map_max_load_factor in
-  let i = self.hash_map_max_load in
   begin match hash_map_clear_slots_fwd_back t self.hash_map_slots 0 with
   | Fail -> Fail
-  | Return v -> let self0 = Mkhash_map_t 0 p i v in Return self0
+  | Return v ->
+    Return (Mkhash_map_t 0 self.hash_map_max_load_factor self.hash_map_max_load
+      v)
   end
 
 (** [hashmap::HashMap::len] *)
 let hash_map_len_fwd (t : Type0) (self : hash_map_t t) : result usize =
-  let i = self.hash_map_num_entries in Return i
+  Return self.hash_map_num_entries
 
 (** [hashmap::HashMap::insert_in_list] *)
 let rec hash_map_insert_in_list_fwd
@@ -125,13 +125,13 @@ let rec hash_map_insert_in_list_back
   begin match ls with
   | ListCons ckey cvalue ls0 ->
     if ckey = key
-    then let ls1 = ListCons ckey value ls0 in Return ls1
+    then Return (ListCons ckey value ls0)
     else
       begin match hash_map_insert_in_list_back t key value ls0 with
       | Fail -> Fail
-      | Return l -> let ls1 = ListCons ckey cvalue l in Return ls1
+      | Return l -> Return (ListCons ckey cvalue l)
       end
-  | ListNil -> let l = ListNil in let ls0 = ListCons key value l in Return ls0
+  | ListNil -> let l = ListNil in Return (ListCons key value l)
   end
 
 (** [hashmap::HashMap::insert_no_resize] *)
@@ -142,11 +142,8 @@ let hash_map_insert_no_resize_fwd_back
   begin match hash_key_fwd key with
   | Fail -> Fail
   | Return i ->
-    let i0 = self.hash_map_num_entries in
-    let p = self.hash_map_max_load_factor in
-    let i1 = self.hash_map_max_load in
-    let i2 = vec_len (list_t t) self.hash_map_slots in
-    begin match usize_rem i i2 with
+    let i0 = vec_len (list_t t) self.hash_map_slots in
+    begin match usize_rem i i0 with
     | Fail -> Fail
     | Return hash_mod ->
       begin match vec_index_mut_fwd (list_t t) self.hash_map_slots hash_mod
@@ -160,7 +157,7 @@ let hash_map_insert_no_resize_fwd_back
           then
             begin match usize_add self.hash_map_num_entries 1 with
             | Fail -> Fail
-            | Return i3 ->
+            | Return i1 ->
               begin match hash_map_insert_in_list_back t key value l with
               | Fail -> Fail
               | Return l0 ->
@@ -169,7 +166,8 @@ let hash_map_insert_no_resize_fwd_back
                   with
                 | Fail -> Fail
                 | Return v ->
-                  let self0 = Mkhash_map_t i3 p i1 v in Return self0
+                  Return (Mkhash_map_t i1 self.hash_map_max_load_factor
+                    self.hash_map_max_load v)
                 end
               end
             end
@@ -181,7 +179,10 @@ let hash_map_insert_no_resize_fwd_back
                 vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0
                 with
               | Fail -> Fail
-              | Return v -> let self0 = Mkhash_map_t i0 p i1 v in Return self0
+              | Return v ->
+                Return (Mkhash_map_t self.hash_map_num_entries
+                  self.hash_map_max_load_factor self.hash_map_max_load 
+                  v)
               end
             end
         end
@@ -202,10 +203,10 @@ let rec hash_map_move_elements_from_list_fwd_back
     | Return h ->
       begin match hash_map_move_elements_from_list_fwd_back t h tl with
       | Fail -> Fail
-      | Return h0 -> let ntable0 = h0 in Return ntable0
+      | Return h0 -> Return h0
       end
     end
-  | ListNil -> let ntable0 = ntable in Return ntable0
+  | ListNil -> Return ntable
   end
 
 (** [hashmap::HashMap::move_elements] *)
@@ -233,51 +234,46 @@ let rec hash_map_move_elements_fwd_back
           | Return i1 ->
             begin match hash_map_move_elements_fwd_back t h v i1 with
             | Fail -> Fail
-            | Return (h0, v0) ->
-              let ntable0 = h0 in let slots0 = v0 in Return (ntable0, slots0)
+            | Return (h0, v0) -> Return (h0, v0)
             end
           end
         end
       end
     end
-  else let ntable0 = ntable in let slots0 = slots in Return (ntable0, slots0)
+  else Return (ntable, slots)
 
 (** [hashmap::HashMap::try_resize] *)
 let hash_map_try_resize_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
-  let i = self.hash_map_num_entries in
-  let i0 = self.hash_map_max_load in
-  let v = self.hash_map_slots in
-  let i1 = vec_len (list_t t) self.hash_map_slots in
+  let i = vec_len (list_t t) self.hash_map_slots in
   begin match usize_div 4294967295 2 with
   | Fail -> Fail
   | Return n1 ->
-    let (i2, i3) = self.hash_map_max_load_factor in
-    begin match usize_div n1 i2 with
+    let (i0, i1) = self.hash_map_max_load_factor in
+    begin match usize_div n1 i0 with
     | Fail -> Fail
-    | Return i4 ->
-      if i1 <= i4
+    | Return i2 ->
+      if i <= i2
       then
-        begin match usize_mul i1 2 with
+        begin match usize_mul i 2 with
         | Fail -> Fail
-        | Return i5 ->
-          begin match hash_map_new_with_capacity_fwd t i5 i2 i3 with
+        | Return i3 ->
+          begin match hash_map_new_with_capacity_fwd t i3 i0 i1 with
           | Fail -> Fail
           | Return h ->
             begin match
               hash_map_move_elements_fwd_back t h self.hash_map_slots 0 with
             | Fail -> Fail
-            | Return (h0, v0) ->
-              let i6 = h0.hash_map_max_load in
-              let v1 = mem_replace_back (vec (list_t t)) v0 h0.hash_map_slots
-                in
-              let self0 = Mkhash_map_t i (i2, i3) i6 v1 in
-              Return
-              self0
+            | Return (h0, v) ->
+              let v0 = mem_replace_back (vec (list_t t)) v h0.hash_map_slots in
+              Return (Mkhash_map_t self.hash_map_num_entries (i0, i1)
+                h0.hash_map_max_load v0)
             end
           end
         end
-      else let self0 = Mkhash_map_t i (i2, i3) i0 v in Return self0
+      else
+        Return (Mkhash_map_t self.hash_map_num_entries (i0, i1)
+          self.hash_map_max_load self.hash_map_slots)
     end
   end
 
@@ -292,18 +288,18 @@ let hash_map_insert_fwd_back
     begin match hash_map_len_fwd t h with
     | Fail -> Fail
     | Return i ->
-      let i0 = h.hash_map_num_entries in
-      let p = h.hash_map_max_load_factor in
-      let i1 = h.hash_map_max_load in
-      let v = h.hash_map_slots in
       if i > h.hash_map_max_load
       then
-        begin match hash_map_try_resize_fwd_back t (Mkhash_map_t i0 p i1 v)
+        begin match
+          hash_map_try_resize_fwd_back t (Mkhash_map_t h.hash_map_num_entries
+            h.hash_map_max_load_factor h.hash_map_max_load h.hash_map_slots)
           with
         | Fail -> Fail
-        | Return h0 -> let self0 = h0 in Return self0
+        | Return h0 -> Return h0
         end
-      else let self0 = Mkhash_map_t i0 p i1 v in Return self0
+      else
+        Return (Mkhash_map_t h.hash_map_num_entries h.hash_map_max_load_factor
+          h.hash_map_max_load h.hash_map_slots)
     end
   end
 
@@ -358,7 +354,7 @@ let rec hash_map_get_in_list_fwd
     else
       begin match hash_map_get_in_list_fwd t key ls0 with
       | Fail -> Fail
-      | Return x -> let x0 = x in Return x0
+      | Return x -> Return x
       end
   | ListNil -> Fail
   end
@@ -378,7 +374,7 @@ let hash_map_get_fwd
       | Return l ->
         begin match hash_map_get_in_list_fwd t key l with
         | Fail -> Fail
-        | Return x -> let x0 = x in Return x0
+        | Return x -> Return x
         end
       end
     end
@@ -396,7 +392,7 @@ let rec hash_map_get_mut_in_list_fwd
     else
       begin match hash_map_get_mut_in_list_fwd t key ls0 with
       | Fail -> Fail
-      | Return x -> let x0 = x in Return x0
+      | Return x -> Return x
       end
   | ListNil -> Fail
   end
@@ -410,11 +406,11 @@ let rec hash_map_get_mut_in_list_back
   begin match ls with
   | ListCons ckey cvalue ls0 ->
     if ckey = key
-    then let x = ret in let ls1 = ListCons ckey x ls0 in Return ls1
+    then Return (ListCons ckey ret ls0)
     else
       begin match hash_map_get_mut_in_list_back t key ls0 ret with
       | Fail -> Fail
-      | Return l -> let ls1 = ListCons ckey cvalue l in Return ls1
+      | Return l -> Return (ListCons ckey cvalue l)
       end
   | ListNil -> Fail
   end
@@ -435,7 +431,7 @@ let hash_map_get_mut_fwd
       | Return l ->
         begin match hash_map_get_mut_in_list_fwd t key l with
         | Fail -> Fail
-        | Return x -> let x0 = x in Return x0
+        | Return x -> Return x
         end
       end
     end
@@ -449,11 +445,8 @@ let hash_map_get_mut_back
   begin match hash_key_fwd key with
   | Fail -> Fail
   | Return i ->
-    let i0 = self.hash_map_num_entries in
-    let p = self.hash_map_max_load_factor in
-    let i1 = self.hash_map_max_load in
-    let i2 = vec_len (list_t t) self.hash_map_slots in
-    begin match usize_rem i i2 with
+    let i0 = vec_len (list_t t) self.hash_map_slots in
+    begin match usize_rem i i0 with
     | Fail -> Fail
     | Return hash_mod ->
       begin match vec_index_mut_fwd (list_t t) self.hash_map_slots hash_mod
@@ -466,7 +459,9 @@ let hash_map_get_mut_back
           begin match
             vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 with
           | Fail -> Fail
-          | Return v -> let self0 = Mkhash_map_t i0 p i1 v in Return self0
+          | Return v ->
+            Return (Mkhash_map_t self.hash_map_num_entries
+              self.hash_map_max_load_factor self.hash_map_max_load v)
           end
         end
       end
@@ -508,15 +503,15 @@ let rec hash_map_remove_from_list_back
     then
       let mv_ls = mem_replace_fwd (list_t t) (ListCons ckey x tl) ListNil in
       begin match mv_ls with
-      | ListCons i cvalue tl0 -> let ls0 = tl0 in Return ls0
+      | ListCons i cvalue tl0 -> Return tl0
       | ListNil -> Fail
       end
     else
       begin match hash_map_remove_from_list_back t key tl with
       | Fail -> Fail
-      | Return l -> let ls0 = ListCons ckey x l in Return ls0
+      | Return l -> Return (ListCons ckey x l)
       end
-  | ListNil -> let ls0 = ListNil in Return ls0
+  | ListNil -> Return ListNil
   end
 
 (** [hashmap::HashMap::remove] *)
@@ -555,11 +550,8 @@ let hash_map_remove_back
   begin match hash_key_fwd key with
   | Fail -> Fail
   | Return i ->
-    let i0 = self.hash_map_num_entries in
-    let p = self.hash_map_max_load_factor in
-    let i1 = self.hash_map_max_load in
-    let i2 = vec_len (list_t t) self.hash_map_slots in
-    begin match usize_rem i i2 with
+    let i0 = vec_len (list_t t) self.hash_map_slots in
+    begin match usize_rem i i0 with
     | Fail -> Fail
     | Return hash_mod ->
       begin match vec_index_mut_fwd (list_t t) self.hash_map_slots hash_mod
@@ -578,13 +570,16 @@ let hash_map_remove_back
                 vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0
                 with
               | Fail -> Fail
-              | Return v -> let self0 = Mkhash_map_t i0 p i1 v in Return self0
+              | Return v ->
+                Return (Mkhash_map_t self.hash_map_num_entries
+                  self.hash_map_max_load_factor self.hash_map_max_load 
+                  v)
               end
             end
           | Some x0 ->
             begin match usize_sub self.hash_map_num_entries 1 with
             | Fail -> Fail
-            | Return i3 ->
+            | Return i1 ->
               begin match hash_map_remove_from_list_back t key l with
               | Fail -> Fail
               | Return l0 ->
@@ -593,7 +588,8 @@ let hash_map_remove_back
                   with
                 | Fail -> Fail
                 | Return v ->
-                  let self0 = Mkhash_map_t i3 p i1 v in Return self0
+                  Return (Mkhash_map_t i1 self.hash_map_max_load_factor
+                    self.hash_map_max_load v)
                 end
               end
             end

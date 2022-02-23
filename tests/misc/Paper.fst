@@ -7,10 +7,7 @@ open Primitives
 
 (** [paper::ref_incr] *)
 let ref_incr_fwd_back (x : i32) : result i32 =
-  begin match i32_add x 1 with
-  | Fail -> Fail
-  | Return x0 -> let x1 = x0 in Return x1
-  end
+  begin match i32_add x 1 with | Fail -> Fail | Return x0 -> Return x0 end
 
 (** [paper::test_incr] *)
 let test_incr_fwd : result unit =
@@ -24,14 +21,12 @@ let _ = assert_norm (test_incr_fwd = Return ())
 
 (** [paper::choose] *)
 let choose_fwd (t : Type0) (b : bool) (x : t) (y : t) : result t =
-  let x0 = y in let x1 = x in if b then Return x1 else Return x0
+  if b then Return x else Return y
 
 (** [paper::choose] *)
 let choose_back
   (t : Type0) (b : bool) (x : t) (y : t) (ret : t) : result (t & t) =
-  if b
-  then let x0 = ret in let y0 = y in Return (x0, y0)
-  else let x0 = x in let y0 = ret in Return (x0, y0)
+  if b then Return (ret, y) else Return (x, ret)
 
 (** [paper::test_choose] *)
 let test_choose_fwd : result unit =
@@ -74,7 +69,7 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
       | Return i0 ->
         begin match list_nth_mut_fwd t tl i0 with
         | Fail -> Fail
-        | Return x0 -> let x1 = x0 in Return x1
+        | Return x0 -> Return x0
         end
       end
     end
@@ -87,14 +82,14 @@ let rec list_nth_mut_back
   begin match l with
   | ListCons x tl ->
     begin match i with
-    | 0 -> let x0 = ret in let l0 = ListCons x0 tl in Return l0
+    | 0 -> Return (ListCons ret tl)
     | _ ->
       begin match u32_sub i 1 with
       | Fail -> Fail
       | Return i0 ->
         begin match list_nth_mut_back t tl i0 ret with
         | Fail -> Fail
-        | Return l0 -> let l1 = ListCons x l0 in Return l1
+        | Return l0 -> Return (ListCons x l0)
         end
       end
     end
