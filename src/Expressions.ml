@@ -88,6 +88,7 @@ type operand_constant_value =
   | ConstantAdt of VariantId.id option * operand_constant_value list
 [@@deriving show]
 
+(* TODO: symplify the operand constant values *)
 type operand =
   | Copy of place
   | Move of place
@@ -121,6 +122,7 @@ type aggregate_kind =
       TypeDefId.id * VariantId.id option * erased_region list * ety list
 [@@deriving show]
 
+(* TODO: move the aggregate kind to operands *)
 type rvalue =
   | Use of operand
   | Ref of place * borrow_kind
