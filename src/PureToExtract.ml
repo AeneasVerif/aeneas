@@ -369,6 +369,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let variant_name =
         match id with
         | Tuple -> failwith "Unreachable"
+        | Assumed State -> failwith "Unreachable"
         | Assumed Result ->
             if variant_id = result_return_id then "@result::Return"
             else if variant_id = result_fail_id then "@result::Fail"
@@ -391,7 +392,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let field_name =
         match id with
         | Tuple -> failwith "Unreachable"
-        | Assumed (Result | Option) -> failwith "Unreachable"
+        | Assumed (State | Result | Option) -> failwith "Unreachable"
         | Assumed Vec ->
             (* We can't directly have access to the fields of a vector *)
             failwith "Unreachable"

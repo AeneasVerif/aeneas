@@ -130,7 +130,11 @@ let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   | AdtId id -> fmt.type_def_id_to_string id
   | Tuple -> ""
   | Assumed aty -> (
-      match aty with Result -> "Result" | Option -> "Option" | Vec -> "Vec")
+      match aty with
+      | State -> "State"
+      | Result -> "Result"
+      | Option -> "Option"
+      | Vec -> "Vec")
 
 let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
   match ty with
@@ -148,6 +152,8 @@ let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
   | Str -> "str"
   | Array aty -> "[" ^ ty_to_string fmt aty ^ "; ?]"
   | Slice sty -> "[" ^ ty_to_string fmt sty ^ "]"
+  | Arrow (arg_ty, ret_ty) ->
+      ty_to_string fmt arg_ty ^ " -> " ^ ty_to_string fmt ret_ty
 
 let field_to_string fmt (f : field) : string =
   match f.field_name with
@@ -257,6 +263,9 @@ let adt_g_value_to_string (fmt : value_formatter)
   | Adt (Assumed aty, _) -> (
       (* Assumed type *)
       match aty with
+      | State ->
+          (* The `State` type is opaque: we can't get there *)
+          raise (Failure "Unreachable")
       | Result ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then

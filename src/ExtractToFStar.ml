@@ -302,6 +302,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
             | Assumed Result -> "r"
             | Assumed Option -> "opt"
             | Assumed Vec -> "v"
+            | Assumed State -> "st"
             | AdtId adt_id ->
                 let def =
                   TypeDefId.Map.find adt_id ctx.type_context.type_defs
@@ -317,15 +318,13 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
                 let cl = List.filter (fun s -> String.length s > 0) cl in
                 assert (List.length cl > 0);
                 let cl = List.map (fun s -> s.[0]) cl in
-                StringUtils.string_of_chars cl
-                (* let c = (get_type_name def.name).[0] in
-                   let c = StringUtils.lowercase_ascii c in
-                     String.make 1 c *))
+                StringUtils.string_of_chars cl)
         | TypeVar _ -> "x" (* lacking imagination here... *)
         | Bool -> "b"
         | Char -> "c"
         | Integer _ -> "i"
         | Str -> "s"
+        | Arrow _ -> "f"
         | Array _ | Slice _ -> raise Unimplemented)
   in
   let type_var_basename (_varset : StringSet.t) (basename : string) : string =
@@ -406,6 +405,14 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   | Char -> F.pp_print_string fmt ctx.fmt.char_name
   | Integer int_ty -> F.pp_print_string fmt (ctx.fmt.int_name int_ty)
   | Str -> F.pp_print_string fmt ctx.fmt.str_name
+  | Arrow (arg_ty, ret_ty) ->
+      if inside then F.pp_print_string fmt "(";
+      extract_ty ctx fmt false arg_ty;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "->";
+      F.pp_print_space fmt ();
+      extract_ty ctx fmt false ret_ty;
+      if inside then F.pp_print_string fmt ")"
   | Array _ | Slice _ -> raise Unimplemented
 
 (** Compute the names for all the top-level identifiers used in a type

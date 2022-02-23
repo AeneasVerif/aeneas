@@ -286,6 +286,9 @@ module TypeCheck = struct
       | Adt (Assumed aty, tys) -> (
           (* Assumed type *)
           match aty with
+          | State ->
+              (* `State` is opaque *)
+              raise (Failure "Unreachable: `State` values are opaque")
           | Result ->
               let ty = Collections.List.to_cons_nil tys in
               let variant_id = Option.get variant_id in

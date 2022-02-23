@@ -24,10 +24,15 @@ type integer_type = T.integer_type [@@deriving show, ord]
 
     In comparison with CFIM:
     - we removed `Box` (because it is translated as the identity: `Box T == T`)
-    - we added `Result`, which is the type used in the error monad. This allows
-      us to have a unified treatment of expressions.
+    - we added:
+      - `Result`: the type used in the error monad. This allows us to have a
+        unified treatment of expressions (especially when we have to unfold the
+        monadic binds)
+      - `State`: the type of the state, when using state-error monads. Note that
+        this state is opaque to Aeneas (the user can define it, or leave it as
+        assumed)
   *)
-type assumed_ty = Result | Vec | Option [@@deriving show, ord]
+type assumed_ty = State | Result | Vec | Option [@@deriving show, ord]
 
 let result_return_id = VariantId.of_int 0
 
@@ -81,6 +86,7 @@ type ty =
   | Str
   | Array of ty (* TODO: this should be an assumed type?... *)
   | Slice of ty (* TODO: this should be an assumed type?... *)
+  | Arrow of ty * ty
 [@@deriving
   show,
     visitors
