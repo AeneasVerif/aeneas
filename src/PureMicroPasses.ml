@@ -420,7 +420,8 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
                  *
                  * Also: we can always substitute if we substitute with
                  * a variable. If we substitute with a value we need to
-                 * check the path is empty (TODO: actually do a projection) *)
+                 * check that the path is empty.
+                 * TODO: actually do a projection *)
                 if is_var ne then
                   let var = as_var ne in
                   let p = { p with var } in
@@ -438,7 +439,7 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
           | Some ne -> (
               (* Substitute if the new expression is a value *)
               match ne.e with
-              | Value (nv, _) -> super#visit_rvalue env nv.value
+              | Value (nv, _) -> self#visit_rvalue env nv.value
               | _ -> (* Not a value *) super#visit_RvPlace env p)
         else (* TODO: project *)
           super#visit_RvPlace env p
