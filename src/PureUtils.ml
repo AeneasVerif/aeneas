@@ -347,3 +347,26 @@ module TypeCheck = struct
             check_typed_rvalue ctx v)
           av.variant_id av.field_values v.ty
 end
+
+let is_value (e : texpression) : bool =
+  match e.e with Value _ -> true | _ -> false
+
+let is_var (e : texpression) : bool =
+  match e.e with
+  | Value (v, _) -> (
+      match v.value with
+      | RvPlace { var = _; projection = [] } -> true
+      | _ -> false)
+  | _ -> false
+
+let as_var (e : texpression) : VarId.id =
+  match e.e with
+  | Value (v, _) -> (
+      match v.value with
+      | RvPlace { var; projection = [] } -> var
+      | _ -> raise (Failure "Unreachable"))
+  | _ -> raise (Failure "Unreachable")
+
+(** Remove the external occurrences of [Meta] *)
+let rec unmeta (e : texpression) : texpression =
+  match e.e with Meta (_, e) -> unmeta e | _ -> e

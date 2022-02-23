@@ -327,60 +327,108 @@ let remove_meta (def : fun_def) : fun_def =
   let body = obj#visit_texpression () def.body in
   { def with body }
 
-(** Inline the useless variable reassignments (a lot of variable assignments
-    like `let x = y in ...ÿ` are introduced through the compilation to MIR
-    and by the translation, and the variable used on the left is often unnamed.
+(** Inline the useless variable (re-)assignments:
+
+    A lot of intermediate variable assignments are introduced through the
+    compilation to MIR and by the translation itself (and the variable used
+    on the left is often unnamed).
+
+    Note that many of them are just variable "reassignments": `let x = y in ...`.
+    Some others come from ??
+    
+    TODO: how do we call that when we introduce intermediate variable assignments
+    for the arguments of a function call?
 
     [inline_named]: if `true`, inline all the assignments of the form
     `let VAR = VAR in ...`, otherwise inline only the ones where the variable
     on the left is anonymous.
- *)
-let inline_useless_var_reassignments (inline_named : bool) (def : fun_def) :
-    fun_def =
-  (* Register a substitution.
-     When registering that we need to substitute v0 with v1, we check
-     if v1 is itself substituted by v2, in which case we register:
-     `v0 --> v2` instead of `v0 --> v1`
-  *)
-  let add_subst v0 v1 m =
-    match VarId.Map.find_opt v1 m with
-    | None -> VarId.Map.add v0 v1 m
-    | Some v2 -> VarId.Map.add v0 v2 m
-  in
+    
+    [inline_pure]: if `true`, inline all the pure assignments where the variable
+    on the left is anonymous, but the assignments where the r-expression is
+    a non-primitive function call (i.e.: inline the binops, ADT constructions,
+    etc.).
 
+    TODO: we have a smallish issue which is that rvalues should be merged with
+    expressions... For now, this forces us to substitute whenever we can, but
+    leave the let-bindings where they are, and eliminated them in a subsequent
+    pass (if they are useless).
+ *)
+let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
+    (def : fun_def) : fun_def =
   let obj =
-    object
+    object (self)
       inherit [_] map_expression as super
 
       method! visit_Let env monadic lv re e =
         (* Check that:
          * - the let-binding is not monadic
          * - the left-value is a variable
-         * - the assigned expression is a value *)
-        match (monadic, lv.value, re.e) with
-        | false, LvVar (Var (lv_var, _)), Value (rv, _) -> (
-            (* Check that:
-             * - the left variable is unnamed or that [inline_named] is true
-             * - the right-value is a variable
+         *)
+        match (monadic, lv.value) with
+        | false, LvVar (Var (lv_var, _)) ->
+            (* Check that: *)
+            let filter = false in
+            (* 1. Either:
+             *   - the left variable is unnamed or [inline_named] is true
+             *   - the right-expression is a variable
              *)
-            match ((inline_named, lv_var.basename), rv.value) with
-            | (true, _ | false, None), RvPlace { var; projection = [] } ->
-                (* Update the environment and explore the next expression
-                 * (dropping the currrent let) *)
-                let env = add_subst lv_var.id var env in
-                super#visit_expression env e.e
-            | _ -> super#visit_Let env monadic lv re e)
+            let filter =
+              match (inline_named, lv_var.basename) with
+              | true, _ | _, None -> is_var re
+              | _ -> filter
+            in
+            (* 2. Or:
+             *   - the left variable is an unnamed variable
+             *   - the right-expression is a value or a primitive function call
+             *)
+            let filter =
+              if inline_pure then
+                match re.e with
+                | Value _ -> true
+                | Call call -> (
+                    match call.func with
+                    | Regular _ -> false
+                    | Unop _ | Binop _ -> true)
+                | _ -> filter
+              else false
+            in
+
+            (* Update the environment and continue the exploration *)
+            let re = self#visit_texpression env re in
+            (* TODO: once rvalues and expressions are merged, filter the
+             * let-binding (note that for now we leave it, expect it to
+             * become useless, and wait for a subsequent pass to filter it) *)
+            (* let env = add_subst lv_var.id re env in *)
+            let env = if filter then VarId.Map.add lv_var.id re env else env in
+            let e = self#visit_texpression env e in
+            Let (monadic, lv, re, e)
         | _ -> super#visit_Let env monadic lv re e
       (** Visit the let-bindings to filter the useless ones (and update
           the substitution map while doing so *)
 
-      method! visit_place env p =
+      method! visit_Value env v mp =
         (* Check if we need to substitute *)
-        match VarId.Map.find_opt p.var env with
-        | None -> (* No substitution *) p
-        | Some nv ->
-            (* Substitute *)
-            { p with var = nv }
+        match v.value with
+        | RvPlace p -> (
+            match VarId.Map.find_opt p.var env with
+            | None -> (* No substitution *) super#visit_Value env v mp
+            | Some ne ->
+                (* Substitute - note that we need to reexplore, because
+                 * there may be stacked substitutions, if we have:
+                 * var0 --> var1
+                 * var1 --> var2.
+                 *
+                 * Also: we can always substitute if we substitute with
+                 * a variable. If we substitute with a value we need to
+                 * check the path is empty (TODO: actually do a projection) *)
+                if is_var ne then
+                  let var = as_var ne in
+                  let p = { p with var } in
+                  let nv = { v with value = RvPlace p } in
+                  self#visit_Value env nv mp
+                else if p.projection = [] then self#visit_expression env ne.e
+                else super#visit_Value env v mp)
+        | _ -> (* No substitution *) super#visit_Value env v mp
       (** Visit the places used as rvalues, to substitute them if necessary *)
     end
   in
@@ -901,7 +949,9 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
 
   (* TODO: reorder the branches of the matches/switches *)
 
-  (* The meta-information is now useless: remove it *)
+  (* The meta-information is now useless: remove it.
+   * Rk.: some passes below use the fact that we removed the meta-data
+   * (otherwise we would have to "unmeta" expressions before matching) *)
   let def = remove_meta def in
   log#ldebug (lazy ("remove_meta:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
 
@@ -929,7 +979,10 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
 
       (* Inline the useless variable reassignments *)
       let inline_named_vars = true in
-      let def = inline_useless_var_reassignments inline_named_vars def in
+      let inline_pure = true in
+      let def =
+        inline_useless_var_reassignments inline_named_vars inline_pure def
+      in
       log#ldebug
         (lazy
           ("inline_useless_var_assignments:\n\n" ^ fun_def_to_string ctx def
