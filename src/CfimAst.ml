@@ -171,7 +171,7 @@ and switch_targets =
 
 type fun_def = {
   def_id : FunDefId.id;
-  name : name;
+  name : fun_name;
   signature : fun_sig;
   arg_count : int;
   locals : var list;

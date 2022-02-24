@@ -10,7 +10,7 @@ include Hashmap.Clauses
 (** [hashmap::hash_key] *)
 let hash_key_fwd (k : usize) : result usize = Return k
 
-(** [hashmap::HashMap::allocate_slots] *)
+(** [hashmap::HashMap{0}::allocate_slots] *)
 let rec hash_map_allocate_slots_fwd
   (t : Type0) (slots : vec (list_t t)) (n : usize) :
   Tot (result (vec (list_t t)))
@@ -33,7 +33,7 @@ let rec hash_map_allocate_slots_fwd
     end
   end
 
-(** [hashmap::HashMap::new_with_capacity] *)
+(** [hashmap::HashMap{0}::new_with_capacity] *)
 let hash_map_new_with_capacity_fwd
   (t : Type0) (capacity : usize) (max_load_dividend : usize)
   (max_load_divisor : usize) :
@@ -54,14 +54,14 @@ let hash_map_new_with_capacity_fwd
     end
   end
 
-(** [hashmap::HashMap::new] *)
+(** [hashmap::HashMap{0}::new] *)
 let hash_map_new_fwd (t : Type0) : result (hash_map_t t) =
   begin match hash_map_new_with_capacity_fwd t 32 4 5 with
   | Fail -> Fail
   | Return hm -> Return hm
   end
 
-(** [hashmap::HashMap::clear_slots] *)
+(** [hashmap::HashMap{0}::clear_slots] *)
 let rec hash_map_clear_slots_fwd_back
   (t : Type0) (slots : vec (list_t t)) (i : usize) :
   Tot (result (vec (list_t t)))
@@ -84,7 +84,7 @@ let rec hash_map_clear_slots_fwd_back
     end
   else Return slots
 
-(** [hashmap::HashMap::clear] *)
+(** [hashmap::HashMap{0}::clear] *)
 let hash_map_clear_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
   begin match hash_map_clear_slots_fwd_back t self.hash_map_slots 0 with
@@ -94,11 +94,11 @@ let hash_map_clear_fwd_back
       v)
   end
 
-(** [hashmap::HashMap::len] *)
+(** [hashmap::HashMap{0}::len] *)
 let hash_map_len_fwd (t : Type0) (self : hash_map_t t) : result usize =
   Return self.hash_map_num_entries
 
-(** [hashmap::HashMap::insert_in_list] *)
+(** [hashmap::HashMap{0}::insert_in_list] *)
 let rec hash_map_insert_in_list_fwd
   (t : Type0) (key : usize) (value : t) (ls : list_t t) :
   Tot (result bool)
@@ -116,7 +116,7 @@ let rec hash_map_insert_in_list_fwd
   | ListNil -> Return true
   end
 
-(** [hashmap::HashMap::insert_in_list] *)
+(** [hashmap::HashMap{0}::insert_in_list] *)
 let rec hash_map_insert_in_list_back
   (t : Type0) (key : usize) (value : t) (ls : list_t t) :
   Tot (result (list_t t))
@@ -134,7 +134,7 @@ let rec hash_map_insert_in_list_back
   | ListNil -> let l = ListNil in Return (ListCons key value l)
   end
 
-(** [hashmap::HashMap::insert_no_resize] *)
+(** [hashmap::HashMap{0}::insert_no_resize] *)
 let hash_map_insert_no_resize_fwd_back
   (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
   result (hash_map_t t)
@@ -190,7 +190,7 @@ let hash_map_insert_no_resize_fwd_back
     end
   end
 
-(** [hashmap::HashMap::move_elements_from_list] *)
+(** [hashmap::HashMap{0}::move_elements_from_list] *)
 let rec hash_map_move_elements_from_list_fwd_back
   (t : Type0) (ntable : hash_map_t t) (ls : list_t t) :
   Tot (result (hash_map_t t))
@@ -209,7 +209,7 @@ let rec hash_map_move_elements_from_list_fwd_back
   | ListNil -> Return ntable
   end
 
-(** [hashmap::HashMap::move_elements] *)
+(** [hashmap::HashMap{0}::move_elements] *)
 let rec hash_map_move_elements_fwd_back
   (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
   Tot (result ((hash_map_t t) & (vec (list_t t))))
@@ -242,7 +242,7 @@ let rec hash_map_move_elements_fwd_back
     end
   else Return (ntable, slots)
 
-(** [hashmap::HashMap::try_resize] *)
+(** [hashmap::HashMap{0}::try_resize] *)
 let hash_map_try_resize_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
   let i = vec_len (list_t t) self.hash_map_slots in
@@ -278,7 +278,7 @@ let hash_map_try_resize_fwd_back
     end
   end
 
-(** [hashmap::HashMap::insert] *)
+(** [hashmap::HashMap{0}::insert] *)
 let hash_map_insert_fwd_back
   (t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
   result (hash_map_t t)
@@ -304,7 +304,7 @@ let hash_map_insert_fwd_back
     end
   end
 
-(** [hashmap::HashMap::contains_key_in_list] *)
+(** [hashmap::HashMap{0}::contains_key_in_list] *)
 let rec hash_map_contains_key_in_list_fwd
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result bool)
@@ -322,7 +322,7 @@ let rec hash_map_contains_key_in_list_fwd
   | ListNil -> Return false
   end
 
-(** [hashmap::HashMap::contains_key] *)
+(** [hashmap::HashMap{0}::contains_key] *)
 let hash_map_contains_key_fwd
   (t : Type0) (self : hash_map_t t) (key : usize) : result bool =
   begin match hash_key_fwd key with
@@ -343,7 +343,7 @@ let hash_map_contains_key_fwd
     end
   end
 
-(** [hashmap::HashMap::get_in_list] *)
+(** [hashmap::HashMap{0}::get_in_list] *)
 let rec hash_map_get_in_list_fwd
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result t) (decreases (hash_map_get_in_list_decreases t key ls))
@@ -360,7 +360,7 @@ let rec hash_map_get_in_list_fwd
   | ListNil -> Fail
   end
 
-(** [hashmap::HashMap::get] *)
+(** [hashmap::HashMap{0}::get] *)
 let hash_map_get_fwd
   (t : Type0) (self : hash_map_t t) (key : usize) : result t =
   begin match hash_key_fwd key with
@@ -381,7 +381,7 @@ let hash_map_get_fwd
     end
   end
 
-(** [hashmap::HashMap::get_mut_in_list] *)
+(** [hashmap::HashMap{0}::get_mut_in_list] *)
 let rec hash_map_get_mut_in_list_fwd
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result t) (decreases (hash_map_get_mut_in_list_decreases t key ls))
@@ -398,7 +398,7 @@ let rec hash_map_get_mut_in_list_fwd
   | ListNil -> Fail
   end
 
-(** [hashmap::HashMap::get_mut_in_list] *)
+(** [hashmap::HashMap{0}::get_mut_in_list] *)
 let rec hash_map_get_mut_in_list_back
   (t : Type0) (key : usize) (ls : list_t t) (ret : t) :
   Tot (result (list_t t))
@@ -416,7 +416,7 @@ let rec hash_map_get_mut_in_list_back
   | ListNil -> Fail
   end
 
-(** [hashmap::HashMap::get_mut] *)
+(** [hashmap::HashMap{0}::get_mut] *)
 let hash_map_get_mut_fwd
   (t : Type0) (self : hash_map_t t) (key : usize) : result t =
   begin match hash_key_fwd key with
@@ -438,7 +438,7 @@ let hash_map_get_mut_fwd
     end
   end
 
-(** [hashmap::HashMap::get_mut] *)
+(** [hashmap::HashMap{0}::get_mut] *)
 let hash_map_get_mut_back
   (t : Type0) (self : hash_map_t t) (key : usize) (ret : t) :
   result (hash_map_t t)
@@ -469,7 +469,7 @@ let hash_map_get_mut_back
     end
   end
 
-(** [hashmap::HashMap::remove_from_list] *)
+(** [hashmap::HashMap{0}::remove_from_list] *)
 let rec hash_map_remove_from_list_fwd
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result (option t))
@@ -492,7 +492,7 @@ let rec hash_map_remove_from_list_fwd
   | ListNil -> Return None
   end
 
-(** [hashmap::HashMap::remove_from_list] *)
+(** [hashmap::HashMap{0}::remove_from_list] *)
 let rec hash_map_remove_from_list_back
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result (list_t t))
@@ -515,7 +515,7 @@ let rec hash_map_remove_from_list_back
   | ListNil -> Return ListNil
   end
 
-(** [hashmap::HashMap::remove] *)
+(** [hashmap::HashMap{0}::remove] *)
 let hash_map_remove_fwd
   (t : Type0) (self : hash_map_t t) (key : usize) : result (option t) =
   begin match hash_key_fwd key with
@@ -545,7 +545,7 @@ let hash_map_remove_fwd
     end
   end
 
-(** [hashmap::HashMap::remove] *)
+(** [hashmap::HashMap{0}::remove] *)
 let hash_map_remove_back
   (t : Type0) (self : hash_map_t t) (key : usize) : result (hash_map_t t) =
   begin match hash_key_fwd key with

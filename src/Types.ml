@@ -203,7 +203,7 @@ type type_def_kind = Struct of field list | Enum of variant list
 
 type type_def = {
   def_id : TypeDefId.id;
-  name : name;
+  name : type_name;
   region_params : region_var list;
   type_params : type_var list;
   kind : type_def_kind;

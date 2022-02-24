@@ -1072,7 +1072,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
   log#ldebug
     (lazy
       ("PureMicroPasses.apply_passes_to_def: "
-      ^ Print.name_to_string def.basename
+      ^ Print.fun_name_to_string def.basename
       ^ " ("
       ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
       ^ ")"));

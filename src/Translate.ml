@@ -56,7 +56,8 @@ let translate_function_to_symbolics (config : C.partial_config)
   (* Debug *)
   log#ldebug
     (lazy
-      ("translate_function_to_symbolics: " ^ Print.name_to_string fdef.A.name));
+      ("translate_function_to_symbolics: "
+      ^ Print.fun_name_to_string fdef.A.name));
 
   let { type_context; fun_context } = trans_ctx in
 
@@ -94,7 +95,8 @@ let translate_function_to_pure (config : C.partial_config)
     pure_fun_translation =
   (* Debug *)
   log#ldebug
-    (lazy ("translate_function_to_pure: " ^ Print.name_to_string fdef.A.name));
+    (lazy
+      ("translate_function_to_pure: " ^ Print.fun_name_to_string fdef.A.name));
 
   let { type_context; fun_context } = trans_ctx in
   let def_id = fdef.def_id in

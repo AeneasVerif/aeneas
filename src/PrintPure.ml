@@ -61,6 +61,8 @@ let ast_to_type_formatter (fmt : ast_formatter) : type_formatter =
 
 let name_to_string = Print.name_to_string
 
+let fun_name_to_string = Print.fun_name_to_string
+
 let option_to_string = Print.option_to_string
 
 let type_var_to_string = Print.Types.type_var_to_string
@@ -113,7 +115,7 @@ let mk_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
   in
   let fun_def_id_to_string def_id =
     let def = A.FunDefId.Map.find def_id fun_defs in
-    name_to_string def.name
+    fun_name_to_string def.name
   in
   {
     type_var_id_to_string;
@@ -474,7 +476,7 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
 
 let fun_def_to_string (fmt : ast_formatter) (def : fun_def) : string =
   let type_fmt = ast_to_type_formatter fmt in
-  let name = name_to_string def.basename ^ fun_suffix def.back_id in
+  let name = fun_name_to_string def.basename ^ fun_suffix def.back_id in
   let signature = fun_sig_to_string fmt def.signature in
   let inputs = List.map (var_to_string type_fmt) def.inputs in
   let inputs =

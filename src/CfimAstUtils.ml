@@ -26,7 +26,7 @@ let lookup_fun_sig (fun_id : fun_id) (fun_defs : fun_def FunDefId.Map.t) :
   | Assumed aid -> Assumed.get_assumed_sig aid
 
 let lookup_fun_name (fun_id : fun_id) (fun_defs : fun_def FunDefId.Map.t) :
-    Identifiers.name =
+    Identifiers.fun_name =
   match fun_id with
   | Local id -> (FunDefId.Map.find id fun_defs).name
   | Assumed aid -> Assumed.get_assumed_name aid

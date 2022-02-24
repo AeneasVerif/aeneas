@@ -13,6 +13,12 @@ let option_to_string (to_string : 'a -> string) (x : 'a option) : string =
 
 let name_to_string (name : name) : string = String.concat "::" name
 
+let fun_name_to_string (name : fun_name) : string =
+  match name with
+  | Regular name -> name_to_string name
+  | Impl (type_name, impl_id, ident) ->
+      name_to_string type_name ^ "{" ^ ImplId.to_string impl_id ^ "}::" ^ ident
+
 (** Pretty-printing for types *)
 module Types = struct
   let type_var_to_string (tv : T.type_var) : string = tv.name
@@ -737,7 +743,7 @@ module CfimAst = struct
     in
     let fun_def_id_to_string def_id =
       let def = C.ctx_lookup_fun_def ctx def_id in
-      name_to_string def.name
+      fun_name_to_string def.name
     in
     {
       rvar_to_string = ctx_fmt.PV.rvar_to_string;
@@ -779,7 +785,7 @@ module CfimAst = struct
     let adt_field_to_string = type_ctx_to_adt_field_to_string_fun type_defs in
     let fun_def_id_to_string def_id =
       let def = A.FunDefId.Map.find def_id fun_defs in
-      name_to_string def.name
+      fun_name_to_string def.name
     in
     {
       rvar_to_string;
@@ -1037,7 +1043,7 @@ module CfimAst = struct
     let sg = def.signature in
 
     (* Function name *)
-    let name = name_to_string def.A.name in
+    let name = fun_name_to_string def.A.name in
 
     (* Region/type parameters *)
     let regions = sg.region_params in
@@ -1124,7 +1130,7 @@ module Module = struct
     in
     let fun_def_id_to_string def_id =
       let def = A.FunDefId.Map.find def_id fun_context in
-      name_to_string def.name
+      fun_name_to_string def.name
     in
     let var_id_to_string vid =
       let var = V.VarId.nth def.locals vid in

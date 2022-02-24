@@ -256,14 +256,15 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
    * `module::function` (if top function)
    * `module::Type::function` (for implementations)
    *)
-  let get_fun_name (name : name) : string =
+  let get_fun_name (name : fun_name) : string =
     match name with
-    | [ _module; name ] -> name
-    | [ _module; ty; name ] -> to_snake_case ty ^ "_" ^ name
+    | Regular [ _module; name ] -> name
+    | Impl ([ _module; ty ], _, name) -> to_snake_case ty ^ "_" ^ name
     | _ ->
-        raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
+        raise
+          (Failure ("Unexpected name shape: " ^ Print.fun_name_to_string name))
   in
-  let fun_name (_fid : A.fun_id) (fname : name) (num_rgs : int)
+  let fun_name (_fid : A.fun_id) (fname : fun_name) (num_rgs : int)
       (rg : region_group_info option) (filter_info : bool * int) : string =
     let fname = get_fun_name fname in
     (* Converting to snake case should be a no-op, but it doesn't cost much *)
@@ -274,7 +275,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     fname ^ suffix
   in
 
-  let decreases_clause_name (_fid : FunDefId.id) (fname : name) : string =
+  let decreases_clause_name (_fid : FunDefId.id) (fname : fun_name) : string =
     let fname = get_fun_name fname in
     (* Converting to snake case should be a no-op, but it doesn't cost much *)
     let fname = to_snake_case fname in
@@ -1051,7 +1052,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   F.pp_print_string fmt
-    ("(** [" ^ Print.name_to_string def.basename ^ "]: decreases clause *)");
+    ("(** [" ^ Print.fun_name_to_string def.basename ^ "]: decreases clause *)");
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1107,7 +1108,8 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  F.pp_print_string fmt ("(** [" ^ Print.name_to_string def.basename ^ "] *)");
+  F.pp_print_string fmt
+    ("(** [" ^ Print.fun_name_to_string def.basename ^ "] *)");
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1232,7 +1234,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_break fmt 0 0;
     (* Print a comment *)
     F.pp_print_string fmt
-      ("(** Unit test for [" ^ Print.name_to_string def.basename ^ "] *)");
+      ("(** Unit test for [" ^ Print.fun_name_to_string def.basename ^ "] *)");
     F.pp_print_space fmt ();
     (* Open a box for the test *)
     F.pp_open_hovbox fmt ctx.indent_incr;

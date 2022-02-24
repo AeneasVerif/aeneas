@@ -41,4 +41,5 @@ let fun_def_to_string (ctx : trans_ctx) (def : Pure.fun_def) : string =
   PrintPure.fun_def_to_string fmt def
 
 let fun_def_id_to_string (ctx : trans_ctx) (id : Pure.FunDefId.id) : string =
-  Print.name_to_string (Pure.FunDefId.Map.find id ctx.fun_context.fun_defs).name
+  Print.fun_name_to_string
+    (Pure.FunDefId.Map.find id ctx.fun_context.fun_defs).name

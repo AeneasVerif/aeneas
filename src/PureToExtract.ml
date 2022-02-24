@@ -30,6 +30,10 @@ module StringMap = Collections.MakeMap (Collections.OrderedString)
 
 type name = Identifiers.name
 
+type type_name = Identifiers.type_name
+
+type fun_name = Identifiers.fun_name
+
 (* TODO: this should a module we give to a functor! *)
 type formatter = {
   bool_name : string;
@@ -65,9 +69,15 @@ type formatter = {
           Inputs:
           - type name
        *)
-  type_name : name -> string;  (** Provided a basename, compute a type name. *)
+  type_name : type_name -> string;
+      (** Provided a basename, compute a type name. *)
   fun_name :
-    A.fun_id -> name -> int -> region_group_info option -> bool * int -> string;
+    A.fun_id ->
+    fun_name ->
+    int ->
+    region_group_info option ->
+    bool * int ->
+    string;
       (** Inputs:
           - function id: this is especially useful to identify whether the
             function is an assumed function or a local function
@@ -82,7 +92,7 @@ type formatter = {
             (`None` if forward function)
           TODO: use the fun id for the assumed functions.
        *)
-  decreases_clause_name : FunDefId.id -> name -> string;
+  decreases_clause_name : FunDefId.id -> fun_name -> string;
       (** Generates the name of the definition used to prove/reason about
           termination. The generated code uses this clause where needed,
           but its body must be defined by the user.
@@ -346,7 +356,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let fun_name =
         match fid with
         | A.Local fid ->
-            Print.name_to_string (FunDefId.Map.find fid fun_defs).name
+            Print.fun_name_to_string (FunDefId.Map.find fid fun_defs).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
       let fun_kind =
@@ -359,7 +369,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let fun_name =
         match fid with
         | A.Local fid ->
-            Print.name_to_string (FunDefId.Map.find fid fun_defs).name
+            Print.fun_name_to_string (FunDefId.Map.find fid fun_defs).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
       "decreases clause for function: " ^ fun_name

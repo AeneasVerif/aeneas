@@ -1448,7 +1448,7 @@ let translate_fun_def (config : config) (ctx : bs_ctx) (body : S.expression) :
   log#ldebug
     (lazy
       ("SymbolicToPure.translate_fun_def: "
-      ^ Print.name_to_string def.A.name
+      ^ Print.fun_name_to_string def.A.name
       ^ " ("
       ^ Print.option_to_string T.RegionGroupId.to_string bid
       ^ ")"));

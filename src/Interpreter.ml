@@ -193,7 +193,7 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
     V.symbolic_value list * SA.expression option =
   (* Debug *)
   let name_to_string () =
-    Print.name_to_string fdef.A.name
+    Print.fun_name_to_string fdef.A.name
     ^ " ("
     ^ Print.option_to_string T.RegionGroupId.to_string back_id
     ^ ")"
@@ -258,7 +258,7 @@ module Test = struct
 
     (* Debug *)
     log#ldebug
-      (lazy ("test_unit_function: " ^ Print.name_to_string fdef.A.name));
+      (lazy ("test_unit_function: " ^ Print.fun_name_to_string fdef.A.name));
 
     (* Sanity check - *)
     assert (List.length fdef.A.signature.region_params = 0);
@@ -282,7 +282,7 @@ module Test = struct
       | _ ->
           failwith
             ("Unit test failed (concrete execution) on: "
-            ^ Print.name_to_string fdef.A.name)
+            ^ Print.fun_name_to_string fdef.A.name)
     in
 
     (* Evaluate the function *)
@@ -312,7 +312,7 @@ module Test = struct
       (fdef : A.fun_def) : unit =
     (* Debug *)
     log#ldebug
-      (lazy ("test_function_symbolic: " ^ Print.name_to_string fdef.A.name));
+      (lazy ("test_function_symbolic: " ^ Print.fun_name_to_string fdef.A.name));
 
     (* Evaluate *)
     let evaluate =

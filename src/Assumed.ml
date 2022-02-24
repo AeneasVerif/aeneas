@@ -271,9 +271,9 @@ let get_assumed_sig (id : A.assumed_fun_id) : A.fun_sig =
   let _, sg, _, _ = get_assumed_info id in
   sg
 
-let get_assumed_name (id : A.assumed_fun_id) : Identifiers.name =
+let get_assumed_name (id : A.assumed_fun_id) : Identifiers.fun_name =
   let _, _, _, name = get_assumed_info id in
-  name
+  Identifiers.Regular name
 
 let assumed_is_monadic (id : A.assumed_fun_id) : bool =
   let _, _, b, _ = get_assumed_info id in

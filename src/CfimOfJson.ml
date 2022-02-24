@@ -24,6 +24,19 @@ let log = Logging.cfim_of_json_logger
 let name_of_json (js : json) : (name, string) result =
   combine_error_msgs js "name_of_json" (list_of_json string_of_json js)
 
+let fun_name_of_json (js : json) : (fun_name, string) result =
+  combine_error_msgs js "fun_name_of_json"
+    (match js with
+    | `Assoc [ ("Regular", name) ] ->
+        let* name = name_of_json name in
+        Ok (Regular name)
+    | `Assoc [ ("Impl", `List [ type_name; impl_id; ident ]) ] ->
+        let* type_name = name_of_json type_name in
+        let* impl_id = ImplId.id_of_json impl_id in
+        let* ident = string_of_json ident in
+        Ok (Impl (type_name, impl_id, ident))
+    | _ -> Error "")
+
 let type_var_of_json (js : json) : (T.type_var, string) result =
   combine_error_msgs js "type_var_of_json"
     (match js with
@@ -606,7 +619,7 @@ let fun_def_of_json (js : json) : (A.fun_def, string) result =
           ("body", body);
         ] ->
         let* def_id = A.FunDefId.id_of_json def_id in
-        let* name = name_of_json name in
+        let* name = fun_name_of_json name in
         let* signature = fun_sig_of_json signature in
         let* arg_count = int_of_json arg_count in
         let* locals = list_of_json var_of_json locals in
