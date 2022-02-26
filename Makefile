@@ -46,15 +46,28 @@ translate-nll-betree_nll: SUBDIR:=misc
 # The "standard" and the nll (non-linear lifetime) tests are in separate
 # directories in Charon
 .PHONY: gen-cfim-%
+
 gen-cfim-%: CHARON_OPTIONS = --dest ../tests/cfim --no-code-duplication
 gen-cfim-%: CHARON_TESTS_SRC = ../tests/src
+
+gen-cfim-nll-%: CHARON_OPTIONS = --dest ../tests/cfim --no-code-duplication --nll
+gen-cfim-nll-%: CHARON_TESTS_SRC = ../tests-nll/src
+
 gen-cfim-%: build
+	cd $(CHARON_HOME)/charon && cargo run $(CHARON_TESTS_SRC)/$*.rs $(CHARON_OPTIONS)
+
+gen-cfim-nll-%: build
 	cd $(CHARON_HOME)/charon && cargo run $(CHARON_TESTS_SRC)/$*.rs $(CHARON_OPTIONS)
 
 # Generic rule to test the translation on a CFIM file
 .PHONY: translate-%
 translate-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/cfim
+translate-nll-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-nll/cfim
+
 translate-%: gen-cfim-%
+	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.cfim -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
+
+translate-nll-%: gen-cfim-nll-%
 	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.cfim -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
 .PHONY: doc
