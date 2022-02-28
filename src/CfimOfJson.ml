@@ -203,8 +203,8 @@ let type_def_of_json (js : json) : (T.type_def, string) result =
           ("name", name);
           ("region_params", region_params);
           ("type_params", type_params);
-          ("kind", kind);
           ("regions_hierarchy", regions_hierarchy);
+          ("kind", kind);
         ] ->
         let* def_id = T.TypeDefId.id_of_json def_id in
         let* name = name_of_json name in

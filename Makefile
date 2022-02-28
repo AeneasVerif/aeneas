@@ -47,10 +47,11 @@ translate-nll-betree_nll: SUBDIR:=misc
 # directories in Charon
 .PHONY: gen-cfim-%
 
+# TODO: remove those "gen-..." rules, and just do `make` in the charon repo
 gen-cfim-%: CHARON_OPTIONS = --dest ../tests/cfim --no-code-duplication
 gen-cfim-%: CHARON_TESTS_SRC = ../tests/src
 
-gen-cfim-nll-%: CHARON_OPTIONS = --dest ../tests/cfim --no-code-duplication --nll
+gen-cfim-nll-%: CHARON_OPTIONS = --dest ../tests-nll/cfim --no-code-duplication --nll
 gen-cfim-nll-%: CHARON_TESTS_SRC = ../tests-nll/src
 
 gen-cfim-%: build
