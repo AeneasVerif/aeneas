@@ -52,7 +52,7 @@ type symbolic_fun_translation = V.symbolic_value list * SA.expression
 *)
 let translate_function_to_symbolics (config : C.partial_config)
     (trans_ctx : trans_ctx) (fdef : A.fun_decl) :
-    symbolic_fun_translation * symbolic_fun_translation list =
+    (symbolic_fun_translation * symbolic_fun_translation list) option =
   (* Debug *)
   log#ldebug
     (lazy
@@ -61,26 +61,29 @@ let translate_function_to_symbolics (config : C.partial_config)
 
   let { type_context; fun_context } = trans_ctx in
 
-  (* Evaluate *)
-  let synthesize = true in
-  let evaluate gid =
-    let inputs, symb =
-      evaluate_function_symbolic config synthesize type_context fun_context fdef
-        gid
-    in
-    (inputs, Option.get symb)
-  in
-  (* Execute the forward function *)
-  let forward = evaluate None in
-  (* Execute the backward functions *)
-  let backwards =
-    T.RegionGroupId.mapi
-      (fun gid _ -> evaluate (Some gid))
-      fdef.signature.regions_hierarchy
-  in
+  match fdef.body with
+  | None -> None
+  | Some _ ->
+      (* Evaluate *)
+      let synthesize = true in
+      let evaluate gid =
+        let inputs, symb =
+          evaluate_function_symbolic config synthesize type_context fun_context
+            fdef gid
+        in
+        (inputs, Option.get symb)
+      in
+      (* Execute the forward function *)
+      let forward = evaluate None in
+      (* Execute the backward functions *)
+      let backwards =
+        T.RegionGroupId.mapi
+          (fun gid _ -> evaluate (Some gid))
+          fdef.signature.regions_hierarchy
+      in
 
-  (* Return *)
-  (forward, backwards)
+      (* Return *)
+      Some (forward, backwards)
 
 (** Translate a function, by generating its forward and backward translations.
 
@@ -101,9 +104,12 @@ let translate_function_to_pure (config : C.partial_config)
   let { type_context; fun_context } = trans_ctx in
   let def_id = fdef.def_id in
 
-  (* Compute the symbolic ASTs *)
+  (* Compute the symbolic ASTs, if the function is transparent *)
+  let symbolic_trans = translate_function_to_symbolics config trans_ctx fdef in
   let symbolic_forward, symbolic_backwards =
-    translate_function_to_symbolics config trans_ctx fdef
+    match symbolic_trans with
+    | None -> (None, None)
+    | Some (fwd, backs) -> (Some fwd, Some backs)
   in
 
   (* Convert the symbolic ASTs to pure ASTs: *)
@@ -152,17 +158,20 @@ let translate_function_to_pure (config : C.partial_config)
   in
 
   (* We need to initialize the input/output variables *)
-  let forward_input_vars = LlbcAstUtils.fun_body_get_input_vars body in
-  let forward_input_varnames =
-    List.map (fun (v : A.var) -> v.name) forward_input_vars
-  in
-  let num_forward_inputs = body.arg_count in
+  let num_forward_inputs = List.length fdef.signature.inputs in
   let add_forward_inputs input_svs ctx =
-    let input_svs = List.combine forward_input_varnames input_svs in
-    let ctx, forward_inputs =
-      SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
-    in
-    { ctx with forward_inputs }
+    match fdef.body with
+    | None -> ctx
+    | Some body ->
+        let forward_input_vars = LlbcAstUtils.fun_body_get_input_vars body in
+        let forward_input_varnames =
+          List.map (fun (v : A.var) -> v.name) forward_input_vars
+        in
+        let input_svs = List.combine forward_input_varnames input_svs in
+        let ctx, forward_inputs =
+          SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
+        in
+        { ctx with forward_inputs }
   in
 
   (* The symbolic to pure config *)
@@ -175,9 +184,12 @@ let translate_function_to_pure (config : C.partial_config)
 
   (* Translate the forward function *)
   let pure_forward =
-    SymbolicToPure.translate_fun_decl sp_config
-      (add_forward_inputs (fst symbolic_forward) ctx)
-      (snd symbolic_forward)
+    match symbolic_forward with
+    | None -> SymbolicToPure.translate_fun_decl sp_config ctx None
+    | Some (fwd_svs, fwd_ast) ->
+        SymbolicToPure.translate_fun_decl sp_config
+          (add_forward_inputs fwd_svs ctx)
+          (Some fwd_ast)
   in
 
   (* Translate the backward functions *)
@@ -187,55 +199,73 @@ let translate_function_to_pure (config : C.partial_config)
      * can't have parents *)
     assert (rg.parents = []);
     let back_id = rg.id in
-    let input_svs, symbolic = T.RegionGroupId.nth symbolic_backwards back_id in
-    let ctx = add_forward_inputs input_svs ctx in
-    (* TODO: the computation of the backward inputs is a bit awckward... *)
-    let backward_sg =
-      RegularFunIdMap.find (A.Local def_id, Some back_id) fun_sigs
-    in
-    let _, backward_inputs =
-      Collections.List.split_at backward_sg.sg.inputs num_forward_inputs
-    in
-    (* As we forbid nested borrows, the additional inputs for the backward
-     * functions come from the borrows in the return value of the rust function:
-     * we thus use the name "ret" for those inputs *)
-    let backward_inputs =
-      List.map (fun ty -> (Some "ret", ty)) backward_inputs
-    in
-    let ctx, backward_inputs = SymbolicToPure.fresh_vars backward_inputs ctx in
-    (* The outputs for the backward functions, however, come from borrows
-     * present in the input values of the rust function: for those we reuse
-     * the names of the  input values. *)
-    let backward_outputs =
-      List.combine backward_sg.output_names backward_sg.sg.outputs
-    in
-    let ctx, backward_outputs =
-      SymbolicToPure.fresh_vars backward_outputs ctx
-    in
-    let backward_output_tys =
-      List.map (fun (v : Pure.var) -> v.ty) backward_outputs
-    in
-    let backward_ret_ty = mk_simpl_tuple_ty backward_output_tys in
-    let backward_inputs =
-      T.RegionGroupId.Map.singleton back_id backward_inputs
-    in
-    let backward_outputs =
-      T.RegionGroupId.Map.singleton back_id backward_outputs
-    in
 
-    (* Put everything in the context *)
-    let ctx =
-      {
-        ctx with
-        bid = Some back_id;
-        ret_ty = backward_ret_ty;
-        backward_inputs;
-        backward_outputs;
-      }
-    in
+    match symbolic_backwards with
+    | None ->
+        (* Initialize the context - note that the ret_ty is not really
+         * useful as we don't translate a body *)
+        let backward_sg =
+          RegularFunIdMap.find (A.Local def_id, Some back_id) fun_sigs
+        in
+        let backward_ret_ty = mk_simpl_tuple_ty backward_sg.sg.outputs in
+        let ctx = { ctx with bid = Some back_id; ret_ty = backward_ret_ty } in
 
-    (* Translate *)
-    SymbolicToPure.translate_fun_decl sp_config ctx symbolic
+        (* Translate *)
+        SymbolicToPure.translate_fun_decl sp_config ctx None
+    | Some symbolic_backwards ->
+        let input_svs, symbolic =
+          T.RegionGroupId.nth symbolic_backwards back_id
+        in
+        let ctx = add_forward_inputs input_svs ctx in
+        (* TODO: the computation of the backward inputs is a bit awckward... *)
+        let backward_sg =
+          RegularFunIdMap.find (A.Local def_id, Some back_id) fun_sigs
+        in
+        let _, backward_inputs =
+          Collections.List.split_at backward_sg.sg.inputs num_forward_inputs
+        in
+        (* As we forbid nested borrows, the additional inputs for the backward
+         * functions come from the borrows in the return value of the rust function:
+         * we thus use the name "ret" for those inputs *)
+        let backward_inputs =
+          List.map (fun ty -> (Some "ret", ty)) backward_inputs
+        in
+        let ctx, backward_inputs =
+          SymbolicToPure.fresh_vars backward_inputs ctx
+        in
+        (* The outputs for the backward functions, however, come from borrows
+         * present in the input values of the rust function: for those we reuse
+         * the names of the  input values. *)
+        let backward_outputs =
+          List.combine backward_sg.output_names backward_sg.sg.outputs
+        in
+        let ctx, backward_outputs =
+          SymbolicToPure.fresh_vars backward_outputs ctx
+        in
+        let backward_output_tys =
+          List.map (fun (v : Pure.var) -> v.ty) backward_outputs
+        in
+        let backward_ret_ty = mk_simpl_tuple_ty backward_output_tys in
+        let backward_inputs =
+          T.RegionGroupId.Map.singleton back_id backward_inputs
+        in
+        let backward_outputs =
+          T.RegionGroupId.Map.singleton back_id backward_outputs
+        in
+
+        (* Put everything in the context *)
+        let ctx =
+          {
+            ctx with
+            bid = Some back_id;
+            ret_ty = backward_ret_ty;
+            backward_inputs;
+            backward_outputs;
+          }
+        in
+
+        (* Translate *)
+        SymbolicToPure.translate_fun_decl sp_config ctx (Some symbolic)
   in
   let pure_backwards =
     List.map translate_backward fdef.signature.regions_hierarchy
@@ -273,11 +303,15 @@ let translate_module_to_pure (config : C.partial_config)
   let local_sigs =
     List.map
       (fun (fdef : A.fun_decl) ->
-        ( A.Local fdef.def_id,
-          List.map
-            (fun (v : A.var) -> v.name)
-            (LlbcAstUtils.fun_body_get_input_vars fdef),
-          fdef.signature ))
+        let input_names =
+          match fdef.body with
+          | None -> List.map (fun _ -> None) fdef.signature.inputs
+          | Some body ->
+              List.map
+                (fun (v : A.var) -> v.name)
+                (LlbcAstUtils.fun_body_get_input_vars body)
+        in
+        (A.Local fdef.def_id, input_names, fdef.signature))
       m.functions
   in
   let sigs = List.append assumed_sigs local_sigs in
