@@ -3,7 +3,7 @@ open Types
 open Values
 open Expressions
 
-module FunDefId = IdGen ()
+module FunDeclId = IdGen ()
 
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
@@ -32,7 +32,7 @@ type assumed_fun_id =
       (** `core::ops::index::IndexMut::index_mut<alloc::vec::Vec<T>, usize>` *)
 [@@deriving show, ord]
 
-type fun_id = Local of FunDefId.id | Assumed of assumed_fun_id
+type fun_id = Local of FunDeclId.id | Assumed of assumed_fun_id
 [@@deriving show, ord]
 
 type assertion = { cond : operand; expected : bool } [@@deriving show]
@@ -169,8 +169,8 @@ and switch_targets =
         concrete = true;
       }]
 
-type fun_def = {
-  def_id : FunDefId.id;
+type fun_decl = {
+  def_id : FunDeclId.id;
   name : fun_name;
   signature : fun_sig;
   arg_count : int;

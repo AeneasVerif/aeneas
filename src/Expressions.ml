@@ -2,7 +2,7 @@ open Types
 open Values
 
 type field_proj_kind =
-  | ProjAdt of TypeDefId.id * VariantId.id option
+  | ProjAdt of TypeDeclId.id * VariantId.id option
   | ProjOption of VariantId.id
       (** Option is an assumed type, coming from the standard library *)
   | ProjTuple of int
@@ -119,7 +119,7 @@ type operand =
 type aggregate_kind =
   | AggregatedTuple
   | AggregatedAdt of
-      TypeDefId.id * VariantId.id option * erased_region list * ety list
+      TypeDeclId.id * VariantId.id option * erased_region list * ety list
 [@@deriving show]
 
 (* TODO: move the aggregate kind to operands *)

@@ -3,13 +3,13 @@ module T = Types
 module V = Values
 module E = Expressions
 module A = CfimAst
-module TypeDefId = T.TypeDefId
+module TypeDeclId = T.TypeDeclId
 module TypeVarId = T.TypeVarId
 module RegionGroupId = T.RegionGroupId
 module VariantId = T.VariantId
 module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
-module FunDefId = A.FunDefId
+module FunDeclId = A.FunDeclId
 
 module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward
@@ -45,7 +45,7 @@ let option_some_id = T.option_some_id
 
 let option_none_id = T.option_none_id
 
-type type_id = AdtId of TypeDefId.id | Tuple | Assumed of assumed_ty
+type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 [@@deriving show, ord]
 
 (** Ancestor for iter visitor for [ty] *)
@@ -115,16 +115,16 @@ type field = { field_name : string option; field_ty : ty } [@@deriving show]
 
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 
-type type_def_kind = Struct of field list | Enum of variant list
+type type_decl_kind = Struct of field list | Enum of variant list
 [@@deriving show]
 
 type type_var = T.type_var [@@deriving show]
 
-type type_def = {
-  def_id : TypeDefId.id;
+type type_decl = {
+  def_id : TypeDeclId.id;
   name : name;
   type_params : type_var list;
-  kind : type_def_kind;
+  kind : type_decl_kind;
 }
 [@@deriving show]
 
@@ -595,8 +595,8 @@ type fun_sig = {
 
 type inst_fun_sig = { inputs : ty list; outputs : ty list }
 
-type fun_def = {
-  def_id : FunDefId.id;
+type fun_decl = {
+  def_id : FunDeclId.id;
   back_id : T.RegionGroupId.id option;
   basename : fun_name;
       (** The "base" name of the function.

@@ -410,7 +410,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.Adt av, T.Adt (T.AdtId def_id, regions, tys) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
-            let def = C.ctx_lookup_type_def ctx def_id in
+            let def = C.ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
             assert (List.length regions = List.length def.region_params);
             assert (List.length tys = List.length def.type_params);
@@ -422,7 +422,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | _ -> failwith "Erroneous typing");
             (* Check that the field types are correct *)
             let field_types =
-              Subst.type_def_get_instantiated_field_etypes def av.V.variant_id
+              Subst.type_decl_get_instantiated_field_etypes def av.V.variant_id
                 tys
             in
             let fields_with_types =
@@ -509,7 +509,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.AAdt av, T.Adt (T.AdtId def_id, regions, tys) ->
             (* Retrieve the definition to check the variant id, the number of
              * parameters, etc. *)
-            let def = C.ctx_lookup_type_def ctx def_id in
+            let def = C.ctx_lookup_type_decl ctx def_id in
             (* Check the number of parameters *)
             assert (List.length regions = List.length def.region_params);
             assert (List.length tys = List.length def.type_params);
@@ -521,7 +521,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | _ -> failwith "Erroneous typing");
             (* Check that the field types are correct *)
             let field_types =
-              Subst.type_def_get_instantiated_field_rtypes def av.V.variant_id
+              Subst.type_decl_get_instantiated_field_rtypes def av.V.variant_id
                 regions tys
             in
             let fields_with_types =

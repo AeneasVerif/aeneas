@@ -24,7 +24,7 @@ let log = L.pre_passes_log
     ```
 
  *)
-let filter_drop_assigns (f : A.fun_def) : A.fun_def =
+let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
   (* The visitor *)
   let obj =
     object (self)

@@ -220,16 +220,16 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
-    (kind : V.sv_kind) (def_id : T.TypeDefId.id)
+    (kind : V.sv_kind) (def_id : T.TypeDeclId.id)
     (regions : T.RegionId.id T.region list) (types : T.rty list)
     (ctx : C.eval_ctx) : V.symbolic_expansion list =
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
-  let def = C.ctx_lookup_type_def ctx def_id in
+  let def = C.ctx_lookup_type_decl ctx def_id in
   assert (List.length regions = List.length def.T.region_params);
   (* Retrieve, for every variant, the list of its instantiated field types *)
   let variants_fields_types =
-    Subst.type_def_get_instantiated_variants_fields_rtypes def regions types
+    Subst.type_decl_get_instantiated_variants_fields_rtypes def regions types
   in
   (* Check if there is strictly more than one variant *)
   if List.length variants_fields_types > 1 && not expand_enumerations then
@@ -677,7 +677,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
             (* [expand_symbolic_value_no_branching] checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
-            let def = C.ctx_lookup_type_def ctx def_id in
+            let def = C.ctx_lookup_type_decl ctx def_id in
             (match def.kind with
             | T.Struct _ | T.Enum ([] | [ _ ]) -> ()
             | T.Enum (_ :: _) ->
@@ -688,7 +688,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
                        [greedy_expand_symbolics_with_borrows] of [config]): "
                      ^ Print.name_to_string def.name)));
             (* Also, we need to check if the definition is recursive *)
-            if C.ctx_type_def_is_rec ctx def_id then
+            if C.ctx_type_decl_is_rec ctx def_id then
               raise
                 (Failure
                    ("Attempted to greedily expand a recursive definition \

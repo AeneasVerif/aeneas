@@ -51,7 +51,7 @@ type symbolic_fun_translation = V.symbolic_value list * SA.expression
     for the forward function and the backward functions.
 *)
 let translate_function_to_symbolics (config : C.partial_config)
-    (trans_ctx : trans_ctx) (fdef : A.fun_def) :
+    (trans_ctx : trans_ctx) (fdef : A.fun_decl) :
     symbolic_fun_translation * symbolic_fun_translation list =
   (* Debug *)
   log#ldebug
@@ -91,7 +91,7 @@ let translate_function_to_symbolics (config : C.partial_config)
 let translate_function_to_pure (config : C.partial_config)
     (mp_config : Micro.config) (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
-    (pure_type_defs : Pure.type_def Pure.TypeDefId.Map.t) (fdef : A.fun_def) :
+    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl) :
     pure_fun_translation =
   (* Debug *)
   log#ldebug
@@ -122,12 +122,12 @@ let translate_function_to_pure (config : C.partial_config)
   let type_context =
     {
       SymbolicToPure.types_infos = type_context.type_infos;
-      cfim_type_defs = type_context.type_defs;
-      type_defs = pure_type_defs;
+      cfim_type_decls = type_context.type_decls;
+      type_decls = pure_type_decls;
     }
   in
   let fun_context =
-    { SymbolicToPure.cfim_fun_defs = fun_context.fun_defs; fun_sigs }
+    { SymbolicToPure.cfim_fun_decls = fun_context.fun_decls; fun_sigs }
   in
   let ctx =
     {
@@ -139,7 +139,7 @@ let translate_function_to_pure (config : C.partial_config)
       var_counter;
       type_context;
       fun_context;
-      fun_def = fdef;
+      fun_decl = fdef;
       forward_inputs = [];
       (* Empty for now *)
       backward_inputs = T.RegionGroupId.Map.empty;
@@ -152,7 +152,7 @@ let translate_function_to_pure (config : C.partial_config)
   in
 
   (* We need to initialize the input/output variables *)
-  let forward_input_vars = CfimAstUtils.fun_def_get_input_vars fdef in
+  let forward_input_vars = CfimAstUtils.fun_decl_get_input_vars fdef in
   let forward_input_varnames =
     List.map (fun (v : A.var) -> v.name) forward_input_vars
   in
@@ -175,13 +175,13 @@ let translate_function_to_pure (config : C.partial_config)
 
   (* Translate the forward function *)
   let pure_forward =
-    SymbolicToPure.translate_fun_def sp_config
+    SymbolicToPure.translate_fun_decl sp_config
       (add_forward_inputs (fst symbolic_forward) ctx)
       (snd symbolic_forward)
   in
 
   (* Translate the backward functions *)
-  let translate_backward (rg : T.region_var_group) : Pure.fun_def =
+  let translate_backward (rg : T.region_var_group) : Pure.fun_decl =
     (* For the backward inputs/outputs initialization: we use the fact that
      * there are no nested borrows for now, and so that the region groups
      * can't have parents *)
@@ -235,7 +235,7 @@ let translate_function_to_pure (config : C.partial_config)
     in
 
     (* Translate *)
-    SymbolicToPure.translate_fun_def sp_config ctx symbolic
+    SymbolicToPure.translate_fun_decl sp_config ctx symbolic
   in
   let pure_backwards =
     List.map translate_backward fdef.signature.regions_hierarchy
@@ -246,7 +246,7 @@ let translate_function_to_pure (config : C.partial_config)
 
 let translate_module_to_pure (config : C.partial_config)
     (mp_config : Micro.config) (m : M.cfim_module) :
-    trans_ctx * Pure.type_def list * (bool * pure_fun_translation) list =
+    trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
 
@@ -255,12 +255,12 @@ let translate_module_to_pure (config : C.partial_config)
   let trans_ctx = { type_context; fun_context } in
 
   (* Translate all the type definitions *)
-  let type_defs = SymbolicToPure.translate_type_defs m.types in
+  let type_decls = SymbolicToPure.translate_type_decls m.types in
 
   (* Compute the type definition map *)
-  let type_defs_map =
-    Pure.TypeDefId.Map.of_list
-      (List.map (fun (def : Pure.type_def) -> (def.def_id, def)) type_defs)
+  let type_decls_map =
+    Pure.TypeDeclId.Map.of_list
+      (List.map (fun (def : Pure.type_decl) -> (def.def_id, def)) type_decls)
   in
 
   (* Translate all the function *signatures* *)
@@ -272,11 +272,11 @@ let translate_module_to_pure (config : C.partial_config)
   in
   let local_sigs =
     List.map
-      (fun (fdef : A.fun_def) ->
+      (fun (fdef : A.fun_decl) ->
         ( A.Local fdef.def_id,
           List.map
             (fun (v : A.var) -> v.name)
-            (CfimAstUtils.fun_def_get_input_vars fdef),
+            (CfimAstUtils.fun_decl_get_input_vars fdef),
           fdef.signature ))
       m.functions
   in
@@ -289,7 +289,7 @@ let translate_module_to_pure (config : C.partial_config)
   let pure_translations =
     List.map
       (translate_function_to_pure config mp_config trans_ctx fun_sigs
-         type_defs_map)
+         type_decls_map)
       m.functions
   in
 
@@ -301,14 +301,14 @@ let translate_module_to_pure (config : C.partial_config)
   in
 
   (* Return *)
-  (trans_ctx, type_defs, pure_translations)
+  (trans_ctx, type_decls, pure_translations)
 
 type gen_ctx = {
   m : M.cfim_module;
   extract_ctx : PureToExtract.extraction_ctx;
-  trans_types : Pure.type_def Pure.TypeDefId.Map.t;
-  trans_funs : (bool * pure_fun_translation) Pure.FunDefId.Map.t;
-  functions_with_decreases_clause : Pure.FunDefId.Set.t;
+  trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
+  trans_funs : (bool * pure_fun_translation) Pure.FunDeclId.Map.t;
+  functions_with_decreases_clause : Pure.FunDeclId.Set.t;
 }
 (** Extraction context *)
 
@@ -316,7 +316,7 @@ type gen_config = {
   extract_types : bool;
   extract_decreases_clauses : bool;
   extract_template_decreases_clauses : bool;
-  extract_fun_defs : bool;
+  extract_fun_decls : bool;
   test_unit_functions : bool;
 }
 
@@ -327,15 +327,15 @@ type gen_config = {
 let extract_definitions (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) : unit =
   (* Export the definition groups to the file, in the proper order *)
-  let export_type (qualif : ExtractToFStar.type_def_qualif)
-      (id : Pure.TypeDefId.id) : unit =
-    let def = Pure.TypeDefId.Map.find id ctx.trans_types in
-    ExtractToFStar.extract_type_def ctx.extract_ctx fmt qualif def
+  let export_type (qualif : ExtractToFStar.type_decl_qualif)
+      (id : Pure.TypeDeclId.id) : unit =
+    let def = Pure.TypeDeclId.Map.find id ctx.trans_types in
+    ExtractToFStar.extract_type_decl ctx.extract_ctx fmt qualif def
   in
 
   (* Utility to check a function has a decrease clause *)
-  let has_decreases_clause (def : Pure.fun_def) : bool =
-    Pure.FunDefId.Set.mem def.def_id ctx.functions_with_decreases_clause
+  let has_decreases_clause (def : Pure.fun_decl) : bool =
+    Pure.FunDeclId.Set.mem def.def_id ctx.functions_with_decreases_clause
   in
 
   (* In case of (non-mutually) recursive functions, we use a simple procedure to
@@ -364,7 +364,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
               fwd)
         pure_ls;
     (* Extract the function definitions *)
-    (if config.extract_fun_defs then
+    (if config.extract_fun_decls then
      (* Check if the functions are mutually recursive - this really works
       * to check if the forward and backward translations of a single
       * recursive function are mutually recursive *)
@@ -386,7 +386,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          let has_decr_clause =
            has_decreases_clause def && config.extract_decreases_clauses
          in
-         ExtractToFStar.extract_fun_def ctx.extract_ctx fmt qualif
+         ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif
            has_decr_clause fwd_def def)
        fls);
     (* Insert unit tests if necessary *)
@@ -413,14 +413,14 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
             ids
     | Fun (NonRec id) ->
         (* Lookup *)
-        let pure_fun = Pure.FunDefId.Map.find id ctx.trans_funs in
+        let pure_fun = Pure.FunDeclId.Map.find id ctx.trans_funs in
         (* Translate *)
         export_functions false [ pure_fun ]
     | Fun (Rec ids) ->
         (* General case of mutually recursive functions *)
         (* Lookup *)
         let pure_funs =
-          List.map (fun id -> Pure.FunDefId.Map.find id ctx.trans_funs) ids
+          List.map (fun id -> Pure.FunDeclId.Map.find id ctx.trans_funs) ids
         in
         (* Translate *)
         export_functions true pure_funs
@@ -494,7 +494,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* We need to compute which functions are recursive, in order to know
    * whether we should generate a decrease clause or not. *)
   let rec_functions =
-    Pure.FunDefId.Set.of_list
+    Pure.FunDeclId.Set.of_list
       (List.concat
          (List.map
             (fun decl -> match decl with M.Fun (Rec ids) -> ids | _ -> [])
@@ -507,7 +507,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
    * sure there are no name clashes. *)
   let ctx =
     List.fold_left
-      (fun ctx def -> ExtractToFStar.extract_type_def_register_names ctx def)
+      (fun ctx def -> ExtractToFStar.extract_type_decl_register_names ctx def)
       ctx trans_types
   in
 
@@ -516,9 +516,9 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       (fun ctx (keep_fwd, def) ->
         (* Note that we generate a decrease clause for all the recursive functions *)
         let gen_decr_clause =
-          Pure.FunDefId.Set.mem (fst def).Pure.def_id rec_functions
+          Pure.FunDeclId.Set.mem (fst def).Pure.def_id rec_functions
         in
-        ExtractToFStar.extract_fun_def_register_names ctx keep_fwd
+        ExtractToFStar.extract_fun_decl_register_names ctx keep_fwd
           gen_decr_clause def)
       ctx trans_funs
   in
@@ -542,11 +542,11 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
 
   (* Put the translated definitions in maps *)
   let trans_types =
-    Pure.TypeDefId.Map.of_list
-      (List.map (fun (d : Pure.type_def) -> (d.def_id, d)) trans_types)
+    Pure.TypeDeclId.Map.of_list
+      (List.map (fun (d : Pure.type_decl) -> (d.def_id, d)) trans_types)
   in
   let trans_funs =
-    Pure.FunDefId.Map.of_list
+    Pure.FunDeclId.Map.of_list
       (List.map
          (fun ((keep_fwd, (fd, bdl)) : bool * pure_fun_translation) ->
            (fd.def_id, (keep_fwd, (fd, bdl))))
@@ -571,7 +571,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         extract_types = false;
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses = false;
-        extract_fun_defs = false;
+        extract_fun_decls = false;
         test_unit_functions = false;
       }
     in
@@ -603,7 +603,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let fun_config =
       {
         base_gen_config with
-        extract_fun_defs = true;
+        extract_fun_decls = true;
         test_unit_functions = config.test_unit_functions;
       }
     in
@@ -618,7 +618,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses =
           config.extract_template_decreases_clauses;
-        extract_fun_defs = true;
+        extract_fun_decls = true;
         test_unit_functions = config.test_unit_functions;
       }
     in

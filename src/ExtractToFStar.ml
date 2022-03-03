@@ -13,13 +13,13 @@ module F = Format
     Controls whether we should use `type ...` or `and ...` (for mutually
     recursive datatypes).
  *)
-type type_def_qualif = Type | And
+type type_decl_qualif = Type | And
 
 (** A qualifier for function definitions.
 
     Controls whether we should use `let ...`, `let rec ...` or `and ...`
  *)
-type fun_def_qualif = Let | LetRec | And
+type fun_decl_qualif = Let | LetRec | And
 
 (** Small helper to compute the name of an int type *)
 let fstar_int_name (int_ty : integer_type) =
@@ -275,7 +275,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     fname ^ suffix
   in
 
-  let decreases_clause_name (_fid : FunDefId.id) (fname : fun_name) : string =
+  let decreases_clause_name (_fid : FunDeclId.id) (fname : fun_name) : string =
     let fname = get_fun_name fname in
     (* Converting to snake case should be a no-op, but it doesn't cost much *)
     let fname = to_snake_case fname in
@@ -306,7 +306,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
             | Assumed State -> "st"
             | AdtId adt_id ->
                 let def =
-                  TypeDefId.Map.find adt_id ctx.type_context.type_defs
+                  TypeDeclId.Map.find adt_id ctx.type_context.type_decls
                 in
                 (* We do the following:
                  * - convert to snake_case
@@ -424,10 +424,10 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     We need to do this preemptively, beforce extracting any definition,
     because of recursive definitions.
  *)
-let extract_type_def_register_names (ctx : extraction_ctx) (def : type_def) :
+let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
   (* Compute and register the type def name *)
-  let ctx = ctx_add_type_def def ctx in
+  let ctx = ctx_add_type_decl def ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -451,8 +451,8 @@ let extract_type_def_register_names (ctx : extraction_ctx) (def : type_def) :
   (* Return *)
   ctx
 
-let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : type_def) (fields : field list) : unit =
+let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
+    (def : type_decl) (fields : field list) : unit =
   (* We want to generate a definition which looks like this:
    * ```
    * type t = { x : int; y : bool; }
@@ -509,8 +509,8 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ();
     F.pp_print_string fmt "}")
 
-let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : type_def) (def_name : string) (type_params : string list)
+let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
+    (def : type_decl) (def_name : string) (type_params : string list)
     (variants : variant list) : unit =
   (* We want to generate a definition which looks like this:
    * ```
@@ -614,8 +614,8 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     Note that all the names used for extraction should already have been
     registered.
  *)
-let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : type_def_qualif) (def : type_def) : unit =
+let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (qualif : type_decl_qualif) (def : type_decl) : unit =
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.def_id ctx in
   (* Add the type params - note that we need those bindings only for the
@@ -653,9 +653,9 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
   (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_close_box fmt ();
   (match def.kind with
-  | Struct fields -> extract_type_def_struct_body ctx_body fmt def fields
+  | Struct fields -> extract_type_decl_struct_body ctx_body fmt def fields
   | Enum variants ->
-      extract_type_def_enum_body ctx_body fmt def def_name type_params variants);
+      extract_type_decl_enum_body ctx_body fmt def def_name type_params variants);
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
@@ -664,7 +664,7 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
 (** Compute the names for all the pure functions generated from a rust function
     (forward function and backward functions).
  *)
-let extract_fun_def_register_names (ctx : extraction_ctx) (keep_fwd : bool)
+let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     (has_decreases_clause : bool) (def : pure_fun_translation) : extraction_ctx
     =
   let fwd, back_ls = def in
@@ -673,11 +673,11 @@ let extract_fun_def_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     if has_decreases_clause then ctx_add_decrases_clause fwd ctx else ctx
   in
   (* Register the forward function name *)
-  let ctx = ctx_add_fun_def (keep_fwd, def) fwd ctx in
+  let ctx = ctx_add_fun_decl (keep_fwd, def) fwd ctx in
   (* Register the backward functions' names *)
   let ctx =
     List.fold_left
-      (fun ctx back -> ctx_add_fun_def (keep_fwd, def) back ctx)
+      (fun ctx back -> ctx_add_fun_decl (keep_fwd, def) back ctx)
       ctx back_ls
   in
   (* Return *)
@@ -986,7 +986,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     - the previous context augmented with bindings for the input values
  *)
 let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : fun_def) : extraction_ctx * extraction_ctx =
+    (def : fun_decl) : extraction_ctx * extraction_ctx =
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, _ = ctx_add_type_params def.signature.type_params ctx in
@@ -1045,7 +1045,7 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     ```
  *)
 let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : fun_def) : unit =
+    (def : fun_decl) : unit =
   (* Retrieve the function name *)
   let def_name = ctx_get_decreases_clause def.def_id ctx in
   (* Add a break before *)
@@ -1097,9 +1097,9 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     equal to the definition to extract, if we extract a forward function) because
     it is useful for the decrease clause.
  *)
-let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : fun_def_qualif) (has_decreases_clause : bool) (fwd_def : fun_def)
-    (def : fun_def) : unit =
+let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (qualif : fun_decl_qualif) (has_decreases_clause : bool) (fwd_def : fun_decl)
+    (def : fun_decl) : unit =
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* (* Add the type parameters - note that we need those bindings only for the
@@ -1220,7 +1220,7 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     ```
  *)
 let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : fun_def) : unit =
+    (def : fun_decl) : unit =
   (* We only insert unit tests for forward functions *)
   assert (def.back_id = None);
   (* Check if this is a unit function *)

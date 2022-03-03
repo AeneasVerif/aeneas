@@ -200,13 +200,13 @@ let config_of_partial (mode : interpreter_mode) (config : partial_config) :
   }
 
 type type_context = {
-  type_defs_groups : M.type_declaration_group TypeDefId.Map.t;
-  type_defs : type_def TypeDefId.Map.t;
+  type_decls_groups : M.type_declaration_group TypeDeclId.Map.t;
+  type_decls : type_decl TypeDeclId.Map.t;
   type_infos : TypesAnalysis.type_infos;
 }
 [@@deriving show]
 
-type fun_context = { fun_defs : fun_def FunDefId.Map.t } [@@deriving show]
+type fun_context = { fun_decls : fun_decl FunDeclId.Map.t } [@@deriving show]
 
 type eval_ctx = {
   type_context : type_context;
@@ -237,12 +237,12 @@ let ctx_lookup_binder (ctx : eval_ctx) (vid : VarId.id) : binder =
   lookup ctx.env
 
 (** TODO: make this more efficient with maps *)
-let ctx_lookup_type_def (ctx : eval_ctx) (tid : TypeDefId.id) : type_def =
-  TypeDefId.Map.find tid ctx.type_context.type_defs
+let ctx_lookup_type_decl (ctx : eval_ctx) (tid : TypeDeclId.id) : type_decl =
+  TypeDeclId.Map.find tid ctx.type_context.type_decls
 
 (** TODO: make this more efficient with maps *)
-let ctx_lookup_fun_def (ctx : eval_ctx) (fid : FunDefId.id) : fun_def =
-  FunDefId.Map.find fid ctx.fun_context.fun_defs
+let ctx_lookup_fun_decl (ctx : eval_ctx) (fid : FunDeclId.id) : fun_decl =
+  FunDeclId.Map.find fid ctx.fun_context.fun_decls
 
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
@@ -370,8 +370,8 @@ let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
 let ctx_lookup_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) : V.abs =
   env_lookup_abs ctx.env abs_id
 
-let ctx_type_def_is_rec (ctx : eval_ctx) (id : TypeDefId.id) : bool =
-  let decl_group = TypeDefId.Map.find id ctx.type_context.type_defs_groups in
+let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
+  let decl_group = TypeDeclId.Map.find id ctx.type_context.type_decls_groups in
   match decl_group with M.Rec _ -> true | M.NonRec _ -> false
 
 (** Visitor to iterate over the values in the *current* frame *)

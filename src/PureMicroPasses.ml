@@ -157,7 +157,7 @@ type pn_ctx = string VarId.Map.t
       ```
    - TODO: inputs and end abstraction...
  *)
-let compute_pretty_names (def : fun_def) : fun_def =
+let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Small helpers *)
   (* 
    * When we do branchings, we need to merge (the constraints saved in) the
@@ -322,7 +322,7 @@ let compute_pretty_names (def : fun_def) : fun_def =
   { def with body }
 
 (** Remove the meta-information *)
-let remove_meta (def : fun_def) : fun_def =
+let remove_meta (def : fun_decl) : fun_decl =
   let obj =
     object
       inherit [_] map_expression as super
@@ -360,7 +360,7 @@ let remove_meta (def : fun_def) : fun_def =
     pass (if they are useless).
  *)
 let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
-    (def : fun_def) : fun_def =
+    (def : fun_decl) : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -504,7 +504,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
                   (* We need to use the regions hierarchy *)
                   (* First, lookup the signature of the CFIM function *)
                   let sg =
-                    CfimAstUtils.lookup_fun_sig id0 ctx.fun_context.fun_defs
+                    CfimAstUtils.lookup_fun_sig id0 ctx.fun_context.fun_decls
                   in
                   (* Compute the set of ancestors of the function in call1 *)
                   let call1_ancestors =
@@ -585,7 +585,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
 (** Filter the useless assignments (removes the useless variables, filters
     the function calls) *)
 let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
-    (def : fun_def) : fun_def =
+    (def : fun_decl) : fun_decl =
   (* We first need a transformation on *left-values*, which filters the useless
    * variables and tells us whether the value contains any variable which has
    * not been replaced by `_` (in which case we need to keep the assignment,
@@ -707,8 +707,8 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
     symbolic to pure. Here, we remove the definitions altogether, because they
     are now useless
   *)
-let filter_if_backward_with_no_outputs (config : config) (def : fun_def) :
-    fun_def option =
+let filter_if_backward_with_no_outputs (config : config) (def : fun_decl) :
+    fun_decl option =
   if
     config.filter_useless_functions && Option.is_some def.back_id
     && def.signature.outputs = []
@@ -745,7 +745,7 @@ let keep_forward (config : config) (trans : pure_fun_translation) : bool =
 (** Add unit arguments (optionally) to functions with no arguments, and
     change their output type to use `result`
   *)
-let to_monadic (config : config) (def : fun_def) : fun_def =
+let to_monadic (config : config) (def : fun_decl) : fun_decl =
   (* Update the body *)
   let obj =
     object
@@ -812,7 +812,7 @@ let to_monadic (config : config) (def : fun_def) : fun_def =
 
 (** Convert the unit variables to `()` if they are used as right-values or
     `_` if they are used as left values in patterns. *)
-let unit_vars_to_unit (def : fun_def) : fun_def =
+let unit_vars_to_unit (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
@@ -846,7 +846,7 @@ let unit_vars_to_unit (def : fun_def) : fun_def =
     function calls, and when translating end abstractions. Here, we can do
     something simpler, in one micro-pass.
  *)
-let eliminate_box_functions (_ctx : trans_ctx) (def : fun_def) : fun_def =
+let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
@@ -894,7 +894,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_def) : fun_def =
 
     See the explanations in [config].
  *)
-let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_def) : fun_def
+let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl
     =
   (* Set up the var id generator *)
   let cnt = get_expression_min_var_counter def.body.e in
@@ -937,7 +937,7 @@ let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_def) : fun_def
 
 (** Unfold the monadic let-bindings to explicit matches. *)
 let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
-    (def : fun_def) : fun_def =
+    (def : fun_decl) : fun_decl =
   (* We may need to introduce fresh variables for the state *)
   let var_cnt = get_expression_min_var_counter def.body.e in
   let _, fresh_var_id = VarId.mk_stateful_generator var_cnt in
@@ -1066,8 +1066,8 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
 
     [ctx]: used only for printing.
  *)
-let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
-    fun_def option =
+let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
+    fun_decl option =
   (* Debug *)
   log#ldebug
     (lazy
@@ -1080,7 +1080,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
   (* First, find names for the variables which are unnamed *)
   let def = compute_pretty_names def in
   log#ldebug
-    (lazy ("compute_pretty_name:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+    (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* TODO: we might want to leverage more the assignment meta-data, for
    * aggregates for instance. *)
@@ -1091,7 +1091,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
    * Rk.: some passes below use the fact that we removed the meta-data
    * (otherwise we would have to "unmeta" expressions before matching) *)
   let def = remove_meta def in
-  log#ldebug (lazy ("remove_meta:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+  log#ldebug (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Remove the backward functions with no outputs.
    * Note that the calls to those functions should already have been removed,
@@ -1108,13 +1108,13 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
        * TODO: this is not true with the state-error monad, unless we unfold the monadic binds.
        * Also, from now onwards, the outputs list has length 1. *)
       let def = to_monadic config def in
-      log#ldebug (lazy ("to_monadic:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+      log#ldebug (lazy ("to_monadic:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
       (* Convert the unit variables to `()` if they are used as right-values or
        * `_` if they are used as left values. *)
       let def = unit_vars_to_unit def in
       log#ldebug
-        (lazy ("unit_vars_to_unit:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+        (lazy ("unit_vars_to_unit:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
       (* Inline the useless variable reassignments *)
       let inline_named_vars = true in
@@ -1124,7 +1124,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
       in
       log#ldebug
         (lazy
-          ("inline_useless_var_assignments:\n\n" ^ fun_def_to_string ctx def
+          ("inline_useless_var_assignments:\n\n" ^ fun_decl_to_string ctx def
          ^ "\n"));
 
       (* Eliminate the box functions - note that the "box" types were eliminated
@@ -1132,12 +1132,12 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
       let def = eliminate_box_functions ctx def in
       log#ldebug
         (lazy
-          ("eliminate_box_functions:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+          ("eliminate_box_functions:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
       (* Filter the useless variables, assignments, function calls, etc. *)
       let def = filter_useless config.filter_useless_monadic_calls ctx def in
       log#ldebug
-        (lazy ("filter_useless:\n\n" ^ fun_def_to_string ctx def ^ "\n"));
+        (lazy ("filter_useless:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
       (* Decompose the monadic let-bindings - F* specific
        * TODO: remove? With the state-error monad, it is becoming completely
@@ -1149,7 +1149,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
           let def = decompose_monadic_let_bindings ctx def in
           log#ldebug
             (lazy
-              ("decompose_monadic_let_bindings:\n\n" ^ fun_def_to_string ctx def
+              ("decompose_monadic_let_bindings:\n\n" ^ fun_decl_to_string ctx def
              ^ "\n"));
           def)
         else (
@@ -1165,7 +1165,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_def) :
           let def = unfold_monadic_let_bindings config ctx def in
           log#ldebug
             (lazy
-              ("unfold_monadic_let_bindings:\n\n" ^ fun_def_to_string ctx def
+              ("unfold_monadic_let_bindings:\n\n" ^ fun_decl_to_string ctx def
              ^ "\n"));
           def)
         else (

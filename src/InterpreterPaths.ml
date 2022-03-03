@@ -351,18 +351,18 @@ let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
   | Ok ctx -> ctx
 
 (** Compute an expanded ADT bottom value *)
-let compute_expanded_bottom_adt_value (tyctx : T.type_def T.TypeDefId.Map.t)
-    (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
+let compute_expanded_bottom_adt_value (tyctx : T.type_decl T.TypeDeclId.Map.t)
+    (def_id : T.TypeDeclId.id) (opt_variant_id : T.VariantId.id option)
     (regions : T.erased_region list) (types : T.ety list) : V.typed_value =
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
-  let def = T.TypeDefId.Map.find def_id tyctx in
+  let def = T.TypeDeclId.Map.find def_id tyctx in
   assert (List.length regions = List.length def.T.region_params);
   (* Compute the field types *)
   let field_types =
-    Subst.type_def_get_instantiated_field_etypes def opt_variant_id types
+    Subst.type_decl_get_instantiated_field_etypes def opt_variant_id types
   in
   (* Initialize the expanded value *)
   let fields = List.map mk_bottom field_types in
@@ -444,7 +444,7 @@ let expand_bottom_value_from_projection (config : C.config)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         T.Adt (T.AdtId def_id', regions, types) ) ->
         assert (def_id = def_id');
-        compute_expanded_bottom_adt_value ctx.type_context.type_defs def_id
+        compute_expanded_bottom_adt_value ctx.type_context.type_decls def_id
           opt_variant_id regions types
     (* Option *)
     | Field (ProjOption variant_id, _), T.Adt (T.Assumed T.Option, [], [ ty ])

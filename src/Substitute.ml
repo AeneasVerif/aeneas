@@ -102,7 +102,7 @@ let make_type_subst (var_ids : T.TypeVarId.id list) (tys : 'r T.ty list) :
 
 (** Instantiate the type variables in an ADT definition, and return, for
     every variant, the list of the types of its fields *)
-let type_def_get_instantiated_variants_fields_rtypes (def : T.type_def)
+let type_decl_get_instantiated_variants_fields_rtypes (def : T.type_decl)
     (regions : T.RegionId.id T.region list) (types : T.rty list) :
     (T.VariantId.id option * T.rty list) list =
   let r_subst =
@@ -130,7 +130,7 @@ let type_def_get_instantiated_variants_fields_rtypes (def : T.type_def)
 
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)
-let type_def_get_instantiated_field_rtypes (def : T.type_def)
+let type_decl_get_instantiated_field_rtypes (def : T.type_decl)
     (opt_variant_id : T.VariantId.id option)
     (regions : T.RegionId.id T.region list) (types : T.rty list) : T.rty list =
   let r_subst =
@@ -141,16 +141,16 @@ let type_def_get_instantiated_field_rtypes (def : T.type_def)
   let ty_subst =
     make_type_subst (List.map (fun x -> x.T.index) def.T.type_params) types
   in
-  let fields = TU.type_def_get_fields def opt_variant_id in
+  let fields = TU.type_decl_get_fields def opt_variant_id in
   List.map (fun f -> ty_substitute r_subst ty_subst f.T.field_ty) fields
 
 (** Return the types of the properly instantiated ADT's variant, provided a
     context *)
 let ctx_adt_get_instantiated_field_rtypes (ctx : C.eval_ctx)
-    (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
+    (def_id : T.TypeDeclId.id) (opt_variant_id : T.VariantId.id option)
     (regions : T.RegionId.id T.region list) (types : T.rty list) : T.rty list =
-  let def = C.ctx_lookup_type_def ctx def_id in
-  type_def_get_instantiated_field_rtypes def opt_variant_id regions types
+  let def = C.ctx_lookup_type_decl ctx def_id in
+  type_decl_get_instantiated_field_rtypes def opt_variant_id regions types
 
 (** Return the types of the properly instantiated ADT value (note that
     here, ADT is understood in its broad meaning: ADT, assumed value or tuple) *)
@@ -181,12 +181,12 @@ let ctx_adt_value_get_instantiated_field_rtypes (ctx : C.eval_ctx)
 
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)
-let type_def_get_instantiated_field_etypes (def : T.type_def)
+let type_decl_get_instantiated_field_etypes (def : T.type_decl)
     (opt_variant_id : T.VariantId.id option) (types : T.ety list) : T.ety list =
   let ty_subst =
     make_type_subst (List.map (fun x -> x.T.index) def.T.type_params) types
   in
-  let fields = TU.type_def_get_fields def opt_variant_id in
+  let fields = TU.type_decl_get_fields def opt_variant_id in
   List.map
     (fun f -> erase_regions_substitute_types ty_subst f.T.field_ty)
     fields
@@ -194,10 +194,10 @@ let type_def_get_instantiated_field_etypes (def : T.type_def)
 (** Return the types of the properly instantiated ADT's variant, provided a
     context *)
 let ctx_adt_get_instantiated_field_etypes (ctx : C.eval_ctx)
-    (def_id : T.TypeDefId.id) (opt_variant_id : T.VariantId.id option)
+    (def_id : T.TypeDeclId.id) (opt_variant_id : T.VariantId.id option)
     (types : T.ety list) : T.ety list =
-  let def = C.ctx_lookup_type_def ctx def_id in
-  type_def_get_instantiated_field_etypes def opt_variant_id types
+  let def = C.ctx_lookup_type_decl ctx def_id in
+  type_decl_get_instantiated_field_etypes def opt_variant_id types
 
 (** Apply a type substitution to a place *)
 let place_substitute (_tsubst : T.TypeVarId.id -> T.ety) (p : E.place) : E.place
@@ -320,8 +320,8 @@ and switch_targets_substitute (tsubst : T.TypeVarId.id -> T.ety)
 
 (** Apply a type substitution to a function body. Return the local variables
     and the body. *)
-let fun_def_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
-    (def : A.fun_def) : A.var list * A.statement =
+let fun_decl_substitute_in_body (tsubst : T.TypeVarId.id -> T.ety)
+    (def : A.fun_decl) : A.var list * A.statement =
   let rsubst r = r in
   let locals =
     List.map

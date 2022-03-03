@@ -15,16 +15,16 @@ let log = L.interpreter_log
 
 let compute_type_fun_contexts (m : M.cfim_module) :
     C.type_context * C.fun_context =
-  let type_decls, _ = M.split_declarations m.declarations in
-  let type_defs, fun_defs = M.compute_defs_maps m in
-  let type_defs_groups, _funs_defs_groups =
+  let type_decls_list, _ = M.split_declarations m.declarations in
+  let type_decls, fun_decls = M.compute_defs_maps m in
+  let type_decls_groups, _funs_defs_groups =
     M.split_declarations_to_group_maps m.declarations
   in
   let type_infos =
-    TypesAnalysis.analyze_type_declarations type_defs type_decls
+    TypesAnalysis.analyze_type_declarations type_decls type_decls_list
   in
-  let type_context = { C.type_defs_groups; type_defs; type_infos } in
-  let fun_context = { C.fun_defs } in
+  let type_context = { C.type_decls_groups; type_decls; type_infos } in
+  let fun_context = { C.fun_decls } in
   (type_context, fun_context)
 
 let initialize_eval_context (type_context : C.type_context)
@@ -52,7 +52,7 @@ let initialize_eval_context (type_context : C.type_context)
       - the instantiated function signature
  *)
 let initialize_symbolic_context_for_fun (type_context : C.type_context)
-    (fun_context : C.fun_context) (fdef : A.fun_def) :
+    (fun_context : C.fun_context) (fdef : A.fun_decl) :
     C.eval_ctx * V.symbolic_value list * A.inst_fun_sig =
   (* The abstractions are not initialized the same way as for function
    * calls: they contain *loan* projectors, because they "provide" us
@@ -113,7 +113,7 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
     the synthesis (mostly by ending abstractions).
 *)
 let evaluate_function_symbolic_synthesize_backward_from_return
-    (config : C.config) (fdef : A.fun_def) (inst_sg : A.inst_fun_sig)
+    (config : C.config) (fdef : A.fun_decl) (inst_sg : A.inst_fun_sig)
     (back_id : T.RegionGroupId.id) (ctx : C.eval_ctx) : SA.expression option =
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
@@ -189,7 +189,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
  *)
 let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
     (type_context : C.type_context) (fun_context : C.fun_context)
-    (fdef : A.fun_def) (back_id : T.RegionGroupId.id option) :
+    (fdef : A.fun_decl) (back_id : T.RegionGroupId.id option) :
     V.symbolic_value list * SA.expression option =
   (* Debug *)
   let name_to_string () =
@@ -252,9 +252,9 @@ module Test = struct
       environment.
    *)
   let test_unit_function (config : C.partial_config) (m : M.cfim_module)
-      (fid : A.FunDefId.id) : unit =
+      (fid : A.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
-    let fdef = A.FunDefId.nth m.functions fid in
+    let fdef = A.FunDeclId.nth m.functions fid in
 
     (* Debug *)
     log#ldebug
@@ -291,7 +291,7 @@ module Test = struct
 
   (** Small helper: return true if the function is a unit function (no parameters,
     no arguments) - TODO: move *)
-  let fun_def_is_unit (def : A.fun_def) : bool =
+  let fun_decl_is_unit (def : A.fun_decl) : bool =
     def.A.arg_count = 0
     && List.length def.A.signature.region_params = 0
     && List.length def.A.signature.type_params = 0
@@ -300,8 +300,8 @@ module Test = struct
   (** Test all the unit functions in a list of function definitions *)
   let test_unit_functions (config : C.partial_config) (m : M.cfim_module) : unit
       =
-    let unit_funs = List.filter fun_def_is_unit m.functions in
-    let test_unit_fun (def : A.fun_def) : unit =
+    let unit_funs = List.filter fun_decl_is_unit m.functions in
+    let test_unit_fun (def : A.fun_decl) : unit =
       test_unit_function config m def.A.def_id
     in
     List.iter test_unit_fun unit_funs
@@ -309,7 +309,7 @@ module Test = struct
   (** Execute the symbolic interpreter on a function. *)
   let test_function_symbolic (config : C.partial_config) (synthesize : bool)
       (type_context : C.type_context) (fun_context : C.fun_context)
-      (fdef : A.fun_def) : unit =
+      (fdef : A.fun_decl) : unit =
     (* Debug *)
     log#ldebug
       (lazy ("test_function_symbolic: " ^ Print.fun_name_to_string fdef.A.name));
@@ -337,10 +337,10 @@ module Test = struct
   let test_functions_symbolic (config : C.partial_config) (synthesize : bool)
       (m : M.cfim_module) : unit =
     let no_loop_funs =
-      List.filter (fun f -> not (CfimAstUtils.fun_def_has_loops f)) m.functions
+      List.filter (fun f -> not (CfimAstUtils.fun_decl_has_loops f)) m.functions
     in
     let type_context, fun_context = compute_type_fun_contexts m in
-    let test_fun (def : A.fun_def) : unit =
+    let test_fun (def : A.fun_decl) : unit =
       (* Execute the function - note that as the symbolic interpreter explores
        * all the path, some executions are expected to "panic": we thus don't
        * check the return value *)

@@ -2,12 +2,12 @@ open Types
 open Utils
 module TA = TypesAnalysis
 
-(** Retrieve the list of fields for the given variant of a [type_def].
+(** Retrieve the list of fields for the given variant of a [type_decl].
 
     Raises [Invalid_argument] if the arguments are incorrect.
  *)
-let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
-    : field list =
+let type_decl_get_fields (def : type_decl)
+    (opt_variant_id : VariantId.id option) : field list =
   match (def.kind, opt_variant_id) with
   | Enum variants, Some variant_id -> (VariantId.nth variants variant_id).fields
   | Struct fields, None -> fields
@@ -19,7 +19,7 @@ let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
         (Invalid_argument
            ("The variant id should be [Some] if and only if the definition is \
              an enumeration:\n\
-             - def: " ^ show_type_def def ^ "\n- opt_variant_id: "
+             - def: " ^ show_type_decl def ^ "\n- opt_variant_id: "
           ^ opt_variant_id))
 
 (** Return [true] if a [ty] is actually `unit` *)
@@ -37,7 +37,7 @@ let ty_as_adt (ty : 'r ty) : type_id * 'r list * 'r ty list =
 let ty_is_custom_adt (ty : 'r ty) : bool =
   match ty with Adt (AdtId _, _, _) -> true | _ -> false
 
-let ty_as_custom_adt (ty : 'r ty) : TypeDefId.id * 'r list * 'r ty list =
+let ty_as_custom_adt (ty : 'r ty) : TypeDeclId.id * 'r list * 'r ty list =
   match ty with
   | Adt (AdtId id, regions, tys) -> (id, regions, tys)
   | _ -> failwith "Unreachable"

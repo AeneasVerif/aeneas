@@ -233,7 +233,7 @@ let set_discriminant (config : C.config) (p : E.place)
               let bottom_v =
                 match type_id with
                 | T.AdtId def_id ->
-                    compute_expanded_bottom_adt_value ctx.type_context.type_defs
+                    compute_expanded_bottom_adt_value ctx.type_context.type_decls
                       def_id (Some variant_id) regions types
                 | T.Assumed T.Option ->
                     assert (regions = []);
@@ -247,7 +247,7 @@ let set_discriminant (config : C.config) (p : E.place)
         let bottom_v =
           match type_id with
           | T.AdtId def_id ->
-              compute_expanded_bottom_adt_value ctx.type_context.type_defs
+              compute_expanded_bottom_adt_value ctx.type_context.type_decls
                 def_id (Some variant_id) regions types
           | T.Assumed T.Option ->
               assert (regions = []);
@@ -997,20 +997,20 @@ and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
         call.type_params call.args call.dest
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
-and eval_local_function_call_concrete (config : C.config) (fid : A.FunDefId.id)
+and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
   assert (region_params = []);
 
   (* Retrieve the (correctly instantiated) body *)
-  let def = C.ctx_lookup_fun_def ctx fid in
+  let def = C.ctx_lookup_fun_decl ctx fid in
   let tsubst =
     Subst.make_type_subst
       (List.map (fun v -> v.T.index) def.A.signature.type_params)
       type_params
   in
-  let locals, body = Subst.fun_def_substitute_in_body tsubst def in
+  let locals, body = Subst.fun_decl_substitute_in_body tsubst def in
 
   (* Evaluate the input operands *)
   assert (List.length args = def.A.arg_count);
@@ -1063,12 +1063,12 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDefId.id)
   cc cf ctx
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
-and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDefId.id)
+and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
   (* Retrieve the (correctly instantiated) signature *)
-  let def = C.ctx_lookup_fun_def ctx fid in
+  let def = C.ctx_lookup_fun_decl ctx fid in
   let sg = def.A.signature in
   (* Instantiate the signature and introduce fresh abstraction and region ids
    * while doing so *)
@@ -1239,7 +1239,7 @@ and eval_non_local_function_call (config : C.config) (fid : A.assumed_fun_id)
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
-and eval_local_function_call (config : C.config) (fid : A.FunDefId.id)
+and eval_local_function_call (config : C.config) (fid : A.FunDeclId.id)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
   match config.mode with

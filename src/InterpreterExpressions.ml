@@ -89,9 +89,9 @@ let rec operand_constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
       let field_tys =
         match adt_id with
         | T.AdtId def_id ->
-            let def = C.ctx_lookup_type_def ctx def_id in
+            let def = C.ctx_lookup_type_decl ctx def_id in
             assert (def.region_params = []);
-            Subst.type_def_get_instantiated_field_etypes def variant_id
+            Subst.type_decl_get_instantiated_field_etypes def variant_id
               type_params
         | T.Tuple -> type_params
         | T.Assumed _ -> failwith "Unreachable"
@@ -601,8 +601,8 @@ let eval_rvalue_aggregate (config : C.config)
         cf aggregated ctx
     | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
         (* Sanity checks *)
-        let type_def = C.ctx_lookup_type_def ctx def_id in
-        assert (List.length type_def.region_params = List.length regions);
+        let type_decl = C.ctx_lookup_type_decl ctx def_id in
+        assert (List.length type_decl.region_params = List.length regions);
         let expected_field_types =
           Subst.ctx_adt_get_instantiated_field_etypes ctx def_id opt_variant_id
             types
