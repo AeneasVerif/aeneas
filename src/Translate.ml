@@ -602,7 +602,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* First compute the filename by replacing the extension and converting the
    * case (rust module names are snake case) *)
   let module_name, extract_filebasename =
-    match Filename.chop_suffix_opt ~suffix:".llbc" filename with
+    match Filename.chop_suffix_opt ~suffix:".cfim" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
         failwith "Unreachable"
@@ -660,7 +660,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
 
     (* Extract the types *)
     (* If there are opaque types, we extract in an interface *)
-    let types_filename_ext = if has_opaque_types then ".fst" else ".fsti" in
+    let types_filename_ext = if has_opaque_types then ".fsti" else ".fst" in
     let types_filename = extract_filebasename ^ ".Types" ^ types_filename_ext in
     let types_module = module_name ^ ".Types" in
     let types_config =
@@ -703,7 +703,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
           }
         in
         extract_file opaque_config gen_ctx opaque_filename m.M.name
-          opaque_module ": type definitions" [] [];
+          opaque_module ": opaque function definitions" [] [ types_module ];
         [ opaque_module ])
       else []
     in

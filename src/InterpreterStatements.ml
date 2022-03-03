@@ -1009,7 +1009,11 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
   (* We can evaluate the function call only if it is not opaque *)
   let body =
     match def.body with
-    | None -> raise (Failure "Can't evaluate a call to an opaque function")
+    | None ->
+        raise
+          (Failure
+             ("Can't evaluate a call to an opaque function: "
+             ^ Print.name_to_string def.name))
     | Some body -> body
   in
   let tsubst =
