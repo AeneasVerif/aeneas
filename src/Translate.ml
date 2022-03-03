@@ -657,9 +657,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     (* Extract the opaque functions, if needed *)
     let opaque_funs_module =
       if has_opaque_funs then (
-        let opaque_filename =
-          extract_filebasename ^ ".Opaque" ^ types_filename_ext
-        in
+        let opaque_filename = extract_filebasename ^ ".Opaque.fsti" in
         let opaque_module = module_name ^ ".Opaque" in
         let opaque_config =
           {
@@ -667,6 +665,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
             extract_fun_decls = true;
             extract_transparent = false;
             extract_opaque = true;
+            interface = true;
           }
         in
         extract_file opaque_config gen_ctx opaque_filename m.M.name

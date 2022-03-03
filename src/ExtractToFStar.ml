@@ -637,7 +637,12 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let qualif = match qualif with Type -> "type" | And -> "and" in
+  let is_opaque, qualif =
+    match qualif with
+    | Type -> (false, "type")
+    | And -> (false, "and")
+    | AssumeType -> (true, "assume type")
+  in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   (* Print the type parameters *)
   if def.type_params <> [] then (
@@ -653,14 +658,18 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ();
     F.pp_print_string fmt "Type0)");
   (* Print the "=" *)
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "=";
+  if not is_opaque then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "=");
   (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_close_box fmt ();
-  (match def.kind with
-  | Struct fields -> extract_type_decl_struct_body ctx_body fmt def fields
-  | Enum variants ->
-      extract_type_decl_enum_body ctx_body fmt def def_name type_params variants);
+  (if not is_opaque then
+   match def.kind with
+   | Struct fields -> extract_type_decl_struct_body ctx_body fmt def fields
+   | Enum variants ->
+       extract_type_decl_enum_body ctx_body fmt def def_name type_params
+         variants
+   | Opaque -> raise (Failure "Unreachable"));
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
@@ -1122,8 +1131,13 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
-  let qualif =
-    match qualif with Let -> "let" | LetRec -> "let rec" | And -> "and"
+  let is_opaque, qualif =
+    match qualif with
+    | Let -> (false, "let")
+    | LetRec -> (false, "let rec")
+    | And -> (false, "and")
+    | Val -> (true, "val")
+    | AssumeVal -> (true, "AssumeVal")
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   F.pp_print_space fmt ();
@@ -1198,19 +1212,21 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ()
   in
   (* Print the "=" *)
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "=";
+  if not is_opaque then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "=");
   (* Close the box for "(PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
   (* Close the box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
-  F.pp_print_space fmt ();
-  (* Open a box for the body *)
-  F.pp_open_hvbox fmt 0;
-  (* Extract the body *)
-  let _ = extract_texpression ctx_body fmt false false def.body in
-  (* Close the box for the body *)
-  F.pp_close_box fmt ();
+  if not is_opaque then (
+    F.pp_print_space fmt ();
+    (* Open a box for the body *)
+    F.pp_open_hvbox fmt 0;
+    (* Extract the body *)
+    let _ = extract_texpression ctx_body fmt false false def.body in
+    (* Close the box for the body *)
+    F.pp_close_box fmt ());
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
