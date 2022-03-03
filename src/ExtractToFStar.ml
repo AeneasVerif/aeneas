@@ -13,13 +13,14 @@ module F = Format
     Controls whether we should use `type ...` or `and ...` (for mutually
     recursive datatypes).
  *)
-type type_decl_qualif = Type | And
+type type_decl_qualif = Type | And | AssumeType
 
 (** A qualifier for function definitions.
 
-    Controls whether we should use `let ...`, `let rec ...` or `and ...`
+    Controls whether we should use `let ...`, `let rec ...` or `and ...`,
+    or only generate a declaration with `val` or `assume val`
  *)
-type fun_decl_qualif = Let | LetRec | And
+type fun_decl_qualif = Let | LetRec | And | Val | AssumeVal
 
 (** Small helper to compute the name of an int type *)
 let fstar_int_name (int_ty : integer_type) =
@@ -448,6 +449,9 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           (ctx_add_variants def
              (VariantId.mapi (fun id v -> (id, v)) variants)
              ctx)
+    | Opaque ->
+        (* Nothing to do *)
+        ctx
   in
   (* Return *)
   ctx

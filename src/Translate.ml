@@ -91,8 +91,8 @@ let translate_function_to_symbolics (config : C.partial_config)
 let translate_function_to_pure (config : C.partial_config)
     (mp_config : Micro.config) (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
-    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl) :
-    pure_fun_translation =
+    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
+    : pure_fun_translation =
   (* Debug *)
   log#ldebug
     (lazy
@@ -317,8 +317,31 @@ type gen_config = {
   extract_decreases_clauses : bool;
   extract_template_decreases_clauses : bool;
   extract_fun_decls : bool;
+  extract_transparent : bool;
+      (** If `true`, extract the transparent declarations, otherwise ignore. *)
+  extract_opaque : bool;
+      (** If `true`, extract the opaque declarations, otherwise ignore. *)
+  interface : bool;
+      (** `true` if we generate an interface file, `false` otherwise.
+          For now, this only impacts whether we use `val` or `assume val` for the
+          opaque definitions. In the future, we might want to extract all the
+          declarations in an interface file, together with an implementation file
+          if needed.
+       *)
   test_unit_functions : bool;
 }
+
+(** Returns the pair: (has opaque type decls, has opaque fun decls) *)
+let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
+  let has_opaque_types =
+    T.TypeDeclId.Map.exists
+      (fun _ (d : Pure.type_decl) ->
+        match d.kind with Opaque -> true | _ -> false)
+      ctx.trans_types
+  in
+  (* TODO: *)
+  let has_opaque_funs = false in
+  (has_opaque_types, has_opaque_funs)
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control
@@ -329,8 +352,25 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   (* Export the definition groups to the file, in the proper order *)
   let export_type (qualif : ExtractToFStar.type_decl_qualif)
       (id : Pure.TypeDeclId.id) : unit =
+    (* Retrive the declaration *)
     let def = Pure.TypeDeclId.Map.find id ctx.trans_types in
-    ExtractToFStar.extract_type_decl ctx.extract_ctx fmt qualif def
+    (* Update the qualifier, if the type is opaque *)
+    let is_opaque, qualif =
+      match def.kind with
+      | Enum _ | Struct _ -> (false, qualif)
+      | Opaque ->
+          let qualif =
+            if config.interface then ExtractToFStar.Type
+            else ExtractToFStar.AssumeType
+          in
+          (true, qualif)
+    in
+    (* Extract, if the config instructs to do so (depending on whether the type
+     * is opaque or not) *)
+    if
+      (is_opaque && config.extract_opaque)
+      || ((not is_opaque) && config.extract_transparent)
+    then ExtractToFStar.extract_type_decl ctx.extract_ctx fmt qualif def
   in
 
   (* Utility to check a function has a decrease clause *)
@@ -403,6 +443,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | Type (NonRec id) ->
         if config.extract_types then export_type ExtractToFStar.Type id
     | Type (Rec ids) ->
+        (* Rk.: we shouldn't have (mutually) recursive opaque types *)
         if config.extract_types then
           List.iteri
             (fun i id ->
@@ -572,14 +613,30 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses = false;
         extract_fun_decls = false;
+        extract_transparent = true;
+        extract_opaque = false;
+        interface = false;
         test_unit_functions = false;
       }
     in
 
+    (* Check if there are opaque types and functions - in which case we need
+     * to split *)
+    let has_opaque_types, has_opaque_funs = module_has_opaque_decls gen_ctx in
+
     (* Extract the types *)
-    let types_filename = extract_filebasename ^ ".Types.fst" in
+    (* If there are opaque types, we extract in an interface *)
+    let types_filename_ext = if has_opaque_types then ".fst" else ".fsti" in
+    let types_filename = extract_filebasename ^ ".Types" ^ types_filename_ext in
     let types_module = module_name ^ ".Types" in
-    let types_config = { base_gen_config with extract_types = true } in
+    let types_config =
+      {
+        base_gen_config with
+        extract_types = true;
+        extract_opaque = true;
+        interface = has_opaque_types;
+      }
+    in
     extract_file types_config gen_ctx types_filename m.M.name types_module
       ": type definitions" [] [];
 
@@ -597,6 +654,27 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
        clauses_module ": templates for the decreases clauses" [ types_module ]
        []);
 
+    (* Extract the opaque functions, if needed *)
+    let opaque_funs_module =
+      if has_opaque_funs then (
+        let opaque_filename =
+          extract_filebasename ^ ".Opaque" ^ types_filename_ext
+        in
+        let opaque_module = module_name ^ ".Opaque" in
+        let opaque_config =
+          {
+            base_gen_config with
+            extract_fun_decls = true;
+            extract_transparent = false;
+            extract_opaque = true;
+          }
+        in
+        extract_file opaque_config gen_ctx opaque_filename m.M.name
+          opaque_module ": type definitions" [] [];
+        [ opaque_module ])
+      else []
+    in
+
     (* Extract the functions *)
     let fun_filename = extract_filebasename ^ ".Funs.fst" in
     let fun_module = module_name ^ ".Funs" in
@@ -610,7 +688,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let clauses_module = module_name ^ ".Clauses" in
     extract_file fun_config gen_ctx fun_filename m.M.name fun_module
       ": function definitions" []
-      [ types_module; clauses_module ])
+      ([ types_module ] @ opaque_funs_module @ [ clauses_module ]))
   else
     let gen_config =
       {
@@ -619,6 +697,9 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         extract_template_decreases_clauses =
           config.extract_template_decreases_clauses;
         extract_fun_decls = true;
+        extract_transparent = true;
+        extract_opaque = true;
+        interface = false;
         test_unit_functions = config.test_unit_functions;
       }
     in
