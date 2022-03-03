@@ -43,24 +43,15 @@ translate-nll-betree_nll: TRANS_OPTIONS=-test-units -no-split-files -no-state -n
 translate-nll-betree_nll: SUBDIR:=misc
 
 # Generic rules to extract the LLBC from a rust file
-# The "standard" and the nll (non-linear lifetime) tests are in separate
-# directories in Charon
+# We use the rules in Charon's Makefile to generate the .llbc files: the options
+# vary with the test files.
 .PHONY: gen-llbc-%
-
-# TODO: remove those "gen-..." rules, and just do `make` in the charon repo
-gen-llbc-%: CHARON_OPTIONS = --dest ../tests/llbc --no-code-duplication
-gen-llbc-%: CHARON_TESTS_SRC = ../tests/src
-
-gen-llbc-nll-%: CHARON_OPTIONS = --dest ../tests-nll/llbc --no-code-duplication --nll
-gen-llbc-nll-%: CHARON_TESTS_SRC = ../tests-nll/src
-
 gen-llbc-%: build
-	cd $(CHARON_HOME)/charon && cargo run $(CHARON_TESTS_SRC)/$*.rs $(CHARON_OPTIONS)
+	cd $(CHARON_HOME) && make test-$*
 
-gen-llbc-nll-%: build
-	cd $(CHARON_HOME)/charon && cargo run $(CHARON_TESTS_SRC)/$*.rs $(CHARON_OPTIONS)
-
-# Generic rule to test the translation on a LLBC file
+# Generic rule to test the translation on an LLBC file.
+# Note that the non-linear lifetime files are generated in the tests-nll
+# subdirectory.
 .PHONY: translate-%
 translate-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/llbc
 translate-nll-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-nll/llbc
