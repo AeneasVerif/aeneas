@@ -2,6 +2,9 @@ open Types
 open Utils
 module TA = TypesAnalysis
 
+let type_decl_is_opaque (d : type_decl) : bool =
+  match d.kind with Struct _ | Enum _ -> false | Opaque -> true
+
 (** Retrieve the list of fields for the given variant of a [type_decl].
 
     Raises [Invalid_argument] if the arguments are incorrect.

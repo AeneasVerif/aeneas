@@ -392,7 +392,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
-            | Struct _ -> failwith "Unreachable"
+            | Struct _ | Opaque -> failwith "Unreachable"
             | Enum variants ->
                 let variant = VariantId.nth variants variant_id in
                 Print.name_to_string def.name ^ "::" ^ variant.variant_name)
@@ -409,7 +409,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
-            | Enum _ -> failwith "Unreachable"
+            | Enum _ | Opaque -> failwith "Unreachable"
             | Struct fields ->
                 let field = FieldId.nth fields field_id in
                 let field_name =

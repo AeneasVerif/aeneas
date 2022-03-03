@@ -173,11 +173,12 @@ let get_instantiated_fun_sig (fun_id : A.fun_id)
   (* Apply *)
   fun_sig_substitute tsubst sg
 
-let bs_ctx_lookup_cfim_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : T.type_decl
-    =
+let bs_ctx_lookup_cfim_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
+    T.type_decl =
   TypeDeclId.Map.find id ctx.type_context.cfim_type_decls
 
-let bs_ctx_lookup_cfim_fun_decl (id : FunDeclId.id) (ctx : bs_ctx) : A.fun_decl =
+let bs_ctx_lookup_cfim_fun_decl (id : FunDeclId.id) (ctx : bs_ctx) : A.fun_decl
+    =
   FunDeclId.Map.find id ctx.fun_context.cfim_fun_decls
 
 (* TODO: move *)
@@ -268,6 +269,7 @@ let translate_type_decl_kind (kind : T.type_decl_kind) : type_decl_kind =
   match kind with
   | T.Struct fields -> Struct (translate_fields fields)
   | T.Enum variants -> Enum (translate_variants variants)
+  | T.Opaque -> Opaque
 
 (** Translate a type definition from IM 
 

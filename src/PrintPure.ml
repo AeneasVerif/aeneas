@@ -189,6 +189,7 @@ let type_decl_to_string (fmt : type_formatter) (def : type_decl) : string =
       in
       let variants = String.concat "\n" variants in
       "enum " ^ name ^ params ^ " =\n" ^ variants
+  | Opaque -> "opaque type " ^ name ^ params
 
 let var_to_string (fmt : type_formatter) (v : var) : string =
   let varname =

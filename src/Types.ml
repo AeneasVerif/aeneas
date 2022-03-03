@@ -199,7 +199,11 @@ type field = { field_name : string option; field_ty : sty } [@@deriving show]
 
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 
-type type_decl_kind = Struct of field list | Enum of variant list
+type type_decl_kind =
+  | Struct of field list
+  | Enum of variant list
+  | Opaque
+      (** An opaque type: either a local type marked as opaque, or an external type *)
 [@@deriving show]
 
 type type_decl = {

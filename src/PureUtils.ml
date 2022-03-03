@@ -102,7 +102,7 @@ let ty_as_integer (t : ty) : T.integer_type =
 
 (* TODO: move *)
 let type_decl_is_enum (def : T.type_decl) : bool =
-  match def.kind with T.Struct _ -> false | Enum _ -> true
+  match def.kind with T.Struct _ -> false | Enum _ -> true | Opaque -> false
 
 let mk_state_ty : ty = Adt (Assumed State, [])
 
@@ -186,8 +186,8 @@ let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
 
     Raises [Invalid_argument] if the arguments are incorrect.
  *)
-let type_decl_get_fields (def : type_decl) (opt_variant_id : VariantId.id option)
-    : field list =
+let type_decl_get_fields (def : type_decl)
+    (opt_variant_id : VariantId.id option) : field list =
   match (def.kind, opt_variant_id) with
   | Enum variants, Some variant_id -> (VariantId.nth variants variant_id).fields
   | Struct fields, None -> fields

@@ -116,7 +116,7 @@ type field = { field_name : string option; field_ty : ty } [@@deriving show]
 
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 
-type type_decl_kind = Struct of field list | Enum of variant list
+type type_decl_kind = Struct of field list | Enum of variant list | Opaque
 [@@deriving show]
 
 type type_var = T.type_var [@@deriving show]

@@ -238,31 +238,41 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
   (* Explore *)
   analyze expl_info_init ty_info ty
 
+let type_decl_is_opaque (d : type_decl) : bool =
+  match d.kind with Struct _ | Enum _ -> false | Opaque -> true
+
 let analyze_type_decl (updated : bool ref) (infos : type_infos)
     (def : type_decl) : type_infos =
-  (* Retrieve all the types of all the fields of all the variants *)
-  let fields_tys : sty list =
-    match def.kind with
-    | Struct fields -> List.map (fun f -> f.field_ty) fields
-    | Enum variants ->
-        List.concat
-          (List.map (fun v -> List.map (fun f -> f.field_ty) v.fields) variants)
-  in
-  (* Explore the types and accumulate information *)
-  let r_is_static r = r = Static in
-  let type_decl_info = TypeDeclId.Map.find def.def_id infos in
-  let type_decl_info = type_decl_info_to_partial_type_info type_decl_info in
-  let type_decl_info =
-    List.fold_left
-      (fun type_decl_info ty ->
-        analyze_full_ty r_is_static updated infos type_decl_info ty)
-      type_decl_info fields_tys
-  in
-  let type_decl_info = partial_type_info_to_type_decl_info type_decl_info in
-  (* Update the information for the type definition we explored *)
-  let infos = TypeDeclId.Map.add def.def_id type_decl_info infos in
-  (* Return *)
-  infos
+  (* We analyze the type declaration only if it is not opaque (we need to explore
+   * the variants of the ADTs *)
+  if type_decl_is_opaque def then infos
+  else
+    (* Retrieve all the types of all the fields of all the variants *)
+    let fields_tys : sty list =
+      match def.kind with
+      | Struct fields -> List.map (fun f -> f.field_ty) fields
+      | Enum variants ->
+          List.concat
+            (List.map
+               (fun v -> List.map (fun f -> f.field_ty) v.fields)
+               variants)
+      | Opaque -> raise (Failure "unreachable")
+    in
+    (* Explore the types and accumulate information *)
+    let r_is_static r = r = Static in
+    let type_decl_info = TypeDeclId.Map.find def.def_id infos in
+    let type_decl_info = type_decl_info_to_partial_type_info type_decl_info in
+    let type_decl_info =
+      List.fold_left
+        (fun type_decl_info ty ->
+          analyze_full_ty r_is_static updated infos type_decl_info ty)
+        type_decl_info fields_tys
+    in
+    let type_decl_info = partial_type_info_to_type_decl_info type_decl_info in
+    (* Update the information for the type definition we explored *)
+    let infos = TypeDeclId.Map.add def.def_id type_decl_info infos in
+    (* Return *)
+    infos
 
 let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     (infos : type_infos) (decl : type_declaration_group) : type_infos =

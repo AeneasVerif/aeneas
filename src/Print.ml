@@ -172,6 +172,7 @@ module Types = struct
         in
         let variants = String.concat "\n" variants in
         "enum " ^ name ^ params ^ " =\n" ^ variants
+    | T.Opaque -> "opaque type " ^ name ^ params
 end
 
 module PT = Types (* local module *)
@@ -573,7 +574,7 @@ module Contexts = struct
    fun def_id variant_id ->
     let def = T.TypeDeclId.Map.find def_id ctx in
     match def.kind with
-    | Struct _ -> failwith "Unreachable"
+    | Struct _ | Opaque -> failwith "Unreachable"
     | Enum variants ->
         let variant = T.VariantId.nth variants variant_id in
         name_to_string def.name ^ "::" ^ variant.variant_name

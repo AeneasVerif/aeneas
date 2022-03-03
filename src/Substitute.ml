@@ -120,6 +120,8 @@ let type_decl_get_instantiated_variants_fields_rtypes (def : T.type_decl)
           (fun i v -> (Some (T.VariantId.of_int i), v.T.fields))
           variants
     | T.Struct fields -> [ (None, fields) ]
+    | T.Opaque ->
+        raise (Failure "Can't retrieve the variants of an opaque type")
   in
   List.map
     (fun (id, fields) ->

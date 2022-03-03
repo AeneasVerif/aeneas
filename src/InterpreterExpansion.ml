@@ -686,7 +686,9 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
                      ("Attempted to greedily expand a symbolic enumeration \
                        with > 1 variants (option \
                        [greedy_expand_symbolics_with_borrows] of [config]): "
-                     ^ Print.name_to_string def.name)));
+                     ^ Print.name_to_string def.name))
+            | T.Opaque ->
+                raise (Failure "Attempted to greedily expand an opaque type"));
             (* Also, we need to check if the definition is recursive *)
             if C.ctx_type_decl_is_rec ctx def_id then
               raise
