@@ -48,39 +48,8 @@ type name = path_elem list [@@deriving show, ord]
 
 let to_name (ls : string list) : name = List.map (fun s -> Ident s) ls
 
-(*(* TODO: remove? *)
-  module NameOrderedType : C.OrderedType with type t = name = struct
-    type t = name
-
-    let compare = compare_name
-
-    let to_string = String.concat "::"
-
-    let pp_t = pp_name
-
-    let show_t = show_name
-  end
-
-  module NameMap = C.MakeMap (NameOrderedType)
-  module NameSet = C.MakeSet (NameOrderedType)
-*)
-
 type module_name = name [@@deriving show, ord]
 
 type type_name = name [@@deriving show, ord]
 
 type fun_name = name [@@deriving show, ord]
-
-(*module ImplId = IdGen ()
-
-  (** A function name *)
-  type fun_name =
-    | Regular of name  (** "Regular" function name *)
-    | Impl of type_name * ImplId.id * string
-        (** The function comes from an "impl" block.
-
-            As we may have several "impl" blocks for one type, we need to use
-            a block id to disambiguate the functions (in rustc, this identifier
-            is called a "disambiguator").
-         *)
-  [@@deriving show, ord]*)
