@@ -34,12 +34,12 @@ test: build translate-no_nested_borrows translate-hashmap translate-paper \
 
 # Add specific options to some tests
 translate-no_nested_borrows translate-paper: \
-	TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units -no-split-files -no-state -no-decreases-clauses
+	TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
 translate-no_nested_borrows translate-paper: SUBDIR:=misc
-translate-hashmap: TRANS_OPTIONS:=$(TRANS_OPTIONS) -template-clauses -no-state
+translate-hashmap: TRANS_OPTIONS += -template-clauses -no-state
 translate-hashmap: SUBDIR:=hashmap
 
-translate-nll-betree_nll: TRANS_OPTIONS=-test-units -no-split-files -no-state -no-decreases-clauses
+translate-nll-betree_nll: TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
 translate-nll-betree_nll: SUBDIR:=misc
 
 # Generic rules to extract the LLBC from a rust file
