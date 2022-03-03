@@ -230,14 +230,14 @@ let functions_not_mutually_recursive (funs : fun_decl list) : bool =
   let ids =
     FunIdSet.of_list
       (List.map
-         (fun (f : fun_decl) -> Regular (A.Local f.def_id, f.back_id))
+         (fun (f : fun_decl) -> Regular (A.Regular f.def_id, f.back_id))
          funs)
   in
   let ids = ref ids in
   (* Explore every body *)
   let body_only_calls_itself (fdef : fun_decl) : bool =
     (* Remove the current id from the id set *)
-    ids := FunIdSet.remove (Regular (A.Local fdef.def_id, fdef.back_id)) !ids;
+    ids := FunIdSet.remove (Regular (A.Regular fdef.def_id, fdef.back_id)) !ids;
 
     (* Check if we call functions from the updated id set *)
     let obj =

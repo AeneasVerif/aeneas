@@ -355,7 +355,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | FunId (fid, rg_id) ->
       let fun_name =
         match fid with
-        | A.Local fid ->
+        | A.Regular fid ->
             Print.fun_name_to_string (FunDeclId.Map.find fid fun_decls).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
@@ -368,7 +368,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | DecreasesClauseId fid ->
       let fun_name =
         match fid with
-        | A.Local fid ->
+        | A.Regular fid ->
             Print.fun_name_to_string (FunDeclId.Map.find fid fun_decls).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
@@ -446,7 +446,7 @@ let ctx_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
 
 let ctx_get_local_function (id : FunDeclId.id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
-  ctx_get_function (A.Local id) rg ctx
+  ctx_get_function (A.Regular id) rg ctx
 
 let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> Tuple);
@@ -477,7 +477,7 @@ let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
 
 let ctx_get_decreases_clause (def_id : FunDeclId.id) (ctx : extraction_ctx) :
     string =
-  ctx_get (DecreasesClauseId (A.Local def_id)) ctx
+  ctx_get (DecreasesClauseId (A.Regular def_id)) ctx
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
@@ -566,7 +566,7 @@ let ctx_add_struct (def : type_decl) (ctx : extraction_ctx) :
 let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
-  ctx_add (DecreasesClauseId (A.Local def.def_id)) name ctx
+  ctx_add (DecreasesClauseId (A.Regular def.def_id)) name ctx
 
 let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
@@ -594,7 +594,7 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
         in
         Some { id = rg_id; region_names }
   in
-  let def_id = A.Local def_id in
+  let def_id = A.Regular def_id in
   let name =
     ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
   in

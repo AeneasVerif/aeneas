@@ -359,7 +359,7 @@ let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
 let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : A.fun_id) : string
     =
   match fun_id with
-  | A.Local fid -> fmt.fun_decl_id_to_string fid
+  | A.Regular fid -> fmt.fun_decl_id_to_string fid
   | A.Assumed fid -> (
       match fid with
       | A.Replace -> "core::mem::replace"

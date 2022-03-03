@@ -184,7 +184,7 @@ let bs_ctx_lookup_llbc_fun_decl (id : FunDeclId.id) (ctx : bs_ctx) : A.fun_decl
 (* TODO: move *)
 let bs_ctx_lookup_local_function_sig (def_id : FunDeclId.id)
     (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
-  let id = (A.Local def_id, back_id) in
+  let id = (A.Regular def_id, back_id) in
   (RegularFunIdMap.find id ctx.fun_context.fun_sigs).sg
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
@@ -942,7 +942,7 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
  *)
 let fun_is_monadic (fun_id : A.fun_id) : bool =
   match fun_id with
-  | A.Local _ -> true
+  | A.Regular _ -> true
   | A.Assumed aid -> Assumed.assumed_is_monadic aid
 
 let rec translate_expression (config : config) (e : S.expression) (ctx : bs_ctx)

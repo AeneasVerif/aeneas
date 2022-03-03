@@ -33,7 +33,7 @@ type assumed_fun_id =
       (** `core::ops::index::IndexMut::index_mut<alloc::vec::Vec<T>, usize>` *)
 [@@deriving show, ord]
 
-type fun_id = Local of FunDeclId.id | Assumed of assumed_fun_id
+type fun_id = Regular of FunDeclId.id | Assumed of assumed_fun_id
 [@@deriving show, ord]
 
 type assertion = { cond : operand; expected : bool } [@@deriving show]

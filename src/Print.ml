@@ -965,7 +965,7 @@ module LlbcAst = struct
         let args = "(" ^ String.concat ", " args ^ ")" in
         let name_params =
           match call.A.func with
-          | A.Local fid -> fmt.fun_decl_id_to_string fid ^ params
+          | A.Regular fid -> fmt.fun_decl_id_to_string fid ^ params
           | A.Assumed fid -> (
               match fid with
               | A.Replace -> "core::mem::replace" ^ params

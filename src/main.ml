@@ -102,7 +102,8 @@ let () =
   let filename =
     match !filenames with
     | [ f ] ->
-        if not (Filename.check_suffix f ".llbc") then (
+        (* TODO: update the extension *)
+        if not (Filename.check_suffix f ".cfim") then (
           print_string "Unrecognized file extension";
           fail ())
         else if not (Sys.file_exists f) then (

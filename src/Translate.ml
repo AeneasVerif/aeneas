@@ -115,7 +115,7 @@ let translate_function_to_pure (config : C.partial_config)
   (* Convert the symbolic ASTs to pure ASTs: *)
 
   (* Initialize the context *)
-  let forward_sig = RegularFunIdMap.find (A.Local def_id, None) fun_sigs in
+  let forward_sig = RegularFunIdMap.find (A.Regular def_id, None) fun_sigs in
   let forward_ret_ty =
     match forward_sig.sg.outputs with
     | [ ty ] -> ty
@@ -205,7 +205,7 @@ let translate_function_to_pure (config : C.partial_config)
         (* Initialize the context - note that the ret_ty is not really
          * useful as we don't translate a body *)
         let backward_sg =
-          RegularFunIdMap.find (A.Local def_id, Some back_id) fun_sigs
+          RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
         let backward_ret_ty = mk_simpl_tuple_ty backward_sg.sg.outputs in
         let ctx = { ctx with bid = Some back_id; ret_ty = backward_ret_ty } in
@@ -219,7 +219,7 @@ let translate_function_to_pure (config : C.partial_config)
         let ctx = add_forward_inputs input_svs ctx in
         (* TODO: the computation of the backward inputs is a bit awckward... *)
         let backward_sg =
-          RegularFunIdMap.find (A.Local def_id, Some back_id) fun_sigs
+          RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
         let _, backward_inputs =
           Collections.List.split_at backward_sg.sg.inputs num_forward_inputs
@@ -311,7 +311,7 @@ let translate_module_to_pure (config : C.partial_config)
                 (fun (v : A.var) -> v.name)
                 (LlbcAstUtils.fun_body_get_input_vars body)
         in
-        (A.Local fdef.def_id, input_names, fdef.signature))
+        (A.Regular fdef.def_id, input_names, fdef.signature))
       m.functions
   in
   let sigs = List.append assumed_sigs local_sigs in

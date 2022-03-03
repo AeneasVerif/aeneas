@@ -776,7 +776,7 @@ let to_monadic (config : config) (def : fun_decl) : fun_decl =
 
       method! visit_call env call =
         match call.func with
-        | Regular (A.Local _, _) ->
+        | Regular (A.Regular _, _) ->
             if call.args = [] && config.add_unit_args then
               let args = [ mk_value_expression unit_rvalue None ] in
               { call with args }
@@ -1015,7 +1015,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                * it more idiomatic lambda calculus... *)
               let re_call_can_use_state =
                 match re_call.func with
-                | Regular (A.Local _, _) -> true
+                | Regular (A.Regular _, _) -> true
                 | Regular (A.Assumed _, _) | Unop _ | Binop _ -> false
               in
               if config.use_state_monad && re_call_can_use_state then

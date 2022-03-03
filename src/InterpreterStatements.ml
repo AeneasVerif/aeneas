@@ -990,7 +990,7 @@ and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
      - this is a non-local function, in which case there is a special treatment
   *)
   match call.func with
-  | A.Local fid ->
+  | A.Regular fid ->
       eval_local_function_call config fid call.region_params call.type_params
         call.args call.dest
   | A.Assumed fid ->
@@ -1085,7 +1085,7 @@ and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
   (* Sanity check *)
   assert (List.length args = List.length def.A.signature.inputs);
   (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config (A.Local fid) inst_sg
+  eval_function_call_symbolic_from_inst_sig config (A.Regular fid) inst_sg
     region_params type_params args dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.

@@ -479,9 +479,9 @@ let assumed_fun_id_of_json (js : json) : (A.assumed_fun_id, string) result =
 let fun_id_of_json (js : json) : (A.fun_id, string) result =
   combine_error_msgs js "fun_id_of_json"
     (match js with
-    | `Assoc [ ("Local", id) ] ->
+    | `Assoc [ ("Regular", id) ] ->
         let* id = A.FunDeclId.id_of_json id in
-        Ok (A.Local id)
+        Ok (A.Regular id)
     | `Assoc [ ("Assumed", fid) ] ->
         let* fid = assumed_fun_id_of_json fid in
         Ok (A.Assumed fid)
