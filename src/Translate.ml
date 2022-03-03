@@ -639,6 +639,12 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     }
   in
 
+  (* Create the directory, if necessary *)
+  if not (Sys.file_exists dest_dir) then (
+    log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
+    (* Create a directory with *default* permissions *)
+    Core.Unix.mkdir_p dest_dir);
+
   (* Extract one or several files, depending on the configuration *)
   if config.split_files then (
     let base_gen_config =
