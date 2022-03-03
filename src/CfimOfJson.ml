@@ -9,7 +9,7 @@
  *)
 
 open Yojson.Basic
-open Identifiers
+open Names
 open OfJsonBasic
 module T = Types
 module V = Values

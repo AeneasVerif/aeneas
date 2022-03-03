@@ -1,4 +1,4 @@
-open Identifiers
+open Names
 module T = Types
 module TU = TypesUtils
 module V = Values

@@ -28,11 +28,11 @@ type region_group_info = {
 module StringSet = Collections.MakeSet (Collections.OrderedString)
 module StringMap = Collections.MakeMap (Collections.OrderedString)
 
-type name = Identifiers.name
+type name = Names.name
 
-type type_name = Identifiers.type_name
+type type_name = Names.type_name
 
-type fun_name = Identifiers.fun_name
+type fun_name = Names.fun_name
 
 (* TODO: this should a module we give to a functor! *)
 type formatter = {
@@ -526,7 +526,8 @@ let ctx_add_type_decl_struct (def : type_decl) (ctx : extraction_ctx) :
   let ctx = ctx_add (StructId (AdtId def.def_id)) cons_name ctx in
   (ctx, cons_name)
 
-let ctx_add_type_decl (def : type_decl) (ctx : extraction_ctx) : extraction_ctx =
+let ctx_add_type_decl (def : type_decl) (ctx : extraction_ctx) : extraction_ctx
+    =
   let def_name = ctx.fmt.type_name def.name in
   let ctx = ctx_add (TypeId (AdtId def.def_id)) def_name ctx in
   ctx
@@ -549,8 +550,9 @@ let ctx_add_variant (def : type_decl) (variant_id : VariantId.id)
   let ctx = ctx_add (VariantId (AdtId def.def_id, variant_id)) name ctx in
   (ctx, name)
 
-let ctx_add_variants (def : type_decl) (variants : (VariantId.id * variant) list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
+let ctx_add_variants (def : type_decl)
+    (variants : (VariantId.id * variant) list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (vid, v) -> ctx_add_variant def vid v ctx)
     ctx variants
@@ -566,11 +568,13 @@ let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
   ctx_add (DecreasesClauseId (A.Local def.def_id)) name ctx
 
-let ctx_add_fun_decl (trans_group : bool * pure_fun_translation) (def : fun_decl)
-    (ctx : extraction_ctx) : extraction_ctx =
+let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
+    (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Lookup the CFIM def to compute the region group information *)
   let def_id = def.def_id in
-  let cfim_def = FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls in
+  let cfim_def =
+    FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls
+  in
   let sg = cfim_def.signature in
   let num_rgs = List.length sg.regions_hierarchy in
   let keep_fwd, (_, backs) = trans_group in

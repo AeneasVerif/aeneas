@@ -29,9 +29,10 @@
     ```
  *)
 
+open Names
+open TypesUtils
 module T = Types
 module A = CfimAst
-open TypesUtils
 
 module Sig = struct
   (** A few utilities *)
@@ -227,7 +228,7 @@ module Sig = struct
   let vec_index_mut_sig : A.fun_sig = vec_index_gen_sig true
 end
 
-type assumed_info = A.assumed_fun_id * A.fun_sig * bool * Identifiers.name
+type assumed_info = A.assumed_fun_id * A.fun_sig * bool * name
 
 (** The list of assumed functions and all their information:
     - their signature
@@ -271,9 +272,9 @@ let get_assumed_sig (id : A.assumed_fun_id) : A.fun_sig =
   let _, sg, _, _ = get_assumed_info id in
   sg
 
-let get_assumed_name (id : A.assumed_fun_id) : Identifiers.fun_name =
+let get_assumed_name (id : A.assumed_fun_id) : fun_name =
   let _, _, _, name = get_assumed_info id in
-  Identifiers.Regular name
+  Regular name
 
 let assumed_is_monadic (id : A.assumed_fun_id) : bool =
   let _, _, b, _ = get_assumed_info id in

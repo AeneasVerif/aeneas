@@ -1,4 +1,5 @@
 open Identifiers
+open Names
 module T = Types
 module V = Values
 module E = Expressions

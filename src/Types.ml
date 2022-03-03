@@ -1,4 +1,5 @@
 open Identifiers
+open Names
 
 module TypeVarId = IdGen ()
 
