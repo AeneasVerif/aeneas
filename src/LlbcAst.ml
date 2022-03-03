@@ -186,3 +186,16 @@ type fun_decl = {
   * prevents us from computing this info in Charon (and thus exporting directly
   * it with the type/function defs), in which case we just have to implement special
   * treatment when deserializing, to move the info to a separate map. *)
+
+(*
+type fun_body = { arg_count : int; locals : var list; body : statement }
+[@@deriving show]
+
+type fun_decl = {
+  def_id : FunDeclId.id;
+  name : fun_name;
+  signature : fun_sig;
+  body : fun_body option;
+}
+[@@deriving show]
+*)

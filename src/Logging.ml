@@ -9,8 +9,8 @@ let main_log = L.get_logger "MainLogger"
 (** Below, we create subgloggers for various submodules, so that we can precisely
     toggle logging on/off, depending on which information we need *)
 
-(** Logger for CfimOfJson *)
-let llbc_of_json_logger = L.get_logger "MainLogger.CfimOfJson"
+(** Logger for LlbcOfJson *)
+let llbc_of_json_logger = L.get_logger "MainLogger.LlbcOfJson"
 
 (** Logger for PrePasses *)
 let pre_passes_log = L.get_logger "MainLogger.PrePasses"
