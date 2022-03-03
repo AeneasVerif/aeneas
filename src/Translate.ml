@@ -602,7 +602,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* First compute the filename by replacing the extension and converting the
    * case (rust module names are snake case) *)
   let module_name, extract_filebasename =
-    match Filename.chop_suffix_opt ~suffix:".cfim" filename with
+    match Filename.chop_suffix_opt ~suffix:".llbc" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
         failwith "Unreachable"

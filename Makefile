@@ -42,34 +42,34 @@ translate-hashmap: SUBDIR:=hashmap
 translate-nll-betree_nll: TRANS_OPTIONS=-test-units -no-split-files -no-state -no-decreases-clauses
 translate-nll-betree_nll: SUBDIR:=misc
 
-# Generic rules to extract the CFIM from a rust file
+# Generic rules to extract the LLBC from a rust file
 # The "standard" and the nll (non-linear lifetime) tests are in separate
 # directories in Charon
-.PHONY: gen-cfim-%
+.PHONY: gen-llbc-%
 
 # TODO: remove those "gen-..." rules, and just do `make` in the charon repo
-gen-cfim-%: CHARON_OPTIONS = --dest ../tests/cfim --no-code-duplication
-gen-cfim-%: CHARON_TESTS_SRC = ../tests/src
+gen-llbc-%: CHARON_OPTIONS = --dest ../tests/llbc --no-code-duplication
+gen-llbc-%: CHARON_TESTS_SRC = ../tests/src
 
-gen-cfim-nll-%: CHARON_OPTIONS = --dest ../tests-nll/cfim --no-code-duplication --nll
-gen-cfim-nll-%: CHARON_TESTS_SRC = ../tests-nll/src
+gen-llbc-nll-%: CHARON_OPTIONS = --dest ../tests-nll/llbc --no-code-duplication --nll
+gen-llbc-nll-%: CHARON_TESTS_SRC = ../tests-nll/src
 
-gen-cfim-%: build
+gen-llbc-%: build
 	cd $(CHARON_HOME)/charon && cargo run $(CHARON_TESTS_SRC)/$*.rs $(CHARON_OPTIONS)
 
-gen-cfim-nll-%: build
+gen-llbc-nll-%: build
 	cd $(CHARON_HOME)/charon && cargo run $(CHARON_TESTS_SRC)/$*.rs $(CHARON_OPTIONS)
 
-# Generic rule to test the translation on a CFIM file
+# Generic rule to test the translation on a LLBC file
 .PHONY: translate-%
-translate-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/cfim
-translate-nll-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-nll/cfim
+translate-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/llbc
+translate-nll-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-nll/llbc
 
-translate-%: gen-cfim-%
-	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.cfim -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
+translate-%: gen-llbc-%
+	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
-translate-nll-%: gen-cfim-nll-%
-	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.cfim -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
+translate-nll-%: gen-llbc-nll-%
+	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
 .PHONY: doc
 doc:
