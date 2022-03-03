@@ -21,21 +21,22 @@ module A = CfimAst
 (* The default logger *)
 let log = Logging.cfim_of_json_logger
 
+let path_elem_of_json (js : json) : (path_elem, string) result =
+  combine_error_msgs js "path_elem_of_json"
+    (match js with
+    | `Assoc [ ("Ident", name) ] ->
+        let* name = string_of_json name in
+        Ok (Ident name)
+    | `Assoc [ ("Disambiguator", d) ] ->
+        let* d = Disambiguator.id_of_json d in
+        Ok (Disambiguator d)
+    | _ -> Error "")
+
 let name_of_json (js : json) : (name, string) result =
-  combine_error_msgs js "name_of_json" (list_of_json string_of_json js)
+  combine_error_msgs js "name_of_json" (list_of_json path_elem_of_json js)
 
 let fun_name_of_json (js : json) : (fun_name, string) result =
-  combine_error_msgs js "fun_name_of_json"
-    (match js with
-    | `Assoc [ ("Regular", name) ] ->
-        let* name = name_of_json name in
-        Ok (Regular name)
-    | `Assoc [ ("Impl", `List [ type_name; impl_id; ident ]) ] ->
-        let* type_name = name_of_json type_name in
-        let* impl_id = ImplId.id_of_json impl_id in
-        let* ident = string_of_json ident in
-        Ok (Impl (type_name, impl_id, ident))
-    | _ -> Error "")
+  combine_error_msgs js "fun_name_of_json" (name_of_json js)
 
 let type_var_of_json (js : json) : (T.type_var, string) result =
   combine_error_msgs js "type_var_of_json"

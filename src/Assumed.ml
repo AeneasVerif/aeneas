@@ -247,22 +247,28 @@ let assumed_infos : assumed_info list =
   let vec_pre = [ "alloc"; "vec"; "Vec" ] in
   let index_pre = [ "core"; "ops"; "index" ] in
   [
-    (Replace, Sig.mem_replace_sig, false, [ "core"; "mem"; "replace" ]);
-    (BoxNew, Sig.box_new_sig, false, [ "alloc"; "boxed"; "Box"; "new" ]);
-    (BoxDeref, Sig.box_deref_shared_sig, false, deref_pre @ [ "Deref"; "deref" ]);
+    (A.Replace, Sig.mem_replace_sig, false, to_name [ "core"; "mem"; "replace" ]);
+    (BoxNew, Sig.box_new_sig, false, to_name [ "alloc"; "boxed"; "Box"; "new" ]);
+    ( BoxDeref,
+      Sig.box_deref_shared_sig,
+      false,
+      to_name (deref_pre @ [ "Deref"; "deref" ]) );
     ( BoxDerefMut,
       Sig.box_deref_mut_sig,
       false,
-      deref_pre @ [ "DerefMut"; "deref_mut" ] );
-    (VecNew, Sig.vec_new_sig, false, vec_pre @ [ "new" ]);
-    (VecPush, Sig.vec_push_sig, true, vec_pre @ [ "push" ]);
-    (VecInsert, Sig.vec_insert_sig, true, vec_pre @ [ "insert" ]);
-    (VecLen, Sig.vec_len_sig, false, vec_pre @ [ "len" ]);
-    (VecIndex, Sig.vec_index_shared_sig, true, index_pre @ [ "Index"; "index" ]);
+      to_name (deref_pre @ [ "DerefMut"; "deref_mut" ]) );
+    (VecNew, Sig.vec_new_sig, false, to_name (vec_pre @ [ "new" ]));
+    (VecPush, Sig.vec_push_sig, true, to_name (vec_pre @ [ "push" ]));
+    (VecInsert, Sig.vec_insert_sig, true, to_name (vec_pre @ [ "insert" ]));
+    (VecLen, Sig.vec_len_sig, false, to_name (vec_pre @ [ "len" ]));
+    ( VecIndex,
+      Sig.vec_index_shared_sig,
+      true,
+      to_name (index_pre @ [ "Index"; "index" ]) );
     ( VecIndexMut,
       Sig.vec_index_mut_sig,
       true,
-      index_pre @ [ "IndexMut"; "index_mut" ] );
+      to_name (index_pre @ [ "IndexMut"; "index_mut" ]) );
   ]
 
 let get_assumed_info (id : A.assumed_fun_id) : assumed_info =
@@ -274,7 +280,7 @@ let get_assumed_sig (id : A.assumed_fun_id) : A.fun_sig =
 
 let get_assumed_name (id : A.assumed_fun_id) : fun_name =
   let _, _, _, name = get_assumed_info id in
-  Regular name
+  name
 
 let assumed_is_monadic (id : A.assumed_fun_id) : bool =
   let _, _, b, _ = get_assumed_info id in

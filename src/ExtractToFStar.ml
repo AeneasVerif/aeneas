@@ -221,7 +221,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
    *)
   let get_type_name (name : name) : string =
     match name with
-    | [ _module; name ] -> name
+    | [ Ident _module; Ident name ] -> name
     | _ ->
         raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
   in
@@ -258,8 +258,9 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
    *)
   let get_fun_name (name : fun_name) : string =
     match name with
-    | Regular [ _module; name ] -> name
-    | Impl ([ _module; ty ], _, name) -> to_snake_case ty ^ "_" ^ name
+    | [ Ident _module_name; Ident name ] -> name
+    | [ Ident _module_name; Ident ty; Disambiguator _; Ident name ] ->
+        to_snake_case ty ^ "_" ^ name
     | _ ->
         raise
           (Failure ("Unexpected name shape: " ^ Print.fun_name_to_string name))
@@ -1098,8 +1099,8 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     it is useful for the decrease clause.
  *)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : fun_decl_qualif) (has_decreases_clause : bool) (fwd_def : fun_decl)
-    (def : fun_decl) : unit =
+    (qualif : fun_decl_qualif) (has_decreases_clause : bool)
+    (fwd_def : fun_decl) (def : fun_decl) : unit =
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* (* Add the type parameters - note that we need those bindings only for the

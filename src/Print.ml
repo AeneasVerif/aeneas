@@ -11,13 +11,15 @@ module M = Modules
 let option_to_string (to_string : 'a -> string) (x : 'a option) : string =
   match x with Some x -> "Some (" ^ to_string x ^ ")" | None -> "None"
 
-let name_to_string (name : name) : string = String.concat "::" name
+let path_elem_to_string (pe : path_elem) : string =
+  match pe with
+  | Ident s -> s
+  | Disambiguator d -> "{" ^ Disambiguator.to_string d ^ "}"
 
-let fun_name_to_string (name : fun_name) : string =
-  match name with
-  | Regular name -> name_to_string name
-  | Impl (type_name, impl_id, ident) ->
-      name_to_string type_name ^ "{" ^ ImplId.to_string impl_id ^ "}::" ^ ident
+let name_to_string (name : name) : string =
+  String.concat "::" (List.map path_elem_to_string name)
+
+let fun_name_to_string (name : fun_name) : string = name_to_string name
 
 (** Pretty-printing for types *)
 module Types = struct
