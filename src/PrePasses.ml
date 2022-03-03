@@ -42,7 +42,11 @@ let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
     end
   in
   (* Map  *)
-  let body = obj#visit_statement () f.body in
+  let body =
+    match f.body with
+    | Some body -> Some { body with body = obj#visit_statement () body.body }
+    | None -> None
+  in
   { f with body }
 
 let apply_passes (m : M.llbc_module) : M.llbc_module =

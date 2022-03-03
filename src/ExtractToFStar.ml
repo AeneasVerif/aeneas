@@ -1025,22 +1025,25 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ());
   (* The input parameters - note that doing this adds bindings to the context *)
   let ctx_body =
-    List.fold_left
-      (fun ctx (lv : typed_lvalue) ->
-        (* Open a box for the input parameter *)
-        F.pp_open_hovbox fmt 0;
-        F.pp_print_string fmt "(";
-        let ctx = extract_typed_lvalue ctx fmt false lv in
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt ":";
-        F.pp_print_space fmt ();
-        extract_ty ctx fmt false lv.ty;
-        F.pp_print_string fmt ")";
-        (* Close the box for the input parameters *)
-        F.pp_close_box fmt ();
-        F.pp_print_space fmt ();
-        ctx)
-      ctx def.inputs_lvs
+    match def.body with
+    | None -> ctx
+    | Some body ->
+        List.fold_left
+          (fun ctx (lv : typed_lvalue) ->
+            (* Open a box for the input parameter *)
+            F.pp_open_hovbox fmt 0;
+            F.pp_print_string fmt "(";
+            let ctx = extract_typed_lvalue ctx fmt false lv in
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt ":";
+            F.pp_print_space fmt ();
+            extract_ty ctx fmt false lv.ty;
+            F.pp_print_string fmt ")";
+            (* Close the box for the input parameters *)
+            F.pp_close_box fmt ();
+            F.pp_print_space fmt ();
+            ctx)
+          ctx body.inputs_lvs
   in
   (ctx, ctx_body)
 
@@ -1169,7 +1172,8 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       (Collections.List.to_cons_nil def.signature.outputs);
     (* Close the box for the return type *)
     F.pp_close_box fmt ();
-    (* Print the decrease clause *)
+    (* Print the decrease clause - rk.: a function with a decreases clause
+     * is necessarily a transparent function *)
     if has_decreases_clause then (
       F.pp_print_space fmt ();
       (* Open a box for the decrease clause *)
@@ -1193,9 +1197,13 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
        * function (the additional input values "given back" to the
        * backward functions have no influence on termination: we thus
        * share the decrease clauses between the forward and the backward
-       * functions) *)
+       * functions).
+       * Rk.: if a function has a decreases clause, it is necessarily
+       * a transparent function *)
       let inputs_lvs =
-        Collections.List.prefix (List.length fwd_def.inputs_lvs) def.inputs_lvs
+        Collections.List.prefix
+          (List.length (Option.get fwd_def.body).inputs_lvs)
+          (Option.get def.body).inputs_lvs
       in
       let _ =
         List.fold_left
@@ -1224,7 +1232,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (* Open a box for the body *)
     F.pp_open_hvbox fmt 0;
     (* Extract the body *)
-    let _ = extract_texpression ctx_body fmt false false def.body in
+    let _ =
+      extract_texpression ctx_body fmt false false (Option.get def.body).body
+    in
     (* Close the box for the body *)
     F.pp_close_box fmt ());
   (* Close the box for the definition *)

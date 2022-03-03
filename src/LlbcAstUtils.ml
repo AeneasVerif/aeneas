@@ -17,7 +17,10 @@ let statement_has_loops (st : statement) : bool =
   with Found -> true
 
 (** Check if a [fun_decl] contains loops *)
-let fun_decl_has_loops (fd : fun_decl) : bool = statement_has_loops fd.body
+let fun_decl_has_loops (fd : fun_decl) : bool =
+  match fd.body with
+  | Some body -> statement_has_loops body.body
+  | None -> false
 
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     fun_sig =
@@ -64,6 +67,6 @@ let list_ordered_parent_region_groups (sg : fun_sig) (gid : T.RegionGroupId.id)
   let parents = List.map (fun (rg : T.region_var_group) -> rg.id) parents in
   parents
 
-let fun_decl_get_input_vars (fdef : fun_decl) : var list =
-  let locals = List.tl fdef.locals in
-  Collections.List.prefix fdef.arg_count locals
+let fun_body_get_input_vars (fbody : fun_body) : var list =
+  let locals = List.tl fbody.locals in
+  Collections.List.prefix fbody.arg_count locals

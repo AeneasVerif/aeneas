@@ -596,6 +596,14 @@ type fun_sig = {
 
 type inst_fun_sig = { inputs : ty list; outputs : ty list }
 
+type fun_body = {
+  inputs : var list;
+  inputs_lvs : typed_lvalue list;
+      (** The inputs seen as lvalues. Allows to make transformations, for example
+          to replace unused variables by `_` *)
+  body : texpression;
+}
+
 type fun_decl = {
   def_id : FunDeclId.id;
   back_id : T.RegionGroupId.id option;
@@ -606,9 +614,5 @@ type fun_decl = {
           (to identify the forward/backward functions) later.
        *)
   signature : fun_sig;
-  inputs : var list;
-  inputs_lvs : typed_lvalue list;
-      (** The inputs seen as lvalues. Allows to make transformations, for example
-          to replace unused variables by `_` *)
-  body : texpression;
+  body : fun_body option;
 }

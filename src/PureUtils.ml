@@ -251,8 +251,11 @@ let functions_not_mutually_recursive (funs : fun_decl list) : bool =
     in
 
     try
-      obj#visit_texpression () fdef.body;
-      true
+      match fdef.body with
+      | None -> true
+      | Some body ->
+          obj#visit_texpression () body.body;
+          true
     with Utils.Found -> false
   in
   List.for_all body_only_calls_itself funs

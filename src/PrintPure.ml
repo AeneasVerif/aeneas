@@ -479,9 +479,13 @@ let fun_decl_to_string (fmt : ast_formatter) (def : fun_decl) : string =
   let type_fmt = ast_to_type_formatter fmt in
   let name = fun_name_to_string def.basename ^ fun_suffix def.back_id in
   let signature = fun_sig_to_string fmt def.signature in
-  let inputs = List.map (var_to_string type_fmt) def.inputs in
-  let inputs =
-    if inputs = [] then "" else "  fun " ^ String.concat " " inputs ^ " ->\n"
-  in
-  let body = texpression_to_string fmt "  " "  " def.body in
-  "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ "  " ^ body
+  match def.body with
+  | None -> "val " ^ name ^ " :\n  " ^ signature
+  | Some body ->
+      let inputs = List.map (var_to_string type_fmt) body.inputs in
+      let inputs =
+        if inputs = [] then ""
+        else "  fun " ^ String.concat " " inputs ^ " ->\n"
+      in
+      let body = texpression_to_string fmt "  " "  " body.body in
+      "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ "  " ^ body

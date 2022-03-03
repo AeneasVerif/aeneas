@@ -152,11 +152,11 @@ let translate_function_to_pure (config : C.partial_config)
   in
 
   (* We need to initialize the input/output variables *)
-  let forward_input_vars = LlbcAstUtils.fun_decl_get_input_vars fdef in
+  let forward_input_vars = LlbcAstUtils.fun_body_get_input_vars body in
   let forward_input_varnames =
     List.map (fun (v : A.var) -> v.name) forward_input_vars
   in
-  let num_forward_inputs = fdef.arg_count in
+  let num_forward_inputs = body.arg_count in
   let add_forward_inputs input_svs ctx =
     let input_svs = List.combine forward_input_varnames input_svs in
     let ctx, forward_inputs =
@@ -276,7 +276,7 @@ let translate_module_to_pure (config : C.partial_config)
         ( A.Local fdef.def_id,
           List.map
             (fun (v : A.var) -> v.name)
-            (LlbcAstUtils.fun_decl_get_input_vars fdef),
+            (LlbcAstUtils.fun_body_get_input_vars fdef),
           fdef.signature ))
       m.functions
   in
@@ -285,7 +285,7 @@ let translate_module_to_pure (config : C.partial_config)
     SymbolicToPure.translate_fun_signatures type_context.type_infos sigs
   in
 
-  (* Translate all the functions *)
+  (* Translate all the *transparent* functions *)
   let pure_translations =
     List.map
       (translate_function_to_pure config mp_config trans_ctx fun_sigs

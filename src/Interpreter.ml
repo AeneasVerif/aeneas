@@ -91,9 +91,10 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
       inst_sg.A.regions_hierarchy compute_abs_avalues ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
-  let ret_var = List.hd fdef.locals in
+  let body = Option.get fdef.body in
+  let ret_var = List.hd body.locals in
   let input_vars, local_vars =
-    Collections.List.split_at (List.tl fdef.locals) fdef.arg_count
+    Collections.List.split_at (List.tl body.locals) body.arg_count
   in
   (* Push the return variable (initialized with ⊥) *)
   let ctx = C.ctx_push_uninitialized_var ctx ret_var in
@@ -242,7 +243,9 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
   in
 
   (* Evaluate the function *)
-  let symbolic = eval_function_body config fdef.A.body cf_finish ctx in
+  let symbolic =
+    eval_function_body config (Option.get fdef.A.body).body cf_finish ctx
+  in
 
   (* Return *)
   (input_svs, symbolic)
@@ -255,6 +258,7 @@ module Test = struct
       (fid : A.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = A.FunDeclId.nth m.functions fid in
+    let body = Option.get fdef.body in
 
     (* Debug *)
     log#ldebug
@@ -263,14 +267,14 @@ module Test = struct
     (* Sanity check - *)
     assert (List.length fdef.A.signature.region_params = 0);
     assert (List.length fdef.A.signature.type_params = 0);
-    assert (fdef.A.arg_count = 0);
+    assert (body.A.arg_count = 0);
 
     (* Create the evaluation context *)
     let type_context, fun_context = compute_type_fun_contexts m in
     let ctx = initialize_eval_context type_context fun_context [] in
 
     (* Insert the (uninitialized) local variables *)
-    let ctx = C.ctx_push_uninitialized_vars ctx fdef.A.locals in
+    let ctx = C.ctx_push_uninitialized_vars ctx body.A.locals in
 
     (* Create the continuation to check the function's result *)
     let config = C.config_of_partial C.ConcreteMode config in
@@ -286,21 +290,24 @@ module Test = struct
     in
 
     (* Evaluate the function *)
-    let _ = eval_function_body config fdef.A.body cf_check ctx in
+    let _ = eval_function_body config body.body cf_check ctx in
     ()
 
-  (** Small helper: return true if the function is a unit function (no parameters,
-    no arguments) - TODO: move *)
-  let fun_decl_is_unit (def : A.fun_decl) : bool =
-    def.A.arg_count = 0
-    && List.length def.A.signature.region_params = 0
-    && List.length def.A.signature.type_params = 0
-    && List.length def.A.signature.inputs = 0
+  (** Small helper: return true if the function is a *transparent* unit function
+      (no parameters, no arguments) - TODO: move *)
+  let fun_decl_is_transparent_unit (def : A.fun_decl) : bool =
+    match def.body with
+    | None -> false
+    | Some body ->
+        body.arg_count = 0
+        && List.length def.A.signature.region_params = 0
+        && List.length def.A.signature.type_params = 0
+        && List.length def.A.signature.inputs = 0
 
   (** Test all the unit functions in a list of function definitions *)
   let test_unit_functions (config : C.partial_config) (m : M.llbc_module) : unit
       =
-    let unit_funs = List.filter fun_decl_is_unit m.functions in
+    let unit_funs = List.filter fun_decl_is_transparent_unit m.functions in
     let test_unit_fun (def : A.fun_decl) : unit =
       test_unit_function config m def.A.def_id
     in
@@ -329,6 +336,10 @@ module Test = struct
 
     ()
 
+  (** Small helper *)
+  let fun_decl_is_transparent (def : A.fun_decl) : bool =
+    Option.is_some def.body
+
   (** Execute the symbolic interpreter on a list of functions.
 
       TODO: for now we ignore the functions which contain loops, because
@@ -336,9 +347,12 @@ module Test = struct
    *)
   let test_functions_symbolic (config : C.partial_config) (synthesize : bool)
       (m : M.llbc_module) : unit =
+    (* Filter the functions which contain loops *)
     let no_loop_funs =
       List.filter (fun f -> not (LlbcAstUtils.fun_decl_has_loops f)) m.functions
     in
+    (* Filter the opaque functions *)
+    let no_loop_funs = List.filter fun_decl_is_transparent no_loop_funs in
     let type_context, fun_context = compute_type_fun_contexts m in
     let test_fun (def : A.fun_decl) : unit =
       (* Execute the function - note that as the symbolic interpreter explores

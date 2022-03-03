@@ -1443,8 +1443,8 @@ and translate_meta (config : config) (meta : S.meta) (e : S.expression)
   let ty = next_e.ty in
   { e; ty }
 
-let translate_fun_decl (config : config) (ctx : bs_ctx) (body : S.expression) :
-    fun_decl =
+let translate_fun_decl (config : config) (ctx : bs_ctx)
+    (body : S.expression option) : fun_decl =
   let def = ctx.fun_decl in
   let bid = ctx.bid in
   log#ldebug
@@ -1455,35 +1455,43 @@ let translate_fun_decl (config : config) (ctx : bs_ctx) (body : S.expression) :
       ^ Print.option_to_string T.RegionGroupId.to_string bid
       ^ ")"));
 
-  (* Translate the function *)
+  (* Translate the declaration *)
   let def_id = def.A.def_id in
   let basename = def.name in
   let signature = bs_ctx_lookup_local_function_sig def_id bid ctx in
-  let body = translate_expression config body ctx in
-  (* Compute the list of (properly ordered) input variables *)
-  let backward_inputs : var list =
-    match bid with
-    | None -> []
-    | Some back_id ->
-        let parents_ids =
-          list_ordered_parent_region_groups def.signature back_id
+  (* Translate the body, if there is *)
+  let body =
+    match body with
+    | None -> None
+    | Some body ->
+        let body = translate_expression config body ctx in
+        (* Compute the list of (properly ordered) input variables *)
+        let backward_inputs : var list =
+          match bid with
+          | None -> []
+          | Some back_id ->
+              let parents_ids =
+                list_ordered_parent_region_groups def.signature back_id
+              in
+              let backward_ids = List.append parents_ids [ back_id ] in
+              List.concat
+                (List.map
+                   (fun id -> T.RegionGroupId.Map.find id ctx.backward_inputs)
+                   backward_ids)
         in
-        let backward_ids = List.append parents_ids [ back_id ] in
-        List.concat
-          (List.map
-             (fun id -> T.RegionGroupId.Map.find id ctx.backward_inputs)
-             backward_ids)
+        let inputs = List.append ctx.forward_inputs backward_inputs in
+        let inputs_lvs =
+          List.map (fun v -> mk_typed_lvalue_from_var v None) inputs
+        in
+        (* Sanity check *)
+        assert (
+          List.for_all
+            (fun (var, ty) -> (var : var).ty = ty)
+            (List.combine inputs signature.inputs));
+        Some { inputs; inputs_lvs; body }
   in
-  let inputs = List.append ctx.forward_inputs backward_inputs in
-  let inputs_lvs = List.map (fun v -> mk_typed_lvalue_from_var v None) inputs in
-  (* Sanity check *)
-  assert (
-    List.for_all
-      (fun (var, ty) -> (var : var).ty = ty)
-      (List.combine inputs signature.inputs));
-  let def =
-    { def_id; back_id = bid; basename; signature; inputs; inputs_lvs; body }
-  in
+  (* Assemble the declaration *)
+  let def = { def_id; back_id = bid; basename; signature; body } in
   (* Debugging *)
   log#ldebug
     (lazy

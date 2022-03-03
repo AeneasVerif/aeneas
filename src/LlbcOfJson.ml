@@ -607,6 +607,16 @@ and switch_targets_of_json (js : json) : (A.switch_targets, string) result =
         Ok (A.SwitchInt (int_ty, tgts, otherwise))
     | _ -> Error "")
 
+let fun_body_of_json (js : json) : (A.fun_body, string) result =
+  combine_error_msgs js "fun_body_of_json"
+    (match js with
+    | `Assoc [ ("arg_count", arg_count); ("locals", locals); ("body", body) ] ->
+        let* arg_count = int_of_json arg_count in
+        let* locals = list_of_json var_of_json locals in
+        let* body = statement_of_json body in
+        Ok { A.arg_count; locals; body }
+    | _ -> Error "")
+
 let fun_decl_of_json (js : json) : (A.fun_decl, string) result =
   combine_error_msgs js "fun_decl_of_json"
     (match js with
@@ -615,17 +625,13 @@ let fun_decl_of_json (js : json) : (A.fun_decl, string) result =
           ("def_id", def_id);
           ("name", name);
           ("signature", signature);
-          ("arg_count", arg_count);
-          ("locals", locals);
           ("body", body);
         ] ->
         let* def_id = A.FunDeclId.id_of_json def_id in
         let* name = fun_name_of_json name in
         let* signature = fun_sig_of_json signature in
-        let* arg_count = int_of_json arg_count in
-        let* locals = list_of_json var_of_json locals in
-        let* body = statement_of_json body in
-        Ok { A.def_id; name; signature; arg_count; locals; body }
+        let* body = option_of_json fun_body_of_json body in
+        Ok { A.def_id; name; signature; body }
     | _ -> Error "")
 
 let g_declaration_group_of_json (id_of_json : json -> ('id, string) result)

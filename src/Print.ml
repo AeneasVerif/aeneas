@@ -784,7 +784,7 @@ module LlbcAst = struct
       PC.type_ctx_to_adt_variant_to_string_fun type_decls
     in
     let var_id_to_string vid =
-      let var = V.VarId.nth fdef.locals vid in
+      let var = V.VarId.nth (Option.get fdef.body).locals vid in
       var_to_string var
     in
     let adt_field_names = PC.type_ctx_to_adt_field_names_fun type_decls in
@@ -1062,41 +1062,56 @@ module LlbcAst = struct
         "<" ^ String.concat "," (List.append regions types) ^ ">"
     in
 
-    (* Arguments *)
-    let inputs = List.tl def.locals in
-    let inputs, _aux_locals = Collections.List.split_at inputs def.arg_count in
-    let args = List.combine inputs sg.inputs in
-    let args =
-      List.map
-        (fun (var, rty) -> var_to_string var ^ " : " ^ sty_to_string rty)
-        args
-    in
-    let args = String.concat ", " args in
-
     (* Return type *)
     let ret_ty = sg.output in
     let ret_ty =
       if TU.ty_is_unit ret_ty then "" else " -> " ^ sty_to_string ret_ty
     in
 
-    (* All the locals (with erased regions) *)
-    let locals =
-      List.map
-        (fun var ->
-          indent ^ indent_incr ^ var_to_string var ^ " : "
-          ^ ety_to_string var.var_ty ^ ";")
-        def.locals
-    in
-    let locals = String.concat "\n" locals in
+    (* We print the declaration differently if it is opaque (no body) or transparent
+     * (we have access to a body) *)
+    match def.body with
+    | None ->
+        (* Arguments - we need to ignore the first input type which is actually
+         * the return type... TODO: fix that *)
+        let input_tys = List.tl sg.inputs in
+        let args = List.map sty_to_string input_tys in
+        let args = String.concat ", " args in
 
-    (* Body *)
-    let body =
-      statement_to_string fmt (indent ^ indent_incr) indent_incr def.body
-    in
+        (* Put everything together *)
+        indent ^ "opaque fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty
+    | Some body ->
+        (* Arguments *)
+        let inputs = List.tl body.locals in
+        let inputs, _aux_locals =
+          Collections.List.split_at inputs body.arg_count
+        in
+        let args = List.combine inputs sg.inputs in
+        let args =
+          List.map
+            (fun (var, rty) -> var_to_string var ^ " : " ^ sty_to_string rty)
+            args
+        in
+        let args = String.concat ", " args in
 
-    (* Put everything together *)
-    indent ^ "fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty ^ " {\n" ^ locals
-    ^ "\n\n" ^ body ^ "\n" ^ indent ^ "}"
+        (* All the locals (with erased regions) *)
+        let locals =
+          List.map
+            (fun var ->
+              indent ^ indent_incr ^ var_to_string var ^ " : "
+              ^ ety_to_string var.var_ty ^ ";")
+            body.locals
+        in
+        let locals = String.concat "\n" locals in
+
+        (* Body *)
+        let body =
+          statement_to_string fmt (indent ^ indent_incr) indent_incr body.body
+        in
+
+        (* Put everything together *)
+        indent ^ "fn " ^ name ^ params ^ "(" ^ args ^ ")" ^ ret_ty ^ " {\n"
+        ^ locals ^ "\n\n" ^ body ^ "\n" ^ indent ^ "}"
 end
 
 module PA = LlbcAst (* local module *)
@@ -1139,7 +1154,7 @@ module Module = struct
       fun_name_to_string def.name
     in
     let var_id_to_string vid =
-      let var = V.VarId.nth def.locals vid in
+      let var = V.VarId.nth (Option.get def.body).locals vid in
       PA.var_to_string var
     in
     let adt_variant_to_string =

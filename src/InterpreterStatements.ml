@@ -233,8 +233,9 @@ let set_discriminant (config : C.config) (p : E.place)
               let bottom_v =
                 match type_id with
                 | T.AdtId def_id ->
-                    compute_expanded_bottom_adt_value ctx.type_context.type_decls
-                      def_id (Some variant_id) regions types
+                    compute_expanded_bottom_adt_value
+                      ctx.type_context.type_decls def_id (Some variant_id)
+                      regions types
                 | T.Assumed T.Option ->
                     assert (regions = []);
                     compute_expanded_bottom_option_value variant_id
@@ -1005,15 +1006,21 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
 
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_decl ctx fid in
+  (* We can evaluate the function call only if it is not opaque *)
+  let body =
+    match def.body with
+    | None -> raise (Failure "Can't evaluate a call to an opaque function")
+    | Some body -> body
+  in
   let tsubst =
     Subst.make_type_subst
       (List.map (fun v -> v.T.index) def.A.signature.type_params)
       type_params
   in
-  let locals, body = Subst.fun_decl_substitute_in_body tsubst def in
+  let locals, body_st = Subst.fun_body_substitute_in_body tsubst body in
 
   (* Evaluate the input operands *)
-  assert (List.length args = def.A.arg_count);
+  assert (List.length args = body.A.arg_count);
   let cc = eval_operands config args in
 
   (* Push a frame delimiter - we use [comp_transmit] to transmit the result
@@ -1028,7 +1035,9 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
     | ret_ty :: locals -> (ret_ty, locals)
     | _ -> raise (Failure "Unreachable")
   in
-  let input_locals, locals = Collections.List.split_at locals def.A.arg_count in
+  let input_locals, locals =
+    Collections.List.split_at locals body.A.arg_count
+  in
 
   let cc = comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty)) in
 
@@ -1045,7 +1054,7 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
   let cc = comp cc (push_uninitialized_vars locals) in
 
   (* Execute the function body *)
-  let cc = comp cc (eval_function_body config body) in
+  let cc = comp cc (eval_function_body config body_st) in
 
   (* Pop the stack frame and move the return value to its destination *)
   let cf_finish cf res =
@@ -1074,7 +1083,7 @@ and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
    * while doing so *)
   let inst_sg = instantiate_fun_sig type_params sg in
   (* Sanity check *)
-  assert (List.length args = def.A.arg_count);
+  assert (List.length args = List.length def.A.signature.inputs);
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config (A.Local fid) inst_sg
     region_params type_params args dest cf ctx
