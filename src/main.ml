@@ -10,7 +10,7 @@ module Micro = PureMicroPasses
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
- * JP: are you running with OCAMLRUNPARAM=b=1? *)
+ * TODO: run with OCAMLRUNPARAM=b=1? *)
 let () = Printexc.record_backtrace true
 
 let usage =
