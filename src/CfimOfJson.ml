@@ -16,10 +16,10 @@ module V = Values
 module S = Scalars
 module M = Modules
 module E = Expressions
-module A = CfimAst
+module A = LlbcAst
 
 (* The default logger *)
-let log = Logging.cfim_of_json_logger
+let log = Logging.llbc_of_json_logger
 
 let path_elem_of_json (js : json) : (path_elem, string) result =
   combine_error_msgs js "path_elem_of_json"
@@ -662,8 +662,8 @@ let declaration_group_of_json (js : json) : (M.declaration_group, string) result
         Ok (M.Fun decl)
     | _ -> Error "")
 
-let cfim_module_of_json (js : json) : (M.cfim_module, string) result =
-  combine_error_msgs js "cfim_module_of_json"
+let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
+  combine_error_msgs js "llbc_module_of_json"
     (match js with
     | `Assoc
         [

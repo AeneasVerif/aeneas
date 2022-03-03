@@ -6,7 +6,7 @@
 module T = Types
 module V = Values
 module E = Expressions
-module A = CfimAst
+module A = LlbcAst
 
 type mplace = {
   bv : Contexts.binder;

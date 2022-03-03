@@ -1,5 +1,5 @@
 open Errors
-open CfimAstUtils
+open LlbcAstUtils
 open Pure
 open PureUtils
 module Id = Identifiers
@@ -41,7 +41,7 @@ type config = {
 }
 
 type type_context = {
-  cfim_type_decls : T.type_decl TypeDeclId.Map.t;
+  llbc_type_decls : T.type_decl TypeDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
       (** We use this for type-checking (for sanity checks) when translating
           values and functions.
@@ -66,7 +66,7 @@ type fun_sig_named_outputs = {
 }
 
 type fun_context = {
-  cfim_fun_decls : A.fun_decl FunDeclId.Map.t;
+  llbc_fun_decls : A.fun_decl FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdMap.t;  (** *)
 }
 
@@ -114,14 +114,14 @@ let type_check_lvalue (ctx : bs_ctx) (v : typed_lvalue) : unit =
   TypeCheck.check_typed_lvalue ctx v
 
 (* TODO: move *)
-let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.CfimAst.ast_formatter =
-  Print.CfimAst.fun_decl_to_ast_formatter ctx.type_context.cfim_type_decls
-    ctx.fun_context.cfim_fun_decls ctx.fun_decl
+let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.LlbcAst.ast_formatter =
+  Print.LlbcAst.fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
+    ctx.fun_context.llbc_fun_decls ctx.fun_decl
 
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
   let type_params = ctx.fun_decl.signature.type_params in
-  let type_decls = ctx.type_context.cfim_type_decls in
-  let fun_decls = ctx.fun_context.cfim_fun_decls in
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fun_decls = ctx.fun_context.llbc_fun_decls in
   PrintPure.mk_ast_formatter type_decls fun_decls type_params
 
 let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
@@ -131,7 +131,7 @@ let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
 
 let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let type_params = def.type_params in
-  let type_decls = ctx.type_context.cfim_type_decls in
+  let type_decls = ctx.type_context.llbc_type_decls in
   let fmt = PrintPure.mk_type_formatter type_decls type_params in
   PrintPure.type_decl_to_string fmt def
 
@@ -141,22 +141,22 @@ let typed_rvalue_to_string (ctx : bs_ctx) (v : typed_rvalue) : string =
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let type_params = sg.type_params in
-  let type_decls = ctx.type_context.cfim_type_decls in
-  let fun_decls = ctx.fun_context.cfim_fun_decls in
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fun_decls = ctx.fun_context.llbc_fun_decls in
   let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
   PrintPure.fun_sig_to_string fmt sg
 
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let type_params = def.signature.type_params in
-  let type_decls = ctx.type_context.cfim_type_decls in
-  let fun_decls = ctx.fun_context.cfim_fun_decls in
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fun_decls = ctx.fun_context.llbc_fun_decls in
   let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
   PrintPure.fun_decl_to_string fmt def
 
 (* TODO: move *)
 let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let fmt = bs_ctx_to_ast_formatter ctx in
-  let fmt = Print.CfimAst.ast_to_value_formatter fmt in
+  let fmt = Print.LlbcAst.ast_to_value_formatter fmt in
   let indent = "" in
   let indent_incr = "  " in
   Print.Values.abs_to_string fmt indent indent_incr abs
@@ -173,13 +173,13 @@ let get_instantiated_fun_sig (fun_id : A.fun_id)
   (* Apply *)
   fun_sig_substitute tsubst sg
 
-let bs_ctx_lookup_cfim_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
+let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
-  TypeDeclId.Map.find id ctx.type_context.cfim_type_decls
+  TypeDeclId.Map.find id ctx.type_context.llbc_type_decls
 
-let bs_ctx_lookup_cfim_fun_decl (id : FunDeclId.id) (ctx : bs_ctx) : A.fun_decl
+let bs_ctx_lookup_llbc_fun_decl (id : FunDeclId.id) (ctx : bs_ctx) : A.fun_decl
     =
-  FunDeclId.Map.find id ctx.fun_context.cfim_fun_decls
+  FunDeclId.Map.find id ctx.fun_context.llbc_fun_decls
 
 (* TODO: move *)
 let bs_ctx_lookup_local_function_sig (def_id : FunDeclId.id)
@@ -1294,7 +1294,7 @@ and translate_expansion (config : config) (p : S.mplace option)
           match type_id with
           | T.AdtId adt_id ->
               (* Detect if this is an enumeration or not *)
-              let tdef = bs_ctx_lookup_cfim_type_decl adt_id ctx in
+              let tdef = bs_ctx_lookup_llbc_type_decl adt_id ctx in
               let is_enum = type_decl_is_enum tdef in
               if is_enum then
                 (* This is an enumeration: introduce an [ExpandEnum] let-binding *)

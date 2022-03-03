@@ -2,7 +2,7 @@ module C = Collections
 module T = Types
 module V = Values
 module E = Expressions
-module A = CfimAst
+module A = LlbcAst
 open SymbolicAst
 
 let mk_mplace (p : E.place) (ctx : Contexts.eval_ctx) : mplace =

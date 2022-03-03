@@ -3,7 +3,7 @@ open Names
 module T = Types
 module V = Values
 module E = Expressions
-module A = CfimAst
+module A = LlbcAst
 module TypeDeclId = T.TypeDeclId
 module TypeVarId = T.TypeVarId
 module RegionGroupId = T.RegionGroupId

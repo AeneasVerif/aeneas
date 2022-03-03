@@ -1,4 +1,4 @@
-open CfimAst
+open LlbcAst
 open Utils
 module T = Types
 

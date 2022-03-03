@@ -4,7 +4,7 @@ module TU = TypesUtils
 module V = Values
 module VU = ValuesUtils
 module E = Expressions
-module A = CfimAst
+module A = LlbcAst
 module C = Contexts
 module M = Modules
 
@@ -677,7 +677,7 @@ end
 module PC = Contexts (* local module *)
 
 (** Pretty-printing for contexts (generic functions) *)
-module CfimAst = struct
+module LlbcAst = struct
   let var_to_string (var : A.var) : string =
     match var.name with
     | None -> V.VarId.to_string var.index
@@ -1099,7 +1099,7 @@ module CfimAst = struct
     ^ "\n\n" ^ body ^ "\n" ^ indent ^ "}"
 end
 
-module PA = CfimAst (* local module *)
+module PA = LlbcAst (* local module *)
 
 (** Pretty-printing for ASTs (functions based on a definition context) *)
 module Module = struct
@@ -1168,7 +1168,7 @@ module Module = struct
     let fmt = def_ctx_to_ast_formatter type_context fun_context def in
     PA.fun_decl_to_string fmt "" "  " def
 
-  let module_to_string (m : M.cfim_module) : string =
+  let module_to_string (m : M.llbc_module) : string =
     let types_defs_map, funs_defs_map = M.compute_defs_maps m in
 
     (* The types *)
@@ -1185,7 +1185,7 @@ module Module = struct
 end
 
 (** Pretty-printing for CFIM ASTs (functions based on an evaluation context) *)
-module EvalCtxCfimAst = struct
+module EvalCtxLlbcAst = struct
   let ety_to_string (ctx : C.eval_ctx) (t : T.ety) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     let fmt = PC.ctx_to_etype_formatter fmt in

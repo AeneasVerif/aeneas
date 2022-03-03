@@ -32,7 +32,7 @@
 open Names
 open TypesUtils
 module T = Types
-module A = CfimAst
+module A = LlbcAst
 
 module Sig = struct
   (** A few utilities *)

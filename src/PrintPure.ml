@@ -4,7 +4,7 @@ open Pure
 module T = Types
 module V = Values
 module E = Expressions
-module A = CfimAst
+module A = LlbcAst
 module TypeDeclId = T.TypeDeclId
 module TypeVarId = T.TypeVarId
 module RegionId = T.RegionId
@@ -111,7 +111,7 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     Print.Contexts.type_ctx_to_adt_field_names_fun type_decls
   in
   let adt_field_to_string =
-    Print.CfimAst.type_ctx_to_adt_field_to_string_fun type_decls
+    Print.LlbcAst.type_ctx_to_adt_field_to_string_fun type_decls
   in
   let fun_decl_id_to_string def_id =
     let def = A.FunDeclId.Map.find def_id fun_decls in
@@ -383,7 +383,7 @@ let fun_suffix (rg_id : T.RegionGroupId.id option) : string =
 let unop_to_string (unop : unop) : string =
   match unop with Not -> "¬" | Neg _ -> "-"
 
-let binop_to_string = Print.CfimAst.binop_to_string
+let binop_to_string = Print.LlbcAst.binop_to_string
 
 let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   match fun_id with

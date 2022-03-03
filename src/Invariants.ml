@@ -6,7 +6,7 @@ module V = Values
 module E = Expressions
 module C = Contexts
 module Subst = Substitute
-module A = CfimAst
+module A = LlbcAst
 module L = Logging
 open Cps
 open TypesUtils

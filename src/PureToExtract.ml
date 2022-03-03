@@ -572,10 +572,10 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Lookup the CFIM def to compute the region group information *)
   let def_id = def.def_id in
-  let cfim_def =
+  let llbc_def =
     FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls
   in
-  let sg = cfim_def.signature in
+  let sg = llbc_def.signature in
   let num_rgs = List.length sg.regions_hierarchy in
   let keep_fwd, (_, backs) = trans_group in
   let num_backs = List.length backs in

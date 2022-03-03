@@ -11,7 +11,7 @@ module T = Types
 module TU = TypesUtils
 module V = Values
 module E = Expressions
-module A = CfimAst
+module A = LlbcAst
 module C = Contexts
 module M = Modules
 open SymbolicAst

@@ -1,5 +1,5 @@
 open Types
-open CfimAst
+open LlbcAst
 
 type 'id g_declaration_group = NonRec of 'id | Rec of 'id list
 [@@deriving show]
@@ -15,7 +15,7 @@ type declaration_group =
   | Fun of fun_declaration_group
 [@@deriving show]
 
-type cfim_module = {
+type llbc_module = {
   name : string;
   declarations : declaration_group list;
   types : type_decl list;
@@ -23,7 +23,7 @@ type cfim_module = {
 }
 (** LLBC module - TODO: rename to crate *)
 
-let compute_defs_maps (m : cfim_module) :
+let compute_defs_maps (m : llbc_module) :
     type_decl TypeDeclId.Map.t * fun_decl FunDeclId.Map.t =
   let types_map =
     List.fold_left

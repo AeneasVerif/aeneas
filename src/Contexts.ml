@@ -1,6 +1,6 @@
 open Types
 open Values
-open CfimAst
+open LlbcAst
 module V = Values
 open ValuesUtils
 module M = Modules

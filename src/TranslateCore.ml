@@ -3,7 +3,7 @@
 open InterpreterStatements
 module L = Logging
 module T = Types
-module A = CfimAst
+module A = LlbcAst
 module M = Modules
 module SA = SymbolicAst
 

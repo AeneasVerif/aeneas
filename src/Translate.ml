@@ -2,7 +2,7 @@ open InterpreterStatements
 open Interpreter
 module L = Logging
 module T = Types
-module A = CfimAst
+module A = LlbcAst
 module M = Modules
 module SA = SymbolicAst
 module Micro = PureMicroPasses
@@ -122,12 +122,12 @@ let translate_function_to_pure (config : C.partial_config)
   let type_context =
     {
       SymbolicToPure.types_infos = type_context.type_infos;
-      cfim_type_decls = type_context.type_decls;
+      llbc_type_decls = type_context.type_decls;
       type_decls = pure_type_decls;
     }
   in
   let fun_context =
-    { SymbolicToPure.cfim_fun_decls = fun_context.fun_decls; fun_sigs }
+    { SymbolicToPure.llbc_fun_decls = fun_context.fun_decls; fun_sigs }
   in
   let ctx =
     {
@@ -152,7 +152,7 @@ let translate_function_to_pure (config : C.partial_config)
   in
 
   (* We need to initialize the input/output variables *)
-  let forward_input_vars = CfimAstUtils.fun_decl_get_input_vars fdef in
+  let forward_input_vars = LlbcAstUtils.fun_decl_get_input_vars fdef in
   let forward_input_varnames =
     List.map (fun (v : A.var) -> v.name) forward_input_vars
   in
@@ -245,7 +245,7 @@ let translate_function_to_pure (config : C.partial_config)
   (pure_forward, pure_backwards)
 
 let translate_module_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (m : M.cfim_module) :
+    (mp_config : Micro.config) (m : M.llbc_module) :
     trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
@@ -276,7 +276,7 @@ let translate_module_to_pure (config : C.partial_config)
         ( A.Local fdef.def_id,
           List.map
             (fun (v : A.var) -> v.name)
-            (CfimAstUtils.fun_decl_get_input_vars fdef),
+            (LlbcAstUtils.fun_decl_get_input_vars fdef),
           fdef.signature ))
       m.functions
   in
@@ -304,7 +304,7 @@ let translate_module_to_pure (config : C.partial_config)
   (trans_ctx, type_decls, pure_translations)
 
 type gen_ctx = {
-  m : M.cfim_module;
+  m : M.llbc_module;
   extract_ctx : PureToExtract.extraction_ctx;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : (bool * pure_fun_translation) Pure.FunDeclId.Map.t;
@@ -514,7 +514,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
 
 (** Translate a module and write the synthesized code to an output file. *)
 let translate_module (filename : string) (dest_dir : string) (config : config)
-    (m : M.cfim_module) : unit =
+    (m : M.llbc_module) : unit =
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs =
     translate_module_to_pure config.eval_config config.mp_config m
@@ -568,7 +568,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* First compute the filename by replacing the extension and converting the
    * case (rust module names are snake case) *)
   let module_name, extract_filebasename =
-    match Filename.chop_suffix_opt ~suffix:".cfim" filename with
+    match Filename.chop_suffix_opt ~suffix:".llbc" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
         failwith "Unreachable"

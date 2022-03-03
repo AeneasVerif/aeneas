@@ -6,7 +6,7 @@ module T = Types
 module V = Values
 module E = Expressions
 module C = Contexts
-module A = CfimAst
+module A = LlbcAst
 module M = Modules
 module L = Logging
 
@@ -45,6 +45,6 @@ let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
   let body = obj#visit_statement () f.body in
   { f with body }
 
-let apply_passes (m : M.cfim_module) : M.cfim_module =
+let apply_passes (m : M.llbc_module) : M.llbc_module =
   let functions = List.map filter_drop_assigns m.functions in
   { m with functions }
