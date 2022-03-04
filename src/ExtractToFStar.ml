@@ -1102,6 +1102,23 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
   in
   (ctx, ctx_body)
 
+(** A small utility to print the types of the input parameters in the form:
+    `u32 -> list u32 -> ...`
+    (we don't print the return type of the function)
+    
+    This is used for opaque function declarations, in particular.
+ *)
+let extract_fun_input_parameters_types (ctx : extraction_ctx)
+    (fmt : F.formatter) (def : fun_decl) : unit =
+  let extract_param (ty : ty) : unit =
+    let inside = false in
+    extract_ty ctx fmt inside ty;
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "->";
+    F.pp_print_space fmt ()
+  in
+  List.iter extract_param def.signature.inputs
+
 (** Extract a decrease clause function template body.
 
     In order to help the user, we can generate a template for the functions
@@ -1220,6 +1237,10 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (* Open a box for the return type *)
     F.pp_open_hovbox fmt ctx.indent_incr;
     (* Print the return type *)
+    (* For opaque definitions, as we don't have named parameters under the hand,
+     * we don't print parameters in the form `(x : a) (y : b) ...` above,
+     * but wait until here to print the types: `a -> b -> ...`. *)
+    if is_opaque then extract_fun_input_parameters_types ctx fmt def;
     (* `Tot` *)
     if has_decreases_clause then (
       F.pp_print_string fmt "Tot";

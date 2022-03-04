@@ -30,7 +30,7 @@ build:
 # Test the project
 .PHONY: test
 test: build translate-no_nested_borrows translate-hashmap translate-paper \
-	translate-nll-betree_nll
+	translate-external translate-nll-betree_nll
 
 # Add specific options to some tests
 translate-no_nested_borrows translate-paper: \
@@ -41,6 +41,9 @@ translate-hashmap: SUBDIR:=hashmap
 
 translate-nll-betree_nll: TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
 translate-nll-betree_nll: SUBDIR:=misc
+
+translate-external: TRANS_OPTIONS +=
+translate-external: SUBDIR:=misc
 
 # Generic rules to extract the LLBC from a rust file
 # We use the rules in Charon's Makefile to generate the .llbc files: the options
