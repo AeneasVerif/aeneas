@@ -101,9 +101,7 @@ module IdGen () : Id = struct
      * they happen *)
     if x == max_int then raise (Errors.IntegerOverflow ()) else x + 1
 
-  let generator_from_incr_id id =
-    let id = incr id in
-    id
+  let generator_from_incr_id id = incr id
 
   let mk_stateful_generator g =
     let g = ref g in

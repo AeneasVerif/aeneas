@@ -406,8 +406,6 @@ class ['self] iter_expression_base =
 
     method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
 
-    method visit_id : 'env -> VariantId.id -> unit = fun _ _ -> ()
-
     method visit_fun_id : 'env -> fun_id -> unit = fun _ _ -> ()
   end
 
@@ -423,8 +421,6 @@ class ['self] map_expression_base =
 
     method visit_scalar_value : 'env -> scalar_value -> scalar_value =
       fun _ x -> x
-
-    method visit_id : 'env -> VariantId.id -> VariantId.id = fun _ x -> x
 
     method visit_fun_id : 'env -> fun_id -> fun_id = fun _ x -> x
   end
@@ -442,8 +438,6 @@ class virtual ['self] reduce_expression_base =
     method visit_scalar_value : 'env -> scalar_value -> 'a =
       fun _ _ -> self#zero
 
-    method visit_id : 'env -> VariantId.id -> 'a = fun _ _ -> self#zero
-
     method visit_fun_id : 'env -> fun_id -> 'a = fun _ _ -> self#zero
   end
 
@@ -458,9 +452,6 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
 
     method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_id : 'env -> VariantId.id -> VariantId.id * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_fun_id : 'env -> fun_id -> fun_id * 'a =

@@ -81,20 +81,30 @@ type config = {
     TODO: things would be simpler if we used a better representation of the
     variables indices...
  *)
-let get_expression_min_var_counter (e : expression) : VarId.generator =
+let get_body_min_var_counter (body : fun_body) : VarId.generator =
+  (* Find the max id in the input variables - some of them may have been
+   * filtered from the body *)
+  let min_input_id =
+    List.fold_left (fun id var -> VarId.max id var.id) VarId.zero body.inputs
+  in
   let obj =
     object
       inherit [_] reduce_expression
 
-      method zero _ = VarId.zero
+      method zero _ = min_input_id
 
       method plus id0 id1 _ = VarId.max (id0 ()) (id1 ())
       (* Get the maximum *)
 
       method! visit_var _ v _ = v.id
+      (** For the lvalues *)
+
+      method! visit_place _ p _ = p.var
+      (** For the rvalues *)
     end
   in
-  let id = obj#visit_expression () e () in
+  (* Find the max counter in the body *)
+  let id = obj#visit_expression () body.body.e () in
   VarId.generator_from_incr_id id
 
 type pn_ctx = string VarId.Map.t
@@ -802,7 +812,7 @@ let to_monadic (config : config) (def : fun_decl) : fun_decl =
         match def.body with
         | None -> None
         | Some body ->
-            let var_cnt = get_expression_min_var_counter body.body.e in
+            let var_cnt = get_body_min_var_counter body in
             let id, _ = VarId.fresh var_cnt in
             let var = { id; basename = None; ty = unit_ty } in
             let inputs = [ var ] in
@@ -940,7 +950,7 @@ let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
   | None -> def
   | Some body ->
       (* Set up the var id generator *)
-      let cnt = get_expression_min_var_counter body.body.e in
+      let cnt = get_body_min_var_counter body in
       let _, fresh_id = VarId.mk_stateful_generator cnt in
       (* It is a very simple map *)
       let obj =
@@ -985,8 +995,11 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
   | None -> def
   | Some body ->
       (* We may need to introduce fresh variables for the state *)
-      let var_cnt = get_expression_min_var_counter body.body.e in
-      let _, fresh_var_id = VarId.mk_stateful_generator var_cnt in
+      let fresh_var_id =
+        let var_cnt = get_body_min_var_counter body in
+        let _, fresh_var_id = VarId.mk_stateful_generator var_cnt in
+        fresh_var_id
+      in
       let fresh_state_var () =
         let id = fresh_var_id () in
         { id; basename = Some "st"; ty = mk_state_ty }
