@@ -4,32 +4,32 @@ open Pure
 module T = Types
 module V = Values
 module E = Expressions
-module A = CfimAst
-module TypeDefId = T.TypeDefId
+module A = LlbcAst
+module TypeDeclId = T.TypeDeclId
 module TypeVarId = T.TypeVarId
 module RegionId = T.RegionId
 module VariantId = T.VariantId
 module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
-module FunDefId = A.FunDefId
+module FunDeclId = A.FunDeclId
 
 type type_formatter = {
   type_var_id_to_string : TypeVarId.id -> string;
-  type_def_id_to_string : TypeDefId.id -> string;
+  type_decl_id_to_string : TypeDeclId.id -> string;
 }
 
 type value_formatter = {
   type_var_id_to_string : TypeVarId.id -> string;
-  type_def_id_to_string : TypeDefId.id -> string;
-  adt_variant_to_string : TypeDefId.id -> VariantId.id -> string;
+  type_decl_id_to_string : TypeDeclId.id -> string;
+  adt_variant_to_string : TypeDeclId.id -> VariantId.id -> string;
   var_id_to_string : VarId.id -> string;
-  adt_field_names : TypeDefId.id -> VariantId.id option -> string list option;
+  adt_field_names : TypeDeclId.id -> VariantId.id option -> string list option;
 }
 
 let value_to_type_formatter (fmt : value_formatter) : type_formatter =
   {
     type_var_id_to_string = fmt.type_var_id_to_string;
-    type_def_id_to_string = fmt.type_def_id_to_string;
+    type_decl_id_to_string = fmt.type_decl_id_to_string;
   }
 
 (* TODO: we need to store which variables we have encountered so far, and
@@ -37,19 +37,19 @@ let value_to_type_formatter (fmt : value_formatter) : type_formatter =
 *)
 type ast_formatter = {
   type_var_id_to_string : TypeVarId.id -> string;
-  type_def_id_to_string : TypeDefId.id -> string;
-  adt_variant_to_string : TypeDefId.id -> VariantId.id -> string;
+  type_decl_id_to_string : TypeDeclId.id -> string;
+  adt_variant_to_string : TypeDeclId.id -> VariantId.id -> string;
   var_id_to_string : VarId.id -> string;
   adt_field_to_string :
-    TypeDefId.id -> VariantId.id option -> FieldId.id -> string option;
-  adt_field_names : TypeDefId.id -> VariantId.id option -> string list option;
-  fun_def_id_to_string : A.FunDefId.id -> string;
+    TypeDeclId.id -> VariantId.id option -> FieldId.id -> string option;
+  adt_field_names : TypeDeclId.id -> VariantId.id option -> string list option;
+  fun_decl_id_to_string : A.FunDeclId.id -> string;
 }
 
 let ast_to_value_formatter (fmt : ast_formatter) : value_formatter =
   {
     type_var_id_to_string = fmt.type_var_id_to_string;
-    type_def_id_to_string = fmt.type_def_id_to_string;
+    type_decl_id_to_string = fmt.type_decl_id_to_string;
     adt_variant_to_string = fmt.adt_variant_to_string;
     var_id_to_string = fmt.var_id_to_string;
     adt_field_names = fmt.adt_field_names;
@@ -71,65 +71,65 @@ let integer_type_to_string = Print.Types.integer_type_to_string
 
 let scalar_value_to_string = Print.Values.scalar_value_to_string
 
-let mk_type_formatter (type_defs : T.type_def TypeDefId.Map.t)
+let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     (type_params : type_var list) : type_formatter =
   let type_var_id_to_string vid =
     let var = T.TypeVarId.nth type_params vid in
     type_var_to_string var
   in
-  let type_def_id_to_string def_id =
-    let def = T.TypeDefId.Map.find def_id type_defs in
+  let type_decl_id_to_string def_id =
+    let def = T.TypeDeclId.Map.find def_id type_decls in
     name_to_string def.name
   in
-  { type_var_id_to_string; type_def_id_to_string }
+  { type_var_id_to_string; type_decl_id_to_string }
 
-(* TODO: there is a bit of duplication with Print.fun_def_to_ast_formatter.
+(* TODO: there is a bit of duplication with Print.fun_decl_to_ast_formatter.
 
    TODO: use the pure defs as inputs? Note that it is a bit annoying for the
    functions (there is a difference between the forward/backward functions...)
    while we only need those definitions to lookup proper names for the def ids.
 *)
-let mk_ast_formatter (type_defs : T.type_def TypeDefId.Map.t)
-    (fun_defs : A.fun_def FunDefId.Map.t) (type_params : type_var list) :
+let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
+    (fun_decls : A.fun_decl FunDeclId.Map.t) (type_params : type_var list) :
     ast_formatter =
   let type_var_id_to_string vid =
     let var = T.TypeVarId.nth type_params vid in
     type_var_to_string var
   in
-  let type_def_id_to_string def_id =
-    let def = T.TypeDefId.Map.find def_id type_defs in
+  let type_decl_id_to_string def_id =
+    let def = T.TypeDeclId.Map.find def_id type_decls in
     name_to_string def.name
   in
   let adt_variant_to_string =
-    Print.Contexts.type_ctx_to_adt_variant_to_string_fun type_defs
+    Print.Contexts.type_ctx_to_adt_variant_to_string_fun type_decls
   in
   let var_id_to_string vid =
     (* TODO: somehow lookup in the context *)
     "^" ^ VarId.to_string vid
   in
   let adt_field_names =
-    Print.Contexts.type_ctx_to_adt_field_names_fun type_defs
+    Print.Contexts.type_ctx_to_adt_field_names_fun type_decls
   in
   let adt_field_to_string =
-    Print.CfimAst.type_ctx_to_adt_field_to_string_fun type_defs
+    Print.LlbcAst.type_ctx_to_adt_field_to_string_fun type_decls
   in
-  let fun_def_id_to_string def_id =
-    let def = A.FunDefId.Map.find def_id fun_defs in
+  let fun_decl_id_to_string def_id =
+    let def = A.FunDeclId.Map.find def_id fun_decls in
     fun_name_to_string def.name
   in
   {
     type_var_id_to_string;
-    type_def_id_to_string;
+    type_decl_id_to_string;
     adt_variant_to_string;
     var_id_to_string;
     adt_field_names;
     adt_field_to_string;
-    fun_def_id_to_string;
+    fun_decl_id_to_string;
   }
 
 let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
-  | AdtId id -> fmt.type_def_id_to_string id
+  | AdtId id -> fmt.type_decl_id_to_string id
   | Tuple -> ""
   | Assumed aty -> (
       match aty with
@@ -167,7 +167,7 @@ let variant_to_string fmt (v : variant) : string =
   ^ String.concat ", " (List.map (field_to_string fmt) v.fields)
   ^ ")"
 
-let type_def_to_string (fmt : type_formatter) (def : type_def) : string =
+let type_decl_to_string (fmt : type_formatter) (def : type_decl) : string =
   let types = def.type_params in
   let name = name_to_string def.name in
   let params =
@@ -189,6 +189,7 @@ let type_def_to_string (fmt : type_formatter) (def : type_def) : string =
       in
       let variants = String.concat "\n" variants in
       "enum " ^ name ^ params ^ " =\n" ^ variants
+  | Opaque -> "opaque type " ^ name ^ params
 
 let var_to_string (fmt : type_formatter) (v : var) : string =
   let varname =
@@ -245,7 +246,7 @@ let adt_g_value_to_string (fmt : value_formatter)
       let adt_ident =
         match variant_id with
         | Some vid -> fmt.adt_variant_to_string def_id vid
-        | None -> fmt.type_def_id_to_string def_id
+        | None -> fmt.type_decl_id_to_string def_id
       in
       if field_values <> [] then
         match fmt.adt_field_names def_id variant_id with
@@ -358,7 +359,7 @@ let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
 let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : A.fun_id) : string
     =
   match fun_id with
-  | A.Local fid -> fmt.fun_def_id_to_string fid
+  | A.Regular fid -> fmt.fun_decl_id_to_string fid
   | A.Assumed fid -> (
       match fid with
       | A.Replace -> "core::mem::replace"
@@ -382,7 +383,7 @@ let fun_suffix (rg_id : T.RegionGroupId.id option) : string =
 let unop_to_string (unop : unop) : string =
   match unop with Not -> "¬" | Neg _ -> "-"
 
-let binop_to_string = Print.CfimAst.binop_to_string
+let binop_to_string = Print.LlbcAst.binop_to_string
 
 let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   match fun_id with
@@ -474,13 +475,17 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
 
-let fun_def_to_string (fmt : ast_formatter) (def : fun_def) : string =
+let fun_decl_to_string (fmt : ast_formatter) (def : fun_decl) : string =
   let type_fmt = ast_to_type_formatter fmt in
   let name = fun_name_to_string def.basename ^ fun_suffix def.back_id in
   let signature = fun_sig_to_string fmt def.signature in
-  let inputs = List.map (var_to_string type_fmt) def.inputs in
-  let inputs =
-    if inputs = [] then "" else "  fun " ^ String.concat " " inputs ^ " ->\n"
-  in
-  let body = texpression_to_string fmt "  " "  " def.body in
-  "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ "  " ^ body
+  match def.body with
+  | None -> "val " ^ name ^ " :\n  " ^ signature
+  | Some body ->
+      let inputs = List.map (var_to_string type_fmt) body.inputs in
+      let inputs =
+        if inputs = [] then ""
+        else "  fun " ^ String.concat " " inputs ^ " ->\n"
+      in
+      let body = texpression_to_string fmt "  " "  " body.body in
+      "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ "  " ^ body

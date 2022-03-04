@@ -101,8 +101,8 @@ let ty_as_integer (t : ty) : T.integer_type =
   match t with Integer int_ty -> int_ty | _ -> raise (Failure "Unreachable")
 
 (* TODO: move *)
-let type_def_is_enum (def : T.type_def) : bool =
-  match def.kind with T.Struct _ -> false | Enum _ -> true
+let type_decl_is_enum (def : T.type_decl) : bool =
+  match def.kind with T.Struct _ -> false | Enum _ -> true | Opaque -> false
 
 let mk_state_ty : ty = Adt (Assumed State, [])
 
@@ -182,12 +182,12 @@ let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
   in
   fun id -> TypeVarId.Map.find id mp
 
-(** Retrieve the list of fields for the given variant of a [type_def].
+(** Retrieve the list of fields for the given variant of a [type_decl].
 
     Raises [Invalid_argument] if the arguments are incorrect.
  *)
-let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
-    : field list =
+let type_decl_get_fields (def : type_decl)
+    (opt_variant_id : VariantId.id option) : field list =
   match (def.kind, opt_variant_id) with
   | Enum variants, Some variant_id -> (VariantId.nth variants variant_id).fields
   | Struct fields, None -> fields
@@ -199,15 +199,15 @@ let type_def_get_fields (def : type_def) (opt_variant_id : VariantId.id option)
         (Invalid_argument
            ("The variant id should be [Some] if and only if the definition is \
              an enumeration:\n\
-             - def: " ^ show_type_def def ^ "\n- opt_variant_id: "
+             - def: " ^ show_type_decl def ^ "\n- opt_variant_id: "
           ^ opt_variant_id))
 
 (** Instantiate the type variables for the chosen variant in an ADT definition,
     and return the list of the types of its fields *)
-let type_def_get_instantiated_fields_types (def : type_def)
+let type_decl_get_instantiated_fields_types (def : type_decl)
     (opt_variant_id : VariantId.id option) (types : ty list) : ty list =
   let ty_subst = make_type_subst def.type_params types in
-  let fields = type_def_get_fields def opt_variant_id in
+  let fields = type_decl_get_fields def opt_variant_id in
   List.map (fun f -> ty_substitute ty_subst f.field_ty) fields
 
 let fun_sig_substitute (tsubst : TypeVarId.id -> ty) (sg : fun_sig) :
@@ -225,19 +225,19 @@ let fun_sig_substitute (tsubst : TypeVarId.id -> ty) (sg : fun_sig) :
     - if all functions only call functions we already explored, they are not
       mutually recursive
  *)
-let functions_not_mutually_recursive (funs : fun_def list) : bool =
+let functions_not_mutually_recursive (funs : fun_decl list) : bool =
   (* Compute the set of function identifiers in the group *)
   let ids =
     FunIdSet.of_list
       (List.map
-         (fun (f : fun_def) -> Regular (A.Local f.def_id, f.back_id))
+         (fun (f : fun_decl) -> Regular (A.Regular f.def_id, f.back_id))
          funs)
   in
   let ids = ref ids in
   (* Explore every body *)
-  let body_only_calls_itself (fdef : fun_def) : bool =
+  let body_only_calls_itself (fdef : fun_decl) : bool =
     (* Remove the current id from the id set *)
-    ids := FunIdSet.remove (Regular (A.Local fdef.def_id, fdef.back_id)) !ids;
+    ids := FunIdSet.remove (Regular (A.Regular fdef.def_id, fdef.back_id)) !ids;
 
     (* Check if we call functions from the updated id set *)
     let obj =
@@ -251,8 +251,11 @@ let functions_not_mutually_recursive (funs : fun_def list) : bool =
     in
 
     try
-      obj#visit_texpression () fdef.body;
-      true
+      match fdef.body with
+      | None -> true
+      | Some body ->
+          obj#visit_texpression () body.body;
+          true
     with Utils.Found -> false
   in
   List.for_all body_only_calls_itself funs
@@ -271,7 +274,7 @@ let rec expression_requires_parentheses (e : texpression) : bool =
 
 (** Module to perform type checking - we use this for sanity checks only *)
 module TypeCheck = struct
-  type tc_ctx = { type_defs : type_def TypeDefId.Map.t }
+  type tc_ctx = { type_decls : type_decl TypeDeclId.Map.t }
 
   let check_constant_value (ty : ty) (v : constant_value) : unit =
     match (ty, v) with
@@ -290,8 +293,8 @@ module TypeCheck = struct
           tys
       | Adt (AdtId def_id, tys) ->
           (* "Regular" ADT *)
-          let def = TypeDefId.Map.find def_id ctx.type_defs in
-          type_def_get_instantiated_fields_types def variant_id tys
+          let def = TypeDeclId.Map.find def_id ctx.type_decls in
+          type_decl_get_instantiated_fields_types def variant_id tys
       | Adt (Assumed aty, tys) -> (
           (* Assumed type *)
           match aty with

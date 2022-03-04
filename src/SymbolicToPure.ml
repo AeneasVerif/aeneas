@@ -1,5 +1,5 @@
 open Errors
-open CfimAstUtils
+open LlbcAstUtils
 open Pure
 open PureUtils
 module Id = Identifiers
@@ -41,8 +41,8 @@ type config = {
 }
 
 type type_context = {
-  cfim_type_defs : T.type_def TypeDefId.Map.t;
-  type_defs : type_def TypeDefId.Map.t;
+  llbc_type_decls : T.type_decl TypeDeclId.Map.t;
+  type_decls : type_decl TypeDeclId.Map.t;
       (** We use this for type-checking (for sanity checks) when translating
           values and functions.
           This map is empty when we translate the types, then contains all
@@ -62,11 +62,11 @@ type fun_sig_named_outputs = {
           to generate beautiful codes (we may need to introduce temporary variables
           in the bodies of the backward functions to store the returned values, in
           which case we use those names).
- *)
+       *)
 }
 
 type fun_context = {
-  cfim_fun_defs : A.fun_def FunDefId.Map.t;
+  llbc_fun_decls : A.fun_decl FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdMap.t;  (** *)
 }
 
@@ -83,7 +83,7 @@ type call_info = {
 type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
-  fun_def : A.fun_def;
+  fun_decl : A.fun_decl;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   ret_ty : ty;  (** The return type - we use it to translate `Panic` *)
   sv_to_var : var V.SymbolicValueId.Map.t;
@@ -106,34 +106,34 @@ type bs_ctx = {
 (** Body synthesis context *)
 
 let type_check_rvalue (ctx : bs_ctx) (v : typed_rvalue) : unit =
-  let ctx = { TypeCheck.type_defs = ctx.type_context.type_defs } in
+  let ctx = { TypeCheck.type_decls = ctx.type_context.type_decls } in
   TypeCheck.check_typed_rvalue ctx v
 
 let type_check_lvalue (ctx : bs_ctx) (v : typed_lvalue) : unit =
-  let ctx = { TypeCheck.type_defs = ctx.type_context.type_defs } in
+  let ctx = { TypeCheck.type_decls = ctx.type_context.type_decls } in
   TypeCheck.check_typed_lvalue ctx v
 
 (* TODO: move *)
-let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.CfimAst.ast_formatter =
-  Print.CfimAst.fun_def_to_ast_formatter ctx.type_context.cfim_type_defs
-    ctx.fun_context.cfim_fun_defs ctx.fun_def
+let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.LlbcAst.ast_formatter =
+  Print.LlbcAst.fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
+    ctx.fun_context.llbc_fun_decls ctx.fun_decl
 
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
-  let type_params = ctx.fun_def.signature.type_params in
-  let type_defs = ctx.type_context.cfim_type_defs in
-  let fun_defs = ctx.fun_context.cfim_fun_defs in
-  PrintPure.mk_ast_formatter type_defs fun_defs type_params
+  let type_params = ctx.fun_decl.signature.type_params in
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fun_decls = ctx.fun_context.llbc_fun_decls in
+  PrintPure.mk_ast_formatter type_decls fun_decls type_params
 
 let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let fmt = bs_ctx_to_pp_ast_formatter ctx in
   let fmt = PrintPure.ast_to_type_formatter fmt in
   PrintPure.ty_to_string fmt ty
 
-let type_def_to_string (ctx : bs_ctx) (def : type_def) : string =
+let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let type_params = def.type_params in
-  let type_defs = ctx.type_context.cfim_type_defs in
-  let fmt = PrintPure.mk_type_formatter type_defs type_params in
-  PrintPure.type_def_to_string fmt def
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fmt = PrintPure.mk_type_formatter type_decls type_params in
+  PrintPure.type_decl_to_string fmt def
 
 let typed_rvalue_to_string (ctx : bs_ctx) (v : typed_rvalue) : string =
   let fmt = bs_ctx_to_pp_ast_formatter ctx in
@@ -141,22 +141,22 @@ let typed_rvalue_to_string (ctx : bs_ctx) (v : typed_rvalue) : string =
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let type_params = sg.type_params in
-  let type_defs = ctx.type_context.cfim_type_defs in
-  let fun_defs = ctx.fun_context.cfim_fun_defs in
-  let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fun_decls = ctx.fun_context.llbc_fun_decls in
+  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
   PrintPure.fun_sig_to_string fmt sg
 
-let fun_def_to_string (ctx : bs_ctx) (def : Pure.fun_def) : string =
+let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let type_params = def.signature.type_params in
-  let type_defs = ctx.type_context.cfim_type_defs in
-  let fun_defs = ctx.fun_context.cfim_fun_defs in
-  let fmt = PrintPure.mk_ast_formatter type_defs fun_defs type_params in
-  PrintPure.fun_def_to_string fmt def
+  let type_decls = ctx.type_context.llbc_type_decls in
+  let fun_decls = ctx.fun_context.llbc_fun_decls in
+  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
+  PrintPure.fun_decl_to_string fmt def
 
 (* TODO: move *)
 let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let fmt = bs_ctx_to_ast_formatter ctx in
-  let fmt = Print.CfimAst.ast_to_value_formatter fmt in
+  let fmt = Print.LlbcAst.ast_to_value_formatter fmt in
   let indent = "" in
   let indent_incr = "  " in
   Print.Values.abs_to_string fmt indent indent_incr abs
@@ -173,17 +173,18 @@ let get_instantiated_fun_sig (fun_id : A.fun_id)
   (* Apply *)
   fun_sig_substitute tsubst sg
 
-let bs_ctx_lookup_cfim_type_def (id : TypeDefId.id) (ctx : bs_ctx) : T.type_def
-    =
-  TypeDefId.Map.find id ctx.type_context.cfim_type_defs
+let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
+    T.type_decl =
+  TypeDeclId.Map.find id ctx.type_context.llbc_type_decls
 
-let bs_ctx_lookup_cfim_fun_def (id : FunDefId.id) (ctx : bs_ctx) : A.fun_def =
-  FunDefId.Map.find id ctx.fun_context.cfim_fun_defs
+let bs_ctx_lookup_llbc_fun_decl (id : FunDeclId.id) (ctx : bs_ctx) : A.fun_decl
+    =
+  FunDeclId.Map.find id ctx.fun_context.llbc_fun_decls
 
 (* TODO: move *)
-let bs_ctx_lookup_local_function_sig (def_id : FunDefId.id)
+let bs_ctx_lookup_local_function_sig (def_id : FunDeclId.id)
     (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
-  let id = (A.Local def_id, back_id) in
+  let id = (A.Regular def_id, back_id) in
   (RegularFunIdMap.find id ctx.fun_context.fun_sigs).sg
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
@@ -264,24 +265,25 @@ let translate_variants (vl : T.variant list) : variant list =
   List.map translate_variant vl
 
 (** Translate a type def kind to IM *)
-let translate_type_def_kind (kind : T.type_def_kind) : type_def_kind =
+let translate_type_decl_kind (kind : T.type_decl_kind) : type_decl_kind =
   match kind with
   | T.Struct fields -> Struct (translate_fields fields)
   | T.Enum variants -> Enum (translate_variants variants)
+  | T.Opaque -> Opaque
 
 (** Translate a type definition from IM 
 
     TODO: this is not symbolic to pure but IM to pure. Still, I don't see the
     point of moving this definition for now.
  *)
-let translate_type_def (def : T.type_def) : type_def =
+let translate_type_decl (def : T.type_decl) : type_decl =
   (* Translate *)
   let def_id = def.T.def_id in
   let name = def.name in
   (* Can't translate types with regions for now *)
   assert (def.region_params = []);
   let type_params = def.type_params in
-  let kind = translate_type_def_kind def.T.kind in
+  let kind = translate_type_decl_kind def.T.kind in
   { def_id; name; type_params; kind }
 
 (** Translate a type, seen as an input/output of a forward function
@@ -940,7 +942,7 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
  *)
 let fun_is_monadic (fun_id : A.fun_id) : bool =
   match fun_id with
-  | A.Local _ -> true
+  | A.Regular _ -> true
   | A.Assumed aid -> Assumed.assumed_is_monadic aid
 
 let rec translate_expression (config : config) (e : S.expression) (ctx : bs_ctx)
@@ -1292,8 +1294,8 @@ and translate_expansion (config : config) (p : S.mplace option)
           match type_id with
           | T.AdtId adt_id ->
               (* Detect if this is an enumeration or not *)
-              let tdef = bs_ctx_lookup_cfim_type_def adt_id ctx in
-              let is_enum = type_def_is_enum tdef in
+              let tdef = bs_ctx_lookup_llbc_type_decl adt_id ctx in
+              let is_enum = type_decl_is_enum tdef in
               if is_enum then
                 (* This is an enumeration: introduce an [ExpandEnum] let-binding *)
                 let variant_id = Option.get variant_id in
@@ -1441,57 +1443,65 @@ and translate_meta (config : config) (meta : S.meta) (e : S.expression)
   let ty = next_e.ty in
   { e; ty }
 
-let translate_fun_def (config : config) (ctx : bs_ctx) (body : S.expression) :
-    fun_def =
-  let def = ctx.fun_def in
+let translate_fun_decl (config : config) (ctx : bs_ctx)
+    (body : S.expression option) : fun_decl =
+  let def = ctx.fun_decl in
   let bid = ctx.bid in
   log#ldebug
     (lazy
-      ("SymbolicToPure.translate_fun_def: "
+      ("SymbolicToPure.translate_fun_decl: "
       ^ Print.fun_name_to_string def.A.name
       ^ " ("
       ^ Print.option_to_string T.RegionGroupId.to_string bid
       ^ ")"));
 
-  (* Translate the function *)
+  (* Translate the declaration *)
   let def_id = def.A.def_id in
   let basename = def.name in
   let signature = bs_ctx_lookup_local_function_sig def_id bid ctx in
-  let body = translate_expression config body ctx in
-  (* Compute the list of (properly ordered) input variables *)
-  let backward_inputs : var list =
-    match bid with
-    | None -> []
-    | Some back_id ->
-        let parents_ids =
-          list_ordered_parent_region_groups def.signature back_id
+  (* Translate the body, if there is *)
+  let body =
+    match body with
+    | None -> None
+    | Some body ->
+        let body = translate_expression config body ctx in
+        (* Compute the list of (properly ordered) input variables *)
+        let backward_inputs : var list =
+          match bid with
+          | None -> []
+          | Some back_id ->
+              let parents_ids =
+                list_ordered_parent_region_groups def.signature back_id
+              in
+              let backward_ids = List.append parents_ids [ back_id ] in
+              List.concat
+                (List.map
+                   (fun id -> T.RegionGroupId.Map.find id ctx.backward_inputs)
+                   backward_ids)
         in
-        let backward_ids = List.append parents_ids [ back_id ] in
-        List.concat
-          (List.map
-             (fun id -> T.RegionGroupId.Map.find id ctx.backward_inputs)
-             backward_ids)
+        let inputs = List.append ctx.forward_inputs backward_inputs in
+        let inputs_lvs =
+          List.map (fun v -> mk_typed_lvalue_from_var v None) inputs
+        in
+        (* Sanity check *)
+        assert (
+          List.for_all
+            (fun (var, ty) -> (var : var).ty = ty)
+            (List.combine inputs signature.inputs));
+        Some { inputs; inputs_lvs; body }
   in
-  let inputs = List.append ctx.forward_inputs backward_inputs in
-  let inputs_lvs = List.map (fun v -> mk_typed_lvalue_from_var v None) inputs in
-  (* Sanity check *)
-  assert (
-    List.for_all
-      (fun (var, ty) -> (var : var).ty = ty)
-      (List.combine inputs signature.inputs));
-  let def =
-    { def_id; back_id = bid; basename; signature; inputs; inputs_lvs; body }
-  in
+  (* Assemble the declaration *)
+  let def = { def_id; back_id = bid; basename; signature; body } in
   (* Debugging *)
   log#ldebug
     (lazy
-      ("SymbolicToPure.translate_fun_def: translated:\n"
-     ^ fun_def_to_string ctx def));
+      ("SymbolicToPure.translate_fun_decl: translated:\n"
+     ^ fun_decl_to_string ctx def));
   (* return *)
   def
 
-let translate_type_defs (type_defs : T.type_def list) : type_def list =
-  List.map translate_type_def type_defs
+let translate_type_decls (type_decls : T.type_decl list) : type_decl list =
+  List.map translate_type_decl type_decls
 
 (** Translates function signatures.
 

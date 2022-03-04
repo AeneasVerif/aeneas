@@ -1,4 +1,4 @@
-open CfimAst
+open LlbcAst
 open Utils
 module T = Types
 
@@ -16,19 +16,22 @@ let statement_has_loops (st : statement) : bool =
     false
   with Found -> true
 
-(** Check if a [fun_def] contains loops *)
-let fun_def_has_loops (fd : fun_def) : bool = statement_has_loops fd.body
+(** Check if a [fun_decl] contains loops *)
+let fun_decl_has_loops (fd : fun_decl) : bool =
+  match fd.body with
+  | Some body -> statement_has_loops body.body
+  | None -> false
 
-let lookup_fun_sig (fun_id : fun_id) (fun_defs : fun_def FunDefId.Map.t) :
+let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     fun_sig =
   match fun_id with
-  | Local id -> (FunDefId.Map.find id fun_defs).signature
+  | Regular id -> (FunDeclId.Map.find id fun_decls).signature
   | Assumed aid -> Assumed.get_assumed_sig aid
 
-let lookup_fun_name (fun_id : fun_id) (fun_defs : fun_def FunDefId.Map.t) :
-    Identifiers.fun_name =
+let lookup_fun_name (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
+    Names.fun_name =
   match fun_id with
-  | Local id -> (FunDefId.Map.find id fun_defs).name
+  | Regular id -> (FunDeclId.Map.find id fun_decls).name
   | Assumed aid -> Assumed.get_assumed_name aid
 
 (** Small utility: list the transitive parents of a region var group.
@@ -64,6 +67,6 @@ let list_ordered_parent_region_groups (sg : fun_sig) (gid : T.RegionGroupId.id)
   let parents = List.map (fun (rg : T.region_var_group) -> rg.id) parents in
   parents
 
-let fun_def_get_input_vars (fdef : fun_def) : var list =
-  let locals = List.tl fdef.locals in
-  Collections.List.prefix fdef.arg_count locals
+let fun_body_get_input_vars (fbody : fun_body) : var list =
+  let locals = List.tl fbody.locals in
+  Collections.List.prefix fbody.arg_count locals

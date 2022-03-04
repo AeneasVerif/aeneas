@@ -1,8 +1,9 @@
 open Identifiers
+open Names
 
 module TypeVarId = IdGen ()
 
-module TypeDefId = IdGen ()
+module TypeDeclId = IdGen ()
 
 module VariantId = IdGen ()
 
@@ -101,7 +102,7 @@ let option_some_id = VariantId.of_int 1
     ADTs are very general in our encoding: they account for "regular" ADTs,
     tuples and also assumed types.
 *)
-type type_id = AdtId of TypeDefId.id | Tuple | Assumed of assumed_ty
+type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 [@@deriving show, ord]
 
 (** Ancestor for iter visitor for [ty] *)
@@ -198,15 +199,19 @@ type field = { field_name : string option; field_ty : sty } [@@deriving show]
 
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 
-type type_def_kind = Struct of field list | Enum of variant list
+type type_decl_kind =
+  | Struct of field list
+  | Enum of variant list
+  | Opaque
+      (** An opaque type: either a local type marked as opaque, or an external type *)
 [@@deriving show]
 
-type type_def = {
-  def_id : TypeDefId.id;
+type type_decl = {
+  def_id : TypeDeclId.id;
   name : type_name;
   region_params : region_var list;
   type_params : type_var list;
-  kind : type_def_kind;
+  kind : type_decl_kind;
   regions_hierarchy : region_var_groups;
       (** Stores the hierarchy between the regions (which regions have the
           same lifetime, which lifetime should end before which other lifetime,

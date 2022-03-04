@@ -3,11 +3,11 @@ module V = Values
 module E = Expressions
 module C = Contexts
 module Subst = Substitute
-module A = CfimAst
+module A = LlbcAst
 module L = Logging
 open Utils
 open TypesUtils
-module PA = Print.EvalCtxCfimAst
+module PA = Print.EvalCtxLlbcAst
 
 (** Some utilities *)
 

@@ -1,7 +1,8 @@
+;; core: for Core.Unix.mkdir_p
 (executable
  (name main)
  (preprocess (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
- (libraries ppx_deriving yojson zarith easy_logging))
+ (libraries ppx_deriving yojson zarith easy_logging core))
 
 (env
   (dev (flags

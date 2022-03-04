@@ -45,7 +45,7 @@ type term =
           Otherwise, we can use `App` (with the record constructor).
        *)
 
-type fun_def = {
+type fun_decl = {
   name : string;
   inputs : pattern list;
       (** We can match over the inputs, hence the use of [pattern]. In practice,

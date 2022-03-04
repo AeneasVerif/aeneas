@@ -11,7 +11,7 @@ module T = Types
 module TU = TypesUtils
 module V = Values
 module E = Expressions
-module A = CfimAst
+module A = LlbcAst
 module C = Contexts
 module M = Modules
 open SymbolicAst
@@ -20,7 +20,7 @@ module PT = Print.Types
 
 type formatting_ctx = {
   type_context : C.type_context;
-  fun_context : A.fun_def A.FunDefId.Map.t;
+  fun_context : A.fun_decl A.FunDeclId.Map.t;
   type_vars : T.type_var list;
 }
 
@@ -35,24 +35,24 @@ let formatting_ctx_to_formatter (ctx : formatting_ctx) : formatter =
     let v = T.TypeVarId.nth ctx.type_vars vid in
     v.name
   in
-  let type_def_id_to_string def_id =
-    let def = T.TypeDefId.Map.find def_id ctx.type_context.type_defs in
+  let type_decl_id_to_string def_id =
+    let def = T.TypeDeclId.Map.find def_id ctx.type_context.type_decls in
     P.name_to_string def.name
   in
   let adt_variant_to_string =
-    P.Contexts.type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_defs
+    P.Contexts.type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_decls
   in
   (* We shouldn't use [var_id_to_string] *)
   let var_id_to_string _ = failwith "Unexpected use of var_id_to_string" in
 
   let adt_field_names =
-    P.Contexts.type_ctx_to_adt_field_names_fun ctx.type_context.type_defs
+    P.Contexts.type_ctx_to_adt_field_names_fun ctx.type_context.type_decls
   in
   {
     rvar_to_string;
     r_to_string;
     type_var_id_to_string;
-    type_def_id_to_string;
+    type_decl_id_to_string;
     adt_variant_to_string;
     var_id_to_string;
     adt_field_names;

@@ -2,9 +2,12 @@ all: build-test
 
 CHARON_HOME = ../charon
 CHARON_EXEC = $(CHARON_HOME)/charon
-CHARON_TESTS_DIR = $(CHARON_HOME)/tests/cfim
-CHARON_OPTIONS = --dest ../tests/cfim --no-code-duplication
 DEST_DIR = tests
+
+# We use those variables, whose definition depends on the rule we apply
+CHARON_TESTS_DIR =
+CHARON_OPTIONS =
+CHARON_TESTS_SRC =
 
 # The user can specify additional translation options for Aeneas:
 OPTIONS ?=
@@ -26,24 +29,45 @@ build:
 
 # Test the project
 .PHONY: test
-test: build translate-no_nested_borrows translate-hashmap translate-paper
+test: build trans-no_nested_borrows trans-paper \
+	trans-hashmap trans-hashmap_main \
+	trans-external trans-nll-betree_nll
 
 # Add specific options to some tests
-translate-no_nested_borrows translate-paper: \
-	TRANS_OPTIONS:=$(TRANS_OPTIONS) -test-units -no-split-files -no-state -no-decreases-clauses
-translate-no_nested_borrows translate-paper: SUBDIR:=misc
-translate-hashmap: TRANS_OPTIONS:=$(TRANS_OPTIONS) -template-clauses -no-state
-translate-hashmap: SUBDIR:=hashmap
+trans-no_nested_borrows trans-paper: \
+	TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
+trans-no_nested_borrows trans-paper: SUBDIR:=misc
 
-# Generic rule to extract the CFIM from a rust file
-.PHONY: gen-cfim-%
-gen-cfim-%: build
-	cd $(CHARON_HOME)/charon && cargo run ../tests/src/$*.rs $(CHARON_OPTIONS)
+trans-hashmap: TRANS_OPTIONS += -template-clauses -no-state
+trans-hashmap: SUBDIR:=hashmap
 
-# Generic rule to test the translation on a CFIM file
-.PHONY: translate-%
-translate-%: gen-cfim-%
-	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.cfim -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
+trans-hashmap_main: TRANS_OPTIONS += -template-clauses
+trans-hashmap_main: SUBDIR:=hashmap_on_disk
+
+trans-nll-betree_nll: TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
+trans-nll-betree_nll: SUBDIR:=misc
+
+trans-external: TRANS_OPTIONS +=
+trans-external: SUBDIR:=misc
+
+# Generic rules to extract the LLBC from a rust file
+# We use the rules in Charon's Makefile to generate the .llbc files: the options
+# vary with the test files.
+.PHONY: gen-llbc-%
+gen-llbc-%: build
+	cd $(CHARON_HOME) && make test-$*
+
+# Generic rule to test the translation of an LLBC file.
+# Note that the non-linear lifetime files are generated in the tests-nll subdirectory.
+.PHONY: trans-%
+trans-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/llbc
+trans-nll-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-nll/llbc
+
+trans-%: gen-llbc-%
+	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
+
+trans-nll-%: gen-llbc-nll-%
+	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
 .PHONY: doc
 doc:

@@ -1,8 +1,8 @@
-open CfimOfJson
+open LlbcOfJson
 open Logging
 open Print
 module T = Types
-module A = CfimAst
+module A = LlbcAst
 module I = Interpreter
 module EL = Easy_logging.Logging
 module TA = TypesAnalysis
@@ -10,7 +10,7 @@ module Micro = PureMicroPasses
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
- * JP: are you running with OCAMLRUNPARAM=b=1? *)
+ * TODO: run with OCAMLRUNPARAM=b=1? *)
 let () = Printexc.record_backtrace true
 
 let usage =
@@ -102,7 +102,8 @@ let () =
   let filename =
     match !filenames with
     | [ f ] ->
-        if not (Filename.check_suffix f ".cfim") then (
+        (* TODO: update the extension *)
+        if not (Filename.check_suffix f ".llbc") then (
           print_string "Unrecognized file extension";
           fail ())
         else if not (Sys.file_exists f) then (
@@ -123,7 +124,7 @@ let () =
    * command-line arguments *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Info;
   main_log#set_level EL.Info;
-  cfim_of_json_logger#set_level EL.Info;
+  llbc_of_json_logger#set_level EL.Info;
   pre_passes_log#set_level EL.Info;
   interpreter_log#set_level EL.Info;
   statements_log#set_level EL.Info;
@@ -139,7 +140,7 @@ let () =
   translate_log#set_level EL.Info;
   (* Load the module *)
   let json = Yojson.Basic.from_file filename in
-  match cfim_module_of_json json with
+  match llbc_module_of_json json with
   | Error s ->
       main_log#error "error: %s\n" s;
       exit 1

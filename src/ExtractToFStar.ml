@@ -13,13 +13,18 @@ module F = Format
     Controls whether we should use `type ...` or `and ...` (for mutually
     recursive datatypes).
  *)
-type type_def_qualif = Type | And
+type type_decl_qualif =
+  | Type  (** `type t = ...` *)
+  | And  (** `type t0 = ... and t1 = ...` *)
+  | AssumeType  (** `assume type t` *)
+  | TypeVal  (** In an fsti: `val t : Type0` *)
 
 (** A qualifier for function definitions.
 
-    Controls whether we should use `let ...`, `let rec ...` or `and ...`
+    Controls whether we should use `let ...`, `let rec ...` or `and ...`,
+    or only generate a declaration with `val` or `assume val`
  *)
-type fun_def_qualif = Let | LetRec | And
+type fun_decl_qualif = Let | LetRec | And | Val | AssumeVal
 
 (** Small helper to compute the name of an int type *)
 let fstar_int_name (int_ty : integer_type) =
@@ -212,26 +217,42 @@ let fstar_extract_binop (extract_expr : bool -> texpression -> unit)
  * up type checking. Note that some languages actually forbids the name clashes
  * (it is the case of F* ).
  *)
-let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
-    formatter =
+let mk_formatter (ctx : trans_ctx) (crate_name : string)
+    (variant_concatenate_type_name : bool) : formatter =
   let int_name = fstar_int_name in
 
-  (* For now, we treat only the case where type names are of the
-   * form: `Module::Type`
+  (* Prepare a name.
+   * The first id elem is always the crate: if it is the local crate,
+   * we remove it.
+   * We also remove all the disambiguators which are 0, then convert
+   * everything to strings.
    *)
-  let get_type_name (name : name) : string =
+  let get_name (name : name) : string list =
+    let name = Names.filter_disambiguators_zero name in
     match name with
-    | [ _module; name ] -> name
+    | Ident crate :: name ->
+        let name = if crate = crate_name then name else Ident crate :: name in
+        let name =
+          List.map
+            (function
+              | Names.Ident s -> s
+              | Disambiguator d -> Names.Disambiguator.to_string d)
+            name
+        in
+        name
     | _ ->
         raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
   in
+  let get_type_name = get_name in
   let type_name_to_camel_case name =
     let name = get_type_name name in
-    to_camel_case name
+    let name = List.map to_camel_case name in
+    String.concat "" name
   in
   let type_name_to_snake_case name =
     let name = get_type_name name in
-    to_snake_case name
+    let name = List.map to_snake_case name in
+    String.concat "_" name
   in
   let type_name name = type_name_to_snake_case name ^ "_t" in
   let field_name (def_name : name) (field_id : FieldId.id)
@@ -251,34 +272,25 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     let tname = type_name basename in
     "Mk" ^ tname
   in
-  (* For now, we treat only the case where function names are of the
-   * form:
-   * `module::function` (if top function)
-   * `module::Type::function` (for implementations)
-   *)
-  let get_fun_name (name : fun_name) : string =
-    match name with
-    | Regular [ _module; name ] -> name
-    | Impl ([ _module; ty ], _, name) -> to_snake_case ty ^ "_" ^ name
-    | _ ->
-        raise
-          (Failure ("Unexpected name shape: " ^ Print.fun_name_to_string name))
+  let get_fun_name = get_name in
+  let fun_name_to_snake_case (fname : fun_name) : string =
+    let fname = get_fun_name fname in
+    (* Converting to snake case should be a no-op, but it doesn't cost much *)
+    let fname = List.map to_snake_case fname in
+    (* Concatenate the elements *)
+    String.concat "_" fname
   in
   let fun_name (_fid : A.fun_id) (fname : fun_name) (num_rgs : int)
       (rg : region_group_info option) (filter_info : bool * int) : string =
-    let fname = get_fun_name fname in
-    (* Converting to snake case should be a no-op, but it doesn't cost much *)
-    let fname = to_snake_case fname in
+    let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
     let suffix = default_fun_suffix num_rgs rg filter_info in
     (* Concatenate *)
     fname ^ suffix
   in
 
-  let decreases_clause_name (_fid : FunDefId.id) (fname : fun_name) : string =
-    let fname = get_fun_name fname in
-    (* Converting to snake case should be a no-op, but it doesn't cost much *)
-    let fname = to_snake_case fname in
+  let decreases_clause_name (_fid : FunDeclId.id) (fname : fun_name) : string =
+    let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
     let suffix = "_decreases" in
     (* Concatenate *)
@@ -306,15 +318,18 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
             | Assumed State -> "st"
             | AdtId adt_id ->
                 let def =
-                  TypeDefId.Map.find adt_id ctx.type_context.type_defs
+                  TypeDeclId.Map.find adt_id ctx.type_context.type_decls
                 in
                 (* We do the following:
-                 * - convert to snake_case
+                 * - compute the type name, and retrieve the last ident
+                 * - convert this to snake case
                  * - take the first letter of every "letter group"
-                 * Ex.: "TypeVar" -> "type_var" -> "tv"
+                 * Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
                  *)
-                let cl = get_type_name def.name in
-                let cl = StringUtils.to_snake_case cl in
+                (* Thename shouldn't be empty, and its last element should
+                 * be an ident *)
+                let cl = List.nth def.name (List.length def.name - 1) in
+                let cl = to_snake_case (Names.as_ident cl) in
                 let cl = String.split_on_char '_' cl in
                 let cl = List.filter (fun s -> String.length s > 0) cl in
                 assert (List.length cl > 0);
@@ -424,10 +439,10 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     We need to do this preemptively, beforce extracting any definition,
     because of recursive definitions.
  *)
-let extract_type_def_register_names (ctx : extraction_ctx) (def : type_def) :
+let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
   (* Compute and register the type def name *)
-  let ctx = ctx_add_type_def def ctx in
+  let ctx = ctx_add_type_decl def ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -447,12 +462,15 @@ let extract_type_def_register_names (ctx : extraction_ctx) (def : type_def) :
           (ctx_add_variants def
              (VariantId.mapi (fun id v -> (id, v)) variants)
              ctx)
+    | Opaque ->
+        (* Nothing to do *)
+        ctx
   in
   (* Return *)
   ctx
 
-let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : type_def) (fields : field list) : unit =
+let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
+    (def : type_decl) (fields : field list) : unit =
   (* We want to generate a definition which looks like this:
    * ```
    * type t = { x : int; y : bool; }
@@ -509,8 +527,8 @@ let extract_type_def_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ();
     F.pp_print_string fmt "}")
 
-let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : type_def) (def_name : string) (type_params : string list)
+let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
+    (def : type_decl) (def_name : string) (type_params : string list)
     (variants : variant list) : unit =
   (* We want to generate a definition which looks like this:
    * ```
@@ -609,13 +627,13 @@ let extract_type_def_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   let variants = VariantId.mapi (fun vid v -> (vid, v)) variants in
   List.iter (fun (vid, v) -> print_variant vid v) variants
 
-(** Extract a type definition.
+(** Extract a type declaration.
 
     Note that all the names used for extraction should already have been
     registered.
  *)
-let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : type_def_qualif) (def : type_def) : unit =
+let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (qualif : type_decl_qualif) (def : type_decl) : unit =
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.def_id ctx in
   (* Add the type params - note that we need those bindings only for the
@@ -632,7 +650,13 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let qualif = match qualif with Type -> "type" | And -> "and" in
+  let extract_body, qualif =
+    match qualif with
+    | Type -> (true, "type")
+    | And -> (true, "and")
+    | AssumeType -> (false, "assume type")
+    | TypeVal -> (false, "val")
+  in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   (* Print the type parameters *)
   if def.type_params <> [] then (
@@ -647,15 +671,64 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
     F.pp_print_string fmt "Type0)");
-  (* Print the "=" *)
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "=";
+  (* Print the "=" if we extract the body*)
+  if extract_body then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "=")
+  else (
+    (* Otherwise print ": Type0" *)
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "Type0");
   (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_close_box fmt ();
-  (match def.kind with
-  | Struct fields -> extract_type_def_struct_body ctx_body fmt def fields
-  | Enum variants ->
-      extract_type_def_enum_body ctx_body fmt def def_name type_params variants);
+  (if extract_body then
+   match def.kind with
+   | Struct fields -> extract_type_decl_struct_body ctx_body fmt def fields
+   | Enum variants ->
+       extract_type_decl_enum_body ctx_body fmt def def_name type_params
+         variants
+   | Opaque -> raise (Failure "Unreachable"));
+  (* Close the box for the definition *)
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
+
+(** Extract the state type declaration. *)
+let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
+    (qualif : type_decl_qualif) : unit =
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Print a comment  *)
+  F.pp_print_string fmt "(** The state type used in the state-error monad *)";
+  F.pp_print_space fmt ();
+  (* Open a box for the definition, so that whenever possible it gets printed on
+   * one line *)
+  F.pp_open_hvbox fmt 0;
+  (* Retrieve the name *)
+  let state_name = ctx_get_assumed_type State ctx in
+  (* The qualif should be `AssumeType` or `TypeVal` *)
+  (match qualif with
+  | Type | And -> raise (Failure "Unexpected")
+  | AssumeType ->
+      F.pp_print_string fmt "assume";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "type";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt state_name;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "Type0"
+  | TypeVal ->
+      F.pp_print_string fmt "val";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt state_name;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "Type0");
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
@@ -664,7 +737,7 @@ let extract_type_def (ctx : extraction_ctx) (fmt : F.formatter)
 (** Compute the names for all the pure functions generated from a rust function
     (forward function and backward functions).
  *)
-let extract_fun_def_register_names (ctx : extraction_ctx) (keep_fwd : bool)
+let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     (has_decreases_clause : bool) (def : pure_fun_translation) : extraction_ctx
     =
   let fwd, back_ls = def in
@@ -673,11 +746,11 @@ let extract_fun_def_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     if has_decreases_clause then ctx_add_decrases_clause fwd ctx else ctx
   in
   (* Register the forward function name *)
-  let ctx = ctx_add_fun_def (keep_fwd, def) fwd ctx in
+  let ctx = ctx_add_fun_decl (keep_fwd, def) fwd ctx in
   (* Register the backward functions' names *)
   let ctx =
     List.fold_left
-      (fun ctx back -> ctx_add_fun_def (keep_fwd, def) back ctx)
+      (fun ctx back -> ctx_add_fun_decl (keep_fwd, def) back ctx)
       ctx back_ls
   in
   (* Return *)
@@ -986,7 +1059,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     - the previous context augmented with bindings for the input values
  *)
 let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : fun_def) : extraction_ctx * extraction_ctx =
+    (def : fun_decl) : extraction_ctx * extraction_ctx =
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, _ = ctx_add_type_params def.signature.type_params ctx in
@@ -1011,24 +1084,44 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ());
   (* The input parameters - note that doing this adds bindings to the context *)
   let ctx_body =
-    List.fold_left
-      (fun ctx (lv : typed_lvalue) ->
-        (* Open a box for the input parameter *)
-        F.pp_open_hovbox fmt 0;
-        F.pp_print_string fmt "(";
-        let ctx = extract_typed_lvalue ctx fmt false lv in
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt ":";
-        F.pp_print_space fmt ();
-        extract_ty ctx fmt false lv.ty;
-        F.pp_print_string fmt ")";
-        (* Close the box for the input parameters *)
-        F.pp_close_box fmt ();
-        F.pp_print_space fmt ();
-        ctx)
-      ctx def.inputs_lvs
+    match def.body with
+    | None -> ctx
+    | Some body ->
+        List.fold_left
+          (fun ctx (lv : typed_lvalue) ->
+            (* Open a box for the input parameter *)
+            F.pp_open_hovbox fmt 0;
+            F.pp_print_string fmt "(";
+            let ctx = extract_typed_lvalue ctx fmt false lv in
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt ":";
+            F.pp_print_space fmt ();
+            extract_ty ctx fmt false lv.ty;
+            F.pp_print_string fmt ")";
+            (* Close the box for the input parameters *)
+            F.pp_close_box fmt ();
+            F.pp_print_space fmt ();
+            ctx)
+          ctx body.inputs_lvs
   in
   (ctx, ctx_body)
+
+(** A small utility to print the types of the input parameters in the form:
+    `u32 -> list u32 -> ...`
+    (we don't print the return type of the function)
+    
+    This is used for opaque function declarations, in particular.
+ *)
+let extract_fun_input_parameters_types (ctx : extraction_ctx)
+    (fmt : F.formatter) (def : fun_decl) : unit =
+  let extract_param (ty : ty) : unit =
+    let inside = false in
+    extract_ty ctx fmt inside ty;
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "->";
+    F.pp_print_space fmt ()
+  in
+  List.iter extract_param def.signature.inputs
 
 (** Extract a decrease clause function template body.
 
@@ -1045,7 +1138,7 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     ```
  *)
 let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : fun_def) : unit =
+    (def : fun_decl) : unit =
   (* Retrieve the function name *)
   let def_name = ctx_get_decreases_clause def.def_id ctx in
   (* Add a break before *)
@@ -1088,7 +1181,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
-(** Extract a function definition.
+(** Extract a function declaration.
 
     Note that all the names used for extraction should already have been
     registered.
@@ -1097,9 +1190,9 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     equal to the definition to extract, if we extract a forward function) because
     it is useful for the decrease clause.
  *)
-let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : fun_def_qualif) (has_decreases_clause : bool) (fwd_def : fun_def)
-    (def : fun_def) : unit =
+let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (qualif : fun_decl_qualif) (has_decreases_clause : bool)
+    (has_state_param : bool) (fwd_def : fun_decl) (def : fun_decl) : unit =
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* (* Add the type parameters - note that we need those bindings only for the
@@ -1117,8 +1210,14 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
+  let is_opaque = Option.is_none def.body in
   let qualif =
-    match qualif with Let -> "let" | LetRec -> "let rec" | And -> "and"
+    match qualif with
+    | Let -> "let"
+    | LetRec -> "let rec"
+    | And -> "and"
+    | Val -> "val"
+    | AssumeVal -> "AssumeVal"
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   F.pp_print_space fmt ();
@@ -1142,6 +1241,10 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     (* Open a box for the return type *)
     F.pp_open_hovbox fmt ctx.indent_incr;
     (* Print the return type *)
+    (* For opaque definitions, as we don't have named parameters under the hand,
+     * we don't print parameters in the form `(x : a) (y : b) ...` above,
+     * but wait until here to print the types: `a -> b -> ...`. *)
+    if is_opaque then extract_fun_input_parameters_types ctx fmt def;
     (* `Tot` *)
     if has_decreases_clause then (
       F.pp_print_string fmt "Tot";
@@ -1150,7 +1253,8 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
       (Collections.List.to_cons_nil def.signature.outputs);
     (* Close the box for the return type *)
     F.pp_close_box fmt ();
-    (* Print the decrease clause *)
+    (* Print the decrease clause - rk.: a function with a decreases clause
+     * is necessarily a transparent function *)
     if has_decreases_clause then (
       F.pp_print_space fmt ();
       (* Open a box for the decrease clause *)
@@ -1174,9 +1278,31 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
        * function (the additional input values "given back" to the
        * backward functions have no influence on termination: we thus
        * share the decrease clauses between the forward and the backward
-       * functions) *)
+       * functions).
+       * Something annoying is that there may be a state parameter, for
+       * the state-error monad, in which case we need to forget the input
+       * parameter before last:
+       * ```
+       * val f_fwd (x : u32) (st : state) :
+       *   Tot (result (state & u32)) (decreases (f_decreases x st))
+       *
+       *              We ignore this parameter
+       *                       VVV
+       * val f_back (x : u32) (ret : u32) (st : state) :
+       *   Tot (result (state & u32)) (decreases (f_decreases x st))
+       * ```
+       * Rk.: if a function has a decreases clause, it is necessarily
+       * a transparent function *)
       let inputs_lvs =
-        Collections.List.prefix (List.length fwd_def.inputs_lvs) def.inputs_lvs
+        let num_fwd_inputs = List.length (Option.get fwd_def.body).inputs_lvs in
+        let num_fwd_inputs =
+          if has_state_param then num_fwd_inputs - 1 else num_fwd_inputs
+        in
+        let all_inputs = (Option.get def.body).inputs_lvs in
+        let inputs = Collections.List.prefix num_fwd_inputs all_inputs in
+        if has_state_param then
+          inputs @ [ List.nth all_inputs (List.length all_inputs - 1) ]
+        else inputs
       in
       let _ =
         List.fold_left
@@ -1193,19 +1319,23 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ()
   in
   (* Print the "=" *)
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "=";
+  if not is_opaque then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "=");
   (* Close the box for "(PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
   (* Close the box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
-  F.pp_print_space fmt ();
-  (* Open a box for the body *)
-  F.pp_open_hvbox fmt 0;
-  (* Extract the body *)
-  let _ = extract_texpression ctx_body fmt false false def.body in
-  (* Close the box for the body *)
-  F.pp_close_box fmt ();
+  if not is_opaque then (
+    F.pp_print_space fmt ();
+    (* Open a box for the body *)
+    F.pp_open_hvbox fmt 0;
+    (* Extract the body *)
+    let _ =
+      extract_texpression ctx_body fmt false false (Option.get def.body).body
+    in
+    (* Close the box for the body *)
+    F.pp_close_box fmt ());
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
@@ -1220,7 +1350,7 @@ let extract_fun_def (ctx : extraction_ctx) (fmt : F.formatter)
     ```
  *)
 let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : fun_def) : unit =
+    (def : fun_decl) : unit =
   (* We only insert unit tests for forward functions *)
   assert (def.back_id = None);
   (* Check if this is a unit function *)

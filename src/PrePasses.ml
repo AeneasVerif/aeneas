@@ -6,7 +6,7 @@ module T = Types
 module V = Values
 module E = Expressions
 module C = Contexts
-module A = CfimAst
+module A = LlbcAst
 module M = Modules
 module L = Logging
 
@@ -24,7 +24,7 @@ let log = L.pre_passes_log
     ```
 
  *)
-let filter_drop_assigns (f : A.fun_def) : A.fun_def =
+let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
   (* The visitor *)
   let obj =
     object (self)
@@ -42,9 +42,13 @@ let filter_drop_assigns (f : A.fun_def) : A.fun_def =
     end
   in
   (* Map  *)
-  let body = obj#visit_statement () f.body in
+  let body =
+    match f.body with
+    | Some body -> Some { body with body = obj#visit_statement () body.body }
+    | None -> None
+  in
   { f with body }
 
-let apply_passes (m : M.cfim_module) : M.cfim_module =
+let apply_passes (m : M.llbc_module) : M.llbc_module =
   let functions = List.map filter_drop_assigns m.functions in
   { m with functions }

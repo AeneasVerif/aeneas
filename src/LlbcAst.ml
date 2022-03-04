@@ -1,9 +1,10 @@
 open Identifiers
+open Names
 open Types
 open Values
 open Expressions
 
-module FunDefId = IdGen ()
+module FunDeclId = IdGen ()
 
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
@@ -32,7 +33,7 @@ type assumed_fun_id =
       (** `core::ops::index::IndexMut::index_mut<alloc::vec::Vec<T>, usize>` *)
 [@@deriving show, ord]
 
-type fun_id = Local of FunDefId.id | Assumed of assumed_fun_id
+type fun_id = Regular of FunDeclId.id | Assumed of assumed_fun_id
 [@@deriving show, ord]
 
 type assertion = { cond : operand; expected : bool } [@@deriving show]
@@ -169,19 +170,13 @@ and switch_targets =
         concrete = true;
       }]
 
-type fun_def = {
-  def_id : FunDefId.id;
+type fun_body = { arg_count : int; locals : var list; body : statement }
+[@@deriving show]
+
+type fun_decl = {
+  def_id : FunDeclId.id;
   name : fun_name;
   signature : fun_sig;
-  arg_count : int;
-  locals : var list;
-  body : statement;
+  body : fun_body option;
 }
 [@@deriving show]
-(** TODO: function definitions (and maybe type definitions in the future)
-  * contain information like `divergent`. I wonder if this information should
-  * be stored directly inside the definitions or inside separate maps/sets.
-  * Of course, if everything is stored in separate maps/sets, nothing
-  * prevents us from computing this info in Charon (and thus exporting directly
-  * it with the type/function defs), in which case we just have to implement special
-  * treatment when deserializing, to move the info to a separate map. *)

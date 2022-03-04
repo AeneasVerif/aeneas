@@ -28,11 +28,11 @@ type region_group_info = {
 module StringSet = Collections.MakeSet (Collections.OrderedString)
 module StringMap = Collections.MakeMap (Collections.OrderedString)
 
-type name = Identifiers.name
+type name = Names.name
 
-type type_name = Identifiers.type_name
+type type_name = Names.type_name
 
-type fun_name = Identifiers.fun_name
+type fun_name = Names.fun_name
 
 (* TODO: this should a module we give to a functor! *)
 type formatter = {
@@ -92,7 +92,7 @@ type formatter = {
             (`None` if forward function)
           TODO: use the fun id for the assumed functions.
        *)
-  decreases_clause_name : FunDefId.id -> fun_name -> string;
+  decreases_clause_name : FunDeclId.id -> fun_name -> string;
       (** Generates the name of the definition used to prove/reason about
           termination. The generated code uses this clause where needed,
           but its body must be defined by the user.
@@ -340,13 +340,13 @@ type extraction_ctx = {
 
 (** Debugging function *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
-  let fun_defs = ctx.trans_ctx.fun_context.fun_defs in
-  let type_defs = ctx.trans_ctx.type_context.type_defs in
+  let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
+  let type_decls = ctx.trans_ctx.type_context.type_decls in
   (* TODO: factorize the pretty-printing with what is in PrintPure *)
   let get_type_name (id : type_id) : string =
     match id with
     | AdtId id ->
-        let def = TypeDefId.Map.find id type_defs in
+        let def = TypeDeclId.Map.find id type_decls in
         Print.name_to_string def.name
     | Assumed aty -> show_assumed_ty aty
     | Tuple -> failwith "Unreachable"
@@ -355,8 +355,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | FunId (fid, rg_id) ->
       let fun_name =
         match fid with
-        | A.Local fid ->
-            Print.fun_name_to_string (FunDefId.Map.find fid fun_defs).name
+        | A.Regular fid ->
+            Print.fun_name_to_string (FunDeclId.Map.find fid fun_decls).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
       let fun_kind =
@@ -368,8 +368,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | DecreasesClauseId fid ->
       let fun_name =
         match fid with
-        | A.Local fid ->
-            Print.fun_name_to_string (FunDefId.Map.find fid fun_defs).name
+        | A.Regular fid ->
+            Print.fun_name_to_string (FunDeclId.Map.find fid fun_decls).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
       "decreases clause for function: " ^ fun_name
@@ -390,9 +390,9 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             else failwith "Unreachable"
         | Assumed Vec -> failwith "Unreachable"
         | AdtId id -> (
-            let def = TypeDefId.Map.find id type_defs in
+            let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
-            | Struct _ -> failwith "Unreachable"
+            | Struct _ | Opaque -> failwith "Unreachable"
             | Enum variants ->
                 let variant = VariantId.nth variants variant_id in
                 Print.name_to_string def.name ^ "::" ^ variant.variant_name)
@@ -407,9 +407,9 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             (* We can't directly have access to the fields of a vector *)
             failwith "Unreachable"
         | AdtId id -> (
-            let def = TypeDefId.Map.find id type_defs in
+            let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
-            | Enum _ -> failwith "Unreachable"
+            | Enum _ | Opaque -> failwith "Unreachable"
             | Struct fields ->
                 let field = FieldId.nth fields field_id in
                 let field_name =
@@ -444,15 +444,15 @@ let ctx_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
   ctx_get (FunId (id, rg)) ctx
 
-let ctx_get_local_function (id : FunDefId.id) (rg : RegionGroupId.id option)
+let ctx_get_local_function (id : FunDeclId.id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
-  ctx_get_function (A.Local id) rg ctx
+  ctx_get_function (A.Regular id) rg ctx
 
 let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> Tuple);
   ctx_get (TypeId id) ctx
 
-let ctx_get_local_type (id : TypeDefId.id) (ctx : extraction_ctx) : string =
+let ctx_get_local_type (id : TypeDeclId.id) (ctx : extraction_ctx) : string =
   ctx_get_type (AdtId id) ctx
 
 let ctx_get_assumed_type (id : assumed_ty) (ctx : extraction_ctx) : string =
@@ -475,9 +475,9 @@ let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
     (ctx : extraction_ctx) : string =
   ctx_get (VariantId (def_id, variant_id)) ctx
 
-let ctx_get_decreases_clause (def_id : FunDefId.id) (ctx : extraction_ctx) :
+let ctx_get_decreases_clause (def_id : FunDeclId.id) (ctx : extraction_ctx) :
     string =
-  ctx_get (DecreasesClauseId (A.Local def_id)) ctx
+  ctx_get (DecreasesClauseId (A.Regular def_id)) ctx
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
@@ -520,58 +520,62 @@ let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :
     (fun ctx (var : type_var) -> ctx_add_type_var var.name var.index ctx)
     ctx vars
 
-let ctx_add_type_def_struct (def : type_def) (ctx : extraction_ctx) :
+let ctx_add_type_decl_struct (def : type_decl) (ctx : extraction_ctx) :
     extraction_ctx * string =
   let cons_name = ctx.fmt.struct_constructor def.name in
   let ctx = ctx_add (StructId (AdtId def.def_id)) cons_name ctx in
   (ctx, cons_name)
 
-let ctx_add_type_def (def : type_def) (ctx : extraction_ctx) : extraction_ctx =
+let ctx_add_type_decl (def : type_decl) (ctx : extraction_ctx) : extraction_ctx
+    =
   let def_name = ctx.fmt.type_name def.name in
   let ctx = ctx_add (TypeId (AdtId def.def_id)) def_name ctx in
   ctx
 
-let ctx_add_field (def : type_def) (field_id : FieldId.id) (field : field)
+let ctx_add_field (def : type_decl) (field_id : FieldId.id) (field : field)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name = ctx.fmt.field_name def.name field_id field.field_name in
   let ctx = ctx_add (FieldId (AdtId def.def_id, field_id)) name ctx in
   (ctx, name)
 
-let ctx_add_fields (def : type_def) (fields : (FieldId.id * field) list)
+let ctx_add_fields (def : type_decl) (fields : (FieldId.id * field) list)
     (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (vid, v) -> ctx_add_field def vid v ctx)
     ctx fields
 
-let ctx_add_variant (def : type_def) (variant_id : VariantId.id)
+let ctx_add_variant (def : type_decl) (variant_id : VariantId.id)
     (variant : variant) (ctx : extraction_ctx) : extraction_ctx * string =
   let name = ctx.fmt.variant_name def.name variant.variant_name in
   let ctx = ctx_add (VariantId (AdtId def.def_id, variant_id)) name ctx in
   (ctx, name)
 
-let ctx_add_variants (def : type_def) (variants : (VariantId.id * variant) list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
+let ctx_add_variants (def : type_decl)
+    (variants : (VariantId.id * variant) list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (vid, v) -> ctx_add_variant def vid v ctx)
     ctx variants
 
-let ctx_add_struct (def : type_def) (ctx : extraction_ctx) :
+let ctx_add_struct (def : type_decl) (ctx : extraction_ctx) :
     extraction_ctx * string =
   let name = ctx.fmt.struct_constructor def.name in
   let ctx = ctx_add (StructId (AdtId def.def_id)) name ctx in
   (ctx, name)
 
-let ctx_add_decrases_clause (def : fun_def) (ctx : extraction_ctx) :
+let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
-  ctx_add (DecreasesClauseId (A.Local def.def_id)) name ctx
+  ctx_add (DecreasesClauseId (A.Regular def.def_id)) name ctx
 
-let ctx_add_fun_def (trans_group : bool * pure_fun_translation) (def : fun_def)
-    (ctx : extraction_ctx) : extraction_ctx =
+let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
+    (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Lookup the CFIM def to compute the region group information *)
   let def_id = def.def_id in
-  let cfim_def = FunDefId.Map.find def_id ctx.trans_ctx.fun_context.fun_defs in
-  let sg = cfim_def.signature in
+  let llbc_def =
+    FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls
+  in
+  let sg = llbc_def.signature in
   let num_rgs = List.length sg.regions_hierarchy in
   let keep_fwd, (_, backs) = trans_group in
   let num_backs = List.length backs in
@@ -590,7 +594,7 @@ let ctx_add_fun_def (trans_group : bool * pure_fun_translation) (def : fun_def)
         in
         Some { id = rg_id; region_names }
   in
-  let def_id = A.Local def_id in
+  let def_id = A.Regular def_id in
   let name =
     ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
   in
@@ -655,7 +659,7 @@ let initialize_names_map (init : names_map_init) : names_map =
   (* Return *)
   nm
 
-let compute_type_def_name (fmt : formatter) (def : type_def) : string =
+let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
   fmt.type_name def.name
 
 (** A helper function: generates a function suffix from a region group
