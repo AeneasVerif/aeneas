@@ -45,7 +45,7 @@ val deserialize_lem (st : state) : Lemma (
 
 /// The below proofs are trivial: we just prove that the hashmap insert function
 /// doesn't update the state... As F* is made for *intrinsic* proofs, we have to
-/// copy-paste the definitions and to insert the proper lemma calls wherever needed,
+/// copy-paste the definitions to insert the proper lemma calls wherever needed,
 /// hence the verbosity...
 
 #push-options "--fuel 1"
