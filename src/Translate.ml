@@ -355,6 +355,8 @@ type gen_config = {
       (** If `true`, extract the transparent declarations, otherwise ignore. *)
   extract_opaque : bool;
       (** If `true`, extract the opaque declarations, otherwise ignore. *)
+  extract_state_type : bool;
+      (** If `true`, generate a definition/declaration for the state type *)
   interface : bool;
       (** `true` if we generate an interface file, `false` otherwise.
           For now, this only impacts whether we use `val` or `assume val` for the
@@ -455,8 +457,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
      in
      List.iteri
        (fun i (fwd_def, def) ->
+         let is_opaque = Option.is_none fwd_def.Pure.body in
          let qualif =
-           if not is_rec then ExtractToFStar.Let
+           if is_opaque then
+             if config.interface then ExtractToFStar.Val
+             else ExtractToFStar.AssumeVal
+           else if not is_rec then ExtractToFStar.Let
            else if is_mut_rec then
              if i = 0 then ExtractToFStar.LetRec else ExtractToFStar.And
            else ExtractToFStar.LetRec
@@ -464,8 +470,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          let has_decr_clause =
            has_decreases_clause def && config.extract_decreases_clauses
          in
-         ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif
-           has_decr_clause fwd_def def)
+         (* Check if the definition needs to be filtered or not *)
+         if
+           ((not is_opaque) && config.extract_transparent)
+           || (is_opaque && config.extract_opaque)
+         then
+           ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif
+             has_decr_clause fwd_def def)
        fls);
     (* Insert unit tests if necessary *)
     if config.test_unit_functions then
@@ -474,6 +485,14 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           if keep_fwd then
             ExtractToFStar.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
         pure_ls
+  in
+
+  let export_state_type () : unit =
+    let qualif =
+      if config.interface then ExtractToFStar.TypeVal
+      else ExtractToFStar.AssumeType
+    in
+    ExtractToFStar.extract_state_type fmt ctx.extract_ctx qualif
   in
 
   let export_decl (decl : M.declaration_group) : unit =
@@ -505,7 +524,19 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         export_functions true pure_funs
   in
 
-  List.iter export_decl ctx.m.declarations
+  (* If we need to export the state type: we try to export it after we defined
+   * the type definitions, because if the user wants to define a model for the
+   * type, he might want to reuse them in the state type.
+   * More specifically: if we extract functions, we have no choice but to define
+   * the state type before the functions, because they may reuse this state
+   * type: in this case, we define/declare it at the very beginning. Otherwise,
+   * we define/declare it at the very end.
+   *)
+  if config.extract_state_type && config.extract_fun_decls then
+    export_state_type ();
+  List.iter export_decl ctx.m.declarations;
+  if config.extract_state_type && not config.extract_fun_decls then
+    export_state_type ()
 
 let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
     (rust_module_name : string) (module_name : string) (custom_msg : string)
@@ -550,7 +581,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
   (* Some logging *)
   log#linfo (lazy ("Generated: " ^ filename))
 
-(** Translate a module and write the synthesized code to an output file. *)
+(** Translate a module and write the synthesized code to an output file.
+    TODO: rename to translate_crate
+ *)
 let translate_module (filename : string) (dest_dir : string) (config : config)
     (m : M.llbc_module) : unit =
   (* Translate the module to the pure AST *)
@@ -649,6 +682,8 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     (* Create a directory with *default* permissions *)
     Core.Unix.mkdir_p dest_dir);
 
+  let use_state = config.mp_config.use_state_monad in
+
   (* Extract one or several files, depending on the configuration *)
   if config.split_files then (
     let base_gen_config =
@@ -659,6 +694,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         extract_fun_decls = false;
         extract_transparent = true;
         extract_opaque = false;
+        extract_state_type = false;
         interface = false;
         test_unit_functions = false;
       }
@@ -667,6 +703,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     (* Check if there are opaque types and functions - in which case we need
      * to split *)
     let has_opaque_types, has_opaque_funs = module_has_opaque_decls gen_ctx in
+    let has_opaque_types = has_opaque_types || use_state in
 
     (* Extract the types *)
     (* If there are opaque types, we extract in an interface *)
@@ -678,6 +715,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         base_gen_config with
         extract_types = true;
         extract_opaque = true;
+        extract_state_type = use_state;
         interface = has_opaque_types;
       }
     in
@@ -742,6 +780,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         extract_fun_decls = true;
         extract_transparent = true;
         extract_opaque = true;
+        extract_state_type = use_state;
         interface = false;
         test_unit_functions = config.test_unit_functions;
       }

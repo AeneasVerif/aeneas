@@ -623,7 +623,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   let variants = VariantId.mapi (fun vid v -> (vid, v)) variants in
   List.iter (fun (vid, v) -> print_variant vid v) variants
 
-(** Extract a type definition.
+(** Extract a type declaration.
 
     Note that all the names used for extraction should already have been
     registered.
@@ -686,6 +686,45 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
        extract_type_decl_enum_body ctx_body fmt def def_name type_params
          variants
    | Opaque -> raise (Failure "Unreachable"));
+  (* Close the box for the definition *)
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
+
+(** Extract the state type declaration. *)
+let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
+    (qualif : type_decl_qualif) : unit =
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Print a comment  *)
+  F.pp_print_string fmt "(** The state type used in the state-error monad *)";
+  F.pp_print_space fmt ();
+  (* Open a box for the definition, so that whenever possible it gets printed on
+   * one line *)
+  F.pp_open_hvbox fmt 0;
+  (* Retrieve the name *)
+  let state_name = ctx_get_assumed_type State ctx in
+  (* The qualif should be `AssumeType` or `TypeVal` *)
+  (match qualif with
+  | Type | And -> raise (Failure "Unexpected")
+  | AssumeType ->
+      F.pp_print_string fmt "assume";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "type";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt state_name;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "Type0"
+  | TypeVal ->
+      F.pp_print_string fmt "val";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt state_name;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "Type0");
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
@@ -1121,7 +1160,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
-(** Extract a function definition.
+(** Extract a function declaration.
 
     Note that all the names used for extraction should already have been
     registered.
