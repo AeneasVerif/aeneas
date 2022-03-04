@@ -723,10 +723,11 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       ": type definitions" [] [];
 
     (* Extract the template clauses *)
-    (if
-     config.extract_decreases_clauses
-     && config.extract_template_decreases_clauses
-    then
+    let needs_clauses_module =
+      config.extract_decreases_clauses
+      && not (Pure.FunDeclId.Set.is_empty rec_functions)
+    in
+    (if needs_clauses_module && config.extract_template_decreases_clauses then
      let clauses_filename = extract_filebasename ^ ".Clauses.Template.fst" in
      let clauses_module = module_name ^ ".Clauses.Template" in
      let clauses_config =
@@ -766,10 +767,12 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         test_unit_functions = config.test_unit_functions;
       }
     in
-    let clauses_module = module_name ^ ".Clauses" in
+    let clauses_module =
+      if needs_clauses_module then [ module_name ^ ".Clauses" ] else []
+    in
     extract_file fun_config gen_ctx fun_filename m.M.name fun_module
       ": function definitions" []
-      ([ types_module ] @ opaque_funs_module @ [ clauses_module ]))
+      ([ types_module ] @ opaque_funs_module @ clauses_module))
   else
     let gen_config =
       {
