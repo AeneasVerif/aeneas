@@ -9,6 +9,16 @@ open HashmapMain.Funs
 /// how such reasoning which mixes opaque functions together with a state-error
 /// monad can be performed.
 
+/// Also note that for now, whenever we want to use a state-error monad, we translate
+/// all the LLBC functions to pure functions living in the state-error monad (this
+/// is the reason why we regenerate all the hash map definitions for this example).
+/// 
+/// In the future, we will probably do some analysis to use the proper monad when
+/// generating the definitions (no monad if functions can't fail, error monad if
+/// they can fail but don't need manipulate the state, etc. in addition to proper
+/// lifting).
+
+
 (*** Hypotheses *)
 
 /// [state_v] gives us the hash map currently stored on disk
@@ -33,15 +43,10 @@ val deserialize_lem (st : state) : Lemma (
 
 (*** Lemmas - auxiliary *)
 
-/// The below proofs are trivial (and were done super quickly): we just prove that
-/// the hashmap insert function doesn't update the state... As F* is made for
-/// *intrinsic* proofs, we have to copy-paste the definitions and to insert the proper
-/// lemma calls wherever needed, hence the verbosity...
-
-/// We will probably do some analysis in the future to use the proper monad when
-/// generating the definitions (no monad if functions can't fail, error monad if
-/// they can fail but don't need manipulate the state, etc. in addition to proper
-/// lifting).
+/// The below proofs are trivial: we just prove that the hashmap insert function
+/// doesn't update the state... As F* is made for *intrinsic* proofs, we have to
+/// copy-paste the definitions and to insert the proper lemma calls wherever needed,
+/// hence the verbosity...
 
 #push-options "--fuel 1"
 let rec hashmap_hash_map_insert_in_list_fwd_lem
