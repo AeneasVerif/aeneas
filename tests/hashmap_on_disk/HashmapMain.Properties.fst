@@ -33,9 +33,10 @@ val deserialize_lem (st : state) : Lemma (
 
 (*** Lemmas - auxiliary *)
 
-/// The below proofs are trivial: we just prove that the hashmap insert function
-/// doesn't update the state... As F* is made for *intrinsic* proofs, we have
-/// to copy-paste the definitions, hence the huge verbosity...
+/// The below proofs are trivial (and were done super quickly): we just prove that
+/// the hashmap insert function doesn't update the state... As F* is made for
+/// *intrinsic* proofs, we have to copy-paste the definitions and to insert the proper
+/// lemma calls wherever needed, hence the verbosity...
 
 /// We will probably do some analysis in the future to use the proper monad when
 /// generating the definitions (no monad if functions can't fail, error monad if
@@ -269,9 +270,8 @@ let hashmap_hash_map_insert_back_lem
 
 (*** Lemmas *)
 
-
 /// The obvious lemma about [insert_on_disk]: the updated hash map stored on disk
-/// is exactly the hash map produced from inserting the binding ([key], [value]
+/// is exactly the hash map produced from inserting the binding ([key], [value])
 /// in the hash map previously stored on disk.
 val insert_on_disk_fwd_lem (key : usize) (value : u64) (st : state) : Lemma (
   match insert_on_disk_fwd key value st with
