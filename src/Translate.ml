@@ -347,6 +347,7 @@ type gen_ctx = {
 (** Extraction context *)
 
 type gen_config = {
+  mp_config : Micro.config;
   extract_types : bool;
   extract_decreases_clauses : bool;
   extract_template_decreases_clauses : bool;
@@ -470,13 +471,19 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          let has_decr_clause =
            has_decreases_clause def && config.extract_decreases_clauses
          in
+         (* Is there an input parameter "visible" for the state used in
+          * the state error monad (if we use a state error monad)? *)
+         let has_state_param =
+           config.mp_config.use_state_monad
+           && config.mp_config.unfold_monadic_let_bindings
+         in
          (* Check if the definition needs to be filtered or not *)
          if
            ((not is_opaque) && config.extract_transparent)
            || (is_opaque && config.extract_opaque)
          then
            ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif
-             has_decr_clause fwd_def def)
+             has_decr_clause has_state_param fwd_def def)
        fls);
     (* Insert unit tests if necessary *)
     if config.test_unit_functions then
@@ -579,7 +586,10 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
   Format.pp_print_newline fmt ();
 
   (* Some logging *)
-  log#linfo (lazy ("Generated: " ^ filename))
+  log#linfo (lazy ("Generated: " ^ filename));
+
+  (* Flush and close the file *)
+  close_out out
 
 (** Translate a module and write the synthesized code to an output file.
     TODO: rename to translate_crate
@@ -665,6 +675,30 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
          trans_funs)
   in
 
+  (* Create the directory, if necessary *)
+  if not (Sys.file_exists dest_dir) then (
+    log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
+    (* Create a directory with *default* permissions *)
+    Core.Unix.mkdir_p dest_dir);
+
+  (* Copy "Primitives.fst" - I couldn't find a "cp" function in the OCaml
+   * libraries... *)
+  let _ =
+    let src = open_in "fstar/Primitives.fst" in
+    let tgt_filename = Filename.concat dest_dir "Primitives.fst" in
+    let tgt = open_out tgt_filename in
+    try
+      while true do
+        (* We copy line by line *)
+        let line = input_line src in
+        Printf.fprintf tgt "%s\n" line
+      done
+    with End_of_file ->
+      close_in src;
+      close_out tgt;
+      log#linfo (lazy ("Copied: " ^ tgt_filename))
+  in
+
   (* Extract the file(s) *)
   let gen_ctx =
     {
@@ -676,18 +710,13 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     }
   in
 
-  (* Create the directory, if necessary *)
-  if not (Sys.file_exists dest_dir) then (
-    log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
-    (* Create a directory with *default* permissions *)
-    Core.Unix.mkdir_p dest_dir);
-
   let use_state = config.mp_config.use_state_monad in
 
   (* Extract one or several files, depending on the configuration *)
   if config.split_files then (
     let base_gen_config =
       {
+        mp_config = config.mp_config;
         extract_types = false;
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses = false;
@@ -776,6 +805,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   else
     let gen_config =
       {
+        mp_config = config.mp_config;
         extract_types = true;
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses =

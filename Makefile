@@ -29,21 +29,26 @@ build:
 
 # Test the project
 .PHONY: test
-test: build translate-no_nested_borrows translate-hashmap translate-paper \
-	translate-external translate-nll-betree_nll
+test: build trans-no_nested_borrows trans-paper \
+	trans-hashmap trans-hashmap_main \
+	trans-external trans-nll-betree_nll
 
 # Add specific options to some tests
-translate-no_nested_borrows translate-paper: \
+trans-no_nested_borrows trans-paper: \
 	TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
-translate-no_nested_borrows translate-paper: SUBDIR:=misc
-translate-hashmap: TRANS_OPTIONS += -template-clauses -no-state
-translate-hashmap: SUBDIR:=hashmap
+trans-no_nested_borrows trans-paper: SUBDIR:=misc
 
-translate-nll-betree_nll: TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
-translate-nll-betree_nll: SUBDIR:=misc
+trans-hashmap: TRANS_OPTIONS += -template-clauses -no-state
+trans-hashmap: SUBDIR:=hashmap
 
-translate-external: TRANS_OPTIONS +=
-translate-external: SUBDIR:=misc
+trans-hashmap_main: TRANS_OPTIONS += -template-clauses
+trans-hashmap_main: SUBDIR:=hashmap_on_disk
+
+trans-nll-betree_nll: TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
+trans-nll-betree_nll: SUBDIR:=misc
+
+trans-external: TRANS_OPTIONS +=
+trans-external: SUBDIR:=misc
 
 # Generic rules to extract the LLBC from a rust file
 # We use the rules in Charon's Makefile to generate the .llbc files: the options
@@ -52,17 +57,16 @@ translate-external: SUBDIR:=misc
 gen-llbc-%: build
 	cd $(CHARON_HOME) && make test-$*
 
-# Generic rule to test the translation on an LLBC file.
-# Note that the non-linear lifetime files are generated in the tests-nll
-# subdirectory.
-.PHONY: translate-%
-translate-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/llbc
-translate-nll-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-nll/llbc
+# Generic rule to test the translation of an LLBC file.
+# Note that the non-linear lifetime files are generated in the tests-nll subdirectory.
+.PHONY: trans-%
+trans-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/llbc
+trans-nll-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-nll/llbc
 
-translate-%: gen-llbc-%
+trans-%: gen-llbc-%
 	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
-translate-nll-%: gen-llbc-nll-%
+trans-nll-%: gen-llbc-nll-%
 	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
 .PHONY: doc
