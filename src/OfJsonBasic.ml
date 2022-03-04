@@ -11,7 +11,7 @@ let ( let* ) o f = match o with Error e -> Error e | Ok x -> f x
 let combine_error_msgs js msg res : ('a, string) result =
   match res with
   | Ok x -> Ok x
-  | Error e -> Error (msg ^ " failed on: " ^ show js ^ "\n" ^ e)
+  | Error e -> Error ("[" ^ msg ^ "]" ^ " failed on: " ^ show js ^ "\n\n" ^ e)
 
 let bool_of_json (js : json) : (bool, string) result =
   match js with

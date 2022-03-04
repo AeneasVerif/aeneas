@@ -213,26 +213,42 @@ let fstar_extract_binop (extract_expr : bool -> texpression -> unit)
  * up type checking. Note that some languages actually forbids the name clashes
  * (it is the case of F* ).
  *)
-let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
-    formatter =
+let mk_formatter (ctx : trans_ctx) (crate_name : string)
+    (variant_concatenate_type_name : bool) : formatter =
   let int_name = fstar_int_name in
 
-  (* For now, we treat only the case where type names are of the
-   * form: `Module::Type`
+  (* Prepare a name.
+   * The first id elem is always the crate: if it is the local crate,
+   * we remove it.
+   * We also remove all the disambiguators which are 0, then convert
+   * everything to strings.
    *)
-  let get_type_name (name : name) : string =
+  let get_name (name : name) : string list =
+    let name = Names.filter_disambiguators_zero name in
     match name with
-    | [ Ident _module; Ident name ] -> name
+    | Ident crate :: name ->
+        let name = if crate = crate_name then name else Ident crate :: name in
+        let name =
+          List.map
+            (function
+              | Names.Ident s -> s
+              | Disambiguator d -> Names.Disambiguator.to_string d)
+            name
+        in
+        name
     | _ ->
         raise (Failure ("Unexpected name shape: " ^ Print.name_to_string name))
   in
+  let get_type_name = get_name in
   let type_name_to_camel_case name =
     let name = get_type_name name in
-    to_camel_case name
+    let name = List.map to_camel_case name in
+    String.concat "" name
   in
   let type_name_to_snake_case name =
     let name = get_type_name name in
-    to_snake_case name
+    let name = List.map to_snake_case name in
+    String.concat "_" name
   in
   let type_name name = type_name_to_snake_case name ^ "_t" in
   let field_name (def_name : name) (field_id : FieldId.id)
@@ -252,25 +268,17 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
     let tname = type_name basename in
     "Mk" ^ tname
   in
-  (* For now, we treat only the case where function names are of the
-   * form:
-   * `module::function` (if top function)
-   * `module::Type::function` (for implementations)
-   *)
-  let get_fun_name (name : fun_name) : string =
-    match name with
-    | [ Ident _module_name; Ident name ] -> name
-    | [ Ident _module_name; Ident ty; Disambiguator _; Ident name ] ->
-        to_snake_case ty ^ "_" ^ name
-    | _ ->
-        raise
-          (Failure ("Unexpected name shape: " ^ Print.fun_name_to_string name))
+  let get_fun_name = get_name in
+  let fun_name_to_snake_case (fname : fun_name) : string =
+    let fname = get_fun_name fname in
+    (* Converting to snake case should be a no-op, but it doesn't cost much *)
+    let fname = List.map to_snake_case fname in
+    (* Concatenate the elements *)
+    String.concat "_" fname
   in
   let fun_name (_fid : A.fun_id) (fname : fun_name) (num_rgs : int)
       (rg : region_group_info option) (filter_info : bool * int) : string =
-    let fname = get_fun_name fname in
-    (* Converting to snake case should be a no-op, but it doesn't cost much *)
-    let fname = to_snake_case fname in
+    let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
     let suffix = default_fun_suffix num_rgs rg filter_info in
     (* Concatenate *)
@@ -278,9 +286,7 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
   in
 
   let decreases_clause_name (_fid : FunDeclId.id) (fname : fun_name) : string =
-    let fname = get_fun_name fname in
-    (* Converting to snake case should be a no-op, but it doesn't cost much *)
-    let fname = to_snake_case fname in
+    let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
     let suffix = "_decreases" in
     (* Concatenate *)
@@ -311,12 +317,11 @@ let mk_formatter (ctx : trans_ctx) (variant_concatenate_type_name : bool) :
                   TypeDeclId.Map.find adt_id ctx.type_context.type_decls
                 in
                 (* We do the following:
-                 * - convert to snake_case
+                 * - compute the type name converted_to_snake_case
                  * - take the first letter of every "letter group"
                  * Ex.: "TypeVar" -> "type_var" -> "tv"
                  *)
-                let cl = get_type_name def.name in
-                let cl = StringUtils.to_snake_case cl in
+                let cl = type_name_to_snake_case def.name in
                 let cl = String.split_on_char '_' cl in
                 let cl = List.filter (fun s -> String.length s > 0) cl in
                 assert (List.length cl > 0);
@@ -637,11 +642,16 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let is_opaque, qualif =
+  let is_opaque =
+    match def.kind with Struct _ | Enum _ -> false | Opaque -> true
+  in
+  let qualif =
     match qualif with
-    | Type -> (false, "type")
-    | And -> (false, "and")
-    | AssumeType -> (true, "assume type")
+    | Type -> "type"
+    | And -> "and"
+    | AssumeType ->
+        assert is_opaque;
+        "assume type"
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   (* Print the type parameters *)
@@ -1134,13 +1144,14 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
-  let is_opaque, qualif =
+  let is_opaque = Option.is_none def.body in
+  let qualif =
     match qualif with
-    | Let -> (false, "let")
-    | LetRec -> (false, "let rec")
-    | And -> (false, "and")
-    | Val -> (true, "val")
-    | AssumeVal -> (true, "AssumeVal")
+    | Let -> "let"
+    | LetRec -> "let rec"
+    | And -> "and"
+    | Val -> "val"
+    | AssumeVal -> "AssumeVal"
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   F.pp_print_space fmt ();

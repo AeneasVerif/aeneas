@@ -53,3 +53,10 @@ type module_name = name [@@deriving show, ord]
 type type_name = name [@@deriving show, ord]
 
 type fun_name = name [@@deriving show, ord]
+
+(** Filter the disambiguators equal to 0 in a name *)
+let filter_disambiguators_zero (n : name) : name =
+  let pred (pe : path_elem) : bool =
+    match pe with Ident _ -> true | Disambiguator d -> d <> Disambiguator.zero
+  in
+  List.filter pred n

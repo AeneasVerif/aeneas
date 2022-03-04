@@ -368,13 +368,17 @@ type gen_config = {
 (** Returns the pair: (has opaque type decls, has opaque fun decls) *)
 let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
   let has_opaque_types =
-    T.TypeDeclId.Map.exists
+    Pure.TypeDeclId.Map.exists
       (fun _ (d : Pure.type_decl) ->
         match d.kind with Opaque -> true | _ -> false)
       ctx.trans_types
   in
-  (* TODO: *)
-  let has_opaque_funs = false in
+  let has_opaque_funs =
+    Pure.FunDeclId.Map.exists
+      (fun _ ((_, (t_fwd, _)) : bool * pure_fun_translation) ->
+        Option.is_none t_fwd.body)
+      ctx.trans_funs
+  in
   (has_opaque_types, has_opaque_funs)
 
 (** A generic utility to generate the extracted definitions: as we may want to
@@ -560,7 +564,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   in
   let variant_concatenate_type_name = true in
   let fstar_fmt =
-    ExtractToFStar.mk_formatter trans_ctx variant_concatenate_type_name
+    ExtractToFStar.mk_formatter trans_ctx m.name variant_concatenate_type_name
   in
   let ctx =
     { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }

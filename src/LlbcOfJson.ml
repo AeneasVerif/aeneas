@@ -178,6 +178,7 @@ let type_decl_kind_of_json (js : json) : (T.type_decl_kind, string) result =
     | `Assoc [ ("Enum", variants) ] ->
         let* variants = list_of_json variant_of_json variants in
         Ok (T.Enum variants)
+    | `String "Opaque" -> Ok T.Opaque
     | _ -> Error "")
 
 let region_var_group_of_json (js : json) : (T.region_var_group, string) result =
