@@ -36,7 +36,7 @@ let test_new_non_zero_u32_fwd
       core_option_option_unwrap_fwd core_num_nonzero_non_zero_u32_t opt st0
       with
     | Fail -> Fail
-    | Return (st1, cnnnzu) -> Return (st1, cnnnzu)
+    | Return (st1, nzu) -> Return (st1, nzu)
     end
   end
 

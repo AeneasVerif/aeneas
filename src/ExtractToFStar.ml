@@ -321,11 +321,15 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
                   TypeDeclId.Map.find adt_id ctx.type_context.type_decls
                 in
                 (* We do the following:
-                 * - compute the type name converted_to_snake_case
+                 * - compute the type name, and retrieve the last ident
+                 * - convert this to snake case
                  * - take the first letter of every "letter group"
-                 * Ex.: "TypeVar" -> "type_var" -> "tv"
+                 * Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
                  *)
-                let cl = type_name_to_snake_case def.name in
+                (* Thename shouldn't be empty, and its last element should
+                 * be an ident *)
+                let cl = List.nth def.name (List.length def.name - 1) in
+                let cl = to_snake_case (Names.as_ident cl) in
                 let cl = String.split_on_char '_' cl in
                 let cl = List.filter (fun s -> String.length s > 0) cl in
                 assert (List.length cl > 0);

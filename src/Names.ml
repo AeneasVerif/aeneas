@@ -60,3 +60,8 @@ let filter_disambiguators_zero (n : name) : name =
     match pe with Ident _ -> true | Disambiguator d -> d <> Disambiguator.zero
   in
   List.filter pred n
+
+let as_ident (pe : path_elem) : string =
+  match pe with
+  | Ident s -> s
+  | Disambiguator _ -> raise (Failure "Improper variant")
