@@ -13,7 +13,11 @@ module F = Format
     Controls whether we should use `type ...` or `and ...` (for mutually
     recursive datatypes).
  *)
-type type_decl_qualif = Type | And | AssumeType
+type type_decl_qualif =
+  | Type  (** `type t = ...` *)
+  | And  (** `type t0 = ... and t1 = ...` *)
+  | AssumeType  (** `assume type t` *)
+  | TypeVal  (** In an fsti: `val t : Type0` *)
 
 (** A qualifier for function definitions.
 
@@ -642,16 +646,12 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let is_opaque =
-    match def.kind with Struct _ | Enum _ -> false | Opaque -> true
-  in
-  let qualif =
+  let extract_body, qualif =
     match qualif with
-    | Type -> "type"
-    | And -> "and"
-    | AssumeType ->
-        assert is_opaque;
-        "assume type"
+    | Type -> (true, "type")
+    | And -> (true, "and")
+    | AssumeType -> (false, "assume type")
+    | TypeVal -> (false, "val")
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   (* Print the type parameters *)
@@ -667,13 +667,19 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
     F.pp_print_string fmt "Type0)");
-  (* Print the "=" *)
-  if not is_opaque then (
+  (* Print the "=" if we extract the body*)
+  if extract_body then (
     F.pp_print_space fmt ();
-    F.pp_print_string fmt "=");
+    F.pp_print_string fmt "=")
+  else (
+    (* Otherwise print ": Type0" *)
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "Type0");
   (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_close_box fmt ();
-  (if not is_opaque then
+  (if extract_body then
    match def.kind with
    | Struct fields -> extract_type_decl_struct_body ctx_body fmt def fields
    | Enum variants ->

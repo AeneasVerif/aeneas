@@ -398,7 +398,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       | Enum _ | Struct _ -> (false, qualif)
       | Opaque ->
           let qualif =
-            if config.interface then ExtractToFStar.Type
+            if config.interface then ExtractToFStar.TypeVal
             else ExtractToFStar.AssumeType
           in
           (true, qualif)
