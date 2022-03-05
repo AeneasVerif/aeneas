@@ -447,13 +447,10 @@ let hashmap_hash_map_try_resize_back
               hashmap_hash_map_move_elements_back t hm
                 self.hashmap_hash_map_slots 0 st0 with
             | Fail -> Fail
-            | Return (st1, (hm0, v)) ->
-              let v0 =
-                mem_replace_back (vec (hashmap_list_t t)) v
-                  hm0.hashmap_hash_map_slots in
+            | Return (st1, (hm0, _)) ->
               Return (st1, Mkhashmap_hash_map_t
                 self.hashmap_hash_map_num_entries (i0, i1)
-                hm0.hashmap_hash_map_max_load v0)
+                hm0.hashmap_hash_map_max_load hm0.hashmap_hash_map_slots)
             end
           end
         end

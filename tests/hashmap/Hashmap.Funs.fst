@@ -264,11 +264,9 @@ let hash_map_try_resize_fwd_back
             begin match
               hash_map_move_elements_fwd_back t hm self.hash_map_slots 0 with
             | Fail -> Fail
-            | Return (hm0, v) ->
-              let v0 = mem_replace_back (vec (list_t t)) v hm0.hash_map_slots
-                in
+            | Return (hm0, _) ->
               Return (Mkhash_map_t self.hash_map_num_entries (i0, i1)
-                hm0.hash_map_max_load v0)
+                hm0.hash_map_max_load hm0.hash_map_slots)
             end
           end
         end
