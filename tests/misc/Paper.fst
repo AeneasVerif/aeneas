@@ -133,3 +133,19 @@ let test_nth_fwd : result unit =
 (** Unit test for [paper::test_nth] *)
 let _ = assert_norm (test_nth_fwd = Return ())
 
+(** [paper::call_choose] *)
+let call_choose_fwd (p : (u32 & u32)) : result u32 =
+  let (px, py) = p in
+  begin match choose_fwd u32 true px py with
+  | Fail -> Fail
+  | Return i ->
+    begin match u32_add i 1 with
+    | Fail -> Fail
+    | Return pz ->
+      begin match choose_back u32 true px py pz with
+      | Fail -> Fail
+      | Return (i0, _) -> Return i0
+      end
+    end
+  end
+
