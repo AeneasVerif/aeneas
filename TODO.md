@@ -1,5 +1,11 @@
 # TODO
 
+0. Priority:
+  * update treatment of matches
+  * remove prepass
+  * update pure expressions
+  * update control-flow reconstruction (Charon)
+
 0. Improve treatments of error and state error monads. In particular, introduce
    `return` and `fail`, and remove `Return` and `Fail`.
 
