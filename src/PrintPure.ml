@@ -411,7 +411,7 @@ let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
 let rec expression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : expression) : string =
   match e with
-  | Value (v, _) -> typed_rvalue_to_string fmt v
+  | Value (v, _) -> "(" ^ typed_rvalue_to_string fmt v ^ ")"
   | Call call -> call_to_string fmt indent indent_incr call
   | Let (monadic, lv, re, e) ->
       let_to_string fmt indent indent_incr monadic lv re e
@@ -420,7 +420,7 @@ let rec expression_to_string (fmt : ast_formatter) (indent : string)
   | Meta (meta, e) ->
       let meta = meta_to_string fmt meta in
       let e = texpression_to_string fmt indent indent_incr e in
-      indent ^ meta ^ "\n" ^ e
+      meta ^ "\n" ^ indent ^ e
 
 and texpression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : texpression) : string =
@@ -482,10 +482,11 @@ let fun_decl_to_string (fmt : ast_formatter) (def : fun_decl) : string =
   match def.body with
   | None -> "val " ^ name ^ " :\n  " ^ signature
   | Some body ->
+      let indent = "  " in
       let inputs = List.map (var_to_string type_fmt) body.inputs in
       let inputs =
-        if inputs = [] then ""
-        else "  fun " ^ String.concat " " inputs ^ " ->\n"
+        if inputs = [] then indent
+        else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
       in
-      let body = texpression_to_string fmt "  " "  " body.body in
-      "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ "  " ^ body
+      let body = texpression_to_string fmt indent indent body.body in
+      "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body
