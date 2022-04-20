@@ -341,6 +341,26 @@ let rec list_nth_mut_back
   | ListNil -> Fail
   end
 
+(** [no_nested_borrows::list_rev_aux] *)
+let rec list_rev_aux_fwd
+  (t : Type0) (lo : list_t t) (li : list_t t) : result (list_t t) =
+  begin match li with
+  | ListCons hd tl ->
+    begin match list_rev_aux_fwd t (ListCons hd lo) tl with
+    | Fail -> Fail
+    | Return l -> Return l
+    end
+  | ListNil -> Return lo
+  end
+
+(** [no_nested_borrows::list_rev] *)
+let list_rev_fwd_back (t : Type0) (l : list_t t) : result (list_t t) =
+  let l0 = mem_replace_fwd (list_t t) l ListNil in
+  begin match list_rev_aux_fwd t ListNil l0 with
+  | Fail -> Fail
+  | Return l1 -> Return l1
+  end
+
 (** [no_nested_borrows::test_list_functions] *)
 let test_list_functions_fwd : result unit =
   let l = ListNil in
