@@ -60,11 +60,11 @@ let get_max_fwd (x : u32) (y : u32) : result u32 =
 let test3_fwd : result unit =
   begin match get_max_fwd 4 3 with
   | Fail -> Fail
-  | Return i ->
+  | Return x ->
     begin match get_max_fwd 10 11 with
     | Fail -> Fail
-    | Return i0 ->
-      begin match u32_add i i0 with
+    | Return y ->
+      begin match u32_add x y with
       | Fail -> Fail
       | Return z -> if not (z = 15) then Fail else Return ()
       end
@@ -112,7 +112,7 @@ let _ = assert_norm (test_list1_fwd = Return ())
 
 (** [no_nested_borrows::test_box1] *)
 let test_box1_fwd : result unit =
-  let i = 1 in let i0 = i in if not (i0 = 1) then Fail else Return ()
+  let i = 1 in let x = i in if not (x = 1) then Fail else Return ()
 
 (** Unit test for [no_nested_borrows::test_box1] *)
 let _ = assert_norm (test_box1_fwd = Return ())
@@ -131,7 +131,7 @@ let test_panic_fwd (b : bool) : result unit = if b then Fail else Return ()
 let test_copy_int_fwd : result unit =
   begin match copy_int_fwd 0 with
   | Fail -> Fail
-  | Return i -> if not (0 = i) then Fail else Return ()
+  | Return y -> if not (0 = y) then Fail else Return ()
   end
 
 (** Unit test for [no_nested_borrows::test_copy_int] *)
@@ -183,19 +183,19 @@ let get_elem_back
 let get_elem_test_fwd : result unit =
   begin match get_elem_fwd i32 true 0 0 with
   | Fail -> Fail
-  | Return i ->
-    begin match i32_add i 1 with
+  | Return z ->
+    begin match i32_add z 1 with
     | Fail -> Fail
-    | Return z ->
-      if not (z = 1)
+    | Return z0 ->
+      if not (z0 = 1)
       then Fail
       else
-        begin match get_elem_back i32 true 0 0 z with
+        begin match get_elem_back i32 true 0 0 z0 with
         | Fail -> Fail
-        | Return (i0, i1) ->
-          if not (i0 = 1)
+        | Return (i, i0) ->
+          if not (i = 1)
           then Fail
-          else if not (i1 = 0) then Fail else Return ()
+          else if not (i0 = 0) then Fail else Return ()
         end
     end
   end
@@ -355,10 +355,10 @@ let rec list_rev_aux_fwd
 
 (** [no_nested_borrows::list_rev] *)
 let list_rev_fwd_back (t : Type0) (l : list_t t) : result (list_t t) =
-  let l0 = mem_replace_fwd (list_t t) l ListNil in
-  begin match list_rev_aux_fwd t ListNil l0 with
+  let li = mem_replace_fwd (list_t t) l ListNil in
+  begin match list_rev_aux_fwd t ListNil li with
   | Fail -> Fail
-  | Return l1 -> Return l1
+  | Return l0 -> Return l0
   end
 
 (** [no_nested_borrows::test_list_functions] *)
@@ -536,7 +536,7 @@ let _ = assert_norm (test_weird_borrows1_fwd = Return ())
 
 (** [no_nested_borrows::test_mem_replace] *)
 let test_mem_replace_fwd_back (px : u32) : result u32 =
-  let i = mem_replace_fwd u32 px 1 in if not (i = 0) then Fail else Return 2
+  let y = mem_replace_fwd u32 px 1 in if not (y = 0) then Fail else Return 2
 
 (** [no_nested_borrows::test_shared_borrow_bool1] *)
 let test_shared_borrow_bool1_fwd (b : bool) : result u32 =

@@ -32,19 +32,19 @@ let choose_back
 let test_choose_fwd : result unit =
   begin match choose_fwd i32 true 0 0 with
   | Fail -> Fail
-  | Return i ->
-    begin match i32_add i 1 with
+  | Return z ->
+    begin match i32_add z 1 with
     | Fail -> Fail
-    | Return z ->
-      if not (z = 1)
+    | Return z0 ->
+      if not (z0 = 1)
       then Fail
       else
-        begin match choose_back i32 true 0 0 z with
+        begin match choose_back i32 true 0 0 z0 with
         | Fail -> Fail
-        | Return (i0, i1) ->
-          if not (i0 = 1)
+        | Return (i, i0) ->
+          if not (i = 1)
           then Fail
-          else if not (i1 = 0) then Fail else Return ()
+          else if not (i0 = 0) then Fail else Return ()
         end
     end
   end
@@ -115,16 +115,16 @@ let test_nth_fwd : result unit =
   let l1 = ListCons 2 l0 in
   begin match list_nth_mut_fwd i32 (ListCons 1 l1) 2 with
   | Fail -> Fail
-  | Return i ->
-    begin match i32_add i 1 with
+  | Return x ->
+    begin match i32_add x 1 with
     | Fail -> Fail
-    | Return x ->
-      begin match list_nth_mut_back i32 (ListCons 1 l1) 2 x with
+    | Return x0 ->
+      begin match list_nth_mut_back i32 (ListCons 1 l1) 2 x0 with
       | Fail -> Fail
       | Return l2 ->
         begin match sum_fwd l2 with
         | Fail -> Fail
-        | Return i0 -> if not (i0 = 7) then Fail else Return ()
+        | Return i -> if not (i = 7) then Fail else Return ()
         end
       end
     end
@@ -138,13 +138,13 @@ let call_choose_fwd (p : (u32 & u32)) : result u32 =
   let (px, py) = p in
   begin match choose_fwd u32 true px py with
   | Fail -> Fail
-  | Return i ->
-    begin match u32_add i 1 with
+  | Return pz ->
+    begin match u32_add pz 1 with
     | Fail -> Fail
-    | Return pz ->
-      begin match choose_back u32 true px py pz with
+    | Return pz0 ->
+      begin match choose_back u32 true px py pz0 with
       | Fail -> Fail
-      | Return (i0, _) -> Return i0
+      | Return (i, _) -> Return i
       end
     end
   end
