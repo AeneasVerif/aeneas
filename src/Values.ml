@@ -336,6 +336,9 @@ type aproj =
       (** The only purpose of [AEndedProjBorrows] is to store, for synthesis
           purposes, the symbolic value which was originally in the borrow projection,
           and the symbolic value which was generated and given back upon ending the borrow.
+       
+          The given back value is necessary for the synthesis. The orignal value is
+          useful to propagate naming constraints.
        *)
   | AIgnoredProjBorrows
 [@@deriving
@@ -682,6 +685,10 @@ and aborrow_content =
       (** The sole purpose of [AEndedMutBorrow] is to store the (symbolic) value
           that we gave back as a meta-value, to help with the synthesis, together
           with the initial consumed value (also as a meta-value).
+
+          The given back value is necessary for the synthesis. The orignal consumed
+          value is useful to propagate naming constraints.
+
           We also remember the child [avalue] because this structural information
           is useful for the synthesis (but not for the symbolic execution):
           in practice the child value should only contain ended borrows, ignored
