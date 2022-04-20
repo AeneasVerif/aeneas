@@ -242,7 +242,11 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
 
         method plus ctx0 ctx1 _ = merge_ctxs (ctx0 ()) (ctx1 ())
 
-        method! visit_var _ v () = add_var (self#zero ()) v
+        method! visit_Var _ v mp () =
+          (* Register the variable *)
+          let ctx = add_var (self#zero ()) v in
+          (* Register the mplace information if there is such information *)
+          match mp with None -> ctx | Some mp -> add_constraint mp v.id ctx
       end
     in
     let ctx1 = obj#visit_typed_lvalue () lv () in

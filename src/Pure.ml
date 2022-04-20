@@ -236,7 +236,7 @@ class virtual ['self] mapreduce_value_base =
   end
 
 type var_or_dummy =
-  | Var of var * mplace option
+  | Var of var * mplace option (* TODO: the mplace is actually always a variable *)
   | Dummy  (** Ignored value: `_`. *)
 [@@deriving
   show,

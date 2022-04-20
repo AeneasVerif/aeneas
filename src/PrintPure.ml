@@ -191,18 +191,14 @@ let type_decl_to_string (fmt : type_formatter) (def : type_decl) : string =
       "enum " ^ name ^ params ^ " =\n" ^ variants
   | Opaque -> "opaque type " ^ name ^ params
 
-let var_to_string (fmt : type_formatter) (v : var) : string =
-  let varname =
-    match v.basename with
-    | Some name -> name ^ "^" ^ VarId.to_string v.id
-    | None -> "^" ^ VarId.to_string v.id
-  in
-  "(" ^ varname ^ " : " ^ ty_to_string fmt v.ty ^ ")"
+let var_to_varname (v : var) : string =
+  match v.basename with
+  | Some name -> name ^ "^" ^ VarId.to_string v.id
+  | None -> "^" ^ VarId.to_string v.id
 
-let var_or_dummy_to_string (fmt : value_formatter) (v : var_or_dummy) : string =
-  match v with
-  | Var (v, _) -> var_to_string (value_to_type_formatter fmt) v
-  | Dummy -> "_"
+let var_to_string (fmt : type_formatter) (v : var) : string =
+  let varname = var_to_varname v in
+  "(" ^ varname ^ " : " ^ ty_to_string fmt v.ty ^ ")"
 
 let rec projection_to_string (fmt : ast_formatter) (inside : string)
     (p : projection) : string =
@@ -227,6 +223,20 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
           | Some variant_id ->
               let variant_name = fmt.adt_variant_to_string adt_id variant_id in
               "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
+
+let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
+  let name = match p.name with None -> "_" | Some name -> name in
+  projection_to_string fmt name p.projection
+
+let var_or_dummy_to_string (fmt : value_formatter) (v : var_or_dummy) : string =
+  match v with
+  | Var (v, Some { name = Some name; projection }) ->
+      assert (projection = []);
+      let fmt = value_to_type_formatter fmt in
+      "(" ^ var_to_varname v ^ " @meta[@dest=" ^ name ^ "] : "
+      ^ ty_to_string fmt v.ty ^ ")"
+  | Var (v, _) -> var_to_string (value_to_type_formatter fmt) v
+  | Dummy -> "_"
 
 let place_to_string (fmt : ast_formatter) (p : place) : string =
   (* TODO: improve that *)
@@ -394,10 +404,6 @@ let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   | Binop (binop, int_ty) ->
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
 
-let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
-  let name = match p.name with None -> "_" | Some name -> name in
-  projection_to_string fmt name p.projection
-
 let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   let meta =
     match meta with
@@ -444,10 +450,9 @@ and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
     (monadic : bool) (lv : typed_lvalue) (re : texpression) (e : texpression) :
     string =
   let indent1 = indent ^ indent_incr in
-  let val_fmt = ast_to_value_formatter fmt in
   let re = texpression_to_string fmt indent1 indent_incr re in
   let e = texpression_to_string fmt indent indent_incr e in
-  let lv = typed_lvalue_to_string val_fmt lv in
+  let lv = typed_lvalue_to_string (ast_to_value_formatter fmt) lv in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
@@ -466,9 +471,8 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent ^ e_true ^ "\n" ^ indent
       ^ "else\n" ^ indent ^ e_false
   | Match branches ->
-      let val_fmt = ast_to_value_formatter fmt in
       let branch_to_string (b : match_branch) : string =
-        let pat = typed_lvalue_to_string val_fmt b.pat in
+        let pat = typed_lvalue_to_string (ast_to_value_formatter fmt) b.pat in
         indent ^ "| " ^ pat ^ " ->\n" ^ indent1
         ^ texpression_to_string fmt indent1 indent_incr b.branch
       in

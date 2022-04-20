@@ -1072,9 +1072,8 @@ module LlbcAst = struct
      * (we have access to a body) *)
     match def.body with
     | None ->
-        (* Arguments - we need to ignore the first input type which is actually
-         * the return type... TODO: fix that *)
-        let input_tys = List.tl sg.inputs in
+        (* Arguments *)
+        let input_tys = sg.inputs in
         let args = List.map sty_to_string input_tys in
         let args = String.concat ", " args in
 
