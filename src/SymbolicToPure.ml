@@ -647,7 +647,7 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
         (mk_typed_rvalue_from_var var).value
   in
   let ty = ctx_translate_fwd_ty ctx v.ty in
-  let value = { value; ty } in
+  let value : typed_rvalue = { value; ty } in
   (* Debugging *)
   log#ldebug
     (lazy
@@ -736,7 +736,7 @@ and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
       failwith "Unreachable"
-  | AEndedMutBorrow (_, _) ->
+  | AEndedMutBorrow (_, _, _) ->
       (* We collect consumed values: ignore *)
       None
   | AEndedIgnoredMutBorrow _ ->
@@ -804,6 +804,9 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
     
     [mp]: it is possible to provide some meta-place information, to guide
     the heuristics which later find pretty names for the variables.
+
+    TODO:
+    
  *)
 let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
     (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
@@ -875,10 +878,13 @@ and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
       failwith "Unreachable"
-  | AEndedMutBorrow (mv, _) ->
-      (* Return the meta-value *)
-      let ctx, var = fresh_var_for_symbolic_value mv ctx in
-      (ctx, Some (mk_typed_lvalue_from_var var mp))
+  | AEndedMutBorrow (consumed_mv, msv, _) ->
+      (* We use the originally consumed value (which is stored as a meta-value)
+       * to help with propagating naming constraints. *)
+      let consumed = typed_value_to_rvalue ctx consumed_mv in
+      (* Return the meta-symbolic-value *)
+      let ctx, var = fresh_var_for_symbolic_value msv ctx in
+      (ctx, Some (mk_typed_lvalue_from_var var mp (Some consumed)))
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -897,10 +903,15 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
           (fun (_, aproj) -> aproj = V.AIgnoredProjBorrows)
           child_projs);
       (ctx, None)
-  | AEndedProjBorrows mv ->
+  | AEndedProjBorrows { original; given_back = mv } ->
+      (* We use the original symbolic value to help propagate the naming constraints *)
+      let original =
+        InterpreterUtils.mk_typed_value_from_symbolic_value original
+      in
+      let original = typed_value_to_rvalue ctx original in
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
-      (ctx, Some (mk_typed_lvalue_from_var var mp))
+      (ctx, Some (mk_typed_lvalue_from_var var mp (Some original)))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
       failwith "Unreachable"
 
@@ -1039,7 +1050,7 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
       (fun (arg, mp) -> mk_value_expression arg mp)
       (List.combine args args_mplaces)
   in
-  let dest_v = mk_typed_lvalue_from_var dest dest_mplace in
+  let dest_v = mk_typed_lvalue_from_var dest dest_mplace None in
   let call = { func; type_params; args } in
   let call = Call call in
   let call_ty = if monadic then mk_result_ty dest_v.ty else dest_v.ty in
@@ -1104,7 +1115,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       List.fold_right
         (fun (var, value) (e : texpression) ->
           mk_let monadic
-            (mk_typed_lvalue_from_var var None)
+            (mk_typed_lvalue_from_var var None None)
             (mk_value_expression value None)
             e)
         variables_values next_e
@@ -1276,7 +1287,7 @@ and translate_expansion (config : config) (p : S.mplace option)
           let next_e = translate_expression config e ctx in
           let monadic = false in
           mk_let monadic
-            (mk_typed_lvalue_from_var var None)
+            (mk_typed_lvalue_from_var var None None)
             (mk_value_expression scrutinee scrutinee_mplace)
             next_e
       | SeAdt _ ->
@@ -1300,7 +1311,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                 (* This is an enumeration: introduce an [ExpandEnum] let-binding *)
                 let variant_id = Option.get variant_id in
                 let lvars =
-                  List.map (fun v -> mk_typed_lvalue_from_var v None) vars
+                  List.map (fun v -> mk_typed_lvalue_from_var v None None) vars
                 in
                 let lv = mk_adt_lvalue scrutinee.ty variant_id lvars in
                 let monadic = false in
@@ -1329,13 +1340,13 @@ and translate_expansion (config : config) (p : S.mplace option)
                   (fun (fid, var) e ->
                     let field_proj = gen_field_proj fid var in
                     mk_let monadic
-                      (mk_typed_lvalue_from_var var None)
+                      (mk_typed_lvalue_from_var var None None)
                       (mk_value_expression field_proj None)
                       e)
                   id_var_pairs branch
           | T.Tuple ->
               let vars =
-                List.map (fun x -> mk_typed_lvalue_from_var x None) vars
+                List.map (fun x -> mk_typed_lvalue_from_var x None None) vars
               in
               let monadic = false in
               mk_let monadic
@@ -1351,7 +1362,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                * identity when extracted (`box a == a`) *)
               let monadic = false in
               mk_let monadic
-                (mk_typed_lvalue_from_var var None)
+                (mk_typed_lvalue_from_var var None None)
                 (mk_value_expression scrutinee scrutinee_mplace)
                 branch
           | T.Assumed T.Vec ->
@@ -1372,7 +1383,7 @@ and translate_expansion (config : config) (p : S.mplace option)
             let variant_id = Option.get variant_id in
             let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
             let vars =
-              List.map (fun x -> mk_typed_lvalue_from_var x None) vars
+              List.map (fun x -> mk_typed_lvalue_from_var x None None) vars
             in
             let pat_ty = scrutinee.ty in
             let pat = mk_adt_lvalue pat_ty variant_id vars in
@@ -1481,7 +1492,7 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
         in
         let inputs = List.append ctx.forward_inputs backward_inputs in
         let inputs_lvs =
-          List.map (fun v -> mk_typed_lvalue_from_var v None) inputs
+          List.map (fun v -> mk_typed_lvalue_from_var v None None) inputs
         in
         (* Sanity check *)
         assert (

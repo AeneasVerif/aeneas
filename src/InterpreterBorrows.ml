@@ -1202,16 +1202,16 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
           ^ aborrow_content_to_string ctx bc));
       let ctx =
         match bc with
-        | V.AMutBorrow (_, bid, av) ->
+        | V.AMutBorrow (mv, bid, av) ->
             (* First, convert the avalue to a (fresh symbolic) value *)
-            let v = convert_avalue_to_given_back_value abs.kind av in
+            let sv = convert_avalue_to_given_back_value abs.kind av in
             (* Replace the mut borrow to register the fact that we ended
              * it and store with it the freshly generated given back value *)
-            let ended_borrow = V.ABorrow (V.AEndedMutBorrow (v, av)) in
+            let ended_borrow = V.ABorrow (V.AEndedMutBorrow (mv, sv, av)) in
             let ctx = update_aborrow ek_all bid ended_borrow ctx in
             (* Give the value back *)
-            let v = mk_typed_value_from_symbolic_value v in
-            give_back_value config bid v ctx
+            let sv = mk_typed_value_from_symbolic_value sv in
+            give_back_value config bid sv ctx
         | V.ASharedBorrow bid ->
             (* Replace the shared borrow to account for the fact it ended *)
             let ended_borrow = V.ABorrow V.AEndedSharedBorrow in
@@ -1256,7 +1256,9 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       (* Generate a fresh symbolic value *)
       let nsv = mk_fresh_symbolic_value V.FunCallGivenBack proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
-      let ended_borrow = V.AEndedProjBorrows nsv in
+      let ended_borrow =
+        V.AEndedProjBorrows { original = sv; given_back = nsv }
+      in
       let ctx = update_aproj_borrows abs.abs_id sv ended_borrow ctx in
       (* Give back the symbolic value *)
       let ctx =

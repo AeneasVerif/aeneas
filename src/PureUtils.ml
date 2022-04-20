@@ -64,8 +64,10 @@ let mk_typed_rvalue_from_var (v : var) : typed_rvalue =
   let ty = v.ty in
   { value; ty }
 
-let mk_typed_lvalue_from_var (v : var) (mp : mplace option) : typed_lvalue =
-  let value = LvVar (Var (v, mp)) in
+let mk_typed_lvalue_from_var (v : var) (mp : mplace option)
+    (mfrom_rvalue : typed_rvalue option) : typed_lvalue =
+  let mdplace = { place = mp; from_rvalue = mfrom_rvalue } in
+  let value = LvVar (Var (v, mdplace)) in
   let ty = v.ty in
   { value; ty }
 

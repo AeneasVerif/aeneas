@@ -228,16 +228,6 @@ let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
   let name = match p.name with None -> "_" | Some name -> name in
   projection_to_string fmt name p.projection
 
-let var_or_dummy_to_string (fmt : value_formatter) (v : var_or_dummy) : string =
-  match v with
-  | Var (v, Some { name = Some name; projection }) ->
-      assert (projection = []);
-      let fmt = value_to_type_formatter fmt in
-      "(" ^ var_to_varname v ^ " @meta[@dest=" ^ name ^ "] : "
-      ^ ty_to_string fmt v.ty ^ ")"
-  | Var (v, _) -> var_to_string (value_to_type_formatter fmt) v
-  | Dummy -> "_"
-
 let place_to_string (fmt : ast_formatter) (p : place) : string =
   (* TODO: improve that *)
   let var = fmt.var_id_to_string p.var in
@@ -315,16 +305,6 @@ let adt_g_value_to_string (fmt : value_formatter)
           ^ "\n- ty: " ^ ty_to_string fmt ty ^ "\n- variant_id: "
            ^ Print.option_to_string VariantId.to_string variant_id))
 
-let rec typed_lvalue_to_string (fmt : value_formatter) (v : typed_lvalue) :
-    string =
-  match v.value with
-  | LvConcrete cv -> Print.Values.constant_value_to_string cv
-  | LvVar var -> var_or_dummy_to_string fmt var
-  | LvAdt av ->
-      adt_g_value_to_string fmt
-        (typed_lvalue_to_string fmt)
-        av.variant_id av.field_values v.ty
-
 let rec typed_rvalue_to_string (fmt : ast_formatter) (v : typed_rvalue) : string
     =
   match v.value with
@@ -334,6 +314,32 @@ let rec typed_rvalue_to_string (fmt : ast_formatter) (v : typed_rvalue) : string
       adt_g_value_to_string
         (ast_to_value_formatter fmt)
         (typed_rvalue_to_string fmt)
+        av.variant_id av.field_values v.ty
+
+let var_or_dummy_to_string (fmt : ast_formatter) (v : var_or_dummy) : string =
+  match v with
+  | Var (v, { place = None; from_rvalue = None }) ->
+      var_to_string (ast_to_type_formatter fmt) v
+  | Var (v, { place; from_rvalue }) ->
+      let dest = Print.option_to_string (mplace_to_string fmt) place in
+      let from_rvalue =
+        Print.option_to_string (typed_rvalue_to_string fmt) from_rvalue
+      in
+      "(" ^ var_to_varname v ^ " @meta[@dest=" ^ dest ^ ", from_rvalue="
+      ^ from_rvalue ^ "] : "
+      ^ ty_to_string (ast_to_type_formatter fmt) v.ty
+      ^ ")"
+  | Dummy -> "_"
+
+let rec typed_lvalue_to_string (fmt : ast_formatter) (v : typed_lvalue) : string
+    =
+  match v.value with
+  | LvConcrete cv -> Print.Values.constant_value_to_string cv
+  | LvVar var -> var_or_dummy_to_string fmt var
+  | LvAdt av ->
+      adt_g_value_to_string
+        (ast_to_value_formatter fmt)
+        (typed_lvalue_to_string fmt)
         av.variant_id av.field_values v.ty
 
 let fun_sig_to_string (fmt : ast_formatter) (sg : fun_sig) : string =
@@ -452,7 +458,7 @@ and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
   let indent1 = indent ^ indent_incr in
   let re = texpression_to_string fmt indent1 indent_incr re in
   let e = texpression_to_string fmt indent indent_incr e in
-  let lv = typed_lvalue_to_string (ast_to_value_formatter fmt) lv in
+  let lv = typed_lvalue_to_string fmt lv in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
@@ -472,7 +478,7 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       ^ "else\n" ^ indent ^ e_false
   | Match branches ->
       let branch_to_string (b : match_branch) : string =
-        let pat = typed_lvalue_to_string (ast_to_value_formatter fmt) b.pat in
+        let pat = typed_lvalue_to_string fmt b.pat in
         indent ^ "| " ^ pat ^ " ->\n" ^ indent1
         ^ texpression_to_string fmt indent1 indent_incr b.branch
       in

@@ -242,11 +242,13 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
 
         method plus ctx0 ctx1 _ = merge_ctxs (ctx0 ()) (ctx1 ())
 
-        method! visit_Var _ v mp () =
+        method! visit_Var _ v mdp () =
           (* Register the variable *)
           let ctx = add_var (self#zero ()) v in
           (* Register the mplace information if there is such information *)
-          match mp with None -> ctx | Some mp -> add_constraint mp v.id ctx
+          match mdp.place with
+          | None -> ctx
+          | Some mp -> add_constraint mp v.id ctx
       end
     in
     let ctx1 = obj#visit_typed_lvalue () lv () in
@@ -820,7 +822,7 @@ let to_monadic (config : config) (def : fun_decl) : fun_decl =
             let id, _ = VarId.fresh var_cnt in
             let var = { id; basename = None; ty = unit_ty } in
             let inputs = [ var ] in
-            let input_lv = mk_typed_lvalue_from_var var None in
+            let input_lv = mk_typed_lvalue_from_var var None None in
             let inputs_lvs = [ input_lv ] in
             Some { body with inputs; inputs_lvs }
       in
@@ -978,7 +980,7 @@ let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
                    * monadic binding *)
                   let vid = fresh_id () in
                   let tmp : var = { id = vid; basename = None; ty = lv.ty } in
-                  let ltmp = mk_typed_lvalue_from_var tmp None in
+                  let ltmp = mk_typed_lvalue_from_var tmp None None in
                   let rtmp = mk_typed_rvalue_from_var tmp in
                   let rtmp = mk_value_expression rtmp None in
                   (* Visit the next expression *)
@@ -1056,7 +1058,9 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                 in
                 (* The `Success` branch introduces a fresh state variable *)
                 let state_var = fresh_state_var () in
-                let state_value = mk_typed_lvalue_from_var state_var None in
+                let state_value =
+                  mk_typed_lvalue_from_var state_var None None
+                in
                 let success_pat =
                   mk_result_return_lvalue
                     (mk_simpl_tuple_lvalue [ state_value; lv ])
@@ -1127,7 +1131,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
           let sg = { sg with inputs = sg_inputs; outputs = sg_outputs } in
           (* Update the inputs list *)
           let inputs = body.inputs @ [ input_state_var ] in
-          let input_lv = mk_typed_lvalue_from_var input_state_var None in
+          let input_lv = mk_typed_lvalue_from_var input_state_var None None in
           let inputs_lvs = body.inputs_lvs @ [ input_lv ] in
           (* Update the body *)
           let body = { body with inputs; inputs_lvs } in

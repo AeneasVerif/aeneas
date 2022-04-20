@@ -182,7 +182,7 @@ class ['self] iter_value_base =
     method visit_ty : 'env -> ty -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for [map_var_or_dummy] visitor *)
+(** Ancestor for [map_typed_rvalue] visitor *)
 class ['self] map_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
@@ -199,7 +199,7 @@ class ['self] map_value_base =
     method visit_ty : 'env -> ty -> ty = fun _ x -> x
   end
 
-(** Ancestor for [reduce_var_or_dummy] visitor *)
+(** Ancestor for [reduce_typed_rvalue] visitor *)
 class virtual ['self] reduce_value_base =
   object (self : 'self)
     inherit [_] VisitorsRuntime.reduce
@@ -216,7 +216,7 @@ class virtual ['self] reduce_value_base =
     method visit_ty : 'env -> ty -> 'a = fun _ _ -> self#zero
   end
 
-(** Ancestor for [mapreduce_var_or_dummy] visitor *)
+(** Ancestor for [mapreduce_typed_rvalue] visitor *)
 class virtual ['self] mapreduce_value_base =
   object (self : 'self)
     inherit [_] VisitorsRuntime.mapreduce
@@ -235,14 +235,22 @@ class virtual ['self] mapreduce_value_base =
     method visit_ty : 'env -> ty -> ty * 'a = fun _ x -> (x, self#zero)
   end
 
-type var_or_dummy =
-  | Var of var * mplace option (* TODO: the mplace is actually always a variable *)
-  | Dummy  (** Ignored value: `_`. *)
+type rvalue =
+  | RvConcrete of constant_value
+  | RvPlace of place
+  | RvAdt of adt_rvalue
+
+and adt_rvalue = {
+  variant_id : (VariantId.id option[@opaque]);
+  field_values : typed_rvalue list;
+}
+
+and typed_rvalue = { value : rvalue; ty : ty }
 [@@deriving
   show,
     visitors
       {
-        name = "iter_var_or_dummy";
+        name = "iter_typed_rvalue";
         variety = "iter";
         ancestors = [ "iter_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
@@ -251,9 +259,118 @@ type var_or_dummy =
       },
     visitors
       {
-        name = "map_var_or_dummy";
+        name = "map_typed_rvalue";
         variety = "map";
         ancestors = [ "map_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "reduce_typed_rvalue";
+        variety = "reduce";
+        ancestors = [ "reduce_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "mapreduce_typed_rvalue";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_value_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        polymorphic = false;
+      }]
+
+type mdplace = { place : mplace option; from_rvalue : typed_rvalue option }
+[@@deriving show]
+(** "Meta" destination place.
+
+    Meta information for places used as assignment destinations.
+    This is useful for the values given back by the backward functions: in such
+    situations, we link the output variables to the input arguments, to derive
+    names for the output variables from the input variables.
+
+    Ex.:
+    ====
+    ```
+    let y = f<'a>(&mut x);
+    ...
+    // end 'a
+    ...
+    ```
+    gets translated to:
+    ```
+    let y = f_fwd x in
+    ...
+    let s = f_back x y_i in // we want the introduced variable to be name "x1"
+    ...
+    ```
+    In order to compute a proper name for the variable introduced by the backward
+    call, we need to link `s` to `x`. However, because of desugaring, it may happen
+    that the fact `f` takes `x` as argument may have to be computed by propagating
+    naming information. This is why we link the output variables to the input arguments:
+    it allows us to propagate such naming constraints "across" function calls.
+ *)
+
+(** Ancestor for [iter_var_or_dummy] visitor *)
+class ['self] iter_var_or_dummy_base =
+  object (_self : 'self)
+    inherit [_] iter_typed_rvalue
+
+    method visit_mdplace : 'env -> mdplace -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for [map_var_or_dummy] visitor *)
+class ['self] map_var_or_dummy_base =
+  object (_self : 'self)
+    inherit [_] map_typed_rvalue
+
+    method visit_mdplace : 'env -> mdplace -> mdplace = fun _ x -> x
+  end
+
+(** Ancestor for [reduce_var_or_dummy] visitor *)
+class virtual ['self] reduce_var_or_dummy_base =
+  object (self : 'self)
+    inherit [_] reduce_typed_rvalue
+
+    method visit_mdplace : 'env -> mdplace -> 'a = fun _ _ -> self#zero
+  end
+
+(** Ancestor for [mapreduce_var_or_dummy] visitor *)
+class virtual ['self] mapreduce_var_or_dummy_base =
+  object (self : 'self)
+    inherit [_] mapreduce_typed_rvalue
+
+    method visit_mdplace : 'env -> mdplace -> mdplace * 'a =
+      fun _ x -> (x, self#zero)
+  end
+
+type var_or_dummy =
+  | Var of var * mdplace
+      (** Rk.: the mdplace is actually always a variable (i.e.: there are no projections).
+
+          We use [mplace] because it leads to a more uniform treatment of the meta
+          information.
+       *)
+  | Dummy  (** Ignored value: `_`. *)
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_var_or_dummy";
+        variety = "iter";
+        ancestors = [ "iter_var_or_dummy_base" ];
+        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "map_var_or_dummy";
+        variety = "map";
+        ancestors = [ "map_var_or_dummy_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.map] *);
         concrete = true;
         polymorphic = false;
@@ -262,7 +379,7 @@ type var_or_dummy =
       {
         name = "reduce_var_or_dummy";
         variety = "reduce";
-        ancestors = [ "reduce_value_base" ];
+        ancestors = [ "reduce_var_or_dummy_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
         polymorphic = false;
       },
@@ -270,7 +387,7 @@ type var_or_dummy =
       {
         name = "mapreduce_var_or_dummy";
         variety = "mapreduce";
-        ancestors = [ "mapreduce_value_base" ];
+        ancestors = [ "mapreduce_var_or_dummy_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
         polymorphic = false;
       }]
@@ -326,54 +443,6 @@ and typed_lvalue = { value : lvalue; ty : ty }
         polymorphic = false;
       }]
 
-type rvalue =
-  | RvConcrete of constant_value
-  | RvPlace of place
-  | RvAdt of adt_rvalue
-
-and adt_rvalue = {
-  variant_id : (VariantId.id option[@opaque]);
-  field_values : typed_rvalue list;
-}
-
-and typed_rvalue = { value : rvalue; ty : ty }
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_typed_rvalue";
-        variety = "iter";
-        ancestors = [ "iter_typed_lvalue" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        concrete = true;
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "map_typed_rvalue";
-        variety = "map";
-        ancestors = [ "map_typed_lvalue" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        concrete = true;
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "reduce_typed_rvalue";
-        variety = "reduce";
-        ancestors = [ "reduce_typed_lvalue" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "mapreduce_typed_rvalue";
-        variety = "mapreduce";
-        ancestors = [ "mapreduce_typed_lvalue" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        polymorphic = false;
-      }]
-
 type unop = Not | Neg of integer_type [@@deriving show, ord]
 
 type fun_id =
@@ -398,7 +467,7 @@ type meta = Assignment of mplace * typed_rvalue [@@deriving show]
 (** Ancestor for [iter_expression] visitor *)
 class ['self] iter_expression_base =
   object (_self : 'self)
-    inherit [_] iter_typed_rvalue
+    inherit [_] iter_typed_lvalue
 
     method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
 
@@ -412,7 +481,7 @@ class ['self] iter_expression_base =
 (** Ancestor for [map_expression] visitor *)
 class ['self] map_expression_base =
   object (_self : 'self)
-    inherit [_] map_typed_rvalue
+    inherit [_] map_typed_lvalue
 
     method visit_meta : 'env -> meta -> meta = fun _ x -> x
 
@@ -428,7 +497,7 @@ class ['self] map_expression_base =
 (** Ancestor for [reduce_expression] visitor *)
 class virtual ['self] reduce_expression_base =
   object (self : 'self)
-    inherit [_] reduce_typed_rvalue
+    inherit [_] reduce_typed_lvalue
 
     method visit_meta : 'env -> meta -> 'a = fun _ _ -> self#zero
 
@@ -444,7 +513,7 @@ class virtual ['self] reduce_expression_base =
 (** Ancestor for [mapreduce_expression] visitor *)
 class virtual ['self] mapreduce_expression_base =
   object (self : 'self)
-    inherit [_] mapreduce_typed_rvalue
+    inherit [_] mapreduce_typed_lvalue
 
     method visit_meta : 'env -> meta -> meta * 'a = fun _ x -> (x, self#zero)
 
