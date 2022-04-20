@@ -115,3 +115,13 @@ let find_first_primitively_copyable_sv_with_borrows (type_infos : TA.type_infos)
     obj#visit_typed_value () v;
     None
   with FoundSymbolicValue sv -> Some sv
+
+(** Strip the outer shared loans in a value.
+    Ex.:
+    `shared_loan {l0, l1} (3 : u32, shared_loan {l2} (4 : u32))` ~~>
+    `(3 : u32, shared_loan {l2} (4 : u32))`
+ *)
+let rec value_strip_shared_loans (v : typed_value) : typed_value =
+  match v.value with
+  | Loan (SharedLoan (_, v')) -> value_strip_shared_loans v'
+  | _ -> v

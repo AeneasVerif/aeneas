@@ -274,7 +274,7 @@ let eval_unary_op_concrete (config : C.config) (unop : E.unop) (op : E.operand)
         match mk_scalar sv.int_ty i with
         | Error _ -> cf (Error EPanic)
         | Ok sv -> cf (Ok { v with V.value = V.Concrete (V.Scalar sv) }))
-    | _ -> failwith "Invalid input for unop"
+    | _ -> raise (Failure "Invalid input for unop")
   in
   comp eval_op apply cf
 
@@ -291,7 +291,7 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
       match (unop, v.V.ty) with
       | E.Not, T.Bool -> T.Bool
       | E.Neg, T.Integer int_ty -> T.Integer int_ty
-      | _ -> failwith "Invalid input for unop"
+      | _ -> raise (Failure "Invalid input for unop")
     in
     let res_sv =
       { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
@@ -347,7 +347,7 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
               | E.Gt -> Z.gt sv1.V.value sv2.V.value
               | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
               | E.BitOr | E.Shl | E.Shr | E.Ne | E.Eq ->
-                  failwith "Unreachable"
+                  raise (Failure "Unreachable")
             in
             Ok ({ V.value = V.Concrete (Bool b); ty = T.Bool } : V.typed_value)
         | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd | E.BitOr
@@ -370,7 +370,7 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
               | E.BitAnd -> raise Unimplemented
               | E.BitOr -> raise Unimplemented
               | E.Lt | E.Le | E.Ge | E.Gt | E.Shl | E.Shr | E.Ne | E.Eq ->
-                  failwith "Unreachable"
+                  raise (Failure "Unreachable")
             in
             match res with
             | Error _ -> Error EPanic
@@ -381,8 +381,8 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
                     ty = Integer sv1.int_ty;
                   })
         | E.Shl | E.Shr -> raise Unimplemented
-        | E.Ne | E.Eq -> failwith "Unreachable")
-    | _ -> failwith "Invalid inputs for binop"
+        | E.Ne | E.Eq -> raise (Failure "Unreachable"))
+    | _ -> raise (Failure "Invalid inputs for binop")
 
 let eval_binary_op_concrete (config : C.config) (binop : E.binop)
     (op1 : E.operand) (op2 : E.operand)
@@ -428,8 +428,8 @@ let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
                 assert (int_ty1 = int_ty2);
                 T.Integer int_ty1
             | E.Shl | E.Shr -> raise Unimplemented
-            | E.Ne | E.Eq -> failwith "Unreachable")
-        | _ -> failwith "Invalid inputs for binop"
+            | E.Ne | E.Eq -> raise (Failure "Unreachable"))
+        | _ -> raise (Failure "Invalid inputs for binop")
     in
     let res_sv =
       { V.sv_kind = V.FunCallRet; V.sv_id = res_sv_id; sv_ty = res_sv_ty }
@@ -462,20 +462,25 @@ let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
   let prepare = prepare_rplace config expand_prim_copy access p in
   (* Read the value *)
   let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
+    (* The value may be shared: we need to ignore the shared loans *)
+    let v = value_strip_shared_loans v in
     match v.V.value with
     | Adt av -> (
         match av.variant_id with
         | None ->
-            failwith
-              "Invalid input for `discriminant`: structure instead of enum"
+            raise
+              (Failure
+                 "Invalid input for `discriminant`: structure instead of enum")
         | Some variant_id -> (
             let id = Z.of_int (T.VariantId.to_int variant_id) in
             match mk_scalar Isize id with
-            | Error _ -> failwith "Disciminant id out of range"
+            | Error _ -> raise (Failure "Disciminant id out of range")
             (* Should really never happen *)
             | Ok sv ->
                 cf { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }))
-    | _ -> failwith "Invalid input for `discriminant`"
+    | _ ->
+        raise
+          (Failure ("Invalid input for `discriminant`: " ^ V.show_typed_value v))
   in
   (* Compose and apply *)
   comp prepare read cf
@@ -496,6 +501,8 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
   (* Read the value *)
   let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
    fun ctx ->
+    (* The value may be shared: we need to ignore the shared loans *)
+    let v = value_strip_shared_loans v in
     match v.V.value with
     | Adt _ -> eval_rvalue_discriminant_concrete config p cf ctx
     | Symbolic sv ->
@@ -507,7 +514,9 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
         in
         (* This time the value is concrete: reevaluate *)
         comp cc (eval_rvalue_discriminant_concrete config p) cf ctx
-    | _ -> failwith "Invalid input for `discriminant`"
+    | _ ->
+        raise
+          (Failure ("Invalid input for `discriminant`: " ^ V.show_typed_value v))
   in
   (* Compose and apply *)
   comp prepare read cf ctx

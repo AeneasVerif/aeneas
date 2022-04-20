@@ -538,3 +538,17 @@ let _ = assert_norm (test_weird_borrows1_fwd = Return ())
 let test_mem_replace_fwd_back (px : u32) : result u32 =
   let i = mem_replace_fwd u32 px 1 in if not (i = 0) then Fail else Return 2
 
+(** [no_nested_borrows::test_shared_borrow_bool1] *)
+let test_shared_borrow_bool1_fwd (b : bool) : result u32 =
+  if b then Return 0 else Return 1
+
+(** [no_nested_borrows::test_shared_borrow_bool2] *)
+let test_shared_borrow_bool2_fwd : result u32 = Return 0
+
+(** [no_nested_borrows::test_shared_borrow_enum1] *)
+let test_shared_borrow_enum1_fwd (l : list_t u32) : result u32 =
+  begin match l with | ListCons i l0 -> Return 1 | ListNil -> Return 0 end
+
+(** [no_nested_borrows::test_shared_borrow_enum2] *)
+let test_shared_borrow_enum2_fwd : result u32 = Return 0
+
