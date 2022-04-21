@@ -309,7 +309,7 @@ module Values = struct
         "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_value_to_string fmt tv
         ^ ")"
-    | InactivatedMutBorrow bid ->
+    | InactivatedMutBorrow (_, bid) ->
         "⌊inactivated_mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
   and loan_content_to_string (fmt : value_formatter) (lc : V.loan_content) :

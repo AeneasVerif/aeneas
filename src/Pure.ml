@@ -165,7 +165,11 @@ type projection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 
 type projection = projection_elem list [@@deriving show]
 
-type mplace = { name : string option; projection : projection }
+type mplace = {
+  var_id : V.VarId.id;
+  name : string option;
+  projection : projection;
+}
 [@@deriving show]
 (** "Meta" place.
 
@@ -476,7 +480,8 @@ type fun_id =
 [@@deriving show, ord]
 
 (** Meta-information stored in the AST *)
-type meta = Assignment of mplace * typed_rvalue [@@deriving show]
+type meta = Assignment of mplace * typed_rvalue * mplace option
+[@@deriving show]
 
 (** Ancestor for [iter_expression] visitor *)
 class ['self] iter_expression_base =

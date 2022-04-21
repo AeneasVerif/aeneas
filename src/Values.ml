@@ -144,7 +144,7 @@ and borrow_content =
        *)
   | MutBorrow of (BorrowId.id[@opaque]) * typed_value
       (** A mutably borrowed value. *)
-  | InactivatedMutBorrow of (BorrowId.id[@opaque])
+  | InactivatedMutBorrow of mvalue * (BorrowId.id[@opaque])
       (** An inactivated mut borrow.
 
           This is used to model [two-phase borrows](https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html).
@@ -169,6 +169,10 @@ and borrow_content =
           l = Vec::len(move v2);
           Vec::push(move v1, move l); // In practice, v1 gets activated only here
           ```
+          
+          The meta-value is used for the same purposes as with shared borrows,
+          at the exception that in case of inactivated borrows it is not
+          *necessary* for the synthesis: we keep it only as meta-information.
        *)
 
 and loan_content =

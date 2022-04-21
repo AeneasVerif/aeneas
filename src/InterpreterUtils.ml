@@ -249,3 +249,13 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
     obj#visit_typed_value () v;
     false
   with Found -> true
+
+(** Return the place used in an rvalue, if that makes sense.
+    This is used to compute meta-data, to find pretty names.
+ *)
+let rvalue_get_place (rv : E.rvalue) : E.place option =
+  match rv with
+  | Use (Copy p | Move p) -> Some p
+  | Use (Constant _) -> None
+  | Ref (p, _) -> Some p
+  | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ -> None

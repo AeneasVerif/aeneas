@@ -3,6 +3,7 @@
 open Pure
 open PureUtils
 open TranslateCore
+module V = Values
 
 (** The local logger *)
 let log = L.pure_micro_passes_log
@@ -109,7 +110,10 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
   let id = obj#visit_expression () body.body.e () in
   VarId.generator_from_incr_id id
 
-type pn_ctx = string VarId.Map.t
+type pn_ctx = {
+  pure_vars : string VarId.Map.t;
+  llbc_vars : string V.VarId.Map.t;
+}
 (** "pretty-name context": see [compute_pretty_names] *)
 
 (** This function computes pretty names for the variables in the pure AST. It
@@ -229,50 +233,101 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    *   also.
    *)
   let merge_ctxs (ctx0 : pn_ctx) (ctx1 : pn_ctx) : pn_ctx =
-    VarId.Map.fold (fun id name ctx -> VarId.Map.add id name ctx) ctx0 ctx1
+    let pure_vars =
+      VarId.Map.fold
+        (fun id name ctx -> VarId.Map.add id name ctx)
+        ctx0.pure_vars ctx1.pure_vars
+    in
+    let llbc_vars =
+      V.VarId.Map.fold
+        (fun id name ctx -> V.VarId.Map.add id name ctx)
+        ctx0.llbc_vars ctx1.llbc_vars
+    in
+    { pure_vars; llbc_vars }
+  in
+  let empty_ctx =
+    { pure_vars = VarId.Map.empty; llbc_vars = V.VarId.Map.empty }
   in
   let merge_ctxs_ls (ctxs : pn_ctx list) : pn_ctx =
-    List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) VarId.Map.empty ctxs
+    List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) empty_ctx ctxs
   in
 
   let add_var (ctx : pn_ctx) (v : var) : pn_ctx =
-    assert (not (VarId.Map.mem v.id ctx));
+    assert (not (VarId.Map.mem v.id ctx.pure_vars));
     match v.basename with
     | None -> ctx
-    | Some name -> VarId.Map.add v.id name ctx
+    | Some name ->
+        let pure_vars = VarId.Map.add v.id name ctx.pure_vars in
+        { ctx with pure_vars }
   in
-  let update_var (ctx : pn_ctx) (v : var) : var =
+  let update_var (ctx : pn_ctx) (v : var) (mp : mplace option) : var =
     match v.basename with
     | Some _ -> v
     | None -> (
-        match VarId.Map.find_opt v.id ctx with
-        | None -> v
-        | Some basename -> { v with basename = Some basename })
+        match VarId.Map.find_opt v.id ctx.pure_vars with
+        | Some basename -> { v with basename = Some basename }
+        | None ->
+            if Option.is_some mp then
+              match
+                V.VarId.Map.find_opt (Option.get mp).var_id ctx.llbc_vars
+              with
+              | None -> v
+              | Some basename -> { v with basename = Some basename }
+            else v)
   in
   let update_typed_lvalue ctx (lv : typed_lvalue) : typed_lvalue =
     let obj =
       object
         inherit [_] map_typed_lvalue
 
-        method! visit_var _ v = update_var ctx v
+        method! visit_Var _ v mp = Var (update_var ctx v mp, mp)
       end
     in
     obj#visit_typed_lvalue () lv
   in
 
+  let register_mplace (mp : mplace) (ctx : pn_ctx) : pn_ctx =
+    match (V.VarId.Map.find_opt mp.var_id ctx.llbc_vars, mp.name) with
+    | None, Some name ->
+        let llbc_vars = V.VarId.Map.add mp.var_id name ctx.llbc_vars in
+        { ctx with llbc_vars }
+    | _ -> ctx
+  in
+
+  let add_pure_var_constraint (var_id : VarId.id) (name : string) (ctx : pn_ctx)
+      : pn_ctx =
+    let pure_vars =
+      if VarId.Map.mem var_id ctx.pure_vars then ctx.pure_vars
+      else VarId.Map.add var_id name ctx.pure_vars
+    in
+    { ctx with pure_vars }
+  in
+  let add_llbc_var_constraint (var_id : V.VarId.id) (name : string)
+      (ctx : pn_ctx) : pn_ctx =
+    let llbc_vars =
+      if V.VarId.Map.mem var_id ctx.llbc_vars then ctx.llbc_vars
+      else V.VarId.Map.add var_id name ctx.llbc_vars
+    in
+    { ctx with llbc_vars }
+  in
   let add_constraint (mp : mplace) (var_id : VarId.id) (ctx : pn_ctx) : pn_ctx =
+    (* Register the place *)
+    let ctx = register_mplace mp ctx in
     (* Update the variable name *)
     match (mp.name, mp.projection) with
     | Some name, [] ->
         (* Check if the variable already has a name - if not: insert the new name *)
-        if VarId.Map.mem var_id ctx then ctx else VarId.Map.add var_id name ctx
+        let ctx = add_pure_var_constraint var_id name ctx in
+        let ctx = add_llbc_var_constraint mp.var_id name ctx in
+        ctx
     | _ -> ctx
   in
   let add_right_constraint (mp : mplace) (rv : typed_rvalue) (ctx : pn_ctx) :
       pn_ctx =
-    match rv.value with
-    | RvPlace { var = var_id; projection = [] } -> add_constraint mp var_id ctx
-    | _ -> ctx
+    (* Register the place *)
+    let ctx = register_mplace mp ctx in
+    (* Add the constraint *)
+    match rv.value with RvPlace p -> add_constraint mp p.var ctx | _ -> ctx
   in
   let add_opt_right_constraint (mp : mplace option) (rv : typed_rvalue)
       (ctx : pn_ctx) : pn_ctx =
@@ -283,7 +338,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       object (self)
         inherit [_] reduce_typed_lvalue
 
-        method zero _ = VarId.Map.empty
+        method zero _ = empty_ctx
 
         method plus ctx0 ctx1 _ = merge_ctxs (ctx0 ()) (ctx1 ())
 
@@ -302,22 +357,69 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    * assignments *)
   let add_left_right_constraint (lv : typed_lvalue) (re : texpression)
       (ctx : pn_ctx) : pn_ctx =
-    (* We propagate constraints across variable reassignments: `^0 = x` *)
-    match (lv.value, re.e) with
-    | ( LvVar (Var (lvar, (Some { name = None; projection = [] } | None))),
-        Value (_, Some ({ name = Some _; projection = [] } as rmp)) ) ->
-        (* Use the meta-information on the right *)
-        add_constraint rmp lvar.id ctx
-    | ( LvVar (Var (lvar, (Some { name = None; projection = [] } | None))),
-        Value ({ value = RvPlace { var = rvar_id; projection = [] }; ty = _ }, _)
-      ) -> (
-        (* Use the variable name *)
-        match
-          (VarId.Map.find_opt lvar.id ctx, VarId.Map.find_opt rvar_id ctx)
-        with
-        | None, Some name -> VarId.Map.add lvar.id name ctx
-        | _ -> ctx)
-    | _ -> (* Nothing to propagate *) ctx
+    (* We propagate constraints across variable reassignments: `^0 = x`,
+     * if the destination doesn't have naming information *)
+    match lv.value with
+    | LvVar (Var (({ id = _; basename = None; ty = _ } as lvar), lmp)) -> (
+        if
+          (* Check that there is not already a name for teh variable *)
+          VarId.Map.mem lvar.id ctx.pure_vars
+        then ctx
+        else
+          (* We ignore the left meta-place information: it should have been taken
+           * care of by [add_left_constraint]. We try to use the right meta-place
+           * information *)
+          let add (name : string) (ctx : pn_ctx) : pn_ctx =
+            (* Add the constraint for the pure variable *)
+            let ctx = add_pure_var_constraint lvar.id name ctx in
+            (* Add the constraint for the LLBC variable *)
+            match lmp with
+            | None -> ctx
+            | Some lmp -> add_llbc_var_constraint lmp.var_id name ctx
+          in
+          match re.e with
+          | Value (rv, rmp) ->
+              (* We try to use the right-place information *)
+              let ctx =
+                match rmp with
+                | Some { var_id; name; projection = [] } -> (
+                    if Option.is_some name then add (Option.get name) ctx
+                    else
+                      match V.VarId.Map.find_opt var_id ctx.llbc_vars with
+                      | None -> ctx
+                      | Some name -> add name ctx)
+                | _ -> ctx
+              in
+              (* We try to use the rvalue information *)
+              let ctx =
+                match rv with
+                | { value = RvPlace { var = rvar_id; projection = [] }; ty = _ }
+                  -> (
+                    match VarId.Map.find_opt rvar_id ctx.pure_vars with
+                    | None -> ctx
+                    | Some name -> add name ctx)
+                | _ -> ctx
+              in
+              ctx
+          | _ -> ctx)
+    | _ -> ctx
+    (* match (lv.value, re.e) with
+       (* Case 1: *)
+       | ( LvVar (Var (lvar, (Some { name = None; projection = [] } | None))),
+           Value (_, Some ({ name = Some _; projection = [] } as rmp)) ) ->
+           (* Use the meta-information on the right *)
+           add_constraint rmp lvar.id ctx
+       (* Case 2: *)
+       | ( LvVar (Var (lvar, (Some { name = None; projection = [] } | None))),
+           Value ({ value = RvPlace { var = rvar_id; projection = [] }; ty = _ }, _)
+         ) -> (
+           (* Use the variable name *)
+           match
+             (VarId.Map.find_opt lvar.id ctx, VarId.Map.find_opt rvar_id ctx)
+           with
+           | None, Some name -> VarId.Map.add lvar.id name ctx
+           | _ -> ctx)
+         | _ -> (* Nothing to propagate *) ctx *)
   in
 
   (* *)
@@ -350,7 +452,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   (* *)
   and update_let (monadic : bool) (lv : typed_lvalue) (re : texpression)
       (e : texpression) (ctx : pn_ctx) : pn_ctx * expression =
+    (* We first add the left-constraint *)
     let ctx = add_left_constraint lv ctx in
+    (* Then we try to propagate the right-constraints to the left, in case
+     * the left constraints didn't give naming information *)
     let ctx = add_left_right_constraint lv re ctx in
     let ctx, re = update_texpression re ctx in
     let ctx, e = update_texpression e ctx in
@@ -387,8 +492,21 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   and update_meta (meta : meta) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
     match meta with
-    | Assignment (mp, rvalue) ->
+    | Assignment (mp, rvalue, rmp) ->
         let ctx = add_right_constraint mp rvalue ctx in
+        let ctx =
+          match (mp.projection, rmp) with
+          | [], Some { var_id; name; projection = [] } -> (
+              let name =
+                match name with
+                | Some name -> Some name
+                | None -> V.VarId.Map.find_opt var_id ctx.llbc_vars
+              in
+              match name with
+              | None -> ctx
+              | Some name -> add_llbc_var_constraint mp.var_id name ctx)
+          | _ -> ctx
+        in
         let ctx, e = update_texpression e ctx in
         (ctx, e.e)
   in
@@ -405,7 +523,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
               | Some name -> Some (v.id, name))
             body.inputs
         in
-        let ctx = VarId.Map.of_list input_names in
+        let ctx =
+          {
+            pure_vars = VarId.Map.of_list input_names;
+            llbc_vars = V.VarId.Map.empty;
+          }
+        in
         let _, body_exp = update_texpression body.body ctx in
         Some { body with body = body_exp }
   in

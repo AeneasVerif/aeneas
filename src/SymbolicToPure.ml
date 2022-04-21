@@ -638,7 +638,11 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
             (* The meta-value stored in the shared borrow was added especially
              * for this case (because we can't use the borrow id for lookups) *)
             (translate mv).value
-        | V.InactivatedMutBorrow _ -> failwith "Unreachable"
+        | V.InactivatedMutBorrow (mv, _) ->
+            (* Same as for shared borrows. However, note that we use inactivated borrows
+             * only in meta-data: a value actually used in the translation can't come
+             * from an unpromoted inactivated borrow *)
+            (translate mv).value
         | V.MutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
             (translate v).value)
@@ -784,9 +788,10 @@ let translate_mprojection (p : E.projection) : projection =
 
 (** Translate a "meta"-place *)
 let translate_mplace (p : S.mplace) : mplace =
+  let var_id = p.bv.index in
   let name = p.bv.name in
   let projection = translate_mprojection p.projection in
-  { name; projection }
+  { var_id; name; projection }
 
 let translate_opt_mplace (p : S.mplace option) : mplace option =
   match p with None -> None | Some p -> Some (translate_mplace p)
@@ -1434,10 +1439,11 @@ and translate_meta (config : config) (meta : S.meta) (e : S.expression)
   let next_e = translate_expression config e ctx in
   let meta =
     match meta with
-    | S.Assignment (p, rv) ->
-        let p = translate_mplace p in
+    | S.Assignment (lp, rv, rp) ->
+        let lp = translate_mplace lp in
         let rv = typed_value_to_rvalue ctx rv in
-        Assignment (p, rv)
+        let rp = translate_opt_mplace rp in
+        Assignment (lp, rv, rp)
   in
   let e = Meta (meta, next_e) in
   let ty = next_e.ty in

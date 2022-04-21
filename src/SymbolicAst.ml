@@ -49,8 +49,8 @@ type call = {
  *)
 
 type meta =
-  | Assignment of mplace * V.typed_value
-      (** We generated an assignment (destination, assigned value) *)
+  | Assignment of mplace * V.typed_value * mplace option
+      (** We generated an assignment (destination, assigned value, src) *)
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
     used in CFIM: they are a first step towards lambda-calculus expressions.

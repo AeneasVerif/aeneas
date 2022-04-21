@@ -92,7 +92,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
 
       method! visit_Borrow outer bc =
         match bc with
-        | SharedBorrow (_, l') | InactivatedMutBorrow l' ->
+        | SharedBorrow (_, l') | InactivatedMutBorrow (_, l') ->
             (* Check if this is the borrow we are looking for *)
             if l = l' then (
               (* Check if there are outer borrows or if we are inside an abstraction *)
@@ -730,7 +730,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_value config l tv ctx
-  | Concrete (V.SharedBorrow (_, l') | V.InactivatedMutBorrow l') ->
+  | Concrete (V.SharedBorrow (_, l') | V.InactivatedMutBorrow (_, l')) ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)

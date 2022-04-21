@@ -558,7 +558,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         in
         let bc =
           if bkind = E.Shared then V.SharedBorrow (shared_mvalue, bid)
-          else V.InactivatedMutBorrow bid
+          else V.InactivatedMutBorrow (shared_mvalue, bid)
         in
         let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
         (* Continue *)

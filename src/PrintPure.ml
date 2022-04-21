@@ -225,7 +225,8 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
               "(" ^ s ^ " as " ^ variant_name ^ ")." ^ field_name))
 
 let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
-  let name = match p.name with None -> "_" | Some name -> name in
+  let name = match p.name with None -> "" | Some name -> name in
+  let name = name ^ "^" ^ V.VarId.to_string p.var_id in
   projection_to_string fmt name p.projection
 
 let place_to_string (fmt : ast_formatter) (p : place) : string =
@@ -408,17 +409,28 @@ let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
 let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   let meta =
     match meta with
-    | Assignment (p, rv) ->
-        "@assign(" ^ mplace_to_string fmt p ^ " := "
+    | Assignment (lp, rv, rp) ->
+        let rp =
+          match rp with
+          | None -> ""
+          | Some rp -> " [@src=" ^ mplace_to_string fmt rp ^ "]"
+        in
+        "@assign(" ^ mplace_to_string fmt lp ^ " := "
         ^ typed_rvalue_to_string fmt rv
-        ^ ")"
+        ^ rp ^ ")"
   in
   "@meta[" ^ meta ^ "]"
 
 let rec expression_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (e : expression) : string =
   match e with
-  | Value (v, _) -> "(" ^ typed_rvalue_to_string fmt v ^ ")"
+  | Value (v, mp) ->
+      let mp =
+        match mp with
+        | None -> ""
+        | Some mp -> " [@mplace=" ^ mplace_to_string fmt mp ^ "]"
+      in
+      "(" ^ typed_rvalue_to_string fmt v ^ mp ^ ")"
   | Call call -> call_to_string fmt indent indent_incr call
   | Let (monadic, lv, re, e) ->
       let_to_string fmt indent indent_incr monadic lv re e
@@ -469,8 +481,8 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
   | If (e_true, e_false) ->
       let e_true = texpression_to_string fmt indent1 indent_incr e_true in
       let e_false = texpression_to_string fmt indent1 indent_incr e_false in
-      "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent ^ e_true ^ "\n" ^ indent
-      ^ "else\n" ^ indent ^ e_false
+      "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent1 ^ e_true ^ "\n"
+      ^ indent ^ "else\n" ^ indent1 ^ e_false
   | Match branches ->
       let branch_to_string (b : match_branch) : string =
         let pat = typed_lvalue_to_string fmt b.pat in

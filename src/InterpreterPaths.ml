@@ -214,7 +214,8 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                         (* Return - note that we don't need to update the borrow itself *)
                         Ok (ctx, { res with updated = v }))
               else Error (FailBorrow bc)
-          | V.InactivatedMutBorrow bid -> Error (FailInactivatedMutBorrow bid)
+          | V.InactivatedMutBorrow (_, bid) ->
+              Error (FailInactivatedMutBorrow bid)
           | V.MutBorrow (bid, bv) ->
               if access.enter_mut_borrows then
                 match access_projection access ctx update p' bv with
@@ -565,7 +566,7 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
         match bc with
         | V.SharedBorrow _ | V.MutBorrow (_, _) ->
             (* Nothing special to do *) super#visit_borrow_content env bc
-        | V.InactivatedMutBorrow bid ->
+        | V.InactivatedMutBorrow (_, bid) ->
             (* We need to activate inactivated borrows *)
             let cc = activate_inactivated_mut_borrow config bid in
             raise (UpdateCtx cc)
@@ -654,7 +655,7 @@ let drop_outer_borrows_loans_at_lplace (config : C.config) (end_borrows : bool)
           | LoanContent (V.MutLoan bid)
           | BorrowContent (V.MutBorrow (bid, _) | SharedBorrow (_, bid)) ->
               end_outer_borrow config bid
-          | BorrowContent (V.InactivatedMutBorrow bid) ->
+          | BorrowContent (V.InactivatedMutBorrow (_, bid)) ->
               (* First activate the borrow *)
               activate_inactivated_mut_borrow config bid
         in

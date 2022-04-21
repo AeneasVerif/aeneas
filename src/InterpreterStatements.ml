@@ -808,12 +808,15 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
                * inactivated borrow, we later can't translate it to pure values...) *)
               match rvalue with
               | E.Use _
-              | E.Ref (_, (E.Shared | E.Mut))
+              | E.Ref (_, (E.Shared | E.Mut | E.TwoPhaseMut))
               | E.UnaryOp _ | E.BinaryOp _ | E.Discriminant _ | E.Aggregate _ ->
-                  S.synthesize_assignment (S.mk_mplace p ctx) rv expr
-              | E.Ref (_, E.TwoPhaseMut) ->
-                  (* Two-phase borrow: don't synthesize meta-information *)
-                  expr)
+                  let rp = rvalue_get_place rvalue in
+                  let rp =
+                    match rp with
+                    | Some rp -> Some (S.mk_mplace rp ctx)
+                    | None -> None
+                  in
+                  S.synthesize_assignment (S.mk_mplace p ctx) rv rp expr)
         in
 
         (* Compose and apply *)
