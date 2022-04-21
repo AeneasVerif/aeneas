@@ -12,16 +12,6 @@ module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
 module FunDeclId = A.FunDeclId
 
-module MPlaceId = IdGen ()
-(** A meta-place identifier. See [mplace]. *)
-
-(** Some global counters - TODO: remove *)
-
-let mplace_id_counter, fresh_mplace_id = MPlaceId.fresh_stateful_generator ()
-
-(** Reset the mplace counter *)
-let reset_pure_counters () = mplace_id_counter := MPlaceId.generator_zero
-
 module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
@@ -297,74 +287,6 @@ and typed_rvalue = { value : rvalue; ty : ty }
         polymorphic = false;
       }]
 
-(** Meta destination place.
-
-    Meta information for places used as assignment destinations.
-    Either a regular mplace, or an mplace derived from another mplace.
-    
-    The second case is used for values given back by backward function: we
-    remember the identifier of the place from which the input argument was
-    taken from.
-
-    Ex.:
-    ====
-    ```
-    let y = f<'a>(&mut x);
-    ...
-    // end 'a
-    ...
-    ```
-    gets translated to:
-    ```
-    let y = f_fwd xv in
-    ...
-    let s = f_back xv y_i in // we want the introduced variable to be name "x"
-    ...
-    ```
-    In order to compute a proper name for the variable introduced by the backward
-    call, we need to link `s` to `x`. However, because of desugaring, it may happen
-    that the fact `f` takes `x` as argument may have to be computed by propagating
-    naming information. We use place identifiers to link the output variables to the
-    input arguments: it allows us to propagate naming constraints "across" function
-    calls.
-
-    The full details are given in [PureMicroPasses.compute_pretty_names]
- *)
-type mdplace = Regular of mplace | From of MPlaceId.id [@@deriving show]
-
-(** Ancestor for [iter_var_or_dummy] visitor *)
-class ['self] iter_var_or_dummy_base =
-  object (_self : 'self)
-    inherit [_] iter_typed_rvalue
-
-    method visit_mdplace : 'env -> mdplace -> unit = fun _ _ -> ()
-  end
-
-(** Ancestor for [map_var_or_dummy] visitor *)
-class ['self] map_var_or_dummy_base =
-  object (_self : 'self)
-    inherit [_] map_typed_rvalue
-
-    method visit_mdplace : 'env -> mdplace -> mdplace = fun _ x -> x
-  end
-
-(** Ancestor for [reduce_var_or_dummy] visitor *)
-class virtual ['self] reduce_var_or_dummy_base =
-  object (self : 'self)
-    inherit [_] reduce_typed_rvalue
-
-    method visit_mdplace : 'env -> mdplace -> 'a = fun _ _ -> self#zero
-  end
-
-(** Ancestor for [mapreduce_var_or_dummy] visitor *)
-class virtual ['self] mapreduce_var_or_dummy_base =
-  object (self : 'self)
-    inherit [_] mapreduce_typed_rvalue
-
-    method visit_mdplace : 'env -> mdplace -> mdplace * 'a =
-      fun _ x -> (x, self#zero)
-  end
-
 type var_or_dummy =
   | Var of var * mplace option
       (** Rk.: the mdplace is actually always a variable (i.e.: there are no projections).
@@ -379,7 +301,7 @@ type var_or_dummy =
       {
         name = "iter_var_or_dummy";
         variety = "iter";
-        ancestors = [ "iter_var_or_dummy_base" ];
+        ancestors = [ "iter_typed_rvalue" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
         polymorphic = false;
@@ -388,7 +310,7 @@ type var_or_dummy =
       {
         name = "map_var_or_dummy";
         variety = "map";
-        ancestors = [ "map_var_or_dummy_base" ];
+        ancestors = [ "map_typed_rvalue" ];
         nude = true (* Don't inherit [VisitorsRuntime.map] *);
         concrete = true;
         polymorphic = false;
@@ -397,7 +319,7 @@ type var_or_dummy =
       {
         name = "reduce_var_or_dummy";
         variety = "reduce";
-        ancestors = [ "reduce_var_or_dummy_base" ];
+        ancestors = [ "reduce_typed_rvalue" ];
         nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
         polymorphic = false;
       },
@@ -405,7 +327,7 @@ type var_or_dummy =
       {
         name = "mapreduce_var_or_dummy";
         variety = "mapreduce";
-        ancestors = [ "mapreduce_var_or_dummy_base" ];
+        ancestors = [ "mapreduce_typed_rvalue" ];
         nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
         polymorphic = false;
       }]

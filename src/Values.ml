@@ -173,6 +173,16 @@ and borrow_content =
           The meta-value is used for the same purposes as with shared borrows,
           at the exception that in case of inactivated borrows it is not
           *necessary* for the synthesis: we keep it only as meta-information.
+          To be more precise:
+          - when generating the synthesized program, we may need to convert
+            shared borrows to pure values
+          - we never need to do so for inactivated borrows: such borrows must
+            be activated at the moment we use them (meaning we convert a *mutable*
+            borrow to a pure value). However, we save meta-data about the assignments,
+            which is used to make the code cleaner: when generating this meta-data,
+            we may need to convert inactivated borrows to pure values, in which
+            situation we convert the meta-value we stored in the inactivated
+            borrow.
        *)
 
 and loan_content =

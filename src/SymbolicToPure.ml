@@ -640,7 +640,7 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
             (translate mv).value
         | V.InactivatedMutBorrow (mv, _) ->
             (* Same as for shared borrows. However, note that we use inactivated borrows
-             * only in meta-data: a value actually used in the translation can't come
+             * only in meta-data: a value actually *used in the translation* can't come
              * from an unpromoted inactivated borrow *)
             (translate mv).value
         | V.MutBorrow (_, v) ->
@@ -1451,8 +1451,6 @@ and translate_meta (config : config) (meta : S.meta) (e : S.expression)
 
 let translate_fun_decl (config : config) (ctx : bs_ctx)
     (body : S.expression option) : fun_decl =
-  (* Reset the counters *)
-  reset_pure_counters ();
   (* Translate *)
   let def = ctx.fun_decl in
   let bid = ctx.bid in
