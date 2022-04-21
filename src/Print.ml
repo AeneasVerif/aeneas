@@ -457,7 +457,7 @@ module Values = struct
         ^ ", "
         ^ typed_avalue_to_string fmt av
         ^ ")"
-    | AEndedMutBorrow (_mv, _msv, child) ->
+    | AEndedMutBorrow (_mv, child) ->
         "@ended_mut_borrow(" ^ typed_avalue_to_string fmt child ^ ")"
     | AEndedIgnoredMutBorrow
         { child; given_back_loans_proj; given_back_meta = _ } ->

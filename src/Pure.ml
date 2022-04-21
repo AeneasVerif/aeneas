@@ -12,6 +12,16 @@ module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
 module FunDeclId = A.FunDeclId
 
+module MPlaceId = IdGen ()
+(** A meta-place identifier. See [mplace]. *)
+
+(** Some global counters - TODO: remove *)
+
+let mplace_id_counter, fresh_mplace_id = MPlaceId.fresh_stateful_generator ()
+
+(** Reset the mplace counter *)
+let reset_pure_counters () = mplace_id_counter := MPlaceId.generator_zero
+
 module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
@@ -283,14 +293,14 @@ and typed_rvalue = { value : rvalue; ty : ty }
         polymorphic = false;
       }]
 
-type mdplace = { place : mplace option; from_rvalue : typed_rvalue option }
-[@@deriving show]
-(** "Meta" destination place.
+(** Meta destination place.
 
     Meta information for places used as assignment destinations.
-    This is useful for the values given back by the backward functions: in such
-    situations, we link the output variables to the input arguments, to derive
-    names for the output variables from the input variables.
+    Either a regular mplace, or an mplace derived from another mplace.
+    
+    The second case is used for values given back by backward function: we
+    remember the identifier of the place from which the input argument was
+    taken from.
 
     Ex.:
     ====
@@ -302,17 +312,21 @@ type mdplace = { place : mplace option; from_rvalue : typed_rvalue option }
     ```
     gets translated to:
     ```
-    let y = f_fwd x in
+    let y = f_fwd xv in
     ...
-    let s = f_back x y_i in // we want the introduced variable to be name "x1"
+    let s = f_back xv y_i in // we want the introduced variable to be name "x"
     ...
     ```
     In order to compute a proper name for the variable introduced by the backward
     call, we need to link `s` to `x`. However, because of desugaring, it may happen
     that the fact `f` takes `x` as argument may have to be computed by propagating
-    naming information. This is why we link the output variables to the input arguments:
-    it allows us to propagate such naming constraints "across" function calls.
+    naming information. We use place identifiers to link the output variables to the
+    input arguments: it allows us to propagate naming constraints "across" function
+    calls.
+
+    The full details are given in [PureMicroPasses.compute_pretty_names]
  *)
+type mdplace = Regular of mplace | From of MPlaceId.id [@@deriving show]
 
 (** Ancestor for [iter_var_or_dummy] visitor *)
 class ['self] iter_var_or_dummy_base =
@@ -348,7 +362,7 @@ class virtual ['self] mapreduce_var_or_dummy_base =
   end
 
 type var_or_dummy =
-  | Var of var * mdplace
+  | Var of var * mplace option
       (** Rk.: the mdplace is actually always a variable (i.e.: there are no projections).
 
           We use [mplace] because it leads to a more uniform treatment of the meta

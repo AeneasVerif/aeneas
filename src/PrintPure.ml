@@ -318,15 +318,10 @@ let rec typed_rvalue_to_string (fmt : ast_formatter) (v : typed_rvalue) : string
 
 let var_or_dummy_to_string (fmt : ast_formatter) (v : var_or_dummy) : string =
   match v with
-  | Var (v, { place = None; from_rvalue = None }) ->
-      var_to_string (ast_to_type_formatter fmt) v
-  | Var (v, { place; from_rvalue }) ->
-      let dest = Print.option_to_string (mplace_to_string fmt) place in
-      let from_rvalue =
-        Print.option_to_string (typed_rvalue_to_string fmt) from_rvalue
-      in
-      "(" ^ var_to_varname v ^ " @meta[@dest=" ^ dest ^ ", from_rvalue="
-      ^ from_rvalue ^ "] : "
+  | Var (v, None) -> var_to_string (ast_to_type_formatter fmt) v
+  | Var (v, Some mp) ->
+      let mp = "[@mplace=" ^ mplace_to_string fmt mp ^ "]" in
+      "(" ^ var_to_varname v ^ " " ^ mp ^ " : "
       ^ ty_to_string (ast_to_type_formatter fmt) v.ty
       ^ ")"
   | Dummy -> "_"

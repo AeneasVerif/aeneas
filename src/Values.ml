@@ -329,16 +329,10 @@ type aproj =
           
           Note that we keep the original symbolic value as a meta-value.
        *)
-  | AEndedProjBorrows of {
-      original : msymbolic_value;
-      given_back : msymbolic_value;
-    }
+  | AEndedProjBorrows of msymbolic_value
       (** The only purpose of [AEndedProjBorrows] is to store, for synthesis
-          purposes, the symbolic value which was originally in the borrow projection,
-          and the symbolic value which was generated and given back upon ending the borrow.
-       
-          The given back value is necessary for the synthesis. The orignal value is
-          useful to propagate naming constraints.
+          purposes, the symbolic value which was generated and given back upon
+          ending the borrow.
        *)
   | AIgnoredProjBorrows
 [@@deriving
@@ -681,13 +675,9 @@ and aborrow_content =
             abstraction so that we can properly call the backward functions
             when generating the pure translation.
        *)
-  | AEndedMutBorrow of mvalue * msymbolic_value * typed_avalue
+  | AEndedMutBorrow of msymbolic_value * typed_avalue
       (** The sole purpose of [AEndedMutBorrow] is to store the (symbolic) value
-          that we gave back as a meta-value, to help with the synthesis, together
-          with the initial consumed value (also as a meta-value).
-
-          The given back value is necessary for the synthesis. The orignal consumed
-          value is useful to propagate naming constraints.
+          that we gave back as a meta-value, to help with the synthesis.
 
           We also remember the child [avalue] because this structural information
           is useful for the synthesis (but not for the symbolic execution):

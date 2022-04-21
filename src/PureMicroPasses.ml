@@ -85,7 +85,9 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
   (* Find the max id in the input variables - some of them may have been
    * filtered from the body *)
   let min_input_id =
-    List.fold_left (fun id var -> VarId.max id var.id) VarId.zero body.inputs
+    List.fold_left
+      (fun id (var : var) -> VarId.max id var.id)
+      VarId.zero body.inputs
   in
   let obj =
     object
@@ -119,9 +121,12 @@ type pn_ctx = string VarId.Map.t
     - whenever we see an rvalue/lvalue which is exactly an unnamed variable,
       and this value is linked to some meta-place information which contains
       a name and an empty path, we consider we should use this name
+    - for the values given back by backward functions, we link the given back
+      values to the places (identified by unique indices) where the input
+      arguments come from (see examples below)
       
     Something important is that, for every variable we find, the name of this
-    variable is influenced by the information we find *below* in the AST.
+    variable can be influenced by the information we find *below* in the AST.
 
     For instance, the following situations happen:
     
@@ -139,8 +144,8 @@ type pn_ctx = string VarId.Map.t
       tmp := discriminant(ls);
       switch tmp {
         0 => {
-          x := (ls as Cons).0;
-          hd := (ls as Cons).1;
+          x := (ls as Cons).0; // (i)
+          hd := (ls as Cons).1; // (ii)
           ...
         }
       }
@@ -149,8 +154,10 @@ type pn_ctx = string VarId.Map.t
       mode, we expand this value upon evaluating `tmp = discriminant(ls)`.
       However, at this point, we don't know which should be the names of
       the symbolic values we introduce for the fields of `Cons`!
+
       Let's imagine we have (for the `Cons` branch): `s0 ~~> Cons s1 s2`.
-      The assigments lead to the following binding in the evaluation context:
+      The assigments at (i) and (ii) lead to the following binding in the
+      evaluation context:
       ```
       x -> s1
       hd -> s2
@@ -165,7 +172,44 @@ type pn_ctx = string VarId.Map.t
       | Cons x hd -> ...
       | ...
       ```
+   - Given back values (introduced by backward functions):
+     Let's say we have the following Rust code:
+     ```
+     let py = id(&mut x);
+     *py = 2;
+     assert!(x == 2);
+     ```
+     
+     After desugaring, we get the following MIR:
+     ```
+     ^0 = &mut x; // anonymous variable
+     py = id(move ^0);
+     *py += 2;
+     assert!(x == 2);
+     ```
+     
+     We want this to be translated as:
+     ```
+     let py = id_fwd x in
+     let py1 = py + 2 in
+     let x1 = id_back x py1 in // <-- x1 is "given back": doesn't appear in the original MIR
+     assert(x1 = 2);
+     ```
+
+     We want to notice that the value given back by `id_back` is given back for "x",
+     so we should use "x" as the basename (hence the resulting name "x1"). However,
+     this is non-trivial, because after desugaring the input argument given to `id`
+     is not `&mut x` but `move ^0` (i.e., it comes from a temporary, anonymous
+     variable). For this reason, we give unique identifiers to places, link
+     given back values to the places where the input arguments come from, and
+     propagate naming information between the places.
+
+     This way, because of `^0 = &mut x`, we can propagate the name "x" to the place
+     `^0`, then to the given back variable across the function call.
+
    - TODO: inputs and end abstraction...
+   
+   
  *)
 let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Small helpers *)
@@ -217,6 +261,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   in
 
   let add_constraint (mp : mplace) (var_id : VarId.id) (ctx : pn_ctx) : pn_ctx =
+    (* Update the variable name *)
     match (mp.name, mp.projection) with
     | Some name, [] ->
         (* Check if the variable already has a name - if not: insert the new name *)
@@ -242,17 +287,37 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
 
         method plus ctx0 ctx1 _ = merge_ctxs (ctx0 ()) (ctx1 ())
 
-        method! visit_Var _ v mdp () =
+        method! visit_Var _ v mp () =
           (* Register the variable *)
           let ctx = add_var (self#zero ()) v in
           (* Register the mplace information if there is such information *)
-          match mdp.place with
-          | None -> ctx
-          | Some mp -> add_constraint mp v.id ctx
+          match mp with Some mp -> add_constraint mp v.id ctx | None -> ctx
       end
     in
     let ctx1 = obj#visit_typed_lvalue () lv () in
     merge_ctxs ctx ctx1
+  in
+
+  (* This is used to propagate constraint information about places in case of
+   * assignments *)
+  let add_left_right_constraint (lv : typed_lvalue) (re : texpression)
+      (ctx : pn_ctx) : pn_ctx =
+    (* We propagate constraints across variable reassignments: `^0 = x` *)
+    match (lv.value, re.e) with
+    | ( LvVar (Var (lvar, (Some { name = None; projection = [] } | None))),
+        Value (_, Some ({ name = Some _; projection = [] } as rmp)) ) ->
+        (* Use the meta-information on the right *)
+        add_constraint rmp lvar.id ctx
+    | ( LvVar (Var (lvar, (Some { name = None; projection = [] } | None))),
+        Value ({ value = RvPlace { var = rvar_id; projection = [] }; ty = _ }, _)
+      ) -> (
+        (* Use the variable name *)
+        match
+          (VarId.Map.find_opt lvar.id ctx, VarId.Map.find_opt rvar_id ctx)
+        with
+        | None, Some name -> VarId.Map.add lvar.id name ctx
+        | _ -> ctx)
+    | _ -> (* Nothing to propagate *) ctx
   in
 
   (* *)
@@ -286,6 +351,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   and update_let (monadic : bool) (lv : typed_lvalue) (re : texpression)
       (e : texpression) (ctx : pn_ctx) : pn_ctx * expression =
     let ctx = add_left_constraint lv ctx in
+    let ctx = add_left_right_constraint lv re ctx in
     let ctx, re = update_texpression re ctx in
     let ctx, e = update_texpression e ctx in
     let lv = update_typed_lvalue ctx lv in
@@ -822,7 +888,7 @@ let to_monadic (config : config) (def : fun_decl) : fun_decl =
             let id, _ = VarId.fresh var_cnt in
             let var = { id; basename = None; ty = unit_ty } in
             let inputs = [ var ] in
-            let input_lv = mk_typed_lvalue_from_var var None None in
+            let input_lv = mk_typed_lvalue_from_var var None in
             let inputs_lvs = [ input_lv ] in
             Some { body with inputs; inputs_lvs }
       in
@@ -980,7 +1046,7 @@ let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
                    * monadic binding *)
                   let vid = fresh_id () in
                   let tmp : var = { id = vid; basename = None; ty = lv.ty } in
-                  let ltmp = mk_typed_lvalue_from_var tmp None None in
+                  let ltmp = mk_typed_lvalue_from_var tmp None in
                   let rtmp = mk_typed_rvalue_from_var tmp in
                   let rtmp = mk_value_expression rtmp None in
                   (* Visit the next expression *)
@@ -1058,9 +1124,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                 in
                 (* The `Success` branch introduces a fresh state variable *)
                 let state_var = fresh_state_var () in
-                let state_value =
-                  mk_typed_lvalue_from_var state_var None None
-                in
+                let state_value = mk_typed_lvalue_from_var state_var None in
                 let success_pat =
                   mk_result_return_lvalue
                     (mk_simpl_tuple_lvalue [ state_value; lv ])
@@ -1131,7 +1195,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
           let sg = { sg with inputs = sg_inputs; outputs = sg_outputs } in
           (* Update the inputs list *)
           let inputs = body.inputs @ [ input_state_var ] in
-          let input_lv = mk_typed_lvalue_from_var input_state_var None None in
+          let input_lv = mk_typed_lvalue_from_var input_state_var None in
           let inputs_lvs = body.inputs_lvs @ [ input_lv ] in
           (* Update the body *)
           let body = { body with inputs; inputs_lvs } in
