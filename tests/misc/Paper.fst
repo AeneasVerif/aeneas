@@ -13,7 +13,7 @@ let ref_incr_fwd_back (x : i32) : result i32 =
 let test_incr_fwd : result unit =
   begin match ref_incr_fwd_back 0 with
   | Fail -> Fail
-  | Return i -> if not (i = 1) then Fail else Return ()
+  | Return x -> if not (x = 1) then Fail else Return ()
   end
 
 (** Unit test for [paper::test_incr] *)
@@ -41,10 +41,8 @@ let test_choose_fwd : result unit =
       else
         begin match choose_back i32 true 0 0 z0 with
         | Fail -> Fail
-        | Return (i, i0) ->
-          if not (i = 1)
-          then Fail
-          else if not (i0 = 0) then Fail else Return ()
+        | Return (x, y) ->
+          if not (x = 1) then Fail else if not (y = 0) then Fail else Return ()
         end
     end
   end
@@ -89,7 +87,7 @@ let rec list_nth_mut_back
       | Return i0 ->
         begin match list_nth_mut_back t tl i0 ret with
         | Fail -> Fail
-        | Return l0 -> Return (ListCons x l0)
+        | Return tl0 -> Return (ListCons x tl0)
         end
       end
     end
@@ -144,7 +142,7 @@ let call_choose_fwd (p : (u32 & u32)) : result u32 =
     | Return pz0 ->
       begin match choose_back u32 true px py pz0 with
       | Fail -> Fail
-      | Return (i, _) -> Return i
+      | Return (px0, _) -> Return px0
       end
     end
   end

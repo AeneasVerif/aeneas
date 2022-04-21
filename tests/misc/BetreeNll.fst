@@ -34,7 +34,7 @@ let rec get_list_at_x_back
     else
       begin match get_list_at_x_back tl x ret with
       | Fail -> Fail
-      | Return l -> Return (ListCons hd l)
+      | Return tl0 -> Return (ListCons hd tl0)
       end
   | ListNil -> Return ret
   end

@@ -22,7 +22,7 @@ let swap_back
   | Return (st0, x0) ->
     begin match core_mem_swap_back1 t x y st0 with
     | Fail -> Fail
-    | Return (st1, x1) -> Return (st1, (x0, x1))
+    | Return (st1, y0) -> Return (st1, (x0, y0))
     end
   end
 

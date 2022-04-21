@@ -112,7 +112,7 @@ let _ = assert_norm (test_list1_fwd = Return ())
 
 (** [no_nested_borrows::test_box1] *)
 let test_box1_fwd : result unit =
-  let i = 1 in let x = i in if not (x = 1) then Fail else Return ()
+  let b = 1 in let x = b in if not (x = 1) then Fail else Return ()
 
 (** Unit test for [no_nested_borrows::test_box1] *)
 let _ = assert_norm (test_box1_fwd = Return ())
@@ -192,10 +192,8 @@ let get_elem_test_fwd : result unit =
       else
         begin match get_elem_back i32 true 0 0 z0 with
         | Fail -> Fail
-        | Return (i, i0) ->
-          if not (i = 1)
-          then Fail
-          else if not (i0 = 0) then Fail else Return ()
+        | Return (x, y) ->
+          if not (x = 1) then Fail else if not (y = 0) then Fail else Return ()
         end
     end
   end
@@ -334,7 +332,7 @@ let rec list_nth_mut_back
       | Return i0 ->
         begin match list_nth_mut_back t tl i0 ret with
         | Fail -> Fail
-        | Return l0 -> Return (ListCons x l0)
+        | Return tl0 -> Return (ListCons x tl0)
         end
       end
     end
@@ -392,20 +390,20 @@ let test_list_functions_fwd : result unit =
                 else
                   begin match list_nth_mut_back i32 (ListCons 0 l1) 1 3 with
                   | Fail -> Fail
-                  | Return l2 ->
-                    begin match list_nth_shared_fwd i32 l2 0 with
+                  | Return ls ->
+                    begin match list_nth_shared_fwd i32 ls 0 with
                     | Fail -> Fail
                     | Return i3 ->
                       if not (i3 = 0)
                       then Fail
                       else
-                        begin match list_nth_shared_fwd i32 l2 1 with
+                        begin match list_nth_shared_fwd i32 ls 1 with
                         | Fail -> Fail
                         | Return i4 ->
                           if not (i4 = 3)
                           then Fail
                           else
-                            begin match list_nth_shared_fwd i32 l2 2 with
+                            begin match list_nth_shared_fwd i32 ls 2 with
                             | Fail -> Fail
                             | Return i5 ->
                               if not (i5 = 2) then Fail else Return ()
