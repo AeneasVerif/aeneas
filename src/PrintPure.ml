@@ -226,7 +226,11 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
 
 let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
   let name = match p.name with None -> "" | Some name -> name in
-  let name = name ^ "^" ^ V.VarId.to_string p.var_id in
+  (* We add the "llbc" suffix to the variable index, because meta-places
+   * use indices of the variables in the original LLBC program, while
+   * regular places use indices for the pure variables: we want to make
+   * this explicit, otherwise it is confusing. *)
+  let name = name ^ "^" ^ V.VarId.to_string p.var_id ^ "llbc" in
   projection_to_string fmt name p.projection
 
 let place_to_string (fmt : ast_formatter) (p : place) : string =
