@@ -33,6 +33,24 @@ theorem prover, and we intend to add backends for other provers such as
   instance to generate `MIN` and `MAX` constants for all the integer types
   supported by Rust).
 
+## Installation & Build
+
+You need to install OCaml, together with some packages.
+
+We suggest you to follow those [instructions](https://ocaml.org/docs/install.html),
+and install OPAM on the way (same instructions).
+
+The dependencies can then be installed with the following command:
+
+```
+opam install ppx_deriving visitors easy_logging zarith yojson core
+```
+
+When choosing the OCaml compiler version: we compiled Aeneas with version 4.12.1, but any
+recent version should work.
+
+Finally, building the project simply requires to run `make` in the top directory.
+
 ## Usage
 
 The simplest way to run Aeneas is to execute `dune exec -- src/main.exe [OPTIONS] LLBC_FILE`,
@@ -61,7 +79,7 @@ We have the following limitations, that we plan to address one by one:
 - **no interior mutability**: long-term effort. Interior mutability introduces
   true aliasing: we will probably have to combine our pure lambda calculus
   with separation logic to address this.
-  Note that interior mutability is mostly anecdotical in sequential execution,
+  Note that interior mutability is mostly anecdotal in sequential execution,
   but necessary for concurrent execution (it is exploited by the synchronisation
   primitives).
 - **no concurrent execution**: long-term effort. We plan to address coarse-grained
