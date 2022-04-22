@@ -1,9 +1,9 @@
 <p><div style="text-align: center">
 <img src="static/Aeneas.jpg"
-     alt="Lapyx removing arrowhead from Aeneas" title="Lapyx removing arrowhead from Aeneas"
+     alt="Iapyx removing arrowhead from Aeneas" title="Iapyx removing arrowhead from Aeneas"
      style=""/>
 <figcaption>
-Unknown author, <i>Lapyx removing arrowhead from Aeneas</i> [Fresco].
+Unknown author, <i>Iapyx removing arrowhead from Aeneas</i> [Fresco].
 Wall in Pompei, digital image from Michael Lahanis.
 <a href="https://commons.wikimedia.org/w/index.php?curid=1357010">Source</a>
 </figcaption>
