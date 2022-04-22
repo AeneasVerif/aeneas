@@ -21,7 +21,8 @@ theorem prover, and we intend to add backends for other provers such as
 
 ## Project Structure
 
-- `src`: the OCaml sources. Note that we rely on Dune to build the project.
+- `src`: the OCaml sources. Note that we rely on [Dune](https://github.com/ocaml/dune)
+  to build the project.
 - `fstar`: F\* files providing basic definitions and notations for the
   generated code (basic definitions for arithmetic types and operations,
   collections like vectors, etc.).
