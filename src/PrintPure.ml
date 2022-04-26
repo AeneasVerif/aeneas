@@ -1,6 +1,7 @@
 (** This module defines printing functions for the types defined in Pure.ml *)
 
 open Pure
+open PureUtils
 module T = Types
 module V = Values
 module E = Expressions
@@ -425,50 +426,86 @@ let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   in
   "@meta[" ^ meta ^ "]"
 
-let rec expression_to_string (fmt : ast_formatter) (indent : string)
-    (indent_incr : string) (e : expression) : string =
-  match e with
+let rec texpression_to_string (fmt : ast_formatter) (inner : bool)
+    (indent : string) (indent_incr : string) (e : texpression) : string =
+  match e.e with
   | Value (v, mp) ->
       let mp =
         match mp with
         | None -> ""
         | Some mp -> " [@mplace=" ^ mplace_to_string fmt mp ^ "]"
       in
-      "(" ^ typed_rvalue_to_string fmt v ^ mp ^ ")"
-  | Call call -> call_to_string fmt indent indent_incr call
+      let e = typed_rvalue_to_string fmt v ^ mp in
+      if inner then "(" ^ e ^ ")" else e
+  | App _ ->
+      (* Recursively destruct the app, to have a pair (app, arguments list) *)
+      let app, args = destruct_apps e in
+      (* Convert to string *)
+      app_to_string fmt inner indent indent_incr app args
+  | Func _ ->
+      (* Func without arguments *)
+      app_to_string fmt inner indent indent_incr e []
   | Let (monadic, lv, re, e) ->
-      let_to_string fmt indent indent_incr monadic lv re e
+      let e = let_to_string fmt indent indent_incr monadic lv re e in
+      if inner then "(" ^ e ^ ")" else e
   | Switch (scrutinee, body) ->
-      switch_to_string fmt indent indent_incr scrutinee body
+      let e = switch_to_string fmt indent indent_incr scrutinee body in
+      if inner then "(" ^ e ^ ")" else e
   | Meta (meta, e) ->
       let meta = meta_to_string fmt meta in
-      let e = texpression_to_string fmt indent indent_incr e in
-      meta ^ "\n" ^ indent ^ e
+      let e = texpression_to_string fmt inner indent indent_incr e in
+      let e = meta ^ "\n" ^ indent ^ e in
+      if inner then "(" ^ e ^ ")" else e
 
-and texpression_to_string (fmt : ast_formatter) (indent : string)
+(*and texpression_to_string (fmt : ast_formatter) (inner : bool) (indent : string)
     (indent_incr : string) (e : texpression) : string =
-  expression_to_string fmt indent indent_incr e.e
+  expression_to_string fmt inner indent indent_incr inner e.e*)
 
-and call_to_string (fmt : ast_formatter) (indent : string)
-    (indent_incr : string) (call : call) : string =
-  let ty_fmt = ast_to_type_formatter fmt in
-  let tys = List.map (ty_to_string ty_fmt) call.type_params in
-  (* The arguments are expressions, so indentation might get weird... (though
-   * those expressions will in most cases just be values) *)
-  let indent1 = indent ^ indent_incr in
-  let args =
-    List.map (texpression_to_string fmt indent1 indent_incr) call.args
+and app_to_string (fmt : ast_formatter) (inner : bool) (indent : string)
+    (indent_incr : string) (app : texpression) (args : texpression list) :
+    string =
+  (* There are two possibilities: either the `app` is an instantiated,
+   * top-level function, or it is a "regular" expression *)
+  let app, tys =
+    match app.e with
+    | Func func ->
+        (* Function case *)
+        (* Convert the function identifier *)
+        let fun_id = fun_id_to_string fmt func.func in
+        (* Convert the type instantiation *)
+        let ty_fmt = ast_to_type_formatter fmt in
+        let tys = List.map (ty_to_string ty_fmt) func.type_params in
+        (* *)
+        (fun_id, tys)
+    | _ ->
+        (* "Regular" expression case *)
+        let inner = args <> [] || (args = [] && inner) in
+        (texpression_to_string fmt inner indent indent_incr app, [])
   in
+  (* Convert the arguments.
+   * The arguments are expressions, so indentation might get weird... (though
+   * those expressions will in most cases just be values) *)
+  let arg_to_string =
+    let inner = true in
+    let indent1 = indent ^ indent_incr in
+    texpression_to_string fmt inner indent1 indent_incr
+  in
+  let args = List.map arg_to_string args in
   let all_args = List.append tys args in
-  let fun_id = fun_id_to_string fmt call.func in
-  if all_args = [] then fun_id else fun_id ^ " " ^ String.concat " " all_args
+  (* Put together *)
+  let e =
+    if all_args = [] then app else app ^ " " ^ String.concat " " all_args
+  in
+  (* Add parentheses *)
+  if all_args <> [] && inner then "(" ^ e ^ ")" else e
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
     (monadic : bool) (lv : typed_lvalue) (re : texpression) (e : texpression) :
     string =
   let indent1 = indent ^ indent_incr in
-  let re = texpression_to_string fmt indent1 indent_incr re in
-  let e = texpression_to_string fmt indent indent_incr e in
+  let inner = false in
+  let re = texpression_to_string fmt inner indent1 indent_incr re in
+  let e = texpression_to_string fmt inner indent indent_incr e in
   let lv = typed_lvalue_to_string fmt lv in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
@@ -480,18 +517,18 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
   (* Printing can mess up on the scrutinee, because it is an expression - but
    * in most situations it will be a value or a function call, so it should be
    * ok*)
-  let scrut = texpression_to_string fmt indent1 indent_incr scrutinee in
+  let scrut = texpression_to_string fmt true indent1 indent_incr scrutinee in
+  let e_to_string = texpression_to_string fmt false indent1 indent_incr in
   match body with
   | If (e_true, e_false) ->
-      let e_true = texpression_to_string fmt indent1 indent_incr e_true in
-      let e_false = texpression_to_string fmt indent1 indent_incr e_false in
+      let e_true = e_to_string e_true in
+      let e_false = e_to_string e_false in
       "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent1 ^ e_true ^ "\n"
       ^ indent ^ "else\n" ^ indent1 ^ e_false
   | Match branches ->
       let branch_to_string (b : match_branch) : string =
         let pat = typed_lvalue_to_string fmt b.pat in
-        indent ^ "| " ^ pat ^ " ->\n" ^ indent1
-        ^ texpression_to_string fmt indent1 indent_incr b.branch
+        indent ^ "| " ^ pat ^ " ->\n" ^ indent1 ^ e_to_string b.branch
       in
       let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
@@ -503,11 +540,12 @@ let fun_decl_to_string (fmt : ast_formatter) (def : fun_decl) : string =
   match def.body with
   | None -> "val " ^ name ^ " :\n  " ^ signature
   | Some body ->
+      let inner = false in
       let indent = "  " in
       let inputs = List.map (var_to_string type_fmt) body.inputs in
       let inputs =
         if inputs = [] then indent
         else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
       in
-      let body = texpression_to_string fmt indent indent body.body in
+      let body = texpression_to_string fmt inner indent indent body.body in
       "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body

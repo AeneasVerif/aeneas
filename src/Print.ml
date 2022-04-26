@@ -1198,7 +1198,7 @@ module Module = struct
     String.concat "\n\n" all_defs
 end
 
-(** Pretty-printing for CFIM ASTs (functions based on an evaluation context) *)
+(** Pretty-printing for LLBC ASTs (functions based on an evaluation context) *)
 module EvalCtxLlbcAst = struct
   let ety_to_string (ctx : C.eval_ctx) (t : T.ety) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in

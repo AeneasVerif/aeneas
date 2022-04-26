@@ -23,7 +23,7 @@ type integer_type = T.integer_type [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
-    In comparison with CFIM:
+    In comparison with LLBC:
     - we removed `Box` (because it is translated as the identity: `Box T == T`)
     - we added:
       - `Result`: the type used in the error monad. This allows us to have a
@@ -168,6 +168,7 @@ type mplace = {
     we introduce.
  *)
 
+(* TODO: there shouldn't be places *)
 type place = { var : VarId.id; projection : projection } [@@deriving show]
 
 (** Ancestor for [iter_var_or_dummy] visitor *)
@@ -239,13 +240,16 @@ class virtual ['self] mapreduce_value_base =
     method visit_ty : 'env -> ty -> ty * 'a = fun _ x -> (x, self#zero)
   end
 
+(* TODO: merge with expressions *)
 type rvalue =
   | RvConcrete of constant_value
-  | RvPlace of place
+  | RvPlace of place (* TODO: field projectors should be expressions *)
   | RvAdt of adt_rvalue
 
 and adt_rvalue = {
   variant_id : (VariantId.id option[@opaque]);
+  (* TODO: variant constructors should be expressions, treated in a manner
+   * similar to functions *)
   field_values : typed_rvalue list;
 }
 
@@ -332,7 +336,10 @@ type var_or_dummy =
         polymorphic = false;
       }]
 
-(** A left value (which appears on the left of assignments *)
+(** A left value (which appears on the left of assignments.
+ 
+    TODO: rename to "pattern"
+ *)
 type lvalue =
   | LvConcrete of constant_value
       (** [LvConcrete] is necessary because we merge the switches over integer
@@ -405,6 +412,14 @@ type fun_id =
 type meta = Assignment of mplace * typed_rvalue * mplace option
 [@@deriving show]
 
+type func = { func : fun_id; type_params : ty list } [@@deriving show]
+(** A function.
+
+    Note that for now we have a clear separation between types and expressions,
+    which explains why we have the `type_params` field: a function is always
+    fully instantiated.
+ *)
+
 (** Ancestor for [iter_expression] visitor *)
 class ['self] iter_expression_base =
   object (_self : 'self)
@@ -416,7 +431,7 @@ class ['self] iter_expression_base =
 
     method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
 
-    method visit_fun_id : 'env -> fun_id -> unit = fun _ _ -> ()
+    method visit_func : 'env -> func -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for [map_expression] visitor *)
@@ -432,7 +447,7 @@ class ['self] map_expression_base =
     method visit_scalar_value : 'env -> scalar_value -> scalar_value =
       fun _ x -> x
 
-    method visit_fun_id : 'env -> fun_id -> fun_id = fun _ x -> x
+    method visit_func : 'env -> func -> func = fun _ x -> x
   end
 
 (** Ancestor for [reduce_expression] visitor *)
@@ -448,7 +463,7 @@ class virtual ['self] reduce_expression_base =
     method visit_scalar_value : 'env -> scalar_value -> 'a =
       fun _ _ -> self#zero
 
-    method visit_fun_id : 'env -> fun_id -> 'a = fun _ _ -> self#zero
+    method visit_func : 'env -> func -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for [mapreduce_expression] visitor *)
@@ -464,23 +479,25 @@ class virtual ['self] mapreduce_expression_base =
     method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_fun_id : 'env -> fun_id -> fun_id * 'a =
-      fun _ x -> (x, self#zero)
+    method visit_func : 'env -> func -> func * 'a = fun _ x -> (x, self#zero)
   end
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
-    used in CFIM. They are lambda-calculus expressions, and are thus actually
-    more general than the CFIM statements, in a sense.
+    used in LLBC. They are lambda-calculus expressions, and are thus actually
+    more general than the LLBC statements, in a sense.
  *)
 type expression =
   | Value of typed_rvalue * mplace option
-  | Call of call
-      (** The function calls are still quite structured.
+  | App of texpression * texpression
+      (** Application of a function to an argument.
+
+          The function calls are still quite structured.
           Change that?... We might want to have a "normal" lambda calculus
           app (with head and argument): this would allow us to replace some
           field accesses with calls to projectors over fields (when there
           are clashes of field names, some provers like F* get pretty bad...)
        *)
+  | Func of func  (** A function - TODO: change to Qualifier *)
   | Let of bool * typed_lvalue * texpression * texpression
       (** Let binding.
       
@@ -522,19 +539,6 @@ type expression =
        *)
   | Switch of texpression * switch_body
   | Meta of meta * texpression  (** Meta-information *)
-
-and call = {
-  func : fun_id;
-  type_params : ty list;
-  args : texpression list;
-      (** Note that immediately after we converted the symbolic AST to a pure AST,
-          some functions may have no arguments. For instance:
-          ```
-          fn f();
-          ```
-          We later add a unit argument.
-       *)
-}
 
 and switch_body = If of texpression * texpression | Match of match_branch list
 

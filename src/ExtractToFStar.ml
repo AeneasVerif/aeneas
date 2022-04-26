@@ -899,7 +899,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
       let _ = extract_typed_rvalue ctx fmt inside rv in
       if not inner then F.pp_close_box fmt ();
       ()
-  | Call call -> (
+  | App call -> (
       match (call.func, call.args) with
       | Unop unop, [ arg ] ->
           ctx.fmt.extract_unop

@@ -244,9 +244,9 @@ let functions_not_mutually_recursive (funs : fun_decl list) : bool =
       object
         inherit [_] iter_expression as super
 
-        method! visit_call env call =
-          if FunIdSet.mem call.func !ids then raise Utils.Found
-          else super#visit_call env call
+        method! visit_func env func =
+          if FunIdSet.mem func.func !ids then raise Utils.Found
+          else super#visit_func env func
       end
     in
 
@@ -264,13 +264,13 @@ let functions_not_mutually_recursive (funs : fun_decl list) : bool =
     We only look for outer monadic let-bindings.
     This is used when printing the branches of `if ... then ... else ...`.
  *)
-let rec expression_requires_parentheses (e : texpression) : bool =
+let rec let_group_requires_parentheses (e : texpression) : bool =
   match e.e with
-  | Value _ | Call _ -> false
+  | Value _ | App _ | Func _ -> false
   | Let (monadic, _, _, next_e) ->
-      if monadic then true else expression_requires_parentheses next_e
+      if monadic then true else let_group_requires_parentheses next_e
   | Switch (_, _) -> false
-  | Meta (_, next_e) -> expression_requires_parentheses next_e
+  | Meta (_, next_e) -> let_group_requires_parentheses next_e
 
 (** Module to perform type checking - we use this for sanity checks only *)
 module TypeCheck = struct
@@ -385,3 +385,49 @@ let as_var (e : texpression) : VarId.id =
 (** Remove the external occurrences of [Meta] *)
 let rec unmeta (e : texpression) : texpression =
   match e.e with Meta (_, e) -> unmeta e | _ -> e
+
+(** Construct a type as a list of arrows: ty1 -> ... tyn  *)
+let mk_arrows (inputs : ty list) (output : ty) =
+  let rec aux (tys : ty list) : ty =
+    match tys with [] -> output | ty :: tys' -> Arrow (ty, aux tys')
+  in
+  aux inputs
+
+(** Destruct an `App` expression into an expression and a list of arguments.
+
+    We simply destruct the expression as long as it is of the form `App (f, x)`.
+ *)
+let destruct_apps (e : texpression) : texpression * texpression list =
+  let rec aux (args : texpression list) (e : texpression) :
+      texpression * texpression list =
+    match e.e with App (f, x) -> aux (x :: args) f | _ -> (e, args)
+  in
+  aux [] e
+
+(** The reverse of [destruct_app] *)
+let mk_apps (e : texpression) (args : texpression list) : texpression =
+  (* Reverse the arguments *)
+  let args = List.rev args in
+  (* Apply *)
+  let rec aux (e : texpression) (args : texpression list) : texpression =
+    match args with
+    | [] -> e
+    | arg :: args' -> (
+        let e' = aux e args' in
+        match e'.ty with
+        | Arrow (ty0, ty1) ->
+            (* Sanity check *)
+            assert (ty0 == arg.ty);
+            let e'' = App (e', arg) in
+            let ty'' = ty1 in
+            { e = e''; ty = ty'' }
+        | _ -> raise (Failure "Expected an arrow type"))
+  in
+  aux e args
+
+(* Destruct an expression into a function identifier and a list of arguments,
+ * if possible *)
+let opt_destruct_function_call (e : texpression) :
+    (func * texpression list) option =
+  let app, args = destruct_apps e in
+  match app.e with Func func -> Some (func, args) | _ -> None

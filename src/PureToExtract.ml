@@ -333,7 +333,7 @@ type extraction_ctx = {
 (** Extraction context.
 
     Note that the extraction context contains information coming from the
-    CFIM AST (not only the pure AST). This is useful for naming, for instance:
+    LLBC AST (not only the pure AST). This is useful for naming, for instance:
     we use the region information to generate the names of the backward
     functions, etc.
  *)
@@ -570,7 +570,7 @@ let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
 
 let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
-  (* Lookup the CFIM def to compute the region group information *)
+  (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
   let llbc_def =
     FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls

@@ -69,8 +69,6 @@ type config = {
             borrows as inputs, it can't return mutable borrows; we actually
             dynamically check for that).
        *)
-  add_unit_args : bool;
-      (** Add unit input arguments to functions with no arguments. *)
 }
 (** A configuration to control the application of the passes *)
 
@@ -444,7 +442,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx, e =
       match e.e with
       | Value (v, mp) -> update_value v mp ctx
-      | Call call -> update_call call ctx
+      | App (app, arg) ->
+          let ctx, app = update_texpression app ctx in
+          let ctx, arg = update_texpression app ctx in
+          let e = App (app, arg) in
+          (ctx, e)
+      | Func _ -> (* nothing to do *) (ctx, e.e)
       | Let (monadic, lb, re, e) -> update_let monadic lb re e ctx
       | Switch (scrut, body) -> update_switch_body scrut body ctx
       | Meta (meta, e) -> update_meta meta e ctx
@@ -455,15 +458,6 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       pn_ctx * expression =
     let ctx = add_opt_right_constraint mp v ctx in
     (ctx, Value (v, mp))
-  (* *)
-  and update_call (call : call) (ctx : pn_ctx) : pn_ctx * expression =
-    let ctx, args =
-      List.fold_left_map
-        (fun ctx arg -> update_texpression arg ctx)
-        ctx call.args
-    in
-    let call = { call with args } in
-    (ctx, Call call)
   (* *)
   and update_let (monadic : bool) (lv : typed_lvalue) (re : texpression)
       (e : texpression) (ctx : pn_ctx) : pn_ctx * expression =
@@ -597,13 +591,13 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
       inherit [_] map_expression as super
 
       method! visit_Let env monadic lv re e =
-        (* Check that:
+        (* In order to filter, we need to check first that:
          * - the let-binding is not monadic
          * - the left-value is a variable
          *)
         match (monadic, lv.value) with
         | false, LvVar (Var (lv_var, _)) ->
-            (* Check that: *)
+            (* We can filter if: *)
             let filter = false in
             (* 1. Either:
              *   - the left variable is unnamed or [inline_named] is true
@@ -622,10 +616,14 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
               if inline_pure then
                 match re.e with
                 | Value _ -> true
-                | Call call -> (
-                    match call.func with
-                    | Regular _ -> false
-                    | Unop _ | Binop _ -> true)
+                | App _ -> (
+                    (* Application: decompose, and check that function call *)
+                    match opt_destruct_function_call re with
+                    | Some (func, _) -> (
+                        match func.func with
+                        | Regular _ -> false
+                        | Unop _ | Binop _ -> true)
+                    | _ -> false)
                 | _ -> filter
               else false
             in
@@ -716,11 +714,11 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
 
     In this situation, we can remove the call `f x`.
  *)
-let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
-    (e : texpression) : bool =
-  let check_call call1 : bool =
+let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (func0 : func)
+    (args0 : texpression list) (e : texpression) : bool =
+  let check_call (func1 : func) (args1 : texpression list) : bool =
     (* Check the func_ids, to see if call1's function is a child of call0's function *)
-    match (call0.func, call1.func) with
+    match (func0.func, func1.func) with
     | Regular (id0, rg_id0), Regular (id1, rg_id1) ->
         (* Both are "regular" calls: check if they come from the same rust function *)
         if id0 = id1 then
@@ -738,7 +736,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
                 if rg_id0 = rg_id1 then true
                 else
                   (* We need to use the regions hierarchy *)
-                  (* First, lookup the signature of the CFIM function *)
+                  (* First, lookup the signature of the LLBC function *)
                   let sg =
                     LlbcAstUtils.lookup_fun_sig id0 ctx.fun_context.fun_decls
                   in
@@ -756,9 +754,9 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
            * *)
           if call1_is_child then
             let call1_args =
-              Collections.List.prefix (List.length call0.args) call1.args
+              Collections.List.prefix (List.length args0) args1
             in
-            let args = List.combine call0.args call1_args in
+            let args = List.combine args0 call1_args in
             (* Note that the input values are expressions, *which may contain
              * meta-values* (which we need to ignore). We only consider the
              * case where both expressions are actually values. *)
@@ -767,7 +765,8 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
               | Value (v0, _), Value (v1, _) -> v0 = v1
               | _ -> false
             in
-            call0.type_params = call1.type_params && List.for_all input_eq args
+            (* Compare the input types and the prefix of the input arguments *)
+            func0.type_params = func1.type_params && List.for_all input_eq args
           else (* Not a child *)
             false
         else (* Not the same function *)
@@ -783,25 +782,24 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx) (call0 : call)
 
       method plus b0 b1 _ = b0 () && b1 ()
 
-      method! visit_expression env e =
-        match e with
+      method! visit_texpression env e =
+        match e.e with
         | Value (_, _) -> fun _ -> false
-        | Let (_, _, { e = Call call1; ty = _ }, e) ->
-            let call_is_child = check_call call1 in
-            if call_is_child then fun () -> true
-            else self#visit_texpression env e
-        | Let (_, _, re, e) ->
+        | Let (_, _, re, e) -> (
+            match opt_destruct_function_call re with
+            | None -> fun () -> self#visit_texpression env e ()
+            | Some (func1, args1) ->
+                let call_is_child = check_call func1 args1 in
+                if call_is_child then fun () -> true
+                else fun () -> self#visit_texpression env e ())
+        | App _ -> (
             fun () ->
-              self#visit_texpression env re ()
-              && self#visit_texpression env e ()
-        | Call call1 -> fun () -> check_call call1
+              match opt_destruct_function_call e with
+              | Some (func1, args1) -> check_call func1 args1
+              | None -> false)
+        | Func _ -> fun () -> false
         | Meta (_, e) -> self#visit_texpression env e
         | Switch (_, body) -> self#visit_switch_body env body
-      (** We need to reimplement the way we compose the booleans *)
-
-      method! visit_texpression env e =
-        (* We take care not to visit the type *)
-        self#visit_expression env e.e
 
       method! visit_switch_body env body =
         match body with
@@ -877,7 +875,7 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
 
       method! visit_expression env e =
         match e with
-        | Value (_, _) | Call _ | Switch (_, _) | Meta (_, _) ->
+        | Value (_, _) | App _ | Switch (_, _) | Meta (_, _) ->
             super#visit_expression env e
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)
@@ -900,13 +898,14 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
                 (* Monadic let-binding: trickier.
                  * We can filter if the right-expression is a function call,
                  * under some conditions. *)
-                match (filter_monadic_calls, re.e) with
-                | true, Call call ->
+                match (filter_monadic_calls, opt_destruct_function_call re) with
+                | true, Some (func, args) ->
                     (* We need to check if there is a child call - see
                      * the comments for:
                      * [expression_contains_child_call_in_all_paths] *)
                     let has_child_call =
-                      expression_contains_child_call_in_all_paths ctx call e
+                      expression_contains_child_call_in_all_paths ctx func args
+                        e
                     in
                     if has_child_call then (* Filter *)
                       (e.e, fun _ -> used)
@@ -987,6 +986,8 @@ let keep_forward (config : config) (trans : pure_fun_translation) : bool =
 
 (** Add unit arguments (optionally) to functions with no arguments, and
     change their output type to use `result`
+
+    TODO: remove this
   *)
 let to_monadic (config : config) (def : fun_decl) : fun_decl =
   (* Update the body *)
@@ -1109,7 +1110,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
     object
       inherit [_] map_expression as super
 
-      method! visit_Call env call =
+      method! visit_App env call =
         match call.func with
         | Regular (A.Assumed aid, rg_id) -> (
             match (aid, rg_id) with
@@ -1139,8 +1140,8 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
             | ( ( A.Replace | A.VecNew | A.VecPush | A.VecInsert | A.VecLen
                 | A.VecIndex | A.VecIndexMut ),
                 _ ) ->
-                super#visit_Call env call)
-        | _ -> super#visit_Call env call
+                super#visit_App env call)
+        | _ -> super#visit_App env call
     end
   in
   (* Update the body *)
@@ -1229,7 +1230,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                *)
               let re_call =
                 match re.e with
-                | Call call -> call
+                | App call -> call
                 | _ -> raise (Failure "Unreachable: expected a function call")
               in
               (* TODO: this information should be computed in SymbolicToPure and
@@ -1248,7 +1249,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                   let args =
                     call.args @ [ mk_value_expression state_value None ]
                   in
-                  Call { call with args }
+                  App { call with args }
                 in
                 let re = { re with e = re_call } in
                 (* Create the match *)

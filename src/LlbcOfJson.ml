@@ -1,4 +1,4 @@
-(** Functions to load CFIM ASTs from json.
+(** Functions to load LLBC ASTs from json.
 
     Initially, we used `ppx_derive_yojson` to automate this.
     However, `ppx_derive_yojson` expects formatting to be slightly

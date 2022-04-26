@@ -1045,10 +1045,12 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
       (List.combine args args_mplaces)
   in
   let dest_v = mk_typed_lvalue_from_var dest dest_mplace in
-  let call = { func; type_params; args } in
-  let call = Call call in
-  let call_ty = if monadic then mk_result_ty dest_v.ty else dest_v.ty in
-  let call = { e = call; ty = call_ty } in
+  let func = { func; type_params } in
+  let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
+  let ret_ty = if monadic then mk_result_ty dest_v.ty else dest_v.ty in
+  let func_ty = mk_arrows input_tys ret_ty in
+  let func = { e = Func func; ty = func_ty } in
+  let call = mk_apps func args in
   (* Translate the next expression *)
   let next_e = translate_expression config e ctx in
   (* Put together *)
@@ -1177,9 +1179,12 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
           (List.combine inputs args_mplaces)
       in
       let monadic = fun_is_monadic fun_id in
-      let call = { func; type_params; args } in
-      let call_ty = mk_result_ty output.ty in
-      let call = { e = Call call; ty = call_ty } in
+      let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
+      let ret_ty = if monadic then mk_result_ty output.ty else output.ty in
+      let func_ty = mk_arrows input_tys ret_ty in
+      let func = { func; type_params } in
+      let func = { e = Func func; ty = func_ty } in
+      let call = mk_apps func args in
       (* **Optimization**:
        * =================
        * We do a small optimization here: if the backward function doesn't

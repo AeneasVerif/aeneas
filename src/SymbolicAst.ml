@@ -53,7 +53,7 @@ type meta =
       (** We generated an assignment (destination, assigned value, src) *)
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
-    used in CFIM: they are a first step towards lambda-calculus expressions.
+    used in LLBC: they are a first step towards lambda-calculus expressions.
  *)
 type expression =
   | Return of V.typed_value option
