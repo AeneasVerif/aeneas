@@ -63,6 +63,7 @@ type config = {
             borrows as inputs, it can't return mutable borrows; we actually
             dynamically check for that).
        *)
+  use_state_monad : bool;  (** TODO: remove *)
 }
 (** A configuration to control the application of the passes *)
 
@@ -438,7 +439,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Value (v, mp) -> update_value v mp ctx
       | App (app, arg) ->
           let ctx, app = update_texpression app ctx in
-          let ctx, arg = update_texpression app ctx in
+          let ctx, arg = update_texpression arg ctx in
           let e = App (app, arg) in
           (ctx, e)
       | Abs (x, e) -> update_abs x e ctx
@@ -1140,7 +1141,7 @@ let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
       { def with body }
 
 (** Unfold the monadic let-bindings to explicit matches. *)
-let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
+let unfold_monadic_let_bindings (_config : config) (_ctx : trans_ctx)
     (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
@@ -1217,63 +1218,19 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                 let switch_body = Match [ fail_branch; success_branch ] in
                 let e = Switch (re, switch_body) in
                 self#visit_expression state_var e
-
-          method! visit_Value state_var rv mp =
-            if config.use_state_monad then
-              match rv.ty with
-              | Adt (Assumed Result, _) -> (
-                  match rv.value with
-                  | RvAdt av ->
-                      (* We only need to replace the content of `Return ...` *)
-                      (* TODO: type checking is completely broken at this point... *)
-                      let variant_id = Option.get av.variant_id in
-                      if variant_id = result_return_id then
-                        let res_v =
-                          Collections.List.to_cons_nil av.field_values
-                        in
-                        let state_value = mk_typed_rvalue_from_var state_var in
-                        let res =
-                          mk_simpl_tuple_rvalue [ state_value; res_v ]
-                        in
-                        let res = mk_result_return_rvalue res in
-                        (mk_value_expression res None).e
-                      else super#visit_Value state_var rv mp
-                  | _ -> raise (Failure "Unrechable"))
-              | _ -> super#visit_Value state_var rv mp
-            else super#visit_Value state_var rv mp
-          (** We also need to update values, in case this value is `Return ...`.
-        
-              TODO: this is super ugly... We need to use the monadic functions
-              fail` and `return` instead.
-           *)
         end
       in
       (* Update the body *)
-      let input_state_var = fresh_state_var () in
-      let body =
-        { body with body = obj#visit_texpression input_state_var body.body }
+      let body_e =
+        let input_state_var = fresh_state_var () in
+        (* First: expand the matches *)
+        let body_e = obj#visit_texpression input_state_var body.body in
+        (* Then: add a lambda abstraction for the state variable *)
+        mk_abs (mk_typed_lvalue_from_var input_state_var None) body_e
       in
-      (* We need to update the type if we revealed the state monad *)
-      let body, signature =
-        if config.use_state_monad then
-          (* Update the signature *)
-          let sg = def.signature in
-          let sg_inputs = sg.inputs @ [ mk_state_ty ] in
-          let sg_outputs = Collections.List.to_cons_nil sg.outputs in
-          let _, sg_outputs = dest_arrow_ty sg_outputs in
-          let sg_outputs = [ sg_outputs ] in
-          let sg = { sg with inputs = sg_inputs; outputs = sg_outputs } in
-          (* Update the inputs list *)
-          let inputs = body.inputs @ [ input_state_var ] in
-          let input_lv = mk_typed_lvalue_from_var input_state_var None in
-          let inputs_lvs = body.inputs_lvs @ [ input_lv ] in
-          (* Update the body *)
-          let body = { body with inputs; inputs_lvs } in
-          (body, sg)
-        else (body, def.signature)
-      in
+      let body = { body with body = body_e } in
       (* Return *)
-      { def with body = Some body; signature }
+      { def with body = Some body }
 
 (** Apply all the micro-passes to a function.
 
