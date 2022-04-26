@@ -266,7 +266,7 @@ let functions_not_mutually_recursive (funs : fun_decl list) : bool =
  *)
 let rec let_group_requires_parentheses (e : texpression) : bool =
   match e.e with
-  | Value _ | App _ | Func _ -> false
+  | Value _ | App _ | Func _ | Abs _ -> false
   | Let (monadic, _, _, next_e) ->
       if monadic then true else let_group_requires_parentheses next_e
   | Switch (_, _) -> false
@@ -404,30 +404,68 @@ let destruct_apps (e : texpression) : texpression * texpression list =
   in
   aux [] e
 
-(** The reverse of [destruct_app] *)
-let mk_apps (e : texpression) (args : texpression list) : texpression =
-  (* Reverse the arguments *)
-  let args = List.rev args in
-  (* Apply *)
-  let rec aux (e : texpression) (args : texpression list) : texpression =
-    match args with
-    | [] -> e
-    | arg :: args' -> (
-        let e' = aux e args' in
-        match e'.ty with
-        | Arrow (ty0, ty1) ->
-            (* Sanity check *)
-            assert (ty0 == arg.ty);
-            let e'' = App (e', arg) in
-            let ty'' = ty1 in
-            { e = e''; ty = ty'' }
-        | _ -> raise (Failure "Expected an arrow type"))
-  in
-  aux e args
+(** Make an `App (app, arg)` expression *)
+let mk_app (app : texpression) (arg : texpression) : texpression =
+  match app.ty with
+  | Arrow (ty0, ty1) ->
+      (* Sanity check *)
+      assert (ty0 = arg.ty);
+      let e = App (app, arg) in
+      let ty = ty1 in
+      { e; ty }
+  | _ -> raise (Failure "Expected an arrow type")
 
-(* Destruct an expression into a function identifier and a list of arguments,
- * if possible *)
+(** The reverse of [destruct_app] *)
+let mk_apps (app : texpression) (args : texpression list) : texpression =
+  List.fold_left (fun app arg -> mk_app app arg) app args
+
+(** Destruct an expression into a function identifier and a list of arguments,
+ *  if possible *)
 let opt_destruct_function_call (e : texpression) :
     (func * texpression list) option =
   let app, args = destruct_apps e in
   match app.e with Func func -> Some (func, args) | _ -> None
+
+(** Destruct an expression into a function identifier and a list of arguments *)
+let destruct_function_call (e : texpression) : func * texpression list =
+  Option.get (opt_destruct_function_call e)
+
+let opt_destruct_result (ty : ty) : ty option =
+  match ty with
+  | Adt (Assumed Result, tys) -> Some (Collections.List.to_cons_nil tys)
+  | _ -> None
+
+let opt_destruct_tuple (ty : ty) : ty list option =
+  match ty with Adt (Tuple, tys) -> Some tys | _ -> None
+
+let opt_destruct_state_monad_result (ty : ty) : ty option =
+  (* Checking:
+   * ty == state -> result (state & _) ? *)
+  match ty with
+  | Arrow (ty0, ty1) ->
+      (* ty == ty0 -> ty1
+       * Checking: ty0 == state ?
+       * *)
+      if ty0 = mk_state_ty then
+        (* Checking: ty1 == result (state & _) *)
+        match opt_destruct_result ty1 with
+        | None -> None
+        | Some ty2 -> (
+            (* Checking: ty2 == state & _ *)
+            match opt_destruct_tuple ty2 with
+            | Some [ ty3; ty4 ] -> if ty3 = mk_state_ty then Some ty4 else None
+            | _ -> None)
+      else None
+  | _ -> None
+
+let mk_abs (x : typed_lvalue) (e : texpression) : texpression =
+  let ty = Arrow (x.ty, e.ty) in
+  let e = Abs (x, e) in
+  { e; ty }
+
+let rec destruct_abs_list (e : texpression) : typed_lvalue list * texpression =
+  match e.e with
+  | Abs (x, e') ->
+      let xl, e'' = destruct_abs_list e' in
+      (x :: xl, e'')
+  | _ -> ([], e)

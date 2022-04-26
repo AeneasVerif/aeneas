@@ -26,7 +26,7 @@ let int_of_json (js : json) : (int, string) result =
 let char_of_json (js : json) : (char, string) result =
   match js with
   | `String c ->
-      if String.length c == 1 then Ok c.[0]
+      if String.length c = 1 then Ok c.[0]
       else Error ("char_of_json: stricly more than one character in: " ^ show js)
   | _ -> Error ("char_of_json: not a char: " ^ show js)
 

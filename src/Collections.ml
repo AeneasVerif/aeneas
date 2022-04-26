@@ -77,6 +77,11 @@ module List = struct
     match ls with
     | [ x ] -> x
     | _ -> raise (Failure "The list should have length exactly one")
+
+  let pop (ls : 'a list) : 'a * 'a list =
+    match ls with
+    | x :: ls' -> (x, ls')
+    | _ -> raise (Failure "The list should have length > 0")
 end
 
 module type OrderedType = sig

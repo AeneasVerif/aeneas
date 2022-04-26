@@ -209,8 +209,8 @@ let rec projection_to_string (fmt : ast_formatter) (inside : string)
       let s = projection_to_string fmt inside p' in
       match pe.pkind with
       | E.ProjOption variant_id ->
-          assert (variant_id == T.option_some_id);
-          assert (pe.field_id == T.FieldId.zero);
+          assert (variant_id = T.option_some_id);
+          assert (pe.field_id = T.FieldId.zero);
           "(" ^ s ^ "as Option::Some)." ^ T.FieldId.to_string pe.field_id
       | E.ProjTuple _ -> "(" ^ s ^ ")." ^ T.FieldId.to_string pe.field_id
       | E.ProjAdt (adt_id, opt_variant_id) -> (
@@ -442,6 +442,10 @@ let rec texpression_to_string (fmt : ast_formatter) (inner : bool)
       let app, args = destruct_apps e in
       (* Convert to string *)
       app_to_string fmt inner indent indent_incr app args
+  | Abs _ ->
+      let xl, e = destruct_abs_list e in
+      let e = abs_to_string fmt indent indent_incr xl e in
+      if inner then "(" ^ e ^ ")" else e
   | Func _ ->
       (* Func without arguments *)
       app_to_string fmt inner indent indent_incr e []
@@ -498,6 +502,12 @@ and app_to_string (fmt : ast_formatter) (inner : bool) (indent : string)
   in
   (* Add parentheses *)
   if all_args <> [] && inner then "(" ^ e ^ ")" else e
+
+and abs_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
+    (xl : typed_lvalue list) (e : texpression) : string =
+  let xl = List.map (typed_lvalue_to_string fmt) xl in
+  let e = texpression_to_string fmt false indent indent_incr e in
+  "λ " ^ String.concat " " xl ^ ". " ^ e
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
     (monadic : bool) (lv : typed_lvalue) (re : texpression) (e : texpression) :

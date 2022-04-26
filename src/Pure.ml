@@ -497,6 +497,7 @@ type expression =
           field accesses with calls to projectors over fields (when there
           are clashes of field names, some provers like F* get pretty bad...)
        *)
+  | Abs of typed_lvalue * texpression  (** Lambda abstraction: `fun x -> e` *)
   | Func of func  (** A function - TODO: change to Qualifier *)
   | Let of bool * typed_lvalue * texpression * texpression
       (** Let binding.

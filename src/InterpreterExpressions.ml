@@ -111,7 +111,7 @@ let rec operand_constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
   | T.Str, ConstantValue (String v) -> { V.value = V.Concrete (String v); ty }
   | T.Integer int_ty, ConstantValue (V.Scalar v) ->
       (* Check the type and the ranges *)
-      assert (int_ty == v.int_ty);
+      assert (int_ty = v.int_ty);
       assert (check_scalar_value_in_range v);
       { V.value = V.Concrete (V.Scalar v); ty }
   (* Remaining cases (invalid) - listing as much as we can on purpose

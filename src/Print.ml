@@ -815,8 +815,8 @@ module LlbcAst = struct
         | E.Deref -> "*(" ^ s ^ ")"
         | E.DerefBox -> "deref_box(" ^ s ^ ")"
         | E.Field (E.ProjOption variant_id, fid) ->
-            assert (variant_id == T.option_some_id);
-            assert (fid == T.FieldId.zero);
+            assert (variant_id = T.option_some_id);
+            assert (fid = T.FieldId.zero);
             "(" ^ s ^ " as Option::Some)." ^ T.FieldId.to_string fid
         | E.Field (E.ProjTuple _, fid) ->
             "(" ^ s ^ ")." ^ T.FieldId.to_string fid
