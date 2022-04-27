@@ -890,6 +890,8 @@ let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
     itself is in a box).
 
     [inside]: controls the introduction of parentheses. See [extract_ty]
+    
+    TODO: change the formatting booleans
  *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     (inner : bool) (inside : bool) (e : texpression) : unit =
@@ -899,8 +901,27 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
       let _ = extract_typed_rvalue ctx fmt inside rv in
       if not inner then F.pp_close_box fmt ();
       ()
-  | App call -> (
-      match (call.func, call.args) with
+  | App _ ->
+      let app, args = destruct_apps e in
+      extract_App ctx fmt inner inside app args
+  | Abs _ ->
+      let xl, e = destruct_abs_list e in
+      extract_Abs ctx fmt inner inside xl e
+  | Func _ ->
+      (* We use the app case *)
+      extract_App ctx fmt inner inside e []
+  | Let (monadic, lv, re, next_e) ->
+      extract_Let ctx fmt inner inside monadic lv re next_e
+  | Switch (scrut, body) -> extract_Switch ctx fmt inner inside scrut body
+  | Meta (_, e) -> extract_texpression ctx fmt inner inside e
+
+and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
+    (inside : bool) (app : texpression) (args : texpression list) : unit =
+  (* We don't do the same thing if the app is a function identifier or a "regular" expression *)
+  match app.e with
+  | Func func -> (
+      (* Function identifier *)
+      match (func.func, args) with
       | Unop unop, [ arg ] ->
           ctx.fmt.extract_unop
             (extract_texpression ctx fmt true)
@@ -921,136 +942,189 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
             (fun ty ->
               F.pp_print_space fmt ();
               extract_ty ctx fmt true ty)
-            call.type_params;
-          (* Print the input values *)
+            func.type_params;
+          (* Print the arguments *)
           List.iter
             (fun ve ->
               F.pp_print_space fmt ();
               extract_texpression ctx fmt true true ve)
-            call.args;
+            args;
           (* Close the box for the function call *)
           F.pp_close_box fmt ();
           (* Return *)
           if inside then F.pp_print_string fmt ")"
       | _ -> raise (Failure "Unreachable"))
-  | Let (monadic, lv, re, next_e) ->
-      (* Open a box for the let-binding *)
+  | _ ->
+      let use_parentheses = inside && args <> [] in
+      (* "Regular" expression *)
+      (* Open parentheses *)
+      if use_parentheses then F.pp_print_string fmt "(";
+      (* Open a box for the application *)
       F.pp_open_hovbox fmt ctx.indent_incr;
-      let ctx =
-        if monadic then (
-          (* Note that in F*, the left value of a monadic let-binding can only be
-           * a variable *)
-          let ctx = extract_typed_lvalue ctx fmt true lv in
+      (* Print the app expression *)
+      extract_texpression ctx fmt true true app;
+      (* Print the arguments *)
+      List.iter
+        (fun ve ->
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "<--";
-          F.pp_print_space fmt ();
-          extract_texpression ctx fmt true false re;
-          F.pp_print_string fmt ";";
-          ctx)
-        else (
-          F.pp_print_string fmt "let";
-          F.pp_print_space fmt ();
-          let ctx = extract_typed_lvalue ctx fmt true lv in
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "=";
-          F.pp_print_space fmt ();
-          extract_texpression ctx fmt true false re;
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "in";
-          ctx)
-      in
-      (* Close the box for the let-binding *)
+          extract_texpression ctx fmt true true ve)
+        args;
+      (* Close the box for the application *)
       F.pp_close_box fmt ();
-      (* Print the next expression *)
+      (* Close parentheses *)
+      if use_parentheses then F.pp_print_string fmt ")"
+
+and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
+    (inside : bool) (xl : typed_lvalue list) (e : texpression) : unit =
+  (* Open a box for the abs expression *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  (* Open parentheses *)
+  if inside then F.pp_print_string fmt "(";
+  (* Print the lambda - note that there should always be at least one variable *)
+  assert (xl <> []);
+  F.pp_print_string fmt "fun";
+  let ctx =
+    List.fold_left
+      (fun ctx x ->
+        F.pp_print_space fmt ();
+        extract_typed_lvalue ctx fmt true x)
+      ctx xl
+  in
+  F.pp_print_string fmt ".";
+  F.pp_print_space fmt ();
+  (* Print the body *)
+  extract_texpression ctx fmt true false e;
+  (* Close parentheses *)
+  if inside then F.pp_print_string fmt ")";
+  (* Close the box for the abs expression *)
+  F.pp_close_box fmt ()
+
+and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
+    (inside : bool) (monadic : bool) (lv : typed_lvalue) (re : texpression)
+    (next_e : texpression) : unit =
+  (* Open a box for the let-binding *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  (* Open parentheses *)
+  if inside then F.pp_print_string fmt "(";
+  let ctx =
+    if monadic then (
+      (* Note that in F*, the left value of a monadic let-binding can only be
+       * a variable *)
+      let ctx = extract_typed_lvalue ctx fmt true lv in
       F.pp_print_space fmt ();
-      extract_texpression ctx fmt inner inside next_e
-  | Switch (scrut, body) -> (
-      match body with
-      | If (e_then, e_else) ->
-          (* Open a box for the whole `if ... then ... else ...` *)
-          F.pp_open_hvbox fmt 0;
-          (* Open a box for the `if` *)
-          F.pp_open_hovbox fmt ctx.indent_incr;
-          F.pp_print_string fmt "if";
-          F.pp_print_space fmt ();
-          extract_texpression ctx fmt true false scrut;
-          (* Close the box for the `if` *)
-          F.pp_close_box fmt ();
-          (* Extract the branches *)
-          let extract_branch (is_then : bool) (e_branch : texpression) : unit =
-            F.pp_print_space fmt ();
-            (* Open a box for the then/else+branch *)
-            F.pp_open_hovbox fmt ctx.indent_incr;
-            let then_or_else = if is_then then "then" else "else" in
-            F.pp_print_string fmt then_or_else;
-            F.pp_print_space fmt ();
-            (* Open a box for the branch *)
-            F.pp_open_hvbox fmt 0;
-            (* Print the `begin` if necessary *)
-            let parenth = PureUtils.expression_requires_parentheses e_branch in
-            if parenth then (
-              F.pp_print_string fmt "begin";
-              F.pp_print_space fmt ());
-            (* Print the branch expression *)
-            extract_texpression ctx fmt false false e_branch;
-            (* Close the `begin ... end ` *)
-            if parenth then (
-              F.pp_print_space fmt ();
-              F.pp_print_string fmt "end");
-            (* Close the box for the branch *)
-            F.pp_close_box fmt ();
-            (* Close the box for the then/else+branch *)
-            F.pp_close_box fmt ()
-          in
+      F.pp_print_string fmt "<--";
+      F.pp_print_space fmt ();
+      extract_texpression ctx fmt true false re;
+      F.pp_print_string fmt ";";
+      ctx)
+    else (
+      F.pp_print_string fmt "let";
+      F.pp_print_space fmt ();
+      let ctx = extract_typed_lvalue ctx fmt true lv in
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "=";
+      F.pp_print_space fmt ();
+      extract_texpression ctx fmt true false re;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "in";
+      ctx)
+  in
+  (* Close parentheses *)
+  if inside then F.pp_print_string fmt ")";
+  (* Close the box for the let-binding *)
+  F.pp_close_box fmt ();
+  (* Print the next expression *)
+  F.pp_print_space fmt ();
+  extract_texpression ctx fmt true false next_e
 
-          extract_branch true e_then;
-          extract_branch false e_else;
-          (* Close the box for the whole `if ... then ... else ...` *)
-          F.pp_close_box fmt ()
-      | Match branches ->
-          (* Open a box for the whole match *)
-          F.pp_open_hvbox fmt 0;
-          (* Open a box for the `match ... with` *)
-          F.pp_open_hovbox fmt ctx.indent_incr;
-          (* Print the `match ... with` *)
-          F.pp_print_string fmt "begin match";
+and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
+    (inside : bool) (scrut : texpression) (body : switch_body) : unit =
+  (* Open a box for the whole expression *)
+  F.pp_open_hvbox fmt 0;
+  (* Open parentheses *)
+  if inside then F.pp_print_string fmt "(";
+  (* Extract the switch *)
+  (match body with
+  | If (e_then, e_else) ->
+      (* Open a box for the `if` *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      F.pp_print_string fmt "if";
+      F.pp_print_space fmt ();
+      extract_texpression ctx fmt true true scrut;
+      (* Close the box for the `if` *)
+      F.pp_close_box fmt ();
+      (* Extract the branches *)
+      let extract_branch (is_then : bool) (e_branch : texpression) : unit =
+        F.pp_print_space fmt ();
+        (* Open a box for the then/else+branch *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        let then_or_else = if is_then then "then" else "else" in
+        F.pp_print_string fmt then_or_else;
+        F.pp_print_space fmt ();
+        (* Open a box for the branch *)
+        F.pp_open_hvbox fmt 0;
+        (* Print the `begin` if necessary *)
+        let parenth = PureUtils.let_group_requires_parentheses e_branch in
+        if parenth then (
+          F.pp_print_string fmt "begin";
+          F.pp_print_space fmt ());
+        (* Print the branch expression *)
+        extract_texpression ctx fmt false false e_branch;
+        (* Close the `begin ... end ` *)
+        if parenth then (
           F.pp_print_space fmt ();
-          extract_texpression ctx fmt true false scrut;
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "with";
-          (* Close the box for the `match ... with` *)
-          F.pp_close_box fmt ();
+          F.pp_print_string fmt "end");
+        (* Close the box for the branch *)
+        F.pp_close_box fmt ();
+        (* Close the box for the then/else+branch *)
+        F.pp_close_box fmt ()
+      in
 
-          (* Extract the branches *)
-          let extract_branch (br : match_branch) : unit =
-            F.pp_print_space fmt ();
-            (* Open a box for the pattern+branch *)
-            F.pp_open_hovbox fmt ctx.indent_incr;
-            F.pp_print_string fmt "|";
-            (* Print the pattern *)
-            F.pp_print_space fmt ();
-            let ctx = extract_typed_lvalue ctx fmt false br.pat in
-            F.pp_print_space fmt ();
-            F.pp_print_string fmt "->";
-            F.pp_print_space fmt ();
-            (* Open a box for the branch *)
-            F.pp_open_hvbox fmt 0;
-            (* Print the branch itself *)
-            extract_texpression ctx fmt false false br.branch;
-            (* Close the box for the branch *)
-            F.pp_close_box fmt ();
-            (* Close the box for the pattern+branch *)
-            F.pp_close_box fmt ()
-          in
+      extract_branch true e_then;
+      extract_branch false e_else
+  | Match branches ->
+      (* Open a box for the `match ... with` *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      (* Print the `match ... with` *)
+      F.pp_print_string fmt "begin match";
+      F.pp_print_space fmt ();
+      extract_texpression ctx fmt true true scrut;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "with";
+      (* Close the box for the `match ... with` *)
+      F.pp_close_box fmt ();
 
-          List.iter extract_branch branches;
+      (* Extract the branches *)
+      let extract_branch (br : match_branch) : unit =
+        F.pp_print_space fmt ();
+        (* Open a box for the pattern+branch *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        F.pp_print_string fmt "|";
+        (* Print the pattern *)
+        F.pp_print_space fmt ();
+        let ctx = extract_typed_lvalue ctx fmt false br.pat in
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "->";
+        F.pp_print_space fmt ();
+        (* Open a box for the branch *)
+        F.pp_open_hvbox fmt 0;
+        (* Print the branch itself *)
+        extract_texpression ctx fmt false false br.branch;
+        (* Close the box for the branch *)
+        F.pp_close_box fmt ();
+        (* Close the box for the pattern+branch *)
+        F.pp_close_box fmt ()
+      in
 
-          (* End the match *)
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "end";
-          (* Close the box for the whole match *)
-          F.pp_close_box fmt ())
-  | Meta (_, e) -> extract_texpression ctx fmt inner inside e
+      List.iter extract_branch branches;
+
+      (* End the match *)
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "end");
+  (* Close parentheses *)
+  if inside then F.pp_print_string fmt ")";
+  (* Close the box for the whole expression *)
+  F.pp_close_box fmt ()
 
 (** A small utility to print the parameters of a function signature.
 
