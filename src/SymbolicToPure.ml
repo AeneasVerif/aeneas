@@ -948,9 +948,11 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) : S.call * V.abs list =
 
 (** Small utility.
 
-    Return: (function is monadic, function uses state monad)
+    Return: (function is monadic, if monadic, function uses state monad)
 
     Note that all functions are monadic except some assumed functions.
+    
+    TODO: use an enumeration
  *)
 let fun_is_monadic (fun_id : A.fun_id) : bool * bool =
   match fun_id with
