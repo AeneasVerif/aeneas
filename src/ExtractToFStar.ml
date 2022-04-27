@@ -881,17 +881,9 @@ let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
       extract_adt_g_value extract_value fmt ctx inside av.variant_id
         av.field_values v.ty
 
-(** [inner]: "inner-expression": controls how we break *value* expressions over
-    several lines. If `false`, we wrap the expression in an hovbox. Otherwise,
-    we don't wrap.
-    This is important when we have an expression like `Return (...)`: we want
-    to wrap it in an hovbox. However, when formatting function arguments, we
-    to want to introduce any additional box (because the whole function call
-    itself is in a box).
-
-    [inside]: controls the introduction of parentheses. See [extract_ty]
+(** [inside]: controls the introduction of parentheses. See [extract_ty]
     
-    TODO: change the formatting booleans
+    TODO: replace the formatting boolean [inside] with something more general?
  *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (e : texpression) : unit =
@@ -1050,7 +1042,8 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       F.pp_open_hovbox fmt ctx.indent_incr;
       F.pp_print_string fmt "if";
       F.pp_print_space fmt ();
-      extract_texpression ctx fmt true scrut;
+      let scrut_inside = PureUtils.let_group_requires_parentheses scrut in
+      extract_texpression ctx fmt scrut_inside scrut;
       (* Close the box for the `if` *)
       F.pp_close_box fmt ();
       (* Extract the branches *)
@@ -1088,7 +1081,8 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (* Print the `match ... with` *)
       F.pp_print_string fmt "begin match";
       F.pp_print_space fmt ();
-      extract_texpression ctx fmt true scrut;
+      let scrut_inside = PureUtils.let_group_requires_parentheses scrut in
+      extract_texpression ctx fmt scrut_inside scrut;
       F.pp_print_space fmt ();
       F.pp_print_string fmt "with";
       (* Close the box for the `match ... with` *)
