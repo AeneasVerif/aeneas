@@ -986,7 +986,8 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         extract_typed_lvalue ctx fmt true x)
       ctx xl
   in
-  F.pp_print_string fmt ".";
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "->";
   F.pp_print_space fmt ();
   (* Print the body *)
   extract_texpression ctx fmt false e;
