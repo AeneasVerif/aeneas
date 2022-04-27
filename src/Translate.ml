@@ -179,6 +179,7 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.filter_useless_back_calls =
         mp_config.filter_useless_monadic_calls;
+      use_state_monad = mp_config.use_state_monad;
     }
   in
 

@@ -177,7 +177,6 @@ let () =
           unfold_monadic_let_bindings = !unfold_monads;
           filter_useless_monadic_calls = !filter_useless_calls;
           filter_useless_functions = !filter_useless_functions;
-          add_unit_args = false;
           use_state_monad = not !no_state;
         }
       in
