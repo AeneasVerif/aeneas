@@ -884,6 +884,7 @@ let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
 (** [inside]: controls the introduction of parentheses. See [extract_ty]
     
     TODO: replace the formatting boolean [inside] with something more general?
+    Also, it seems we don't really use it...
  *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (e : texpression) : unit =
@@ -943,14 +944,14 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
           if inside then F.pp_print_string fmt ")"
       | _ -> raise (Failure "Unreachable"))
   | _ ->
-      let use_parentheses = inside && args <> [] in
       (* "Regular" expression *)
       (* Open parentheses *)
-      if use_parentheses then F.pp_print_string fmt "(";
+      if inside then F.pp_print_string fmt "(";
       (* Open a box for the application *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the app expression *)
-      extract_texpression ctx fmt true app;
+      let app_inside = inside && args <> [] in
+      extract_texpression ctx fmt app_inside app;
       (* Print the arguments *)
       List.iter
         (fun ve ->
@@ -960,7 +961,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (* Close the box for the application *)
       F.pp_close_box fmt ();
       (* Close parentheses *)
-      if use_parentheses then F.pp_print_string fmt ")"
+      if inside then F.pp_print_string fmt ")"
 
 and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (xl : typed_lvalue list) (e : texpression) : unit =
