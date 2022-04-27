@@ -1000,7 +1000,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
        * *)
       (* TODO: we should use a `return` function, it would be cleaner *)
       if config.use_state_monad then
-        let _, state_var = fresh_var (Some "state") mk_state_ty ctx in
+        let _, state_var = fresh_var (Some "st") mk_state_ty ctx in
         let state_rvalue = mk_typed_rvalue_from_var state_var in
         let v =
           mk_result_return_rvalue (mk_simpl_tuple_rvalue [ state_rvalue; v ])
@@ -1029,7 +1029,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
       (* See the comment about the monads, for the forward function case *)
       (* TODO: we should use a `fail` function, it would be cleaner *)
       if config.use_state_monad then
-        let _, state_var = fresh_var (Some "state") mk_state_ty ctx in
+        let _, state_var = fresh_var (Some "st") mk_state_ty ctx in
         let state_rvalue = mk_typed_rvalue_from_var state_var in
         let ret_value = mk_simpl_tuple_rvalue field_values in
         let ret_value =
