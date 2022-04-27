@@ -959,9 +959,14 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
   *)
 let filter_if_backward_with_no_outputs (config : config) (def : fun_decl) :
     fun_decl option =
+  let return_ty =
+    if config.use_state_monad then
+      mk_result_ty (mk_simpl_tuple_ty [ mk_state_ty; unit_ty ])
+    else mk_result_ty (mk_simpl_tuple_ty [ unit_ty ])
+  in
   if
     config.filter_useless_functions && Option.is_some def.back_id
-    && def.signature.outputs = []
+    && def.signature.outputs = [ return_ty ]
   then None
   else Some def
 
