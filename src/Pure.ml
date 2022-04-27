@@ -171,6 +171,8 @@ type mplace = {
 (* TODO: there shouldn't be places *)
 type place = { var : VarId.id; projection : projection } [@@deriving show]
 
+type variant_id = VariantId.id [@@deriving show]
+
 (** Ancestor for [iter_var_or_dummy] visitor *)
 class ['self] iter_value_base =
   object (_self : 'self)
@@ -185,6 +187,8 @@ class ['self] iter_value_base =
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
 
     method visit_ty : 'env -> ty -> unit = fun _ _ -> ()
+
+    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for [map_typed_rvalue] visitor *)
@@ -202,6 +206,8 @@ class ['self] map_value_base =
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
 
     method visit_ty : 'env -> ty -> ty = fun _ x -> x
+
+    method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
   end
 
 (** Ancestor for [reduce_typed_rvalue] visitor *)
@@ -219,6 +225,8 @@ class virtual ['self] reduce_value_base =
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
 
     method visit_ty : 'env -> ty -> 'a = fun _ _ -> self#zero
+
+    method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for [mapreduce_typed_rvalue] visitor *)
@@ -238,6 +246,9 @@ class virtual ['self] mapreduce_value_base =
       fun _ x -> (x, self#zero)
 
     method visit_ty : 'env -> ty -> ty * 'a = fun _ x -> (x, self#zero)
+
+    method visit_variant_id : 'env -> variant_id -> variant_id * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 (* TODO: merge with expressions *)
@@ -247,7 +258,7 @@ type rvalue =
   | RvAdt of adt_rvalue
 
 and adt_rvalue = {
-  variant_id : (VariantId.id option[@opaque]);
+  variant_id : variant_id option;
   (* TODO: variant constructors should be expressions, treated in a manner
    * similar to functions *)
   field_values : typed_rvalue list;
@@ -348,7 +359,7 @@ type lvalue =
   | LvAdt of adt_lvalue
 
 and adt_lvalue = {
-  variant_id : (VariantId.id option[@opaque]);
+  variant_id : variant_id option;
   field_values : typed_lvalue list;
 }
 

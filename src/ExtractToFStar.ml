@@ -942,7 +942,14 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
           F.pp_close_box fmt ();
           (* Return *)
           if inside then F.pp_print_string fmt ")"
-      | _ -> raise (Failure "Unreachable"))
+      | _ ->
+          raise
+            (Failure
+               ("Unreachable:\n" ^ "Function: " ^ show_fun_id func.func
+              ^ ",\nNumber of arguments: "
+               ^ string_of_int (List.length args)
+               ^ ",\nArguments: "
+               ^ String.concat " " (List.map show_texpression args))))
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)
@@ -950,7 +957,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (* Open a box for the application *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the app expression *)
-      let app_inside = inside && args <> [] in
+      let app_inside = (inside && args = []) || args <> [] in
       extract_texpression ctx fmt app_inside app;
       (* Print the arguments *)
       List.iter
@@ -993,10 +1000,10 @@ and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (next_e : texpression) : unit =
   (* Open a box for the whole expression *)
   F.pp_open_hvbox fmt 0;
-  (* Open a box for the let-binding *)
-  F.pp_open_hovbox fmt ctx.indent_incr;
   (* Open parentheses *)
   if inside then F.pp_print_string fmt "(";
+  (* Open a box for the let-binding *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
   let ctx =
     if monadic then (
       (* Note that in F*, the left value of a monadic let-binding can only be
@@ -1020,13 +1027,13 @@ and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       F.pp_print_string fmt "in";
       ctx)
   in
-  (* Close parentheses *)
-  if inside then F.pp_print_string fmt ")";
   (* Close the box for the let-binding *)
   F.pp_close_box fmt ();
   (* Print the next expression *)
   F.pp_print_space fmt ();
   extract_texpression ctx fmt false next_e;
+  (* Close parentheses *)
+  if inside then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
   F.pp_close_box fmt ()
 
@@ -1361,7 +1368,8 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
        *   Tot (result (state & u32)) (decreases (f_decreases x st))
        * ```
        * Rk.: if a function has a decreases clause, it is necessarily
-       * a transparent function *)
+       * a transparent function
+       *)
       let inputs_lvs =
         let num_fwd_inputs = List.length (Option.get fwd_def.body).inputs_lvs in
         let num_fwd_inputs =

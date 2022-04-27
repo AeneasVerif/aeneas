@@ -435,6 +435,8 @@ let opt_destruct_result (ty : ty) : ty option =
   | Adt (Assumed Result, tys) -> Some (Collections.List.to_cons_nil tys)
   | _ -> None
 
+let destruct_result (ty : ty) : ty = Option.get (opt_destruct_result ty)
+
 let opt_destruct_tuple (ty : ty) : ty list option =
   match ty with Adt (Tuple, tys) -> Some tys | _ -> None
 
@@ -469,3 +471,10 @@ let rec destruct_abs_list (e : texpression) : typed_lvalue list * texpression =
       let xl, e'' = destruct_abs_list e' in
       (x :: xl, e'')
   | _ -> ([], e)
+
+let destruct_arrow (ty : ty) : ty * ty =
+  match ty with
+  | Arrow (ty0, ty1) -> (ty0, ty1)
+  | _ -> raise (Failure "Unreachable")
+
+let mk_arrow (ty0 : ty) (ty1 : ty) : ty = Arrow (ty0, ty1)
