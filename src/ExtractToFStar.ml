@@ -894,41 +894,37 @@ let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
     TODO: change the formatting booleans
  *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
-    (inner : bool) (inside : bool) (e : texpression) : unit =
+    (inside : bool) (e : texpression) : unit =
   match e.e with
   | Value (rv, _) ->
-      if not inner then F.pp_open_hovbox fmt ctx.indent_incr;
       let _ = extract_typed_rvalue ctx fmt inside rv in
-      if not inner then F.pp_close_box fmt ();
       ()
   | App _ ->
       let app, args = destruct_apps e in
-      extract_App ctx fmt inner inside app args
+      extract_App ctx fmt inside app args
   | Abs _ ->
       let xl, e = destruct_abs_list e in
-      extract_Abs ctx fmt inner inside xl e
+      extract_Abs ctx fmt inside xl e
   | Func _ ->
       (* We use the app case *)
-      extract_App ctx fmt inner inside e []
+      extract_App ctx fmt inside e []
   | Let (monadic, lv, re, next_e) ->
-      extract_Let ctx fmt inner inside monadic lv re next_e
-  | Switch (scrut, body) -> extract_Switch ctx fmt inner inside scrut body
-  | Meta (_, e) -> extract_texpression ctx fmt inner inside e
+      extract_Let ctx fmt inside monadic lv re next_e
+  | Switch (scrut, body) -> extract_Switch ctx fmt inside scrut body
+  | Meta (_, e) -> extract_texpression ctx fmt inside e
 
-and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
-    (inside : bool) (app : texpression) (args : texpression list) : unit =
+and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
+    (app : texpression) (args : texpression list) : unit =
   (* We don't do the same thing if the app is a function identifier or a "regular" expression *)
   match app.e with
   | Func func -> (
       (* Function identifier *)
       match (func.func, args) with
       | Unop unop, [ arg ] ->
-          ctx.fmt.extract_unop
-            (extract_texpression ctx fmt true)
-            fmt inside unop arg
+          ctx.fmt.extract_unop (extract_texpression ctx fmt) fmt inside unop arg
       | Binop (binop, int_ty), [ arg0; arg1 ] ->
           ctx.fmt.extract_binop
-            (extract_texpression ctx fmt true)
+            (extract_texpression ctx fmt)
             fmt inside binop int_ty arg0 arg1
       | Regular (fun_id, rg_id), _ ->
           if inside then F.pp_print_string fmt "(";
@@ -947,7 +943,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
           List.iter
             (fun ve ->
               F.pp_print_space fmt ();
-              extract_texpression ctx fmt true true ve)
+              extract_texpression ctx fmt true ve)
             args;
           (* Close the box for the function call *)
           F.pp_close_box fmt ();
@@ -962,20 +958,20 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
       (* Open a box for the application *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the app expression *)
-      extract_texpression ctx fmt true true app;
+      extract_texpression ctx fmt true app;
       (* Print the arguments *)
       List.iter
         (fun ve ->
           F.pp_print_space fmt ();
-          extract_texpression ctx fmt true true ve)
+          extract_texpression ctx fmt true ve)
         args;
       (* Close the box for the application *)
       F.pp_close_box fmt ();
       (* Close parentheses *)
       if use_parentheses then F.pp_print_string fmt ")"
 
-and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
-    (inside : bool) (xl : typed_lvalue list) (e : texpression) : unit =
+and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
+    (xl : typed_lvalue list) (e : texpression) : unit =
   (* Open a box for the abs expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Open parentheses *)
@@ -993,15 +989,17 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
   F.pp_print_string fmt ".";
   F.pp_print_space fmt ();
   (* Print the body *)
-  extract_texpression ctx fmt true false e;
+  extract_texpression ctx fmt false e;
   (* Close parentheses *)
   if inside then F.pp_print_string fmt ")";
   (* Close the box for the abs expression *)
   F.pp_close_box fmt ()
 
-and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
-    (inside : bool) (monadic : bool) (lv : typed_lvalue) (re : texpression)
+and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
+    (monadic : bool) (lv : typed_lvalue) (re : texpression)
     (next_e : texpression) : unit =
+  (* Open a box for the whole expression *)
+  F.pp_open_hvbox fmt 0;
   (* Open a box for the let-binding *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Open parentheses *)
@@ -1014,7 +1012,7 @@ and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
       F.pp_print_space fmt ();
       F.pp_print_string fmt "<--";
       F.pp_print_space fmt ();
-      extract_texpression ctx fmt true false re;
+      extract_texpression ctx fmt false re;
       F.pp_print_string fmt ";";
       ctx)
     else (
@@ -1024,7 +1022,7 @@ and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
       F.pp_print_space fmt ();
       F.pp_print_string fmt "=";
       F.pp_print_space fmt ();
-      extract_texpression ctx fmt true false re;
+      extract_texpression ctx fmt false re;
       F.pp_print_space fmt ();
       F.pp_print_string fmt "in";
       ctx)
@@ -1035,10 +1033,12 @@ and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
   F.pp_close_box fmt ();
   (* Print the next expression *)
   F.pp_print_space fmt ();
-  extract_texpression ctx fmt true false next_e
+  extract_texpression ctx fmt false next_e;
+  (* Close the box for the whole expression *)
+  F.pp_close_box fmt ()
 
-and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
-    (inside : bool) (scrut : texpression) (body : switch_body) : unit =
+and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
+    (scrut : texpression) (body : switch_body) : unit =
   (* Open a box for the whole expression *)
   F.pp_open_hvbox fmt 0;
   (* Open parentheses *)
@@ -1050,7 +1050,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
       F.pp_open_hovbox fmt ctx.indent_incr;
       F.pp_print_string fmt "if";
       F.pp_print_space fmt ();
-      extract_texpression ctx fmt true true scrut;
+      extract_texpression ctx fmt true scrut;
       (* Close the box for the `if` *)
       F.pp_close_box fmt ();
       (* Extract the branches *)
@@ -1062,14 +1062,14 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
         F.pp_print_string fmt then_or_else;
         F.pp_print_space fmt ();
         (* Open a box for the branch *)
-        F.pp_open_hvbox fmt 0;
+        F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the `begin` if necessary *)
         let parenth = PureUtils.let_group_requires_parentheses e_branch in
         if parenth then (
           F.pp_print_string fmt "begin";
           F.pp_print_space fmt ());
         (* Print the branch expression *)
-        extract_texpression ctx fmt false false e_branch;
+        extract_texpression ctx fmt false e_branch;
         (* Close the `begin ... end ` *)
         if parenth then (
           F.pp_print_space fmt ();
@@ -1088,7 +1088,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
       (* Print the `match ... with` *)
       F.pp_print_string fmt "begin match";
       F.pp_print_space fmt ();
-      extract_texpression ctx fmt true true scrut;
+      extract_texpression ctx fmt true scrut;
       F.pp_print_space fmt ();
       F.pp_print_string fmt "with";
       (* Close the box for the `match ... with` *)
@@ -1107,9 +1107,9 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (_inner : bool)
         F.pp_print_string fmt "->";
         F.pp_print_space fmt ();
         (* Open a box for the branch *)
-        F.pp_open_hvbox fmt 0;
+        F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the branch itself *)
-        extract_texpression ctx fmt false false br.branch;
+        extract_texpression ctx fmt false br.branch;
         (* Close the box for the branch *)
         F.pp_close_box fmt ();
         (* Close the box for the pattern+branch *)
@@ -1405,9 +1405,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (* Open a box for the body *)
     F.pp_open_hvbox fmt 0;
     (* Extract the body *)
-    let _ =
-      extract_texpression ctx_body fmt false false (Option.get def.body).body
-    in
+    let _ = extract_texpression ctx_body fmt false (Option.get def.body).body in
     (* Close the box for the body *)
     F.pp_close_box fmt ());
   (* Close the box for the definition *)
