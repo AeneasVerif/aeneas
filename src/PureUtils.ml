@@ -196,6 +196,17 @@ let as_var (e : texpression) : VarId.id =
 let rec unmeta (e : texpression) : texpression =
   match e.e with Meta (_, e) -> unmeta e | _ -> e
 
+(** Remove *all* the meta information *)
+let remove_meta (e : texpression) : texpression =
+  let obj =
+    object
+      inherit [_] map_expression as super
+
+      method! visit_Meta env _ e = super#visit_expression env e.e
+    end
+  in
+  obj#visit_texpression () e
+
 let mk_arrow (ty0 : ty) (ty1 : ty) : ty = Arrow (ty0, ty1)
 
 (** Construct a type as a list of arrows: ty1 -> ... tyn  *)
@@ -238,9 +249,19 @@ let opt_destruct_qualif_app (e : texpression) :
   let app, args = destruct_apps e in
   match app.e with Qualif qualif -> Some (qualif, args) | _ -> None
 
-(** Destruct an expression into a function identifier and a list of arguments *)
+(** Destruct an expression into a qualif identifier and a list of arguments *)
 let destruct_qualif_app (e : texpression) : qualif * texpression list =
   Option.get (opt_destruct_qualif_app e)
+
+(** Destruct an expression into a function call, if possible *)
+let opt_destruct_function_call (e : texpression) :
+    (fun_id * ty list * texpression list) option =
+  match opt_destruct_qualif_app e with
+  | None -> None
+  | Some (qualif, args) -> (
+      match qualif.id with
+      | Func fun_id -> Some (fun_id, qualif.type_params, args)
+      | _ -> None)
 
 let opt_destruct_result (ty : ty) : ty option =
   match ty with
@@ -452,6 +473,9 @@ let opt_destruct_state_monad_result (ty : ty) : ty option =
             | _ -> None)
       else None
   | _ -> None
+
+let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
+  match e.e with Meta (MPlace mp, e) -> (Some mp, e) | _ -> (None, e)
 
 (** Utility function, used for type checking - TODO: move *)
 let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
