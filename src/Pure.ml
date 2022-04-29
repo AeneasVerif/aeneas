@@ -444,7 +444,7 @@ class virtual ['self] mapreduce_expression_base =
     more general than the LLBC statements, in a sense.
  *)
 type expression =
-  | Local of var_id * mplace option
+  | Local of var_id
       (** Local variable - TODO: we name it "Local" because "Var" is used
           in [var_or_dummy]: change the name. Maybe rename `Var` and `Dummy`
           in `var_or_dummy` to `PatVar` and `PatDummy`.
@@ -510,7 +510,11 @@ and match_branch = { pat : typed_lvalue; branch : texpression }
 and texpression = { e : expression; ty : ty }
 
 and mvalue = (texpression[@opaque])
-(** Meta-value (converted to an expression) *)
+(** Meta-value (converted to an expression). It is important that the content
+    is opaque.
+    
+    TODO: is it possible to mark the whole mvalue type as opaque?
+ *)
 
 and meta =
   | Assignment of mplace * mvalue * mplace option
@@ -520,6 +524,7 @@ and meta =
           The mvalue stores the value which is put in the destination
           The second (optional) mplace stores the origin.
         *)
+  | MPlace of mplace  (** Meta-information about the origin of a value *)
 [@@deriving
   show,
     visitors

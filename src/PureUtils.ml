@@ -190,7 +190,7 @@ let is_var (e : texpression) : bool =
   match e.e with Local _ -> true | _ -> false
 
 let as_var (e : texpression) : VarId.id =
-  match e.e with Local (v, _) -> v | _ -> raise (Failure "Unreachable")
+  match e.e with Local v -> v | _ -> raise (Failure "Unreachable")
 
 (** Remove the external occurrences of [Meta] *)
 let rec unmeta (e : texpression) : texpression =
@@ -328,8 +328,8 @@ let unit_rvalue : texpression =
   let ty = unit_ty in
   { e; ty }
 
-let mk_texpression_from_var (v : var) (mp : mplace option) : texpression =
-  let e = Local (v.id, mp) in
+let mk_texpression_from_var (v : var) : texpression =
+  let e = Local v.id in
   let ty = v.ty in
   { e; ty }
 
@@ -337,6 +337,18 @@ let mk_typed_lvalue_from_var (v : var) (mp : mplace option) : typed_lvalue =
   let value = LvVar (Var (v, mp)) in
   let ty = v.ty in
   { value; ty }
+
+let mk_meta (m : meta) (e : texpression) : texpression =
+  let ty = e.ty in
+  let e = Meta (m, e) in
+  { e; ty }
+
+let mk_mplace_texpression (mp : mplace) (e : texpression) : texpression =
+  mk_meta (MPlace mp) e
+
+let mk_opt_mplace_texpression (mp : mplace option) (e : texpression) :
+    texpression =
+  match mp with None -> e | Some mp -> mk_mplace_texpression mp e
 
 (** Make a "simplified" tuple value from a list of values:
     - if there is exactly one value, just return it
@@ -383,6 +395,7 @@ let mk_state_ty : ty = Adt (Assumed State, [])
 
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
+(* TODO: rename *)
 let mk_result_fail_rvalue (ty : ty) : texpression =
   let type_args = [ ty ] in
   let ty = Adt (Assumed Result, type_args) in
@@ -395,6 +408,7 @@ let mk_result_fail_rvalue (ty : ty) : texpression =
   let cons = { e = cons_e; ty = cons_ty } in
   cons
 
+(* TODO: rename *)
 let mk_result_return_rvalue (v : texpression) : texpression =
   let type_args = [ v.ty ] in
   let ty = Adt (Assumed Result, type_args) in
@@ -529,7 +543,7 @@ module TypeCheck = struct
 
   let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
     match e.e with
-    | Local (var_id, _) -> (
+    | Local var_id -> (
         (* Lookup the variable - note that the variable may not be there,
          * if we type-check a subexpression (i.e.: if the variable is introduced
          * "outside" of the expression) - TODO: this won't happen once

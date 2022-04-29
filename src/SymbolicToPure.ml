@@ -111,13 +111,16 @@ type bs_ctx = {
 }
 (** Body synthesis context *)
 
-let type_check_rvalue (ctx : bs_ctx) (v : typed_rvalue) : unit =
-  let ctx = { TypeCheck.type_decls = ctx.type_context.type_decls } in
-  TypeCheck.check_typed_rvalue ctx v
-
 let type_check_lvalue (ctx : bs_ctx) (v : typed_lvalue) : unit =
-  let ctx = { TypeCheck.type_decls = ctx.type_context.type_decls } in
-  TypeCheck.check_typed_lvalue ctx v
+  let env = VarId.Map.empty in
+  let ctx = { TypeCheck.type_decls = ctx.type_context.type_decls; env } in
+  let _ = TypeCheck.check_typed_lvalue ctx v in
+  ()
+
+let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
+  let env = VarId.Map.empty in
+  let ctx = { TypeCheck.type_decls = ctx.type_context.type_decls; env } in
+  TypeCheck.check_texpression ctx e
 
 (* TODO: move *)
 let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.LlbcAst.ast_formatter =
@@ -141,9 +144,9 @@ let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let fmt = PrintPure.mk_type_formatter type_decls type_params in
   PrintPure.type_decl_to_string fmt def
 
-let typed_rvalue_to_string (ctx : bs_ctx) (v : typed_rvalue) : string =
+let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
   let fmt = bs_ctx_to_pp_ast_formatter ctx in
-  PrintPure.typed_rvalue_to_string fmt v
+  PrintPure.texpression_to_string fmt false "" "  " e
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let type_params = sg.type_params in
@@ -218,7 +221,7 @@ let bs_ctx_register_backward_call (abs : V.abs) (ctx : bs_ctx) : bs_ctx * fun_id
   let fun_id =
     match info.forward.call_id with
     | S.Fun (fid, _) -> Regular (fid, Some abs.back_id)
-    | S.Unop _ | S.Binop _ -> failwith "Unreachable"
+    | S.Unop _ | S.Binop _ -> raise (Failure "Unreachable")
   in
   (* Update the context and return *)
   ({ ctx with calls; abstractions }, fun_id)
@@ -247,7 +250,7 @@ let rec translate_sty (ty : T.sty) : ty =
   | TypeVar vid -> TypeVar vid
   | Bool -> Bool
   | Char -> Char
-  | Never -> failwith "Unreachable"
+  | Never -> raise (Failure "Unreachable")
   | Integer int_ty -> Integer int_ty
   | Str -> Str
   | Array ty -> Array (translate ty)
@@ -334,7 +337,7 @@ let rec translate_fwd_ty (types_infos : TA.type_infos) (ty : 'r T.ty) : ty =
   | TypeVar vid -> TypeVar vid
   | Bool -> Bool
   | Char -> Char
-  | Never -> failwith "Unreachable"
+  | Never -> raise (Failure "Unreachable")
   | Integer int_ty -> Integer int_ty
   | Str -> Str
   | Array ty ->
@@ -372,7 +375,7 @@ let rec translate_back_ty (types_infos : TA.type_infos)
             | T.AdtId id -> AdtId id
             | T.Assumed T.Vec -> Assumed Vec
             | T.Assumed T.Option -> Assumed Option
-            | T.Tuple | T.Assumed T.Box -> failwith "Unreachable"
+            | T.Tuple | T.Assumed T.Box -> raise (Failure "Unreachable")
           in
           if inside_mut then
             let tys_t = List.filter_map translate tys in
@@ -398,7 +401,7 @@ let rec translate_back_ty (types_infos : TA.type_infos)
   | TypeVar vid -> wrap (TypeVar vid)
   | Bool -> wrap Bool
   | Char -> wrap Char
-  | Never -> failwith "Unreachable"
+  | Never -> raise (Failure "Unreachable")
   | Integer int_ty -> wrap (Integer int_ty)
   | Str -> wrap Str
   | Array ty -> (
@@ -597,7 +600,7 @@ let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
   | V.Adt av, T.Adt (T.Assumed T.Box, _, _) -> (
       match av.field_values with
       | [ bv ] -> unbox_typed_value bv
-      | _ -> failwith "Unreachable")
+      | _ -> raise (Failure "Unreachable"))
   | _ -> v
 
 (** Translate a typed value.
@@ -616,14 +619,17 @@ let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
     - end abstraction
     - return
  *)
-let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
-    =
+let rec typed_value_to_texpression (ctx : bs_ctx) (v : V.typed_value) :
+    texpression =
   (* We need to ignore boxes *)
   let v = unbox_typed_value v in
-  let translate = typed_value_to_rvalue ctx in
+  let translate = typed_value_to_texpression ctx in
+  (* Translate the type *)
+  let ty = ctx_translate_fwd_ty ctx v.ty in
+  (* Translate the value *)
   let value =
     match v.value with
-    | V.Concrete cv -> RvConcrete cv
+    | V.Concrete cv -> { e = Const cv; ty }
     | Adt av -> (
         let variant_id = av.variant_id in
         let field_values = List.map translate av.field_values in
@@ -631,40 +637,57 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
         match v.ty with
         | T.Adt (T.Tuple, _, _) ->
             assert (variant_id = None);
-            (mk_simpl_tuple_rvalue field_values).value
-        | _ -> RvAdt { variant_id; field_values })
-    | Bottom -> failwith "Unreachable"
+            mk_simpl_tuple_texpression field_values
+        | _ ->
+            (* Retrieve the type and the translated type arguments from the
+             * translated type (simpler this way) *)
+            let adt_id, type_args =
+              match ty with
+              | Adt (type_id, tys) -> (type_id, tys)
+              | _ -> raise (Failure "Unreachable")
+            in
+            (* Create the constructor *)
+            let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
+            let qualif = { id = qualif_id; type_params = type_args } in
+            let cons_e = Qualif qualif in
+            let field_tys =
+              List.map (fun (v : texpression) -> v.ty) field_values
+            in
+            let cons_ty = mk_arrows field_tys ty in
+            let cons = { e = cons_e; ty = cons_ty } in
+            (* Apply the constructor *)
+            mk_apps cons field_values)
+    | Bottom -> raise (Failure "Unreachable")
     | Loan lc -> (
         match lc with
-        | SharedLoan (_, v) -> (translate v).value
-        | MutLoan _ -> failwith "Unreachable")
+        | SharedLoan (_, v) -> translate v
+        | MutLoan _ -> raise (Failure "Unreachable"))
     | Borrow bc -> (
         match bc with
         | V.SharedBorrow (mv, _) ->
             (* The meta-value stored in the shared borrow was added especially
              * for this case (because we can't use the borrow id for lookups) *)
-            (translate mv).value
+            translate mv
         | V.InactivatedMutBorrow (mv, _) ->
             (* Same as for shared borrows. However, note that we use inactivated borrows
              * only in meta-data: a value actually *used in the translation* can't come
              * from an unpromoted inactivated borrow *)
-            (translate mv).value
+            translate mv
         | V.MutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
-            (translate v).value)
+            translate v)
     | Symbolic sv ->
         let var = lookup_var_for_symbolic_value sv ctx in
-        (mk_typed_rvalue_from_var var).value
+        mk_texpression_from_var var
   in
-  let ty = ctx_translate_fwd_ty ctx v.ty in
-  let value : typed_rvalue = { value; ty } in
   (* Debugging *)
   log#ldebug
     (lazy
-      ("typed_value_to_rvalue: result:" ^ "\n- input:\n" ^ V.show_typed_value v
-     ^ "\n- typed rvalue:\n" ^ show_typed_rvalue value));
+      ("typed_value_to_texpression: result:" ^ "\n- input value:\n"
+     ^ V.show_typed_value v ^ "\n- translated expression:\n"
+     ^ show_texpression value));
   (* Sanity check *)
-  type_check_rvalue ctx value;
+  type_check_texpression ctx value;
   (* Return *)
   value
 
@@ -684,11 +707,11 @@ let rec typed_value_to_rvalue (ctx : bs_ctx) (v : V.typed_value) : typed_rvalue
     ```
  *)
 let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
-    typed_rvalue option =
+    texpression option =
   let translate = typed_avalue_to_consumed ctx in
   let value =
     match av.value with
-    | AConcrete _ -> failwith "Unreachable"
+    | AConcrete _ -> raise (Failure "Unreachable")
     | AAdt adt_v -> (
         (* Translate the field values *)
         let field_values = List.filter_map translate adt_v.field_values in
@@ -704,9 +727,9 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
             else
               (* Note that if there is exactly one field value,
                * [mk_simpl_tuple_rvalue] is the identity *)
-              let rv = mk_simpl_tuple_rvalue field_values in
+              let rv = mk_simpl_tuple_texpression field_values in
               Some rv)
-    | ABottom -> failwith "Unreachable"
+    | ABottom -> raise (Failure "Unreachable")
     | ALoan lc -> aloan_content_to_consumed ctx lc
     | ABorrow bc -> aborrow_content_to_consumed ctx bc
     | ASymbolic aproj -> aproj_to_consumed ctx aproj
@@ -714,17 +737,19 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
   in
   (* Sanity check - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
-  (match value with None -> () | Some value -> type_check_rvalue ctx value);
+  (match value with
+  | None -> ()
+  | Some value -> type_check_texpression ctx value);
   (* Return *)
   value
 
 and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
-    typed_rvalue option =
+    texpression option =
   match lc with
-  | AMutLoan (_, _) | ASharedLoan (_, _, _) -> failwith "Unreachable"
+  | AMutLoan (_, _) | ASharedLoan (_, _, _) -> raise (Failure "Unreachable")
   | AEndedMutLoan { child = _; given_back = _; given_back_meta } ->
       (* Return the meta-value *)
-      Some (typed_value_to_rvalue ctx given_back_meta)
+      Some (typed_value_to_texpression ctx given_back_meta)
   | AEndedSharedLoan (_, _) ->
       (* We don't dive into shared loans: there is nothing to give back
        * inside (note that there could be a mutable borrow in the shared
@@ -733,7 +758,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
       None
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -742,10 +767,10 @@ and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
       None
 
 and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
-    typed_rvalue option =
+    texpression option =
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
   | AEndedMutBorrow (_, _) ->
       (* We collect consumed values: ignore *)
       None
@@ -756,30 +781,30 @@ and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
       (* Ignore *)
       None
 
-and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : typed_rvalue option =
+and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
   match aproj with
   | V.AEndedProjLoans (msv, []) ->
       (* The symbolic value was left unchanged *)
       let var = lookup_var_for_symbolic_value msv ctx in
-      Some (mk_typed_rvalue_from_var var)
+      Some (mk_texpression_from_var var)
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
       assert (child_aproj = AIgnoredProjBorrows);
       (* The symbolic value was updated *)
       let var = lookup_var_for_symbolic_value mnv ctx in
-      Some (mk_typed_rvalue_from_var var)
+      Some (mk_texpression_from_var var)
   | V.AEndedProjLoans (_, _) ->
       (* The symbolic value was updated, and the given back values come from sevearl
        * abstractions *)
       raise Unimplemented
   | AEndedProjBorrows _ -> (* We consider consumed values *) None
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
 
 (** Convert the abstraction values in an abstraction to consumed values.
 
     See [typed_avalue_to_consumed].
  *)
-let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : typed_rvalue list =
+let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : texpression list =
   log#ldebug (lazy ("abs_to_consumed:\n" ^ abs_to_string ctx abs));
   List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
 
@@ -820,7 +845,7 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
     (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
   let ctx, value =
     match av.value with
-    | AConcrete _ -> failwith "Unreachable"
+    | AConcrete _ -> raise (Failure "Unreachable")
     | AAdt adt_v -> (
         (* Translate the field values *)
         (* For now we forget the meta-place information so that it doesn't get used
@@ -851,7 +876,7 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
                * is the identity *)
               let lv = mk_simpl_tuple_lvalue field_values in
               (ctx, Some lv))
-    | ABottom -> failwith "Unreachable"
+    | ABottom -> raise (Failure "Unreachable")
     | ALoan lc -> aloan_content_to_given_back mp lc ctx
     | ABorrow bc -> aborrow_content_to_given_back mp bc ctx
     | ASymbolic aproj -> aproj_to_given_back mp aproj ctx
@@ -866,14 +891,14 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
 and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
     (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
   match lc with
-  | AMutLoan (_, _) | ASharedLoan (_, _, _) -> failwith "Unreachable"
+  | AMutLoan (_, _) | ASharedLoan (_, _, _) -> raise (Failure "Unreachable")
   | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
   | AEndedSharedLoan (_, _) ->
       (* We consider given back values, and thus ignore those *)
       (ctx, None)
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
   | AEndedIgnoredMutLoan _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -885,7 +910,7 @@ and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
     (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta-symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv ctx in
@@ -913,7 +938,7 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
       (ctx, Some (mk_typed_lvalue_from_var var mp))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
 
 (** Convert the abstraction values in an abstraction to given back values.
 
@@ -971,7 +996,7 @@ let mk_function_ret_ty (config : config) (monadic : bool) (state_monad : bool)
   if monadic then
     if config.use_state_monad && state_monad then
       let ret = mk_result_ty (mk_simpl_tuple_ty [ mk_state_ty; out_ty ]) in
-      let ret = mk_arrow_ty mk_state_ty ret in
+      let ret = mk_arrow mk_state_ty ret in
       ret
     else mk_result_ty out_ty
   else out_ty
@@ -994,21 +1019,14 @@ and translate_panic (config : config) (ctx : bs_ctx) : texpression =
   if config.use_state_monad then
     (* Create the `Fail` value *)
     let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; ctx.ret_ty ] in
-    let v = mk_result_fail_rvalue ret_ty in
-    let e = Value (v, None) in
-    let ty = v.ty in
-    let e = { e; ty } in
+    let ret_v = mk_result_fail_rvalue ret_ty in
     (* Add the lambda *)
     let _, state_var =
       fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
     in
     let state_lvalue = mk_typed_lvalue_from_var state_var None in
-    mk_abs state_lvalue e
-  else
-    let v = mk_result_fail_rvalue ctx.ret_ty in
-    let e = Value (v, None) in
-    let ty = v.ty in
-    { e; ty }
+    mk_abs state_lvalue ret_v
+  else mk_result_fail_rvalue ctx.ret_ty
 
 and translate_return (config : config) (opt_v : V.typed_value option)
     (ctx : bs_ctx) : texpression =
@@ -1021,7 +1039,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
   | None ->
       (* Forward function *)
       let v = Option.get opt_v in
-      let v = typed_value_to_rvalue ctx v in
+      let v = typed_value_to_texpression ctx v in
       (* We don't synthesize the same expression depending on the monad we use:
        * - error-monad: Return x
        * - state-error monad: fun state -> Return (state, x)
@@ -1031,20 +1049,14 @@ and translate_return (config : config) (opt_v : V.typed_value option)
         let _, state_var =
           fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
         in
-        let state_rvalue = mk_typed_rvalue_from_var state_var in
-        let v =
-          mk_result_return_rvalue (mk_simpl_tuple_rvalue [ state_rvalue; v ])
+        let state_rvalue = mk_texpression_from_var state_var in
+        let ret_v =
+          mk_result_return_rvalue
+            (mk_simpl_tuple_texpression [ state_rvalue; v ])
         in
-        let e = Value (v, None) in
-        let ty = v.ty in
-        let e = { e; ty } in
         let state_var = mk_typed_lvalue_from_var state_var None in
-        mk_abs state_var e
-      else
-        let v = mk_result_return_rvalue v in
-        let e = Value (v, None) in
-        let ty = v.ty in
-        { e; ty }
+        mk_abs state_var ret_v
+      else mk_result_return_rvalue v
   | Some bid ->
       (* Backward function *)
       (* Sanity check *)
@@ -1055,40 +1067,35 @@ and translate_return (config : config) (opt_v : V.typed_value option)
       let backward_outputs =
         T.RegionGroupId.Map.find bid ctx.backward_outputs
       in
-      let field_values = List.map mk_typed_rvalue_from_var backward_outputs in
+      let field_values = List.map mk_texpression_from_var backward_outputs in
       (* See the comment about the monads, for the forward function case *)
       (* TODO: we should use a `fail` function, it would be cleaner *)
       if config.use_state_monad then
         let _, state_var = fresh_var (Some "st") mk_state_ty ctx in
-        let state_rvalue = mk_typed_rvalue_from_var state_var in
-        let ret_value = mk_simpl_tuple_rvalue field_values in
+        let state_rvalue = mk_texpression_from_var state_var in
+        let ret_value = mk_simpl_tuple_texpression field_values in
         let ret_value =
           mk_result_return_rvalue
-            (mk_simpl_tuple_rvalue [ state_rvalue; ret_value ])
+            (mk_simpl_tuple_texpression [ state_rvalue; ret_value ])
         in
-        let e = Value (ret_value, None) in
-        let ty = ret_value.ty in
-        let e = { e; ty } in
         let state_var = mk_typed_lvalue_from_var state_var None in
-        mk_abs state_var e
+        mk_abs state_var ret_value
       else
-        let ret_value = mk_simpl_tuple_rvalue field_values in
+        let ret_value = mk_simpl_tuple_texpression field_values in
         let ret_value = mk_result_return_rvalue ret_value in
-        let e = Value (ret_value, None) in
-        let ty = ret_value.ty in
-        { e; ty }
+        ret_value
 
 and translate_function_call (config : config) (call : S.call) (e : S.expression)
     (ctx : bs_ctx) : texpression =
   (* Translate the function call *)
   let type_params = List.map (ctx_translate_fwd_ty ctx) call.type_params in
-  let args = List.map (typed_value_to_rvalue ctx) call.args in
+  let args = List.map (typed_value_to_texpression ctx) call.args in
   let args_mplaces = List.map translate_opt_mplace call.args_places in
   let dest_mplace = translate_opt_mplace call.dest_place in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
   (* Retrieve the function id, and register the function call in the context
    * if necessary. *)
-  let ctx, func, monadic, state_monad =
+  let ctx, fun_id, monadic, state_monad =
     match call.call_id with
     | S.Fun (fid, call_id) ->
         let ctx = bs_ctx_register_forward_call call_id call ctx in
@@ -1103,7 +1110,7 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
             (* Note that negation can lead to an overflow and thus fail (it
              * is thus monadic) *)
             (ctx, Unop (Neg int_ty), true, false)
-        | _ -> failwith "Unreachable")
+        | _ -> raise (Failure "Unreachable"))
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -1112,19 +1119,19 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
             assert (int_ty0 = int_ty1);
             let monadic = binop_can_fail binop in
             (ctx, Binop (binop, int_ty0), monadic, false)
-        | _ -> failwith "Unreachable")
+        | _ -> raise (Failure "Unreachable"))
   in
   let args =
     List.map
-      (fun (arg, mp) -> mk_value_expression arg mp)
+      (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
       (List.combine args args_mplaces)
   in
   let dest_v = mk_typed_lvalue_from_var dest dest_mplace in
-  let func = { func; type_params } in
+  let func = { id = Func fun_id; type_params } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
   let ret_ty = mk_function_ret_ty config monadic state_monad dest_v.ty in
   let func_ty = mk_arrows input_tys ret_ty in
-  let func = { e = Func func; ty = func_ty } in
+  let func = { e = Qualif func; ty = func_ty } in
   let call = mk_apps func args in
   (* Translate the next expression *)
   let next_e = translate_expression config e ctx in
@@ -1177,7 +1184,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       in
       (* Sanity check: the two lists match (same types) *)
       List.iter
-        (fun (var, v) -> assert ((var : var).ty = (v : typed_rvalue).ty))
+        (fun (var, v) -> assert ((var : var).ty = (v : texpression).ty))
         variables_values;
       (* Translate the next expression *)
       let next_e = translate_expression config e ctx in
@@ -1185,10 +1192,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       let monadic = false in
       List.fold_right
         (fun (var, value) (e : texpression) ->
-          mk_let monadic
-            (mk_typed_lvalue_from_var var None)
-            (mk_value_expression value None)
-            e)
+          mk_let monadic (mk_typed_lvalue_from_var var None) value e)
         variables_values next_e
   | V.FunCall ->
       let call_info = V.FunCallId.Map.find abs.call_id ctx.calls in
@@ -1199,7 +1203,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       (* Retrieve the values consumed when we called the forward function and
        * ended the parent backward functions: those give us part of the input
        * values *)
-      let fwd_inputs = List.map (typed_value_to_rvalue ctx) forward.args in
+      let fwd_inputs = List.map (typed_value_to_texpression ctx) forward.args in
       let back_ancestors_inputs =
         List.concat (List.map (abs_to_consumed ctx) backwards)
       in
@@ -1223,14 +1227,15 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
         match call.call_id with
         | S.Fun (fun_id, _) -> fun_id
         | Unop _ | Binop _ ->
-            (* Those don't have backward functions *) failwith "Unreachable"
+            (* Those don't have backward functions *)
+            raise (Failure "Unreachable")
       in
 
       let inst_sg =
         get_instantiated_fun_sig fun_id (Some abs.back_id) type_params ctx
       in
       List.iter
-        (fun (x, ty) -> assert ((x : typed_rvalue).ty = ty))
+        (fun (x, ty) -> assert ((x : texpression).ty = ty))
         (List.combine inputs inst_sg.inputs);
       log#ldebug
         (lazy
@@ -1250,15 +1255,15 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       let args_mplaces = List.map (fun _ -> None) inputs in
       let args =
         List.map
-          (fun (arg, mp) -> mk_value_expression arg mp)
+          (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
           (List.combine inputs args_mplaces)
       in
       let monadic, state_monad = fun_is_monadic fun_id in
       let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
       let ret_ty = mk_function_ret_ty config monadic state_monad output.ty in
       let func_ty = mk_arrows input_tys ret_ty in
-      let func = { func; type_params } in
-      let func = { e = Func func; ty = func_ty } in
+      let func = { id = Func func; type_params } in
+      let func = { e = Qualif func; ty = func_ty } in
       let call = mk_apps func args in
       (* **Optimization**:
        * =================
@@ -1335,16 +1340,14 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       let monadic = false in
       List.fold_right
         (fun (given_back, input_var) e ->
-          mk_let monadic given_back
-            (mk_value_expression (mk_typed_rvalue_from_var input_var) None)
-            e)
+          mk_let monadic given_back (mk_texpression_from_var input_var) e)
         given_back_inputs next_e
 
 and translate_expansion (config : config) (p : S.mplace option)
     (sv : V.symbolic_value) (exp : S.expansion) (ctx : bs_ctx) : texpression =
   (* Translate the scrutinee *)
   let scrutinee_var = lookup_var_for_symbolic_value sv ctx in
-  let scrutinee = mk_typed_rvalue_from_var scrutinee_var in
+  let scrutinee = mk_texpression_from_var scrutinee_var in
   let scrutinee_mplace = translate_opt_mplace p in
   (* Translate the branches *)
   match exp with
@@ -1353,7 +1356,7 @@ and translate_expansion (config : config) (p : S.mplace option)
       | V.SeConcrete _ ->
           (* Actually, we don't *register* symbolic expansions to constant
            * values in the symbolic ADT *)
-          failwith "Unreachable"
+          raise (Failure "Unreachable")
       | SeMutRef (_, nsv) | SeSharedRef (_, nsv) ->
           (* The (mut/shared) borrow type is extracted to identity: we thus simply
            * introduce an reassignment *)
@@ -1362,15 +1365,15 @@ and translate_expansion (config : config) (p : S.mplace option)
           let monadic = false in
           mk_let monadic
             (mk_typed_lvalue_from_var var None)
-            (mk_value_expression scrutinee scrutinee_mplace)
+            (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
             next_e
       | SeAdt _ ->
           (* Should be in the [ExpandAdt] case *)
-          failwith "Unreachable")
+          raise (Failure "Unreachable"))
   | ExpandAdt branches -> (
       (* We don't do the same thing if there is a branching or not *)
       match branches with
-      | [] -> failwith "Unreachable"
+      | [] -> raise (Failure "Unreachable")
       | [ (variant_id, svl, branch) ] -> (
           (* There is exactly one branch: no branching *)
           let type_id, _, _ = TypesUtils.ty_as_adt sv.V.sv_ty in
@@ -1391,22 +1394,26 @@ and translate_expansion (config : config) (p : S.mplace option)
                 let monadic = false in
 
                 mk_let monadic lv
-                  (mk_value_expression scrutinee scrutinee_mplace)
+                  (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
                   branch
               else
                 (* This is not an enumeration: introduce let-bindings for every
                  * field.
                  * We use the [dest] variable in order not to have to recompute
                  * the type of the result of the projection... *)
+                let adt_id, type_params =
+                  match scrutinee.ty with
+                  | Adt (adt_id, tys) -> (adt_id, tys)
+                  | _ -> raise (Failure "Unreachable")
+                in
                 let gen_field_proj (field_id : FieldId.id) (dest : var) :
-                    typed_rvalue =
-                  let pkind = E.ProjAdt (adt_id, None) in
-                  let pe : projection_elem = { pkind; field_id } in
-                  let projection = [ pe ] in
-                  let place = { var = scrutinee_var.id; projection } in
-                  let value = RvPlace place in
-                  let ty = dest.ty in
-                  { value; ty }
+                    texpression =
+                  let proj_kind = ProjField (adt_id, field_id) in
+                  let qualif = { id = Proj proj_kind; type_params } in
+                  let proj_e = Qualif qualif in
+                  let proj_ty = mk_arrow scrutinee.ty dest.ty in
+                  let proj = { e = proj_e; ty = proj_ty } in
+                  mk_app proj scrutinee
                 in
                 let id_var_pairs = FieldId.mapi (fun fid v -> (fid, v)) vars in
                 let monadic = false in
@@ -1415,8 +1422,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                     let field_proj = gen_field_proj fid var in
                     mk_let monadic
                       (mk_typed_lvalue_from_var var None)
-                      (mk_value_expression field_proj None)
-                      e)
+                      field_proj e)
                   id_var_pairs branch
           | T.Tuple ->
               let vars =
@@ -1425,19 +1431,21 @@ and translate_expansion (config : config) (p : S.mplace option)
               let monadic = false in
               mk_let monadic
                 (mk_simpl_tuple_lvalue vars)
-                (mk_value_expression scrutinee scrutinee_mplace)
+                (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
                 branch
           | T.Assumed T.Box ->
               (* There should be exactly one variable *)
               let var =
-                match vars with [ v ] -> v | _ -> failwith "Unreachable"
+                match vars with
+                | [ v ] -> v
+                | _ -> raise (Failure "Unreachable")
               in
               (* We simply introduce an assignment - the box type is the
                * identity when extracted (`box a == a`) *)
               let monadic = false in
               mk_let monadic
                 (mk_typed_lvalue_from_var var None)
-                (mk_value_expression scrutinee scrutinee_mplace)
+                (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
                 branch
           | T.Assumed T.Vec ->
               (* We can't expand vector values: we can access the fields only
@@ -1448,7 +1456,7 @@ and translate_expansion (config : config) (p : S.mplace option)
           | T.Assumed T.Option ->
               (* We shouldn't get there in the "one-branch" case: options have
                * two variants *)
-              failwith "Unreachable")
+              raise (Failure "Unreachable"))
       | branches ->
           let translate_branch (variant_id : T.VariantId.id option)
               (svl : V.symbolic_value list) (branch : S.expression) :
@@ -1469,7 +1477,8 @@ and translate_expansion (config : config) (p : S.mplace option)
           in
           let e =
             Switch
-              (mk_value_expression scrutinee scrutinee_mplace, Match branches)
+              ( mk_opt_mplace_texpression scrutinee_mplace scrutinee,
+                Match branches )
           in
           (* There should be at least one branch *)
           let branch = List.hd branches in
@@ -1485,7 +1494,8 @@ and translate_expansion (config : config) (p : S.mplace option)
       let false_e = translate_expression config false_e ctx in
       let e =
         Switch
-          (mk_value_expression scrutinee scrutinee_mplace, If (true_e, false_e))
+          ( mk_opt_mplace_texpression scrutinee_mplace scrutinee,
+            If (true_e, false_e) )
       in
       let ty = true_e.ty in
       assert (ty = false_e.ty);
@@ -1509,7 +1519,8 @@ and translate_expansion (config : config) (p : S.mplace option)
       let all_branches = List.append branches [ otherwise ] in
       let e =
         Switch
-          (mk_value_expression scrutinee scrutinee_mplace, Match all_branches)
+          ( mk_opt_mplace_texpression scrutinee_mplace scrutinee,
+            Match all_branches )
       in
       let ty = otherwise.branch.ty in
       assert (
@@ -1523,7 +1534,7 @@ and translate_meta (config : config) (meta : S.meta) (e : S.expression)
     match meta with
     | S.Assignment (lp, rv, rp) ->
         let lp = translate_mplace lp in
-        let rv = typed_value_to_rvalue ctx rv in
+        let rv = typed_value_to_texpression ctx rv in
         let rp = translate_opt_mplace rp in
         Assignment (lp, rv, rp)
   in
@@ -1555,6 +1566,8 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
     | None -> None
     | Some body ->
         let body = translate_expression config body ctx in
+        (* Sanity check *)
+        type_check_texpression ctx body;
         (* Compute the list of (properly ordered) input variables *)
         let backward_inputs : var list =
           match bid with
@@ -1591,7 +1604,7 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
          *)
         if config.use_state_monad then
           let ret = mk_result_ty (mk_simpl_tuple_ty [ mk_state_ty; out_ty ]) in
-          let ret = mk_arrow_ty mk_state_ty ret in
+          let ret = mk_arrow mk_state_ty ret in
           ret
         else (* Simply wrap the type in `result` *)
           mk_result_ty out_ty
@@ -1605,10 +1618,10 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
         if config.use_state_monad then
           let ret = mk_simpl_tuple_ty outputs in
           let ret = mk_result_ty (mk_simpl_tuple_ty [ mk_state_ty; ret ]) in
-          let ret = mk_arrow_ty mk_state_ty ret in
+          let ret = mk_arrow mk_state_ty ret in
           ret
         else mk_result_ty (mk_simpl_tuple_ty outputs)
-    | _ -> failwith "Unreachable"
+    | _ -> raise (Failure "Unreachable")
   in
   let outputs = [ output_ty ] in
   let signature = { signature with outputs } in

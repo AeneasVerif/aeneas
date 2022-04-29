@@ -455,13 +455,8 @@ let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
 let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
     (indent : string) (indent_incr : string) (e : texpression) : string =
   match e.e with
-  | Local (var_id, mp) ->
-      let mp =
-        match mp with
-        | None -> ""
-        | Some mp -> " [@mplace=" ^ mplace_to_string fmt mp ^ "]"
-      in
-      let s = fmt.var_id_to_string var_id ^ mp in
+  | Local var_id ->
+      let s = fmt.var_id_to_string var_id in
       if inside then "(" ^ s ^ ")" else s
   | Const cv -> Print.Values.constant_value_to_string cv
   | App _ ->
@@ -482,11 +477,14 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
   | Switch (scrutinee, body) ->
       let e = switch_to_string fmt indent indent_incr scrutinee body in
       if inside then "(" ^ e ^ ")" else e
-  | Meta (meta, e) ->
-      let meta = meta_to_string fmt meta in
+  | Meta (meta, e) -> (
+      let meta_s = meta_to_string fmt meta in
       let e = texpression_to_string fmt inside indent indent_incr e in
-      let e = meta ^ "\n" ^ indent ^ e in
-      if inside then "(" ^ e ^ ")" else e
+      match meta with
+      | Assignment _ ->
+          let e = meta_s ^ "\n" ^ indent ^ e in
+          if inside then "(" ^ e ^ ")" else e
+      | MPlace _ -> "(" ^ meta_s ^ " " ^ e ^ ")")
 
 and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
     (indent_incr : string) (app : texpression) (args : texpression list) :
@@ -596,6 +594,7 @@ and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
         "@assign(" ^ mplace_to_string fmt lp ^ " := "
         ^ texpression_to_string fmt false "" "" rv
         ^ rp ^ ")"
+    | MPlace mp -> "@mplace=" ^ mplace_to_string fmt mp
   in
   "@meta[" ^ meta ^ "]"
 
