@@ -149,7 +149,9 @@ type var = {
 
 (* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
  * on enumerations.
- * Also: tuples... *)
+ * Also: tuples...
+ * Rmk: projections are actually only used as meta-data.
+ * *)
 type projection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 [@@deriving show]
 
@@ -168,9 +170,6 @@ type mplace = {
     we introduce.
  *)
 
-(* TODO: there shouldn't be places *)
-type place = { var : VarId.id; projection : projection } [@@deriving show]
-
 type variant_id = VariantId.id [@@deriving show]
 
 (** Ancestor for [iter_var_or_dummy] visitor *)
@@ -181,8 +180,6 @@ class ['self] iter_value_base =
     method visit_constant_value : 'env -> constant_value -> unit = fun _ _ -> ()
 
     method visit_var : 'env -> var -> unit = fun _ _ -> ()
-
-    method visit_place : 'env -> place -> unit = fun _ _ -> ()
 
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
 
@@ -201,8 +198,6 @@ class ['self] map_value_base =
 
     method visit_var : 'env -> var -> var = fun _ x -> x
 
-    method visit_place : 'env -> place -> place = fun _ x -> x
-
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
 
     method visit_ty : 'env -> ty -> ty = fun _ x -> x
@@ -219,8 +214,6 @@ class virtual ['self] reduce_value_base =
       fun _ _ -> self#zero
 
     method visit_var : 'env -> var -> 'a = fun _ _ -> self#zero
-
-    method visit_place : 'env -> place -> 'a = fun _ _ -> self#zero
 
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
 
@@ -240,8 +233,6 @@ class virtual ['self] mapreduce_value_base =
 
     method visit_var : 'env -> var -> var * 'a = fun _ x -> (x, self#zero)
 
-    method visit_place : 'env -> place -> place * 'a = fun _ x -> (x, self#zero)
-
     method visit_mplace : 'env -> mplace -> mplace * 'a =
       fun _ x -> (x, self#zero)
 
@@ -250,57 +241,6 @@ class virtual ['self] mapreduce_value_base =
     method visit_variant_id : 'env -> variant_id -> variant_id * 'a =
       fun _ x -> (x, self#zero)
   end
-
-(* TODO: merge with expressions *)
-type rvalue =
-  | RvConcrete of constant_value
-  | RvPlace of place (* TODO: field projectors should be expressions *)
-  | RvAdt of adt_rvalue
-
-and adt_rvalue = {
-  variant_id : variant_id option;
-  (* TODO: variant constructors should be expressions, treated in a manner
-   * similar to functions *)
-  field_values : typed_rvalue list;
-}
-
-and typed_rvalue = { value : rvalue; ty : ty }
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_typed_rvalue";
-        variety = "iter";
-        ancestors = [ "iter_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        concrete = true;
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "map_typed_rvalue";
-        variety = "map";
-        ancestors = [ "map_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        concrete = true;
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "reduce_typed_rvalue";
-        variety = "reduce";
-        ancestors = [ "reduce_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "mapreduce_typed_rvalue";
-        variety = "mapreduce";
-        ancestors = [ "mapreduce_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        polymorphic = false;
-      }]
 
 type var_or_dummy =
   | Var of var * mplace option
@@ -316,7 +256,7 @@ type var_or_dummy =
       {
         name = "iter_var_or_dummy";
         variety = "iter";
-        ancestors = [ "iter_typed_rvalue" ];
+        ancestors = [ "iter_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
         polymorphic = false;
@@ -325,7 +265,7 @@ type var_or_dummy =
       {
         name = "map_var_or_dummy";
         variety = "map";
-        ancestors = [ "map_typed_rvalue" ];
+        ancestors = [ "map_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.map] *);
         concrete = true;
         polymorphic = false;
@@ -334,7 +274,7 @@ type var_or_dummy =
       {
         name = "reduce_var_or_dummy";
         variety = "reduce";
-        ancestors = [ "reduce_typed_rvalue" ];
+        ancestors = [ "reduce_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
         polymorphic = false;
       },
@@ -342,7 +282,7 @@ type var_or_dummy =
       {
         name = "mapreduce_var_or_dummy";
         variety = "mapreduce";
-        ancestors = [ "mapreduce_typed_rvalue" ];
+        ancestors = [ "mapreduce_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
         polymorphic = false;
       }]
@@ -419,30 +359,43 @@ type fun_id =
   | Binop of E.binop * integer_type
 [@@deriving show, ord]
 
-(** Meta-information stored in the AST *)
-type meta = Assignment of mplace * typed_rvalue * mplace option
+type adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
+[@@deriving show]
+(** An identifier for an ADT constructor *)
+
+type proj_kind = ProjField of type_id * FieldId.id | ProjTuple of int
 [@@deriving show]
 
-type func = { func : fun_id; type_params : ty list } [@@deriving show]
-(** A function.
+type qualif_id =
+  | Func of fun_id
+  | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
+  | Proj of proj_kind  (** Field projector *)
+[@@deriving show]
+
+type qualif = {
+  id : qualif_id;
+  type_params : ty list; (* TODO: rename to type_args *)
+}
+[@@deriving show]
+(** An instantiated qualified.
 
     Note that for now we have a clear separation between types and expressions,
-    which explains why we have the `type_params` field: a function is always
-    fully instantiated.
+    which explains why we have the `type_params` field: a function or ADT
+    constructor is always fully instantiated.
  *)
+
+type var_id = VarId.id [@@deriving show]
 
 (** Ancestor for [iter_expression] visitor *)
 class ['self] iter_expression_base =
   object (_self : 'self)
     inherit [_] iter_typed_lvalue
 
-    method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
-
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
 
-    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
+    method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
 
-    method visit_func : 'env -> func -> unit = fun _ _ -> ()
+    method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for [map_expression] visitor *)
@@ -450,15 +403,12 @@ class ['self] map_expression_base =
   object (_self : 'self)
     inherit [_] map_typed_lvalue
 
-    method visit_meta : 'env -> meta -> meta = fun _ x -> x
-
     method visit_integer_type : 'env -> integer_type -> integer_type =
       fun _ x -> x
 
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
-      fun _ x -> x
+    method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
 
-    method visit_func : 'env -> func -> func = fun _ x -> x
+    method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
   end
 
 (** Ancestor for [reduce_expression] visitor *)
@@ -466,15 +416,12 @@ class virtual ['self] reduce_expression_base =
   object (self : 'self)
     inherit [_] reduce_typed_lvalue
 
-    method visit_meta : 'env -> meta -> 'a = fun _ _ -> self#zero
-
     method visit_integer_type : 'env -> integer_type -> 'a =
       fun _ _ -> self#zero
 
-    method visit_scalar_value : 'env -> scalar_value -> 'a =
-      fun _ _ -> self#zero
+    method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
 
-    method visit_func : 'env -> func -> 'a = fun _ _ -> self#zero
+    method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for [mapreduce_expression] visitor *)
@@ -482,15 +429,14 @@ class virtual ['self] mapreduce_expression_base =
   object (self : 'self)
     inherit [_] mapreduce_typed_lvalue
 
-    method visit_meta : 'env -> meta -> meta * 'a = fun _ x -> (x, self#zero)
-
     method visit_integer_type : 'env -> integer_type -> integer_type * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
+    method visit_var_id : 'env -> var_id -> var_id * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_func : 'env -> func -> func * 'a = fun _ x -> (x, self#zero)
+    method visit_qualif : 'env -> qualif -> qualif * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 (** **Rk.:** here, [expression] is not at all equivalent to the expressions
@@ -498,7 +444,12 @@ class virtual ['self] mapreduce_expression_base =
     more general than the LLBC statements, in a sense.
  *)
 type expression =
-  | Value of typed_rvalue * mplace option
+  | Local of var_id * mplace option
+      (** Local variable - TODO: we name it "Local" because "Var" is used
+          in [var_or_dummy]: change the name. Maybe rename `Var` and `Dummy`
+          in `var_or_dummy` to `PatVar` and `PatDummy`.
+       *)
+  | Const of constant_value
   | App of texpression * texpression
       (** Application of a function to an argument.
 
@@ -509,7 +460,7 @@ type expression =
           are clashes of field names, some provers like F* get pretty bad...)
        *)
   | Abs of typed_lvalue * texpression  (** Lambda abstraction: `fun x -> e` *)
-  | Func of func  (** A function - TODO: change to Qualifier *)
+  | Qualif of qualif  (** A top-level qualifier *)
   | Let of bool * typed_lvalue * texpression * texpression
       (** Let binding.
       
@@ -550,13 +501,25 @@ type expression =
           ```
        *)
   | Switch of texpression * switch_body
-  | Meta of meta * texpression  (** Meta-information *)
+  | Meta of (meta[@opaque]) * texpression  (** Meta-information *)
 
 and switch_body = If of texpression * texpression | Match of match_branch list
 
 and match_branch = { pat : typed_lvalue; branch : texpression }
 
 and texpression = { e : expression; ty : ty }
+
+and mvalue = (texpression[@opaque])
+(** Meta-value (converted to an expression) *)
+
+and meta =
+  | Assignment of mplace * mvalue * mplace option
+      (** Meta-information stored in the AST.
+
+          The first mplace stores the destination.
+          The mvalue stores the value which is put in the destination
+          The second (optional) mplace stores the origin.
+        *)
 [@@deriving
   show,
     visitors

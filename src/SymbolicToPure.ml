@@ -999,7 +999,9 @@ and translate_panic (config : config) (ctx : bs_ctx) : texpression =
     let ty = v.ty in
     let e = { e; ty } in
     (* Add the lambda *)
-    let _, state_var = fresh_var (Some "st") mk_state_ty ctx in
+    let _, state_var =
+      fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
+    in
     let state_lvalue = mk_typed_lvalue_from_var state_var None in
     mk_abs state_lvalue e
   else
@@ -1026,7 +1028,9 @@ and translate_return (config : config) (opt_v : V.typed_value option)
        * *)
       (* TODO: we should use a `return` function, it would be cleaner *)
       if config.use_state_monad then
-        let _, state_var = fresh_var (Some "st") mk_state_ty ctx in
+        let _, state_var =
+          fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
+        in
         let state_rvalue = mk_typed_rvalue_from_var state_var in
         let v =
           mk_result_return_rvalue (mk_simpl_tuple_rvalue [ state_rvalue; v ])

@@ -1160,7 +1160,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
       in
       let fresh_state_var () =
         let id = fresh_var_id () in
-        { id; basename = Some "st"; ty = mk_state_ty }
+        { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
       in
       (* It is a very simple map *)
       let obj =

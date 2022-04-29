@@ -234,11 +234,62 @@ let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
   let name = name ^ "^" ^ V.VarId.to_string p.var_id ^ "llbc" in
   projection_to_string fmt name p.projection
 
-let place_to_string (fmt : ast_formatter) (p : place) : string =
-  (* TODO: improve that *)
-  let var = fmt.var_id_to_string p.var in
-  projection_to_string fmt var p.projection
+let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
+    (variant_id : VariantId.id option) : string =
+  match adt_id with
+  | Tuple -> "Tuple"
+  | AdtId def_id -> (
+      (* "Regular" ADT *)
+      match variant_id with
+      | Some vid -> fmt.adt_variant_to_string def_id vid
+      | None -> fmt.type_decl_id_to_string def_id)
+  | Assumed aty -> (
+      (* Assumed type *)
+      match aty with
+      | State ->
+          (* The `State` type is opaque: we can't get there *)
+          raise (Failure "Unreachable")
+      | Result ->
+          let variant_id = Option.get variant_id in
+          if variant_id = result_return_id then "@Result::Return"
+          else if variant_id = result_fail_id then "@Result::Fail"
+          else
+            raise (Failure "Unreachable: improper variant id for result type")
+      | Option ->
+          let variant_id = Option.get variant_id in
+          if variant_id = option_some_id then "@Option::Some "
+          else if variant_id = option_none_id then "@Option::None"
+          else
+            raise (Failure "Unreachable: improper variant id for result type")
+      | Vec ->
+          assert (variant_id = None);
+          "Vec")
 
+let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
+    (field_id : FieldId.id) : string =
+  match adt_id with
+  | Tuple ->
+      raise (Failure "Unreachable")
+      (* Tuples don't use the opaque field id for the field indices, but `int` *)
+  | AdtId def_id -> (
+      (* "Regular" ADT *)
+      let fields = fmt.adt_field_names def_id None in
+      match fields with
+      | None -> FieldId.to_string field_id
+      | Some fields -> FieldId.nth fields field_id)
+  | Assumed aty -> (
+      (* Assumed type *)
+      match aty with
+      | State | Vec ->
+          (* Opaque types: we can't get there *)
+          raise (Failure "Unreachable")
+      | Result | Option ->
+          (* Enumerations: we can't get there *)
+          raise (Failure "Unreachable"))
+
+(** TODO: we don't need a general function anymore (it is now only used for
+    lvalues (i.e., patterns)
+ *)
 let adt_g_value_to_string (fmt : value_formatter)
     (value_to_string : 'v -> string) (variant_id : VariantId.id option)
     (field_values : 'v list) (ty : ty) : string =
@@ -310,17 +361,6 @@ let adt_g_value_to_string (fmt : value_formatter)
            ("Inconsistently typed value: expected ADT type but found:"
           ^ "\n- ty: " ^ ty_to_string fmt ty ^ "\n- variant_id: "
            ^ Print.option_to_string VariantId.to_string variant_id))
-
-let rec typed_rvalue_to_string (fmt : ast_formatter) (v : typed_rvalue) : string
-    =
-  match v.value with
-  | RvConcrete cv -> Print.Values.constant_value_to_string cv
-  | RvPlace p -> place_to_string fmt p
-  | RvAdt av ->
-      adt_g_value_to_string
-        (ast_to_value_formatter fmt)
-        (typed_rvalue_to_string fmt)
-        av.variant_id av.field_values v.ty
 
 let var_or_dummy_to_string (fmt : ast_formatter) (v : var_or_dummy) : string =
   match v with
@@ -411,33 +451,19 @@ let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   | Binop (binop, int_ty) ->
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
 
-let meta_to_string (fmt : ast_formatter) (meta : meta) : string =
-  let meta =
-    match meta with
-    | Assignment (lp, rv, rp) ->
-        let rp =
-          match rp with
-          | None -> ""
-          | Some rp -> " [@src=" ^ mplace_to_string fmt rp ^ "]"
-        in
-        "@assign(" ^ mplace_to_string fmt lp ^ " := "
-        ^ typed_rvalue_to_string fmt rv
-        ^ rp ^ ")"
-  in
-  "@meta[" ^ meta ^ "]"
-
 (** [inside]: controls the introduction of parentheses *)
 let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
     (indent : string) (indent_incr : string) (e : texpression) : string =
   match e.e with
-  | Value (v, mp) ->
+  | Local (var_id, mp) ->
       let mp =
         match mp with
         | None -> ""
         | Some mp -> " [@mplace=" ^ mplace_to_string fmt mp ^ "]"
       in
-      let e = typed_rvalue_to_string fmt v ^ mp in
-      if inside then "(" ^ e ^ ")" else e
+      let s = fmt.var_id_to_string var_id ^ mp in
+      if inside then "(" ^ s ^ ")" else s
+  | Const cv -> Print.Values.constant_value_to_string cv
   | App _ ->
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
       let app, args = destruct_apps e in
@@ -447,8 +473,8 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
       let xl, e = destruct_abs_list e in
       let e = abs_to_string fmt indent indent_incr xl e in
       if inside then "(" ^ e ^ ")" else e
-  | Func _ ->
-      (* Func without arguments *)
+  | Qualif _ ->
+      (* Qualifier without arguments *)
       app_to_string fmt inside indent indent_incr e []
   | Let (monadic, lv, re, e) ->
       let e = let_to_string fmt indent indent_incr monadic lv re e in
@@ -466,18 +492,36 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
     (indent_incr : string) (app : texpression) (args : texpression list) :
     string =
   (* There are two possibilities: either the `app` is an instantiated,
-   * top-level function, or it is a "regular" expression *)
+   * top-level qualifier (function, ADT constructore...), or it is a "regular"
+   * expression *)
   let app, tys =
     match app.e with
-    | Func func ->
-        (* Function case *)
-        (* Convert the function identifier *)
-        let fun_id = fun_id_to_string fmt func.func in
+    | Qualif qualif ->
+        (* Qualifier case *)
+        (* Convert the qualifier identifier *)
+        let qualif_s =
+          match qualif.id with
+          | Func fun_id -> fun_id_to_string fmt fun_id
+          | AdtCons adt_cons_id ->
+              let variant_s =
+                adt_variant_to_string
+                  (ast_to_value_formatter fmt)
+                  adt_cons_id.adt_id adt_cons_id.variant_id
+              in
+              ConstStrings.constructor_prefix ^ variant_s
+          | Proj (ProjField (adt_id, field_id)) ->
+              let value_fmt = ast_to_value_formatter fmt in
+              let adt_s = adt_variant_to_string value_fmt adt_id None in
+              let field_s = adt_field_to_string value_fmt adt_id field_id in
+              (* Adopting an F*-like syntax *)
+              ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s
+          | Proj (ProjTuple field_id) -> "MkTuple?." ^ string_of_int field_id
+        in
         (* Convert the type instantiation *)
         let ty_fmt = ast_to_type_formatter fmt in
-        let tys = List.map (ty_to_string ty_fmt) func.type_params in
+        let tys = List.map (ty_to_string ty_fmt) qualif.type_params in
         (* *)
-        (fun_id, tys)
+        (qualif_s, tys)
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in
@@ -539,6 +583,21 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       in
       let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
+
+and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
+  let meta =
+    match meta with
+    | Assignment (lp, rv, rp) ->
+        let rp =
+          match rp with
+          | None -> ""
+          | Some rp -> " [@src=" ^ mplace_to_string fmt rp ^ "]"
+        in
+        "@assign(" ^ mplace_to_string fmt lp ^ " := "
+        ^ texpression_to_string fmt false "" "" rv
+        ^ rp ^ ")"
+  in
+  "@meta[" ^ meta ^ "]"
 
 let fun_decl_to_string (fmt : ast_formatter) (def : fun_decl) : string =
   let type_fmt = ast_to_type_formatter fmt in
