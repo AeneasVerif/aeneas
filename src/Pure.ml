@@ -363,8 +363,12 @@ type adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
 [@@deriving show]
 (** An identifier for an ADT constructor *)
 
-type proj_kind = ProjField of type_id * FieldId.id | ProjTuple of int
-[@@deriving show]
+type proj_kind = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
+(** Projection kind - For now we don't support projection of tuple fields 
+    (because not all the backends have syntax for this).
+    
+    TODO: rename
+ *)
 
 type qualif_id =
   | Func of fun_id

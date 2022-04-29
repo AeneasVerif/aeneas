@@ -760,6 +760,8 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
 
     Note that lvalues can introduce new variables: we thus return an extraction
     context updated with new bindings.
+    
+    TODO: we don't need something very generic anymore
  *)
 let extract_adt_g_value
     (extract_value : extraction_ctx -> bool -> 'v -> extraction_ctx)
@@ -830,57 +832,6 @@ let rec extract_typed_lvalue (ctx : extraction_ctx) (fmt : F.formatter)
       extract_adt_g_value extract_value fmt ctx inside av.variant_id
         av.field_values v.ty
 
-let extract_place (ctx : extraction_ctx) (fmt : F.formatter) (p : place) : unit
-    =
-  let rec extract_projection (pl : projection) : unit =
-    match pl with
-    | [] ->
-        (* No projection element left: print the variable *)
-        let var_name = ctx_get_var p.var ctx in
-        F.pp_print_string fmt var_name
-    | pe :: pl ->
-        (* Extract the interior of the projection *)
-        extract_projection pl;
-        (* Match on the projection element *)
-        let def_id =
-          match pe.pkind with
-          | E.ProjAdt (def_id, None) -> def_id
-          | E.ProjAdt (_, Some _) | E.ProjOption _ | E.ProjTuple _ ->
-              (* We can't have field accesses on enumerations (variables for
-               * the fields are introduced upon the moment we match over the
-               * enumeration). We also forbid field access on tuples, because
-               * we don't have the syntax to translate that... We thus
-               * deconstruct the tuples whenever we need to have access:
-               * `let (x, y) = p in ...` *)
-              raise (Failure "Unreachable")
-        in
-        let field_name = ctx_get_field (AdtId def_id) pe.field_id ctx in
-        (* We allow to break where the "." appears *)
-        F.pp_print_break fmt 0 0;
-        F.pp_print_string fmt ".";
-        F.pp_print_string fmt field_name
-  in
-  (* We allow to break where "." appears, but we try to prevent that by
-   * wrapping in a box *)
-  F.pp_open_hovbox fmt ctx.indent_incr;
-  extract_projection p.projection;
-  F.pp_close_box fmt ()
-
-(** [inside]: see [extract_ty] *)
-let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (v : typed_rvalue) : extraction_ctx =
-  match v.value with
-  | RvConcrete cv ->
-      ctx.fmt.extract_constant_value fmt inside cv;
-      ctx
-  | RvPlace p ->
-      extract_place ctx fmt p;
-      ctx
-  | RvAdt av ->
-      let extract_value ctx inside v = extract_typed_rvalue ctx fmt inside v in
-      extract_adt_g_value extract_value fmt ctx inside av.variant_id
-        av.field_values v.ty
-
 (** [inside]: controls the introduction of parentheses. See [extract_ty]
     
     TODO: replace the formatting boolean [inside] with something more general?
@@ -889,16 +840,17 @@ let rec extract_typed_rvalue (ctx : extraction_ctx) (fmt : F.formatter)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (e : texpression) : unit =
   match e.e with
-  | Value (rv, _) ->
-      let _ = extract_typed_rvalue ctx fmt inside rv in
-      ()
+  | Local var_id ->
+      let var_name = ctx_get_var var_id ctx in
+      F.pp_print_string fmt var_name
+  | Const cv -> ctx.fmt.extract_constant_value fmt inside cv
   | App _ ->
       let app, args = destruct_apps e in
       extract_App ctx fmt inside app args
   | Abs _ ->
       let xl, e = destruct_abs_list e in
       extract_Abs ctx fmt inside xl e
-  | Func _ ->
+  | Qualif _ ->
       (* We use the app case *)
       extract_App ctx fmt inside e []
   | Let (monadic, lv, re, next_e) ->
@@ -908,48 +860,19 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
 
 and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (app : texpression) (args : texpression list) : unit =
-  (* We don't do the same thing if the app is a function identifier or a "regular" expression *)
+  (* We don't do the same thing if the app is a top-level identifier (function,
+   * ADT constructor...) or a "regular" expression *)
   match app.e with
-  | Func func -> (
-      (* Function identifier *)
-      match (func.func, args) with
-      | Unop unop, [ arg ] ->
-          ctx.fmt.extract_unop (extract_texpression ctx fmt) fmt inside unop arg
-      | Binop (binop, int_ty), [ arg0; arg1 ] ->
-          ctx.fmt.extract_binop
-            (extract_texpression ctx fmt)
-            fmt inside binop int_ty arg0 arg1
-      | Regular (fun_id, rg_id), _ ->
-          if inside then F.pp_print_string fmt "(";
-          (* Open a box for the function call *)
-          F.pp_open_hovbox fmt ctx.indent_incr;
-          (* Print the function name *)
-          let fun_name = ctx_get_function fun_id rg_id ctx in
-          F.pp_print_string fmt fun_name;
-          (* Print the type parameters *)
-          List.iter
-            (fun ty ->
-              F.pp_print_space fmt ();
-              extract_ty ctx fmt true ty)
-            func.type_params;
-          (* Print the arguments *)
-          List.iter
-            (fun ve ->
-              F.pp_print_space fmt ();
-              extract_texpression ctx fmt true ve)
-            args;
-          (* Close the box for the function call *)
-          F.pp_close_box fmt ();
-          (* Return *)
-          if inside then F.pp_print_string fmt ")"
-      | _ ->
-          raise
-            (Failure
-               ("Unreachable:\n" ^ "Function: " ^ show_fun_id func.func
-              ^ ",\nNumber of arguments: "
-               ^ string_of_int (List.length args)
-               ^ ",\nArguments: "
-               ^ String.concat " " (List.map show_texpression args))))
+  | Qualif qualif -> (
+      (* Top-level qualifier *)
+      match qualif.id with
+      | Func fun_id ->
+          extract_function_call ctx fmt inside fun_id qualif.type_params args
+      | AdtCons adt_cons_id ->
+          extract_adt_cons ctx fmt inside adt_cons_id qualif.type_params args
+      | Proj proj ->
+          extract_field_projector ctx fmt inside app proj qualif.type_params
+            args)
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)
@@ -969,6 +892,126 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       F.pp_close_box fmt ();
       (* Close parentheses *)
       if inside then F.pp_print_string fmt ")"
+
+(** Subcase of the app case: function call *)
+and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (fid : fun_id) (type_args : ty list)
+    (args : texpression list) : unit =
+  match (fid, args) with
+  | Unop unop, [ arg ] ->
+      (* A unop can have *at most* one argument (the result can't be a function!).
+       * Note that the way we generate the translation, we shouldn't get the
+       * case where we have no argument (all functions are fully instantiated,
+       * and no AST transformation introduces partial calls). *)
+      ctx.fmt.extract_unop (extract_texpression ctx fmt) fmt inside unop arg
+  | Binop (binop, int_ty), [ arg0; arg1 ] ->
+      (* Number of arguments: similar to unop *)
+      ctx.fmt.extract_binop
+        (extract_texpression ctx fmt)
+        fmt inside binop int_ty arg0 arg1
+  | Regular (fun_id, rg_id), _ ->
+      if inside then F.pp_print_string fmt "(";
+      (* Open a box for the function call *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      (* Print the function name *)
+      let fun_name = ctx_get_function fun_id rg_id ctx in
+      F.pp_print_string fmt fun_name;
+      (* Print the type parameters *)
+      List.iter
+        (fun ty ->
+          F.pp_print_space fmt ();
+          extract_ty ctx fmt true ty)
+        type_args;
+      (* Print the arguments *)
+      List.iter
+        (fun ve ->
+          F.pp_print_space fmt ();
+          extract_texpression ctx fmt true ve)
+        args;
+      (* Close the box for the function call *)
+      F.pp_close_box fmt ();
+      (* Return *)
+      if inside then F.pp_print_string fmt ")"
+  | _ ->
+      raise
+        (Failure
+           ("Unreachable:\n" ^ "Function: " ^ show_fun_id fid
+          ^ ",\nNumber of arguments: "
+           ^ string_of_int (List.length args)
+           ^ ",\nArguments: "
+           ^ String.concat " " (List.map show_texpression args)))
+
+(** Subcase of the app case: ADT constructor *)
+and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
+    (adt_cons : adt_cons_id) (type_args : ty list) (args : texpression list) :
+    unit =
+  match adt_cons.adt_id with
+  | Tuple ->
+      (* Tuple *)
+      (* For now, we only support fully applied tuple constructors *)
+      assert (List.length type_args = List.length args);
+      F.pp_print_string fmt "(";
+      Collections.List.iter_link
+        (fun () ->
+          F.pp_print_string fmt ",";
+          F.pp_print_space fmt ())
+        (fun v -> extract_texpression ctx fmt false v)
+        args;
+      F.pp_print_string fmt ")"
+  | _ ->
+      (* "Regular" ADT *)
+      (* We print something of the form: `Cons field0 ... fieldn`.
+       * We could update the code to print something of the form:
+       * `{ field0=...; ...; fieldn=...; }` in case of fully
+       * applied structure constructors.
+       *)
+      let cons =
+        match adt_cons.variant_id with
+        | Some vid -> ctx_get_variant adt_cons.adt_id vid ctx
+        | None -> ctx_get_struct adt_cons.adt_id ctx
+      in
+      let use_parentheses = inside && args <> [] in
+      if use_parentheses then F.pp_print_string fmt "(";
+      F.pp_print_string fmt cons;
+      Collections.List.iter
+        (fun v ->
+          F.pp_print_space fmt ();
+          extract_texpression ctx fmt false v)
+        args;
+      if use_parentheses then F.pp_print_string fmt ")"
+
+(** Subcase of the app case: ADT field projector.  *)
+and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (original_app : texpression) (proj : proj_kind)
+    (_proj_type_params : ty list) (args : texpression list) : unit =
+  (* We isolate the first argument (if there is), in order to pretty print the
+   * projection (`x.field` instead of `MkAdt?.field x` *)
+  match args with
+  | [ arg ] ->
+      (* Exactly one argument: pretty-print *)
+      let field_name = ctx_get_field proj.adt_id proj.field_id ctx in
+      (* Open a box *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      (* TODO: parentheses: we do something very crude *)
+      let use_parentheses = not (is_var arg) in
+      if use_parentheses then F.pp_print_string fmt "(";
+      (* Extract the expression *)
+      extract_texpression ctx fmt false arg;
+      (* We allow to break where the "." appears *)
+      F.pp_print_break fmt 0 0;
+      F.pp_print_string fmt ".";
+      F.pp_print_string fmt field_name;
+      (* Close the parentheses *)
+      if use_parentheses then F.pp_print_string fmt ")";
+      (* Close the box *)
+      F.pp_close_box fmt ()
+  | arg :: args ->
+      (* Call extract_App again, but in such a way that the first argument is
+       * isolated *)
+      extract_App ctx fmt inside (mk_app original_app arg) args
+  | [] ->
+      (* No argument: shouldn't happen *)
+      raise (Failure "Unreachable")
 
 and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (xl : typed_lvalue list) (e : texpression) : unit =

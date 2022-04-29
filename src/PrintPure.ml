@@ -507,13 +507,12 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
                   adt_cons_id.adt_id adt_cons_id.variant_id
               in
               ConstStrings.constructor_prefix ^ variant_s
-          | Proj (ProjField (adt_id, field_id)) ->
+          | Proj { adt_id; field_id } ->
               let value_fmt = ast_to_value_formatter fmt in
               let adt_s = adt_variant_to_string value_fmt adt_id None in
               let field_s = adt_field_to_string value_fmt adt_id field_id in
               (* Adopting an F*-like syntax *)
               ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s
-          | Proj (ProjTuple field_id) -> "MkTuple?." ^ string_of_int field_id
         in
         (* Convert the type instantiation *)
         let ty_fmt = ast_to_type_formatter fmt in

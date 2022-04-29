@@ -341,7 +341,7 @@ let mk_simpl_tuple_ty (tys : ty list) : ty =
 (** TODO: rename to "mk_..." *)
 let unit_ty : ty = Adt (Tuple, [])
 
-(** TODO: rename to "mk_..." *)
+(** TODO: rename to "mk_unit_texpression" *)
 let unit_rvalue : texpression =
   let id = AdtCons { adt_id = Tuple; variant_id = None } in
   let qualif = { id; type_params = [] } in
@@ -592,24 +592,17 @@ module TypeCheck = struct
     | Qualif qualif -> (
         match qualif.id with
         | Func _ -> () (* TODO *)
-        | Proj (ProjField (type_id, field_id)) ->
-            (* Note we can only project fields of structurs (not enumerations) *)
+        | Proj { adt_id; field_id } ->
+            (* Note we can only project fields of structures (not enumerations) *)
             let variant_id = None in
             let expected_field_tys =
-              get_adt_field_types ctx.type_decls type_id variant_id
+              get_adt_field_types ctx.type_decls adt_id variant_id
                 qualif.type_params
             in
             let expected_field_ty = FieldId.nth expected_field_tys field_id in
             let _adt_ty, field_ty = destruct_arrow e.ty in
             (* TODO: check the adt_ty *)
             assert (expected_field_ty = field_ty)
-        | Proj (ProjTuple field_id) -> (
-            let tuple_ty, field_ty = destruct_arrow e.ty in
-            match tuple_ty with
-            | Adt (Tuple, tys) ->
-                let expected_field_ty = List.nth tys field_id in
-                assert (field_ty = expected_field_ty)
-            | _ -> raise (Failure "Inconsistently typed projector"))
         | AdtCons id ->
             (* TODO: we might also want to check the out type *)
             let expected_field_tys =

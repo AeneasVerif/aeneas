@@ -1408,7 +1408,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                 in
                 let gen_field_proj (field_id : FieldId.id) (dest : var) :
                     texpression =
-                  let proj_kind = ProjField (adt_id, field_id) in
+                  let proj_kind = { adt_id; field_id } in
                   let qualif = { id = Proj proj_kind; type_params } in
                   let proj_e = Qualif qualif in
                   let proj_ty = mk_arrow scrutinee.ty dest.ty in
