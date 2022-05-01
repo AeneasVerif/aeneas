@@ -817,14 +817,14 @@ let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
   | PatConcrete cv ->
       ctx.fmt.extract_constant_value fmt inside cv;
       ctx
-  | PatVar (Var (v, _)) ->
+  | PatVar (v, _) ->
       let vname =
         ctx.fmt.var_basename ctx.names_map.names_set v.basename v.ty
       in
       let ctx, vname = ctx_add_var vname v.id ctx in
       F.pp_print_string fmt vname;
       ctx
-  | PatVar Dummy ->
+  | PatDummy ->
       F.pp_print_string fmt "_";
       ctx
   | PatAdt av ->
@@ -845,7 +845,7 @@ let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (e : texpression) : unit =
   match e.e with
-  | Local var_id ->
+  | Var var_id ->
       let var_name = ctx_get_var var_id ctx in
       F.pp_print_string fmt var_name
   | Const cv -> ctx.fmt.extract_constant_value fmt inside cv

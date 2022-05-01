@@ -1512,9 +1512,7 @@ and translate_expansion (config : config) (p : S.mplace option)
       let branches = List.map translate_branch branches in
       let otherwise = translate_expression config otherwise ctx in
       let pat_ty = Integer int_ty in
-      let otherwise_pat : typed_pattern =
-        { value = PatVar Dummy; ty = pat_ty }
-      in
+      let otherwise_pat : typed_pattern = { value = PatDummy; ty = pat_ty } in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }
       in

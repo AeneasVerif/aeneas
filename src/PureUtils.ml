@@ -180,17 +180,17 @@ let functions_not_mutually_recursive (funs : fun_decl list) : bool =
  *)
 let rec let_group_requires_parentheses (e : texpression) : bool =
   match e.e with
-  | Local _ | Const _ | App _ | Abs _ | Qualif _ -> false
+  | Var _ | Const _ | App _ | Abs _ | Qualif _ -> false
   | Let (monadic, _, _, next_e) ->
       if monadic then true else let_group_requires_parentheses next_e
   | Switch (_, _) -> false
   | Meta (_, next_e) -> let_group_requires_parentheses next_e
 
 let is_var (e : texpression) : bool =
-  match e.e with Local _ -> true | _ -> false
+  match e.e with Var _ -> true | _ -> false
 
 let as_var (e : texpression) : VarId.id =
-  match e.e with Local v -> v | _ -> raise (Failure "Unreachable")
+  match e.e with Var v -> v | _ -> raise (Failure "Unreachable")
 
 (** Remove the external occurrences of [Meta] *)
 let rec unmeta (e : texpression) : texpression =
@@ -350,12 +350,12 @@ let unit_rvalue : texpression =
   { e; ty }
 
 let mk_texpression_from_var (v : var) : texpression =
-  let e = Local v.id in
+  let e = Var v.id in
   let ty = v.ty in
   { e; ty }
 
 let mk_typed_pattern_from_var (v : var) (mp : mplace option) : typed_pattern =
-  let value = PatVar (Var (v, mp)) in
+  let value = PatVar (v, mp) in
   let ty = v.ty in
   { value; ty }
 
@@ -535,8 +535,8 @@ module TypeCheck = struct
     | PatConcrete cv ->
         check_constant_value cv v.ty;
         ctx
-    | PatVar Dummy -> ctx
-    | PatVar (Var (var, _)) ->
+    | PatDummy -> ctx
+    | PatVar (var, _) ->
         assert (var.ty = v.ty);
         let env = VarId.Map.add var.id var.ty ctx.env in
         { ctx with env }
@@ -567,7 +567,7 @@ module TypeCheck = struct
 
   let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
     match e.e with
-    | Local var_id -> (
+    | Var var_id -> (
         (* Lookup the variable - note that the variable may not be there,
          * if we type-check a subexpression (i.e.: if the variable is introduced
          * "outside" of the expression) - TODO: this won't happen once

@@ -172,7 +172,7 @@ type mplace = {
 
 type variant_id = VariantId.id [@@deriving show]
 
-(** Ancestor for [iter_var_or_dummy] visitor *)
+(** Ancestor for [iter_pat_var_or_dummy] visitor *)
 class ['self] iter_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
@@ -242,57 +242,13 @@ class virtual ['self] mapreduce_value_base =
       fun _ x -> (x, self#zero)
   end
 
-type var_or_dummy =
-  | Var of var * mplace option
-      (** Rk.: the mdplace is actually always a variable (i.e.: there are no projections).
-
-          We use [mplace] because it leads to a more uniform treatment of the meta
-          information.
-       *)
-  | Dummy  (** Ignored value: `_`. *)
-[@@deriving
-  show,
-    visitors
-      {
-        name = "iter_var_or_dummy";
-        variety = "iter";
-        ancestors = [ "iter_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
-        concrete = true;
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "map_var_or_dummy";
-        variety = "map";
-        ancestors = [ "map_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.map] *);
-        concrete = true;
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "reduce_var_or_dummy";
-        variety = "reduce";
-        ancestors = [ "reduce_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
-        polymorphic = false;
-      },
-    visitors
-      {
-        name = "mapreduce_var_or_dummy";
-        variety = "mapreduce";
-        ancestors = [ "mapreduce_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.reduce] *);
-        polymorphic = false;
-      }]
-
 (** A pattern (which appears on the left of assignments, in matches, etc.). *)
 type pattern =
   | PatConcrete of constant_value
       (** [PatConcrete] is necessary because we merge the switches over integer
           values and the matches over enumerations *)
-  | PatVar of var_or_dummy
+  | PatVar of var * mplace option
+  | PatDummy  (** Ignored value: `_`. *)
   | PatAdt of adt_pattern
 
 and adt_pattern = {
@@ -307,7 +263,7 @@ and typed_pattern = { value : pattern; ty : ty }
       {
         name = "iter_typed_pattern";
         variety = "iter";
-        ancestors = [ "iter_var_or_dummy" ];
+        ancestors = [ "iter_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
         polymorphic = false;
@@ -316,7 +272,7 @@ and typed_pattern = { value : pattern; ty : ty }
       {
         name = "map_typed_pattern";
         variety = "map";
-        ancestors = [ "map_var_or_dummy" ];
+        ancestors = [ "map_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         concrete = true;
         polymorphic = false;
@@ -325,7 +281,7 @@ and typed_pattern = { value : pattern; ty : ty }
       {
         name = "reduce_typed_pattern";
         variety = "reduce";
-        ancestors = [ "reduce_var_or_dummy" ];
+        ancestors = [ "reduce_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         polymorphic = false;
       },
@@ -333,7 +289,7 @@ and typed_pattern = { value : pattern; ty : ty }
       {
         name = "mapreduce_typed_pattern";
         variety = "mapreduce";
-        ancestors = [ "mapreduce_var_or_dummy" ];
+        ancestors = [ "mapreduce_value_base" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
         polymorphic = false;
       }]
@@ -439,11 +395,7 @@ class virtual ['self] mapreduce_expression_base =
     more general than the LLBC statements, in a sense.
  *)
 type expression =
-  | Local of var_id
-      (** Local variable - TODO: we name it "Local" because "Var" is used
-          in [var_or_dummy]: change the name. Maybe rename `Var` and `Dummy`
-          in `var_or_dummy` to `PatVar` and `PatDummy`.
-       *)
+  | Var of var_id  (** a variable *)
   | Const of constant_value
   | App of texpression * texpression
       (** Application of a function to an argument.

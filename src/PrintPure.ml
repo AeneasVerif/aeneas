@@ -362,21 +362,17 @@ let adt_g_value_to_string (fmt : value_formatter)
           ^ "\n- ty: " ^ ty_to_string fmt ty ^ "\n- variant_id: "
            ^ Print.option_to_string VariantId.to_string variant_id))
 
-let var_or_dummy_to_string (fmt : ast_formatter) (v : var_or_dummy) : string =
-  match v with
-  | Var (v, None) -> var_to_string (ast_to_type_formatter fmt) v
-  | Var (v, Some mp) ->
-      let mp = "[@mplace=" ^ mplace_to_string fmt mp ^ "]" in
-      "(" ^ var_to_varname v ^ " " ^ mp ^ " : "
-      ^ ty_to_string (ast_to_type_formatter fmt) v.ty
-      ^ ")"
-  | Dummy -> "_"
-
 let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
     string =
   match v.value with
   | PatConcrete cv -> Print.Values.constant_value_to_string cv
-  | PatVar var -> var_or_dummy_to_string fmt var
+  | PatVar (v, None) -> var_to_string (ast_to_type_formatter fmt) v
+  | PatVar (v, Some mp) ->
+      let mp = "[@mplace=" ^ mplace_to_string fmt mp ^ "]" in
+      "(" ^ var_to_varname v ^ " " ^ mp ^ " : "
+      ^ ty_to_string (ast_to_type_formatter fmt) v.ty
+      ^ ")"
+  | PatDummy -> "_"
   | PatAdt av ->
       adt_g_value_to_string
         (ast_to_value_formatter fmt)
@@ -455,7 +451,7 @@ let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
 let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
     (indent : string) (indent_incr : string) (e : texpression) : string =
   match e.e with
-  | Local var_id ->
+  | Var var_id ->
       let s = fmt.var_id_to_string var_id in
       if inside then "(" ^ s ^ ")" else s
   | Const cv -> Print.Values.constant_value_to_string cv

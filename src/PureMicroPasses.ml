@@ -95,7 +95,7 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
       method! visit_var _ v _ = v.id
       (** For the patterns *)
 
-      method! visit_Local _ vid _ = vid
+      method! visit_Var _ vid _ = vid
       (** For the rvalues *)
     end
   in
@@ -296,7 +296,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       object
         inherit [_] map_typed_pattern
 
-        method! visit_Var _ v mp = Var (update_var ctx v mp, mp)
+        method! visit_PatVar _ v mp = PatVar (update_var ctx v mp, mp)
       end
     in
     obj#visit_typed_pattern () lv
@@ -350,7 +350,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
     (* Add the constraint *)
-    match (unmeta rv).e with Local vid -> add_constraint mp vid ctx | _ -> ctx
+    match (unmeta rv).e with Var vid -> add_constraint mp vid ctx | _ -> ctx
   in
   (* Specific case of constraint on left values *)
   let add_left_constraint (lv : typed_pattern) (ctx : pn_ctx) : pn_ctx =
@@ -362,7 +362,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
 
         method plus ctx0 ctx1 _ = merge_ctxs (ctx0 ()) (ctx1 ())
 
-        method! visit_Var _ v mp () =
+        method! visit_PatVar _ v mp () =
           (* Register the variable *)
           let ctx = register_var (self#zero ()) v in
           (* Register the mplace information if there is such information *)
@@ -381,7 +381,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* We propagate constraints across variable reassignments: `^0 = x`,
      * if the destination doesn't have naming information *)
     match lv.value with
-    | PatVar (Var (({ id = _; basename = None; ty = _ } as lvar), lmp)) ->
+    | PatVar (({ id = _; basename = None; ty = _ } as lvar), lmp) ->
         if
           (* Check that there is not already a name for the variable *)
           VarId.Map.mem lvar.id ctx.pure_vars
@@ -413,7 +413,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           (* We try to use the rvalue information, if it is a variable *)
           let ctx =
             match (unmeta re).e with
-            | Local rvar_id -> (
+            | Var rvar_id -> (
                 match VarId.Map.find_opt rvar_id ctx.pure_vars with
                 | None -> ctx
                 | Some name -> add name ctx)
@@ -429,7 +429,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ty = e.ty in
     let ctx, e =
       match e.e with
-      | Local _ -> (* Nothing to do *) (ctx, e.e)
+      | Var _ -> (* Nothing to do *) (ctx, e.e)
       | Const _ -> (* Nothing to do *) (ctx, e.e)
       | App (app, arg) ->
           let ctx, app = update_texpression app ctx in
@@ -590,7 +590,7 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
          * - the left-value is a variable
          *)
         match (monadic, lv.value) with
-        | false, PatVar (Var (lv_var, _)) ->
+        | false, PatVar (lv_var, _) ->
             (* We can filter if: *)
             let filter = false in
             (* 1. Either:
@@ -610,7 +610,7 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
               if inline_pure then
                 let app, _ = destruct_apps re in
                 match app.e with
-                | Const _ | Local _ -> true (* constant or variable *)
+                | Const _ | Var _ -> true (* constant or variable *)
                 | Qualif qualif -> (
                     match qualif.id with
                     | AdtCons _ | Proj _ -> true (* ADT constructor *)
@@ -635,9 +635,9 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
       (** Visit the let-bindings to filter the useless ones (and update
           the substitution map while doing so *)
 
-      method! visit_Local (env : texpression VarId.Map.t) (vid : VarId.id) =
+      method! visit_Var (env : texpression VarId.Map.t) (vid : VarId.id) =
         match VarId.Map.find_opt vid env with
-        | None -> (* No substitution *) super#visit_Local env vid
+        | None -> (* No substitution *) super#visit_Var env vid
         | Some ne ->
             (* Substitute - note that we need to reexplore, because
              * there may be stacked substitutions, if we have:
@@ -750,7 +750,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
 
       method! visit_texpression env e =
         match e.e with
-        | Local _ | Const _ -> fun _ -> false
+        | Var _ | Const _ -> fun _ -> false
         | Let (_, _, re, e) -> (
             match opt_destruct_function_call re with
             | None -> fun () -> self#visit_texpression env e ()
@@ -812,12 +812,9 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
 
       method plus b0 b1 _ = b0 () && b1 ()
 
-      method! visit_var_or_dummy env v =
-        match v with
-        | Dummy -> (Dummy, fun _ -> true)
-        | Var (v, mp) ->
-            if VarId.Set.mem v.id env then (Var (v, mp), fun _ -> false)
-            else (Dummy, fun _ -> true)
+      method! visit_PatVar env v mp =
+        if VarId.Set.mem v.id env then (PatVar (v, mp), fun _ -> false)
+        else (PatDummy, fun _ -> true)
     end
   in
   let filter_typed_pattern (used_vars : VarId.Set.t) (lv : typed_pattern) :
@@ -839,12 +836,12 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
 
       method plus s0 s1 _ = VarId.Set.union (s0 ()) (s1 ())
 
-      method! visit_Local _ vid = (Local vid, fun _ -> VarId.Set.singleton vid)
+      method! visit_Var _ vid = (Var vid, fun _ -> VarId.Set.singleton vid)
       (** Whenever we visit a variable, we need to register the used variable *)
 
       method! visit_expression env e =
         match e with
-        | Local _ | Const _ | App _ | Qualif _
+        | Var _ | Const _ | App _ | Qualif _
         | Switch (_, _)
         | Meta (_, _)
         | Abs _ ->
@@ -970,10 +967,8 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
     object
       inherit [_] map_expression as super
 
-      method! visit_var_or_dummy _ v =
-        match v with
-        | Dummy -> Dummy
-        | Var (v, mp) -> if v.ty = unit_ty then Dummy else Var (v, mp)
+      method! visit_PatVar _ v mp =
+        if v.ty = unit_ty then PatDummy else PatVar (v, mp)
       (** Replace in patterns *)
 
       method! visit_texpression env e =
