@@ -181,8 +181,7 @@ let hash_map_insert_no_resize_fwd_back
               | Fail -> Fail
               | Return v ->
                 Return (Mkhash_map_t self.hash_map_num_entries
-                  self.hash_map_max_load_factor self.hash_map_max_load 
-                  v)
+                  self.hash_map_max_load_factor self.hash_map_max_load v)
               end
             end
         end
@@ -574,8 +573,7 @@ let hash_map_remove_back
               | Fail -> Fail
               | Return v ->
                 Return (Mkhash_map_t self.hash_map_num_entries
-                  self.hash_map_max_load_factor self.hash_map_max_load 
-                  v)
+                  self.hash_map_max_load_factor self.hash_map_max_load v)
               end
             end
           | Some x0 ->

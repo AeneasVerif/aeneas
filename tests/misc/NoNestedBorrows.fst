@@ -341,10 +341,10 @@ let rec list_nth_mut_back
 
 (** [no_nested_borrows::list_rev_aux] *)
 let rec list_rev_aux_fwd
-  (t : Type0) (lo : list_t t) (li : list_t t) : result (list_t t) =
+  (t : Type0) (li : list_t t) (lo : list_t t) : result (list_t t) =
   begin match li with
   | ListCons hd tl ->
-    begin match list_rev_aux_fwd t (ListCons hd lo) tl with
+    begin match list_rev_aux_fwd t tl (ListCons hd lo) with
     | Fail -> Fail
     | Return l -> Return l
     end
@@ -354,7 +354,7 @@ let rec list_rev_aux_fwd
 (** [no_nested_borrows::list_rev] *)
 let list_rev_fwd_back (t : Type0) (l : list_t t) : result (list_t t) =
   let li = mem_replace_fwd (list_t t) l ListNil in
-  begin match list_rev_aux_fwd t ListNil li with
+  begin match list_rev_aux_fwd t li ListNil with
   | Fail -> Fail
   | Return l0 -> Return l0
   end
@@ -516,8 +516,9 @@ let test_constants_fwd : result unit =
               begin match new_pair1_fwd with
               | Fail -> Fail
               | Return swp ->
-                let p = swp.struct_with_pair_p in
-                if not (p.pair_x = 1) then Fail else Return ()
+                if not (swp.struct_with_pair_p.pair_x = 1)
+                then Fail
+                else Return ()
               end
           end
       end
