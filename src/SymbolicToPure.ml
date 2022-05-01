@@ -111,10 +111,10 @@ type bs_ctx = {
 }
 (** Body synthesis context *)
 
-let type_check_lvalue (ctx : bs_ctx) (v : typed_lvalue) : unit =
+let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
   let env = VarId.Map.empty in
   let ctx = { TypeCheck.type_decls = ctx.type_context.type_decls; env } in
-  let _ = TypeCheck.check_typed_lvalue ctx v in
+  let _ = TypeCheck.check_typed_pattern ctx v in
   ()
 
 let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
@@ -830,7 +830,7 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
 (** Explore an abstraction value and convert it to a given back value
     by collecting all the meta-values from the ended *borrows*.
 
-    Given back values are lvalues, because when an abstraction ends, we
+    Given back values are patterns, because when an abstraction ends, we
     introduce a call to a backward function in the synthesized program,
     which introduces new values:
     ```
@@ -842,7 +842,7 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
     the heuristics which later find pretty names for the variables.
  *)
 let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
-    (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
+    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   let ctx, value =
     match av.value with
     | AConcrete _ -> raise (Failure "Unreachable")
@@ -872,9 +872,9 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
             assert (variant_id = None);
             if field_values = [] then (ctx, None)
             else
-              (* Note that if there is exactly one field value, [mk_simpl_tuple_lvalue]
+              (* Note that if there is exactly one field value, [mk_simpl_tuple_pattern]
                * is the identity *)
-              let lv = mk_simpl_tuple_lvalue field_values in
+              let lv = mk_simpl_tuple_pattern field_values in
               (ctx, Some lv))
     | ABottom -> raise (Failure "Unreachable")
     | ALoan lc -> aloan_content_to_given_back mp lc ctx
@@ -884,12 +884,12 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
   in
   (* Sanity check - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
-  (match value with None -> () | Some value -> type_check_lvalue ctx value);
+  (match value with None -> () | Some value -> type_check_pattern ctx value);
   (* Return *)
   (ctx, value)
 
 and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
-    (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
+    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) -> raise (Failure "Unreachable")
   | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
@@ -907,14 +907,14 @@ and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
       (ctx, None)
 
 and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
-    (ctx : bs_ctx) : bs_ctx * typed_lvalue option =
+    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match bc with
   | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
       raise (Failure "Unreachable")
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta-symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv ctx in
-      (ctx, Some (mk_typed_lvalue_from_var var mp))
+      (ctx, Some (mk_typed_pattern_from_var var mp))
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
       raise Unimplemented
@@ -923,7 +923,7 @@ and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
       (ctx, None)
 
 and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
-    bs_ctx * typed_lvalue option =
+    bs_ctx * typed_pattern option =
   match aproj with
   | V.AEndedProjLoans (_, child_projs) ->
       (* There may be children borrow projections in case of nested borrows,
@@ -936,7 +936,7 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
   | AEndedProjBorrows mv ->
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv ctx in
-      (ctx, Some (mk_typed_lvalue_from_var var mp))
+      (ctx, Some (mk_typed_pattern_from_var var mp))
   | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
       raise (Failure "Unreachable")
 
@@ -945,7 +945,7 @@ and aproj_to_given_back (mp : mplace option) (aproj : V.aproj) (ctx : bs_ctx) :
     See [typed_avalue_to_given_back].
  *)
 let abs_to_given_back (mpl : mplace option list) (abs : V.abs) (ctx : bs_ctx) :
-    bs_ctx * typed_lvalue list =
+    bs_ctx * typed_pattern list =
   let avalues = List.combine mpl abs.avalues in
   let ctx, values =
     List.fold_left_map
@@ -957,7 +957,7 @@ let abs_to_given_back (mpl : mplace option list) (abs : V.abs) (ctx : bs_ctx) :
 
 (** Simply calls [abs_to_given_back] *)
 let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) :
-    bs_ctx * typed_lvalue list =
+    bs_ctx * typed_pattern list =
   let mpl = List.map (fun _ -> None) abs.avalues in
   abs_to_given_back mpl abs ctx
 
@@ -1024,8 +1024,8 @@ and translate_panic (config : config) (ctx : bs_ctx) : texpression =
     let _, state_var =
       fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
     in
-    let state_lvalue = mk_typed_lvalue_from_var state_var None in
-    mk_abs state_lvalue ret_v
+    let state_pattern = mk_typed_pattern_from_var state_var None in
+    mk_abs state_pattern ret_v
   else mk_result_fail_rvalue ctx.ret_ty
 
 and translate_return (config : config) (opt_v : V.typed_value option)
@@ -1054,7 +1054,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
           mk_result_return_rvalue
             (mk_simpl_tuple_texpression [ state_rvalue; v ])
         in
-        let state_var = mk_typed_lvalue_from_var state_var None in
+        let state_var = mk_typed_pattern_from_var state_var None in
         mk_abs state_var ret_v
       else mk_result_return_rvalue v
   | Some bid ->
@@ -1078,7 +1078,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
           mk_result_return_rvalue
             (mk_simpl_tuple_texpression [ state_rvalue; ret_value ])
         in
-        let state_var = mk_typed_lvalue_from_var state_var None in
+        let state_var = mk_typed_pattern_from_var state_var None in
         mk_abs state_var ret_value
       else
         let ret_value = mk_simpl_tuple_texpression field_values in
@@ -1126,7 +1126,7 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
       (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
       (List.combine args args_mplaces)
   in
-  let dest_v = mk_typed_lvalue_from_var dest dest_mplace in
+  let dest_v = mk_typed_pattern_from_var dest dest_mplace in
   let func = { id = Func fun_id; type_params } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
   let ret_ty = mk_function_ret_ty config monadic state_monad dest_v.ty in
@@ -1192,7 +1192,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       let monadic = false in
       List.fold_right
         (fun (var, value) (e : texpression) ->
-          mk_let monadic (mk_typed_lvalue_from_var var None) value e)
+          mk_let monadic (mk_typed_pattern_from_var var None) value e)
         variables_values next_e
   | V.FunCall ->
       let call_info = V.FunCallId.Map.find abs.call_id ctx.calls in
@@ -1221,7 +1221,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
         List.append (List.map translate_opt_mplace call.args_places) [ None ]
       in
       let ctx, outputs = abs_to_given_back output_mpl abs ctx in
-      let output = mk_simpl_tuple_lvalue outputs in
+      let output = mk_simpl_tuple_pattern outputs in
       (* Sanity check: the inputs and outputs have the proper number and the proper type *)
       let fun_id =
         match call.call_id with
@@ -1244,7 +1244,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
           ^ "\n- expected outputs: "
           ^ string_of_int (List.length inst_sg.outputs)));
       List.iter
-        (fun (x, ty) -> assert ((x : typed_lvalue).ty = ty))
+        (fun (x, ty) -> assert ((x : typed_pattern).ty = ty))
         (List.combine outputs inst_sg.outputs);
       (* Retrieve the function id, and register the function call in the context
        * if necessary *)
@@ -1326,7 +1326,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       let given_back_inputs = List.combine given_back inputs in
       (* Sanity check *)
       List.iter
-        (fun ((given_back, input) : typed_lvalue * var) ->
+        (fun ((given_back, input) : typed_pattern * var) ->
           log#ldebug
             (lazy
               ("\n- given_back ty: "
@@ -1364,7 +1364,7 @@ and translate_expansion (config : config) (p : S.mplace option)
           let next_e = translate_expression config e ctx in
           let monadic = false in
           mk_let monadic
-            (mk_typed_lvalue_from_var var None)
+            (mk_typed_pattern_from_var var None)
             (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
             next_e
       | SeAdt _ ->
@@ -1388,9 +1388,9 @@ and translate_expansion (config : config) (p : S.mplace option)
                 (* This is an enumeration: introduce an [ExpandEnum] let-binding *)
                 let variant_id = Option.get variant_id in
                 let lvars =
-                  List.map (fun v -> mk_typed_lvalue_from_var v None) vars
+                  List.map (fun v -> mk_typed_pattern_from_var v None) vars
                 in
-                let lv = mk_adt_lvalue scrutinee.ty variant_id lvars in
+                let lv = mk_adt_pattern scrutinee.ty variant_id lvars in
                 let monadic = false in
 
                 mk_let monadic lv
@@ -1421,16 +1421,16 @@ and translate_expansion (config : config) (p : S.mplace option)
                   (fun (fid, var) e ->
                     let field_proj = gen_field_proj fid var in
                     mk_let monadic
-                      (mk_typed_lvalue_from_var var None)
+                      (mk_typed_pattern_from_var var None)
                       field_proj e)
                   id_var_pairs branch
           | T.Tuple ->
               let vars =
-                List.map (fun x -> mk_typed_lvalue_from_var x None) vars
+                List.map (fun x -> mk_typed_pattern_from_var x None) vars
               in
               let monadic = false in
               mk_let monadic
-                (mk_simpl_tuple_lvalue vars)
+                (mk_simpl_tuple_pattern vars)
                 (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
                 branch
           | T.Assumed T.Box ->
@@ -1444,7 +1444,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                * identity when extracted (`box a == a`) *)
               let monadic = false in
               mk_let monadic
-                (mk_typed_lvalue_from_var var None)
+                (mk_typed_pattern_from_var var None)
                 (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
                 branch
           | T.Assumed T.Vec ->
@@ -1465,10 +1465,10 @@ and translate_expansion (config : config) (p : S.mplace option)
             let variant_id = Option.get variant_id in
             let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
             let vars =
-              List.map (fun x -> mk_typed_lvalue_from_var x None) vars
+              List.map (fun x -> mk_typed_pattern_from_var x None) vars
             in
             let pat_ty = scrutinee.ty in
-            let pat = mk_adt_lvalue pat_ty variant_id vars in
+            let pat = mk_adt_pattern pat_ty variant_id vars in
             let branch = translate_expression config branch ctx in
             { pat; branch }
           in
@@ -1506,13 +1506,15 @@ and translate_expansion (config : config) (p : S.mplace option)
         (* We don't need to update the context: we don't introduce any
          * new values/variables *)
         let branch = translate_expression config branch_e ctx in
-        let pat = mk_typed_lvalue_from_constant_value (V.Scalar v) in
+        let pat = mk_typed_pattern_from_constant_value (V.Scalar v) in
         { pat; branch }
       in
       let branches = List.map translate_branch branches in
       let otherwise = translate_expression config otherwise ctx in
       let pat_ty = Integer int_ty in
-      let otherwise_pat : typed_lvalue = { value = LvVar Dummy; ty = pat_ty } in
+      let otherwise_pat : typed_pattern =
+        { value = PatVar Dummy; ty = pat_ty }
+      in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }
       in
@@ -1584,7 +1586,7 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
         in
         let inputs = List.append ctx.forward_inputs backward_inputs in
         let inputs_lvs =
-          List.map (fun v -> mk_typed_lvalue_from_var v None) inputs
+          List.map (fun v -> mk_typed_pattern_from_var v None) inputs
         in
         (* Sanity check *)
         assert (

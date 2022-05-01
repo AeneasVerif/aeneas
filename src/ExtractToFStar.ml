@@ -758,7 +758,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
 
 (** The following function factorizes the extraction of ADT values.
 
-    Note that lvalues can introduce new variables: we thus return an extraction
+    Note that patterns can introduce new variables: we thus return an extraction
     context updated with new bindings.
     
     TODO: we don't need something very generic anymore
@@ -808,27 +808,27 @@ let extract_adt_g_value
 
 (** [inside]: see [extract_ty].
 
-    As an lvalue can introduce new variables, we return an extraction context
+    As an pattern can introduce new variables, we return an extraction context
     updated with new bindings.
  *)
-let rec extract_typed_lvalue (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (v : typed_lvalue) : extraction_ctx =
+let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (v : typed_pattern) : extraction_ctx =
   match v.value with
-  | LvConcrete cv ->
+  | PatConcrete cv ->
       ctx.fmt.extract_constant_value fmt inside cv;
       ctx
-  | LvVar (Var (v, _)) ->
+  | PatVar (Var (v, _)) ->
       let vname =
         ctx.fmt.var_basename ctx.names_map.names_set v.basename v.ty
       in
       let ctx, vname = ctx_add_var vname v.id ctx in
       F.pp_print_string fmt vname;
       ctx
-  | LvVar Dummy ->
+  | PatVar Dummy ->
       F.pp_print_string fmt "_";
       ctx
-  | LvAdt av ->
-      let extract_value ctx inside v = extract_typed_lvalue ctx fmt inside v in
+  | PatAdt av ->
+      let extract_value ctx inside v = extract_typed_pattern ctx fmt inside v in
       extract_adt_g_value extract_value fmt ctx inside av.variant_id
         av.field_values v.ty
 
@@ -1014,7 +1014,7 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
       raise (Failure "Unreachable")
 
 and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (xl : typed_lvalue list) (e : texpression) : unit =
+    (xl : typed_pattern list) (e : texpression) : unit =
   (* Open a box for the abs expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Open parentheses *)
@@ -1026,7 +1026,7 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     List.fold_left
       (fun ctx x ->
         F.pp_print_space fmt ();
-        extract_typed_lvalue ctx fmt true x)
+        extract_typed_pattern ctx fmt true x)
       ctx xl
   in
   F.pp_print_space fmt ();
@@ -1040,7 +1040,7 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   F.pp_close_box fmt ()
 
 and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (monadic : bool) (lv : typed_lvalue) (re : texpression)
+    (monadic : bool) (lv : typed_pattern) (re : texpression)
     (next_e : texpression) : unit =
   (* Open a box for the whole expression *)
   F.pp_open_hvbox fmt 0;
@@ -1052,7 +1052,7 @@ and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     if monadic then (
       (* Note that in F*, the left value of a monadic let-binding can only be
        * a variable *)
-      let ctx = extract_typed_lvalue ctx fmt true lv in
+      let ctx = extract_typed_pattern ctx fmt true lv in
       F.pp_print_space fmt ();
       F.pp_print_string fmt "<--";
       F.pp_print_space fmt ();
@@ -1062,7 +1062,7 @@ and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     else (
       F.pp_print_string fmt "let";
       F.pp_print_space fmt ();
-      let ctx = extract_typed_lvalue ctx fmt true lv in
+      let ctx = extract_typed_pattern ctx fmt true lv in
       F.pp_print_space fmt ();
       F.pp_print_string fmt "=";
       F.pp_print_space fmt ();
@@ -1148,7 +1148,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_print_string fmt "|";
         (* Print the pattern *)
         F.pp_print_space fmt ();
-        let ctx = extract_typed_lvalue ctx fmt false br.pat in
+        let ctx = extract_typed_pattern ctx fmt false br.pat in
         F.pp_print_space fmt ();
         F.pp_print_string fmt "->";
         F.pp_print_space fmt ();
@@ -1208,11 +1208,11 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     | None -> ctx
     | Some body ->
         List.fold_left
-          (fun ctx (lv : typed_lvalue) ->
+          (fun ctx (lv : typed_pattern) ->
             (* Open a box for the input parameter *)
             F.pp_open_hovbox fmt 0;
             F.pp_print_string fmt "(";
-            let ctx = extract_typed_lvalue ctx fmt false lv in
+            let ctx = extract_typed_pattern ctx fmt false lv in
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
             F.pp_print_space fmt ();
@@ -1427,9 +1427,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       in
       let _ =
         List.fold_left
-          (fun ctx (lv : typed_lvalue) ->
+          (fun ctx (lv : typed_pattern) ->
             F.pp_print_space fmt ();
-            let ctx = extract_typed_lvalue ctx fmt false lv in
+            let ctx = extract_typed_pattern ctx fmt false lv in
             ctx)
           ctx inputs_lvs
       in

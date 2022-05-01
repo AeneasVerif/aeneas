@@ -93,7 +93,7 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
       (* Get the maximum *)
 
       method! visit_var _ v _ = v.id
-      (** For the lvalues *)
+      (** For the patterns *)
 
       method! visit_Local _ vid _ = vid
       (** For the rvalues *)
@@ -117,7 +117,7 @@ type pn_ctx = {
     
     The way it works is as follows:
     - we only modify the names of the unnamed variables
-    - whenever we see an rvalue/lvalue which is exactly an unnamed variable,
+    - whenever we see an rvalue/pattern which is exactly an unnamed variable,
       and this value is linked to some meta-place information which contains
       a name and an empty path, we consider we should use this name
     - we try to propagate naming constraints on the pure variables use in the
@@ -290,16 +290,16 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
               | Some basename -> { v with basename = Some basename }
             else v)
   in
-  (* Update an lvalue - used to update an expression after we computed constraints *)
-  let update_typed_lvalue ctx (lv : typed_lvalue) : typed_lvalue =
+  (* Update an pattern - used to update an expression after we computed constraints *)
+  let update_typed_pattern ctx (lv : typed_pattern) : typed_pattern =
     let obj =
       object
-        inherit [_] map_typed_lvalue
+        inherit [_] map_typed_pattern
 
         method! visit_Var _ v mp = Var (update_var ctx v mp, mp)
       end
     in
-    obj#visit_typed_lvalue () lv
+    obj#visit_typed_pattern () lv
   in
 
   (* Register an mplace the first time we find one *)
@@ -353,10 +353,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     match (unmeta rv).e with Local vid -> add_constraint mp vid ctx | _ -> ctx
   in
   (* Specific case of constraint on left values *)
-  let add_left_constraint (lv : typed_lvalue) (ctx : pn_ctx) : pn_ctx =
+  let add_left_constraint (lv : typed_pattern) (ctx : pn_ctx) : pn_ctx =
     let obj =
       object (self)
-        inherit [_] reduce_typed_lvalue
+        inherit [_] reduce_typed_pattern
 
         method zero _ = empty_ctx
 
@@ -369,19 +369,19 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           match mp with Some mp -> add_constraint mp v.id ctx | None -> ctx
       end
     in
-    let ctx1 = obj#visit_typed_lvalue () lv () in
+    let ctx1 = obj#visit_typed_pattern () lv () in
     merge_ctxs ctx ctx1
   in
 
   (* This is used to propagate constraint information about places in case of
    * variable reassignments: we try to propagate the information from the
    * rvalue to the left *)
-  let add_left_right_constraint (lv : typed_lvalue) (re : texpression)
+  let add_left_right_constraint (lv : typed_pattern) (re : texpression)
       (ctx : pn_ctx) : pn_ctx =
     (* We propagate constraints across variable reassignments: `^0 = x`,
      * if the destination doesn't have naming information *)
     match lv.value with
-    | LvVar (Var (({ id = _; basename = None; ty = _ } as lvar), lmp)) ->
+    | PatVar (Var (({ id = _; basename = None; ty = _ } as lvar), lmp)) ->
         if
           (* Check that there is not already a name for the variable *)
           VarId.Map.mem lvar.id ctx.pure_vars
@@ -444,18 +444,18 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     in
     (ctx, { e; ty })
   (* *)
-  and update_abs (x : typed_lvalue) (e : texpression) (ctx : pn_ctx) :
+  and update_abs (x : typed_pattern) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
     (* We first add the left-constraint *)
     let ctx = add_left_constraint x ctx in
     (* Update the expression, and add additional constraints *)
     let ctx, e = update_texpression e ctx in
     (* Update the abstracted value *)
-    let x = update_typed_lvalue ctx x in
+    let x = update_typed_pattern ctx x in
     (* Put together *)
     (ctx, Abs (x, e))
   (* *)
-  and update_let (monadic : bool) (lv : typed_lvalue) (re : texpression)
+  and update_let (monadic : bool) (lv : typed_pattern) (re : texpression)
       (e : texpression) (ctx : pn_ctx) : pn_ctx * expression =
     (* We first add the left-constraint *)
     let ctx = add_left_constraint lv ctx in
@@ -464,7 +464,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx = add_left_right_constraint lv re ctx in
     let ctx, re = update_texpression re ctx in
     let ctx, e = update_texpression e ctx in
-    let lv = update_typed_lvalue ctx lv in
+    let lv = update_typed_pattern ctx lv in
     (ctx, Let (monadic, lv, re, e))
   (* *)
   and update_switch_body (scrut : texpression) (body : switch_body)
@@ -484,7 +484,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
               (fun br ->
                 let ctx = add_left_constraint br.pat ctx in
                 let ctx, branch = update_texpression br.branch ctx in
-                let pat = update_typed_lvalue ctx br.pat in
+                let pat = update_typed_pattern ctx br.pat in
                 (ctx, { pat; branch }))
               branches
           in
@@ -590,7 +590,7 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
          * - the left-value is a variable
          *)
         match (monadic, lv.value) with
-        | false, LvVar (Var (lv_var, _)) ->
+        | false, PatVar (Var (lv_var, _)) ->
             (* We can filter if: *)
             let filter = false in
             (* 1. Either:
@@ -806,7 +806,7 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
    *)
   let lv_visitor =
     object
-      inherit [_] mapreduce_typed_lvalue
+      inherit [_] mapreduce_typed_pattern
 
       method zero _ = true
 
@@ -820,9 +820,9 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
             else (Dummy, fun _ -> true)
     end
   in
-  let filter_typed_lvalue (used_vars : VarId.Set.t) (lv : typed_lvalue) :
-      typed_lvalue * bool =
-    let lv, all_dummies = lv_visitor#visit_typed_lvalue used_vars lv in
+  let filter_typed_pattern (used_vars : VarId.Set.t) (lv : typed_pattern) :
+      typed_pattern * bool =
+    let lv, all_dummies = lv_visitor#visit_typed_pattern used_vars lv in
     (lv, all_dummies ())
   in
 
@@ -854,7 +854,7 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
             let e, used = self#visit_texpression env e in
             let used = used () in
             (* Filter the left values *)
-            let lv, all_dummies = filter_typed_lvalue used lv in
+            let lv, all_dummies = filter_typed_pattern used lv in
             (* Small utility - called if we can't filter the let-binding *)
             let dont_filter () =
               let re, used_re = self#visit_texpression env re in
@@ -906,7 +906,7 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
       let inputs_lvs =
         if false then
           List.map
-            (fun lv -> fst (filter_typed_lvalue used_vars lv))
+            (fun lv -> fst (filter_typed_pattern used_vars lv))
             body.inputs_lvs
         else body.inputs_lvs
       in
@@ -974,7 +974,7 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
         match v with
         | Dummy -> Dummy
         | Var (v, mp) -> if v.ty = unit_ty then Dummy else Var (v, mp)
-      (** Replace in lvalues *)
+      (** Replace in patterns *)
 
       method! visit_texpression env e =
         if e.ty = unit_ty then unit_rvalue else super#visit_texpression env e
@@ -989,7 +989,7 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
   | Some body ->
       let body_exp = obj#visit_texpression () body.body in
       (* Update the input parameters *)
-      let inputs_lvs = List.map (obj#visit_typed_lvalue ()) body.inputs_lvs in
+      let inputs_lvs = List.map (obj#visit_typed_pattern ()) body.inputs_lvs in
       (* Return *)
       let body = Some { body with body = body_exp; inputs_lvs } in
       { def with body }
@@ -1089,7 +1089,7 @@ let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
                * - if not, make the decomposition in two steps
                *)
               match lv.value with
-              | LvVar _ ->
+              | PatVar _ ->
                   (* Variable: nothing to do *)
                   super#visit_Let env monadic lv re next_e
               | _ ->
@@ -1098,7 +1098,7 @@ let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
                    * monadic binding *)
                   let vid = fresh_id () in
                   let tmp : var = { id = vid; basename = None; ty = lv.ty } in
-                  let ltmp = mk_typed_lvalue_from_var tmp None in
+                  let ltmp = mk_typed_pattern_from_var tmp None in
                   let rtmp = mk_texpression_from_var tmp in
                   (* Visit the next expression *)
                   let next_e = self#visit_texpression env next_e in
@@ -1155,7 +1155,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
               (* Generate a fresh state variable *)
               let state_var = fresh_state_var () in
               let state_value = mk_texpression_from_var state_var in
-              let state_lvar = mk_typed_lvalue_from_var state_var None in
+              let state_lvar = mk_typed_pattern_from_var state_var None in
               (* Apply in all the branches and reconstruct the switch *)
               let mk_app e = mk_app e state_value in
               let switch_body = map_switch_body_branches mk_app switch_body in
@@ -1219,17 +1219,17 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                   mk_app re state_value
                 in
                 (* Create the match *)
-                let fail_pat = mk_result_fail_lvalue re_no_monad_ty in
+                let fail_pat = mk_result_fail_pattern re_no_monad_ty in
                 let fail_value = mk_result_fail_rvalue e_no_monad_ty in
                 let fail_branch = { pat = fail_pat; branch = fail_value } in
                 (* The `Success` branch introduces a fresh state variable *)
                 let pat_state_var = fresh_state_var () in
-                let pat_state_lvalue =
-                  mk_typed_lvalue_from_var pat_state_var None
+                let pat_state_pattern =
+                  mk_typed_pattern_from_var pat_state_var None
                 in
                 let success_pat =
-                  mk_result_return_lvalue
-                    (mk_simpl_tuple_lvalue [ pat_state_lvalue; lv ])
+                  mk_result_return_pattern
+                    (mk_simpl_tuple_pattern [ pat_state_pattern; lv ])
                 in
                 let pat_state_rvalue = mk_texpression_from_var pat_state_var in
                 (* TODO: write a utility to create matches (and perform
@@ -1241,7 +1241,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                 let e = Switch (re, switch_body) in
                 let e = { e; ty = e_no_arrow_ty } in
                 (* Add the lambda to introduce the state variable *)
-                let e = mk_abs (mk_typed_lvalue_from_var state_var None) e in
+                let e = mk_abs (mk_typed_pattern_from_var state_var None) e in
                 (* Sanity check *)
                 assert (e0.ty = e.ty);
                 assert (fail_branch.branch.ty = success_branch.branch.ty);
@@ -1250,10 +1250,10 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
               else
                 let re_ty = Option.get (opt_destruct_result re.ty) in
                 assert (lv.ty = re_ty);
-                let fail_pat = mk_result_fail_lvalue lv.ty in
+                let fail_pat = mk_result_fail_pattern lv.ty in
                 let fail_value = mk_result_fail_rvalue e.ty in
                 let fail_branch = { pat = fail_pat; branch = fail_value } in
-                let success_pat = mk_result_return_lvalue lv in
+                let success_pat = mk_result_return_pattern lv in
                 let success_branch = { pat = success_pat; branch = e } in
                 let switch_body = Match [ fail_branch; success_branch ] in
                 let e = Switch (re, switch_body) in
@@ -1282,7 +1282,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
           let sg = { sg with inputs = sg_inputs; outputs = sg_outputs } in
           (* Input list *)
           let inputs = body.inputs @ [ state_var ] in
-          let input_lv = mk_typed_lvalue_from_var state_var None in
+          let input_lv = mk_typed_pattern_from_var state_var None in
           let inputs_lvs = body.inputs_lvs @ [ input_lv ] in
           let body = { body = body_e; inputs; inputs_lvs } in
           (body, sg)

@@ -57,16 +57,16 @@ let compute_constant_value_ty (cv : constant_value) : ty =
   | Char _ -> Char
   | String _ -> Str
 
-let mk_typed_lvalue_from_constant_value (cv : constant_value) : typed_lvalue =
+let mk_typed_pattern_from_constant_value (cv : constant_value) : typed_pattern =
   let ty = compute_constant_value_ty cv in
-  { value = LvConcrete cv; ty }
+  { value = PatConcrete cv; ty }
 
 (*let mk_value_expression (v : typed_rvalue) (mp : mplace option) : texpression =
     let e = Value (v, mp) in
     let ty = v.ty in
   { e; ty }*)
 
-let mk_let (monadic : bool) (lv : typed_lvalue) (re : texpression)
+let mk_let (monadic : bool) (lv : typed_pattern) (re : texpression)
     (next_e : texpression) : texpression =
   let e = Let (monadic, lv, re, next_e) in
   let ty = next_e.ty in
@@ -273,12 +273,12 @@ let destruct_result (ty : ty) : ty = Option.get (opt_destruct_result ty)
 let opt_destruct_tuple (ty : ty) : ty list option =
   match ty with Adt (Tuple, tys) -> Some tys | _ -> None
 
-let mk_abs (x : typed_lvalue) (e : texpression) : texpression =
+let mk_abs (x : typed_pattern) (e : texpression) : texpression =
   let ty = Arrow (x.ty, e.ty) in
   let e = Abs (x, e) in
   { e; ty }
 
-let rec destruct_abs_list (e : texpression) : typed_lvalue list * texpression =
+let rec destruct_abs_list (e : texpression) : typed_pattern list * texpression =
   match e.e with
   | Abs (x, e') ->
       let xl, e'' = destruct_abs_list e' in
@@ -354,8 +354,8 @@ let mk_texpression_from_var (v : var) : texpression =
   let ty = v.ty in
   { e; ty }
 
-let mk_typed_lvalue_from_var (v : var) (mp : mplace option) : typed_lvalue =
-  let value = LvVar (Var (v, mp)) in
+let mk_typed_pattern_from_var (v : var) (mp : mplace option) : typed_pattern =
+  let value = PatVar (Var (v, mp)) in
   let ty = v.ty in
   { value; ty }
 
@@ -375,16 +375,16 @@ let mk_opt_mplace_texpression (mp : mplace option) (e : texpression) :
     - if there is exactly one value, just return it
     - if there is > one value: wrap them in a tuple
  *)
-let mk_simpl_tuple_lvalue (vl : typed_lvalue list) : typed_lvalue =
+let mk_simpl_tuple_pattern (vl : typed_pattern list) : typed_pattern =
   match vl with
   | [ v ] -> v
   | _ ->
-      let tys = List.map (fun (v : typed_lvalue) -> v.ty) vl in
+      let tys = List.map (fun (v : typed_pattern) -> v.ty) vl in
       let ty = Adt (Tuple, tys) in
-      let value = LvAdt { variant_id = None; field_values = vl } in
+      let value = PatAdt { variant_id = None; field_values = vl } in
       { value; ty }
 
-(** Similar to [mk_simpl_tuple_lvalue] *)
+(** Similar to [mk_simpl_tuple_pattern] *)
 let mk_simpl_tuple_texpression (vl : texpression list) : texpression =
   match vl with
   | [ v ] -> v
@@ -400,9 +400,9 @@ let mk_simpl_tuple_texpression (vl : texpression list) : texpression =
       let cons = { e = Qualif qualif; ty } in
       mk_apps cons vl
 
-let mk_adt_lvalue (adt_ty : ty) (variant_id : VariantId.id)
-    (vl : typed_lvalue list) : typed_lvalue =
-  let value = LvAdt { variant_id = Some variant_id; field_values = vl } in
+let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id)
+    (vl : typed_pattern list) : typed_pattern =
+  let value = PatAdt { variant_id = Some variant_id; field_values = vl } in
   { value; ty = adt_ty }
 
 let ty_as_integer (t : ty) : T.integer_type =
@@ -442,15 +442,15 @@ let mk_result_return_rvalue (v : texpression) : texpression =
   let cons = { e = cons_e; ty = cons_ty } in
   mk_app cons v
 
-let mk_result_fail_lvalue (ty : ty) : typed_lvalue =
+let mk_result_fail_pattern (ty : ty) : typed_pattern =
   let ty = Adt (Assumed Result, [ ty ]) in
-  let value = LvAdt { variant_id = Some result_fail_id; field_values = [] } in
+  let value = PatAdt { variant_id = Some result_fail_id; field_values = [] } in
   { value; ty }
 
-let mk_result_return_lvalue (v : typed_lvalue) : typed_lvalue =
+let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
   let ty = Adt (Assumed Result, [ v.ty ]) in
   let value =
-    LvAdt { variant_id = Some result_return_id; field_values = [ v ] }
+    PatAdt { variant_id = Some result_return_id; field_values = [ v ] }
   in
   { value; ty }
 
@@ -529,18 +529,18 @@ module TypeCheck = struct
     | Bool, Bool _ | Char, Char _ | Str, String _ -> ()
     | _ -> raise (Failure "Inconsistent type")
 
-  let rec check_typed_lvalue (ctx : tc_ctx) (v : typed_lvalue) : tc_ctx =
-    log#ldebug (lazy ("check_typed_lvalue: " ^ show_typed_lvalue v));
+  let rec check_typed_pattern (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
+    log#ldebug (lazy ("check_typed_pattern: " ^ show_typed_pattern v));
     match v.value with
-    | LvConcrete cv ->
+    | PatConcrete cv ->
         check_constant_value cv v.ty;
         ctx
-    | LvVar Dummy -> ctx
-    | LvVar (Var (var, _)) ->
+    | PatVar Dummy -> ctx
+    | PatVar (Var (var, _)) ->
         assert (var.ty = v.ty);
         let env = VarId.Map.add var.id var.ty ctx.env in
         { ctx with env }
-    | LvAdt av ->
+    | PatAdt av ->
         (* Compute the field types *)
         let type_id, tys =
           match v.ty with
@@ -550,13 +550,13 @@ module TypeCheck = struct
         let field_tys =
           get_adt_field_types ctx.type_decls type_id av.variant_id tys
         in
-        let check_value (ctx : tc_ctx) (ty : ty) (v : typed_lvalue) : tc_ctx =
+        let check_value (ctx : tc_ctx) (ty : ty) (v : typed_pattern) : tc_ctx =
           if ty <> v.ty then (
             log#serror
-              ("check_typed_lvalue: not the same types:" ^ "\n- ty: "
+              ("check_typed_pattern: not the same types:" ^ "\n- ty: "
              ^ show_ty ty ^ "\n- v.ty: " ^ show_ty v.ty);
             raise (Failure "Inconsistent types"));
-          check_typed_lvalue ctx v
+          check_typed_pattern ctx v
         in
         (* Check the field types - TODO: we might also want to check that the
          * type of the applied constructor is correct *)
@@ -587,7 +587,7 @@ module TypeCheck = struct
         assert (pat.ty = pat_ty);
         assert (body.ty = body_ty);
         (* Check the pattern and register the introduced variables at the same time *)
-        let ctx = check_typed_lvalue ctx pat in
+        let ctx = check_typed_pattern ctx pat in
         check_texpression ctx body
     | Qualif qualif -> (
         match qualif.id with
@@ -620,7 +620,7 @@ module TypeCheck = struct
         (* Check the right-expression *)
         check_texpression ctx re;
         (* Check the pattern and register the introduced variables at the same time *)
-        let ctx = check_typed_lvalue ctx pat in
+        let ctx = check_typed_pattern ctx pat in
         (* Check the next expression *)
         check_texpression ctx e_next
     | Switch (scrut, switch_body) -> (
@@ -635,7 +635,7 @@ module TypeCheck = struct
         | Match branches ->
             let check_branch (br : match_branch) : unit =
               assert (br.pat.ty = scrut.ty);
-              let ctx = check_typed_lvalue ctx br.pat in
+              let ctx = check_typed_pattern ctx br.pat in
               check_texpression ctx br.branch
             in
             List.iter check_branch branches)

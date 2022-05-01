@@ -288,7 +288,7 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
           raise (Failure "Unreachable"))
 
 (** TODO: we don't need a general function anymore (it is now only used for
-    lvalues (i.e., patterns)
+    patterns (i.e., patterns)
  *)
 let adt_g_value_to_string (fmt : value_formatter)
     (value_to_string : 'v -> string) (variant_id : VariantId.id option)
@@ -372,15 +372,15 @@ let var_or_dummy_to_string (fmt : ast_formatter) (v : var_or_dummy) : string =
       ^ ")"
   | Dummy -> "_"
 
-let rec typed_lvalue_to_string (fmt : ast_formatter) (v : typed_lvalue) : string
-    =
+let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
+    string =
   match v.value with
-  | LvConcrete cv -> Print.Values.constant_value_to_string cv
-  | LvVar var -> var_or_dummy_to_string fmt var
-  | LvAdt av ->
+  | PatConcrete cv -> Print.Values.constant_value_to_string cv
+  | PatVar var -> var_or_dummy_to_string fmt var
+  | PatAdt av ->
       adt_g_value_to_string
         (ast_to_value_formatter fmt)
-        (typed_lvalue_to_string fmt)
+        (typed_pattern_to_string fmt)
         av.variant_id av.field_values v.ty
 
 let fun_sig_to_string (fmt : ast_formatter) (sg : fun_sig) : string =
@@ -542,19 +542,19 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
   if all_args <> [] && inside then "(" ^ e ^ ")" else e
 
 and abs_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
-    (xl : typed_lvalue list) (e : texpression) : string =
-  let xl = List.map (typed_lvalue_to_string fmt) xl in
+    (xl : typed_pattern list) (e : texpression) : string =
+  let xl = List.map (typed_pattern_to_string fmt) xl in
   let e = texpression_to_string fmt false indent indent_incr e in
   "λ " ^ String.concat " " xl ^ ". " ^ e
 
 and let_to_string (fmt : ast_formatter) (indent : string) (indent_incr : string)
-    (monadic : bool) (lv : typed_lvalue) (re : texpression) (e : texpression) :
+    (monadic : bool) (lv : typed_pattern) (re : texpression) (e : texpression) :
     string =
   let indent1 = indent ^ indent_incr in
   let inside = false in
   let re = texpression_to_string fmt inside indent1 indent_incr re in
   let e = texpression_to_string fmt inside indent indent_incr e in
-  let lv = typed_lvalue_to_string fmt lv in
+  let lv = typed_pattern_to_string fmt lv in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
@@ -575,7 +575,7 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       ^ indent ^ "else\n" ^ indent1 ^ e_false
   | Match branches ->
       let branch_to_string (b : match_branch) : string =
-        let pat = typed_lvalue_to_string fmt b.pat in
+        let pat = typed_pattern_to_string fmt b.pat in
         indent ^ "| " ^ pat ^ " ->\n" ^ indent1 ^ e_to_string b.branch
       in
       let branches = List.map branch_to_string branches in

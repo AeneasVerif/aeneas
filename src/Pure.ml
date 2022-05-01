@@ -287,28 +287,25 @@ type var_or_dummy =
         polymorphic = false;
       }]
 
-(** A left value (which appears on the left of assignments.
- 
-    TODO: rename to "pattern"
- *)
-type lvalue =
-  | LvConcrete of constant_value
-      (** [LvConcrete] is necessary because we merge the switches over integer
-        values and the matches over enumerations *)
-  | LvVar of var_or_dummy
-  | LvAdt of adt_lvalue
+(** A pattern (which appears on the left of assignments, in matches, etc.). *)
+type pattern =
+  | PatConcrete of constant_value
+      (** [PatConcrete] is necessary because we merge the switches over integer
+          values and the matches over enumerations *)
+  | PatVar of var_or_dummy
+  | PatAdt of adt_pattern
 
-and adt_lvalue = {
+and adt_pattern = {
   variant_id : variant_id option;
-  field_values : typed_lvalue list;
+  field_values : typed_pattern list;
 }
 
-and typed_lvalue = { value : lvalue; ty : ty }
+and typed_pattern = { value : pattern; ty : ty }
 [@@deriving
   show,
     visitors
       {
-        name = "iter_typed_lvalue";
+        name = "iter_typed_pattern";
         variety = "iter";
         ancestors = [ "iter_var_or_dummy" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
@@ -317,7 +314,7 @@ and typed_lvalue = { value : lvalue; ty : ty }
       },
     visitors
       {
-        name = "map_typed_lvalue";
+        name = "map_typed_pattern";
         variety = "map";
         ancestors = [ "map_var_or_dummy" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
@@ -326,7 +323,7 @@ and typed_lvalue = { value : lvalue; ty : ty }
       },
     visitors
       {
-        name = "reduce_typed_lvalue";
+        name = "reduce_typed_pattern";
         variety = "reduce";
         ancestors = [ "reduce_var_or_dummy" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
@@ -334,7 +331,7 @@ and typed_lvalue = { value : lvalue; ty : ty }
       },
     visitors
       {
-        name = "mapreduce_typed_lvalue";
+        name = "mapreduce_typed_pattern";
         variety = "mapreduce";
         ancestors = [ "mapreduce_var_or_dummy" ];
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
@@ -393,7 +390,7 @@ type var_id = VarId.id [@@deriving show]
 (** Ancestor for [iter_expression] visitor *)
 class ['self] iter_expression_base =
   object (_self : 'self)
-    inherit [_] iter_typed_lvalue
+    inherit [_] iter_typed_pattern
 
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
 
@@ -405,7 +402,7 @@ class ['self] iter_expression_base =
 (** Ancestor for [map_expression] visitor *)
 class ['self] map_expression_base =
   object (_self : 'self)
-    inherit [_] map_typed_lvalue
+    inherit [_] map_typed_pattern
 
     method visit_integer_type : 'env -> integer_type -> integer_type =
       fun _ x -> x
@@ -418,7 +415,7 @@ class ['self] map_expression_base =
 (** Ancestor for [reduce_expression] visitor *)
 class virtual ['self] reduce_expression_base =
   object (self : 'self)
-    inherit [_] reduce_typed_lvalue
+    inherit [_] reduce_typed_pattern
 
     method visit_integer_type : 'env -> integer_type -> 'a =
       fun _ _ -> self#zero
@@ -431,7 +428,7 @@ class virtual ['self] reduce_expression_base =
 (** Ancestor for [mapreduce_expression] visitor *)
 class virtual ['self] mapreduce_expression_base =
   object (self : 'self)
-    inherit [_] mapreduce_typed_lvalue
+    inherit [_] mapreduce_typed_pattern
 
     method visit_integer_type : 'env -> integer_type -> integer_type * 'a =
       fun _ x -> (x, self#zero)
@@ -463,9 +460,9 @@ type expression =
           field accesses with calls to projectors over fields (when there
           are clashes of field names, some provers like F* get pretty bad...)
        *)
-  | Abs of typed_lvalue * texpression  (** Lambda abstraction: `fun x -> e` *)
+  | Abs of typed_pattern * texpression  (** Lambda abstraction: `fun x -> e` *)
   | Qualif of qualif  (** A top-level qualifier *)
-  | Let of bool * typed_lvalue * texpression * texpression
+  | Let of bool * typed_pattern * texpression * texpression
       (** Let binding.
       
           TODO: the boolean should be replaced by an enum: sometimes we use
@@ -509,7 +506,7 @@ type expression =
 
 and switch_body = If of texpression * texpression | Match of match_branch list
 
-and match_branch = { pat : typed_lvalue; branch : texpression }
+and match_branch = { pat : typed_pattern; branch : texpression }
 
 and texpression = { e : expression; ty : ty }
 
@@ -587,8 +584,8 @@ type inst_fun_sig = { inputs : ty list; outputs : ty list }
 
 type fun_body = {
   inputs : var list;
-  inputs_lvs : typed_lvalue list;
-      (** The inputs seen as lvalues. Allows to make transformations, for example
+  inputs_lvs : typed_pattern list;
+      (** The inputs seen as patterns. Allows to make transformations, for example
           to replace unused variables by `_` *)
   body : texpression;
 }
