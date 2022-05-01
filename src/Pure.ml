@@ -373,11 +373,7 @@ type qualif_id =
   | Proj of proj_kind  (** Field projector *)
 [@@deriving show]
 
-type qualif = {
-  id : qualif_id;
-  type_params : ty list; (* TODO: rename to type_args *)
-}
-[@@deriving show]
+type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]
 (** An instantiated qualified.
 
     Note that for now we have a clear separation between types and expressions,

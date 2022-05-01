@@ -953,41 +953,41 @@ module LlbcAst = struct
         else indent ^ "assert(¬" ^ cond ^ ")"
     | A.Call call ->
         let ty_fmt = ast_to_etype_formatter fmt in
-        let params =
-          if List.length call.A.type_params > 0 then
+        let t_params =
+          if List.length call.A.type_args > 0 then
             "<"
             ^ String.concat ","
-                (List.map (PT.ty_to_string ty_fmt) call.A.type_params)
+                (List.map (PT.ty_to_string ty_fmt) call.A.type_args)
             ^ ">"
           else ""
         in
         let args = List.map (operand_to_string fmt) call.A.args in
         let args = "(" ^ String.concat ", " args ^ ")" in
-        let name_params =
+        let name_args =
           match call.A.func with
-          | A.Regular fid -> fmt.fun_decl_id_to_string fid ^ params
+          | A.Regular fid -> fmt.fun_decl_id_to_string fid ^ t_params
           | A.Assumed fid -> (
               match fid with
-              | A.Replace -> "core::mem::replace" ^ params
-              | A.BoxNew -> "alloc::boxed::Box" ^ params ^ "::new"
+              | A.Replace -> "core::mem::replace" ^ t_params
+              | A.BoxNew -> "alloc::boxed::Box" ^ t_params ^ "::new"
               | A.BoxDeref ->
-                  "core::ops::deref::Deref<Box" ^ params ^ ">::deref"
+                  "core::ops::deref::Deref<Box" ^ t_params ^ ">::deref"
               | A.BoxDerefMut ->
-                  "core::ops::deref::DerefMut" ^ params ^ "::deref_mut"
-              | A.BoxFree -> "alloc::alloc::box_free" ^ params
-              | A.VecNew -> "alloc::vec::Vec" ^ params ^ "::new"
-              | A.VecPush -> "alloc::vec::Vec" ^ params ^ "::push"
-              | A.VecInsert -> "alloc::vec::Vec" ^ params ^ "::insert"
-              | A.VecLen -> "alloc::vec::Vec" ^ params ^ "::len"
+                  "core::ops::deref::DerefMut" ^ t_params ^ "::deref_mut"
+              | A.BoxFree -> "alloc::alloc::box_free" ^ t_params
+              | A.VecNew -> "alloc::vec::Vec" ^ t_params ^ "::new"
+              | A.VecPush -> "alloc::vec::Vec" ^ t_params ^ "::push"
+              | A.VecInsert -> "alloc::vec::Vec" ^ t_params ^ "::insert"
+              | A.VecLen -> "alloc::vec::Vec" ^ t_params ^ "::len"
               | A.VecIndex ->
-                  "core::ops::index::Index<alloc::vec::Vec" ^ params
+                  "core::ops::index::Index<alloc::vec::Vec" ^ t_params
                   ^ ">::index"
               | A.VecIndexMut ->
-                  "core::ops::index::IndexMut<alloc::vec::Vec" ^ params
+                  "core::ops::index::IndexMut<alloc::vec::Vec" ^ t_params
                   ^ ">::index_mut")
         in
         let dest = place_to_string fmt call.A.dest in
-        indent ^ dest ^ " := move " ^ name_params ^ args
+        indent ^ dest ^ " := move " ^ name_args ^ args
     | A.Panic -> indent ^ "panic"
     | A.Return -> indent ^ "return"
     | A.Break i -> indent ^ "break " ^ string_of_int i

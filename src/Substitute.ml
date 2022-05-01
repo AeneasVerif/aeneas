@@ -262,15 +262,15 @@ let assertion_substitute (tsubst : T.TypeVarId.id -> T.ety) (a : A.assertion) :
 let call_substitute (tsubst : T.TypeVarId.id -> T.ety) (call : A.call) : A.call
     =
   let rsubst x = x in
-  let type_params = List.map (ty_substitute rsubst tsubst) call.A.type_params in
+  let type_args = List.map (ty_substitute rsubst tsubst) call.A.type_args in
   let args = List.map (operand_substitute tsubst) call.A.args in
   let dest = place_substitute tsubst call.A.dest in
   (* Putting all the paramters on purpose: we want to get a compiler error if
      something moves - we may add a field on which we need to apply a substitution *)
   {
     func = call.A.func;
-    region_params = call.A.region_params;
-    A.type_params;
+    region_args = call.A.region_args;
+    A.type_args;
     args;
     dest;
   }

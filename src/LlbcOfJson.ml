@@ -532,17 +532,17 @@ let call_of_json (js : json) : (A.call, string) result =
     | `Assoc
         [
           ("func", func);
-          ("region_params", region_params);
-          ("type_params", type_params);
+          ("region_args", region_args);
+          ("type_args", type_args);
           ("args", args);
           ("dest", dest);
         ] ->
         let* func = fun_id_of_json func in
-        let* region_params = list_of_json erased_region_of_json region_params in
-        let* type_params = list_of_json ety_of_json type_params in
+        let* region_args = list_of_json erased_region_of_json region_args in
+        let* type_args = list_of_json ety_of_json type_args in
         let* args = list_of_json operand_of_json args in
         let* dest = place_of_json dest in
-        Ok { A.func; region_params; type_params; args; dest }
+        Ok { A.func; region_args; type_args; args; dest }
     | _ -> Error "")
 
 let rec statement_of_json (js : json) : (A.statement, string) result =

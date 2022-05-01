@@ -516,7 +516,7 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
         in
         (* Convert the type instantiation *)
         let ty_fmt = ast_to_type_formatter fmt in
-        let tys = List.map (ty_to_string ty_fmt) qualif.type_params in
+        let tys = List.map (ty_to_string ty_fmt) qualif.type_args in
         (* *)
         (qualif_s, tys)
     | _ ->

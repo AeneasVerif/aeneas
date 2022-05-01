@@ -65,8 +65,8 @@ type inst_fun_sig = {
 
 type call = {
   func : fun_id;
-  region_params : erased_region list;
-  type_params : ety list;
+  region_args : erased_region list;
+  type_args : ety list;
   args : operand list;
   dest : place;
 }

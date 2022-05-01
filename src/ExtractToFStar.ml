@@ -872,12 +872,11 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (* Top-level qualifier *)
       match qualif.id with
       | Func fun_id ->
-          extract_function_call ctx fmt inside fun_id qualif.type_params args
+          extract_function_call ctx fmt inside fun_id qualif.type_args args
       | AdtCons adt_cons_id ->
-          extract_adt_cons ctx fmt inside adt_cons_id qualif.type_params args
+          extract_adt_cons ctx fmt inside adt_cons_id qualif.type_args args
       | Proj proj ->
-          extract_field_projector ctx fmt inside app proj qualif.type_params
-            args)
+          extract_field_projector ctx fmt inside app proj qualif.type_args args)
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)

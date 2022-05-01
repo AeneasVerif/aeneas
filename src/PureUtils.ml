@@ -260,7 +260,7 @@ let opt_destruct_function_call (e : texpression) :
   | None -> None
   | Some (qualif, args) -> (
       match qualif.id with
-      | Func fun_id -> Some (fun_id, qualif.type_params, args)
+      | Func fun_id -> Some (fun_id, qualif.type_args, args)
       | _ -> None)
 
 let opt_destruct_result (ty : ty) : ty option =
@@ -344,7 +344,7 @@ let unit_ty : ty = Adt (Tuple, [])
 (** TODO: rename to "mk_unit_texpression" *)
 let unit_rvalue : texpression =
   let id = AdtCons { adt_id = Tuple; variant_id = None } in
-  let qualif = { id; type_params = [] } in
+  let qualif = { id; type_args = [] } in
   let e = Qualif qualif in
   let ty = unit_ty in
   { e; ty }
@@ -395,7 +395,7 @@ let mk_simpl_tuple_texpression (vl : texpression list) : texpression =
       let ty = mk_arrows tys ty in
       (* Construct the tuple constructor qualifier *)
       let id = AdtCons { adt_id = Tuple; variant_id = None } in
-      let qualif = { id; type_params = tys } in
+      let qualif = { id; type_args = tys } in
       (* Put everything together *)
       let cons = { e = Qualif qualif; ty } in
       mk_apps cons vl
@@ -423,7 +423,7 @@ let mk_result_fail_rvalue (ty : ty) : texpression =
   let id =
     AdtCons { adt_id = Assumed Result; variant_id = Some result_fail_id }
   in
-  let qualif = { id; type_params = type_args } in
+  let qualif = { id; type_args } in
   let cons_e = Qualif qualif in
   let cons_ty = ty in
   let cons = { e = cons_e; ty = cons_ty } in
@@ -436,7 +436,7 @@ let mk_result_return_rvalue (v : texpression) : texpression =
   let id =
     AdtCons { adt_id = Assumed Result; variant_id = Some result_return_id }
   in
-  let qualif = { id; type_params = type_args } in
+  let qualif = { id; type_args } in
   let cons_e = Qualif qualif in
   let cons_ty = mk_arrow v.ty ty in
   let cons = { e = cons_e; ty = cons_ty } in
@@ -597,7 +597,7 @@ module TypeCheck = struct
             let variant_id = None in
             let expected_field_tys =
               get_adt_field_types ctx.type_decls adt_id variant_id
-                qualif.type_params
+                qualif.type_args
             in
             let expected_field_ty = FieldId.nth expected_field_tys field_id in
             let _adt_ty, field_ty = destruct_arrow e.ty in
@@ -607,7 +607,7 @@ module TypeCheck = struct
             (* TODO: we might also want to check the out type *)
             let expected_field_tys =
               get_adt_field_types ctx.type_decls id.adt_id id.variant_id
-                qualif.type_params
+                qualif.type_args
             in
             let field_tys, _ = destruct_arrows e.ty in
             assert (expected_field_tys = field_tys))

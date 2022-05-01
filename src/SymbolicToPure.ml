@@ -648,7 +648,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (v : V.typed_value) :
             in
             (* Create the constructor *)
             let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
-            let qualif = { id = qualif_id; type_params = type_args } in
+            let qualif = { id = qualif_id; type_args } in
             let cons_e = Qualif qualif in
             let field_tys =
               List.map (fun (v : texpression) -> v.ty) field_values
@@ -1088,7 +1088,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
 and translate_function_call (config : config) (call : S.call) (e : S.expression)
     (ctx : bs_ctx) : texpression =
   (* Translate the function call *)
-  let type_params = List.map (ctx_translate_fwd_ty ctx) call.type_params in
+  let type_args = List.map (ctx_translate_fwd_ty ctx) call.type_params in
   let args = List.map (typed_value_to_texpression ctx) call.args in
   let args_mplaces = List.map translate_opt_mplace call.args_places in
   let dest_mplace = translate_opt_mplace call.dest_place in
@@ -1127,7 +1127,7 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
       (List.combine args args_mplaces)
   in
   let dest_v = mk_typed_pattern_from_var dest dest_mplace in
-  let func = { id = Func fun_id; type_params } in
+  let func = { id = Func fun_id; type_args } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
   let ret_ty = mk_function_ret_ty config monadic state_monad dest_v.ty in
   let func_ty = mk_arrows input_tys ret_ty in
@@ -1197,7 +1197,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
   | V.FunCall ->
       let call_info = V.FunCallId.Map.find abs.call_id ctx.calls in
       let call = call_info.forward in
-      let type_params = List.map (ctx_translate_fwd_ty ctx) call.type_params in
+      let type_args = List.map (ctx_translate_fwd_ty ctx) call.type_params in
       (* Retrive the orignal call and the parent abstractions *)
       let forward, backwards = get_abs_ancestors ctx abs in
       (* Retrieve the values consumed when we called the forward function and
@@ -1232,7 +1232,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       in
 
       let inst_sg =
-        get_instantiated_fun_sig fun_id (Some abs.back_id) type_params ctx
+        get_instantiated_fun_sig fun_id (Some abs.back_id) type_args ctx
       in
       List.iter
         (fun (x, ty) -> assert ((x : texpression).ty = ty))
@@ -1262,7 +1262,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
       let ret_ty = mk_function_ret_ty config monadic state_monad output.ty in
       let func_ty = mk_arrows input_tys ret_ty in
-      let func = { id = Func func; type_params } in
+      let func = { id = Func func; type_args } in
       let func = { e = Qualif func; ty = func_ty } in
       let call = mk_apps func args in
       (* **Optimization**:
@@ -1401,7 +1401,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                  * field.
                  * We use the [dest] variable in order not to have to recompute
                  * the type of the result of the projection... *)
-                let adt_id, type_params =
+                let adt_id, type_args =
                   match scrutinee.ty with
                   | Adt (adt_id, tys) -> (adt_id, tys)
                   | _ -> raise (Failure "Unreachable")
@@ -1409,7 +1409,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                 let gen_field_proj (field_id : FieldId.id) (dest : var) :
                     texpression =
                   let proj_kind = { adt_id; field_id } in
-                  let qualif = { id = Proj proj_kind; type_params } in
+                  let qualif = { id = Proj proj_kind; type_args } in
                   let proj_e = Qualif qualif in
                   let proj_ty = mk_arrow scrutinee.ty dest.ty in
                   let proj = { e = proj_e; ty = proj_ty } in

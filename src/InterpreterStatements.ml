@@ -994,18 +994,18 @@ and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
   *)
   match call.func with
   | A.Regular fid ->
-      eval_local_function_call config fid call.region_params call.type_params
+      eval_local_function_call config fid call.region_args call.type_args
         call.args call.dest
   | A.Assumed fid ->
-      eval_non_local_function_call config fid call.region_params
-        call.type_params call.args call.dest
+      eval_non_local_function_call config fid call.region_args call.type_args
+        call.args call.dest
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
-    (region_params : T.erased_region list) (type_params : T.ety list)
+    (region_args : T.erased_region list) (type_args : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
-  assert (region_params = []);
+  assert (region_args = []);
 
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_decl ctx fid in
@@ -1022,7 +1022,7 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
   let tsubst =
     Subst.make_type_subst
       (List.map (fun v -> v.T.index) def.A.signature.type_params)
-      type_params
+      type_args
   in
   let locals, body_st = Subst.fun_body_substitute_in_body tsubst body in
 
@@ -1080,7 +1080,7 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
 and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
-    (region_params : T.erased_region list) (type_params : T.ety list)
+    (region_args : T.erased_region list) (type_args : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
   (* Retrieve the (correctly instantiated) signature *)
@@ -1088,12 +1088,12 @@ and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
   let sg = def.A.signature in
   (* Instantiate the signature and introduce fresh abstraction and region ids
    * while doing so *)
-  let inst_sg = instantiate_fun_sig type_params sg in
+  let inst_sg = instantiate_fun_sig type_args sg in
   (* Sanity check *)
   assert (List.length args = List.length def.A.signature.inputs);
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config (A.Regular fid) inst_sg
-    region_params type_params args dest cf ctx
+    region_args type_args args dest cf ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -1102,10 +1102,10 @@ and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
  *)
 and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (fid : A.fun_id) (inst_sg : A.inst_fun_sig)
-    (region_params : T.erased_region list) (type_params : T.ety list)
+    (region_args : T.erased_region list) (type_args : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
-  assert (region_params = []);
+  assert (region_args = []);
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
   let ret_spc = mk_fresh_symbolic_value V.FunCallRet ret_sv_ty in
@@ -1169,7 +1169,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
 
     (* Synthesize the symbolic AST *)
     let abs_ids = List.map (fun rg -> rg.T.id) inst_sg.regions_hierarchy in
-    S.synthesize_regular_function_call fid call_id abs_ids type_params args
+    S.synthesize_regular_function_call fid call_id abs_ids type_args args
       args_places ret_spc dest_place expr
   in
   let cc = comp cc cf_call in
@@ -1185,8 +1185,8 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
 
 (** Evaluate a non-local function call in symbolic mode *)
 and eval_non_local_function_call_symbolic (config : C.config)
-    (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) :
+    (fid : A.assumed_fun_id) (region_args : T.erased_region list)
+    (type_args : T.ety list) (args : E.operand list) (dest : E.place) :
     st_cm_fun =
  fun cf ctx ->
   (* Sanity check: make sure the type parameters don't contain regions -
@@ -1194,7 +1194,7 @@ and eval_non_local_function_call_symbolic (config : C.config)
   assert (
     List.for_all
       (fun ty -> not (ty_has_borrows ctx.type_context.type_infos ty))
-      type_params);
+      type_args);
 
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
@@ -1205,7 +1205,7 @@ and eval_non_local_function_call_symbolic (config : C.config)
   | A.BoxFree ->
       (* Degenerate case: box_free - note that this is not really a function
        * call: no need to call a "synthesize_..." function *)
-      eval_box_free config region_params type_params args dest (cf Unit) ctx
+      eval_box_free config region_args type_args args dest (cf Unit) ctx
   | _ ->
       (* "Normal" case: not box_free *)
       (* In symbolic mode, the behaviour of a function call is completely defined
@@ -1216,55 +1216,53 @@ and eval_non_local_function_call_symbolic (config : C.config)
         | A.BoxFree ->
             (* should have been treated above *)
             raise (Failure "Unreachable")
-        | _ -> instantiate_fun_sig type_params (Assumed.get_assumed_sig fid)
+        | _ -> instantiate_fun_sig type_args (Assumed.get_assumed_sig fid)
       in
 
       (* Evaluate the function call *)
       eval_function_call_symbolic_from_inst_sig config (A.Assumed fid) inst_sig
-        region_params type_params args dest cf ctx
+        region_args type_args args dest cf ctx
 
 (** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
     (auxiliary helper for [eval_statement]) *)
 and eval_non_local_function_call (config : C.config) (fid : A.assumed_fun_id)
-    (region_params : T.erased_region list) (type_params : T.ety list)
+    (region_args : T.erased_region list) (type_args : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
   (* Debug *)
   log#ldebug
     (lazy
-      (let type_params =
-         "["
-         ^ String.concat ", " (List.map (ety_to_string ctx) type_params)
-         ^ "]"
+      (let type_args =
+         "[" ^ String.concat ", " (List.map (ety_to_string ctx) type_args) ^ "]"
        in
        let args =
          "[" ^ String.concat ", " (List.map (operand_to_string ctx) args) ^ "]"
        in
        let dest = place_to_string ctx dest in
        "eval_non_local_function_call:\n- fid:" ^ A.show_assumed_fun_id fid
-       ^ "\n- type_params: " ^ type_params ^ "\n- args: " ^ args ^ "\n- dest: "
+       ^ "\n- type_args: " ^ type_args ^ "\n- args: " ^ args ^ "\n- dest: "
        ^ dest));
 
   match config.mode with
   | C.ConcreteMode ->
-      eval_non_local_function_call_concrete config fid region_params type_params
+      eval_non_local_function_call_concrete config fid region_args type_args
         args dest (cf Unit) ctx
   | C.SymbolicMode ->
-      eval_non_local_function_call_symbolic config fid region_params type_params
+      eval_non_local_function_call_symbolic config fid region_args type_args
         args dest cf ctx
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
 and eval_local_function_call (config : C.config) (fid : A.FunDeclId.id)
-    (region_params : T.erased_region list) (type_params : T.ety list)
+    (region_args : T.erased_region list) (type_args : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
   match config.mode with
   | ConcreteMode ->
-      eval_local_function_call_concrete config fid region_params type_params
-        args dest
+      eval_local_function_call_concrete config fid region_args type_args args
+        dest
   | SymbolicMode ->
-      eval_local_function_call_symbolic config fid region_params type_params
-        args dest
+      eval_local_function_call_symbolic config fid region_args type_args args
+        dest
 
 (** Evaluate a statement seen as a function body (auxiliary helper for
     [eval_statement]) *)
