@@ -1019,14 +1019,14 @@ and translate_panic (config : config) (ctx : bs_ctx) : texpression =
   if config.use_state_monad then
     (* Create the `Fail` value *)
     let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; ctx.ret_ty ] in
-    let ret_v = mk_result_fail_rvalue ret_ty in
+    let ret_v = mk_result_fail_texpression ret_ty in
     (* Add the lambda *)
     let _, state_var =
       fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
     in
     let state_pattern = mk_typed_pattern_from_var state_var None in
     mk_abs state_pattern ret_v
-  else mk_result_fail_rvalue ctx.ret_ty
+  else mk_result_fail_texpression ctx.ret_ty
 
 and translate_return (config : config) (opt_v : V.typed_value option)
     (ctx : bs_ctx) : texpression =
@@ -1051,12 +1051,12 @@ and translate_return (config : config) (opt_v : V.typed_value option)
         in
         let state_rvalue = mk_texpression_from_var state_var in
         let ret_v =
-          mk_result_return_rvalue
+          mk_result_return_texpression
             (mk_simpl_tuple_texpression [ state_rvalue; v ])
         in
         let state_var = mk_typed_pattern_from_var state_var None in
         mk_abs state_var ret_v
-      else mk_result_return_rvalue v
+      else mk_result_return_texpression v
   | Some bid ->
       (* Backward function *)
       (* Sanity check *)
@@ -1075,14 +1075,14 @@ and translate_return (config : config) (opt_v : V.typed_value option)
         let state_rvalue = mk_texpression_from_var state_var in
         let ret_value = mk_simpl_tuple_texpression field_values in
         let ret_value =
-          mk_result_return_rvalue
+          mk_result_return_texpression
             (mk_simpl_tuple_texpression [ state_rvalue; ret_value ])
         in
         let state_var = mk_typed_pattern_from_var state_var None in
         mk_abs state_var ret_value
       else
         let ret_value = mk_simpl_tuple_texpression field_values in
-        let ret_value = mk_result_return_rvalue ret_value in
+        let ret_value = mk_result_return_texpression ret_value in
         ret_value
 
 and translate_function_call (config : config) (call : S.call) (e : S.expression)

@@ -1475,8 +1475,8 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
   let sg = def.signature in
   if
     sg.type_params = []
-    && (sg.inputs = [ unit_ty ] || sg.inputs = [])
-    && sg.outputs = [ mk_result_ty unit_ty ]
+    && (sg.inputs = [ mk_unit_ty ] || sg.inputs = [])
+    && sg.outputs = [ mk_result_ty mk_unit_ty ]
   then (
     (* Add a break before *)
     F.pp_print_break fmt 0 0;

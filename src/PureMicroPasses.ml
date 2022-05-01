@@ -923,8 +923,8 @@ let filter_if_backward_with_no_outputs (config : config) (def : fun_decl) :
   let return_ty =
     if config.use_state_monad then
       mk_arrow mk_state_ty
-        (mk_result_ty (mk_simpl_tuple_ty [ mk_state_ty; unit_ty ]))
-    else mk_result_ty (mk_simpl_tuple_ty [ unit_ty ])
+        (mk_result_ty (mk_simpl_tuple_ty [ mk_state_ty; mk_unit_ty ]))
+    else mk_result_ty (mk_simpl_tuple_ty [ mk_unit_ty ])
   in
   if
     config.filter_useless_functions && Option.is_some def.back_id
@@ -954,7 +954,7 @@ let keep_forward (config : config) (trans : pure_fun_translation) : bool =
    * they should be lists of length 1. *)
   if
     config.filter_useless_functions
-    && fwd.signature.outputs = [ mk_result_ty unit_ty ]
+    && fwd.signature.outputs = [ mk_result_ty mk_unit_ty ]
     && backs <> []
   then false
   else true
@@ -968,11 +968,12 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
       inherit [_] map_expression as super
 
       method! visit_PatVar _ v mp =
-        if v.ty = unit_ty then PatDummy else PatVar (v, mp)
+        if v.ty = mk_unit_ty then PatDummy else PatVar (v, mp)
       (** Replace in patterns *)
 
       method! visit_texpression env e =
-        if e.ty = unit_ty then unit_rvalue else super#visit_texpression env e
+        if e.ty = mk_unit_ty then mk_unit_rvalue
+        else super#visit_texpression env e
       (** Replace in "regular" expressions - note that we could limit ourselves
           to variables, but this is more powerful
        *)
@@ -1026,7 +1027,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 | A.BoxDeref, Some _ ->
                     (* `Box::deref` backward is `()` (doesn't give back anything) *)
                     assert (args = []);
-                    unit_rvalue
+                    mk_unit_rvalue
                 | A.BoxDerefMut, None ->
                     (* `Box::deref_mut` forward is the identity *)
                     let arg, args = Collections.List.pop args in
@@ -1043,7 +1044,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     mk_apps arg args
                 | A.BoxFree, _ ->
                     assert (args = []);
-                    unit_rvalue
+                    mk_unit_rvalue
                 | ( ( A.Replace | A.VecNew | A.VecPush | A.VecInsert | A.VecLen
                     | A.VecIndex | A.VecIndexMut ),
                     _ ) ->
@@ -1215,7 +1216,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                 in
                 (* Create the match *)
                 let fail_pat = mk_result_fail_pattern re_no_monad_ty in
-                let fail_value = mk_result_fail_rvalue e_no_monad_ty in
+                let fail_value = mk_result_fail_texpression e_no_monad_ty in
                 let fail_branch = { pat = fail_pat; branch = fail_value } in
                 (* The `Success` branch introduces a fresh state variable *)
                 let pat_state_var = fresh_state_var () in
@@ -1246,7 +1247,7 @@ let unfold_monadic_let_bindings (config : config) (_ctx : trans_ctx)
                 let re_ty = Option.get (opt_destruct_result re.ty) in
                 assert (lv.ty = re_ty);
                 let fail_pat = mk_result_fail_pattern lv.ty in
-                let fail_value = mk_result_fail_rvalue e.ty in
+                let fail_value = mk_result_fail_texpression e.ty in
                 let fail_branch = { pat = fail_pat; branch = fail_value } in
                 let success_pat = mk_result_return_pattern lv in
                 let success_branch = { pat = success_pat; branch = e } in

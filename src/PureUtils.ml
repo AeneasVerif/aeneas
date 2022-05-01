@@ -323,9 +323,15 @@ let iter_switch_body_branches (f : texpression -> unit) (sb : switch_body) :
   | Match branches -> List.iter (fun (b : match_branch) -> f b.branch) branches
 
 let mk_switch (scrut : texpression) (sb : switch_body) : texpression =
-  (* TODO: check the type of the scrutinee *)
-  let ty = get_switch_body_ty sb in
+  (* Sanity check: the scrutinee has the proper type *)
+  (match sb with
+  | If (_, _) -> assert (scrut.ty = Bool)
+  | Match branches ->
+      List.iter
+        (fun (b : match_branch) -> assert (b.pat.ty = scrut.ty))
+        branches);
   (* Sanity check: all the branches have the same type *)
+  let ty = get_switch_body_ty sb in
   iter_switch_body_branches (fun e -> assert (e.ty = ty)) sb;
   (* Put together *)
   let e = Switch (scrut, sb) in
@@ -338,15 +344,13 @@ let mk_switch (scrut : texpression) (sb : switch_body) : texpression =
 let mk_simpl_tuple_ty (tys : ty list) : ty =
   match tys with [ ty ] -> ty | _ -> Adt (Tuple, tys)
 
-(** TODO: rename to "mk_..." *)
-let unit_ty : ty = Adt (Tuple, [])
+let mk_unit_ty : ty = Adt (Tuple, [])
 
-(** TODO: rename to "mk_unit_texpression" *)
-let unit_rvalue : texpression =
+let mk_unit_rvalue : texpression =
   let id = AdtCons { adt_id = Tuple; variant_id = None } in
   let qualif = { id; type_args = [] } in
   let e = Qualif qualif in
-  let ty = unit_ty in
+  let ty = mk_unit_ty in
   { e; ty }
 
 let mk_texpression_from_var (v : var) : texpression =
@@ -416,8 +420,7 @@ let mk_state_ty : ty = Adt (Assumed State, [])
 
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
-(* TODO: rename *)
-let mk_result_fail_rvalue (ty : ty) : texpression =
+let mk_result_fail_texpression (ty : ty) : texpression =
   let type_args = [ ty ] in
   let ty = Adt (Assumed Result, type_args) in
   let id =
@@ -429,8 +432,7 @@ let mk_result_fail_rvalue (ty : ty) : texpression =
   let cons = { e = cons_e; ty = cons_ty } in
   cons
 
-(* TODO: rename *)
-let mk_result_return_rvalue (v : texpression) : texpression =
+let mk_result_return_texpression (v : texpression) : texpression =
   let type_args = [ v.ty ] in
   let ty = Adt (Assumed Result, type_args) in
   let id =
