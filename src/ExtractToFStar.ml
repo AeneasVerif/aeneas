@@ -836,6 +836,11 @@ let rec extract_typed_lvalue (ctx : extraction_ctx) (fmt : F.formatter)
     
     TODO: replace the formatting boolean [inside] with something more general?
     Also, it seems we don't really use it...
+    Cases to consider:
+    - right-expression in a let: `let x = re in _` (never parentheses?)
+    - next expression in a let:  `let x = _ in next_e` (never parentheses?)
+    - application argument: `f (exp)`
+    - match/if scrutinee: `if exp then _ else _`/`match exp | _ -> _`
  *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (e : texpression) : unit =
@@ -992,17 +997,12 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
       let field_name = ctx_get_field proj.adt_id proj.field_id ctx in
       (* Open a box *)
       F.pp_open_hovbox fmt ctx.indent_incr;
-      (* TODO: parentheses: we do something very crude *)
-      let use_parentheses = not (is_var arg) in
-      if use_parentheses then F.pp_print_string fmt "(";
       (* Extract the expression *)
-      extract_texpression ctx fmt false arg;
+      extract_texpression ctx fmt true arg;
       (* We allow to break where the "." appears *)
       F.pp_print_break fmt 0 0;
       F.pp_print_string fmt ".";
       F.pp_print_string fmt field_name;
-      (* Close the parentheses *)
-      if use_parentheses then F.pp_print_string fmt ")";
       (* Close the box *)
       F.pp_close_box fmt ()
   | arg :: args ->
