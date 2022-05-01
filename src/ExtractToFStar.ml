@@ -976,7 +976,7 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       Collections.List.iter
         (fun v ->
           F.pp_print_space fmt ();
-          extract_texpression ctx fmt false v)
+          extract_texpression ctx fmt true v)
         args;
       if use_parentheses then F.pp_print_string fmt ")"
 
