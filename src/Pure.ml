@@ -152,15 +152,15 @@ type var = {
  * Also: tuples...
  * Rmk: projections are actually only used as meta-data.
  * *)
-type projection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
+type mprojection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 [@@deriving show]
 
-type projection = projection_elem list [@@deriving show]
+type mprojection = mprojection_elem list [@@deriving show]
 
 type mplace = {
   var_id : V.VarId.id;
   name : string option;
-  projection : projection;
+  projection : mprojection;
 }
 [@@deriving show]
 (** "Meta" place.
@@ -360,17 +360,15 @@ type adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
 [@@deriving show]
 (** An identifier for an ADT constructor *)
 
-type proj_kind = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
-(** Projection kind - For now we don't support projection of tuple fields 
+type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
+(** Projection - For now we don't support projection of tuple fields 
     (because not all the backends have syntax for this).
-    
-    TODO: rename
  *)
 
 type qualif_id =
   | Func of fun_id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
-  | Proj of proj_kind  (** Field projector *)
+  | Proj of projection  (** Field projector *)
 [@@deriving show]
 
 type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]

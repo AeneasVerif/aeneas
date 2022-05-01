@@ -986,7 +986,7 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
 (** Subcase of the app case: ADT field projector.  *)
 and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (original_app : texpression) (proj : proj_kind)
+    (inside : bool) (original_app : texpression) (proj : projection)
     (_proj_type_params : ty list) (args : texpression list) : unit =
   (* We isolate the first argument (if there is), in order to pretty print the
    * projection (`x.field` instead of `MkAdt?.field x` *)

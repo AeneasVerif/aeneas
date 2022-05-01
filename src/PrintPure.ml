@@ -201,12 +201,12 @@ let var_to_string (fmt : type_formatter) (v : var) : string =
   let varname = var_to_varname v in
   "(" ^ varname ^ " : " ^ ty_to_string fmt v.ty ^ ")"
 
-let rec projection_to_string (fmt : ast_formatter) (inside : string)
-    (p : projection) : string =
+let rec mprojection_to_string (fmt : ast_formatter) (inside : string)
+    (p : mprojection) : string =
   match p with
   | [] -> inside
   | pe :: p' -> (
-      let s = projection_to_string fmt inside p' in
+      let s = mprojection_to_string fmt inside p' in
       match pe.pkind with
       | E.ProjOption variant_id ->
           assert (variant_id = T.option_some_id);
@@ -232,7 +232,7 @@ let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
    * regular places use indices for the pure variables: we want to make
    * this explicit, otherwise it is confusing. *)
   let name = name ^ "^" ^ V.VarId.to_string p.var_id ^ "llbc" in
-  projection_to_string fmt name p.projection
+  mprojection_to_string fmt name p.projection
 
 let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
     (variant_id : VariantId.id option) : string =

@@ -808,13 +808,13 @@ let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : texpression list =
   log#ldebug (lazy ("abs_to_consumed:\n" ^ abs_to_string ctx abs));
   List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
 
-let translate_mprojection_elem (pe : E.projection_elem) : projection_elem option
-    =
+let translate_mprojection_elem (pe : E.projection_elem) :
+    mprojection_elem option =
   match pe with
   | Deref | DerefBox -> None
   | Field (pkind, field_id) -> Some { pkind; field_id }
 
-let translate_mprojection (p : E.projection) : projection =
+let translate_mprojection (p : E.projection) : mprojection =
   List.filter_map translate_mprojection_elem p
 
 (** Translate a "meta"-place *)
