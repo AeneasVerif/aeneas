@@ -1368,8 +1368,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     if has_decreases_clause then (
       F.pp_print_string fmt "Tot";
       F.pp_print_space fmt ());
-    extract_ty ctx fmt has_decreases_clause
-      (Collections.List.to_cons_nil def.signature.outputs);
+    extract_ty ctx fmt has_decreases_clause def.signature.output;
     (* Close the box for the return type *)
     F.pp_close_box fmt ();
     (* Print the decrease clause - rk.: a function with a decreases clause
@@ -1476,7 +1475,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
   if
     sg.type_params = []
     && (sg.inputs = [ mk_unit_ty ] || sg.inputs = [])
-    && sg.outputs = [ mk_result_ty mk_unit_ty ]
+    && sg.output = mk_result_ty mk_unit_ty
   then (
     (* Add a break before *)
     F.pp_print_break fmt 0 0;

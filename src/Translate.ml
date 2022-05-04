@@ -15,6 +15,12 @@ let log = TranslateCore.log
 type config = {
   eval_config : Contexts.partial_config;
   mp_config : Micro.config;
+  use_state_monad : bool;
+      (** If `true`, use a state-error monad.
+          If `false`, only use an error monad.
+          
+          Using a state-error monad is necessary when modelling I/O, for instance.
+       *)
   split_files : bool;
       (** Controls whether we split the generated definitions between different
           files for the types, clauses and functions, or if we group them in
@@ -92,7 +98,7 @@ let translate_function_to_symbolics (config : C.partial_config)
     TODO: maybe we should introduce a record for this.
 *)
 let translate_function_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (trans_ctx : trans_ctx)
+    (mp_config : Micro.config) (use_state_monad : bool) (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
     : pure_fun_translation =
@@ -116,13 +122,14 @@ let translate_function_to_pure (config : C.partial_config)
 
   (* Initialize the context *)
   let forward_sig = RegularFunIdMap.find (A.Regular def_id, None) fun_sigs in
-  let forward_ret_ty =
-    match forward_sig.sg.outputs with
+  let forward_output_ty =
+    match forward_sig.sg.doutputs with
     | [ ty ] -> ty
     | _ -> failwith "Unreachable"
   in
   let sv_to_var = V.SymbolicValueId.Map.empty in
   let var_counter = Pure.VarId.generator_zero in
+  let state_var, var_counter = Pure.VarId.fresh var_counter in
   let calls = V.FunCallId.Map.empty in
   let abstractions = V.AbstractionId.Map.empty in
   let type_context =
@@ -139,10 +146,11 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.bid = None;
       (* Dummy for now *)
-      ret_ty = forward_ret_ty;
+      output_ty = forward_output_ty;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
       var_counter;
+      state_var;
       type_context;
       fun_context;
       fun_decl = fdef;
@@ -179,7 +187,7 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.filter_useless_back_calls =
         mp_config.filter_useless_monadic_calls;
-      use_state_monad = mp_config.use_state_monad;
+      use_state_monad;
     }
   in
 
@@ -208,8 +216,10 @@ let translate_function_to_pure (config : C.partial_config)
         let backward_sg =
           RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
-        let backward_ret_ty = mk_simpl_tuple_ty backward_sg.sg.outputs in
-        let ctx = { ctx with bid = Some back_id; ret_ty = backward_ret_ty } in
+        let backward_output_ty = mk_simpl_tuple_ty backward_sg.sg.doutputs in
+        let ctx =
+          { ctx with bid = Some back_id; output_ty = backward_output_ty }
+        in
 
         (* Translate *)
         SymbolicToPure.translate_fun_decl sp_config ctx None
@@ -238,7 +248,7 @@ let translate_function_to_pure (config : C.partial_config)
          * present in the input values of the rust function: for those we reuse
          * the names of the  input values. *)
         let backward_outputs =
-          List.combine backward_sg.output_names backward_sg.sg.outputs
+          List.combine backward_sg.output_names backward_sg.sg.doutputs
         in
         let ctx, backward_outputs =
           SymbolicToPure.fresh_vars backward_outputs ctx
@@ -246,7 +256,7 @@ let translate_function_to_pure (config : C.partial_config)
         let backward_output_tys =
           List.map (fun (v : Pure.var) -> v.ty) backward_outputs
         in
-        let backward_ret_ty = mk_simpl_tuple_ty backward_output_tys in
+        let backward_output_ty = mk_simpl_tuple_ty backward_output_tys in
         let backward_inputs =
           T.RegionGroupId.Map.singleton back_id backward_inputs
         in
@@ -259,7 +269,7 @@ let translate_function_to_pure (config : C.partial_config)
           {
             ctx with
             bid = Some back_id;
-            ret_ty = backward_ret_ty;
+            output_ty = backward_output_ty;
             backward_inputs;
             backward_outputs;
           }
@@ -276,7 +286,7 @@ let translate_function_to_pure (config : C.partial_config)
   (pure_forward, pure_backwards)
 
 let translate_module_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (m : M.llbc_module) :
+    (mp_config : Micro.config) (use_state_monad : bool) (m : M.llbc_module) :
     trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
@@ -316,15 +326,23 @@ let translate_module_to_pure (config : C.partial_config)
       m.functions
   in
   let sigs = List.append assumed_sigs local_sigs in
+  let sp_config =
+    {
+      SymbolicToPure.filter_useless_back_calls =
+        mp_config.filter_useless_monadic_calls;
+      use_state_monad;
+    }
+  in
   let fun_sigs =
-    SymbolicToPure.translate_fun_signatures type_context.type_infos sigs
+    SymbolicToPure.translate_fun_signatures sp_config type_context.type_infos
+      sigs
   in
 
   (* Translate all the *transparent* functions *)
   let pure_translations =
     List.map
-      (translate_function_to_pure config mp_config trans_ctx fun_sigs
-         type_decls_map)
+      (translate_function_to_pure config mp_config use_state_monad trans_ctx
+         fun_sigs type_decls_map)
       m.functions
   in
 
@@ -349,6 +367,7 @@ type gen_ctx = {
 
 type gen_config = {
   mp_config : Micro.config;
+  use_state_monad : bool;
   extract_types : bool;
   extract_decreases_clauses : bool;
   extract_template_decreases_clauses : bool;
@@ -475,7 +494,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          (* Is there an input parameter "visible" for the state used in
           * the state error monad (if we use a state error monad)? *)
          let has_state_param =
-           config.mp_config.use_state_monad
+           config.use_state_monad
            && config.mp_config.unfold_monadic_let_bindings
          in
          (* Check if the definition needs to be filtered or not *)
@@ -599,7 +618,8 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     (m : M.llbc_module) : unit =
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs =
-    translate_module_to_pure config.eval_config config.mp_config m
+    translate_module_to_pure config.eval_config config.mp_config
+      config.use_state_monad m
   in
 
   (* Initialize the extraction context - for now we extract only to F* *)
@@ -711,13 +731,14 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     }
   in
 
-  let use_state = config.mp_config.use_state_monad in
+  let use_state = config.use_state_monad in
 
   (* Extract one or several files, depending on the configuration *)
   if config.split_files then (
     let base_gen_config =
       {
         mp_config = config.mp_config;
+        use_state_monad = use_state;
         extract_types = false;
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses = false;
@@ -807,6 +828,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let gen_config =
       {
         mp_config = config.mp_config;
+        use_state_monad = use_state;
         extract_types = true;
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses =

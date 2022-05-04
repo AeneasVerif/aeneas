@@ -101,7 +101,12 @@ type bs_ctx = {
   fun_context : fun_context;
   fun_decl : A.fun_decl;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
-  ret_ty : ty;  (** The return type - we use it to translate `Panic` *)
+  output_ty : ty;
+      (** The output type - we use it to translate `Panic`.
+   
+       This should be the directly translated output type (i.e., no state,
+       no result).
+    *)
   sv_to_var : var V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of
           a symbolic expansion or upon ending an abstraction, for instance)
@@ -1082,7 +1087,7 @@ and translate_panic (config : config) (ctx : bs_ctx) : texpression =
   (* If we use a state monad, we need to add a lambda for the state variable *)
   if config.use_state_monad then
     (* Create the `Fail` value *)
-    let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; ctx.ret_ty ] in
+    let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; ctx.output_ty ] in
     let ret_v = mk_result_fail_texpression ret_ty in
     (* Add the lambda *)
     let _, state_var =
@@ -1090,7 +1095,7 @@ and translate_panic (config : config) (ctx : bs_ctx) : texpression =
     in
     let state_pattern = mk_typed_pattern_from_var state_var None in
     mk_abs state_pattern ret_v
-  else mk_result_fail_texpression ctx.ret_ty
+  else mk_result_fail_texpression ctx.output_ty
 
 and translate_return (config : config) (opt_v : V.typed_value option)
     (ctx : bs_ctx) : texpression =
