@@ -1310,8 +1310,8 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     it is useful for the decrease clause.
  *)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : fun_decl_qualif) (has_decreases_clause : bool)
-    (has_state_param : bool) (fwd_def : fun_decl) (def : fun_decl) : unit =
+    (qualif : fun_decl_qualif) (has_decreases_clause : bool) (def : fun_decl) :
+    unit =
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* (* Add the type parameters - note that we need those bindings only for the
@@ -1397,31 +1397,19 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
        * backward functions have no influence on termination: we thus
        * share the decrease clauses between the forward and the backward
        * functions).
-       * Something annoying is that there may be a state parameter, for
-       * the state-error monad, in which case we need to forget the input
-       * parameter before last:
-       * ```
-       * val f_fwd (x : u32) (st : state) :
-       *   Tot (result (state & u32)) (decreases (f_decreases x st))
-       *
-       *              We ignore this parameter
-       *                       VVV
-       * val f_back (x : u32) (ret : u32) (st : state) :
-       *   Tot (result (state & u32)) (decreases (f_decreases x st))
-       * ```
-       * Rk.: if a function has a decreases clause, it is necessarily
-       * a transparent function
        *)
       let inputs_lvs =
-        let num_fwd_inputs = List.length (Option.get fwd_def.body).inputs_lvs in
-        let num_fwd_inputs =
-          if has_state_param then num_fwd_inputs - 1 else num_fwd_inputs
-        in
         let all_inputs = (Option.get def.body).inputs_lvs in
-        let inputs = Collections.List.prefix num_fwd_inputs all_inputs in
-        if has_state_param then
-          inputs @ [ List.nth all_inputs (List.length all_inputs - 1) ]
-        else inputs
+        (* We have to count:
+         * - the forward inputs
+         * - the state
+         *)
+        let num_fwd_inputs = def.signature.info.num_fwd_inputs in
+        let num_fwd_inputs =
+          if def.signature.info.input_state then 1 + num_fwd_inputs
+          else num_fwd_inputs
+        in
+        Collections.List.prefix num_fwd_inputs all_inputs
       in
       let _ =
         List.fold_left

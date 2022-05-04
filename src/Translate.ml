@@ -481,19 +481,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          let has_decr_clause =
            has_decreases_clause def && config.extract_decreases_clauses
          in
-         (* Is there an input parameter "visible" for the state used in
-          * the state error monad (if we use a state error monad)? *)
-         let has_state_param =
-           config.use_state_monad
-           && config.mp_config.unfold_monadic_let_bindings
-         in
          (* Check if the definition needs to be filtered or not *)
          if
            ((not is_opaque) && config.extract_transparent)
            || (is_opaque && config.extract_opaque)
          then
            ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif
-             has_decr_clause has_state_param fwd_def def)
+             has_decr_clause def)
        fls);
     (* Insert unit tests if necessary *)
     if config.test_unit_functions then
