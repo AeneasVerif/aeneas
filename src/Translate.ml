@@ -15,11 +15,9 @@ let log = TranslateCore.log
 type config = {
   eval_config : Contexts.partial_config;
   mp_config : Micro.config;
-  use_state_monad : bool;
-      (** If `true`, use a state-error monad.
-          If `false`, only use an error monad.
-          
-          Using a state-error monad is necessary when modelling I/O, for instance.
+  use_state : bool;
+      (** Controls whether we need to use a state to model the external world
+          (I/O, for instance).
        *)
   split_files : bool;
       (** Controls whether we split the generated definitions between different
@@ -98,7 +96,7 @@ let translate_function_to_symbolics (config : C.partial_config)
     TODO: maybe we should introduce a record for this.
 *)
 let translate_function_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (use_state_monad : bool) (trans_ctx : trans_ctx)
+    (mp_config : Micro.config) (use_state : bool) (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
     : pure_fun_translation =
@@ -182,7 +180,7 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.filter_useless_back_calls =
         mp_config.filter_useless_monadic_calls;
-      use_state_monad;
+      use_state;
     }
   in
 
@@ -227,7 +225,7 @@ let translate_function_to_pure (config : C.partial_config)
         (* We need to ignore the forward inputs, and the state input (if there is) *)
         let _, backward_inputs =
           Collections.List.split_at backward_sg.sg.inputs
-            (num_forward_inputs + if use_state_monad then 1 else 0)
+            (num_forward_inputs + if use_state then 1 else 0)
         in
         (* As we forbid nested borrows, the additional inputs for the backward
          * functions come from the borrows in the return value of the rust function:
@@ -276,7 +274,7 @@ let translate_function_to_pure (config : C.partial_config)
   (pure_forward, pure_backwards)
 
 let translate_module_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (use_state_monad : bool) (m : M.llbc_module) :
+    (mp_config : Micro.config) (use_state : bool) (m : M.llbc_module) :
     trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
@@ -320,7 +318,7 @@ let translate_module_to_pure (config : C.partial_config)
     {
       SymbolicToPure.filter_useless_back_calls =
         mp_config.filter_useless_monadic_calls;
-      use_state_monad;
+      use_state;
     }
   in
   let fun_sigs =
@@ -331,8 +329,8 @@ let translate_module_to_pure (config : C.partial_config)
   (* Translate all the *transparent* functions *)
   let pure_translations =
     List.map
-      (translate_function_to_pure config mp_config use_state_monad trans_ctx
-         fun_sigs type_decls_map)
+      (translate_function_to_pure config mp_config use_state trans_ctx fun_sigs
+         type_decls_map)
       m.functions
   in
 
@@ -357,7 +355,7 @@ type gen_ctx = {
 
 type gen_config = {
   mp_config : Micro.config;
-  use_state_monad : bool;
+  use_state : bool;
   extract_types : bool;
   extract_decreases_clauses : bool;
   extract_template_decreases_clauses : bool;
@@ -603,7 +601,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs =
     translate_module_to_pure config.eval_config config.mp_config
-      config.use_state_monad m
+      config.use_state m
   in
 
   (* Initialize the extraction context - for now we extract only to F* *)
@@ -715,14 +713,14 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     }
   in
 
-  let use_state = config.use_state_monad in
+  let use_state = config.use_state in
 
   (* Extract one or several files, depending on the configuration *)
   if config.split_files then (
     let base_gen_config =
       {
         mp_config = config.mp_config;
-        use_state_monad = use_state;
+        use_state;
         extract_types = false;
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses = false;
@@ -812,7 +810,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let gen_config =
       {
         mp_config = config.mp_config;
-        use_state_monad = use_state;
+        use_state;
         extract_types = true;
         extract_decreases_clauses = config.extract_decreases_clauses;
         extract_template_decreases_clauses =

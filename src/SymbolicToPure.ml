@@ -38,11 +38,9 @@ type config = {
           Note that we later filter the useless *forward* calls in the micro-passes,
           where it is more natural to do.
        *)
-  use_state_monad : bool;
-      (** If `true`, use a state-error monad.
-          If `false`, only use an error monad.
-          
-          Using a state-error monad is necessary when modelling I/O, for instance.
+  use_state : bool;
+      (** Controls whether we need to use a state to model the external world
+          (I/O, for instance).
        *)
 }
 
@@ -477,7 +475,7 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) :
 (** Small utility. *)
 let get_fun_effect_info (config : config) (fun_id : A.fun_id)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
-  PureUtils.get_fun_effect_info config.use_state_monad fun_id gid
+  PureUtils.get_fun_effect_info config.use_state fun_id gid
 
 (** Translate a function signature.
 
@@ -1081,7 +1079,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
        * - error-monad: Return x
        * - state-error: Return (state, x)
        * *)
-      if config.use_state_monad then
+      if config.use_state then
         let state_var =
           {
             id = ctx.state_var;

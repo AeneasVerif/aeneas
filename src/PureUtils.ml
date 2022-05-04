@@ -485,7 +485,7 @@ let get_fun_effect_info (use_state : bool) (fun_id : A.fun_id)
       { can_fail = true; input_state; output_state }
   | A.Assumed aid ->
       {
-        can_fail = Assumed.assumed_is_monadic aid;
+        can_fail = Assumed.assumed_can_fail aid;
         input_state = false;
         output_state = false;
       }

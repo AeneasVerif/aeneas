@@ -188,7 +188,7 @@ let () =
           test_unit_functions;
           extract_decreases_clauses = not !no_decreases_clauses;
           extract_template_decreases_clauses = !template_decreases_clauses;
-          use_state_monad = not !no_state;
+          use_state = not !no_state;
         }
       in
       Translate.translate_module filename dest_dir trans_config m

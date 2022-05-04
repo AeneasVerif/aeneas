@@ -232,8 +232,7 @@ type assumed_info = A.assumed_fun_id * A.fun_sig * bool * name
 
 (** The list of assumed functions and all their information:
     - their signature
-    - a boolean indicating whether they are monadic or not (i.e., if they
-      can fail or not)
+    - a boolean indicating whether the function can fail or not
     - their name
 
     Rk.: following what is written above, we don't include `Box::free`.
@@ -282,6 +281,6 @@ let get_assumed_name (id : A.assumed_fun_id) : fun_name =
   let _, _, _, name = get_assumed_info id in
   name
 
-let assumed_is_monadic (id : A.assumed_fun_id) : bool =
+let assumed_can_fail (id : A.assumed_fun_id) : bool =
   let _, _, b, _ = get_assumed_info id in
   b
