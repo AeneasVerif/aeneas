@@ -101,12 +101,8 @@ type bs_ctx = {
   fun_context : fun_context;
   fun_decl : A.fun_decl;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
-  output_ty : ty;
-      (** The output type - we use it to translate `Panic`.
-   
-       This should be the directly translated output type (i.e., no state,
-       no result).
-    *)
+  sg : fun_sig;
+      (** The function signature - useful in particular to translate `Panic` *)
   sv_to_var : var V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of
           a symbolic expansion or upon ending an abstraction, for instance)
@@ -1070,29 +1066,25 @@ let rec translate_expression (config : config) (e : S.expression) (ctx : bs_ctx)
     : texpression =
   match e with
   | S.Return opt_v -> translate_return config opt_v ctx
-  | Panic -> translate_panic config ctx
+  | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call config call e ctx
   | EndAbstraction (abs, e) -> translate_end_abstraction config abs e ctx
   | Expansion (p, sv, exp) -> translate_expansion config p sv exp ctx
   | Meta (meta, e) -> translate_meta config meta e ctx
 
-and translate_panic (config : config) (ctx : bs_ctx) : texpression =
+and translate_panic (ctx : bs_ctx) : texpression =
   (* Here we use the function return type - note that it is ok because
    * we don't match on panics which happen inside the function body -
    * but it won't be true anymore once we translate individual blocks *)
   (* If we use a state monad, we need to add a lambda for the state variable *)
   (* Note that only forward functions return a state *)
-  if config.use_state_monad && ctx.bid <> None then
+  let output_ty = mk_simpl_tuple_ty ctx.sg.doutputs in
+  if ctx.sg.info.output_state then
     (* Create the `Fail` value *)
-    let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; ctx.output_ty ] in
+    let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
     let ret_v = mk_result_fail_texpression ret_ty in
-    (* Add the lambda *)
-    let _, state_var =
-      fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
-    in
-    let state_pattern = mk_typed_pattern_from_var state_var None in
-    mk_abs state_pattern ret_v
-  else mk_result_fail_texpression ctx.output_ty
+    ret_v
+  else mk_result_fail_texpression output_ty
 
 and translate_return (config : config) (opt_v : V.typed_value option)
     (ctx : bs_ctx) : texpression =

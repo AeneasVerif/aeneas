@@ -122,11 +122,6 @@ let translate_function_to_pure (config : C.partial_config)
 
   (* Initialize the context *)
   let forward_sig = RegularFunIdMap.find (A.Regular def_id, None) fun_sigs in
-  let forward_output_ty =
-    match forward_sig.sg.doutputs with
-    | [ ty ] -> ty
-    | _ -> failwith "Unreachable"
-  in
   let sv_to_var = V.SymbolicValueId.Map.empty in
   let var_counter = Pure.VarId.generator_zero in
   let state_var, var_counter = Pure.VarId.fresh var_counter in
@@ -146,7 +141,7 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.bid = None;
       (* Dummy for now *)
-      output_ty = forward_output_ty;
+      sg = forward_sig.sg;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
       var_counter;
@@ -216,10 +211,7 @@ let translate_function_to_pure (config : C.partial_config)
         let backward_sg =
           RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
-        let backward_output_ty = mk_simpl_tuple_ty backward_sg.sg.doutputs in
-        let ctx =
-          { ctx with bid = Some back_id; output_ty = backward_output_ty }
-        in
+        let ctx = { ctx with bid = Some back_id; sg = backward_sg.sg } in
 
         (* Translate *)
         SymbolicToPure.translate_fun_decl sp_config ctx None
@@ -255,10 +247,6 @@ let translate_function_to_pure (config : C.partial_config)
         let ctx, backward_outputs =
           SymbolicToPure.fresh_vars backward_outputs ctx
         in
-        let backward_output_tys =
-          List.map (fun (v : Pure.var) -> v.ty) backward_outputs
-        in
-        let backward_output_ty = mk_simpl_tuple_ty backward_output_tys in
         let backward_inputs =
           T.RegionGroupId.Map.singleton back_id backward_inputs
         in
@@ -271,7 +259,7 @@ let translate_function_to_pure (config : C.partial_config)
           {
             ctx with
             bid = Some back_id;
-            output_ty = backward_output_ty;
+            sg = backward_sg.sg;
             backward_inputs;
             backward_outputs;
           }
