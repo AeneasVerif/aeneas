@@ -383,30 +383,15 @@ let fun_sig_to_string (fmt : ast_formatter) (sg : fun_sig) : string =
   let ty_fmt = ast_to_type_formatter fmt in
   let type_params = List.map type_var_to_string sg.type_params in
   let inputs = List.map (ty_to_string ty_fmt) sg.inputs in
-  let outputs = List.map (ty_to_string ty_fmt) sg.outputs in
-  let outputs =
-    match outputs with
-    | [] ->
-        (* Can happen with backward functions which don't give back
-         * anything (shared borrows only) *)
-        "()"
-    | [ out ] -> out
-    | outputs -> "(" ^ String.concat " * " outputs ^ ")"
-  in
-  let all_types = List.concat [ type_params; inputs; [ outputs ] ] in
+  let output = ty_to_string ty_fmt sg.output in
+  let all_types = List.concat [ type_params; inputs; [ output ] ] in
   String.concat " -> " all_types
 
 let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
   let ty_fmt = ast_to_type_formatter fmt in
   let inputs = List.map (ty_to_string ty_fmt) sg.inputs in
-  let outputs = List.map (ty_to_string ty_fmt) sg.outputs in
-  let outputs =
-    match outputs with
-    | [] -> "()"
-    | [ out ] -> out
-    | outputs -> "(" ^ String.concat " * " outputs ^ ")"
-  in
-  let all_types = List.append inputs [ outputs ] in
+  let output = ty_to_string ty_fmt sg.output in
+  let all_types = List.append inputs [ output ] in
   String.concat " -> " all_types
 
 let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : A.fun_id) : string

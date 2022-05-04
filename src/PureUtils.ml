@@ -125,8 +125,10 @@ let fun_sig_substitute (tsubst : TypeVarId.id -> ty) (sg : fun_sig) :
     inst_fun_sig =
   let subst = ty_substitute tsubst in
   let inputs = List.map subst sg.inputs in
-  let outputs = List.map subst sg.outputs in
-  { inputs; outputs }
+  let output = subst sg.output in
+  let doutputs = List.map subst sg.doutputs in
+  let info = sg.info in
+  { inputs; output; doutputs; info }
 
 (** Return true if a list of functions are *not* mutually recursive, false otherwise.
     This function is meant to be applied on a set of (forward, backwards) functions
@@ -478,38 +480,3 @@ let opt_destruct_state_monad_result (ty : ty) : ty option =
 
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
   match e.e with Meta (MPlace mp, e) -> (Some mp, e) | _ -> (None, e)
-
-(** Utility function, used for type checking - TODO: move *)
-let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
-    (type_id : type_id) (variant_id : VariantId.id option) (tys : ty list) :
-    ty list =
-  match type_id with
-  | Tuple ->
-      (* Tuple *)
-      assert (variant_id = None);
-      tys
-  | AdtId def_id ->
-      (* "Regular" ADT *)
-      let def = TypeDeclId.Map.find def_id type_decls in
-      type_decl_get_instantiated_fields_types def variant_id tys
-  | Assumed aty -> (
-      (* Assumed type *)
-      match aty with
-      | State ->
-          (* `State` is opaque *)
-          raise (Failure "Unreachable: `State` values are opaque")
-      | Result ->
-          let ty = Collections.List.to_cons_nil tys in
-          let variant_id = Option.get variant_id in
-          if variant_id = result_return_id then [ ty ]
-          else if variant_id = result_fail_id then []
-          else
-            raise (Failure "Unreachable: improper variant id for result type")
-      | Option ->
-          let ty = Collections.List.to_cons_nil tys in
-          let variant_id = Option.get variant_id in
-          if variant_id = option_some_id then [ ty ]
-          else if variant_id = option_none_id then []
-          else
-            raise (Failure "Unreachable: improper variant id for result type")
-      | Vec -> raise (Failure "Unreachable: `Vector` values are opaque"))

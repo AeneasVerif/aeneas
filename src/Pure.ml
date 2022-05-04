@@ -505,28 +505,79 @@ and meta =
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
       }]
 
+type fun_sig_info = {
+  num_fwd_inputs : int;
+      (** The number of input types for forward computation *)
+  num_back_inputs : int option;
+      (** The number of additional inputs for the backward computation (if pertinent) *)
+  input_state : bool;  (** `true` if the function takes a state as input *)
+  output_state : bool;
+      (** `true` if the function outputs a state (it then lives
+                            in a state monad) *)
+  can_fail : bool;  (** `true` if the return type is a `result` *)
+}
+(** Meta information about a function signature *)
+
 type fun_sig = {
   type_params : type_var list;
   inputs : ty list;
-  outputs : ty list;
-      (** The list of outputs.
+  output : ty;
+  doutputs : ty list;
+      (** The "decomposed" list of outputs.
 
-          Immediately after the translation from symbolic to pure we have this
-          the following:
-          In case of a forward function, the list will have length = 1.
-          However, in case of backward function, the list may have length > 1.
-          If the length is > 1, it gets extracted to a tuple type. Followingly,
-          we could not use a list because we can encode tuples, but here we
-          want to account for the fact that we immediately deconstruct the tuple
-          upon calling the backward function (because the backward function is
-          called to update a set of values in the environment).
+          In case of a forward function, the list has length = 1, for the
+          type of the returned value.
           
-          After the "to monadic" pass, the list has size exactly one (and we
-          use the `Result` type).
+          In case of backward function, the list contains all the types of
+          all the given back values (there is at most one type per forward
+          input argument).
+          
+          Ex.:
+          ```
+          fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T;
+          ```
+          Decomposed outputs:
+          - forward function:  [T]
+          - backward function: [T; T] (for "x" and "y")
+          
        *)
+  info : fun_sig_info;  (** Additional information *)
 }
+(** A function signature.
 
-type inst_fun_sig = { inputs : ty list; outputs : ty list }
+    We have the following cases:
+    - forward function:
+      `in_ty0 -> ... -> in_tyn -> out_ty`                           (* pure function *)
+      `in_ty0 -> ... -> in_tyn -> result out_ty`                    (* error-monad *)
+      `in_ty0 -> ... -> in_tyn -> state -> result (state & out_ty)` (* state-error *)
+    - backward function:
+      `in_ty0 -> ... -> in_tyn -> back_in0 -> ... back_inm -> (back_out0 & ... & back_outp)` (* pure function *)
+      `in_ty0 -> ... -> in_tyn -> back_in0 -> ... back_inm ->
+       result (back_out0 & ... & back_outp)` (* error-monad *)
+      `in_ty0 -> ... -> in_tyn -> state -> back_in0 -> ... back_inm ->
+       result (back_out0 & ... & back_outp)` (* state-error *)
+       
+       Note that a backward function never returns (i.e., updates) a state: only
+       forward functions do so. Also, the state input parameter is *betwee*
+       the forward inputs and the backward inputs.
+
+    The function's type should be given by `mk_arrows sig.inputs sig.output`.
+    We provide additional meta-information:
+    - we divide between forward inputs and backward inputs (i.e., inputs specific
+      to the forward functions, and additional inputs necessary if the signature is
+      for a backward function)
+    - we have booleans to give us the fact that the function takes a state as
+      input, or can fail, etc. without having to inspect the signature
+    - etc.
+ *)
+
+type inst_fun_sig = {
+  inputs : ty list;
+  output : ty;
+  doutputs : ty list;
+  info : fun_sig_info;
+}
+(** An instantiated function signature. See [fun_sig] *)
 
 type fun_body = {
   inputs : var list;
