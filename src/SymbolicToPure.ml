@@ -474,29 +474,10 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) :
   let abs_ids = list_ancestor_abstractions_ids ctx abs in
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 
-type fun_effect_info = {
-  can_fail : bool;
-  input_state : bool;
-  output_state : bool;
-}
-(** TODO: factorize with fun_sig_info?
-    TODO: use an enumeration
- *)
-
 (** Small utility. *)
 let get_fun_effect_info (config : config) (fun_id : A.fun_id)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
-  match fun_id with
-  | A.Regular _ ->
-      let input_state = config.use_state_monad in
-      let output_state = input_state && gid = None in
-      { can_fail = true; input_state; output_state }
-  | A.Assumed aid ->
-      {
-        can_fail = Assumed.assumed_is_monadic aid;
-        input_state = false;
-        output_state = false;
-      }
+  PureUtils.get_fun_effect_info config.use_state_monad fun_id gid
 
 (** Translate a function signature.
 
@@ -618,9 +599,7 @@ let translate_fun_sig (config : config) (fun_id : A.fun_id)
       num_fwd_inputs = List.length fwd_inputs;
       num_back_inputs =
         (if bid = None then None else Some (List.length back_inputs));
-      input_state = effect_info.input_state;
-      output_state = effect_info.output_state;
-      can_fail = effect_info.can_fail;
+      effect_info;
     }
   in
   let sg = { type_params; inputs; output; doutputs; info } in
@@ -1079,7 +1058,7 @@ and translate_panic (ctx : bs_ctx) : texpression =
   (* If we use a state monad, we need to add a lambda for the state variable *)
   (* Note that only forward functions return a state *)
   let output_ty = mk_simpl_tuple_ty ctx.sg.doutputs in
-  if ctx.sg.info.output_state then
+  if ctx.sg.info.effect_info.output_state then
     (* Create the `Fail` value *)
     let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
     let ret_v = mk_result_fail_texpression ret_ty in

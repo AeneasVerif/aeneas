@@ -505,16 +505,21 @@ and meta =
         nude = true (* Don't inherit [VisitorsRuntime.iter] *);
       }]
 
-type fun_sig_info = {
-  num_fwd_inputs : int;
-      (** The number of input types for forward computation *)
-  num_back_inputs : int option;
-      (** The number of additional inputs for the backward computation (if pertinent) *)
+type fun_effect_info = {
   input_state : bool;  (** `true` if the function takes a state as input *)
   output_state : bool;
       (** `true` if the function outputs a state (it then lives
                             in a state monad) *)
   can_fail : bool;  (** `true` if the return type is a `result` *)
+}
+(** Information about the "effect" of a function *)
+
+type fun_sig_info = {
+  num_fwd_inputs : int;
+      (** The number of input types for forward computation *)
+  num_back_inputs : int option;
+      (** The number of additional inputs for the backward computation (if pertinent) *)
+  effect_info : fun_effect_info;
 }
 (** Meta information about a function signature *)
 

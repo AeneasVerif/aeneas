@@ -1406,7 +1406,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
          *)
         let num_fwd_inputs = def.signature.info.num_fwd_inputs in
         let num_fwd_inputs =
-          if def.signature.info.input_state then 1 + num_fwd_inputs
+          if def.signature.info.effect_info.input_state then 1 + num_fwd_inputs
           else num_fwd_inputs
         in
         Collections.List.prefix num_fwd_inputs all_inputs

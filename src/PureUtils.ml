@@ -61,11 +61,6 @@ let mk_typed_pattern_from_constant_value (cv : constant_value) : typed_pattern =
   let ty = compute_constant_value_ty cv in
   { value = PatConcrete cv; ty }
 
-(*let mk_value_expression (v : typed_rvalue) (mp : mplace option) : texpression =
-    let e = Value (v, mp) in
-    let ty = v.ty in
-  { e; ty }*)
-
 let mk_let (monadic : bool) (lv : typed_pattern) (re : texpression)
     (next_e : texpression) : texpression =
   let e = Let (monadic, lv, re, next_e) in
@@ -480,3 +475,17 @@ let opt_destruct_state_monad_result (ty : ty) : ty option =
 
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
   match e.e with Meta (MPlace mp, e) -> (Some mp, e) | _ -> (None, e)
+
+let get_fun_effect_info (use_state : bool) (fun_id : A.fun_id)
+    (gid : T.RegionGroupId.id option) : fun_effect_info =
+  match fun_id with
+  | A.Regular _ ->
+      let input_state = use_state in
+      let output_state = input_state && gid = None in
+      { can_fail = true; input_state; output_state }
+  | A.Assumed aid ->
+      {
+        can_fail = Assumed.assumed_is_monadic aid;
+        input_state = false;
+        output_state = false;
+      }
