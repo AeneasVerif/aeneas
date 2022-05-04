@@ -475,7 +475,17 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) :
 (** Small utility. *)
 let get_fun_effect_info (config : config) (fun_id : A.fun_id)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
-  PureUtils.get_fun_effect_info config.use_state fun_id gid
+  match fun_id with
+  | A.Regular _ ->
+      let input_state = config.use_state in
+      let output_state = input_state && gid = None in
+      { can_fail = true; input_state; output_state }
+  | A.Assumed aid ->
+      {
+        can_fail = Assumed.assumed_can_fail aid;
+        input_state = false;
+        output_state = false;
+      }
 
 (** Translate a function signature.
 

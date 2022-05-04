@@ -64,6 +64,7 @@ let translate_function_to_symbolics (config : C.partial_config)
       ^ Print.fun_name_to_string fdef.A.name));
 
   let { type_context; fun_context } = trans_ctx in
+  let fun_context = { C.fun_decls = fun_context.fun_decls } in
 
   match fdef.body with
   | None -> None
@@ -281,6 +282,8 @@ let translate_module_to_pure (config : C.partial_config)
 
   (* Compute the type and function contexts *)
   let type_context, fun_context = compute_type_fun_contexts m in
+  let fun_infos = FA.analyze_module m fun_context.C.fun_decls use_state in
+  let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
   let trans_ctx = { type_context; fun_context } in
 
   (* Translate all the type definitions *)

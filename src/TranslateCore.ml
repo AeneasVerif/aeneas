@@ -6,11 +6,20 @@ module T = Types
 module A = LlbcAst
 module M = Modules
 module SA = SymbolicAst
+module FA = FunsAnalysis
 
 (** The local logger *)
 let log = L.translate_log
 
-type trans_ctx = { type_context : C.type_context; fun_context : C.fun_context }
+type type_context = C.type_context [@@deriving show]
+
+type fun_context = {
+  fun_decls : A.fun_decl A.FunDeclId.Map.t;
+  fun_infos : FA.fun_info A.FunDeclId.Map.t;
+}
+[@@deriving show]
+
+type trans_ctx = { type_context : type_context; fun_context : fun_context }
 
 type pure_fun_translation = Pure.fun_decl * Pure.fun_decl list
 

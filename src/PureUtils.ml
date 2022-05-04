@@ -453,39 +453,5 @@ let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
   in
   { value; ty }
 
-let opt_destruct_state_monad_result (ty : ty) : ty option =
-  (* Checking:
-   * ty == state -> result (state & _) ? *)
-  match ty with
-  | Arrow (ty0, ty1) ->
-      (* ty == ty0 -> ty1
-       * Checking: ty0 == state ?
-       * *)
-      if ty0 = mk_state_ty then
-        (* Checking: ty1 == result (state & _) *)
-        match opt_destruct_result ty1 with
-        | None -> None
-        | Some ty2 -> (
-            (* Checking: ty2 == state & _ *)
-            match opt_destruct_tuple ty2 with
-            | Some [ ty3; ty4 ] -> if ty3 = mk_state_ty then Some ty4 else None
-            | _ -> None)
-      else None
-  | _ -> None
-
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
   match e.e with Meta (MPlace mp, e) -> (Some mp, e) | _ -> (None, e)
-
-let get_fun_effect_info (use_state : bool) (fun_id : A.fun_id)
-    (gid : T.RegionGroupId.id option) : fun_effect_info =
-  match fun_id with
-  | A.Regular _ ->
-      let input_state = use_state in
-      let output_state = input_state && gid = None in
-      { can_fail = true; input_state; output_state }
-  | A.Assumed aid ->
-      {
-        can_fail = Assumed.assumed_can_fail aid;
-        input_state = false;
-        output_state = false;
-      }
