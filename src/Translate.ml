@@ -232,8 +232,10 @@ let translate_function_to_pure (config : C.partial_config)
         let backward_sg =
           RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
+        (* We need to ignore the forward inputs, and the state input (if there is) *)
         let _, backward_inputs =
-          Collections.List.split_at backward_sg.sg.inputs num_forward_inputs
+          Collections.List.split_at backward_sg.sg.inputs
+            (num_forward_inputs + if use_state_monad then 1 else 0)
         in
         (* As we forbid nested borrows, the additional inputs for the backward
          * functions come from the borrows in the return value of the rust function:
