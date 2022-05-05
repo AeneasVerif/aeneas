@@ -97,7 +97,7 @@ let translate_function_to_symbolics (config : C.partial_config)
     TODO: maybe we should introduce a record for this.
 *)
 let translate_function_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (use_state : bool) (trans_ctx : trans_ctx)
+    (mp_config : Micro.config) (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
     : pure_fun_translation =
@@ -134,7 +134,11 @@ let translate_function_to_pure (config : C.partial_config)
     }
   in
   let fun_context =
-    { SymbolicToPure.llbc_fun_decls = fun_context.fun_decls; fun_sigs }
+    {
+      SymbolicToPure.llbc_fun_decls = fun_context.fun_decls;
+      fun_sigs;
+      fun_infos = fun_context.fun_infos;
+    }
   in
   let ctx =
     {
@@ -181,7 +185,6 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.filter_useless_back_calls =
         mp_config.filter_useless_monadic_calls;
-      use_state;
     }
   in
 
@@ -224,9 +227,13 @@ let translate_function_to_pure (config : C.partial_config)
           RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
         (* We need to ignore the forward inputs, and the state input (if there is) *)
+        let fun_info =
+          SymbolicToPure.get_fun_effect_info fun_context.fun_infos
+            (A.Regular def_id) (Some back_id)
+        in
         let _, backward_inputs =
           Collections.List.split_at backward_sg.sg.inputs
-            (num_forward_inputs + if use_state then 1 else 0)
+            (num_forward_inputs + if fun_info.input_state then 1 else 0)
         in
         (* As we forbid nested borrows, the additional inputs for the backward
          * functions come from the borrows in the return value of the rust function:
@@ -317,22 +324,15 @@ let translate_module_to_pure (config : C.partial_config)
       m.functions
   in
   let sigs = List.append assumed_sigs local_sigs in
-  let sp_config =
-    {
-      SymbolicToPure.filter_useless_back_calls =
-        mp_config.filter_useless_monadic_calls;
-      use_state;
-    }
-  in
   let fun_sigs =
-    SymbolicToPure.translate_fun_signatures sp_config type_context.type_infos
-      sigs
+    SymbolicToPure.translate_fun_signatures fun_context.fun_infos
+      type_context.type_infos sigs
   in
 
   (* Translate all the *transparent* functions *)
   let pure_translations =
     List.map
-      (translate_function_to_pure config mp_config use_state trans_ctx fun_sigs
+      (translate_function_to_pure config mp_config trans_ctx fun_sigs
          type_decls_map)
       m.functions
   in
