@@ -40,12 +40,15 @@ let test_new_non_zero_u32_fwd
   end
 
 (** [external::test_vec] *)
-let test_vec_fwd (st : state) : result (state & unit) =
+let test_vec_fwd : result unit =
   let v = vec_new u32 in
   begin match vec_push_back u32 v 0 with
   | Fail -> Fail
-  | Return _ -> Return (st, ())
+  | Return _ -> Return ()
   end
+
+(** Unit test for [external::test_vec] *)
+let _ = assert_norm (test_vec_fwd = Return ())
 
 (** [external::custom_swap] *)
 let custom_swap_fwd
@@ -85,5 +88,17 @@ let test_custom_swap_back
   begin match custom_swap_back u32 x y st 1 with
   | Fail -> Fail
   | Return (x0, y0) -> Return (x0, y0)
+  end
+
+(** [external::test_swap_non_zero] *)
+let test_swap_non_zero_fwd (x : u32) (st : state) : result (state & u32) =
+  begin match swap_fwd u32 x 0 st with
+  | Fail -> Fail
+  | Return (st0, _) ->
+    begin match swap_back u32 x 0 st with
+    | Fail -> Fail
+    | Return (x0, _) ->
+      begin match x0 with | 0 -> Fail | _ -> Return (st0, x0) end
+    end
   end
 
