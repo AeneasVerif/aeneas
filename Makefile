@@ -29,7 +29,7 @@ build:
 
 # Test the project
 .PHONY: test
-test: build trans-sidney_test trans-no_nested_borrows trans-paper \
+test: build trans-sidney_tests trans-no_nested_borrows trans-paper \
 	trans-hashmap trans-hashmap_main \
 	trans-external trans-nll-betree_nll
 
