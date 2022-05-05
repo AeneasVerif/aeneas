@@ -29,11 +29,15 @@ build:
 
 # Test the project
 .PHONY: test
-test: build trans-no_nested_borrows trans-paper \
+test: build trans-sidney_test trans-no_nested_borrows trans-paper \
 	trans-hashmap trans-hashmap_main \
 	trans-external trans-nll-betree_nll
 
 # Add specific options to some tests
+trans-sidney_tests: \
+	TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
+trans-sidney_tests: SUBDIR:=misc
+
 trans-no_nested_borrows trans-paper: \
 	TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
 trans-no_nested_borrows trans-paper: SUBDIR:=misc
