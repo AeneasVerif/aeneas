@@ -1058,54 +1058,17 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
  fun cf ctx ->
   (* Lookup the abstraction *)
   let abs = C.ctx_lookup_abs ctx abs_id in
-  (* End the first loan we find *)
-  let obj =
-    object
-      inherit [_] V.iter_abs as super
-
-      method! visit_aloan_content env lc =
-        match lc with
-        | V.AMutLoan (bid, _) -> raise (FoundBorrowIds (Borrow bid))
-        | V.ASharedLoan (bids, _, _) -> raise (FoundBorrowIds (Borrows bids))
-        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
-        | V.AEndedSharedLoan (_, _) ->
-            super#visit_aloan_content env lc
-        | V.AIgnoredMutLoan (_, _) ->
-            (* Note that this loan can't come from a parent abstraction, because
-             * we should have ended them already) *)
-            super#visit_aloan_content env lc
-        | V.AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_meta = _ }
-        | V.AIgnoredSharedLoan _ ->
-            super#visit_aloan_content env lc
-
-      method! visit_loan_content _ lc =
-        match lc with
-        | V.MutLoan _ ->
-            (* The mut loan linked to the mutable borrow present in a shared
-             * value in an abstraction should be in an AProjBorrows *)
-            failwith "Unreachable"
-        | V.SharedLoan (bids, _) -> raise (FoundBorrowIds (Borrows bids))
-      (** We may need to visit loan contents because of shared values *)
-
-      method! visit_aproj env sproj =
-        (match sproj with
-        | V.AProjBorrows (_, _)
-        | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
-            ()
-        | V.AProjLoans (sv, _) -> raise (FoundSymbolicValue sv));
-        super#visit_aproj env sproj
-    end
-  in
-  try
-    (* Check if there are loans *)
-    obj#visit_abs () abs;
-    (* No loans: nothing to update *)
-    cf ctx
-  with
-  (* There are loans: end them, then recheck *)
-  | FoundBorrowIds bids ->
-      (* End the corresponding borrows *)
+  (* End the first loan we find.
+   *
+   * We ignore the "ignored mut/shared loans": as we should have already ended
+   * the parent abstractions, they necessarily come from children. *)
+  let opt_loan = get_first_non_ignored_aloan_in_abstraction abs in
+  match opt_loan with
+  | None ->
+      (* No loans: nothing to update *)
+      cf ctx
+  | Some (BorrowIds bids) ->
+      (* There are loans: end the corresponding borrows, then recheck *)
       let cc : cm_fun =
         match bids with
         | Borrow bid -> end_borrow config chain None bid
@@ -1115,7 +1078,7 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
       let cc = comp cc (end_abstraction_loans config chain abs_id) in
       (* Continue *)
       cc cf ctx
-  | FoundSymbolicValue sv ->
+  | Some (SymbolicValue sv) ->
       (* There is a proj_loans over a symbolic value: end the proj_borrows
        * which intersect this proj_loans, then end the proj_loans itself *)
       let cc = end_proj_loans_symbolic config chain abs_id abs.regions sv in

@@ -43,6 +43,11 @@ type priority_borrows_or_abs =
   | InnerLoans of borrow_ids
 [@@deriving show]
 
+type borrow_ids_or_symbolic_value =
+  | BorrowIds of borrow_ids
+  | SymbolicValue of V.symbolic_value
+[@@deriving show]
+
 let update_if_none opt x = match opt with None -> Some x | _ -> opt
 
 exception FoundPriority of priority_borrows_or_abs
@@ -1119,3 +1124,63 @@ let no_aproj_over_symbolic_in_context (sv : V.symbolic_value) (ctx : C.eval_ctx)
   (* Apply *)
   try obj#visit_eval_ctx () ctx
   with Found -> failwith "update_aproj_loans_to_ended: failed"
+
+(** Helper function
+
+    Return the loan (aloan, loan, proj_loans over a symbolic value) we find
+    in an abstraction, if there is.
+    
+    **Remark:** we don't take the *ignored* mut/shared loans into account.
+ *)
+let get_first_non_ignored_aloan_in_abstraction (abs : V.abs) :
+    borrow_ids_or_symbolic_value option =
+  (* Explore to find a loan *)
+  let obj =
+    object
+      inherit [_] V.iter_abs as super
+
+      method! visit_aloan_content env lc =
+        match lc with
+        | V.AMutLoan (bid, _) -> raise (FoundBorrowIds (Borrow bid))
+        | V.ASharedLoan (bids, _, _) -> raise (FoundBorrowIds (Borrows bids))
+        | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
+        | V.AEndedSharedLoan (_, _) ->
+            super#visit_aloan_content env lc
+        | V.AIgnoredMutLoan (_, _) ->
+            (* Ignore *)
+            super#visit_aloan_content env lc
+        | V.AEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ }
+        | V.AIgnoredSharedLoan _ ->
+            (* Ignore *)
+            super#visit_aloan_content env lc
+
+      method! visit_loan_content _ lc =
+        match lc with
+        | V.MutLoan _ ->
+            (* The mut loan linked to the mutable borrow present in a shared
+             * value in an abstraction should be in an AProjBorrows *)
+            failwith "Unreachable"
+        | V.SharedLoan (bids, _) -> raise (FoundBorrowIds (Borrows bids))
+      (** We may need to visit loan contents because of shared values *)
+
+      method! visit_aproj env sproj =
+        (match sproj with
+        | V.AProjBorrows (_, _)
+        | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
+            ()
+        | V.AProjLoans (sv, _) -> raise (ValuesUtils.FoundSymbolicValue sv));
+        super#visit_aproj env sproj
+    end
+  in
+  try
+    (* Check if there are loans *)
+    obj#visit_abs () abs;
+    (* No loans *)
+    None
+  with
+  (* There are loans *)
+  | FoundBorrowIds bids -> Some (BorrowIds bids)
+  | ValuesUtils.FoundSymbolicValue sv ->
+      (* There are loan projections over symbolic values *)
+      Some (SymbolicValue sv)
