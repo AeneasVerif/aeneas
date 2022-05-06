@@ -3,7 +3,7 @@
 module BetreeMain.Types
 open Primitives
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [betree_main::betree::List] *)
 type betree_list_t (t : Type0) =

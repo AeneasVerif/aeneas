@@ -4,7 +4,7 @@ module BetreeMain.Opaque
 open Primitives
 include BetreeMain.Types
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [betree_main::betree_utils::load_internal_node] *)
 val betree_utils_load_internal_node_fwd

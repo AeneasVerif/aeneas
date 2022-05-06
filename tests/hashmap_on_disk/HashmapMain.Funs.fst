@@ -6,7 +6,7 @@ include HashmapMain.Types
 include HashmapMain.Opaque
 include HashmapMain.Clauses
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap_main::hashmap::hash_key] *)
 let hashmap_hash_key_fwd (k : usize) : result usize = Return k

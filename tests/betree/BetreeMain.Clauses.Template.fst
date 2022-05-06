@@ -4,7 +4,7 @@ module BetreeMain.Clauses.Template
 open Primitives
 open BetreeMain.Types
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [betree_main::betree::List::{1}::len]: decreases clause *)
 unfold

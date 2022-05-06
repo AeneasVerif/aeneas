@@ -573,8 +573,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
   List.iter (fun m -> Printf.fprintf out "open %s\n" m) custom_imports;
   (* Add the custom includes *)
   List.iter (fun m -> Printf.fprintf out "include %s\n" m) custom_includes;
-  (* Z3 options *)
-  Printf.fprintf out "\n#set-options \"--z3rlimit 50 --fuel 0 --ifuel 1\"\n";
+  (* Z3 options - note that we use fuel 1 because it its useful for the decrease clauses *)
+  Printf.fprintf out "\n#set-options \"--z3rlimit 50 --fuel 1 --ifuel 1\"\n";
 
   (* From now onwards, we use the formatter *)
   (* Set the margin *)

@@ -4,7 +4,7 @@ module External.Opaque
 open Primitives
 include External.Types
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::mem::swap] *)
 val core_mem_swap_fwd (t : Type0) : t -> t -> state -> result (state & unit)

@@ -3,7 +3,7 @@
 module BetreeNll
 open Primitives
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [betree_nll::List] *)
 type list_t (t : Type0) =

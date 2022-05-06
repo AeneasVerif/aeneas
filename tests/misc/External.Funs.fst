@@ -5,7 +5,7 @@ open Primitives
 include External.Types
 include External.Opaque
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [external::swap] *)
 let swap_fwd (t : Type0) (x : t) (y : t) (st : state) : result (state & unit) =
