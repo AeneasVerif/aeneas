@@ -11,7 +11,15 @@ include External.Opaque
 let swap_fwd (t : Type0) (x : t) (y : t) (st : state) : result (state & unit) =
   begin match core_mem_swap_fwd t x y st with
   | Fail -> Fail
-  | Return (st0, _) -> Return (st0, ())
+  | Return (st0, _) ->
+    begin match core_mem_swap_back0 t x y st with
+    | Fail -> Fail
+    | Return _ ->
+      begin match core_mem_swap_back1 t x y st with
+      | Fail -> Fail
+      | Return _ -> Return (st0, ())
+      end
+    end
   end
 
 (** [external::swap] *)
@@ -58,7 +66,11 @@ let custom_swap_fwd
   | Return (st0, _) ->
     begin match core_mem_swap_back0 t x y st with
     | Fail -> Fail
-    | Return x0 -> Return (st0, x0)
+    | Return x0 ->
+      begin match core_mem_swap_back1 t x y st with
+      | Fail -> Fail
+      | Return _ -> Return (st0, x0)
+      end
     end
   end
 
