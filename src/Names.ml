@@ -61,6 +61,13 @@ let filter_disambiguators_zero (n : name) : name =
   in
   List.filter pred n
 
+(** Filter the disambiguators in a name *)
+let filter_disambiguators (n : name) : name =
+  let pred (pe : path_elem) : bool =
+    match pe with Ident _ -> true | Disambiguator _ -> false
+  in
+  List.filter pred n
+
 let as_ident (pe : path_elem) : string =
   match pe with
   | Ident s -> s
