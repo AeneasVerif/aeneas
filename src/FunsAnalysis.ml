@@ -1,7 +1,8 @@
 (** Compute various information, including:
     - can a function fail (by having `Fail` in its body, or transitively
       calling a function which can fail)
-    - can a function diverge
+    - can a function diverge (bu being recursive, containing a loop or
+      transitively calling a function which can diverge)
     - does a function perform stateful operations (i.e., do we need a state
       to translate it)
  *)
@@ -35,7 +36,12 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
 
   (* Analyze a group of mutually recursive functions.
    * As the functions can call each other, we compute the same information
-   * for all of them.
+   * for all of them (if one of the functions can fail, then all of them
+   * can fail, etc.).
+   *
+   * We simply check if the functions contains panic statements, loop statements,
+   * recursive calls, etc. We use the previously computed information in case
+   * of function calls.
    *)
   let analyze_fun_decls (fun_ids : FunDeclId.Set.t) (d : fun_decl list) :
       fun_info =
