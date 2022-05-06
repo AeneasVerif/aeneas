@@ -159,6 +159,7 @@ let () =
           C.check_invariants = not !no_check_inv;
           greedy_expand_symbolics_with_borrows = true;
           allow_bottom_below_borrow = true;
+          return_unit_end_abs_with_no_loans = true;
         }
       in
 
