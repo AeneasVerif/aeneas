@@ -16,7 +16,7 @@ val core_mem_swap_back0 (t : Type0) : t -> t -> state -> result t
 val core_mem_swap_back1 (t : Type0) : t -> t -> state -> result t
 
 (** [core::num::nonzero::NonZeroU32::{14}::new] *)
-val core_num_nonzero_non_zero_u32_14_new_fwd
+val core_num_nonzero_non_zero_u32_new_fwd
   : u32 -> state -> result (state & (option core_num_nonzero_non_zero_u32_t))
 
 (** [core::option::Option::{0}::unwrap] *)

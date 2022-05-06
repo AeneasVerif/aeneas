@@ -36,7 +36,7 @@ let swap_back (t : Type0) (x : t) (y : t) (st : state) : result (t & t) =
 (** [external::test_new_non_zero_u32] *)
 let test_new_non_zero_u32_fwd
   (x : u32) (st : state) : result (state & core_num_nonzero_non_zero_u32_t) =
-  begin match core_num_nonzero_non_zero_u32_14_new_fwd x st with
+  begin match core_num_nonzero_non_zero_u32_new_fwd x st with
   | Fail -> Fail
   | Return (st0, opt) ->
     begin match
