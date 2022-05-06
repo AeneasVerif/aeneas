@@ -6,7 +6,7 @@ include BetreeMain.Types
 include BetreeMain.Opaque
 include BetreeMain.Clauses
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [betree_main::betree::load_internal_node] *)
 let betree_load_internal_node_fwd
@@ -115,13 +115,13 @@ let betree_upsert_update_fwd
   end
 
 (** [betree_main::betree::List::{1}::len] *)
-let rec betree_list_1_len_fwd
+let rec betree_list_len_fwd
   (t : Type0) (self : betree_list_t t) :
-  Tot (result u64) (decreases (betree_list_1_len_decreases t self))
+  Tot (result u64) (decreases (betree_list_len_decreases t self))
   =
   begin match self with
   | BetreeListCons x tl ->
-    begin match betree_list_1_len_fwd t tl with
+    begin match betree_list_len_fwd t tl with
     | Fail -> Fail
     | Return i ->
       begin match u64_add 1 i with | Fail -> Fail | Return i0 -> Return i0 end
@@ -130,10 +130,10 @@ let rec betree_list_1_len_fwd
   end
 
 (** [betree_main::betree::List::{1}::split_at] *)
-let rec betree_list_1_split_at_fwd
+let rec betree_list_split_at_fwd
   (t : Type0) (self : betree_list_t t) (n : u64) :
   Tot (result ((betree_list_t t) & (betree_list_t t)))
-  (decreases (betree_list_1_split_at_decreases t self n))
+  (decreases (betree_list_split_at_decreases t self n))
   =
   begin match n with
   | 0 -> Return (BetreeListNil, self)
@@ -143,7 +143,7 @@ let rec betree_list_1_split_at_fwd
       begin match u64_sub n 1 with
       | Fail -> Fail
       | Return i ->
-        begin match betree_list_1_split_at_fwd t tl i with
+        begin match betree_list_split_at_fwd t tl i with
         | Fail -> Fail
         | Return p ->
           let (ls0, ls1) = p in
@@ -155,14 +155,13 @@ let rec betree_list_1_split_at_fwd
   end
 
 (** [betree_main::betree::List::{1}::push_front] *)
-let betree_list_1_push_front_fwd_back
+let betree_list_push_front_fwd_back
   (t : Type0) (self : betree_list_t t) (x : t) : result (betree_list_t t) =
   let tl = mem_replace_fwd (betree_list_t t) self BetreeListNil in
   let l = tl in Return (BetreeListCons x l)
 
 (** [betree_main::betree::List::{1}::pop_front] *)
-let betree_list_1_pop_front_fwd
-  (t : Type0) (self : betree_list_t t) : result t =
+let betree_list_pop_front_fwd (t : Type0) (self : betree_list_t t) : result t =
   let ls = mem_replace_fwd (betree_list_t t) self BetreeListNil in
   begin match ls with
   | BetreeListCons x tl -> Return x
@@ -170,7 +169,7 @@ let betree_list_1_pop_front_fwd
   end
 
 (** [betree_main::betree::List::{1}::pop_front] *)
-let betree_list_1_pop_front_back
+let betree_list_pop_front_back
   (t : Type0) (self : betree_list_t t) : result (betree_list_t t) =
   let ls = mem_replace_fwd (betree_list_t t) self BetreeListNil in
   begin match ls with
@@ -179,14 +178,14 @@ let betree_list_1_pop_front_back
   end
 
 (** [betree_main::betree::List::{1}::hd] *)
-let betree_list_1_hd_fwd (t : Type0) (self : betree_list_t t) : result t =
+let betree_list_hd_fwd (t : Type0) (self : betree_list_t t) : result t =
   begin match self with
   | BetreeListCons hd l -> Return hd
   | BetreeListNil -> Fail
   end
 
 (** [betree_main::betree::List::{2}::head_has_key] *)
-let betree_list_2_head_has_key_fwd
+let betree_list_head_has_key_fwd
   (t : Type0) (self : betree_list_t (u64 & t)) (key : u64) : result bool =
   begin match self with
   | BetreeListCons hd l -> let (i, _) = hd in Return (i = key)
@@ -194,10 +193,10 @@ let betree_list_2_head_has_key_fwd
   end
 
 (** [betree_main::betree::List::{2}::partition_at_pivot] *)
-let rec betree_list_2_partition_at_pivot_fwd
+let rec betree_list_partition_at_pivot_fwd
   (t : Type0) (self : betree_list_t (u64 & t)) (pivot : u64) :
   Tot (result ((betree_list_t (u64 & t)) & (betree_list_t (u64 & t))))
-  (decreases (betree_list_2_partition_at_pivot_decreases t self pivot))
+  (decreases (betree_list_partition_at_pivot_decreases t self pivot))
   =
   begin match self with
   | BetreeListCons hd tl ->
@@ -205,7 +204,7 @@ let rec betree_list_2_partition_at_pivot_fwd
     if i >= pivot
     then Return (BetreeListNil, BetreeListCons (i, x) tl)
     else
-      begin match betree_list_2_partition_at_pivot_fwd t tl pivot with
+      begin match betree_list_partition_at_pivot_fwd t tl pivot with
       | Fail -> Fail
       | Return p ->
         let (ls0, ls1) = p in
@@ -215,19 +214,19 @@ let rec betree_list_2_partition_at_pivot_fwd
   end
 
 (** [betree_main::betree::Leaf::{3}::split] *)
-let betree_leaf_3_split_fwd
+let betree_leaf_split_fwd
   (self : betree_leaf_t) (content : betree_list_t (u64 & u64))
   (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
   (st : state) :
   result (state & betree_internal_t)
   =
   begin match
-    betree_list_1_split_at_fwd (u64 & u64) content
+    betree_list_split_at_fwd (u64 & u64) content
       params.betree_params_split_size with
   | Fail -> Fail
   | Return p ->
     let (content0, content1) = p in
-    begin match betree_list_1_hd_fwd (u64 & u64) content1 with
+    begin match betree_list_hd_fwd (u64 & u64) content1 with
     | Fail -> Fail
     | Return p0 ->
       let (pivot, _) = p0 in
@@ -266,19 +265,19 @@ let betree_leaf_3_split_fwd
   end
 
 (** [betree_main::betree::Leaf::{3}::split] *)
-let betree_leaf_3_split_back
+let betree_leaf_split_back
   (self : betree_leaf_t) (content : betree_list_t (u64 & u64))
   (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
   (st : state) :
   result betree_node_id_counter_t
   =
   begin match
-    betree_list_1_split_at_fwd (u64 & u64) content
+    betree_list_split_at_fwd (u64 & u64) content
       params.betree_params_split_size with
   | Fail -> Fail
   | Return p ->
     let (content0, content1) = p in
-    begin match betree_list_1_hd_fwd (u64 & u64) content1 with
+    begin match betree_list_hd_fwd (u64 & u64) content1 with
     | Fail -> Fail
     | Return _ ->
       begin match betree_node_id_counter_fresh_id_fwd node_id_cnt with
@@ -310,10 +309,10 @@ let betree_leaf_3_split_back
   end
 
 (** [betree_main::betree::Node::{5}::lookup_in_bindings] *)
-let rec betree_node_5_lookup_in_bindings_fwd
+let rec betree_node_lookup_in_bindings_fwd
   (key : u64) (bindings : betree_list_t (u64 & u64)) :
   Tot (result (option u64))
-  (decreases (betree_node_5_lookup_in_bindings_decreases key bindings))
+  (decreases (betree_node_lookup_in_bindings_decreases key bindings))
   =
   begin match bindings with
   | BetreeListCons hd tl ->
@@ -324,7 +323,7 @@ let rec betree_node_5_lookup_in_bindings_fwd
       if i > key
       then Return None
       else
-        begin match betree_node_5_lookup_in_bindings_fwd key tl with
+        begin match betree_node_lookup_in_bindings_fwd key tl with
         | Fail -> Fail
         | Return opt -> Return opt
         end
@@ -332,10 +331,10 @@ let rec betree_node_5_lookup_in_bindings_fwd
   end
 
 (** [betree_main::betree::Node::{5}::lookup_first_message_for_key] *)
-let rec betree_node_5_lookup_first_message_for_key_fwd
+let rec betree_node_lookup_first_message_for_key_fwd
   (key : u64) (msgs : betree_list_t (u64 & betree_message_t)) :
   Tot (result (betree_list_t (u64 & betree_message_t)))
-  (decreases (betree_node_5_lookup_first_message_for_key_decreases key msgs))
+  (decreases (betree_node_lookup_first_message_for_key_decreases key msgs))
   =
   begin match msgs with
   | BetreeListCons x next_msgs ->
@@ -343,7 +342,7 @@ let rec betree_node_5_lookup_first_message_for_key_fwd
     if i >= key
     then Return (BetreeListCons (i, m) next_msgs)
     else
-      begin match betree_node_5_lookup_first_message_for_key_fwd key next_msgs
+      begin match betree_node_lookup_first_message_for_key_fwd key next_msgs
         with
       | Fail -> Fail
       | Return l -> Return l
@@ -352,11 +351,11 @@ let rec betree_node_5_lookup_first_message_for_key_fwd
   end
 
 (** [betree_main::betree::Node::{5}::lookup_first_message_for_key] *)
-let rec betree_node_5_lookup_first_message_for_key_back
+let rec betree_node_lookup_first_message_for_key_back
   (key : u64) (msgs : betree_list_t (u64 & betree_message_t))
   (ret : betree_list_t (u64 & betree_message_t)) :
   Tot (result (betree_list_t (u64 & betree_message_t)))
-  (decreases (betree_node_5_lookup_first_message_for_key_decreases key msgs))
+  (decreases (betree_node_lookup_first_message_for_key_decreases key msgs))
   =
   begin match msgs with
   | BetreeListCons x next_msgs ->
@@ -365,7 +364,7 @@ let rec betree_node_5_lookup_first_message_for_key_back
     then Return ret
     else
       begin match
-        betree_node_5_lookup_first_message_for_key_back key next_msgs ret with
+        betree_node_lookup_first_message_for_key_back key next_msgs ret with
       | Fail -> Fail
       | Return next_msgs0 -> Return (BetreeListCons (i, m) next_msgs0)
       end
@@ -373,19 +372,18 @@ let rec betree_node_5_lookup_first_message_for_key_back
   end
 
 (** [betree_main::betree::Node::{5}::apply_upserts] *)
-let rec betree_node_5_apply_upserts_fwd
+let rec betree_node_apply_upserts_fwd
   (msgs : betree_list_t (u64 & betree_message_t)) (prev : option u64)
   (key : u64) (st : state) :
   Tot (result (state & u64))
-  (decreases (betree_node_5_apply_upserts_decreases msgs prev key st))
+  (decreases (betree_node_apply_upserts_decreases msgs prev key st))
   =
-  begin match betree_list_2_head_has_key_fwd betree_message_t msgs key with
+  begin match betree_list_head_has_key_fwd betree_message_t msgs key with
   | Fail -> Fail
   | Return b ->
     if b
     then
-      begin match betree_list_1_pop_front_fwd (u64 & betree_message_t) msgs
-        with
+      begin match betree_list_pop_front_fwd (u64 & betree_message_t) msgs with
       | Fail -> Fail
       | Return msg ->
         let (_, m) = msg in
@@ -397,10 +395,10 @@ let rec betree_node_5_apply_upserts_fwd
           | Fail -> Fail
           | Return v ->
             begin match
-              betree_list_1_pop_front_back (u64 & betree_message_t) msgs with
+              betree_list_pop_front_back (u64 & betree_message_t) msgs with
             | Fail -> Fail
             | Return msgs0 ->
-              begin match betree_node_5_apply_upserts_fwd msgs0 (Some v) key st
+              begin match betree_node_apply_upserts_fwd msgs0 (Some v) key st
                 with
               | Fail -> Fail
               | Return (st0, i) -> Return (st0, i)
@@ -414,7 +412,7 @@ let rec betree_node_5_apply_upserts_fwd
       | Fail -> Fail
       | Return (st0, v) ->
         begin match
-          betree_list_1_push_front_fwd_back (u64 & betree_message_t) msgs (key,
+          betree_list_push_front_fwd_back (u64 & betree_message_t) msgs (key,
             BetreeMessageInsert v) with
         | Fail -> Fail
         | Return _ -> Return (st0, v)
@@ -423,19 +421,18 @@ let rec betree_node_5_apply_upserts_fwd
   end
 
 (** [betree_main::betree::Node::{5}::apply_upserts] *)
-let rec betree_node_5_apply_upserts_back
+let rec betree_node_apply_upserts_back
   (msgs : betree_list_t (u64 & betree_message_t)) (prev : option u64)
   (key : u64) (st : state) :
   Tot (result (betree_list_t (u64 & betree_message_t)))
-  (decreases (betree_node_5_apply_upserts_decreases msgs prev key st))
+  (decreases (betree_node_apply_upserts_decreases msgs prev key st))
   =
-  begin match betree_list_2_head_has_key_fwd betree_message_t msgs key with
+  begin match betree_list_head_has_key_fwd betree_message_t msgs key with
   | Fail -> Fail
   | Return b ->
     if b
     then
-      begin match betree_list_1_pop_front_fwd (u64 & betree_message_t) msgs
-        with
+      begin match betree_list_pop_front_fwd (u64 & betree_message_t) msgs with
       | Fail -> Fail
       | Return msg ->
         let (_, m) = msg in
@@ -447,11 +444,11 @@ let rec betree_node_5_apply_upserts_back
           | Fail -> Fail
           | Return v ->
             begin match
-              betree_list_1_pop_front_back (u64 & betree_message_t) msgs with
+              betree_list_pop_front_back (u64 & betree_message_t) msgs with
             | Fail -> Fail
             | Return msgs0 ->
-              begin match
-                betree_node_5_apply_upserts_back msgs0 (Some v) key st with
+              begin match betree_node_apply_upserts_back msgs0 (Some v) key st
+                with
               | Fail -> Fail
               | Return msgs1 -> Return msgs1
               end
@@ -464,7 +461,7 @@ let rec betree_node_5_apply_upserts_back
       | Fail -> Fail
       | Return (_, v) ->
         begin match
-          betree_list_1_push_front_fwd_back (u64 & betree_message_t) msgs (key,
+          betree_list_push_front_fwd_back (u64 & betree_message_t) msgs (key,
             BetreeMessageInsert v) with
         | Fail -> Fail
         | Return msgs0 -> Return msgs0
@@ -473,40 +470,39 @@ let rec betree_node_5_apply_upserts_back
   end
 
 (** [betree_main::betree::Internal::{4}::lookup_in_children] *)
-let rec betree_internal_4_lookup_in_children_fwd
+let rec betree_internal_lookup_in_children_fwd
   (self : betree_internal_t) (key : u64) (st : state) :
   Tot (result (state & (option u64)))
-  (decreases (betree_internal_4_lookup_in_children_decreases self key st))
+  (decreases (betree_internal_lookup_in_children_decreases self key st))
   =
   if key < self.betree_internal_pivot
   then
-    begin match betree_node_5_lookup_fwd self.betree_internal_left key st with
+    begin match betree_node_lookup_fwd self.betree_internal_left key st with
     | Fail -> Fail
     | Return (st0, opt) -> Return (st0, opt)
     end
   else
-    begin match betree_node_5_lookup_fwd self.betree_internal_right key st with
+    begin match betree_node_lookup_fwd self.betree_internal_right key st with
     | Fail -> Fail
     | Return (st0, opt) -> Return (st0, opt)
     end
 
 (** [betree_main::betree::Internal::{4}::lookup_in_children] *)
-and betree_internal_4_lookup_in_children_back
+and betree_internal_lookup_in_children_back
   (self : betree_internal_t) (key : u64) (st : state) :
   Tot (result betree_internal_t)
-  (decreases (betree_internal_4_lookup_in_children_decreases self key st))
+  (decreases (betree_internal_lookup_in_children_decreases self key st))
   =
   if key < self.betree_internal_pivot
   then
-    begin match betree_node_5_lookup_back self.betree_internal_left key st with
+    begin match betree_node_lookup_back self.betree_internal_left key st with
     | Fail -> Fail
     | Return n ->
       Return (Mkbetree_internal_t self.betree_internal_id
         self.betree_internal_pivot n self.betree_internal_right)
     end
   else
-    begin match betree_node_5_lookup_back self.betree_internal_right key st
-      with
+    begin match betree_node_lookup_back self.betree_internal_right key st with
     | Fail -> Fail
     | Return n ->
       Return (Mkbetree_internal_t self.betree_internal_id
@@ -514,17 +510,17 @@ and betree_internal_4_lookup_in_children_back
     end
 
 (** [betree_main::betree::Node::{5}::lookup] *)
-and betree_node_5_lookup_fwd
+and betree_node_lookup_fwd
   (self : betree_node_t) (key : u64) (st : state) :
   Tot (result (state & (option u64)))
-  (decreases (betree_node_5_lookup_decreases self key st))
+  (decreases (betree_node_lookup_decreases self key st))
   =
   begin match self with
   | BetreeNodeInternal node ->
     begin match betree_load_internal_node_fwd node.betree_internal_id st with
     | Fail -> Fail
     | Return (st0, msgs) ->
-      begin match betree_node_5_lookup_first_message_for_key_fwd key msgs with
+      begin match betree_node_lookup_first_message_for_key_fwd key msgs with
       | Fail -> Fail
       | Return pending ->
         begin match pending with
@@ -533,14 +529,14 @@ and betree_node_5_lookup_fwd
           if k <> key
           then
             begin match
-              betree_internal_4_lookup_in_children_fwd (Mkbetree_internal_t
+              betree_internal_lookup_in_children_fwd (Mkbetree_internal_t
                 node.betree_internal_id node.betree_internal_pivot
                 node.betree_internal_left node.betree_internal_right) key st0
               with
             | Fail -> Fail
             | Return (st1, opt) ->
               begin match
-                betree_node_5_lookup_first_message_for_key_back key msgs
+                betree_node_lookup_first_message_for_key_back key msgs
                   (BetreeListCons (k, msg) l) with
               | Fail -> Fail
               | Return _ -> Return (st1, opt)
@@ -550,46 +546,46 @@ and betree_node_5_lookup_fwd
             begin match msg with
             | BetreeMessageInsert v ->
               begin match
-                betree_node_5_lookup_first_message_for_key_back key msgs
+                betree_node_lookup_first_message_for_key_back key msgs
                   (BetreeListCons (k, BetreeMessageInsert v) l) with
               | Fail -> Fail
               | Return _ -> Return (st0, Some v)
               end
             | BetreeMessageDelete ->
               begin match
-                betree_node_5_lookup_first_message_for_key_back key msgs
+                betree_node_lookup_first_message_for_key_back key msgs
                   (BetreeListCons (k, BetreeMessageDelete) l) with
               | Fail -> Fail
               | Return _ -> Return (st0, None)
               end
             | BetreeMessageUpsert ufs ->
               begin match
-                betree_internal_4_lookup_in_children_fwd (Mkbetree_internal_t
+                betree_internal_lookup_in_children_fwd (Mkbetree_internal_t
                   node.betree_internal_id node.betree_internal_pivot
                   node.betree_internal_left node.betree_internal_right) key st0
                 with
               | Fail -> Fail
               | Return (st1, v) ->
                 begin match
-                  betree_node_5_apply_upserts_fwd (BetreeListCons (k,
+                  betree_node_apply_upserts_fwd (BetreeListCons (k,
                     BetreeMessageUpsert ufs) l) v key st1 with
                 | Fail -> Fail
                 | Return (st2, v0) ->
                   begin match
-                    betree_internal_4_lookup_in_children_back
+                    betree_internal_lookup_in_children_back
                       (Mkbetree_internal_t node.betree_internal_id
                       node.betree_internal_pivot node.betree_internal_left
                       node.betree_internal_right) key st0 with
                   | Fail -> Fail
                   | Return node0 ->
                     begin match
-                      betree_node_5_apply_upserts_back (BetreeListCons (k,
+                      betree_node_apply_upserts_back (BetreeListCons (k,
                         BetreeMessageUpsert ufs) l) v key st1 with
                     | Fail -> Fail
                     | Return pending0 ->
                       begin match
-                        betree_node_5_lookup_first_message_for_key_back key
-                          msgs pending0 with
+                        betree_node_lookup_first_message_for_key_back key msgs
+                          pending0 with
                       | Fail -> Fail
                       | Return msgs0 ->
                         begin match
@@ -606,14 +602,14 @@ and betree_node_5_lookup_fwd
             end
         | BetreeListNil ->
           begin match
-            betree_internal_4_lookup_in_children_fwd (Mkbetree_internal_t
+            betree_internal_lookup_in_children_fwd (Mkbetree_internal_t
               node.betree_internal_id node.betree_internal_pivot
               node.betree_internal_left node.betree_internal_right) key st0
             with
           | Fail -> Fail
           | Return (st1, opt) ->
             begin match
-              betree_node_5_lookup_first_message_for_key_back key msgs
+              betree_node_lookup_first_message_for_key_back key msgs
                 BetreeListNil with
             | Fail -> Fail
             | Return _ -> Return (st1, opt)
@@ -626,7 +622,7 @@ and betree_node_5_lookup_fwd
     begin match betree_load_leaf_node_fwd node.betree_leaf_id st with
     | Fail -> Fail
     | Return (st0, bindings) ->
-      begin match betree_node_5_lookup_in_bindings_fwd key bindings with
+      begin match betree_node_lookup_in_bindings_fwd key bindings with
       | Fail -> Fail
       | Return opt -> Return (st0, opt)
       end
@@ -634,17 +630,17 @@ and betree_node_5_lookup_fwd
   end
 
 (** [betree_main::betree::Node::{5}::lookup] *)
-and betree_node_5_lookup_back
+and betree_node_lookup_back
   (self : betree_node_t) (key : u64) (st : state) :
   Tot (result betree_node_t)
-  (decreases (betree_node_5_lookup_decreases self key st))
+  (decreases (betree_node_lookup_decreases self key st))
   =
   begin match self with
   | BetreeNodeInternal node ->
     begin match betree_load_internal_node_fwd node.betree_internal_id st with
     | Fail -> Fail
     | Return (st0, msgs) ->
-      begin match betree_node_5_lookup_first_message_for_key_fwd key msgs with
+      begin match betree_node_lookup_first_message_for_key_fwd key msgs with
       | Fail -> Fail
       | Return pending ->
         begin match pending with
@@ -653,12 +649,12 @@ and betree_node_5_lookup_back
           if k <> key
           then
             begin match
-              betree_node_5_lookup_first_message_for_key_back key msgs
+              betree_node_lookup_first_message_for_key_back key msgs
                 (BetreeListCons (k, msg) l) with
             | Fail -> Fail
             | Return _ ->
               begin match
-                betree_internal_4_lookup_in_children_back (Mkbetree_internal_t
+                betree_internal_lookup_in_children_back (Mkbetree_internal_t
                   node.betree_internal_id node.betree_internal_pivot
                   node.betree_internal_left node.betree_internal_right) key st0
                 with
@@ -670,7 +666,7 @@ and betree_node_5_lookup_back
             begin match msg with
             | BetreeMessageInsert v ->
               begin match
-                betree_node_5_lookup_first_message_for_key_back key msgs
+                betree_node_lookup_first_message_for_key_back key msgs
                   (BetreeListCons (k, BetreeMessageInsert v) l) with
               | Fail -> Fail
               | Return _ ->
@@ -680,7 +676,7 @@ and betree_node_5_lookup_back
               end
             | BetreeMessageDelete ->
               begin match
-                betree_node_5_lookup_first_message_for_key_back key msgs
+                betree_node_lookup_first_message_for_key_back key msgs
                   (BetreeListCons (k, BetreeMessageDelete) l) with
               | Fail -> Fail
               | Return _ ->
@@ -690,32 +686,32 @@ and betree_node_5_lookup_back
               end
             | BetreeMessageUpsert ufs ->
               begin match
-                betree_internal_4_lookup_in_children_fwd (Mkbetree_internal_t
+                betree_internal_lookup_in_children_fwd (Mkbetree_internal_t
                   node.betree_internal_id node.betree_internal_pivot
                   node.betree_internal_left node.betree_internal_right) key st0
                 with
               | Fail -> Fail
               | Return (st1, v) ->
                 begin match
-                  betree_node_5_apply_upserts_fwd (BetreeListCons (k,
+                  betree_node_apply_upserts_fwd (BetreeListCons (k,
                     BetreeMessageUpsert ufs) l) v key st1 with
                 | Fail -> Fail
                 | Return (st2, _) ->
                   begin match
-                    betree_internal_4_lookup_in_children_back
+                    betree_internal_lookup_in_children_back
                       (Mkbetree_internal_t node.betree_internal_id
                       node.betree_internal_pivot node.betree_internal_left
                       node.betree_internal_right) key st0 with
                   | Fail -> Fail
                   | Return node0 ->
                     begin match
-                      betree_node_5_apply_upserts_back (BetreeListCons (k,
+                      betree_node_apply_upserts_back (BetreeListCons (k,
                         BetreeMessageUpsert ufs) l) v key st1 with
                     | Fail -> Fail
                     | Return pending0 ->
                       begin match
-                        betree_node_5_lookup_first_message_for_key_back key
-                          msgs pending0 with
+                        betree_node_lookup_first_message_for_key_back key msgs
+                          pending0 with
                       | Fail -> Fail
                       | Return msgs0 ->
                         begin match
@@ -737,12 +733,12 @@ and betree_node_5_lookup_back
             end
         | BetreeListNil ->
           begin match
-            betree_node_5_lookup_first_message_for_key_back key msgs
+            betree_node_lookup_first_message_for_key_back key msgs
               BetreeListNil with
           | Fail -> Fail
           | Return _ ->
             begin match
-              betree_internal_4_lookup_in_children_back (Mkbetree_internal_t
+              betree_internal_lookup_in_children_back (Mkbetree_internal_t
                 node.betree_internal_id node.betree_internal_pivot
                 node.betree_internal_left node.betree_internal_right) key st0
               with
@@ -757,7 +753,7 @@ and betree_node_5_lookup_back
     begin match betree_load_leaf_node_fwd node.betree_leaf_id st with
     | Fail -> Fail
     | Return (_, bindings) ->
-      begin match betree_node_5_lookup_in_bindings_fwd key bindings with
+      begin match betree_node_lookup_in_bindings_fwd key bindings with
       | Fail -> Fail
       | Return _ ->
         Return (BetreeNodeLeaf (Mkbetree_leaf_t node.betree_leaf_id
@@ -767,10 +763,10 @@ and betree_node_5_lookup_back
   end
 
 (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings] *)
-let rec betree_node_5_lookup_mut_in_bindings_fwd
+let rec betree_node_lookup_mut_in_bindings_fwd
   (key : u64) (bindings : betree_list_t (u64 & u64)) :
   Tot (result (betree_list_t (u64 & u64)))
-  (decreases (betree_node_5_lookup_mut_in_bindings_decreases key bindings))
+  (decreases (betree_node_lookup_mut_in_bindings_decreases key bindings))
   =
   begin match bindings with
   | BetreeListCons hd tl ->
@@ -778,7 +774,7 @@ let rec betree_node_5_lookup_mut_in_bindings_fwd
     if i >= key
     then Return (BetreeListCons (i, i0) tl)
     else
-      begin match betree_node_5_lookup_mut_in_bindings_fwd key tl with
+      begin match betree_node_lookup_mut_in_bindings_fwd key tl with
       | Fail -> Fail
       | Return l -> Return l
       end
@@ -786,11 +782,11 @@ let rec betree_node_5_lookup_mut_in_bindings_fwd
   end
 
 (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings] *)
-let rec betree_node_5_lookup_mut_in_bindings_back
+let rec betree_node_lookup_mut_in_bindings_back
   (key : u64) (bindings : betree_list_t (u64 & u64))
   (ret : betree_list_t (u64 & u64)) :
   Tot (result (betree_list_t (u64 & u64)))
-  (decreases (betree_node_5_lookup_mut_in_bindings_decreases key bindings))
+  (decreases (betree_node_lookup_mut_in_bindings_decreases key bindings))
   =
   begin match bindings with
   | BetreeListCons hd tl ->
@@ -798,7 +794,7 @@ let rec betree_node_5_lookup_mut_in_bindings_back
     if i >= key
     then Return ret
     else
-      begin match betree_node_5_lookup_mut_in_bindings_back key tl ret with
+      begin match betree_node_lookup_mut_in_bindings_back key tl ret with
       | Fail -> Fail
       | Return tl0 -> Return (BetreeListCons (i, i0) tl0)
       end
@@ -806,34 +802,34 @@ let rec betree_node_5_lookup_mut_in_bindings_back
   end
 
 (** [betree_main::betree::Node::{5}::apply_to_leaf] *)
-let betree_node_5_apply_to_leaf_fwd_back
+let betree_node_apply_to_leaf_fwd_back
   (bindings : betree_list_t (u64 & u64)) (key : u64)
   (new_msg : betree_message_t) :
   result (betree_list_t (u64 & u64))
   =
-  begin match betree_node_5_lookup_mut_in_bindings_fwd key bindings with
+  begin match betree_node_lookup_mut_in_bindings_fwd key bindings with
   | Fail -> Fail
   | Return bindings0 ->
-    begin match betree_list_2_head_has_key_fwd u64 bindings0 key with
+    begin match betree_list_head_has_key_fwd u64 bindings0 key with
     | Fail -> Fail
     | Return b ->
       if b
       then
-        begin match betree_list_1_pop_front_fwd (u64 & u64) bindings0 with
+        begin match betree_list_pop_front_fwd (u64 & u64) bindings0 with
         | Fail -> Fail
         | Return hd ->
           begin match new_msg with
           | BetreeMessageInsert v ->
-            begin match betree_list_1_pop_front_back (u64 & u64) bindings0 with
+            begin match betree_list_pop_front_back (u64 & u64) bindings0 with
             | Fail -> Fail
             | Return bindings1 ->
               begin match
-                betree_list_1_push_front_fwd_back (u64 & u64) bindings1 (key,
-                  v) with
+                betree_list_push_front_fwd_back (u64 & u64) bindings1 (key, v)
+                with
               | Fail -> Fail
               | Return bindings2 ->
                 begin match
-                  betree_node_5_lookup_mut_in_bindings_back key bindings
+                  betree_node_lookup_mut_in_bindings_back key bindings
                     bindings2 with
                 | Fail -> Fail
                 | Return bindings3 -> Return bindings3
@@ -841,12 +837,12 @@ let betree_node_5_apply_to_leaf_fwd_back
               end
             end
           | BetreeMessageDelete ->
-            begin match betree_list_1_pop_front_back (u64 & u64) bindings0 with
+            begin match betree_list_pop_front_back (u64 & u64) bindings0 with
             | Fail -> Fail
             | Return bindings1 ->
               begin match
-                betree_node_5_lookup_mut_in_bindings_back key bindings
-                  bindings1 with
+                betree_node_lookup_mut_in_bindings_back key bindings bindings1
+                with
               | Fail -> Fail
               | Return bindings2 -> Return bindings2
               end
@@ -856,17 +852,16 @@ let betree_node_5_apply_to_leaf_fwd_back
             begin match betree_upsert_update_fwd (Some i) s with
             | Fail -> Fail
             | Return v ->
-              begin match betree_list_1_pop_front_back (u64 & u64) bindings0
-                with
+              begin match betree_list_pop_front_back (u64 & u64) bindings0 with
               | Fail -> Fail
               | Return bindings1 ->
                 begin match
-                  betree_list_1_push_front_fwd_back (u64 & u64) bindings1 (key,
+                  betree_list_push_front_fwd_back (u64 & u64) bindings1 (key,
                     v) with
                 | Fail -> Fail
                 | Return bindings2 ->
                   begin match
-                    betree_node_5_lookup_mut_in_bindings_back key bindings
+                    betree_node_lookup_mut_in_bindings_back key bindings
                       bindings2 with
                   | Fail -> Fail
                   | Return bindings3 -> Return bindings3
@@ -880,12 +875,11 @@ let betree_node_5_apply_to_leaf_fwd_back
         begin match new_msg with
         | BetreeMessageInsert v ->
           begin match
-            betree_list_1_push_front_fwd_back (u64 & u64) bindings0 (key, v)
-            with
+            betree_list_push_front_fwd_back (u64 & u64) bindings0 (key, v) with
           | Fail -> Fail
           | Return bindings1 ->
             begin match
-              betree_node_5_lookup_mut_in_bindings_back key bindings bindings1
+              betree_node_lookup_mut_in_bindings_back key bindings bindings1
               with
             | Fail -> Fail
             | Return bindings2 -> Return bindings2
@@ -893,8 +887,7 @@ let betree_node_5_apply_to_leaf_fwd_back
           end
         | BetreeMessageDelete ->
           begin match
-            betree_node_5_lookup_mut_in_bindings_back key bindings bindings0
-            with
+            betree_node_lookup_mut_in_bindings_back key bindings bindings0 with
           | Fail -> Fail
           | Return bindings1 -> Return bindings1
           end
@@ -903,13 +896,13 @@ let betree_node_5_apply_to_leaf_fwd_back
           | Fail -> Fail
           | Return v ->
             begin match
-              betree_list_1_push_front_fwd_back (u64 & u64) bindings0 (key, v)
+              betree_list_push_front_fwd_back (u64 & u64) bindings0 (key, v)
               with
             | Fail -> Fail
             | Return bindings1 ->
               begin match
-                betree_node_5_lookup_mut_in_bindings_back key bindings
-                  bindings1 with
+                betree_node_lookup_mut_in_bindings_back key bindings bindings1
+                with
               | Fail -> Fail
               | Return bindings2 -> Return bindings2
               end
@@ -919,11 +912,33 @@ let betree_node_5_apply_to_leaf_fwd_back
     end
   end
 
+(** [betree_main::betree::Node::{5}::apply_messages_to_leaf] *)
+let rec betree_node_apply_messages_to_leaf_fwd_back
+  (bindings : betree_list_t (u64 & u64))
+  (new_msgs : betree_list_t (u64 & betree_message_t)) :
+  Tot (result (betree_list_t (u64 & u64)))
+  (decreases (betree_node_apply_messages_to_leaf_decreases bindings new_msgs))
+  =
+  begin match new_msgs with
+  | BetreeListCons new_msg new_msgs_tl ->
+    let (i, m) = new_msg in
+    begin match betree_node_apply_to_leaf_fwd_back bindings i m with
+    | Fail -> Fail
+    | Return bindings0 ->
+      begin match
+        betree_node_apply_messages_to_leaf_fwd_back bindings0 new_msgs_tl with
+      | Fail -> Fail
+      | Return bindings1 -> Return bindings1
+      end
+    end
+  | BetreeListNil -> Return bindings
+  end
+
 (** [betree_main::betree::Node::{5}::filter_messages_for_key] *)
-let rec betree_node_5_filter_messages_for_key_fwd_back
+let rec betree_node_filter_messages_for_key_fwd_back
   (key : u64) (msgs : betree_list_t (u64 & betree_message_t)) :
   Tot (result (betree_list_t (u64 & betree_message_t)))
-  (decreases (betree_node_5_filter_messages_for_key_decreases key msgs))
+  (decreases (betree_node_filter_messages_for_key_decreases key msgs))
   =
   begin match msgs with
   | BetreeListCons p l ->
@@ -931,12 +946,11 @@ let rec betree_node_5_filter_messages_for_key_fwd_back
     if k = key
     then
       begin match
-        betree_list_1_pop_front_back (u64 & betree_message_t) (BetreeListCons
-          (k, m) l) with
+        betree_list_pop_front_back (u64 & betree_message_t) (BetreeListCons (k,
+          m) l) with
       | Fail -> Fail
       | Return msgs0 ->
-        begin match betree_node_5_filter_messages_for_key_fwd_back key msgs0
-          with
+        begin match betree_node_filter_messages_for_key_fwd_back key msgs0 with
         | Fail -> Fail
         | Return msgs1 -> Return msgs1
         end
@@ -946,18 +960,18 @@ let rec betree_node_5_filter_messages_for_key_fwd_back
   end
 
 (** [betree_main::betree::Node::{5}::lookup_first_message_after_key] *)
-let rec betree_node_5_lookup_first_message_after_key_fwd
+let rec betree_node_lookup_first_message_after_key_fwd
   (key : u64) (msgs : betree_list_t (u64 & betree_message_t)) :
   Tot (result (betree_list_t (u64 & betree_message_t)))
-  (decreases (betree_node_5_lookup_first_message_after_key_decreases key msgs))
+  (decreases (betree_node_lookup_first_message_after_key_decreases key msgs))
   =
   begin match msgs with
   | BetreeListCons p next_msgs ->
     let (k, m) = p in
     if k = key
     then
-      begin match
-        betree_node_5_lookup_first_message_after_key_fwd key next_msgs with
+      begin match betree_node_lookup_first_message_after_key_fwd key next_msgs
+        with
       | Fail -> Fail
       | Return l -> Return l
       end
@@ -966,11 +980,11 @@ let rec betree_node_5_lookup_first_message_after_key_fwd
   end
 
 (** [betree_main::betree::Node::{5}::lookup_first_message_after_key] *)
-let rec betree_node_5_lookup_first_message_after_key_back
+let rec betree_node_lookup_first_message_after_key_back
   (key : u64) (msgs : betree_list_t (u64 & betree_message_t))
   (ret : betree_list_t (u64 & betree_message_t)) :
   Tot (result (betree_list_t (u64 & betree_message_t)))
-  (decreases (betree_node_5_lookup_first_message_after_key_decreases key msgs))
+  (decreases (betree_node_lookup_first_message_after_key_decreases key msgs))
   =
   begin match msgs with
   | BetreeListCons p next_msgs ->
@@ -978,8 +992,7 @@ let rec betree_node_5_lookup_first_message_after_key_back
     if k = key
     then
       begin match
-        betree_node_5_lookup_first_message_after_key_back key next_msgs ret
-        with
+        betree_node_lookup_first_message_after_key_back key next_msgs ret with
       | Fail -> Fail
       | Return next_msgs0 -> Return (BetreeListCons (k, m) next_msgs0)
       end
@@ -988,32 +1001,32 @@ let rec betree_node_5_lookup_first_message_after_key_back
   end
 
 (** [betree_main::betree::Node::{5}::apply_to_internal] *)
-let betree_node_5_apply_to_internal_fwd_back
+let betree_node_apply_to_internal_fwd_back
   (msgs : betree_list_t (u64 & betree_message_t)) (key : u64)
   (new_msg : betree_message_t) :
   result (betree_list_t (u64 & betree_message_t))
   =
-  begin match betree_node_5_lookup_first_message_for_key_fwd key msgs with
+  begin match betree_node_lookup_first_message_for_key_fwd key msgs with
   | Fail -> Fail
   | Return msgs0 ->
-    begin match betree_list_2_head_has_key_fwd betree_message_t msgs0 key with
+    begin match betree_list_head_has_key_fwd betree_message_t msgs0 key with
     | Fail -> Fail
     | Return b ->
       if b
       then
         begin match new_msg with
         | BetreeMessageInsert i ->
-          begin match betree_node_5_filter_messages_for_key_fwd_back key msgs0
+          begin match betree_node_filter_messages_for_key_fwd_back key msgs0
             with
           | Fail -> Fail
           | Return msgs1 ->
             begin match
-              betree_list_1_push_front_fwd_back (u64 & betree_message_t) msgs1
+              betree_list_push_front_fwd_back (u64 & betree_message_t) msgs1
                 (key, BetreeMessageInsert i) with
             | Fail -> Fail
             | Return msgs2 ->
               begin match
-                betree_node_5_lookup_first_message_for_key_back key msgs msgs2
+                betree_node_lookup_first_message_for_key_back key msgs msgs2
                 with
               | Fail -> Fail
               | Return msgs3 -> Return msgs3
@@ -1021,17 +1034,17 @@ let betree_node_5_apply_to_internal_fwd_back
             end
           end
         | BetreeMessageDelete ->
-          begin match betree_node_5_filter_messages_for_key_fwd_back key msgs0
+          begin match betree_node_filter_messages_for_key_fwd_back key msgs0
             with
           | Fail -> Fail
           | Return msgs1 ->
             begin match
-              betree_list_1_push_front_fwd_back (u64 & betree_message_t) msgs1
+              betree_list_push_front_fwd_back (u64 & betree_message_t) msgs1
                 (key, BetreeMessageDelete) with
             | Fail -> Fail
             | Return msgs2 ->
               begin match
-                betree_node_5_lookup_first_message_for_key_back key msgs msgs2
+                betree_node_lookup_first_message_for_key_back key msgs msgs2
                 with
               | Fail -> Fail
               | Return msgs3 -> Return msgs3
@@ -1039,7 +1052,7 @@ let betree_node_5_apply_to_internal_fwd_back
             end
           end
         | BetreeMessageUpsert s ->
-          begin match betree_list_1_hd_fwd (u64 & betree_message_t) msgs0 with
+          begin match betree_list_hd_fwd (u64 & betree_message_t) msgs0 with
           | Fail -> Fail
           | Return p ->
             let (_, m) = p in
@@ -1049,17 +1062,17 @@ let betree_node_5_apply_to_internal_fwd_back
               | Fail -> Fail
               | Return v ->
                 begin match
-                  betree_list_1_pop_front_back (u64 & betree_message_t) msgs0
+                  betree_list_pop_front_back (u64 & betree_message_t) msgs0
                   with
                 | Fail -> Fail
                 | Return msgs1 ->
                   begin match
-                    betree_list_1_push_front_fwd_back (u64 & betree_message_t)
+                    betree_list_push_front_fwd_back (u64 & betree_message_t)
                       msgs1 (key, BetreeMessageInsert v) with
                   | Fail -> Fail
                   | Return msgs2 ->
                     begin match
-                      betree_node_5_lookup_first_message_for_key_back key msgs
+                      betree_node_lookup_first_message_for_key_back key msgs
                         msgs2 with
                     | Fail -> Fail
                     | Return msgs3 -> Return msgs3
@@ -1072,17 +1085,17 @@ let betree_node_5_apply_to_internal_fwd_back
               | Fail -> Fail
               | Return v ->
                 begin match
-                  betree_list_1_pop_front_back (u64 & betree_message_t) msgs0
+                  betree_list_pop_front_back (u64 & betree_message_t) msgs0
                   with
                 | Fail -> Fail
                 | Return msgs1 ->
                   begin match
-                    betree_list_1_push_front_fwd_back (u64 & betree_message_t)
+                    betree_list_push_front_fwd_back (u64 & betree_message_t)
                       msgs1 (key, BetreeMessageInsert v) with
                   | Fail -> Fail
                   | Return msgs2 ->
                     begin match
-                      betree_node_5_lookup_first_message_for_key_back key msgs
+                      betree_node_lookup_first_message_for_key_back key msgs
                         msgs2 with
                     | Fail -> Fail
                     | Return msgs3 -> Return msgs3
@@ -1092,21 +1105,21 @@ let betree_node_5_apply_to_internal_fwd_back
               end
             | BetreeMessageUpsert ufs ->
               begin match
-                betree_node_5_lookup_first_message_after_key_fwd key msgs0 with
+                betree_node_lookup_first_message_after_key_fwd key msgs0 with
               | Fail -> Fail
               | Return msgs1 ->
                 begin match
-                  betree_list_1_push_front_fwd_back (u64 & betree_message_t)
+                  betree_list_push_front_fwd_back (u64 & betree_message_t)
                     msgs1 (key, BetreeMessageUpsert s) with
                 | Fail -> Fail
                 | Return msgs2 ->
                   begin match
-                    betree_node_5_lookup_first_message_after_key_back key msgs0
+                    betree_node_lookup_first_message_after_key_back key msgs0
                       msgs2 with
                   | Fail -> Fail
                   | Return msgs3 ->
                     begin match
-                      betree_node_5_lookup_first_message_for_key_back key msgs
+                      betree_node_lookup_first_message_for_key_back key msgs
                         msgs3 with
                     | Fail -> Fail
                     | Return msgs4 -> Return msgs4
@@ -1119,12 +1132,12 @@ let betree_node_5_apply_to_internal_fwd_back
         end
       else
         begin match
-          betree_list_1_push_front_fwd_back (u64 & betree_message_t) msgs0
-            (key, new_msg) with
+          betree_list_push_front_fwd_back (u64 & betree_message_t) msgs0 (key,
+            new_msg) with
         | Fail -> Fail
         | Return msgs1 ->
           begin match
-            betree_node_5_lookup_first_message_for_key_back key msgs msgs1 with
+            betree_node_lookup_first_message_for_key_back key msgs msgs1 with
           | Fail -> Fail
           | Return msgs2 -> Return msgs2
           end
@@ -1132,51 +1145,72 @@ let betree_node_5_apply_to_internal_fwd_back
     end
   end
 
+(** [betree_main::betree::Node::{5}::apply_messages_to_internal] *)
+let rec betree_node_apply_messages_to_internal_fwd_back
+  (msgs : betree_list_t (u64 & betree_message_t))
+  (new_msgs : betree_list_t (u64 & betree_message_t)) :
+  Tot (result (betree_list_t (u64 & betree_message_t)))
+  (decreases (betree_node_apply_messages_to_internal_decreases msgs new_msgs))
+  =
+  begin match new_msgs with
+  | BetreeListCons new_msg new_msgs_tl ->
+    let (i, m) = new_msg in
+    begin match betree_node_apply_to_internal_fwd_back msgs i m with
+    | Fail -> Fail
+    | Return msgs0 ->
+      begin match
+        betree_node_apply_messages_to_internal_fwd_back msgs0 new_msgs_tl with
+      | Fail -> Fail
+      | Return msgs1 -> Return msgs1
+      end
+    end
+  | BetreeListNil -> Return msgs
+  end
+
 (** [betree_main::betree::Internal::{4}::flush] *)
-let rec betree_internal_4_flush_fwd
+let rec betree_internal_flush_fwd
   (self : betree_internal_t) (params : betree_params_t)
   (node_id_cnt : betree_node_id_counter_t)
   (content : betree_list_t (u64 & betree_message_t)) (st : state) :
   Tot (result (state & (betree_list_t (u64 & betree_message_t))))
-  (decreases (betree_internal_4_flush_decreases self params node_id_cnt content
-  st))
+  (decreases %[betree_internal_size self; 0])
+  //(decreases (betree_internal_flush_decreases self params node_id_cnt content st))
   =
   begin match
-    betree_list_2_partition_at_pivot_fwd betree_message_t content
+    betree_list_partition_at_pivot_fwd betree_message_t content
       self.betree_internal_pivot with
   | Fail -> Fail
   | Return p ->
     let (msgs_left, msgs_right) = p in
-    begin match betree_list_1_len_fwd (u64 & betree_message_t) msgs_left with
+    begin match betree_list_len_fwd (u64 & betree_message_t) msgs_left with
     | Fail -> Fail
     | Return len_left ->
       if len_left >= params.betree_params_min_flush_size
       then
         begin match
-          betree_node_5_apply_messages_fwd self.betree_internal_left params
+          betree_node_apply_messages_fwd self.betree_internal_left params
             node_id_cnt msgs_left st with
         | Fail -> Fail
         | Return (st0, _) ->
           begin match
-            betree_node_5_apply_messages_back self.betree_internal_left params
+            betree_node_apply_messages_back self.betree_internal_left params
               node_id_cnt msgs_left st with
           | Fail -> Fail
           | Return (_, node_id_cnt0) ->
-            begin match
-              betree_list_1_len_fwd (u64 & betree_message_t) msgs_right with
+            begin match betree_list_len_fwd (u64 & betree_message_t) msgs_right
+              with
             | Fail -> Fail
             | Return len_right ->
               if len_right >= params.betree_params_min_flush_size
               then
                 begin match
-                  betree_node_5_apply_messages_fwd self.betree_internal_right
+                  betree_node_apply_messages_fwd self.betree_internal_right
                     params node_id_cnt0 msgs_right st0 with
                 | Fail -> Fail
                 | Return (st1, _) ->
                   begin match
-                    betree_node_5_apply_messages_back
-                      self.betree_internal_right params node_id_cnt0 msgs_right
-                      st0 with
+                    betree_node_apply_messages_back self.betree_internal_right
+                      params node_id_cnt0 msgs_right st0 with
                   | Fail -> Fail
                   | Return (_, _) -> Return (st1, BetreeListNil)
                   end
@@ -1187,12 +1221,12 @@ let rec betree_internal_4_flush_fwd
         end
       else
         begin match
-          betree_node_5_apply_messages_fwd self.betree_internal_right params
+          betree_node_apply_messages_fwd self.betree_internal_right params
             node_id_cnt msgs_right st with
         | Fail -> Fail
         | Return (st0, _) ->
           begin match
-            betree_node_5_apply_messages_back self.betree_internal_right params
+            betree_node_apply_messages_back self.betree_internal_right params
               node_id_cnt msgs_right st with
           | Fail -> Fail
           | Return (_, _) -> Return (st0, msgs_left)
@@ -1202,43 +1236,43 @@ let rec betree_internal_4_flush_fwd
   end
 
 (** [betree_main::betree::Internal::{4}::flush] *)
-and betree_internal_4_flush_back
+and betree_internal_flush_back
   (self : betree_internal_t) (params : betree_params_t)
   (node_id_cnt : betree_node_id_counter_t)
   (content : betree_list_t (u64 & betree_message_t)) (st : state) :
   Tot (result (betree_internal_t & betree_node_id_counter_t))
-  (decreases (betree_internal_4_flush_decreases self params node_id_cnt content
-  st))
+  (decreases %[betree_internal_size self; 0])
+  //(decreases (betree_internal_flush_decreases self params node_id_cnt content st))
   =
   begin match
-    betree_list_2_partition_at_pivot_fwd betree_message_t content
+    betree_list_partition_at_pivot_fwd betree_message_t content
       self.betree_internal_pivot with
   | Fail -> Fail
   | Return p ->
     let (msgs_left, msgs_right) = p in
-    begin match betree_list_1_len_fwd (u64 & betree_message_t) msgs_left with
+    begin match betree_list_len_fwd (u64 & betree_message_t) msgs_left with
     | Fail -> Fail
     | Return len_left ->
       if len_left >= params.betree_params_min_flush_size
       then
         begin match
-          betree_node_5_apply_messages_fwd self.betree_internal_left params
+          betree_node_apply_messages_fwd self.betree_internal_left params
             node_id_cnt msgs_left st with
         | Fail -> Fail
         | Return (st0, _) ->
           begin match
-            betree_node_5_apply_messages_back self.betree_internal_left params
+            betree_node_apply_messages_back self.betree_internal_left params
               node_id_cnt msgs_left st with
           | Fail -> Fail
           | Return (n, node_id_cnt0) ->
-            begin match
-              betree_list_1_len_fwd (u64 & betree_message_t) msgs_right with
+            begin match betree_list_len_fwd (u64 & betree_message_t) msgs_right
+              with
             | Fail -> Fail
             | Return len_right ->
               if len_right >= params.betree_params_min_flush_size
               then
                 begin match
-                  betree_node_5_apply_messages_back self.betree_internal_right
+                  betree_node_apply_messages_back self.betree_internal_right
                     params node_id_cnt0 msgs_right st0 with
                 | Fail -> Fail
                 | Return (n0, node_id_cnt1) ->
@@ -1254,7 +1288,7 @@ and betree_internal_4_flush_back
         end
       else
         begin match
-          betree_node_5_apply_messages_back self.betree_internal_right params
+          betree_node_apply_messages_back self.betree_internal_right params
             node_id_cnt msgs_right st with
         | Fail -> Fail
         | Return (n, node_id_cnt0) ->
@@ -1266,104 +1300,37 @@ and betree_internal_4_flush_back
   end
 
 (** [betree_main::betree::Node::{5}::apply_messages] *)
-and betree_node_5_apply_messages_fwd
+and betree_node_apply_messages_fwd
   (self : betree_node_t) (params : betree_params_t)
   (node_id_cnt : betree_node_id_counter_t)
   (msgs : betree_list_t (u64 & betree_message_t)) (st : state) :
   Tot (result (state & unit))
-  (decreases (betree_node_5_apply_messages_decreases self params node_id_cnt
-  msgs st))
-  =
-  begin match msgs with
-  | BetreeListCons p msgs0 ->
-    let (key, msg) = p in
-    begin match betree_node_5_apply_fwd self params node_id_cnt key msg st with
-    | Fail -> Fail
-    | Return (st0, _) ->
-      begin match betree_node_5_apply_back self params node_id_cnt key msg st
-        with
-      | Fail -> Fail
-      | Return (self0, node_id_cnt0) ->
-        begin match
-          betree_node_5_apply_messages_fwd self0 params node_id_cnt0 msgs0 st0
-          with
-        | Fail -> Fail
-        | Return (st1, _) ->
-          begin match
-            betree_node_5_apply_messages_back self0 params node_id_cnt0 msgs0
-              st0 with
-          | Fail -> Fail
-          | Return (_, _) -> Return (st1, ())
-          end
-        end
-      end
-    end
-  | BetreeListNil -> Return (st, ())
-  end
-
-(** [betree_main::betree::Node::{5}::apply_messages] *)
-and betree_node_5_apply_messages_back
-  (self : betree_node_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t)
-  (msgs : betree_list_t (u64 & betree_message_t)) (st : state) :
-  Tot (result (betree_node_t & betree_node_id_counter_t))
-  (decreases (betree_node_5_apply_messages_decreases self params node_id_cnt
-  msgs st))
-  =
-  begin match msgs with
-  | BetreeListCons p msgs0 ->
-    let (key, msg) = p in
-    begin match betree_node_5_apply_fwd self params node_id_cnt key msg st with
-    | Fail -> Fail
-    | Return (st0, _) ->
-      begin match betree_node_5_apply_back self params node_id_cnt key msg st
-        with
-      | Fail -> Fail
-      | Return (self0, node_id_cnt0) ->
-        begin match
-          betree_node_5_apply_messages_back self0 params node_id_cnt0 msgs0 st0
-          with
-        | Fail -> Fail
-        | Return (self1, node_id_cnt1) -> Return (self1, node_id_cnt1)
-        end
-      end
-    end
-  | BetreeListNil -> Return (self, node_id_cnt)
-  end
-
-(** [betree_main::betree::Node::{5}::apply] *)
-and betree_node_5_apply_fwd
-  (self : betree_node_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t) (key : u64)
-  (new_msg : betree_message_t) (st : state) :
-  Tot (result (state & unit))
-  (decreases (betree_node_5_apply_decreases self params node_id_cnt key new_msg
-  st))
+  (decreases %[betree_size self; betree_list_len msgs])
+//  (decreases (betree_node_apply_messages_decreases self params node_id_cnt msgs st))
   =
   begin match self with
   | BetreeNodeInternal node ->
     begin match betree_load_internal_node_fwd node.betree_internal_id st with
     | Fail -> Fail
     | Return (st0, content) ->
-      begin match betree_node_5_apply_to_internal_fwd_back content key new_msg
+      begin match betree_node_apply_messages_to_internal_fwd_back content msgs
         with
       | Fail -> Fail
       | Return content0 ->
-        begin match betree_list_1_len_fwd (u64 & betree_message_t) content0
-          with
+        begin match betree_list_len_fwd (u64 & betree_message_t) content0 with
         | Fail -> Fail
         | Return num_msgs ->
           if num_msgs >= params.betree_params_min_flush_size
           then
             begin match
-              betree_internal_4_flush_fwd (Mkbetree_internal_t
+              betree_internal_flush_fwd (Mkbetree_internal_t
                 node.betree_internal_id node.betree_internal_pivot
                 node.betree_internal_left node.betree_internal_right) params
                 node_id_cnt content0 st0 with
             | Fail -> Fail
             | Return (st1, content1) ->
               begin match
-                betree_internal_4_flush_back (Mkbetree_internal_t
+                betree_internal_flush_back (Mkbetree_internal_t
                   node.betree_internal_id node.betree_internal_pivot
                   node.betree_internal_left node.betree_internal_right) params
                   node_id_cnt content0 st0 with
@@ -1391,10 +1358,10 @@ and betree_node_5_apply_fwd
     begin match betree_load_leaf_node_fwd node.betree_leaf_id st with
     | Fail -> Fail
     | Return (st0, content) ->
-      begin match betree_node_5_apply_to_leaf_fwd_back content key new_msg with
+      begin match betree_node_apply_messages_to_leaf_fwd_back content msgs with
       | Fail -> Fail
       | Return content0 ->
-        begin match betree_list_1_len_fwd (u64 & u64) content0 with
+        begin match betree_list_len_fwd (u64 & u64) content0 with
         | Fail -> Fail
         | Return len ->
           begin match u64_mul 2 params.betree_params_split_size with
@@ -1403,7 +1370,7 @@ and betree_node_5_apply_fwd
             if len >= i
             then
               begin match
-                betree_leaf_3_split_fwd (Mkbetree_leaf_t node.betree_leaf_id
+                betree_leaf_split_fwd (Mkbetree_leaf_t node.betree_leaf_id
                   node.betree_leaf_size) content0 params node_id_cnt st0 with
               | Fail -> Fail
               | Return (st1, _) ->
@@ -1427,39 +1394,38 @@ and betree_node_5_apply_fwd
     end
   end
 
-(** [betree_main::betree::Node::{5}::apply] *)
-and betree_node_5_apply_back
+(** [betree_main::betree::Node::{5}::apply_messages] *)
+and betree_node_apply_messages_back
   (self : betree_node_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t) (key : u64)
-  (new_msg : betree_message_t) (st : state) :
+  (node_id_cnt : betree_node_id_counter_t)
+  (msgs : betree_list_t (u64 & betree_message_t)) (st : state) :
   Tot (result (betree_node_t & betree_node_id_counter_t))
-  (decreases (betree_node_5_apply_decreases self params node_id_cnt key new_msg
-  st))
+  (decreases %[betree_size self; betree_list_len msgs])
+//  (decreases (betree_node_apply_messages_decreases self params node_id_cnt msgs st))
   =
   begin match self with
   | BetreeNodeInternal node ->
     begin match betree_load_internal_node_fwd node.betree_internal_id st with
     | Fail -> Fail
     | Return (st0, content) ->
-      begin match betree_node_5_apply_to_internal_fwd_back content key new_msg
+      begin match betree_node_apply_messages_to_internal_fwd_back content msgs
         with
       | Fail -> Fail
       | Return content0 ->
-        begin match betree_list_1_len_fwd (u64 & betree_message_t) content0
-          with
+        begin match betree_list_len_fwd (u64 & betree_message_t) content0 with
         | Fail -> Fail
         | Return num_msgs ->
           if num_msgs >= params.betree_params_min_flush_size
           then
             begin match
-              betree_internal_4_flush_fwd (Mkbetree_internal_t
+              betree_internal_flush_fwd (Mkbetree_internal_t
                 node.betree_internal_id node.betree_internal_pivot
                 node.betree_internal_left node.betree_internal_right) params
                 node_id_cnt content0 st0 with
             | Fail -> Fail
             | Return (st1, content1) ->
               begin match
-                betree_internal_4_flush_back (Mkbetree_internal_t
+                betree_internal_flush_back (Mkbetree_internal_t
                   node.betree_internal_id node.betree_internal_pivot
                   node.betree_internal_left node.betree_internal_right) params
                   node_id_cnt content0 st0 with
@@ -1495,10 +1461,10 @@ and betree_node_5_apply_back
     begin match betree_load_leaf_node_fwd node.betree_leaf_id st with
     | Fail -> Fail
     | Return (st0, content) ->
-      begin match betree_node_5_apply_to_leaf_fwd_back content key new_msg with
+      begin match betree_node_apply_messages_to_leaf_fwd_back content msgs with
       | Fail -> Fail
       | Return content0 ->
-        begin match betree_list_1_len_fwd (u64 & u64) content0 with
+        begin match betree_list_len_fwd (u64 & u64) content0 with
         | Fail -> Fail
         | Return len ->
           begin match u64_mul 2 params.betree_params_split_size with
@@ -1507,7 +1473,7 @@ and betree_node_5_apply_back
             if len >= i
             then
               begin match
-                betree_leaf_3_split_fwd (Mkbetree_leaf_t node.betree_leaf_id
+                betree_leaf_split_fwd (Mkbetree_leaf_t node.betree_leaf_id
                   node.betree_leaf_size) content0 params node_id_cnt st0 with
               | Fail -> Fail
               | Return (st1, new_node) ->
@@ -1517,9 +1483,9 @@ and betree_node_5_apply_back
                 | Fail -> Fail
                 | Return (_, _) ->
                   begin match
-                    betree_leaf_3_split_back (Mkbetree_leaf_t
-                      node.betree_leaf_id node.betree_leaf_size) content0
-                      params node_id_cnt st0 with
+                    betree_leaf_split_back (Mkbetree_leaf_t node.betree_leaf_id
+                      node.betree_leaf_size) content0 params node_id_cnt st0
+                    with
                   | Fail -> Fail
                   | Return node_id_cnt0 ->
                     Return (BetreeNodeInternal new_node, node_id_cnt0)
@@ -1541,8 +1507,44 @@ and betree_node_5_apply_back
     end
   end
 
+(** [betree_main::betree::Node::{5}::apply] *)
+let betree_node_apply_fwd
+  (self : betree_node_t) (params : betree_params_t)
+  (node_id_cnt : betree_node_id_counter_t) (key : u64)
+  (new_msg : betree_message_t) (st : state) :
+  result (state & unit)
+  =
+  let l = BetreeListNil in
+  begin match
+    betree_node_apply_messages_fwd self params node_id_cnt (BetreeListCons
+      (key, new_msg) l) st with
+  | Fail -> Fail
+  | Return (st0, _) ->
+    begin match
+      betree_node_apply_messages_back self params node_id_cnt (BetreeListCons
+        (key, new_msg) l) st with
+    | Fail -> Fail
+    | Return (_, _) -> Return (st0, ())
+    end
+  end
+
+(** [betree_main::betree::Node::{5}::apply] *)
+let betree_node_apply_back
+  (self : betree_node_t) (params : betree_params_t)
+  (node_id_cnt : betree_node_id_counter_t) (key : u64)
+  (new_msg : betree_message_t) (st : state) :
+  result (betree_node_t & betree_node_id_counter_t)
+  =
+  let l = BetreeListNil in
+  begin match
+    betree_node_apply_messages_back self params node_id_cnt (BetreeListCons
+      (key, new_msg) l) st with
+  | Fail -> Fail
+  | Return (self0, node_id_cnt0) -> Return (self0, node_id_cnt0)
+  end
+
 (** [betree_main::betree::BeTree::{6}::new] *)
-let betree_be_tree_6_new_fwd
+let betree_be_tree_new_fwd
   (min_flush_size : u64) (split_size : u64) (st : state) :
   result (state & betree_be_tree_t)
   =
@@ -1566,17 +1568,17 @@ let betree_be_tree_6_new_fwd
   end
 
 (** [betree_main::betree::BeTree::{6}::apply] *)
-let betree_be_tree_6_apply_fwd
+let betree_be_tree_apply_fwd
   (self : betree_be_tree_t) (key : u64) (msg : betree_message_t) (st : state) :
   result (state & unit)
   =
   begin match
-    betree_node_5_apply_fwd self.betree_be_tree_root self.betree_be_tree_params
+    betree_node_apply_fwd self.betree_be_tree_root self.betree_be_tree_params
       self.betree_be_tree_node_id_cnt key msg st with
   | Fail -> Fail
   | Return (st0, _) ->
     begin match
-      betree_node_5_apply_back self.betree_be_tree_root
+      betree_node_apply_back self.betree_be_tree_root
         self.betree_be_tree_params self.betree_be_tree_node_id_cnt key msg st
       with
     | Fail -> Fail
@@ -1585,114 +1587,112 @@ let betree_be_tree_6_apply_fwd
   end
 
 (** [betree_main::betree::BeTree::{6}::apply] *)
-let betree_be_tree_6_apply_back
+let betree_be_tree_apply_back
   (self : betree_be_tree_t) (key : u64) (msg : betree_message_t) (st : state) :
   result betree_be_tree_t
   =
   begin match
-    betree_node_5_apply_back self.betree_be_tree_root
-      self.betree_be_tree_params self.betree_be_tree_node_id_cnt key msg st
-    with
+    betree_node_apply_back self.betree_be_tree_root self.betree_be_tree_params
+      self.betree_be_tree_node_id_cnt key msg st with
   | Fail -> Fail
   | Return (n, nic) ->
     Return (Mkbetree_be_tree_t self.betree_be_tree_params nic n)
   end
 
 (** [betree_main::betree::BeTree::{6}::insert] *)
-let betree_be_tree_6_insert_fwd
+let betree_be_tree_insert_fwd
   (self : betree_be_tree_t) (key : u64) (value : u64) (st : state) :
   result (state & unit)
   =
-  begin match
-    betree_be_tree_6_apply_fwd self key (BetreeMessageInsert value) st with
+  begin match betree_be_tree_apply_fwd self key (BetreeMessageInsert value) st
+    with
   | Fail -> Fail
   | Return (st0, _) ->
     begin match
-      betree_be_tree_6_apply_back self key (BetreeMessageInsert value) st with
+      betree_be_tree_apply_back self key (BetreeMessageInsert value) st with
     | Fail -> Fail
     | Return _ -> Return (st0, ())
     end
   end
 
 (** [betree_main::betree::BeTree::{6}::insert] *)
-let betree_be_tree_6_insert_back
+let betree_be_tree_insert_back
   (self : betree_be_tree_t) (key : u64) (value : u64) (st : state) :
   result betree_be_tree_t
   =
-  begin match
-    betree_be_tree_6_apply_back self key (BetreeMessageInsert value) st with
+  begin match betree_be_tree_apply_back self key (BetreeMessageInsert value) st
+    with
   | Fail -> Fail
   | Return self0 -> Return self0
   end
 
 (** [betree_main::betree::BeTree::{6}::delete] *)
-let betree_be_tree_6_delete_fwd
+let betree_be_tree_delete_fwd
   (self : betree_be_tree_t) (key : u64) (st : state) : result (state & unit) =
-  begin match betree_be_tree_6_apply_fwd self key BetreeMessageDelete st with
+  begin match betree_be_tree_apply_fwd self key BetreeMessageDelete st with
   | Fail -> Fail
   | Return (st0, _) ->
-    begin match betree_be_tree_6_apply_back self key BetreeMessageDelete st
+    begin match betree_be_tree_apply_back self key BetreeMessageDelete st with
+    | Fail -> Fail
+    | Return _ -> Return (st0, ())
+    end
+  end
+
+(** [betree_main::betree::BeTree::{6}::delete] *)
+let betree_be_tree_delete_back
+  (self : betree_be_tree_t) (key : u64) (st : state) :
+  result betree_be_tree_t
+  =
+  begin match betree_be_tree_apply_back self key BetreeMessageDelete st with
+  | Fail -> Fail
+  | Return self0 -> Return self0
+  end
+
+(** [betree_main::betree::BeTree::{6}::upsert] *)
+let betree_be_tree_upsert_fwd
+  (self : betree_be_tree_t) (key : u64) (upd : betree_upsert_fun_state_t)
+  (st : state) :
+  result (state & unit)
+  =
+  begin match betree_be_tree_apply_fwd self key (BetreeMessageUpsert upd) st
+    with
+  | Fail -> Fail
+  | Return (st0, _) ->
+    begin match betree_be_tree_apply_back self key (BetreeMessageUpsert upd) st
       with
     | Fail -> Fail
     | Return _ -> Return (st0, ())
     end
   end
 
-(** [betree_main::betree::BeTree::{6}::delete] *)
-let betree_be_tree_6_delete_back
-  (self : betree_be_tree_t) (key : u64) (st : state) :
-  result betree_be_tree_t
-  =
-  begin match betree_be_tree_6_apply_back self key BetreeMessageDelete st with
-  | Fail -> Fail
-  | Return self0 -> Return self0
-  end
-
 (** [betree_main::betree::BeTree::{6}::upsert] *)
-let betree_be_tree_6_upsert_fwd
-  (self : betree_be_tree_t) (key : u64) (upd : betree_upsert_fun_state_t)
-  (st : state) :
-  result (state & unit)
-  =
-  begin match betree_be_tree_6_apply_fwd self key (BetreeMessageUpsert upd) st
-    with
-  | Fail -> Fail
-  | Return (st0, _) ->
-    begin match
-      betree_be_tree_6_apply_back self key (BetreeMessageUpsert upd) st with
-    | Fail -> Fail
-    | Return _ -> Return (st0, ())
-    end
-  end
-
-(** [betree_main::betree::BeTree::{6}::upsert] *)
-let betree_be_tree_6_upsert_back
+let betree_be_tree_upsert_back
   (self : betree_be_tree_t) (key : u64) (upd : betree_upsert_fun_state_t)
   (st : state) :
   result betree_be_tree_t
   =
-  begin match betree_be_tree_6_apply_back self key (BetreeMessageUpsert upd) st
+  begin match betree_be_tree_apply_back self key (BetreeMessageUpsert upd) st
     with
   | Fail -> Fail
   | Return self0 -> Return self0
   end
 
 (** [betree_main::betree::BeTree::{6}::lookup] *)
-let betree_be_tree_6_lookup_fwd
+let betree_be_tree_lookup_fwd
   (self : betree_be_tree_t) (key : u64) (st : state) :
   result (state & (option u64))
   =
-  begin match betree_node_5_lookup_fwd self.betree_be_tree_root key st with
+  begin match betree_node_lookup_fwd self.betree_be_tree_root key st with
   | Fail -> Fail
   | Return (st0, opt) -> Return (st0, opt)
   end
 
 (** [betree_main::betree::BeTree::{6}::lookup] *)
-let betree_be_tree_6_lookup_back
+let betree_be_tree_lookup_back
   (self : betree_be_tree_t) (key : u64) (st : state) :
   result betree_be_tree_t
   =
-  begin match betree_node_5_lookup_back self.betree_be_tree_root key st with
+  begin match betree_node_lookup_back self.betree_be_tree_root key st with
   | Fail -> Fail
   | Return n ->
     Return (Mkbetree_be_tree_t self.betree_be_tree_params
