@@ -1173,8 +1173,8 @@ let rec betree_internal_flush_fwd
   (node_id_cnt : betree_node_id_counter_t)
   (content : betree_list_t (u64 & betree_message_t)) (st : state) :
   Tot (result (state & (betree_list_t (u64 & betree_message_t))))
-  (decreases %[betree_internal_size self; 0])
-  //(decreases (betree_internal_flush_decreases self params node_id_cnt content st))
+  (decreases (betree_internal_flush_decreases self params node_id_cnt content
+  st))
   =
   begin match
     betree_list_partition_at_pivot_fwd betree_message_t content
@@ -1241,8 +1241,8 @@ and betree_internal_flush_back
   (node_id_cnt : betree_node_id_counter_t)
   (content : betree_list_t (u64 & betree_message_t)) (st : state) :
   Tot (result (betree_internal_t & betree_node_id_counter_t))
-  (decreases %[betree_internal_size self; 0])
-  //(decreases (betree_internal_flush_decreases self params node_id_cnt content st))
+  (decreases (betree_internal_flush_decreases self params node_id_cnt content
+  st))
   =
   begin match
     betree_list_partition_at_pivot_fwd betree_message_t content
@@ -1305,8 +1305,8 @@ and betree_node_apply_messages_fwd
   (node_id_cnt : betree_node_id_counter_t)
   (msgs : betree_list_t (u64 & betree_message_t)) (st : state) :
   Tot (result (state & unit))
-  (decreases %[betree_size self; betree_list_len msgs])
-//  (decreases (betree_node_apply_messages_decreases self params node_id_cnt msgs st))
+  (decreases (betree_node_apply_messages_decreases self params node_id_cnt msgs
+  st))
   =
   begin match self with
   | BetreeNodeInternal node ->
@@ -1400,8 +1400,8 @@ and betree_node_apply_messages_back
   (node_id_cnt : betree_node_id_counter_t)
   (msgs : betree_list_t (u64 & betree_message_t)) (st : state) :
   Tot (result (betree_node_t & betree_node_id_counter_t))
-  (decreases %[betree_size self; betree_list_len msgs])
-//  (decreases (betree_node_apply_messages_decreases self params node_id_cnt msgs st))
+  (decreases (betree_node_apply_messages_decreases self params node_id_cnt msgs
+  st))
   =
   begin match self with
   | BetreeNodeInternal node ->

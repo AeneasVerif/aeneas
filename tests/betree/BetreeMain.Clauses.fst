@@ -5,6 +5,100 @@ open BetreeMain.Types
 
 #set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
 
+(*** Well-founded relations *)
+
+(* We had a few issues when proving termination of the mutually recursive functions:
+ * - betree_internal_flush
+ * - betree_node_apply_messages
+ *
+ * The quantity which effectively decreases is:
+ *   (betree_size, messages_length)
+ *   where messages_length is 0 when there are no messages
+ *   (and where we use the lexicographic ordering, of course)
+ *
+ * However, the `%[...]` and `{:well-founded ...} notations are not available outside
+ * of `decrease` clauses.
+ * 
+ * We thus resorted to writing and proving correct a well-founded relation over
+ * pairs of natural numbers. The trick is that `<<` can be used outside of decrease
+ * clauses, and can be used to trigger SMT patterns.
+ *
+ * What follows is adapted from:
+ * https://www.fstar-lang.org/tutorial/book/part2/part2_well_founded.html
+ *)
+
+module P = FStar.Preorder
+module W = FStar.WellFounded
+module L = FStar.LexicographicOrdering
+
+let lt_nat (x y:nat) : Type = x < y == true
+let rec wf_lt_nat (x:nat)
+  : W.acc lt_nat x
+  = W.AccIntro (fun y _ -> wf_lt_nat y)
+
+// A type abbreviation for a pair of nats
+let nat_pair = (x:nat & nat)
+
+// Making a lexicographic ordering from a pair of nat ordering
+let lex_order_nat_pair  : P.relation nat_pair =
+  L.lex_t lt_nat (fun _ -> lt_nat)
+
+// The lex order on nat pairs is well-founded, using our general proof
+// of lexicographic composition of well-founded orders
+let lex_order_nat_pair_wf : W.well_founded lex_order_nat_pair =
+  L.lex_t_wf wf_lt_nat (fun _ -> wf_lt_nat)
+
+// A utility to introduce lt_nat
+let mk_lt_nat (x:nat) (y:nat { x < y }) : lt_nat x y =
+  let _ : equals (x < y) true = Refl in
+  ()
+    
+// A utility to make a lex ordering of nat pairs
+let mk_lex_order_nat_pair (xy0:nat_pair) 
+                          (xy1:nat_pair {
+                            let (|x0, y0|) = xy0 in
+                            let (|x1, y1|) = xy1 in
+                            x0 < x1 \/ (x0 == x1 /\ y0 < y1)
+                          }) : lex_order_nat_pair xy0 xy1 =
+  let (|x0, y0|) = xy0 in
+  let (|x1, y1|) = xy1 in
+  if x0 < x1 then L.Left_lex x0 x1 y0 y1 (mk_lt_nat x0 x1)
+  else L.Right_lex x0 y0 y1 (mk_lt_nat y0 y1)
+
+let rec coerce #a #r #x (p:W.acc #a r x) : Tot (W.acc r x) (decreases p) =
+  W.AccIntro (fun y r -> coerce (p.access_smaller y r))
+
+let coerce_wf #a #r (p: (x:a -> W.acc r x)) : x:a -> W.acc r x =
+  fun x -> coerce (p x)
+
+(* We need this axiom, which comes from the following discussion:
+ * https://github.com/FStarLang/FStar/issues/1916
+ * An issue here is that the `{well-founded ... }` notation
+ *)
+assume
+val axiom_well_founded (a:Type) (rel:a -> a -> Type0)
+  (rwf:W.well_founded #a rel) (x y:a): Lemma
+  (requires (rel x y))
+  (ensures (x << y))
+
+(* This lemma has a pattern (which makes it work) *)
+let wf_nat_pair_lem (p0 p1 : nat_pair) :
+  Lemma
+  (requires (
+    let (|x0, y0|) = p0 in
+    let (|x1, y1|) = p1 in
+    x0 < x1 || (x0 = x1 && y0 < y1)))
+  (ensures (p0 << p1))
+  [SMTPat (p0 << p1)] =
+  let rel = lex_order_nat_pair in
+  let rel_wf = lex_order_nat_pair_wf in
+  let _ = mk_lex_order_nat_pair p0 p1 in
+  assert(rel p0 p1);
+  axiom_well_founded nat_pair rel rel_wf p0 p1
+
+(*** Decrease clauses *)
+/// "Standard" decrease clauses
+
 (** [betree_main::betree::List::{1}::len]: decreases clause *)
 unfold
 let betree_list_len_decreases (t : Type0) (self : betree_list_t t) : betree_list_t t =
@@ -82,18 +176,10 @@ let betree_node_apply_messages_to_internal_decreases
   (new_msgs : betree_list_t (u64 & betree_message_t)) : betree_list_t (u64 & betree_message_t) =
   new_msgs
 
-(* This is annoying, we can't use the following trick when defining decrease
- * clauses as separate functions:
- * [https://github.com/FStarLang/FStar/issues/138]
- *
- * Note that the quantity which effectively decreases is:
- *
- *   [betree_size; messages_length]
- *   where messages_length is 0 when there are no messages
- *   (and where we use the lexicographic ordering, of course)
- *
- * For now, we "patch" the code directly (we need to find a better way...)
- *)
+(*** Decrease clauses - nat_pair *)
+/// The following decrease clauses use the [nat_pair] definition and the well-founded
+/// relation proven above.
+
 let rec betree_size (bt : betree_node_t) : nat =
   match bt with
   | BetreeNodeInternal node -> 1 + betree_internal_size node
@@ -107,18 +193,16 @@ let rec betree_list_len (#a : Type0) (ls : betree_list_t a) : nat =
   | BetreeListCons _ tl -> 1 + betree_list_len tl
   | BetreeListNil -> 0
 
-(*
 (** [betree_main::betree::Internal::{4}::flush]: decreases clause *)
 unfold
 let betree_internal_flush_decreases (self : betree_internal_t)
   (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
-  (content : betree_list_t (u64 & betree_message_t)) (st : state) : nat =
-  admit ()
+  (content : betree_list_t (u64 & betree_message_t)) (st : state) : nat_pair =
+  (|betree_internal_size self, 0|)
 
 (** [betree_main::betree::Node::{5}::apply_messages]: decreases clause *)
 unfold
 let betree_node_apply_messages_decreases (self : betree_node_t)
   (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
-  (msgs : betree_list_t (u64 & betree_message_t)) (st : state) : nat =
-  admit ()
-*)
+  (msgs : betree_list_t (u64 & betree_message_t)) (st : state) : nat_pair =
+  (|betree_size self, betree_list_len msgs|)
