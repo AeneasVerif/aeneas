@@ -25,6 +25,9 @@ open BetreeMain.Types
  *
  * What follows is adapted from:
  * https://www.fstar-lang.org/tutorial/book/part2/part2_well_founded.html
+ *
+ * Also, the following PR might make things easier:
+ * https://github.com/FStarLang/FStar/pull/2561
  *)
 
 module P = FStar.Preorder
@@ -76,10 +79,9 @@ let coerce_wf #a #r (p: (x:a -> W.acc r x)) : x:a -> W.acc r x =
  * An issue here is that the `{well-founded ... }` notation
  *)
 assume
-val axiom_well_founded (a:Type) (rel:a -> a -> Type0)
-  (rwf:W.well_founded #a rel) (x y:a): Lemma
-  (requires (rel x y))
-  (ensures (x << y))
+val axiom_well_founded (a : Type) (rel : a -> a -> Type0)
+  (rwf : W.well_founded #a rel) (x y : a) :
+  Lemma (requires (rel x y)) (ensures (x << y))
 
 (* This lemma has a pattern (which makes it work) *)
 let wf_nat_pair_lem (p0 p1 : nat_pair) :
