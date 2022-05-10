@@ -72,3 +72,11 @@ let as_ident (pe : path_elem) : string =
   match pe with
   | Ident s -> s
   | Disambiguator _ -> raise (Failure "Improper variant")
+
+let path_elem_to_string (pe : path_elem) : string =
+  match pe with
+  | Ident s -> s
+  | Disambiguator d -> "{" ^ Disambiguator.to_string d ^ "}"
+
+let name_to_string (name : name) : string =
+  String.concat "::" (List.map path_elem_to_string name)
