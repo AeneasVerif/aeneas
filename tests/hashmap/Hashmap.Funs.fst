@@ -5,7 +5,7 @@ open Primitives
 include Hashmap.Types
 include Hashmap.Clauses
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap::hash_key] *)
 let hash_key_fwd (k : usize) : result usize = Return k

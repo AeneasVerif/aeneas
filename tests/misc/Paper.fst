@@ -3,7 +3,7 @@
 module Paper
 open Primitives
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [paper::ref_incr] *)
 let ref_incr_fwd_back (x : i32) : result i32 =

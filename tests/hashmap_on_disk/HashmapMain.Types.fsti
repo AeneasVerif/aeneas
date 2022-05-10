@@ -3,7 +3,7 @@
 module HashmapMain.Types
 open Primitives
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap_main::hashmap::List] *)
 type hashmap_list_t (t : Type0) =

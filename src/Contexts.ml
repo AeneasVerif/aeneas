@@ -179,6 +179,15 @@ type config = {
           meaning at intermediate steps of the assignment where the invariants
           might actually be broken.
        *)
+  return_unit_end_abs_with_no_loans : bool;
+      (** If a function doesn't return any borrows, we can immediately call
+          its backward functions. If this option is on, whenever we call a
+          function *and* this function returns unit, we immediately end all the
+          abstractions which are introduced and don't contain loans. This can be
+          useful to make the code cleaner (the backward function is introduced
+          where the function call happened) and make sure all forward functions
+          with no return value are followed by a backward function.
+       *)
 }
 [@@deriving show]
 
@@ -186,6 +195,7 @@ type partial_config = {
   check_invariants : bool;
   greedy_expand_symbolics_with_borrows : bool;
   allow_bottom_below_borrow : bool;
+  return_unit_end_abs_with_no_loans : bool;
 }
 (** See [config] *)
 
@@ -197,6 +207,7 @@ let config_of_partial (mode : interpreter_mode) (config : partial_config) :
     greedy_expand_symbolics_with_borrows =
       config.greedy_expand_symbolics_with_borrows;
     allow_bottom_below_borrow = config.allow_bottom_below_borrow;
+    return_unit_end_abs_with_no_loans = config.return_unit_end_abs_with_no_loans;
   }
 
 type type_context = {

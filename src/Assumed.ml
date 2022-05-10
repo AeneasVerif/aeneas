@@ -92,6 +92,17 @@ module Sig = struct
       output = mk_box_ty tvar_0 (* Box<T> *);
     }
 
+  (** `fn<T>(Box<T>) -> ()` *)
+  let box_free_sig : A.fun_sig =
+    {
+      region_params = [];
+      num_early_bound_regions = 0;
+      regions_hierarchy = [];
+      type_params = [ type_param_0 ] (* <T> *);
+      inputs = [ mk_box_ty tvar_0 (* Box<T> *) ];
+      output = mk_unit_ty (* () *);
+    }
+
   (** Helper for `Box::deref_shared` and `Box::deref_mut`.
       Returns:
       `fn<'a, T>(&'a (mut) Box<T>) -> &'a (mut) T`
@@ -248,6 +259,10 @@ let assumed_infos : assumed_info list =
   [
     (A.Replace, Sig.mem_replace_sig, false, to_name [ "core"; "mem"; "replace" ]);
     (BoxNew, Sig.box_new_sig, false, to_name [ "alloc"; "boxed"; "Box"; "new" ]);
+    ( BoxFree,
+      Sig.box_free_sig,
+      false,
+      to_name [ "alloc"; "boxed"; "Box"; "free" ] );
     ( BoxDeref,
       Sig.box_deref_shared_sig,
       false,
@@ -271,7 +286,11 @@ let assumed_infos : assumed_info list =
   ]
 
 let get_assumed_info (id : A.assumed_fun_id) : assumed_info =
-  List.find (fun (id', _, _, _) -> id = id') assumed_infos
+  match List.find_opt (fun (id', _, _, _) -> id = id') assumed_infos with
+  | Some info -> info
+  | None ->
+      raise
+        (Failure ("get_assumed_info: not found: " ^ A.show_assumed_fun_id id))
 
 let get_assumed_sig (id : A.assumed_fun_id) : A.fun_sig =
   let _, sg, _, _ = get_assumed_info id in

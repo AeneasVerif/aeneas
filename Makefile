@@ -31,7 +31,8 @@ build:
 .PHONY: test
 test: build trans-sidney_tests trans-no_nested_borrows trans-paper \
 	trans-hashmap trans-hashmap_main \
-	trans-external trans-nll-betree_nll
+	trans-external trans-nll-betree_nll \
+	trans-nll-betree_main
 
 # Add specific options to some tests
 trans-sidney_tests: \
@@ -53,6 +54,9 @@ trans-nll-betree_nll: SUBDIR:=misc
 
 trans-external: TRANS_OPTIONS +=
 trans-external: SUBDIR:=misc
+
+trans-nll-betree_main: TRANS_OPTIONS += -template-clauses
+trans-nll-betree_main: SUBDIR:=betree
 
 # Generic rules to extract the LLBC from a rust file
 # We use the rules in Charon's Makefile to generate the .llbc files: the options

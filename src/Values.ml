@@ -545,7 +545,7 @@ and aloan_content =
        *)
   | AIgnoredSharedLoan of typed_avalue
       (** An ignored shared loan.
-      
+            
           Example:
           ========
           ```

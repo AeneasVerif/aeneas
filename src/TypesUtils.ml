@@ -172,10 +172,14 @@ let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : rty) : bool =
   * "primitively copyable" means that copying instances of this type doesn't
   * require calling dedicated functions defined through the Copy trait. It
   * is the case for types like integers, shared borrows, etc.
+  *
+  * Generally, ADTs are not copyable. However, some of the primitive ADTs are
+  * like `Option`.
   *)
 let rec ty_is_primitively_copyable (ty : 'r ty) : bool =
   match ty with
-  | Adt ((AdtId _ | Assumed _), _, _) -> false
+  | Adt (Assumed Option, _, tys) -> List.for_all ty_is_primitively_copyable tys
+  | Adt ((AdtId _ | Assumed (Box | Vec)), _, _) -> false
   | Adt (Tuple, _, tys) -> List.for_all ty_is_primitively_copyable tys
   | TypeVar _ | Never | Str | Array _ | Slice _ -> false
   | Bool | Char | Integer _ -> true

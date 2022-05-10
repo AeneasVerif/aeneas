@@ -711,9 +711,10 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
   | V.Adt av ->
       (* Sanity check *)
       (match v.V.ty with
-      | T.Adt (T.Assumed _, _, _) -> failwith "Can't copy an assumed value"
+      | T.Adt (T.Assumed (T.Box | Vec), _, _) ->
+          failwith "Can't copy an assumed value other than Option"
       | T.Adt (T.AdtId _, _, _) -> assert allow_adt_copy
-      | T.Adt (T.Tuple, _, _) -> () (* Ok *)
+      | T.Adt ((T.Assumed Option | T.Tuple), _, _) -> () (* Ok *)
       | _ -> failwith "Unreachable");
       let ctx, fields =
         List.fold_left_map
