@@ -5,13 +5,21 @@ open Primitives
 include External.Types
 include External.Opaque
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [external::swap] *)
 let swap_fwd (t : Type0) (x : t) (y : t) (st : state) : result (state & unit) =
   begin match core_mem_swap_fwd t x y st with
   | Fail -> Fail
-  | Return (st0, _) -> Return (st0, ())
+  | Return (st0, _) ->
+    begin match core_mem_swap_back0 t x y st with
+    | Fail -> Fail
+    | Return _ ->
+      begin match core_mem_swap_back1 t x y st with
+      | Fail -> Fail
+      | Return _ -> Return (st0, ())
+      end
+    end
   end
 
 (** [external::swap] *)
@@ -28,7 +36,7 @@ let swap_back (t : Type0) (x : t) (y : t) (st : state) : result (t & t) =
 (** [external::test_new_non_zero_u32] *)
 let test_new_non_zero_u32_fwd
   (x : u32) (st : state) : result (state & core_num_nonzero_non_zero_u32_t) =
-  begin match core_num_nonzero_non_zero_u32_14_new_fwd x st with
+  begin match core_num_nonzero_non_zero_u32_new_fwd x st with
   | Fail -> Fail
   | Return (st0, opt) ->
     begin match
@@ -40,12 +48,15 @@ let test_new_non_zero_u32_fwd
   end
 
 (** [external::test_vec] *)
-let test_vec_fwd (st : state) : result (state & unit) =
+let test_vec_fwd : result unit =
   let v = vec_new u32 in
   begin match vec_push_back u32 v 0 with
   | Fail -> Fail
-  | Return _ -> Return (st, ())
+  | Return _ -> Return ()
   end
+
+(** Unit test for [external::test_vec] *)
+let _ = assert_norm (test_vec_fwd = Return ())
 
 (** [external::custom_swap] *)
 let custom_swap_fwd
@@ -55,7 +66,11 @@ let custom_swap_fwd
   | Return (st0, _) ->
     begin match core_mem_swap_back0 t x y st with
     | Fail -> Fail
-    | Return x0 -> Return (st0, x0)
+    | Return x0 ->
+      begin match core_mem_swap_back1 t x y st with
+      | Fail -> Fail
+      | Return _ -> Return (st0, x0)
+      end
     end
   end
 
@@ -85,5 +100,17 @@ let test_custom_swap_back
   begin match custom_swap_back u32 x y st 1 with
   | Fail -> Fail
   | Return (x0, y0) -> Return (x0, y0)
+  end
+
+(** [external::test_swap_non_zero] *)
+let test_swap_non_zero_fwd (x : u32) (st : state) : result (state & u32) =
+  begin match swap_fwd u32 x 0 st with
+  | Fail -> Fail
+  | Return (st0, _) ->
+    begin match swap_back u32 x 0 st with
+    | Fail -> Fail
+    | Return (x0, _) ->
+      begin match x0 with | 0 -> Fail | _ -> Return (st0, x0) end
+    end
   end
 

@@ -61,7 +61,22 @@ let filter_disambiguators_zero (n : name) : name =
   in
   List.filter pred n
 
+(** Filter the disambiguators in a name *)
+let filter_disambiguators (n : name) : name =
+  let pred (pe : path_elem) : bool =
+    match pe with Ident _ -> true | Disambiguator _ -> false
+  in
+  List.filter pred n
+
 let as_ident (pe : path_elem) : string =
   match pe with
   | Ident s -> s
   | Disambiguator _ -> raise (Failure "Improper variant")
+
+let path_elem_to_string (pe : path_elem) : string =
+  match pe with
+  | Ident s -> s
+  | Disambiguator d -> "{" ^ Disambiguator.to_string d ^ "}"
+
+let name_to_string (name : name) : string =
+  String.concat "::" (List.map path_elem_to_string name)

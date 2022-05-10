@@ -4,7 +4,7 @@ module Hashmap.Clauses.Template
 open Primitives
 open Hashmap.Types
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap::HashMap::{0}::allocate_slots]: decreases clause *)
 unfold

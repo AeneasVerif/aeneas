@@ -8,6 +8,7 @@ module S = SymbolicAst
 module TA = TypesAnalysis
 module L = Logging
 module PP = PrintPure
+module FA = FunsAnalysis
 
 (** The local logger *)
 let log = L.symbolic_to_pure_log
@@ -37,10 +38,6 @@ type config = {
           to do it when going from symbolic to pure.
           Note that we later filter the useless *forward* calls in the micro-passes,
           where it is more natural to do.
-       *)
-  use_state : bool;
-      (** Controls whether we need to use a state to model the external world
-          (I/O, for instance).
        *)
 }
 
@@ -72,6 +69,7 @@ type fun_sig_named_outputs = {
 type fun_context = {
   llbc_fun_decls : A.fun_decl FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdMap.t;  (** *)
+  fun_infos : FA.fun_info FunDeclId.Map.t;
 }
 
 type call_info = {
@@ -473,11 +471,12 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) :
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 
 (** Small utility. *)
-let get_fun_effect_info (config : config) (fun_id : A.fun_id)
-    (gid : T.RegionGroupId.id option) : fun_effect_info =
+let get_fun_effect_info (fun_infos : FA.fun_info FunDeclId.Map.t)
+    (fun_id : A.fun_id) (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | A.Regular _ ->
-      let input_state = config.use_state in
+  | A.Regular fid ->
+      let info = FunDeclId.Map.find fid fun_infos in
+      let input_state = info.stateful in
       let output_state = input_state && gid = None in
       { can_fail = true; input_state; output_state }
   | A.Assumed aid ->
@@ -494,8 +493,8 @@ let get_fun_effect_info (config : config) (fun_id : A.fun_id)
     name (outputs for backward functions come from borrows in the inputs
     of the forward function).
  *)
-let translate_fun_sig (config : config) (fun_id : A.fun_id)
-    (types_infos : TA.type_infos) (sg : A.fun_sig)
+let translate_fun_sig (fun_infos : FA.fun_info FunDeclId.Map.t)
+    (fun_id : A.fun_id) (types_infos : TA.type_infos) (sg : A.fun_sig)
     (input_names : string option list) (bid : T.RegionGroupId.id option) :
     fun_sig_named_outputs =
   (* Retrieve the list of parent backward functions *)
@@ -547,7 +546,7 @@ let translate_fun_sig (config : config) (fun_id : A.fun_id)
   in
   (* Does the function take a state as input, does it return a state and can
    * it fail? *)
-  let effect_info = get_fun_effect_info config fun_id bid in
+  let effect_info = get_fun_effect_info fun_infos fun_id bid in
   (* *)
   let state_ty = if effect_info.input_state then [ mk_state_ty ] else [] in
   (* Concatenate the inputs, in the following order:
@@ -1052,7 +1051,7 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) :
 let rec translate_expression (config : config) (e : S.expression) (ctx : bs_ctx)
     : texpression =
   match e with
-  | S.Return opt_v -> translate_return config opt_v ctx
+  | S.Return opt_v -> translate_return opt_v ctx
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call config call e ctx
   | EndAbstraction (abs, e) -> translate_end_abstraction config abs e ctx
@@ -1073,8 +1072,8 @@ and translate_panic (ctx : bs_ctx) : texpression =
     ret_v
   else mk_result_fail_texpression output_ty
 
-and translate_return (config : config) (opt_v : V.typed_value option)
-    (ctx : bs_ctx) : texpression =
+and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : texpression
+    =
   (* There are two cases:
      - either we are translating a forward function, in which case the optional
        value should be `Some` (it is the returned value)
@@ -1089,7 +1088,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
        * - error-monad: Return x
        * - state-error: Return (state, x)
        * *)
-      if config.use_state then
+      if ctx.sg.info.effect_info.output_state then
         let state_var =
           {
             id = ctx.state_var;
@@ -1105,6 +1104,7 @@ and translate_return (config : config) (opt_v : V.typed_value option)
       (* Backward function *)
       (* Sanity check *)
       assert (opt_v = None);
+      assert (not ctx.sg.info.effect_info.output_state);
       (* We simply need to return the variables in which we stored the values
        * we need to give back.
        * See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
@@ -1140,7 +1140,9 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
         let func = Regular (fid, None) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
-        let effect_info = get_fun_effect_info config fid None in
+        let effect_info =
+          get_fun_effect_info ctx.fun_context.fun_infos fid None
+        in
         (* Add the state input argument *)
         let args =
           if effect_info.input_state then
@@ -1344,7 +1346,9 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
           (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
           (List.combine inputs args_mplaces)
       in
-      let effect_info = get_fun_effect_info config fun_id (Some abs.back_id) in
+      let effect_info =
+        get_fun_effect_info ctx.fun_context.fun_infos fun_id (Some abs.back_id)
+      in
       let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
       let ret_ty =
         if effect_info.can_fail then mk_result_ty output.ty else output.ty
@@ -1657,7 +1661,9 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
         (* Sanity check *)
         type_check_texpression ctx body;
         (* Introduce the input state, if necessary *)
-        let effect_info = get_fun_effect_info config (Regular def_id) bid in
+        let effect_info =
+          get_fun_effect_info ctx.fun_context.fun_infos (Regular def_id) bid
+        in
         let input_state =
           if effect_info.input_state then
             [
@@ -1731,7 +1737,8 @@ let translate_type_decls (type_decls : T.type_decl list) : type_decl list =
     - optional names for the outputs values (we derive them for the backward
       functions)
  *)
-let translate_fun_signatures (config : config) (types_infos : TA.type_infos)
+let translate_fun_signatures (fun_infos : FA.fun_info FunDeclId.Map.t)
+    (types_infos : TA.type_infos)
     (functions : (A.fun_id * string option list * A.fun_sig) list) :
     fun_sig_named_outputs RegularFunIdMap.t =
   (* For every function, translate the signatures of:
@@ -1742,7 +1749,7 @@ let translate_fun_signatures (config : config) (types_infos : TA.type_infos)
       (sg : A.fun_sig) : (regular_fun_id * fun_sig_named_outputs) list =
     (* The forward function *)
     let fwd_sg =
-      translate_fun_sig config fun_id types_infos sg input_names None
+      translate_fun_sig fun_infos fun_id types_infos sg input_names None
     in
     let fwd_id = (fun_id, None) in
     (* The backward functions *)
@@ -1750,7 +1757,7 @@ let translate_fun_signatures (config : config) (types_infos : TA.type_infos)
       List.map
         (fun (rg : T.region_var_group) ->
           let tsg =
-            translate_fun_sig config fun_id types_infos sg input_names
+            translate_fun_sig fun_infos fun_id types_infos sg input_names
               (Some rg.id)
           in
           let id = (fun_id, Some rg.id) in

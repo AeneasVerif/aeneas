@@ -224,11 +224,13 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   (* Prepare a name.
    * The first id elem is always the crate: if it is the local crate,
    * we remove it.
-   * We also remove all the disambiguators which are 0, then convert
-   * everything to strings.
+   * We also remove all the disambiguators, then convert everything to strings.
+   * **Rmk:** because we remove the disambiguators, there may be name collisions
+   * (which is ok, because we check for name collisions and fail if there is any).
    *)
   let get_name (name : name) : string list =
-    let name = Names.filter_disambiguators_zero name in
+    (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
+    let name = Names.filter_disambiguators name in
     match name with
     | Ident crate :: name ->
         let name = if crate = crate_name then name else Ident crate :: name in

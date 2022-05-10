@@ -1120,6 +1120,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   let cc = eval_operands config args in
 
   (* Generate the abstractions and insert them in the context *)
+  let abs_ids = List.map (fun rg -> rg.T.id) inst_sg.regions_hierarchy in
   let cf_call cf (args : V.typed_value list) : m_fun =
    fun ctx ->
     let args_with_rtypes = List.combine args inst_sg.A.inputs in
@@ -1168,7 +1169,6 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     let expr = cf ctx in
 
     (* Synthesize the symbolic AST *)
-    let abs_ids = List.map (fun rg -> rg.T.id) inst_sg.regions_hierarchy in
     S.synthesize_regular_function_call fid call_id abs_ids type_args args
       args_places ret_spc dest_place expr
   in
@@ -1176,6 +1176,53 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
 
   (* Move the return value to its destination *)
   let cc = comp cc (assign_to_place config ret_value dest) in
+
+  (* End the abstractions which don't contain loans and don't have parent
+   * abstractions.
+   * We do the general, nested borrows case here: we end abstractions, then
+   * retry (because then we might end their children abstractions)
+   *)
+  let abs_ids = ref abs_ids in
+  let rec end_abs_with_no_loans cf : m_fun =
+   fun ctx ->
+    (* Find the abstractions which don't contain loans *)
+    let no_loans_abs, with_loans_abs =
+      List.partition
+        (fun abs_id ->
+          (* Lookup the abstraction *)
+          let abs = C.ctx_lookup_abs ctx abs_id in
+          (* Check if it has parents *)
+          V.AbstractionId.Set.is_empty abs.parents
+          (* Check if it contains non-ignored loans *)
+          && Option.is_none
+               (InterpreterBorrowsCore
+                .get_first_non_ignored_aloan_in_abstraction abs))
+        !abs_ids
+    in
+    (* Check if there are abstractions to end *)
+    if no_loans_abs <> [] then (
+      (* Update the reference to the list of asbtraction ids, for the recursive calls *)
+      abs_ids := with_loans_abs;
+      (* End the abstractions which can be ended *)
+      let no_loans_abs = V.AbstractionId.Set.of_list no_loans_abs in
+      let cc = InterpreterBorrows.end_abstractions config [] no_loans_abs in
+      (* Recursive call *)
+      let cc = comp cc end_abs_with_no_loans in
+      (* Continue *)
+      cc cf ctx)
+    else (* No abstractions to end: continue *)
+      cf ctx
+  in
+  (* Try to end the abstractions with no loans if:
+   * - the option is enabled
+   * - the function returns unit
+   * (see the documentation of [config] for more information)
+   *)
+  let cc =
+    if config.return_unit_end_abs_with_no_loans && ty_is_unit inst_sg.output
+    then comp cc end_abs_with_no_loans
+    else cc
+  in
 
   (* Continue - note that we do as if the function call has been successful,
    * by giving [Unit] to the continuation, because we place us in the case

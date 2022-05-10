@@ -3,7 +3,7 @@
 module NoNestedBorrows
 open Primitives
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [no_nested_borrows::Pair] *)
 type pair_t (t1 t2 : Type0) = { pair_x : t1; pair_y : t2; }
