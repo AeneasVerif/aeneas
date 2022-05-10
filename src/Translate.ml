@@ -685,7 +685,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   if not (Sys.file_exists dest_dir) then (
     log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
     (* Create a directory with *default* permissions *)
-    Core.Unix.mkdir_p dest_dir);
+    Core_unix.mkdir_p dest_dir);
 
   (* Copy "Primitives.fst" - I couldn't find a "cp" function in the OCaml
    * libraries... *)

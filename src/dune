@@ -2,7 +2,7 @@
 (executable
  (name main)
  (preprocess (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
- (libraries ppx_deriving yojson zarith easy_logging core))
+ (libraries ppx_deriving yojson zarith easy_logging core core_unix))
 
 (env
   (dev (flags
