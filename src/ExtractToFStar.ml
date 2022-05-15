@@ -156,10 +156,14 @@ let fstar_extract_unop (extract_expr : bool -> texpression -> unit)
       F.pp_print_space fmt ();
       extract_expr true arg;
       if inside then F.pp_print_string fmt ")"
-  | Cast (_src, tgt) ->
+  | Cast (src, tgt) ->
       (* The source type is an implicit parameter *)
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt "scalar_cast";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt
+        (StringUtils.capitalize_first_letter
+           (PrintPure.integer_type_to_string src));
       F.pp_print_space fmt ();
       F.pp_print_string fmt
         (StringUtils.capitalize_first_letter

@@ -23,6 +23,7 @@ let log = L.pre_passes_log
     *x = move ...;
     ```
 
+    TODO: this is not necessary anymore
  *)
 let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
   (* The visitor *)
