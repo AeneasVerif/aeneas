@@ -608,6 +608,20 @@ let eval_rvalue_aggregate (config : C.config)
         let aggregated : V.typed_value = { V.value = v; ty } in
         (* Call the continuation *)
         cf aggregated ctx
+    | E.AggregatedOption (variant_id, ty) ->
+        (* Sanity check *)
+        if variant_id == T.option_none_id then assert (values == [])
+        else if variant_id == T.option_some_id then
+          assert (List.length values == 1)
+        else raise (Failure "Unreachable");
+        (* Construt the value *)
+        let aty = T.Adt (T.Assumed T.Option, [], [ ty ]) in
+        let av : V.adt_value =
+          { V.variant_id = Some variant_id; V.field_values = values }
+        in
+        let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
+        (* Call the continuation *)
+        cf aggregated ctx
     | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
         (* Sanity checks *)
         let type_decl = C.ctx_lookup_type_decl ctx def_id in

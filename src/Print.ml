@@ -12,7 +12,6 @@ let option_to_string (to_string : 'a -> string) (x : 'a option) : string =
   match x with Some x -> "Some (" ^ to_string x ^ ")" | None -> "None"
 
 let name_to_string (name : name) : string = Names.name_to_string name
-
 let fun_name_to_string (name : fun_name) : string = name_to_string name
 
 (** Pretty-printing for types *)
@@ -48,9 +47,7 @@ module Types = struct
   }
 
   type stype_formatter = T.RegionVarId.id T.region type_formatter
-
   type rtype_formatter = T.RegionId.id T.region type_formatter
-
   type etype_formatter = T.erased_region type_formatter
 
   let integer_type_to_string = function
@@ -906,6 +903,15 @@ module LlbcAst = struct
         let ops = List.map (operand_to_string fmt) ops in
         match akind with
         | E.AggregatedTuple -> "(" ^ String.concat ", " ops ^ ")"
+        | E.AggregatedOption (variant_id, _ty) ->
+            if variant_id == T.option_none_id then (
+              assert (ops == []);
+              "@Option::None")
+            else if variant_id == T.option_some_id then (
+              assert (List.length ops == 1);
+              let op = List.hd ops in
+              "@Option::Some(" ^ op ^ ")")
+            else raise (Failure "Unreachable")
         | E.AggregatedAdt (def_id, opt_variant_id, _regions, _types) ->
             let adt_name = fmt.type_decl_id_to_string def_id in
             let variant_name =

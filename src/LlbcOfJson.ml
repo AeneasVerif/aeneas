@@ -423,6 +423,10 @@ let aggregate_kind_of_json (js : json) : (E.aggregate_kind, string) result =
   combine_error_msgs js "operand_kind_of_json"
     (match js with
     | `String "AggregatedTuple" -> Ok E.AggregatedTuple
+    | `Assoc [ ("AggregatedOption", `List [ variant_id; ty ]) ] ->
+        let* variant_id = T.VariantId.id_of_json variant_id in
+        let* ty = ety_of_json ty in
+        Ok (E.AggregatedOption (variant_id, ty))
     | `Assoc [ ("AggregatedAdt", `List [ id; opt_variant_id; regions; tys ]) ]
       ->
         let* id = T.TypeDeclId.id_of_json id in
