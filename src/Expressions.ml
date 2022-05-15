@@ -16,12 +16,15 @@ type projection_elem =
 [@@deriving show]
 
 type projection = projection_elem list [@@deriving show]
-
 type place = { var_id : VarId.id; projection : projection } [@@deriving show]
-
 type borrow_kind = Shared | Mut | TwoPhaseMut [@@deriving show]
 
-type unop = Not | Neg [@@deriving show, ord]
+type unop =
+  | Not
+  | Neg
+  | Cast of integer_type * integer_type
+      (** Cast an integer from a source type to a target type *)
+[@@deriving show, ord]
 
 (** A binary operation
 
@@ -118,6 +121,8 @@ type operand =
  *)
 type aggregate_kind =
   | AggregatedTuple
+  | AggregatedOption of VariantId.id * ety
+  (* TODO: AggregatedOption should be merged with AggregatedAdt *)
   | AggregatedAdt of
       TypeDeclId.id * VariantId.id option * erased_region list * ety list
 [@@deriving show]

@@ -145,6 +145,10 @@ let scalar_sub (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scala
 let scalar_mul (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scalar ty) =
   mk_scalar ty (x * y)
 
+(** Cast an integer from a [src_ty] to a [tgt_ty] *)
+let scalar_cast (src_ty : scalar_ty) (tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) =
+  mk_scalar tgt_ty x
+
 /// The scalar types
 type isize : eqtype = scalar Isize
 type i8 : eqtype = scalar I8

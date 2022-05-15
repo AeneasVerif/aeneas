@@ -121,7 +121,10 @@ let type_decl_get_instantiated_variants_fields_rtypes (def : T.type_decl)
           variants
     | T.Struct fields -> [ (None, fields) ]
     | T.Opaque ->
-        raise (Failure ("Can't retrieve the variants of an opaque type: " ^ Names.name_to_string def.name))
+        raise
+          (Failure
+             ("Can't retrieve the variants of an opaque type: "
+             ^ Names.name_to_string def.name))
   in
   List.map
     (fun (id, fields) ->
@@ -243,8 +246,11 @@ let rvalue_substitute (tsubst : T.TypeVarId.id -> T.ety) (rv : E.rvalue) :
       let kind =
         match kind with
         | E.AggregatedTuple -> E.AggregatedTuple
+        | E.AggregatedOption (variant_id, ty) ->
+            let rsubst r = r in
+            E.AggregatedOption (variant_id, ty_substitute rsubst tsubst ty)
         | E.AggregatedAdt (def_id, variant_id, regions, tys) ->
-            let rsubst x = x in
+            let rsubst r = r in
             E.AggregatedAdt
               ( def_id,
                 variant_id,

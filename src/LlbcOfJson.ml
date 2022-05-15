@@ -367,6 +367,10 @@ let unop_of_json (js : json) : (E.unop, string) result =
   match js with
   | `String "Not" -> Ok E.Not
   | `String "Neg" -> Ok E.Neg
+  | `Assoc [ ("Cast", `List [ src_ty; tgt_ty ]) ] ->
+      let* src_ty = integer_type_of_json src_ty in
+      let* tgt_ty = integer_type_of_json tgt_ty in
+      Ok (E.Cast (src_ty, tgt_ty))
   | _ -> Error ("unop_of_json failed on:" ^ show js)
 
 let binop_of_json (js : json) : (E.binop, string) result =
@@ -423,6 +427,10 @@ let aggregate_kind_of_json (js : json) : (E.aggregate_kind, string) result =
   combine_error_msgs js "operand_kind_of_json"
     (match js with
     | `String "AggregatedTuple" -> Ok E.AggregatedTuple
+    | `Assoc [ ("AggregatedOption", `List [ variant_id; ty ]) ] ->
+        let* variant_id = T.VariantId.id_of_json variant_id in
+        let* ty = ety_of_json ty in
+        Ok (E.AggregatedOption (variant_id, ty))
     | `Assoc [ ("AggregatedAdt", `List [ id; opt_variant_id; regions; tys ]) ]
       ->
         let* id = T.TypeDeclId.id_of_json id in

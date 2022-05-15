@@ -44,7 +44,10 @@ let fstar_int_name (int_ty : integer_type) =
 
 (** Small helper to compute the name of a unary operation *)
 let fstar_unop_name (unop : unop) : string =
-  match unop with Not -> "not" | Neg int_ty -> fstar_int_name int_ty ^ "_neg"
+  match unop with
+  | Not -> "not"
+  | Neg int_ty -> fstar_int_name int_ty ^ "_neg"
+  | Cast _ -> raise (Failure "Unsupported")
 
 (** Small helper to compute the name of a binary operation (note that many
     binary operations like "less than" are extracted to primitive operations,
@@ -83,7 +86,9 @@ let fstar_keywords =
       "rec";
       "in";
       "fn";
+      "val";
       "int";
+      "nat";
       "list";
       "FStar";
       "FStar.Mul";
@@ -95,6 +100,7 @@ let fstar_keywords =
       "Type0";
       "unit";
       "not";
+      "scalar_cast";
     ]
   in
   List.concat [ named_unops; named_binops; misc ]
@@ -142,12 +148,29 @@ let fstar_names_map_init =
 let fstar_extract_unop (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpression) : unit
     =
-  let unop = fstar_unop_name unop in
-  if inside then F.pp_print_string fmt "(";
-  F.pp_print_string fmt unop;
-  F.pp_print_space fmt ();
-  extract_expr true arg;
-  if inside then F.pp_print_string fmt ")"
+  match unop with
+  | Not | Neg _ ->
+      let unop = fstar_unop_name unop in
+      if inside then F.pp_print_string fmt "(";
+      F.pp_print_string fmt unop;
+      F.pp_print_space fmt ();
+      extract_expr true arg;
+      if inside then F.pp_print_string fmt ")"
+  | Cast (src, tgt) ->
+      (* The source type is an implicit parameter *)
+      if inside then F.pp_print_string fmt "(";
+      F.pp_print_string fmt "scalar_cast";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt
+        (StringUtils.capitalize_first_letter
+           (PrintPure.integer_type_to_string src));
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt
+        (StringUtils.capitalize_first_letter
+           (PrintPure.integer_type_to_string tgt));
+      F.pp_print_space fmt ();
+      extract_expr true arg;
+      if inside then F.pp_print_string fmt ")"
 
 let fstar_extract_binop (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (binop : E.binop)

@@ -61,15 +61,10 @@ let ast_to_type_formatter (fmt : ast_formatter) : type_formatter =
   value_to_type_formatter fmt
 
 let name_to_string = Print.name_to_string
-
 let fun_name_to_string = Print.fun_name_to_string
-
 let option_to_string = Print.option_to_string
-
 let type_var_to_string = Print.Types.type_var_to_string
-
 let integer_type_to_string = Print.Types.integer_type_to_string
-
 let scalar_value_to_string = Print.Values.scalar_value_to_string
 
 let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
@@ -419,7 +414,12 @@ let fun_suffix (rg_id : T.RegionGroupId.id option) : string =
   | Some rg_id -> "@" ^ T.RegionGroupId.to_string rg_id
 
 let unop_to_string (unop : unop) : string =
-  match unop with Not -> "¬" | Neg _ -> "-"
+  match unop with
+  | Not -> "¬"
+  | Neg _ -> "-"
+  | Cast (src, tgt) ->
+      "cast<" ^ integer_type_to_string src ^ "," ^ integer_type_to_string tgt
+      ^ ">"
 
 let binop_to_string = Print.LlbcAst.binop_to_string
 

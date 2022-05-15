@@ -7,15 +7,10 @@
  *)
 
 let code_0 = 48
-
 let code_9 = 57
-
 let code_A = 65
-
 let code_Z = 90
-
 let code_a = 97
-
 let code_z = 122
 
 let is_lowercase_ascii (c : char) : bool =
@@ -34,7 +29,6 @@ let is_digit_ascii (c : char) : bool =
   code_0 <= c && c <= code_9
 
 let lowercase_ascii = Char.lowercase_ascii
-
 let uppercase_ascii = Char.uppercase_ascii
 
 (** Using buffers as per:
@@ -96,6 +90,11 @@ let map (f : char -> string) (s : string) : string =
   let sl = List.map f (string_to_chars s) in
   let sl = List.map string_to_chars sl in
   string_of_chars (List.concat sl)
+
+let capitalize_first_letter (s : string) : string =
+  let s = string_to_chars s in
+  let s = match s with [] -> s | c :: s' -> uppercase_ascii c :: s' in
+  string_of_chars s
 
 (** Unit tests *)
 let _ =

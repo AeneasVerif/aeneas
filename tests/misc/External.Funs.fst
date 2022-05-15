@@ -109,8 +109,7 @@ let test_swap_non_zero_fwd (x : u32) (st : state) : result (state & u32) =
   | Return (st0, _) ->
     begin match swap_back u32 x 0 st with
     | Fail -> Fail
-    | Return (x0, _) ->
-      begin match x0 with | 0 -> Fail | _ -> Return (st0, x0) end
+    | Return (x0, _) -> if x0 = 0 then Fail else Return (st0, x0)
     end
   end
 

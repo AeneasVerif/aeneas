@@ -59,9 +59,9 @@ type list_t (t : Type0) =
 let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
   begin match l with
   | ListCons x tl ->
-    begin match i with
-    | 0 -> Return x
-    | _ ->
+    if i = 0
+    then Return x
+    else
       begin match u32_sub i 1 with
       | Fail -> Fail
       | Return i0 ->
@@ -70,7 +70,6 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
         | Return x0 -> Return x0
         end
       end
-    end
   | ListNil -> Fail
   end
 
@@ -79,9 +78,9 @@ let rec list_nth_mut_back
   (t : Type0) (l : list_t t) (i : u32) (ret : t) : result (list_t t) =
   begin match l with
   | ListCons x tl ->
-    begin match i with
-    | 0 -> Return (ListCons ret tl)
-    | _ ->
+    if i = 0
+    then Return (ListCons ret tl)
+    else
       begin match u32_sub i 1 with
       | Fail -> Fail
       | Return i0 ->
@@ -90,7 +89,6 @@ let rec list_nth_mut_back
         | Return tl0 -> Return (ListCons x tl0)
         end
       end
-    end
   | ListNil -> Fail
   end
 

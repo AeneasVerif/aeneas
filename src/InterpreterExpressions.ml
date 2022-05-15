@@ -274,6 +274,15 @@ let eval_unary_op_concrete (config : C.config) (unop : E.unop) (op : E.operand)
         match mk_scalar sv.int_ty i with
         | Error _ -> cf (Error EPanic)
         | Ok sv -> cf (Ok { v with V.value = V.Concrete (V.Scalar sv) }))
+    | E.Cast (src_ty, tgt_ty), V.Concrete (V.Scalar sv) -> (
+        assert (src_ty == sv.int_ty);
+        let i = sv.V.value in
+        match mk_scalar tgt_ty i with
+        | Error _ -> cf (Error EPanic)
+        | Ok sv ->
+            let ty = T.Integer tgt_ty in
+            let value = V.Concrete (V.Scalar sv) in
+            cf (Ok { V.ty; value }))
     | _ -> raise (Failure "Invalid input for unop")
   in
   comp eval_op apply cf
@@ -291,6 +300,7 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
       match (unop, v.V.ty) with
       | E.Not, T.Bool -> T.Bool
       | E.Neg, T.Integer int_ty -> T.Integer int_ty
+      | E.Cast (_, tgt_ty), _ -> T.Integer tgt_ty
       | _ -> raise (Failure "Invalid input for unop")
     in
     let res_sv =
@@ -606,6 +616,20 @@ let eval_rvalue_aggregate (config : C.config)
         let v = V.Adt { variant_id = None; field_values = values } in
         let ty = T.Adt (T.Tuple, [], tys) in
         let aggregated : V.typed_value = { V.value = v; ty } in
+        (* Call the continuation *)
+        cf aggregated ctx
+    | E.AggregatedOption (variant_id, ty) ->
+        (* Sanity check *)
+        if variant_id == T.option_none_id then assert (values == [])
+        else if variant_id == T.option_some_id then
+          assert (List.length values == 1)
+        else raise (Failure "Unreachable");
+        (* Construt the value *)
+        let aty = T.Adt (T.Assumed T.Option, [], [ ty ]) in
+        let av : V.adt_value =
+          { V.variant_id = Some variant_id; V.field_values = values }
+        in
+        let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
         (* Call the continuation *)
         cf aggregated ctx
     | E.AggregatedAdt (def_id, opt_variant_id, regions, types) ->
