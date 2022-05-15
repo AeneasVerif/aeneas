@@ -146,7 +146,7 @@ let scalar_mul (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scala
   mk_scalar ty (x * y)
 
 (** Cast an integer from a [src_ty] to a [tgt_ty] *)
-let scalar_cast (#src_ty : scalar_ty) (tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) =
+let scalar_cast (src_ty : scalar_ty) (tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) =
   mk_scalar tgt_ty x
 
 /// The scalar types

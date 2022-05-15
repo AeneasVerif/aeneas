@@ -135,9 +135,9 @@ let rec betree_list_split_at_fwd
   Tot (result ((betree_list_t t) & (betree_list_t t)))
   (decreases (betree_list_split_at_decreases t self n))
   =
-  begin match n with
-  | 0 -> Return (BetreeListNil, self)
-  | _ ->
+  if n = 0
+  then Return (BetreeListNil, self)
+  else
     begin match self with
     | BetreeListCons hd tl ->
       begin match u64_sub n 1 with
@@ -152,7 +152,6 @@ let rec betree_list_split_at_fwd
       end
     | BetreeListNil -> Fail
     end
-  end
 
 (** [betree_main::betree::List::{1}::push_front] *)
 let betree_list_push_front_fwd_back
@@ -528,10 +527,7 @@ and betree_node_lookup_fwd
           let (k, msg) = p in
           if k <> key
           then
-            begin match
-              betree_internal_lookup_in_children_fwd (Mkbetree_internal_t
-                node.betree_internal_id node.betree_internal_pivot
-                node.betree_internal_left node.betree_internal_right) key st0
+            begin match betree_internal_lookup_in_children_fwd node key st0
               with
             | Fail -> Fail
             | Return (st1, opt) ->
@@ -559,10 +555,7 @@ and betree_node_lookup_fwd
               | Return _ -> Return (st0, None)
               end
             | BetreeMessageUpsert ufs ->
-              begin match
-                betree_internal_lookup_in_children_fwd (Mkbetree_internal_t
-                  node.betree_internal_id node.betree_internal_pivot
-                  node.betree_internal_left node.betree_internal_right) key st0
+              begin match betree_internal_lookup_in_children_fwd node key st0
                 with
               | Fail -> Fail
               | Return (st1, v) ->
@@ -572,10 +565,7 @@ and betree_node_lookup_fwd
                 | Fail -> Fail
                 | Return (st2, v0) ->
                   begin match
-                    betree_internal_lookup_in_children_back
-                      (Mkbetree_internal_t node.betree_internal_id
-                      node.betree_internal_pivot node.betree_internal_left
-                      node.betree_internal_right) key st0 with
+                    betree_internal_lookup_in_children_back node key st0 with
                   | Fail -> Fail
                   | Return node0 ->
                     begin match
@@ -601,11 +591,7 @@ and betree_node_lookup_fwd
               end
             end
         | BetreeListNil ->
-          begin match
-            betree_internal_lookup_in_children_fwd (Mkbetree_internal_t
-              node.betree_internal_id node.betree_internal_pivot
-              node.betree_internal_left node.betree_internal_right) key st0
-            with
+          begin match betree_internal_lookup_in_children_fwd node key st0 with
           | Fail -> Fail
           | Return (st1, opt) ->
             begin match
@@ -653,10 +639,7 @@ and betree_node_lookup_back
                 (BetreeListCons (k, msg) l) with
             | Fail -> Fail
             | Return _ ->
-              begin match
-                betree_internal_lookup_in_children_back (Mkbetree_internal_t
-                  node.betree_internal_id node.betree_internal_pivot
-                  node.betree_internal_left node.betree_internal_right) key st0
+              begin match betree_internal_lookup_in_children_back node key st0
                 with
               | Fail -> Fail
               | Return node0 -> Return (BetreeNodeInternal node0)
@@ -669,26 +652,17 @@ and betree_node_lookup_back
                 betree_node_lookup_first_message_for_key_back key msgs
                   (BetreeListCons (k, BetreeMessageInsert v) l) with
               | Fail -> Fail
-              | Return _ ->
-                Return (BetreeNodeInternal (Mkbetree_internal_t
-                  node.betree_internal_id node.betree_internal_pivot
-                  node.betree_internal_left node.betree_internal_right))
+              | Return _ -> Return (BetreeNodeInternal node)
               end
             | BetreeMessageDelete ->
               begin match
                 betree_node_lookup_first_message_for_key_back key msgs
                   (BetreeListCons (k, BetreeMessageDelete) l) with
               | Fail -> Fail
-              | Return _ ->
-                Return (BetreeNodeInternal (Mkbetree_internal_t
-                  node.betree_internal_id node.betree_internal_pivot
-                  node.betree_internal_left node.betree_internal_right))
+              | Return _ -> Return (BetreeNodeInternal node)
               end
             | BetreeMessageUpsert ufs ->
-              begin match
-                betree_internal_lookup_in_children_fwd (Mkbetree_internal_t
-                  node.betree_internal_id node.betree_internal_pivot
-                  node.betree_internal_left node.betree_internal_right) key st0
+              begin match betree_internal_lookup_in_children_fwd node key st0
                 with
               | Fail -> Fail
               | Return (st1, v) ->
@@ -698,10 +672,7 @@ and betree_node_lookup_back
                 | Fail -> Fail
                 | Return (st2, _) ->
                   begin match
-                    betree_internal_lookup_in_children_back
-                      (Mkbetree_internal_t node.betree_internal_id
-                      node.betree_internal_pivot node.betree_internal_left
-                      node.betree_internal_right) key st0 with
+                    betree_internal_lookup_in_children_back node key st0 with
                   | Fail -> Fail
                   | Return node0 ->
                     begin match
@@ -718,12 +689,7 @@ and betree_node_lookup_back
                           betree_store_internal_node_fwd
                             node0.betree_internal_id msgs0 st2 with
                         | Fail -> Fail
-                        | Return (_, _) ->
-                          Return (BetreeNodeInternal (Mkbetree_internal_t
-                            node0.betree_internal_id
-                            node0.betree_internal_pivot
-                            node0.betree_internal_left
-                            node0.betree_internal_right))
+                        | Return (_, _) -> Return (BetreeNodeInternal node0)
                         end
                       end
                     end
@@ -737,10 +703,7 @@ and betree_node_lookup_back
               BetreeListNil with
           | Fail -> Fail
           | Return _ ->
-            begin match
-              betree_internal_lookup_in_children_back (Mkbetree_internal_t
-                node.betree_internal_id node.betree_internal_pivot
-                node.betree_internal_left node.betree_internal_right) key st0
+            begin match betree_internal_lookup_in_children_back node key st0
               with
             | Fail -> Fail
             | Return node0 -> Return (BetreeNodeInternal node0)
@@ -755,9 +718,7 @@ and betree_node_lookup_back
     | Return (_, bindings) ->
       begin match betree_node_lookup_in_bindings_fwd key bindings with
       | Fail -> Fail
-      | Return _ ->
-        Return (BetreeNodeLeaf (Mkbetree_leaf_t node.betree_leaf_id
-          node.betree_leaf_size))
+      | Return _ -> Return (BetreeNodeLeaf node)
       end
     end
   end
@@ -1323,17 +1284,13 @@ and betree_node_apply_messages_fwd
           if num_msgs >= params.betree_params_min_flush_size
           then
             begin match
-              betree_internal_flush_fwd (Mkbetree_internal_t
-                node.betree_internal_id node.betree_internal_pivot
-                node.betree_internal_left node.betree_internal_right) params
-                node_id_cnt content0 st0 with
+              betree_internal_flush_fwd node params node_id_cnt content0 st0
+              with
             | Fail -> Fail
             | Return (st1, content1) ->
               begin match
-                betree_internal_flush_back (Mkbetree_internal_t
-                  node.betree_internal_id node.betree_internal_pivot
-                  node.betree_internal_left node.betree_internal_right) params
-                  node_id_cnt content0 st0 with
+                betree_internal_flush_back node params node_id_cnt content0 st0
+                with
               | Fail -> Fail
               | Return (node0, _) ->
                 begin match
@@ -1370,8 +1327,7 @@ and betree_node_apply_messages_fwd
             if len >= i
             then
               begin match
-                betree_leaf_split_fwd (Mkbetree_leaf_t node.betree_leaf_id
-                  node.betree_leaf_size) content0 params node_id_cnt st0 with
+                betree_leaf_split_fwd node content0 params node_id_cnt st0 with
               | Fail -> Fail
               | Return (st1, _) ->
                 begin match
@@ -1418,17 +1374,13 @@ and betree_node_apply_messages_back
           if num_msgs >= params.betree_params_min_flush_size
           then
             begin match
-              betree_internal_flush_fwd (Mkbetree_internal_t
-                node.betree_internal_id node.betree_internal_pivot
-                node.betree_internal_left node.betree_internal_right) params
-                node_id_cnt content0 st0 with
+              betree_internal_flush_fwd node params node_id_cnt content0 st0
+              with
             | Fail -> Fail
             | Return (st1, content1) ->
               begin match
-                betree_internal_flush_back (Mkbetree_internal_t
-                  node.betree_internal_id node.betree_internal_pivot
-                  node.betree_internal_left node.betree_internal_right) params
-                  node_id_cnt content0 st0 with
+                betree_internal_flush_back node params node_id_cnt content0 st0
+                with
               | Fail -> Fail
               | Return (node0, node_id_cnt0) ->
                 begin match
@@ -1436,10 +1388,7 @@ and betree_node_apply_messages_back
                     content1 st1 with
                 | Fail -> Fail
                 | Return (_, _) ->
-                  Return (BetreeNodeInternal (Mkbetree_internal_t
-                    node0.betree_internal_id node0.betree_internal_pivot
-                    node0.betree_internal_left node0.betree_internal_right),
-                    node_id_cnt0)
+                  Return (BetreeNodeInternal node0, node_id_cnt0)
                 end
               end
             end
@@ -1448,11 +1397,7 @@ and betree_node_apply_messages_back
               betree_store_internal_node_fwd node.betree_internal_id content0
                 st0 with
             | Fail -> Fail
-            | Return (_, _) ->
-              Return (BetreeNodeInternal (Mkbetree_internal_t
-                node.betree_internal_id node.betree_internal_pivot
-                node.betree_internal_left node.betree_internal_right),
-                node_id_cnt)
+            | Return (_, _) -> Return (BetreeNodeInternal node, node_id_cnt)
             end
         end
       end
@@ -1473,8 +1418,7 @@ and betree_node_apply_messages_back
             if len >= i
             then
               begin match
-                betree_leaf_split_fwd (Mkbetree_leaf_t node.betree_leaf_id
-                  node.betree_leaf_size) content0 params node_id_cnt st0 with
+                betree_leaf_split_fwd node content0 params node_id_cnt st0 with
               | Fail -> Fail
               | Return (st1, new_node) ->
                 begin match
@@ -1483,8 +1427,7 @@ and betree_node_apply_messages_back
                 | Fail -> Fail
                 | Return (_, _) ->
                   begin match
-                    betree_leaf_split_back (Mkbetree_leaf_t node.betree_leaf_id
-                      node.betree_leaf_size) content0 params node_id_cnt st0
+                    betree_leaf_split_back node content0 params node_id_cnt st0
                     with
                   | Fail -> Fail
                   | Return node_id_cnt0 ->

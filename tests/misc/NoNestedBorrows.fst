@@ -56,10 +56,14 @@ let rem_test_fwd (x : u32) (y : u32) : result u32 =
 
 (** [no_nested_borrows::cast_test] *)
 let cast_test_fwd (x : u32) : result i32 =
-  begin match scalar_cast I32 x with | Fail -> Fail | Return i -> Return i end
+  begin match scalar_cast U32 I32 x with
+  | Fail -> Fail
+  | Return i -> Return i
+  end
 
 (** [no_nested_borrows::test2] *)
-let test2_fwd : result unit = Return ()
+let test2_fwd : result unit =
+  begin match u32_add 23 44 with | Fail -> Fail | Return _ -> Return () end
 
 (** Unit test for [no_nested_borrows::test2] *)
 let _ = assert_norm (test2_fwd = Return ())
@@ -87,7 +91,11 @@ let test3_fwd : result unit =
 let _ = assert_norm (test3_fwd = Return ())
 
 (** [no_nested_borrows::test_neg1] *)
-let test_neg1_fwd : result unit = Return ()
+let test_neg1_fwd : result unit =
+  begin match i32_neg 3 with
+  | Fail -> Fail
+  | Return y -> if not (y = -3) then Fail else Return ()
+  end
 
 (** Unit test for [no_nested_borrows::test_neg1] *)
 let _ = assert_norm (test_neg1_fwd = Return ())
@@ -222,27 +230,25 @@ and node_elem_t (t : Type0) =
 
 (** [no_nested_borrows::even] *)
 let rec even_fwd (x : u32) : result bool =
-  begin match x with
-  | 0 -> Return true
-  | _ ->
+  if x = 0
+  then Return true
+  else
     begin match u32_sub x 1 with
     | Fail -> Fail
     | Return i ->
       begin match odd_fwd i with | Fail -> Fail | Return b -> Return b end
     end
-  end
 
 (** [no_nested_borrows::odd] *)
 and odd_fwd (x : u32) : result bool =
-  begin match x with
-  | 0 -> Return false
-  | _ ->
+  if x = 0
+  then Return false
+  else
     begin match u32_sub x 1 with
     | Fail -> Fail
     | Return i ->
       begin match even_fwd i with | Fail -> Fail | Return b -> Return b end
     end
-  end
 
 (** [no_nested_borrows::test_even_odd] *)
 let test_even_odd_fwd : result unit =
@@ -291,9 +297,9 @@ let rec list_length_fwd (t : Type0) (l : list_t t) : result u32 =
 let rec list_nth_shared_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
   begin match l with
   | ListCons x tl ->
-    begin match i with
-    | 0 -> Return x
-    | _ ->
+    if i = 0
+    then Return x
+    else
       begin match u32_sub i 1 with
       | Fail -> Fail
       | Return i0 ->
@@ -302,7 +308,6 @@ let rec list_nth_shared_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
         | Return x0 -> Return x0
         end
       end
-    end
   | ListNil -> Fail
   end
 
@@ -310,9 +315,9 @@ let rec list_nth_shared_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
 let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
   begin match l with
   | ListCons x tl ->
-    begin match i with
-    | 0 -> Return x
-    | _ ->
+    if i = 0
+    then Return x
+    else
       begin match u32_sub i 1 with
       | Fail -> Fail
       | Return i0 ->
@@ -321,7 +326,6 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
         | Return x0 -> Return x0
         end
       end
-    end
   | ListNil -> Fail
   end
 
@@ -330,9 +334,9 @@ let rec list_nth_mut_back
   (t : Type0) (l : list_t t) (i : u32) (ret : t) : result (list_t t) =
   begin match l with
   | ListCons x tl ->
-    begin match i with
-    | 0 -> Return (ListCons ret tl)
-    | _ ->
+    if i = 0
+    then Return (ListCons ret tl)
+    else
       begin match u32_sub i 1 with
       | Fail -> Fail
       | Return i0 ->
@@ -341,7 +345,6 @@ let rec list_nth_mut_back
         | Return tl0 -> Return (ListCons x tl0)
         end
       end
-    end
   | ListNil -> Fail
   end
 

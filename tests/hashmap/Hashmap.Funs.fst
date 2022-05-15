@@ -16,9 +16,9 @@ let rec hash_map_allocate_slots_fwd
   Tot (result (vec (list_t t)))
   (decreases (hash_map_allocate_slots_decreases t slots n))
   =
-  begin match n with
-  | 0 -> Return slots
-  | _ ->
+  if n = 0
+  then Return slots
+  else
     begin match vec_push_back (list_t t) slots ListNil with
     | Fail -> Fail
     | Return slots0 ->
@@ -31,7 +31,6 @@ let rec hash_map_allocate_slots_fwd
         end
       end
     end
-  end
 
 (** [hashmap::HashMap::{0}::new_with_capacity] *)
 let hash_map_new_with_capacity_fwd
@@ -245,35 +244,39 @@ let rec hash_map_move_elements_fwd_back
 (** [hashmap::HashMap::{0}::try_resize] *)
 let hash_map_try_resize_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
-  let capacity = vec_len (list_t t) self.hash_map_slots in
-  begin match usize_div 4294967295 2 with
+  begin match scalar_cast U32 Usize 4294967295 with
   | Fail -> Fail
-  | Return n1 ->
-    let (i, i0) = self.hash_map_max_load_factor in
-    begin match usize_div n1 i with
+  | Return max_usize ->
+    let capacity = vec_len (list_t t) self.hash_map_slots in
+    begin match usize_div max_usize 2 with
     | Fail -> Fail
-    | Return i1 ->
-      if capacity <= i1
-      then
-        begin match usize_mul capacity 2 with
-        | Fail -> Fail
-        | Return i2 ->
-          begin match hash_map_new_with_capacity_fwd t i2 i i0 with
+    | Return n1 ->
+      let (i, i0) = self.hash_map_max_load_factor in
+      begin match usize_div n1 i with
+      | Fail -> Fail
+      | Return i1 ->
+        if capacity <= i1
+        then
+          begin match usize_mul capacity 2 with
           | Fail -> Fail
-          | Return ntable ->
-            begin match
-              hash_map_move_elements_fwd_back t ntable self.hash_map_slots 0
-              with
+          | Return i2 ->
+            begin match hash_map_new_with_capacity_fwd t i2 i i0 with
             | Fail -> Fail
-            | Return (ntable0, _) ->
-              Return (Mkhash_map_t self.hash_map_num_entries (i, i0)
-                ntable0.hash_map_max_load ntable0.hash_map_slots)
+            | Return ntable ->
+              begin match
+                hash_map_move_elements_fwd_back t ntable self.hash_map_slots 0
+                with
+              | Fail -> Fail
+              | Return (ntable0, _) ->
+                Return (Mkhash_map_t self.hash_map_num_entries (i, i0)
+                  ntable0.hash_map_max_load ntable0.hash_map_slots)
+              end
             end
           end
-        end
-      else
-        Return (Mkhash_map_t self.hash_map_num_entries (i, i0)
-          self.hash_map_max_load self.hash_map_slots)
+        else
+          Return (Mkhash_map_t self.hash_map_num_entries (i, i0)
+            self.hash_map_max_load self.hash_map_slots)
+      end
     end
   end
 
@@ -290,17 +293,11 @@ let hash_map_insert_fwd_back
     | Return i ->
       if i > self0.hash_map_max_load
       then
-        begin match
-          hash_map_try_resize_fwd_back t (Mkhash_map_t
-            self0.hash_map_num_entries self0.hash_map_max_load_factor
-            self0.hash_map_max_load self0.hash_map_slots) with
+        begin match hash_map_try_resize_fwd_back t self0 with
         | Fail -> Fail
         | Return self1 -> Return self1
         end
-      else
-        Return (Mkhash_map_t self0.hash_map_num_entries
-          self0.hash_map_max_load_factor self0.hash_map_max_load
-          self0.hash_map_slots)
+      else Return self0
     end
   end
 
