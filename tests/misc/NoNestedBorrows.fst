@@ -30,6 +30,10 @@ type sum_t (t1 t2 : Type0) =
 | SumLeft : t1 -> sum_t t1 t2
 | SumRight : t2 -> sum_t t1 t2
 
+(** [no_nested_borrows::neg_test] *)
+let neg_test_fwd (x : i32) : result i32 =
+  begin match i32_neg x with | Fail -> Fail | Return i -> Return i end
+
 (** [no_nested_borrows::add_test] *)
 let add_test_fwd (x : u32) (y : u32) : result u32 =
   begin match u32_add x y with | Fail -> Fail | Return i -> Return i end
@@ -41,6 +45,10 @@ let subs_test_fwd (x : u32) (y : u32) : result u32 =
 (** [no_nested_borrows::div_test] *)
 let div_test_fwd (x : u32) (y : u32) : result u32 =
   begin match u32_div x y with | Fail -> Fail | Return i -> Return i end
+
+(** [no_nested_borrows::div_test1] *)
+let div_test1_fwd (x : u32) : result u32 =
+  begin match u32_div x 2 with | Fail -> Fail | Return i -> Return i end
 
 (** [no_nested_borrows::rem_test] *)
 let rem_test_fwd (x : u32) (y : u32) : result u32 =
@@ -73,12 +81,6 @@ let test3_fwd : result unit =
 
 (** Unit test for [no_nested_borrows::test3] *)
 let _ = assert_norm (test3_fwd = Return ())
-
-(** [no_nested_borrows::test_neg] *)
-let test_neg_fwd (x : i32) : result i32 =
-  if x = -2147483648
-  then Fail
-  else begin match i32_neg x with | Fail -> Fail | Return i -> Return i end
 
 (** [no_nested_borrows::test_neg1] *)
 let test_neg1_fwd : result unit = Return ()
