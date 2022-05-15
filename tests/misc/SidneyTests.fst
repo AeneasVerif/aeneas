@@ -3,11 +3,412 @@
 module SidneyTests
 open Primitives
 
-#set-options "--z3rlimit 50 --fuel 0 --ifuel 1"
+#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [sidney_tests::test] *)
-let test_fwd : result unit = Return ()
+(** [sidney_tests::btree::Ordering] *)
+type btree_ordering_t =
+| BtreeOrderingEqual : btree_ordering_t
+| BtreeOrderingLess : btree_ordering_t
+| BtreeOrderingGreater : btree_ordering_t
 
-(** Unit test for [sidney_tests::test] *)
-let _ = assert_norm (test_fwd = Return ())
+(** [sidney_tests::btree::cmp] *)
+let btree_cmp_fwd (l : i32) (r : i32) : result btree_ordering_t =
+  if l < r
+  then Return BtreeOrderingLess
+  else if l > r then Return BtreeOrderingGreater else Return BtreeOrderingEqual
+
+(** [sidney_tests::btree::BNode] *)
+type btree_bnode_t (v : Type0) =
+{
+  btree_bnode_key : i32;
+  btree_bnode_value : v;
+  btree_bnode_left : btree_btree_t v;
+  btree_bnode_right : btree_btree_t v;
+}
+
+(** [sidney_tests::btree::BTree] *)
+and btree_btree_t (v : Type0) =
+| BtreeBTreeLeaf : btree_btree_t v
+| BtreeBTreeNode : btree_bnode_t v -> btree_btree_t v
+
+(** [sidney_tests::btree::BTree::{0}::new] *)
+let btree_btree_new_fwd (v : Type0) : result (btree_btree_t v) =
+  Return BtreeBTreeLeaf
+
+(** [sidney_tests::btree::BTree::{0}::check_integrity] *)
+let rec btree_btree_check_integrity_fwd
+  (v : Type0) (self : btree_btree_t v) : result unit =
+  begin match self with
+  | BtreeBTreeLeaf -> Return ()
+  | BtreeBTreeNode n ->
+    begin match n.btree_bnode_left with
+    | BtreeBTreeLeaf ->
+      begin match n.btree_bnode_right with
+      | BtreeBTreeLeaf -> Return ()
+      | BtreeBTreeNode right ->
+        begin match btree_btree_check_integrity_fwd v (BtreeBTreeNode right)
+          with
+        | Fail -> Fail
+        | Return _ ->
+          if not (right.btree_bnode_key > n.btree_bnode_key)
+          then Fail
+          else Fail
+        end
+      end
+    | BtreeBTreeNode left ->
+      begin match btree_btree_check_integrity_fwd v (BtreeBTreeNode left) with
+      | Fail -> Fail
+      | Return _ ->
+        if not (left.btree_bnode_key < n.btree_bnode_key) then Fail else Fail
+      end
+    end
+  end
+
+(** [sidney_tests::btree::BTree::{0}::is_leaf] *)
+let btree_btree_is_leaf_fwd
+  (v : Type0) (self : btree_btree_t v) : result bool =
+  begin match self with
+  | BtreeBTreeLeaf -> Return true
+  | BtreeBTreeNode b -> Return false
+  end
+
+(** [sidney_tests::btree::BTree::{0}::contains] *)
+let rec btree_btree_contains_fwd
+  (v : Type0) (self : btree_btree_t v) (k : i32) : result bool =
+  begin match self with
+  | BtreeBTreeLeaf -> Return false
+  | BtreeBTreeNode n ->
+    begin match btree_cmp_fwd k n.btree_bnode_key with
+    | Fail -> Fail
+    | Return o ->
+      begin match o with
+      | BtreeOrderingEqual -> Return true
+      | BtreeOrderingLess ->
+        begin match btree_btree_contains_fwd v n.btree_bnode_left k with
+        | Fail -> Fail
+        | Return b -> Return b
+        end
+      | BtreeOrderingGreater ->
+        begin match btree_btree_contains_fwd v n.btree_bnode_right k with
+        | Fail -> Fail
+        | Return b -> Return b
+        end
+      end
+    end
+  end
+
+(** [sidney_tests::btree::BTree::{0}::get_mut] *)
+let rec btree_btree_get_mut_fwd
+  (v : Type0) (self : btree_btree_t v) (k : i32) : result v =
+  begin match self with
+  | BtreeBTreeLeaf -> Fail
+  | BtreeBTreeNode n ->
+    begin match btree_cmp_fwd k n.btree_bnode_key with
+    | Fail -> Fail
+    | Return o ->
+      begin match o with
+      | BtreeOrderingEqual -> Return n.btree_bnode_value
+      | BtreeOrderingLess ->
+        begin match btree_btree_get_mut_fwd v n.btree_bnode_left k with
+        | Fail -> Fail
+        | Return x -> Return x
+        end
+      | BtreeOrderingGreater ->
+        begin match btree_btree_get_mut_fwd v n.btree_bnode_right k with
+        | Fail -> Fail
+        | Return x -> Return x
+        end
+      end
+    end
+  end
+
+(** [sidney_tests::btree::BTree::{0}::get_mut] *)
+let rec btree_btree_get_mut_back
+  (v : Type0) (self : btree_btree_t v) (k : i32) (ret : v) :
+  result (btree_btree_t v)
+  =
+  begin match self with
+  | BtreeBTreeLeaf -> Fail
+  | BtreeBTreeNode n ->
+    begin match btree_cmp_fwd k n.btree_bnode_key with
+    | Fail -> Fail
+    | Return o ->
+      begin match o with
+      | BtreeOrderingEqual ->
+        Return (BtreeBTreeNode (Mkbtree_bnode_t n.btree_bnode_key ret
+          n.btree_bnode_left n.btree_bnode_right))
+      | BtreeOrderingLess ->
+        begin match btree_btree_get_mut_back v n.btree_bnode_left k ret with
+        | Fail -> Fail
+        | Return b ->
+          Return (BtreeBTreeNode (Mkbtree_bnode_t n.btree_bnode_key
+            n.btree_bnode_value b n.btree_bnode_right))
+        end
+      | BtreeOrderingGreater ->
+        begin match btree_btree_get_mut_back v n.btree_bnode_right k ret with
+        | Fail -> Fail
+        | Return b ->
+          Return (BtreeBTreeNode (Mkbtree_bnode_t n.btree_bnode_key
+            n.btree_bnode_value n.btree_bnode_left b))
+        end
+      end
+    end
+  end
+
+(** [sidney_tests::btree::BTree::{0}::insert] *)
+let rec btree_btree_insert_fwd_back
+  (v : Type0) (self : btree_btree_t v) (k : i32) (v0 : v) :
+  result (btree_btree_t v)
+  =
+  begin match self with
+  | BtreeBTreeLeaf ->
+    let b = Mkbtree_bnode_t k v0 BtreeBTreeLeaf BtreeBTreeLeaf in
+    Return
+    (BtreeBTreeNode
+    b)
+  | BtreeBTreeNode n ->
+    begin match btree_cmp_fwd k n.btree_bnode_key with
+    | Fail -> Fail
+    | Return o ->
+      begin match o with
+      | BtreeOrderingEqual ->
+        Return (BtreeBTreeNode (Mkbtree_bnode_t n.btree_bnode_key v0
+          n.btree_bnode_left n.btree_bnode_right))
+      | BtreeOrderingLess ->
+        begin match btree_btree_insert_fwd_back v n.btree_bnode_left k v0 with
+        | Fail -> Fail
+        | Return b ->
+          Return (BtreeBTreeNode (Mkbtree_bnode_t n.btree_bnode_key
+            n.btree_bnode_value b n.btree_bnode_right))
+        end
+      | BtreeOrderingGreater ->
+        begin match btree_btree_insert_fwd_back v n.btree_bnode_right k v0 with
+        | Fail -> Fail
+        | Return b ->
+          Return (BtreeBTreeNode (Mkbtree_bnode_t n.btree_bnode_key
+            n.btree_bnode_value n.btree_bnode_left b))
+        end
+      end
+    end
+  end
+
+(** [sidney_tests::btree::BTree::{0}::as_node_mut] *)
+let btree_btree_as_node_mut_fwd
+  (v : Type0) (self : btree_btree_t v) : result (btree_bnode_t v) =
+  begin match self with
+  | BtreeBTreeLeaf -> Fail
+  | BtreeBTreeNode n -> Return n
+  end
+
+(** [sidney_tests::btree::BTree::{0}::as_node_mut] *)
+let btree_btree_as_node_mut_back
+  (v : Type0) (self : btree_btree_t v) (ret : btree_bnode_t v) :
+  result (btree_btree_t v)
+  =
+  begin match self with
+  | BtreeBTreeLeaf -> Fail
+  | BtreeBTreeNode n -> Return (BtreeBTreeNode ret)
+  end
+
+(** [sidney_tests::btree::BTree::{0}::get_leftmost] *)
+let rec btree_btree_get_leftmost_fwd
+  (v : Type0) (self : btree_btree_t v) : result (btree_btree_t v) =
+  begin match btree_btree_is_leaf_fwd v self with
+  | Fail -> Fail
+  | Return b ->
+    if b
+    then Fail
+    else
+      begin match btree_btree_as_node_mut_fwd v self with
+      | Fail -> Fail
+      | Return b0 ->
+        begin match btree_btree_is_leaf_fwd v b0.btree_bnode_left with
+        | Fail -> Fail
+        | Return b1 ->
+          if b1
+          then
+            begin match
+              btree_btree_as_node_mut_back v self (Mkbtree_bnode_t
+                b0.btree_bnode_key b0.btree_bnode_value b0.btree_bnode_left
+                b0.btree_bnode_right) with
+            | Fail -> Fail
+            | Return self0 -> Return self0
+            end
+          else
+            begin match
+              btree_btree_as_node_mut_back v self (Mkbtree_bnode_t
+                b0.btree_bnode_key b0.btree_bnode_value b0.btree_bnode_left
+                b0.btree_bnode_right) with
+            | Fail -> Fail
+            | Return self0 ->
+              begin match btree_btree_as_node_mut_fwd v self0 with
+              | Fail -> Fail
+              | Return b2 ->
+                begin match btree_btree_get_leftmost_fwd v b2.btree_bnode_left
+                  with
+                | Fail -> Fail
+                | Return b3 -> Return b3
+                end
+              end
+            end
+        end
+      end
+  end
+
+(** [sidney_tests::btree::BTree::{0}::get_leftmost] *)
+let rec btree_btree_get_leftmost_back
+  (v : Type0) (self : btree_btree_t v) (ret : btree_btree_t v) :
+  result (btree_btree_t v)
+  =
+  begin match btree_btree_is_leaf_fwd v self with
+  | Fail -> Fail
+  | Return b ->
+    if b
+    then Fail
+    else
+      begin match btree_btree_as_node_mut_fwd v self with
+      | Fail -> Fail
+      | Return b0 ->
+        begin match btree_btree_is_leaf_fwd v b0.btree_bnode_left with
+        | Fail -> Fail
+        | Return b1 ->
+          if b1
+          then
+            begin match
+              btree_btree_as_node_mut_back v self (Mkbtree_bnode_t
+                b0.btree_bnode_key b0.btree_bnode_value b0.btree_bnode_left
+                b0.btree_bnode_right) with
+            | Fail -> Fail
+            | Return _ -> Return ret
+            end
+          else
+            begin match
+              btree_btree_as_node_mut_back v self (Mkbtree_bnode_t
+                b0.btree_bnode_key b0.btree_bnode_value b0.btree_bnode_left
+                b0.btree_bnode_right) with
+            | Fail -> Fail
+            | Return self0 ->
+              begin match btree_btree_as_node_mut_fwd v self0 with
+              | Fail -> Fail
+              | Return b2 ->
+                begin match
+                  btree_btree_get_leftmost_back v b2.btree_bnode_left ret with
+                | Fail -> Fail
+                | Return b3 ->
+                  begin match
+                    btree_btree_as_node_mut_back v self0 (Mkbtree_bnode_t
+                      b2.btree_bnode_key b2.btree_bnode_value b3
+                      b2.btree_bnode_right) with
+                  | Fail -> Fail
+                  | Return self1 -> Return self1
+                  end
+                end
+              end
+            end
+        end
+      end
+  end
+
+(** [core::mem::swap] *)
+AssumeVal core_mem_swap_back0 (t : Type0) : t -> t -> result t
+
+(** [core::mem::swap] *)
+AssumeVal core_mem_swap_back1 (t : Type0) : t -> t -> result t
+
+(** [sidney_tests::btree::BTree::{0}::remove_current] *)
+let btree_btree_remove_current_fwd
+  (v : Type0) (self : btree_btree_t v) : result (btree_btree_t v) =
+  begin match self with
+  | BtreeBTreeLeaf -> Fail
+  | BtreeBTreeNode n ->
+    begin match btree_btree_is_leaf_fwd v n.btree_bnode_right with
+    | Fail -> Fail
+    | Return b ->
+      if b
+      then
+        let b0 =
+          mem_replace_fwd (btree_btree_t v) n.btree_bnode_left BtreeBTreeLeaf
+          in
+        Return
+        b0
+      else
+        begin match btree_btree_get_leftmost_fwd v n.btree_bnode_right with
+        | Fail -> Fail
+        | Return succ ->
+          begin match succ with
+          | BtreeBTreeLeaf -> Fail
+          | BtreeBTreeNode s ->
+            begin match
+              core_mem_swap_back0 i32 n.btree_bnode_key s.btree_bnode_key with
+            | Fail -> Fail
+            | Return _ ->
+              begin match
+                core_mem_swap_back1 i32 n.btree_bnode_key s.btree_bnode_key
+                with
+              | Fail -> Fail
+              | Return _ ->
+                begin match
+                  core_mem_swap_back0 v n.btree_bnode_value s.btree_bnode_value
+                  with
+                | Fail -> Fail
+                | Return _ ->
+                  begin match
+                    core_mem_swap_back1 v n.btree_bnode_value
+                      s.btree_bnode_value with
+                  | Fail -> Fail
+                  | Return _ ->
+                    let succ0 =
+                      mem_replace_fwd (btree_btree_t v) s.btree_bnode_right
+                        BtreeBTreeLeaf in
+                    begin match
+                      btree_btree_get_leftmost_back v n.btree_bnode_right succ0
+                      with
+                    | Fail -> Fail
+                    | Return _ -> Fail
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+    end
+  end
+
+(** [sidney_tests::btree::BTree::{0}::remove] *)
+let rec btree_btree_remove_fwd_back
+  (v : Type0) (self : btree_btree_t v) (k : i32) : result (btree_btree_t v) =
+  begin match self with
+  | BtreeBTreeLeaf -> Return BtreeBTreeLeaf
+  | BtreeBTreeNode n ->
+    begin match btree_cmp_fwd k n.btree_bnode_key with
+    | Fail -> Fail
+    | Return o ->
+      begin match o with
+      | BtreeOrderingEqual ->
+        let b =
+          mem_replace_fwd (btree_btree_t v) (BtreeBTreeNode (Mkbtree_bnode_t
+            n.btree_bnode_key n.btree_bnode_value n.btree_bnode_left
+            n.btree_bnode_right)) BtreeBTreeLeaf in
+        begin match btree_btree_remove_current_fwd v b with
+        | Fail -> Fail
+        | Return self0 -> Return self0
+        end
+      | BtreeOrderingLess ->
+        begin match btree_btree_remove_fwd_back v n.btree_bnode_left k with
+        | Fail -> Fail
+        | Return b ->
+          Return (BtreeBTreeNode (Mkbtree_bnode_t n.btree_bnode_key
+            n.btree_bnode_value b n.btree_bnode_right))
+        end
+      | BtreeOrderingGreater ->
+        begin match btree_btree_remove_fwd_back v n.btree_bnode_right k with
+        | Fail -> Fail
+        | Return b ->
+          Return (BtreeBTreeNode (Mkbtree_bnode_t n.btree_bnode_key
+            n.btree_bnode_value n.btree_bnode_left b))
+        end
+      end
+    end
+  end
 
