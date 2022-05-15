@@ -1177,6 +1177,12 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
             in
             (ctx, Unop (Neg int_ty), effect_info, args, None)
         | _ -> raise (Failure "Unreachable"))
+    | S.Unop (E.Cast (src_ty, tgt_ty)) ->
+        (* Note that cast can fail *)
+        let effect_info =
+          { can_fail = true; input_state = false; output_state = false }
+        in
+        (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None)
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->

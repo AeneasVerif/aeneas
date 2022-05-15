@@ -39,11 +39,8 @@ type assumed_ty = State | Result | Vec | Option [@@deriving show, ord]
  * the monadic functions `return` and `fail` (makes treatment of error and
  * state-error monads more uniform) *)
 let result_return_id = VariantId.of_int 0
-
 let result_fail_id = VariantId.of_int 1
-
 let option_some_id = T.option_some_id
-
 let option_none_id = T.option_none_id
 
 type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
@@ -53,11 +50,8 @@ type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
-
     method visit_id : 'env -> TypeVarId.id -> unit = fun _ _ -> ()
-
     method visit_type_id : 'env -> type_id -> unit = fun _ _ -> ()
-
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
   end
 
@@ -65,9 +59,7 @@ class ['self] iter_ty_base =
 class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
-
     method visit_id : 'env -> TypeVarId.id -> TypeVarId.id = fun _ id -> id
-
     method visit_type_id : 'env -> type_id -> type_id = fun _ id -> id
 
     method visit_integer_type : 'env -> integer_type -> integer_type =
@@ -113,7 +105,6 @@ type ty =
       }]
 
 type field = { field_name : string option; field_ty : ty } [@@deriving show]
-
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 
 type type_decl_kind = Struct of field list | Enum of variant list | Opaque
@@ -130,7 +121,6 @@ type type_decl = {
 [@@deriving show]
 
 type scalar_value = V.scalar_value [@@deriving show]
-
 type constant_value = V.constant_value [@@deriving show]
 
 type var = {
@@ -176,15 +166,10 @@ type variant_id = VariantId.id [@@deriving show]
 class ['self] iter_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
-
     method visit_constant_value : 'env -> constant_value -> unit = fun _ _ -> ()
-
     method visit_var : 'env -> var -> unit = fun _ _ -> ()
-
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-
     method visit_ty : 'env -> ty -> unit = fun _ _ -> ()
-
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
   end
 
@@ -197,11 +182,8 @@ class ['self] map_value_base =
       fun _ x -> x
 
     method visit_var : 'env -> var -> var = fun _ x -> x
-
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
-
     method visit_ty : 'env -> ty -> ty = fun _ x -> x
-
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
   end
 
@@ -214,11 +196,8 @@ class virtual ['self] reduce_value_base =
       fun _ _ -> self#zero
 
     method visit_var : 'env -> var -> 'a = fun _ _ -> self#zero
-
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
-
     method visit_ty : 'env -> ty -> 'a = fun _ _ -> self#zero
-
     method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
   end
 
@@ -294,7 +273,8 @@ and typed_pattern = { value : pattern; ty : ty }
         polymorphic = false;
       }]
 
-type unop = Not | Neg of integer_type [@@deriving show, ord]
+type unop = Not | Neg of integer_type | Cast of integer_type * integer_type
+[@@deriving show, ord]
 
 type fun_id =
   | Regular of A.fun_id * T.RegionGroupId.id option
@@ -341,11 +321,8 @@ type var_id = VarId.id [@@deriving show]
 class ['self] iter_expression_base =
   object (_self : 'self)
     inherit [_] iter_typed_pattern
-
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
-
     method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
-
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
   end
 
@@ -358,7 +335,6 @@ class ['self] map_expression_base =
       fun _ x -> x
 
     method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
-
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
   end
 
@@ -371,7 +347,6 @@ class virtual ['self] reduce_expression_base =
       fun _ _ -> self#zero
 
     method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
-
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
   end
 
@@ -451,9 +426,7 @@ type expression =
   | Meta of (meta[@opaque]) * texpression  (** Meta-information *)
 
 and switch_body = If of texpression * texpression | Match of match_branch list
-
 and match_branch = { pat : typed_pattern; branch : texpression }
-
 and texpression = { e : expression; ty : ty }
 
 and mvalue = (texpression[@opaque])

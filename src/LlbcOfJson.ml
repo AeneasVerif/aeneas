@@ -367,6 +367,10 @@ let unop_of_json (js : json) : (E.unop, string) result =
   match js with
   | `String "Not" -> Ok E.Not
   | `String "Neg" -> Ok E.Neg
+  | `Assoc [ ("Cast", `List [ src_ty; tgt_ty ]) ] ->
+      let* src_ty = integer_type_of_json src_ty in
+      let* tgt_ty = integer_type_of_json tgt_ty in
+      Ok (E.Cast (src_ty, tgt_ty))
   | _ -> Error ("unop_of_json failed on:" ^ show js)
 
 let binop_of_json (js : json) : (E.binop, string) result =

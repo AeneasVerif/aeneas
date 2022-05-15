@@ -830,7 +830,15 @@ module LlbcAst = struct
     projection_to_string fmt var p.E.projection
 
   let unop_to_string (unop : E.unop) : string =
-    match unop with E.Not -> "¬" | E.Neg -> "-"
+    match unop with
+    | E.Not -> "¬"
+    | E.Neg -> "-"
+    | E.Cast (src, tgt) ->
+        "cast<"
+        ^ PT.integer_type_to_string src
+        ^ ","
+        ^ PT.integer_type_to_string tgt
+        ^ ">"
 
   let binop_to_string (binop : E.binop) : string =
     match binop with

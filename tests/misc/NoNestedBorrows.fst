@@ -54,6 +54,10 @@ let div_test1_fwd (x : u32) : result u32 =
 let rem_test_fwd (x : u32) (y : u32) : result u32 =
   begin match u32_rem x y with | Fail -> Fail | Return i -> Return i end
 
+(** [no_nested_borrows::cast_test] *)
+let cast_test_fwd (x : u32) : result i32 =
+  begin match scalar_cast I32 x with | Fail -> Fail | Return i -> Return i end
+
 (** [no_nested_borrows::test2] *)
 let test2_fwd : result unit = Return ()
 
