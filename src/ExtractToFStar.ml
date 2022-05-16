@@ -1361,7 +1361,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     | LetRec -> "let rec"
     | And -> "and"
     | Val -> "val"
-    | AssumeVal -> "AssumeVal"
+    | AssumeVal -> "assume val"
   in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   F.pp_print_space fmt ();
