@@ -35,7 +35,8 @@ rust-tests/target/
 /fstar-tests
 *~
 nohup.out
-.ocamlformat
+.ocamlformat"
+.vscode
 *#
 *.lock
 *.txt
