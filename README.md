@@ -43,7 +43,7 @@ and install OPAM on the way (same instructions).
 The dependencies can then be installed with the following command:
 
 ```
-opam install ppx_deriving visitors easy_logging zarith yojson core
+opam install ppx_deriving visitors easy_logging zarith yojson core_unix
 ```
 
 When choosing the OCaml compiler version: we compiled Aeneas with version 4.12.1, but any
