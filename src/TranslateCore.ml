@@ -1,6 +1,7 @@
 (** Some utilities for the translation *)
 
 open InterpreterStatements
+open Expressions
 module L = Logging
 module T = Types
 module A = LlbcAst
@@ -14,8 +15,8 @@ let log = L.translate_log
 type type_context = C.type_context [@@deriving show]
 
 type fun_context = {
-  fun_decls : A.fun_decl A.FunDeclId.Map.t;
-  fun_infos : FA.fun_info A.FunDeclId.Map.t;
+  fun_decls : A.fun_decl FunDeclId.Map.t;
+  fun_infos : FA.fun_info FunDeclId.Map.t;
 }
 [@@deriving show]
 

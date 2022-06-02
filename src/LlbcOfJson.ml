@@ -406,6 +406,9 @@ let rec operand_constant_value_of_json (js : json) :
           list_of_json operand_constant_value_of_json field_values
         in
         Ok (E.ConstantAdt (variant_id, field_values))
+    | `Assoc [ ("ConstantIdentifier", `List [ global_id ]) ] ->
+        let* global_id = E.GlobalDeclId.id_of_json global_id in
+        Ok (E.ConstantId global_id)
     | _ -> Error "")
 
 let operand_of_json (js : json) : (E.operand, string) result =
@@ -417,7 +420,7 @@ let operand_of_json (js : json) : (E.operand, string) result =
     | `Assoc [ ("Move", place) ] ->
         let* place = place_of_json place in
         Ok (E.Move place)
-    | `Assoc [ ("Constant", `List [ ty; cv ]) ] ->
+    | `Assoc [ ("Const", `List [ ty; cv ]) ] ->
         let* ty = ety_of_json ty in
         let* cv = operand_constant_value_of_json cv in
         Ok (E.Constant (ty, cv))
@@ -489,7 +492,7 @@ let fun_id_of_json (js : json) : (A.fun_id, string) result =
   combine_error_msgs js "fun_id_of_json"
     (match js with
     | `Assoc [ ("Regular", id) ] ->
-        let* id = A.FunDeclId.id_of_json id in
+        let* id = E.FunDeclId.id_of_json id in
         Ok (A.Regular id)
     | `Assoc [ ("Assumed", fid) ] ->
         let* fid = assumed_fun_id_of_json fid in
@@ -636,13 +639,30 @@ let fun_decl_of_json (js : json) : (A.fun_decl, string) result =
           ("signature", signature);
           ("body", body);
         ] ->
-        let* def_id = A.FunDeclId.id_of_json def_id in
+        let* def_id = E.FunDeclId.id_of_json def_id in
         let* name = fun_name_of_json name in
         let* signature = fun_sig_of_json signature in
         let* body = option_of_json fun_body_of_json body in
         Ok { A.def_id; name; signature; body }
     | _ -> Error "")
 
+let global_decl_of_json (js : json) : (A.global_decl, string) result =
+  combine_error_msgs js "global_decl_of_json"
+    (match js with
+    | `Assoc
+        [
+          ("def_id", def_id);
+          ("name", name);
+          ("type_", type_);
+          ("body", body);
+        ] ->
+        let* def_id = E.GlobalDeclId.id_of_json def_id in
+        let* name = fun_name_of_json name in
+        let* type_ = ety_of_json type_ in
+        let* body = option_of_json fun_body_of_json body in
+        Ok { A.def_id; name; type_; body }
+    | _ -> Error "")
+    
 let g_declaration_group_of_json (id_of_json : json -> ('id, string) result)
     (js : json) : ('id M.g_declaration_group, string) result =
   combine_error_msgs js "g_declaration_group_of_json"
@@ -663,7 +683,12 @@ let type_declaration_group_of_json (js : json) :
 let fun_declaration_group_of_json (js : json) :
     (M.fun_declaration_group, string) result =
   combine_error_msgs js "fun_declaration_group_of_json"
-    (g_declaration_group_of_json A.FunDeclId.id_of_json js)
+    (g_declaration_group_of_json E.FunDeclId.id_of_json js)
+
+  let global_declaration_group_of_json (js : json) :
+    (M.global_declaration_group, string) result =
+  combine_error_msgs js "global_declaration_group_of_json"
+    (g_declaration_group_of_json E.GlobalDeclId.id_of_json js)
 
 let declaration_group_of_json (js : json) : (M.declaration_group, string) result
     =
@@ -675,6 +700,9 @@ let declaration_group_of_json (js : json) : (M.declaration_group, string) result
     | `Assoc [ ("Fun", `List [ decl ]) ] ->
         let* decl = fun_declaration_group_of_json decl in
         Ok (M.Fun decl)
+    | `Assoc [ ("Global", `List [ decl ]) ] ->
+        let* decl = global_declaration_group_of_json decl in
+        Ok (M.Global decl)
     | _ -> Error "")
 
 let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
@@ -686,6 +714,7 @@ let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
           ("declarations", declarations);
           ("types", types);
           ("functions", functions);
+          ("globals", globals);
         ] ->
         let* name = string_of_json name in
         let* declarations =
@@ -693,5 +722,6 @@ let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
         in
         let* types = list_of_json type_decl_of_json types in
         let* functions = list_of_json fun_decl_of_json functions in
-        Ok { M.name; declarations; types; functions }
+        let* globals = list_of_json global_decl_of_json globals in
+        Ok { M.name; declarations; types; functions; globals }
     | _ -> Error "")

@@ -1,18 +1,19 @@
 open Types
 open LlbcAst
+open Expressions
 
 type 'id g_declaration_group = NonRec of 'id | Rec of 'id list
 [@@deriving show]
 
-type type_declaration_group = TypeDeclId.id g_declaration_group
-[@@deriving show]
-
+type type_declaration_group = TypeDeclId.id g_declaration_group [@@deriving show]
 type fun_declaration_group = FunDeclId.id g_declaration_group [@@deriving show]
+type global_declaration_group = GlobalDeclId.id g_declaration_group [@@deriving show]
 
 (** Module declaration *)
 type declaration_group =
   | Type of type_declaration_group
   | Fun of fun_declaration_group
+  | Global of global_declaration_group
 [@@deriving show]
 
 type llbc_module = {
@@ -20,6 +21,7 @@ type llbc_module = {
   declarations : declaration_group list;
   types : type_decl list;
   functions : fun_decl list;
+  globals : global_decl list;
 }
 (** LLBC module - TODO: rename to crate *)
 
@@ -48,6 +50,7 @@ let split_declarations (decls : declaration_group list) :
         match d with
         | Type decl -> (decl :: types, funs)
         | Fun decl -> (types, decl :: funs))
+        | _ -> failwith "TODO"
   in
   split decls
 

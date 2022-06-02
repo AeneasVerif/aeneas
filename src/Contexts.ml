@@ -1,6 +1,7 @@
 open Types
 open Values
 open LlbcAst
+open Expressions
 module V = Values
 open ValuesUtils
 module M = Modules

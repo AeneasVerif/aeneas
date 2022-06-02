@@ -7,6 +7,7 @@
       to translate it)
  *)
 
+ open Expressions
 open LlbcAst
 open Modules
 

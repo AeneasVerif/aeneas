@@ -6,6 +6,7 @@ open InterpreterStatements
 open LlbcAstUtils
 module L = Logging
 module T = Types
+module E = Expressions
 module A = LlbcAst
 module M = Modules
 module SA = SymbolicAst
@@ -255,9 +256,9 @@ module Test = struct
       environment.
    *)
   let test_unit_function (config : C.partial_config) (m : M.llbc_module)
-      (fid : A.FunDeclId.id) : unit =
+      (fid : E.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
-    let fdef = A.FunDeclId.nth m.functions fid in
+    let fdef = E.FunDeclId.nth m.functions fid in
     let body = Option.get fdef.body in
 
     (* Debug *)

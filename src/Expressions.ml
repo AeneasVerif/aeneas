@@ -1,5 +1,9 @@
 open Types
 open Values
+open Identifiers
+
+module FunDeclId = IdGen ()
+module GlobalDeclId = IdGen ()
 
 type field_proj_kind =
   | ProjAdt of TypeDeclId.id * VariantId.id option
@@ -89,6 +93,7 @@ let all_binops =
 type operand_constant_value =
   | ConstantValue of constant_value
   | ConstantAdt of VariantId.id option * operand_constant_value list
+  | ConstantId of GlobalDeclId.id
 [@@deriving show]
 
 (* TODO: symplify the operand constant values *)

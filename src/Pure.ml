@@ -10,7 +10,8 @@ module RegionGroupId = T.RegionGroupId
 module VariantId = T.VariantId
 module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
-module FunDeclId = A.FunDeclId
+module FunDeclId = E.FunDeclId
+module GlobalDeclId = E.GlobalDeclId
 
 module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward

@@ -12,7 +12,8 @@ module RegionId = T.RegionId
 module VariantId = T.VariantId
 module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
-module FunDeclId = A.FunDeclId
+module FunDeclId = E.FunDeclId
+module GlobalDeclId = E.GlobalDeclId
 
 type type_formatter = {
   type_var_id_to_string : TypeVarId.id -> string;
@@ -44,7 +45,7 @@ type ast_formatter = {
   adt_field_to_string :
     TypeDeclId.id -> VariantId.id option -> FieldId.id -> string option;
   adt_field_names : TypeDeclId.id -> VariantId.id option -> string list option;
-  fun_decl_id_to_string : A.FunDeclId.id -> string;
+  fun_decl_id_to_string : FunDeclId.id -> string;
 }
 
 let ast_to_value_formatter (fmt : ast_formatter) : value_formatter =
@@ -110,7 +111,7 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     Print.LlbcAst.type_ctx_to_adt_field_to_string_fun type_decls
   in
   let fun_decl_id_to_string def_id =
-    let def = A.FunDeclId.Map.find def_id fun_decls in
+    let def = FunDeclId.Map.find def_id fun_decls in
     fun_name_to_string def.name
   in
   {

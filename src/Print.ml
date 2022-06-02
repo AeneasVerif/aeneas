@@ -685,7 +685,7 @@ module LlbcAst = struct
     var_id_to_string : V.VarId.id -> string;
     adt_field_names :
       T.TypeDeclId.id -> T.VariantId.id option -> string list option;
-    fun_decl_id_to_string : A.FunDeclId.id -> string;
+    fun_decl_id_to_string : E.FunDeclId.id -> string;
   }
 
   let ast_to_ctx_formatter (fmt : ast_formatter) : PC.ctx_formatter =
@@ -755,7 +755,7 @@ module LlbcAst = struct
     }
 
   let fun_decl_to_ast_formatter (type_decls : T.type_decl T.TypeDeclId.Map.t)
-      (fun_decls : A.fun_decl A.FunDeclId.Map.t) (fdef : A.fun_decl) :
+      (fun_decls : A.fun_decl E.FunDeclId.Map.t) (fdef : A.fun_decl) :
       ast_formatter =
     let rvar_to_string r =
       let rvar = T.RegionVarId.nth fdef.signature.region_params r in
@@ -781,7 +781,7 @@ module LlbcAst = struct
     let adt_field_names = PC.type_ctx_to_adt_field_names_fun type_decls in
     let adt_field_to_string = type_ctx_to_adt_field_to_string_fun type_decls in
     let fun_decl_id_to_string def_id =
-      let def = A.FunDeclId.Map.find def_id fun_decls in
+      let def = E.FunDeclId.Map.find def_id fun_decls in
       fun_name_to_string def.name
     in
     {
@@ -1138,7 +1138,7 @@ module Module = struct
   (** Generate an [ast_formatter] by using a definition context in combination
       with the variables local to a function's definition *)
   let def_ctx_to_ast_formatter (type_context : T.type_decl T.TypeDeclId.Map.t)
-      (fun_context : A.fun_decl A.FunDeclId.Map.t) (def : A.fun_decl) :
+      (fun_context : A.fun_decl E.FunDeclId.Map.t) (def : A.fun_decl) :
       PA.ast_formatter =
     let rvar_to_string vid =
       let var = T.RegionVarId.nth def.signature.region_params vid in
@@ -1157,7 +1157,7 @@ module Module = struct
       name_to_string def.name
     in
     let fun_decl_id_to_string def_id =
-      let def = A.FunDeclId.Map.find def_id fun_context in
+      let def = E.FunDeclId.Map.find def_id fun_context in
       fun_name_to_string def.name
     in
     let var_id_to_string vid =
@@ -1186,7 +1186,7 @@ module Module = struct
   (** This function pretty-prints a function definition by using a definition
       context *)
   let fun_decl_to_string (type_context : T.type_decl T.TypeDeclId.Map.t)
-      (fun_context : A.fun_decl A.FunDeclId.Map.t) (def : A.fun_decl) : string =
+      (fun_context : A.fun_decl E.FunDeclId.Map.t) (def : A.fun_decl) : string =
     let fmt = def_ctx_to_ast_formatter type_context fun_context def in
     PA.fun_decl_to_string fmt "" "  " def
 
