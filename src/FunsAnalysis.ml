@@ -107,7 +107,8 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
   let rec analyze_decl_groups (decls : declaration_group list) : unit =
     match decls with
     | [] -> ()
-    | Type _ :: decls' -> analyze_decl_groups decls'
+    | Type   _ :: decls' -> analyze_decl_groups decls'
+    | Global _ :: decls' -> analyze_decl_groups decls'
     | Fun decl :: decls' ->
         analyze_fun_decl_group decl;
         analyze_decl_groups decls'

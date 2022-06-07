@@ -34,6 +34,9 @@ type assumed_fun_id =
 type fun_id = Regular of FunDeclId.id | Assumed of assumed_fun_id
 [@@deriving show, ord]
 
+type global_id = GlobalDeclId.id
+[@@deriving show, ord]
+
 type assertion = { cond : operand; expected : bool } [@@deriving show]
 
 type abs_region_group = (AbstractionId.id, RegionId.id) g_region_group

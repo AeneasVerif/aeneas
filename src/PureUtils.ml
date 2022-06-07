@@ -5,7 +5,6 @@ let log = Logging.pure_utils_log
 
 type regular_fun_id = A.fun_id * T.RegionGroupId.id option
 [@@deriving show, ord]
-(** We use this type as a key for lookups *)
 
 module RegularFunIdOrderedType = struct
   type t = regular_fun_id
@@ -18,7 +17,6 @@ module RegularFunIdOrderedType = struct
 
   let show_t = show_regular_fun_id
 end
-
 module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
 
 module FunIdOrderedType = struct
@@ -32,7 +30,6 @@ module FunIdOrderedType = struct
 
   let show_t = show_fun_id
 end
-
 module FunIdMap = Collections.MakeMap (FunIdOrderedType)
 module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 

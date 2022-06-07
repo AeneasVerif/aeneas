@@ -20,9 +20,20 @@ type fun_context = {
 }
 [@@deriving show]
 
-type trans_ctx = { type_context : type_context; fun_context : fun_context }
+type global_context = {
+  global_decls : A.global_decl GlobalDeclId.Map.t;
+}
+[@@deriving show]
+
+type trans_ctx = {
+  type_context : type_context;
+  fun_context : fun_context;
+  global_context : global_context;
+}
 
 type pure_fun_translation = Pure.fun_decl * Pure.fun_decl list
+
+type pure_global_translation = Pure.global_decl
 
 let type_decl_to_string (ctx : trans_ctx) (def : Pure.type_decl) : string =
   let type_params = def.type_params in

@@ -63,8 +63,9 @@ let translate_function_to_symbolics (config : C.partial_config)
       ("translate_function_to_symbolics: "
       ^ Print.fun_name_to_string fdef.A.name));
 
-  let { type_context; fun_context } = trans_ctx in
+  let { type_context; fun_context; global_context } = trans_ctx in
   let fun_context = { C.fun_decls = fun_context.fun_decls } in
+  let global_context = { C.global_decls = global_context.global_decls } in
 
   match fdef.body with
   | None -> None
@@ -73,7 +74,7 @@ let translate_function_to_symbolics (config : C.partial_config)
       let synthesize = true in
       let evaluate gid =
         let inputs, symb =
-          evaluate_function_symbolic config synthesize type_context fun_context
+          evaluate_function_symbolic config synthesize type_context fun_context global_context
             fdef gid
         in
         (inputs, Option.get symb)
@@ -89,6 +90,32 @@ let translate_function_to_symbolics (config : C.partial_config)
 
       (* Return *)
       Some (forward, backwards)
+
+(** Execute the symbolic interpreter on a global to generate its symbolic ASTs.
+    TODO: Consider refactoring with [translate_function_to_symbolics].
+*)
+let translate_global_to_symbolics (config : C.partial_config)
+    (trans_ctx : trans_ctx) (gdef : A.global_decl) :
+    SA.expression option =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("translate_global_to_symbolics: "
+      ^ Print.global_name_to_string gdef.name));
+
+  let { type_context; fun_context; global_context } = trans_ctx in
+  let fun_context = { C.fun_decls = fun_context.fun_decls } in
+  let global_context = { C.global_decls = global_context.global_decls } in
+
+  match gdef.body with
+  | None -> None
+  | Some _ ->
+    (* Evaluate *)
+    let synthesize = true in
+    let evaluate = evaluate_global_symbolic config synthesize
+      type_context fun_context global_context gdef
+    in
+    Some (Option.get evaluate)
 
 (** Translate a function, by generating its forward and backward translations.
 
@@ -106,7 +133,7 @@ let translate_function_to_pure (config : C.partial_config)
     (lazy
       ("translate_function_to_pure: " ^ Print.fun_name_to_string fdef.A.name));
 
-  let { type_context; fun_context } = trans_ctx in
+  let { type_context; fun_context; global_context } = trans_ctx in
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs, if the function is transparent *)
@@ -140,6 +167,11 @@ let translate_function_to_pure (config : C.partial_config)
       fun_infos = fun_context.fun_infos;
     }
   in
+  let global_context =
+    {
+      SymbolicToPure.llbc_global_decls = global_context.global_decls;
+    }
+  in
   let ctx =
     {
       SymbolicToPure.bid = None;
@@ -151,6 +183,7 @@ let translate_function_to_pure (config : C.partial_config)
       state_var;
       type_context;
       fun_context;
+      global_context;
       fun_decl = fdef;
       forward_inputs = [];
       (* Empty for now *)
@@ -281,17 +314,211 @@ let translate_function_to_pure (config : C.partial_config)
   (* Return *)
   (pure_forward, pure_backwards)
 
+(** Translate a global.
+    TODO: Consider a refactor with [translate_function_to_pure].
+*)
+let translate_global_to_pure (config : C.partial_config)
+    (mp_config : Micro.config) (trans_ctx : trans_ctx)
+    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (gdef : A.global_decl)
+    : pure_global_translation =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("translate_global_to_pure: " ^ Print.global_name_to_string gdef.A.name));
+
+  let { type_context; fun_context; global_context } = trans_ctx in
+  let def_id = gdef.def_id in
+
+  (* Compute the symbolic ASTs, if the global is transparent *)
+  let symbolic_trans = translate_global_to_symbolics config trans_ctx gdef in
+  let symbolic_forward, symbolic_backwards =
+    match symbolic_trans with
+    | None -> (None, None)
+    | Some (fwd, backs) -> (Some fwd, Some backs)
+  in
+
+  (* Convert the symbolic ASTs to pure ASTs: *)
+
+  (* Initialize the context *)
+  let forward_sig = RegularFunIdMap.find (A.Regular def_id, None) fun_sigs in
+  let sv_to_var = V.SymbolicValueId.Map.empty in
+  let var_counter = Pure.VarId.generator_zero in
+  let state_var, var_counter = Pure.VarId.fresh var_counter in
+  let calls = V.FunCallId.Map.empty in
+  let abstractions = V.AbstractionId.Map.empty in
+  let type_context =
+    {
+      SymbolicToPure.types_infos = type_context.type_infos;
+      llbc_type_decls = type_context.type_decls;
+      type_decls = pure_type_decls;
+    }
+  in
+  let fun_context =
+    {
+      SymbolicToPure.llbc_fun_decls = fun_context.fun_decls;
+      fun_sigs;
+      fun_infos = fun_context.fun_infos;
+    }
+  in
+  let global_context =
+    {
+      SymbolicToPure.llbc_global_decls = global_context.global_decls;
+    }
+  in
+  let ctx =
+    {
+      SymbolicToPure.bid = None;
+      (* Dummy for now *)
+      sg = forward_sig.sg;
+      (* Will need to be updated for the backward functions *)
+      sv_to_var;
+      var_counter;
+      state_var;
+      type_context;
+      fun_context;
+      global_context;
+      fun_decl = gdef;
+      forward_inputs = [];
+      (* Empty for now *)
+      backward_inputs = T.RegionGroupId.Map.empty;
+      (* Empty for now *)
+      backward_outputs = T.RegionGroupId.Map.empty;
+      (* Empty for now *)
+      calls;
+      abstractions;
+    }
+  in
+
+  (* We need to initialize the input/output variables *)
+  let num_forward_inputs = List.length gdef.signature.inputs in
+  let add_forward_inputs input_svs ctx =
+    match gdef.body with
+    | None -> ctx
+    | Some body ->
+        let forward_input_vars = LlbcAstUtils.fun_body_get_input_vars body in
+        let forward_input_varnames =
+          List.map (fun (v : A.var) -> v.name) forward_input_vars
+        in
+        let input_svs = List.combine forward_input_varnames input_svs in
+        let ctx, forward_inputs =
+          SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
+        in
+        { ctx with forward_inputs }
+  in
+
+  (* The symbolic to pure config *)
+  let sp_config =
+    {
+      SymbolicToPure.filter_useless_back_calls =
+        mp_config.filter_useless_monadic_calls;
+    }
+  in
+
+  (* Translate the forward function *)
+  let pure_forward =
+    match symbolic_forward with
+    | None -> SymbolicToPure.translate_fun_decl sp_config ctx None
+    | Some (fwd_svs, fwd_ast) ->
+        SymbolicToPure.translate_fun_decl sp_config
+          (add_forward_inputs fwd_svs ctx)
+          (Some fwd_ast)
+  in
+
+  (* Translate the backward functions *)
+  let translate_backward (rg : T.region_var_group) : Pure.fun_decl =
+    (* For the backward inputs/outputs initialization: we use the fact that
+     * there are no nested borrows for now, and so that the region groups
+     * can't have parents *)
+    assert (rg.parents = []);
+    let back_id = rg.id in
+
+    match symbolic_backwards with
+    | None ->
+        (* Initialize the context - note that the ret_ty is not really
+         * useful as we don't translate a body *)
+        let backward_sg =
+          RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
+        in
+        let ctx = { ctx with bid = Some back_id; sg = backward_sg.sg } in
+
+        (* Translate *)
+        SymbolicToPure.translate_fun_decl sp_config ctx None
+    | Some symbolic_backwards ->
+        let input_svs, symbolic =
+          T.RegionGroupId.nth symbolic_backwards back_id
+        in
+        let ctx = add_forward_inputs input_svs ctx in
+        (* TODO: the computation of the backward inputs is a bit awckward... *)
+        let backward_sg =
+          RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
+        in
+        (* We need to ignore the forward inputs, and the state input (if there is) *)
+        let fun_info =
+          SymbolicToPure.get_fun_effect_info fun_context.fun_infos
+            (A.Regular def_id) (Some back_id)
+        in
+        let _, backward_inputs =
+          Collections.List.split_at backward_sg.sg.inputs
+            (num_forward_inputs + if fun_info.input_state then 1 else 0)
+        in
+        (* As we forbid nested borrows, the additional inputs for the backward
+         * functions come from the borrows in the return value of the rust function:
+         * we thus use the name "ret" for those inputs *)
+        let backward_inputs =
+          List.map (fun ty -> (Some "ret", ty)) backward_inputs
+        in
+        let ctx, backward_inputs =
+          SymbolicToPure.fresh_vars backward_inputs ctx
+        in
+        (* The outputs for the backward functions, however, come from borrows
+         * present in the input values of the rust function: for those we reuse
+         * the names of the  input values. *)
+        let backward_outputs =
+          List.combine backward_sg.output_names backward_sg.sg.doutputs
+        in
+        let ctx, backward_outputs =
+          SymbolicToPure.fresh_vars backward_outputs ctx
+        in
+        let backward_inputs =
+          T.RegionGroupId.Map.singleton back_id backward_inputs
+        in
+        let backward_outputs =
+          T.RegionGroupId.Map.singleton back_id backward_outputs
+        in
+
+        (* Put everything in the context *)
+        let ctx =
+          {
+            ctx with
+            bid = Some back_id;
+            sg = backward_sg.sg;
+            backward_inputs;
+            backward_outputs;
+          }
+        in
+
+        (* Translate *)
+        SymbolicToPure.translate_fun_decl sp_config ctx (Some symbolic)
+  in
+  let pure_backwards =
+    List.map translate_backward gdef.signature.regions_hierarchy
+  in
+
+  (* Return *)
+  pure_forward
+
 let translate_module_to_pure (config : C.partial_config)
     (mp_config : Micro.config) (use_state : bool) (m : M.llbc_module) :
-    trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
+    trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list * pure_global_translation list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
 
   (* Compute the type and function contexts *)
-  let type_context, fun_context = compute_type_fun_contexts m in
+  let type_context, fun_context, global_context = compute_type_fun_contexts m in
   let fun_infos = FA.analyze_module m fun_context.C.fun_decls use_state in
   let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
-  let trans_ctx = { type_context; fun_context } in
+  let global_context = { global_decls = global_context.global_decls } in
+  let trans_ctx = { type_context; fun_context; global_context } in
 
   (* Translate all the type definitions *)
   let type_decls = SymbolicToPure.translate_type_decls m.types in
@@ -330,28 +557,35 @@ let translate_module_to_pure (config : C.partial_config)
   in
 
   (* Translate all the *transparent* functions *)
-  let pure_translations =
+  let pure_fun_translations =
     List.map
       (translate_function_to_pure config mp_config trans_ctx fun_sigs
          type_decls_map)
       m.functions
   in
+  (* Same for globals *)
+  let pure_global_translations =
+    List.map
+      (translate_global_to_pure config mp_config trans_ctx type_decls_map)
+      m.globals
+  in
 
   (* Apply the micro-passes *)
-  let pure_translations =
+  let pure_fun_translations =
     List.map
       (Micro.apply_passes_to_pure_fun_translation mp_config trans_ctx)
-      pure_translations
+      pure_fun_translations
   in
 
   (* Return *)
-  (trans_ctx, type_decls, pure_translations)
+  (trans_ctx, type_decls, pure_fun_translations, pure_global_translations)
 
 type gen_ctx = {
   m : M.llbc_module;
   extract_ctx : PureToExtract.extraction_ctx;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : (bool * pure_fun_translation) Pure.FunDeclId.Map.t;
+  trans_globals : pure_global_translation Pure.GlobalDeclId.Map.t;
   functions_with_decreases_clause : Pure.FunDeclId.Set.t;
 }
 (** Extraction context *)
@@ -499,6 +733,25 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         pure_ls
   in
 
+  let export_global (pure_global: pure_global_translation) : unit =
+    (* Extract the global definition *)
+    (if config.extract_fun_decls then
+      let is_opaque = Option.is_none pure_global.Pure.body in
+      let qualif =
+        if is_opaque then
+          if config.interface then ExtractToFStar.Val
+          else ExtractToFStar.AssumeVal
+        else ExtractToFStar.Let
+      in
+      (* Check if the definition needs to be filtered or not *)
+      if
+        ((not is_opaque) && config.extract_transparent)
+        || (is_opaque && config.extract_opaque)
+      then
+        ExtractToFStar.extract_global_decl ctx.extract_ctx fmt qualif pure_global
+    );
+  in
+
   let export_state_type () : unit =
     let qualif =
       if config.interface then ExtractToFStar.TypeVal
@@ -534,6 +787,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         in
         (* Translate *)
         export_functions true pure_funs
+    | Global (NonRec id) ->
+        let pure_global = Pure.GlobalDeclId.Map.find id ctx.trans_globals in
+        export_global pure_global
+    | Global (Rec _) -> failwith "globals cannot be recursive"
   in
 
   (* If we need to export the state type: we try to export it after we defined
@@ -602,7 +859,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
 let translate_module (filename : string) (dest_dir : string) (config : config)
     (m : M.llbc_module) : unit =
   (* Translate the module to the pure AST *)
-  let trans_ctx, trans_types, trans_funs =
+  let trans_ctx, trans_types, trans_funs, trans_globals =
     translate_module_to_pure config.eval_config config.mp_config
       config.use_state m
   in
@@ -641,7 +898,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
 
   let ctx =
     List.fold_left
-      (fun ctx (keep_fwd, def) ->
+      (fun ctx (keep_fwd, def: bool * pure_fun_translation) ->
         (* Note that we generate a decrease clause for all the recursive functions *)
         let gen_decr_clause =
           Pure.FunDeclId.Set.mem (fst def).Pure.def_id rec_functions
@@ -712,6 +969,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       extract_ctx = ctx;
       trans_types;
       trans_funs;
+      trans_globals;
       functions_with_decreases_clause = rec_functions;
     }
   in

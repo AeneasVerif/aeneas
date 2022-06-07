@@ -185,6 +185,7 @@ type formatter = {
 (** We use identifiers to look for name clashes *)
 type id =
   | FunId of A.fun_id * RegionGroupId.id option
+  | GlobalId of A.global_id
   | DecreasesClauseId of A.fun_id
       (** The definition which provides the decreases/termination clause.
           We insert calls to this clause to prove/reason about termination:
@@ -447,6 +448,9 @@ let ctx_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
 let ctx_get_local_function (id : FunDeclId.id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
   ctx_get_function (A.Regular id) rg ctx
+
+let ctx_get_global (id : A.global_id) (ctx : extraction_ctx) : string =
+  ctx_get (GlobalId id) ctx
 
 let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> Tuple);

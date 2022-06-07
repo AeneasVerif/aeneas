@@ -1471,6 +1471,79 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
+(** Extract a global declaration.
+
+    Note that all the names used for extraction should already have been
+    registered.
+    Perhaps cleaner if refactored with the functions extraction.
+ *)
+let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (qualif : fun_decl_qualif) (def : global_decl) :
+    unit =
+  (* Retrieve the function name *)
+  let def_name = ctx_get_global def.def_id ctx in
+  (* Add a break before *)
+  F.pp_print_break fmt 0 0;
+  (* Print a comment to link the extracted type to its original rust definition *)
+  F.pp_print_string fmt
+  ("(** [" ^ Print.global_name_to_string def.name ^ "] *)");
+  F.pp_print_space fmt ();
+
+    (* Open a box for the definition, so that whenever possible it gets printed on
+    * one line *)
+    F.pp_open_hvbox fmt ctx.indent_incr;
+    (* Open a box for "let GLOBAL_NAME : TYPE =" *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
+
+    (* > "let GLOBAL_NAME" *)
+    let is_opaque = Option.is_none def.body in
+    let qualif =
+    match qualif with
+    | Let -> "let"
+    | Val -> "val"
+    | AssumeVal -> "assume val"
+    | LetRec -> failwith "a global declaration cannot be recursive"
+    | And -> failwith "a global declaration cannot be mutually recursive"
+    in
+    F.pp_print_string fmt (qualif ^ " " ^ def_name);
+    F.pp_print_space fmt ();
+
+    (* Open a box for ": TYPE =" *)
+    F.pp_open_hvbox fmt 0;
+    let _ =
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
+
+    (* Open a box for the TYPE *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
+    (* Print the return type *)
+    extract_ty ctx fmt true def.ty;
+    (* Close the box for the TYPE *)
+    F.pp_close_box fmt ()
+    in
+
+    (* Print the "=" *)
+    if not is_opaque then (
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "=");
+    (* Close the box for ": TYPE =" *)
+    F.pp_close_box fmt ();
+    (* Close the box for "let GLOBAL_NAME : TYPE =" *)
+    F.pp_close_box fmt ();
+  
+  if not is_opaque then (
+  F.pp_print_space fmt ();
+  (* Open a box for the body *)
+  F.pp_open_hvbox fmt 0;
+  (* Extract the body *)
+  let _ = extract_texpression ctx fmt false (Option.get def.body) in
+  (* Close the box for the body *)
+  F.pp_close_box fmt ());
+  (* Close the box for the definition *)
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
+
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).
     

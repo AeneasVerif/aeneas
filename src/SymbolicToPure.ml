@@ -72,6 +72,10 @@ type fun_context = {
   fun_infos : FA.fun_info FunDeclId.Map.t;
 }
 
+type global_context = {
+  llbc_global_decls : A.global_decl GlobalDeclId.Map.t;
+}
+
 type call_info = {
   forward : S.call;
   forward_inputs : texpression list;
@@ -95,6 +99,7 @@ type call_info = {
 type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
+  global_context : global_context;
   fun_decl : A.fun_decl;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sg : fun_sig;
@@ -133,8 +138,11 @@ let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
 
 (* TODO: move *)
 let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.LlbcAst.ast_formatter =
-  Print.LlbcAst.fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
-    ctx.fun_context.llbc_fun_decls ctx.fun_decl
+  Print.LlbcAst.fun_decl_to_ast_formatter
+    ctx.type_context.llbc_type_decls
+    ctx.fun_context.llbc_fun_decls
+    ctx.global_context.llbc_global_decls
+    ctx.fun_decl
 
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
   let type_params = ctx.fun_decl.signature.type_params in

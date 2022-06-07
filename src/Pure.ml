@@ -578,3 +578,10 @@ type fun_decl = {
   signature : fun_sig;
   body : fun_body option;
 }
+
+type global_decl = {
+  def_id : GlobalDeclId.id;
+  name : global_name;
+  ty : ty;
+  body : texpression option;
+}
