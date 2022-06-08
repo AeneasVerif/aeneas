@@ -2,6 +2,7 @@ open Errors
 open LlbcAstUtils
 open Pure
 open PureUtils
+open FunIdentifier
 module Id = Identifiers
 module M = Modules
 module S = SymbolicAst

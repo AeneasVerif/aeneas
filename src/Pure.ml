@@ -1,5 +1,6 @@
 open Identifiers
 open Names
+open FunIdentifier
 module T = Types
 module V = Values
 module E = Expressions
@@ -10,7 +11,6 @@ module RegionGroupId = T.RegionGroupId
 module VariantId = T.VariantId
 module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
-module FunDeclId = A.FunDeclId
 
 module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward

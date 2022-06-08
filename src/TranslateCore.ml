@@ -1,6 +1,7 @@
 (** Some utilities for the translation *)
 
 open InterpreterStatements
+open FunIdentifier
 module L = Logging
 module T = Types
 module A = LlbcAst
@@ -14,8 +15,8 @@ let log = L.translate_log
 type type_context = C.type_context [@@deriving show]
 
 type fun_context = {
-  fun_decls : A.fun_decl A.FunDeclId.Map.t;
-  fun_infos : FA.fun_info A.FunDeclId.Map.t;
+  fun_decls : A.fun_decl FunDeclId.Map.t;
+  fun_infos : FA.fun_info FunDeclId.Map.t;
 }
 [@@deriving show]
 
@@ -49,6 +50,6 @@ let fun_decl_to_string (ctx : trans_ctx) (def : Pure.fun_decl) : string =
   let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
   PrintPure.fun_decl_to_string fmt def
 
-let fun_decl_id_to_string (ctx : trans_ctx) (id : Pure.FunDeclId.id) : string =
+let fun_decl_id_to_string (ctx : trans_ctx) (id : FunDeclId.id) : string =
   Print.fun_name_to_string
-    (Pure.FunDeclId.Map.find id ctx.fun_context.fun_decls).name
+    (FunDeclId.Map.find id ctx.fun_context.fun_decls).name

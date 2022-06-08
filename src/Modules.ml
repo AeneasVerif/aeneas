@@ -1,5 +1,6 @@
 open Types
 open LlbcAst
+open FunIdentifier
 
 type 'id g_declaration_group = NonRec of 'id | Rec of 'id list
 [@@deriving show]

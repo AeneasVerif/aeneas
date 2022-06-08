@@ -1,5 +1,6 @@
 open Types
 open Values
+open FunIdentifier
 
 type field_proj_kind =
   | ProjAdt of TypeDeclId.id * VariantId.id option
@@ -88,6 +89,7 @@ let all_binops =
  *)
 type operand_constant_value =
   | ConstantValue of constant_value
+  | ConstantId of FunDeclId.id
   | ConstantAdt of VariantId.id option * operand_constant_value list
 [@@deriving show]
 

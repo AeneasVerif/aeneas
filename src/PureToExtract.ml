@@ -6,6 +6,7 @@
 
 open Pure
 open TranslateCore
+open FunIdentifier
 module C = Contexts
 module RegionVarId = T.RegionVarId
 module F = Format

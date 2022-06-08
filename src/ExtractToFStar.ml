@@ -6,6 +6,7 @@ open PureUtils
 open TranslateCore
 open PureToExtract
 open StringUtils
+open FunIdentifier
 module F = Format
 
 (** A qualifier for a type definition.

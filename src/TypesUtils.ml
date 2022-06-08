@@ -100,27 +100,30 @@ let rty_regions_intersect (ty : rty) (regions : RegionId.Set.t) : bool =
   let ty_regions = rty_regions ty in
   not (RegionId.Set.disjoint ty_regions regions)
 
-(** Convert an [ety], containing no region variables, to an [rty].
+(** Convert an [ety], containing no region variables, to an [rty] or [sty].
 
     In practice, it is the identity.
  *)
-let rec ety_no_regions_to_rty (ty : ety) : rty =
+let rec ety_no_regions_to_gr_ty (ty : ety) : 'a gr_ty =
   match ty with
   | Adt (type_id, regions, tys) ->
       assert (regions = []);
-      Adt (type_id, [], List.map ety_no_regions_to_rty tys)
+      Adt (type_id, [], List.map ety_no_regions_to_gr_ty tys)
   | TypeVar v -> TypeVar v
   | Bool -> Bool
   | Char -> Char
   | Never -> Never
   | Integer int_ty -> Integer int_ty
   | Str -> Str
-  | Array ty -> Array (ety_no_regions_to_rty ty)
-  | Slice ty -> Slice (ety_no_regions_to_rty ty)
+  | Array ty -> Array (ety_no_regions_to_gr_ty ty)
+  | Slice ty -> Slice (ety_no_regions_to_gr_ty ty)
   | Ref (_, _, _) ->
       failwith
         "Can't convert a ref with erased regions to a ref with non-erased \
          regions"
+
+let ety_no_regions_to_rty (ty : ety) : rty = ety_no_regions_to_gr_ty ty
+let ety_no_regions_to_sty (ty : ety) : sty = ety_no_regions_to_gr_ty ty
 
 (** Retuns true if the type contains borrows.
 

@@ -1,4 +1,5 @@
 open Cps
+open FunIdentifier
 open InterpreterUtils
 open InterpreterProjectors
 open InterpreterBorrows
@@ -255,9 +256,9 @@ module Test = struct
       environment.
    *)
   let test_unit_function (config : C.partial_config) (m : M.llbc_module)
-      (fid : A.FunDeclId.id) : unit =
+      (fid : FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
-    let fdef = A.FunDeclId.nth m.functions fid in
+    let fdef = FunDeclId.nth m.functions fid in
     let body = Option.get fdef.body in
 
     (* Debug *)

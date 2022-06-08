@@ -1,10 +1,8 @@
-open Identifiers
 open Names
 open Types
 open Values
 open Expressions
-
-module FunDeclId = IdGen ()
+open FunIdentifier
 
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
@@ -178,5 +176,6 @@ type fun_decl = {
   name : fun_name;
   signature : fun_sig;
   body : fun_body option;
+  is_global : bool;
 }
 [@@deriving show]

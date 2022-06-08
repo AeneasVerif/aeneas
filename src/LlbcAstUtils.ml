@@ -1,5 +1,6 @@
 open LlbcAst
 open Utils
+open FunIdentifier
 module T = Types
 
 (** Check if a [statement] contains loops *)
