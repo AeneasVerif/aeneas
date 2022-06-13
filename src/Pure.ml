@@ -305,6 +305,7 @@ type qualif_id =
   | Func of fun_id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
+  (* TODO | Global of GlobalDeclId.id*)
 [@@deriving show]
 
 type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]

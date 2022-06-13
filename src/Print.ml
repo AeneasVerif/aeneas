@@ -863,6 +863,7 @@ module LlbcAst = struct
   let rec operand_constant_value_to_string (fmt : ast_formatter)
       (cv : E.operand_constant_value) : string =
     match cv with
+    | E.ConstantId id -> fmt.fun_decl_id_to_string id
     | E.ConstantValue cv -> PV.constant_value_to_string cv
     | E.ConstantAdt (variant_id, field_values) ->
         (* This is a bit annoying, because we don't have context information

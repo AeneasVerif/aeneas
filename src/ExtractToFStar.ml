@@ -902,7 +902,10 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       | AdtCons adt_cons_id ->
           extract_adt_cons ctx fmt inside adt_cons_id qualif.type_args args
       | Proj proj ->
-          extract_field_projector ctx fmt inside app proj qualif.type_args args)
+          extract_field_projector ctx fmt inside app proj qualif.type_args args
+      (* TODO | Global global_id ->
+          extract_global_ref ctx fmt inside global_id*)
+    )
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)

@@ -31,8 +31,8 @@ build:
 .PHONY: test
 test: build trans-no_nested_borrows trans-paper \
 	trans-hashmap trans-hashmap_main \
-	trans-external trans-nll-betree_nll \
-	trans-nll-betree_main
+	trans-external trans-constants \
+	trans-nll-betree_nll trans-nll-betree_main \
 
 # Add specific options to some tests
 trans-no_nested_borrows trans-paper: \
@@ -47,6 +47,9 @@ trans-hashmap_main: SUBDIR:=hashmap_on_disk
 
 trans-nll-betree_nll: TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
 trans-nll-betree_nll: SUBDIR:=misc
+
+trans-constants: TRANS_OPTIONS += -no-split-files -no-state -no-decreases-clauses
+trans-constants: SUBDIR:=misc
 
 trans-external: TRANS_OPTIONS +=
 trans-external: SUBDIR:=misc
