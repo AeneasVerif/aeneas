@@ -77,8 +77,7 @@ We have the following limitations, that we plan to address one by one:
 - **no interior mutability**: long-term effort. Interior mutability introduces
   true aliasing: we will probably have to use a low-level memory model to address
   this issue.
-  Note that interior mutability is mostly anecdotal in sequential execution,
-  but necessary for concurrent execution (it is exploited by the synchronisation
-  primitives).
+  Note that interior mutability is truely necessary for concurrent execution (it
+  is exploited to implement the synchronisation primitives).
 - **no concurrent execution**: long-term effort. We plan to address coarse-grained
   parallelism as a long-term goal.
