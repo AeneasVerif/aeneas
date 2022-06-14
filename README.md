@@ -11,10 +11,10 @@ Wall in Pompei, digital image from Michael Lahanis.
 
 # Aeneas
 
-Aeneas is a compiler from LLBC, a language inspired by Rust's MIR, to pure lambda calculus.
-It is intended to be used in combination with [Charon](https://github.com/Kachoc/charon),
-which compiles Rust programs to LLBC, to allow the verification of Rust programs in
-proof assistants. It currently has a backend for the [F\*](https://www.fstar-lang.org)
+Aeneas is a verification toolchain for Rust programs.  It relies on a translation from Rusts's MIR
+internal language to a pure lamdba calculus.  It is intended to be used in combination with
+[Charon](https://github.com/Kachoc/charon), which compiles Rust programs to an intermediate
+representation called LLBC. It currently has a backend for the [F\*](https://www.fstar-lang.org)
 theorem prover, and we intend to add backends for other provers such as
 [Coq](https://coq.inria.fr/), [HOL4](https://hol-theorem-prover.org/) or
 [LEAN](https://leanprover.github.io/).
@@ -73,12 +73,10 @@ We have the following limitations, that we plan to address one by one:
   issue. We intend to quickly address the issue for types (i.e., allow `Option<&mut T>`),
   and later address it for functions (i.e., allow `f<&mut T>` - we consider this to
   be less urgent).
-- **no nested borrows in function signatures**. See the paper for a detailed
-  discussion. We might allow nested borrows while forbiding what we call
-  "borrow overwrites" (see the paper) as a first step towards supporting this feature.
+- **no nested borrows in function signatures**: ongoing work.
 - **no interior mutability**: long-term effort. Interior mutability introduces
-  true aliasing: we will probably have to combine our pure lambda calculus
-  with separation logic to address this.
+  true aliasing: we will probably have to use a low-level memory model to address
+  this issue.
   Note that interior mutability is mostly anecdotal in sequential execution,
   but necessary for concurrent execution (it is exploited by the synchronisation
   primitives).
