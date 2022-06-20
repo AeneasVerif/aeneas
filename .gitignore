@@ -31,6 +31,10 @@ _opam/
 # Rust working directory
 rust-tests/target/
 
+# F*
+.depend
+*.hints
+
 # Misc
 /fstar-tests
 *~
