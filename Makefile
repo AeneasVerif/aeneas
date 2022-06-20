@@ -1,4 +1,4 @@
-all: build-test
+all: build-test-verify
 
 CHARON_HOME = ../charon
 CHARON_EXEC = $(CHARON_HOME)/charon
@@ -19,20 +19,25 @@ TRANS_OPTIONS := -test-trans-units $(OPTIONS)
 SUBDIR :=
 
 # Build the project and test it
-.PHONY: build-test
-build-test: build test
+.PHONY: build-test-verify
+build-test-verify: build test verify
 
 # Build the project
 .PHONY: build
 build:
 	dune build src/main.exe
 
-# Test the project
+# Test the project by translating test files to F*
 .PHONY: test
 test: build trans-no_nested_borrows trans-paper \
 	trans-hashmap trans-hashmap_main \
 	trans-external trans-nll-betree_nll \
 	trans-nll-betree_main
+
+# Verify the translated F* files
+.PHONY: verify
+verify: build test
+	cd tests && make all
 
 # Add specific options to some tests
 trans-no_nested_borrows trans-paper: \
