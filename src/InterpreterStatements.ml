@@ -7,7 +7,6 @@ module A = LlbcAst
 module L = Logging
 open TypesUtils
 open ValuesUtils
-open FunIdentifier
 module Inv = Invariants
 module S = SynthesizeSymbolic
 open Errors
@@ -822,6 +821,15 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
 
         (* Compose and apply *)
         comp cf_eval_rvalue cf_assign cf ctx
+    | A.AssignGlobal { dst; global } ->
+        let call : A.call = {
+          func = A.Regular (A.global_to_fun_id ctx.fun_context.gid_conv global);
+          region_args = [];
+          type_args = [];
+          args = [];
+          dest = { var_id = dst; projection = [] };
+        } in
+        eval_function_call config call cf ctx
     | A.FakeRead p ->
         let expand_prim_copy = false in
         let cf_prepare = prepare_rplace config expand_prim_copy Read p in
@@ -1002,7 +1010,7 @@ and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
         call.args call.dest
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
-and eval_local_function_call_concrete (config : C.config) (fid : FunDeclId.id)
+and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
     (region_args : T.erased_region list) (type_args : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
@@ -1080,7 +1088,7 @@ and eval_local_function_call_concrete (config : C.config) (fid : FunDeclId.id)
   cc cf ctx
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
-and eval_local_function_call_symbolic (config : C.config) (fid : FunDeclId.id)
+and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
     (region_args : T.erased_region list) (type_args : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
  fun cf ctx ->
@@ -1301,7 +1309,7 @@ and eval_non_local_function_call (config : C.config) (fid : A.assumed_fun_id)
 
 (** Evaluate a local (i.e, not assumed) function call (auxiliary helper for
     [eval_statement]) *)
-and eval_local_function_call (config : C.config) (fid : FunDeclId.id)
+and eval_local_function_call (config : C.config) (fid : A.FunDeclId.id)
     (region_args : T.erased_region list) (type_args : T.ety list)
     (args : E.operand list) (dest : E.place) : st_cm_fun =
   match config.mode with

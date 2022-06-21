@@ -2,7 +2,6 @@ open Errors
 open LlbcAstUtils
 open Pure
 open PureUtils
-open FunIdentifier
 module Id = Identifiers
 module M = Modules
 module S = SymbolicAst
@@ -68,9 +67,10 @@ type fun_sig_named_outputs = {
 }
 
 type fun_context = {
-  llbc_fun_decls : A.fun_decl FunDeclId.Map.t;
+  llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdMap.t;  (** *)
-  fun_infos : FA.fun_info FunDeclId.Map.t;
+  fun_infos : FA.fun_info A.FunDeclId.Map.t;
+  gid_conv : A.global_id_converter;
 }
 
 type call_info = {
@@ -134,8 +134,11 @@ let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
 
 (* TODO: move *)
 let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.LlbcAst.ast_formatter =
-  Print.LlbcAst.fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
-    ctx.fun_context.llbc_fun_decls ctx.fun_decl
+  Print.LlbcAst.fun_decl_to_ast_formatter
+    ctx.type_context.llbc_type_decls
+    ctx.fun_context.llbc_fun_decls
+    (A.global_to_fun_id ctx.fun_context.gid_conv)
+    ctx.fun_decl
 
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
   let type_params = ctx.fun_decl.signature.type_params in
@@ -196,12 +199,12 @@ let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
   TypeDeclId.Map.find id ctx.type_context.llbc_type_decls
 
-let bs_ctx_lookup_llbc_fun_decl (id : FunDeclId.id) (ctx : bs_ctx) : A.fun_decl
+let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) : A.fun_decl
     =
-  FunDeclId.Map.find id ctx.fun_context.llbc_fun_decls
+  A.FunDeclId.Map.find id ctx.fun_context.llbc_fun_decls
 
 (* TODO: move *)
-let bs_ctx_lookup_local_function_sig (def_id : FunDeclId.id)
+let bs_ctx_lookup_local_function_sig (def_id : A.FunDeclId.id)
     (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
   let id = (A.Regular def_id, back_id) in
   (RegularFunIdMap.find id ctx.fun_context.fun_sigs).sg
@@ -472,11 +475,11 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) :
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 
 (** Small utility. *)
-let get_fun_effect_info (fun_infos : FA.fun_info FunDeclId.Map.t)
+let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     (fun_id : A.fun_id) (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
   | A.Regular fid ->
-      let info = FunDeclId.Map.find fid fun_infos in
+      let info = A.FunDeclId.Map.find fid fun_infos in
       let input_state = info.stateful in
       let output_state = input_state && gid = None in
       { can_fail = true; input_state; output_state }
@@ -494,7 +497,7 @@ let get_fun_effect_info (fun_infos : FA.fun_info FunDeclId.Map.t)
     name (outputs for backward functions come from borrows in the inputs
     of the forward function).
  *)
-let translate_fun_sig (fun_infos : FA.fun_info FunDeclId.Map.t)
+let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     (fun_id : A.fun_id) (types_infos : TA.type_infos) (sg : A.fun_sig)
     (input_names : string option list) (bid : T.RegionGroupId.id option) :
     fun_sig_named_outputs =
@@ -1744,7 +1747,7 @@ let translate_type_decls (type_decls : T.type_decl list) : type_decl list =
     - optional names for the outputs values (we derive them for the backward
       functions)
  *)
-let translate_fun_signatures (fun_infos : FA.fun_info FunDeclId.Map.t)
+let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     (types_infos : TA.type_infos)
     (functions : (A.fun_id * string option list * A.fun_sig) list) :
     fun_sig_named_outputs RegularFunIdMap.t =

@@ -1,6 +1,5 @@
 open InterpreterStatements
 open Interpreter
-open FunIdentifier
 module L = Logging
 module T = Types
 module A = LlbcAst
@@ -65,7 +64,10 @@ let translate_function_to_symbolics (config : C.partial_config)
       ^ Print.fun_name_to_string fdef.A.name));
 
   let { type_context; fun_context } = trans_ctx in
-  let fun_context = { C.fun_decls = fun_context.fun_decls } in
+  let fun_context = {
+    C.fun_decls = fun_context.fun_decls;
+    C.gid_conv = fun_context.gid_conv;
+  } in
 
   match fdef.body with
   | None -> None
@@ -100,7 +102,8 @@ let translate_function_to_symbolics (config : C.partial_config)
 let translate_function_to_pure (config : C.partial_config)
     (mp_config : Micro.config) (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
-    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
+    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
+    (fdef : A.fun_decl)
     : pure_fun_translation =
   (* Debug *)
   log#ldebug
@@ -139,6 +142,7 @@ let translate_function_to_pure (config : C.partial_config)
       SymbolicToPure.llbc_fun_decls = fun_context.fun_decls;
       fun_sigs;
       fun_infos = fun_context.fun_infos;
+      gid_conv = fun_context.gid_conv;
     }
   in
   let ctx =
@@ -291,7 +295,11 @@ let translate_module_to_pure (config : C.partial_config)
   (* Compute the type and function contexts *)
   let type_context, fun_context = compute_type_fun_contexts m in
   let fun_infos = FA.analyze_module m fun_context.C.fun_decls use_state in
-  let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
+  let fun_context = {
+    fun_decls = fun_context.fun_decls;
+    fun_infos;
+    gid_conv = m.gid_conv;
+  } in
   let trans_ctx = { type_context; fun_context } in
 
   (* Translate all the type definitions *)
@@ -352,8 +360,8 @@ type gen_ctx = {
   m : M.llbc_module;
   extract_ctx : PureToExtract.extraction_ctx;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
-  trans_funs : (bool * pure_fun_translation) FunDeclId.Map.t;
-  functions_with_decreases_clause : FunDeclId.Set.t;
+  trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t;
+  functions_with_decreases_clause : A.FunDeclId.Set.t;
 }
 (** Extraction context *)
 
@@ -389,7 +397,7 @@ let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
       ctx.trans_types
   in
   let has_opaque_funs =
-    FunDeclId.Map.exists
+    A.FunDeclId.Map.exists
       (fun _ ((_, (t_fwd, _)) : bool * pure_fun_translation) ->
         Option.is_none t_fwd.body)
       ctx.trans_funs
@@ -428,7 +436,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
 
   (* Utility to check a function has a decrease clause *)
   let has_decreases_clause (def : Pure.fun_decl) : bool =
-    FunDeclId.Set.mem def.def_id ctx.functions_with_decreases_clause
+    A.FunDeclId.Set.mem def.def_id ctx.functions_with_decreases_clause
   in
 
   (* In case of (non-mutually) recursive functions, we use a simple procedure to
@@ -524,14 +532,14 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
             ids
     | Fun (NonRec id) ->
         (* Lookup *)
-        let pure_fun = FunDeclId.Map.find id ctx.trans_funs in
+        let pure_fun = A.FunDeclId.Map.find id ctx.trans_funs in
         (* Translate *)
         export_functions false [ pure_fun ]
     | Fun (Rec ids) ->
         (* General case of mutually recursive functions *)
         (* Lookup *)
         let pure_funs =
-          List.map (fun id -> FunDeclId.Map.find id ctx.trans_funs) ids
+          List.map (fun id -> A.FunDeclId.Map.find id ctx.trans_funs) ids
         in
         (* Translate *)
         export_functions true pure_funs
@@ -623,7 +631,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* We need to compute which functions are recursive, in order to know
    * whether we should generate a decrease clause or not. *)
   let rec_functions =
-    FunDeclId.Set.of_list
+    A.FunDeclId.Set.of_list
       (List.concat
          (List.map
             (fun decl -> match decl with M.Fun (Rec ids) -> ids | _ -> [])
@@ -645,7 +653,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       (fun ctx (keep_fwd, def) ->
         (* Note that we generate a decrease clause for all the recursive functions *)
         let gen_decr_clause =
-          FunDeclId.Set.mem (fst def).Pure.def_id rec_functions
+          A.FunDeclId.Set.mem (fst def).Pure.def_id rec_functions
         in
         ExtractToFStar.extract_fun_decl_register_names ctx keep_fwd
           gen_decr_clause def)
@@ -675,7 +683,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       (List.map (fun (d : Pure.type_decl) -> (d.def_id, d)) trans_types)
   in
   let trans_funs =
-    FunDeclId.Map.of_list
+    A.FunDeclId.Map.of_list
       (List.map
          (fun ((keep_fwd, (fd, bdl)) : bool * pure_fun_translation) ->
            (fd.def_id, (keep_fwd, (fd, bdl))))
@@ -762,7 +770,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     (* Extract the template clauses *)
     let needs_clauses_module =
       config.extract_decreases_clauses
-      && not (FunDeclId.Set.is_empty rec_functions)
+      && not (A.FunDeclId.Set.is_empty rec_functions)
     in
     (if needs_clauses_module && config.extract_template_decreases_clauses then
      let clauses_filename = extract_filebasename ^ ".Clauses.Template.fst" in

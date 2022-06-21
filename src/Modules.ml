@@ -1,6 +1,5 @@
 open Types
 open LlbcAst
-open FunIdentifier
 
 type 'id g_declaration_group = NonRec of 'id | Rec of 'id list
 [@@deriving show]
@@ -21,6 +20,7 @@ type llbc_module = {
   declarations : declaration_group list;
   types : type_decl list;
   functions : fun_decl list;
+  gid_conv : global_id_converter;
 }
 (** LLBC module - TODO: rename to crate *)
 

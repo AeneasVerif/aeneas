@@ -2,7 +2,6 @@
 
 open Pure
 open PureUtils
-open FunIdentifier
 module T = Types
 module V = Values
 module E = Expressions
@@ -44,7 +43,7 @@ type ast_formatter = {
   adt_field_to_string :
     TypeDeclId.id -> VariantId.id option -> FieldId.id -> string option;
   adt_field_names : TypeDeclId.id -> VariantId.id option -> string list option;
-  fun_decl_id_to_string : FunDeclId.id -> string;
+  fun_decl_id_to_string : A.FunDeclId.id -> string;
 }
 
 let ast_to_value_formatter (fmt : ast_formatter) : value_formatter =
@@ -86,7 +85,7 @@ let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
    while we only need those definitions to lookup proper names for the def ids.
 *)
 let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
-    (fun_decls : A.fun_decl FunDeclId.Map.t) (type_params : type_var list) :
+    (fun_decls : A.fun_decl A.FunDeclId.Map.t) (type_params : type_var list) :
     ast_formatter =
   let type_var_id_to_string vid =
     let var = T.TypeVarId.nth type_params vid in
@@ -110,7 +109,7 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     Print.LlbcAst.type_ctx_to_adt_field_to_string_fun type_decls
   in
   let fun_decl_id_to_string def_id =
-    let def = FunDeclId.Map.find def_id fun_decls in
+    let def = A.FunDeclId.Map.find def_id fun_decls in
     fun_name_to_string def.name
   in
   {

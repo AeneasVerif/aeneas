@@ -1,5 +1,4 @@
 open Cps
-open FunIdentifier
 open InterpreterUtils
 open InterpreterProjectors
 open InterpreterBorrows
@@ -25,7 +24,7 @@ let compute_type_fun_contexts (m : M.llbc_module) :
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list
   in
   let type_context = { C.type_decls_groups; type_decls; type_infos } in
-  let fun_context = { C.fun_decls } in
+  let fun_context = { C.fun_decls; gid_conv = m.gid_conv } in
   (type_context, fun_context)
 
 let initialize_eval_context (type_context : C.type_context)
@@ -256,9 +255,9 @@ module Test = struct
       environment.
    *)
   let test_unit_function (config : C.partial_config) (m : M.llbc_module)
-      (fid : FunDeclId.id) : unit =
+      (fid : A.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
-    let fdef = FunDeclId.nth m.functions fid in
+    let fdef = A.FunDeclId.nth m.functions fid in
     let body = Option.get fdef.body in
 
     (* Debug *)

@@ -1,6 +1,5 @@
 open Identifiers
 open Names
-open FunIdentifier
 module T = Types
 module V = Values
 module E = Expressions
@@ -567,7 +566,7 @@ type fun_body = {
 }
 
 type fun_decl = {
-  def_id : FunDeclId.id;
+  def_id : A.FunDeclId.id;
   back_id : T.RegionGroupId.id option;
   basename : fun_name;
       (** The "base" name of the function.

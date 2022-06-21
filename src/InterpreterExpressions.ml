@@ -71,68 +71,23 @@ let prepare_rplace (config : C.config) (expand_prim_copy : bool)
   in
   comp cc read_place cf ctx
 
-(** Convert an operand constant operand value to a typed value *)
-let rec eval_operand_constant_value (ty : T.ety)
-    (cv : E.operand_constant_value) (cf : V.typed_value -> m_fun) : m_fun =
-  fun ctx ->
-    (* Check the type while converting - we actually need some information
-    * contained in the type *)
-    log#ldebug
-      (lazy
-        ("eval_operand_constant_value:" ^ "\n- ty: "
-      ^ ety_to_string ctx ty ^ "\n- cv: "
-        ^ operand_constant_value_to_string ctx cv));
-    match (ty, cv) with
-    (* Adt *)
-    | ( T.Adt (adt_id, region_params, type_params),
-        ConstantAdt (variant_id, field_values) ) ->
-        assert (region_params = []);
-        (* Compute the types of the fields *)
-        let field_tys =
-          match adt_id with
-          | T.AdtId def_id ->
-              let def = C.ctx_lookup_type_decl ctx def_id in
-              assert (def.region_params = []);
-              Subst.type_decl_get_instantiated_field_etypes def variant_id
-                type_params
-          | T.Tuple -> type_params
-          | T.Assumed _ -> failwith "Unreachable"
-        in
-        let adt_cf = fun fields ctx ->
-          let value = V.Adt { variant_id; field_values = fields } in
-          cf { value; ty } ctx
-        in
-        (* Map the field values & types to the continuation above *)
-        fold_left_apply_continuation
-          (fun (ty, v) cf ctx -> eval_operand_constant_value ty v cf ctx)
-          (List.combine field_tys field_values)
-          adt_cf ctx
-    (* Scalar, boolean... *)
-    | T.Bool, ConstantValue (Bool v)   -> cf { V.value = V.Concrete (Bool v);   ty } ctx
-    | T.Char, ConstantValue (Char v)   -> cf { V.value = V.Concrete (Char v);   ty } ctx
-    | T.Str,  ConstantValue (String v) -> cf { V.value = V.Concrete (String v); ty } ctx
-    | T.Integer int_ty, ConstantValue (V.Scalar v) ->
-        (* Check the type and the ranges *)
-        assert (int_ty = v.int_ty);
-        assert (check_scalar_value_in_range v);
-        cf { V.value = V.Concrete (V.Scalar v); ty } ctx
-    (* Constant expression identifier *)
-    | ty, ConstantId id ->
-        let dest = mk_fresh_symbolic_value V.FunCallRet (ety_no_regions_to_rty ty) in
-
-        (* Call the continuation *)
-        let expr = cf (mk_typed_value_from_symbolic_value dest) ctx in
-        
-        (* TODO Should it really be a new call ID ? *)
-        let call = SA.Fun (LA.Regular id, C.fresh_fun_call_id ()) in
-          
-        S.synthesize_function_call call [] [] [] []
-          dest None(*TODO meta-info*) expr
-
-    (* Remaining cases (invalid) - listing as much as we can on purpose
-      (allows to catch errors at compilation if the definitions change) *)
-    | _, ConstantAdt _ | _, ConstantValue _ ->
-        failwith "Improperly typed constant value"
+(** Convert a constant operand value to a typed value *)
+let typecheck_constant_value (ty : T.ety) (cv : V.constant_value) : V.typed_value =
+  (* Check the type while converting -
+   * we actually need some information contained in the type *)
+  match (ty, cv) with
+  (* Scalar, boolean... *)
+  | T.Bool, (Bool v)   -> { V.value = V.Concrete (Bool v);   ty }
+  | T.Char, (Char v)   -> { V.value = V.Concrete (Char v);   ty }
+  | T.Str,  (String v) -> { V.value = V.Concrete (String v); ty }
+  | T.Integer int_ty, (V.Scalar v) ->
+      (* Check the type and the ranges *)
+      assert (int_ty = v.int_ty);
+      assert (check_scalar_value_in_range v);
+      { V.value = V.Concrete (V.Scalar v); ty }
+  (* Remaining cases (invalid) - listing as much as we can on purpose
+    (allows to catch errors at compilation if the definitions change) *)
+  | _, _ -> failwith "Improperly typed constant value"
 
 (** Prepare the evaluation of an operand.
 
@@ -172,7 +127,7 @@ let eval_operand_prepare (config : C.config) (op : E.operand)
    fun ctx ->
     match op with
     | Expressions.Constant (ty, cv) ->
-        eval_operand_constant_value ty cv cf ctx
+        cf (typecheck_constant_value ty cv) ctx
     | Expressions.Copy p ->
         (* Access the value *)
         let access = Read in
@@ -205,7 +160,7 @@ let eval_operand (config : C.config) (op : E.operand)
      ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
-  | Expressions.Constant (ty, cv) -> eval_operand_constant_value ty cv cf ctx
+  | Expressions.Constant (ty, cv) -> cf (typecheck_constant_value ty cv) ctx
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in

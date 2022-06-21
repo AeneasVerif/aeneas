@@ -9,7 +9,6 @@
 
 open LlbcAst
 open Modules
-open FunIdentifier
 
 type fun_info = {
   can_fail : bool;

@@ -124,21 +124,21 @@ let () =
    * command-line arguments *)
   (* By setting a level for the main_logger_handler, we filter everything *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
-  main_log#set_level EL.Info;
-  llbc_of_json_logger#set_level EL.Info;
-  pre_passes_log#set_level EL.Info;
-  interpreter_log#set_level EL.Info;
-  statements_log#set_level EL.Info;
-  paths_log#set_level EL.Info;
-  expressions_log#set_level EL.Info;
-  expansion_log#set_level EL.Info;
-  borrows_log#set_level EL.Info;
-  invariants_log#set_level EL.Info;
-  pure_utils_log#set_level EL.Info;
-  symbolic_to_pure_log#set_level EL.Info;
-  pure_micro_passes_log#set_level EL.Info;
-  pure_to_extract_log#set_level EL.Info;
-  translate_log#set_level EL.Info;
+  main_log#set_level EL.Debug;
+  llbc_of_json_logger#set_level EL.Debug;
+  pre_passes_log#set_level EL.Debug;
+  interpreter_log#set_level EL.Debug;
+  statements_log#set_level EL.Debug;
+  paths_log#set_level EL.Debug;
+  expressions_log#set_level EL.Debug;
+  expansion_log#set_level EL.Debug;
+  borrows_log#set_level EL.Debug;
+  invariants_log#set_level EL.Debug;
+  pure_utils_log#set_level EL.Debug;
+  symbolic_to_pure_log#set_level EL.Debug;
+  pure_micro_passes_log#set_level EL.Debug;
+  pure_to_extract_log#set_level EL.Debug;
+  translate_log#set_level EL.Debug;
   (* Load the module *)
   let json = Yojson.Basic.from_file filename in
   match llbc_module_of_json json with

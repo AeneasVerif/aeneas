@@ -1,5 +1,4 @@
 open Names
-open FunIdentifier
 module T = Types
 module TU = TypesUtils
 module V = Values
@@ -686,7 +685,8 @@ module LlbcAst = struct
     var_id_to_string : V.VarId.id -> string;
     adt_field_names :
       T.TypeDeclId.id -> T.VariantId.id option -> string list option;
-    fun_decl_id_to_string : FunDeclId.id -> string;
+    fun_decl_id_to_string : A.FunDeclId.id -> string;
+    global_decl_id_to_string : A.GlobalDeclId.id -> string;
   }
 
   let ast_to_ctx_formatter (fmt : ast_formatter) : PC.ctx_formatter =
@@ -743,6 +743,9 @@ module LlbcAst = struct
       let def = C.ctx_lookup_fun_decl ctx def_id in
       fun_name_to_string def.name
     in
+    let global_decl_id_to_string def_id =
+      fun_decl_id_to_string (A.global_to_fun_id ctx.fun_context.gid_conv def_id)
+    in
     {
       rvar_to_string = ctx_fmt.PV.rvar_to_string;
       r_to_string = ctx_fmt.PV.r_to_string;
@@ -753,10 +756,14 @@ module LlbcAst = struct
       adt_field_names = ctx_fmt.PV.adt_field_names;
       adt_field_to_string;
       fun_decl_id_to_string;
+      global_decl_id_to_string;
     }
 
-  let fun_decl_to_ast_formatter (type_decls : T.type_decl T.TypeDeclId.Map.t)
-      (fun_decls : A.fun_decl FunDeclId.Map.t) (fdef : A.fun_decl) :
+  let fun_decl_to_ast_formatter
+      (type_decls : T.type_decl T.TypeDeclId.Map.t)
+      (fun_decls : A.fun_decl A.FunDeclId.Map.t)
+      (global_to_fun_id : A.GlobalDeclId.id -> A.FunDeclId.id)
+      (fdef : A.fun_decl) :
       ast_formatter =
     let rvar_to_string r =
       let rvar = T.RegionVarId.nth fdef.signature.region_params r in
@@ -782,8 +789,11 @@ module LlbcAst = struct
     let adt_field_names = PC.type_ctx_to_adt_field_names_fun type_decls in
     let adt_field_to_string = type_ctx_to_adt_field_to_string_fun type_decls in
     let fun_decl_id_to_string def_id =
-      let def = FunDeclId.Map.find def_id fun_decls in
+      let def = A.FunDeclId.Map.find def_id fun_decls in
       fun_name_to_string def.name
+    in
+    let global_decl_id_to_string def_id =
+      fun_decl_id_to_string (global_to_fun_id def_id)
     in
     {
       rvar_to_string;
@@ -795,6 +805,7 @@ module LlbcAst = struct
       adt_field_names;
       adt_field_to_string;
       fun_decl_id_to_string;
+      global_decl_id_to_string;
     }
 
   let rec projection_to_string (fmt : ast_formatter) (inside : string)
@@ -860,36 +871,13 @@ module LlbcAst = struct
     | E.Shl -> "<<"
     | E.Shr -> ">>"
 
-  let rec operand_constant_value_to_string (fmt : ast_formatter)
-      (cv : E.operand_constant_value) : string =
-    match cv with
-    | E.ConstantId id -> fmt.fun_decl_id_to_string id
-    | E.ConstantValue cv -> PV.constant_value_to_string cv
-    | E.ConstantAdt (variant_id, field_values) ->
-        (* This is a bit annoying, because we don't have context information
-         * to convert the ADT to a value, so we do the best we can in the
-         * simplest manner. Anyway, those printing utilitites are only used
-         * for debugging, and complex constant values are not common.
-         * We might want to store type information in the operand constant values
-         * in the future.
-         *)
-        let variant_id = option_to_string T.VariantId.to_string variant_id in
-        let field_values =
-          List.map (operand_constant_value_to_string fmt) field_values
-        in
-        "ConstantAdt " ^ variant_id ^ " {"
-        ^ String.concat ", " field_values
-        ^ "}"
-
   let operand_to_string (fmt : ast_formatter) (op : E.operand) : string =
     match op with
     | E.Copy p -> "copy " ^ place_to_string fmt p
     | E.Move p -> "move " ^ place_to_string fmt p
     | E.Constant (ty, cv) ->
-        (* For clarity, we also print the typing information: see the comment in
-         * [operand_constant_value_to_string] *)
         "("
-        ^ operand_constant_value_to_string fmt cv
+        ^ PV.constant_value_to_string cv
         ^ " : "
         ^ PT.ety_to_string (ast_to_etype_formatter fmt) ty
         ^ ")"
@@ -950,6 +938,8 @@ module LlbcAst = struct
     match st with
     | A.Assign (p, rv) ->
         indent ^ place_to_string fmt p ^ " := " ^ rvalue_to_string fmt rv
+    | A.AssignGlobal { dst; global } ->
+        indent ^ fmt.var_id_to_string dst ^ " := global " ^ fmt.global_decl_id_to_string global
     | A.FakeRead p -> "fake_read " ^ place_to_string fmt p
     | A.SetDiscriminant (p, variant_id) ->
         (* TODO: improve this to lookup the variant name by using the def id *)
@@ -1139,8 +1129,11 @@ module Module = struct
 
   (** Generate an [ast_formatter] by using a definition context in combination
       with the variables local to a function's definition *)
-  let def_ctx_to_ast_formatter (type_context : T.type_decl T.TypeDeclId.Map.t)
-      (fun_context : A.fun_decl FunDeclId.Map.t) (def : A.fun_decl) :
+  let def_ctx_to_ast_formatter
+      (type_context : T.type_decl T.TypeDeclId.Map.t)
+      (fun_context : A.fun_decl A.FunDeclId.Map.t)
+      (global_to_fun_id : A.GlobalDeclId.id -> A.FunDeclId.id)
+      (def : A.fun_decl) :
       PA.ast_formatter =
     let rvar_to_string vid =
       let var = T.RegionVarId.nth def.signature.region_params vid in
@@ -1159,8 +1152,11 @@ module Module = struct
       name_to_string def.name
     in
     let fun_decl_id_to_string def_id =
-      let def = FunDeclId.Map.find def_id fun_context in
+      let def = A.FunDeclId.Map.find def_id fun_context in
       fun_name_to_string def.name
+    in
+    let global_decl_id_to_string def_id =
+      fun_decl_id_to_string (global_to_fun_id def_id)
     in
     let var_id_to_string vid =
       let var = V.VarId.nth (Option.get def.body).locals vid in
@@ -1183,13 +1179,17 @@ module Module = struct
       var_id_to_string;
       adt_field_names;
       fun_decl_id_to_string;
+      global_decl_id_to_string;
     }
 
   (** This function pretty-prints a function definition by using a definition
       context *)
-  let fun_decl_to_string (type_context : T.type_decl T.TypeDeclId.Map.t)
-      (fun_context : A.fun_decl FunDeclId.Map.t) (def : A.fun_decl) : string =
-    let fmt = def_ctx_to_ast_formatter type_context fun_context def in
+  let fun_decl_to_string
+      (type_context : T.type_decl T.TypeDeclId.Map.t)
+      (fun_context : A.fun_decl A.FunDeclId.Map.t)
+      (global_to_fun_id : A.GlobalDeclId.id -> A.FunDeclId.id)
+      (def : A.fun_decl) : string =
+    let fmt = def_ctx_to_ast_formatter type_context fun_context global_to_fun_id def in
     PA.fun_decl_to_string fmt "" "  " def
 
   let module_to_string (m : M.llbc_module) : string =
@@ -1200,7 +1200,8 @@ module Module = struct
 
     (* The functions *)
     let fun_decls =
-      List.map (fun_decl_to_string types_defs_map funs_defs_map) m.M.functions
+      let gid_to_fid = fun gid -> A.global_to_fun_id m.gid_conv gid in
+      List.map (fun_decl_to_string types_defs_map funs_defs_map gid_to_fid) m.M.functions
     in
 
     (* Put everything together *)
@@ -1256,11 +1257,6 @@ module EvalCtxLlbcAst = struct
   let typed_avalue_to_string (ctx : C.eval_ctx) (v : V.typed_avalue) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
     PV.typed_avalue_to_string fmt v
-
-  let operand_constant_value_to_string (ctx : C.eval_ctx)
-      (cv : E.operand_constant_value) : string =
-    let fmt = PA.eval_ctx_to_ast_formatter ctx in
-    PA.operand_constant_value_to_string fmt cv
 
   let place_to_string (ctx : C.eval_ctx) (op : E.place) : string =
     let fmt = PA.eval_ctx_to_ast_formatter ctx in

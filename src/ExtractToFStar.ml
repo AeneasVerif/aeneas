@@ -6,7 +6,6 @@ open PureUtils
 open TranslateCore
 open PureToExtract
 open StringUtils
-open FunIdentifier
 module F = Format
 
 (** A qualifier for a type definition.
@@ -315,7 +314,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fname ^ suffix
   in
 
-  let decreases_clause_name (_fid : FunDeclId.id) (fname : fun_name) : string =
+  let decreases_clause_name (_fid : A.FunDeclId.id) (fname : fun_name) : string =
     let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
     let suffix = "_decreases" in

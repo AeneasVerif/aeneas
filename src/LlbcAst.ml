@@ -2,7 +2,21 @@ open Names
 open Types
 open Values
 open Expressions
-open FunIdentifier
+open Identifiers
+
+module FunDeclId = IdGen ()
+module GlobalDeclId = IdGen ()
+
+(* Strict type for the number of function declarations (see [global_to_fun_id] below) *)
+type global_id_converter = { fun_count : int }
+[@@deriving show]
+
+(** Converts a global id to its corresponding function id.
+    To do so, it adds the global id to the number of function declarations :
+    We have the bijection `global_id <=> fun_id + fun_id_count`.
+*)
+let global_to_fun_id (conv : global_id_converter) (gid : GlobalDeclId.id) : FunDeclId.id =
+  FunDeclId.of_int ((GlobalDeclId.to_int gid) + conv.fun_count)
 
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
@@ -33,6 +47,12 @@ type assumed_fun_id =
 
 type fun_id = Regular of FunDeclId.id | Assumed of assumed_fun_id
 [@@deriving show, ord]
+
+type assign_global = {
+  dst : VarId.id;
+  global : GlobalDeclId.id;
+}
+[@@deriving show]
 
 type assertion = { cond : operand; expected : bool } [@@deriving show]
 
@@ -75,6 +95,8 @@ class ['self] iter_statement_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
 
+    method visit_assign_global : 'env -> assign_global -> unit = fun _ _ -> ()
+
     method visit_place : 'env -> place -> unit = fun _ _ -> ()
 
     method visit_rvalue : 'env -> rvalue -> unit = fun _ _ -> ()
@@ -97,6 +119,8 @@ class ['self] map_statement_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
 
+    method visit_assign_global : 'env -> assign_global -> assign_global = fun _ x -> x
+
     method visit_place : 'env -> place -> place = fun _ x -> x
 
     method visit_rvalue : 'env -> rvalue -> rvalue = fun _ x -> x
@@ -118,6 +142,7 @@ class ['self] map_statement_base =
 
 type statement =
   | Assign of place * rvalue
+  | AssignGlobal of assign_global
   | FakeRead of place
   | SetDiscriminant of place * VariantId.id
   | Drop of place
