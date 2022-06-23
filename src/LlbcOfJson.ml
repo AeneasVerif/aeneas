@@ -381,24 +381,18 @@ let binop_of_json (js : json) : (E.binop, string) result =
 let constant_value_of_json (js : json) : (V.constant_value, string) result =
   combine_error_msgs js "constant_value_of_json"
     (match js with
-    (* This indirection is because Charon still export the type OperandConstantValue,
-      * which had other variants than ConstantValue before.
-      *)
-    | `Assoc [ ("ConstantValue", `List [ cv ]) ] ->
-        (match cv with
-          | `Assoc [ ("Scalar", scalar_value) ] ->
-              let* scalar_value = scalar_value_of_json scalar_value in
-              Ok (V.Scalar scalar_value)
-          | `Assoc [ ("Bool", v) ] ->
-              let* v = bool_of_json v in
-              Ok (V.Bool v)
-          | `Assoc [ ("Char", v) ] ->
-              let* v = char_of_json v in
-              Ok (V.Char v)
-          | `Assoc [ ("String", v) ] ->
-              let* v = string_of_json v in
-              Ok (V.String v)
-          | _ -> Error "")
+    | `Assoc [ ("Scalar", scalar_value) ] ->
+        let* scalar_value = scalar_value_of_json scalar_value in
+        Ok (V.Scalar scalar_value)
+    | `Assoc [ ("Bool", v) ] ->
+        let* v = bool_of_json v in
+        Ok (V.Bool v)
+    | `Assoc [ ("Char", v) ] ->
+        let* v = char_of_json v in
+        Ok (V.Char v)
+    | `Assoc [ ("String", v) ] ->
+        let* v = string_of_json v in
+        Ok (V.String v)
     | _ -> Error "")
   
 let operand_of_json (js : json) : (E.operand, string) result =

@@ -117,3 +117,22 @@ let get_z2_fwd : result i32 =
     end
   end
 
+(** [constants::S1] *)
+let s1_fwd : result u32 = Return 6
+
+(** [constants::S2] *)
+let s2_fwd : result u32 =
+  begin match s1_fwd with
+  | Fail -> Fail
+  | Return i ->
+    begin match incr_fwd i with | Fail -> Fail | Return i0 -> Return i0 end
+  end
+
+(** [constants::S3] *)
+let s3_fwd : result (pair_t u32 u32) =
+  begin match p3_fwd with | Fail -> Fail | Return p -> Return p end
+
+(** [constants::S4] *)
+let s4_fwd : result (pair_t u32 u32) =
+  begin match mk_pair1_fwd 7 8 with | Fail -> Fail | Return p -> Return p end
+
