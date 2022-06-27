@@ -985,6 +985,9 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
   (* Lookup the abstraction *)
   let abs = C.ctx_lookup_abs ctx abs_id in
 
+  (* Check that we can end the abstraction *)
+  assert abs.can_end;
+
   (* End the parent abstractions first *)
   let cc = end_abstractions config chain abs.parents in
   let cc =

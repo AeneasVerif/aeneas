@@ -677,9 +677,13 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
  
     Create abstractions (with no avalues, which have to be inserted afterwards)
     from a list of abs region groups.
+    
+    [region_can_end]: gives the region groups from which we generate functions
+    which can end or not.
  *)
 let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
-    (kind : V.abs_kind) (rgl : A.abs_region_group list) : V.abs list =
+    (kind : V.abs_kind) (rgl : A.abs_region_group list)
+    (region_can_end : T.RegionGroupId.id -> bool) : V.abs list =
   (* We use a reference to progressively create a map from abstraction ids
    * to set of ancestor regions. Note that abs_to_ancestors_regions[abs_id]
    * returns the union of:
@@ -714,6 +718,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     let ancestors_regions_union_current_regions =
       T.RegionId.Set.union ancestors_regions regions
     in
+    let can_end = region_can_end back_id in
     abs_to_ancestors_regions :=
       V.AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
         !abs_to_ancestors_regions;
@@ -723,6 +728,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
       call_id;
       back_id;
       kind;
+      can_end;
       parents;
       original_parents;
       regions;
@@ -737,6 +743,9 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
 
     Create a list of abstractions from a list of regions groups, and insert
     them in the context.
+
+    [region_can_end]: gives the region groups from which we generate functions
+    which can end or not.
     
     [compute_abs_avalues]: this function must compute, given an initialized,
     empty (i.e., with no avalues) abstraction, compute the avalues which
@@ -746,12 +755,14 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
 *)
 let create_push_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     (kind : V.abs_kind) (rgl : A.abs_region_group list)
+    (region_can_end : T.RegionGroupId.id -> bool)
     (compute_abs_avalues :
       V.abs -> C.eval_ctx -> C.eval_ctx * V.typed_avalue list)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
     create_empty_abstractions_from_abs_region_groups call_id kind rgl
+      region_can_end
   in
 
   (* Compute and add the avalues to the abstractions, the insert the abstractions
@@ -1152,9 +1163,10 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     in
     (* Actually initialize and insert the abstractions *)
     let call_id = C.fresh_fun_call_id () in
+    let region_can_end _ = true in
     let ctx =
       create_push_abstractions_from_abs_region_groups call_id V.FunCall
-        inst_sg.A.regions_hierarchy compute_abs_avalues ctx
+        inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues ctx
     in
 
     (* Apply the continuation *)
