@@ -188,8 +188,6 @@ let replace_symbolic_values (at_most_once : bool)
   in
   (* Apply the substitution *)
   let ctx = obj#visit_eval_ctx None ctx in
-  (* Check that we substituted *)
-  assert !replaced;
   (* Return *)
   ctx
 
@@ -469,8 +467,24 @@ let apply_branching_symbolic_expansions_non_borrow (config : C.config)
   let seel = List.map fst see_cf_l in
   S.synthesize_symbolic_expansion sv sv_place seel subterms
 
-(** Expand a symbolic value which is not an enumeration with several variants
-    (i.e., in a situation where it doesn't lead to branching).
+(** Expand a symbolic boolean *)
+let expand_symbolic_bool (config : C.config) (sp : V.symbolic_value)
+    (sp_place : SA.mplace option) (cf_true : m_fun) (cf_false : m_fun) : m_fun =
+ fun ctx ->
+  (* Compute the expanded value *)
+  let original_sv = sp in
+  let original_sv_place = sp_place in
+  let rty = original_sv.V.sv_ty in
+  assert (rty = T.Bool);
+  (* Expand the symbolic value to true or false and continue execution *)
+  let see_true = V.SeConcrete (V.Bool true) in
+  let see_false = V.SeConcrete (V.Bool false) in
+  let seel = [ (Some see_true, cf_true); (Some see_false, cf_false) ] in
+  (* Apply the symbolic expansion (this also outputs the updated symbolic AST) *)
+  apply_branching_symbolic_expansions_non_borrow config original_sv
+    original_sv_place seel ctx
+
+(** Expand a symbolic value.
     
     [allow_branching]: if `true` we can branch (by expanding enumerations with
     stricly more than one variant), otherwise we can't.
@@ -554,14 +568,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     (* Booleans *)
     | T.Bool ->
         assert allow_branching;
-        (* Expand the symbolic value to true or false and continue execution *)
-        let see_true = V.SeConcrete (V.Bool true) in
-        let see_false = V.SeConcrete (V.Bool false) in
-        let seel = [ see_true; see_false ] in
-        let seel = List.map (fun see -> (Some see, cf)) seel in
-        (* Apply the symbolic expansion (this also outputs the updated symbolic AST) *)
-        apply_branching_symbolic_expansions_non_borrow config original_sv
-          original_sv_place seel ctx
+        expand_symbolic_bool config sp sp_place cf cf ctx
     | _ ->
         raise
           (Failure ("expand_symbolic_value: unexpected type: " ^ T.show_rty rty))

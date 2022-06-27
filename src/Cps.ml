@@ -77,7 +77,6 @@ let comp_ret_val (f : (V.typed_value -> m_fun) -> m_fun)
   comp f g
 
 let apply (f : cm_fun) (g : m_fun) : m_fun = fun ctx -> f g ctx
-
 let id_cm_fun : cm_fun = fun cf ctx -> cf ctx
 
 (** If we have a list of [inputs] of type `'a list` and a function [f] which
@@ -92,7 +91,37 @@ let id_cm_fun : cm_fun = fun cf ctx -> cf ctx
     
     See the unit test below for an illustration.
  *)
-let fold_left_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
+let fold_left_apply_continuation (f : 'a -> ('c -> 'd) -> 'c -> 'd)
+    (inputs : 'a list) (cf : 'c -> 'd) : 'c -> 'd =
+  let rec eval_list (inputs : 'a list) (cf : 'c -> 'd) : 'c -> 'd =
+   fun ctx ->
+    match inputs with
+    | [] -> cf ctx
+    | x :: inputs -> comp (f x) (fun cf -> eval_list inputs cf) cf ctx
+  in
+  eval_list inputs cf
+
+(** Unit test/example for [fold_left_apply_continuation] *)
+let _ =
+  fold_left_apply_continuation
+    (fun x cf (ctx : int) -> cf (ctx + x))
+    [ 1; 20; 300; 4000 ]
+    (fun (ctx : int) -> assert (ctx = 4321))
+    0
+
+(** If we have a list of [inputs] of type `'a list` and a function [f] which
+    evaluates one element of type `'a` to compute a result of type `'b` before
+    giving it to a continuation, the following function performs a fold operation:
+    it evaluates all the inputs one by one by accumulating the results in a list,
+    and gives the list to a continuation.
+    
+    Note that we make sure that the results are listed in the order in
+    which they were computed (the first element of the list is the result
+    of applying [f] to the first element of the inputs).
+    
+    See the unit test below for an illustration.
+ *)
+let fold_left_list_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
     (inputs : 'a list) (cf : 'b list -> 'c -> 'd) : 'c -> 'd =
   let rec eval_list (inputs : 'a list) (cf : 'b list -> 'c -> 'd)
       (outputs : 'b list) : 'c -> 'd =
@@ -104,9 +133,9 @@ let fold_left_apply_continuation (f : 'a -> ('b -> 'c -> 'd) -> 'c -> 'd)
   in
   eval_list inputs cf []
 
-(** Unit test/example for [fold_left_apply_continuation] *)
+(** Unit test/example for [fold_left_list_apply_continuation] *)
 let _ =
-  fold_left_apply_continuation
+  fold_left_list_apply_continuation
     (fun x cf (ctx : unit) -> cf (10 + x) ctx)
     [ 0; 1; 2; 3; 4 ]
     (fun values _ctx -> assert (values = [ 10; 11; 12; 13; 14 ]))
