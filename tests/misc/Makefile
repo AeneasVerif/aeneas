@@ -21,10 +21,7 @@ ifeq (,$(filter %-in,$(MAKECMDGOALS)))
 ifndef NODEPEND
 ifndef MAKE_RESTARTS
 .depend: .FORCE
-	$(FSTAR_NO_FLAGS) --dep full $(notdir $(FSTAR_ROOTS)) \
-	    --extract 'krml:*' \
-	    --extract 'OCaml:-* +FStar.Krml.Endianness +Vale.Arch +Vale.X64 -Vale.X64.MemoryAdapters +Vale.Def +Vale.Lib +Vale.Bignum.X64 -Vale.Lib.Tactics +Vale.Math +Vale.Transformers +Vale.AES +Vale.Interop +Vale.Arch.Types +Vale.Arch.BufferFriend +Vale.Lib.X64 +Vale.SHA.X64 +Vale.SHA.SHA_helpers +Vale.Curve25519.X64 +Vale.Poly1305.X64 +Vale.Inline +Vale.AsLowStar +Vale.Test +Spec +Lib -Lib.IntVector +C' \
-	    > $@
+	$(FSTAR_NO_FLAGS) --dep full $(notdir $(FSTAR_ROOTS)) > $@
 
 .PHONY: .FORCE
 .FORCE:
