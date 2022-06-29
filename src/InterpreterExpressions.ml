@@ -48,17 +48,34 @@ let expand_primitively_copyable_at_place (config : C.config)
   (* Apply *)
   expand cf ctx
 
-(** Read a place (CPS-style function *)
+(** Read a place (CPS-style function).
+
+    We also check that the value *doesn't contain bottoms or inactivated
+    borrows.
+ *)
 let read_place (config : C.config) (access : access_kind) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
   let v = read_place_unwrap config access p ctx in
+  (* Check that there are no bottoms in the value *)
+  assert (not (bottom_in_value ctx.ended_regions v));
+  (* Check that there are no inactivated borrows in the value *)
+  assert (not (inactivated_in_value v));
+  (* Call the continuation *)
   cf v ctx
 
 (** Small utility.
 
     Prepare the access to a place in a right-value (typically an operand) by
     reorganizing the environment.
+
+    We reorganize the environment so that:
+    - we can access the place (we prepare *along* the path)
+    - the value at the place itself doesn't contain loans (the `access_kind`
+      controls whether we only end mutable loans, or also shared loans).
+
+    We also check, after the reorganization, that the value at the place
+    *doesn't contain any bottom nor inactivated borrows*.
 
     [expand_prim_copy]: if true, expand the symbolic values which are primitively
     copyable and contain borrows.
@@ -67,14 +84,20 @@ let access_rplace_reorganize_and_read (config : C.config)
     (expand_prim_copy : bool) (access : access_kind) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
+  (* Make sure we can evaluate the path *)
   let cc = update_ctx_along_read_place config access p in
+  (* End the proper loans at the place itself *)
   let cc = comp cc (end_loans_at_place config access p) in
+  (* Expand the copyable values which contain borrows (which are necessarily shared
+   * borrows) *)
   let cc =
     if expand_prim_copy then
       comp cc (expand_primitively_copyable_at_place config access p)
     else cc
   in
+  (* Read the place - note that this checks that the value doesn't contain bottoms *)
   let read_place = read_place config access p in
+  (* Compose *)
   comp cc read_place cf ctx
 
 let access_rplace_reorganize (config : C.config) (expand_prim_copy : bool)

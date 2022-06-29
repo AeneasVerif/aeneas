@@ -1442,12 +1442,22 @@ let end_outer_borrows config : V.BorrowId.Set.t -> cm_fun =
     - it mustn't contain [Bottom]
     - it mustn't contain inactivated borrows
     TODO: this kind of checks should be put in an auxiliary helper, because
-    they are redundant
+    they are redundant.
+
+    The loan to update mustn't be a borrowed value.
  *)
 let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
-  (* Lookup the shared loan *)
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("promote_shared_loan_to_mut_loan:\n- loan: " ^ V.BorrowId.to_string l
+     ^ "\n- context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
+  (* Lookup the shared loan - note that we can't promote a shared loan
+   * in a shared value, but we can do it in a mutably borrowed value.
+   * This is important because we can do: `let y = &two-phase ( *x );`
+   *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
@@ -1548,7 +1558,10 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
              the borrow we want to promote *)
           let bids = V.BorrowId.Set.remove l bids in
           let cc = end_outer_borrows config bids in
-          (* Promote the loan *)
+          (* Promote the loan - TODO: this will fail if the value contains
+           * any loans. In practice, it shouldn't, but we could also
+           * look for loans inside the value and end them before promoting
+           * the borrow. *)
           let cc = comp cc (promote_shared_loan_to_mut_loan l) in
           (* Promote the borrow - the value should have been checked by
              [promote_shared_loan_to_mut_loan]
