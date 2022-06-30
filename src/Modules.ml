@@ -7,7 +7,8 @@ type 'id g_declaration_group = NonRec of 'id | Rec of 'id list
 type type_declaration_group = TypeDeclId.id g_declaration_group
 [@@deriving show]
 
-type fun_declaration_group = FunDeclId.id g_declaration_group [@@deriving show]
+type fun_declaration_group = FunDeclId.id g_declaration_group
+[@@deriving show]
 
 (** Module declaration *)
 type declaration_group =

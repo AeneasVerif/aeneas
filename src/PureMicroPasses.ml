@@ -611,7 +611,10 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
                     | Func (Unop _ | Binop _) ->
                         true (* primitive function call *)
                     | Func (Regular _) ->
-                        false (* non-primitive function call *))
+                        false (* non-primitive function call *)
+                    | Global _ ->
+                        true (* Global constant or static *)
+                  )
                 | _ -> filter
               else false
             in

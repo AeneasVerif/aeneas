@@ -111,7 +111,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       check_texpression ctx body
   | Qualif qualif -> (
       match qualif.id with
-      | Func _ -> () (* TODO *)
+      | Func _ | Global _ -> () (* TODO *)
       | Proj { adt_id = proj_adt_id; field_id } ->
           (* Note we can only project fields of structures (not enumerations) *)
           (* Deconstruct the projector type *)

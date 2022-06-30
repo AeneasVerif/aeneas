@@ -302,9 +302,9 @@ type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
 
 type qualif_id =
   | Func of fun_id
+  | Global of A.GlobalDeclId.id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
-  (* TODO | Global of GlobalDeclId.id*)
 [@@deriving show]
 
 type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]
@@ -575,5 +575,6 @@ type fun_decl = {
           (to identify the forward/backward functions) later.
        *)
   signature : fun_sig;
+  is_global : bool;
   body : fun_body option;
 }

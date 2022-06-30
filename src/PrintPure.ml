@@ -44,6 +44,7 @@ type ast_formatter = {
     TypeDeclId.id -> VariantId.id option -> FieldId.id -> string option;
   adt_field_names : TypeDeclId.id -> VariantId.id option -> string list option;
   fun_decl_id_to_string : A.FunDeclId.id -> string;
+  global_decl_id_to_string : A.GlobalDeclId.id -> string;
 }
 
 let ast_to_value_formatter (fmt : ast_formatter) : value_formatter =
@@ -85,7 +86,9 @@ let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
    while we only need those definitions to lookup proper names for the def ids.
 *)
 let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
-    (fun_decls : A.fun_decl A.FunDeclId.Map.t) (type_params : type_var list) :
+    (fun_decls : A.fun_decl A.FunDeclId.Map.t)
+    (gid_conv : A.global_id_converter)
+    (type_params : type_var list) :
     ast_formatter =
   let type_var_id_to_string vid =
     let var = T.TypeVarId.nth type_params vid in
@@ -112,6 +115,9 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     let def = A.FunDeclId.Map.find def_id fun_decls in
     fun_name_to_string def.name
   in
+  let global_decl_id_to_string def_id =
+    fun_decl_id_to_string (A.global_to_fun_id gid_conv def_id)
+  in
   {
     type_var_id_to_string;
     type_decl_id_to_string;
@@ -120,6 +126,7 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     adt_field_names;
     adt_field_to_string;
     fun_decl_id_to_string;
+    global_decl_id_to_string;
   }
 
 let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
@@ -480,6 +487,7 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
         let qualif_s =
           match qualif.id with
           | Func fun_id -> fun_id_to_string fmt fun_id
+          | Global global_id -> fmt.global_decl_id_to_string global_id
           | AdtCons adt_cons_id ->
               let variant_s =
                 adt_variant_to_string

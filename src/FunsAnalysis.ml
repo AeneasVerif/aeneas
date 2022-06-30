@@ -1,6 +1,6 @@
 (** Compute various information, including:
     - can a function fail (by having `Fail` in its body, or transitively
-      calling a function which can fail)
+      calling a function which can fail), false for globals
     - can a function diverge (bu being recursive, containing a loop or
       transitively calling a function which can diverge)
     - does a function perform stateful operations (i.e., do we need a state
@@ -49,47 +49,56 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
     let stateful = ref false in
     let divergent = ref false in
 
-    let obj =
-      object
-        inherit [_] iter_statement as super
-
-        method! visit_Assert env a =
-          can_fail := true;
-          super#visit_Assert env a
-
-        method! visit_Call env call =
-          (match call.func with
-          | Regular id ->
-              if FunDeclId.Set.mem id fun_ids then divergent := true
-              else
-                let info = FunDeclId.Map.find id !infos in
-                can_fail := !can_fail || info.can_fail;
-                stateful := !stateful || info.stateful;
-                divergent := !divergent || info.divergent
-          | Assumed id ->
-              (* None of the assumed functions is stateful for now *)
-              can_fail := !can_fail || Assumed.assumed_can_fail id);
-          super#visit_Call env call
-
-        method! visit_Panic env =
-          can_fail := true;
-          super#visit_Panic env
-
-        method! visit_Loop env loop =
-          divergent := true;
-          super#visit_Loop env loop
-      end
-    in
-
     let visit_fun (f : fun_decl) : unit =
+      print_endline ("@ fun: " ^ Print.fun_name_to_string f.name);
+      let obj =
+        object (self)
+          inherit [_] iter_statement as super
+
+          method may_fail b =
+            if f.is_global then () else
+            can_fail := !can_fail || b
+
+          method! visit_Assert env a =
+            self#may_fail true;
+            super#visit_Assert env a
+
+          method! visit_Call env call =
+            print_string "@ dep: ";
+            pp_fun_id Format.std_formatter call.func;
+            print_newline ();
+
+            (match call.func with
+            | Regular id ->
+                if FunDeclId.Set.mem id fun_ids then divergent := true
+                else
+                  let info = FunDeclId.Map.find id !infos in
+                  self#may_fail info.can_fail;
+                  stateful := !stateful || info.stateful;
+                  divergent := !divergent || info.divergent
+            | Assumed id ->
+                (* None of the assumed functions is stateful for now *)
+                can_fail := !can_fail || Assumed.assumed_can_fail id);
+            super#visit_Call env call
+
+          method! visit_Panic env =
+            self#may_fail true;
+            super#visit_Panic env
+
+          method! visit_Loop env loop =
+            divergent := true;
+            super#visit_Loop env loop
+        end
+      in
       match f.body with
       | None ->
           (* Opaque function *)
-          can_fail := true;
+          obj#may_fail true;
           stateful := use_state
       | Some body -> obj#visit_statement () body.body
     in
     List.iter visit_fun d;
+    print_endline ("@ can_fail: " ^ Bool.to_string !can_fail);
     { can_fail = !can_fail; stateful = !stateful; divergent = !divergent }
   in
 

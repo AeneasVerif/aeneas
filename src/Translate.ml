@@ -495,9 +495,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          if
            ((not is_opaque) && config.extract_transparent)
            || (is_opaque && config.extract_opaque)
-         then
-           ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif
-             has_decr_clause def)
+         then if def.is_global
+          then ExtractToFStar.extract_global_decl ctx.extract_ctx fmt qualif def
+          else ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif has_decr_clause def
+        )
        fls);
     (* Insert unit tests if necessary *)
     if config.test_unit_functions then

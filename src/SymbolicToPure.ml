@@ -144,7 +144,8 @@ let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
   let type_params = ctx.fun_decl.signature.type_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
-  PrintPure.mk_ast_formatter type_decls fun_decls type_params
+  let gid_conv = ctx.fun_context.gid_conv in
+  PrintPure.mk_ast_formatter type_decls fun_decls gid_conv type_params
 
 let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let fmt = bs_ctx_to_pp_ast_formatter ctx in
@@ -165,14 +166,16 @@ let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let type_params = sg.type_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
+  let gid_conv = ctx.fun_context.gid_conv in
+  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls gid_conv type_params in
   PrintPure.fun_sig_to_string fmt sg
 
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let type_params = def.signature.type_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
+  let gid_conv = ctx.fun_context.gid_conv in
+  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls gid_conv type_params in
   PrintPure.fun_decl_to_string fmt def
 
 (* TODO: move *)
@@ -482,7 +485,7 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
       let info = A.FunDeclId.Map.find fid fun_infos in
       let input_state = info.stateful in
       let output_state = input_state && gid = None in
-      { can_fail = true; input_state; output_state }
+      { can_fail = info.can_fail; input_state; output_state }
   | A.Assumed aid ->
       {
         can_fail = Assumed.assumed_can_fail aid;
@@ -1663,6 +1666,7 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
   (* Lookup the signature *)
   let signature = bs_ctx_lookup_local_function_sig def_id bid ctx in
   (* Translate the body, if there is *)
+  let is_global = def.A.is_global in
   let body =
     match body with
     | None -> None
@@ -1723,7 +1727,7 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
         Some { inputs; inputs_lvs; body }
   in
   (* Assemble the declaration *)
-  let def = { def_id; back_id = bid; basename; signature; body } in
+  let def = { def_id; back_id = bid; basename; signature; is_global; body } in
   (* Debugging *)
   log#ldebug
     (lazy
