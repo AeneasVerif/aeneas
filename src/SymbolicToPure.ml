@@ -478,6 +478,9 @@ let get_fun_effect_info (fun_infos : FA.fun_info FunDeclId.Map.t)
       let info = FunDeclId.Map.find fid fun_infos in
       let input_state = info.stateful in
       let output_state = input_state && gid = None in
+      (* We ignore on purpose info.can_fail: the result of the analysis is not
+       * used yet to adjust the translation so that the functions which syntactically
+       * can't fail don't use an error monad. *)
       { can_fail = true; input_state; output_state }
   | A.Assumed aid ->
       {
@@ -1191,7 +1194,7 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
             assert (int_ty0 = int_ty1);
             let effect_info =
               {
-                can_fail = binop_can_fail binop;
+                can_fail = ExpressionsUtils.binop_can_fail binop;
                 input_state = false;
                 output_state = false;
               }

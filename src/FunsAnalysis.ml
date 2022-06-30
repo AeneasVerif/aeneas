@@ -9,6 +9,7 @@
 
 open LlbcAst
 open Modules
+module EU = ExpressionsUtils
 
 type fun_info = {
   can_fail : bool;
@@ -56,6 +57,13 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
         method! visit_Assert env a =
           can_fail := true;
           super#visit_Assert env a
+
+        method! visit_rvalue _env rv =
+          match rv with
+          | Use _ | Ref _ | Discriminant _ | Aggregate _ -> ()
+          | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
+          | BinaryOp (bop, _, _) ->
+              can_fail := EU.binop_can_fail bop || !can_fail
 
         method! visit_Call env call =
           (match call.func with
