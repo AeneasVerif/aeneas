@@ -7,7 +7,6 @@ let statement_has_loops (st : statement) : bool =
   let obj =
     object
       inherit [_] iter_statement
-
       method! visit_Loop _ _ = raise Found
     end
   in
@@ -38,6 +37,8 @@ let lookup_fun_name (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     We don't do that in an efficient manner, but it doesn't matter.
     
     TODO: rename to "list_ancestors_..."
+
+    This list *doesn't* include the current region.
  *)
 let rec list_parent_region_groups (sg : fun_sig) (gid : T.RegionGroupId.id) :
     T.RegionGroupId.Set.t =

@@ -304,7 +304,11 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
         lookup_shared_borrows = false;
       }
 
-(** Read the value at a given place *)
+(** Read the value at a given place.
+
+    Note that we only access the value at the place, and do not check that
+    the value is "well-formed" (for instance that it doesn't contain bottoms).
+ *)
 let read_place (config : C.config) (access : access_kind) (p : E.place)
     (ctx : C.eval_ctx) : V.typed_value path_access_result =
   let access = access_kind_to_projection_access access in

@@ -218,29 +218,18 @@ let _ = assert_norm (get_elem_test_fwd = Return ())
 (** [no_nested_borrows::test_char] *)
 let test_char_fwd : result char = Return 'a'
 
-(** [no_nested_borrows::Tree] *)
-type tree_t (t : Type0) =
-| TreeLeaf : t -> tree_t t
-| TreeNode : t -> node_elem_t t -> tree_t t -> tree_t t
-
 (** [no_nested_borrows::NodeElem] *)
-and node_elem_t (t : Type0) =
+type node_elem_t (t : Type0) =
 | NodeElemCons : tree_t t -> node_elem_t t -> node_elem_t t
 | NodeElemNil : node_elem_t t
 
-(** [no_nested_borrows::even] *)
-let rec even_fwd (x : u32) : result bool =
-  if x = 0
-  then Return true
-  else
-    begin match u32_sub x 1 with
-    | Fail -> Fail
-    | Return i ->
-      begin match odd_fwd i with | Fail -> Fail | Return b -> Return b end
-    end
+(** [no_nested_borrows::Tree] *)
+and tree_t (t : Type0) =
+| TreeLeaf : t -> tree_t t
+| TreeNode : t -> node_elem_t t -> tree_t t -> tree_t t
 
 (** [no_nested_borrows::odd] *)
-and odd_fwd (x : u32) : result bool =
+let rec odd_fwd (x : u32) : result bool =
   if x = 0
   then Return false
   else
@@ -248,6 +237,17 @@ and odd_fwd (x : u32) : result bool =
     | Fail -> Fail
     | Return i ->
       begin match even_fwd i with | Fail -> Fail | Return b -> Return b end
+    end
+
+(** [no_nested_borrows::even] *)
+and even_fwd (x : u32) : result bool =
+  if x = 0
+  then Return true
+  else
+    begin match u32_sub x 1 with
+    | Fail -> Fail
+    | Return i ->
+      begin match odd_fwd i with | Fail -> Fail | Return b -> Return b end
     end
 
 (** [no_nested_borrows::test_even_odd] *)

@@ -150,13 +150,10 @@ let eval_assertion_concrete (config : C.config) (assertion : A.assertion) :
  *)
 let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
  fun cf ctx ->
-  (* There may be a symbolic expansion, so don't fully evaluate the operand
-   * (if we moved the value, we can't expand it because it is hanging in
-   * thin air, outside of the environment...): simply update the environment
-   * to make sure we have access to the value we want to check. *)
-  let prepare = eval_operand_prepare config assertion.cond in
+  (* Evaluate the operand *)
+  let eval_op = eval_operand config assertion.cond in
   (* Evaluate the assertion *)
-  let eval cf (v : V.typed_value) : m_fun =
+  let eval_assert cf (v : V.typed_value) : m_fun =
    fun ctx ->
     assert (v.ty = T.Bool);
     (* We make a choice here: we could completely decouple the concrete and
@@ -171,20 +168,22 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
     | Symbolic sv ->
         assert (config.mode = C.SymbolicMode);
         assert (sv.V.sv_ty = T.Bool);
-        (* Expand the symbolic value, then call the evaluation function for the
-         * non-symbolic case *)
-        let allow_branching = true in
+        (* Expand the symbolic value and call the proper continuation functions
+         * for the true and false cases - TODO: call an "assert" function instead *)
+        let cf_true : m_fun = fun ctx -> cf Unit ctx in
+        let cf_false : m_fun = fun ctx -> cf Panic ctx in
         let expand =
-          expand_symbolic_value config allow_branching sv
+          expand_symbolic_bool config sv
             (S.mk_opt_place_from_op assertion.cond ctx)
+            cf_true cf_false
         in
-        comp expand (eval_assertion_concrete config assertion) cf ctx
+        expand ctx
     | _ ->
         raise
           (Failure ("Expected a boolean, got: " ^ typed_value_to_string ctx v))
   in
   (* Compose and apply *)
-  comp prepare eval cf ctx
+  comp eval_op eval_assert cf ctx
 
 (** Updates the discriminant of a value at a given place.
 
@@ -678,9 +677,13 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
  
     Create abstractions (with no avalues, which have to be inserted afterwards)
     from a list of abs region groups.
+    
+    [region_can_end]: gives the region groups from which we generate functions
+    which can end or not.
  *)
 let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
-    (kind : V.abs_kind) (rgl : A.abs_region_group list) : V.abs list =
+    (kind : V.abs_kind) (rgl : A.abs_region_group list)
+    (region_can_end : T.RegionGroupId.id -> bool) : V.abs list =
   (* We use a reference to progressively create a map from abstraction ids
    * to set of ancestor regions. Note that abs_to_ancestors_regions[abs_id]
    * returns the union of:
@@ -715,6 +718,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     let ancestors_regions_union_current_regions =
       T.RegionId.Set.union ancestors_regions regions
     in
+    let can_end = region_can_end back_id in
     abs_to_ancestors_regions :=
       V.AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
         !abs_to_ancestors_regions;
@@ -724,6 +728,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
       call_id;
       back_id;
       kind;
+      can_end;
       parents;
       original_parents;
       regions;
@@ -738,6 +743,9 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
 
     Create a list of abstractions from a list of regions groups, and insert
     them in the context.
+
+    [region_can_end]: gives the region groups from which we generate functions
+    which can end or not.
     
     [compute_abs_avalues]: this function must compute, given an initialized,
     empty (i.e., with no avalues) abstraction, compute the avalues which
@@ -747,12 +755,14 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
 *)
 let create_push_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     (kind : V.abs_kind) (rgl : A.abs_region_group list)
+    (region_can_end : T.RegionGroupId.id -> bool)
     (compute_abs_avalues :
       V.abs -> C.eval_ctx -> C.eval_ctx * V.typed_avalue list)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
     create_empty_abstractions_from_abs_region_groups call_id kind rgl
+      region_can_end
   in
 
   (* Compute and add the avalues to the abstractions, the insert the abstractions
@@ -832,8 +842,14 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
         eval_function_call config call cf ctx
     | A.FakeRead p ->
         let expand_prim_copy = false in
-        let cf_prepare = prepare_rplace config expand_prim_copy Read p in
-        let cf_continue cf _ = cf in
+        let cf_prepare cf =
+          access_rplace_reorganize_and_read config expand_prim_copy Read p cf
+        in
+        let cf_continue cf v : m_fun =
+         fun ctx ->
+          assert (not (bottom_in_value ctx.ended_regions v));
+          cf ctx
+        in
         comp cf_prepare cf_continue (cf Unit) ctx
     | A.SetDiscriminant (p, variant_id) ->
         set_discriminant config p variant_id cf ctx
@@ -914,7 +930,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
    * (and would thus floating in thin air...)!
    * *)
   (* Prepare the operand *)
-  let cf_prepare_op cf : m_fun = eval_operand_prepare config op cf in
+  let cf_eval_op cf : m_fun = eval_operand config op cf in
   (* Match on the targets *)
   let cf_match (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
    fun ctx ->
@@ -922,39 +938,29 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
     | A.If (st1, st2) -> (
         match op_v.value with
         | V.Concrete (V.Bool b) ->
-            (* Evaluate the operand *)
-            let cf_eval_op cf : m_fun = eval_operand config op cf in
             (* Evaluate the if and the branch body *)
-            let cf_branch cf op_v' : m_fun =
-              assert (op_v' = op_v);
+            let cf_branch cf : m_fun =
               (* Branch *)
               if b then eval_statement config st1 cf
               else eval_statement config st2 cf
             in
             (* Compose the continuations *)
-            comp cf_eval_op cf_branch cf ctx
+            cf_branch cf ctx
         | V.Symbolic sv ->
-            (* Expand the symbolic value *)
-            let allows_branching = true in
-            let cf_expand cf =
-              expand_symbolic_value config allows_branching sv
-                (S.mk_opt_place_from_op op ctx)
-                cf
-            in
-            (* Retry *)
-            let cf_eval_if cf = eval_switch config op tgts cf in
-            (* Compose *)
-            comp cf_expand cf_eval_if cf ctx
+            (* Expand the symbolic boolean, and continue by evaluating
+             * the branches *)
+            let cf_true : m_fun = eval_statement config st1 cf in
+            let cf_false : m_fun = eval_statement config st2 cf in
+            expand_symbolic_bool config sv
+              (S.mk_opt_place_from_op op ctx)
+              cf_true cf_false ctx
         | _ -> raise (Failure "Inconsistent state"))
     | A.SwitchInt (int_ty, stgts, otherwise) -> (
         match op_v.value with
         | V.Concrete (V.Scalar sv) ->
-            (* Evaluate the operand *)
-            let cf_eval_op cf = eval_operand config op cf in
             (* Evaluate the branch *)
-            let cf_eval_branch cf op_v' =
+            let cf_eval_branch cf =
               (* Sanity check *)
-              assert (op_v' = op_v);
               assert (sv.V.int_ty = int_ty);
               (* Find the branch *)
               match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
@@ -962,13 +968,10 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
               | Some (_, tgt) -> eval_statement config tgt cf
             in
             (* Compose *)
-            comp cf_eval_op cf_eval_branch cf ctx
+            cf_eval_branch cf ctx
         | V.Symbolic sv ->
-            (* Expand the symbolic value - note that contrary to the boolean
-             * case, we can't expand then retry, because when switching over
-             * arbitrary integers we need to have an `otherwise` case, in
-             * which the scrutinee remains symbolic: if we expand the symbolic,
-             * reevaluate the switch, we loop... *)
+            (* Expand the symbolic value and continue by evaluating the
+             * proper branches *)
             let stgts =
               List.map
                 (fun (cv, tgt_st) -> (cv, eval_statement config tgt_st cf))
@@ -993,7 +996,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
         | _ -> raise (Failure "Inconsistent state"))
   in
   (* Compose the continuations *)
-  comp cf_prepare_op cf_match cf ctx
+  comp cf_eval_op cf_match cf ctx
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
@@ -1169,9 +1172,10 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     in
     (* Actually initialize and insert the abstractions *)
     let call_id = C.fresh_fun_call_id () in
+    let region_can_end _ = true in
     let ctx =
       create_push_abstractions_from_abs_region_groups call_id V.FunCall
-        inst_sg.A.regions_hierarchy compute_abs_avalues ctx
+        inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues ctx
     in
 
     (* Apply the continuation *)

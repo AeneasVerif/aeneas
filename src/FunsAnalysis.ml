@@ -9,6 +9,7 @@
 
 open LlbcAst
 open Modules
+module EU = ExpressionsUtils
 
 type fun_info = {
   can_fail : bool;
@@ -50,12 +51,14 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
     let divergent = ref false in
 
     let visit_fun (f : fun_decl) : unit =
-      print_endline ("@ fun: " ^ Print.fun_name_to_string f.name);
       let obj =
         object (self)
           inherit [_] iter_statement as super
 
           method may_fail b =
+            (* The fail flag is disabled for globals : the global body is
+             * normalised into its declaration, which is always successful.
+             *)
             if f.is_global then () else
             can_fail := !can_fail || b
 
@@ -63,8 +66,14 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
             self#may_fail true;
             super#visit_Assert env a
 
+            method! visit_rvalue _env rv =
+              match rv with
+              | Use _ | Ref _ | Discriminant _ | Aggregate _ -> ()
+              | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
+              | BinaryOp (bop, _, _) ->
+                  can_fail := EU.binop_can_fail bop || !can_fail
+    
           method! visit_Call env call =
-            print_string "@ dep: ";
             pp_fun_id Format.std_formatter call.func;
             print_newline ();
 
@@ -90,15 +99,18 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
             super#visit_Loop env loop
         end
       in
-      match f.body with
+      (match f.body with
       | None ->
           (* Opaque function *)
           obj#may_fail true;
           stateful := use_state
-      | Some body -> obj#visit_statement () body.body
+      | Some body -> obj#visit_statement () body.body);
+      (* We ignore on purpose functions that cannot fail: the result of the analysis
+       * is not used yet to adjust the translation so that the functions which
+       * syntactically can't fail don't use an error monad. *)
+      can_fail := not f.is_global
     in
     List.iter visit_fun d;
-    print_endline ("@ can_fail: " ^ Bool.to_string !can_fail);
     { can_fail = !can_fail; stateful = !stateful; divergent = !divergent }
   in
 

@@ -7,6 +7,7 @@ open Errors
 module C = Contexts
 module Subst = Substitute
 module L = Logging
+module PV = Print.Values
 open TypesUtils
 open ValuesUtils
 module Inv = Invariants
@@ -49,50 +50,93 @@ let expand_primitively_copyable_at_place (config : C.config)
   (* Apply *)
   expand cf ctx
 
+(** Read a place (CPS-style function).
+
+    We also check that the value *doesn't contain bottoms or inactivated
+    borrows.
+ *)
+let read_place (config : C.config) (access : access_kind) (p : E.place)
+    (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
+  let v = read_place_unwrap config access p ctx in
+  (* Check that there are no bottoms in the value *)
+  assert (not (bottom_in_value ctx.ended_regions v));
+  (* Check that there are no inactivated borrows in the value *)
+  assert (not (inactivated_in_value v));
+  (* Call the continuation *)
+  cf v ctx
+
 (** Small utility.
+
+    Prepare the access to a place in a right-value (typically an operand) by
+    reorganizing the environment.
+
+    We reorganize the environment so that:
+    - we can access the place (we prepare *along* the path)
+    - the value at the place itself doesn't contain loans (the `access_kind`
+      controls whether we only end mutable loans, or also shared loans).
+
+    We also check, after the reorganization, that the value at the place
+    *doesn't contain any bottom nor inactivated borrows*.
 
     [expand_prim_copy]: if true, expand the symbolic values which are primitively
     copyable and contain borrows.
  *)
-let prepare_rplace (config : C.config) (expand_prim_copy : bool)
-    (access : access_kind) (p : E.place) (cf : V.typed_value -> m_fun) : m_fun =
+let access_rplace_reorganize_and_read (config : C.config)
+    (expand_prim_copy : bool) (access : access_kind) (p : E.place)
+    (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
+  (* Make sure we can evaluate the path *)
   let cc = update_ctx_along_read_place config access p in
+  (* End the proper loans at the place itself *)
   let cc = comp cc (end_loans_at_place config access p) in
+  (* Expand the copyable values which contain borrows (which are necessarily shared
+   * borrows) *)
   let cc =
     if expand_prim_copy then
       comp cc (expand_primitively_copyable_at_place config access p)
     else cc
   in
-  let read_place cf : m_fun =
-   fun ctx ->
-    let v = read_place_unwrap config access p ctx in
-    cf v ctx
-  in
+  (* Read the place - note that this checks that the value doesn't contain bottoms *)
+  let read_place = read_place config access p in
+  (* Compose *)
   comp cc read_place cf ctx
 
-(** Convert a constant operand value to a typed value *)
-let typecheck_constant_value (ty : T.ety) (cv : V.constant_value) : V.typed_value =
-  (* Check the type while converting -
-   * we actually need some information contained in the type *)
+let access_rplace_reorganize (config : C.config) (expand_prim_copy : bool)
+    (access : access_kind) (p : E.place) : cm_fun =
+ fun cf ctx ->
+  access_rplace_reorganize_and_read config expand_prim_copy access p
+    (fun _v -> cf)
+    ctx
+
+(** Convert an operand constant operand value to a typed value *)
+let typecheck_constant_value (ty : T.ety)
+    (cv : V.constant_value) : V.typed_value =
+  (* Check the type while converting - we actually need some information
+  * contained in the type *)
+  log#ldebug
+    (lazy
+      ("typecheck_constant_value:" ^ "\n- cv: "
+      ^ PV.constant_value_to_string cv));
   match (ty, cv) with
   (* Scalar, boolean... *)
-  | T.Bool, (Bool v)   -> { V.value = V.Concrete (Bool v);   ty }
-  | T.Char, (Char v)   -> { V.value = V.Concrete (Char v);   ty }
-  | T.Str,  (String v) -> { V.value = V.Concrete (String v); ty }
-  | T.Integer int_ty, (V.Scalar v) ->
+  | T.Bool, Bool v -> { V.value = V.Concrete (Bool v); ty }
+  | T.Char, Char v -> { V.value = V.Concrete (Char v); ty }
+  | T.Str, String v -> { V.value = V.Concrete (String v); ty }
+  | T.Integer int_ty, V.Scalar v ->
       (* Check the type and the ranges *)
       assert (int_ty = v.int_ty);
       assert (check_scalar_value_in_range v);
       { V.value = V.Concrete (V.Scalar v); ty }
   (* Remaining cases (invalid) - listing as much as we can on purpose
     (allows to catch errors at compilation if the definitions change) *)
-  | _, _ -> failwith "Improperly typed constant value"
+  | _, _ ->
+      failwith "Improperly typed constant value"
 
-(** Prepare the evaluation of an operand.
+(** Reorganize the environment in preparation for the evaluation of an operand.
 
-    Evaluating an operand requires updating the context to get access to a
-    given place (by ending borrows, expanding symbolic values...) then
+    Evaluating an operand requires reorganizing the environment to get access
+    to a given place (by ending borrows, expanding symbolic values...) then
     applying the operand operation (move, copy, etc.).
     
     Sometimes, we want to decouple the two operations.
@@ -106,7 +150,7 @@ let typecheck_constant_value (ty : T.ety) (cv : V.constant_value) : V.typed_valu
     dest <- f(move x, move y);
     ...
     ```
-    Because of the way end_borrow is implemented, when giving back the borrow
+    Because of the way `end_borrow` is implemented, when giving back the borrow
     `l0` upon evaluating `move y`, we won't notice that `shared_borrow l0` has
     disappeared from the environment (it has been moved and not assigned yet,
     and so is hanging in "thin air").
@@ -114,58 +158,56 @@ let typecheck_constant_value (ty : T.ety) (cv : V.constant_value) : V.typed_valu
     By first "preparing" the operands evaluation, we make sure no such thing
     happens. To be more precise, we make sure all the updates to borrows triggered
     by access *and* move operations have already been applied.
+
+    Rk.: in the formalization, we always have an explicit "reorganization" step
+    in the rule premises, before the actual operand evaluation.
     
-    As a side note: doing this is actually not completely necessary because when
+    Rk.: doing this is actually not completely necessary because when
     generating MIR, rustc introduces intermediate assignments for all the function
     parameters. Still, it is better for soundness purposes, and corresponds to
-    what we do in the formal semantics.
+    what we do in the formalization (because we don't enforce constraints
+    in the formalization).
  *)
-let eval_operand_prepare (config : C.config) (op : E.operand)
-    (cf : V.typed_value -> m_fun) : m_fun =
- fun ctx ->
-  let prepare (cf : V.typed_value -> m_fun) : m_fun =
-   fun ctx ->
+let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
+    cm_fun =
+ fun cf ctx ->
+  let prepare : cm_fun =
+   fun cf ctx ->
     match op with
     | Expressions.Constant (ty, cv) ->
-        cf (typecheck_constant_value ty cv) ctx
+        typecheck_constant_value ty cv |> ignore;
+        cf ctx
     | Expressions.Copy p ->
         (* Access the value *)
         let access = Read in
         (* Expand the symbolic values, if necessary *)
         let expand_prim_copy = true in
-        prepare_rplace config expand_prim_copy access p cf ctx
+        access_rplace_reorganize config expand_prim_copy access p cf ctx
     | Expressions.Move p ->
         (* Access the value *)
         let access = Move in
         let expand_prim_copy = false in
-        prepare_rplace config expand_prim_copy access p cf ctx
+        access_rplace_reorganize config expand_prim_copy access p cf ctx
   in
-  (* Sanity check *)
-  let check cf v : m_fun =
-   fun ctx ->
-    assert (not (bottom_in_value ctx.ended_regions v));
-    cf v ctx
-  in
-  (* Compose and apply *)
-  comp prepare check cf ctx
+  (* Apply *)
+  prepare cf ctx
 
-(** Evaluate an operand. *)
-let eval_operand (config : C.config) (op : E.operand)
+(** Evaluate an operand, without reorganizing the context before *)
+let eval_operand_no_reorganize (config : C.config) (op : E.operand)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
   (* Debug *)
   log#ldebug
     (lazy
-      ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
-     ^ eval_ctx_to_string ctx ^ "\n"));
+      ("eval_operand_no_reorganize: op: " ^ operand_to_string ctx op
+     ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
   | Expressions.Constant (ty, cv) -> cf (typecheck_constant_value ty cv) ctx
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
-      let expand_prim_copy = true in
-      let cc = prepare_rplace config expand_prim_copy access p in
+      let cc = read_place config access p in
       (* Copy the value *)
       let copy cf v : m_fun =
        fun ctx ->
@@ -175,8 +217,8 @@ let eval_operand (config : C.config) (op : E.operand)
           Option.is_none
             (find_first_primitively_copyable_sv_with_borrows
                ctx.type_context.type_infos v));
-        let allow_adt_copy = false in
         (* Actually perform the copy *)
+        let allow_adt_copy = false in
         let ctx, v = copy_value allow_adt_copy config ctx v in
         (* Continue *)
         cf v ctx
@@ -186,11 +228,11 @@ let eval_operand (config : C.config) (op : E.operand)
   | Expressions.Move p ->
       (* Access the value *)
       let access = Move in
-      let expand_prim_copy = false in
-      let cc = prepare_rplace config expand_prim_copy access p in
+      let cc = read_place config access p in
       (* Move the value *)
       let move cf v : m_fun =
        fun ctx ->
+        (* Check that there are no bottoms in the value we are about to move *)
         assert (not (bottom_in_value ctx.ended_regions v));
         let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
         match write_place config access p bottom ctx with
@@ -200,24 +242,49 @@ let eval_operand (config : C.config) (op : E.operand)
       (* Compose and apply *)
       comp cc move cf ctx
 
+(** Evaluate an operand.
+
+    Reorganize the context, then evaluate the operand.
+
+    **Warning**: this function shouldn't be used to evaluate a list of
+    operands (for a function call, for instance): we must do *one* reorganization
+    of the environment, before evaluating all the operands at once.
+    Use [`eval_operands`] instead.
+ *)
+let eval_operand (config : C.config) (op : E.operand)
+    (cf : V.typed_value -> m_fun) : m_fun =
+ fun ctx ->
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
+     ^ eval_ctx_to_string ctx ^ "\n"));
+  (* We reorganize the context, then evaluate the operand *)
+  comp
+    (prepare_eval_operand_reorganize config op)
+    (eval_operand_no_reorganize config op)
+    cf ctx
+
 (** Small utility.
 
-    See [eval_operand_prepare].
+    See [prepare_eval_operand_reorganize].
  *)
-let eval_operands_prepare (config : C.config) (ops : E.operand list)
-    (cf : V.typed_value list -> m_fun) : m_fun =
-  fold_left_apply_continuation (eval_operand_prepare config) ops cf
+let prepare_eval_operands_reorganize (config : C.config) (ops : E.operand list)
+    : cm_fun =
+  fold_left_apply_continuation (prepare_eval_operand_reorganize config) ops
 
 (** Evaluate several operands. *)
 let eval_operands (config : C.config) (ops : E.operand list)
     (cf : V.typed_value list -> m_fun) : m_fun =
  fun ctx ->
   (* Prepare the operands *)
-  let prepare = eval_operands_prepare config ops in
+  let prepare = prepare_eval_operands_reorganize config ops in
   (* Evaluate the operands *)
-  let eval = fold_left_apply_continuation (eval_operand config) ops in
+  let eval =
+    fold_left_list_apply_continuation (eval_operand_no_reorganize config) ops
+  in
   (* Compose and apply *)
-  comp prepare (fun cf (_ : V.typed_value list) -> eval cf) cf ctx
+  comp prepare eval cf ctx
 
 let eval_two_operands (config : C.config) (op1 : E.operand) (op2 : E.operand)
     (cf : V.typed_value * V.typed_value -> m_fun) : m_fun =
@@ -436,7 +503,9 @@ let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
   (* Access the value *)
   let access = Read in
   let expand_prim_copy = false in
-  let prepare = prepare_rplace config expand_prim_copy access p in
+  let prepare =
+    access_rplace_reorganize_and_read config expand_prim_copy access p
+  in
   (* Read the value *)
   let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
     (* The value may be shared: we need to ignore the shared loans *)
@@ -474,7 +543,9 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
   (* Access the value *)
   let access = Read in
   let expand_prim_copy = false in
-  let prepare = prepare_rplace config expand_prim_copy access p in
+  let prepare =
+    access_rplace_reorganize_and_read config expand_prim_copy access p
+  in
   (* Read the value *)
   let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
    fun ctx ->
@@ -506,7 +577,9 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
       (* Access the value *)
       let access = if bkind = E.Shared then Read else Write in
       let expand_prim_copy = false in
-      let prepare = prepare_rplace config expand_prim_copy access p in
+      let prepare =
+        access_rplace_reorganize_and_read config expand_prim_copy access p
+      in
       (* Evaluate the borrowing operation *)
       let eval (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
        fun ctx ->
@@ -547,7 +620,9 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
       (* Access the value *)
       let access = Write in
       let expand_prim_copy = false in
-      let prepare = prepare_rplace config expand_prim_copy access p in
+      let prepare =
+        access_rplace_reorganize_and_read config expand_prim_copy access p
+      in
       (* Evaluate the borrowing operation *)
       let eval (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
        fun ctx ->

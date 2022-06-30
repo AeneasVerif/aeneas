@@ -188,6 +188,10 @@ let hash_map_insert_no_resize_fwd_back
     end
   end
 
+(** [core::num::u32::{8}::MAX] *)
+let core_num_u32_max_body : result u32 = Return 4294967295
+let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
+
 (** [hashmap::HashMap::{0}::move_elements_from_list] *)
 let rec hash_map_move_elements_from_list_fwd_back
   (t : Type0) (ntable : hash_map_t t) (ls : list_t t) :
@@ -244,23 +248,24 @@ let rec hash_map_move_elements_fwd_back
 (** [hashmap::HashMap::{0}::try_resize] *)
 let hash_map_try_resize_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
-  begin match scalar_cast U32 Usize 4294967295 with
+  let i = core_num_u32_max_c in
+  begin match scalar_cast U32 Usize i with
   | Fail -> Fail
   | Return max_usize ->
     let capacity = vec_len (list_t t) self.hash_map_slots in
     begin match usize_div max_usize 2 with
     | Fail -> Fail
     | Return n1 ->
-      let (i, i0) = self.hash_map_max_load_factor in
-      begin match usize_div n1 i with
+      let (i0, i1) = self.hash_map_max_load_factor in
+      begin match usize_div n1 i0 with
       | Fail -> Fail
-      | Return i1 ->
-        if capacity <= i1
+      | Return i2 ->
+        if capacity <= i2
         then
           begin match usize_mul capacity 2 with
           | Fail -> Fail
-          | Return i2 ->
-            begin match hash_map_new_with_capacity_fwd t i2 i i0 with
+          | Return i3 ->
+            begin match hash_map_new_with_capacity_fwd t i3 i0 i1 with
             | Fail -> Fail
             | Return ntable ->
               begin match
@@ -268,13 +273,13 @@ let hash_map_try_resize_fwd_back
                 with
               | Fail -> Fail
               | Return (ntable0, _) ->
-                Return (Mkhash_map_t self.hash_map_num_entries (i, i0)
+                Return (Mkhash_map_t self.hash_map_num_entries (i0, i1)
                   ntable0.hash_map_max_load ntable0.hash_map_slots)
               end
             end
           end
         else
-          Return (Mkhash_map_t self.hash_map_num_entries (i, i0)
+          Return (Mkhash_map_t self.hash_map_num_entries (i0, i1)
             self.hash_map_max_load self.hash_map_slots)
       end
     end

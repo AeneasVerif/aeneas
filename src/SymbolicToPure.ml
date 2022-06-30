@@ -1198,7 +1198,7 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
             assert (int_ty0 = int_ty1);
             let effect_info =
               {
-                can_fail = binop_can_fail binop;
+                can_fail = ExpressionsUtils.binop_can_fail binop;
                 input_state = false;
                 output_state = false;
               }

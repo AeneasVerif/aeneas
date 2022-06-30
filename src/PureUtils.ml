@@ -11,11 +11,8 @@ module RegularFunIdOrderedType = struct
   type t = regular_fun_id
 
   let compare = compare_regular_fun_id
-
   let to_string = show_regular_fun_id
-
   let pp_t = pp_regular_fun_id
-
   let show_t = show_regular_fun_id
 end
 
@@ -25,25 +22,13 @@ module FunIdOrderedType = struct
   type t = fun_id
 
   let compare = compare_fun_id
-
   let to_string = show_fun_id
-
   let pp_t = pp_fun_id
-
   let show_t = show_fun_id
 end
 
 module FunIdMap = Collections.MakeMap (FunIdOrderedType)
 module FunIdSet = Collections.MakeSet (FunIdOrderedType)
-
-(* TODO : move *)
-let binop_can_fail (binop : E.binop) : bool =
-  match binop with
-  | BitXor | BitAnd | BitOr | Eq | Lt | Le | Ne | Ge | Gt -> false
-  | Div | Rem | Add | Sub | Mul -> true
-  | Shl | Shr -> raise Errors.Unimplemented
-
-(*let mk_arrow_ty (arg_ty : ty) (ret_ty : ty) : ty = Arrow (arg_ty, ret_ty)*)
 
 let dest_arrow_ty (ty : ty) : ty * ty =
   match ty with
@@ -72,7 +57,6 @@ let ty_substitute (tsubst : TypeVarId.id -> ty) (ty : ty) : ty =
   let obj =
     object
       inherit [_] map_ty
-
       method! visit_TypeVar _ var_id = tsubst var_id
     end
   in
@@ -198,7 +182,6 @@ let remove_meta (e : texpression) : texpression =
   let obj =
     object
       inherit [_] map_expression as super
-
       method! visit_Meta env _ e = super#visit_expression env e.e
     end
   in
@@ -414,7 +397,6 @@ let type_decl_is_enum (def : T.type_decl) : bool =
   match def.kind with T.Struct _ -> false | Enum _ -> true | Opaque -> false
 
 let mk_state_ty : ty = Adt (Assumed State, [])
-
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
 let mk_result_fail_texpression (ty : ty) : texpression =

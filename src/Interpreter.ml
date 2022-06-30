@@ -86,9 +86,10 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
     in
     (ctx, avalues)
   in
+  let region_can_end _ = true in
   let ctx =
     create_push_abstractions_from_abs_region_groups call_id V.SynthInput
-      inst_sg.A.regions_hierarchy compute_abs_avalues ctx
+      inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
   let body = Option.get fdef.body in
@@ -127,6 +128,21 @@ let evaluate_function_symbolic_synthesize_backward_from_return
   (* Move the return value out of the return variable *)
   let cf_pop_frame = ctx_pop_frame config in
 
+  (* We need to find the parents regions/abstractions of the region we
+   * will end - this will allow us to, first, mark the other return
+   * regions as non-endable, and, second, end those parent regions in
+   * proper order. *)
+  let parent_rgs = list_parent_region_groups sg back_id in
+  let parent_input_abs_ids =
+    T.RegionGroupId.mapi
+      (fun rg_id rg ->
+        if T.RegionGroupId.Set.mem rg_id parent_rgs then Some rg.T.id else None)
+      inst_sg.regions_hierarchy
+  in
+  let parent_input_abs_ids =
+    List.filter_map (fun x -> x) parent_input_abs_ids
+  in
+
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
   let cf_consume_ret ret_value ctx =
@@ -139,10 +155,20 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       in
       (ctx, [ avalue ])
     in
-    (* Initialize and insert the abstractions in the context *)
+
+    (* Initialize and insert the abstractions in the context.
+     *
+     * We take care of disallowing ending the return regions which we
+     * shouldn't end (see the documentation of the `can_end` field of [abs]
+     * for more information. *)
+    let parent_and_current_rgs = T.RegionGroupId.Set.add back_id parent_rgs in
+    let region_can_end rid =
+      T.RegionGroupId.Set.mem rid parent_and_current_rgs
+    in
+    assert (region_can_end back_id);
     let ctx =
       create_push_abstractions_from_abs_region_groups ret_call_id V.SynthRet
-        ret_inst_sg.A.regions_hierarchy compute_abs_avalues ctx
+        ret_inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues ctx
     in
 
     (* We now need to end the proper *input* abstractions - pay attention
@@ -150,17 +176,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return
      * abstractions (of course, the corresponding return abstractions will
      * automatically be ended, because they consumed values coming from the
      * input abstractions...) *)
-    let parent_rgs = list_parent_region_groups sg back_id in
-    let parent_input_abs_ids =
-      T.RegionGroupId.mapi
-        (fun rg_id rg ->
-          if T.RegionGroupId.Set.mem rg_id parent_rgs then Some rg.T.id
-          else None)
-        inst_sg.regions_hierarchy
-    in
-    let parent_input_abs_ids =
-      List.filter_map (fun x -> x) parent_input_abs_ids
-    in
     (* End the parent abstractions and the current abstraction - note that we
      * end them in an order which follows the regions hierarchy: it should lead
      * to generated code which has a better consistency between the parent

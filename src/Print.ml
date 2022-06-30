@@ -940,7 +940,7 @@ module LlbcAst = struct
         indent ^ place_to_string fmt p ^ " := " ^ rvalue_to_string fmt rv
     | A.AssignGlobal { dst; global } ->
         indent ^ fmt.var_id_to_string dst ^ " := global " ^ fmt.global_decl_id_to_string global
-    | A.FakeRead p -> "fake_read " ^ place_to_string fmt p
+    | A.FakeRead p -> indent ^ "fake_read " ^ place_to_string fmt p
     | A.SetDiscriminant (p, variant_id) ->
         (* TODO: improve this to lookup the variant name by using the def id *)
         indent ^ "set_discriminant(" ^ place_to_string fmt p ^ ", "
