@@ -42,16 +42,16 @@ let betree_node_apply_upserts_decreases
   (key : u64) (st : state) : nat =
   admit ()
 
-(** [betree_main::betree::Internal::{4}::lookup_in_children]: decreases clause *)
-unfold
-let betree_internal_lookup_in_children_decreases (self : betree_internal_t)
-  (key : u64) (st : state) : nat =
-  admit ()
-
 (** [betree_main::betree::Node::{5}::lookup]: decreases clause *)
 unfold
 let betree_node_lookup_decreases (self : betree_node_t) (key : u64)
   (st : state) : nat =
+  admit ()
+
+(** [betree_main::betree::Internal::{4}::lookup_in_children]: decreases clause *)
+unfold
+let betree_internal_lookup_in_children_decreases (self : betree_internal_t)
+  (key : u64) (st : state) : nat =
   admit ()
 
 (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings]: decreases clause *)
@@ -86,17 +86,17 @@ let betree_node_apply_messages_to_internal_decreases
   (new_msgs : betree_list_t (u64 & betree_message_t)) : nat =
   admit ()
 
-(** [betree_main::betree::Internal::{4}::flush]: decreases clause *)
-unfold
-let betree_internal_flush_decreases (self : betree_internal_t)
-  (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
-  (content : betree_list_t (u64 & betree_message_t)) (st : state) : nat =
-  admit ()
-
 (** [betree_main::betree::Node::{5}::apply_messages]: decreases clause *)
 unfold
 let betree_node_apply_messages_decreases (self : betree_node_t)
   (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
   (msgs : betree_list_t (u64 & betree_message_t)) (st : state) : nat =
+  admit ()
+
+(** [betree_main::betree::Internal::{4}::flush]: decreases clause *)
+unfold
+let betree_internal_flush_decreases (self : betree_internal_t)
+  (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
+  (content : betree_list_t (u64 & betree_message_t)) (st : state) : nat =
   admit ()
 

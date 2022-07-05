@@ -644,13 +644,13 @@ let global_decl_of_json (js : json) (gid_conv : A.global_id_converter) : (A.fun_
         [
           ("def_id", def_id);
           ("name", name);
-          ("type_", type_);
+          ("ty", ty);
           ("body", body);
         ] ->
         let* global_id = A.GlobalDeclId.id_of_json def_id in
         let def_id = A.global_to_fun_id gid_conv global_id in
         let* name = fun_name_of_json name in
-        let* type_ = ety_of_json type_ in
+        let* ty = ety_of_json ty in
         let* body = option_of_json (fun js -> fun_body_of_json js gid_conv) body in
         let signature : A.fun_sig = {
           region_params = [];
@@ -658,7 +658,7 @@ let global_decl_of_json (js : json) (gid_conv : A.global_id_converter) : (A.fun_
           regions_hierarchy = [];
           type_params = [];
           inputs = [];
-          output = TU.ety_no_regions_to_sty type_;
+          output = TU.ety_no_regions_to_sty ty;
         } in
         Ok { A.def_id; name; signature; body; is_global = true; }
     | _ -> Error "")

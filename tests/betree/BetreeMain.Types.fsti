@@ -24,19 +24,19 @@ type betree_message_t =
 (** [betree_main::betree::Leaf] *)
 type betree_leaf_t = { betree_leaf_id : u64; betree_leaf_size : u64; }
 
+(** [betree_main::betree::Node] *)
+type betree_node_t =
+| BetreeNodeInternal : betree_internal_t -> betree_node_t
+| BetreeNodeLeaf : betree_leaf_t -> betree_node_t
+
 (** [betree_main::betree::Internal] *)
-type betree_internal_t =
+and betree_internal_t =
 {
   betree_internal_id : u64;
   betree_internal_pivot : u64;
   betree_internal_left : betree_node_t;
   betree_internal_right : betree_node_t;
 }
-
-(** [betree_main::betree::Node] *)
-and betree_node_t =
-| BetreeNodeInternal : betree_internal_t -> betree_node_t
-| BetreeNodeLeaf : betree_leaf_t -> betree_node_t
 
 (** [betree_main::betree::Params] *)
 type betree_params_t =

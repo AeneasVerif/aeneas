@@ -74,9 +74,6 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
                   can_fail := EU.binop_can_fail bop || !can_fail
     
           method! visit_Call env call =
-            pp_fun_id Format.std_formatter call.func;
-            print_newline ();
-
             (match call.func with
             | Regular id ->
                 if FunDeclId.Set.mem id fun_ids then divergent := true
