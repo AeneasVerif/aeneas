@@ -26,7 +26,7 @@ type type_decl_qualif =
  *)
 type fun_decl_qualif = Let | LetRec | And | Val | AssumeVal
 
-let fun_decl_qualif_name (qualif : fun_decl_qualif) : string =
+let fun_decl_qualif_keyword (qualif : fun_decl_qualif) : string =
   match qualif with
   | Let -> "let"
   | LetRec -> "let rec"
@@ -1368,7 +1368,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
   let is_opaque = Option.is_none def.body in
-  let qualif = fun_decl_qualif_name qualif in
+  let qualif = fun_decl_qualif_keyword qualif in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   F.pp_print_space fmt ();
   (* Open a box for "(PARAMS) : EFFECT =" *)
@@ -1498,7 +1498,7 @@ let extract_global_definition (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open "QUALIF NAME : TYPE =" box (depth=1) *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print "QUALIF NAME " *)
-  F.pp_print_string fmt (fun_decl_qualif_name qualif ^ " " ^ name);
+  F.pp_print_string fmt (fun_decl_qualif_keyword qualif ^ " " ^ name);
   F.pp_print_space  fmt ();
 
   (* Open ": TYPE =" box (depth=2) *)
@@ -1558,7 +1558,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   assert (List.length def.signature.type_params = 0);
   assert (not def.signature.info.effect_info.can_fail);
 
-  (* Add a break then the corresponding Rust definition *)
+  (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break  fmt 0 0;
   F.pp_print_string fmt ("(** [" ^ Print.fun_name_to_string def.basename ^ "] *)");
   F.pp_print_space  fmt ();

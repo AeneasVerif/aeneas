@@ -58,6 +58,8 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
           method may_fail b =
             (* The fail flag is disabled for globals : the global body is
              * normalised into its declaration, which is always successful.
+             * (we check that it is successful in the extracted code: if it is
+             *  not, it leads to a type-checking error in the generated files)
              *)
             if f.is_global then () else
             can_fail := !can_fail || b
@@ -96,6 +98,7 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
             super#visit_Loop env loop
         end
       in
+      assert (not f.is_global || not use_state);
       (match f.body with
       | None ->
           (* Opaque function *)

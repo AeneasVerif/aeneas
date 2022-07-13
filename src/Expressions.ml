@@ -72,7 +72,6 @@ let all_binops =
     Shr;
   ]
 
-(* TODO: symplify the operand constant values *)
 type operand =
   | Copy of place
   | Move of place

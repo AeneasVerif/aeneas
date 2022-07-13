@@ -110,13 +110,13 @@ let access_rplace_reorganize (config : C.config) (expand_prim_copy : bool)
     ctx
 
 (** Convert an operand constant operand value to a typed value *)
-let typecheck_constant_value (ty : T.ety)
+let constant_to_typed_value (ty : T.ety)
     (cv : V.constant_value) : V.typed_value =
   (* Check the type while converting - we actually need some information
   * contained in the type *)
   log#ldebug
     (lazy
-      ("typecheck_constant_value:" ^ "\n- cv: "
+      ("constant_to_typed_value:" ^ "\n- cv: "
       ^ PV.constant_value_to_string cv));
   match (ty, cv) with
   (* Scalar, boolean... *)
@@ -175,7 +175,8 @@ let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
    fun cf ctx ->
     match op with
     | Expressions.Constant (ty, cv) ->
-        typecheck_constant_value ty cv |> ignore;
+        (* No need to reorganize the context *)
+        constant_to_typed_value ty cv |> ignore;
         cf ctx
     | Expressions.Copy p ->
         (* Access the value *)
@@ -203,7 +204,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
-  | Expressions.Constant (ty, cv) -> cf (typecheck_constant_value ty cv) ctx
+  | Expressions.Constant (ty, cv) -> cf (constant_to_typed_value ty cv) ctx
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
