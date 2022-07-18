@@ -63,10 +63,9 @@ let translate_function_to_symbolics (config : C.partial_config)
       ("translate_function_to_symbolics: "
       ^ Print.fun_name_to_string fdef.A.name));
 
-  let { type_context; fun_context } = trans_ctx in
+  let { type_context; fun_context; global_context } = trans_ctx in
   let fun_context = {
     C.fun_decls = fun_context.fun_decls;
-    C.gid_conv = fun_context.gid_conv;
   } in
 
   match fdef.body with
@@ -76,7 +75,8 @@ let translate_function_to_symbolics (config : C.partial_config)
       let synthesize = true in
       let evaluate gid =
         let inputs, symb =
-          evaluate_function_symbolic config synthesize type_context fun_context
+          evaluate_function_symbolic config synthesize
+            type_context fun_context global_context
             fdef gid
         in
         (inputs, Option.get symb)
@@ -110,7 +110,7 @@ let translate_function_to_pure (config : C.partial_config)
     (lazy
       ("translate_function_to_pure: " ^ Print.fun_name_to_string fdef.A.name));
 
-  let { type_context; fun_context } = trans_ctx in
+  let { type_context; fun_context; global_context } = trans_ctx in
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs, if the function is transparent *)
@@ -142,7 +142,10 @@ let translate_function_to_pure (config : C.partial_config)
       SymbolicToPure.llbc_fun_decls = fun_context.fun_decls;
       fun_sigs;
       fun_infos = fun_context.fun_infos;
-      gid_conv = fun_context.gid_conv;
+    }
+  in
+  let global_context = {
+      SymbolicToPure.llbc_global_decls = global_context.global_decls
     }
   in
   let ctx =
@@ -156,6 +159,7 @@ let translate_function_to_pure (config : C.partial_config)
       state_var;
       type_context;
       fun_context;
+      global_context;
       fun_decl = fdef;
       forward_inputs = [];
       (* Empty for now *)
@@ -293,14 +297,13 @@ let translate_module_to_pure (config : C.partial_config)
   log#ldebug (lazy "translate_module_to_pure");
 
   (* Compute the type and function contexts *)
-  let type_context, fun_context = compute_type_fun_contexts m in
+  let type_context, fun_context, global_context = compute_type_fun_contexts m in
   let fun_infos = FA.analyze_module m fun_context.C.fun_decls use_state in
   let fun_context = {
     fun_decls = fun_context.fun_decls;
     fun_infos;
-    gid_conv = m.gid_conv;
   } in
-  let trans_ctx = { type_context; fun_context } in
+  let trans_ctx = { type_context; fun_context; global_context } in
 
   (* Translate all the type definitions *)
   let type_decls = SymbolicToPure.translate_type_decls m.types in
@@ -495,7 +498,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          if
            ((not is_opaque) && config.extract_transparent)
            || (is_opaque && config.extract_opaque)
-         then if def.is_global
+         then if def.is_global_body
           then ExtractToFStar.extract_global_decl ctx.extract_ctx fmt qualif def
           else ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif has_decr_clause def
         )

@@ -70,7 +70,10 @@ type fun_context = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdMap.t;  (** *)
   fun_infos : FA.fun_info A.FunDeclId.Map.t;
-  gid_conv : A.global_id_converter;
+}
+
+type global_context = {
+  llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t;
 }
 
 type call_info = {
@@ -96,6 +99,7 @@ type call_info = {
 type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
+  global_context : global_context;
   fun_decl : A.fun_decl;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sg : fun_sig;
@@ -137,15 +141,15 @@ let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.LlbcAst.ast_formatter =
   Print.LlbcAst.fun_decl_to_ast_formatter
     ctx.type_context.llbc_type_decls
     ctx.fun_context.llbc_fun_decls
-    (A.global_to_fun_id ctx.fun_context.gid_conv)
+    ctx.global_context.llbc_global_decls
     ctx.fun_decl
 
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
   let type_params = ctx.fun_decl.signature.type_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let gid_conv = ctx.fun_context.gid_conv in
-  PrintPure.mk_ast_formatter type_decls fun_decls gid_conv type_params
+  let global_decls = ctx.global_context.llbc_global_decls in
+  PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
 
 let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let fmt = bs_ctx_to_pp_ast_formatter ctx in
@@ -166,16 +170,16 @@ let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let type_params = sg.type_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let gid_conv = ctx.fun_context.gid_conv in
-  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls gid_conv type_params in
+  let global_decls = ctx.global_context.llbc_global_decls in
+  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params in
   PrintPure.fun_sig_to_string fmt sg
 
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let type_params = def.signature.type_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
-  let gid_conv = ctx.fun_context.gid_conv in
-  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls gid_conv type_params in
+  let global_decls = ctx.global_context.llbc_global_decls in
+  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params in
   PrintPure.fun_decl_to_string fmt def
 
 (* TODO: move *)
@@ -1666,7 +1670,6 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
   (* Lookup the signature *)
   let signature = bs_ctx_lookup_local_function_sig def_id bid ctx in
   (* Translate the body, if there is *)
-  let is_global = def.A.is_global in
   let body =
     match body with
     | None -> None
@@ -1727,7 +1730,7 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
         Some { inputs; inputs_lvs; body }
   in
   (* Assemble the declaration *)
-  let def = { def_id; back_id = bid; basename; signature; is_global; body } in
+  let def = { def_id; back_id = bid; basename; signature; is_global_body = def.is_global_body; body } in
   (* Debugging *)
   log#ldebug
     (lazy

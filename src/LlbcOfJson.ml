@@ -540,7 +540,7 @@ let call_of_json (js : json) : (A.call, string) result =
         Ok { A.func; region_args; type_args; args; dest }
     | _ -> Error "")
 
-let rec statement_of_json (js : json) (gid_conv : A.global_id_converter) : (A.statement, string) result =
+let rec statement_of_json (js : json) : (A.statement, string) result =
   combine_error_msgs js "statement_of_json"
     (match js with
     | `Assoc [ ("Assign", `List [ place; rvalue ]) ] ->
@@ -577,48 +577,49 @@ let rec statement_of_json (js : json) (gid_conv : A.global_id_converter) : (A.st
         Ok (A.Continue i)
     | `String "Nop" -> Ok A.Nop
     | `Assoc [ ("Sequence", `List [ st1; st2 ]) ] ->
-        let* st1 = statement_of_json st1 gid_conv in
-        let* st2 = statement_of_json st2 gid_conv in
+        let* st1 = statement_of_json st1 in
+        let* st2 = statement_of_json st2 in
         Ok (A.Sequence (st1, st2))
     | `Assoc [ ("Switch", `List [ op; tgt ]) ] ->
         let* op = operand_of_json op in
-        let* tgt = switch_targets_of_json tgt gid_conv in
+        let* tgt = switch_targets_of_json tgt in
         Ok (A.Switch (op, tgt))
     | `Assoc [ ("Loop", st) ] ->
-        let* st = statement_of_json st gid_conv in
+        let* st = statement_of_json st in
         Ok (A.Loop st)
     | _ -> Error "")
 
-and switch_targets_of_json (js : json) (gid_conv : A.global_id_converter) : (A.switch_targets, string) result =
+and switch_targets_of_json (js : json) : (A.switch_targets, string) result =
   combine_error_msgs js "switch_targets_of_json"
     (match js with
     | `Assoc [ ("If", `List [ st1; st2 ]) ] ->
-        let* st1 = statement_of_json st1 gid_conv in
-        let* st2 = statement_of_json st2 gid_conv in
+        let* st1 = statement_of_json st1 in
+        let* st2 = statement_of_json st2 in
         Ok (A.If (st1, st2))
     | `Assoc [ ("SwitchInt", `List [ int_ty; tgts; otherwise ]) ] ->
         let* int_ty = integer_type_of_json int_ty in
         let* tgts =
-          list_of_json (pair_of_json
+            list_of_json (
+              pair_of_json
               (list_of_json scalar_value_of_json)
-              (fun js -> statement_of_json js gid_conv))
+              statement_of_json)
             tgts
         in
-        let* otherwise = statement_of_json otherwise gid_conv in
+        let* otherwise = statement_of_json otherwise in
         Ok (A.SwitchInt (int_ty, tgts, otherwise))
     | _ -> Error "")
 
-let fun_body_of_json (js : json) (gid_conv : A.global_id_converter) : (A.fun_body, string) result =
+let fun_body_of_json (js : json) : (A.fun_body, string) result =
   combine_error_msgs js "fun_body_of_json"
     (match js with
     | `Assoc [ ("arg_count", arg_count); ("locals", locals); ("body", body) ] ->
         let* arg_count = int_of_json arg_count in
         let* locals = list_of_json var_of_json locals in
-        let* body = statement_of_json body gid_conv in
+        let* body = statement_of_json body in
         Ok { A.arg_count; locals; body }
     | _ -> Error "")
 
-let fun_decl_of_json (js : json) (gid_conv : A.global_id_converter) : (A.fun_decl, string) result =
+let fun_decl_of_json (js : json) : (A.fun_decl, string) result =
   combine_error_msgs js "fun_decl_of_json"
     (match js with
     | `Assoc
@@ -631,13 +632,24 @@ let fun_decl_of_json (js : json) (gid_conv : A.global_id_converter) : (A.fun_dec
         let* def_id = A.FunDeclId.id_of_json def_id in
         let* name = fun_name_of_json name in
         let* signature = fun_sig_of_json signature in
-        let* body = option_of_json (fun js -> fun_body_of_json js gid_conv) body in
-        Ok { A.def_id; name; signature; body; is_global = false; }
+        let* body = option_of_json fun_body_of_json body in
+        Ok { A.def_id; name; signature; body; is_global_body = false; }
     | _ -> Error "")
+
+(* Strict type for the number of function declarations (see [global_to_fun_id] below) *)
+type global_id_converter = { fun_count : int }
+[@@deriving show]
+
+(** Converts a global id to its corresponding function id.
+    To do so, it adds the global id to the number of function declarations :
+    We have the bijection `global_id <=> fun_id + fun_id_count`.
+*)
+let global_to_fun_id (conv : global_id_converter) (gid : A.GlobalDeclId.id) : A.FunDeclId.id =
+  A.FunDeclId.of_int ((A.GlobalDeclId.to_int gid) + conv.fun_count)
 
 (* Converts a global declaration to a function declaration.
  *)
-let global_decl_of_json (js : json) (gid_conv : A.global_id_converter) : (A.fun_decl, string) result =
+let global_decl_of_json (js : json) (gid_conv : global_id_converter) : (A.global_decl * A.fun_decl, string) result =
   combine_error_msgs js "global_decl_of_json"
     (match js with
     | `Assoc
@@ -648,10 +660,10 @@ let global_decl_of_json (js : json) (gid_conv : A.global_id_converter) : (A.fun_
           ("body", body);
         ] ->
         let* global_id = A.GlobalDeclId.id_of_json def_id in
-        let def_id = A.global_to_fun_id gid_conv global_id in
+        let fun_id = global_to_fun_id gid_conv global_id in
         let* name = fun_name_of_json name in
         let* ty = ety_of_json ty in
-        let* body = option_of_json (fun js -> fun_body_of_json js gid_conv) body in
+        let* body = option_of_json fun_body_of_json body in
         let signature : A.fun_sig = {
           region_params = [];
           num_early_bound_regions = 0;
@@ -660,7 +672,8 @@ let global_decl_of_json (js : json) (gid_conv : A.global_id_converter) : (A.fun_
           inputs = [];
           output = TU.ety_no_regions_to_sty ty;
         } in
-        Ok { A.def_id; name; signature; body; is_global = true; }
+        Ok ({ A.def_id = global_id; body_id = fun_id; name; ty; },
+            { A.def_id = fun_id; name; signature; body; is_global_body = true; })
     | _ -> Error "")
 
 let g_declaration_group_of_json (id_of_json : json -> ('id, string) result)
@@ -685,15 +698,18 @@ let fun_declaration_group_of_json (js : json) :
   combine_error_msgs js "fun_declaration_group_of_json"
     (g_declaration_group_of_json A.FunDeclId.id_of_json js)
 
-let global_declaration_group_of_json (js : json) (gid_conv : A.global_id_converter) :
+(* TODO Should a global declaration group be converted to its function bodies ?
+        It does not seems very clean.
+*)
+let global_declaration_group_of_json (js : json) (gid_conv : global_id_converter) :
     (M.fun_declaration_group, string) result =
   combine_error_msgs js "global_declaration_group_of_json"
     (g_declaration_group_of_json (fun js ->
         let* id = A.GlobalDeclId.id_of_json js in
-        Ok (A.global_to_fun_id gid_conv id)
+        Ok (global_to_fun_id gid_conv id)
       ) js)
 
-let declaration_group_of_json (js : json) (gid_conv : A.global_id_converter) : (M.declaration_group, string) result
+let declaration_group_of_json (js : json) (gid_conv : global_id_converter) : (M.declaration_group, string) result
     =
   combine_error_msgs js "declaration_of_json"
     (match js with
@@ -726,19 +742,20 @@ let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
           ("globals", globals);
         ] ->
         let* fun_count = length_of_json_list functions in
-        let gid_conv = { A.fun_count = fun_count } in
+        let gid_conv = { fun_count } in
         let* name = string_of_json name in
         let* declarations =
           list_of_json (fun js -> declaration_group_of_json js gid_conv) declarations
         in
-        let* types = list_of_json type_decl_of_json types in
-        let* functions = list_of_json (fun js -> fun_decl_of_json js gid_conv) functions in
+        let* types     = list_of_json type_decl_of_json types in
+        let* functions = list_of_json fun_decl_of_json functions in
         let* globals   = list_of_json (fun js -> global_decl_of_json js gid_conv) globals in
+        let globals, global_bodies = List.split globals in
         Ok {
           M.name;
           declarations;
           types;
-          functions = functions @ globals;
-          gid_conv;
+          functions = functions @ global_bodies;
+          globals;
         }
     | _ -> Error "")

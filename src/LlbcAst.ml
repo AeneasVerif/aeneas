@@ -7,17 +7,6 @@ open Identifiers
 module FunDeclId = IdGen ()
 module GlobalDeclId = IdGen ()
 
-(* Strict type for the number of function declarations (see [global_to_fun_id] below) *)
-type global_id_converter = { fun_count : int }
-[@@deriving show]
-
-(** Converts a global id to its corresponding function id.
-    To do so, it adds the global id to the number of function declarations :
-    We have the bijection `global_id <=> fun_id + fun_id_count`.
-*)
-let global_to_fun_id (conv : global_id_converter) (gid : GlobalDeclId.id) : FunDeclId.id =
-  FunDeclId.of_int ((GlobalDeclId.to_int gid) + conv.fun_count)
-
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;
@@ -201,6 +190,14 @@ type fun_decl = {
   name : fun_name;
   signature : fun_sig;
   body : fun_body option;
-  is_global : bool;
+  is_global_body : bool;
+}
+[@@deriving show]
+
+type global_decl = {
+  def_id : GlobalDeclId.id;
+  body_id: FunDeclId.id;
+  name : global_name;
+  ty: ety;
 }
 [@@deriving show]

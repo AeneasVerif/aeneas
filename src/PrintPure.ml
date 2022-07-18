@@ -62,6 +62,7 @@ let ast_to_type_formatter (fmt : ast_formatter) : type_formatter =
 
 let name_to_string = Print.name_to_string
 let fun_name_to_string = Print.fun_name_to_string
+let global_name_to_string = Print.global_name_to_string
 let option_to_string = Print.option_to_string
 let type_var_to_string = Print.Types.type_var_to_string
 let integer_type_to_string = Print.Types.integer_type_to_string
@@ -85,9 +86,10 @@ let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
    functions (there is a difference between the forward/backward functions...)
    while we only need those definitions to lookup proper names for the def ids.
 *)
-let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
+let mk_ast_formatter
+    (type_decls : T.type_decl TypeDeclId.Map.t)
     (fun_decls : A.fun_decl A.FunDeclId.Map.t)
-    (gid_conv : A.global_id_converter)
+    (global_decls : A.global_decl A.GlobalDeclId.Map.t)
     (type_params : type_var list) :
     ast_formatter =
   let type_var_id_to_string vid =
@@ -116,7 +118,8 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     fun_name_to_string def.name
   in
   let global_decl_id_to_string def_id =
-    fun_decl_id_to_string (A.global_to_fun_id gid_conv def_id)
+    let def = A.GlobalDeclId.Map.find def_id global_decls in
+    global_name_to_string def.name
   in
   {
     type_var_id_to_string;

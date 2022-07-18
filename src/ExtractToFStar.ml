@@ -907,9 +907,12 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       | Func fun_id ->
           extract_function_call ctx fmt inside fun_id qualif.type_args args
       | Global global_id ->
+          failwith "TODO ExtractToFStar.ml:911"
+          (* Previous code:
           let fid = A.global_to_fun_id ctx.trans_ctx.fun_context.gid_conv global_id in
           let fun_id = Regular (A.Regular fid, None) in
           extract_function_call ctx fmt inside fun_id qualif.type_args args
+          *)
       | AdtCons adt_cons_id ->
           extract_adt_cons ctx fmt inside adt_cons_id qualif.type_args args
       | Proj proj ->
@@ -1485,7 +1488,7 @@ let global_decl_to_body_name (decl : string) : string =
   assert (String.sub decl base_len 2 = "_c");
   (String.sub decl 0 base_len) ^ "_body"
 
-(** Print a definition of the shape "QUALIF NAME : TYPE = BODY" with a custom body extractor *)
+(** Extract a global definition of the shape "QUALIF NAME : TYPE = BODY" with a custom body extractor *)
 let extract_global_definition (ctx : extraction_ctx) (fmt : F.formatter)
   (qualif : fun_decl_qualif) (name : string) (ty : ty)
   (extract_body : (F.formatter -> unit) Option.t)
@@ -1550,8 +1553,11 @@ let extract_global_definition (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (qualif : fun_decl_qualif) (def : fun_decl)
     : unit =
+  (* TODO Lookup LLBC decl *)
   (* Sanity checks for globals *)
-  assert (def.is_global);
+  assert (def.is_global_body);
+  failwith "TODO ExtractToFStar.ml:1559"
+  (* Previous code:
   assert (Option.is_none def.back_id);
   assert (List.length def.signature.inputs = 0);
   assert (List.length def.signature.doutputs = 1);
@@ -1578,6 +1584,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt ("eval_global " ^ body_name)
       ));
   F.pp_print_break fmt 0 0
+  *)
 
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).

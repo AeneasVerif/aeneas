@@ -83,14 +83,15 @@ type formatter = {
           - function id: this is especially useful to identify whether the
             function is an assumed function or a local function
           - function basename
+          - flag indicating if the function is a global
           - number of region groups
+          - region group information in case of a backward function
+            (`None` if forward function)
           - pair:
             - do we generate the forward function (it may have been filtered)?
             - the number of extracted backward functions (not necessarily equal
               to the number of region groups, because we may have filtered
               some of them)
-          - region group information in case of a backward function
-            (`None` if forward function)
           TODO: use the fun id for the assumed functions.
        *)
   decreases_clause_name : A.FunDeclId.id -> fun_name -> string;
@@ -599,7 +600,7 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
   in
   let def_id = A.Regular def_id in
   let name =
-    ctx.fmt.fun_name def_id def.basename def.is_global num_rgs rg_info (keep_fwd, num_backs)
+    ctx.fmt.fun_name def_id def.basename def.is_global_body num_rgs rg_info (keep_fwd, num_backs)
   in
   (* Add the function name *)
   let ctx = ctx_add (FunId (def_id, def.back_id)) name ctx in

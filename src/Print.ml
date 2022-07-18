@@ -13,6 +13,7 @@ let option_to_string (to_string : 'a -> string) (x : 'a option) : string =
 
 let name_to_string (name : name) : string = Names.name_to_string name
 let fun_name_to_string (name : fun_name) : string = name_to_string name
+let global_name_to_string (name : global_name) : string = name_to_string name
 
 (** Pretty-printing for types *)
 module Types = struct
@@ -744,7 +745,8 @@ module LlbcAst = struct
       fun_name_to_string def.name
     in
     let global_decl_id_to_string def_id =
-      fun_decl_id_to_string (A.global_to_fun_id ctx.fun_context.gid_conv def_id)
+      let def = C.ctx_lookup_global_decl ctx def_id in
+      global_name_to_string def.name
     in
     {
       rvar_to_string = ctx_fmt.PV.rvar_to_string;
@@ -762,7 +764,7 @@ module LlbcAst = struct
   let fun_decl_to_ast_formatter
       (type_decls : T.type_decl T.TypeDeclId.Map.t)
       (fun_decls : A.fun_decl A.FunDeclId.Map.t)
-      (global_to_fun_id : A.GlobalDeclId.id -> A.FunDeclId.id)
+      (global_decls : A.global_decl A.GlobalDeclId.Map.t)
       (fdef : A.fun_decl) :
       ast_formatter =
     let rvar_to_string r =
@@ -793,7 +795,8 @@ module LlbcAst = struct
       fun_name_to_string def.name
     in
     let global_decl_id_to_string def_id =
-      fun_decl_id_to_string (global_to_fun_id def_id)
+      let def = A.GlobalDeclId.Map.find def_id global_decls in
+      global_name_to_string def.name
     in
     {
       rvar_to_string;
@@ -1132,7 +1135,7 @@ module Module = struct
   let def_ctx_to_ast_formatter
       (type_context : T.type_decl T.TypeDeclId.Map.t)
       (fun_context : A.fun_decl A.FunDeclId.Map.t)
-      (global_to_fun_id : A.GlobalDeclId.id -> A.FunDeclId.id)
+      (global_context : A.global_decl A.GlobalDeclId.Map.t)
       (def : A.fun_decl) :
       PA.ast_formatter =
     let rvar_to_string vid =
@@ -1156,7 +1159,8 @@ module Module = struct
       fun_name_to_string def.name
     in
     let global_decl_id_to_string def_id =
-      fun_decl_id_to_string (global_to_fun_id def_id)
+      let def = A.GlobalDeclId.Map.find def_id global_context in
+      global_name_to_string def.name
     in
     let var_id_to_string vid =
       let var = V.VarId.nth (Option.get def.body).locals vid in
@@ -1187,21 +1191,20 @@ module Module = struct
   let fun_decl_to_string
       (type_context : T.type_decl T.TypeDeclId.Map.t)
       (fun_context : A.fun_decl A.FunDeclId.Map.t)
-      (global_to_fun_id : A.GlobalDeclId.id -> A.FunDeclId.id)
+      (global_context : A.global_decl A.GlobalDeclId.Map.t)
       (def : A.fun_decl) : string =
-    let fmt = def_ctx_to_ast_formatter type_context fun_context global_to_fun_id def in
+    let fmt = def_ctx_to_ast_formatter type_context fun_context global_context def in
     PA.fun_decl_to_string fmt "" "  " def
 
   let module_to_string (m : M.llbc_module) : string =
-    let types_defs_map, funs_defs_map = M.compute_defs_maps m in
+    let types_defs_map, funs_defs_map, globals_defs_map = M.compute_defs_maps m in
 
     (* The types *)
     let type_decls = List.map (type_decl_to_string types_defs_map) m.M.types in
 
     (* The functions *)
     let fun_decls =
-      let gid_to_fid = fun gid -> A.global_to_fun_id m.gid_conv gid in
-      List.map (fun_decl_to_string types_defs_map funs_defs_map gid_to_fid) m.M.functions
+      List.map (fun_decl_to_string types_defs_map funs_defs_map globals_defs_map) m.M.functions
     in
 
     (* Put everything together *)

@@ -219,13 +219,18 @@ type type_context = {
 
 type fun_context = {
   fun_decls : fun_decl FunDeclId.Map.t;
-  gid_conv : global_id_converter;
+}
+[@@deriving show]
+
+type global_context = {
+  global_decls : global_decl GlobalDeclId.Map.t;
 }
 [@@deriving show]
 
 type eval_ctx = {
   type_context : type_context;
   fun_context : fun_context;
+  global_context : global_context;
   type_vars : type_var list;
   env : env;
   ended_regions : RegionId.Set.t;
@@ -260,8 +265,8 @@ let ctx_lookup_fun_decl (ctx : eval_ctx) (fid : FunDeclId.id) : fun_decl =
   FunDeclId.Map.find fid ctx.fun_context.fun_decls
 
 (** TODO: make this more efficient with maps *)
-let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) : fun_decl =
-  ctx_lookup_fun_decl ctx (global_to_fun_id ctx.fun_context.gid_conv gid)
+let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) : global_decl =
+  GlobalDeclId.Map.find gid ctx.global_context.global_decls
 
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
