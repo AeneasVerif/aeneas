@@ -127,13 +127,21 @@ type bs_ctx = {
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
   let env = VarId.Map.empty in
-  let ctx = { PureTypeCheck.type_decls = ctx.type_context.type_decls; env } in
+  let ctx = {
+    PureTypeCheck.type_decls = ctx.type_context.type_decls; 
+    global_decls = ctx.global_context.llbc_global_decls;
+    env
+  } in
   let _ = PureTypeCheck.check_typed_pattern ctx v in
   ()
 
 let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
   let env = VarId.Map.empty in
-  let ctx = { PureTypeCheck.type_decls = ctx.type_context.type_decls; env } in
+  let ctx = {
+    PureTypeCheck.type_decls = ctx.type_context.type_decls;
+    global_decls = ctx.global_context.llbc_global_decls;
+    env
+  } in
   PureTypeCheck.check_texpression ctx e
 
 (* TODO: move *)

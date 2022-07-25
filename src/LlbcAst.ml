@@ -37,7 +37,7 @@ type assumed_fun_id =
 type fun_id = Regular of FunDeclId.id | Assumed of assumed_fun_id
 [@@deriving show, ord]
 
-type assign_global = {
+type global_assignment = {
   dst : VarId.id;
   global : GlobalDeclId.id;
 }
@@ -84,7 +84,7 @@ class ['self] iter_statement_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
 
-    method visit_assign_global : 'env -> assign_global -> unit = fun _ _ -> ()
+    method visit_global_assignment : 'env -> global_assignment -> unit = fun _ _ -> ()
 
     method visit_place : 'env -> place -> unit = fun _ _ -> ()
 
@@ -108,7 +108,7 @@ class ['self] map_statement_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
 
-    method visit_assign_global : 'env -> assign_global -> assign_global = fun _ x -> x
+    method visit_global_assignment : 'env -> global_assignment -> global_assignment = fun _ x -> x
 
     method visit_place : 'env -> place -> place = fun _ x -> x
 
@@ -131,7 +131,7 @@ class ['self] map_statement_base =
 
 type statement =
   | Assign of place * rvalue
-  | AssignGlobal of assign_global
+  | AssignGlobal of global_assignment
   | FakeRead of place
   | SetDiscriminant of place * VariantId.id
   | Drop of place

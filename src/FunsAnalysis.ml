@@ -56,12 +56,6 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
           inherit [_] iter_statement as super
 
           method may_fail b =
-            (* The fail flag is disabled for globals : the global body is
-             * normalised into its declaration, which is always successful.
-             * (we check that it is successful in the extracted code: if it is
-             *  not, it leads to a type-checking error in the generated files)
-             *)
-            if f.is_global_body then () else
             can_fail := !can_fail || b
 
           method! visit_Assert env a =
@@ -104,11 +98,10 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
           (* Opaque function *)
           obj#may_fail true;
           stateful := use_state
-      | Some body -> obj#visit_statement () body.body);
+      | Some body -> obj#visit_statement () body.body)
       (* We ignore on purpose functions that cannot fail: the result of the analysis
        * is not used yet to adjust the translation so that the functions which
        * syntactically can't fail don't use an error monad. *)
-      can_fail := not f.is_global_body
     in
     List.iter visit_fun d;
     { can_fail = !can_fail; stateful = !stateful; divergent = !divergent }

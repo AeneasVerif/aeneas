@@ -671,7 +671,7 @@ let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
     TODO: move all those helpers.
 *)
 let default_fun_suffix
-    (is_global : bool)
+    (is_global_body : bool)
     (num_region_groups : int)
     (rg : region_group_info option)
     ((keep_fwd, num_backs) : bool * int)
@@ -691,7 +691,7 @@ let default_fun_suffix
      we could not add the "_fwd" suffix) to prevent name clashes between
      definitions (in particular between type and function definitions).
   *)
-  if is_global then "_c" else
+  if is_global_body then "_body" else
   match rg with
   | None -> "_fwd"
   | Some rg ->
