@@ -104,6 +104,8 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
        * syntactically can't fail don't use an error monad. *)
     in
     List.iter visit_fun d;
+    (* Not-failing functions are not handled yet. *)
+    can_fail := true;
     { can_fail = !can_fail; stateful = !stateful; divergent = !divergent }
   in
 

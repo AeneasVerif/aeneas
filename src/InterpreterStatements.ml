@@ -832,15 +832,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
         (* Compose and apply *)
         comp cf_eval_rvalue cf_assign cf ctx
     | A.AssignGlobal { dst; global } ->
-        (* What codegen do we want ? *)
-        let call : A.call = {
-          func = A.Regular (failwith "TODO InterpretStatements.ml:837");
-          region_args = [];
-          type_args = [];
-          args = [];
-          dest = { var_id = dst; projection = [] };
-        } in
-        eval_function_call config call cf ctx
+        eval_global config dst global cf ctx
     | A.FakeRead p ->
         let expand_prim_copy = false in
         let cf_prepare cf =
@@ -917,6 +909,21 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
   in
   (* Compose and apply *)
   comp cc cf_eval_st cf ctx
+
+and eval_global (config : C.config) (dest : V.VarId.id) (gid : LA.GlobalDeclId.id) : st_cm_fun =
+ fun cf ctx ->
+  let global = C.ctx_lookup_global_decl ctx gid in
+  let place = { E.var_id = dest; projection = [] } in
+  match config.mode with
+  | ConcreteMode ->
+    (* Treat the global as a function without arguments to call *)
+    (eval_local_function_call_concrete config global.body_id [] [] [] place) cf ctx
+  | SymbolicMode ->
+    (* Treat the global as a fresh symbolic value *)
+    let rty = ety_no_regions_to_rty global.ty in
+    let sval = mk_fresh_symbolic_value V.FunCallRet rty in
+    let sval = mk_typed_value_from_symbolic_value sval in
+    assign_to_place config sval place (cf Unit) ctx
 
 (** Evaluate a switch *)
 and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
