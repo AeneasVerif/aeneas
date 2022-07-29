@@ -399,6 +399,11 @@ let type_decl_is_enum (def : T.type_decl) : bool =
 let mk_state_ty : ty = Adt (Assumed State, [])
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 
+let unwrap_result_ty (ty : ty) : ty =
+  match ty with
+  | Adt (Assumed Result, [ ty ]) -> ty
+  | _ -> failwith "not a result"
+
 let mk_result_fail_texpression (ty : ty) : texpression =
   let type_args = [ ty ] in
   let ty = Adt (Assumed Result, type_args) in

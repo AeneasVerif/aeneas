@@ -15,9 +15,9 @@ let log = L.interpreter_log
 
 let compute_type_fun_contexts (m : M.llbc_module) :
     C.type_context * C.fun_context * C.global_context =
-  let type_decls_list, _ = M.split_declarations m.declarations in
+  let type_decls_list, _, _ = M.split_declarations m.declarations in
   let type_decls, fun_decls, global_decls = M.compute_defs_maps m in
-  let type_decls_groups, _funs_defs_groups =
+  let type_decls_groups, _funs_defs_groups, _globals_defs_groups =
     M.split_declarations_to_group_maps m.declarations
   in
   let type_infos =

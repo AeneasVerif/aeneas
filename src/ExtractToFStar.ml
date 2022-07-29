@@ -313,11 +313,15 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     (* Concatenate the elements *)
     String.concat "_" fname
   in
-  let fun_name (_fid : A.fun_id) (fname : fun_name) (is_global : bool) (num_rgs : int)
+  let global_name (name : global_name) : string =
+    let parts = List.map to_snake_case (get_name name) in
+    String.concat "_" parts
+  in
+  let fun_name (_fid : A.fun_id) (fname : fun_name) (num_rgs : int)
       (rg : region_group_info option) (filter_info : bool * int) : string =
     let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
-    let suffix = default_fun_suffix is_global num_rgs rg filter_info in
+    let suffix = default_fun_suffix num_rgs rg filter_info in
     (* Concatenate *)
     fname ^ suffix
   in
@@ -411,6 +415,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     variant_name;
     struct_constructor;
     type_name;
+    global_name;
     fun_name;
     decreases_clause_name;
     var_basename;
@@ -839,6 +844,11 @@ let extract_adt_g_value
       ctx
   | _ -> raise (Failure "Inconsistent typed value")
 
+(* Extract globals in the same way as variables *)
+let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
+  	(id : A.GlobalDeclId.id) : unit =
+  F.pp_print_string fmt (ctx_get_global_decl id ctx)
+
 (** [inside]: see [extract_ty].
 
     As an pattern can introduce new variables, we return an extraction context
@@ -907,12 +917,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       | Func fun_id ->
           extract_function_call ctx fmt inside fun_id qualif.type_args args
       | Global global_id ->
-          failwith "TODO ExtractToFStar.ml:911"
-          (* Previous code:
-          let fid = A.global_to_fun_id ctx.trans_ctx.fun_context.gid_conv global_id in
-          let fun_id = Regular (A.Regular fid, None) in
-          extract_function_call ctx fmt inside fun_id qualif.type_args args
-          *)
+          extract_global ctx fmt global_id
       | AdtCons adt_cons_id ->
           extract_adt_cons ctx fmt inside adt_cons_id qualif.type_args args
       | Proj proj ->
@@ -1353,6 +1358,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (qualif : fun_decl_qualif) (has_decreases_clause : bool) (def : fun_decl) :
     unit =
+  assert (def.is_global_body);
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* (* Add the type parameters - note that we need those bindings only for the
@@ -1551,40 +1557,40 @@ let extract_global_definition (ctx : extraction_ctx) (fmt : F.formatter)
     `let x_c : int = eval_global x_body`
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
-  (qualif : fun_decl_qualif) (def : fun_decl)
-    : unit =
-  (* TODO Lookup LLBC decl *)
-  (* Sanity checks for globals *)
-  assert (def.is_global_body);
-  failwith "TODO ExtractToFStar.ml:1559"
-  (* Previous code:
-  assert (Option.is_none def.back_id);
-  assert (List.length def.signature.inputs = 0);
-  assert (List.length def.signature.doutputs = 1);
-  assert (List.length def.signature.type_params = 0);
-  assert (not def.signature.info.effect_info.can_fail);
+    (global : A.global_decl) (body : fun_decl) (interface : bool) : unit =
+  assert (body.is_global_body);
+  assert (Option.is_none body.back_id);
+  assert (List.length body.signature.inputs = 0);
+  assert (List.length body.signature.doutputs = 1);
+  assert (List.length body.signature.type_params = 0);
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break  fmt 0 0;
-  F.pp_print_string fmt ("(** [" ^ Print.fun_name_to_string def.basename ^ "] *)");
+  F.pp_print_string fmt ("(** [" ^ Print.global_name_to_string global.name ^ "] *)");
   F.pp_print_space  fmt ();
 
-  let def_name = ctx_get_local_function def.def_id def.back_id ctx in
-  match def.body with
+  let decl_name = ctx_get_global_decl global.def_id ctx in
+  let body_name = ctx_get_global_body global.def_id ctx in
+
+  let decl_ty, body_ty =
+    let ty = body.signature.output in
+    if body.signature.info.effect_info.can_fail
+      then (unwrap_result_ty ty, ty)
+      else (ty, mk_result_ty ty)
+  in
+  match body.body with
   | None ->
-      extract_global_definition ctx fmt qualif def_name def.signature.output None
+      let qualif = if interface then Val else AssumeVal in
+      extract_global_definition ctx fmt qualif decl_name decl_ty None
   | Some body ->
-      let body_name = global_decl_to_body_name def_name in
-      let body_ty = mk_result_ty def.signature.output in
-      extract_global_definition ctx fmt qualif body_name body_ty (Some (fun fmt ->
+      extract_global_definition ctx fmt Let body_name body_ty (Some (fun fmt ->
         extract_texpression ctx fmt false body.body
       ));
       F.pp_print_break fmt 0 0;
-      extract_global_definition ctx fmt qualif def_name def.signature.output (Some (fun fmt ->
+      extract_global_definition ctx fmt Let decl_name decl_ty (Some (fun fmt ->
         F.pp_print_string fmt ("eval_global " ^ body_name)
       ));
   F.pp_print_break fmt 0 0
-  *)
 
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).

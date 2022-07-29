@@ -1,7 +1,7 @@
 (** Compute various information, including:
     - can a function fail (by having `Fail` in its body, or transitively
       calling a function which can fail), false for globals
-    - can a function diverge (bu being recursive, containing a loop or
+    - can a function diverge (by being recursive, containing a loop or
       transitively calling a function which can diverge)
     - does a function perform stateful operations (i.e., do we need a state
       to translate it)
@@ -26,7 +26,9 @@ type fun_info = {
 type modules_funs_info = fun_info FunDeclId.Map.t
 (** Various information about a module's functions *)
 
-let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
+let analyze_module (m : llbc_module)
+    (funs_map : fun_decl FunDeclId.Map.t)
+    (globals_map : global_decl GlobalDeclId.Map.t)
     (use_state : bool) : modules_funs_info =
   let infos = ref FunDeclId.Map.empty in
 
@@ -104,7 +106,7 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
        * syntactically can't fail don't use an error monad. *)
     in
     List.iter visit_fun d;
-    (* Not-failing functions are not handled yet. *)
+    (* Non-failing functions are not handled yet. *)
     can_fail := true;
     { can_fail = !can_fail; stateful = !stateful; divergent = !divergent }
   in
@@ -125,6 +127,11 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
     | Type _ :: decls' -> analyze_decl_groups decls'
     | Fun decl :: decls' ->
         analyze_fun_decl_group decl;
+        analyze_decl_groups decls'
+    | Global id :: decls' ->
+        (* Analyze a global by analyzing its body function *)
+        let global = GlobalDeclId.Map.find id globals_map in
+        analyze_fun_decl_group (NonRec global.body_id);
         analyze_decl_groups decls'
   in
 

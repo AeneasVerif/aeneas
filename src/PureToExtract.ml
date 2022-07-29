@@ -32,6 +32,8 @@ type name = Names.name
 
 type type_name = Names.type_name
 
+type global_name = Names.global_name
+
 type fun_name = Names.fun_name
 
 (* TODO: this should a module we give to a functor! *)
@@ -71,10 +73,11 @@ type formatter = {
        *)
   type_name : type_name -> string;
       (** Provided a basename, compute a type name. *)
+  global_name : global_name -> string;
+      (** Provided a basename, compute a global name. *)
   fun_name :
     A.fun_id ->
     fun_name ->
-    bool ->
     int ->
     region_group_info option ->
     bool * int ->
@@ -83,7 +86,6 @@ type formatter = {
           - function id: this is especially useful to identify whether the
             function is an assumed function or a local function
           - function basename
-          - flag indicating if the function is a global
           - number of region groups
           - region group information in case of a backward function
             (`None` if forward function)
@@ -186,6 +188,7 @@ type formatter = {
 
 (** We use identifiers to look for name clashes *)
 type id =
+  | GlobalId of A.GlobalDeclId.id
   | FunId of A.fun_id * RegionGroupId.id option
   | DecreasesClauseId of A.fun_id
       (** The definition which provides the decreases/termination clause.
@@ -342,6 +345,7 @@ type extraction_ctx = {
 
 (** Debugging function *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
+  let global_decls = ctx.trans_ctx.global_context.global_decls in
   let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
   let type_decls = ctx.trans_ctx.type_context.type_decls in
   (* TODO: factorize the pretty-printing with what is in PrintPure *)
@@ -354,6 +358,9 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
     | Tuple -> failwith "Unreachable"
   in
   match id with
+  | GlobalId gid ->
+      let name = (A.GlobalDeclId.Map.find gid global_decls).name in
+      "global name: " ^ Print.global_name_to_string name
   | FunId (fid, rg_id) ->
       let fun_name =
         match fid with
@@ -442,6 +449,12 @@ let ctx_get (id : id) (ctx : extraction_ctx) : string =
       log#serror ("Could not find: " ^ id_to_string id ctx);
       raise Not_found
 
+let ctx_get_global_decl (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
+  ctx_get (GlobalId id) ctx ^ "_c"
+
+let ctx_get_global_body (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
+  ctx_get (GlobalId id) ctx ^ "_body"
+  
 let ctx_get_function (id : A.fun_id)
     (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
@@ -572,6 +585,10 @@ let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
   ctx_add (DecreasesClauseId (A.Regular def.def_id)) name ctx
 
+let ctx_add_global_decl (def : A.global_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  ctx_add (GlobalId def.def_id) (ctx.fmt.global_name def.name) ctx
+
 let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Lookup the LLBC def to compute the region group information *)
@@ -600,11 +617,12 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
   in
   let def_id = A.Regular def_id in
   let name =
-    ctx.fmt.fun_name def_id def.basename def.is_global_body num_rgs rg_info (keep_fwd, num_backs)
+    ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
   in
-  (* Add the function name *)
-  let ctx = ctx_add (FunId (def_id, def.back_id)) name ctx in
-  ctx
+  (* Add the function name if it's not a global *)
+  if def.is_global_body
+    then ctx
+    else ctx_add (FunId (def_id, def.back_id)) name ctx
 
 type names_map_init = {
   keywords : string list;
@@ -671,7 +689,6 @@ let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
     TODO: move all those helpers.
 *)
 let default_fun_suffix
-    (is_global_body : bool)
     (num_region_groups : int)
     (rg : region_group_info option)
     ((keep_fwd, num_backs) : bool * int)
@@ -691,7 +708,6 @@ let default_fun_suffix
      we could not add the "_fwd" suffix) to prevent name clashes between
      definitions (in particular between type and function definitions).
   *)
-  if is_global_body then "_body" else
   match rg with
   | None -> "_fwd"
   | Some rg ->

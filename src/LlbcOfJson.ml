@@ -698,18 +698,18 @@ let fun_declaration_group_of_json (js : json) :
   combine_error_msgs js "fun_declaration_group_of_json"
     (g_declaration_group_of_json A.FunDeclId.id_of_json js)
 
-(* TODO Should a global declaration group be converted to its function bodies ?
-        It does not seems very clean.
-*)
-let global_declaration_group_of_json (js : json) (gid_conv : global_id_converter) :
-    (M.fun_declaration_group, string) result =
+let global_declaration_group_of_json (js : json) :
+    (A.GlobalDeclId.id, string) result =
   combine_error_msgs js "global_declaration_group_of_json"
-    (g_declaration_group_of_json (fun js ->
-        let* id = A.GlobalDeclId.id_of_json js in
-        Ok (global_to_fun_id gid_conv id)
-      ) js)
+  (match js with
+  | `Assoc [ ("NonRec", `List [ id ]) ] ->
+      let* id = A.GlobalDeclId.id_of_json id in
+      Ok (id)
+  | `Assoc [ ("Rec", `List [ _ ]) ] ->
+      Error "got mutually dependent globals"
+  | _ -> Error "")
 
-let declaration_group_of_json (js : json) (gid_conv : global_id_converter) : (M.declaration_group, string) result
+let declaration_group_of_json (js : json) : (M.declaration_group, string) result
     =
   combine_error_msgs js "declaration_of_json"
     (match js with
@@ -720,8 +720,8 @@ let declaration_group_of_json (js : json) (gid_conv : global_id_converter) : (M.
         let* decl = fun_declaration_group_of_json decl in
         Ok (M.Fun decl)
     | `Assoc [ ("Global", `List [ decl ]) ] ->
-        let* decl = global_declaration_group_of_json decl gid_conv in
-        Ok (M.Fun decl)
+        let* id = global_declaration_group_of_json decl in
+        Ok (M.Global id)
     | _ -> Error "")
 
 let length_of_json_list (js: json) : (int, string) result =
@@ -741,15 +741,12 @@ let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
           ("functions", functions);
           ("globals", globals);
         ] ->
-        let* fun_count = length_of_json_list functions in
-        let gid_conv = { fun_count } in
         let* name = string_of_json name in
-        let* declarations =
-          list_of_json (fun js -> declaration_group_of_json js gid_conv) declarations
-        in
-        let* types     = list_of_json type_decl_of_json types in
+        let* declarations = list_of_json declaration_group_of_json declarations in
+        let* types = list_of_json type_decl_of_json types in
         let* functions = list_of_json fun_decl_of_json functions in
-        let* globals   = list_of_json (fun js -> global_decl_of_json js gid_conv) globals in
+        let gid_conv = { fun_count = List.length functions } in
+        let* globals = list_of_json (fun js -> global_decl_of_json js gid_conv) globals in
         let globals, global_bodies = List.split globals in
         Ok {
           M.name;

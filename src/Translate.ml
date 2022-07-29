@@ -298,7 +298,7 @@ let translate_module_to_pure (config : C.partial_config)
 
   (* Compute the type and function contexts *)
   let type_context, fun_context, global_context = compute_type_fun_contexts m in
-  let fun_infos = FA.analyze_module m fun_context.C.fun_decls use_state in
+  let fun_infos = FA.analyze_module m fun_context.C.fun_decls global_context.C.global_decls use_state in
   let fun_context = {
     fun_decls = fun_context.fun_decls;
     fun_infos;
@@ -498,9 +498,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          if
            ((not is_opaque) && config.extract_transparent)
            || (is_opaque && config.extract_opaque)
-         then if def.is_global_body
-          then ExtractToFStar.extract_global_decl ctx.extract_ctx fmt qualif def
-          else ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif has_decr_clause def
+         then ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif has_decr_clause def
         )
        fls);
     (* Insert unit tests if necessary *)
@@ -510,6 +508,19 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           if keep_fwd then
             ExtractToFStar.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
         pure_ls
+  in
+
+  (* TODO: Check correct behaviour with opaque globals *)
+  let export_global (id : A.GlobalDeclId.id) : unit =
+    let global_decls = ctx.extract_ctx.trans_ctx.global_context.global_decls in
+    let global = A.GlobalDeclId.Map.find id global_decls in
+    let (_, (body, body_backs)) = A.FunDeclId.Map.find global.body_id ctx.trans_funs in
+    assert (List.length body_backs = 0);
+    
+    let is_opaque = Option.is_none body.Pure.body in
+    if ((not is_opaque) && config.extract_transparent)
+         || (is_opaque  && config.extract_opaque)
+    then ExtractToFStar.extract_global_decl ctx.extract_ctx fmt global body config.interface
   in
 
   let export_state_type () : unit =
@@ -547,6 +558,8 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         in
         (* Translate *)
         export_functions true pure_funs
+    | Global id ->
+        export_global id
   in
 
   (* If we need to export the state type: we try to export it after we defined

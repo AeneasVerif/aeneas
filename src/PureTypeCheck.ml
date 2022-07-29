@@ -112,11 +112,8 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       check_texpression ctx body
   | Qualif qualif -> (
       match qualif.id with
-      | Func _ -> () (* TODO *)
-      | Global id ->
-        let global = A.GlobalDeclId.Map.find id ctx.global_decls in
-        (* TODO: something like assert (global.ty = e.ty) *)
-        failwith "PureTypeCheck.ml:118"
+      | Func   _ -> () (* TODO *)
+      | Global _ -> () (* TODO *)
       | Proj { adt_id = proj_adt_id; field_id } ->
           (* Note we can only project fields of structures (not enumerations) *)
           (* Deconstruct the projector type *)
