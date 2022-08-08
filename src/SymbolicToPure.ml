@@ -687,7 +687,13 @@ let fresh_vars (vars : (string option * ty) list) (ctx : bs_ctx) :
   List.fold_left_map (fun ctx (name, ty) -> fresh_var name ty ctx) ctx vars
 
 let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
-  V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
+  try (V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var) with
+    Not_found ->
+      print_endline ("Missing " ^ Print.V.show_symbolic_value sv);
+      V.SymbolicValueId.Map.iter (fun id (v : var) ->
+          print_endline (" -- " ^ (Option.value v.basename ~default:""))
+        ) ctx.sv_to_var;
+      raise Not_found
 
 (** Peel boxes as long as the value is of the form `Box<T>` *)
 let rec unbox_typed_value (v : V.typed_value) : V.typed_value =

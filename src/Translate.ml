@@ -655,7 +655,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
             m.declarations))
   in
 
-  (* Register unique names for all the top-level types and functions.
+  (* Register unique names for all the top-level types, functions and globals.
    * Note that the order in which we generate the names doesn't matter:
    * we just need to generate a mapping from identifier to name, and make
    * sure there are no name clashes. *)
@@ -675,6 +675,10 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         ExtractToFStar.extract_fun_decl_register_names ctx keep_fwd
           gen_decr_clause def)
       ctx trans_funs
+  in
+
+  let ctx = List.fold_left
+    ExtractToFStar.extract_global_decl_register_names ctx m.globals
   in
 
   (* Open the output file *)

@@ -794,6 +794,11 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
   (* Return *)
   ctx
 
+(** Simply add the global name to the context. *)
+let extract_global_decl_register_names (ctx : extraction_ctx) (def : A.global_decl)
+    : extraction_ctx =
+  ctx_add_global_decl def ctx
+
 (** The following function factorizes the extraction of ADT values.
 
     Note that patterns can introduce new variables: we thus return an extraction
