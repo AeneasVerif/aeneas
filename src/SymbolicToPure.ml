@@ -687,13 +687,7 @@ let fresh_vars (vars : (string option * ty) list) (ctx : bs_ctx) :
   List.fold_left_map (fun ctx (name, ty) -> fresh_var name ty ctx) ctx vars
 
 let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
-  try (V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var) with
-    Not_found ->
-      print_endline ("Missing " ^ Print.V.show_symbolic_value sv);
-      V.SymbolicValueId.Map.iter (fun id (v : var) ->
-          print_endline (" -- " ^ (Option.value v.basename ~default:""))
-        ) ctx.sv_to_var;
-      raise Not_found
+  V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
 
 (** Peel boxes as long as the value is of the form `Box<T>` *)
 let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
@@ -1080,6 +1074,7 @@ let rec translate_expression (config : config) (e : S.expression) (ctx : bs_ctx)
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call config call e ctx
   | EndAbstraction (abs, e) -> translate_end_abstraction config abs e ctx
+  | EvalGlobal (gid, sv, e) -> translate_global_eval config gid sv e ctx
   | Expansion (p, sv, exp) -> translate_expansion config p sv exp ctx
   | Meta (meta, e) -> translate_meta config meta e ctx
 
@@ -1465,6 +1460,18 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
         (fun (given_back, input_var) e ->
           mk_let monadic given_back (mk_texpression_from_var input_var) e)
         given_back_inputs next_e
+
+and translate_global_eval (config : config) (gid : A.GlobalDeclId.id)
+  (sval : V.symbolic_value) (e : S.expression) (ctx : bs_ctx)
+    : texpression =
+  let (ctx, var) = fresh_var_for_symbolic_value sval ctx in
+  let decl = A.GlobalDeclId.Map.find gid ctx.global_context.llbc_global_decls in
+  let global_expr = { id = Global gid; type_args = [] } in
+  (* We use translate_fwd_ty to translate the global type *)
+  let ty = ctx_translate_fwd_ty ctx decl.ty in
+  let gval = { e = Qualif global_expr; ty } in
+  let e = translate_expression config e ctx in
+  mk_let false (mk_typed_pattern_from_var var None) gval e
 
 and translate_expansion (config : config) (p : S.mplace option)
     (sv : V.symbolic_value) (exp : S.expansion) (ctx : bs_ctx) : texpression =

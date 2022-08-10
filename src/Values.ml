@@ -65,6 +65,7 @@ type sv_kind =
        *)
   | SynthInputGivenBack
       (** The value was given back upon ending one of the input abstractions *)
+  | Global (** The value is a global *)
 [@@deriving show]
 
 type symbolic_value = {

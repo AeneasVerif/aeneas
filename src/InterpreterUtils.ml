@@ -238,8 +238,8 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
               raise Found
             else ()
         | V.SynthInput | V.SynthInputGivenBack | V.FunCallGivenBack
-        | V.SynthRetGivenBack ->
-            ()
+        | V.SynthRetGivenBack -> ()
+        | V.Global -> ()
     end
   in
   (* We use exceptions *)

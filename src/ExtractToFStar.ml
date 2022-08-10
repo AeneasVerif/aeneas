@@ -1363,7 +1363,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (qualif : fun_decl_qualif) (has_decreases_clause : bool) (def : fun_decl) :
     unit =
-  assert (def.is_global_body);
+  assert (not def.is_global_body);
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* (* Add the type parameters - note that we need those bindings only for the

@@ -920,19 +920,10 @@ and eval_global (config : C.config) (dest : V.VarId.id) (gid : LA.GlobalDeclId.i
     (eval_local_function_call_concrete config global.body_id [] [] [] place) cf ctx
   | SymbolicMode ->
     (* Treat the global as a fresh symbolic value *)
-    
-    (*
-    let g = A.GlobalDeclId.Map.find gid ctx.global_context.global_decls in
-    (eval_local_function_call_symbolic config g.body_id [] [] [] place) cf ctx
-    
-    failwith "TODO Got error later in translate_fun_decl>meta>expansion ~> lookup_var_for_symbolic_value";
-    *)
-
-    let rty = ety_no_regions_to_rty global.ty in
-    let sval = mk_fresh_symbolic_value V.FunCallRet rty in
-    let sval = mk_typed_value_from_symbolic_value sval in
-    (assign_to_place config sval place) (cf Unit) ctx
-    
+    let sval = mk_fresh_symbolic_value V.Global (ety_no_regions_to_rty global.ty) in
+    let cc = assign_to_place config (mk_typed_value_from_symbolic_value sval) place in
+    let e = cc (cf Unit) ctx in
+    S.synthesize_global_eval gid sval e
 
 (** Evaluate a switch *)
 and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
