@@ -96,17 +96,16 @@ let betree_upsert_update_fwd
   | Some prev0 ->
     begin match st with
     | BetreeUpsertFunStateAdd v ->
-      let i = core_num_u64_max_c in
-      begin match u64_sub i prev0 with
+      begin match u64_sub core_num_u64_max_c prev0 with
       | Fail -> Fail
       | Return margin ->
         if margin >= v
         then
           begin match u64_add prev0 v with
           | Fail -> Fail
-          | Return i0 -> Return i0
+          | Return i -> Return i
           end
-        else let i0 = core_num_u64_max_c in Return i0
+        else Return core_num_u64_max_c
       end
     | BetreeUpsertFunStateSub v ->
       if prev0 >= v

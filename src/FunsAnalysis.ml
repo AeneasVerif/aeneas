@@ -94,7 +94,7 @@ let analyze_module (m : llbc_module)
             super#visit_Loop env loop
         end
       in
-      assert (not f.is_global_body || not use_state);
+      assert (not f.is_global_body || not !stateful);
       (match f.body with
       | None ->
           (* Opaque function *)

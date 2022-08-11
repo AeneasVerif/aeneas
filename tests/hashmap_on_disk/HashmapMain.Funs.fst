@@ -261,24 +261,23 @@ let rec hashmap_hash_map_move_elements_fwd_back
 (** [hashmap_main::hashmap::HashMap::{0}::try_resize] *)
 let hashmap_hash_map_try_resize_fwd_back
   (t : Type0) (self : hashmap_hash_map_t t) : result (hashmap_hash_map_t t) =
-  let i = core_num_u32_max_c in
-  begin match scalar_cast U32 Usize i with
+  begin match scalar_cast U32 Usize core_num_u32_max_c with
   | Fail -> Fail
   | Return max_usize ->
     let capacity = vec_len (hashmap_list_t t) self.hashmap_hash_map_slots in
     begin match usize_div max_usize 2 with
     | Fail -> Fail
     | Return n1 ->
-      let (i0, i1) = self.hashmap_hash_map_max_load_factor in
-      begin match usize_div n1 i0 with
+      let (i, i0) = self.hashmap_hash_map_max_load_factor in
+      begin match usize_div n1 i with
       | Fail -> Fail
-      | Return i2 ->
-        if capacity <= i2
+      | Return i1 ->
+        if capacity <= i1
         then
           begin match usize_mul capacity 2 with
           | Fail -> Fail
-          | Return i3 ->
-            begin match hashmap_hash_map_new_with_capacity_fwd t i3 i0 i1 with
+          | Return i2 ->
+            begin match hashmap_hash_map_new_with_capacity_fwd t i2 i i0 with
             | Fail -> Fail
             | Return ntable ->
               begin match
@@ -287,14 +286,14 @@ let hashmap_hash_map_try_resize_fwd_back
               | Fail -> Fail
               | Return (ntable0, _) ->
                 Return (Mkhashmap_hash_map_t self.hashmap_hash_map_num_entries
-                  (i0, i1) ntable0.hashmap_hash_map_max_load
+                  (i, i0) ntable0.hashmap_hash_map_max_load
                   ntable0.hashmap_hash_map_slots)
               end
             end
           end
         else
-          Return (Mkhashmap_hash_map_t self.hashmap_hash_map_num_entries (i0,
-            i1) self.hashmap_hash_map_max_load self.hashmap_hash_map_slots)
+          Return (Mkhashmap_hash_map_t self.hashmap_hash_map_num_entries (i,
+            i0) self.hashmap_hash_map_max_load self.hashmap_hash_map_slots)
       end
     end
   end
