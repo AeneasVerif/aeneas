@@ -797,7 +797,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx) (def : A.global_decl)
     : extraction_ctx =
-  ctx_add_global_decl def ctx
+  ctx_add_global_decl_body def ctx
 
 (** The following function factorizes the extraction of ADT values.
 
@@ -852,7 +852,7 @@ let extract_adt_g_value
 (* Extract globals in the same way as variables *)
 let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
   	(id : A.GlobalDeclId.id) : unit =
-  F.pp_print_string fmt (ctx_get_global_decl id ctx)
+  F.pp_print_string fmt (ctx_get_global id ctx)
 
 (** [inside]: see [extract_ty].
 
@@ -1491,16 +1491,8 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
-(* Change the suffix from "_c" to "_body" *)
-let global_decl_to_body_name (decl : string) : string =
-  (* The declaration length without the global suffix *)
-  let base_len = String.length decl - 2 in
-  (* TODO: Use String.ends_with instead when a more recent version of OCaml is used *)
-  assert (String.sub decl base_len 2 = "_c");
-  (String.sub decl 0 base_len) ^ "_body"
-
 (** Extract a global definition of the shape "QUALIF NAME : TYPE = BODY" with a custom body extractor *)
-let extract_global_definition (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
   (qualif : fun_decl_qualif) (name : string) (ty : ty)
   (extract_body : (F.formatter -> unit) Option.t)
     : unit =
@@ -1574,8 +1566,8 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_string fmt ("(** [" ^ Print.global_name_to_string global.name ^ "] *)");
   F.pp_print_space  fmt ();
 
-  let decl_name = ctx_get_global_decl global.def_id ctx in
-  let body_name = ctx_get_global_body global.def_id ctx in
+  let decl_name = ctx_get_global global.def_id ctx in
+  let body_name = ctx_get_function (Regular global.body_id) None ctx in
 
   let decl_ty, body_ty =
     let ty = body.signature.output in
@@ -1586,13 +1578,13 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   match body.body with
   | None ->
       let qualif = if interface then Val else AssumeVal in
-      extract_global_definition ctx fmt qualif decl_name decl_ty None
+      extract_global_decl_body ctx fmt qualif decl_name decl_ty None
   | Some body ->
-      extract_global_definition ctx fmt Let body_name body_ty (Some (fun fmt ->
+      extract_global_decl_body ctx fmt Let body_name body_ty (Some (fun fmt ->
         extract_texpression ctx fmt false body.body
       ));
       F.pp_print_break fmt 0 0;
-      extract_global_definition ctx fmt Let decl_name decl_ty (Some (fun fmt ->
+      extract_global_decl_body ctx fmt Let decl_name decl_ty (Some (fun fmt ->
         F.pp_print_string fmt ("eval_global " ^ body_name)
       ));
   F.pp_print_break fmt 0 0

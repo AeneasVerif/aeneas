@@ -31,14 +31,14 @@ let x3_body : result u32 =
 let x3_c : u32 = eval_global x3_body
 
 (** [constants::mk_pair0] *)
-let mk_pair0_fwd (x : u32) (y0 : u32) : result (u32 & u32) = Return (x, y0)
+let mk_pair0_fwd (x : u32) (y : u32) : result (u32 & u32) = Return (x, y)
 
 (** [constants::Pair] *)
 type pair_t (t1 t2 : Type0) = { pair_x : t1; pair_y : t2; }
 
 (** [constants::mk_pair1] *)
-let mk_pair1_fwd (x : u32) (y0 : u32) : result (pair_t u32 u32) =
-  Return (Mkpair_t x y0)
+let mk_pair1_fwd (x : u32) (y : u32) : result (pair_t u32 u32) =
+  Return (Mkpair_t x y)
 
 (** [constants::P0] *)
 let p0_body : result (u32 & u32) =

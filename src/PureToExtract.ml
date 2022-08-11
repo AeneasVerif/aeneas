@@ -449,12 +449,9 @@ let ctx_get (id : id) (ctx : extraction_ctx) : string =
       log#serror ("Could not find: " ^ id_to_string id ctx);
       raise Not_found
 
-let ctx_get_global_decl (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
-  ctx_get (GlobalId id) ctx ^ "_c"
+let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
+  ctx_get (GlobalId id) ctx
 
-let ctx_get_global_body (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
-  ctx_get (GlobalId id) ctx ^ "_body"
-  
 let ctx_get_function (id : A.fun_id)
     (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
@@ -585,9 +582,14 @@ let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
   ctx_add (DecreasesClauseId (A.Regular def.def_id)) name ctx
 
-let ctx_add_global_decl (def : A.global_decl) (ctx : extraction_ctx) :
+let ctx_add_global_decl_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  ctx_add (GlobalId def.def_id) (ctx.fmt.global_name def.name) ctx
+  let name = ctx.fmt.global_name def.name in
+  let decl = GlobalId def.def_id in
+  let body = FunId (Regular def.body_id, None) in
+  let ctx = ctx_add decl (name ^ "_c") ctx in
+  let ctx = ctx_add body (name ^ "_body") ctx in
+  ctx
 
 let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
