@@ -88,9 +88,7 @@ module type OrderedType = sig
   include Map.OrderedType
 
   val to_string : t -> string
-
   val pp_t : Format.formatter -> t -> unit
-
   val show_t : t -> string
 end
 
@@ -99,9 +97,7 @@ module OrderedString : OrderedType with type t = string = struct
   include String
 
   let to_string s = s
-
   let pp_t fmt s = Format.pp_print_string fmt s
-
   let show_t s = s
 end
 
@@ -109,7 +105,6 @@ module type Map = sig
   include Map.S
 
   val add_list : (key * 'a) list -> 'a t -> 'a t
-
   val of_list : (key * 'a) list -> 'a t
 
   val to_string : string option -> ('a -> string) -> 'a t -> string
@@ -123,7 +118,6 @@ module type Map = sig
    *)
 
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-
   val show : ('a -> string) -> 'a t -> string
 end
 
@@ -132,7 +126,6 @@ module MakeMap (Ord : OrderedType) : Map with type key = Ord.t = struct
   include Map
 
   let add_list bl m = List.fold_left (fun s (key, e) -> add key e s) m bl
-
   let of_list bl = add_list bl empty
 
   let to_string indent_opt a_to_string m =
@@ -177,7 +170,6 @@ module type Set = sig
   include Set.S
 
   val add_list : elt list -> t -> t
-
   val of_list : elt list -> t
 
   val to_string : string option -> t -> string
@@ -191,7 +183,6 @@ module type Set = sig
    *)
 
   val pp : Format.formatter -> t -> unit
-
   val show : t -> string
 end
 
@@ -200,7 +191,6 @@ module MakeSet (Ord : OrderedType) : Set with type elt = Ord.t = struct
   include Set
 
   let add_list bl s = List.fold_left (fun s e -> add e s) s bl
-
   let of_list bl = add_list bl empty
 
   let to_string indent_opt m =
@@ -239,79 +229,43 @@ end
  *)
 module type InjMap = sig
   type key
-
   type elem
-
   type t
 
   val empty : t
-
   val is_empty : t -> bool
-
   val mem : key -> t -> bool
-
   val add : key -> elem -> t -> t
-
   val singleton : key -> elem -> t
-
   val remove : key -> t -> t
-
   val compare : (elem -> elem -> int) -> t -> t -> int
-
   val equal : (elem -> elem -> bool) -> t -> t -> bool
-
   val iter : (key -> elem -> unit) -> t -> unit
-
   val fold : (key -> elem -> 'b -> 'b) -> t -> 'b -> 'b
-
   val for_all : (key -> elem -> bool) -> t -> bool
-
   val exists : (key -> elem -> bool) -> t -> bool
-
   val filter : (key -> elem -> bool) -> t -> t
-
   val partition : (key -> elem -> bool) -> t -> t * t
-
   val cardinal : t -> int
-
   val bindings : t -> (key * elem) list
-
   val min_binding : t -> key * elem
-
   val min_binding_opt : t -> (key * elem) option
-
   val max_binding : t -> key * elem
-
   val max_binding_opt : t -> (key * elem) option
-
   val choose : t -> key * elem
-
   val choose_opt : t -> (key * elem) option
-
   val split : key -> t -> t * elem option * t
-
   val find : key -> t -> elem
-
   val find_opt : key -> t -> elem option
-
   val find_first : (key -> bool) -> t -> key * elem
-
   val find_first_opt : (key -> bool) -> t -> (key * elem) option
-
   val find_last : (key -> bool) -> t -> key * elem
-
   val find_last_opt : (key -> bool) -> t -> (key * elem) option
-
   val to_seq : t -> (key * elem) Seq.t
-
   val to_seq_from : key -> t -> (key * elem) Seq.t
-
   val add_seq : (key * elem) Seq.t -> t -> t
-
   val of_seq : (key * elem) Seq.t -> t
-
   val add_list : (key * elem) list -> t -> t
-
   val of_list : (key * elem) list -> t
 end
 
@@ -322,15 +276,11 @@ module MakeInjMap (Key : OrderedType) (Elem : OrderedType) :
   module Set = MakeSet (Elem)
 
   type key = Key.t
-
   type elem = Elem.t
-
   type t = { map : elem Map.t; elems : Set.t }
 
   let empty = { map = Map.empty; elems = Set.empty }
-
   let is_empty m = Map.is_empty m.map
-
   let mem k m = Map.mem k m.map
 
   let add k e m =
@@ -345,15 +295,10 @@ module MakeInjMap (Key : OrderedType) (Elem : OrderedType) :
     | Some x -> { map = Map.remove k m.map; elems = Set.remove x m.elems }
 
   let compare f m1 m2 = Map.compare f m1.map m2.map
-
   let equal f m1 m2 = Map.equal f m1.map m2.map
-
   let iter f m = Map.iter f m.map
-
   let fold f m x = Map.fold f m.map x
-
   let for_all f m = Map.for_all f m.map
-
   let exists f m = Map.exists f m.map
 
   (** Small helper *)
@@ -381,19 +326,12 @@ module MakeInjMap (Key : OrderedType) (Elem : OrderedType) :
     (map_to_t map1, map_to_t map2)
 
   let cardinal m = Map.cardinal m.map
-
   let bindings m = Map.bindings m.map
-
   let min_binding m = Map.min_binding m.map
-
   let min_binding_opt m = Map.min_binding_opt m.map
-
   let max_binding m = Map.max_binding m.map
-
   let max_binding_opt m = Map.max_binding_opt m.map
-
   let choose m = Map.choose m.map
-
   let choose_opt m = Map.choose_opt m.map
 
   let split k m =
@@ -403,19 +341,12 @@ module MakeInjMap (Key : OrderedType) (Elem : OrderedType) :
     (l, data, r)
 
   let find k m = Map.find k m.map
-
   let find_opt k m = Map.find_opt k m.map
-
   let find_first k m = Map.find_first k m.map
-
   let find_first_opt k m = Map.find_first_opt k m.map
-
   let find_last k m = Map.find_last k m.map
-
   let find_last_opt k m = Map.find_last_opt k m.map
-
   let to_seq m = Map.to_seq m.map
-
   let to_seq_from k m = Map.to_seq_from k m.map
 
   let rec add_seq s m =
@@ -428,8 +359,6 @@ module MakeInjMap (Key : OrderedType) (Elem : OrderedType) :
         add_seq s m
 
   let of_seq s = add_seq s empty
-
   let add_list ls m = List.fold_left (fun m (key, elem) -> add key elem m) m ls
-
   let of_list ls = add_list ls empty
 end

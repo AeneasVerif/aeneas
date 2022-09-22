@@ -114,11 +114,9 @@ let synthesize_function_call (call_id : call_id)
       in
       Some (FunCall (call, expr))
 
-let synthesize_global_eval (gid : A.GlobalDeclId.id) (dest : V.symbolic_value) (expr : expression option)
-    : expression option =
-  match expr with
-  | None   -> None
-  | Some e -> Some (EvalGlobal (gid, dest, e))
+let synthesize_global_eval (gid : A.GlobalDeclId.id) (dest : V.symbolic_value)
+    (expr : expression option) : expression option =
+  match expr with None -> None | Some e -> Some (EvalGlobal (gid, dest, e))
 
 let synthesize_regular_function_call (fun_id : A.fun_id)
     (call_id : V.FunCallId.id) (abstractions : V.AbstractionId.id list)

@@ -13,15 +13,10 @@ module type Id = sig
   (** Id generator - simply a counter *)
 
   val zero : id
-
   val generator_zero : generator
-
   val generator_from_incr_id : id -> generator
-
   val fresh_stateful_generator : unit -> generator ref * (unit -> id)
-
   val mk_stateful_generator : generator -> generator ref * (unit -> id)
-
   val incr : id -> id
 
   (* TODO: this should be stateful! - but we may want to be able to duplicate
@@ -30,29 +25,17 @@ module type Id = sig
      TODO: change the order of the returned types
   *)
   val fresh : generator -> id * generator
-
   val to_string : id -> string
-
   val pp_id : Format.formatter -> id -> unit
-
   val show_id : id -> string
-
   val id_of_json : Yojson.Basic.t -> (id, string) result
-
   val compare_id : id -> id -> int
-
   val max : id -> id -> id
-
   val min : id -> id -> id
-
   val pp_generator : Format.formatter -> generator -> unit
-
   val show_generator : generator -> string
-
   val to_int : id -> int
-
   val of_int : int -> id
-
   val nth : 'a list -> id -> 'a
   (* TODO: change the signature (invert the index and the list *)
 
@@ -75,9 +58,7 @@ module type Id = sig
   val iteri : (id -> 'a -> unit) -> 'a list -> unit
 
   module Ord : C.OrderedType with type t = id
-
   module Set : C.Set with type elt = id
-
   module Map : C.Map with type key = id
 end
 
@@ -88,11 +69,9 @@ end
 module IdGen () : Id = struct
   (* TODO: use Z.t *)
   type id = int [@@deriving show]
-
   type generator = id [@@deriving show]
 
   let zero = 0
-
   let generator_zero = 0
 
   let incr x =
@@ -113,13 +92,9 @@ module IdGen () : Id = struct
     (g, fresh)
 
   let fresh_stateful_generator () = mk_stateful_generator 0
-
   let fresh gen = (gen, incr gen)
-
   let to_string = string_of_int
-
   let to_int x = x
-
   let of_int x = x
 
   let id_of_json js =
@@ -129,13 +104,9 @@ module IdGen () : Id = struct
     | _ -> Error ("id_of_json: failed on " ^ Yojson.Basic.show js)
 
   let compare_id = compare
-
   let max id0 id1 = if id0 > id1 then id0 else id1
-
   let min id0 id1 = if id0 < id1 then id0 else id1
-
   let nth v id = List.nth v id
-
   let nth_opt v id = List.nth_opt v id
 
   let rec update_nth vec id v =
@@ -158,11 +129,8 @@ module IdGen () : Id = struct
     type t = id
 
     let compare = compare
-
     let to_string = to_string
-
     let pp_t = pp_id
-
     let show_t = show_id
   end
 

@@ -761,11 +761,9 @@ module LlbcAst = struct
       global_decl_id_to_string;
     }
 
-  let fun_decl_to_ast_formatter
-      (type_decls : T.type_decl T.TypeDeclId.Map.t)
+  let fun_decl_to_ast_formatter (type_decls : T.type_decl T.TypeDeclId.Map.t)
       (fun_decls : A.fun_decl A.FunDeclId.Map.t)
-      (global_decls : A.global_decl A.GlobalDeclId.Map.t)
-      (fdef : A.fun_decl) :
+      (global_decls : A.global_decl A.GlobalDeclId.Map.t) (fdef : A.fun_decl) :
       ast_formatter =
     let rvar_to_string r =
       let rvar = T.RegionVarId.nth fdef.signature.region_params r in
@@ -942,7 +940,8 @@ module LlbcAst = struct
     | A.Assign (p, rv) ->
         indent ^ place_to_string fmt p ^ " := " ^ rvalue_to_string fmt rv
     | A.AssignGlobal { dst; global } ->
-        indent ^ fmt.var_id_to_string dst ^ " := global " ^ fmt.global_decl_id_to_string global
+        indent ^ fmt.var_id_to_string dst ^ " := global "
+        ^ fmt.global_decl_id_to_string global
     | A.FakeRead p -> indent ^ "fake_read " ^ place_to_string fmt p
     | A.SetDiscriminant (p, variant_id) ->
         (* TODO: improve this to lookup the variant name by using the def id *)
@@ -1132,11 +1131,9 @@ module Module = struct
 
   (** Generate an [ast_formatter] by using a definition context in combination
       with the variables local to a function's definition *)
-  let def_ctx_to_ast_formatter
-      (type_context : T.type_decl T.TypeDeclId.Map.t)
+  let def_ctx_to_ast_formatter (type_context : T.type_decl T.TypeDeclId.Map.t)
       (fun_context : A.fun_decl A.FunDeclId.Map.t)
-      (global_context : A.global_decl A.GlobalDeclId.Map.t)
-      (def : A.fun_decl) :
+      (global_context : A.global_decl A.GlobalDeclId.Map.t) (def : A.fun_decl) :
       PA.ast_formatter =
     let rvar_to_string vid =
       let var = T.RegionVarId.nth def.signature.region_params vid in
@@ -1188,23 +1185,28 @@ module Module = struct
 
   (** This function pretty-prints a function definition by using a definition
       context *)
-  let fun_decl_to_string
-      (type_context : T.type_decl T.TypeDeclId.Map.t)
+  let fun_decl_to_string (type_context : T.type_decl T.TypeDeclId.Map.t)
       (fun_context : A.fun_decl A.FunDeclId.Map.t)
-      (global_context : A.global_decl A.GlobalDeclId.Map.t)
-      (def : A.fun_decl) : string =
-    let fmt = def_ctx_to_ast_formatter type_context fun_context global_context def in
+      (global_context : A.global_decl A.GlobalDeclId.Map.t) (def : A.fun_decl) :
+      string =
+    let fmt =
+      def_ctx_to_ast_formatter type_context fun_context global_context def
+    in
     PA.fun_decl_to_string fmt "" "  " def
 
   let module_to_string (m : M.llbc_module) : string =
-    let types_defs_map, funs_defs_map, globals_defs_map = M.compute_defs_maps m in
+    let types_defs_map, funs_defs_map, globals_defs_map =
+      M.compute_defs_maps m
+    in
 
     (* The types *)
     let type_decls = List.map (type_decl_to_string types_defs_map) m.M.types in
 
     (* The functions *)
     let fun_decls =
-      List.map (fun_decl_to_string types_defs_map funs_defs_map globals_defs_map) m.M.functions
+      List.map
+        (fun_decl_to_string types_defs_map funs_defs_map globals_defs_map)
+        m.M.functions
     in
 
     (* Put everything together *)

@@ -582,7 +582,6 @@ let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
   let obj =
     object
       inherit [_] V.iter_typed_value
-
       method! visit_loan_content _ lc = raise (FoundLoanContent lc)
     end
   in
@@ -597,7 +596,6 @@ let get_first_borrow_in_value (v : V.typed_value) : V.borrow_content option =
   let obj =
     object
       inherit [_] V.iter_typed_value
-
       method! visit_borrow_content _ bc = raise (FoundBorrowContent bc)
     end
   in
@@ -700,7 +698,6 @@ let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
   let obj =
     object
       inherit [_] C.iter_eval_ctx as super
-
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
       method! visit_abstract_shared_borrows abs asb =
@@ -791,7 +788,6 @@ let update_intersecting_aproj_borrows (can_update_shared : bool)
   let obj =
     object
       inherit [_] C.map_eval_ctx as super
-
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
       method! visit_abstract_shared_borrows abs asb =
@@ -920,7 +916,6 @@ let update_intersecting_aproj_loans (proj_regions : T.RegionId.Set.t)
   let obj =
     object
       inherit [_] C.map_eval_ctx as super
-
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
       method! visit_aproj abs sproj =

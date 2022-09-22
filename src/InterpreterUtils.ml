@@ -12,33 +12,19 @@ module PA = Print.EvalCtxLlbcAst
 (** Some utilities *)
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
-
 let ety_to_string = PA.ety_to_string
-
 let rty_to_string = PA.rty_to_string
-
 let symbolic_value_to_string = PA.symbolic_value_to_string
-
 let borrow_content_to_string = PA.borrow_content_to_string
-
 let loan_content_to_string = PA.loan_content_to_string
-
 let aborrow_content_to_string = PA.aborrow_content_to_string
-
 let aloan_content_to_string = PA.aloan_content_to_string
-
 let aproj_to_string = PA.aproj_to_string
-
 let typed_value_to_string = PA.typed_value_to_string
-
 let typed_avalue_to_string = PA.typed_avalue_to_string
-
 let place_to_string = PA.place_to_string
-
 let operand_to_string = PA.operand_to_string
-
 let statement_to_string ctx = PA.statement_to_string ctx "" "  "
-
 let statement_to_string_with_tab ctx = PA.statement_to_string ctx "  " "  "
 
 let same_symbolic_id (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) : bool =
@@ -211,7 +197,6 @@ let bottom_in_value (ended_regions : T.RegionId.Set.t) (v : V.typed_value) :
   let obj =
     object
       inherit [_] V.iter_typed_value
-
       method! visit_Bottom _ = raise Found
 
       method! visit_symbolic_value _ s =
@@ -238,7 +223,8 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
               raise Found
             else ()
         | V.SynthInput | V.SynthInputGivenBack | V.FunCallGivenBack
-        | V.SynthRetGivenBack -> ()
+        | V.SynthRetGivenBack ->
+            ()
         | V.Global -> ()
     end
   in

@@ -1,5 +1,4 @@
 open Identifiers
-
 module Disambiguator = IdGen ()
 
 (** See the comments for [Name] *)
@@ -49,11 +48,8 @@ type name = path_elem list [@@deriving show, ord]
 let to_name (ls : string list) : name = List.map (fun s -> Ident s) ls
 
 type module_name = name [@@deriving show, ord]
-
 type type_name = name [@@deriving show, ord]
-
 type fun_name = name [@@deriving show, ord]
-
 type global_name = name [@@deriving show, ord]
 
 (** Filter the disambiguators equal to 0 in a name *)

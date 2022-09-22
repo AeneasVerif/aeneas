@@ -38,13 +38,9 @@ module Sig = struct
   (** A few utilities *)
 
   let rvar_id_0 = T.RegionVarId.of_int 0
-
   let rvar_0 : T.RegionVarId.id T.region = T.Var rvar_id_0
-
   let rg_id_0 = T.RegionGroupId.of_int 0
-
   let tvar_id_0 = T.TypeVarId.of_int 0
-
   let tvar_0 : T.sty = T.TypeVar tvar_id_0
 
   (** Region 'a of id 0 *)
@@ -218,8 +214,7 @@ module Sig = struct
     let inputs =
       [
         mk_ref_ty rvar_0 (mk_vec_ty tvar_0) is_mut (* &'a (mut) Vec<T> *);
-        mk_usize_ty;
-        (* usize *)
+        mk_usize_ty (* usize *);
       ]
     in
     let output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *) in

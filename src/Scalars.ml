@@ -4,43 +4,24 @@ open Values
 (** The minimum/maximum values an integer type can have depending on its type *)
 
 let i8_min = Z.of_string "-128"
-
 let i8_max = Z.of_string "127"
-
 let i16_min = Z.of_string "-32768"
-
 let i16_max = Z.of_string "32767"
-
 let i32_min = Z.of_string "-2147483648"
-
 let i32_max = Z.of_string "2147483647"
-
 let i64_min = Z.of_string "-9223372036854775808"
-
 let i64_max = Z.of_string "9223372036854775807"
-
 let i128_min = Z.of_string "-170141183460469231731687303715884105728"
-
 let i128_max = Z.of_string "170141183460469231731687303715884105727"
-
 let u8_min = Z.of_string "0"
-
 let u8_max = Z.of_string "255"
-
 let u16_min = Z.of_string "0"
-
 let u16_max = Z.of_string "65535"
-
 let u32_min = Z.of_string "0"
-
 let u32_max = Z.of_string "4294967295"
-
 let u64_min = Z.of_string "0"
-
 let u64_max = Z.of_string "18446744073709551615"
-
 let u128_min = Z.of_string "0"
-
 let u128_max = Z.of_string "340282366920938463463374607431768211455"
 
 (** Being a bit conservative about isize/usize: depending on the system,
@@ -48,11 +29,8 @@ let u128_max = Z.of_string "340282366920938463463374607431768211455"
     want to take that into account in the future *)
 
 let isize_min = i32_min
-
 let isize_max = i32_max
-
 let usize_min = u32_min
-
 let usize_max = u32_max
 
 (** Check that an integer value is in range *)
