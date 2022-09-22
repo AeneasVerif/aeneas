@@ -670,12 +670,17 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   let ctx =
     List.fold_left
       (fun ctx (keep_fwd, def) ->
-        (* Note that we generate a decrease clause for all the recursive functions *)
+        (* We generate a decrease clause for all the recursive functions *)
         let gen_decr_clause =
           A.FunDeclId.Set.mem (fst def).Pure.def_id rec_functions
         in
-        ExtractToFStar.extract_fun_decl_register_names ctx keep_fwd
-          gen_decr_clause def)
+        (* Register the names, only if the function is not a global body -
+         * those are handled later *)
+        let is_global = (fst def).Pure.is_global_decl_body in
+        if is_global then ctx
+        else
+          ExtractToFStar.extract_fun_decl_register_names ctx keep_fwd
+            gen_decr_clause def)
       ctx trans_funs
   in
 

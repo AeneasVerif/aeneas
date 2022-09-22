@@ -585,6 +585,9 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
 
 let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
+  (* Sanity check: the function should not be a global body - those are handled
+   * separately *)
+  assert (not def.is_global_decl_body);
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
   let llbc_def =
@@ -613,9 +616,7 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
   let name =
     ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
   in
-  (* Add the function name if it's not a global *)
-  if def.is_global_decl_body then ctx
-  else ctx_add (FunId (def_id, def.back_id)) name ctx
+  ctx_add (FunId (def_id, def.back_id)) name ctx
 
 type names_map_init = {
   keywords : string list;
