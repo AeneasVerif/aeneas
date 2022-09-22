@@ -34,7 +34,7 @@ let bind (#a #b : Type0) (m : result a) (f : a -> result b) : result b =
 // Monadic assert(...)
 let massert (b:bool) : result unit = if b then Return () else Fail
 
-// Unwrap a successful result by normalisation (used for globals).
+// Normalize and unwrap a successful result (used for globals).
 let eval_global (#a : Type0) (x : result a{Return? (normalize_term x)}) : a = Return?.v x
 
 (*** Misc *)
