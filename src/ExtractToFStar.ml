@@ -1546,7 +1546,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
     This has similarity with the function extraction above (without parameters).
     However, generate its body separately from its declaration to extract the result value.
 
-    For example,
+    For example in Rust,
     `static X: u32 = 3;`
 
     will be translated to
