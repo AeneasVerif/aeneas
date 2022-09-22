@@ -631,7 +631,7 @@ let fun_decl_of_json (js : json) : (A.fun_decl, string) result =
         let* name = fun_name_of_json name in
         let* signature = fun_sig_of_json signature in
         let* body = option_of_json fun_body_of_json body in
-        Ok { A.def_id; name; signature; body; is_global_body = false }
+        Ok { A.def_id; name; signature; body; is_global_decl_body = false }
     | _ -> Error "")
 
 (* Strict type for the number of function declarations (see [global_to_fun_id] below) *)
@@ -670,8 +670,13 @@ let global_decl_of_json (js : json) (gid_conv : global_id_converter) :
         in
         Ok
           ( { A.def_id = global_id; body_id = fun_id; name; ty },
-            { A.def_id = fun_id; name; signature; body; is_global_body = true }
-          )
+            {
+              A.def_id = fun_id;
+              name;
+              signature;
+              body;
+              is_global_decl_body = true;
+            } )
     | _ -> Error "")
 
 let g_declaration_group_of_json (id_of_json : json -> ('id, string) result)

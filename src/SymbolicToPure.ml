@@ -72,9 +72,7 @@ type fun_context = {
   fun_infos : FA.fun_info A.FunDeclId.Map.t;
 }
 
-type global_context = {
-  llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t;
-}
+type global_context = { llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t }
 
 type call_info = {
   forward : S.call;
@@ -127,29 +125,31 @@ type bs_ctx = {
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
   let env = VarId.Map.empty in
-  let ctx = {
-    PureTypeCheck.type_decls = ctx.type_context.type_decls; 
-    global_decls = ctx.global_context.llbc_global_decls;
-    env
-  } in
+  let ctx =
+    {
+      PureTypeCheck.type_decls = ctx.type_context.type_decls;
+      global_decls = ctx.global_context.llbc_global_decls;
+      env;
+    }
+  in
   let _ = PureTypeCheck.check_typed_pattern ctx v in
   ()
 
 let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
   let env = VarId.Map.empty in
-  let ctx = {
-    PureTypeCheck.type_decls = ctx.type_context.type_decls;
-    global_decls = ctx.global_context.llbc_global_decls;
-    env
-  } in
+  let ctx =
+    {
+      PureTypeCheck.type_decls = ctx.type_context.type_decls;
+      global_decls = ctx.global_context.llbc_global_decls;
+      env;
+    }
+  in
   PureTypeCheck.check_texpression ctx e
 
 (* TODO: move *)
 let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.LlbcAst.ast_formatter =
-  Print.LlbcAst.fun_decl_to_ast_formatter
-    ctx.type_context.llbc_type_decls
-    ctx.fun_context.llbc_fun_decls
-    ctx.global_context.llbc_global_decls
+  Print.LlbcAst.fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
+    ctx.fun_context.llbc_fun_decls ctx.global_context.llbc_global_decls
     ctx.fun_decl
 
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
@@ -179,7 +179,9 @@ let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
-  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params in
+  let fmt =
+    PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
+  in
   PrintPure.fun_sig_to_string fmt sg
 
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
@@ -187,7 +189,9 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
-  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params in
+  let fmt =
+    PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
+  in
   PrintPure.fun_decl_to_string fmt def
 
 (* TODO: move *)
@@ -214,8 +218,8 @@ let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
   TypeDeclId.Map.find id ctx.type_context.llbc_type_decls
 
-let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) : A.fun_decl
-    =
+let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
+    A.fun_decl =
   A.FunDeclId.Map.find id ctx.fun_context.llbc_fun_decls
 
 (* TODO: move *)
@@ -1462,9 +1466,8 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
         given_back_inputs next_e
 
 and translate_global_eval (config : config) (gid : A.GlobalDeclId.id)
-  (sval : V.symbolic_value) (e : S.expression) (ctx : bs_ctx)
-    : texpression =
-  let (ctx, var) = fresh_var_for_symbolic_value sval ctx in
+    (sval : V.symbolic_value) (e : S.expression) (ctx : bs_ctx) : texpression =
+  let ctx, var = fresh_var_for_symbolic_value sval ctx in
   let decl = A.GlobalDeclId.Map.find gid ctx.global_context.llbc_global_decls in
   let global_expr = { id = Global gid; type_args = [] } in
   (* We use translate_fwd_ty to translate the global type *)
@@ -1751,7 +1754,16 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
         Some { inputs; inputs_lvs; body }
   in
   (* Assemble the declaration *)
-  let def = { def_id; back_id = bid; basename; signature; is_global_body = def.is_global_body; body } in
+  let def =
+    {
+      def_id;
+      back_id = bid;
+      basename;
+      signature;
+      is_global_decl_body = def.is_global_decl_body;
+      body;
+    }
+  in
   (* Debugging *)
   log#ldebug
     (lazy

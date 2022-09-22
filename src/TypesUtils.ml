@@ -87,7 +87,6 @@ let rty_regions (ty : rty) : RegionId.Set.t =
   let obj =
     object
       inherit [_] iter_ty
-
       method! visit_'r _env r = add_region r
     end
   in

@@ -29,11 +29,8 @@ module StringSet = Collections.MakeSet (Collections.OrderedString)
 module StringMap = Collections.MakeMap (Collections.OrderedString)
 
 type name = Names.name
-
 type type_name = Names.type_name
-
 type global_name = Names.global_name
-
 type fun_name = Names.fun_name
 
 (* TODO: this should a module we give to a functor! *)
@@ -229,11 +226,8 @@ module IdOrderedType = struct
   type t = id
 
   let compare = compare_id
-
   let to_string = show_id
-
   let pp_t = pp_id
-
   let show_t = show_id
 end
 
@@ -452,13 +446,11 @@ let ctx_get (id : id) (ctx : extraction_ctx) : string =
 let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
   ctx_get (GlobalId id) ctx
 
-let ctx_get_function (id : A.fun_id)
-    (rg : RegionGroupId.id option)
+let ctx_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
   ctx_get (FunId (id, rg)) ctx
 
-let ctx_get_local_function (id : A.FunDeclId.id)
-    (rg : RegionGroupId.id option)
+let ctx_get_local_function (id : A.FunDeclId.id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
   ctx_get_function (A.Regular id) rg ctx
 
@@ -582,7 +574,7 @@ let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
   ctx_add (DecreasesClauseId (A.Regular def.def_id)) name ctx
 
-let ctx_add_global_decl_body (def : A.global_decl) (ctx : extraction_ctx) :
+let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx.fmt.global_name def.name in
   let decl = GlobalId def.def_id in
@@ -622,9 +614,8 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
   in
   (* Add the function name if it's not a global *)
-  if def.is_global_body
-    then ctx
-    else ctx_add (FunId (def_id, def.back_id)) name ctx
+  if def.is_global_decl_body then ctx
+  else ctx_add (FunId (def_id, def.back_id)) name ctx
 
 type names_map_init = {
   keywords : string list;
@@ -690,11 +681,8 @@ let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
     information.
     TODO: move all those helpers.
 *)
-let default_fun_suffix
-    (num_region_groups : int)
-    (rg : region_group_info option)
-    ((keep_fwd, num_backs) : bool * int)
-    : string =
+let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
+    ((keep_fwd, num_backs) : bool * int) : string =
   (* There are several cases:
      - [rg] is `Some`: this is a forward function:
        - we add "_fwd"

@@ -64,9 +64,7 @@ let translate_function_to_symbolics (config : C.partial_config)
       ^ Print.fun_name_to_string fdef.A.name));
 
   let { type_context; fun_context; global_context } = trans_ctx in
-  let fun_context = {
-    C.fun_decls = fun_context.fun_decls;
-  } in
+  let fun_context = { C.fun_decls = fun_context.fun_decls } in
 
   match fdef.body with
   | None -> None
@@ -75,9 +73,8 @@ let translate_function_to_symbolics (config : C.partial_config)
       let synthesize = true in
       let evaluate gid =
         let inputs, symb =
-          evaluate_function_symbolic config synthesize
-            type_context fun_context global_context
-            fdef gid
+          evaluate_function_symbolic config synthesize type_context fun_context
+            global_context fdef gid
         in
         (inputs, Option.get symb)
       in
@@ -102,8 +99,7 @@ let translate_function_to_symbolics (config : C.partial_config)
 let translate_function_to_pure (config : C.partial_config)
     (mp_config : Micro.config) (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
-    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
-    (fdef : A.fun_decl)
+    (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
     : pure_fun_translation =
   (* Debug *)
   log#ldebug
@@ -144,9 +140,8 @@ let translate_function_to_pure (config : C.partial_config)
       fun_infos = fun_context.fun_infos;
     }
   in
-  let global_context = {
-      SymbolicToPure.llbc_global_decls = global_context.global_decls
-    }
+  let global_context =
+    { SymbolicToPure.llbc_global_decls = global_context.global_decls }
   in
   let ctx =
     {
@@ -297,12 +292,14 @@ let translate_module_to_pure (config : C.partial_config)
   log#ldebug (lazy "translate_module_to_pure");
 
   (* Compute the type and function contexts *)
-  let type_context, fun_context, global_context = compute_type_fun_contexts m in
-  let fun_infos = FA.analyze_module m fun_context.C.fun_decls global_context.C.global_decls use_state in
-  let fun_context = {
-    fun_decls = fun_context.fun_decls;
-    fun_infos;
-  } in
+  let type_context, fun_context, global_context =
+    compute_type_fun_global_contexts m
+  in
+  let fun_infos =
+    FA.analyze_module m fun_context.C.fun_decls global_context.C.global_decls
+      use_state
+  in
+  let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
   let trans_ctx = { type_context; fun_context; global_context } in
 
   (* Translate all the type definitions *)
@@ -498,8 +495,9 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          if
            ((not is_opaque) && config.extract_transparent)
            || (is_opaque && config.extract_opaque)
-         then ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif has_decr_clause def
-        )
+         then
+           ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif
+             has_decr_clause def)
        fls);
     (* Insert unit tests if necessary *)
     if config.test_unit_functions then
@@ -514,13 +512,18 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_global (id : A.GlobalDeclId.id) : unit =
     let global_decls = ctx.extract_ctx.trans_ctx.global_context.global_decls in
     let global = A.GlobalDeclId.Map.find id global_decls in
-    let (_, (body, body_backs)) = A.FunDeclId.Map.find global.body_id ctx.trans_funs in
+    let _, (body, body_backs) =
+      A.FunDeclId.Map.find global.body_id ctx.trans_funs
+    in
     assert (List.length body_backs = 0);
-    
+
     let is_opaque = Option.is_none body.Pure.body in
-    if ((not is_opaque) && config.extract_transparent)
-         || (is_opaque  && config.extract_opaque)
-    then ExtractToFStar.extract_global_decl ctx.extract_ctx fmt global body config.interface
+    if
+      ((not is_opaque) && config.extract_transparent)
+      || (is_opaque && config.extract_opaque)
+    then
+      ExtractToFStar.extract_global_decl ctx.extract_ctx fmt global body
+        config.interface
   in
 
   let export_state_type () : unit =
@@ -558,8 +561,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         in
         (* Translate *)
         export_functions true pure_funs
-    | Global id ->
-        export_global id
+    | Global id -> export_global id
   in
 
   (* If we need to export the state type: we try to export it after we defined
@@ -677,8 +679,9 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       ctx trans_funs
   in
 
-  let ctx = List.fold_left
-    ExtractToFStar.extract_global_decl_register_names ctx m.globals
+  let ctx =
+    List.fold_left ExtractToFStar.extract_global_decl_register_names ctx
+      m.globals
   in
 
   (* Open the output file *)

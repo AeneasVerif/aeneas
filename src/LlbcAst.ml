@@ -3,7 +3,6 @@ open Types
 open Values
 open Expressions
 open Identifiers
-
 module FunDeclId = IdGen ()
 module GlobalDeclId = IdGen ()
 
@@ -37,10 +36,7 @@ type assumed_fun_id =
 type fun_id = Regular of FunDeclId.id | Assumed of assumed_fun_id
 [@@deriving show, ord]
 
-type global_assignment = {
-  dst : VarId.id;
-  global : GlobalDeclId.id;
-}
+type global_assignment = { dst : VarId.id; global : GlobalDeclId.id }
 [@@deriving show]
 
 type assertion = { cond : operand; expected : bool } [@@deriving show]
@@ -84,22 +80,16 @@ class ['self] iter_statement_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
 
-    method visit_global_assignment : 'env -> global_assignment -> unit = fun _ _ -> ()
+    method visit_global_assignment : 'env -> global_assignment -> unit =
+      fun _ _ -> ()
 
     method visit_place : 'env -> place -> unit = fun _ _ -> ()
-
     method visit_rvalue : 'env -> rvalue -> unit = fun _ _ -> ()
-
     method visit_id : 'env -> VariantId.id -> unit = fun _ _ -> ()
-
     method visit_assertion : 'env -> assertion -> unit = fun _ _ -> ()
-
     method visit_operand : 'env -> operand -> unit = fun _ _ -> ()
-
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
-
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
-
     method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
   end
 
@@ -108,18 +98,15 @@ class ['self] map_statement_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
 
-    method visit_global_assignment : 'env -> global_assignment -> global_assignment = fun _ x -> x
+    method visit_global_assignment
+        : 'env -> global_assignment -> global_assignment =
+      fun _ x -> x
 
     method visit_place : 'env -> place -> place = fun _ x -> x
-
     method visit_rvalue : 'env -> rvalue -> rvalue = fun _ x -> x
-
     method visit_id : 'env -> VariantId.id -> VariantId.id = fun _ x -> x
-
     method visit_assertion : 'env -> assertion -> assertion = fun _ x -> x
-
     method visit_operand : 'env -> operand -> operand = fun _ x -> x
-
     method visit_call : 'env -> call -> call = fun _ x -> x
 
     method visit_integer_type : 'env -> integer_type -> integer_type =
@@ -190,14 +177,14 @@ type fun_decl = {
   name : fun_name;
   signature : fun_sig;
   body : fun_body option;
-  is_global_body : bool;
+  is_global_decl_body : bool;
 }
 [@@deriving show]
 
 type global_decl = {
   def_id : GlobalDeclId.id;
-  body_id: FunDeclId.id;
+  body_id : FunDeclId.id;
   name : global_name;
-  ty: ety;
+  ty : ety;
 }
 [@@deriving show]

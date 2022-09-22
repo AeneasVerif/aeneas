@@ -800,7 +800,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
     (def : A.global_decl) : extraction_ctx =
-  ctx_add_global_decl_body def ctx
+  ctx_add_global_decl_and_body def ctx
 
 (** The following function factorizes the extraction of ADT values.
 
@@ -1364,7 +1364,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (qualif : fun_decl_qualif) (has_decreases_clause : bool) (def : fun_decl) :
     unit =
-  assert (not def.is_global_body);
+  assert (not def.is_global_decl_body);
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* (* Add the type parameters - note that we need those bindings only for the
@@ -1552,7 +1552,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : A.global_decl) (body : fun_decl) (interface : bool) : unit =
-  assert body.is_global_body;
+  assert body.is_global_decl_body;
   assert (Option.is_none body.back_id);
   assert (List.length body.signature.inputs = 0);
   assert (List.length body.signature.doutputs = 1);

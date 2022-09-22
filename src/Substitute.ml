@@ -219,7 +219,7 @@ let operand_substitute (tsubst : T.TypeVarId.id -> T.ety) (op : E.operand) :
   | E.Move p -> E.Move (p_subst p)
   | E.Constant (ety, cv) ->
       let rsubst x = x in
-      E.Constant ( ty_substitute rsubst tsubst ety, cv )
+      E.Constant (ty_substitute rsubst tsubst ety, cv)
 
 (** Apply a type substitution to an rvalue *)
 let rvalue_substitute (tsubst : T.TypeVarId.id -> T.ety) (rv : E.rvalue) :
@@ -281,7 +281,9 @@ let rec statement_substitute (tsubst : T.TypeVarId.id -> T.ety)
       let p = place_substitute tsubst p in
       let rvalue = rvalue_substitute tsubst rvalue in
       A.Assign (p, rvalue)
-  | A.AssignGlobal g -> A.AssignGlobal g
+  | A.AssignGlobal g ->
+      (* Globals don't have type parameters *)
+      A.AssignGlobal g
   | A.FakeRead p ->
       let p = place_substitute tsubst p in
       A.FakeRead p

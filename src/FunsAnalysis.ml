@@ -92,25 +92,25 @@ let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
         end
       in
       (* Sanity check: global bodies don't contain stateful calls *)
-      assert ((not f.is_global_body) || not !stateful);
+      assert ((not f.is_global_decl_body) || not !stateful);
       match f.body with
       | None ->
           (* Opaque function: we consider they fail by default *)
           obj#may_fail true;
-          stateful := (not f.is_global_body) && use_state
+          stateful := (not f.is_global_decl_body) && use_state
       | Some body -> obj#visit_statement () body.body
     in
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
-    let is_global_body = List.exists (fun f -> f.is_global_body) d in
-    assert ((not is_global_body) || List.length d == 1);
+    let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
+    assert ((not is_global_decl_body) || List.length d == 1);
     (* We ignore on purpose functions that cannot fail and consider they *can*
      * fail: the result of the analysis is not used yet to adjust the translation
      * so that the functions which syntactically can't fail don't use an error monad.
      * However, we do keep the result of the analysis for global bodies.
      * *)
-    can_fail := (not is_global_body) || !can_fail;
+    can_fail := (not is_global_decl_body) || !can_fail;
     { can_fail = !can_fail; stateful = !stateful; divergent = !divergent }
   in
 

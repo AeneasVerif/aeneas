@@ -575,6 +575,6 @@ type fun_decl = {
           (to identify the forward/backward functions) later.
        *)
   signature : fun_sig;
-  is_global_body : bool;
+  is_global_decl_body : bool;
   body : fun_body option;
 }
