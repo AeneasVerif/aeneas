@@ -39,6 +39,11 @@ test: build trans-no_nested_borrows trans-paper \
 verify: build test
 	cd tests && make all
 
+# Reformat the project
+.PHONY: format
+format:
+	dune build @fmt && dune promote
+
 # Add specific options to some tests
 trans-no_nested_borrows trans-paper: \
 	TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
