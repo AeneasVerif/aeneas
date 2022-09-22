@@ -173,6 +173,12 @@ let is_var (e : texpression) : bool =
 let as_var (e : texpression) : VarId.id =
   match e.e with Var v -> v | _ -> raise (Failure "Unreachable")
 
+let is_global (e : texpression) : bool =
+  match e.e with Qualif { id = Global _; _ } -> true | _ -> false
+
+let is_const (e : texpression) : bool =
+  match e.e with Const _ -> true | _ -> false
+
 (** Remove the external occurrences of [Meta] *)
 let rec unmeta (e : texpression) : texpression =
   match e.e with Meta (_, e) -> unmeta e | _ -> e
@@ -398,6 +404,11 @@ let type_decl_is_enum (def : T.type_decl) : bool =
 
 let mk_state_ty : ty = Adt (Assumed State, [])
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
+
+let unwrap_result_ty (ty : ty) : ty =
+  match ty with
+  | Adt (Assumed Result, [ ty ]) -> ty
+  | _ -> failwith "not a result type"
 
 let mk_result_fail_texpression (ty : ty) : texpression =
   let type_args = [ ty ] in

@@ -7,6 +7,7 @@
 
 open Errors
 open Identifiers
+open FunIdentifier
 module T = Types
 module TU = TypesUtils
 module V = Values
@@ -20,7 +21,7 @@ module PT = Print.Types
 
 type formatting_ctx = {
   type_context : C.type_context;
-  fun_context : A.fun_decl A.FunDeclId.Map.t;
+  fun_context : A.fun_decl FunDeclId.Map.t;
   type_vars : T.type_var list;
 }
 

@@ -13,11 +13,11 @@ module SA = SymbolicAst
 (** The local logger *)
 let log = L.interpreter_log
 
-let compute_type_fun_contexts (m : M.llbc_module) :
-    C.type_context * C.fun_context =
-  let type_decls_list, _ = M.split_declarations m.declarations in
-  let type_decls, fun_decls = M.compute_defs_maps m in
-  let type_decls_groups, _funs_defs_groups =
+let compute_type_fun_global_contexts (m : M.llbc_module) :
+    C.type_context * C.fun_context * C.global_context =
+  let type_decls_list, _, _ = M.split_declarations m.declarations in
+  let type_decls, fun_decls, global_decls = M.compute_defs_maps m in
+  let type_decls_groups, _funs_defs_groups, _globals_defs_groups =
     M.split_declarations_to_group_maps m.declarations
   in
   let type_infos =
@@ -25,14 +25,17 @@ let compute_type_fun_contexts (m : M.llbc_module) :
   in
   let type_context = { C.type_decls_groups; type_decls; type_infos } in
   let fun_context = { C.fun_decls } in
-  (type_context, fun_context)
+  let global_context = { C.global_decls } in
+  (type_context, fun_context, global_context)
 
 let initialize_eval_context (type_context : C.type_context)
-    (fun_context : C.fun_context) (type_vars : T.type_var list) : C.eval_ctx =
+    (fun_context : C.fun_context) (global_context : C.global_context)
+    (type_vars : T.type_var list) : C.eval_ctx =
   C.reset_global_counters ();
   {
     C.type_context;
     C.fun_context;
+    C.global_context;
     C.type_vars;
     C.env = [ C.Frame ];
     C.ended_regions = T.RegionId.Set.empty;
@@ -52,8 +55,8 @@ let initialize_eval_context (type_context : C.type_context)
       - the instantiated function signature
  *)
 let initialize_symbolic_context_for_fun (type_context : C.type_context)
-    (fun_context : C.fun_context) (fdef : A.fun_decl) :
-    C.eval_ctx * V.symbolic_value list * A.inst_fun_sig =
+    (fun_context : C.fun_context) (global_context : C.global_context)
+    (fdef : A.fun_decl) : C.eval_ctx * V.symbolic_value list * A.inst_fun_sig =
   (* The abstractions are not initialized the same way as for function
    * calls: they contain *loan* projectors, because they "provide" us
    * with the input values (which behave as if they had been returned
@@ -67,7 +70,10 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
    * *)
   let sg = fdef.signature in
   (* Create the context *)
-  let ctx = initialize_eval_context type_context fun_context sg.type_params in
+  let ctx =
+    initialize_eval_context type_context fun_context global_context
+      sg.type_params
+  in
   (* Instantiate the signature *)
   let type_params = List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params in
   let inst_sg = instantiate_fun_sig type_params sg in
@@ -205,7 +211,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return
  *)
 let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
     (type_context : C.type_context) (fun_context : C.fun_context)
-    (fdef : A.fun_decl) (back_id : T.RegionGroupId.id option) :
+    (global_context : C.global_context) (fdef : A.fun_decl)
+    (back_id : T.RegionGroupId.id option) :
     V.symbolic_value list * SA.expression option =
   (* Debug *)
   let name_to_string () =
@@ -218,7 +225,8 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
 
   (* Create the evaluation context *)
   let ctx, input_svs, inst_sg =
-    initialize_symbolic_context_for_fun type_context fun_context fdef
+    initialize_symbolic_context_for_fun type_context fun_context global_context
+      fdef
   in
 
   (* Create the continuation to finish the evaluation *)
@@ -285,8 +293,12 @@ module Test = struct
     assert (body.A.arg_count = 0);
 
     (* Create the evaluation context *)
-    let type_context, fun_context = compute_type_fun_contexts m in
-    let ctx = initialize_eval_context type_context fun_context [] in
+    let type_context, fun_context, global_context =
+      compute_type_fun_global_contexts m
+    in
+    let ctx =
+      initialize_eval_context type_context fun_context global_context []
+    in
 
     (* Insert the (uninitialized) local variables *)
     let ctx = C.ctx_push_uninitialized_vars ctx body.A.locals in
@@ -331,14 +343,15 @@ module Test = struct
   (** Execute the symbolic interpreter on a function. *)
   let test_function_symbolic (config : C.partial_config) (synthesize : bool)
       (type_context : C.type_context) (fun_context : C.fun_context)
-      (fdef : A.fun_decl) : unit =
+      (global_context : C.global_context) (fdef : A.fun_decl) : unit =
     (* Debug *)
     log#ldebug
       (lazy ("test_function_symbolic: " ^ Print.fun_name_to_string fdef.A.name));
 
     (* Evaluate *)
     let evaluate =
-      evaluate_function_symbolic config synthesize type_context fun_context fdef
+      evaluate_function_symbolic config synthesize type_context fun_context
+        global_context fdef
     in
     (* Execute the forward function *)
     let _ = evaluate None in
@@ -368,12 +381,15 @@ module Test = struct
     in
     (* Filter the opaque functions *)
     let no_loop_funs = List.filter fun_decl_is_transparent no_loop_funs in
-    let type_context, fun_context = compute_type_fun_contexts m in
+    let type_context, fun_context, global_context =
+      compute_type_fun_global_contexts m
+    in
     let test_fun (def : A.fun_decl) : unit =
       (* Execute the function - note that as the symbolic interpreter explores
        * all the path, some executions are expected to "panic": we thus don't
        * check the return value *)
-      test_function_symbolic config synthesize type_context fun_context def
+      test_function_symbolic config synthesize type_context fun_context
+        global_context def
     in
     List.iter test_fun no_loop_funs
 end

@@ -1,11 +1,13 @@
 module T = Types
 module V = Values
+module LA = LlbcAst
 open Scalars
 module E = Expressions
 open Errors
 module C = Contexts
 module Subst = Substitute
 module L = Logging
+module PV = Print.Values
 open TypesUtils
 open ValuesUtils
 module Inv = Invariants
@@ -108,53 +110,25 @@ let access_rplace_reorganize (config : C.config) (expand_prim_copy : bool)
     ctx
 
 (** Convert an operand constant operand value to a typed value *)
-let rec operand_constant_value_to_typed_value (ctx : C.eval_ctx) (ty : T.ety)
-    (cv : E.operand_constant_value) : V.typed_value =
+let constant_to_typed_value (ty : T.ety) (cv : V.constant_value) : V.typed_value
+    =
   (* Check the type while converting - we actually need some information
-   * contained in the type *)
+     * contained in the type *)
   log#ldebug
     (lazy
-      ("operand_constant_value_to_typed_value:" ^ "\n- ty: "
-     ^ ety_to_string ctx ty ^ "\n- cv: "
-      ^ operand_constant_value_to_string ctx cv));
+      ("constant_to_typed_value:" ^ "\n- cv: " ^ PV.constant_value_to_string cv));
   match (ty, cv) with
-  (* Adt *)
-  | ( T.Adt (adt_id, region_params, type_params),
-      ConstantAdt (variant_id, field_values) ) ->
-      assert (region_params = []);
-      (* Compute the types of the fields *)
-      let field_tys =
-        match adt_id with
-        | T.AdtId def_id ->
-            let def = C.ctx_lookup_type_decl ctx def_id in
-            assert (def.region_params = []);
-            Subst.type_decl_get_instantiated_field_etypes def variant_id
-              type_params
-        | T.Tuple -> type_params
-        | T.Assumed _ -> failwith "Unreachable"
-      in
-      (* Compute the field values *)
-      let field_values =
-        List.map
-          (fun (ty, v) -> operand_constant_value_to_typed_value ctx ty v)
-          (List.combine field_tys field_values)
-      in
-      (* Put together *)
-      let value = V.Adt { variant_id; field_values } in
-      { value; ty }
   (* Scalar, boolean... *)
-  | T.Bool, ConstantValue (Bool v) -> { V.value = V.Concrete (Bool v); ty }
-  | T.Char, ConstantValue (Char v) -> { V.value = V.Concrete (Char v); ty }
-  | T.Str, ConstantValue (String v) -> { V.value = V.Concrete (String v); ty }
-  | T.Integer int_ty, ConstantValue (V.Scalar v) ->
+  | T.Bool, Bool v -> { V.value = V.Concrete (Bool v); ty }
+  | T.Char, Char v -> { V.value = V.Concrete (Char v); ty }
+  | T.Str, String v -> { V.value = V.Concrete (String v); ty }
+  | T.Integer int_ty, V.Scalar v ->
       (* Check the type and the ranges *)
       assert (int_ty = v.int_ty);
       assert (check_scalar_value_in_range v);
       { V.value = V.Concrete (V.Scalar v); ty }
-  (* Remaining cases (invalid) - listing as much as we can on purpose
-     (allows to catch errors at compilation if the definitions change) *)
-  | _, ConstantAdt _ | _, ConstantValue _ ->
-      failwith "Improperly typed constant value"
+  (* Remaining cases (invalid) *)
+  | _, _ -> failwith "Improperly typed constant value"
 
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
@@ -197,8 +171,9 @@ let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
   let prepare : cm_fun =
    fun cf ctx ->
     match op with
-    | Expressions.Constant _ ->
+    | Expressions.Constant (ty, cv) ->
         (* No need to reorganize the context *)
+        constant_to_typed_value ty cv |> ignore;
         cf ctx
     | Expressions.Copy p ->
         (* Access the value *)
@@ -226,9 +201,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
-  | Expressions.Constant (ty, cv) ->
-      let v = operand_constant_value_to_typed_value ctx ty cv in
-      cf v ctx
+  | Expressions.Constant (ty, cv) -> cf (constant_to_typed_value ty cv) ctx
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in

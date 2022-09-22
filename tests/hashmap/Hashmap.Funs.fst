@@ -188,6 +188,10 @@ let hash_map_insert_no_resize_fwd_back
     end
   end
 
+(** [core::num::u32::{8}::MAX] *)
+let core_num_u32_max_body : result u32 = Return 4294967295
+let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
+
 (** [hashmap::HashMap::{0}::move_elements_from_list] *)
 let rec hash_map_move_elements_from_list_fwd_back
   (t : Type0) (ntable : hash_map_t t) (ls : list_t t) :
@@ -244,7 +248,7 @@ let rec hash_map_move_elements_fwd_back
 (** [hashmap::HashMap::{0}::try_resize] *)
 let hash_map_try_resize_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
-  begin match scalar_cast U32 Usize 4294967295 with
+  begin match scalar_cast U32 Usize core_num_u32_max_c with
   | Fail -> Fail
   | Return max_usize ->
     let capacity = vec_len (list_t t) self.hash_map_slots in

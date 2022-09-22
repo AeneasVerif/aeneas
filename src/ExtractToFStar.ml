@@ -26,6 +26,14 @@ type type_decl_qualif =
  *)
 type fun_decl_qualif = Let | LetRec | And | Val | AssumeVal
 
+let fun_decl_qualif_keyword (qualif : fun_decl_qualif) : string =
+  match qualif with
+  | Let -> "let"
+  | LetRec -> "let rec"
+  | And -> "and"
+  | Val -> "val"
+  | AssumeVal -> "assume val"
+
 (** Small helper to compute the name of an int type *)
 let fstar_int_name (int_ty : integer_type) =
   match int_ty with
@@ -305,6 +313,12 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     (* Concatenate the elements *)
     String.concat "_" fname
   in
+  let global_name (name : global_name) : string =
+    (* Converting to snake case also lowercases the letters (in Rust, global
+     * names are written in capital letters). *)
+    let parts = List.map to_snake_case (get_name name) in
+    String.concat "_" parts
+  in
   let fun_name (_fid : A.fun_id) (fname : fun_name) (num_rgs : int)
       (rg : region_group_info option) (filter_info : bool * int) : string =
     let fname = fun_name_to_snake_case fname in
@@ -314,7 +328,8 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fname ^ suffix
   in
 
-  let decreases_clause_name (_fid : FunDeclId.id) (fname : fun_name) : string =
+  let decreases_clause_name (_fid : A.FunDeclId.id) (fname : fun_name) : string
+      =
     let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
     let suffix = "_decreases" in
@@ -403,6 +418,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     variant_name;
     struct_constructor;
     type_name;
+    global_name;
     fun_name;
     decreases_clause_name;
     var_basename;
@@ -781,6 +797,11 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
   (* Return *)
   ctx
 
+(** Simply add the global name to the context. *)
+let extract_global_decl_register_names (ctx : extraction_ctx)
+    (def : A.global_decl) : extraction_ctx =
+  ctx_add_global_decl_and_body def ctx
+
 (** The following function factorizes the extraction of ADT values.
 
     Note that patterns can introduce new variables: we thus return an extraction
@@ -831,9 +852,14 @@ let extract_adt_g_value
       ctx
   | _ -> raise (Failure "Inconsistent typed value")
 
+(* Extract globals in the same way as variables *)
+let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
+    (id : A.GlobalDeclId.id) : unit =
+  F.pp_print_string fmt (ctx_get_global id ctx)
+
 (** [inside]: see [extract_ty].
 
-    As an pattern can introduce new variables, we return an extraction context
+    As a pattern can introduce new variables, we return an extraction context
     updated with new bindings.
  *)
 let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
@@ -888,6 +914,9 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | Switch (scrut, body) -> extract_Switch ctx fmt inside scrut body
   | Meta (_, e) -> extract_texpression ctx fmt inside e
 
+(* Extract an application *or* a top-level qualif (function extraction has
+ * to handle top-level qualifiers, so it seemed more natural to merge the
+ * two cases) *)
 and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (app : texpression) (args : texpression list) : unit =
   (* We don't do the same thing if the app is a top-level identifier (function,
@@ -898,6 +927,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       match qualif.id with
       | Func fun_id ->
           extract_function_call ctx fmt inside fun_id qualif.type_args args
+      | Global global_id -> extract_global ctx fmt global_id
       | AdtCons adt_cons_id ->
           extract_adt_cons ctx fmt inside adt_cons_id qualif.type_args args
       | Proj proj ->
@@ -1337,6 +1367,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (qualif : fun_decl_qualif) (has_decreases_clause : bool) (def : fun_decl) :
     unit =
+  assert (not def.is_global_decl_body);
   (* Retrieve the function name *)
   let def_name = ctx_get_local_function def.def_id def.back_id ctx in
   (* (* Add the type parameters - note that we need those bindings only for the
@@ -1355,14 +1386,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
   let is_opaque = Option.is_none def.body in
-  let qualif =
-    match qualif with
-    | Let -> "let"
-    | LetRec -> "let rec"
-    | And -> "and"
-    | Val -> "val"
-    | AssumeVal -> "assume val"
-  in
+  let qualif = fun_decl_qualif_keyword qualif in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   F.pp_print_space fmt ();
   (* Open a box for "(PARAMS) : EFFECT =" *)
@@ -1470,6 +1494,98 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
+
+(** Extract a global declaration body of the shape "QUALIF NAME : TYPE = BODY" with a custom body extractor *)
+let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
+    (qualif : fun_decl_qualif) (name : string) (ty : ty)
+    (extract_body : (F.formatter -> unit) Option.t) : unit =
+  let is_opaque = Option.is_none extract_body in
+
+  (* Open the definition box (depth=0) *)
+  F.pp_open_hvbox fmt ctx.indent_incr;
+
+  (* Open "QUALIF NAME : TYPE =" box (depth=1) *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  (* Print "QUALIF NAME " *)
+  F.pp_print_string fmt (fun_decl_qualif_keyword qualif ^ " " ^ name);
+  F.pp_print_space fmt ();
+
+  (* Open ": TYPE =" box (depth=2) *)
+  F.pp_open_hvbox fmt 0;
+  (* Print ": " *)
+  F.pp_print_string fmt ":";
+  F.pp_print_space fmt ();
+
+  (* Open "TYPE" box (depth=3) *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
+  (* Print "TYPE" *)
+  extract_ty ctx fmt false ty;
+  (* Close "TYPE" box (depth=3) *)
+  F.pp_close_box fmt ();
+
+  if not is_opaque then (
+    (* Print " =" *)
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "=");
+  (* Close ": TYPE =" box (depth=2) *)
+  F.pp_close_box fmt ();
+  (* Close "QUALIF NAME : TYPE =" box (depth=1) *)
+  F.pp_close_box fmt ();
+
+  if not is_opaque then (
+    F.pp_print_space fmt ();
+    (* Open "BODY" box (depth=1) *)
+    F.pp_open_hvbox fmt 0;
+    (* Print "BODY" *)
+    (Option.get extract_body) fmt;
+    (* Close "BODY" box (depth=1) *)
+    F.pp_close_box fmt ());
+  (* Close the definition box (depth=0) *)
+  F.pp_close_box fmt ()
+
+(** Extract a global declaration.
+    We generate the body which computes the global value separately from the value declaration itself.
+
+    For example in Rust,
+    `static X: u32 = 3;`
+
+    will be translated to:
+    `let x_body : result u32 = Return 3`
+    `let x_c : u32 = eval_global x_body`
+ *)
+let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
+    (global : A.global_decl) (body : fun_decl) (interface : bool) : unit =
+  assert body.is_global_decl_body;
+  assert (Option.is_none body.back_id);
+  assert (List.length body.signature.inputs = 0);
+  assert (List.length body.signature.doutputs = 1);
+  assert (List.length body.signature.type_params = 0);
+
+  (* Add a break then the name of the corresponding LLBC declaration *)
+  F.pp_print_break fmt 0 0;
+  F.pp_print_string fmt
+    ("(** [" ^ Print.global_name_to_string global.name ^ "] *)");
+  F.pp_print_space fmt ();
+
+  let decl_name = ctx_get_global global.def_id ctx in
+  let body_name = ctx_get_function (Regular global.body_id) None ctx in
+
+  let decl_ty, body_ty =
+    let ty = body.signature.output in
+    if body.signature.info.effect_info.can_fail then (unwrap_result_ty ty, ty)
+    else (ty, mk_result_ty ty)
+  in
+  match body.body with
+  | None ->
+      let qualif = if interface then Val else AssumeVal in
+      extract_global_decl_body ctx fmt qualif decl_name decl_ty None
+  | Some body ->
+      extract_global_decl_body ctx fmt Let body_name body_ty
+        (Some (fun fmt -> extract_texpression ctx fmt false body.body));
+      F.pp_print_break fmt 0 0;
+      extract_global_decl_body ctx fmt Let decl_name decl_ty
+        (Some (fun fmt -> F.pp_print_string fmt ("eval_global " ^ body_name)));
+      F.pp_print_break fmt 0 0
 
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).

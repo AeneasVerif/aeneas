@@ -399,7 +399,6 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
   let visitor =
     object
       inherit [_] C.iter_eval_ctx as super
-
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
       method! visit_typed_value info tv =
@@ -705,9 +704,7 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
   let obj =
     object
       inherit [_] C.iter_eval_ctx as super
-
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
-
       method! visit_Symbolic _ sv = add_env_sv sv
 
       method! visit_abstract_shared_borrows abs asb =

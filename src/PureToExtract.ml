@@ -29,9 +29,8 @@ module StringSet = Collections.MakeSet (Collections.OrderedString)
 module StringMap = Collections.MakeMap (Collections.OrderedString)
 
 type name = Names.name
-
 type type_name = Names.type_name
-
+type global_name = Names.global_name
 type fun_name = Names.fun_name
 
 (* TODO: this should a module we give to a functor! *)
@@ -71,6 +70,8 @@ type formatter = {
        *)
   type_name : type_name -> string;
       (** Provided a basename, compute a type name. *)
+  global_name : global_name -> string;
+      (** Provided a basename, compute a global name. *)
   fun_name :
     A.fun_id ->
     fun_name ->
@@ -83,16 +84,16 @@ type formatter = {
             function is an assumed function or a local function
           - function basename
           - number of region groups
+          - region group information in case of a backward function
+            (`None` if forward function)
           - pair:
             - do we generate the forward function (it may have been filtered)?
             - the number of extracted backward functions (not necessarily equal
               to the number of region groups, because we may have filtered
               some of them)
-          - region group information in case of a backward function
-            (`None` if forward function)
           TODO: use the fun id for the assumed functions.
        *)
-  decreases_clause_name : FunDeclId.id -> fun_name -> string;
+  decreases_clause_name : A.FunDeclId.id -> fun_name -> string;
       (** Generates the name of the definition used to prove/reason about
           termination. The generated code uses this clause where needed,
           but its body must be defined by the user.
@@ -184,6 +185,7 @@ type formatter = {
 
 (** We use identifiers to look for name clashes *)
 type id =
+  | GlobalId of A.GlobalDeclId.id
   | FunId of A.fun_id * RegionGroupId.id option
   | DecreasesClauseId of A.fun_id
       (** The definition which provides the decreases/termination clause.
@@ -224,11 +226,8 @@ module IdOrderedType = struct
   type t = id
 
   let compare = compare_id
-
   let to_string = show_id
-
   let pp_t = pp_id
-
   let show_t = show_id
 end
 
@@ -340,6 +339,7 @@ type extraction_ctx = {
 
 (** Debugging function *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
+  let global_decls = ctx.trans_ctx.global_context.global_decls in
   let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
   let type_decls = ctx.trans_ctx.type_context.type_decls in
   (* TODO: factorize the pretty-printing with what is in PrintPure *)
@@ -352,11 +352,14 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
     | Tuple -> failwith "Unreachable"
   in
   match id with
+  | GlobalId gid ->
+      let name = (A.GlobalDeclId.Map.find gid global_decls).name in
+      "global name: " ^ Print.global_name_to_string name
   | FunId (fid, rg_id) ->
       let fun_name =
         match fid with
         | A.Regular fid ->
-            Print.fun_name_to_string (FunDeclId.Map.find fid fun_decls).name
+            Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
       let fun_kind =
@@ -369,7 +372,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let fun_name =
         match fid with
         | A.Regular fid ->
-            Print.fun_name_to_string (FunDeclId.Map.find fid fun_decls).name
+            Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
         | A.Assumed aid -> A.show_assumed_fun_id aid
       in
       "decreases clause for function: " ^ fun_name
@@ -440,11 +443,14 @@ let ctx_get (id : id) (ctx : extraction_ctx) : string =
       log#serror ("Could not find: " ^ id_to_string id ctx);
       raise Not_found
 
+let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
+  ctx_get (GlobalId id) ctx
+
 let ctx_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
   ctx_get (FunId (id, rg)) ctx
 
-let ctx_get_local_function (id : FunDeclId.id) (rg : RegionGroupId.id option)
+let ctx_get_local_function (id : A.FunDeclId.id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
   ctx_get_function (A.Regular id) rg ctx
 
@@ -475,7 +481,7 @@ let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
     (ctx : extraction_ctx) : string =
   ctx_get (VariantId (def_id, variant_id)) ctx
 
-let ctx_get_decreases_clause (def_id : FunDeclId.id) (ctx : extraction_ctx) :
+let ctx_get_decreases_clause (def_id : A.FunDeclId.id) (ctx : extraction_ctx) :
     string =
   ctx_get (DecreasesClauseId (A.Regular def_id)) ctx
 
@@ -568,12 +574,24 @@ let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
   ctx_add (DecreasesClauseId (A.Regular def.def_id)) name ctx
 
+let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let name = ctx.fmt.global_name def.name in
+  let decl = GlobalId def.def_id in
+  let body = FunId (Regular def.body_id, None) in
+  let ctx = ctx_add decl (name ^ "_c") ctx in
+  let ctx = ctx_add body (name ^ "_body") ctx in
+  ctx
+
 let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
+  (* Sanity check: the function should not be a global body - those are handled
+   * separately *)
+  assert (not def.is_global_decl_body);
   (* Lookup the LLBC def to compute the region group information *)
   let def_id = def.def_id in
   let llbc_def =
-    FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls
+    A.FunDeclId.Map.find def_id ctx.trans_ctx.fun_context.fun_decls
   in
   let sg = llbc_def.signature in
   let num_rgs = List.length sg.regions_hierarchy in
@@ -598,9 +616,7 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
   let name =
     ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
   in
-  (* Add the function name *)
-  let ctx = ctx_add (FunId (def_id, def.back_id)) name ctx in
-  ctx
+  ctx_add (FunId (def_id, def.back_id)) name ctx
 
 type names_map_init = {
   keywords : string list;

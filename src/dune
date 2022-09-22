@@ -1,21 +1,25 @@
 ;; core: for Core.Unix.mkdir_p
+
 (executable
  (name main)
- (preprocess (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
  (libraries ppx_deriving yojson zarith easy_logging core_unix))
 
 (env
-  (dev (flags
-    :standard
-    -safe-string
-    -g
-    ;-dsource
-    -warn-error -5-8-9-11-14-33-20-21-26-27-39
-  ))
-  (release (flags
-    :standard
-    -safe-string
-    -g
-    ;-dsource
-    -warn-error -5-8-9-11-14-33-20-21-26-27-39
-  )))
+ (dev
+  (flags
+   :standard
+   -safe-string
+   -g
+   ;-dsource
+   -warn-error
+   -5-8-9-11-14-33-20-21-26-27-39))
+ (release
+  (flags
+   :standard
+   -safe-string
+   -g
+   ;-dsource
+   -warn-error
+   -5-8-9-11-14-33-20-21-26-27-39)))

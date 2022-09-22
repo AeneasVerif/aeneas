@@ -62,7 +62,6 @@ let symbolic_value_id_counter, fresh_symbolic_value_id =
   SymbolicValueId.fresh_stateful_generator ()
 
 let borrow_id_counter, fresh_borrow_id = BorrowId.fresh_stateful_generator ()
-
 let region_id_counter, fresh_region_id = RegionId.fresh_stateful_generator ()
 
 let abstraction_id_counter, fresh_abstraction_id =
@@ -219,9 +218,13 @@ type type_context = {
 
 type fun_context = { fun_decls : fun_decl FunDeclId.Map.t } [@@deriving show]
 
+type global_context = { global_decls : global_decl GlobalDeclId.Map.t }
+[@@deriving show]
+
 type eval_ctx = {
   type_context : type_context;
   fun_context : fun_context;
+  global_context : global_context;
   type_vars : type_var list;
   env : env;
   ended_regions : RegionId.Set.t;
@@ -254,6 +257,11 @@ let ctx_lookup_type_decl (ctx : eval_ctx) (tid : TypeDeclId.id) : type_decl =
 (** TODO: make this more efficient with maps *)
 let ctx_lookup_fun_decl (ctx : eval_ctx) (fid : FunDeclId.id) : fun_decl =
   FunDeclId.Map.find fid ctx.fun_context.fun_decls
+
+(** TODO: make this more efficient with maps *)
+let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) :
+    global_decl =
+  GlobalDeclId.Map.find gid ctx.global_context.global_decls
 
 (** Retrieve a variable's value in an environment *)
 let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =

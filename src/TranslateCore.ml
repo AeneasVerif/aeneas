@@ -19,7 +19,13 @@ type fun_context = {
 }
 [@@deriving show]
 
-type trans_ctx = { type_context : type_context; fun_context : fun_context }
+type global_context = C.global_context [@@deriving show]
+
+type trans_ctx = {
+  type_context : type_context;
+  fun_context : fun_context;
+  global_context : global_context;
+}
 
 type pure_fun_translation = Pure.fun_decl * Pure.fun_decl list
 
@@ -39,16 +45,22 @@ let fun_sig_to_string (ctx : trans_ctx) (sg : Pure.fun_sig) : string =
   let type_params = sg.type_params in
   let type_decls = ctx.type_context.type_decls in
   let fun_decls = ctx.fun_context.fun_decls in
-  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
+  let global_decls = ctx.global_context.global_decls in
+  let fmt =
+    PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
+  in
   PrintPure.fun_sig_to_string fmt sg
 
 let fun_decl_to_string (ctx : trans_ctx) (def : Pure.fun_decl) : string =
   let type_params = def.signature.type_params in
   let type_decls = ctx.type_context.type_decls in
   let fun_decls = ctx.fun_context.fun_decls in
-  let fmt = PrintPure.mk_ast_formatter type_decls fun_decls type_params in
+  let global_decls = ctx.global_context.global_decls in
+  let fmt =
+    PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
+  in
   PrintPure.fun_decl_to_string fmt def
 
-let fun_decl_id_to_string (ctx : trans_ctx) (id : Pure.FunDeclId.id) : string =
+let fun_decl_id_to_string (ctx : trans_ctx) (id : A.FunDeclId.id) : string =
   Print.fun_name_to_string
-    (Pure.FunDeclId.Map.find id ctx.fun_context.fun_decls).name
+    (A.FunDeclId.Map.find id ctx.fun_context.fun_decls).name

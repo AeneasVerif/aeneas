@@ -11,7 +11,6 @@ let mk_unit_value : typed_value =
   { value = Adt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
 let mk_typed_value (ty : ety) (value : value) : typed_value = { value; ty }
-
 let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
 
 (** Box a value *)
@@ -38,7 +37,6 @@ let borrows_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
-
       method! visit_borrow_content _env _ = raise Found
     end
   in
@@ -53,7 +51,6 @@ let inactivated_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
-
       method! visit_InactivatedMutBorrow _env _ = raise Found
     end
   in
@@ -68,7 +65,6 @@ let loans_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
-
       method! visit_loan_content _env _ = raise Found
     end
   in
@@ -84,9 +80,7 @@ let outer_loans_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
-
       method! visit_loan_content _env _ = raise Found
-
       method! visit_borrow_content _ _ = ()
     end
   in

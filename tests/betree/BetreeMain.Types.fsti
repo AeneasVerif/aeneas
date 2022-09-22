@@ -24,19 +24,19 @@ type betree_message_t =
 (** [betree_main::betree::Leaf] *)
 type betree_leaf_t = { betree_leaf_id : u64; betree_leaf_size : u64; }
 
+(** [betree_main::betree::Node] *)
+type betree_node_t =
+| BetreeNodeInternal : betree_internal_t -> betree_node_t
+| BetreeNodeLeaf : betree_leaf_t -> betree_node_t
+
 (** [betree_main::betree::Internal] *)
-type betree_internal_t =
+and betree_internal_t =
 {
   betree_internal_id : u64;
   betree_internal_pivot : u64;
   betree_internal_left : betree_node_t;
   betree_internal_right : betree_node_t;
 }
-
-(** [betree_main::betree::Node] *)
-and betree_node_t =
-| BetreeNodeInternal : betree_internal_t -> betree_node_t
-| BetreeNodeLeaf : betree_leaf_t -> betree_node_t
 
 (** [betree_main::betree::Params] *)
 type betree_params_t =
@@ -54,6 +54,10 @@ type betree_be_tree_t =
   betree_be_tree_node_id_cnt : betree_node_id_counter_t;
   betree_be_tree_root : betree_node_t;
 }
+
+(** [core::num::u64::{9}::MAX] *)
+let core_num_u64_max_body : result u64 = Return 18446744073709551615
+let core_num_u64_max_c : u64 = eval_global core_num_u64_max_body
 
 (** The state type used in the state-error monad *)
 val state : Type0

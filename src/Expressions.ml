@@ -72,30 +72,10 @@ let all_binops =
     Shr;
   ]
 
-(** Constant value for an operand
-
-    It is a bit annoying, but rustc treats some ADT and tuple instances as
-    constants when generating MIR:
-    - an enumeration with one variant and no fields is a constant.
-    - a structure with no field is a constant.
-    - sometimes, Rust stores the initialization of an ADT as a constant
-      (if all the fields are constant) rather than as an aggregated value
-
-    For our translation, we use the following enumeration to encode those
-    special cases in assignments. They are converted to "normal" values
-    when evaluating the assignment (which is why we don't put them in the
-    [ConstantValue] enumeration).
- *)
-type operand_constant_value =
-  | ConstantValue of constant_value
-  | ConstantAdt of VariantId.id option * operand_constant_value list
-[@@deriving show]
-
-(* TODO: symplify the operand constant values *)
 type operand =
   | Copy of place
   | Move of place
-  | Constant of ety * operand_constant_value
+  | Constant of ety * constant_value
 [@@deriving show]
 
 (** An aggregated ADT.

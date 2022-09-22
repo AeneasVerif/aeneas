@@ -436,7 +436,7 @@ let give_back_symbolic_value (_config : C.config)
   assert (sv.sv_id <> nsv.sv_id);
   (match nsv.sv_kind with
   | V.SynthInputGivenBack | V.SynthRetGivenBack | V.FunCallGivenBack -> ()
-  | V.FunCallRet | V.SynthInput -> failwith "Unrechable");
+  | V.FunCallRet | V.SynthInput | V.Global -> failwith "Unrechable");
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)

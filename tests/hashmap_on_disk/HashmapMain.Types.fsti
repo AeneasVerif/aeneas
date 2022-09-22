@@ -19,6 +19,10 @@ type hashmap_hash_map_t (t : Type0) =
   hashmap_hash_map_slots : vec (hashmap_list_t t);
 }
 
+(** [core::num::u32::{8}::MAX] *)
+let core_num_u32_max_body : result u32 = Return 4294967295
+let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
+
 (** The state type used in the state-error monad *)
 val state : Type0
 

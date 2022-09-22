@@ -1,12 +1,8 @@
 open Identifiers
 open Names
-
 module TypeVarId = IdGen ()
-
 module TypeDeclId = IdGen ()
-
 module VariantId = IdGen ()
-
 module FieldId = IdGen ()
 
 module RegionVarId = IdGen ()
@@ -24,7 +20,6 @@ type ('id, 'name) indexed_var = {
 [@@deriving show]
 
 type type_var = (TypeVarId.id, string) indexed_var [@@deriving show]
-
 type region_var = (RegionVarId.id, string option) indexed_var [@@deriving show]
 
 (** A region.
@@ -82,13 +77,10 @@ type integer_type =
 [@@deriving show, ord]
 
 let all_signed_int_types = [ Isize; I8; I16; I32; I64; I128 ]
-
 let all_unsigned_int_types = [ Usize; U8; U16; U32; U64; U128 ]
-
 let all_int_types = List.append all_signed_int_types all_unsigned_int_types
 
 type ref_kind = Mut | Shared [@@deriving show, ord]
-
 type assumed_ty = Box | Vec | Option [@@deriving show, ord]
 
 (** The variant id for `Option::None` *)
@@ -109,15 +101,10 @@ type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
-
     method visit_'r : 'env -> 'r -> unit = fun _ _ -> ()
-
     method visit_id : 'env -> TypeVarId.id -> unit = fun _ _ -> ()
-
     method visit_type_id : 'env -> type_id -> unit = fun _ _ -> ()
-
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
-
     method visit_ref_kind : 'env -> ref_kind -> unit = fun _ _ -> ()
   end
 
@@ -125,11 +112,8 @@ class ['self] iter_ty_base =
 class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
-
     method visit_'r : 'env -> 'r -> 'r = fun _ r -> r
-
     method visit_id : 'env -> TypeVarId.id -> TypeVarId.id = fun _ id -> id
-
     method visit_type_id : 'env -> type_id -> type_id = fun _ id -> id
 
     method visit_integer_type : 'env -> integer_type -> integer_type =
@@ -196,7 +180,6 @@ type ety = erased_region ty [@@deriving show, ord]
  *)
 
 type field = { field_name : string option; field_ty : sty } [@@deriving show]
-
 type variant = { variant_name : string; fields : field list } [@@deriving show]
 
 type type_decl_kind =
