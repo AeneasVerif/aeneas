@@ -26,10 +26,9 @@ type fun_info = {
 type modules_funs_info = fun_info FunDeclId.Map.t
 (** Various information about a module's functions *)
 
-let analyze_module (m : llbc_module)
-    (funs_map : fun_decl FunDeclId.Map.t)
-    (globals_map : global_decl GlobalDeclId.Map.t)
-    (use_state : bool) : modules_funs_info =
+let analyze_module (m : llbc_module) (funs_map : fun_decl FunDeclId.Map.t)
+    (globals_map : global_decl GlobalDeclId.Map.t) (use_state : bool) :
+    modules_funs_info =
   let infos = ref FunDeclId.Map.empty in
 
   let register_info (id : FunDeclId.id) (info : fun_info) : unit =
@@ -56,21 +55,19 @@ let analyze_module (m : llbc_module)
       let obj =
         object (self)
           inherit [_] iter_statement as super
-
-          method may_fail b =
-            can_fail := !can_fail || b
+          method may_fail b = can_fail := !can_fail || b
 
           method! visit_Assert env a =
             self#may_fail true;
             super#visit_Assert env a
 
-            method! visit_rvalue _env rv =
-              match rv with
-              | Use _ | Ref _ | Discriminant _ | Aggregate _ -> ()
-              | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
-              | BinaryOp (bop, _, _) ->
-                  can_fail := EU.binop_can_fail bop || !can_fail
-    
+          method! visit_rvalue _env rv =
+            match rv with
+            | Use _ | Ref _ | Discriminant _ | Aggregate _ -> ()
+            | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
+            | BinaryOp (bop, _, _) ->
+                can_fail := EU.binop_can_fail bop || !can_fail
+
           method! visit_Call env call =
             (match call.func with
             | Regular id ->
@@ -95,20 +92,25 @@ let analyze_module (m : llbc_module)
         end
       in
       (* Sanity check: global bodies don't contain stateful calls *)
-      assert (not f.is_global_body || not !stateful);
-      (match f.body with
+      assert ((not f.is_global_body) || not !stateful);
+      match f.body with
       | None ->
-          (* Opaque function *)
+          (* Opaque function: we consider they fail by default *)
           obj#may_fail true;
-          stateful := use_state
-      | Some body -> obj#visit_statement () body.body)
-      (* We ignore on purpose functions that cannot fail: the result of the analysis
-       * is not used yet to adjust the translation so that the functions which
-       * syntactically can't fail don't use an error monad. *)
+          stateful := (not f.is_global_body) && use_state
+      | Some body -> obj#visit_statement () body.body
     in
     List.iter visit_fun d;
-    (* Non-failing functions are not handled yet. *)
-    can_fail := true;
+    (* We need to know if the declaration group contains a global - note that
+     * groups containing globals contain exactly one declaration *)
+    let is_global_body = List.exists (fun f -> f.is_global_body) d in
+    assert ((not is_global_body) || List.length d == 1);
+    (* We ignore on purpose functions that cannot fail and consider they *can*
+     * fail: the result of the analysis is not used yet to adjust the translation
+     * so that the functions which syntactically can't fail don't use an error monad.
+     * However, we do keep the result of the analysis for global bodies.
+     * *)
+    can_fail := (not is_global_body) || !can_fail;
     { can_fail = !can_fail; stateful = !stateful; divergent = !divergent }
   in
 
