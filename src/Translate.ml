@@ -655,7 +655,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
             m.declarations))
   in
 
-  (* Register unique names for all the top-level types, functions and globals.
+  (* Register unique names for all the top-level types, globals and functions.
    * Note that the order in which we generate the names doesn't matter:
    * we just need to generate a mapping from identifier to name, and make
    * sure there are no name clashes. *)
