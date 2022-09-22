@@ -1551,7 +1551,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
 
     will be translated to:
     `let x_body : result u32 = Return 3`
-    `let x_c : int = eval_global x_body`
+    `let x_c : u32 = eval_global x_body`
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : A.global_decl) (body : fun_decl) (interface : bool) : unit =
