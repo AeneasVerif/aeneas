@@ -100,7 +100,7 @@ let rty_regions_intersect (ty : rty) (regions : RegionId.Set.t) : bool =
   let ty_regions = rty_regions ty in
   not (RegionId.Set.disjoint ty_regions regions)
 
-(** Convert an [ety], containing no region variables, to an [rty] or [sty].
+(** Convert an [ety], containing no region variables, to an [rty] or an [sty].
 
     In practice, it is the identity.
  *)
