@@ -94,6 +94,7 @@ let analyze_module (m : llbc_module)
             super#visit_Loop env loop
         end
       in
+      (* Sanity check: global bodies don't contain stateful calls *)
       assert (not f.is_global_body || not !stateful);
       (match f.body with
       | None ->
