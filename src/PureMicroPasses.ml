@@ -586,48 +586,47 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
         match (monadic, lv.value) with
         | false, PatVar (lv_var, _) ->
             (* We can filter if: *)
-            let filter = false in
-            (* 1. Either:
-             *   - the left variable is unnamed or [inline_named] is true
-             *   - the right-expression is a variable
-             *)
-            let filter =
+            (* 1. the left variable is unnamed or [inline_named] is true *)
+            let filter_left =
               match (inline_named, lv_var.basename) with
-              | true, _ | _, None -> is_var re
-              | _ -> filter
+              | true, _ | _, None -> true
+              | _ -> false
             in
-            (* 2. Or:
-             *   - the left variable is an unnamed variable
-             *   - the right-expression is a value or a primitive function call
-             *)
+            (* And either:
+             * 2.1 the right-expression is a variable or a global *)
+            let var_or_global = is_var re || is_global re in
+            (* Or:
+             * 2.2 the right-expression is a constant value, an ADT value,
+             *     a projection or a primitive function call *and* the flag
+             *     `inline_pure` is set *)
+            let pure_re =
+              is_const re
+              ||
+              let app, _ = destruct_apps re in
+              match app.e with
+              | Qualif qualif -> (
+                  match qualif.id with
+                  | AdtCons _ -> true (* ADT constructor *)
+                  | Proj _ -> true (* Projector *)
+                  | Func (Unop _ | Binop _) ->
+                      true (* primitive function call *)
+                  | Func (Regular _) -> false (* non-primitive function call *)
+                  | _ -> false)
+              | _ -> false
+            in
             let filter =
-              if inline_pure then
-                let app, _ = destruct_apps re in
-                match app.e with
-                | Const _ | Var _ -> true (* constant or variable *)
-                | Qualif qualif -> (
-                    match qualif.id with
-                    | AdtCons _ | Proj _ -> true (* ADT constructor *)
-                    | Func (Unop _ | Binop _) ->
-                        true (* primitive function call *)
-                    | Func (Regular _) ->
-                        false (* non-primitive function call *)
-                    | Global _ ->
-                        true (* Global constant or static *)
-                  )
-                | _ -> filter
-              else false
+              filter_left && (var_or_global || (inline_pure && pure_re))
             in
 
-            (* Update the environment and continue the exploration *)
+            (* Update the rhs (we may perform substitutions inside, and it is
+             * better to do them *before* we inline it *)
             let re = self#visit_texpression env re in
-            (* TODO: once rvalues and expressions are merged, filter the
-             * let-binding (note that for now we leave it, expect it to
-             * become useless, and wait for a subsequent pass to filter it) *)
-            (* let env = add_subst lv_var.id re env in *)
+            (* Update the substitution environment *)
             let env = if filter then VarId.Map.add lv_var.id re env else env in
+            (* Update the next expression *)
             let e = self#visit_texpression env e in
-            Let (monadic, lv, re, e)
+            (* Reconstruct the `let`, only if the binding is not filtered *)
+            if filter then e.e else Let (monadic, lv, re, e)
         | _ -> super#visit_Let env monadic lv re e
       (** Visit the let-bindings to filter the useless ones (and update
           the substitution map while doing so *)

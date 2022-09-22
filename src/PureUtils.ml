@@ -173,6 +173,12 @@ let is_var (e : texpression) : bool =
 let as_var (e : texpression) : VarId.id =
   match e.e with Var v -> v | _ -> raise (Failure "Unreachable")
 
+let is_global (e : texpression) : bool =
+  match e.e with Qualif { id = Global _; _ } -> true | _ -> false
+
+let is_const (e : texpression) : bool =
+  match e.e with Const _ -> true | _ -> false
+
 (** Remove the external occurrences of [Meta] *)
 let rec unmeta (e : texpression) : texpression =
   match e.e with Meta (_, e) -> unmeta e | _ -> e
