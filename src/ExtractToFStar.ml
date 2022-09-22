@@ -1549,7 +1549,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
     For example in Rust,
     `static X: u32 = 3;`
 
-    will be translated to
+    will be translated to:
     `let x_body : result int = Return 3`
     `let x_c : int = eval_global x_body`
  *)
