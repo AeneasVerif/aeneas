@@ -66,7 +66,7 @@ type expression =
   | FunCall of call * expression
   | EndAbstraction of V.abs * expression
   | EvalGlobal of A.GlobalDeclId.id * V.symbolic_value * expression
-      (** A fresh symbolic value for the global *)
+      (** Evaluate a global to a fresh symbolic value *)
   | Expansion of mplace option * V.symbolic_value * expansion
       (** Expansion of a symbolic value.
     
