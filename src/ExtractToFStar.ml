@@ -1543,7 +1543,6 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ()
 
 (** Extract a global declaration.
-    This has similarity with the function extraction above (without parameters).
     However, generate its body separately from its declaration to extract the result value.
 
     For example in Rust,
