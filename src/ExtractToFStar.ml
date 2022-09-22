@@ -1543,7 +1543,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ()
 
 (** Extract a global declaration.
-    However, generate its body separately from its declaration to extract the result value.
+    We generate the body which computes the global value separately from the value declaration itself.
 
     For example in Rust,
     `static X: u32 = 3;`
