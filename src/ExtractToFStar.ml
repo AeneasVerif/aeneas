@@ -314,6 +314,8 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     String.concat "_" fname
   in
   let global_name (name : global_name) : string =
+    (* Converting to snake case also lowercases the letters (in Rust, global
+     * names are written in capital letters). *)
     let parts = List.map to_snake_case (get_name name) in
     String.concat "_" parts
   in
@@ -326,7 +328,8 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fname ^ suffix
   in
 
-  let decreases_clause_name (_fid : A.FunDeclId.id) (fname : fun_name) : string =
+  let decreases_clause_name (_fid : A.FunDeclId.id) (fname : fun_name) : string
+      =
     let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
     let suffix = "_decreases" in
@@ -795,8 +798,8 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
   ctx
 
 (** Simply add the global name to the context. *)
-let extract_global_decl_register_names (ctx : extraction_ctx) (def : A.global_decl)
-    : extraction_ctx =
+let extract_global_decl_register_names (ctx : extraction_ctx)
+    (def : A.global_decl) : extraction_ctx =
   ctx_add_global_decl_body def ctx
 
 (** The following function factorizes the extraction of ADT values.
@@ -851,7 +854,7 @@ let extract_adt_g_value
 
 (* Extract globals in the same way as variables *)
 let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
-  	(id : A.GlobalDeclId.id) : unit =
+    (id : A.GlobalDeclId.id) : unit =
   F.pp_print_string fmt (ctx_get_global id ctx)
 
 (** [inside]: see [extract_ty].
@@ -921,13 +924,11 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       match qualif.id with
       | Func fun_id ->
           extract_function_call ctx fmt inside fun_id qualif.type_args args
-      | Global global_id ->
-          extract_global ctx fmt global_id
+      | Global global_id -> extract_global ctx fmt global_id
       | AdtCons adt_cons_id ->
           extract_adt_cons ctx fmt inside adt_cons_id qualif.type_args args
       | Proj proj ->
-          extract_field_projector ctx fmt inside app proj qualif.type_args args
-    )
+          extract_field_projector ctx fmt inside app proj qualif.type_args args)
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)
@@ -1493,9 +1494,8 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Extract a global declaration body of the shape "QUALIF NAME : TYPE = BODY" with a custom body extractor *)
 let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
-  (qualif : fun_decl_qualif) (name : string) (ty : ty)
-  (extract_body : (F.formatter -> unit) Option.t)
-    : unit =
+    (qualif : fun_decl_qualif) (name : string) (ty : ty)
+    (extract_body : (F.formatter -> unit) Option.t) : unit =
   let is_opaque = Option.is_none extract_body in
 
   (* Open the definition box (depth=0) *)
@@ -1505,7 +1505,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print "QUALIF NAME " *)
   F.pp_print_string fmt (fun_decl_qualif_keyword qualif ^ " " ^ name);
-  F.pp_print_space  fmt ();
+  F.pp_print_space fmt ();
 
   (* Open ": TYPE =" box (depth=2) *)
   F.pp_open_hvbox fmt 0;
@@ -1523,8 +1523,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
   if not is_opaque then (
     (* Print " =" *)
     F.pp_print_space fmt ();
-    F.pp_print_string fmt "=";
-  );
+    F.pp_print_string fmt "=");
   (* Close ": TYPE =" box (depth=2) *)
   F.pp_close_box fmt ();
   (* Close "QUALIF NAME : TYPE =" box (depth=1) *)
@@ -1537,8 +1536,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
     (* Print "BODY" *)
     (Option.get extract_body) fmt;
     (* Close "BODY" box (depth=1) *)
-    F.pp_close_box fmt ()
-  );
+    F.pp_close_box fmt ());
   (* Close the definition box (depth=0) *)
   F.pp_close_box fmt ()
 
@@ -1554,39 +1552,37 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : A.global_decl) (body : fun_decl) (interface : bool) : unit =
-  assert (body.is_global_body);
+  assert body.is_global_body;
   assert (Option.is_none body.back_id);
   assert (List.length body.signature.inputs = 0);
   assert (List.length body.signature.doutputs = 1);
   assert (List.length body.signature.type_params = 0);
 
   (* Add a break then the name of the corresponding LLBC declaration *)
-  F.pp_print_break  fmt 0 0;
-  F.pp_print_string fmt ("(** [" ^ Print.global_name_to_string global.name ^ "] *)");
-  F.pp_print_space  fmt ();
+  F.pp_print_break fmt 0 0;
+  F.pp_print_string fmt
+    ("(** [" ^ Print.global_name_to_string global.name ^ "] *)");
+  F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global global.def_id ctx in
   let body_name = ctx_get_function (Regular global.body_id) None ctx in
 
   let decl_ty, body_ty =
     let ty = body.signature.output in
-    if body.signature.info.effect_info.can_fail
-      then (unwrap_result_ty ty, ty)
-      else (ty, mk_result_ty ty)
+    if body.signature.info.effect_info.can_fail then (unwrap_result_ty ty, ty)
+    else (ty, mk_result_ty ty)
   in
   match body.body with
   | None ->
       let qualif = if interface then Val else AssumeVal in
       extract_global_decl_body ctx fmt qualif decl_name decl_ty None
   | Some body ->
-      extract_global_decl_body ctx fmt Let body_name body_ty (Some (fun fmt ->
-        extract_texpression ctx fmt false body.body
-      ));
+      extract_global_decl_body ctx fmt Let body_name body_ty
+        (Some (fun fmt -> extract_texpression ctx fmt false body.body));
       F.pp_print_break fmt 0 0;
-      extract_global_decl_body ctx fmt Let decl_name decl_ty (Some (fun fmt ->
-        F.pp_print_string fmt ("eval_global " ^ body_name)
-      ));
-  F.pp_print_break fmt 0 0
+      extract_global_decl_body ctx fmt Let decl_name decl_ty
+        (Some (fun fmt -> F.pp_print_string fmt ("eval_global " ^ body_name)));
+      F.pp_print_break fmt 0 0
 
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).

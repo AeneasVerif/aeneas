@@ -394,7 +394,7 @@ let constant_value_of_json (js : json) : (V.constant_value, string) result =
         let* v = string_of_json v in
         Ok (V.String v)
     | _ -> Error "")
-  
+
 let operand_of_json (js : json) : (E.operand, string) result =
   combine_error_msgs js "operand_of_json"
     (match js with
@@ -599,10 +599,8 @@ and switch_targets_of_json (js : json) : (A.switch_targets, string) result =
     | `Assoc [ ("SwitchInt", `List [ int_ty; tgts; otherwise ]) ] ->
         let* int_ty = integer_type_of_json int_ty in
         let* tgts =
-            list_of_json (
-              pair_of_json
-              (list_of_json scalar_value_of_json)
-              statement_of_json)
+          list_of_json
+            (pair_of_json (list_of_json scalar_value_of_json) statement_of_json)
             tgts
         in
         let* otherwise = statement_of_json otherwise in
@@ -633,47 +631,47 @@ let fun_decl_of_json (js : json) : (A.fun_decl, string) result =
         let* name = fun_name_of_json name in
         let* signature = fun_sig_of_json signature in
         let* body = option_of_json fun_body_of_json body in
-        Ok { A.def_id; name; signature; body; is_global_body = false; }
+        Ok { A.def_id; name; signature; body; is_global_body = false }
     | _ -> Error "")
 
 (* Strict type for the number of function declarations (see [global_to_fun_id] below) *)
-type global_id_converter = { fun_count : int }
-[@@deriving show]
+type global_id_converter = { fun_count : int } [@@deriving show]
 
 (** Converts a global id to its corresponding function id.
     To do so, it adds the global id to the number of function declarations :
-    We have the bijection `global_id <=> fun_id + fun_id_count`.
+    We have the bijection `global_fun_id <=> global_id + fun_id_count`.
 *)
-let global_to_fun_id (conv : global_id_converter) (gid : A.GlobalDeclId.id) : A.FunDeclId.id =
-  A.FunDeclId.of_int ((A.GlobalDeclId.to_int gid) + conv.fun_count)
+let global_to_fun_id (conv : global_id_converter) (gid : A.GlobalDeclId.id) :
+    A.FunDeclId.id =
+  A.FunDeclId.of_int (A.GlobalDeclId.to_int gid + conv.fun_count)
 
 (* Converts a global declaration to a function declaration.
  *)
-let global_decl_of_json (js : json) (gid_conv : global_id_converter) : (A.global_decl * A.fun_decl, string) result =
+let global_decl_of_json (js : json) (gid_conv : global_id_converter) :
+    (A.global_decl * A.fun_decl, string) result =
   combine_error_msgs js "global_decl_of_json"
     (match js with
-    | `Assoc
-        [
-          ("def_id", def_id);
-          ("name", name);
-          ("ty", ty);
-          ("body", body);
-        ] ->
+    | `Assoc [ ("def_id", def_id); ("name", name); ("ty", ty); ("body", body) ]
+      ->
         let* global_id = A.GlobalDeclId.id_of_json def_id in
         let fun_id = global_to_fun_id gid_conv global_id in
         let* name = fun_name_of_json name in
         let* ty = ety_of_json ty in
         let* body = option_of_json fun_body_of_json body in
-        let signature : A.fun_sig = {
-          region_params = [];
-          num_early_bound_regions = 0;
-          regions_hierarchy = [];
-          type_params = [];
-          inputs = [];
-          output = TU.ety_no_regions_to_sty ty;
-        } in
-        Ok ({ A.def_id = global_id; body_id = fun_id; name; ty; },
-            { A.def_id = fun_id; name; signature; body; is_global_body = true; })
+        let signature : A.fun_sig =
+          {
+            region_params = [];
+            num_early_bound_regions = 0;
+            regions_hierarchy = [];
+            type_params = [];
+            inputs = [];
+            output = TU.ety_no_regions_to_sty ty;
+          }
+        in
+        Ok
+          ( { A.def_id = global_id; body_id = fun_id; name; ty },
+            { A.def_id = fun_id; name; signature; body; is_global_body = true }
+          )
     | _ -> Error "")
 
 let g_declaration_group_of_json (id_of_json : json -> ('id, string) result)
@@ -701,13 +699,12 @@ let fun_declaration_group_of_json (js : json) :
 let global_declaration_group_of_json (js : json) :
     (A.GlobalDeclId.id, string) result =
   combine_error_msgs js "global_declaration_group_of_json"
-  (match js with
-  | `Assoc [ ("NonRec", `List [ id ]) ] ->
-      let* id = A.GlobalDeclId.id_of_json id in
-      Ok (id)
-  | `Assoc [ ("Rec", `List [ _ ]) ] ->
-      Error "got mutually dependent globals"
-  | _ -> Error "")
+    (match js with
+    | `Assoc [ ("NonRec", `List [ id ]) ] ->
+        let* id = A.GlobalDeclId.id_of_json id in
+        Ok id
+    | `Assoc [ ("Rec", `List [ _ ]) ] -> Error "got mutually dependent globals"
+    | _ -> Error "")
 
 let declaration_group_of_json (js : json) : (M.declaration_group, string) result
     =
@@ -724,11 +721,11 @@ let declaration_group_of_json (js : json) : (M.declaration_group, string) result
         Ok (M.Global id)
     | _ -> Error "")
 
-let length_of_json_list (js: json) : (int, string) result =
+let length_of_json_list (js : json) : (int, string) result =
   combine_error_msgs js "get_json_list_len"
     (match js with
-      | `List jsl -> Ok (List.length jsl)
-      | _ -> Error ("not a list: " ^ show js))
+    | `List jsl -> Ok (List.length jsl)
+    | _ -> Error ("not a list: " ^ show js))
 
 let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
   combine_error_msgs js "llbc_module_of_json"
@@ -741,18 +738,30 @@ let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
           ("functions", functions);
           ("globals", globals);
         ] ->
+        (* We first deserialize the declaration groups (which simply contain ids)
+         * and all the declarations *butù* the globals *)
         let* name = string_of_json name in
-        let* declarations = list_of_json declaration_group_of_json declarations in
+        let* declarations =
+          list_of_json declaration_group_of_json declarations
+        in
         let* types = list_of_json type_decl_of_json types in
         let* functions = list_of_json fun_decl_of_json functions in
+        (* When deserializing the globals, we split the global declarations
+         * between the globals themselves and their bodies, which are simply
+         * functions with no arguments. We add the global bodies to the list
+         * of function declarations: the (fresh) ids we use for those bodies
+         * are simply given by: `num_functions + global_id` *)
         let gid_conv = { fun_count = List.length functions } in
-        let* globals = list_of_json (fun js -> global_decl_of_json js gid_conv) globals in
+        let* globals =
+          list_of_json (fun js -> global_decl_of_json js gid_conv) globals
+        in
         let globals, global_bodies = List.split globals in
-        Ok {
-          M.name;
-          declarations;
-          types;
-          functions = functions @ global_bodies;
-          globals;
-        }
+        Ok
+          {
+            M.name;
+            declarations;
+            types;
+            functions = functions @ global_bodies;
+            globals;
+          }
     | _ -> Error "")

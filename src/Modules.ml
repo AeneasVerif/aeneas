@@ -7,10 +7,9 @@ type 'id g_declaration_group = NonRec of 'id | Rec of 'id list
 type type_declaration_group = TypeDeclId.id g_declaration_group
 [@@deriving show]
 
-type fun_declaration_group = FunDeclId.id g_declaration_group
-[@@deriving show]
+type fun_declaration_group = FunDeclId.id g_declaration_group [@@deriving show]
 
-(** Module declaration. Globals cannot be mutually dependent. *)
+(** Module declaration. Globals cannot be mutually recursive. *)
 type declaration_group =
   | Type of type_declaration_group
   | Fun of fun_declaration_group
@@ -27,7 +26,9 @@ type llbc_module = {
 (** LLBC module - TODO: rename to crate *)
 
 let compute_defs_maps (m : llbc_module) :
-    type_decl TypeDeclId.Map.t * fun_decl FunDeclId.Map.t * global_decl GlobalDeclId.Map.t =
+    type_decl TypeDeclId.Map.t
+    * fun_decl FunDeclId.Map.t
+    * global_decl GlobalDeclId.Map.t =
   let types_map =
     List.fold_left
       (fun m (def : type_decl) -> TypeDeclId.Map.add def.def_id def m)
@@ -45,9 +46,11 @@ let compute_defs_maps (m : llbc_module) :
   in
   (types_map, funs_map, globals_map)
 
-(** Split a module's declarations between types, globals and functions *)
+(** Split a module's declarations between types, functions and globals *)
 let split_declarations (decls : declaration_group list) :
-    type_declaration_group list * fun_declaration_group list * GlobalDeclId.id list =
+    type_declaration_group list
+    * fun_declaration_group list
+    * GlobalDeclId.id list =
   let rec split decls =
     match decls with
     | [] -> ([], [], [])
@@ -56,8 +59,7 @@ let split_declarations (decls : declaration_group list) :
         match d with
         | Type decl -> (decl :: types, funs, globals)
         | Fun decl -> (types, decl :: funs, globals)
-        | Global decl -> (types, funs, decl :: globals)
-      )
+        | Global decl -> (types, funs, decl :: globals))
   in
   split decls
 
@@ -66,7 +68,7 @@ let split_declarations (decls : declaration_group list) :
  *)
 let split_declarations_to_group_maps (decls : declaration_group list) :
     type_declaration_group TypeDeclId.Map.t
-    * fun_declaration_group FunDeclId.Map.t 
+    * fun_declaration_group FunDeclId.Map.t
     * GlobalDeclId.Set.t =
   let module G (M : Map.S) = struct
     let add_group (map : M.key g_declaration_group M.t)

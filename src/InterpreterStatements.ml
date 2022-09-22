@@ -831,8 +831,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
 
         (* Compose and apply *)
         comp cf_eval_rvalue cf_assign cf ctx
-    | A.AssignGlobal { dst; global } ->
-        eval_global config dst global cf ctx
+    | A.AssignGlobal { dst; global } -> eval_global config dst global cf ctx
     | A.FakeRead p ->
         let expand_prim_copy = false in
         let cf_prepare cf =
@@ -910,20 +909,27 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
   (* Compose and apply *)
   comp cc cf_eval_st cf ctx
 
-and eval_global (config : C.config) (dest : V.VarId.id) (gid : LA.GlobalDeclId.id) : st_cm_fun =
+and eval_global (config : C.config) (dest : V.VarId.id)
+    (gid : LA.GlobalDeclId.id) : st_cm_fun =
  fun cf ctx ->
   let global = C.ctx_lookup_global_decl ctx gid in
   let place = { E.var_id = dest; projection = [] } in
   match config.mode with
   | ConcreteMode ->
-    (* Treat the global as a function without arguments to call *)
-    (eval_local_function_call_concrete config global.body_id [] [] [] place) cf ctx
+      (* Treat the evaluation of the global as a call to the global body (without arguments) *)
+      (eval_local_function_call_concrete config global.body_id [] [] [] place)
+        cf ctx
   | SymbolicMode ->
-    (* Treat the global as a fresh symbolic value *)
-    let sval = mk_fresh_symbolic_value V.Global (ety_no_regions_to_rty global.ty) in
-    let cc = assign_to_place config (mk_typed_value_from_symbolic_value sval) place in
-    let e = cc (cf Unit) ctx in
-    S.synthesize_global_eval gid sval e
+      (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
+       * defined as equal to the value of the global (see `S.synthesize_global_eval`). *)
+      let sval =
+        mk_fresh_symbolic_value V.Global (ety_no_regions_to_rty global.ty)
+      in
+      let cc =
+        assign_to_place config (mk_typed_value_from_symbolic_value sval) place
+      in
+      let e = cc (cf Unit) ctx in
+      S.synthesize_global_eval gid sval e
 
 (** Evaluate a switch *)
 and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :

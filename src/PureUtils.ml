@@ -402,7 +402,7 @@ let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 let unwrap_result_ty (ty : ty) : ty =
   match ty with
   | Adt (Assumed Result, [ ty ]) -> ty
-  | _ -> failwith "not a result"
+  | _ -> failwith "not a result type"
 
 let mk_result_fail_texpression (ty : ty) : texpression =
   let type_args = [ ty ] in

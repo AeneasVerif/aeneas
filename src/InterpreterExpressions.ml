@@ -110,14 +110,13 @@ let access_rplace_reorganize (config : C.config) (expand_prim_copy : bool)
     ctx
 
 (** Convert an operand constant operand value to a typed value *)
-let constant_to_typed_value (ty : T.ety)
-    (cv : V.constant_value) : V.typed_value =
+let constant_to_typed_value (ty : T.ety) (cv : V.constant_value) : V.typed_value
+    =
   (* Check the type while converting - we actually need some information
-  * contained in the type *)
+     * contained in the type *)
   log#ldebug
     (lazy
-      ("constant_to_typed_value:" ^ "\n- cv: "
-      ^ PV.constant_value_to_string cv));
+      ("constant_to_typed_value:" ^ "\n- cv: " ^ PV.constant_value_to_string cv));
   match (ty, cv) with
   (* Scalar, boolean... *)
   | T.Bool, Bool v -> { V.value = V.Concrete (Bool v); ty }
@@ -128,10 +127,8 @@ let constant_to_typed_value (ty : T.ety)
       assert (int_ty = v.int_ty);
       assert (check_scalar_value_in_range v);
       { V.value = V.Concrete (V.Scalar v); ty }
-  (* Remaining cases (invalid) - listing as much as we can on purpose
-    (allows to catch errors at compilation if the definitions change) *)
-  | _, _ ->
-      failwith "Improperly typed constant value"
+  (* Remaining cases (invalid) *)
+  | _, _ -> failwith "Improperly typed constant value"
 
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
