@@ -10,6 +10,8 @@ module RegionGroupId = T.RegionGroupId
 module VariantId = T.VariantId
 module FieldId = T.FieldId
 module SymbolicValueId = V.SymbolicValueId
+module FunDeclId = A.FunDeclId
+module GlobalDeclId = A.GlobalDeclId
 
 module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward
@@ -302,7 +304,7 @@ type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
 
 type qualif_id =
   | Func of fun_id
-  | Global of A.GlobalDeclId.id
+  | Global of GlobalDeclId.id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
 [@@deriving show]
@@ -566,7 +568,7 @@ type fun_body = {
 }
 
 type fun_decl = {
-  def_id : A.FunDeclId.id;
+  def_id : FunDeclId.id;
   back_id : T.RegionGroupId.id option;
   basename : fun_name;
       (** The "base" name of the function.
