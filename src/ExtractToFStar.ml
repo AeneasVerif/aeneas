@@ -1491,7 +1491,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
-(** Extract a global definition of the shape "QUALIF NAME : TYPE = BODY" with a custom body extractor *)
+(** Extract a global declaration body of the shape "QUALIF NAME : TYPE = BODY" with a custom body extractor *)
 let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
   (qualif : fun_decl_qualif) (name : string) (ty : ty)
   (extract_body : (F.formatter -> unit) Option.t)
