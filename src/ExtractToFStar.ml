@@ -1550,7 +1550,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
     `static X: u32 = 3;`
 
     will be translated to:
-    `let x_body : result int = Return 3`
+    `let x_body : result u32 = Return 3`
     `let x_c : int = eval_global x_body`
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
