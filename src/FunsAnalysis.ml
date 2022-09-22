@@ -1,6 +1,6 @@
 (** Compute various information, including:
     - can a function fail (by having `Fail` in its body, or transitively
-      calling a function which can fail), false for globals
+      calling a function which can fail - this is false for globals)
     - can a function diverge (by being recursive, containing a loop or
       transitively calling a function which can diverge)
     - does a function perform stateful operations (i.e., do we need a state
