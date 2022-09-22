@@ -1547,7 +1547,7 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
     However, generate its body separately from its declaration to extract the result value.
 
     For example,
-    `let x = 3`
+    `static X: u32 = 3;`
 
     will be translated to
     `let x_body : result int = Return 3`
