@@ -856,7 +856,7 @@ let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** [inside]: see [extract_ty].
 
-    As an pattern can introduce new variables, we return an extraction context
+    As a pattern can introduce new variables, we return an extraction context
     updated with new bindings.
  *)
 let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
