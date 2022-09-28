@@ -3,6 +3,8 @@ ifeq (3.81,$(MAKE_VERSION))
     install make, then invoke gmake instead of make)
 endif
 
+
+
 all: build-test-verify
 
 CHARON_HOME = ../charon
@@ -27,9 +29,14 @@ SUBDIR :=
 .PHONY: build-test-verify
 build-test-verify: build test verify
 
+# Check the OCaml version
+.PHONY: check-ocaml
+check-ocaml:
+	bash check_ocaml
+
 # Build the project
 .PHONY: build
-build:
+build: check-ocaml
 	dune build src/main.exe
 
 # Test the project by translating test files to F*

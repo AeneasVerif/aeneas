@@ -1,0 +1,14 @@
+# This script checks the OCaml version
+
+OCAML_VERSION=`ocamlc -vnum`
+
+case $OCAML_VERSION in
+    4.12.*|4.13*)
+        # Ok
+        ;;
+    *)
+        # Not ok
+        echo "error: OCaml version ($OCAML_VERSION) is too old: need >= 4.12"
+        exit 1
+        ;;
+esac
