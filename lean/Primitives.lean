@@ -1,6 +1,7 @@
 inductive result (α : Type) where
   | ret : α -> result α
   | fail : result α 
+deriving Repr
 
 open result
 
@@ -56,17 +57,20 @@ def scalar_max (ty:scalar_ty) : Int :=
   | I32 => i32_max
   | U32 => u32_max
 
-/-- TODO: Add refinement on bounds for scalars -/
-def scalar (_ty:scalar_ty) : Type := Int
+@[simp]
+def fits (ty:scalar_ty) (x:Int) :=
+  scalar_min ty <= x && scalar_max ty >= x
+
+def scalar (ty:scalar_ty) : Type := { x : Int // fits ty x }
 
 instance : Coe (scalar ty) Int where
-  coe x := x
+  coe x := x.val
 
-instance : OfNat (scalar ty) n where
-  ofNat := Int.ofNat n
+instance (n:Nat) (p : fits ty n) : OfNat (scalar ty) n where
+  ofNat := ⟨ Int.ofNat n, p ⟩ 
 
 def mk_scalar (ty: scalar_ty) (x: Int) : result (scalar ty) :=
-  if scalar_min ty <= x && scalar_max ty >= x then ret x else fail
+  if h : fits ty x then ret ⟨ x, by apply h ⟩ else fail
 
 def scalar_add (x : scalar ty) (y : scalar ty) : result (scalar ty) :=
   mk_scalar ty (Int.add x y)
@@ -82,3 +86,6 @@ def choose_bck (b:Bool) (x : t) (y : t) (z : t) : result (t × t) :=
 def choose_test : result Unit := do
   let _x ← choose_fwd true 0 0
   ret ()
+
+#eval choose_fwd true 4 3
+#eval choose_fwd false 4 3
