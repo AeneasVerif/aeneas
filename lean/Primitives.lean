@@ -88,7 +88,7 @@ def scalar_max (ty:scalar_ty) : Int :=
   | U128 => u128_max
 
 abbrev fits (ty:scalar_ty) (x:Int) :=
-  scalar_min ty <= x && scalar_max ty >= x
+  scalar_min ty <= x && x <= scalar_max ty
 
 def scalar (ty:scalar_ty) : Type := { x : Int // fits ty x }
 
@@ -100,6 +100,14 @@ instance : Coe (scalar ty) Int where
     `if x = y then ...` when `x` and `y` are scalars -/
 instance : BEq (scalar ty) where
   beq x y := x.val == y.val
+
+/-- Lifting `<=` for scalars -/
+instance : LE (scalar ty) where
+  le x y := Int.le x.val y.val
+
+/-- Lifting `<` for scalars -/
+instance : LT (scalar ty) where
+  lt x y := Int.lt x.val y.val
 
 /-- In theory, the default argument := by simp should allow Lean to automatically
     synthesizing this argument during typeclass instance synthesis.
@@ -241,6 +249,52 @@ abbrev u16_mul := @scalar_mul U16
 abbrev u32_mul := @scalar_mul U32
 abbrev u64_mul := @scalar_mul U64
 abbrev u128_mul := @scalar_mul U128
+
+/-- A small theorem to simplify reasoning about integers -/
+@[simp] def le_ofNat (h : x <= y) : (Int.ofNat x <= Int.ofNat y) := by
+  simp [LE.le, Int.le]
+  simp [HSub.hSub, Sub.sub, Int.sub, HAdd.hAdd, Add.add, Int.add]
+  simp [Neg.neg, Int.neg, Int.subNatNat, Int.negOfNat]
+  cases x <;> simp
+  case zero => exact Int.NonNeg.mk _
+  case succ n =>
+    have h : Nat.succ n - y = 0 := by
+      apply Nat.sub_eq_zero_of_le
+      apply h
+    rw [h]
+    exact Int.NonNeg.mk _
+
+@[simp] def ofNat_lt (h : Int.ofNat x < Int.ofNat y) : x < y := by
+  -- There should be something in stdlib to prove that automatically
+  sorry
+  
+def vec (α : Type) : Type := { l : List α // List.length l <= 4294967295 }
+
+def vec_new : vec α := ⟨ [], by simp ⟩  
+
+def vec_len (v : vec α) : usize :=
+  ⟨ List.length v.val, by
+      simp [scalar_min, scalar_max]
+      apply And.intro <;> apply decide_eq_true
+      case left => exact Int.NonNeg.mk _
+      case right =>
+        apply le_ofNat
+        apply v.property
+     ⟩ 
+
+def vec_push_fwd (_ : vec α) (_ : α) : Unit := ()
+def vec_push_back (v : vec α) (x : α) : { res: result (vec α) //
+  match res with | fail => True | ret v' => List.length v'.val = List.length v.val + 1}
+  :=
+  if h : List.length v.val < usize_max then
+    ⟨ ret ⟨ List.concat v.val x, by 
+        rw [List.length_concat]
+        apply Nat.le_of_lt_succ
+        apply Nat.succ_lt_succ
+        apply ofNat_lt
+        apply h
+     ⟩, by simp ⟩ 
+  else ⟨ fail, by simp ⟩
 
 /-- Some tests -/
 
