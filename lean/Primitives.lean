@@ -150,7 +150,97 @@ def scalar_cast (tgt_ty : scalar_ty) (x : scalar src_ty)
   : result (scalar tgt_ty) :=
   mk_scalar tgt_ty x
 
+/-- The scalar types -/
+abbrev isize := scalar Isize
+abbrev i8 := scalar I8
+abbrev i16 := scalar I16
+abbrev i32 := scalar I32
+abbrev i64 := scalar I64
+abbrev i128 := scalar I128
+abbrev usize := scalar Usize
+abbrev u8 := scalar U8
+abbrev u16 := scalar U16
+abbrev u32 := scalar U32
+abbrev u64 := scalar U64
+abbrev u128 := scalar U128
 
+/-- Negation -/
+abbrev isize_neg := @scalar_neg Isize
+abbrev i8_neg := @scalar_neg I8
+abbrev i16_neg := @scalar_neg I16
+abbrev i32_neg := @scalar_neg I32
+abbrev i64_neg := @scalar_neg I64
+abbrev i128_neg := @scalar_neg I128
+
+/-- Division -/
+abbrev isize_div := @scalar_div Isize
+abbrev i8_div := @scalar_div I8
+abbrev i16_div := @scalar_div I16
+abbrev i32_div := @scalar_div I32
+abbrev i64_div := @scalar_div I64
+abbrev i128_div := @scalar_div I128
+abbrev usize_div := @scalar_div Usize
+abbrev u8_div := @scalar_div U8
+abbrev u16_div := @scalar_div U16
+abbrev u32_div := @scalar_div U32
+abbrev u64_div := @scalar_div U64
+abbrev u128_div := @scalar_div U128
+
+/-- Remainder -/
+abbrev isize_rem := @scalar_rem Isize
+abbrev i8_rem := @scalar_rem I8
+abbrev i16_rem := @scalar_rem I16
+abbrev i32_rem := @scalar_rem I32
+abbrev i64_rem := @scalar_rem I64
+abbrev i128_rem := @scalar_rem I128
+abbrev usize_rem := @scalar_rem Usize
+abbrev u8_rem := @scalar_rem U8
+abbrev u16_rem := @scalar_rem U16
+abbrev u32_rem := @scalar_rem U32
+abbrev u64_rem := @scalar_rem U64
+abbrev u128_rem := @scalar_rem U128
+
+/-- Addition -/
+abbrev isize_add := @scalar_add Isize
+abbrev i8_add := @scalar_add I8
+abbrev i16_add := @scalar_add I16
+abbrev i32_add := @scalar_add I32
+abbrev i64_add := @scalar_add I64
+abbrev i128_add := @scalar_add I128
+abbrev usize_add := @scalar_add Usize
+abbrev u8_add := @scalar_add U8
+abbrev u16_add := @scalar_add U16
+abbrev u32_add := @scalar_add U32
+abbrev u64_add := @scalar_add U64
+abbrev u128_add := @scalar_add U128
+
+/-- Substraction -/
+abbrev isize_sub := @scalar_sub Isize
+abbrev i8_sub := @scalar_sub I8
+abbrev i16_sub := @scalar_sub I16
+abbrev i32_sub := @scalar_sub I32
+abbrev i64_sub := @scalar_sub I64
+abbrev i128_sub := @scalar_sub I128
+abbrev usize_sub := @scalar_sub Usize
+abbrev u8_sub := @scalar_sub U8
+abbrev u16_sub := @scalar_sub U16
+abbrev u32_sub := @scalar_sub U32
+abbrev u64_sub := @scalar_sub U64
+abbrev u128_sub := @scalar_sub U128
+
+/-- Multiplication -/
+abbrev isize_mul := @scalar_mul Isize
+abbrev i8_mul := @scalar_mul I8
+abbrev i16_mul := @scalar_mul I16
+abbrev i32_mul := @scalar_mul I32
+abbrev i64_mul := @scalar_mul I64
+abbrev i128_mul := @scalar_mul I128
+abbrev usize_mul := @scalar_mul Usize
+abbrev u8_mul := @scalar_mul U8
+abbrev u16_mul := @scalar_mul U16
+abbrev u32_mul := @scalar_mul U32
+abbrev u64_mul := @scalar_mul U64
+abbrev u128_mul := @scalar_mul U128
 
 /-- Some tests -/
 
