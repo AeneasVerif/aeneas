@@ -44,7 +44,7 @@ type formatter = {
           - type name
           - field id
           - field name
-          
+
           Note that fields don't always have names, but we still need to
           generate some names if we want to extract the structures to records...
           We might want to extract such structures to tuples, later, but field
@@ -58,13 +58,13 @@ type formatter = {
        *)
   struct_constructor : name -> string;
       (** Structure constructors are used when constructing structure values.
-      
+
           For instance, in F*:
           ```
           type pair = { x : nat; y : nat }
           let p : pair = Mkpair 0 1
           ```
-          
+
           Inputs:
           - type name
        *)
@@ -97,7 +97,7 @@ type formatter = {
       (** Generates the name of the definition used to prove/reason about
           termination. The generated code uses this clause where needed,
           but its body must be defined by the user.
-      
+
           Inputs:
           - function id: this is especially useful to identify whether the
             function is an assumed function or a local function
@@ -105,7 +105,7 @@ type formatter = {
        *)
   var_basename : StringSet.t -> string option -> ty -> string;
       (** Generates a variable basename.
-      
+
           Inputs:
           - the set of names used in the context so far
           - the basename we got from the symbolic execution, if we have one
@@ -127,7 +127,7 @@ type formatter = {
        *)
   extract_constant_value : F.formatter -> bool -> constant_value -> unit;
       (** Format a constant value.
-      
+
           Inputs:
           - formatter
           - [inside]: if `true`, the value should be wrapped in parentheses
@@ -141,7 +141,7 @@ type formatter = {
     texpression ->
     unit;
       (** Format a unary operation
-      
+
           Inputs:
           - extraction context (see below)
           - formatter
@@ -160,7 +160,7 @@ type formatter = {
     texpression ->
     unit;
       (** Format a binary operation
-      
+
           Inputs:
           - extraction context (see below)
           - formatter
@@ -176,10 +176,10 @@ type formatter = {
     For instance, provided some information about a function (its basename,
     information about the region group, etc.) it should come up with an
     appropriate name for the forward/backward function.
-    
+
     It can of course apply many transformations, like changing to camel case/
     snake case, adding prefixes/suffixes, etc.
-    
+
     2. Format some specific terms, like constants.
  *)
 
@@ -197,7 +197,7 @@ type id =
   | StructId of type_id
       (** We use this when we manipulate the names of the structure
           constructors.
-          
+
           For instance, in F*:
           ```
           type pair = { x: nat; y : nat }
@@ -245,7 +245,7 @@ type names_map = {
 (** The names map stores the mappings from names to identifiers and vice-versa.
 
     We use it for lookups (during the translation) and to check for name clashes.
-    
+
     [id_to_string] is for debugging.
   *)
 
@@ -294,7 +294,7 @@ let names_map_add_assumed_function (id_to_string : id -> string)
 
     We do this in an inefficient manner (by testing all indices starting from
     0) but it shouldn't be a bottleneck.
-    
+
     Also note that at some point, we thought about trying to reuse names of
     variables which are not used anymore, like here:
     ```
@@ -303,7 +303,7 @@ let names_map_add_assumed_function (id_to_string : id -> string)
     let x0 = ... in // We could use the name "x" if `x` is not used below
     ...
     ```
-    
+
     However it is a good idea to keep things as they are for F*: as F* is
     designed for extrinsic proofs, a proof about a function follows this
     function's structure. The consequence is that we often end up
@@ -311,7 +311,7 @@ let names_map_add_assumed_function (id_to_string : id -> string)
     when calling lemmas) we often need to talk about the "past" (i.e.,
     previous values), it is very useful to generate code where all variable
     names are assigned at most once.
-    
+
     [append]: function to append an index to a string
  *)
 let basename_to_unique (names_set : StringSet.t)

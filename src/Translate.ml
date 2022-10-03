@@ -410,28 +410,22 @@ let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
  *)
 let extract_definitions (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) : unit =
-  (* Export the definition groups to the file, in the proper order *)
-  let export_type (qualif : ExtractToFStar.type_decl_qualif)
-      (id : Pure.TypeDeclId.id) : unit =
-    (* Retrive the declaration *)
-    let def = Pure.TypeDeclId.Map.find id ctx.trans_types in
-    (* Update the qualifier, if the type is opaque *)
-    let is_opaque, qualif =
-      match def.kind with
-      | Enum _ | Struct _ -> (false, qualif)
-      | Opaque ->
-          let qualif =
-            if config.interface then ExtractToFStar.TypeVal
-            else ExtractToFStar.AssumeType
-          in
-          (true, qualif)
-    in
-    (* Extract, if the config instructs to do so (depending on whether the type
-     * is opaque or not) *)
-    if
-      (is_opaque && config.extract_opaque)
-      || ((not is_opaque) && config.extract_transparent)
-    then ExtractToFStar.extract_type_decl ctx.extract_ctx fmt qualif def
+  (* Export a group of mutually-recursive type definitions. *)
+  let export_types (ids : Pure.TypeDeclId.id list) : unit =
+    (* Retrieve the declaration *)
+    let defs = List.map (fun id -> Pure.TypeDeclId.Map.find id ctx.trans_types) ids in
+    match defs with
+    | [ def ] when def.kind = Opaque ->
+        if config.extract_opaque then
+          if config.interface then
+            ExtractToFStar.extract_type_val ctx.extract_ctx fmt def
+          else
+            ExtractToFStar.extract_type_assume ctx.extract_ctx fmt def
+    | defs ->
+        (* No mixing of opaque definitions and non-opaque ones. *)
+        assert (List.for_all (fun def -> def.Pure.kind <> Opaque) defs);
+        if config.extract_transparent then
+          ExtractToFStar.extract_type_group ctx.extract_ctx fmt defs
   in
 
   (* Utility to check a function has a decrease clause *)
@@ -537,17 +531,11 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_decl (decl : M.declaration_group) : unit =
     match decl with
     | Type (NonRec id) ->
-        if config.extract_types then export_type ExtractToFStar.Type id
+        if config.extract_types then export_types [ id ]
     | Type (Rec ids) ->
         (* Rk.: we shouldn't have (mutually) recursive opaque types *)
         if config.extract_types then
-          List.iteri
-            (fun i id ->
-              let qualif =
-                if i = 0 then ExtractToFStar.Type else ExtractToFStar.And
-              in
-              export_type qualif id)
-            ids
+          export_types ids
     | Fun (NonRec id) ->
         (* Lookup *)
         let pure_fun = A.FunDeclId.Map.find id ctx.trans_funs in

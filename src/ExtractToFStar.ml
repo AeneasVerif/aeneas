@@ -673,8 +673,10 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     Note that all the names used for extraction should already have been
     registered.
  *)
-let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
-    (qualif : type_decl_qualif) (def : type_decl) : unit =
+
+(* Opens two boxes *)
+let extract_type_name (ctx : extraction_ctx) (fmt : F.formatter)
+    (qualif : string) (def : type_decl) : string * string list * extraction_ctx =
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.def_id ctx in
   (* Add the type params - note that we need those bindings only for the
@@ -691,15 +693,8 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let extract_body, qualif =
-    match qualif with
-    | Type -> (true, "type")
-    | And -> (true, "and")
-    | AssumeType -> (false, "assume type")
-    | TypeVal -> (false, "val")
-  in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
-  (* Print the type parameters *)
+  (* Print the type parameters: `(x y z: Type0)` *)
   if def.type_params <> [] then (
     F.pp_print_space fmt ();
     F.pp_print_string fmt "(";
@@ -712,29 +707,52 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
     F.pp_print_string fmt "Type0)");
-  (* Print the "=" if we extract the body*)
-  if extract_body then (
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt "=")
-  else (
-    (* Otherwise print ": Type0" *)
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt ":";
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt "Type0");
-  (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
+  def_name, type_params, ctx_body
+
+let extract_type_body (ctx_body : extraction_ctx) (fmt : F.formatter)
+    (def : type_decl) def_name type_params : unit =
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "=";
   F.pp_close_box fmt ();
-  (if extract_body then
-   match def.kind with
-   | Struct fields -> extract_type_decl_struct_body ctx_body fmt def fields
-   | Enum variants ->
-       extract_type_decl_enum_body ctx_body fmt def def_name type_params
-         variants
-   | Opaque -> raise (Failure "Unreachable"));
+  match def.kind with
+  | Struct fields -> extract_type_decl_struct_body ctx_body fmt def fields
+  | Enum variants ->
+      extract_type_decl_enum_body ctx_body fmt def def_name type_params
+        variants
+  | Opaque -> raise (Failure "Unreachable")
+
+let extract_type_no_body (fmt : F.formatter) : unit =
+  (* Otherwise print ": Type0" *)
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt ":";
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt "Type0";
+  (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
+  F.pp_close_box fmt ()
+
+let extract_type_end (fmt : F.formatter): unit =
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
+
+let extract_type_val (ctx : extraction_ctx) (fmt : F.formatter) (def : type_decl) : unit =
+  let _ = extract_type_name ctx fmt "val" def in
+  extract_type_no_body fmt;
+  extract_type_end fmt
+
+let extract_type_assume (ctx : extraction_ctx) (fmt : F.formatter) (def : type_decl) : unit =
+  let _ = extract_type_name ctx fmt "assume type" def in
+  extract_type_no_body fmt;
+  extract_type_end fmt
+
+let extract_type_group (ctx : extraction_ctx) (fmt : F.formatter) (defs : type_decl list) : unit =
+  List.iteri (fun i def ->
+    let qualif = if i = 0 then "type" else "and" in
+    let def_name, type_params, ctx_body = extract_type_name ctx fmt qualif def in
+    extract_type_body ctx_body fmt def def_name type_params;
+    extract_type_end fmt
+  ) defs
 
 (** Extract the state type declaration. *)
 let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
