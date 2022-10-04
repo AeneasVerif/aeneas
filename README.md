@@ -81,9 +81,9 @@ We have the following limitations, that we plan to address one by one:
 - **no concurrent execution**: long-term effort. We plan to address coarse-grained
   parallelism as a long-term goal.
 
-## Formalisation
+## Formalization
 
-The translation has been formalised and published at ICFP2022: [Aeneas: Rust
+The translation has been formalized and published at ICFP2022: [Aeneas: Rust
 verification by functional
 translation](https://dl.acm.org/doi/abs/10.1145/3547647)
 ([long version](https://arxiv.org/abs/2206.07185)).
