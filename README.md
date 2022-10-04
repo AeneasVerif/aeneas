@@ -46,8 +46,7 @@ The dependencies can then be installed with the following command:
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix
 ```
 
-When choosing the OCaml compiler version: we compiled Aeneas with version 4.12.1, but any
-recent version should work.
+We use **OCaml 4.12.1**.
 
 Finally, building the project simply requires to run `make` in the top directory.
 
@@ -81,3 +80,10 @@ We have the following limitations, that we plan to address one by one:
   is exploited to implement the synchronisation primitives).
 - **no concurrent execution**: long-term effort. We plan to address coarse-grained
   parallelism as a long-term goal.
+
+## Formalization
+
+The translation has been formalized and published at ICFP2022: [Aeneas: Rust
+verification by functional
+translation](https://dl.acm.org/doi/abs/10.1145/3547647)
+([long version](https://arxiv.org/abs/2206.07185)).
