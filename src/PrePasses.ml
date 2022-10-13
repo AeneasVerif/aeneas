@@ -7,7 +7,6 @@ module V = Values
 module E = Expressions
 module C = Contexts
 module A = LlbcAst
-module M = Modules
 module L = Logging
 
 let log = L.pre_passes_log
@@ -50,6 +49,6 @@ let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
   in
   { f with body }
 
-let apply_passes (m : M.llbc_module) : M.llbc_module =
+let apply_passes (m : Crates.llbc_crate) : Crates.llbc_crate =
   let functions = List.map filter_drop_assigns m.functions in
   { m with functions }

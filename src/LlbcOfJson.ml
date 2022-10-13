@@ -14,7 +14,6 @@ open OfJsonBasic
 module T = Types
 module V = Values
 module S = Scalars
-module M = Modules
 module E = Expressions
 module A = LlbcAst
 module TU = TypesUtils
@@ -680,24 +679,24 @@ let global_decl_of_json (js : json) (gid_conv : global_id_converter) :
     | _ -> Error "")
 
 let g_declaration_group_of_json (id_of_json : json -> ('id, string) result)
-    (js : json) : ('id M.g_declaration_group, string) result =
+    (js : json) : ('id Crates.g_declaration_group, string) result =
   combine_error_msgs js "g_declaration_group_of_json"
     (match js with
     | `Assoc [ ("NonRec", `List [ id ]) ] ->
         let* id = id_of_json id in
-        Ok (M.NonRec id)
+        Ok (Crates.NonRec id)
     | `Assoc [ ("Rec", `List [ ids ]) ] ->
         let* ids = list_of_json id_of_json ids in
-        Ok (M.Rec ids)
+        Ok (Crates.Rec ids)
     | _ -> Error "")
 
 let type_declaration_group_of_json (js : json) :
-    (M.type_declaration_group, string) result =
+    (Crates.type_declaration_group, string) result =
   combine_error_msgs js "type_declaration_group_of_json"
     (g_declaration_group_of_json T.TypeDeclId.id_of_json js)
 
 let fun_declaration_group_of_json (js : json) :
-    (M.fun_declaration_group, string) result =
+    (Crates.fun_declaration_group, string) result =
   combine_error_msgs js "fun_declaration_group_of_json"
     (g_declaration_group_of_json A.FunDeclId.id_of_json js)
 
@@ -711,19 +710,19 @@ let global_declaration_group_of_json (js : json) :
     | `Assoc [ ("Rec", `List [ _ ]) ] -> Error "got mutually dependent globals"
     | _ -> Error "")
 
-let declaration_group_of_json (js : json) : (M.declaration_group, string) result
-    =
+let declaration_group_of_json (js : json) :
+    (Crates.declaration_group, string) result =
   combine_error_msgs js "declaration_of_json"
     (match js with
     | `Assoc [ ("Type", `List [ decl ]) ] ->
         let* decl = type_declaration_group_of_json decl in
-        Ok (M.Type decl)
+        Ok (Crates.Type decl)
     | `Assoc [ ("Fun", `List [ decl ]) ] ->
         let* decl = fun_declaration_group_of_json decl in
-        Ok (M.Fun decl)
+        Ok (Crates.Fun decl)
     | `Assoc [ ("Global", `List [ decl ]) ] ->
         let* id = global_declaration_group_of_json decl in
-        Ok (M.Global id)
+        Ok (Crates.Global id)
     | _ -> Error "")
 
 let length_of_json_list (js : json) : (int, string) result =
@@ -732,8 +731,8 @@ let length_of_json_list (js : json) : (int, string) result =
     | `List jsl -> Ok (List.length jsl)
     | _ -> Error ("not a list: " ^ show js))
 
-let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
-  combine_error_msgs js "llbc_module_of_json"
+let llbc_crate_of_json (js : json) : (Crates.llbc_crate, string) result =
+  combine_error_msgs js "llbc_crate_of_json"
     (match js with
     | `Assoc
         [
@@ -763,7 +762,7 @@ let llbc_module_of_json (js : json) : (M.llbc_module, string) result =
         let globals, global_bodies = List.split globals in
         Ok
           {
-            M.name;
+            Crates.name;
             declarations;
             types;
             functions = functions @ global_bodies;

@@ -14,7 +14,6 @@ module V = Values
 module E = Expressions
 module A = LlbcAst
 module C = Contexts
-module M = Modules
 open SymbolicAst
 module P = Print
 module PT = Print.Types

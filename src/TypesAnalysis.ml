@@ -1,5 +1,5 @@
 open Types
-open Modules
+open Crates
 
 type subtype_info = {
   under_borrow : bool;  (** Are we inside a borrow? *)

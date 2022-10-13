@@ -3,7 +3,6 @@ open LlbcAstUtils
 open Pure
 open PureUtils
 module Id = Identifiers
-module M = Modules
 module S = SymbolicAst
 module TA = TypesAnalysis
 module L = Logging

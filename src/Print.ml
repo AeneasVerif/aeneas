@@ -6,7 +6,6 @@ module VU = ValuesUtils
 module E = Expressions
 module A = LlbcAst
 module C = Contexts
-module M = Modules
 
 let option_to_string (to_string : 'a -> string) (x : 'a option) : string =
   match x with Some x -> "Some (" ^ to_string x ^ ")" | None -> "None"
@@ -1194,19 +1193,21 @@ module Module = struct
     in
     PA.fun_decl_to_string fmt "" "  " def
 
-  let module_to_string (m : M.llbc_module) : string =
+  let module_to_string (m : Crates.llbc_crate) : string =
     let types_defs_map, funs_defs_map, globals_defs_map =
-      M.compute_defs_maps m
+      Crates.compute_defs_maps m
     in
 
     (* The types *)
-    let type_decls = List.map (type_decl_to_string types_defs_map) m.M.types in
+    let type_decls =
+      List.map (type_decl_to_string types_defs_map) m.Crates.types
+    in
 
     (* The functions *)
     let fun_decls =
       List.map
         (fun_decl_to_string types_defs_map funs_defs_map globals_defs_map)
-        m.M.functions
+        m.Crates.functions
     in
 
     (* Put everything together *)
