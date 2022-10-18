@@ -75,9 +75,13 @@ trans-polonius-betree_main: SUBDIR:=betree
 # Generic rules to extract the LLBC from a rust file
 # We use the rules in Charon's Makefile to generate the .llbc files: the options
 # vary with the test files.
+.PHONY: gen-llbc-polonius-%
+gen-llbc-polonius-%: build
+	cd $(CHARON_HOME)/tests-polonius && $(MAKE) test-$*
+
 .PHONY: gen-llbc-%
 gen-llbc-%: build
-	cd $(CHARON_HOME) && $(MAKE) test-$*
+	cd $(CHARON_HOME)/tests && $(MAKE) test-$*
 
 # Generic rule to test the translation of an LLBC file.
 # Note that the files requiring the Polonius borrow-checker are generated
@@ -86,10 +90,10 @@ gen-llbc-%: build
 trans-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/llbc
 trans-polonius-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-polonius/llbc
 
-trans-%: gen-llbc-%
+trans-polonius-%: gen-llbc-polonius-%
 	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
-trans-polonius-%: gen-llbc-polonius-%
+trans-%: gen-llbc-%
 	dune exec -- src/main.exe $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
 .PHONY: doc
