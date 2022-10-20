@@ -184,6 +184,7 @@ module type Set = sig
 
   val pp : Format.formatter -> t -> unit
   val show : t -> string
+  val pairwise_distinct : elt list -> bool
 end
 
 module MakeSet (Ord : OrderedType) : Set with type elt = Ord.t = struct
@@ -218,6 +219,19 @@ module MakeSet (Ord : OrderedType) : Set with type elt = Ord.t = struct
     pp_string "}"
 
   let show s = to_string None s
+
+  let pairwise_distinct ls =
+    let s = ref empty in
+    let rec check ls =
+      match ls with
+      | [] -> true
+      | x :: ls' ->
+          if mem x !s then false
+          else (
+            s := add x !s;
+            check ls')
+    in
+    check ls
 end
 
 (** A map where the bindings are injective (i.e., if two keys are distinct,

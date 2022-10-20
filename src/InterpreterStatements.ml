@@ -20,20 +20,32 @@ open InterpreterExpressions
 (** The local logger *)
 let log = L.statements_log
 
-(** Drop a value at a given place *)
+(** Drop a value at a given place - TODO: factorize this with [assign_to_place] *)
 let drop_value (config : C.config) (p : E.place) : cm_fun =
  fun cf ctx ->
-  log#ldebug (lazy ("drop_value: place: " ^ place_to_string ctx p));
-  (* Prepare the place (by ending the outer loans and the borrows).
+  log#ldebug
+    (lazy
+      ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
+     ^ eval_ctx_to_string ctx));
+  (* Prepare the place (by ending the outer loans).
    * Note that [prepare_lplace] will use the `Write` access kind:
    * it is ok, because when updating the value with [Bottom] below,
    * we will use the `Move` access *)
-  let end_borrows = true in
+  let end_borrows = false in
   let prepare = prepare_lplace config end_borrows p in
   (* Replace the value with [Bottom] *)
   let replace cf (v : V.typed_value) ctx =
+    (* Move the value at destination (that we will overwrite) to a dummy variable
+     * to preserve the borrows *)
+    let mv = read_place_unwrap config Write p ctx in
+    let ctx = C.ctx_push_dummy_var ctx mv in
+    (* Update the destination to ⊥ *)
     let nv = { v with value = V.Bottom } in
     let ctx = write_place_unwrap config Move p nv ctx in
+    log#ldebug
+      (lazy
+        ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
+       ^ eval_ctx_to_string ctx));
     cf ctx
   in
   (* Compose and apply *)
