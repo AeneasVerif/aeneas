@@ -55,7 +55,7 @@ type betree_be_tree_t =
   betree_be_tree_root : betree_node_t;
 }
 
-(** [core::num::u64::{9}::MAX] *)
+(** [core::num::u64::{10}::MAX] *)
 let core_num_u64_max_body : result u64 = Return 18446744073709551615
 let core_num_u64_max_c : u64 = eval_global core_num_u64_max_body
 
