@@ -22,6 +22,9 @@ Usage: %s [OPTIONS] FILE
     Sys.argv.(0)
 
 let () =
+  (* Measure start time *)
+  let start_time = Unix.gettimeofday () in
+
   (* Read the command line arguments *)
   let dest_dir = ref "" in
   let decompose_monads = ref false in
@@ -139,6 +142,7 @@ let () =
   pure_micro_passes_log#set_level EL.Info;
   pure_to_extract_log#set_level EL.Info;
   translate_log#set_level EL.Info;
+
   (* Load the module *)
   let json = Yojson.Basic.from_file filename in
   match llbc_crate_of_json json with
@@ -192,4 +196,10 @@ let () =
           use_state = not !no_state;
         }
       in
-      Translate.translate_module filename dest_dir trans_config m
+      Translate.translate_module filename dest_dir trans_config m;
+
+      (* Print total elapsed time *)
+      log#linfo
+        (lazy
+          (Printf.sprintf "Total execution time: %f seconds"
+             (Unix.gettimeofday () -. start_time)))
