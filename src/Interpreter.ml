@@ -7,18 +7,17 @@ open LlbcAstUtils
 module L = Logging
 module T = Types
 module A = LlbcAst
-module M = Modules
 module SA = SymbolicAst
 
 (** The local logger *)
 let log = L.interpreter_log
 
-let compute_type_fun_global_contexts (m : M.llbc_module) :
+let compute_type_fun_global_contexts (m : Crates.llbc_crate) :
     C.type_context * C.fun_context * C.global_context =
-  let type_decls_list, _, _ = M.split_declarations m.declarations in
-  let type_decls, fun_decls, global_decls = M.compute_defs_maps m in
+  let type_decls_list, _, _ = Crates.split_declarations m.declarations in
+  let type_decls, fun_decls, global_decls = Crates.compute_defs_maps m in
   let type_decls_groups, _funs_defs_groups, _globals_defs_groups =
-    M.split_declarations_to_group_maps m.declarations
+    Crates.split_declarations_to_group_maps m.declarations
   in
   let type_infos =
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list
@@ -277,10 +276,10 @@ module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
       environment.
    *)
-  let test_unit_function (config : C.partial_config) (m : M.llbc_module)
+  let test_unit_function (config : C.partial_config) (crate : Crates.llbc_crate)
       (fid : A.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
-    let fdef = A.FunDeclId.nth m.functions fid in
+    let fdef = A.FunDeclId.nth crate.functions fid in
     let body = Option.get fdef.body in
 
     (* Debug *)
@@ -294,7 +293,7 @@ module Test = struct
 
     (* Create the evaluation context *)
     let type_context, fun_context, global_context =
-      compute_type_fun_global_contexts m
+      compute_type_fun_global_contexts crate
     in
     let ctx =
       initialize_eval_context type_context fun_context global_context []
@@ -332,11 +331,11 @@ module Test = struct
         && List.length def.A.signature.inputs = 0
 
   (** Test all the unit functions in a list of function definitions *)
-  let test_unit_functions (config : C.partial_config) (m : M.llbc_module) : unit
-      =
-    let unit_funs = List.filter fun_decl_is_transparent_unit m.functions in
+  let test_unit_functions (config : C.partial_config)
+      (crate : Crates.llbc_crate) : unit =
+    let unit_funs = List.filter fun_decl_is_transparent_unit crate.functions in
     let test_unit_fun (def : A.fun_decl) : unit =
-      test_unit_function config m def.A.def_id
+      test_unit_function config crate def.A.def_id
     in
     List.iter test_unit_fun unit_funs
 
@@ -374,15 +373,17 @@ module Test = struct
       they are not supported by the symbolic interpreter.
    *)
   let test_functions_symbolic (config : C.partial_config) (synthesize : bool)
-      (m : M.llbc_module) : unit =
+      (crate : Crates.llbc_crate) : unit =
     (* Filter the functions which contain loops *)
     let no_loop_funs =
-      List.filter (fun f -> not (LlbcAstUtils.fun_decl_has_loops f)) m.functions
+      List.filter
+        (fun f -> not (LlbcAstUtils.fun_decl_has_loops f))
+        crate.functions
     in
     (* Filter the opaque functions *)
     let no_loop_funs = List.filter fun_decl_is_transparent no_loop_funs in
     let type_context, fun_context, global_context =
-      compute_type_fun_global_contexts m
+      compute_type_fun_global_contexts crate
     in
     let test_fun (def : A.fun_decl) : unit =
       (* Execute the function - note that as the symbolic interpreter explores

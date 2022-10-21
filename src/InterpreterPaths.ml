@@ -771,6 +771,7 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
     
     [end_borrows]: if false, we only end the outer loans we find. If true, we
     end all the loans and the borrows we find.
+    TODO: end_borrows is not necessary anymore.
  *)
 let prepare_lplace (config : C.config) (end_borrows : bool) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =

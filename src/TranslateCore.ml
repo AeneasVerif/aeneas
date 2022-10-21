@@ -4,7 +4,6 @@ open InterpreterStatements
 module L = Logging
 module T = Types
 module A = LlbcAst
-module M = Modules
 module SA = SymbolicAst
 module FA = FunsAnalysis
 

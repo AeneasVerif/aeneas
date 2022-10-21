@@ -3,7 +3,6 @@ open Interpreter
 module L = Logging
 module T = Types
 module A = LlbcAst
-module M = Modules
 module SA = SymbolicAst
 module Micro = PureMicroPasses
 open PureUtils
@@ -286,24 +285,24 @@ let translate_function_to_pure (config : C.partial_config)
   (pure_forward, pure_backwards)
 
 let translate_module_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (use_state : bool) (m : M.llbc_module) :
+    (mp_config : Micro.config) (use_state : bool) (crate : Crates.llbc_crate) :
     trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
 
   (* Compute the type and function contexts *)
   let type_context, fun_context, global_context =
-    compute_type_fun_global_contexts m
+    compute_type_fun_global_contexts crate
   in
   let fun_infos =
-    FA.analyze_module m fun_context.C.fun_decls global_context.C.global_decls
-      use_state
+    FA.analyze_module crate fun_context.C.fun_decls
+      global_context.C.global_decls use_state
   in
   let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
   let trans_ctx = { type_context; fun_context; global_context } in
 
   (* Translate all the type definitions *)
-  let type_decls = SymbolicToPure.translate_type_decls m.types in
+  let type_decls = SymbolicToPure.translate_type_decls crate.types in
 
   (* Compute the type definition map *)
   let type_decls_map =
@@ -330,7 +329,7 @@ let translate_module_to_pure (config : C.partial_config)
                 (LlbcAstUtils.fun_body_get_input_vars body)
         in
         (A.Regular fdef.def_id, input_names, fdef.signature))
-      m.functions
+      crate.functions
   in
   let sigs = List.append assumed_sigs local_sigs in
   let fun_sigs =
@@ -343,7 +342,7 @@ let translate_module_to_pure (config : C.partial_config)
     List.map
       (translate_function_to_pure config mp_config trans_ctx fun_sigs
          type_decls_map)
-      m.functions
+      crate.functions
   in
 
   (* Apply the micro-passes *)
@@ -357,7 +356,7 @@ let translate_module_to_pure (config : C.partial_config)
   (trans_ctx, type_decls, pure_translations)
 
 type gen_ctx = {
-  m : M.llbc_module;
+  crate : Crates.llbc_crate;
   extract_ctx : PureToExtract.extraction_ctx;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t;
@@ -534,7 +533,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     ExtractToFStar.extract_state_type fmt ctx.extract_ctx qualif
   in
 
-  let export_decl (decl : M.declaration_group) : unit =
+  let export_decl (decl : Crates.declaration_group) : unit =
     match decl with
     | Type (NonRec id) ->
         if config.extract_types then export_type ExtractToFStar.Type id
@@ -574,7 +573,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
    *)
   if config.extract_state_type && config.extract_fun_decls then
     export_state_type ();
-  List.iter export_decl ctx.m.declarations;
+  List.iter export_decl ctx.crate.declarations;
   if config.extract_state_type && not config.extract_fun_decls then
     export_state_type ()
 
@@ -628,11 +627,11 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
     TODO: rename to translate_crate
  *)
 let translate_module (filename : string) (dest_dir : string) (config : config)
-    (m : M.llbc_module) : unit =
+    (crate : Crates.llbc_crate) : unit =
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs =
     translate_module_to_pure config.eval_config config.mp_config
-      config.use_state m
+      config.use_state crate
   in
 
   (* Initialize the extraction context - for now we extract only to F* *)
@@ -641,7 +640,8 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   in
   let variant_concatenate_type_name = true in
   let fstar_fmt =
-    ExtractToFStar.mk_formatter trans_ctx m.name variant_concatenate_type_name
+    ExtractToFStar.mk_formatter trans_ctx crate.name
+      variant_concatenate_type_name
   in
   let ctx =
     { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }
@@ -653,8 +653,9 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     A.FunDeclId.Set.of_list
       (List.concat
          (List.map
-            (fun decl -> match decl with M.Fun (Rec ids) -> ids | _ -> [])
-            m.declarations))
+            (fun decl ->
+              match decl with Crates.Fun (Rec ids) -> ids | _ -> [])
+            crate.declarations))
   in
 
   (* Register unique names for all the top-level types, globals and functions.
@@ -686,7 +687,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
 
   let ctx =
     List.fold_left ExtractToFStar.extract_global_decl_register_names ctx
-      m.globals
+      crate.globals
   in
 
   (* Open the output file *)
@@ -746,7 +747,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* Extract the file(s) *)
   let gen_ctx =
     {
-      m;
+      crate;
       extract_ctx = ctx;
       trans_types;
       trans_funs;
@@ -793,8 +794,8 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         interface = has_opaque_types;
       }
     in
-    extract_file types_config gen_ctx types_filename m.M.name types_module
-      ": type definitions" [] [];
+    extract_file types_config gen_ctx types_filename crate.Crates.name
+      types_module ": type definitions" [] [];
 
     (* Extract the template clauses *)
     let needs_clauses_module =
@@ -807,7 +808,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
      let clauses_config =
        { base_gen_config with extract_template_decreases_clauses = true }
      in
-     extract_file clauses_config gen_ctx clauses_filename m.M.name
+     extract_file clauses_config gen_ctx clauses_filename crate.Crates.name
        clauses_module ": templates for the decreases clauses" [ types_module ]
        []);
 
@@ -825,7 +826,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
             interface = true;
           }
         in
-        extract_file opaque_config gen_ctx opaque_filename m.M.name
+        extract_file opaque_config gen_ctx opaque_filename crate.Crates.name
           opaque_module ": opaque function definitions" [] [ types_module ];
         [ opaque_module ])
       else []
@@ -844,7 +845,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let clauses_module =
       if needs_clauses_module then [ module_name ^ ".Clauses" ] else []
     in
-    extract_file fun_config gen_ctx fun_filename m.M.name fun_module
+    extract_file fun_config gen_ctx fun_filename crate.Crates.name fun_module
       ": function definitions" []
       ([ types_module ] @ opaque_funs_module @ clauses_module))
   else
@@ -866,5 +867,5 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     in
     (* Add the extension for F* *)
     let extract_filename = extract_filebasename ^ ".fst" in
-    extract_file gen_config gen_ctx extract_filename m.M.name module_name "" []
-      []
+    extract_file gen_config gen_ctx extract_filename crate.Crates.name
+      module_name "" [] []

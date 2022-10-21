@@ -141,7 +141,7 @@ let () =
   translate_log#set_level EL.Info;
   (* Load the module *)
   let json = Yojson.Basic.from_file filename in
-  match llbc_module_of_json json with
+  match llbc_crate_of_json json with
   | Error s ->
       main_log#error "error: %s\n" s;
       exit 1

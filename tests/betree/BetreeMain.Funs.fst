@@ -80,7 +80,7 @@ let betree_node_id_counter_fresh_id_back
   | Return i -> Return (Mkbetree_node_id_counter_t i)
   end
 
-(** [core::num::u64::{9}::MAX] *)
+(** [core::num::u64::{10}::MAX] *)
 let core_num_u64_max_body : result u64 = Return 18446744073709551615
 let core_num_u64_max_c : u64 = eval_global core_num_u64_max_body
 

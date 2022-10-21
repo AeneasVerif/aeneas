@@ -16,33 +16,33 @@ type declaration_group =
   | Global of GlobalDeclId.id
 [@@deriving show]
 
-type llbc_module = {
+type llbc_crate = {
   name : string;
   declarations : declaration_group list;
   types : type_decl list;
   functions : fun_decl list;
   globals : global_decl list;
 }
-(** LLBC module - TODO: rename to crate *)
+(** LLBC crate *)
 
-let compute_defs_maps (m : llbc_module) :
+let compute_defs_maps (c : llbc_crate) :
     type_decl TypeDeclId.Map.t
     * fun_decl FunDeclId.Map.t
     * global_decl GlobalDeclId.Map.t =
   let types_map =
     List.fold_left
       (fun m (def : type_decl) -> TypeDeclId.Map.add def.def_id def m)
-      TypeDeclId.Map.empty m.types
+      TypeDeclId.Map.empty c.types
   in
   let funs_map =
     List.fold_left
       (fun m (def : fun_decl) -> FunDeclId.Map.add def.def_id def m)
-      FunDeclId.Map.empty m.functions
+      FunDeclId.Map.empty c.functions
   in
   let globals_map =
     List.fold_left
       (fun m (def : global_decl) -> GlobalDeclId.Map.add def.def_id def m)
-      GlobalDeclId.Map.empty m.globals
+      GlobalDeclId.Map.empty c.globals
   in
   (types_map, funs_map, globals_map)
 

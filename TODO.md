@@ -78,7 +78,7 @@
 
 6. add `mvalue` (meta values) stored in abstractions when ending loans
 
-8. The following doesn't work:
+8. The following doesn't work (if we don't expand the symbolic values):
   ```
   fn f1<'c, T>(p : (&'c mut T, &'c mut T)) -> (&'c mut T, &'c mut T)
 
