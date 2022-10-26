@@ -174,7 +174,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                     | Error err -> Error err
                     | Ok (ctx, res) ->
                         (* Update the shared loan with the new value returned
-                           by [access_projection] *)
+                           by {!access_projection} *)
                         let ctx =
                           update_loan ek bid
                             (V.SharedLoan (bids, res.updated))
@@ -205,7 +205,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                           | _ -> failwith "Unexpected"
                         in
                         (* Update the shared loan with the new value returned
-                             by [access_projection] *)
+                             by {!access_projection} *)
                         let ctx =
                           update_aloan ek bid
                             (V.ASharedLoan (bids, res.updated, av))
@@ -378,7 +378,7 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_decl T.TypeDeclId.Map.t)
 (** Compute an expanded Option bottom value *)
 let compute_expanded_bottom_option_value (variant_id : T.VariantId.id)
     (param_ty : T.ety) : V.typed_value =
-  (* Note that the variant can be `Some` or `None`: we expand bottom values
+  (* Note that the variant can be [Some] or [None]: we expand bottom values
    * when writing to fields or setting discriminants *)
   let field_values =
     if variant_id = T.option_some_id then [ mk_bottom param_ty ]
@@ -398,23 +398,23 @@ let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
   let ty = T.Adt (T.Tuple, [], field_types) in
   { V.value = v; V.ty }
 
-(** Auxiliary helper to expand [Bottom] values.
+(** Auxiliary helper to expand {!V.Bottom} values.
 
     During compilation, rustc desaggregates the ADT initializations. The
     consequence is that the following rust code:
-    ```
-    let x = Cons a b;
-    ```
+    {[
+      let x = Cons a b;
+    ]}
 
     Looks like this in MIR:
-    ```
-    (x as Cons).0 = a;
-    (x as Cons).1 = b;
-    set_discriminant(x, 0); // If `Cons` is the variant of index 0
-    ```
+    {[
+      (x as Cons).0 = a;
+      (x as Cons).1 = b;
+      set_discriminant(x, 0); // If [Cons] is the variant of index 0
+    ]}
 
     The consequence is that we may sometimes need to write fields to values
-    which are currently [Bottom]. When doing this, we first expand the value
+    which are currently {!V.Bottom}. When doing this, we first expand the value
     to, say, [Cons Bottom Bottom] (note that field projection contains information
     about which variant we should project to, which is why we *can* set the
     variant index when writing one of its fields).
@@ -436,12 +436,12 @@ let expand_bottom_value_from_projection (config : C.config)
   in
   let p' = { p with projection = projection' } in
   (* Compute the expanded value.
-     The type of the [Bottom] value should be a tuple or an ADT.
+     The type of the {!V.Bottom} value should be a tuple or an ADT.
      Note that the projection element we got stuck at should be a
-     field projection, and gives the variant id if the [Bottom] value
+     field projection, and gives the variant id if the {!V.Bottom} value
      is an enumeration value.
      Also, the expanded value should be the proper ADT variant or a tuple
-     with the proper arity, with all the fields initialized to [Bottom]
+     with the proper arity, with all the fields initialized to {!V.Bottom}
   *)
   let nv =
     match (pe, ty) with
@@ -500,7 +500,7 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
             expand_symbolic_value_no_branching config sp
               (Some (Synth.mk_mplace prefix ctx))
         | FailBottom (_, _, _) ->
-            (* We can't expand [Bottom] values while reading them *)
+            (* We can't expand {!V.Bottom} values while reading them *)
             failwith "Found [Bottom] while reading a place"
         | FailBorrow _ -> failwith "Could not read a borrow"
       in
@@ -508,7 +508,7 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
 
 (** Update the environment to be able to write to a place.
 
-    See [update_env_alond_read_place].
+    See {!update_ctx_along_read_place}.
 *)
 let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
     (p : E.place) : cm_fun =
@@ -530,7 +530,7 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
             expand_symbolic_value_no_branching config sp
               (Some (Synth.mk_mplace p ctx))
         | FailBottom (remaining_pes, pe, ty) ->
-            (* Expand the [Bottom] value *)
+            (* Expand the {!V.Bottom} value *)
             fun cf ctx ->
              let ctx =
                expand_bottom_value_from_projection config access p remaining_pes
@@ -542,14 +542,14 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
       (* Retry *)
       comp cc (update_ctx_along_write_place config access p) cf ctx
 
-exception UpdateCtx of cm_fun
 (** Small utility used to break control-flow *)
+exception UpdateCtx of cm_fun
 
 (** End the loans at a given place: read the value, if it contains a loan,
     end this loan, repeat.
 
     This is used when reading or borrowing values. We typically
-    first call [update_ctx_along_read_place] or [update_ctx_along_write_place]
+    first call {!update_ctx_along_read_place} or {!update_ctx_along_write_place}
     to get access to the value, then call this function to "prepare" the value:
     when moving values, we can't move a value which contains loans and thus need
     to end them, etc.
@@ -620,7 +620,7 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
     
     [end_borrows]:
     - if true: end all the loans and borrows we find, starting with the outer
-      ones. This is used when evaluating the `drop` statement (see [drop_value])
+      ones. This is used when evaluating the [drop] statement (see [drop_value])
     - if false: only end the outer loans. This is used by [assign_to_place]
       or to drop the loans in the local variables when popping a frame.
 
@@ -766,7 +766,7 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
 
     Return the updated context and the (updated) value at the end of the
     place. This value should not contain any loan or borrow (and we check
-    it is the case). Note that this value is very likely to contain [Bottom]
+    it is the case). Note that this value is very likely to contain {!V.Bottom}
     subvalues.
     
     [end_borrows]: if false, we only end the outer loans we find. If true, we

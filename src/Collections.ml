@@ -7,10 +7,10 @@ module List = struct
 
   (** Split a list at a given index.
   
-      `split_at ls i` splits `ls` into two lists where the first list has
-      length `i`.
+      [split_at ls i] splits [ls] into two lists where the first list has
+      length [i].
       
-      Raise `Failure` if the list is too short.
+      Raise [Failure] if the list is too short.
   *)
   let rec split_at (ls : 'a list) (i : int) =
     if i < 0 then raise (Invalid_argument "split_at take positive integers")
@@ -26,7 +26,7 @@ module List = struct
 
   (** Pop the last element of a list
      
-      Raise `Failure` if the list is empty.
+      Raise [Failure] if the list is empty.
    *)
   let rec pop_last (ls : 'a list) : 'a list * 'a =
     match ls with
@@ -58,7 +58,7 @@ module List = struct
 
   (** Fold and link the iterations.
 
-      Similar to [iter_link] but for fold left operations.
+      Similar to {!iter_link} but for fold left operations.
    *)
   let fold_left_link (link : unit -> unit) (f : 'a -> 'b -> 'a) (init : 'a)
       (ls : 'b list) : 'a =
@@ -107,15 +107,15 @@ module type Map = sig
   val add_list : (key * 'a) list -> 'a t -> 'a t
   val of_list : (key * 'a) list -> 'a t
 
-  val to_string : string option -> ('a -> string) -> 'a t -> string
   (** "Simple" pretty printing function.
   
       Is useful when we need to customize a bit [show_t], but without using
       something as burdensome as [pp_t].
   
-      `to_string (Some indent) m` prints `m` by breaking line after every binding
-      and inserting `indent`.
+      [to_string (Some indent) m] prints [m] by breaking line after every binding
+      and inserting [indent].
    *)
+  val to_string : string option -> ('a -> string) -> 'a t -> string
 
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
   val show : ('a -> string) -> 'a t -> string
@@ -172,15 +172,15 @@ module type Set = sig
   val add_list : elt list -> t -> t
   val of_list : elt list -> t
 
-  val to_string : string option -> t -> string
   (** "Simple" pretty printing function.
   
       Is useful when we need to customize a bit [show_t], but without using
       something as burdensome as [pp_t].
   
-      `to_string (Some indent) s` prints `s` by breaking line after every element
-      and inserting `indent`.
+      [to_string (Some indent) s] prints [s] by breaking line after every element
+      and inserting [indent].
    *)
+  val to_string : string option -> t -> string
 
   val pp : Format.formatter -> t -> unit
   val show : t -> string
@@ -283,7 +283,7 @@ module type InjMap = sig
   val of_list : (key * elem) list -> t
 end
 
-(** See [InjMap] *)
+(** See {!InjMap} *)
 module MakeInjMap (Key : OrderedType) (Elem : OrderedType) :
   InjMap with type key = Key.t with type elem = Elem.t = struct
   module Map = MakeMap (Key)

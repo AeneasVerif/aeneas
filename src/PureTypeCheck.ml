@@ -20,7 +20,7 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
       (* Assumed type *)
       match aty with
       | State ->
-          (* `State` is opaque *)
+          (* [State] is opaque *)
           raise (Failure "Unreachable: `State` values are opaque")
       | Result ->
           let ty = Collections.List.to_cons_nil tys in

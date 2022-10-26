@@ -8,15 +8,6 @@ module V = Values
 module E = Expressions
 module A = LlbcAst
 
-type mplace = {
-  bv : Contexts.binder;
-      (** It is important that we store the binder, and not just the variable id,
-          because the most important information in a place is the name of the
-          variable!
-       *)
-  projection : E.projection;
-      (** We store the projection because we can, but it is actually not that useful *)
-}
 (** "Meta"-place: a place stored as meta-data.
 
     Whenever we need to introduce new symbolic variables, for instance because
@@ -26,6 +17,15 @@ type mplace = {
     We later use this place information to generate meaningful name, to prettify
     the generated code.
  *)
+type mplace = {
+  bv : Contexts.binder;
+      (** It is important that we store the binder, and not just the variable id,
+          because the most important information in a place is the name of the
+          variable!
+       *)
+  projection : E.projection;
+      (** We store the projection because we can, but it is actually not that useful *)
+}
 
 type call_id =
   | Fun of A.fun_id * V.FunCallId.id
@@ -52,7 +52,7 @@ type meta =
   | Assignment of mplace * V.typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
 
-(** **Rk.:** here, [expression] is not at all equivalent to the expressions
+(** **Rk.:** here, {!expression} is not at all equivalent to the expressions
     used in LLBC: they are a first step towards lambda-calculus expressions.
  *)
 type expression =
@@ -60,7 +60,7 @@ type expression =
       (** There are two cases:
           - the AST is for a forward function: the typed value should contain
             the value which was in the return variable
-          - the AST is for a backward function: the typed value should be `None`
+          - the AST is for a backward function: the typed value should be [None]
        *)
   | Panic
   | FunCall of call * expression
@@ -91,7 +91,7 @@ and expansion =
       (T.VariantId.id option * V.symbolic_value list * expression) list
       (** ADT expansion *)
   | ExpandBool of expression * expression
-      (** A boolean expansion (i.e, an `if ... then ... else ...`) *)
+      (** A boolean expansion (i.e, an [if ... then ... else ...]) *)
   | ExpandInt of
       T.integer_type * (V.scalar_value * expression) list * expression
       (** An integer expansion (i.e, a switch over an integer). The last

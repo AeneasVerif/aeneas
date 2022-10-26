@@ -14,13 +14,13 @@ let log = L.pre_passes_log
 (** Rustc inserts a lot of drops before the assignments.
     We consider those drops are part of the assignment, and splitting the
     drop and the assignment is problematic for us because it can introduce
-    ⊥ under borrows. For instance, we encountered situations like the
+    [⊥] under borrows. For instance, we encountered situations like the
     following one:
     
-    ```
-    drop( *x ); // Illegal! Inserts a ⊥ under a borrow
-    *x = move ...;
-    ```
+    {[
+      drop( *x ); // Illegal! Inserts a ⊥ under a borrow
+      *x = move ...;
+    ]}
 
     TODO: this is not necessary anymore
  *)

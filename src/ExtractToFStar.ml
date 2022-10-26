@@ -10,19 +10,19 @@ module F = Format
 
 (** A qualifier for a type definition.
 
-    Controls whether we should use `type ...` or `and ...` (for mutually
+    Controls whether we should use [type ...] or [and ...] (for mutually
     recursive datatypes).
  *)
 type type_decl_qualif =
-  | Type  (** `type t = ...` *)
-  | And  (** `type t0 = ... and t1 = ...` *)
-  | AssumeType  (** `assume type t` *)
-  | TypeVal  (** In an fsti: `val t : Type0` *)
+  | Type  (** [type t = ...] *)
+  | And  (** [type t0 = ... and t1 = ...] *)
+  | AssumeType  (** [assume type t] *)
+  | TypeVal  (** In an fsti: [val t : Type0] *)
 
 (** A qualifier for function definitions.
 
-    Controls whether we should use `let ...`, `let rec ...` or `and ...`,
-    or only generate a declaration with `val` or `assume val`
+    Controls whether we should use [let ...], [let rec ...] or [and ...],
+    or only generate a declaration with [val] or [assume val]
  *)
 type fun_decl_qualif = Let | LetRec | And | Val | AssumeVal
 
@@ -59,7 +59,7 @@ let fstar_unop_name (unop : unop) : string =
 
 (** Small helper to compute the name of a binary operation (note that many
     binary operations like "less than" are extracted to primitive operations,
-    like `<`.
+    like [<].
  *)
 let fstar_named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
   let binop =
@@ -213,40 +213,40 @@ let fstar_extract_binop (extract_expr : bool -> texpression -> unit)
   if inside then F.pp_print_string fmt ")"
 
 (**
- * [ctx]: we use the context to lookup type definitions, to retrieve type names.
- * This is used to compute variable names, when they have no basenames: in this
- * case we use the first letter of the type name.
- *
- * [variant_concatenate_type_name]: if true, add the type name as a prefix
- * to the variant names.
- * Ex.:
- * In Rust:
- *   ```
- *   enum List = {
- *     Cons(u32, Box<List>),x
- *     Nil,
- *   }
- *   ```
- *
- * F*, if option activated:
- *   ```
- *   type list =
- *   | ListCons : u32 -> list -> list
- *   | ListNil : list
- *   ```
- *
- * F*, if option not activated:
- *   ```
- *   type list =
- *   | Cons : u32 -> list -> list
- *   | Nil : list
- *   ```
- *
- * Rk.: this should be true by default, because in Rust all the variant names
- * are actively uniquely identifier by the type name `List::Cons(...)`, while
- * in other languages it is not necessarily the case, and thus clashes can mess
- * up type checking. Note that some languages actually forbids the name clashes
- * (it is the case of F* ).
+   [ctx]: we use the context to lookup type definitions, to retrieve type names.
+   This is used to compute variable names, when they have no basenames: in this
+   case we use the first letter of the type name.
+  
+   [variant_concatenate_type_name]: if true, add the type name as a prefix
+   to the variant names.
+   Ex.:
+   In Rust:
+     {[
+       enum List = {
+         Cons(u32, Box<List>),x
+         Nil,
+       }
+     ]}
+  
+   F*, if option activated:
+     {[
+       type list =
+       | ListCons : u32 -> list -> list
+       | ListNil : list
+     ]}
+  
+   F*, if option not activated:
+     {[
+       type list =
+       | Cons : u32 -> list -> list
+       | Nil : list
+     ]}
+  
+   Rk.: this should be true by default, because in Rust all the variant names
+   are actively uniquely identifier by the type name [List::Cons(...)], while
+   in other languages it is not necessarily the case, and thus clashes can mess
+   up type checking. Note that some languages actually forbids the name clashes
+   (it is the case of F* ).
  *)
 let mk_formatter (ctx : trans_ctx) (crate_name : string)
     (variant_concatenate_type_name : bool) : formatter =
@@ -430,7 +430,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   }
 
 (** [inside] constrols whether we should add parentheses or not around type
-    application (if `true` we add parentheses).
+    application (if [true] we add parentheses).
  *)
 let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (ty : ty) : unit =
@@ -438,8 +438,8 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   | Adt (type_id, tys) -> (
       match type_id with
       | Tuple ->
-          (* This is a bit annoying, but in F* `()` is not the unit type:
-           * we have to write `unit`... *)
+          (* This is a bit annoying, but in F* [()] is not the unit type:
+           * we have to write [unit]... *)
           if tys = [] then F.pp_print_string fmt "unit"
           else (
             F.pp_print_string fmt "(";
@@ -513,31 +513,31 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     (def : type_decl) (fields : field list) : unit =
   (* We want to generate a definition which looks like this:
-   * ```
-   * type t = { x : int; y : bool; }
-   * ```
-   *
-   * If there isn't enough space on one line:
-   * ```
-   * type t =
-   * {
-   *   x : int; y : bool;
-   * }
-   * ```
-   * 
-   * And if there is even less space:
-   * ```
-   * type t =
-   * {
-   *   x : int;
-   *   y : bool;
-   * }
-   * ```
-   *
-   * Also, in case there are no fields, we need to define the type as `unit`
-   * (`type t = {}` doesn't work in F* ).
-   *)
-  (* Note that we already printed: `type t =` *)
+     {[
+       type t = { x : int; y : bool; }
+     ]}
+
+     If there isn't enough space on one line:
+     {[
+       type t =
+       {
+         x : int; y : bool;
+       }
+     ]}
+
+     And if there is even less space:
+     {[
+       type t =
+       {
+         x : int;
+         y : bool;
+       }
+     ]}
+
+     Also, in case there are no fields, we need to define the type as [unit]
+     ([type t = {}] doesn't work in F* ).
+  *)
+  (* Note that we already printed: [type t =] *)
   if fields = [] then (
     F.pp_print_space fmt ();
     F.pp_print_string fmt "unit")
@@ -572,44 +572,44 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     (def : type_decl) (def_name : string) (type_params : string list)
     (variants : variant list) : unit =
   (* We want to generate a definition which looks like this:
-   * ```
-   * type list a = | Cons : a -> list a -> list a | Nil : list a
-   * ```
-   *
-   * If there isn't enough space on one line:
-   * ```
-   * type s =
-   * | Cons : a -> list a -> list a
-   * | Nil : list a
-   * ```
-   *
-   * And if we need to write the type of a variant on several lines:
-   * ```
-   * type s =
-   * | Cons :
-   *   a ->
-   *   list a ->
-   *   list a
-   * | Nil : list a
-   * ```
-   *
-   * Finally, it is possible to give names to the variant fields in Rust.
-   * In this situation, we generate a definition like this:
-   * ```
-   * type s =
-   * | Cons : hd:a -> tl:list a -> list a
-   * | Nil : list a
-   * ```
-   *
-   * Note that we already printed: `type s =`
-   *)
+     {[
+       type list a = | Cons : a -> list a -> list a | Nil : list a
+     ]}
+
+     If there isn't enough space on one line:
+     {[
+       type s =
+       | Cons : a -> list a -> list a
+       | Nil : list a
+     ]}
+
+     And if we need to write the type of a variant on several lines:
+     {[
+       type s =
+       | Cons :
+         a ->
+         list a ->
+         list a
+       | Nil : list a
+     ]}
+
+     Finally, it is possible to give names to the variant fields in Rust.
+     In this situation, we generate a definition like this:
+     {[
+       type s =
+       | Cons : hd:a -> tl:list a -> list a
+       | Nil : list a
+     ]}
+
+     Note that we already printed: [type s =]
+  *)
   (* Print the variants *)
   let print_variant (variant_id : VariantId.id) (variant : variant) : unit =
     let variant_name = ctx_get_variant (AdtId def.def_id) variant_id ctx in
     F.pp_print_space fmt ();
     F.pp_open_hvbox fmt ctx.indent_incr;
     (* variant box *)
-    (* `| Cons :`
+    (* [| Cons :]
      * Note that we really don't want any break above so we print everything
      * at once. *)
     F.pp_print_string fmt ("| " ^ variant_name ^ " :");
@@ -619,7 +619,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
       (* Open the field box *)
       F.pp_open_box fmt ctx.indent_incr;
       (* Print the field names
-       * `  x :`
+       * [  x :]
        * Note that when printing fields, we register the field names as
        * *variables*: they don't need to be unique at the top level. *)
       let ctx =
@@ -638,7 +638,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
       in
       (* Print the field type *)
       extract_ty ctx fmt false f.field_ty;
-      (* Print the arrow `->`*)
+      (* Print the arrow [->]*)
       F.pp_print_space fmt ();
       F.pp_print_string fmt "->";
       (* Close the field box *)
@@ -749,7 +749,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
   F.pp_open_hvbox fmt 0;
   (* Retrieve the name *)
   let state_name = ctx_get_assumed_type State ctx in
-  (* The qualif should be `AssumeType` or `TypeVal` *)
+  (* The qualif should be [AssumeType] or [TypeVal] *)
   (match qualif with
   | Type | And -> raise (Failure "Unexpected")
   | AssumeType ->
@@ -830,9 +830,9 @@ let extract_adt_g_value
       ctx
   | Adt (adt_id, _) ->
       (* "Regular" ADT *)
-      (* We print something of the form: `Cons field0 ... fieldn`.
+      (* We print something of the form: [Cons field0 ... fieldn].
        * We could update the code to print something of the form:
-       * `{ field0=...; ...; fieldn=...; }` in case of structures.
+       * [{ field0=...; ...; fieldn=...; }] in case of structures.
        *)
       let cons =
         match variant_id with
@@ -888,10 +888,10 @@ let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
     TODO: replace the formatting boolean [inside] with something more general?
     Also, it seems we don't really use it...
     Cases to consider:
-    - right-expression in a let: `let x = re in _` (never parentheses?)
-    - next expression in a let:  `let x = _ in next_e` (never parentheses?)
-    - application argument: `f (exp)`
-    - match/if scrutinee: `if exp then _ else _`/`match exp | _ -> _`
+    - right-expression in a let: [let x = re in _] (never parentheses?)
+    - next expression in a let:  [let x = _ in next_e] (never parentheses?)
+    - application argument: [f (exp)]
+    - match/if scrutinee: [if exp then _ else _]/[match exp | _ -> _]
  *)
 let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (e : texpression) : unit =
@@ -1019,9 +1019,9 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       F.pp_print_string fmt ")"
   | _ ->
       (* "Regular" ADT *)
-      (* We print something of the form: `Cons field0 ... fieldn`.
+      (* We print something of the form: [Cons field0 ... fieldn].
        * We could update the code to print something of the form:
-       * `{ field0=...; ...; fieldn=...; }` in case of fully
+       * [{ field0=...; ...; fieldn=...; }] in case of fully
        * applied structure constructors.
        *)
       let cons =
@@ -1044,7 +1044,7 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (original_app : texpression) (proj : projection)
     (_proj_type_params : ty list) (args : texpression list) : unit =
   (* We isolate the first argument (if there is), in order to pretty print the
-   * projection (`x.field` instead of `MkAdt?.field x` *)
+   * projection ([x.field] instead of [MkAdt?.field x] *)
   match args with
   | [ arg ] ->
       (* Exactly one argument: pretty-print *)
@@ -1144,13 +1144,13 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Extract the switch *)
   (match body with
   | If (e_then, e_else) ->
-      (* Open a box for the `if` *)
+      (* Open a box for the [if] *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       F.pp_print_string fmt "if";
       F.pp_print_space fmt ();
       let scrut_inside = PureUtils.let_group_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;
-      (* Close the box for the `if` *)
+      (* Close the box for the [if] *)
       F.pp_close_box fmt ();
       (* Extract the branches *)
       let extract_branch (is_then : bool) (e_branch : texpression) : unit =
@@ -1162,14 +1162,14 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_print_space fmt ();
         (* Open a box for the branch *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        (* Print the `begin` if necessary *)
+        (* Print the [begin] if necessary *)
         let parenth = PureUtils.let_group_requires_parentheses e_branch in
         if parenth then (
           F.pp_print_string fmt "begin";
           F.pp_print_space fmt ());
         (* Print the branch expression *)
         extract_texpression ctx fmt false e_branch;
-        (* Close the `begin ... end ` *)
+        (* Close the [begin ... end ] *)
         if parenth then (
           F.pp_print_space fmt ();
           F.pp_print_string fmt "end");
@@ -1182,16 +1182,16 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       extract_branch true e_then;
       extract_branch false e_else
   | Match branches ->
-      (* Open a box for the `match ... with` *)
+      (* Open a box for the [match ... with] *)
       F.pp_open_hovbox fmt ctx.indent_incr;
-      (* Print the `match ... with` *)
+      (* Print the [match ... with] *)
       F.pp_print_string fmt "begin match";
       F.pp_print_space fmt ();
       let scrut_inside = PureUtils.let_group_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;
       F.pp_print_space fmt ();
       F.pp_print_string fmt "with";
-      (* Close the box for the `match ... with` *)
+      (* Close the box for the [match ... with] *)
       F.pp_close_box fmt ();
 
       (* Extract the branches *)
@@ -1281,7 +1281,7 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
   (ctx, ctx_body)
 
 (** A small utility to print the types of the input parameters in the form:
-    `u32 -> list u32 -> ...`
+    [u32 -> list u32 -> ...]
     (we don't print the return type of the function)
     
     This is used for opaque function declarations, in particular.
@@ -1302,14 +1302,14 @@ let extract_fun_input_parameters_types (ctx : extraction_ctx)
     In order to help the user, we can generate a template for the functions
     required by the decreases clauses. We simply generate definitions of
     the following form in a separate file:
-    ```
-    let f_decrease (t : Type0) (x : t) : nat = admit()
-    ```
+    {[
+      let f_decrease (t : Type0) (x : t) : nat = admit()
+    ]}
     
-    Where the translated functions for `f` look like this:
-    ```
-    let f_fwd (t : Type0) (x : t) : Tot ... (decreases (f_decrease t x)) = ...
-    ```
+    Where the translated functions for [f] look like this:
+    {[
+      let f_fwd (t : Type0) (x : t) : Tot ... (decreases (f_decrease t x)) = ...
+    ]}
  *)
 let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
@@ -1324,7 +1324,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
   F.pp_open_hvbox fmt 0;
-  (* Add the `unfold` keyword *)
+  (* Add the [unfold] keyword *)
   F.pp_print_string fmt "unfold";
   F.pp_print_space fmt ();
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT = admit()" *)
@@ -1410,10 +1410,10 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_open_hovbox fmt ctx.indent_incr;
     (* Print the return type *)
     (* For opaque definitions, as we don't have named parameters under the hand,
-     * we don't print parameters in the form `(x : a) (y : b) ...` above,
-     * but wait until here to print the types: `a -> b -> ...`. *)
+     * we don't print parameters in the form [(x : a) (y : b) ...] above,
+     * but wait until here to print the types: [a -> b -> ...]. *)
     if is_opaque then extract_fun_input_parameters_types ctx fmt def;
-    (* `Tot` *)
+    (* [Tot] *)
     if has_decreases_clause then (
       F.pp_print_string fmt "Tot";
       F.pp_print_space fmt ());
@@ -1547,11 +1547,11 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
     We generate the body which computes the global value separately from the value declaration itself.
 
     For example in Rust,
-    `static X: u32 = 3;`
+    [static X: u32 = 3;]
 
     will be translated to:
-    `let x_body : result u32 = Return 3`
-    `let x_c : u32 = eval_global x_body`
+    [let x_body : result u32 = Return 3]
+    [let x_c : u32 = eval_global x_body]
  *)
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : A.global_decl) (body : fun_decl) (interface : bool) : unit =
@@ -1590,10 +1590,10 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a unit test, if the function is a unit function (takes no
     parameters, returns unit).
     
-    A unit test simply checks that the function normalizes to `Return ()`:
-    ```
-    let _ = assert_norm (FUNCTION () = Return ())
-    ```
+    A unit test simply checks that the function normalizes to [Return ()]:
+    {[
+      let _ = assert_norm (FUNCTION () = Return ())
+    ]}
  *)
 let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =

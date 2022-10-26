@@ -28,12 +28,12 @@ let pp_big_int (fmt : Format.formatter) (bi : big_int) : unit =
 
 let show_big_int (bi : big_int) : string = Z.to_string bi
 
-type scalar_value = { value : big_int; int_ty : integer_type } [@@deriving show]
 (** A scalar value
 
     Note that we use unbounded integers everywhere.
     We then harcode the boundaries for the different types.
  *)
+type scalar_value = { value : big_int; int_ty : integer_type } [@@deriving show]
 
 (** A constant value *)
 type constant_value =
@@ -68,15 +68,15 @@ type sv_kind =
   | Global  (** The value is a global *)
 [@@deriving show]
 
+(** A symbolic value *)
 type symbolic_value = {
   sv_kind : sv_kind;
   sv_id : SymbolicValueId.id;
   sv_ty : rty;
 }
 [@@deriving show]
-(** A symbolic value *)
 
-(** Ancestor for [typed_value] iter visitor *)
+(** Ancestor for {!typed_value} iter visitor *)
 class ['self] iter_typed_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
@@ -86,7 +86,7 @@ class ['self] iter_typed_value_base =
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for [typed_value] map visitor for *)
+(** Ancestor for {!typed_value} map visitor for *)
 class ['self] map_typed_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
@@ -140,7 +140,7 @@ and borrow_content =
   | InactivatedMutBorrow of mvalue * (BorrowId.id[@opaque])
       (** An inactivated mut borrow.
 
-          This is used to model [two-phase borrows](https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html).
+          This is used to model {{: https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html} two-phase borrows}.
           When evaluating a two-phase mutable borrow, we first introduce an inactivated
           borrow which behaves like a shared borrow, until the moment we actually *use*
           the borrow: at this point, we end all the other shared borrows (or inactivated
@@ -149,19 +149,19 @@ and borrow_content =
           mutable borrow.
           
           A simple use case of two-phase borrows:
-          ```
-          let mut v = Vec::new();
-          v.push(v.len());
-          ```
+          {[
+            let mut v = Vec::new();
+            v.push(v.len());
+          ]}
           
           This gets desugared to (something similar to) the following MIR:
-          ```
-          v = Vec::new();
-          v1 = &mut v;
-          v2 = &v; // We need this borrow, but v has already been mutably borrowed!
-          l = Vec::len(move v2);
-          Vec::push(move v1, move l); // In practice, v1 gets activated only here
-          ```
+          {[
+            v = Vec::new();
+            v1 = &mut v;
+            v2 = &v; // We need this borrow, but v has already been mutably borrowed!
+            l = Vec::len(move v2);
+            Vec::push(move v1, move l); // In practice, v1 gets activated only here
+          ]}
           
           The meta-value is used for the same purposes as with shared borrows,
           at the exception that in case of inactivated borrows it is not
@@ -185,7 +185,6 @@ and loan_content =
           borrows, and extremely useful when giving shared values to abstractions).
        *)
 
-and mvalue = typed_value
 (** "Meta"-value: information we store for the synthesis.
 
      Note that we never automatically visit the meta-values with the
@@ -195,7 +194,9 @@ and mvalue = typed_value
      TODO: we may want to create wrappers, to prevent accidently mixing meta
      values and regular values.
  *)
+and mvalue = typed_value
 
+(** "Regular" typed value (we map variables to typed values) *)
 and typed_value = { value : value; ty : ety }
 [@@deriving
   show,
@@ -204,7 +205,7 @@ and typed_value = { value : value; ty : ety }
         name = "iter_typed_value_visit_mvalue";
         variety = "iter";
         ancestors = [ "iter_typed_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -212,33 +213,34 @@ and typed_value = { value : value; ty : ety }
         name = "map_typed_value_visit_mvalue";
         variety = "map";
         ancestors = [ "map_typed_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
-(** "Regular" typed value (we map variables to typed values) *)
 
-(** We have to override the [visit_mvalue] method, to ignore meta-values *)
+(** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
+    to ignore meta-values *)
 class ['self] iter_typed_value =
   object (_self : 'self)
     inherit [_] iter_typed_value_visit_mvalue
     method! visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
   end
 
-(** We have to override the [visit_mvalue] method, to ignore meta-values *)
+(** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
+    to ignore meta-values *)
 class ['self] map_typed_value =
   object (_self : 'self)
     inherit [_] map_typed_value_visit_mvalue
     method! visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
   end
 
-type msymbolic_value = symbolic_value [@@deriving show]
 (** "Meta"-symbolic value.
 
-     See the explanations for [mvalue]
+     See the explanations for {!mvalue}
 
      TODO: we may want to create wrappers, to prevent mixing meta values
      and regular values.
  *)
+type msymbolic_value = symbolic_value [@@deriving show]
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
     abstractions) we need to reborrow the shared values. When doing so, we lookup
@@ -259,10 +261,10 @@ type abstract_shared_borrow =
   | AsbProjReborrows of (symbolic_value[@opaque]) * (rty[@opaque])
 [@@deriving show]
 
-type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
 (** A set of abstract shared borrows *)
+type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
 
-(** Ancestor for [aproj] iter visitor *)
+(** Ancestor for {!aproj} iter visitor *)
 class ['self] iter_aproj_base =
   object (_self : 'self)
     inherit [_] iter_typed_value
@@ -272,7 +274,7 @@ class ['self] iter_aproj_base =
       fun _ _ -> ()
   end
 
-(** Ancestor for [aproj] map visitor *)
+(** Ancestor for {!aproj} map visitor *)
 class ['self] map_aproj_base =
   object (_self : 'self)
     inherit [_] map_typed_value
@@ -291,21 +293,21 @@ type aproj =
           receive *several* (symbolic) given back values.
           
           This is the case in the following example:
-          ```
-          fn f<'a> (...) -> (&'a mut u32, &'a mut u32);
-          fn g<'b, 'c>(p : (&'b mut u32, &'c mut u32));
+          {[
+            fn f<'a> (...) -> (&'a mut u32, &'a mut u32);
+            fn g<'b, 'c>(p : (&'b mut u32, &'c mut u32));
+
+            let p = f(...);
+            g(move p);
+
+            // Symbolic context after the call to g:
+            // abs'a {'a} { [s@0 <: (&'a mut u32, &'a mut u32)] }
+            //
+            // abs'b {'b} { (s@0 <: (&'b mut u32, &'c mut u32)) }
+            // abs'c {'c} { (s@0 <: (&'b mut u32, &'c mut u32)) }
+          ]}
           
-          let p = f(...);
-          g(move p);
-          
-          // Symbolic context after the call to g:
-          // abs'a {'a} { [s@0 <: (&'a mut u32, &'a mut u32)] }
-          //
-          // abs'b {'b} { (s@0 <: (&'b mut u32, &'c mut u32)) }
-          // abs'c {'c} { (s@0 <: (&'b mut u32, &'c mut u32)) }
-          ```
-          
-          Upon evaluating the call to `f`, we introduce a symbolic value `s@0`
+          Upon evaluating the call to [f], we introduce a symbolic value [s@0]
           and a projector of loans (projector loans from the region 'c).
           This projector will later receive two given back values: one for
           'a and one for 'b.
@@ -313,13 +315,13 @@ type aproj =
           We accumulate those values in the list of projections (note that
           the meta value stores the value which was given back).
           
-          We can later end the projector of loans if `s@0` is not referenced
+          We can later end the projector of loans if [s@0] is not referenced
           anywhere in the context below a projector of borrows which intersects
           this projector of loans.
        *)
   | AProjBorrows of symbolic_value * rty
       (** Note that an AProjBorrows only operates on a value which is not below
-          a shared loan: under a shared loan, we use [abstract_shared_borrow].
+          a shared loan: under a shared loan, we use {!abstract_shared_borrow}.
           
           Also note that once given to a borrow projection, a symbolic value
           can't get updated/expanded: this means that we don't need to save
@@ -328,12 +330,12 @@ type aproj =
   | AEndedProjLoans of msymbolic_value * (msymbolic_value * aproj) list
       (** An ended projector of loans over a symbolic value.
       
-          See the explanations for [AProjLoans]
+          See the explanations for {!AProjLoans}
           
           Note that we keep the original symbolic value as a meta-value.
        *)
   | AEndedProjBorrows of msymbolic_value
-      (** The only purpose of [AEndedProjBorrows] is to store, for synthesis
+      (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
           purposes, the symbolic value which was generated and given back upon
           ending the borrow.
        *)
@@ -345,7 +347,7 @@ type aproj =
         name = "iter_aproj";
         variety = "iter";
         ancestors = [ "iter_aproj_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -353,13 +355,13 @@ type aproj =
         name = "map_aproj";
         variety = "map";
         ancestors = [ "map_aproj_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
 
 type region = RegionVarId.id Types.region [@@deriving show]
 
-(** Ancestor for [typed_avalue] iter visitor *)
+(** Ancestor for {!typed_avalue} iter visitor *)
 class ['self] iter_typed_avalue_base =
   object (_self : 'self)
     inherit [_] iter_aproj
@@ -371,7 +373,7 @@ class ['self] iter_typed_avalue_base =
       fun _ _ -> ()
   end
 
-(** Ancestor for [typed_avalue] map visitor *)
+(** Ancestor for {!typed_avalue} map visitor *)
 class ['self] map_typed_avalue_base =
   object (_self : 'self)
     inherit [_] map_aproj
@@ -420,7 +422,7 @@ and adt_avalue = {
 (** A loan content as stored in an abstraction.
 
     Note that the children avalues are independent of the parent avalues.
-    For instance, the child avalue contained in an [AMutLoan] will likely
+    For instance, the child avalue contained in an {!AMutLoan} will likely
     contain other, independent loans.
     Keeping track of the hierarchy is not necessary to maintain the borrow graph
     (which is the primary role of the abstractions), but it is necessary
@@ -433,36 +435,36 @@ and aloan_content =
          
           Example:
           ========
-          ```
-          fn f<'a>(...) -> &'a mut &'a mut u32;
-          
-          let px = f(...);
-          ```
+          {[
+            fn f<'a>(...) -> &'a mut &'a mut u32;
+
+            let px = f(...);
+          ]}
           
           We get (after some symbolic exansion):
-          ```
-          abs0 {
-            a_mut_loan l0 (a_mut_loan l1)
-          }
-          px -> mut_borrow l0 (mut_borrow @s1)
-          ```
+          {[
+            abs0 {
+              a_mut_loan l0 (a_mut_loan l1)
+            }
+            px -> mut_borrow l0 (mut_borrow @s1)
+          ]}
        *)
   | ASharedLoan of (BorrowId.Set.t[@opaque]) * typed_value * typed_avalue
       (** A shared loan owned by an abstraction.
 
           Example:
           ========
-          ```
-          fn f<'a>(...) -> &'a u32;
-          
-          let px = f(...);
-          ```
+          {[
+            fn f<'a>(...) -> &'a u32;
+
+            let px = f(...);
+          ]}
           
           We get:
-          ```
-          abs0 { a_shared_loan {l0} @s0 ⊥ }
-          px -> shared_loan l0
-          ```
+          {[
+            abs0 { a_shared_loan {l0} @s0 ⊥ }
+            px -> shared_loan l0
+          ]}
      *)
   | AEndedMutLoan of {
       child : typed_avalue;
@@ -480,20 +482,20 @@ and aloan_content =
       
           Example:
           ========
-          ```
-          abs0 { a_mut_loan l0 ⊥ }
-          x -> mut_borrow l0 (U32 3)
-          ```
+          {[
+            abs0 { a_mut_loan l0 ⊥ }
+            x -> mut_borrow l0 (U32 3)
+          ]}
           
-          After ending `l0`:
+          After ending [l0]:
           
-          ```
-          abs0 { a_ended_mut_loan { given_back = U32 3; child = ⊥; }
-          x -> ⊥
-          ```
+          {[
+            abs0 { a_ended_mut_loan { given_back = U32 3; child = ⊥; }
+            x -> ⊥
+          ]}
        *)
   | AEndedSharedLoan of typed_value * typed_avalue
-      (** Similar to [AEndedMutLoan] but in this case there are no avalues to
+      (** Similar to {!AEndedMutLoan} but in this case there are no avalues to
           give back. We keep the shared value because it now behaves as a
           "regular" value (which contains borrows we might want to end...).
        *)
@@ -502,55 +504,55 @@ and aloan_content =
       
           We need to keep track of ignored mutable loans, because we may have
           to apply projections on the values given back to those loans (say
-          you have a borrow of type `&'a mut &'b mut`, in the abstraction 'b,
+          you have a borrow of type [&'a mut &'b mut], in the abstraction 'b,
           the outer loan is ignored, however you need to keep track of it so
           that when ending the borrow corresponding to 'a you can correctly
           project on the inner value).
        
           Example:
           ========
-          ```
-          fn f<'a,'b>(...) -> &'a mut &'b mut u32;
-          let x = f(...);
-          
-          > abs'a { a_mut_loan l0 (a_ignored_mut_loan l1 ⊥) }
-          > abs'b { a_ignored_mut_loan l0 (a_mut_loan l1 ⊥) }
-          > x -> mut_borrow l0 (mut_borrow l1 @s1)
-          ```
+          {[
+            fn f<'a,'b>(...) -> &'a mut &'b mut u32;
+            let x = f(...);
+
+            > abs'a { a_mut_loan l0 (a_ignored_mut_loan l1 ⊥) }
+            > abs'b { a_ignored_mut_loan l0 (a_mut_loan l1 ⊥) }
+            > x -> mut_borrow l0 (mut_borrow l1 @s1)
+          ]}
        *)
   | AEndedIgnoredMutLoan of {
       child : typed_avalue;
       given_back : typed_avalue;
       given_back_meta : mvalue;
     }
-      (** Similar to [AEndedMutLoan], for ignored loans.
+      (** Similar to {!AEndedMutLoan}, for ignored loans.
 
            Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan].
-           See the comment for [AEndedMutLoan].
+           See the comment for {!AEndedMutLoan}.
        *)
   | AIgnoredSharedLoan of typed_avalue
       (** An ignored shared loan.
             
           Example:
           ========
-          ```
-          fn f<'a,'b>(...) -> &'a &'b u32;
-          let x = f(...);
-          
-          > abs'a { a_shared_loan {l0} (shared_borrow l1) (a_ignored_shared_loan ⊥) }
-          > abs'b { a_ignored_shared_loan (a_shared_loan {l1} @s1 ⊥) }
-          > x -> shared_borrow l0
-          ```
+          {[
+            fn f<'a,'b>(...) -> &'a &'b u32;
+            let x = f(...);
+
+            > abs'a { a_shared_loan {l0} (shared_borrow l1) (a_ignored_shared_loan ⊥) }
+            > abs'b { a_ignored_shared_loan (a_shared_loan {l1} @s1 ⊥) }
+            > x -> shared_borrow l0
+          ]}
        *)
 
 (** Note that when a borrow content is ended, it is replaced by ⊥ (while
     we need to track ended loans more precisely, especially because of their
     children values).
 
-    Note that contrary to [aloan_content], here the children avalues are
+    Note that contrary to {!aloan_content}, here the children avalues are
     not independent of the parent avalues. For instance, a value
-    `AMutBorrow (_, AMutBorrow (_, ...)` (ignoring the types) really is
-    to be seen like a `mut_borrow ... (mut_borrow ...)`.
+    [AMutBorrow (_, AMutBorrow (_, ...)] (ignoring the types) really is
+    to be seen like a [mut_borrow ... (mut_borrow ...)].
     
     TODO: be more precise about the ignored borrows (keep track of the borrow
     ids)?
@@ -564,18 +566,18 @@ and aborrow_content =
 
           Example:
           ========
-          ```
-          fn f<'a>(px : &'a mut u32);
-          
-          > x -> mut_loan l0
-          > px -> mut_borrow l0 (U32 0)
-          
-          f(move px);
-          
-          > x -> mut_loan l0
-          > px -> ⊥
-          > abs0 { a_mut_borrow l0 (U32 0) }
-          ```
+          {[
+            fn f<'a>(px : &'a mut u32);
+
+            > x -> mut_loan l0
+            > px -> mut_borrow l0 (U32 0)
+
+            f(move px);
+
+            > x -> mut_loan l0
+            > px -> ⊥
+            > abs0 { a_mut_borrow l0 (U32 0) }
+          ]}
           
           The meta-value stores the initial value on which the projector was
           applied, which reduced to this mut borrow. This meta-information
@@ -587,18 +589,18 @@ and aborrow_content =
     
           Example:
           ========
-          ```
-          fn f<'a>(px : &'a u32);
-          
-          > x -> shared_loan {l0} (U32 0)
-          > px -> shared_borrow l0
-          
-          f(move px);
-          
-          > x -> shared_loan {l0} (U32 0)
-          > px -> ⊥
-          > abs0 { a_shared_borrow l0 }
-          ```
+          {[
+            fn f<'a>(px : &'a u32);
+
+            > x -> shared_loan {l0} (U32 0)
+            > px -> shared_borrow l0
+
+            f(move px);
+
+            > x -> shared_loan {l0} (U32 0)
+            > px -> ⊥
+            > abs0 { a_shared_borrow l0 }
+          ]}
      *)
   | AIgnoredMutBorrow of BorrowId.id option * typed_avalue
       (** An ignored mutable borrow.
@@ -614,42 +616,42 @@ and aborrow_content =
 
           Example:
           ========
-          ```
-          fn f<'a,'b>(ppx : &'a mut &'b mut u32);
-          
-          > x -> mut_loan l0
-          > px -> mut_loan l1
-          > ppx -> mut_borrow l1 (mut_borrow l0 (U32 0))
+          {[
+            fn f<'a,'b>(ppx : &'a mut &'b mut u32);
 
-          f(move ppx);
+            > x -> mut_loan l0
+            > px -> mut_loan l1
+            > ppx -> mut_borrow l1 (mut_borrow l0 (U32 0))
 
-          > x -> mut_loan l0
-          > px -> mut_loan l1
-          > ppx -> ⊥
-          > abs'a { a_mut_borrow l1 (a_ignored_mut_borrow None (U32 0)) } // TODO: duplication
-          > abs'b {parents={abs'a}} { a_ignored_mut_borrow (Some l1) (a_mut_borrow l0 (U32 0)) }
-          
-          ... // abs'a ends
-          
-          > x -> mut_loan l0
-          > px -> @s0
-          > ppx -> ⊥
-          > abs'b {
-          >   a_ended_ignored_mut_borrow (a_proj_loans (@s0 <: &'b mut u32)) // <-- loan projector
-          >                              (a_mut_borrow l0 (U32 0))
-          > }
-          
-          ... // `@s0` gets expanded to `&mut l2 @s1`
+            f(move ppx);
 
-          > x -> mut_loan l0
-          > px -> &mut l2 @s1
-          > ppx -> ⊥
-          > abs'b {
-          >   a_ended_ignored_mut_borrow (a_mut_loan l2) // <-- loan l2 is here
-          >                              (a_mut_borrow l0 (U32 0))
-          > }
-          
-          ```
+            > x -> mut_loan l0
+            > px -> mut_loan l1
+            > ppx -> ⊥
+            > abs'a { a_mut_borrow l1 (a_ignored_mut_borrow None (U32 0)) } // TODO: duplication
+            > abs'b {parents={abs'a}} { a_ignored_mut_borrow (Some l1) (a_mut_borrow l0 (U32 0)) }
+
+            ... // abs'a ends
+
+            > x -> mut_loan l0
+            > px -> @s0
+            > ppx -> ⊥
+            > abs'b {
+            >   a_ended_ignored_mut_borrow (a_proj_loans (@s0 <: &'b mut u32)) // <-- loan projector
+            >                              (a_mut_borrow l0 (U32 0))
+            > }
+
+            ... // [@s0] gets expanded to [&mut l2 @s1]
+
+            > x -> mut_loan l0
+            > px -> &mut l2 @s1
+            > ppx -> ⊥
+            > abs'b {
+            >   a_ended_ignored_mut_borrow (a_mut_loan l2) // <-- loan l2 is here
+            >                              (a_mut_borrow l0 (U32 0))
+            > }
+
+          ]}
 
           Note that we could use AIgnoredMutLoan in the case the borrow id is not
           None, which would allow us to simplify the rules (to not have rules
@@ -675,16 +677,16 @@ and aborrow_content =
             when generating the pure translation.
        *)
   | AEndedMutBorrow of msymbolic_value * typed_avalue
-      (** The sole purpose of [AEndedMutBorrow] is to store the (symbolic) value
+      (** The sole purpose of {!AEndedMutBorrow} is to store the (symbolic) value
           that we gave back as a meta-value, to help with the synthesis.
 
-          We also remember the child [avalue] because this structural information
+          We also remember the child {!avalue} because this structural information
           is useful for the synthesis (but not for the symbolic execution):
           in practice the child value should only contain ended borrows, ignored
           values, bottom values, etc.
        *)
   | AEndedSharedBorrow
-      (** We don't really need [AEndedSharedBorrow]: we simply want to be
+      (** We don't really need {!AEndedSharedBorrow}: we simply want to be
           precise, and not insert ⊥ when ending borrows.
        *)
   | AEndedIgnoredMutBorrow of {
@@ -695,9 +697,9 @@ and aborrow_content =
               upon ending the borrow.
 
               Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan].
-              See the comment for [AEndedMutLoan].
+              See the comment for {!AEndedMutLoan}.
           *)
-    }  (** See the explanations for [AIgnoredMutBorrow] *)
+    }  (** See the explanations for {!AIgnoredMutBorrow} *)
   | AProjSharedBorrow of abstract_shared_borrows
       (** A projected shared borrow.
 
@@ -708,30 +710,30 @@ and aborrow_content =
 
           Example:
           ========
-          Below, when calling `f`, we need to introduce one shared borrow per
+          Below, when calling [f], we need to introduce one shared borrow per
           borrow in the argument.
-          ```
-          fn f<'a,'b>(pppx : &'a &'b &'c mut u32);
+          {[
+            fn f<'a,'b>(pppx : &'a &'b &'c mut u32);
 
-          > x    -> mut_loan l0
-          > px   -> shared_loan {l1} (mut_borrow l0 (U32 0))
-          > ppx  -> shared_loan {l2} (shared_borrow l1)
-          > pppx -> shared_borrow l2
+            > x    -> mut_loan l0
+            > px   -> shared_loan {l1} (mut_borrow l0 (U32 0))
+            > ppx  -> shared_loan {l2} (shared_borrow l1)
+            > pppx -> shared_borrow l2
 
-          f(move pppx);
+            f(move pppx);
 
-          > x    -> mut_loan l0
-          > px   -> shared_loan {l1, l3, l4} (mut_borrow l0 (U32 0))
-          > ppx  -> shared_loan {l2} (shared_borrow l1)
-          > pppx -> ⊥
-          > abs'a { a_proj_shared_borrow {l2} }
-          > abs'b { a_proj_shared_borrow {l3} } // l3 reborrows l1
-          > abs'c { a_proj_shared_borrow {l4} } // l4 reborrows l0
-          ```
+            > x    -> mut_loan l0
+            > px   -> shared_loan {l1, l3, l4} (mut_borrow l0 (U32 0))
+            > ppx  -> shared_loan {l2} (shared_borrow l1)
+            > pppx -> ⊥
+            > abs'a { a_proj_shared_borrow {l2} }
+            > abs'b { a_proj_shared_borrow {l3} } // l3 reborrows l1
+            > abs'c { a_proj_shared_borrow {l4} } // l4 reborrows l0
+          ]}
        *)
 
 (* TODO: the type of avalues doesn't make sense for loan avalues: they currently
-   are typed as `& (mut) T` instead of `T`...
+   are typed as [& (mut) T] instead of [T]...
 *)
 and typed_avalue = { value : avalue; ty : rty }
 [@@deriving
@@ -741,7 +743,7 @@ and typed_avalue = { value : avalue; ty : rty }
         name = "iter_typed_avalue";
         variety = "iter";
         ancestors = [ "iter_typed_avalue_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -749,7 +751,7 @@ and typed_avalue = { value : avalue; ty : rty }
         name = "map_typed_avalue";
         variety = "map";
         ancestors = [ "map_typed_avalue_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
 
@@ -764,6 +766,12 @@ type abs_kind =
           are currently synthesizing *)
 [@@deriving show]
 
+(** Abstractions model the parts in the borrow graph where the borrowing relations
+    have been abstracted because of a function call.
+    
+    In order to model the relations between the borrows, we use "abstraction values",
+    which are a special kind of value.
+*)
 type abs = {
   abs_id : (AbstractionId.id[@opaque]);
   call_id : (FunCallId.id[@opaque]);
@@ -789,7 +797,7 @@ type abs = {
           This allows to "pin" some regions, and is useful when generating
           backward functions.
           
-          For instance, if we have: `fn f<'a, 'b>(...) -> (&'a mut T, &'b mut T)`,
+          For instance, if we have: [fn f<'a, 'b>(...) -> (&'a mut T, &'b mut T)],
           when generating the backward function for 'a, we have to make sure we
           don't need to end the return region for 'b (if it is the case, it means
           the function doesn't borrow check).
@@ -810,7 +818,7 @@ type abs = {
         name = "iter_abs";
         variety = "iter";
         ancestors = [ "iter_typed_avalue" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -818,15 +826,9 @@ type abs = {
         name = "map_abs";
         variety = "map";
         ancestors = [ "map_typed_avalue" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
-(** Abstractions model the parts in the borrow graph where the borrowing relations
-    have been abstracted because of a function call.
-    
-    In order to model the relations between the borrows, we use "abstraction values",
-    which are a special kind of value.
-*)
 
 (** A symbolic expansion
     

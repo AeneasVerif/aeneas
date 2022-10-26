@@ -32,7 +32,7 @@ let lowercase_ascii = Char.lowercase_ascii
 let uppercase_ascii = Char.uppercase_ascii
 
 (** Using buffers as per:
-    [https://stackoverflow.com/questions/29957418/how-to-convert-char-list-to-string-in-ocaml]
+    {{: https://stackoverflow.com/questions/29957418/how-to-convert-char-list-to-string-in-ocaml} stackoverflow}
  *)
 let string_of_chars (chars : char list) : string =
   let buf = Buffer.create (List.length chars) in

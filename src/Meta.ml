@@ -26,17 +26,17 @@ type meta = {
           to the macro).
 
           Ex:
-          ```text
-          // Below, we consider the spans for the statements inside `test`
+          {[
+            // Below, we consider the spans for the statements inside `test`
 
-          //   the statement we consider, which gets inlined in `test`
-                                   VV
-          macro_rules! macro { ... st ... } // `generated_from_span` refers to this location
+            //   the statement we consider, which gets inlined in `test`
+                                     VV
+            macro_rules! macro { ... st ... } // `generated_from_span` refers to this location
 
-          fn test() {
-              macro!(); // <-- `span` refers to this location
-          }
-          ```
+            fn test() {
+                macro!(); // <-- `span` refers to this location
+            }
+          ]}
        *)
   generated_from_span : span option;
       (** Where the code actually comes from, in case of macro expansion/inlining/etc. *)

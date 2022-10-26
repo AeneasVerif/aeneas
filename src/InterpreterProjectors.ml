@@ -12,7 +12,7 @@ open InterpreterBorrowsCore
 
     Apply a proj_borrows on a shared borrow.
     Note that when projecting over shared values, we generate
-    [abstract_shared_borrows], not avalues.
+    {!V.abstract_shared_borrows}, not {!V.avalue}s.
 *)
 let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
@@ -22,7 +22,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
   assert (ety = v.V.ty);
-  (* Project - if there are no regions from the abstraction in the type, return `_` *)
+  (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then []
   else
     match (v.V.value, ty) with
@@ -97,12 +97,12 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     - [v]: the value over which we project
     - [ty]: the projection type (is used to map borrows to regions, or to
       interpret the borrows as belonging to some regions...). Remember that
-      `v` doesn't contain region information.
+      [v] doesn't contain region information.
       For instance, if we have:
-      `v <: ty` where:
-      - `v = mut_borrow l ...`
-      - `ty = Ref (r, ...)`
-      then we interpret the borrow `l` as belonging to region `r`
+      [v <: ty] where:
+      - [v = mut_borrow l ...]
+      - [ty = Ref (r, ...)]
+      then we interpret the borrow [l] as belonging to region [r]
     
     Also, when applying projections on shared values, we need to apply
     reborrows. This is a bit annoying because, with the way we compute
@@ -115,13 +115,13 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     This check is activated when applying projectors upon calling a function
     (because we need to check that function arguments don't contain ⊥),
     but deactivated when expanding symbolic values:
-    ```
-    fn f<'a,'b>(x : &'a mut u32, y : &'b mut u32) -> (&'a mut u32, &'b mut u32);
-    
-    let p = f(&mut x, &mut y); // p -> @s0
-    assert(x == ...); // end 'a
-    let z = p.1; // HERE: the symbolic expansion of @s0 contains ended regions
-    ```
+    {[
+      fn f<'a,'b>(x : &'a mut u32, y : &'b mut u32) -> (&'a mut u32, &'b mut u32);
+
+      let p = f(&mut x, &mut y); // p -> @s0
+      assert(x == ...); // end 'a
+      let z = p.1; // HERE: the symbolic expansion of @s0 contains ended regions
+    ]}
 *)
 let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
@@ -131,7 +131,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
   assert (ety = v.V.ty);
-  (* Project - if there are no regions from the abstraction in the type, return `_` *)
+  (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then { V.value = V.AIgnored; ty }
   else
     let value : V.avalue =
@@ -343,18 +343,18 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
     This function is used when applying projectors on shared borrows: when
     doing so, we might need to reborrow subvalues from the shared value.
     For instance:
-    ```
-    fn f<'a,'b,'c>(x : &'a 'b 'c u32)
-    ```
+    {[
+      fn f<'a,'b,'c>(x : &'a 'b 'c u32)
+    ]}
     When introducing the abstractions for 'a, 'b and 'c, we apply a projector
-    on some value `shared_borrow l : &'a &'b &'c u32`.
+    on some value [shared_borrow l : &'a &'b &'c u32].
     In the 'a abstraction, this shared borrow gets projected. However, when
     reducing the projectors for the 'b and 'c abstractions, we need to make
     sure that the borrows living in regions 'b and 'c live as long as those
     regions. This is done by looking up the shared value and applying reborrows
     on the borrows we find there (note that those reborrows apply on shared
     borrows - easy - and mutable borrows - in this case, we reborrow the whole
-    borrow: `mut_borrow ... ~~> shared_loan {...} (mut_borrow ...)`).
+    borrow: [mut_borrow ... ~~> shared_loan {...} (mut_borrow ...)]).
 *)
 let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
     (ctx : C.eval_ctx) : C.eval_ctx =
@@ -415,6 +415,8 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
     object
       inherit [_] C.map_eval_ctx as super
 
+      (** We may need to reborrow mutable borrows. Note that this doesn't
+          happen for aborrows *)
       method! visit_typed_value env v =
         match v.V.value with
         | V.Borrow (V.MutBorrow (bid, bv)) ->
@@ -430,9 +432,9 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
               let ty = v.V.ty in
               { V.value; ty }
         | _ -> super#visit_typed_value env v
-      (** We may need to reborrow mutable borrows. Note that this doesn't
-          happen for aborrows *)
 
+      (** We reimplement {!visit_loan_content} (rather than one of the sub-
+          functions) on purpose: exhaustive matches are good for maintenance *)
       method! visit_loan_content env lc =
         match lc with
         | V.SharedLoan (bids, sv) ->
@@ -455,8 +457,6 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
         | V.MutLoan bid ->
             (* Nothing special to do *)
             super#visit_MutLoan env bid
-      (** We reimplement [visit_loan_content] (rather than one of the sub-
-          functions) on purpose: exhaustive matches are good for maintenance *)
 
       method! visit_aloan_content env lc =
         match lc with

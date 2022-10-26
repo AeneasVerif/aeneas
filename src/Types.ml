@@ -84,10 +84,10 @@ let all_int_types = List.append all_signed_int_types all_unsigned_int_types
 type ref_kind = Mut | Shared [@@deriving show, ord]
 type assumed_ty = Box | Vec | Option [@@deriving show, ord]
 
-(** The variant id for `Option::None` *)
+(** The variant id for [Option::None] *)
 let option_none_id = VariantId.of_int 0
 
-(** The variant id for `Option::Some` *)
+(** The variant id for [Option::Some] *)
 let option_some_id = VariantId.of_int 1
 
 (** Type identifier for ADTs.
@@ -125,7 +125,7 @@ class ['self] map_ty_base =
 
 type 'r ty =
   | Adt of type_id * 'r list * 'r ty list
-      (** [Adt] encodes ADTs, tuples and assumed types *)
+      (** {!Adt} encodes ADTs, tuples and assumed types *)
   | TypeVar of TypeVarId.id
   | Bool
   | Char
@@ -143,7 +143,7 @@ type 'r ty =
         name = "iter_ty";
         variety = "iter";
         ancestors = [ "iter_ty_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
       },
@@ -152,7 +152,7 @@ type 'r ty =
         name = "map_ty";
         variety = "map";
         ancestors = [ "map_ty_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
       }]

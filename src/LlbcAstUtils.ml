@@ -2,7 +2,7 @@ open LlbcAst
 open Utils
 module T = Types
 
-(** Check if a [statement] contains loops *)
+(** Check if a {!type:LlbcAst.statement} contains loops *)
 let statement_has_loops (st : statement) : bool =
   let obj =
     object
@@ -15,7 +15,7 @@ let statement_has_loops (st : statement) : bool =
     false
   with Found -> true
 
-(** Check if a [fun_decl] contains loops *)
+(** Check if a {!type:LlbcAst.fun_decl} contains loops *)
 let fun_decl_has_loops (fd : fun_decl) : bool =
   match fd.body with
   | Some body -> statement_has_loops body.body
@@ -56,7 +56,7 @@ let rec list_parent_region_groups (sg : fun_sig) (gid : T.RegionGroupId.id) :
   in
   parents
 
-(** Small utility: same as [list_parent_region_groups], but returns an ordered list.  *)
+(** Small utility: same as {!list_parent_region_groups}, but returns an ordered list.  *)
 let list_ordered_parent_region_groups (sg : fun_sig) (gid : T.RegionGroupId.id)
     : T.RegionGroupId.id list =
   let pset = list_parent_region_groups sg gid in

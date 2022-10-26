@@ -25,15 +25,15 @@ type config = {
        *)
   test_unit_functions : bool;
       (** If true, insert tests in the generated files to check that the
-          unit functions normalize to `Success _`.
+          unit functions normalize to [Success _].
           
           For instance, in F* it generates code like this:
-          ```
-          let _ = assert_norm (FUNCTION () = Success ())
-          ```
+          {[
+            let _ = assert_norm (FUNCTION () = Success ())
+          ]}
        *)
   extract_decreases_clauses : bool;
-      (** If `true`, insert `decreases` clauses for all the recursive definitions.
+      (** If [true], insert [decreases] clauses for all the recursive definitions.
 
           The body of such clauses must be defined by the user.
        *)
@@ -44,11 +44,11 @@ type config = {
        *)
 }
 
-type symbolic_fun_translation = V.symbolic_value list * SA.expression
 (** The result of running the symbolic interpreter on a function:
     - the list of symbolic values used for the input values
     - the generated symbolic AST
 *)
+type symbolic_fun_translation = V.symbolic_value list * SA.expression
 
 (** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
     for the forward function and the backward functions.
@@ -355,6 +355,7 @@ let translate_module_to_pure (config : C.partial_config)
   (* Return *)
   (trans_ctx, type_decls, pure_translations)
 
+(** Extraction context *)
 type gen_ctx = {
   crate : Crates.llbc_crate;
   extract_ctx : PureToExtract.extraction_ctx;
@@ -362,7 +363,6 @@ type gen_ctx = {
   trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t;
   functions_with_decreases_clause : A.FunDeclId.Set.t;
 }
-(** Extraction context *)
 
 type gen_config = {
   mp_config : Micro.config;
@@ -372,14 +372,14 @@ type gen_config = {
   extract_template_decreases_clauses : bool;
   extract_fun_decls : bool;
   extract_transparent : bool;
-      (** If `true`, extract the transparent declarations, otherwise ignore. *)
+      (** If [true], extract the transparent declarations, otherwise ignore. *)
   extract_opaque : bool;
-      (** If `true`, extract the opaque declarations, otherwise ignore. *)
+      (** If [true], extract the opaque declarations, otherwise ignore. *)
   extract_state_type : bool;
-      (** If `true`, generate a definition/declaration for the state type *)
+      (** If [true], generate a definition/declaration for the state type *)
   interface : bool;
-      (** `true` if we generate an interface file, `false` otherwise.
-          For now, this only impacts whether we use `val` or `assume val` for the
+      (** [true] if we generate an interface file, [false] otherwise.
+          For now, this only impacts whether we use [val] or [assume val] for the
           opaque definitions. In the future, we might want to extract all the
           declarations in an interface file, together with an implementation file
           if needed.
@@ -586,7 +586,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
 
   (* Print the headers.
    * Note that we don't use the OCaml formatter for purpose: we want to control
-   * line insertion (we have to make sure that some instructions like `open MODULE`
+   * line insertion (we have to make sure that some instructions like [open MODULE]
    * are printed on one line!).
    * This is ok as long as we end up with a line break, so that the formatter's
    * internal count is consistent with the state of the file.

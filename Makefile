@@ -31,7 +31,7 @@ build-tests-verify: build tests verify
 
 # Build the project
 .PHONY: build
-build: build-driver build-lib
+build: build-driver build-lib doc
 
 .PHONY: build-driver
 build-driver:

@@ -7,8 +7,8 @@ type subtype_info = {
 }
 [@@deriving show]
 
+(** See {!type_decl_info} *)
 type type_param_info = subtype_info [@@deriving show]
-(** See [type_decl_info] *)
 
 type expl_info = subtype_info [@@deriving show]
 
@@ -23,26 +23,26 @@ type type_borrows_info = {
 }
 [@@deriving show]
 
+(** Generic definition *)
 type 'p g_type_info = {
   borrows_info : type_borrows_info;
       (** Various informations about the borrows *)
   param_infos : 'p;  (** Gives information about the type parameters *)
 }
 [@@deriving show]
-(** Generic definition *)
 
-type type_decl_info = type_param_info list g_type_info [@@deriving show]
 (** Information about a type definition. *)
+type type_decl_info = type_param_info list g_type_info [@@deriving show]
 
-type ty_info = type_borrows_info [@@deriving show]
 (** Information about a type. *)
+type ty_info = type_borrows_info [@@deriving show]
 
-type partial_type_info = type_param_info list option g_type_info
-[@@deriving show]
 (** Helper definition.
 
-    Allows us to factorize code: [analyze_full_ty] is used both to analyze
+    Allows us to factorize code: {!analyze_full_ty} is used both to analyze
     type definitions and types. *)
+type partial_type_info = type_param_info list option g_type_info
+[@@deriving show]
 
 type type_infos = type_decl_info TypeDeclId.Map.t [@@deriving show]
 
@@ -129,11 +129,11 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
         | None -> ty_info
         | Some param_infos ->
             let param_info = TypeVarId.nth param_infos var_id in
-            (* Set `under_borrow` *)
+            (* Set [under_borrow] *)
             let under_borrow =
               check_update_bool param_info.under_borrow expl_info.under_borrow
             in
-            (* Set `under_nested_borrows` *)
+            (* Set [under_nested_borrows] *)
             let under_mut_borrow =
               check_update_bool param_info.under_mut_borrow
                 expl_info.under_mut_borrow
@@ -318,7 +318,7 @@ let analyze_type_declarations (type_decls : type_decl TypeDeclId.Map.t)
     we have already analyzed the type definitions in the context.
  *)
 let analyze_ty (infos : type_infos) (ty : 'r ty) : ty_info =
-  (* We don't use `updated` but need to give it as parameter *)
+  (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
   let r_is_static _ = false in

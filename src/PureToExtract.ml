@@ -34,6 +34,18 @@ type global_name = Names.global_name
 type fun_name = Names.fun_name
 
 (* TODO: this should a module we give to a functor! *)
+
+(** A formatter's role is twofold:
+    1. Come up with name suggestions.
+    For instance, provided some information about a function (its basename,
+    information about the region group, etc.) it should come up with an
+    appropriate name for the forward/backward function.
+    
+    It can of course apply many transformations, like changing to camel case/
+    snake case, adding prefixes/suffixes, etc.
+    
+    2. Format some specific terms, like constants.
+ *)
 type formatter = {
   bool_name : string;
   char_name : string;
@@ -49,7 +61,7 @@ type formatter = {
           generate some names if we want to extract the structures to records...
           We might want to extract such structures to tuples, later, but field
           access then causes trouble because not all provers accept syntax like
-          `x.3` where `x` is a tuple.
+          [x.3] where [x] is a tuple.
        *)
   variant_name : name -> string -> string;
       (** Inputs:
@@ -60,10 +72,10 @@ type formatter = {
       (** Structure constructors are used when constructing structure values.
       
           For instance, in F*:
-          ```
-          type pair = { x : nat; y : nat }
-          let p : pair = Mkpair 0 1
-          ```
+          {[
+            type pair = { x : nat; y : nat }
+            let p : pair = Mkpair 0 1
+          ]}
           
           Inputs:
           - type name
@@ -85,7 +97,7 @@ type formatter = {
           - function basename
           - number of region groups
           - region group information in case of a backward function
-            (`None` if forward function)
+            ([None] if forward function)
           - pair:
             - do we generate the forward function (it may have been filtered)?
             - the number of extracted backward functions (not necessarily equal
@@ -130,8 +142,9 @@ type formatter = {
       
           Inputs:
           - formatter
-          - [inside]: if `true`, the value should be wrapped in parentheses
-            if it is made of an application (ex.: `U32 3`)
+          - [inside]: if [true], the value should be wrapped in parentheses
+            if it is made of an application (ex.: [U32 3])
+          - the constant value
        *)
   extract_unop :
     (bool -> texpression -> unit) ->
@@ -143,6 +156,7 @@ type formatter = {
       (** Format a unary operation
       
           Inputs:
+          - a formatter for expressions (called on the argument of the unop)
           - extraction context (see below)
           - formatter
           - expression formatter
@@ -162,6 +176,7 @@ type formatter = {
       (** Format a binary operation
       
           Inputs:
+          - a formatter for expressions (called on the arguments of the binop)
           - extraction context (see below)
           - formatter
           - expression formatter
@@ -171,17 +186,6 @@ type formatter = {
           - argument 1
        *)
 }
-(** A formatter's role is twofold:
-    1. Come up with name suggestions.
-    For instance, provided some information about a function (its basename,
-    information about the region group, etc.) it should come up with an
-    appropriate name for the forward/backward function.
-    
-    It can of course apply many transformations, like changing to camel case/
-    snake case, adding prefixes/suffixes, etc.
-    
-    2. Format some specific terms, like constants.
- *)
 
 (** We use identifiers to look for name clashes *)
 type id =
@@ -199,10 +203,10 @@ type id =
           constructors.
           
           For instance, in F*:
-          ```
-          type pair = { x: nat; y : nat }
-          let p : pair = Mkpair 0 1
-          ```
+          {[
+            type pair = { x: nat; y : nat }
+            let p : pair = Mkpair 0 1
+          ]}
        *)
   | VariantId of type_id * VariantId.id
       (** If often happens that variant names must be unique (it is the case in
@@ -233,6 +237,12 @@ end
 
 module IdMap = Collections.MakeMap (IdOrderedType)
 
+(** The names map stores the mappings from names to identifiers and vice-versa.
+
+    We use it for lookups (during the translation) and to check for name clashes.
+    
+    [id_to_string] is for debugging.
+  *)
 type names_map = {
   id_to_name : string IdMap.t;
   name_to_id : id StringMap.t;
@@ -242,12 +252,6 @@ type names_map = {
        *)
   names_set : StringSet.t;
 }
-(** The names map stores the mappings from names to identifiers and vice-versa.
-
-    We use it for lookups (during the translation) and to check for name clashes.
-    
-    [id_to_string] is for debugging.
-  *)
 
 let names_map_add (id_to_string : id -> string) (id : id) (name : string)
     (nm : names_map) : names_map =
@@ -297,12 +301,12 @@ let names_map_add_assumed_function (id_to_string : id -> string)
     
     Also note that at some point, we thought about trying to reuse names of
     variables which are not used anymore, like here:
-    ```
-    let x = ... in
-    ...
-    let x0 = ... in // We could use the name "x" if `x` is not used below
-    ...
-    ```
+    {[
+      let x = ... in
+      ...
+      let x0 = ... in // We could use the name "x" if [x] is not used below
+      ...
+    ]}
     
     However it is a good idea to keep things as they are for F*: as F* is
     designed for extrinsic proofs, a proof about a function follows this
@@ -322,13 +326,6 @@ let basename_to_unique (names_set : StringSet.t)
   in
   if StringSet.mem basename names_set then gen 0 else basename
 
-type extraction_ctx = {
-  trans_ctx : trans_ctx;
-  names_map : names_map;
-  fmt : formatter;
-  indent_incr : int;
-      (** The indent increment we insert whenever we need to indent more *)
-}
 (** Extraction context.
 
     Note that the extraction context contains information coming from the
@@ -336,6 +333,13 @@ type extraction_ctx = {
     we use the region information to generate the names of the backward
     functions, etc.
  *)
+type extraction_ctx = {
+  trans_ctx : trans_ctx;
+  names_map : names_map;
+  fmt : formatter;
+  indent_incr : int;
+      (** The indent increment we insert whenever we need to indent more *)
+}
 
 (** Debugging function *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
@@ -495,7 +499,7 @@ let ctx_add_type_var (basename : string) (id : TypeVarId.id)
   let ctx = ctx_add (TypeVarId id) name ctx in
   (ctx, name)
 
-(** See [ctx_add_type_var] *)
+(** See {!ctx_add_type_var} *)
 let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
     (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
@@ -511,7 +515,7 @@ let ctx_add_var (basename : string) (id : VarId.id) (ctx : extraction_ctx) :
   let ctx = ctx_add (VarId id) name ctx in
   (ctx, name)
 
-(** See [ctx_add_var] *)
+(** See {!ctx_add_var} *)
 let ctx_add_vars (vars : var list) (ctx : extraction_ctx) :
     extraction_ctx * string list =
   List.fold_left_map
@@ -685,9 +689,9 @@ let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
 let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
     ((keep_fwd, num_backs) : bool * int) : string =
   (* There are several cases:
-     - [rg] is `Some`: this is a forward function:
+     - [rg] is [Some]: this is a forward function:
        - we add "_fwd"
-     - [rg] is `None`: this is a backward function:
+     - [rg] is [None]: this is a backward function:
        - this function has one extracted backward function:
          - if the forward function has been filtered, we add "_fwd_back":
            the forward function is useless, so the unique backward function

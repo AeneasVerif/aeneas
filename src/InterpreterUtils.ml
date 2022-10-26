@@ -66,7 +66,7 @@ let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
 (** Create a loans projector value from a symbolic value.
     
     Checks if the projector will actually project some regions. If not,
-    returns [AIgnored] (`_`).
+    returns {!V.AIgnored} ([_]).
     
     TODO: update to handle 'static
  *)
@@ -118,31 +118,31 @@ let remove_borrow_from_asb (bid : V.BorrowId.id)
     contents when we perform environment lookups by using borrow ids) *)
 type ('a, 'b) concrete_or_abs = Concrete of 'a | Abstract of 'b
 
-type g_loan_content = (V.loan_content, V.aloan_content) concrete_or_abs
 (** Generic loan content: concrete or abstract *)
+type g_loan_content = (V.loan_content, V.aloan_content) concrete_or_abs
 
-type g_borrow_content = (V.borrow_content, V.aborrow_content) concrete_or_abs
 (** Generic borrow content: concrete or abstract *)
+type g_borrow_content = (V.borrow_content, V.aborrow_content) concrete_or_abs
 
 type abs_or_var_id = AbsId of V.AbstractionId.id | VarId of V.VarId.id option
 
+(** Utility exception *)
 exception FoundBorrowContent of V.borrow_content
-(** Utility exception *)
 
+(** Utility exception *)
 exception FoundLoanContent of V.loan_content
-(** Utility exception *)
 
+(** Utility exception *)
 exception FoundABorrowContent of V.aborrow_content
-(** Utility exception *)
 
+(** Utility exception *)
 exception FoundGBorrowContent of g_borrow_content
-(** Utility exception *)
 
+(** Utility exception *)
 exception FoundGLoanContent of g_loan_content
-(** Utility exception *)
 
-exception FoundAProjBorrows of V.symbolic_value * T.rty
 (** Utility exception *)
+exception FoundAProjBorrows of V.symbolic_value * T.rty
 
 let symbolic_value_id_in_ctx (sv_id : V.SymbolicValueId.id) (ctx : C.eval_ctx) :
     bool =
@@ -187,7 +187,7 @@ let symbolic_value_has_ended_regions (ended_regions : T.RegionId.Set.t)
   let regions = rty_regions s.V.sv_ty in
   not (T.RegionId.Set.disjoint regions ended_regions)
 
-(** Check if a [value] contains ⊥.
+(** Check if a {!type:V.value} contains [⊥].
 
     Note that this function is very general: it also checks wether
     symbolic values contain already ended regions.

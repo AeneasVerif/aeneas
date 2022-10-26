@@ -82,21 +82,21 @@ type operand =
 
     Note that ADTs are desaggregated at some point in MIR. For instance, if
     we have in Rust:
-    ```
-    let ls = Cons(hd, tl);
-    ```
+    {[
+      let ls = Cons(hd, tl);
+    ]}
     
     In MIR we have (yes, the discriminant update happens *at the end* for some
     reason):
-    ```
-    (ls as Cons).0 = move hd;
-    (ls as Cons).1 = move tl;
-    discriminant(ls) = 0; // assuming `Cons` is the variant of index 0
-    ```
+    {[
+      (ls as Cons).0 = move hd;
+      (ls as Cons).1 = move tl;
+      discriminant(ls) = 0; // assuming [Cons] is the variant of index 0
+    ]}
     
     Note that in our semantics, we handle both cases (in case of desaggregated
-    initialization, `ls` is initialized to `⊥`, then this `⊥` is expanded to
-    `Cons (⊥, ⊥)` upon the first assignment, at which point we can initialize
+    initialization, [ls] is initialized to [⊥], then this [⊥] is expanded to
+    [Cons (⊥, ⊥)] upon the first assignment, at which point we can initialize
     the field 0, etc.).
  *)
 type aggregate_kind =
