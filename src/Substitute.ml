@@ -276,6 +276,10 @@ let call_substitute (tsubst : T.TypeVarId.id -> T.ety) (call : A.call) : A.call
 (** Apply a type substitution to a statement *)
 let rec statement_substitute (tsubst : T.TypeVarId.id -> T.ety)
     (st : A.statement) : A.statement =
+  { st with A.content = raw_statement_substitute tsubst st.content }
+
+and raw_statement_substitute (tsubst : T.TypeVarId.id -> T.ety)
+    (st : A.raw_statement) : A.raw_statement =
   match st with
   | A.Assign (p, rvalue) ->
       let p = place_substitute tsubst p in

@@ -810,7 +810,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
   (* Evaluate *)
   let cf_eval_st cf : m_fun =
    fun ctx ->
-    match st with
+    match st.content with
     | A.Assign (p, rvalue) ->
         (* Evaluate the rvalue *)
         let cf_eval_rvalue = eval_rvalue config rvalue in

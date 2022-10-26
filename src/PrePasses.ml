@@ -31,12 +31,12 @@ let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
       inherit [_] A.map_statement as super
 
       method! visit_Sequence env st1 st2 =
-        match (st1, st2) with
+        match (st1.content, st2.content) with
         | Drop p1, Assign (p2, _) ->
-            if p1 = p2 then self#visit_statement env st2
+            if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
-        | Drop p1, Sequence (Assign (p2, _), _) ->
-            if p1 = p2 then self#visit_statement env st2
+        | Drop p1, Sequence ({ content = Assign (p2, _); meta = _ }, _) ->
+            if p1 = p2 then (self#visit_statement env st2).content
             else super#visit_Sequence env st1 st2
         | _ -> super#visit_Sequence env st1 st2
     end
