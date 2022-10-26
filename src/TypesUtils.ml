@@ -5,7 +5,7 @@ module TA = TypesAnalysis
 let type_decl_is_opaque (d : type_decl) : bool =
   match d.kind with Struct _ | Enum _ -> false | Opaque -> true
 
-(** Retrieve the list of fields for the given variant of a [type_decl].
+(** Retrieve the list of fields for the given variant of a {!Types.type_decl}.
 
     Raises [Invalid_argument] if the arguments are incorrect.
  *)
@@ -25,7 +25,7 @@ let type_decl_get_fields (def : type_decl)
              - def: " ^ show_type_decl def ^ "\n- opt_variant_id: "
           ^ opt_variant_id))
 
-(** Return [true] if a [ty] is actually `unit` *)
+(** Return [true] if a {!Types.ty} is actually [unit] *)
 let ty_is_unit (ty : 'r ty) : bool =
   match ty with Adt (Tuple, [], []) -> true | _ -> false
 
@@ -51,13 +51,13 @@ let mk_unit_ty : 'r ty = Adt (Tuple, [], [])
 (** The usize type *)
 let mk_usize_ty : 'r ty = Integer Usize
 
-(** Deconstruct a type of the form `Box<T>` to retrieve the `T` inside *)
+(** Deconstruct a type of the form [Box<T>] to retrieve the [T] inside *)
 let ty_get_box (box_ty : ety) : ety =
   match box_ty with
   | Adt (Assumed Box, [], [ boxed_ty ]) -> boxed_ty
   | _ -> failwith "Not a boxed type"
 
-(** Deconstruct a type of the form `&T` or `&mut T` to retrieve the `T` (and
+(** Deconstruct a type of the form [&T] or [&mut T] to retrieve the [T] (and
     the borrow kind, etc.)
  *)
 let ty_get_ref (ty : 'r ty) : 'r * 'r ty * ref_kind =
@@ -99,7 +99,8 @@ let rty_regions_intersect (ty : rty) (regions : RegionId.Set.t) : bool =
   let ty_regions = rty_regions ty in
   not (RegionId.Set.disjoint ty_regions regions)
 
-(** Convert an [ety], containing no region variables, to an [rty] or an [sty].
+(** Convert an {!Types.ety}, containing no region variables, to an {!Types.rty}
+    or an {!Types.sty}.
 
     In practice, it is the identity.
  *)
@@ -127,7 +128,7 @@ let ety_no_regions_to_sty (ty : ety) : sty = ety_no_regions_to_gr_ty ty
 (** Retuns true if the type contains borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes
-    we erase the lists of regions (by replacing them with `[]` when using `ety`,
+    we erase the lists of regions (by replacing them with [[]] when using {!Types.ety},
     and when a type uses 'static this region doesn't appear in the region parameters.
  *)
 let ty_has_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
@@ -137,7 +138,7 @@ let ty_has_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
 (** Retuns true if the type contains nested borrows.
 
     Note that we can't simply explore the type and look for regions: sometimes
-    we erase the lists of regions (by replacing them with `[]` when using `ety`,
+    we erase the lists of regions (by replacing them with [[]] when using {!Types.ety},
     and when a type uses 'static this region doesn't appear in the region parameters.
  *)
 let ty_has_nested_borrows (infos : TA.type_infos) (ty : 'r ty) : bool =
@@ -149,7 +150,7 @@ let ty_has_borrow_under_mut (infos : TA.type_infos) (ty : 'r ty) : bool =
   let info = TA.analyze_ty infos ty in
   info.TA.contains_borrow_under_mut
 
-(** Check if a [ty] contains regions from a given set *)
+(** Check if a {!Types.ty} contains regions from a given set *)
 let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : rty) : bool =
   let obj =
     object

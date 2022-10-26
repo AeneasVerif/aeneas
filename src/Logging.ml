@@ -138,7 +138,8 @@ let level_to_color (lvl : L.level) =
   | NoLevel -> Default
 
 (** [format styles str] formats [str] to the given [styles] -
-    TODO: comes from easy_logging (did not manage to reuse the module directl)
+    TODO: comes from {{: http://ocamlverse.net/content/documentation_guidelines.html}[easy_logging]}
+    (did not manage to reuse the module directly)
 *)
 let rec format styles str =
   match styles with
@@ -147,7 +148,8 @@ let rec format styles str =
       Printf.sprintf "\027[%dm%s\027[%dm" set (format styles' str) reset
   | [] -> str
 
-(** TODO: comes from easy_logging (did not manage to reuse the module directly) *)
+(** TODO: comes from {{: http://ocamlverse.net/content/documentation_guidelines.html}[easy_logging]}
+    (did not manage to reuse the module directly) *)
 let format_tags (tags : string list) =
   match tags with
   | [] -> ""

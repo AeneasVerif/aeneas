@@ -66,24 +66,24 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
     object (self)
       inherit [_] C.map_eval_ctx as super
 
+      (** When visiting an abstraction, we remember the regions it owns to be
+          able to properly reduce projectors when expanding symbolic values *)
       method! visit_abs current_abs abs =
         assert (Option.is_none current_abs);
         let current_abs = Some abs in
         super#visit_abs current_abs abs
-      (** When visiting an abstraction, we remember the regions it owns to be
-          able to properly reduce projectors when expanding symbolic values *)
 
+      (** We carefully updated {!visit_ASymbolic} so that {!visit_aproj} is called
+          only on child projections (i.e., projections which appear in {!AEndedProjLoans}).
+          The role of visit_aproj is then to check we don't have to expand symbolic
+          values in child projections, because it should never happen
+        *)
       method! visit_aproj current_abs aproj =
         (match aproj with
         | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
             assert (not (same_symbolic_id sv original_sv))
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj current_abs aproj
-      (** We carefully updated [visit_ASymbolic] so that [visit_aproj] is called
-          only on child projections (i.e., projections which appear in [AEndedProjLoans]).
-          The role of visit_aproj is then to check we don't have to expand symbolic
-          values in child projections, because it should never happen
-        *)
 
       method! visit_ASymbolic current_abs aproj =
         let current_abs = Option.get current_abs in
@@ -214,7 +214,7 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
     The function might return a list of values if the symbolic value to expand
     is an enumeration.
     
-    `expand_enumerations` controls the expansion of enumerations: if false, it
+    [expand_enumerations] controls the expansion of enumerations: if false, it
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
 let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
@@ -290,8 +290,8 @@ let expand_symbolic_value_shared_borrow (config : C.config)
   in
   (* Small utility used on shared borrows in abstractions (regular borrow
    * projector and asb).
-   * Returns `Some` if the symbolic value has been expanded to an asb list,
-   * `None` otherwise *)
+   * Returns [Some] if the symbolic value has been expanded to an asb list,
+   * [None] otherwise *)
   let reborrow_ashared proj_regions (sv : V.symbolic_value) (proj_ty : T.rty) :
       V.abstract_shared_borrows option =
     if same_symbolic_id sv original_sv then
@@ -341,17 +341,17 @@ let expand_symbolic_value_shared_borrow (config : C.config)
         let asb = List.concat (List.map expand_asb asb) in
         V.AProjSharedBorrow asb
 
+      (** We carefully updated {!visit_ASymbolic} so that {!visit_aproj} is called
+          only on child projections (i.e., projections which appear in {!AEndedProjLoans}).
+          The role of visit_aproj is then to check we don't have to expand symbolic
+          values in child projections, because it should never happen
+        *)
       method! visit_aproj proj_regions aproj =
         (match aproj with
         | AProjLoans (sv, _) | AProjBorrows (sv, _) ->
             assert (not (same_symbolic_id sv original_sv))
         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
         super#visit_aproj proj_regions aproj
-      (** We carefully updated [visit_ASymbolic] so that [visit_aproj] is called
-          only on child projections (i.e., projections which appear in [AEndedProjLoans]).
-          The role of visit_aproj is then to check we don't have to expand symbolic
-          values in child projections, because it should never happen
-        *)
 
       method! visit_ASymbolic proj_regions aproj =
         match aproj with
@@ -486,7 +486,7 @@ let expand_symbolic_bool (config : C.config) (sp : V.symbolic_value)
 
 (** Expand a symbolic value.
     
-    [allow_branching]: if `true` we can branch (by expanding enumerations with
+    [allow_branching]: if [true] we can branch (by expanding enumerations with
     stricly more than one variant), otherwise we can't.
     
     TODO: rename [sp] to [sv]
@@ -588,26 +588,26 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
   (* Continue *)
   cc cf ctx
 
-(** Symbolic integers are expanded upon evaluating a `switch`, when the integer
+(** Symbolic integers are expanded upon evaluating a [switch], when the integer
     is not an enumeration discriminant.
     Note that a discriminant is never symbolic: we evaluate discriminant values
-    upon evaluating `eval_discriminant`, which always generates a concrete value
+    upon evaluating [eval_discriminant], which always generates a concrete value
     (because if we call it on a symbolic enumeration, we expand the enumeration
     *then* evaluate the discriminant). This is how we can spot "regular" switches
     over integers.
 
 
-    When expanding a boolean upon evaluating an `if ... then ... else ...`,
+    When expanding a boolean upon evaluating an [if ... then ... else ...],
     or an enumeration just before matching over it, we can simply expand the
     boolean/enumeration (generating a list of contexts from which to execute)
-    then retry evaluating the `if ... then ... else ...` or the `match`: as
+    then retry evaluating the [if ... then ... else ...] or the [match]: as
     the scrutinee will then have a concrete value, the interpreter will switch
     to the proper branch.
     
     However, when expanding a "regular" integer for a switch, there is always an
     *otherwise* branch that we can take, for which the integer must remain symbolic
     (because in this branch the scrutinee can take a range of values). We thus
-    can't simply expand then retry to evaluate the `switch`, because then we
+    can't simply expand then retry to evaluate the [switch], because then we
     would loop...
     
     For this reason, we take the list of branches to execute as parameters, and
@@ -661,8 +661,8 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
           raise (FoundSymbolicValue sv)
         else ()
 
-      method! visit_abs _ _ = ()
       (** Don't enter abstractions *)
+      method! visit_abs _ _ = ()
     end
   in
 
@@ -681,7 +681,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
       let cc : cm_fun =
         match sv.V.sv_ty with
         | T.Adt (AdtId def_id, _, _) ->
-            (* [expand_symbolic_value_no_branching] checks if there are branchings,
+            (* {!expand_symbolic_value_no_branching} checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
             let def = C.ctx_lookup_type_decl ctx def_id in

@@ -34,7 +34,7 @@ let rec ty_substitute (rsubst : 'r1 -> 'r2)
   | Str -> Str
   | TypeVar vid -> tsubst vid
 
-(** Convert an [rty] to an [ety] by erasing the region variables *)
+(** Convert an {!T.rty} to an {!T.ety} by erasing the region variables *)
 let erase_regions (ty : T.rty) : T.ety =
   ty_substitute (fun _ -> T.Erased) (fun vid -> T.TypeVar vid) ty
 
@@ -43,7 +43,7 @@ let erase_regions (ty : T.rty) : T.ety =
     Return the list of new regions and appropriate substitutions from the
     original region variables to the fresh regions.
     
-    TODO: simplify? we only need the subst `T.RegionVarId.id -> T.RegionId.id`
+    TODO: simplify? we only need the subst [T.RegionVarId.id -> T.RegionId.id]
   *)
 let fresh_regions_with_substs (region_vars : T.region_var list) :
     T.RegionId.id list

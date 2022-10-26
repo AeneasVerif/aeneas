@@ -239,7 +239,7 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
       (* Assumed type *)
       match aty with
       | State ->
-          (* The `State` type is opaque: we can't get there *)
+          (* The [State] type is opaque: we can't get there *)
           raise (Failure "Unreachable")
       | Result ->
           let variant_id = Option.get variant_id in
@@ -262,7 +262,7 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
   match adt_id with
   | Tuple ->
       raise (Failure "Unreachable")
-      (* Tuples don't use the opaque field id for the field indices, but `int` *)
+      (* Tuples don't use the opaque field id for the field indices, but [int] *)
   | AdtId def_id -> (
       (* "Regular" ADT *)
       let fields = fmt.adt_field_names def_id None in
@@ -316,7 +316,7 @@ let adt_g_value_to_string (fmt : value_formatter)
       (* Assumed type *)
       match aty with
       | State ->
-          (* The `State` type is opaque: we can't get there *)
+          (* The [State] type is opaque: we can't get there *)
           raise (Failure "Unreachable")
       | Result ->
           let variant_id = Option.get variant_id in
@@ -467,7 +467,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
 and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
     (indent_incr : string) (app : texpression) (args : texpression list) :
     string =
-  (* There are two possibilities: either the `app` is an instantiated,
+  (* There are two possibilities: either the [app] is an instantiated,
    * top-level qualifier (function, ADT constructore...), or it is a "regular"
    * expression *)
   let app, tys =

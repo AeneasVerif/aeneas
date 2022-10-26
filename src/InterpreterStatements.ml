@@ -28,12 +28,12 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
       ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
      ^ eval_ctx_to_string ctx));
   (* Prepare the place (by ending the outer loans).
-   * Note that [prepare_lplace] will use the `Write` access kind:
-   * it is ok, because when updating the value with [Bottom] below,
-   * we will use the `Move` access *)
+   * Note that {!prepare_lplace} will use the [Write] access kind:
+   * it is ok, because when updating the value with {!Bottom} below,
+   * we will use the [Move] access *)
   let end_borrows = false in
   let prepare = prepare_lplace config end_borrows p in
-  (* Replace the value with [Bottom] *)
+  (* Replace the value with {!Bottom} *)
   let replace cf (v : V.typed_value) ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows *)
@@ -157,8 +157,8 @@ let eval_assertion_concrete (config : C.config) (assertion : A.assertion) :
 (** Evaluates an assertion.
     
     In the case the boolean under scrutinee is symbolic, we synthesize
-    a call to `assert ...` then continue in the success branch (and thus
-    expand the boolean to `true`).
+    a call to [assert ...] then continue in the success branch (and thus
+    expand the boolean to [true]).
  *)
 let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
  fun cf ctx ->
@@ -203,10 +203,10 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
     - either the discriminant is already the proper one (in which case we
       don't do anything)
     - or it is not the proper one (because the variant is not the proper
-      one, or the value is actually [Bottom] - this happens when
+      one, or the value is actually {!V.Bottom} - this happens when
       initializing ADT values), in which case we replace the value with
-      a variant with all its fields set to [Bottom].
-      For instance, something like: `Cons Bottom Bottom`.
+      a variant with all its fields set to {!V.Bottom}.
+      For instance, something like: [Cons Bottom Bottom].
  *)
 let set_discriminant (config : C.config) (p : E.place)
     (variant_id : T.VariantId.id) : st_cm_fun =
@@ -232,7 +232,7 @@ let set_discriminant (config : C.config) (p : E.place)
            - either the discriminant is already the proper one (in which case we
              don't do anything)
            - or it is not the proper one, in which case we replace the value with
-             a variant with all its fields set to [Bottom]
+             a variant with all its fields set to {!Bottom}
         *)
         match av.variant_id with
         | None -> raise (Failure "Found a struct value while expected an enum")
@@ -297,7 +297,7 @@ let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
  *)
 let get_non_local_function_return_type (fid : A.assumed_fun_id)
     (region_params : T.erased_region list) (type_params : T.ety list) : T.ety =
-  (* `Box::free` has a special treatment *)
+  (* [Box::free] has a special treatment *)
   match (fid, region_params, type_params) with
   | A.BoxFree, [], [ _ ] -> mk_unit_ty
   | _ ->
@@ -322,7 +322,7 @@ let move_return_value (config : C.config) (cf : V.typed_value -> m_fun) : m_fun
     
     Drop all the local variables but the return variable, move the return
     value out of the return variable, remove all the local variables (but not the
-    abstractions!) from the context, remove the [Frame] indicator delimiting the
+    abstractions!) from the context, remove the {!C.Frame} indicator delimiting the
     current frame and handle the return value to the continuation.
     
     TODO: rename (remove the "ctx_")
@@ -385,7 +385,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
            ^ eval_ctx_to_string ctx)))
   in
 
-  (* Pop the frame - we remove the `Frame` delimiter, and reintroduce all
+  (* Pop the frame - we remove the [Frame] delimiter, and reintroduce all
    * the local variables (which may still contain borrow permissions - but
    * no outer loans) as dummy variables in the caller frame *)
   let rec pop env =
@@ -457,8 +457,8 @@ let eval_box_new_concrete (config : C.config)
       comp cf_move cf_create cf ctx
   | _ -> raise (Failure "Inconsistent state")
 
-(** Auxiliary function which factorizes code to evaluate `std::Deref::deref`
-    and `std::DerefMut::deref_mut` - see [eval_non_local_function_call] *)
+(** Auxiliary function which factorizes code to evaluate [std::Deref::deref]
+    and [std::DerefMut::deref_mut] - see [eval_non_local_function_call] *)
 let eval_box_deref_mut_or_shared_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (is_mut : bool) : cm_fun =
@@ -517,22 +517,22 @@ let eval_box_deref_mut_concrete (config : C.config)
 
 (** Auxiliary function - see [eval_non_local_function_call].
 
-    `Box::free` is not handled the same way as the other assumed functions:
+    [Box::free] is not handled the same way as the other assumed functions:
     - in the regular case, whenever we need to evaluate an assumed function,
       we evaluate the operands, push a frame, call a dedicated function
       to correctly update the variables in the frame (and mimic the execution
       of a body) and finally pop the frame
-    - in the case of `Box::free`: the value given to this function is often
-      of the form `Box(⊥)` because we can move the value out of the
+    - in the case of [Box::free]: the value given to this function is often
+      of the form [Box(⊥)] because we can move the value out of the
       box before freeing the box. It makes it invalid to see box_free as a
       "regular" function: it is not valid to call a function with arguments
-      which contain `⊥`. For this reason, we execute `Box::free` as drop_value,
+      which contain [⊥]. For this reason, we execute [Box::free] as drop_value,
       but this is a bit annoying with regards to the semantics...
 
     Followingly this function doesn't behave like the others: it does not expect
-    a stack frame to have been pushed, but rather simply behaves like [drop_value].
-    It thus updates the box value (by calling [drop_value]) and updates
-    the destination (by setting it to `()`).
+    a stack frame to have been pushed, but rather simply behaves like {!drop_value}.
+    It thus updates the box value (by calling {!drop_value}) and updates
+    the destination (by setting it to [()]).
 *)
 let eval_box_free (config : C.config) (region_params : T.erased_region list)
     (type_params : T.ety list) (args : E.operand list) (dest : E.place) : cm_fun
@@ -548,7 +548,7 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
       (* Drop the value *)
       let cc = drop_value config input_box_place in
 
-      (* Update the destination by setting it to `()` *)
+      (* Update the destination by setting it to [()] *)
       let cc = comp cc (assign_to_place config mk_unit_value dest) in
 
       (* Continue *)
@@ -569,7 +569,7 @@ let eval_non_local_function_call_concrete (config : C.config)
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
      - the function is box_free
-     See [eval_box_free]
+     See {!eval_box_free}
   *)
   match fid with
   | A.BoxFree ->
@@ -583,8 +583,8 @@ let eval_non_local_function_call_concrete (config : C.config)
 
       (* Evaluate the call
        *
-       * Style note: at some point we used [comp_transmit] to
-       * transmit the result of [eval_operands] above down to [push_vars]
+       * Style note: at some point we used {!comp_transmit} to
+       * transmit the result of {!eval_operands} above down to {!push_vars}
        * below, without having to introduce an intermediary function call,
        * but it made it less clear where the computed values came from,
        * so we reversed the modifications. *)
@@ -668,7 +668,7 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
   let _, rsubst, _ = Subst.fresh_regions_with_substs sg.region_params in
   (* Generate the type substitution
    * Note that we need the substitution to map the type variables to
-   * [rty] types (not [ety]). In order to do that, we convert the
+   * {!rty} types (not {!ety}). In order to do that, we convert the
    * type parameters to types with regions. This is possible only
    * if those types don't contain any regions.
    * This is a current limitation of the analysis: there is still some
@@ -697,7 +697,7 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     (kind : V.abs_kind) (rgl : A.abs_region_group list)
     (region_can_end : T.RegionGroupId.id -> bool) : V.abs list =
   (* We use a reference to progressively create a map from abstraction ids
-   * to set of ancestor regions. Note that abs_to_ancestors_regions[abs_id]
+   * to set of ancestor regions. Note that {!abs_to_ancestors_regions} [abs_id]
    * returns the union of:
    * - the regions of the ancestors of abs_id
    * - the regions of abs_id
@@ -887,7 +887,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
            - exits the loop
            - other...
 
-           We need a specific function because of the [Continue] case: in case we
+           We need a specific function because of the {!Continue} case: in case we
            continue, we might have to reevaluate the current loop body with the
            new context (and repeat this an indefinite number of times).
         *)
@@ -908,8 +908,8 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
               (* We can't get there.
                * Note that if we decide not to fail here but rather do
                * the same thing as for [Continue 0], we could make the
-               * code slightly simpler: calling [reeval_loop_body] with
-               * [Unit] would account for the first iteration of the loop.
+               * code slightly simpler: calling {!reeval_loop_body} with
+               * {!Unit} would account for the first iteration of the loop.
                * We prefer to write it this way for consistency and sanity,
                * though. *)
               raise (Failure "Unreachable")
@@ -933,7 +933,7 @@ and eval_global (config : C.config) (dest : V.VarId.id)
         cf ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
-       * defined as equal to the value of the global (see `S.synthesize_global_eval`). *)
+       * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
       let sval =
         mk_fresh_symbolic_value V.Global (ety_no_regions_to_rty global.ty)
       in
@@ -1068,7 +1068,7 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
   assert (List.length args = body.A.arg_count);
   let cc = eval_operands config args in
 
-  (* Push a frame delimiter - we use [comp_transmit] to transmit the result
+  (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
    * of the operands evaluation from above to the functions afterwards, while
    * ignoring it in this function *)
   let cc = comp_transmit cc push_frame in
@@ -1095,7 +1095,7 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
   in
   let cc = comp cc cf_push_inputs in
 
-  (* 3. Push the remaining local variables (initialized as [Bottom]) *)
+  (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
   let cc = comp cc (push_uninitialized_vars locals) in
 
   (* Execute the function body *)
@@ -1255,7 +1255,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   (* Try to end the abstractions with no loans if:
    * - the option is enabled
    * - the function returns unit
-   * (see the documentation of [config] for more information)
+   * (see the documentation of {!config} for more information)
    *)
   let cc =
     if config.return_unit_end_abs_with_no_loans && ty_is_unit inst_sg.output
@@ -1264,7 +1264,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
   in
 
   (* Continue - note that we do as if the function call has been successful,
-   * by giving [Unit] to the continuation, because we place us in the case
+   * by giving {!Unit} to the continuation, because we place us in the case
    * where we haven't panicked. Of course, the translation needs to take the
    * panic case into account... *)
   cc (cf Unit) ctx
@@ -1285,7 +1285,7 @@ and eval_non_local_function_call_symbolic (config : C.config)
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
      - the function is box_free
-       See [eval_box_free]
+       See {!eval_box_free}
   *)
   match fid with
   | A.BoxFree ->
@@ -1309,7 +1309,7 @@ and eval_non_local_function_call_symbolic (config : C.config)
       eval_function_call_symbolic_from_inst_sig config (A.Assumed fid) inst_sig
         region_args type_args args dest cf ctx
 
-(** Evaluate a non-local (i.e, assumed) function call such as `Box::deref`
+(** Evaluate a non-local (i.e, assumed) function call such as [Box::deref]
     (auxiliary helper for [eval_statement]) *)
 and eval_non_local_function_call (config : C.config) (fid : A.assumed_fun_id)
     (region_args : T.erased_region list) (type_args : T.ety list)
@@ -1356,7 +1356,7 @@ and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =
  fun cf ctx ->
   let cc = eval_statement config body in
   let cf_finish cf res =
-    (* Note that we *don't* check the result ([Panic], [Return], etc.): we
+    (* Note that we *don't* check the result ({!Panic}, {!Return}, etc.): we
      * delegate the check to the caller. *)
     (* Expand the symbolic values if necessary - we need to do that before
      * checking the invariants *)

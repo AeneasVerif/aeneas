@@ -1,8 +1,8 @@
 (** Functions to load LLBC ASTs from json.
 
-    Initially, we used `ppx_derive_yojson` to automate this.
-    However, `ppx_derive_yojson` expects formatting to be slightly
-    different from what `serde_rs` generates (because it uses [Yojson.Safe.t]
+    Initially, we used [ppx_derive_yojson] to automate this.
+    However, [ppx_derive_yojson] expects formatting to be slightly
+    different from what [serde_rs] generates (because it uses [Yojson.Safe.t]
     and not [Yojson.Basic.t]).
 
     TODO: we should check all that the integer values are in the proper range
@@ -349,7 +349,7 @@ let big_int_of_json (js : json) : (V.big_int, string) result =
     | `String is -> Ok (Z.of_string is)
     | _ -> Error "")
 
-(** Deserialize a [scalar_value] from JSON and **check the ranges**.
+(** Deserialize a {!V.scalar_value} from JSON and **check the ranges**.
     
     Note that in practice we also check that the values are in range
     in the interpreter functions. Still, it doesn't cost much to be
@@ -764,12 +764,12 @@ let fun_decl_of_json (id_to_file : id_to_file_map) (js : json) :
           { A.def_id; meta; name; signature; body; is_global_decl_body = false }
     | _ -> Error "")
 
-(* Strict type for the number of function declarations (see [global_to_fun_id] below) *)
+(* Strict type for the number of function declarations (see {!global_to_fun_id} below) *)
 type global_id_converter = { fun_count : int } [@@deriving show]
 
 (** Converts a global id to its corresponding function id.
     To do so, it adds the global id to the number of function declarations :
-    We have the bijection `global_fun_id <=> global_id + fun_id_count`.
+    We have the bijection [global_fun_id <=> global_id + fun_id_count].
 *)
 let global_to_fun_id (conv : global_id_converter) (gid : A.GlobalDeclId.id) :
     A.FunDeclId.id =
@@ -896,7 +896,7 @@ let llbc_crate_of_json (js : json) : (Crates.llbc_crate, string) result =
          * between the globals themselves and their bodies, which are simply
          * functions with no arguments. We add the global bodies to the list
          * of function declarations: the (fresh) ids we use for those bodies
-         * are simply given by: `num_functions + global_id` *)
+         * are simply given by: [num_functions + global_id] *)
         let gid_conv = { fun_count = List.length functions } in
         let* globals =
           list_of_json

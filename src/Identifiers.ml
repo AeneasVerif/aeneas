@@ -4,13 +4,13 @@ module C = Collections
     
     We often need identifiers (for definitions, variables, etc.) and in
     order to make sure we don't mix them, we use a generative functor
-    (see [IdGen]).
+    (see {!IdGen}).
 *)
 module type Id = sig
   type id
 
-  type generator
   (** Id generator - simply a counter *)
+  type generator
 
   val zero : id
   val generator_zero : generator
@@ -21,7 +21,7 @@ module type Id = sig
 
   (* TODO: this should be stateful! - but we may want to be able to duplicate
      contexts...
-     Maybe we could have a `fresh` and a `global_fresh`
+     Maybe we could have a [fresh] and a [global_fresh]
      TODO: change the order of the returned types
   *)
   val fresh : generator -> id * generator
@@ -41,19 +41,19 @@ module type Id = sig
 
   val nth_opt : 'a list -> id -> 'a option
 
-  val update_nth : 'a list -> id -> 'a -> 'a list
   (** Update the nth element of the list.
 
       Raises [Invalid_argument] if the identifier is out of range.
    *)
+  val update_nth : 'a list -> id -> 'a -> 'a list
 
   val mapi : (id -> 'a -> 'b) -> 'a list -> 'b list
 
-  val mapi_from1 : (id -> 'a -> 'b) -> 'a list -> 'b list
-  (** Same as [mapi], but where the indices start with 1.
+  (** Same as {!mapi}, but where the indices start with 1.
        
-      TODO: generalize to `map_from_i`
+      TODO: generalize to [map_from_i]
    *)
+  val mapi_from1 : (id -> 'a -> 'b) -> 'a list -> 'b list
 
   val iteri : (id -> 'a -> unit) -> 'a list -> unit
 
@@ -64,7 +64,7 @@ end
 
 (** Generative functor for identifiers.
 
-    See [Id].
+    See {!Id}.
 *)
 module IdGen () : Id = struct
   (* TODO: use Z.t *)

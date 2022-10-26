@@ -13,31 +13,31 @@ module SymbolicValueId = V.SymbolicValueId
 module FunDeclId = A.FunDeclId
 module GlobalDeclId = A.GlobalDeclId
 
-module SynthPhaseId = IdGen ()
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
+module SynthPhaseId = IdGen ()
 
+(** Pay attention to the fact that we also define a {!Values.VarId} module in Values *)
 module VarId = IdGen ()
-(** Pay attention to the fact that we also define a [VarId] module in Values *)
 
 type integer_type = T.integer_type [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
     In comparison with LLBC:
-    - we removed `Box` (because it is translated as the identity: `Box T == T`)
+    - we removed [Box] (because it is translated as the identity: [Box T == T])
     - we added:
-      - `Result`: the type used in the error monad. This allows us to have a
+      - [Result]: the type used in the error monad. This allows us to have a
         unified treatment of expressions (especially when we have to unfold the
         monadic binds)
-      - `State`: the type of the state, when using state-error monads. Note that
+      - [State]: the type of the state, when using state-error monads. Note that
         this state is opaque to Aeneas (the user can define it, or leave it as
         assumed)
   *)
 type assumed_ty = State | Result | Vec | Option [@@deriving show, ord]
 
-(* TODO: we should never directly manipulate `Return` and `Fail`, but rather
- * the monadic functions `return` and `fail` (makes treatment of error and
+(* TODO: we should never directly manipulate [Return] and [Fail], but rather
+ * the monadic functions [return] and [fail] (makes treatment of error and
  * state-error monads more uniform) *)
 let result_return_id = VariantId.of_int 0
 let result_fail_id = VariantId.of_int 1
@@ -69,7 +69,7 @@ class ['self] map_ty_base =
 
 type ty =
   | Adt of type_id * ty list
-      (** [Adt] encodes ADTs and tuples and assumed types.
+      (** {!Adt} encodes ADTs and tuples and assumed types.
        
           TODO: what about the ended regions? (ADTs may be parameterized
           with several region variables. When giving back an ADT value, we may
@@ -91,7 +91,7 @@ type ty =
         name = "iter_ty";
         variety = "iter";
         ancestors = [ "iter_ty_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
       },
@@ -100,7 +100,7 @@ type ty =
         name = "map_ty";
         variety = "map";
         ancestors = [ "map_ty_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
       }]
@@ -124,6 +124,10 @@ type type_decl = {
 type scalar_value = V.scalar_value [@@deriving show]
 type constant_value = V.constant_value [@@deriving show]
 
+(** Because we introduce a lot of temporary variables, the list of variables
+    is not fixed: we thus must carry all its information with the variable
+    itself.
+ *)
 type var = {
   id : VarId.id;
   basename : string option;
@@ -133,10 +137,6 @@ type var = {
   ty : ty;
 }
 [@@deriving show]
-(** Because we introduce a lot of temporary variables, the list of variables
-    is not fixed: we thus must carry all its information with the variable
-    itself.
- *)
 
 (* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
  * on enumerations.
@@ -148,18 +148,18 @@ type mprojection_elem = { pkind : E.field_proj_kind; field_id : FieldId.id }
 
 type mprojection = mprojection_elem list [@@deriving show]
 
-type mplace = {
-  var_id : V.VarId.id;
-  name : string option;
-  projection : mprojection;
-}
-[@@deriving show]
 (** "Meta" place.
 
     Meta-data retrieved from the symbolic execution, which gives provenance
     information about the values. We use this to generate names for the variables
     we introduce.
  *)
+type mplace = {
+  var_id : V.VarId.id;
+  name : string option;
+  projection : mprojection;
+}
+[@@deriving show]
 
 type variant_id = VariantId.id [@@deriving show]
 
@@ -225,10 +225,10 @@ class virtual ['self] mapreduce_value_base =
 (** A pattern (which appears on the left of assignments, in matches, etc.). *)
 type pattern =
   | PatConcrete of constant_value
-      (** [PatConcrete] is necessary because we merge the switches over integer
+      (** {!PatConcrete} is necessary because we merge the switches over integer
           values and the matches over enumerations *)
   | PatVar of var * mplace option
-  | PatDummy  (** Ignored value: `_`. *)
+  | PatDummy  (** Ignored value: [_]. *)
   | PatAdt of adt_pattern
 
 and adt_pattern = {
@@ -244,7 +244,7 @@ and typed_pattern = { value : pattern; ty : ty }
         name = "iter_typed_pattern";
         variety = "iter";
         ancestors = [ "iter_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
       },
@@ -253,7 +253,7 @@ and typed_pattern = { value : pattern; ty : ty }
         name = "map_typed_pattern";
         variety = "map";
         ancestors = [ "map_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
       },
@@ -262,7 +262,7 @@ and typed_pattern = { value : pattern; ty : ty }
         name = "reduce_typed_pattern";
         variety = "reduce";
         ancestors = [ "reduce_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         polymorphic = false;
       },
     visitors
@@ -270,7 +270,7 @@ and typed_pattern = { value : pattern; ty : ty }
         name = "mapreduce_typed_pattern";
         variety = "mapreduce";
         ancestors = [ "mapreduce_value_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         polymorphic = false;
       }]
 
@@ -279,28 +279,28 @@ type unop = Not | Neg of integer_type | Cast of integer_type * integer_type
 
 type fun_id =
   | Regular of A.fun_id * T.RegionGroupId.id option
-      (** Backward id: `Some` if the function is a backward function, `None`
+      (** Backward id: [Some] if the function is a backward function, [None]
           if it is a forward function.
 
-          TODO: we need to redefine A.fun_id here, to add `fail` and
-          `return` (important to get a unified treatment of the state-error
+          TODO: we need to redefine A.fun_id here, to add [fail] and
+          [return] (important to get a unified treatment of the state-error
           monad). For now, when using the state-error monad: extraction
           works only if we unfold all the monadic let-bindings, and we
-          then replace the content of the occurrences of `Return` to also
+          then replace the content of the occurrences of [Return] to also
           return the state (which is really super ugly).
        *)
   | Unop of unop
   | Binop of E.binop * integer_type
 [@@deriving show, ord]
 
+(** An identifier for an ADT constructor *)
 type adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
 [@@deriving show]
-(** An identifier for an ADT constructor *)
 
-type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
 (** Projection - For now we don't support projection of tuple fields 
     (because not all the backends have syntax for this).
  *)
+type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
 
 type qualif_id =
   | Func of fun_id
@@ -309,13 +309,13 @@ type qualif_id =
   | Proj of projection  (** Field projector *)
 [@@deriving show]
 
-type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]
 (** An instantiated qualified.
 
     Note that for now we have a clear separation between types and expressions,
-    which explains why we have the `type_params` field: a function or ADT
+    which explains why we have the [type_params] field: a function or ADT
     constructor is always fully instantiated.
  *)
+type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]
 
 type var_id = VarId.id [@@deriving show]
 
@@ -367,7 +367,7 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
   end
 
-(** **Rk.:** here, [expression] is not at all equivalent to the expressions
+(** **Rk.:** here, {!expression} is not at all equivalent to the expressions
     used in LLBC. They are lambda-calculus expressions, and are thus actually
     more general than the LLBC statements, in a sense.
  *)
@@ -383,7 +383,7 @@ type expression =
           field accesses with calls to projectors over fields (when there
           are clashes of field names, some provers like F* get pretty bad...)
        *)
-  | Abs of typed_pattern * texpression  (** Lambda abstraction: `fun x -> e` *)
+  | Abs of typed_pattern * texpression  (** Lambda abstraction: [fun x -> e] *)
   | Qualif of qualif  (** A top-level qualifier *)
   | Let of bool * typed_pattern * texpression * texpression
       (** Let binding.
@@ -395,34 +395,33 @@ type expression =
 
           The boolean controls whether the let is monadic or not.
           For instance, in F*:
-          - non-monadic: `let x = ... in ...`
-          - monadic:     `x <-- ...; ...`
+          - non-monadic: [let x = ... in ...]
+          - monadic:     [x <-- ...; ...]
 
           Note that we are quite general for the left-value on purpose; this
           is used in several situations:
 
           1. When deconstructing a tuple:
-          ```
-          let (x, y) = p in ...
-          ```
-          (not all languages have syntax like `p.0`, `p.1`... and it is more
+          {[
+            let (x, y) = p in ...
+          ]}
+          (not all languages have syntax like [p.0], [p.1]... and it is more
           readable anyway).
           
           2. When expanding an enumeration with one variant.
-          
-          In this case, [Deconstruct] has to be understood as:
-          ```
-          let Cons x tl = ls in
-          ...
-          ```
+          In this case, {!Let} has to be understood as:
+          {[
+            let Cons x tl = ls in
+            ...
+          ]}
           
           Note that later, depending on the language we extract to, we can
           eventually update it to something like this (for F*, for instance):
-          ```
-          let x = Cons?.v ls in
-          let tl = Cons?.tl ls in
-          ...
-          ```
+          {[
+            let x = Cons?.v ls in
+            let tl = Cons?.tl ls in
+            ...
+          ]}
        *)
   | Switch of texpression * switch_body
   | Meta of (meta[@opaque]) * texpression  (** Meta-information *)
@@ -431,12 +430,12 @@ and switch_body = If of texpression * texpression | Match of match_branch list
 and match_branch = { pat : typed_pattern; branch : texpression }
 and texpression = { e : expression; ty : ty }
 
-and mvalue = (texpression[@opaque])
 (** Meta-value (converted to an expression). It is important that the content
     is opaque.
     
     TODO: is it possible to mark the whole mvalue type as opaque?
  *)
+and mvalue = (texpression[@opaque])
 
 and meta =
   | Assignment of mplace * mvalue * mplace option
@@ -454,7 +453,7 @@ and meta =
         name = "iter_expression";
         variety = "iter";
         ancestors = [ "iter_expression_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -462,7 +461,7 @@ and meta =
         name = "map_expression";
         variety = "map";
         ancestors = [ "map_expression_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -470,25 +469,26 @@ and meta =
         name = "reduce_expression";
         variety = "reduce";
         ancestors = [ "reduce_expression_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       },
     visitors
       {
         name = "mapreduce_expression";
         variety = "mapreduce";
         ancestors = [ "mapreduce_expression_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       }]
 
-type fun_effect_info = {
-  input_state : bool;  (** `true` if the function takes a state as input *)
-  output_state : bool;
-      (** `true` if the function outputs a state (it then lives
-                            in a state monad) *)
-  can_fail : bool;  (** `true` if the return type is a `result` *)
-}
 (** Information about the "effect" of a function *)
+type fun_effect_info = {
+  input_state : bool;  (** [true] if the function takes a state as input *)
+  output_state : bool;
+      (** [true] if the function outputs a state (it then lives
+                            in a state monad) *)
+  can_fail : bool;  (** [true] if the return type is a [result] *)
+}
 
+(** Meta information about a function signature *)
 type fun_sig_info = {
   num_fwd_inputs : int;
       (** The number of input types for forward computation *)
@@ -496,38 +496,12 @@ type fun_sig_info = {
       (** The number of additional inputs for the backward computation (if pertinent) *)
   effect_info : fun_effect_info;
 }
-(** Meta information about a function signature *)
 
-type fun_sig = {
-  type_params : type_var list;
-  inputs : ty list;
-  output : ty;
-  doutputs : ty list;
-      (** The "decomposed" list of outputs.
-
-          In case of a forward function, the list has length = 1, for the
-          type of the returned value.
-          
-          In case of backward function, the list contains all the types of
-          all the given back values (there is at most one type per forward
-          input argument).
-          
-          Ex.:
-          ```
-          fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T;
-          ```
-          Decomposed outputs:
-          - forward function:  [T]
-          - backward function: [T; T] (for "x" and "y")
-          
-       *)
-  info : fun_sig_info;  (** Additional information *)
-}
 (** A function signature.
 
     We have the following cases:
     - forward function:
-      `in_ty0 -> ... -> in_tyn -> out_ty`                           (* pure function *)
+      [in_ty0 -> ... -> in_tyn -> out_ty]                           (* pure function *)
       `in_ty0 -> ... -> in_tyn -> result out_ty`                    (* error-monad *)
       `in_ty0 -> ... -> in_tyn -> state -> result (state & out_ty)` (* state-error *)
     - backward function:
@@ -550,20 +524,45 @@ type fun_sig = {
       input, or can fail, etc. without having to inspect the signature
     - etc.
  *)
+type fun_sig = {
+  type_params : type_var list;
+  inputs : ty list;
+  output : ty;
+  doutputs : ty list;
+      (** The "decomposed" list of outputs.
 
+          In case of a forward function, the list has length = 1, for the
+          type of the returned value.
+          
+          In case of backward function, the list contains all the types of
+          all the given back values (there is at most one type per forward
+          input argument).
+          
+          Ex.:
+          {[
+            fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T;
+          ]}
+          Decomposed outputs:
+          - forward function:  [T]
+          - backward function: [T; T] (for "x" and "y")
+          
+       *)
+  info : fun_sig_info;  (** Additional information *)
+}
+
+(** An instantiated function signature. See {!fun_sig} *)
 type inst_fun_sig = {
   inputs : ty list;
   output : ty;
   doutputs : ty list;
   info : fun_sig_info;
 }
-(** An instantiated function signature. See [fun_sig] *)
 
 type fun_body = {
   inputs : var list;
   inputs_lvs : typed_pattern list;
       (** The inputs seen as patterns. Allows to make transformations, for example
-          to replace unused variables by `_` *)
+          to replace unused variables by [_] *)
   body : texpression;
 }
 

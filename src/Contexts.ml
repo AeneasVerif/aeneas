@@ -5,56 +5,56 @@ module V = Values
 open ValuesUtils
 
 (** Some global counters.
- *
- * Note that those counters were initially stored in [eval_ctx] values,
- * but it proved better to make them global and stateful:
- * - when branching (and thus executing on several paths with different
- *   contexts) it is better to really have unique ids everywhere (and
- *   not have fresh ids shared by several contexts even though introduced
- *   after the branching) because at some point we might need to merge the
- *   different contexts
- * - also, it is a lot more convenient to not store those counters in contexts
- *   objects
- *
- * =============
- * **WARNING**:
- * =============
- * Pay attention when playing with closures, as you may not always generate
- * fresh identifiers without noticing it, especially when using type abbreviations.
- * For instance, consider the following:
- * ```
- * type fun_type = unit -> ...
- * fn f x : fun_type =
- *   let id = fresh_id () in
- *   ...
- *
- * let g = f x in   // <-- the fresh identifier gets generated here
- * let x1 = g () in // <-- no fresh generation here
- * let x2 = g () in
- * ...
- * ```
- *
- * This is why, in such cases, we often introduce all the inputs, even
- * when they are not used (which happens!).
- * ```
- * fn f x : fun_type =
- *  fun .. ->
- *   let id = fresh_id () in
- *   ...
- * ```
- *
- * Note that in practice, we never reuse closures, except when evaluating
- * a branching in the execution (which is fine, because the branches evaluate
- * independentely of each other). Still, it is always a good idea to be
- * defensive.
- *
- * However, the same problem arises with logging. 
- *
- * Also, a more defensive way would be to not use global references, and
- * store the counters in the evaluation context. This is actually what was
- * originally done, before we updated the code to use global counters because
- * it proved more convenient (and even before updating the code of the
- * interpreter to use CPS).
+
+  Note that those counters were initially stored in {!eval_ctx} values,
+  but it proved better to make them global and stateful:
+  - when branching (and thus executing on several paths with different
+    contexts) it is better to really have unique ids everywhere (and
+    not have fresh ids shared by several contexts even though introduced
+    after the branching) because at some point we might need to merge the
+    different contexts
+  - also, it is a lot more convenient to not store those counters in contexts
+    objects
+
+  =============
+  **WARNING**:
+  =============
+  Pay attention when playing with closures, as you may not always generate
+  fresh identifiers without noticing it, especially when using type abbreviations.
+  For instance, consider the following:
+  {[
+    type fun_type = unit -> ...
+    fn f x : fun_type =
+      let id = fresh_id () in
+      ...
+   
+    let g = f x in   // <-- the fresh identifier gets generated here
+    let x1 = g () in // <-- no fresh generation here
+    let x2 = g () in
+    ...
+  ]}
+
+  This is why, in such cases, we often introduce all the inputs, even
+  when they are not used (which happens!).
+  {[
+    fn f x : fun_type =
+     fun .. ->
+      let id = fresh_id () in
+      ...
+  ]}
+
+  Note that in practice, we never reuse closures, except when evaluating
+  a branching in the execution (which is fine, because the branches evaluate
+  independentely of each other). Still, it is always a good idea to be
+  defensive.
+
+  However, the same problem arises with logging. 
+
+  Also, a more defensive way would be to not use global references, and
+  store the counters in the evaluation context. This is actually what was
+  originally done, before we updated the code to use global counters because
+  it proved more convenient (and even before updating the code of the
+  interpreter to use CPS).
  *)
 
 let symbolic_value_id_counter, fresh_symbolic_value_id =
@@ -87,12 +87,12 @@ let reset_global_counters () =
   abstraction_id_counter := AbstractionId.generator_zero;
   fun_call_id_counter := FunCallId.generator_zero
 
+(** A binder used in an environment, to map a variable to a value *)
 type binder = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)
 }
 [@@deriving show]
-(** A binder used in an environment, to map a variable to a value *)
 
 (** Environment value: mapping from variable to value, abstraction (only
     used in symbolic mode) or stack frame delimiter.
@@ -113,7 +113,7 @@ type env_elem =
         name = "iter_env_elem";
         variety = "iter";
         ancestors = [ "iter_abs" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -121,7 +121,7 @@ type env_elem =
         name = "map_env_elem";
         variety = "map";
         ancestors = [ "map_abs" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
 
@@ -133,7 +133,7 @@ type env = env_elem list
         name = "iter_env";
         variety = "iter";
         ancestors = [ "iter_env_elem" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -141,7 +141,7 @@ type env = env_elem list
         name = "map_env";
         variety = "map";
         ancestors = [ "map_env_elem" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
 
@@ -189,13 +189,13 @@ type config = {
 }
 [@@deriving show]
 
+(** See {!config} *)
 type partial_config = {
   check_invariants : bool;
   greedy_expand_symbolics_with_borrows : bool;
   allow_bottom_below_borrow : bool;
   return_unit_end_abs_with_no_loans : bool;
 }
-(** See [config] *)
 
 let config_of_partial (mode : interpreter_mode) (config : partial_config) :
     config =
@@ -220,6 +220,7 @@ type fun_context = { fun_decls : fun_decl FunDeclId.Map.t } [@@deriving show]
 type global_context = { global_decls : global_decl GlobalDeclId.Map.t }
 [@@deriving show]
 
+(** Evaluation context *)
 type eval_ctx = {
   type_context : type_context;
   fun_context : fun_context;
@@ -229,7 +230,6 @@ type eval_ctx = {
   ended_regions : RegionId.Set.t;
 }
 [@@deriving show]
-(** Evaluation context *)
 
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
@@ -366,11 +366,11 @@ let ctx_read_first_dummy_var (ctx : eval_ctx) : typed_value =
   in
   read_var ctx.env
 
-(** Push an uninitialized variable (which thus maps to [Bottom]) *)
+(** Push an uninitialized variable (which thus maps to {!Values.Bottom}) *)
 let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =
   ctx_push_var ctx var (mk_bottom var.var_ty)
 
-(** Push a list of uninitialized variables (which thus map to [Bottom]) *)
+(** Push a list of uninitialized variables (which thus map to {!Values.Bottom}) *)
 let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in
   ctx_push_vars ctx vars

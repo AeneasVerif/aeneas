@@ -1,32 +1,32 @@
 (** This module contains various utilities for the assumed functions.
 
-    Note that `Box::free` is peculiar: we don't really handle it as a function,
-    because it is legal to free a box whose boxed value is `⊥` (it often
+    Note that [Box::free] is peculiar: we don't really handle it as a function,
+    because it is legal to free a box whose boxed value is [⊥] (it often
     happens that we move a value out of a box before freeing this box).
-    Semantically speaking, we thus handle `Box::free` as a value drop and
+    Semantically speaking, we thus handle [Box::free] as a value drop and
     not as a function call, and thus never need its signature.
     
     TODO: implementing the concrete evaluation functions for the assumed
     functions is really annoying (see
     [InterpreterStatements.eval_non_local_function_call_concrete]).
     I think it should be possible, in most situations, to write bodies which
-    model the behaviour of those unsafe functions. For instance, `Box::deref_mut`
+    model the behaviour of those unsafe functions. For instance, [Box::deref_mut]
     should simply be:
-    ```
-    fn deref_mut<'a, T>(x : &'a mut Box<T>) -> &'a mut T {
-      &mut ( *x ) // box dereferencement is a primitive operation
-    }
-    ```
+    {[
+      fn deref_mut<'a, T>(x : &'a mut Box<T>) -> &'a mut T {
+        &mut ( *x ) // box dereferencement is a primitive operation
+      }
+    ]}
     
     For vectors, we could "cheat" by using the index as a field index (vectors
     would be encoded as ADTs with a variable number of fields). Of course, it
     would require a bit of engineering, but it would probably be quite lightweight
     in the end.
-    ```
-    Vec::get_mut<'a,T>(v : &'a mut Vec<T>, i : usize) -> &'a mut T {
-      &mut ( ( *x ).i )
-    }
-    ```
+    {[
+      Vec::get_mut<'a,T>(v : &'a mut Vec<T>, i : usize) -> &'a mut T {
+        &mut ( ( *x ).i )
+      }
+    ]}
  *)
 
 open Names
@@ -46,11 +46,11 @@ module Sig = struct
   (** Region 'a of id 0 *)
   let region_param_0 : T.region_var = { T.index = rvar_id_0; name = Some "'a" }
 
-  (** Region group: { parent={}; regions:{'a of id 0} } *)
+  (** Region group: [{ parent={}; regions:{'a of id 0} }] *)
   let region_group_0 : T.region_var_group =
     { T.id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
 
-  (** Type parameter `T` of id 0 *)
+  (** Type parameter [T] of id 0 *)
   let type_param_0 : T.type_var = { T.index = tvar_id_0; name = "T" }
 
   let mk_ref_ty (r : T.RegionVarId.id T.region) (ty : T.sty) (is_mut : bool) :
@@ -58,7 +58,7 @@ module Sig = struct
     let ref_kind = if is_mut then T.Mut else T.Shared in
     mk_ref_ty r ty ref_kind
 
-  (** `fn<T>(&'a mut T, T) -> T` *)
+  (** [fn<T>(&'a mut T, T) -> T] *)
   let mem_replace_sig : A.fun_sig =
     (* The signature fields *)
     let region_params = [ region_param_0 ] (* <'a> *) in
@@ -77,7 +77,7 @@ module Sig = struct
       output;
     }
 
-  (** `fn<T>(T) -> Box<T>` *)
+  (** [fn<T>(T) -> Box<T>] *)
   let box_new_sig : A.fun_sig =
     {
       region_params = [];
@@ -88,7 +88,7 @@ module Sig = struct
       output = mk_box_ty tvar_0 (* Box<T> *);
     }
 
-  (** `fn<T>(Box<T>) -> ()` *)
+  (** [fn<T>(Box<T>) -> ()] *)
   let box_free_sig : A.fun_sig =
     {
       region_params = [];
@@ -99,9 +99,9 @@ module Sig = struct
       output = mk_unit_ty (* () *);
     }
 
-  (** Helper for `Box::deref_shared` and `Box::deref_mut`.
+  (** Helper for [Box::deref_shared] and [Box::deref_mut].
       Returns:
-      `fn<'a, T>(&'a (mut) Box<T>) -> &'a (mut) T`
+      [fn<'a, T>(&'a (mut) Box<T>) -> &'a (mut) T]
   *)
   let box_deref_gen_sig (is_mut : bool) : A.fun_sig =
     (* The signature fields *)
@@ -117,13 +117,13 @@ module Sig = struct
       output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *);
     }
 
-  (** `fn<'a, T>(&'a Box<T>) -> &'a T` *)
+  (** [fn<'a, T>(&'a Box<T>) -> &'a T] *)
   let box_deref_shared_sig = box_deref_gen_sig false
 
-  (** `fn<'a, T>(&'a mut Box<T>) -> &'a mut T` *)
+  (** [fn<'a, T>(&'a mut Box<T>) -> &'a mut T] *)
   let box_deref_mut_sig = box_deref_gen_sig true
 
-  (** `fn<T>() -> Vec<T>` *)
+  (** [fn<T>() -> Vec<T>] *)
   let vec_new_sig : A.fun_sig =
     let region_params = [] in
     let regions_hierarchy = [] in
@@ -139,7 +139,7 @@ module Sig = struct
       output;
     }
 
-  (** `fn<T>(&'a mut Vec<T>, T)` *)
+  (** [fn<T>(&'a mut Vec<T>, T)] *)
   let vec_push_sig : A.fun_sig =
     (* The signature fields *)
     let region_params = [ region_param_0 ] in
@@ -161,7 +161,7 @@ module Sig = struct
       output;
     }
 
-  (** `fn<T>(&'a mut Vec<T>, usize, T)` *)
+  (** [fn<T>(&'a mut Vec<T>, usize, T)] *)
   let vec_insert_sig : A.fun_sig =
     (* The signature fields *)
     let region_params = [ region_param_0 ] in
@@ -184,7 +184,7 @@ module Sig = struct
       output;
     }
 
-  (** `fn<T>(&'a Vec<T>) -> usize` *)
+  (** [fn<T>(&'a Vec<T>) -> usize] *)
   let vec_len_sig : A.fun_sig =
     (* The signature fields *)
     let region_params = [ region_param_0 ] in
@@ -204,7 +204,7 @@ module Sig = struct
     }
 
   (** Helper:
-      `fn<T>(&'a (mut) Vec<T>, usize) -> &'a (mut) T`
+      [fn<T>(&'a (mut) Vec<T>, usize) -> &'a (mut) T]
    *)
   let vec_index_gen_sig (is_mut : bool) : A.fun_sig =
     (* The signature fields *)
@@ -227,10 +227,10 @@ module Sig = struct
       output;
     }
 
-  (** `fn<T>(&'a Vec<T>, usize) -> &'a T` *)
+  (** [fn<T>(&'a Vec<T>, usize) -> &'a T] *)
   let vec_index_shared_sig : A.fun_sig = vec_index_gen_sig false
 
-  (** `fn<T>(&'a mut Vec<T>, usize) -> &'a mut T` *)
+  (** [fn<T>(&'a mut Vec<T>, usize) -> &'a mut T] *)
   let vec_index_mut_sig : A.fun_sig = vec_index_gen_sig true
 end
 
@@ -241,11 +241,11 @@ type assumed_info = A.assumed_fun_id * A.fun_sig * bool * name
     - a boolean indicating whether the function can fail or not
     - their name
 
-    Rk.: following what is written above, we don't include `Box::free`.
+    Rk.: following what is written above, we don't include [Box::free].
     
-    Remark about the vector functions: for `Vec::len` to be correct and return
-    a `usize`, we have to make sure that vectors are bounded by the max usize.
-    Followingly, `Vec::push` is monadic.
+    Remark about the vector functions: for [Vec::len] to be correct and return
+    a [usize], we have to make sure that vectors are bounded by the max usize.
+    Followingly, [Vec::push] is monadic.
  *)
 let assumed_infos : assumed_info list =
   let deref_pre = [ "core"; "ops"; "deref" ] in

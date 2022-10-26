@@ -4,8 +4,8 @@ open Types
 open Values
 module TA = TypesAnalysis
 
-exception FoundSymbolicValue of symbolic_value
 (** Utility exception *)
+exception FoundSymbolicValue of symbolic_value
 
 let mk_unit_value : typed_value =
   { value = Adt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
@@ -112,8 +112,8 @@ let find_first_primitively_copyable_sv_with_borrows (type_infos : TA.type_infos)
 
 (** Strip the outer shared loans in a value.
     Ex.:
-    `shared_loan {l0, l1} (3 : u32, shared_loan {l2} (4 : u32))` ~~>
-    `(3 : u32, shared_loan {l2} (4 : u32))`
+    [shared_loan {l0, l1} (3 : u32, shared_loan {l2} (4 : u32))] ~~>
+    [(3 : u32, shared_loan {l2} (4 : u32))]
  *)
 let rec value_strip_shared_loans (v : typed_value) : typed_value =
   match v.value with

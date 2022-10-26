@@ -19,19 +19,19 @@ type var = {
 [@@deriving show]
 
 type assumed_fun_id =
-  | Replace  (** `core::mem::replace` *)
+  | Replace  (** [core::mem::replace] *)
   | BoxNew
-  | BoxDeref  (** `core::ops::deref::Deref::<alloc::boxed::Box<T>>::deref` *)
+  | BoxDeref  (** [core::ops::deref::Deref::<alloc::boxed::Box<T>>::deref] *)
   | BoxDerefMut
-      (** `core::ops::deref::DerefMut::<alloc::boxed::Box<T>>::deref_mut` *)
+      (** [core::ops::deref::DerefMut::<alloc::boxed::Box<T>>::deref_mut] *)
   | BoxFree
   | VecNew
   | VecPush
   | VecInsert
   | VecLen
-  | VecIndex  (** `core::ops::index::Index::index<alloc::vec::Vec<T>, usize>` *)
+  | VecIndex  (** [core::ops::index::Index::index<alloc::vec::Vec<T>, usize>] *)
   | VecIndexMut
-      (** `core::ops::index::IndexMut::index_mut<alloc::vec::Vec<T>, usize>` *)
+      (** [core::ops::index::IndexMut::index_mut<alloc::vec::Vec<T>, usize>] *)
 [@@deriving show, ord]
 
 type fun_id = Regular of FunDeclId.id | Assumed of assumed_fun_id
@@ -142,7 +142,7 @@ and raw_statement =
           *)
   | Continue of int
       (** Continue to (outer) loop. The loop identifier works
-          the same way as for [Break] *)
+          the same way as for {!Break} *)
   | Nop
   | Sequence of statement * statement
   | Switch of operand * switch_targets
@@ -152,9 +152,9 @@ and switch_targets =
   | If of statement * statement  (** Gives the "if" and "else" blocks *)
   | SwitchInt of integer_type * (scalar_value list * statement) list * statement
       (** The targets for a switch over an integer are:
-          - the list `(matched values, statement to execute)`
+          - the list [(matched values, statement to execute)]
             We need a list for the matched values in case we do something like this:
-            `switch n { 0 | 1 => ..., _ => ... }
+            [switch n { 0 | 1 => ..., _ => ... }]
           - the "otherwise" statement
           Also note that we precise the type of the integer (uint32, int64, etc.)
           which we switch on. *)
@@ -165,7 +165,7 @@ and switch_targets =
         name = "iter_statement";
         variety = "iter";
         ancestors = [ "iter_statement_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
     visitors
@@ -173,7 +173,7 @@ and switch_targets =
         name = "map_statement";
         variety = "map";
         ancestors = [ "map_statement_base" ];
-        nude = true (* Don't inherit [VisitorsRuntime.iter] *);
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
 

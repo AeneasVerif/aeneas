@@ -5,28 +5,27 @@ module Disambiguator = IdGen ()
 type path_elem = Ident of string | Disambiguator of Disambiguator.id
 [@@deriving show, ord]
 
-type name = path_elem list [@@deriving show, ord]
-(** A name such as: `std::collections::vector` (which would be represented as
+(** A name such as: [std::collections::vector] (which would be represented as
     [[Ident "std"; Ident "collections"; Ident "vector"]])
 
 
     A name really is a list of strings. However, we sometimes need to
     introduce unique indices to disambiguate. This mostly happens because
     of "impl" blocks in Rust:
-      ```
+    {[
       impl<T> List<T> {
         ...
       }
-      ```
+    ]}
    
     A type in Rust can have several "impl" blocks, and those blocks can
     contain items with similar names. For this reason, we need to disambiguate
     them with unique indices. Rustc calls those "disambiguators". In rustc, this
     gives names like this:
-    - `betree_main::betree::NodeIdCounter{impl#0}::new`
+    - [betree_main::betree::NodeIdCounter{impl#0}::new]
     - note that impl blocks can be nested, and macros sometimes generate
       weird names (which require disambiguation):
-      `betree_main::betree_utils::_#1::{impl#0}::deserialize::{impl#0}`
+      [betree_main::betree_utils::_#1::{impl#0}::deserialize::{impl#0}]
    
     Finally, the paths used by rustc are a lot more precise and explicit than
     those we expose in LLBC: for instance, every identifier belongs to a specific
@@ -39,11 +38,12 @@ type name = path_elem list [@@deriving show, ord]
     in the other situations (i.e., the disambiguator is always equal to 0).
    
     Moreover, the items are uniquely disambiguated by their (integer) ids
-    (`TypeDeclId.id`, etc.), and when extracting the code we have to deal with
+    ([TypeDeclId.id], etc.), and when extracting the code we have to deal with
     name clashes anyway. Still, we might want to be more precise in the future.
    
     Also note that the first path element in the name is always the crate name.
  *)
+type name = path_elem list [@@deriving show, ord]
 
 let to_name (ls : string list) : name = List.map (fun s -> Ident s) ls
 

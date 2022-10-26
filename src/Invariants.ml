@@ -385,7 +385,7 @@ let check_constant_value_type (cv : V.constant_value) (ty : T.ety) : unit =
 
 let check_typing_invariant (ctx : C.eval_ctx) : unit =
   (* TODO: the type of aloans doens't make sense: they have a type
-   * of the shape `& (mut) T` where they should have type `T`...
+   * of the shape [& (mut) T] where they should have type [T]...
    * This messes a bit the type invariant checks when checking the
    * children. In order to isolate the problem (for future modifications)
    * we introduce function, so that we can easily spot all the involved
@@ -491,7 +491,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_value info tv
 
-      (* TODO: there is a lot of duplication with [visit_typed_value]
+      (* TODO: there is a lot of duplication with {!visit_typed_value}
        * which is quite annoying. There might be a way of factorizing
        * that by factorizing the definitions of value and avalue, but
        * the generation of visitors then doesn't work properly (TODO:
@@ -607,14 +607,14 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 let ty2 = Subst.erase_regions sv.V.sv_ty in
                 assert (ty1 = ty2);
                 (* Also check that the symbolic values contain regions of interest -
-                 * otherwise they should have been reduced to `_` *)
+                 * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
                 assert (ty_has_regions_in_set abs.regions sv.V.sv_ty)
             | V.AProjBorrows (sv, proj_ty) ->
                 let ty2 = Subst.erase_regions sv.V.sv_ty in
                 assert (ty1 = ty2);
                 (* Also check that the symbolic values contain regions of interest -
-                 * otherwise they should have been reduced to `_` *)
+                 * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
                 assert (ty_has_regions_in_set abs.regions proj_ty)
             | V.AEndedProjLoans (_msv, given_back_ls) ->
@@ -787,7 +787,7 @@ let check_invariants (config : C.config) (ctx : C.eval_ctx) : unit =
     check_symbolic_values config ctx)
   else log#ldebug (lazy "Not checking invariants (check is not activated)")
 
-(** Same as [check_invariants], but written in CPS *)
+(** Same as {!check_invariants}, but written in CPS *)
 let cf_check_invariants (config : C.config) : cm_fun =
  fun cf ctx ->
   check_invariants config ctx;

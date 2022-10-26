@@ -3,9 +3,9 @@ open Pure
 (** Default logger *)
 let log = Logging.pure_utils_log
 
+(** We use this type as a key for lookups *)
 type regular_fun_id = A.fun_id * T.RegionGroupId.id option
 [@@deriving show, ord]
-(** We use this type as a key for lookups *)
 
 module RegularFunIdOrderedType = struct
   type t = regular_fun_id
@@ -72,7 +72,7 @@ let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
   in
   fun id -> TypeVarId.Map.find id mp
 
-(** Retrieve the list of fields for the given variant of a [type_decl].
+(** Retrieve the list of fields for the given variant of a {!Pure.type_decl}.
 
     Raises [Invalid_argument] if the arguments are incorrect.
  *)
@@ -157,7 +157,7 @@ let functions_not_mutually_recursive (funs : fun_decl list) : bool =
 
 (** We use this to check whether we need to add parentheses around expressions.
     We only look for outer monadic let-bindings.
-    This is used when printing the branches of `if ... then ... else ...`.
+    This is used when printing the branches of [if ... then ... else ...].
  *)
 let rec let_group_requires_parentheses (e : texpression) : bool =
   match e.e with
@@ -179,7 +179,7 @@ let is_global (e : texpression) : bool =
 let is_const (e : texpression) : bool =
   match e.e with Const _ -> true | _ -> false
 
-(** Remove the external occurrences of [Meta] *)
+(** Remove the external occurrences of {!Meta} *)
 let rec unmeta (e : texpression) : texpression =
   match e.e with Meta (_, e) -> unmeta e | _ -> e
 
@@ -202,9 +202,9 @@ let mk_arrows (inputs : ty list) (output : ty) =
   in
   aux inputs
 
-(** Destruct an `App` expression into an expression and a list of arguments.
+(** Destruct an [App] expression into an expression and a list of arguments.
 
-    We simply destruct the expression as long as it is of the form `App (f, x)`.
+    We simply destruct the expression as long as it is of the form [App (f, x)].
  *)
 let destruct_apps (e : texpression) : texpression * texpression list =
   let rec aux (args : texpression list) (e : texpression) :
@@ -213,7 +213,7 @@ let destruct_apps (e : texpression) : texpression * texpression list =
   in
   aux [] e
 
-(** Make an `App (app, arg)` expression *)
+(** Make an [App (app, arg)] expression *)
 let mk_app (app : texpression) (arg : texpression) : texpression =
   match app.ty with
   | Arrow (ty0, ty1) ->
@@ -224,7 +224,7 @@ let mk_app (app : texpression) (arg : texpression) : texpression =
       { e; ty }
   | _ -> raise (Failure "Expected an arrow type")
 
-(** The reverse of [destruct_app] *)
+(** The reverse of {!destruct_apps} *)
 let mk_apps (app : texpression) (args : texpression list) : texpression =
   List.fold_left (fun app arg -> mk_app app arg) app args
 
@@ -374,7 +374,7 @@ let mk_simpl_tuple_pattern (vl : typed_pattern list) : typed_pattern =
       let value = PatAdt { variant_id = None; field_values = vl } in
       { value; ty }
 
-(** Similar to [mk_simpl_tuple_pattern] *)
+(** Similar to {!mk_simpl_tuple_pattern} *)
 let mk_simpl_tuple_texpression (vl : texpression list) : texpression =
   match vl with
   | [ v ] -> v

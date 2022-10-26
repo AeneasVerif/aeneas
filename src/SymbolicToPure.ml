@@ -14,7 +14,7 @@ let log = L.symbolic_to_pure_log
 
 type config = {
   filter_useless_back_calls : bool;
-      (** If `true`, filter the useless calls to backward functions.
+      (** If [true], filter the useless calls to backward functions.
        
           The useless calls are calls to backward functions which have no outputs.
           This case happens if the original Rust function only takes *shared* borrows
@@ -73,6 +73,10 @@ type fun_context = {
 
 type global_context = { llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t }
 
+(** Whenever we translate a function call or an ended abstraction, we
+    store the related information (this is useful when translating ended
+    children abstractions).
+ *)
 type call_info = {
   forward : S.call;
   forward_inputs : texpression list;
@@ -88,11 +92,8 @@ type call_info = {
           TODO: remove? it is also in the bs_ctx ("abstractions" field)
        *)
 }
-(** Whenever we translate a function call or an ended abstraction, we
-    store the related information (this is useful when translating ended
-    children abstractions).
- *)
 
+(** Body synthesis context *)
 type bs_ctx = {
   type_context : type_context;
   fun_context : fun_context;
@@ -100,7 +101,7 @@ type bs_ctx = {
   fun_decl : A.fun_decl;
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sg : fun_sig;
-      (** The function signature - useful in particular to translate `Panic` *)
+      (** The function signature - useful in particular to translate [Panic] *)
   sv_to_var : var V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of
           a symbolic expansion or upon ending an abstraction, for instance)
@@ -120,7 +121,6 @@ type bs_ctx = {
   abstractions : (V.abs * texpression list) V.AbstractionId.Map.t;
       (** The ended abstractions we encountered so far, with their additional input arguments  *)
 }
-(** Body synthesis context *)
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
   let env = VarId.Map.empty in
@@ -556,14 +556,14 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     | None -> []
     | Some gid ->
         (* For now, we don't allow nested borrows, so the additional inputs to the
-         * backward function can only come from borrows that were returned like
-         * in (for the backward function we introduce for 'a):
-         * ```
-         * fn f<'a>(...) -> &'a mut u32;
-         * ```
-         * Upon ending the abstraction for 'a, we need to get back the borrow
-         * the function returned.
-         *)
+           backward function can only come from borrows that were returned like
+           in (for the backward function we introduce for 'a):
+           {[
+             fn f<'a>(...) -> &'a mut u32;
+           ]}
+           Upon ending the abstraction for 'a, we need to get back the borrow
+           the function returned.
+        *)
         List.filter_map (translate_back_ty_for_gid gid) [ sg.output ]
   in
   (* Does the function take a state as input, does it return a state and can
@@ -585,14 +585,14 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
         ([ None ], [ translate_fwd_ty types_infos sg.output ])
     | Some gid ->
         (* This is a backward function: there might be several outputs.
-         * The outputs are the borrows inside the regions of the abstractions
-         * and which are present in the input values. For instance, see:
-         * ```
-         * fn f<'a>(x : &'a mut u32) -> ...;
-         * ```
-         * Upon ending the abstraction for 'a, we give back the borrow which
-         * was consumed through the `x` parameter.
-         *)
+           The outputs are the borrows inside the regions of the abstractions
+           and which are present in the input values. For instance, see:
+           {[
+             fn f<'a>(x : &'a mut u32) -> ...;
+           ]}
+           Upon ending the abstraction for 'a, we give back the borrow which
+           was consumed through the [x] parameter.
+        *)
         let outputs =
           List.map
             (fun (name, input_ty) ->
@@ -692,7 +692,7 @@ let fresh_vars (vars : (string option * ty) list) (ctx : bs_ctx) :
 let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
   V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
 
-(** Peel boxes as long as the value is of the form `Box<T>` *)
+(** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
   match (v.value, v.ty) with
   | V.Adt av, T.Adt (T.Assumed T.Box, _, _) -> (
@@ -795,14 +795,14 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (v : V.typed_value) :
     Consumed values are rvalues, because when an abstraction ends, we
     introduce a call to a backward function in the synthesized program,
     which takes as inputs those consumed values:
-    ```
-    // Rust:
-    fn choose<'a>(b: bool, x : &'a mut u32, y : &'a mut u32) -> &'a mut u32;
-    
-    // Synthesis:
-    let ... = choose_back b x y nz in
-                                ^^
-    ```
+    {[
+      // Rust:
+      fn choose<'a>(b: bool, x : &'a mut u32, y : &'a mut u32) -> &'a mut u32;
+
+      // Synthesis:
+      let ... = choose_back b x y nz in
+                                  ^^
+    ]}
  *)
 let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
     texpression option =
@@ -931,10 +931,10 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
     Given back values are patterns, because when an abstraction ends, we
     introduce a call to a backward function in the synthesized program,
     which introduces new values:
-    ```
-    let (nx, ny) = f_back ... in
-        ^^^^^^^^
-    ```
+    {[
+      let (nx, ny) = f_back ... in
+          ^^^^^^^^
+    ]}
     
     [mp]: it is possible to provide some meta-place information, to guide
     the heuristics which later find pretty names for the variables.
@@ -957,7 +957,7 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         in
         let field_values = List.filter_map (fun x -> x) field_values in
         (* For now, only tuples can contain borrows - note that if we gave
-         * something like a `&mut Vec` to a function, we give give back the
+         * something like a [&mut Vec] to a function, we give give back the
          * vector value upon visiting the "abstraction borrow" node *)
         let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
@@ -1089,7 +1089,7 @@ and translate_panic (ctx : bs_ctx) : texpression =
   (* Note that only forward functions return a state *)
   let output_ty = mk_simpl_tuple_ty ctx.sg.doutputs in
   if ctx.sg.info.effect_info.output_state then
-    (* Create the `Fail` value *)
+    (* Create the [Fail] value *)
     let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
     let ret_v = mk_result_fail_texpression ret_ty in
     ret_v
@@ -1099,8 +1099,8 @@ and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : texpression
     =
   (* There are two cases:
      - either we are translating a forward function, in which case the optional
-       value should be `Some` (it is the returned value)
-     - or we are translating a backward function, in which case it should be `None`
+       value should be [Some] (it is the returned value)
+     - or we are translating a backward function, in which case it should be [None]
   *)
   match ctx.bid with
   | None ->
@@ -1136,7 +1136,7 @@ and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : texpression
       in
       let field_values = List.map mk_texpression_from_var backward_outputs in
       (* Backward functions never return a state *)
-      (* TODO: we should use a `fail` function, it would be cleaner *)
+      (* TODO: we should use a [fail] function, it would be cleaner *)
       let ret_value = mk_simpl_tuple_texpression field_values in
       let ret_value = mk_result_return_texpression ret_value in
       ret_value
@@ -1262,18 +1262,18 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       assert (abs.back_id = bid);
 
       (* The translation is done as follows:
-       * - for a given backward function, we choose a set of variables `v_i`
+       * - for a given backward function, we choose a set of variables [v_i]
        * - when we detect the ended input abstraction which corresponds
-       *   to the backward function, and which consumed the values `consumed_i`,
+       *   to the backward function, and which consumed the values [consumed_i],
        *   we introduce:
-       *   ```
-       *   let v_i = consumed_i in
-       *   ...
-       *   ```
-       *   Then, when we reach the `Return` node, we introduce:
-       *   ```
-       *   (v_i)
-       *   ```
+       *   {[
+         *   let v_i = consumed_i in
+         *   ...
+       *   ]}
+       *   Then, when we reach the [Return] node, we introduce:
+       *   {[
+         *   (v_i)
+       *   ]}
        * *)
       (* First, get the given back variables *)
       let given_back_variables =
@@ -1321,7 +1321,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       (* Retrieve the values given back by this function: those are the output
        * values. We rely on the fact that there are no nested borrows to use the
        * meta-place information from the input values given to the forward function
-       * (we need to add `None` for the return avalue) *)
+       * (we need to add [None] for the return avalue) *)
       let output_mpl =
         List.append (List.map translate_opt_mplace call.args_places) [ None ]
       in
@@ -1402,34 +1402,33 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
       else mk_let effect_info.can_fail output call next_e
   | V.SynthRet ->
       (* If we end the abstraction which consumed the return value of the function
-       * we are synthesizing, we get back the borrows which were inside. Those borrows
-       * are actually input arguments of the backward function we are synthesizing.
-       * So we simply need to introduce proper let bindings.
-       * 
-       * For instance:
-       * ```
-       * fn id<'a>(x : &'a mut u32) -> &'a mut u32 {
-       *   x
-       * }
-       * ```
-       *
-       * Upon ending the return abstraction for 'a, we get back the borrow for `x`.
-       * This new value is the second argument of the backward function:
-       * ```
-       * let id_back x nx = nx
-       * ```
-       *
-       * In practice, upon ending this abstraction we introduce a useless
-       * let-binding:
-       * ```
-       * let id_back x nx =
-       *   let s = nx in // the name `s` is not important (only collision matters)
-       *   ...
-       * ```
-       *
-       * This let-binding later gets inlined, during a micro-pass.
-       * 
-       * *)
+         we are synthesizing, we get back the borrows which were inside. Those borrows
+         are actually input arguments of the backward function we are synthesizing.
+         So we simply need to introduce proper let bindings.
+
+         For instance:
+         {[
+           fn id<'a>(x : &'a mut u32) -> &'a mut u32 {
+             x
+           }
+         ]}
+
+         Upon ending the return abstraction for 'a, we get back the borrow for [x].
+         This new value is the second argument of the backward function:
+         {[
+           let id_back x nx = nx
+         ]}
+
+         In practice, upon ending this abstraction we introduce a useless
+         let-binding:
+         {[
+           let id_back x nx =
+             let s = nx in // the name [s] is not important (only collision matters)
+             ...
+         ]}
+
+         This let-binding later gets inlined, during a micro-pass.
+      *)
       (* First, retrieve the list of variables used for the inputs for the
        * backward function *)
       let inputs = T.RegionGroupId.Map.find abs.back_id ctx.backward_inputs in
@@ -1573,7 +1572,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                 | _ -> raise (Failure "Unreachable")
               in
               (* We simply introduce an assignment - the box type is the
-               * identity when extracted (`box a == a`) *)
+               * identity when extracted ([box a == a]) *)
               let monadic = false in
               mk_let monadic
                 (mk_typed_pattern_from_var var None)

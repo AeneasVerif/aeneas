@@ -44,7 +44,7 @@ let initialize_eval_context (type_context : C.type_context)
 
       Introduces local variables initialized in the following manner:
       - input arguments are initialized as symbolic values
-      - the remaining locals are initialized as ⊥
+      - the remaining locals are initialized as [⊥]
       Abstractions are introduced for the regions present in the function
       signature.
       
@@ -115,7 +115,7 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
 (** Small helper.
 
     This is a continuation function called by the symbolic interpreter upon
-    reaching the `return` instruction when synthesizing a *backward* function:
+    reaching the [return] instruction when synthesizing a *backward* function:
     this continuation takes care of doing the proper manipulations to finish
     the synthesis (mostly by ending abstractions).
 *)
@@ -164,7 +164,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
     (* Initialize and insert the abstractions in the context.
      *
      * We take care of disallowing ending the return regions which we
-     * shouldn't end (see the documentation of the `can_end` field of [abs]
+     * shouldn't end (see the documentation of the [can_end] field of [abs]
      * for more information. *)
     let parent_and_current_rgs = T.RegionGroupId.Set.add back_id parent_rgs in
     let region_can_end rid =

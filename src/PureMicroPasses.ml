@@ -8,51 +8,52 @@ module V = Values
 (** The local logger *)
 let log = L.pure_micro_passes_log
 
+(** A configuration to control the application of the passes *)
 type config = {
   decompose_monadic_let_bindings : bool;
       (** Some provers like F* don't support the decomposition of return values
           in monadic let-bindings:
-          ```
-          // NOT supported in F*
-          let (x, y) <-- f ();
-          ...
-          ```
+          {[
+            // NOT supported in F*
+            let (x, y) <-- f ();
+            ...
+          ]}
 
           In such situations, we might want to introduce an intermediate
           assignment:
-          ```
-          let tmp <-- f ();
-          let (x, y) = tmp in
-          ...
-          ```
+          {[
+            let tmp <-- f ();
+            let (x, y) = tmp in
+            ...
+          ]}
        *)
   unfold_monadic_let_bindings : bool;
       (** Controls the unfolding of monadic let-bindings to explicit matches:
           
-          `y <-- f x; ...`
+          [y <-- f x; ...]
 
           becomes:
           
-          `match f x with | Failure -> Failure | Return y -> ...`
+          [match f x with | Failure -> Failure | Return y -> ...]
 
           
           This is useful when extracting to F*: the support for monadic
           definitions is not super powerful.
-          Note that when [undolf_monadic_let_bindings] is true, setting
-          [decompose_monadic_let_bindings] to true and only makes the code
+          Note that when {!field:unfold_monadic_let_bindings} is true, setting
+          {!field:decompose_monadic_let_bindings} to true and only makes the code
           more verbose.
        *)
   filter_useless_monadic_calls : bool;
       (** Controls whether we try to filter the calls to monadic functions
           (which can fail) when their outputs are not used.
           
-          See the comments for [expression_contains_child_call_in_all_paths]
+          See the comments for {!expression_contains_child_call_in_all_paths}
           for additional explanations.
           
-          TODO: rename to [filter_useless_monadic_calls]
+          TODO: rename to {!filter_useless_monadic_calls}
        *)
   filter_useless_functions : bool;
-      (** If [filter_useless_monadic_calls] is activated, some functions
+      (** If {!filter_useless_monadic_calls} is activated, some functions
           become useless: if this option is true, we don't extract them.
 
           The calls to functions which always get filtered are:
@@ -64,7 +65,6 @@ type config = {
             dynamically check for that).
        *)
 }
-(** A configuration to control the application of the passes *)
 
 (** Small utility.
 
@@ -89,24 +89,24 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
       method plus id0 id1 _ = VarId.max (id0 ()) (id1 ())
       (* Get the maximum *)
 
-      method! visit_var _ v _ = v.id
       (** For the patterns *)
+      method! visit_var _ v _ = v.id
 
-      method! visit_Var _ vid _ = vid
       (** For the rvalues *)
+      method! visit_Var _ vid _ = vid
     end
   in
   (* Find the max counter in the body *)
   let id = obj#visit_expression () body.body.e () in
   VarId.generator_from_incr_id id
 
+(** "pretty-name context": see [compute_pretty_names] *)
 type pn_ctx = {
   pure_vars : string VarId.Map.t;
       (** Information about the pure variables used in the synthesized program *)
   llbc_vars : string V.VarId.Map.t;
       (** Information about the LLBC variables used in the original program *)
 }
-(** "pretty-name context": see [compute_pretty_names] *)
 
 (** This function computes pretty names for the variables in the pure AST. It
     relies on the "meta"-place information in the AST to generate naming
@@ -128,49 +128,49 @@ type pn_ctx = {
     For instance, the following situations happen:
     
     - let's say we evaluate:
-      ```
-      match (ls : List<T>) {
-        List::Cons(x, hd) => {
-          ...
+      {[
+        match (ls : List<T>) {
+          List::Cons(x, hd) => {
+            ...
+          }
         }
-      }
-      ```
+      ]}
       
       Actually, in MIR, we get:
-      ```
-      tmp := discriminant(ls);
-      switch tmp {
-        0 => {
-          x := (ls as Cons).0; // (i)
-          hd := (ls as Cons).1; // (ii)
-          ...
+      {[
+        tmp := discriminant(ls);
+        switch tmp {
+          0 => {
+            x := (ls as Cons).0; // (i)
+            hd := (ls as Cons).1; // (ii)
+            ...
+          }
         }
-      }
-      ```
-      If `ls` maps to a symbolic value `s0` upon evaluating the match in symbolic
-      mode, we expand this value upon evaluating `tmp = discriminant(ls)`.
+      ]}
+      If [ls] maps to a symbolic value [s0] upon evaluating the match in symbolic
+      mode, we expand this value upon evaluating [tmp = discriminant(ls)].
       However, at this point, we don't know which should be the names of
-      the symbolic values we introduce for the fields of `Cons`!
+      the symbolic values we introduce for the fields of [Cons]!
 
-      Let's imagine we have (for the `Cons` branch): `s0 ~~> Cons s1 s2`.
+      Let's imagine we have (for the [Cons] branch): [s0 ~~> Cons s1 s2].
       The assigments at (i) and (ii) lead to the following binding in the
       evaluation context:
-      ```
-      x -> s1
-      hd -> s2
-      ```
+      {[
+        x -> s1
+        hd -> s2
+      ]}
       
       When generating the symbolic AST, we save as meta-information that we
-      assign `s1` to the place `x` and `s2` to the place `hd`. This way,
-      we learn we can use the names `x` and `hd` for the variables which are
+      assign [s1] to the place [x] and [s2] to the place [hd]. This way,
+      we learn we can use the names [x] and [hd] for the variables which are
       introduced by the match:
-      ```
-      match ls with
-      | Cons x hd -> ...
-      | ...
-      ```
+      {[
+        match ls with
+        | Cons x hd -> ...
+        | ...
+      ]}
    - Assignments:
-     `let x [@mplace=lp] = v [@mplace = rp} in ...`
+     [let x [@mplace=lp] = v [@mplace = rp] in ...]
      
      We propagate naming information across the assignments. This is important
      because many reassignments using temporary, anonymous variables are
@@ -178,39 +178,39 @@ type pn_ctx = {
    
    - Given back values (introduced by backward functions):
      Let's say we have the following Rust code:
-     ```
-     let py = id(&mut x);
-     *py = 2;
-     assert!(x == 2);
-     ```
+     {[
+       let py = id(&mut x);
+       *py = 2;
+       assert!(x == 2);
+     ]}
      
      After desugaring, we get the following MIR:
-     ```
-     ^0 = &mut x; // anonymous variable
-     py = id(move ^0);
-     *py += 2;
-     assert!(x == 2);
-     ```
+     {[
+       ^0 = &mut x; // anonymous variable
+       py = id(move ^0);
+       *py += 2;
+       assert!(x == 2);
+     ]}
      
      We want this to be translated as:
-     ```
-     let py = id_fwd x in
-     let py1 = py + 2 in
-     let x1 = id_back x py1 in // <-- x1 is "given back": doesn't appear in the original MIR
-     assert(x1 = 2);
-     ```
+     {[
+       let py = id_fwd x in
+       let py1 = py + 2 in
+       let x1 = id_back x py1 in // <-- x1 is "given back": doesn't appear in the original MIR
+       assert(x1 = 2);
+     ]}
 
-     We want to notice that the value given back by `id_back` is given back for "x",
+     We want to notice that the value given back by [id_back] is given back for "x",
      so we should use "x" as the basename (hence the resulting name "x1"). However,
-     this is non-trivial, because after desugaring the input argument given to `id`
-     is not `&mut x` but `move ^0` (i.e., it comes from a temporary, anonymous
-     variable). For this reason, we use the meta-place "&mut x" as the meta-place
+     this is non-trivial, because after desugaring the input argument given to [id]
+     is not [&mut x] but [move ^0] (i.e., it comes from a temporary, anonymous
+     variable). For this reason, we use the meta-place [&mut x] as the meta-place
      for the given back value (this is done during the synthesis), and propagate
      naming information *also* on the LLBC variables (which are referenced by the
      meta-places).
 
-     This way, because of `^0 = &mut x`, we can propagate the name "x" to the place
-     `^0`, then to the given back variable across the function call.
+     This way, because of [^0 = &mut x], we can propagate the name "x" to the place
+     [^0], then to the given back variable across the function call.
    
  *)
 let compute_pretty_names (def : fun_decl) : fun_decl =
@@ -372,7 +372,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    * rvalue to the left *)
   let add_left_right_constraint (lv : typed_pattern) (re : texpression)
       (ctx : pn_ctx) : pn_ctx =
-    (* We propagate constraints across variable reassignments: `^0 = x`,
+    (* We propagate constraints across variable reassignments: [^0 = x],
      * if the destination doesn't have naming information *)
     match lv.value with
     | PatVar (({ id = _; basename = None; ty = _ } as lvar), lmp) ->
@@ -552,17 +552,17 @@ let remove_meta (def : fun_decl) : fun_decl =
     compilation to MIR and by the translation itself (and the variable used
     on the left is often unnamed).
 
-    Note that many of them are just variable "reassignments": `let x = y in ...`.
+    Note that many of them are just variable "reassignments": [let x = y in ...].
     Some others come from ??
     
     TODO: how do we call that when we introduce intermediate variable assignments
     for the arguments of a function call?
 
-    [inline_named]: if `true`, inline all the assignments of the form
-    `let VAR = VAR in ...`, otherwise inline only the ones where the variable
+    [inline_named]: if [true], inline all the assignments of the form
+    [let VAR = VAR in ...], otherwise inline only the ones where the variable
     on the left is anonymous.
     
-    [inline_pure]: if `true`, inline all the pure assignments where the variable
+    [inline_pure]: if [true], inline all the pure assignments where the variable
     on the left is anonymous, but the assignments where the r-expression is
     a non-primitive function call (i.e.: inline the binops, ADT constructions,
     etc.).
@@ -578,6 +578,8 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
     object (self)
       inherit [_] map_expression as super
 
+      (** Visit the let-bindings to filter the useless ones (and update
+          the substitution map while doing so *)
       method! visit_Let (env : texpression VarId.Map.t) monadic lv re e =
         (* In order to filter, we need to check first that:
          * - the let-binding is not monadic
@@ -598,7 +600,7 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
             (* Or:
              * 2.2 the right-expression is a constant value, an ADT value,
              *     a projection or a primitive function call *and* the flag
-             *     `inline_pure` is set *)
+             *     [inline_pure] is set *)
             let pure_re =
               is_const re
               ||
@@ -625,12 +627,11 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
             let env = if filter then VarId.Map.add lv_var.id re env else env in
             (* Update the next expression *)
             let e = self#visit_texpression env e in
-            (* Reconstruct the `let`, only if the binding is not filtered *)
+            (* Reconstruct the [let], only if the binding is not filtered *)
             if filter then e.e else Let (monadic, lv, re, e)
         | _ -> super#visit_Let env monadic lv re e
-      (** Visit the let-bindings to filter the useless ones (and update
-          the substitution map while doing so *)
 
+      (** Substitute the variables *)
       method! visit_Var (env : texpression VarId.Map.t) (vid : VarId.id) =
         match VarId.Map.find_opt vid env with
         | None -> (* No substitution *) super#visit_Var env vid
@@ -641,7 +642,6 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
              * var1 --> var2.
              *)
             self#visit_expression env ne.e
-      (** Substitute the variables *)
     end
   in
   match def.body with
@@ -663,19 +663,19 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
     the additional inputs those receive).
     
     For instance, if we have:
-    ```
-    fn f<'a>(x : &'a mut T);
-    ```
+    {[
+      fn f<'a>(x : &'a mut T);
+    ]}
     
     We often have  things like this in the synthesized code:
-    ```
-    _ <-- f x;
-    ...
-    nx <-- f@back'a x y;
-    ...
-    ```
+    {[
+      _ <-- f x;
+      ...
+      nx <-- f@back'a x y;
+      ...
+    ]}
 
-    In this situation, we can remove the call `f x`.
+    In this situation, we can remove the call [f x].
  *)
 let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
     (fun_id0 : fun_id) (tys0 : ty list) (args0 : texpression list)
@@ -785,14 +785,14 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
     (def : fun_decl) : fun_decl =
   (* We first need a transformation on *left-values*, which filters the useless
    * variables and tells us whether the value contains any variable which has
-   * not been replaced by `_` (in which case we need to keep the assignment,
+   * not been replaced by [_] (in which case we need to keep the assignment,
    * etc.).
    * 
    * This is implemented as a map-reduce.
    *
    * Returns: ( filtered_left_value, *all_dummies* )
    *
-   * `all_dummies`:
+   * [all_dummies]:
    * If the returned boolean is true, it means that all the variables appearing
    * in the filtered left-value are *dummies* (meaning that if this left-value
    * appears at the left of a let-binding, this binding might potentially be
@@ -826,8 +826,8 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
       method zero _ = VarId.Set.empty
       method plus s0 s1 _ = VarId.Set.union (s0 ()) (s1 ())
 
-      method! visit_Var _ vid = (Var vid, fun _ -> VarId.Set.singleton vid)
       (** Whenever we visit a variable, we need to register the used variable *)
+      method! visit_Var _ vid = (Var vid, fun _ -> VarId.Set.singleton vid)
 
       method! visit_expression env e =
         match e with
@@ -903,13 +903,13 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
 
 (** Simplify the aggregated ADTs.
     Ex.:
-    ```
-    type struct = { f0 : nat; f1 : nat }
+    {[
+      type struct = { f0 : nat; f1 : nat }
+
+      Mkstruct x.f0 x.f1 ~~> x
+    ]}
     
-    Mkstruct x.f0 x.f1 ~~> x
-    ```
-    
-    TODO: introduce a notation for { x with field = ... }, and use it.
+    TODO: introduce a notation for [{ x with field = ... }], and use it.
  *)
 let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let expr_visitor =
@@ -943,7 +943,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 assert (num_fields > 0);
                 if num_fields = List.length args then
                   (* We now need to check that all the arguments are of the form:
-                   * `x.field` for some variable `x`, and where the projection
+                   * [x.field] for some variable [x], and where the projection
                    * is for the proper ADT *)
                   let to_var_proj (i : int) (arg : texpression) :
                       (ty list * var_id) option =
@@ -995,7 +995,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = { body with body = body_exp } in
       { def with body = Some body }
 
-(** Return `None` if the function is a backward function with no outputs (so
+(** Return [None] if the function is a backward function with no outputs (so
     that we eliminate the definition which is useless).
 
     Note that the calls to such functions are filtered when translating from
@@ -1010,7 +1010,7 @@ let filter_if_backward_with_no_outputs (config : config) (def : fun_decl) :
   then None
   else Some def
 
-(** Return `false` if the forward function is useless and should be filtered.
+(** Return [false] if the forward function is useless and should be filtered.
 
     - a forward function with no output (comes from a Rust function with
       unit return type)
@@ -1037,24 +1037,24 @@ let keep_forward (config : config) (trans : pure_fun_translation) : bool =
   then false
   else true
 
-(** Convert the unit variables to `()` if they are used as right-values or
-    `_` if they are used as left values in patterns. *)
+(** Convert the unit variables to [()] if they are used as right-values or
+    [_] if they are used as left values in patterns. *)
 let unit_vars_to_unit (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
       inherit [_] map_expression as super
 
+      (** Replace in patterns *)
       method! visit_PatVar _ v mp =
         if v.ty = mk_unit_ty then PatDummy else PatVar (v, mp)
-      (** Replace in patterns *)
 
-      method! visit_texpression env e =
-        if e.ty = mk_unit_ty then mk_unit_rvalue
-        else super#visit_texpression env e
       (** Replace in "regular" expressions - note that we could limit ourselves
           to variables, but this is more powerful
        *)
+      method! visit_texpression env e =
+        if e.ty = mk_unit_ty then mk_unit_rvalue
+        else super#visit_texpression env e
     end
   in
   (* Update the body *)
@@ -1068,8 +1068,8 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
       let body = Some { body with body = body_exp; inputs_lvs } in
       { def with body }
 
-(** Eliminate the box functions like `Box::new`, `Box::deref`, etc. Most of them
-    are translated to identity, and `Box::free` is translated to `()`.
+(** Eliminate the box functions like [Box::new], [Box::deref], etc. Most of them
+    are translated to identity, and [Box::free] is translated to [()].
 
     Note that the box types have already been eliminated during the translation
     from symbolic to pure.
@@ -1091,7 +1091,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
             | Regular (A.Assumed aid, rg_id) -> (
                 (* Below, when dealing with the arguments: we consider the very
                  * general case, where functions could be boxed (meaning we
-                 * could have: `box_new f x`)
+                 * could have: [box_new f x])
                  * *)
                 match (aid, rg_id) with
                 | A.BoxNew, _ ->
@@ -1099,19 +1099,19 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
                 | A.BoxDeref, None ->
-                    (* `Box::deref` forward is the identity *)
+                    (* [Box::deref] forward is the identity *)
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
                 | A.BoxDeref, Some _ ->
-                    (* `Box::deref` backward is `()` (doesn't give back anything) *)
+                    (* [Box::deref] backward is [()] (doesn't give back anything) *)
                     assert (args = []);
                     mk_unit_rvalue
                 | A.BoxDerefMut, None ->
-                    (* `Box::deref_mut` forward is the identity *)
+                    (* [Box::deref_mut] forward is the identity *)
                     let arg, args = Collections.List.pop args in
                     mk_apps arg args
                 | A.BoxDerefMut, Some _ ->
-                    (* `Box::deref_mut` back is almost the identity:
+                    (* [Box::deref_mut] back is almost the identity:
                      * let box_deref_mut (x_init : t) (x_back : t) : t = x_back
                      * *)
                     let arg, args =
@@ -1197,24 +1197,24 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
           method! visit_Let env monadic lv re e =
             (* We simply do the following transformation:
-             * ```
-             * pat <-- re; e
-             *
-             *     ~~>
-             *
-             * match re with
-             * | Fail err -> Fail err
-             * | Return pat -> e
-             * ```
-             *)
+               {[
+                 pat <-- re; e
+
+                     ~~>
+
+                 match re with
+                 | Fail err -> Fail err
+                 | Return pat -> e
+               ]}
+            *)
             (* TODO: we should use a monad "kind" instead of a boolean *)
             if not monadic then super#visit_Let env monadic lv re e
             else
               (* We don't do the same thing if we use a state-error monad or simply
-               * an error monad.
-               * Note that some functions always live in the error monad (arithmetic
-               * operations, for instance).
-               *)
+                 an error monad.
+                 Note that some functions always live in the error monad (arithmetic
+                 operations, for instance).
+              *)
               (* TODO: this information should be computed in SymbolicToPure and
                * store in an enum ("monadic" should be an enum, not a bool). *)
               let re_ty = Option.get (opt_destruct_result re.ty) in
@@ -1238,7 +1238,7 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
 (** Apply all the micro-passes to a function.
 
-    Will return `None` if the function is a backward function with no outputs.
+    Will return [None] if the function is a backward function with no outputs.
 
     [ctx]: used only for printing.
  *)
@@ -1278,8 +1278,8 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
   match def with
   | None -> None
   | Some def ->
-      (* Convert the unit variables to `()` if they are used as right-values or
-       * `_` if they are used as left values. *)
+      (* Convert the unit variables to [()] if they are used as right-values or
+       * [_] if they are used as left values. *)
       let def = unit_vars_to_unit def in
       log#ldebug
         (lazy ("unit_vars_to_unit:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
@@ -1308,13 +1308,13 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
         (lazy ("filter_useless:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
       (* Simplify the aggregated ADTs.
-       * Ex.:
-       * ```
-       * type struct = { f0 : nat; f1 : nat }
-       * 
-       * Mkstruct x.f0 x.f1 ~~> x
-       * ```
-       *)
+         Ex.:
+         {[
+           type struct = { f0 : nat; f1 : nat }
+
+           Mkstruct x.f0 x.f1 ~~> x
+         ]}
+      *)
       let def = simplify_aggregates ctx def in
       log#ldebug
         (lazy ("simplify_aggregates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
@@ -1358,7 +1358,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
 (** Return the forward/backward translations on which we applied the micro-passes.
 
     Also returns a boolean indicating whether the forward function should be kept
-    or not (because useful/useless - `true` means we need to keep the forward
+    or not (because useful/useless - [true] means we need to keep the forward
     function).
     Note that we don't "filter" the forward function and return a boolean instead,
     because this function contains useful information to extract the backward

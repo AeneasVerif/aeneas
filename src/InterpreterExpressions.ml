@@ -73,7 +73,7 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
 
     We reorganize the environment so that:
     - we can access the place (we prepare *along* the path)
-    - the value at the place itself doesn't contain loans (the `access_kind`
+    - the value at the place itself doesn't contain loans (the [access_kind]
       controls whether we only end mutable loans, or also shared loans).
 
     We also check, after the reorganization, that the value at the place
@@ -138,17 +138,17 @@ let constant_to_typed_value (ty : T.ety) (cv : V.constant_value) : V.typed_value
     
     Sometimes, we want to decouple the two operations.
     Consider the following example:
-    ```
-    context = {
-      x -> shared_borrow l0
-      y -> shared_loan {l0} v
-    }
-    
-    dest <- f(move x, move y);
-    ...
-    ```
-    Because of the way `end_borrow` is implemented, when giving back the borrow
-    `l0` upon evaluating `move y`, we won't notice that `shared_borrow l0` has
+    {[
+      context = {
+        x -> shared_borrow l0
+        y -> shared_loan {l0} v
+      }
+
+      dest <- f(move x, move y);
+      ...
+    ]}
+    Because of the way [end_borrow] is implemented, when giving back the borrow
+    [l0] upon evaluating [move y], we won't notice that [shared_borrow l0] has
     disappeared from the environment (it has been moved and not assigned yet,
     and so is hanging in "thin air").
     
@@ -247,7 +247,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
     **Warning**: this function shouldn't be used to evaluate a list of
     operands (for a function call, for instance): we must do *one* reorganization
     of the environment, before evaluating all the operands at once.
-    Use [`eval_operands`] instead.
+    Use [eval_operands] instead.
  *)
 let eval_operand (config : C.config) (op : E.operand)
     (cf : V.typed_value -> m_fun) : m_fun =
@@ -497,7 +497,7 @@ let eval_binary_op (config : C.config) (binop : E.binop) (op1 : E.operand)
 (** Evaluate the discriminant of a concrete (i.e., non symbolic) ADT value *)
 let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
-  (* Note that discriminant values have type `isize` *)
+  (* Note that discriminant values have type [isize] *)
   (* Access the value *)
   let access = Read in
   let expand_prim_copy = false in
@@ -537,7 +537,7 @@ let eval_rvalue_discriminant (config : C.config) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
   log#ldebug (lazy "eval_rvalue_discriminant");
-  (* Note that discriminant values have type `isize` *)
+  (* Note that discriminant values have type [isize] *)
   (* Access the value *)
   let access = Read in
   let expand_prim_copy = false in
