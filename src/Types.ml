@@ -1,15 +1,16 @@
 open Identifiers
 open Names
+open Meta
 module TypeVarId = IdGen ()
 module TypeDeclId = IdGen ()
 module VariantId = IdGen ()
 module FieldId = IdGen ()
 
-module RegionVarId = IdGen ()
 (** Region variable ids. Used in function signatures. *)
+module RegionVarId = IdGen ()
 
-module RegionId = IdGen ()
 (** Region ids. Used for symbolic executions. *)
+module RegionId = IdGen ()
 
 module RegionGroupId = IdGen ()
 
@@ -39,12 +40,6 @@ type 'rid region =
  *)
 type erased_region = Erased [@@deriving show, ord]
 
-type ('id, 'r) g_region_group = {
-  id : 'id;
-  regions : 'r list;
-  parents : 'id list;
-}
-[@@deriving show]
 (** A group of regions.
 
     Results from a lifetime analysis: we group the regions with the same
@@ -52,6 +47,12 @@ type ('id, 'r) g_region_group = {
     This is necessary to introduce the proper abstraction with the
     proper constraints, when evaluating a function call in symbolic mode.
 *)
+type ('id, 'r) g_region_group = {
+  id : 'id;
+  regions : 'r list;
+  parents : 'id list;
+}
+[@@deriving show]
 
 type ('r, 'id) g_region_groups = ('r, 'id) g_region_group list [@@deriving show]
 
@@ -157,30 +158,33 @@ type 'r ty =
       }]
 (* TODO: group Bool, Char, etc. in Constant *)
 
-type 'r gr_ty = 'r region ty [@@deriving show, ord]
 (** Generic type with regions *)
+type 'r gr_ty = 'r region ty [@@deriving show, ord]
 
-type sty = RegionVarId.id gr_ty [@@deriving show, ord]
 (** *S*ignature types.
 
     Used in function signatures and type definitions.
  *)
+type sty = RegionVarId.id gr_ty [@@deriving show, ord]
 
-type rty = RegionId.id gr_ty [@@deriving show, ord]
 (** Type with *R*egions.
 
     Used to project borrows/loans inside of abstractions, during symbolic
     execution.
  *)
+type rty = RegionId.id gr_ty [@@deriving show, ord]
 
-type ety = erased_region ty [@@deriving show, ord]
 (** Type with *E*rased regions.
     
     Used in function bodies, "regular" value types, etc.
  *)
+type ety = erased_region ty [@@deriving show, ord]
 
-type field = { field_name : string option; field_ty : sty } [@@deriving show]
-type variant = { variant_name : string; fields : field list } [@@deriving show]
+type field = { meta : meta; field_name : string option; field_ty : sty }
+[@@deriving show]
+
+type variant = { meta : meta; variant_name : string; fields : field list }
+[@@deriving show]
 
 type type_decl_kind =
   | Struct of field list
@@ -191,6 +195,7 @@ type type_decl_kind =
 
 type type_decl = {
   def_id : TypeDeclId.id;
+  meta : meta;
   name : type_name;
   region_params : region_var list;
   type_params : type_var list;

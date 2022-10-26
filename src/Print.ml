@@ -935,6 +935,10 @@ module LlbcAst = struct
 
   let rec statement_to_string (fmt : ast_formatter) (indent : string)
       (indent_incr : string) (st : A.statement) : string =
+    raw_statement_to_string fmt indent indent_incr st.content
+
+  and raw_statement_to_string (fmt : ast_formatter) (indent : string)
+      (indent_incr : string) (st : A.raw_statement) : string =
     match st with
     | A.Assign (p, rv) ->
         indent ^ place_to_string fmt p ^ " := " ^ rvalue_to_string fmt rv

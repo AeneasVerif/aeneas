@@ -5,7 +5,9 @@ open Expressions
 open Identifiers
 module FunDeclId = IdGen ()
 module GlobalDeclId = IdGen ()
+open Meta
 
+(** A variable, as used in a function definition *)
 type var = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;
@@ -15,7 +17,6 @@ type var = {
        ** variables manipulated by a function body *)
 }
 [@@deriving show]
-(** A variable, as used in a function definition *)
 
 type assumed_fun_id =
   | Replace  (** `core::mem::replace` *)
@@ -47,6 +48,7 @@ type abs_region_group = (AbstractionId.id, RegionId.id) g_region_group
 type abs_region_groups = (AbstractionId.id, RegionId.id) g_region_groups
 [@@deriving show]
 
+(** A function signature, as used when declaring functions *)
 type fun_sig = {
   region_params : region_var list;
   num_early_bound_regions : int;
@@ -56,15 +58,14 @@ type fun_sig = {
   output : sty;
 }
 [@@deriving show]
-(** A function signature, as used when declaring functions *)
 
+(** A function signature, after instantiation *)
 type inst_fun_sig = {
   regions_hierarchy : abs_region_groups;
   inputs : rty list;
   output : rty;
 }
 [@@deriving show]
-(** A function signature, after instantiation *)
 
 type call = {
   func : fun_id;
@@ -83,6 +84,7 @@ class ['self] iter_statement_base =
     method visit_global_assignment : 'env -> global_assignment -> unit =
       fun _ _ -> ()
 
+    method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
     method visit_place : 'env -> place -> unit = fun _ _ -> ()
     method visit_rvalue : 'env -> rvalue -> unit = fun _ _ -> ()
     method visit_id : 'env -> VariantId.id -> unit = fun _ _ -> ()
@@ -102,6 +104,7 @@ class ['self] map_statement_base =
         : 'env -> global_assignment -> global_assignment =
       fun _ x -> x
 
+    method visit_meta : 'env -> meta -> meta = fun _ x -> x
     method visit_place : 'env -> place -> place = fun _ x -> x
     method visit_rvalue : 'env -> rvalue -> rvalue = fun _ x -> x
     method visit_id : 'env -> VariantId.id -> VariantId.id = fun _ x -> x
@@ -116,7 +119,12 @@ class ['self] map_statement_base =
       fun _ x -> x
   end
 
-type statement =
+type statement = {
+  meta : meta;  (** The statement meta-data *)
+  content : raw_statement;  (** The statement itself *)
+}
+
+and raw_statement =
   | Assign of place * rvalue
   | AssignGlobal of global_assignment
   | FakeRead of place
@@ -169,11 +177,17 @@ and switch_targets =
         concrete = true;
       }]
 
-type fun_body = { arg_count : int; locals : var list; body : statement }
+type fun_body = {
+  meta : meta;
+  arg_count : int;
+  locals : var list;
+  body : statement;
+}
 [@@deriving show]
 
 type fun_decl = {
   def_id : FunDeclId.id;
+  meta : meta;
   name : fun_name;
   signature : fun_sig;
   body : fun_body option;
@@ -183,6 +197,7 @@ type fun_decl = {
 
 type global_decl = {
   def_id : GlobalDeclId.id;
+  meta : meta;
   body_id : FunDeclId.id;
   name : global_name;
   ty : ety;

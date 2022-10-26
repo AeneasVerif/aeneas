@@ -43,7 +43,6 @@ tests/misc/obj/
 /fstar-tests
 *~
 nohup.out
-.ocamlformat
 .vscode
 *#
 *.lock
