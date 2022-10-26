@@ -1,1 +1,24 @@
 (lang dune 2.8)
+
+(name aeneas)
+
+(version 0.1)
+
+(generate_opam_files true)
+
+(formatting)
+
+(source
+ (uri git+https://github.com/AeneasVerif/aeneas.git))
+
+(homepage "https://github.com/AeneasVerif/aeneas")
+
+(bug_reports "https://github.com/AeneasVerif/aeneas/issues")
+
+(authors
+  "Son Ho"
+  "Jonathan Protzenko"
+  "Aymeric Fromherz"
+  "Sidney Congard")
+
+(license Apache-2.0)

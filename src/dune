@@ -1,10 +1,33 @@
 ;; core: for Core.Unix.mkdir_p
 
 (executable
- (name main)
+ (name driver)
+ (public_name aeneas_driver)
+ (package aeneas)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
- (libraries ppx_deriving yojson zarith easy_logging core_unix))
+ (libraries ppx_deriving yojson zarith easy_logging core_unix aeneas)
+ (modules driver))
+
+(library
+ (name aeneas) ;; The name as used in the project
+ (public_name aeneas) ;; The name as revealed to the projects importing this library
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
+ (libraries ppx_deriving yojson zarith easy_logging core_unix)
+ (modules Assumed Collections ConstStrings Contexts Cps Crates Errors
+   Expressions ExpressionsUtils ExtractToFStar FunsAnalysis Identifiers
+   InterpreterBorrowsCore InterpreterBorrows InterpreterExpansion
+   InterpreterExpressions Interpreter InterpreterPaths InterpreterProjectors
+   InterpreterStatements InterpreterUtils Invariants LlbcAst LlbcAstUtils
+   LlbcOfJson Logging Meta Names OfJsonBasic PrePasses Print PrintPure
+   PureMicroPasses Pure PureToExtract PureTypeCheck PureUtils Scalars
+   StringUtils Substitute SymbolicAst SymbolicToPure SynthesizeSymbolic
+   TranslateCore Translate TypesAnalysis Types TypesUtils Utils Values
+   ValuesUtils))
+
+(documentation
+ (package aeneas))
 
 (env
  (dev
