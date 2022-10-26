@@ -1,12 +1,15 @@
-open LlbcOfJson
-open Logging
-open Print
-module T = Types
-module A = LlbcAst
-module I = Interpreter
+open Aeneas.LlbcOfJson
+open Aeneas.Logging
+open Aeneas.Print
+module T = Aeneas.Types
+module A = Aeneas.LlbcAst
+module I = Aeneas.Interpreter
 module EL = Easy_logging.Logging
-module TA = TypesAnalysis
-module Micro = PureMicroPasses
+module TA = Aeneas.TypesAnalysis
+module Micro = Aeneas.PureMicroPasses
+module Print = Aeneas.Print
+module PrePasses = Aeneas.PrePasses
+module Translate = Aeneas.Translate
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
