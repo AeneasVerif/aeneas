@@ -951,7 +951,7 @@ module LlbcAst = struct
         indent ^ "set_discriminant(" ^ place_to_string fmt p ^ ", "
         ^ T.VariantId.to_string variant_id
         ^ ")"
-    | A.Drop p -> indent ^ "drop(" ^ place_to_string fmt p ^ ")"
+    | A.Drop p -> indent ^ "drop " ^ place_to_string fmt p
     | A.Assert a ->
         let cond = operand_to_string fmt a.A.cond in
         if a.A.expected then indent ^ "assert(" ^ cond ^ ")"

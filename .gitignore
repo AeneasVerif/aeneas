@@ -29,7 +29,7 @@ setup.log
 _opam/
 
 # Rust working directory
-rust-tests/target/
+rust-scripts/target/
 
 # F*
 .depend

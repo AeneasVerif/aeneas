@@ -14,7 +14,7 @@ CHARON_TESTS_DIR =
 CHARON_OPTIONS =
 CHARON_TESTS_SRC =
 
-AENEAS_DRIVER = src/driver.exe
+AENEAS_DRIVER = driver.exe
 
 # The user can specify additional translation options for Aeneas:
 OPTIONS ?=
@@ -35,11 +35,15 @@ build: build-driver build-lib doc
 
 .PHONY: build-driver
 build-driver:
-	dune build $(AENEAS_DRIVER)
+	cd compiler && dune build $(AENEAS_DRIVER)
 
 .PHONY: build-lib
 build-lib:
-	dune build src/aeneas.cmxs
+	cd compiler && dune build aeneas.cmxs
+
+.PHONY: doc
+doc:
+	cd compiler && dune build @doc
 
 # Test the project by translating test files to F*
 .PHONY: tests
@@ -100,11 +104,7 @@ trans-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests/llbc
 trans-polonius-%: CHARON_TESTS_DIR = $(CHARON_HOME)/tests-polonius/llbc
 
 trans-polonius-%: gen-llbc-polonius-%
-	dune exec -- $(AENEAS_DRIVER) $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
+	cd compiler && dune exec -- ./$(AENEAS_DRIVER) ../$(CHARON_TESTS_DIR)/$*.llbc -dest ../$(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
 
 trans-%: gen-llbc-%
-	dune exec -- $(AENEAS_DRIVER) $(CHARON_TESTS_DIR)/$*.llbc -dest $(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
-
-.PHONY: doc
-doc:
-	dune build @doc
+	cd compiler && dune exec -- ./$(AENEAS_DRIVER) ../$(CHARON_TESTS_DIR)/$*.llbc -dest ../$(DEST_DIR)/$(SUBDIR) $(TRANS_OPTIONS)
