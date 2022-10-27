@@ -100,7 +100,7 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
   let id = obj#visit_expression () body.body.e () in
   VarId.generator_from_incr_id id
 
-(** "pretty-name context": see [compute_pretty_names] *)
+(** "Pretty-Name context": see {!compute_pretty_names} *)
 type pn_ctx = {
   pure_vars : string VarId.Map.t;
       (** Information about the pure variables used in the synthesized program *)

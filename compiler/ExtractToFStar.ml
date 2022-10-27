@@ -857,7 +857,7 @@ let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
     (id : A.GlobalDeclId.id) : unit =
   F.pp_print_string fmt (ctx_get_global id ctx)
 
-(** [inside]: see [extract_ty].
+(** [inside]: see {!extract_ty}.
 
     As a pattern can introduce new variables, we return an extraction context
     updated with new bindings.

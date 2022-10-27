@@ -620,9 +620,11 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
     
     [end_borrows]:
     - if true: end all the loans and borrows we find, starting with the outer
-      ones. This is used when evaluating the [drop] statement (see [drop_value])
-    - if false: only end the outer loans. This is used by [assign_to_place]
+      ones. This is used when evaluating the {!LlbcAst.Drop} statement (see {!InterpreterStatements.drop_value})
+    - if false: only end the outer loans. This is used by {!InterpreterStatements.assign_to_place}
       or to drop the loans in the local variables when popping a frame.
+    TODO: remove this option, it is actually not used anymore (should always be
+    false).
 
     Note that we don't do what is defined in the formalization: we move the
     value to a temporary dummy value, then explore this value and end the
