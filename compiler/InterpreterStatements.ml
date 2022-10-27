@@ -1,4 +1,5 @@
 module T = Types
+module PV = PrimitiveValues
 module V = Values
 module E = Expressions
 module C = Contexts
@@ -144,7 +145,7 @@ let eval_assertion_concrete (config : C.config) (assertion : A.assertion) :
   let eval_assert cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match v.value with
-    | Concrete (Bool b) ->
+    | Primitive (Bool b) ->
         (* Branch *)
         if b = assertion.expected then cf Unit ctx else cf Panic ctx
     | _ ->
@@ -174,7 +175,7 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
      * even if we are in symbolic mode. Note that this case should be
      * extremely rare... *)
     match v.value with
-    | Concrete (Bool _) ->
+    | Primitive (Bool _) ->
         (* Delegate to the concrete evaluation function *)
         eval_assertion_concrete config assertion cf ctx
     | Symbolic sv ->
@@ -279,7 +280,7 @@ let set_discriminant (config : C.config) (p : E.place)
          * or reset an already initialized value, really. *)
         raise (Failure "Unexpected value")
     | _, (V.Adt _ | V.Bottom) -> raise (Failure "Inconsistent state")
-    | _, (V.Concrete _ | V.Borrow _ | V.Loan _) ->
+    | _, (V.Primitive _ | V.Borrow _ | V.Loan _) ->
         raise (Failure "Unexpected value")
   in
   (* Compose and apply *)
@@ -963,7 +964,7 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
     match tgts with
     | A.If (st1, st2) -> (
         match op_v.value with
-        | V.Concrete (V.Bool b) ->
+        | V.Primitive (PV.Bool b) ->
             (* Evaluate the if and the branch body *)
             let cf_branch cf : m_fun =
               (* Branch *)
@@ -983,11 +984,11 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
         | _ -> raise (Failure "Inconsistent state"))
     | A.SwitchInt (int_ty, stgts, otherwise) -> (
         match op_v.value with
-        | V.Concrete (V.Scalar sv) ->
+        | V.Primitive (PV.Scalar sv) ->
             (* Evaluate the branch *)
             let cf_eval_branch cf =
               (* Sanity check *)
-              assert (sv.V.int_ty = int_ty);
+              assert (sv.PV.int_ty = int_ty);
               (* Find the branch *)
               match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
               | None -> eval_statement config otherwise cf

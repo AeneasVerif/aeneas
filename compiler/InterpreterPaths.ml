@@ -248,7 +248,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                     in
                     Ok (ctx, { res with updated = nv })
               else Error (FailSharedLoan bids))
-      | (_, (V.Concrete _ | V.Adt _ | V.Bottom | V.Borrow _), _) as r ->
+      | (_, (V.Primitive _ | V.Adt _ | V.Bottom | V.Borrow _), _) as r ->
           let pe, v, ty = r in
           let pe = "- pe: " ^ E.show_projection_elem pe in
           let v = "- v:\n" ^ V.show_value v in
@@ -711,7 +711,7 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
    * the fact that we have exhaustive matches below makes very obvious the cases
    * in which we need to fail *)
   match v.V.value with
-  | V.Concrete _ -> (ctx, v)
+  | V.Primitive _ -> (ctx, v)
   | V.Adt av ->
       (* Sanity check *)
       (match v.V.ty with

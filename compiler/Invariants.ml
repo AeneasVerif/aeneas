@@ -2,6 +2,7 @@
  * are always maintained by evaluation contexts *)
 
 module T = Types
+module PV = PrimitiveValues
 module V = Values
 module E = Expressions
 module C = Contexts
@@ -377,10 +378,10 @@ let check_borrowed_values_invariant (config : C.config) (ctx : C.eval_ctx) :
   let info = { outer_borrow = false; outer_shared = false } in
   visitor#visit_eval_ctx info ctx
 
-let check_constant_value_type (cv : V.constant_value) (ty : T.ety) : unit =
+let check_primitive_value_type (cv : V.primitive_value) (ty : T.ety) : unit =
   match (cv, ty) with
-  | V.Scalar sv, T.Integer int_ty -> assert (sv.int_ty = int_ty)
-  | V.Bool _, T.Bool | V.Char _, T.Char | V.String _, T.Str -> ()
+  | PV.Scalar sv, T.Integer int_ty -> assert (sv.int_ty = int_ty)
+  | PV.Bool _, T.Bool | PV.Char _, T.Char | PV.String _, T.Str -> ()
   | _ -> failwith "Erroneous typing"
 
 let check_typing_invariant (ctx : C.eval_ctx) : unit =
@@ -404,7 +405,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
       method! visit_typed_value info tv =
         (* Check the current pair (value, type) *)
         (match (tv.V.value, tv.V.ty) with
-        | V.Concrete cv, ty -> check_constant_value_type cv ty
+        | V.Primitive cv, ty -> check_primitive_value_type cv ty
         (* ADT case *)
         | V.Adt av, T.Adt (T.AdtId def_id, regions, tys) ->
             (* Retrieve the definition to check the variant id, the number of
@@ -502,8 +503,8 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
       method! visit_typed_avalue info atv =
         (* Check the current pair (value, type) *)
         (match (atv.V.value, atv.V.ty) with
-        | V.AConcrete cv, ty ->
-            check_constant_value_type cv (Subst.erase_regions ty)
+        | V.APrimitive cv, ty ->
+            check_primitive_value_type cv (Subst.erase_regions ty)
         (* ADT case *)
         | V.AAdt av, T.Adt (T.AdtId def_id, regions, tys) ->
             (* Retrieve the definition to check the variant id, the number of

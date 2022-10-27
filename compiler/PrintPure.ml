@@ -357,7 +357,7 @@ let adt_g_value_to_string (fmt : value_formatter)
 let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
     string =
   match v.value with
-  | PatConcrete cv -> Print.Values.constant_value_to_string cv
+  | PatConstant cv -> Print.Values.primitive_value_to_string cv
   | PatVar (v, None) -> var_to_string (ast_to_type_formatter fmt) v
   | PatVar (v, Some mp) ->
       let mp = "[@mplace=" ^ mplace_to_string fmt mp ^ "]" in
@@ -436,7 +436,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
   | Var var_id ->
       let s = fmt.var_id_to_string var_id in
       if inside then "(" ^ s ^ ")" else s
-  | Const cv -> Print.Values.constant_value_to_string cv
+  | Const cv -> Print.Values.primitive_value_to_string cv
   | App _ ->
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
       let app, args = destruct_apps e in

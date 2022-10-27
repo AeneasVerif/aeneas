@@ -45,17 +45,17 @@ type tc_ctx = {
   env : ty VarId.Map.t;  (** Environment from variables to types *)
 }
 
-let check_constant_value (v : constant_value) (ty : ty) : unit =
+let check_primitive_value (v : primitive_value) (ty : ty) : unit =
   match (ty, v) with
-  | Integer int_ty, V.Scalar sv -> assert (int_ty = sv.V.int_ty)
+  | Integer int_ty, PV.Scalar sv -> assert (int_ty = sv.PV.int_ty)
   | Bool, Bool _ | Char, Char _ | Str, String _ -> ()
   | _ -> raise (Failure "Inconsistent type")
 
 let rec check_typed_pattern (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
   log#ldebug (lazy ("check_typed_pattern: " ^ show_typed_pattern v));
   match v.value with
-  | PatConcrete cv ->
-      check_constant_value cv v.ty;
+  | PatConstant cv ->
+      check_primitive_value cv v.ty;
       ctx
   | PatDummy -> ctx
   | PatVar (var, _) ->
@@ -97,7 +97,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       match VarId.Map.find_opt var_id ctx.env with
       | None -> ()
       | Some ty -> assert (ty = e.ty))
-  | Const cv -> check_constant_value cv e.ty
+  | Const cv -> check_primitive_value cv e.ty
   | App (app, arg) ->
       let input_ty, output_ty = destruct_arrow app.ty in
       assert (input_ty = arg.ty);

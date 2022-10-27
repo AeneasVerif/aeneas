@@ -14,6 +14,7 @@ open OfJsonBasic
 open Identifiers
 open Meta
 module T = Types
+module PV = PrimitiveValues
 module V = Values
 module S = Scalars
 module E = Expressions
@@ -361,48 +362,49 @@ let scalar_value_of_json (js : json) : (V.scalar_value, string) result =
       (match js with
       | `Assoc [ ("Isize", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = Isize }
+          Ok { PV.value = bi; int_ty = Isize }
       | `Assoc [ ("I8", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = I8 }
+          Ok { PV.value = bi; int_ty = I8 }
       | `Assoc [ ("I16", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = I16 }
+          Ok { PV.value = bi; int_ty = I16 }
       | `Assoc [ ("I32", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = I32 }
+          Ok { PV.value = bi; int_ty = I32 }
       | `Assoc [ ("I64", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = I64 }
+          Ok { PV.value = bi; int_ty = I64 }
       | `Assoc [ ("I128", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = I128 }
+          Ok { PV.value = bi; int_ty = I128 }
       | `Assoc [ ("Usize", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = Usize }
+          Ok { PV.value = bi; int_ty = Usize }
       | `Assoc [ ("U8", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = U8 }
+          Ok { PV.value = bi; int_ty = U8 }
       | `Assoc [ ("U16", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = U16 }
+          Ok { PV.value = bi; int_ty = U16 }
       | `Assoc [ ("U32", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = U32 }
+          Ok { PV.value = bi; int_ty = U32 }
       | `Assoc [ ("U64", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = U64 }
+          Ok { PV.value = bi; int_ty = U64 }
       | `Assoc [ ("U128", `List [ bi ]) ] ->
           let* bi = big_int_of_json bi in
-          Ok { V.value = bi; int_ty = U128 }
+          Ok { PV.value = bi; int_ty = U128 }
       | _ -> Error "")
   in
   match res with
   | Error _ -> res
   | Ok sv ->
       if not (S.check_scalar_value_in_range sv) then (
-        log#serror ("Scalar value not in range: " ^ V.show_scalar_value sv);
-        raise (Failure ("Scalar value not in range: " ^ V.show_scalar_value sv)));
+        log#serror ("Scalar value not in range: " ^ PV.show_scalar_value sv);
+        raise
+          (Failure ("Scalar value not in range: " ^ PV.show_scalar_value sv)));
       res
 
 let field_proj_kind_of_json (js : json) : (E.field_proj_kind, string) result =
@@ -482,21 +484,21 @@ let binop_of_json (js : json) : (E.binop, string) result =
   | `String "Shr" -> Ok E.Shr
   | _ -> Error ("binop_of_json failed on:" ^ show js)
 
-let constant_value_of_json (js : json) : (V.constant_value, string) result =
+let primitive_value_of_json (js : json) : (V.primitive_value, string) result =
   combine_error_msgs js __FUNCTION__
     (match js with
     | `Assoc [ ("Scalar", scalar_value) ] ->
         let* scalar_value = scalar_value_of_json scalar_value in
-        Ok (V.Scalar scalar_value)
+        Ok (PV.Scalar scalar_value)
     | `Assoc [ ("Bool", v) ] ->
         let* v = bool_of_json v in
-        Ok (V.Bool v)
+        Ok (PV.Bool v)
     | `Assoc [ ("Char", v) ] ->
         let* v = char_of_json v in
-        Ok (V.Char v)
+        Ok (PV.Char v)
     | `Assoc [ ("String", v) ] ->
         let* v = string_of_json v in
-        Ok (V.String v)
+        Ok (PV.String v)
     | _ -> Error "")
 
 let operand_of_json (js : json) : (E.operand, string) result =
@@ -510,7 +512,7 @@ let operand_of_json (js : json) : (E.operand, string) result =
         Ok (E.Move place)
     | `Assoc [ ("Const", `List [ ty; cv ]) ] ->
         let* ty = ety_of_json ty in
-        let* cv = constant_value_of_json cv in
+        let* cv = primitive_value_of_json cv in
         Ok (E.Constant (ty, cv))
     | _ -> Error "")
 

@@ -35,16 +35,16 @@ let dest_arrow_ty (ty : ty) : ty * ty =
   | Arrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
   | _ -> raise (Failure "Unreachable")
 
-let compute_constant_value_ty (cv : constant_value) : ty =
+let compute_primitive_value_ty (cv : primitive_value) : ty =
   match cv with
-  | V.Scalar sv -> Integer sv.V.int_ty
+  | PV.Scalar sv -> Integer sv.PV.int_ty
   | Bool _ -> Bool
   | Char _ -> Char
   | String _ -> Str
 
-let mk_typed_pattern_from_constant_value (cv : constant_value) : typed_pattern =
-  let ty = compute_constant_value_ty cv in
-  { value = PatConcrete cv; ty }
+let mk_typed_pattern_from_primitive_value (cv : primitive_value) : typed_pattern =
+  let ty = compute_primitive_value_ty cv in
+  { value = PatConstant cv; ty }
 
 let mk_let (monadic : bool) (lv : typed_pattern) (re : texpression)
     (next_e : texpression) : texpression =

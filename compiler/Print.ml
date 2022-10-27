@@ -210,7 +210,7 @@ module Values = struct
   let scalar_value_to_string (sv : V.scalar_value) : string =
     big_int_to_string sv.value ^ ": " ^ PT.integer_type_to_string sv.int_ty
 
-  let constant_value_to_string (cv : V.constant_value) : string =
+  let primitive_value_to_string (cv : V.primitive_value) : string =
     match cv with
     | Scalar sv -> scalar_value_to_string sv
     | Bool b -> Bool.to_string b
@@ -240,7 +240,7 @@ module Values = struct
       string =
     let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
     match v.value with
-    | Concrete cv -> constant_value_to_string cv
+    | Primitive cv -> primitive_value_to_string cv
     | Adt av -> (
         let field_values =
           List.map (typed_value_to_string fmt) av.field_values
@@ -352,7 +352,7 @@ module Values = struct
       string =
     let ty_fmt : PT.rtype_formatter = value_to_rtype_formatter fmt in
     match v.value with
-    | AConcrete cv -> constant_value_to_string cv
+    | APrimitive cv -> primitive_value_to_string cv
     | AAdt av -> (
         let field_values =
           List.map (typed_avalue_to_string fmt) av.field_values
@@ -877,7 +877,7 @@ module LlbcAst = struct
     | E.Move p -> "move " ^ place_to_string fmt p
     | E.Constant (ty, cv) ->
         "("
-        ^ PV.constant_value_to_string cv
+        ^ PV.primitive_value_to_string cv
         ^ " : "
         ^ PT.ety_to_string (ast_to_etype_formatter fmt) ty
         ^ ")"

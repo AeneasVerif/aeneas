@@ -1,7 +1,7 @@
 open Identifiers
 open Types
 
-(* TODO: I often write "abstract" (value, borrow content, etc.) while I should
+(* TODO(SH): I often write "abstract" (value, borrow content, etc.) while I should
  * write "abstraction" (because those values are not abstract, they simply are
  * inside abstractions) *)
 
@@ -11,37 +11,9 @@ module SymbolicValueId = IdGen ()
 module AbstractionId = IdGen ()
 module FunCallId = IdGen ()
 
-(** A variable *)
-
-type big_int = Z.t
-
-let big_int_of_yojson (json : Yojson.Safe.t) : (big_int, string) result =
-  match json with
-  | `Int i -> Ok (Z.of_int i)
-  | `Intlit is -> Ok (Z.of_string is)
-  | _ -> Error "not an integer or an integer literal"
-
-let big_int_to_yojson (i : big_int) = `Intlit (Z.to_string i)
-
-let pp_big_int (fmt : Format.formatter) (bi : big_int) : unit =
-  Format.pp_print_string fmt (Z.to_string bi)
-
-let show_big_int (bi : big_int) : string = Z.to_string bi
-
-(** A scalar value
-
-    Note that we use unbounded integers everywhere.
-    We then harcode the boundaries for the different types.
- *)
-type scalar_value = { value : big_int; int_ty : integer_type } [@@deriving show]
-
-(** A constant value *)
-type constant_value =
-  | Scalar of scalar_value
-  | Bool of bool
-  | Char of char
-  | String of string
-[@@deriving show]
+type big_int = PrimitiveValues.big_int [@@deriving show]
+type scalar_value = PrimitiveValues.scalar_value [@@deriving show]
+type primitive_value = PrimitiveValues.primitive_value [@@deriving show]
 
 (** The kind of a symbolic value, which precises how the value was generated *)
 type sv_kind =
@@ -80,7 +52,10 @@ type symbolic_value = {
 class ['self] iter_typed_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
-    method visit_constant_value : 'env -> constant_value -> unit = fun _ _ -> ()
+
+    method visit_primitive_value : 'env -> primitive_value -> unit =
+      fun _ _ -> ()
+
     method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
     method visit_symbolic_value : 'env -> symbolic_value -> unit = fun _ _ -> ()
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
@@ -91,7 +66,7 @@ class ['self] map_typed_value_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
 
-    method visit_constant_value : 'env -> constant_value -> constant_value =
+    method visit_primitive_value : 'env -> primitive_value -> primitive_value =
       fun _ cv -> cv
 
     method visit_erased_region : 'env -> erased_region -> erased_region =
@@ -105,7 +80,7 @@ class ['self] map_typed_value_base =
 
 (** An untyped value, used in the environments *)
 type value =
-  | Concrete of constant_value  (** Concrete (non-symbolic) value *)
+  | Primitive of primitive_value  (** Non-symbolic primitive value *)
   | Adt of adt_value  (** Enumerations and structures *)
   | Bottom  (** No value (uninitialized or moved value) *)
   | Borrow of borrow_content  (** A borrowed value *)
@@ -392,7 +367,7 @@ class ['self] map_typed_avalue_base =
     part of it is thus "abstracted" away.
 *)
 type avalue =
-  | AConcrete of constant_value
+  | APrimitive of primitive_value
       (** TODO: remove. We actually don't use that for the synthesis, but the
           meta-values.
        
@@ -838,7 +813,7 @@ type abs = {
     TODO: this should rather be name "expanded_symbolic"
  *)
 type symbolic_expansion =
-  | SeConcrete of constant_value
+  | SePrimitive of primitive_value
   | SeAdt of (VariantId.id option * symbolic_value list)
   | SeMutRef of BorrowId.id * symbolic_value
   | SeSharedRef of BorrowId.Set.t * symbolic_value

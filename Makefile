@@ -45,6 +45,10 @@ build-lib:
 doc:
 	cd compiler && dune build @doc
 
+.PHONY: clean
+clean:
+	cd compiler && dune clean
+
 # Test the project by translating test files to F*
 .PHONY: tests
 tests: build trans-no_nested_borrows trans-paper \
