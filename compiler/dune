@@ -24,7 +24,7 @@
    PureMicroPasses Pure PureToExtract PureTypeCheck PureUtils Scalars
    StringUtils Substitute SymbolicAst SymbolicToPure SynthesizeSymbolic
    TranslateCore Translate TypesAnalysis Types TypesUtils Utils Values
-   ValuesUtils))
+   ValuesUtils PrimitiveValues))
 
 (documentation
  (package aeneas))

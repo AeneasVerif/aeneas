@@ -75,7 +75,7 @@ let all_binops =
 type operand =
   | Copy of place
   | Move of place
-  | Constant of ety * constant_value
+  | Constant of ety * primitive_value
 [@@deriving show]
 
 (** An aggregated ADT.

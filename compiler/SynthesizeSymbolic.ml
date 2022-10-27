@@ -1,5 +1,6 @@
 module C = Collections
 module T = Types
+module PV = PrimitiveValues
 module V = Values
 module E = Expressions
 module A = LlbcAst
@@ -33,8 +34,8 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             (* Boolean expansion: there should be two branches *)
             match ls with
             | [
-             (Some (V.SeConcrete (V.Bool true)), true_exp);
-             (Some (V.SeConcrete (V.Bool false)), false_exp);
+             (Some (V.SePrimitive (PV.Bool true)), true_exp);
+             (Some (V.SePrimitive (PV.Bool false)), false_exp);
             ] ->
                 ExpandBool (true_exp, false_exp)
             | _ -> failwith "Ill-formed boolean expansion")
@@ -47,8 +48,8 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             let get_scalar (see : V.symbolic_expansion option) : V.scalar_value
                 =
               match see with
-              | Some (V.SeConcrete (V.Scalar cv)) ->
-                  assert (cv.V.int_ty = int_ty);
+              | Some (V.SePrimitive (PV.Scalar cv)) ->
+                  assert (cv.PV.int_ty = int_ty);
                   cv
               | _ -> failwith "Unreachable"
             in

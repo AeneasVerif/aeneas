@@ -137,7 +137,7 @@ type formatter = {
           indices to names, the responsability of finding a proper index is
           delegated to helper functions.
        *)
-  extract_constant_value : F.formatter -> bool -> constant_value -> unit;
+  extract_primitive_value : F.formatter -> bool -> primitive_value -> unit;
       (** Format a constant value.
       
           Inputs:

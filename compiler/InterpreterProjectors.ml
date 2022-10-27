@@ -26,7 +26,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
   if not (ty_has_regions_in_set regions ty) then []
   else
     match (v.V.value, ty) with
-    | V.Concrete _, (T.Bool | T.Char | T.Integer _ | T.Str) -> []
+    | V.Primitive _, (T.Bool | T.Char | T.Integer _ | T.Str) -> []
     | V.Adt adt, T.Adt (id, region_params, tys) ->
         (* Retrieve the types of the fields *)
         let field_types =
@@ -136,7 +136,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
   else
     let value : V.avalue =
       match (v.V.value, ty) with
-      | V.Concrete cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AConcrete cv
+      | V.Primitive cv, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.APrimitive cv
       | V.Adt adt, T.Adt (id, region_params, tys) ->
           (* Retrieve the types of the fields *)
           let field_types =
@@ -252,7 +252,7 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
   let ty = Subst.erase_regions sv.V.sv_ty in
   let value =
     match see with
-    | SeConcrete cv -> V.Concrete cv
+    | SePrimitive cv -> V.Primitive cv
     | SeAdt (variant_id, field_values) ->
         let field_values =
           List.map mk_typed_value_from_symbolic_value field_values
@@ -293,7 +293,7 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
   (* Match *)
   let (value, ty) : V.avalue * T.rty =
     match (see, original_sv_ty) with
-    | SeConcrete _, (T.Bool | T.Char | T.Integer _ | T.Str) ->
+    | SePrimitive _, (T.Bool | T.Char | T.Integer _ | T.Str) ->
         (V.AIgnored, original_sv_ty)
     | SeAdt (variant_id, field_values), T.Adt (_id, _region_params, _tys) ->
         (* Project over the field values *)

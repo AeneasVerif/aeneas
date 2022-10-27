@@ -392,10 +392,10 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     basename ^ string_of_int i
   in
 
-  let extract_constant_value (fmt : F.formatter) (_inside : bool)
-      (cv : constant_value) : unit =
+  let extract_primitive_value (fmt : F.formatter) (_inside : bool)
+      (cv : primitive_value) : unit =
     match cv with
-    | Scalar sv -> F.pp_print_string fmt (Z.to_string sv.V.value)
+    | Scalar sv -> F.pp_print_string fmt (Z.to_string sv.PV.value)
     | Bool b ->
         let b = if b then "true" else "false" in
         F.pp_print_string fmt b
@@ -424,7 +424,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     var_basename;
     type_var_basename;
     append_index;
-    extract_constant_value;
+    extract_primitive_value;
     extract_unop = fstar_extract_unop;
     extract_binop = fstar_extract_binop;
   }
@@ -865,8 +865,8 @@ let extract_global (ctx : extraction_ctx) (fmt : F.formatter)
 let rec extract_typed_pattern (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (v : typed_pattern) : extraction_ctx =
   match v.value with
-  | PatConcrete cv ->
-      ctx.fmt.extract_constant_value fmt inside cv;
+  | PatConstant cv ->
+      ctx.fmt.extract_primitive_value fmt inside cv;
       ctx
   | PatVar (v, _) ->
       let vname =
@@ -899,7 +899,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | Var var_id ->
       let var_name = ctx_get_var var_id ctx in
       F.pp_print_string fmt var_name
-  | Const cv -> ctx.fmt.extract_constant_value fmt inside cv
+  | Const cv -> ctx.fmt.extract_primitive_value fmt inside cv
   | App _ ->
       let app, args = destruct_apps e in
       extract_App ctx fmt inside app args

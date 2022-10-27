@@ -728,7 +728,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (v : V.typed_value) :
   (* Translate the value *)
   let value =
     match v.value with
-    | V.Concrete cv -> { e = Const cv; ty }
+    | V.Primitive cv -> { e = Const cv; ty }
     | Adt av -> (
         let variant_id = av.variant_id in
         let field_values = List.map translate av.field_values in
@@ -810,7 +810,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
   let translate = typed_avalue_to_consumed ctx in
   let value =
     match av.value with
-    | AConcrete _ -> raise (Failure "Unreachable")
+    | APrimitive _ -> raise (Failure "Unreachable")
     | AAdt adt_v -> (
         (* Translate the field values *)
         let field_values = List.filter_map translate adt_v.field_values in
@@ -944,7 +944,7 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   let ctx, value =
     match av.value with
-    | AConcrete _ -> raise (Failure "Unreachable")
+    | APrimitive _ -> raise (Failure "Unreachable")
     | AAdt adt_v -> (
         (* Translate the field values *)
         (* For now we forget the meta-place information so that it doesn't get used
@@ -1485,7 +1485,7 @@ and translate_expansion (config : config) (p : S.mplace option)
   match exp with
   | ExpandNoBranch (sexp, e) -> (
       match sexp with
-      | V.SeConcrete _ ->
+      | V.SePrimitive _ ->
           (* Actually, we don't *register* symbolic expansions to constant
            * values in the symbolic ADT *)
           raise (Failure "Unreachable")
@@ -1638,7 +1638,7 @@ and translate_expansion (config : config) (p : S.mplace option)
         (* We don't need to update the context: we don't introduce any
          * new values/variables *)
         let branch = translate_expression config branch_e ctx in
-        let pat = mk_typed_pattern_from_constant_value (V.Scalar v) in
+        let pat = mk_typed_pattern_from_primitive_value (PV.Scalar v) in
         { pat; branch }
       in
       let branches = List.map translate_branch branches in

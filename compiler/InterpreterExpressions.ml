@@ -1,4 +1,5 @@
 module T = Types
+module PV = PrimitiveValues
 module V = Values
 module LA = LlbcAst
 open Scalars
@@ -7,7 +8,6 @@ open Errors
 module C = Contexts
 module Subst = Substitute
 module L = Logging
-module PV = Print.Values
 open TypesUtils
 open ValuesUtils
 module Inv = Invariants
@@ -110,23 +110,24 @@ let access_rplace_reorganize (config : C.config) (expand_prim_copy : bool)
     ctx
 
 (** Convert an operand constant operand value to a typed value *)
-let constant_to_typed_value (ty : T.ety) (cv : V.constant_value) : V.typed_value
+let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) : V.typed_value
     =
   (* Check the type while converting - we actually need some information
      * contained in the type *)
   log#ldebug
     (lazy
-      ("constant_to_typed_value:" ^ "\n- cv: " ^ PV.constant_value_to_string cv));
+      ("primitive_to_typed_value:" ^ "\n- cv: "
+      ^ Print.Values.primitive_value_to_string cv));
   match (ty, cv) with
   (* Scalar, boolean... *)
-  | T.Bool, Bool v -> { V.value = V.Concrete (Bool v); ty }
-  | T.Char, Char v -> { V.value = V.Concrete (Char v); ty }
-  | T.Str, String v -> { V.value = V.Concrete (String v); ty }
-  | T.Integer int_ty, V.Scalar v ->
+  | T.Bool, Bool v -> { V.value = V.Primitive (Bool v); ty }
+  | T.Char, Char v -> { V.value = V.Primitive (Char v); ty }
+  | T.Str, String v -> { V.value = V.Primitive (String v); ty }
+  | T.Integer int_ty, PV.Scalar v ->
       (* Check the type and the ranges *)
       assert (int_ty = v.int_ty);
       assert (check_scalar_value_in_range v);
-      { V.value = V.Concrete (V.Scalar v); ty }
+      { V.value = V.Primitive (PV.Scalar v); ty }
   (* Remaining cases (invalid) *)
   | _, _ -> failwith "Improperly typed constant value"
 
@@ -173,7 +174,7 @@ let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
     match op with
     | Expressions.Constant (ty, cv) ->
         (* No need to reorganize the context *)
-        constant_to_typed_value ty cv |> ignore;
+        primitive_to_typed_value ty cv |> ignore;
         cf ctx
     | Expressions.Copy p ->
         (* Access the value *)
@@ -201,7 +202,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
-  | Expressions.Constant (ty, cv) -> cf (constant_to_typed_value ty cv) ctx
+  | Expressions.Constant (ty, cv) -> cf (primitive_to_typed_value ty cv) ctx
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
@@ -299,21 +300,21 @@ let eval_unary_op_concrete (config : C.config) (unop : E.unop) (op : E.operand)
   (* Apply the unop *)
   let apply cf (v : V.typed_value) : m_fun =
     match (unop, v.V.value) with
-    | E.Not, V.Concrete (Bool b) ->
-        cf (Ok { v with V.value = V.Concrete (Bool (not b)) })
-    | E.Neg, V.Concrete (V.Scalar sv) -> (
-        let i = Z.neg sv.V.value in
+    | E.Not, V.Primitive (Bool b) ->
+        cf (Ok { v with V.value = V.Primitive (Bool (not b)) })
+    | E.Neg, V.Primitive (PV.Scalar sv) -> (
+        let i = Z.neg sv.PV.value in
         match mk_scalar sv.int_ty i with
         | Error _ -> cf (Error EPanic)
-        | Ok sv -> cf (Ok { v with V.value = V.Concrete (V.Scalar sv) }))
-    | E.Cast (src_ty, tgt_ty), V.Concrete (V.Scalar sv) -> (
+        | Ok sv -> cf (Ok { v with V.value = V.Primitive (PV.Scalar sv) }))
+    | E.Cast (src_ty, tgt_ty), V.Primitive (PV.Scalar sv) -> (
         assert (src_ty == sv.int_ty);
-        let i = sv.V.value in
+        let i = sv.PV.value in
         match mk_scalar tgt_ty i with
         | Error _ -> cf (Error EPanic)
         | Ok sv ->
             let ty = T.Integer tgt_ty in
-            let value = V.Concrete (V.Scalar sv) in
+            let value = V.Primitive (PV.Scalar sv) in
             cf (Ok { V.ty; value }))
     | _ -> raise (Failure "Invalid input for unop")
   in
@@ -367,11 +368,11 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
     (* Equality/inequality check is primitive only for a subset of types *)
     assert (ty_is_primitively_copyable v1.ty);
     let b = v1 = v2 in
-    Ok { V.value = V.Concrete (Bool b); ty = T.Bool })
+    Ok { V.value = V.Primitive (Bool b); ty = T.Bool })
   else
     (* For the non-equality operations, the input values are necessarily scalars *)
     match (v1.V.value, v2.V.value) with
-    | V.Concrete (V.Scalar sv1), V.Concrete (V.Scalar sv2) -> (
+    | V.Primitive (PV.Scalar sv1), V.Primitive (PV.Scalar sv2) -> (
         (* There are binops which require the two operands to have the same
            type, and binops for which it is not the case.
            There are also binops which return booleans, and binops which
@@ -383,15 +384,15 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
             assert (sv1.int_ty = sv2.int_ty);
             let b =
               match binop with
-              | E.Lt -> Z.lt sv1.V.value sv2.V.value
-              | E.Le -> Z.leq sv1.V.value sv2.V.value
-              | E.Ge -> Z.geq sv1.V.value sv2.V.value
-              | E.Gt -> Z.gt sv1.V.value sv2.V.value
+              | E.Lt -> Z.lt sv1.PV.value sv2.PV.value
+              | E.Le -> Z.leq sv1.PV.value sv2.PV.value
+              | E.Ge -> Z.geq sv1.PV.value sv2.PV.value
+              | E.Gt -> Z.gt sv1.PV.value sv2.PV.value
               | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd
               | E.BitOr | E.Shl | E.Shr | E.Ne | E.Eq ->
                   raise (Failure "Unreachable")
             in
-            Ok ({ V.value = V.Concrete (Bool b); ty = T.Bool } : V.typed_value)
+            Ok ({ V.value = V.Primitive (Bool b); ty = T.Bool } : V.typed_value)
         | E.Div | E.Rem | E.Add | E.Sub | E.Mul | E.BitXor | E.BitAnd | E.BitOr
           -> (
             (* The two operands must have the same type and the result is an integer *)
@@ -399,15 +400,15 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
             let res =
               match binop with
               | E.Div ->
-                  if sv2.V.value = Z.zero then Error ()
-                  else mk_scalar sv1.int_ty (Z.div sv1.V.value sv2.V.value)
+                  if sv2.PV.value = Z.zero then Error ()
+                  else mk_scalar sv1.int_ty (Z.div sv1.PV.value sv2.PV.value)
               | E.Rem ->
                   (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
-                  if sv2.V.value = Z.zero then Error ()
-                  else mk_scalar sv1.int_ty (Z.rem sv1.V.value sv2.V.value)
-              | E.Add -> mk_scalar sv1.int_ty (Z.add sv1.V.value sv2.V.value)
-              | E.Sub -> mk_scalar sv1.int_ty (Z.sub sv1.V.value sv2.V.value)
-              | E.Mul -> mk_scalar sv1.int_ty (Z.mul sv1.V.value sv2.V.value)
+                  if sv2.PV.value = Z.zero then Error ()
+                  else mk_scalar sv1.int_ty (Z.rem sv1.PV.value sv2.PV.value)
+              | E.Add -> mk_scalar sv1.int_ty (Z.add sv1.PV.value sv2.PV.value)
+              | E.Sub -> mk_scalar sv1.int_ty (Z.sub sv1.PV.value sv2.PV.value)
+              | E.Mul -> mk_scalar sv1.int_ty (Z.mul sv1.PV.value sv2.PV.value)
               | E.BitXor -> raise Unimplemented
               | E.BitAnd -> raise Unimplemented
               | E.BitOr -> raise Unimplemented
@@ -419,7 +420,7 @@ let eval_binary_op_concrete_compute (binop : E.binop) (v1 : V.typed_value)
             | Ok sv ->
                 Ok
                   {
-                    V.value = V.Concrete (V.Scalar sv);
+                    V.value = V.Primitive (PV.Scalar sv);
                     ty = Integer sv1.int_ty;
                   })
         | E.Shl | E.Shr -> raise Unimplemented
@@ -521,7 +522,7 @@ let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
             | Error _ -> raise (Failure "Disciminant id out of range")
             (* Should really never happen *)
             | Ok sv ->
-                cf { V.value = V.Concrete (V.Scalar sv); ty = Integer Isize }))
+                cf { V.value = V.Primitive (PV.Scalar sv); ty = Integer Isize }))
     | _ ->
         raise
           (Failure ("Invalid input for `discriminant`: " ^ V.show_typed_value v))

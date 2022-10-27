@@ -4,6 +4,7 @@
  * using indices to identify the values for instance). *)
 
 module T = Types
+module PV = PrimitiveValues
 module V = Values
 module E = Expressions
 module C = Contexts
@@ -477,8 +478,8 @@ let expand_symbolic_bool (config : C.config) (sp : V.symbolic_value)
   let rty = original_sv.V.sv_ty in
   assert (rty = T.Bool);
   (* Expand the symbolic value to true or false and continue execution *)
-  let see_true = V.SeConcrete (V.Bool true) in
-  let see_false = V.SeConcrete (V.Bool false) in
+  let see_true = V.SePrimitive (PV.Bool true) in
+  let see_false = V.SePrimitive (PV.Bool false) in
   let seel = [ (Some see_true, cf_true); (Some see_false, cf_false) ] in
   (* Apply the symbolic expansion (this also outputs the updated symbolic AST) *)
   apply_branching_symbolic_expansions_non_borrow config original_sv
@@ -629,7 +630,7 @@ let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
    * (optional expansion, statement to execute)
    *)
   let tgts =
-    List.map (fun (v, cf) -> (Some (V.SeConcrete (V.Scalar v)), cf)) tgts
+    List.map (fun (v, cf) -> (Some (V.SePrimitive (PV.Scalar v)), cf)) tgts
   in
   let tgts = List.append tgts [ (None, otherwise) ] in
   (* Then expand and evaluate - this generates the proper symbolic AST *)
