@@ -17,7 +17,6 @@
   ConstStrings
   Contexts
   Cps
-  Crates
   Expressions
   ExpressionsUtils
   ExtractToFStar

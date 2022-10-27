@@ -1,5 +1,5 @@
 open Types
-open Crates
+module A = LlbcAst
 
 type subtype_info = {
   under_borrow : bool;  (** Are we inside a borrow? *)
@@ -275,7 +275,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
     infos
 
 let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
-    (infos : type_infos) (decl : type_declaration_group) : type_infos =
+    (infos : type_infos) (decl : A.type_declaration_group) : type_infos =
   (* Collect the identifiers used in the declaration group *)
   let ids = match decl with NonRec id -> [ id ] | Rec ids -> ids in
   (* Retrieve the type definitions *)
@@ -309,7 +309,7 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     Rk.: pay attention to the difference between type definitions and types!
  *)
 let analyze_type_declarations (type_decls : type_decl TypeDeclId.Map.t)
-    (decls : type_declaration_group list) : type_infos =
+    (decls : A.type_declaration_group list) : type_infos =
   List.fold_left
     (fun infos decl -> analyze_type_declaration_group type_decls infos decl)
     TypeDeclId.Map.empty decls

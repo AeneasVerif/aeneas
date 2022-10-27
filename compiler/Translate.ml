@@ -285,7 +285,7 @@ let translate_function_to_pure (config : C.partial_config)
   (pure_forward, pure_backwards)
 
 let translate_module_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (use_state : bool) (crate : Crates.llbc_crate) :
+    (mp_config : Micro.config) (use_state : bool) (crate : A.crate) :
     trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
@@ -357,7 +357,7 @@ let translate_module_to_pure (config : C.partial_config)
 
 (** Extraction context *)
 type gen_ctx = {
-  crate : Crates.llbc_crate;
+  crate : A.crate;
   extract_ctx : PureToExtract.extraction_ctx;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t;
@@ -533,7 +533,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     ExtractToFStar.extract_state_type fmt ctx.extract_ctx qualif
   in
 
-  let export_decl (decl : Crates.declaration_group) : unit =
+  let export_decl (decl : A.declaration_group) : unit =
     match decl with
     | Type (NonRec id) ->
         if config.extract_types then export_type ExtractToFStar.Type id
@@ -627,7 +627,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
     TODO: rename to translate_crate
  *)
 let translate_module (filename : string) (dest_dir : string) (config : config)
-    (crate : Crates.llbc_crate) : unit =
+    (crate : A.crate) : unit =
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs =
     translate_module_to_pure config.eval_config config.mp_config
@@ -654,7 +654,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       (List.concat
          (List.map
             (fun decl ->
-              match decl with Crates.Fun (Rec ids) -> ids | _ -> [])
+              match decl with A.Fun (Rec ids) -> ids | _ -> [])
             crate.declarations))
   in
 
@@ -794,7 +794,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         interface = has_opaque_types;
       }
     in
-    extract_file types_config gen_ctx types_filename crate.Crates.name
+    extract_file types_config gen_ctx types_filename crate.A.name
       types_module ": type definitions" [] [];
 
     (* Extract the template clauses *)
@@ -808,7 +808,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
      let clauses_config =
        { base_gen_config with extract_template_decreases_clauses = true }
      in
-     extract_file clauses_config gen_ctx clauses_filename crate.Crates.name
+     extract_file clauses_config gen_ctx clauses_filename crate.A.name
        clauses_module ": templates for the decreases clauses" [ types_module ]
        []);
 
@@ -826,7 +826,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
             interface = true;
           }
         in
-        extract_file opaque_config gen_ctx opaque_filename crate.Crates.name
+        extract_file opaque_config gen_ctx opaque_filename crate.A.name
           opaque_module ": opaque function definitions" [] [ types_module ];
         [ opaque_module ])
       else []
@@ -845,7 +845,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     let clauses_module =
       if needs_clauses_module then [ module_name ^ ".Clauses" ] else []
     in
-    extract_file fun_config gen_ctx fun_filename crate.Crates.name fun_module
+    extract_file fun_config gen_ctx fun_filename crate.A.name fun_module
       ": function definitions" []
       ([ types_module ] @ opaque_funs_module @ clauses_module))
   else
@@ -867,5 +867,5 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     in
     (* Add the extension for F* *)
     let extract_filename = extract_filebasename ^ ".fst" in
-    extract_file gen_config gen_ctx extract_filename crate.Crates.name
+    extract_file gen_config gen_ctx extract_filename crate.A.name
       module_name "" [] []

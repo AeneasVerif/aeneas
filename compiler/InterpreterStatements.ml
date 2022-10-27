@@ -922,15 +922,14 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
   (* Compose and apply *)
   comp cc cf_eval_st cf ctx
 
-and eval_global (config : C.config) (dest : E.VarId.id)
-    (gid : LA.GlobalDeclId.id) : st_cm_fun =
+and eval_global (config : C.config) (dest : E.place) (gid : LA.GlobalDeclId.id)
+    : st_cm_fun =
  fun cf ctx ->
   let global = C.ctx_lookup_global_decl ctx gid in
-  let place = { E.var_id = dest; projection = [] } in
   match config.mode with
   | ConcreteMode ->
       (* Treat the evaluation of the global as a call to the global body (without arguments) *)
-      (eval_local_function_call_concrete config global.body_id [] [] [] place)
+      (eval_local_function_call_concrete config global.body_id [] [] [] dest)
         cf ctx
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
@@ -939,7 +938,7 @@ and eval_global (config : C.config) (dest : E.VarId.id)
         mk_fresh_symbolic_value V.Global (ety_no_regions_to_rty global.ty)
       in
       let cc =
-        assign_to_place config (mk_typed_value_from_symbolic_value sval) place
+        assign_to_place config (mk_typed_value_from_symbolic_value sval) dest
       in
       let e = cc (cf Unit) ctx in
       S.synthesize_global_eval gid sval e

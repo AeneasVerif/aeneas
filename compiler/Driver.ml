@@ -148,7 +148,7 @@ let () =
 
   (* Load the module *)
   let json = Yojson.Basic.from_file filename in
-  match llbc_crate_of_json json with
+  match crate_of_json json with
   | Error s ->
       main_log#error "error: %s\n" s;
       exit 1
