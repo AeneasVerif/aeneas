@@ -40,13 +40,13 @@ You need to install OCaml, together with some packages.
 We suggest you to follow those [instructions](https://ocaml.org/docs/install.html),
 and install OPAM on the way (same instructions).
 
+We use **OCaml 4.13.1**: `opam switch create 4.13.1+options`
+
 The dependencies can then be installed with the following command:
 
 ```
-opam install ppx_deriving visitors easy_logging zarith yojson core_unix
+opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc
 ```
-
-We use **OCaml 4.12.1**.
 
 Finally, building the project simply requires to run `make` in the top directory.
 

@@ -29,8 +29,9 @@ type config = {
           
           Also note that in general, backward functions "do more things" than
           forward functions, and have more opportunities to fail (even though
-          in the generated code, backward functions should fail exactly when
-          the forward functions fail).
+          in the generated code, calls to the backward functions should fail
+          exactly when the corresponding, previous call to the forward functions
+          failed).
           
           We might want to move this optimization to the micro-passes subsequent
           to the translation from symbolic to pure, but it is really super easy
