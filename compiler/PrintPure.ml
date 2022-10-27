@@ -223,7 +223,7 @@ let mplace_to_string (fmt : ast_formatter) (p : mplace) : string =
    * use indices of the variables in the original LLBC program, while
    * regular places use indices for the pure variables: we want to make
    * this explicit, otherwise it is confusing. *)
-  let name = name ^ "^" ^ V.VarId.to_string p.var_id ^ "llbc" in
+  let name = name ^ "^" ^ E.VarId.to_string p.var_id ^ "llbc" in
   mprojection_to_string fmt name p.projection
 
 let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)

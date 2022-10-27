@@ -1,11 +1,11 @@
 open Identifiers
 open Types
+module PrimitiveValues = PrimitiveValues
 
 (* TODO(SH): I often write "abstract" (value, borrow content, etc.) while I should
  * write "abstraction" (because those values are not abstract, they simply are
  * inside abstractions) *)
 
-module VarId = IdGen ()
 module BorrowId = IdGen ()
 module SymbolicValueId = IdGen ()
 module AbstractionId = IdGen ()

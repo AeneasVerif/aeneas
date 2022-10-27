@@ -1,4 +1,5 @@
 open Types
+open Expressions
 open Values
 open LlbcAst
 module V = Values

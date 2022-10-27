@@ -1,7 +1,7 @@
 open Identifiers
 open Names
-module T = Types
 module PV = PrimitiveValues
+module T = Types
 module V = Values
 module E = Expressions
 module A = LlbcAst
@@ -18,7 +18,7 @@ module GlobalDeclId = A.GlobalDeclId
     for group of regions 0, etc.) *)
 module SynthPhaseId = IdGen ()
 
-(** Pay attention to the fact that we also define a {!Values.VarId} module in Values *)
+(** Pay attention to the fact that we also define a {!E.VarId} module in Values *)
 module VarId = IdGen ()
 
 type integer_type = T.integer_type [@@deriving show, ord]
@@ -156,7 +156,7 @@ type mprojection = mprojection_elem list [@@deriving show]
     we introduce.
  *)
 type mplace = {
-  var_id : V.VarId.id;
+  var_id : E.VarId.id;
   name : string option;
   projection : mprojection;
 }

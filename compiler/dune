@@ -1,12 +1,8 @@
-;; core: for Core.Unix.mkdir_p
-
 (executable
  (name driver)
  (public_name aeneas_driver)
  (package aeneas)
- (preprocess
-  (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
- (libraries ppx_deriving yojson zarith easy_logging core_unix aeneas)
+ (libraries aeneas)
  (modules Driver))
 
 (library
@@ -14,7 +10,7 @@
  (public_name aeneas) ;; The name as revealed to the projects importing this library
  (preprocess
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
- (libraries ppx_deriving yojson zarith easy_logging core_unix)
+ (libraries charon core_unix)
  (modules
   Assumed
   Collections
@@ -44,7 +40,6 @@
   Logging
   Meta
   Names
-  OfJsonBasic
   PrePasses
   Print
   PrintPure

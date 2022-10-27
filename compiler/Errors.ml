@@ -1,2 +1,1 @@
-exception IntegerOverflow of unit
-exception Unimplemented
+include Charon.Errors
