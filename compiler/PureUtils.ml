@@ -42,7 +42,8 @@ let compute_primitive_value_ty (cv : primitive_value) : ty =
   | Char _ -> Char
   | String _ -> Str
 
-let mk_typed_pattern_from_primitive_value (cv : primitive_value) : typed_pattern =
+let mk_typed_pattern_from_primitive_value (cv : primitive_value) : typed_pattern
+    =
   let ty = compute_primitive_value_ty cv in
   { value = PatConstant cv; ty }
 

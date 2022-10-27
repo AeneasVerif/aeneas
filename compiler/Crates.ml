@@ -16,6 +16,7 @@ type declaration_group =
   | Global of GlobalDeclId.id
 [@@deriving show]
 
+(** LLBC crate *)
 type llbc_crate = {
   name : string;
   declarations : declaration_group list;
@@ -23,7 +24,6 @@ type llbc_crate = {
   functions : fun_decl list;
   globals : global_decl list;
 }
-(** LLBC crate *)
 
 let compute_defs_maps (c : llbc_crate) :
     type_decl TypeDeclId.Map.t
