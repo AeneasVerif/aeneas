@@ -413,13 +413,13 @@ let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
   in
   comp cf_pop cf_assign
 
-(** Auxiliary function - see [eval_non_local_function_call] *)
+(** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_replace_concrete (_config : C.config)
     (_region_params : T.erased_region list) (_type_params : T.ety list) : cm_fun
     =
  fun _cf _ctx -> raise Unimplemented
 
-(** Auxiliary function - see [eval_non_local_function_call] *)
+(** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_new_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
  fun cf ctx ->
@@ -459,7 +459,7 @@ let eval_box_new_concrete (config : C.config)
   | _ -> raise (Failure "Inconsistent state")
 
 (** Auxiliary function which factorizes code to evaluate [std::Deref::deref]
-    and [std::DerefMut::deref_mut] - see [eval_non_local_function_call] *)
+    and [std::DerefMut::deref_mut] - see {!eval_non_local_function_call} *)
 let eval_box_deref_mut_or_shared_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
     (is_mut : bool) : cm_fun =
@@ -504,19 +504,19 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
       comp cf_borrow cf_move cf ctx
   | _ -> raise (Failure "Inconsistent state")
 
-(** Auxiliary function - see [eval_non_local_function_call] *)
+(** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_deref_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
   let is_mut = false in
   eval_box_deref_mut_or_shared_concrete config region_params type_params is_mut
 
-(** Auxiliary function - see [eval_non_local_function_call] *)
+(** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_deref_mut_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
   let is_mut = true in
   eval_box_deref_mut_or_shared_concrete config region_params type_params is_mut
 
-(** Auxiliary function - see [eval_non_local_function_call].
+(** Auxiliary function - see {!eval_non_local_function_call}.
 
     [Box::free] is not handled the same way as the other assumed functions:
     - in the regular case, whenever we need to evaluate an assumed function,
@@ -556,7 +556,7 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
       cc cf ctx
   | _ -> raise (Failure "Inconsistent state")
 
-(** Auxiliary function - see [eval_non_local_function_call] *)
+(** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_vec_function_concrete (_config : C.config) (_fid : A.assumed_fun_id)
     (_region_params : T.erased_region list) (_type_params : T.ety list) : cm_fun
     =

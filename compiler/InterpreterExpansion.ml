@@ -431,7 +431,7 @@ let expand_symbolic_value_borrow (config : C.config)
 
     Apply a branching symbolic expansion to a context and execute all the
     branches. Note that the expansion is optional for every branch (this is
-    used for integer expansion: see [expand_symbolic_int]).
+    used for integer expansion: see {!expand_symbolic_int}).
     
     [see_cf_l]: list of pairs (optional symbolic expansion, continuation)
 *)

@@ -224,7 +224,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
     Ok (ctx, !replaced_bc)
   with FoundPriority outers -> Error outers
 
-(** Auxiliary function to end borrows. See [give_back].
+(** Auxiliary function to end borrows. See {!give_back}.
     
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
@@ -475,7 +475,7 @@ let give_back_symbolic_value (_config : C.config)
   in
   update_intersecting_aproj_loans proj_regions proj_ty sv subst ctx
 
-(** Auxiliary function to end borrows. See [give_back].
+(** Auxiliary function to end borrows. See {!give_back}.
 
     This function is similar to {!give_back_value} but gives back an {!V.avalue}
     (coming from an abstraction).
@@ -577,7 +577,7 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
   (* Return *)
   ctx
 
-(** Auxiliary function to end borrows. See [give_back].
+(** Auxiliary function to end borrows. See  {!give_back}.
     
     When we end a shared borrow, we need to remove the borrow id from the list
     of borrows to the shared value.
@@ -704,7 +704,7 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
   assert !r;
   { ctx with env }
 
-(** Auxiliary function: see [end_borrow] *)
+(** Auxiliary function: see {!end_borrow} *)
 let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Debug *)
@@ -1430,7 +1430,7 @@ let end_outer_borrow config : V.BorrowId.id -> cm_fun =
 let end_outer_borrows config : V.BorrowId.Set.t -> cm_fun =
   end_borrows config [] None
 
-(** Helper function: see [activate_inactivated_mut_borrow].
+(** Helper function: see {!activate_inactivated_mut_borrow}.
 
     This function updates the shared loan to a mutable loan (we then update
     the borrow with another helper). Of course, the shared loan must contain
