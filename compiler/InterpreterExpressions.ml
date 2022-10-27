@@ -4,7 +4,7 @@ module V = Values
 module LA = LlbcAst
 open Scalars
 module E = Expressions
-open Errors
+open Utils
 module C = Contexts
 module Subst = Substitute
 module L = Logging
