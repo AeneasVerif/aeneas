@@ -56,7 +56,7 @@ let global_name_to_string = Print.global_name_to_string
 let option_to_string = Print.option_to_string
 let type_var_to_string = Print.Types.type_var_to_string
 let integer_type_to_string = Print.Types.integer_type_to_string
-let scalar_value_to_string = Print.Values.scalar_value_to_string
+let scalar_value_to_string = Print.PrimitiveValues.scalar_value_to_string
 
 let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     (type_params : type_var list) : type_formatter =
@@ -89,17 +89,17 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     name_to_string def.name
   in
   let adt_variant_to_string =
-    Print.Contexts.type_ctx_to_adt_variant_to_string_fun type_decls
+    Print.Types.type_ctx_to_adt_variant_to_string_fun type_decls
   in
   let var_id_to_string vid =
     (* TODO: somehow lookup in the context *)
     "^" ^ VarId.to_string vid
   in
   let adt_field_names =
-    Print.Contexts.type_ctx_to_adt_field_names_fun type_decls
+    Print.Types.type_ctx_to_adt_field_names_fun type_decls
   in
   let adt_field_to_string =
-    Print.LlbcAst.type_ctx_to_adt_field_to_string_fun type_decls
+    Print.Types.type_ctx_to_adt_field_to_string_fun type_decls
   in
   let fun_decl_id_to_string def_id =
     let def = FunDeclId.Map.find def_id fun_decls in
@@ -357,7 +357,7 @@ let adt_g_value_to_string (fmt : value_formatter)
 let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
     string =
   match v.value with
-  | PatConstant cv -> Print.Values.primitive_value_to_string cv
+  | PatConstant cv -> Print.PrimitiveValues.primitive_value_to_string cv
   | PatVar (v, None) -> var_to_string (ast_to_type_formatter fmt) v
   | PatVar (v, Some mp) ->
       let mp = "[@mplace=" ^ mplace_to_string fmt mp ^ "]" in
@@ -436,7 +436,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
   | Var var_id ->
       let s = fmt.var_id_to_string var_id in
       if inside then "(" ^ s ^ ")" else s
-  | Const cv -> Print.Values.primitive_value_to_string cv
+  | Const cv -> Print.PrimitiveValues.primitive_value_to_string cv
   | App _ ->
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
       let app, args = destruct_apps e in

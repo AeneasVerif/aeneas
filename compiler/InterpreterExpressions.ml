@@ -117,7 +117,7 @@ let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) :
   log#ldebug
     (lazy
       ("primitive_to_typed_value:" ^ "\n- cv: "
-      ^ Print.Values.primitive_value_to_string cv));
+      ^ Print.PrimitiveValues.primitive_value_to_string cv));
   match (ty, cv) with
   (* Scalar, boolean... *)
   | T.Bool, Bool v -> { V.value = V.Primitive (Bool v); ty }
