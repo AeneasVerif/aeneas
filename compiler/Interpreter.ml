@@ -12,12 +12,12 @@ module SA = SymbolicAst
 (** The local logger *)
 let log = L.interpreter_log
 
-let compute_type_fun_global_contexts (m : Crates.llbc_crate) :
+let compute_type_fun_global_contexts (m : A.crate) :
     C.type_context * C.fun_context * C.global_context =
-  let type_decls_list, _, _ = Crates.split_declarations m.declarations in
-  let type_decls, fun_decls, global_decls = Crates.compute_defs_maps m in
+  let type_decls_list, _, _ = split_declarations m.declarations in
+  let type_decls, fun_decls, global_decls = compute_defs_maps m in
   let type_decls_groups, _funs_defs_groups, _globals_defs_groups =
-    Crates.split_declarations_to_group_maps m.declarations
+    split_declarations_to_group_maps m.declarations
   in
   let type_infos =
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list
@@ -276,7 +276,7 @@ module Test = struct
   (** Test a unit function (taking no arguments) by evaluating it in an empty
       environment.
    *)
-  let test_unit_function (config : C.partial_config) (crate : Crates.llbc_crate)
+  let test_unit_function (config : C.partial_config) (crate : A.crate)
       (fid : A.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = A.FunDeclId.nth crate.functions fid in
@@ -331,8 +331,7 @@ module Test = struct
         && List.length def.A.signature.inputs = 0
 
   (** Test all the unit functions in a list of function definitions *)
-  let test_unit_functions (config : C.partial_config)
-      (crate : Crates.llbc_crate) : unit =
+  let test_unit_functions (config : C.partial_config) (crate : A.crate) : unit =
     let unit_funs = List.filter fun_decl_is_transparent_unit crate.functions in
     let test_unit_fun (def : A.fun_decl) : unit =
       test_unit_function config crate def.A.def_id
@@ -373,7 +372,7 @@ module Test = struct
       they are not supported by the symbolic interpreter.
    *)
   let test_functions_symbolic (config : C.partial_config) (synthesize : bool)
-      (crate : Crates.llbc_crate) : unit =
+      (crate : A.crate) : unit =
     (* Filter the functions which contain loops *)
     let no_loop_funs =
       List.filter

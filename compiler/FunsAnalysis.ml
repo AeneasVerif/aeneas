@@ -8,7 +8,6 @@
  *)
 
 open LlbcAst
-open Crates
 module EU = ExpressionsUtils
 
 (** Various information about a function.
@@ -26,7 +25,7 @@ type fun_info = {
 (** Various information about a module's functions *)
 type modules_funs_info = fun_info FunDeclId.Map.t
 
-let analyze_module (m : llbc_crate) (funs_map : fun_decl FunDeclId.Map.t)
+let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (globals_map : global_decl GlobalDeclId.Map.t) (use_state : bool) :
     modules_funs_info =
   let infos = ref FunDeclId.Map.empty in

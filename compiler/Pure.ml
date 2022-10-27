@@ -48,7 +48,7 @@ let option_none_id = T.option_none_id
 type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 [@@deriving show, ord]
 
-(** Ancestor for iter visitor for [ty] *)
+(** Ancestor for iter visitor for {!ty} *)
 class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
@@ -57,7 +57,7 @@ class ['self] iter_ty_base =
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for map visitor for [ty] *)
+(** Ancestor for map visitor for {!ty} *)
 class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
@@ -164,8 +164,8 @@ type mplace = {
 
 type variant_id = VariantId.id [@@deriving show]
 
-(** Ancestor for [iter_pat_var_or_dummy] visitor *)
-class ['self] iter_value_base =
+(** Ancestor for {!iter_typed_pattern} visitor *)
+class ['self] iter_typed_pattern_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
 
@@ -178,8 +178,8 @@ class ['self] iter_value_base =
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for [map_typed_rvalue] visitor *)
-class ['self] map_value_base =
+(** Ancestor for {!map_typed_pattern} visitor *)
+class ['self] map_typed_pattern_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
 
@@ -192,8 +192,8 @@ class ['self] map_value_base =
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
   end
 
-(** Ancestor for [reduce_typed_rvalue] visitor *)
-class virtual ['self] reduce_value_base =
+(** Ancestor for {!reduce_typed_pattern} visitor *)
+class virtual ['self] reduce_typed_pattern_base =
   object (self : 'self)
     inherit [_] VisitorsRuntime.reduce
 
@@ -206,8 +206,8 @@ class virtual ['self] reduce_value_base =
     method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
   end
 
-(** Ancestor for [mapreduce_typed_rvalue] visitor *)
-class virtual ['self] mapreduce_value_base =
+(** Ancestor for {!mapreduce_typed_pattern} visitor *)
+class virtual ['self] mapreduce_typed_pattern_base =
   object (self : 'self)
     inherit [_] VisitorsRuntime.mapreduce
 
@@ -247,7 +247,7 @@ and typed_pattern = { value : pattern; ty : ty }
       {
         name = "iter_typed_pattern";
         variety = "iter";
-        ancestors = [ "iter_value_base" ];
+        ancestors = [ "iter_typed_pattern_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
@@ -256,7 +256,7 @@ and typed_pattern = { value : pattern; ty : ty }
       {
         name = "map_typed_pattern";
         variety = "map";
-        ancestors = [ "map_value_base" ];
+        ancestors = [ "map_typed_pattern_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
@@ -265,7 +265,7 @@ and typed_pattern = { value : pattern; ty : ty }
       {
         name = "reduce_typed_pattern";
         variety = "reduce";
-        ancestors = [ "reduce_value_base" ];
+        ancestors = [ "reduce_typed_pattern_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         polymorphic = false;
       },
@@ -273,7 +273,7 @@ and typed_pattern = { value : pattern; ty : ty }
       {
         name = "mapreduce_typed_pattern";
         variety = "mapreduce";
-        ancestors = [ "mapreduce_value_base" ];
+        ancestors = [ "mapreduce_typed_pattern_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         polymorphic = false;
       }]
@@ -323,7 +323,7 @@ type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]
 
 type var_id = VarId.id [@@deriving show]
 
-(** Ancestor for [iter_expression] visitor *)
+(** Ancestor for {!iter_expression} visitor *)
 class ['self] iter_expression_base =
   object (_self : 'self)
     inherit [_] iter_typed_pattern
@@ -332,7 +332,7 @@ class ['self] iter_expression_base =
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for [map_expression] visitor *)
+(** Ancestor for {!map_expression} visitor *)
 class ['self] map_expression_base =
   object (_self : 'self)
     inherit [_] map_typed_pattern
@@ -344,7 +344,7 @@ class ['self] map_expression_base =
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
   end
 
-(** Ancestor for [reduce_expression] visitor *)
+(** Ancestor for {!reduce_expression} visitor *)
 class virtual ['self] reduce_expression_base =
   object (self : 'self)
     inherit [_] reduce_typed_pattern
@@ -356,7 +356,7 @@ class virtual ['self] reduce_expression_base =
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
   end
 
-(** Ancestor for [mapreduce_expression] visitor *)
+(** Ancestor for {!mapreduce_expression} visitor *)
 class virtual ['self] mapreduce_expression_base =
   object (self : 'self)
     inherit [_] mapreduce_typed_pattern

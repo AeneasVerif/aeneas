@@ -49,6 +49,6 @@ let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
   in
   { f with body }
 
-let apply_passes (m : Crates.llbc_crate) : Crates.llbc_crate =
+let apply_passes (m : A.crate) : A.crate =
   let functions = List.map filter_drop_assigns m.functions in
   { m with functions }
