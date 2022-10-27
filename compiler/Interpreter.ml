@@ -137,7 +137,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * will end - this will allow us to, first, mark the other return
    * regions as non-endable, and, second, end those parent regions in
    * proper order. *)
-  let parent_rgs = list_parent_region_groups sg back_id in
+  let parent_rgs = list_ancestor_region_groups sg back_id in
   let parent_input_abs_ids =
     T.RegionGroupId.mapi
       (fun rg_id rg ->

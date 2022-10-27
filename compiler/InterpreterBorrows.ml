@@ -442,7 +442,7 @@ let give_back_symbolic_value (_config : C.config)
   (* Substitution function, to replace the borrow projectors over symbolic values *)
   let subst (_abs : V.abs) local_given_back =
     (* See the below comments: there is something wrong here *)
-    let _ = raise Errors.Unimplemented in
+    let _ = raise Utils.Unimplemented in
     (* Compute the projection over the given back value *)
     let child_proj =
       match nsv.sv_kind with

@@ -712,7 +712,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
         | T.Adt (Assumed (Vec | Option), _, _) ->
             (* We can't expand those *)
             raise (Failure "Attempted to greedily expand a Vec or an Option ")
-        | T.Array _ -> raise Errors.Unimplemented
+        | T.Array _ -> raise Utils.Unimplemented
         | T.Slice _ -> raise (Failure "Can't expand symbolic slices")
         | T.TypeVar _ | Bool | Char | Never | Integer _ | Str ->
             raise (Failure "Unreachable")

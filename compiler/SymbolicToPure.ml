@@ -1,4 +1,4 @@
-open Errors
+open Utils
 open LlbcAstUtils
 open Pure
 open PureUtils
@@ -525,7 +525,7 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     match bid with
     | None -> (None, T.RegionGroupId.Set.empty)
     | Some bid ->
-        let parents = list_parent_region_groups sg bid in
+        let parents = list_ancestor_region_groups sg bid in
         (Some bid, parents)
   in
   (* List the inputs for:
@@ -1721,7 +1721,7 @@ let translate_fun_decl (config : config) (ctx : bs_ctx)
           | None -> []
           | Some back_id ->
               let parents_ids =
-                list_ordered_parent_region_groups def.signature back_id
+                list_ordered_ancestor_region_groups def.signature back_id
               in
               let backward_ids = List.append parents_ids [ back_id ] in
               List.concat

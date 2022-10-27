@@ -707,7 +707,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
                   in
                   (* Compute the set of ancestors of the function in call1 *)
                   let call1_ancestors =
-                    LlbcAstUtils.list_parent_region_groups sg rg_id1
+                    LlbcAstUtils.list_ancestor_region_groups sg rg_id1
                   in
                   (* Check if the function used in call0 is inside *)
                   T.RegionGroupId.Set.mem rg_id0 call1_ancestors

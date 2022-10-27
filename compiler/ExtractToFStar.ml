@@ -1,6 +1,6 @@
 (** Extract to F* *)
 
-open Errors
+open Utils
 open Pure
 open PureUtils
 open TranslateCore

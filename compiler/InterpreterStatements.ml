@@ -10,7 +10,7 @@ open TypesUtils
 open ValuesUtils
 module Inv = Invariants
 module S = SynthesizeSymbolic
-open Errors
+open Utils
 open Cps
 open InterpreterUtils
 open InterpreterProjectors
