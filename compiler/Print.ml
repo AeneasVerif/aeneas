@@ -164,9 +164,62 @@ module Types = struct
         let variants = String.concat "\n" variants in
         "enum " ^ name ^ params ^ " =\n" ^ variants
     | T.Opaque -> "opaque type " ^ name ^ params
+
+  let type_ctx_to_adt_variant_to_string_fun
+      (ctx : T.type_decl T.TypeDeclId.Map.t) :
+      T.TypeDeclId.id -> T.VariantId.id -> string =
+   fun def_id variant_id ->
+    let def = T.TypeDeclId.Map.find def_id ctx in
+    match def.kind with
+    | Struct _ | Opaque -> failwith "Unreachable"
+    | Enum variants ->
+        let variant = T.VariantId.nth variants variant_id in
+        name_to_string def.name ^ "::" ^ variant.variant_name
+
+  let type_ctx_to_adt_field_names_fun (ctx : T.type_decl T.TypeDeclId.Map.t) :
+      T.TypeDeclId.id -> T.VariantId.id option -> string list option =
+   fun def_id opt_variant_id ->
+    let def = T.TypeDeclId.Map.find def_id ctx in
+    let fields = TU.type_decl_get_fields def opt_variant_id in
+    (* There are two cases: either all the fields have names, or none of them
+     * has names *)
+    let has_names =
+      List.exists (fun f -> Option.is_some f.T.field_name) fields
+    in
+    if has_names then
+      let fields = List.map (fun f -> Option.get f.T.field_name) fields in
+      Some fields
+    else None
+
+  let type_ctx_to_adt_field_to_string_fun (ctx : T.type_decl T.TypeDeclId.Map.t)
+      :
+      T.TypeDeclId.id -> T.VariantId.id option -> T.FieldId.id -> string option
+      =
+   fun def_id opt_variant_id field_id ->
+    let def = T.TypeDeclId.Map.find def_id ctx in
+    let fields = TU.type_decl_get_fields def opt_variant_id in
+    let field = T.FieldId.nth fields field_id in
+    field.T.field_name
 end
 
 module PT = Types (* local module *)
+
+(** Pretty-printing for primitive values *)
+module PrimitiveValues = struct
+  let big_int_to_string (bi : V.big_int) : string = Z.to_string bi
+
+  let scalar_value_to_string (sv : V.scalar_value) : string =
+    big_int_to_string sv.value ^ ": " ^ PT.integer_type_to_string sv.int_ty
+
+  let primitive_value_to_string (cv : V.primitive_value) : string =
+    match cv with
+    | Scalar sv -> scalar_value_to_string sv
+    | Bool b -> Bool.to_string b
+    | Char c -> String.make 1 c
+    | String s -> s
+end
+
+module PPV = PrimitiveValues (* local module *)
 
 (** Pretty-printing for values *)
 module Values = struct
@@ -205,18 +258,6 @@ module Values = struct
   let var_id_to_string (id : V.VarId.id) : string =
     "var@" ^ V.VarId.to_string id
 
-  let big_int_to_string (bi : V.big_int) : string = Z.to_string bi
-
-  let scalar_value_to_string (sv : V.scalar_value) : string =
-    big_int_to_string sv.value ^ ": " ^ PT.integer_type_to_string sv.int_ty
-
-  let primitive_value_to_string (cv : V.primitive_value) : string =
-    match cv with
-    | Scalar sv -> scalar_value_to_string sv
-    | Bool b -> Bool.to_string b
-    | Char c -> String.make 1 c
-    | String s -> s
-
   let symbolic_value_id_to_string (id : V.SymbolicValueId.id) : string =
     "s@" ^ V.SymbolicValueId.to_string id
 
@@ -240,7 +281,7 @@ module Values = struct
       string =
     let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
     match v.value with
-    | Primitive cv -> primitive_value_to_string cv
+    | Primitive cv -> PPV.primitive_value_to_string cv
     | Adt av -> (
         let field_values =
           List.map (typed_value_to_string fmt) av.field_values
@@ -352,7 +393,7 @@ module Values = struct
       string =
     let ty_fmt : PT.rtype_formatter = value_to_rtype_formatter fmt in
     match v.value with
-    | APrimitive cv -> primitive_value_to_string cv
+    | APrimitive cv -> PPV.primitive_value_to_string cv
     | AAdt av -> (
         let field_values =
           List.map (typed_avalue_to_string fmt) av.field_values
@@ -481,193 +522,7 @@ end
 
 module PV = Values (* local module *)
 
-(** Pretty-printing for contexts *)
-module Contexts = struct
-  let binder_to_string (bv : C.binder) : string =
-    match bv.name with
-    | None -> PV.var_id_to_string bv.index
-    | Some name -> name
-
-  let env_elem_to_string (fmt : PV.value_formatter) (indent : string)
-      (indent_incr : string) (ev : C.env_elem) : string =
-    match ev with
-    | Var (var, tv) ->
-        let bv =
-          match var with Some var -> binder_to_string var | None -> "_"
-        in
-        indent ^ bv ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
-    | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
-    | Frame -> failwith "Can't print a Frame element"
-
-  let opt_env_elem_to_string (fmt : PV.value_formatter) (indent : string)
-      (indent_incr : string) (ev : C.env_elem option) : string =
-    match ev with
-    | None -> indent ^ "..."
-    | Some ev -> env_elem_to_string fmt indent indent_incr ev
-
-  (** Filters "dummy" bindings from an environment, to gain space and clarity/
-      See [env_to_string]. *)
-  let filter_env (env : C.env) : C.env_elem option list =
-    (* We filter:
-     * - non-dummy bindings which point to ⊥
-     * - dummy bindings which don't contain loans nor borrows
-     * Note that the first case can sometimes be confusing: we may try to improve
-     * it...
-     *)
-    let filter_elem (ev : C.env_elem) : C.env_elem option =
-      match ev with
-      | Var (Some _, tv) ->
-          (* Not a dummy binding: check if the value is ⊥ *)
-          if VU.is_bottom tv.value then None else Some ev
-      | Var (None, tv) ->
-          (* Dummy binding: check if the value contains borrows or loans *)
-          if VU.borrows_in_value tv || VU.loans_in_value tv then Some ev
-          else None
-      | _ -> Some ev
-    in
-    let env = List.map filter_elem env in
-    (* We collapse groups of filtered values - so that we can print one
-     * single "..." for a whole group of filtered values *)
-    let rec group_filtered (env : C.env_elem option list) :
-        C.env_elem option list =
-      match env with
-      | [] -> []
-      | None :: None :: env -> group_filtered (None :: env)
-      | x :: env -> x :: group_filtered env
-    in
-    group_filtered env
-
-  (** Environments can have a lot of dummy or uninitialized values: [filter]
-      allows to filter them when printing, replacing groups of such bindings with
-      "..." to gain space and clarity.
-   *)
-  let env_to_string (filter : bool) (fmt : PV.value_formatter) (env : C.env) :
-      string =
-    let env =
-      if filter then filter_env env else List.map (fun ev -> Some ev) env
-    in
-    "{\n"
-    ^ String.concat "\n"
-        (List.map (fun ev -> opt_env_elem_to_string fmt "  " "  " ev) env)
-    ^ "\n}"
-
-  type ctx_formatter = PV.value_formatter
-
-  let ctx_to_etype_formatter (fmt : ctx_formatter) : PT.etype_formatter =
-    PV.value_to_etype_formatter fmt
-
-  let ctx_to_rtype_formatter (fmt : ctx_formatter) : PT.rtype_formatter =
-    PV.value_to_rtype_formatter fmt
-
-  let type_ctx_to_adt_variant_to_string_fun
-      (ctx : T.type_decl T.TypeDeclId.Map.t) :
-      T.TypeDeclId.id -> T.VariantId.id -> string =
-   fun def_id variant_id ->
-    let def = T.TypeDeclId.Map.find def_id ctx in
-    match def.kind with
-    | Struct _ | Opaque -> failwith "Unreachable"
-    | Enum variants ->
-        let variant = T.VariantId.nth variants variant_id in
-        name_to_string def.name ^ "::" ^ variant.variant_name
-
-  let type_ctx_to_adt_field_names_fun (ctx : T.type_decl T.TypeDeclId.Map.t) :
-      T.TypeDeclId.id -> T.VariantId.id option -> string list option =
-   fun def_id opt_variant_id ->
-    let def = T.TypeDeclId.Map.find def_id ctx in
-    let fields = TU.type_decl_get_fields def opt_variant_id in
-    (* There are two cases: either all the fields have names, or none of them
-     * has names *)
-    let has_names =
-      List.exists (fun f -> Option.is_some f.T.field_name) fields
-    in
-    if has_names then
-      let fields = List.map (fun f -> Option.get f.T.field_name) fields in
-      Some fields
-    else None
-
-  let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
-    (* We shouldn't use rvar_to_string *)
-    let rvar_to_string _r = failwith "Unexpected use of rvar_to_string" in
-    let r_to_string r = PT.region_id_to_string r in
-
-    let type_var_id_to_string vid =
-      let v = C.lookup_type_var ctx vid in
-      v.name
-    in
-    let type_decl_id_to_string def_id =
-      let def = C.ctx_lookup_type_decl ctx def_id in
-      name_to_string def.name
-    in
-    let adt_variant_to_string =
-      type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_decls
-    in
-    let var_id_to_string vid =
-      let bv = C.ctx_lookup_binder ctx vid in
-      binder_to_string bv
-    in
-    let adt_field_names =
-      type_ctx_to_adt_field_names_fun ctx.type_context.type_decls
-    in
-    {
-      rvar_to_string;
-      r_to_string;
-      type_var_id_to_string;
-      type_decl_id_to_string;
-      adt_variant_to_string;
-      var_id_to_string;
-      adt_field_names;
-    }
-
-  (** Split an [env] at every occurrence of [Frame], eliminating those elements.
-          Also reorders the frames and the values in the frames according to the
-          following order:
-          * frames: from the current frame to the first pushed (oldest frame)
-          * values: from the first pushed (oldest) to the last pushed
-       *)
-  let split_env_according_to_frames (env : C.env) : C.env list =
-    let rec split_aux (frames : C.env list) (curr_frame : C.env) (env : C.env) =
-      match env with
-      | [] ->
-          if List.length curr_frame > 0 then curr_frame :: frames else frames
-      | Frame :: env' -> split_aux (curr_frame :: frames) [] env'
-      | ev :: env' -> split_aux frames (ev :: curr_frame) env'
-    in
-    let frames = split_aux [] [] env in
-    frames
-
-  let eval_ctx_to_string (ctx : C.eval_ctx) : string =
-    let fmt = eval_ctx_to_ctx_formatter ctx in
-    let ended_regions = T.RegionId.Set.to_string None ctx.ended_regions in
-    let frames = split_env_according_to_frames ctx.env in
-    let num_frames = List.length frames in
-    let frames =
-      List.mapi
-        (fun i f ->
-          let num_bindings = ref 0 in
-          let num_dummies = ref 0 in
-          let num_abs = ref 0 in
-          List.iter
-            (fun ev ->
-              match ev with
-              | C.Var (None, _) -> num_dummies := !num_abs + 1
-              | C.Var (Some _, _) -> num_bindings := !num_bindings + 1
-              | C.Abs _ -> num_abs := !num_abs + 1
-              | _ -> raise (Failure "Unreachable"))
-            f;
-          "\n# Frame " ^ string_of_int i ^ ":" ^ "\n- locals: "
-          ^ string_of_int !num_bindings
-          ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
-          ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string true fmt f ^ "\n")
-        frames
-    in
-    "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
-    ^ " frame(s)\n" ^ String.concat "" frames
-end
-
-module PC = Contexts (* local module *)
-
-(** Pretty-printing for contexts (generic functions) *)
+(** Pretty-printing for LLBC AST (generic functions) *)
 module LlbcAst = struct
   let var_to_string (var : A.var) : string =
     match var.name with
@@ -688,20 +543,6 @@ module LlbcAst = struct
     fun_decl_id_to_string : A.FunDeclId.id -> string;
     global_decl_id_to_string : A.GlobalDeclId.id -> string;
   }
-
-  let ast_to_ctx_formatter (fmt : ast_formatter) : PC.ctx_formatter =
-    {
-      PV.rvar_to_string = fmt.rvar_to_string;
-      PV.r_to_string = fmt.r_to_string;
-      PV.type_var_id_to_string = fmt.type_var_id_to_string;
-      PV.type_decl_id_to_string = fmt.type_decl_id_to_string;
-      PV.adt_variant_to_string = fmt.adt_variant_to_string;
-      PV.var_id_to_string = fmt.var_id_to_string;
-      PV.adt_field_names = fmt.adt_field_names;
-    }
-
-  let ast_to_value_formatter (fmt : ast_formatter) : PV.value_formatter =
-    ast_to_ctx_formatter fmt
 
   let ast_to_etype_formatter (fmt : ast_formatter) : PT.etype_formatter =
     {
@@ -724,42 +565,6 @@ module LlbcAst = struct
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
     }
 
-  let type_ctx_to_adt_field_to_string_fun (ctx : T.type_decl T.TypeDeclId.Map.t)
-      :
-      T.TypeDeclId.id -> T.VariantId.id option -> T.FieldId.id -> string option
-      =
-   fun def_id opt_variant_id field_id ->
-    let def = T.TypeDeclId.Map.find def_id ctx in
-    let fields = TU.type_decl_get_fields def opt_variant_id in
-    let field = T.FieldId.nth fields field_id in
-    field.T.field_name
-
-  let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : ast_formatter =
-    let ctx_fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    let adt_field_to_string =
-      type_ctx_to_adt_field_to_string_fun ctx.type_context.type_decls
-    in
-    let fun_decl_id_to_string def_id =
-      let def = C.ctx_lookup_fun_decl ctx def_id in
-      fun_name_to_string def.name
-    in
-    let global_decl_id_to_string def_id =
-      let def = C.ctx_lookup_global_decl ctx def_id in
-      global_name_to_string def.name
-    in
-    {
-      rvar_to_string = ctx_fmt.PV.rvar_to_string;
-      r_to_string = ctx_fmt.PV.r_to_string;
-      type_var_id_to_string = ctx_fmt.PV.type_var_id_to_string;
-      type_decl_id_to_string = ctx_fmt.PV.type_decl_id_to_string;
-      adt_variant_to_string = ctx_fmt.PV.adt_variant_to_string;
-      var_id_to_string = ctx_fmt.PV.var_id_to_string;
-      adt_field_names = ctx_fmt.PV.adt_field_names;
-      adt_field_to_string;
-      fun_decl_id_to_string;
-      global_decl_id_to_string;
-    }
-
   let fun_decl_to_ast_formatter (type_decls : T.type_decl T.TypeDeclId.Map.t)
       (fun_decls : A.fun_decl A.FunDeclId.Map.t)
       (global_decls : A.global_decl A.GlobalDeclId.Map.t) (fdef : A.fun_decl) :
@@ -779,14 +584,16 @@ module LlbcAst = struct
       name_to_string def.name
     in
     let adt_variant_to_string =
-      PC.type_ctx_to_adt_variant_to_string_fun type_decls
+      PT.type_ctx_to_adt_variant_to_string_fun type_decls
     in
     let var_id_to_string vid =
       let var = V.VarId.nth (Option.get fdef.body).locals vid in
       var_to_string var
     in
-    let adt_field_names = PC.type_ctx_to_adt_field_names_fun type_decls in
-    let adt_field_to_string = type_ctx_to_adt_field_to_string_fun type_decls in
+    let adt_field_names = PT.type_ctx_to_adt_field_names_fun type_decls in
+    let adt_field_to_string =
+      PT.type_ctx_to_adt_field_to_string_fun type_decls
+    in
     let fun_decl_id_to_string def_id =
       let def = A.FunDeclId.Map.find def_id fun_decls in
       fun_name_to_string def.name
@@ -877,7 +684,7 @@ module LlbcAst = struct
     | E.Move p -> "move " ^ place_to_string fmt p
     | E.Constant (ty, cv) ->
         "("
-        ^ PV.primitive_value_to_string cv
+        ^ PPV.primitive_value_to_string cv
         ^ " : "
         ^ PT.ety_to_string (ast_to_etype_formatter fmt) ty
         ^ ")"
@@ -1024,7 +831,9 @@ module LlbcAst = struct
               List.map
                 (fun (svl, be) ->
                   let svl =
-                    List.map (fun sv -> "| " ^ PV.scalar_value_to_string sv) svl
+                    List.map
+                      (fun sv -> "| " ^ PPV.scalar_value_to_string sv)
+                      svl
                   in
                   let svl = String.concat " " svl in
                   indent1 ^ svl ^ " => {\n" ^ inner_to_string2 be ^ "\n"
@@ -1120,6 +929,206 @@ end
 
 module PA = LlbcAst (* local module *)
 
+(** Pretty-printing for contexts *)
+module Contexts = struct
+  let binder_to_string (bv : C.binder) : string =
+    match bv.name with
+    | None -> PV.var_id_to_string bv.index
+    | Some name -> name
+
+  let env_elem_to_string (fmt : PV.value_formatter) (indent : string)
+      (indent_incr : string) (ev : C.env_elem) : string =
+    match ev with
+    | Var (var, tv) ->
+        let bv =
+          match var with Some var -> binder_to_string var | None -> "_"
+        in
+        indent ^ bv ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
+    | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
+    | Frame -> failwith "Can't print a Frame element"
+
+  let opt_env_elem_to_string (fmt : PV.value_formatter) (indent : string)
+      (indent_incr : string) (ev : C.env_elem option) : string =
+    match ev with
+    | None -> indent ^ "..."
+    | Some ev -> env_elem_to_string fmt indent indent_incr ev
+
+  (** Filters "dummy" bindings from an environment, to gain space and clarity/
+      See [env_to_string]. *)
+  let filter_env (env : C.env) : C.env_elem option list =
+    (* We filter:
+     * - non-dummy bindings which point to ⊥
+     * - dummy bindings which don't contain loans nor borrows
+     * Note that the first case can sometimes be confusing: we may try to improve
+     * it...
+     *)
+    let filter_elem (ev : C.env_elem) : C.env_elem option =
+      match ev with
+      | Var (Some _, tv) ->
+          (* Not a dummy binding: check if the value is ⊥ *)
+          if VU.is_bottom tv.value then None else Some ev
+      | Var (None, tv) ->
+          (* Dummy binding: check if the value contains borrows or loans *)
+          if VU.borrows_in_value tv || VU.loans_in_value tv then Some ev
+          else None
+      | _ -> Some ev
+    in
+    let env = List.map filter_elem env in
+    (* We collapse groups of filtered values - so that we can print one
+     * single "..." for a whole group of filtered values *)
+    let rec group_filtered (env : C.env_elem option list) :
+        C.env_elem option list =
+      match env with
+      | [] -> []
+      | None :: None :: env -> group_filtered (None :: env)
+      | x :: env -> x :: group_filtered env
+    in
+    group_filtered env
+
+  (** Environments can have a lot of dummy or uninitialized values: [filter]
+      allows to filter them when printing, replacing groups of such bindings with
+      "..." to gain space and clarity.
+   *)
+  let env_to_string (filter : bool) (fmt : PV.value_formatter) (env : C.env) :
+      string =
+    let env =
+      if filter then filter_env env else List.map (fun ev -> Some ev) env
+    in
+    "{\n"
+    ^ String.concat "\n"
+        (List.map (fun ev -> opt_env_elem_to_string fmt "  " "  " ev) env)
+    ^ "\n}"
+
+  type ctx_formatter = PV.value_formatter
+
+  let ast_to_ctx_formatter (fmt : PA.ast_formatter) : ctx_formatter =
+    {
+      PV.rvar_to_string = fmt.rvar_to_string;
+      PV.r_to_string = fmt.r_to_string;
+      PV.type_var_id_to_string = fmt.type_var_id_to_string;
+      PV.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PV.adt_variant_to_string = fmt.adt_variant_to_string;
+      PV.var_id_to_string = fmt.var_id_to_string;
+      PV.adt_field_names = fmt.adt_field_names;
+    }
+
+  let ast_to_value_formatter (fmt : PA.ast_formatter) : PV.value_formatter =
+    ast_to_ctx_formatter fmt
+
+  let ctx_to_etype_formatter (fmt : ctx_formatter) : PT.etype_formatter =
+    PV.value_to_etype_formatter fmt
+
+  let ctx_to_rtype_formatter (fmt : ctx_formatter) : PT.rtype_formatter =
+    PV.value_to_rtype_formatter fmt
+
+  let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
+    (* We shouldn't use rvar_to_string *)
+    let rvar_to_string _r = failwith "Unexpected use of rvar_to_string" in
+    let r_to_string r = PT.region_id_to_string r in
+
+    let type_var_id_to_string vid =
+      let v = C.lookup_type_var ctx vid in
+      v.name
+    in
+    let type_decl_id_to_string def_id =
+      let def = C.ctx_lookup_type_decl ctx def_id in
+      name_to_string def.name
+    in
+    let adt_variant_to_string =
+      PT.type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_decls
+    in
+    let var_id_to_string vid =
+      let bv = C.ctx_lookup_binder ctx vid in
+      binder_to_string bv
+    in
+    let adt_field_names =
+      PT.type_ctx_to_adt_field_names_fun ctx.type_context.type_decls
+    in
+    {
+      rvar_to_string;
+      r_to_string;
+      type_var_id_to_string;
+      type_decl_id_to_string;
+      adt_variant_to_string;
+      var_id_to_string;
+      adt_field_names;
+    }
+
+  let eval_ctx_to_ast_formatter (ctx : C.eval_ctx) : PA.ast_formatter =
+    let ctx_fmt = eval_ctx_to_ctx_formatter ctx in
+    let adt_field_to_string =
+      PT.type_ctx_to_adt_field_to_string_fun ctx.type_context.type_decls
+    in
+    let fun_decl_id_to_string def_id =
+      let def = C.ctx_lookup_fun_decl ctx def_id in
+      fun_name_to_string def.name
+    in
+    let global_decl_id_to_string def_id =
+      let def = C.ctx_lookup_global_decl ctx def_id in
+      global_name_to_string def.name
+    in
+    {
+      rvar_to_string = ctx_fmt.PV.rvar_to_string;
+      r_to_string = ctx_fmt.PV.r_to_string;
+      type_var_id_to_string = ctx_fmt.PV.type_var_id_to_string;
+      type_decl_id_to_string = ctx_fmt.PV.type_decl_id_to_string;
+      adt_variant_to_string = ctx_fmt.PV.adt_variant_to_string;
+      var_id_to_string = ctx_fmt.PV.var_id_to_string;
+      adt_field_names = ctx_fmt.PV.adt_field_names;
+      adt_field_to_string;
+      fun_decl_id_to_string;
+      global_decl_id_to_string;
+    }
+
+  (** Split an [env] at every occurrence of [Frame], eliminating those elements.
+          Also reorders the frames and the values in the frames according to the
+          following order:
+          * frames: from the current frame to the first pushed (oldest frame)
+          * values: from the first pushed (oldest) to the last pushed
+       *)
+  let split_env_according_to_frames (env : C.env) : C.env list =
+    let rec split_aux (frames : C.env list) (curr_frame : C.env) (env : C.env) =
+      match env with
+      | [] ->
+          if List.length curr_frame > 0 then curr_frame :: frames else frames
+      | Frame :: env' -> split_aux (curr_frame :: frames) [] env'
+      | ev :: env' -> split_aux frames (ev :: curr_frame) env'
+    in
+    let frames = split_aux [] [] env in
+    frames
+
+  let eval_ctx_to_string (ctx : C.eval_ctx) : string =
+    let fmt = eval_ctx_to_ctx_formatter ctx in
+    let ended_regions = T.RegionId.Set.to_string None ctx.ended_regions in
+    let frames = split_env_according_to_frames ctx.env in
+    let num_frames = List.length frames in
+    let frames =
+      List.mapi
+        (fun i f ->
+          let num_bindings = ref 0 in
+          let num_dummies = ref 0 in
+          let num_abs = ref 0 in
+          List.iter
+            (fun ev ->
+              match ev with
+              | C.Var (None, _) -> num_dummies := !num_abs + 1
+              | C.Var (Some _, _) -> num_bindings := !num_bindings + 1
+              | C.Abs _ -> num_abs := !num_abs + 1
+              | _ -> raise (Failure "Unreachable"))
+            f;
+          "\n# Frame " ^ string_of_int i ^ ":" ^ "\n- locals: "
+          ^ string_of_int !num_bindings
+          ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
+          ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
+          ^ env_to_string true fmt f ^ "\n")
+        frames
+    in
+    "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
+    ^ " frame(s)\n" ^ String.concat "" frames
+end
+
+module PC = Contexts (* local module *)
+
 (** Pretty-printing for ASTs (functions based on a definition context) *)
 module Module = struct
   (** This function pretty-prints a type definition by using a definition
@@ -1167,12 +1176,12 @@ module Module = struct
       PA.var_to_string var
     in
     let adt_variant_to_string =
-      PC.type_ctx_to_adt_variant_to_string_fun type_context
+      PT.type_ctx_to_adt_variant_to_string_fun type_context
     in
     let adt_field_to_string =
-      PA.type_ctx_to_adt_field_to_string_fun type_context
+      PT.type_ctx_to_adt_field_to_string_fun type_context
     in
-    let adt_field_names = PC.type_ctx_to_adt_field_names_fun type_context in
+    let adt_field_names = PT.type_ctx_to_adt_field_names_fun type_context in
     {
       rvar_to_string;
       r_to_string;
@@ -1269,15 +1278,15 @@ module EvalCtxLlbcAst = struct
     PV.typed_avalue_to_string fmt v
 
   let place_to_string (ctx : C.eval_ctx) (op : E.place) : string =
-    let fmt = PA.eval_ctx_to_ast_formatter ctx in
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.place_to_string fmt op
 
   let operand_to_string (ctx : C.eval_ctx) (op : E.operand) : string =
-    let fmt = PA.eval_ctx_to_ast_formatter ctx in
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.operand_to_string fmt op
 
   let statement_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (e : A.statement) : string =
-    let fmt = PA.eval_ctx_to_ast_formatter ctx in
+    let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.statement_to_string fmt indent indent_incr e
 end

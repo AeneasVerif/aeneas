@@ -197,7 +197,7 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
 (* TODO: move *)
 let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let fmt = bs_ctx_to_ast_formatter ctx in
-  let fmt = Print.LlbcAst.ast_to_value_formatter fmt in
+  let fmt = Print.Contexts.ast_to_value_formatter fmt in
   let indent = "" in
   let indent_incr = "  " in
   Print.Values.abs_to_string fmt indent indent_incr abs
