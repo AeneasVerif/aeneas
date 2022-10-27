@@ -30,12 +30,12 @@ let statement_to_string_with_tab ctx = PA.statement_to_string ctx "  " "  "
 let same_symbolic_id (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) : bool =
   sv0.V.sv_id = sv1.V.sv_id
 
-let mk_var (index : V.VarId.id) (name : string option) (var_ty : T.ety) : A.var
+let mk_var (index : E.VarId.id) (name : string option) (var_ty : T.ety) : A.var
     =
   { A.index; name; var_ty }
 
 (** Small helper - TODO: move *)
-let mk_place_from_var_id (var_id : V.VarId.id) : E.place =
+let mk_place_from_var_id (var_id : E.VarId.id) : E.place =
   { var_id; projection = [] }
 
 (** Create a fresh symbolic value *)
@@ -124,7 +124,7 @@ type g_loan_content = (V.loan_content, V.aloan_content) concrete_or_abs
 (** Generic borrow content: concrete or abstract *)
 type g_borrow_content = (V.borrow_content, V.aborrow_content) concrete_or_abs
 
-type abs_or_var_id = AbsId of V.AbstractionId.id | VarId of V.VarId.id option
+type abs_or_var_id = AbsId of V.AbstractionId.id | VarId of E.VarId.id option
 
 (** Utility exception *)
 exception FoundBorrowContent of V.borrow_content

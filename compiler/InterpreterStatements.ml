@@ -315,7 +315,7 @@ let get_non_local_function_return_type (fid : A.assumed_fun_id)
 let move_return_value (config : C.config) (cf : V.typed_value -> m_fun) : m_fun
     =
  fun ctx ->
-  let ret_vid = V.VarId.zero in
+  let ret_vid = E.VarId.zero in
   let cc = eval_operand config (E.Move (mk_place_from_var_id ret_vid)) in
   cc cf ctx
 
@@ -334,7 +334,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
   log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
 
   (* List the local variables, but the return variable *)
-  let ret_vid = V.VarId.zero in
+  let ret_vid = E.VarId.zero in
   let rec list_locals env =
     match env with
     | [] -> raise (Failure "Inconsistent environment")
@@ -345,12 +345,12 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
         if var.index <> ret_vid then var.index :: locals else locals
     | C.Frame :: _ -> []
   in
-  let locals : V.VarId.id list = list_locals ctx.env in
+  let locals : E.VarId.id list = list_locals ctx.env in
   (* Debug *)
   log#ldebug
     (lazy
       ("ctx_pop_frame: locals in which to drop the outer loans: ["
-      ^ String.concat "," (List.map V.VarId.to_string locals)
+      ^ String.concat "," (List.map E.VarId.to_string locals)
       ^ "]"));
 
   (* Move the return value out of the return variable *)
@@ -447,7 +447,7 @@ let eval_box_new_concrete (config : C.config)
         let box_v = mk_typed_value box_ty box_v in
 
         (* Move this value to the return variable *)
-        let dest = mk_place_from_var_id V.VarId.zero in
+        let dest = mk_place_from_var_id E.VarId.zero in
         let cf_assign = assign_to_place config box_v dest in
 
         (* Continue *)
@@ -496,7 +496,7 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
             raise (Failure "Unreachable")
         | Ok borrowed_value ->
             (* Move and continue *)
-            let destp = mk_place_from_var_id V.VarId.zero in
+            let destp = mk_place_from_var_id E.VarId.zero in
             assign_to_place config borrowed_value destp cf
       in
 
@@ -595,7 +595,7 @@ let eval_non_local_function_call_concrete (config : C.config)
         let cc = push_frame in
 
         (* Create and push the return variable *)
-        let ret_vid = V.VarId.zero in
+        let ret_vid = E.VarId.zero in
         let ret_ty =
           get_non_local_function_return_type fid region_params type_params
         in
@@ -604,7 +604,7 @@ let eval_non_local_function_call_concrete (config : C.config)
 
         (* Create and push the input variables *)
         let input_vars =
-          V.VarId.mapi_from1
+          E.VarId.mapi_from1
             (fun id (v : V.typed_value) -> (mk_var id None v.V.ty, v))
             args_vl
         in
@@ -922,7 +922,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
   (* Compose and apply *)
   comp cc cf_eval_st cf ctx
 
-and eval_global (config : C.config) (dest : V.VarId.id)
+and eval_global (config : C.config) (dest : E.VarId.id)
     (gid : LA.GlobalDeclId.id) : st_cm_fun =
  fun cf ctx ->
   let global = C.ctx_lookup_global_decl ctx gid in

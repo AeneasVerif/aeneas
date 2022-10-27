@@ -104,7 +104,7 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
 type pn_ctx = {
   pure_vars : string VarId.Map.t;
       (** Information about the pure variables used in the synthesized program *)
-  llbc_vars : string V.VarId.Map.t;
+  llbc_vars : string E.VarId.Map.t;
       (** Information about the LLBC variables used in the original program *)
 }
 
@@ -237,14 +237,14 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
         ctx0.pure_vars ctx1.pure_vars
     in
     let llbc_vars =
-      V.VarId.Map.fold
-        (fun id name ctx -> V.VarId.Map.add id name ctx)
+      E.VarId.Map.fold
+        (fun id name ctx -> E.VarId.Map.add id name ctx)
         ctx0.llbc_vars ctx1.llbc_vars
     in
     { pure_vars; llbc_vars }
   in
   let empty_ctx =
-    { pure_vars = VarId.Map.empty; llbc_vars = V.VarId.Map.empty }
+    { pure_vars = VarId.Map.empty; llbc_vars = E.VarId.Map.empty }
   in
   let merge_ctxs_ls (ctxs : pn_ctx list) : pn_ctx =
     List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) empty_ctx ctxs
@@ -281,7 +281,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
         | None ->
             if Option.is_some mp then
               match
-                V.VarId.Map.find_opt (Option.get mp).var_id ctx.llbc_vars
+                E.VarId.Map.find_opt (Option.get mp).var_id ctx.llbc_vars
               with
               | None -> v
               | Some basename -> { v with basename = Some basename }
@@ -300,9 +300,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
 
   (* Register an mplace the first time we find one *)
   let register_mplace (mp : mplace) (ctx : pn_ctx) : pn_ctx =
-    match (V.VarId.Map.find_opt mp.var_id ctx.llbc_vars, mp.name) with
+    match (E.VarId.Map.find_opt mp.var_id ctx.llbc_vars, mp.name) with
     | None, Some name ->
-        let llbc_vars = V.VarId.Map.add mp.var_id name ctx.llbc_vars in
+        let llbc_vars = E.VarId.Map.add mp.var_id name ctx.llbc_vars in
         { ctx with llbc_vars }
     | _ -> ctx
   in
@@ -318,11 +318,11 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     { ctx with pure_vars }
   in
   (* Similar to [add_pure_var_constraint], but for LLBC variables *)
-  let add_llbc_var_constraint (var_id : V.VarId.id) (name : string)
+  let add_llbc_var_constraint (var_id : E.VarId.id) (name : string)
       (ctx : pn_ctx) : pn_ctx =
     let llbc_vars =
-      if V.VarId.Map.mem var_id ctx.llbc_vars then ctx.llbc_vars
-      else V.VarId.Map.add var_id name ctx.llbc_vars
+      if E.VarId.Map.mem var_id ctx.llbc_vars then ctx.llbc_vars
+      else E.VarId.Map.add var_id name ctx.llbc_vars
     in
     { ctx with llbc_vars }
   in
@@ -399,7 +399,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             | Some { var_id; name; projection = [] } -> (
                 if Option.is_some name then add (Option.get name) ctx
                 else
-                  match V.VarId.Map.find_opt var_id ctx.llbc_vars with
+                  match E.VarId.Map.find_opt var_id ctx.llbc_vars with
                   | None -> ctx
                   | Some name -> add name ctx)
             | _ -> ctx
@@ -500,7 +500,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
                 let name =
                   match name with
                   | Some name -> Some name
-                  | None -> V.VarId.Map.find_opt var_id ctx.llbc_vars
+                  | None -> E.VarId.Map.find_opt var_id ctx.llbc_vars
                 in
                 match name with
                 | None -> ctx
@@ -530,7 +530,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
         let ctx =
           {
             pure_vars = VarId.Map.of_list input_names;
-            llbc_vars = V.VarId.Map.empty;
+            llbc_vars = E.VarId.Map.empty;
           }
         in
         let _, body_exp = update_texpression body.body ctx in

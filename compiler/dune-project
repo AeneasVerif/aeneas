@@ -6,8 +6,6 @@
 
 (generate_opam_files true)
 
-(formatting)
-
 (source
  (uri git+https://github.com/AeneasVerif/aeneas.git))
 
