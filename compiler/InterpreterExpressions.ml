@@ -110,8 +110,8 @@ let access_rplace_reorganize (config : C.config) (expand_prim_copy : bool)
     ctx
 
 (** Convert an operand constant operand value to a typed value *)
-let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) : V.typed_value
-    =
+let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) :
+    V.typed_value =
   (* Check the type while converting - we actually need some information
      * contained in the type *)
   log#ldebug
@@ -522,7 +522,8 @@ let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
             | Error _ -> raise (Failure "Disciminant id out of range")
             (* Should really never happen *)
             | Ok sv ->
-                cf { V.value = V.Primitive (PV.Scalar sv); ty = Integer Isize }))
+                cf { V.value = V.Primitive (PV.Scalar sv); ty = Integer Isize })
+        )
     | _ ->
         raise
           (Failure ("Invalid input for `discriminant`: " ^ V.show_typed_value v))

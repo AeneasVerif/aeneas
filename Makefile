@@ -64,7 +64,7 @@ verify: build tests
 # Reformat the project
 .PHONY: format
 format:
-	dune build @fmt && dune promote
+	cd compiler && dune promote
 
 # Add specific options to some tests
 trans-no_nested_borrows trans-paper: \
