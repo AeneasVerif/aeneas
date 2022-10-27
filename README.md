@@ -48,7 +48,18 @@ The dependencies can then be installed with the following command:
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc
 ```
 
-Finally, building the project simply requires to run `make` in the top directory.
+Moreover, Aeneas requires the Charon ML library, defined in the
+[Charon](https://github.com/AeneasVerif/charon) project.
+The simplest way is to clone Charon, then go to [`compiler`](./compiler) and
+create a symbolic link to the Charon library:
+`ln -s PATH_TO_CHARON_REPO/charon-ml charon`
+
+Finally, building the project simply requires to run `make` in the top
+directory.
+
+## Documentation
+
+If you run `make`, you will generate a documentation accessible from [`doc.html`](./doc.html).
 
 ## Usage
 
