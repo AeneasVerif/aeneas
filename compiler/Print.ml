@@ -1,7 +1,11 @@
-include Charon.Print
+include Charon.PrintUtils
+include Charon.PrintLlbcAst
 module V = Values
 module VU = ValuesUtils
 module C = Contexts
+module PrimitiveValues = Charon.PrintPrimitiveValues
+module Types = Charon.PrintTypes
+module Expressions = Charon.PrintExpressions
 
 (** Pretty-printing for values *)
 module Values = struct
@@ -555,11 +559,11 @@ module EvalCtxLlbcAst = struct
 
   let place_to_string (ctx : C.eval_ctx) (op : E.place) : string =
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PA.place_to_string fmt op
+    PE.place_to_string fmt op
 
   let operand_to_string (ctx : C.eval_ctx) (op : E.operand) : string =
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
-    PA.operand_to_string fmt op
+    PE.operand_to_string fmt op
 
   let statement_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (e : A.statement) : string =
