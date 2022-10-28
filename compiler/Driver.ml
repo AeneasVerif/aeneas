@@ -155,7 +155,7 @@ let () =
   | Ok m ->
       (* Logging *)
       main_log#linfo (lazy ("Imported: " ^ filename));
-      main_log#ldebug (lazy ("\n" ^ Print.Module.module_to_string m ^ "\n"));
+      main_log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
 
       (* Apply the pre-passes *)
       let m = PrePasses.apply_passes m in

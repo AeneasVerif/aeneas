@@ -147,8 +147,8 @@ let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
   PureTypeCheck.check_texpression ctx e
 
 (* TODO: move *)
-let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.LlbcAst.ast_formatter =
-  Print.LlbcAst.fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
+let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.Ast.ast_formatter =
+  Print.Ast.decls_and_fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
     ctx.fun_context.llbc_fun_decls ctx.global_context.llbc_global_decls
     ctx.fun_decl
 

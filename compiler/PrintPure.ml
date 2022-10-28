@@ -418,7 +418,7 @@ let unop_to_string (unop : unop) : string =
       "cast<" ^ integer_type_to_string src ^ "," ^ integer_type_to_string tgt
       ^ ">"
 
-let binop_to_string = Print.LlbcAst.binop_to_string
+let binop_to_string = Print.Expressions.binop_to_string
 
 let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   match fun_id with
