@@ -242,4 +242,4 @@ let rvalue_get_place (rv : E.rvalue) : E.place option =
   | Use (Copy p | Move p) -> Some p
   | Use (Constant _) -> None
   | Ref (p, _) -> Some p
-  | UnaryOp _ | BinaryOp _ | Discriminant _ | Aggregate _ -> None
+  | UnaryOp _ | BinaryOp _ | Global _ | Discriminant _ | Aggregate _ -> None

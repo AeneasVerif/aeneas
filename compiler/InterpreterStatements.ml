@@ -486,7 +486,7 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
       in
       let borrow_kind = if is_mut then E.Mut else E.Shared in
       let rv = E.Ref (p, borrow_kind) in
-      let cf_borrow = eval_rvalue config rv in
+      let cf_borrow = eval_rvalue_not_global config rv in
 
       (* Move the borrow to its destination *)
       let cf_move cf res : m_fun =
@@ -812,39 +812,46 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
   let cf_eval_st cf : m_fun =
    fun ctx ->
     match st.content with
-    | A.Assign (p, rvalue) ->
-        (* Evaluate the rvalue *)
-        let cf_eval_rvalue = eval_rvalue config rvalue in
-        (* Assign *)
-        let cf_assign cf (res : (V.typed_value, eval_error) result) ctx =
-          log#ldebug
-            (lazy
-              ("about to assign to place: " ^ place_to_string ctx p
-             ^ "\n- Context:\n" ^ eval_ctx_to_string ctx));
-          match res with
-          | Error EPanic -> cf Panic ctx
-          | Ok rv -> (
-              let expr = assign_to_place config rv p (cf Unit) ctx in
-              (* Update the synthesized AST - here we store meta-information.
-               * We do it only in specific cases (it is not always useful, and
-               * also it can lead to issues - for instance, if we borrow an
-               * inactivated borrow, we later can't translate it to pure values...) *)
-              match rvalue with
-              | E.Use _
-              | E.Ref (_, (E.Shared | E.Mut | E.TwoPhaseMut))
-              | E.UnaryOp _ | E.BinaryOp _ | E.Discriminant _ | E.Aggregate _ ->
-                  let rp = rvalue_get_place rvalue in
-                  let rp =
-                    match rp with
-                    | Some rp -> Some (S.mk_mplace rp ctx)
-                    | None -> None
-                  in
-                  S.synthesize_assignment (S.mk_mplace p ctx) rv rp expr)
-        in
+    | A.Assign (p, rvalue) -> (
+        (* We handle global assignments separately *)
+        match rvalue with
+        | E.Global gid ->
+            (* Evaluate the global *)
+            eval_global config p gid cf ctx
+        | _ ->
+            (* Evaluate the rvalue *)
+            let cf_eval_rvalue = eval_rvalue_not_global config rvalue in
+            (* Assign *)
+            let cf_assign cf (res : (V.typed_value, eval_error) result) ctx =
+              log#ldebug
+                (lazy
+                  ("about to assign to place: " ^ place_to_string ctx p
+                 ^ "\n- Context:\n" ^ eval_ctx_to_string ctx));
+              match res with
+              | Error EPanic -> cf Panic ctx
+              | Ok rv -> (
+                  let expr = assign_to_place config rv p (cf Unit) ctx in
+                  (* Update the synthesized AST - here we store meta-information.
+                   * We do it only in specific cases (it is not always useful, and
+                   * also it can lead to issues - for instance, if we borrow an
+                   * inactivated borrow, we later can't translate it to pure values...) *)
+                  match rvalue with
+                  | E.Global _ -> raise (Failure "Unreachable")
+                  | E.Use _
+                  | E.Ref (_, (E.Shared | E.Mut | E.TwoPhaseMut))
+                  | E.UnaryOp _ | E.BinaryOp _ | E.Discriminant _
+                  | E.Aggregate _ ->
+                      let rp = rvalue_get_place rvalue in
+                      let rp =
+                        match rp with
+                        | Some rp -> Some (S.mk_mplace rp ctx)
+                        | None -> None
+                      in
+                      S.synthesize_assignment (S.mk_mplace p ctx) rv rp expr)
+            in
 
-        (* Compose and apply *)
-        comp cf_eval_rvalue cf_assign cf ctx
-    | A.AssignGlobal { dst; global } -> eval_global config dst global cf ctx
+            (* Compose and apply *)
+            comp cf_eval_rvalue cf_assign cf ctx)
     | A.FakeRead p ->
         let expand_prim_copy = false in
         let cf_prepare cf =
