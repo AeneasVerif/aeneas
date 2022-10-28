@@ -697,11 +697,11 @@ let eval_rvalue_aggregate (config : C.config)
   (* Compose and apply *)
   comp eval_ops compute cf
 
-(** Evaluate an rvalue.
+(** Evaluate an rvalue which is not a global.
 
     Transmits the computed rvalue to the received continuation.
  *)
-let eval_rvalue (config : C.config) (rvalue : E.rvalue)
+let eval_rvalue_not_global (config : C.config) (rvalue : E.rvalue)
     (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
  fun ctx ->
   log#ldebug (lazy "eval_rvalue");
@@ -720,3 +720,4 @@ let eval_rvalue (config : C.config) (rvalue : E.rvalue)
   | E.Aggregate (aggregate_kind, ops) ->
       comp_wrap (eval_rvalue_aggregate config aggregate_kind ops) ctx
   | E.Discriminant p -> comp_wrap (eval_rvalue_discriminant config p) ctx
+  | E.Global _ -> raise (Failure "Unreachable")

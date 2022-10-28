@@ -233,6 +233,7 @@ let rvalue_substitute (tsubst : T.TypeVarId.id -> T.ety) (rv : E.rvalue) :
   | E.BinaryOp (binop, op1, op2) ->
       E.BinaryOp (binop, op_subst op1, op_subst op2)
   | E.Discriminant p -> E.Discriminant (p_subst p)
+  | E.Global _ -> (* Globals don't have type parameters *) rv
   | E.Aggregate (kind, ops) ->
       let ops = List.map op_subst ops in
       let kind =
@@ -285,9 +286,6 @@ and raw_statement_substitute (tsubst : T.TypeVarId.id -> T.ety)
       let p = place_substitute tsubst p in
       let rvalue = rvalue_substitute tsubst rvalue in
       A.Assign (p, rvalue)
-  | A.AssignGlobal g ->
-      (* Globals don't have type parameters *)
-      A.AssignGlobal g
   | A.FakeRead p ->
       let p = place_substitute tsubst p in
       A.FakeRead p
