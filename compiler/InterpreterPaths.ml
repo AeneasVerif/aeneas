@@ -46,6 +46,7 @@ type path_fail_kind =
        *)
   | FailBorrow of V.borrow_content
       (** We got stuck because we couldn't enter a borrow *)
+[@@deriving show]
 
 (** Result of evaluating a path (reading from a path/writing to a path)
     
@@ -104,7 +105,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               assert (opt_variant_id = adt.variant_id)
           | ProjOption variant_id, T.Assumed T.Option ->
               assert (Some variant_id = adt.variant_id)
-          | _ -> failwith "Unreachable");
+          | _ -> raise (Failure "Unreachable"));
           (* Actually project *)
           let fv = T.FieldId.nth adt.field_values field_id in
           match access_projection access ctx update p' fv with
@@ -167,7 +168,8 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               (* Lookup the loan content, and explore from there *)
               if access.lookup_shared_borrows then
                 match lookup_loan ek bid ctx with
-                | _, Concrete (V.MutLoan _) -> failwith "Expected a shared loan"
+                | _, Concrete (V.MutLoan _) ->
+                    raise (Failure "Expected a shared loan")
                 | _, Concrete (V.SharedLoan (bids, sv)) -> (
                     (* Explore the shared value *)
                     match access_projection access ctx update p' sv with
@@ -192,7 +194,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                       | V.AEndedIgnoredMutLoan
                           { given_back = _; child = _; given_back_meta = _ }
                       | V.AIgnoredSharedLoan _ ) ) ->
-                    failwith "Expected a shared (abstraction) loan"
+                    raise (Failure "Expected a shared (abstraction) loan")
                 | _, Abstract (V.ASharedLoan (bids, sv, _av)) -> (
                     (* Explore the shared value *)
                     match access_projection access ctx update p' sv with
@@ -202,7 +204,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                         let av =
                           match lookup_loan ek bid ctx with
                           | _, Abstract (V.ASharedLoan (_, _, av)) -> av
-                          | _ -> failwith "Unexpected"
+                          | _ -> raise (Failure "Unexpected")
                         in
                         (* Update the shared loan with the new value returned
                              by {!access_projection} *)
@@ -254,7 +256,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
           let v = "- v:\n" ^ V.show_value v in
           let ty = "- ty:\n" ^ T.show_ety ty in
           log#serror ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty);
-          failwith "Inconsistent projection")
+          raise (Failure "Inconsistent projection"))
 
 (** Generic function to access (read/write) the value at a given place.
 
@@ -328,13 +330,13 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
             ^ C.show_env ctx.env
           in
           log#serror msg;
-          failwith "Unexpected environment update");
+          raise (Failure "Unexpected environment update"));
       Ok read_value
 
 let read_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
     (ctx : C.eval_ctx) : V.typed_value =
   match read_place config access p ctx with
-  | Error _ -> failwith "Unreachable"
+  | Error e -> raise (Failure ("Unreachable: " ^ show_path_fail_kind e))
   | Ok v -> v
 
 (** Update the value at a given place *)
@@ -352,7 +354,7 @@ let write_place (_config : C.config) (access : access_kind) (p : E.place)
 let write_place_unwrap (config : C.config) (access : access_kind) (p : E.place)
     (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
   match write_place config access p nv ctx with
-  | Error _ -> failwith "Unreachable"
+  | Error e -> raise (Failure ("Unreachable: " ^ show_path_fail_kind e))
   | Ok ctx -> ctx
 
 (** Compute an expanded ADT bottom value *)
@@ -467,7 +469,7 @@ let expand_bottom_value_from_projection (config : C.config)
   (* Update the context by inserting the expanded value at the proper place *)
   match write_place config access p' nv ctx with
   | Ok ctx -> ctx
-  | Error _ -> failwith "Unreachable"
+  | Error _ -> raise (Failure "Unreachable")
 
 (** Update the environment to be able to read a place.
 
@@ -501,8 +503,8 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
               (Some (Synth.mk_mplace prefix ctx))
         | FailBottom (_, _, _) ->
             (* We can't expand {!V.Bottom} values while reading them *)
-            failwith "Found [Bottom] while reading a place"
-        | FailBorrow _ -> failwith "Could not read a borrow"
+            raise (Failure "Found [Bottom] while reading a place")
+        | FailBorrow _ -> raise (Failure "Could not read a borrow")
       in
       comp cc (update_ctx_along_read_place config access p) cf ctx
 
@@ -537,7 +539,7 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
                  pe ty ctx
              in
              cf ctx
-        | FailBorrow _ -> failwith "Could not write to a borrow"
+        | FailBorrow _ -> raise (Failure "Could not write to a borrow")
       in
       (* Retry *)
       comp cc (update_ctx_along_write_place config access p) cf ctx
@@ -594,7 +596,7 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
 
   (* First, retrieve the value *)
   match read_place config access p ctx with
-  | Error _ -> failwith "Unreachable"
+  | Error _ -> raise (Failure "Unreachable")
   | Ok v -> (
       (* Inspect the value and update the context while doing so.
          If the context gets updated: perform a recursive call (many things
@@ -718,17 +720,17 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
       (* Sanity check *)
       (match v.V.ty with
       | T.Adt (T.Assumed (T.Box | Vec), _, _) ->
-          failwith "Can't copy an assumed value other than Option"
+          raise (Failure "Can't copy an assumed value other than Option")
       | T.Adt (T.AdtId _, _, _) -> assert allow_adt_copy
       | T.Adt ((T.Assumed Option | T.Tuple), _, _) -> () (* Ok *)
-      | _ -> failwith "Unreachable");
+      | _ -> raise (Failure "Unreachable"));
       let ctx, fields =
         List.fold_left_map
           (copy_value allow_adt_copy config)
           ctx av.field_values
       in
       (ctx, { v with V.value = V.Adt { av with field_values = fields } })
-  | V.Bottom -> failwith "Can't copy ⊥"
+  | V.Bottom -> raise (Failure "Can't copy ⊥")
   | V.Borrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
@@ -738,13 +740,13 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
           let bid' = C.fresh_borrow_id () in
           let ctx = reborrow_shared bid bid' ctx in
           (ctx, { v with V.value = V.Borrow (SharedBorrow (mv, bid')) })
-      | MutBorrow (_, _) -> failwith "Can't copy a mutable borrow"
+      | MutBorrow (_, _) -> raise (Failure "Can't copy a mutable borrow")
       | V.InactivatedMutBorrow _ ->
-          failwith "Can't copy an inactivated mut borrow")
+          raise (Failure "Can't copy an inactivated mut borrow"))
   | V.Loan lc -> (
       (* We can only copy shared loans *)
       match lc with
-      | V.MutLoan _ -> failwith "Can't copy a mutable loan"
+      | V.MutLoan _ -> raise (Failure "Can't copy a mutable loan")
       | V.SharedLoan (_, sv) ->
           (* We don't copy the shared loan: only the shared value inside *)
           copy_value allow_adt_copy config ctx sv)
