@@ -4,6 +4,15 @@ open Values
 open LlbcAst
 module V = Values
 open ValuesUtils
+open Identifiers
+
+(** The [Id] module for dummy variables.
+
+    Dummy variables are used to store values that we don't want to forget
+    in the environment, because they contain borrows for instance, typically
+    because they might be overwritten during an assignment.
+  *)
+module DummyVarId = IdGen ()
 
 (** Some global counters.
 
@@ -70,6 +79,9 @@ let abstraction_id_counter, fresh_abstraction_id =
 let fun_call_id_counter, fresh_fun_call_id =
   FunCallId.fresh_stateful_generator ()
 
+let dummy_var_id_counter, fresh_dummy_var_id =
+  DummyVarId.fresh_stateful_generator ()
+
 (** We shouldn't need to reset the global counters, but it might be good to
     do it from time to time, for instance every time we start evaluating/
     synthesizing a function.
@@ -86,14 +98,33 @@ let reset_global_counters () =
   borrow_id_counter := BorrowId.generator_zero;
   region_id_counter := RegionId.generator_zero;
   abstraction_id_counter := AbstractionId.generator_zero;
-  fun_call_id_counter := FunCallId.generator_zero
+  fun_call_id_counter := FunCallId.generator_zero;
+  dummy_var_id_counter := DummyVarId.generator_zero
 
 (** A binder used in an environment, to map a variable to a value *)
-type binder = {
+type var_binder = {
   index : VarId.id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)
 }
 [@@deriving show]
+
+(** A binder, for a "real" variable or a dummy variable *)
+type binder = VarBinder of var_binder | DummyBinder of DummyVarId.id
+[@@deriving show]
+
+(** Ancestor for {!env_elem} iter visitor *)
+class ['self] iter_env_elem_base =
+  object (_self : 'self)
+    inherit [_] iter_abs
+    method visit_binder : 'env -> binder -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for {!env_elem} map visitor *)
+class ['self] map_env_elem_base =
+  object (_self : 'self)
+    inherit [_] map_abs
+    method visit_binder : 'env -> binder -> binder = fun _ x -> x
+  end
 
 (** Environment value: mapping from variable to value, abstraction (only
     used in symbolic mode) or stack frame delimiter.
@@ -101,7 +132,7 @@ type binder = {
     TODO: rename Var (-> Binding?)
  *)
 type env_elem =
-  | Var of (binder option[@opaque]) * typed_value
+  | Var of binder * typed_value
       (** Variable binding - the binder is None if the variable is a dummy variable
           (we use dummy variables to store temporaries while doing bookkeeping such
            as ending borrows for instance). *)
@@ -113,7 +144,7 @@ type env_elem =
       {
         name = "iter_env_elem";
         variety = "iter";
-        ancestors = [ "iter_abs" ];
+        ancestors = [ "iter_env_elem_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
@@ -121,7 +152,7 @@ type env_elem =
       {
         name = "map_env_elem";
         variety = "map";
-        ancestors = [ "map_abs" ];
+        ancestors = [ "map_env_elem_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
@@ -235,54 +266,44 @@ type eval_ctx = {
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
 
-let opt_binder_has_vid (bv : binder option) (vid : VarId.id) : bool =
-  match bv with Some bv -> bv.index = vid | None -> false
-
-let ctx_lookup_binder (ctx : eval_ctx) (vid : VarId.id) : binder =
-  (* TOOD: we might want to stop at the end of the frame *)
-  let rec lookup env =
-    match env with
-    | [] ->
-        raise (Invalid_argument ("Variable not found: " ^ VarId.to_string vid))
-    | Var (var, _) :: env' ->
-        if opt_binder_has_vid var vid then Option.get var else lookup env'
-    | (Abs _ | Frame) :: env' -> lookup env'
-  in
-  lookup ctx.env
-
-(** TODO: make this more efficient with maps *)
-let ctx_lookup_type_decl (ctx : eval_ctx) (tid : TypeDeclId.id) : type_decl =
-  TypeDeclId.Map.find tid ctx.type_context.type_decls
-
-(** TODO: make this more efficient with maps *)
-let ctx_lookup_fun_decl (ctx : eval_ctx) (fid : FunDeclId.id) : fun_decl =
-  FunDeclId.Map.find fid ctx.fun_context.fun_decls
-
-(** TODO: make this more efficient with maps *)
-let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) :
-    global_decl =
-  GlobalDeclId.Map.find gid ctx.global_context.global_decls
-
-(** Retrieve a variable's value in an environment *)
-let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
+(** Lookup a variable in the current frame *)
+let env_lookup_var (env : env) (vid : VarId.id) : var_binder * typed_value =
   (* We take care to stop at the end of current frame: different variables
      in different frames can have the same id!
   *)
   let rec lookup env =
     match env with
-    | [] -> raise (Failure "Unexpected")
-    | Var (var, v) :: env' ->
-        if opt_binder_has_vid var vid then v else lookup env'
-    | Abs _ :: env' -> lookup env'
+    | [] ->
+        raise (Invalid_argument ("Variable not found: " ^ VarId.to_string vid))
+    | Var (VarBinder var, v) :: env' ->
+        if var.index = vid then (var, v) else lookup env'
+    | (Var (DummyBinder _, _) | Abs _) :: env' -> lookup env'
     | Frame :: _ -> raise (Failure "End of frame")
   in
   lookup env
+
+let ctx_lookup_var_binder (ctx : eval_ctx) (vid : VarId.id) : var_binder =
+  fst (env_lookup_var ctx.env vid)
+
+let ctx_lookup_type_decl (ctx : eval_ctx) (tid : TypeDeclId.id) : type_decl =
+  TypeDeclId.Map.find tid ctx.type_context.type_decls
+
+let ctx_lookup_fun_decl (ctx : eval_ctx) (fid : FunDeclId.id) : fun_decl =
+  FunDeclId.Map.find fid ctx.fun_context.fun_decls
+
+let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) :
+    global_decl =
+  GlobalDeclId.Map.find gid ctx.global_context.global_decls
+
+(** Retrieve a variable's value in the current frame *)
+let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
+  snd (env_lookup_var env vid)
 
 (** Retrieve a variable's value in an evaluation context *)
 let ctx_lookup_var_value (ctx : eval_ctx) (vid : VarId.id) : typed_value =
   env_lookup_var_value ctx.env vid
 
-(** Update a variable's value in an environment
+(** Update a variable's value in the current frame.
 
     This is a helper function: it can break invariants and doesn't perform
     any check.
@@ -294,15 +315,16 @@ let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
   let rec update env =
     match env with
     | [] -> raise (Failure "Unexpected")
-    | Var (var, v) :: env' ->
-        if opt_binder_has_vid var vid then Var (var, nv) :: env'
+    | Var ((VarBinder b as var), v) :: env' ->
+        if b.index = vid then Var (var, nv) :: env'
         else Var (var, v) :: update env'
-    | Abs abs :: env' -> Abs abs :: update env'
+    | ((Var (DummyBinder _, _) | Abs _) as ee) :: env' -> ee :: update env'
     | Frame :: _ -> raise (Failure "End of frame")
   in
   update env
 
-let var_to_binder (var : var) : binder = { index = var.index; name = var.name }
+let var_to_binder (var : var) : var_binder =
+  { index = var.index; name = var.name }
 
 (** Update a variable's value in an evaluation context.
 
@@ -321,7 +343,7 @@ let ctx_update_var_value (ctx : eval_ctx) (vid : VarId.id) (nv : typed_value) :
 let ctx_push_var (ctx : eval_ctx) (var : var) (v : typed_value) : eval_ctx =
   assert (var.var_ty = v.ty);
   let bv = var_to_binder var in
-  { ctx with env = Var (Some bv, v) :: ctx.env }
+  { ctx with env = Var (VarBinder bv, v) :: ctx.env }
 
 (** Push a list of variables.
 
@@ -335,37 +357,41 @@ let ctx_push_vars (ctx : eval_ctx) (vars : (var * typed_value) list) : eval_ctx
       (fun (var, (value : typed_value)) -> var.var_ty = value.ty)
       vars);
   let vars =
-    List.map (fun (var, value) -> Var (Some (var_to_binder var), value)) vars
+    List.map
+      (fun (var, value) -> Var (VarBinder (var_to_binder var), value))
+      vars
   in
   let vars = List.rev vars in
   { ctx with env = List.append vars ctx.env }
 
 (** Push a dummy variable in the context's environment. *)
-let ctx_push_dummy_var (ctx : eval_ctx) (v : typed_value) : eval_ctx =
-  { ctx with env = Var (None, v) :: ctx.env }
+let ctx_push_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) (v : typed_value)
+    : eval_ctx =
+  { ctx with env = Var (DummyBinder vid, v) :: ctx.env }
 
-(** Pop the first dummy variable from a context's environment. *)
-let ctx_pop_dummy_var (ctx : eval_ctx) : eval_ctx * typed_value =
-  let rec pop_var (env : env) : env * typed_value =
+(** Remove a dummy variable from a context's environment. *)
+let ctx_remove_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) :
+    eval_ctx * typed_value =
+  let rec remove_var (env : env) : env * typed_value =
     match env with
-    | [] -> raise (Failure "Could not find a dummy variable")
-    | Var (None, v) :: env -> (env, v)
+    | [] -> raise (Failure "Could not lookup a dummy variable")
+    | Var (DummyBinder vid', v) :: env when vid' = vid -> (env, v)
     | ee :: env ->
-        let env, v = pop_var env in
+        let env, v = remove_var env in
         (ee :: env, v)
   in
-  let env, v = pop_var ctx.env in
+  let env, v = remove_var ctx.env in
   ({ ctx with env }, v)
 
-(** Read the first dummy variable in a context's environment. *)
-let ctx_read_first_dummy_var (ctx : eval_ctx) : typed_value =
-  let rec read_var (env : env) : typed_value =
+(** Lookup a dummy variable in a context's environment. *)
+let ctx_lookup_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) : typed_value =
+  let rec lookup_var (env : env) : typed_value =
     match env with
-    | [] -> raise (Failure "Could not find a dummy variable")
-    | Var (None, v) :: _env -> v
-    | _ :: env -> read_var env
+    | [] -> raise (Failure "Could not lookup a dummy variable")
+    | Var (DummyBinder vid', v) :: _env when vid' = vid -> v
+    | _ :: env -> lookup_var env
   in
-  read_var ctx.env
+  lookup_var ctx.env
 
 (** Push an uninitialized variable (which thus maps to {!Values.Bottom}) *)
 let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =
@@ -398,8 +424,8 @@ class ['self] iter_frame =
   object (self : 'self)
     inherit [_] V.iter_abs
 
-    method visit_Var : 'acc -> binder option -> typed_value -> unit =
-      fun acc _vid v -> self#visit_typed_value acc v
+    method visit_Var : 'acc -> binder -> typed_value -> unit =
+      fun acc _ v -> self#visit_typed_value acc v
 
     method visit_Abs : 'acc -> abs -> unit =
       fun acc abs -> self#visit_abs acc abs
@@ -426,10 +452,10 @@ class ['self] map_frame_concrete =
   object (self : 'self)
     inherit [_] V.map_abs
 
-    method visit_Var : 'acc -> binder option -> typed_value -> env_elem =
-      fun acc vid v ->
+    method visit_Var : 'acc -> binder -> typed_value -> env_elem =
+      fun acc b v ->
         let v = self#visit_typed_value acc v in
-        Var (vid, v)
+        Var (b, v)
 
     method visit_Abs : 'acc -> abs -> env_elem =
       fun acc abs -> Abs (self#visit_abs acc abs)

@@ -310,18 +310,24 @@ module PV = Values (* local module *)
 
 (** Pretty-printing for contexts *)
 module Contexts = struct
-  let binder_to_string (bv : C.binder) : string =
+  let var_binder_to_string (bv : C.var_binder) : string =
     match bv.name with
     | None -> PV.var_id_to_string bv.index
     | Some name -> name
+
+  let dummy_var_id_to_string (bid : C.DummyVarId.id) : string =
+    "_@" ^ C.DummyVarId.to_string bid
+
+  let binder_to_string (bv : C.binder) : string =
+    match bv with
+    | VarBinder b -> var_binder_to_string b
+    | DummyBinder bid -> dummy_var_id_to_string bid
 
   let env_elem_to_string (fmt : PV.value_formatter) (indent : string)
       (indent_incr : string) (ev : C.env_elem) : string =
     match ev with
     | Var (var, tv) ->
-        let bv =
-          match var with Some var -> binder_to_string var | None -> "_"
-        in
+        let bv = binder_to_string var in
         indent ^ bv ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
     | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
     | Frame -> raise (Failure "Can't print a Frame element")
@@ -343,10 +349,10 @@ module Contexts = struct
      *)
     let filter_elem (ev : C.env_elem) : C.env_elem option =
       match ev with
-      | Var (Some _, tv) ->
+      | Var (VarBinder _, tv) ->
           (* Not a dummy binding: check if the value is ⊥ *)
           if VU.is_bottom tv.value then None else Some ev
-      | Var (None, tv) ->
+      | Var (DummyBinder _, tv) ->
           (* Dummy binding: check if the value contains borrows or loans *)
           if VU.borrows_in_value tv || VU.loans_in_value tv then Some ev
           else None
@@ -419,8 +425,8 @@ module Contexts = struct
       PT.type_ctx_to_adt_variant_to_string_fun ctx.type_context.type_decls
     in
     let var_id_to_string vid =
-      let bv = C.ctx_lookup_binder ctx vid in
-      binder_to_string bv
+      let bv = C.ctx_lookup_var_binder ctx vid in
+      var_binder_to_string bv
     in
     let adt_field_names =
       PT.type_ctx_to_adt_field_names_fun ctx.type_context.type_decls
@@ -492,8 +498,8 @@ module Contexts = struct
           List.iter
             (fun ev ->
               match ev with
-              | C.Var (None, _) -> num_dummies := !num_abs + 1
-              | C.Var (Some _, _) -> num_bindings := !num_bindings + 1
+              | C.Var (DummyBinder _, _) -> num_dummies := !num_abs + 1
+              | C.Var (VarBinder _, _) -> num_bindings := !num_bindings + 1
               | C.Abs _ -> num_abs := !num_abs + 1
               | _ -> raise (Failure "Unreachable"))
             f;

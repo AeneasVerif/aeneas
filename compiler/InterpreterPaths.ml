@@ -635,12 +635,13 @@ let drop_outer_loans_at_lplace (config : C.config) (p : E.place) : cm_fun =
   let access = Write in
   let v = read_place_unwrap config access p ctx in
   let ctx = write_place_unwrap config access p (mk_bottom v.V.ty) ctx in
-  let ctx = C.ctx_push_dummy_var ctx v in
+  let dummy_id = C.fresh_dummy_var_id () in
+  let ctx = C.ctx_push_dummy_var ctx dummy_id v in
   (* Auxiliary function *)
   let rec drop : cm_fun =
    fun cf ctx ->
     (* Read the value *)
-    let v = C.ctx_read_first_dummy_var ctx in
+    let v = C.ctx_lookup_dummy_var ctx dummy_id in
     (* Check if there are loans or borrows to end *)
     let with_borrows = false in
     match get_first_outer_loan_or_borrow_in_value with_borrows v with
@@ -665,7 +666,7 @@ let drop_outer_loans_at_lplace (config : C.config) (p : E.place) : cm_fun =
   let cc =
     comp cc (fun cf ctx ->
         (* Pop *)
-        let ctx, v = C.ctx_pop_dummy_var ctx in
+        let ctx, v = C.ctx_remove_dummy_var ctx dummy_id in
         (* Reinsert *)
         let ctx = write_place_unwrap config access p v ctx in
         (* Sanity check *)

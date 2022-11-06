@@ -254,7 +254,9 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
         assert (Option.is_none !abs_or_var);
         abs_or_var :=
           Some
-            (VarId (match bv with Some bv -> Some bv.C.index | None -> None));
+            (match bv with
+            | VarBinder b -> VarId b.C.index
+            | DummyBinder id -> DummyVarId id);
         super#visit_Var env bv v;
         abs_or_var := None
 

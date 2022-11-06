@@ -18,7 +18,7 @@ module A = LlbcAst
     the generated code.
  *)
 type mplace = {
-  bv : Contexts.binder;
+  bv : Contexts.var_binder;
       (** It is important that we store the binder, and not just the variable id,
           because the most important information in a place is the name of the
           variable!

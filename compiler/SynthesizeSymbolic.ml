@@ -7,7 +7,7 @@ module A = LlbcAst
 open SymbolicAst
 
 let mk_mplace (p : E.place) (ctx : Contexts.eval_ctx) : mplace =
-  let bv = Contexts.ctx_lookup_binder ctx p.var_id in
+  let bv = Contexts.ctx_lookup_var_binder ctx p.var_id in
   { bv; projection = p.projection }
 
 let mk_opt_mplace (p : E.place option) (ctx : Contexts.eval_ctx) : mplace option
