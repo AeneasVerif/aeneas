@@ -931,7 +931,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
                    * By doing that we should have ended the target borrow (see the
                    * below sanity check) *)
                   end_abstraction config chain abs_id
-            | VarId _, _ ->
+            | (VarId _ | DummyVarId _), _ ->
                 (* The loan is not inside the same abstraction (actually inside
                  * a non-abstraction value): we need to end the whole abstraction *)
                 end_abstraction config chain abs_id

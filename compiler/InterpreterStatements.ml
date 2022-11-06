@@ -40,7 +40,8 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
     let mv = read_place_unwrap config access p ctx in
-    let ctx = C.ctx_push_dummy_var ctx mv in
+    let dummy_id = C.fresh_dummy_var_id () in
+    let ctx = C.ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = V.Bottom } in
     let ctx = write_place_unwrap config access p nv ctx in
@@ -54,15 +55,16 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
   comp cc replace cf ctx
 
 (** Push a dummy variable to the environment *)
-let push_dummy_var (v : V.typed_value) : cm_fun =
+let push_dummy_var (vid : C.DummyVarId.id) (v : V.typed_value) : cm_fun =
  fun cf ctx ->
-  let ctx = C.ctx_push_dummy_var ctx v in
+  let ctx = C.ctx_push_dummy_var ctx vid v in
   cf ctx
 
-(** Pop a dummy variable from the environment *)
-let pop_dummy_var (cf : V.typed_value -> m_fun) : m_fun =
+(** Remove a dummy variable from the environment *)
+let remove_dummy_var (vid : C.DummyVarId.id) (cf : V.typed_value -> m_fun) :
+    m_fun =
  fun ctx ->
-  let ctx, v = C.ctx_pop_dummy_var ctx in
+  let ctx, v = C.ctx_remove_dummy_var ctx vid in
   cf v ctx
 
 (** Push an uninitialized variable to the environment *)
@@ -106,18 +108,20 @@ let assign_to_place (config : C.config) (rv : V.typed_value) (p : E.place) :
       ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
       ^ eval_ctx_to_string ctx));
   (* Push the rvalue to a dummy variable, for bookkeeping *)
-  let cc = push_dummy_var rv in
+  let rvalue_vid = C.fresh_dummy_var_id () in
+  let cc = push_dummy_var rvalue_vid rv in
   (* Prepare the destination *)
   let cc = comp cc (prepare_lplace config p) in
   (* Retrieve the rvalue from the dummy variable *)
-  let cc = comp cc (fun cf _lv -> pop_dummy_var cf) in
+  let cc = comp cc (fun cf _lv -> remove_dummy_var rvalue_vid cf) in
   (* Update the destination *)
   let move_dest cf (rv : V.typed_value) : m_fun =
    fun ctx ->
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows *)
     let mv = read_place_unwrap config Write p ctx in
-    let ctx = C.ctx_push_dummy_var ctx mv in
+    let dest_vid = C.fresh_dummy_var_id () in
+    let ctx = C.ctx_push_dummy_var ctx dest_vid mv in
     (* Write to the destination *)
     (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
     assert (not (bottom_in_value ctx.ended_regions rv));
@@ -338,8 +342,8 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
     match env with
     | [] -> raise (Failure "Inconsistent environment")
     | C.Abs _ :: env -> list_locals env
-    | C.Var (None, _) :: env -> list_locals env
-    | C.Var (Some var, _) :: env ->
+    | C.Var (DummyBinder _, _) :: env -> list_locals env
+    | C.Var (VarBinder var, _) :: env ->
         let locals = list_locals env in
         if var.index <> ret_vid then var.index :: locals else locals
     | C.Frame :: _ -> []
@@ -390,7 +394,9 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
     match env with
     | [] -> raise (Failure "Inconsistent environment")
     | C.Abs abs :: env -> C.Abs abs :: pop env
-    | C.Var (_, v) :: env -> C.Var (None, v) :: pop env
+    | C.Var (_, v) :: env ->
+        let vid = C.fresh_dummy_var_id () in
+        C.Var (C.DummyBinder vid, v) :: pop env
     | C.Frame :: env -> (* Stop here *) env
   in
   let cf_pop cf (ret_value : V.typed_value) : m_fun =
@@ -424,8 +430,9 @@ let eval_box_new_concrete (config : C.config)
   match (region_params, type_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
-      Var (Some input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ )
-    ->
+      Var (VarBinder input_var, input_value)
+      :: Var (_ret_var, _)
+      :: C.Frame :: _ ) ->
       (* Required type checking *)
       assert (input_value.V.ty = boxed_ty);
 
@@ -465,8 +472,9 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
   match (region_params, type_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
-      Var (Some input_var, input_value) :: Var (_ret_var, _) :: C.Frame :: _ )
-    ->
+      Var (VarBinder input_var, input_value)
+      :: Var (_ret_var, _)
+      :: C.Frame :: _ ) ->
       (* Required type checking. We must have:
          - input_value.ty == & (mut) Box<ty>
          - boxed_ty == ty
