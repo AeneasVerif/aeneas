@@ -653,8 +653,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     A.FunDeclId.Set.of_list
       (List.concat
          (List.map
-            (fun decl ->
-              match decl with A.Fun (Rec ids) -> ids | _ -> [])
+            (fun decl -> match decl with A.Fun (Rec ids) -> ids | _ -> [])
             crate.declarations))
   in
 
@@ -697,7 +696,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     match Filename.chop_suffix_opt ~suffix:".llbc" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
-        failwith "Unreachable"
+        raise (Failure "Unreachable")
     | Some filename ->
         (* Retrieve the file basename *)
         let basename = Filename.basename filename in
@@ -794,8 +793,8 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         interface = has_opaque_types;
       }
     in
-    extract_file types_config gen_ctx types_filename crate.A.name
-      types_module ": type definitions" [] [];
+    extract_file types_config gen_ctx types_filename crate.A.name types_module
+      ": type definitions" [] [];
 
     (* Extract the template clauses *)
     let needs_clauses_module =
@@ -867,5 +866,5 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     in
     (* Add the extension for F* *)
     let extract_filename = extract_filebasename ^ ".fst" in
-    extract_file gen_config gen_ctx extract_filename crate.A.name
-      module_name "" [] []
+    extract_file gen_config gen_ctx extract_filename crate.A.name module_name ""
+      [] []

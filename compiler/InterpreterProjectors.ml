@@ -43,7 +43,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
             fields_types
         in
         List.concat proj_fields
-    | V.Bottom, _ -> failwith "Unreachable"
+    | V.Bottom, _ -> raise (Failure "Unreachable")
     | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
         (* Retrieve the bid of the borrow and the asb of the projected borrowed value *)
         let bid, asb =
@@ -66,13 +66,15 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
                 | _, Abstract (V.ASharedLoan (_, sv, _)) ->
                     apply_proj_borrows_on_shared_borrow ctx fresh_reborrow
                       regions sv ref_ty
-                | _ -> failwith "Unexpected"
+                | _ -> raise (Failure "Unexpected")
               in
               (bid, asb)
           | V.InactivatedMutBorrow _, _ ->
-              failwith
-                "Can't apply a proj_borrow over an inactivated mutable borrow"
-          | _ -> failwith "Unreachable"
+              raise
+                (Failure
+                   "Can't apply a proj_borrow over an inactivated mutable \
+                    borrow")
+          | _ -> raise (Failure "Unreachable")
         in
         let asb =
           (* Check if the region is in the set of projected regions (note that
@@ -83,13 +85,13 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
           else asb
         in
         asb
-    | V.Loan _, _ -> failwith "Unreachable"
+    | V.Loan _, _ -> raise (Failure "Unreachable")
     | V.Symbolic s, _ ->
         (* Check that the projection doesn't contain ended regions *)
         assert (
           not (projections_intersect s.V.sv_ty ctx.ended_regions ty regions));
         [ V.AsbProjReborrows (s, ty) ]
-    | _ -> failwith "Unreachable"
+    | _ -> raise (Failure "Unreachable")
 
 (** Apply (and reduce) a projector over borrows to a value.
 
@@ -154,7 +156,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
               fields_types
           in
           V.AAdt { V.variant_id = adt.V.variant_id; field_values = proj_fields }
-      | V.Bottom, _ -> failwith "Unreachable"
+      | V.Bottom, _ -> raise (Failure "Unreachable")
       | V.Borrow bc, T.Ref (r, ref_ty, kind) ->
           if
             (* Check if the region is in the set of projected regions (note that
@@ -175,10 +177,11 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                   V.AMutBorrow (mv, bid, bv)
               | V.SharedBorrow (_, bid), T.Shared -> V.ASharedBorrow bid
               | V.InactivatedMutBorrow _, _ ->
-                  failwith
-                    "Can't apply a proj_borrow over an inactivated mutable \
-                     borrow"
-              | _ -> failwith "Unreachable"
+                  raise
+                    (Failure
+                       "Can't apply a proj_borrow over an inactivated mutable \
+                        borrow")
+              | _ -> raise (Failure "Unreachable")
             in
             V.ABorrow bc
           else
@@ -208,17 +211,18 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                     | _, Abstract (V.ASharedLoan (_, sv, _)) ->
                         apply_proj_borrows_on_shared_borrow ctx fresh_reborrow
                           regions sv ref_ty
-                    | _ -> failwith "Unexpected"
+                    | _ -> raise (Failure "Unexpected")
                   in
                   V.AProjSharedBorrow asb
               | V.InactivatedMutBorrow _, _ ->
-                  failwith
-                    "Can't apply a proj_borrow over an inactivated mutable \
-                     borrow"
-              | _ -> failwith "Unreachable"
+                  raise
+                    (Failure
+                       "Can't apply a proj_borrow over an inactivated mutable \
+                        borrow")
+              | _ -> raise (Failure "Unreachable")
             in
             V.ABorrow bc
-      | V.Loan _, _ -> failwith "Unreachable"
+      | V.Loan _, _ -> raise (Failure "Unreachable")
       | V.Symbolic s, _ ->
           (* Check that the projection doesn't contain already ended regions,
            * if necessary *)
@@ -243,7 +247,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
               ("apply_proj_borrows: unexpected inputs:\n- input value: "
               ^ typed_value_to_string ctx v
               ^ "\n- proj rty: " ^ rty_to_string ctx ty));
-          failwith "Unreachable"
+          raise (Failure "Unreachable")
     in
     { V.value; V.ty }
 
@@ -260,7 +264,7 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
         in
         V.Adt { V.variant_id; V.field_values }
     | SeMutRef (_, _) | SeSharedRef (_, _) ->
-        failwith "Unexpected symbolic reference expansion"
+        raise (Failure "Unexpected symbolic reference expansion")
   in
   { V.value; V.ty }
 
@@ -279,7 +283,7 @@ let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
       let value = V.Borrow (V.MutBorrow (bid, bv)) in
       { V.value; ty }
   | SeSharedRef (_, _) ->
-      failwith "Unexpected symbolic shared reference expansion"
+      raise (Failure "Unexpected symbolic shared reference expansion")
   | _ -> symbolic_expansion_non_borrow_to_value sv see
 
 (** Apply (and reduce) a projector over loans to a value.
@@ -331,7 +335,7 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
         else
           (* Not in the set: ignore *)
           (V.ALoan (V.AIgnoredSharedLoan child_av), ref_ty)
-    | _ -> failwith "Unreachable"
+    | _ -> raise (Failure "Unreachable")
   in
   { V.value; V.ty }
 
@@ -510,7 +514,7 @@ let prepare_reborrows (config : C.config) (allow_reborrows : bool) :
       let bid' = C.fresh_borrow_id () in
       reborrows := (bid, bid') :: !reborrows;
       bid')
-    else failwith "Unexpected reborrow"
+    else raise (Failure "Unexpected reborrow")
   in
   (* The function to apply the reborrows in a context *)
   let apply_registered_reborrows (ctx : C.eval_ctx) : C.eval_ctx =

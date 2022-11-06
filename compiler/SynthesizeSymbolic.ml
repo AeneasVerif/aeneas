@@ -38,7 +38,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
              (Some (V.SePrimitive (PV.Bool false)), false_exp);
             ] ->
                 ExpandBool (true_exp, false_exp)
-            | _ -> failwith "Ill-formed boolean expansion")
+            | _ -> raise (Failure "Ill-formed boolean expansion"))
         | T.Integer int_ty ->
             (* Switch over an integer: split between the "regular" branches
                and the "otherwise" branch (which should be the last branch) *)
@@ -51,7 +51,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
               | Some (V.SePrimitive (PV.Scalar cv)) ->
                   assert (cv.PV.int_ty = int_ty);
                   cv
-              | _ -> failwith "Unreachable"
+              | _ -> raise (Failure "Unreachable")
             in
             let branches =
               List.map (fun (see, exp) -> (get_scalar see, exp)) branches
@@ -68,7 +68,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
                 T.VariantId.id option * V.symbolic_value list =
               match see with
               | Some (V.SeAdt (vid, fields)) -> (vid, fields)
-              | _ -> failwith "Ill-formed branching ADT expansion"
+              | _ -> raise (Failure "Ill-formed branching ADT expansion")
             in
             let exp =
               List.map
@@ -82,9 +82,9 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             (* Reference expansion: there should be one branch *)
             match ls with
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
-            | _ -> failwith "Ill-formed borrow expansion")
+            | _ -> raise (Failure "Ill-formed borrow expansion"))
         | T.TypeVar _ | Char | Never | Str | Array _ | Slice _ ->
-            failwith "Ill-formed symbolic expansion"
+            raise (Failure "Ill-formed symbolic expansion")
       in
       Some (Expansion (place, sv, expansion))
 

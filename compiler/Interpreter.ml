@@ -261,7 +261,8 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
          * the executions can lead to a panic *)
         if synthesize then Some SA.Panic else None
     | _ ->
-        failwith ("evaluate_function_symbolic failed on: " ^ name_to_string ())
+        raise
+          (Failure ("evaluate_function_symbolic failed on: " ^ name_to_string ()))
   in
 
   (* Evaluate the function *)
@@ -310,9 +311,10 @@ module Test = struct
           (* Ok: drop the local variables and finish *)
           ctx_pop_frame config (fun _ _ -> None) ctx
       | _ ->
-          failwith
-            ("Unit test failed (concrete execution) on: "
-            ^ Print.fun_name_to_string fdef.A.name)
+          raise
+            (Failure
+               ("Unit test failed (concrete execution) on: "
+               ^ Print.fun_name_to_string fdef.A.name))
     in
 
     (* Evaluate the function *)

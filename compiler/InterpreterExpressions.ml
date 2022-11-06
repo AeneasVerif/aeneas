@@ -129,7 +129,7 @@ let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) :
       assert (check_scalar_value_in_range v);
       { V.value = V.Primitive (PV.Scalar v); ty }
   (* Remaining cases (invalid) *)
-  | _, _ -> failwith "Improperly typed constant value"
+  | _, _ -> raise (Failure "Improperly typed constant value")
 
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
@@ -235,7 +235,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
         assert (not (bottom_in_value ctx.ended_regions v));
         let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
         match write_place config access p bottom ctx with
-        | Error _ -> failwith "Unreachable"
+        | Error _ -> raise (Failure "Unreachable")
         | Ok ctx -> cf v ctx
       in
       (* Compose and apply *)
@@ -289,7 +289,9 @@ let eval_two_operands (config : C.config) (op1 : E.operand) (op2 : E.operand)
     (cf : V.typed_value * V.typed_value -> m_fun) : m_fun =
   let eval_op = eval_operands config [ op1; op2 ] in
   let use_res cf res =
-    match res with [ v1; v2 ] -> cf (v1, v2) | _ -> failwith "Unreachable"
+    match res with
+    | [ v1; v2 ] -> cf (v1, v2)
+    | _ -> raise (Failure "Unreachable")
   in
   comp eval_op use_res cf
 

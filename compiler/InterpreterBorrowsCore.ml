@@ -78,9 +78,10 @@ let borrow_or_abs_ids_chain_to_string (ids : borrow_or_abs_ids) : string =
 let add_borrow_or_abs_id_to_chain (msg : string) (id : borrow_or_abs_id)
     (ids : borrow_or_abs_ids) : borrow_or_abs_ids =
   if List.mem id ids then
-    failwith
-      (msg ^ "detected a loop in the chain of ids: "
-      ^ borrow_or_abs_ids_chain_to_string (id :: ids))
+    raise
+      (Failure
+         (msg ^ "detected a loop in the chain of ids: "
+         ^ borrow_or_abs_ids_chain_to_string (id :: ids)))
   else id :: ids
 
 (** Helper function.
@@ -150,7 +151,7 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
         (lazy
           ("compare_rtys: unexpected inputs:" ^ "\n- ty1: " ^ T.show_rty ty1
          ^ "\n- ty2: " ^ T.show_rty ty2));
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
 
 (** Check if two different projections intersect. This is necessary when
     giving a symbolic value to an abstraction: we need to check that
@@ -283,7 +284,7 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
 let lookup_loan (ek : exploration_kind) (l : V.BorrowId.id) (ctx : C.eval_ctx) :
     abs_or_var_id * g_loan_content =
   match lookup_loan_opt ek l ctx with
-  | None -> failwith "Unreachable"
+  | None -> raise (Failure "Unreachable")
   | Some res -> res
 
 (** Update a loan content.
@@ -464,7 +465,7 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
 let lookup_borrow (ek : exploration_kind) (l : V.BorrowId.id) (ctx : C.eval_ctx)
     : g_borrow_content =
   match lookup_borrow_opt ek l ctx with
-  | None -> failwith "Unreachable"
+  | None -> raise (Failure "Unreachable")
   | Some lc -> lc
 
 (** Update a borrow content.
@@ -677,13 +678,13 @@ let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
   let set_non_shared ((id, ty) : V.AbstractionId.id * T.rty) : unit =
     match !found with
     | None -> found := Some (NonSharedProj (id, ty))
-    | Some _ -> failwith "Unreachable"
+    | Some _ -> raise (Failure "Unreachable")
   in
   let add_shared (x : V.AbstractionId.id * T.rty) : unit =
     match !found with
     | None -> found := Some (SharedProjs [ x ])
     | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
-    | Some (NonSharedProj _) -> failwith "Unreachable"
+    | Some (NonSharedProj _) -> raise (Failure "Unreachable")
   in
   let check_add_proj_borrows (is_shared : bool) abs sv' proj_ty =
     if
@@ -703,7 +704,7 @@ let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
       method! visit_abstract_shared_borrows abs asb =
         (* Sanity check *)
         (match !found with
-        | Some (NonSharedProj _) -> failwith "Unreachable"
+        | Some (NonSharedProj _) -> raise (Failure "Unreachable")
         | _ -> ());
         (* Explore *)
         if lookup_shared then
@@ -752,7 +753,7 @@ let lookup_intersecting_aproj_borrows_not_shared_opt
   match lookup_intersecting_aproj_borrows_opt lookup_shared regions sv ctx with
   | None -> None
   | Some (NonSharedProj (abs_id, rty)) -> Some (abs_id, rty)
-  | _ -> failwith "Unexpected"
+  | _ -> raise (Failure "Unexpected")
 
 (** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the
     values.
@@ -772,7 +773,7 @@ let update_intersecting_aproj_borrows (can_update_shared : bool)
   let set_non_shared () =
     match !shared with
     | None -> shared := Some false
-    | Some _ -> failwith "Found unexpected intersecting proj_borrows"
+    | Some _ -> raise (Failure "Found unexpected intersecting proj_borrows")
   in
   let check_proj_borrows is_shared abs sv' proj_ty =
     if
@@ -840,7 +841,7 @@ let update_intersecting_aproj_borrows_non_shared (regions : T.RegionId.Set.t)
     (sv : V.symbolic_value) (nv : V.aproj) (ctx : C.eval_ctx) : C.eval_ctx =
   (* Small helpers *)
   let can_update_shared = false in
-  let update_shared _ _ = failwith "Unexpected" in
+  let update_shared _ _ = raise (Failure "Unexpected") in
   let updated = ref false in
   let update_non_shared _ _ =
     (* We can update more than one borrow! *)
@@ -867,7 +868,7 @@ let remove_intersecting_aproj_borrows_shared (regions : T.RegionId.Set.t)
   (* Small helpers *)
   let can_update_shared = true in
   let update_shared _ _ = [] in
-  let update_non_shared _ _ = failwith "Unexpected" in
+  let update_non_shared _ _ = raise (Failure "Unexpected") in
   (* Update *)
   update_intersecting_aproj_borrows can_update_shared update_shared
     update_non_shared regions sv ctx
@@ -1118,7 +1119,7 @@ let no_aproj_over_symbolic_in_context (sv : V.symbolic_value) (ctx : C.eval_ctx)
   in
   (* Apply *)
   try obj#visit_eval_ctx () ctx
-  with Found -> failwith "update_aproj_loans_to_ended: failed"
+  with Found -> raise (Failure "update_aproj_loans_to_ended: failed")
 
 (** Helper function
 
@@ -1156,7 +1157,7 @@ let get_first_non_ignored_aloan_in_abstraction (abs : V.abs) :
         | V.MutLoan _ ->
             (* The mut loan linked to the mutable borrow present in a shared
              * value in an abstraction should be in an AProjBorrows *)
-            failwith "Unreachable"
+            raise (Failure "Unreachable")
         | V.SharedLoan (bids, _) -> raise (FoundBorrowIds (Borrows bids))
 
       method! visit_aproj env sproj =
