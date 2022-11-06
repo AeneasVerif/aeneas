@@ -182,7 +182,7 @@ let ctx_adt_value_get_instantiated_field_rtypes (ctx : C.eval_ctx)
           assert (List.length type_params = 1);
           if adt.V.variant_id = Some T.option_some_id then type_params
           else if adt.V.variant_id = Some T.option_none_id then []
-          else failwith "Unrechable")
+          else raise (Failure "Unreachable"))
 
 (** Instantiate the type variables in an ADT definition, and return the list
     of types of the fields for the chosen variant *)

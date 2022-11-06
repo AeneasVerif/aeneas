@@ -270,11 +270,11 @@ let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
   *)
   let rec lookup env =
     match env with
-    | [] -> failwith "Unexpected"
+    | [] -> raise (Failure "Unexpected")
     | Var (var, v) :: env' ->
         if opt_binder_has_vid var vid then v else lookup env'
     | Abs _ :: env' -> lookup env'
-    | Frame :: _ -> failwith "End of frame"
+    | Frame :: _ -> raise (Failure "End of frame")
   in
   lookup env
 
@@ -293,12 +293,12 @@ let env_update_var_value (env : env) (vid : VarId.id) (nv : typed_value) : env =
   *)
   let rec update env =
     match env with
-    | [] -> failwith "Unexpected"
+    | [] -> raise (Failure "Unexpected")
     | Var (var, v) :: env' ->
         if opt_binder_has_vid var vid then Var (var, nv) :: env'
         else Var (var, v) :: update env'
     | Abs abs :: env' -> Abs abs :: update env'
-    | Frame :: _ -> failwith "End of frame"
+    | Frame :: _ -> raise (Failure "End of frame")
   in
   update env
 
@@ -348,7 +348,7 @@ let ctx_push_dummy_var (ctx : eval_ctx) (v : typed_value) : eval_ctx =
 let ctx_pop_dummy_var (ctx : eval_ctx) : eval_ctx * typed_value =
   let rec pop_var (env : env) : env * typed_value =
     match env with
-    | [] -> failwith "Could not find a dummy variable"
+    | [] -> raise (Failure "Could not find a dummy variable")
     | Var (None, v) :: env -> (env, v)
     | ee :: env ->
         let env, v = pop_var env in
@@ -361,7 +361,7 @@ let ctx_pop_dummy_var (ctx : eval_ctx) : eval_ctx * typed_value =
 let ctx_read_first_dummy_var (ctx : eval_ctx) : typed_value =
   let rec read_var (env : env) : typed_value =
     match env with
-    | [] -> failwith "Could not find a dummy variable"
+    | [] -> raise (Failure "Could not find a dummy variable")
     | Var (None, v) :: _env -> v
     | _ :: env -> read_var env
   in
@@ -379,7 +379,7 @@ let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
 let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
   let rec lookup env =
     match env with
-    | [] -> failwith "Unexpected"
+    | [] -> raise (Failure "Unexpected")
     | Var (_, _) :: env' -> lookup env'
     | Abs abs :: env' -> if abs.abs_id = abs_id then abs else lookup env'
     | Frame :: env' -> lookup env'
@@ -409,7 +409,7 @@ class ['self] iter_frame =
         match em with
         | Var (vid, v) -> self#visit_Var acc vid v
         | Abs abs -> self#visit_Abs acc abs
-        | Frame -> failwith "Unreachable"
+        | Frame -> raise (Failure "Unreachable")
 
     method visit_env : 'acc -> env -> unit =
       fun acc env ->
@@ -439,7 +439,7 @@ class ['self] map_frame_concrete =
         match em with
         | Var (vid, v) -> self#visit_Var acc vid v
         | Abs abs -> self#visit_Abs acc abs
-        | Frame -> failwith "Unreachable"
+        | Frame -> raise (Failure "Unreachable")
 
     method visit_env : 'acc -> env -> env =
       fun acc env ->

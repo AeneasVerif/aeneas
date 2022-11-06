@@ -289,7 +289,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                   ("give_back_value: improper type:\n- expected: "
                  ^ ety_to_string ctx ty ^ "\n- received: "
                  ^ ety_to_string ctx nv.V.ty);
-                failwith "Value given back doesn't have the proper type");
+                raise (Failure "Value given back doesn't have the proper type"));
               (* Replace *)
               set_replaced ();
               nv.V.value)
@@ -335,7 +335,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                   V.ABorrow
                     (V.AEndedIgnoredMutBorrow
                        { given_back_loans_proj; child; given_back_meta })
-              | _ -> failwith "Unreachable"
+              | _ -> raise (Failure "Unreachable")
             else
               (* Continue exploring *)
               V.ABorrow (super#visit_AIgnoredMutBorrow opt_abs bid' child)
@@ -350,7 +350,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
         (* Preparing a bit *)
         let regions, ancestors_regions =
           match opt_abs with
-          | None -> failwith "Unreachable"
+          | None -> raise (Failure "Unreachable")
           | Some abs -> (abs.V.regions, abs.V.ancestors_regions)
         in
         (* Rk.: there is a small issue with the types of the aloan values.
@@ -436,7 +436,7 @@ let give_back_symbolic_value (_config : C.config)
   assert (sv.sv_id <> nsv.sv_id);
   (match nsv.sv_kind with
   | V.SynthInputGivenBack | V.SynthRetGivenBack | V.FunCallGivenBack -> ()
-  | V.FunCallRet | V.SynthInput | V.Global -> failwith "Unrechable");
+  | V.FunCallRet | V.SynthInput | V.Global -> raise (Failure "Unrechable"));
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
@@ -469,7 +469,7 @@ let give_back_symbolic_value (_config : C.config)
              type [T]! We thus *mustn't* introduce a projector here.
           *)
           V.AProjBorrows (nsv, sv.V.sv_ty)
-      | _ -> failwith "Unreachable"
+      | _ -> raise (Failure "Unreachable")
     in
     V.AProjLoans (sv, (mv, child_proj) :: local_given_back)
   in
@@ -530,7 +530,7 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
                   ("give_back_avalue_to_same_abstraction: improper type:\n\
                     - expected: " ^ rty_to_string ctx ty ^ "\n- received: "
                  ^ rty_to_string ctx nv.V.ty);
-                failwith "Value given back doesn't have the proper type");
+                raise (Failure "Value given back doesn't have the proper type"));
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
                * an ended loan *)
@@ -759,7 +759,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
   | Abstract
       ( V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _ | V.AEndedIgnoredMutBorrow _
       | V.AEndedSharedBorrow ) ->
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
 
 (** Convert an {!type:V.avalue} to a {!type:V.value}.
 
@@ -851,7 +851,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
              ^ ": borrow didn't disappear:\n- original context:\n"
              ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
              ^ eval_ctx_to_string ctx));
-          failwith "Borrow not eliminated"
+          raise (Failure "Borrow not eliminated")
     in
     match lookup_loan_opt ek_all l ctx with
     | None -> () (* Ok *)
@@ -862,7 +862,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
            ^ ": loan didn't disappear:\n- original context:\n"
            ^ eval_ctx_to_string ctx0 ^ "\n\n- new context:\n"
            ^ eval_ctx_to_string ctx));
-        failwith "Loan not eliminated"
+        raise (Failure "Loan not eliminated")
   in
   let cf_check_disappeared : cm_fun = unit_to_cm_fun check_disappeared in
   (* The complete sanity check: also check that after we ended a borrow,
@@ -1137,7 +1137,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
 
       method! visit_aproj env sproj =
         (match sproj with
-        | V.AProjLoans _ -> failwith "Unexpected"
+        | V.AProjLoans _ -> raise (Failure "Unexpected")
         | V.AProjBorrows (sv, proj_ty) ->
             raise (FoundAProjBorrows (sv, proj_ty))
         | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows ->
@@ -1149,7 +1149,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         match bc with
         | V.SharedBorrow (_, _) | V.MutBorrow (_, _) ->
             raise (FoundBorrowContent bc)
-        | V.InactivatedMutBorrow _ -> failwith "Unreachable"
+        | V.InactivatedMutBorrow _ -> raise (Failure "Unreachable")
     end
   in
   (* Lookup the abstraction *)
@@ -1209,7 +1209,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
             ctx
         | V.AEndedMutBorrow _ | V.AIgnoredMutBorrow _
         | V.AEndedIgnoredMutBorrow _ | V.AEndedSharedBorrow ->
-            failwith "Unexpected"
+            raise (Failure "Unexpected")
       in
       (* Reexplore *)
       end_abstraction_borrows config chain abs_id cf ctx
@@ -1241,19 +1241,19 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         | V.SharedBorrow (_, bid) -> (
             (* Replace the shared borrow with bottom *)
             match end_borrow_get_borrow (Some abs_id) bid ctx with
-            | Error _ -> failwith "Unreachable"
+            | Error _ -> raise (Failure "Unreachable")
             | Ok (ctx, _) ->
                 (* Give back *)
                 give_back_shared config bid ctx)
         | V.MutBorrow (bid, v) -> (
             (* Replace the mut borrow with bottom *)
             match end_borrow_get_borrow (Some abs_id) bid ctx with
-            | Error _ -> failwith "Unreachable"
+            | Error _ -> raise (Failure "Unreachable")
             | Ok (ctx, _) ->
                 (* Give the value back - note that the mut borrow was below a
                  * shared borrow: the value is thus unchanged *)
                 give_back_value config bid v ctx)
-        | V.InactivatedMutBorrow _ -> failwith "Unreachable"
+        | V.InactivatedMutBorrow _ -> raise (Failure "Unreachable")
       in
       (* Reexplore *)
       end_abstraction_borrows config chain abs_id cf ctx
@@ -1264,7 +1264,7 @@ and end_abstraction_remove_from_context (_config : C.config)
  fun cf ctx ->
   let rec remove_from_env (env : C.env) : C.env * V.abs option =
     match env with
-    | [] -> failwith "Unreachable"
+    | [] -> raise (Failure "Unreachable")
     | C.Frame :: _ -> (env, None)
     | Var (bv, v) :: env ->
         let env, abs_opt = remove_from_env env in
@@ -1463,7 +1463,7 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
   in
   match lookup_loan ek l ctx with
   | _, Concrete (V.MutLoan _) ->
-      failwith "Expected a shared loan, found a mut loan"
+      raise (Failure "Expected a shared loan, found a mut loan")
   | _, Concrete (V.SharedLoan (bids, sv)) ->
       (* Check that there is only one borrow id (l) and update the loan *)
       assert (V.BorrowId.Set.mem l bids && V.BorrowId.Set.cardinal bids = 1);
@@ -1482,9 +1482,10 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
-      failwith
-        "Can't promote a shared loan to a mutable loan if the loan is inside \
-         an abstraction"
+      raise
+        (Failure
+           "Can't promote a shared loan to a mutable loan if the loan is \
+            inside an abstraction")
 
 (** Helper function: see {!activate_inactivated_mut_borrow}.
 
@@ -1502,15 +1503,16 @@ let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
   let ctx =
     match lookup_borrow ek l ctx with
     | Concrete (V.SharedBorrow _ | V.MutBorrow (_, _)) ->
-        failwith "Expected an inactivated mutable borrow"
+        raise (Failure "Expected an inactivated mutable borrow")
     | Concrete (V.InactivatedMutBorrow _) ->
         (* Update it *)
         update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx
     | Abstract _ ->
         (* This can't happen for sure *)
-        failwith
-          "Can't promote a shared borrow to a mutable borrow if the borrow is \
-           inside an abstraction"
+        raise
+          (Failure
+             "Can't promote a shared borrow to a mutable borrow if the borrow \
+              is inside an abstraction")
   in
   (* Continue *)
   cf ctx
@@ -1527,7 +1529,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
   match lookup_loan ek l ctx with
-  | _, Concrete (V.MutLoan _) -> failwith "Unreachable"
+  | _, Concrete (V.MutLoan _) -> raise (Failure "Unreachable")
   | _, Concrete (V.SharedLoan (bids, sv)) -> (
       (* If there are loans inside the value, end them. Note that there can't be
          inactivated borrows inside the value.
@@ -1575,6 +1577,8 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
-      failwith
-        "Can't activate an inactivated mutable borrow referencing a loan inside\n\
-        \         an abstraction"
+      raise
+        (Failure
+           "Can't activate an inactivated mutable borrow referencing a loan \
+            inside\n\
+           \         an abstraction")

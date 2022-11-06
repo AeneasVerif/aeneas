@@ -1117,7 +1117,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     let arg, args =
                       match args with
                       | _ :: given_back :: args -> (given_back, args)
-                      | _ -> failwith "Unreachable"
+                      | _ -> raise (Failure "Unreachable")
                     in
                     mk_apps arg args
                 | A.BoxFree, _ ->

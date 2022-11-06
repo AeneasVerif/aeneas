@@ -284,8 +284,10 @@ let rec translate_sty (ty : T.sty) : ty =
               match tys with
               | [ ty ] -> ty
               | _ ->
-                  failwith
-                    "Box/vec/option type with incorrect number of arguments")))
+                  raise
+                    (Failure
+                       "Box/vec/option type with incorrect number of arguments")
+              )))
   | TypeVar vid -> TypeVar vid
   | Bool -> Bool
   | Char -> Char
@@ -370,9 +372,10 @@ let rec translate_fwd_ty (types_infos : TA.type_infos) (ty : 'r T.ty) : ty =
           match t_tys with
           | [ bty ] -> bty
           | _ ->
-              failwith
-                "Unreachable: box/vec/option receives exactly one type \
-                 parameter"))
+              raise
+                (Failure
+                   "Unreachable: box/vec/option receives exactly one type \
+                    parameter")))
   | TypeVar vid -> TypeVar vid
   | Bool -> Bool
   | Char -> Char
@@ -427,7 +430,9 @@ let rec translate_back_ty (types_infos : TA.type_infos)
           match tys with
           | [ bty ] -> translate bty
           | _ ->
-              failwith "Unreachable: boxes receive exactly one type parameter")
+              raise
+                (Failure "Unreachable: boxes receive exactly one type parameter")
+          )
       | T.Tuple -> (
           (* Tuples can contain borrows (which we eliminated) *)
           let tys_t = List.filter_map translate tys in
@@ -1584,7 +1589,7 @@ and translate_expansion (config : config) (p : S.mplace option)
                * through the functions provided by the API (note that we don't
                * know how to expand a vector, because it has a variable number
                * of fields!) *)
-              failwith "Can't expand a vector value"
+              raise (Failure "Can't expand a vector value")
           | T.Assumed T.Option ->
               (* We shouldn't get there in the "one-branch" case: options have
                * two variants *)

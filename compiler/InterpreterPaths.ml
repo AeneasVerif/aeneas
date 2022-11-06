@@ -88,9 +88,10 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
           (lazy
             ("Not the same type:\n- nv.ty: " ^ T.show_ety nv.ty ^ "\n- v.ty: "
            ^ T.show_ety v.ty));
-        failwith
-          "Assertion failed: new value doesn't have the same type as its \
-           destination");
+        raise
+          (Failure
+             "Assertion failed: new value doesn't have the same type as its \
+              destination"));
       Ok (ctx, { read = v; updated = nv })
   | pe :: p' -> (
       (* Match on the projection element and the value *)
@@ -463,8 +464,9 @@ let expand_bottom_value_from_projection (config : C.config)
         (* Generate the field values *)
         compute_expanded_bottom_tuple_value tys
     | _ ->
-        failwith
-          ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_ety ty)
+        raise
+          (Failure
+             ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_ety ty))
   in
   (* Update the context by inserting the expanded value at the proper place *)
   match write_place config access p' nv ctx with

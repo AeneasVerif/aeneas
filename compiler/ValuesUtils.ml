@@ -25,12 +25,12 @@ let is_symbolic (v : value) : bool =
   match v with Symbolic _ -> true | _ -> false
 
 let as_symbolic (v : value) : symbolic_value =
-  match v with Symbolic s -> s | _ -> failwith "Unexpected"
+  match v with Symbolic s -> s | _ -> raise (Failure "Unexpected")
 
 let as_mut_borrow (v : typed_value) : BorrowId.id * typed_value =
   match v.value with
   | Borrow (MutBorrow (bid, bv)) -> (bid, bv)
-  | _ -> failwith "Unexpected"
+  | _ -> raise (Failure "Unexpected")
 
 (** Check if a value contains a borrow *)
 let borrows_in_value (v : typed_value) : bool =

@@ -267,7 +267,7 @@ let names_map_add (id_to_string : id -> string) (id : id) (name : string)
          name \"" ^ name ^ "\":" ^ id1 ^ id2
       in
       log#serror err;
-      failwith err);
+      raise (Failure err));
   (* Sanity check *)
   assert (not (StringSet.mem name nm.names_set));
   (* Insert *)
@@ -353,7 +353,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
         let def = TypeDeclId.Map.find id type_decls in
         Print.name_to_string def.name
     | Assumed aty -> show_assumed_ty aty
-    | Tuple -> failwith "Unreachable"
+    | Tuple -> raise (Failure "Unreachable")
   in
   match id with
   | GlobalId gid ->
@@ -385,21 +385,21 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | VariantId (id, variant_id) ->
       let variant_name =
         match id with
-        | Tuple -> failwith "Unreachable"
-        | Assumed State -> failwith "Unreachable"
+        | Tuple -> raise (Failure "Unreachable")
+        | Assumed State -> raise (Failure "Unreachable")
         | Assumed Result ->
             if variant_id = result_return_id then "@result::Return"
             else if variant_id = result_fail_id then "@result::Fail"
-            else failwith "Unreachable"
+            else raise (Failure "Unreachable")
         | Assumed Option ->
             if variant_id = option_some_id then "@option::Some"
             else if variant_id = option_none_id then "@option::None"
-            else failwith "Unreachable"
-        | Assumed Vec -> failwith "Unreachable"
+            else raise (Failure "Unreachable")
+        | Assumed Vec -> raise (Failure "Unreachable")
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
-            | Struct _ | Opaque -> failwith "Unreachable"
+            | Struct _ | Opaque -> raise (Failure "Unreachable")
             | Enum variants ->
                 let variant = VariantId.nth variants variant_id in
                 Print.name_to_string def.name ^ "::" ^ variant.variant_name)
@@ -408,15 +408,15 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | FieldId (id, field_id) ->
       let field_name =
         match id with
-        | Tuple -> failwith "Unreachable"
-        | Assumed (State | Result | Option) -> failwith "Unreachable"
+        | Tuple -> raise (Failure "Unreachable")
+        | Assumed (State | Result | Option) -> raise (Failure "Unreachable")
         | Assumed Vec ->
             (* We can't directly have access to the fields of a vector *)
-            failwith "Unreachable"
+            raise (Failure "Unreachable")
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
-            | Enum _ | Opaque -> failwith "Unreachable"
+            | Enum _ | Opaque -> raise (Failure "Unreachable")
             | Struct fields ->
                 let field = FieldId.nth fields field_id in
                 let field_name =
@@ -431,7 +431,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TypeVarId _ | VarId _ ->
       (* We should never get there: we add indices to make sure variable
        * names are unique *)
-      failwith "Unreachable"
+      raise (Failure "Unreachable")
 
 let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   (* The id_to_string function to print nice debugging messages if there are

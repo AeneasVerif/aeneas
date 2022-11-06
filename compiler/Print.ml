@@ -110,10 +110,10 @@ module Values = struct
                 else if av.variant_id = Some T.option_none_id then (
                   assert (field_values = []);
                   "@Option::None")
-                else failwith "Unreachable"
+                else raise (Failure "Unreachable")
             | Vec, _ -> "@Vec[" ^ String.concat ", " field_values ^ "]"
-            | _ -> failwith "Inconsistent value")
-        | _ -> failwith "Inconsistent typed value")
+            | _ -> raise (Failure "Inconsistent value"))
+        | _ -> raise (Failure "Inconsistent typed value"))
     | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
     | Borrow bc -> borrow_content_to_string fmt bc
     | Loan lc -> loan_content_to_string fmt lc
@@ -214,8 +214,8 @@ module Values = struct
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
-            | _ -> failwith "Inconsistent value")
-        | _ -> failwith "Inconsistent typed value")
+            | _ -> raise (Failure "Inconsistent value"))
+        | _ -> raise (Failure "Inconsistent typed value"))
     | ABottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
     | ABorrow bc -> aborrow_content_to_string fmt bc
     | ALoan lc -> aloan_content_to_string fmt lc
@@ -324,7 +324,7 @@ module Contexts = struct
         in
         indent ^ bv ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
     | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
-    | Frame -> failwith "Can't print a Frame element"
+    | Frame -> raise (Failure "Can't print a Frame element")
 
   let opt_env_elem_to_string (fmt : PV.value_formatter) (indent : string)
       (indent_incr : string) (ev : C.env_elem option) : string =
@@ -402,7 +402,9 @@ module Contexts = struct
 
   let eval_ctx_to_ctx_formatter (ctx : C.eval_ctx) : ctx_formatter =
     (* We shouldn't use rvar_to_string *)
-    let rvar_to_string _r = failwith "Unexpected use of rvar_to_string" in
+    let rvar_to_string _r =
+      raise (Failure "Unexpected use of rvar_to_string")
+    in
     let r_to_string r = PT.region_id_to_string r in
 
     let type_var_id_to_string vid =
