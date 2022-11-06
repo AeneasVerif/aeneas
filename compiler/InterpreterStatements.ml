@@ -34,8 +34,7 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
    * symbolic values along the path, for instance *)
   let cc = update_ctx_along_read_place config access p in
   (* Prepare the place (by ending the outer loans *at* the place). *)
-  let end_borrows = false in
-  let cc = comp cc (prepare_lplace config end_borrows p) in
+  let cc = comp cc (prepare_lplace config p) in
   (* Replace the value with {!Bottom} *)
   let replace cf (v : V.typed_value) ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
@@ -109,8 +108,7 @@ let assign_to_place (config : C.config) (rv : V.typed_value) (p : E.place) :
   (* Push the rvalue to a dummy variable, for bookkeeping *)
   let cc = push_dummy_var rv in
   (* Prepare the destination *)
-  let end_borrows = false in
-  let cc = comp cc (prepare_lplace config end_borrows p) in
+  let cc = comp cc (prepare_lplace config p) in
   (* Retrieve the rvalue from the dummy variable *)
   let cc = comp cc (fun cf _lv -> pop_dummy_var cf) in
   (* Update the destination *)
@@ -223,8 +221,7 @@ let set_discriminant (config : C.config) (p : E.place)
   (* Access the value *)
   let access = Write in
   let cc = update_ctx_along_read_place config access p in
-  let end_borrows = false in
-  let cc = comp cc (prepare_lplace config end_borrows p) in
+  let cc = comp cc (prepare_lplace config p) in
   (* Update the value *)
   let update_value cf (v : V.typed_value) : m_fun =
    fun ctx ->
@@ -366,13 +363,11 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
   (* Drop the outer *loans* we find in the local variables *)
   let cf_drop_loans_in_locals cf (ret_value : V.typed_value) : m_fun =
     (* Drop the loans *)
-    let end_borrows = false in
     let locals = List.rev locals in
     let cf_drop =
       List.fold_left
         (fun cf lid ->
-          drop_outer_borrows_loans_at_lplace config end_borrows
-            (mk_place_from_var_id lid) cf)
+          drop_outer_loans_at_lplace config (mk_place_from_var_id lid) cf)
         (cf ret_value) locals
     in
     (* Apply *)

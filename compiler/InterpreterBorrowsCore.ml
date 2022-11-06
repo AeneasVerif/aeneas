@@ -610,8 +610,8 @@ let get_first_borrow_in_value (v : V.typed_value) : V.borrow_content option =
     the outer ones).
     
     [with_borrows]:
-    - if true: return the first loan or borrow we find
-    - if false: return the first loan we find, do not dive into borrowed values
+    - if [true]: return the first loan or borrow we find
+    - if [false]: return the first loan we find, do not dive into borrowed values
  *)
 let get_first_outer_loan_or_borrow_in_value (with_borrows : bool)
     (v : V.typed_value) : loan_or_borrow_content option =
