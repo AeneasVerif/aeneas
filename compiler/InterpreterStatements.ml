@@ -28,21 +28,23 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
     (lazy
       ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
      ^ eval_ctx_to_string ctx));
-  (* Prepare the place (by ending the outer loans).
-   * Note that {!prepare_lplace} will use the [Write] access kind:
-   * it is ok, because when updating the value with {!Bottom} below,
-   * we will use the [Move] access *)
+  (* Note that we use [Write], not [Move]: we allow to drop values *below* borrows *)
+  let access = Write in
+  (* First make sure we can access the place, by ending loans or expanding
+   * symbolic values along the path, for instance *)
+  let cc = update_ctx_along_read_place config access p in
+  (* Prepare the place (by ending the outer loans *at* the place). *)
   let end_borrows = false in
-  let prepare = prepare_lplace config end_borrows p in
+  let cc = comp cc (prepare_lplace config end_borrows p) in
   (* Replace the value with {!Bottom} *)
   let replace cf (v : V.typed_value) ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
-     * to preserve the borrows *)
-    let mv = read_place_unwrap config Write p ctx in
+     * to preserve the borrows it may contain *)
+    let mv = read_place_unwrap config access p ctx in
     let ctx = C.ctx_push_dummy_var ctx mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = V.Bottom } in
-    let ctx = write_place_unwrap config Move p nv ctx in
+    let ctx = write_place_unwrap config access p nv ctx in
     log#ldebug
       (lazy
         ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
@@ -50,7 +52,7 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
     cf ctx
   in
   (* Compose and apply *)
-  comp prepare replace cf ctx
+  comp cc replace cf ctx
 
 (** Push a dummy variable to the environment *)
 let push_dummy_var (v : V.typed_value) : cm_fun =
