@@ -23,10 +23,11 @@ let log = InterpreterBorrowsCore.log
     borrows, we end them, before finally ending the borrow we wanted to end in the
     first place.
 
-    Note that it is possible to end a borrow in an abstraction, without ending
-    the whole abstraction, if the corresponding loan is inside the abstraction
-    as well. The [allowed_abs] parameter controls whether we allow to end borrows
-    in an abstraction or not, and in which abstraction.
+    [allowed_abs]: if not [None], allows to get a borrow in the given
+    abstraction without ending the whole abstraction first. This parameter
+    allows us to use {!end_borrow} as an auxiliary function for
+    {!end_abstraction} (we end all the borrows in the abstraction one by one
+    before removing the abstraction from the context).
 *)
 let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
     (l : V.BorrowId.id) (ctx : C.eval_ctx) :
@@ -789,38 +790,20 @@ let convert_avalue_to_given_back_value (abs_kind : V.abs_kind)
 
 (** End a borrow identified by its borrow id in a context.
 
-    Rk.: from now onwards, the functions are written in continuation passing style.
-    The reason is that when ending borrows we may end abstractions, which results
-    in synthesized code.
-    
-    First lookup the borrow in the context and replace it with {!V.Bottom}.
-    Then, check that there is an associated loan in the context. When moving
-    values, before putting the value in its destination, we get an
-    intermediate state where some values are "outside" the context and thus
-    inaccessible. As {!give_back_value} just performs a map for instance (TODO:
-    not the case anymore), we need to check independently that there is indeed a
-    loan ready to receive the value we give back (note that we also have other
-    invariants like: there is exacly one mutable loan associated to a mutable
-    borrow, etc. but they are more easily maintained).
-    Note that in theory, we shouldn't never reach a problematic state as the
-    one we describe above, because when we move a value we need to end all the
-    loans inside before moving it. Still, it is a very useful sanity check.
-    Finally, give the values back.
+    This function **preserves invariants** provided [allowed_abs] is [None]: if the
+    borrow is inside another borrow/an abstraction, we end the outer borrow/abstraction
+    first, etc.
 
-    Of course, we end outer borrows before updating the target borrow if it
-    proves necessary.
-    If a borrow is inside an abstraction, we need to end the whole abstraction,
-    at the exception of the case where the loan corresponding to the borrow is
-    inside the same abstraction. We control this with the [allowed_abs] parameter:
-    if it is not [None], we allow ending a borrow if it is inside the given
-    abstraction. In practice, if the value is [Some abs_id], we should have
-    checked that the corresponding loan is inside the abstraction given by
-    [abs_id] before. In practice, only {!end_borrow} should call itself
-    with [allowed_abs = Some ...], all the other calls should use [allowed_abs = None]:
-    if you look ath the implementation details, [end_borrow] performs
-    all tne necessary checks in case a borrow is inside an abstraction.
-    TODO: we shouldn't allow this last case (end a borrow when the corresponding
-    loan is in the same abstraction).
+    [allowed_abs]: see the comment for {!end_borrow_get_borrow}.
+
+    [chain]: contains the list of borrows/abstraction ids on which {!end_borrow}
+    and {!end_abstraction} were called, to remember the chain of calls. This is
+    useful for debugging purposes, and also for sanity checks to detect cycles
+    (which shouldn't happen if the environment is well-formed).
+
+    Rk.: from now onwards, the functions are written in continuation passing style.
+    The reason is that when ending borrows we may end abstractions, which requires
+    generating code for the translation (and we do this in CPS).
     
     TODO: we should split this function in two: one function which doesn't
     perform anything smart and is trusted, and another function for the
@@ -871,13 +854,20 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
     comp cf_check_disappeared (Invariants.cf_check_invariants config)
   in
 
-  (* Start by getting the borrow *)
+  (* Start by ending the borrow itself (we lookup it up and replace it with [Bottom] *)
   match end_borrow_get_borrow allowed_abs l ctx with
   (* Two cases:
-   * - error: we found outer borrows or inner loans (end them first)
-   * - success: we didn't find outer borrows when updating (but maybe we actually
-       didn't find the borrow we were looking for...)
-   *)
+     - error: we found outer borrows (the borrow is inside a borrowed value) or
+       inner loans (the borrow contains loans)
+     - success: we didn't find outer borrows when updating (but maybe we actually
+       didn't find the borrow we were looking for...). The borrow was successfully
+       replaced with [Bottom], and we can proceed to ending the corresponding loan.
+
+     Note that if [allowed_abs] is [Some abs_id] and the borrow is inside the
+     abstraction identified by [abs_id], the abstraction is ignored (i.e.:
+     {!end_borrow_get_borrow} won't return [Error] because of the abstraction
+     itself).
+  *)
   | Error priority -> (
       (* Debug *)
       log#ldebug
@@ -885,7 +875,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
           ("end borrow: " ^ V.BorrowId.to_string l
          ^ ": found outer borrows/abs or inner loans:"
           ^ show_priority_borrows_or_abs priority));
-      (* End the priority borrows, abstraction, then try again to end the target
+      (* End the priority borrows, abstractions, then try again to end the target
        * borrow (if necessary) *)
       match priority with
       | OuterBorrows (Borrows bids) | InnerLoans (Borrows bids) ->
@@ -908,34 +898,8 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
           (* Check and apply *)
           comp cc cf_check cf ctx
       | OuterAbs abs_id ->
-          (* The borrow is inside an asbtraction: check if the corresponding
-           * loan is inside the same abstraction. If this is the case, we end
-           * the borrow without ending the abstraction. If not, we need to
-           * end the whole abstraction *)
-          (* Note that we can lookup the loan anywhere *)
-          let ek =
-            {
-              enter_shared_loans = true;
-              enter_mut_borrows = true;
-              enter_abs = true;
-            }
-          in
-          let cf_end_abs : cm_fun =
-            match lookup_loan ek l ctx with
-            | AbsId loan_abs_id, _ ->
-                if loan_abs_id = abs_id then
-                  (* Same abstraction! We can end the borrow *)
-                  end_borrow config chain0 (Some abs_id) l
-                else
-                  (* Not the same abstraction: we need to end the whole abstraction.
-                   * By doing that we should have ended the target borrow (see the
-                   * below sanity check) *)
-                  end_abstraction config chain abs_id
-            | (VarId _ | DummyVarId _), _ ->
-                (* The loan is not inside the same abstraction (actually inside
-                 * a non-abstraction value): we need to end the whole abstraction *)
-                end_abstraction config chain abs_id
-          in
+          (* The borrow is inside an abstraction: end the whole abstraction *)
+          let cf_end_abs = end_abstraction config chain abs_id in
           (* Compose with a sanity check *)
           comp cf_end_abs cf_check cf ctx)
   | Ok (ctx, None) ->
@@ -945,7 +909,8 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
       assert (config.mode = SymbolicMode);
       (* Do a sanity check and continue *)
       cf_check cf ctx
-  (* We found a borrow: give it back (i.e., update the corresponding loan) *)
+  (* We found a borrow and replaced it with [Bottom]: give it back (i.e., update
+     the corresponding loan) *)
   | Ok (ctx, Some bc) ->
       (* Sanity check: the borrowed value shouldn't contain loans *)
       (match bc with
