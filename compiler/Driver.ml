@@ -138,6 +138,7 @@ let () =
   paths_log#set_level EL.Info;
   expressions_log#set_level EL.Info;
   expansion_log#set_level EL.Info;
+  projectors_log#set_level EL.Info;
   borrows_log#set_level EL.Info;
   invariants_log#set_level EL.Info;
   pure_utils_log#set_level EL.Info;

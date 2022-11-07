@@ -39,12 +39,12 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
   let replace cf (v : V.typed_value) ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
-    let mv = read_place_unwrap config access p ctx in
+    let mv = InterpreterPaths.read_place config access p ctx in
     let dummy_id = C.fresh_dummy_var_id () in
     let ctx = C.ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = V.Bottom } in
-    let ctx = write_place_unwrap config access p nv ctx in
+    let ctx = write_place config access p nv ctx in
     log#ldebug
       (lazy
         ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
@@ -119,14 +119,14 @@ let assign_to_place (config : C.config) (rv : V.typed_value) (p : E.place) :
    fun ctx ->
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows *)
-    let mv = read_place_unwrap config Write p ctx in
+    let mv = InterpreterPaths.read_place config Write p ctx in
     let dest_vid = C.fresh_dummy_var_id () in
     let ctx = C.ctx_push_dummy_var ctx dest_vid mv in
     (* Write to the destination *)
     (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
     assert (not (bottom_in_value ctx.ended_regions rv));
     (* Update the destination *)
-    let ctx = write_place_unwrap config Write p rv ctx in
+    let ctx = write_place config Write p rv ctx in
     (* Debug *)
     log#ldebug
       (lazy
@@ -322,19 +322,10 @@ let move_return_value (config : C.config) (cf : V.typed_value -> m_fun) : m_fun
   let cc = eval_operand config (E.Move (mk_place_from_var_id ret_vid)) in
   cc cf ctx
 
-(** Pop the current frame.
-    
-    Drop all the local variables but the return variable, move the return
-    value out of the return variable, remove all the local variables (but not the
-    abstractions!) from the context, remove the {!C.Frame} indicator delimiting the
-    current frame and handle the return value to the continuation.
-    
-    TODO: rename (remove the "ctx_")
- *)
-let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
+let pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
   (* Debug *)
-  log#ldebug (lazy ("ctx_pop_frame:\n" ^ eval_ctx_to_string ctx));
+  log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ctx));
 
   (* List the local variables, but the return variable *)
   let ret_vid = E.VarId.zero in
@@ -352,7 +343,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
   (* Debug *)
   log#ldebug
     (lazy
-      ("ctx_pop_frame: locals in which to drop the outer loans: ["
+      ("pop_frame: locals in which to drop the outer loans: ["
       ^ String.concat "," (List.map E.VarId.to_string locals)
       ^ "]"));
 
@@ -383,7 +374,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
     comp_check_value cc (fun _ ctx ->
         log#ldebug
           (lazy
-            ("ctx_pop_frame: after dropping outer loans in local variables:\n"
+            ("pop_frame: after dropping outer loans in local variables:\n"
            ^ eval_ctx_to_string ctx)))
   in
 
@@ -410,7 +401,7 @@ let ctx_pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
 
 (** Pop the current frame and assign the returned value to its destination. *)
 let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
-  let cf_pop = ctx_pop_frame config in
+  let cf_pop = pop_frame config in
   let cf_assign cf ret_value : m_fun =
     assign_to_place config ret_value dest cf
   in
@@ -547,7 +538,9 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
   match (region_params, type_params, args) with
   | [], [ boxed_ty ], [ E.Move input_box_place ] ->
       (* Required type checking *)
-      let input_box = read_place_unwrap config Write input_box_place ctx in
+      let input_box =
+        InterpreterPaths.read_place config Write input_box_place ctx
+      in
       (let input_ty = ty_get_box input_box.V.ty in
        assert (input_ty = boxed_ty));
 
@@ -642,15 +635,6 @@ let eval_non_local_function_call_concrete (config : C.config)
       (* Compose and apply *)
       comp cf_eval_ops cf_eval_call
 
-(** Instantiate a function signature, introducing fresh abstraction ids and
-    region ids. This is mostly used in preparation of function calls, when
-    evaluating in symbolic mode of course.
-    
-    Note: there are no region parameters, because they should be erased.
-    
-    **Rk.:** this function is **stateful** and generates fresh abstraction ids
-    for the region groups.
- *)
 let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
     A.inst_fun_sig =
   (* Generate fresh abstraction ids and create a substitution from region
@@ -757,20 +741,6 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
   (* Apply *)
   T.RegionGroupId.mapi create_abs rgl
 
-(** Helper.
-
-    Create a list of abstractions from a list of regions groups, and insert
-    them in the context.
-
-    [region_can_end]: gives the region groups from which we generate functions
-    which can end or not.
-    
-    [compute_abs_avalues]: this function must compute, given an initialized,
-    empty (i.e., with no avalues) abstraction, compute the avalues which
-    should be inserted in this abstraction before we insert it in the context.
-    Note that this function may update the context: it is necessary when
-    computing borrow projections, for instance.
-*)
 let create_push_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     (kind : V.abs_kind) (rgl : A.abs_region_group list)
     (region_can_end : T.RegionGroupId.id -> bool)
@@ -857,17 +827,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
 
             (* Compose and apply *)
             comp cf_eval_rvalue cf_assign cf ctx)
-    | A.FakeRead p ->
-        let expand_prim_copy = false in
-        let cf_prepare cf =
-          access_rplace_reorganize_and_read config expand_prim_copy Read p cf
-        in
-        let cf_continue cf v : m_fun =
-         fun ctx ->
-          assert (not (bottom_in_value ctx.ended_regions v));
-          cf ctx
-        in
-        comp cf_prepare cf_continue (cf Unit) ctx
+    | A.FakeRead p -> eval_fake_read config p (cf Unit) ctx
     | A.SetDiscriminant (p, variant_id) ->
         set_discriminant config p variant_id cf ctx
     | A.Drop p -> drop_value config p (cf Unit) ctx
@@ -1256,7 +1216,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
       abs_ids := with_loans_abs;
       (* End the abstractions which can be ended *)
       let no_loans_abs = V.AbstractionId.Set.of_list no_loans_abs in
-      let cc = InterpreterBorrows.end_abstractions config [] no_loans_abs in
+      let cc = InterpreterBorrows.end_abstractions config no_loans_abs in
       (* Recursive call *)
       let cc = comp cc end_abs_with_no_loans in
       (* Continue *)
@@ -1362,8 +1322,7 @@ and eval_local_function_call (config : C.config) (fid : A.FunDeclId.id)
       eval_local_function_call_symbolic config fid region_args type_args args
         dest
 
-(** Evaluate a statement seen as a function body (auxiliary helper for
-    [eval_statement]) *)
+(** Evaluate a statement seen as a function body *)
 and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =
  fun cf ctx ->
   let cc = eval_statement config body in

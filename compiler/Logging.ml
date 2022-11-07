@@ -36,6 +36,9 @@ let paths_log = L.get_logger "MainLogger.Interpreter.Paths"
 (** Logger for InterpreterExpansion *)
 let expansion_log = L.get_logger "MainLogger.Interpreter.Expansion"
 
+(** Logger for InterpreterProjectors *)
+let projectors_log = L.get_logger "MainLogger.Interpreter.Projectors"
+
 (** Logger for InterpreterBorrows *)
 let borrows_log = L.get_logger "MainLogger.Interpreter.Borrows"
 
