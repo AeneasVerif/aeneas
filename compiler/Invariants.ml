@@ -219,7 +219,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     (match (info.loan_kind, kind) with
     | T.Shared, (Shared | Reserved) | T.Mut, Mut -> ()
     | _ -> raise (Failure "Invariant not satisfied"));
-    (* An reserved borrow can't point to a value inside an abstraction *)
+    (* A reserved borrow can't point to a value inside an abstraction *)
     assert (kind <> Reserved || not info.loan_in_abs);
     (* Insert the borrow id *)
     let borrow_ids = info.borrow_ids in
