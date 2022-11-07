@@ -772,10 +772,10 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (v : V.typed_value) :
             (* The meta-value stored in the shared borrow was added especially
              * for this case (because we can't use the borrow id for lookups) *)
             translate mv
-        | V.InactivatedMutBorrow (mv, _) ->
-            (* Same as for shared borrows. However, note that we use inactivated borrows
+        | V.ReservedMutBorrow (mv, _) ->
+            (* Same as for shared borrows. However, note that we use reserved borrows
              * only in meta-data: a value actually *used in the translation* can't come
-             * from an unpromoted inactivated borrow *)
+             * from an unpromoted reserved borrow *)
             translate mv
         | V.MutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)

@@ -46,7 +46,7 @@ let borrows_infos_to_string (indent : string)
     (infos : borrow_info V.BorrowId.Map.t) : string =
   V.BorrowId.Map.to_string (Some indent) show_borrow_info infos
 
-type borrow_kind = Mut | Shared | Inactivated
+type borrow_kind = Mut | Shared | Reserved
 
 (** Check that:
     - loans and borrows are correctly related
@@ -217,10 +217,10 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     let info = find_info bid in
     (* Check that the borrow kind is consistent *)
     (match (info.loan_kind, kind) with
-    | T.Shared, (Shared | Inactivated) | T.Mut, Mut -> ()
+    | T.Shared, (Shared | Reserved) | T.Mut, Mut -> ()
     | _ -> raise (Failure "Invariant not satisfied"));
-    (* An inactivated borrow can't point to a value inside an abstraction *)
-    assert (kind <> Inactivated || not info.loan_in_abs);
+    (* An reserved borrow can't point to a value inside an abstraction *)
+    assert (kind <> Reserved || not info.loan_in_abs);
     (* Insert the borrow id *)
     let borrow_ids = info.borrow_ids in
     assert (not (V.BorrowId.Set.mem bid borrow_ids));
@@ -247,7 +247,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
           match bc with
           | V.SharedBorrow (_, bid) -> register_borrow Shared bid
           | V.MutBorrow (bid, _) -> register_borrow Mut bid
-          | V.InactivatedMutBorrow (_, bid) -> register_borrow Inactivated bid
+          | V.ReservedMutBorrow (_, bid) -> register_borrow Reserved bid
         in
         (* Continue exploring *)
         super#visit_borrow_content env bc
@@ -298,7 +298,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     !borrows_infos
 
 (** Check that:
-    - borrows/loans can't contain ⊥ or inactivated mut borrows
+    - borrows/loans can't contain ⊥ or reserved mut borrows
     - shared loans can't contain mutable loans
  *)
 let check_borrowed_values_invariant (config : C.config) (ctx : C.eval_ctx) :
@@ -333,7 +333,7 @@ let check_borrowed_values_invariant (config : C.config) (ctx : C.eval_ctx) :
         let info =
           match bc with
           | V.SharedBorrow _ -> set_outer_shared info
-          | V.InactivatedMutBorrow _ ->
+          | V.ReservedMutBorrow _ ->
               assert (not info.outer_borrow);
               set_outer_shared info
           | V.MutBorrow (_, _) -> set_outer_mut info
@@ -463,7 +463,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.Borrow bc, T.Ref (_, ref_ty, rkind) -> (
             match (bc, rkind) with
             | V.SharedBorrow (_, bid), T.Shared
-            | V.InactivatedMutBorrow (_, bid), T.Mut -> (
+            | V.ReservedMutBorrow (_, bid), T.Mut -> (
                 (* Lookup the borrowed value to check it has the proper type *)
                 let _, glc = lookup_loan ek_all bid ctx in
                 match glc with

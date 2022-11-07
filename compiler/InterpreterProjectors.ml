@@ -66,10 +66,10 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
                 | _ -> raise (Failure "Unexpected")
               in
               (bid, asb)
-          | V.InactivatedMutBorrow _, _ ->
+          | V.ReservedMutBorrow _, _ ->
               raise
                 (Failure
-                   "Can't apply a proj_borrow over an inactivated mutable \
+                   "Can't apply a proj_borrow over a reserved mutable \
                     borrow")
           | _ -> raise (Failure "Unreachable")
         in
@@ -141,10 +141,10 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                   in
                   V.AMutBorrow (mv, bid, bv)
               | V.SharedBorrow (_, bid), T.Shared -> V.ASharedBorrow bid
-              | V.InactivatedMutBorrow _, _ ->
+              | V.ReservedMutBorrow _, _ ->
                   raise
                     (Failure
-                       "Can't apply a proj_borrow over an inactivated mutable \
+                       "Can't apply a proj_borrow over a reserved mutable \
                         borrow")
               | _ -> raise (Failure "Unreachable")
             in
@@ -179,10 +179,10 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                     | _ -> raise (Failure "Unexpected")
                   in
                   V.AProjSharedBorrow asb
-              | V.InactivatedMutBorrow _, _ ->
+              | V.ReservedMutBorrow _, _ ->
                   raise
                     (Failure
-                       "Can't apply a proj_borrow over an inactivated mutable \
+                       "Can't apply a proj_borrow over a reserved mutable \
                         borrow")
               | _ -> raise (Failure "Unreachable")
             in
@@ -333,7 +333,7 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
     match v.V.value with
     | V.Borrow lc -> (
         match lc with
-        | V.SharedBorrow (_, _) | V.InactivatedMutBorrow _ -> None
+        | V.SharedBorrow (_, _) | V.ReservedMutBorrow _ -> None
         | V.MutBorrow (id, _) -> Some id)
     | _ -> None
   in

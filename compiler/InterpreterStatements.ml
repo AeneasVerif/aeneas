@@ -809,7 +809,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
                   (* Update the synthesized AST - here we store meta-information.
                    * We do it only in specific cases (it is not always useful, and
                    * also it can lead to issues - for instance, if we borrow an
-                   * inactivated borrow, we later can't translate it to pure values...) *)
+                   * reserved borrow, we later can't translate it to pure values...) *)
                   match rvalue with
                   | E.Global _ -> raise (Failure "Unreachable")
                   | E.Use _
