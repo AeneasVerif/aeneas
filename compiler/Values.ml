@@ -113,15 +113,15 @@ and borrow_content =
   | MutBorrow of (BorrowId.id[@opaque]) * typed_value
       (** A mutably borrowed value. *)
   | ReservedMutBorrow of mvalue * (BorrowId.id[@opaque])
-      (** An reserved mut borrow.
+      (** A reserved mut borrow.
 
           This is used to model {{: https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html} two-phase borrows}.
           When evaluating a two-phase mutable borrow, we first introduce a reserved
           borrow which behaves like a shared borrow, until the moment we actually *use*
           the borrow: at this point, we end all the other shared borrows (or reserved
-          borrows - though there shouldn't be any other reserved borrows if the program
-          is well typed) of this value and replace the reserved borrow with a
-          mutable borrow.
+          borrows - though there shouldn't be any other reserved borrows) of this value
+          and replace the reserved borrow with a mutable borrow (as well as the shared
+          loan with a mutable loan).
           
           A simple use case of two-phase borrows:
           {[
@@ -134,23 +134,23 @@ and borrow_content =
             v = Vec::new();
             v1 = &mut v;
             v2 = &v; // We need this borrow, but v has already been mutably borrowed!
-            l = Vec::len(move v2);
-            Vec::push(move v1, move l); // In practice, v1 gets activated only here
+            l = Vec::len(move v2); // We need v2 here, and v1 *below*
+            Vec::push(move v1, move l); // In practice, v1 gets promoted only here
           ]}
           
           The meta-value is used for the same purposes as with shared borrows,
-          at the exception that in case of reserved borrows it is not
+          at the exception that in the case of reserved borrows it is not
           *necessary* for the synthesis: we keep it only as meta-information.
           To be more precise:
           - when generating the synthesized program, we may need to convert
             shared borrows to pure values
           - we never need to do so for reserved borrows: such borrows must
-            be activated at the moment we use them (meaning we convert a *mutable*
-            borrow to a pure value). However, we save meta-data about the assignments,
-            which is used to make the code cleaner: when generating this meta-data,
-            we may need to convert reserved borrows to pure values, in which
-            situation we convert the meta-value we stored in the reserved
-            borrow.
+            be promoted at the moment we use them (meaning in the synthesis we
+            convert a *mutable* borrow to a pure value). However, we save
+            meta-data about the assignments, which is used to make the code
+            cleaner: when generating this meta-data, we may need to convert
+            reserved borrows to pure values, in which situation we convert
+            the meta-value we stored in the reserved borrow.
        *)
 
 and loan_content =
