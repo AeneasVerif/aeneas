@@ -54,6 +54,12 @@ The simplest way is to clone Charon, then go to [`compiler`](./compiler) and
 create a symbolic link to the Charon library:
 `ln -s PATH_TO_CHARON_REPO/charon-ml charon`
 
+**Remark:** if you want to test if the symbolic link is valid, copy-paste the
+following script in your terminal (from the `compiler` directory):
+```bash
+if [ -e charon ]; then echo "valid"; else echo "invalid"; fi
+```
+
 Finally, building the project simply requires to run `make` in the top
 directory.
 
