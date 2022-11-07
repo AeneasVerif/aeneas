@@ -204,9 +204,9 @@ let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
         | V.SharedBorrow (mv, bid) ->
             (* Nothing specific to do *)
             super#visit_SharedBorrow env mv bid
-        | V.InactivatedMutBorrow (mv, bid) ->
+        | V.ReservedMutBorrow (mv, bid) ->
             (* Nothing specific to do *)
-            super#visit_InactivatedMutBorrow env mv bid
+            super#visit_ReservedMutBorrow env mv bid
         | V.MutBorrow (bid, mv) ->
             (* Control the dive *)
             if ek.enter_mut_borrows then super#visit_MutBorrow env bid mv
@@ -314,7 +314,7 @@ let update_loan (ek : exploration_kind) (l : V.BorrowId.id)
 
       method! visit_borrow_content env bc =
         match bc with
-        | V.SharedBorrow (_, _) | V.InactivatedMutBorrow _ ->
+        | V.SharedBorrow (_, _) | V.ReservedMutBorrow _ ->
             (* Nothing specific to do *)
             super#visit_borrow_content env bc
         | V.MutBorrow (bid, mv) ->
@@ -419,7 +419,7 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
         | V.SharedBorrow (_, bid) ->
             (* Check the borrow id *)
             if bid = l then raise (FoundGBorrowContent (Concrete bc)) else ()
-        | V.InactivatedMutBorrow (_, bid) ->
+        | V.ReservedMutBorrow (_, bid) ->
             (* Check the borrow id *)
             if bid = l then raise (FoundGBorrowContent (Concrete bc)) else ()
 
@@ -503,10 +503,10 @@ let update_borrow (ek : exploration_kind) (l : V.BorrowId.id)
         | V.SharedBorrow (mv, bid) ->
             (* Check the id *)
             if bid = l then update () else super#visit_SharedBorrow env mv bid
-        | V.InactivatedMutBorrow (mv, bid) ->
+        | V.ReservedMutBorrow (mv, bid) ->
             (* Check the id *)
             if bid = l then update ()
-            else super#visit_InactivatedMutBorrow env mv bid
+            else super#visit_ReservedMutBorrow env mv bid
 
       method! visit_loan_content env lc =
         match lc with

@@ -30,5 +30,13 @@ val end_abstraction : C.config -> V.AbstractionId.id -> cm_fun
 (** End a set of abstractions while preserving the invariants. *)
 val end_abstractions : C.config -> V.AbstractionId.Set.t -> cm_fun
 
-(** Activate a reserved borrow into a mutable borrow, while preserving the invariants. *)
-val activate_inactivated_mut_borrow : C.config -> V.BorrowId.id -> cm_fun
+(** Promote a reserved mut borrow to a mut borrow, while preserving the invariants.
+
+    Reserved borrows are special mutable borrows which are created as shared borrows
+    then promoted to mutable borrows upon their first use.
+
+    This function replaces the reserved borrow with a mutable borrow, then replaces
+    the corresponding shared loan with a mutable loan (after having ended the
+    other shared borrows which point to this loan).
+ *)
+val promote_reserved_mut_borrow : C.config -> V.BorrowId.id -> cm_fun

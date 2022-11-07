@@ -52,7 +52,7 @@ let expand_primitively_copyable_at_place (config : C.config)
 
 (** Read a place (CPS-style function).
 
-    We also check that the value *doesn't contain bottoms or inactivated
+    We also check that the value *doesn't contain bottoms or reserved
     borrows*.
  *)
 let read_place (config : C.config) (access : access_kind) (p : E.place)
@@ -61,8 +61,8 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
   let v = read_place config access p ctx in
   (* Check that there are no bottoms in the value *)
   assert (not (bottom_in_value ctx.ended_regions v));
-  (* Check that there are no inactivated borrows in the value *)
-  assert (not (inactivated_in_value v));
+  (* Check that there are no reserved borrows in the value *)
+  assert (not (reserved_in_value v));
   (* Call the continuation *)
   cf v ctx
 
@@ -77,7 +77,7 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
       controls whether we only end mutable loans, or also shared loans).
 
     We also check, after the reorganization, that the value at the place
-    *doesn't contain any bottom nor inactivated borrows*.
+    *doesn't contain any bottom nor reserved borrows*.
 
     [expand_prim_copy]: if [true], expand the symbolic values which are
     primitively copyable and contain borrows.
@@ -180,8 +180,8 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
           let ctx = InterpreterBorrows.reborrow_shared bid bid' ctx in
           (ctx, { v with V.value = V.Borrow (SharedBorrow (mv, bid')) })
       | MutBorrow (_, _) -> raise (Failure "Can't copy a mutable borrow")
-      | V.InactivatedMutBorrow _ ->
-          raise (Failure "Can't copy an inactivated mut borrow"))
+      | V.ReservedMutBorrow _ ->
+          raise (Failure "Can't copy a reserved mut borrow"))
   | V.Loan lc -> (
       (* We can only copy shared loans *)
       match lc with
@@ -673,7 +673,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         in
         let bc =
           if bkind = E.Shared then V.SharedBorrow (shared_mvalue, bid)
-          else V.InactivatedMutBorrow (shared_mvalue, bid)
+          else V.ReservedMutBorrow (shared_mvalue, bid)
         in
         let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
         (* Continue *)

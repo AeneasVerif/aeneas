@@ -93,7 +93,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
 
       method! visit_Borrow outer bc =
         match bc with
-        | SharedBorrow (_, l') | InactivatedMutBorrow (_, l') ->
+        | SharedBorrow (_, l') | ReservedMutBorrow (_, l') ->
             (* Check if this is the borrow we are looking for *)
             if l = l' then (
               (* Check if there are outer borrows or if we are inside an abstraction *)
@@ -731,7 +731,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_value config l tv ctx
-  | Concrete (V.SharedBorrow (_, l') | V.InactivatedMutBorrow (_, l')) ->
+  | Concrete (V.SharedBorrow (_, l') | V.ReservedMutBorrow (_, l')) ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
@@ -1120,7 +1120,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
         match bc with
         | V.SharedBorrow (_, _) | V.MutBorrow (_, _) ->
             raise (FoundBorrowContent bc)
-        | V.InactivatedMutBorrow _ -> raise (Failure "Unreachable")
+        | V.ReservedMutBorrow _ -> raise (Failure "Unreachable")
     end
   in
   (* Lookup the abstraction *)
@@ -1224,7 +1224,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
                 (* Give the value back - note that the mut borrow was below a
                  * shared borrow: the value is thus unchanged *)
                 give_back_value config bid v ctx)
-        | V.InactivatedMutBorrow _ -> raise (Failure "Unreachable")
+        | V.ReservedMutBorrow _ -> raise (Failure "Unreachable")
       in
       (* Reexplore *)
       end_abstraction_borrows config chain abs_id cf ctx
@@ -1403,7 +1403,7 @@ let end_borrows config : V.BorrowId.Set.t -> cm_fun =
 let end_abstraction config = end_abstraction_aux config []
 let end_abstractions config = end_abstractions_aux config []
 
-(** Helper function: see {!activate_inactivated_mut_borrow}.
+(** Helper function: see {!activate_reserved_mut_borrow}.
 
     This function updates the shared loan to a mutable loan (we then update
     the borrow with another helper). Of course, the shared loan must contain
@@ -1413,7 +1413,7 @@ let end_abstractions config = end_abstractions_aux config []
     The returned value (previously shared) is checked:
     - it mustn't contain loans
     - it mustn't contain {!V.Bottom}
-    - it mustn't contain inactivated borrows
+    - it mustn't contain reserved borrows
     TODO: this kind of checks should be put in an auxiliary helper, because
     they are redundant.
 
@@ -1446,8 +1446,8 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
       assert (not (loans_in_value sv));
       (* Check there isn't {!Bottom} (this is actually an invariant *)
       assert (not (bottom_in_value ctx.ended_regions sv));
-      (* Check there aren't inactivated borrows *)
-      assert (not (inactivated_in_value sv));
+      (* Check there aren't reserved borrows *)
+      assert (not (reserved_in_value sv));
       (* Update the loan content *)
       let ctx = update_loan ek l (V.MutLoan l) ctx in
       (* Continue *)
@@ -1460,15 +1460,16 @@ let promote_shared_loan_to_mut_loan (l : V.BorrowId.id)
            "Can't promote a shared loan to a mutable loan if the loan is \
             inside an abstraction")
 
-(** Helper function: see {!activate_inactivated_mut_borrow}.
+(** Helper function: see {!activate_reserved_mut_borrow}.
 
-    This function updates a shared borrow to a mutable borrow.
+    This function updates a shared borrow to a mutable borrow (and that is
+    all: it doesn't touch the corresponding loan).
  *)
-let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
+let replace_reserved_borrow_with_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
     (borrowed_value : V.typed_value) : m_fun =
  fun ctx ->
-  (* Lookup the inactivated borrow - note that we don't go inside borrows/loans:
-     there can't be inactivated borrows inside other borrows/loans
+  (* Lookup the reserved borrow - note that we don't go inside borrows/loans:
+     there can't be reserved borrows inside other borrows/loans
   *)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = false; enter_abs = false }
@@ -1476,8 +1477,8 @@ let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
   let ctx =
     match lookup_borrow ek l ctx with
     | Concrete (V.SharedBorrow _ | V.MutBorrow (_, _)) ->
-        raise (Failure "Expected an inactivated mutable borrow")
-    | Concrete (V.InactivatedMutBorrow _) ->
+        raise (Failure "Expected a reserved mutable borrow")
+    | Concrete (V.ReservedMutBorrow _) ->
         (* Update it *)
         update_borrow ek l (V.MutBorrow (l, borrowed_value)) ctx
     | Abstract _ ->
@@ -1490,12 +1491,9 @@ let promote_inactivated_borrow_to_mut_borrow (l : V.BorrowId.id) (cf : m_fun)
   (* Continue *)
   cf ctx
 
-(** Promote an inactivated mut borrow to a mut borrow.
-
-    The borrow must point to a shared value which is borrowed exactly once.
- *)
-let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
-    : cm_fun =
+(** Promote a reserved mut borrow to a mut borrow. *)
+let rec promote_reserved_mut_borrow (config : C.config) (l : V.BorrowId.id) :
+    cm_fun =
  fun cf ctx ->
   (* Lookup the value *)
   let ek =
@@ -1505,7 +1503,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
   | _, Concrete (V.MutLoan _) -> raise (Failure "Unreachable")
   | _, Concrete (V.SharedLoan (bids, sv)) -> (
       (* If there are loans inside the value, end them. Note that there can't be
-         inactivated borrows inside the value.
+         reserved borrows inside the value.
          If we perform an update, do a recursive call to lookup the updated value *)
       match get_first_loan_in_value sv with
       | Some lc ->
@@ -1516,7 +1514,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
             | V.MutLoan bid -> end_borrow config bid
           in
           (* Recursive call *)
-          let cc = comp cc (activate_inactivated_mut_borrow config l) in
+          let cc = comp cc (promote_reserved_mut_borrow config l) in
           (* Continue *)
           cc cf ctx
       | None ->
@@ -1524,11 +1522,11 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
           (* Some sanity checks *)
           log#ldebug
             (lazy
-              ("activate_inactivated_mut_borrow: resulting value:\n"
+              ("activate_reserved_mut_borrow: resulting value:\n"
               ^ typed_value_to_string ctx sv));
           assert (not (loans_in_value sv));
           assert (not (bottom_in_value ctx.ended_regions sv));
-          assert (not (inactivated_in_value sv));
+          assert (not (reserved_in_value sv));
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = V.BorrowId.Set.remove l bids in
@@ -1543,7 +1541,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
           *)
           let cc =
             comp cc (fun cf borrowed_value ->
-                promote_inactivated_borrow_to_mut_borrow l cf borrowed_value)
+                replace_reserved_borrow_with_mut_borrow l cf borrowed_value)
           in
           (* Continue *)
           cc cf ctx)
@@ -1552,6 +1550,5 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
       raise
         (Failure
-           "Can't activate an inactivated mutable borrow referencing a loan \
-            inside\n\
+           "Can't activate a reserved mutable borrow referencing a loan inside\n\
            \         an abstraction")

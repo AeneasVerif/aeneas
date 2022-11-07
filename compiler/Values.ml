@@ -112,15 +112,15 @@ and borrow_content =
        *)
   | MutBorrow of (BorrowId.id[@opaque]) * typed_value
       (** A mutably borrowed value. *)
-  | InactivatedMutBorrow of mvalue * (BorrowId.id[@opaque])
-      (** An inactivated mut borrow.
+  | ReservedMutBorrow of mvalue * (BorrowId.id[@opaque])
+      (** An reserved mut borrow.
 
           This is used to model {{: https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html} two-phase borrows}.
-          When evaluating a two-phase mutable borrow, we first introduce an inactivated
+          When evaluating a two-phase mutable borrow, we first introduce a reserved
           borrow which behaves like a shared borrow, until the moment we actually *use*
-          the borrow: at this point, we end all the other shared borrows (or inactivated
-          borrows - though there shouldn't be any other inactivated borrows if the program
-          is well typed) of this value and replace the inactivated borrow with a
+          the borrow: at this point, we end all the other shared borrows (or reserved
+          borrows - though there shouldn't be any other reserved borrows if the program
+          is well typed) of this value and replace the reserved borrow with a
           mutable borrow.
           
           A simple use case of two-phase borrows:
@@ -139,24 +139,24 @@ and borrow_content =
           ]}
           
           The meta-value is used for the same purposes as with shared borrows,
-          at the exception that in case of inactivated borrows it is not
+          at the exception that in case of reserved borrows it is not
           *necessary* for the synthesis: we keep it only as meta-information.
           To be more precise:
           - when generating the synthesized program, we may need to convert
             shared borrows to pure values
-          - we never need to do so for inactivated borrows: such borrows must
+          - we never need to do so for reserved borrows: such borrows must
             be activated at the moment we use them (meaning we convert a *mutable*
             borrow to a pure value). However, we save meta-data about the assignments,
             which is used to make the code cleaner: when generating this meta-data,
-            we may need to convert inactivated borrows to pure values, in which
-            situation we convert the meta-value we stored in the inactivated
+            we may need to convert reserved borrows to pure values, in which
+            situation we convert the meta-value we stored in the reserved
             borrow.
        *)
 
 and loan_content =
   | SharedLoan of (BorrowId.Set.t[@opaque]) * typed_value
   | MutLoan of (BorrowId.id[@opaque])
-      (** TODO: we might want to add a set of borrow ids (useful for inactivated
+      (** TODO: we might want to add a set of borrow ids (useful for reserved
           borrows, and extremely useful when giving shared values to abstractions).
        *)
 

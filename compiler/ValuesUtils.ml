@@ -46,12 +46,12 @@ let borrows_in_value (v : typed_value) : bool =
     false
   with Found -> true
 
-(** Check if a value contains inactivated mutable borrows *)
-let inactivated_in_value (v : typed_value) : bool =
+(** Check if a value contains reserved mutable borrows *)
+let reserved_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
-      method! visit_InactivatedMutBorrow _env _ = raise Found
+      method! visit_ReservedMutBorrow _env _ = raise Found
     end
   in
   (* We use exceptions *)

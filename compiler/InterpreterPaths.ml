@@ -28,8 +28,8 @@ type path_fail_kind =
       (** Failure because we couldn't go inside a shared loan *)
   | FailMutLoan of V.BorrowId.id
       (** Failure because we couldn't go inside a mutable loan *)
-  | FailInactivatedMutBorrow of V.BorrowId.id
-      (** Failure because we couldn't go inside an inactivated mutable borrow
+  | FailReservedMutBorrow of V.BorrowId.id
+      (** Failure because we couldn't go inside a reserved mutable borrow
           (which should get activated) *)
   | FailSymbolic of int * V.symbolic_value
       (** Failure because we need to enter a symbolic value (and thus need to
@@ -216,8 +216,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                         (* Return - note that we don't need to update the borrow itself *)
                         Ok (ctx, { res with updated = v }))
               else Error (FailBorrow bc)
-          | V.InactivatedMutBorrow (_, bid) ->
-              Error (FailInactivatedMutBorrow bid)
+          | V.ReservedMutBorrow (_, bid) -> Error (FailReservedMutBorrow bid)
           | V.MutBorrow (bid, bv) ->
               if access.enter_mut_borrows then
                 match access_projection access ctx update p' bv with
@@ -480,8 +479,7 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
         match err with
         | FailSharedLoan bids -> end_borrows config bids
         | FailMutLoan bid -> end_borrow config bid
-        | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config bid
+        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow config bid
         | FailSymbolic (i, sp) ->
             (* Expand the symbolic value *)
             let proj, _ =
@@ -511,8 +509,7 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
         match err with
         | FailSharedLoan bids -> end_borrows config bids
         | FailMutLoan bid -> end_borrow config bid
-        | FailInactivatedMutBorrow bid ->
-            activate_inactivated_mut_borrow config bid
+        | FailReservedMutBorrow bid -> promote_reserved_mut_borrow config bid
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
             expand_symbolic_value_no_branching config sp
@@ -549,9 +546,9 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
         match bc with
         | V.SharedBorrow _ | V.MutBorrow (_, _) ->
             (* Nothing special to do *) super#visit_borrow_content env bc
-        | V.InactivatedMutBorrow (_, bid) ->
-            (* We need to activate inactivated borrows *)
-            let cc = activate_inactivated_mut_borrow config bid in
+        | V.ReservedMutBorrow (_, bid) ->
+            (* We need to activate reserved borrows *)
+            let cc = promote_reserved_mut_borrow config bid in
             raise (UpdateCtx cc)
 
       method! visit_loan_content env lc =
