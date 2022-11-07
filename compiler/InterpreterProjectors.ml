@@ -8,12 +8,9 @@ open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 
-(** Auxiliary function.
+(** The local logger *)
+let log = L.projectors_log
 
-    Apply a proj_borrows on a shared borrow.
-    Note that when projecting over shared values, we generate
-    {!V.abstract_shared_borrows}, not {!V.avalue}s.
-*)
 let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
     (regions : T.RegionId.Set.t) (v : V.typed_value) (ty : T.rty) :
@@ -93,38 +90,6 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
         [ V.AsbProjReborrows (s, ty) ]
     | _ -> raise (Failure "Unreachable")
 
-(** Apply (and reduce) a projector over borrows to a value.
-
-    - [regions]: the regions we project
-    - [v]: the value over which we project
-    - [ty]: the projection type (is used to map borrows to regions, or to
-      interpret the borrows as belonging to some regions...). Remember that
-      [v] doesn't contain region information.
-      For instance, if we have:
-      [v <: ty] where:
-      - [v = mut_borrow l ...]
-      - [ty = Ref (r, ...)]
-      then we interpret the borrow [l] as belonging to region [r]
-    
-    Also, when applying projections on shared values, we need to apply
-    reborrows. This is a bit annoying because, with the way we compute
-    the projection on borrows, we can't update the context immediately.
-    Instead, we remember the list of borrows we have to insert in the
-    context *afterwards*.
-
-    [check_symbolic_no_ended] controls whether we check or not whether
-    symbolic values don't contain already ended regions.
-    This check is activated when applying projectors upon calling a function
-    (because we need to check that function arguments don't contain ⊥),
-    but deactivated when expanding symbolic values:
-    {[
-      fn f<'a,'b>(x : &'a mut u32, y : &'b mut u32) -> (&'a mut u32, &'b mut u32);
-
-      let p = f(&mut x, &mut y); // p -> @s0
-      assert(x == ...); // end 'a
-      let z = p.1; // HERE: the symbolic expansion of @s0 contains ended regions
-    ]}
-*)
 let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     (fresh_reborrow : V.BorrowId.id -> V.BorrowId.id)
     (regions : T.RegionId.Set.t) (ancestors_regions : T.RegionId.Set.t)
@@ -251,7 +216,6 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
     in
     { V.value; V.ty }
 
-(** Convert a symbolic expansion *which is not a borrow* to a value *)
 let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
     (see : V.symbolic_expansion) : V.typed_value =
   let ty = Subst.erase_regions sv.V.sv_ty in
@@ -268,12 +232,6 @@ let symbolic_expansion_non_borrow_to_value (sv : V.symbolic_value)
   in
   { V.value; V.ty }
 
-(** Convert a symbolic expansion to a value.
-
-    If the expansion is a mutable reference expansion, it converts it to a borrow.
-    This function is meant to be used when reducing projectors over borrows,
-    during a symbolic expansion.
-  *)
 let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
     (see : V.symbolic_expansion) : V.typed_value =
   match see with
@@ -497,14 +455,6 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
   (* Return *)
   ctx
 
-(** Auxiliary function to prepare reborrowing operations (used when
-    applying projectors).
-    
-    Returns two functions:
-    - a function to generate fresh re-borrow ids, and register the reborrows
-    - a function to apply the reborrows in a context
-    Those functions are of course stateful.
- *)
 let prepare_reborrows (config : C.config) (allow_reborrows : bool) :
     (V.BorrowId.id -> V.BorrowId.id) * (C.eval_ctx -> C.eval_ctx) =
   let reborrows : (V.BorrowId.id * V.BorrowId.id) list ref = ref [] in

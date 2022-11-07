@@ -1,6 +1,7 @@
-(* This file defines the basic blocks to implement the semantics of borrows.
- * Note that those functions are not only used in InterpreterBorrows, but
- * also in Invariants or InterpreterProjectors *)
+(** This file defines the basic blocks to implement the semantics of borrows.
+    Note that those functions are not only used in InterpreterBorrows, but
+    also in Invariants or InterpreterProjectors
+ *)
 
 module T = Types
 module V = Values
@@ -35,17 +36,17 @@ let ek_all : exploration_kind =
 type borrow_ids = Borrows of V.BorrowId.Set.t | Borrow of V.BorrowId.id
 [@@deriving show]
 
+type borrow_ids_or_symbolic_value =
+  | BorrowIds of borrow_ids
+  | SymbolicValue of V.symbolic_value
+[@@deriving show]
+
 exception FoundBorrowIds of borrow_ids
 
 type priority_borrows_or_abs =
   | OuterBorrows of borrow_ids
   | OuterAbs of V.AbstractionId.id
   | InnerLoans of borrow_ids
-[@@deriving show]
-
-type borrow_ids_or_symbolic_value =
-  | BorrowIds of borrow_ids
-  | SymbolicValue of V.symbolic_value
 [@@deriving show]
 
 let update_if_none opt x = match opt with None -> Some x | _ -> opt

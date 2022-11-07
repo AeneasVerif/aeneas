@@ -468,13 +468,12 @@ let apply_branching_symbolic_expansions_non_borrow (config : C.config)
   let seel = List.map fst see_cf_l in
   S.synthesize_symbolic_expansion sv sv_place seel subterms
 
-(** Expand a symbolic boolean *)
-let expand_symbolic_bool (config : C.config) (sp : V.symbolic_value)
-    (sp_place : SA.mplace option) (cf_true : m_fun) (cf_false : m_fun) : m_fun =
+let expand_symbolic_bool (config : C.config) (sv : V.symbolic_value)
+    (sv_place : SA.mplace option) (cf_true : m_fun) (cf_false : m_fun) : m_fun =
  fun ctx ->
   (* Compute the expanded value *)
-  let original_sv = sp in
-  let original_sv_place = sp_place in
+  let original_sv = sv in
+  let original_sv_place = sv_place in
   let rty = original_sv.V.sv_ty in
   assert (rty = T.Bool);
   (* Expand the symbolic value to true or false and continue execution *)
@@ -485,24 +484,17 @@ let expand_symbolic_bool (config : C.config) (sp : V.symbolic_value)
   apply_branching_symbolic_expansions_non_borrow config original_sv
     original_sv_place seel ctx
 
-(** Expand a symbolic value.
-    
-    [allow_branching]: if [true] we can branch (by expanding enumerations with
-    stricly more than one variant), otherwise we can't.
-    
-    TODO: rename [sp] to [sv]
- *)
 let expand_symbolic_value (config : C.config) (allow_branching : bool)
-    (sp : V.symbolic_value) (sp_place : SA.mplace option) : cm_fun =
+    (sv : V.symbolic_value) (sv_place : SA.mplace option) : cm_fun =
  fun cf ctx ->
   (* Debug *)
-  log#ldebug (lazy ("expand_symbolic_value:" ^ symbolic_value_to_string ctx sp));
+  log#ldebug (lazy ("expand_symbolic_value:" ^ symbolic_value_to_string ctx sv));
   (* Remember the initial context for printing purposes *)
   let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
-  let original_sv = sp in
-  let original_sv_place = sp_place in
+  let original_sv = sv in
+  let original_sv_place = sv_place in
   let rty = original_sv.V.sv_ty in
   let cc : cm_fun =
    fun cf ctx ->
@@ -512,7 +504,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     | T.Adt (T.AdtId def_id, regions, types) ->
         (* Compute the expanded value *)
         let seel =
-          compute_expanded_symbolic_adt_value allow_branching sp.sv_kind def_id
+          compute_expanded_symbolic_adt_value allow_branching sv.sv_kind def_id
             regions types ctx
         in
         (* Check for branching *)
@@ -528,7 +520,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
         let ty = Collections.List.to_cons_nil types in
         (* Compute the expanded value *)
         let seel =
-          compute_expanded_symbolic_option_value allow_branching sp.sv_kind ty
+          compute_expanded_symbolic_option_value allow_branching sv.sv_kind ty
         in
 
         (* Check for branching *)
@@ -540,7 +532,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     (* Tuples *)
     | T.Adt (T.Tuple, [], tys) ->
         (* Generate the field values *)
-        let see = compute_expanded_symbolic_tuple_value sp.sv_kind tys in
+        let see = compute_expanded_symbolic_tuple_value sv.sv_kind tys in
         (* Apply in the context *)
         let ctx =
           apply_symbolic_expansion_non_borrow config original_sv see ctx
@@ -552,7 +544,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
           original_sv_place see expr
     (* Boxes *)
     | T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
-        let see = compute_expanded_symbolic_box_value sp.sv_kind boxed_ty in
+        let see = compute_expanded_symbolic_box_value sv.sv_kind boxed_ty in
         (* Apply in the context *)
         let ctx =
           apply_symbolic_expansion_non_borrow config original_sv see ctx
@@ -569,7 +561,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     (* Booleans *)
     | T.Bool ->
         assert allow_branching;
-        expand_symbolic_bool config sp sp_place cf cf ctx
+        expand_symbolic_bool config sv sv_place cf cf ctx
     | _ ->
         raise
           (Failure ("expand_symbolic_value: unexpected type: " ^ T.show_rty rty))
@@ -580,7 +572,7 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
         log#ldebug
           (lazy
             ("expand_symbolic_value: "
-            ^ symbolic_value_to_string ctx0 sp
+            ^ symbolic_value_to_string ctx0 sv
             ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
             ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
         (* Sanity check: the symbolic value has disappeared *)
@@ -589,32 +581,6 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
   (* Continue *)
   cc cf ctx
 
-(** Symbolic integers are expanded upon evaluating a [switch], when the integer
-    is not an enumeration discriminant.
-    Note that a discriminant is never symbolic: we evaluate discriminant values
-    upon evaluating [eval_discriminant], which always generates a concrete value
-    (because if we call it on a symbolic enumeration, we expand the enumeration
-    *then* evaluate the discriminant). This is how we can spot "regular" switches
-    over integers.
-
-
-    When expanding a boolean upon evaluating an [if ... then ... else ...],
-    or an enumeration just before matching over it, we can simply expand the
-    boolean/enumeration (generating a list of contexts from which to execute)
-    then retry evaluating the [if ... then ... else ...] or the [match]: as
-    the scrutinee will then have a concrete value, the interpreter will switch
-    to the proper branch.
-    
-    However, when expanding a "regular" integer for a switch, there is always an
-    *otherwise* branch that we can take, for which the integer must remain symbolic
-    (because in this branch the scrutinee can take a range of values). We thus
-    can't simply expand then retry to evaluate the [switch], because then we
-    would loop...
-    
-    For this reason, we take the list of branches to execute as parameters, and
-    directly jump to those branches after the expansion, without reevaluating the
-    switch. The continuation is thus for the execution *after* the switch.
-*)
 let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
     (sv_place : SA.mplace option) (int_type : T.integer_type)
     (tgts : (V.scalar_value * m_fun) list) (otherwise : m_fun) : m_fun =
@@ -636,7 +602,6 @@ let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
   (* Then expand and evaluate - this generates the proper symbolic AST *)
   apply_branching_symbolic_expansions_non_borrow config sv sv_place tgts
 
-(** See [expand_symbolic_value] *)
 let expand_symbolic_value_no_branching (config : C.config)
     (sv : V.symbolic_value) (sv_place : SA.mplace option) : cm_fun =
   let allow_branching = false in
@@ -723,9 +688,6 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
   (* Apply *)
   expand cf ctx
 
-(** If this mode is activated through the [config], greedily expand the symbolic
-    values which need to be expanded. See [config] for more information.
- *)
 let greedy_expand_symbolic_values (config : C.config) : cm_fun =
  fun cf ctx ->
   if config.greedy_expand_symbolics_with_borrows then (

@@ -34,7 +34,7 @@ let expand_primitively_copyable_at_place (config : C.config)
   (* Small helper *)
   let rec expand : cm_fun =
    fun cf ctx ->
-    let v = read_place_unwrap config access p ctx in
+    let v = read_place config access p ctx in
     match
       find_first_primitively_copyable_sv_with_borrows
         ctx.type_context.type_infos v
@@ -53,12 +53,12 @@ let expand_primitively_copyable_at_place (config : C.config)
 (** Read a place (CPS-style function).
 
     We also check that the value *doesn't contain bottoms or inactivated
-    borrows.
+    borrows*.
  *)
 let read_place (config : C.config) (access : access_kind) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
-  let v = read_place_unwrap config access p ctx in
+  let v = read_place config access p ctx in
   (* Check that there are no bottoms in the value *)
   assert (not (bottom_in_value ctx.ended_regions v));
   (* Check that there are no inactivated borrows in the value *)
@@ -79,8 +79,8 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
     We also check, after the reorganization, that the value at the place
     *doesn't contain any bottom nor inactivated borrows*.
 
-    [expand_prim_copy]: if true, expand the symbolic values which are primitively
-    copyable and contain borrows.
+    [expand_prim_copy]: if [true], expand the symbolic values which are
+    primitively copyable and contain borrows.
  *)
 let access_rplace_reorganize_and_read (config : C.config)
     (expand_prim_copy : bool) (access : access_kind) (p : E.place)
@@ -131,6 +131,77 @@ let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) :
   (* Remaining cases (invalid) *)
   | _, _ -> raise (Failure "Improperly typed constant value")
 
+(** Copy a value, and return the resulting value.
+
+    Note that copying values might update the context. For instance, when
+    copying shared borrows, we need to insert new shared borrows in the context.
+
+    Also, this function is actually more general than it should be: it can be
+    used to copy concrete ADT values, while ADT copy should be done through the
+    Copy trait (i.e., by calling a dedicated function). This is why we added a
+    parameter to control this copy ([allow_adt_copy]). Note that here by ADT we
+    mean the user-defined ADTs (not tuples or assumed types).
+ *)
+let rec copy_value (allow_adt_copy : bool) (config : C.config)
+    (ctx : C.eval_ctx) (v : V.typed_value) : C.eval_ctx * V.typed_value =
+  log#ldebug
+    (lazy
+      ("copy_value: "
+      ^ typed_value_to_string ctx v
+      ^ "\n- context:\n" ^ eval_ctx_to_string ctx));
+  (* Remark: at some point we rewrote this function to use iterators, but then
+   * we reverted the changes: the result was less clear actually. In particular,
+   * the fact that we have exhaustive matches below makes very obvious the cases
+   * in which we need to fail *)
+  match v.V.value with
+  | V.Primitive _ -> (ctx, v)
+  | V.Adt av ->
+      (* Sanity check *)
+      (match v.V.ty with
+      | T.Adt (T.Assumed (T.Box | Vec), _, _) ->
+          raise (Failure "Can't copy an assumed value other than Option")
+      | T.Adt (T.AdtId _, _, _) -> assert allow_adt_copy
+      | T.Adt ((T.Assumed Option | T.Tuple), _, _) -> () (* Ok *)
+      | _ -> raise (Failure "Unreachable"));
+      let ctx, fields =
+        List.fold_left_map
+          (copy_value allow_adt_copy config)
+          ctx av.field_values
+      in
+      (ctx, { v with V.value = V.Adt { av with field_values = fields } })
+  | V.Bottom -> raise (Failure "Can't copy ⊥")
+  | V.Borrow bc -> (
+      (* We can only copy shared borrows *)
+      match bc with
+      | SharedBorrow (mv, bid) ->
+          (* We need to create a new borrow id for the copied borrow, and
+           * update the context accordingly *)
+          let bid' = C.fresh_borrow_id () in
+          let ctx = InterpreterBorrows.reborrow_shared bid bid' ctx in
+          (ctx, { v with V.value = V.Borrow (SharedBorrow (mv, bid')) })
+      | MutBorrow (_, _) -> raise (Failure "Can't copy a mutable borrow")
+      | V.InactivatedMutBorrow _ ->
+          raise (Failure "Can't copy an inactivated mut borrow"))
+  | V.Loan lc -> (
+      (* We can only copy shared loans *)
+      match lc with
+      | V.MutLoan _ -> raise (Failure "Can't copy a mutable loan")
+      | V.SharedLoan (_, sv) ->
+          (* We don't copy the shared loan: only the shared value inside *)
+          copy_value allow_adt_copy config ctx sv)
+  | V.Symbolic sp ->
+      (* We can copy only if the type is "primitively" copyable.
+       * Note that in the general case, copy is a trait: copying values
+       * thus requires calling the proper function. Here, we copy values
+       * for very simple types such as integers, shared borrows, etc. *)
+      assert (ty_is_primitively_copyable (Subst.erase_regions sp.V.sv_ty));
+      (* If the type is copyable, we simply return the current value. Side
+       * remark: what is important to look at when copying symbolic values
+       * is symbolic expansion. The important subcase is the expansion of shared
+       * borrows: when doing so, every occurrence of the same symbolic value
+       * must use a fresh borrow id. *)
+      (ctx, v)
+
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
     Evaluating an operand requires reorganizing the environment to get access
@@ -148,7 +219,7 @@ let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) :
       dest <- f(move x, move y);
       ...
     ]}
-    Because of the way [end_borrow] is implemented, when giving back the borrow
+    Because of the way {!end_borrow} is implemented, when giving back the borrow
     [l0] upon evaluating [move y], we won't notice that [shared_borrow l0] has
     disappeared from the environment (it has been moved and not assigned yet,
     and so is hanging in "thin air").
@@ -158,13 +229,15 @@ let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) :
     by access *and* move operations have already been applied.
 
     Rk.: in the formalization, we always have an explicit "reorganization" step
-    in the rule premises, before the actual operand evaluation.
+    in the rule premises, before the actual operand evaluation, that allows to
+    reorganize the environment so that it satisfies the proper conditions. This
+    function's role is to do the reorganization.
     
     Rk.: doing this is actually not completely necessary because when
     generating MIR, rustc introduces intermediate assignments for all the function
     parameters. Still, it is better for soundness purposes, and corresponds to
-    what we do in the formalization (because we don't enforce constraints
-    in the formalization).
+    what we do in the formalization (because we don't enforce the same constraints
+    as MIR in the formalization).
  *)
 let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
     cm_fun =
@@ -234,22 +307,12 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
         (* Check that there are no bottoms in the value we are about to move *)
         assert (not (bottom_in_value ctx.ended_regions v));
         let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
-        match write_place config access p bottom ctx with
-        | Error _ -> raise (Failure "Unreachable")
-        | Ok ctx -> cf v ctx
+        let ctx = write_place config access p bottom ctx in
+        cf v ctx
       in
       (* Compose and apply *)
       comp cc move cf ctx
 
-(** Evaluate an operand.
-
-    Reorganize the context, then evaluate the operand.
-
-    **Warning**: this function shouldn't be used to evaluate a list of
-    operands (for a function call, for instance): we must do *one* reorganization
-    of the environment, before evaluating all the operands at once.
-    Use [eval_operands] instead.
- *)
 let eval_operand (config : C.config) (op : E.operand)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
@@ -602,7 +665,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
               ({ v with V.value = v' }, v)
         in
         (* Update the borrowed value in the context *)
-        let ctx = write_place_unwrap config access p nv ctx in
+        let ctx = write_place config access p nv ctx in
         (* Compute the rvalue - simply a shared borrow with a the fresh id.
          * Note that the reference is *mutable* if we do a two-phase borrow *)
         let rv_ty =
@@ -637,7 +700,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         (* Compute the value with which to replace the value at place p *)
         let nv = { v with V.value = V.Loan (V.MutLoan bid) } in
         (* Update the value in the context *)
-        let ctx = write_place_unwrap config access p nv ctx in
+        let ctx = write_place config access p nv ctx in
         (* Continue *)
         cf rv ctx
       in
@@ -699,10 +762,6 @@ let eval_rvalue_aggregate (config : C.config)
   (* Compose and apply *)
   comp eval_ops compute cf
 
-(** Evaluate an rvalue which is not a global.
-
-    Transmits the computed rvalue to the received continuation.
- *)
 let eval_rvalue_not_global (config : C.config) (rvalue : E.rvalue)
     (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
  fun ctx ->
@@ -723,3 +782,16 @@ let eval_rvalue_not_global (config : C.config) (rvalue : E.rvalue)
       comp_wrap (eval_rvalue_aggregate config aggregate_kind ops) ctx
   | E.Discriminant p -> comp_wrap (eval_rvalue_discriminant config p) ctx
   | E.Global _ -> raise (Failure "Unreachable")
+
+let eval_fake_read (config : C.config) (p : E.place) : cm_fun =
+ fun cf ctx ->
+  let expand_prim_copy = false in
+  let cf_prepare cf =
+    access_rplace_reorganize_and_read config expand_prim_copy Read p cf
+  in
+  let cf_continue cf v : m_fun =
+   fun ctx ->
+    assert (not (bottom_in_value ctx.ended_regions v));
+    cf ctx
+  in
+  comp cf_prepare cf_continue cf ctx

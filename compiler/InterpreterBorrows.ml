@@ -12,21 +12,21 @@ open InterpreterBorrowsCore
 open InterpreterProjectors
 
 (** The local logger *)
-let log = InterpreterBorrowsCore.log
+let log = L.borrows_log
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
     replaced by {!V.Bottom})) if we can end the borrow (for instance, it is not
     an outer borrow...) or return the reason why we couldn't update the borrow.
 
-    [end_borrow] then simply performs a loop: as long as we need to end (outer)
+    [end_borrow_aux] then simply performs a loop: as long as we need to end (outer)
     borrows, we end them, before finally ending the borrow we wanted to end in the
     first place.
 
     [allowed_abs]: if not [None], allows to get a borrow in the given
     abstraction without ending the whole abstraction first. This parameter
-    allows us to use {!end_borrow} as an auxiliary function for
-    {!end_abstraction} (we end all the borrows in the abstraction one by one
+    allows us to use {!end_borrow_aux} as an auxiliary function for
+    {!end_abstraction_aux} (we end all the borrows in the abstraction one by one
     before removing the abstraction from the context).
 *)
 let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
@@ -705,7 +705,7 @@ let reborrow_shared (original_bid : V.BorrowId.id) (new_bid : V.BorrowId.id)
   assert !r;
   { ctx with env }
 
-(** Auxiliary function: see {!end_borrow} *)
+(** Auxiliary function: see {!end_borrow_aux} *)
 let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Debug *)
@@ -796,8 +796,8 @@ let convert_avalue_to_given_back_value (abs_kind : V.abs_kind)
 
     [allowed_abs]: see the comment for {!end_borrow_get_borrow}.
 
-    [chain]: contains the list of borrows/abstraction ids on which {!end_borrow}
-    and {!end_abstraction} were called, to remember the chain of calls. This is
+    [chain]: contains the list of borrows/abstraction ids on which {!end_borrow_aux}
+    and {!end_abstraction_aux} were called, to remember the chain of calls. This is
     useful for debugging purposes, and also for sanity checks to detect cycles
     (which shouldn't happen if the environment is well-formed).
 
@@ -809,12 +809,14 @@ let convert_avalue_to_given_back_value (abs_kind : V.abs_kind)
     perform anything smart and is trusted, and another function for the
     book-keeping.
  *)
-let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
+let rec end_borrow_aux (config : C.config) (chain : borrow_or_abs_ids)
     (allowed_abs : V.AbstractionId.id option) (l : V.BorrowId.id) : cm_fun =
  fun cf ctx ->
   (* Check that we don't loop *)
   let chain0 = chain in
-  let chain = add_borrow_or_abs_id_to_chain "end_borrow: " (BorrowId l) chain in
+  let chain =
+    add_borrow_or_abs_id_to_chain "end_borrow_aux: " (BorrowId l) chain
+  in
   log#ldebug
     (lazy
       ("end borrow: " ^ V.BorrowId.to_string l ^ ":\n- original context:\n"
@@ -884,22 +886,22 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
            * inside another borrow *)
           let allowed_abs' = None in
           (* End the outer borrows *)
-          let cc = end_borrows config chain allowed_abs' bids in
+          let cc = end_borrows_aux config chain allowed_abs' bids in
           (* Retry to end the borrow *)
-          let cc = comp cc (end_borrow config chain0 allowed_abs l) in
+          let cc = comp cc (end_borrow_aux config chain0 allowed_abs l) in
           (* Check and apply *)
           comp cc cf_check cf ctx
       | OuterBorrows (Borrow bid) | InnerLoans (Borrow bid) ->
           let allowed_abs' = None in
           (* End the outer borrow *)
-          let cc = end_borrow config chain allowed_abs' bid in
+          let cc = end_borrow_aux config chain allowed_abs' bid in
           (* Retry to end the borrow *)
-          let cc = comp cc (end_borrow config chain0 allowed_abs l) in
+          let cc = comp cc (end_borrow_aux config chain0 allowed_abs l) in
           (* Check and apply *)
           comp cc cf_check cf ctx
       | OuterAbs abs_id ->
           (* The borrow is inside an abstraction: end the whole abstraction *)
-          let cf_end_abs = end_abstraction config chain abs_id in
+          let cf_end_abs = end_abstraction_aux config chain abs_id in
           (* Compose with a sanity check *)
           comp cf_end_abs cf_check cf ctx)
   | Ok (ctx, None) ->
@@ -922,7 +924,7 @@ let rec end_borrow (config : C.config) (chain : borrow_or_abs_ids)
       (* Do a sanity check and continue *)
       cf_check cf ctx
 
-and end_borrows (config : C.config) (chain : borrow_or_abs_ids)
+and end_borrows_aux (config : C.config) (chain : borrow_or_abs_ids)
     (allowed_abs : V.AbstractionId.id option) (lset : V.BorrowId.Set.t) : cm_fun
     =
  fun cf ->
@@ -930,20 +932,22 @@ and end_borrows (config : C.config) (chain : borrow_or_abs_ids)
    * so that we actually end from the smallest id to the highest id - just
    * a matter of taste, and may make debugging easier *)
   let ids = V.BorrowId.Set.fold (fun id ids -> id :: ids) lset [] in
-  List.fold_left (fun cf id -> end_borrow config chain allowed_abs id cf) cf ids
+  List.fold_left
+    (fun cf id -> end_borrow_aux config chain allowed_abs id cf)
+    cf ids
 
-and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
+and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
     (abs_id : V.AbstractionId.id) : cm_fun =
  fun cf ctx ->
   (* Check that we don't loop *)
   let chain =
-    add_borrow_or_abs_id_to_chain "end_abstraction: " (AbsId abs_id) chain
+    add_borrow_or_abs_id_to_chain "end_abstraction_aux: " (AbsId abs_id) chain
   in
   (* Remember the original context for printing purposes *)
   let ctx0 = ctx in
   log#ldebug
     (lazy
-      ("end_abstraction: "
+      ("end_abstraction_aux: "
       ^ V.AbstractionId.to_string abs_id
       ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0));
 
@@ -954,12 +958,12 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
   assert abs.can_end;
 
   (* End the parent abstractions first *)
-  let cc = end_abstractions config chain abs.parents in
+  let cc = end_abstractions_aux config chain abs.parents in
   let cc =
     comp_unit cc (fun ctx ->
         log#ldebug
           (lazy
-            ("end_abstraction: "
+            ("end_abstraction_aux: "
             ^ V.AbstractionId.to_string abs_id
             ^ "\n- context after parent abstractions ended:\n"
             ^ eval_ctx_to_string ctx)))
@@ -971,7 +975,7 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
     comp_unit cc (fun ctx ->
         log#ldebug
           (lazy
-            ("end_abstraction: "
+            ("end_abstraction_aux: "
             ^ V.AbstractionId.to_string abs_id
             ^ "\n- context after loans ended:\n" ^ eval_ctx_to_string ctx)))
   in
@@ -1000,7 +1004,7 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
     comp_unit cc (fun ctx ->
         log#ldebug
           (lazy
-            ("end_abstraction: "
+            ("end_abstraction_aux: "
             ^ V.AbstractionId.to_string abs_id
             ^ "\n- original context:\n" ^ eval_ctx_to_string ctx0
             ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx)))
@@ -1012,14 +1016,16 @@ and end_abstraction (config : C.config) (chain : borrow_or_abs_ids)
   (* Apply the continuation *)
   cc cf ctx
 
-and end_abstractions (config : C.config) (chain : borrow_or_abs_ids)
+and end_abstractions_aux (config : C.config) (chain : borrow_or_abs_ids)
     (abs_ids : V.AbstractionId.Set.t) : cm_fun =
  fun cf ->
   (* This is not necessary, but we prefer to reorder the abstraction ids,
    * so that we actually end from the smallest id to the highest id - just
    * a matter of taste, and may make debugging easier *)
   let abs_ids = V.AbstractionId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
-  List.fold_left (fun cf id -> end_abstraction config chain id cf) cf abs_ids
+  List.fold_left
+    (fun cf id -> end_abstraction_aux config chain id cf)
+    cf abs_ids
 
 and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
     (abs_id : V.AbstractionId.id) : cm_fun =
@@ -1039,8 +1045,8 @@ and end_abstraction_loans (config : C.config) (chain : borrow_or_abs_ids)
       (* There are loans: end the corresponding borrows, then recheck *)
       let cc : cm_fun =
         match bids with
-        | Borrow bid -> end_borrow config chain None bid
-        | Borrows bids -> end_borrows config chain None bids
+        | Borrow bid -> end_borrow_aux config chain None bid
+        | Borrows bids -> end_borrows_aux config chain None bids
       in
       (* Reexplore, looking for loans *)
       let cc = comp cc (end_abstraction_loans config chain abs_id) in
@@ -1326,7 +1332,7 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
             V.AbstractionId.Set.empty abs_ids
         in
         (* End the abstractions and continue *)
-        end_abstractions config chain abs_ids cf ctx
+        end_abstractions_aux config chain abs_ids cf ctx
       in
       (* End the internal borrows projectors and the loans projector *)
       let cf_end_internal : cm_fun =
@@ -1379,7 +1385,7 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         cf ctx)
       else
         (* The borrows proj comes from a different abstraction: end it. *)
-        let cc = end_abstraction config chain abs_id' in
+        let cc = end_abstraction_aux config chain abs_id' in
         (* Retry ending the projector of loans *)
         let cc =
           comp cc (end_proj_loans_symbolic config chain abs_id regions sv)
@@ -1389,11 +1395,13 @@ and end_proj_loans_symbolic (config : C.config) (chain : borrow_or_abs_ids)
         (* Continue *)
         cc cf ctx
 
-let end_outer_borrow config : V.BorrowId.id -> cm_fun =
-  end_borrow config [] None
+let end_borrow config : V.BorrowId.id -> cm_fun = end_borrow_aux config [] None
 
-let end_outer_borrows config : V.BorrowId.Set.t -> cm_fun =
-  end_borrows config [] None
+let end_borrows config : V.BorrowId.Set.t -> cm_fun =
+  end_borrows_aux config [] None
+
+let end_abstraction config = end_abstraction_aux config []
+let end_abstractions config = end_abstractions_aux config []
 
 (** Helper function: see {!activate_inactivated_mut_borrow}.
 
@@ -1504,8 +1512,8 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
           (* End the loans *)
           let cc =
             match lc with
-            | V.SharedLoan (bids, _) -> end_outer_borrows config bids
-            | V.MutLoan bid -> end_outer_borrow config bid
+            | V.SharedLoan (bids, _) -> end_borrows config bids
+            | V.MutLoan bid -> end_borrow config bid
           in
           (* Recursive call *)
           let cc = comp cc (activate_inactivated_mut_borrow config l) in
@@ -1524,7 +1532,7 @@ let rec activate_inactivated_mut_borrow (config : C.config) (l : V.BorrowId.id)
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids = V.BorrowId.Set.remove l bids in
-          let cc = end_outer_borrows config bids in
+          let cc = end_borrows config bids in
           (* Promote the loan - TODO: this will fail if the value contains
            * any loans. In practice, it shouldn't, but we could also
            * look for loans inside the value and end them before promoting

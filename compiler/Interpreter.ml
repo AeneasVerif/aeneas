@@ -131,7 +131,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
   let ret_inst_sg = instantiate_fun_sig type_params sg in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
-  let cf_pop_frame = ctx_pop_frame config in
+  let cf_pop_frame = pop_frame config in
 
   (* We need to find the parents regions/abstractions of the region we
    * will end - this will allow us to, first, mark the other return
@@ -191,7 +191,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
     let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
     let cf_end_target_abs cf =
       List.fold_left
-        (fun cf id -> end_abstraction config [] id cf)
+        (fun cf id -> end_abstraction config id cf)
         cf target_abs_ids
     in
     (* Generate the Return node *)
@@ -244,7 +244,7 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
           | None ->
               (* Forward translation *)
               (* Pop the frame and retrieve the returned value at the same time*)
-              let cf_pop = ctx_pop_frame config in
+              let cf_pop = pop_frame config in
               (* Generate the Return node *)
               let cf_return ret_value : m_fun =
                fun _ -> Some (SA.Return (Some ret_value))
@@ -309,7 +309,7 @@ module Test = struct
       match res with
       | Return ->
           (* Ok: drop the local variables and finish *)
-          ctx_pop_frame config (fun _ _ -> None) ctx
+          pop_frame config (fun _ _ -> None) ctx
       | _ ->
           raise
             (Failure
