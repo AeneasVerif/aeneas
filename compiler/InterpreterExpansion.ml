@@ -210,7 +210,8 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
   apply_symbolic_expansion_to_avalues config allow_reborrows original_sv
     expansion ctx
 
-(** Compute the expansion of an adt value.
+(** Compute the expansion of a non-assumed (i.e.: not [Option], [Box], etc.)
+    adt value.
 
     The function might return a list of values if the symbolic value to expand
     is an enumeration.
@@ -218,7 +219,7 @@ let apply_symbolic_expansion_non_borrow (config : C.config)
     [expand_enumerations] controls the expansion of enumerations: if false, it
     doesn't allow the expansion of enumerations *containing several variants*.
  *)
-let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
+let compute_expanded_symbolic_non_assumed_adt_value (expand_enumerations : bool)
     (kind : V.sv_kind) (def_id : T.TypeDeclId.id)
     (regions : T.RegionId.id T.region list) (types : T.rty list)
     (ctx : C.eval_ctx) : V.symbolic_expansion list =
@@ -273,6 +274,31 @@ let compute_expanded_symbolic_box_value (kind : V.sv_kind) (boxed_ty : T.rty) :
   let boxed_value = mk_fresh_symbolic_value kind boxed_ty in
   let see = V.SeAdt (None, [ boxed_value ]) in
   see
+
+(** Compute the expansion of an adt value.
+
+    The function might return a list of values if the symbolic value to expand
+    is an enumeration.
+
+    [expand_enumerations] controls the expansion of enumerations: if [false], it
+    doesn't allow the expansion of enumerations *containing several variants*.
+ *)
+let compute_expanded_symbolic_adt_value (expand_enumerations : bool)
+    (kind : V.sv_kind) (adt_id : T.type_id)
+    (regions : T.RegionId.id T.region list) (types : T.rty list)
+    (ctx : C.eval_ctx) : V.symbolic_expansion list =
+  match (adt_id, regions, types) with
+  | T.AdtId def_id, _, _ ->
+      compute_expanded_symbolic_non_assumed_adt_value expand_enumerations kind
+        def_id regions types ctx
+  | T.Tuple, [], _ -> [ compute_expanded_symbolic_tuple_value kind types ]
+  | T.Assumed T.Option, [], [ ty ] ->
+      compute_expanded_symbolic_option_value expand_enumerations kind ty
+  | T.Assumed T.Box, [], [ boxed_ty ] ->
+      [ compute_expanded_symbolic_box_value kind boxed_ty ]
+  | _ ->
+      raise
+        (Failure "compute_expanded_symbolic_adt_value: unexpected combination")
 
 let expand_symbolic_value_shared_borrow (config : C.config)
     (original_sv : V.symbolic_value) (original_sv_place : SA.mplace option)
@@ -484,11 +510,13 @@ let expand_symbolic_bool (config : C.config) (sv : V.symbolic_value)
   apply_branching_symbolic_expansions_non_borrow config original_sv
     original_sv_place seel ctx
 
-let expand_symbolic_value (config : C.config) (allow_branching : bool)
+let expand_symbolic_value_no_branching (config : C.config)
     (sv : V.symbolic_value) (sv_place : SA.mplace option) : cm_fun =
  fun cf ctx ->
   (* Debug *)
-  log#ldebug (lazy ("expand_symbolic_value:" ^ symbolic_value_to_string ctx sv));
+  log#ldebug
+    (lazy
+      ("expand_symbolic_value_no_branching:" ^ symbolic_value_to_string ctx sv));
   (* Remember the initial context for printing purposes *)
   let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
@@ -499,52 +527,16 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
   let cc : cm_fun =
    fun cf ctx ->
     match rty with
-    (* TODO: I think it is possible to factorize a lot the below match *)
-    (* "Regular" ADTs *)
-    | T.Adt (T.AdtId def_id, regions, types) ->
+    (* ADTs *)
+    | T.Adt (adt_id, regions, types) ->
         (* Compute the expanded value *)
+        let allow_branching = false in
         let seel =
-          compute_expanded_symbolic_adt_value allow_branching sv.sv_kind def_id
+          compute_expanded_symbolic_adt_value allow_branching sv.sv_kind adt_id
             regions types ctx
         in
-        (* Check for branching *)
-        assert (List.length seel <= 1 || allow_branching);
-        (* Apply *)
-        let seel = List.map (fun see -> (Some see, cf)) seel in
-        apply_branching_symbolic_expansions_non_borrow config original_sv
-          original_sv_place seel ctx
-    (* Options *)
-    | T.Adt (T.Assumed Option, regions, types) ->
-        (* Sanity check *)
-        assert (regions = []);
-        let ty = Collections.List.to_cons_nil types in
-        (* Compute the expanded value *)
-        let seel =
-          compute_expanded_symbolic_option_value allow_branching sv.sv_kind ty
-        in
-
-        (* Check for branching *)
-        assert (List.length seel <= 1 || allow_branching);
-        (* Apply *)
-        let seel = List.map (fun see -> (Some see, cf)) seel in
-        apply_branching_symbolic_expansions_non_borrow config original_sv
-          original_sv_place seel ctx
-    (* Tuples *)
-    | T.Adt (T.Tuple, [], tys) ->
-        (* Generate the field values *)
-        let see = compute_expanded_symbolic_tuple_value sv.sv_kind tys in
-        (* Apply in the context *)
-        let ctx =
-          apply_symbolic_expansion_non_borrow config original_sv see ctx
-        in
-        (* Call the continuation *)
-        let expr = cf ctx in
-        (* Update the synthesized program *)
-        S.synthesize_symbolic_expansion_no_branching original_sv
-          original_sv_place see expr
-    (* Boxes *)
-    | T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) ->
-        let see = compute_expanded_symbolic_box_value sv.sv_kind boxed_ty in
+        (* There should be exacly one branch *)
+        let see = Collections.List.to_cons_nil seel in
         (* Apply in the context *)
         let ctx =
           apply_symbolic_expansion_non_borrow config original_sv see ctx
@@ -558,20 +550,64 @@ let expand_symbolic_value (config : C.config) (allow_branching : bool)
     | T.Ref (region, ref_ty, rkind) ->
         expand_symbolic_value_borrow config original_sv original_sv_place region
           ref_ty rkind cf ctx
-    (* Booleans *)
-    | T.Bool ->
-        assert allow_branching;
-        expand_symbolic_bool config sv sv_place cf cf ctx
     | _ ->
         raise
-          (Failure ("expand_symbolic_value: unexpected type: " ^ T.show_rty rty))
+          (Failure
+             ("expand_symbolic_value_no_branching: unexpected type: "
+            ^ T.show_rty rty))
   in
   (* Debug *)
   let cc =
     comp_unit cc (fun ctx ->
         log#ldebug
           (lazy
-            ("expand_symbolic_value: "
+            ("expand_symbolic_value_no_branching: "
+            ^ symbolic_value_to_string ctx0 sv
+            ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
+            ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
+        (* Sanity check: the symbolic value has disappeared *)
+        assert (not (symbolic_value_id_in_ctx original_sv.V.sv_id ctx)))
+  in
+  (* Continue *)
+  cc cf ctx
+
+let expand_symbolic_adt (config : C.config) (sv : V.symbolic_value)
+    (sv_place : SA.mplace option) : cm_fun =
+ fun cf ctx ->
+  (* Debug *)
+  log#ldebug (lazy ("expand_symbolic_adt:" ^ symbolic_value_to_string ctx sv));
+  (* Remember the initial context for printing purposes *)
+  let ctx0 = ctx in
+  (* Compute the expanded value - note that when doing so, we may introduce
+   * fresh symbolic values in the context (which thus gets updated) *)
+  let original_sv = sv in
+  let original_sv_place = sv_place in
+  let rty = original_sv.V.sv_ty in
+  let cc : cm_fun =
+   fun cf ctx ->
+    match rty with
+    (* ADTs *)
+    | T.Adt (adt_id, regions, types) ->
+        let allow_branching = true in
+        (* Compute the expanded value *)
+        let seel =
+          compute_expanded_symbolic_adt_value allow_branching sv.sv_kind adt_id
+            regions types ctx
+        in
+        (* Apply *)
+        let seel = List.map (fun see -> (Some see, cf)) seel in
+        apply_branching_symbolic_expansions_non_borrow config original_sv
+          original_sv_place seel ctx
+    | _ ->
+        raise
+          (Failure ("expand_symbolic_adt: unexpected type: " ^ T.show_rty rty))
+  in
+  (* Debug *)
+  let cc =
+    comp_unit cc (fun ctx ->
+        log#ldebug
+          (lazy
+            ("expand_symbolic_adt: "
             ^ symbolic_value_to_string ctx0 sv
             ^ "\n\n- original context:\n" ^ eval_ctx_to_string ctx0
             ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx ^ "\n"));
@@ -601,11 +637,6 @@ let expand_symbolic_int (config : C.config) (sv : V.symbolic_value)
   let tgts = List.append tgts [ (None, otherwise) ] in
   (* Then expand and evaluate - this generates the proper symbolic AST *)
   apply_branching_symbolic_expansions_non_borrow config sv sv_place tgts
-
-let expand_symbolic_value_no_branching (config : C.config)
-    (sv : V.symbolic_value) (sv_place : SA.mplace option) : cm_fun =
-  let allow_branching = false in
-  expand_symbolic_value config allow_branching sv sv_place
 
 (** Expand all the symbolic values which contain borrows.
     Allows us to restrict ourselves to a simpler model for the projectors over
