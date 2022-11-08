@@ -105,7 +105,9 @@ let fstar_keywords =
       "with";
       "assert";
       "assert_norm";
+      "assume";
       "Type0";
+      "Type";
       "unit";
       "not";
       "scalar_cast";
@@ -144,7 +146,7 @@ let fstar_assumed_functions :
     (VecIndexMut, rg0, "vec_index_mut_back");
   ]
 
-let fstar_names_map_init =
+let fstar_names_map_init : names_map_init =
   {
     keywords = fstar_keywords;
     assumed_adts = fstar_assumed_adts;
@@ -414,6 +416,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     char_name = "char";
     int_name;
     str_name = "string";
+    assert_name = "massert";
     field_name;
     variant_name;
     struct_constructor;
@@ -968,12 +971,17 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       ctx.fmt.extract_binop
         (extract_texpression ctx fmt)
         fmt inside binop int_ty arg0 arg1
-  | Regular (fun_id, rg_id), _ ->
+  | Regular (_, _), _ | Assert, [ _ ] ->
       if inside then F.pp_print_string fmt "(";
       (* Open a box for the function call *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the function name *)
-      let fun_name = ctx_get_function fun_id rg_id ctx in
+      let fun_name =
+        match fid with
+        | Regular (fun_id, rg_id) -> ctx_get_function fun_id rg_id ctx
+        | Assert -> ctx.fmt.assert_name
+        | _ -> raise (Failure "Unreachable")
+      in
       F.pp_print_string fmt fun_name;
       (* Print the type parameters *)
       List.iter
@@ -991,7 +999,7 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_close_box fmt ();
       (* Return *)
       if inside then F.pp_print_string fmt ")"
-  | _ ->
+  | (Unop _ | Binop _ | Assert), _ ->
       raise
         (Failure
            ("Unreachable:\n" ^ "Function: " ^ show_fun_id fid

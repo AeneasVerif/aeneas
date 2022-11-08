@@ -350,6 +350,10 @@ let mk_typed_pattern_from_var (v : var) (mp : mplace option) : typed_pattern =
   let ty = v.ty in
   { value; ty }
 
+let mk_dummy_pattern (ty : ty) : typed_pattern =
+  let value = PatDummy in
+  { value; ty }
+
 let mk_meta (m : meta) (e : texpression) : texpression =
   let ty = e.ty in
   let e = Meta (m, e) in

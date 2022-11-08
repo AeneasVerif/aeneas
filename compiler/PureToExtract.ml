@@ -51,6 +51,7 @@ type formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
+  assert_name : string;
   field_name : name -> FieldId.id -> string option -> string;
       (** Inputs:
           - type name
@@ -632,11 +633,20 @@ type names_map_init = {
 
 (** Initialize a names map with a proper set of keywords/names coming from the
     target language/prover. *)
-let initialize_names_map (init : names_map_init) : names_map =
-  let name_to_id =
-    StringMap.of_list (List.map (fun x -> (x, UnknownId)) init.keywords)
+let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
+  let int_names = List.map fmt.int_name T.all_int_types in
+  let keywords =
+    List.concat
+      [
+        [ fmt.bool_name; fmt.char_name; fmt.str_name; fmt.assert_name ];
+        int_names;
+        init.keywords;
+      ]
   in
-  let names_set = StringSet.of_list init.keywords in
+  let names_set = StringSet.of_list keywords in
+  let name_to_id =
+    StringMap.of_list (List.map (fun x -> (x, UnknownId)) keywords)
+  in
   (* We fist initialize [id_to_name] as empty, because the id of a keyword is [UnknownId].
    * Also note that we don't need this mapping for keywords: we insert keywords only
    * to check collisions. *)

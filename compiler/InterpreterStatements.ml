@@ -185,16 +185,18 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
     | Symbolic sv ->
         assert (config.mode = C.SymbolicMode);
         assert (sv.V.sv_ty = T.Bool);
-        (* Expand the symbolic value and call the proper continuation functions
-         * for the true and false cases - TODO: call an "assert" function instead *)
-        let cf_true : m_fun = fun ctx -> cf Unit ctx in
-        let cf_false : m_fun = fun ctx -> cf Panic ctx in
-        let expand =
-          expand_symbolic_bool config sv
-            (S.mk_opt_place_from_op assertion.cond ctx)
-            cf_true cf_false
+        (* We continue the execution as if the test had succeeded, and thus
+         * perform the symbolic expansion: sv ~~> true.
+         * We will of course synthesize an assertion in the generated code
+         * (see below). *)
+        let ctx =
+          apply_symbolic_expansion_non_borrow config sv
+            (V.SePrimitive (PV.Bool true)) ctx
         in
-        expand ctx
+        (* Continue *)
+        let expr = cf Unit ctx in
+        (* Add the synthesized assertion *)
+        S.synthesize_assertion v expr
     | _ ->
         raise
           (Failure ("Expected a boolean, got: " ^ typed_value_to_string ctx v))
@@ -949,11 +951,11 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
           | V.Symbolic sv ->
               (* Expand the symbolic boolean, and continue by evaluating
                * the branches *)
-              let cf_true : m_fun = eval_statement config st1 cf in
-              let cf_false : m_fun = eval_statement config st2 cf in
+              let cf_true : st_cm_fun = eval_statement config st1 in
+              let cf_false : st_cm_fun = eval_statement config st2 in
               expand_symbolic_bool config sv
                 (S.mk_opt_place_from_op op ctx)
-                cf_true cf_false ctx
+                cf_true cf_false cf ctx
           | _ -> raise (Failure "Inconsistent state")
         in
         (* Compose *)
@@ -982,7 +984,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
                * proper branches *)
               let stgts =
                 List.map
-                  (fun (cv, tgt_st) -> (cv, eval_statement config tgt_st cf))
+                  (fun (cv, tgt_st) -> (cv, eval_statement config tgt_st))
                   stgts
               in
               (* Several branches may be grouped together: every branch is described
@@ -996,11 +998,11 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
                      stgts)
               in
               (* Translate the otherwise branch *)
-              let otherwise = eval_statement config otherwise cf in
+              let otherwise = eval_statement config otherwise in
               (* Expand and continue *)
               expand_symbolic_int config sv
                 (S.mk_opt_place_from_op op ctx)
-                int_ty stgts otherwise ctx
+                int_ty stgts otherwise cf ctx
           | _ -> raise (Failure "Inconsistent state")
         in
         (* Compose *)
@@ -1034,7 +1036,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
               in
               (* Re-evaluate the switch - the value is not symbolic anymore,
                  which means we will go to the other branch *)
-              comp cf_expand (eval_switch config switch) cf ctx
+              cf_expand (eval_switch config switch) cf ctx
           | _ -> raise (Failure "Inconsistent state")
         in
         (* Compose *)
