@@ -1029,10 +1029,8 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
               | Some (_, tgt) -> eval_statement config tgt cf ctx)
           | V.Symbolic sv ->
               (* Expand the symbolic value - may lead to branching *)
-              let allow_branching = true in
               let cf_expand =
-                expand_symbolic_value config allow_branching sv
-                  (Some (S.mk_mplace p ctx))
+                expand_symbolic_adt config sv (Some (S.mk_mplace p ctx))
               in
               (* Re-evaluate the switch - the value is not symbolic anymore,
                  which means we will go to the other branch *)

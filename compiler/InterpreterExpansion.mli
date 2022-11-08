@@ -17,18 +17,6 @@ type proj_kind = LoanProj | BorrowProj
 val expand_symbolic_bool :
   C.config -> V.symbolic_value -> SA.mplace option -> m_fun -> m_fun -> m_fun
 
-(** Expand a symbolic value.
-    
-    Parameters:
-    - [config]
-    - [allow_branching]: if [true] we can branch (by expanding enumerations with
-      stricly more than one variant), otherwise we can't.
-    - [sv]
-    - [sv_place]
- *)
-val expand_symbolic_value :
-  C.config -> bool -> V.symbolic_value -> SA.mplace option -> cm_fun
-
 (** Symbolic integers are expanded upon evaluating a [switch], when the integer
     is not an enumeration discriminant.
     Note that a discriminant is never symbolic: we evaluate discriminant values
@@ -65,6 +53,12 @@ val expand_symbolic_int :
 
 (** See {!expand_symbolic_value} *)
 val expand_symbolic_value_no_branching :
+  C.config -> V.symbolic_value -> SA.mplace option -> cm_fun
+
+(** Expand a symbolic enumeration (leads to branching if the enumeration has
+    more than one variant).
+ *)
+val expand_symbolic_adt :
   C.config -> V.symbolic_value -> SA.mplace option -> cm_fun
 
 (** If this mode is activated through the [config], greedily expand the symbolic
