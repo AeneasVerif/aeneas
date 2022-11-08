@@ -274,7 +274,7 @@ let call_substitute (tsubst : T.TypeVarId.id -> T.ety) (call : A.call) : A.call
     dest;
   }
 
-(** Apply a type substitution to a statement *)
+(** Apply a type substitution to a statement - TODO: use a map iterator *)
 let rec statement_substitute (tsubst : T.TypeVarId.id -> T.ety)
     (st : A.statement) : A.statement =
   { st with A.content = raw_statement_substitute tsubst st.content }
@@ -305,23 +305,30 @@ and raw_statement_substitute (tsubst : T.TypeVarId.id -> T.ety)
   | A.Sequence (st1, st2) ->
       A.Sequence
         (statement_substitute tsubst st1, statement_substitute tsubst st2)
-  | A.Switch (op, tgts) ->
-      A.Switch
-        (operand_substitute tsubst op, switch_targets_substitute tsubst tgts)
+  | A.Switch switch -> A.Switch (switch_substitute tsubst switch)
   | A.Loop le -> A.Loop (statement_substitute tsubst le)
 
-(** Apply a type substitution to switch targets *)
-and switch_targets_substitute (tsubst : T.TypeVarId.id -> T.ety)
-    (tgts : A.switch_targets) : A.switch_targets =
-  match tgts with
-  | A.If (st1, st2) ->
-      A.If (statement_substitute tsubst st1, statement_substitute tsubst st2)
-  | A.SwitchInt (int_ty, tgts, otherwise) ->
+(** Apply a type substitution to a switch *)
+and switch_substitute (tsubst : T.TypeVarId.id -> T.ety) (switch : A.switch) :
+    A.switch =
+  match switch with
+  | A.If (op, st1, st2) ->
+      A.If
+        ( operand_substitute tsubst op,
+          statement_substitute tsubst st1,
+          statement_substitute tsubst st2 )
+  | A.SwitchInt (op, int_ty, tgts, otherwise) ->
       let tgts =
         List.map (fun (sv, st) -> (sv, statement_substitute tsubst st)) tgts
       in
       let otherwise = statement_substitute tsubst otherwise in
-      A.SwitchInt (int_ty, tgts, otherwise)
+      A.SwitchInt (operand_substitute tsubst op, int_ty, tgts, otherwise)
+  | A.Match (p, tgts, otherwise) ->
+      let tgts =
+        List.map (fun (sv, st) -> (sv, statement_substitute tsubst st)) tgts
+      in
+      let otherwise = statement_substitute tsubst otherwise in
+      A.Match (place_substitute tsubst p, tgts, otherwise)
 
 (** Apply a type substitution to a function body. Return the local variables
     and the body. *)

@@ -121,10 +121,9 @@ let remove_useless_cf_merges (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
 
       method! visit_Sequence env st1 st2 =
         match st1.content with
-        | Switch (op, tgts) ->
+        | Switch switch ->
             if can_be_moved st2 then
-              super#visit_Switch env op
-                (chain_statements_in_switch_targets tgts st2)
+              super#visit_Switch env (chain_statements_in_switch switch st2)
             else super#visit_Sequence env st1 st2
         | _ -> super#visit_Sequence env st1 st2
     end

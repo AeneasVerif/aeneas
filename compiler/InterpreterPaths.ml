@@ -569,23 +569,21 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
   in
 
   (* First, retrieve the value *)
-  match try_read_place config access p ctx with
-  | Error _ -> raise (Failure "Unreachable")
-  | Ok v -> (
-      (* Inspect the value and update the context while doing so.
-         If the context gets updated: perform a recursive call (many things
-         may have been updated in the context: we need to re-read the value
-         at place [p] - and this value may actually not be accessible
-         anymore...)
-      *)
-      try
-        obj#visit_typed_value () v;
-        (* No context update required: apply the continuation *)
-        cf ctx
-      with UpdateCtx cc ->
-        (* We need to update the context: compose the caugth continuation with
-         * a recursive call to reinspect the value *)
-        comp cc (end_loans_at_place config access p) cf ctx)
+  let v = read_place config access p ctx in
+  (* Inspect the value and update the context while doing so.
+     If the context gets updated: perform a recursive call (many things
+     may have been updated in the context: we need to re-read the value
+     at place [p] - and this value may actually not be accessible
+     anymore...)
+  *)
+  try
+    obj#visit_typed_value () v;
+    (* No context update required: apply the continuation *)
+    cf ctx
+  with UpdateCtx cc ->
+    (* We need to update the context: compose the caugth continuation with
+     * a recursive call to reinspect the value *)
+    comp cc (end_loans_at_place config access p) cf ctx
 
 let drop_outer_loans_at_lplace (config : C.config) (p : E.place) : cm_fun =
  fun cf ctx ->
