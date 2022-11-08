@@ -889,7 +889,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
         in
         (* Apply *)
         eval_statement config loop_body reeval_loop_body ctx
-    | A.Switch (op, tgts) -> eval_switch config op tgts cf ctx
+    | A.Switch switch -> eval_switch config switch cf ctx
   in
   (* Compose and apply *)
   comp cc cf_eval_st cf ctx
@@ -916,8 +916,7 @@ and eval_global (config : C.config) (dest : E.place) (gid : LA.GlobalDeclId.id)
       S.synthesize_global_eval gid sval e
 
 (** Evaluate a switch *)
-and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
-    st_cm_fun =
+and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
  fun cf ctx ->
   (* We evaluate the operand in two steps:
    * first we prepare it, then we check if its value is concrete or
@@ -927,74 +926,124 @@ and eval_switch (config : C.config) (op : E.operand) (tgts : A.switch_targets) :
    * value if it is symbolic, because the value may have been move
    * (and would thus floating in thin air...)!
    * *)
-  (* Prepare the operand *)
-  let cf_eval_op cf : m_fun = eval_operand config op cf in
   (* Match on the targets *)
-  let cf_match (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
-   fun ctx ->
-    match tgts with
-    | A.If (st1, st2) -> (
-        match op_v.value with
-        | V.Primitive (PV.Bool b) ->
-            (* Evaluate the if and the branch body *)
-            let cf_branch cf : m_fun =
-              (* Branch *)
-              if b then eval_statement config st1 cf
-              else eval_statement config st2 cf
-            in
-            (* Compose the continuations *)
-            cf_branch cf ctx
-        | V.Symbolic sv ->
-            (* Expand the symbolic boolean, and continue by evaluating
-             * the branches *)
-            let cf_true : m_fun = eval_statement config st1 cf in
-            let cf_false : m_fun = eval_statement config st2 cf in
-            expand_symbolic_bool config sv
-              (S.mk_opt_place_from_op op ctx)
-              cf_true cf_false ctx
-        | _ -> raise (Failure "Inconsistent state"))
-    | A.SwitchInt (int_ty, stgts, otherwise) -> (
-        match op_v.value with
-        | V.Primitive (PV.Scalar sv) ->
-            (* Evaluate the branch *)
-            let cf_eval_branch cf =
-              (* Sanity check *)
-              assert (sv.PV.int_ty = int_ty);
-              (* Find the branch *)
-              match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
-              | None -> eval_statement config otherwise cf
-              | Some (_, tgt) -> eval_statement config tgt cf
-            in
-            (* Compose *)
-            cf_eval_branch cf ctx
-        | V.Symbolic sv ->
-            (* Expand the symbolic value and continue by evaluating the
-             * proper branches *)
-            let stgts =
-              List.map
-                (fun (cv, tgt_st) -> (cv, eval_statement config tgt_st cf))
-                stgts
-            in
-            (* Several branches may be grouped together: every branch is described
-             * by a pair (list of values, branch expression).
-             * In order to do a symbolic evaluation, we make this "flat" by
-             * de-grouping the branches. *)
-            let stgts =
-              List.concat
-                (List.map
-                   (fun (vl, st) -> List.map (fun v -> (v, st)) vl)
-                   stgts)
-            in
-            (* Translate the otherwise branch *)
-            let otherwise = eval_statement config otherwise cf in
-            (* Expand and continue *)
-            expand_symbolic_int config sv
-              (S.mk_opt_place_from_op op ctx)
-              int_ty stgts otherwise ctx
-        | _ -> raise (Failure "Inconsistent state"))
+  let cf_match : st_cm_fun =
+   fun cf ctx ->
+    match switch with
+    | A.If (op, st1, st2) ->
+        (* Evaluate the operand *)
+        let cf_eval_op = eval_operand config op in
+        (* Switch on the value *)
+        let cf_if (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
+         fun ctx ->
+          match op_v.value with
+          | V.Primitive (PV.Bool b) ->
+              (* Evaluate the if and the branch body *)
+              let cf_branch cf : m_fun =
+                (* Branch *)
+                if b then eval_statement config st1 cf
+                else eval_statement config st2 cf
+              in
+              (* Compose the continuations *)
+              cf_branch cf ctx
+          | V.Symbolic sv ->
+              (* Expand the symbolic boolean, and continue by evaluating
+               * the branches *)
+              let cf_true : m_fun = eval_statement config st1 cf in
+              let cf_false : m_fun = eval_statement config st2 cf in
+              expand_symbolic_bool config sv
+                (S.mk_opt_place_from_op op ctx)
+                cf_true cf_false ctx
+          | _ -> raise (Failure "Inconsistent state")
+        in
+        (* Compose *)
+        comp cf_eval_op cf_if cf ctx
+    | A.SwitchInt (op, int_ty, stgts, otherwise) ->
+        (* Evaluate the operand *)
+        let cf_eval_op = eval_operand config op in
+        (* Switch on the value *)
+        let cf_switch (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
+         fun ctx ->
+          match op_v.value with
+          | V.Primitive (PV.Scalar sv) ->
+              (* Evaluate the branch *)
+              let cf_eval_branch cf =
+                (* Sanity check *)
+                assert (sv.PV.int_ty = int_ty);
+                (* Find the branch *)
+                match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
+                | None -> eval_statement config otherwise cf
+                | Some (_, tgt) -> eval_statement config tgt cf
+              in
+              (* Compose *)
+              cf_eval_branch cf ctx
+          | V.Symbolic sv ->
+              (* Expand the symbolic value and continue by evaluating the
+               * proper branches *)
+              let stgts =
+                List.map
+                  (fun (cv, tgt_st) -> (cv, eval_statement config tgt_st cf))
+                  stgts
+              in
+              (* Several branches may be grouped together: every branch is described
+               * by a pair (list of values, branch expression).
+               * In order to do a symbolic evaluation, we make this "flat" by
+               * de-grouping the branches. *)
+              let stgts =
+                List.concat
+                  (List.map
+                     (fun (vl, st) -> List.map (fun v -> (v, st)) vl)
+                     stgts)
+              in
+              (* Translate the otherwise branch *)
+              let otherwise = eval_statement config otherwise cf in
+              (* Expand and continue *)
+              expand_symbolic_int config sv
+                (S.mk_opt_place_from_op op ctx)
+                int_ty stgts otherwise ctx
+          | _ -> raise (Failure "Inconsistent state")
+        in
+        (* Compose *)
+        comp cf_eval_op cf_switch cf ctx
+    | A.Match (p, stgts, otherwise) ->
+        (* Access the place *)
+        let access = Read in
+        let expand_prim_copy = false in
+        let cf_read_p cf : m_fun =
+          access_rplace_reorganize_and_read config expand_prim_copy access p cf
+        in
+        (* Match on the value *)
+        let cf_match (cf : st_m_fun) (p_v : V.typed_value) : m_fun =
+         fun ctx ->
+          (* The value may be shared: we need to ignore the shared loans
+             to read the value itself *)
+          let p_v = value_strip_shared_loans p_v in
+          (* Match *)
+          match p_v.value with
+          | V.Adt adt -> (
+              (* Evaluate the discriminant *)
+              let dv = Option.get adt.variant_id in
+              (* Find the branch, evaluate and continue *)
+              match List.find_opt (fun (svl, _) -> List.mem dv svl) stgts with
+              | None -> eval_statement config otherwise cf ctx
+              | Some (_, tgt) -> eval_statement config tgt cf ctx)
+          | V.Symbolic sv ->
+              (* Expand the symbolic value - may lead to branching *)
+              let allow_branching = true in
+              let cf_expand =
+                expand_symbolic_value config allow_branching sv
+                  (Some (S.mk_mplace p ctx))
+              in
+              (* Re-evaluate the switch - the value is not symbolic anymore,
+                 which means we will go to the other branch *)
+              comp cf_expand (eval_switch config switch) cf ctx
+          | _ -> raise (Failure "Inconsistent state")
+        in
+        (* Compose *)
+        comp cf_read_p cf_match cf ctx
   in
   (* Compose the continuations *)
-  comp cf_eval_op cf_match cf ctx
+  cf_match cf ctx
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =

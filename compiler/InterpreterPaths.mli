@@ -27,6 +27,9 @@ val update_ctx_along_write_place : C.config -> access_kind -> E.place -> cm_fun
 
 (** Read the value at a given place.
 
+    This function doesn't update the environment to make sure the value is
+    accessible: if needs be, you should call {!update_ctx_along_read_place} first.
+
     Note that we only access the value at the place, and do not check that
     the value is "well-formed" (for instance that it doesn't contain bottoms).
  *)
@@ -35,7 +38,10 @@ val read_place :
 
 (** Update the value at a given place.
 
-    This function is an auxiliary function and is not safe: it will not check if
+    This function doesn't update the environment to make sure the value is
+    accessible: if needs be, you should call {!update_ctx_along_write_place} first.
+
+    This function is a helper function and is **not safe**: it will not check if
     the overwritten value contains borrows, loans, etc. and will simply
     overwrite it.
  *)

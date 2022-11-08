@@ -48,7 +48,7 @@ let option_none_id = T.option_none_id
 type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 [@@deriving show, ord]
 
-(** Ancestor for iter visitor for {!ty} *)
+(** Ancestor for iter visitor for {!Pure.ty} *)
 class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
@@ -57,7 +57,7 @@ class ['self] iter_ty_base =
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for map visitor for {!ty} *)
+(** Ancestor for map visitor for {!Pure.ty} *)
 class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map

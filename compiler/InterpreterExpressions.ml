@@ -66,22 +66,6 @@ let read_place (config : C.config) (access : access_kind) (p : E.place)
   (* Call the continuation *)
   cf v ctx
 
-(** Small utility.
-
-    Prepare the access to a place in a right-value (typically an operand) by
-    reorganizing the environment.
-
-    We reorganize the environment so that:
-    - we can access the place (we prepare *along* the path)
-    - the value at the place itself doesn't contain loans (the [access_kind]
-      controls whether we only end mutable loans, or also shared loans).
-
-    We also check, after the reorganization, that the value at the place
-    *doesn't contain any bottom nor reserved borrows*.
-
-    [expand_prim_copy]: if [true], expand the symbolic values which are
-    primitively copyable and contain borrows.
- *)
 let access_rplace_reorganize_and_read (config : C.config)
     (expand_prim_copy : bool) (access : access_kind) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
@@ -560,80 +544,6 @@ let eval_binary_op (config : C.config) (binop : E.binop) (op1 : E.operand)
   | C.ConcreteMode -> eval_binary_op_concrete config binop op1 op2 cf
   | C.SymbolicMode -> eval_binary_op_symbolic config binop op1 op2 cf
 
-(** Evaluate the discriminant of a concrete (i.e., non symbolic) ADT value *)
-let eval_rvalue_discriminant_concrete (config : C.config) (p : E.place)
-    (cf : V.typed_value -> m_fun) : m_fun =
-  (* Note that discriminant values have type [isize] *)
-  (* Access the value *)
-  let access = Read in
-  let expand_prim_copy = false in
-  let prepare =
-    access_rplace_reorganize_and_read config expand_prim_copy access p
-  in
-  (* Read the value *)
-  let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
-    (* The value may be shared: we need to ignore the shared loans *)
-    let v = value_strip_shared_loans v in
-    match v.V.value with
-    | Adt av -> (
-        match av.variant_id with
-        | None ->
-            raise
-              (Failure
-                 "Invalid input for `discriminant`: structure instead of enum")
-        | Some variant_id -> (
-            let id = Z.of_int (T.VariantId.to_int variant_id) in
-            match mk_scalar Isize id with
-            | Error _ -> raise (Failure "Disciminant id out of range")
-            (* Should really never happen *)
-            | Ok sv ->
-                cf { V.value = V.Primitive (PV.Scalar sv); ty = Integer Isize })
-        )
-    | _ ->
-        raise
-          (Failure ("Invalid input for `discriminant`: " ^ V.show_typed_value v))
-  in
-  (* Compose and apply *)
-  comp prepare read cf
-
-(** Evaluate the discriminant of an ADT value.
-
-    Might lead to branching, if the value is symbolic.
- *)
-let eval_rvalue_discriminant (config : C.config) (p : E.place)
-    (cf : V.typed_value -> m_fun) : m_fun =
- fun ctx ->
-  log#ldebug (lazy "eval_rvalue_discriminant");
-  (* Note that discriminant values have type [isize] *)
-  (* Access the value *)
-  let access = Read in
-  let expand_prim_copy = false in
-  let prepare =
-    access_rplace_reorganize_and_read config expand_prim_copy access p
-  in
-  (* Read the value *)
-  let read (cf : V.typed_value -> m_fun) (v : V.typed_value) : m_fun =
-   fun ctx ->
-    (* The value may be shared: we need to ignore the shared loans *)
-    let v = value_strip_shared_loans v in
-    match v.V.value with
-    | Adt _ -> eval_rvalue_discriminant_concrete config p cf ctx
-    | Symbolic sv ->
-        (* Expand the symbolic value - may lead to branching *)
-        let allow_branching = true in
-        let cc =
-          expand_symbolic_value config allow_branching sv
-            (Some (S.mk_mplace p ctx))
-        in
-        (* This time the value is concrete: reevaluate *)
-        comp cc (eval_rvalue_discriminant_concrete config p) cf ctx
-    | _ ->
-        raise
-          (Failure ("Invalid input for `discriminant`: " ^ V.show_typed_value v))
-  in
-  (* Compose and apply *)
-  comp prepare read cf ctx
-
 let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
@@ -780,7 +690,11 @@ let eval_rvalue_not_global (config : C.config) (rvalue : E.rvalue)
   | E.BinaryOp (binop, op1, op2) -> eval_binary_op config binop op1 op2 cf ctx
   | E.Aggregate (aggregate_kind, ops) ->
       comp_wrap (eval_rvalue_aggregate config aggregate_kind ops) ctx
-  | E.Discriminant p -> comp_wrap (eval_rvalue_discriminant config p) ctx
+  | E.Discriminant _ ->
+      raise
+        (Failure
+           "Unreachable: discriminant reads should have been eliminated from \
+            the AST")
   | E.Global _ -> raise (Failure "Unreachable")
 
 let eval_fake_read (config : C.config) (p : E.place) : cm_fun =
