@@ -634,14 +634,17 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       config.use_state crate
   in
 
-  (* Initialize the extraction context - for now we extract only to F* *)
-  let names_map =
-    PureToExtract.initialize_names_map ExtractToFStar.fstar_names_map_init
-  in
+  (* Initialize the extraction context - for now we extract only to F*.
+   * We initialize the names map by registering the keywords used in the
+   * language, as well as some primitive names ("u32", etc.) *)
   let variant_concatenate_type_name = true in
   let fstar_fmt =
     ExtractToFStar.mk_formatter trans_ctx crate.name
       variant_concatenate_type_name
+  in
+  let names_map =
+    PureToExtract.initialize_names_map fstar_fmt
+      ExtractToFStar.fstar_names_map_init
   in
   let ctx =
     { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }

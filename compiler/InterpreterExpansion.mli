@@ -13,17 +13,60 @@ open InterpreterBorrows
 
 type proj_kind = LoanProj | BorrowProj
 
-(** Expand a symbolic boolean *)
-val expand_symbolic_bool :
-  C.config -> V.symbolic_value -> SA.mplace option -> m_fun -> m_fun -> m_fun
+(** Apply a symbolic expansion to a context, by replacing the original
+    symbolic value with its expanded value. Is valid only if the expansion
+    is *not a borrow* (i.e., an adt...).
 
-(** Symbolic integers are expanded upon evaluating a [switch], when the integer
-    is not an enumeration discriminant.
-    Note that a discriminant is never symbolic: we evaluate discriminant values
-    upon evaluating [eval_discriminant], which always generates a concrete value
-    (because if we call it on a symbolic enumeration, we expand the enumeration
-    *then* evaluate the discriminant). This is how we can spot "regular" switches
-    over integers.
+    This function does *not* update the synthesis.
+*)
+val apply_symbolic_expansion_non_borrow :
+  C.config ->
+  V.symbolic_value ->
+  V.symbolic_expansion ->
+  C.eval_ctx ->
+  C.eval_ctx
+
+(** Expand a symhbolic value, without branching *)
+val expand_symbolic_value_no_branching :
+  C.config -> V.symbolic_value -> SA.mplace option -> cm_fun
+
+(** Expand a symbolic enumeration (leads to branching if the enumeration has
+    more than one variant).
+
+    Parameters:
+    - [config]
+    - [sv]
+    - [sv_place]
+    - [cf_branches]: the continuation to evaluate the branches. This continuation
+      typically evaluates a [match] statement *after* we have performed the symbolic
+      expansion (in particular, we can have one continuation for all the branches).
+    - [cf_after_join]: the continuation for *after* the match (we perform a join
+      then call it).
+ *)
+val expand_symbolic_adt :
+  C.config ->
+  V.symbolic_value ->
+  SA.mplace option ->
+  st_cm_fun ->
+  st_m_fun ->
+  m_fun
+
+(** Expand a symbolic boolean.
+
+    Parameters: see {!expand_symbolic_adt}.
+    The two parameters of type [st_cm_fun] correspond to the [cf_branches]
+    parameter (here, there are exactly two branches).
+ *)
+val expand_symbolic_bool :
+  C.config ->
+  V.symbolic_value ->
+  SA.mplace option ->
+  st_cm_fun ->
+  st_cm_fun ->
+  st_m_fun ->
+  m_fun
+
+(** Symbolic integers are expanded upon evaluating a [SwitchInt].
 
     When expanding a boolean upon evaluating an [if ... then ... else ...],
     or an enumeration just before matching over it, we can simply expand the
@@ -47,19 +90,10 @@ val expand_symbolic_int :
   V.symbolic_value ->
   SA.mplace option ->
   T.integer_type ->
-  (V.scalar_value * m_fun) list ->
-  m_fun ->
+  (V.scalar_value * st_cm_fun) list ->
+  st_cm_fun ->
+  st_m_fun ->
   m_fun
-
-(** See {!expand_symbolic_value} *)
-val expand_symbolic_value_no_branching :
-  C.config -> V.symbolic_value -> SA.mplace option -> cm_fun
-
-(** Expand a symbolic enumeration (leads to branching if the enumeration has
-    more than one variant).
- *)
-val expand_symbolic_adt :
-  C.config -> V.symbolic_value -> SA.mplace option -> cm_fun
 
 (** If this mode is activated through the [config], greedily expand the symbolic
     values which need to be expanded. See {!C.config} for more information.

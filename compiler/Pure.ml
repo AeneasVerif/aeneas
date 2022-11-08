@@ -292,9 +292,11 @@ type fun_id =
           works only if we unfold all the monadic let-bindings, and we
           then replace the content of the occurrences of [Return] to also
           return the state (which is really super ugly).
+          TODO: also add Assert...
        *)
   | Unop of unop
   | Binop of E.binop * integer_type
+  | Assert
 [@@deriving show, ord]
 
 (** An identifier for an ADT constructor *)
@@ -394,8 +396,9 @@ type expression =
       
           TODO: the boolean should be replaced by an enum: sometimes we use
           the error-monad, sometimes we use the state-error monad (and we
-          do this an a per-function basis! For instance, arithmetic functions
-          are always in the error monad).
+          should do this an a per-function basis! For instance, arithmetic
+          functions are always in the error monad, they shouldn't use the
+          state-error monad).
 
           The boolean controls whether the let is monadic or not.
           For instance, in F*:

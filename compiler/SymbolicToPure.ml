@@ -1084,6 +1084,7 @@ let rec translate_expression (config : config) (e : S.expression) (ctx : bs_ctx)
   | FunCall (call, e) -> translate_function_call config call e ctx
   | EndAbstraction (abs, e) -> translate_end_abstraction config abs e ctx
   | EvalGlobal (gid, sv, e) -> translate_global_eval config gid sv e ctx
+  | Assertion (v, e) -> translate_assertion config v e ctx
   | Expansion (p, sv, exp) -> translate_expansion config p sv exp ctx
   | Meta (meta, e) -> translate_meta config meta e ctx
 
@@ -1479,6 +1480,18 @@ and translate_global_eval (config : config) (gid : A.GlobalDeclId.id)
   let gval = { e = Qualif global_expr; ty } in
   let e = translate_expression config e ctx in
   mk_let false (mk_typed_pattern_from_var var None) gval e
+
+and translate_assertion (config : config) (v : V.typed_value) (e : S.expression)
+    (ctx : bs_ctx) : texpression =
+  let next_e = translate_expression config e ctx in
+  let monadic = true in
+  let v = typed_value_to_texpression ctx v in
+  let args = [ v ] in
+  let func = { id = Func Assert; type_args = [] } in
+  let func_ty = mk_arrow Bool mk_unit_ty in
+  let func = { e = Qualif func; ty = func_ty } in
+  let assertion = mk_apps func args in
+  mk_let monadic (mk_dummy_pattern mk_unit_ty) assertion next_e
 
 and translate_expansion (config : config) (p : S.mplace option)
     (sv : V.symbolic_value) (exp : S.expansion) (ctx : bs_ctx) : texpression =

@@ -155,3 +155,6 @@ let synthesize_assignment (lplace : mplace) (rvalue : V.typed_value)
   match expr with
   | None -> None
   | Some expr -> Some (Meta (Assignment (lplace, rvalue, rplace), expr))
+
+let synthesize_assertion (v : V.typed_value) (expr : expression option) =
+  match expr with None -> None | Some expr -> Some (Assertion (v, expr))

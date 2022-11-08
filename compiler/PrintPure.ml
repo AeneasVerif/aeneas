@@ -428,6 +428,7 @@ let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   | Unop unop -> unop_to_string unop
   | Binop (binop, int_ty) ->
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
+  | Assert -> "assert"
 
 (** [inside]: controls the introduction of parentheses *)
 let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
