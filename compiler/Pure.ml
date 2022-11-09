@@ -496,19 +496,26 @@ and meta =
 
 (** Information about the "effect" of a function *)
 type fun_effect_info = {
-  input_state : bool;  (** [true] if the function takes a state as input *)
-  output_state : bool;
-      (** [true] if the function outputs a state (it then lives
-                            in a state monad) *)
+  stateful_group : bool;
+      (** [true] if the function group is stateful. By *function group*, we mean
+          the set { forward function } U { backward functions }.
+
+          We need this because the option {!Translate.eval_config.backward_no_state_update}:
+          if it is [true], then in case of a backward function {!stateful} is [false],
+          but we might need to know whether the corresponding forward function
+          is stateful or not.
+       *)
+  stateful : bool;  (** [true] if the function is stateful (updates a state) *)
   can_fail : bool;  (** [true] if the return type is a [result] *)
 }
 
 (** Meta information about a function signature *)
 type fun_sig_info = {
   num_fwd_inputs : int;
-      (** The number of input types for forward computation *)
+      (** The number of input types for forward computation, ignoring the state *)
   num_back_inputs : int option;
-      (** The number of additional inputs for the backward computation (if pertinent) *)
+      (** The number of additional inputs for the backward computation (if pertinent),
+          ignoring the state *)
   effect_info : fun_effect_info;
 }
 
@@ -523,12 +530,18 @@ type fun_sig_info = {
       `in_ty0 -> ... -> in_tyn -> back_in0 -> ... back_inm -> (back_out0 & ... & back_outp)` (* pure function *)
       `in_ty0 -> ... -> in_tyn -> back_in0 -> ... back_inm ->
        result (back_out0 & ... & back_outp)` (* error-monad *)
-      `in_ty0 -> ... -> in_tyn -> state -> back_in0 -> ... back_inm ->
-       result (back_out0 & ... & back_outp)` (* state-error *)
+      `in_ty0 -> ... -> in_tyn -> state -> back_in0 -> ... back_inm -> state ->
+       result (state & (back_out0 & ... & back_outp))` (* state-error *)
        
-       Note that a backward function never returns (i.e., updates) a state: only
-       forward functions do so. Also, the state input parameter is *betwee*
-       the forward inputs and the backward inputs.
+       Note that a stateful backward function takes two states as inputs: the
+       state received by the associated forward function, and the state at which
+       the backward is called. This leads to code of the following shape:
+
+       {[
+         (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
+         ... // the state may be updated
+         (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
+       ]}
 
     The function's type should be given by `mk_arrows sig.inputs sig.output`.
     We provide additional meta-information:

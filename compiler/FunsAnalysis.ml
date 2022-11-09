@@ -16,7 +16,7 @@ module EU = ExpressionsUtils
  *)
 type fun_info = {
   can_fail : bool;
-  (* Not used yet: all the extracted functions use an error monad *)
+      (* Not used yet: all the extracted functions use an error monad *)
   stateful : bool;
   divergent : bool; (* Not used yet *)
 }

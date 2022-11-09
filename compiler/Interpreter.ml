@@ -253,8 +253,15 @@ let evaluate_function_symbolic (config : C.partial_config) (synthesize : bool)
               cf_pop cf_return ctx
           | Some back_id ->
               (* Backward translation *)
-              evaluate_function_symbolic_synthesize_backward_from_return config
-                fdef inst_sg back_id ctx
+              let e =
+                evaluate_function_symbolic_synthesize_backward_from_return
+                  config fdef inst_sg back_id ctx
+              in
+              (* We insert a delimiter to indicate the point where we switch
+               * from the part which is common to all the functions (forwards
+               * and backwards) and the part specific to this backward function.
+               *)
+              S.synthesize_forward_end e
         else None
     | Panic ->
         (* Note that as we explore all the execution branches, one of

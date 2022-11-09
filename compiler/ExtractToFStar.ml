@@ -1451,17 +1451,19 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
        * function (the additional input values "given back" to the
        * backward functions have no influence on termination: we thus
        * share the decrease clauses between the forward and the backward
-       * functions).
+       * functions - we also ignore the additional state received by the
+       * backward function, if there is one).
        *)
       let inputs_lvs =
         let all_inputs = (Option.get def.body).inputs_lvs in
         (* We have to count:
          * - the forward inputs
-         * - the state
+         * - the state (if there is one)
          *)
         let num_fwd_inputs = def.signature.info.num_fwd_inputs in
         let num_fwd_inputs =
-          if def.signature.info.effect_info.input_state then 1 + num_fwd_inputs
+          if def.signature.info.effect_info.stateful_group then
+            1 + num_fwd_inputs
           else num_fwd_inputs
         in
         Collections.List.prefix num_fwd_inputs all_inputs

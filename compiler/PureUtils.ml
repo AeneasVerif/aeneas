@@ -456,3 +456,9 @@ let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
 
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
   match e.e with Meta (MPlace mp, e) -> (Some mp, e) | _ -> (None, e)
+
+let mk_state_var (vid : VarId.id) : var =
+  { id = vid; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
+
+let mk_state_texpression (vid : VarId.id) : texpression =
+  { e = Var vid; ty = mk_state_ty }

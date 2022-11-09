@@ -38,6 +38,8 @@ let () =
   let test_trans_units = ref false in
   let no_decreases_clauses = ref false in
   let no_state = ref false in
+  (* [backward_no_state_update]: see the comment for {!Translate.config.backward_no_state_update} *)
+  let backward_no_state_update = ref false in
   let template_decreases_clauses = ref false in
   let no_split_files = ref false in
   let no_check_inv = ref false in
@@ -78,6 +80,9 @@ let () =
       ( "-no-state",
         Arg.Set no_state,
         " Do not use state-error monads, simply use error monads" );
+      ( "-backward-no-state-update",
+        Arg.Set backward_no_state_update,
+        " Forbid backward functions from updating the state" );
       ( "-template-clauses",
         Arg.Set template_decreases_clauses,
         " Generate templates for the required decreases clauses, in a\n\
@@ -95,6 +100,8 @@ let () =
   in
   (* Sanity check: -template-clauses ==> not -no-decrease-clauses *)
   assert ((not !no_decreases_clauses) || not !template_decreases_clauses);
+  (* Sanity check: -backward-no-state-update ==> not -no-state *)
+  assert ((not !backward_no_state_update) || not !no_state);
 
   let spec = Arg.align spec in
   let filenames = ref [] in
@@ -110,10 +117,10 @@ let () =
     | [ f ] ->
         (* TODO: update the extension *)
         if not (Filename.check_suffix f ".llbc") then (
-          print_string "Unrecognized file extension";
+          print_string ("Unrecognized file extension: " ^ f ^ "\n");
           fail ())
         else if not (Sys.file_exists f) then (
-          print_string "File not found";
+          print_string ("File not found: " ^ f ^ "\n");
           fail ())
         else f
     | _ ->
@@ -198,6 +205,7 @@ let () =
           extract_decreases_clauses = not !no_decreases_clauses;
           extract_template_decreases_clauses = !template_decreases_clauses;
           use_state = not !no_state;
+          backward_no_state_update = !backward_no_state_update;
         }
       in
       Translate.translate_module filename dest_dir trans_config m;

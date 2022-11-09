@@ -12,24 +12,31 @@ let swap_fwd (t : Type0) (x : t) (y : t) (st : state) : result (state & unit) =
   begin match core_mem_swap_fwd t x y st with
   | Fail -> Fail
   | Return (st0, _) ->
-    begin match core_mem_swap_back0 t x y st with
+    begin match core_mem_swap_back0 t x y st st0 with
     | Fail -> Fail
-    | Return _ ->
-      begin match core_mem_swap_back1 t x y st with
+    | Return (st1, _) ->
+      begin match core_mem_swap_back1 t x y st st1 with
       | Fail -> Fail
-      | Return _ -> Return (st0, ())
+      | Return (st2, _) -> Return (st2, ())
       end
     end
   end
 
 (** [external::swap] *)
-let swap_back (t : Type0) (x : t) (y : t) (st : state) : result (t & t) =
-  begin match core_mem_swap_back0 t x y st with
+let swap_back
+  (t : Type0) (x : t) (y : t) (st : state) (st0 : state) :
+  result (state & (t & t))
+  =
+  begin match core_mem_swap_fwd t x y st with
   | Fail -> Fail
-  | Return x0 ->
-    begin match core_mem_swap_back1 t x y st with
+  | Return (st1, _) ->
+    begin match core_mem_swap_back0 t x y st st1 with
     | Fail -> Fail
-    | Return y0 -> Return (x0, y0)
+    | Return (st2, x0) ->
+      begin match core_mem_swap_back1 t x y st st2 with
+      | Fail -> Fail
+      | Return (_, y0) -> Return (st0, (x0, y0))
+      end
     end
   end
 
@@ -64,25 +71,31 @@ let custom_swap_fwd
   begin match core_mem_swap_fwd t x y st with
   | Fail -> Fail
   | Return (st0, _) ->
-    begin match core_mem_swap_back0 t x y st with
+    begin match core_mem_swap_back0 t x y st st0 with
     | Fail -> Fail
-    | Return x0 ->
-      begin match core_mem_swap_back1 t x y st with
+    | Return (st1, x0) ->
+      begin match core_mem_swap_back1 t x y st st1 with
       | Fail -> Fail
-      | Return _ -> Return (st0, x0)
+      | Return (st2, _) -> Return (st2, x0)
       end
     end
   end
 
 (** [external::custom_swap] *)
 let custom_swap_back
-  (t : Type0) (x : t) (y : t) (st : state) (ret : t) : result (t & t) =
-  begin match core_mem_swap_back0 t x y st with
+  (t : Type0) (x : t) (y : t) (st : state) (ret : t) (st0 : state) :
+  result (state & (t & t))
+  =
+  begin match core_mem_swap_fwd t x y st with
   | Fail -> Fail
-  | Return _ ->
-    begin match core_mem_swap_back1 t x y st with
+  | Return (st1, _) ->
+    begin match core_mem_swap_back0 t x y st st1 with
     | Fail -> Fail
-    | Return y0 -> Return (ret, y0)
+    | Return (st2, _) ->
+      begin match core_mem_swap_back1 t x y st st2 with
+      | Fail -> Fail
+      | Return (_, y0) -> Return (st0, (ret, y0))
+      end
     end
   end
 
@@ -96,10 +109,12 @@ let test_custom_swap_fwd
 
 (** [external::test_custom_swap] *)
 let test_custom_swap_back
-  (x : u32) (y : u32) (st : state) : result (u32 & u32) =
-  begin match custom_swap_back u32 x y st 1 with
+  (x : u32) (y : u32) (st : state) (st0 : state) :
+  result (state & (u32 & u32))
+  =
+  begin match custom_swap_back u32 x y st 1 st0 with
   | Fail -> Fail
-  | Return (x0, y0) -> Return (x0, y0)
+  | Return (st1, (x0, y0)) -> Return (st1, (x0, y0))
   end
 
 (** [external::test_swap_non_zero] *)
@@ -107,9 +122,9 @@ let test_swap_non_zero_fwd (x : u32) (st : state) : result (state & u32) =
   begin match swap_fwd u32 x 0 st with
   | Fail -> Fail
   | Return (st0, _) ->
-    begin match swap_back u32 x 0 st with
+    begin match swap_back u32 x 0 st st0 with
     | Fail -> Fail
-    | Return (x0, _) -> if x0 = 0 then Fail else Return (st0, x0)
+    | Return (st1, (x0, _)) -> if x0 = 0 then Fail else Return (st1, x0)
     end
   end
 

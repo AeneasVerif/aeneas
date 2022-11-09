@@ -35,6 +35,7 @@ rust-scripts/target/
 .depend
 *.hints
 tests/betree/obj/
+tests/betree_back_stateful/obj/
 tests/hashmap/obj/
 tests/hashmap_on_disk/obj/
 tests/misc/obj/
