@@ -77,13 +77,16 @@ type expression =
           We use it to compute meaningful names for the variables we introduce,
           to prettify the generated code.
        *)
-  | ForwardEnd of expression
+  | ForwardEnd of expression * expression T.RegionGroupId.Map.t
       (** We use this delimiter to indicate at which point we switch to the
-          generation of code specific to the backward function(s).
+          generation of code specific to the backward function(s). This allows
+          us in particular to factor the work out: we don't need to replay the
+          symbolic execution up to this point, and can reuse it for the forward
+          function and all the backward functions.
 
-          TODO: use this to factorize the generation of the forward and backward
-          functions (today we replay the *whole* symbolic execution once per
-          generated function).
+          The first expression gives the end of the translation for the forward
+          function, the map from region group ids to expressions gives the end
+          of the translation for the backward functions.
        *)
   | Meta of meta * expression  (** Meta information *)
 
