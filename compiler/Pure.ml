@@ -511,11 +511,16 @@ type fun_effect_info = {
 
 (** Meta information about a function signature *)
 type fun_sig_info = {
-  num_fwd_inputs : int;
-      (** The number of input types for forward computation, ignoring the state *)
-  num_back_inputs : int option;
+  num_fwd_inputs_no_state : int;
+      (** The number of input types for forward computation, ignoring the state (if there is one) *)
+  num_fwd_inputs_with_state : int;
+      (** The number of input types for forward computation, with the state (if there is one) *)
+  num_back_inputs_no_state : int option;
       (** The number of additional inputs for the backward computation (if pertinent),
-          ignoring the state *)
+          ignoring the state (if there is one) *)
+  num_back_inputs_with_state : int option;
+      (** The number of additional inputs for the backward computation (if pertinent),
+          with the state (if there is one) *)
   effect_info : fun_effect_info;
 }
 
@@ -524,14 +529,14 @@ type fun_sig_info = {
     We have the following cases:
     - forward function:
       [in_ty0 -> ... -> in_tyn -> out_ty]                           (* pure function *)
-      `in_ty0 -> ... -> in_tyn -> result out_ty`                    (* error-monad *)
-      `in_ty0 -> ... -> in_tyn -> state -> result (state & out_ty)` (* state-error *)
+      [in_ty0 -> ... -> in_tyn -> result out_ty]                    (* error-monad *)
+      [in_ty0 -> ... -> in_tyn -> state -> result (state & out_ty)] (* state-error *)
     - backward function:
-      `in_ty0 -> ... -> in_tyn -> back_in0 -> ... back_inm -> (back_out0 & ... & back_outp)` (* pure function *)
-      `in_ty0 -> ... -> in_tyn -> back_in0 -> ... back_inm ->
-       result (back_out0 & ... & back_outp)` (* error-monad *)
-      `in_ty0 -> ... -> in_tyn -> state -> back_in0 -> ... back_inm -> state ->
-       result (state & (back_out0 & ... & back_outp))` (* state-error *)
+      [in_ty0 -> ... -> in_tyn -> back_in0 -> ... back_inm -> (back_out0 & ... & back_outp)] (* pure function *)
+      [in_ty0 -> ... -> in_tyn -> back_in0 -> ... back_inm ->
+       result (back_out0 & ... & back_outp)] (* error-monad *)
+      [in_ty0 -> ... -> in_tyn -> state -> back_in0 -> ... back_inm -> state ->
+       result (state & (back_out0 & ... & back_outp))] (* state-error *)
        
        Note that a stateful backward function takes two states as inputs: the
        state received by the associated forward function, and the state at which
@@ -543,7 +548,7 @@ type fun_sig_info = {
          (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
        ]}
 
-    The function's type should be given by `mk_arrows sig.inputs sig.output`.
+    The function's type should be given by [mk_arrows sig.inputs sig.output].
     We provide additional meta-information:
     - we divide between forward inputs and backward inputs (i.e., inputs specific
       to the forward functions, and additional inputs necessary if the signature is
@@ -571,8 +576,8 @@ type fun_sig = {
             fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T;
           ]}
           Decomposed outputs:
-          - forward function:  [T]
-          - backward function: [T; T] (for "x" and "y")
+          - forward function:  [[T]]
+          - backward function: [[T; T]] (for "x" and "y")
           
        *)
   info : fun_sig_info;  (** Additional information *)

@@ -134,7 +134,6 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   in
 
   (* We need to initialize the input/output variables *)
-  let num_forward_inputs = List.length fdef.signature.inputs in
   let add_forward_inputs input_svs ctx =
     match fdef.body with
     | None -> ctx
@@ -189,23 +188,12 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
           RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
         (* We need to ignore the forward inputs, and the state input (if there is) *)
-        let fun_info =
-          SymbolicToPure.get_fun_effect_info fun_context.fun_infos
-            (A.Regular def_id) (Some back_id)
-        in
         let backward_inputs =
+          let sg = backward_sg.sg in
           (* We need to ignore the forward state and the backward state *)
-          (* TODO: this is ad-hoc and error-prone. We should group all this
-           * information in the signature information. *)
-          let fwd_state_n = if fun_info.stateful_group then 1 else 0 in
-          let num_forward_inputs = num_forward_inputs + fwd_state_n in
-          let back_state_n = if fun_info.stateful then 1 else 0 in
-          let num_back_inputs =
-            List.length backward_sg.sg.inputs
-            - num_forward_inputs - back_state_n
-          in
-          Collections.List.subslice backward_sg.sg.inputs num_forward_inputs
-            num_back_inputs
+          let num_forward_inputs = sg.info.num_fwd_inputs_with_state in
+          let num_back_inputs = Option.get sg.info.num_back_inputs_no_state in
+          Collections.List.subslice sg.inputs num_forward_inputs num_back_inputs
         in
         (* As we forbid nested borrows, the additional inputs for the backward
          * functions come from the borrows in the return value of the rust function:
