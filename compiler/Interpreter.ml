@@ -210,16 +210,10 @@ let evaluate_function_symbolic_synthesize_backward_from_return
  *)
 let evaluate_function_symbolic (synthesize : bool)
     (type_context : C.type_context) (fun_context : C.fun_context)
-    (global_context : C.global_context) (fdef : A.fun_decl)
-    (back_id : T.RegionGroupId.id option) :
+    (global_context : C.global_context) (fdef : A.fun_decl) :
     V.symbolic_value list * SA.expression option =
   (* Debug *)
-  let name_to_string () =
-    Print.fun_name_to_string fdef.A.name
-    ^ " ("
-    ^ Print.option_to_string T.RegionGroupId.to_string back_id
-    ^ ")"
-  in
+  let name_to_string () = Print.fun_name_to_string fdef.A.name in
   log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
 
   (* Create the evaluation context *)
@@ -234,34 +228,46 @@ let evaluate_function_symbolic (synthesize : bool)
     match res with
     | Return ->
         if synthesize then
+          (* We have to "play different endings":
+           * - one execution for the forward function
+           * - one execution per backward function
+           * We then group everything together.
+           *)
           (* There are two cases:
            * - if this is a forward translation, we retrieve the returned value.
            * - if this is a backward translation, we introduce "return"
            *   abstractions to consume the return value, then end all the
            *   abstractions up to the one in which we are interested.
            *)
-          match back_id with
-          | None ->
-              (* Forward translation *)
-              (* Pop the frame and retrieve the returned value at the same time*)
-              let cf_pop = pop_frame config in
-              (* Generate the Return node *)
-              let cf_return ret_value : m_fun =
-               fun _ -> Some (SA.Return (Some ret_value))
-              in
-              (* Apply *)
-              cf_pop cf_return ctx
-          | Some back_id ->
-              (* Backward translation *)
-              let e =
-                evaluate_function_symbolic_synthesize_backward_from_return
-                  config fdef inst_sg back_id ctx
-              in
-              (* We insert a delimiter to indicate the point where we switch
-               * from the part which is common to all the functions (forwards
-               * and backwards) and the part specific to this backward function.
-               *)
-              S.synthesize_forward_end e
+          (* Forward translation: retrieve the returned value *)
+          let fwd_e =
+            (* Pop the frame and retrieve the returned value at the same time*)
+            let cf_pop = pop_frame config in
+            (* Generate the Return node *)
+            let cf_return ret_value : m_fun =
+             fun _ -> Some (SA.Return (Some ret_value))
+            in
+            (* Apply *)
+            cf_pop cf_return ctx
+          in
+          let fwd_e = Option.get fwd_e in
+          (* Backward translation: introduce "return"
+             abstractions to consume the return value, then end all the
+             abstractions up to the one in which we are interested.
+          *)
+          let finish_back_eval back_id =
+            Option.get
+              (evaluate_function_symbolic_synthesize_backward_from_return config
+                 fdef inst_sg back_id ctx)
+          in
+          let back_el =
+            T.RegionGroupId.mapi
+              (fun gid _ -> (gid, finish_back_eval gid))
+              fdef.signature.regions_hierarchy
+          in
+          let back_el = T.RegionGroupId.Map.of_list back_el in
+          (* Put everything together *)
+          S.synthesize_forward_end fwd_e back_el
         else None
     | Panic ->
         (* Note that as we explore all the execution branches, one of
@@ -355,17 +361,9 @@ module Test = struct
       (lazy ("test_function_symbolic: " ^ Print.fun_name_to_string fdef.A.name));
 
     (* Evaluate *)
-    let evaluate =
+    let _ =
       evaluate_function_symbolic synthesize type_context fun_context
         global_context fdef
-    in
-    (* Execute the forward function *)
-    let _ = evaluate None in
-    (* Execute the backward functions *)
-    let _ =
-      T.RegionGroupId.mapi
-        (fun gid _ -> evaluate (Some gid))
-        fdef.signature.regions_hierarchy
     in
 
     ()

@@ -1113,13 +1113,16 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | Assertion (v, e) -> translate_assertion v e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | Meta (meta, e) -> translate_meta meta e ctx
-  | ForwardEnd e ->
+  | ForwardEnd (e, back_e) ->
       (* Update the current state with the additional state received by the backward
-         function, if needs be *)
-      let ctx =
+         function, if needs be, and lookup the proper expression *)
+      let ctx, e =
         match ctx.bid with
-        | None -> ctx
-        | Some _ -> { ctx with state_var = ctx.back_state_var }
+        | None -> (ctx, e)
+        | Some bid ->
+            let ctx = { ctx with state_var = ctx.back_state_var } in
+            let e = T.RegionGroupId.Map.find bid back_e in
+            (ctx, e)
       in
       translate_expression e ctx
 

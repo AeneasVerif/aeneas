@@ -152,5 +152,6 @@ let synthesize_assignment (lplace : mplace) (rvalue : V.typed_value)
 let synthesize_assertion (v : V.typed_value) (e : expression option) =
   Option.map (fun e -> Assertion (v, e)) e
 
-let synthesize_forward_end (e : expression option) =
-  Option.map (fun e -> ForwardEnd e) e
+let synthesize_forward_end (e : expression)
+    (el : expression T.RegionGroupId.Map.t) =
+  Some (ForwardEnd (e, el))
