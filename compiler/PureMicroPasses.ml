@@ -610,9 +610,9 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
                   match qualif.id with
                   | AdtCons _ -> true (* ADT constructor *)
                   | Proj _ -> true (* Projector *)
-                  | Func (Unop _ | Binop _) ->
+                  | FunOrOp (Unop _ | Binop _) ->
                       true (* primitive function call *)
-                  | Func (Regular _) -> false (* non-primitive function call *)
+                  | FunOrOp (Fun _) -> false (* non-primitive function call *)
                   | _ -> false)
               | _ -> false
             in
@@ -667,24 +667,25 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
       fn f<'a>(x : &'a mut T);
     ]}
     
-    We often have  things like this in the synthesized code:
+    We often have things like this in the synthesized code:
     {[
-      _ <-- f x;
+      _ <-- f@fwd x;
       ...
       nx <-- f@back'a x y;
       ...
     ]}
 
-    In this situation, we can remove the call [f x].
+    If [f@back'a x y] fails, then necessarily [f@fwd x] also fails.
+    In this situation, we can remove the call [f@fwd x].
  *)
 let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
-    (fun_id0 : fun_id) (tys0 : ty list) (args0 : texpression list)
-    (e : texpression) : bool =
-  let check_call (fun_id1 : fun_id) (tys1 : ty list) (args1 : texpression list)
-      : bool =
+    (id0 : A.fun_id) (rg_id0 : T.RegionGroupId.id option) (tys0 : ty list)
+    (args0 : texpression list) (e : texpression) : bool =
+  let check_call (fun_id1 : fun_or_op_id) (tys1 : ty list)
+      (args1 : texpression list) : bool =
     (* Check the fun_ids, to see if call1's function is a child of call0's function *)
-    match (fun_id0, fun_id1) with
-    | Regular (id0, rg_id0), Regular (id1, rg_id1) ->
+    match fun_id1 with
+    | Fun (FromLlbc (id1, rg_id1)) ->
         (* Both are "regular" calls: check if they come from the same rust function *)
         if id0 = id1 then
           (* Same rust functions: check the regions hierarchy *)
@@ -858,20 +859,20 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
                  * We can filter if the right-expression is a function call,
                  * under some conditions. *)
                 match (filter_monadic_calls, opt_destruct_function_call re) with
-                | true, Some (func, tys, args) ->
+                | true, Some (Fun (FromLlbc (fid, rg_id)), tys, args) ->
                     (* We need to check if there is a child call - see
                      * the comments for:
                      * [expression_contains_child_call_in_all_paths] *)
                     let has_child_call =
-                      expression_contains_child_call_in_all_paths ctx func tys
-                        args e
+                      expression_contains_child_call_in_all_paths ctx fid rg_id
+                        tys args e
                     in
                     if has_child_call then (* Filter *)
                       (e.e, fun _ -> used)
                     else (* No child call: don't filter *)
                       dont_filter ()
                 | _ ->
-                    (* Not a call or not allowed to filter: we can't filter *)
+                    (* Not an LLBC function call or not allowed to filter: we can't filter *)
                     dont_filter ()
             else (* There are used variables: don't filter *)
               dont_filter ()
@@ -1088,7 +1089,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         match opt_destruct_function_call e with
         | Some (fun_id, _tys, args) -> (
             match fun_id with
-            | Regular (A.Assumed aid, rg_id) -> (
+            | Fun (FromLlbc (A.Assumed aid, rg_id)) -> (
                 (* Below, when dealing with the arguments: we consider the very
                  * general case, where functions could be boxed (meaning we
                  * could have: [box_new f x])

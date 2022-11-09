@@ -51,7 +51,6 @@ type formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
-  assert_name : string;
   field_name : name -> FieldId.id -> string option -> string;
       (** Inputs:
           - type name
@@ -86,16 +85,12 @@ type formatter = {
   global_name : global_name -> string;
       (** Provided a basename, compute a global name. *)
   fun_name :
-    A.fun_id ->
-    fun_name ->
-    int ->
-    region_group_info option ->
-    bool * int ->
-    string;
-      (** Inputs:
-          - function id: this is especially useful to identify whether the
-            function is an assumed function or a local function
-          - function basename
+    fun_name -> int -> region_group_info option -> bool * int -> string;
+      (** Compute the name of a regular (non-assumed) function.
+
+          Inputs:
+          - function id
+          - function basename (TODO: shouldn't appear for assumed functions?...)
           - number of region groups
           - region group information in case of a backward function
             ([None] if forward function)
@@ -191,7 +186,7 @@ type formatter = {
 (** We use identifiers to look for name clashes *)
 type id =
   | GlobalId of A.GlobalDeclId.id
-  | FunId of A.fun_id * RegionGroupId.id option
+  | FunId of fun_id
   | DecreasesClauseId of A.fun_id
       (** The definition which provides the decreases/termination clause.
           We insert calls to this clause to prove/reason about termination:
@@ -290,10 +285,9 @@ let names_map_add_assumed_variant (id_to_string : id -> string)
     (nm : names_map) : names_map =
   names_map_add id_to_string (VariantId (Assumed id, variant_id)) name nm
 
-let names_map_add_assumed_function (id_to_string : id -> string)
-    (fid : A.assumed_fun_id) (rg_id : RegionGroupId.id option) (name : string)
-    (nm : names_map) : names_map =
-  names_map_add id_to_string (FunId (A.Assumed fid, rg_id)) name nm
+let names_map_add_function (id_to_string : id -> string) (fid : fun_id)
+    (name : string) (nm : names_map) : names_map =
+  names_map_add id_to_string (FunId fid) name nm
 
 (** Make a (variable) basename unique (by adding an index).
 
@@ -360,25 +354,29 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | GlobalId gid ->
       let name = (A.GlobalDeclId.Map.find gid global_decls).name in
       "global name: " ^ Print.global_name_to_string name
-  | FunId (fid, rg_id) ->
-      let fun_name =
-        match fid with
-        | A.Regular fid ->
-            Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
-        | A.Assumed aid -> A.show_assumed_fun_id aid
-      in
-      let fun_kind =
-        match rg_id with
-        | None -> "forward"
-        | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
-      in
-      "fun name (" ^ fun_kind ^ "): " ^ fun_name
+  | FunId fid -> (
+      match fid with
+      | FromLlbc (fid, rg_id) ->
+          let fun_name =
+            match fid with
+            | Regular fid ->
+                Print.fun_name_to_string
+                  (A.FunDeclId.Map.find fid fun_decls).name
+            | Assumed aid -> A.show_assumed_fun_id aid
+          in
+          let fun_kind =
+            match rg_id with
+            | None -> "forward"
+            | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
+          in
+          "fun name (" ^ fun_kind ^ "): " ^ fun_name
+      | Pure fid -> PrintPure.pure_assumed_fun_id_to_string fid)
   | DecreasesClauseId fid ->
       let fun_name =
         match fid with
-        | A.Regular fid ->
+        | Regular fid ->
             Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
-        | A.Assumed aid -> A.show_assumed_fun_id aid
+        | Assumed aid -> A.show_assumed_fun_id aid
       in
       "decreases clause for function: " ^ fun_name
   | TypeId id -> "type name: " ^ get_type_name id
@@ -451,13 +449,12 @@ let ctx_get (id : id) (ctx : extraction_ctx) : string =
 let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
   ctx_get (GlobalId id) ctx
 
-let ctx_get_function (id : A.fun_id) (rg : RegionGroupId.id option)
-    (ctx : extraction_ctx) : string =
-  ctx_get (FunId (id, rg)) ctx
+let ctx_get_function (id : fun_id) (ctx : extraction_ctx) : string =
+  ctx_get (FunId id) ctx
 
 let ctx_get_local_function (id : A.FunDeclId.id) (rg : RegionGroupId.id option)
     (ctx : extraction_ctx) : string =
-  ctx_get_function (A.Regular id) rg ctx
+  ctx_get_function (FromLlbc (Regular id, rg)) ctx
 
 let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> Tuple);
@@ -488,7 +485,7 @@ let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
 
 let ctx_get_decreases_clause (def_id : A.FunDeclId.id) (ctx : extraction_ctx) :
     string =
-  ctx_get (DecreasesClauseId (A.Regular def_id)) ctx
+  ctx_get (DecreasesClauseId (Regular def_id)) ctx
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
@@ -577,13 +574,13 @@ let ctx_add_struct (def : type_decl) (ctx : extraction_ctx) :
 let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
-  ctx_add (DecreasesClauseId (A.Regular def.def_id)) name ctx
+  ctx_add (DecreasesClauseId (Regular def.def_id)) name ctx
 
 let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx.fmt.global_name def.name in
   let decl = GlobalId def.def_id in
-  let body = FunId (Regular def.body_id, None) in
+  let body = FunId (FromLlbc (Regular def.body_id, None)) in
   let ctx = ctx_add decl (name ^ "_c") ctx in
   let ctx = ctx_add body (name ^ "_body") ctx in
   ctx
@@ -617,18 +614,19 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
         in
         Some { id = rg_id; region_names }
   in
-  let def_id = A.Regular def_id in
   let name =
-    ctx.fmt.fun_name def_id def.basename num_rgs rg_info (keep_fwd, num_backs)
+    ctx.fmt.fun_name def.basename num_rgs rg_info (keep_fwd, num_backs)
   in
-  ctx_add (FunId (def_id, def.back_id)) name ctx
+  ctx_add (FunId (FromLlbc (A.Regular def_id, def.back_id))) name ctx
 
 type names_map_init = {
   keywords : string list;
   assumed_adts : (assumed_ty * string) list;
   assumed_structs : (assumed_ty * string) list;
   assumed_variants : (assumed_ty * VariantId.id * string) list;
-  assumed_functions : (A.assumed_fun_id * RegionGroupId.id option * string) list;
+  assumed_llbc_functions :
+    (A.assumed_fun_id * RegionGroupId.id option * string) list;
+  assumed_pure_functions : (pure_assumed_fun_id * string) list;
 }
 
 (** Initialize a names map with a proper set of keywords/names coming from the
@@ -638,9 +636,7 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
   let keywords =
     List.concat
       [
-        [ fmt.bool_name; fmt.char_name; fmt.str_name; fmt.assert_name ];
-        int_names;
-        init.keywords;
+        [ fmt.bool_name; fmt.char_name; fmt.str_name ]; int_names; init.keywords;
       ]
   in
   let names_set = StringSet.of_list keywords in
@@ -680,11 +676,16 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
         names_map_add_assumed_variant id_to_string type_id variant_id name nm)
       nm init.assumed_variants
   in
+  let assumed_functions =
+    List.map
+      (fun (fid, rg, name) -> (FromLlbc (A.Assumed fid, rg), name))
+      init.assumed_llbc_functions
+    @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
+  in
   let nm =
     List.fold_left
-      (fun nm (fun_id, rg_id, name) ->
-        names_map_add_assumed_function id_to_string fun_id rg_id name nm)
-      nm init.assumed_functions
+      (fun nm (fid, name) -> names_map_add_function id_to_string fid name nm)
+      nm assumed_functions
   in
   (* Return *)
   nm

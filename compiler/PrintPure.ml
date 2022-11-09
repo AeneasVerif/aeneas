@@ -386,29 +386,38 @@ let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
   let all_types = List.append inputs [ output ] in
   String.concat " -> " all_types
 
-let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : A.fun_id) : string
-    =
-  match fun_id with
-  | A.Regular fid -> fmt.fun_decl_id_to_string fid
-  | A.Assumed fid -> (
-      match fid with
-      | A.Replace -> "core::mem::replace"
-      | A.BoxNew -> "alloc::boxed::Box::new"
-      | A.BoxDeref -> "core::ops::deref::Deref::deref"
-      | A.BoxDerefMut -> "core::ops::deref::DerefMut::deref_mut"
-      | A.BoxFree -> "alloc::alloc::box_free"
-      | A.VecNew -> "alloc::vec::Vec::new"
-      | A.VecPush -> "alloc::vec::Vec::push"
-      | A.VecInsert -> "alloc::vec::Vec::insert"
-      | A.VecLen -> "alloc::vec::Vec::len"
-      | A.VecIndex -> "core::ops::index::Index<alloc::vec::Vec>::index"
-      | A.VecIndexMut ->
-          "core::ops::index::IndexMut<alloc::vec::Vec>::index_mut")
-
 let fun_suffix (rg_id : T.RegionGroupId.id option) : string =
   match rg_id with
   | None -> ""
   | Some rg_id -> "@" ^ T.RegionGroupId.to_string rg_id
+
+let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
+  match fid with
+  | A.Replace -> "core::mem::replace"
+  | A.BoxNew -> "alloc::boxed::Box::new"
+  | A.BoxDeref -> "core::ops::deref::Deref::deref"
+  | A.BoxDerefMut -> "core::ops::deref::DerefMut::deref_mut"
+  | A.BoxFree -> "alloc::alloc::box_free"
+  | A.VecNew -> "alloc::vec::Vec::new"
+  | A.VecPush -> "alloc::vec::Vec::push"
+  | A.VecInsert -> "alloc::vec::Vec::insert"
+  | A.VecLen -> "alloc::vec::Vec::len"
+  | A.VecIndex -> "core::ops::index::Index<alloc::vec::Vec>::index"
+  | A.VecIndexMut -> "core::ops::index::IndexMut<alloc::vec::Vec>::index_mut"
+
+let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
+  match fid with Return -> "return" | Fail -> "fail" | Assert -> "assert"
+
+let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
+  match fun_id with
+  | FromLlbc (fid, rg_id) ->
+      let f =
+        match fid with
+        | Regular fid -> fmt.fun_decl_id_to_string fid
+        | Assumed fid -> llbc_assumed_fun_id_to_string fid
+      in
+      f ^ fun_suffix rg_id
+  | Pure fid -> pure_assumed_fun_id_to_string fid
 
 let unop_to_string (unop : unop) : string =
   match unop with
@@ -420,15 +429,13 @@ let unop_to_string (unop : unop) : string =
 
 let binop_to_string = Print.Expressions.binop_to_string
 
-let fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
+let fun_or_op_id_to_string (fmt : ast_formatter) (fun_id : fun_or_op_id) :
+    string =
   match fun_id with
-  | Regular (fun_id, rg_id) ->
-      let f = regular_fun_id_to_string fmt fun_id in
-      f ^ fun_suffix rg_id
+  | Fun fun_id -> regular_fun_id_to_string fmt fun_id
   | Unop unop -> unop_to_string unop
   | Binop (binop, int_ty) ->
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
-  | Assert -> "assert"
 
 (** [inside]: controls the introduction of parentheses *)
 let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
@@ -478,7 +485,7 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
         (* Convert the qualifier identifier *)
         let qualif_s =
           match qualif.id with
-          | Func fun_id -> fun_id_to_string fmt fun_id
+          | FunOrOp fun_id -> fun_or_op_id_to_string fmt fun_id
           | Global global_id -> fmt.global_decl_id_to_string global_id
           | AdtCons adt_cons_id ->
               let variant_s =
