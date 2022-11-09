@@ -644,11 +644,23 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
   (* Type parameters *)
   let type_params = sg.type_params in
   (* Return *)
+  let num_fwd_inputs_no_state = List.length fwd_inputs in
+  let num_back_inputs_no_state =
+    if bid = None then None else Some (List.length back_inputs)
+  in
   let info =
     {
-      num_fwd_inputs = List.length fwd_inputs;
-      num_back_inputs =
-        (if bid = None then None else Some (List.length back_inputs));
+      num_fwd_inputs_no_state;
+      num_fwd_inputs_with_state =
+        (* We use the fact that [fwd_state_ty] has length 1 if there is a state,
+           and 0 otherwise *)
+        num_fwd_inputs_no_state + List.length fwd_state_ty;
+      num_back_inputs_no_state;
+      num_back_inputs_with_state =
+        (* Length of [back_state_ty]: similar trick as for [fwd_state_ty] *)
+        Option.map
+          (fun n -> n + List.length back_state_ty)
+          num_back_inputs_no_state;
       effect_info;
     }
   in

@@ -47,8 +47,8 @@ let mem_replace_back (a : Type0) (x : a) (y : a) : a = y
 (*** Scalars *)
 /// Rk.: most of the following code was at least partially generated
 
-let isize_min : int = -9223372036854775808
-let isize_max : int = 9223372036854775807
+let isize_min : int = -9223372036854775808 // TODO: should be opaque
+let isize_max : int = 9223372036854775807 // TODO: should be opaque
 let i8_min : int = -128
 let i8_max : int = 127
 let i16_min : int = -32768
@@ -60,7 +60,7 @@ let i64_max : int = 9223372036854775807
 let i128_min : int = -170141183460469231731687303715884105728
 let i128_max : int = 170141183460469231731687303715884105727
 let usize_min : int = 0
-let usize_max : int = 4294967295 // being conservative here: [u32_max] instead of [u64_max]
+let usize_max : int = 4294967295 // TODO: should be opaque
 let u8_min : int = 0
 let u8_max : int = 255
 let u16_min : int = 0
@@ -149,6 +149,7 @@ let scalar_mul (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scala
   mk_scalar ty (x * y)
 
 (** Cast an integer from a [src_ty] to a [tgt_ty] *)
+// TODO: check the semantics of casts in Rust
 let scalar_cast (src_ty : scalar_ty) (tgt_ty : scalar_ty) (x : scalar src_ty) : result (scalar tgt_ty) =
   mk_scalar tgt_ty x
 
