@@ -10,10 +10,12 @@ include External.Types
 val core_mem_swap_fwd (t : Type0) : t -> t -> state -> result (state & unit)
 
 (** [core::mem::swap] *)
-val core_mem_swap_back0 (t : Type0) : t -> t -> state -> result t
+val core_mem_swap_back0
+  (t : Type0) : t -> t -> state -> state -> result (state & t)
 
 (** [core::mem::swap] *)
-val core_mem_swap_back1 (t : Type0) : t -> t -> state -> result t
+val core_mem_swap_back1
+  (t : Type0) : t -> t -> state -> state -> result (state & t)
 
 (** [core::num::nonzero::NonZeroU32::{14}::new] *)
 val core_num_nonzero_non_zero_u32_new_fwd

@@ -77,6 +77,14 @@ type expression =
           We use it to compute meaningful names for the variables we introduce,
           to prettify the generated code.
        *)
+  | ForwardEnd of expression
+      (** We use this delimiter to indicate at which point we switch to the
+          generation of code specific to the backward function(s).
+
+          TODO: use this to factorize the generation of the forward and backward
+          functions (today we replay the *whole* symbolic execution once per
+          generated function).
+       *)
   | Meta of meta * expression  (** Meta information *)
 
 and expansion =

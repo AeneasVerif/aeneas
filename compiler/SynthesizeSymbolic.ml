@@ -12,7 +12,7 @@ let mk_mplace (p : E.place) (ctx : Contexts.eval_ctx) : mplace =
 
 let mk_opt_mplace (p : E.place option) (ctx : Contexts.eval_ctx) : mplace option
     =
-  match p with None -> None | Some p -> Some (mk_mplace p ctx)
+  Option.map (fun p -> mk_mplace p ctx) p
 
 let mk_opt_place_from_op (op : E.operand) (ctx : Contexts.eval_ctx) :
     mplace option =
@@ -22,11 +22,11 @@ let mk_opt_place_from_op (op : E.operand) (ctx : Contexts.eval_ctx) :
 
 let synthesize_symbolic_expansion (sv : V.symbolic_value)
     (place : mplace option) (seel : V.symbolic_expansion option list)
-    (exprl : expression list option) : expression option =
-  match exprl with
+    (el : expression list option) : expression option =
+  match el with
   | None -> None
-  | Some exprl ->
-      let ls = List.combine seel exprl in
+  | Some el ->
+      let ls = List.combine seel el in
       (* Match on the symbolic value type to know which can of expansion happened *)
       let expansion =
         match sv.V.sv_ty with
@@ -89,19 +89,18 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
       Some (Expansion (place, sv, expansion))
 
 let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
-    (place : mplace option) (see : V.symbolic_expansion)
-    (expr : expression option) : expression option =
-  let exprl = match expr with None -> None | Some expr -> Some [ expr ] in
-  synthesize_symbolic_expansion sv place [ Some see ] exprl
+    (place : mplace option) (see : V.symbolic_expansion) (e : expression option)
+    : expression option =
+  let el = Option.map (fun e -> [ e ]) e in
+  synthesize_symbolic_expansion sv place [ Some see ] el
 
 let synthesize_function_call (call_id : call_id)
     (abstractions : V.AbstractionId.id list) (type_params : T.ety list)
     (args : V.typed_value list) (args_places : mplace option list)
     (dest : V.symbolic_value) (dest_place : mplace option)
-    (expr : expression option) : expression option =
-  match expr with
-  | None -> None
-  | Some expr ->
+    (e : expression option) : expression option =
+  Option.map
+    (fun e ->
       let call =
         {
           call_id;
@@ -113,48 +112,45 @@ let synthesize_function_call (call_id : call_id)
           dest_place;
         }
       in
-      Some (FunCall (call, expr))
+      FunCall (call, e))
+    e
 
 let synthesize_global_eval (gid : A.GlobalDeclId.id) (dest : V.symbolic_value)
-    (expr : expression option) : expression option =
-  match expr with None -> None | Some e -> Some (EvalGlobal (gid, dest, e))
+    (e : expression option) : expression option =
+  Option.map (fun e -> EvalGlobal (gid, dest, e)) e
 
 let synthesize_regular_function_call (fun_id : A.fun_id)
     (call_id : V.FunCallId.id) (abstractions : V.AbstractionId.id list)
     (type_params : T.ety list) (args : V.typed_value list)
     (args_places : mplace option list) (dest : V.symbolic_value)
-    (dest_place : mplace option) (expr : expression option) : expression option
-    =
+    (dest_place : mplace option) (e : expression option) : expression option =
   synthesize_function_call
     (Fun (fun_id, call_id))
-    abstractions type_params args args_places dest dest_place expr
+    abstractions type_params args args_places dest dest_place e
 
 let synthesize_unary_op (unop : E.unop) (arg : V.typed_value)
     (arg_place : mplace option) (dest : V.symbolic_value)
-    (dest_place : mplace option) (expr : expression option) : expression option
-    =
+    (dest_place : mplace option) (e : expression option) : expression option =
   synthesize_function_call (Unop unop) [] [] [ arg ] [ arg_place ] dest
-    dest_place expr
+    dest_place e
 
 let synthesize_binary_op (binop : E.binop) (arg0 : V.typed_value)
     (arg0_place : mplace option) (arg1 : V.typed_value)
     (arg1_place : mplace option) (dest : V.symbolic_value)
-    (dest_place : mplace option) (expr : expression option) : expression option
-    =
+    (dest_place : mplace option) (e : expression option) : expression option =
   synthesize_function_call (Binop binop) [] [] [ arg0; arg1 ]
-    [ arg0_place; arg1_place ] dest dest_place expr
+    [ arg0_place; arg1_place ] dest dest_place e
 
-let synthesize_end_abstraction (abs : V.abs) (expr : expression option) :
+let synthesize_end_abstraction (abs : V.abs) (e : expression option) :
     expression option =
-  match expr with
-  | None -> None
-  | Some expr -> Some (EndAbstraction (abs, expr))
+  Option.map (fun e -> EndAbstraction (abs, e)) e
 
 let synthesize_assignment (lplace : mplace) (rvalue : V.typed_value)
-    (rplace : mplace option) (expr : expression option) : expression option =
-  match expr with
-  | None -> None
-  | Some expr -> Some (Meta (Assignment (lplace, rvalue, rplace), expr))
+    (rplace : mplace option) (e : expression option) : expression option =
+  Option.map (fun e -> Meta (Assignment (lplace, rvalue, rplace), e)) e
 
-let synthesize_assertion (v : V.typed_value) (expr : expression option) =
-  match expr with None -> None | Some expr -> Some (Assertion (v, expr))
+let synthesize_assertion (v : V.typed_value) (e : expression option) =
+  Option.map (fun e -> Assertion (v, e)) e
+
+let synthesize_forward_end (e : expression option) =
+  Option.map (fun e -> ForwardEnd e) e

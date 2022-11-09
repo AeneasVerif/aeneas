@@ -18,6 +18,30 @@ type config = {
       (** Controls whether we need to use a state to model the external world
           (I/O, for instance).
        *)
+  backward_no_state_update : bool;
+      (** Controls whether backward functions update the state, in case we use
+          a state ({!use_state}).
+
+          If they update the state, we generate code of the following style:
+          {[
+             (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
+             ...
+             (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
+          }]
+
+          Otherwise, we generate code of the following shape:
+          {[
+             (st1, y)  <-- f_fwd x st0;
+             ...
+             x' <-- f_back x st0 y';
+          }]
+
+          The second format is easier to reason about, but the first one is
+          necessary to properly handle some Rust functions which use internal
+          mutability such as {{:https://doc.rust-lang.org/std/cell/struct.RefCell.html#method.try_borrow_mut} [RefCell::try_mut_borrow]}:
+          in order to model this behaviour we would need a state, and calling the backward
+          function would update the state by reinserting the updated value in it.
+       *)
   split_files : bool;
       (** Controls whether we split the generated definitions between different
           files for the types, clauses and functions, or if we group them in
@@ -96,7 +120,8 @@ let translate_function_to_symbolics (config : C.partial_config)
     TODO: maybe we should introduce a record for this.
 *)
 let translate_function_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (trans_ctx : trans_ctx)
+    (mp_config : Micro.config) (backward_no_state_update : bool)
+    (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
     : pure_fun_translation =
@@ -123,6 +148,7 @@ let translate_function_to_pure (config : C.partial_config)
   let sv_to_var = V.SymbolicValueId.Map.empty in
   let var_counter = Pure.VarId.generator_zero in
   let state_var, var_counter = Pure.VarId.fresh var_counter in
+  let back_state_var, var_counter = Pure.VarId.fresh var_counter in
   let calls = V.FunCallId.Map.empty in
   let abstractions = V.AbstractionId.Map.empty in
   let type_context =
@@ -151,6 +177,7 @@ let translate_function_to_pure (config : C.partial_config)
       sv_to_var;
       var_counter;
       state_var;
+      back_state_var;
       type_context;
       fun_context;
       global_context;
@@ -188,6 +215,7 @@ let translate_function_to_pure (config : C.partial_config)
     {
       SymbolicToPure.filter_useless_back_calls =
         mp_config.filter_useless_monadic_calls;
+      backward_no_state_update;
     }
   in
 
@@ -231,12 +259,22 @@ let translate_function_to_pure (config : C.partial_config)
         in
         (* We need to ignore the forward inputs, and the state input (if there is) *)
         let fun_info =
-          SymbolicToPure.get_fun_effect_info fun_context.fun_infos
-            (A.Regular def_id) (Some back_id)
+          SymbolicToPure.get_fun_effect_info backward_no_state_update
+            fun_context.fun_infos (A.Regular def_id) (Some back_id)
         in
-        let _, backward_inputs =
-          Collections.List.split_at backward_sg.sg.inputs
-            (num_forward_inputs + if fun_info.input_state then 1 else 0)
+        let backward_inputs =
+          (* We need to ignore the forward state and the backward state *)
+          (* TODO: this is ad-hoc and error-prone. We should group all this
+           * information in the signature information. *)
+          let fwd_state_n = if fun_info.stateful_group then 1 else 0 in
+          let num_forward_inputs = num_forward_inputs + fwd_state_n in
+          let back_state_n = if fun_info.stateful then 1 else 0 in
+          let num_back_inputs =
+            List.length backward_sg.sg.inputs
+            - num_forward_inputs - back_state_n
+          in
+          Collections.List.subslice backward_sg.sg.inputs num_forward_inputs
+            num_back_inputs
         in
         (* As we forbid nested borrows, the additional inputs for the backward
          * functions come from the borrows in the return value of the rust function:
@@ -285,7 +323,8 @@ let translate_function_to_pure (config : C.partial_config)
   (pure_forward, pure_backwards)
 
 let translate_module_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (use_state : bool) (crate : A.crate) :
+    (mp_config : Micro.config) (use_state : bool)
+    (backward_no_state_update : bool) (crate : A.crate) :
     trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
@@ -333,15 +372,15 @@ let translate_module_to_pure (config : C.partial_config)
   in
   let sigs = List.append assumed_sigs local_sigs in
   let fun_sigs =
-    SymbolicToPure.translate_fun_signatures fun_context.fun_infos
-      type_context.type_infos sigs
+    SymbolicToPure.translate_fun_signatures backward_no_state_update
+      fun_context.fun_infos type_context.type_infos sigs
   in
 
   (* Translate all the *transparent* functions *)
   let pure_translations =
     List.map
-      (translate_function_to_pure config mp_config trans_ctx fun_sigs
-         type_decls_map)
+      (translate_function_to_pure config mp_config backward_no_state_update
+         trans_ctx fun_sigs type_decls_map)
       crate.functions
   in
 
@@ -631,7 +670,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   (* Translate the module to the pure AST *)
   let trans_ctx, trans_types, trans_funs =
     translate_module_to_pure config.eval_config config.mp_config
-      config.use_state crate
+      config.use_state config.backward_no_state_update crate
   in
 
   (* Initialize the extraction context - for now we extract only to F*.
