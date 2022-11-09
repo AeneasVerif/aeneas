@@ -34,7 +34,7 @@ let expand_primitively_copyable_at_place (config : C.config)
   (* Small helper *)
   let rec expand : cm_fun =
    fun cf ctx ->
-    let v = read_place config access p ctx in
+    let v = read_place access p ctx in
     match
       find_first_primitively_copyable_sv_with_borrows
         ctx.type_context.type_infos v
@@ -55,10 +55,10 @@ let expand_primitively_copyable_at_place (config : C.config)
     We also check that the value *doesn't contain bottoms or reserved
     borrows*.
  *)
-let read_place (config : C.config) (access : access_kind) (p : E.place)
+let read_place (access : access_kind) (p : E.place)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
-  let v = read_place config access p ctx in
+  let v = read_place access p ctx in
   (* Check that there are no bottoms in the value *)
   assert (not (bottom_in_value ctx.ended_regions v));
   (* Check that there are no reserved borrows in the value *)
@@ -82,7 +82,7 @@ let access_rplace_reorganize_and_read (config : C.config)
     else cc
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
-  let read_place = read_place config access p in
+  let read_place = read_place access p in
   (* Compose *)
   comp cc read_place cf ctx
 
@@ -263,7 +263,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in
-      let cc = read_place config access p in
+      let cc = read_place access p in
       (* Copy the value *)
       let copy cf v : m_fun =
        fun ctx ->
@@ -284,14 +284,14 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
   | Expressions.Move p ->
       (* Access the value *)
       let access = Move in
-      let cc = read_place config access p in
+      let cc = read_place access p in
       (* Move the value *)
       let move cf v : m_fun =
        fun ctx ->
         (* Check that there are no bottoms in the value we are about to move *)
         assert (not (bottom_in_value ctx.ended_regions v));
         let bottom : V.typed_value = { V.value = Bottom; ty = v.ty } in
-        let ctx = write_place config access p bottom ctx in
+        let ctx = write_place access p bottom ctx in
         cf v ctx
       in
       (* Compose and apply *)
@@ -575,7 +575,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
               ({ v with V.value = v' }, v)
         in
         (* Update the borrowed value in the context *)
-        let ctx = write_place config access p nv ctx in
+        let ctx = write_place access p nv ctx in
         (* Compute the rvalue - simply a shared borrow with a the fresh id.
          * Note that the reference is *mutable* if we do a two-phase borrow *)
         let rv_ty =
@@ -610,7 +610,7 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         (* Compute the value with which to replace the value at place p *)
         let nv = { v with V.value = V.Loan (V.MutLoan bid) } in
         (* Update the value in the context *)
-        let ctx = write_place config access p nv ctx in
+        let ctx = write_place access p nv ctx in
         (* Continue *)
         cf rv ctx
       in

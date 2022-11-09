@@ -33,8 +33,7 @@ val update_ctx_along_write_place : C.config -> access_kind -> E.place -> cm_fun
     Note that we only access the value at the place, and do not check that
     the value is "well-formed" (for instance that it doesn't contain bottoms).
  *)
-val read_place :
-  C.config -> access_kind -> E.place -> C.eval_ctx -> V.typed_value
+val read_place : access_kind -> E.place -> C.eval_ctx -> V.typed_value
 
 (** Update the value at a given place.
 
@@ -46,12 +45,7 @@ val read_place :
     overwrite it.
  *)
 val write_place :
-  C.config ->
-  access_kind ->
-  E.place ->
-  V.typed_value ->
-  C.eval_ctx ->
-  C.eval_ctx
+  access_kind -> E.place -> V.typed_value -> C.eval_ctx -> C.eval_ctx
 
 (** Compute an expanded tuple ⊥ value.
 

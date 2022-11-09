@@ -17,7 +17,7 @@ CHARON_TESTS_SRC =
 AENEAS_DRIVER = driver.exe
 
 # The user can specify additional translation options for Aeneas:
-OPTIONS ?=
+OPTIONS += -unfold-monads
 
 # Default translation options:
 # - insert calls to the normalizer in the translated code to test the
@@ -75,7 +75,7 @@ AENEAS_CMD = cd compiler && dune exec -- ./$(AENEAS_DRIVER) ../$(CHARON_TESTS_DI
 
 # Add specific options to some tests
 trans-no_nested_borrows trans-paper: \
-	TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
+	TRANS_OPTIONS += -test-units -test-trans-units -no-split-files -no-state -no-decreases-clauses
 trans-no_nested_borrows trans-paper: SUBDIR:=misc
 
 trans-hashmap: TRANS_OPTIONS += -template-clauses -no-state
@@ -84,10 +84,10 @@ trans-hashmap: SUBDIR:=hashmap
 trans-hashmap_main: TRANS_OPTIONS += -template-clauses
 trans-hashmap_main: SUBDIR:=hashmap_on_disk
 
-trans-polonius-betree_polonius: TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
+trans-polonius-betree_polonius: TRANS_OPTIONS += -test-units -test-trans-units -no-split-files -no-state -no-decreases-clauses
 trans-polonius-betree_polonius: SUBDIR:=misc
 
-trans-constants: TRANS_OPTIONS += -test-units -no-split-files -no-state -no-decreases-clauses
+trans-constants: TRANS_OPTIONS += -test-units -test-trans-units -no-split-files -no-state -no-decreases-clauses
 trans-constants: SUBDIR:=misc
 
 trans-external: TRANS_OPTIONS +=

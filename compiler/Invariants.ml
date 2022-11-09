@@ -301,15 +301,14 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     - borrows/loans can't contain ⊥ or reserved mut borrows
     - shared loans can't contain mutable loans
  *)
-let check_borrowed_values_invariant (config : C.config) (ctx : C.eval_ctx) :
-    unit =
+let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
   let visitor =
     object
       inherit [_] C.iter_eval_ctx as super
 
       method! visit_Bottom info =
         (* No ⊥ inside borrowed values *)
-        assert (config.C.allow_bottom_below_borrow || not info.outer_borrow)
+        assert (Config.allow_bottom_below_borrow || not info.outer_borrow)
 
       method! visit_ABottom _info =
         (* ⊥ inside an abstraction is not the same as in a regular value *)
@@ -672,7 +671,7 @@ type sv_info = {
     - the union of the aproj_loans contains the aproj_borrows applied on the
       same symbolic values
  *)
-let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
+let check_symbolic_values (ctx : C.eval_ctx) : unit =
   (* Small utility *)
   let module M = V.SymbolicValueId.Map in
   let infos : sv_info M.t ref = ref M.empty in
@@ -781,17 +780,17 @@ let check_symbolic_values (_config : C.config) (ctx : C.eval_ctx) : unit =
 
   M.iter check_info !infos
 
-let check_invariants (config : C.config) (ctx : C.eval_ctx) : unit =
-  if config.C.check_invariants then (
+let check_invariants (ctx : C.eval_ctx) : unit =
+  if !Config.check_invariants then (
     log#ldebug (lazy "Checking invariants");
     check_loans_borrows_relation_invariant ctx;
-    check_borrowed_values_invariant config ctx;
+    check_borrowed_values_invariant ctx;
     check_typing_invariant ctx;
-    check_symbolic_values config ctx)
+    check_symbolic_values ctx)
   else log#ldebug (lazy "Not checking invariants (check is not activated)")
 
 (** Same as {!check_invariants}, but written in CPS *)
-let cf_check_invariants (config : C.config) : cm_fun =
+let cf_check_invariants : cm_fun =
  fun cf ctx ->
-  check_invariants config ctx;
+  check_invariants ctx;
   cf ctx

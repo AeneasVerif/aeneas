@@ -719,7 +719,7 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
 
 let greedy_expand_symbolic_values (config : C.config) : cm_fun =
  fun cf ctx ->
-  if config.greedy_expand_symbolics_with_borrows then (
+  if Config.greedy_expand_symbolics_with_borrows then (
     log#ldebug (lazy "greedy_expand_symbolic_values");
     greedy_expand_symbolics_with_borrows config cf ctx)
   else cf ctx

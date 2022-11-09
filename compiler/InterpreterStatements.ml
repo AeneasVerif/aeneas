@@ -39,12 +39,12 @@ let drop_value (config : C.config) (p : E.place) : cm_fun =
   let replace cf (v : V.typed_value) ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
-    let mv = InterpreterPaths.read_place config access p ctx in
+    let mv = InterpreterPaths.read_place access p ctx in
     let dummy_id = C.fresh_dummy_var_id () in
     let ctx = C.ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = V.Bottom } in
-    let ctx = write_place config access p nv ctx in
+    let ctx = write_place access p nv ctx in
     log#ldebug
       (lazy
         ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
@@ -119,14 +119,14 @@ let assign_to_place (config : C.config) (rv : V.typed_value) (p : E.place) :
    fun ctx ->
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows *)
-    let mv = InterpreterPaths.read_place config Write p ctx in
+    let mv = InterpreterPaths.read_place Write p ctx in
     let dest_vid = C.fresh_dummy_var_id () in
     let ctx = C.ctx_push_dummy_var ctx dest_vid mv in
     (* Write to the destination *)
     (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
     assert (not (bottom_in_value ctx.ended_regions rv));
     (* Update the destination *)
-    let ctx = write_place config Write p rv ctx in
+    let ctx = write_place Write p rv ctx in
     (* Debug *)
     log#ldebug
       (lazy
@@ -540,9 +540,7 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
   match (region_params, type_params, args) with
   | [], [ boxed_ty ], [ E.Move input_box_place ] ->
       (* Required type checking *)
-      let input_box =
-        InterpreterPaths.read_place config Write input_box_place ctx
-      in
+      let input_box = InterpreterPaths.read_place Write input_box_place ctx in
       (let input_ty = ty_get_box input_box.V.ty in
        assert (input_ty = boxed_ty));
 
@@ -783,7 +781,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
    * checking the invariants *)
   let cc = greedy_expand_symbolic_values config in
   (* Sanity check *)
-  let cc = comp cc (Inv.cf_check_invariants config) in
+  let cc = comp cc Inv.cf_check_invariants in
 
   (* Evaluate *)
   let cf_eval_st cf : m_fun =
@@ -1279,7 +1277,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
    * (see the documentation of {!config} for more information)
    *)
   let cc =
-    if config.return_unit_end_abs_with_no_loans && ty_is_unit inst_sg.output
+    if Config.return_unit_end_abs_with_no_loans && ty_is_unit inst_sg.output
     then comp cc end_abs_with_no_loans
     else cc
   in
@@ -1382,7 +1380,7 @@ and eval_function_body (config : C.config) (body : A.statement) : st_cm_fun =
      * checking the invariants *)
     let cc = greedy_expand_symbolic_values config in
     (* Sanity check *)
-    let cc = comp_check_ctx cc (Inv.check_invariants config) in
+    let cc = comp_check_ctx cc Inv.check_invariants in
     (* Continue *)
     cc (cf res)
   in

@@ -11,63 +11,6 @@ open TranslateCore
 (** The local logger *)
 let log = TranslateCore.log
 
-type config = {
-  eval_config : Contexts.partial_config;
-  mp_config : Micro.config;
-  use_state : bool;
-      (** Controls whether we need to use a state to model the external world
-          (I/O, for instance).
-       *)
-  backward_no_state_update : bool;
-      (** Controls whether backward functions update the state, in case we use
-          a state ({!use_state}).
-
-          If they update the state, we generate code of the following style:
-          {[
-             (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
-             ...
-             (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
-          }]
-
-          Otherwise, we generate code of the following shape:
-          {[
-             (st1, y)  <-- f_fwd x st0;
-             ...
-             x' <-- f_back x st0 y';
-          }]
-
-          The second format is easier to reason about, but the first one is
-          necessary to properly handle some Rust functions which use internal
-          mutability such as {{:https://doc.rust-lang.org/std/cell/struct.RefCell.html#method.try_borrow_mut} [RefCell::try_mut_borrow]}:
-          in order to model this behaviour we would need a state, and calling the backward
-          function would update the state by reinserting the updated value in it.
-       *)
-  split_files : bool;
-      (** Controls whether we split the generated definitions between different
-          files for the types, clauses and functions, or if we group them in
-          one file.
-       *)
-  test_unit_functions : bool;
-      (** If true, insert tests in the generated files to check that the
-          unit functions normalize to [Success _].
-          
-          For instance, in F* it generates code like this:
-          {[
-            let _ = assert_norm (FUNCTION () = Success ())
-          ]}
-       *)
-  extract_decreases_clauses : bool;
-      (** If [true], insert [decreases] clauses for all the recursive definitions.
-
-          The body of such clauses must be defined by the user.
-       *)
-  extract_template_decreases_clauses : bool;
-      (** In order to help the user, we can generate "template" decrease clauses
-          (i.e., definitions with proper signatures but dummy bodies) in a
-          dedicated file.
-       *)
-}
-
 (** The result of running the symbolic interpreter on a function:
     - the list of symbolic values used for the input values
     - the generated symbolic AST
@@ -77,9 +20,8 @@ type symbolic_fun_translation = V.symbolic_value list * SA.expression
 (** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
     for the forward function and the backward functions.
 *)
-let translate_function_to_symbolics (config : C.partial_config)
-    (trans_ctx : trans_ctx) (fdef : A.fun_decl) :
-    (symbolic_fun_translation * symbolic_fun_translation list) option =
+let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : A.fun_decl)
+    : (symbolic_fun_translation * symbolic_fun_translation list) option =
   (* Debug *)
   log#ldebug
     (lazy
@@ -96,7 +38,7 @@ let translate_function_to_symbolics (config : C.partial_config)
       let synthesize = true in
       let evaluate gid =
         let inputs, symb =
-          evaluate_function_symbolic config synthesize type_context fun_context
+          evaluate_function_symbolic synthesize type_context fun_context
             global_context fdef gid
         in
         (inputs, Option.get symb)
@@ -119,9 +61,7 @@ let translate_function_to_symbolics (config : C.partial_config)
     of backward functions, we also provide names for the outputs.
     TODO: maybe we should introduce a record for this.
 *)
-let translate_function_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (backward_no_state_update : bool)
-    (trans_ctx : trans_ctx)
+let translate_function_to_pure (trans_ctx : trans_ctx)
     (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
     : pure_fun_translation =
@@ -134,7 +74,7 @@ let translate_function_to_pure (config : C.partial_config)
   let def_id = fdef.def_id in
 
   (* Compute the symbolic ASTs, if the function is transparent *)
-  let symbolic_trans = translate_function_to_symbolics config trans_ctx fdef in
+  let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
   let symbolic_forward, symbolic_backwards =
     match symbolic_trans with
     | None -> (None, None)
@@ -210,21 +150,12 @@ let translate_function_to_pure (config : C.partial_config)
         { ctx with forward_inputs }
   in
 
-  (* The symbolic to pure config *)
-  let sp_config =
-    {
-      SymbolicToPure.filter_useless_back_calls =
-        mp_config.filter_useless_monadic_calls;
-      backward_no_state_update;
-    }
-  in
-
   (* Translate the forward function *)
   let pure_forward =
     match symbolic_forward with
-    | None -> SymbolicToPure.translate_fun_decl sp_config ctx None
+    | None -> SymbolicToPure.translate_fun_decl ctx None
     | Some (fwd_svs, fwd_ast) ->
-        SymbolicToPure.translate_fun_decl sp_config
+        SymbolicToPure.translate_fun_decl
           (add_forward_inputs fwd_svs ctx)
           (Some fwd_ast)
   in
@@ -247,7 +178,7 @@ let translate_function_to_pure (config : C.partial_config)
         let ctx = { ctx with bid = Some back_id; sg = backward_sg.sg } in
 
         (* Translate *)
-        SymbolicToPure.translate_fun_decl sp_config ctx None
+        SymbolicToPure.translate_fun_decl ctx None
     | Some symbolic_backwards ->
         let input_svs, symbolic =
           T.RegionGroupId.nth symbolic_backwards back_id
@@ -259,8 +190,8 @@ let translate_function_to_pure (config : C.partial_config)
         in
         (* We need to ignore the forward inputs, and the state input (if there is) *)
         let fun_info =
-          SymbolicToPure.get_fun_effect_info backward_no_state_update
-            fun_context.fun_infos (A.Regular def_id) (Some back_id)
+          SymbolicToPure.get_fun_effect_info fun_context.fun_infos
+            (A.Regular def_id) (Some back_id)
         in
         let backward_inputs =
           (* We need to ignore the forward state and the backward state *)
@@ -313,7 +244,7 @@ let translate_function_to_pure (config : C.partial_config)
         in
 
         (* Translate *)
-        SymbolicToPure.translate_fun_decl sp_config ctx (Some symbolic)
+        SymbolicToPure.translate_fun_decl ctx (Some symbolic)
   in
   let pure_backwards =
     List.map translate_backward fdef.signature.regions_hierarchy
@@ -322,9 +253,7 @@ let translate_function_to_pure (config : C.partial_config)
   (* Return *)
   (pure_forward, pure_backwards)
 
-let translate_module_to_pure (config : C.partial_config)
-    (mp_config : Micro.config) (use_state : bool)
-    (backward_no_state_update : bool) (crate : A.crate) :
+let translate_module_to_pure (crate : A.crate) :
     trans_ctx * Pure.type_decl list * (bool * pure_fun_translation) list =
   (* Debug *)
   log#ldebug (lazy "translate_module_to_pure");
@@ -335,7 +264,7 @@ let translate_module_to_pure (config : C.partial_config)
   in
   let fun_infos =
     FA.analyze_module crate fun_context.C.fun_decls
-      global_context.C.global_decls use_state
+      global_context.C.global_decls !Config.use_state
   in
   let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
   let trans_ctx = { type_context; fun_context; global_context } in
@@ -372,22 +301,21 @@ let translate_module_to_pure (config : C.partial_config)
   in
   let sigs = List.append assumed_sigs local_sigs in
   let fun_sigs =
-    SymbolicToPure.translate_fun_signatures backward_no_state_update
-      fun_context.fun_infos type_context.type_infos sigs
+    SymbolicToPure.translate_fun_signatures fun_context.fun_infos
+      type_context.type_infos sigs
   in
 
   (* Translate all the *transparent* functions *)
   let pure_translations =
     List.map
-      (translate_function_to_pure config mp_config backward_no_state_update
-         trans_ctx fun_sigs type_decls_map)
+      (translate_function_to_pure trans_ctx fun_sigs type_decls_map)
       crate.functions
   in
 
   (* Apply the micro-passes *)
   let pure_translations =
     List.map
-      (Micro.apply_passes_to_pure_fun_translation mp_config trans_ctx)
+      (Micro.apply_passes_to_pure_fun_translation trans_ctx)
       pure_translations
   in
 
@@ -404,8 +332,6 @@ type gen_ctx = {
 }
 
 type gen_config = {
-  mp_config : Micro.config;
-  use_state : bool;
   extract_types : bool;
   extract_decreases_clauses : bool;
   extract_template_decreases_clauses : bool;
@@ -423,7 +349,7 @@ type gen_config = {
           declarations in an interface file, together with an implementation file
           if needed.
        *)
-  test_unit_functions : bool;
+  test_trans_unit_functions : bool;
 }
 
 (** Returns the pair: (has opaque type decls, has opaque fun decls) *)
@@ -538,7 +464,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
              has_decr_clause def)
        fls);
     (* Insert unit tests if necessary *)
-    if config.test_unit_functions then
+    if config.test_trans_unit_functions then
       List.iter
         (fun (keep_fwd, (fwd, _)) ->
           if keep_fwd then
@@ -665,13 +591,10 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
 (** Translate a module and write the synthesized code to an output file.
     TODO: rename to translate_crate
  *)
-let translate_module (filename : string) (dest_dir : string) (config : config)
-    (crate : A.crate) : unit =
+let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
+    unit =
   (* Translate the module to the pure AST *)
-  let trans_ctx, trans_types, trans_funs =
-    translate_module_to_pure config.eval_config config.mp_config
-      config.use_state config.backward_no_state_update crate
-  in
+  let trans_ctx, trans_types, trans_funs = translate_module_to_pure crate in
 
   (* Initialize the extraction context - for now we extract only to F*.
    * We initialize the names map by registering the keywords used in the
@@ -796,30 +719,26 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
     }
   in
 
-  let use_state = config.use_state in
-
   (* Extract one or several files, depending on the configuration *)
-  if config.split_files then (
+  if !Config.split_files then (
     let base_gen_config =
       {
-        mp_config = config.mp_config;
-        use_state;
         extract_types = false;
-        extract_decreases_clauses = config.extract_decreases_clauses;
+        extract_decreases_clauses = !Config.extract_decreases_clauses;
         extract_template_decreases_clauses = false;
         extract_fun_decls = false;
         extract_transparent = true;
         extract_opaque = false;
         extract_state_type = false;
         interface = false;
-        test_unit_functions = false;
+        test_trans_unit_functions = false;
       }
     in
 
     (* Check if there are opaque types and functions - in which case we need
      * to split *)
     let has_opaque_types, has_opaque_funs = module_has_opaque_decls gen_ctx in
-    let has_opaque_types = has_opaque_types || use_state in
+    let has_opaque_types = has_opaque_types || !Config.use_state in
 
     (* Extract the types *)
     (* If there are opaque types, we extract in an interface *)
@@ -831,7 +750,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
         base_gen_config with
         extract_types = true;
         extract_opaque = true;
-        extract_state_type = use_state;
+        extract_state_type = !Config.use_state;
         interface = has_opaque_types;
       }
     in
@@ -840,10 +759,10 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
 
     (* Extract the template clauses *)
     let needs_clauses_module =
-      config.extract_decreases_clauses
+      !Config.extract_decreases_clauses
       && not (A.FunDeclId.Set.is_empty rec_functions)
     in
-    (if needs_clauses_module && config.extract_template_decreases_clauses then
+    (if needs_clauses_module && !Config.extract_template_decreases_clauses then
      let clauses_filename = extract_filebasename ^ ".Clauses.Template.fst" in
      let clauses_module = module_name ^ ".Clauses.Template" in
      let clauses_config =
@@ -880,7 +799,7 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
       {
         base_gen_config with
         extract_fun_decls = true;
-        test_unit_functions = config.test_unit_functions;
+        test_trans_unit_functions = !Config.test_trans_unit_functions;
       }
     in
     let clauses_module =
@@ -892,18 +811,16 @@ let translate_module (filename : string) (dest_dir : string) (config : config)
   else
     let gen_config =
       {
-        mp_config = config.mp_config;
-        use_state;
         extract_types = true;
-        extract_decreases_clauses = config.extract_decreases_clauses;
+        extract_decreases_clauses = !Config.extract_decreases_clauses;
         extract_template_decreases_clauses =
-          config.extract_template_decreases_clauses;
+          !Config.extract_template_decreases_clauses;
         extract_fun_decls = true;
         extract_transparent = true;
         extract_opaque = true;
-        extract_state_type = use_state;
+        extract_state_type = !Config.use_state;
         interface = false;
-        test_unit_functions = config.test_unit_functions;
+        test_trans_unit_functions = !Config.test_trans_unit_functions;
       }
     in
     (* Add the extension for F* *)

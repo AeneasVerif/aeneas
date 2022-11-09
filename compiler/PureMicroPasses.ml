@@ -8,64 +8,6 @@ module V = Values
 (** The local logger *)
 let log = L.pure_micro_passes_log
 
-(** A configuration to control the application of the passes *)
-type config = {
-  decompose_monadic_let_bindings : bool;
-      (** Some provers like F* don't support the decomposition of return values
-          in monadic let-bindings:
-          {[
-            // NOT supported in F*
-            let (x, y) <-- f ();
-            ...
-          ]}
-
-          In such situations, we might want to introduce an intermediate
-          assignment:
-          {[
-            let tmp <-- f ();
-            let (x, y) = tmp in
-            ...
-          ]}
-       *)
-  unfold_monadic_let_bindings : bool;
-      (** Controls the unfolding of monadic let-bindings to explicit matches:
-          
-          [y <-- f x; ...]
-
-          becomes:
-          
-          [match f x with | Failure -> Failure | Return y -> ...]
-
-          
-          This is useful when extracting to F*: the support for monadic
-          definitions is not super powerful.
-          Note that when {!field:unfold_monadic_let_bindings} is true, setting
-          {!field:decompose_monadic_let_bindings} to true and only makes the code
-          more verbose.
-       *)
-  filter_useless_monadic_calls : bool;
-      (** Controls whether we try to filter the calls to monadic functions
-          (which can fail) when their outputs are not used.
-          
-          See the comments for {!expression_contains_child_call_in_all_paths}
-          for additional explanations.
-          
-          TODO: rename to {!filter_useless_monadic_calls}
-       *)
-  filter_useless_functions : bool;
-      (** If {!filter_useless_monadic_calls} is activated, some functions
-          become useless: if this option is true, we don't extract them.
-
-          The calls to functions which always get filtered are:
-          - the forward functions with unit return value
-          - the backward functions which don't output anything (backward
-            functions coming from rust functions with no mutable borrows
-            as input values - note that if a function doesn't take mutable
-            borrows as inputs, it can't return mutable borrows; we actually
-            dynamically check for that).
-       *)
-}
-
 (** Small utility.
 
     We sometimes have to insert new fresh variables in a function body, in which
@@ -1003,10 +945,10 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     symbolic to pure. Here, we remove the definitions altogether, because they
     are now useless
   *)
-let filter_if_backward_with_no_outputs (config : config) (def : fun_decl) :
-    fun_decl option =
+let filter_if_backward_with_no_outputs (def : fun_decl) : fun_decl option =
   if
-    config.filter_useless_functions && Option.is_some def.back_id
+    !Config.filter_useless_functions
+    && Option.is_some def.back_id
     && def.signature.output = mk_result_ty mk_unit_ty
   then None
   else Some def
@@ -1027,12 +969,12 @@ let filter_if_backward_with_no_outputs (config : config) (def : fun_decl) :
     In such situation, we can remove the forward function definition
     altogether.
   *)
-let keep_forward (config : config) (trans : pure_fun_translation) : bool =
+let keep_forward (trans : pure_fun_translation) : bool =
   let fwd, backs = trans in
   (* Note that at this point, the output types are no longer seen as tuples:
    * they should be lists of length 1. *)
   if
-    config.filter_useless_functions
+    !Config.filter_useless_functions
     && fwd.signature.output = mk_result_ty mk_unit_ty
     && backs <> []
   then false
@@ -1141,7 +1083,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
 (** Decompose the monadic let-bindings.
 
-    See the explanations in [config].
+    See the explanations in {!config.decompose_monadic_let_bindings}
  *)
 let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
     fun_decl =
@@ -1243,8 +1185,7 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
     [ctx]: used only for printing.
  *)
-let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
-    fun_decl option =
+let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl option =
   (* Debug *)
   log#ldebug
     (lazy
@@ -1274,7 +1215,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
    * Note that the calls to those functions should already have been removed,
    * when translating from symbolic to pure. Here, we remove the definitions
    * altogether, because they are now useless *)
-  let def = filter_if_backward_with_no_outputs config def in
+  let def = filter_if_backward_with_no_outputs def in
 
   match def with
   | None -> None
@@ -1304,7 +1245,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
           ("eliminate_box_functions:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
       (* Filter the useless variables, assignments, function calls, etc. *)
-      let def = filter_useless config.filter_useless_monadic_calls ctx def in
+      let def = filter_useless !Config.filter_useless_monadic_calls ctx def in
       log#ldebug
         (lazy ("filter_useless:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
@@ -1323,7 +1264,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
       (* Decompose the monadic let-bindings - F* specific
        * TODO: remove? *)
       let def =
-        if config.decompose_monadic_let_bindings then (
+        if !Config.decompose_monadic_let_bindings then (
           let def = decompose_monadic_let_bindings ctx def in
           log#ldebug
             (lazy
@@ -1339,7 +1280,7 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
 
       (* Unfold the monadic let-bindings *)
       let def =
-        if config.unfold_monadic_let_bindings then (
+        if !Config.unfold_monadic_let_bindings then (
           let def = unfold_monadic_let_bindings ctx def in
           log#ldebug
             (lazy
@@ -1365,12 +1306,12 @@ let apply_passes_to_def (config : config) (ctx : trans_ctx) (def : fun_decl) :
     because this function contains useful information to extract the backward
     functions: keeping it is not necessary but more convenient.
  *)
-let apply_passes_to_pure_fun_translation (config : config) (ctx : trans_ctx)
+let apply_passes_to_pure_fun_translation (ctx : trans_ctx)
     (trans : pure_fun_translation) : bool * pure_fun_translation =
   (* Apply the passes to the individual functions *)
   let forward, backwards = trans in
-  let forward = Option.get (apply_passes_to_def config ctx forward) in
-  let backwards = List.filter_map (apply_passes_to_def config ctx) backwards in
+  let forward = Option.get (apply_passes_to_def ctx forward) in
+  let backwards = List.filter_map (apply_passes_to_def ctx) backwards in
   let trans = (forward, backwards) in
   (* Compute whether we need to filter the forward function or not *)
-  (keep_forward config trans, trans)
+  (keep_forward trans, trans)
