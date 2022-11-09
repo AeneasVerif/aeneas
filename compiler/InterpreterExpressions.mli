@@ -19,8 +19,7 @@ open InterpreterPaths
     This function doesn't reorganize the context to make sure we can read
     the place. If needs be, you should call {!update_ctx_along_read_place} first.
  *)
-val read_place :
-  C.config -> access_kind -> E.place -> (V.typed_value -> m_fun) -> m_fun
+val read_place : access_kind -> E.place -> (V.typed_value -> m_fun) -> m_fun
 
 (** Auxiliary function.
 

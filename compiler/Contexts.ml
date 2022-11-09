@@ -182,63 +182,10 @@ type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 type config = {
   mode : interpreter_mode;
       (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
-  check_invariants : bool;
-      (** Check that invariants are maintained whenever we execute a statement *)
-  greedy_expand_symbolics_with_borrows : bool;
-      (** Expand all symbolic values containing borrows upon introduction - allows
-          to use restrict ourselves to a simpler model for the projectors over
-          symbolic values.
-          The interpreter fails if doing this requires to do a branching (because
-          we need to expand an enumeration with strictly more than one variant)
-          or if we need to expand a recursive type (because this leads to looping).
-       *)
-  allow_bottom_below_borrow : bool;
-      (** Experimental.
-  
-          We sometimes want to temporarily break the invariant that there is no
-          bottom value below a borrow. If this value is true, we don't check
-          the invariant, and the rule becomes: we can't end a borrow *if* it contains
-          a bottom value. The consequence is that it becomes ok to temporarily
-          have bottom below a borrow, if we put something else inside before ending
-          the borrow.
-          
-          For instance, when evaluating an assignment, we move the value which
-          will be overwritten then do some administrative tasks with the borrows,
-          then move the rvalue to its destination. We currently want to be able
-          to check the invariants every time we end a borrow/an abstraction,
-          meaning at intermediate steps of the assignment where the invariants
-          might actually be broken.
-       *)
-  return_unit_end_abs_with_no_loans : bool;
-      (** If a function doesn't return any borrows, we can immediately call
-          its backward functions. If this option is on, whenever we call a
-          function *and* this function returns unit, we immediately end all the
-          abstractions which are introduced and don't contain loans. This can be
-          useful to make the code cleaner (the backward function is introduced
-          where the function call happened) and make sure all forward functions
-          with no return value are followed by a backward function.
-       *)
 }
 [@@deriving show]
 
-(** See {!config} *)
-type partial_config = {
-  check_invariants : bool;
-  greedy_expand_symbolics_with_borrows : bool;
-  allow_bottom_below_borrow : bool;
-  return_unit_end_abs_with_no_loans : bool;
-}
-
-let config_of_partial (mode : interpreter_mode) (config : partial_config) :
-    config =
-  {
-    mode;
-    check_invariants = config.check_invariants;
-    greedy_expand_symbolics_with_borrows =
-      config.greedy_expand_symbolics_with_borrows;
-    allow_bottom_below_borrow = config.allow_bottom_below_borrow;
-    return_unit_end_abs_with_no_loans = config.return_unit_end_abs_with_no_loans;
-  }
+let mk_config (mode : interpreter_mode) : config = { mode }
 
 type type_context = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;

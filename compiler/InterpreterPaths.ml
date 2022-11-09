@@ -310,8 +310,8 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
     Note that we only access the value at the place, and do not check that
     the value is "well-formed" (for instance that it doesn't contain bottoms).
  *)
-let try_read_place (config : C.config) (access : access_kind) (p : E.place)
-    (ctx : C.eval_ctx) : V.typed_value path_access_result =
+let try_read_place (access : access_kind) (p : E.place) (ctx : C.eval_ctx) :
+    V.typed_value path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
   let update v = v in
@@ -321,7 +321,7 @@ let try_read_place (config : C.config) (access : access_kind) (p : E.place)
       (* Note that we ignore the new environment: it should be the same as the
          original one.
       *)
-      if config.check_invariants then
+      if !Config.check_invariants then
         if ctx1 <> ctx then (
           let msg =
             "Unexpected environment update:\nNew environment:\n"
@@ -332,15 +332,15 @@ let try_read_place (config : C.config) (access : access_kind) (p : E.place)
           raise (Failure "Unexpected environment update"));
       Ok read_value
 
-let read_place (config : C.config) (access : access_kind) (p : E.place)
-    (ctx : C.eval_ctx) : V.typed_value =
-  match try_read_place config access p ctx with
+let read_place (access : access_kind) (p : E.place) (ctx : C.eval_ctx) :
+    V.typed_value =
+  match try_read_place access p ctx with
   | Error e -> raise (Failure ("Unreachable: " ^ show_path_fail_kind e))
   | Ok v -> v
 
 (** Attempt to update the value at a given place *)
-let try_write_place (_config : C.config) (access : access_kind) (p : E.place)
-    (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx path_access_result =
+let try_write_place (access : access_kind) (p : E.place) (nv : V.typed_value)
+    (ctx : C.eval_ctx) : C.eval_ctx path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function substitutes the value with the new value *)
   let update _ = nv in
@@ -350,9 +350,9 @@ let try_write_place (_config : C.config) (access : access_kind) (p : E.place)
       (* We ignore the read value *)
       Ok ctx
 
-let write_place (config : C.config) (access : access_kind) (p : E.place)
-    (nv : V.typed_value) (ctx : C.eval_ctx) : C.eval_ctx =
-  match try_write_place config access p nv ctx with
+let write_place (access : access_kind) (p : E.place) (nv : V.typed_value)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  match try_write_place access p nv ctx with
   | Error e -> raise (Failure ("Unreachable: " ^ show_path_fail_kind e))
   | Ok ctx -> ctx
 
@@ -417,9 +417,9 @@ let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
     about which variant we should project to, which is why we *can* set the
     variant index when writing one of its fields).
 *)
-let expand_bottom_value_from_projection (config : C.config)
-    (access : access_kind) (p : E.place) (remaining_pes : int)
-    (pe : E.projection_elem) (ty : T.ety) (ctx : C.eval_ctx) : C.eval_ctx =
+let expand_bottom_value_from_projection (access : access_kind) (p : E.place)
+    (remaining_pes : int) (pe : E.projection_elem) (ty : T.ety)
+    (ctx : C.eval_ctx) : C.eval_ctx =
   (* Debugging *)
   log#ldebug
     (lazy
@@ -464,7 +464,7 @@ let expand_bottom_value_from_projection (config : C.config)
              ("Unreachable: " ^ E.show_projection_elem pe ^ ", " ^ T.show_ety ty))
   in
   (* Update the context by inserting the expanded value at the proper place *)
-  match try_write_place config access p' nv ctx with
+  match try_write_place access p' nv ctx with
   | Ok ctx -> ctx
   | Error _ -> raise (Failure "Unreachable")
 
@@ -472,7 +472,7 @@ let rec update_ctx_along_read_place (config : C.config) (access : access_kind)
     (p : E.place) : cm_fun =
  fun cf ctx ->
   (* Attempt to read the place: if it fails, update the environment and retry *)
-  match try_read_place config access p ctx with
+  match try_read_place access p ctx with
   | Ok _ -> cf ctx
   | Error err ->
       let cc =
@@ -501,7 +501,7 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
  fun cf ctx ->
   (* Attempt to *read* (yes, *read*: we check the access to the place, and
      write to it later) the place: if it fails, update the environment and retry *)
-  match try_read_place config access p ctx with
+  match try_read_place access p ctx with
   | Ok _ -> cf ctx
   | Error err ->
       (* Update the context *)
@@ -518,8 +518,8 @@ let rec update_ctx_along_write_place (config : C.config) (access : access_kind)
             (* Expand the {!V.Bottom} value *)
             fun cf ctx ->
              let ctx =
-               expand_bottom_value_from_projection config access p remaining_pes
-                 pe ty ctx
+               expand_bottom_value_from_projection access p remaining_pes pe ty
+                 ctx
              in
              cf ctx
         | FailBorrow _ -> raise (Failure "Could not write to a borrow")
@@ -569,7 +569,7 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
   in
 
   (* First, retrieve the value *)
-  let v = read_place config access p ctx in
+  let v = read_place access p ctx in
   (* Inspect the value and update the context while doing so.
      If the context gets updated: perform a recursive call (many things
      may have been updated in the context: we need to re-read the value
@@ -590,8 +590,8 @@ let drop_outer_loans_at_lplace (config : C.config) (p : E.place) : cm_fun =
   (* Move the current value in the place outside of this place and into
    * a dummy variable *)
   let access = Write in
-  let v = read_place config access p ctx in
-  let ctx = write_place config access p (mk_bottom v.V.ty) ctx in
+  let v = read_place access p ctx in
+  let ctx = write_place access p (mk_bottom v.V.ty) ctx in
   let dummy_id = C.fresh_dummy_var_id () in
   let ctx = C.ctx_push_dummy_var ctx dummy_id v in
   (* Auxiliary function *)
@@ -624,7 +624,7 @@ let drop_outer_loans_at_lplace (config : C.config) (p : E.place) : cm_fun =
         (* Pop *)
         let ctx, v = C.ctx_remove_dummy_var ctx dummy_id in
         (* Reinsert *)
-        let ctx = write_place config access p v ctx in
+        let ctx = write_place access p v ctx in
         (* Sanity check *)
         assert (not (outer_loans_in_value v));
         (* Continue *)
@@ -648,7 +648,7 @@ let prepare_lplace (config : C.config) (p : E.place)
   (* Read the value and check it *)
   let read_check cf : m_fun =
    fun ctx ->
-    let v = read_place config access p ctx in
+    let v = read_place access p ctx in
     (* Sanity checks *)
     assert (not (outer_loans_in_value v));
     (* Continue *)

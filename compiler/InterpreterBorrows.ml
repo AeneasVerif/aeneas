@@ -853,7 +853,7 @@ let rec end_borrow_aux (config : C.config) (chain : borrow_or_abs_ids)
   (* The complete sanity check: also check that after we ended a borrow,
    * the invariant is preserved *)
   let cf_check : cm_fun =
-    comp cf_check_disappeared (Invariants.cf_check_invariants config)
+    comp cf_check_disappeared Invariants.cf_check_invariants
   in
 
   (* Start by ending the borrow itself (we lookup it up and replace it with [Bottom] *)
@@ -1011,7 +1011,7 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
   in
 
   (* Sanity check: ending an abstraction must preserve the invariants *)
-  let cc = comp cc (Invariants.cf_check_invariants config) in
+  let cc = comp cc Invariants.cf_check_invariants in
 
   (* Apply the continuation *)
   cc cf ctx
