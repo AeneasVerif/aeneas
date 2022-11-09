@@ -128,7 +128,7 @@ let fstar_assumed_variants : (assumed_ty * VariantId.id * string) list =
     (Option, option_none_id, "None");
   ]
 
-let fstar_assumed_functions :
+let fstar_assumed_llbc_functions :
     (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
   let rg0 = Some T.RegionGroupId.zero in
   [
@@ -146,13 +146,17 @@ let fstar_assumed_functions :
     (VecIndexMut, rg0, "vec_index_mut_back");
   ]
 
+let fstar_assumed_pure_functions : (pure_assumed_fun_id * string) list =
+  [ (Return, "return"); (Fail, "fail"); (Assert, "massert") ]
+
 let fstar_names_map_init : names_map_init =
   {
     keywords = fstar_keywords;
     assumed_adts = fstar_assumed_adts;
     assumed_structs = fstar_assumed_structs;
     assumed_variants = fstar_assumed_variants;
-    assumed_functions = fstar_assumed_functions;
+    assumed_llbc_functions = fstar_assumed_llbc_functions;
+    assumed_pure_functions = fstar_assumed_pure_functions;
   }
 
 let fstar_extract_unop (extract_expr : bool -> texpression -> unit)
@@ -321,7 +325,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     let parts = List.map to_snake_case (get_name name) in
     String.concat "_" parts
   in
-  let fun_name (_fid : A.fun_id) (fname : fun_name) (num_rgs : int)
+  let fun_name (fname : fun_name) (num_rgs : int)
       (rg : region_group_info option) (filter_info : bool * int) : string =
     let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
@@ -416,7 +420,6 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     char_name = "char";
     int_name;
     str_name = "string";
-    assert_name = "massert";
     field_name;
     variant_name;
     struct_constructor;
@@ -433,7 +436,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   }
 
 (** [inside] constrols whether we should add parentheses or not around type
-    application (if [true] we add parentheses).
+    applications (if [true] we add parentheses).
  *)
 let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (ty : ty) : unit =
@@ -928,7 +931,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   | Qualif qualif -> (
       (* Top-level qualifier *)
       match qualif.id with
-      | Func fun_id ->
+      | FunOrOp fun_id ->
           extract_function_call ctx fmt inside fun_id qualif.type_args args
       | Global global_id -> extract_global ctx fmt global_id
       | AdtCons adt_cons_id ->
@@ -957,7 +960,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
 (** Subcase of the app case: function call *)
 and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (fid : fun_id) (type_args : ty list)
+    (inside : bool) (fid : fun_or_op_id) (type_args : ty list)
     (args : texpression list) : unit =
   match (fid, args) with
   | Unop unop, [ arg ] ->
@@ -971,17 +974,12 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       ctx.fmt.extract_binop
         (extract_texpression ctx fmt)
         fmt inside binop int_ty arg0 arg1
-  | Regular (_, _), _ | Assert, [ _ ] ->
+  | Fun fun_id, _ ->
       if inside then F.pp_print_string fmt "(";
       (* Open a box for the function call *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the function name *)
-      let fun_name =
-        match fid with
-        | Regular (fun_id, rg_id) -> ctx_get_function fun_id rg_id ctx
-        | Assert -> ctx.fmt.assert_name
-        | _ -> raise (Failure "Unreachable")
-      in
+      let fun_name = ctx_get_function fun_id ctx in
       F.pp_print_string fmt fun_name;
       (* Print the type parameters *)
       List.iter
@@ -999,10 +997,10 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_close_box fmt ();
       (* Return *)
       if inside then F.pp_print_string fmt ")"
-  | (Unop _ | Binop _ | Assert), _ ->
+  | (Unop _ | Binop _), _ ->
       raise
         (Failure
-           ("Unreachable:\n" ^ "Function: " ^ show_fun_id fid
+           ("Unreachable:\n" ^ "Function: " ^ show_fun_or_op_id fid
           ^ ",\nNumber of arguments: "
            ^ string_of_int (List.length args)
            ^ ",\nArguments: "
@@ -1576,7 +1574,9 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global global.def_id ctx in
-  let body_name = ctx_get_function (Regular global.body_id) None ctx in
+  let body_name =
+    ctx_get_function (FromLlbc (Regular global.body_id, None)) ctx
+  in
 
   let decl_ty, body_ty =
     let ty = body.signature.output in

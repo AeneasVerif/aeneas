@@ -281,22 +281,30 @@ and typed_pattern = { value : pattern; ty : ty }
 type unop = Not | Neg of integer_type | Cast of integer_type * integer_type
 [@@deriving show, ord]
 
-type fun_id =
-  | Regular of A.fun_id * T.RegionGroupId.id option
-      (** Backward id: [Some] if the function is a backward function, [None]
-          if it is a forward function.
+(** Identifiers of assumed functions that we use only in the pure translation *)
+type pure_assumed_fun_id =
+  | Return  (** The monadic return *)
+  | Fail  (** The monadic fail *)
+  | Assert  (** Assertion *)
+[@@deriving show, ord]
 
-          TODO: we need to redefine A.fun_id here, to add [fail] and
-          [return] (important to get a unified treatment of the state-error
-          monad). For now, when using the state-error monad: extraction
-          works only if we unfold all the monadic let-bindings, and we
-          then replace the content of the occurrences of [Return] to also
-          return the state (which is really super ugly).
-          TODO: also add Assert...
+(** A function identifier *)
+type fun_id =
+  | FromLlbc of A.fun_id * T.RegionGroupId.id option
+      (** A function coming from LLBC.
+
+          The region group id is the backward id:: [Some] if the function is a
+          backward function, [None] if it is a forward function.
        *)
+  | Pure of pure_assumed_fun_id
+      (** A function only used in the pure translation *)
+[@@deriving show, ord]
+
+(** A function or an operation id *)
+type fun_or_op_id =
+  | Fun of fun_id
   | Unop of unop
   | Binop of E.binop * integer_type
-  | Assert
 [@@deriving show, ord]
 
 (** An identifier for an ADT constructor *)
@@ -309,7 +317,7 @@ type adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
 type projection = { adt_id : type_id; field_id : FieldId.id } [@@deriving show]
 
 type qualif_id =
-  | Func of fun_id
+  | FunOrOp of fun_or_op_id  (** A function or an operation *)
   | Global of GlobalDeclId.id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)

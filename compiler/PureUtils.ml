@@ -18,17 +18,17 @@ end
 
 module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
 
-module FunIdOrderedType = struct
-  type t = fun_id
+module FunOrOpIdOrderedType = struct
+  type t = fun_or_op_id
 
-  let compare = compare_fun_id
-  let to_string = show_fun_id
-  let pp_t = pp_fun_id
-  let show_t = show_fun_id
+  let compare = compare_fun_or_op_id
+  let to_string = show_fun_or_op_id
+  let pp_t = pp_fun_or_op_id
+  let show_t = show_fun_or_op_id
 end
 
-module FunIdMap = Collections.MakeMap (FunIdOrderedType)
-module FunIdSet = Collections.MakeSet (FunIdOrderedType)
+module FunOrOpIdMap = Collections.MakeMap (FunOrOpIdOrderedType)
+module FunOrOpIdSet = Collections.MakeSet (FunOrOpIdOrderedType)
 
 let dest_arrow_ty (ty : ty) : ty * ty =
   match ty with
@@ -114,23 +114,26 @@ let fun_sig_substitute (tsubst : TypeVarId.id -> ty) (sg : fun_sig) :
     This function is meant to be applied on a set of (forward, backwards) functions
     generated for one recursive function.
     The way we do the test is very simple:
-    - we explore the functions one by one, in the order
+    - we explore the functions one by one, in the order in which they are provided
     - if all functions only call functions we already explored, they are not
       mutually recursive
  *)
 let functions_not_mutually_recursive (funs : fun_decl list) : bool =
   (* Compute the set of function identifiers in the group *)
   let ids =
-    FunIdSet.of_list
+    FunOrOpIdSet.of_list
       (List.map
-         (fun (f : fun_decl) -> Regular (A.Regular f.def_id, f.back_id))
+         (fun (f : fun_decl) -> Fun (FromLlbc (A.Regular f.def_id, f.back_id)))
          funs)
   in
   let ids = ref ids in
   (* Explore every body *)
   let body_only_calls_itself (fdef : fun_decl) : bool =
     (* Remove the current id from the id set *)
-    ids := FunIdSet.remove (Regular (A.Regular fdef.def_id, fdef.back_id)) !ids;
+    ids :=
+      FunOrOpIdSet.remove
+        (Fun (FromLlbc (A.Regular fdef.def_id, fdef.back_id)))
+        !ids;
 
     (* Check if we call functions from the updated id set *)
     let obj =
@@ -139,8 +142,8 @@ let functions_not_mutually_recursive (funs : fun_decl list) : bool =
 
         method! visit_qualif env qualif =
           match qualif.id with
-          | Func fun_id ->
-              if FunIdSet.mem fun_id !ids then raise Utils.Found
+          | FunOrOp fun_id ->
+              if FunOrOpIdSet.mem fun_id !ids then raise Utils.Found
               else super#visit_qualif env qualif
           | _ -> super#visit_qualif env qualif
       end
@@ -242,12 +245,12 @@ let destruct_qualif_app (e : texpression) : qualif * texpression list =
 
 (** Destruct an expression into a function call, if possible *)
 let opt_destruct_function_call (e : texpression) :
-    (fun_id * ty list * texpression list) option =
+    (fun_or_op_id * ty list * texpression list) option =
   match opt_destruct_qualif_app e with
   | None -> None
   | Some (qualif, args) -> (
       match qualif.id with
-      | Func fun_id -> Some (fun_id, qualif.type_args, args)
+      | FunOrOp fun_id -> Some (fun_id, qualif.type_args, args)
       | _ -> None)
 
 let opt_destruct_result (ty : ty) : ty option =

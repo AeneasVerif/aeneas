@@ -240,7 +240,7 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
 
 (** [back_args]: the *additional* list of inputs received by the backward function *)
 let bs_ctx_register_backward_call (abs : V.abs) (back_args : texpression list)
-    (ctx : bs_ctx) : bs_ctx * fun_id =
+    (ctx : bs_ctx) : bs_ctx * fun_or_op_id =
   (* Insert the abstraction in the call informations *)
   let back_id = abs.back_id in
   let info = V.FunCallId.Map.find abs.call_id ctx.calls in
@@ -259,7 +259,7 @@ let bs_ctx_register_backward_call (abs : V.abs) (back_args : texpression list)
   (* Retrieve the fun_id *)
   let fun_id =
     match info.forward.call_id with
-    | S.Fun (fid, _) -> Regular (fid, Some abs.back_id)
+    | S.Fun (fid, _) -> Fun (FromLlbc (fid, Some abs.back_id))
     | S.Unop _ | S.Binop _ -> raise (Failure "Unreachable")
   in
   (* Update the context and return *)
@@ -1167,7 +1167,7 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
     match call.call_id with
     | S.Fun (fid, call_id) ->
         (* Regular function call *)
-        let func = Regular (fid, None) in
+        let func = Fun (FromLlbc (fid, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
         let effect_info =
@@ -1235,7 +1235,7 @@ and translate_function_call (config : config) (call : S.call) (e : S.expression)
     | None -> dest
     | Some out_state -> mk_simpl_tuple_pattern [ out_state; dest ]
   in
-  let func = { id = Func fun_id; type_args } in
+  let func = { id = FunOrOp fun_id; type_args } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
   let ret_ty =
     if effect_info.can_fail then mk_result_ty dest_v.ty else dest_v.ty
@@ -1390,7 +1390,7 @@ and translate_end_abstraction (config : config) (abs : V.abs) (e : S.expression)
         if effect_info.can_fail then mk_result_ty output.ty else output.ty
       in
       let func_ty = mk_arrows input_tys ret_ty in
-      let func = { id = Func func; type_args } in
+      let func = { id = FunOrOp func; type_args } in
       let func = { e = Qualif func; ty = func_ty } in
       let call = mk_apps func args in
       (* **Optimization**:
@@ -1487,7 +1487,7 @@ and translate_assertion (config : config) (v : V.typed_value) (e : S.expression)
   let monadic = true in
   let v = typed_value_to_texpression ctx v in
   let args = [ v ] in
-  let func = { id = Func Assert; type_args = [] } in
+  let func = { id = FunOrOp (Fun (Pure Assert)); type_args = [] } in
   let func_ty = mk_arrow Bool mk_unit_ty in
   let func = { e = Qualif func; ty = func_ty } in
   let assertion = mk_apps func args in
