@@ -6,7 +6,6 @@ endif
 all: build-tests-verify
 
 CHARON_HOME = ../charon
-CHARON_EXEC = $(CHARON_HOME)/charon
 DEST_DIR = tests
 
 # We use those variables, whose definition depends on the rule we apply
