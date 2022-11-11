@@ -50,7 +50,7 @@
             filter = path: type:
               path == toString ./Makefile
               || pkgs.lib.hasPrefix (toString ./compiler) path
-              || pkgs.lib.hasPrefix (toString ./fstar) path
+              || pkgs.lib.hasPrefix (toString ./backends) path
               || pkgs.lib.hasPrefix (toString ./tests) path;
           };
           buildPhase = ''
