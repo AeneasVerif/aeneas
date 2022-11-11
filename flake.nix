@@ -26,7 +26,7 @@
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
-          src = ./.;
+          src = ./compiler;
           buildInputs = [ easy_logging charon.packages.${system}.charon-ml ]
             ++ (with ocamlPackages; [
               calendar
@@ -36,11 +36,38 @@
               yojson
               zarith
             ]);
+          afterBuild = ''
+          echo charon.packages.${system}.tests
+          '';
+        };
+        # Make sure we don't need to recompile the package whenever we make
+        # unnecessary changes - we list the exact files and folders the package
+        # depends upon.
+        aeneas-tests = pkgs.stdenv.mkDerivation {
+          name = "aeneas_tests";
+          src = pkgs.lib.cleanSourceWith {
+            src = ./.;
+            filter = path: type:
+              path == toString ./Makefile
+              || pkgs.lib.hasPrefix (toString ./compiler) path
+              || pkgs.lib.hasPrefix (toString ./fstar) path
+              || pkgs.lib.hasPrefix (toString ./tests) path;
+          };
+          buildPhase = ''
+          export CHARON_TESTS_REGULAR_DIR=${charon.checks.${system}.tests}
+          export CHARON_TESTS_POLONIUS_DIR=${charon.checks.${system}.tests-polonius}
+          export AENEAS_EXE=${aeneas}/bin/aeneas_driver
+
+          make tests
+          '';
+          installPhase = "touch $out";
         };
       in {
         packages = {
           inherit aeneas;
           default = aeneas;
         };
+        checks = { inherit aeneas aeneas-tests; };
+        hydraJobs = { inherit aeneas aeneas-tests; };
       });
 }

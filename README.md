@@ -63,6 +63,12 @@ if [ -e charon ]; then echo "valid"; else echo "invalid"; fi
 Finally, building the project simply requires to run `make` in the top
 directory.
 
+You can also use `make tests` and `make verify` to run the tests, and check
+the generated files. As `make tests` will run tests which use the Charon tests,
+you will need to regenerate the `.llbc` files. You have the following options:
+- run `make tests` in the Charon repository
+- run `REGEN_LLBC=1 make tests` in the Aeneas repository
+
 ## Documentation
 
 If you run `make`, you will generate a documentation accessible from [`doc.html`](./doc.html).

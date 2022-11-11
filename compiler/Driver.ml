@@ -140,17 +140,18 @@ let () =
   pure_micro_passes_log#set_level EL.Info;
   pure_to_extract_log#set_level EL.Info;
   translate_log#set_level EL.Info;
+  let log = main_log in
 
   (* Load the module *)
   let json = Yojson.Basic.from_file filename in
   match crate_of_json json with
   | Error s ->
-      main_log#error "error: %s\n" s;
+      log#error "error: %s\n" s;
       exit 1
   | Ok m ->
       (* Logging *)
-      main_log#linfo (lazy ("Imported: " ^ filename));
-      main_log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
+      log#linfo (lazy ("Imported: " ^ filename));
+      log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
 
       (* Apply the pre-passes *)
       let m = PrePasses.apply_passes m in
