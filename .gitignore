@@ -40,11 +40,11 @@ result
 # F*
 .depend
 *.hints
-tests/betree/obj/
-tests/betree_back_stateful/obj/
-tests/hashmap/obj/
-tests/hashmap_on_disk/obj/
-tests/misc/obj/
+tests/fstar/betree/obj/
+tests/fstar/betree_back_stateful/obj/
+tests/fstar/hashmap/obj/
+tests/fstar/hashmap_on_disk/obj/
+tests/fstar/misc/obj/
 
 # Misc
 /fstar-tests

@@ -106,7 +106,7 @@ CHARON_CMD = cd $(CHARON_TEST_DIR) && NOT_ALL_TESTS=1 $(MAKE) test-$*
 endif
 
 # The command to run Aeneas on the proper llbc file
-AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/$(SUBDIR) $(OPTIONS)
+AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/fstar/$(SUBDIR) $(OPTIONS)
 
 
 # Add specific options to some tests

@@ -343,7 +343,7 @@ let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
 let extract_definitions (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) : unit =
   (* Export the definition groups to the file, in the proper order *)
-  let export_type (qualif : ExtractToFStar.type_decl_qualif)
+  let export_type (qualif : ExtractToBackend.type_decl_qualif)
       (id : Pure.TypeDeclId.id) : unit =
     (* Retrive the declaration *)
     let def = Pure.TypeDeclId.Map.find id ctx.trans_types in
@@ -353,8 +353,8 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       | Enum _ | Struct _ -> (false, qualif)
       | Opaque ->
           let qualif =
-            if config.interface then ExtractToFStar.TypeVal
-            else ExtractToFStar.AssumeType
+            if config.interface then ExtractToBackend.TypeVal
+            else ExtractToBackend.AssumeType
           in
           (true, qualif)
     in
@@ -363,7 +363,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     if
       (is_opaque && config.extract_opaque)
       || ((not is_opaque) && config.extract_transparent)
-    then ExtractToFStar.extract_type_decl ctx.extract_ctx fmt qualif def
+    then ExtractToBackend.extract_type_decl ctx.extract_ctx fmt qualif def
   in
 
   (* Utility to check a function has a decrease clause *)
@@ -393,7 +393,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (fun (_, (fwd, _)) ->
           let has_decr_clause = has_decreases_clause fwd in
           if has_decr_clause then
-            ExtractToFStar.extract_template_decreases_clause ctx.extract_ctx fmt
+            ExtractToBackend.extract_template_decreases_clause ctx.extract_ctx fmt
               fwd)
         pure_ls;
     (* Extract the function definitions *)
@@ -413,12 +413,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          let is_opaque = Option.is_none fwd_def.Pure.body in
          let qualif =
            if is_opaque then
-             if config.interface then ExtractToFStar.Val
-             else ExtractToFStar.AssumeVal
-           else if not is_rec then ExtractToFStar.Let
+             if config.interface then ExtractToBackend.Val
+             else ExtractToBackend.AssumeVal
+           else if not is_rec then ExtractToBackend.Let
            else if is_mut_rec then
-             if i = 0 then ExtractToFStar.LetRec else ExtractToFStar.And
-           else ExtractToFStar.LetRec
+             if i = 0 then ExtractToBackend.LetRec else ExtractToBackend.And
+           else ExtractToBackend.LetRec
          in
          let has_decr_clause =
            has_decreases_clause def && config.extract_decreases_clauses
@@ -428,7 +428,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
            ((not is_opaque) && config.extract_transparent)
            || (is_opaque && config.extract_opaque)
          then
-           ExtractToFStar.extract_fun_decl ctx.extract_ctx fmt qualif
+           ExtractToBackend.extract_fun_decl ctx.extract_ctx fmt qualif
              has_decr_clause def)
        fls);
     (* Insert unit tests if necessary *)
@@ -436,7 +436,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       List.iter
         (fun (keep_fwd, (fwd, _)) ->
           if keep_fwd then
-            ExtractToFStar.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
+            ExtractToBackend.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
         pure_ls
   in
 
@@ -454,29 +454,29 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       ((not is_opaque) && config.extract_transparent)
       || (is_opaque && config.extract_opaque)
     then
-      ExtractToFStar.extract_global_decl ctx.extract_ctx fmt global body
+      ExtractToBackend.extract_global_decl ctx.extract_ctx fmt global body
         config.interface
   in
 
   let export_state_type () : unit =
     let qualif =
-      if config.interface then ExtractToFStar.TypeVal
-      else ExtractToFStar.AssumeType
+      if config.interface then ExtractToBackend.TypeVal
+      else ExtractToBackend.AssumeType
     in
-    ExtractToFStar.extract_state_type fmt ctx.extract_ctx qualif
+    ExtractToBackend.extract_state_type fmt ctx.extract_ctx qualif
   in
 
   let export_decl (decl : A.declaration_group) : unit =
     match decl with
     | Type (NonRec id) ->
-        if config.extract_types then export_type ExtractToFStar.Type id
+        if config.extract_types then export_type ExtractToBackend.Type id
     | Type (Rec ids) ->
         (* Rk.: we shouldn't have (mutually) recursive opaque types *)
         if config.extract_types then
           List.iteri
             (fun i id ->
               let qualif =
-                if i = 0 then ExtractToFStar.Type else ExtractToFStar.And
+                if i = 0 then ExtractToBackend.Type else ExtractToBackend.And
               in
               export_type qualif id)
             ids
@@ -569,12 +569,12 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
    * language, as well as some primitive names ("u32", etc.) *)
   let variant_concatenate_type_name = true in
   let fstar_fmt =
-    ExtractToFStar.mk_formatter trans_ctx crate.name
+    ExtractToBackend.mk_formatter trans_ctx crate.name
       variant_concatenate_type_name
   in
   let names_map =
     PureToExtract.initialize_names_map fstar_fmt
-      ExtractToFStar.fstar_names_map_init
+      ExtractToBackend.fstar_names_map_init
   in
   let ctx =
     { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }
@@ -596,7 +596,7 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
    * sure there are no name clashes. *)
   let ctx =
     List.fold_left
-      (fun ctx def -> ExtractToFStar.extract_type_decl_register_names ctx def)
+      (fun ctx def -> ExtractToBackend.extract_type_decl_register_names ctx def)
       ctx trans_types
   in
 
@@ -612,13 +612,13 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
         let is_global = (fst def).Pure.is_global_decl_body in
         if is_global then ctx
         else
-          ExtractToFStar.extract_fun_decl_register_names ctx keep_fwd
+          ExtractToBackend.extract_fun_decl_register_names ctx keep_fwd
             gen_decr_clause def)
       ctx trans_funs
   in
 
   let ctx =
-    List.fold_left ExtractToFStar.extract_global_decl_register_names ctx
+    List.fold_left ExtractToBackend.extract_global_decl_register_names ctx
       crate.globals
   in
 

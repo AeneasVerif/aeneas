@@ -500,7 +500,7 @@ type fun_effect_info = {
       (** [true] if the function group is stateful. By *function group*, we mean
           the set [{ forward function } U { backward functions }].
 
-          We need this because of the option {!Config.backward_no_state_update}:
+          We need this because of the option {!val:Config.backward_no_state_update}:
           if it is [true], then in case of a backward function {!stateful} is [false],
           but we might need to know whether the corresponding forward function
           is stateful or not.

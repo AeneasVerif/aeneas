@@ -20,7 +20,7 @@
   Cps
   Expressions
   ExpressionsUtils
-  ExtractToFStar
+  ExtractToBackend
   FunsAnalysis
   Identifiers
   InterpreterBorrowsCore
