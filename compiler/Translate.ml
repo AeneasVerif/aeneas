@@ -658,12 +658,14 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     (* Create a directory with *default* permissions *)
     Core_unix.mkdir_p dest_dir);
 
-  (* Copy "Primitives.fst" - I couldn't find a "cp" function in the OCaml
-   * libraries... *)
+  (* Copy "Primitives.fst" *)
   let _ =
-    let src = open_in "fstar/Primitives.fst" in
+    (* Retrieve the executable's directory *)
+    let exe_dir = Filename.dirname Sys.argv.(0) in
+    let src = open_in (exe_dir ^ "/fstar/Primitives.fst") in
     let tgt_filename = Filename.concat dest_dir "Primitives.fst" in
     let tgt = open_out tgt_filename in
+    (* Very annoying: I couldn't find a "cp" function in the OCaml libraries... *)
     try
       while true do
         (* We copy line by line *)

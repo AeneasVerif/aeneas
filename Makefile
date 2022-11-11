@@ -21,11 +21,9 @@ CHARON_HOME ?= ../charon
 CHARON_TESTS_REGULAR_DIR ?= $(CHARON_HOME)/tests
 CHARON_TESTS_POLONIUS_DIR ?= $(CHARON_HOME)/tests-polonius
 
-AENEAS_DRIVER = driver.exe
-
 # The path to the Aeneas executable to run the tests - we need the ability to
 # change this path for the Nix package.
-AENEAS_EXE ?= compiler/_build/default/$(AENEAS_DRIVER)
+AENEAS_EXE ?= bin/aeneas.exe
 
 # The user can specify additional translation options for Aeneas.
 # By default we do:
@@ -54,7 +52,7 @@ build-tests-verify: build tests verify
 
 # Build the project
 .PHONY: build
-build: build-driver build-lib doc
+build: build-driver build-lib build-bin-dir doc
 
 .PHONY: build-driver
 build-driver:
@@ -63,6 +61,13 @@ build-driver:
 .PHONY: build-lib
 build-lib:
 	cd compiler && dune build aeneas.cmxs
+
+.PHONY: build-bin-dir
+build-bin-dir: build-driver build-lib
+	mkdir -p bin
+	cp -f compiler/_build/default/driver.exe bin/aeneas.exe
+	cp -f compiler/_build/default/driver.exe bin/aeneas.cmxs
+	cp -rf fstar bin
 
 .PHONY: doc
 doc:
