@@ -184,18 +184,18 @@ let test_split_list_fwd : result unit =
 (** Unit test for [no_nested_borrows::test_split_list] *)
 let _ = assert_norm (test_split_list_fwd = Return ())
 
-(** [no_nested_borrows::get_elem] *)
-let get_elem_fwd (t : Type0) (b : bool) (x : t) (y : t) : result t =
+(** [no_nested_borrows::choose] *)
+let choose_fwd (t : Type0) (b : bool) (x : t) (y : t) : result t =
   if b then Return x else Return y
 
-(** [no_nested_borrows::get_elem] *)
-let get_elem_back
+(** [no_nested_borrows::choose] *)
+let choose_back
   (t : Type0) (b : bool) (x : t) (y : t) (ret : t) : result (t & t) =
   if b then Return (ret, y) else Return (x, ret)
 
-(** [no_nested_borrows::get_elem_test] *)
-let get_elem_test_fwd : result unit =
-  begin match get_elem_fwd i32 true 0 0 with
+(** [no_nested_borrows::choose_test] *)
+let choose_test_fwd : result unit =
+  begin match choose_fwd i32 true 0 0 with
   | Fail -> Fail
   | Return z ->
     begin match i32_add z 1 with
@@ -204,7 +204,7 @@ let get_elem_test_fwd : result unit =
       if not (z0 = 1)
       then Fail
       else
-        begin match get_elem_back i32 true 0 0 z0 with
+        begin match choose_back i32 true 0 0 z0 with
         | Fail -> Fail
         | Return (x, y) ->
           if not (x = 1) then Fail else if not (y = 0) then Fail else Return ()
@@ -212,8 +212,8 @@ let get_elem_test_fwd : result unit =
     end
   end
 
-(** Unit test for [no_nested_borrows::get_elem_test] *)
-let _ = assert_norm (get_elem_test_fwd = Return ())
+(** Unit test for [no_nested_borrows::choose_test] *)
+let _ = assert_norm (choose_test_fwd = Return ())
 
 (** [no_nested_borrows::test_char] *)
 let test_char_fwd : result char = Return 'a'
