@@ -8,7 +8,7 @@
     
     TODO: implementing the concrete evaluation functions for the
     assumed functions is really annoying (see
-    {!InterpreterStatements.eval_non_local_function_call_concrete}),
+    [InterpreterStatements.eval_non_local_function_call_concrete]),
     I think it should be possible, in most situations, to write bodies which
     model the behaviour of those unsafe functions. For instance, [Box::deref_mut]
     should simply be:

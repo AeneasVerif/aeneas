@@ -17,7 +17,7 @@ open InterpreterPaths
     borrows*.
 
     This function doesn't reorganize the context to make sure we can read
-    the place. If needs be, you should call {!update_ctx_along_read_place} first.
+    the place. If needs be, you should call {!InterpreterPaths.update_ctx_along_read_place} first.
  *)
 val read_place : access_kind -> E.place -> (V.typed_value -> m_fun) -> m_fun
 
@@ -64,8 +64,8 @@ val eval_operands :
 
     Transmits the computed rvalue to the received continuation.
 
-    Note that this function fails on {!E.Discriminant}: discriminant reads should
-    have been eliminated from the AST.
+    Note that this function fails on {!constructor:E.Discriminant}: discriminant
+    reads should have been eliminated from the AST.
  *)
 val eval_rvalue_not_global :
   C.config -> E.rvalue -> ((V.typed_value, eval_error) result -> m_fun) -> m_fun

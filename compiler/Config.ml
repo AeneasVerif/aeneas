@@ -1,6 +1,6 @@
 (** Define the global configuration options *)
 
-(** {0 Interpreter} *)
+(** {1 Interpreter} *)
 
 (** Check that invariants are maintained whenever we execute a statement *)
 let check_invariants = ref true
@@ -44,7 +44,7 @@ let allow_bottom_below_borrow = true
  *)
 let return_unit_end_abs_with_no_loans = true
 
-(** {0 Translation} *)
+(** {1 Translation} *)
 
 (** Controls whether we need to use a state to model the external world
     (I/O, for instance).
@@ -59,7 +59,7 @@ let use_state = ref true (* TODO *)
        (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
        ...
        (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
-    }]
+    ]}
 
     Otherwise, we generate code of the following shape:
     {[
@@ -110,7 +110,7 @@ let extract_decreases_clauses = ref true
  *)
 let extract_template_decreases_clauses = ref false
 
-(** {0 Micro passes} *)
+(** {1 Micro passes} *)
 
 (** Some provers like F* don't support the decomposition of return values
     in monadic let-bindings:
@@ -141,8 +141,8 @@ let decompose_monadic_let_bindings = ref false
 
     This is useful when extracting to F*: the support for monadic
     definitions is not super powerful.
-    Note that when {!field:unfold_monadic_let_bindings} is true, setting
-    {!field:decompose_monadic_let_bindings} to true and only makes the code
+    Note that when {!unfold_monadic_let_bindings} is true, setting
+    {!decompose_monadic_let_bindings} to true and only makes the code
     more verbose.
  *)
 let unfold_monadic_let_bindings = ref false
@@ -173,7 +173,7 @@ let unfold_monadic_let_bindings = ref false
     we later filter the useless *forward* calls in the micro-passes, where it is
     more natural to do.
 
-    See the comments for {!expression_contains_child_call_in_all_paths}
+    See the comments for {!PureMicroPasses.expression_contains_child_call_in_all_paths}
     for additional explanations.
  *)
 let filter_useless_monadic_calls = ref true

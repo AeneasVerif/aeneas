@@ -485,10 +485,7 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) :
   let abs_ids = list_ancestor_abstractions_ids ctx abs in
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 
-(** Small utility.
-
-    [backward_no_state_update]: see {!config}
- *)
+(** Small utility. *)
 let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     (fun_id : A.fun_id) (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with

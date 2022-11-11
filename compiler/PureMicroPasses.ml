@@ -1083,7 +1083,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
 (** Decompose the monadic let-bindings.
 
-    See the explanations in {!config.decompose_monadic_let_bindings}
+    See the explanations in {!Config.decompose_monadic_let_bindings}
  *)
 let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
     fun_decl =

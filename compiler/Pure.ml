@@ -48,7 +48,7 @@ let option_none_id = T.option_none_id
 type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 [@@deriving show, ord]
 
-(** Ancestor for iter visitor for {!Pure.ty} *)
+(** Ancestor for iter visitor for [ty] *)
 class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
@@ -57,7 +57,7 @@ class ['self] iter_ty_base =
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for map visitor for {!Pure.ty} *)
+(** Ancestor for map visitor for [ty] *)
 class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
@@ -498,9 +498,9 @@ and meta =
 type fun_effect_info = {
   stateful_group : bool;
       (** [true] if the function group is stateful. By *function group*, we mean
-          the set { forward function } U { backward functions }.
+          the set [{ forward function } U { backward functions }].
 
-          We need this because the option {!Translate.eval_config.backward_no_state_update}:
+          We need this because of the option {!Config.backward_no_state_update}:
           if it is [true], then in case of a backward function {!stateful} is [false],
           but we might need to know whether the corresponding forward function
           is stateful or not.
