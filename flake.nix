@@ -54,12 +54,20 @@
               || pkgs.lib.hasPrefix (toString ./tests) path;
           };
           buildPhase = ''
+          # We need to provide the paths to the Charon tests derivations
           export CHARON_TESTS_REGULAR_DIR=${charon.checks.${system}.tests}
           export CHARON_TESTS_POLONIUS_DIR=${charon.checks.${system}.tests-polonius}
-          export AENEAS_EXE=${aeneas}/bin/aeneas_driver
 
+          # Copy the Aeneas executable, and update the path to it
+          cp ${aeneas}/bin/aeneas_driver aeneas.exe
+          export AENEAS_EXE=./aeneas.exe
+
+          # Run the tests
           make tests
           '';
+          # Tests don't generate anything new as the generated files are
+          # versionned, but the installation phase still needs to prodocue
+          # something, otherwise Nix will consider the build has failed.
           installPhase = "touch $out";
         };
       in {
