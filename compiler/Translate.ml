@@ -675,7 +675,7 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     with End_of_file ->
       close_in src;
       close_out tgt;
-      log#linfo (lazy ("Copied: " ^ tgt_filename))
+      log#linfo (lazy ("Copied:    " ^ tgt_filename))
   in
 
   (* Extract the file(s) *)
