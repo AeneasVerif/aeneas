@@ -73,7 +73,7 @@ let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
   in
   fun id -> TypeVarId.Map.find id mp
 
-(** Retrieve the list of fields for the given variant of a {!type:Pure.type_decl}.
+(** Retrieve the list of fields for the given variant of a {!type:Aeneas.Pure.type_decl}.
 
     Raises [Invalid_argument] if the arguments are incorrect.
  *)

@@ -66,11 +66,12 @@ let use_state = ref true (* TODO *)
        (st1, y)  <-- f_fwd x st0;
        ...
        x' <-- f_back x st0 y';
-    }]
+    ]}
 
     The second format is easier to reason about, but the first one is
     necessary to properly handle some Rust functions which use internal
-    mutability such as {{:https://doc.rust-lang.org/std/cell/struct.RefCell.html#method.try_borrow_mut} [RefCell::try_mut_borrow]}:
+    mutability such as
+    {{:https://doc.rust-lang.org/std/cell/struct.RefCell.html#method.try_borrow_mut}[RefCell::try_mut_borrow]}:
     in order to model this behaviour we would need a state, and calling the backward
     function would update the state by reinserting the updated value in it.
  *)
