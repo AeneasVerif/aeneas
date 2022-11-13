@@ -1,5 +1,33 @@
 (** Define the global configuration options *)
 
+(** {1 Backend choice} *)
+
+(** The choice of backend *)
+type backend = FStar | Coq
+
+let backend_names = [ "fstar"; "coq" ]
+
+(** Utility to compute the backend from an input parameter *)
+let backend_of_string (b : string) : backend option =
+  match b with "fstar" -> Some FStar | "coq" -> Some Coq | _ -> None
+
+let opt_backend : backend option ref = ref None
+
+let set_backend (b : string) : unit =
+  match backend_of_string b with
+  | Some b -> opt_backend := Some b
+  | None ->
+      (* We shouldn't get there: the string should have been checked as
+         belonging to the proper set *)
+      raise (Failure "Unexpected")
+
+(** The backend to which to extract.
+
+    We initialize it with a default value, but it always gets overwritten:
+    we check that the user provides a backend argument.
+ *)
+let backend = ref FStar
+
 (** {1 Interpreter} *)
 
 (** Check that invariants are maintained whenever we execute a statement *)
@@ -43,6 +71,39 @@ let allow_bottom_below_borrow = true
     with no return value are followed by a backward function.
  *)
 let return_unit_end_abs_with_no_loans = true
+
+(** Forbids using field projectors for structures.
+
+    If we don't use field projectors, whenever we symbolically expand a structure
+    value (note that accessing a structure field in the symbolic execution triggers
+    its expansion), then instead of generating code like this:
+    {[
+       let x1 = s.f1 in
+       let x2 = s.f2 in
+       ...
+    ]}
+
+    we generate code like this:
+    {[
+       let Mkstruct x1 x2 ... = s in
+       ...
+    ]}
+
+    We use this for instance for Coq, because in Coq we can't define groups
+    of mutually recursive records and inductives. In such cases, we extract
+    the structures as inductives, which means that field projectors are not
+    always available.
+
+    TODO: we could define a notation to take care of this.
+    TODO: today dont_use_field_projectors is not useful actually.
+ *)
+let dont_use_field_projectors = ref false
+
+(** Deconstructing ADTs which have only one variant with let-bindings is not always
+    supported: this parameter controls whether we use let-bindings in such situations or not.
+  *)
+
+let always_deconstruct_adts_with_matches = ref false
 
 (** {1 Translation} *)
 
@@ -103,7 +164,7 @@ let test_trans_unit_functions = ref false
 
     The body of such clauses must be defined by the user.
  *)
-let extract_decreases_clauses = ref true
+let extract_decreases_clauses = ref false
 
 (** In order to help the user, we can generate "template" decrease clauses
     (i.e., definitions with proper signatures but dummy bodies) in a
@@ -113,10 +174,10 @@ let extract_template_decreases_clauses = ref false
 
 (** {1 Micro passes} *)
 
-(** Some provers like F* don't support the decomposition of return values
+(** Some provers like F* and Coq don't support the decomposition of return values
     in monadic let-bindings:
     {[
-      // NOT supported in F*
+      (* NOT supported in F*/Coq *)
       let (x, y) <-- f ();
       ...
     ]}

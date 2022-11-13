@@ -18,8 +18,8 @@ let symbolic_to_pure_log = L.get_logger "MainLogger.SymbolicToPure"
 (** Logger for PureMicroPasses *)
 let pure_micro_passes_log = L.get_logger "MainLogger.PureMicroPasses"
 
-(** Logger for PureToExtract *)
-let pure_to_extract_log = L.get_logger "MainLogger.PureToExtract"
+(** Logger for ExtractBase *)
+let pure_to_extract_log = L.get_logger "MainLogger.ExtractBase"
 
 (** Logger for Interpreter *)
 let interpreter_log = L.get_logger "MainLogger.Interpreter"

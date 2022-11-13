@@ -33,6 +33,9 @@ let () =
 
   let spec =
     [
+      ( "-backend",
+        Arg.Symbol (backend_names, set_backend),
+        " Specify the backend to which to extract" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
       ( "-decompose-monads",
         Arg.Set decompose_monadic_let_bindings,
@@ -61,9 +64,9 @@ let () =
         Arg.Set test_trans_unit_functions,
         " Test the translated unit functions with the target theorem\n\
         \                         prover's normalizer" );
-      ( "-no-decreases-clauses",
-        Arg.Clear extract_decreases_clauses,
-        " Do not add decrease clauses to the recursive definitions" );
+      ( "-decreases-clauses",
+        Arg.Set extract_decreases_clauses,
+        " Use decreases clauses for the recursive definitions" );
       ( "-no-state",
         Arg.Clear use_state,
         " Do not use state-error monads, simply use error monads" );
@@ -73,8 +76,8 @@ let () =
       ( "-template-clauses",
         Arg.Set extract_template_decreases_clauses,
         " Generate templates for the required decreases clauses, in a\n\
-        \                         dedicated file. Incompatible with \
-         -no-decreases-clauses" );
+        \                         dedicated file. Reauires -decreases-clauses"
+      );
       ( "-no-split-files",
         Arg.Clear split_files,
         " Don't split the definitions between different files for types,\n\
@@ -98,6 +101,29 @@ let () =
     print_string usage;
     exit 1
   in
+
+  (* Check that the user specified a backend *)
+  let _ =
+    match !opt_backend with
+    | Some b -> backend := b
+    | None ->
+        print_string "Backend not specified (use the `-backend` argument)\n";
+        fail ()
+  in
+
+  (* In the case of Coq, we forbid using field projectors (see the comments for
+     [dont_use_field_projectors]).
+     Also, we always decompose ADT values with matches (decomposing with
+     let-bindings is not supported).
+  *)
+  let _ =
+    match !backend with
+    | FStar -> ()
+    | Coq ->
+        dont_use_field_projectors := true;
+        always_deconstruct_adts_with_matches := true
+  in
+
   (* Retrieve and check the filename *)
   let filename =
     match !filenames with

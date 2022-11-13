@@ -1578,8 +1578,17 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       (* We don't do the same thing if there is a branching or not *)
       match branches with
       | [] -> raise (Failure "Unreachable")
-      | [ (variant_id, svl, branch) ] -> (
-          (* There is exactly one branch: no branching *)
+      | [ (variant_id, svl, branch) ]
+        when not
+               (TypesUtils.ty_is_custom_adt sv.V.sv_ty
+               && !Config.always_deconstruct_adts_with_matches) -> (
+          (* There is exactly one branch: no branching.
+
+             We can decompose the ADT value with a let-binding, unless
+             the backend doesn't support this (see {!Config.always_deconstruct_adts_with_matches}):
+             we *ignore* this branch (and go to the next one) if the ADT is a custom
+             adt, and [always_deconstruct_adts_with_matches] is true.
+          *)
           let type_id, _, _ = TypesUtils.ty_as_adt sv.V.sv_ty in
           let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
           let branch = translate_expression branch ctx in
@@ -1588,9 +1597,16 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
               (* Detect if this is an enumeration or not *)
               let tdef = bs_ctx_lookup_llbc_type_decl adt_id ctx in
               let is_enum = type_decl_is_enum tdef in
-              if is_enum then
-                (* This is an enumeration: introduce an [ExpandEnum] let-binding *)
-                let variant_id = Option.get variant_id in
+              (* We deconstruct the ADT with a let-binding in two situations:
+                 - if the ADT is an enumeration (which must have exactly one branch)
+                 - if we forbid using field projectors.
+
+                   We forbid using field projectors in some situations, for example
+                   if the backend is Coq. See  '!Config.dont_use_field_projectors}.
+              *)
+              let use_let = is_enum || !Config.dont_use_field_projectors in
+              if use_let then
+                (* Introduce a let binding which expands the ADT *)
                 let lvars =
                   List.map (fun v -> mk_typed_pattern_from_var v None) vars
                 in
@@ -1665,8 +1681,6 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let translate_branch (variant_id : T.VariantId.id option)
               (svl : V.symbolic_value list) (branch : S.expression) :
               match_branch =
-            (* There *must* be a variant id - otherwise there can't be several branches *)
-            let variant_id = Option.get variant_id in
             let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
             let vars =
               List.map (fun x -> mk_typed_pattern_from_var x None) vars

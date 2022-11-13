@@ -817,3 +817,4 @@ type symbolic_expansion =
   | SeAdt of (VariantId.id option * symbolic_value list)
   | SeMutRef of BorrowId.id * symbolic_value
   | SeSharedRef of BorrowId.Set.t * symbolic_value
+[@@deriving show]

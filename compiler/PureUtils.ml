@@ -398,9 +398,9 @@ let mk_simpl_tuple_texpression (vl : texpression list) : texpression =
       let cons = { e = Qualif qualif; ty } in
       mk_apps cons vl
 
-let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id)
+let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
     (vl : typed_pattern list) : typed_pattern =
-  let value = PatAdt { variant_id = Some variant_id; field_values = vl } in
+  let value = PatAdt { variant_id; field_values = vl } in
   { value; ty = adt_ty }
 
 let ty_as_integer (t : ty) : T.integer_type =

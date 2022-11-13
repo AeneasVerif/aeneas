@@ -1250,6 +1250,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl option =
         (lazy ("filter_useless:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
       (* Simplify the aggregated ADTs.
+
          Ex.:
          {[
            type struct = { f0 : nat; f1 : nat }
