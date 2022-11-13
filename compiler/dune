@@ -22,8 +22,6 @@
   ExpressionsUtils
   Extract
   ExtractBase
-  ExtractToCoq
-  ExtractToFStar
   FunsAnalysis
   Identifiers
   InterpreterBorrowsCore

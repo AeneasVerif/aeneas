@@ -84,8 +84,7 @@ Definition test_custom_swap_back
   result (state * (u32 * u32))
   :=
   p <- custom_swap_back u32 x y st (1 %u32) st0;
-  let (st1, tmp) := p in
-  let (x0, y0) := tmp in Return (st1, (x0, y0))
+  let (st1, (x0, y0)) := p in Return (st1, (x0, y0))
   .
 
 (** [external::test_swap_non_zero] *)
