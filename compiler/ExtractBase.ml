@@ -1,8 +1,4 @@
-(** This module is used to extract the pure ASTs to various theorem provers.
-    It defines utilities and helpers to make the work as easy as possible:
-    we try to factorize as much as possible the different extractions to the
-    backends we target.
- *)
+(** Define base utilities for the extraction *)
 
 open Pure
 open TranslateCore
@@ -33,7 +29,78 @@ type type_name = Names.type_name
 type global_name = Names.global_name
 type fun_name = Names.fun_name
 
+(** Characterizes a declaration.
+
+    Is in particular useful to derive the proper keywords to introduce the
+    declarations/definitions.
+ *)
+type decl_kind =
+  | SingleNonRec
+      (** A single, non-recursive definition.
+
+          F*:  [let x = ...]
+          Coq: [Definition x := ...]
+       *)
+  | SingleRec
+      (** A single, recursive definition.
+
+          F*:  [let rec x = ...]
+          Coq: [Fixpoint x := ...]
+       *)
+  | MutRecFirst
+      (** The first definition of a group of mutually-recursive definitions.
+
+          F*:  [type x0 = ... and x1 = ...]
+          Coq: [Fixpoing x0 := ... with x1 := ...]
+       *)
+  | MutRecInner
+      (** An inner definition in a group of mutually-recursive definitions. *)
+  | MutRecLast
+      (** The last definition in a group of mutually-recursive definitions.
+
+          We need this because in some theorem provers like Coq, we need to
+          delimit group of mutually recursive definitions (in particular, we
+          need to insert an end delimiter).
+       *)
+  | Assumed
+      (** An assumed definition.
+
+         F*:  [assume val x]
+         Coq: [Axiom x : Type.]
+      *)
+  | Declared
+      (** Declare a type in an interface or a module signature.
+
+          Rem.: for now, in Coq, we don't declare module signatures: we
+          thus assume the corresponding declarations.
+
+          F*:  [val x : Type0]
+          Coq: [Axiom x : Type.]
+       *)
+
+(** Return [true] if the declaration is the last from its group of declarations.
+
+    We need this because in some provers (e.g., Coq), we need to delimit the
+    end of a (group of) definition(s) (in Coq: with a ".").
+ *)
+let decl_is_last_from_group (kind : decl_kind) : bool =
+  match kind with
+  | SingleNonRec | SingleRec | MutRecLast | Assumed | Declared -> true
+  | MutRecFirst | MutRecInner -> false
+
+let decl_is_from_rec_group (kind : decl_kind) : bool =
+  match kind with
+  | SingleNonRec | Assumed | Declared -> false
+  | SingleRec | MutRecFirst | MutRecInner | MutRecLast -> true
+
+let decl_is_from_mut_rec_group (kind : decl_kind) : bool =
+  match kind with
+  | SingleNonRec | SingleRec | Assumed | Declared -> false
+  | MutRecFirst | MutRecInner | MutRecLast -> true
+
 (* TODO: this should a module we give to a functor! *)
+
+type type_decl_kind = Enum | Struct
 
 (** A formatter's role is twofold:
     1. Come up with name suggestions.
@@ -51,6 +118,16 @@ type formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
+  type_decl_kind_to_qualif : decl_kind -> type_decl_kind option -> string;
+      (** Compute the qualified for a type definition/declaration.
+    
+          For instance: "type", "and", etc.
+       *)
+  fun_decl_kind_to_qualif : decl_kind -> string;
+      (** Compute the qualified for a function definition/declaration.
+    
+          For instance: "let", "let rec", "and", etc.
+       *)
   field_name : name -> FieldId.id -> string option -> string;
       (** Inputs:
           - type name

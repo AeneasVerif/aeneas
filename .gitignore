@@ -46,6 +46,17 @@ tests/fstar/hashmap/obj/
 tests/fstar/hashmap_on_disk/obj/
 tests/fstar/misc/obj/
 
+# Coq
+*.vo
+*.vok
+*.vos
+*.glob
+*.aux
+*.lia.cache
+*.d
+*Makefile.coq
+*CoqMakefile.conf
+
 # Misc
 /fstar-tests
 *~

@@ -26,6 +26,7 @@ type mplace = {
   projection : E.projection;
       (** We store the projection because we can, but it is actually not that useful *)
 }
+[@@deriving show]
 
 type call_id =
   | Fun of A.fun_id * V.FunCallId.id
@@ -43,6 +44,7 @@ type call = {
   dest : V.symbolic_value;
   dest_place : mplace option;  (** Meta information *)
 }
+[@@deriving show]
 
 (** Meta information, not necessary for synthesis but useful to guide it to
     generate a pretty output.
@@ -51,6 +53,7 @@ type call = {
 type meta =
   | Assignment of mplace * V.typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
+[@@deriving show]
 
 (** **Rk.:** here, {!expression} is not at all equivalent to the expressions
     used in LLBC: they are a first step towards lambda-calculus expressions.
@@ -108,3 +111,4 @@ and expansion =
       T.integer_type * (V.scalar_value * expression) list * expression
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
+[@@deriving show]

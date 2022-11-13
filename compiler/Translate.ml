@@ -293,7 +293,7 @@ let translate_module_to_pure (crate : A.crate) :
 (** Extraction context *)
 type gen_ctx = {
   crate : A.crate;
-  extract_ctx : PureToExtract.extraction_ctx;
+  extract_ctx : ExtractBase.extraction_ctx;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : (bool * pure_fun_translation) A.FunDeclId.Map.t;
   functions_with_decreases_clause : A.FunDeclId.Set.t;
@@ -342,29 +342,40 @@ let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
  *)
 let extract_definitions (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) : unit =
-  (* Export the definition groups to the file, in the proper order *)
-  let export_type (qualif : ExtractToBackend.type_decl_qualif)
-      (id : Pure.TypeDeclId.id) : unit =
-    (* Retrive the declaration *)
+  (* Export the definition groups to the file, in the proper order.
+     - [extract_decl]: extract the type declaration (if not filtered)
+     - [extract_extra_info]: extra the extra type information (e.g.,
+       the [Arguments] information in Coq).
+  *)
+  let export_type (kind : ExtractBase.decl_kind) (id : Pure.TypeDeclId.id)
+      (extract_decl : bool) (extract_extra_info : bool) : unit =
+    (* Retrieve the declaration *)
     let def = Pure.TypeDeclId.Map.find id ctx.trans_types in
-    (* Update the qualifier, if the type is opaque *)
-    let is_opaque, qualif =
+    (* Update the kind, if the type is opaque *)
+    let is_opaque, kind =
       match def.kind with
-      | Enum _ | Struct _ -> (false, qualif)
+      | Enum _ | Struct _ -> (false, kind)
       | Opaque ->
-          let qualif =
-            if config.interface then ExtractToBackend.TypeVal
-            else ExtractToBackend.AssumeType
+          let kind =
+            if config.interface then ExtractBase.Declared
+            else ExtractBase.Assumed
           in
-          (true, qualif)
+          (true, kind)
     in
     (* Extract, if the config instructs to do so (depending on whether the type
      * is opaque or not) *)
     if
       (is_opaque && config.extract_opaque)
       || ((not is_opaque) && config.extract_transparent)
-    then ExtractToBackend.extract_type_decl ctx.extract_ctx fmt qualif def
+    then (
+      if extract_decl then
+        Extract.extract_type_decl ctx.extract_ctx fmt kind def;
+      if extract_extra_info then
+        Extract.extract_type_decl_extra_info ctx.extract_ctx fmt kind def)
   in
+
+  let export_type_decl kind id = export_type kind id true false in
+  let export_type_extra_info kind id = export_type kind id false true in
 
   (* Utility to check a function has a decrease clause *)
   let has_decreases_clause (def : Pure.fun_decl) : bool =
@@ -393,8 +404,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (fun (_, (fwd, _)) ->
           let has_decr_clause = has_decreases_clause fwd in
           if has_decr_clause then
-            ExtractToBackend.extract_template_decreases_clause ctx.extract_ctx fmt
-              fwd)
+            Extract.extract_template_decreases_clause ctx.extract_ctx fmt fwd)
         pure_ls;
     (* Extract the function definitions *)
     (if config.extract_fun_decls then
@@ -408,17 +418,25 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
          else true
        else false
      in
+     let fls_length = List.length fls in
      List.iteri
        (fun i (fwd_def, def) ->
          let is_opaque = Option.is_none fwd_def.Pure.body in
-         let qualif =
+         let kind =
            if is_opaque then
-             if config.interface then ExtractToBackend.Val
-             else ExtractToBackend.AssumeVal
-           else if not is_rec then ExtractToBackend.Let
+             if config.interface then ExtractBase.Declared
+             else ExtractBase.Assumed
+           else if not is_rec then ExtractBase.SingleNonRec
            else if is_mut_rec then
-             if i = 0 then ExtractToBackend.LetRec else ExtractToBackend.And
-           else ExtractToBackend.LetRec
+             (* If the functions are mutually recursive, we need to distinguish:
+              * - the first of the group
+              * - the last of the group
+              * - the inner functions
+              *)
+             if i = 0 then ExtractBase.MutRecFirst
+             else if i = fls_length - 1 then ExtractBase.MutRecLast
+             else ExtractBase.MutRecInner
+           else ExtractBase.SingleRec
          in
          let has_decr_clause =
            has_decreases_clause def && config.extract_decreases_clauses
@@ -428,15 +446,14 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
            ((not is_opaque) && config.extract_transparent)
            || (is_opaque && config.extract_opaque)
          then
-           ExtractToBackend.extract_fun_decl ctx.extract_ctx fmt qualif
-             has_decr_clause def)
+           Extract.extract_fun_decl ctx.extract_ctx fmt kind has_decr_clause def)
        fls);
     (* Insert unit tests if necessary *)
     if config.test_trans_unit_functions then
       List.iter
         (fun (keep_fwd, (fwd, _)) ->
           if keep_fwd then
-            ExtractToBackend.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
+            Extract.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
         pure_ls
   in
 
@@ -454,32 +471,49 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       ((not is_opaque) && config.extract_transparent)
       || (is_opaque && config.extract_opaque)
     then
-      ExtractToBackend.extract_global_decl ctx.extract_ctx fmt global body
+      Extract.extract_global_decl ctx.extract_ctx fmt global body
         config.interface
   in
 
   let export_state_type () : unit =
-    let qualif =
-      if config.interface then ExtractToBackend.TypeVal
-      else ExtractToBackend.AssumeType
+    let kind =
+      if config.interface then ExtractBase.Declared else ExtractBase.Assumed
     in
-    ExtractToBackend.extract_state_type fmt ctx.extract_ctx qualif
+    Extract.extract_state_type fmt ctx.extract_ctx kind
   in
 
   let export_decl (decl : A.declaration_group) : unit =
     match decl with
     | Type (NonRec id) ->
-        if config.extract_types then export_type ExtractToBackend.Type id
+        if config.extract_types then (
+          let kind = ExtractBase.SingleNonRec in
+          (* Export the type declaration *)
+          export_type_decl kind id;
+          (* Export the extra information (ex.: [Arguments] instructions in Coq) *)
+          export_type_extra_info kind id)
     | Type (Rec ids) ->
         (* Rk.: we shouldn't have (mutually) recursive opaque types *)
-        if config.extract_types then
+        let num_decls = List.length ids in
+        let is_mut_rec = num_decls > 1 in
+        if config.extract_types then (
+          let kind_from_index i =
+            if not is_mut_rec then ExtractBase.SingleRec
+            else if i = 0 then ExtractBase.MutRecFirst
+            else if i = num_decls - 1 then ExtractBase.MutRecLast
+            else ExtractBase.MutRecInner
+          in
+          (* Extract the type declarations *)
           List.iteri
             (fun i id ->
-              let qualif =
-                if i = 0 then ExtractToBackend.Type else ExtractToBackend.And
-              in
-              export_type qualif id)
-            ids
+              let kind = kind_from_index i in
+              export_type_decl kind id)
+            ids;
+          (* Export the extra information (ex.: [Arguments] instructions in Coq) *)
+          List.iteri
+            (fun i id ->
+              let kind = kind_from_index i in
+              export_type_extra_info kind id)
+            ids)
     | Fun (NonRec id) ->
         (* Lookup *)
         let pure_fun = A.FunDeclId.Map.find id ctx.trans_funs in
@@ -527,15 +561,33 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
   (* Create the header *)
   Printf.fprintf out "(** THIS FILE WAS AUTOMATICALLY GENERATED BY AENEAS *)\n";
   Printf.fprintf out "(** [%s]%s *)\n" rust_module_name custom_msg;
-  Printf.fprintf out "module %s\n" module_name;
-  Printf.fprintf out "open Primitives\n";
-  (* Add the custom imports *)
-  List.iter (fun m -> Printf.fprintf out "open %s\n" m) custom_imports;
-  (* Add the custom includes *)
-  List.iter (fun m -> Printf.fprintf out "include %s\n" m) custom_includes;
-  (* Z3 options - note that we use fuel 1 because it its useful for the decrease clauses *)
-  Printf.fprintf out "\n#set-options \"--z3rlimit 50 --fuel 1 --ifuel 1\"\n";
+  (match !Config.backend with
+  | FStar ->
+      Printf.fprintf out "module %s\n" module_name;
+      Printf.fprintf out "open Primitives\n";
+      (* Add the custom imports *)
+      List.iter (fun m -> Printf.fprintf out "open %s\n" m) custom_imports;
+      (* Add the custom includes *)
+      List.iter (fun m -> Printf.fprintf out "include %s\n" m) custom_includes;
+      (* Z3 options - note that we use fuel 1 because it its useful for the decrease clauses *)
+      Printf.fprintf out "\n#set-options \"--z3rlimit 50 --fuel 1 --ifuel 1\"\n"
+  | Coq ->
+      Printf.fprintf out "Require Import Primitives.\n";
+      Printf.fprintf out "Import Primitives.\n";
+      Printf.fprintf out "Require Import Coq.ZArith.ZArith.\n";
+      Printf.fprintf out "Local Open Scope Primitives_scope.\n";
 
+      (* Add the custom imports *)
+      List.iter
+        (fun m -> Printf.fprintf out "Require Import %s .\n" m)
+        custom_imports;
+      (* Add the custom includes *)
+      List.iter
+        (fun m ->
+          Printf.fprintf out "Require Export %s .\n" m;
+          Printf.fprintf out "Import %s .\n" m)
+        custom_includes;
+      Printf.fprintf out "Module %s .\n" module_name);
   (* From now onwards, we use the formatter *)
   (* Set the margin *)
   Format.pp_set_margin fmt 80;
@@ -549,6 +601,11 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
   (* Close the box and end the formatting *)
   Format.pp_close_box fmt ();
   Format.pp_print_newline fmt ();
+
+  (* Close the module *)
+  (match !Config.backend with
+  | FStar -> ()
+  | Coq -> Printf.fprintf out "End %s .\n" module_name);
 
   (* Some logging *)
   log#linfo (lazy ("Generated: " ^ filename));
@@ -568,17 +625,12 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
    * We initialize the names map by registering the keywords used in the
    * language, as well as some primitive names ("u32", etc.) *)
   let variant_concatenate_type_name = true in
-  let fstar_fmt =
-    ExtractToBackend.mk_formatter trans_ctx crate.name
+  let mk_formatter_and_names_map = Extract.mk_formatter_and_names_map in
+  let fmt, names_map =
+    mk_formatter_and_names_map trans_ctx crate.name
       variant_concatenate_type_name
   in
-  let names_map =
-    PureToExtract.initialize_names_map fstar_fmt
-      ExtractToBackend.fstar_names_map_init
-  in
-  let ctx =
-    { PureToExtract.trans_ctx; names_map; fmt = fstar_fmt; indent_incr = 2 }
-  in
+  let ctx = { ExtractBase.trans_ctx; names_map; fmt; indent_incr = 2 } in
 
   (* We need to compute which functions are recursive, in order to know
    * whether we should generate a decrease clause or not. *)
@@ -596,7 +648,7 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
    * sure there are no name clashes. *)
   let ctx =
     List.fold_left
-      (fun ctx def -> ExtractToBackend.extract_type_decl_register_names ctx def)
+      (fun ctx def -> Extract.extract_type_decl_register_names ctx def)
       ctx trans_types
   in
 
@@ -612,14 +664,13 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
         let is_global = (fst def).Pure.is_global_decl_body in
         if is_global then ctx
         else
-          ExtractToBackend.extract_fun_decl_register_names ctx keep_fwd
-            gen_decr_clause def)
+          Extract.extract_fun_decl_register_names ctx keep_fwd gen_decr_clause
+            def)
       ctx trans_funs
   in
 
   let ctx =
-    List.fold_left ExtractToBackend.extract_global_decl_register_names ctx
-      crate.globals
+    List.fold_left Extract.extract_global_decl_register_names ctx crate.globals
   in
 
   (* Open the output file *)
@@ -658,12 +709,17 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     (* Create a directory with *default* permissions *)
     Core_unix.mkdir_p dest_dir);
 
-  (* Copy "Primitives.fst" *)
+  (* Copy the "Primitives" file *)
   let _ =
     (* Retrieve the executable's directory *)
     let exe_dir = Filename.dirname Sys.argv.(0) in
-    let src = open_in (exe_dir ^ "/backends/fstar/Primitives.fst") in
-    let tgt_filename = Filename.concat dest_dir "Primitives.fst" in
+    let primitives_src, primitives_destname =
+      match !Config.backend with
+      | Config.FStar -> ("/backends/fstar/Primitives.fst", "Primitives.fst")
+      | Config.Coq -> ("/backends/coq/Primitives.v", "Primitives.v")
+    in
+    let src = open_in (exe_dir ^ primitives_src) in
+    let tgt_filename = Filename.concat dest_dir primitives_destname in
     let tgt = open_out tgt_filename in
     (* Very annoying: I couldn't find a "cp" function in the OCaml libraries... *)
     try
@@ -689,6 +745,10 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     }
   in
 
+  let module_delimiter =
+    match !Config.backend with FStar -> "." | Coq -> "__"
+  in
+
   (* Extract one or several files, depending on the configuration *)
   if !Config.split_files then (
     let base_gen_config =
@@ -712,9 +772,16 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
 
     (* Extract the types *)
     (* If there are opaque types, we extract in an interface *)
-    let types_filename_ext = if has_opaque_types then ".fsti" else ".fst" in
-    let types_filename = extract_filebasename ^ ".Types" ^ types_filename_ext in
-    let types_module = module_name ^ ".Types" in
+    let types_filename_ext =
+      match !Config.backend with
+      | FStar -> if has_opaque_types then ".fsti" else ".fst"
+      | Coq -> if has_opaque_types then ".v" else ".v"
+    in
+    let types_file_suffix = module_delimiter ^ "Types" in
+    let types_filename =
+      extract_filebasename ^ types_file_suffix ^ types_filename_ext
+    in
+    let types_module = module_name ^ types_file_suffix in
     let types_config =
       {
         base_gen_config with
@@ -733,8 +800,12 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
       && not (A.FunDeclId.Set.is_empty rec_functions)
     in
     (if needs_clauses_module && !Config.extract_template_decreases_clauses then
-     let clauses_filename = extract_filebasename ^ ".Clauses.Template.fst" in
-     let clauses_module = module_name ^ ".Clauses.Template" in
+     let ext = match !Config.backend with FStar -> ".fst" | Coq -> ".v" in
+     let clauses_file_suffix =
+       module_delimiter ^ "Clauses" ^ module_delimiter ^ "Template"
+     in
+     let clauses_filename = extract_filebasename ^ clauses_file_suffix ^ ext in
+     let clauses_module = module_name ^ clauses_file_suffix in
      let clauses_config =
        { base_gen_config with extract_template_decreases_clauses = true }
      in
@@ -745,8 +816,10 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     (* Extract the opaque functions, if needed *)
     let opaque_funs_module =
       if has_opaque_funs then (
-        let opaque_filename = extract_filebasename ^ ".Opaque.fsti" in
-        let opaque_module = module_name ^ ".Opaque" in
+        let ext = match !Config.backend with FStar -> ".fsti" | Coq -> ".v" in
+        let opaque_file_suffix = module_delimiter ^ "Opaque" in
+        let opaque_filename = extract_filebasename ^ opaque_file_suffix ^ ext in
+        let opaque_module = module_name ^ opaque_file_suffix in
         let opaque_config =
           {
             base_gen_config with
@@ -763,8 +836,10 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     in
 
     (* Extract the functions *)
-    let fun_filename = extract_filebasename ^ ".Funs.fst" in
-    let fun_module = module_name ^ ".Funs" in
+    let ext = match !Config.backend with FStar -> ".fst" | Coq -> ".v" in
+    let fun_file_suffix = module_delimiter ^ "Funs" in
+    let fun_filename = extract_filebasename ^ fun_file_suffix ^ ext in
+    let fun_module = module_name ^ fun_file_suffix in
     let fun_config =
       {
         base_gen_config with
@@ -773,7 +848,9 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
       }
     in
     let clauses_module =
-      if needs_clauses_module then [ module_name ^ ".Clauses" ] else []
+      if needs_clauses_module then
+        [ module_name ^ module_delimiter ^ "Clauses" ]
+      else []
     in
     extract_file fun_config gen_ctx fun_filename crate.A.name fun_module
       ": function definitions" []
@@ -794,6 +871,7 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
       }
     in
     (* Add the extension for F* *)
-    let extract_filename = extract_filebasename ^ ".fst" in
+    let ext = match !Config.backend with FStar -> ".fst" | Coq -> ".v" in
+    let extract_filename = extract_filebasename ^ ext in
     extract_file gen_config gen_ctx extract_filename crate.A.name module_name ""
       [] []

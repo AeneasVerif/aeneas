@@ -228,59 +228,6 @@ and tree_t (t : Type0) =
 | TreeLeaf : t -> tree_t t
 | TreeNode : t -> node_elem_t t -> tree_t t -> tree_t t
 
-(** [no_nested_borrows::odd] *)
-let rec odd_fwd (x : u32) : result bool =
-  if x = 0
-  then Return false
-  else
-    begin match u32_sub x 1 with
-    | Fail -> Fail
-    | Return i ->
-      begin match even_fwd i with | Fail -> Fail | Return b -> Return b end
-    end
-
-(** [no_nested_borrows::even] *)
-and even_fwd (x : u32) : result bool =
-  if x = 0
-  then Return true
-  else
-    begin match u32_sub x 1 with
-    | Fail -> Fail
-    | Return i ->
-      begin match odd_fwd i with | Fail -> Fail | Return b -> Return b end
-    end
-
-(** [no_nested_borrows::test_even_odd] *)
-let test_even_odd_fwd : result unit =
-  begin match even_fwd 0 with
-  | Fail -> Fail
-  | Return b ->
-    if not b
-    then Fail
-    else
-      begin match even_fwd 4 with
-      | Fail -> Fail
-      | Return b0 ->
-        if not b0
-        then Fail
-        else
-          begin match odd_fwd 1 with
-          | Fail -> Fail
-          | Return b1 ->
-            if not b1
-            then Fail
-            else
-              begin match odd_fwd 5 with
-              | Fail -> Fail
-              | Return b2 -> if not b2 then Fail else Return ()
-              end
-          end
-      end
-  end
-
-(** Unit test for [no_nested_borrows::test_even_odd] *)
-let _ = assert_norm (test_even_odd_fwd = Return ())
-
 (** [no_nested_borrows::list_length] *)
 let rec list_length_fwd (t : Type0) (l : list_t t) : result u32 =
   begin match l with

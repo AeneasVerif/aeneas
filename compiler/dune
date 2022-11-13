@@ -20,7 +20,10 @@
   Cps
   Expressions
   ExpressionsUtils
-  ExtractToBackend
+  Extract
+  ExtractBase
+  ExtractToCoq
+  ExtractToFStar
   FunsAnalysis
   Identifiers
   InterpreterBorrowsCore
@@ -44,7 +47,6 @@
   PrintPure
   PureMicroPasses
   Pure
-  PureToExtract
   PureTypeCheck
   PureUtils
   Scalars
