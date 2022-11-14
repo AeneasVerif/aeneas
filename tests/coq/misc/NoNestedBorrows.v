@@ -210,13 +210,12 @@ Definition choose_test_fwd : result unit :=
   z0 <- i32_add z 1 %i32;
   if negb (z0 s= 1 %i32)
   then Fail_
-  else
-    (
-      p <- choose_back i32 true (0 %i32) (0 %i32) z0;
-      let (x, y) := p in
-      if negb (x s= 1 %i32)
-      then Fail_
-      else if negb (y s= 0 %i32) then Fail_ else Return tt )
+  else (
+    p <- choose_back i32 true (0 %i32) (0 %i32) z0;
+    let (x, y) := p in
+    if negb (x s= 1 %i32)
+    then Fail_
+    else if negb (y s= 0 %i32) then Fail_ else Return tt)
   .
 
 (** Unit test for [no_nested_borrows::choose_test] *)
@@ -258,7 +257,7 @@ Fixpoint list_nth_shared_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
   | ListCons x tl =>
     if i s= 0 %u32
     then Return x
-    else ( i0 <- u32_sub i 1 %u32; t <- list_nth_shared_fwd T tl i0; Return t )
+    else (i0 <- u32_sub i 1 %u32; t <- list_nth_shared_fwd T tl i0; Return t)
   | ListNil => Fail_
   end
   .
@@ -269,7 +268,7 @@ Fixpoint list_nth_mut_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
   | ListCons x tl =>
     if i s= 0 %u32
     then Return x
-    else ( i0 <- u32_sub i 1 %u32; t <- list_nth_mut_fwd T tl i0; Return t )
+    else (i0 <- u32_sub i 1 %u32; t <- list_nth_mut_fwd T tl i0; Return t)
   | ListNil => Fail_
   end
   .
@@ -281,11 +280,10 @@ Fixpoint list_nth_mut_back
   | ListCons x tl =>
     if i s= 0 %u32
     then Return (ListCons ret tl)
-    else
-      (
-        i0 <- u32_sub i 1 %u32;
-        tl0 <- list_nth_mut_back T tl i0 ret;
-        Return (ListCons x tl0) )
+    else (
+      i0 <- u32_sub i 1 %u32;
+      tl0 <- list_nth_mut_back T tl i0 ret;
+      Return (ListCons x tl0))
   | ListNil => Fail_
   end
   .
@@ -314,39 +312,30 @@ Definition test_list_functions_fwd : result unit :=
   i <- list_length_fwd i32 (ListCons (0 %i32) l1);
   if negb (i s= 3 %u32)
   then Fail_
-  else
-    (
-      i0 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (0 %u32);
-      if negb (i0 s= 0 %i32)
+  else (
+    i0 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (0 %u32);
+    if negb (i0 s= 0 %i32)
+    then Fail_
+    else (
+      i1 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (1 %u32);
+      if negb (i1 s= 1 %i32)
       then Fail_
-      else
-        (
-          i1 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (1 %u32);
-          if negb (i1 s= 1 %i32)
+      else (
+        i2 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (2 %u32);
+        if negb (i2 s= 2 %i32)
+        then Fail_
+        else (
+          ls <- list_nth_mut_back i32 (ListCons (0 %i32) l1) (1 %u32) (3 %i32);
+          i3 <- list_nth_shared_fwd i32 ls (0 %u32);
+          if negb (i3 s= 0 %i32)
           then Fail_
-          else
-            (
-              i2 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (2 %u32);
-              if negb (i2 s= 2 %i32)
-              then Fail_
-              else
-                (
-                  ls <-
-                    list_nth_mut_back i32 (ListCons (0 %i32) l1) (1 %u32) (3
-                      %i32);
-                  i3 <- list_nth_shared_fwd i32 ls (0 %u32);
-                  if negb (i3 s= 0 %i32)
-                  then Fail_
-                  else
-                    (
-                      i4 <- list_nth_shared_fwd i32 ls (1 %u32);
-                      if negb (i4 s= 3 %i32)
-                      then Fail_
-                      else
-                        (
-                          i5 <- list_nth_shared_fwd i32 ls (2 %u32);
-                          if negb (i5 s= 2 %i32) then Fail_ else Return tt ) )
-                  ) ) ) )
+          else (
+            i4 <- list_nth_shared_fwd i32 ls (1 %u32);
+            if negb (i4 s= 3 %i32)
+            then Fail_
+            else (
+              i5 <- list_nth_shared_fwd i32 ls (2 %u32);
+              if negb (i5 s= 2 %i32) then Fail_ else Return tt))))))
   .
 
 (** Unit test for [no_nested_borrows::test_list_functions] *)
@@ -448,34 +437,31 @@ Definition test_constants_fwd : result unit :=
     let (i, _) := p in
     if negb (i s= 1 %u32)
     then Fail_
-    else
-      (
-        swt0 <- new_tuple2_fwd;
-        match swt0 with
-        | mkStruct_with_tuple_t p0 =>
-          let (i0, _) := p0 in
-          if negb (i0 s= 1 %i16)
-          then Fail_
-          else
-            (
-              swt1 <- new_tuple3_fwd;
-              match swt1 with
-              | mkStruct_with_tuple_t p1 =>
-                let (i1, _) := p1 in
-                if negb (i1 s= 1 %u64)
-                then Fail_
-                else
-                  (
-                    swp <- new_pair1_fwd;
-                    match swp with
-                    | mkStruct_with_pair_t p2 =>
-                      match p2 with
-                      | mkPair_t i2 i3 =>
-                        if negb (i2 s= 1 %u32) then Fail_ else Return tt
-                      end
-                    end )
-              end )
-        end )
+    else (
+      swt0 <- new_tuple2_fwd;
+      match swt0 with
+      | mkStruct_with_tuple_t p0 =>
+        let (i0, _) := p0 in
+        if negb (i0 s= 1 %i16)
+        then Fail_
+        else (
+          swt1 <- new_tuple3_fwd;
+          match swt1 with
+          | mkStruct_with_tuple_t p1 =>
+            let (i1, _) := p1 in
+            if negb (i1 s= 1 %u64)
+            then Fail_
+            else (
+              swp <- new_pair1_fwd;
+              match swp with
+              | mkStruct_with_pair_t p2 =>
+                match p2 with
+                | mkPair_t i2 i3 =>
+                  if negb (i2 s= 1 %u32) then Fail_ else Return tt
+                end
+              end)
+          end)
+      end)
   end
   .
 

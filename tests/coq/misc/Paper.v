@@ -34,13 +34,12 @@ Definition test_choose_fwd : result unit :=
   z0 <- i32_add z 1 %i32;
   if negb (z0 s= 1 %i32)
   then Fail_
-  else
-    (
-      p <- choose_back i32 true (0 %i32) (0 %i32) z0;
-      let (x, y) := p in
-      if negb (x s= 1 %i32)
-      then Fail_
-      else if negb (y s= 0 %i32) then Fail_ else Return tt )
+  else (
+    p <- choose_back i32 true (0 %i32) (0 %i32) z0;
+    let (x, y) := p in
+    if negb (x s= 1 %i32)
+    then Fail_
+    else if negb (y s= 0 %i32) then Fail_ else Return tt)
   .
 
 (** Unit test for [paper::test_choose] *)
@@ -61,7 +60,7 @@ Fixpoint list_nth_mut_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
   | ListCons x tl =>
     if i s= 0 %u32
     then Return x
-    else ( i0 <- u32_sub i 1 %u32; t <- list_nth_mut_fwd T tl i0; Return t )
+    else (i0 <- u32_sub i 1 %u32; t <- list_nth_mut_fwd T tl i0; Return t)
   | ListNil => Fail_
   end
   .
@@ -73,11 +72,10 @@ Fixpoint list_nth_mut_back
   | ListCons x tl =>
     if i s= 0 %u32
     then Return (ListCons ret tl)
-    else
-      (
-        i0 <- u32_sub i 1 %u32;
-        tl0 <- list_nth_mut_back T tl i0 ret;
-        Return (ListCons x tl0) )
+    else (
+      i0 <- u32_sub i 1 %u32;
+      tl0 <- list_nth_mut_back T tl i0 ret;
+      Return (ListCons x tl0))
   | ListNil => Fail_
   end
   .
