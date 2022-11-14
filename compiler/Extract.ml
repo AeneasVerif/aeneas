@@ -126,7 +126,13 @@ let keywords () =
   List.concat [ named_unops; named_binops; misc ]
 
 let assumed_adts : (assumed_ty * string) list =
-  [ (State, "state"); (Result, "result"); (Option, "option"); (Vec, "vec") ]
+  [
+    (State, "state");
+    (Result, "result");
+    (Error, "error");
+    (Option, "option");
+    (Vec, "vec");
+  ]
 
 let assumed_structs : (assumed_ty * string) list = []
 
@@ -136,6 +142,8 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       [
         (Result, result_return_id, "Return");
         (Result, result_fail_id, "Fail");
+        (Error, error_failure_id, "Failure");
+        (Error, error_out_of_fuel_id, "OutOfFuel");
         (Option, option_some_id, "Some");
         (Option, option_none_id, "None");
       ]
@@ -143,6 +151,8 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       [
         (Result, result_return_id, "Return");
         (Result, result_fail_id, "Fail_");
+        (Error, error_failure_id, "Failure");
+        (Error, error_out_of_fuel_id, "OutOfFuel");
         (Option, option_some_id, "Some");
         (Option, option_none_id, "None");
       ]
@@ -429,6 +439,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
                 (* The "pair" case is frequent enough to have its special treatment *)
                 if List.length tys = 2 then "p" else "t"
             | Assumed Result -> "r"
+            | Assumed Error -> "e"
             | Assumed Option -> "opt"
             | Assumed Vec -> "v"
             | Assumed State -> "st"

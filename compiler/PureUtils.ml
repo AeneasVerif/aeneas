@@ -421,13 +421,21 @@ let type_decl_is_enum (def : T.type_decl) : bool =
 
 let mk_state_ty : ty = Adt (Assumed State, [])
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
+let mk_error_ty : ty = Adt (Assumed Error, [])
+
+let mk_error (error : VariantId.id) : texpression =
+  let ty = mk_error_ty in
+  let id = AdtCons { adt_id = Assumed Error; variant_id = Some error } in
+  let qualif = { id; type_args = [] } in
+  let e = Qualif qualif in
+  { e; ty }
 
 let unwrap_result_ty (ty : ty) : ty =
   match ty with
   | Adt (Assumed Result, [ ty ]) -> ty
   | _ -> raise (Failure "not a result type")
 
-let mk_result_fail_texpression (ty : ty) : texpression =
+let mk_result_fail_texpression (error : texpression) (ty : ty) : texpression =
   let type_args = [ ty ] in
   let ty = Adt (Assumed Result, type_args) in
   let id =
@@ -435,9 +443,14 @@ let mk_result_fail_texpression (ty : ty) : texpression =
   in
   let qualif = { id; type_args } in
   let cons_e = Qualif qualif in
-  let cons_ty = ty in
+  let cons_ty = mk_arrow error.ty ty in
   let cons = { e = cons_e; ty = cons_ty } in
-  cons
+  mk_app cons error
+
+let mk_result_fail_texpression_with_error_id (error : VariantId.id) (ty : ty) :
+    texpression =
+  let error = mk_error error in
+  mk_result_fail_texpression error ty
 
 let mk_result_return_texpression (v : texpression) : texpression =
   let type_args = [ v.ty ] in
@@ -451,10 +464,19 @@ let mk_result_return_texpression (v : texpression) : texpression =
   let cons = { e = cons_e; ty = cons_ty } in
   mk_app cons v
 
-let mk_result_fail_pattern (ty : ty) : typed_pattern =
+(** Create a [Fail err] pattern which captures the error *)
+let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : typed_pattern =
+  let error_pat : typed_pattern = { value = error_pat; ty = mk_error_ty } in
   let ty = Adt (Assumed Result, [ ty ]) in
-  let value = PatAdt { variant_id = Some result_fail_id; field_values = [] } in
+  let value =
+    PatAdt { variant_id = Some result_fail_id; field_values = [ error_pat ] }
+  in
   { value; ty }
+
+(** Create a [Fail _] pattern (we ignore the error) *)
+let mk_result_fail_pattern_ignore_error (ty : ty) : typed_pattern =
+  let error_pat : pattern = PatDummy in
+  mk_result_fail_pattern error_pat ty
 
 let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
   let ty = Adt (Assumed Result, [ v.ty ]) in

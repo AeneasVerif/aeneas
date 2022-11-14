@@ -103,7 +103,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
     let is_global_decl_body = List.exists (fun f -> f.is_global_decl_body) d in
-    assert ((not is_global_decl_body) || List.length d == 1);
+    assert ((not is_global_decl_body) || List.length d = 1);
     (* We ignore on purpose functions that cannot fail and consider they *can*
      * fail: the result of the analysis is not used yet to adjust the translation
      * so that the functions which syntactically can't fail don't use an error monad.

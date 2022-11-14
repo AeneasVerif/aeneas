@@ -13,40 +13,44 @@ Module Primitives.
 Declare Scope Primitives_scope.
 
 (*** Result *)
-  
+
+Inductive error :=
+  | Failure
+  | OutOfFuel.
+
 Inductive result A :=
   | Return : A -> result A
-  | Fail_ : result A.
+  | Fail_ : error -> result A.
 
 Arguments Return {_} a.
 Arguments Fail_ {_}.
 
 Definition bind {A B} (m: result A) (f: A -> result B) : result B :=
   match m with
-  | Fail_ => Fail_
+  | Fail_ e => Fail_ e
   | Return x => f x
   end.
 
-Definition return_ {A: Type} (x: A) : result A := Return x .
-Definition fail_ {A: Type} : result A := Fail_ .
+Definition return_ {A: Type} (x: A) : result A := Return x.
+Definition fail_ {A: Type} (e: error) : result A := Fail_ e.
 
 Notation "x <- c1 ; c2" := (bind c1 (fun x => c2))
   (at level 61, c1 at next level, right associativity).
 
 (** Monadic assert *)
 Definition massert (b: bool) : result unit :=
-  if b then Return tt else Fail_.
+  if b then Return tt else Fail_ Failure.
 
 (** Normalize and unwrap a successful result (used for globals) *)
 Definition eval_result_refl {A} {x} (a: result A) (p: a = Return x) : A :=
   match a as r return (r = Return x -> A) with
   | Return a' => fun _  => a'
-  | Fail_     => fun p' =>
-      False_rect _ (eq_ind Fail_
+  | Fail_ e   => fun p' =>
+      False_rect _ (eq_ind (Fail_ e)
           (fun e : result A =>
           match e with
           | Return _ => False
-          | Fail_ => True
+          | Fail_ e => True
           end)
         I (Return x) p')
   end p.
@@ -55,7 +59,7 @@ Notation "x %global" := (eval_result_refl x eq_refl) (at level 40).
 Notation "x %return" := (eval_result_refl x eq_refl) (at level 40).
 
 (* Sanity check *)
-Check (if true then Return (1 + 2) else Fail_)%global = 3.
+Check (if true then Return (1 + 2) else Fail_ Failure)%global = 3.
 
 (*** Misc *)
 
@@ -232,7 +236,7 @@ Import Sumbool.
 Definition mk_scalar (ty: scalar_ty) (x: Z) : result (scalar ty) :=
   match sumbool_of_bool (scalar_in_bounds ty x) with
   | left H => Return (exist _ x (scalar_in_bounds_valid _ _ H))
-  | right _ => Fail_
+  | right _ => Fail_ Failure
   end.
 
 Definition scalar_add {ty} (x y: scalar ty) : result (scalar ty) := mk_scalar ty (to_Z x + to_Z y).
@@ -242,7 +246,7 @@ Definition scalar_sub {ty} (x y: scalar ty) : result (scalar ty) := mk_scalar ty
 Definition scalar_mul {ty} (x y: scalar ty) : result (scalar ty) := mk_scalar ty (to_Z x * to_Z y).
 
 Definition scalar_div {ty} (x y: scalar ty) : result (scalar ty) :=
-  if to_Z y =? 0 then Fail_ else
+  if to_Z y =? 0 then Fail_ Failure else
   mk_scalar ty (to_Z x / to_Z y).
 
 Definition scalar_rem {ty} (x y: scalar ty) : result (scalar ty) := mk_scalar ty (Z.rem (to_Z x) (to_Z y)).
@@ -433,7 +437,7 @@ Definition vec_bind {A B} (v: vec A) (f: list A -> result (list B)) : result (ve
   l <- f (vec_to_list v) ;
   match sumbool_of_bool (scalar_le_max Usize (Z.of_nat (length l))) with
   | left H => Return (exist _ l (scalar_le_max_valid _ _ H))
-  | right _ => Fail_
+  | right _ => Fail_ Failure
   end.
 
 (* The **forward** function shouldn't be used *)
@@ -444,35 +448,35 @@ Definition vec_push_back (T: Type) (v: vec T) (x: T) : result (vec T) :=
 
 (* The **forward** function shouldn't be used *)
 Definition vec_insert_fwd (T: Type) (v: vec T) (i: usize) (x: T) : result unit :=
-  if to_Z i <? vec_length v then Return tt else Fail_.
+  if to_Z i <? vec_length v then Return tt else Fail_ Failure.
 
 Definition vec_insert_back (T: Type) (v: vec T) (i: usize) (x: T) : result (vec T) :=
   vec_bind v (fun l =>
     if to_Z i <? Z.of_nat (length l)
     then Return (list_update l (usize_to_nat i) x)
-    else Fail_).
+    else Fail_ Failure).
 
 (* The **backward** function shouldn't be used *)
 Definition vec_index_fwd (T: Type) (v: vec T) (i: usize) : result T :=
   match nth_error (vec_to_list v) (usize_to_nat i) with
   | Some n => Return n
-  | None   => Fail_
+  | None   => Fail_ Failure
   end.
 
 Definition vec_index_back (T: Type) (v: vec T) (i: usize) (x: T) : result unit :=
-  if to_Z i <? vec_length v then Return tt else Fail_.
+  if to_Z i <? vec_length v then Return tt else Fail_ Failure.
 
 (* The **backward** function shouldn't be used *)
 Definition vec_index_mut_fwd (T: Type) (v: vec T) (i: usize) : result T :=
   match nth_error (vec_to_list v) (usize_to_nat i) with
   | Some n => Return n
-  | None   => Fail_
+  | None   => Fail_ Failure
   end.
 
 Definition vec_index_mut_back (T: Type) (v: vec T) (i: usize) (x: T) : result (vec T) :=
   vec_bind v (fun l =>
     if to_Z i <? Z.of_nat (length l)
     then Return (list_update l (usize_to_nat i) x)
-    else Fail_).
+    else Fail_ Failure).
 
 End Primitives.

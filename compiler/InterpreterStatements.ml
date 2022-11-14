@@ -469,8 +469,8 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
       :: Var (_ret_var, _)
       :: C.Frame :: _ ) ->
       (* Required type checking. We must have:
-         - input_value.ty == & (mut) Box<ty>
-         - boxed_ty == ty
+         - input_value.ty = & (mut) Box<ty>
+         - boxed_ty = ty
          for some ty
       *)
       (let _, input_ty, ref_kind = ty_get_ref input_value.V.ty in

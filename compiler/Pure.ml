@@ -26,16 +26,17 @@ type integer_type = T.integer_type [@@deriving show, ord]
 (** The assumed types for the pure AST.
 
     In comparison with LLBC:
-    - we removed [Box] (because it is translated as the identity: [Box T == T])
+    - we removed [Box] (because it is translated as the identity: [Box T = T])
     - we added:
       - [Result]: the type used in the error monad. This allows us to have a
         unified treatment of expressions (especially when we have to unfold the
         monadic binds)
+      - [Error]: the kind of error, in case of failure (used by [Result])
       - [State]: the type of the state, when using state-error monads. Note that
         this state is opaque to Aeneas (the user can define it, or leave it as
         assumed)
   *)
-type assumed_ty = State | Result | Vec | Option [@@deriving show, ord]
+type assumed_ty = State | Result | Error | Vec | Option [@@deriving show, ord]
 
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather
  * the monadic functions [return] and [fail] (makes treatment of error and
@@ -44,6 +45,8 @@ let result_return_id = VariantId.of_int 0
 let result_fail_id = VariantId.of_int 1
 let option_some_id = T.option_some_id
 let option_none_id = T.option_none_id
+let error_failure_id = VariantId.of_int 0
+let error_out_of_fuel_id = VariantId.of_int 1
 
 type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 [@@deriving show, ord]

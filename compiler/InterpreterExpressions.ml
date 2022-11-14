@@ -357,7 +357,7 @@ let eval_unary_op_concrete (config : C.config) (unop : E.unop) (op : E.operand)
         | Error _ -> cf (Error EPanic)
         | Ok sv -> cf (Ok { v with V.value = V.Primitive (PV.Scalar sv) }))
     | E.Cast (src_ty, tgt_ty), V.Primitive (PV.Scalar sv) -> (
-        assert (src_ty == sv.int_ty);
+        assert (src_ty = sv.int_ty);
         let i = sv.PV.value in
         match mk_scalar tgt_ty i with
         | Error _ -> cf (Error EPanic)
@@ -637,9 +637,9 @@ let eval_rvalue_aggregate (config : C.config)
         cf aggregated ctx
     | E.AggregatedOption (variant_id, ty) ->
         (* Sanity check *)
-        if variant_id == T.option_none_id then assert (values == [])
-        else if variant_id == T.option_some_id then
-          assert (List.length values == 1)
+        if variant_id = T.option_none_id then assert (values = [])
+        else if variant_id = T.option_some_id then
+          assert (List.length values = 1)
         else raise (Failure "Unreachable");
         (* Construt the value *)
         let aty = T.Adt (T.Assumed T.Option, [], [ ty ]) in

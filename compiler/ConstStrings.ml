@@ -5,3 +5,6 @@ let state_basename = "st"
 
 (** ADT constructor prefix (used when pretty-printing) *)
 let constructor_prefix = "Mk"
+
+(** Basename for error variables *)
+let error_basename = "e"

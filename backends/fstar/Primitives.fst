@@ -18,9 +18,13 @@ let rec list_update #a ls i x =
 #pop-options
 
 (*** Result *)
+type error : Type0 =
+| Failure
+| OutOfFuel
+
 type result (a : Type0) : Type0 =
 | Return : v:a -> result a
-| Fail : result a
+| Fail : e:error -> result a
 
 // Monadic bind and return.
 // Re-definining those allows us to customize the result of the monadic notations
@@ -29,10 +33,10 @@ let return (#a : Type0) (x:a) : result a = Return x
 let bind (#a #b : Type0) (m : result a) (f : a -> result b) : result b =
     match m with
     | Return x -> f x
-    | Fail -> Fail
+    | Fail e -> Fail e
 
 // Monadic assert(...)
-let massert (b:bool) : result unit = if b then Return () else Fail
+let massert (b:bool) : result unit = if b then Return () else Fail Failure
 
 // Normalize and unwrap a successful result (used for globals).
 let eval_global (#a : Type0) (x : result a{Return? (normalize_term x)}) : a = Return?.v x
@@ -119,12 +123,12 @@ let scalar_max (ty : scalar_ty) : int =
 type scalar (ty : scalar_ty) : eqtype = x:int{scalar_min ty <= x && x <= scalar_max ty}
 
 let mk_scalar (ty : scalar_ty) (x : int) : result (scalar ty) =
-  if scalar_min ty <= x && scalar_max ty >= x then Return x else Fail
+  if scalar_min ty <= x && scalar_max ty >= x then Return x else Fail Failure
 
 let scalar_neg (#ty : scalar_ty) (x : scalar ty) : result (scalar ty) = mk_scalar ty (-x)
 
 let scalar_div (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scalar ty) =
-  if y <> 0 then mk_scalar ty (x / y) else Fail
+  if y <> 0 then mk_scalar ty (x / y) else Fail Failure
 
 /// The remainder operation
 let int_rem (x : int) (y : int{y <> 0}) : int =
@@ -137,7 +141,7 @@ let _ = assert_norm(int_rem 1 (-2) = 1)
 let _ = assert_norm(int_rem (-1) (-2) = -1)
 
 let scalar_rem (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scalar ty) =
-  if y <> 0 then mk_scalar ty (int_rem x y) else Fail
+  if y <> 0 then mk_scalar ty (int_rem x y) else Fail Failure
 
 let scalar_add (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scalar ty) =
   mk_scalar ty (x + y)
@@ -258,7 +262,7 @@ let vec_push_back (a  : Type0) (v : vec a) (x : a) :
   (requires True)
   (ensures (fun res ->
     match res with
-    | Fail -> True
+    | Fail e -> e == Failure
     | Return v' -> length v' = length v + 1)) =
   if length v < usize_max then begin
     (**) assert_norm(length [x] == 1);
@@ -266,22 +270,22 @@ let vec_push_back (a  : Type0) (v : vec a) (x : a) :
     (**) assert(length (append v [x]) = length v + 1);
     Return (append v [x])
     end
-  else Fail
+  else Fail Failure
 
 // The **forward** function shouldn't be used
 let vec_insert_fwd (a : Type0) (v : vec a) (i : usize) (x : a) : result unit =
-  if i < length v then Return () else Fail
+  if i < length v then Return () else Fail Failure
 let vec_insert_back (a : Type0) (v : vec a) (i : usize) (x : a) : result (vec a) =
-  if i < length v then Return (list_update v i x) else Fail
+  if i < length v then Return (list_update v i x) else Fail Failure
 
 // The **backward** function shouldn't be used
 let vec_index_fwd (a : Type0) (v : vec a) (i : usize) : result a =
-  if i < length v then Return (index v i) else Fail
+  if i < length v then Return (index v i) else Fail Failure
 let vec_index_back (a : Type0) (v : vec a) (i : usize) (x : a) : result unit =
-  if i < length v then Return () else Fail
+  if i < length v then Return () else Fail Failure
 
 let vec_index_mut_fwd (a : Type0) (v : vec a) (i : usize) : result a =
-  if i < length v then Return (index v i) else Fail
+  if i < length v then Return (index v i) else Fail Failure
 let vec_index_mut_back (a : Type0) (v : vec a) (i : usize) (nx : a) : result (vec a) =
-  if i < length v then Return (list_update v i nx) else Fail
+  if i < length v then Return (list_update v i nx) else Fail Failure
 
