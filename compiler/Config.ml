@@ -110,7 +110,11 @@ let always_deconstruct_adts_with_matches = ref false
 (** Controls whether we need to use a state to model the external world
     (I/O, for instance).
  *)
-let use_state = ref true (* TODO *)
+let use_state = ref true
+
+(** Controls whether we use fuel to control termination.
+ *)
+let use_fuel = ref false
 
 (** Controls whether backward functions update the state, in case we use
     a state ({!use_state}).

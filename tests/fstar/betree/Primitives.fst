@@ -45,6 +45,9 @@ let eval_global (#a : Type0) (x : result a{Return? (normalize_term x)}) : a = Re
 type char = FStar.Char.char
 type string = string
 
+let is_zero (n: nat) : bool = n = 0
+let decrease (n: nat{n > 0}) : nat = n - 1
+
 let mem_replace_fwd (a : Type0) (x : a) (y : a) : a = x
 let mem_replace_back (a : Type0) (x : a) (y : a) : a = y
 

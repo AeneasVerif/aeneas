@@ -343,6 +343,7 @@ let mk_switch (scrut : texpression) (sb : switch_body) : texpression =
 let mk_simpl_tuple_ty (tys : ty list) : ty =
   match tys with [ ty ] -> ty | _ -> Adt (Tuple, tys)
 
+let mk_bool_ty : ty = Bool
 let mk_unit_ty : ty = Adt (Tuple, [])
 
 let mk_unit_rvalue : texpression =
@@ -422,6 +423,7 @@ let type_decl_is_enum (def : T.type_decl) : bool =
 let mk_state_ty : ty = Adt (Assumed State, [])
 let mk_result_ty (ty : ty) : ty = Adt (Assumed Result, [ ty ])
 let mk_error_ty : ty = Adt (Assumed Error, [])
+let mk_fuel_ty : ty = Adt (Assumed Fuel, [])
 
 let mk_error (error : VariantId.id) : texpression =
   let ty = mk_error_ty in
@@ -488,8 +490,14 @@ let mk_result_return_pattern (v : typed_pattern) : typed_pattern =
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
   match e.e with Meta (MPlace mp, e) -> (Some mp, e) | _ -> (None, e)
 
-let mk_state_var (vid : VarId.id) : var =
-  { id = vid; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
+let mk_state_var (id : VarId.id) : var =
+  { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
 
-let mk_state_texpression (vid : VarId.id) : texpression =
-  { e = Var vid; ty = mk_state_ty }
+let mk_state_texpression (id : VarId.id) : texpression =
+  { e = Var id; ty = mk_state_ty }
+
+let mk_fuel_var (id : VarId.id) : var =
+  { id; basename = Some ConstStrings.fuel_basename; ty = mk_fuel_ty }
+
+let mk_fuel_texpression (id : VarId.id) : texpression =
+  { e = Var id; ty = mk_fuel_ty }

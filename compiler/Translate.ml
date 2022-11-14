@@ -71,6 +71,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   let var_counter = Pure.VarId.generator_zero in
   let state_var, var_counter = Pure.VarId.fresh var_counter in
   let back_state_var, var_counter = Pure.VarId.fresh var_counter in
+  let fuel0, var_counter = Pure.VarId.fresh var_counter in
+  let fuel, var_counter = Pure.VarId.fresh var_counter in
   let calls = V.FunCallId.Map.empty in
   let abstractions = V.AbstractionId.Map.empty in
   let type_context =
@@ -100,6 +102,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       var_counter;
       state_var;
       back_state_var;
+      fuel0;
+      fuel;
       type_context;
       fun_context;
       global_context;
@@ -171,7 +175,9 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
         let backward_inputs =
           let sg = backward_sg.sg in
           (* We need to ignore the forward state and the backward state *)
-          let num_forward_inputs = sg.info.num_fwd_inputs_with_state in
+          let num_forward_inputs =
+            sg.info.num_fwd_inputs_with_fuel_with_state
+          in
           let num_back_inputs = Option.get sg.info.num_back_inputs_no_state in
           Collections.List.subslice sg.inputs num_forward_inputs num_back_inputs
         in

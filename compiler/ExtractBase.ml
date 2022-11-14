@@ -413,7 +413,10 @@ type extraction_ctx = {
       (** The indent increment we insert whenever we need to indent more *)
 }
 
-(** Debugging function, used when communicating name collisions to the user *)
+(** Debugging function, used when communicating name collisions to the user,
+    and also to print ids for internal debugging (in case of lookup miss for
+    instance).
+ *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
   let global_decls = ctx.trans_ctx.global_context.global_decls in
   let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
@@ -462,7 +465,6 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let variant_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed State -> raise (Failure "Unreachable")
         | Assumed Result ->
             if variant_id = result_return_id then "@result::Return"
             else if variant_id = result_fail_id then "@result::Fail"
@@ -475,7 +477,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             if variant_id = option_some_id then "@option::Some"
             else if variant_id = option_none_id then "@option::None"
             else raise (Failure "Unreachable")
-        | Assumed Vec -> raise (Failure "Unreachable")
+        | Assumed (State | Vec | Fuel) -> raise (Failure "Unreachable")
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
@@ -489,7 +491,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let field_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed (State | Result | Error | Option) ->
+        | Assumed (State | Result | Error | Fuel | Option) ->
             raise (Failure "Unreachable")
         | Assumed Vec ->
             (* We can't directly have access to the fields of a vector *)
@@ -509,10 +511,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       in
       "field name: " ^ field_name
   | UnknownId -> "keyword"
-  | TypeVarId _ | VarId _ ->
-      (* We should never get there: we add indices to make sure variable
-       * names are unique *)
-      raise (Failure "Unreachable")
+  | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
+  | VarId id -> "var_id: " ^ VarId.to_string id
 
 let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   (* The id_to_string function to print nice debugging messages if there are

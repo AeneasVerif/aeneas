@@ -129,6 +129,7 @@ let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
       | State -> "State"
       | Result -> "Result"
       | Error -> "Error"
+      | Fuel -> "Fuel"
       | Option -> "Option"
       | Vec -> "Vec")
 
@@ -240,7 +241,7 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
       (* Assumed type *)
       match aty with
       | State ->
-          (* The [State] type is opaque: we can't get there *)
+          (* This type is opaque: we can't get there *)
           raise (Failure "Unreachable")
       | Result ->
           let variant_id = Option.get variant_id in
@@ -253,6 +254,11 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
           else raise (Failure "Unreachable: improper variant id for error type")
+      | Fuel ->
+          let variant_id = Option.get variant_id in
+          if variant_id = fuel_zero_id then "@Fuel::Zero"
+          else if variant_id = fuel_succ_id then "@Fuel::Succ"
+          else raise (Failure "Unreachable: improper variant id for fuel type")
       | Option ->
           let variant_id = Option.get variant_id in
           if variant_id = option_some_id then "@Option::Some "
@@ -278,7 +284,7 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
   | Assumed aty -> (
       (* Assumed type *)
       match aty with
-      | State | Vec ->
+      | State | Fuel | Vec ->
           (* Opaque types: we can't get there *)
           raise (Failure "Unreachable")
       | Result | Error | Option ->
@@ -322,7 +328,7 @@ let adt_g_value_to_string (fmt : value_formatter)
       (* Assumed type *)
       match aty with
       | State ->
-          (* The [State] type is opaque: we can't get there *)
+          (* This type is opaque: we can't get there *)
           raise (Failure "Unreachable")
       | Result ->
           let variant_id = Option.get variant_id in
@@ -342,6 +348,16 @@ let adt_g_value_to_string (fmt : value_formatter)
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
           else raise (Failure "Unreachable: improper variant id for error type")
+      | Fuel ->
+          let variant_id = Option.get variant_id in
+          if variant_id = fuel_zero_id then (
+            assert (field_values = []);
+            "@Fuel::Zero")
+          else if variant_id = fuel_succ_id then
+            match field_values with
+            | [ v ] -> "@Fuel::Succ " ^ v
+            | _ -> raise (Failure "@Fuel::Succ takes exactly one value")
+          else raise (Failure "Unreachable: improper variant id for fuel type")
       | Option ->
           let variant_id = Option.get variant_id in
           if variant_id = option_some_id then
@@ -419,7 +435,12 @@ let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   | A.VecIndexMut -> "core::ops::index::IndexMut<alloc::vec::Vec>::index_mut"
 
 let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
-  match fid with Return -> "return" | Fail -> "fail" | Assert -> "assert"
+  match fid with
+  | Return -> "return"
+  | Fail -> "fail"
+  | Assert -> "assert"
+  | FuelDecrease -> "fuel_decrease"
+  | FuelEqZero -> "fuel_eq_zero"
 
 let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   match fun_id with

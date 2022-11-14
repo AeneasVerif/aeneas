@@ -20,8 +20,8 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
       (* Assumed type *)
       match aty with
       | State ->
-          (* [State] is opaque *)
-          raise (Failure "Unreachable: `State` values are opaque")
+          (* This type is opaque *)
+          raise (Failure "Unreachable: opaque type")
       | Result ->
           let ty = Collections.List.to_cons_nil tys in
           let variant_id = Option.get variant_id in
@@ -35,6 +35,11 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           assert (
             variant_id = error_failure_id || variant_id = error_out_of_fuel_id);
           []
+      | Fuel ->
+          let variant_id = Option.get variant_id in
+          if variant_id = fuel_zero_id then []
+          else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
+          else raise (Failure "Unreachable: improper variant id for fuel type")
       | Option ->
           let ty = Collections.List.to_cons_nil tys in
           let variant_id = Option.get variant_id in
