@@ -1081,11 +1081,16 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = Some { body with body = obj#visit_texpression () body.body } in
       { def with body }
 
-(** Decompose the monadic let-bindings.
+(** Decompose let-bindings by introducing intermediate let-bindings.
 
-    See the explanations in {!val:Config.decompose_monadic_let_bindings}
+    This is a utility function: see {!decompose_monadic_let_bindings} and
+    {!decompose_nested_let_patterns}.
+
+    [decompose_monadic]: always decompose a monadic let-binding
+    [decompose_nested_pats]: decompose the nested patterns
  *)
-let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
+let decompose_let_bindings (decompose_monadic : bool)
+    (decompose_nested_pats : bool) (_ctx : trans_ctx) (def : fun_decl) :
     fun_decl =
   match def.body with
   | None -> def
@@ -1093,40 +1098,130 @@ let decompose_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) :
       (* Set up the var id generator *)
       let cnt = get_body_min_var_counter body in
       let _, fresh_id = VarId.mk_stateful_generator cnt in
+      let mk_fresh (ty : ty) : typed_pattern * texpression =
+        let vid = fresh_id () in
+        let tmp : var = { id = vid; basename = None; ty } in
+        let ltmp = mk_typed_pattern_from_var tmp None in
+        let rtmp = mk_texpression_from_var tmp in
+        (ltmp, rtmp)
+      in
+
+      (* Utility function - returns the patterns to introduce, from the last to
+         the first.
+
+         For instance, if it returns:
+         {[
+           ([
+              ((x3, x4), x1);
+              ((x1, x2), tmp)
+            ],
+            (x0, tmp))
+         ]}
+         then we need to introduce:
+         {[
+           let (x0, tmp) = original_term in
+           let (x1, x2) = tmp in
+           let (x3, x4) = x1 in
+           ...
+         }]
+      *)
+      let decompose_pat (lv : typed_pattern) :
+          (typed_pattern * texpression) list * typed_pattern =
+        let patterns = ref [] in
+
+        (* We decompose patterns *inside* other patterns.
+           The boolean [inside] allows us to remember if we dived into a
+           pattern already *)
+        let visit_pats =
+          object
+            inherit [_] map_typed_pattern as super
+
+            method! visit_typed_pattern (inside : bool) (pat : typed_pattern)
+                : typed_pattern =
+              match pat.value with
+              | PatConstant _ | PatVar _ | PatDummy -> pat
+              | PatAdt _ ->
+                  if not inside then super#visit_typed_pattern true pat
+                  else
+                    let ltmp, rtmp = mk_fresh pat.ty in
+                    let pat = super#visit_typed_pattern false pat in
+                    patterns := (pat, rtmp) :: !patterns;
+                    ltmp
+          end
+        in
+
+        let inside = false in
+        let lv = visit_pats#visit_typed_pattern inside lv in
+        (!patterns, lv)
+      in
+
       (* It is a very simple map *)
-      let obj =
+      let visit_lets =
         object (self)
           inherit [_] map_expression as super
 
           method! visit_Let env monadic lv re next_e =
-            if not monadic then super#visit_Let env monadic lv re next_e
-            else
-              (* If monadic, we need to check if the left-value is a variable:
-               * - if yes, don't decompose
-               * - if not, make the decomposition in two steps
-               *)
-              match lv.value with
-              | PatVar _ ->
-                  (* Variable: nothing to do *)
-                  super#visit_Let env monadic lv re next_e
-              | _ ->
-                  (* Not a variable: decompose *)
-                  (* Introduce a temporary variable to receive the value of the
-                   * monadic binding *)
-                  let vid = fresh_id () in
-                  let tmp : var = { id = vid; basename = None; ty = lv.ty } in
-                  let ltmp = mk_typed_pattern_from_var tmp None in
-                  let rtmp = mk_texpression_from_var tmp in
-                  (* Visit the next expression *)
-                  let next_e = self#visit_texpression env next_e in
-                  (* Create the let-bindings *)
-                  (mk_let true ltmp re (mk_let false lv rtmp next_e)).e
+            (* Decompose the monadic let-bindings *)
+            let monadic, lv, re, next_e =
+              if (not monadic) || not decompose_monadic then
+                (monadic, lv, re, next_e)
+              else
+                (* If monadic, we need to check if the left-value is a variable:
+                 * - if yes, don't decompose
+                 * - if not, make the decomposition in two steps
+                 *)
+                match lv.value with
+                | PatVar _ ->
+                    (* Variable: nothing to do *)
+                    (monadic, lv, re, next_e)
+                | _ ->
+                    (* Not a variable: decompose if required *)
+                    (* Introduce a temporary variable to receive the value of the
+                     * monadic binding *)
+                    let ltmp, rtmp = mk_fresh lv.ty in
+                    (* Visit the next expression *)
+                    let next_e = self#visit_texpression env next_e in
+                    (* Create the let-bindings *)
+                    (true, ltmp, re, mk_let false lv rtmp next_e)
+            in
+            (* Decompose the nested let-patterns *)
+            let lv, next_e =
+              if not decompose_nested_pats then (lv, next_e)
+              else
+                let pats, first_pat = decompose_pat lv in
+                let e =
+                  List.fold_left
+                    (fun next_e (lpat, rv) -> mk_let false lpat rv next_e)
+                    next_e pats
+                in
+                (first_pat, e)
+            in
+            (* Continue *)
+            super#visit_Let env monadic lv re next_e
         end
       in
       (* Update the body *)
-      let body = Some { body with body = obj#visit_texpression () body.body } in
+      let body =
+        Some { body with body = visit_lets#visit_texpression () body.body }
+      in
       (* Return *)
       { def with body }
+
+(** Decompose monadic let-bindings.
+
+    See the explanations in {!val:Config.decompose_monadic_let_bindings}
+ *)
+let decompose_monadic_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl
+    =
+  decompose_let_bindings true false ctx def
+
+(** Decompose the nested let patterns.
+
+    See the explanations in {!val:Config.decompose_nested_let_patterns}
+ *)
+let decompose_nested_let_patterns (ctx : trans_ctx) (def : fun_decl) : fun_decl
+    =
+  decompose_let_bindings false true ctx def
 
 (** Unfold the monadic let-bindings to explicit matches. *)
 let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
@@ -1253,7 +1348,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl option =
 
          Ex.:
          {[
-           type struct = { f0 : nat; f1 : nat }
+           (* type struct = { f0 : nat; f1 : nat } *)
 
            Mkstruct x.f0 x.f1 ~~> x
          ]}
@@ -1262,8 +1357,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl option =
       log#ldebug
         (lazy ("simplify_aggregates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
-      (* Decompose the monadic let-bindings - F* specific
-       * TODO: remove? *)
+      (* Decompose the monadic let-bindings - used by Coq *)
       let def =
         if !Config.decompose_monadic_let_bindings then (
           let def = decompose_monadic_let_bindings ctx def in
@@ -1276,6 +1370,22 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl option =
           log#ldebug
             (lazy
               "ignoring decompose_monadic_let_bindings due to the configuration\n");
+          def)
+      in
+
+      (* Decompose nested let-patterns *)
+      let def =
+        if !Config.decompose_nested_let_patterns then (
+          let def = decompose_nested_let_patterns ctx def in
+          log#ldebug
+            (lazy
+              ("decompose_nested_let_patterns:\n\n" ^ fun_decl_to_string ctx def
+             ^ "\n"));
+          def)
+        else (
+          log#ldebug
+            (lazy
+              "ignoring decompose_nested_let_patterns due to the configuration\n");
           def)
       in
 

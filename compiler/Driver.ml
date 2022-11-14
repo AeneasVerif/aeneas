@@ -37,20 +37,6 @@ let () =
         Arg.Symbol (backend_names, set_backend),
         " Specify the backend to which to extract" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
-      ( "-decompose-monads",
-        Arg.Set decompose_monadic_let_bindings,
-        " Decompose the monadic let-bindings.\n\n\
-        \         Introduces a temporary variable which is later decomposed,\n\
-        \         when the pattern on the left of the monadic let is not a \n\
-        \         variable.\n\
-        \         \n\
-        \         Example:\n\
-        \         `(x, y) <-- f (); ...` ~~>\n\
-        \         `tmp <-- f (); let (x, y) = tmp in ...`\n\
-        \        " );
-      ( "-unfold-monads",
-        Arg.Set unfold_monadic_let_bindings,
-        " Unfold the monadic let-bindings to matches" );
       ( "-no-filter-useless-calls",
         Arg.Clear filter_useless_monadic_calls,
         " Do not filter the useless function calls, when possible" );
@@ -111,17 +97,23 @@ let () =
         fail ()
   in
 
-  (* In the case of Coq, we forbid using field projectors (see the comments for
-     [dont_use_field_projectors]).
-     Also, we always decompose ADT values with matches (decomposing with
-     let-bindings is not supported).
-  *)
+  (* Set some options depending on the backend *)
   let _ =
     match !backend with
-    | FStar -> ()
+    | FStar ->
+        (* F* supports monadic notations, but the encoding loses information *)
+        unfold_monadic_let_bindings := true
     | Coq ->
+        (* In the case of Coq, we forbid using field projectors (see the comments for
+           [dont_use_field_projectors]).
+           Also, we always decompose ADT values with matches (decomposing with
+           let-bindings is not supported).
+        *)
         dont_use_field_projectors := true;
-        always_deconstruct_adts_with_matches := true
+        always_deconstruct_adts_with_matches := true;
+        (* Some patterns are not supported *)
+        decompose_monadic_let_bindings := true;
+        decompose_nested_let_patterns := true
   in
 
   (* Retrieve and check the filename *)

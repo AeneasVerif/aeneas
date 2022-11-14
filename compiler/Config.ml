@@ -178,19 +178,36 @@ let extract_template_decreases_clauses = ref false
     in monadic let-bindings:
     {[
       (* NOT supported in F*/Coq *)
-      let (x, y) <-- f ();
+      (x, y) <-- f ();
       ...
     ]}
 
     In such situations, we might want to introduce an intermediate
     assignment:
     {[
-      let tmp <-- f ();
+      tmp <-- f ();
       let (x, y) = tmp in
       ...
     ]}
  *)
 let decompose_monadic_let_bindings = ref false
+
+(** Some provers like Coq don't support nested patterns in let-bindings:
+    {[
+      (* NOT supported in Coq *)
+      (st, (x1, x2)) <-- f ();
+      ...
+    ]}
+
+    In such situations, we might want to introduce intermediate
+    assignments:
+    {[
+      (st, tmp) <-- f ();
+      let (x1, x2) = tmp in
+      ...
+    ]}
+ *)
+let decompose_nested_let_patterns = ref false
 
 (** Controls the unfolding of monadic let-bindings to explicit matches:
 
