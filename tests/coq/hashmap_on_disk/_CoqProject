@@ -1,0 +1,9 @@
+-R . Lib
+-arg -w
+-arg all
+
+Primitives.v
+
+HashmapMain__Funs.v
+HashmapMain__Opaque.v
+HashmapMain__Types.v
