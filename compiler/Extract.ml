@@ -674,23 +674,26 @@ let extract_type_decl_variant (ctx : extraction_ctx) (fmt : F.formatter)
       extraction_ctx =
     (* Open the field box *)
     F.pp_open_box fmt ctx.indent_incr;
-    (* Print the field names
+    (* Print the field names, if the backend accepts it.
      * [  x :]
      * Note that when printing fields, we register the field names as
      * *variables*: they don't need to be unique at the top level. *)
     let ctx =
-      match f.field_name with
-      | None -> ctx
-      | Some field_name ->
-          let var_id = VarId.of_int (FieldId.to_int fid) in
-          let field_name =
-            ctx.fmt.var_basename ctx.names_map.names_set (Some field_name)
-              f.field_ty
-          in
-          let ctx, field_name = ctx_add_var field_name var_id ctx in
-          F.pp_print_string fmt (field_name ^ " :");
-          F.pp_print_space fmt ();
-          ctx
+      match !backend with
+      | FStar -> (
+          match f.field_name with
+          | None -> ctx
+          | Some field_name ->
+              let var_id = VarId.of_int (FieldId.to_int fid) in
+              let field_name =
+                ctx.fmt.var_basename ctx.names_map.names_set (Some field_name)
+                  f.field_ty
+              in
+              let ctx, field_name = ctx_add_var field_name var_id ctx in
+              F.pp_print_string fmt (field_name ^ " :");
+              F.pp_print_space fmt ();
+              ctx)
+      | Coq -> ctx
     in
     (* Print the field type *)
     extract_ty ctx fmt false f.field_ty;

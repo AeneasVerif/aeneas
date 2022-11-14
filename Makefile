@@ -130,10 +130,12 @@ tcoq-hashmap_main: OPTIONS += -use-fuel
 transp-polonius_list: OPTIONS += -test-units -test-trans-units -no-split-files -no-state
 transp-polonius_list: SUBDIR:=misc
 tfstarp-polonius_list: OPTIONS +=
+tcoqp-polonius_list: OPTIONS +=
 
 trans-constants: OPTIONS += -test-units -test-trans-units -no-split-files -no-state
 trans-constants: SUBDIR:=misc
 tfstar-constants: OPTIONS +=
+tcoq-constants: OPTIONS +=
 
 trans-external: OPTIONS +=
 trans-external: SUBDIR:=misc
@@ -143,6 +145,7 @@ BETREE_FSTAR_OPTIONS = -decreases-clauses -template-clauses
 transp-betree_main: OPTIONS += -backward-no-state-update
 transp-betree_main: SUBDIR:=betree
 tfstarp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
+tcoqp-betree_main: OPTIONS += -use-fuel
 
 # Additional test on the betree: translate it without `-backward-no-state-update`.
 # This generates very ugly code, but is good to test the translation.
@@ -184,7 +187,7 @@ trans-%: gen-llbc-% tfstar-% tcoq-%
 .PHONY: transp-%
 transp-%: CHARON_TEST_DIR = $(CHARON_TESTS_POLONIUS_DIR)
 transp-%: FILE = $*
-transp-%: gen-llbcp-% tfstarp-%
+transp-%: gen-llbcp-% tfstarp-% tcoqp-%
 	echo "# Test $* done"
 
 .PHONY: tfstar-%
@@ -204,6 +207,13 @@ tfstarp-%:
 tcoq-%: OPTIONS += -backend coq -test-trans-units
 tcoq-%: BACKEND_SUBDIR := coq
 tcoq-%:
+	$(AENEAS_CMD)
+
+# "p" stands for "Polonius"
+.PHONY: tcoqp-%
+tcoqp-%: OPTIONS += -backend coq
+tcoqp-%: BACKEND_SUBDIR := coq
+tcoqp-%:
 	$(AENEAS_CMD)
 
 # Nix
