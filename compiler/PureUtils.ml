@@ -206,6 +206,15 @@ let mk_arrows (inputs : ty list) (output : ty) =
   in
   aux inputs
 
+(** Destruct an expression into a list of nested lets *)
+let rec destruct_lets (e : texpression) :
+    (bool * typed_pattern * texpression) list * texpression =
+  match e.e with
+  | Let (monadic, lv, re, next_e) ->
+      let lets, last_e = destruct_lets next_e in
+      ((monadic, lv, re) :: lets, last_e)
+  | _ -> ([], e)
+
 (** Destruct an [App] expression into an expression and a list of arguments.
 
     We simply destruct the expression as long as it is of the form [App (f, x)].

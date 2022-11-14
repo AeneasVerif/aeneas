@@ -76,7 +76,8 @@ Fixpoint list_nth_mut_back
     else
       (
         i0 <- u32_sub i 1 %u32;
-        tl0 <- list_nth_mut_back T tl i0 ret; Return (ListCons x tl0) )
+        tl0 <- list_nth_mut_back T tl i0 ret;
+        Return (ListCons x tl0) )
   | ListNil => Fail_
   end
   .
@@ -97,7 +98,8 @@ Definition test_nth_fwd : result unit :=
   x <- list_nth_mut_fwd i32 (ListCons (1 %i32) l1) (2 %u32);
   x0 <- i32_add x 1 %i32;
   l2 <- list_nth_mut_back i32 (ListCons (1 %i32) l1) (2 %u32) x0;
-  i <- sum_fwd l2; if negb (i s= 7 %i32) then Fail_ else Return tt
+  i <- sum_fwd l2;
+  if negb (i s= 7 %i32) then Fail_ else Return tt
   .
 
 (** Unit test for [paper::test_nth] *)
@@ -108,7 +110,9 @@ Definition call_choose_fwd (p : (u32 * u32)) : result u32 :=
   let (px, py) := p in
   pz <- choose_fwd u32 true px py;
   pz0 <- u32_add pz 1 %u32;
-  p0 <- choose_back u32 true px py pz0; let (px0, _) := p0 in Return px0
+  p0 <- choose_back u32 true px py pz0;
+  let (px0, _) := p0 in
+  Return px0
   .
 
 End Paper .
