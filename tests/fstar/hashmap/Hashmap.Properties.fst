@@ -502,7 +502,7 @@ val hash_map_allocate_slots_fwd_lem
   (requires (length slots + n <= usize_max))
   (ensures (
    match hash_map_allocate_slots_fwd t slots n with
-   | Fail -> False
+   | Fail _ -> False
    | Return slots' ->
      length slots' = length slots + n /\
      // We leave the already allocated slots unchanged
@@ -517,14 +517,14 @@ let rec hash_map_allocate_slots_fwd_lem t slots n =
   | 0 -> ()
   | _ ->
     begin match vec_push_back (list_t t) slots ListNil with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return slots1 ->
       begin match usize_sub n 1 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return i ->
         hash_map_allocate_slots_fwd_lem t slots1 i;
         begin match hash_map_allocate_slots_fwd t slots1 i with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return slots2 ->
           assert(length slots1 = length slots + 1);
           assert(slots1 == slots @ [ListNil]); // Triggers patterns
@@ -550,7 +550,7 @@ val hash_map_new_with_capacity_fwd_lem
     capacity * max_load_dividend <= usize_max))
   (ensures (
     match hash_map_new_with_capacity_fwd t capacity max_load_dividend max_load_divisor with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm ->
       // The hash map invariant is satisfied
       hash_map_t_inv hm /\
@@ -574,13 +574,13 @@ let hash_map_new_with_capacity_fwd_lem (t : Type0) (capacity : usize)
   assert(length v = 0);
   hash_map_allocate_slots_fwd_lem t v capacity;
   begin match hash_map_allocate_slots_fwd t v capacity with
-  | Fail -> assert(False)
+  | Fail _ -> assert(False)
   | Return v0 ->
     begin match usize_mul capacity max_load_dividend with
-    | Fail -> assert(False)
+    | Fail _ -> assert(False)
     | Return i ->
       begin match usize_div i max_load_divisor with
-      | Fail -> assert(False)
+      | Fail _ -> assert(False)
       | Return i0 ->
           let hm = Mkhash_map_t 0 (max_load_dividend, max_load_divisor) i0 v0 in
           slots_t_all_nil_inv_lem v0;
@@ -597,7 +597,7 @@ val hash_map_new_fwd_lem_aux (t : Type0) :
   Lemma
   (ensures (
     match hash_map_new_fwd t with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm ->
       // The hash map invariant is satisfied
       hash_map_t_inv hm /\
@@ -610,7 +610,7 @@ val hash_map_new_fwd_lem_aux (t : Type0) :
 let hash_map_new_fwd_lem_aux t =
   hash_map_new_with_capacity_fwd_lem t 32 4 5;
   match hash_map_new_with_capacity_fwd t 32 4 5 with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return hm -> ()
 #pop-options
 
@@ -625,7 +625,7 @@ let rec hash_map_clear_slots_fwd_back_lem
   Lemma
   (ensures (
     match hash_map_clear_slots_fwd_back t slots i with
-    | Fail -> False
+    | Fail _ -> False
     | Return slots' ->
       // The length is preserved
       length slots' == length slots /\
@@ -640,14 +640,14 @@ let rec hash_map_clear_slots_fwd_back_lem
   if b
   then
     begin match vec_index_mut_back (list_t t) slots i ListNil with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return v ->
       begin match usize_add i 1 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return i1 ->
         hash_map_clear_slots_fwd_back_lem t v i1;
         begin match hash_map_clear_slots_fwd_back t v i1 with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return slots1 ->
           assert(length slots1 == length slots);
           assert(forall (j:nat{i+1 <= j /\ j < length slots}). index slots1 j == ListNil);
@@ -666,7 +666,7 @@ val hash_map_clear_fwd_back_lem_aux
   (requires (hash_map_t_base_inv self))
   (ensures (
     match hash_map_clear_fwd_back t self with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm ->
       // The hash map invariant is satisfied
       hash_map_t_base_inv hm /\
@@ -685,7 +685,7 @@ let hash_map_clear_fwd_back_lem_aux #t self =
   let v = self.hash_map_slots in
   hash_map_clear_slots_fwd_back_lem t v 0;
   begin match hash_map_clear_slots_fwd_back t v 0 with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return slots1 ->
     slots_t_al_v_all_nil_is_empty_lem slots1;
     let hm1 = Mkhash_map_t 0 p i slots1 in
@@ -714,7 +714,7 @@ val hash_map_insert_in_list_fwd_lem
   Lemma
   (ensures (
     match hash_map_insert_in_list_fwd t key value ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return b ->
       b <==> (slot_t_find_s key ls == None)))
   (decreases (hash_map_insert_in_list_decreases t key value ls))
@@ -730,7 +730,7 @@ let rec hash_map_insert_in_list_fwd_lem t key value ls =
       begin
       hash_map_insert_in_list_fwd_lem t key value ls0;
       match hash_map_insert_in_list_fwd t key value ls0 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return b0 -> ()
       end
   | ListNil ->
@@ -769,7 +769,7 @@ val hash_map_insert_in_list_back_lem_append_s
     slot_t_find_s key ls == None))
   (ensures (
     match hash_map_insert_in_list_back t key value ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return ls' ->
       list_t_v ls' == list_t_v ls @ [(key,value)]))
   (decreases (hash_map_insert_in_list_decreases t key value ls))
@@ -785,7 +785,7 @@ let rec hash_map_insert_in_list_back_lem_append_s t key value ls =
       begin
       hash_map_insert_in_list_back_lem_append_s t key value ls0;
       match hash_map_insert_in_list_back t key value ls0 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l -> ()
       end
   | ListNil -> ()
@@ -800,7 +800,7 @@ val hash_map_insert_in_list_back_lem_update_s
     Some? (find (same_key key) (list_t_v ls))))
   (ensures (
     match hash_map_insert_in_list_back t key value ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return ls' ->
       list_t_v ls' == find_update (same_key key) (list_t_v ls) (key,value)))
   (decreases (hash_map_insert_in_list_decreases t key value ls))
@@ -816,7 +816,7 @@ let rec hash_map_insert_in_list_back_lem_update_s t key value ls =
       begin
       hash_map_insert_in_list_back_lem_update_s t key value ls0;
       match hash_map_insert_in_list_back t key value ls0 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l -> ()
       end
   | ListNil -> ()
@@ -829,7 +829,7 @@ val hash_map_insert_in_list_back_lem_s
   Lemma
   (ensures (
     match hash_map_insert_in_list_back t key value ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return ls' ->
       list_t_v ls' == hash_map_insert_in_list_s key value (list_t_v ls)))
 
@@ -924,7 +924,7 @@ val hash_map_insert_in_list_back_lem_append
     slot_t_find_s key ls == None))
   (ensures (
     match hash_map_insert_in_list_back t key value ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return ls' ->
       list_t_v ls' == list_t_v ls @ [(key,value)] /\
       // The invariant is preserved
@@ -1044,7 +1044,7 @@ val hash_map_insert_in_list_back_lem_update
     Some? (slot_t_find_s key ls)))
   (ensures (
     match hash_map_insert_in_list_back t key value ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return ls' ->
       let als = list_t_v ls in
       list_t_v ls' == find_update (same_key key) als (key,value) /\
@@ -1096,7 +1096,7 @@ val hash_map_insert_in_list_back_lem
   (requires (slot_t_inv len (hash_mod_key key len) ls))
   (ensures (
     match hash_map_insert_in_list_back t key value ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return ls' ->
       // The invariant is preserved
       slot_t_inv len (hash_mod_key key len) ls' /\
@@ -1145,7 +1145,7 @@ let hash_map_insert_no_resize_s
   result (hash_map_s t) =
   // Check if the table is saturated (too many entries, and we need to insert one)
   let num_entries = length (flatten hm) in
-  if None? (hash_map_s_find hm key) && num_entries = usize_max then Fail
+  if None? (hash_map_s_find hm key) && num_entries = usize_max then Fail Failure
   else Return (hash_map_insert_no_fail_s hm key value)
 
 /// Prove that [hash_map_insert_no_resize_s] is refined by
@@ -1161,7 +1161,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
     match hash_map_insert_no_resize_fwd_back t self key value,
           hash_map_insert_no_resize_s (hash_map_t_v self) key value
     with
-    | Fail, Fail -> True
+    | Fail _, Fail _ -> True
     | Return hm, Return hm_v ->
       hash_map_t_base_inv hm /\
       hash_map_t_same_params hm self /\
@@ -1172,7 +1172,7 @@ val hash_map_insert_no_resize_fwd_back_lem_s
 
 let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
   begin match hash_key_fwd key with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return i ->
     let i0 = self.hash_map_num_entries in
     let p = self.hash_map_max_load_factor in
@@ -1181,31 +1181,31 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
     let i2 = vec_len (list_t t) v in
     let len = length v in
     begin match usize_rem i i2 with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hash_mod ->
       begin match vec_index_mut_fwd (list_t t) v hash_mod with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l ->
         begin
         // Checking that: list_t_v (index ...) == index (hash_map_t_v ...) ...
         assert(list_t_v l == index (hash_map_t_v self) hash_mod);
         hash_map_insert_in_list_fwd_lem t key value l;
         match hash_map_insert_in_list_fwd t key value l with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return b ->
           assert(b = None? (slot_s_find key (list_t_v l)));
           hash_map_insert_in_list_back_lem t len key value l;
           if b
           then
             begin match usize_add i0 1 with
-            | Fail -> ()
+            | Fail _ -> ()
             | Return i3 ->
               begin
               match hash_map_insert_in_list_back t key value l with
-              | Fail -> ()
+              | Fail _ -> ()
               | Return l0 ->
                 begin match vec_index_mut_back (list_t t) v hash_mod l0 with
-                | Fail -> ()
+                | Fail _ -> ()
                 | Return v0 ->
                   let self_v = hash_map_t_v self in
                   let hm = Mkhash_map_t i3 p i1 v0 in
@@ -1221,10 +1221,10 @@ let hash_map_insert_no_resize_fwd_back_lem_s t self key value =
           else
             begin
             match hash_map_insert_in_list_back t key value l with
-            | Fail -> ()
+            | Fail _ -> ()
             | Return l0 ->
               begin match vec_index_mut_back (list_t t) v hash_mod l0 with
-              | Fail -> ()
+              | Fail _ -> ()
               | Return v0 ->
                 let self_v = hash_map_t_v self in
                 let hm = Mkhash_map_t i0 p i1 v0 in
@@ -1285,7 +1285,7 @@ val hash_map_insert_no_resize_s_lem
   (requires (hash_map_s_inv hm))
   (ensures (
     match hash_map_insert_no_resize_s hm key value with
-    | Fail ->
+    | Fail _ ->
       // Can fail only if we need to create a new binding in
       // an already saturated map
       hash_map_s_len hm = usize_max /\
@@ -1308,7 +1308,7 @@ val hash_map_insert_no_resize_s_get_same_lem
   Lemma (requires (hash_map_s_inv hm))
   (ensures (
     match hash_map_insert_no_resize_s hm key value with
-    | Fail -> True
+    | Fail _ -> True
     | Return hm' ->
       hash_map_s_find hm' key == Some value))
 
@@ -1330,7 +1330,7 @@ val hash_map_insert_no_resize_s_get_diff_lem
   Lemma (requires (hash_map_s_inv hm))
   (ensures (
     match hash_map_insert_no_resize_s hm key value with
-    | Fail -> True
+    | Fail _ -> True
     | Return hm' ->
       hash_map_s_find hm' key' == hash_map_s_find hm key'))
 
@@ -1364,7 +1364,7 @@ let hash_map_insert_no_resize_s_get_diff_lem #t hm key value key' =
 type result_hash_map_s_nes (t : Type0) : Type0 =
   res:result (hash_map_s t) {
     match res with
-    | Fail -> True
+    | Fail _ -> True
     | Return hm -> is_pos_usize (length hm)
   }
 
@@ -1378,7 +1378,7 @@ let rec hash_map_move_elements_from_list_s
   | [] -> Return hm
   | (key, value) :: ls' ->
     match hash_map_insert_no_resize_s hm key value with
-    | Fail -> Fail
+    | Fail e -> Fail e
     | Return hm' ->
       hash_map_move_elements_from_list_s hm' ls'
 
@@ -1390,7 +1390,7 @@ val hash_map_move_elements_from_list_fwd_back_lem
     match hash_map_move_elements_from_list_fwd_back t ntable ls,
           hash_map_move_elements_from_list_s (hash_map_t_v ntable) (slot_t_v ls)
     with
-    | Fail, Fail -> True
+    | Fail _, Fail _ -> True
     | Return hm', Return hm_v ->
       hash_map_t_base_inv hm' /\
       hash_map_t_v hm' == hm_v /\
@@ -1407,13 +1407,13 @@ let rec hash_map_move_elements_from_list_fwd_back_lem t ntable ls =
     let (_,_) :: tl_v = ls_v in
     hash_map_insert_no_resize_fwd_back_lem_s t ntable k v;
     begin match hash_map_insert_no_resize_fwd_back t ntable k v with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return h ->
       let h_v = Return?.v (hash_map_insert_no_resize_s (hash_map_t_v ntable) k v) in
       assert(hash_map_t_v h == h_v);
       hash_map_move_elements_from_list_fwd_back_lem t h tl;
       begin match hash_map_move_elements_from_list_fwd_back t h tl with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return h0 -> ()
       end
     end
@@ -1450,7 +1450,7 @@ let rec hash_map_move_elements_s_simpl
   (requires (True))
   (ensures (fun res ->
     match res, hash_map_move_elements_fwd_back t ntable slots i with
-    | Fail, Fail -> True
+    | Fail _, Fail _ -> True
     | Return (ntable1, slots1), Return (ntable2, slots2) ->
       ntable1 == ntable2 /\
       slots1 == slots2
@@ -1461,7 +1461,7 @@ let rec hash_map_move_elements_s_simpl
   then
     let slot = index slots i in
     begin match hash_map_move_elements_from_list_fwd_back t ntable slot with
-    | Fail -> Fail
+    | Fail e -> Fail e
     | Return hm' ->
       let slots' = list_update slots i ListNil in
       hash_map_move_elements_s_simpl t hm' slots' (i+1)
@@ -1487,7 +1487,7 @@ let rec hash_map_move_elements_s
     begin
     let slot = index slots i in
     match hash_map_move_elements_from_list_s hm slot with
-    | Fail -> Fail
+    | Fail e -> Fail e
     | Return hm' ->
       let slots' = list_update slots i [] in
       hash_map_move_elements_s hm' slots' (i+1)
@@ -1504,7 +1504,7 @@ val hash_map_move_elements_fwd_back_lem_refin
     match hash_map_move_elements_fwd_back t ntable slots i,
           hash_map_move_elements_s (hash_map_t_v ntable) (slots_t_v slots) i
     with
-    | Fail, Fail -> True // We will prove later that this is not possible
+    | Fail _, Fail _ -> True // We will prove later that this is not possible
     | Return (ntable', _), Return ntable'_v ->
       hash_map_t_base_inv ntable' /\
       hash_map_t_v ntable' == ntable'_v /\
@@ -1567,27 +1567,27 @@ let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
   if b
   then
     begin match vec_index_mut_fwd (list_t t) slots i with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return l ->
       let l0 = mem_replace_fwd (list_t t) l ListNil in
       assert(l0 == l);
       hash_map_move_elements_from_list_fwd_back_lem t ntable l0;
       begin match hash_map_move_elements_from_list_fwd_back t ntable l0 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return h ->
         let l1 = mem_replace_back (list_t t) l ListNil in
         assert(l1 == ListNil);
         assert(slot_t_v #t ListNil == []); // THIS IS IMPORTANT
         begin match vec_index_mut_back (list_t t) slots i l1 with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return v ->
           begin match usize_add i 1 with
-          | Fail -> ()
+          | Fail _ -> ()
           | Return i1 ->
             hash_map_move_elements_fwd_back_lem_refin t h v i1;
             begin match hash_map_move_elements_fwd_back t h v i1 with
-            | Fail ->
-              assert(hash_map_move_elements_fwd_back t ntable slots i == Fail);
+            | Fail _ ->
+              assert(Fail? (hash_map_move_elements_fwd_back t ntable slots i));
               ()
             | Return (ntable', v0) -> ()
             end
@@ -1617,7 +1617,7 @@ let rec hash_map_move_elements_s_flat
   | [] -> Return ntable
   | (k,v) :: slots' ->
     match hash_map_insert_no_resize_s ntable k v with
-    | Fail -> Fail
+    | Fail e -> Fail e
     | Return ntable' ->
       hash_map_move_elements_s_flat ntable' slots'
 
@@ -1718,7 +1718,7 @@ let rec hash_map_move_elements_from_list_s_as_flat_lem #t hm ls =
   | [] -> ()
   | (key, value) :: ls' ->
     match hash_map_insert_no_resize_s hm key value with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hm' ->
       hash_map_move_elements_from_list_s_as_flat_lem hm' ls'
 #pop-options
@@ -1728,7 +1728,7 @@ let hash_map_move_elements_s_flat_comp
   (#t : Type0) (hm : hash_map_s_nes t) (slot0 slot1 : slot_s t) :
   Tot (result_hash_map_s_nes t) =
   match hash_map_move_elements_s_flat hm slot0 with
-  | Fail -> Fail
+  | Fail e -> Fail e
   | Return hm1 -> hash_map_move_elements_s_flat hm1 slot1
 
 /// High-level desc:
@@ -1740,7 +1740,7 @@ val hash_map_move_elements_s_flat_append_lem
     match hash_map_move_elements_s_flat_comp hm slot0 slot1,
           hash_map_move_elements_s_flat hm (slot0 @ slot1)
     with
-    | Fail, Fail -> True
+    | Fail _, Fail _ -> True
     | Return hm1, Return hm2 -> hm1 == hm2
     | _ -> False))
   (decreases (slot0))
@@ -1751,7 +1751,7 @@ let rec hash_map_move_elements_s_flat_append_lem #t hm slot0 slot1 =
   | [] -> ()
   | (k,v) :: slot0' ->
     match hash_map_insert_no_resize_s hm k v with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hm' ->
       hash_map_move_elements_s_flat_append_lem hm' slot0' slot1
 #pop-options
@@ -1784,7 +1784,7 @@ val hash_map_move_elements_s_lem_refin_flat
     match hash_map_move_elements_s hm slots i,
           hash_map_move_elements_s_flat hm (flatten_i slots i)
     with
-    | Fail, Fail -> True
+    | Fail _, Fail _ -> True
     | Return hm, Return hm' -> hm == hm'
     | _ -> False))
   (decreases (length slots - i))
@@ -1797,10 +1797,10 @@ let rec hash_map_move_elements_s_lem_refin_flat #t hm slots i =
     let slot = index slots i in
     hash_map_move_elements_from_list_s_as_flat_lem hm slot;
     match hash_map_move_elements_from_list_s hm slot with
-    | Fail ->
+    | Fail _ ->
       assert(flatten_i slots i == slot @ flatten_i slots (i+1));
       hash_map_move_elements_s_flat_append_lem hm slot (flatten_i slots (i+1));
-      assert(hash_map_move_elements_s_flat hm (flatten_i slots i) == Fail)
+      assert(Fail? (hash_map_move_elements_s_flat hm (flatten_i slots i)))
     | Return hm' ->
       let slots' = list_update slots i [] in
       flatten_i_same_suffix slots slots' (i+1);
@@ -1859,7 +1859,7 @@ val hash_map_move_elements_s_flat_lem
     hash_map_s_len hm + length al <= usize_max))
   (ensures (
     match hash_map_move_elements_s_flat hm al with
-    | Fail -> False // We can't fail
+    | Fail _ -> False // We can't fail
     | Return hm' ->
       // The invariant is preserved
       hash_map_s_inv hm' /\
@@ -1876,7 +1876,7 @@ let rec hash_map_move_elements_s_flat_lem #t hm al =
   | (k,v) :: al' ->
     hash_map_insert_no_resize_s_lem hm k v;
     match hash_map_insert_no_resize_s hm k v with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hm' ->
       assert(hash_map_s_inv hm');
       assert(assoc_list_inv al');
@@ -2211,7 +2211,7 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
   match hash_map_move_elements_fwd_back t ntable slots 0,
         hash_map_move_elements_s ntable_v slots_v 0
   with
-  | Fail, Fail -> ()
+  | Fail _, Fail _ -> ()
   | Return (ntable', _), Return ntable'_v ->
     assert(hash_map_t_base_inv ntable');
     assert(hash_map_t_v ntable' == ntable'_v)
@@ -2222,7 +2222,7 @@ let hash_map_move_elements_fwd_back_lem t ntable slots =
   match hash_map_move_elements_s ntable_v slots_v 0,
         hash_map_move_elements_s_flat ntable_v (flatten_i slots_v 0)
   with
-  | Fail, Fail -> ()
+  | Fail _, Fail _ -> ()
   | Return hm, Return hm' -> assert(hm == hm')
   | _ -> assert(False)
   end;
@@ -2258,10 +2258,10 @@ let hash_map_try_resize_s_simpl
   if capacity <= (usize_max / 2) / divid then
     let ncapacity : usize = capacity * 2 in
     begin match hash_map_new_with_capacity_fwd t ncapacity divid divis with
-    | Fail -> Fail
+    | Fail e -> Fail e
     | Return ntable ->
       match hash_map_move_elements_fwd_back t ntable hm.hash_map_slots 0 with
-      | Fail -> Fail
+      | Fail e -> Fail e
       | Return (ntable', _) ->
         let hm =
           { hm with hash_map_slots = ntable'.hash_map_slots;
@@ -2294,7 +2294,7 @@ val hash_map_try_resize_fwd_back_lem_refin
     match hash_map_try_resize_fwd_back t self,
           hash_map_try_resize_s_simpl self
     with
-    | Fail, Fail -> True
+    | Fail _, Fail _ -> True
     | Return hm1, Return hm2 -> hm1 == hm2
     | _ -> False))
 
@@ -2420,7 +2420,7 @@ val hash_map_try_resize_s_simpl_lem (#t : Type0) (hm : hash_map_t t) :
   ))
   (ensures (
     match hash_map_try_resize_s_simpl hm with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm' ->
       // The full invariant is now satisfied (the full invariant is "base
       // invariant" + the map is not overloaded (or can't be resized because
@@ -2442,7 +2442,7 @@ let hash_map_try_resize_s_simpl_lem #t hm =
     new_max_load_lem (hash_map_t_len_s hm) capacity divid divis;
     hash_map_new_with_capacity_fwd_lem t ncapacity divid divis;
     match hash_map_new_with_capacity_fwd t ncapacity divid divis with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return ntable ->
       let slots = hm.hash_map_slots in
       let al = flatten (slots_t_v slots) in
@@ -2461,7 +2461,7 @@ let hash_map_try_resize_s_simpl_lem #t hm =
       assert(forall (k:key). hash_map_t_find_s ntable k  == None);
       hash_map_move_elements_fwd_back_lem t ntable hm.hash_map_slots;
       match hash_map_move_elements_fwd_back t ntable hm.hash_map_slots 0 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return (ntable', _) ->
         hash_map_is_assoc_list_lem hm;
         assert(hash_map_is_assoc_list hm (hash_map_t_al_v hm));
@@ -2502,7 +2502,7 @@ val hash_map_try_resize_fwd_back_lem (#t : Type0) (hm : hash_map_t t) :
      length hm.hash_map_slots * 2 * dividend > usize_max)))
   (ensures (
     match hash_map_try_resize_fwd_back t hm with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm' ->
       // The full invariant is now satisfied (the full invariant is "base
       // invariant" + the map is not overloaded (or can't be resized because
@@ -2525,7 +2525,7 @@ let hash_map_insert_s
   (#t : Type0) (self : hash_map_t t) (key : usize) (value : t) :
   result (hash_map_t t) =
   match hash_map_insert_no_resize_fwd_back t self key value with
-  | Fail -> Fail
+  | Fail e -> Fail e
   | Return hm' ->
     if hash_map_t_len_s hm' > hm'.hash_map_max_load then
       hash_map_try_resize_fwd_back t hm'
@@ -2538,7 +2538,7 @@ val hash_map_insert_fwd_back_lem_refin
     match hash_map_insert_fwd_back t self key value,
           hash_map_insert_s self key value
     with
-    | Fail, Fail -> True
+    | Fail _, Fail _ -> True
     | Return hm1, Return hm2 -> hm1 == hm2
     | _ -> False))
 
@@ -2563,7 +2563,7 @@ val hash_map_insert_fwd_back_lem_aux
   Lemma (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_insert_fwd_back t self key value with
-    | Fail ->
+    | Fail _ ->
       // We can fail only if:
       // - the key is not in the map and we need to add it
       // - we are already saturated
@@ -2585,7 +2585,7 @@ let hash_map_insert_fwd_back_lem_aux #t self key value =
   hash_map_insert_no_resize_fwd_back_lem_s t self key value;
   hash_map_insert_no_resize_s_lem (hash_map_t_v self) key value;
   match hash_map_insert_no_resize_fwd_back t self key value with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return hm' ->
     // Expanding the post of [hash_map_insert_no_resize_fwd_back_lem_s]
     let self_v = hash_map_t_v self in
@@ -2634,7 +2634,7 @@ val hash_map_contains_key_in_list_fwd_lem
   Lemma
   (ensures (
     match hash_map_contains_key_in_list_fwd t key ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return b ->
       b = Some? (slot_t_find_s key ls)))
 
@@ -2650,7 +2650,7 @@ let rec hash_map_contains_key_in_list_fwd_lem #t key ls =
       begin
       hash_map_contains_key_in_list_fwd_lem key ls0;
       match hash_map_contains_key_in_list_fwd t key ls0 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return b0 -> ()
       end
   | ListNil -> ()
@@ -2663,24 +2663,24 @@ val hash_map_contains_key_fwd_lem_aux
   Lemma
   (ensures (
     match hash_map_contains_key_fwd t self key with
-    | Fail -> False
+    | Fail _ -> False
     | Return b -> b = Some? (hash_map_t_find_s self key)))
 
 let hash_map_contains_key_fwd_lem_aux #t self key =
   begin match hash_key_fwd key with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return i ->
     let v = self.hash_map_slots in
     let i0 = vec_len (list_t t) v in
     begin match usize_rem i i0 with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hash_mod ->
       begin match vec_index_fwd (list_t t) v hash_mod with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l ->
         hash_map_contains_key_in_list_fwd_lem key l;
         begin match hash_map_contains_key_in_list_fwd t key l with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return b -> ()
         end
       end
@@ -2700,7 +2700,7 @@ val hash_map_get_in_list_fwd_lem
   Lemma
   (ensures (
     match hash_map_get_in_list_fwd t key ls, slot_t_find_s key ls with
-    | Fail, None -> True
+    | Fail _, None -> True
     | Return x, Some x' -> x == x'
     | _ -> False))
 
@@ -2715,7 +2715,7 @@ let rec hash_map_get_in_list_fwd_lem #t key ls =
       begin
       hash_map_get_in_list_fwd_lem key ls0;
       match hash_map_get_in_list_fwd t key ls0 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return x -> ()
       end
   | ListNil -> ()
@@ -2729,26 +2729,26 @@ val hash_map_get_fwd_lem_aux
   Lemma
   (ensures (
     match hash_map_get_fwd t self key, hash_map_t_find_s self key with
-    | Fail, None -> True
+    | Fail _, None -> True
     | Return x, Some x' -> x == x'
     | _ -> False))
 
 let hash_map_get_fwd_lem_aux #t self key =
   begin match hash_key_fwd key with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return i ->
     let v = self.hash_map_slots in
     let i0 = vec_len (list_t t) v in
     begin match usize_rem i i0 with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hash_mod ->
       begin match vec_index_fwd (list_t t) v hash_mod with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l ->
         begin
         hash_map_get_in_list_fwd_lem key l;
         match hash_map_get_in_list_fwd t key l with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return x -> ()
         end
       end
@@ -2768,7 +2768,7 @@ val hash_map_get_mut_in_list_fwd_lem
   Lemma
   (ensures (
     match hash_map_get_mut_in_list_fwd t key ls, slot_t_find_s key ls with
-    | Fail, None -> True
+    | Fail _, None -> True
     | Return x, Some x' -> x == x'
     | _ -> False))
 
@@ -2783,7 +2783,7 @@ let rec hash_map_get_mut_in_list_fwd_lem #t key ls =
       begin
       hash_map_get_mut_in_list_fwd_lem key ls0;
       match hash_map_get_mut_in_list_fwd t key ls0 with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return x -> ()
       end
   | ListNil -> ()
@@ -2797,26 +2797,26 @@ val hash_map_get_mut_fwd_lem_aux
   Lemma
   (ensures (
     match hash_map_get_mut_fwd t self key, hash_map_t_find_s self key with
-    | Fail, None -> True
+    | Fail _, None -> True
     | Return x, Some x' -> x == x'
     | _ -> False))
 
 let hash_map_get_mut_fwd_lem_aux #t self key =
   begin match hash_key_fwd key with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return i ->
     let v = self.hash_map_slots in
     let i0 = vec_len (list_t t) v in
     begin match usize_rem i i0 with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hash_mod ->
       begin match vec_index_fwd (list_t t) v hash_mod with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l ->
         begin
         hash_map_get_mut_in_list_fwd_lem key l;
         match hash_map_get_mut_in_list_fwd t key l with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return x -> ()
         end
       end
@@ -2836,7 +2836,7 @@ val hash_map_get_mut_in_list_back_lem
   (requires (Some? (slot_t_find_s key ls)))
   (ensures (
     match hash_map_get_mut_in_list_back t key ls ret with
-    | Fail -> False
+    | Fail _ -> False
     | Return ls' -> list_t_v ls' == find_update (same_key key) (list_t_v ls) (key,ret)
     | _ -> False))
 
@@ -2851,7 +2851,7 @@ let rec hash_map_get_mut_in_list_back_lem #t key ls ret =
       begin
       hash_map_get_mut_in_list_back_lem key ls0 ret;
       match hash_map_get_mut_in_list_back t key ls0 ret with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l -> let ls1 = ListCons ckey cvalue l in ()
       end
   | ListNil -> ()
@@ -2868,13 +2868,13 @@ val hash_map_get_mut_back_lem_refin
   (requires (Some? (hash_map_t_find_s self key)))
   (ensures (
     match hash_map_get_mut_back t self key ret with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm' ->
       hash_map_t_v hm' == hash_map_insert_no_fail_s (hash_map_t_v self) key ret))
 
 let hash_map_get_mut_back_lem_refin #t self key ret =
   begin match hash_key_fwd key with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return i ->
     let i0 = self.hash_map_num_entries in
     let p = self.hash_map_max_load_factor in
@@ -2882,18 +2882,18 @@ let hash_map_get_mut_back_lem_refin #t self key ret =
     let v = self.hash_map_slots in
     let i2 = vec_len (list_t t) v in
     begin match usize_rem i i2 with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hash_mod ->
       begin match vec_index_mut_fwd (list_t t) v hash_mod with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l ->
         begin
         hash_map_get_mut_in_list_back_lem key l ret;
         match hash_map_get_mut_in_list_back t key l ret with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return l0 ->
           begin match vec_index_mut_back (list_t t) v hash_mod l0 with
-          | Fail -> ()
+          | Fail _ -> ()
           | Return v0 -> let self0 = Mkhash_map_t i0 p i1 v0 in ()
           end
         end
@@ -2911,7 +2911,7 @@ val hash_map_get_mut_back_lem_aux
     Some? (hash_map_t_find_s hm key)))
   (ensures (
     match hash_map_get_mut_back t hm key ret with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm' ->
       // Functional spec
       hash_map_t_v hm' == hash_map_insert_no_fail_s (hash_map_t_v hm) key ret /\
@@ -2928,7 +2928,7 @@ let hash_map_get_mut_back_lem_aux #t hm key ret =
   let hm_v = hash_map_t_v hm in
   hash_map_get_mut_back_lem_refin hm key ret;
   match hash_map_get_mut_back t hm key ret with
-  | Fail -> assert(False)
+  | Fail _ -> assert(False)
   | Return hm' ->
     hash_map_insert_no_fail_s_lem hm_v key ret
 
@@ -2942,7 +2942,7 @@ val hash_map_remove_from_list_fwd_lem
   Lemma
   (ensures (
     match hash_map_remove_from_list_fwd t key ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return opt_x ->
       opt_x == slot_t_find_s key ls /\
       (Some? opt_x ==> length (slot_t_v ls) > 0)))
@@ -2963,7 +2963,7 @@ let rec hash_map_remove_from_list_fwd_lem #t key ls =
       begin
       hash_map_remove_from_list_fwd_lem key tl;
       match hash_map_remove_from_list_fwd t key tl with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return opt -> ()
       end
   | ListNil -> ()
@@ -2979,26 +2979,26 @@ val hash_map_remove_fwd_lem_aux
     hash_map_t_inv self))
   (ensures (
     match hash_map_remove_fwd t self key with
-    | Fail -> False
+    | Fail _ -> False
     | Return opt_x -> opt_x == hash_map_t_find_s self key))
 
 let hash_map_remove_fwd_lem_aux #t self key =
   begin match hash_key_fwd key with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return i ->
     let i0 = self.hash_map_num_entries in
     let v = self.hash_map_slots in
     let i1 = vec_len (list_t t) v in
     begin match usize_rem i i1 with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hash_mod ->
       begin match vec_index_mut_fwd (list_t t) v hash_mod with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l ->
         begin
         hash_map_remove_from_list_fwd_lem key l;
         match hash_map_remove_from_list_fwd t key l with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return x ->
           begin match x with
           | None -> ()
@@ -3008,7 +3008,7 @@ let hash_map_remove_fwd_lem_aux #t self key =
             assert(length (list_t_v #t l) > 0);
             length_flatten_index (hash_map_t_v self) hash_mod;
             match usize_sub i0 1 with
-            | Fail -> ()
+            | Fail _ -> ()
             | Return _ -> ()
             end
           end
@@ -3036,7 +3036,7 @@ val hash_map_remove_from_list_back_lem_refin
   Lemma
   (ensures (
     match hash_map_remove_from_list_back t key ls with
-    | Fail -> False
+    | Fail _ -> False
     | Return ls' ->
       list_t_v ls' == hash_map_remove_from_list_s key (list_t_v ls) /\
       // The length is decremented, iff the key was in the slot
@@ -3062,7 +3062,7 @@ let rec hash_map_remove_from_list_back_lem_refin #t key ls =
       begin
       hash_map_remove_from_list_back_lem_refin key tl;
       match hash_map_remove_from_list_back t key tl with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l -> let ls0 = ListCons ckey x l in ()
       end
   | ListNil -> ()
@@ -3089,7 +3089,7 @@ val hash_map_remove_back_lem_refin
     hash_map_t_inv self))
   (ensures (
     match hash_map_remove_back t self key with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm' ->
       hash_map_t_same_params hm' self /\
       hash_map_t_v hm' == hash_map_remove_s (hash_map_t_v self) key /\
@@ -3102,7 +3102,7 @@ val hash_map_remove_back_lem_refin
 
 let hash_map_remove_back_lem_refin #t self key =
   begin match hash_key_fwd key with
-  | Fail -> ()
+  | Fail _ -> ()
   | Return i ->
     let i0 = self.hash_map_num_entries in
     let p = self.hash_map_max_load_factor in
@@ -3110,27 +3110,27 @@ let hash_map_remove_back_lem_refin #t self key =
     let v = self.hash_map_slots in
     let i2 = vec_len (list_t t) v in
     begin match usize_rem i i2 with
-    | Fail -> ()
+    | Fail _ -> ()
     | Return hash_mod ->
       begin match vec_index_mut_fwd (list_t t) v hash_mod with
-      | Fail -> ()
+      | Fail _ -> ()
       | Return l ->
         begin
         hash_map_remove_from_list_fwd_lem key l;
         match hash_map_remove_from_list_fwd t key l with
-        | Fail -> ()
+        | Fail _ -> ()
         | Return x ->
           begin match x with
           | None ->
             begin
             hash_map_remove_from_list_back_lem_refin key l;
             match hash_map_remove_from_list_back t key l with
-            | Fail -> ()
+            | Fail _ -> ()
             | Return l0 ->
               begin
               length_flatten_update (slots_t_v v) hash_mod (list_t_v l0);
               match vec_index_mut_back (list_t t) v hash_mod l0 with
-              | Fail -> ()
+              | Fail _ -> ()
               | Return v0 -> ()
               end
             end
@@ -3140,17 +3140,17 @@ let hash_map_remove_back_lem_refin #t self key =
             assert(length (list_t_v #t l) > 0);
             length_flatten_index (hash_map_t_v self) hash_mod;
             match usize_sub i0 1 with
-            | Fail -> ()
+            | Fail _ -> ()
             | Return i3 ->
               begin
               hash_map_remove_from_list_back_lem_refin key l;
               match hash_map_remove_from_list_back t key l with
-              | Fail -> ()
+              | Fail _ -> ()
               | Return l0 ->
                 begin
                 length_flatten_update (slots_t_v v) hash_mod (list_t_v l0);
                 match vec_index_mut_back (list_t t) v hash_mod l0 with
-                | Fail -> ()
+                | Fail _ -> ()
                 | Return v0 -> ()
                 end
               end
@@ -3224,7 +3224,7 @@ val hash_map_remove_back_lem_aux
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_remove_back t self key with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm' ->
       hash_map_t_inv self /\
       hash_map_t_same_params hm' self /\

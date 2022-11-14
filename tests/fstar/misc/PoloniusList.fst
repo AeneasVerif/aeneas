@@ -18,7 +18,7 @@ let rec get_list_at_x_fwd (ls : list_t u32) (x : u32) : result (list_t u32) =
     then Return (ListCons hd tl)
     else
       begin match get_list_at_x_fwd tl x with
-      | Fail -> Fail
+      | Fail e -> Fail e
       | Return l -> Return l
       end
   | ListNil -> Return ListNil
@@ -33,7 +33,7 @@ let rec get_list_at_x_back
     then Return ret
     else
       begin match get_list_at_x_back tl x ret with
-      | Fail -> Fail
+      | Fail e -> Fail e
       | Return tl0 -> Return (ListCons hd tl0)
       end
   | ListNil -> Return ret

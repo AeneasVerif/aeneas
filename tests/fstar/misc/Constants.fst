@@ -23,11 +23,11 @@ let x2_c : u32 = eval_global x2_body
 
 (** [constants::incr] *)
 let incr_fwd (n : u32) : result u32 =
-  begin match u32_add n 1 with | Fail -> Fail | Return i -> Return i end
+  begin match u32_add n 1 with | Fail e -> Fail e | Return i -> Return i end
 
 (** [constants::X3] *)
 let x3_body : result u32 =
-  begin match incr_fwd 32 with | Fail -> Fail | Return i -> Return i end
+  begin match incr_fwd 32 with | Fail e -> Fail e | Return i -> Return i end
 let x3_c : u32 = eval_global x3_body
 
 (** [constants::mk_pair0] *)
@@ -42,12 +42,18 @@ let mk_pair1_fwd (x : u32) (y : u32) : result (pair_t u32 u32) =
 
 (** [constants::P0] *)
 let p0_body : result (u32 & u32) =
-  begin match mk_pair0_fwd 0 1 with | Fail -> Fail | Return p -> Return p end
+  begin match mk_pair0_fwd 0 1 with
+  | Fail e -> Fail e
+  | Return p -> Return p
+  end
 let p0_c : (u32 & u32) = eval_global p0_body
 
 (** [constants::P1] *)
 let p1_body : result (pair_t u32 u32) =
-  begin match mk_pair1_fwd 0 1 with | Fail -> Fail | Return p -> Return p end
+  begin match mk_pair1_fwd 0 1 with
+  | Fail e -> Fail e
+  | Return p -> Return p
+  end
 let p1_c : pair_t u32 u32 = eval_global p1_body
 
 (** [constants::P2] *)
@@ -67,7 +73,10 @@ let wrap_new_fwd (t : Type0) (val0 : t) : result (wrap_t t) =
 
 (** [constants::Y] *)
 let y_body : result (wrap_t i32) =
-  begin match wrap_new_fwd i32 2 with | Fail -> Fail | Return w -> Return w end
+  begin match wrap_new_fwd i32 2 with
+  | Fail e -> Fail e
+  | Return w -> Return w
+  end
 let y_c : wrap_t i32 = eval_global y_body
 
 (** [constants::unwrap_y] *)
@@ -75,7 +84,7 @@ let unwrap_y_fwd : result i32 = Return y_c.wrap_val
 
 (** [constants::YVAL] *)
 let yval_body : result i32 =
-  begin match unwrap_y_fwd with | Fail -> Fail | Return i -> Return i end
+  begin match unwrap_y_fwd with | Fail e -> Fail e | Return i -> Return i end
 let yval_c : i32 = eval_global yval_body
 
 (** [constants::get_z1::Z1] *)
@@ -87,7 +96,7 @@ let get_z1_fwd : result i32 = Return get_z1_z1_c
 
 (** [constants::add] *)
 let add_fwd (a : i32) (b : i32) : result i32 =
-  begin match i32_add a b with | Fail -> Fail | Return i -> Return i end
+  begin match i32_add a b with | Fail e -> Fail e | Return i -> Return i end
 
 (** [constants::Q1] *)
 let q1_body : result i32 = Return 5
@@ -99,19 +108,19 @@ let q2_c : i32 = eval_global q2_body
 
 (** [constants::Q3] *)
 let q3_body : result i32 =
-  begin match add_fwd q2_c 3 with | Fail -> Fail | Return i -> Return i end
+  begin match add_fwd q2_c 3 with | Fail e -> Fail e | Return i -> Return i end
 let q3_c : i32 = eval_global q3_body
 
 (** [constants::get_z2] *)
 let get_z2_fwd : result i32 =
   begin match get_z1_fwd with
-  | Fail -> Fail
+  | Fail e -> Fail e
   | Return i ->
     begin match add_fwd i q3_c with
-    | Fail -> Fail
+    | Fail e -> Fail e
     | Return i0 ->
       begin match add_fwd q1_c i0 with
-      | Fail -> Fail
+      | Fail e -> Fail e
       | Return i1 -> Return i1
       end
     end
@@ -123,7 +132,7 @@ let s1_c : u32 = eval_global s1_body
 
 (** [constants::S2] *)
 let s2_body : result u32 =
-  begin match incr_fwd s1_c with | Fail -> Fail | Return i -> Return i end
+  begin match incr_fwd s1_c with | Fail e -> Fail e | Return i -> Return i end
 let s2_c : u32 = eval_global s2_body
 
 (** [constants::S3] *)
@@ -132,6 +141,9 @@ let s3_c : pair_t u32 u32 = eval_global s3_body
 
 (** [constants::S4] *)
 let s4_body : result (pair_t u32 u32) =
-  begin match mk_pair1_fwd 7 8 with | Fail -> Fail | Return p -> Return p end
+  begin match mk_pair1_fwd 7 8 with
+  | Fail e -> Fail e
+  | Return p -> Return p
+  end
 let s4_c : pair_t u32 u32 = eval_global s4_body
 
