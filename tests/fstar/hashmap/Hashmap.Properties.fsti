@@ -67,7 +67,7 @@ val hash_map_new_fwd_lem (t : Type0) :
   Lemma
   (ensures (
     match hash_map_new_fwd t with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm ->
       // The hash map invariant is satisfied
       hash_map_t_inv hm /\
@@ -85,7 +85,7 @@ val hash_map_clear_fwd_back_lem
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_clear_fwd_back t self with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm ->
       // The hash map invariant is satisfied
       hash_map_t_inv hm /\
@@ -102,7 +102,7 @@ val hash_map_len_fwd_lem (#t : Type0) (self : hash_map_t t) :
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_len_fwd t self with
-    | Fail -> False
+    | Fail _ -> False
     | Return l -> l = len_s self))
 
 
@@ -120,7 +120,7 @@ val hash_map_insert_fwd_back_lem
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_insert_fwd_back t self key value with
-    | Fail ->
+    | Fail _ ->
       // We can fail only if:
       // - the key is not in the map and we thus need to add it
       None? (find_s self key) /\
@@ -151,7 +151,7 @@ val hash_map_contains_key_fwd_lem
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_contains_key_fwd t self key with
-    | Fail -> False
+    | Fail _ -> False
     | Return b -> b = Some? (find_s self key)))
 
 (**** [get'fwd] *)
@@ -163,7 +163,7 @@ val hash_map_get_fwd_lem
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_get_fwd t self key, find_s self key with
-    | Fail, None -> True
+    | Fail _, None -> True
     | Return x, Some x' -> x == x'
     | _ -> False))
 
@@ -181,7 +181,7 @@ val hash_map_get_mut_fwd_lem
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_get_mut_fwd t self key, find_s self key with
-    | Fail, None -> True
+    | Fail _, None -> True
     | Return x, Some x' -> x == x'
     | _ -> False))
 
@@ -211,7 +211,7 @@ val hash_map_get_mut_back_lem
     Some? (find_s hm key)))
   (ensures (
     match hash_map_get_mut_back t hm key ret with
-    | Fail -> False // Can't fail
+    | Fail _ -> False // Can't fail
     | Return hm' ->
      // The invariant is preserved
      hash_map_t_inv hm' /\
@@ -234,7 +234,7 @@ val hash_map_remove_fwd_lem
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_remove_fwd t self key with
-    | Fail -> False
+    | Fail _ -> False
     | Return opt_x -> opt_x == find_s self key))
 
 
@@ -249,7 +249,7 @@ val hash_map_remove_back_lem
   (requires (hash_map_t_inv self))
   (ensures (
     match hash_map_remove_back t self key with
-    | Fail -> False
+    | Fail _ -> False
     | Return hm' ->
       // The invariant is preserved
       hash_map_t_inv self /\

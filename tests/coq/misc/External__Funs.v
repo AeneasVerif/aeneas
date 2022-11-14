@@ -107,7 +107,7 @@ Definition test_swap_non_zero_fwd
   p0 <- swap_back u32 x (0 %u32) st st0;
   let (st1, p1) := p0 in
   let (x0, _) := p1 in
-  if x0 s= 0 %u32 then Fail_ else Return (st1, x0)
+  if x0 s= 0 %u32 then Fail_ Failure else Return (st1, x0)
   .
 
 End External__Funs .

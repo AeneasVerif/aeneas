@@ -95,7 +95,7 @@ Definition test3_fwd : result unit :=
   x <- get_max_fwd (4 %u32) (3 %u32);
   y <- get_max_fwd (10 %u32) (11 %u32);
   z <- u32_add x y;
-  if negb (z s= 15 %u32) then Fail_ else Return tt
+  if negb (z s= 15 %u32) then Fail_ Failure else Return tt
   .
 
 (** Unit test for [no_nested_borrows::test3] *)
@@ -103,14 +103,16 @@ Check (test3_fwd )%return.
 
 (** [no_nested_borrows::test_neg1] *)
 Definition test_neg1_fwd : result unit :=
-  y <- i32_neg (3 %i32); if negb (y s= (-3) %i32) then Fail_ else Return tt .
+  y <- i32_neg (3 %i32);
+  if negb (y s= (-3) %i32) then Fail_ Failure else Return tt
+  .
 
 (** Unit test for [no_nested_borrows::test_neg1] *)
 Check (test_neg1_fwd )%return.
 
 (** [no_nested_borrows::refs_test1] *)
 Definition refs_test1_fwd : result unit :=
-  if negb (1 %i32 s= 1 %i32) then Fail_ else Return tt .
+  if negb (1 %i32 s= 1 %i32) then Fail_ Failure else Return tt .
 
 (** Unit test for [no_nested_borrows::refs_test1] *)
 Check (refs_test1_fwd )%return.
@@ -118,14 +120,14 @@ Check (refs_test1_fwd )%return.
 (** [no_nested_borrows::refs_test2] *)
 Definition refs_test2_fwd : result unit :=
   if negb (2 %i32 s= 2 %i32)
-  then Fail_
+  then Fail_ Failure
   else
     if negb (0 %i32 s= 0 %i32)
-    then Fail_
+    then Fail_ Failure
     else
       if negb (2 %i32 s= 2 %i32)
-      then Fail_
-      else if negb (2 %i32 s= 2 %i32) then Fail_ else Return tt
+      then Fail_ Failure
+      else if negb (2 %i32 s= 2 %i32) then Fail_ Failure else Return tt
   .
 
 (** Unit test for [no_nested_borrows::refs_test2] *)
@@ -141,7 +143,7 @@ Check (test_list1_fwd )%return.
 Definition test_box1_fwd : result unit :=
   let b := 1 %i32 in
   let x := b in
-  if negb (x s= 1 %i32) then Fail_ else Return tt
+  if negb (x s= 1 %i32) then Fail_ Failure else Return tt
   .
 
 (** Unit test for [no_nested_borrows::test_box1] *)
@@ -152,15 +154,17 @@ Definition copy_int_fwd (x : i32) : result i32 := Return x .
 
 (** [no_nested_borrows::test_unreachable] *)
 Definition test_unreachable_fwd (b : bool) : result unit :=
-  if b then Fail_ else Return tt .
+  if b then Fail_ Failure else Return tt .
 
 (** [no_nested_borrows::test_panic] *)
 Definition test_panic_fwd (b : bool) : result unit :=
-  if b then Fail_ else Return tt .
+  if b then Fail_ Failure else Return tt .
 
 (** [no_nested_borrows::test_copy_int] *)
 Definition test_copy_int_fwd : result unit :=
-  y <- copy_int_fwd (0 %i32); if negb (0 %i32 s= y) then Fail_ else Return tt .
+  y <- copy_int_fwd (0 %i32);
+  if negb (0 %i32 s= y) then Fail_ Failure else Return tt
+  .
 
 (** Unit test for [no_nested_borrows::test_copy_int] *)
 Check (test_copy_int_fwd )%return.
@@ -173,7 +177,7 @@ Definition is_cons_fwd (T : Type) (l : List_t T) : result bool :=
 Definition test_is_cons_fwd : result unit :=
   let l := ListNil in
   b <- is_cons_fwd i32 (ListCons (0 %i32) l);
-  if negb b then Fail_ else Return tt
+  if negb b then Fail_ Failure else Return tt
   .
 
 (** Unit test for [no_nested_borrows::test_is_cons] *)
@@ -182,14 +186,18 @@ Check (test_is_cons_fwd )%return.
 (** [no_nested_borrows::split_list] *)
 Definition split_list_fwd
   (T : Type) (l : List_t T) : result (T * (List_t T)) :=
-  match l with | ListCons hd tl => Return (hd, tl) | ListNil => Fail_ end .
+  match l with
+  | ListCons hd tl => Return (hd, tl)
+  | ListNil => Fail_ Failure
+  end
+  .
 
 (** [no_nested_borrows::test_split_list] *)
 Definition test_split_list_fwd : result unit :=
   let l := ListNil in
   p <- split_list_fwd i32 (ListCons (0 %i32) l);
   let (hd, _) := p in
-  if negb (hd s= 0 %i32) then Fail_ else Return tt
+  if negb (hd s= 0 %i32) then Fail_ Failure else Return tt
   .
 
 (** Unit test for [no_nested_borrows::test_split_list] *)
@@ -209,13 +217,13 @@ Definition choose_test_fwd : result unit :=
   z <- choose_fwd i32 true (0 %i32) (0 %i32);
   z0 <- i32_add z 1 %i32;
   if negb (z0 s= 1 %i32)
-  then Fail_
+  then Fail_ Failure
   else (
     p <- choose_back i32 true (0 %i32) (0 %i32) z0;
     let (x, y) := p in
     if negb (x s= 1 %i32)
-    then Fail_
-    else if negb (y s= 0 %i32) then Fail_ else Return tt)
+    then Fail_ Failure
+    else if negb (y s= 0 %i32) then Fail_ Failure else Return tt)
   .
 
 (** Unit test for [no_nested_borrows::choose_test] *)
@@ -258,7 +266,7 @@ Fixpoint list_nth_shared_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
     if i s= 0 %u32
     then Return x
     else (i0 <- u32_sub i 1 %u32; t <- list_nth_shared_fwd T tl i0; Return t)
-  | ListNil => Fail_
+  | ListNil => Fail_ Failure
   end
   .
 
@@ -269,7 +277,7 @@ Fixpoint list_nth_mut_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
     if i s= 0 %u32
     then Return x
     else (i0 <- u32_sub i 1 %u32; t <- list_nth_mut_fwd T tl i0; Return t)
-  | ListNil => Fail_
+  | ListNil => Fail_ Failure
   end
   .
 
@@ -284,7 +292,7 @@ Fixpoint list_nth_mut_back
       i0 <- u32_sub i 1 %u32;
       tl0 <- list_nth_mut_back T tl i0 ret;
       Return (ListCons x tl0))
-  | ListNil => Fail_
+  | ListNil => Fail_ Failure
   end
   .
 
@@ -311,31 +319,31 @@ Definition test_list_functions_fwd : result unit :=
   let l1 := ListCons (1 %i32) l0 in
   i <- list_length_fwd i32 (ListCons (0 %i32) l1);
   if negb (i s= 3 %u32)
-  then Fail_
+  then Fail_ Failure
   else (
     i0 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (0 %u32);
     if negb (i0 s= 0 %i32)
-    then Fail_
+    then Fail_ Failure
     else (
       i1 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (1 %u32);
       if negb (i1 s= 1 %i32)
-      then Fail_
+      then Fail_ Failure
       else (
         i2 <- list_nth_shared_fwd i32 (ListCons (0 %i32) l1) (2 %u32);
         if negb (i2 s= 2 %i32)
-        then Fail_
+        then Fail_ Failure
         else (
           ls <- list_nth_mut_back i32 (ListCons (0 %i32) l1) (1 %u32) (3 %i32);
           i3 <- list_nth_shared_fwd i32 ls (0 %u32);
           if negb (i3 s= 0 %i32)
-          then Fail_
+          then Fail_ Failure
           else (
             i4 <- list_nth_shared_fwd i32 ls (1 %u32);
             if negb (i4 s= 3 %i32)
-            then Fail_
+            then Fail_ Failure
             else (
               i5 <- list_nth_shared_fwd i32 ls (2 %u32);
-              if negb (i5 s= 2 %i32) then Fail_ else Return tt))))))
+              if negb (i5 s= 2 %i32) then Fail_ Failure else Return tt))))))
   .
 
 (** Unit test for [no_nested_borrows::test_list_functions] *)
@@ -436,28 +444,28 @@ Definition test_constants_fwd : result unit :=
   | mkStruct_with_tuple_t p =>
     let (i, _) := p in
     if negb (i s= 1 %u32)
-    then Fail_
+    then Fail_ Failure
     else (
       swt0 <- new_tuple2_fwd;
       match swt0 with
       | mkStruct_with_tuple_t p0 =>
         let (i0, _) := p0 in
         if negb (i0 s= 1 %i16)
-        then Fail_
+        then Fail_ Failure
         else (
           swt1 <- new_tuple3_fwd;
           match swt1 with
           | mkStruct_with_tuple_t p1 =>
             let (i1, _) := p1 in
             if negb (i1 s= 1 %u64)
-            then Fail_
+            then Fail_ Failure
             else (
               swp <- new_pair1_fwd;
               match swp with
               | mkStruct_with_pair_t p2 =>
                 match p2 with
                 | mkPair_t i2 i3 =>
-                  if negb (i2 s= 1 %u32) then Fail_ else Return tt
+                  if negb (i2 s= 1 %u32) then Fail_ Failure else Return tt
                 end
               end)
           end)
@@ -477,7 +485,7 @@ Check (test_weird_borrows1_fwd )%return.
 (** [no_nested_borrows::test_mem_replace] *)
 Definition test_mem_replace_fwd_back (px : u32) : result u32 :=
   let y := mem_replace_fwd u32 px (1 %u32) in
-  if negb (y s= 0 %u32) then Fail_ else Return (2 %u32)
+  if negb (y s= 0 %u32) then Fail_ Failure else Return (2 %u32)
   .
 
 (** [no_nested_borrows::test_shared_borrow_bool1] *)
