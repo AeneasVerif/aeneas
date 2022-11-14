@@ -120,10 +120,12 @@ tfstar-no_nested_borrows tfstar-paper:
 trans-hashmap: OPTIONS += -no-state
 trans-hashmap: SUBDIR:=hashmap
 tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
+tcoq-hashmap: OPTIONS += -use-fuel
 
 trans-hashmap_main: OPTIONS +=
 trans-hashmap_main: SUBDIR:=hashmap_on_disk
 tfstar-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
+tcoq-hashmap_main: OPTIONS += -use-fuel
 
 transp-polonius_list: OPTIONS += -test-units -test-trans-units -no-split-files -no-state
 transp-polonius_list: SUBDIR:=misc

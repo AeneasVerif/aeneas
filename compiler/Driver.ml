@@ -56,6 +56,9 @@ let () =
       ( "-no-state",
         Arg.Clear use_state,
         " Do not use state-error monads, simply use error monads" );
+      ( "-use-fuel",
+        Arg.Set use_fuel,
+        " Use a fuel parameter to control divergence" );
       ( "-backward-no-state-update",
         Arg.Set backward_no_state_update,
         " Forbid backward functions from updating the state" );
@@ -78,6 +81,11 @@ let () =
   assert (!extract_decreases_clauses || not !extract_template_decreases_clauses);
   (* Sanity check: -backward-no-state-update ==> not -no-state *)
   assert ((not !backward_no_state_update) || !use_state);
+  (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
+  assert (
+    (not !use_fuel)
+    || (not !extract_decreases_clauses)
+       && not !extract_template_decreases_clauses);
 
   let spec = Arg.align spec in
   let filenames = ref [] in

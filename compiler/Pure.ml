@@ -32,11 +32,15 @@ type integer_type = T.integer_type [@@deriving show, ord]
         unified treatment of expressions (especially when we have to unfold the
         monadic binds)
       - [Error]: the kind of error, in case of failure (used by [Result])
+      - [Fuel]: the fuel, to control recursion (some theorem provers like Coq
+        don't support semantic termination, in which case we can use a fuel
+        parameter to do partial verification)
       - [State]: the type of the state, when using state-error monads. Note that
         this state is opaque to Aeneas (the user can define it, or leave it as
         assumed)
   *)
-type assumed_ty = State | Result | Error | Vec | Option [@@deriving show, ord]
+type assumed_ty = State | Result | Error | Fuel | Vec | Option
+[@@deriving show, ord]
 
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather
  * the monadic functions [return] and [fail] (makes treatment of error and
@@ -47,6 +51,12 @@ let option_some_id = T.option_some_id
 let option_none_id = T.option_none_id
 let error_failure_id = VariantId.of_int 0
 let error_out_of_fuel_id = VariantId.of_int 1
+
+(* We don't always use those: it depends on the backend (we use natural numbers
+   for the fuel: in Coq they are enumerations, but in F* they are primitive)
+*)
+let fuel_zero_id = VariantId.of_int 0
+let fuel_succ_id = VariantId.of_int 1
 
 type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
 [@@deriving show, ord]
@@ -289,6 +299,9 @@ type pure_assumed_fun_id =
   | Return  (** The monadic return *)
   | Fail  (** The monadic fail *)
   | Assert  (** Assertion *)
+  | FuelDecrease
+      (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is ugly *)
+  | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
 [@@deriving show, ord]
 
 (** A function identifier *)
@@ -510,14 +523,19 @@ type fun_effect_info = {
        *)
   stateful : bool;  (** [true] if the function is stateful (updates a state) *)
   can_fail : bool;  (** [true] if the return type is a [result] *)
+  can_diverge : bool;
+      (** [true] if the function can diverge (i.e., not terminate) *)
 }
 
 (** Meta information about a function signature *)
 type fun_sig_info = {
-  num_fwd_inputs_no_state : int;
-      (** The number of input types for forward computation, ignoring the state (if there is one) *)
-  num_fwd_inputs_with_state : int;
-      (** The number of input types for forward computation, with the state (if there is one) *)
+  has_fuel : bool;
+  (* TODO: add [num_fwd_inputs_no_fuel_no_state] *)
+  num_fwd_inputs_with_fuel_no_state : int;
+      (** The number of input types for forward computation, with the fuel (if used)
+          and ignoring the state (if used) *)
+  num_fwd_inputs_with_fuel_with_state : int;
+      (** The number of input types for forward computation, with fuel and state (if used) *)
   num_back_inputs_no_state : int option;
       (** The number of additional inputs for the backward computation (if pertinent),
           ignoring the state (if there is one) *)

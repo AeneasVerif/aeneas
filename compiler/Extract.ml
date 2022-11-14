@@ -76,7 +76,6 @@ let keywords () =
           "fn";
           "val";
           "int";
-          "nat";
           "list";
           "FStar";
           "FStar.Mul";
@@ -113,7 +112,6 @@ let keywords () =
           "fun";
           "type";
           "int";
-          "nat";
           "match";
           "with";
           "assert";
@@ -130,6 +128,7 @@ let assumed_adts : (assumed_ty * string) list =
     (State, "state");
     (Result, "result");
     (Error, "error");
+    (Fuel, "nat");
     (Option, "option");
     (Vec, "vec");
   ]
@@ -144,6 +143,8 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (Result, result_fail_id, "Fail");
         (Error, error_failure_id, "Failure");
         (Error, error_out_of_fuel_id, "OutOfFuel");
+        (* No Fuel::Zero on purpose *)
+        (* No Fuel::Succ on purpose *)
         (Option, option_some_id, "Some");
         (Option, option_none_id, "None");
       ]
@@ -153,6 +154,8 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (Result, result_fail_id, "Fail_");
         (Error, error_failure_id, "Failure");
         (Error, error_out_of_fuel_id, "OutOfFuel");
+        (Fuel, fuel_zero_id, "O");
+        (Fuel, fuel_succ_id, "S");
         (Option, option_some_id, "Some");
         (Option, option_none_id, "None");
       ]
@@ -177,8 +180,17 @@ let assumed_llbc_functions :
 
 let assumed_pure_functions : (pure_assumed_fun_id * string) list =
   match !backend with
-  | FStar -> [ (Return, "return"); (Fail, "fail"); (Assert, "massert") ]
-  | Coq -> [ (Return, "return_"); (Fail, "fail_"); (Assert, "massert") ]
+  | FStar ->
+      [
+        (Return, "return");
+        (Fail, "fail");
+        (Assert, "massert");
+        (FuelDecrease, "decrease");
+        (FuelEqZero, "is_zero");
+      ]
+  | Coq ->
+      (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
+      [ (Return, "return_"); (Fail, "fail_"); (Assert, "massert") ]
 
 let names_map_init () : names_map_init =
   {
@@ -439,10 +451,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
                 (* The "pair" case is frequent enough to have its special treatment *)
                 if List.length tys = 2 then "p" else "t"
             | Assumed Result -> "r"
-            | Assumed Error -> "e"
+            | Assumed Error -> ConstStrings.error_basename
+            | Assumed Fuel -> ConstStrings.fuel_basename
             | Assumed Option -> "opt"
             | Assumed Vec -> "v"
-            | Assumed State -> "st"
+            | Assumed State -> ConstStrings.state_basename
             | AdtId adt_id ->
                 let def =
                   TypeDeclId.Map.find adt_id ctx.type_context.type_decls
@@ -1808,7 +1821,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
        *)
       let inputs_lvs =
         let all_inputs = (Option.get def.body).inputs_lvs in
-        let num_fwd_inputs = def.signature.info.num_fwd_inputs_with_state in
+        let num_fwd_inputs =
+          def.signature.info.num_fwd_inputs_with_fuel_with_state
+        in
         Collections.List.prefix num_fwd_inputs all_inputs
       in
       let _ =
