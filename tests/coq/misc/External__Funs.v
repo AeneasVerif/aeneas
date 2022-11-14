@@ -54,6 +54,9 @@ Definition test_vec_fwd : result unit :=
   Return tt
   .
 
+(** Unit test for [external::test_vec] *)
+Check (test_vec_fwd )%return.
+
 (** [external::custom_swap] *)
 Definition custom_swap_fwd
   (T : Type) (x : T) (y : T) (st : state) : result (state * T) :=

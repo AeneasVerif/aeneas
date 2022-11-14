@@ -198,10 +198,8 @@ tfstarp-%: BACKEND_SUBDIR := fstar
 tfstarp-%:
 	$(AENEAS_CMD)
 
-# TODO: -test-trans-units
-# It doesn't work on vec_push_fwd, I don't understand why.
 .PHONY: tcoq-%
-tcoq-%: OPTIONS += -backend coq
+tcoq-%: OPTIONS += -backend coq -test-trans-units
 tcoq-%: BACKEND_SUBDIR := coq
 tcoq-%:
 	$(AENEAS_CMD)
