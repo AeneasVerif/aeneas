@@ -123,7 +123,7 @@ type pn_ctx = {
      {[
        let py = id(&mut x);
        *py = 2;
-       assert!(x == 2);
+       assert!(x = 2);
      ]}
      
      After desugaring, we get the following MIR:
@@ -131,7 +131,7 @@ type pn_ctx = {
        ^0 = &mut x; // anonymous variable
        py = id(move ^0);
        *py += 2;
-       assert!(x == 2);
+       assert!(x = 2);
      ]}
      
      We want this to be translated as:
@@ -1228,6 +1228,9 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
   | Some body ->
+      let cnt = get_body_min_var_counter body in
+      let _, fresh_id = VarId.mk_stateful_generator cnt in
+
       (* It is a very simple map *)
       let obj =
         object (_self)
@@ -1257,8 +1260,18 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                * store in an enum ("monadic" should be an enum, not a bool). *)
               let re_ty = Option.get (opt_destruct_result re.ty) in
               assert (lv.ty = re_ty);
-              let fail_pat = mk_result_fail_pattern lv.ty in
-              let fail_value = mk_result_fail_texpression e.ty in
+              let err_vid = fresh_id () in
+              let err_var : var =
+                {
+                  id = err_vid;
+                  basename = Some ConstStrings.error_basename;
+                  ty = mk_error_ty;
+                }
+              in
+              let err_pat = mk_typed_pattern_from_var err_var None in
+              let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
+              let err_v = mk_texpression_from_var err_var in
+              let fail_value = mk_result_fail_texpression err_v e.ty in
               let fail_branch = { pat = fail_pat; branch = fail_value } in
               let success_pat = mk_result_return_pattern lv in
               let success_branch = { pat = success_pat; branch = e } in

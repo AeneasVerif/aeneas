@@ -128,6 +128,7 @@ let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
       match aty with
       | State -> "State"
       | Result -> "Result"
+      | Error -> "Error"
       | Option -> "Option"
       | Vec -> "Vec")
 
@@ -247,6 +248,11 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
           else if variant_id = result_fail_id then "@Result::Fail"
           else
             raise (Failure "Unreachable: improper variant id for result type")
+      | Error ->
+          let variant_id = Option.get variant_id in
+          if variant_id = error_failure_id then "@Error::Failure"
+          else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
+          else raise (Failure "Unreachable: improper variant id for error type")
       | Option ->
           let variant_id = Option.get variant_id in
           if variant_id = option_some_id then "@Option::Some "
@@ -275,7 +281,7 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
       | State | Vec ->
           (* Opaque types: we can't get there *)
           raise (Failure "Unreachable")
-      | Result | Option ->
+      | Result | Error | Option ->
           (* Enumerations: we can't get there *)
           raise (Failure "Unreachable"))
 
@@ -324,11 +330,18 @@ let adt_g_value_to_string (fmt : value_formatter)
             match field_values with
             | [ v ] -> "@Result::Return " ^ v
             | _ -> raise (Failure "Result::Return takes exactly one value")
-          else if variant_id = result_fail_id then (
-            assert (field_values = []);
-            "@Result::Fail")
+          else if variant_id = result_fail_id then
+            match field_values with
+            | [ v ] -> "@Result::Fail " ^ v
+            | _ -> raise (Failure "Result::Fail takes exactly one value")
           else
             raise (Failure "Unreachable: improper variant id for result type")
+      | Error ->
+          assert (field_values = []);
+          let variant_id = Option.get variant_id in
+          if variant_id = error_failure_id then "@Error::Failure"
+          else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
+          else raise (Failure "Unreachable: improper variant id for error type")
       | Option ->
           let variant_id = Option.get variant_id in
           if variant_id = option_some_id then

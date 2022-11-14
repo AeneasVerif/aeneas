@@ -26,9 +26,15 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           let ty = Collections.List.to_cons_nil tys in
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then [ ty ]
-          else if variant_id = result_fail_id then []
+          else if variant_id = result_fail_id then [ mk_error_ty ]
           else
             raise (Failure "Unreachable: improper variant id for result type")
+      | Error ->
+          assert (tys = []);
+          let variant_id = Option.get variant_id in
+          assert (
+            variant_id = error_failure_id || variant_id = error_out_of_fuel_id);
+          []
       | Option ->
           let ty = Collections.List.to_cons_nil tys in
           let variant_id = Option.get variant_id in

@@ -1134,9 +1134,11 @@ and translate_panic (ctx : bs_ctx) : texpression =
   if ctx.sg.info.effect_info.stateful then
     (* Create the [Fail] value *)
     let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
-    let ret_v = mk_result_fail_texpression ret_ty in
+    let ret_v =
+      mk_result_fail_texpression_with_error_id error_failure_id ret_ty
+    in
     ret_v
-  else mk_result_fail_texpression output_ty
+  else mk_result_fail_texpression_with_error_id error_failure_id output_ty
 
 (** [opt_v]: the value to return, in case we translate a forward function *)
 and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : texpression
@@ -1661,7 +1663,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
                 | _ -> raise (Failure "Unreachable")
               in
               (* We simply introduce an assignment - the box type is the
-               * identity when extracted ([box a == a]) *)
+               * identity when extracted ([box a = a]) *)
               let monadic = false in
               mk_let monadic
                 (mk_typed_pattern_from_var var None)

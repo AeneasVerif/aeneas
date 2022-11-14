@@ -413,7 +413,7 @@ type extraction_ctx = {
       (** The indent increment we insert whenever we need to indent more *)
 }
 
-(** Debugging function *)
+(** Debugging function, used when communicating name collisions to the user *)
 let id_to_string (id : id) (ctx : extraction_ctx) : string =
   let global_decls = ctx.trans_ctx.global_context.global_decls in
   let fun_decls = ctx.trans_ctx.fun_context.fun_decls in
@@ -467,6 +467,10 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             if variant_id = result_return_id then "@result::Return"
             else if variant_id = result_fail_id then "@result::Fail"
             else raise (Failure "Unreachable")
+        | Assumed Error ->
+            if variant_id = error_failure_id then "@error::Failure"
+            else if variant_id = error_out_of_fuel_id then "@error::OutOfFuel"
+            else raise (Failure "Unreachable")
         | Assumed Option ->
             if variant_id = option_some_id then "@option::Some"
             else if variant_id = option_none_id then "@option::None"
@@ -485,7 +489,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let field_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed (State | Result | Option) -> raise (Failure "Unreachable")
+        | Assumed (State | Result | Error | Option) ->
+            raise (Failure "Unreachable")
         | Assumed Vec ->
             (* We can't directly have access to the fields of a vector *)
             raise (Failure "Unreachable")
