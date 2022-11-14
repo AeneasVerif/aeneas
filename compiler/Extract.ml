@@ -1476,25 +1476,34 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_open_hovbox fmt ctx.indent_incr;
         let then_or_else = if is_then then "then" else "else" in
         F.pp_print_string fmt then_or_else;
-        F.pp_print_space fmt ();
-        (* Open a box for the branch *)
-        F.pp_open_hovbox fmt ctx.indent_incr;
-        (* Print the [begin] if necessary *)
         let parenth = PureUtils.let_group_requires_parentheses e_branch in
-        let left_delim, right_delim =
-          match !backend with FStar -> ("begin", "end") | Coq -> ("(", ")")
-        in
-        if parenth then (
-          F.pp_print_string fmt left_delim;
-          F.pp_print_space fmt ());
+        (* Open a box for the branch - we do this only if it is not a parenthesized
+           group of nested let bindings.
+        *)
+        if not parenth then (
+          F.pp_print_space fmt ();
+          F.pp_open_hovbox fmt ctx.indent_incr);
+        (* Open the parenthesized expression *)
+        (if parenth then
+         match !backend with
+         | FStar ->
+             F.pp_print_space fmt ();
+             F.pp_print_string fmt "begin";
+             F.pp_print_space fmt ()
+         | Coq ->
+             F.pp_print_string fmt " (";
+             F.pp_print_cut fmt ());
         (* Print the branch expression *)
         extract_texpression ctx fmt false e_branch;
-        (* Close the [begin ... end ] *)
-        if parenth then (
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt right_delim);
+        (* Close the parenthesized expression *)
+        (if parenth then
+         match !backend with
+         | FStar ->
+             F.pp_print_space fmt ();
+             F.pp_print_string fmt "end"
+         | Coq -> F.pp_print_string fmt ")");
         (* Close the box for the branch *)
-        F.pp_close_box fmt ();
+        if not parenth then F.pp_close_box fmt ();
         (* Close the box for the then/else+branch *)
         F.pp_close_box fmt ()
       in
