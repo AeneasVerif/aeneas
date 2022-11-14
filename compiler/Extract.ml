@@ -1203,8 +1203,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | Qualif _ ->
       (* We use the app case *)
       extract_App ctx fmt inside e []
-  | Let (monadic, lv, re, next_e) ->
-      extract_Let ctx fmt inside monadic lv re next_e
+  | Let (_, _, _, _) -> extract_lets ctx fmt inside e
   | Switch (scrut, body) -> extract_Switch ctx fmt inside scrut body
   | Meta (_, e) -> extract_texpression ctx fmt inside e
 
@@ -1394,45 +1393,60 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Close the box for the abs expression *)
   F.pp_close_box fmt ()
 
-and extract_Let (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
-    (monadic : bool) (lv : typed_pattern) (re : texpression)
-    (next_e : texpression) : unit =
+and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
+    (e : texpression) : unit =
+  let lets, next_e = destruct_lets e in
   (* Open a box for the whole expression *)
   F.pp_open_hvbox fmt 0;
   (* Open parentheses *)
   if inside then F.pp_print_string fmt "(";
-  (* Open a box for the let-binding *)
-  F.pp_open_hovbox fmt ctx.indent_incr;
-  let ctx =
-    if monadic then (
-      (* Note that in F*, the left value of a monadic let-binding can only be
-       * a variable *)
-      let ctx = extract_typed_pattern ctx fmt true lv in
-      F.pp_print_space fmt ();
-      let arrow = match !backend with FStar -> "<--" | Coq -> "<-" in
-      F.pp_print_string fmt arrow;
-      F.pp_print_space fmt ();
-      extract_texpression ctx fmt false re;
-      F.pp_print_string fmt ";";
-      ctx)
-    else (
-      F.pp_print_string fmt "let";
-      F.pp_print_space fmt ();
-      let ctx = extract_typed_pattern ctx fmt true lv in
-      F.pp_print_space fmt ();
-      let eq = match !backend with FStar -> "=" | Coq -> ":=" in
-      F.pp_print_string fmt eq;
-      F.pp_print_space fmt ();
-      extract_texpression ctx fmt false re;
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt "in";
-      ctx)
+  (* Extract the let-bindings *)
+  let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : typed_pattern)
+      (re : texpression) : extraction_ctx =
+    (* Open a box for the let-binding *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
+    let ctx =
+      if monadic then (
+        (* Note that in F*, the left value of a monadic let-binding can only be
+         * a variable *)
+        let ctx = extract_typed_pattern ctx fmt true lv in
+        F.pp_print_space fmt ();
+        let arrow = match !backend with FStar -> "<--" | Coq -> "<-" in
+        F.pp_print_string fmt arrow;
+        F.pp_print_space fmt ();
+        extract_texpression ctx fmt false re;
+        F.pp_print_string fmt ";";
+        ctx)
+      else (
+        F.pp_print_string fmt "let";
+        F.pp_print_space fmt ();
+        let ctx = extract_typed_pattern ctx fmt true lv in
+        F.pp_print_space fmt ();
+        let eq = match !backend with FStar -> "=" | Coq -> ":=" in
+        F.pp_print_string fmt eq;
+        F.pp_print_space fmt ();
+        extract_texpression ctx fmt false re;
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "in";
+        ctx)
+    in
+    (* Close the box for the let-binding *)
+    F.pp_close_box fmt ();
+    F.pp_print_space fmt ();
+    (* Return *)
+    ctx
   in
-  (* Close the box for the let-binding *)
-  F.pp_close_box fmt ();
+  let ctx =
+    List.fold_left
+      (fun ctx (monadic, lv, re) -> extract_let ctx monadic lv re)
+      ctx lets
+  in
+  (* Open a box for the next expression *)
+  F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print the next expression *)
-  F.pp_print_space fmt ();
   extract_texpression ctx fmt false next_e;
+  (* Close the box for the next expression *)
+  F.pp_close_box fmt ();
   (* Close parentheses *)
   if inside then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)

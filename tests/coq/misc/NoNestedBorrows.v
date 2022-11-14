@@ -94,7 +94,8 @@ Definition get_max_fwd (x : u32) (y : u32) : result u32 :=
 Definition test3_fwd : result unit :=
   x <- get_max_fwd (4 %u32) (3 %u32);
   y <- get_max_fwd (10 %u32) (11 %u32);
-  z <- u32_add x y; if negb (z s= 15 %u32) then Fail_ else Return tt
+  z <- u32_add x y;
+  if negb (z s= 15 %u32) then Fail_ else Return tt
   .
 
 (** Unit test for [no_nested_borrows::test3] *)
@@ -139,7 +140,8 @@ Check (test_list1_fwd )%return.
 (** [no_nested_borrows::test_box1] *)
 Definition test_box1_fwd : result unit :=
   let b := 1 %i32 in
-  let x := b in if negb (x s= 1 %i32) then Fail_ else Return tt
+  let x := b in
+  if negb (x s= 1 %i32) then Fail_ else Return tt
   .
 
 (** Unit test for [no_nested_borrows::test_box1] *)
@@ -186,7 +188,8 @@ Definition split_list_fwd
 Definition test_split_list_fwd : result unit :=
   let l := ListNil in
   p <- split_list_fwd i32 (ListCons (0 %i32) l);
-  let (hd, _) := p in if negb (hd s= 0 %i32) then Fail_ else Return tt
+  let (hd, _) := p in
+  if negb (hd s= 0 %i32) then Fail_ else Return tt
   .
 
 (** Unit test for [no_nested_borrows::test_split_list] *)
@@ -281,7 +284,8 @@ Fixpoint list_nth_mut_back
     else
       (
         i0 <- u32_sub i 1 %u32;
-        tl0 <- list_nth_mut_back T tl i0 ret; Return (ListCons x tl0) )
+        tl0 <- list_nth_mut_back T tl i0 ret;
+        Return (ListCons x tl0) )
   | ListNil => Fail_
   end
   .
@@ -298,7 +302,8 @@ Fixpoint list_rev_aux_fwd
 (** [no_nested_borrows::list_rev] *)
 Definition list_rev_fwd_back (T : Type) (l : List_t T) : result (List_t T) :=
   let li := mem_replace_fwd (List_t T) l ListNil in
-  l0 <- list_rev_aux_fwd T li ListNil; Return l0
+  l0 <- list_rev_aux_fwd T li ListNil;
+  Return l0
   .
 
 (** [no_nested_borrows::test_list_functions] *)

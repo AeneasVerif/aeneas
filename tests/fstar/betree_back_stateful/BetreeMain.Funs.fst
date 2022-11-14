@@ -151,7 +151,8 @@ let rec betree_list_split_at_fwd
         | Fail -> Fail
         | Return p ->
           let (ls0, ls1) = p in
-          let l = ls0 in Return (BetreeListCons hd l, ls1)
+          let l = ls0 in
+          Return (BetreeListCons hd l, ls1)
         end
       end
     | BetreeListNil -> Fail
@@ -161,7 +162,8 @@ let rec betree_list_split_at_fwd
 let betree_list_push_front_fwd_back
   (t : Type0) (self : betree_list_t t) (x : t) : result (betree_list_t t) =
   let tl = mem_replace_fwd (betree_list_t t) self BetreeListNil in
-  let l = tl in Return (BetreeListCons x l)
+  let l = tl in
+  Return (BetreeListCons x l)
 
 (** [betree_main::betree::List::{1}::pop_front] *)
 let betree_list_pop_front_fwd (t : Type0) (self : betree_list_t t) : result t =
@@ -211,7 +213,8 @@ let rec betree_list_partition_at_pivot_fwd
       | Fail -> Fail
       | Return p ->
         let (ls0, ls1) = p in
-        let l = ls0 in Return (BetreeListCons (i, x) l, ls1)
+        let l = ls0 in
+        Return (BetreeListCons (i, x) l, ls1)
       end
   | BetreeListNil -> Return (BetreeListNil, BetreeListNil)
   end
@@ -252,13 +255,8 @@ let betree_leaf_split_fwd
                   params.betree_params_split_size) in
                 let n0 = BetreeNodeLeaf (Mkbetree_leaf_t id1
                   params.betree_params_split_size) in
-                Return
-                (st1,
-                Mkbetree_internal_t
-                self.betree_leaf_id
-                pivot
-                n
-                n0)
+                Return (st1, Mkbetree_internal_t self.betree_leaf_id pivot n
+                  n0)
               end
             end
           end
