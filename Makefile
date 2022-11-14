@@ -146,7 +146,7 @@ tfstarp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
 # This generates very ugly code, but is good to test the translation.
 .PHONY: test-transp-betree_main
 test-transp-betree_main: transp-betree_main
-test-transp-betree_main: OPTIONS += -backend fstar -unfold-monads -test-trans-units
+test-transp-betree_main: OPTIONS += -backend fstar -test-trans-units
 test-transp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
 test-transp-betree_main: BACKEND_SUBDIR := "fstar"
 test-transp-betree_main: SUBDIR:=betree_back_stateful
@@ -186,14 +186,14 @@ transp-%: gen-llbcp-% tfstarp-%
 	echo "# Test $* done"
 
 .PHONY: tfstar-%
-tfstar-%: OPTIONS += -backend fstar -unfold-monads -test-trans-units
+tfstar-%: OPTIONS += -backend fstar -test-trans-units
 tfstar-%: BACKEND_SUBDIR := fstar
 tfstar-%:
 	$(AENEAS_CMD)
 
 # "p" stands for "Polonius"
 .PHONY: tfstarp-%
-tfstarp-%: OPTIONS += -backend fstar -unfold-monads -test-trans-units
+tfstarp-%: OPTIONS += -backend fstar -test-trans-units
 tfstarp-%: BACKEND_SUBDIR := fstar
 tfstarp-%:
 	$(AENEAS_CMD)
@@ -201,7 +201,7 @@ tfstarp-%:
 # TODO: -test-trans-units
 # It doesn't work on vec_push_fwd, I don't understand why.
 .PHONY: tcoq-%
-tcoq-%: OPTIONS += -backend coq -decompose-monads
+tcoq-%: OPTIONS += -backend coq
 tcoq-%: BACKEND_SUBDIR := coq
 tcoq-%:
 	$(AENEAS_CMD)

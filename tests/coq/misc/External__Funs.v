@@ -84,7 +84,7 @@ Definition test_custom_swap_back
   result (state * (u32 * u32))
   :=
   p <- custom_swap_back u32 x y st (1 %u32) st0;
-  let (st1, (x0, y0)) := p in Return (st1, (x0, y0))
+  let (st1, p0) := p in let (x0, y0) := p0 in Return (st1, (x0, y0))
   .
 
 (** [external::test_swap_non_zero] *)
@@ -93,7 +93,8 @@ Definition test_swap_non_zero_fwd
   p <- swap_fwd u32 x (0 %u32) st;
   let (st0, _) := p in
   p0 <- swap_back u32 x (0 %u32) st st0;
-  let (st1, (x0, _)) := p0 in if x0 s= 0 %u32 then Fail_ else Return (st1, x0)
+  let (st1, p1) := p0 in
+  let (x0, _) := p1 in if x0 s= 0 %u32 then Fail_ else Return (st1, x0)
   .
 
 End External__Funs .
