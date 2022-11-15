@@ -82,17 +82,15 @@ Definition hash_map_clear_fwd_back
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match self with
-    | mkHash_map_t i p i0 v =>
-      v0 <- hash_map_clear_slots_fwd_back T n0 v (0%usize);
-      Return (mkHash_map_t (0%usize) p i0 v0)
-    end
+    v <- hash_map_clear_slots_fwd_back T n0 self.(Hash_map_slots) (0%usize);
+    Return (mkHash_map_t (0%usize) self.(Hash_map_max_load_factor)
+      self.(Hash_map_max_load) v)
   end
 .
 
 (** [hashmap::HashMap::{0}::len] *)
 Definition hash_map_len_fwd (T : Type) (self : Hash_map_t T) : result usize :=
-  match self with | mkHash_map_t i p i0 v => Return i end
+  Return self.(Hash_map_num_entries)
 .
 
 (** [hashmap::HashMap::{0}::insert_in_list] *)
@@ -142,23 +140,22 @@ Definition hash_map_insert_no_resize_fwd_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     hash <- hash_key_fwd key;
-    match self with
-    | mkHash_map_t i p i0 v =>
-      let i1 := vec_len (List_t T) v in
-      hash_mod <- usize_rem hash i1;
-      l <- vec_index_mut_fwd (List_t T) v hash_mod;
-      inserted <- hash_map_insert_in_list_fwd T n0 key value l;
-      if inserted
-      then (
-        i2 <- usize_add i 1%usize;
-        l0 <- hash_map_insert_in_list_back T n0 key value l;
-        v0 <- vec_index_mut_back (List_t T) v hash_mod l0;
-        Return (mkHash_map_t i2 p i0 v0))
-      else (
-        l0 <- hash_map_insert_in_list_back T n0 key value l;
-        v0 <- vec_index_mut_back (List_t T) v hash_mod l0;
-        Return (mkHash_map_t i p i0 v0))
-    end
+    let i := vec_len (List_t T) self.(Hash_map_slots) in
+    hash_mod <- usize_rem hash i;
+    l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
+    inserted <- hash_map_insert_in_list_fwd T n0 key value l;
+    if inserted
+    then (
+      i0 <- usize_add self.(Hash_map_num_entries) 1%usize;
+      l0 <- hash_map_insert_in_list_back T n0 key value l;
+      v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+      Return (mkHash_map_t i0 self.(Hash_map_max_load_factor)
+        self.(Hash_map_max_load) v))
+    else (
+      l0 <- hash_map_insert_in_list_back T n0 key value l;
+      v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+      Return (mkHash_map_t self.(Hash_map_num_entries)
+        self.(Hash_map_max_load_factor) self.(Hash_map_max_load) v))
   end
 .
 
@@ -216,23 +213,23 @@ Definition hash_map_try_resize_fwd_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     max_usize <- scalar_cast U32 Usize core_num_u32_max_c;
-    match self with
-    | mkHash_map_t i p i0 v =>
-      let capacity := vec_len (List_t T) v in
-      n1 <- usize_div max_usize 2%usize;
-      let (i1, i2) := p in
-      i3 <- usize_div n1 i1;
-      if capacity s<= i3
-      then (
-        i4 <- usize_mul capacity 2%usize;
-        ntable <- hash_map_new_with_capacity_fwd T n0 i4 i1 i2;
-        p0 <- hash_map_move_elements_fwd_back T n0 ntable v (0%usize);
-        let (ntable0, _) := p0 in
-        match ntable0 with
-        | mkHash_map_t i5 p1 i6 v0 => Return (mkHash_map_t i (i1, i2) i6 v0)
-        end)
-      else Return (mkHash_map_t i (i1, i2) i0 v)
-    end
+    let capacity := vec_len (List_t T) self.(Hash_map_slots) in
+    n1 <- usize_div max_usize 2%usize;
+    let (i, i0) := self.(Hash_map_max_load_factor) in
+    i1 <- usize_div n1 i;
+    if capacity s<= i1
+    then (
+      i2 <- usize_mul capacity 2%usize;
+      ntable <- hash_map_new_with_capacity_fwd T n0 i2 i i0;
+      p <-
+        hash_map_move_elements_fwd_back T n0 ntable self.(Hash_map_slots)
+          (0%usize);
+      let (ntable0, _) := p in
+      Return (mkHash_map_t self.(Hash_map_num_entries) (i, i0)
+        ntable0.(Hash_map_max_load) ntable0.(Hash_map_slots)))
+    else
+      Return (mkHash_map_t self.(Hash_map_num_entries) (i, i0)
+        self.(Hash_map_max_load) self.(Hash_map_slots))
   end
 .
 
@@ -246,14 +243,9 @@ Definition hash_map_insert_fwd_back
   | S n0 =>
     self0 <- hash_map_insert_no_resize_fwd_back T n0 self key value;
     i <- hash_map_len_fwd T self0;
-    match self0 with
-    | mkHash_map_t i0 p i1 v =>
-      if i s> i1
-      then (
-        self1 <- hash_map_try_resize_fwd_back T n0 (mkHash_map_t i0 p i1 v);
-        Return self1)
-      else Return (mkHash_map_t i0 p i1 v)
-    end
+    if i s> self0.(Hash_map_max_load)
+    then (self1 <- hash_map_try_resize_fwd_back T n0 self0; Return self1)
+    else Return self0
   end
 .
 
@@ -280,14 +272,11 @@ Definition hash_map_contains_key_fwd
   | O => Fail_ OutOfFuel
   | S n0 =>
     hash <- hash_key_fwd key;
-    match self with
-    | mkHash_map_t i p i0 v =>
-      let i1 := vec_len (List_t T) v in
-      hash_mod <- usize_rem hash i1;
-      l <- vec_index_fwd (List_t T) v hash_mod;
-      b <- hash_map_contains_key_in_list_fwd T n0 key l;
-      Return b
-    end
+    let i := vec_len (List_t T) self.(Hash_map_slots) in
+    hash_mod <- usize_rem hash i;
+    l <- vec_index_fwd (List_t T) self.(Hash_map_slots) hash_mod;
+    b <- hash_map_contains_key_in_list_fwd T n0 key l;
+    Return b
   end
 .
 
@@ -314,14 +303,11 @@ Definition hash_map_get_fwd
   | O => Fail_ OutOfFuel
   | S n0 =>
     hash <- hash_key_fwd key;
-    match self with
-    | mkHash_map_t i p i0 v =>
-      let i1 := vec_len (List_t T) v in
-      hash_mod <- usize_rem hash i1;
-      l <- vec_index_fwd (List_t T) v hash_mod;
-      t <- hash_map_get_in_list_fwd T n0 key l;
-      Return t
-    end
+    let i := vec_len (List_t T) self.(Hash_map_slots) in
+    hash_mod <- usize_rem hash i;
+    l <- vec_index_fwd (List_t T) self.(Hash_map_slots) hash_mod;
+    t <- hash_map_get_in_list_fwd T n0 key l;
+    Return t
   end
 .
 
@@ -368,14 +354,11 @@ Definition hash_map_get_mut_fwd
   | O => Fail_ OutOfFuel
   | S n0 =>
     hash <- hash_key_fwd key;
-    match self with
-    | mkHash_map_t i p i0 v =>
-      let i1 := vec_len (List_t T) v in
-      hash_mod <- usize_rem hash i1;
-      l <- vec_index_mut_fwd (List_t T) v hash_mod;
-      t <- hash_map_get_mut_in_list_fwd T n0 key l;
-      Return t
-    end
+    let i := vec_len (List_t T) self.(Hash_map_slots) in
+    hash_mod <- usize_rem hash i;
+    l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
+    t <- hash_map_get_mut_in_list_fwd T n0 key l;
+    Return t
   end
 .
 
@@ -388,15 +371,13 @@ Definition hash_map_get_mut_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     hash <- hash_key_fwd key;
-    match self with
-    | mkHash_map_t i p i0 v =>
-      let i1 := vec_len (List_t T) v in
-      hash_mod <- usize_rem hash i1;
-      l <- vec_index_mut_fwd (List_t T) v hash_mod;
-      l0 <- hash_map_get_mut_in_list_back T n0 key l ret;
-      v0 <- vec_index_mut_back (List_t T) v hash_mod l0;
-      Return (mkHash_map_t i p i0 v0)
-    end
+    let i := vec_len (List_t T) self.(Hash_map_slots) in
+    hash_mod <- usize_rem hash i;
+    l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
+    l0 <- hash_map_get_mut_in_list_back T n0 key l ret;
+    v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+    Return (mkHash_map_t self.(Hash_map_num_entries)
+      self.(Hash_map_max_load_factor) self.(Hash_map_max_load) v)
   end
 .
 
@@ -453,16 +434,16 @@ Definition hash_map_remove_fwd
   | O => Fail_ OutOfFuel
   | S n0 =>
     hash <- hash_key_fwd key;
-    match self with
-    | mkHash_map_t i p i0 v =>
-      let i1 := vec_len (List_t T) v in
-      hash_mod <- usize_rem hash i1;
-      l <- vec_index_mut_fwd (List_t T) v hash_mod;
-      x <- hash_map_remove_from_list_fwd T n0 key l;
-      match x with
-      | None => Return None
-      | Some x0 => i2 <- usize_sub i 1%usize; let _ := i2 in Return (Some x0)
-      end
+    let i := vec_len (List_t T) self.(Hash_map_slots) in
+    hash_mod <- usize_rem hash i;
+    l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
+    x <- hash_map_remove_from_list_fwd T n0 key l;
+    match x with
+    | None => Return None
+    | Some x0 =>
+      i0 <- usize_sub self.(Hash_map_num_entries) 1%usize;
+      let _ := i0 in
+      Return (Some x0)
     end
   end
 .
@@ -476,23 +457,22 @@ Definition hash_map_remove_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     hash <- hash_key_fwd key;
-    match self with
-    | mkHash_map_t i p i0 v =>
-      let i1 := vec_len (List_t T) v in
-      hash_mod <- usize_rem hash i1;
-      l <- vec_index_mut_fwd (List_t T) v hash_mod;
-      x <- hash_map_remove_from_list_fwd T n0 key l;
-      match x with
-      | None =>
-        l0 <- hash_map_remove_from_list_back T n0 key l;
-        v0 <- vec_index_mut_back (List_t T) v hash_mod l0;
-        Return (mkHash_map_t i p i0 v0)
-      | Some x0 =>
-        i2 <- usize_sub i 1%usize;
-        l0 <- hash_map_remove_from_list_back T n0 key l;
-        v0 <- vec_index_mut_back (List_t T) v hash_mod l0;
-        Return (mkHash_map_t i2 p i0 v0)
-      end
+    let i := vec_len (List_t T) self.(Hash_map_slots) in
+    hash_mod <- usize_rem hash i;
+    l <- vec_index_mut_fwd (List_t T) self.(Hash_map_slots) hash_mod;
+    x <- hash_map_remove_from_list_fwd T n0 key l;
+    match x with
+    | None =>
+      l0 <- hash_map_remove_from_list_back T n0 key l;
+      v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+      Return (mkHash_map_t self.(Hash_map_num_entries)
+        self.(Hash_map_max_load_factor) self.(Hash_map_max_load) v)
+    | Some x0 =>
+      i0 <- usize_sub self.(Hash_map_num_entries) 1%usize;
+      l0 <- hash_map_remove_from_list_back T n0 key l;
+      v <- vec_index_mut_back (List_t T) self.(Hash_map_slots) hash_mod l0;
+      Return (mkHash_map_t i0 self.(Hash_map_max_load_factor)
+        self.(Hash_map_max_load) v)
     end
   end
 .

@@ -86,9 +86,7 @@ Definition y_body : result (Wrap_t i32) :=
 Definition y_c : Wrap_t i32 := y_body%global.
 
 (** [constants::unwrap_y] *)
-Definition unwrap_y_fwd : result i32 :=
-  match y_c with | mkWrap_t i => Return i end
-.
+Definition unwrap_y_fwd : result i32 := Return y_c.(Wrap_val).
 
 (** [constants::YVAL] *)
 Definition yval_body : result i32 := i <- unwrap_y_fwd; Return i.

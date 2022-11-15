@@ -662,8 +662,8 @@ let extract_type_decl_variant (ctx : extraction_ctx) (fmt : F.formatter)
     (type_name : string) (type_params : string list) (cons_name : string)
     (fields : field list) : unit =
   F.pp_print_space fmt ();
-  F.pp_open_hvbox fmt ctx.indent_incr;
   (* variant box *)
+  F.pp_open_hvbox fmt ctx.indent_incr;
   (* [| Cons :]
    * Note that we really don't want any break above so we print everything
    * at once. *)
@@ -951,7 +951,232 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
-(** Extract extra information for a type (e.g., [Arguments] information in Coq).
+(** Auxiliary function.
+
+    Generate [Arguments] instructions in Coq.
+ *)
+let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
+    (kind : decl_kind) (decl : type_decl) : unit =
+  assert (!backend = Coq);
+  (* Generating the [Arguments] instructions is useful only if there are type parameters *)
+  if decl.type_params = [] then ()
+  else
+    (* Add the type params - note that we need those bindings only for the
+     * body translation (they are not top-level) *)
+    let _ctx_body, type_params = ctx_add_type_params decl.type_params ctx in
+    (* Auxiliary function to extract an [Arguments Cons {T} _ _.] instruction *)
+    let extract_arguments_info (cons_name : string) (fields : 'a list) : unit =
+      (* Add a break before *)
+      F.pp_print_break fmt 0 0;
+      (* Open a box *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      (* Small utility *)
+      let print_type_vars () =
+        List.iter
+          (fun (var : string) ->
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt ("{" ^ var ^ "}"))
+          type_params
+      in
+      let print_fields () =
+        List.iter
+          (fun _ ->
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "_")
+          fields
+      in
+      F.pp_print_break fmt 0 0;
+      F.pp_print_string fmt "Arguments";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt cons_name;
+      print_type_vars ();
+      print_fields ();
+      F.pp_print_string fmt ".";
+
+      (* Close the box *)
+      F.pp_close_box fmt ()
+    in
+
+    (* Generate the [Arguments] instruction *)
+    match decl.kind with
+    | Opaque -> ()
+    | Struct fields ->
+        let adt_id = AdtId decl.def_id in
+        (* Generate the instruction for the record constructor *)
+        let cons_name = ctx_get_struct adt_id ctx in
+        extract_arguments_info cons_name fields;
+        (* Generate the instruction for the record projectors, if there are *)
+        let is_rec = decl_is_from_rec_group kind in
+        if not is_rec then
+          FieldId.iteri
+            (fun fid _ ->
+              let cons_name = ctx_get_field adt_id fid ctx in
+              extract_arguments_info cons_name [])
+            fields;
+        (* Add breaks to insert new lines between definitions *)
+        F.pp_print_break fmt 0 0
+    | Enum variants ->
+        (* Generate the instructions *)
+        VariantId.iteri
+          (fun vid (v : variant) ->
+            let cons_name = ctx_get_variant (AdtId decl.def_id) vid ctx in
+            extract_arguments_info cons_name v.fields)
+          variants;
+        (* Add breaks to insert new lines between definitions *)
+        F.pp_print_break fmt 0 0
+
+(** Auxiliary function.
+
+    Generate field projectors in Coq.
+
+    Sometimes we extract records as inductives in Coq: when this happens we
+    have to define the field projectors afterwards.
+ *)
+let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
+    (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
+  assert (!backend = Coq);
+  match decl.kind with
+  | Opaque | Enum _ -> ()
+  | Struct fields ->
+      (* Records are extracted as inductives only if they are recursive *)
+      let is_rec = decl_is_from_rec_group kind in
+      if is_rec then
+        (* Add the type params *)
+        let ctx, type_params = ctx_add_type_params decl.type_params ctx in
+        let ctx, record_var = ctx_add_var "x" (VarId.of_int 0) ctx in
+        let ctx, field_var = ctx_add_var "x" (VarId.of_int 1) ctx in
+        let def_name = ctx_get_local_type decl.def_id ctx in
+        let cons_name = ctx_get_struct (AdtId decl.def_id) ctx in
+        let extract_field_proj (field_id : FieldId.id) (_ : field) : unit =
+          F.pp_print_space fmt ();
+          (* Outer box for the projector definition *)
+          F.pp_open_hvbox fmt 0;
+          (* Inner box for the projector definition *)
+          F.pp_open_hvbox fmt ctx.indent_incr;
+          (* Open a box for the [Definition PROJ ... :=] *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          F.pp_print_string fmt "Definition";
+          F.pp_print_space fmt ();
+          let field_name = ctx_get_field (AdtId decl.def_id) field_id ctx in
+          F.pp_print_string fmt field_name;
+          F.pp_print_space fmt ();
+          (* Print the type parameters *)
+          if type_params <> [] then (
+            F.pp_print_string fmt "{";
+            List.iter
+              (fun p ->
+                F.pp_print_string fmt p;
+                F.pp_print_space fmt ())
+              type_params;
+            F.pp_print_string fmt ":";
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "Type}";
+            F.pp_print_space fmt ());
+          (* Print the record parameter *)
+          F.pp_print_string fmt "(";
+          F.pp_print_string fmt record_var;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt def_name;
+          List.iter
+            (fun p ->
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt p)
+            type_params;
+          F.pp_print_string fmt ")";
+          (* *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":=";
+          (* Close the box for the [Definition PROJ ... :=] *)
+          F.pp_close_box fmt ();
+          F.pp_print_space fmt ();
+          (* Open a box for the whole match *)
+          F.pp_open_hvbox fmt 0;
+          (* Open a box for the [match ... with] *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          F.pp_print_string fmt "match";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt record_var;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "with";
+          (* Close the box for the [match ... with] *)
+          F.pp_close_box fmt ();
+
+          (* Open a box for the branch *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          (* Print the match branch *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "|";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt cons_name;
+          FieldId.iteri
+            (fun id _ ->
+              F.pp_print_space fmt ();
+              if field_id = id then F.pp_print_string fmt field_var
+              else F.pp_print_string fmt "_")
+            fields;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "=>";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt field_var;
+          (* Close the box for the branch *)
+          F.pp_close_box fmt ();
+          (* Print the [end] *)
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "end";
+          (* Close the box for the whole match *)
+          F.pp_close_box fmt ();
+          (* Close the inner box projector *)
+          F.pp_close_box fmt ();
+          (* If Coq: end the definition with a "." *)
+          print_decl_end_delimiter fmt kind;
+          (* Close the outer box projector  *)
+          F.pp_close_box fmt ();
+          (* Add breaks to insert new lines between definitions *)
+          F.pp_print_break fmt 0 0
+        in
+
+        let extract_proj_notation (field_id : FieldId.id) (_ : field) : unit =
+          F.pp_print_space fmt ();
+          (* Outer box for the projector definition *)
+          F.pp_open_hvbox fmt 0;
+          (* Inner box for the projector definition *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          let ctx, record_var = ctx_add_var "x" (VarId.of_int 0) ctx in
+          F.pp_print_string fmt "Notation";
+          F.pp_print_space fmt ();
+          let field_name = ctx_get_field (AdtId decl.def_id) field_id ctx in
+          F.pp_print_string fmt ("\"" ^ record_var ^ " .(" ^ field_name ^ ")\"");
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":=";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "(";
+          F.pp_print_string fmt field_name;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt record_var;
+          F.pp_print_string fmt ")";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "(at level 9)";
+          (* Close the inner box projector *)
+          F.pp_close_box fmt ();
+          (* If Coq: end the definition with a "." *)
+          print_decl_end_delimiter fmt kind;
+          (* Close the outer box projector  *)
+          F.pp_close_box fmt ();
+          (* Add breaks to insert new lines between definitions *)
+          F.pp_print_break fmt 0 0
+        in
+
+        let extract_field_proj_and_notation (field_id : FieldId.id)
+            (field : field) : unit =
+          extract_field_proj field_id field;
+          extract_proj_notation field_id field
+        in
+
+        FieldId.iteri extract_field_proj_and_notation fields
+
+(** Extract extra information for a type (e.g., [Arguments] instructions in Coq).
 
     Note that all the names used for extraction should already have been
     registered.
@@ -960,77 +1185,9 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   match !backend with
   | FStar -> ()
-  | Coq -> (
-      if
-        (* Generate the [Arguments] instruction - this is useful only if there
-           are type parameters *)
-        decl.type_params = []
-      then ()
-      else
-        (* Add the type params - note that we need those bindings only for the
-         * body translation (they are not top-level) *)
-        let _ctx_body, type_params = ctx_add_type_params decl.type_params ctx in
-        (* Auxiliary function to extract an [Arguments Cons {T} _ _.] instruction *)
-        let extract_arguments_info (cons_name : string) (fields : 'a list) :
-            unit =
-          (* Add a break before *)
-          F.pp_print_break fmt 0 0;
-          (* Open a box *)
-          F.pp_open_hovbox fmt ctx.indent_incr;
-          (* Small utility *)
-          let print_type_vars () =
-            List.iter
-              (fun (var : string) ->
-                F.pp_print_space fmt ();
-                F.pp_print_string fmt ("{" ^ var ^ "}"))
-              type_params
-          in
-          let print_fields () =
-            List.iter
-              (fun _ ->
-                F.pp_print_space fmt ();
-                F.pp_print_string fmt "_")
-              fields
-          in
-          F.pp_print_break fmt 0 0;
-          F.pp_print_string fmt "Arguments";
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt cons_name;
-          print_type_vars ();
-          print_fields ();
-          F.pp_print_string fmt ".";
-
-          (* Close the box *)
-          F.pp_close_box fmt ()
-        in
-
-        (* Generate the [Arguments] instruction *)
-        match decl.kind with
-        | Opaque -> ()
-        | Struct fields ->
-            let adt_id = AdtId decl.def_id in
-            (* Generate the instruction for the record constructor *)
-            let cons_name = ctx_get_struct adt_id ctx in
-            extract_arguments_info cons_name fields;
-            (* Generate the instruction for the record projectors, if there are *)
-            let is_rec = decl_is_from_rec_group kind in
-            if not is_rec then
-              FieldId.iteri
-                (fun fid _ ->
-                  let cons_name = ctx_get_field adt_id fid ctx in
-                  extract_arguments_info cons_name [])
-                fields;
-            (* Add breaks to insert new lines between definitions *)
-            F.pp_print_break fmt 0 0
-        | Enum variants ->
-            (* Generate the instructions *)
-            VariantId.iteri
-              (fun vid (v : variant) ->
-                let cons_name = ctx_get_variant (AdtId decl.def_id) vid ctx in
-                extract_arguments_info cons_name v.fields)
-              variants;
-            (* Add breaks to insert new lines between definitions *)
-            F.pp_print_break fmt 0 0)
+  | Coq ->
+      extract_type_decl_coq_arguments ctx fmt kind decl;
+      extract_type_decl_record_field_projectors ctx fmt kind decl
 
 (** Extract the state type declaration. *)
 let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)

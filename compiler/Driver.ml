@@ -112,13 +112,6 @@ let () =
         (* F* supports monadic notations, but the encoding loses information *)
         unfold_monadic_let_bindings := true
     | Coq ->
-        (* In the case of Coq, we forbid using field projectors (see the comments for
-           [dont_use_field_projectors]).
-           Also, we always decompose ADT values with matches (decomposing with
-           let-bindings is not supported).
-        *)
-        dont_use_field_projectors := true;
-        always_deconstruct_adts_with_matches := true;
         (* Some patterns are not supported *)
         decompose_monadic_let_bindings := true;
         decompose_nested_let_patterns := true

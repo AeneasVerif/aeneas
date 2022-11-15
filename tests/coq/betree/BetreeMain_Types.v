@@ -50,6 +50,35 @@ with Betree_internal_t :=
   Betree_internal_t
 .
 
+Definition Betree_internal_id (x : Betree_internal_t) :=
+  match x with | mkBetree_internal_t x0 _ _ _ => x0 end
+.
+
+Notation "x1 .(Betree_internal_id)" := (Betree_internal_id x1) (at level 9).
+
+Definition Betree_internal_pivot (x : Betree_internal_t) :=
+  match x with | mkBetree_internal_t _ x0 _ _ => x0 end
+.
+
+Notation "x1 .(Betree_internal_pivot)" := (Betree_internal_pivot x1)
+  (at level 9)
+.
+
+Definition Betree_internal_left (x : Betree_internal_t) :=
+  match x with | mkBetree_internal_t _ _ x0 _ => x0 end
+.
+
+Notation "x1 .(Betree_internal_left)" := (Betree_internal_left x1) (at level 9)
+.
+
+Definition Betree_internal_right (x : Betree_internal_t) :=
+  match x with | mkBetree_internal_t _ _ _ x0 => x0 end
+.
+
+Notation "x1 .(Betree_internal_right)" := (Betree_internal_right x1)
+  (at level 9)
+.
+
 (** [betree_main::betree::Params] *)
 Record Betree_params_t :=
 mkBetree_params_t {

@@ -460,37 +460,24 @@ Definition new_pair1_fwd : result (Struct_with_pair_t u32 u32) :=
 (** [no_nested_borrows::test_constants] *)
 Definition test_constants_fwd : result unit :=
   swt <- new_tuple1_fwd;
-  match swt with
-  | mkStruct_with_tuple_t p =>
-    let (i, _) := p in
-    if negb (i s= 1%u32)
+  let (i, _) := swt.(Struct_with_tuple_p) in
+  if negb (i s= 1%u32)
+  then Fail_ Failure
+  else (
+    swt0 <- new_tuple2_fwd;
+    let (i0, _) := swt0.(Struct_with_tuple_p) in
+    if negb (i0 s= 1%i16)
     then Fail_ Failure
     else (
-      swt0 <- new_tuple2_fwd;
-      match swt0 with
-      | mkStruct_with_tuple_t p0 =>
-        let (i0, _) := p0 in
-        if negb (i0 s= 1%i16)
+      swt1 <- new_tuple3_fwd;
+      let (i1, _) := swt1.(Struct_with_tuple_p) in
+      if negb (i1 s= 1%u64)
+      then Fail_ Failure
+      else (
+        swp <- new_pair1_fwd;
+        if negb (swp.(Struct_with_pair_p).(Pair_x) s= 1%u32)
         then Fail_ Failure
-        else (
-          swt1 <- new_tuple3_fwd;
-          match swt1 with
-          | mkStruct_with_tuple_t p1 =>
-            let (i1, _) := p1 in
-            if negb (i1 s= 1%u64)
-            then Fail_ Failure
-            else (
-              swp <- new_pair1_fwd;
-              match swp with
-              | mkStruct_with_pair_t p2 =>
-                match p2 with
-                | mkPair_t i2 i3 =>
-                  if negb (i2 s= 1%u32) then Fail_ Failure else Return tt
-                end
-              end)
-          end)
-      end)
-  end
+        else Return tt)))
 .
 
 (** Unit test for [no_nested_borrows::test_constants] *)

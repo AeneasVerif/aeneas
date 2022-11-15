@@ -4,6 +4,6 @@
 
 Primitives.v
 
-HashmapMain__Funs.v
-HashmapMain__Opaque.v
-HashmapMain__Types.v
+HashmapMain_Funs.v
+HashmapMain_Opaque.v
+HashmapMain_Types.v
