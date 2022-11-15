@@ -4,11 +4,11 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Require Export BetreeMain__Types.
-Import BetreeMain__Types.
-Require Export BetreeMain__Opaque.
-Import BetreeMain__Opaque.
-Module BetreeMain__Funs.
+Require Export BetreeMain_Types.
+Import BetreeMain_Types.
+Require Export BetreeMain_Opaque.
+Import BetreeMain_Opaque.
+Module BetreeMain_Funs.
 
 (** [betree_main::betree::load_internal_node] *)
 Definition betree_load_internal_node_fwd
@@ -1394,4 +1394,4 @@ Definition betree_be_tree_lookup_back
 (** [betree_main::main] *)
 Definition main_fwd : result unit := Return tt.
 
-End BetreeMain__Funs .
+End BetreeMain_Funs .

@@ -4,7 +4,7 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Module HashmapMain__Types.
+Module HashmapMain_Types.
 
 (** [hashmap_main::hashmap::List] *)
 Inductive Hashmap_list_t (T : Type) :=
@@ -38,4 +38,4 @@ Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
 (** The state type used in the state-error monad *)
 Axiom state : Type.
 
-End HashmapMain__Types .
+End HashmapMain_Types .

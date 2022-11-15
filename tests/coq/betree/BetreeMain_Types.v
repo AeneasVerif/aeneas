@@ -4,7 +4,7 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Module BetreeMain__Types.
+Module BetreeMain_Types.
 
 (** [betree_main::betree::List] *)
 Inductive Betree_list_t (T : Type) :=
@@ -82,4 +82,4 @@ Definition core_num_u64_max_c : u64 := core_num_u64_max_body%global.
 (** The state type used in the state-error monad *)
 Axiom state : Type.
 
-End BetreeMain__Types .
+End BetreeMain_Types .

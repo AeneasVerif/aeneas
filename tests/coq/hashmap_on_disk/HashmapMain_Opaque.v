@@ -4,9 +4,9 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Require Export HashmapMain__Types.
-Import HashmapMain__Types.
-Module HashmapMain__Opaque.
+Require Export HashmapMain_Types.
+Import HashmapMain_Types.
+Module HashmapMain_Opaque.
 
 (** [hashmap_main::hashmap_utils::deserialize] *)
 Axiom hashmap_utils_deserialize_fwd
@@ -18,4 +18,4 @@ Axiom hashmap_utils_serialize_fwd
   : Hashmap_hash_map_t u64 -> state -> result (state * unit)
 .
 
-End HashmapMain__Opaque .
+End HashmapMain_Opaque .

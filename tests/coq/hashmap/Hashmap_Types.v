@@ -4,7 +4,7 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Module Hashmap__Types.
+Module Hashmap_Types.
 
 (** [hashmap::List] *)
 Inductive List_t (T : Type) :=
@@ -35,4 +35,4 @@ Arguments Hash_map_slots {T}.
 Definition core_num_u32_max_body : result u32 := Return (4294967295%u32).
 Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
 
-End Hashmap__Types .
+End Hashmap_Types .

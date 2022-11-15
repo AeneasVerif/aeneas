@@ -4,9 +4,9 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Require Export External__Types.
-Import External__Types.
-Module External__Opaque.
+Require Export External_Types.
+Import External_Types.
+Module External_Opaque.
 
 (** [core::mem::swap] *)
 Axiom core_mem_swap_fwd :
@@ -33,4 +33,4 @@ Axiom core_option_option_unwrap_fwd :
   forall(T : Type), option T -> state -> result (state * T)
 .
 
-End External__Opaque .
+End External_Opaque .
