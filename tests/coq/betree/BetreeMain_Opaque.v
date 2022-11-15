@@ -4,9 +4,9 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Require Export BetreeMain__Types.
-Import BetreeMain__Types.
-Module BetreeMain__Opaque.
+Require Export BetreeMain_Types.
+Import BetreeMain_Types.
+Module BetreeMain_Opaque.
 
 (** [betree_main::betree_utils::load_internal_node] *)
 Axiom betree_utils_load_internal_node_fwd
@@ -35,4 +35,4 @@ Axiom core_option_option_unwrap_fwd :
   forall(T : Type), option T -> state -> result (state * T)
 .
 
-End BetreeMain__Opaque .
+End BetreeMain_Opaque .

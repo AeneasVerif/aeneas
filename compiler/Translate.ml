@@ -752,7 +752,7 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
   in
 
   let module_delimiter =
-    match !Config.backend with FStar -> "." | Coq -> "__"
+    match !Config.backend with FStar -> "." | Coq -> "_"
   in
 
   (* Extract one or several files, depending on the configuration *)

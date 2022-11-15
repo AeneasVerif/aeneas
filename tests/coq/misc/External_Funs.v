@@ -4,11 +4,11 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Require Export External__Types.
-Import External__Types.
-Require Export External__Opaque.
-Import External__Opaque.
-Module External__Funs.
+Require Export External_Types.
+Import External_Types.
+Require Export External_Opaque.
+Import External_Opaque.
+Module External_Funs.
 
 (** [external::swap] *)
 Definition swap_fwd
@@ -111,4 +111,4 @@ Definition test_swap_non_zero_fwd
   if x0 s= 0%u32 then Fail_ Failure else Return (st1, x0)
 .
 
-End External__Funs .
+End External_Funs .

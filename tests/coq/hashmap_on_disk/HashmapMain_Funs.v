@@ -4,11 +4,11 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Require Export HashmapMain__Types.
-Import HashmapMain__Types.
-Require Export HashmapMain__Opaque.
-Import HashmapMain__Opaque.
-Module HashmapMain__Funs.
+Require Export HashmapMain_Types.
+Import HashmapMain_Types.
+Require Export HashmapMain_Opaque.
+Import HashmapMain_Opaque.
+Module HashmapMain_Funs.
 
 (** [hashmap_main::hashmap::hash_key] *)
 Definition hashmap_hash_key_fwd (k : usize) : result usize := Return k.
@@ -595,4 +595,4 @@ Definition main_fwd : result unit := Return tt.
 (** Unit test for [hashmap_main::main] *)
 Check (main_fwd )%return.
 
-End HashmapMain__Funs .
+End HashmapMain_Funs .

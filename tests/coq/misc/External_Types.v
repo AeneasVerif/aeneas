@@ -4,7 +4,7 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Module External__Types.
+Module External_Types.
 
 (** [core::num::nonzero::NonZeroU32] *)
 Axiom Core_num_nonzero_non_zero_u32_t : Type.
@@ -12,4 +12,4 @@ Axiom Core_num_nonzero_non_zero_u32_t : Type.
 (** The state type used in the state-error monad *)
 Axiom state : Type.
 
-End External__Types .
+End External_Types .
