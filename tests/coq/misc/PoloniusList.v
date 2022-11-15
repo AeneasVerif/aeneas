@@ -4,7 +4,7 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Module PoloniusList .
+Module PoloniusList.
 
 (** [polonius_list::List] *)
 Inductive List_t (T : Type) :=
@@ -12,8 +12,8 @@ Inductive List_t (T : Type) :=
 | ListNil : List_t T
 .
 
-Arguments ListCons {T} _ _  .
-Arguments ListNil {T}  .
+Arguments ListCons {T} _ _.
+Arguments ListNil {T}.
 
 (** [polonius_list::get_list_at_x] *)
 Fixpoint get_list_at_x_fwd (ls : List_t u32) (x : u32) : result (List_t u32) :=
@@ -24,7 +24,7 @@ Fixpoint get_list_at_x_fwd (ls : List_t u32) (x : u32) : result (List_t u32) :=
     else (l <- get_list_at_x_fwd tl x; Return l)
   | ListNil => Return ListNil
   end
-  .
+.
 
 (** [polonius_list::get_list_at_x] *)
 Fixpoint get_list_at_x_back
@@ -36,6 +36,6 @@ Fixpoint get_list_at_x_back
     else (tl0 <- get_list_at_x_back tl x ret; Return (ListCons hd tl0))
   | ListNil => Return ret
   end
-  .
+.
 
 End PoloniusList .

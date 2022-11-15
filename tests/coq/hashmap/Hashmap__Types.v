@@ -4,7 +4,7 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Module Hashmap__Types .
+Module Hashmap__Types.
 
 (** [hashmap::List] *)
 Inductive List_t (T : Type) :=
@@ -12,13 +12,12 @@ Inductive List_t (T : Type) :=
 | ListNil : List_t T
 .
 
-Arguments ListCons {T} _ _ _  .
-Arguments ListNil {T}  .
+Arguments ListCons {T} _ _ _.
+Arguments ListNil {T}.
 
 (** [hashmap::HashMap] *)
 Record Hash_map_t (T : Type) :=
-mkHash_map_t
-{
+mkHash_map_t {
   Hash_map_num_entries : usize;
   Hash_map_max_load_factor : (usize * usize);
   Hash_map_max_load : usize;
@@ -26,14 +25,14 @@ mkHash_map_t
 }
 .
 
-Arguments mkHash_map_t {T} _ _ _ _  .
-Arguments Hash_map_num_entries {T}  .
-Arguments Hash_map_max_load_factor {T}  .
-Arguments Hash_map_max_load {T}  .
-Arguments Hash_map_slots {T}  .
+Arguments mkHash_map_t {T} _ _ _ _.
+Arguments Hash_map_num_entries {T}.
+Arguments Hash_map_max_load_factor {T}.
+Arguments Hash_map_max_load {T}.
+Arguments Hash_map_slots {T}.
 
 (** [core::num::u32::{9}::MAX] *)
-Definition core_num_u32_max_body : result u32 := Return (4294967295 %u32) .
-Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global .
+Definition core_num_u32_max_body : result u32 := Return (4294967295%u32).
+Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
 
 End Hashmap__Types .

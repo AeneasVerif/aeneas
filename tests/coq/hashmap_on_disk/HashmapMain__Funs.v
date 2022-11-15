@@ -4,14 +4,14 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Require Export HashmapMain__Types .
-Import HashmapMain__Types .
-Require Export HashmapMain__Opaque .
-Import HashmapMain__Opaque .
-Module HashmapMain__Funs .
+Require Export HashmapMain__Types.
+Import HashmapMain__Types.
+Require Export HashmapMain__Opaque.
+Import HashmapMain__Opaque.
+Module HashmapMain__Funs.
 
 (** [hashmap_main::hashmap::hash_key] *)
-Definition hashmap_hash_key_fwd (k : usize) : result usize := Return k .
+Definition hashmap_hash_key_fwd (k : usize) : result usize := Return k.
 
 (** [hashmap_main::hashmap::HashMap::{0}::allocate_slots] *)
 Fixpoint hashmap_hash_map_allocate_slots_fwd
@@ -21,15 +21,15 @@ Fixpoint hashmap_hash_map_allocate_slots_fwd
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
-    if n0 s= 0 %usize
+    if n0 s= 0%usize
     then Return slots
     else (
       slots0 <- vec_push_back (Hashmap_list_t T) slots HashmapListNil;
-      i <- usize_sub n0 1 %usize;
+      i <- usize_sub n0 1%usize;
       v <- hashmap_hash_map_allocate_slots_fwd T n1 slots0 i;
       Return v)
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::new_with_capacity] *)
 Definition hashmap_hash_map_new_with_capacity_fwd
@@ -44,10 +44,10 @@ Definition hashmap_hash_map_new_with_capacity_fwd
     slots <- hashmap_hash_map_allocate_slots_fwd T n0 v capacity;
     i <- usize_mul capacity max_load_dividend;
     i0 <- usize_div i max_load_divisor;
-    Return (mkHashmap_hash_map_t (0 %usize) (max_load_dividend,
+    Return (mkHashmap_hash_map_t (0%usize) (max_load_dividend,
       max_load_divisor) i0 slots)
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::new] *)
 Definition hashmap_hash_map_new_fwd
@@ -56,11 +56,11 @@ Definition hashmap_hash_map_new_fwd
   | O => Fail_ OutOfFuel
   | S n0 =>
     hm <-
-      hashmap_hash_map_new_with_capacity_fwd T n0 (32 %usize) (4 %usize) (5
-        %usize);
+      hashmap_hash_map_new_with_capacity_fwd T n0 (32%usize) (4%usize)
+        (5%usize);
     Return hm
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::clear_slots] *)
 Fixpoint hashmap_hash_map_clear_slots_fwd_back
@@ -74,12 +74,12 @@ Fixpoint hashmap_hash_map_clear_slots_fwd_back
     if i s< i0
     then (
       slots0 <- vec_index_mut_back (Hashmap_list_t T) slots i HashmapListNil;
-      i1 <- usize_add i 1 %usize;
+      i1 <- usize_add i 1%usize;
       slots1 <- hashmap_hash_map_clear_slots_fwd_back T n0 slots0 i1;
       Return slots1)
     else Return slots
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::clear] *)
 Definition hashmap_hash_map_clear_fwd_back
@@ -91,16 +91,17 @@ Definition hashmap_hash_map_clear_fwd_back
   | S n0 =>
     match self with
     | mkHashmap_hash_map_t i p i0 v =>
-      v0 <- hashmap_hash_map_clear_slots_fwd_back T n0 v (0 %usize);
-      Return (mkHashmap_hash_map_t (0 %usize) p i0 v0)
+      v0 <- hashmap_hash_map_clear_slots_fwd_back T n0 v (0%usize);
+      Return (mkHashmap_hash_map_t (0%usize) p i0 v0)
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::len] *)
 Definition hashmap_hash_map_len_fwd
   (T : Type) (self : Hashmap_hash_map_t T) : result usize :=
-  match self with | mkHashmap_hash_map_t i p i0 v => Return i end .
+  match self with | mkHashmap_hash_map_t i p i0 v => Return i end
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::insert_in_list] *)
 Fixpoint hashmap_hash_map_insert_in_list_fwd
@@ -119,7 +120,7 @@ Fixpoint hashmap_hash_map_insert_in_list_fwd
     | HashmapListNil => Return true
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::insert_in_list] *)
 Fixpoint hashmap_hash_map_insert_in_list_back
@@ -140,11 +141,12 @@ Fixpoint hashmap_hash_map_insert_in_list_back
       let l := HashmapListNil in Return (HashmapListCons key value l)
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::insert_no_resize] *)
 Definition hashmap_hash_map_insert_no_resize_fwd_back
-  (T : Type) (n : nat) (self : Hashmap_hash_map_t T) (key : usize) (value : T) :
+  (T : Type) (n : nat) (self : Hashmap_hash_map_t T) (key : usize) (value : T)
+  :
   result (Hashmap_hash_map_t T)
   :=
   match n with
@@ -159,7 +161,7 @@ Definition hashmap_hash_map_insert_no_resize_fwd_back
       inserted <- hashmap_hash_map_insert_in_list_fwd T n0 key value l;
       if inserted
       then (
-        i2 <- usize_add i 1 %usize;
+        i2 <- usize_add i 1%usize;
         l0 <- hashmap_hash_map_insert_in_list_back T n0 key value l;
         v0 <- vec_index_mut_back (Hashmap_list_t T) v hash_mod l0;
         Return (mkHashmap_hash_map_t i2 p i0 v0))
@@ -169,15 +171,16 @@ Definition hashmap_hash_map_insert_no_resize_fwd_back
         Return (mkHashmap_hash_map_t i p i0 v0))
     end
   end
-  .
+.
 
 (** [core::num::u32::{9}::MAX] *)
-Definition core_num_u32_max_body : result u32 := Return (4294967295 %u32) .
-Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global .
+Definition core_num_u32_max_body : result u32 := Return (4294967295%u32).
+Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
 
 (** [hashmap_main::hashmap::HashMap::{0}::move_elements_from_list] *)
 Fixpoint hashmap_hash_map_move_elements_from_list_fwd_back
-  (T : Type) (n : nat) (ntable : Hashmap_hash_map_t T) (ls : Hashmap_list_t T) :
+  (T : Type) (n : nat) (ntable : Hashmap_hash_map_t T) (ls : Hashmap_list_t T)
+  :
   result (Hashmap_hash_map_t T)
   :=
   match n with
@@ -192,7 +195,7 @@ Fixpoint hashmap_hash_map_move_elements_from_list_fwd_back
     | HashmapListNil => Return ntable
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::move_elements] *)
 Fixpoint hashmap_hash_map_move_elements_fwd_back
@@ -212,13 +215,13 @@ Fixpoint hashmap_hash_map_move_elements_fwd_back
         hashmap_hash_map_move_elements_from_list_fwd_back T n0 ntable ls;
       let l0 := mem_replace_back (Hashmap_list_t T) l HashmapListNil in
       slots0 <- vec_index_mut_back (Hashmap_list_t T) slots i l0;
-      i1 <- usize_add i 1 %usize;
+      i1 <- usize_add i 1%usize;
       p <- hashmap_hash_map_move_elements_fwd_back T n0 ntable0 slots0 i1;
       let (ntable1, slots1) := p in
       Return (ntable1, slots1))
     else Return (ntable, slots)
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::try_resize] *)
 Definition hashmap_hash_map_try_resize_fwd_back
@@ -232,14 +235,14 @@ Definition hashmap_hash_map_try_resize_fwd_back
     match self with
     | mkHashmap_hash_map_t i p i0 v =>
       let capacity := vec_len (Hashmap_list_t T) v in
-      n1 <- usize_div max_usize 2 %usize;
+      n1 <- usize_div max_usize 2%usize;
       let (i1, i2) := p in
       i3 <- usize_div n1 i1;
       if capacity s<= i3
       then (
-        i4 <- usize_mul capacity 2 %usize;
+        i4 <- usize_mul capacity 2%usize;
         ntable <- hashmap_hash_map_new_with_capacity_fwd T n0 i4 i1 i2;
-        p0 <- hashmap_hash_map_move_elements_fwd_back T n0 ntable v (0 %usize);
+        p0 <- hashmap_hash_map_move_elements_fwd_back T n0 ntable v (0%usize);
         let (ntable0, _) := p0 in
         match ntable0 with
         | mkHashmap_hash_map_t i5 p1 i6 v0 =>
@@ -248,11 +251,12 @@ Definition hashmap_hash_map_try_resize_fwd_back
       else Return (mkHashmap_hash_map_t i (i1, i2) i0 v)
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::insert] *)
 Definition hashmap_hash_map_insert_fwd_back
-  (T : Type) (n : nat) (self : Hashmap_hash_map_t T) (key : usize) (value : T) :
+  (T : Type) (n : nat) (self : Hashmap_hash_map_t T) (key : usize) (value : T)
+  :
   result (Hashmap_hash_map_t T)
   :=
   match n with
@@ -271,7 +275,7 @@ Definition hashmap_hash_map_insert_fwd_back
       else Return (mkHashmap_hash_map_t i0 p i1 v)
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::contains_key_in_list] *)
 Fixpoint hashmap_hash_map_contains_key_in_list_fwd
@@ -288,7 +292,7 @@ Fixpoint hashmap_hash_map_contains_key_in_list_fwd
     | HashmapListNil => Return false
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::contains_key] *)
 Definition hashmap_hash_map_contains_key_fwd
@@ -308,7 +312,7 @@ Definition hashmap_hash_map_contains_key_fwd
       Return b
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_in_list] *)
 Fixpoint hashmap_hash_map_get_in_list_fwd
@@ -324,7 +328,7 @@ Fixpoint hashmap_hash_map_get_in_list_fwd
     | HashmapListNil => Fail_ Failure
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::get] *)
 Definition hashmap_hash_map_get_fwd
@@ -344,7 +348,7 @@ Definition hashmap_hash_map_get_fwd
       Return t
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 Fixpoint hashmap_hash_map_get_mut_in_list_fwd
@@ -360,7 +364,7 @@ Fixpoint hashmap_hash_map_get_mut_in_list_fwd
     | HashmapListNil => Fail_ Failure
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 Fixpoint hashmap_hash_map_get_mut_in_list_back
@@ -380,7 +384,7 @@ Fixpoint hashmap_hash_map_get_mut_in_list_back
     | HashmapListNil => Fail_ Failure
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut] *)
 Definition hashmap_hash_map_get_mut_fwd
@@ -400,7 +404,7 @@ Definition hashmap_hash_map_get_mut_fwd
       Return t
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut] *)
 Definition hashmap_hash_map_get_mut_back
@@ -421,7 +425,7 @@ Definition hashmap_hash_map_get_mut_back
       Return (mkHashmap_hash_map_t i p i0 v0)
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::remove_from_list] *)
 Fixpoint hashmap_hash_map_remove_from_list_fwd
@@ -447,7 +451,7 @@ Fixpoint hashmap_hash_map_remove_from_list_fwd
     | HashmapListNil => Return None
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::remove_from_list] *)
 Fixpoint hashmap_hash_map_remove_from_list_back
@@ -474,7 +478,7 @@ Fixpoint hashmap_hash_map_remove_from_list_back
     | HashmapListNil => Return HashmapListNil
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::remove] *)
 Definition hashmap_hash_map_remove_fwd
@@ -493,11 +497,11 @@ Definition hashmap_hash_map_remove_fwd
       x <- hashmap_hash_map_remove_from_list_fwd T n0 key l;
       match x with
       | None => Return None
-      | Some x0 => i2 <- usize_sub i 1 %usize; let _ := i2 in Return (Some x0)
+      | Some x0 => i2 <- usize_sub i 1%usize; let _ := i2 in Return (Some x0)
       end
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::HashMap::{0}::remove] *)
 Definition hashmap_hash_map_remove_back
@@ -520,14 +524,14 @@ Definition hashmap_hash_map_remove_back
         v0 <- vec_index_mut_back (Hashmap_list_t T) v hash_mod l0;
         Return (mkHashmap_hash_map_t i p i0 v0)
       | Some x0 =>
-        i2 <- usize_sub i 1 %usize;
+        i2 <- usize_sub i 1%usize;
         l0 <- hashmap_hash_map_remove_from_list_back T n0 key l;
         v0 <- vec_index_mut_back (Hashmap_list_t T) v hash_mod l0;
         Return (mkHashmap_hash_map_t i2 p i0 v0)
       end
     end
   end
-  .
+.
 
 (** [hashmap_main::hashmap::test1] *)
 Definition hashmap_test1_fwd (n : nat) : result unit :=
@@ -535,42 +539,40 @@ Definition hashmap_test1_fwd (n : nat) : result unit :=
   | O => Fail_ OutOfFuel
   | S n0 =>
     hm <- hashmap_hash_map_new_fwd u64 n0;
-    hm0 <- hashmap_hash_map_insert_fwd_back u64 n0 hm (0 %usize) (42 %u64);
-    hm1 <- hashmap_hash_map_insert_fwd_back u64 n0 hm0 (128 %usize) (18 %u64);
-    hm2 <-
-      hashmap_hash_map_insert_fwd_back u64 n0 hm1 (1024 %usize) (138 %u64);
-    hm3 <-
-      hashmap_hash_map_insert_fwd_back u64 n0 hm2 (1056 %usize) (256 %u64);
-    i <- hashmap_hash_map_get_fwd u64 n0 hm3 (128 %usize);
-    if negb (i s= 18 %u64)
+    hm0 <- hashmap_hash_map_insert_fwd_back u64 n0 hm (0%usize) (42%u64);
+    hm1 <- hashmap_hash_map_insert_fwd_back u64 n0 hm0 (128%usize) (18%u64);
+    hm2 <- hashmap_hash_map_insert_fwd_back u64 n0 hm1 (1024%usize) (138%u64);
+    hm3 <- hashmap_hash_map_insert_fwd_back u64 n0 hm2 (1056%usize) (256%u64);
+    i <- hashmap_hash_map_get_fwd u64 n0 hm3 (128%usize);
+    if negb (i s= 18%u64)
     then Fail_ Failure
     else (
-      hm4 <- hashmap_hash_map_get_mut_back u64 n0 hm3 (1024 %usize) (56 %u64);
-      i0 <- hashmap_hash_map_get_fwd u64 n0 hm4 (1024 %usize);
-      if negb (i0 s= 56 %u64)
+      hm4 <- hashmap_hash_map_get_mut_back u64 n0 hm3 (1024%usize) (56%u64);
+      i0 <- hashmap_hash_map_get_fwd u64 n0 hm4 (1024%usize);
+      if negb (i0 s= 56%u64)
       then Fail_ Failure
       else (
-        x <- hashmap_hash_map_remove_fwd u64 n0 hm4 (1024 %usize);
+        x <- hashmap_hash_map_remove_fwd u64 n0 hm4 (1024%usize);
         match x with
         | None => Fail_ Failure
         | Some x0 =>
-          if negb (x0 s= 56 %u64)
+          if negb (x0 s= 56%u64)
           then Fail_ Failure
           else (
-            hm5 <- hashmap_hash_map_remove_back u64 n0 hm4 (1024 %usize);
-            i1 <- hashmap_hash_map_get_fwd u64 n0 hm5 (0 %usize);
-            if negb (i1 s= 42 %u64)
+            hm5 <- hashmap_hash_map_remove_back u64 n0 hm4 (1024%usize);
+            i1 <- hashmap_hash_map_get_fwd u64 n0 hm5 (0%usize);
+            if negb (i1 s= 42%u64)
             then Fail_ Failure
             else (
-              i2 <- hashmap_hash_map_get_fwd u64 n0 hm5 (128 %usize);
-              if negb (i2 s= 18 %u64)
+              i2 <- hashmap_hash_map_get_fwd u64 n0 hm5 (128%usize);
+              if negb (i2 s= 18%u64)
               then Fail_ Failure
               else (
-                i3 <- hashmap_hash_map_get_fwd u64 n0 hm5 (1056 %usize);
-                if negb (i3 s= 256 %u64) then Fail_ Failure else Return tt)))
+                i3 <- hashmap_hash_map_get_fwd u64 n0 hm5 (1056%usize);
+                if negb (i3 s= 256%u64) then Fail_ Failure else Return tt)))
         end))
   end
-  .
+.
 
 (** [hashmap_main::insert_on_disk] *)
 Definition insert_on_disk_fwd
@@ -585,10 +587,10 @@ Definition insert_on_disk_fwd
     let (st1, _) := p0 in
     Return (st1, tt)
   end
-  .
+.
 
 (** [hashmap_main::main] *)
-Definition main_fwd : result unit := Return tt .
+Definition main_fwd : result unit := Return tt.
 
 (** Unit test for [hashmap_main::main] *)
 Check (main_fwd )%return.
