@@ -26,14 +26,19 @@ type result (a : Type0) : Type0 =
 | Return : v:a -> result a
 | Fail : e:error -> result a
 
-// Monadic bind and return.
-// Re-definining those allows us to customize the result of the monadic notations
-// like: `y <-- f x;`
-let return (#a : Type0) (x:a) : result a = Return x
-let bind (#a #b : Type0) (m : result a) (f : a -> result b) : result b =
-    match m with
-    | Return x -> f x
-    | Fail e -> Fail e
+// Monadic return operator
+unfold let return (#a : Type0) (x : a) : result a = Return x
+
+// Monadic bind operator.
+// Allows to use the notation:
+// ```
+// let* x = y in
+// ...
+// ```
+unfold let (let*) (#a #b : Type0) (m: result a) (f: a -> result b) : result b =
+  match m with
+  | Return x -> f x
+  | Fail e   -> Fail e
 
 // Monadic assert(...)
 let massert (b:bool) : result unit = if b then Return () else Fail Failure
@@ -52,7 +57,7 @@ let mem_replace_fwd (a : Type0) (x : a) (y : a) : a = x
 let mem_replace_back (a : Type0) (x : a) (y : a) : a = y
 
 (*** Scalars *)
-/// Rk.: most of the following code was at least partially generated
+/// Rem.: most of the following code was partially generated
 
 let isize_min : int = -9223372036854775808 // TODO: should be opaque
 let isize_max : int = 9223372036854775807 // TODO: should be opaque
@@ -291,4 +296,3 @@ let vec_index_mut_fwd (a : Type0) (v : vec a) (i : usize) : result a =
   if i < length v then Return (index v i) else Fail Failure
 let vec_index_mut_back (a : Type0) (v : vec a) (i : usize) (nx : a) : result (vec a) =
   if i < length v then Return (list_update v i nx) else Fail Failure
-

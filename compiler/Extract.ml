@@ -1432,10 +1432,19 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (re : texpression) : extraction_ctx =
     (* Open a box for the let-binding *)
     F.pp_open_hovbox fmt ctx.indent_incr;
+    let is_fstar_monadic = monadic && !backend = FStar in
     let ctx =
-      if monadic then (
-        (* Note that in F*, the left value of a monadic let-binding can only be
-         * a variable *)
+      (* There are two cases:
+       * - do we use a notation like [x <-- y;]
+       * - do we use notation with let-bindings
+       * Note that both notations can be used for monadic let-bindings.
+       * For instance, in F*, you can write:
+       * {[
+       *   let* x = y in // monadic
+       *   ...
+       * ]}
+       * *)
+      if monadic && !backend = Coq then (
         let ctx = extract_typed_pattern ctx fmt true lv in
         F.pp_print_space fmt ();
         let arrow = match !backend with FStar -> "<--" | Coq -> "<-" in
@@ -1445,7 +1454,7 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_print_string fmt ";";
         ctx)
       else (
-        F.pp_print_string fmt "let";
+        F.pp_print_string fmt (if is_fstar_monadic then "let*" else "let");
         F.pp_print_space fmt ();
         let ctx = extract_typed_pattern ctx fmt true lv in
         F.pp_print_space fmt ();
