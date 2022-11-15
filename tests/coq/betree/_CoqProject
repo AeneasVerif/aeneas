@@ -4,6 +4,6 @@
 
 Primitives.v
 
-BetreeMain__Funs.v
-BetreeMain__Opaque.v
-BetreeMain__Types.v
+BetreeMain_Funs.v
+BetreeMain_Opaque.v
+BetreeMain_Types.v

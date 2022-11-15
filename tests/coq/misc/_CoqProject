@@ -5,9 +5,9 @@
 Primitives.v
 
 Constants.v
-External__Funs.v
-External__Opaque.v
-External__Types.v
+External_Funs.v
+External_Opaque.v
+External_Types.v
 NoNestedBorrows.v
 Paper.v
 PoloniusList.v

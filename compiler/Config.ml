@@ -89,13 +89,11 @@ let return_unit_end_abs_with_no_loans = true
        ...
     ]}
 
-    We use this for instance for Coq, because in Coq we can't define groups
+    Rem.: this used to be useful for Coq, because in Coq we can't define groups
     of mutually recursive records and inductives. In such cases, we extract
     the structures as inductives, which means that field projectors are not
-    always available.
-
-    TODO: we could define a notation to take care of this.
-    TODO: today dont_use_field_projectors is not useful actually.
+    always available. As of today, we generate field projectors definitions
+    (together with the appropriate notations).
  *)
 let dont_use_field_projectors = ref false
 
