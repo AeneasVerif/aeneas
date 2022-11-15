@@ -259,8 +259,6 @@ Definition scalar_cast (src_ty tgt_ty : scalar_ty) (x : scalar src_ty) : result 
   mk_scalar tgt_ty (to_Z x).
 
 (** Comparisons *)
-Print Z.leb .
-
 Definition scalar_leb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
   Z.leb (to_Z x) (to_Z y) .
 
