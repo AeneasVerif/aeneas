@@ -511,7 +511,6 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             if sv.PV.value >= Z.of_int 0 then
               F.pp_print_string fmt (Z.to_string sv.PV.value)
             else F.pp_print_string fmt ("(" ^ Z.to_string sv.PV.value ^ ")");
-            F.pp_print_space fmt ();
             F.pp_print_string fmt ("%" ^ int_name sv.PV.int_ty);
             if inside then F.pp_print_string fmt ")")
     | Bool b ->
@@ -573,7 +572,7 @@ let mk_formatter_and_names_map (ctx : trans_ctx) (crate_name : string)
 (** In Coq, a group of definitions must be ended with a "." *)
 let print_decl_end_delimiter (fmt : F.formatter) (kind : decl_kind) =
   if !backend = Coq && decl_is_last_from_group kind then (
-    F.pp_print_space fmt ();
+    F.pp_print_cut fmt ();
     F.pp_print_string fmt ".")
 
 (** [inside] constrols whether we should add parentheses or not around type
@@ -813,16 +812,16 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
   *)
   (* Note that we already printed: [type t =] *)
   let is_rec = decl_is_from_rec_group kind in
-  (* If Coq: print the constructor name *)
-  if !backend = Coq && not is_rec then (
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt (ctx_get_struct (AdtId def.def_id) ctx));
   let _ =
     if !backend = FStar && fields = [] then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt "unit")
     else if (not is_rec) || !backend = FStar then (
       F.pp_print_space fmt ();
+      (* If Coq: print the constructor name *)
+      if !backend = Coq && not is_rec then (
+        F.pp_print_string fmt (ctx_get_struct (AdtId def.def_id) ctx);
+        F.pp_print_string fmt " ");
       F.pp_print_string fmt "{";
       F.pp_print_break fmt 1 ctx.indent_incr;
       (* The body itself *)
@@ -962,72 +961,76 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
   match !backend with
   | FStar -> ()
   | Coq -> (
-      (* Add the type params - note that we need those bindings only for the
-       * body translation (they are not top-level) *)
-      let _ctx_body, type_params = ctx_add_type_params decl.type_params ctx in
-      (* Auxiliary function to extract an [Arguments Cons {T} _ _.] instruction *)
-      let extract_arguments_info (cons_name : string) (fields : 'a list) : unit
-          =
-        (* Add a break before *)
-        F.pp_print_break fmt 0 0;
-        (* Open a box *)
-        F.pp_open_hovbox fmt ctx.indent_incr;
-        (* Small utility *)
-        let print_type_vars () =
-          List.iter
-            (fun (var : string) ->
-              F.pp_print_string fmt ("{" ^ var ^ "}");
-              F.pp_print_space fmt ())
-            type_params
-        in
-        let print_fields () =
-          List.iter
-            (fun _ ->
-              F.pp_print_string fmt "_";
-              F.pp_print_space fmt ())
-            fields
-        in
-        F.pp_print_break fmt 0 0;
-        F.pp_print_string fmt "Arguments";
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt cons_name;
-        F.pp_print_space fmt ();
-        print_type_vars ();
-        print_fields ();
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt ".";
+      if
+        (* Generate the [Arguments] instruction - this is useful only if there
+           are type parameters *)
+        decl.type_params = []
+      then ()
+      else
+        (* Add the type params - note that we need those bindings only for the
+         * body translation (they are not top-level) *)
+        let _ctx_body, type_params = ctx_add_type_params decl.type_params ctx in
+        (* Auxiliary function to extract an [Arguments Cons {T} _ _.] instruction *)
+        let extract_arguments_info (cons_name : string) (fields : 'a list) :
+            unit =
+          (* Add a break before *)
+          F.pp_print_break fmt 0 0;
+          (* Open a box *)
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          (* Small utility *)
+          let print_type_vars () =
+            List.iter
+              (fun (var : string) ->
+                F.pp_print_space fmt ();
+                F.pp_print_string fmt ("{" ^ var ^ "}"))
+              type_params
+          in
+          let print_fields () =
+            List.iter
+              (fun _ ->
+                F.pp_print_space fmt ();
+                F.pp_print_string fmt "_")
+              fields
+          in
+          F.pp_print_break fmt 0 0;
+          F.pp_print_string fmt "Arguments";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt cons_name;
+          print_type_vars ();
+          print_fields ();
+          F.pp_print_string fmt ".";
 
-        (* Close the box *)
-        F.pp_close_box fmt ()
-      in
+          (* Close the box *)
+          F.pp_close_box fmt ()
+        in
 
-      (* Generate the [Arguments] instruction *)
-      match decl.kind with
-      | Opaque -> ()
-      | Struct fields ->
-          let adt_id = AdtId decl.def_id in
-          (* Generate the instruction for the record constructor *)
-          let cons_name = ctx_get_struct adt_id ctx in
-          extract_arguments_info cons_name fields;
-          (* Generate the instruction for the record projectors, if there are *)
-          let is_rec = decl_is_from_rec_group kind in
-          if not is_rec then
-            FieldId.iteri
-              (fun fid _ ->
-                let cons_name = ctx_get_field adt_id fid ctx in
-                extract_arguments_info cons_name [])
-              fields;
-          (* Add breaks to insert new lines between definitions *)
-          F.pp_print_break fmt 0 0
-      | Enum variants ->
-          (* Generate the instructions *)
-          VariantId.iteri
-            (fun vid (v : variant) ->
-              let cons_name = ctx_get_variant (AdtId decl.def_id) vid ctx in
-              extract_arguments_info cons_name v.fields)
-            variants;
-          (* Add breaks to insert new lines between definitions *)
-          F.pp_print_break fmt 0 0)
+        (* Generate the [Arguments] instruction *)
+        match decl.kind with
+        | Opaque -> ()
+        | Struct fields ->
+            let adt_id = AdtId decl.def_id in
+            (* Generate the instruction for the record constructor *)
+            let cons_name = ctx_get_struct adt_id ctx in
+            extract_arguments_info cons_name fields;
+            (* Generate the instruction for the record projectors, if there are *)
+            let is_rec = decl_is_from_rec_group kind in
+            if not is_rec then
+              FieldId.iteri
+                (fun fid _ ->
+                  let cons_name = ctx_get_field adt_id fid ctx in
+                  extract_arguments_info cons_name [])
+                fields;
+            (* Add breaks to insert new lines between definitions *)
+            F.pp_print_break fmt 0 0
+        | Enum variants ->
+            (* Generate the instructions *)
+            VariantId.iteri
+              (fun vid (v : variant) ->
+                let cons_name = ctx_get_variant (AdtId decl.def_id) vid ctx in
+                extract_arguments_info cons_name v.fields)
+              variants;
+            (* Add breaks to insert new lines between definitions *)
+            F.pp_print_break fmt 0 0)
 
 (** Extract the state type declaration. *)
 let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
@@ -1595,14 +1598,18 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Close the box for the whole expression *)
   F.pp_close_box fmt ()
 
+(** Insert a space, if necessary *)
+let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
+  if !space then space := false else F.pp_print_space fmt ()
+
 (** A small utility to print the parameters of a function signature.
 
     We return two contexts:
     - the context augmented with bindings for the type parameters
     - the previous context augmented with bindings for the input values
  *)
-let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : fun_decl) : extraction_ctx * extraction_ctx =
+let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
+    (fmt : F.formatter) (def : fun_decl) : extraction_ctx * extraction_ctx =
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, _ = ctx_add_type_params def.signature.type_params ctx in
@@ -1612,6 +1619,7 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
   if def.signature.type_params <> [] then (
     (* Open a box for the type parameters *)
     F.pp_open_hovbox fmt 0;
+    insert_req_space fmt space;
     F.pp_print_string fmt "(";
     List.iter
       (fun (p : type_var) ->
@@ -1624,8 +1632,7 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     let type_keyword = match !backend with FStar -> "Type0" | Coq -> "Type" in
     F.pp_print_string fmt (type_keyword ^ ")");
     (* Close the box for the type parameters *)
-    F.pp_close_box fmt ();
-    F.pp_print_space fmt ());
+    F.pp_close_box fmt ());
   (* The input parameters - note that doing this adds bindings to the context *)
   let ctx_body =
     match def.body with
@@ -1633,6 +1640,7 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
     | Some body ->
         List.fold_left
           (fun ctx (lv : typed_pattern) ->
+            insert_req_space fmt space;
             (* Open a box for the input parameter *)
             F.pp_open_hovbox fmt 0;
             F.pp_print_string fmt "(";
@@ -1644,7 +1652,6 @@ let extract_fun_parameters (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_string fmt ")";
             (* Close the box for the input parameters *)
             F.pp_close_box fmt ();
-            F.pp_print_space fmt ();
             ctx)
           ctx body.inputs_lvs
   in
@@ -1708,7 +1715,9 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_string fmt ("let " ^ def_name);
   F.pp_print_space fmt ();
   (* Extract the parameters *)
-  let _, _ = extract_fun_parameters ctx fmt def in
+  let space = ref true in
+  let _, _ = extract_fun_parameters space ctx fmt def in
+  insert_req_space fmt space;
   F.pp_print_string fmt ":";
   (* Print the signature *)
   F.pp_print_space fmt ();
@@ -1748,8 +1757,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_string fmt
     ("(** [" ^ Print.fun_name_to_string def.basename ^ "] *)");
   F.pp_print_space fmt ();
-  (* Open a box for the definition, so that whenever possible it gets printed on
-   * one line *)
+  (* Open two boxes for the definition, so that whenever possible it gets printed on
+   * one line and indents are correct *)
+  F.pp_open_hvbox fmt 0;
   F.pp_open_hvbox fmt ctx.indent_incr;
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
@@ -1772,18 +1782,22 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt "forall");
   (* Open a box for "(PARAMS) : EFFECT =" *)
   F.pp_open_hvbox fmt 0;
-  (* Open a box for "(PARAMS)" *)
+  (* Open a box for "(PARAMS) :" *)
   F.pp_open_hovbox fmt 0;
-  let ctx, ctx_body = extract_fun_parameters ctx fmt def in
-  (* Close the box for "(PARAMS)" *)
-  F.pp_close_box fmt ();
+  let space = ref true in
+  let ctx, ctx_body = extract_fun_parameters space ctx fmt def in
   (* Print the return type - note that we have to be careful when
    * printing the input values for the decrease clause, because
    * it introduces bindings in the context... We thus "forget"
    * the bindings we introduced above.
    * TODO: figure out a cleaner way *)
   let _ =
-    if use_forall then F.pp_print_string fmt "," else F.pp_print_string fmt ":";
+    if use_forall then F.pp_print_string fmt ","
+    else (
+      insert_req_space fmt space;
+      F.pp_print_string fmt ":");
+    (* Close the box for "(PARAMS) :" *)
+    F.pp_close_box fmt ();
     F.pp_print_space fmt ();
     (* Open a box for the EFFECT *)
     F.pp_open_hvbox fmt 0;
@@ -1807,12 +1821,13 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     if has_decreases_clause then (
       assert (!backend = FStar);
       F.pp_print_space fmt ();
-      (* Open a box for the decrease clause *)
-      F.pp_open_hovbox fmt 0;
+      (* Open a box for the decreases clause *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
       (* *)
-      F.pp_print_string fmt "(decreases";
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt "(";
+      F.pp_print_string fmt "(decreases (";
+      F.pp_print_cut fmt ();
+      (* Open a box for the decreases term *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
       (* The name of the decrease clause *)
       let decr_name = ctx_get_decreases_clause def.def_id ctx in
       F.pp_print_string fmt decr_name;
@@ -1847,7 +1862,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
           ctx inputs_lvs
       in
       F.pp_print_string fmt "))";
-      (* Close the box for the decrease clause *)
+      (* Close the box for the decreases term *)
+      F.pp_close_box fmt ();
+      (* Close the box for the decreases clause *)
       F.pp_close_box fmt ());
     (* Close the box for the EFFECT *)
     F.pp_close_box fmt ()
@@ -1867,13 +1884,13 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_open_hvbox fmt 0;
     (* Extract the body *)
     let _ = extract_texpression ctx_body fmt false (Option.get def.body).body in
-    (* Coq: add a "." *)
-    print_decl_end_delimiter fmt kind;
     (* Close the box for the body *)
     F.pp_close_box fmt ());
+  (* Close the inner box for the definition *)
+  F.pp_close_box fmt ();
   (* Coq: add a "." *)
-  if is_opaque_coq then print_decl_end_delimiter fmt kind;
-  (* Close the box for the definition *)
+  print_decl_end_delimiter fmt kind;
+  (* Close the outer box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
@@ -1886,7 +1903,8 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
     (extract_body : (F.formatter -> unit) Option.t) : unit =
   let is_opaque = Option.is_none extract_body in
 
-  (* Open the definition box (depth=0) *)
+  (* Open the definition boxes (depth=0) *)
+  F.pp_open_hvbox fmt 0;
   F.pp_open_hvbox fmt ctx.indent_incr;
 
   (* Open "QUALIF NAME : TYPE =" box (depth=1) *)
@@ -1929,10 +1947,13 @@ let extract_global_decl_body (ctx : extraction_ctx) (fmt : F.formatter)
     (* Close "BODY" box (depth=1) *)
     F.pp_close_box fmt ());
 
+  (* Close the inner definition box (depth=0) *)
+  F.pp_close_box fmt ();
+
   (* Coq: add a "." *)
   print_decl_end_delimiter fmt Declared;
 
-  (* Close the definition box (depth=0) *)
+  (* Close the outer definition box (depth=0) *)
   F.pp_close_box fmt ()
 
 (** Extract a global declaration.

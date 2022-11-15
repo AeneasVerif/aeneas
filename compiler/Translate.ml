@@ -585,15 +585,15 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
 
       (* Add the custom imports *)
       List.iter
-        (fun m -> Printf.fprintf out "Require Import %s .\n" m)
+        (fun m -> Printf.fprintf out "Require Import %s.\n" m)
         custom_imports;
       (* Add the custom includes *)
       List.iter
         (fun m ->
-          Printf.fprintf out "Require Export %s .\n" m;
-          Printf.fprintf out "Import %s .\n" m)
+          Printf.fprintf out "Require Export %s.\n" m;
+          Printf.fprintf out "Import %s.\n" m)
         custom_includes;
-      Printf.fprintf out "Module %s .\n" module_name);
+      Printf.fprintf out "Module %s.\n" module_name);
   (* From now onwards, we use the formatter *)
   (* Set the margin *)
   Format.pp_set_margin fmt 80;

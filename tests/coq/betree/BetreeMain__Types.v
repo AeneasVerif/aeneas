@@ -4,7 +4,7 @@ Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
-Module BetreeMain__Types .
+Module BetreeMain__Types.
 
 (** [betree_main::betree::List] *)
 Inductive Betree_list_t (T : Type) :=
@@ -12,17 +12,14 @@ Inductive Betree_list_t (T : Type) :=
 | BetreeListNil : Betree_list_t T
 .
 
-Arguments BetreeListCons {T} _ _  .
-Arguments BetreeListNil {T}  .
+Arguments BetreeListCons {T} _ _.
+Arguments BetreeListNil {T}.
 
 (** [betree_main::betree::UpsertFunState] *)
 Inductive Betree_upsert_fun_state_t :=
 | BetreeUpsertFunStateAdd : u64 -> Betree_upsert_fun_state_t
 | BetreeUpsertFunStateSub : u64 -> Betree_upsert_fun_state_t
 .
-
-Arguments BetreeUpsertFunStateAdd _  .
-Arguments BetreeUpsertFunStateSub _  .
 
 (** [betree_main::betree::Message] *)
 Inductive Betree_message_t :=
@@ -31,21 +28,12 @@ Inductive Betree_message_t :=
 | BetreeMessageUpsert : Betree_upsert_fun_state_t -> Betree_message_t
 .
 
-Arguments BetreeMessageInsert _  .
-Arguments BetreeMessageDelete  .
-Arguments BetreeMessageUpsert _  .
-
 (** [betree_main::betree::Leaf] *)
 Record Betree_leaf_t :=
-mkBetree_leaf_t
-{
+mkBetree_leaf_t {
   Betree_leaf_id : u64; Betree_leaf_size : u64;
 }
 .
-
-Arguments mkBetree_leaf_t _ _  .
-Arguments Betree_leaf_id  .
-Arguments Betree_leaf_size  .
 
 (** [betree_main::betree::Node] *)
 Inductive Betree_node_t :=
@@ -62,54 +50,34 @@ with Betree_internal_t :=
   Betree_internal_t
 .
 
-Arguments BetreeNodeInternal _  .
-Arguments BetreeNodeLeaf _  .
-
-Arguments mkBetree_internal_t _ _ _ _  .
-
 (** [betree_main::betree::Params] *)
 Record Betree_params_t :=
-mkBetree_params_t
-{
+mkBetree_params_t {
   Betree_params_min_flush_size : u64; Betree_params_split_size : u64;
 }
 .
 
-Arguments mkBetree_params_t _ _  .
-Arguments Betree_params_min_flush_size  .
-Arguments Betree_params_split_size  .
-
 (** [betree_main::betree::NodeIdCounter] *)
 Record Betree_node_id_counter_t :=
-mkBetree_node_id_counter_t
-{
+mkBetree_node_id_counter_t {
   Betree_node_id_counter_next_node_id : u64;
 }
 .
 
-Arguments mkBetree_node_id_counter_t _  .
-Arguments Betree_node_id_counter_next_node_id  .
-
 (** [betree_main::betree::BeTree] *)
 Record Betree_be_tree_t :=
-mkBetree_be_tree_t
-{
+mkBetree_be_tree_t {
   Betree_be_tree_params : Betree_params_t;
   Betree_be_tree_node_id_cnt : Betree_node_id_counter_t;
   Betree_be_tree_root : Betree_node_t;
 }
 .
 
-Arguments mkBetree_be_tree_t _ _ _  .
-Arguments Betree_be_tree_params  .
-Arguments Betree_be_tree_node_id_cnt  .
-Arguments Betree_be_tree_root  .
-
 (** [core::num::u64::{10}::MAX] *)
 Definition core_num_u64_max_body : result u64 :=
-  Return (18446744073709551615 %u64)
-  .
-Definition core_num_u64_max_c : u64 := core_num_u64_max_body%global .
+  Return (18446744073709551615%u64)
+.
+Definition core_num_u64_max_c : u64 := core_num_u64_max_body%global.
 
 (** The state type used in the state-error monad *)
 Axiom state : Type.
