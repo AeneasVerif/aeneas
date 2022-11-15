@@ -1512,52 +1512,6 @@ val hash_map_move_elements_fwd_back_lem_refin
     | _ -> False))
  (decreases (length slots - i))
 
-// This proof was super unstable for some reasons.
-// 
-// For instance, using the [hash_map_s_nes] type abbreviation
-// in some of the above definitions led to a failure (while it was just a type
-// abbreviation: the signatures were the same if we unfolded this type). This
-// behaviour led me to the hypothesis that maybe it made F*'s type inference
-// end up with a different result, which combined with its poor support for
-// subtyping made the proof failed.
-//
-// However, later, unwrapping a definition led to another failure.
-// 
-// I thus tried to manually unfold some postconditions because it
-// seemed to work for [hash_map_move_elements_fwd_back_lem] but it didn't
-// succeed.
-//
-// I tried to increase the ifuel to 2, 3: it didn't work, and I fell back to
-// other methods. Finally out of angriness I swiched the ifuel to 4 for no
-// specific reason: everything worked fine.
-// 
-// I have *no clue* why 4 is the magic number. Also: it fails if I remove
-// the unfolded postconditions (meaning I would probably need to increase
-// the ifuel to unreasonable amounts).
-//
-// Finally, as I had succeeded in fixing the proof, I thought that maybe the
-// initial problem with the type abbreviations was fixed: I thus tried to use
-// them. Of course, it made the proof fail again, and this time no ifuel setting
-// seemed to work.
-//
-// At this point I was just fed up and leave things as they were, without trying
-// to cleanup the previous definitions.
-//
-// Finally, even later it broke, again, at which point I had no choice but to
-// introduce an even simpler refinement proof (with [hash_map_move_elements_s_simpl]).
-// Doing this allowed me to see that maybe the problem came from the fact that
-// Z3 had to prove that `list_t_v ListNil == []` at some point, so I added the
-// corresponding assertion and miraculously everything becamse stable... I then
-// removed all the postconditions I had manually instanciated and inserted in
-// the proof, and which took a lot of place.
-// I still have no clue why `ifuel 4` made it work earlier.
-//
-// The terrible thing is that this refinement proof is conceptually super simple:
-// - there are maybe two arithmetic proofs, which are directly solved by the
-//   precondition
-// - we need to prove the call to [hash_map_move_elements_from_list_fwd_back]
-//   refines its model: this is proven by another refinement lemma we proved above
-// - there is the recursive call (trivial)
 #restart-solver
 #push-options "--fuel 1"
 let rec hash_map_move_elements_fwd_back_lem_refin t ntable slots i =
@@ -2102,7 +2056,6 @@ val partial_hash_map_s_is_assoc_list_lem
   (ensures (
     partial_hash_map_s_find len offset hm k == assoc_list_find k (flatten hm)))
   (decreases hm)
-//  (decreases (length hm + length (flatten hm)))
 
 #push-options "--fuel 1"
 let rec partial_hash_map_s_is_assoc_list_lem #t len offset hm k =
@@ -2271,19 +2224,6 @@ let hash_map_try_resize_s_simpl
     end
   else Return hm
 
-// I had made a mistake when writing the above definition: I had used `ntable`
-// instead of `ntable'` in the last assignments. Of course, Z3 failed to prove
-// the equality `hm1 == hm2`, and as I couldn't spot immediately the mistake,
-// I had to resort to the good old "test every field" trick, by replacing
-// `hm1 == hm2` with:
-//   ```
-//    hm1.hash_map_num_entries == hm2.hash_map_num_entries /\
-//    hm1.hash_map_max_load_factor == hm2.hash_map_max_load_factor /\
-//    hm1.hash_map_max_load == hm2.hash_map_max_load /\
-//    hm1.hash_map_slots == hm2.hash_map_slots
-//    ```
-// Once again, if I had had access to a context, I would have seen the error
-// immediately.
 val hash_map_try_resize_fwd_back_lem_refin
   (t : Type0) (self : hash_map_t t) :
   Lemma
