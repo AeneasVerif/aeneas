@@ -495,7 +495,17 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs) :
   let abs_ids = list_ancestor_abstractions_ids ctx abs in
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 
-(** Small utility *)
+(** Small utility.
+
+    Does the function *decrease* the fuel? [true] if recursive.
+ *)
+let function_decreases_fuel (info : fun_effect_info) : bool =
+  !Config.use_fuel && info.is_rec
+
+(** Small utility.
+
+    Does the function *use* the fuel? [true] if can diverge.
+ *)
 let function_uses_fuel (info : fun_effect_info) : bool =
   !Config.use_fuel && info.can_diverge
 
@@ -522,7 +532,8 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
         can_fail = info.can_fail;
         stateful_group;
         stateful;
-        can_diverge = info.divergent;
+        can_diverge = info.can_diverge;
+        is_rec = info.is_rec;
       }
   | A.Assumed aid ->
       {
@@ -530,6 +541,7 @@ let get_fun_effect_info (fun_infos : FA.fun_info A.FunDeclId.Map.t)
         stateful_group = false;
         stateful = false;
         can_diverge = false;
+        is_rec = false;
       }
 
 (** Translate a function signature.
@@ -1268,6 +1280,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             stateful_group = false;
             stateful = false;
             can_diverge = false;
+            is_rec = false;
           }
         in
         (ctx, Unop Not, effect_info, args, None)
@@ -1283,6 +1296,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                 stateful_group = false;
                 stateful = false;
                 can_diverge = false;
+                is_rec = false;
               }
             in
             (ctx, Unop (Neg int_ty), effect_info, args, None)
@@ -1295,6 +1309,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             stateful_group = false;
             stateful = false;
             can_diverge = false;
+            is_rec = false;
           }
         in
         (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None)
@@ -1310,6 +1325,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
                 stateful_group = false;
                 stateful = false;
                 can_diverge = false;
+                is_rec = false;
               }
             in
             (ctx, Binop (binop, int_ty0), effect_info, args, None)
@@ -1913,14 +1929,20 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         let body = translate_expression body ctx in
         (* Add a match over the fuel, if necessary *)
         let body =
-          if function_uses_fuel effect_info then wrap_in_match_fuel body ctx
+          if function_decreases_fuel effect_info then
+            wrap_in_match_fuel body ctx
           else body
         in
         (* Sanity check *)
         type_check_texpression ctx body;
         (* Introduce the fuel parameter, if necessary *)
         let fuel =
-          if function_uses_fuel effect_info then [ mk_fuel_var ctx.fuel0 ]
+          if function_uses_fuel effect_info then
+            let fuel_var =
+              if function_decreases_fuel effect_info then ctx.fuel0
+              else ctx.fuel
+            in
+            [ mk_fuel_var fuel_var ]
           else []
         in
         (* Introduce the forward input state (the state at call site of the

@@ -525,6 +525,8 @@ type fun_effect_info = {
   can_fail : bool;  (** [true] if the return type is a [result] *)
   can_diverge : bool;
       (** [true] if the function can diverge (i.e., not terminate) *)
+  is_rec : bool;
+      (** [true] if the function is recursive (or in a mutually recursive group) *)
 }
 
 (** Meta information about a function signature *)
