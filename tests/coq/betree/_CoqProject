@@ -1,9 +1,9 @@
+# This file was automatically generated - see ../Makefile
 -R . Lib
 -arg -w
 -arg all
 
+BetreeMain_Types.v
 Primitives.v
-
 BetreeMain_Funs.v
 BetreeMain_Opaque.v
-BetreeMain_Types.v

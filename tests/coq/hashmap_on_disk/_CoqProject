@@ -1,9 +1,9 @@
+# This file was automatically generated - see ../Makefile
 -R . Lib
 -arg -w
 -arg all
 
+HashmapMain_Types.v
 Primitives.v
-
 HashmapMain_Funs.v
 HashmapMain_Opaque.v
-HashmapMain_Types.v

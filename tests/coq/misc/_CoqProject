@@ -1,13 +1,13 @@
+# This file was automatically generated - see ../Makefile
 -R . Lib
 -arg -w
 -arg all
 
 Primitives.v
-
-Constants.v
 External_Funs.v
-External_Opaque.v
+Constants.v
+PoloniusList.v
 External_Types.v
 NoNestedBorrows.v
+External_Opaque.v
 Paper.v
-PoloniusList.v

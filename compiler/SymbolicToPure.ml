@@ -1637,6 +1637,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       match branches with
       | [] -> raise (Failure "Unreachable")
       | [ (variant_id, svl, branch) ]
+      (* TODO: always introduce a match, and use micro-passes to turn the
+         the match into a let *)
         when not
                (TypesUtils.ty_is_custom_adt sv.V.sv_ty
                && !Config.always_deconstruct_adts_with_matches) -> (
