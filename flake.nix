@@ -5,9 +5,10 @@
     charon.url = "github:aeneasverif/charon";
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
+    hacl-nix.url = "github:hacl-star/hacl-nix";
   };
 
-  outputs = { self, charon, flake-utils, nixpkgs }:
+  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -40,6 +41,7 @@
           echo charon.packages.${system}.tests
           '';
         };
+        # Run the translation on various files.
         # Make sure we don't need to recompile the package whenever we make
         # unnecessary changes - we list the exact files and folders the package
         # depends upon.
@@ -54,20 +56,28 @@
               || pkgs.lib.hasPrefix (toString ./tests) path;
           };
           buildPhase = ''
-          # We need to provide the paths to the Charon tests derivations
-          export CHARON_TESTS_REGULAR_DIR=${charon.checks.${system}.tests}
-          export CHARON_TESTS_POLONIUS_DIR=${charon.checks.${system}.tests-polonius}
+            # We need to provide the paths to the Charon tests derivations
+            export CHARON_TESTS_REGULAR_DIR=${charon.checks.${system}.tests}
+            export CHARON_TESTS_POLONIUS_DIR=${charon.checks.${system}.tests-polonius}
 
-          # Copy the Aeneas executable, and update the path to it
-          cp ${aeneas}/bin/aeneas_driver aeneas.exe
-          export AENEAS_EXE=./aeneas.exe
+            # Copy the Aeneas executable, and update the path to it
+            cp ${aeneas}/bin/aeneas_driver aeneas.exe
+            export AENEAS_EXE=./aeneas.exe
 
-          # Run the tests
-          make tests
+            # Run the tests
+            make tests
           '';
           # Tests don't generate anything new as the generated files are
           # versionned, but the installation phase still needs to prodocue
           # something, otherwise Nix will consider the build has failed.
+          installPhase = "touch $out";
+        };
+        # Replay the F* proofs.
+        aeneas-verify-fstar = pkgs.stdenv.mkDerivation {
+          name = "aeneas_tests";
+          src = ./tests/fstar;
+          FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
+          # Tests don't generate anything
           installPhase = "touch $out";
         };
       in {
@@ -75,7 +85,7 @@
           inherit aeneas;
           default = aeneas;
         };
-        checks = { inherit aeneas aeneas-tests; };
-        hydraJobs = { inherit aeneas aeneas-tests; };
+        checks = { inherit aeneas aeneas-tests aeneas-verify-fstar; };
+        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar; };
       });
 }

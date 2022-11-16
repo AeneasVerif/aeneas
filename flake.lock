@@ -79,6 +79,110 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "locked": {
+        "lastModified": 1667395993,
+        "narHash": "sha256-nuEHfE/LcWyuSWnS8t12N1wc105Qtau+/OdUAjtQ0rA=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "5aed5285a952e0b949eb3ba02c12fa4fcfef535f",
+        "type": "github"
+      },
+      "original": {
+        "id": "flake-utils",
+        "type": "indirect"
+      }
+    },
+    "fstar-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1668549455,
+        "narHash": "sha256-WHgHYmeWwy3RfIE2pkOyLTpkhi8FXL83zO8Tv2N9Iic=",
+        "owner": "fstarlang",
+        "repo": "fstar",
+        "rev": "2040a595ed2faff0a1dce782fefbb518102eb1dd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "fstarlang",
+        "repo": "fstar",
+        "type": "github"
+      }
+    },
+    "hacl": {
+      "inputs": {
+        "flake-utils": [
+          "hacl-nix",
+          "flake-utils"
+        ],
+        "fstar-src": [
+          "hacl-nix",
+          "fstar-src"
+        ],
+        "hacl-nix": [
+          "hacl-nix"
+        ],
+        "karamel-src": [
+          "hacl-nix",
+          "karamel-src"
+        ],
+        "nixpkgs": [
+          "hacl-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1668456660,
+        "narHash": "sha256-m4/L+AgF5LaG6v82L3TpB66vv/PIORtd0XTvoOlP1Ok=",
+        "owner": "hacl-star",
+        "repo": "hacl-star",
+        "rev": "7241848c958eb6ae7dec0cd683852ae10a3bd799",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hacl-star",
+        "repo": "hacl-star",
+        "type": "github"
+      }
+    },
+    "hacl-nix": {
+      "inputs": {
+        "flake-utils": "flake-utils_2",
+        "fstar-src": "fstar-src",
+        "hacl": "hacl",
+        "karamel-src": "karamel-src",
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1668558838,
+        "narHash": "sha256-etn/6ASEQFHIbTddAaHuz55/mWNz/UJcu3363YUHUOE=",
+        "owner": "hacl-star",
+        "repo": "hacl-nix",
+        "rev": "8f22117a9e9b2733acfa0f50fc5cf849bca18860",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hacl-star",
+        "repo": "hacl-nix",
+        "type": "github"
+      }
+    },
+    "karamel-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1668034772,
+        "narHash": "sha256-1Z3is1g0qhrn4eKFepXxD1fPhcPVIB02rAihMUU5zyc=",
+        "owner": "fstarlang",
+        "repo": "karamel",
+        "rev": "55b36e2c06b99f735283062e74f826d3088c2697",
+        "type": "github"
+      },
+      "original": {
+        "owner": "fstarlang",
+        "repo": "karamel",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1666703756,
@@ -94,6 +198,21 @@
         "type": "indirect"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1667811565,
+        "narHash": "sha256-HYml7RdQPQ7X13VNe2CoDMqmifsXbt4ACTKxHRKQE3Q=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "667e5581d16745bcda791300ae7e2d73f49fff25",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "ref": "nixos-unstable",
+        "type": "indirect"
+      }
+    },
     "root": {
       "inputs": {
         "charon": "charon",
@@ -101,6 +220,7 @@
           "charon",
           "flake-utils"
         ],
+        "hacl-nix": "hacl-nix",
         "nixpkgs": [
           "charon",
           "nixpkgs"

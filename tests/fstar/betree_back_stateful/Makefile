@@ -8,7 +8,8 @@ FSTAR_OPTIONS = $(FSTAR_HINTS) \
   --cache_checked_modules $(FSTAR_INCLUDES) --cmi \
   --warn_error '+241@247+285-274' \
 
-FSTAR_NO_FLAGS = fstar.exe --already_cached 'Prims FStar LowStar Steel' --odir obj --cache_dir obj
+FSTAR_EXE ?= fstar.exe
+FSTAR_NO_FLAGS = $(FSTAR_EXE) --already_cached 'Prims FStar LowStar Steel' --odir obj --cache_dir obj
 
 FSTAR = $(FSTAR_NO_FLAGS) $(FSTAR_OPTIONS)
 

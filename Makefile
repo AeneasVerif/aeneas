@@ -218,5 +218,12 @@ tcoqp-%:
 
 # Nix
 .PHONY: nix
-nix:
+nix: nix-aeneas-tests nix-aeneas-verify-fstar
+
+.PHONY: nix-aeneas-tests
+nix-aeneas-tests:
 	nix build .#checks.x86_64-linux.aeneas-tests --show-trace -L
+
+.PHONY: nix-aeneas-verify-fstar
+nix-aeneas-verify-fstar:
+	nix build .#checks.x86_64-linux.aeneas-verify-fstar --show-trace -L
