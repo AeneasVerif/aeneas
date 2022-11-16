@@ -1,3 +1,4 @@
+# This file was automatically generated - modify ../Makefile.template instead
 # Makefile originally taken from coq-club
 
 %: Makefile.coq phony

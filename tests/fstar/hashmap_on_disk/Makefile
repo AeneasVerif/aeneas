@@ -1,3 +1,4 @@
+# This file was automatically generated - modify ../Makefile.template instead
 INCLUDE_DIRS = .
 
 FSTAR_INCLUDES = $(addprefix --include ,$(INCLUDE_DIRS))
