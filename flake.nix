@@ -13,6 +13,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         ocamlPackages = pkgs.ocamlPackages;
+        coqPackages = pkgs.coqPackages;
         easy_logging = ocamlPackages.buildDunePackage rec {
           pname = "easy_logging";
           version = "0.8.2";
@@ -74,10 +75,18 @@
         };
         # Replay the F* proofs.
         aeneas-verify-fstar = pkgs.stdenv.mkDerivation {
-          name = "aeneas_tests";
+          name = "aeneas_verify_fstar";
           src = ./tests/fstar;
           FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
-          # Tests don't generate anything
+          # The tests don't generate anything
+          installPhase = "touch $out";
+        };
+        # Replay the Coq proofs.
+        aeneas-verify-coq = pkgs.stdenv.mkDerivation {
+          name = "aeneas_verify_coq";
+          src = ./tests/coq;
+          buildInputs = [ pkgs.coq ];
+          # The tests don't generate anything
           installPhase = "touch $out";
         };
       in {
@@ -85,7 +94,7 @@
           inherit aeneas;
           default = aeneas;
         };
-        checks = { inherit aeneas aeneas-tests aeneas-verify-fstar; };
-        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar; };
+        checks = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq; };
+        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq; };
       });
 }

@@ -29,8 +29,10 @@ gen-coq-project-%:
 	rm -f $*/_CoqProject
 	echo "# This file was automatically generated - see ../Makefile" >> $*/_CoqProject
 	cat _CoqProject.template >> $*/_CoqProject
-	echo $(patsubst $*/%,"\n"%,$(wildcard $*/*.v)) >> $*/_CoqProject
-	sed -i -z "s/ \n/\n/g" $*/_CoqProject
+	echo $(wildcard $*/*.v) >> $*/_CoqProject # List the .v files
+	sed -i -z "s/"$*"\//\n/g" $*/_CoqProject # Insert breaks
+	sed -i -z "s/ \n/\n/g" $*/_CoqProject # Remove whitespaces at the end of lines
+	cat $*/_CoqProject
 
 .PHONY: clean-%
 clean-%:
