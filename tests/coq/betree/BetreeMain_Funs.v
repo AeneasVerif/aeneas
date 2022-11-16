@@ -218,28 +218,24 @@ Definition betree_leaf_split_fwd
   (st : state) :
   result (state * Betree_internal_t)
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    p <-
-      betree_list_split_at_fwd (u64 * u64) n0 content
-        params.(Betree_params_split_size);
-    let (content0, content1) := p in
-    p0 <- betree_list_hd_fwd (u64 * u64) content1;
-    let (pivot, _) := p0 in
-    id0 <- betree_node_id_counter_fresh_id_fwd node_id_cnt;
-    node_id_cnt0 <- betree_node_id_counter_fresh_id_back node_id_cnt;
-    id1 <- betree_node_id_counter_fresh_id_fwd node_id_cnt0;
-    p1 <- betree_store_leaf_node_fwd id0 content0 st;
-    let (st0, _) := p1 in
-    p2 <- betree_store_leaf_node_fwd id1 content1 st0;
-    let (st1, _) := p2 in
-    let n1 := BetreeNodeLeaf (mkBetree_leaf_t id0
-      params.(Betree_params_split_size)) in
-    let n2 := BetreeNodeLeaf (mkBetree_leaf_t id1
-      params.(Betree_params_split_size)) in
-    Return (st1, mkBetree_internal_t self.(Betree_leaf_id) pivot n1 n2)
-  end
+  p <-
+    betree_list_split_at_fwd (u64 * u64) n content
+      params.(Betree_params_split_size);
+  let (content0, content1) := p in
+  p0 <- betree_list_hd_fwd (u64 * u64) content1;
+  let (pivot, _) := p0 in
+  id0 <- betree_node_id_counter_fresh_id_fwd node_id_cnt;
+  node_id_cnt0 <- betree_node_id_counter_fresh_id_back node_id_cnt;
+  id1 <- betree_node_id_counter_fresh_id_fwd node_id_cnt0;
+  p1 <- betree_store_leaf_node_fwd id0 content0 st;
+  let (st0, _) := p1 in
+  p2 <- betree_store_leaf_node_fwd id1 content1 st0;
+  let (st1, _) := p2 in
+  let n0 := BetreeNodeLeaf (mkBetree_leaf_t id0
+    params.(Betree_params_split_size)) in
+  let n1 := BetreeNodeLeaf (mkBetree_leaf_t id1
+    params.(Betree_params_split_size)) in
+  Return (st1, mkBetree_internal_t self.(Betree_leaf_id) pivot n0 n1)
 .
 
 (** [betree_main::betree::Leaf::{3}::split] *)
@@ -249,25 +245,21 @@ Definition betree_leaf_split_back
   (st : state) :
   result Betree_node_id_counter_t
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    p <-
-      betree_list_split_at_fwd (u64 * u64) n0 content
-        params.(Betree_params_split_size);
-    let (content0, content1) := p in
-    p0 <- betree_list_hd_fwd (u64 * u64) content1;
-    let _ := p0 in
-    id0 <- betree_node_id_counter_fresh_id_fwd node_id_cnt;
-    node_id_cnt0 <- betree_node_id_counter_fresh_id_back node_id_cnt;
-    id1 <- betree_node_id_counter_fresh_id_fwd node_id_cnt0;
-    p1 <- betree_store_leaf_node_fwd id0 content0 st;
-    let (st0, _) := p1 in
-    p2 <- betree_store_leaf_node_fwd id1 content1 st0;
-    let (_, _) := p2 in
-    node_id_cnt1 <- betree_node_id_counter_fresh_id_back node_id_cnt0;
-    Return node_id_cnt1
-  end
+  p <-
+    betree_list_split_at_fwd (u64 * u64) n content
+      params.(Betree_params_split_size);
+  let (content0, content1) := p in
+  p0 <- betree_list_hd_fwd (u64 * u64) content1;
+  let _ := p0 in
+  id0 <- betree_node_id_counter_fresh_id_fwd node_id_cnt;
+  node_id_cnt0 <- betree_node_id_counter_fresh_id_back node_id_cnt;
+  id1 <- betree_node_id_counter_fresh_id_fwd node_id_cnt0;
+  p1 <- betree_store_leaf_node_fwd id0 content0 st;
+  let (st0, _) := p1 in
+  p2 <- betree_store_leaf_node_fwd id1 content1 st0;
+  let (_, _) := p2 in
+  node_id_cnt1 <- betree_node_id_counter_fresh_id_back node_id_cnt0;
+  Return node_id_cnt1
 .
 
 (** [betree_main::betree::Node::{5}::lookup_in_bindings] *)
@@ -641,58 +633,54 @@ Definition betree_node_apply_to_leaf_fwd_back
   (new_msg : Betree_message_t) :
   result (Betree_list_t (u64 * u64))
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    bindings0 <- betree_node_lookup_mut_in_bindings_fwd n0 key bindings;
-    b <- betree_list_head_has_key_fwd u64 bindings0 key;
-    if b
-    then (
-      hd <- betree_list_pop_front_fwd (u64 * u64) bindings0;
-      match new_msg with
-      | BetreeMessageInsert v =>
-        bindings1 <- betree_list_pop_front_back (u64 * u64) bindings0;
-        bindings2 <-
-          betree_list_push_front_fwd_back (u64 * u64) bindings1 (key, v);
-        bindings3 <-
-          betree_node_lookup_mut_in_bindings_back n0 key bindings bindings2;
-        Return bindings3
-      | BetreeMessageDelete =>
-        bindings1 <- betree_list_pop_front_back (u64 * u64) bindings0;
-        bindings2 <-
-          betree_node_lookup_mut_in_bindings_back n0 key bindings bindings1;
-        Return bindings2
-      | BetreeMessageUpsert s =>
-        let (_, i) := hd in
-        v <- betree_upsert_update_fwd (Some i) s;
-        bindings1 <- betree_list_pop_front_back (u64 * u64) bindings0;
-        bindings2 <-
-          betree_list_push_front_fwd_back (u64 * u64) bindings1 (key, v);
-        bindings3 <-
-          betree_node_lookup_mut_in_bindings_back n0 key bindings bindings2;
-        Return bindings3
-      end)
-    else
-      match new_msg with
-      | BetreeMessageInsert v =>
-        bindings1 <-
-          betree_list_push_front_fwd_back (u64 * u64) bindings0 (key, v);
-        bindings2 <-
-          betree_node_lookup_mut_in_bindings_back n0 key bindings bindings1;
-        Return bindings2
-      | BetreeMessageDelete =>
-        bindings1 <-
-          betree_node_lookup_mut_in_bindings_back n0 key bindings bindings0;
-        Return bindings1
-      | BetreeMessageUpsert s =>
-        v <- betree_upsert_update_fwd None s;
-        bindings1 <-
-          betree_list_push_front_fwd_back (u64 * u64) bindings0 (key, v);
-        bindings2 <-
-          betree_node_lookup_mut_in_bindings_back n0 key bindings bindings1;
-        Return bindings2
-      end
-  end
+  bindings0 <- betree_node_lookup_mut_in_bindings_fwd n key bindings;
+  b <- betree_list_head_has_key_fwd u64 bindings0 key;
+  if b
+  then (
+    hd <- betree_list_pop_front_fwd (u64 * u64) bindings0;
+    match new_msg with
+    | BetreeMessageInsert v =>
+      bindings1 <- betree_list_pop_front_back (u64 * u64) bindings0;
+      bindings2 <-
+        betree_list_push_front_fwd_back (u64 * u64) bindings1 (key, v);
+      bindings3 <-
+        betree_node_lookup_mut_in_bindings_back n key bindings bindings2;
+      Return bindings3
+    | BetreeMessageDelete =>
+      bindings1 <- betree_list_pop_front_back (u64 * u64) bindings0;
+      bindings2 <-
+        betree_node_lookup_mut_in_bindings_back n key bindings bindings1;
+      Return bindings2
+    | BetreeMessageUpsert s =>
+      let (_, i) := hd in
+      v <- betree_upsert_update_fwd (Some i) s;
+      bindings1 <- betree_list_pop_front_back (u64 * u64) bindings0;
+      bindings2 <-
+        betree_list_push_front_fwd_back (u64 * u64) bindings1 (key, v);
+      bindings3 <-
+        betree_node_lookup_mut_in_bindings_back n key bindings bindings2;
+      Return bindings3
+    end)
+  else
+    match new_msg with
+    | BetreeMessageInsert v =>
+      bindings1 <-
+        betree_list_push_front_fwd_back (u64 * u64) bindings0 (key, v);
+      bindings2 <-
+        betree_node_lookup_mut_in_bindings_back n key bindings bindings1;
+      Return bindings2
+    | BetreeMessageDelete =>
+      bindings1 <-
+        betree_node_lookup_mut_in_bindings_back n key bindings bindings0;
+      Return bindings1
+    | BetreeMessageUpsert s =>
+      v <- betree_upsert_update_fwd None s;
+      bindings1 <-
+        betree_list_push_front_fwd_back (u64 * u64) bindings0 (key, v);
+      bindings2 <-
+        betree_node_lookup_mut_in_bindings_back n key bindings bindings1;
+      Return bindings2
+    end
 .
 
 (** [betree_main::betree::Node::{5}::apply_messages_to_leaf] *)
@@ -790,71 +778,65 @@ Definition betree_node_apply_to_internal_fwd_back
   (new_msg : Betree_message_t) :
   result (Betree_list_t (u64 * Betree_message_t))
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    msgs0 <- betree_node_lookup_first_message_for_key_fwd n0 key msgs;
-    b <- betree_list_head_has_key_fwd Betree_message_t msgs0 key;
-    if b
-    then
-      match new_msg with
-      | BetreeMessageInsert i =>
-        msgs1 <- betree_node_filter_messages_for_key_fwd_back n0 key msgs0;
+  msgs0 <- betree_node_lookup_first_message_for_key_fwd n key msgs;
+  b <- betree_list_head_has_key_fwd Betree_message_t msgs0 key;
+  if b
+  then
+    match new_msg with
+    | BetreeMessageInsert i =>
+      msgs1 <- betree_node_filter_messages_for_key_fwd_back n key msgs0;
+      msgs2 <-
+        betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs1 (key,
+          BetreeMessageInsert i);
+      msgs3 <- betree_node_lookup_first_message_for_key_back n key msgs msgs2;
+      Return msgs3
+    | BetreeMessageDelete =>
+      msgs1 <- betree_node_filter_messages_for_key_fwd_back n key msgs0;
+      msgs2 <-
+        betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs1 (key,
+          BetreeMessageDelete);
+      msgs3 <- betree_node_lookup_first_message_for_key_back n key msgs msgs2;
+      Return msgs3
+    | BetreeMessageUpsert s =>
+      p <- betree_list_hd_fwd (u64 * Betree_message_t) msgs0;
+      let (_, m) := p in
+      match m with
+      | BetreeMessageInsert prev =>
+        v <- betree_upsert_update_fwd (Some prev) s;
+        msgs1 <- betree_list_pop_front_back (u64 * Betree_message_t) msgs0;
         msgs2 <-
           betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs1 (key,
-            BetreeMessageInsert i);
+            BetreeMessageInsert v);
         msgs3 <-
-          betree_node_lookup_first_message_for_key_back n0 key msgs msgs2;
+          betree_node_lookup_first_message_for_key_back n key msgs msgs2;
         Return msgs3
       | BetreeMessageDelete =>
-        msgs1 <- betree_node_filter_messages_for_key_fwd_back n0 key msgs0;
+        v <- betree_upsert_update_fwd None s;
+        msgs1 <- betree_list_pop_front_back (u64 * Betree_message_t) msgs0;
         msgs2 <-
           betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs1 (key,
-            BetreeMessageDelete);
+            BetreeMessageInsert v);
         msgs3 <-
-          betree_node_lookup_first_message_for_key_back n0 key msgs msgs2;
+          betree_node_lookup_first_message_for_key_back n key msgs msgs2;
         Return msgs3
-      | BetreeMessageUpsert s =>
-        p <- betree_list_hd_fwd (u64 * Betree_message_t) msgs0;
-        let (_, m) := p in
-        match m with
-        | BetreeMessageInsert prev =>
-          v <- betree_upsert_update_fwd (Some prev) s;
-          msgs1 <- betree_list_pop_front_back (u64 * Betree_message_t) msgs0;
-          msgs2 <-
-            betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs1
-              (key, BetreeMessageInsert v);
-          msgs3 <-
-            betree_node_lookup_first_message_for_key_back n0 key msgs msgs2;
-          Return msgs3
-        | BetreeMessageDelete =>
-          v <- betree_upsert_update_fwd None s;
-          msgs1 <- betree_list_pop_front_back (u64 * Betree_message_t) msgs0;
-          msgs2 <-
-            betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs1
-              (key, BetreeMessageInsert v);
-          msgs3 <-
-            betree_node_lookup_first_message_for_key_back n0 key msgs msgs2;
-          Return msgs3
-        | BetreeMessageUpsert ufs =>
-          msgs1 <- betree_node_lookup_first_message_after_key_fwd n0 key msgs0;
-          msgs2 <-
-            betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs1
-              (key, BetreeMessageUpsert s);
-          msgs3 <-
-            betree_node_lookup_first_message_after_key_back n0 key msgs0 msgs2;
-          msgs4 <-
-            betree_node_lookup_first_message_for_key_back n0 key msgs msgs3;
-          Return msgs4
-        end
+      | BetreeMessageUpsert ufs =>
+        msgs1 <- betree_node_lookup_first_message_after_key_fwd n key msgs0;
+        msgs2 <-
+          betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs1 (key,
+            BetreeMessageUpsert s);
+        msgs3 <-
+          betree_node_lookup_first_message_after_key_back n key msgs0 msgs2;
+        msgs4 <-
+          betree_node_lookup_first_message_for_key_back n key msgs msgs3;
+        Return msgs4
       end
-    else (
-      msgs1 <-
-        betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs0 (key,
-          new_msg);
-      msgs2 <- betree_node_lookup_first_message_for_key_back n0 key msgs msgs1;
-      Return msgs2)
-  end
+    end
+  else (
+    msgs1 <-
+      betree_list_push_front_fwd_back (u64 * Betree_message_t) msgs0 (key,
+        new_msg);
+    msgs2 <- betree_node_lookup_first_message_for_key_back n key msgs msgs1;
+    Return msgs2)
 .
 
 (** [betree_main::betree::Node::{5}::apply_messages_to_internal] *)
@@ -1099,20 +1081,16 @@ Definition betree_node_apply_fwd
   (new_msg : Betree_message_t) (st : state) :
   result (state * unit)
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    let l := BetreeListNil in
-    p <-
-      betree_node_apply_messages_fwd n0 self params node_id_cnt (BetreeListCons
-        (key, new_msg) l) st;
-    let (st0, _) := p in
-    p0 <-
-      betree_node_apply_messages_back n0 self params node_id_cnt
-        (BetreeListCons (key, new_msg) l) st;
-    let (_, _) := p0 in
-    Return (st0, tt)
-  end
+  let l := BetreeListNil in
+  p <-
+    betree_node_apply_messages_fwd n self params node_id_cnt (BetreeListCons
+      (key, new_msg) l) st;
+  let (st0, _) := p in
+  p0 <-
+    betree_node_apply_messages_back n self params node_id_cnt (BetreeListCons
+      (key, new_msg) l) st;
+  let (_, _) := p0 in
+  Return (st0, tt)
 .
 
 (** [betree_main::betree::Node::{5}::apply] *)
@@ -1122,16 +1100,12 @@ Definition betree_node_apply_back
   (new_msg : Betree_message_t) (st : state) :
   result (Betree_node_t * Betree_node_id_counter_t)
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    let l := BetreeListNil in
-    p <-
-      betree_node_apply_messages_back n0 self params node_id_cnt
-        (BetreeListCons (key, new_msg) l) st;
-    let (self0, node_id_cnt0) := p in
-    Return (self0, node_id_cnt0)
-  end
+  let l := BetreeListNil in
+  p <-
+    betree_node_apply_messages_back n self params node_id_cnt (BetreeListCons
+      (key, new_msg) l) st;
+  let (self0, node_id_cnt0) := p in
+  Return (self0, node_id_cnt0)
 .
 
 (** [betree_main::betree::BeTree::{6}::new] *)
@@ -1154,21 +1128,15 @@ Definition betree_be_tree_apply_fwd
   (st : state) :
   result (state * unit)
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    p <-
-      betree_node_apply_fwd n0 self.(Betree_be_tree_root)
-        self.(Betree_be_tree_params) self.(Betree_be_tree_node_id_cnt) key msg
-        st;
-    let (st0, _) := p in
-    p0 <-
-      betree_node_apply_back n0 self.(Betree_be_tree_root)
-        self.(Betree_be_tree_params) self.(Betree_be_tree_node_id_cnt) key msg
-        st;
-    let (_, _) := p0 in
-    Return (st0, tt)
-  end
+  p <-
+    betree_node_apply_fwd n self.(Betree_be_tree_root)
+      self.(Betree_be_tree_params) self.(Betree_be_tree_node_id_cnt) key msg st;
+  let (st0, _) := p in
+  p0 <-
+    betree_node_apply_back n self.(Betree_be_tree_root)
+      self.(Betree_be_tree_params) self.(Betree_be_tree_node_id_cnt) key msg st;
+  let (_, _) := p0 in
+  Return (st0, tt)
 .
 
 (** [betree_main::betree::BeTree::{6}::apply] *)
@@ -1177,16 +1145,11 @@ Definition betree_be_tree_apply_back
   (st : state) :
   result Betree_be_tree_t
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    p <-
-      betree_node_apply_back n0 self.(Betree_be_tree_root)
-        self.(Betree_be_tree_params) self.(Betree_be_tree_node_id_cnt) key msg
-        st;
-    let (n1, nic) := p in
-    Return (mkBetree_be_tree_t self.(Betree_be_tree_params) nic n1)
-  end
+  p <-
+    betree_node_apply_back n self.(Betree_be_tree_root)
+      self.(Betree_be_tree_params) self.(Betree_be_tree_node_id_cnt) key msg st;
+  let (n0, nic) := p in
+  Return (mkBetree_be_tree_t self.(Betree_be_tree_params) nic n0)
 .
 
 (** [betree_main::betree::BeTree::{6}::insert] *)
@@ -1194,15 +1157,11 @@ Definition betree_be_tree_insert_fwd
   (n : nat) (self : Betree_be_tree_t) (key : u64) (value : u64) (st : state) :
   result (state * unit)
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    p <- betree_be_tree_apply_fwd n0 self key (BetreeMessageInsert value) st;
-    let (st0, _) := p in
-    bt <- betree_be_tree_apply_back n0 self key (BetreeMessageInsert value) st;
-    let _ := bt in
-    Return (st0, tt)
-  end
+  p <- betree_be_tree_apply_fwd n self key (BetreeMessageInsert value) st;
+  let (st0, _) := p in
+  bt <- betree_be_tree_apply_back n self key (BetreeMessageInsert value) st;
+  let _ := bt in
+  Return (st0, tt)
 .
 
 (** [betree_main::betree::BeTree::{6}::insert] *)
@@ -1210,13 +1169,8 @@ Definition betree_be_tree_insert_back
   (n : nat) (self : Betree_be_tree_t) (key : u64) (value : u64) (st : state) :
   result Betree_be_tree_t
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    self0 <-
-      betree_be_tree_apply_back n0 self key (BetreeMessageInsert value) st;
-    Return self0
-  end
+  self0 <- betree_be_tree_apply_back n self key (BetreeMessageInsert value) st;
+  Return self0
 .
 
 (** [betree_main::betree::BeTree::{6}::delete] *)
@@ -1224,15 +1178,11 @@ Definition betree_be_tree_delete_fwd
   (n : nat) (self : Betree_be_tree_t) (key : u64) (st : state) :
   result (state * unit)
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    p <- betree_be_tree_apply_fwd n0 self key BetreeMessageDelete st;
-    let (st0, _) := p in
-    bt <- betree_be_tree_apply_back n0 self key BetreeMessageDelete st;
-    let _ := bt in
-    Return (st0, tt)
-  end
+  p <- betree_be_tree_apply_fwd n self key BetreeMessageDelete st;
+  let (st0, _) := p in
+  bt <- betree_be_tree_apply_back n self key BetreeMessageDelete st;
+  let _ := bt in
+  Return (st0, tt)
 .
 
 (** [betree_main::betree::BeTree::{6}::delete] *)
@@ -1240,12 +1190,8 @@ Definition betree_be_tree_delete_back
   (n : nat) (self : Betree_be_tree_t) (key : u64) (st : state) :
   result Betree_be_tree_t
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    self0 <- betree_be_tree_apply_back n0 self key BetreeMessageDelete st;
-    Return self0
-  end
+  self0 <- betree_be_tree_apply_back n self key BetreeMessageDelete st;
+  Return self0
 .
 
 (** [betree_main::betree::BeTree::{6}::upsert] *)
@@ -1254,15 +1200,11 @@ Definition betree_be_tree_upsert_fwd
   (upd : Betree_upsert_fun_state_t) (st : state) :
   result (state * unit)
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    p <- betree_be_tree_apply_fwd n0 self key (BetreeMessageUpsert upd) st;
-    let (st0, _) := p in
-    bt <- betree_be_tree_apply_back n0 self key (BetreeMessageUpsert upd) st;
-    let _ := bt in
-    Return (st0, tt)
-  end
+  p <- betree_be_tree_apply_fwd n self key (BetreeMessageUpsert upd) st;
+  let (st0, _) := p in
+  bt <- betree_be_tree_apply_back n self key (BetreeMessageUpsert upd) st;
+  let _ := bt in
+  Return (st0, tt)
 .
 
 (** [betree_main::betree::BeTree::{6}::upsert] *)
@@ -1271,13 +1213,8 @@ Definition betree_be_tree_upsert_back
   (upd : Betree_upsert_fun_state_t) (st : state) :
   result Betree_be_tree_t
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    self0 <-
-      betree_be_tree_apply_back n0 self key (BetreeMessageUpsert upd) st;
-    Return self0
-  end
+  self0 <- betree_be_tree_apply_back n self key (BetreeMessageUpsert upd) st;
+  Return self0
 .
 
 (** [betree_main::betree::BeTree::{6}::lookup] *)
@@ -1285,13 +1222,9 @@ Definition betree_be_tree_lookup_fwd
   (n : nat) (self : Betree_be_tree_t) (key : u64) (st : state) :
   result (state * (option u64))
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    p <- betree_node_lookup_fwd n0 self.(Betree_be_tree_root) key st;
-    let (st0, opt) := p in
-    Return (st0, opt)
-  end
+  p <- betree_node_lookup_fwd n self.(Betree_be_tree_root) key st;
+  let (st0, opt) := p in
+  Return (st0, opt)
 .
 
 (** [betree_main::betree::BeTree::{6}::lookup] *)
@@ -1299,13 +1232,9 @@ Definition betree_be_tree_lookup_back
   (n : nat) (self : Betree_be_tree_t) (key : u64) (st : state) :
   result Betree_be_tree_t
   :=
-  match n with
-  | O => Fail_ OutOfFuel
-  | S n0 =>
-    n1 <- betree_node_lookup_back n0 self.(Betree_be_tree_root) key st;
-    Return (mkBetree_be_tree_t self.(Betree_be_tree_params)
-      self.(Betree_be_tree_node_id_cnt) n1)
-  end
+  n0 <- betree_node_lookup_back n self.(Betree_be_tree_root) key st;
+  Return (mkBetree_be_tree_t self.(Betree_be_tree_params)
+    self.(Betree_be_tree_node_id_cnt) n0)
 .
 
 (** [betree_main::main] *)

@@ -18,7 +18,14 @@ type fun_info = {
   can_fail : bool;
       (* Not used yet: all the extracted functions use an error monad *)
   stateful : bool;
-  divergent : bool; (* Not used yet *)
+  can_diverge : bool;
+  (* The function can diverge if:
+     - it is recursive
+     - it contains a loop
+     - it calls a functions which can diverge
+  *)
+  is_rec : bool;
+      (* [true] if the function is recursive (or in a mutually recursive group) *)
 }
 [@@deriving show]
 
@@ -48,7 +55,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       fun_info =
     let can_fail = ref false in
     let stateful = ref false in
-    let divergent = ref false in
+    let can_diverge = ref false in
+    let is_rec = ref false in
 
     let visit_fun (f : fun_decl) : unit =
       let obj =
@@ -70,14 +78,16 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
           method! visit_Call env call =
             (match call.func with
             | Regular id ->
-                if FunDeclId.Set.mem id fun_ids then divergent := true
+                if FunDeclId.Set.mem id fun_ids then (
+                  can_diverge := true;
+                  is_rec := true)
                 else
                   let info = FunDeclId.Map.find id !infos in
                   self#may_fail info.can_fail;
                   stateful := !stateful || info.stateful;
-                  divergent := !divergent || info.divergent
+                  can_diverge := !can_diverge || info.can_diverge
             | Assumed id ->
-                (* None of the assumed functions is stateful for now *)
+                (* None of the assumed functions can diverge nor are considered stateful *)
                 can_fail := !can_fail || Assumed.assumed_can_fail id);
             super#visit_Call env call
 
@@ -86,7 +96,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             super#visit_Panic env
 
           method! visit_Loop env loop =
-            divergent := true;
+            can_diverge := true;
             super#visit_Loop env loop
         end
       in
@@ -110,7 +120,12 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
      * However, we do keep the result of the analysis for global bodies.
      * *)
     can_fail := (not is_global_decl_body) || !can_fail;
-    { can_fail = !can_fail; stateful = !stateful; divergent = !divergent }
+    {
+      can_fail = !can_fail;
+      stateful = !stateful;
+      can_diverge = !can_diverge;
+      is_rec = !is_rec;
+    }
   in
 
   let analyze_fun_decl_group (d : fun_declaration_group) : unit =
