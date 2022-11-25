@@ -182,6 +182,28 @@ let projection_contains (ty1 : T.rty) (rset1 : T.RegionId.Set.t) (ty2 : T.rty)
   in
   compare_rtys default combine compare_regions ty1 ty2
 
+(** Compute the set of borrow ids, loan ids and abstraction ids in a context. *)
+let compute_borrow_abs_ids_in_context (ctx : C.eval_ctx) :
+    V.BorrowId.Set.t * V.AbstractionId.Set.t =
+  let bids = ref V.BorrowId.Set.empty in
+  let aids = ref V.AbstractionId.Set.empty in
+  let obj =
+    object
+      inherit [_] C.iter_eval_ctx
+      method! visit_borrow_id _ id = bids := V.BorrowId.Set.add id !bids
+
+      method! visit_loan_id _ id =
+        (* Actually, this is not necessary because all loans have a
+           corresponding borrow *)
+        bids := V.BorrowId.Set.add id !bids
+
+      method! visit_abstraction_id _ id =
+        aids := V.AbstractionId.Set.add id !aids
+    end
+  in
+  obj#visit_eval_ctx () ctx;
+  (!bids, !aids)
+
 (** Lookup a loan content.
 
     The loan is referred to by a borrow id.
@@ -704,7 +726,7 @@ let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
       inherit [_] C.iter_eval_ctx as super
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
-      method! visit_abstract_shared_borrows abs asb =
+      method! visit_abstract_shared_borrow abs asb =
         (* Sanity check *)
         (match !found with
         | Some (NonSharedProj _) -> raise (Failure "Unreachable")
@@ -712,14 +734,11 @@ let lookup_intersecting_aproj_borrows_opt (lookup_shared : bool)
         (* Explore *)
         if lookup_shared then
           let abs = Option.get abs in
-          let check asb =
-            match asb with
-            | V.AsbBorrow _ -> ()
-            | V.AsbProjReborrows (sv', proj_ty) ->
-                let is_shared = true in
-                check_add_proj_borrows is_shared abs sv' proj_ty
-          in
-          List.iter check asb
+          match asb with
+          | V.AsbBorrow _ -> ()
+          | V.AsbProjReborrows (sv', proj_ty) ->
+              let is_shared = true in
+              check_add_proj_borrows is_shared abs sv' proj_ty
         else ()
 
       method! visit_aproj abs sproj =

@@ -16,9 +16,16 @@ type statement_eval_res =
   | Continue of int
   | Return
   | Panic
-
-(** Synthesized expresssion - dummy for now *)
-type sexpr = SOne | SList of sexpr list
+  | EndEnterLoop
+      (** When we enter a loop, we delegate the end of the function is
+          synthesized with a call to the loop translation. We use this
+          evaluation result to transmit the fact that we end evaluation
+          because we entered a loop.
+       *)
+  | EndContinue
+      (** For loop translations: we end with a continue (i.e., a recursive call
+          to the translation for the loop body).
+       *)
 
 type eval_result = SA.expression option
 

@@ -48,8 +48,7 @@ val instantiate_fun_sig : T.ety list -> LA.fun_sig -> LA.inst_fun_sig
     - [ctx]
 *)
 val create_push_abstractions_from_abs_region_groups :
-  V.FunCallId.id ->
-  V.abs_kind ->
+  (T.RegionGroupId.id -> V.abs_kind) ->
   LA.abs_region_group list ->
   (T.RegionGroupId.id -> bool) ->
   (V.abs -> C.eval_ctx -> C.eval_ctx * V.typed_avalue list) ->

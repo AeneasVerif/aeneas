@@ -76,6 +76,8 @@ let region_id_counter, fresh_region_id = RegionId.fresh_stateful_generator ()
 let abstraction_id_counter, fresh_abstraction_id =
   AbstractionId.fresh_stateful_generator ()
 
+let loop_id_counter, fresh_loop_id = LoopId.fresh_stateful_generator ()
+
 let fun_call_id_counter, fresh_fun_call_id =
   FunCallId.fresh_stateful_generator ()
 
@@ -98,6 +100,7 @@ let reset_global_counters () =
   borrow_id_counter := BorrowId.generator_zero;
   region_id_counter := RegionId.generator_zero;
   abstraction_id_counter := AbstractionId.generator_zero;
+  loop_id_counter := LoopId.generator_zero;
   fun_call_id_counter := FunCallId.generator_zero;
   dummy_var_id_counter := DummyVarId.generator_zero
 
@@ -359,8 +362,75 @@ let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
   in
   lookup env
 
+(** Remove an abstraction from the context, as well as all the references to
+    this abstraction (for instance, remove the abs id from all the parent sets
+    of all the other abstractions).
+ *)
+let env_remove_abs (env : env) (abs_id : V.AbstractionId.id) :
+    env * V.abs option =
+  let rec remove (env : env) : env * V.abs option =
+    match env with
+    | [] -> raise (Failure "Unreachable")
+    | Frame :: _ -> (env, None)
+    | Var (bv, v) :: env ->
+        let env, abs_opt = remove env in
+        (Var (bv, v) :: env, abs_opt)
+    | Abs abs :: env ->
+        if abs.abs_id = abs_id then (env, Some abs)
+        else
+          let env, abs_opt = remove env in
+          (* Update the parents set *)
+          let parents = V.AbstractionId.Set.remove abs_id abs.parents in
+          (Abs { abs with V.parents } :: env, abs_opt)
+  in
+  remove env
+
+(** Substitue an abstraction in an environment.
+
+    Note that we substitute an abstraction (identified by its id) with a different
+    abstraction which **doesn't necessarily have the same id**. Because of this,
+    we also substitute the abstraction id wherever it is used (i.e., in the
+    parent sets of the other abstractions).
+ *)
+let env_subst_abs (env : env) (abs_id : V.AbstractionId.id) (nabs : V.abs) :
+    env * V.abs option =
+  let rec update (env : env) : env * V.abs option =
+    match env with
+    | [] -> raise (Failure "Unreachable")
+    | Frame :: _ -> (* We're done *) (env, None)
+    | Var (bv, v) :: env ->
+        let env, opt_abs = update env in
+        (Var (bv, v) :: env, opt_abs)
+    | Abs abs :: env ->
+        if abs.abs_id = abs_id then (Abs nabs :: env, Some abs)
+        else
+          let env, opt_abs = update env in
+          (* Update the parents set *)
+          let parents = abs.parents in
+          let parents =
+            if V.AbstractionId.Set.mem abs_id parents then
+              let parents = V.AbstractionId.Set.remove abs_id parents in
+              V.AbstractionId.Set.add nabs.abs_id parents
+            else parents
+          in
+          (Abs { abs with V.parents } :: env, opt_abs)
+  in
+  update env
+
 let ctx_lookup_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) : V.abs =
   env_lookup_abs ctx.env abs_id
+
+(** See the comments for {!env_remove_abs} *)
+let ctx_remove_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) :
+    eval_ctx * V.abs option =
+  let env, abs = env_remove_abs ctx.env abs_id in
+  ({ ctx with env }, abs)
+
+(** See the comments for {!env_subst_abs} *)
+let ctx_subst_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) (nabs : V.abs)
+    : eval_ctx * V.abs option =
+  let env, abs_opt = env_subst_abs ctx.env abs_id nabs in
+  ({ ctx with env }, abs_opt)
 
 let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
   let decl_group = TypeDeclId.Map.find id ctx.type_context.type_decls_groups in

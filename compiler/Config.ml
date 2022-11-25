@@ -30,7 +30,10 @@ let backend = ref FStar
 
 (** {1 Interpreter} *)
 
-(** Check that invariants are maintained whenever we execute a statement *)
+(** Check that invariants are maintained whenever we execute a statement
+
+    TODO: rename to sanity_checks.
+ *)
 let check_invariants = ref true
 
 (** Expand all symbolic values containing borrows upon introduction - allows
@@ -72,6 +75,17 @@ let allow_bottom_below_borrow = true
  *)
 let return_unit_end_abs_with_no_loans = true
 
+(** The maximum number of iterations we can do to find a loop fixed point.
+
+    This is mostly for sanity: we should always find a fixed point in a
+    reasonable number of iterations. If we fail to do so, it is likely a bug: we
+    thus use this bound to detect a loop, fail and report the case to the
+    user.
+ *)
+let loop_fixed_point_max_num_iters = 100
+
+(** {1 Translation} *)
+
 (** Forbids using field projectors for structures.
 
     If we don't use field projectors, whenever we symbolically expand a structure
@@ -102,8 +116,6 @@ let dont_use_field_projectors = ref false
   *)
 
 let always_deconstruct_adts_with_matches = ref false
-
-(** {1 Translation} *)
 
 (** Controls whether we need to use a state to model the external world
     (I/O, for instance).

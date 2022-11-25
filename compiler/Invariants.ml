@@ -233,13 +233,10 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
     object
       inherit [_] C.iter_eval_ctx as super
 
-      method! visit_abstract_shared_borrows _ asb =
-        let visit asb =
-          match asb with
-          | V.AsbBorrow bid -> register_borrow Shared bid
-          | V.AsbProjReborrows _ -> ()
-        in
-        List.iter visit asb
+      method! visit_abstract_shared_borrow _ asb =
+        match asb with
+        | V.AsbBorrow bid -> register_borrow Shared bid
+        | V.AsbProjReborrows _ -> ()
 
       method! visit_borrow_content env bc =
         (* Register the loan *)
@@ -709,15 +706,12 @@ let check_symbolic_values (ctx : C.eval_ctx) : unit =
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
       method! visit_Symbolic _ sv = add_env_sv sv
 
-      method! visit_abstract_shared_borrows abs asb =
+      method! visit_abstract_shared_borrow abs asb =
         let abs = Option.get abs in
-        let visit asb =
-          match asb with
-          | V.AsbBorrow _ -> ()
-          | AsbProjReborrows (sv, proj_ty) ->
-              add_aproj_borrows sv abs.abs_id abs.regions proj_ty true
-        in
-        List.iter visit asb
+        match asb with
+        | V.AsbBorrow _ -> ()
+        | AsbProjReborrows (sv, proj_ty) ->
+            add_aproj_borrows sv abs.abs_id abs.regions proj_ty true
 
       method! visit_aproj abs aproj =
         (let abs = Option.get abs in
