@@ -221,14 +221,13 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
 
       method! visit_symbolic_value _ s =
         match s.sv_kind with
-        | V.FunCallRet ->
+        | V.FunCallRet | V.LoopOutput ->
             if ty_has_borrow_under_mut ctx.type_context.type_infos s.sv_ty then
               raise Found
             else ()
         | V.SynthInput | V.SynthInputGivenBack | V.FunCallGivenBack
-        | V.SynthRetGivenBack ->
+        | V.SynthRetGivenBack | V.Global | V.LoopGivenBack ->
             ()
-        | V.Global -> ()
     end
   in
   (* We use exceptions *)
@@ -246,3 +245,11 @@ let rvalue_get_place (rv : E.rvalue) : E.place option =
   | Use (Constant _) -> None
   | Ref (p, _) -> Some p
   | UnaryOp _ | BinaryOp _ | Global _ | Discriminant _ | Aggregate _ -> None
+
+(** See {!ValuesUtils.value_has_borrows}. *)
+let value_has_borrows (ctx : C.eval_ctx) (v : V.value) : bool =
+  ValuesUtils.value_has_borrows ctx.type_context.type_infos v
+
+(** See {!ValuesUtils.value_has_loans_or_borrows}. *)
+let value_has_loans_or_borrows (ctx : C.eval_ctx) (v : V.value) : bool =
+  ValuesUtils.value_has_loans_or_borrows ctx.type_context.type_infos v

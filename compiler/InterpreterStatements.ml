@@ -683,8 +683,8 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
     [region_can_end]: gives the region groups from which we generate functions
     which can end or not.
  *)
-let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
-    (kind : V.abs_kind) (rgl : A.abs_region_group list)
+let create_empty_abstractions_from_abs_region_groups
+    (kind : T.RegionGroupId.id -> V.abs_kind) (rgl : A.abs_region_group list)
     (region_can_end : T.RegionGroupId.id -> bool) : V.abs list =
   (* We use a reference to progressively create a map from abstraction ids
    * to set of ancestor regions. Note that {!abs_to_ancestors_regions} [abs_id]
@@ -696,8 +696,8 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     ref V.AbstractionId.Map.empty
   in
   (* Auxiliary function to create one abstraction *)
-  let create_abs (back_id : T.RegionGroupId.id) (rg : A.abs_region_group) :
-      V.abs =
+  let create_abs (rg_id : T.RegionGroupId.id) (rg : A.abs_region_group) : V.abs
+      =
     let abs_id = rg.T.id in
     let original_parents = rg.parents in
     let parents =
@@ -720,16 +720,14 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
     let ancestors_regions_union_current_regions =
       T.RegionId.Set.union ancestors_regions regions
     in
-    let can_end = region_can_end back_id in
+    let can_end = region_can_end rg_id in
     abs_to_ancestors_regions :=
       V.AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
         !abs_to_ancestors_regions;
     (* Create the abstraction *)
     {
       V.abs_id;
-      call_id;
-      back_id;
-      kind;
+      kind = kind rg_id;
       can_end;
       parents;
       original_parents;
@@ -741,16 +739,15 @@ let create_empty_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
   (* Apply *)
   T.RegionGroupId.mapi create_abs rgl
 
-let create_push_abstractions_from_abs_region_groups (call_id : V.FunCallId.id)
-    (kind : V.abs_kind) (rgl : A.abs_region_group list)
+let create_push_abstractions_from_abs_region_groups
+    (kind : T.RegionGroupId.id -> V.abs_kind) (rgl : A.abs_region_group list)
     (region_can_end : T.RegionGroupId.id -> bool)
     (compute_abs_avalues :
       V.abs -> C.eval_ctx -> C.eval_ctx * V.typed_avalue list)
     (ctx : C.eval_ctx) : C.eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
-    create_empty_abstractions_from_abs_region_groups call_id kind rgl
-      region_can_end
+    create_empty_abstractions_from_abs_region_groups kind rgl region_can_end
   in
 
   (* Compute and add the avalues to the abstractions, the insert the abstractions
@@ -847,48 +844,16 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
           (* Evaluation successful: evaluate the second statement *)
           | Unit -> eval_statement config st2 cf
           (* Control-flow break: transmit. We enumerate the cases on purpose *)
-          | Panic | Break _ | Continue _ | Return -> cf res
+          | Panic | Break _ | Continue _ | Return | EndEnterLoop | EndContinue
+            ->
+              cf res
         in
         (* Compose and apply *)
         comp cf_st1 cf_st2 cf ctx
     | A.Loop loop_body ->
-        (* For now, we don't support loops in symbolic mode *)
-        assert (config.C.mode = C.ConcreteMode);
-        (* Continuation for after we evaluate the loop body: depending the result
-           of doing one loop iteration:
-           - redoes a loop iteration
-           - exits the loop
-           - other...
-
-           We need a specific function because of the {!Continue} case: in case we
-           continue, we might have to reevaluate the current loop body with the
-           new context (and repeat this an indefinite number of times).
-        *)
-        let rec reeval_loop_body res : m_fun =
-          match res with
-          | Return | Panic -> cf res
-          | Break i ->
-              (* Break out of the loop by calling the continuation *)
-              let res = if i = 0 then Unit else Break (i - 1) in
-              cf res
-          | Continue 0 ->
-              (* Re-evaluate the loop body *)
-              eval_statement config loop_body reeval_loop_body
-          | Continue i ->
-              (* Continue to an outer loop *)
-              cf (Continue (i - 1))
-          | Unit ->
-              (* We can't get there.
-               * Note that if we decide not to fail here but rather do
-               * the same thing as for [Continue 0], we could make the
-               * code slightly simpler: calling {!reeval_loop_body} with
-               * {!Unit} would account for the first iteration of the loop.
-               * We prefer to write it this way for consistency and sanity,
-               * though. *)
-              raise (Failure "Unreachable")
-        in
-        (* Apply *)
-        eval_statement config loop_body reeval_loop_body ctx
+        InterpreterLoops.eval_loop config
+          (eval_statement config loop_body)
+          cf ctx
     | A.Switch switch -> eval_switch config switch cf ctx
   in
   (* Compose and apply *)
@@ -1124,11 +1089,12 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
   let cf_finish cf res =
     match res with
     | Panic -> cf Panic
-    | Break _ | Continue _ | Unit -> raise (Failure "Unreachable")
     | Return ->
         (* Pop the stack frame, retrieve the return value, move it to
          * its destination and continue *)
         pop_frame_assign config dest (cf Unit)
+    | Break _ | Continue _ | Unit | EndEnterLoop | EndContinue ->
+        raise (Failure "Unreachable")
   in
   let cc = comp cc cf_finish in
 
@@ -1219,7 +1185,8 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     let call_id = C.fresh_fun_call_id () in
     let region_can_end _ = true in
     let ctx =
-      create_push_abstractions_from_abs_region_groups call_id V.FunCall
+      create_push_abstractions_from_abs_region_groups
+        (fun rg_id -> V.FunCall (call_id, rg_id))
         inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues ctx
     in
 

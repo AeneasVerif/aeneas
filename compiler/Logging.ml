@@ -24,6 +24,9 @@ let pure_to_extract_log = L.get_logger "MainLogger.ExtractBase"
 (** Logger for Interpreter *)
 let interpreter_log = L.get_logger "MainLogger.Interpreter"
 
+(** Logger for InterpreterLoops *)
+let loops_log = L.get_logger "MainLogger.Interpreter.Loops"
+
 (** Logger for InterpreterStatements *)
 let statements_log = L.get_logger "MainLogger.Interpreter.Statements"
 

@@ -155,3 +155,10 @@ let synthesize_assertion (v : V.typed_value) (e : expression option) =
 let synthesize_forward_end (e : expression)
     (el : expression T.RegionGroupId.Map.t) =
   Some (ForwardEnd (e, el))
+
+let synthesize_loop (end_expr : expression option)
+    (loop_expr : expression option) : expression option =
+  match (end_expr, loop_expr) with
+  | None, None -> None
+  | Some end_expr, Some loop_expr -> Some (Loop { end_expr; loop_expr })
+  | _ -> raise (Failure "Unreachable")

@@ -91,7 +91,14 @@ type expression =
           function, the map from region group ids to expressions gives the end
           of the translation for the backward functions.
        *)
+  | Loop of loop
   | Meta of meta * expression  (** Meta information *)
+
+and loop = {
+  end_expr : expression;
+      (** The end of the function (upon the moment it enters the loop) *)
+  loop_expr : expression;  (** The symbolically executed loop body *)
+}
 
 and expansion =
   | ExpandNoBranch of V.symbolic_expansion * expression

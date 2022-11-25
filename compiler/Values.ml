@@ -10,12 +10,16 @@ module BorrowId = IdGen ()
 module SymbolicValueId = IdGen ()
 module AbstractionId = IdGen ()
 module FunCallId = IdGen ()
+module LoopId = IdGen ()
 
 type big_int = PrimitiveValues.big_int [@@deriving show]
 type scalar_value = PrimitiveValues.scalar_value [@@deriving show]
 type primitive_value = PrimitiveValues.primitive_value [@@deriving show]
 
-(** The kind of a symbolic value, which precises how the value was generated *)
+(** The kind of a symbolic value, which precises how the value was generated.
+
+    TODO: remove? This is not useful anymore.
+  *)
 type sv_kind =
   | FunCallRet  (** The value is the return value of a function call *)
   | FunCallGivenBack
@@ -38,6 +42,9 @@ type sv_kind =
   | SynthInputGivenBack
       (** The value was given back upon ending one of the input abstractions *)
   | Global  (** The value is a global *)
+  | LoopOutput  (** The output of a loop (seen as a forward computation) *)
+  | LoopGivenBack
+      (** A value given back by a loop (when ending abstractions while going backwards) *)
 [@@deriving show]
 
 (** A symbolic value *)
@@ -48,9 +55,14 @@ type symbolic_value = {
 }
 [@@deriving show]
 
+type borrow_id = BorrowId.id [@@deriving show]
+type borrow_id_set = BorrowId.Set.t [@@deriving show]
+type loan_id = BorrowId.id [@@deriving show]
+type loan_id_set = BorrowId.Set.t [@@deriving show]
+
 (** Ancestor for {!typed_value} iter visitor *)
 class ['self] iter_typed_value_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] VisitorsRuntime.iter
 
     method visit_primitive_value : 'env -> primitive_value -> unit =
@@ -59,11 +71,19 @@ class ['self] iter_typed_value_base =
     method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
     method visit_symbolic_value : 'env -> symbolic_value -> unit = fun _ _ -> ()
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
+    method visit_borrow_id : 'env -> borrow_id -> unit = fun _ _ -> ()
+    method visit_loan_id : 'env -> loan_id -> unit = fun _ _ -> ()
+
+    method visit_borrow_id_set : 'env -> borrow_id_set -> unit =
+      fun env ids -> BorrowId.Set.iter (self#visit_borrow_id env) ids
+
+    method visit_loan_id_set : 'env -> loan_id_set -> unit =
+      fun env ids -> BorrowId.Set.iter (self#visit_loan_id env) ids
   end
 
 (** Ancestor for {!typed_value} map visitor for *)
 class ['self] map_typed_value_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] VisitorsRuntime.map
 
     method visit_primitive_value : 'env -> primitive_value -> primitive_value =
@@ -76,6 +96,14 @@ class ['self] map_typed_value_base =
       fun _ sv -> sv
 
     method visit_ety : 'env -> ety -> ety = fun _ ty -> ty
+    method visit_borrow_id : 'env -> borrow_id -> borrow_id = fun _ id -> id
+    method visit_loan_id : 'env -> loan_id -> loan_id = fun _ id -> id
+
+    method visit_borrow_id_set : 'env -> borrow_id_set -> borrow_id_set =
+      fun env ids -> BorrowId.Set.map (self#visit_borrow_id env) ids
+
+    method visit_loan_id_set : 'env -> loan_id_set -> loan_id_set =
+      fun env ids -> BorrowId.Set.map (self#visit_loan_id env) ids
   end
 
 (** An untyped value, used in the environments *)
@@ -99,7 +127,7 @@ and adt_value = {
 }
 
 and borrow_content =
-  | SharedBorrow of mvalue * (BorrowId.id[@opaque])
+  | SharedBorrow of mvalue * borrow_id
       (** A shared borrow.
       
           We remember the shared value which was borrowed as a meta value.
@@ -110,9 +138,8 @@ and borrow_content =
           for as long as they are shared (i.e., as long as we can use the
           shared borrow).
        *)
-  | MutBorrow of (BorrowId.id[@opaque]) * typed_value
-      (** A mutably borrowed value. *)
-  | ReservedMutBorrow of mvalue * (BorrowId.id[@opaque])
+  | MutBorrow of borrow_id * typed_value  (** A mutably borrowed value. *)
+  | ReservedMutBorrow of mvalue * borrow_id
       (** A reserved mut borrow.
 
           This is used to model {{: https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html} two-phase borrows}.
@@ -154,8 +181,8 @@ and borrow_content =
        *)
 
 and loan_content =
-  | SharedLoan of (BorrowId.Set.t[@opaque]) * typed_value
-  | MutLoan of (BorrowId.id[@opaque])
+  | SharedLoan of loan_id_set * typed_value
+  | MutLoan of loan_id
       (** TODO: we might want to add a set of borrow ids (useful for reserved
           borrows, and extremely useful when giving shared values to abstractions).
        *)
@@ -192,22 +219,6 @@ and typed_value = { value : value; ty : ety }
         concrete = true;
       }]
 
-(** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
-    to ignore meta-values *)
-class ['self] iter_typed_value =
-  object (_self : 'self)
-    inherit [_] iter_typed_value_visit_mvalue
-    method! visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
-  end
-
-(** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
-    to ignore meta-values *)
-class ['self] map_typed_value =
-  object (_self : 'self)
-    inherit [_] map_typed_value_visit_mvalue
-    method! visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
-  end
-
 (** "Meta"-symbolic value.
 
      See the explanations for {!mvalue}
@@ -216,6 +227,34 @@ class ['self] map_typed_value =
      and regular values.
  *)
 type msymbolic_value = symbolic_value [@@deriving show]
+
+class ['self] iter_typed_value =
+  object (_self : 'self)
+    inherit [_] iter_typed_value_visit_mvalue
+
+    (** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
+        to ignore meta-values *)
+    method! visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
+
+    method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
+      fun _ _ -> ()
+
+    method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
+  end
+
+class ['self] map_typed_value =
+  object (_self : 'self)
+    inherit [_] map_typed_value_visit_mvalue
+
+    (** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
+        to ignore meta-values *)
+    method! visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
+
+    method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
+
+    method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
+      fun _ m -> m
+  end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
     abstractions) we need to reborrow the shared values. When doing so, we lookup
@@ -232,31 +271,58 @@ type msymbolic_value = symbolic_value [@@deriving show]
     which borrows are inside which other borrows...
 *)
 type abstract_shared_borrow =
-  | AsbBorrow of (BorrowId.id[@opaque])
-  | AsbProjReborrows of (symbolic_value[@opaque]) * (rty[@opaque])
-[@@deriving show]
+  | AsbBorrow of borrow_id
+  | AsbProjReborrows of symbolic_value * rty
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_abstract_shared_borrow";
+        variety = "iter";
+        ancestors = [ "iter_typed_value" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_abstract_shared_borrow";
+        variety = "map";
+        ancestors = [ "map_typed_value" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      }]
 
 (** A set of abstract shared borrows *)
-type abstract_shared_borrows = abstract_shared_borrow list [@@deriving show]
+type abstract_shared_borrows = abstract_shared_borrow list
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_abstract_shared_borrows";
+        variety = "iter";
+        ancestors = [ "iter_abstract_shared_borrow" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_abstract_shared_borrows";
+        variety = "map";
+        ancestors = [ "map_abstract_shared_borrow" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      }]
 
 (** Ancestor for {!aproj} iter visitor *)
 class ['self] iter_aproj_base =
   object (_self : 'self)
-    inherit [_] iter_typed_value
-    method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
-
-    method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
-      fun _ _ -> ()
+    inherit [_] iter_abstract_shared_borrows
   end
 
 (** Ancestor for {!aproj} map visitor *)
 class ['self] map_aproj_base =
   object (_self : 'self)
-    inherit [_] map_typed_value
-    method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
-
-    method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
-      fun _ m -> m
+    inherit [_] map_abstract_shared_borrows
   end
 
 type aproj =
@@ -335,29 +401,24 @@ type aproj =
       }]
 
 type region = RegionVarId.id Types.region [@@deriving show]
+type abstraction_id = AbstractionId.id [@@deriving show]
 
 (** Ancestor for {!typed_avalue} iter visitor *)
 class ['self] iter_typed_avalue_base =
   object (_self : 'self)
     inherit [_] iter_aproj
-    method visit_id : 'env -> BorrowId.id -> unit = fun _ _ -> ()
     method visit_region : 'env -> region -> unit = fun _ _ -> ()
-
-    method visit_abstract_shared_borrows
-        : 'env -> abstract_shared_borrows -> unit =
-      fun _ _ -> ()
+    method visit_abstraction_id : 'env -> abstraction_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!typed_avalue} map visitor *)
 class ['self] map_typed_avalue_base =
   object (_self : 'self)
     inherit [_] map_aproj
-    method visit_id : 'env -> BorrowId.id -> BorrowId.id = fun _ id -> id
     method visit_region : 'env -> region -> region = fun _ r -> r
 
-    method visit_abstract_shared_borrows
-        : 'env -> abstract_shared_borrows -> abstract_shared_borrows =
-      fun _ asb -> asb
+    method visit_abstraction_id : 'env -> abstraction_id -> abstraction_id =
+      fun _ x -> x
   end
 
 (** Abstraction values are used inside of abstractions to properly model
@@ -405,7 +466,7 @@ and adt_avalue = {
     translation.
 *)
 and aloan_content =
-  | AMutLoan of (BorrowId.id[@opaque]) * typed_avalue
+  | AMutLoan of loan_id * typed_avalue
       (** A mutable loan owned by an abstraction.
          
           Example:
@@ -424,7 +485,7 @@ and aloan_content =
             px -> mut_borrow l0 (mut_borrow @s1)
           ]}
        *)
-  | ASharedLoan of (BorrowId.Set.t[@opaque]) * typed_value * typed_avalue
+  | ASharedLoan of loan_id_set * typed_value * typed_avalue
       (** A shared loan owned by an abstraction.
 
           Example:
@@ -474,7 +535,7 @@ and aloan_content =
           give back. We keep the shared value because it now behaves as a
           "regular" value (which contains borrows we might want to end...).
        *)
-  | AIgnoredMutLoan of (BorrowId.id[@opaque]) * typed_avalue
+  | AIgnoredMutLoan of loan_id * typed_avalue
       (** An ignored mutable loan.
       
           We need to keep track of ignored mutable loans, because we may have
@@ -533,7 +594,7 @@ and aloan_content =
     ids)?
 *)
 and aborrow_content =
-  | AMutBorrow of mvalue * (BorrowId.id[@opaque]) * typed_avalue
+  | AMutBorrow of mvalue * borrow_id * typed_avalue
       (** A mutable borrow owned by an abstraction.
       
           Is used when an abstraction "consumes" borrows, when giving borrows
@@ -559,7 +620,7 @@ and aborrow_content =
           is only used for the synthesis.
           TODO: do we really use it actually?
      *)
-  | ASharedBorrow of (BorrowId.id[@opaque])
+  | ASharedBorrow of borrow_id
       (** A shared borrow owned by an abstraction.
     
           Example:
@@ -577,7 +638,7 @@ and aborrow_content =
             > abs0 { a_shared_borrow l0 }
           ]}
      *)
-  | AIgnoredMutBorrow of BorrowId.id option * typed_avalue
+  | AIgnoredMutBorrow of borrow_id option * typed_avalue
       (** An ignored mutable borrow.
       
           We need to keep track of ignored mut borrows because when ending such
@@ -732,13 +793,32 @@ and typed_avalue = { value : avalue; ty : rty }
 
 (** The kind of an abstraction, which keeps track of its origin *)
 type abs_kind =
-  | FunCall  (** The abstraction was introduced because of a function call *)
-  | SynthInput
+  | FunCall of (FunCallId.id * RegionGroupId.id)
+      (** The abstraction was introduced because of a function call.
+
+          It contains he identifier of the function call which introduced this
+          abstraction, as well as the id of the backward function this
+          abstraction stands for (backward functions are identified by the group
+          of regions to which they are associated). This is not used by the
+          symbolic execution: this is only used for pretty-printing and
+          debugging in the symbolic AST, generated by the symbolic
+          execution.
+       *)
+  | SynthInput of RegionGroupId.id
       (** The abstraction keeps track of the input values of the function
-          we are currently synthesizing. *)
-  | SynthRet
+          we are currently synthesizing.
+
+          We introduce one abstraction per (group of) region(s) in the function
+          signature, the region group id identifies this group. Similarly to
+          the [FunCall] case, this is not used by the symbolic execution.
+       *)
+  | SynthRet of RegionGroupId.id
       (** The abstraction "absorbed" the value returned by the function we
-          are currently synthesizing *)
+          are currently synthesizing
+
+          See the explanations for [SynthInput].
+       *)
+  | Loop of LoopId.id  (** The abstraction corresponds to a loop *)
 [@@deriving show]
 
 (** Abstractions model the parts in the borrow graph where the borrowing relations
@@ -748,23 +828,7 @@ type abs_kind =
     which are a special kind of value.
 *)
 type abs = {
-  abs_id : (AbstractionId.id[@opaque]);
-  call_id : (FunCallId.id[@opaque]);
-      (** The identifier of the function call which introduced this
-          abstraction. This is not used by the symbolic execution:
-          this is only used for pretty-printing and debugging, in the
-          symbolic AST, generated by the symbolic execution.
-       *)
-  back_id : (RegionGroupId.id[@opaque]);
-      (** The region group id to which this abstraction is linked.
-      
-          In most situations, it gives the id of the backward function (hence
-          the name), but it is a bit more subtle in the case of synth input
-          and synth ret abstractions.
-
-          This is not used by the symbolic execution: it is a utility for
-          the symbolic AST, generated by the symbolic execution.
-       *)
+  abs_id : abstraction_id;
   kind : (abs_kind[@opaque]);
   can_end : (bool[@opaque]);
       (** Controls whether the region can be ended or not.
@@ -779,7 +843,7 @@ type abs = {
        *)
   parents : (AbstractionId.Set.t[@opaque]);  (** The parent abstractions *)
   original_parents : (AbstractionId.id list[@opaque]);
-      (** The original list of parents, ordered. This is used for synthesis. *)
+      (** The original list of parents, ordered. This is used for synthesis. TODO: remove? *)
   regions : (RegionId.Set.t[@opaque]);  (** Regions owned by this abstraction *)
   ancestors_regions : (RegionId.Set.t[@opaque]);
       (** Union of the regions owned by this abstraction's ancestors (not

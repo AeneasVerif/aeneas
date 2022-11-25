@@ -12,6 +12,8 @@ let mk_unit_value : typed_value =
 
 let mk_typed_value (ty : ety) (value : value) : typed_value = { value; ty }
 let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
+let mk_abottom (ty : rty) : typed_avalue = { value = ABottom; ty }
+let mk_aignored (ty : rty) : typed_avalue = { value = AIgnored; ty }
 
 (** Box a value *)
 let mk_box_value (v : typed_value) : typed_value =
@@ -20,6 +22,9 @@ let mk_box_value (v : typed_value) : typed_value =
   mk_typed_value box_ty box_v
 
 let is_bottom (v : value) : bool = match v with Bottom -> true | _ -> false
+
+let is_aignored (v : avalue) : bool =
+  match v with AIgnored -> true | _ -> false
 
 let is_symbolic (v : value) : bool =
   match v with Symbolic _ -> true | _ -> false
@@ -32,7 +37,9 @@ let as_mut_borrow (v : typed_value) : BorrowId.id * typed_value =
   | Borrow (MutBorrow (bid, bv)) -> (bid, bv)
   | _ -> raise (Failure "Unexpected")
 
-(** Check if a value contains a borrow *)
+(** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value -
+    we don't check if there are borrows hidden in symbolic values).
+ *)
 let borrows_in_value (v : typed_value) : bool =
   let obj =
     object
@@ -46,7 +53,9 @@ let borrows_in_value (v : typed_value) : bool =
     false
   with Found -> true
 
-(** Check if a value contains reserved mutable borrows *)
+(** Check if a value contains reserved mutable borrows (which are necessarily
+    *concrete*: a symbolic value can't "hide" reserved borrows).
+ *)
 let reserved_in_value (v : typed_value) : bool =
   let obj =
     object
@@ -60,11 +69,28 @@ let reserved_in_value (v : typed_value) : bool =
     false
   with Found -> true
 
-(** Check if a value contains a loan *)
+(** Check if a value contains a loan (which is necessarily *concrete*: symbolic
+    values can't "hide" loans).
+ *)
 let loans_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
+      method! visit_loan_content _env _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true
+
+(** Check if a value contains concrete borrows or loans *)
+let concrete_borrows_loans_in_value (v : typed_value) : bool =
+  let obj =
+    object
+      inherit [_] iter_typed_value
+      method! visit_borrow_content _env _ = raise Found
       method! visit_loan_content _env _ = raise Found
     end
   in
@@ -81,7 +107,9 @@ let outer_loans_in_value (v : typed_value) : bool =
     object
       inherit [_] iter_typed_value
       method! visit_loan_content _env _ = raise Found
-      method! visit_borrow_content _ _ = ()
+
+      method! visit_borrow_content _ _ =
+        (* Do nothing so as *not to dive* in borrowed values *) ()
     end
   in
   (* We use exceptions *)
@@ -119,3 +147,49 @@ let rec value_strip_shared_loans (v : typed_value) : typed_value =
   match v.value with
   | Loan (SharedLoan (_, v')) -> value_strip_shared_loans v'
   | _ -> v
+
+(** Check if a value has borrows in **a general sense**.
+
+    It checks if:
+    - there are concrete borrows
+    - there are symbolic values which may contain borrows
+ *)
+let value_has_borrows (infos : TA.type_infos) (v : value) : bool =
+  let obj =
+    object
+      inherit [_] iter_typed_value
+      method! visit_borrow_content _env _ = raise Found
+
+      method! visit_symbolic_value _ sv =
+        if ty_has_borrow_under_mut infos sv.sv_ty then raise Found else ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_value () v;
+    false
+  with Found -> true
+
+(** Check if a value has loans or borrows in **a general sense**.
+
+    It checks if:
+    - there are concrete loans or concrete borrows
+    - there are symbolic values which may contain borrows (symbolic values
+      can't contain loans).
+ *)
+let value_has_loans_or_borrows (infos : TA.type_infos) (v : value) : bool =
+  let obj =
+    object
+      inherit [_] iter_typed_value
+      method! visit_borrow_content _env _ = raise Found
+      method! visit_loan_content _env _ = raise Found
+
+      method! visit_symbolic_value _ sv =
+        if ty_has_borrow_under_mut infos sv.sv_ty then raise Found else ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_value () v;
+    false
+  with Found -> true

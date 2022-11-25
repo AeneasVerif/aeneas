@@ -93,7 +93,8 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
   in
   let region_can_end _ = true in
   let ctx =
-    create_push_abstractions_from_abs_region_groups call_id V.SynthInput
+    create_push_abstractions_from_abs_region_groups
+      (fun rg_id -> V.SynthInput rg_id)
       inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
@@ -151,7 +152,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
   let cf_consume_ret ret_value ctx =
-    let ret_call_id = C.fresh_fun_call_id () in
     let compute_abs_avalues (abs : V.abs) (ctx : C.eval_ctx) :
         C.eval_ctx * V.typed_avalue list =
       let ctx, avalue =
@@ -172,7 +172,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return
     in
     assert (region_can_end back_id);
     let ctx =
-      create_push_abstractions_from_abs_region_groups ret_call_id V.SynthRet
+      create_push_abstractions_from_abs_region_groups
+        (fun rg_id -> V.SynthRet rg_id)
         ret_inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues ctx
     in
 
