@@ -12,9 +12,9 @@ module AbstractionId = IdGen ()
 module FunCallId = IdGen ()
 module LoopId = IdGen ()
 
-type big_int = PrimitiveValues.big_int [@@deriving show]
-type scalar_value = PrimitiveValues.scalar_value [@@deriving show]
-type primitive_value = PrimitiveValues.primitive_value [@@deriving show]
+type big_int = PrimitiveValues.big_int [@@deriving show, ord]
+type scalar_value = PrimitiveValues.scalar_value [@@deriving show, ord]
+type primitive_value = PrimitiveValues.primitive_value [@@deriving show, ord]
 
 (** The kind of a symbolic value, which precises how the value was generated.
 
@@ -45,7 +45,7 @@ type sv_kind =
   | LoopOutput  (** The output of a loop (seen as a forward computation) *)
   | LoopGivenBack
       (** A value given back by a loop (when ending abstractions while going backwards) *)
-[@@deriving show]
+[@@deriving show, ord]
 
 (** A symbolic value *)
 type symbolic_value = {
@@ -53,12 +53,12 @@ type symbolic_value = {
   sv_id : SymbolicValueId.id;
   sv_ty : rty;
 }
-[@@deriving show]
+[@@deriving show, ord]
 
-type borrow_id = BorrowId.id [@@deriving show]
-type borrow_id_set = BorrowId.Set.t [@@deriving show]
-type loan_id = BorrowId.id [@@deriving show]
-type loan_id_set = BorrowId.Set.t [@@deriving show]
+type borrow_id = BorrowId.id [@@deriving show, ord]
+type borrow_id_set = BorrowId.Set.t [@@deriving show, ord]
+type loan_id = BorrowId.id [@@deriving show, ord]
+type loan_id_set = BorrowId.Set.t [@@deriving show, ord]
 
 (** Ancestor for {!typed_value} iter visitor *)
 class ['self] iter_typed_value_base =
@@ -70,6 +70,7 @@ class ['self] iter_typed_value_base =
 
     method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
     method visit_symbolic_value : 'env -> symbolic_value -> unit = fun _ _ -> ()
+    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
     method visit_borrow_id : 'env -> borrow_id -> unit = fun _ _ -> ()
     method visit_loan_id : 'env -> loan_id -> unit = fun _ _ -> ()
@@ -96,6 +97,7 @@ class ['self] map_typed_value_base =
       fun _ sv -> sv
 
     method visit_ety : 'env -> ety -> ety = fun _ ty -> ty
+    method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
     method visit_borrow_id : 'env -> borrow_id -> borrow_id = fun _ id -> id
     method visit_loan_id : 'env -> loan_id -> loan_id = fun _ id -> id
 
@@ -122,7 +124,7 @@ type value =
        *)
 
 and adt_value = {
-  variant_id : (VariantId.id option[@opaque]);
+  variant_id : variant_id option;
   field_values : typed_value list;
 }
 
@@ -202,6 +204,7 @@ and mvalue = typed_value
 and typed_value = { value : value; ty : ety }
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_typed_value_visit_mvalue";
@@ -226,7 +229,7 @@ and typed_value = { value : value; ty : ety }
      TODO: we may want to create wrappers, to prevent mixing meta values
      and regular values.
  *)
-type msymbolic_value = symbolic_value [@@deriving show]
+type msymbolic_value = symbolic_value [@@deriving show, ord]
 
 class ['self] iter_typed_value =
   object (_self : 'self)
@@ -275,6 +278,7 @@ type abstract_shared_borrow =
   | AsbProjReborrows of symbolic_value * rty
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_abstract_shared_borrow";
@@ -296,6 +300,7 @@ type abstract_shared_borrow =
 type abstract_shared_borrows = abstract_shared_borrow list
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_abstract_shared_borrows";
@@ -383,6 +388,7 @@ type aproj =
   | AIgnoredProjBorrows
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_aproj";
@@ -400,25 +406,61 @@ type aproj =
         concrete = true;
       }]
 
-type region = RegionVarId.id Types.region [@@deriving show]
-type abstraction_id = AbstractionId.id [@@deriving show]
+type region = RegionVarId.id Types.region [@@deriving show, ord]
+type region_var_id = RegionVarId.id [@@deriving show, ord]
+type region_id = RegionId.id [@@deriving show, ord]
+type region_id_set = RegionId.Set.t [@@deriving show, ord]
+type abstraction_id = AbstractionId.id [@@deriving show, ord]
+type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 
 (** Ancestor for {!typed_avalue} iter visitor *)
 class ['self] iter_typed_avalue_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] iter_aproj
-    method visit_region : 'env -> region -> unit = fun _ _ -> ()
+    method visit_region_var_id : 'env -> region_var_id -> unit = fun _ _ -> ()
+
+    method visit_region : 'env -> region -> unit =
+      fun env r ->
+        match r with
+        | Static -> ()
+        | Var rid -> self#visit_region_var_id env rid
+
+    method visit_region_id : 'env -> region_id -> unit = fun _ _ -> ()
+
+    method visit_region_id_set : 'env -> region_id_set -> unit =
+      fun env ids -> RegionId.Set.iter (self#visit_region_id env) ids
+
     method visit_abstraction_id : 'env -> abstraction_id -> unit = fun _ _ -> ()
+
+    method visit_abstraction_id_set : 'env -> abstraction_id_set -> unit =
+      fun env ids -> AbstractionId.Set.iter (self#visit_abstraction_id env) ids
   end
 
 (** Ancestor for {!typed_avalue} map visitor *)
 class ['self] map_typed_avalue_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] map_aproj
-    method visit_region : 'env -> region -> region = fun _ r -> r
+
+    method visit_region_var_id : 'env -> region_var_id -> region_var_id =
+      fun _ x -> x
+
+    method visit_region : 'env -> region -> region =
+      fun env r ->
+        match r with
+        | Static -> Static
+        | Var rid -> Var (self#visit_region_var_id env rid)
+
+    method visit_region_id : 'env -> region_id -> region_id = fun _ x -> x
+
+    method visit_region_id_set : 'env -> region_id_set -> region_id_set =
+      fun env ids -> RegionId.Set.map (self#visit_region_id env) ids
 
     method visit_abstraction_id : 'env -> abstraction_id -> abstraction_id =
       fun _ x -> x
+
+    method visit_abstraction_id_set
+        : 'env -> abstraction_id_set -> abstraction_id_set =
+      fun env ids -> AbstractionId.Set.map (self#visit_abstraction_id env) ids
   end
 
 (** Abstraction values are used inside of abstractions to properly model
@@ -774,6 +816,7 @@ and aborrow_content =
 and typed_avalue = { value : avalue; ty : rty }
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_typed_avalue";
@@ -819,7 +862,7 @@ type abs_kind =
           See the explanations for [SynthInput].
        *)
   | Loop of LoopId.id  (** The abstraction corresponds to a loop *)
-[@@deriving show]
+[@@deriving show, ord]
 
 (** Abstractions model the parts in the borrow graph where the borrowing relations
     have been abstracted because of a function call.
@@ -841,17 +884,18 @@ type abs = {
           don't need to end the return region for 'b (if it is the case, it means
           the function doesn't borrow check).
        *)
-  parents : (AbstractionId.Set.t[@opaque]);  (** The parent abstractions *)
-  original_parents : (AbstractionId.id list[@opaque]);
+  parents : abstraction_id_set;  (** The parent abstractions *)
+  original_parents : abstraction_id list;
       (** The original list of parents, ordered. This is used for synthesis. TODO: remove? *)
-  regions : (RegionId.Set.t[@opaque]);  (** Regions owned by this abstraction *)
-  ancestors_regions : (RegionId.Set.t[@opaque]);
+  regions : region_id_set;  (** Regions owned by this abstraction *)
+  ancestors_regions : region_id_set;
       (** Union of the regions owned by this abstraction's ancestors (not
           including the regions of this abstraction itself) *)
   avalues : typed_avalue list;  (** The values in this abstraction *)
 }
 [@@deriving
   show,
+    ord,
     visitors
       {
         name = "iter_abs";

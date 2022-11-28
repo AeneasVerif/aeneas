@@ -1417,6 +1417,9 @@ let get_cf_ctx_no_synth (f : cm_fun) (ctx : C.eval_ctx) : C.eval_ctx =
 let end_borrow_no_synth config id ctx =
   get_cf_ctx_no_synth (end_borrow config id) ctx
 
+let end_borrows_no_synth config ids ctx =
+  get_cf_ctx_no_synth (end_borrows config ids) ctx
+
 let end_abstraction_no_synth config id ctx =
   get_cf_ctx_no_synth (end_abstraction config id) ctx
 
@@ -1770,8 +1773,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             [ { V.value; ty } ])
     | V.Symbolic _ ->
         (* For now, we force all the symbolic values containing borrows to
-           be eagerly expanded *)
-        (* We don't support nested borrows for now *)
+           be eagerly expanded, and we don't support nested borrows *)
         assert (not (value_has_borrows ctx v.V.value));
         (* Return nothing *)
         []
