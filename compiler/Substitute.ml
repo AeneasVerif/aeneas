@@ -9,30 +9,23 @@ module E = Expressions
 module A = LlbcAst
 module C = Contexts
 
-(** Substitute types variables and regions in a type.
-
-    TODO: we can reimplement that with visitors.
- *)
-let rec ty_substitute (rsubst : 'r1 -> 'r2)
-    (tsubst : T.TypeVarId.id -> 'r2 T.ty) (ty : 'r1 T.ty) : 'r2 T.ty =
+(** Substitute types variables and regions in a type. *)
+let ty_substitute (rsubst : 'r1 -> 'r2) (tsubst : T.TypeVarId.id -> 'r2 T.ty)
+    (ty : 'r1 T.ty) : 'r2 T.ty =
   let open T in
-  let subst = ty_substitute rsubst tsubst in
-  (* helper *)
-  match ty with
-  | Adt (def_id, regions, tys) ->
-      Adt (def_id, List.map rsubst regions, List.map subst tys)
-  | Array aty -> Array (subst aty)
-  | Slice sty -> Slice (subst sty)
-  | Ref (r, ref_ty, ref_kind) -> Ref (rsubst r, subst ref_ty, ref_kind)
-  (* Below variants: we technically return the same value, but because
-     one has type ['r1 ty] and the other has type ['r2 ty], we need to
-     deconstruct then reconstruct *)
-  | Bool -> Bool
-  | Char -> Char
-  | Never -> Never
-  | Integer int_ty -> Integer int_ty
-  | Str -> Str
-  | TypeVar vid -> tsubst vid
+  let visitor =
+    object
+      inherit [_] map_ty
+      method visit_'r _ r = rsubst r
+      method! visit_TypeVar _ id = tsubst id
+
+      method! visit_type_var_id _ _ =
+        (* We should never get here because we reimplemented [visit_TypeVar] *)
+        raise (Failure "Unexpected")
+    end
+  in
+
+  visitor#visit_ty () ty
 
 (** Convert an {!T.rty} to an {!T.ety} by erasing the region variables *)
 let erase_regions (ty : T.rty) : T.ety =
@@ -360,3 +353,107 @@ let substitute_signature (asubst : T.RegionGroupId.id -> V.AbstractionId.id)
   in
   let regions_hierarchy = List.map subst_region_group sg.A.regions_hierarchy in
   { A.regions_hierarchy; inputs; output }
+
+(** Substitute identifiers in a type *)
+let ty_substitute_ids (tsubst : T.TypeVarId.id -> T.TypeVarId.id) (ty : 'r T.ty)
+    : 'r T.ty =
+  let open T in
+  let visitor =
+    object
+      inherit [_] map_ty
+      method visit_'r _ r = r
+      method! visit_type_var_id _ id = tsubst id
+    end
+  in
+
+  visitor#visit_ty () ty
+
+(* This visitor is a mess...
+
+   We want to write a class which visits abstractions, values, etc. *and their
+   types* to substitute identifiers.
+
+   The issue comes is that we derive two specialized types (ety and rty) from a
+   polymorphic type (ty). Because of this, there are typing issues with
+   [visit_'r] if we define a class which visits objects of types [ety] and [rty]
+   while inheriting a class which visit [ty]...
+*)
+let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
+    (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
+    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
+    (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
+    (bsubst : V.BorrowId.id -> V.BorrowId.id)
+    (asubst : V.AbstractionId.id -> V.AbstractionId.id) =
+  let subst_rty =
+    object
+      inherit [_] T.map_ty
+
+      method visit_'r _ r =
+        match r with T.Static -> T.Static | T.Var rid -> T.Var (rsubst rid)
+
+      method! visit_type_var_id _ id = tsubst id
+    end
+  in
+
+  let visitor =
+    object (self : 'self)
+      inherit [_] V.map_abs
+      method! visit_borrow_id _ bid = bsubst bid
+      method! visit_loan_id _ bid = bsubst bid
+
+      method! visit_symbolic_value env sv =
+        let sv_id = ssubst sv.sv_id in
+        let sv_ty = subst_rty#visit_ty env sv.sv_ty in
+        { sv with V.sv_id; sv_ty }
+
+      method! visit_ety _ ty = ty_substitute_ids tsubst ty
+
+      (** We *do* visit meta-values *)
+      method! visit_mvalue env v = self#visit_typed_value env v
+
+      method! visit_region_id _ id = rsubst id
+      method! visit_region_var_id _ id = rvsubst id
+      method! visit_abstraction_id _ id = asubst id
+    end
+  in
+
+  object
+    method visit_ety (x : T.ety) : T.ety = visitor#visit_ety () x
+    method visit_rty (x : T.rty) : T.rty = visitor#visit_rty () x
+
+    method visit_typed_value (x : V.typed_value) : V.typed_value =
+      visitor#visit_typed_value () x
+
+    method visit_typed_avalue (x : V.typed_avalue) : V.typed_avalue =
+      visitor#visit_typed_avalue () x
+
+    method visit_abs (x : V.abs) : V.abs = visitor#visit_abs () x
+  end
+
+let typed_value_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
+    (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
+    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
+    (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
+    (bsubst : V.BorrowId.id -> V.BorrowId.id) (v : V.typed_value) :
+    V.typed_value =
+  let asubst _ = raise (Failure "Unreachable") in
+  (subst_ids_visitor rsubst rvsubst tsubst ssubst bsubst asubst)
+    #visit_typed_value v
+
+let typed_avalue_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
+    (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
+    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
+    (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
+    (bsubst : V.BorrowId.id -> V.BorrowId.id) (v : V.typed_avalue) :
+    V.typed_avalue =
+  let asubst _ = raise (Failure "Unreachable") in
+  (subst_ids_visitor rsubst rvsubst tsubst ssubst bsubst asubst)
+    #visit_typed_avalue v
+
+let abs_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
+    (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
+    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
+    (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
+    (bsubst : V.BorrowId.id -> V.BorrowId.id)
+    (asubst : V.AbstractionId.id -> V.AbstractionId.id) (x : V.abs) : V.abs =
+  (subst_ids_visitor rsubst rvsubst tsubst ssubst bsubst asubst)#visit_abs x

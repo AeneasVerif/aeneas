@@ -33,6 +33,10 @@ val end_abstractions : C.config -> V.AbstractionId.Set.t -> cm_fun
 (** End a borrow and return the resulting environment, ignoring synthesis *)
 val end_borrow_no_synth : C.config -> V.BorrowId.id -> C.eval_ctx -> C.eval_ctx
 
+(** End a set of borrows and return the resulting environment, ignoring synthesis *)
+val end_borrows_no_synth :
+  C.config -> V.BorrowId.Set.t -> C.eval_ctx -> C.eval_ctx
+
 (** End an abstraction and return the resulting environment, ignoring synthesis *)
 val end_abstraction_no_synth :
   C.config -> V.AbstractionId.id -> C.eval_ctx -> C.eval_ctx
