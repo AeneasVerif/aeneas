@@ -61,7 +61,7 @@ tests/fstar/misc/obj/
 /fstar-tests
 *~
 nohup.out
-.vscode
+*.vscode
 *#
 *.lock
 *.txt
