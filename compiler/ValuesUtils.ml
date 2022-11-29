@@ -170,6 +170,24 @@ let value_has_borrows (infos : TA.type_infos) (v : value) : bool =
     false
   with Found -> true
 
+(** Check if a value has loans.
+
+    Note that loans are necessarily concrete (there can't be loans hidden
+    inside symbolic values).
+ *)
+let value_has_loans (v : value) : bool =
+  let obj =
+    object
+      inherit [_] iter_typed_value
+      method! visit_loan_content _env _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_value () v;
+    false
+  with Found -> true
+
 (** Check if a value has loans or borrows in **a general sense**.
 
     It checks if:
