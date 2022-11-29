@@ -617,6 +617,20 @@ let get_first_loan_in_value (v : V.typed_value) : V.loan_content option =
     None
   with FoundLoanContent lc -> Some lc
 
+(** Return the first loan we find in a list of values *)
+let get_first_loan_in_values (vs : V.typed_value list) : V.loan_content option =
+  let obj =
+    object
+      inherit [_] V.iter_typed_value
+      method! visit_loan_content _ lc = raise (FoundLoanContent lc)
+    end
+  in
+  (* We use exceptions *)
+  try
+    List.iter (obj#visit_typed_value ()) vs;
+    None
+  with FoundLoanContent lc -> Some lc
+
 (** Return the first borrow we find in a value *)
 let get_first_borrow_in_value (v : V.typed_value) : V.borrow_content option =
   let obj =

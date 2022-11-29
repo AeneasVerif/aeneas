@@ -54,6 +54,12 @@ let mk_fresh_symbolic_typed_value (sv_kind : V.sv_kind) (rty : T.rty) :
   let value = V.Symbolic value in
   { V.value; V.ty }
 
+(** Create a fresh symbolic value *)
+let mk_fresh_symbolic_typed_value_from_ety (sv_kind : V.sv_kind) (ety : T.ety) :
+    V.typed_value =
+  let ty = TypesUtils.ety_no_regions_to_rty ety in
+  mk_fresh_symbolic_typed_value sv_kind ty
+
 (** Create a typed value from a symbolic value. *)
 let mk_typed_value_from_symbolic_value (svalue : V.symbolic_value) :
     V.typed_value =
@@ -115,7 +121,10 @@ let remove_borrow_from_asb (bid : V.BorrowId.id)
 
 (** We sometimes need to return a value whose type may vary depending on
     whether we find it in a "concrete" value or an abstraction (ex.: loan
-    contents when we perform environment lookups by using borrow ids) *)
+    contents when we perform environment lookups by using borrow ids)
+
+    TODO: change the name "abstract"
+ *)
 type ('a, 'b) concrete_or_abs = Concrete of 'a | Abstract of 'b
 
 (** Generic loan content: concrete or abstract *)
@@ -221,7 +230,7 @@ let value_has_ret_symbolic_value_with_borrow_under_mut (ctx : C.eval_ctx)
 
       method! visit_symbolic_value _ s =
         match s.sv_kind with
-        | V.FunCallRet | V.LoopOutput ->
+        | V.FunCallRet | V.LoopOutput | V.LoopJoin ->
             if ty_has_borrow_under_mut ctx.type_context.type_infos s.sv_ty then
               raise Found
             else ()

@@ -45,6 +45,8 @@ type sv_kind =
   | LoopOutput  (** The output of a loop (seen as a forward computation) *)
   | LoopGivenBack
       (** A value given back by a loop (when ending abstractions while going backwards) *)
+  | LoopJoin
+      (** The result of a loop join (when computing loop fixed points) *)
 [@@deriving show, ord]
 
 (** A symbolic value *)

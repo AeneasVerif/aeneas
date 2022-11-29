@@ -70,21 +70,37 @@ val promote_reserved_mut_borrow : C.config -> V.BorrowId.id -> cm_fun
     ]}
 
     Rem.: we do this to simplify the merging of abstractions. We can do this
-    because for now, we don't support nested borrows.
+    because for now we don't support nested borrows. In order to implement
+    support for nested borrows, we will probably need to maintain the structure
+    of the avalues.
 
     Paramters:
     - [abs_kind]
     - [can_end]
+    - [destructure_shared_values]: if [true], explore shared values and whenever we find
+      a shared loan, move it elsewhere by replacing it with the same value without
+      the shared loan, and adding another ashared loan in the abstraction.
+      For instance:
+      {[
+         ML {l0} (0, ML {l1} 1)
+
+         ~~>
+
+         ML {l0} (0, 1)
+         ML {l1} 1
+      ]}
     - [ctx]
     - [abs]
  *)
-val destructure_abs : V.abs_kind -> bool -> C.eval_ctx -> V.abs -> V.abs
+val destructure_abs : V.abs_kind -> bool -> bool -> C.eval_ctx -> V.abs -> V.abs
 
 (** Return [true] if the values in an abstraction are destructured.
 
     We simply destructure it and check that it gives the identity.
+
+    The input boolean is [destructure_shared_value]. See {!destructure_abs}.
  *)
-val abs_is_destructured : C.eval_ctx -> V.abs -> bool
+val abs_is_destructured : bool -> C.eval_ctx -> V.abs -> bool
 
 (** Turn a value into a abstractions.
 
@@ -104,20 +120,54 @@ val abs_is_destructured : C.eval_ctx -> V.abs -> bool
     Parameters:
     - [abs_kind]
     - [can_end]
+    - [destructure_shared_values]: this is similar to [destructure_shared_values]
+      for {!destructure_abs}.
     - [ctx]
     - [v]
  *)
 val convert_value_to_abstractions :
-  V.abs_kind -> bool -> C.eval_ctx -> V.typed_value -> V.abs list
+  V.abs_kind -> bool -> bool -> C.eval_ctx -> V.typed_value -> V.abs list
+
+(** See {!merge_abstractions}.
+
+    Rem.: it may be more idiomatic to have a functor, but this seems a bit
+    heavyweight, though.
+  *)
+type merge_duplicates_funcs = {
+  merge_amut_borrows :
+    V.borrow_id ->
+    T.rty ->
+    V.mvalue ->
+    V.typed_avalue ->
+    T.rty ->
+    V.mvalue ->
+    V.typed_avalue ->
+    V.typed_avalue;
+  merge_ashared_borrows : V.borrow_id -> T.rty -> T.rty -> V.typed_avalue;
+  merge_amut_loans :
+    V.loan_id ->
+    T.rty ->
+    V.typed_avalue ->
+    T.rty ->
+    V.typed_avalue ->
+    V.typed_avalue;
+  merge_ashared_loans :
+    V.loan_id_set ->
+    T.rty ->
+    V.typed_value ->
+    T.rty ->
+    V.typed_value ->
+    V.typed_avalue;
+}
 
 (** Merge two abstractions together.
 
-    Merging two abstractions together implies removing the loans/borrows
+    When we merge two abstractions together, we remove the loans/borrows
     which appear in one and whose associated loans/borrows appear in the
     other. For instance:
     {[
-      abs'0 { mut_borrow l0, mut_loan l1 }
-      abs'1 { mut_borrow l1, mut_borrow l2 }
+      abs'0 { mut_borrow l0, mut_loan l1 }   // Rem.: mut_loan l1
+      abs'1 { mut_borrow l1, mut_borrow l2 } // Rem.: mut_borrow l1
 
           ~~>
 
@@ -127,9 +177,27 @@ val convert_value_to_abstractions :
     Parameters:
     - [kind]
     - [can_end]
+    - [merge_funs]: in the case it can happen that a loan or a borrow appears in
+      both abstractions, we use those functions to merge the different occurrences
+      (such things can happen when joining environments: we might temporarily
+      duplicate borrows during the join, before merging those borrows together).
+      For instance, this happens for the following abstractions is forbidden:
+      {[
+        abs'0 { mut_borrow l0, mut_loan l1 } // mut_borrow l0 !
+        abs'1 { mut_borrow l0, mut_loan l2 } // mut_borrow l0 !
+      ]}
+      If you want to forbid this, provide [None]. In that case, [merge_abstractions]
+      actually simply performs some sort of a union.
+
     - [ctx]
     - [abs0]
     - [abs1]
  *)
 val merge_abstractions :
-  V.abs_kind -> bool -> C.eval_ctx -> V.abs -> V.abs -> V.abs
+  V.abs_kind ->
+  bool ->
+  merge_duplicates_funcs option ->
+  C.eval_ctx ->
+  V.abs ->
+  V.abs ->
+  V.abs
