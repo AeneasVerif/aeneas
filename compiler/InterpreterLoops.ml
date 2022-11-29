@@ -349,40 +349,41 @@ let collapse_ctx (loop_id : V.LoopId.id)
   (* Return the new context *)
   !ctx
 
-let rec match_types (check_regions : 'r -> 'r -> unit) (ctx : C.eval_ctx)
-    (ty0 : 'r T.ty) (ty1 : 'r T.ty) : unit =
-  let match_rec = match_types check_regions ctx in
-  match (ty0, ty1) with
-  | Adt (id0, regions0, tys0), Adt (id1, regions1, tys1) ->
-      assert (id0 = id1);
-      List.iter
-        (fun (id0, id1) -> check_regions id0 id1)
-        (List.combine regions0 regions1);
-      List.iter (fun (ty0, ty1) -> match_rec ty0 ty1) (List.combine tys0 tys1)
-  | TypeVar vid0, TypeVar vid1 -> assert (vid0 = vid1)
-  | Bool, Bool | Char, Char | Never, Never | Str, Str -> ()
-  | Integer int_ty0, Integer int_ty1 -> assert (int_ty0 = int_ty1)
-  | Array ty0, Array ty1 | Slice ty0, Slice ty1 -> match_rec ty0 ty1
-  | Ref (r0, ty0, k0), Ref (r1, ty1, k1) ->
-      check_regions r0 r1;
-      match_rec ty0 ty1;
-      assert (k0 = k1)
-  | _ -> raise (Failure "Unreachable")
+(*(** Match two types during a join. This simply performs a sanity check. *)
+  let rec match_types (check_regions : 'r -> 'r -> unit) (ctx : C.eval_ctx)
+      (ty0 : 'r T.ty) (ty1 : 'r T.ty) : unit =
+    let match_rec = match_types check_regions ctx in
+    match (ty0, ty1) with
+    | Adt (id0, regions0, tys0), Adt (id1, regions1, tys1) ->
+        assert (id0 = id1);
+        List.iter
+          (fun (id0, id1) -> check_regions id0 id1)
+          (List.combine regions0 regions1);
+        List.iter (fun (ty0, ty1) -> match_rec ty0 ty1) (List.combine tys0 tys1)
+    | TypeVar vid0, TypeVar vid1 -> assert (vid0 = vid1)
+    | Bool, Bool | Char, Char | Never, Never | Str, Str -> ()
+    | Integer int_ty0, Integer int_ty1 -> assert (int_ty0 = int_ty1)
+    | Array ty0, Array ty1 | Slice ty0, Slice ty1 -> match_rec ty0 ty1
+    | Ref (r0, ty0, k0), Ref (r1, ty1, k1) ->
+        check_regions r0 r1;
+        match_rec ty0 ty1;
+        assert (k0 = k1)
+    | _ -> raise (Failure "Unreachable")
 
-let match_rtypes (rid_map : T.RegionId.InjSubst.t ref) (ctx : C.eval_ctx)
-    (ty0 : T.rty) (ty1 : T.rty) : unit =
-  let lookup_rid (id : T.RegionId.id) : T.RegionId.id =
-    T.RegionId.InjSubst.find_with_default id id !rid_map
-  in
-  let check_regions r0 r1 =
-    match (r0, r1) with
-    | T.Static, T.Static -> ()
-    | T.Var id0, T.Var id1 ->
-        let id0 = lookup_rid id0 in
-        assert (id0 = id1)
-    | _ -> raise (Failure "Unexpected")
-  in
-  match_types check_regions ctx ty0 ty1
+  let match_rtypes (rid_map : T.RegionId.InjSubst.t ref) (ctx : C.eval_ctx)
+      (ty0 : T.rty) (ty1 : T.rty) : unit =
+    let lookup_rid (id : T.RegionId.id) : T.RegionId.id =
+      T.RegionId.InjSubst.find_with_default id id !rid_map
+    in
+    let check_regions r0 r1 =
+      match (r0, r1) with
+      | T.Static, T.Static -> ()
+      | T.Var id0, T.Var id1 ->
+          let id0 = lookup_rid id0 in
+          assert (id0 = id1)
+      | _ -> raise (Failure "Unexpected")
+    in
+  match_types check_regions ctx ty0 ty1 *)
 
 (** See {!Match} *)
 module type Matcher = sig
@@ -427,6 +428,16 @@ module type Matcher = sig
   (** There are no constraints on the input symbolic values *)
   val match_symbolic_values :
     V.symbolic_value -> V.symbolic_value -> V.symbolic_value
+
+  (** Match a symbolic value with a value which is not symbolic.
+
+      If the boolean is [true], it means the symbolic value comes from the
+      left environment. Otherwise it comes from the right environment (it
+      is important when throwing exceptions, for instance when we need to
+      end loans in one of the two environments).
+   *)
+  val match_symbolic_with_other :
+    bool -> V.symbolic_value -> V.typed_value -> V.typed_value
 end
 
 (** Generic functor to implement matching functions between values, environments,
@@ -514,24 +525,13 @@ module Match (M : Matcher) = struct
         in
         { V.value = Loan lc; ty = v1.V.ty }
     | Symbolic sv0, Symbolic sv1 ->
+        (* For now, we force all the symbolic values containing borrows to
+           be eagerly expanded, and we don't support nested borrows *)
+        assert (not (value_has_borrows ctx v0.V.value));
+        assert (not (value_has_borrows ctx v1.V.value));
+        (* Match *)
         let sv = M.match_symbolic_values sv0 sv1 in
         { v1 with V.value = V.Symbolic sv }
-    (* (* TODO: id check mapping *)
-       let id0 = lookup_sid sv0.sv_id in
-       let id1 = sv1.sv_id in
-       if id0 = id1 then (
-         assert (sv0.sv_kind = sv1.sv_kind);
-         (* Sanity check: the types should be the same *)
-         match_rtypes rid_map ctx sv0.sv_ty sv1.sv_ty;
-         (* Return *)
-         v1)
-       else (
-         (* For now, we force all the symbolic values containing borrows to
-            be eagerly expanded, and we don't support nested borrows *)
-         assert (not (value_has_borrows ctx v0.V.value));
-         assert (not (value_has_borrows ctx v1.V.value));
-         raise (Failure "Unimplemented")
-    *)
     | Loan lc, _ -> (
         match lc with
         | SharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInLeft ids))
@@ -540,9 +540,13 @@ module Match (M : Matcher) = struct
         match lc with
         | SharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInRight ids))
         | MutLoan id -> raise (ValueMatchFailure (LoanInRight id)))
-    | Symbolic _, _ -> raise (Failure "Unimplemented")
-    | _, Symbolic _ -> raise (Failure "Unimplemented")
+    | Symbolic sv, _ -> M.match_symbolic_with_other true sv v1
+    | _, Symbolic sv -> M.match_symbolic_with_other false sv v0
     | _ -> raise (Failure "Unreachable")
+
+  and match_typed_avalues (ctx : C.eval_ctx) (v0 : V.typed_avalue)
+      (v1 : V.typed_avalue) : V.typed_avalue =
+    raise (Failure "Unreachable")
 end
 
 (* Very annoying: functors only take modules as inputs... *)
@@ -708,9 +712,11 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
   let match_shared_loans (ty : T.ety) (ids0 : V.loan_id_set)
       (ids1 : V.loan_id_set) (sv : V.typed_value) :
       V.loan_id_set * V.typed_value =
-    (* Check if the ids are the same - Rem.: we forbid the loans to a value
-       to vary. However, we allow to dive inside a data-structure: in this
-       case,
+    (* Check if the ids are the same - Rem.: we forbid the sets of loans
+       to be different. However, if we dive inside data-structures (by
+       using a shared borrow) the shared values might themselves contain
+       shared loans, which need to be matched. For this reason, we destructure
+       the shared values (see {!destructure_abs}).
     *)
     let extra_ids_left = V.BorrowId.Set.diff ids0 ids1 in
     let extra_ids_right = V.BorrowId.Set.diff ids1 ids0 in
@@ -719,17 +725,52 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
     if not (V.BorrowId.Set.is_empty extra_ids_right) then
       raise (ValueMatchFailure (LoansInRight extra_ids_right));
 
-    (* *)
-    raise (Failure "Unimplemented")
+    (* This should always be true if we get here *)
+    assert (ids0 = ids1);
+    let ids = ids0 in
 
-  let match_mut_loans (ty : T.ety) (id0 : V.loan_id) (id1 : V.loan_id) :
-      V.loan_id =
-    raise (Failure "Unimplemented")
+    (* Return *)
+    (ids, sv)
 
-  (** There are no constraints on the input symbolic values *)
+  let match_mut_loans (_ : T.ety) (id0 : V.loan_id) (_ : V.loan_id) : V.loan_id
+      =
+    id0
+
   let match_symbolic_values (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) :
       V.symbolic_value =
-    raise (Failure "Unimplemented")
+    let id0 = sv0.sv_id in
+    let id1 = sv1.sv_id in
+    if id0 = id1 then (
+      (* Sanity check *)
+      assert (sv0 = sv1);
+      (* Return *)
+      sv0)
+    else (
+      (* The caller should have checked that the symbolic values don't contain
+         borrows *)
+      assert (not (ty_has_borrows S.ctx.type_context.type_infos sv0.sv_ty));
+      (* We simply introduce a fresh symbolic value *)
+      mk_fresh_symbolic_value V.LoopJoin sv0.sv_ty)
+
+  let match_symbolic_with_other (left : bool) (sv : V.symbolic_value)
+      (v : V.typed_value) : V.typed_value =
+    (* Check that:
+       - there are no borrows in the symbolic value
+       - there are no borrows in the "regular" value
+       If there are loans in the regular value, raise an exception.
+    *)
+    assert (not (ty_has_borrows S.ctx.type_context.type_infos sv.sv_ty));
+    assert (not (value_has_borrows S.ctx v.V.value));
+    (match InterpreterBorrowsCore.get_first_loan_in_value v with
+    | None -> ()
+    | Some (SharedLoan (ids, _)) ->
+        if left then raise (ValueMatchFailure (LoansInLeft ids))
+        else raise (ValueMatchFailure (LoansInRight ids))
+    | Some (MutLoan id) ->
+        if left then raise (ValueMatchFailure (LoanInLeft id))
+        else raise (ValueMatchFailure (LoanInRight id)));
+    (* Return a fresh symbolic value *)
+    mk_fresh_symbolic_typed_value V.LoopJoin sv.sv_ty
 end
 
 (*
