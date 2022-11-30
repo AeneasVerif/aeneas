@@ -41,6 +41,10 @@ val end_borrows_no_synth :
 val end_abstraction_no_synth :
   C.config -> V.AbstractionId.id -> C.eval_ctx -> C.eval_ctx
 
+(** End a set of abstractions and return the resulting environment, ignoring synthesis *)
+val end_abstractions_no_synth :
+  C.config -> V.AbstractionId.Set.t -> C.eval_ctx -> C.eval_ctx
+
 (** Promote a reserved mut borrow to a mut borrow, while preserving the invariants.
 
     Reserved borrows are special mutable borrows which are created as shared borrows
@@ -133,6 +137,7 @@ val convert_value_to_abstractions :
     Rem.: it may be more idiomatic to have a functor, but this seems a bit
     heavyweight, though.
   *)
+
 type merge_duplicates_funcs = {
   merge_amut_borrows :
     V.borrow_id ->
@@ -143,7 +148,23 @@ type merge_duplicates_funcs = {
     V.mvalue ->
     V.typed_avalue ->
     V.typed_avalue;
+      (** Parameters:
+          - [id]
+          - [ty0]
+          - [mv0]
+          - [child0]
+          - [ty1]
+          - [mv1]
+          - [child1]
+
+          The children should be [AIgnored].
+       *)
   merge_ashared_borrows : V.borrow_id -> T.rty -> T.rty -> V.typed_avalue;
+      (** Parameters:
+          - [id]
+          - [ty0]
+          - [ty1]
+       *)
   merge_amut_loans :
     V.loan_id ->
     T.rty ->
@@ -151,13 +172,33 @@ type merge_duplicates_funcs = {
     T.rty ->
     V.typed_avalue ->
     V.typed_avalue;
+      (** Parameters:
+          - [id]
+          - [ty0]
+          - [child0]
+          - [ty1]
+          - [child1]
+
+          The children should be [AIgnored].
+       *)
   merge_ashared_loans :
     V.loan_id_set ->
     T.rty ->
     V.typed_value ->
+    V.typed_avalue ->
     T.rty ->
     V.typed_value ->
+    V.typed_avalue ->
     V.typed_avalue;
+      (** Parameters:
+          - [ids]
+          - [ty0]
+          - [sv0]
+          - [child0]
+          - [ty1]
+          - [sv1]
+          - [child1]
+       *)
 }
 
 (** Merge two abstractions together.
