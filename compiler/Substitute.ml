@@ -456,3 +456,15 @@ let abs_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
     (bsubst : V.BorrowId.id -> V.BorrowId.id)
     (asubst : V.AbstractionId.id -> V.AbstractionId.id) (x : V.abs) : V.abs =
   (subst_ids_visitor rsubst rvsubst tsubst ssubst bsubst asubst)#visit_abs x
+
+let typed_avalue_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
+    (x : V.typed_avalue) : V.typed_avalue =
+  let asubst _ = raise (Failure "Unreachable") in
+  (subst_ids_visitor rsubst
+     (fun x -> x)
+     (fun x -> x)
+     (fun x -> x)
+     (fun x -> x)
+     asubst)
+    #visit_typed_avalue
+    x

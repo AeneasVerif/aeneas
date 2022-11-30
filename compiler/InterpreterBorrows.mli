@@ -231,14 +231,17 @@ type merge_duplicates_funcs = {
       actually simply performs some sort of a union.
 
     - [ctx]
-    - [abs0]
-    - [abs1]
+    - [abs_id0]
+    - [abs_id1]
+
+    We return the updated context as well as the id of the new abstraction which
+    results from the merge.
  *)
 val merge_abstractions :
   V.abs_kind ->
   bool ->
   merge_duplicates_funcs option ->
   C.eval_ctx ->
-  V.abs ->
-  V.abs ->
-  V.abs
+  V.AbstractionId.id ->
+  V.AbstractionId.id ->
+  C.eval_ctx * V.AbstractionId.id
