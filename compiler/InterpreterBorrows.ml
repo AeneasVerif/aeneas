@@ -2115,7 +2115,11 @@ type merge_duplicates_funcs = {
        *)
 }
 
-let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
+(** Auxiliary function.
+
+    Merge two abstractions into one, without updating the context.
+ *)
+let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : C.eval_ctx)
     (abs0 : V.abs) (abs1 : V.abs) : V.abs =
   (* Check that the abstractions are destructured *)
@@ -2359,6 +2363,8 @@ let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
   (* Reverse the values *)
   let avalues = List.rev !avalues in
 
+  (* Filter the regions *)
+
   (* Create the new abstraction *)
   let abs_id = C.fresh_abstraction_id () in
   (* Note that one of the two abstractions might a parent of the other *)
@@ -2384,7 +2390,71 @@ let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
       avalues;
     }
   in
+
   (* Sanity check *)
   if !Config.check_invariants then assert (abs_is_destructured true ctx abs);
   (* Return *)
   abs
+
+(** Merge the regions in a context to a single region *)
+let ctx_merge_regions (ctx : C.eval_ctx) (rid : T.RegionId.id)
+    (rids : T.RegionId.Set.t) : C.eval_ctx =
+  let rsubst x = if T.RegionId.Set.mem x rids then rid else x in
+  let merge_in_abs (abs : V.abs) : V.abs =
+    let avalues =
+      List.map (Substitute.typed_avalue_subst_rids rsubst) abs.V.avalues
+    in
+    let regions = T.RegionId.Set.diff abs.V.regions rids in
+    let ancestors_regions = T.RegionId.Set.diff abs.V.ancestors_regions rids in
+    { abs with V.avalues; regions; ancestors_regions }
+  in
+
+  let env =
+    List.map
+      (fun ee ->
+        match ee with
+        | C.Abs abs -> C.Abs (merge_in_abs abs)
+        | Var _ | Frame -> ee)
+      ctx.env
+  in
+  { ctx with C.env }
+
+let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
+    (merge_funs : merge_duplicates_funcs option) (ctx : C.eval_ctx)
+    (abs_id0 : V.AbstractionId.id) (abs_id1 : V.AbstractionId.id) :
+    C.eval_ctx * V.AbstractionId.id =
+  (* Lookup the abstractions *)
+  let abs0 = C.ctx_lookup_abs ctx abs_id0 in
+  let abs1 = C.ctx_lookup_abs ctx abs_id1 in
+
+  (* Merge them *)
+  let nabs = merge_abstractions_aux abs_kind can_end merge_funs ctx abs0 abs1 in
+
+  (* Update the environment: replace the first abstraction with the result of the merge,
+     remove the second abstraction *)
+  let ctx = fst (C.ctx_subst_abs ctx abs_id1 nabs) in
+  let ctx = fst (C.ctx_remove_abs ctx abs_id0) in
+
+  (* Merge all the regions from the abstraction into one (the first - i.e., the
+     one with the smallest id). Note that we need to do this in the whole
+     environment, as those regions may be referenced as ancestor regions by
+     the other abstractions, and may be present in symbolic values, etc. (this
+     is not the case if there are no nested borrows, but we anticipate).
+  *)
+  let ctx =
+    let regions = nabs.regions in
+    (* Pick the first region id (this is the smallest) *)
+    let rid = T.RegionId.Set.min_elt regions in
+    (* If there is only one region, do nothing *)
+    if T.RegionId.Set.cardinal regions = 1 then ctx
+    else
+      let rids = T.RegionId.Set.remove rid regions in
+      ctx_merge_regions ctx rid rids
+  in
+
+  (* Sanity check *)
+  (* Sanity check *)
+  if !Config.check_invariants then Invariants.check_invariants ctx;
+
+  (* Return *)
+  (ctx, nabs.abs_id)
