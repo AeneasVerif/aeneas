@@ -400,13 +400,12 @@ let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
       inherit [_] V.map_abs
       method! visit_borrow_id _ bid = bsubst bid
       method! visit_loan_id _ bid = bsubst bid
-
-      method! visit_symbolic_value env sv =
-        let sv_id = ssubst sv.sv_id in
-        let sv_ty = subst_rty#visit_ty env sv.sv_ty in
-        { sv with V.sv_id; sv_ty }
-
       method! visit_ety _ ty = ty_substitute_ids tsubst ty
+      method! visit_rty env ty = subst_rty#visit_ty env ty
+      method! visit_symbolic_value_id _ id = ssubst id
+
+      (** We *do* visit meta-values *)
+      method! visit_msymbolic_value env sv = self#visit_symbolic_value env sv
 
       (** We *do* visit meta-values *)
       method! visit_mvalue env v = self#visit_typed_value env v
