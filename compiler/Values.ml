@@ -15,6 +15,7 @@ module LoopId = IdGen ()
 type big_int = PrimitiveValues.big_int [@@deriving show, ord]
 type scalar_value = PrimitiveValues.scalar_value [@@deriving show, ord]
 type primitive_value = PrimitiveValues.primitive_value [@@deriving show, ord]
+type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
 
 (** The kind of a symbolic value, which precises how the value was generated.
 
@@ -49,13 +50,54 @@ type sv_kind =
       (** The result of a loop join (when computing loop fixed points) *)
 [@@deriving show, ord]
 
+(** Ancestor for {!symbolic_value} iter visitor *)
+class ['self] iter_symbolic_value_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.iter
+    method visit_sv_kind : 'env -> sv_kind -> unit = fun _ _ -> ()
+    method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
+
+    method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
+      fun _ _ -> ()
+  end
+
+(** Ancestor for {!symbolic_value} map visitor for *)
+class ['self] map_symbolic_value_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.map
+    method visit_sv_kind : 'env -> sv_kind -> sv_kind = fun _ x -> x
+    method visit_rty : 'env -> rty -> rty = fun _ x -> x
+
+    method visit_symbolic_value_id
+        : 'env -> symbolic_value_id -> symbolic_value_id =
+      fun _ x -> x
+  end
+
 (** A symbolic value *)
 type symbolic_value = {
   sv_kind : sv_kind;
-  sv_id : SymbolicValueId.id;
+  sv_id : symbolic_value_id;
   sv_ty : rty;
 }
-[@@deriving show, ord]
+[@@deriving
+  show,
+    ord,
+    visitors
+      {
+        name = "iter_symbolic_value";
+        variety = "iter";
+        ancestors = [ "iter_symbolic_value_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_symbolic_value";
+        variety = "map";
+        ancestors = [ "map_symbolic_value_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      }]
 
 type borrow_id = BorrowId.id [@@deriving show, ord]
 type borrow_id_set = BorrowId.Set.t [@@deriving show, ord]
@@ -65,13 +107,12 @@ type loan_id_set = BorrowId.Set.t [@@deriving show, ord]
 (** Ancestor for {!typed_value} iter visitor *)
 class ['self] iter_typed_value_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.iter
+    inherit [_] iter_symbolic_value
 
     method visit_primitive_value : 'env -> primitive_value -> unit =
       fun _ _ -> ()
 
     method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
-    method visit_symbolic_value : 'env -> symbolic_value -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
     method visit_borrow_id : 'env -> borrow_id -> unit = fun _ _ -> ()
@@ -87,16 +128,13 @@ class ['self] iter_typed_value_base =
 (** Ancestor for {!typed_value} map visitor for *)
 class ['self] map_typed_value_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.map
+    inherit [_] map_symbolic_value
 
     method visit_primitive_value : 'env -> primitive_value -> primitive_value =
       fun _ cv -> cv
 
     method visit_erased_region : 'env -> erased_region -> erased_region =
       fun _ r -> r
-
-    method visit_symbolic_value : 'env -> symbolic_value -> symbolic_value =
-      fun _ sv -> sv
 
     method visit_ety : 'env -> ety -> ety = fun _ ty -> ty
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
@@ -243,8 +281,6 @@ class ['self] iter_typed_value =
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
       fun _ _ -> ()
-
-    method visit_rty : 'env -> rty -> unit = fun _ _ -> ()
   end
 
 class ['self] map_typed_value =
@@ -254,8 +290,6 @@ class ['self] map_typed_value =
     (** We have to override the {!iter_typed_value_visit_mvalue.visit_mvalue} method,
         to ignore meta-values *)
     method! visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
-
-    method visit_rty : 'env -> rty -> rty = fun _ ty -> ty
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
       fun _ m -> m

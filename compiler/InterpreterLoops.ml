@@ -11,7 +11,6 @@ open ValuesUtils
 module Inv = Invariants
 module S = SynthesizeSymbolic
 module UF = UnionFind
-open Utils
 open Cps
 open InterpreterUtils
 open InterpreterBorrows
@@ -1046,9 +1045,8 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id)
   with ValueMatchFailure _ -> raise (Failure "Unexpected")
 
 (** Join two contexts *)
-let join_ctxs (config : C.config) (loop_id : V.LoopId.id)
-    (old_ids : InterpreterBorrowsCore.ctx_ids) (ctx0 : C.eval_ctx)
-    (ctx1 : C.eval_ctx) : ctx_or_update =
+let join_ctxs (loop_id : V.LoopId.id) (old_ids : InterpreterBorrowsCore.ctx_ids)
+    (ctx0 : C.eval_ctx) (ctx1 : C.eval_ctx) : ctx_or_update =
   let env0 = List.rev ctx0.env in
   let env1 = List.rev ctx1.env in
 
@@ -1209,7 +1207,7 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
   *)
   let joined_ctx = ref old_ctx in
   let rec join_one_aux (ctx : C.eval_ctx) : unit =
-    match join_ctxs config loop_id old_ids !joined_ctx ctx with
+    match join_ctxs loop_id old_ids !joined_ctx ctx with
     | Ok nctx -> joined_ctx := nctx
     | Error err ->
         let ctx =
