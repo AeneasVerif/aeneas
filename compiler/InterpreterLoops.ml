@@ -20,15 +20,6 @@ open InterpreterExpressions
 (** The local logger *)
 let log = L.loops_log
 
-(* TODO: some fields are actually useless *)
-type cnt_thresholds = {
-  aid : V.AbstractionId.id;
-  sid : V.SymbolicValueId.id;
-  bid : V.BorrowId.id;
-  did : C.DummyVarId.id;
-  rid : T.RegionId.id;
-}
-
 type updt_env_kind =
   | AbsInLeft of V.AbstractionId.id
   | LoanInLeft of V.BorrowId.id
@@ -1054,116 +1045,139 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id)
   try collapse_ctx loop_id (Some merge_funcs) old_ids ctx
   with ValueMatchFailure _ -> raise (Failure "Unexpected")
 
-(*(** Apply substitutions in the first abstraction, then join the abstractions together.
-
-    TODO: remove?
- *)
-let subst_join_abstractions (loop_id : V.LoopId.id) (thresh : cnt_thresholds)
-    (rid_map : T.RegionId.InjSubst.t) (bid_map : V.BorrowId.InjSubst.t)
-    (sid_map : V.SymbolicValueId.InjSubst.t) (ctx : C.eval_ctx) (abs0 : V.abs)
-    (abs1 : V.abs) : V.abs =
-  (* Apply the substitutions in the first abstraction *)
-  let rsubst id =
-    assert (T.RegionId.Ord.compare id thresh.rid >= 0);
-    T.RegionId.InjSubst.find_with_default id id rid_map
-  in
-  let rvsubst id = id in
-  let tsubst id = id in
-  let ssubst id =
-    assert (V.SymbolicValueId.Ord.compare id thresh.sid >= 0);
-    V.SymbolicValueId.InjSubst.find_with_default id id sid_map
-  in
-  let bsubst id =
-    assert (V.BorrowId.Ord.compare id thresh.bid >= 0);
-    V.BorrowId.InjSubst.find_with_default id id bid_map
-  in
-  let asubst id = id in
-  let abs0 =
-    Substitute.abs_subst_ids rsubst rvsubst tsubst ssubst bsubst asubst abs0
-  in
-
-  (* Merge the two abstractions *)
-  let abs_kind = V.Loop loop_id in
-  let can_end = false in
-merge_abstractions abs_kind can_end None ctx abs0 abs1*)
-
-(*
-(** Merge a borrow with the abstraction containing the associated loan, where
-    the abstraction must be a *loop abstraction* (we don't synthesize code during
-    the operation).
-
-    For instance:
-    {[
-      abs'0 { mut_loan l0 }
-      x -> mut_borrow l0 sx
-
-            ~~>
-
-      abs'0 {}
-      x -> ⊥
-    ]}
- *)
-let merge_borrow_with_parent_loop_abs (config : C.config) (bid : V.BorrowId.id)
-    (ctx : C.eval_ctx) : C.eval_ctx =
-  (* TODO: use the function from InterpreterBorrows *)
-  failwith "Unimplemented"
-(* (* Lookup the borrow *)
-     let ek =
-       { enter_shared_loans = false; enter_mut_borrows = false; enter_abs = false }
-     in
-     (* TODO: use [end_borrow_get_borrow]? *)
-     match lookup_borrow ek bid ctx with
-     | None -> ctx
-   | Some b -> failwith "Unimplemented"*)
-
-(** See {!merge_borrow_with_parent_loop_abs} *)
-let rec merge_borrows_with_parent_loop_abs (config : C.config)
-    (bids : V.BorrowId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
-  V.BorrowId.Set.fold
-    (fun id ctx -> merge_borrow_with_parent_loop_abs config id ctx)
-    bids ctx
- *)
-
-(*
-(* TODO: we probably don't need an [match_ctx], and actually we might not use
-   the bounds propertly.
-   TODO: remove
-*)
-let match_ctx_with_target_old (config : C.config) (tgt_ctx : C.eval_ctx) :
-    cm_fun =
- fun cf src_ctx ->
-  (* We first reorganize [ctx] so that we can match it with [tgt_ctx] *)
-  (* First, collect all the borrows and abstractions which are in [ctx]
-     and not in [tgt_ctx]: we need to end them *)
-  let src_ids = InterpreterBorrowsCore.compute_context_ids src_ctx in
-  let tgt_ids = InterpreterBorrowsCore.compute_context_ids tgt_ctx in
-  let bids = V.BorrowId.Set.diff src_ids.bids tgt_ids.bids in
-  let aids = V.AbstractionId.Set.diff src_ids.aids tgt_ids.aids in
-  (* End those borrows and abstractions *)
-  let cc = InterpreterBorrows.end_borrows config bids in
-  let cc = comp cc (InterpreterBorrows.end_abstractions config aids) in
-  (* In the target context, merge all the borrows introduced by the loop with
-     their parent abstractions
-  *)
-  let tgt_ctx =
-    merge_borrows_with_parent_loop_abs config
-      (V.BorrowId.Set.diff tgt_ids.bids src_ids.bids)
-      tgt_ctx
-  in
-  (* Replace the source context with the target context - TODO: explain
-     why this works *)
-  let cf_apply_match : cm_fun = fun cf _ -> cf tgt_ctx in
-  let cc = comp cc cf_apply_match in
-  (* Sanity check on the resulting context *)
-  let cc = comp_check_ctx cc Inv.check_invariants in
-  (* Apply and continue *)
-  cc cf src_ctx
-*)
-
 (** Join two contexts *)
-let join_ctxs (_config : C.config) (_old_ids : InterpreterBorrowsCore.ctx_ids)
-    (_ctx0 : C.eval_ctx) (_ctx1 : C.eval_ctx) : ctx_or_update =
-  raise (Failure "Unimplemented")
+let join_ctxs (config : C.config) (loop_id : V.LoopId.id)
+    (old_ids : InterpreterBorrowsCore.ctx_ids) (ctx0 : C.eval_ctx)
+    (ctx1 : C.eval_ctx) : ctx_or_update =
+  let env0 = List.rev ctx0.env in
+  let env1 = List.rev ctx1.env in
+
+  (* We need to pick a context for some functions like [match_typed_values]:
+     the context is only used to lookup module data, so we can pick whichever
+     we want.
+     TODO: this is not very clean. Maybe we should just carry this data around.
+  *)
+  let ctx = ctx0 in
+
+  let nabs = ref [] in
+
+  (* Explore the environments.
+
+     Note that they should have the same prefixes (they should start with
+     old dummy values, old abstractions and bindings which have the same ids).
+     Those old values and abstractions should actually be equal between the
+     two environments.
+
+     Rem.: this is important to make the match easy (we take care of preserving
+     the structure of the environments, and ending the proper borrows/abstractions,
+     etc.). We could also implement a more general join.
+  *)
+  let join_suffixes (env0 : C.env) (env1 : C.env) : C.env =
+    (* Sanity check: there are no values/abstractions which should be in the prefix *)
+    let check_valid (ee : C.env_elem) : unit =
+      match ee with
+      | C.Var (C.VarBinder _, _) ->
+          (* Variables are necessarily in the prefix *)
+          raise (Failure "Unreachable")
+      | Var (C.DummyBinder did, _) ->
+          assert (not (C.DummyVarId.Set.mem did old_ids.dids))
+      | Abs abs ->
+          assert (not (V.AbstractionId.Set.mem abs.abs_id old_ids.aids))
+      | Frame -> ()
+    in
+    List.iter check_valid env0;
+    List.iter check_valid env1;
+    (* Concatenate the suffixes and append the abstractions introduced while
+       joining the prefixes *)
+    let absl = List.map (fun abs -> C.Abs abs) !nabs in
+    List.concat [ env0; env1; absl ]
+  in
+
+  let module S : MatchJoinState = struct
+    (* The context is only used to lookup module data: we can pick whichever we want *)
+    let ctx = ctx
+    let loop_id = loop_id
+    let nabs = nabs
+  end in
+  let module JM = MakeJoinMatcher (S) in
+  let module M = Match (JM) in
+  (* Rem.: this function raises exceptions *)
+  let rec join_prefixes (env0 : C.env) (env1 : C.env) : C.env =
+    match (env0, env1) with
+    | ( (C.Var (C.DummyBinder b0, v0) as var) :: env0',
+        C.Var (C.DummyBinder b1, v1) :: env1' ) ->
+        (* Two cases: the dummy value is an old value, in which case the bindings
+           must be the same and we must join their values. Otherwise, it means we
+           are not in the prefix anymore *)
+        if C.DummyVarId.Set.mem b0 old_ids.dids then (
+          (* Still in the prefix: the values must match *)
+          assert (b0 = b1);
+          assert (v0 = v1);
+          (* Continue *)
+          var :: join_prefixes env0' env1')
+        else (* Not in the prefix anymore *)
+          join_suffixes env0 env1
+    | C.Var (C.VarBinder b0, v0) :: env0', C.Var (C.VarBinder b1, v1) :: env1'
+      ->
+        (* Variable bindings *must* be in the prefix and consequently their
+           ids must be the same *)
+        assert (b0 = b1);
+        (* Match the values *)
+        let b = b0 in
+        let v = M.match_typed_values ctx v0 v1 in
+        let var = C.Var (C.VarBinder b, v) in
+        (* Continue *)
+        var :: join_prefixes env0' env1'
+    | (C.Abs abs0 as abs) :: env0', C.Abs abs1 :: env1' ->
+        (* Same as for the dummy values: there are two cases *)
+        if V.AbstractionId.Set.mem abs0.abs_id old_ids.aids then (
+          (* Still in the prefix: the abstractions must be the same *)
+          assert (abs0 = abs1);
+          (* Continue *)
+          abs :: join_suffixes env0' env1')
+        else (* Not in the prefix anymore *)
+          join_suffixes env0 env1
+    | _ ->
+        (* The elements don't match: we are not in the prefix anymore *)
+        join_suffixes env0 env1
+  in
+
+  try
+    let env = List.rev (join_prefixes env0 env1) in
+
+    (* Construct the joined context - of course, the type, fun, etc. contexts
+     * should be the same in the two contexts *)
+    let {
+      C.type_context;
+      fun_context;
+      global_context;
+      type_vars;
+      env = _;
+      ended_regions = ended_regions0;
+    } =
+      ctx0
+    in
+    let {
+      C.type_context = _;
+      fun_context = _;
+      global_context = _;
+      type_vars = _;
+      env = _;
+      ended_regions = ended_regions1;
+    } =
+      ctx1
+    in
+    let ended_regions = T.RegionId.Set.union ended_regions0 ended_regions1 in
+    Ok
+      {
+        C.type_context;
+        fun_context;
+        global_context;
+        type_vars;
+        env;
+        ended_regions;
+      }
+  with ValueMatchFailure e -> Error e
 
 (** Join the context at the entry of the loop with the contexts upon reentry
     (upon reaching the [Continue] statement - the goal is to compute a fixed
@@ -1195,7 +1209,7 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
   *)
   let joined_ctx = ref old_ctx in
   let rec join_one_aux (ctx : C.eval_ctx) : unit =
-    match join_ctxs config old_ids !joined_ctx ctx with
+    match join_ctxs config loop_id old_ids !joined_ctx ctx with
     | Ok nctx -> joined_ctx := nctx
     | Error err ->
         let ctx =
@@ -1229,28 +1243,6 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
   (* # Return *)
   !joined_ctx
 
-(*
-(** Join a context at the entry of a loop with a context upon reaching
-    a continue in this loop.
- *)
-let loop_join_entry_ctx_with_continue_ctx (_ctx0 : C.eval_ctx)
-    (_ctx1 : C.eval_ctx) : ctx_or_update =
-  failwith "Unimplemented"
-
-(** See {!loop_join_entry_ctx_with_continue_ctx} *)
-let rec loop_join_entry_ctx_with_continue_ctxs (ctx0 : C.eval_ctx)
-    (ctxs : C.eval_ctx list) : ctx_or_update =
-  match ctxs with
-  | [] -> Ok ctx0
-  | ctx1 :: ctxs -> (
-      let res = loop_join_entry_ctx_with_continue_ctx ctx0 ctx1 in
-      match res with
-      | Error _ ->
-          (* TODO: apply the error *)
-          raise (Failure "Unimplemented")
-      | Ok ctx0 -> loop_join_entry_ctx_with_continue_ctxs ctx0 ctxs)
- *)
-
 let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) : C.eval_ctx =
   (* The continuation for when we exit the loop - we register the
@@ -1276,13 +1268,6 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
         raise (Failure "Nested loops are not supported for now")
   in
   (* Join the contexts at the loop entry *)
-  (* TODO: return result:
-   * - end borrows in ctx0
-   * - ok: return joined env
-   * TODO: keep initial env somewhere?
-   * TODO: the returned env is an eval_ctx or smth else?
-   * Maybe simply keep track of existentially quantified variables?
-   *)
   let join_ctxs (ctx0 : C.eval_ctx) : C.eval_ctx =
     let ctx1 = loop_join_origin_with_continue_ctxs config loop_id ctx0 !ctxs in
     ctxs := [];
