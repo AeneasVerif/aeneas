@@ -393,10 +393,10 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
         | V.AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
-        | V.AIgnoredMutLoan (bid', child) ->
+        | V.AIgnoredMutLoan (opt_bid, child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
-            if bid' = bid then
+            if opt_bid = Some bid then
               (* Remember the given back value as a meta-value *)
               let given_back_meta = nv in
               (* Note that we replace the ignored mut loan by an *ended* ignored
@@ -557,10 +557,10 @@ let give_back_avalue_to_same_abstraction (_config : C.config)
         | V.AEndedSharedLoan (_, _) ->
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
-        | V.AIgnoredMutLoan (bid', child) ->
+        | V.AIgnoredMutLoan (bid_opt, child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
-            if bid' = bid then (
+            if bid_opt = Some bid then (
               (* Note that we replace the ignored mut loan by an *ended* ignored
                * mut loan. Also, this is not the loan we are looking for *per se*:
                * we don't register the fact that we inserted the value somewhere
@@ -1626,10 +1626,15 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
             push { V.value; ty };
             (* Explore the child *)
             list_avalues false push_fail child_av
+        | V.AIgnoredMutLoan (opt_bid, child_av) ->
+            (* We don't support nested borrows for now *)
+            assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
+            assert (opt_bid = None);
+            (* Simply explore the child *)
+            list_avalues false push_fail child_av
         | V.AEndedMutLoan
             { child = child_av; given_back = _; given_back_meta = _ }
         | V.AEndedSharedLoan (_, child_av)
-        | V.AIgnoredMutLoan (_, child_av)
         | V.AEndedIgnoredMutLoan
             { child = child_av; given_back = _; given_back_meta = _ }
         | V.AIgnoredSharedLoan child_av ->
@@ -1651,7 +1656,12 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
         | V.ASharedBorrow _ ->
             (* Nothing specific to do: keep the value as it is *)
             push av
-        | V.AIgnoredMutBorrow (_, child_av)
+        | V.AIgnoredMutBorrow (opt_bid, child_av) ->
+            (* We don't support nested borrows for now *)
+            assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
+            assert (opt_bid = None);
+            (* Just explore the child *)
+            list_avalues false push_fail child_av
         | V.AEndedIgnoredMutBorrow
             { child = child_av; given_back_loans_proj = _; given_back_meta = _ }
           ->
@@ -1659,9 +1669,11 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
             assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
             (* Just explore the child *)
             list_avalues false push_fail child_av
-        | V.AProjSharedBorrow _ ->
-            (* Nothing specific to do: keep the value as it is *)
-            push_avalue av
+        | V.AProjSharedBorrow asb ->
+            (* We don't support nested borrows *)
+            assert (asb = []);
+            (* Nothing specific to do *)
+            ()
         | V.AEndedMutBorrow _ | V.AEndedSharedBorrow ->
             (* If we get there it means the abstraction ended: it should not
                be in the context anymore (if we end *one* borrow in an abstraction,

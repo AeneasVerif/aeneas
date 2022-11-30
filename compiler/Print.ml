@@ -248,8 +248,10 @@ module Values = struct
         ^ ", "
         ^ typed_avalue_to_string fmt av
         ^ ")"
-    | AIgnoredMutLoan (bid, av) ->
-        "@ignored_mut_loan(" ^ V.BorrowId.to_string bid ^ ", "
+    | AIgnoredMutLoan (opt_bid, av) ->
+        "@ignored_mut_loan("
+        ^ option_to_string V.BorrowId.to_string opt_bid
+        ^ ", "
         ^ typed_avalue_to_string fmt av
         ^ ")"
     | AEndedIgnoredMutLoan ml ->

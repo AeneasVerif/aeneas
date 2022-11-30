@@ -69,8 +69,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
           | V.ReservedMutBorrow _, _ ->
               raise
                 (Failure
-                   "Can't apply a proj_borrow over a reserved mutable \
-                    borrow")
+                   "Can't apply a proj_borrow over a reserved mutable borrow")
           | _ -> raise (Failure "Unreachable")
         in
         let asb =
@@ -140,7 +139,19 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                       fresh_reborrow regions ancestors_regions bv ref_ty
                   in
                   V.AMutBorrow (mv, bid, bv)
-              | V.SharedBorrow (_, bid), T.Shared -> V.ASharedBorrow bid
+              | V.SharedBorrow (_, bid), T.Shared ->
+                  (* Rem.: we don't need to also apply the projection on the
+                     borrowed value, because for as long as the abstraction
+                     lives then the shared borrow lives, which means that the
+                     whole value is borrowed (and thus immutable).
+                     This is not the case if the current borrow is not to be
+                     projected to the current abstraction: if this happens,
+                     then maybe there are borrows *inside* the shared value
+                     which belong to the current abstraction, meaning we
+                     need to lookup the shared value and project it (see the
+                     other branch of the [if then else]).
+                  *)
+                  V.ASharedBorrow bid
               | V.ReservedMutBorrow _, _ ->
                   raise
                     (Failure
@@ -150,7 +161,9 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
             in
             V.ABorrow bc
           else
-            (* Not in the set: ignore *)
+            (* Not in the set: ignore the borrow, but project the borrowed
+               value (maybe some borrows *inside* the borrowed value are in
+               the region set) *)
             let bc =
               match (bc, kind) with
               | V.MutBorrow (bid, bv), T.Mut ->
@@ -249,7 +262,8 @@ let symbolic_expansion_non_shared_borrow_to_value (sv : V.symbolic_value)
     TODO: detailed comments. See [apply_proj_borrows]
 *)
 let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
-    (see : V.symbolic_expansion) (original_sv_ty : T.rty) : V.typed_avalue =
+    (ancestors_regions : T.RegionId.Set.t) (see : V.symbolic_expansion)
+    (original_sv_ty : T.rty) : V.typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
   assert (ty_has_regions_in_set regions original_sv_ty);
@@ -278,7 +292,12 @@ let apply_proj_loans_on_symbolic_expansion (regions : T.RegionId.Set.t)
           (V.ALoan (V.AMutLoan (bid, child_av)), ref_ty)
         else
           (* Not in the set: ignore *)
-          (V.ALoan (V.AIgnoredMutLoan (bid, child_av)), ref_ty)
+          (* If the borrow id is in the ancestor's regions, we still need
+           * to remember it *)
+          let opt_bid =
+            if region_in_set r ancestors_regions then Some bid else None
+          in
+          (V.ALoan (V.AIgnoredMutLoan (opt_bid, child_av)), ref_ty)
     | SeSharedRef (bids, spc), T.Ref (r, ref_ty, T.Shared) ->
         (* Sanity check *)
         assert (spc.V.sv_ty = ref_ty);

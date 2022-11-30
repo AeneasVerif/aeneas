@@ -524,7 +524,7 @@ and aloan_content =
           We get (after some symbolic exansion):
           {[
             abs0 {
-              a_mut_loan l0 (a_mut_loan l1)
+              a_mut_loan l0 (a_mut_loan l1 _)
             }
             px -> mut_borrow l0 (mut_borrow @s1)
           ]}
@@ -542,7 +542,7 @@ and aloan_content =
           
           We get:
           {[
-            abs0 { a_shared_loan {l0} @s0 ⊥ }
+            abs0 { a_shared_loan {l0} @s0 _ }
             px -> shared_loan l0
           ]}
      *)
@@ -579,7 +579,7 @@ and aloan_content =
           give back. We keep the shared value because it now behaves as a
           "regular" value (which contains borrows we might want to end...).
        *)
-  | AIgnoredMutLoan of loan_id * typed_avalue
+  | AIgnoredMutLoan of loan_id option * typed_avalue
       (** An ignored mutable loan.
       
           We need to keep track of ignored mutable loans, because we may have
@@ -588,6 +588,9 @@ and aloan_content =
           the outer loan is ignored, however you need to keep track of it so
           that when ending the borrow corresponding to 'a you can correctly
           project on the inner value).
+
+          Note that we need to do so only for borrows consumed by parent
+          abstractions, hence the optional loan id.
        
           Example:
           ========
@@ -692,7 +695,11 @@ and aborrow_content =
           Note that we need to do so only for borrows consumed by parent
           abstractions (hence the optional borrow id).
           
-          TODO: the below explanations are obsolete
+          Rem.: we don't have an equivalent for shared borrows because if
+          we ignore a shared borrow we don't need keep track it (we directly
+          use {!AProjSharedBorrow} to project the shared value).
+
+          TODO: the explanations below are obsolete
 
           Example:
           ========
@@ -806,10 +813,22 @@ and aborrow_content =
             > px   -> shared_loan {l1, l3, l4} (mut_borrow l0 (U32 0))
             > ppx  -> shared_loan {l2} (shared_borrow l1)
             > pppx -> ⊥
-            > abs'a { a_proj_shared_borrow {l2} }
+            > abs'a { a_shared_borrow {l2} }
             > abs'b { a_proj_shared_borrow {l3} } // l3 reborrows l1
             > abs'c { a_proj_shared_borrow {l4} } // l4 reborrows l0
           ]}
+
+          Rem.: we introduce {!AProjSharedBorrow} only when we project a shared
+          borrow *which is ignored* (i.e., the shared borrow doesn't belong to
+          the current abstraction). The reason is that if the shared borrow
+          belongs to the abstraction, then by introducing a shared borrow inside
+          the abstraction we make sure the whole value is shared (and thus immutable)
+          for as long as the abstraction lives, meaning reborrowing subvalues
+          is redundant. However, if the borrow doesn't belong to the abstraction,
+          we need to project the shared values because it may contain some
+          borrows which *do* belong to the current abstraction.
+
+          TODO: maybe we should factorized [ASharedBorrow] and [AProjSharedBorrow].
        *)
 
 (* TODO: the type of avalues doesn't make sense for loan avalues: they currently
