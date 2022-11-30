@@ -160,7 +160,8 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
           match lc with
           | V.AMutLoan (bid, _) -> register_mut_loan inside_abs bid
           | V.ASharedLoan (bids, _, _) -> register_shared_loan inside_abs bids
-          | V.AIgnoredMutLoan (bid, _) -> register_ignored_loan T.Mut bid
+          | V.AIgnoredMutLoan (Some bid, _) -> register_ignored_loan T.Mut bid
+          | V.AIgnoredMutLoan (None, _)
           | V.AIgnoredSharedLoan _
           | V.AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
           | V.AEndedSharedLoan (_, _)
@@ -571,7 +572,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | _ -> raise (Failure "Inconsistent context"))
         | V.ALoan lc, aty -> (
             match lc with
-            | V.AMutLoan (bid, child_av) | V.AIgnoredMutLoan (bid, child_av)
+            | V.AMutLoan (bid, child_av) | V.AIgnoredMutLoan (Some bid, child_av)
               -> (
                 let borrowed_aty = aloan_get_expected_child_type aty in
                 assert (child_av.V.ty = borrowed_aty);
@@ -585,6 +586,9 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                       Subst.erase_regions sv.V.ty
                       = Subst.erase_regions borrowed_aty)
                 | _ -> raise (Failure "Inconsistent context"))
+            | V.AIgnoredMutLoan (None, child_av) ->
+                let borrowed_aty = aloan_get_expected_child_type aty in
+                assert (child_av.V.ty = borrowed_aty)
             | V.ASharedLoan (_, sv, child_av) | V.AEndedSharedLoan (sv, child_av)
               ->
                 let borrowed_aty = aloan_get_expected_child_type aty in

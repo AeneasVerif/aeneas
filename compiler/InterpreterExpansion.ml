@@ -105,8 +105,8 @@ let apply_symbolic_expansion_to_target_avalues (config : C.config)
               assert (given_back = []);
               (* Apply the projector *)
               let projected_value =
-                apply_proj_loans_on_symbolic_expansion proj_regions expansion
-                  original_sv.V.sv_ty
+                apply_proj_loans_on_symbolic_expansion proj_regions
+                  ancestors_regions expansion original_sv.V.sv_ty
               in
               (* Replace *)
               projected_value.V.value)

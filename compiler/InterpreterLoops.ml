@@ -415,7 +415,12 @@ module type Matcher = sig
     V.typed_value ->
     V.borrow_id * V.typed_value
 
-  (** The shared value is the result of a match *)
+  (** Parameters:
+      [ty]
+      [ids0]
+      [ids1]
+      [v]: the result of matching the shared values coming from the two loans
+   *)
   val match_shared_loans :
     T.ety ->
     V.loan_id_set ->
@@ -438,6 +443,93 @@ module type Matcher = sig
    *)
   val match_symbolic_with_other :
     bool -> V.symbolic_value -> V.typed_value -> V.typed_value
+
+  (** The input ADTs don't have the same variant *)
+  val match_distinct_aadts :
+    T.rty -> V.adt_avalue -> T.rty -> V.adt_avalue -> V.typed_avalue
+
+  (** Parameters:
+      [ty0]
+      [bid0]
+      [ty1]
+      [bid1]
+   *)
+  val match_ashared_borrows :
+    T.rty -> V.borrow_id -> T.rty -> V.borrow_id -> V.typed_avalue
+
+  (** Parameters:
+      [ty0]
+      [mv0]
+      [bid0]
+      [av0]
+      [ty1]
+      [mv1]
+      [bid1]
+      [av1]
+      [mv]: result of matching mv0 and mv1
+      [av]: result of matching av0 and av1
+   *)
+  val match_amut_borrows :
+    T.rty ->
+    V.mvalue ->
+    V.borrow_id ->
+    V.typed_avalue ->
+    T.rty ->
+    V.mvalue ->
+    V.borrow_id ->
+    V.typed_avalue ->
+    V.mvalue ->
+    V.typed_avalue ->
+    V.typed_avalue
+
+  (** Parameters:
+      [ty0]
+      [ids0]
+      [v0]
+      [av0]
+      [ty1]
+      [ids1]
+      [v1]
+      [av1]
+      [v]: result of matching v0 and v1
+      [av]: result of matching av0 and av1
+   *)
+  val match_ashared_loans :
+    T.rty ->
+    V.loan_id_set ->
+    V.typed_value ->
+    V.typed_avalue ->
+    T.rty ->
+    V.loan_id_set ->
+    V.typed_value ->
+    V.typed_avalue ->
+    V.typed_value ->
+    V.typed_avalue ->
+    V.typed_avalue
+
+  (** Parameters:
+      [ty0]
+      [id0]
+      [av0]
+      [ty1]
+      [id1]
+      [av1]
+      [av]: result of matching av0 and av1
+   *)
+  val match_amut_loans :
+    T.rty ->
+    V.borrow_id ->
+    V.typed_avalue ->
+    T.rty ->
+    V.borrow_id ->
+    V.typed_avalue ->
+    V.typed_avalue ->
+    V.typed_avalue
+
+  (** Match two arbitrary avalues whose constructors don't match (this function
+      is typically used to raise the proper exception).
+   *)
+  val match_avalues : V.typed_avalue -> V.typed_avalue -> V.typed_avalue
 end
 
 (** Generic functor to implement matching functions between values, environments,
@@ -473,7 +565,7 @@ module Match (M : Matcher) = struct
           assert (not (value_has_borrows ctx v1.V.value));
           (* Merge *)
           M.match_distinct_adts v0.V.ty av0 av1)
-    | Bottom, Bottom -> v1
+    | Bottom, Bottom -> v0
     | Borrow bc0, Borrow bc1 ->
         let bc =
           match (bc0, bc1) with
@@ -546,7 +638,83 @@ module Match (M : Matcher) = struct
 
   and match_typed_avalues (ctx : C.eval_ctx) (v0 : V.typed_avalue)
       (v1 : V.typed_avalue) : V.typed_avalue =
-    raise (Failure "Unreachable")
+    let match_rec = match_typed_values ctx in
+    let match_arec = match_typed_avalues ctx in
+    assert (v0.V.ty = v1.V.ty);
+    match (v0.V.value, v1.V.value) with
+    | V.APrimitive _, V.APrimitive _ ->
+        (* We simply ignore - those are actually not used *)
+        assert (v0.V.ty = v1.V.ty);
+        mk_aignored v0.V.ty
+    | V.AAdt av0, V.AAdt av1 ->
+        if av0.variant_id = av1.variant_id then
+          let fields = List.combine av0.field_values av1.field_values in
+          let field_values =
+            List.map (fun (f0, f1) -> match_arec f0 f1) fields
+          in
+          let value : V.avalue =
+            V.AAdt { variant_id = av0.variant_id; field_values }
+          in
+          { V.value; ty = v1.V.ty }
+        else (* Merge *)
+          M.match_distinct_aadts v0.V.ty av0 v1.V.ty av1
+    | ABottom, ABottom -> v0
+    | ABorrow bc0, ABorrow bc1 -> (
+        match (bc0, bc1) with
+        | ASharedBorrow bid0, ASharedBorrow bid1 ->
+            M.match_ashared_borrows v0.V.ty bid0 v1.V.ty bid1
+        | AMutBorrow (mv0, bid0, av0), AMutBorrow (mv1, bid1, av1) ->
+            (* Not sure what to do with the meta-value *)
+            let mv = match_rec mv0 mv1 in
+            let av = match_arec av0 av1 in
+            M.match_amut_borrows v0.V.ty mv0 bid0 av0 v1.V.ty mv1 bid1 av1 mv av
+        | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
+            (* The abstractions are destructured: we shouldn't get there *)
+            raise (Failure "Unexpected")
+        | AProjSharedBorrow asb0, AProjSharedBorrow asb1 -> (
+            match (asb0, asb1) with
+            | [], [] ->
+                (* This case actually stands for ignored shared borrows, when
+                   there are no nested borrows *)
+                v0
+            | _ ->
+                (* We should get there only if there are nested borrows *)
+                raise (Failure "Unexpected"))
+        | _ ->
+            (* TODO: getting there is not necessarily inconsistent (it may
+               just be because the environments don't match) so we may want
+               to call a specific function (which could raise the proper
+               exception).
+               Rem.: we shouldn't get to the ended borrow cases, because
+               an abstraction should never contain ended borrows unless
+               we are *currently* ending it, in which case we need
+               to completely end it before continuing.
+            *)
+            raise (Failure "Unexpected"))
+    | ALoan lc0, ALoan lc1 -> (
+        (* TODO: maybe we should enforce that the ids are always exactly the same -
+           without matching *)
+        match (lc0, lc1) with
+        | ASharedLoan (ids0, sv0, av0), ASharedLoan (ids1, sv1, av1) ->
+            let sv = match_rec sv0 sv1 in
+            let av = match_arec av0 av1 in
+            assert (not (value_has_borrows ctx sv.V.value));
+            M.match_ashared_loans v0.V.ty ids0 sv0 av0 v1.V.ty ids1 sv1 av1 sv
+              av
+        | AMutLoan (id0, av0), AMutLoan (id1, av1) ->
+            let av = match_arec av0 av1 in
+            M.match_amut_loans v0.V.ty id0 av0 v1.V.ty id1 av1 av
+        | AIgnoredMutLoan _, AIgnoredMutLoan _
+        | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
+            (* Those should have been filtered when destructuring the abstractions -
+               they are necessary only when there are nested borrows *)
+            raise (Failure "Unreachable")
+        | _ -> raise (Failure "Unreachable"))
+    | ASymbolic _, ASymbolic _ ->
+        (* For now, we force all the symbolic values containing borrows to
+           be eagerly expanded, and we don't support nested borrows *)
+        raise (Failure "Unreachable")
+    | _ -> M.match_avalues v0 v1
 end
 
 (* Very annoying: functors only take modules as inputs... *)
@@ -709,7 +877,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
       (* Return the new borrow *)
       (bid2, sv)
 
-  let match_shared_loans (ty : T.ety) (ids0 : V.loan_id_set)
+  let match_shared_loans (_ : T.ety) (ids0 : V.loan_id_set)
       (ids1 : V.loan_id_set) (sv : V.typed_value) :
       V.loan_id_set * V.typed_value =
     (* Check if the ids are the same - Rem.: we forbid the sets of loans
@@ -732,9 +900,13 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
     (* Return *)
     (ids, sv)
 
-  let match_mut_loans (_ : T.ety) (id0 : V.loan_id) (_ : V.loan_id) : V.loan_id
-      =
-    id0
+  let match_mut_loans (_ : T.ety) (id0 : V.loan_id) (id1 : V.loan_id) :
+      V.loan_id =
+    if id0 = id1 then id0
+    else
+      (* We forbid this case for now: if we get there, we force to end
+         both borrows *)
+      raise (ValueMatchFailure (LoanInLeft id0))
 
   let match_symbolic_values (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) :
       V.symbolic_value =
@@ -771,6 +943,13 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
         else raise (ValueMatchFailure (LoanInRight id)));
     (* Return a fresh symbolic value *)
     mk_fresh_symbolic_typed_value V.LoopJoin sv.sv_ty
+
+  let match_distinct_aadts _ _ _ _ = raise (Failure "Unreachable")
+  let match_ashared_borrows _ _ _ _ = raise (Failure "Unreachable")
+  let match_amut_borrows _ _ _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
+  let match_ashared_loans _ _ _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
+  let match_amut_loans _ _ _ _ _ _ _ = raise (Failure "Unreachable")
+  let match_avalues _ _ = raise (Failure "Unreachable")
 end
 
 (*
