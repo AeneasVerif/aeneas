@@ -203,6 +203,10 @@ type merge_duplicates_funcs = {
 
 (** Merge two abstractions together.
 
+    We insert the result of the merge in place of the first abstraction (this
+    helps preserving the structure of the environment, when computing loop
+    fixed points for instance).
+
     When we merge two abstractions together, we remove the loans/borrows
     which appear in one and whose associated loans/borrows appear in the
     other. For instance:
