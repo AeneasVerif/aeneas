@@ -2405,7 +2405,13 @@ let ctx_merge_regions (ctx : C.eval_ctx) (rid : T.RegionId.id)
       List.map (Substitute.typed_avalue_subst_rids rsubst) abs.V.avalues
     in
     let regions = T.RegionId.Set.diff abs.V.regions rids in
-    let ancestors_regions = T.RegionId.Set.diff abs.V.ancestors_regions rids in
+    let ancestors_regions =
+      if T.RegionId.Set.disjoint abs.V.ancestors_regions rids then
+        abs.V.ancestors_regions
+      else
+        T.RegionId.Set.add rid
+          (T.RegionId.Set.diff abs.V.ancestors_regions rids)
+    in
     { abs with V.avalues; regions; ancestors_regions }
   in
 
