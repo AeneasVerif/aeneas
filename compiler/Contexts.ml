@@ -439,22 +439,9 @@ let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
 (** Visitor to iterate over the values in the *current* frame *)
 class ['self] iter_frame =
   object (self : 'self)
-    inherit [_] V.iter_abs
+    inherit [_] iter_env
 
-    method visit_Var : 'acc -> binder -> typed_value -> unit =
-      fun acc _ v -> self#visit_typed_value acc v
-
-    method visit_Abs : 'acc -> abs -> unit =
-      fun acc abs -> self#visit_abs acc abs
-
-    method visit_env_elem : 'acc -> env_elem -> unit =
-      fun acc em ->
-        match em with
-        | Var (vid, v) -> self#visit_Var acc vid v
-        | Abs abs -> self#visit_Abs acc abs
-        | Frame -> raise (Failure "Unreachable")
-
-    method visit_env : 'acc -> env -> unit =
+    method! visit_env : 'acc -> env -> unit =
       fun acc env ->
         match env with
         | [] -> ()
@@ -467,24 +454,9 @@ class ['self] iter_frame =
 (** Visitor to map over the values in the *current* frame *)
 class ['self] map_frame_concrete =
   object (self : 'self)
-    inherit [_] V.map_abs
+    inherit [_] map_env
 
-    method visit_Var : 'acc -> binder -> typed_value -> env_elem =
-      fun acc b v ->
-        let v = self#visit_typed_value acc v in
-        Var (b, v)
-
-    method visit_Abs : 'acc -> abs -> env_elem =
-      fun acc abs -> Abs (self#visit_abs acc abs)
-
-    method visit_env_elem : 'acc -> env_elem -> env_elem =
-      fun acc em ->
-        match em with
-        | Var (vid, v) -> self#visit_Var acc vid v
-        | Abs abs -> self#visit_Abs acc abs
-        | Frame -> raise (Failure "Unreachable")
-
-    method visit_env : 'acc -> env -> env =
+    method! visit_env : 'acc -> env -> env =
       fun acc env ->
         match env with
         | [] -> []

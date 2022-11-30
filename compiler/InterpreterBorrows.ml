@@ -1423,6 +1423,9 @@ let end_borrows_no_synth config ids ctx =
 let end_abstraction_no_synth config id ctx =
   get_cf_ctx_no_synth (end_abstraction config id) ctx
 
+let end_abstractions_no_synth config ids ctx =
+  get_cf_ctx_no_synth (end_abstractions config ids) ctx
+
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
     This function updates the shared loan to a mutable loan (we then update
@@ -1923,8 +1926,7 @@ type merge_abstraction_info = {
     - all the borrows are destructured (for instance, shared loans can't
       contain shared loans).
  *)
-let compute_merge_abstractions_info (ctx : C.eval_ctx) (abs : V.abs) :
-    merge_abstraction_info =
+let compute_merge_abstractions_info (abs : V.abs) : merge_abstraction_info =
   let loans : V.loan_id_set ref = ref V.BorrowId.Set.empty in
   let borrows : V.borrow_id_set ref = ref V.BorrowId.Set.empty in
   let borrows_loans : borrow_or_loan_id list ref = ref [] in
@@ -2060,7 +2062,23 @@ type merge_duplicates_funcs = {
     V.mvalue ->
     V.typed_avalue ->
     V.typed_avalue;
+      (** Parameters:
+          - [id]
+          - [ty0]
+          - [mv0]
+          - [child0]
+          - [ty1]
+          - [mv1]
+          - [child1]
+
+          The children should be [AIgnored].
+       *)
   merge_ashared_borrows : V.borrow_id -> T.rty -> T.rty -> V.typed_avalue;
+      (** Parameters:
+          - [id]
+          - [ty0]
+          - [ty1]
+       *)
   merge_amut_loans :
     V.loan_id ->
     T.rty ->
@@ -2068,13 +2086,33 @@ type merge_duplicates_funcs = {
     T.rty ->
     V.typed_avalue ->
     V.typed_avalue;
+      (** Parameters:
+          - [id]
+          - [ty0]
+          - [child0]
+          - [ty1]
+          - [child1]
+
+          The children should be [AIgnored].
+       *)
   merge_ashared_loans :
     V.loan_id_set ->
     T.rty ->
     V.typed_value ->
+    V.typed_avalue ->
     T.rty ->
     V.typed_value ->
+    V.typed_avalue ->
     V.typed_avalue;
+      (** Parameters:
+          - [ids]
+          - [ty0]
+          - [sv0]
+          - [child0]
+          - [ty1]
+          - [sv1]
+          - [child1]
+       *)
 }
 
 let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
@@ -2094,7 +2132,7 @@ let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
     loan_to_content = loan_to_content0;
     borrow_to_content = borrow_to_content0;
   } =
-    compute_merge_abstractions_info ctx abs0
+    compute_merge_abstractions_info abs0
   in
 
   let {
@@ -2104,7 +2142,7 @@ let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
     loan_to_content = loan_to_content1;
     borrow_to_content = borrow_to_content1;
   } =
-    compute_merge_abstractions_info ctx abs1
+    compute_merge_abstractions_info abs1
   in
 
   (* Sanity check: there is no loan/borrows which appears in both abstractions,
@@ -2181,7 +2219,7 @@ let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
   let merge_g_borrow_contents (bc0 : g_borrow_content_with_ty)
       (bc1 : g_borrow_content_with_ty) : V.typed_avalue =
     match (bc0, bc1) with
-    | Concrete (ty0, bc0), Concrete (ty1, bc1) ->
+    | Concrete _, Concrete _ ->
         (* This can happen only in case of nested borrows *)
         raise (Failure "Unreachable")
     | Abstract (ty0, bc0), Abstract (ty1, bc1) ->
@@ -2212,7 +2250,8 @@ let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
         (* Register the loan ids *)
         V.BorrowId.Set.iter set_loan_as_merged ids;
         (* Merge *)
-        (Option.get merge_funs).merge_ashared_loans ids ty0 sv0 ty1 sv1
+        (Option.get merge_funs).merge_ashared_loans ids ty0 sv0 child0 ty1 sv1
+          child1
     | _ ->
         (* Unreachable because those cases are ignored (ended/ignored borrows)
            or inconsistent *)

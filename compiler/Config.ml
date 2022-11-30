@@ -82,7 +82,7 @@ let return_unit_end_abs_with_no_loans = true
     thus use this bound to detect a loop, fail and report the case to the
     user.
  *)
-let loop_fixed_point_max_num_iters = 100
+let loop_fixed_point_max_num_iters = 2
 
 (** {1 Translation} *)
 
