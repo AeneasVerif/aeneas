@@ -15,6 +15,7 @@ Require Import Coq.Program.Basics.
 Require Import Coq.Program.Equality.
 Require Import Coq.Logic.ProofIrrelevance.
 Require Import Coq.Bool.Bool.
+Import ListNotations.
 
 Module Hashmap_Properties.
 
@@ -30,6 +31,9 @@ Lemma orb_dis {A B: bool} : (A || B) = false <-> A = false /\ B = false.
 destruct A, B ; intuition.
 Qed.
 
+Lemma Ztrans_le_lt a b c : a < b -> b <= c -> a <= c.
+intuition. Qed.
+
 Lemma Zsucc_le_mono n m : n <= m -> n <= Z.succ m.
 intuition. Qed.
 
@@ -39,18 +43,29 @@ intuition. Qed.
 Lemma Zle_antisym {n m} : (n <= m) <-> (m >= n).
 intuition. Qed.
 
+Lemma repeat_zero {T} {x: T} : repeat x 0 = [].
+intuition. Qed.
+
+Lemma cons_app_sing {T} {x: T} {t: list T} : x :: t = [x] ++ t.
+intuition. Qed.
+
 (* Utilities on top of Primitives *)
 
 (* First, monadic utilities *)
 
-Definition opt_to_res {T} (o: option T) : result T :=
+Definition res_of_opt {T} (o: option T) : result T :=
     match o with
     | Some n => Return n
     | None   => Fail_ Failure
     end.
 
-Definition fmap_res {A B} (x: result A) (f: A -> B) : result B :=
+Definition res_fmap {A B} (x: result A) (f: A -> B) : result B :=
     x' <- x; Return (f x').
+
+Lemma res_bind_id {T} {x: result T} : (v <- x; Return v) = x.
+Proof.
+now destruct x ; simpl.
+Qed.
 
 (* Vector utilities *)
 
@@ -123,14 +138,15 @@ apply ProofIrrelevanceTheory.subset_eq_compat.
 Qed.
 
 (* Usize lemmas can be generalized for positive scalars *)
-Lemma usize_nat_inj {n m: usize} : (usize_to_nat n = usize_to_nat m) -> (n = m).
+Lemma usize_nat_inj {n m: usize} : (usize_to_nat n = usize_to_nat m) <-> (n = m).
 Proof.
-intro H.
-unfold usize_to_nat in H.
-apply Z2Nat.inj in H.
-- apply scalar_Z_inj, H.
-- apply (proj2_sig n).
-- apply (proj2_sig m).
+split ; intro H.
+- unfold usize_to_nat in H.
+  apply Z2Nat.inj in H.
+  + apply scalar_Z_inj, H.
+  + apply (proj2_sig n).
+  + apply (proj2_sig m).
+- now f_equal.
 Qed.
 
 (* It's a simple implication in "scalar_in_bounds_valid" *)
@@ -242,7 +258,7 @@ Lemma usize_to_nonzero {n: usize} : n <> 0%usize <-> ∃m, usize_to_nat n = S m.
 Proof.
 split.
 - intros H.
-  assert (H':= neg_impl usize_nat_inj H).
+  assert (H':= neg_impl (proj1 usize_nat_inj) H).
   unfold usize_to_nat at 2 in H'. simpl in H'.
   exists (Nat.pred (usize_to_nat n)).
   destruct (usize_to_nat n).
@@ -272,12 +288,73 @@ rewrite <-(not_true_iff_false (n s= m)).
 apply (neg_equiv scalar_eqb_eq).
 Qed.
 
-Lemma xyz (ty : scalar_ty) (x: Z) :
-  scalar_min ty <= x <= scalar_max ty ->
-  ∃n,    mk_scalar ty x = Return n
-      /\ to_Z n = x.
+(* Lemmas to reason on Z integers & lists instead of scalars & vectors. *)
+
+Lemma S_scalar_bounds {ty} (n: scalar ty) :
+  scalar_min ty <= to_Z n <= scalar_max ty.
 Proof.
 Admitted.
+
+Lemma S_scalar_Z_inj {ty} (n m: scalar ty) :
+  to_Z n = to_Z m -> n = m.
+Proof.
+Admitted.
+
+Lemma S_eqb_Z {ty} (n m: scalar ty) :
+  (n s= m) = (to_Z n =? to_Z m).
+Proof.
+trivial.
+Qed.
+
+Lemma S_mk_bounded ty (x: Z) :
+  scalar_min ty <= x <= scalar_max ty ->
+  ∃n, mk_scalar ty x = Return n
+   /\ to_Z n = x.
+Proof.
+Admitted.
+
+Lemma S_add_bounded {ty} (n m: scalar ty) :
+  scalar_min ty <= (to_Z n) + (to_Z m) <= scalar_max ty ->
+  ∃x, scalar_add n m = Return x
+   /\ to_Z x = (to_Z n) + (to_Z m).
+Proof.
+Admitted.
+
+Lemma S_sub_bounded {ty} (n m: scalar ty) :
+  scalar_min ty <= (to_Z n) - (to_Z m) <= scalar_max ty ->
+  ∃x, scalar_sub n m = Return x
+   /\ to_Z x = (to_Z n) - (to_Z m).
+Proof.
+Admitted.
+
+Lemma S_mul_bounded {ty} (n m: scalar ty) :
+  scalar_min ty <= (to_Z n) * (to_Z m) <= scalar_max ty ->
+  ∃x, scalar_mul n m = Return x
+   /\ to_Z x = (to_Z n) * (to_Z m).
+Proof.
+Admitted.
+
+Lemma S_div_bounded {ty} (n m: scalar ty) :
+  to_Z m <> 0 ->
+  scalar_min ty <= (to_Z n) * (to_Z m) <= scalar_max ty ->
+  ∃x, scalar_mul n m = Return x
+   /\ to_Z x = (to_Z n) * (to_Z m).
+Proof.
+Admitted.
+
+Lemma V_push_back_bounded {T} (v: vec T) (x: T) :
+  vec_length v < usize_max ->
+  ∃w, vec_push_back T v x = Return w
+   /\ vec_to_list w = (vec_to_list v) ++ [x].
+Proof.
+Admitted.
+
+Lemma usize_nat_to_Z (n: usize) : Z.of_nat (usize_to_nat n) = to_Z n.
+Proof.
+unfold usize_to_nat.
+apply Z2Nat.id.
+apply (S_scalar_bounds n).
+Qed.
 
 (* Utilities for the hashmap *)
 
@@ -308,107 +385,158 @@ Definition get_hash_pos {T} (hm: Hash_map_t T) (k: key_id) : result slot_id :=
 (* Given hm, i, j: give key-value pair *)
 Definition get_kv {T} (hm: Hash_map_t T) (i: slot_id) (j: chain_id) : result (usize * T) :=
     let l := vec_to_list hm.(Hash_map_slots) in
-    ch <- opt_to_res (nth_error l (usize_to_nat i));
+    ch <- res_of_opt (nth_error l (usize_to_nat i));
     let kv := nth_error (list_t_to_chain ch) (usize_to_nat j) in
-    opt_to_res kv.
+    res_of_opt kv.
 
 Definition result_prop_bind {T} (x: result T) (p: T -> Prop) : Prop :=
     match x with
     | Fail_ Failure => True
-    | Fail_ _ => False
+    | Fail_ OutOfFuel => True
     | Return x => p x
     end.
 
+(* The test *)
+
+Example hm_test1_success : ∃fuel,
+  test1_fwd fuel = Return tt.
+Proof.
+unfold test1_fwd.
+now exists (50%nat).
+Qed.
+
 (* Allocate slots *)
 
-Definition hm_clean_slots {T}(slots: vec (List_t T)) : list (chain_t T) :=
+Definition slots_to_chains {T}(slots: vec (List_t T)) : list (chain_t T) :=
     List.map list_t_to_chain (vec_to_list slots).
 
-Definition hm_allocate_slots_spec (T: Type) (n: nat) : list (chain_t T) :=
-    repeat (@nil (usize * T)) n.
+(*
+Tactics :
+- S_X_bounded:
+*)
 
-Lemma hm_allocate_slots_shape (T: Type) (n: usize) (fuel: nat) :
-    match hash_map_allocate_slots_fwd T fuel (vec_new (List_t T)) n with
-    | Return v => hm_clean_slots v =
-                  hm_allocate_slots_spec T (usize_to_nat n)
+Lemma hm_allocate_slots_shape (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat) :
+    vec_length v + to_Z n <= usize_max ->
+    match hash_map_allocate_slots_fwd T fuel v n with
+    | Return v' => slots_to_chains v' =
+      (slots_to_chains v) ++
+      (repeat [] (usize_to_nat n))
     | Fail_ OutOfFuel => True
     | Fail_ Failure => False
     end.
 Proof.
-remember (hash_map_allocate_slots_fwd T fuel (vec_new (List_t T)) n) as x.
-induction x.
-- unfold hash_map_allocate_slots_fwd in Heqx.
-  destruct fuel. inversion Heqx.
-  remember (n s= 0%usize) as y.
-  induction y ; apply eq_sym in Heqy.
-  1: {
-    rewrite scalar_eqb_eq in Heqy.
-    rewrite Heqy.
-    inversion Heqx.
-    now unfold hm_allocate_slots_spec, hm_clean_slots.
-  }
-  rewrite scalar_eqb_ne in Heqy.
-  set (nEx := (proj1 usize_to_nonzero) Heqy).
-  destruct nEx.
-  assert (nEx' := usize_nat_succ H).
-  destruct nEx'.
-  rewrite H0 in Heqx.
-  admit.
-- destruct e.
-    + admit.
-    + trivial.
-Admitted.
+remember (usize_to_nat n) as N.
+revert n HeqN fuel v.
+induction N ; intros.
+(* zero case *)
+1: {
+(* TODO: Coq unfolds the recursive def a second time with "destruct fuel" *)
+unfold hash_map_allocate_slots_fwd.
+destruct fuel. 1: { trivial. }
+fold hash_map_allocate_slots_fwd.
 
-Lemma hm_allocate_slots_shape2 (T: Type) (n: usize) (fuel: nat) :
-    match hash_map_allocate_slots_fwd T fuel (vec_new (List_t T)) n with
-    | Return v => hm_clean_slots v =
-                  hm_allocate_slots_spec T (usize_to_nat n)
+rewrite S_eqb_Z.
+simpl (to_Z 0 %usize).
+apply (f_equal Z.of_nat) in HeqN.
+rewrite usize_nat_to_Z in HeqN.
+simpl in HeqN.
+
+remember (to_Z n =? 0) as B.
+induction B ; apply eq_sym in HeqB.
+- now rewrite app_nil_r.
+- lia.
+}
+(* successor case *)
+1: {
+(* TODO: How to factorize repetitions properly in both cases ? *)
+unfold hash_map_allocate_slots_fwd.
+destruct fuel. 1: { trivial. }
+fold hash_map_allocate_slots_fwd.
+
+(* Should be factorized with a high-level tactic. *)
+assert (H_SN := HeqN).
+rewrite S_eqb_Z.
+simpl (to_Z 0 %usize).
+apply (f_equal Z.of_nat) in HeqN.
+rewrite usize_nat_to_Z in HeqN.
+simpl in HeqN.
+
+remember (to_Z n =? 0) as B.
+induction B ; apply eq_sym in HeqB.
+1: { lia. }
+
+assert (P1: vec_length v < usize_max) by lia.
+destruct (V_push_back_bounded v ListNil P1) as (x, H1).
+destruct H1 as (Hx1, Hx2).
+rewrite Hx1.
+
+assert (P2: usize_min <= (to_Z n) - 1 <= usize_max).
+1: { split.
+- unfold usize_min. lia.
+- assert (b := S_scalar_bounds n).
+  unfold scalar_max in b.
+  lia.
+}
+destruct (S_sub_bounded n (1%usize) P2) as (y, H2).
+destruct H2 as (Hy1, Hy2).
+unfold usize_sub.
+rewrite Hy1.
+simpl in Hy2.
+
+simpl.
+rewrite res_bind_id.
+
+assert (P3: ((slots_to_chains v) ++ [[]]: list (chain_t T)) = slots_to_chains x).
+1: {
+  change ([[]]) with (map (@list_t_to_chain T) [ListNil]).
+  unfold slots_to_chains.
+  rewrite <-map_app.
+  now rewrite <-Hx2.
+}
+rewrite cons_app_sing.
+rewrite app_assoc.
+
+(* To show implicit parameters or remove notations :
+    Set Printing Explicit/All.
+*)
+
+(* For some reason, "rewrite" doesn't find the subterm, so we massage the goal with "change". *)
+change ((slots_to_chains v ++ [[]]) ++ repeat [] N) with ((fun v1 => v1 ++ repeat [] N) (slots_to_chains v ++ [[]])).
+rewrite P3.
+
+apply IHN.
+- unfold usize_to_nat. lia.
+- rewrite Hy2.
+  unfold vec_length.
+  rewrite Hx2.
+  rewrite app_length.
+  simpl.
+  unfold vec_length in H.
+  lia.
+}
+Qed.
+
+Lemma hm_allocate_slots_inv (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat) :
+    match hash_map_allocate_slots_fwd T fuel (vec_new _) n with
+    | Return v' => slots_to_chains v' = repeat [] (usize_to_nat n)
     | Fail_ OutOfFuel => True
     | Fail_ Failure => False
     end.
 Proof.
-revert n.
-apply (usize_peano_ind (λ n: usize,
-  match hash_map_allocate_slots_fwd T fuel (vec_new (List_t T)) n with
-  | Return v => hm_clean_slots v =
-                hm_allocate_slots_spec T (usize_to_nat n)
-  | Fail_ OutOfFuel => True
-  | Fail_ Failure => False
-  end)).
-- remember (hash_map_allocate_slots_fwd T fuel (vec_new (List_t T)) 0 %usize) as x.
-  induction x.
-  unfold hash_map_allocate_slots_fwd in Heqx.
-  destruct fuel. inversion Heqx.
-  simpl in Heqx.
-  inversion Heqx.
-  now unfold hm_allocate_slots_spec, hm_clean_slots.
-  destruct e.
-  + unfold hash_map_allocate_slots_fwd in Heqx.
-    destruct fuel. inversion Heqx.
-    inversion Heqx.
-  + trivial.
-- intros.
-  set (n' := bounded_scalar_succ n b).
-  remember (hash_map_allocate_slots_fwd T fuel (vec_new (List_t T)) n') as x.
-  induction x.
-  unfold hash_map_allocate_slots_fwd in Heqx.
-  destruct fuel. inversion Heqx.
-  remember (n' s= 0 %usize) as y.
-  induction y ; apply eq_sym in Heqy.
-  1: {
-    rewrite scalar_eqb_eq in Heqy.
-    assert (Hne := sc_succ_above_min n b).
-    change (bounded_scalar_succ n b) with n' in Hne.
-    rewrite Heqy in Hne.
-    inversion Hne.
-  }
-  change n' with (bounded_scalar_succ n b) in Heqx.
-  rewrite (sc_succ_pred_eq n) in Heqx.
+apply hm_allocate_slots_shape.
+apply (S_scalar_bounds n).
+Qed.
 
-  assert (Hne := sc_succ_above_min n b).
-  
-  unfold hash_map_allocate_slots_fwd.
-Admitted.
+(* Hashmap length *)
+
+Definition hm_length {T} (hm: Hash_map_t T) : usize :=
+  hm.(Hash_map_num_entries).
+
+Lemma hm_len_success {T} hm :
+  hash_map_len_fwd T hm = Return (hm_length hm).
+Proof.
+reflexivity.
+Qed.
 
 (* Main invariants *)
 
@@ -428,5 +556,62 @@ Definition no_key_duplicate {T} (hm: Hash_map_t T) (i: slot_id) (j1 j2: chain_id
 Definition hm_invariants {T} (hm: Hash_map_t T) :=
     (∀i j, key_is_in_hash_slot hm i j) /\
     (∀i j1 j2 p, no_key_duplicate hm i j1 j2 p).
+
+(* New hashmap *)
+
+(* Need to add lemmas about bounds on multiplication *)
+Lemma hm_new_success T fuel capacity max_load_dividend max_load_divisor :
+     (0 < to_Z max_load_dividend
+   /\ to_Z max_load_dividend < to_Z max_load_divisor
+   /\ 0 < to_Z capacity
+   /\ to_Z capacity * to_Z max_load_dividend >= to_Z max_load_divisor
+   /\ to_Z capacity * to_Z max_load_dividend <= usize_max)
+  ->
+  match hash_map_new_with_capacity_fwd T fuel capacity max_load_dividend max_load_divisor with
+  | Fail_ Failure   => False
+  | Fail_ OutOfFuel => True
+  | Return hm => hm_invariants hm
+              /\ hm_length hm = 0%usize
+  end.
+Proof.
+intro bounds.
+
+unfold hash_map_new_with_capacity_fwd.
+remember (hash_map_allocate_slots_fwd T fuel
+(vec_new (List_t T)) capacity) as S.
+set (Hslots := hm_allocate_slots_shape T capacity fuel).
+rewrite <-HeqS in Hslots.
+destruct S.
+2: { simpl. destruct e ; trivial. }
+
+assert (B1: usize_min <= (to_Z capacity) *  (to_Z max_load_dividend) <= usize_max).
+admit.
+
+assert (P1 := S_mul_bounded capacity max_load_dividend B1).
+destruct P1, H as (Hmul1, Hmul2).
+unfold usize_mul.
+rewrite Hmul1.
+
+assert (B2: usize_min <= (to_Z capacity) /  (to_Z max_load_dividend) <= usize_max).
+admit.
+
+assert (P1 := S_mul_bounded capacity max_load_dividend B1).
+destruct P1, H as (Hmul1, Hmul2).
+unfold usize_mul.
+rewrite Hmul1.
+Admitted.
+
+Example hm_new_no_fail T : ∃fuel,
+  hm <- hash_map_new_fwd T fuel;
+  Return tt = Return tt.
+Proof.
+exists (33%nat).
+cbn.
+reflexivity.
+simpl.
+(* The simplification is too costly,
+   but the reflexivity proof works.
+*)
+Qed.
 
 End Hashmap_Properties.
