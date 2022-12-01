@@ -1776,6 +1776,12 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
   let rec to_avalues (allow_borrows : bool) (inside_borrowed : bool)
       (group : bool) (r_id : T.RegionId.id) (v : V.typed_value) :
       V.typed_avalue list * V.typed_value =
+    (* Debug *)
+    log#ldebug
+      (lazy
+        ("convert_value_to_abstractions: to_avalues:\n- value: "
+        ^ typed_value_to_string ctx v));
+
     let ty = v.V.ty in
     match v.V.value with
     | V.Primitive _ -> ([], v)
@@ -1828,13 +1834,6 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             let r_id = if group then r_id else C.fresh_region_id () in
             (* We don't support nested borrows for now *)
             assert (not (value_has_borrows ctx bv.V.value));
-            (* We don't allow shared borrows inside mutably borrowed values -
-               note that destructuring those is unsoud: if we immutably borrow
-               a value inside a mutably borrowed value, we have to make sure
-               the immutably borrowed value isn't modified for as long as the
-               immutable borrow lives. In case of shared values it is not
-               a problem, because this is enforced by the outer shared loan. *)
-            assert (not (value_has_loans bv.V.value));
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
             let mv = bv in
             let ref_ty = ety_no_regions_to_rty ref_ty in
@@ -2360,8 +2359,8 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
                 push_avalue av))
     borrows_loans;
 
-  (* Reverse the values *)
-  let avalues = List.rev !avalues in
+  (* Note that we *don't* reverse the avalues *)
+  let avalues = !avalues in
 
   (* Filter the regions *)
 
