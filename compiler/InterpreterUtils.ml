@@ -11,6 +11,7 @@ module PA = Print.EvalCtxLlbcAst
 
 (** Some utilities *)
 
+let eval_ctx_to_string_no_filter = Print.Contexts.eval_ctx_to_string_no_filter
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 let ety_to_string = PA.ety_to_string
 let rty_to_string = PA.rty_to_string
@@ -26,6 +27,8 @@ let place_to_string = PA.place_to_string
 let operand_to_string = PA.operand_to_string
 let statement_to_string ctx = PA.statement_to_string ctx "" "  "
 let statement_to_string_with_tab ctx = PA.statement_to_string ctx "  " "  "
+let env_elem_to_string ctx = PA.env_elem_to_string ctx "" "  "
+let abs_to_string ctx = PA.abs_to_string ctx "" "  "
 
 let same_symbolic_id (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) : bool =
   sv0.V.sv_id = sv1.V.sv_id
@@ -271,6 +274,7 @@ type ids_sets = {
   rids : T.RegionId.Set.t;
   sids : V.SymbolicValueId.Set.t;
 }
+[@@deriving show]
 
 let compute_ids () =
   let bids = ref V.BorrowId.Set.empty in

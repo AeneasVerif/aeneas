@@ -472,12 +472,11 @@ let typed_avalue_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
 
 let env_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id) (x : C.env) : C.env
     =
-  let asubst _ = raise (Failure "Unreachable") in
   (subst_ids_visitor rsubst
      (fun x -> x)
      (fun x -> x)
      (fun x -> x)
      (fun x -> x)
-     asubst)
+     (fun x -> x))
     #visit_env
     x

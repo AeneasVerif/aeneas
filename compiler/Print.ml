@@ -486,7 +486,7 @@ module Contexts = struct
     let frames = split_aux [] [] env in
     frames
 
-  let eval_ctx_to_string (ctx : C.eval_ctx) : string =
+  let eval_ctx_to_string_gen (filter : bool) (ctx : C.eval_ctx) : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
     let ended_regions = T.RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
@@ -509,11 +509,17 @@ module Contexts = struct
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string true fmt f ^ "\n")
+          ^ env_to_string filter fmt f ^ "\n")
         frames
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
     ^ " frame(s)\n" ^ String.concat "" frames
+
+  let eval_ctx_to_string (ctx : C.eval_ctx) : string =
+    eval_ctx_to_string_gen true ctx
+
+  let eval_ctx_to_string_no_filter (ctx : C.eval_ctx) : string =
+    eval_ctx_to_string_gen false ctx
 end
 
 module PC = Contexts (* local module *)
@@ -579,4 +585,14 @@ module EvalCtxLlbcAst = struct
       (indent_incr : string) (e : A.statement) : string =
     let fmt = PC.eval_ctx_to_ast_formatter ctx in
     PA.statement_to_string fmt indent indent_incr e
+
+  let env_elem_to_string (ctx : C.eval_ctx) (indent : string)
+      (indent_incr : string) (ev : C.env_elem) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PC.env_elem_to_string fmt indent indent_incr ev
+
+  let abs_to_string (ctx : C.eval_ctx) (indent : string) (indent_incr : string)
+      (abs : V.abs) : string =
+    let fmt = PC.eval_ctx_to_ctx_formatter ctx in
+    PV.abs_to_string fmt indent indent_incr abs
 end

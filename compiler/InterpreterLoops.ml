@@ -233,6 +233,14 @@ let destructure_new_abs (loop_id : V.LoopId.id)
 let collapse_ctx (loop_id : V.LoopId.id)
     (merge_funs : merge_duplicates_funcs option) (old_ids : ids_sets)
     (ctx0 : C.eval_ctx) : C.eval_ctx =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+     ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string_no_filter ctx0
+      ^ "\n\n"));
+
   let abs_kind = V.Loop loop_id in
   let can_end = false in
   let destructure_shared_values = true in
@@ -434,12 +442,21 @@ module type Matcher = sig
   (** Match a symbolic value with a value which is not symbolic.
 
       If the boolean is [true], it means the symbolic value comes from the
-      left environment. Otherwise it comes from the right environment (it
+      *left* environment. Otherwise it comes from the right environment (it
       is important when throwing exceptions, for instance when we need to
       end loans in one of the two environments).
    *)
   val match_symbolic_with_other :
     bool -> V.symbolic_value -> V.typed_value -> V.typed_value
+
+  (** Match a bottom value with a value which is not bottom.
+
+      If the boolean is [true], it means the bottom value comes from the
+      *left* environment. Otherwise it comes from the right environment (it
+      is important when throwing exceptions, for instance when we need to
+      end loans in one of the two environments).
+   *)
+  val match_bottom_with_other : bool -> V.typed_value -> V.typed_value
 
   (** The input ADTs don't have the same variant *)
   val match_distinct_aadts :
@@ -638,7 +655,16 @@ module Match (M : Matcher) = struct
         | MutLoan id -> raise (ValueMatchFailure (LoanInRight id)))
     | Symbolic sv, _ -> M.match_symbolic_with_other true sv v1
     | _, Symbolic sv -> M.match_symbolic_with_other false sv v0
-    | _ -> raise (Failure "Unreachable")
+    | Bottom, _ -> M.match_bottom_with_other true v1
+    | _, Bottom -> M.match_bottom_with_other false v0
+    | _ ->
+        log#ldebug
+          (lazy
+            ("Unexpected match case:\n- value0: "
+            ^ typed_value_to_string ctx v0
+            ^ "\n- value1: "
+            ^ typed_value_to_string ctx v1));
+        raise (Failure "Unexpected match case")
 
   (** Match two avalues.
 
@@ -741,6 +767,8 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
   (** Small utility *)
   let push_abs (abs : V.abs) : unit = S.nabs := abs :: !S.nabs
 
+  let push_absl (absl : V.abs list) : unit = List.iter push_abs absl
+
   let match_etys ty0 ty1 =
     assert (ty0 = ty1);
     ty0
@@ -798,9 +826,9 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
       let bid2 = C.fresh_borrow_id () in
 
       (* Generate a fresh symbolic value for the shared value *)
-      let sv = mk_fresh_symbolic_typed_value_from_ety V.LoopJoin ty in
-
       let _, bv_ty, kind = ty_as_ref ty in
+      let sv = mk_fresh_symbolic_typed_value_from_ety V.LoopJoin bv_ty in
+
       let borrow_ty =
         mk_ref_ty (T.Var rid) (ety_no_regions_to_rty bv_ty) kind
       in
@@ -856,9 +884,9 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
       let bid2 = C.fresh_borrow_id () in
 
       (* Generate a fresh symbolic value for the borrowed value *)
-      let sv = mk_fresh_symbolic_typed_value_from_ety V.LoopJoin ty in
-
       let _, bv_ty, kind = ty_as_ref ty in
+      let sv = mk_fresh_symbolic_typed_value_from_ety V.LoopJoin bv_ty in
+
       let borrow_ty =
         mk_ref_ty (T.Var rid) (ety_no_regions_to_rty bv_ty) kind
       in
@@ -951,16 +979,50 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
     *)
     assert (not (ty_has_borrows S.ctx.type_context.type_infos sv.sv_ty));
     assert (not (value_has_borrows S.ctx v.V.value));
+    let value_is_left = not left in
     (match InterpreterBorrowsCore.get_first_loan_in_value v with
     | None -> ()
     | Some (SharedLoan (ids, _)) ->
-        if left then raise (ValueMatchFailure (LoansInLeft ids))
+        if value_is_left then raise (ValueMatchFailure (LoansInLeft ids))
         else raise (ValueMatchFailure (LoansInRight ids))
     | Some (MutLoan id) ->
-        if left then raise (ValueMatchFailure (LoanInLeft id))
+        if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
         else raise (ValueMatchFailure (LoanInRight id)));
     (* Return a fresh symbolic value *)
     mk_fresh_symbolic_typed_value V.LoopJoin sv.sv_ty
+
+  let match_bottom_with_other (left : bool) (v : V.typed_value) : V.typed_value
+      =
+    (* If there are outer loans in the non-bottom value, raise an exception.
+       Otherwise, convert it to an abstraction and return [Bottom].
+    *)
+    let with_borrows = false in
+    let value_is_left = not left in
+    match
+      InterpreterBorrowsCore.get_first_outer_loan_or_borrow_in_value
+        with_borrows v
+    with
+    | Some (BorrowContent _) -> raise (Failure "Unreachable")
+    | Some (LoanContent lc) -> (
+        match lc with
+        | V.SharedLoan (ids, _) ->
+            if value_is_left then raise (ValueMatchFailure (LoansInLeft ids))
+            else raise (ValueMatchFailure (LoansInRight ids))
+        | V.MutLoan id ->
+            if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
+            else raise (ValueMatchFailure (LoanInRight id)))
+    | None ->
+        (* Convert the value to an abstraction *)
+        let abs_kind = V.Loop S.loop_id in
+        let can_end = false in
+        let destructure_shared_values = true in
+        let absl =
+          convert_value_to_abstractions abs_kind can_end
+            destructure_shared_values S.ctx v
+        in
+        push_absl absl;
+        (* Return [Bottom] *)
+        mk_bottom v.V.ty
 
   let match_distinct_aadts _ _ _ _ _ = raise (Failure "Unreachable")
   let match_ashared_borrows _ _ _ _ = raise (Failure "Unreachable")
@@ -1082,6 +1144,16 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
   *)
 let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (ctx1 : C.eval_ctx) : ctx_or_update =
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("join_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+     ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string_no_filter ctx0
+      ^ "\n\n- ctx1:\n"
+      ^ eval_ctx_to_string_no_filter ctx1
+      ^ "\n\n"));
+
   let env0 = List.rev ctx0.env in
   let env1 = List.rev ctx1.env in
 
@@ -1096,6 +1168,16 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
 
   (* Explore the environments. *)
   let join_suffixes (env0 : C.env) (env1 : C.env) : C.env =
+    (* Debug *)
+    log#ldebug
+      (lazy
+        ("join_suffixes:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+       ^ "\n\n- ctx0:\n"
+        ^ eval_ctx_to_string_no_filter { ctx0 with env = List.rev env0 }
+        ^ "\n\n- ctx1:\n"
+        ^ eval_ctx_to_string_no_filter { ctx1 with env = List.rev env1 }
+        ^ "\n\n"));
+
     (* Sanity check: there are no values/abstractions which should be in the prefix *)
     let check_valid (ee : C.env_elem) : unit =
       match ee with
@@ -1106,13 +1188,15 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
           assert (not (C.DummyVarId.Set.mem did fixed_ids.dids))
       | Abs abs ->
           assert (not (V.AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
-      | Frame -> ()
+      | Frame ->
+          (* This should have been eliminated *)
+          raise (Failure "Unreachable")
     in
     List.iter check_valid env0;
     List.iter check_valid env1;
     (* Concatenate the suffixes and append the abstractions introduced while
        joining the prefixes *)
-    let absl = List.map (fun abs -> C.Abs abs) !nabs in
+    let absl = List.map (fun abs -> C.Abs abs) (List.rev !nabs) in
     List.concat [ env0; env1; absl ]
   in
 
@@ -1127,8 +1211,18 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   (* Rem.: this function raises exceptions *)
   let rec join_prefixes (env0 : C.env) (env1 : C.env) : C.env =
     match (env0, env1) with
-    | ( (C.Var (C.DummyBinder b0, v0) as var) :: env0',
-        C.Var (C.DummyBinder b1, v1) :: env1' ) ->
+    | ( (C.Var (C.DummyBinder b0, v0) as var0) :: env0',
+        (C.Var (C.DummyBinder b1, v1) as var1) :: env1' ) ->
+        (* Debug *)
+        log#ldebug
+          (lazy
+            ("join_prefixes: DummyBinders:\n\n- fixed_ids:\n" ^ "\n"
+           ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
+            ^ env_elem_to_string ctx var0
+            ^ "\n\n- value1:\n"
+            ^ env_elem_to_string ctx var1
+            ^ "\n\n"));
+
         (* Two cases: the dummy value is an old value, in which case the bindings
            must be the same and we must join their values. Otherwise, it means we
            are not in the prefix anymore *)
@@ -1137,11 +1231,21 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
           assert (b0 = b1);
           assert (v0 = v1);
           (* Continue *)
-          var :: join_prefixes env0' env1')
+          var0 :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)
           join_suffixes env0 env1
-    | C.Var (C.VarBinder b0, v0) :: env0', C.Var (C.VarBinder b1, v1) :: env1'
-      ->
+    | ( (C.Var (C.VarBinder b0, v0) as var0) :: env0',
+        (C.Var (C.VarBinder b1, v1) as var1) :: env1' ) ->
+        (* Debug *)
+        log#ldebug
+          (lazy
+            ("join_prefixes: VarBinders:\n\n- fixed_ids:\n" ^ "\n"
+           ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
+            ^ env_elem_to_string ctx var0
+            ^ "\n\n- value1:\n"
+            ^ env_elem_to_string ctx var1
+            ^ "\n\n"));
+
         (* Variable bindings *must* be in the prefix and consequently their
            ids must be the same *)
         assert (b0 = b1);
@@ -1152,12 +1256,19 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         (* Continue *)
         var :: join_prefixes env0' env1'
     | (C.Abs abs0 as abs) :: env0', C.Abs abs1 :: env1' ->
+        (* Debug *)
+        log#ldebug
+          (lazy
+            ("join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
+           ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n" ^ abs_to_string ctx abs0
+           ^ "\n\n- abs1:\n" ^ abs_to_string ctx abs1 ^ "\n\n"));
+
         (* Same as for the dummy values: there are two cases *)
         if V.AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
           (* Still in the prefix: the abstractions must be the same *)
           assert (abs0 = abs1);
           (* Continue *)
-          abs :: join_suffixes env0' env1')
+          abs :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)
           join_suffixes env0 env1
     | _ ->
@@ -1166,7 +1277,19 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   in
 
   try
-    let env = List.rev (join_prefixes env0 env1) in
+    (* Remove the frame delimiter (the first element of an environment is a frame delimiter) *)
+    let env0, env1 =
+      match (env0, env1) with
+      | C.Frame :: env0, C.Frame :: env1 -> (env0, env1)
+      | _ -> raise (Failure "Unreachable")
+    in
+
+    log#ldebug
+      (lazy
+        ("- env0:\n" ^ C.show_env env0 ^ "\n\n- env1:\n" ^ C.show_env env1
+       ^ "\n\n"));
+
+    let env = List.rev (C.Frame :: join_prefixes env0 env1) in
 
     (* Construct the joined context - of course, the type, fun, etc. contexts
      * should be the same in the two contexts *)
@@ -1325,6 +1448,10 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
       (_v : V.typed_value) : V.typed_value =
     raise Distinct
 
+  let match_bottom_with_other (_left : bool) (_v : V.typed_value) :
+      V.typed_value =
+    raise Distinct
+
   let match_distinct_aadts _ _ _ _ _ = raise Distinct
 
   let match_ashared_borrows _ty0 bid0 _ty1 bid1 ty =
@@ -1361,6 +1488,15 @@ end
  *)
 let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (ctx1 : C.eval_ctx) : bool =
+  log#ldebug
+    (lazy
+      ("ctxs_are_equivalent:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+     ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string_no_filter ctx0
+      ^ "\n\n- ctx1:\n"
+      ^ eval_ctx_to_string_no_filter ctx1
+      ^ "\n\n"));
+
   (* Initialize the maps and instantiate the matcher *)
   let rid_map =
     ref
@@ -1459,6 +1595,15 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
 
   (* Rem.: this function raises exceptions of type [Distinct] *)
   let rec match_envs (env0 : C.env) (env1 : C.env) : unit =
+    log#ldebug
+      (lazy
+        ("ctxs_are_equivalent: match_envs:\n\n- fixed_ids:\n"
+       ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
+        ^ eval_ctx_to_string_no_filter { ctx0 with env = List.rev env0 }
+        ^ "\n\n- ctx1:\n"
+        ^ eval_ctx_to_string_no_filter { ctx1 with env = List.rev env1 }
+        ^ "\n\n"));
+
     match (env0, env1) with
     | ( C.Var (C.DummyBinder b0, v0) :: env0',
         C.Var (C.DummyBinder b1, v1) :: env1' ) ->
@@ -1499,6 +1644,9 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
           match_abstractions abs0 abs1;
           (* Continue *)
           match_envs env0' env1')
+    | [], [] ->
+        (* Done *)
+        ()
     | _ ->
         (* The elements don't match: we are not in the prefix anymore *)
         raise Distinct
@@ -1508,7 +1656,16 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
 
      Rem.: we don't match the ended regions (would it make any sense actually?) *)
   try
-    match_envs ctx0.env ctx1.env;
+    (* Remove the frame delimiter (the first element of an environment is a frame delimiter) *)
+    let env0 = List.rev ctx0.env in
+    let env1 = List.rev ctx1.env in
+    let env0, env1 =
+      match (env0, env1) with
+      | C.Frame :: env0, C.Frame :: env1 -> (env0, env1)
+      | _ -> raise (Failure "Unreachable")
+    in
+
+    match_envs env0 env1;
     true
   with Distinct -> false
 
@@ -1638,9 +1795,19 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
       let _ = eval_loop_body cf_exit_loop_body ctx in
       (* Compute the join between the original contexts and the contexts computed
          upon reentry *)
-      let ctx1 = join_ctxs ctx0 in
+      let ctx1 = join_ctxs ctx in
+
+      (* Debug *)
+      log#ldebug
+        (lazy
+          ("compute_fixed_point:" ^ "\n\n- ctx0:\n"
+          ^ eval_ctx_to_string_no_filter ctx
+          ^ "\n\n- ctx1:\n"
+          ^ eval_ctx_to_string_no_filter ctx1
+          ^ "\n\n"));
+
       (* Check if we reached a fixed point: if not, iterate *)
-      if equiv_ctxs ctx0 ctx1 then ctx1 else compute_fixed_point ctx1 (i - 1)
+      if equiv_ctxs ctx ctx1 then ctx1 else compute_fixed_point ctx1 (i - 1)
   in
   compute_fixed_point ctx0 max_num_iter
 
@@ -1706,12 +1873,25 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
 let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
     st_cm_fun =
  fun cf ctx ->
+  (* Debug *)
+  log#ldebug
+    (lazy ("eval_loop_symbolic:\nContext:\n" ^ eval_ctx_to_string ctx ^ "\n\n"));
+
   (* Compute a fresh loop id *)
   let loop_id = C.fresh_loop_id () in
   (* Compute the fixed point at the loop entrance *)
   let fp_ctx =
     compute_loop_entry_fixed_point config loop_id eval_loop_body ctx
   in
+
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("eval_loop_symbolic:\nInitial context:\n" ^ eval_ctx_to_string ctx
+     ^ "\n\nFixed point:\n" ^ eval_ctx_to_string fp_ctx));
+
+  failwith "Unimplemented";
+
   (* Synthesize the end of the function - we simply match the context at the
      loop entry with the fixed point: in the synthesized code, the function
      will end with a call to the loop translation
