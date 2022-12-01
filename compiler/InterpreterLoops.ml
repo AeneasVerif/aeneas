@@ -237,9 +237,7 @@ let collapse_ctx (loop_id : V.LoopId.id)
   log#ldebug
     (lazy
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ctx0
-      ^ "\n\n"));
+     ^ "\n\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n\n"));
 
   let abs_kind = V.Loop loop_id in
   let can_end = false in
@@ -250,9 +248,8 @@ let collapse_ctx (loop_id : V.LoopId.id)
   let is_fresh_did (id : C.DummyVarId.id) : bool =
     not (C.DummyVarId.Set.mem id old_ids.dids)
   in
-  (* Convert the dummy values to abstractions, and destructure all the new
-     abstractions at the same time (note that when we convert values to
-     abstractions, the resulting abstraction should be destructured) *)
+  (* Convert the dummy values to abstractions (note that when we convert
+     values to abstractions, the resulting abstraction should be destructured) *)
   (* Note that we preserve the order of the dummy values: we replace them with
      abstractions in place - this makes matching easier *)
   let env =
@@ -271,6 +268,12 @@ let collapse_ctx (loop_id : V.LoopId.id)
                else [ ee ])
          ctx0.env)
   in
+  log#ldebug
+    (lazy
+      ("collapse_ctx: after converting values to abstractions:\n"
+     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
+      ^ eval_ctx_to_string { ctx0 with env }
+      ^ "\n\n"));
 
   (* Explore all the *new* abstractions, and compute various maps *)
   let explore (abs : V.abs) = is_fresh_abs_id abs.abs_id in
@@ -591,17 +594,20 @@ module Match (M : Matcher) = struct
         let bc =
           match (bc0, bc1) with
           | SharedBorrow (mv0, bid0), SharedBorrow (mv1, bid1) ->
-              (* Not completely sure what to do with the meta-value. If a shared
-                 symbolic value gets expanded in a branch, it may be simplified
-                 (by being folded back to a symbolic value) upon doing the join,
-                 which as a result would lead to code where it is considered as
-                 mutable (which is sound). On the other hand, if we access a
-                 symbolic value in a loop, the translated loop should take it as
-                 input anyway, so maybe this actually leads to equivalent
-                 code.
+              (* Not completely sure what to do with the meta-value, as we use
+                 it for the translation. TODO: remove meta-values from shared borrows?
+
+                 If a shared symbolic value gets expanded in a branch, it may be
+                 simplified (by being folded back to a symbolic value) upon
+                 doing the join, which as a result would lead to code where it
+                 is considered as mutable (which is sound). On the other hand,
+                 if we access a symbolic value in a loop, the translated loop
+                 should take it as input anyway, so maybe this actually leads to
+                 equivalent code.
               *)
+              assert (not (value_has_borrows ctx mv0.V.value));
+              assert (not (value_has_borrows ctx mv1.V.value));
               let mv = match_rec mv0 mv1 in
-              assert (not (value_has_borrows ctx mv.V.value));
               let mv, bid = M.match_shared_borrows ty mv bid0 bid1 in
               V.SharedBorrow (mv, bid)
           | MutBorrow (bid0, bv0), MutBorrow (bid1, bv1) ->
@@ -672,6 +678,13 @@ module Match (M : Matcher) = struct
    *)
   and match_typed_avalues (ctx : C.eval_ctx) (v0 : V.typed_avalue)
       (v1 : V.typed_avalue) : V.typed_avalue =
+    log#ldebug
+      (lazy
+        ("match_typed_avalues:\n- value0: "
+        ^ typed_avalue_to_string ctx v0
+        ^ "\n- value1: "
+        ^ typed_avalue_to_string ctx v1));
+
     let match_rec = match_typed_values ctx in
     let match_arec = match_typed_avalues ctx in
     let ty = M.match_rtys v0.V.ty v1.V.ty in
@@ -691,14 +704,19 @@ module Match (M : Matcher) = struct
           { V.value; ty }
         else (* Merge *)
           M.match_distinct_aadts v0.V.ty av0 v1.V.ty av1 ty
-    | ABottom, ABottom -> v0
+    | ABottom, ABottom -> mk_abottom ty
+    | AIgnored, AIgnored -> mk_aignored ty
     | ABorrow bc0, ABorrow bc1 -> (
         match (bc0, bc1) with
         | ASharedBorrow bid0, ASharedBorrow bid1 ->
             M.match_ashared_borrows v0.V.ty bid0 v1.V.ty bid1 ty
         | AMutBorrow (mv0, bid0, av0), AMutBorrow (mv1, bid1, av1) ->
-            (* Not sure what to do with the meta-value *)
-            let mv = match_rec mv0 mv1 in
+            (* The meta-value should be the value consumed by the abstracion.
+               This only makes sense if the abstraction was introduced because
+               of a function call (we use it for the translation).
+               TODO: make it optional?
+            *)
+            let mv = mk_bottom mv0.V.ty in
             let av = match_arec av0 av1 in
             M.match_amut_borrows v0.V.ty mv0 bid0 av0 v1.V.ty mv1 bid1 av1 ty mv
               av
@@ -1051,8 +1069,34 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = Match (JM) in
-  let merge_amut_borrows _ _ _ _ _ _ _ = raise (Failure "Unexpected") in
-  let merge_ashared_borrows _ _ _ = raise (Failure "Unexpected") in
+  (* TODO: why not simply call: M.match_type_avalues? (or move this code to
+     MakeJoinMatcher?) *)
+  let merge_amut_borrows id ty0 (mv0 : V.typed_value) child0 _ty1
+      (mv1 : V.typed_value) child1 =
+    (* Sanity checks *)
+    assert (is_aignored child0.V.value);
+    assert (is_aignored child1.V.value);
+    assert (mv0.V.ty = mv1.V.ty);
+
+    (* Same remarks as for [merge_amut_loans] *)
+    let ty = ty0 in
+    let child = child0 in
+    let mv = mk_bottom mv0.ty in
+    let value = V.ABorrow (V.AMutBorrow (mv, id, child)) in
+    { V.value; ty }
+  in
+
+  let merge_ashared_borrows id ty0 ty1 =
+    (* Sanity checks *)
+    assert (not (ty_has_borrows ctx.type_context.type_infos ty0));
+    assert (not (ty_has_borrows ctx.type_context.type_infos ty1));
+
+    (* Same remarks as for [merge_amut_loans] *)
+    let ty = ty0 in
+    let value = V.ABorrow (V.ASharedBorrow id) in
+    { V.value; ty }
+  in
+
   let merge_amut_loans id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
     assert (is_aignored child0.V.value);
@@ -1327,6 +1371,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
 
 (* Very annoying: functors only take modules as inputs... *)
 module type MatchCheckEquivState = sig
+  val ctx : C.eval_ctx
   val rid_map : T.RegionId.InjSubst.t ref
   val bid_map : V.BorrowId.InjSubst.t ref
   val sid_map : V.SymbolicValueId.InjSubst.t ref
@@ -1474,7 +1519,14 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
     let value = V.ALoan (V.AMutLoan (id, av)) in
     { V.value; ty }
 
-  let match_avalues _ _ = raise Distinct
+  let match_avalues v0 v1 =
+    log#ldebug
+      (lazy
+        ("avalues don't match:\n- v0: "
+        ^ typed_avalue_to_string S.ctx v0
+        ^ "\n- v1: "
+        ^ typed_avalue_to_string S.ctx v1));
+    raise Distinct
 end
 
 (** Compute whether two contexts are equivalent modulo an identifier substitution.
@@ -1524,6 +1576,7 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   in
 
   let module S : MatchCheckEquivState = struct
+    let ctx = ctx0
     let rid_map = rid_map
     let bid_map = bid_map
     let sid_map = sid_map
@@ -1585,6 +1638,8 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     let _ = CEM.match_aidl original_parents0 original_parents1 in
     let _ = CEM.match_rids regions0 regions1 in
     let _ = CEM.match_rids ancestors_regions0 ancestors_regions1 in
+
+    log#ldebug (lazy "match_abstractions: matching values");
     let _ =
       List.map
         (fun (v0, v1) -> M.match_typed_avalues ctx v0 v1)
@@ -1598,7 +1653,15 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     log#ldebug
       (lazy
         ("ctxs_are_equivalent: match_envs:\n\n- fixed_ids:\n"
-       ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
+       ^ show_ids_sets fixed_ids ^ "\n\n- rid_map: "
+        ^ T.RegionId.InjSubst.show_t !rid_map
+        ^ "\n- bid_map: "
+        ^ V.BorrowId.InjSubst.show_t !bid_map
+        ^ "\n- sid_map: "
+        ^ V.SymbolicValueId.InjSubst.show_t !sid_map
+        ^ "\n- aid_map: "
+        ^ V.AbstractionId.InjSubst.show_t !aid_map
+        ^ "\n\n- ctx0:\n"
         ^ eval_ctx_to_string_no_filter { ctx0 with env = List.rev env0 }
         ^ "\n\n- ctx1:\n"
         ^ eval_ctx_to_string_no_filter { ctx1 with env = List.rev env1 }
@@ -1608,8 +1671,8 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     | ( C.Var (C.DummyBinder b0, v0) :: env0',
         C.Var (C.DummyBinder b1, v1) :: env1' ) ->
         (* Two cases: the dummy value is an old value, in which case the bindings
-           must be the same and we must join their values. Otherwise, it means we
-           are not in the prefix *)
+           must be the same and their values equal (and the borrows/loans/symbolic
+           values they reference must be fixed) *)
         if C.DummyVarId.Set.mem b0 fixed_ids.dids then (
           (* Fixed values: the values must be equal *)
           assert (b0 = b1);
@@ -1648,7 +1711,7 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         (* Done *)
         ()
     | _ ->
-        (* The elements don't match: we are not in the prefix anymore *)
+        (* The elements don't match *)
         raise Distinct
   in
 
@@ -1677,21 +1740,8 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     we return those updated environments, and the joined environment.
  *)
 let loop_join_origin_with_continue_ctxs (config : C.config)
-    (loop_id : V.LoopId.id) (old_ctx : C.eval_ctx) (ctxl : C.eval_ctx list) :
-    (C.eval_ctx * C.eval_ctx list) * C.eval_ctx =
-  (* # Look for borrows and abstractions that exist in [old_ctx] and not in [ctxl]:
-   * we need to end those *)
-  (* Compute the sets of borrows and abstractions *)
-  let old_ids = compute_context_ids old_ctx in
-  let new_ids = compute_contexts_ids ctxl in
-  let bids = V.BorrowId.Set.diff old_ids.bids new_ids.bids in
-  let aids = V.AbstractionId.Set.diff old_ids.aids new_ids.aids in
-  (* End those borrows and abstractions *)
-  let old_ctx = InterpreterBorrows.end_borrows_no_synth config bids old_ctx in
-  let old_ctx =
-    InterpreterBorrows.end_abstractions_no_synth config aids old_ctx
-  in
-
+    (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (old_ctx : C.eval_ctx)
+    (ctxl : C.eval_ctx list) : (C.eval_ctx * C.eval_ctx list) * C.eval_ctx =
   (* # Join with the new contexts, one by one
 
      For every context, we repeteadly attempt to join it with the current
@@ -1702,7 +1752,7 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
   *)
   let joined_ctx = ref old_ctx in
   let rec join_one_aux (ctx : C.eval_ctx) : C.eval_ctx =
-    match join_ctxs loop_id old_ids !joined_ctx ctx with
+    match join_ctxs loop_id fixed_ids !joined_ctx ctx with
     | Ok nctx ->
         joined_ctx := nctx;
         ctx
@@ -1719,16 +1769,41 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
         join_one_aux ctx
   in
   let join_one (ctx : C.eval_ctx) : C.eval_ctx =
+    log#ldebug
+      (lazy
+        ("loop_join_origin_with_continue_ctxs:join_one: initial ctx:\n"
+       ^ eval_ctx_to_string ctx));
+
     (* Destructure the abstractions introduced in the new context *)
-    let ctx = destructure_new_abs loop_id old_ids.aids ctx in
+    let ctx = destructure_new_abs loop_id fixed_ids.aids ctx in
+    log#ldebug
+      (lazy
+        ("loop_join_origin_with_continue_ctxs:join_one: after destructure:\n"
+       ^ eval_ctx_to_string ctx));
+
     (* Collapse the context we want to add to the join *)
-    let ctx = collapse_ctx loop_id None old_ids ctx in
+    let ctx = collapse_ctx loop_id None fixed_ids ctx in
+    log#ldebug
+      (lazy
+        ("loop_join_origin_with_continue_ctxs:join_one: after collapse:\n"
+       ^ eval_ctx_to_string ctx));
+
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
+    log#ldebug
+      (lazy
+        ("loop_join_origin_with_continue_ctxs:join_one: after join:\n"
+       ^ eval_ctx_to_string ctx1));
+
     (* Collapse again - the join might have introduce abstractions we want
        to merge with the others (note that those abstractions may actually
        lead to borrows/loans duplications) *)
-    joined_ctx := collapse_ctx_with_merge loop_id old_ids !joined_ctx;
+    joined_ctx := collapse_ctx_with_merge loop_id fixed_ids !joined_ctx;
+    log#ldebug
+      (lazy
+        ("loop_join_origin_with_continue_ctxs:join_one: after join-collapse:\n"
+        ^ eval_ctx_to_string !joined_ctx));
+
     (* Sanity check *)
     if !Config.check_invariants then Invariants.check_invariants !joined_ctx;
     (* Return *)
@@ -1765,10 +1840,39 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
         (* We don't support nested loops for now *)
         raise (Failure "Nested loops are not supported for now")
   in
+
+  (* The fixed ids. They are the ids of the original ctx, after we ended
+     the borrows/loans which end during the first loop iteration (we do
+     one loop iteration, then set it to [Some].
+  *)
+  let fixed_ids = ref None in
+
   (* Join the contexts at the loop entry *)
   let join_ctxs (ctx0 : C.eval_ctx) : C.eval_ctx =
+    (* If this is the first iteration, end the borrows/loans/abs which
+       appear in ctx0 and not in the other contexts, then compute the
+       set of fixed ids. This means those borrows/loans have to end
+       in the loop, and we rather end them *before* the loop. *)
+    let ctx0 =
+      match !fixed_ids with
+      | Some _ -> ctx0
+      | None ->
+          let old_ids = compute_context_ids ctx0 in
+          let new_ids = compute_contexts_ids !ctxs in
+          let bids = V.BorrowId.Set.diff old_ids.bids new_ids.bids in
+          let aids = V.AbstractionId.Set.diff old_ids.aids new_ids.aids in
+          (* End those borrows and abstractions *)
+          let ctx0 = InterpreterBorrows.end_borrows_no_synth config bids ctx0 in
+          let ctx0 =
+            InterpreterBorrows.end_abstractions_no_synth config aids ctx0
+          in
+          fixed_ids := Some (compute_context_ids ctx0);
+          ctx0
+    in
+
+    let fixed_ids = Option.get !fixed_ids in
     let (ctx0', _), ctx1 =
-      loop_join_origin_with_continue_ctxs config loop_id ctx0 !ctxs
+      loop_join_origin_with_continue_ctxs config loop_id fixed_ids ctx0 !ctxs
     in
     ctxs := [];
     if !ctx_upon_entry = None then ctx_upon_entry := Some ctx0';
@@ -1777,9 +1881,17 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   (* Check if two contexts are equivalent - modulo alpha conversion on the
      existentially quantified borrows/abstractions/symbolic values *)
   let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : bool =
+    (* Compute the set of fixed ids - for the symbolic ids, we compute the
+       intersection of ids between the original environment and [ctx1]
+       and [ctx2] *)
     let fixed_ids = compute_context_ids (Option.get !ctx_upon_entry) in
-    let { aids; bids; dids; rids; sids = _ } = fixed_ids in
-    let sids = V.SymbolicValueId.Set.empty in
+    let { aids; bids; dids; rids; sids } = fixed_ids in
+    let fixed_ids1 = compute_context_ids ctx1 in
+    let fixed_ids2 = compute_context_ids ctx2 in
+    let sids =
+      V.SymbolicValueId.Set.inter sids
+        (V.SymbolicValueId.Set.inter fixed_ids1.sids fixed_ids2.sids)
+    in
     let fixed_ids = { aids; bids; dids; rids; sids } in
     ctxs_are_equivalent fixed_ids ctx1 ctx2
   in
