@@ -262,3 +262,73 @@ let value_has_borrows (ctx : C.eval_ctx) (v : V.value) : bool =
 (** See {!ValuesUtils.value_has_loans_or_borrows}. *)
 let value_has_loans_or_borrows (ctx : C.eval_ctx) (v : V.value) : bool =
   ValuesUtils.value_has_loans_or_borrows ctx.type_context.type_infos v
+
+(** See {!compute_typed_value_ids}, {!compute_context_ids}, etc. *)
+type ids_sets = {
+  aids : V.AbstractionId.Set.t;
+  bids : V.BorrowId.Set.t;
+  dids : C.DummyVarId.Set.t;
+  rids : T.RegionId.Set.t;
+  sids : V.SymbolicValueId.Set.t;
+}
+
+let compute_ids () =
+  let bids = ref V.BorrowId.Set.empty in
+  let aids = ref V.AbstractionId.Set.empty in
+  let dids = ref C.DummyVarId.Set.empty in
+  let rids = ref T.RegionId.Set.empty in
+  let sids = ref V.SymbolicValueId.Set.empty in
+
+  let get_ids () =
+    { aids = !aids; bids = !bids; dids = !dids; rids = !rids; sids = !sids }
+  in
+  let obj =
+    object
+      inherit [_] C.iter_eval_ctx
+      method! visit_dummy_var_id _ did = dids := C.DummyVarId.Set.add did !dids
+      method! visit_borrow_id _ id = bids := V.BorrowId.Set.add id !bids
+
+      method! visit_loan_id _ id =
+        (* Actually, this is not necessary because all loans have a
+           corresponding borrow *)
+        bids := V.BorrowId.Set.add id !bids
+
+      method! visit_abstraction_id _ id =
+        aids := V.AbstractionId.Set.add id !aids
+
+      method! visit_region_id _ id = rids := T.RegionId.Set.add id !rids
+
+      method! visit_symbolic_value_id _ id =
+        sids := V.SymbolicValueId.Set.add id !sids
+    end
+  in
+  (obj, get_ids)
+
+(** Compute the sets of ids found in a list of typed values. *)
+let compute_typed_values_ids (xl : V.typed_value list) : ids_sets =
+  let compute, get_ids = compute_ids () in
+  List.iter (compute#visit_typed_value ()) xl;
+  get_ids ()
+
+(** Compute the sets of ids found in a typed value. *)
+let compute_typed_value_ids (x : V.typed_value) : ids_sets =
+  compute_typed_values_ids [ x ]
+
+(** Compute the sets of ids found in a list of abstractions. *)
+let compute_absl_ids (xl : V.abs list) : ids_sets =
+  let compute, get_ids = compute_ids () in
+  List.iter (compute#visit_abs ()) xl;
+  get_ids ()
+
+(** Compute the sets of ids found in an abstraction. *)
+let compute_abs_ids (x : V.abs) : ids_sets = compute_absl_ids [ x ]
+
+(** Compute the sets of ids found in a list of contexts. *)
+let compute_contexts_ids (ctxl : C.eval_ctx list) : ids_sets =
+  let compute, get_ids = compute_ids () in
+  List.iter (compute#visit_eval_ctx ()) ctxl;
+  get_ids ()
+
+(** Compute the sets of ids found in a context. *)
+let compute_context_ids (ctx : C.eval_ctx) : ids_sets =
+  compute_contexts_ids [ ctx ]
