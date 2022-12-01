@@ -14,6 +14,8 @@ open Identifiers
   *)
 module DummyVarId = IdGen ()
 
+type dummy_var_id = DummyVarId.id [@@deriving show, ord]
+
 (** Some global counters.
 
   Note that those counters were initially stored in {!eval_ctx} values,
@@ -104,29 +106,79 @@ let reset_global_counters () =
   fun_call_id_counter := FunCallId.generator_zero;
   dummy_var_id_counter := DummyVarId.generator_zero
 
+(** Ancestor for {!var_binder} iter visitor *)
+class ['self] iter_var_binder_base =
+  object (_self : 'self)
+    inherit [_] iter_abs
+    method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
+    method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for {!var_binder} map visitor *)
+class ['self] map_var_binder_base =
+  object (_self : 'self)
+    inherit [_] map_abs
+    method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
+
+    method visit_dummy_var_id : 'env -> dummy_var_id -> dummy_var_id =
+      fun _ x -> x
+  end
+
 (** A binder used in an environment, to map a variable to a value *)
 type var_binder = {
-  index : VarId.id;  (** Unique variable identifier *)
+  index : var_id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)
 }
-[@@deriving show]
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_var_binder";
+        variety = "iter";
+        ancestors = [ "iter_var_binder_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_var_binder";
+        variety = "map";
+        ancestors = [ "map_var_binder_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      }]
 
 (** A binder, for a "real" variable or a dummy variable *)
-type binder = VarBinder of var_binder | DummyBinder of DummyVarId.id
-[@@deriving show]
+type binder = VarBinder of var_binder | DummyBinder of dummy_var_id
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_binder";
+        variety = "iter";
+        ancestors = [ "iter_var_binder" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      },
+    visitors
+      {
+        name = "map_binder";
+        variety = "map";
+        ancestors = [ "map_var_binder" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+      }]
 
 (** Ancestor for {!env_elem} iter visitor *)
 class ['self] iter_env_elem_base =
   object (_self : 'self)
-    inherit [_] iter_abs
-    method visit_binder : 'env -> binder -> unit = fun _ _ -> ()
+    inherit [_] iter_binder
   end
 
 (** Ancestor for {!env_elem} map visitor *)
 class ['self] map_env_elem_base =
   object (_self : 'self)
-    inherit [_] map_abs
-    method visit_binder : 'env -> binder -> binder = fun _ x -> x
+    inherit [_] map_binder
   end
 
 (** Environment value: mapping from variable to value, abstraction (only

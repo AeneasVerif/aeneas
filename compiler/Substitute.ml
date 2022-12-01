@@ -397,7 +397,7 @@ let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
 
   let visitor =
     object (self : 'self)
-      inherit [_] V.map_abs
+      inherit [_] C.map_env
       method! visit_borrow_id _ bid = bsubst bid
       method! visit_loan_id _ bid = bsubst bid
       method! visit_ety _ ty = ty_substitute_ids tsubst ty
@@ -427,6 +427,7 @@ let subst_ids_visitor (rsubst : T.RegionId.id -> T.RegionId.id)
       visitor#visit_typed_avalue () x
 
     method visit_abs (x : V.abs) : V.abs = visitor#visit_abs () x
+    method visit_env (env : C.env) : C.env = visitor#visit_env () env
   end
 
 let typed_value_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
@@ -467,4 +468,16 @@ let typed_avalue_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
      (fun x -> x)
      asubst)
     #visit_typed_avalue
+    x
+
+let env_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id) (x : C.env) : C.env
+    =
+  let asubst _ = raise (Failure "Unreachable") in
+  (subst_ids_visitor rsubst
+     (fun x -> x)
+     (fun x -> x)
+     (fun x -> x)
+     (fun x -> x)
+     asubst)
+    #visit_env
     x

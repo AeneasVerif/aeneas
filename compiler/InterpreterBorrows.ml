@@ -2400,29 +2400,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
 let ctx_merge_regions (ctx : C.eval_ctx) (rid : T.RegionId.id)
     (rids : T.RegionId.Set.t) : C.eval_ctx =
   let rsubst x = if T.RegionId.Set.mem x rids then rid else x in
-  let merge_in_abs (abs : V.abs) : V.abs =
-    let avalues =
-      List.map (Substitute.typed_avalue_subst_rids rsubst) abs.V.avalues
-    in
-    let regions = T.RegionId.Set.diff abs.V.regions rids in
-    let ancestors_regions =
-      if T.RegionId.Set.disjoint abs.V.ancestors_regions rids then
-        abs.V.ancestors_regions
-      else
-        T.RegionId.Set.add rid
-          (T.RegionId.Set.diff abs.V.ancestors_regions rids)
-    in
-    { abs with V.avalues; regions; ancestors_regions }
-  in
-
-  let env =
-    List.map
-      (fun ee ->
-        match ee with
-        | C.Abs abs -> C.Abs (merge_in_abs abs)
-        | Var _ | Frame -> ee)
-      ctx.env
-  in
+  let env = Substitute.env_subst_rids rsubst ctx.env in
   { ctx with C.env }
 
 let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
@@ -2457,10 +2435,6 @@ let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
       let rids = T.RegionId.Set.remove rid regions in
       ctx_merge_regions ctx rid rids
   in
-
-  (* Sanity check *)
-  (* Sanity check *)
-  if !Config.check_invariants then Invariants.check_invariants ctx;
 
   (* Return *)
   (ctx, nabs.abs_id)
