@@ -182,42 +182,6 @@ let projection_contains (ty1 : T.rty) (rset1 : T.RegionId.Set.t) (ty2 : T.rty)
   in
   compare_rtys default combine compare_regions ty1 ty2
 
-(* TODO: there misses fields *)
-type ctx_ids = {
-  aids : V.AbstractionId.Set.t;
-  bids : V.BorrowId.Set.t;
-  dids : C.DummyVarId.Set.t;
-}
-
-(* TODO: move *)
-
-(** Compute the sets of ids found in a list of contexts. *)
-let compute_contexts_ids (ctxl : C.eval_ctx list) : ctx_ids =
-  let bids = ref V.BorrowId.Set.empty in
-  let aids = ref V.AbstractionId.Set.empty in
-  let dids = ref C.DummyVarId.Set.empty in
-  let obj =
-    object
-      inherit [_] C.iter_eval_ctx
-      method! visit_dummy_var_id _ did = dids := C.DummyVarId.Set.add did !dids
-      method! visit_borrow_id _ id = bids := V.BorrowId.Set.add id !bids
-
-      method! visit_loan_id _ id =
-        (* Actually, this is not necessary because all loans have a
-           corresponding borrow *)
-        bids := V.BorrowId.Set.add id !bids
-
-      method! visit_abstraction_id _ id =
-        aids := V.AbstractionId.Set.add id !aids
-    end
-  in
-  List.iter (obj#visit_eval_ctx ()) ctxl;
-  { aids = !aids; bids = !bids; dids = !dids }
-
-(** Compute the sets of ids found in a context. *)
-let compute_context_ids (ctx : C.eval_ctx) : ctx_ids =
-  compute_contexts_ids [ ctx ]
-
 (** Lookup a loan content.
 
     The loan is referred to by a borrow id.
