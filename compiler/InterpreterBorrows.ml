@@ -1748,9 +1748,8 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
   let push_abs (r_id : T.RegionId.id) (avalues : V.typed_avalue list) : unit =
     if avalues = [] then ()
     else
-      (* Reverse the list of avalues *)
-      let avalues = List.rev avalues in
-      (* Create the abs *)
+      (* Create the abs - note that we keep the order of the avalues as it is
+         (unlike the environments) *)
       let abs =
         {
           V.abs_id = C.fresh_abstraction_id ();
@@ -2121,6 +2120,11 @@ type merge_duplicates_funcs = {
 let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : C.eval_ctx)
     (abs0 : V.abs) (abs1 : V.abs) : V.abs =
+  log#ldebug
+    (lazy
+      ("merge_abstractions_aux:\n- abs0:\n" ^ abs_to_string ctx abs0
+     ^ "\n\n- abs1:\n" ^ abs_to_string ctx abs1));
+
   (* Check that the abstractions are destructured *)
   if !Config.check_invariants then (
     let destructure_shared_values = true in
@@ -2277,48 +2281,67 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
         raise (Failure "Unreachable")
   in
 
-  let borrows_loans = List.append borrows_loans0 borrows_loans1 in
-  (* Iterate over all the borrows/loans ids found in teh abstractions *)
+  (* Note that we first explore the borrows/loans of [abs1], because we
+     want to merge *into* this abstraction, and as a consequence we want to
+     preserve its structure as much as we can *)
+  let borrows_loans = List.append borrows_loans1 borrows_loans0 in
+  (* Iterate over all the borrows/loans ids found in the abstractions *)
   List.iter
     (fun bl ->
       match bl with
-      | BorrowId bid -> (
-          (* Check if the borrow has already been merged *)
-          assert (not (borrow_is_merged bid));
-          set_borrow_as_merged bid;
-          (* Check if we need to filter it *)
-          match filter_bid bid with
-          | None -> ()
-          | Some bid ->
-              (* Lookup the contents *)
-              let bc0 = V.BorrowId.Map.find_opt bid borrow_to_content0 in
-              let bc1 = V.BorrowId.Map.find_opt bid borrow_to_content1 in
-              (* Merge *)
-              let av : V.typed_avalue =
-                match (bc0, bc1) with
-                | None, Some bc | Some bc, None -> (
-                    match bc with
-                    | Concrete (_, _) ->
-                        (* This can happen only in case of nested borrows -
-                           a concrete borrow can only happen inside a shared
-                           loan
-                        *)
-                        raise (Failure "Unreachable")
-                    | Abstract (ty, bc) -> { V.value = V.ABorrow bc; ty })
-                | Some bc0, Some bc1 ->
-                    assert (merge_funs <> None);
-                    merge_g_borrow_contents bc0 bc1
-                | None, None -> raise (Failure "Unreachable")
-              in
-              push_avalue av)
-      | LoanId bid -> (
+      | BorrowId bid ->
+          log#ldebug
+            (lazy
+              ("merge_abstractions_aux: merging borrow "
+             ^ V.BorrowId.to_string bid));
+
+          (* Check if the borrow has already been merged - this can happen
+             because we go through all the borrows/loans in [abs0] *then*
+             all the borrows/loans in [abs1], and there may be duplicates
+             between the two *)
+          if borrow_is_merged bid then ()
+          else (
+            set_borrow_as_merged bid;
+            (* Check if we need to filter it *)
+            match filter_bid bid with
+            | None -> ()
+            | Some bid ->
+                (* Lookup the contents *)
+                let bc0 = V.BorrowId.Map.find_opt bid borrow_to_content0 in
+                let bc1 = V.BorrowId.Map.find_opt bid borrow_to_content1 in
+                (* Merge *)
+                let av : V.typed_avalue =
+                  match (bc0, bc1) with
+                  | None, Some bc | Some bc, None -> (
+                      match bc with
+                      | Concrete (_, _) ->
+                          (* This can happen only in case of nested borrows -
+                             a concrete borrow can only happen inside a shared
+                             loan
+                          *)
+                          raise (Failure "Unreachable")
+                      | Abstract (ty, bc) -> { V.value = V.ABorrow bc; ty })
+                  | Some bc0, Some bc1 ->
+                      assert (merge_funs <> None);
+                      merge_g_borrow_contents bc0 bc1
+                  | None, None -> raise (Failure "Unreachable")
+                in
+                push_avalue av)
+      | LoanId bid ->
           if
             (* Check if the loan has already been treated - it can happen
-               because shared loans contain sets of borrows.
+               for the same reason as for borrows, and also because shared
+               loans contain sets of borrows (meaning that when taking care
+               of one loan, we can merge several other loans at once).
             *)
             loan_is_merged bid
           then ()
-          else
+          else (
+            log#ldebug
+              (lazy
+                ("merge_abstractions_aux: merging loan "
+               ^ V.BorrowId.to_string bid));
+
             (* Check if we need to filter it *)
             match filter_bid bid with
             | None -> ()
@@ -2359,8 +2382,9 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
                 push_avalue av))
     borrows_loans;
 
-  (* Note that we *don't* reverse the avalues *)
-  let avalues = !avalues in
+  (* Reverse the avalues (we visited the loans/borrows in order, but pushed
+     new values at the beggining of the stack of avalues) *)
+  let avalues = List.rev !avalues in
 
   (* Filter the regions *)
 
