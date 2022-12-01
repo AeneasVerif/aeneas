@@ -199,12 +199,7 @@ let compute_contexts_ids (ctxl : C.eval_ctx list) : ctx_ids =
   let obj =
     object
       inherit [_] C.iter_eval_ctx
-
-      method! visit_binder _ bv =
-        match bv with
-        | VarBinder _ -> ()
-        | DummyBinder bid -> dids := C.DummyVarId.Set.add bid !dids
-
+      method! visit_dummy_var_id _ did = dids := C.DummyVarId.Set.add did !dids
       method! visit_borrow_id _ id = bids := V.BorrowId.Set.add id !bids
 
       method! visit_loan_id _ id =
