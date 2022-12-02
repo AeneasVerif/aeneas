@@ -1865,10 +1865,21 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
           let bids = V.BorrowId.Set.diff old_ids.bids new_ids.bids in
           let aids = V.AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those borrows and abstractions *)
-          let ctx0 = InterpreterBorrows.end_borrows_no_synth config bids ctx0 in
-          let ctx0 =
-            InterpreterBorrows.end_abstractions_no_synth config aids ctx0
+          let end_borrows_abs bids aids ctx =
+            let ctx = InterpreterBorrows.end_borrows_no_synth config bids ctx in
+            let ctx =
+              InterpreterBorrows.end_abstractions_no_synth config aids ctx
+            in
+            ctx
           in
+          (* End the borrows/abs in [ctx0] *)
+          let ctx0 = end_borrows_abs bids aids ctx0 in
+          (* We can also do the same in the contexts [ctxs]: if there are
+             several contexts, maybe one of them ended some borrows and some
+             others didn't. As we need to end those borrows anyway (the join
+             will detect them and ask to end them) we do it preemptively.
+          *)
+          ctxs := List.map (end_borrows_abs bids aids) !ctxs;
           fixed_ids := Some (compute_context_ids ctx0);
           ctx0
     in
