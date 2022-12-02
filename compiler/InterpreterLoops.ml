@@ -145,8 +145,8 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
             (* Process those normally *)
             super#visit_aborrow_content abs_id bc
         | AIgnoredMutBorrow (_, child)
-        | AEndedIgnoredMutBorrow
-            { child; given_back_loans_proj = _; given_back_meta = _ } ->
+        | AEndedIgnoredMutBorrow { child; given_back = _; given_back_meta = _ }
+          ->
             (* Ignore the id of the borrow, if there is *)
             self#visit_typed_avalue abs_id child
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
@@ -390,7 +390,11 @@ let rec match_types (match_distinct_types : 'r T.ty -> 'r T.ty -> 'r T.ty)
       Ref (r, ty, k)
   | _ -> match_distinct_types ty0 ty1
 
-(** See {!Match} *)
+(** See {!Match}.
+
+    This module contains specialized match functions to instantiate the generic
+    {!Match} functor.
+  *)
 module type Matcher = sig
   val match_etys : T.ety -> T.ety -> T.ety
   val match_rtys : T.rty -> T.rty -> T.rty
@@ -553,6 +557,14 @@ end
     etc.
 
     We use it for joins, to check if two environments are convertible, etc.
+
+    The functor is parameterized by a {!Matcher}, which implements the
+    non-generic part of the match. More precisely, the role of {!Match} is two
+    provide generic functions which recursively match two values (by recursively
+    matching the fields of ADT values for instance). When it does need to match
+    values in a non-trivial manner (if two ADT values don't have the same
+    variant for instance) it calls the corresponding specialized function from
+    {!Matcher}.
  *)
 module Match (M : Matcher) = struct
   (** Match two values.
@@ -750,6 +762,20 @@ module type MatchJoinState = sig
   val nabs : V.abs list ref
 end
 
+(** A matcher for loop joins (we use loop joins to compute fixed points).
+
+    See the explanations for {!Match}.
+
+    In case of loop joins:
+    - we match *concrete* values
+    - we check that the "fixed" abstractions (the abstractions to be framed
+      - i.e., the abstractions which are the same in the two environments to
+      join) are equal
+    - we keep the abstractions which are not in the frame, then merge those
+      together (if they have borrows/loans in common) later
+    The join matcher is used to match the *concrete* values only. For this
+    reason, we fail on the functions which match avalues.
+ *)
 module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
   (** Small utility *)
   let push_abs (abs : V.abs) : unit = S.nabs := abs :: !S.nabs
@@ -1011,6 +1037,9 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
         (* Return [Bottom] *)
         mk_bottom v.V.ty
 
+  (* As explained in comments: we don't use the join matcher to join avalues,
+     only concrete values *)
+
   let match_distinct_aadts _ _ _ _ _ = raise (Failure "Unreachable")
   let match_ashared_borrows _ _ _ _ = raise (Failure "Unreachable")
   let match_amut_borrows _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
@@ -1038,14 +1067,26 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = Match (JM) in
-  (* TODO: why not simply call: M.match_type_avalues? (or move this code to
-     MakeJoinMatcher?) *)
+  (* Functions to match avalues (see {!merge_duplicates_funcs}).
+
+     Those functions are used to merge borrows/loans with the *same ids*.
+
+     They will always be called on destructured avalues (whose children are
+     [AIgnored] - we enforce that through sanity checks). We rely on the join
+     matcher [JM] to match the concrete values (for shared loans for instance).
+     Note that the join matcher doesn't implement match functions for avalues
+     (see the comments in {!MakeJoinMatcher}.
+  *)
   let merge_amut_borrows id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
     assert (is_aignored child0.V.value);
     assert (is_aignored child1.V.value);
 
-    (* Same remarks as for [merge_amut_loans] *)
+    (* We need to pick a type for the avalue. The types on the left and on the
+       right may use different regions: it doesn't really matter (here, we pick
+       the one from the left), because we will merge those regions together
+       anyway (see the comments for {!merge_abstractions}).
+    *)
     let ty = ty0 in
     let child = child0 in
     let value = V.ABorrow (V.AMutBorrow (id, child)) in
@@ -1057,7 +1098,7 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
     assert (not (ty_has_borrows ctx.type_context.type_infos ty0));
     assert (not (ty_has_borrows ctx.type_context.type_infos ty1));
 
-    (* Same remarks as for [merge_amut_loans] *)
+    (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let value = V.ABorrow (V.ASharedBorrow id) in
     { V.value; ty }
@@ -1067,12 +1108,7 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
     (* Sanity checks *)
     assert (is_aignored child0.V.value);
     assert (is_aignored child1.V.value);
-    (* We simply need to introduce an [AMutLoan]. Some remarks:
-       - the child is [AIgnored]
-       - we need to pick some types. The types on the left and on the right
-         may use different regions: it doesn't really matter (here, we pick
-         the ones from the left).
-    *)
+    (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let child = child0 in
     let value = V.ALoan (V.AMutLoan (id, child)) in
@@ -1083,9 +1119,10 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
     (* Sanity checks *)
     assert (is_aignored child0.V.value);
     assert (is_aignored child1.V.value);
-    (* Same remarks as for [merge_amut_loans].
+    (* Same remarks as for [merge_amut_borrows].
 
-       This time, however, we need to merge the shared values.
+       This time we need to also merge the shared values. We rely on the
+       join matcher [JM] to do so.
     *)
     assert (not (value_has_loans_or_borrows ctx sv0.V.value));
     assert (not (value_has_loans_or_borrows ctx sv1.V.value));
