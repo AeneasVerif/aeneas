@@ -178,7 +178,6 @@ module Values = struct
       string =
     let ty_fmt : PT.rtype_formatter = value_to_rtype_formatter fmt in
     match v.value with
-    | APrimitive cv -> PPV.primitive_value_to_string cv
     | AAdt av -> (
         let field_values =
           List.map (typed_avalue_to_string fmt) av.field_values

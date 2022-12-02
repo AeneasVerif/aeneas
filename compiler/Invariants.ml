@@ -501,8 +501,6 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
       method! visit_typed_avalue info atv =
         (* Check the current pair (value, type) *)
         (match (atv.V.value, atv.V.ty) with
-        | V.APrimitive cv, ty ->
-            check_primitive_value_type cv (Subst.erase_regions ty)
         (* ADT case *)
         | V.AAdt av, T.Adt (T.AdtId def_id, regions, tys) ->
             (* Retrieve the definition to check the variant id, the number of

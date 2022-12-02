@@ -1595,7 +1595,7 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
       (av : V.typed_avalue) : unit =
     let ty = av.V.ty in
     match av.V.value with
-    | V.APrimitive _ | ABottom | AIgnored -> ()
+    | ABottom | AIgnored -> ()
     | AAdt adt ->
         (* Simply explore the children *)
         List.iter (list_avalues allow_borrows push) adt.field_values
