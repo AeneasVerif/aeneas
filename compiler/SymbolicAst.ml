@@ -37,6 +37,11 @@ type call_id =
 
 type call = {
   call_id : call_id;
+  ctx : Contexts.eval_ctx;
+      (** The context upon calling the function (after the operands have been
+          evaluated). We need it to compute the translated values for shared
+          borrows (we need to perform lookups).
+       *)
   abstractions : V.AbstractionId.id list;
   type_params : T.ety list;
   args : V.typed_value list;
@@ -51,7 +56,7 @@ type call = {
  *)
 
 type meta =
-  | Assignment of mplace * V.typed_value * mplace option
+  | Assignment of Contexts.eval_ctx * mplace * V.typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
 [@@deriving show]
 
@@ -59,18 +64,33 @@ type meta =
     used in LLBC: they are a first step towards lambda-calculus expressions.
  *)
 type expression =
-  | Return of V.typed_value option
+  | Return of Contexts.eval_ctx * V.typed_value option
       (** There are two cases:
           - the AST is for a forward function: the typed value should contain
             the value which was in the return variable
           - the AST is for a backward function: the typed value should be [None]
+
+          The context is the evaluation context upon reaching the return, We
+          need it to translate shared borrows to pure values (we need to be able
+          to look up the shared values in the context).
        *)
   | Panic
   | FunCall of call * expression
-  | EndAbstraction of V.abs * expression
+  | EndAbstraction of Contexts.eval_ctx * V.abs * expression
+      (** The context is the evaluation context upon ending the abstraction,
+          just after we removed the abstraction from the context.
+
+          The context is the evaluation context from after evaluating the asserted
+          value. It has the same purpose as for the {!Return} case.
+       *)
   | EvalGlobal of A.GlobalDeclId.id * V.symbolic_value * expression
       (** Evaluate a global to a fresh symbolic value *)
-  | Assertion of V.typed_value * expression  (** An assertion *)
+  | Assertion of Contexts.eval_ctx * V.typed_value * expression
+      (** An assertion.
+
+          The context is the evaluation context from after evaluating the asserted
+          value. It has the same purpose as for the {!Return} case.
+       *)
   | Expansion of mplace option * V.symbolic_value * expansion
       (** Expansion of a symbolic value.
     

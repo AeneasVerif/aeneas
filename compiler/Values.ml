@@ -169,19 +169,9 @@ and adt_value = {
 }
 
 and borrow_content =
-  | SharedBorrow of mvalue * borrow_id
-      (** A shared borrow.
-      
-          We remember the shared value which was borrowed as a meta value.
-          This is necessary for synthesis: upon translating to "pure" values,
-          we can't perform any lookup because we don't have an environment
-          anymore. Note that it is ok to keep the shared value and copy
-          the shared value this way, because shared values are immutable
-          for as long as they are shared (i.e., as long as we can use the
-          shared borrow).
-       *)
+  | SharedBorrow of borrow_id  (** A shared borrow. *)
   | MutBorrow of borrow_id * typed_value  (** A mutably borrowed value. *)
-  | ReservedMutBorrow of mvalue * borrow_id
+  | ReservedMutBorrow of borrow_id
       (** A reserved mut borrow.
 
           This is used to model {{: https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html} two-phase borrows}.
@@ -206,20 +196,6 @@ and borrow_content =
             l = Vec::len(move v2); // We need v2 here, and v1 *below*
             Vec::push(move v1, move l); // In practice, v1 gets promoted only here
           ]}
-          
-          The meta-value is used for the same purposes as with shared borrows,
-          at the exception that in the case of reserved borrows it is not
-          *necessary* for the synthesis: we keep it only as meta-information.
-          To be more precise:
-          - when generating the synthesized program, we may need to convert
-            shared borrows to pure values
-          - we never need to do so for reserved borrows: such borrows must
-            be promoted at the moment we use them (meaning in the synthesis we
-            convert a *mutable* borrow to a pure value). However, we save
-            meta-data about the assignments, which is used to make the code
-            cleaner: when generating this meta-data, we may need to convert
-            reserved borrows to pure values, in which situation we convert
-            the meta-value we stored in the reserved borrow.
        *)
 
 and loan_content =
@@ -699,7 +675,10 @@ and aborrow_content =
           The meta-value stores the initial value on which the projector was
           applied, which reduced to this mut borrow. This meta-information
           is only used for the synthesis.
-          TODO: do we really use it actually?
+          Rem.: we don't use the meta-value for now, but might need it when
+          using nested borrows: if we end an *internal* borrow, this meta
+          value is propagated to the corresponding loan (we need to know
+          what the loan consumed, for the synthesis).
      *)
   | ASharedBorrow of borrow_id
       (** A shared borrow owned by an abstraction.

@@ -403,8 +403,7 @@ module type Matcher = sig
   val match_distinct_adts : T.ety -> V.adt_value -> V.adt_value -> V.typed_value
 
   (** The meta-value is the result of a match *)
-  val match_shared_borrows :
-    T.ety -> V.mvalue -> V.borrow_id -> V.borrow_id -> V.mvalue * V.borrow_id
+  val match_shared_borrows : T.ety -> V.borrow_id -> V.borrow_id -> V.borrow_id
 
   (** The input parameters are:
       - [ty]
@@ -593,23 +592,9 @@ module Match (M : Matcher) = struct
     | Borrow bc0, Borrow bc1 ->
         let bc =
           match (bc0, bc1) with
-          | SharedBorrow (mv0, bid0), SharedBorrow (mv1, bid1) ->
-              (* Not completely sure what to do with the meta-value, as we use
-                 it for the translation. TODO: remove meta-values from shared borrows?
-
-                 If a shared symbolic value gets expanded in a branch, it may be
-                 simplified (by being folded back to a symbolic value) upon
-                 doing the join, which as a result would lead to code where it
-                 is considered as mutable (which is sound). On the other hand,
-                 if we access a symbolic value in a loop, the translated loop
-                 should take it as input anyway, so maybe this actually leads to
-                 equivalent code.
-              *)
-              assert (not (value_has_borrows ctx mv0.V.value));
-              assert (not (value_has_borrows ctx mv1.V.value));
-              let mv = match_rec mv0 mv1 in
-              let mv, bid = M.match_shared_borrows ty mv bid0 bid1 in
-              V.SharedBorrow (mv, bid)
+          | SharedBorrow bid0, SharedBorrow bid1 ->
+              let bid = M.match_shared_borrows ty bid0 bid1 in
+              V.SharedBorrow bid
           | MutBorrow (bid0, bv0), MutBorrow (bid1, bv1) ->
               let bv = match_rec bv0 bv1 in
               assert (not (value_has_borrows ctx bv.V.value));
@@ -830,9 +815,9 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
     (* No borrows, no loans: we can introduce a symbolic value *)
     mk_fresh_symbolic_typed_value_from_ety V.LoopJoin ty
 
-  let match_shared_borrows (ty : T.ety) (mv : V.mvalue) (bid0 : V.borrow_id)
-      (bid1 : V.borrow_id) : V.mvalue * V.borrow_id =
-    if bid0 = bid1 then (mv, bid0)
+  let match_shared_borrows (ty : T.ety) (bid0 : V.borrow_id)
+      (bid1 : V.borrow_id) : V.borrow_id =
+    if bid0 = bid1 then bid0
     else
       (* We replace bid0 and bid1 with a fresh borrow id, and introduce
          an abstraction which links all of them:
@@ -885,7 +870,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
       push_abs abs;
 
       (* Return the new borrow *)
-      (sv, bid2)
+      bid2
 
   let match_mut_borrows (ty : T.ety) (bid0 : V.borrow_id) (bv0 : V.typed_value)
       (bid1 : V.borrow_id) (bv1 : V.typed_value) (bv : V.typed_value) :
@@ -1457,10 +1442,10 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
       (_adt1 : V.adt_value) : V.typed_value =
     raise Distinct
 
-  let match_shared_borrows (_ty : T.ety) (mv : V.mvalue) (bid0 : V.borrow_id)
-      (bid1 : V.borrow_id) : V.mvalue * V.borrow_id =
+  let match_shared_borrows (_ty : T.ety) (bid0 : V.borrow_id)
+      (bid1 : V.borrow_id) : V.borrow_id =
     let bid = match_bid bid0 bid1 in
-    (mv, bid)
+    bid
 
   let match_mut_borrows (_ty : T.ety) (bid0 : V.borrow_id)
       (_bv0 : V.typed_value) (bid1 : V.borrow_id) (_bv1 : V.typed_value)

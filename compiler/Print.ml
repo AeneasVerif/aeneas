@@ -122,13 +122,12 @@ module Values = struct
   and borrow_content_to_string (fmt : value_formatter) (bc : V.borrow_content) :
       string =
     match bc with
-    | SharedBorrow (_, bid) -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | SharedBorrow bid -> "⌊shared@" ^ V.BorrowId.to_string bid ^ "⌋"
     | MutBorrow (bid, tv) ->
         "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_value_to_string fmt tv
         ^ ")"
-    | ReservedMutBorrow (_, bid) ->
-        "⌊reserved_mut@" ^ V.BorrowId.to_string bid ^ "⌋"
+    | ReservedMutBorrow bid -> "⌊reserved_mut@" ^ V.BorrowId.to_string bid ^ "⌋"
 
   and loan_content_to_string (fmt : value_formatter) (lc : V.loan_content) :
       string =

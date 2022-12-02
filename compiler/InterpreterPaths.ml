@@ -164,7 +164,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
       (* Borrows *)
       | Deref, V.Borrow bc, _ -> (
           match bc with
-          | V.SharedBorrow (_, bid) ->
+          | V.SharedBorrow bid ->
               (* Lookup the loan content, and explore from there *)
               if access.lookup_shared_borrows then
                 match lookup_loan ek bid ctx with
@@ -216,7 +216,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                         (* Return - note that we don't need to update the borrow itself *)
                         Ok (ctx, { res with updated = v }))
               else Error (FailBorrow bc)
-          | V.ReservedMutBorrow (_, bid) -> Error (FailReservedMutBorrow bid)
+          | V.ReservedMutBorrow bid -> Error (FailReservedMutBorrow bid)
           | V.MutBorrow (bid, bv) ->
               if access.enter_mut_borrows then
                 match access_projection access ctx update p' bv with
@@ -546,7 +546,7 @@ let rec end_loans_at_place (config : C.config) (access : access_kind)
         match bc with
         | V.SharedBorrow _ | V.MutBorrow (_, _) ->
             (* Nothing special to do *) super#visit_borrow_content env bc
-        | V.ReservedMutBorrow (_, bid) ->
+        | V.ReservedMutBorrow bid ->
             (* We need to activate reserved borrows *)
             let cc = promote_reserved_mut_borrow config bid in
             raise (UpdateCtx cc)

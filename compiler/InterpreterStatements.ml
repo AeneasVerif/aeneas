@@ -196,7 +196,7 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
         (* Continue *)
         let expr = cf Unit ctx in
         (* Add the synthesized assertion *)
-        S.synthesize_assertion v expr
+        S.synthesize_assertion ctx v expr
     | _ ->
         raise
           (Failure ("Expected a boolean, got: " ^ typed_value_to_string ctx v))
@@ -819,7 +819,8 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
                         | Some rp -> Some (S.mk_mplace rp ctx)
                         | None -> None
                       in
-                      S.synthesize_assignment (S.mk_mplace p ctx) rv rp expr)
+                      S.synthesize_assignment ctx (S.mk_mplace p ctx) rv rp expr
+                  )
             in
 
             (* Compose and apply *)
@@ -1194,7 +1195,7 @@ and eval_function_call_symbolic_from_inst_sig (config : C.config)
     let expr = cf ctx in
 
     (* Synthesize the symbolic AST *)
-    S.synthesize_regular_function_call fid call_id abs_ids type_args args
+    S.synthesize_regular_function_call fid call_id ctx abs_ids type_args args
       args_places ret_spc dest_place expr
   in
   let cc = comp cc cf_call in

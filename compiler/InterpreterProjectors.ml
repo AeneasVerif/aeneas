@@ -53,7 +53,7 @@ let rec apply_proj_borrows_on_shared_borrow (ctx : C.eval_ctx)
                   bv ref_ty
               in
               (bid, asb)
-          | V.SharedBorrow (_, bid), T.Shared ->
+          | V.SharedBorrow bid, T.Shared ->
               (* Lookup the shared value *)
               let ek = ek_all in
               let sv = lookup_loan ek bid ctx in
@@ -139,7 +139,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                       fresh_reborrow regions ancestors_regions bv ref_ty
                   in
                   V.AMutBorrow (mv, bid, bv)
-              | V.SharedBorrow (_, bid), T.Shared ->
+              | V.SharedBorrow bid, T.Shared ->
                   (* Rem.: we don't need to also apply the projection on the
                      borrowed value, because for as long as the abstraction
                      lives then the shared borrow lives, which means that the
@@ -179,7 +179,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                   in
                   (* Return *)
                   V.AIgnoredMutBorrow (opt_bid, bv)
-              | V.SharedBorrow (_, bid), T.Shared ->
+              | V.SharedBorrow bid, T.Shared ->
                   (* Lookup the shared value *)
                   let ek = ek_all in
                   let sv = lookup_loan ek bid ctx in
@@ -352,7 +352,7 @@ let apply_reborrows (reborrows : (V.BorrowId.id * V.BorrowId.id) list)
     match v.V.value with
     | V.Borrow lc -> (
         match lc with
-        | V.SharedBorrow (_, _) | V.ReservedMutBorrow _ -> None
+        | V.SharedBorrow _ | V.ReservedMutBorrow _ -> None
         | V.MutBorrow (id, _) -> Some id)
     | _ -> None
   in
