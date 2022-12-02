@@ -157,12 +157,12 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
   | V.Borrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
-      | SharedBorrow (mv, bid) ->
+      | SharedBorrow bid ->
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
           let bid' = C.fresh_borrow_id () in
           let ctx = InterpreterBorrows.reborrow_shared bid bid' ctx in
-          (ctx, { v with V.value = V.Borrow (SharedBorrow (mv, bid')) })
+          (ctx, { v with V.value = V.Borrow (SharedBorrow bid') })
       | MutBorrow (_, _) -> raise (Failure "Can't copy a mutable borrow")
       | V.ReservedMutBorrow _ ->
           raise (Failure "Can't copy a reserved mut borrow"))
@@ -391,7 +391,7 @@ let eval_unary_op_symbolic (config : C.config) (unop : E.unop) (op : E.operand)
     (* Call the continuation *)
     let expr = cf (Ok (mk_typed_value_from_symbolic_value res_sv)) ctx in
     (* Synthesize the symbolic AST *)
-    S.synthesize_unary_op unop v
+    S.synthesize_unary_op ctx unop v
       (S.mk_opt_place_from_op op ctx)
       res_sv None expr
   in
@@ -532,7 +532,7 @@ let eval_binary_op_symbolic (config : C.config) (binop : E.binop)
     (* Synthesize the symbolic AST *)
     let p1 = S.mk_opt_place_from_op op1 ctx in
     let p2 = S.mk_opt_place_from_op op2 ctx in
-    S.synthesize_binary_op binop v1 p1 v2 p2 res_sv None expr
+    S.synthesize_binary_op ctx binop v1 p1 v2 p2 res_sv None expr
   in
   (* Compose and apply *)
   comp eval_ops compute cf ctx
@@ -561,18 +561,18 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         (* Generate the fresh borrow id *)
         let bid = C.fresh_borrow_id () in
         (* Compute the loan value, with which to replace the value at place p *)
-        let nv, shared_mvalue =
+        let nv =
           match v.V.value with
           | V.Loan (V.SharedLoan (bids, sv)) ->
               (* Shared loan: insert the new borrow id *)
               let bids1 = V.BorrowId.Set.add bid bids in
-              ({ v with V.value = V.Loan (V.SharedLoan (bids1, sv)) }, sv)
+              { v with V.value = V.Loan (V.SharedLoan (bids1, sv)) }
           | _ ->
               (* Not a shared loan: add a wrapper *)
               let v' =
                 V.Loan (V.SharedLoan (V.BorrowId.Set.singleton bid, v))
               in
-              ({ v with V.value = v' }, v)
+              { v with V.value = v' }
         in
         (* Update the borrowed value in the context *)
         let ctx = write_place access p nv ctx in
@@ -582,8 +582,8 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
           T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
         in
         let bc =
-          if bkind = E.Shared then V.SharedBorrow (shared_mvalue, bid)
-          else V.ReservedMutBorrow (shared_mvalue, bid)
+          if bkind = E.Shared then V.SharedBorrow bid
+          else V.ReservedMutBorrow bid
         in
         let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
         (* Continue *)

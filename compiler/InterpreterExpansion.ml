@@ -340,8 +340,7 @@ let expand_symbolic_value_shared_borrow (config : C.config)
       method! visit_Symbolic env sv =
         if same_symbolic_id sv original_sv then
           let bid = fresh_borrow () in
-          V.Borrow
-            (V.SharedBorrow (mk_typed_value_from_symbolic_value shared_sv, bid))
+          V.Borrow (V.SharedBorrow bid)
         else super#visit_Symbolic env sv
 
       method! visit_Abs proj_regions abs =

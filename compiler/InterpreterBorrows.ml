@@ -98,7 +98,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
 
       method! visit_Borrow outer bc =
         match bc with
-        | SharedBorrow (_, l') | ReservedMutBorrow (_, l') ->
+        | SharedBorrow l' | ReservedMutBorrow l' ->
             (* Check if this is the borrow we are looking for *)
             if l = l' then (
               (* Check if there are outer borrows or if we are inside an abstraction *)
@@ -739,7 +739,7 @@ let give_back (config : C.config) (l : V.BorrowId.id) (bc : g_borrow_content)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_value config l tv ctx
-  | Concrete (V.SharedBorrow (_, l') | V.ReservedMutBorrow (_, l')) ->
+  | Concrete (V.SharedBorrow l' | V.ReservedMutBorrow l') ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
@@ -1126,8 +1126,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
       (** We may need to end borrows in "regular" values, because of shared values *)
       method! visit_borrow_content _ bc =
         match bc with
-        | V.SharedBorrow (_, _) | V.MutBorrow (_, _) ->
-            raise (FoundBorrowContent bc)
+        | V.SharedBorrow _ | V.MutBorrow (_, _) -> raise (FoundBorrowContent bc)
         | V.ReservedMutBorrow _ -> raise (Failure "Unreachable")
     end
   in
@@ -1217,7 +1216,7 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
           ^ borrow_content_to_string ctx bc));
       let ctx =
         match bc with
-        | V.SharedBorrow (_, bid) -> (
+        | V.SharedBorrow bid -> (
             (* Replace the shared borrow with bottom *)
             let allow_inner_loans = false in
             match
@@ -1252,7 +1251,7 @@ and end_abstraction_remove_from_context (_config : C.config)
   (* Apply the continuation *)
   let expr = cf ctx in
   (* Synthesize the symbolic AST *)
-  S.synthesize_end_abstraction abs expr
+  S.synthesize_end_abstraction ctx abs expr
 
 (** End a proj_loan over a symbolic value by ending the proj_borrows which
     intersect this proj_loans.
@@ -1824,7 +1823,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
         assert allow_borrows;
         (* Convert the borrow content *)
         match bc with
-        | SharedBorrow (_, bid) ->
+        | SharedBorrow bid ->
             let ref_ty = ety_no_regions_to_rty ref_ty in
             let ty = T.Ref (T.Var r_id, ref_ty, kind) in
             let value = V.ABorrow (V.ASharedBorrow bid) in

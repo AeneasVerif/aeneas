@@ -196,7 +196,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
         cf target_abs_ids
     in
     (* Generate the Return node *)
-    let cf_return : m_fun = fun _ -> Some (SA.Return None) in
+    let cf_return : m_fun = fun ctx -> Some (SA.Return (ctx, None)) in
     (* Apply *)
     cf_end_target_abs cf_return ctx
   in
@@ -246,7 +246,7 @@ let evaluate_function_symbolic (synthesize : bool)
             let cf_pop = pop_frame config in
             (* Generate the Return node *)
             let cf_return ret_value : m_fun =
-             fun _ -> Some (SA.Return (Some ret_value))
+             fun ctx -> Some (SA.Return (ctx, Some ret_value))
             in
             (* Apply *)
             cf_pop cf_return ctx

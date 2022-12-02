@@ -3,6 +3,7 @@ open LlbcAstUtils
 open Pure
 open PureUtils
 module Id = Identifiers
+module C = Contexts
 module S = SymbolicAst
 module TA = TypesAnalysis
 module L = Logging
@@ -798,11 +799,11 @@ let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
     - end abstraction
     - return
  *)
-let rec typed_value_to_texpression (ctx : bs_ctx) (v : V.typed_value) :
-    texpression =
+let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
+    (v : V.typed_value) : texpression =
   (* We need to ignore boxes *)
   let v = unbox_typed_value v in
-  let translate = typed_value_to_texpression ctx in
+  let translate = typed_value_to_texpression ctx ectx in
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx v.ty in
   (* Translate the value *)
@@ -843,15 +844,16 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (v : V.typed_value) :
         | MutLoan _ -> raise (Failure "Unreachable"))
     | Borrow bc -> (
         match bc with
-        | V.SharedBorrow (mv, _) ->
-            (* The meta-value stored in the shared borrow was added especially
-             * for this case (because we can't use the borrow id for lookups) *)
-            translate mv
-        | V.ReservedMutBorrow (mv, _) ->
+        | V.SharedBorrow bid ->
+            (* Lookup the shared value in the context, and continue *)
+            let sv = InterpreterBorrowsCore.lookup_shared_value ectx bid in
+            translate sv
+        | V.ReservedMutBorrow bid ->
             (* Same as for shared borrows. However, note that we use reserved borrows
-             * only in meta-data: a value actually *used in the translation* can't come
+             * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
-            translate mv
+            let sv = InterpreterBorrowsCore.lookup_shared_value ectx bid in
+            translate sv
         | V.MutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
             translate v)
@@ -885,9 +887,9 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (v : V.typed_value) :
                                   ^^
     ]}
  *)
-let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
-    texpression option =
-  let translate = typed_avalue_to_consumed ctx in
+let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
+    (av : V.typed_avalue) : texpression option =
+  let translate = typed_avalue_to_consumed ctx ectx in
   let value =
     match av.value with
     | APrimitive _ -> raise (Failure "Unreachable")
@@ -909,7 +911,7 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
               let rv = mk_simpl_tuple_texpression field_values in
               Some rv)
     | ABottom -> raise (Failure "Unreachable")
-    | ALoan lc -> aloan_content_to_consumed ctx lc
+    | ALoan lc -> aloan_content_to_consumed ctx ectx lc
     | ABorrow bc -> aborrow_content_to_consumed ctx bc
     | ASymbolic aproj -> aproj_to_consumed ctx aproj
     | AIgnored -> None
@@ -922,13 +924,13 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (av : V.typed_avalue) :
   (* Return *)
   value
 
-and aloan_content_to_consumed (ctx : bs_ctx) (lc : V.aloan_content) :
-    texpression option =
+and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
+    (lc : V.aloan_content) : texpression option =
   match lc with
   | AMutLoan (_, _) | ASharedLoan (_, _, _) -> raise (Failure "Unreachable")
   | AEndedMutLoan { child = _; given_back = _; given_back_meta } ->
       (* Return the meta-value *)
-      Some (typed_value_to_texpression ctx given_back_meta)
+      Some (typed_value_to_texpression ctx ectx given_back_meta)
   | AEndedSharedLoan (_, _) ->
       (* We don't dive into shared loans: there is nothing to give back
        * inside (note that there could be a mutable borrow in the shared
@@ -983,9 +985,10 @@ and aproj_to_consumed (ctx : bs_ctx) (aproj : V.aproj) : texpression option =
 
     See [typed_avalue_to_consumed].
  *)
-let abs_to_consumed (ctx : bs_ctx) (abs : V.abs) : texpression list =
+let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
+    texpression list =
   log#ldebug (lazy ("abs_to_consumed:\n" ^ abs_to_string ctx abs));
-  List.filter_map (typed_avalue_to_consumed ctx) abs.avalues
+  List.filter_map (typed_avalue_to_consumed ctx ectx) abs.avalues
 
 let translate_mprojection_elem (pe : E.projection_elem) :
     mprojection_elem option =
@@ -1153,12 +1156,12 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
-  | S.Return opt_v -> translate_return opt_v ctx
+  | S.Return (ectx, opt_v) -> translate_return ectx opt_v ctx
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call call e ctx
-  | EndAbstraction (abs, e) -> translate_end_abstraction abs e ctx
+  | EndAbstraction (ectx, abs, e) -> translate_end_abstraction ectx abs e ctx
   | EvalGlobal (gid, sv, e) -> translate_global_eval gid sv e ctx
-  | Assertion (v, e) -> translate_assertion v e ctx
+  | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | Meta (meta, e) -> translate_meta meta e ctx
   | ForwardEnd (e, back_e) ->
@@ -1193,8 +1196,8 @@ and translate_panic (ctx : bs_ctx) : texpression =
   else mk_result_fail_texpression_with_error_id error_failure_id output_ty
 
 (** [opt_v]: the value to return, in case we translate a forward function *)
-and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : texpression
-    =
+and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
+    (ctx : bs_ctx) : texpression =
   (* There are two cases:
      - either we are translating a forward function, in which case the optional
        value should be [Some] (it is the returned value)
@@ -1207,7 +1210,7 @@ and translate_return (opt_v : V.typed_value option) (ctx : bs_ctx) : texpression
     | None ->
         (* Forward function *)
         let v = Option.get opt_v in
-        typed_value_to_texpression ctx v
+        typed_value_to_texpression ctx ectx v
     | Some bid ->
         (* Backward function *)
         (* Sanity check *)
@@ -1240,7 +1243,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   (* Translate the function call *)
   let type_args = List.map (ctx_translate_fwd_ty ctx) call.type_params in
   let args =
-    let args = List.map (typed_value_to_texpression ctx) call.args in
+    let args = List.map (typed_value_to_texpression ctx call.ctx) call.args in
     let args_mplaces = List.map translate_opt_mplace call.args_places in
     List.map
       (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
@@ -1353,8 +1356,8 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   (* Put together *)
   mk_let effect_info.can_fail dest_v call next_e
 
-and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
-    texpression =
+and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
+    (e : S.expression) (ctx : bs_ctx) : texpression =
   log#ldebug
     (lazy
       ("translate_end_abstraction: abstraction kind: "
@@ -1392,7 +1395,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
         T.RegionGroupId.Map.find bid ctx.backward_outputs
       in
       (* Get the list of values consumed by the abstraction upon ending *)
-      let consumed_values = abs_to_consumed ctx abs in
+      let consumed_values = abs_to_consumed ctx ectx abs in
       (* Group the two lists *)
       let variables_values =
         List.combine given_back_variables consumed_values
@@ -1437,7 +1440,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       in
       (* Retrieve the values consumed upon ending the loans inside this
        * abstraction: those give us the remaining input values *)
-      let back_inputs = abs_to_consumed ctx abs in
+      let back_inputs = abs_to_consumed ctx ectx abs in
       (* If the function is stateful:
        * - add the state input argument
        * - generate a fresh state variable for the returned state
@@ -1574,7 +1577,7 @@ and translate_end_abstraction (abs : V.abs) (e : S.expression) (ctx : bs_ctx) :
       let inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs in
       (* Retrieve the values consumed upon ending the loans inside this
        * abstraction: as there are no nested borrows, there should be none. *)
-      let consumed = abs_to_consumed ctx abs in
+      let consumed = abs_to_consumed ctx ectx abs in
       assert (consumed = []);
       (* Retrieve the values given back upon ending this abstraction - note that
        * we don't provide meta-place information, because those assignments will
@@ -1615,11 +1618,11 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (sval : V.symbolic_value)
   let e = translate_expression e ctx in
   mk_let false (mk_typed_pattern_from_var var None) gval e
 
-and translate_assertion (v : V.typed_value) (e : S.expression) (ctx : bs_ctx) :
-    texpression =
+and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
+    (e : S.expression) (ctx : bs_ctx) : texpression =
   let next_e = translate_expression e ctx in
   let monadic = true in
-  let v = typed_value_to_texpression ctx v in
+  let v = typed_value_to_texpression ctx ectx v in
   let args = [ v ] in
   let func = { id = FunOrOp (Fun (Pure Assert)); type_args = [] } in
   let func_ty = mk_arrow Bool mk_unit_ty in
@@ -1832,9 +1835,9 @@ and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
   let next_e = translate_expression e ctx in
   let meta =
     match meta with
-    | S.Assignment (lp, rv, rp) ->
+    | S.Assignment (ectx, lp, rv, rp) ->
         let lp = translate_mplace lp in
-        let rv = typed_value_to_texpression ctx rv in
+        let rv = typed_value_to_texpression ctx ectx rv in
         let rp = translate_opt_mplace rp in
         Assignment (lp, rv, rp)
   in
