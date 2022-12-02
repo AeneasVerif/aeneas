@@ -277,12 +277,11 @@ module Values = struct
         ^ ")"
     | AEndedMutBorrow (_mv, child) ->
         "@ended_mut_borrow(" ^ typed_avalue_to_string fmt child ^ ")"
-    | AEndedIgnoredMutBorrow
-        { child; given_back_loans_proj; given_back_meta = _ } ->
+    | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
         ^ typed_avalue_to_string fmt child
         ^ "; "
-        ^ typed_avalue_to_string fmt given_back_loans_proj
+        ^ typed_avalue_to_string fmt given_back
         ^ ")"
     | AEndedSharedBorrow -> "@ended_shared_borrow"
     | AProjSharedBorrow sb ->

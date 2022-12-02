@@ -445,7 +445,7 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
         | V.AIgnoredMutBorrow (_, _)
         | V.AEndedMutBorrow _
         | V.AEndedIgnoredMutBorrow
-            { given_back_loans_proj = _; child = _; given_back_meta = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | V.AEndedSharedBorrow ->
             super#visit_aborrow_content env bc
         | V.AProjSharedBorrow asb ->

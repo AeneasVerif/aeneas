@@ -175,12 +175,12 @@ and borrow_content =
       (** A reserved mut borrow.
 
           This is used to model {{: https://rustc-dev-guide.rust-lang.org/borrow_check/two_phase_borrows.html} two-phase borrows}.
-          When evaluating a two-phase mutable borrow, we first introduce a reserved
-          borrow which behaves like a shared borrow, until the moment we actually *use*
-          the borrow: at this point, we end all the other shared borrows (or reserved
-          borrows - though there shouldn't be any other reserved borrows) of this value
-          and replace the reserved borrow with a mutable borrow (as well as the shared
-          loan with a mutable loan).
+          When evaluating a two-phase mutable borrow we first introduce a reserved
+          borrow which behaves like a shared borrow until the moment we actually *use*
+          the borrow: at this point, we end all the other shared borrows (and reserved
+          borrows - though there shouldn't be any other reserved borrows in practice)
+          of this value and replace the reserved borrow with a mutable borrow (as well as
+          the shared loan with a mutable loan).
           
           A simple use case of two-phase borrows:
           {[
@@ -188,22 +188,29 @@ and borrow_content =
             v.push(v.len());
           ]}
           
-          This gets desugared to (something similar to) the following MIR:
+          Without two-phase borrows, this gets desugared to (something similar to)
+          the following MIR:
           {[
             v = Vec::new();
             v1 = &mut v;
             v2 = &v; // We need this borrow, but v has already been mutably borrowed!
             l = Vec::len(move v2); // We need v2 here, and v1 *below*
-            Vec::push(move v1, move l); // In practice, v1 gets promoted only here
+            Vec::push(move v1, move l);
+          ]}
+
+          With two-phase borrows we get this:
+          {[
+            v = Vec::new();
+            v1 = &two-phase mut v; // v1 is a reserved borrow, and v is *shared*
+            v2 = &v; // v is shared, so we can (immutably) borrow through v2
+            l = Vec::len(move v2); // We use v2 here
+            Vec::push(move v1, move l); // v1 gets promoted to a mutable borrow here
           ]}
        *)
 
 and loan_content =
   | SharedLoan of loan_id_set * typed_value
   | MutLoan of loan_id
-      (** TODO: we might want to add a set of borrow ids (useful for reserved
-          borrows, and extremely useful when giving shared values to abstractions).
-       *)
 
 (** "Meta"-value: information we store for the synthesis.
 
@@ -346,9 +353,15 @@ type aproj =
   | AProjLoans of symbolic_value * (msymbolic_value * aproj) list
       (** A projector of loans over a symbolic value.
       
-          Note that the borrows of a symbolic value may be spread between
-          different abstractions, meaning that the projector of loans might
-          receive *several* (symbolic) given back values.
+          Whenever we call a function, we introduce a symbolic value for
+          the returned value. We insert projectors of loans over this
+          symbolic value in the abstractions introduced by this function
+          call: those projectors allow to insert the proper loans in the
+          various abstractions whenever symbolic borrows get expanded.
+
+          The borrows of a symbolic value may be spread between different
+          abstractions, meaning that *one* projector of loans might receive
+          *several* (symbolic) given back values.
           
           This is the case in the following example:
           {[
@@ -483,13 +496,16 @@ class ['self] map_typed_avalue_base =
 *)
 type avalue =
   | AAdt of adt_avalue
-  | ABottom
+  | ABottom (* TODO: remove once we change the way internal borrows are ended *)
   | ALoan of aloan_content
   | ABorrow of aborrow_content
   | ASymbolic of aproj
   | AIgnored
       (** A value which doesn't contain borrows, or which borrows we
-          don't own and thus ignore *)
+          don't own and thus ignore.
+
+          In the comments, we display it as [_].
+       *)
 
 and adt_avalue = {
   variant_id : (VariantId.id option[@opaque]);
@@ -498,17 +514,19 @@ and adt_avalue = {
 
 (** A loan content as stored in an abstraction.
 
+    We use the children avalues for synthesis purposes: though not necessary
+    to maintain the borrow graph, we maintain a structured representation of
+    the avalues to synthesize values for the backward functions in the translation.
+
     Note that the children avalues are independent of the parent avalues.
     For instance, the child avalue contained in an {!AMutLoan} will likely
     contain other, independent loans.
-    Keeping track of the hierarchy is not necessary to maintain the borrow graph
-    (which is the primary role of the abstractions), but it is necessary
-    to properly instantiate the backward functions when generating the pure
-    translation.
 *)
 and aloan_content =
   | AMutLoan of loan_id * typed_avalue
       (** A mutable loan owned by an abstraction.
+
+          The avalue is the child avalue.
          
           Example:
           ========
@@ -528,6 +546,8 @@ and aloan_content =
        *)
   | ASharedLoan of loan_id_set * typed_value * typed_avalue
       (** A shared loan owned by an abstraction.
+
+          The avalue is the child avalue.
 
           Example:
           ========
@@ -553,28 +573,55 @@ and aloan_content =
           we gave back to them, so that we can correctly instantiate
           backward functions.
           
+          [given_back]: stores the projected given back value (useful when
+          there are nested borrows: ending a loan might consume borrows which
+          need to be projected in the abstraction).
+
           Rk.: *DO NOT* use [visit_AEndedMutLoan]. If we update the order of
           the arguments and you forget to swap them at the level of
           [visit_AEndedMutLoan], you will not notice it.          
       
-          Example:
-          ========
+          Example 1:
+          ==========
           {[
-            abs0 { a_mut_loan l0 ⊥ }
+            abs0 { a_mut_loan l0 _ }
             x -> mut_borrow l0 (U32 3)
           ]}
           
           After ending [l0]:
           
           {[
-            abs0 { a_ended_mut_loan { given_back = U32 3; child = ⊥; }
+            abs0 { a_ended_mut_loan { child = _; given_back = _; given_back_meta = U32 3; }
+            x -> ⊥
+          ]}
+
+          Example 2 (nested borrows):
+          ===========================
+          {[
+            abs0 { a_mut_loan l0 _ }
+            ... // abstraction containing a_mut_loan l1
+            x -> mut_borrow l0 (mut_borrow l1 (U32 3))
+          ]}
+
+          After ending [l0]:
+
+          {[
+            abs0 {
+              a_ended_mut_loan {
+                child = _;
+                given_back = a_mut_borrow l1 _;
+                given_back_meta = (mut_borrow l1 (U32 3));
+              }
+            }
+            ...
             x -> ⊥
           ]}
        *)
   | AEndedSharedLoan of typed_value * typed_avalue
-      (** Similar to {!AEndedMutLoan} but in this case there are no avalues to
-          give back. We keep the shared value because it now behaves as a
-          "regular" value (which contains borrows we might want to end...).
+      (** Similar to {!AEndedMutLoan} but in this case we don't consume given
+          back values when the loan ends. We remember the shared value because
+          it now behaves as a "regular" value (which might contain borrows we need
+          to keep track of...).
        *)
   | AIgnoredMutLoan of loan_id option * typed_avalue
       (** An ignored mutable loan.
@@ -584,7 +631,7 @@ and aloan_content =
           you have a borrow of type [&'a mut &'b mut], in the abstraction 'b,
           the outer loan is ignored, however you need to keep track of it so
           that when ending the borrow corresponding to 'a you can correctly
-          project on the inner value).
+          project on the inner given back value).
 
           Note that we need to do so only for borrows consumed by parent
           abstractions, hence the optional loan id.
@@ -595,10 +642,24 @@ and aloan_content =
             fn f<'a,'b>(...) -> &'a mut &'b mut u32;
             let x = f(...);
 
-            > abs'a { a_mut_loan l0 (a_ignored_mut_loan l1 ⊥) }
-            > abs'b { a_ignored_mut_loan l0 (a_mut_loan l1 ⊥) }
+            > abs'a { a_mut_loan l0 (a_ignored_mut_loan None _) _ }
+            > abs'b { a_ignored_mut_loan (Some l0) (a_mut_loan l1 _) }
             > x -> mut_borrow l0 (mut_borrow l1 @s1)
           ]}
+
+          If we end [l0]:
+          {[
+            abs'a { ... }
+            abs'b {
+              a_ended_ignored_mut_loan {
+                child = a_mut_loan l1 _;
+                given_back = a_mut_borrow l1 _;
+                given_back_meta = mut_borrow l1 @s1
+              }
+            }
+            x -> ⊥
+          ]}
+
        *)
   | AEndedIgnoredMutLoan of {
       child : typed_avalue;
@@ -606,9 +667,10 @@ and aloan_content =
       given_back_meta : mvalue;
     }
       (** Similar to {!AEndedMutLoan}, for ignored loans.
+          See the comments for {!AIgnoredMutLoan}.
 
-           Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan].
-           See the comment for {!AEndedMutLoan}.
+          Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan] (for the reason why,
+          see the comments for {!AEndedMutLoan}).
        *)
   | AIgnoredSharedLoan of typed_avalue
       (** An ignored shared loan.
@@ -619,20 +681,17 @@ and aloan_content =
             fn f<'a,'b>(...) -> &'a &'b u32;
             let x = f(...);
 
-            > abs'a { a_shared_loan {l0} (shared_borrow l1) (a_ignored_shared_loan ⊥) }
-            > abs'b { a_ignored_shared_loan (a_shared_loan {l1} @s1 ⊥) }
+            > abs'a { a_shared_loan {l0} (shared_borrow l1) (a_ignored_shared_loan _) }
+            > abs'b { a_ignored_shared_loan (a_shared_loan {l1} @s1 _) }
             > x -> shared_borrow l0
           ]}
        *)
 
-(** Note that when a borrow content is ended, it is replaced by ⊥ (while
-    we need to track ended loans more precisely, especially because of their
-    children values).
-
-    Note that contrary to {!aloan_content}, here the children avalues are
+(** Note that contrary to {!aloan_content}, here the children avalues are
     not independent of the parent avalues. For instance, a value
     [AMutBorrow (_, AMutBorrow (_, ...)] (ignoring the types) really is
-    to be seen like a [mut_borrow ... (mut_borrow ...)].
+    to be seen like a [mut_borrow ... (mut_borrow ...)] (i.e., it is a nested
+    borrow).
     
     TODO: be more precise about the ignored borrows (keep track of the borrow
     ids)?
@@ -656,7 +715,7 @@ and aborrow_content =
 
             > x -> mut_loan l0
             > px -> ⊥
-            > abs0 { a_mut_borrow l0 (U32 0) }
+            > abs0 { a_mut_borrow l0 (U32 0) _ }
           ]}
      *)
   | ASharedBorrow of borrow_id
@@ -674,7 +733,7 @@ and aborrow_content =
 
             > x -> shared_loan {l0} (U32 0)
             > px -> ⊥
-            > abs0 { a_shared_borrow l0 }
+            > abs0 { a_shared_borrow l0 _ }
           ]}
      *)
   | AIgnoredMutBorrow of borrow_id option * typed_avalue
@@ -688,7 +747,7 @@ and aborrow_content =
           abstractions (hence the optional borrow id).
           
           Rem.: we don't have an equivalent for shared borrows because if
-          we ignore a shared borrow we don't need keep track it (we directly
+          we ignore a shared borrow we don't need to keep track it (we directly
           use {!AProjSharedBorrow} to project the shared value).
 
           TODO: the explanations below are obsolete
@@ -707,8 +766,8 @@ and aborrow_content =
             > x -> mut_loan l0
             > px -> mut_loan l1
             > ppx -> ⊥
-            > abs'a { a_mut_borrow l1 (a_ignored_mut_borrow None (U32 0)) } // TODO: duplication
-            > abs'b {parents={abs'a}} { a_ignored_mut_borrow (Some l1) (a_mut_borrow l0 (U32 0)) }
+            > abs'a { a_mut_borrow l1 (a_ignored_mut_borrow None _) }
+            > abs'b {parents={abs'a}} { a_ignored_mut_borrow (Some l1) (a_mut_borrow l0 _) }
 
             ... // abs'a ends
 
@@ -716,8 +775,10 @@ and aborrow_content =
             > px -> @s0
             > ppx -> ⊥
             > abs'b {
-            >   a_ended_ignored_mut_borrow (a_proj_loans (@s0 <: &'b mut u32)) // <-- loan projector
-            >                              (a_mut_borrow l0 (U32 0))
+            >   a_ended_ignored_mut_borrow {
+            >     child = a_mut_borrow l0 _;
+            >     given_back = a_proj_loans (@s0 <: &'b mut u32) // <-- loan projector
+            >   }
             > }
 
             ... // [@s0] gets expanded to [&mut l2 @s1]
@@ -726,43 +787,23 @@ and aborrow_content =
             > px -> &mut l2 @s1
             > ppx -> ⊥
             > abs'b {
-            >   a_ended_ignored_mut_borrow (a_mut_loan l2) // <-- loan l2 is here
-            >                              (a_mut_borrow l0 (U32 0))
+            >   a_ended_ignored_mut_borrow {
+            >     child = a_mut_borrow l0 _;
+            >     given_back = a_mut_loan l2 _;
+            >   }
             > }
 
           ]}
 
-          Note that we could use AIgnoredMutLoan in the case the borrow id is not
-          None, which would allow us to simplify the rules (to not have rules
+          Note that we could use [AIgnoredMutLoan] in the case the borrow id is not
+          [None], which would allow us to simplify the rules (to not have rules
           to specifically handle the case of AIgnoredMutBorrow with Some borrow
           id) and also remove the AEndedIgnoredMutBorrow variant.
-          For now, the rules are implemented and it allows us to make the avalues
-          more precise and clearer, so we will keep it that way.
-   
-          TODO: this is annoying, we are duplicating information. Maybe we
-          could introduce an "Ignored" value? We have to pay attention to
-          two things:
-          - introducing ⊥ when ignoring a value is not always possible, because
-            we check whether the borrowed value contains ⊥ when giving back a
-            borrowed value (if it is the case we give back ⊥, otherwise we
-            introduce a symbolic value). This is necessary when ending nested
-            borrows with the same lifetime: when ending the inner borrow we
-            actually give back a value, however when ending the outer borrow
-            we need to give back ⊥.
-            TODO: actually we don't do that anymore, we check if the borrowed
-            avalue contains ended regions (which is cleaner and more robust).
-          - we may need to remember the precise values given to the
-            abstraction so that we can properly call the backward functions
-            when generating the pure translation.
+          For now, we prefer to be more precise that required.
        *)
   | AEndedMutBorrow of msymbolic_value * typed_avalue
       (** The sole purpose of {!AEndedMutBorrow} is to store the (symbolic) value
           that we gave back as a meta-value, to help with the synthesis.
-
-          We also remember the child {!avalue} because this structural information
-          is useful for the synthesis (but not for the symbolic execution):
-          in practice the child value should only contain ended borrows, ignored
-          values, bottom values, etc.
        *)
   | AEndedSharedBorrow
       (** We don't really need {!AEndedSharedBorrow}: we simply want to be
@@ -770,14 +811,14 @@ and aborrow_content =
        *)
   | AEndedIgnoredMutBorrow of {
       child : typed_avalue;
-      given_back_loans_proj : typed_avalue;
+      given_back : typed_avalue;
       given_back_meta : msymbolic_value;
           (** [given_back_meta] is used to store the (symbolic) value we gave back
               upon ending the borrow.
 
               Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan].
               See the comment for {!AEndedMutLoan}.
-          *)
+           *)
     }  (** See the explanations for {!AIgnoredMutBorrow} *)
   | AProjSharedBorrow of abstract_shared_borrows
       (** A projected shared borrow.
@@ -789,8 +830,11 @@ and aborrow_content =
 
           Example:
           ========
-          Below, when calling [f], we need to introduce one shared borrow per
-          borrow in the argument.
+          Below, when calling [f], we need to introduce one shared re-borrow per
+          *inner* borrow (the borrows for 'b and 'c but not 'a) consumed by the
+          function. Those reborrows are introduced by projecting over the shared
+          value. For each one of those, we introduce an [abstract_shared_borrow]
+          in the abstraction.
           {[
             fn f<'a,'b>(pppx : &'a &'b &'c mut u32);
 
@@ -812,20 +856,22 @@ and aborrow_content =
 
           Rem.: we introduce {!AProjSharedBorrow} only when we project a shared
           borrow *which is ignored* (i.e., the shared borrow doesn't belong to
-          the current abstraction). The reason is that if the shared borrow
-          belongs to the abstraction, then by introducing a shared borrow inside
-          the abstraction we make sure the whole value is shared (and thus immutable)
-          for as long as the abstraction lives, meaning reborrowing subvalues
-          is redundant. However, if the borrow doesn't belong to the abstraction,
-          we need to project the shared values because it may contain some
-          borrows which *do* belong to the current abstraction.
+          the current abstraction, in which case we still project the shared
+          value). The reason is that if the shared borrow belongs to the
+          abstraction, then by introducing a shared borrow inside the
+          abstraction we make sure the whole value is shared (and thus
+          immutable) for as long as the abstraction lives, meaning reborrowing
+          subvalues is redundant. However, if the borrow doesn't belong to the
+          abstraction, we need to project the shared values because it may
+          contain some borrows which *do* belong to the current abstraction.
 
           TODO: maybe we should factorized [ASharedBorrow] and [AProjSharedBorrow].
        *)
 
-(* TODO: the type of avalues doesn't make sense for loan avalues: they currently
-   are typed as [& (mut) T] instead of [T]...
-*)
+(** Rem.: the of avalues is not to be understood in the same manner as for values.
+    To be more precise, shared aloans have the borrow type (i.e., a shared aloan
+    has type [& (mut) T] instead of [T]).
+ *)
 and typed_avalue = { value : avalue; ty : rty }
 [@@deriving
   show,

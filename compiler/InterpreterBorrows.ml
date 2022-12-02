@@ -163,6 +163,8 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
         | V.AMutBorrow (bid, _) ->
             (* Check if this is the borrow we are looking for *)
             if bid = l then (
+              (* TODO: treat this case differently. We should not introduce
+                 a bottom value. *)
               (* When ending a mut borrow, there are two cases:
                * - in the general case, we have to end the whole abstraction
                *   (and thus raise an exception to signal that to the caller)
@@ -181,7 +183,8 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
                * Also note that, as we are moving the borrowed value inside the
                * abstraction (and not really giving the value back to the context)
                * we do not insert {!AEndedMutBorrow} but rather {!ABottom} *)
-              V.ABottom)
+              raise (Failure "Unimplemented")
+              (* V.ABottom *))
             else
               (* Update the outer borrows before diving into the child avalue *)
               let outer = update_outer_borrows outer (Borrow bid) in
@@ -201,7 +204,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
         | V.AIgnoredMutBorrow (_, _)
         | V.AEndedMutBorrow _
         | V.AEndedIgnoredMutBorrow
-            { given_back_loans_proj = _; child = _; given_back_meta = _ }
+            { given_back = _; child = _; given_back_meta = _ }
         | V.AEndedSharedBorrow ->
             (* Nothing special to do *)
             super#visit_ABorrow outer bc
@@ -337,7 +340,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                    * the value... Think about a more elegant way. *)
                   let given_back_meta = as_symbolic nv.value in
                   (* The loan projector *)
-                  let given_back_loans_proj =
+                  let given_back =
                     mk_aproj_loans_value_from_symbolic_value abs.regions sv
                   in
                   (* Continue giving back in the child value *)
@@ -345,7 +348,7 @@ let give_back_value (config : C.config) (bid : V.BorrowId.id)
                   (* Return *)
                   V.ABorrow
                     (V.AEndedIgnoredMutBorrow
-                       { given_back_loans_proj; child; given_back_meta })
+                       { given_back; child; given_back_meta })
               | _ -> raise (Failure "Unreachable")
             else
               (* Continue exploring *)
@@ -1708,8 +1711,7 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
             (* Just explore the child *)
             list_avalues false push_fail child_av
         | V.AEndedIgnoredMutBorrow
-            { child = child_av; given_back_loans_proj = _; given_back_meta = _ }
-          ->
+            { child = child_av; given_back = _; given_back_meta = _ } ->
             (* We don't support nested borrows for now *)
             assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
             (* Just explore the child *)

@@ -561,9 +561,9 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | V.AIgnoredMutBorrow (_opt_bid, av), T.Mut ->
                 assert (av.V.ty = ref_ty)
             | ( V.AEndedIgnoredMutBorrow
-                  { given_back_loans_proj; child; given_back_meta = _ },
+                  { given_back; child; given_back_meta = _ },
                 T.Mut ) ->
-                assert (given_back_loans_proj.V.ty = ref_ty);
+                assert (given_back.V.ty = ref_ty);
                 assert (child.V.ty = ref_ty)
             | V.AProjSharedBorrow _, T.Shared -> ()
             | _ -> raise (Failure "Inconsistent context"))

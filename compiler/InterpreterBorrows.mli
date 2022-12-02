@@ -215,14 +215,23 @@ type merge_duplicates_funcs = {
       abs'01 { mut_borrow l0, mut_borrow l2 }
     ]}
 
+    Also, we merge all their regions together. For instance, if [abs'0] projects
+    region [r0] and [abs'1] projects region [r1], we pick one of the two, say [r0]
+    (the one with the smallest index in practice) and substitute [r1] with [r0]
+    in the whole context.
+
     Parameters:
     - [kind]
     - [can_end]
-    - [merge_funs]: in the case it can happen that a loan or a borrow appears in
-      both abstractions, we use those functions to merge the different occurrences
-      (such things can happen when joining environments: we might temporarily
-      duplicate borrows during the join, before merging those borrows together).
-      For instance, this happens for the following abstractions is forbidden:
+    - [merge_funs]: Those functions are used to merge borrows/loans with the
+      *same ids*. For instance, when performing environment joins we may introduce
+      abstractions which both contain loans/borrows with the same ids. When we
+      later merge those abstractions together, we need to call a merge function
+      to reconcile the borrows/loans. For instance, if both abstractions contain
+      the same shared loan [l0], we will call {!merge_ashared_borrows} to derive
+      a shared value for the merged shared loans.
+
+      For instance, this happens for the following abstractions:
       {[
         abs'0 { mut_borrow l0, mut_loan l1 } // mut_borrow l0 !
         abs'1 { mut_borrow l0, mut_loan l2 } // mut_borrow l0 !
