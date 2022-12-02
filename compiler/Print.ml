@@ -264,7 +264,7 @@ module Values = struct
   and aborrow_content_to_string (fmt : value_formatter) (bc : V.aborrow_content)
       : string =
     match bc with
-    | AMutBorrow (_, bid, av) ->
+    | AMutBorrow (bid, av) ->
         "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_avalue_to_string fmt av
         ^ ")"

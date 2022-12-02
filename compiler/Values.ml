@@ -638,7 +638,7 @@ and aloan_content =
     ids)?
 *)
 and aborrow_content =
-  | AMutBorrow of mvalue * borrow_id * typed_avalue
+  | AMutBorrow of borrow_id * typed_avalue
       (** A mutable borrow owned by an abstraction.
       
           Is used when an abstraction "consumes" borrows, when giving borrows
@@ -658,17 +658,6 @@ and aborrow_content =
             > px -> ⊥
             > abs0 { a_mut_borrow l0 (U32 0) }
           ]}
-          
-          The meta-value stores the initial value on which the projector was
-          applied, which reduced to this mut borrow. This meta-information
-          is only used for the synthesis.
-          Rem.: we don't use the meta-value for now, but might need it when
-          using nested borrows: if we end an *internal* borrow, this meta
-          value is propagated to the corresponding loan (we need to know
-          what the loan consumed, for the synthesis). We could also generate
-          a fresh symbolic value upon ending the internal borrow (as is
-          done in the regular case), which would allow us to remove the
-          meta-value altogether.
      *)
   | ASharedBorrow of borrow_id
       (** A shared borrow owned by an abstraction.

@@ -130,14 +130,12 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
             let bc =
               match (bc, kind) with
               | V.MutBorrow (bid, bv), T.Mut ->
-                  (* Remember the borrowed value we are about to project as a meta-value *)
-                  let mv = bv in
                   (* Apply the projection on the borrowed value *)
                   let bv =
                     apply_proj_borrows check_symbolic_no_ended ctx
                       fresh_reborrow regions ancestors_regions bv ref_ty
                   in
-                  V.AMutBorrow (mv, bid, bv)
+                  V.AMutBorrow (bid, bv)
               | V.SharedBorrow bid, T.Shared ->
                   (* Rem.: we don't need to also apply the projection on the
                      borrowed value, because for as long as the abstraction

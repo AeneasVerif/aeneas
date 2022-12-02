@@ -476,28 +476,22 @@ module type Matcher = sig
 
   (** Parameters:
       [ty0]
-      [mv0]
       [bid0]
       [av0]
       [ty1]
-      [mv1]
       [bid1]
       [av1]
       [ty]: result of matching ty0 and ty1
-      [mv]: result of matching mv0 and mv1
       [av]: result of matching av0 and av1
    *)
   val match_amut_borrows :
     T.rty ->
-    V.mvalue ->
     V.borrow_id ->
     V.typed_avalue ->
     T.rty ->
-    V.mvalue ->
     V.borrow_id ->
     V.typed_avalue ->
     T.rty ->
-    V.mvalue ->
     V.typed_avalue ->
     V.typed_avalue
 
@@ -692,16 +686,9 @@ module Match (M : Matcher) = struct
         match (bc0, bc1) with
         | ASharedBorrow bid0, ASharedBorrow bid1 ->
             M.match_ashared_borrows v0.V.ty bid0 v1.V.ty bid1 ty
-        | AMutBorrow (mv0, bid0, av0), AMutBorrow (mv1, bid1, av1) ->
-            (* The meta-value should be the value consumed by the abstracion.
-               This only makes sense if the abstraction was introduced because
-               of a function call (we use it for the translation).
-               TODO: make it optional?
-            *)
-            let mv = mk_bottom mv0.V.ty in
+        | AMutBorrow (bid0, av0), AMutBorrow (bid1, av1) ->
             let av = match_arec av0 av1 in
-            M.match_amut_borrows v0.V.ty mv0 bid0 av0 v1.V.ty mv1 bid1 av1 ty mv
-              av
+            M.match_amut_borrows v0.V.ty bid0 av0 v1.V.ty bid1 av1 ty av
         | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
             (* The abstractions are destructured: we shouldn't get there *)
             raise (Failure "Unexpected")
@@ -894,7 +881,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (bid : V.borrow_id) (bv : V.typed_value) : V.typed_avalue =
         let bv_ty = ety_no_regions_to_rty bv.V.ty in
-        let value = V.ABorrow (V.AMutBorrow (bv, bid, mk_aignored bv_ty)) in
+        let value = V.ABorrow (V.AMutBorrow (bid, mk_aignored bv_ty)) in
         { V.value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow bid0 bv0; mk_aborrow bid1 bv1 ] in
@@ -1026,7 +1013,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
 
   let match_distinct_aadts _ _ _ _ _ = raise (Failure "Unreachable")
   let match_ashared_borrows _ _ _ _ = raise (Failure "Unreachable")
-  let match_amut_borrows _ _ _ _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
+  let match_amut_borrows _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
   let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
   let match_amut_loans _ _ _ _ _ _ _ _ = raise (Failure "Unreachable")
   let match_avalues _ _ = raise (Failure "Unreachable")
@@ -1053,18 +1040,15 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
   let module M = Match (JM) in
   (* TODO: why not simply call: M.match_type_avalues? (or move this code to
      MakeJoinMatcher?) *)
-  let merge_amut_borrows id ty0 (mv0 : V.typed_value) child0 _ty1
-      (mv1 : V.typed_value) child1 =
+  let merge_amut_borrows id ty0 child0 _ty1 child1 =
     (* Sanity checks *)
     assert (is_aignored child0.V.value);
     assert (is_aignored child1.V.value);
-    assert (mv0.V.ty = mv1.V.ty);
 
     (* Same remarks as for [merge_amut_loans] *)
     let ty = ty0 in
     let child = child0 in
-    let mv = mk_bottom mv0.ty in
-    let value = V.ABorrow (V.AMutBorrow (mv, id, child)) in
+    let value = V.ABorrow (V.AMutBorrow (id, child)) in
     { V.value; ty }
   in
 
@@ -1486,9 +1470,9 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
     let value = V.ABorrow (V.ASharedBorrow bid) in
     { V.value; ty }
 
-  let match_amut_borrows _ty0 _mv0 bid0 _av0 _ty1 _mv1 bid1 _av1 ty mv av =
+  let match_amut_borrows _ty0 bid0 _av0 _ty1 bid1 _av1 ty av =
     let bid = match_bid bid0 bid1 in
-    let value = V.ABorrow (V.AMutBorrow (mv, bid, av)) in
+    let value = V.ABorrow (V.AMutBorrow (bid, av)) in
     { V.value; ty }
 
   let match_ashared_loans _ty0 ids0 _v0 _av0 _ty1 ids1 _v1 _av1 ty v av =
