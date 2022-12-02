@@ -142,19 +142,15 @@ type merge_duplicates_funcs = {
   merge_amut_borrows :
     V.borrow_id ->
     T.rty ->
-    V.mvalue ->
     V.typed_avalue ->
     T.rty ->
-    V.mvalue ->
     V.typed_avalue ->
     V.typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
-          - [mv0]
           - [child0]
           - [ty1]
-          - [mv1]
           - [child1]
 
           The children should be [AIgnored].

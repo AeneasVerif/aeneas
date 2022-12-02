@@ -949,7 +949,7 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
     texpression option =
   match bc with
-  | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
+  | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
       raise (Failure "Unreachable")
   | AEndedMutBorrow (_, _) ->
       (* We collect consumed values: ignore *)
@@ -1089,7 +1089,7 @@ and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
 and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match bc with
-  | V.AMutBorrow (_, _, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
+  | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
       raise (Failure "Unreachable")
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta-symbolic-value *)

@@ -143,22 +143,24 @@ let () =
    * command-line arguments *)
   (* By setting a level for the main_logger_handler, we filter everything *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
-  main_log#set_level EL.Info;
-  llbc_of_json_logger#set_level EL.Info;
-  pre_passes_log#set_level EL.Info;
-  interpreter_log#set_level EL.Info;
-  statements_log#set_level EL.Info;
-  paths_log#set_level EL.Info;
-  expressions_log#set_level EL.Info;
-  expansion_log#set_level EL.Info;
-  projectors_log#set_level EL.Info;
-  borrows_log#set_level EL.Info;
-  invariants_log#set_level EL.Info;
-  pure_utils_log#set_level EL.Info;
-  symbolic_to_pure_log#set_level EL.Info;
-  pure_micro_passes_log#set_level EL.Info;
-  pure_to_extract_log#set_level EL.Info;
-  translate_log#set_level EL.Info;
+  let level = EL.Info in
+  main_log#set_level level;
+  llbc_of_json_logger#set_level level;
+  pre_passes_log#set_level level;
+  interpreter_log#set_level level;
+  statements_log#set_level level;
+  loops_log#set_level level;
+  paths_log#set_level level;
+  expressions_log#set_level level;
+  expansion_log#set_level level;
+  projectors_log#set_level level;
+  borrows_log#set_level level;
+  invariants_log#set_level level;
+  pure_utils_log#set_level level;
+  symbolic_to_pure_log#set_level level;
+  pure_micro_passes_log#set_level level;
+  pure_to_extract_log#set_level level;
+  translate_log#set_level level;
   let log = main_log in
 
   (* Load the module *)
