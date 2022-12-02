@@ -674,9 +674,6 @@ module Match (M : Matcher) = struct
     let match_arec = match_typed_avalues ctx in
     let ty = M.match_rtys v0.V.ty v1.V.ty in
     match (v0.V.value, v1.V.value) with
-    | V.APrimitive _, V.APrimitive _ ->
-        (* We simply ignore - those are actually not used *)
-        mk_aignored ty
     | V.AAdt av0, V.AAdt av1 ->
         if av0.variant_id = av1.variant_id then
           let fields = List.combine av0.field_values av1.field_values in

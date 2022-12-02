@@ -875,7 +875,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
 (** Explore an abstraction value and convert it to a consumed value
     by collecting all the meta-values from the ended *loans*.
 
-    Consumed values are rvalues, because when an abstraction ends, we
+    Consumed values are rvalues because when an abstraction ends we
     introduce a call to a backward function in the synthesized program,
     which takes as inputs those consumed values:
     {[
@@ -892,7 +892,6 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
   let translate = typed_avalue_to_consumed ctx ectx in
   let value =
     match av.value with
-    | APrimitive _ -> raise (Failure "Unreachable")
     | AAdt adt_v -> (
         (* Translate the field values *)
         let field_values = List.filter_map translate adt_v.field_values in
@@ -1027,7 +1026,6 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   let ctx, value =
     match av.value with
-    | APrimitive _ -> raise (Failure "Unreachable")
     | AAdt adt_v -> (
         (* Translate the field values *)
         (* For now we forget the meta-place information so that it doesn't get used

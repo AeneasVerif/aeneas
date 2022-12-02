@@ -102,8 +102,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
   else
     let value : V.avalue =
       match (v.V.value, ty) with
-      | V.Primitive cv, (T.Bool | T.Char | T.Integer _ | T.Str) ->
-          V.APrimitive cv
+      | V.Primitive _, (T.Bool | T.Char | T.Integer _ | T.Str) -> V.AIgnored
       | V.Adt adt, T.Adt (id, region_params, tys) ->
           (* Retrieve the types of the fields *)
           let field_types =
