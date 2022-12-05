@@ -388,12 +388,9 @@ Qed.
 
 (* A first tactic which tries to abstract over the "S_sub_bounded" lemma. It :
  - Adds the boundary prerequisites as additional goals.
- - Tries to resolve them automatically with "lia", perhaps with some "simpl/unfold" applications.
- - Destruct the obtained existential formula into x and H.
- - Destruct H into Hr, the rewrite rule Hr and Hx, the properties on x.
- - Rewrites Hr then "clear" it.
-
- TODO: It should let unresolved goals instead of adding temporary existential variables.
+ - Tries to resolve them automatically with "lia", some "simpl" applications and the boundaries of a & b.
+ - Rewrites the main goal with "S_sub_bounded" existential variable.
+ - "clear" some hypothesis and try monadic simplifications.
  *)
 Ltac rewrite_scalar_sub a b :=
   (* Getting the scalar type *)
@@ -408,11 +405,8 @@ Ltac rewrite_scalar_sub a b :=
     assert (Ha := S_scalar_bounds a);
     assert (Hb := S_scalar_bounds b);
     simpl in Ha, Hb |- *;
-    lia || (let B1' := fresh "B1'" in
-            evar (B1': scalar_min T <= (to_Z a) - (to_Z b));
-            exact B1')
-  | [ |- _ ] => idtac
-  end;
+    try lia
+  | [ |- _ ] =>
 
   (* Same for the upper bound
      TODO: Factorize with the part above,
@@ -426,16 +420,7 @@ Ltac rewrite_scalar_sub a b :=
     assert (Ha := S_scalar_bounds a);
     assert (Hb := S_scalar_bounds b);
     simpl in Ha, Hb |- *;
-    lia || (let B2' := fresh "B2'" in
-            evar (B2': (to_Z a) - (to_Z b) <= scalar_max T);
-            trivial)
-  | [ |- _ ] => idtac
-  end;
-
-  (* Do not touch B1 nor B2 *)
-  match goal with
-  | [ |- scalar_min T <= (to_Z a) - (to_Z b) ] => idtac
-  | [ |- (to_Z a) - (to_Z b) <= scalar_max T ] => idtac
+    try lia
   | [ |- _ ] =>
 
   (* Apply the theorem about subtraction *)
@@ -473,7 +458,7 @@ Ltac rewrite_scalar_sub a b :=
   try rewrite res_bind_id;
   try rewrite res_bind_value
 
-  end.
+  end end.
 
 Lemma add_assoc {a} :
   match (x <- usize_sub a (1%usize); Return x) with
@@ -483,7 +468,8 @@ Lemma add_assoc {a} :
   end.
 Proof.
 rewrite_scalar_sub a (1%usize).
-Show Existentials.
+- admit.
+- admit.
 Admitted.
 
 End Primitives_Ext.
