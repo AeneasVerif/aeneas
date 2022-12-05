@@ -1,4 +1,5 @@
 
+(* TODO: Cleanup imports and scopes *)
 Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
@@ -15,6 +16,7 @@ Require Import Coq.Program.Equality.
 Require Import Coq.Logic.ProofIrrelevance.
 Require Import Coq.Bool.Bool.
 Import ListNotations.
+Require Import Coq.Unicode.Utf8.
 
 Module Primitives_Ext.
 
@@ -138,6 +140,8 @@ Definition bounded_vec_push_back {T} (v: vec T) (x: T) (b: vec_length v < usize_
     | Arithmetic utilities |
     +----------------------+
 *)
+
+Definition scalar_ty_of {ty} (n: scalar ty) := ty.
 
 (* Comparisons *)
 
@@ -381,5 +385,105 @@ Qed.
     | Tactics |
     +---------+
 *)
+
+(* A first tactic which tries to abstract over the "S_sub_bounded" lemma. It :
+ - Adds the boundary prerequisites as additional goals.
+ - Tries to resolve them automatically with "lia", perhaps with some "simpl/unfold" applications.
+ - Destruct the obtained existential formula into x and H.
+ - Destruct H into Hr, the rewrite rule Hr and Hx, the properties on x.
+ - Rewrites Hr then "clear" it.
+
+ TODO: It should let unresolved goals instead of adding temporary existential variables.
+ *)
+Ltac rewrite_scalar_sub a b :=
+  (* Getting the scalar type *)
+  let T := constr:(scalar_ty_of a) in
+
+  (* Proving or supposing the lower bound *)
+  let B1 := fresh "B1" in
+  assert (B1: scalar_min T <= (to_Z a) - (to_Z b));
+  match goal with [ |- scalar_min T <= (to_Z a) - (to_Z b) ] =>
+    let Ha := fresh "Ha" in
+    let Hb := fresh "Hb" in
+    assert (Ha := S_scalar_bounds a);
+    assert (Hb := S_scalar_bounds b);
+    simpl in Ha, Hb |- *;
+    lia || (let B1' := fresh "B1'" in
+            evar (B1': scalar_min T <= (to_Z a) - (to_Z b));
+            exact B1')
+  | [ |- _ ] => idtac
+  end;
+
+  (* Same for the upper bound
+     TODO: Factorize with the part above,
+     They are separated only because "lia" gives no partial progress on the proof.
+  *)
+  let B2 := fresh "B2" in
+  assert (B2: (to_Z a) - (to_Z b) <= scalar_max T);
+  match goal with [ |- (to_Z a) - (to_Z b) <= scalar_max T ] =>
+    let Ha := fresh "Ha" in
+    let Hb := fresh "Hb" in
+    assert (Ha := S_scalar_bounds a);
+    assert (Hb := S_scalar_bounds b);
+    simpl in Ha, Hb |- *;
+    lia || (let B2' := fresh "B2'" in
+            evar (B2': (to_Z a) - (to_Z b) <= scalar_max T);
+            trivial)
+  | [ |- _ ] => idtac
+  end;
+
+  (* Do not touch B1 nor B2 *)
+  match goal with
+  | [ |- scalar_min T <= (to_Z a) - (to_Z b) ] => idtac
+  | [ |- (to_Z a) - (to_Z b) <= scalar_max T ] => idtac
+  | [ |- _ ] =>
+
+  (* Apply the theorem about subtraction *)
+  let H := fresh "H" in
+  let x := fresh "x" in
+  destruct (S_sub_bounded a b (conj B1 B2)) as (x, H);
+
+  (* Remove previous bounds *)
+  clear B1 B2;
+
+  (* Obtain the properties about the result *)
+  let Hr := fresh "Hr" in
+  let Hx := fresh "Hx" in
+  destruct H as (Hr, Hx);
+
+  (* Refine the goal to then rewrite the expression.
+     TODO: Match T to do only one try.
+  *)
+  try change (u8_sub a b) with (scalar_sub a b);
+  try change (i8_sub a b) with (scalar_sub a b);
+  try change (u16_sub a b) with (scalar_sub a b);
+  try change (i16_sub a b) with (scalar_sub a b);
+  try change (u32_sub a b)  with (scalar_sub a b);
+  try change (i32_sub a b)  with (scalar_sub a b);
+  try change (u64_sub a b) with (scalar_sub a b);
+  try change (i64_sub a b) with (scalar_sub a b);
+  try change (u128_sub a b) with (scalar_sub a b);
+  try change (i128_sub a b) with (scalar_sub a b);
+  try change (usize_sub a b) with (scalar_sub a b);
+  try change (isize_sub a b) with (scalar_sub a b);
+  rewrite Hr;
+  clear Hr;
+
+  (* Apply simplifications on the result monad *)
+  try rewrite res_bind_id;
+  try rewrite res_bind_value
+
+  end.
+
+Lemma add_assoc {a} :
+  match (x <- usize_sub a (1%usize); Return x) with
+  | Return v => ∃n, (1 + n)%nat = usize_to_nat a
+  | Fail_ OutOfFuel => False
+  | Fail_ Failure   => True
+  end.
+Proof.
+rewrite_scalar_sub a (1%usize).
+Show Existentials.
+Admitted.
 
 End Primitives_Ext.
