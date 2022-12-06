@@ -270,6 +270,9 @@ let value_has_loans_or_borrows (ctx : C.eval_ctx) (v : V.value) : bool =
 type ids_sets = {
   aids : V.AbstractionId.Set.t;
   bids : V.BorrowId.Set.t;
+      (** All the borrow/loan ids. TODO: rename to [blids] *)
+  borrow_ids : V.BorrowId.Set.t;  (** Only the borrow ids *)
+  loan_ids : V.BorrowId.Set.t;  (** Only the loan ids *)
   dids : C.DummyVarId.Set.t;
   rids : T.RegionId.Set.t;
   sids : V.SymbolicValueId.Set.t;
@@ -278,24 +281,36 @@ type ids_sets = {
 
 let compute_ids () =
   let bids = ref V.BorrowId.Set.empty in
+  let borrow_ids = ref V.BorrowId.Set.empty in
+  let loan_ids = ref V.BorrowId.Set.empty in
   let aids = ref V.AbstractionId.Set.empty in
   let dids = ref C.DummyVarId.Set.empty in
   let rids = ref T.RegionId.Set.empty in
   let sids = ref V.SymbolicValueId.Set.empty in
 
   let get_ids () =
-    { aids = !aids; bids = !bids; dids = !dids; rids = !rids; sids = !sids }
+    {
+      aids = !aids;
+      bids = !bids;
+      borrow_ids = !borrow_ids;
+      loan_ids = !loan_ids;
+      dids = !dids;
+      rids = !rids;
+      sids = !sids;
+    }
   in
   let obj =
     object
       inherit [_] C.iter_eval_ctx
       method! visit_dummy_var_id _ did = dids := C.DummyVarId.Set.add did !dids
-      method! visit_borrow_id _ id = bids := V.BorrowId.Set.add id !bids
+
+      method! visit_borrow_id _ id =
+        bids := V.BorrowId.Set.add id !bids;
+        borrow_ids := V.BorrowId.Set.add id !borrow_ids
 
       method! visit_loan_id _ id =
-        (* Actually, this is not necessary because all loans have a
-           corresponding borrow *)
-        bids := V.BorrowId.Set.add id !bids
+        bids := V.BorrowId.Set.add id !bids;
+        loan_ids := V.BorrowId.Set.add id !loan_ids
 
       method! visit_abstraction_id _ id =
         aids := V.AbstractionId.Set.add id !aids
