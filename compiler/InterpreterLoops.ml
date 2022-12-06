@@ -1274,11 +1274,13 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
            must be the same and we must join their values. Otherwise, it means we
            are not in the prefix anymore *)
         if C.DummyVarId.Set.mem b0 fixed_ids.dids then (
-          (* Still in the prefix: the values must match *)
+          (* Still in the prefix: match the values *)
           assert (b0 = b1);
-          assert (v0 = v1);
+          let b = b0 in
+          let v = M.match_typed_values ctx v0 v1 in
+          let var = C.Var (C.DummyBinder b, v) in
           (* Continue *)
-          var0 :: join_prefixes env0' env1')
+          var :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)
           join_suffixes env0 env1
     | ( (C.Var (C.VarBinder b0, v0) as var0) :: env0',
@@ -1372,15 +1374,39 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       }
   with ValueMatchFailure e -> Error e
 
-(* Very annoying: functors only take modules as inputs... *)
+(** See {!MakeCheckEquivMatcher}.
+
+    Very annoying: functors only take modules as inputs...
+ *)
 module type MatchCheckEquivState = sig
+  (** [true] if we check equivalence between contexts, [false] if we match
+      a source context with a target context. *)
+  val check_equiv : bool
+
   val ctx : C.eval_ctx
   val rid_map : T.RegionId.InjSubst.t ref
+
+  (** Substitution for the loan and borrow ids - used only if [check_equiv] is true *)
   val bid_map : V.BorrowId.InjSubst.t ref
+
+  (** Substitution for the borrow ids - used only if [check_equiv] is false *)
+  val borrow_id_map : V.BorrowId.InjSubst.t ref
+
+  (** Substitution for the loans ids - used only if [check_equiv] is false *)
+  val loan_id_map : V.BorrowId.InjSubst.t ref
+
   val sid_map : V.SymbolicValueId.InjSubst.t ref
+  val sid_to_value_map : V.typed_value V.SymbolicValueId.Map.t ref
   val aid_map : V.AbstractionId.InjSubst.t ref
 end
 
+(** An auxiliary matcher that we use for two purposes:
+    - to check if two contexts are equivalent modulo id substitution (i.e.,
+      alpha equivalent) (see {!ctxs_are_equivalent}).
+    - to compute a mapping between the borrows and the symbolic values in a
+      target context to the values and borrows in a source context (see
+      {!match_ctx_with_target}).
+ *)
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
   module MkGetSetM (Id : Identifiers.Id) = struct
     module Inj = Id.InjSubst
@@ -1415,7 +1441,8 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
   module GetSetRid = MkGetSetM (T.RegionId)
 
   let match_rid = GetSetRid.match_e S.rid_map
-  let match_ridl = GetSetRid.match_el S.rid_map
+
+  (*  let match_ridl = GetSetRid.match_el S.rid_map *)
   let match_rids = GetSetRid.match_es S.rid_map
 
   module GetSetBid = MkGetSetM (V.BorrowId)
@@ -1425,11 +1452,52 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
   let match_bidl = GetSetBid.match_el S.bid_map
   let match_bids = GetSetBid.match_es S.bid_map
 
+  let get_borrow_id =
+    if S.check_equiv then get_bid else GetSetBid.get S.borrow_id_map
+
+  let match_borrow_id =
+    if S.check_equiv then match_bid else GetSetBid.match_e S.borrow_id_map
+
+  let match_borrow_idl =
+    if S.check_equiv then match_bidl else GetSetBid.match_el S.borrow_id_map
+
+  let match_borrow_ids =
+    if S.check_equiv then match_bids else GetSetBid.match_es S.borrow_id_map
+
+  let get_loan_id =
+    if S.check_equiv then get_bid else GetSetBid.get S.loan_id_map
+
+  let match_loan_id =
+    if S.check_equiv then match_bid else GetSetBid.match_e S.loan_id_map
+
+  let match_loan_idl =
+    if S.check_equiv then match_bidl else GetSetBid.match_el S.loan_id_map
+
+  let match_loan_ids =
+    if S.check_equiv then match_bids else GetSetBid.match_es S.loan_id_map
+
   module GetSetSid = MkGetSetM (V.SymbolicValueId)
 
-  let match_sid = GetSetSid.match_e S.sid_map
-  let match_sidl = GetSetSid.match_el S.sid_map
-  let match_sids = GetSetSid.match_es S.sid_map
+  (* If we check for equivalence, we map sids to sids, otherwise we map sids
+     to values. *)
+  let match_sid =
+    if S.check_equiv then GetSetSid.match_e S.sid_map
+    else fun _ -> raise (Failure "Unexpected")
+
+  let match_value_with_sid (v : V.typed_value) (id : V.SymbolicValueId.id) :
+      unit =
+    (* Even when we don't use it, the sids map contains the fixed ids: check
+       that we are not trying to map a fixed id. *)
+    assert (not (V.SymbolicValueId.InjSubst.mem id !S.sid_map));
+
+    (* Check that we are not overriding a binding *)
+    assert (not (V.SymbolicValueId.Map.mem id !S.sid_to_value_map));
+
+    (* Add the mapping *)
+    S.sid_to_value_map := V.SymbolicValueId.Map.add id v !S.sid_to_value_map
+
+  (*  let match_sidl = GetSetSid.match_el S.sid_map *)
+  (*  let match_sids = GetSetSid.match_es S.sid_map *)
 
   module GetSetAid = MkGetSetM (V.AbstractionId)
 
@@ -1462,39 +1530,51 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
 
   let match_shared_borrows (_ty : T.ety) (bid0 : V.borrow_id)
       (bid1 : V.borrow_id) : V.borrow_id =
-    let bid = match_bid bid0 bid1 in
+    let bid = match_borrow_id bid0 bid1 in
     bid
 
   let match_mut_borrows (_ty : T.ety) (bid0 : V.borrow_id)
       (_bv0 : V.typed_value) (bid1 : V.borrow_id) (_bv1 : V.typed_value)
       (bv : V.typed_value) : V.borrow_id * V.typed_value =
-    let bid = match_bid bid0 bid1 in
+    let bid = match_borrow_id bid0 bid1 in
     (bid, bv)
 
   let match_shared_loans (_ : T.ety) (ids0 : V.loan_id_set)
       (ids1 : V.loan_id_set) (sv : V.typed_value) :
       V.loan_id_set * V.typed_value =
-    let ids = match_bids ids0 ids1 in
+    let ids = match_loan_ids ids0 ids1 in
     (ids, sv)
 
   let match_mut_loans (_ : T.ety) (bid0 : V.loan_id) (bid1 : V.loan_id) :
       V.loan_id =
-    match_bid bid0 bid1
+    match_loan_id bid0 bid1
 
   let match_symbolic_values (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) :
       V.symbolic_value =
-    let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
-    let sv_id = match_sid id0 id1 in
-    let sv_ty = match_rtys sv0.V.sv_ty sv1.V.sv_ty in
-    let sv_kind =
-      if sv0.V.sv_kind = sv1.V.sv_kind then sv0.V.sv_kind else raise Distinct
-    in
-    { V.sv_id; sv_ty; sv_kind }
+    if S.check_equiv then
+      let id0 = sv0.sv_id in
+      let sv_id = match_sid id0 id1 in
+      let sv_ty = match_rtys sv0.V.sv_ty sv1.V.sv_ty in
+      let sv_kind =
+        if sv0.V.sv_kind = sv1.V.sv_kind then sv0.V.sv_kind else raise Distinct
+      in
+      { V.sv_id; sv_ty; sv_kind }
+    else (
+      (* Update the binding for the target symbolic value *)
+      match_value_with_sid (mk_typed_value_from_symbolic_value sv0) id1;
+      (* Return - the returned value is not used, so we can return whatever *)
+      sv1)
 
-  let match_symbolic_with_other (_left : bool) (_sv : V.symbolic_value)
-      (_v : V.typed_value) : V.typed_value =
-    raise Distinct
+  let match_symbolic_with_other (left : bool) (sv : V.symbolic_value)
+      (v : V.typed_value) : V.typed_value =
+    if S.check_equiv then raise Distinct
+    else (
+      assert (not left);
+      (* Update the binding for the target symbolic value *)
+      match_value_with_sid v sv.sv_id;
+      (* Return - the returned value is not used, so we can return whatever *)
+      v)
 
   let match_bottom_with_other (_left : bool) (_v : V.typed_value) :
       V.typed_value =
@@ -1503,22 +1583,22 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
   let match_distinct_aadts _ _ _ _ _ = raise Distinct
 
   let match_ashared_borrows _ty0 bid0 _ty1 bid1 ty =
-    let bid = match_bid bid0 bid1 in
+    let bid = match_borrow_id bid0 bid1 in
     let value = V.ABorrow (V.ASharedBorrow bid) in
     { V.value; ty }
 
   let match_amut_borrows _ty0 bid0 _av0 _ty1 bid1 _av1 ty av =
-    let bid = match_bid bid0 bid1 in
+    let bid = match_borrow_id bid0 bid1 in
     let value = V.ABorrow (V.AMutBorrow (bid, av)) in
     { V.value; ty }
 
   let match_ashared_loans _ty0 ids0 _v0 _av0 _ty1 ids1 _v1 _av1 ty v av =
-    let bids = match_bids ids0 ids1 in
+    let bids = match_loan_ids ids0 ids1 in
     let value = V.ALoan (V.ASharedLoan (bids, v, av)) in
     { V.value; ty }
 
   let match_amut_loans _ty0 id0 _av0 _ty1 id1 _av1 ty av =
-    let id = match_bid id0 id1 in
+    let id = match_loan_id id0 id1 in
     let value = V.ALoan (V.AMutLoan (id, av)) in
     { V.value; ty }
 
@@ -1532,6 +1612,19 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
     raise Distinct
 end
 
+(** See {!match_ctxs} *)
+type ids_maps = {
+  aid_map : V.AbstractionId.InjSubst.t;
+  bid_map : V.BorrowId.InjSubst.t;
+      (** Substitution for the loan and borrow ids *)
+  borrow_id_map : V.BorrowId.InjSubst.t;  (** Substitution for the borrow ids *)
+  loan_id_map : V.BorrowId.InjSubst.t;  (** Substitution for the loan ids *)
+  rid_map : T.RegionId.InjSubst.t;
+  sid_map : V.SymbolicValueId.InjSubst.t;
+  sid_to_value_map : V.typed_value V.SymbolicValueId.Map.t;
+}
+[@@deriving show]
+
 (** Compute whether two contexts are equivalent modulo an identifier substitution.
 
     [fixed_ids]: ids for which we force the mapping to be the identity.
@@ -1540,9 +1633,15 @@ end
     have the same prefixes (we check it). See the explanations for {!join_ctxs}.
 
     TODO: explanations.
+
+    [check_equiv]: if [true], check if the two contexts are equivalent.
+    If [false], compute a mapping from the first context to the second context,
+    in the sense of [match_ctx_with_target].
+
+    We return an optional ids map: [Some] if the match succeeded, [None] otherwise.
  *)
-let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
-    (ctx1 : C.eval_ctx) : bool =
+let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
+    (ctx1 : C.eval_ctx) : ids_maps option =
   log#ldebug
     (lazy
       ("ctxs_are_equivalent:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
@@ -1553,36 +1652,52 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       ^ "\n\n"));
 
   (* Initialize the maps and instantiate the matcher *)
+  let module IdMap (Id : Identifiers.Id) = struct
+    let mk_map_ref (ids : Id.Set.t) : Id.InjSubst.t ref =
+      ref
+        (Id.InjSubst.of_list (List.map (fun x -> (x, x)) (Id.Set.elements ids)))
+  end in
   let rid_map =
-    ref
-      (T.RegionId.InjSubst.of_list
-         (List.map (fun x -> (x, x)) (T.RegionId.Set.elements fixed_ids.rids)))
+    let module IdMap = IdMap (T.RegionId) in
+    IdMap.mk_map_ref fixed_ids.rids
   in
   let bid_map =
-    ref
-      (V.BorrowId.InjSubst.of_list
-         (List.map (fun x -> (x, x)) (V.BorrowId.Set.elements fixed_ids.bids)))
+    let module IdMap = IdMap (V.BorrowId) in
+    IdMap.mk_map_ref fixed_ids.bids
+  in
+  let borrow_id_map =
+    let module IdMap = IdMap (V.BorrowId) in
+    IdMap.mk_map_ref fixed_ids.borrow_ids
+  in
+  let loan_id_map =
+    let module IdMap = IdMap (V.BorrowId) in
+    IdMap.mk_map_ref fixed_ids.loan_ids
   in
   let aid_map =
-    ref
-      (V.AbstractionId.InjSubst.of_list
-         (List.map
-            (fun x -> (x, x))
-            (V.AbstractionId.Set.elements fixed_ids.aids)))
+    let module IdMap = IdMap (V.AbstractionId) in
+    IdMap.mk_map_ref fixed_ids.aids
   in
   let sid_map =
-    ref
-      (V.SymbolicValueId.InjSubst.of_list
-         (List.map
-            (fun x -> (x, x))
-            (V.SymbolicValueId.Set.elements fixed_ids.sids)))
+    let module IdMap = IdMap (V.SymbolicValueId) in
+    IdMap.mk_map_ref fixed_ids.sids
+  in
+  (* In case we don't try to check equivalence but want to compute a mapping
+     from a source context to a target context, we use a map from symbolic
+     value ids to values (rather than to ids).
+  *)
+  let sid_to_value_map : V.typed_value V.SymbolicValueId.Map.t ref =
+    ref V.SymbolicValueId.Map.empty
   in
 
   let module S : MatchCheckEquivState = struct
+    let check_equiv = check_equiv
     let ctx = ctx0
     let rid_map = rid_map
     let bid_map = bid_map
+    let borrow_id_map = borrow_id_map
+    let loan_id_map = loan_id_map
     let sid_map = sid_map
+    let sid_to_value_map = sid_to_value_map
     let aid_map = aid_map
   end in
   let module CEM = MakeCheckEquivMatcher (S) in
@@ -1592,9 +1707,10 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
 
   (* Small utility: check that ids are fixed/mapped to themselves *)
   let ids_are_fixed (ids : ids_sets) : bool =
-    let { aids; bids; dids; rids; sids } = ids in
+    let { aids; bids = _; borrow_ids; loan_ids; dids; rids; sids } = ids in
     V.AbstractionId.Set.subset aids fixed_ids.aids
-    && V.BorrowId.Set.subset bids fixed_ids.bids
+    && V.BorrowId.Set.subset borrow_ids fixed_ids.borrow_ids
+    && V.BorrowId.Set.subset loan_ids fixed_ids.loan_ids
     && C.DummyVarId.Set.subset dids fixed_ids.dids
     && T.RegionId.Set.subset rids fixed_ids.rids
     && V.SymbolicValueId.Set.subset sids fixed_ids.sids
@@ -1603,7 +1719,8 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   (* We need to pick a context for some functions like [match_typed_values]:
      the context is only used to lookup module data, so we can pick whichever
      we want.
-     TODO: this is not very clean. Maybe we should just carry this data around.
+     TODO: this is not very clean. Maybe we should just carry the relevant data
+     (i.e.e, not the whole context) around.
   *)
   let ctx = ctx0 in
 
@@ -1682,7 +1799,7 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
           assert (v0 = v1);
           (* The ids present in the left value must be fixed *)
           let ids = compute_typed_value_ids v0 in
-          assert (ids_are_fixed ids);
+          assert ((not S.check_equiv) || ids_are_fixed ids);
           (* Continue *)
           match_envs env0' env1')
         else
@@ -1702,7 +1819,7 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
           assert (abs0 = abs1);
           (* Their ids must be fixed *)
           let ids = compute_abs_ids abs0 in
-          assert (ids_are_fixed ids);
+          assert ((not S.check_equiv) || ids_are_fixed ids);
           (* Continue *)
           match_envs env0' env1')
         else (
@@ -1732,8 +1849,33 @@ let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     in
 
     match_envs env0 env1;
-    true
-  with Distinct -> false
+    let maps =
+      {
+        aid_map = !aid_map;
+        bid_map = !bid_map;
+        borrow_id_map = !borrow_id_map;
+        loan_id_map = !loan_id_map;
+        rid_map = !rid_map;
+        sid_map = !sid_map;
+        sid_to_value_map = !sid_to_value_map;
+      }
+    in
+    Some maps
+  with Distinct -> None
+
+(** Compute whether two contexts are equivalent modulo an identifier substitution.
+
+    [fixed_ids]: ids for which we force the mapping to be the identity.
+
+    We also take advantage of the structure of the environments, which should
+    have the same prefixes (we check it). See the explanations for {!join_ctxs}.
+
+    TODO: explanations.
+ *)
+let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
+    (ctx1 : C.eval_ctx) : bool =
+  let check_equivalent = true in
+  Option.is_some (match_ctxs check_equivalent fixed_ids ctx0 ctx1)
 
 (** Join the context at the entry of the loop with the contexts upon reentry
     (upon reaching the [Continue] statement - the goal is to compute a fixed
@@ -1818,8 +1960,11 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
   (* # Return *)
   ((old_ctx, ctxl), !joined_ctx)
 
+(** Compute a fixed-point for the context at the entry of the loop.
+    We also return the sets of fixed ids.
+ *)
 let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
-    (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) : C.eval_ctx =
+    (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) : C.eval_ctx * ids_sets =
   (* The continuation for when we exit the loop - we register the
      environments upon loop *reentry*, and synthesize nothing by
      returning [None]
@@ -1893,20 +2038,25 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     ctx1
   in
   (* Check if two contexts are equivalent - modulo alpha conversion on the
-     existentially quantified borrows/abstractions/symbolic values *)
-  let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : bool =
+     existentially quantified borrows/abstractions/symbolic values.
+  *)
+  let compute_fixed_ids (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : ids_sets =
     (* Compute the set of fixed ids - for the symbolic ids, we compute the
        intersection of ids between the original environment and [ctx1]
        and [ctx2] *)
     let fixed_ids = compute_context_ids (Option.get !ctx_upon_entry) in
-    let { aids; bids; dids; rids; sids } = fixed_ids in
+    let { aids; bids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
     let fixed_ids1 = compute_context_ids ctx1 in
     let fixed_ids2 = compute_context_ids ctx2 in
     let sids =
       V.SymbolicValueId.Set.inter sids
         (V.SymbolicValueId.Set.inter fixed_ids1.sids fixed_ids2.sids)
     in
-    let fixed_ids = { aids; bids; dids; rids; sids } in
+    let fixed_ids = { aids; bids; borrow_ids; loan_ids; dids; rids; sids } in
+    fixed_ids
+  in
+  let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : bool =
+    let fixed_ids = compute_fixed_ids ctx1 ctx2 in
     ctxs_are_equivalent fixed_ids ctx1 ctx2
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
@@ -1935,22 +2085,400 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
       (* Check if we reached a fixed point: if not, iterate *)
       if equiv_ctxs ctx ctx1 then ctx1 else compute_fixed_point ctx1 (i - 1)
   in
-  compute_fixed_point ctx0 max_num_iter
+  let fp = compute_fixed_point ctx0 max_num_iter in
+  let fixed_ids = compute_fixed_ids (Option.get !ctx_upon_entry) fp in
+  (fp, fixed_ids)
 
-let match_ctx_with_target (config : C.config) (tgt_ctx : C.eval_ctx) : cm_fun =
+(** Split an environment between the fixed abstractions, values, etc. and
+    the new abstractions, values, etc.
+
+    Returns: (fixed, new abs, new dummies)
+ *)
+let ctx_split_fixed_new (fixed_ids : ids_sets) (ctx : C.eval_ctx) :
+    C.env * V.abs list * V.typed_value list =
+  let is_fresh_did (id : C.DummyVarId.id) : bool =
+    not (C.DummyVarId.Set.mem id fixed_ids.dids)
+  in
+  let is_fresh_abs_id (id : V.AbstractionId.id) : bool =
+    not (V.AbstractionId.Set.mem id fixed_ids.aids)
+  in
+  (* Filter the new abstractions and dummy variables (there shouldn't be any new dummy variable
+     though) in the target context *)
+  let is_fresh (ee : C.env_elem) : bool =
+    match ee with
+    | C.Var (VarBinder _, _) | C.Frame -> false
+    | C.Var (DummyBinder bv, _) -> not (is_fresh_did bv)
+    | C.Abs abs -> is_fresh_abs_id abs.abs_id
+  in
+  let new_eel, filt_env = List.partition is_fresh ctx.env in
+  let is_abs ee = match ee with C.Abs _ -> true | _ -> false in
+  let new_absl, new_dummyl = List.partition is_abs new_eel in
+  let new_absl =
+    List.map
+      (fun ee ->
+        match ee with C.Abs abs -> abs | _ -> raise (Failure "Unreachable"))
+      new_absl
+  in
+  let new_dummyl =
+    List.map
+      (fun ee ->
+        match ee with
+        | C.Var (DummyBinder _, v) -> v
+        | _ -> raise (Failure "Unreachable"))
+      new_dummyl
+  in
+  (filt_env, new_absl, new_dummyl)
+
+type borrow_loan_corresp = {
+  borrow_to_loan_id_map : V.BorrowId.InjSubst.t;
+  loan_to_borrow_id_map : V.BorrowId.InjSubst.t;
+}
+
+let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
+  let { aids; bids = _; borrow_ids = _; loan_ids = _; dids; rids; sids } =
+    ids
+  in
+  let empty = V.BorrowId.Set.empty in
+  let ids =
+    {
+      aids;
+      bids = empty;
+      borrow_ids = empty;
+      loan_ids = empty;
+      dids;
+      rids;
+      sids;
+    }
+  in
+  ids
+
+(** For the abstractions in the fixed point, compute the correspondance between
+    the borrows ids and the loans ids, if we want to introduce equivalent
+    identify abstractions (i.e., abstractions which do nothing - the input
+    borrows are exactly the output loans).
+
+    TODO: detailed explanations
+ *)
+let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
+    (src_ctx : C.eval_ctx) (tgt_ctx : C.eval_ctx) : borrow_loan_corresp =
+  log#ldebug
+    (lazy
+      ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
+     ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx
+     ^ "\n\n- tgt_ctx:\n" ^ eval_ctx_to_string tgt_ctx ^ "\n\n"));
+
+  let filt_src_env, _, _ = ctx_split_fixed_new fixed_ids src_ctx in
+  let filt_src_ctx = { src_ctx with env = filt_src_env } in
+  let filt_tgt_env, new_absl, _ = ctx_split_fixed_new fixed_ids tgt_ctx in
+  let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
+
+  log#ldebug
+    (lazy
+      ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
+     ^ show_ids_sets fixed_ids ^ "\n\n- filt_src_ctx:\n"
+      ^ eval_ctx_to_string filt_src_ctx
+      ^ "\n\n- filt_tgt_ctx:\n"
+      ^ eval_ctx_to_string filt_tgt_ctx
+      ^ "\n\n"));
+
+  (* Match the source context and the filtered target context *)
+  let check_equiv = false in
+  let maps =
+    let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
+    Option.get (match_ctxs check_equiv fixed_ids filt_tgt_ctx filt_src_ctx)
+  in
+
+  log#ldebug
+    (lazy
+      ("compute_fixed_point_id_correspondance:\n\n- tgt_to_src_maps:\n"
+     ^ show_ids_maps maps ^ "\n\n"));
+
+  let src_to_tgt_borrow_map =
+    V.BorrowId.Map.of_list
+      (List.map
+         (fun (x, y) -> (y, x))
+         (V.BorrowId.InjSubst.bindings maps.borrow_id_map))
+  in
+
+  (* Sanity check: for every abstraction, the target loans and borrows are mapped
+     to the same set of source loans and borrows *)
+  List.iter
+    (fun abs ->
+      let ids = compute_abs_ids abs in
+      (* Map the *loan* ids (we just match the corresponding *loans* ) *)
+      let loan_ids =
+        V.BorrowId.Set.map
+          (fun x -> V.BorrowId.InjSubst.find x maps.borrow_id_map)
+          ids.loan_ids
+      in
+      (* Check that the loan and borrows are related *)
+      assert (ids.borrow_ids = loan_ids))
+    new_absl;
+
+  (* For every target abstraction:
+     - go through the tgt borrows
+     - for every tgt borrow, find the corresponding src borrow
+     - from there, find the corresponding tgt loan
+  *)
+  let tgt_borrow_to_loan = ref V.BorrowId.InjSubst.empty in
+  let visit_tgt =
+    object
+      inherit [_] V.iter_abs
+
+      method! visit_borrow_id _ id =
+        (* Find the target borrow *)
+        let tgt_borrow_id = V.BorrowId.Map.find id src_to_tgt_borrow_map in
+        (* Update the map *)
+        tgt_borrow_to_loan :=
+          V.BorrowId.InjSubst.add id tgt_borrow_id !tgt_borrow_to_loan
+    end
+  in
+  List.iter (visit_tgt#visit_abs ()) new_absl;
+
+  (* Compute the map from loan to borrows *)
+  let tgt_loan_to_borrow =
+    V.BorrowId.InjSubst.of_list
+      (List.map
+         (fun (x, y) -> (y, x))
+         (V.BorrowId.InjSubst.bindings !tgt_borrow_to_loan))
+  in
+
+  (* Return *)
+  {
+    borrow_to_loan_id_map = !tgt_borrow_to_loan;
+    loan_to_borrow_id_map = tgt_loan_to_borrow;
+  }
+
+(** Match a context with a target context.
+
+    This is used to compute application of loop translations: we use this match
+    to compute the mapping from symbolic values from the target environment
+    to values in the original environment (this allows us to compute the inputs
+    of the call to the loop translation).
+
+    We only match the variables (while checking that the fixed dummy variables
+    and the fixed abstractions are equal - we ignore the newly introduced
+    abstractions and dummy variables).
+
+    [is_loop_entry]: [true] if first entry into the loop, [false] if re-entry
+    (i.e., continue).
+ *)
+let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
+    (is_loop_entry : bool) (fp_bl_maps : borrow_loan_corresp)
+    (fixed_ids : ids_sets) (tgt_ctx : C.eval_ctx) : st_cm_fun =
  fun cf src_ctx ->
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("match_ctx_with_target:\n" ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx
+     ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx));
+
   (* We first reorganize [src_ctx] so that we can match it with [tgt_ctx] *)
-  (* First, collect all the borrows and abstractions which are in [ctx]
-     and not in [tgt_ctx]: we need to end them *)
-  let src_ids = compute_context_ids src_ctx in
-  let tgt_ids = compute_context_ids tgt_ctx in
-  let bids = V.BorrowId.Set.diff src_ids.bids tgt_ids.bids in
-  let aids = V.AbstractionId.Set.diff src_ids.aids tgt_ids.aids in
-  (* End those borrows and abstractions *)
-  let cc = InterpreterBorrows.end_borrows config bids in
-  let cc = comp cc (InterpreterBorrows.end_abstractions config aids) in
-  (* TODO *)
-  raise (Failure "Unimplemented")
+  let rec cf_reorganize_src : cm_fun =
+   fun cf src_ctx ->
+    (* Collect fixed values in the source and target contexts: end the loans in the
+       source context which don't appear in the target context *)
+    let filt_src_env, _, _ = ctx_split_fixed_new fixed_ids src_ctx in
+    let filt_tgt_env, _, _ = ctx_split_fixed_new fixed_ids tgt_ctx in
+
+    (* Remove the abstractions *)
+    let filter (ee : C.env_elem) : bool =
+      match ee with Var _ -> true | Abs _ | Frame -> false
+    in
+    let filt_src_env = List.filter filter filt_src_env in
+    let filt_tgt_env = List.filter filter filt_tgt_env in
+
+    (* Match the values to check if there are loans to eliminate *)
+
+    (* We need to pick a context for some functions like [match_typed_values]:
+       the context is only used to lookup module data, so we can pick whichever
+       we want.
+       TODO: this is not very clean. Maybe we should just carry this data around.
+    *)
+    let ctx = src_ctx in
+
+    let nabs = ref [] in
+
+    let module S : MatchJoinState = struct
+      (* The context is only used to lookup module data: we can pick whichever we want *)
+      let ctx = ctx
+      let loop_id = loop_id
+      let nabs = nabs
+    end in
+    let module JM = MakeJoinMatcher (S) in
+    let module M = Match (JM) in
+    try
+      let _ =
+        List.iter
+          (fun (var0, var1) ->
+            match (var0, var1) with
+            | C.Var (C.DummyBinder b0, v0), C.Var (C.DummyBinder b1, v1) ->
+                assert (b0 = b1);
+                let _ = M.match_typed_values ctx v0 v1 in
+                ()
+            | C.Var (C.VarBinder b0, v0), C.Var (C.VarBinder b1, v1) ->
+                assert (b0 = b1);
+                let _ = M.match_typed_values ctx v0 v1 in
+                ()
+            | _ -> raise (Failure "Unexpected"))
+          (List.combine filt_src_env filt_tgt_env)
+      in
+      (* No exception was thrown: continue *)
+      cf src_ctx
+    with ValueMatchFailure e ->
+      (* Exception: end the corresponding borrows, and continue *)
+      let cc =
+        match e with
+        | LoanInLeft bid -> InterpreterBorrows.end_borrow config bid
+        | LoansInLeft bids -> InterpreterBorrows.end_borrows config bids
+        | AbsInLeft _ | AbsInRight _ | LoanInRight _ | LoansInRight _ ->
+            raise (Failure "Unexpected")
+      in
+      comp cc cf_reorganize_src cf src_ctx
+  in
+
+  (* Introduce the "identity" abstractions for the loop reentry.
+
+     Match the src and target contexts so as to compute how to map the borrows
+     from the target context to the borrows in the source context.
+
+     Substitute the *loans* in the new abstractions of the target context
+     (the abstractions of the fixed point) to properly link those abstraction:
+     we introduce *identity* abstractions (the loans are equal to the borrows):
+     we substitute the loans and introduce fresh ids for the borrows, symbolic
+     values, etc.
+  *)
+  let cf_introduce_loop_fp_abs : m_fun =
+   fun src_ctx ->
+    (* Match the src and target contexts *)
+    let filt_src_env, _, _ = ctx_split_fixed_new fixed_ids src_ctx in
+    let filt_tgt_env, new_absl, new_dummyl =
+      ctx_split_fixed_new fixed_ids tgt_ctx
+    in
+    assert (new_dummyl = []);
+    let filt_src_ctx = { src_ctx with env = filt_src_env } in
+    let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
+
+    let check_equiv = false in
+    let tgt_to_src_maps =
+      let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
+      Option.get (match_ctxs check_equiv fixed_ids filt_tgt_ctx filt_src_ctx)
+    in
+    let src_to_tgt_borrow_map =
+      V.BorrowId.Map.of_list
+        (List.map
+           (fun (x, y) -> (y, x))
+           (V.BorrowId.InjSubst.bindings tgt_to_src_maps.borrow_id_map))
+    in
+
+    (* Debug *)
+    log#ldebug
+      (lazy
+        ("match_ctx_with_target:cf_introduce_loop_fp_abs:"
+       ^ "\n\n- filt_src_ctx: "
+        ^ eval_ctx_to_string filt_src_ctx
+        ^ "\n\n- filt_tgt_ctx: "
+        ^ eval_ctx_to_string filt_tgt_ctx
+        ^ "\n\n- tgt_to_src_maps: "
+        ^ show_ids_maps tgt_to_src_maps));
+
+    (* Update the borrows and symbolic ids in the source context *)
+    let tgt_fresh_borrows_map = ref V.BorrowId.Map.empty in
+    let visit_src =
+      object
+        inherit [_] C.map_eval_ctx
+
+        method! visit_borrow_id _ id =
+          (* Map the borrow, if it needs to be mapped *)
+          if
+            V.BorrowId.InjSubst.Set.mem id
+              (V.BorrowId.InjSubst.elements tgt_to_src_maps.borrow_id_map)
+          then (
+            let tgt_id = V.BorrowId.Map.find id src_to_tgt_borrow_map in
+            let nid = C.fresh_borrow_id () in
+            tgt_fresh_borrows_map :=
+              V.BorrowId.Map.add tgt_id nid !tgt_fresh_borrows_map;
+            nid)
+          else id
+      end
+    in
+    let src_ctx = visit_src#visit_eval_ctx () src_ctx in
+
+    (* Rem.: we don't update the symbolic values. It is not necessary
+       because there shouldn't be any symbolic value containing borrows.
+
+       Rem.: we will need to do something about the symbolic values in the
+       abstractions and in the *variable bindings* once we allow symbolic
+       values containing borrows to not be eagerly expanded.
+    *)
+    assert Config.greedy_expand_symbolics_with_borrows;
+
+    (* Update the borrows and loans in the abstractions of the target context *)
+    let region_id_map = ref T.RegionId.Map.empty in
+    let get_rid rid =
+      match T.RegionId.Map.find_opt rid !region_id_map with
+      | Some rid -> rid
+      | None ->
+          let nid = C.fresh_region_id () in
+          region_id_map := T.RegionId.Map.add rid nid !region_id_map;
+          nid
+    in
+    let visit_tgt =
+      object
+        inherit [_] C.map_eval_ctx
+
+        method! visit_borrow_id _ bid =
+          (* Lookup the id of the loan corresponding to this borrow *)
+          let tgt_lid =
+            V.BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
+          in
+          (* Lookup the src borrow id to which this borrow was mapped *)
+          let src_bid =
+            V.BorrowId.InjSubst.find tgt_lid tgt_to_src_maps.borrow_id_map
+          in
+          src_bid
+
+        method! visit_loan_id _ id =
+          (* Map the borrow - rem.: we mapped the borrows *in the values*,
+             meaning we know how to map the *corresponding loans in the
+             abstractions* *)
+          V.BorrowId.Map.find id !tgt_fresh_borrows_map
+
+        method! visit_symbolic_value_id _ _ = C.fresh_symbolic_value_id ()
+        method! visit_abstraction_id _ _ = C.fresh_abstraction_id ()
+        method! visit_region_id _ id = get_rid id
+      end
+    in
+    let new_absl = List.map (visit_tgt#visit_abs ()) new_absl in
+
+    (* Add the abstractions from the target context to the source context *)
+    let nenv =
+      List.append (List.map (fun abs -> C.Abs abs) new_absl) src_ctx.env
+    in
+    let src_ctx = { src_ctx with env = nenv } in
+
+    log#ldebug
+      (lazy
+        ("match_ctx_with_target:cf_introduce_loop_fp_abs:\n- result ctx:"
+       ^ eval_ctx_to_string src_ctx));
+
+    (* Sanity check *)
+    if !Config.check_invariants then
+      Invariants.check_borrowed_values_invariant src_ctx;
+
+    (* End all the borrows which appear in the *new* abstractions *)
+    let new_borrows =
+      V.BorrowId.Set.of_list
+        (List.map snd (V.BorrowId.Map.bindings !tgt_fresh_borrows_map))
+    in
+    let cc = InterpreterBorrows.end_borrows config new_borrows in
+
+    (* Continue *)
+    cc (cf (if is_loop_entry then EndEnterLoop else EndContinue)) src_ctx
+  in
+
+  (* Compose and continue *)
+  cf_reorganize_src cf_introduce_loop_fp_abs src_ctx
 
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
@@ -2006,7 +2534,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
   (* Compute a fresh loop id *)
   let loop_id = C.fresh_loop_id () in
   (* Compute the fixed point at the loop entrance *)
-  let fp_ctx =
+  let fp_ctx, fixed_ids =
     compute_loop_entry_fixed_point config loop_id eval_loop_body ctx
   in
 
@@ -2016,13 +2544,18 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
       ("eval_loop_symbolic:\nInitial context:\n" ^ eval_ctx_to_string ctx
      ^ "\n\nFixed point:\n" ^ eval_ctx_to_string fp_ctx));
 
-  failwith "Unimplemented";
-
   (* Synthesize the end of the function - we simply match the context at the
      loop entry with the fixed point: in the synthesized code, the function
      will end with a call to the loop translation
   *)
-  let end_expr = match_ctx_with_target config fp_ctx (cf EndEnterLoop) ctx in
+  let fp_bl_corresp =
+    compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
+  in
+  let end_expr =
+    match_ctx_with_target config loop_id true fp_bl_corresp fixed_ids fp_ctx cf
+      ctx
+  in
+
   (* Synthesize the loop body by evaluating it, with the continuation for
      after the loop starting at the *fixed point*, but with a special
      treatment for the [Break] and [Continue] cases *)
@@ -2037,7 +2570,11 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
     | Continue i ->
         (* We don't support nested loops for now *)
         assert (i = 0);
-        match_ctx_with_target config fp_ctx (cf EndContinue) ctx
+        let fp_bl_corresp =
+          compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
+        in
+        match_ctx_with_target config loop_id false fp_bl_corresp fixed_ids
+          fp_ctx cf ctx
     | Unit | EndEnterLoop | EndContinue ->
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
            For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
@@ -2045,6 +2582,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
         raise (Failure "Unreachable")
   in
   let loop_expr = eval_loop_body cf_loop fp_ctx in
+
   (* Put together *)
   S.synthesize_loop end_expr loop_expr
 

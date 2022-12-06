@@ -270,11 +270,13 @@ let evaluate_function_symbolic (synthesize : bool)
           (* Put everything together *)
           S.synthesize_forward_end fwd_e back_el
         else None
+    | EndEnterLoop -> failwith "Unimplemented"
+    | EndContinue -> failwith "Unimplemented"
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)
         if synthesize then Some SA.Panic else None
-    | _ ->
+    | Unit | Break _ | Continue _ ->
         raise
           (Failure ("evaluate_function_symbolic failed on: " ^ name_to_string ()))
   in
