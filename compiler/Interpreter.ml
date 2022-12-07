@@ -270,8 +270,8 @@ let evaluate_function_symbolic (synthesize : bool)
           (* Put everything together *)
           S.synthesize_forward_end fwd_e back_el
         else None
-    | EndEnterLoop -> failwith "Unimplemented"
-    | EndContinue -> failwith "Unimplemented"
+    | EndEnterLoop -> raise (Failure "Unimplemented")
+    | EndContinue -> raise (Failure "Unimplemented")
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)
