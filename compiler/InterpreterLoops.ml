@@ -1,3 +1,61 @@
+(** This module implements support for loops.
+
+    Throughout the module, we will use the following code as example to
+    illustrate what the functions do (this function simply returns a mutable
+    borrow to the nth element of a list):
+    {[
+      pub fn list_nth_mut<'a, T>(mut ls: &'a mut List<T>, mut i: u32) -> &'a mut T {
+          loop {
+              match ls {
+                  List::Nil => {
+                      panic!()
+                  }
+                  List::Cons(x, tl) => {
+                      if i == 0 {
+                          return x;
+                      } else {
+                          ls = tl;
+                          i -= 1;
+                      }
+                  }
+              }
+          }
+      }
+    ]}
+
+    Upon reaching the loop entry, the environment is as follows (ignoring the
+    dummy variables):
+    {[
+      abs@0 { ML l0 }
+      ls -> MB l0 (s2 : loops::List<T>)
+      i -> s1 : u32
+    ]}
+
+    Upon reaching the [continue] at the end of the first iteration, the environment
+    is as follows:
+    {[
+      abs@0 { ML l0 }
+      ls -> MB l4 (s@6 : loops::List<T>)
+      i -> s@7 : u32
+      _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
+      _@2 -> MB l2 (@Box (ML l4))                      // tail
+      _@3 -> MB l1 (s@3 : T)                           // hd
+    ]}
+
+    The fixed point we compute is:
+    {[
+      abs@0 { ML l0 }
+      ls -> MB l1 (s@3 : loops::List<T>)
+      i -> s@4 : u32
+      abs@fp { // fp: fixed-point
+        MB l0
+        ML l1
+      }
+    ]}
+
+    From here, we deduce that [abs@fp { MB l0, ML l1}] is the loop abstraction.
+  *)
+
 module T = Types
 module PV = PrimitiveValues
 module V = Values
@@ -223,6 +281,45 @@ let destructure_new_abs (loop_id : V.LoopId.id)
       merge them.
     In effect, this allows us to merge newly introduced abstractions/borrows
     with their parent abstractions.
+    
+    For instance, when evaluating the first loop iteration, we start in the
+    following environment:
+    {[
+      abs@0 { ML l0 }
+      ls -> MB l0 (s2 : loops::List<T>)
+      i -> s1 : u32
+    ]}
+    
+    and get the following environment upon reaching the [Continue] statement:
+    {[
+      abs@0 { ML l0 }
+      ls -> MB l4 (s@6 : loops::List<T>)
+      i -> s@7 : u32
+      _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
+      _@2 -> MB l2 (@Box (ML l4))                      // tail
+      _@3 -> MB l1 (s@3 : T)                           // hd
+    ]}
+    
+    In this new environment, the dummy variables [_@1], [_@2] and [_@3] are
+    considered as new. We collapse them.
+    
+    We first convert the dummy values to abstractions. It gives:
+    {[
+      abs@0 { ML l0 }
+      ls -> MB l4 (s@6 : loops::List<T>)
+      i -> s@7 : u32
+      abs@1 { MB l0, ML l1, ML l2 }
+      abs@2 { MB l2, ML l4 }
+      abs@3 { MB l1 }
+    ]}
+
+    We then merge those abstractions together. It gives:
+    {[
+      abs@0 { ML l0 }
+      ls -> MB l4 (s@6 : loops::List<T>)
+      i -> s@7 : u32
+      abs@4 { MB l0, ML l4 }
+    ]}
 
     [merge_funs]: those are used to merge loans or borrows which appear in both
     abstractions (rem.: here we mean that, for instance, both abstractions
@@ -356,7 +453,7 @@ let collapse_ctx (loop_id : V.LoopId.id)
   (* Return the new context *)
   !ctx
 
-(** Match two types during a join. This simply performs a sanity check. *)
+(** Match two types during a join. *)
 let rec match_types (match_distinct_types : 'r T.ty -> 'r T.ty -> 'r T.ty)
     (match_regions : 'r -> 'r -> 'r) (ty0 : 'r T.ty) (ty1 : 'r T.ty) : 'r T.ty =
   let match_rec = match_types match_distinct_types match_regions in
@@ -557,6 +654,7 @@ end
     etc.
 
     We use it for joins, to check if two environments are convertible, etc.
+    See for instance {!MakeJoinMatcher} and {!MakeCheckEquivMatcher}.
 
     The functor is parameterized by a {!Matcher}, which implements the
     non-generic part of the match. More precisely, the role of {!Match} is two
@@ -762,7 +860,7 @@ module type MatchJoinState = sig
   val nabs : V.abs list ref
 end
 
-(** A matcher for loop joins (we use loop joins to compute fixed points).
+(** A matcher for joins (we use joins to compute loop fixed points).
 
     See the explanations for {!Match}.
 
@@ -1053,9 +1151,7 @@ end
     This function simply calls {!collapse_ctx} with the proper merging functions.
 
     We do this because when we join environments, we may introduce duplicated
-    *loans*: we thus don't implement merge functions for the borrows, only for
-    the loans. See the explanations for {!join_ctxs}.
-
+    loans and borrows. See the explanations for {!join_ctxs}.
  *)
 let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
     (ctx : C.eval_ctx) : C.eval_ctx =
@@ -1145,20 +1241,28 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
 
 (** Join two contexts.
 
+    We use this to join the environments at loop (re-)entry to progressively
+    compute a fixed point.
+
     We make the hypothesis (and check it) that the environments have the same
     prefixes (same variable ids, same abstractions, etc.). The prefix of
     variable and abstraction ids is given by the [fixed_ids] identifier sets. We
     check that those prefixes are the same (the dummy variables are the same,
     the abstractions are the same), match the values mapped to by the variables
     which are not dummy, then group the additional dummy variables/abstractions
-    together. Note that when joining the values mapped to by the non-dummy
-    variables, we may introduce duplicated borrows. Also, we don't match the
-    abstractions which are not in the prefix, which can also lead to borrow
-    duplications.  For this reason, the environment needs to be collapsed
-    afterwards to get rid of those duplicated loans/borrows.
+    together. In a sense, the [fixed_ids] define a frame (in a separation logic
+    sense).
+
+    Note that when joining the values mapped to by the non-dummy variables, we
+    may introduce duplicated borrows. Also, we don't match the abstractions
+    which are not in the prefix, which can also lead to borrow duplications. For
+    this reason, the environment needs to be collapsed afterwards to get rid of
+    those duplicated loans/borrows.
 
     For instance, if we have:
     {[
+      fixed = { abs0 }
+
       env0 = {
         abs0 { ML l0 }
         l -> MB l0 s0
@@ -1171,13 +1275,13 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
       }
     ]}
 
-    Then:
+    We get:
     {[
       join env0 env1 = {
-        abs0 { ML l0 }
+        abs0 { ML l0 } (* abs0 is fixed: we simply check it is equal in env0 and env1 *)
         l -> MB l2 s2
-        abs1 { MB l0, ML l1 }
-        abs2 { MB l0, MB l1, ML l2 } (* Introduced when merging the "l" binding *)
+        abs1 { MB l0, ML l1 } (* abs1 is new: we keep it unchanged *)
+        abs2 { MB l0, MB l1, ML l2 } (* Introduced when joining on the "l" variable *)
       }
     ]}
 
@@ -1185,9 +1289,9 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
     and abstractions *at the end* of the environments, meaning the environment
     prefixes keep the same structure.
 
-    Rem.: assuming that the environment has some structure poses no soundness
-    issue. It can only make the join fail if the environments actually don't have
-    this structure (this is a completeness issue).
+    Rem.: assuming that the environment has some structure poses *no soundness
+    issue*. It can only make the join fail if the environments actually don't have
+    this structure: this is a *completeness issue*.
   *)
 let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (ctx1 : C.eval_ctx) : ctx_or_update =
@@ -1870,7 +1974,29 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     We also take advantage of the structure of the environments, which should
     have the same prefixes (we check it). See the explanations for {!join_ctxs}.
 
-    TODO: explanations.
+    For instance, the following environments are equivalent:
+    {[
+      env0 = {
+        abs@0 { ML l0 }
+        ls -> MB l1 (s2 : loops::List<T>)
+        i -> s1 : u32
+        abs@1 { MB l0, ML l1 }
+      }
+
+      env1 = {
+        abs@0 { ML l0 }
+        ls -> MB l2 (s4 : loops::List<T>)
+        i -> s3 : u32
+        abs@2 { MB l0, ML l2 }
+      }
+    ]}
+    
+    We can go from [env0] to [env1] with the substitution:
+    {[
+      abs_id_subst: { abs@1 -> abs@2 }
+      borrow_id_subst: { l1 -> l2 }
+      symbolic_id_subst: { s1 -> s3, s2 -> s4 }
+    ]}
  *)
 let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (ctx1 : C.eval_ctx) : bool =
@@ -2154,10 +2280,79 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
 
 (** For the abstractions in the fixed point, compute the correspondance between
     the borrows ids and the loans ids, if we want to introduce equivalent
-    identify abstractions (i.e., abstractions which do nothing - the input
+    identity abstractions (i.e., abstractions which do nothing - the input
     borrows are exactly the output loans).
 
-    TODO: detailed explanations
+    **Context:**
+    ============
+    When we (re-enter) the loop, we want to introduce identity abstractions
+    (i.e., abstractions which actually only introduce fresh identifiers for
+    some borrows, to abstract away a bit the borrow graph) which have the same
+    shape as the abstractions introduced for the fixed point (see the explanations
+    for [match_ctx_with_target]). This allows us to transform the environment
+    into a fixed point (again, see the explanations for [match_ctx_with_target]).
+
+    In order to introduce those identity abstractions, we need to figure out,
+    for those abstractions, which loans should be linked to which borrows.
+    We do this in the following way.
+
+    We match the fixed point environment with the environment upon first entry
+    in the loop, and exploit the fact that the fixed point was derived by also
+    joining this first entry environment: because of that, the borrows in the
+    abstractions introduced for the fixed-point actually exist in this first
+    environment (they are not fresh). For [list_nth_mut] (see the explanations
+    at the top of the file) we have the following:
+
+    {[
+      // Environment upon first entry in the loop
+      env0 = {
+        abs@0 { ML l0 }
+        ls -> MB l0 (s2 : loops::List<T>)
+        i -> s1 : u32
+      }
+
+      // Fixed-point environment
+      env_fp = {
+        abs@0 { ML l0 }
+        ls -> MB l1 (s3 : loops::List<T>)
+        i -> s4 : u32
+        abs@fp {
+          MB l0 // this borrow appears in [env0]
+          ML l1
+        }
+      }
+    ]}
+
+    We filter those environments to remove the non-fixed dummy variables,
+    abstractions, etc. in a manner similar to [match_ctx_with_target]. We
+    get:
+
+    {[
+      filtered_env0 = {
+        abs@0 { ML l0 }
+        ls -> MB l0 (s2 : loops::List<T>)
+        i -> s1 : u32
+      }
+
+      filtered_env_fp = {
+        abs@0 { ML l0 }
+        ls -> MB l1 (s3 : loops::List<T>)
+        i -> s@ : u32
+        // removed abs@fp
+      }
+    ]}
+
+    We then match [filtered_env_fp] with [filtered_env0], taking care to not
+    consider loans and borrows in a disjoint manner, and ignoring the fixed
+    values, abstractions, loans, etc. We get:
+    {[
+      borrows_map: { l1 -> l0 } // because we matched [MB l1 ...] with [MB l0 ...] in [ls]
+      loans_map: {} // we ignore abs@0, which is "fixed"
+    ]}
+
+    From there we deduce that, if we want to introduce an identity abstraction with the
+    shape of [abs@fp], we should link [l1] to [l0]. In other words, the value retrieved
+    through the loan [l1] is actually the value which has to be given back to [l0].
  *)
 let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
     (src_ctx : C.eval_ctx) (tgt_ctx : C.eval_ctx) : borrow_loan_corresp =
@@ -2215,10 +2410,12 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
       assert (ids.borrow_ids = loan_ids))
     new_absl;
 
-  (* For every target abstraction:
-     - go through the tgt borrows
-     - for every tgt borrow, find the corresponding src borrow
-     - from there, find the corresponding tgt loan
+  (* For every target abstraction (going back to the [list_nth_mut] example,
+     we have to visit [abs@fp { ML l0, MB l1 }]):
+     - go through the tgt borrows ([l1])
+     - for every tgt borrow, find the corresponding src borrow ([l0], because
+       we have: [borrows_map: { l1 -> l0 }])
+     - from there, find the corresponding tgt loan ([l0])
   *)
   let tgt_borrow_to_loan = ref V.BorrowId.InjSubst.empty in
   let visit_tgt =
@@ -2251,17 +2448,130 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
 
 (** Match a context with a target context.
 
-    This is used to compute application of loop translations: we use this match
-    to compute the mapping from symbolic values from the target environment
-    to values in the original environment (this allows us to compute the inputs
-    of the call to the loop translation).
+    This is used to compute application of loop translations: we use this
+    to introduce "identity" abstractions upon (re-)entering the loop.
 
-    We only match the variables (while checking that the fixed dummy variables
-    and the fixed abstractions are equal - we ignore the newly introduced
-    abstractions and dummy variables).
+    For instance, the fixed point for [list_nth_mut] (see the top of the file)
+    is:
+    {[
+      env_fp = {
+        abs@0 { ML l0 }
+        ls -> MB l1 (s@3 : loops::List<T>)
+        i -> s@4 : u32
+        abs@fp {
+          MB l0
+          ML l1
+        }
+      }
+    ]}
 
-    [is_loop_entry]: [true] if first entry into the loop, [false] if re-entry
-    (i.e., continue).
+    Upon re-entering the loop, starting from the fixed point, we get the
+    following environment:
+    {[
+      env = {
+        abs@0 { ML l0 }
+        ls -> MB l5 (s@6 : loops::List<T>)
+        i -> s@7 : u32
+        abs@1 { MB l0, ML l1 }
+        _@1 -> MB l1 (loops::List::Cons (ML l2, ML l3))
+        _@2 -> MB l3 (@Box (ML l5))                      // tail
+        _@3 -> MB l2 (s@3 : T)                           // hd
+     }
+   ]}
+
+   We want to introduce an abstraction [abs@2], which has the same shape as [abs@fp]
+   above (the fixed-point abstraction), and which is actually the identity. If we do so,
+   we get an environment which is actually also a fixed point (we can collapse
+   the dummy variables and [abs@1] to actually retrieve the fixed point we
+   computed, and we use the fact that those values and abstractions can't be
+   *directly* manipulated unless we end this newly introduced [abs@2], which we
+   forbid).
+
+   We do the following.
+
+   1. We filter [env_fp] and [env] to remove the newly introduced dummy variables
+   and abstractions. We get:
+
+   {[
+     filtered_env_fp = {
+       abs@0 { ML l0 }
+       ls -> MB l1 (s@3 : loops::List<T>)
+       i -> s@4 : u32
+       // removed abs@fp
+     }
+
+     filtered_env = {
+       abs@0 { ML l0 }
+       ls -> MB l5 (s@6 : loops::List<T>)
+       i -> s@7 : u32
+       // removed abs@1, _@1, etc.
+     }
+   ]}
+
+   2. We match [filtered_env_fp] with [filtered_env] to compute a map from
+   the FP borrows/loans to the current borrows/loans (and also from symbolic values to
+   values). Note that we take care to *consider loans and borrows separately*,
+   and we ignore the "fixed" abstractions (which are unchanged - we checked that
+   when computing the fixed point).
+   We get:
+   {[
+     borrows_map: { l1 -> l5 } // because we matched [MB l1 ...] with [MB l5 ...]
+     loans_map: {} // we ignore abs@0, which is "fixed"
+   ]}
+
+   3. We want to introduce an instance of [abs@fp] which is actually the
+   identity. From [compute_fixed_point_id_correspondance] and looking at
+   [abs@fp], we know we should link the instantiation of loan [l1] with the
+   instantiation of loan [l0]. We substitute [l0] with [l5] (following step 2.)
+   and introduce a fresh borrow [l6] for [l5] that we use to instantiate [l1].
+   We get the following environment:
+
+   {[
+     env = {
+       abs@0 { ML l0 }
+       ls -> MB l6 (s@6 : loops::List<T>)
+       i -> s@7 : u32
+       abs@1 { MB l0, ML l1 }
+       _@1 -> MB l1 (loops::List::Cons (ML l2, ML l3))
+       _@2 -> MB l3 (@Box (ML l5))                      // tail
+       _@3 -> MB l2 (s@3 : T)                           // hd
+       abs@2 { MB l5, ML l6 } // this is actually the identity: l6 = l5
+     }
+   ]}
+
+   4. As we now have a fixed point (see above comments), we can consider than
+   [abs@2] links the current iteration to the last one before we exit. What we
+   are interested in is that:
+   - upon inserting [abs@2] we re-entered the loop, meaning in the translation
+     we need to insert a recursive call to the loop forward function
+   - upon ending [abs@2] we need to insert a call to the loop backward function
+
+   Because we want to ignore them, we end the loans in the newly introduced
+   [abs@2] abstraction (i.e., [l6]). We get:
+   {[
+     env = {
+       abs@0 { ML l0 }
+       ls -> ⊥
+       i -> s@7 : u32
+       abs@1 { MB l0, ML l1 }
+       _@1 -> MB l1 (loops::List::Cons (ML l2, ML l3))
+       _@2 -> MB l3 (@Box (ML l5))                      // tail
+       _@3 -> MB l2 (s@3 : T)                           // hd
+       abs@2 { MB l5 }
+     }
+   ]}
+
+   TODO: we shouldn't need to end the loans, we should actually remove them
+   before inserting the new abstractions (we may have issues with the symbolic
+   values, if they contain borrows - above i points to [s@7], but it should
+   be a different symbolic value...).
+
+   We can then proceed to finishing the symbolic execution and doing the
+   synthesis.
+
+   **Parameters**:
+   [is_loop_entry]: [true] if first entry into the loop, [false] if re-entry
+   (i.e., continue).
  *)
 let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     (is_loop_entry : bool) (fp_bl_maps : borrow_loan_corresp)
@@ -2339,14 +2649,16 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
 
   (* Introduce the "identity" abstractions for the loop reentry.
 
-     Match the src and target contexts so as to compute how to map the borrows
-     from the target context to the borrows in the source context.
+     Match the target context with the source context so as to compute how to
+     map the borrows from the target context (i.e., the fixed point context)
+     to the borrows in the source context.
 
-     Substitute the *loans* in the new abstractions of the target context
+     Substitute the *loans* in the abstractions introduced by the target context
      (the abstractions of the fixed point) to properly link those abstraction:
      we introduce *identity* abstractions (the loans are equal to the borrows):
      we substitute the loans and introduce fresh ids for the borrows, symbolic
-     values, etc.
+     values, etc. About the *identity abstractions*, see the comments for
+     [compute_fixed_point_id_correspondance].
   *)
   let cf_introduce_loop_fp_abs : m_fun =
    fun src_ctx ->
@@ -2382,7 +2694,49 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
         ^ "\n\n- tgt_to_src_maps: "
         ^ show_ids_maps tgt_to_src_maps));
 
-    (* Update the borrows and symbolic ids in the source context *)
+    (* Update the borrows and symbolic ids in the source context.
+
+       Going back to the [list_nth_mut_example], the source environment upon
+       re-entering the loop is:
+
+       {[
+         abs@0 { ML l0 }
+         ls -> MB l5 (s@6 : loops::List<T>)
+         i -> s@7 : u32
+         _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
+         _@2 -> MB l2 (@Box (ML l4))                      // tail
+         _@3 -> MB l1 (s@3 : T)                           // hd
+         abs@1 { MB l4, ML l5 }
+       ]}
+
+       The fixed-point environment is:
+       {[
+         env_fp = {
+           abs@0 { ML l0 }
+           ls -> MB l1 (s3 : loops::List<T>)
+           i -> s4 : u32
+           abs@fp {
+             MB l0 // this borrow appears in [env0]
+             ML l1
+           }
+         }
+       ]}
+
+       Through matching, we detected that in [env_fp], [l1] will be matched
+       to [l5]. We introduced a fresh borrow [l6] for [l1], and remember
+       in the map [tgt_fresh_borrows_map] that: [{ l1 -> l6}].
+
+       We get:
+       {[
+         abs@0 { ML l0 }
+         ls -> MB l6 (s@6 : loops::List<T>) // l6 is fresh and doesn't have a corresponding loan
+         i -> s@7 : u32
+         _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
+         _@2 -> MB l2 (@Box (ML l4))                      // tail
+         _@3 -> MB l1 (s@3 : T)                           // hd
+         abs@1 { MB l4, ML l5 }
+       ]}
+    *)
     let tgt_fresh_borrows_map = ref V.BorrowId.Map.empty in
     let visit_src =
       object
@@ -2413,7 +2767,19 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     *)
     assert Config.greedy_expand_symbolics_with_borrows;
 
-    (* Update the borrows and loans in the abstractions of the target context *)
+    (* Update the borrows and loans in the abstractions of the target context.
+
+       Going back to the [list_nth_mut] example and by using [tgt_fresh_borrows_map],
+       we instantiate the fixed-point abstractions that we will insert into the
+       context.
+       The abstraction is [abs { MB l0, ML l1 }].
+       Because of [tgt_fresh_borrows_map], we substitute [l1] with [l6].
+       Because of the match between the contexts, we substitute [l0] with [l5].
+       We get:
+       {[
+         abs@2 { MB l5, ML l6 }
+       ]}
+    *)
     let region_id_map = ref T.RegionId.Map.empty in
     let get_rid rid =
       match T.RegionId.Map.find_opt rid !region_id_map with
