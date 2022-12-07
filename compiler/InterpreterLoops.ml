@@ -1491,7 +1491,7 @@ module type MatchCheckEquivState = sig
   val rid_map : T.RegionId.InjSubst.t ref
 
   (** Substitution for the loan and borrow ids - used only if [check_equiv] is true *)
-  val bid_map : V.BorrowId.InjSubst.t ref
+  val blid_map : V.BorrowId.InjSubst.t ref
 
   (** Substitution for the borrow ids - used only if [check_equiv] is false *)
   val borrow_id_map : V.BorrowId.InjSubst.t ref
@@ -1551,34 +1551,34 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
 
   module GetSetBid = MkGetSetM (V.BorrowId)
 
-  let get_bid = GetSetBid.get S.bid_map
-  let match_bid = GetSetBid.match_e S.bid_map
-  let match_bidl = GetSetBid.match_el S.bid_map
-  let match_bids = GetSetBid.match_es S.bid_map
+  let get_blid = GetSetBid.get S.blid_map
+  let match_blid = GetSetBid.match_e S.blid_map
+  let match_blidl = GetSetBid.match_el S.blid_map
+  let match_blids = GetSetBid.match_es S.blid_map
 
   let get_borrow_id =
-    if S.check_equiv then get_bid else GetSetBid.get S.borrow_id_map
+    if S.check_equiv then get_blid else GetSetBid.get S.borrow_id_map
 
   let match_borrow_id =
-    if S.check_equiv then match_bid else GetSetBid.match_e S.borrow_id_map
+    if S.check_equiv then match_blid else GetSetBid.match_e S.borrow_id_map
 
   let match_borrow_idl =
-    if S.check_equiv then match_bidl else GetSetBid.match_el S.borrow_id_map
+    if S.check_equiv then match_blidl else GetSetBid.match_el S.borrow_id_map
 
   let match_borrow_ids =
-    if S.check_equiv then match_bids else GetSetBid.match_es S.borrow_id_map
+    if S.check_equiv then match_blids else GetSetBid.match_es S.borrow_id_map
 
   let get_loan_id =
-    if S.check_equiv then get_bid else GetSetBid.get S.loan_id_map
+    if S.check_equiv then get_blid else GetSetBid.get S.loan_id_map
 
   let match_loan_id =
-    if S.check_equiv then match_bid else GetSetBid.match_e S.loan_id_map
+    if S.check_equiv then match_blid else GetSetBid.match_e S.loan_id_map
 
   let match_loan_idl =
-    if S.check_equiv then match_bidl else GetSetBid.match_el S.loan_id_map
+    if S.check_equiv then match_blidl else GetSetBid.match_el S.loan_id_map
 
   let match_loan_ids =
-    if S.check_equiv then match_bids else GetSetBid.match_es S.loan_id_map
+    if S.check_equiv then match_blids else GetSetBid.match_es S.loan_id_map
 
   module GetSetSid = MkGetSetM (V.SymbolicValueId)
 
@@ -1719,7 +1719,7 @@ end
 (** See {!match_ctxs} *)
 type ids_maps = {
   aid_map : V.AbstractionId.InjSubst.t;
-  bid_map : V.BorrowId.InjSubst.t;
+  blid_map : V.BorrowId.InjSubst.t;
       (** Substitution for the loan and borrow ids *)
   borrow_id_map : V.BorrowId.InjSubst.t;  (** Substitution for the borrow ids *)
   loan_id_map : V.BorrowId.InjSubst.t;  (** Substitution for the loan ids *)
@@ -1765,9 +1765,9 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     let module IdMap = IdMap (T.RegionId) in
     IdMap.mk_map_ref fixed_ids.rids
   in
-  let bid_map =
+  let blid_map =
     let module IdMap = IdMap (V.BorrowId) in
-    IdMap.mk_map_ref fixed_ids.bids
+    IdMap.mk_map_ref fixed_ids.blids
   in
   let borrow_id_map =
     let module IdMap = IdMap (V.BorrowId) in
@@ -1797,7 +1797,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     let check_equiv = check_equiv
     let ctx = ctx0
     let rid_map = rid_map
-    let bid_map = bid_map
+    let blid_map = blid_map
     let borrow_id_map = borrow_id_map
     let loan_id_map = loan_id_map
     let sid_map = sid_map
@@ -1811,7 +1811,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
 
   (* Small utility: check that ids are fixed/mapped to themselves *)
   let ids_are_fixed (ids : ids_sets) : bool =
-    let { aids; bids = _; borrow_ids; loan_ids; dids; rids; sids } = ids in
+    let { aids; blids = _; borrow_ids; loan_ids; dids; rids; sids } = ids in
     V.AbstractionId.Set.subset aids fixed_ids.aids
     && V.BorrowId.Set.subset borrow_ids fixed_ids.borrow_ids
     && V.BorrowId.Set.subset loan_ids fixed_ids.loan_ids
@@ -1879,8 +1879,8 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         ("ctxs_are_equivalent: match_envs:\n\n- fixed_ids:\n"
        ^ show_ids_sets fixed_ids ^ "\n\n- rid_map: "
         ^ T.RegionId.InjSubst.show_t !rid_map
-        ^ "\n- bid_map: "
-        ^ V.BorrowId.InjSubst.show_t !bid_map
+        ^ "\n- blid_map: "
+        ^ V.BorrowId.InjSubst.show_t !blid_map
         ^ "\n- sid_map: "
         ^ V.SymbolicValueId.InjSubst.show_t !sid_map
         ^ "\n- aid_map: "
@@ -1956,7 +1956,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     let maps =
       {
         aid_map = !aid_map;
-        bid_map = !bid_map;
+        blid_map = !blid_map;
         borrow_id_map = !borrow_id_map;
         loan_id_map = !loan_id_map;
         rid_map = !rid_map;
@@ -2133,24 +2133,26 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
       | None ->
           let old_ids = compute_context_ids ctx0 in
           let new_ids = compute_contexts_ids !ctxs in
-          let bids = V.BorrowId.Set.diff old_ids.bids new_ids.bids in
+          let blids = V.BorrowId.Set.diff old_ids.blids new_ids.blids in
           let aids = V.AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those borrows and abstractions *)
-          let end_borrows_abs bids aids ctx =
-            let ctx = InterpreterBorrows.end_borrows_no_synth config bids ctx in
+          let end_borrows_abs blids aids ctx =
+            let ctx =
+              InterpreterBorrows.end_borrows_no_synth config blids ctx
+            in
             let ctx =
               InterpreterBorrows.end_abstractions_no_synth config aids ctx
             in
             ctx
           in
           (* End the borrows/abs in [ctx0] *)
-          let ctx0 = end_borrows_abs bids aids ctx0 in
+          let ctx0 = end_borrows_abs blids aids ctx0 in
           (* We can also do the same in the contexts [ctxs]: if there are
              several contexts, maybe one of them ended some borrows and some
              others didn't. As we need to end those borrows anyway (the join
              will detect them and ask to end them) we do it preemptively.
           *)
-          ctxs := List.map (end_borrows_abs bids aids) !ctxs;
+          ctxs := List.map (end_borrows_abs blids aids) !ctxs;
           fixed_ids := Some (compute_context_ids ctx0);
           ctx0
     in
@@ -2171,14 +2173,14 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
        intersection of ids between the original environment and [ctx1]
        and [ctx2] *)
     let fixed_ids = compute_context_ids (Option.get !ctx_upon_entry) in
-    let { aids; bids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
+    let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
     let fixed_ids1 = compute_context_ids ctx1 in
     let fixed_ids2 = compute_context_ids ctx2 in
     let sids =
       V.SymbolicValueId.Set.inter sids
         (V.SymbolicValueId.Set.inter fixed_ids1.sids fixed_ids2.sids)
     in
-    let fixed_ids = { aids; bids; borrow_ids; loan_ids; dids; rids; sids } in
+    let fixed_ids = { aids; blids; borrow_ids; loan_ids; dids; rids; sids } in
     fixed_ids
   in
   let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : bool =
@@ -2213,6 +2215,30 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   in
   let fp = compute_fixed_point ctx0 max_num_iter in
   let fixed_ids = compute_fixed_ids (Option.get !ctx_upon_entry) fp in
+  (* For now, all the new abstractions in the fixed-point have the same region
+     group (of id 0): we want each one of them to have a unique region group
+     (because we will translate each one of those abstractions to a pair
+     forward function/backward function).
+  *)
+  let region_map = ref T.RegionId.Map.empty in
+  let get_rid (rid : T.RegionId.id) : T.RegionId.id =
+    if T.RegionId.Set.mem rid fixed_ids.rids then rid
+    else
+      match T.RegionId.Map.find_opt rid !region_map with
+      | Some rid -> rid
+      | None ->
+          let nrid = C.fresh_region_id () in
+          region_map := T.RegionId.Map.add rid nrid !region_map;
+          nrid
+  in
+  let introduce_fresh_rids =
+    object
+      inherit [_] C.map_eval_ctx
+      method! visit_region_id _ rid = get_rid rid
+    end
+  in
+  let fp_env = List.rev (introduce_fresh_rids#visit_env () (List.rev fp.env)) in
+  let fp = { fp with env = fp_env } in
   (fp, fixed_ids)
 
 (** Split an environment between the fixed abstractions, values, etc. and
@@ -2261,14 +2287,14 @@ type borrow_loan_corresp = {
 }
 
 let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
-  let { aids; bids = _; borrow_ids = _; loan_ids = _; dids; rids; sids } =
+  let { aids; blids = _; borrow_ids = _; loan_ids = _; dids; rids; sids } =
     ids
   in
   let empty = V.BorrowId.Set.empty in
   let ids =
     {
       aids;
-      bids = empty;
+      blids = empty;
       borrow_ids = empty;
       loan_ids = empty;
       dids;
