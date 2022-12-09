@@ -259,6 +259,7 @@ type eval_ctx = {
   type_context : type_context;
   fun_context : fun_context;
   global_context : global_context;
+  region_groups : RegionGroupId.id list;
   type_vars : type_var list;
   env : env;
   ended_regions : RegionId.Set.t;
