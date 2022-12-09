@@ -8,6 +8,7 @@ module E = Expressions
 module C = Contexts
 module A = LlbcAst
 module L = Logging
+open Utils
 open LlbcAstUtils
 
 let log = L.pre_passes_log
@@ -54,6 +55,8 @@ let filter_drop_assigns (f : A.fun_decl) : A.fun_decl =
 (** This pass slightly restructures the control-flow to remove the need to
     merge branches during the symbolic execution in some quite common cases
     where doing a merge is actually not necessary and leads to an ugly translation.
+
+    TODO: this is useless
 
     For instance, it performs the following transformation:
     {[
@@ -145,8 +148,119 @@ let remove_useless_cf_merges (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
       ^ "\n"));
   f
 
+(** This pass restructures the control-flow by inserting all the statements
+    which occur after loops *inside* the loops, thus removing the need to
+    have breaks (we later check that we removed all the breaks).
+
+    This is needed because of the way we perform the symbolic execution
+    on the loops for now.
+
+    Rem.: we check that there are no nested loops (all the breaks must break
+    to the first outer loop, and the statements we insert inside the loops
+    mustn't contain breaks themselves).
+
+    For instance, it performs the following transformation:
+    {[
+      loop {
+        if b {
+          ...
+          continue 0;
+        }
+        else {
+          ...
+          break 0;
+        }
+      };
+      x := x + 1;
+      return;
+
+      ~~>
+
+      loop {
+        if b {
+          ...
+          continue 0;
+        }
+        else {
+          ...
+          x := x + 1;
+          return;
+        }
+      };
+    ]}
+ *)
+let remove_loop_breaks (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
+  let f0 = f in
+
+  (* Check that a statement doesn't contain loops, breaks or continues *)
+  let statement_has_no_loop_break_continue (st : A.statement) : bool =
+    let obj =
+      object
+        inherit [_] A.iter_statement
+        method! visit_Loop _ _ = raise Found
+        method! visit_Break _ _ = raise Found
+        method! visit_Continue _ _ = raise Found
+      end
+    in
+    try
+      obj#visit_statement () st;
+      true
+    with Found -> false
+  in
+
+  (* Replace a break statement with another statement (we check that the
+     break statement breaks exactly one level, and that there are no nested
+     loops.
+  *)
+  let replace_breaks_with (st : A.statement) (nst : A.statement) : A.statement =
+    let obj =
+      object
+        inherit [_] A.map_statement as super
+
+        method! visit_Loop entered_loop loop =
+          assert (not entered_loop);
+          super#visit_Loop true loop
+
+        method! visit_Break _ i =
+          assert (i = 0);
+          nst.content
+      end
+    in
+    obj#visit_statement false st
+  in
+
+  (* The visitor *)
+  let obj =
+    object
+      inherit [_] A.map_statement as super
+
+      method! visit_Sequence env st1 st2 =
+        match st1.content with
+        | Loop _ ->
+            assert (statement_has_no_loop_break_continue st2);
+            (replace_breaks_with st1 st2).content
+        | _ -> super#visit_Sequence env st1 st2
+    end
+  in
+
+  (* Map  *)
+  let body =
+    match f.body with
+    | Some body -> Some { body with body = obj#visit_statement () body.body }
+    | None -> None
+  in
+  let f = { f with body } in
+  log#ldebug
+    (lazy
+      ("Before/after [remove_loop_breaks]:\n"
+      ^ Print.Crate.crate_fun_decl_to_string crate f0
+      ^ "\n\n"
+      ^ Print.Crate.crate_fun_decl_to_string crate f
+      ^ "\n"));
+  f
+
 let apply_passes (crate : A.crate) : A.crate =
-  let passes = [ remove_useless_cf_merges crate ] in
+  let passes = [ remove_loop_breaks crate ] in
   let functions =
     List.fold_left (fun fl pass -> List.map pass fl) crate.functions passes
   in

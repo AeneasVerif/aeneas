@@ -29,12 +29,14 @@ let compute_type_fun_global_contexts (m : A.crate) :
 
 let initialize_eval_context (type_context : C.type_context)
     (fun_context : C.fun_context) (global_context : C.global_context)
-    (type_vars : T.type_var list) : C.eval_ctx =
+    (region_groups : T.RegionGroupId.id list) (type_vars : T.type_var list) :
+    C.eval_ctx =
   C.reset_global_counters ();
   {
     C.type_context;
     C.fun_context;
     C.global_context;
+    C.region_groups;
     C.type_vars;
     C.env = [ C.Frame ];
     C.ended_regions = T.RegionId.Set.empty;
@@ -69,9 +71,12 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
    * *)
   let sg = fdef.signature in
   (* Create the context *)
+  let region_groups =
+    List.map (fun (g : T.region_var_group) -> g.id) sg.regions_hierarchy
+  in
   let ctx =
     initialize_eval_context type_context fun_context global_context
-      sg.type_params
+      region_groups sg.type_params
   in
   (* Instantiate the signature *)
   let type_params = List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params in
@@ -312,7 +317,7 @@ module Test = struct
       compute_type_fun_global_contexts crate
     in
     let ctx =
-      initialize_eval_context type_context fun_context global_context []
+      initialize_eval_context type_context fun_context global_context [] []
     in
 
     (* Insert the (uninitialized) local variables *)

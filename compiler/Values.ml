@@ -920,8 +920,28 @@ type abs_kind =
 
           See the explanations for [SynthInput].
        *)
-  | Loop of LoopId.id  (** The abstraction corresponds to a loop *)
+  | Loop of (LoopId.id * RegionGroupId.id option)
+      (** The abstraction corresponds to a loop.
+
+          The region group id is initially [None].
+          After we computed a fixed point, we give a unique region group
+          identifier for each loop abstraction.
+       *)
 [@@deriving show, ord]
+
+(** Ancestor for {!abs} iter visitor *)
+class ['self] iter_abs_base =
+  object (_self : 'self)
+    inherit [_] iter_typed_avalue
+    method visit_abs_kind : 'env -> abs_kind -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for {!abs} map visitor *)
+class ['self] map_abs_base =
+  object (_self : 'self)
+    inherit [_] map_typed_avalue
+    method visit_abs_kind : 'env -> abs_kind -> abs_kind = fun _ x -> x
+  end
 
 (** Abstractions model the parts in the borrow graph where the borrowing relations
     have been abstracted because of a function call.
@@ -931,8 +951,8 @@ type abs_kind =
 *)
 type abs = {
   abs_id : abstraction_id;
-  kind : (abs_kind[@opaque]);
-  can_end : (bool[@opaque]);
+  kind : abs_kind;
+  can_end : bool;
       (** Controls whether the region can be ended or not.
           
           This allows to "pin" some regions, and is useful when generating
@@ -959,7 +979,7 @@ type abs = {
       {
         name = "iter_abs";
         variety = "iter";
-        ancestors = [ "iter_typed_avalue" ];
+        ancestors = [ "iter_abs_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       },
@@ -967,7 +987,7 @@ type abs = {
       {
         name = "map_abs";
         variety = "map";
-        ancestors = [ "map_typed_avalue" ];
+        ancestors = [ "map_abs_base" ];
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
       }]
