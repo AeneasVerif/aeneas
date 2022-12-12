@@ -124,10 +124,16 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
     reaching the [return] instruction when synthesizing a *backward* function:
     this continuation takes care of doing the proper manipulations to finish
     the synthesis (mostly by ending abstractions).
+
+    [entered_loop]: [true] if we reached the end of the function because we
+    (re-)entered a loop (results [EndEnterLoop] and [EndContinue]).
+
+    [inside_loop]: [true] if we are *inside* a loop (result [EndContinue]).
 *)
 let evaluate_function_symbolic_synthesize_backward_from_return
     (config : C.config) (fdef : A.fun_decl) (inst_sg : A.inst_fun_sig)
-    (back_id : T.RegionGroupId.id) (ctx : C.eval_ctx) : SA.expression option =
+    (back_id : T.RegionGroupId.id) (entered_loop : bool) (inside_loop : bool)
+    (ctx : C.eval_ctx) : SA.expression option =
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
@@ -137,7 +143,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return
   let ret_inst_sg = instantiate_fun_sig type_params sg in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
-  let cf_pop_frame = pop_frame config in
+  let pop_return_value = not entered_loop in
+  let cf_pop_frame = pop_frame config pop_return_value in
 
   (* We need to find the parents regions/abstractions of the region we
    * will end - this will allow us to, first, mark the other return
@@ -156,30 +163,57 @@ let evaluate_function_symbolic_synthesize_backward_from_return
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
-  let cf_consume_ret ret_value ctx =
-    let compute_abs_avalues (abs : V.abs) (ctx : C.eval_ctx) :
-        C.eval_ctx * V.typed_avalue list =
-      let ctx, avalue =
-        apply_proj_borrows_on_input_value config ctx abs.regions
-          abs.ancestors_regions ret_value ret_rty
-      in
-      (ctx, [ avalue ])
+  let cf_consume_ret (ret_value : V.typed_value option) ctx =
+    let ctx =
+      if not entered_loop then (
+        let ret_value = Option.get ret_value in
+        let compute_abs_avalues (abs : V.abs) (ctx : C.eval_ctx) :
+            C.eval_ctx * V.typed_avalue list =
+          let ctx, avalue =
+            apply_proj_borrows_on_input_value config ctx abs.regions
+              abs.ancestors_regions ret_value ret_rty
+          in
+          (ctx, [ avalue ])
+        in
+
+        (* Initialize and insert the abstractions in the context.
+         *
+         * We take care of allowing to end only the regions which should end (note
+         * that this is important for soundness: this is part of the borrow checking).
+         * Also see the documentation of the [can_end] field of [abs] for more
+         * information. *)
+        let parent_and_current_rgs =
+          T.RegionGroupId.Set.add back_id parent_rgs
+        in
+        let region_can_end rid =
+          T.RegionGroupId.Set.mem rid parent_and_current_rgs
+        in
+        assert (region_can_end back_id);
+        let ctx =
+          create_push_abstractions_from_abs_region_groups
+            (fun rg_id -> V.SynthRet rg_id)
+            ret_inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues
+            ctx
+        in
+        ctx)
+      else ctx
     in
 
-    (* Initialize and insert the abstractions in the context.
-     *
-     * We take care of disallowing ending the return regions which we
-     * shouldn't end (see the documentation of the [can_end] field of [abs]
-     * for more information. *)
-    let parent_and_current_rgs = T.RegionGroupId.Set.add back_id parent_rgs in
-    let region_can_end rid =
-      T.RegionGroupId.Set.mem rid parent_and_current_rgs
-    in
-    assert (region_can_end back_id);
+    (* Set the proper loop abstractions as endable *)
     let ctx =
-      create_push_abstractions_from_abs_region_groups
-        (fun rg_id -> V.SynthRet rg_id)
-        ret_inst_sg.A.regions_hierarchy region_can_end compute_abs_avalues ctx
+      let visit_loop_abs =
+        object
+          inherit [_] C.map_eval_ctx
+
+          method! visit_abs _ abs =
+            match abs.kind with
+            | V.Loop (_, rg_id', _) ->
+                let rg_id' = Option.get rg_id' in
+                if rg_id' = back_id then { abs with can_end = true } else abs
+            | _ -> abs
+        end
+      in
+      visit_loop_abs#visit_eval_ctx () ctx
     in
 
     (* We now need to end the proper *input* abstractions - pay attention
@@ -190,9 +224,29 @@ let evaluate_function_symbolic_synthesize_backward_from_return
     (* End the parent abstractions and the current abstraction - note that we
      * end them in an order which follows the regions hierarchy: it should lead
      * to generated code which has a better consistency between the parent
-     * and children backward functions *)
+     * and children backward functions.
+     *
+     * Note that we don't end the same abstraction if we are *inside* a loop (i.e.,
+     * we are evaluating an [EndContinue]) or not.
+     *)
     let current_abs_id =
-      (T.RegionGroupId.nth inst_sg.regions_hierarchy back_id).id
+      if not inside_loop then
+        (T.RegionGroupId.nth inst_sg.regions_hierarchy back_id).id
+      else
+        let pred (abs : V.abs) =
+          match abs.kind with
+          | V.Loop (_, rg_id', kind) ->
+              let rg_id' = Option.get rg_id' in
+              let is_ret =
+                match kind with
+                | V.LoopSynthInput -> true
+                | V.LoopSynthRet -> false
+              in
+              rg_id' = back_id && is_ret
+          | _ -> false
+        in
+        let abs = Option.get (C.ctx_find_abs ctx pred) in
+        abs.abs_id
     in
     let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
     let cf_end_target_abs cf =
@@ -231,8 +285,13 @@ let evaluate_function_symbolic (synthesize : bool)
   (* Create the continuation to finish the evaluation *)
   let config = C.mk_config C.SymbolicMode in
   let cf_finish res ctx =
+    log#ldebug
+      (lazy
+        ("evaluate_function_symbolic: cf_finish: "
+        ^ Cps.show_statement_eval_res res));
+
     match res with
-    | Return ->
+    | Return | LoopReturn ->
         if synthesize then
           (* We have to "play different endings":
            * - one execution for the forward function
@@ -248,10 +307,11 @@ let evaluate_function_symbolic (synthesize : bool)
           (* Forward translation: retrieve the returned value *)
           let fwd_e =
             (* Pop the frame and retrieve the returned value at the same time*)
-            let cf_pop = pop_frame config in
+            let pop_return_value = true in
+            let cf_pop = pop_frame config pop_return_value in
             (* Generate the Return node *)
             let cf_return ret_value : m_fun =
-             fun ctx -> Some (SA.Return (ctx, Some ret_value))
+             fun ctx -> Some (SA.Return (ctx, ret_value))
             in
             (* Apply *)
             cf_pop cf_return ctx
@@ -261,10 +321,17 @@ let evaluate_function_symbolic (synthesize : bool)
              abstractions to consume the return value, then end all the
              abstractions up to the one in which we are interested.
           *)
+          let entered_loop = false in
+          let inside_loop =
+            match res with
+            | Return -> false
+            | LoopReturn -> true
+            | _ -> raise (Failure "Unreachable")
+          in
           let finish_back_eval back_id =
             Option.get
               (evaluate_function_symbolic_synthesize_backward_from_return config
-                 fdef inst_sg back_id ctx)
+                 fdef inst_sg back_id entered_loop inside_loop ctx)
           in
           let back_el =
             T.RegionGroupId.mapi
@@ -273,10 +340,50 @@ let evaluate_function_symbolic (synthesize : bool)
           in
           let back_el = T.RegionGroupId.Map.of_list back_el in
           (* Put everything together *)
-          S.synthesize_forward_end fwd_e back_el
+          S.synthesize_forward_end None fwd_e back_el
         else None
-    | EndEnterLoop -> raise (Failure "Unimplemented")
-    | EndContinue -> raise (Failure "Unimplemented")
+    | EndEnterLoop loop_input_values | EndContinue loop_input_values ->
+        (* Similar to [Return]: we have to play different endings *)
+        if synthesize then
+          (* Forward translation *)
+          let fwd_e =
+            (* Pop the frame - there is no returned value to pop: in the
+               translation we will simply call the loop function *)
+            let pop_return_value = false in
+            let cf_pop = pop_frame config pop_return_value in
+            (* Generate the Return node *)
+            let cf_return _ret_value : m_fun =
+             fun ctx -> Some (SA.Return (ctx, None))
+            in
+            (* Apply *)
+            cf_pop cf_return ctx
+          in
+          let fwd_e = Option.get fwd_e in
+          (* Backward translation: introduce "return"
+             abstractions to consume the return value, then end all the
+             abstractions up to the one in which we are interested.
+          *)
+          let entered_loop = true in
+          let inside_loop =
+            match res with
+            | EndEnterLoop _ -> false
+            | EndContinue _ -> true
+            | _ -> raise (Failure "Unreachable")
+          in
+          let finish_back_eval back_id =
+            Option.get
+              (evaluate_function_symbolic_synthesize_backward_from_return config
+                 fdef inst_sg back_id entered_loop inside_loop ctx)
+          in
+          let back_el =
+            T.RegionGroupId.mapi
+              (fun gid _ -> (gid, finish_back_eval gid))
+              fdef.signature.regions_hierarchy
+          in
+          let back_el = T.RegionGroupId.Map.of_list back_el in
+          (* Put everything together *)
+          S.synthesize_forward_end (Some loop_input_values) fwd_e back_el
+        else None
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)
@@ -329,7 +436,8 @@ module Test = struct
       match res with
       | Return ->
           (* Ok: drop the local variables and finish *)
-          pop_frame config (fun _ _ -> None) ctx
+          let pop_return_value = true in
+          pop_frame config pop_return_value (fun _ _ -> None) ctx
       | _ ->
           raise
             (Failure

@@ -317,14 +317,17 @@ let get_non_local_function_return_type (fid : A.assumed_fun_id)
       in
       Subst.erase_regions_substitute_types tsubst sg.output
 
-let move_return_value (config : C.config) (cf : V.typed_value -> m_fun) : m_fun
-    =
+let move_return_value (config : C.config) (pop_return_value : bool)
+    (cf : V.typed_value option -> m_fun) : m_fun =
  fun ctx ->
-  let ret_vid = E.VarId.zero in
-  let cc = eval_operand config (E.Move (mk_place_from_var_id ret_vid)) in
-  cc cf ctx
+  if pop_return_value then
+    let ret_vid = E.VarId.zero in
+    let cc = eval_operand config (E.Move (mk_place_from_var_id ret_vid)) in
+    cc (fun v ctx -> cf (Some v) ctx) ctx
+  else cf None ctx
 
-let pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
+let pop_frame (config : C.config) (pop_return_value : bool)
+    (cf : V.typed_value option -> m_fun) : m_fun =
  fun ctx ->
   (* Debug *)
   log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ctx));
@@ -350,15 +353,18 @@ let pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
       ^ "]"));
 
   (* Move the return value out of the return variable *)
-  let cc = move_return_value config in
+  let cc = move_return_value config pop_return_value in
   (* Sanity check *)
   let cc =
     comp_check_value cc (fun ret_value ctx ->
-        assert (not (bottom_in_value ctx.ended_regions ret_value)))
+        match ret_value with
+        | None -> ()
+        | Some ret_value ->
+            assert (not (bottom_in_value ctx.ended_regions ret_value)))
   in
 
   (* Drop the outer *loans* we find in the local variables *)
-  let cf_drop_loans_in_locals cf (ret_value : V.typed_value) : m_fun =
+  let cf_drop_loans_in_locals cf (ret_value : V.typed_value option) : m_fun =
     (* Drop the loans *)
     let locals = List.rev locals in
     let cf_drop =
@@ -392,7 +398,7 @@ let pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
         C.Var (C.DummyBinder vid, v) :: pop env
     | C.Frame :: env -> (* Stop here *) env
   in
-  let cf_pop cf (ret_value : V.typed_value) : m_fun =
+  let cf_pop cf (ret_value : V.typed_value option) : m_fun =
    fun ctx ->
     let env = pop ctx.env in
     let ctx = { ctx with env } in
@@ -403,9 +409,9 @@ let pop_frame (config : C.config) (cf : V.typed_value -> m_fun) : m_fun =
 
 (** Pop the current frame and assign the returned value to its destination. *)
 let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
-  let cf_pop = pop_frame config in
+  let cf_pop = pop_frame config true in
   let cf_assign cf ret_value : m_fun =
-    assign_to_place config ret_value dest cf
+    assign_to_place config (Option.get ret_value) dest cf
   in
   comp cf_pop cf_assign
 
@@ -845,8 +851,8 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
           (* Evaluation successful: evaluate the second statement *)
           | Unit -> eval_statement config st2 cf
           (* Control-flow break: transmit. We enumerate the cases on purpose *)
-          | Panic | Break _ | Continue _ | Return | EndEnterLoop | EndContinue
-            ->
+          | Panic | Break _ | Continue _ | Return | LoopReturn | EndEnterLoop _
+          | EndContinue _ ->
               cf res
         in
         (* Compose and apply *)
@@ -1094,7 +1100,8 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
         (* Pop the stack frame, retrieve the return value, move it to
          * its destination and continue *)
         pop_frame_assign config dest (cf Unit)
-    | Break _ | Continue _ | Unit | EndEnterLoop | EndContinue ->
+    | Break _ | Continue _ | Unit | LoopReturn | EndEnterLoop _ | EndContinue _
+      ->
         raise (Failure "Unreachable")
   in
   let cc = comp cc cf_finish in

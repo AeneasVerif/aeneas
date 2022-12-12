@@ -18,8 +18,11 @@ open InterpreterExpressions
     variable, move the return value out of the return variable, remove all the
     local variables (but preserve the abstractions!), remove the {!C.Frame} indicator
     delimiting the current frame and handle the return value to the continuation.
+
+    If the boolean is false, we don't move the return value, and call the
+    continuation with [None].
  *)
-val pop_frame : C.config -> (V.typed_value -> m_fun) -> m_fun
+val pop_frame : C.config -> bool -> (V.typed_value option -> m_fun) -> m_fun
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and
     region ids. This is mostly used in preparation of function calls, when
