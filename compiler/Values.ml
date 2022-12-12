@@ -893,6 +893,9 @@ and typed_avalue = { value : avalue; ty : rty }
         concrete = true;
       }]
 
+(** TODO: make those variants of [abs_kind] *)
+type loop_abs_kind = LoopSynthInput | LoopSynthRet [@@deriving show, ord]
+
 (** The kind of an abstraction, which keeps track of its origin *)
 type abs_kind =
   | FunCall of (FunCallId.id * RegionGroupId.id)
@@ -920,7 +923,7 @@ type abs_kind =
 
           See the explanations for [SynthInput].
        *)
-  | Loop of (LoopId.id * RegionGroupId.id option)
+  | Loop of (LoopId.id * RegionGroupId.id option * loop_abs_kind)
       (** The abstraction corresponds to a loop.
 
           The region group id is initially [None].

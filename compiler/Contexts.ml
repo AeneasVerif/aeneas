@@ -405,15 +405,18 @@ let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in
   ctx_push_vars ctx vars
 
-let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
+let env_find_abs (env : env) (pred : V.abs -> bool) : V.abs option =
   let rec lookup env =
     match env with
-    | [] -> raise (Failure "Unexpected")
+    | [] -> None
     | Var (_, _) :: env' -> lookup env'
-    | Abs abs :: env' -> if abs.abs_id = abs_id then abs else lookup env'
+    | Abs abs :: env' -> if pred abs then Some abs else lookup env'
     | Frame :: env' -> lookup env'
   in
   lookup env
+
+let env_lookup_abs (env : env) (abs_id : V.AbstractionId.id) : V.abs =
+  Option.get (env_find_abs env (fun abs -> abs.abs_id = abs_id))
 
 (** Remove an abstraction from the context, as well as all the references to
     this abstraction (for instance, remove the abs id from all the parent sets
@@ -472,6 +475,9 @@ let env_subst_abs (env : env) (abs_id : V.AbstractionId.id) (nabs : V.abs) :
 
 let ctx_lookup_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) : V.abs =
   env_lookup_abs ctx.env abs_id
+
+let ctx_find_abs (ctx : eval_ctx) (p : V.abs -> bool) : V.abs option =
+  env_find_abs ctx.env p
 
 (** See the comments for {!env_remove_abs} *)
 let ctx_remove_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) :

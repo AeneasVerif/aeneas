@@ -156,13 +156,14 @@ let synthesize_assertion (ctx : Contexts.eval_ctx) (v : V.typed_value)
     (e : expression option) =
   Option.map (fun e -> Assertion (ctx, v, e)) e
 
-let synthesize_forward_end (e : expression)
-    (el : expression T.RegionGroupId.Map.t) =
-  Some (ForwardEnd (e, el))
+let synthesize_forward_end (loop_input_values : V.typed_value list option)
+    (e : expression) (el : expression T.RegionGroupId.Map.t) =
+  Some (ForwardEnd (loop_input_values, e, el))
 
-let synthesize_loop (end_expr : expression option)
+let synthesize_loop (loop_id : V.LoopId.id) (end_expr : expression option)
     (loop_expr : expression option) : expression option =
   match (end_expr, loop_expr) with
   | None, None -> None
-  | Some end_expr, Some loop_expr -> Some (Loop { end_expr; loop_expr })
+  | Some end_expr, Some loop_expr ->
+      Some (Loop { loop_id; end_expr; loop_expr })
   | _ -> raise (Failure "Unreachable")

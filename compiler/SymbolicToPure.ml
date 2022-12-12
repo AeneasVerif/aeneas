@@ -1162,7 +1162,8 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | Meta (meta, e) -> translate_meta meta e ctx
-  | ForwardEnd (e, back_e) ->
+  | ForwardEnd (loop_input_values, e, back_e) ->
+      assert (loop_input_values = None);
       (* Update the current state with the additional state received by the backward
          function, if needs be, and lookup the proper expression *)
       let ctx, e =

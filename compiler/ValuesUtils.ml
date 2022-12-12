@@ -37,6 +37,13 @@ let as_mut_borrow (v : typed_value) : BorrowId.id * typed_value =
   | Borrow (MutBorrow (bid, bv)) -> (bid, bv)
   | _ -> raise (Failure "Unexpected")
 
+let is_unit (v : typed_value) : bool =
+  ty_is_unit v.ty
+  &&
+  match v.value with
+  | Adt av -> av.variant_id = None && av.field_values = []
+  | _ -> false
+
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value -
     we don't check if there are borrows hidden in symbolic values).
  *)

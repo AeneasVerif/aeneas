@@ -28,6 +28,7 @@ let operand_to_string = PA.operand_to_string
 let statement_to_string ctx = PA.statement_to_string ctx "" "  "
 let statement_to_string_with_tab ctx = PA.statement_to_string ctx "  " "  "
 let env_elem_to_string ctx = PA.env_elem_to_string ctx "" "  "
+let env_to_string ctx env = eval_ctx_to_string { ctx with env }
 let abs_to_string ctx = PA.abs_to_string ctx "" "  "
 
 let same_symbolic_id (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) : bool =

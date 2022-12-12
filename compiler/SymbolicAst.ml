@@ -100,7 +100,8 @@ type expression =
           We use it to compute meaningful names for the variables we introduce,
           to prettify the generated code.
        *)
-  | ForwardEnd of expression * expression T.RegionGroupId.Map.t
+  | ForwardEnd of
+      V.typed_value list option * expression * expression T.RegionGroupId.Map.t
       (** We use this delimiter to indicate at which point we switch to the
           generation of code specific to the backward function(s). This allows
           us in particular to factor the work out: we don't need to replay the
@@ -110,11 +111,16 @@ type expression =
           The first expression gives the end of the translation for the forward
           function, the map from region group ids to expressions gives the end
           of the translation for the backward functions.
+
+          The optional list of input values are input values for loops: upon
+          entering a loop, in the translation we call the loop translation
+          function, which takes care of the end of the execution.
        *)
-  | Loop of loop
+  | Loop of loop  (** Loop *)
   | Meta of meta * expression  (** Meta information *)
 
 and loop = {
+  loop_id : V.LoopId.id;
   end_expr : expression;
       (** The end of the function (upon the moment it enters the loop) *)
   loop_expr : expression;  (** The symbolically executed loop body *)

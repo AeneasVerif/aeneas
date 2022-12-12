@@ -245,7 +245,7 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
 (** Destructure all the new abstractions *)
 let destructure_new_abs (loop_id : V.LoopId.id)
     (old_abs_ids : V.AbstractionId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
-  let abs_kind = V.Loop (loop_id, None) in
+  let abs_kind = V.Loop (loop_id, None, V.LoopSynthInput) in
   let can_end = false in
   let destructure_shared_values = true in
   let is_fresh_abs_id (id : V.AbstractionId.id) : bool =
@@ -336,7 +336,7 @@ let collapse_ctx (loop_id : V.LoopId.id)
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n\n"));
 
-  let abs_kind = V.Loop (loop_id, None) in
+  let abs_kind = V.Loop (loop_id, None, LoopSynthInput) in
   let can_end = false in
   let destructure_shared_values = true in
   let is_fresh_abs_id (id : V.AbstractionId.id) : bool =
@@ -966,7 +966,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
       let abs =
         {
           V.abs_id = C.fresh_abstraction_id ();
-          kind = V.Loop (S.loop_id, None);
+          kind = V.Loop (S.loop_id, None, LoopSynthInput);
           can_end = false;
           parents = V.AbstractionId.Set.empty;
           original_parents = [];
@@ -1020,7 +1020,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
       let abs =
         {
           V.abs_id = C.fresh_abstraction_id ();
-          kind = V.Loop (S.loop_id, None);
+          kind = V.Loop (S.loop_id, None, LoopSynthInput);
           can_end = false;
           parents = V.AbstractionId.Set.empty;
           original_parents = [];
@@ -1124,7 +1124,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
         (* Convert the value to an abstraction *)
-        let abs_kind = V.Loop (S.loop_id, None) in
+        let abs_kind = V.Loop (S.loop_id, None, LoopSynthInput) in
         let can_end = false in
         let destructure_shared_values = true in
         let absl =
@@ -1691,9 +1691,16 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
       (* Return - the returned value is not used, so we can return whatever *)
       v)
 
-  let match_bottom_with_other (_left : bool) (_v : V.typed_value) :
-      V.typed_value =
-    raise Distinct
+  let match_bottom_with_other (left : bool) (v : V.typed_value) : V.typed_value
+      =
+    (* It can happen that some variables get initialized in some branches
+       and not in some others, which causes problems when matching. *)
+    (* TODO: the returned value is not used, while it should: in generality it
+       should be ok to match a fixed-point with the environment we get at
+       a continue, where the fixed point contains some bottom values. *)
+    if left && not (value_has_loans_or_borrows S.ctx v.V.value) then
+      mk_bottom v.V.ty
+    else raise Distinct
 
   let match_distinct_aadts _ _ _ _ _ = raise Distinct
 
@@ -2131,7 +2138,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
         assert (i = 0);
         register_ctx ctx;
         None
-    | EndEnterLoop | EndContinue ->
+    | LoopReturn | EndEnterLoop _ | EndContinue _ ->
         (* We don't support nested loops for now *)
         raise (Failure "Nested loops are not supported for now")
   in
@@ -2246,15 +2253,16 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
 
     let list_loop_abstractions =
       object
-        inherit [_] C.map_eval_ctx as super
+        inherit [_] C.map_eval_ctx
 
-        method! visit_abs env abs =
+        method! visit_abs _ abs =
           match abs.kind with
-          | Loop (loop_id', _) ->
+          | Loop (loop_id', _, kind) ->
               assert (loop_id' = loop_id);
+              assert (kind = V.LoopSynthInput);
               add_aid abs.abs_id;
               { abs with can_end = true }
-          | _ -> super#visit_abs env abs
+          | _ -> abs
       end
     in
     let fp = list_loop_abstractions#visit_eval_ctx () fp in
@@ -2285,7 +2293,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
       | Break _ ->
           (* We enforce that we can't get there: see {!PrePasses.remove_loop_breaks} *)
           raise (Failure "Unreachable")
-      | Unit | EndEnterLoop | EndContinue ->
+      | Unit | LoopReturn | EndEnterLoop _ | EndContinue _ ->
           (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
              For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
           *)
@@ -2349,7 +2357,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
           | id0 :: ids ->
               let id0 = ref id0 in
               (* Add the proper region group into the abstraction *)
-              let abs_kind = V.Loop (loop_id, Some rg_id) in
+              let abs_kind = V.Loop (loop_id, Some rg_id, V.LoopSynthInput) in
               let abs = C.ctx_lookup_abs !fp !id0 in
               let abs = { abs with V.kind = abs_kind } in
               let fp', _ = C.ctx_subst_abs !fp !id0 abs in
@@ -2372,17 +2380,19 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     (* Reset the loop abstracions as not endable *)
     let list_loop_abstractions (remove_rg_id : bool) =
       object
-        inherit [_] C.map_eval_ctx as super
+        inherit [_] C.map_eval_ctx
 
-        method! visit_abs env abs =
+        method! visit_abs _ abs =
           match abs.kind with
-          | Loop (loop_id', _) ->
+          | Loop (loop_id', _, kind) ->
               assert (loop_id' = loop_id);
+              assert (kind = V.LoopSynthInput);
               let kind =
-                if remove_rg_id then V.Loop (loop_id, None) else abs.kind
+                if remove_rg_id then V.Loop (loop_id, None, V.LoopSynthInput)
+                else abs.kind
               in
               { abs with can_end = false; kind }
-          | _ -> super#visit_abs env abs
+          | _ -> abs
       end
     in
     let update_kinds_can_end (remove_rg_id : bool) ctx =
@@ -2402,38 +2412,6 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   (* Return *)
   (fp, fixed_ids)
 
-(*
-(** Introduce region groups in the loop abstractions.
-
-    Initially, the new abstractions in the fixed-point have no region group.
-    We want each one of them to have a unique region group (because we will
-    translate each one of those abstractions to a pair forward
-    function/backward function).
- *)
-let ctx_add_loop_region_groups (loop_id : V.LoopId.id) (fp : C.eval_ctx) :
-    C.eval_ctx =
-  let _, fresh_rid = T.RegionGroupId.fresh_stateful_generator () in
-
-  let introduce_fresh_rids =
-    object
-      inherit [_] C.map_eval_ctx
-
-      method! visit_abs _ abs =
-        match abs.kind with
-        | Loop (loop_id', rg_id) ->
-            assert (loop_id' = loop_id);
-            assert (rg_id = None);
-            let rg_id = Some (fresh_rid ()) in
-            let kind = V.Loop (loop_id, rg_id) in
-            { abs with V.kind }
-        | _ -> abs
-    end
-  in
-  let fp_env = List.rev (introduce_fresh_rids#visit_env () (List.rev fp.env)) in
-  let fp = { fp with env = fp_env } in
-  fp
- *)
-
 (** Split an environment between the fixed abstractions, values, etc. and
     the new abstractions, values, etc.
 
@@ -2452,7 +2430,7 @@ let ctx_split_fixed_new (fixed_ids : ids_sets) (ctx : C.eval_ctx) :
   let is_fresh (ee : C.env_elem) : bool =
     match ee with
     | C.Var (VarBinder _, _) | C.Frame -> false
-    | C.Var (DummyBinder bv, _) -> not (is_fresh_did bv)
+    | C.Var (DummyBinder bv, _) -> is_fresh_did bv
     | C.Abs abs -> is_fresh_abs_id abs.abs_id
   in
   let new_eel, filt_env = List.partition is_fresh ctx.env in
@@ -2785,6 +2763,11 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
    values, if they contain borrows - above i points to [s@7], but it should
    be a different symbolic value...).
 
+   Finally, we use the map from symbolic values to values to compute the list of
+   input values of the loop: we simply list the values, by order of increasing
+   symbolic value id. We *do* use the fixed values (though they are in the frame)
+   because they may be *read* inside the loop.
+
    We can then proceed to finishing the symbolic execution and doing the
    synthesis.
 
@@ -2799,8 +2782,9 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
   (* Debug *)
   log#ldebug
     (lazy
-      ("match_ctx_with_target:\n" ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx
-     ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx));
+      ("match_ctx_with_target:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
+     ^ "\n\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
+     ^ eval_ctx_to_string tgt_ctx));
 
   (* We first reorganize [src_ctx] so that we can match it with [tgt_ctx] *)
   let rec cf_reorganize_src : cm_fun =
@@ -2809,6 +2793,14 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
        source context which don't appear in the target context *)
     let filt_src_env, _, _ = ctx_split_fixed_new fixed_ids src_ctx in
     let filt_tgt_env, _, _ = ctx_split_fixed_new fixed_ids tgt_ctx in
+
+    log#ldebug
+      (lazy
+        ("match_ctx_with_target:\n" ^ "\n- fixed_ids: "
+       ^ show_ids_sets fixed_ids ^ "\n\n- filt_src_ctx: "
+        ^ env_to_string src_ctx filt_src_env
+        ^ "\n- filt_tgt_ctx: "
+        ^ env_to_string tgt_ctx filt_tgt_env));
 
     (* Remove the abstractions *)
     let filter (ee : C.env_elem) : bool =
@@ -3010,7 +3002,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     in
     let visit_tgt =
       object
-        inherit [_] C.map_eval_ctx
+        inherit [_] C.map_eval_ctx as super
 
         method! visit_borrow_id _ bid =
           (* Lookup the id of the loan corresponding to this borrow *)
@@ -3032,6 +3024,17 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
         method! visit_symbolic_value_id _ _ = C.fresh_symbolic_value_id ()
         method! visit_abstraction_id _ _ = C.fresh_abstraction_id ()
         method! visit_region_id _ id = get_rid id
+
+        (** We also need to change the abstraction kind *)
+        method! visit_abs env abs =
+          match abs.kind with
+          | V.Loop (loop_id', rg_id, kind) ->
+              assert (loop_id' = loop_id);
+              assert (kind = V.LoopSynthInput);
+              let kind = V.Loop (loop_id, rg_id, V.LoopSynthRet) in
+              let abs = { abs with kind } in
+              super#visit_abs env abs
+          | _ -> super#visit_abs env abs
       end
     in
     let new_absl = List.map (visit_tgt#visit_abs ()) new_absl in
@@ -3058,8 +3061,19 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     in
     let cc = InterpreterBorrows.end_borrows config new_borrows in
 
+    (* List the loop input values - when iterating over a map, we iterate
+       over the keys, in increasing order *)
+    let input_values =
+      List.map snd
+        (V.SymbolicValueId.Map.bindings tgt_to_src_maps.sid_to_value_map)
+    in
+
     (* Continue *)
-    cc (cf (if is_loop_entry then EndEnterLoop else EndContinue)) src_ctx
+    cc
+      (cf
+         (if is_loop_entry then EndEnterLoop input_values
+         else EndContinue input_values))
+      src_ctx
   in
 
   (* Compose and continue *)
@@ -3080,7 +3094,8 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
   *)
   let rec reeval_loop_body (res : statement_eval_res) : m_fun =
     match res with
-    | Return | Panic -> cf res
+    | Return -> cf LoopReturn
+    | Panic -> cf Panic
     | Break i ->
         (* Break out of the loop by calling the continuation *)
         let res = if i = 0 then Unit else Break (i - 1) in
@@ -3100,7 +3115,7 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
          * We prefer to write it this way for consistency and sanity,
          * though. *)
         raise (Failure "Unreachable")
-    | EndEnterLoop | EndContinue ->
+    | LoopReturn | EndEnterLoop _ | EndContinue _ ->
         (* We can't get there: this is only used in symbolic mode *)
         raise (Failure "Unreachable")
   in
@@ -3155,12 +3170,12 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
     | Continue i ->
         (* We don't support nested loops for now *)
         assert (i = 0);
-        let fp_bl_corresp =
-          compute_fixed_point_id_correspondance fixed_ids ctx fp_ctx
+        let cc =
+          match_ctx_with_target config loop_id false fp_bl_corresp fixed_ids
+            fp_ctx
         in
-        match_ctx_with_target config loop_id false fp_bl_corresp fixed_ids
-          fp_ctx cf ctx
-    | Unit | EndEnterLoop | EndContinue ->
+        cc cf ctx
+    | Unit | LoopReturn | EndEnterLoop _ | EndContinue _ ->
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
            For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
         *)
@@ -3169,7 +3184,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
   let loop_expr = eval_loop_body cf_loop fp_ctx in
 
   (* Put together *)
-  S.synthesize_loop end_expr loop_expr
+  S.synthesize_loop loop_id end_expr loop_expr
 
 (** Evaluate a loop *)
 let eval_loop (config : C.config) (eval_loop_body : st_cm_fun) : st_cm_fun =
