@@ -394,18 +394,18 @@ Ltac push_scalar_bounds_tac a :=
   simpl in Ha.
 
 (* fffffffffffff *)
-Ltac VEC v x :=
+Ltac VEC v x wStr :=
   let wVal := constr:(vec_push_back _ v x) in
 
   assert (b: vec_length v < usize_max);
-  match goal with [ |- vec_length v < usize_max ] =>
+  lazymatch goal with [ |- vec_length v < usize_max ] =>
     push_scalar_bounds_tac v;
     simpl; try lia
   | _ =>
     
   let h := fresh "H" in
   let w := string_to_ident wStr in
-  destruct (V_push_back_bounded v x b) as (w, h)
+  destruct (V_push_back_bounded v x b) as (w, h);
   clear b;
 
   let hr := fresh "Hr" in
@@ -416,6 +416,7 @@ Ltac VEC v x :=
   clear hr;
   try rewrite res_bind_value;
   try rewrite res_bind_id
+  end.
 
 (* A first tactic which tries to abstract over the "S_sub_bounded" lemma. It :
  - Adds the boundary prerequisites as additional goals.
@@ -428,22 +429,19 @@ Ltac rewrite_scalar_sub_tac a b xStr :=
   let T := constr:(scalar_ty_of a) in
   let xVal := constr:((to_Z a) - (to_Z b)) in
 
-  (* Proving or supposing the lower bound *)
-  let B12 := fresh "B1" in
+  (* Proving or supposing the lower bound, using "lazymatch" by default to avoid backtracking in case of errors in a branch *)
+  let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
-  match goal with [ |- scalar_min T <= xVal ] =>
+  lazymatch goal with [ |- scalar_min T <= xVal ] =>
     push_scalar_bounds_tac a;
     push_scalar_bounds_tac b;
     simpl; try lia
   | [ |- _ ] =>
 
-  (* Same for the upper bound
-     TODO: Factorize with the part above,
-     They are separated only because "lia" gives no partial progress on the proof.
-  *)
+  (* TODO: Avoid this redundancy (due to "lia" doing no partial progress) *)
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
-  match goal with [ |- xVal <= scalar_max T ] =>
+  lazymatch goal with [ |- xVal <= scalar_max T ] =>
     push_scalar_bounds_tac a;
     push_scalar_bounds_tac b;
     simpl; try lia
@@ -462,9 +460,7 @@ Ltac rewrite_scalar_sub_tac a b xStr :=
   let Hx := string_to_ident ("H" ++ xStr)%string in
   destruct H as (Hr, Hx);
 
-  (* Refine the goal to then rewrite the expression.
-     TODO: Match T to do only one try.
-  *)
+  (* Rewrite the expression then remove the rewriting rule *)
   rewrite Hr;
   clear Hr;
 
@@ -489,7 +485,7 @@ Ltac rewrite_scalar_add_tac a b xStr :=
 
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
-  match goal with [ |- scalar_min T <= xVal ] =>
+  lazymatch goal with [ |- scalar_min T <= xVal ] =>
     push_scalar_bounds_tac a;
     push_scalar_bounds_tac b;
     simpl; try lia
@@ -497,7 +493,7 @@ Ltac rewrite_scalar_add_tac a b xStr :=
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
-  match goal with [ |- xVal <= scalar_max T ] =>
+  lazymatch goal with [ |- xVal <= scalar_max T ] =>
     push_scalar_bounds_tac a;
     push_scalar_bounds_tac b;
     simpl; try lia
@@ -531,7 +527,7 @@ Ltac rewrite_scalar_mul_tac a b xStr :=
 
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
-  match goal with [ |- scalar_min T <= xVal ] =>
+  lazymatch goal with [ |- scalar_min T <= xVal ] =>
     push_scalar_bounds_tac a;
     push_scalar_bounds_tac b;
     simpl; try lia
@@ -539,7 +535,7 @@ Ltac rewrite_scalar_mul_tac a b xStr :=
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
-  match goal with [ |- xVal <= scalar_max T ] =>
+  lazymatch goal with [ |- xVal <= scalar_max T ] =>
     push_scalar_bounds_tac a;
     push_scalar_bounds_tac b;
     simpl; try lia
@@ -573,14 +569,14 @@ Ltac rewrite_scalar_div_tac a b xStr :=
 
   let B0 := fresh "B0" in
   assert (B0: to_Z b <> 0);
-  match goal with [ |- to_Z b <> 0 ] =>
+  lazymatch goal with [ |- to_Z b <> 0 ] =>
     push_scalar_bounds_tac b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
-  match goal with [ |- scalar_min T <= xVal ] =>
+  lazymatch goal with [ |- scalar_min T <= xVal ] =>
     push_scalar_bounds_tac a;
     push_scalar_bounds_tac b;
     simpl; try lia
@@ -588,7 +584,7 @@ Ltac rewrite_scalar_div_tac a b xStr :=
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
-  match goal with [ |- xVal <= scalar_max T ] =>
+  lazymatch goal with [ |- xVal <= scalar_max T ] =>
     push_scalar_bounds_tac a;
     push_scalar_bounds_tac b;
     simpl; try lia
@@ -621,14 +617,15 @@ Ltac rewrite_vec_push_back_tac v x wStr :=
 
   let B := fresh "B" in
   assert (B: vec_length v < usize_max);
-  match goal with [ |- vec_length v < usize_max ] =>
-    push_scalar_bounds_tac v;
+  lazymatch goal with [ |- vec_length v < usize_max ] =>
+    let H := fresh "H" in
+    assert (H := vec_len_in_usize v);
     simpl; try lia
   | [ |- _ ] =>
 
   let H := fresh "H" in
   let w := string_to_ident wStr in
-  destruct (bounded_vec_push_back v x B) as (w, H);
+  destruct (V_push_back_bounded v x B) as (w, H);
   clear B;
 
   let Hr := fresh "Hr" in
@@ -652,8 +649,6 @@ Tactic Notation "rewrite_vec_push_back" constr(v) constr(x) "as" constr(w) :=
     +-------+
 *)
 
-Lemma vec_test {T} : 
-
 Lemma add_assoc {a} :
   match (x <- usize_sub a (1%usize); Return x) with
   | Return v => ∃n, (1 + n)%nat = usize_to_nat a
@@ -667,46 +662,5 @@ rewrite_scalar_sub a (1%usize) as "w"%string.
 - admit.
 - admit.
 Admitted.
-
-
-
-Lemma MP {A B}: A -> (A -> B) -> B.
-Admitted.
-
-Ltac make_mp :=
-  let h := fresh "hyp" in
-  assert (h : True) by auto;
-  match goal with
-  | [ |- True ] => ()
-  | _ =>
-
-  apply (MP h)
-
-  end.
-
-Lemma MP2 {B}: (True -> B) -> B.
-
-make_mp.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 End Primitives_Ext.

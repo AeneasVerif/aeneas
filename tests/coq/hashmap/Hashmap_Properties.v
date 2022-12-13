@@ -18,10 +18,6 @@ Require Import Coq.Program.Equality.
 Require Import Coq.Logic.ProofIrrelevance.
 Require Import Coq.Bool.Bool.
 Import ListNotations.
-Require Import ltac2_string_ident.
-(*
-Require Import Ltac2.Ltac2.
-Require Ltac2.Fresh.*)
 
 Module Hashmap_Properties.
 
@@ -79,71 +75,6 @@ Qed.
 Definition slots_to_chains {T}(slots: vec (List_t T)) : list (chain_t T) :=
     List.map list_t_to_chain (vec_to_list slots).
 
-(* vec_push_back test *)
-Ltac RW_push_back_tac v x wStr :=
-  let wVal := constr:(vec_push_back _ v x) in
-
-  assert (b: vec_length v < usize_max);
-  match goal with [ |- vec_length v < usize_max ] =>
-    push_scalar_bounds_tac v;
-    simpl; admit (*try lia*)
-  | _ =>
-    
-  let h := fresh "H" in
-  let w := string_to_ident wStr in
-  destruct (V_push_back_bounded v x b) as (w, h)
-  (*
-  idtac
-  end (**)
-  clear b;
-
-  let hr := fresh "Hr" in
-  let hw := string_to_ident ("H" ++ wStr)%string in
-  destruct h as (hr, hw);
-
-  rewrite hr;
-  clear hr;
-  try rewrite res_bind_value;
-  try rewrite res_bind_id*)
-  end.
-
-Tactic Notation "RW_push_back" constr(v) constr(x) :=
-  RW_push_back_tac v x "w"%string.
-  
-Tactic Notation "RW_push_back" constr(v) constr(x) "as" constr(w) :=
-  RW_push_back_tac v x w.
-(*
-(* vec_push_back test *)
-Ltac2 rw_push_back_tac2 v x wStr :=
-  let wVal := constr:(vec_push_back _ $v $x) in
-  assert (B: vec_length $v < usize_max);
-  match! goal with [ |- vec_length &v < usize_max ] =>
-  ()(*
-    ltac1:(push_scalar_bounds_tac &v);
-    simpl; try ltac1:(lia)*)
-  | [ |- _ ] =>
-  ()(*
-  let h := Fresh.fresh (Fresh.Free.of_goal ()) @H in
-  let w := string_to_ident_2 wStr in
-  destruct (bounded_vec_push_back $v $x &B) as (w, h);
-  clear B;
-
-  let hr := Fresh.fresh (Fresh.Free.of_goal ()) @Hr in
-  let hw := string_to_ident_2 constr:(("H" ++ $wStr)%string) in
-  destruct h as (hr, hw);
-
-  rewrite &hr;
-  clear hr;
-  try ltac1:(rewrite res_bind_value);
-  try ltac1:(rewrite res_bind_id)*)
-  end.
-
-Ltac2 Notation "rewrite_push_back" v(constr) x(constr) :=
-  rw_push_back_tac2 v x "w".
-
-Ltac2 Notation "rewrite_push_back" v(constr) x(constr) "as" w(constr) :=
-  rw_push_back_tac2 v x w.
-*)
 Lemma hm_allocate_slots_shape (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat) :
     vec_length v + to_Z n <= usize_max ->
     match hash_map_allocate_slots_fwd T fuel v n with
@@ -159,54 +90,51 @@ revert n HeqN fuel v.
 induction N ; intros.
 
 (* zero case *)
+1: {
 (* TODO: Coq unfolds the recursive def a second time with "destruct fuel" *)
 unfold hash_map_allocate_slots_fwd.
 destruct fuel. trivial.
 fold hash_map_allocate_slots_fwd.
 
-rewrite S_eqb_Z.
-simpl (to_Z 0 %usize).
 apply (f_equal Z.of_nat) in HeqN.
 rewrite usize_nat_to_Z in HeqN.
 simpl in HeqN.
 
+unfold scalar_eqb.
+simpl (to_Z 0 %usize).
+
 remember (to_Z n =? 0) as B.
 induction B ; apply eq_sym in HeqB.
-  now rewrite app_nil_r.
-  lia.
+ - now rewrite app_nil_r.
+ - lia.
+}
 
 (* successor case *)
+1: {
 (* TODO: How to factorize repetitions properly in both cases ? *)
 unfold hash_map_allocate_slots_fwd.
 destruct fuel. trivial.
 fold hash_map_allocate_slots_fwd.
 
-(* Should be factorized with a high-level tactic. *)
+(* Should be factorized with an induction tactic (same for the zero case). *)
 assert (H_SN := HeqN).
-rewrite S_eqb_Z.
-simpl (to_Z 0 %usize).
 apply (f_equal Z.of_nat) in HeqN.
 rewrite usize_nat_to_Z in HeqN.
 simpl in HeqN.
 
+unfold scalar_eqb.
+simpl (to_Z 0 %usize).
+
 remember (to_Z n =? 0) as B.
 induction B ; apply eq_sym in HeqB.
-lia.
+1: { lia. }
 
-(* <<<<< HERE >>>>>  *)
-pose (v2 := @ListNil T). 
-RW_push_back v v2 as "w"%string.
-- admit.
-- 
-rewrite_push_back v v2 as "w"%string.
+(* Annoying variable renaming then unfolding *)
+set (v2 := @ListNil T).
+rewrite_vec_push_back v v2 as "w"%string.
+unfold v2 in *.
 
-assert (P1: vec_length v < usize_max) by ltac1:(lia).
-destruct (V_push_back_bounded v ListNil P1) as (w, H1).
-destruct H1 as (Hw1, Hw2).
-rewrite Hw1.
-rewrite res_bind_value.
-
-ltac1:(rewrite_scalar_sub n (1%usize) as "y"%string).
+rewrite_scalar_sub n (1%usize) as "y"%string.
 
 simpl in Hy |- *.
 
@@ -215,7 +143,7 @@ assert (P3: ((slots_to_chains v) ++ [[]]: list (chain_t T)) = slots_to_chains w)
   change ([[]]) with (map (@list_t_to_chain T) [ListNil]).
   unfold slots_to_chains.
   rewrite <-map_app.
-  now rewrite <-Hw2.
+  now rewrite <-Hw.
 }
 rewrite cons_app_sing.
 rewrite app_assoc.
@@ -232,12 +160,12 @@ apply IHN.
 - unfold usize_to_nat. lia.
 - rewrite Hy.
   unfold vec_length.
-  rewrite Hw2.
+  rewrite Hw.
   rewrite app_length.
   simpl.
   unfold vec_length in H.
   lia.
-})
+}
 Qed.
 
 Lemma hm_allocate_slots_inv (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat) :
