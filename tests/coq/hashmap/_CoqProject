@@ -9,3 +9,4 @@ Hashmap_Types.v
 Hashmap_Funs.v
 Hashmap_Properties.v
 Examples.v
+ltac2_string_ident.v

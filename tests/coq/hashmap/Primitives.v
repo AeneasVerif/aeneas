@@ -58,11 +58,7 @@ Definition eval_result_refl {A} {x} (a: result A) (p: a = Return x) : A :=
 Notation "x %global" := (eval_result_refl x eq_refl) (at level 40).
 Notation "x %return" := (eval_result_refl x eq_refl) (at level 40).
 
-(* Sanity check *)
-Check (if true then Return (1 + 2) else Fail_ Failure)%global = 3.
-
 (*** Misc *)
-
 
 Definition string := Coq.Strings.String.string.
 Definition char := Coq.Strings.Ascii.ascii.
@@ -73,31 +69,31 @@ Definition mem_replace_back (a : Type) (x : a) (y : a) : a := y .
 
 (*** Scalars *)
 
-Definition i8_min   : Z := -128%Z.
-Definition i8_max   : Z := 127%Z.
-Definition i16_min  : Z := -32768%Z.
-Definition i16_max  : Z := 32767%Z.
-Definition i32_min  : Z := -2147483648%Z.
-Definition i32_max  : Z := 2147483647%Z.
-Definition i64_min  : Z := -9223372036854775808%Z.
-Definition i64_max  : Z := 9223372036854775807%Z.
-Definition i128_min : Z := -170141183460469231731687303715884105728%Z.
-Definition i128_max : Z := 170141183460469231731687303715884105727%Z.
-Definition u8_min   : Z := 0%Z.
-Definition u8_max   : Z := 255%Z.
-Definition u16_min  : Z := 0%Z.
-Definition u16_max  : Z := 65535%Z.
-Definition u32_min  : Z := 0%Z.
-Definition u32_max  : Z := 4294967295%Z.
-Definition u64_min  : Z := 0%Z.
-Definition u64_max  : Z := 18446744073709551615%Z.
-Definition u128_min : Z := 0%Z.
-Definition u128_max : Z := 340282366920938463463374607431768211455%Z.
+Notation i8_min   := (-128)%Z.
+Notation i8_max   := 127%Z.
+Notation i16_min  := (-32768)%Z.
+Notation i16_max  := 32767%Z.
+Notation i32_min  := (-2147483648)%Z.
+Notation i32_max  := 2147483647%Z.
+Notation i64_min  := (-9223372036854775808)%Z.
+Notation i64_max  := 9223372036854775807%Z.
+Notation i128_min := (-170141183460469231731687303715884105728)%Z.
+Notation i128_max := 170141183460469231731687303715884105727%Z.
+Notation u8_min   := 0%Z.
+Notation u8_max   := 255%Z.
+Notation u16_min  := 0%Z.
+Notation u16_max  := 65535%Z.
+Notation u32_min  := 0%Z.
+Notation u32_max  := 4294967295%Z.
+Notation u64_min  := 0%Z.
+Notation u64_max  := 18446744073709551615%Z.
+Notation u128_min := 0%Z.
+Notation u128_max := 340282366920938463463374607431768211455%Z.
 
 (** The bounds of [isize] and [usize] vary with the architecture. *)
 Axiom isize_min : Z.
 Axiom isize_max : Z.
-Definition usize_min : Z := 0%Z.
+Notation usize_min := 0%Z.
 Axiom usize_max : Z.
 
 Open Scope Z_scope.
@@ -173,8 +169,7 @@ end.
 Lemma scalar_min_cons_valid : forall ty, scalar_min ty <= scalar_min_cons ty .
 Proof.
   destruct ty; unfold scalar_min_cons, scalar_min; try lia.
-  - pose isize_min_bound; lia.
-  - apply Z.le_refl.
+  pose isize_min_bound; lia.
 Qed.
 
 Lemma scalar_max_cons_valid : forall ty, scalar_max ty >= scalar_max_cons ty .
@@ -292,83 +287,83 @@ Definition u32   := scalar U32.
 Definition u64   := scalar U64.
 Definition u128  := scalar U128.
 
-(** Negaion *)
-Definition isize_neg := @scalar_neg Isize.
-Definition i8_neg    := @scalar_neg I8.
-Definition i16_neg   := @scalar_neg I16.
-Definition i32_neg   := @scalar_neg I32.
-Definition i64_neg   := @scalar_neg I64.
-Definition i128_neg  := @scalar_neg I128.
+(** Negation *)
+Notation isize_neg := (@scalar_neg Isize).
+Notation i8_neg    := (@scalar_neg I8).
+Notation i16_neg   := (@scalar_neg I16).
+Notation i32_neg   := (@scalar_neg I32).
+Notation i64_neg   := (@scalar_neg I64).
+Notation i128_neg  := (@scalar_neg I128).
 
 (** Division *)
-Definition isize_div := @scalar_div Isize.
-Definition i8_div    := @scalar_div I8.
-Definition i16_div   := @scalar_div I16.
-Definition i32_div   := @scalar_div I32.
-Definition i64_div   := @scalar_div I64.
-Definition i128_div  := @scalar_div I128.
-Definition usize_div := @scalar_div Usize.
-Definition u8_div    := @scalar_div U8.
-Definition u16_div   := @scalar_div U16.
-Definition u32_div   := @scalar_div U32.
-Definition u64_div   := @scalar_div U64.
-Definition u128_div  := @scalar_div U128.
+Notation isize_div := (@scalar_div Isize).
+Notation i8_div    := (@scalar_div I8).
+Notation i16_div   := (@scalar_div I16).
+Notation i32_div   := (@scalar_div I32).
+Notation i64_div   := (@scalar_div I64).
+Notation i128_div  := (@scalar_div I128).
+Notation usize_div := (@scalar_div Usize).
+Notation u8_div    := (@scalar_div U8).
+Notation u16_div   := (@scalar_div U16).
+Notation u32_div   := (@scalar_div U32).
+Notation u64_div   := (@scalar_div U64).
+Notation u128_div  := (@scalar_div U128).
 
 (** Remainder *)
-Definition isize_rem := @scalar_rem Isize.
-Definition i8_rem    := @scalar_rem I8.
-Definition i16_rem   := @scalar_rem I16.
-Definition i32_rem   := @scalar_rem I32.
-Definition i64_rem   := @scalar_rem I64.
-Definition i128_rem  := @scalar_rem I128.
-Definition usize_rem := @scalar_rem Usize.
-Definition u8_rem    := @scalar_rem U8.
-Definition u16_rem   := @scalar_rem U16.
-Definition u32_rem   := @scalar_rem U32.
-Definition u64_rem   := @scalar_rem U64.
-Definition u128_rem  := @scalar_rem U128.
+Notation isize_rem := (@scalar_rem Isize).
+Notation i8_rem    := (@scalar_rem I8).
+Notation i16_rem   := (@scalar_rem I16).
+Notation i32_rem   := (@scalar_rem I32).
+Notation i64_rem   := (@scalar_rem I64).
+Notation i128_rem  := (@scalar_rem I128).
+Notation usize_rem := (@scalar_rem Usize).
+Notation u8_rem    := (@scalar_rem U8).
+Notation u16_rem   := (@scalar_rem U16).
+Notation u32_rem   := (@scalar_rem U32).
+Notation u64_rem   := (@scalar_rem U64).
+Notation u128_rem  := (@scalar_rem U128).
 
 (** Addition *)
-Definition isize_add := @scalar_add Isize.
-Definition i8_add    := @scalar_add I8.
-Definition i16_add   := @scalar_add I16.
-Definition i32_add   := @scalar_add I32.
-Definition i64_add   := @scalar_add I64.
-Definition i128_add  := @scalar_add I128.
-Definition usize_add := @scalar_add Usize.
-Definition u8_add    := @scalar_add U8.
-Definition u16_add   := @scalar_add U16.
-Definition u32_add   := @scalar_add U32.
-Definition u64_add   := @scalar_add U64.
-Definition u128_add  := @scalar_add U128.
+Notation isize_add := (@scalar_add Isize).
+Notation i8_add    := (@scalar_add I8).
+Notation i16_add   := (@scalar_add I16).
+Notation i32_add   := (@scalar_add I32).
+Notation i64_add   := (@scalar_add I64).
+Notation i128_add  := (@scalar_add I128).
+Notation usize_add := (@scalar_add Usize).
+Notation u8_add    := (@scalar_add U8).
+Notation u16_add   := (@scalar_add U16).
+Notation u32_add   := (@scalar_add U32).
+Notation u64_add   := (@scalar_add U64).
+Notation u128_add  := (@scalar_add U128).
 
 (** Substraction *)
-Definition isize_sub := @scalar_sub Isize.
-Definition i8_sub    := @scalar_sub I8.
-Definition i16_sub   := @scalar_sub I16.
-Definition i32_sub   := @scalar_sub I32.
-Definition i64_sub   := @scalar_sub I64.
-Definition i128_sub  := @scalar_sub I128.
-Definition usize_sub := @scalar_sub Usize.
-Definition u8_sub    := @scalar_sub U8.
-Definition u16_sub   := @scalar_sub U16.
-Definition u32_sub   := @scalar_sub U32.
-Definition u64_sub   := @scalar_sub U64.
-Definition u128_sub  := @scalar_sub U128.
+Notation isize_sub := (@scalar_sub Isize).
+Notation i8_sub    := (@scalar_sub I8).
+Notation i16_sub   := (@scalar_sub I16).
+Notation i32_sub   := (@scalar_sub I32).
+Notation i64_sub   := (@scalar_sub I64).
+Notation i128_sub  := (@scalar_sub I128).
+Notation usize_sub := (@scalar_sub Usize).
+Notation u8_sub    := (@scalar_sub U8).
+Notation u16_sub   := (@scalar_sub U16).
+Notation u32_sub   := (@scalar_sub U32).
+Notation u64_sub   := (@scalar_sub U64).
+Notation u128_sub  := (@scalar_sub U128).
 
 (** Multiplication *)
-Definition isize_mul := @scalar_mul Isize.
-Definition i8_mul    := @scalar_mul I8.
-Definition i16_mul   := @scalar_mul I16.
-Definition i32_mul   := @scalar_mul I32.
-Definition i64_mul   := @scalar_mul I64.
-Definition i128_mul  := @scalar_mul I128.
-Definition usize_mul := @scalar_mul Usize.
-Definition u8_mul    := @scalar_mul U8.
-Definition u16_mul   := @scalar_mul U16.
-Definition u32_mul   := @scalar_mul U32.
-Definition u64_mul   := @scalar_mul U64.
-Definition u128_mul  := @scalar_mul U128.
+Notation isize_mul := (@scalar_mul Isize).
+Notation i8_mul    := (@scalar_mul I8).
+Notation i16_mul   := (@scalar_mul I16).
+Notation i32_mul   := (@scalar_mul I32).
+Notation i64_mul   := (@scalar_mul I64).
+Notation i128_mul  := (@scalar_mul I128).
+Notation usize_mul := (@scalar_mul Usize).
+Notation u8_mul    := (@scalar_mul U8).
+Notation u16_mul   := (@scalar_mul U16).
+Notation u32_mul   := (@scalar_mul U32).
+Notation u64_mul   := (@scalar_mul U64).
+Notation u128_mul  := (@scalar_mul U128).
 
 (** Small utility *)
 Definition usize_to_nat (x: usize) : nat := Z.to_nat (to_Z x).
@@ -405,7 +400,6 @@ Definition vec_length {T: Type} (v: vec T) : Z := Z.of_nat (length (vec_to_list 
 Lemma le_0_usize_max : 0 <= usize_max.
 Proof.
   pose (H := usize_max_bound).
-  unfold u32_max in H.
   lia.
 Qed.
 
@@ -413,7 +407,7 @@ Definition vec_new (T: Type) : vec T := (exist _ [] le_0_usize_max).
 
 Lemma vec_len_in_usize {T} (v: vec T) : usize_min <= vec_length v <= usize_max.
 Proof.
-  unfold vec_length, usize_min.
+  unfold vec_length.
   split.
   - lia.
   - apply (proj2_sig v).

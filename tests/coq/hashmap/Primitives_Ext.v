@@ -3,7 +3,6 @@
 Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
-Require Import Coq.Lists.List.
 Local Open Scope Primitives_scope.
 Require Export Hashmap_Types.
 Import Hashmap_Types.
@@ -15,8 +14,11 @@ Require Import Coq.Program.Basics.
 Require Import Coq.Program.Equality.
 Require Import Coq.Logic.ProofIrrelevance.
 Require Import Coq.Bool.Bool.
+Require Import String.
+Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Unicode.Utf8.
+Require Import ltac2_string_ident.
 
 Module Primitives_Ext.
 
@@ -94,7 +96,7 @@ Qed.
 Definition bounded_vec_push_back {T} (v: vec T) (x: T) (b: vec_length v < usize_max) : vec T.
 Proof.
 exists (x :: vec_to_list v).
-simpl (length (x :: vec_to_list v)).
+simpl (List.length (x :: vec_to_list v)).
 rewrite Nat2Z.inj_succ.
 now apply (Zlt_le_succ _ _ b).
 Defined.
@@ -242,7 +244,7 @@ destruct n.
 (* We should exploit Peano induction on either Z with constraints or positives with upper bound *)
 (* Here, we destruct the Z number of do the induction on natural numbers *)
 destruct x.
-3: { exfalso. simpl in *. unfold usize_min in a. lia. }
+3: { exfalso. simpl in *. lia. }
 - set (x := exist (λ x0 : Z, scalar_min Usize <= x0 <= scalar_max Usize) 0 a).
   set (y := 0%usize).
   assert (H : x = y) by now apply usize_nat_inj.
@@ -386,26 +388,53 @@ Qed.
     +---------+
 *)
 
+Ltac push_scalar_bounds_tac a :=
+  let Ha := fresh "Ha" in
+  assert (Ha := S_scalar_bounds a);
+  simpl in Ha.
+
+(* fffffffffffff *)
+Ltac VEC v x :=
+  let wVal := constr:(vec_push_back _ v x) in
+
+  assert (b: vec_length v < usize_max);
+  match goal with [ |- vec_length v < usize_max ] =>
+    push_scalar_bounds_tac v;
+    simpl; try lia
+  | _ =>
+    
+  let h := fresh "H" in
+  let w := string_to_ident wStr in
+  destruct (V_push_back_bounded v x b) as (w, h)
+  clear b;
+
+  let hr := fresh "Hr" in
+  let hw := string_to_ident ("H" ++ wStr)%string in
+  destruct h as (hr, hw);
+
+  rewrite hr;
+  clear hr;
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
+
 (* A first tactic which tries to abstract over the "S_sub_bounded" lemma. It :
  - Adds the boundary prerequisites as additional goals.
  - Tries to resolve them automatically with "lia", some "simpl" applications and the boundaries of a & b.
  - Rewrites the main goal with "S_sub_bounded" existential variable.
  - "clear" some hypothesis and try monadic simplifications.
  *)
-Ltac rewrite_scalar_sub a b :=
+Ltac rewrite_scalar_sub_tac a b xStr :=
   (* Getting the scalar type *)
   let T := constr:(scalar_ty_of a) in
+  let xVal := constr:((to_Z a) - (to_Z b)) in
 
   (* Proving or supposing the lower bound *)
-  let B1 := fresh "B1" in
-  assert (B1: scalar_min T <= (to_Z a) - (to_Z b));
-  match goal with [ |- scalar_min T <= (to_Z a) - (to_Z b) ] =>
-    let Ha := fresh "Ha" in
-    let Hb := fresh "Hb" in
-    assert (Ha := S_scalar_bounds a);
-    assert (Hb := S_scalar_bounds b);
-    simpl in Ha, Hb |- *;
-    try lia
+  let B12 := fresh "B1" in
+  assert (B1: scalar_min T <= xVal);
+  match goal with [ |- scalar_min T <= xVal ] =>
+    push_scalar_bounds_tac a;
+    push_scalar_bounds_tac b;
+    simpl; try lia
   | [ |- _ ] =>
 
   (* Same for the upper bound
@@ -413,19 +442,16 @@ Ltac rewrite_scalar_sub a b :=
      They are separated only because "lia" gives no partial progress on the proof.
   *)
   let B2 := fresh "B2" in
-  assert (B2: (to_Z a) - (to_Z b) <= scalar_max T);
-  match goal with [ |- (to_Z a) - (to_Z b) <= scalar_max T ] =>
-    let Ha := fresh "Ha" in
-    let Hb := fresh "Hb" in
-    assert (Ha := S_scalar_bounds a);
-    assert (Hb := S_scalar_bounds b);
-    simpl in Ha, Hb |- *;
-    try lia
+  assert (B2: xVal <= scalar_max T);
+  match goal with [ |- xVal <= scalar_max T ] =>
+    push_scalar_bounds_tac a;
+    push_scalar_bounds_tac b;
+    simpl; try lia
   | [ |- _ ] =>
 
   (* Apply the theorem about subtraction *)
   let H := fresh "H" in
-  let x := fresh "x" in
+  let x := string_to_ident xStr in
   destruct (S_sub_bounded a b (conj B1 B2)) as (x, H);
 
   (* Remove previous bounds *)
@@ -433,32 +459,200 @@ Ltac rewrite_scalar_sub a b :=
 
   (* Obtain the properties about the result *)
   let Hr := fresh "Hr" in
-  let Hx := fresh "Hx" in
+  let Hx := string_to_ident ("H" ++ xStr)%string in
   destruct H as (Hr, Hx);
 
   (* Refine the goal to then rewrite the expression.
      TODO: Match T to do only one try.
   *)
-  try change (u8_sub a b) with (scalar_sub a b);
-  try change (i8_sub a b) with (scalar_sub a b);
-  try change (u16_sub a b) with (scalar_sub a b);
-  try change (i16_sub a b) with (scalar_sub a b);
-  try change (u32_sub a b)  with (scalar_sub a b);
-  try change (i32_sub a b)  with (scalar_sub a b);
-  try change (u64_sub a b) with (scalar_sub a b);
-  try change (i64_sub a b) with (scalar_sub a b);
-  try change (u128_sub a b) with (scalar_sub a b);
-  try change (i128_sub a b) with (scalar_sub a b);
-  try change (usize_sub a b) with (scalar_sub a b);
-  try change (isize_sub a b) with (scalar_sub a b);
   rewrite Hr;
   clear Hr;
 
   (* Apply simplifications on the result monad *)
-  try rewrite res_bind_id;
-  try rewrite res_bind_value
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
 
   end end.
+
+Tactic Notation "rewrite_scalar_sub" constr(a) constr(b) :=
+  rewrite_scalar_sub_tac a b "x"%string.
+
+Tactic Notation "rewrite_scalar_sub" constr(a) constr(b) "as" constr(x) :=
+  rewrite_scalar_sub_tac a b x.
+
+(* Other tactics, mainly implemented with copypaste *)
+
+(* scalar_add *)
+Ltac rewrite_scalar_add_tac a b xStr :=
+  let T := constr:(scalar_ty_of a) in
+  let xVal := constr:((to_Z a) + (to_Z b)) in
+
+  let B1 := fresh "B1" in
+  assert (B1: scalar_min T <= xVal);
+  match goal with [ |- scalar_min T <= xVal ] =>
+    push_scalar_bounds_tac a;
+    push_scalar_bounds_tac b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let B2 := fresh "B2" in
+  assert (B2: xVal <= scalar_max T);
+  match goal with [ |- xVal <= scalar_max T ] =>
+    push_scalar_bounds_tac a;
+    push_scalar_bounds_tac b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let H := fresh "H" in
+  let x := string_to_ident xStr in
+  destruct (S_add_bounded a b (conj B1 B2)) as (x, H);
+  clear B1 B2;
+
+  let Hr := fresh "Hr" in
+  let Hx := string_to_ident ("H" ++ xStr)%string in
+  destruct H as (Hr, Hx);
+
+  rewrite Hr;
+  clear Hr;
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
+  end end.
+
+Tactic Notation "rewrite_scalar_add" constr(a) constr(b) :=
+  rewrite_scalar_add_tac a b "x"%string.
+
+Tactic Notation "rewrite_scalar_add" constr(a) constr(b) "as" constr(x) :=
+  rewrite_scalar_add_tac a b x.
+
+(* scalar_mul *)
+Ltac rewrite_scalar_mul_tac a b xStr :=
+  let T := constr:(scalar_ty_of a) in
+  let xVal := constr:((to_Z a) * (to_Z b)) in
+
+  let B1 := fresh "B1" in
+  assert (B1: scalar_min T <= xVal);
+  match goal with [ |- scalar_min T <= xVal ] =>
+    push_scalar_bounds_tac a;
+    push_scalar_bounds_tac b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let B2 := fresh "B2" in
+  assert (B2: xVal <= scalar_max T);
+  match goal with [ |- xVal <= scalar_max T ] =>
+    push_scalar_bounds_tac a;
+    push_scalar_bounds_tac b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let H := fresh "H" in
+  let x := string_to_ident xStr in
+  destruct (S_mul_bounded a b (conj B1 B2)) as (x, H);
+  clear B1 B2;
+
+  let Hr := fresh "Hr" in
+  let Hx := string_to_ident ("H" ++ xStr)%string in
+  destruct H as (Hr, Hx);
+
+  rewrite Hr;
+  clear Hr;
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
+  end end.
+
+Tactic Notation "rewrite_scalar_mul" constr(a) constr(b) :=
+  rewrite_scalar_mul_tac a b "x"%string.
+
+Tactic Notation "rewrite_scalar_mul" constr(a) constr(b) "as" constr(x) :=
+  rewrite_scalar_mul_tac a b x.
+
+(* scalar_div *)
+Ltac rewrite_scalar_div_tac a b xStr :=
+  let T := constr:(scalar_ty_of a) in
+  let xVal := constr:((to_Z a) / (to_Z b)) in
+
+  let B0 := fresh "B0" in
+  assert (B0: to_Z b <> 0);
+  match goal with [ |- to_Z b <> 0 ] =>
+    push_scalar_bounds_tac b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let B1 := fresh "B1" in
+  assert (B1: scalar_min T <= xVal);
+  match goal with [ |- scalar_min T <= xVal ] =>
+    push_scalar_bounds_tac a;
+    push_scalar_bounds_tac b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let B2 := fresh "B2" in
+  assert (B2: xVal <= scalar_max T);
+  match goal with [ |- xVal <= scalar_max T ] =>
+    push_scalar_bounds_tac a;
+    push_scalar_bounds_tac b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let H := fresh "H" in
+  let x := string_to_ident xStr in
+  destruct (S_div_bounded a b B0 (conj B1 B2)) as (x, H);
+  clear B0 B1 B2;
+
+  let Hr := fresh "Hr" in
+  let Hx := string_to_ident ("H" ++ xStr)%string in
+  destruct H as (Hr, Hx);
+
+  rewrite Hr;
+  clear Hr;
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
+  end end end.
+
+Tactic Notation "rewrite_scalar_div" constr(a) constr(b) :=
+  rewrite_scalar_div_tac a b "x"%string.
+
+Tactic Notation "rewrite_scalar_div" constr(a) constr(b) "as" constr(x) :=
+  rewrite_scalar_div_tac a b x.
+
+(* vec_push_back *)
+Ltac rewrite_vec_push_back_tac v x wStr :=
+  let wVal := constr:(vec_push_back _ v x) in
+
+  let B := fresh "B" in
+  assert (B: vec_length v < usize_max);
+  match goal with [ |- vec_length v < usize_max ] =>
+    push_scalar_bounds_tac v;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let H := fresh "H" in
+  let w := string_to_ident wStr in
+  destruct (bounded_vec_push_back v x B) as (w, H);
+  clear B;
+
+  let Hr := fresh "Hr" in
+  let Hw := string_to_ident ("H" ++ wStr)%string in
+  destruct H as (Hr, Hw);
+
+  rewrite Hr;
+  clear Hr;
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
+  end.
+
+Tactic Notation "rewrite_vec_push_back" constr(v) constr(x) :=
+rewrite_vec_push_back_tac v x "w"%string.
+
+Tactic Notation "rewrite_vec_push_back" constr(v) constr(x) "as" constr(w) :=
+  rewrite_vec_push_back_tac v x w.
+
+(*  +-------+
+    | Tests |
+    +-------+
+*)
+
+Lemma vec_test {T} : 
 
 Lemma add_assoc {a} :
   match (x <- usize_sub a (1%usize); Return x) with
@@ -467,9 +661,52 @@ Lemma add_assoc {a} :
   | Fail_ Failure   => True
   end.
 Proof.
-rewrite_scalar_sub a (1%usize).
+
+(* Trade-off between String and List notations *)
+rewrite_scalar_sub a (1%usize) as "w"%string.
 - admit.
 - admit.
 Admitted.
+
+
+
+Lemma MP {A B}: A -> (A -> B) -> B.
+Admitted.
+
+Ltac make_mp :=
+  let h := fresh "hyp" in
+  assert (h : True) by auto;
+  match goal with
+  | [ |- True ] => ()
+  | _ =>
+
+  apply (MP h)
+
+  end.
+
+Lemma MP2 {B}: (True -> B) -> B.
+
+make_mp.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 End Primitives_Ext.

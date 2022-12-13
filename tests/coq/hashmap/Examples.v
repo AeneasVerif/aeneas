@@ -101,3 +101,13 @@ Example e2 (n: usize) :
 (* Search *)
 
 Search (S _ >= _).
+
+(*    +---------------+
+      | Ltac2 tactics |
+      +---------------+
+*)
+
+(* Sources:
+ - https://github.com/tchajed/ltac2-tutorial/blob/master/src/ltac2_tutorial.v
+ - https://www.pédrot.fr/articles/coqpl2019.pdf
+*)
