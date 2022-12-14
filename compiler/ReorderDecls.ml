@@ -6,7 +6,11 @@ open Pure
 (** The local logger *)
 let log = Logging.reorder_decls_log
 
-type fun_id = { def_id : FunDeclId.id; rg_id : T.RegionGroupId.id option }
+type fun_id = {
+  def_id : FunDeclId.id;
+  lp_id : V.LoopId.id option;
+  rg_id : T.RegionGroupId.id option;
+}
 [@@deriving show, ord]
 
 module FunIdOrderedType : OrderedType with type t = fun_id = struct
@@ -38,11 +42,11 @@ let compute_body_fun_deps (e : texpression) : FunIdSet.t =
         | FunOrOp (Fun fid) -> (
             match fid with
             | Pure _ -> ()
-            | FromLlbc (fid, rg_id) -> (
+            | FromLlbc (fid, lp_id, rg_id) -> (
                 match fid with
                 | Assumed _ -> ()
                 | Regular fid ->
-                    let id = { def_id = fid; rg_id } in
+                    let id = { def_id = fid; lp_id; rg_id } in
                     ids := FunIdSet.add id !ids))
     end
   in
@@ -66,7 +70,7 @@ let group_reorder_fun_decls (decls : fun_decl list) :
     (bool * fun_decl list) list =
   let module IntMap = MakeMap (OrderedInt) in
   let get_fun_id (decl : fun_decl) : fun_id =
-    { def_id = decl.def_id; rg_id = decl.back_id }
+    { def_id = decl.def_id; lp_id = decl.loop_id; rg_id = decl.back_id }
   in
   (* Compute the list/set of identifiers *)
   let idl = List.map get_fun_id decls in

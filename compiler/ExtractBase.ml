@@ -436,7 +436,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       "global name: " ^ Print.global_name_to_string name
   | FunId fid -> (
       match fid with
-      | FromLlbc (fid, rg_id) ->
+      | FromLlbc (fid, lp_id, rg_id) ->
           let fun_name =
             match fid with
             | Regular fid ->
@@ -444,12 +444,19 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
                   (A.FunDeclId.Map.find fid fun_decls).name
             | Assumed aid -> A.show_assumed_fun_id aid
           in
-          let fun_kind =
+
+          let lp_kind =
+            match lp_id with
+            | None -> ""
+            | Some lp_id -> "loop " ^ V.LoopId.to_string lp_id ^ ", "
+          in
+
+          let fwd_back_kind =
             match rg_id with
             | None -> "forward"
             | Some rg_id -> "backward " ^ RegionGroupId.to_string rg_id
           in
-          "fun name (" ^ fun_kind ^ "): " ^ fun_name
+          "fun name (" ^ lp_kind ^ fwd_back_kind ^ "): " ^ fun_name
       | Pure fid -> PrintPure.pure_assumed_fun_id_to_string fid)
   | DecreasesClauseId fid ->
       let fun_name =
@@ -534,9 +541,9 @@ let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
 let ctx_get_function (id : fun_id) (ctx : extraction_ctx) : string =
   ctx_get (FunId id) ctx
 
-let ctx_get_local_function (id : A.FunDeclId.id) (rg : RegionGroupId.id option)
-    (ctx : extraction_ctx) : string =
-  ctx_get_function (FromLlbc (Regular id, rg)) ctx
+let ctx_get_local_function (id : A.FunDeclId.id) (lp : V.LoopId.id option)
+    (rg : RegionGroupId.id option) (ctx : extraction_ctx) : string =
+  ctx_get_function (FromLlbc (Regular id, lp, rg)) ctx
 
 let ctx_get_type (id : type_id) (ctx : extraction_ctx) : string =
   assert (id <> Tuple);
@@ -662,7 +669,7 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx.fmt.global_name def.name in
   let decl = GlobalId def.def_id in
-  let body = FunId (FromLlbc (Regular def.body_id, None)) in
+  let body = FunId (FromLlbc (Regular def.body_id, None, None)) in
   let ctx = ctx_add decl (name ^ "_c") ctx in
   let ctx = ctx_add body (name ^ "_body") ctx in
   ctx
@@ -699,7 +706,9 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
   let name =
     ctx.fmt.fun_name def.basename num_rgs rg_info (keep_fwd, num_backs)
   in
-  ctx_add (FunId (FromLlbc (A.Regular def_id, def.back_id))) name ctx
+  ctx_add
+    (FunId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))
+    name ctx
 
 type names_map_init = {
   keywords : string list;
@@ -760,7 +769,7 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
   in
   let assumed_functions =
     List.map
-      (fun (fid, rg, name) -> (FromLlbc (A.Assumed fid, rg), name))
+      (fun (fid, rg, name) -> (FromLlbc (A.Assumed fid, None, rg), name))
       init.assumed_llbc_functions
     @ List.map (fun (fid, name) -> (Pure fid, name)) init.assumed_pure_functions
   in

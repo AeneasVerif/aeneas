@@ -415,10 +415,21 @@ let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
   let all_types = List.append inputs [ output ] in
   String.concat " -> " all_types
 
-let fun_suffix (rg_id : T.RegionGroupId.id option) : string =
-  match rg_id with
-  | None -> ""
-  | Some rg_id -> "@" ^ T.RegionGroupId.to_string rg_id
+let fun_suffix (lp_id : V.LoopId.id option) (rg_id : T.RegionGroupId.id option)
+    : string =
+  let lp_suff =
+    match lp_id with
+    | None -> ""
+    | Some lp_id -> "^loop^" ^ V.LoopId.to_string lp_id
+  in
+
+  let rg_suff =
+    match rg_id with
+    | None -> ""
+    | Some rg_id -> "@" ^ T.RegionGroupId.to_string rg_id
+  in
+
+  lp_suff ^ rg_suff
 
 let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   match fid with
@@ -444,13 +455,13 @@ let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
 
 let regular_fun_id_to_string (fmt : ast_formatter) (fun_id : fun_id) : string =
   match fun_id with
-  | FromLlbc (fid, rg_id) ->
+  | FromLlbc (fid, lp_id, rg_id) ->
       let f =
         match fid with
         | Regular fid -> fmt.fun_decl_id_to_string fid
         | Assumed fid -> llbc_assumed_fun_id_to_string fid
       in
-      f ^ fun_suffix rg_id
+      f ^ fun_suffix lp_id rg_id
   | Pure fid -> pure_assumed_fun_id_to_string fid
 
 let unop_to_string (unop : unop) : string =
@@ -620,7 +631,9 @@ and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
 
 let fun_decl_to_string (fmt : ast_formatter) (def : fun_decl) : string =
   let type_fmt = ast_to_type_formatter fmt in
-  let name = fun_name_to_string def.basename ^ fun_suffix def.back_id in
+  let name =
+    fun_name_to_string def.basename ^ fun_suffix def.loop_id def.back_id
+  in
   let signature = fun_sig_to_string fmt def.signature in
   match def.body with
   | None -> "val " ^ name ^ " :\n  " ^ signature

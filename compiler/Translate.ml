@@ -459,9 +459,7 @@ let export_functions_declarations (fmt : Format.formatter) (config : gen_config)
   in
 
   (* Extract the function declarations *)
-  (* Check if the functions are mutually recursive - this really works
-   * to check if the forward and backward translations of a single
-   * recursive function are mutually recursive *)
+  (* Check if the functions are mutually recursive *)
   let is_mut_rec = List.length decls > 1 in
   assert ((not is_mut_rec) || is_rec);
   let decls_length = List.length decls in
