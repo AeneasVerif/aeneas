@@ -3,7 +3,7 @@
 open Collections
 module SccId = Identifiers.IdGen ()
 
-(** A functor to compute and order strongly connected components *)
+(** A functor which provides functions to work on strongly connected components *)
 module Make (Id : OrderedType) = struct
   module IdMap = MakeMap (Id)
   module IdSet = MakeSet (Id)

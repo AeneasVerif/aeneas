@@ -48,6 +48,7 @@
   Pure
   PureTypeCheck
   PureUtils
+  ReorderDecls
   SCC
   Scalars
   StringUtils
