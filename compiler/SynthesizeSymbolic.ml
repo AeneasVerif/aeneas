@@ -156,7 +156,8 @@ let synthesize_assertion (ctx : Contexts.eval_ctx) (v : V.typed_value)
     (e : expression option) =
   Option.map (fun e -> Assertion (ctx, v, e)) e
 
-let synthesize_forward_end (loop_input_values : V.typed_value list option)
+let synthesize_forward_end
+    (loop_input_values : V.typed_value V.SymbolicValueId.Map.t option)
     (e : expression) (el : expression T.RegionGroupId.Map.t) =
   Some (ForwardEnd (loop_input_values, e, el))
 

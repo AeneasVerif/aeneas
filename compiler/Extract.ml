@@ -1394,6 +1394,9 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | Let (_, _, _, _) -> extract_lets ctx fmt inside e
   | Switch (scrut, body) -> extract_Switch ctx fmt inside scrut body
   | Meta (_, e) -> extract_texpression ctx fmt inside e
+  | Loop _ ->
+      (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
+      raise (Failure "Unreachable")
 
 (* Extract an application *or* a top-level qualif (function extraction has
  * to handle top-level qualifiers, so it seemed more natural to merge the

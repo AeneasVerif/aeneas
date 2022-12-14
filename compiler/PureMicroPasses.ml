@@ -376,6 +376,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Qualif _ -> (* nothing to do *) (ctx, e.e)
       | Let (monadic, lb, re, e) -> update_let monadic lb re e ctx
       | Switch (scrut, body) -> update_switch_body scrut body ctx
+      | Loop loop -> update_loop loop ctx
       | Meta (meta, e) -> update_meta meta e ctx
     in
     (ctx, { e; ty })
@@ -429,6 +430,15 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           (ctx, Match branches)
     in
     (ctx, Switch (scrut, body))
+  (* *)
+  and update_loop (loop : loop) (ctx : pn_ctx) : pn_ctx * expression =
+    let { fun_end; loop_id; inputs; inputs_lvs; loop_body } = loop in
+    let ctx, fun_end = update_texpression fun_end ctx in
+    let ctx, loop_body = update_texpression loop_body ctx in
+    let inputs = List.map (fun input -> update_var ctx input None) inputs in
+    let inputs_lvs = List.map (update_typed_pattern ctx) inputs_lvs in
+    let loop = { fun_end; loop_id; inputs; inputs_lvs; loop_body } in
+    (ctx, Loop loop)
   (* *)
   and update_meta (meta : meta) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
@@ -706,6 +716,9 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
             (* Note that this case includes functions without arguments *)
             fun () -> false
         | Meta (_, e) -> self#visit_texpression env e
+        | Loop loop ->
+            (* We only visit the *function end* *)
+            self#visit_texpression env loop.fun_end
         | Switch (_, body) -> self#visit_switch_body env body
 
       method! visit_switch_body env body =
@@ -819,6 +832,11 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
                     dont_filter ()
             else (* There are used variables: don't filter *)
               dont_filter ()
+        | Loop loop ->
+            (* We take care to ignore the varset computed on the *loop body* *)
+            let fun_end, s = self#visit_texpression () loop.fun_end in
+            let loop_body, _ = self#visit_texpression () loop.loop_body in
+            (Loop { loop with fun_end; loop_body }, s)
     end
   in
   (* We filter only inside of transparent (i.e., non-opaque) definitions *)

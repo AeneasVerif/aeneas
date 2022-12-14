@@ -184,6 +184,11 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
             check_texpression ctx br.branch
           in
           List.iter check_branch branches)
+  | Loop loop ->
+      assert (loop.fun_end.ty = e.ty);
+      assert (loop.loop_body.ty = e.ty);
+      check_texpression ctx loop.fun_end;
+      check_texpression ctx loop.loop_body
   | Meta (_, e_next) ->
       assert (e_next.ty = e.ty);
       check_texpression ctx e_next

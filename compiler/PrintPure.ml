@@ -508,6 +508,9 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
   | Switch (scrutinee, body) ->
       let e = switch_to_string fmt indent indent_incr scrutinee body in
       if inside then "(" ^ e ^ ")" else e
+  | Loop loop ->
+      let e = loop_to_string fmt indent indent_incr loop in
+      if inside then "(" ^ e ^ ")" else e
   | Meta (meta, e) -> (
       let meta_s = meta_to_string fmt meta in
       let e = texpression_to_string fmt inside indent indent_incr e in
@@ -612,6 +615,18 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
       in
       let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
+
+and loop_to_string (fmt : ast_formatter) (indent : string)
+    (indent_incr : string) (loop : loop) : string =
+  let indent1 = indent ^ indent_incr in
+  let fun_end =
+    texpression_to_string fmt false indent1 indent_incr loop.fun_end
+  in
+  let loop_body =
+    texpression_to_string fmt false indent1 indent_incr loop.loop_body
+  in
+  "loop {\n" ^ indent1 ^ "fun_end: " ^ fun_end ^ "\n" ^ indent1 ^ "loop_body:"
+  ^ loop_body ^ "\n" ^ indent ^ "}"
 
 and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   let meta =
