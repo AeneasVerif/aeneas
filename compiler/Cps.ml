@@ -173,7 +173,7 @@ let _ =
 let comp_transmit (f : ('v -> 'm) -> 'n) (g : 'm -> 'm) : ('v -> 'm) -> 'n =
  fun cf -> f (fun v -> g (cf v))
 
-(** Example of use of {!comp_transmit} *)
+(** Example of use of {!comp_transmit} - TODO: make "real" unit tests *)
 let () =
   let return3 (cf : int -> unit -> unit) (ctx : unit) = cf 3 ctx in
   let do_nothing (cf : unit -> unit) (ctx : unit) = cf ctx in
