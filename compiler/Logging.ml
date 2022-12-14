@@ -47,3 +47,9 @@ let borrows_log = L.get_logger "MainLogger.Interpreter.Borrows"
 
 (** Logger for Invariants *)
 let invariants_log = L.get_logger "MainLogger.Interpreter.Invariants"
+
+(** Logger for SCC *)
+let scc_log = L.get_logger "MainLogger.SCC"
+
+(** Logger for ReorderDecls *)
+let reorder_decls_log = L.get_logger "MainLogger.ReorderDecls"

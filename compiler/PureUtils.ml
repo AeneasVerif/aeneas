@@ -110,55 +110,6 @@ let fun_sig_substitute (tsubst : TypeVarId.id -> ty) (sg : fun_sig) :
   let info = sg.info in
   { inputs; output; doutputs; info }
 
-(** Return true if a list of functions are *not* mutually recursive, false otherwise.
-    This function is meant to be applied on a set of (forward, backwards) functions
-    generated for one recursive function.
-    The way we do the test is very simple:
-    - we explore the functions one by one, in the order in which they are provided
-    - if all functions only call functions we already explored, they are not
-      mutually recursive
- *)
-let functions_not_mutually_recursive (funs : fun_decl list) : bool =
-  (* Compute the set of function identifiers in the group *)
-  let ids =
-    FunOrOpIdSet.of_list
-      (List.map
-         (fun (f : fun_decl) -> Fun (FromLlbc (A.Regular f.def_id, f.back_id)))
-         funs)
-  in
-  let ids = ref ids in
-  (* Explore every body *)
-  let body_only_calls_itself (fdef : fun_decl) : bool =
-    (* Remove the current id from the id set *)
-    ids :=
-      FunOrOpIdSet.remove
-        (Fun (FromLlbc (A.Regular fdef.def_id, fdef.back_id)))
-        !ids;
-
-    (* Check if we call functions from the updated id set *)
-    let obj =
-      object
-        inherit [_] iter_expression as super
-
-        method! visit_qualif env qualif =
-          match qualif.id with
-          | FunOrOp fun_id ->
-              if FunOrOpIdSet.mem fun_id !ids then raise Utils.Found
-              else super#visit_qualif env qualif
-          | _ -> super#visit_qualif env qualif
-      end
-    in
-
-    try
-      match fdef.body with
-      | None -> true
-      | Some body ->
-          obj#visit_texpression () body.body;
-          true
-    with Utils.Found -> false
-  in
-  List.for_all body_only_calls_itself funs
-
 (** We use this to check whether we need to add parentheses around expressions.
     We only look for outer monadic let-bindings.
     This is used when printing the branches of [if ... then ... else ...].
