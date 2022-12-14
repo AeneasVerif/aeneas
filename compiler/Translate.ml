@@ -344,6 +344,176 @@ let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
   in
   (has_opaque_types, has_opaque_funs)
 
+(** Export a type declaration.
+
+    It may happen that we have to extract extra information/instructions.
+    For instance, we might need to define some projector notations. This is
+    why we have the two booleans [extract_decl] and [extract_extra_info].
+    If [extract_decl] is [true], then we extract the type declaration. If
+    [extract_extra_info] is [true], we extract this extra information (after
+    the declaration, if both booleans are [true]).
+ *)
+let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
+    (kind : ExtractBase.decl_kind) (id : Pure.TypeDeclId.id)
+    (extract_decl : bool) (extract_extra_info : bool) : unit =
+  (* Retrieve the declaration *)
+  let def = Pure.TypeDeclId.Map.find id ctx.trans_types in
+  (* Update the kind, if the type is opaque *)
+  let is_opaque, kind =
+    match def.kind with
+    | Enum _ | Struct _ -> (false, kind)
+    | Opaque ->
+        let kind =
+          if config.interface then ExtractBase.Declared else ExtractBase.Assumed
+        in
+        (true, kind)
+  in
+  (* Extract, if the config instructs to do so (depending on whether the type
+   * is opaque or not) *)
+  if
+    (is_opaque && config.extract_opaque)
+    || ((not is_opaque) && config.extract_transparent)
+  then (
+    if extract_decl then Extract.extract_type_decl ctx.extract_ctx fmt kind def;
+    if extract_extra_info then
+      Extract.extract_type_decl_extra_info ctx.extract_ctx fmt kind def)
+
+(** Export a group of types.
+
+    [is_rec]: [true] if the types are recursive. Necessarily [true] if there is
+    > 1 type to extract.
+ *)
+let export_types (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
+    (is_rec : bool) (ids : Pure.TypeDeclId.id list) : unit =
+  let export_type = export_type fmt config ctx in
+  let export_type_decl kind id = export_type kind id true false in
+  let export_type_extra_info kind id = export_type kind id false true in
+
+  (* Rem.: we shouldn't have (mutually) recursive opaque types *)
+  let num_decls = List.length ids in
+  let is_mut_rec = num_decls > 1 in
+  let kind_from_index i =
+    if not is_mut_rec then
+      if is_rec then ExtractBase.SingleRec else ExtractBase.SingleNonRec
+    else if i = 0 then ExtractBase.MutRecFirst
+    else if i = num_decls - 1 then ExtractBase.MutRecLast
+    else ExtractBase.MutRecInner
+  in
+  (* Extract the type declarations *)
+  List.iteri
+    (fun i id ->
+      let kind = kind_from_index i in
+      export_type_decl kind id)
+    ids;
+  (* Export the extra information (ex.: [Arguments] instructions in Coq) *)
+  List.iteri
+    (fun i id ->
+      let kind = kind_from_index i in
+      export_type_extra_info kind id)
+    ids
+
+(** Export a global declaration.
+
+    TODO: check correct behaviour with opaque globals.
+ *)
+let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
+    (id : A.GlobalDeclId.id) : unit =
+  let global_decls = ctx.extract_ctx.trans_ctx.global_context.global_decls in
+  let global = A.GlobalDeclId.Map.find id global_decls in
+  let _, (body, body_backs) =
+    A.FunDeclId.Map.find global.body_id ctx.trans_funs
+  in
+  assert (List.length body_backs = 0);
+
+  let is_opaque = Option.is_none body.Pure.body in
+  if
+    ((not is_opaque) && config.extract_transparent)
+    || (is_opaque && config.extract_opaque)
+  then
+    Extract.extract_global_decl ctx.extract_ctx fmt global body config.interface
+
+(** Export a group of function declarations.
+
+    In case of (non-mutually) recursive functions, we use a simple procedure to
+    check if the forward and backward functions are mutually recursive.
+ *)
+let export_functions (fmt : Format.formatter) (config : gen_config)
+    (ctx : gen_ctx) (is_rec : bool)
+    (pure_ls : (bool * pure_fun_translation) list) : unit =
+  (* Utility to check a function has a decrease clause *)
+  let has_decreases_clause (def : Pure.fun_decl) : bool =
+    A.FunDeclId.Set.mem def.def_id ctx.functions_with_decreases_clause
+  in
+
+  (* Concatenate the function definitions, filtering the useless forward
+   * functions. We also make pairs: (forward function, backward function)
+   * (the forward function contains useful information that we want to keep) *)
+  let fls =
+    List.concat
+      (List.map
+         (fun (keep_fwd, (fwd, back_ls)) ->
+           let back_ls = List.map (fun back -> (fwd, back)) back_ls in
+           if keep_fwd then (fwd, fwd) :: back_ls else back_ls)
+         pure_ls)
+  in
+  (* Extract the decrease clauses template bodies *)
+  if config.extract_template_decreases_clauses then
+    List.iter
+      (fun (_, (fwd, _)) ->
+        let has_decr_clause = has_decreases_clause fwd in
+        if has_decr_clause then
+          Extract.extract_template_decreases_clause ctx.extract_ctx fmt fwd)
+      pure_ls;
+  (* Extract the function definitions *)
+  (if config.extract_fun_decls then
+   (* Check if the functions are mutually recursive - this really works
+    * to check if the forward and backward translations of a single
+    * recursive function are mutually recursive *)
+   let is_mut_rec =
+     if is_rec then
+       if List.length pure_ls <= 1 then
+         not (PureUtils.functions_not_mutually_recursive (List.map fst fls))
+       else true
+     else false
+   in
+   let fls_length = List.length fls in
+   List.iteri
+     (fun i (fwd_def, def) ->
+       let is_opaque = Option.is_none fwd_def.Pure.body in
+       let kind =
+         if is_opaque then
+           if config.interface then ExtractBase.Declared
+           else ExtractBase.Assumed
+         else if not is_rec then ExtractBase.SingleNonRec
+         else if is_mut_rec then
+           (* If the functions are mutually recursive, we need to distinguish:
+            * - the first of the group
+            * - the last of the group
+            * - the inner functions
+            *)
+           if i = 0 then ExtractBase.MutRecFirst
+           else if i = fls_length - 1 then ExtractBase.MutRecLast
+           else ExtractBase.MutRecInner
+         else ExtractBase.SingleRec
+       in
+       let has_decr_clause =
+         has_decreases_clause def && config.extract_decreases_clauses
+       in
+       (* Check if the definition needs to be filtered or not *)
+       if
+         ((not is_opaque) && config.extract_transparent)
+         || (is_opaque && config.extract_opaque)
+       then
+         Extract.extract_fun_decl ctx.extract_ctx fmt kind has_decr_clause def)
+     fls);
+  (* Insert unit tests if necessary *)
+  if config.test_trans_unit_functions then
+    List.iter
+      (fun (keep_fwd, (fwd, _)) ->
+        if keep_fwd then
+          Extract.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
+      pure_ls
+
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control
     what is precisely extracted.
@@ -355,133 +525,9 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
      - [extract_extra_info]: extra the extra type information (e.g.,
        the [Arguments] information in Coq).
   *)
-  let export_type (kind : ExtractBase.decl_kind) (id : Pure.TypeDeclId.id)
-      (extract_decl : bool) (extract_extra_info : bool) : unit =
-    (* Retrieve the declaration *)
-    let def = Pure.TypeDeclId.Map.find id ctx.trans_types in
-    (* Update the kind, if the type is opaque *)
-    let is_opaque, kind =
-      match def.kind with
-      | Enum _ | Struct _ -> (false, kind)
-      | Opaque ->
-          let kind =
-            if config.interface then ExtractBase.Declared
-            else ExtractBase.Assumed
-          in
-          (true, kind)
-    in
-    (* Extract, if the config instructs to do so (depending on whether the type
-     * is opaque or not) *)
-    if
-      (is_opaque && config.extract_opaque)
-      || ((not is_opaque) && config.extract_transparent)
-    then (
-      if extract_decl then
-        Extract.extract_type_decl ctx.extract_ctx fmt kind def;
-      if extract_extra_info then
-        Extract.extract_type_decl_extra_info ctx.extract_ctx fmt kind def)
-  in
-
-  let export_type_decl kind id = export_type kind id true false in
-  let export_type_extra_info kind id = export_type kind id false true in
-
-  (* Utility to check a function has a decrease clause *)
-  let has_decreases_clause (def : Pure.fun_decl) : bool =
-    A.FunDeclId.Set.mem def.def_id ctx.functions_with_decreases_clause
-  in
-
-  (* In case of (non-mutually) recursive functions, we use a simple procedure to
-   * check if the forward and backward functions are mutually recursive.
-   *)
-  let export_functions (is_rec : bool)
-      (pure_ls : (bool * pure_fun_translation) list) : unit =
-    (* Concatenate the function definitions, filtering the useless forward
-     * functions. We also make pairs: (forward function, backward function)
-     * (the forward function contains useful information that we want to keep) *)
-    let fls =
-      List.concat
-        (List.map
-           (fun (keep_fwd, (fwd, back_ls)) ->
-             let back_ls = List.map (fun back -> (fwd, back)) back_ls in
-             if keep_fwd then (fwd, fwd) :: back_ls else back_ls)
-           pure_ls)
-    in
-    (* Extract the decrease clauses template bodies *)
-    if config.extract_template_decreases_clauses then
-      List.iter
-        (fun (_, (fwd, _)) ->
-          let has_decr_clause = has_decreases_clause fwd in
-          if has_decr_clause then
-            Extract.extract_template_decreases_clause ctx.extract_ctx fmt fwd)
-        pure_ls;
-    (* Extract the function definitions *)
-    (if config.extract_fun_decls then
-     (* Check if the functions are mutually recursive - this really works
-      * to check if the forward and backward translations of a single
-      * recursive function are mutually recursive *)
-     let is_mut_rec =
-       if is_rec then
-         if List.length pure_ls <= 1 then
-           not (PureUtils.functions_not_mutually_recursive (List.map fst fls))
-         else true
-       else false
-     in
-     let fls_length = List.length fls in
-     List.iteri
-       (fun i (fwd_def, def) ->
-         let is_opaque = Option.is_none fwd_def.Pure.body in
-         let kind =
-           if is_opaque then
-             if config.interface then ExtractBase.Declared
-             else ExtractBase.Assumed
-           else if not is_rec then ExtractBase.SingleNonRec
-           else if is_mut_rec then
-             (* If the functions are mutually recursive, we need to distinguish:
-              * - the first of the group
-              * - the last of the group
-              * - the inner functions
-              *)
-             if i = 0 then ExtractBase.MutRecFirst
-             else if i = fls_length - 1 then ExtractBase.MutRecLast
-             else ExtractBase.MutRecInner
-           else ExtractBase.SingleRec
-         in
-         let has_decr_clause =
-           has_decreases_clause def && config.extract_decreases_clauses
-         in
-         (* Check if the definition needs to be filtered or not *)
-         if
-           ((not is_opaque) && config.extract_transparent)
-           || (is_opaque && config.extract_opaque)
-         then
-           Extract.extract_fun_decl ctx.extract_ctx fmt kind has_decr_clause def)
-       fls);
-    (* Insert unit tests if necessary *)
-    if config.test_trans_unit_functions then
-      List.iter
-        (fun (keep_fwd, (fwd, _)) ->
-          if keep_fwd then
-            Extract.extract_unit_test_if_unit_fun ctx.extract_ctx fmt fwd)
-        pure_ls
-  in
-
-  (* TODO: Check correct behaviour with opaque globals *)
-  let export_global (id : A.GlobalDeclId.id) : unit =
-    let global_decls = ctx.extract_ctx.trans_ctx.global_context.global_decls in
-    let global = A.GlobalDeclId.Map.find id global_decls in
-    let _, (body, body_backs) =
-      A.FunDeclId.Map.find global.body_id ctx.trans_funs
-    in
-    assert (List.length body_backs = 0);
-
-    let is_opaque = Option.is_none body.Pure.body in
-    if
-      ((not is_opaque) && config.extract_transparent)
-      || (is_opaque && config.extract_opaque)
-    then
-      Extract.extract_global_decl ctx.extract_ctx fmt global body
-        config.interface
-  in
+  let export_functions = export_functions fmt config ctx in
+  let export_global = export_global fmt config ctx in
+  let export_types = export_types fmt config ctx in
 
   let export_state_type () : unit =
     let kind =
@@ -490,38 +536,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     Extract.extract_state_type fmt ctx.extract_ctx kind
   in
 
-  let export_decl (decl : A.declaration_group) : unit =
-    match decl with
-    | Type (NonRec id) ->
-        if config.extract_types then (
-          let kind = ExtractBase.SingleNonRec in
-          (* Export the type declaration *)
-          export_type_decl kind id;
-          (* Export the extra information (ex.: [Arguments] instructions in Coq) *)
-          export_type_extra_info kind id)
-    | Type (Rec ids) ->
-        (* Rk.: we shouldn't have (mutually) recursive opaque types *)
-        let num_decls = List.length ids in
-        let is_mut_rec = num_decls > 1 in
-        if config.extract_types then (
-          let kind_from_index i =
-            if not is_mut_rec then ExtractBase.SingleRec
-            else if i = 0 then ExtractBase.MutRecFirst
-            else if i = num_decls - 1 then ExtractBase.MutRecLast
-            else ExtractBase.MutRecInner
-          in
-          (* Extract the type declarations *)
-          List.iteri
-            (fun i id ->
-              let kind = kind_from_index i in
-              export_type_decl kind id)
-            ids;
-          (* Export the extra information (ex.: [Arguments] instructions in Coq) *)
-          List.iteri
-            (fun i id ->
-              let kind = kind_from_index i in
-              export_type_extra_info kind id)
-            ids)
+  let export_decl_group (dg : A.declaration_group) : unit =
+    match dg with
+    | Type (NonRec id) -> if config.extract_types then export_types false [ id ]
+    | Type (Rec ids) -> if config.extract_types then export_types true ids
     | Fun (NonRec id) ->
         (* Lookup *)
         let pure_fun = A.FunDeclId.Map.find id ctx.trans_funs in
@@ -540,15 +558,15 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
 
   (* If we need to export the state type: we try to export it after we defined
    * the type definitions, because if the user wants to define a model for the
-   * type, he might want to reuse them in the state type.
-   * More specifically: if we extract functions, we have no choice but to define
-   * the state type before the functions, because they may reuse this state
-   * type: in this case, we define/declare it at the very beginning. Otherwise,
-   * we define/declare it at the very end.
+   * type, he might want to reuse those in the state type.
+   * More specifically: if we extract functions in the same file as the type,
+   * we have no choice but to define the state type before the functions,
+   * because they may reuse this state type: in this case, we define/declare
+   * it at the very beginning. Otherwise, we define/declare it at the very end.
    *)
   if config.extract_state_type && config.extract_fun_decls then
     export_state_type ();
-  List.iter export_decl ctx.crate.declarations;
+  List.iter export_decl_group ctx.crate.declarations;
   if config.extract_state_type && not config.extract_fun_decls then
     export_state_type ()
 
