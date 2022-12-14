@@ -415,12 +415,12 @@ let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
   let all_types = List.append inputs [ output ] in
   String.concat " -> " all_types
 
-let fun_suffix (lp_id : V.LoopId.id option) (rg_id : T.RegionGroupId.id option)
-    : string =
+let fun_suffix (lp_id : LoopId.id option) (rg_id : T.RegionGroupId.id option) :
+    string =
   let lp_suff =
     match lp_id with
     | None -> ""
-    | Some lp_id -> "^loop^" ^ V.LoopId.to_string lp_id
+    | Some lp_id -> "^loop^" ^ LoopId.to_string lp_id
   in
 
   let rg_suff =

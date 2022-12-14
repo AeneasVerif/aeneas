@@ -162,13 +162,22 @@ type formatter = {
   global_name : global_name -> string;
       (** Provided a basename, compute a global name. *)
   fun_name :
-    fun_name -> int -> region_group_info option -> bool * int -> string;
+    fun_name ->
+    int ->
+    LoopId.id option ->
+    int ->
+    region_group_info option ->
+    bool * int ->
+    string;
       (** Compute the name of a regular (non-assumed) function.
 
           Inputs:
-          - function id
           - function basename (TODO: shouldn't appear for assumed functions?...)
-          - number of region groups
+          - number of loops in the function (useful to check if we need to use
+            indices to derive unique names for the loops for instance - if there is
+            exactly one loop, we don't need to use indices)
+          - loop id (if pertinent)
+          - number of region groups (same comment as for the number of loops)
           - region group information in case of a backward function
             ([None] if forward function)
           - pair:
@@ -448,7 +457,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
           let lp_kind =
             match lp_id with
             | None -> ""
-            | Some lp_id -> "loop " ^ V.LoopId.to_string lp_id ^ ", "
+            | Some lp_id -> "loop " ^ LoopId.to_string lp_id ^ ", "
           in
 
           let fwd_back_kind =
@@ -541,7 +550,7 @@ let ctx_get_global (id : A.GlobalDeclId.id) (ctx : extraction_ctx) : string =
 let ctx_get_function (id : fun_id) (ctx : extraction_ctx) : string =
   ctx_get (FunId id) ctx
 
-let ctx_get_local_function (id : A.FunDeclId.id) (lp : V.LoopId.id option)
+let ctx_get_local_function (id : A.FunDeclId.id) (lp : LoopId.id option)
     (rg : RegionGroupId.id option) (ctx : extraction_ctx) : string =
   ctx_get_function (FromLlbc (Regular id, lp, rg)) ctx
 
@@ -704,7 +713,8 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
         Some { id = rg_id; region_names }
   in
   let name =
-    ctx.fmt.fun_name def.basename num_rgs rg_info (keep_fwd, num_backs)
+    ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
+      (keep_fwd, num_backs)
   in
   ctx_add
     (FunId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))
@@ -788,7 +798,8 @@ let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
     information.
     TODO: move all those helpers.
 *)
-let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
+let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
+    (num_region_groups : int) (rg : region_group_info option)
     ((keep_fwd, num_backs) : bool * int) : string =
   (* There are several cases:
      - [rg] is [Some]: this is a forward function:
@@ -805,21 +816,31 @@ let default_fun_suffix (num_region_groups : int) (rg : region_group_info option)
      we could not add the "_fwd" suffix) to prevent name clashes between
      definitions (in particular between type and function definitions).
   *)
-  match rg with
-  | None -> "_fwd"
-  | Some rg ->
-      assert (num_region_groups > 0 && num_backs > 0);
-      if num_backs = 1 then
-        (* Exactly one backward function *)
-        if not keep_fwd then "_fwd_back" else "_back"
-      else if
-        (* Several region groups/backward functions:
-           - if all the regions in the group have names, we use those names
-           - otherwise we use an index
-        *)
-        List.for_all Option.is_some rg.region_names
-      then
-        (* Concatenate the region names *)
-        "_back" ^ String.concat "" (List.map Option.get rg.region_names)
-      else (* Use the region index *)
-        "_back" ^ RegionGroupId.to_string rg.id
+  let lp_suff =
+    match loop_id with
+    | None -> ""
+    | Some loop_id ->
+        if num_loops = 1 then "_loop" else "_loop" ^ LoopId.to_string loop_id
+  in
+
+  let rg_suff =
+    match rg with
+    | None -> "_fwd"
+    | Some rg ->
+        assert (num_region_groups > 0 && num_backs > 0);
+        if num_backs = 1 then
+          (* Exactly one backward function *)
+          if not keep_fwd then "_fwd_back" else "_back"
+        else if
+          (* Several region groups/backward functions:
+             - if all the regions in the group have names, we use those names
+             - otherwise we use an index
+          *)
+          List.for_all Option.is_some rg.region_names
+        then
+          (* Concatenate the region names *)
+          "_back" ^ String.concat "" (List.map Option.get rg.region_names)
+        else (* Use the region index *)
+          "_back" ^ RegionGroupId.to_string rg.id
+  in
+  lp_suff ^ rg_suff

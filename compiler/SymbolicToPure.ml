@@ -2028,15 +2028,18 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         Some { inputs; inputs_lvs; body }
   in
 
-  (* Note that for now, the loops are still *inside* the function body: we will
-     extract them from there later, in {!PureMicroPasses} (by "splitting" the definition).
+  (* Note that for now, the loops are still *inside* the function body (and we
+     haven't counted them): we will extract them from there later, in {!PureMicroPasses}
+     (by "splitting" the definition).
   *)
+  let num_loops = 0 in
   let loop_id = None in
 
   (* Assemble the declaration *)
   let def =
     {
       def_id;
+      num_loops;
       loop_id;
       back_id = bid;
       basename;
