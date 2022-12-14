@@ -10,7 +10,7 @@
  (public_name aeneas) ;; The name as revealed to the projects importing this library
  (preprocess
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
- (libraries charon core_unix unionFind)
+ (libraries charon core_unix unionFind ocamlgraph)
  (modules
   Assumed
   Collections
@@ -48,6 +48,7 @@
   Pure
   PureTypeCheck
   PureUtils
+  SCC
   Scalars
   StringUtils
   Substitute

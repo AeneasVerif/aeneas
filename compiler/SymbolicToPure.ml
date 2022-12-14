@@ -119,6 +119,18 @@ type bs_ctx = {
       (** The function calls we encountered so far *)
   abstractions : (V.abs * texpression list) V.AbstractionId.Map.t;
       (** The ended abstractions we encountered so far, with their additional input arguments  *)
+  loop_id : V.LoopId.id option;
+      (** [Some] if we reached a loop (we are synthesizing a function, and reached a loop, or are
+          synthesizing the loop body itself)
+       *)
+  inside_loop : bool;
+      (** In case {!loop_id} is [Some]:
+          - if [true]: we are synthesizing a loop body
+          - if [false]: we reached a loop and are synthesizing the end of the function (after the loop body)
+
+          Note that when a function contains a loop, we group the function symbolic AST and the loop symbolic
+          AST in a single function.
+       *)
 }
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
@@ -1175,7 +1187,7 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
             (ctx, e)
       in
       translate_expression e ctx
-  | Loop _loop -> raise (Failure "Unimplemented")
+  | Loop loop -> translate_loop loop ctx
 
 and translate_panic (ctx : bs_ctx) : texpression =
   (* Here we use the function return type - note that it is ok because
@@ -1828,6 +1840,9 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       assert (
         List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches);
       { e; ty }
+
+and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
+  raise (Failure "Unreachable")
 
 and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
     texpression =

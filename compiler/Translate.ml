@@ -116,6 +116,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       (* Empty for now *)
       calls;
       abstractions;
+      loop_id = None;
+      inside_loop = false;
     }
   in
 
