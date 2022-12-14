@@ -269,7 +269,7 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   (* Retrieve the fun_id *)
   let fun_id =
     match info.forward.call_id with
-    | S.Fun (fid, _) -> Fun (FromLlbc (fid, Some back_id))
+    | S.Fun (fid, _) -> Fun (FromLlbc (fid, None, Some back_id))
     | S.Unop _ | S.Binop _ -> raise (Failure "Unreachable")
   in
   (* Update the context and return *)
@@ -1268,7 +1268,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     match call.call_id with
     | S.Fun (fid, call_id) ->
         (* Regular function call *)
-        let func = Fun (FromLlbc (fid, None)) in
+        let func = Fun (FromLlbc (fid, None, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
         let effect_info =
@@ -2027,10 +2027,17 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
             (List.combine inputs signature.inputs));
         Some { inputs; inputs_lvs; body }
   in
+
+  (* Note that for now, the loops are still *inside* the function body: we will
+     extract them from there later, in {!PureMicroPasses} (by "splitting" the definition).
+  *)
+  let loop_id = None in
+
   (* Assemble the declaration *)
   let def =
     {
       def_id;
+      loop_id;
       back_id = bid;
       basename;
       signature;

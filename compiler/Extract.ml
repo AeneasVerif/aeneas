@@ -1907,7 +1907,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
   assert (not def.is_global_decl_body);
   (* Retrieve the function name *)
-  let def_name = ctx_get_local_function def.def_id def.back_id ctx in
+  let def_name =
+    ctx_get_local_function def.def_id def.loop_id def.back_id ctx
+  in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -2141,7 +2143,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
   let decl_name = ctx_get_global global.def_id ctx in
   let body_name =
-    ctx_get_function (FromLlbc (Regular global.body_id, None)) ctx
+    ctx_get_function (FromLlbc (Regular global.body_id, None, None)) ctx
   in
 
   let decl_ty, body_ty =
@@ -2211,7 +2213,9 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "assert_norm";
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
-        let fun_name = ctx_get_local_function def.def_id def.back_id ctx in
+        let fun_name =
+          ctx_get_local_function def.def_id def.loop_id def.back_id ctx
+        in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
           F.pp_print_space fmt ();
@@ -2225,7 +2229,9 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "Check";
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
-        let fun_name = ctx_get_local_function def.def_id def.back_id ctx in
+        let fun_name =
+          ctx_get_local_function def.def_id def.loop_id def.back_id ctx
+        in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
           F.pp_print_space fmt ();

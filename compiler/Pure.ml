@@ -306,8 +306,11 @@ type pure_assumed_fun_id =
 
 (** A function identifier *)
 type fun_id =
-  | FromLlbc of A.fun_id * T.RegionGroupId.id option
+  | FromLlbc of A.fun_id * V.LoopId.id option * T.RegionGroupId.id option
       (** A function coming from LLBC.
+
+          The loop id is [None] if the function is actually the auxiliary function
+          generated from a loop.
 
           The region group id is the backward id:: [Some] if the function is a
           backward function, [None] if it is a forward function.
@@ -624,6 +627,8 @@ type fun_body = {
 
 type fun_decl = {
   def_id : FunDeclId.id;
+  loop_id : V.LoopId.id option;
+      (** [Some] if this definition was generated for a loop *)
   back_id : T.RegionGroupId.id option;
   basename : fun_name;
       (** The "base" name of the function.
