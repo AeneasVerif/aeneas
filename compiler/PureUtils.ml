@@ -113,6 +113,9 @@ let fun_sig_substitute (tsubst : TypeVarId.id -> ty) (sg : fun_sig) :
 (** We use this to check whether we need to add parentheses around expressions.
     We only look for outer monadic let-bindings.
     This is used when printing the branches of [if ... then ... else ...].
+
+    Rem.: this function will *fail* if there are {!Loop} nodes (you should call
+    it on an expression where those nodes have been eliminated).
  *)
 let rec let_group_requires_parentheses (e : texpression) : bool =
   match e.e with
@@ -121,6 +124,9 @@ let rec let_group_requires_parentheses (e : texpression) : bool =
       if monadic then true else let_group_requires_parentheses next_e
   | Switch (_, _) -> false
   | Meta (_, next_e) -> let_group_requires_parentheses next_e
+  | Loop _ ->
+      (* Should have been eliminated *)
+      raise (Failure "Unreachable")
 
 let is_var (e : texpression) : bool =
   match e.e with Var _ -> true | _ -> false

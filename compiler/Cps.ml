@@ -17,19 +17,21 @@ type statement_eval_res =
   | Return
   | Panic
   | LoopReturn  (** We reached a return statement *while inside a loop* *)
-  | EndEnterLoop of V.typed_value list
+  | EndEnterLoop of V.typed_value V.SymbolicValueId.Map.t
       (** When we enter a loop, we delegate the end of the function is
           synthesized with a call to the loop translation. We use this
           evaluation result to transmit the fact that we end evaluation
           because we entered a loop.
 
-          We provide the list of values for the translated loop function call.
+          We provide the list of values for the translated loop function call
+          (or to be more precise the input values instantiation).
        *)
-  | EndContinue of V.typed_value list
+  | EndContinue of V.typed_value V.SymbolicValueId.Map.t
       (** For loop translations: we end with a continue (i.e., a recursive call
           to the translation for the loop body).
 
-          We provide the list of values for the translated loop function call.
+          We provide the list of values for the translated loop function call
+          (or to be more precise the input values instantiation).
        *)
 [@@deriving show]
 

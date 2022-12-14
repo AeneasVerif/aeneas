@@ -20,6 +20,8 @@ module GlobalDeclId = A.GlobalDeclId
  *)
 module LoopId = IdGen ()
 
+type loop_id = LoopId.id [@@deriving show, ord]
+
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
 module SynthPhaseId = IdGen ()
@@ -365,6 +367,7 @@ class ['self] iter_expression_base =
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
     method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
+    method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_expression} visitor *)
@@ -377,6 +380,7 @@ class ['self] map_expression_base =
 
     method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
+    method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_expression} visitor *)
@@ -389,6 +393,7 @@ class virtual ['self] reduce_expression_base =
 
     method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
+    method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_expression} visitor *)
@@ -403,6 +408,9 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
 
     method visit_qualif : 'env -> qualif -> qualif * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_loop_id : 'env -> loop_id -> loop_id * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -464,10 +472,32 @@ type expression =
           ]}
        *)
   | Switch of texpression * switch_body
+  | Loop of loop  (** See the comments for {!loop} *)
   | Meta of (meta[@opaque]) * texpression  (** Meta-information *)
 
 and switch_body = If of texpression * texpression | Match of match_branch list
 and match_branch = { pat : typed_pattern; branch : texpression }
+
+(** In {!SymbolicToPure}, whenever we encounter a loop we insert a {!loop}
+    node, which contains the end of the function (i.e., the call to the
+    loop function) as well as the *body* of the loop translation (to be
+    more precise, the bodies of the loop forward and backward function).
+    We later split the function definition in {!PureMicroPasses}, to
+    remove this node.
+
+    Note that the loop body is a forward body if the function is
+    a forward function, and a backward body (for the corresponding region
+    group) if the function is a backward function.
+ *)
+and loop = {
+  fun_end : texpression;
+  loop_id : loop_id;
+  inputs : var list;
+  inputs_lvs : typed_pattern list;
+      (** The inputs seen as patterns. See {!fun_body}. *)
+  loop_body : texpression;
+}
+
 and texpression = { e : expression; ty : ty }
 
 (** Meta-value (converted to an expression). It is important that the content
@@ -634,6 +664,10 @@ type fun_body = {
 type fun_decl = {
   def_id : FunDeclId.id;
   num_loops : int;
+      (** The number of loops in the parent forward function (basically the number
+          of loops appearing in the original Rust functions, unless some loops are
+          duplicated because we don't join the control-flow after a branching)
+       *)
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
   back_id : T.RegionGroupId.id option;

@@ -3061,12 +3061,8 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     in
     let cc = InterpreterBorrows.end_borrows config new_borrows in
 
-    (* List the loop input values - when iterating over a map, we iterate
-       over the keys, in increasing order *)
-    let input_values =
-      List.map snd
-        (V.SymbolicValueId.Map.bindings tgt_to_src_maps.sid_to_value_map)
-    in
+    (* Compute the loop input values *)
+    let input_values = tgt_to_src_maps.sid_to_value_map in
 
     (* Continue *)
     cc
