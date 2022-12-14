@@ -8,7 +8,7 @@ let log = Logging.reorder_decls_log
 
 type fun_id = {
   def_id : FunDeclId.id;
-  lp_id : V.LoopId.id option;
+  lp_id : LoopId.id option;
   rg_id : T.RegionGroupId.id option;
 }
 [@@deriving show, ord]

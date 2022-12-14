@@ -417,11 +417,12 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     let parts = List.map to_snake_case (get_name name) in
     String.concat "_" parts
   in
-  let fun_name (fname : fun_name) (num_rgs : int)
-      (rg : region_group_info option) (filter_info : bool * int) : string =
+  let fun_name (fname : fun_name) (num_loops : int) (loop_id : LoopId.id option)
+      (num_rgs : int) (rg : region_group_info option) (filter_info : bool * int)
+      : string =
     let fname = fun_name_to_snake_case fname in
     (* Compute the suffix *)
-    let suffix = default_fun_suffix num_rgs rg filter_info in
+    let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
     (* Concatenate *)
     fname ^ suffix
   in

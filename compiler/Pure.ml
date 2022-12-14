@@ -14,6 +14,12 @@ module SymbolicValueId = V.SymbolicValueId
 module FunDeclId = A.FunDeclId
 module GlobalDeclId = A.GlobalDeclId
 
+(** We redefine identifiers for loop: in {Values}, the identifiers are global
+    (they monotonically increase across functions) while in {!Pure} we want
+    the indices to start at 0 for every function.
+ *)
+module LoopId = IdGen ()
+
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
 module SynthPhaseId = IdGen ()
@@ -306,7 +312,7 @@ type pure_assumed_fun_id =
 
 (** A function identifier *)
 type fun_id =
-  | FromLlbc of A.fun_id * V.LoopId.id option * T.RegionGroupId.id option
+  | FromLlbc of A.fun_id * LoopId.id option * T.RegionGroupId.id option
       (** A function coming from LLBC.
 
           The loop id is [None] if the function is actually the auxiliary function
@@ -627,7 +633,8 @@ type fun_body = {
 
 type fun_decl = {
   def_id : FunDeclId.id;
-  loop_id : V.LoopId.id option;
+  num_loops : int;
+  loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
   back_id : T.RegionGroupId.id option;
   basename : fun_name;

@@ -621,7 +621,7 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
     In this situation, we can remove the call [f@fwd x].
  *)
 let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
-    (id0 : A.fun_id) (lp_id0 : V.LoopId.id option)
+    (id0 : A.fun_id) (lp_id0 : LoopId.id option)
     (rg_id0 : T.RegionGroupId.id option) (tys0 : ty list)
     (args0 : texpression list) (e : texpression) : bool =
   let check_call (fun_id1 : fun_or_op_id) (tys1 : ty list)
