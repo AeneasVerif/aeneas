@@ -7,6 +7,9 @@ module PrimitiveValues = Charon.PrintPrimitiveValues
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
+let list_to_string (to_string : 'a -> string) (ls : 'a list) : string =
+  "[" ^ String.concat "; " (List.map to_string ls) ^ "]"
+
 (** Pretty-printing for values *)
 module Values = struct
   type value_formatter = {

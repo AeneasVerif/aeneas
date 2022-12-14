@@ -3,6 +3,9 @@ open Collections
 open SCC
 open Pure
 
+(** The local logger *)
+let log = Logging.reorder_decls_log
+
 type fun_id = { def_id : FunDeclId.id; rg_id : T.RegionGroupId.id option }
 [@@deriving show, ord]
 
@@ -69,6 +72,11 @@ let group_reorder_fun_decls (decls : fun_decl list) :
   let idl = List.map get_fun_id decls in
   let ids = FunIdSet.of_list idl in
 
+  log#ldebug
+    (lazy
+      ("group_reorder_fun_decls: ids:\n"
+      ^ (Print.list_to_string FunIdOrderedType.show_t) idl));
+
   (* Explore the bodies to compute the dependencies - we ignore the ids
      which refer to declarations not in the group we want to reorder *)
   let deps : (fun_id * FunIdSet.t) list =
@@ -79,49 +87,87 @@ let group_reorder_fun_decls (decls : fun_decl list) :
         | None -> (id, FunIdSet.empty)
         | Some body ->
             let deps = compute_body_fun_deps body.body in
-            (id, FunIdSet.inter deps ids))
+            (* Restrict the set dependencies *)
+            let deps = FunIdSet.inter deps ids in
+            (id, deps))
       decls
   in
 
   (*
    * Create the dependency graph
    *)
-  (* Convert the ids to vertices (i.e., injectively map ids to integers) *)
-  let id_to_vertex : int FunIdMap.t =
+  (* Convert the ids to vertices (i.e., injectively map ids to integers, and create
+     vertices labeled with those integers).
+
+     Rem.: [Graph.create] is *imperative*: it generates a new vertex every time
+     it is called (!!).
+  *)
+  let module Graph = Pack.Digraph in
+  let id_to_vertex : Graph.V.t FunIdMap.t =
     let cnt = ref 0 in
     FunIdMap.of_list
       (List.map
          (fun id ->
-           let v = !cnt in
+           let lbl = !cnt in
            cnt := !cnt + 1;
+           (* We create a vertex *)
+           let v = Graph.V.create lbl in
            (id, v))
          idl)
   in
   let vertex_to_id : fun_id IntMap.t =
     IntMap.of_list
-      (List.map (fun (fid, vid) -> (vid, fid)) (FunIdMap.bindings id_to_vertex))
+      (List.map
+         (fun (fid, v) -> (Graph.V.label v, fid))
+         (FunIdMap.bindings id_to_vertex))
   in
-  let to_v id = Pack.Graph.V.create (FunIdMap.find id id_to_vertex) in
-  let to_id v = IntMap.find (Pack.Graph.V.label v) vertex_to_id in
 
-  let g = Pack.Graph.create () in
-  (* First add the vertices *)
-  List.iter (fun id -> Pack.Graph.add_vertex g (to_v id)) idl;
+  let to_v id = FunIdMap.find id id_to_vertex in
+  let to_id v = IntMap.find (Graph.V.label v) vertex_to_id in
 
-  (* Then add the edges *)
+  let g = Graph.create () in
+
+  (* Add the edges, first from the vertices to themselves, then between vertices *)
   List.iter
     (fun (fun_id, deps) ->
-      FunIdSet.iter
-        (fun dep_id -> Pack.Graph.add_edge g (to_v fun_id) (to_v dep_id))
-        deps)
+      let v = to_v fun_id in
+      Graph.add_edge g v v;
+      FunIdSet.iter (fun dep_id -> Graph.add_edge g v (to_v dep_id)) deps)
     deps;
 
   (* Compute the SCCs *)
-  let module Comp = Components.Make (Pack.Graph) in
+  let module Comp = Components.Make (Graph) in
   let sccs = Comp.scc_list g in
 
   (* Convert the vertices to ids *)
   let sccs = List.map (List.map to_id) sccs in
+
+  log#ldebug
+    (lazy
+      ("group_reorder_fun_decls: SCCs:\n"
+      ^ Print.list_to_string (Print.list_to_string FunIdOrderedType.show_t) sccs
+      ));
+
+  (* Sanity check *)
+  let _ =
+    (* Check that the SCCs are pairwise disjoint *)
+    assert (FunIdSet.pairwise_disjoint (List.map FunIdSet.of_list sccs));
+    (* Check that all the ids are in the sccs *)
+    let scc_ids = FunIdSet.of_list (List.concat sccs) in
+
+    log#ldebug
+      (lazy
+        ("group_reorder_fun_decls: sanity check:" ^ "\n- ids    : "
+       ^ FunIdSet.show ids ^ "\n- scc_ids: " ^ FunIdSet.show scc_ids));
+
+    assert (FunIdSet.equal scc_ids ids)
+  in
+
+  log#ldebug
+    (lazy
+      ("group_reorder_fun_decls: reordered SCCs:\n"
+      ^ Print.list_to_string (Print.list_to_string FunIdOrderedType.show_t) sccs
+      ));
 
   (* Reorder *)
   let module Reorder = SCC.Make (FunIdOrderedType) in
@@ -130,6 +176,16 @@ let group_reorder_fun_decls (decls : fun_decl list) :
       (List.map (fun (fid, deps) -> (fid, FunIdSet.elements deps)) deps)
   in
   let sccs = Reorder.reorder_sccs id_deps idl sccs in
+
+  (* Sanity check *)
+  let _ =
+    (* Check that the SCCs are pairwise disjoint *)
+    let sccs = List.map snd (SccId.Map.bindings sccs.sccs) in
+    assert (FunIdSet.pairwise_disjoint (List.map FunIdSet.of_list sccs));
+    (* Check that all the ids are in the sccs *)
+    let scc_ids = FunIdSet.of_list (List.concat sccs) in
+    assert (scc_ids = ids)
+  in
 
   (* Group the declarations *)
   let deps = FunIdMap.of_list deps in
