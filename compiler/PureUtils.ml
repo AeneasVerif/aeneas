@@ -114,7 +114,7 @@ let fun_sig_substitute (tsubst : TypeVarId.id -> ty) (sg : fun_sig) :
     We only look for outer monadic let-bindings.
     This is used when printing the branches of [if ... then ... else ...].
 
-    Rem.: this function will *fail* if there are {!Loop} nodes (you should call
+    Rem.: this function will *fail* if there are {!constructor:Aeneas.Pure.expression.Loop} nodes (you should call
     it on an expression where those nodes have been eliminated).
  *)
 let rec let_group_requires_parentheses (e : texpression) : bool =

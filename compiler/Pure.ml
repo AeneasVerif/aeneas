@@ -15,7 +15,7 @@ module FunDeclId = A.FunDeclId
 module GlobalDeclId = A.GlobalDeclId
 
 (** We redefine identifiers for loop: in {Values}, the identifiers are global
-    (they monotonically increase across functions) while in {!Pure} we want
+    (they monotonically increase across functions) while in {!module:Pure} we want
     the indices to start at 0 for every function.
  *)
 module LoopId = IdGen ()

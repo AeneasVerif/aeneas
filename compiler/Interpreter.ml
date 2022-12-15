@@ -132,8 +132,9 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
 *)
 let evaluate_function_symbolic_synthesize_backward_from_return
     (config : C.config) (fdef : A.fun_decl) (inst_sg : A.inst_fun_sig)
-    (back_id : T.RegionGroupId.id) (entered_loop : bool) (inside_loop : bool)
-    (ctx : C.eval_ctx) : SA.expression option =
+    (back_id : T.RegionGroupId.id) (loop_id : V.LoopId.id option)
+    (inside_loop : bool) (ctx : C.eval_ctx) : SA.expression option =
+  let entered_loop = Option.is_some loop_id in
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
@@ -238,9 +239,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
           | V.Loop (_, rg_id', kind) ->
               let rg_id' = Option.get rg_id' in
               let is_ret =
-                match kind with
-                | V.LoopSynthInput -> true
-                | V.LoopSynthRet -> false
+                match kind with V.LoopSynthInput -> true | V.LoopCall -> false
               in
               rg_id' = back_id && is_ret
           | _ -> false
@@ -255,7 +254,12 @@ let evaluate_function_symbolic_synthesize_backward_from_return
         cf target_abs_ids
     in
     (* Generate the Return node *)
-    let cf_return : m_fun = fun ctx -> Some (SA.Return (ctx, None)) in
+    let cf_return : m_fun =
+     fun ctx ->
+      match loop_id with
+      | None -> Some (SA.Return (ctx, None))
+      | Some loop_id -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
+    in
     (* Apply *)
     cf_end_target_abs cf_return ctx
   in
@@ -285,6 +289,7 @@ let evaluate_function_symbolic (synthesize : bool)
   (* Create the continuation to finish the evaluation *)
   let config = C.mk_config C.SymbolicMode in
   let cf_finish res ctx =
+    let ctx0 = ctx in
     log#ldebug
       (lazy
         ("evaluate_function_symbolic: cf_finish: "
@@ -321,7 +326,6 @@ let evaluate_function_symbolic (synthesize : bool)
              abstractions to consume the return value, then end all the
              abstractions up to the one in which we are interested.
           *)
-          let entered_loop = false in
           let inside_loop =
             match res with
             | Return -> false
@@ -331,7 +335,7 @@ let evaluate_function_symbolic (synthesize : bool)
           let finish_back_eval back_id =
             Option.get
               (evaluate_function_symbolic_synthesize_backward_from_return config
-                 fdef inst_sg back_id entered_loop inside_loop ctx)
+                 fdef inst_sg back_id None inside_loop ctx)
           in
           let back_el =
             T.RegionGroupId.mapi
@@ -340,11 +344,18 @@ let evaluate_function_symbolic (synthesize : bool)
           in
           let back_el = T.RegionGroupId.Map.of_list back_el in
           (* Put everything together *)
-          S.synthesize_forward_end None fwd_e back_el
+          S.synthesize_forward_end ctx0 None fwd_e back_el
         else None
-    | EndEnterLoop loop_input_values | EndContinue loop_input_values ->
+    | EndEnterLoop (loop_id, loop_input_values)
+    | EndContinue (loop_id, loop_input_values) ->
         (* Similar to [Return]: we have to play different endings *)
         if synthesize then
+          let inside_loop =
+            match res with
+            | EndEnterLoop _ -> false
+            | EndContinue _ -> true
+            | _ -> raise (Failure "Unreachable")
+          in
           (* Forward translation *)
           let fwd_e =
             (* Pop the frame - there is no returned value to pop: in the
@@ -353,7 +364,7 @@ let evaluate_function_symbolic (synthesize : bool)
             let cf_pop = pop_frame config pop_return_value in
             (* Generate the Return node *)
             let cf_return _ret_value : m_fun =
-             fun ctx -> Some (SA.Return (ctx, None))
+             fun _ctx -> Some (SA.ReturnWithLoop (loop_id, inside_loop))
             in
             (* Apply *)
             cf_pop cf_return ctx
@@ -363,17 +374,10 @@ let evaluate_function_symbolic (synthesize : bool)
              abstractions to consume the return value, then end all the
              abstractions up to the one in which we are interested.
           *)
-          let entered_loop = true in
-          let inside_loop =
-            match res with
-            | EndEnterLoop _ -> false
-            | EndContinue _ -> true
-            | _ -> raise (Failure "Unreachable")
-          in
           let finish_back_eval back_id =
             Option.get
               (evaluate_function_symbolic_synthesize_backward_from_return config
-                 fdef inst_sg back_id entered_loop inside_loop ctx)
+                 fdef inst_sg back_id (Some loop_id) inside_loop ctx)
           in
           let back_el =
             T.RegionGroupId.mapi
@@ -382,7 +386,7 @@ let evaluate_function_symbolic (synthesize : bool)
           in
           let back_el = T.RegionGroupId.Map.of_list back_el in
           (* Put everything together *)
-          S.synthesize_forward_end (Some loop_input_values) fwd_e back_el
+          S.synthesize_forward_end ctx0 (Some loop_input_values) fwd_e back_el
         else None
     | Panic ->
         (* Note that as we explore all the execution branches, one of

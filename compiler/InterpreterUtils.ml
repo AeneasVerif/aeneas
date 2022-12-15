@@ -279,6 +279,14 @@ type ids_sets = {
 }
 [@@deriving show]
 
+(** See {!compute_typed_value_ids}, {!compute_context_ids}, etc.
+
+    TODO: there misses information.
+ *)
+type ids_to_values = {
+  sids_to_values : V.symbolic_value V.SymbolicValueId.Map.t;
+}
+
 let compute_ids () =
   let blids = ref V.BorrowId.Set.empty in
   let borrow_ids = ref V.BorrowId.Set.empty in
@@ -287,6 +295,7 @@ let compute_ids () =
   let dids = ref C.DummyVarId.Set.empty in
   let rids = ref T.RegionId.Set.empty in
   let sids = ref V.SymbolicValueId.Set.empty in
+  let sids_to_values = ref V.SymbolicValueId.Map.empty in
 
   let get_ids () =
     {
@@ -299,9 +308,10 @@ let compute_ids () =
       sids = !sids;
     }
   in
+  let get_ids_to_values () = { sids_to_values = !sids_to_values } in
   let obj =
     object
-      inherit [_] C.iter_eval_ctx
+      inherit [_] C.iter_eval_ctx as super
       method! visit_dummy_var_id _ did = dids := C.DummyVarId.Set.add did !dids
 
       method! visit_borrow_id _ id =
@@ -317,37 +327,45 @@ let compute_ids () =
 
       method! visit_region_id _ id = rids := T.RegionId.Set.add id !rids
 
+      method! visit_symbolic_value env sv =
+        sids := V.SymbolicValueId.Set.add sv.sv_id !sids;
+        sids_to_values := V.SymbolicValueId.Map.add sv.sv_id sv !sids_to_values;
+        super#visit_symbolic_value env sv
+
       method! visit_symbolic_value_id _ id =
+        (* TODO: can we get there without going through [visit_symbolic_value] first? *)
         sids := V.SymbolicValueId.Set.add id !sids
     end
   in
-  (obj, get_ids)
+  (obj, get_ids, get_ids_to_values)
 
 (** Compute the sets of ids found in a list of typed values. *)
-let compute_typed_values_ids (xl : V.typed_value list) : ids_sets =
-  let compute, get_ids = compute_ids () in
+let compute_typed_values_ids (xl : V.typed_value list) :
+    ids_sets * ids_to_values =
+  let compute, get_ids, get_ids_to_values = compute_ids () in
   List.iter (compute#visit_typed_value ()) xl;
-  get_ids ()
+  (get_ids (), get_ids_to_values ())
 
 (** Compute the sets of ids found in a typed value. *)
-let compute_typed_value_ids (x : V.typed_value) : ids_sets =
+let compute_typed_value_ids (x : V.typed_value) : ids_sets * ids_to_values =
   compute_typed_values_ids [ x ]
 
 (** Compute the sets of ids found in a list of abstractions. *)
-let compute_absl_ids (xl : V.abs list) : ids_sets =
-  let compute, get_ids = compute_ids () in
+let compute_absl_ids (xl : V.abs list) : ids_sets * ids_to_values =
+  let compute, get_ids, get_ids_to_values = compute_ids () in
   List.iter (compute#visit_abs ()) xl;
-  get_ids ()
+  (get_ids (), get_ids_to_values ())
 
 (** Compute the sets of ids found in an abstraction. *)
-let compute_abs_ids (x : V.abs) : ids_sets = compute_absl_ids [ x ]
+let compute_abs_ids (x : V.abs) : ids_sets * ids_to_values =
+  compute_absl_ids [ x ]
 
 (** Compute the sets of ids found in a list of contexts. *)
-let compute_contexts_ids (ctxl : C.eval_ctx list) : ids_sets =
-  let compute, get_ids = compute_ids () in
+let compute_contexts_ids (ctxl : C.eval_ctx list) : ids_sets * ids_to_values =
+  let compute, get_ids, get_ids_to_values = compute_ids () in
   List.iter (compute#visit_eval_ctx ()) ctxl;
-  get_ids ()
+  (get_ids (), get_ids_to_values ())
 
 (** Compute the sets of ids found in a context. *)
-let compute_context_ids (ctx : C.eval_ctx) : ids_sets =
+let compute_context_ids (ctx : C.eval_ctx) : ids_sets * ids_to_values =
   compute_contexts_ids [ ctx ]
