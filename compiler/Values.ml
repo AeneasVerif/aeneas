@@ -16,6 +16,8 @@ type big_int = PrimitiveValues.big_int [@@deriving show, ord]
 type scalar_value = PrimitiveValues.scalar_value [@@deriving show, ord]
 type primitive_value = PrimitiveValues.primitive_value [@@deriving show, ord]
 type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
+type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
+type loop_id = LoopId.id [@@deriving show, ord]
 
 (** The kind of a symbolic value, which precises how the value was generated.
 
@@ -894,7 +896,14 @@ and typed_avalue = { value : avalue; ty : rty }
       }]
 
 (** TODO: make those variants of [abs_kind] *)
-type loop_abs_kind = LoopSynthInput | LoopSynthRet [@@deriving show, ord]
+type loop_abs_kind =
+  | LoopSynthInput
+      (** See {!abs_kind.SynthInput} - this abstraction is an input abstraction
+          for a loop body. *)
+  | LoopCall
+      (** An abstraction introduced because we (re-)entered a loop, that we see
+          like a function call. *)
+[@@deriving show, ord]
 
 (** The kind of an abstraction, which keeps track of its origin *)
 type abs_kind =

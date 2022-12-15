@@ -1766,7 +1766,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (ctx1 : C.eval_ctx) : ids_maps option =
   log#ldebug
     (lazy
-      ("ctxs_are_equivalent:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+      ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
       ^ eval_ctx_to_string_no_filter ctx0
       ^ "\n\n- ctx1:\n"
@@ -1898,8 +1898,8 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
   let rec match_envs (env0 : C.env) (env1 : C.env) : unit =
     log#ldebug
       (lazy
-        ("ctxs_are_equivalent: match_envs:\n\n- fixed_ids:\n"
-       ^ show_ids_sets fixed_ids ^ "\n\n- rid_map: "
+        ("match_ctxs: match_envs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+       ^ "\n\n- rid_map: "
         ^ T.RegionId.InjSubst.show_t !rid_map
         ^ "\n- blid_map: "
         ^ V.BorrowId.InjSubst.show_t !blid_map
@@ -1924,7 +1924,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
           assert (b0 = b1);
           assert (v0 = v1);
           (* The ids present in the left value must be fixed *)
-          let ids = compute_typed_value_ids v0 in
+          let ids, _ = compute_typed_value_ids v0 in
           assert ((not S.check_equiv) || ids_are_fixed ids);
           (* Continue *)
           match_envs env0' env1')
@@ -1939,22 +1939,20 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         (* Continue *)
         match_envs env0' env1'
     | C.Abs abs0 :: env0', C.Abs abs1 :: env1' ->
-        log#ldebug (lazy "ctxs_are_equivalent: match_envs: matching abs");
+        log#ldebug (lazy "match_ctxs: match_envs: matching abs");
         (* Same as for the dummy values: there are two cases *)
         if V.AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
-          log#ldebug
-            (lazy "ctxs_are_equivalent: match_envs: matching abs: fixed abs");
+          log#ldebug (lazy "match_ctxs: match_envs: matching abs: fixed abs");
           (* Still in the prefix: the abstractions must be the same *)
           assert (abs0 = abs1);
           (* Their ids must be fixed *)
-          let ids = compute_abs_ids abs0 in
+          let ids, _ = compute_abs_ids abs0 in
           assert ((not S.check_equiv) || ids_are_fixed ids);
           (* Continue *)
           match_envs env0' env1')
         else (
           log#ldebug
-            (lazy
-              "ctxs_are_equivalent: match_envs: matching abs: not fixed abs");
+            (lazy "match_ctxs: match_envs: matching abs: not fixed abs");
           (* Match the values *)
           match_abstractions abs0 abs1;
           (* Continue *)
@@ -2115,10 +2113,17 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
   ((old_ctx, ctxl), !joined_ctx)
 
 (** Compute a fixed-point for the context at the entry of the loop.
-    We also return the sets of fixed ids.
+    We also return the sets of fixed ids, and the list of symbolic values
+    that appear in the fixed point context.
+
+    Rem.: the list of symbolic values should be computable by simply exploring
+    the fixed point environment and listing all the symbolic values we find.
+    In the future, we might want to do something more precise, by listing only
+    the values which are read or modified (some symbolic values may be ignored).
  *)
 let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
-    (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) : C.eval_ctx * ids_sets =
+    (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) :
+    C.eval_ctx * ids_sets * V.symbolic_value list =
   (* The continuation for when we exit the loop - we register the
      environments upon loop *reentry*, and synthesize nothing by
      returning [None]
@@ -2147,7 +2152,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
      the borrows/loans which end during the first loop iteration (we do
      one loop iteration, then set it to [Some].
   *)
-  let fixed_ids = ref None in
+  let fixed_ids : ids_sets option ref = ref None in
 
   (* Join the contexts at the loop entry *)
   let join_ctxs (ctx0 : C.eval_ctx) : C.eval_ctx =
@@ -2159,8 +2164,8 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
       match !fixed_ids with
       | Some _ -> ctx0
       | None ->
-          let old_ids = compute_context_ids ctx0 in
-          let new_ids = compute_contexts_ids !ctxs in
+          let old_ids, _ = compute_context_ids ctx0 in
+          let new_ids, _ = compute_contexts_ids !ctxs in
           let blids = V.BorrowId.Set.diff old_ids.blids new_ids.blids in
           let aids = V.AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those borrows and abstractions *)
@@ -2181,7 +2186,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
              will detect them and ask to end them) we do it preemptively.
           *)
           ctxs := List.map (end_borrows_abs blids aids) !ctxs;
-          fixed_ids := Some (compute_context_ids ctx0);
+          fixed_ids := Some (fst (compute_context_ids ctx0));
           ctx0
     in
 
@@ -2200,10 +2205,10 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     (* Compute the set of fixed ids - for the symbolic ids, we compute the
        intersection of ids between the original environment and [ctx1]
        and [ctx2] *)
-    let fixed_ids = compute_context_ids (Option.get !ctx_upon_entry) in
+    let fixed_ids, _ = compute_context_ids (Option.get !ctx_upon_entry) in
     let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
-    let fixed_ids1 = compute_context_ids ctx1 in
-    let fixed_ids2 = compute_context_ids ctx2 in
+    let fixed_ids1, _ = compute_context_ids ctx1 in
+    let fixed_ids2, _ = compute_context_ids ctx2 in
     let sids =
       V.SymbolicValueId.Set.inter sids
         (V.SymbolicValueId.Set.inter fixed_ids1.sids fixed_ids2.sids)
@@ -2211,13 +2216,30 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     let fixed_ids = { aids; blids; borrow_ids; loan_ids; dids; rids; sids } in
     fixed_ids
   in
-  let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : bool =
+  let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) :
+      V.symbolic_value list option =
     let fixed_ids = compute_fixed_ids ctx1 ctx2 in
-    ctxs_are_equivalent fixed_ids ctx1 ctx2
+    let check_equivalent = true in
+    match match_ctxs check_equivalent fixed_ids ctx1 ctx2 with
+    | None -> None
+    | Some maps ->
+        (* Compute the list of symbolic value ids *)
+        let sidl =
+          List.map fst (V.SymbolicValueId.Map.bindings maps.sid_to_value_map)
+        in
+        (* Lookup the symbolic value themselves *)
+        let _, ids_to_values = compute_context_ids ctx1 in
+        let svl =
+          List.map
+            (fun sid ->
+              V.SymbolicValueId.Map.find sid ids_to_values.sids_to_values)
+            sidl
+        in
+        Some svl
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
   let rec compute_fixed_point (ctx : C.eval_ctx) (i0 : int) (i : int) :
-      C.eval_ctx =
+      C.eval_ctx * V.symbolic_value list =
     if i = 0 then
       raise
         (Failure
@@ -2240,12 +2262,20 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
           ^ "\n\n"));
 
       (* Check if we reached a fixed point: if not, iterate *)
-      if equiv_ctxs ctx ctx1 then ctx1 else compute_fixed_point ctx1 i0 (i - 1)
+      match equiv_ctxs ctx ctx1 with
+      | Some svl -> (ctx1, svl)
+      | None -> compute_fixed_point ctx1 i0 (i - 1)
   in
-  let fp = compute_fixed_point ctx0 max_num_iter max_num_iter in
+  let fp, fp_svl = compute_fixed_point ctx0 max_num_iter max_num_iter in
 
   (* Make sure we have exactly one loop abstraction per function region (merge
-     abstractions accordingly) *)
+     abstractions accordingly).
+
+     Rem.: this shouldn't impact the set of symbolic value ids (because we
+     already merged abstractions "vertically" and are now merging them
+     "horizontally": the symbolic values contained in the abstractions (typically
+     the shared values) will be preserved.
+  *)
   let fp =
     (* List the loop abstractions in the fixed-point, and set all the abstractions
        as endable *)
@@ -2320,7 +2350,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
                   InterpreterBorrows.end_abstraction_no_synth config abs_id ctx
                 in
                 (* Explore the context, and check which abstractions are not there anymore *)
-                let ids = compute_context_ids ctx in
+                let ids, _ = compute_context_ids ctx in
                 let ended_ids = V.AbstractionId.Set.diff !fp_aids ids.aids in
                 add_ended_aids rg_id ended_ids)
               ctx.region_groups
@@ -2400,9 +2430,18 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     in
     let fp = update_kinds_can_end false !fp in
 
-    (* Check that we still have a fixed point - we simply call [compute_fixed_point]
+    (* Sanity check: we still have a fixed point - we simply call [compute_fixed_point]
        while allowing exactly one iteration to see if it fails *)
     let _ = compute_fixed_point (update_kinds_can_end true fp) 1 1 in
+
+    (* Sanity check: the set of symbolic value ids is still valid *)
+    let _ =
+      let all_ids, _ = compute_context_ids fp in
+      let fp_sids =
+        V.SymbolicValueId.Set.of_list (List.map (fun sv -> sv.V.sv_id) fp_svl)
+      in
+      assert (V.SymbolicValueId.Set.subset fp_sids all_ids.sids)
+    in
 
     (* Return *)
     fp
@@ -2410,7 +2449,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   let fixed_ids = compute_fixed_ids (Option.get !ctx_upon_entry) fp in
 
   (* Return *)
-  (fp, fixed_ids)
+  (fp, fixed_ids, fp_svl)
 
 (** Split an environment between the fixed abstractions, values, etc. and
     the new abstractions, values, etc.
@@ -2596,7 +2635,7 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
      to the same set of source loans and borrows *)
   List.iter
     (fun abs ->
-      let ids = compute_abs_ids abs in
+      let ids, _ = compute_abs_ids abs in
       (* Map the *loan* ids (we just match the corresponding *loans* ) *)
       let loan_ids =
         V.BorrowId.Set.map
@@ -3031,7 +3070,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
           | V.Loop (loop_id', rg_id, kind) ->
               assert (loop_id' = loop_id);
               assert (kind = V.LoopSynthInput);
-              let kind = V.Loop (loop_id, rg_id, V.LoopSynthRet) in
+              let kind = V.Loop (loop_id, rg_id, V.LoopCall) in
               let abs = { abs with kind } in
               super#visit_abs env abs
           | _ -> super#visit_abs env abs
@@ -3067,8 +3106,8 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     (* Continue *)
     cc
       (cf
-         (if is_loop_entry then EndEnterLoop input_values
-         else EndContinue input_values))
+         (if is_loop_entry then EndEnterLoop (loop_id, input_values)
+         else EndContinue (loop_id, input_values)))
       src_ctx
   in
 
@@ -3130,7 +3169,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
   (* Compute a fresh loop id *)
   let loop_id = C.fresh_loop_id () in
   (* Compute the fixed point at the loop entrance *)
-  let fp_ctx, fixed_ids =
+  let fp_ctx, fixed_ids, input_svalues =
     compute_loop_entry_fixed_point config loop_id eval_loop_body ctx
   in
 
@@ -3179,8 +3218,17 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
   in
   let loop_expr = eval_loop_body cf_loop fp_ctx in
 
+  (* Compute the list of fresh symbolic values *)
+  let fresh_sids =
+    let input_sids =
+      V.SymbolicValueId.Set.of_list
+        (List.map (fun sv -> sv.V.sv_id) input_svalues)
+    in
+    V.SymbolicValueId.Set.diff input_sids fixed_ids.sids
+  in
+
   (* Put together *)
-  S.synthesize_loop loop_id end_expr loop_expr
+  S.synthesize_loop loop_id input_svalues fresh_sids end_expr loop_expr
 
 (** Evaluate a loop *)
 let eval_loop (config : C.config) (eval_loop_body : st_cm_fun) : st_cm_fun =

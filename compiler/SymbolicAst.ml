@@ -60,8 +60,68 @@ type meta =
       (** We generated an assignment (destination, assigned value, src) *)
 [@@deriving show]
 
-(** **Rk.:** here, {!expression} is not at all equivalent to the expressions
-    used in LLBC: they are a first step towards lambda-calculus expressions.
+type variant_id = T.VariantId.id [@@deriving show]
+type global_decl_id = A.GlobalDeclId.id [@@deriving show]
+type 'a symbolic_value_id_map = 'a V.SymbolicValueId.Map.t [@@deriving show]
+type 'a region_group_id_map = 'a T.RegionGroupId.Map.t [@@deriving show]
+
+(** Ancestor for {!expression} iter visitor *)
+class ['self] iter_expression_base =
+  object (self : 'self)
+    inherit [_] VisitorsRuntime.iter
+    method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
+    method visit_typed_value : 'env -> V.typed_value -> unit = fun _ _ -> ()
+    method visit_call : 'env -> call -> unit = fun _ _ -> ()
+    method visit_abs : 'env -> V.abs -> unit = fun _ _ -> ()
+    method visit_loop_id : 'env -> V.loop_id -> unit = fun _ _ -> ()
+    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
+
+    method visit_symbolic_value_id : 'env -> V.symbolic_value_id -> unit =
+      fun _ _ -> ()
+
+    method visit_symbolic_value : 'env -> V.symbolic_value -> unit =
+      fun _ _ -> ()
+
+    method visit_region_group_id : 'env -> T.RegionGroupId.id -> unit =
+      fun _ _ -> ()
+
+    method visit_global_decl_id : 'env -> global_decl_id -> unit = fun _ _ -> ()
+    method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
+    method visit_meta : 'env -> meta -> unit = fun _ _ -> ()
+
+    method visit_region_group_id_map
+        : 'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
+      fun f env m ->
+        T.RegionGroupId.Map.iter
+          (fun id x ->
+            self#visit_region_group_id env id;
+            f env x)
+          m
+
+    method visit_symbolic_value_id_map
+        : 'a. ('env -> 'a -> unit) -> 'env -> 'a symbolic_value_id_map -> unit =
+      fun f env m ->
+        V.SymbolicValueId.Map.iter
+          (fun id x ->
+            self#visit_symbolic_value_id env id;
+            f env x)
+          m
+
+    method visit_symbolic_value_id_set : 'env -> V.symbolic_value_id_set -> unit
+        =
+      fun env s ->
+        V.SymbolicValueId.Set.iter (self#visit_symbolic_value_id env) s
+
+    method visit_integer_type : 'env -> T.integer_type -> unit = fun _ _ -> ()
+    method visit_scalar_value : 'env -> V.scalar_value -> unit = fun _ _ -> ()
+
+    method visit_symbolic_expansion : 'env -> V.symbolic_expansion -> unit =
+      fun _ _ -> ()
+  end
+
+(** **Rem.:** here, {!expression} is not at all equivalent to the expressions
+    used in LLBC or in lambda-calculus: they are simply a first step towards
+    lambda-calculus expressions.
  *)
 type expression =
   | Return of Contexts.eval_ctx * V.typed_value option
@@ -83,7 +143,7 @@ type expression =
           The context is the evaluation context from after evaluating the asserted
           value. It has the same purpose as for the {!Return} case.
        *)
-  | EvalGlobal of A.GlobalDeclId.id * V.symbolic_value * expression
+  | EvalGlobal of global_decl_id * V.symbolic_value * expression
       (** Evaluate a global to a fresh symbolic value *)
   | Assertion of Contexts.eval_ctx * V.typed_value * expression
       (** An assertion.
@@ -101,9 +161,10 @@ type expression =
           to prettify the generated code.
        *)
   | ForwardEnd of
-      V.typed_value V.SymbolicValueId.Map.t option
+      Contexts.eval_ctx
+      * V.typed_value symbolic_value_id_map option
       * expression
-      * expression T.RegionGroupId.Map.t
+      * expression region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
           generation of code specific to the backward function(s). This allows
           us in particular to factor the work out: we don't need to replay the
@@ -117,12 +178,28 @@ type expression =
           The optional map from symbolic values to input values are input values
           for loops: upon entering a loop, in the translation we call the loop
           translation function, which takes care of the end of the execution.
+
+          The evaluation context is the context at the moment we introduce the
+          [ForwardEnd], and is used to translate the input values (see the
+          comments for the {!Return} variant).
        *)
   | Loop of loop  (** Loop *)
+  | ReturnWithLoop of V.loop_id * bool
+      (** End the function with a call to a loop function.
+
+          This encompasses the cases when we synthesize a function body
+          and enter a loop for the first time, or when we synthesize a
+          loop body and reach a [Continue].
+
+          The boolean is [is_continue].
+       *)
   | Meta of meta * expression  (** Meta information *)
 
 and loop = {
-  loop_id : V.LoopId.id;
+  loop_id : V.loop_id;
+  input_svalues : V.symbolic_value list;  (** The input symbolic values *)
+  fresh_svalues : V.symbolic_value_id_set;
+      (** The symbolic values introduced by the loop fixed-point *)
   end_expr : expression;
       (** The end of the function (upon the moment it enters the loop) *)
   loop_expr : expression;  (** The symbolically executed loop body *)
@@ -137,8 +214,7 @@ and expansion =
           *Doesn't* include:
           - expansion of ADTs with one variant
        *)
-  | ExpandAdt of
-      (T.VariantId.id option * V.symbolic_value list * expression) list
+  | ExpandAdt of (variant_id option * V.symbolic_value list * expression) list
       (** ADT expansion *)
   | ExpandBool of expression * expression
       (** A boolean expansion (i.e, an [if ... then ... else ...]) *)
@@ -146,4 +222,14 @@ and expansion =
       T.integer_type * (V.scalar_value * expression) list * expression
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
-[@@deriving show]
+[@@deriving
+  show,
+    visitors
+      {
+        name = "iter_expression";
+        variety = "iter";
+        ancestors = [ "iter_expression_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+        polymorphic = false;
+      }]

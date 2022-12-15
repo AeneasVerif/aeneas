@@ -83,7 +83,7 @@ module Make (Id : OrderedType) = struct
       stable manner. For instance, if some Rust functions are mutually recursive,
       it is possible that we can extract the forward functions in one group, and
       extract the backward functions in one group (after filtering the useless
-      calls in {!MicroPasses}), but is is also possible that all the functions
+      calls in {!module:PureMicroPasses}), but is is also possible that all the functions
       (forward and backward) are mutually recursive). For this reason, we compute
       the dependency graph and the strongly connected components of that graph.
       Similar problems when functions contain loops (especially mutually recursive

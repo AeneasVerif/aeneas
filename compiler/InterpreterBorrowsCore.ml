@@ -186,9 +186,9 @@ let projection_contains (ty1 : T.rty) (rset1 : T.RegionId.Set.t) (ty2 : T.rty)
 
     The loan is referred to by a borrow id.
 
-    Rem.: if the {!g_loan_content} is {!Concrete}, the {!abs_or_var_id} is not
-    necessarily {!VarId} or {!DummyVarId}: there can be concrete loans in
-    abstractions (in the shared values).
+    Rem.: if the {!InterpreterUtils.g_loan_content} is {!constructor:Aeneas.InterpreterUtils.concrete_or_abs.Concrete},
+    the {!InterpreterUtils.abs_or_var_id} is not necessarily {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.VarId} or
+    {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.DummyVarId}: there can be concrete loans in abstractions (in the shared values).
  *)
 let lookup_loan_opt (ek : exploration_kind) (l : V.BorrowId.id)
     (ctx : C.eval_ctx) : (abs_or_var_id * g_loan_content) option =

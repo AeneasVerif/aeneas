@@ -92,6 +92,36 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   let global_context =
     { SymbolicToPure.llbc_global_decls = global_context.global_decls }
   in
+
+  (* Compute the set of loops, and find better ids for them (starting at 0).
+     Note that we only need to explore the forward function: the backward
+     functions should contain the same set of loops.
+  *)
+  let loop_ids_map =
+    match symbolic_trans with
+    | None -> V.LoopId.Map.empty
+    | Some (_, ast) ->
+        let m = ref V.LoopId.Map.empty in
+        let _, fresh_loop_id = Pure.LoopId.fresh_stateful_generator () in
+
+        let visitor =
+          object
+            inherit [_] SA.iter_expression as super
+
+            method! visit_loop env loop =
+              let _ =
+                match V.LoopId.Map.find_opt loop.loop_id !m with
+                | Some _ -> ()
+                | None ->
+                    m := V.LoopId.Map.add loop.loop_id (fresh_loop_id ()) !m
+              in
+              super#visit_loop env loop
+          end
+        in
+        visitor#visit_expression () ast;
+        !m
+  in
+
   let ctx =
     {
       SymbolicToPure.bid = None;
@@ -118,6 +148,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       abstractions;
       loop_id = None;
       inside_loop = false;
+      loop_ids_map;
+      loops = Pure.LoopId.Map.empty;
     }
   in
 
