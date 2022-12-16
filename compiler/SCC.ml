@@ -94,15 +94,6 @@ module Make (Id : OrderedType) = struct
   *)
   let reorder_sccs (id_deps : Id.t list IdMap.t) (ids : Id.t list)
       (sccs : Id.t list list) : sccs =
-    log#ldebug
-      (lazy
-        ("reorder_sccs:" ^ "\n- id_deps: "
-        ^ IdMap.show (Print.list_to_string Id.show_t) id_deps
-        ^ "\n- ids: "
-        ^ Print.list_to_string Id.show_t ids
-        ^ "\n- sccs: "
-        ^ Print.list_to_string (Print.list_to_string Id.show_t) sccs));
-
     (* Map the identifiers to the SCC indices *)
     let id_to_scc =
       IdMap.of_list

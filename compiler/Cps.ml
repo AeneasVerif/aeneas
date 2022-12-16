@@ -16,7 +16,8 @@ type statement_eval_res =
   | Continue of int
   | Return
   | Panic
-  | LoopReturn  (** We reached a return statement *while inside a loop* *)
+  | LoopReturn of V.loop_id
+      (** We reached a return statement *while inside a loop* *)
   | EndEnterLoop of V.loop_id * V.typed_value V.SymbolicValueId.Map.t
       (** When we enter a loop, we delegate the end of the function is
           synthesized with a call to the loop translation. We use this

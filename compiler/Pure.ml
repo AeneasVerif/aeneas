@@ -567,6 +567,7 @@ type fun_effect_info = {
   is_rec : bool;
       (** [true] if the function is recursive (or in a mutually recursive group) *)
 }
+[@@deriving show]
 
 (** Meta information about a function signature *)
 type fun_sig_info = {
@@ -585,6 +586,7 @@ type fun_sig_info = {
           with the state (if there is one) *)
   effect_info : fun_effect_info;
 }
+[@@deriving show]
 
 (** A function signature.
 
@@ -600,7 +602,7 @@ type fun_sig_info = {
       [in_ty0 -> ... -> in_tyn -> state -> back_in0 -> ... back_inm -> state ->
        result (state & (back_out0 & ... & back_outp))] (* state-error *)
        
-       Note that a stateful backward function takes two states as inputs: the
+       Note that a stateful backward function may take two states as inputs: the
        state received by the associated forward function, and the state at which
        the backward is called. This leads to code of the following shape:
 
@@ -611,7 +613,7 @@ type fun_sig_info = {
        ]}
 
     The function's type should be given by [mk_arrows sig.inputs sig.output].
-    We provide additional meta-information:
+    We provide additional meta-information with {!fun_sig.info}:
     - we divide between forward inputs and backward inputs (i.e., inputs specific
       to the forward functions, and additional inputs necessary if the signature is
       for a backward function)
@@ -622,7 +624,32 @@ type fun_sig_info = {
 type fun_sig = {
   type_params : type_var list;
   inputs : ty list;
+      (** The input types.
+
+          Note that those input types take into account the [fuel] parameter,
+          if the function uses fuel for termination, and the [state] parameter,
+          if the function is stateful.
+
+          For instance, if we have the following Rust function:
+          {[
+            fn f(x : int);
+          ]}
+
+          If we translate it to a stateful function which uses fuel we get:
+          {[
+            val f : nat -> int -> state -> result (state * unit);
+          ]}
+
+          In particular, the list of input types is: [[nat; int; state]].
+       *)
   output : ty;
+      (** The output type.
+
+          Note that this type contains the "effect" of the function (i.e., it is
+          not just a purification of the Rust return type). For instance, it will
+          be a tuple with a [state] if the function is stateful, and will be wrapped
+          in a [result] if the function can fail.
+       *)
   doutputs : ty list;
       (** The "decomposed" list of outputs.
 
@@ -641,9 +668,13 @@ type fun_sig = {
           - forward function:  [[T]]
           - backward function: [[T; T]] (for "x" and "y")
           
+          Non-decomposed ouputs (if the function can fail, but is not stateful):
+          - [result T]
+          - [[result (T * T)]
        *)
   info : fun_sig_info;  (** Additional information *)
 }
+[@@deriving show]
 
 (** An instantiated function signature. See {!fun_sig} *)
 type inst_fun_sig = {
@@ -652,6 +683,7 @@ type inst_fun_sig = {
   doutputs : ty list;
   info : fun_sig_info;
 }
+[@@deriving show]
 
 type fun_body = {
   inputs : var list;
@@ -660,6 +692,7 @@ type fun_body = {
           to replace unused variables by [_] *)
   body : texpression;
 }
+[@@deriving show]
 
 type fun_decl = {
   def_id : FunDeclId.id;
@@ -681,3 +714,4 @@ type fun_decl = {
   is_global_decl_body : bool;
   body : fun_body option;
 }
+[@@deriving show]

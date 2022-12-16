@@ -851,8 +851,8 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
           (* Evaluation successful: evaluate the second statement *)
           | Unit -> eval_statement config st2 cf
           (* Control-flow break: transmit. We enumerate the cases on purpose *)
-          | Panic | Break _ | Continue _ | Return | LoopReturn | EndEnterLoop _
-          | EndContinue _ ->
+          | Panic | Break _ | Continue _ | Return | LoopReturn _
+          | EndEnterLoop _ | EndContinue _ ->
               cf res
         in
         (* Compose and apply *)
@@ -1100,8 +1100,8 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
         (* Pop the stack frame, retrieve the return value, move it to
          * its destination and continue *)
         pop_frame_assign config dest (cf Unit)
-    | Break _ | Continue _ | Unit | LoopReturn | EndEnterLoop _ | EndContinue _
-      ->
+    | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
+    | EndContinue _ ->
         raise (Failure "Unreachable")
   in
   let cc = comp cc cf_finish in

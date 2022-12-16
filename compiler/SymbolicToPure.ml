@@ -9,6 +9,7 @@ module TA = TypesAnalysis
 module L = Logging
 module PP = PrintPure
 module FA = FunsAnalysis
+module IU = InterpreterUtils
 
 (** The local logger *)
 let log = L.symbolic_to_pure_log
@@ -23,6 +24,7 @@ type type_context = {
        *)
   types_infos : TA.type_infos; (* TODO: rename to type_infos *)
 }
+[@@deriving show]
 
 type fun_sig_named_outputs = {
   sg : fun_sig;  (** A function signature *)
@@ -37,14 +39,17 @@ type fun_sig_named_outputs = {
           which case we use those names).
        *)
 }
+[@@deriving show]
 
 type fun_context = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_sigs : fun_sig_named_outputs RegularFunIdMap.t;  (** *)
   fun_infos : FA.fun_info A.FunDeclId.Map.t;
 }
+[@@deriving show]
 
 type global_context = { llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t }
+[@@deriving show]
 
 (** Whenever we translate a function call or an ended abstraction, we
     store the related information (this is useful when translating ended
@@ -64,6 +69,7 @@ type call_info = {
           TODO: remove? it is also in the bs_ctx ("abstractions" field)
        *)
 }
+[@@deriving show]
 
 (** Contains information about a loop we entered.
 
@@ -101,9 +107,10 @@ type loop_info = {
   type_args : ty list;
   forward_inputs : texpression list option;
       (** The forward inputs are initialized at [None] *)
-  forward_output_no_state : var option;
+  forward_output_no_state_no_result : var option;
       (** The forward outputs are initialized at [None] *)
 }
+[@@deriving show]
 
 (** Body synthesis context *)
 type bs_ctx = {
@@ -179,6 +186,7 @@ type bs_ctx = {
           AST in a single function.
        *)
 }
+[@@deriving show]
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
   let env = VarId.Map.empty in
@@ -209,12 +217,33 @@ let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.Ast.ast_formatter =
     ctx.fun_context.llbc_fun_decls ctx.global_context.llbc_global_decls
     ctx.fun_decl
 
+let bs_ctx_to_ctx_formatter (ctx : bs_ctx) : Print.Contexts.ctx_formatter =
+  let rvar_to_string = Print.Types.region_var_id_to_string in
+  let r_to_string = Print.Types.region_id_to_string in
+  let type_var_id_to_string = Print.Types.type_var_id_to_string in
+  let var_id_to_string = Print.Expressions.var_id_to_string in
+  let ast_fmt = bs_ctx_to_ast_formatter ctx in
+  {
+    Print.Values.rvar_to_string;
+    r_to_string;
+    type_var_id_to_string;
+    type_decl_id_to_string = ast_fmt.type_decl_id_to_string;
+    adt_variant_to_string = ast_fmt.adt_variant_to_string;
+    var_id_to_string;
+    adt_field_names = ast_fmt.adt_field_names;
+  }
+
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
   let type_params = ctx.fun_decl.signature.type_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
   PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
+
+let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
+  let fmt = bs_ctx_to_ctx_formatter ctx in
+  let fmt = Print.PC.ctx_to_rtype_formatter fmt in
+  Print.PV.symbolic_value_to_string fmt sv
 
 let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let fmt = bs_ctx_to_pp_ast_formatter ctx in
@@ -843,7 +872,13 @@ let fresh_vars (vars : (string option * ty) list) (ctx : bs_ctx) :
   List.fold_left_map (fun ctx (name, ty) -> fresh_var name ty ctx) ctx vars
 
 let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
-  V.SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var
+  match V.SymbolicValueId.Map.find_opt sv.sv_id ctx.sv_to_var with
+  | Some v -> v
+  | None ->
+      raise
+        (Failure
+           ("Could not find var for symbolic value: "
+           ^ V.SymbolicValueId.to_string sv.sv_id))
 
 (** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
@@ -1319,7 +1354,8 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     match ctx.bid with
     | None ->
         (* Forward *)
-        mk_texpression_from_var (Option.get loop_info.forward_output_no_state)
+        mk_texpression_from_var
+          (Option.get loop_info.forward_output_no_state_no_result)
     | Some bid ->
         (* Backward *)
         (* Group the variables in which we stored the values we need to give back.
@@ -1478,12 +1514,17 @@ and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
   | V.FunCall (call_id, rg_id) ->
       translate_end_abstraction_fun_call ectx abs e ctx call_id rg_id
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
-  | Loop (loop_id, rg_id, abs_kind) ->
+  | V.Loop (loop_id, rg_id, abs_kind) ->
       translate_end_abstraction_loop ectx abs e ctx loop_id rg_id abs_kind
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpression
     =
+  log#ldebug
+    (lazy
+      ("translate_end_abstraction_synth_input:" ^ "\n- eval_ctx:\n"
+     ^ IU.eval_ctx_to_string ectx ^ "\n- abs:\n" ^ IU.abs_to_string ectx abs
+     ^ "\n"));
   (* When we end an input abstraction, this input abstraction gets back
    * the borrows which it introduced in the context through the input
    * values: by listing those values, we get the values which are given
@@ -1763,7 +1804,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
           ([ back_state ], ctx, Some nstate)
         else ([], ctx, None)
       in
-      (* Concatenate all the inpus *)
+      (* Concatenate all the inputs *)
       let inputs = List.concat [ fwd_inputs; back_inputs; back_state ] in
       (* Retrieve the values given back by this function *)
       let ctx, outputs = abs_to_given_back None abs ctx in
@@ -2057,12 +2098,11 @@ and translate_forward_end (ectx : C.eval_ctx)
     translate_expression e ctx
   in
 
-  (* If we entered/are entering a loop, we need to introduce a call to the
+  (* If we are (re-)entering a loop, we need to introduce a call to the
      forward translation of the loop. *)
   match loop_input_values with
   | None ->
-      (* "Regular" case: not a loop *)
-      assert (ctx.loop_id = None);
+      (* "Regular" case: we reached a return *)
       translate_end ctx
   | Some loop_input_values ->
       (* Loop *)
@@ -2089,7 +2129,7 @@ and translate_forward_end (ectx : C.eval_ctx)
 
       (* Introduce a fresh output value for the forward function *)
       let ctx, output_var =
-        let output_ty = ctx.sg.output in
+        let output_ty = mk_simpl_tuple_ty ctx.sg.doutputs in
         fresh_var None output_ty ctx
       in
       let args, ctx, out_pats =
@@ -2116,7 +2156,7 @@ and translate_forward_end (ectx : C.eval_ctx)
         {
           loop_info with
           forward_inputs = Some args;
-          forward_output_no_state = Some output_var;
+          forward_output_no_state_no_result = Some output_var;
         }
       in
       let ctx =
@@ -2145,6 +2185,33 @@ and translate_forward_end (ectx : C.eval_ctx)
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 
+  (* Translate the loop inputs - some inputs are symbolic values already
+     in the context, some inputs are introduced by the loop fixed point:
+     we need to introduce fresh variables for those. *)
+  (* First introduce fresh variables for the new inputs *)
+  let ctx =
+    (* We have to filter the list of symbolic values, to remove the not fresh ones *)
+    let svl =
+      List.filter
+        (fun (sv : V.symbolic_value) ->
+          V.SymbolicValueId.Set.mem sv.sv_id loop.fresh_svalues)
+        loop.input_svalues
+    in
+    log#ldebug
+      (lazy
+        ("translate_loop:" ^ "\n- filtered svl: "
+        ^ (Print.list_to_string (symbolic_value_to_string ctx)) svl));
+    let ctx, _ = fresh_vars_for_symbolic_values svl ctx in
+    ctx
+  in
+
+  (* Sanity check: all the non-fresh symbolic values are in the context *)
+  assert (
+    List.for_all
+      (fun (sv : V.symbolic_value) ->
+        V.SymbolicValueId.Map.mem sv.sv_id ctx.sv_to_var)
+      loop.input_svalues);
+
   (* Translate the loop inputs *)
   let inputs =
     List.map
@@ -2172,7 +2239,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         input_svl = loop.input_svalues;
         type_args;
         forward_inputs = None;
-        forward_output_no_state = None;
+        forward_output_no_state_no_result = None;
       }
     in
     let loops = LoopId.Map.add loop_id loop_info ctx.loops in
@@ -2196,6 +2263,10 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
           V.SymbolicValueId.Set.mem sv.sv_id loop.fresh_svalues)
         loop.input_svalues
     in
+    log#ldebug
+      (lazy
+        ("translate_loop:" ^ "\n- filtered svl: "
+        ^ (Print.list_to_string (symbolic_value_to_string ctx)) svl));
     let ctx_loop, _ = fresh_vars_for_symbolic_values svl ctx_loop in
     ctx_loop
   in

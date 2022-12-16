@@ -1521,6 +1521,8 @@ end
     - to compute a mapping between the borrows and the symbolic values in a
       target context to the values and borrows in a source context (see
       {!match_ctx_with_target}).
+
+    TODO: rename
  *)
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
   module MkGetSetM (Id : Identifiers.Id) = struct
@@ -1599,7 +1601,7 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
     if S.check_equiv then GetSetSid.match_e S.sid_map
     else fun _ -> raise (Failure "Unexpected")
 
-  let match_value_with_sid (v : V.typed_value) (id : V.SymbolicValueId.id) :
+  let match_sid_with_value (id : V.SymbolicValueId.id) (v : V.typed_value) :
       unit =
     (* Even when we don't use it, the sids map contains the fixed ids: check
        that we are not trying to map a fixed id. *)
@@ -1610,9 +1612,6 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
 
     (* Add the mapping *)
     S.sid_to_value_map := V.SymbolicValueId.Map.add id v !S.sid_to_value_map
-
-  (*  let match_sidl = GetSetSid.match_el S.sid_map *)
-  (*  let match_sids = GetSetSid.match_es S.sid_map *)
 
   module GetSetAid = MkGetSetM (V.AbstractionId)
 
@@ -1666,9 +1665,9 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
 
   let match_symbolic_values (sv0 : V.symbolic_value) (sv1 : V.symbolic_value) :
       V.symbolic_value =
+    let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
     if S.check_equiv then
-      let id0 = sv0.sv_id in
       let sv_id = match_sid id0 id1 in
       let sv_ty = match_rtys sv0.V.sv_ty sv1.V.sv_ty in
       let sv_kind =
@@ -1677,7 +1676,7 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
       { V.sv_id; sv_ty; sv_kind }
     else (
       (* Update the binding for the target symbolic value *)
-      match_value_with_sid (mk_typed_value_from_symbolic_value sv0) id1;
+      match_sid_with_value id0 (mk_typed_value_from_symbolic_value sv1);
       (* Return - the returned value is not used, so we can return whatever *)
       sv1)
 
@@ -1685,9 +1684,9 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
       (v : V.typed_value) : V.typed_value =
     if S.check_equiv then raise Distinct
     else (
-      assert (not left);
+      assert left;
       (* Update the binding for the target symbolic value *)
-      match_value_with_sid v sv.sv_id;
+      match_sid_with_value sv.sv_id v;
       (* Return - the returned value is not used, so we can return whatever *)
       v)
 
@@ -2122,8 +2121,7 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
     the values which are read or modified (some symbolic values may be ignored).
  *)
 let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
-    (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) :
-    C.eval_ctx * ids_sets * V.symbolic_value list =
+    (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) : C.eval_ctx * ids_sets =
   (* The continuation for when we exit the loop - we register the
      environments upon loop *reentry*, and synthesize nothing by
      returning [None]
@@ -2143,7 +2141,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
         assert (i = 0);
         register_ctx ctx;
         None
-    | LoopReturn | EndEnterLoop _ | EndContinue _ ->
+    | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* We don't support nested loops for now *)
         raise (Failure "Nested loops are not supported for now")
   in
@@ -2216,30 +2214,14 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     let fixed_ids = { aids; blids; borrow_ids; loan_ids; dids; rids; sids } in
     fixed_ids
   in
-  let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) :
-      V.symbolic_value list option =
+  let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : bool =
     let fixed_ids = compute_fixed_ids ctx1 ctx2 in
     let check_equivalent = true in
-    match match_ctxs check_equivalent fixed_ids ctx1 ctx2 with
-    | None -> None
-    | Some maps ->
-        (* Compute the list of symbolic value ids *)
-        let sidl =
-          List.map fst (V.SymbolicValueId.Map.bindings maps.sid_to_value_map)
-        in
-        (* Lookup the symbolic value themselves *)
-        let _, ids_to_values = compute_context_ids ctx1 in
-        let svl =
-          List.map
-            (fun sid ->
-              V.SymbolicValueId.Map.find sid ids_to_values.sids_to_values)
-            sidl
-        in
-        Some svl
+    Option.is_some (match_ctxs check_equivalent fixed_ids ctx1 ctx2)
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
   let rec compute_fixed_point (ctx : C.eval_ctx) (i0 : int) (i : int) :
-      C.eval_ctx * V.symbolic_value list =
+      C.eval_ctx =
     if i = 0 then
       raise
         (Failure
@@ -2262,11 +2244,9 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
           ^ "\n\n"));
 
       (* Check if we reached a fixed point: if not, iterate *)
-      match equiv_ctxs ctx ctx1 with
-      | Some svl -> (ctx1, svl)
-      | None -> compute_fixed_point ctx1 i0 (i - 1)
+      if equiv_ctxs ctx ctx1 then ctx1 else compute_fixed_point ctx1 i0 (i - 1)
   in
-  let fp, fp_svl = compute_fixed_point ctx0 max_num_iter max_num_iter in
+  let fp = compute_fixed_point ctx0 max_num_iter max_num_iter in
 
   (* Make sure we have exactly one loop abstraction per function region (merge
      abstractions accordingly).
@@ -2323,7 +2303,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
       | Break _ ->
           (* We enforce that we can't get there: see {!PrePasses.remove_loop_breaks} *)
           raise (Failure "Unreachable")
-      | Unit | LoopReturn | EndEnterLoop _ | EndContinue _ ->
+      | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
           (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
              For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
           *)
@@ -2434,22 +2414,13 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
        while allowing exactly one iteration to see if it fails *)
     let _ = compute_fixed_point (update_kinds_can_end true fp) 1 1 in
 
-    (* Sanity check: the set of symbolic value ids is still valid *)
-    let _ =
-      let all_ids, _ = compute_context_ids fp in
-      let fp_sids =
-        V.SymbolicValueId.Set.of_list (List.map (fun sv -> sv.V.sv_id) fp_svl)
-      in
-      assert (V.SymbolicValueId.Set.subset fp_sids all_ids.sids)
-    in
-
     (* Return *)
     fp
   in
   let fixed_ids = compute_fixed_ids (Option.get !ctx_upon_entry) fp in
 
   (* Return *)
-  (fp, fixed_ids, fp_svl)
+  (fp, fixed_ids)
 
 (** Split an environment between the fixed abstractions, values, etc. and
     the new abstractions, values, etc.
@@ -3117,6 +3088,9 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
  fun cf ctx ->
+  (* We need a loop id for the [LoopReturn]. In practice it won't be used
+     (it is useful only for the symbolic execution *)
+  let loop_id = C.fresh_loop_id () in
   (* Continuation for after we evaluate the loop body: depending the result
      of doing one loop iteration:
      - redoes a loop iteration
@@ -3129,7 +3103,7 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
   *)
   let rec reeval_loop_body (res : statement_eval_res) : m_fun =
     match res with
-    | Return -> cf LoopReturn
+    | Return -> cf (LoopReturn loop_id)
     | Panic -> cf Panic
     | Break i ->
         (* Break out of the loop by calling the continuation *)
@@ -3150,7 +3124,7 @@ let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
          * We prefer to write it this way for consistency and sanity,
          * though. *)
         raise (Failure "Unreachable")
-    | LoopReturn | EndEnterLoop _ | EndContinue _ ->
+    | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* We can't get there: this is only used in symbolic mode *)
         raise (Failure "Unreachable")
   in
@@ -3169,7 +3143,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
   (* Compute a fresh loop id *)
   let loop_id = C.fresh_loop_id () in
   (* Compute the fixed point at the loop entrance *)
-  let fp_ctx, fixed_ids, input_svalues =
+  let fp_ctx, fixed_ids =
     compute_loop_entry_fixed_point config loop_id eval_loop_body ctx
   in
 
@@ -3210,7 +3184,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
             fp_ctx
         in
         cc cf ctx
-    | Unit | LoopReturn | EndEnterLoop _ | EndContinue _ ->
+    | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
            For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
         *)
@@ -3219,13 +3193,28 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
   let loop_expr = eval_loop_body cf_loop fp_ctx in
 
   (* Compute the list of fresh symbolic values *)
-  let fresh_sids =
-    let input_sids =
-      V.SymbolicValueId.Set.of_list
-        (List.map (fun sv -> sv.V.sv_id) input_svalues)
+  let fresh_sids, input_svalues =
+    let old_ids, _ = compute_context_ids ctx in
+    let fp_ids, fp_ids_maps = compute_context_ids fp_ctx in
+    let fresh_sids = V.SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
+    (* The value ids should be listed in increasing order *)
+    let input_svalues =
+      List.map
+        (fun sid -> V.SymbolicValueId.Map.find sid fp_ids_maps.sids_to_values)
+        (V.SymbolicValueId.Set.elements fresh_sids)
     in
-    V.SymbolicValueId.Set.diff input_sids fixed_ids.sids
+    (fresh_sids, input_svalues)
   in
+
+  log#ldebug
+    (lazy
+      ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
+     ^ eval_ctx_to_string ctx ^ "\n- fixed point:\n" ^ eval_ctx_to_string fp_ctx
+     ^ "\n- fixed_sids: "
+      ^ V.SymbolicValueId.Set.show fixed_ids.sids
+      ^ "\n- input_svalues: "
+      ^ V.SymbolicValueId.Set.show fresh_sids
+      ^ "\n\n"));
 
   (* Put together *)
   S.synthesize_loop loop_id input_svalues fresh_sids end_expr loop_expr
