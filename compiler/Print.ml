@@ -486,8 +486,8 @@ module Contexts = struct
     let frames = split_aux [] [] env in
     frames
 
-  let eval_ctx_to_string_gen (filter : bool) (ctx : C.eval_ctx) : string =
-    let fmt = eval_ctx_to_ctx_formatter ctx in
+  let fmt_eval_ctx_to_string_gen (fmt : ctx_formatter) (filter : bool)
+      (ctx : C.eval_ctx) : string =
     let ended_regions = T.RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
@@ -514,6 +514,10 @@ module Contexts = struct
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
     ^ " frame(s)\n" ^ String.concat "" frames
+
+  let eval_ctx_to_string_gen (filter : bool) (ctx : C.eval_ctx) : string =
+    let fmt = eval_ctx_to_ctx_formatter ctx in
+    fmt_eval_ctx_to_string_gen fmt filter ctx
 
   let eval_ctx_to_string (ctx : C.eval_ctx) : string =
     eval_ctx_to_string_gen true ctx

@@ -49,7 +49,7 @@ let borrows_log = L.get_logger "MainLogger.Interpreter.Borrows"
 let invariants_log = L.get_logger "MainLogger.Interpreter.Invariants"
 
 (** Logger for SCC *)
-let scc_log = L.get_logger "MainLogger.SCC"
+let scc_log = L.get_logger "MainLogger.Graph.SCC"
 
 (** Logger for ReorderDecls *)
-let reorder_decls_log = L.get_logger "MainLogger.ReorderDecls"
+let reorder_decls_log = L.get_logger "MainLogger.Graph.ReorderDecls"
