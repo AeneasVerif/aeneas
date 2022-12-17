@@ -8,7 +8,7 @@ include Loops.Clauses
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [loops::sum] *)
-let rec sum_loop0_fwd
+let rec sum_loop_fwd
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_decreases max i s))
   =
@@ -19,16 +19,16 @@ let rec sum_loop0_fwd
     | Return s0 ->
       begin match u32_add i 1 with
       | Fail e -> Fail e
-      | Return i0 -> sum_loop0_fwd max i0 s0
+      | Return i0 -> sum_loop_fwd max i0 s0
       end
     end
   else u32_mul s 2
 
 (** [loops::sum] *)
-let sum_fwd (max : u32) : result u32 = sum_loop0_fwd max 0 0
+let sum_fwd (max : u32) : result u32 = sum_loop_fwd max 0 0
 
 (** [loops::list_nth_mut_loop] *)
-let rec list_nth_mut_loop_loop0_fwd
+let rec list_nth_mut_loop_loop_fwd
   (t : Type0) (ls : list_t t) (i : u32) :
   Tot (result t) (decreases (list_nth_mut_loop_decreases t ls i))
   =
@@ -39,17 +39,17 @@ let rec list_nth_mut_loop_loop0_fwd
     else
       begin match u32_sub i 1 with
       | Fail e -> Fail e
-      | Return i0 -> list_nth_mut_loop_loop0_fwd t tl i0
+      | Return i0 -> list_nth_mut_loop_loop_fwd t tl i0
       end
   | ListNil -> Fail Failure
   end
 
 (** [loops::list_nth_mut_loop] *)
 let list_nth_mut_loop_fwd (t : Type0) (ls : list_t t) (i : u32) : result t =
-  list_nth_mut_loop_loop0_fwd t ls i
+  list_nth_mut_loop_loop_fwd t ls i
 
 (** [loops::list_nth_mut_loop] *)
-let rec list_nth_mut_loop_loop0_back
+let rec list_nth_mut_loop_loop_back
   (t : Type0) (ls : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t)) (decreases (list_nth_mut_loop_decreases t ls i))
   =
@@ -61,7 +61,7 @@ let rec list_nth_mut_loop_loop0_back
       begin match u32_sub i 1 with
       | Fail e -> Fail e
       | Return i0 ->
-        begin match list_nth_mut_loop_loop0_back t tl i0 ret with
+        begin match list_nth_mut_loop_loop_back t tl i0 ret with
         | Fail e -> Fail e
         | Return l -> Return (ListCons x l)
         end
@@ -72,5 +72,5 @@ let rec list_nth_mut_loop_loop0_back
 (** [loops::list_nth_mut_loop] *)
 let list_nth_mut_loop_back
   (t : Type0) (ls : list_t t) (i : u32) (ret : t) : result (list_t t) =
-  list_nth_mut_loop_loop0_back t ls i ret
+  list_nth_mut_loop_loop_back t ls i ret
 
