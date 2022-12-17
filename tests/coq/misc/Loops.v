@@ -7,20 +7,19 @@ Local Open Scope Primitives_scope.
 Module Loops.
 
 (** [loops::sum] *)
-Fixpoint sum_loop0_fwd
-  (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
+Fixpoint sum_loop_fwd (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     if i s< max
-    then (s0 <- u32_add s i; i0 <- u32_add i 1%u32; sum_loop0_fwd n0 max i0 s0)
+    then (s0 <- u32_add s i; i0 <- u32_add i 1%u32; sum_loop_fwd n0 max i0 s0)
     else u32_mul s 2%u32
   end
 .
 
 (** [loops::sum] *)
 Definition sum_fwd (n : nat) (max : u32) : result u32 :=
-  sum_loop0_fwd n max (0%u32) (0%u32)
+  sum_loop_fwd n max (0%u32) (0%u32)
 .
 
 (** [loops::List] *)
@@ -33,7 +32,7 @@ Arguments ListCons {T} _ _.
 Arguments ListNil {T}.
 
 (** [loops::list_nth_mut_loop] *)
-Fixpoint list_nth_mut_loop_loop0_fwd
+Fixpoint list_nth_mut_loop_loop_fwd
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
   match n with
   | O => Fail_ OutOfFuel
@@ -42,7 +41,7 @@ Fixpoint list_nth_mut_loop_loop0_fwd
     | ListCons x tl =>
       if i s= 0%u32
       then Return x
-      else (i0 <- u32_sub i 1%u32; list_nth_mut_loop_loop0_fwd T n0 tl i0)
+      else (i0 <- u32_sub i 1%u32; list_nth_mut_loop_loop_fwd T n0 tl i0)
     | ListNil => Fail_ Failure
     end
   end
@@ -51,11 +50,11 @@ Fixpoint list_nth_mut_loop_loop0_fwd
 (** [loops::list_nth_mut_loop] *)
 Definition list_nth_mut_loop_fwd
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
-  list_nth_mut_loop_loop0_fwd T n ls i
+  list_nth_mut_loop_loop_fwd T n ls i
 .
 
 (** [loops::list_nth_mut_loop] *)
-Fixpoint list_nth_mut_loop_loop0_back
+Fixpoint list_nth_mut_loop_loop_back
   (T : Type) (n : nat) (ls : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
@@ -68,7 +67,7 @@ Fixpoint list_nth_mut_loop_loop0_back
       then Return (ListCons ret tl)
       else (
         i0 <- u32_sub i 1%u32;
-        l <- list_nth_mut_loop_loop0_back T n0 tl i0 ret;
+        l <- list_nth_mut_loop_loop_back T n0 tl i0 ret;
         Return (ListCons x l))
     | ListNil => Fail_ Failure
     end
@@ -80,7 +79,7 @@ Definition list_nth_mut_loop_back
   (T : Type) (n : nat) (ls : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
-  list_nth_mut_loop_loop0_back T n ls i ret
+  list_nth_mut_loop_loop_back T n ls i ret
 .
 
 End Loops .
