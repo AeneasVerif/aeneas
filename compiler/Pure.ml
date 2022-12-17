@@ -14,7 +14,7 @@ module SymbolicValueId = V.SymbolicValueId
 module FunDeclId = A.FunDeclId
 module GlobalDeclId = A.GlobalDeclId
 
-(** We redefine identifiers for loop: in {Values}, the identifiers are global
+(** We redefine identifiers for loop: in {!Values}, the identifiers are global
     (they monotonically increase across functions) while in {!module:Pure} we want
     the indices to start at 0 for every function.
  *)
@@ -492,6 +492,9 @@ and match_branch = { pat : typed_pattern; branch : texpression }
 and loop = {
   fun_end : texpression;
   loop_id : loop_id;
+  fuel0 : var_id;
+  fuel : var_id;
+  input_state : var_id option;
   inputs : var list;
   inputs_lvs : typed_pattern list;
       (** The inputs seen as patterns. See {!fun_body}. *)

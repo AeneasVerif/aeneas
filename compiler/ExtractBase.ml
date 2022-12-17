@@ -273,7 +273,7 @@ type formatter = {
 type id =
   | GlobalId of A.GlobalDeclId.id
   | FunId of fun_id
-  | DecreasesClauseId of A.fun_id
+  | DecreasesClauseId of (A.fun_id * LoopId.id option)
       (** The definition which provides the decreases/termination clause.
           We insert calls to this clause to prove/reason about termination:
           the body of those clauses must be defined by the user, in the
@@ -467,14 +467,19 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
           in
           "fun name (" ^ lp_kind ^ fwd_back_kind ^ "): " ^ fun_name
       | Pure fid -> PrintPure.pure_assumed_fun_id_to_string fid)
-  | DecreasesClauseId fid ->
+  | DecreasesClauseId (fid, lid) ->
       let fun_name =
         match fid with
         | Regular fid ->
             Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
         | Assumed aid -> A.show_assumed_fun_id aid
       in
-      "decreases clause for function: " ^ fun_name
+      let loop =
+        match lid with
+        | None -> ""
+        | Some lid -> ", loop: " ^ LoopId.to_string lid
+      in
+      "decreases clause for function: " ^ fun_name ^ loop
   | TypeId id -> "type name: " ^ get_type_name id
   | StructId id -> "struct constructor of: " ^ get_type_name id
   | VariantId (id, variant_id) ->
@@ -581,9 +586,9 @@ let ctx_get_variant (def_id : type_id) (variant_id : VariantId.id)
     (ctx : extraction_ctx) : string =
   ctx_get (VariantId (def_id, variant_id)) ctx
 
-let ctx_get_decreases_clause (def_id : A.FunDeclId.id) (ctx : extraction_ctx) :
-    string =
-  ctx_get (DecreasesClauseId (Regular def_id)) ctx
+let ctx_get_decreases_clause (def_id : A.FunDeclId.id)
+    (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
+  ctx_get (DecreasesClauseId (Regular def_id, loop_id)) ctx
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
@@ -669,10 +674,10 @@ let ctx_add_struct (def : type_decl) (ctx : extraction_ctx) :
   let ctx = ctx_add (StructId (AdtId def.def_id)) name ctx in
   (ctx, name)
 
-let ctx_add_decrases_clause (def : fun_decl) (ctx : extraction_ctx) :
+let ctx_add_decreases_clause (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
-  ctx_add (DecreasesClauseId (Regular def.def_id)) name ctx
+  ctx_add (DecreasesClauseId (Regular def.def_id, def.loop_id)) name ctx
 
 let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
