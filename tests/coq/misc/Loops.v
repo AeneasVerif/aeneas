@@ -22,6 +22,26 @@ Definition sum_fwd (n : nat) (max : u32) : result u32 :=
   sum_loop_fwd n max (0%u32) (0%u32)
 .
 
+(** [loops::sum_with_borrows] *)
+Fixpoint sum_with_borrows_loop_fwd
+  (n : nat) (max : u32) (mi : u32) (ms : u32) : result u32 :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    if mi s< max
+    then (
+      ms0 <- u32_add ms mi;
+      mi0 <- u32_add mi 1%u32;
+      sum_with_borrows_loop_fwd n0 max mi0 ms0)
+    else u32_mul ms 2%u32
+  end
+.
+
+(** [loops::sum_with_borrows] *)
+Definition sum_with_borrows_fwd (n : nat) (max : u32) : result u32 :=
+  sum_with_borrows_loop_fwd n max (0%u32) (0%u32)
+.
+
 (** [loops::List] *)
 Inductive List_t (T : Type) :=
 | ListCons : T -> List_t T -> List_t T
@@ -80,6 +100,172 @@ Definition list_nth_mut_loop_back
   result (List_t T)
   :=
   list_nth_mut_loop_loop_back T n ls i ret
+.
+
+(** [loops::list_nth_mut_loop_pair] *)
+Fixpoint list_nth_mut_loop_pair_loop_fwd
+  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  result (T * T)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match l with
+    | ListCons x0 tl0 =>
+      match l0 with
+      | ListCons x1 tl1 =>
+        if i s= 0%u32
+        then Return (x0, x1)
+        else (
+          i0 <- u32_sub i 1%u32;
+          list_nth_mut_loop_pair_loop_fwd T n0 tl0 tl1 i0)
+      | ListNil => Fail_ Failure
+      end
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::list_nth_mut_loop_pair] *)
+Definition list_nth_mut_loop_pair_fwd
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
+  result (T * T)
+  :=
+  list_nth_mut_loop_pair_loop_fwd T n ls0 ls1 i
+.
+
+(** [loops::list_nth_mut_loop_pair] *)
+Fixpoint list_nth_mut_loop_pair_loop_back'a
+  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : T) :
+  result (List_t T)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match l with
+    | ListCons x0 tl0 =>
+      match l0 with
+      | ListCons x1 tl1 =>
+        if i s= 0%u32
+        then Return (ListCons ret tl0)
+        else (
+          i0 <- u32_sub i 1%u32;
+          l1 <- list_nth_mut_loop_pair_loop_back'a T n0 tl0 tl1 i0 ret;
+          Return (ListCons x0 l1))
+      | ListNil => Fail_ Failure
+      end
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::list_nth_mut_loop_pair] *)
+Definition list_nth_mut_loop_pair_back'a
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
+  result (List_t T)
+  :=
+  list_nth_mut_loop_pair_loop_back'a T n ls0 ls1 i ret
+.
+
+(** [loops::list_nth_mut_loop_pair] *)
+Fixpoint list_nth_mut_loop_pair_loop_back'b
+  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : T) :
+  result (List_t T)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match l with
+    | ListCons x0 tl0 =>
+      match l0 with
+      | ListCons x1 tl1 =>
+        if i s= 0%u32
+        then Return (ListCons ret tl1)
+        else (
+          i0 <- u32_sub i 1%u32;
+          l1 <- list_nth_mut_loop_pair_loop_back'b T n0 tl0 tl1 i0 ret;
+          Return (ListCons x1 l1))
+      | ListNil => Fail_ Failure
+      end
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::list_nth_mut_loop_pair] *)
+Definition list_nth_mut_loop_pair_back'b
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
+  result (List_t T)
+  :=
+  list_nth_mut_loop_pair_loop_back'b T n ls0 ls1 i ret
+.
+
+(** [loops::list_nth_mut_loop_pair_merge] *)
+Fixpoint list_nth_mut_loop_pair_merge_loop_fwd
+  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  result (T * T)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match l with
+    | ListCons x0 tl0 =>
+      match l0 with
+      | ListCons x1 tl1 =>
+        if i s= 0%u32
+        then Return (x0, x1)
+        else (
+          i0 <- u32_sub i 1%u32;
+          list_nth_mut_loop_pair_merge_loop_fwd T n0 tl0 tl1 i0)
+      | ListNil => Fail_ Failure
+      end
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::list_nth_mut_loop_pair_merge] *)
+Definition list_nth_mut_loop_pair_merge_fwd
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
+  result (T * T)
+  :=
+  list_nth_mut_loop_pair_merge_loop_fwd T n ls0 ls1 i
+.
+
+(** [loops::list_nth_mut_loop_pair_merge] *)
+Fixpoint list_nth_mut_loop_pair_merge_loop_back
+  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : (T * T))
+  :
+  result ((List_t T) * (List_t T))
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match l with
+    | ListCons x0 tl0 =>
+      match l0 with
+      | ListCons x1 tl1 =>
+        if i s= 0%u32
+        then let (t, t0) := ret in Return (ListCons t tl0, ListCons t0 tl1)
+        else (
+          i0 <- u32_sub i 1%u32;
+          p <- list_nth_mut_loop_pair_merge_loop_back T n0 tl0 tl1 i0 ret;
+          let (l1, l2) := p in
+          Return (ListCons x0 l1, ListCons x1 l2))
+      | ListNil => Fail_ Failure
+      end
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::list_nth_mut_loop_pair_merge] *)
+Definition list_nth_mut_loop_pair_merge_back
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32)
+  (ret : (T * T)) :
+  result ((List_t T) * (List_t T))
+  :=
+  list_nth_mut_loop_pair_merge_loop_back T n ls0 ls1 i ret
 .
 
 End Loops .
