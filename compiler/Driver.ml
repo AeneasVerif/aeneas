@@ -11,6 +11,34 @@ module PrePasses = Aeneas.PrePasses
 module Translate = Aeneas.Translate
 open Aeneas.Config
 
+(** The local logger *)
+let log = main_log
+
+let _ =
+  (* Set up the logging - for now we use default values - TODO: use the
+   * command-line arguments *)
+  (* By setting a level for the main_logger_handler, we filter everything *)
+  Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
+  main_log#set_level EL.Info;
+  llbc_of_json_logger#set_level EL.Info;
+  pre_passes_log#set_level EL.Info;
+  interpreter_log#set_level EL.Info;
+  statements_log#set_level EL.Info;
+  loops_log#set_level EL.Info;
+  paths_log#set_level EL.Info;
+  expressions_log#set_level EL.Info;
+  expansion_log#set_level EL.Info;
+  projectors_log#set_level EL.Info;
+  borrows_log#set_level EL.Info;
+  invariants_log#set_level EL.Info;
+  pure_utils_log#set_level EL.Info;
+  symbolic_to_pure_log#set_level EL.Info;
+  pure_micro_passes_log#set_level EL.Info;
+  pure_to_extract_log#set_level EL.Info;
+  translate_log#set_level EL.Info;
+  scc_log#set_level EL.Info;
+  reorder_decls_log#set_level EL.Info
+
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
  * TODO: run with OCAMLRUNPARAM=b=1? *)
@@ -138,30 +166,6 @@ let () =
   let dest_dir =
     if !dest_dir = "" then Filename.dirname filename else !dest_dir
   in
-
-  (* Set up the logging - for now we use default values - TODO: use the
-   * command-line arguments *)
-  (* By setting a level for the main_logger_handler, we filter everything *)
-  Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
-  let level = EL.Info in
-  main_log#set_level level;
-  llbc_of_json_logger#set_level level;
-  pre_passes_log#set_level level;
-  interpreter_log#set_level level;
-  statements_log#set_level level;
-  loops_log#set_level level;
-  paths_log#set_level level;
-  expressions_log#set_level level;
-  expansion_log#set_level level;
-  projectors_log#set_level level;
-  borrows_log#set_level level;
-  invariants_log#set_level level;
-  pure_utils_log#set_level level;
-  symbolic_to_pure_log#set_level level;
-  pure_micro_passes_log#set_level level;
-  pure_to_extract_log#set_level level;
-  translate_log#set_level level;
-  let log = main_log in
 
   (* Load the module *)
   let json = Yojson.Basic.from_file filename in
