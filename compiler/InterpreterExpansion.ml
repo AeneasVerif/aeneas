@@ -663,7 +663,9 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
   let rec expand : cm_fun =
    fun cf ctx ->
     try
-      obj#visit_eval_ctx () ctx;
+      (* We reverse the environment before exploring it - this way the values
+         get expanded in a more "logical" order (this is only for convenience) *)
+      obj#visit_env () (List.rev ctx.env);
       (* Nothing to expand: continue *)
       cf ctx
     with FoundSymbolicValue sv ->
