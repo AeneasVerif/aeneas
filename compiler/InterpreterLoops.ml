@@ -246,7 +246,7 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
 let destructure_new_abs (loop_id : V.LoopId.id)
     (old_abs_ids : V.AbstractionId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
   let abs_kind = V.Loop (loop_id, None, V.LoopSynthInput) in
-  let can_end = false in
+  let can_end = true in
   let destructure_shared_values = true in
   let is_fresh_abs_id (id : V.AbstractionId.id) : bool =
     not (V.AbstractionId.Set.mem id old_abs_ids)
@@ -337,7 +337,7 @@ let collapse_ctx (loop_id : V.LoopId.id)
      ^ "\n\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n\n"));
 
   let abs_kind = V.Loop (loop_id, None, LoopSynthInput) in
-  let can_end = false in
+  let can_end = true in
   let destructure_shared_values = true in
   let is_fresh_abs_id (id : V.AbstractionId.id) : bool =
     not (V.AbstractionId.Set.mem id old_ids.aids)
@@ -967,7 +967,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
         {
           V.abs_id = C.fresh_abstraction_id ();
           kind = V.Loop (S.loop_id, None, LoopSynthInput);
-          can_end = false;
+          can_end = true;
           parents = V.AbstractionId.Set.empty;
           original_parents = [];
           regions = T.RegionId.Set.singleton rid;
@@ -1021,7 +1021,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
         {
           V.abs_id = C.fresh_abstraction_id ();
           kind = V.Loop (S.loop_id, None, LoopSynthInput);
-          can_end = false;
+          can_end = true;
           parents = V.AbstractionId.Set.empty;
           original_parents = [];
           regions = T.RegionId.Set.singleton rid;
@@ -1125,7 +1125,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
     | None ->
         (* Convert the value to an abstraction *)
         let abs_kind = V.Loop (S.loop_id, None, LoopSynthInput) in
-        let can_end = false in
+        let can_end = true in
         let destructure_shared_values = true in
         let absl =
           convert_value_to_abstractions abs_kind can_end
@@ -2256,8 +2256,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
      the shared values) will be preserved.
   *)
   let fp =
-    (* List the loop abstractions in the fixed-point, and set all the abstractions
-       as endable *)
+    (* List the loop abstractions in the fixed-point *)
     let fp_aids, add_aid, _mem_aid = V.AbstractionId.Set.mk_stateful_set () in
 
     let list_loop_abstractions =
@@ -2269,8 +2268,10 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
           | Loop (loop_id', _, kind) ->
               assert (loop_id' = loop_id);
               assert (kind = V.LoopSynthInput);
+              (* The abstractions introduced so far should be endable *)
+              assert (abs.can_end = true);
               add_aid abs.abs_id;
-              { abs with can_end = true }
+              abs
           | _ -> abs
       end
     in
@@ -2389,8 +2390,8 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
         !fp_ended_aids
     in
 
-    (* Reset the loop abstracions as not endable *)
-    let list_loop_abstractions (remove_rg_id : bool) =
+    (* Reset the loop abstracions as not endable, and update their kinds *)
+    let update_loop_abstractions (remove_rg_id : bool) =
       object
         inherit [_] C.map_eval_ctx
 
@@ -2408,7 +2409,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
       end
     in
     let update_kinds_can_end (remove_rg_id : bool) ctx =
-      (list_loop_abstractions remove_rg_id)#visit_eval_ctx () ctx
+      (update_loop_abstractions remove_rg_id)#visit_eval_ctx () ctx
     in
     let fp = update_kinds_can_end false !fp in
 
@@ -3050,8 +3051,9 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
           | V.Loop (loop_id', rg_id, kind) ->
               assert (loop_id' = loop_id);
               assert (kind = V.LoopSynthInput);
+              let can_end = false in
               let kind = V.Loop (loop_id, rg_id, V.LoopCall) in
-              let abs = { abs with kind } in
+              let abs = { abs with kind; can_end } in
               super#visit_abs env abs
           | _ -> super#visit_abs env abs
       end
