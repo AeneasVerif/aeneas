@@ -266,7 +266,7 @@ let unfold_monadic_let_bindings = ref false
     we later filter the useless *forward* calls in the micro-passes, where it is
     more natural to do.
 
-    See the comments for {!PureMicroPasses.expression_contains_child_call_in_all_paths}
+    See the comments for {!Aeneas.PureMicroPasses.expression_contains_child_call_in_all_paths}
     for additional explanations.
  *)
 let filter_useless_monadic_calls = ref true
