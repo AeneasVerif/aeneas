@@ -248,7 +248,7 @@ let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
 let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let fmt = bs_ctx_to_pp_ast_formatter ctx in
   let fmt = PrintPure.ast_to_type_formatter fmt in
-  PrintPure.ty_to_string fmt ty
+  PrintPure.ty_to_string fmt false ty
 
 let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let type_params = def.type_params in
@@ -808,7 +808,7 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
   let sg = { type_params; inputs; output; doutputs; info } in
   { sg; output_names }
 
-let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
+let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * typed_pattern =
   (* Generate the fresh variable *)
   let id, var_counter = VarId.fresh ctx.var_counter in
   let state_var =
@@ -818,7 +818,7 @@ let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
   (* Update the context *)
   let ctx = { ctx with var_counter; state_var = id } in
   (* Return *)
-  (ctx, state_var, state_pat)
+  (ctx, state_pat)
 
 let fresh_var (basename : string option) (ty : 'r T.ty) (ctx : bs_ctx) :
     bs_ctx * var =
@@ -836,7 +836,7 @@ let fresh_named_var_for_symbolic_value (basename : string option)
   (* Generate the fresh variable *)
   let ctx, var = fresh_var basename sv.sv_ty ctx in
   (* Insert in the map *)
-  let sv_to_var = V.SymbolicValueId.Map.add sv.sv_id var ctx.sv_to_var in
+  let sv_to_var = V.SymbolicValueId.Map.add_strict sv.sv_id var ctx.sv_to_var in
   (* Update the context *)
   let ctx = { ctx with sv_to_var } in
   (* Return *)
@@ -1419,7 +1419,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           let fuel = mk_fuel_input_as_list ctx effect_info in
           if effect_info.stateful then
             let state_var = mk_state_texpression ctx.state_var in
-            let ctx, _, nstate_var = bs_ctx_fresh_state_var ctx in
+            let ctx, nstate_var = bs_ctx_fresh_state_var ctx in
             (List.concat [ fuel; args; [ state_var ] ], ctx, Some nstate_var)
           else (List.concat [ fuel; args ], ctx, None)
         in
@@ -1611,7 +1611,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   let back_state, ctx, nstate =
     if effect_info.stateful then
       let back_state = mk_state_texpression ctx.state_var in
-      let ctx, _, nstate = bs_ctx_fresh_state_var ctx in
+      let ctx, nstate = bs_ctx_fresh_state_var ctx in
       ([ back_state ], ctx, Some nstate)
     else ([], ctx, None)
   in
@@ -1805,7 +1805,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       let back_state, ctx, nstate =
         if effect_info.stateful then
           let back_state = mk_state_texpression ctx.state_var in
-          let ctx, _, nstate = bs_ctx_fresh_state_var ctx in
+          let ctx, nstate = bs_ctx_fresh_state_var ctx in
           ([ back_state ], ctx, Some nstate)
         else ([], ctx, None)
       in
@@ -2144,12 +2144,11 @@ and translate_forward_end (ectx : C.eval_ctx)
          * - add the fuel
          * - add the state input argument
          * - generate a fresh state variable for the returned state
-         * TODO: we do exactly the same thing in {!translate_function_call}
          *)
         let fuel = mk_fuel_input_as_list ctx effect_info in
         if effect_info.stateful then
           let state_var = mk_state_texpression ctx.state_var in
-          let ctx, _nstate_var, nstate_pat = bs_ctx_fresh_state_var ctx in
+          let ctx, nstate_pat = bs_ctx_fresh_state_var ctx in
           ( List.concat [ fuel; args; [ state_var ] ],
             ctx,
             [ nstate_pat; output_pat ] )
@@ -2257,24 +2256,6 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
 
   (* Update the context for the loop body *)
   let ctx_loop = { ctx_end with inside_loop = true } in
-  (* We also need to introduce variables for the symbolic values which are
-     introduced in the fixed point (we have to filter the list of symbolic
-     values, to remove the not fresh ones - the fixed point introduces some
-     symbolic values and keeps some others)... *)
-  let ctx_loop =
-    let svl =
-      List.filter
-        (fun (sv : V.symbolic_value) ->
-          V.SymbolicValueId.Set.mem sv.sv_id loop.fresh_svalues)
-        loop.input_svalues
-    in
-    log#ldebug
-      (lazy
-        ("translate_loop:" ^ "\n- filtered svl: "
-        ^ (Print.list_to_string (symbolic_value_to_string ctx)) svl));
-    let ctx_loop, _ = fresh_vars_for_symbolic_values svl ctx_loop in
-    ctx_loop
-  in
 
   (* Translate the loop body *)
   let loop_body = translate_expression loop.loop_expr ctx_loop in
