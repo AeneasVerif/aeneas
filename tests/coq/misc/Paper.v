@@ -7,9 +7,7 @@ Local Open Scope Primitives_scope.
 Module Paper.
 
 (** [paper::ref_incr] *)
-Definition ref_incr_fwd_back (x : i32) : result i32 :=
-  x0 <- i32_add x 1%i32; Return x0
-.
+Definition ref_incr_fwd_back (x : i32) : result i32 := i32_add x 1%i32.
 
 (** [paper::test_incr] *)
 Definition test_incr_fwd : result unit :=
@@ -63,7 +61,7 @@ Fixpoint list_nth_mut_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
   | ListCons x tl =>
     if i s= 0%u32
     then Return x
-    else (i0 <- u32_sub i 1%u32; t <- list_nth_mut_fwd T tl i0; Return t)
+    else (i0 <- u32_sub i 1%u32; list_nth_mut_fwd T tl i0)
   | ListNil => Fail_ Failure
   end
 .
@@ -86,7 +84,7 @@ Fixpoint list_nth_mut_back
 (** [paper::sum] *)
 Fixpoint sum_fwd (l : List_t i32) : result i32 :=
   match l with
-  | ListCons x tl => i <- sum_fwd tl; i0 <- i32_add x i; Return i0
+  | ListCons x tl => i <- sum_fwd tl; i32_add x i
   | ListNil => Return (0%i32)
   end
 .

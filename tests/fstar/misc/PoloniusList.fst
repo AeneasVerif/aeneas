@@ -14,13 +14,7 @@ type list_t (t : Type0) =
 let rec get_list_at_x_fwd (ls : list_t u32) (x : u32) : result (list_t u32) =
   begin match ls with
   | ListCons hd tl ->
-    if hd = x
-    then Return (ListCons hd tl)
-    else
-      begin match get_list_at_x_fwd tl x with
-      | Fail e -> Fail e
-      | Return l -> Return l
-      end
+    if hd = x then Return (ListCons hd tl) else get_list_at_x_fwd tl x
   | ListNil -> Return ListNil
   end
 

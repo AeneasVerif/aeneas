@@ -31,35 +31,25 @@ type sum_t (t1 t2 : Type0) =
 | SumRight : t2 -> sum_t t1 t2
 
 (** [no_nested_borrows::neg_test] *)
-let neg_test_fwd (x : i32) : result i32 =
-  begin match i32_neg x with | Fail e -> Fail e | Return i -> Return i end
+let neg_test_fwd (x : i32) : result i32 = i32_neg x
 
 (** [no_nested_borrows::add_test] *)
-let add_test_fwd (x : u32) (y : u32) : result u32 =
-  begin match u32_add x y with | Fail e -> Fail e | Return i -> Return i end
+let add_test_fwd (x : u32) (y : u32) : result u32 = u32_add x y
 
 (** [no_nested_borrows::subs_test] *)
-let subs_test_fwd (x : u32) (y : u32) : result u32 =
-  begin match u32_sub x y with | Fail e -> Fail e | Return i -> Return i end
+let subs_test_fwd (x : u32) (y : u32) : result u32 = u32_sub x y
 
 (** [no_nested_borrows::div_test] *)
-let div_test_fwd (x : u32) (y : u32) : result u32 =
-  begin match u32_div x y with | Fail e -> Fail e | Return i -> Return i end
+let div_test_fwd (x : u32) (y : u32) : result u32 = u32_div x y
 
 (** [no_nested_borrows::div_test1] *)
-let div_test1_fwd (x : u32) : result u32 =
-  begin match u32_div x 2 with | Fail e -> Fail e | Return i -> Return i end
+let div_test1_fwd (x : u32) : result u32 = u32_div x 2
 
 (** [no_nested_borrows::rem_test] *)
-let rem_test_fwd (x : u32) (y : u32) : result u32 =
-  begin match u32_rem x y with | Fail e -> Fail e | Return i -> Return i end
+let rem_test_fwd (x : u32) (y : u32) : result u32 = u32_rem x y
 
 (** [no_nested_borrows::cast_test] *)
-let cast_test_fwd (x : u32) : result i32 =
-  begin match scalar_cast U32 I32 x with
-  | Fail e -> Fail e
-  | Return i -> Return i
-  end
+let cast_test_fwd (x : u32) : result i32 = scalar_cast U32 I32 x
 
 (** [no_nested_borrows::test2] *)
 let test2_fwd : result unit =
@@ -245,11 +235,7 @@ let rec list_length_fwd (t : Type0) (l : list_t t) : result u32 =
   | ListCons x l1 ->
     begin match list_length_fwd t l1 with
     | Fail e -> Fail e
-    | Return i ->
-      begin match u32_add 1 i with
-      | Fail e -> Fail e
-      | Return i0 -> Return i0
-      end
+    | Return i -> u32_add 1 i
     end
   | ListNil -> Return 0
   end
@@ -263,11 +249,7 @@ let rec list_nth_shared_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
     else
       begin match u32_sub i 1 with
       | Fail e -> Fail e
-      | Return i0 ->
-        begin match list_nth_shared_fwd t tl i0 with
-        | Fail e -> Fail e
-        | Return x0 -> Return x0
-        end
+      | Return i0 -> list_nth_shared_fwd t tl i0
       end
   | ListNil -> Fail Failure
   end
@@ -281,11 +263,7 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
     else
       begin match u32_sub i 1 with
       | Fail e -> Fail e
-      | Return i0 ->
-        begin match list_nth_mut_fwd t tl i0 with
-        | Fail e -> Fail e
-        | Return x0 -> Return x0
-        end
+      | Return i0 -> list_nth_mut_fwd t tl i0
       end
   | ListNil -> Fail Failure
   end
@@ -313,21 +291,14 @@ let rec list_nth_mut_back
 let rec list_rev_aux_fwd
   (t : Type0) (li : list_t t) (lo : list_t t) : result (list_t t) =
   begin match li with
-  | ListCons hd tl ->
-    begin match list_rev_aux_fwd t tl (ListCons hd lo) with
-    | Fail e -> Fail e
-    | Return l -> Return l
-    end
+  | ListCons hd tl -> list_rev_aux_fwd t tl (ListCons hd lo)
   | ListNil -> Return lo
   end
 
 (** [no_nested_borrows::list_rev] *)
 let list_rev_fwd_back (t : Type0) (l : list_t t) : result (list_t t) =
   let li = mem_replace_fwd (list_t t) l ListNil in
-  begin match list_rev_aux_fwd t li ListNil with
-  | Fail e -> Fail e
-  | Return l0 -> Return l0
-  end
+  list_rev_aux_fwd t li ListNil
 
 (** [no_nested_borrows::test_list_functions] *)
 let test_list_functions_fwd : result unit =

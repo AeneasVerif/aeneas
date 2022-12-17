@@ -24,11 +24,7 @@ let rec hash_map_allocate_slots_fwd
     | Return slots0 ->
       begin match usize_sub n 1 with
       | Fail e -> Fail e
-      | Return i ->
-        begin match hash_map_allocate_slots_fwd t slots0 i with
-        | Fail e -> Fail e
-        | Return v -> Return v
-        end
+      | Return i -> hash_map_allocate_slots_fwd t slots0 i
       end
     end
 
@@ -55,10 +51,7 @@ let hash_map_new_with_capacity_fwd
 
 (** [hashmap::HashMap::{0}::new] *)
 let hash_map_new_fwd (t : Type0) : result (hash_map_t t) =
-  begin match hash_map_new_with_capacity_fwd t 32 4 5 with
-  | Fail e -> Fail e
-  | Return hm -> Return hm
-  end
+  hash_map_new_with_capacity_fwd t 32 4 5
 
 (** [hashmap::HashMap::{0}::clear_slots] *)
 let rec hash_map_clear_slots_fwd_back
@@ -74,11 +67,7 @@ let rec hash_map_clear_slots_fwd_back
     | Return slots0 ->
       begin match usize_add i 1 with
       | Fail e -> Fail e
-      | Return i1 ->
-        begin match hash_map_clear_slots_fwd_back t slots0 i1 with
-        | Fail e -> Fail e
-        | Return slots1 -> Return slots1
-        end
+      | Return i1 -> hash_map_clear_slots_fwd_back t slots0 i1
       end
     end
   else Return slots
@@ -107,11 +96,7 @@ let rec hash_map_insert_in_list_fwd
   | ListCons ckey cvalue ls0 ->
     if ckey = key
     then Return false
-    else
-      begin match hash_map_insert_in_list_fwd t key value ls0 with
-      | Fail e -> Fail e
-      | Return b -> Return b
-      end
+    else hash_map_insert_in_list_fwd t key value ls0
   | ListNil -> Return true
   end
 
@@ -202,11 +187,7 @@ let rec hash_map_move_elements_from_list_fwd_back
   | ListCons k v tl ->
     begin match hash_map_insert_no_resize_fwd_back t ntable k v with
     | Fail e -> Fail e
-    | Return ntable0 ->
-      begin match hash_map_move_elements_from_list_fwd_back t ntable0 tl with
-      | Fail e -> Fail e
-      | Return ntable1 -> Return ntable1
-      end
+    | Return ntable0 -> hash_map_move_elements_from_list_fwd_back t ntable0 tl
     end
   | ListNil -> Return ntable
   end
@@ -233,12 +214,7 @@ let rec hash_map_move_elements_fwd_back
         | Return slots0 ->
           begin match usize_add i 1 with
           | Fail e -> Fail e
-          | Return i1 ->
-            begin match hash_map_move_elements_fwd_back t ntable0 slots0 i1
-              with
-            | Fail e -> Fail e
-            | Return (ntable1, slots1) -> Return (ntable1, slots1)
-            end
+          | Return i1 -> hash_map_move_elements_fwd_back t ntable0 slots0 i1
           end
         end
       end
@@ -296,11 +272,7 @@ let hash_map_insert_fwd_back
     | Fail e -> Fail e
     | Return i ->
       if i > self0.hash_map_max_load
-      then
-        begin match hash_map_try_resize_fwd_back t self0 with
-        | Fail e -> Fail e
-        | Return self1 -> Return self1
-        end
+      then hash_map_try_resize_fwd_back t self0
       else Return self0
     end
   end
@@ -315,11 +287,7 @@ let rec hash_map_contains_key_in_list_fwd
   | ListCons ckey x ls0 ->
     if ckey = key
     then Return true
-    else
-      begin match hash_map_contains_key_in_list_fwd t key ls0 with
-      | Fail e -> Fail e
-      | Return b -> Return b
-      end
+    else hash_map_contains_key_in_list_fwd t key ls0
   | ListNil -> Return false
   end
 
@@ -335,11 +303,7 @@ let hash_map_contains_key_fwd
     | Return hash_mod ->
       begin match vec_index_fwd (list_t t) self.hash_map_slots hash_mod with
       | Fail e -> Fail e
-      | Return l ->
-        begin match hash_map_contains_key_in_list_fwd t key l with
-        | Fail e -> Fail e
-        | Return b -> Return b
-        end
+      | Return l -> hash_map_contains_key_in_list_fwd t key l
       end
     end
   end
@@ -351,13 +315,7 @@ let rec hash_map_get_in_list_fwd
   =
   begin match ls with
   | ListCons ckey cvalue ls0 ->
-    if ckey = key
-    then Return cvalue
-    else
-      begin match hash_map_get_in_list_fwd t key ls0 with
-      | Fail e -> Fail e
-      | Return x -> Return x
-      end
+    if ckey = key then Return cvalue else hash_map_get_in_list_fwd t key ls0
   | ListNil -> Fail Failure
   end
 
@@ -373,11 +331,7 @@ let hash_map_get_fwd
     | Return hash_mod ->
       begin match vec_index_fwd (list_t t) self.hash_map_slots hash_mod with
       | Fail e -> Fail e
-      | Return l ->
-        begin match hash_map_get_in_list_fwd t key l with
-        | Fail e -> Fail e
-        | Return x -> Return x
-        end
+      | Return l -> hash_map_get_in_list_fwd t key l
       end
     end
   end
@@ -391,11 +345,7 @@ let rec hash_map_get_mut_in_list_fwd
   | ListCons ckey cvalue ls0 ->
     if ckey = key
     then Return cvalue
-    else
-      begin match hash_map_get_mut_in_list_fwd t key ls0 with
-      | Fail e -> Fail e
-      | Return x -> Return x
-      end
+    else hash_map_get_mut_in_list_fwd t key ls0
   | ListNil -> Fail Failure
   end
 
@@ -430,11 +380,7 @@ let hash_map_get_mut_fwd
       begin match vec_index_mut_fwd (list_t t) self.hash_map_slots hash_mod
         with
       | Fail e -> Fail e
-      | Return l ->
-        begin match hash_map_get_mut_in_list_fwd t key l with
-        | Fail e -> Fail e
-        | Return x -> Return x
-        end
+      | Return l -> hash_map_get_mut_in_list_fwd t key l
       end
     end
   end
@@ -485,11 +431,7 @@ let rec hash_map_remove_from_list_fwd
       | ListCons i cvalue tl0 -> Return (Some cvalue)
       | ListNil -> Fail Failure
       end
-    else
-      begin match hash_map_remove_from_list_fwd t key tl with
-      | Fail e -> Fail e
-      | Return opt -> Return opt
-      end
+    else hash_map_remove_from_list_fwd t key tl
   | ListNil -> Return None
   end
 

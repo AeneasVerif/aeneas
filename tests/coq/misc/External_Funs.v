@@ -41,9 +41,7 @@ Definition test_new_non_zero_u32_fwd
   (x : u32) (st : state) : result (state * Core_num_nonzero_non_zero_u32_t) :=
   p <- core_num_nonzero_non_zero_u32_new_fwd x st;
   let (st0, opt) := p in
-  p0 <- core_option_option_unwrap_fwd Core_num_nonzero_non_zero_u32_t opt st0;
-  let (st1, nzu) := p0 in
-  Return (st1, nzu)
+  core_option_option_unwrap_fwd Core_num_nonzero_non_zero_u32_t opt st0
 .
 
 (** [external::test_vec] *)
@@ -94,10 +92,7 @@ Definition test_custom_swap_back
   (x : u32) (y : u32) (st : state) (st0 : state) :
   result (state * (u32 * u32))
   :=
-  p <- custom_swap_back u32 x y st (1%u32) st0;
-  let (st1, p0) := p in
-  let (x0, y0) := p0 in
-  Return (st1, (x0, y0))
+  custom_swap_back u32 x y st (1%u32) st0
 .
 
 (** [external::test_swap_non_zero] *)

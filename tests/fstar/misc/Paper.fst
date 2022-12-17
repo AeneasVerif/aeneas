@@ -6,8 +6,7 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [paper::ref_incr] *)
-let ref_incr_fwd_back (x : i32) : result i32 =
-  begin match i32_add x 1 with | Fail e -> Fail e | Return x0 -> Return x0 end
+let ref_incr_fwd_back (x : i32) : result i32 = i32_add x 1
 
 (** [paper::test_incr] *)
 let test_incr_fwd : result unit =
@@ -66,11 +65,7 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
     else
       begin match u32_sub i 1 with
       | Fail e -> Fail e
-      | Return i0 ->
-        begin match list_nth_mut_fwd t tl i0 with
-        | Fail e -> Fail e
-        | Return x0 -> Return x0
-        end
+      | Return i0 -> list_nth_mut_fwd t tl i0
       end
   | ListNil -> Fail Failure
   end
@@ -100,11 +95,7 @@ let rec sum_fwd (l : list_t i32) : result i32 =
   | ListCons x tl ->
     begin match sum_fwd tl with
     | Fail e -> Fail e
-    | Return i ->
-      begin match i32_add x i with
-      | Fail e -> Fail e
-      | Return i0 -> Return i0
-      end
+    | Return i -> i32_add x i
     end
   | ListNil -> Return 0
   end
