@@ -7,6 +7,26 @@ include Loops.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
+(** [loops::sum] *)
+let rec sum_loop0_fwd
+  (max : u32) (i : u32) (s : u32) :
+  Tot (result u32) (decreases (sum_decreases max i s))
+  =
+  if i < max
+  then
+    begin match u32_add s i with
+    | Fail e -> Fail e
+    | Return s0 ->
+      begin match u32_add i 1 with
+      | Fail e -> Fail e
+      | Return i0 -> sum_loop0_fwd max i0 s0
+      end
+    end
+  else u32_mul s 2
+
+(** [loops::sum] *)
+let sum_fwd (max : u32) : result u32 = sum_loop0_fwd max 0 0
+
 (** [loops::list_nth_mut_loop] *)
 let rec list_nth_mut_loop_loop0_fwd
   (t : Type0) (ls : list_t t) (i : u32) :
