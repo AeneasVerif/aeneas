@@ -19,9 +19,7 @@ Arguments ListNil {T}.
 Fixpoint get_list_at_x_fwd (ls : List_t u32) (x : u32) : result (List_t u32) :=
   match ls with
   | ListCons hd tl =>
-    if hd s= x
-    then Return (ListCons hd tl)
-    else (l <- get_list_at_x_fwd tl x; Return l)
+    if hd s= x then Return (ListCons hd tl) else get_list_at_x_fwd tl x
   | ListNil => Return ListNil
   end
 .

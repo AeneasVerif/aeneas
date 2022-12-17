@@ -19,21 +19,14 @@ let rec list_nth_mut_loop_loop0_fwd
     else
       begin match u32_sub i 1 with
       | Fail e -> Fail e
-      | Return i0 ->
-        begin match list_nth_mut_loop_loop0_fwd t tl i0 with
-        | Fail e -> Fail e
-        | Return x0 -> Return x0
-        end
+      | Return i0 -> list_nth_mut_loop_loop0_fwd t tl i0
       end
   | ListNil -> Fail Failure
   end
 
 (** [loops::list_nth_mut_loop] *)
 let list_nth_mut_loop_fwd (t : Type0) (ls : list_t t) (i : u32) : result t =
-  begin match list_nth_mut_loop_loop0_fwd t ls i with
-  | Fail e -> Fail e
-  | Return x -> Return x
-  end
+  list_nth_mut_loop_loop0_fwd t ls i
 
 (** [loops::list_nth_mut_loop] *)
 let rec list_nth_mut_loop_loop0_back
@@ -59,8 +52,5 @@ let rec list_nth_mut_loop_loop0_back
 (** [loops::list_nth_mut_loop] *)
 let list_nth_mut_loop_back
   (t : Type0) (ls : list_t t) (i : u32) (ret : t) : result (list_t t) =
-  begin match list_nth_mut_loop_loop0_back t ls i ret with
-  | Fail e -> Fail e
-  | Return l -> Return l
-  end
+  list_nth_mut_loop_loop0_back t ls i ret
 

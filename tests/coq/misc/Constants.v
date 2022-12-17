@@ -23,10 +23,10 @@ Definition x2_body : result u32 := Return (3%u32).
 Definition x2_c : u32 := x2_body%global.
 
 (** [constants::incr] *)
-Definition incr_fwd (n : u32) : result u32 := i <- u32_add n 1%u32; Return i.
+Definition incr_fwd (n : u32) : result u32 := u32_add n 1%u32.
 
 (** [constants::X3] *)
-Definition x3_body : result u32 := i <- incr_fwd (32%u32); Return i.
+Definition x3_body : result u32 := incr_fwd (32%u32).
 Definition x3_c : u32 := x3_body%global.
 
 (** [constants::mk_pair0] *)
@@ -47,15 +47,11 @@ Definition mk_pair1_fwd (x : u32) (y : u32) : result (Pair_t u32 u32) :=
 .
 
 (** [constants::P0] *)
-Definition p0_body : result (u32 * u32) :=
-  p <- mk_pair0_fwd (0%u32) (1%u32); Return p
-.
+Definition p0_body : result (u32 * u32) := mk_pair0_fwd (0%u32) (1%u32).
 Definition p0_c : (u32 * u32) := p0_body%global.
 
 (** [constants::P1] *)
-Definition p1_body : result (Pair_t u32 u32) :=
-  p <- mk_pair1_fwd (0%u32) (1%u32); Return p
-.
+Definition p1_body : result (Pair_t u32 u32) := mk_pair1_fwd (0%u32) (1%u32).
 Definition p1_c : Pair_t u32 u32 := p1_body%global.
 
 (** [constants::P2] *)
@@ -80,16 +76,14 @@ Definition wrap_new_fwd (T : Type) (val : T) : result (Wrap_t T) :=
 .
 
 (** [constants::Y] *)
-Definition y_body : result (Wrap_t i32) :=
-  w <- wrap_new_fwd i32 (2%i32); Return w
-.
+Definition y_body : result (Wrap_t i32) := wrap_new_fwd i32 (2%i32).
 Definition y_c : Wrap_t i32 := y_body%global.
 
 (** [constants::unwrap_y] *)
 Definition unwrap_y_fwd : result i32 := Return y_c.(Wrap_val).
 
 (** [constants::YVAL] *)
-Definition yval_body : result i32 := i <- unwrap_y_fwd; Return i.
+Definition yval_body : result i32 := unwrap_y_fwd.
 Definition yval_c : i32 := yval_body%global.
 
 (** [constants::get_z1::Z1] *)
@@ -100,9 +94,7 @@ Definition get_z1_z1_c : i32 := get_z1_z1_body%global.
 Definition get_z1_fwd : result i32 := Return get_z1_z1_c.
 
 (** [constants::add] *)
-Definition add_fwd (a : i32) (b : i32) : result i32 :=
-  i <- i32_add a b; Return i
-.
+Definition add_fwd (a : i32) (b : i32) : result i32 := i32_add a b.
 
 (** [constants::Q1] *)
 Definition q1_body : result i32 := Return (5%i32).
@@ -113,12 +105,12 @@ Definition q2_body : result i32 := Return q1_c.
 Definition q2_c : i32 := q2_body%global.
 
 (** [constants::Q3] *)
-Definition q3_body : result i32 := i <- add_fwd q2_c (3%i32); Return i.
+Definition q3_body : result i32 := add_fwd q2_c (3%i32).
 Definition q3_c : i32 := q3_body%global.
 
 (** [constants::get_z2] *)
 Definition get_z2_fwd : result i32 :=
-  i <- get_z1_fwd; i0 <- add_fwd i q3_c; i1 <- add_fwd q1_c i0; Return i1
+  i <- get_z1_fwd; i0 <- add_fwd i q3_c; add_fwd q1_c i0
 .
 
 (** [constants::S1] *)
@@ -126,7 +118,7 @@ Definition s1_body : result u32 := Return (6%u32).
 Definition s1_c : u32 := s1_body%global.
 
 (** [constants::S2] *)
-Definition s2_body : result u32 := i <- incr_fwd s1_c; Return i.
+Definition s2_body : result u32 := incr_fwd s1_c.
 Definition s2_c : u32 := s2_body%global.
 
 (** [constants::S3] *)
@@ -134,9 +126,7 @@ Definition s3_body : result (Pair_t u32 u32) := Return p3_c.
 Definition s3_c : Pair_t u32 u32 := s3_body%global.
 
 (** [constants::S4] *)
-Definition s4_body : result (Pair_t u32 u32) :=
-  p <- mk_pair1_fwd (7%u32) (8%u32); Return p
-.
+Definition s4_body : result (Pair_t u32 u32) := mk_pair1_fwd (7%u32) (8%u32).
 Definition s4_c : Pair_t u32 u32 := s4_body%global.
 
 End Constants .

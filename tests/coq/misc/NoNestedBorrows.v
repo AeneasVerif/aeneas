@@ -46,37 +46,25 @@ Arguments SumLeft {T1} {T2} _.
 Arguments SumRight {T1} {T2} _.
 
 (** [no_nested_borrows::neg_test] *)
-Definition neg_test_fwd (x : i32) : result i32 := i <- i32_neg x; Return i.
+Definition neg_test_fwd (x : i32) : result i32 := i32_neg x.
 
 (** [no_nested_borrows::add_test] *)
-Definition add_test_fwd (x : u32) (y : u32) : result u32 :=
-  i <- u32_add x y; Return i
-.
+Definition add_test_fwd (x : u32) (y : u32) : result u32 := u32_add x y.
 
 (** [no_nested_borrows::subs_test] *)
-Definition subs_test_fwd (x : u32) (y : u32) : result u32 :=
-  i <- u32_sub x y; Return i
-.
+Definition subs_test_fwd (x : u32) (y : u32) : result u32 := u32_sub x y.
 
 (** [no_nested_borrows::div_test] *)
-Definition div_test_fwd (x : u32) (y : u32) : result u32 :=
-  i <- u32_div x y; Return i
-.
+Definition div_test_fwd (x : u32) (y : u32) : result u32 := u32_div x y.
 
 (** [no_nested_borrows::div_test1] *)
-Definition div_test1_fwd (x : u32) : result u32 :=
-  i <- u32_div x 2%u32; Return i
-.
+Definition div_test1_fwd (x : u32) : result u32 := u32_div x 2%u32.
 
 (** [no_nested_borrows::rem_test] *)
-Definition rem_test_fwd (x : u32) (y : u32) : result u32 :=
-  i <- u32_rem x y; Return i
-.
+Definition rem_test_fwd (x : u32) (y : u32) : result u32 := u32_rem x y.
 
 (** [no_nested_borrows::cast_test] *)
-Definition cast_test_fwd (x : u32) : result i32 :=
-  i <- scalar_cast U32 I32 x; Return i
-.
+Definition cast_test_fwd (x : u32) : result i32 := scalar_cast U32 I32 x.
 
 (** [no_nested_borrows::test2] *)
 Definition test2_fwd : result unit :=
@@ -261,8 +249,7 @@ Arguments TreeNode {T} _ _ _.
 (** [no_nested_borrows::list_length] *)
 Fixpoint list_length_fwd (T : Type) (l : List_t T) : result u32 :=
   match l with
-  | ListCons t l1 =>
-    i <- list_length_fwd T l1; i0 <- u32_add 1%u32 i; Return i0
+  | ListCons t l1 => i <- list_length_fwd T l1; u32_add 1%u32 i
   | ListNil => Return (0%u32)
   end
 .
@@ -273,7 +260,7 @@ Fixpoint list_nth_shared_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
   | ListCons x tl =>
     if i s= 0%u32
     then Return x
-    else (i0 <- u32_sub i 1%u32; t <- list_nth_shared_fwd T tl i0; Return t)
+    else (i0 <- u32_sub i 1%u32; list_nth_shared_fwd T tl i0)
   | ListNil => Fail_ Failure
   end
 .
@@ -284,7 +271,7 @@ Fixpoint list_nth_mut_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
   | ListCons x tl =>
     if i s= 0%u32
     then Return x
-    else (i0 <- u32_sub i 1%u32; t <- list_nth_mut_fwd T tl i0; Return t)
+    else (i0 <- u32_sub i 1%u32; list_nth_mut_fwd T tl i0)
   | ListNil => Fail_ Failure
   end
 .
@@ -308,7 +295,7 @@ Fixpoint list_nth_mut_back
 Fixpoint list_rev_aux_fwd
   (T : Type) (li : List_t T) (lo : List_t T) : result (List_t T) :=
   match li with
-  | ListCons hd tl => l <- list_rev_aux_fwd T tl (ListCons hd lo); Return l
+  | ListCons hd tl => list_rev_aux_fwd T tl (ListCons hd lo)
   | ListNil => Return lo
   end
 .
@@ -316,8 +303,7 @@ Fixpoint list_rev_aux_fwd
 (** [no_nested_borrows::list_rev] *)
 Definition list_rev_fwd_back (T : Type) (l : List_t T) : result (List_t T) :=
   let li := mem_replace_fwd (List_t T) l ListNil in
-  l0 <- list_rev_aux_fwd T li ListNil;
-  Return l0
+  list_rev_aux_fwd T li ListNil
 .
 
 (** [no_nested_borrows::test_list_functions] *)

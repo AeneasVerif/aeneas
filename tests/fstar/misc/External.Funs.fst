@@ -46,12 +46,7 @@ let test_new_non_zero_u32_fwd
   begin match core_num_nonzero_non_zero_u32_new_fwd x st with
   | Fail e -> Fail e
   | Return (st0, opt) ->
-    begin match
-      core_option_option_unwrap_fwd core_num_nonzero_non_zero_u32_t opt st0
-      with
-    | Fail e -> Fail e
-    | Return (st1, nzu) -> Return (st1, nzu)
-    end
+    core_option_option_unwrap_fwd core_num_nonzero_non_zero_u32_t opt st0
   end
 
 (** [external::test_vec] *)
@@ -112,10 +107,7 @@ let test_custom_swap_back
   (x : u32) (y : u32) (st : state) (st0 : state) :
   result (state & (u32 & u32))
   =
-  begin match custom_swap_back u32 x y st 1 st0 with
-  | Fail e -> Fail e
-  | Return (st1, (x0, y0)) -> Return (st1, (x0, y0))
-  end
+  custom_swap_back u32 x y st 1 st0
 
 (** [external::test_swap_non_zero] *)
 let test_swap_non_zero_fwd (x : u32) (st : state) : result (state & u32) =

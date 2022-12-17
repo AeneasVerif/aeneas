@@ -26,8 +26,7 @@ Fixpoint hashmap_hash_map_allocate_slots_fwd
     else (
       slots0 <- vec_push_back (Hashmap_list_t T) slots HashmapListNil;
       i <- usize_sub n0 1%usize;
-      v <- hashmap_hash_map_allocate_slots_fwd T n1 slots0 i;
-      Return v)
+      hashmap_hash_map_allocate_slots_fwd T n1 slots0 i)
   end
 .
 
@@ -48,9 +47,7 @@ Definition hashmap_hash_map_new_with_capacity_fwd
 (** [hashmap_main::hashmap::HashMap::{0}::new] *)
 Definition hashmap_hash_map_new_fwd
   (T : Type) (n : nat) : result (Hashmap_hash_map_t T) :=
-  hm <-
-    hashmap_hash_map_new_with_capacity_fwd T n (32%usize) (4%usize) (5%usize);
-  Return hm
+  hashmap_hash_map_new_with_capacity_fwd T n (32%usize) (4%usize) (5%usize)
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::clear_slots] *)
@@ -66,8 +63,7 @@ Fixpoint hashmap_hash_map_clear_slots_fwd_back
     then (
       slots0 <- vec_index_mut_back (Hashmap_list_t T) slots i HashmapListNil;
       i1 <- usize_add i 1%usize;
-      slots1 <- hashmap_hash_map_clear_slots_fwd_back T n0 slots0 i1;
-      Return slots1)
+      hashmap_hash_map_clear_slots_fwd_back T n0 slots0 i1)
     else Return slots
   end
 .
@@ -102,8 +98,7 @@ Fixpoint hashmap_hash_map_insert_in_list_fwd
     | HashmapListCons ckey cvalue ls0 =>
       if ckey s= key
       then Return false
-      else (
-        b <- hashmap_hash_map_insert_in_list_fwd T n0 key value ls0; Return b)
+      else hashmap_hash_map_insert_in_list_fwd T n0 key value ls0
     | HashmapListNil => Return true
     end
   end
@@ -177,9 +172,7 @@ Fixpoint hashmap_hash_map_move_elements_from_list_fwd_back
     match ls with
     | HashmapListCons k v tl =>
       ntable0 <- hashmap_hash_map_insert_no_resize_fwd_back T n0 ntable k v;
-      ntable1 <-
-        hashmap_hash_map_move_elements_from_list_fwd_back T n0 ntable0 tl;
-      Return ntable1
+      hashmap_hash_map_move_elements_from_list_fwd_back T n0 ntable0 tl
     | HashmapListNil => Return ntable
     end
   end
@@ -204,9 +197,7 @@ Fixpoint hashmap_hash_map_move_elements_fwd_back
       let l0 := mem_replace_back (Hashmap_list_t T) l HashmapListNil in
       slots0 <- vec_index_mut_back (Hashmap_list_t T) slots i l0;
       i1 <- usize_add i 1%usize;
-      p <- hashmap_hash_map_move_elements_fwd_back T n0 ntable0 slots0 i1;
-      let (ntable1, slots1) := p in
-      Return (ntable1, slots1))
+      hashmap_hash_map_move_elements_fwd_back T n0 ntable0 slots0 i1)
     else Return (ntable, slots)
   end
 .
@@ -245,7 +236,7 @@ Definition hashmap_hash_map_insert_fwd_back
   self0 <- hashmap_hash_map_insert_no_resize_fwd_back T n self key value;
   i <- hashmap_hash_map_len_fwd T self0;
   if i s> self0.(Hashmap_hash_map_max_load)
-  then (self1 <- hashmap_hash_map_try_resize_fwd_back T n self0; Return self1)
+  then hashmap_hash_map_try_resize_fwd_back T n self0
   else Return self0
 .
 
@@ -259,8 +250,7 @@ Fixpoint hashmap_hash_map_contains_key_in_list_fwd
     | HashmapListCons ckey t ls0 =>
       if ckey s= key
       then Return true
-      else (
-        b <- hashmap_hash_map_contains_key_in_list_fwd T n0 key ls0; Return b)
+      else hashmap_hash_map_contains_key_in_list_fwd T n0 key ls0
     | HashmapListNil => Return false
     end
   end
@@ -275,8 +265,7 @@ Definition hashmap_hash_map_contains_key_fwd
   let i := vec_len (Hashmap_list_t T) self.(Hashmap_hash_map_slots) in
   hash_mod <- usize_rem hash i;
   l <- vec_index_fwd (Hashmap_list_t T) self.(Hashmap_hash_map_slots) hash_mod;
-  b <- hashmap_hash_map_contains_key_in_list_fwd T n key l;
-  Return b
+  hashmap_hash_map_contains_key_in_list_fwd T n key l
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_in_list] *)
@@ -289,7 +278,7 @@ Fixpoint hashmap_hash_map_get_in_list_fwd
     | HashmapListCons ckey cvalue ls0 =>
       if ckey s= key
       then Return cvalue
-      else (t <- hashmap_hash_map_get_in_list_fwd T n0 key ls0; Return t)
+      else hashmap_hash_map_get_in_list_fwd T n0 key ls0
     | HashmapListNil => Fail_ Failure
     end
   end
@@ -304,8 +293,7 @@ Definition hashmap_hash_map_get_fwd
   let i := vec_len (Hashmap_list_t T) self.(Hashmap_hash_map_slots) in
   hash_mod <- usize_rem hash i;
   l <- vec_index_fwd (Hashmap_list_t T) self.(Hashmap_hash_map_slots) hash_mod;
-  t <- hashmap_hash_map_get_in_list_fwd T n key l;
-  Return t
+  hashmap_hash_map_get_in_list_fwd T n key l
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
@@ -318,7 +306,7 @@ Fixpoint hashmap_hash_map_get_mut_in_list_fwd
     | HashmapListCons ckey cvalue ls0 =>
       if ckey s= key
       then Return cvalue
-      else (t <- hashmap_hash_map_get_mut_in_list_fwd T n0 key ls0; Return t)
+      else hashmap_hash_map_get_mut_in_list_fwd T n0 key ls0
     | HashmapListNil => Fail_ Failure
     end
   end
@@ -354,8 +342,7 @@ Definition hashmap_hash_map_get_mut_fwd
   hash_mod <- usize_rem hash i;
   l <-
     vec_index_mut_fwd (Hashmap_list_t T) self.(Hashmap_hash_map_slots) hash_mod;
-  t <- hashmap_hash_map_get_mut_in_list_fwd T n key l;
-  Return t
+  hashmap_hash_map_get_mut_in_list_fwd T n key l
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut] *)
@@ -395,8 +382,7 @@ Fixpoint hashmap_hash_map_remove_from_list_fwd
         | HashmapListCons i cvalue tl0 => Return (Some cvalue)
         | HashmapListNil => Fail_ Failure
         end
-      else (
-        opt <- hashmap_hash_map_remove_from_list_fwd T n0 key tl; Return opt)
+      else hashmap_hash_map_remove_from_list_fwd T n0 key tl
     | HashmapListNil => Return None
     end
   end

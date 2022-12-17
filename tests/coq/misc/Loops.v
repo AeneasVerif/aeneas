@@ -25,10 +25,7 @@ Fixpoint list_nth_mut_loop_loop0_fwd
     | ListCons x tl =>
       if i s= 0%u32
       then Return x
-      else (
-        i0 <- u32_sub i 1%u32;
-        t <- list_nth_mut_loop_loop0_fwd T n0 tl i0;
-        Return t)
+      else (i0 <- u32_sub i 1%u32; list_nth_mut_loop_loop0_fwd T n0 tl i0)
     | ListNil => Fail_ Failure
     end
   end
@@ -37,7 +34,7 @@ Fixpoint list_nth_mut_loop_loop0_fwd
 (** [loops::list_nth_mut_loop] *)
 Definition list_nth_mut_loop_fwd
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
-  t <- list_nth_mut_loop_loop0_fwd T n ls i; Return t
+  list_nth_mut_loop_loop0_fwd T n ls i
 .
 
 (** [loops::list_nth_mut_loop] *)
@@ -66,7 +63,7 @@ Definition list_nth_mut_loop_back
   (T : Type) (n : nat) (ls : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
-  l <- list_nth_mut_loop_loop0_back T n ls i ret; Return l
+  list_nth_mut_loop_loop0_back T n ls i ret
 .
 
 End Loops .
