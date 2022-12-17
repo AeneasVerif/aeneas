@@ -45,7 +45,8 @@ We use **OCaml 4.13.1**: `opam switch create 4.13.1+options`
 The dependencies can then be installed with the following command:
 
 ```
-opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc unionFind
+opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
+  unionFind ocamlgraph
 ```
 
 Moreover, Aeneas requires the Charon ML library, defined in the

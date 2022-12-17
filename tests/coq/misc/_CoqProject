@@ -3,6 +3,7 @@
 -arg -w
 -arg all
 
+Loops.v
 Primitives.v
 External_Funs.v
 Constants.v
