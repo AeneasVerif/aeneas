@@ -1028,9 +1028,12 @@ let decompose_loops (def : fun_decl) : fun_decl * fun_decl list =
           let fuel = if !Config.use_fuel then 1 else 0 in
           let num_inputs = List.length loop.inputs in
           let num_fwd_inputs_with_fuel_no_state = fuel + num_inputs in
-          let num_fwd_inputs_with_fuel_with_state =
+          let fwd_state =
             fun_sig_info.num_fwd_inputs_with_fuel_with_state
             - fun_sig_info.num_fwd_inputs_with_fuel_no_state
+          in
+          let num_fwd_inputs_with_fuel_with_state =
+            num_fwd_inputs_with_fuel_no_state + fwd_state
           in
           {
             has_fuel = !Config.use_fuel;
