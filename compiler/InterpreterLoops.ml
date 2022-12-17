@@ -232,8 +232,10 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
           else ())
     env;
 
+  (* Rem.: there is no need to reverse the abs ids, because we explored the environment
+     starting with the freshest values and abstractions *)
   {
-    abs_ids = List.rev !abs_ids;
+    abs_ids = !abs_ids;
     abs_to_borrows = !abs_to_borrows;
     abs_to_loans = !abs_to_loans;
     abs_to_borrows_loans = !abs_to_borrows_loans;
@@ -433,19 +435,27 @@ let collapse_ctx (loop_id : V.LoopId.id)
                   let abs_id1 = UF.get abs_ref1 in
                   (* If the two ids are the same, it means the abstractions were already merged *)
                   if abs_id0 = abs_id1 then ()
-                  else
+                  else (
+                    log#ldebug
+                      (lazy
+                        ("collapse_ctx: merging abstractions: "
+                        ^ V.AbstractionId.to_string abs_id0
+                        ^ " and "
+                        ^ V.AbstractionId.to_string abs_id1));
+
                     (* We actually need to merge the abstractions *)
 
-                    (* Update the environment *)
+                    (* Update the environment - pay attention to the order: we
+                       we merge [abs_id1] *into* [abs_id0] *)
                     let nctx, abs_id =
                       merge_abstractions abs_kind can_end merge_funs !ctx
-                        abs_id0 abs_id1
+                        abs_id1 abs_id0
                     in
                     ctx := nctx;
 
                     (* Update the union find *)
                     let abs_ref_merged = UF.union abs_ref0 abs_ref1 in
-                    UF.set abs_ref_merged abs_id)
+                    UF.set abs_ref_merged abs_id))
                 abs_ids1)
         bids)
     abs_ids;
@@ -793,11 +803,19 @@ module Match (M : Matcher) = struct
     | ABottom, ABottom -> mk_abottom ty
     | AIgnored, AIgnored -> mk_aignored ty
     | ABorrow bc0, ABorrow bc1 -> (
+        log#ldebug (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
         | ASharedBorrow bid0, ASharedBorrow bid1 ->
+            log#ldebug (lazy "match_typed_avalues: shared borrows");
             M.match_ashared_borrows v0.V.ty bid0 v1.V.ty bid1 ty
         | AMutBorrow (bid0, av0), AMutBorrow (bid1, av1) ->
+            log#ldebug (lazy "match_typed_avalues: mut borrows");
+            log#ldebug
+              (lazy
+                "match_typed_avalues: mut borrows: matching children values");
             let av = match_arec av0 av1 in
+            log#ldebug
+              (lazy "match_typed_avalues: mut borrows: matched children values");
             M.match_amut_borrows v0.V.ty bid0 av0 v1.V.ty bid1 av1 ty av
         | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
             (* The abstractions are destructured: we shouldn't get there *)
@@ -823,17 +841,24 @@ module Match (M : Matcher) = struct
             *)
             raise (Failure "Unexpected"))
     | ALoan lc0, ALoan lc1 -> (
+        log#ldebug (lazy "match_typed_avalues: loans");
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
         | ASharedLoan (ids0, sv0, av0), ASharedLoan (ids1, sv1, av1) ->
+            log#ldebug (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             assert (not (value_has_borrows ctx sv.V.value));
             M.match_ashared_loans v0.V.ty ids0 sv0 av0 v1.V.ty ids1 sv1 av1 ty
               sv av
         | AMutLoan (id0, av0), AMutLoan (id1, av1) ->
+            log#ldebug (lazy "match_typed_avalues: mut loans");
+            log#ldebug
+              (lazy "match_typed_avalues: mut loans: matching children values");
             let av = match_arec av0 av1 in
+            log#ldebug
+              (lazy "match_typed_avalues: mut loans: matched children values");
             M.match_amut_loans v0.V.ty id0 av0 v1.V.ty id1 av1 ty av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
         | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
@@ -1718,6 +1743,13 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
     { V.value; ty }
 
   let match_amut_loans _ty0 id0 _av0 _ty1 id1 _av1 ty av =
+    log#ldebug
+      (lazy
+        ("MakeCheckEquivMatcher:match_amut_loans:" ^ "\n- id0: "
+       ^ V.BorrowId.to_string id0 ^ "\n- id1: " ^ V.BorrowId.to_string id1
+       ^ "\n- ty: " ^ rty_to_string S.ctx ty ^ "\n- av: "
+        ^ typed_avalue_to_string S.ctx av));
+
     let id = match_loan_id id0 id1 in
     let value = V.ALoan (V.AMutLoan (id, av)) in
     { V.value; ty }
@@ -1849,7 +1881,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     log#ldebug
       (lazy
         ("match_ctxs: match_abstractions: " ^ "\n\n- abs0: " ^ V.show_abs abs0
-       ^ "\n\n- abs0: " ^ V.show_abs abs1));
+       ^ "\n\n- abs1: " ^ V.show_abs abs1));
     let {
       V.abs_id = abs_id0;
       kind = kind0;
@@ -1889,6 +1921,7 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         (fun (v0, v1) -> M.match_typed_avalues ctx v0 v1)
         (List.combine avalues0 avalues1)
     in
+    log#ldebug (lazy "match_abstractions: values matched OK");
     ()
   in
 
@@ -2247,6 +2280,14 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   in
   let fp = compute_fixed_point ctx0 max_num_iter max_num_iter in
 
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("compute_fixed_point: fixed point computed before matching with input \
+        region groups:" ^ "\n\n- fp:\n"
+      ^ eval_ctx_to_string_no_filter fp
+      ^ "\n\n"));
+
   (* Make sure we have exactly one loop abstraction per function region (merge
      abstractions accordingly).
 
@@ -2353,7 +2394,10 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
           aids_union := V.AbstractionId.Set.union ids !aids_union)
         !fp_ended_aids
     in
-    assert (!aids_union = !fp_aids);
+
+    (* We also check that all the regions need to end - this is not necessary per
+       se, but if it doesn't happen it is bizarre and worth investigating... *)
+    assert (V.AbstractionId.Set.equal !aids_union !fp_aids);
 
     (* Merge the abstractions which need to be merged *)
     let fp = ref fp in
@@ -2379,8 +2423,16 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
               List.iter
                 (fun id ->
                   try
+                    log#ldebug
+                      (lazy
+                        ("compute_loop_entry_fixed_point: merge FP \
+                          abstractions: "
+                        ^ V.AbstractionId.to_string !id0
+                        ^ " and "
+                        ^ V.AbstractionId.to_string id));
+                    (* Note that we merge *into* [id0] *)
                     let fp', id0' =
-                      merge_abstractions loop_id abs_kind false !fp !id0 id
+                      merge_abstractions loop_id abs_kind false !fp id !id0
                     in
                     fp := fp';
                     id0 := id0';
@@ -2390,7 +2442,18 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
         !fp_ended_aids
     in
 
-    (* Reset the loop abstracions as not endable, and update their kinds *)
+    (* Update the abstraction's [can_end] field and their kinds.
+
+       Note that if [remove_rg_id] is [true], we set the region id to [None]
+       and set the abstractions as endable: this is so that we can check that
+       we have a fixed point (so far in the fixed point the loop abstractions had
+       no region group, and we set them as endable just above).
+
+       If [remove_rg_id] is [false], we simply set the abstractions as non-endable
+       to freeze them (we will use the fixed point as starting point for the
+       symbolic execution of the loop body, and we have to make sure the input
+       abstractions are frozen).
+    *)
     let update_loop_abstractions (remove_rg_id : bool) =
       object
         inherit [_] C.map_eval_ctx
@@ -2404,7 +2467,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
                 if remove_rg_id then V.Loop (loop_id, None, V.LoopSynthInput)
                 else abs.kind
               in
-              { abs with can_end = false; kind }
+              { abs with can_end = remove_rg_id; kind }
           | _ -> abs
       end
     in
@@ -2415,7 +2478,15 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
 
     (* Sanity check: we still have a fixed point - we simply call [compute_fixed_point]
        while allowing exactly one iteration to see if it fails *)
-    let _ = compute_fixed_point (update_kinds_can_end true fp) 1 1 in
+    let _ =
+      let fp_test = update_kinds_can_end true fp in
+      log#ldebug
+        (lazy
+          ("compute_fixed_point: fixed point after matching with the function \
+            region groups:\n"
+          ^ eval_ctx_to_string_no_filter fp_test));
+      compute_fixed_point fp_test 1 1
+    in
 
     (* Return *)
     fp
@@ -2617,7 +2688,7 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
           ids.loan_ids
       in
       (* Check that the loan and borrows are related *)
-      assert (ids.borrow_ids = loan_ids))
+      assert (V.BorrowId.Set.equal ids.borrow_ids loan_ids))
     new_absl;
 
   (* For every target abstraction (going back to the [list_nth_mut] example,

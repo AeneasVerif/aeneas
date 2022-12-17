@@ -1862,7 +1862,10 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
                   in
                   push_abs r_id avl;
                   fv)
-                adt.field_values
+                (* Slightly tricky: pay attention to the order in which the
+                   abstractions are pushed (i.e.: the [List.rev] is important
+                   to get a "good" environment, and a nice translation) *)
+                (List.rev adt.field_values)
             in
             ([], field_values)
         in
@@ -2429,6 +2432,21 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
   (* Reverse the avalues (we visited the loans/borrows in order, but pushed
      new values at the beggining of the stack of avalues) *)
   let avalues = List.rev !avalues in
+
+  (* Reorder the avalues. We want the avalues to have the borrows first, then
+     the loans (this structure is more stable when we merge abstractions together,
+     meaning it is easier to find fixed points).
+  *)
+  let avalues =
+    let is_borrow (av : V.typed_avalue) : bool =
+      match av.V.value with
+      | ABorrow _ -> true
+      | ALoan _ -> false
+      | _ -> raise (Failure "Unexpected")
+    in
+    let aborrows, aloans = List.partition is_borrow avalues in
+    List.append aborrows aloans
+  in
 
   (* Filter the regions *)
 

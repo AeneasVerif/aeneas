@@ -197,7 +197,7 @@ type merge_duplicates_funcs = {
        *)
 }
 
-(** Merge two abstractions together.
+(** Merge an abstraction into another abstraction.
 
     We insert the result of the merge in place of the first abstraction (this
     helps preserving the structure of the environment, when computing loop
