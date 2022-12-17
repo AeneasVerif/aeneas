@@ -26,7 +26,9 @@ type trans_ctx = {
   global_context : global_context;
 }
 
-type pure_fun_translation = Pure.fun_decl * Pure.fun_decl list
+type fun_and_loops = Pure.fun_decl * Pure.fun_decl list
+type pure_fun_translation_no_loops = Pure.fun_decl * Pure.fun_decl list
+type pure_fun_translation = fun_and_loops * fun_and_loops list
 
 let type_decl_to_string (ctx : trans_ctx) (def : Pure.type_decl) : string =
   let type_params = def.type_params in

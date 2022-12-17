@@ -7,6 +7,9 @@ let log = Logging.pure_utils_log
 type regular_fun_id = A.fun_id * T.RegionGroupId.id option
 [@@deriving show, ord]
 
+(** We use this type as a key for lookups *)
+type fun_loop_id = A.FunDeclId.id * LoopId.id option [@@deriving show, ord]
+
 module RegularFunIdOrderedType = struct
   type t = regular_fun_id
 
@@ -29,6 +32,18 @@ end
 
 module FunOrOpIdMap = Collections.MakeMap (FunOrOpIdOrderedType)
 module FunOrOpIdSet = Collections.MakeSet (FunOrOpIdOrderedType)
+
+module FunLoopIdOrderedType = struct
+  type t = fun_loop_id
+
+  let compare = compare_fun_loop_id
+  let to_string = show_fun_loop_id
+  let pp_t = pp_fun_loop_id
+  let show_t = show_fun_loop_id
+end
+
+module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
+module FunLoopIdSet = Collections.MakeSet (FunLoopIdOrderedType)
 
 let dest_arrow_ty (ty : ty) : ty * ty =
   match ty with

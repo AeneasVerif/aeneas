@@ -2261,7 +2261,19 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_body = translate_expression loop.loop_expr ctx_loop in
 
   (* Create the loop node and return *)
-  let loop = Loop { fun_end; loop_id; inputs; inputs_lvs; loop_body } in
+  let loop =
+    Loop
+      {
+        fun_end;
+        loop_id;
+        fuel0 = ctx.fuel0;
+        fuel = ctx.fuel;
+        input_state = (if !Config.use_state then Some ctx.state_var else None);
+        inputs;
+        inputs_lvs;
+        loop_body;
+      }
+  in
   assert (fun_end.ty = loop_body.ty);
   let ty = fun_end.ty in
   { e = loop; ty }
@@ -2282,10 +2294,11 @@ and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
   { e; ty }
 
 (** Wrap a function body in a match over the fuel to control termination. *)
-let wrap_in_match_fuel (body : texpression) (ctx : bs_ctx) : texpression =
-  let fuel0_var : var = mk_fuel_var ctx.fuel0 in
+let wrap_in_match_fuel (fuel0 : VarId.id) (fuel : VarId.id) (body : texpression)
+    : texpression =
+  let fuel0_var : var = mk_fuel_var fuel0 in
   let fuel0 = mk_texpression_from_var fuel0_var in
-  let nfuel_var : var = mk_fuel_var ctx.fuel in
+  let nfuel_var : var = mk_fuel_var fuel in
   let nfuel_pat = mk_typed_pattern_from_var nfuel_var None in
   let fail_branch =
     mk_result_fail_texpression_with_error_id error_out_of_fuel_id body.ty
@@ -2376,7 +2389,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         (* Add a match over the fuel, if necessary *)
         let body =
           if function_decreases_fuel effect_info then
-            wrap_in_match_fuel body ctx
+            wrap_in_match_fuel ctx.fuel0 ctx.fuel body
           else body
         in
         (* Sanity check *)
