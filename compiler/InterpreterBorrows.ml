@@ -1005,7 +1005,13 @@ and end_abstraction_aux (config : C.config) (chain : borrow_or_abs_ids)
   let abs = C.ctx_lookup_abs ctx abs_id in
 
   (* Check that we can end the abstraction *)
-  assert abs.can_end;
+  if abs.can_end then ()
+  else
+    raise
+      (Failure
+         ("Can't end abstraction "
+         ^ V.AbstractionId.to_string abs.abs_id
+         ^ " as it is set as non-endable"));
 
   (* End the parent abstractions first *)
   let cc = end_abstractions_aux config chain abs.parents in

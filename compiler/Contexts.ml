@@ -491,6 +491,12 @@ let ctx_subst_abs (ctx : eval_ctx) (abs_id : V.AbstractionId.id) (nabs : V.abs)
   let env, abs_opt = env_subst_abs ctx.env abs_id nabs in
   ({ ctx with env }, abs_opt)
 
+let ctx_set_abs_can_end (ctx : eval_ctx) (abs_id : V.AbstractionId.id)
+    (can_end : bool) : eval_ctx =
+  let abs = ctx_lookup_abs ctx abs_id in
+  let abs = { abs with can_end } in
+  fst (ctx_subst_abs ctx abs_id abs)
+
 let ctx_type_decl_is_rec (ctx : eval_ctx) (id : TypeDeclId.id) : bool =
   let decl_group = TypeDeclId.Map.find id ctx.type_context.type_decls_groups in
   match decl_group with Rec _ -> true | NonRec _ -> false
