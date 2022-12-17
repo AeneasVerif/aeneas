@@ -125,15 +125,16 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
     this continuation takes care of doing the proper manipulations to finish
     the synthesis (mostly by ending abstractions).
 
-    [entered_loop]: [true] if we reached the end of the function because we
-    (re-)entered a loop (results [EndEnterLoop] and [EndContinue]).
+    [is_regular_return]: [true] if we reached a [Return] instruction (i.e., the
+    result is {!Return} or {LoopReturn}).
 
     [inside_loop]: [true] if we are *inside* a loop (result [EndContinue]).
 *)
 let evaluate_function_symbolic_synthesize_backward_from_return
     (config : C.config) (fdef : A.fun_decl) (inst_sg : A.inst_fun_sig)
     (back_id : T.RegionGroupId.id) (loop_id : V.LoopId.id option)
-    (inside_loop : bool) (ctx : C.eval_ctx) : SA.expression option =
+    (is_regular_return : bool) (inside_loop : bool) (ctx : C.eval_ctx) :
+    SA.expression option =
   log#ldebug
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return:"
@@ -145,7 +146,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       ^ Print.bool_to_string inside_loop
       ^ "\n- ctx:\n"
       ^ Print.Contexts.eval_ctx_to_string_gen true true ctx));
-  let entered_loop = Option.is_some loop_id in
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
@@ -155,7 +155,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
   let ret_inst_sg = instantiate_fun_sig type_params sg in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
-  let pop_return_value = not entered_loop in
+  let pop_return_value = is_regular_return in
   let cf_pop_frame = pop_frame config pop_return_value in
 
   (* We need to find the parents regions/abstractions of the region we
@@ -177,7 +177,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
    * borrow projections) *)
   let cf_consume_ret (ret_value : V.typed_value option) ctx =
     let ctx =
-      if not entered_loop then (
+      if is_regular_return then (
         let ret_value = Option.get ret_value in
         let compute_abs_avalues (abs : V.abs) (ctx : C.eval_ctx) :
             C.eval_ctx * V.typed_avalue list =
@@ -366,11 +366,12 @@ let evaluate_function_symbolic (synthesize : bool)
             | LoopReturn loop_id -> Some loop_id
             | _ -> raise (Failure "Unreachable")
           in
+          let is_regular_return = true in
           let inside_loop = Option.is_some loop_id in
           let finish_back_eval back_id =
             Option.get
               (evaluate_function_symbolic_synthesize_backward_from_return config
-                 fdef inst_sg back_id loop_id inside_loop ctx)
+                 fdef inst_sg back_id loop_id is_regular_return inside_loop ctx)
           in
           let back_el =
             T.RegionGroupId.mapi
@@ -409,10 +410,12 @@ let evaluate_function_symbolic (synthesize : bool)
              abstractions to consume the return value, then end all the
              abstractions up to the one in which we are interested.
           *)
+          let is_regular_return = false in
           let finish_back_eval back_id =
             Option.get
               (evaluate_function_symbolic_synthesize_backward_from_return config
-                 fdef inst_sg back_id (Some loop_id) inside_loop ctx)
+                 fdef inst_sg back_id (Some loop_id) is_regular_return
+                 inside_loop ctx)
           in
           let back_el =
             T.RegionGroupId.mapi
