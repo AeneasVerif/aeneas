@@ -1791,9 +1791,13 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       let loop_info = LoopId.Map.find loop_id ctx.loops in
       let type_args = loop_info.type_args in
       let fwd_inputs = Option.get loop_info.forward_inputs in
-      (* Retrieve the values consumed upon ending the loans inside this
-       * abstraction: those give us the remaining input values *)
-      let back_inputs = abs_to_consumed ctx ectx abs in
+      (* Retrieve the additional backward inputs. Note that those are actually
+         the backward inputs of the function we are synthesizing (and that we
+         need to *transmit* to the loop backward function): they are not the
+         values consumed upon ending the abstraction (i.e., we don't use
+         [abs_to_consumed]) *)
+      let back_inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs in
+      let back_inputs = List.map mk_texpression_from_var back_inputs in
       (* If the function is stateful:
        * - add the state input argument
        * - generate a fresh state variable for the returned state
