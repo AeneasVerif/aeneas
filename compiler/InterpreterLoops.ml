@@ -1594,25 +1594,6 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
     if S.check_equiv then match_blids else GetSetBid.match_es S.loan_id_map
 
   module GetSetSid = MkGetSetM (V.SymbolicValueId)
-
-  (* If we check for equivalence, we map sids to sids, otherwise we map sids
-     to values. *)
-  let match_sid =
-    if S.check_equiv then GetSetSid.match_e S.sid_map
-    else fun _ -> raise (Failure "Unexpected")
-
-  let match_sid_with_value (id : V.SymbolicValueId.id) (v : V.typed_value) :
-      unit =
-    (* Even when we don't use it, the sids map contains the fixed ids: check
-       that we are not trying to map a fixed id. *)
-    assert (not (V.SymbolicValueId.InjSubst.mem id !S.sid_map));
-
-    (* Check that we are not overriding a binding *)
-    assert (not (V.SymbolicValueId.Map.mem id !S.sid_to_value_map));
-
-    (* Add the mapping *)
-    S.sid_to_value_map := V.SymbolicValueId.Map.add id v !S.sid_to_value_map
-
   module GetSetAid = MkGetSetM (V.AbstractionId)
 
   let match_aid = GetSetAid.match_e S.aid_map
@@ -1667,27 +1648,45 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
       V.symbolic_value =
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
+
+    (* If we don't check for equivalence, we also update the map from sids
+       to values *)
     if S.check_equiv then
-      let sv_id = match_sid id0 id1 in
+      (* Create the joined symbolic value *)
+      let sv_id = GetSetSid.match_e S.sid_map id0 id1 in
       let sv_ty = match_rtys sv0.V.sv_ty sv1.V.sv_ty in
       let sv_kind =
         if sv0.V.sv_kind = sv1.V.sv_kind then sv0.V.sv_kind else raise Distinct
       in
-      { V.sv_id; sv_ty; sv_kind }
+      let sv = { V.sv_id; sv_ty; sv_kind } in
+      sv
     else (
-      (* Update the binding for the target symbolic value *)
-      match_sid_with_value id0 (mk_typed_value_from_symbolic_value sv1);
-      (* Return - the returned value is not used, so we can return whatever *)
-      sv1)
+      (* Check: fixed values are fixed *)
+      assert (id0 = id1 || not (V.SymbolicValueId.InjSubst.mem id0 !S.sid_map));
+
+      (* Update the symbolic value mapping *)
+      let sv1 = mk_typed_value_from_symbolic_value sv1 in
+
+      (* Update the symbolic value mapping *)
+      S.sid_to_value_map :=
+        V.SymbolicValueId.Map.add_strict id0 sv1 !S.sid_to_value_map;
+
+      (* Return - the returned value is not used: we can return  whatever
+         we want *)
+      sv0)
 
   let match_symbolic_with_other (left : bool) (sv : V.symbolic_value)
       (v : V.typed_value) : V.typed_value =
     if S.check_equiv then raise Distinct
     else (
       assert left;
+      let id = sv.sv_id in
+      (* Check: fixed values are fixed *)
+      assert (not (V.SymbolicValueId.InjSubst.mem id !S.sid_map));
       (* Update the binding for the target symbolic value *)
-      match_sid_with_value sv.sv_id v;
-      (* Return - the returned value is not used, so we can return whatever *)
+      S.sid_to_value_map :=
+        V.SymbolicValueId.Map.add_strict id v !S.sid_to_value_map;
+      (* Return - the returned value is not used, so we can return whatever we want *)
       v)
 
   let match_bottom_with_other (left : bool) (v : V.typed_value) : V.typed_value
@@ -3212,9 +3211,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
     let fresh_sids = V.SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
     (* The value ids should be listed in increasing order *)
     let input_svalues =
-      List.map
-        (fun sid -> V.SymbolicValueId.Map.find sid fp_ids_maps.sids_to_values)
-        (V.SymbolicValueId.Set.elements fresh_sids)
+      List.map snd (V.SymbolicValueId.Map.bindings fp_ids_maps.sids_to_values)
     in
     (fresh_sids, input_svalues)
   in

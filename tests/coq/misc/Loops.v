@@ -6,6 +6,23 @@ Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
 Module Loops.
 
+(** [loops::sum] *)
+Fixpoint sum_loop0_fwd
+  (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    if i s< max
+    then (s0 <- u32_add s i; i0 <- u32_add i 1%u32; sum_loop0_fwd n0 max i0 s0)
+    else u32_mul s 2%u32
+  end
+.
+
+(** [loops::sum] *)
+Definition sum_fwd (n : nat) (max : u32) : result u32 :=
+  sum_loop0_fwd n max (0%u32) (0%u32)
+.
+
 (** [loops::List] *)
 Inductive List_t (T : Type) :=
 | ListCons : T -> List_t T -> List_t T
