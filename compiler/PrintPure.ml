@@ -133,33 +133,39 @@ let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
       | Option -> "Option"
       | Vec -> "Vec")
 
-let rec ty_to_string (fmt : type_formatter) (ty : ty) : string =
+let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
   match ty with
   | Adt (id, tys) -> (
-      let tys = List.map (ty_to_string fmt) tys in
+      let tys = List.map (ty_to_string fmt false) tys in
       match id with
       | Tuple -> "(" ^ String.concat " * " tys ^ ")"
       | AdtId _ | Assumed _ ->
-          let tys = if tys = [] then "" else " " ^ String.concat " " tys in
-          type_id_to_string fmt id ^ tys)
+          let tys_s = if tys = [] then "" else " " ^ String.concat " " tys in
+          let ty_s = type_id_to_string fmt id ^ tys_s in
+          if tys <> [] && inside then "(" ^ ty_s ^ ")" else ty_s)
   | TypeVar tv -> fmt.type_var_id_to_string tv
   | Bool -> "bool"
   | Char -> "char"
   | Integer int_ty -> integer_type_to_string int_ty
   | Str -> "str"
-  | Array aty -> "[" ^ ty_to_string fmt aty ^ "; ?]"
-  | Slice sty -> "[" ^ ty_to_string fmt sty ^ "]"
+  | Array aty -> "[" ^ ty_to_string fmt false aty ^ "; ?]"
+  | Slice sty -> "[" ^ ty_to_string fmt false sty ^ "]"
   | Arrow (arg_ty, ret_ty) ->
-      ty_to_string fmt arg_ty ^ " -> " ^ ty_to_string fmt ret_ty
+      let ty =
+        ty_to_string fmt true arg_ty ^ " -> " ^ ty_to_string fmt false ret_ty
+      in
+      if inside then "(" ^ ty ^ ")" else ty
 
-let field_to_string fmt (f : field) : string =
+let field_to_string fmt inside (f : field) : string =
   match f.field_name with
-  | None -> ty_to_string fmt f.field_ty
-  | Some field_name -> field_name ^ " : " ^ ty_to_string fmt f.field_ty
+  | None -> ty_to_string fmt inside f.field_ty
+  | Some field_name ->
+      let s = field_name ^ " : " ^ ty_to_string fmt false f.field_ty in
+      if inside then "(" ^ s ^ ")" else s
 
 let variant_to_string fmt (v : variant) : string =
   v.variant_name ^ "("
-  ^ String.concat ", " (List.map (field_to_string fmt) v.fields)
+  ^ String.concat ", " (List.map (field_to_string fmt false) v.fields)
   ^ ")"
 
 let type_decl_to_string (fmt : type_formatter) (def : type_decl) : string =
@@ -174,7 +180,7 @@ let type_decl_to_string (fmt : type_formatter) (def : type_decl) : string =
       if List.length fields > 0 then
         let fields =
           String.concat ","
-            (List.map (fun f -> "\n  " ^ field_to_string fmt f) fields)
+            (List.map (fun f -> "\n  " ^ field_to_string fmt false f) fields)
         in
         "struct " ^ name ^ params ^ "{" ^ fields ^ "}"
       else "struct " ^ name ^ params ^ "{}"
@@ -193,7 +199,7 @@ let var_to_varname (v : var) : string =
 
 let var_to_string (fmt : type_formatter) (v : var) : string =
   let varname = var_to_varname v in
-  "(" ^ varname ^ " : " ^ ty_to_string fmt v.ty ^ ")"
+  "(" ^ varname ^ " : " ^ ty_to_string fmt false v.ty ^ ")"
 
 let rec mprojection_to_string (fmt : ast_formatter) (inside : string)
     (p : mprojection) : string =
@@ -380,7 +386,7 @@ let adt_g_value_to_string (fmt : value_formatter)
       raise
         (Failure
            ("Inconsistently typed value: expected ADT type but found:"
-          ^ "\n- ty: " ^ ty_to_string fmt ty ^ "\n- variant_id: "
+          ^ "\n- ty: " ^ ty_to_string fmt false ty ^ "\n- variant_id: "
            ^ Print.option_to_string VariantId.to_string variant_id))
 
 let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
@@ -391,7 +397,7 @@ let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
   | PatVar (v, Some mp) ->
       let mp = "[@mplace=" ^ mplace_to_string fmt mp ^ "]" in
       "(" ^ var_to_varname v ^ " " ^ mp ^ " : "
-      ^ ty_to_string (ast_to_type_formatter fmt) v.ty
+      ^ ty_to_string (ast_to_type_formatter fmt) false v.ty
       ^ ")"
   | PatDummy -> "_"
   | PatAdt av ->
@@ -403,15 +409,15 @@ let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
 let fun_sig_to_string (fmt : ast_formatter) (sg : fun_sig) : string =
   let ty_fmt = ast_to_type_formatter fmt in
   let type_params = List.map type_var_to_string sg.type_params in
-  let inputs = List.map (ty_to_string ty_fmt) sg.inputs in
-  let output = ty_to_string ty_fmt sg.output in
+  let inputs = List.map (ty_to_string ty_fmt false) sg.inputs in
+  let output = ty_to_string ty_fmt false sg.output in
   let all_types = List.concat [ type_params; inputs; [ output ] ] in
   String.concat " -> " all_types
 
 let inst_fun_sig_to_string (fmt : ast_formatter) (sg : inst_fun_sig) : string =
   let ty_fmt = ast_to_type_formatter fmt in
-  let inputs = List.map (ty_to_string ty_fmt) sg.inputs in
-  let output = ty_to_string ty_fmt sg.output in
+  let inputs = List.map (ty_to_string ty_fmt false) sg.inputs in
+  let output = ty_to_string ty_fmt false sg.output in
   let all_types = List.append inputs [ output ] in
   String.concat " -> " all_types
 
@@ -551,7 +557,7 @@ and app_to_string (fmt : ast_formatter) (inside : bool) (indent : string)
         in
         (* Convert the type instantiation *)
         let ty_fmt = ast_to_type_formatter fmt in
-        let tys = List.map (ty_to_string ty_fmt) qualif.type_args in
+        let tys = List.map (ty_to_string ty_fmt true) qualif.type_args in
         (* *)
         (qualif_s, tys)
     | _ ->
@@ -620,15 +626,21 @@ and loop_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
   let indent2 = indent1 ^ indent_incr in
+  let type_fmt = ast_to_type_formatter fmt in
+  let loop_inputs =
+    "fresh_vars: ["
+    ^ String.concat "; " (List.map (var_to_string type_fmt) loop.inputs)
+    ^ "]"
+  in
   let fun_end =
     texpression_to_string fmt false indent2 indent_incr loop.fun_end
   in
   let loop_body =
     texpression_to_string fmt false indent2 indent_incr loop.loop_body
   in
-  "loop {\n" ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1
-  ^ "}\n" ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1
-  ^ "}\n" ^ indent ^ "}"
+  "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ "fun_end: {\n" ^ indent2
+  ^ fun_end ^ "\n" ^ indent1 ^ "}\n" ^ indent1 ^ "loop_body: {\n" ^ indent2
+  ^ loop_body ^ "\n" ^ indent1 ^ "}\n" ^ indent ^ "}"
 
 and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   let meta =
