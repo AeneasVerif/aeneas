@@ -155,6 +155,11 @@ let is_global (e : texpression) : bool =
 let is_const (e : texpression) : bool =
   match e.e with Const _ -> true | _ -> false
 
+let ty_as_adt (ty : ty) : type_id * ty list =
+  match ty with
+  | Adt (id, tys) -> (id, tys)
+  | _ -> raise (Failure "Unreachable")
+
 (** Remove the external occurrences of {!Meta} *)
 let rec unmeta (e : texpression) : texpression =
   match e.e with Meta (_, e) -> unmeta e | _ -> e
@@ -473,3 +478,34 @@ let mk_fuel_var (id : VarId.id) : var =
 
 let mk_fuel_texpression (id : VarId.id) : texpression =
   { e = Var id; ty = mk_fuel_ty }
+
+let rec typed_pattern_to_texpression (pat : typed_pattern) : texpression option
+    =
+  let e_opt =
+    match pat.value with
+    | PatConstant pv -> Some (Const pv)
+    | PatVar (v, _) -> Some (Var v.id)
+    | PatDummy -> None
+    | PatAdt av ->
+        let fields = List.map typed_pattern_to_texpression av.field_values in
+        if List.mem None fields then None
+        else
+          let fields_values = List.map (fun e -> Option.get e) fields in
+
+          (* Retrieve the type id and the type args from the pat type (simpler this way *)
+          let adt_id, type_args = ty_as_adt pat.ty in
+
+          (* Create the constructor *)
+          let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
+          let qualif = { id = qualif_id; type_args } in
+          let cons_e = Qualif qualif in
+          let field_tys =
+            List.map (fun (v : texpression) -> v.ty) fields_values
+          in
+          let cons_ty = mk_arrows field_tys pat.ty in
+          let cons = { e = cons_e; ty = cons_ty } in
+
+          (* Apply the constructor *)
+          Some (mk_apps cons fields_values).e
+  in
+  match e_opt with None -> None | Some e -> Some { e; ty = pat.ty }

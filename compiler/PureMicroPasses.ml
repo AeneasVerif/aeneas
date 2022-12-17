@@ -885,6 +885,53 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
       let body = { body with body = body_exp; inputs_lvs } in
       { def with body = Some body }
 
+(** Simplify the lets immediately followed by a return.
+
+    Ex.:
+    {[
+      x <-- f y;
+      Return x
+
+        ~~>
+
+      f y
+    ]}
+ *)
+let simplify_let_then_return _ctx def =
+  let expr_visitor =
+    object (self)
+      inherit [_] map_expression
+
+      method! visit_Let env monadic lv rv next_e =
+        (* We do a bottom up traversal (simplifying in the children nodes
+           can allow to simplify in the parent nodes) *)
+        let rv = self#visit_texpression env rv in
+        let next_e = self#visit_texpression env next_e in
+        let not_simpl_e = Let (monadic, lv, rv, next_e) in
+        match next_e.e with
+        | Switch _ | Loop _ | Let _ ->
+            (* Small shortcut to avoid doing the check on every let-binding *)
+            not_simpl_e
+        | _ -> (
+            match typed_pattern_to_texpression lv with
+            | None -> not_simpl_e
+            | Some lv_v ->
+                let lv_v =
+                  if monadic then mk_result_return_texpression lv_v else lv_v
+                in
+                if lv_v = next_e then rv.e else not_simpl_e)
+    end
+  in
+
+  match def.body with
+  | None -> def
+  | Some body ->
+      (* Visit the body *)
+      let body_exp = expr_visitor#visit_texpression () body.body in
+      (* Return *)
+      let body = { body with body = body_exp } in
+      { def with body = Some body }
+
 (** Simplify the aggregated ADTs.
     Ex.:
     {[
@@ -1512,6 +1559,22 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   (* Filter the useless variables, assignments, function calls, etc. *)
   let def = filter_useless !Config.filter_useless_monadic_calls ctx def in
   log#ldebug (lazy ("filter_useless:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Simplify the lets immediately followed by a return.
+
+     Ex.:
+     {[
+       x <-- f y;
+       Return x
+
+         ~~>
+
+       f y
+     ]}
+  *)
+  let def = simplify_let_then_return ctx def in
+  log#ldebug
+    (lazy ("simplify_let_then_return:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Simplify the aggregated ADTs.
 
