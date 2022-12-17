@@ -96,7 +96,7 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
     in
     (ctx, avalues)
   in
-  let region_can_end _ = true in
+  let region_can_end _ = false in
   let ctx =
     create_push_abstractions_from_abs_region_groups
       (fun rg_id -> V.SynthInput rg_id)
@@ -134,6 +134,17 @@ let evaluate_function_symbolic_synthesize_backward_from_return
     (config : C.config) (fdef : A.fun_decl) (inst_sg : A.inst_fun_sig)
     (back_id : T.RegionGroupId.id) (loop_id : V.LoopId.id option)
     (inside_loop : bool) (ctx : C.eval_ctx) : SA.expression option =
+  log#ldebug
+    (lazy
+      ("evaluate_function_symbolic_synthesize_backward_from_return:"
+     ^ "\n- back_id: "
+      ^ T.RegionGroupId.to_string back_id
+      ^ "\n- loop_id: "
+      ^ Print.option_to_string V.LoopId.to_string loop_id
+      ^ "\n- inside_loop: "
+      ^ Print.bool_to_string inside_loop
+      ^ "\n- ctx:\n"
+      ^ Print.Contexts.eval_ctx_to_string_gen true true ctx));
   let entered_loop = Option.is_some loop_id in
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
@@ -200,7 +211,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       else ctx
     in
 
-    (* Set the proper loop abstractions as endable *)
+    (* Set the proper abstractions as endable *)
     let ctx =
       let visit_loop_abs =
         object
@@ -208,10 +219,28 @@ let evaluate_function_symbolic_synthesize_backward_from_return
 
           method! visit_abs _ abs =
             match abs.kind with
-            | V.Loop (_, rg_id', _) ->
+            | V.Loop (loop_id', rg_id', V.LoopSynthInput) ->
+                (* We only allow to end the loop synth input abs for the region
+                   group [rg_id] *)
+                assert (
+                  if Option.is_some loop_id then loop_id = Some loop_id'
+                  else true);
+                (* Loop abstractions *)
                 let rg_id' = Option.get rg_id' in
-                if rg_id' = back_id then { abs with can_end = true } else abs
-            | _ -> abs
+                if rg_id' = back_id && inside_loop then
+                  { abs with can_end = true }
+                else abs
+            | V.Loop (loop_id', _, V.LoopCall) ->
+                (* We can end all the loop call abstractions *)
+                assert (loop_id = Some loop_id');
+                { abs with can_end = true }
+            | V.SynthInput rg_id' ->
+                if rg_id' = back_id && not inside_loop then
+                  { abs with can_end = true }
+                else abs
+            | _ ->
+                (* Other abstractions *)
+                abs
         end
       in
       visit_loop_abs#visit_eval_ctx () ctx
@@ -247,6 +276,11 @@ let evaluate_function_symbolic_synthesize_backward_from_return
         let abs = Option.get (C.ctx_find_abs ctx pred) in
         abs.abs_id
     in
+    log#ldebug
+      (lazy
+        ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
+          input abstraction: "
+        ^ V.AbstractionId.to_string current_abs_id));
     let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
     let cf_end_target_abs cf =
       List.fold_left
@@ -296,7 +330,7 @@ let evaluate_function_symbolic (synthesize : bool)
         ^ Cps.show_statement_eval_res res));
 
     match res with
-    | Return | LoopReturn ->
+    | Return | LoopReturn _ ->
         if synthesize then
           (* We have to "play different endings":
            * - one execution for the forward function
@@ -326,16 +360,17 @@ let evaluate_function_symbolic (synthesize : bool)
              abstractions to consume the return value, then end all the
              abstractions up to the one in which we are interested.
           *)
-          let inside_loop =
+          let loop_id =
             match res with
-            | Return -> false
-            | LoopReturn -> true
+            | Return -> None
+            | LoopReturn loop_id -> Some loop_id
             | _ -> raise (Failure "Unreachable")
           in
+          let inside_loop = Option.is_some loop_id in
           let finish_back_eval back_id =
             Option.get
               (evaluate_function_symbolic_synthesize_backward_from_return config
-                 fdef inst_sg back_id None inside_loop ctx)
+                 fdef inst_sg back_id loop_id inside_loop ctx)
           in
           let back_el =
             T.RegionGroupId.mapi

@@ -2323,8 +2323,11 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
                 let abs_id =
                   V.AbstractionId.of_int (T.RegionGroupId.to_int rg_id)
                 in
-                let abs = C.ctx_lookup_abs ctx abs_id in
-                assert (abs.kind = V.SynthInput rg_id);
+                (* By default, the [SynthInput] abs can't end *)
+                let ctx = C.ctx_set_abs_can_end ctx abs_id true in
+                assert (
+                  let abs = C.ctx_lookup_abs ctx abs_id in
+                  abs.kind = V.SynthInput rg_id);
                 (* End this abstraction *)
                 let ctx =
                   InterpreterBorrows.end_abstraction_no_synth config abs_id ctx
@@ -3171,7 +3174,10 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
   let cf_loop : st_m_fun =
    fun res ctx ->
     match res with
-    | Return | Panic -> cf res ctx
+    | Return ->
+        (* We replace the [Return] with a [LoopReturn] *)
+        cf (LoopReturn loop_id) ctx
+    | Panic -> cf res ctx
     | Break i ->
         (* Break out of the loop by calling the continuation *)
         let res = if i = 0 then Unit else Break (i - 1) in

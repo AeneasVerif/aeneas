@@ -284,9 +284,10 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
 let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let fmt = bs_ctx_to_ast_formatter ctx in
   let fmt = Print.Contexts.ast_to_value_formatter fmt in
+  let verbose = false in
   let indent = "" in
   let indent_incr = "  " in
-  Print.Values.abs_to_string fmt indent indent_incr abs
+  Print.Values.abs_to_string fmt verbose indent indent_incr abs
 
 let get_instantiated_fun_sig (fun_id : A.fun_id)
     (back_id : T.RegionGroupId.id option) (tys : ty list) (ctx : bs_ctx) :

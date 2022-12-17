@@ -619,14 +619,16 @@ and switch_to_string (fmt : ast_formatter) (indent : string)
 and loop_to_string (fmt : ast_formatter) (indent : string)
     (indent_incr : string) (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
   let fun_end =
-    texpression_to_string fmt false indent1 indent_incr loop.fun_end
+    texpression_to_string fmt false indent2 indent_incr loop.fun_end
   in
   let loop_body =
-    texpression_to_string fmt false indent1 indent_incr loop.loop_body
+    texpression_to_string fmt false indent2 indent_incr loop.loop_body
   in
-  "loop {\n" ^ indent1 ^ "fun_end: " ^ fun_end ^ "\n" ^ indent1 ^ "loop_body:"
-  ^ loop_body ^ "\n" ^ indent ^ "}"
+  "loop {\n" ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1
+  ^ "}\n" ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1
+  ^ "}\n" ^ indent ^ "}"
 
 and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   let meta =

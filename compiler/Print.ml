@@ -10,6 +10,8 @@ module Expressions = Charon.PrintExpressions
 let list_to_string (to_string : 'a -> string) (ls : 'a list) : string =
   "[" ^ String.concat "; " (List.map to_string ls) ^ "]"
 
+let bool_to_string (b : bool) : string = if b then "true" else "false"
+
 (** Pretty-printing for values *)
 module Values = struct
   type value_formatter = {
@@ -292,16 +294,41 @@ module Values = struct
         ^ abstract_shared_borrows_to_string fmt sb
         ^ ")"
 
-  let abs_to_string (fmt : value_formatter) (indent : string)
+  let loop_abs_kind_to_string (kind : V.loop_abs_kind) : string =
+    match kind with
+    | LoopSynthInput -> "LoopSynthInput"
+    | LoopCall -> "LoopCall"
+
+  let abs_kind_to_string (kind : V.abs_kind) : string =
+    match kind with
+    | V.FunCall (fid, rg_id) ->
+        "FunCall(fid:" ^ V.FunCallId.to_string fid ^ ", rg_id:"
+        ^ T.RegionGroupId.to_string rg_id
+        ^ ")"
+    | SynthInput rg_id ->
+        "SynthInput(rg_id:" ^ T.RegionGroupId.to_string rg_id ^ ")"
+    | SynthRet rg_id ->
+        "SynthRet(rg_id:" ^ T.RegionGroupId.to_string rg_id ^ ")"
+    | Loop (lp_id, rg_id, abs_kind) ->
+        "Loop(loop_id:" ^ V.LoopId.to_string lp_id ^ ", rg_id:"
+        ^ option_to_string T.RegionGroupId.to_string rg_id
+        ^ ", loop abs kind: "
+        ^ loop_abs_kind_to_string abs_kind
+        ^ ")"
+
+  let abs_to_string (fmt : value_formatter) (verbose : bool) (indent : string)
       (indent_incr : string) (abs : V.abs) : string =
     let indent2 = indent ^ indent_incr in
     let avs =
       List.map (fun av -> indent2 ^ typed_avalue_to_string fmt av) abs.avalues
     in
     let avs = String.concat ",\n" avs in
+    let kind =
+      if verbose then "[kind:" ^ abs_kind_to_string abs.kind ^ "]" else ""
+    in
     indent ^ "abs@"
     ^ V.AbstractionId.to_string abs.abs_id
-    ^ "{parents="
+    ^ kind ^ "{parents="
     ^ V.AbstractionId.Set.to_string None abs.parents
     ^ "}" ^ "{regions="
     ^ T.RegionId.Set.to_string None abs.regions
@@ -325,20 +352,21 @@ module Contexts = struct
     | VarBinder b -> var_binder_to_string b
     | DummyBinder bid -> dummy_var_id_to_string bid
 
-  let env_elem_to_string (fmt : PV.value_formatter) (indent : string)
-      (indent_incr : string) (ev : C.env_elem) : string =
+  let env_elem_to_string (fmt : PV.value_formatter) (verbose : bool)
+      (indent : string) (indent_incr : string) (ev : C.env_elem) : string =
     match ev with
     | Var (var, tv) ->
         let bv = binder_to_string var in
         indent ^ bv ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
-    | Abs abs -> PV.abs_to_string fmt indent indent_incr abs
+    | Abs abs -> PV.abs_to_string fmt verbose indent indent_incr abs
     | Frame -> raise (Failure "Can't print a Frame element")
 
-  let opt_env_elem_to_string (fmt : PV.value_formatter) (indent : string)
-      (indent_incr : string) (ev : C.env_elem option) : string =
+  let opt_env_elem_to_string (fmt : PV.value_formatter) (verbose : bool)
+      (indent : string) (indent_incr : string) (ev : C.env_elem option) : string
+      =
     match ev with
     | None -> indent ^ "..."
-    | Some ev -> env_elem_to_string fmt indent indent_incr ev
+    | Some ev -> env_elem_to_string fmt verbose indent indent_incr ev
 
   (** Filters "dummy" bindings from an environment, to gain space and clarity/
       See [env_to_string]. *)
@@ -376,14 +404,16 @@ module Contexts = struct
       allows to filter them when printing, replacing groups of such bindings with
       "..." to gain space and clarity.
    *)
-  let env_to_string (filter : bool) (fmt : PV.value_formatter) (env : C.env) :
-      string =
+  let env_to_string (filter : bool) (fmt : PV.value_formatter) (verbose : bool)
+      (env : C.env) : string =
     let env =
       if filter then filter_env env else List.map (fun ev -> Some ev) env
     in
     "{\n"
     ^ String.concat "\n"
-        (List.map (fun ev -> opt_env_elem_to_string fmt "  " "  " ev) env)
+        (List.map
+           (fun ev -> opt_env_elem_to_string fmt verbose "  " "  " ev)
+           env)
     ^ "\n}"
 
   type ctx_formatter = PV.value_formatter
@@ -486,8 +516,8 @@ module Contexts = struct
     let frames = split_aux [] [] env in
     frames
 
-  let fmt_eval_ctx_to_string_gen (fmt : ctx_formatter) (filter : bool)
-      (ctx : C.eval_ctx) : string =
+  let fmt_eval_ctx_to_string_gen (fmt : ctx_formatter) (verbose : bool)
+      (filter : bool) (ctx : C.eval_ctx) : string =
     let ended_regions = T.RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
@@ -509,21 +539,23 @@ module Contexts = struct
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string filter fmt f ^ "\n")
+          ^ env_to_string filter fmt verbose f
+          ^ "\n")
         frames
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
     ^ " frame(s)\n" ^ String.concat "" frames
 
-  let eval_ctx_to_string_gen (filter : bool) (ctx : C.eval_ctx) : string =
+  let eval_ctx_to_string_gen (verbose : bool) (filter : bool) (ctx : C.eval_ctx)
+      : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
-    fmt_eval_ctx_to_string_gen fmt filter ctx
+    fmt_eval_ctx_to_string_gen fmt verbose filter ctx
 
   let eval_ctx_to_string (ctx : C.eval_ctx) : string =
-    eval_ctx_to_string_gen true ctx
+    eval_ctx_to_string_gen false true ctx
 
   let eval_ctx_to_string_no_filter (ctx : C.eval_ctx) : string =
-    eval_ctx_to_string_gen false ctx
+    eval_ctx_to_string_gen false false ctx
 end
 
 module PC = Contexts (* local module *)
@@ -593,10 +625,10 @@ module EvalCtxLlbcAst = struct
   let env_elem_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (ev : C.env_elem) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PC.env_elem_to_string fmt indent indent_incr ev
+    PC.env_elem_to_string fmt false indent indent_incr ev
 
   let abs_to_string (ctx : C.eval_ctx) (indent : string) (indent_incr : string)
       (abs : V.abs) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PV.abs_to_string fmt indent indent_incr abs
+    PV.abs_to_string fmt false indent indent_incr abs
 end
