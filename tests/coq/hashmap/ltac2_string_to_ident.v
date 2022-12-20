@@ -1,3 +1,8 @@
+
+(* Taken from Iris here:
+   https://gitlab.mpi-sws.org/iris/iris/-/blob/master/iris/proofmode/string_ident.v
+*)
+
 From Ltac2 Require Import Ltac2.
 From Coq Require Import Strings.String.
 From Coq Require Import Init.Byte.

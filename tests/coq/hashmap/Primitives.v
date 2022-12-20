@@ -254,38 +254,37 @@ Definition scalar_cast (src_ty tgt_ty : scalar_ty) (x : scalar src_ty) : result 
   mk_scalar tgt_ty (to_Z x).
 
 (** Comparisons *)
-Definition scalar_leb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
-  Z.leb (to_Z x) (to_Z y) .
+Notation scalar_leb x y := (Z.leb (to_Z x) (to_Z y)).
 
-Definition scalar_ltb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
-  Z.ltb (to_Z x) (to_Z y) .
+Notation scalar_ltb x y :=
+  (Z.ltb (to_Z x) (to_Z y)).
 
-Definition scalar_geb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
-  Z.geb (to_Z x) (to_Z y) .
+Notation scalar_geb x y :=
+  (Z.geb (to_Z x) (to_Z y)).
 
-Definition scalar_gtb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
-  Z.gtb (to_Z x) (to_Z y) .
+Notation scalar_gtb x y :=
+  (Z.gtb (to_Z x) (to_Z y)).
 
-Definition scalar_eqb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
-  Z.eqb (to_Z x) (to_Z y) .
+Notation scalar_eqb x y :=
+  (Z.eqb (to_Z x) (to_Z y)).
 
-Definition scalar_neqb {ty : scalar_ty} (x : scalar ty) (y : scalar ty) : bool :=
-  negb (Z.eqb (to_Z x) (to_Z y)) .
+Notation scalar_neqb x y :=
+  (negb (Z.eqb (to_Z x) (to_Z y))).
 
 
 (** The scalar types *)
-Definition isize := scalar Isize.
-Definition i8    := scalar I8.
-Definition i16   := scalar I16.
-Definition i32   := scalar I32.
-Definition i64   := scalar I64.
-Definition i128  := scalar I128.
-Definition usize := scalar Usize.
-Definition u8    := scalar U8.
-Definition u16   := scalar U16.
-Definition u32   := scalar U32.
-Definition u64   := scalar U64.
-Definition u128  := scalar U128.
+Notation isize := (scalar Isize).
+Notation i8    := (scalar I8).
+Notation i16   := (scalar I16).
+Notation i32   := (scalar I32).
+Notation i64   := (scalar I64).
+Notation i128  := (scalar I128).
+Notation usize := (scalar Usize).
+Notation u8    := (scalar U8).
+Notation u16   := (scalar U16).
+Notation u32   := (scalar U32).
+Notation u64   := (scalar U64).
+Notation u128  := (scalar U128).
 
 (** Negation *)
 Notation isize_neg := (@scalar_neg Isize).

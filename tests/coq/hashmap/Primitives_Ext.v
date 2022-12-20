@@ -18,9 +18,15 @@ Require Import String.
 Require Import Coq.Lists.List.
 Import ListNotations.
 Require Import Coq.Unicode.Utf8.
-Require Import ltac2_string_ident.
+Require ltac2_string_to_ident.
+Require ltac2_ident_to_string.
 
 Module Primitives_Ext.
+
+Ltac string_to_ident s := ltac2_string_to_ident.string_to_ident s.
+
+Notation ident_to_string id :=
+  (ltac2_ident_to_string.ident_to_string id) (only parsing).
 
 (*  +------------------------------+
     | Generic, intuitive utilities |
@@ -46,6 +52,11 @@ Lemma Zpred_le_mono n m : n <= m -> Z.pred n <= m.
 intuition. Qed.
 
 Lemma Zle_antisym {n m} : (n <= m) <-> (m >= n).
+intuition. Qed.
+
+Lemma Zeqb_sym {n m} : (n =? m) = (m =? n).
+remember (n =? m) as B ; induction B ;
+remember (m =? n) as C ; induction C ;
 intuition. Qed.
 
 Lemma repeat_zero {T} {x: T} : repeat x 0 = [].
@@ -100,6 +111,17 @@ simpl (List.length (x :: vec_to_list v)).
 rewrite Nat2Z.inj_succ.
 now apply (Zlt_le_succ _ _ b).
 Defined.
+
+(* Generic lemma that can be defined for all primitive functions. *)
+Lemma vec_push_back_fuel {T} (v: vec T) (x: T) :
+  vec_push_back _ v x <> Fail_ OutOfFuel.
+Proof.
+unfold vec_push_back, vec_bind.
+rewrite res_bind_value.
+set (w := vec_to_list v ++ [x]).
+destruct (Sumbool.sumbool_of_bool
+(scalar_le_max Usize (Z.of_nat (Datatypes.length w)))) ; discriminate.
+Qed.
 
 (*
 Lemma vec_push_success {T} (v: vec T) (x: T) (b: vec_length v < usize_max) :
@@ -309,6 +331,20 @@ rewrite <-(not_true_iff_false (n s= m)).
 apply (neg_equiv scalar_eqb_eq).
 Qed.
 
+Lemma Z_eqb_ne {n m: Z} :
+(n =? m) = false <-> n <> m.
+Proof.
+rewrite <-(not_true_iff_false (n =? m)).
+apply (neg_equiv (Z.eqb_eq _ _)).
+Qed.
+
+Lemma scalar_sub_fuel {ty} (n m: scalar ty) :
+  scalar_sub n m <> Fail_ OutOfFuel.
+Proof.
+unfold scalar_sub, mk_scalar.
+destruct (Sumbool.sumbool_of_bool (scalar_in_bounds ty (to_Z n - to_Z m))) ; discriminate.
+Qed.
+
 (*  +--------------------------+
     | Reasoning on Z and lists |
     +--------------------------+
@@ -326,12 +362,6 @@ Lemma S_scalar_Z_inj {ty} (n m: scalar ty) :
   to_Z n = to_Z m -> n = m.
 Proof.
 Admitted.
-
-Lemma S_eqb_Z {ty} (n m: scalar ty) :
-  (n s= m) = (to_Z n =? to_Z m).
-Proof.
-trivial.
-Qed.
 
 Lemma S_mk_bounded ty (x: Z) :
   scalar_min ty <= x <= scalar_max ty ->
@@ -383,40 +413,52 @@ apply Z2Nat.id.
 apply (S_scalar_bounds n).
 Qed.
 
-(*  +---------+
-    | Tactics |
-    +---------+
+(*  +-------------------+
+    | Tactics - helpers |
+    +-------------------+
 *)
 
-Ltac push_scalar_bounds_tac a :=
-  let Ha := fresh "Ha" in
-  assert (Ha := S_scalar_bounds a);
-  simpl in Ha.
+(* TODO:
+ - Decidable comparisons (Z.eqb)
+ - Induction on scalars & vectors
+ - Introduction of bounds for *all* scalars
+ - Cleanup the ugly code
+*)
 
-(* fffffffffffff *)
-Ltac VEC v x wStr :=
-  let wVal := constr:(vec_push_back _ v x) in
+(* Small helper to create a new id by encompassing one between two strings. *)
+Ltac ltac_new_id prefix id suffix :=
+  let old := constr:(ident_to_string id) in
+  let new := constr:((prefix ++ old ++ suffix)%string) in
+  string_to_ident new.
 
-  assert (b: vec_length v < usize_max);
-  lazymatch goal with [ |- vec_length v < usize_max ] =>
-    push_scalar_bounds_tac v;
-    simpl; try lia
-  | _ =>
-    
-  let h := fresh "H" in
-  let w := string_to_ident wStr in
-  destruct (V_push_back_bounded v x b) as (w, h);
-  clear b;
+(* Registers the bounds of the given scalar in a new hypothesis. *)
+Ltac intro_scalar_bounds n :=
+  let H_id := ltac_new_id ""%string n "_bounds"%string in
+  let H := fresh H_id in
+  assert (H := S_scalar_bounds n);
+  simpl in H.
 
-  let hr := fresh "Hr" in
-  let hw := string_to_ident ("H" ++ wStr)%string in
-  destruct h as (hr, hw);
+(* Does not create an identifier based on n.
+   Used for unknown scalar parameters which could be expressions.
+   TODO: Match identifiers VS expressions to know which tactic to call.
+*)
+Ltac intro_scalar_expr_bounds n :=
+  let H := fresh in
+  assert (H := S_scalar_bounds n);
+  simpl in H.
 
-  rewrite hr;
-  clear hr;
-  try rewrite res_bind_value;
-  try rewrite res_bind_id
-  end.
+Example example_intro_scalar_bounds (a: usize) : to_Z a <= usize_max.
+Proof.
+pose (a_bounds := tt).
+intro_scalar_bounds a.
+intro_scalar_expr_bounds (1%usize).
+exact (proj2 a_bounds0).
+Qed.
+
+(*  +--------------------+
+    | Tactics - rewrites |
+    +--------------------+
+*)
 
 (* A first tactic which tries to abstract over the "S_sub_bounded" lemma. It :
  - Adds the boundary prerequisites as additional goals.
@@ -424,7 +466,7 @@ Ltac VEC v x wStr :=
  - Rewrites the main goal with "S_sub_bounded" existential variable.
  - "clear" some hypothesis and try monadic simplifications.
  *)
-Ltac rewrite_scalar_sub_tac a b xStr :=
+Ltac rewrite_scalar_sub_tac a b x :=
   (* Getting the scalar type *)
   let T := constr:(scalar_ty_of a) in
   let xVal := constr:((to_Z a) - (to_Z b)) in
@@ -433,8 +475,8 @@ Ltac rewrite_scalar_sub_tac a b xStr :=
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
   lazymatch goal with [ |- scalar_min T <= xVal ] =>
-    push_scalar_bounds_tac a;
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds a;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
@@ -442,124 +484,130 @@ Ltac rewrite_scalar_sub_tac a b xStr :=
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
   lazymatch goal with [ |- xVal <= scalar_max T ] =>
-    push_scalar_bounds_tac a;
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds a;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   (* Apply the theorem about subtraction *)
   let H := fresh "H" in
-  let x := string_to_ident xStr in
   destruct (S_sub_bounded a b (conj B1 B2)) as (x, H);
 
   (* Remove previous bounds *)
   clear B1 B2;
-
   (* Obtain the properties about the result *)
+  let Hx := ltac_new_id "H"%string x ""%string in
   let Hr := fresh "Hr" in
-  let Hx := string_to_ident ("H" ++ xStr)%string in
   destruct H as (Hr, Hx);
 
   (* Rewrite the expression then remove the rewriting rule *)
   rewrite Hr;
   clear Hr;
+  
+  (* Add bounds of the new scalar to the context *)
+  intro_scalar_bounds x;
 
   (* Apply simplifications on the result monad *)
   try rewrite res_bind_value;
   try rewrite res_bind_id
-
   end end.
 
 Tactic Notation "rewrite_scalar_sub" constr(a) constr(b) :=
-  rewrite_scalar_sub_tac a b "x"%string.
-
-Tactic Notation "rewrite_scalar_sub" constr(a) constr(b) "as" constr(x) :=
+  let x := fresh "x" in
   rewrite_scalar_sub_tac a b x.
+
+Tactic Notation "rewrite_scalar_sub" constr(a) constr(b) "as" simple_intropattern(x) :=
+  let x' := fresh x in
+  rewrite_scalar_sub_tac a b x'.
 
 (* Other tactics, mainly implemented with copypaste *)
 
 (* scalar_add *)
-Ltac rewrite_scalar_add_tac a b xStr :=
+Ltac rewrite_scalar_add_tac a b x :=
   let T := constr:(scalar_ty_of a) in
   let xVal := constr:((to_Z a) + (to_Z b)) in
 
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
   lazymatch goal with [ |- scalar_min T <= xVal ] =>
-    push_scalar_bounds_tac a;
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds a;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
   lazymatch goal with [ |- xVal <= scalar_max T ] =>
-    push_scalar_bounds_tac a;
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds a;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let H := fresh "H" in
-  let x := string_to_ident xStr in
   destruct (S_add_bounded a b (conj B1 B2)) as (x, H);
   clear B1 B2;
 
+  let Hx := ltac_new_id "H"%string x ""%string in
   let Hr := fresh "Hr" in
-  let Hx := string_to_ident ("H" ++ xStr)%string in
   destruct H as (Hr, Hx);
 
   rewrite Hr;
   clear Hr;
+  intro_scalar_bounds x;
+
   try rewrite res_bind_value;
   try rewrite res_bind_id
   end end.
 
 Tactic Notation "rewrite_scalar_add" constr(a) constr(b) :=
-  rewrite_scalar_add_tac a b "x"%string.
+  let x := fresh "x" in
+  rewrite_scalar_add_tac a b x.
 
-Tactic Notation "rewrite_scalar_add" constr(a) constr(b) "as" constr(x) :=
+Tactic Notation "rewrite_scalar_add" constr(a) constr(b) "as" simple_intropattern(x) :=
   rewrite_scalar_add_tac a b x.
 
 (* scalar_mul *)
-Ltac rewrite_scalar_mul_tac a b xStr :=
+Ltac rewrite_scalar_mul_tac a b x :=
   let T := constr:(scalar_ty_of a) in
   let xVal := constr:((to_Z a) * (to_Z b)) in
 
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
   lazymatch goal with [ |- scalar_min T <= xVal ] =>
-    push_scalar_bounds_tac a;
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds a;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
   lazymatch goal with [ |- xVal <= scalar_max T ] =>
-    push_scalar_bounds_tac a;
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds a;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let H := fresh "H" in
-  let x := string_to_ident xStr in
   destruct (S_mul_bounded a b (conj B1 B2)) as (x, H);
   clear B1 B2;
 
+  let Hx := ltac_new_id "H"%string x ""%string in
   let Hr := fresh "Hr" in
-  let Hx := string_to_ident ("H" ++ xStr)%string in
   destruct H as (Hr, Hx);
 
   rewrite Hr;
   clear Hr;
+  intro_scalar_bounds x;
+  
   try rewrite res_bind_value;
   try rewrite res_bind_id
   end end.
 
 Tactic Notation "rewrite_scalar_mul" constr(a) constr(b) :=
-  rewrite_scalar_mul_tac a b "x"%string.
+  let x := fresh "x" in
+  rewrite_scalar_mul_tac a b x.
 
-Tactic Notation "rewrite_scalar_mul" constr(a) constr(b) "as" constr(x) :=
+Tactic Notation "rewrite_scalar_mul" constr(a) constr(b) "as" simple_intropattern(x) :=
   rewrite_scalar_mul_tac a b x.
 
 (* scalar_div *)
@@ -570,49 +618,51 @@ Ltac rewrite_scalar_div_tac a b xStr :=
   let B0 := fresh "B0" in
   assert (B0: to_Z b <> 0);
   lazymatch goal with [ |- to_Z b <> 0 ] =>
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
   lazymatch goal with [ |- scalar_min T <= xVal ] =>
-    push_scalar_bounds_tac a;
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds a;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
   lazymatch goal with [ |- xVal <= scalar_max T ] =>
-    push_scalar_bounds_tac a;
-    push_scalar_bounds_tac b;
+    intro_scalar_expr_bounds a;
+    intro_scalar_expr_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let H := fresh "H" in
-  let x := string_to_ident xStr in
   destruct (S_div_bounded a b B0 (conj B1 B2)) as (x, H);
   clear B0 B1 B2;
 
+  let Hx := ltac_new_id "H"%string x ""%string in
   let Hr := fresh "Hr" in
-  let Hx := string_to_ident ("H" ++ xStr)%string in
   destruct H as (Hr, Hx);
 
   rewrite Hr;
   clear Hr;
+  intro_scalar_bounds x;
+  
   try rewrite res_bind_value;
   try rewrite res_bind_id
   end end end.
 
 Tactic Notation "rewrite_scalar_div" constr(a) constr(b) :=
-  rewrite_scalar_div_tac a b "x"%string.
+  let x := fresh "x" in
+  rewrite_scalar_div_tac a b x.
 
-Tactic Notation "rewrite_scalar_div" constr(a) constr(b) "as" constr(x) :=
+Tactic Notation "rewrite_scalar_div" constr(a) constr(b) "as" simple_intropattern(x) :=
   rewrite_scalar_div_tac a b x.
 
 (* vec_push_back *)
-Ltac rewrite_vec_push_back_tac v x wStr :=
+Ltac rewrite_vec_push_back_tac v x w :=
   let wVal := constr:(vec_push_back _ v x) in
 
   let B := fresh "B" in
@@ -620,47 +670,177 @@ Ltac rewrite_vec_push_back_tac v x wStr :=
   lazymatch goal with [ |- vec_length v < usize_max ] =>
     let H := fresh "H" in
     assert (H := vec_len_in_usize v);
-    simpl; try lia
+    simpl in H |- *; try lia
   | [ |- _ ] =>
 
   let H := fresh "H" in
-  let w := string_to_ident wStr in
   destruct (V_push_back_bounded v x B) as (w, H);
   clear B;
 
+  let Hw := ltac_new_id "H"%string w ""%string in
   let Hr := fresh "Hr" in
-  let Hw := string_to_ident ("H" ++ wStr)%string in
   destruct H as (Hr, Hw);
 
   rewrite Hr;
   clear Hr;
+  
   try rewrite res_bind_value;
   try rewrite res_bind_id
   end.
 
 Tactic Notation "rewrite_vec_push_back" constr(v) constr(x) :=
-rewrite_vec_push_back_tac v x "w"%string.
-
-Tactic Notation "rewrite_vec_push_back" constr(v) constr(x) "as" constr(w) :=
+  let w := fresh "w" in
   rewrite_vec_push_back_tac v x w.
+
+Tactic Notation "rewrite_vec_push_back" constr(v) constr(x) "as" simple_intropattern(w) :=
+  rewrite_vec_push_back_tac v x w.
+
+(*  +-----------------------+
+    | Tactics - comparisons |
+    +-----------------------+
+*)
+
+Ltac destruct_eqb_tac a b h :=
+  let B := fresh "B" in
+  set (B := to_Z a =? to_Z b);
+  assert (h: (to_Z a =? to_Z b) = B) by intuition;
+  induction B;
+  lazymatch goal with
+  | [ h: (to_Z a =? to_Z b) = true |- _ ] =>
+    rewrite Z.eqb_eq in h;
+    (* TODO: simplification is duplicated to be able to match on expressions. Perhaps there is a way to avoid that ? *)
+    simpl (to_Z a) in *;
+    simpl (to_Z b) in *;
+    try lia
+  | [ h: (to_Z a =? to_Z b) = false |- _ ] =>
+    rewrite Z_eqb_ne in h;
+    simpl (to_Z a) in *;
+    simpl (to_Z b) in *;
+    try lia
+  end.
+
+Tactic Notation "destruct_eqb" constr(a) constr(b) :=
+  let h := fresh in
+  destruct_eqb_tac a b h.
+
+Tactic Notation "destruct_eqb" constr(a) constr(b) "as" simple_intropattern(h) :=
+  destruct_eqb_tac a b h.
+
+(* TODO: Define the same tactic for the other comparisons *)
+
+(*  +----------------------+
+    | Tactics - inductions |
+    +----------------------+
+*)
+
+(* TODO: vec to list induction *)
+
+(* Usize to nat induction.
+   TODO: Support all unsigned scalars.
+*)
+Ltac induction_usize_as_nat_tac s n :=
+  let HeqN := ltac_new_id "Heq"%string n ""%string in
+  remember (usize_to_nat s) as n;
+  apply eq_sym in HeqN;
+  revert s HeqN;
+  induction n; intros s HeqN;
+  apply (f_equal Z.of_nat) in HeqN;
+  rewrite usize_nat_to_Z in HeqN;
+  simpl in HeqN.
+  (* TODO: IH hypothesis should be on Z. *)
+
+Tactic Notation "induction_usize_to_nat" simple_intropattern(s) "as" simple_intropattern(n) :=
+  induction_usize_as_nat_tac s n.
+
+(* Fuel destruction.
+   TODO: How can it be applied automatically ?
+   We need to detect fuel parameters, do we assume that they are the only "nat" values ?
+*)
+Ltac siphon_fuel fuel :=
+  (* TODO:
+   - Lookup in which function is the fuel called.
+   - Unfold it and lookup again until the fuel is matched.
+   - Destruct the fuel, try to solve the 0 case (with e.g. intuition).
+   - Fold the previously unfolded fixpoint (it's expanded twice).
+
+   If the function is already unfolded, detect match on fuel.
+  *)
+  (* Do we want to recursively unfold functions ?
+     Here we only allow it once.
+  *)
+  lazymatch goal with
+  (* How to match the fixpoint ?
+  
+  | [ |- context[ (match _ with _ => _ end) fuel ] ] =>
+    destruct fuel;
+    only 1: intuition *)
+  | [ |- context[ ?F fuel ] ] =>
+    unfold F;
+    destruct fuel;
+    only 1: intuition;
+    fold F
+  end.
 
 (*  +-------+
     | Tests |
     +-------+
 *)
 
-Lemma add_assoc {a} :
-  match (x <- usize_sub a (1%usize); Return x) with
-  | Return v => ∃n, (1 + n)%nat = usize_to_nat a
-  | Fail_ OutOfFuel => False
-  | Fail_ Failure   => True
+Fixpoint usize_identity (fuel: nat) (s: usize) : result usize :=
+  match fuel with
+  | 0%nat => Fail_ OutOfFuel
+  | S fuel =>
+    if (s s= 0%usize) then Return 0%usize else
+      x <- usize_sub s (1%usize);
+      y <- usize_identity fuel x;
+      usize_add y (1%usize)
+  end.
+
+Lemma usize_identity_shape fuel s :
+  match usize_identity fuel s with
+  | Return v => s = v
+  | Fail_ OutOfFuel => True
+  | Fail_ Failure   => False
   end.
 Proof.
+(* induction *)
+revert fuel.
+induction_usize_to_nat s as S;
+intro fuel;
+siphon_fuel fuel;
+destruct_eqb s (0%usize) as Seq0.
 
-(* Trade-off between String and List notations *)
-rewrite_scalar_sub a (1%usize) as "w"%string.
-- admit.
-- admit.
-Admitted.
+(* 0 case *)
+1: now apply scalar_Z_inj.
+
+(* successor case: *)
+
+intro_scalar_bounds s.
+rewrite_scalar_sub s (1%usize) as r.
+
+(* Apply IH *)
+assert (B: usize_to_nat r = S). 1: {
+  (* I'm sure there is a simple tactic for that ... *)
+  cut (Z.of_nat (usize_to_nat r) = Z.of_nat S). intuition.
+  (* Can this fit in the induction ? *)
+  rewrite usize_nat_to_Z.
+  (* Those simplification seem common (see below).
+     Is there a way to automate them ?
+  *)
+  simpl (to_Z 1 %usize) in *.
+  lia.
+}
+assert (H := IHS r B fuel).
+
+destruct (usize_identity fuel r). 2: exact H.
+rewrite res_bind_value.
+rewrite <-H.
+simpl (to_Z 1 %usize) in *.
+
+rewrite_scalar_add r (1%usize) as r0.
+simpl (to_Z 1 %usize) in *.
+apply scalar_Z_inj.
+lia.
+Qed.
 
 End Primitives_Ext.
