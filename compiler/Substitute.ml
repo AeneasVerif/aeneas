@@ -27,6 +27,17 @@ let ty_substitute (rsubst : 'r1 -> 'r2) (tsubst : T.TypeVarId.id -> 'r2 T.ty)
 
   visitor#visit_ty () ty
 
+let rty_substitute (rsubst : T.RegionId.id -> T.RegionId.id)
+    (tsubst : T.TypeVarId.id -> T.rty) (ty : T.rty) : T.rty =
+  let rsubst r =
+    match r with T.Static -> T.Static | T.Var rid -> T.Var (rsubst rid)
+  in
+  ty_substitute rsubst tsubst ty
+
+let ety_substitute (tsubst : T.TypeVarId.id -> T.ety) (ty : T.ety) : T.ety =
+  let rsubst r = r in
+  ty_substitute rsubst tsubst ty
+
 (** Convert an {!T.rty} to an {!T.ety} by erasing the region variables *)
 let erase_regions (ty : T.rty) : T.ety =
   ty_substitute (fun _ -> T.Erased) (fun vid -> T.TypeVar vid) ty
@@ -354,7 +365,7 @@ let substitute_signature (asubst : T.RegionGroupId.id -> V.AbstractionId.id)
   let regions_hierarchy = List.map subst_region_group sg.A.regions_hierarchy in
   { A.regions_hierarchy; inputs; output }
 
-(** Substitute identifiers in a type *)
+(** Substitute type variable identifiers in a type *)
 let ty_substitute_ids (tsubst : T.TypeVarId.id -> T.TypeVarId.id) (ty : 'r T.ty)
     : 'r T.ty =
   let open T in
@@ -440,6 +451,15 @@ let typed_value_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
   (subst_ids_visitor rsubst rvsubst tsubst ssubst bsubst asubst)
     #visit_typed_value v
 
+let typed_value_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
+    (v : V.typed_value) : V.typed_value =
+  typed_value_subst_ids rsubst
+    (fun x -> x)
+    (fun x -> x)
+    (fun x -> x)
+    (fun x -> x)
+    v
+
 let typed_avalue_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
     (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
     (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
@@ -457,6 +477,14 @@ let abs_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
     (bsubst : V.BorrowId.id -> V.BorrowId.id)
     (asubst : V.AbstractionId.id -> V.AbstractionId.id) (x : V.abs) : V.abs =
   (subst_ids_visitor rsubst rvsubst tsubst ssubst bsubst asubst)#visit_abs x
+
+let env_subst_ids (rsubst : T.RegionId.id -> T.RegionId.id)
+    (rvsubst : T.RegionVarId.id -> T.RegionVarId.id)
+    (tsubst : T.TypeVarId.id -> T.TypeVarId.id)
+    (ssubst : V.SymbolicValueId.id -> V.SymbolicValueId.id)
+    (bsubst : V.BorrowId.id -> V.BorrowId.id)
+    (asubst : V.AbstractionId.id -> V.AbstractionId.id) (x : C.env) : C.env =
+  (subst_ids_visitor rsubst rvsubst tsubst ssubst bsubst asubst)#visit_env x
 
 let typed_avalue_subst_rids (rsubst : T.RegionId.id -> T.RegionId.id)
     (x : V.typed_avalue) : V.typed_avalue =

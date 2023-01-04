@@ -142,6 +142,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       ^ T.RegionGroupId.to_string back_id
       ^ "\n- loop_id: "
       ^ Print.option_to_string V.LoopId.to_string loop_id
+      ^ "\n- is_regular_return: "
+      ^ Print.bool_to_string is_regular_return
       ^ "\n- inside_loop: "
       ^ Print.bool_to_string inside_loop
       ^ "\n- ctx:\n"

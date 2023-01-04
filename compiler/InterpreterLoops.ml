@@ -215,21 +215,17 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
     end
   in
 
-  List.iter
-    (fun (ee : C.env_elem) ->
-      match ee with
-      | Var _ | Frame -> ()
-      | Abs abs ->
-          let abs_id = abs.abs_id in
-          if explore abs then (
-            abs_to_borrows :=
-              V.AbstractionId.Map.add abs_id V.BorrowId.Set.empty
-                !abs_to_borrows;
-            abs_to_loans :=
-              V.AbstractionId.Map.add abs_id V.BorrowId.Set.empty !abs_to_loans;
-            abs_ids := abs.abs_id :: !abs_ids;
-            List.iter (explore_abs#visit_typed_avalue abs.abs_id) abs.avalues)
-          else ())
+  C.env_iter_abs
+    (fun abs ->
+      let abs_id = abs.abs_id in
+      if explore abs then (
+        abs_to_borrows :=
+          V.AbstractionId.Map.add abs_id V.BorrowId.Set.empty !abs_to_borrows;
+        abs_to_loans :=
+          V.AbstractionId.Map.add abs_id V.BorrowId.Set.empty !abs_to_loans;
+        abs_ids := abs.abs_id :: !abs_ids;
+        List.iter (explore_abs#visit_typed_avalue abs.abs_id) abs.avalues)
+      else ())
     env;
 
   (* Rem.: there is no need to reverse the abs ids, because we explored the environment
@@ -244,6 +240,96 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
     borrow_loan_to_abs = !borrow_loan_to_abs;
   }
 
+(** Refresh the ids of the fresh abstractions.
+
+    We do this because {!prepare_ashared_loans} introduces some non-fixed
+    abstractions in contexts which are later joined: we have to make sure
+    two contexts we join don't have non-fixed abstractions with the same ids.
+ *)
+let refresh_abs (old_abs : V.AbstractionId.Set.t) (ctx : C.eval_ctx) :
+    C.eval_ctx =
+  let ids, _ = compute_context_ids ctx in
+  let abs_to_refresh = V.AbstractionId.Set.diff ids.aids old_abs in
+  let aids_subst =
+    List.map
+      (fun id -> (id, C.fresh_abstraction_id ()))
+      (V.AbstractionId.Set.elements abs_to_refresh)
+  in
+  let aids_subst = V.AbstractionId.Map.of_list aids_subst in
+  let subst id =
+    match V.AbstractionId.Map.find_opt id aids_subst with
+    | None -> id
+    | Some id -> id
+  in
+  let env =
+    Subst.env_subst_ids
+      (fun x -> x)
+      (fun x -> x)
+      (fun x -> x)
+      (fun x -> x)
+      (fun x -> x)
+      subst ctx.env
+  in
+  { ctx with C.env }
+
+(** Reorder the loans and borrows in the fresh abstractions.
+
+    We do this in order to enforce some structure in the environments: this
+    allows us to find fixed-points. Note that this function needs to be
+    called typically after we merge abstractions together (see {!collapse_ctx}
+    for instance).
+ *)
+let reorder_loans_borrows_in_fresh_abs (old_abs_ids : V.AbstractionId.Set.t)
+    (ctx : C.eval_ctx) : C.eval_ctx =
+  let reorder_in_fresh_abs (abs : V.abs) : V.abs =
+    (* Split between the loans and borrows *)
+    let is_borrow (av : V.typed_avalue) : bool =
+      match av.V.value with
+      | ABorrow _ -> true
+      | ALoan _ -> false
+      | _ -> raise (Failure "Unexpected")
+    in
+    let aborrows, aloans = List.partition is_borrow abs.V.avalues in
+
+    (* Reoder the borrows, and the loans.
+
+       After experimenting, it seems that a good way of reordering the loans
+       and the borrows to find fixed points is simply to sort them by increasing
+       order of id (taking the smallest id of a set of ids, in case of sets).
+    *)
+    let get_borrow_id (av : V.typed_avalue) : V.BorrowId.id =
+      match av.V.value with
+      | V.ABorrow (V.AMutBorrow (bid, _) | V.ASharedBorrow bid) -> bid
+      | _ -> raise (Failure "Unexpected")
+    in
+    let get_loan_id (av : V.typed_avalue) : V.BorrowId.id =
+      match av.V.value with
+      | V.ALoan (V.AMutLoan (lid, _)) -> lid
+      | V.ALoan (V.ASharedLoan (lids, _, _)) -> V.BorrowId.Set.min_elt lids
+      | _ -> raise (Failure "Unexpected")
+    in
+    (* We use ordered maps to reorder the borrows and loans *)
+    let reorder (get_bid : V.typed_avalue -> V.BorrowId.id)
+        (values : V.typed_avalue list) : V.typed_avalue list =
+      List.map snd
+        (V.BorrowId.Map.bindings
+           (V.BorrowId.Map.of_list (List.map (fun v -> (get_bid v, v)) values)))
+    in
+    let aborrows = reorder get_borrow_id aborrows in
+    let aloans = reorder get_loan_id aloans in
+    let avalues = List.append aborrows aloans in
+    { abs with V.avalues }
+  in
+
+  let reorder_in_abs (abs : V.abs) =
+    if V.AbstractionId.Set.mem abs.abs_id old_abs_ids then abs
+    else reorder_in_fresh_abs abs
+  in
+
+  let env = C.env_map_abs reorder_in_abs ctx.env in
+
+  { ctx with C.env }
+
 (** Destructure all the new abstractions *)
 let destructure_new_abs (loop_id : V.LoopId.id)
     (old_abs_ids : V.AbstractionId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
@@ -254,21 +340,121 @@ let destructure_new_abs (loop_id : V.LoopId.id)
     not (V.AbstractionId.Set.mem id old_abs_ids)
   in
   let env =
-    List.map
-      (fun ee ->
-        match ee with
-        | C.Var _ | C.Frame -> ee
-        | C.Abs abs ->
-            if is_fresh_abs_id abs.abs_id then
-              let abs =
-                destructure_abs abs_kind can_end destructure_shared_values ctx
-                  abs
-              in
-              C.Abs abs
-            else ee)
+    C.env_map_abs
+      (fun abs ->
+        if is_fresh_abs_id abs.abs_id then
+          let abs =
+            destructure_abs abs_kind can_end destructure_shared_values ctx abs
+          in
+          abs
+        else abs)
       ctx.env
   in
   { ctx with env }
+
+(** Decompose the shared avalues, so as not to have nested shared loans
+    inside of abstractions.
+
+    For instance:
+    {[
+      abs'0 { shared_aloan ls0 (true, shared_loan ls1 s0) _ }
+
+        ~~>
+
+      abs'0 {
+        shared_aloan ls0 (true, s0) _
+        shared_aloan ls1 s1 _
+      }
+    ]}
+
+    Note that we decompose only in the "fresh" abstractions (this is controled
+    by the [old_aids] parameter).
+
+    TODO: how to factorize with {!destructure_abs}?
+ *)
+let decompose_shared_avalues (loop_id : V.LoopId.id)
+    (old_aids : V.AbstractionId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =
+  (* Decompose the shared avalues in a fresh abstraction. We only decompose
+     in fresh (i.e., non-fixed) abstractions: {!decompose_in_abs} below
+     ignores the fixed abstractions and delegates to this function *)
+  let decompose_in_fresh_abs (abs : V.abs) : V.abs =
+    let new_loans = ref [] in
+    (* When decomposing, we need to duplicate the symbolic values (we
+       simply introduce fresh ids) *)
+    let mk_value_with_fresh_sids (v : V.typed_value) : V.typed_value =
+      let visitor =
+        object
+          inherit [_] V.map_typed_avalue
+          method! visit_symbolic_value_id _ _ = C.fresh_symbolic_value_id ()
+        end
+      in
+      visitor#visit_typed_value () v
+    in
+    (* Visit the values: whenever we enter a shared loan (which is necessarily
+       a strict subvalue of a shared aloan, because we only explore abstractions)
+       we move it outside (we remove the shared loan, register a shared value
+       to insert in the abstraction, and use fresh symbolic values in this new
+       shared value).
+    *)
+    let loan_visitor =
+      object (self : 'self)
+        inherit [_] V.map_typed_avalue as super
+
+        method! visit_typed_value env v =
+          match v.V.value with
+          | V.Loan (V.SharedLoan (lids, sv)) ->
+              let sv = self#visit_typed_value env sv in
+
+              (* Introduce fresh symbolic values for the new loan *)
+              let nsv = mk_value_with_fresh_sids sv in
+              new_loans := List.append !new_loans [ (lids, nsv) ];
+
+              (* Return *)
+              sv
+          | _ -> super#visit_typed_value env v
+      end
+    in
+    let rid = T.RegionId.Set.min_elt abs.regions in
+
+    (* We registered new loans to add in the abstraction: actually create those
+       loans, and insert them in the abstraction *)
+    let mk_ashared_loan (lids : V.BorrowId.Set.t) (sv : V.typed_value) :
+        V.typed_avalue =
+      (* There shouldn't be nested borrows *)
+      let sv_ty = ety_no_regions_to_rty sv.V.ty in
+      let ty = T.Ref (T.Var rid, sv_ty, T.Shared) in
+      let child_av = mk_aignored sv_ty in
+      let value = V.ALoan (V.ASharedLoan (lids, sv, child_av)) in
+      { V.value; ty }
+    in
+    let avalues =
+      List.map
+        (fun av ->
+          new_loans := [];
+          let av = loan_visitor#visit_typed_avalue () av in
+          let new_loans =
+            List.map (fun (lids, sv) -> mk_ashared_loan lids sv) !new_loans
+          in
+          av :: List.rev new_loans)
+        abs.V.avalues
+    in
+    let avalues = List.concat avalues in
+    let abs_id = C.fresh_abstraction_id () in
+    let kind = V.Loop (loop_id, None, V.LoopSynthInput) in
+    let can_end = true in
+    let abs = { abs with V.abs_id; kind; can_end; avalues } in
+    abs
+  in
+
+  (* Decompose only in the fresh abstractions *)
+  let decompose_in_abs abs =
+    if V.AbstractionId.Set.mem abs.V.abs_id old_aids then abs
+    else decompose_in_fresh_abs abs
+  in
+
+  (* Apply in the environment *)
+  let env = C.env_map_abs decompose_in_abs ctx.env in
+  { ctx with C.env }
 
 (** Collapse an environment.
 
@@ -277,7 +463,7 @@ let destructure_new_abs (loop_id : V.LoopId.id)
 
     We do the following:
     - we look for all the *new* dummy values (we use sets of old ids to decide
-      wether a value is new or not)
+      wether a value is new or not) and convert them into abstractions
     - whenever there is a new abstraction in the context, and some of its
       its borrows are associated to loans in another new abstraction, we
       merge them.
@@ -303,9 +489,9 @@ let destructure_new_abs (loop_id : V.LoopId.id)
     ]}
     
     In this new environment, the dummy variables [_@1], [_@2] and [_@3] are
-    considered as new. We collapse them.
+    considered as new.
     
-    We first convert the dummy values to abstractions. It gives:
+    We first convert the new dummy values to abstractions. It gives:
     {[
       abs@0 { ML l0 }
       ls -> MB l4 (s@6 : loops::List<T>)
@@ -315,7 +501,7 @@ let destructure_new_abs (loop_id : V.LoopId.id)
       abs@3 { MB l1 }
     ]}
 
-    We then merge those abstractions together. It gives:
+    We finally merge the new abstractions together. It gives:
     {[
       abs@0 { ML l0 }
       ls -> MB l4 (s@6 : loops::List<T>)
@@ -367,12 +553,18 @@ let collapse_ctx (loop_id : V.LoopId.id)
                else [ ee ])
          ctx0.env)
   in
+  let ctx = { ctx0 with C.env } in
   log#ldebug
     (lazy
       ("collapse_ctx: after converting values to abstractions:\n"
-     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
-      ^ eval_ctx_to_string { ctx0 with env }
-      ^ "\n\n"));
+     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n\n"
+      ));
+
+  log#ldebug
+    (lazy
+      ("collapse_ctx: after decomposing the shared values in the abstractions:\n"
+     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n\n"
+      ));
 
   (* Explore all the *new* abstractions, and compute various maps *)
   let explore (abs : V.abs) = is_fresh_abs_id abs.abs_id in
@@ -402,7 +594,7 @@ let collapse_ctx (loop_id : V.LoopId.id)
     V.AbstractionId.Map.of_list (List.map (fun id -> (id, UF.make id)) abs_ids)
   in
 
-  let ctx = ref { ctx0 with C.env } in
+  let ctx = ref ctx in
 
   (* Merge all the mergeable abs.
 
@@ -436,19 +628,21 @@ let collapse_ctx (loop_id : V.LoopId.id)
                   (* If the two ids are the same, it means the abstractions were already merged *)
                   if abs_id0 = abs_id1 then ()
                   else (
+                    (* We actually need to merge the abstractions *)
+
+                    (* Debug *)
                     log#ldebug
                       (lazy
-                        ("collapse_ctx: merging abstractions: "
+                        ("collapse_ctx: merging abstraction "
+                        ^ V.AbstractionId.to_string abs_id1
+                        ^ " into "
                         ^ V.AbstractionId.to_string abs_id0
-                        ^ " and "
-                        ^ V.AbstractionId.to_string abs_id1));
-
-                    (* We actually need to merge the abstractions *)
+                        ^ ":\n\n" ^ eval_ctx_to_string !ctx));
 
                     (* Update the environment - pay attention to the order: we
                        we merge [abs_id1] *into* [abs_id0] *)
                     let nctx, abs_id =
-                      merge_abstractions abs_kind can_end merge_funs !ctx
+                      merge_into_abstraction abs_kind can_end merge_funs !ctx
                         abs_id1 abs_id0
                     in
                     ctx := nctx;
@@ -460,8 +654,22 @@ let collapse_ctx (loop_id : V.LoopId.id)
         bids)
     abs_ids;
 
+  log#ldebug
+    (lazy
+      ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+     ^ "\n\n- after collapse:\n" ^ eval_ctx_to_string !ctx ^ "\n\n"));
+
+  (* Reorder the loans and borrows in the fresh abstractions *)
+  let ctx = reorder_loans_borrows_in_fresh_abs old_ids.aids !ctx in
+
+  log#ldebug
+    (lazy
+      ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+     ^ "\n\n- after collapse and reorder borrows/loans:\n"
+     ^ eval_ctx_to_string ctx ^ "\n\n"));
+
   (* Return the new context *)
-  !ctx
+  ctx
 
 (** Match two types during a join. *)
 let rec match_types (match_distinct_types : 'r T.ty -> 'r T.ty -> 'r T.ty)
@@ -513,8 +721,22 @@ module type Matcher = sig
   (** The input ADTs don't have the same variant *)
   val match_distinct_adts : T.ety -> V.adt_value -> V.adt_value -> V.typed_value
 
-  (** The meta-value is the result of a match *)
-  val match_shared_borrows : T.ety -> V.borrow_id -> V.borrow_id -> V.borrow_id
+  (** The meta-value is the result of a match.
+
+      We take an additional function as input, which acts as a matcher over
+      typed values, to be able to lookup the shared values and match them.
+      We do this for shared borrows (and not, e.g., mutable borrows) because
+      shared borrows introduce indirections, while mutable borrows carry the
+      borrowed values with them: we might want to explore and match those
+      borrowed values, in which case we have to manually look them up before
+      calling the match function.
+   *)
+  val match_shared_borrows :
+    (V.typed_value -> V.typed_value -> V.typed_value) ->
+    T.ety ->
+    V.borrow_id ->
+    V.borrow_id ->
+    V.borrow_id
 
   (** The input parameters are:
       - [ty]
@@ -707,7 +929,7 @@ module Match (M : Matcher) = struct
         let bc =
           match (bc0, bc1) with
           | SharedBorrow bid0, SharedBorrow bid1 ->
-              let bid = M.match_shared_borrows ty bid0 bid1 in
+              let bid = M.match_shared_borrows match_rec ty bid0 bid1 in
               V.SharedBorrow bid
           | MutBorrow (bid0, bv0), MutBorrow (bid1, bv1) ->
               let bv = match_rec bv0 bv1 in
@@ -948,7 +1170,7 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
     (* No borrows, no loans: we can introduce a symbolic value *)
     mk_fresh_symbolic_typed_value_from_ety V.LoopJoin ty
 
-  let match_shared_borrows (ty : T.ety) (bid0 : V.borrow_id)
+  let match_shared_borrows _ (ty : T.ety) (bid0 : V.borrow_id)
       (bid1 : V.borrow_id) : V.borrow_id =
     if bid0 = bid1 then bid0
     else
@@ -1199,7 +1421,7 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : V.LoopId.id)
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
        the one from the left), because we will merge those regions together
-       anyway (see the comments for {!merge_abstractions}).
+       anyway (see the comments for {!merge_into_abstraction}).
     *)
     let ty = ty0 in
     let child = child0 in
@@ -1209,8 +1431,12 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : V.LoopId.id)
 
   let merge_ashared_borrows id ty0 ty1 =
     (* Sanity checks *)
-    assert (not (ty_has_borrows ctx.type_context.type_infos ty0));
-    assert (not (ty_has_borrows ctx.type_context.type_infos ty1));
+    let _ =
+      let _, ty0, _ = ty_as_ref ty0 in
+      let _, ty1, _ = ty_as_ref ty1 in
+      assert (not (ty_has_borrows ctx.type_context.type_infos ty0));
+      assert (not (ty_has_borrows ctx.type_context.type_infos ty1))
+    in
 
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
@@ -1253,11 +1479,11 @@ let mk_collapse_ctx_merge_duplicate_funs (loop_id : V.LoopId.id)
     merge_ashared_loans;
   }
 
-let merge_abstractions (loop_id : V.LoopId.id) (abs_kind : V.abs_kind)
+let merge_into_abstraction (loop_id : V.LoopId.id) (abs_kind : V.abs_kind)
     (can_end : bool) (ctx : C.eval_ctx) (aid0 : V.AbstractionId.id)
     (aid1 : V.AbstractionId.id) : C.eval_ctx * V.AbstractionId.id =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs loop_id ctx in
-  merge_abstractions abs_kind can_end (Some merge_funs) ctx aid0 aid1
+  merge_into_abstraction abs_kind can_end (Some merge_funs) ctx aid0 aid1
 
 (** Collapse an environment, merging the duplicated borrows/loans.
 
@@ -1288,9 +1514,9 @@ let collapse_ctx_with_merge (loop_id : V.LoopId.id) (old_ids : ids_sets)
 
     Note that when joining the values mapped to by the non-dummy variables, we
     may introduce duplicated borrows. Also, we don't match the abstractions
-    which are not in the prefix, which can also lead to borrow duplications. For
-    this reason, the environment needs to be collapsed afterwards to get rid of
-    those duplicated loans/borrows.
+    which are not in the prefix, and this can also lead to borrow
+    duplications. For this reason, the environment needs to be collapsed
+    afterwards to get rid of those duplicated loans/borrows.
 
     For instance, if we have:
     {[
@@ -1538,6 +1764,8 @@ module type MatchCheckEquivState = sig
   val sid_map : V.SymbolicValueId.InjSubst.t ref
   val sid_to_value_map : V.typed_value V.SymbolicValueId.Map.t ref
   val aid_map : V.AbstractionId.InjSubst.t ref
+  val lookup_shared_value_in_ctx0 : V.BorrowId.id -> V.typed_value
+  val lookup_shared_value_in_ctx1 : V.BorrowId.id -> V.typed_value
 end
 
 (** An auxiliary matcher that we use for two purposes:
@@ -1648,9 +1876,21 @@ module MakeCheckEquivMatcher (S : MatchCheckEquivState) = struct
       (_adt1 : V.adt_value) : V.typed_value =
     raise Distinct
 
-  let match_shared_borrows (_ty : T.ety) (bid0 : V.borrow_id)
-      (bid1 : V.borrow_id) : V.borrow_id =
+  let match_shared_borrows
+      (match_typed_values : V.typed_value -> V.typed_value -> V.typed_value)
+      (_ty : T.ety) (bid0 : V.borrow_id) (bid1 : V.borrow_id) : V.borrow_id =
     let bid = match_borrow_id bid0 bid1 in
+    (* If we don't check for equivalence (i.e., we apply a fixed-point),
+       we lookup the shared values and match them.
+    *)
+    let _ =
+      if S.check_equiv then ()
+      else
+        let v0 = S.lookup_shared_value_in_ctx0 bid0 in
+        let v1 = S.lookup_shared_value_in_ctx1 bid1 in
+        let _ = match_typed_values v0 v1 in
+        ()
+    in
     bid
 
   let match_mut_borrows (_ty : T.ety) (bid0 : V.borrow_id)
@@ -1790,10 +2030,17 @@ type ids_maps = {
     If [false], compute a mapping from the first context to the second context,
     in the sense of [match_ctx_with_target].
 
+    The lookup functions are used to match the shared values when [check_equiv]
+    is [false] (we sometimes use [match_ctxs] on partial environments, meaning
+    we have to lookup the shared values in the complete environment, otherwise
+    we miss some mappings).
+
     We return an optional ids map: [Some] if the match succeeded, [None] otherwise.
  *)
-let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
-    (ctx1 : C.eval_ctx) : ids_maps option =
+let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets)
+    (lookup_shared_value_in_ctx0 : V.BorrowId.id -> V.typed_value)
+    (lookup_shared_value_in_ctx1 : V.BorrowId.id -> V.typed_value)
+    (ctx0 : C.eval_ctx) (ctx1 : C.eval_ctx) : ids_maps option =
   log#ldebug
     (lazy
       ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
@@ -1851,6 +2098,8 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     let sid_map = sid_map
     let sid_to_value_map = sid_to_value_map
     let aid_map = aid_map
+    let lookup_shared_value_in_ctx0 = lookup_shared_value_in_ctx0
+    let lookup_shared_value_in_ctx1 = lookup_shared_value_in_ctx1
   end in
   let module CEM = MakeCheckEquivMatcher (S) in
   let module M = Match (CEM) in
@@ -1878,10 +2127,6 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
 
   (* Rem.: this function raises exceptions of type [Distinct] *)
   let match_abstractions (abs0 : V.abs) (abs1 : V.abs) : unit =
-    log#ldebug
-      (lazy
-        ("match_ctxs: match_abstractions: " ^ "\n\n- abs0: " ^ V.show_abs abs0
-       ^ "\n\n- abs1: " ^ V.show_abs abs1));
     let {
       V.abs_id = abs_id0;
       kind = kind0;
@@ -2058,7 +2303,10 @@ let match_ctxs (check_equiv : bool) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
 let ctxs_are_equivalent (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
     (ctx1 : C.eval_ctx) : bool =
   let check_equivalent = true in
-  Option.is_some (match_ctxs check_equivalent fixed_ids ctx0 ctx1)
+  let lookup_shared_value _ = raise (Failure "Unreachable") in
+  Option.is_some
+    (match_ctxs check_equivalent fixed_ids lookup_shared_value
+       lookup_shared_value ctx0 ctx1)
 
 (** Join the context at the entry of the loop with the contexts upon reentry
     (upon reaching the [Continue] statement - the goal is to compute a fixed
@@ -2102,6 +2350,17 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
         ("loop_join_origin_with_continue_ctxs:join_one: initial ctx:\n"
        ^ eval_ctx_to_string ctx));
 
+    (* (* Push the abstractions introduced by {!prepare_shared_loans} as
+          far as we can to preserve the structure of the context. *)
+       let ctx =
+         push_fresh_shared_loans_abs fresh_shared_loans_abs_ids original_ctx_length
+           ctx
+       in
+       log#ldebug
+         (lazy
+           ("loop_join_origin_with_continue_ctxs:join_one: after push fresh \
+             shared loan abs:\n" ^ eval_ctx_to_string ctx)); *)
+
     (* Destructure the abstractions introduced in the new context *)
     let ctx = destructure_new_abs loop_id fixed_ids.aids ctx in
     log#ldebug
@@ -2115,6 +2374,9 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after collapse:\n"
        ^ eval_ctx_to_string ctx));
+
+    (* Refresh the fresh abstractions *)
+    let ctx = refresh_abs fixed_ids.aids ctx in
 
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
@@ -2143,6 +2405,245 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
   (* # Return *)
   ((old_ctx, ctxl), !joined_ctx)
 
+(** Prepare the shared loans in the abstractions by moving them to fresh
+    abstractions.
+
+    We use this to prepare an evaluation context before computing a fixed point.
+
+    Because a loop iteration might lead to symbolic value expansions and create
+    shared loans in shared values inside the *fixed* abstractions, which we want
+    to leave unchanged, we introduce some reborrows in the following way:
+
+    {[
+      abs'0 { SL {l0, l1} s0 }
+      l0 -> SB l0
+      l1 -> SB l1
+
+        ~~>
+
+      abs'0 { SL {l0, l1} s0 }
+      l0 -> SB l2
+      l1 -> SB l3
+      abs'2 { SB l0, SL {l2} s2 }
+      abs'3 { SB l1, SL {l3} s3 }
+    ]}
+
+    This is sound but leads to information loss. This way, the fixed abstraction
+    [abs'0] is never modified because [s0] is never accessed (and thus never
+    expanded).
+
+    We do this because it makes it easier to compute joins and fixed points.
+
+    We return the new context and the set of fresh abs ids.
+  *)
+let prepare_ashared_loans (loop_id : V.LoopId.id) (ctx : C.eval_ctx) :
+    C.eval_ctx * V.AbstractionId.Set.t =
+  (* Return the same value but where:
+     - the shared loans have been removed
+     - the symbolic values have been replaced with fresh symbolic values
+     - the region ids found in the value and belonging to the set [rids] have
+       been substituted with [nrid]
+  *)
+  let mk_value_with_fresh_sids_no_shared_loans (rids : T.RegionId.Set.t)
+      (nrid : T.RegionId.id) (v : V.typed_value) : V.typed_value =
+    (* Remove the shared loans *)
+    let v = value_remove_shared_loans v in
+    (* Substitute the symbolic values and the region *)
+    Subst.typed_value_subst_ids
+      (fun r -> if T.RegionId.Set.mem r rids then nrid else r)
+      (fun x -> x)
+      (fun x -> x)
+      (fun _ -> C.fresh_symbolic_value_id ())
+      (fun x -> x)
+      v
+  in
+
+  let borrow_substs = ref [] in
+  let fresh_absl = ref [] in
+
+  (* Auxiliary function to create a new abstraction for a shared value found in
+     an abstraction.
+
+     Example:
+     ========
+     When exploring:
+     {[
+       abs'0 { SL {l0, l1} s0 }
+     ]}
+
+     we find the shared value:
+
+     {[
+       SL {l0, l1} s0
+     ]}
+
+     and introduce the corresponding abstraction:
+     {[
+       abs'2 { SB l0, SL {l2} s2 }
+     ]}
+  *)
+  let push_abs_for_shared_value (abs : V.abs) (sv : V.typed_value)
+      (lid : V.BorrowId.id) : unit =
+    (* Create a fresh borrow (for the reborrow) *)
+    let nlid = C.fresh_borrow_id () in
+
+    (* We need a fresh region for the new abstraction *)
+    let nrid = C.fresh_region_id () in
+
+    (* Prepare the shared value *)
+    let nsv = mk_value_with_fresh_sids_no_shared_loans abs.regions nrid sv in
+
+    (* Save the borrow substitution, to apply it to the context later *)
+    borrow_substs := (lid, nlid) :: !borrow_substs;
+
+    (* Rem.: the below sanity checks are not really necessary *)
+    assert (V.AbstractionId.Set.is_empty abs.parents);
+    assert (abs.original_parents = []);
+    assert (T.RegionId.Set.is_empty abs.ancestors_regions);
+
+    (* Introduce the new abstraction for the shared values *)
+    let rty = ety_no_regions_to_rty sv.V.ty in
+
+    (* Create the shared loan child *)
+    let child_rty = rty in
+    let child_av = mk_aignored child_rty in
+
+    (* Create the shared loan *)
+    let loan_rty = T.Ref (T.Var nrid, rty, T.Shared) in
+    let loan_value =
+      V.ALoan (V.ASharedLoan (V.BorrowId.Set.singleton nlid, nsv, child_av))
+    in
+    let loan_value = mk_typed_avalue loan_rty loan_value in
+
+    (* Create the shared borrow *)
+    let borrow_rty = loan_rty in
+    let borrow_value = V.ABorrow (V.ASharedBorrow lid) in
+    let borrow_value = mk_typed_avalue borrow_rty borrow_value in
+
+    (* Create the abstraction *)
+    let avalues = [ borrow_value; loan_value ] in
+    let kind = V.Loop (loop_id, None, V.LoopSynthInput) in
+    let can_end = true in
+    let fresh_abs =
+      {
+        V.abs_id = C.fresh_abstraction_id ();
+        kind;
+        can_end;
+        parents = V.AbstractionId.Set.empty;
+        original_parents = [];
+        regions = T.RegionId.Set.singleton nrid;
+        ancestors_regions = T.RegionId.Set.empty;
+        avalues;
+      }
+    in
+    fresh_absl := fresh_abs :: !fresh_absl
+  in
+
+  (* Explore the shared values in the context abstractions, and introduce
+     fresh abstractions with reborrows for those shared values.
+
+     We simply explore the context and call {!push_abs_for_shared_value}
+     when necessary.
+  *)
+  let collect_shared_values_in_abs (abs : V.abs) : unit =
+    let visit_avalue =
+      object
+        inherit [_] V.iter_typed_avalue as super
+
+        method! visit_SharedLoan env lids sv =
+          (* Sanity check: we don't support nested borrows for now *)
+          assert (not (value_has_borrows ctx sv.V.value));
+
+          (* Generate fresh borrows and values *)
+          V.BorrowId.Set.iter (push_abs_for_shared_value abs sv) lids;
+
+          (* Continue the exploration *)
+          super#visit_SharedLoan env lids sv
+
+        method! visit_ASharedLoan env lids sv _ =
+          (* Sanity check: we don't support nested borrows for now *)
+          assert (not (value_has_borrows ctx sv.V.value));
+
+          (* Generate fresh borrows and values *)
+          V.BorrowId.Set.iter (push_abs_for_shared_value abs sv) lids;
+
+          (* Continue the exploration *)
+          super#visit_SharedLoan env lids sv
+
+        (** Check that there are no symbolic values with *borrows* inside the
+            abstraction - shouldn't happen if the symbolic values are greedily
+            expanded.
+            We do this because those values could contain shared borrows:
+            if it is the case, we need to duplicate them too.
+            TODO: implement this more general behavior.
+         *)
+        method! visit_symbolic_value env sv =
+          assert (not (symbolic_value_has_borrows ctx sv));
+          super#visit_symbolic_value env sv
+      end
+    in
+    List.iter (visit_avalue#visit_typed_avalue None) abs.avalues
+  in
+  C.env_iter_abs collect_shared_values_in_abs ctx.env;
+
+  (* Update the borrow ids in the environment.
+
+     Example:
+     ========
+     If we start with environment:
+     {[
+       abs'0 { SL {l0, l1} s0 }
+       l0 -> SB l0
+       l1 -> SB l1
+     ]}
+
+     We introduce the following abstractions:
+     {[
+       abs'2 { SB l0, SL {l2} s2 }
+       abs'3 { SB l1, SL {l3} s3 }
+     ]}
+
+     While doing so, we registered the fact that we introduced [l2] for [l0]
+     and [l3] for [l1]: we now need to perform the proper substitutions in
+     the values [l0] and [l1]. This gives:
+
+     {[
+       l0 -> SB l0
+       l1 -> SB l1
+
+         ~~>
+
+       l0 -> SB l2
+       l1 -> SB l3
+     ]}
+  *)
+  let env =
+    let bmap = V.BorrowId.Map.of_list !borrow_substs in
+    let bsusbt bid =
+      match V.BorrowId.Map.find_opt bid bmap with
+      | None -> bid
+      | Some bid -> bid
+    in
+
+    let visitor =
+      object
+        inherit [_] C.map_env
+        method! visit_borrow_id _ bid = bsusbt bid
+      end
+    in
+    visitor#visit_env () ctx.env
+  in
+
+  (* Add the abstractions *)
+  let fresh_abs_ids =
+    V.AbstractionId.Set.of_list (List.map (fun abs -> abs.V.abs_id) !fresh_absl)
+  in
+  let fresh_absl = List.map (fun abs -> C.Abs abs) !fresh_absl in
+  let env = List.append fresh_absl env in
+
+  (* Return *)
+  ({ ctx with C.env }, fresh_abs_ids)
+
 (** Compute a fixed-point for the context at the entry of the loop.
     We also return the sets of fixed ids, and the list of symbolic values
     that appear in the fixed point context.
@@ -2161,6 +2662,26 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   let ctx_upon_entry = ref None in
   let ctxs = ref [] in
   let register_ctx ctx = ctxs := ctx :: !ctxs in
+
+  (* Introduce "reborrows" for the shared values in the abstractions, so that
+     the shared values in the fixed abstractions never get modified (technically,
+     they are immutable, but in practice we can introduce more shared loans, or
+     expand symbolic values).
+
+     For more details, see the comments for {!prepare_ashared_loans}
+  *)
+  let ctx, _ = prepare_ashared_loans loop_id ctx0 in
+
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("compute_loop_entry_fixed_point: after prepare_ashared_loans:"
+     ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string_no_filter ctx0
+      ^ "\n\n- ctx1:\n"
+      ^ eval_ctx_to_string_no_filter ctx
+      ^ "\n\n"));
+
   let cf_exit_loop_body (res : statement_eval_res) : m_fun =
    fun ctx ->
     match res with
@@ -2184,17 +2705,20 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   *)
   let fixed_ids : ids_sets option ref = ref None in
 
-  (* Join the contexts at the loop entry *)
-  let join_ctxs (ctx0 : C.eval_ctx) : C.eval_ctx =
+  (* Join the contexts at the loop entry - ctx1 is the current joined
+     context (the context at the loop entry, after we called
+     {!prepare_ashared_loans}, if this is the first iteration) *)
+  (* TODO: ctx_upon_entry is useless, it should be ctx0? *)
+  let join_ctxs (ctx1 : C.eval_ctx) : C.eval_ctx =
     (* If this is the first iteration, end the borrows/loans/abs which
-       appear in ctx0 and not in the other contexts, then compute the
+       appear in ctx1 and not in the other contexts, then compute the
        set of fixed ids. This means those borrows/loans have to end
        in the loop, and we rather end them *before* the loop. *)
-    let ctx0 =
+    let ctx1 =
       match !fixed_ids with
-      | Some _ -> ctx0
+      | Some _ -> ctx1
       | None ->
-          let old_ids, _ = compute_context_ids ctx0 in
+          let old_ids, _ = compute_context_ids ctx1 in
           let new_ids, _ = compute_contexts_ids !ctxs in
           let blids = V.BorrowId.Set.diff old_ids.blids new_ids.blids in
           let aids = V.AbstractionId.Set.diff old_ids.aids new_ids.aids in
@@ -2208,25 +2732,27 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
             in
             ctx
           in
-          (* End the borrows/abs in [ctx0] *)
-          let ctx0 = end_borrows_abs blids aids ctx0 in
+          (* End the borrows/abs in [ctx1] *)
+          let ctx1 = end_borrows_abs blids aids ctx1 in
           (* We can also do the same in the contexts [ctxs]: if there are
              several contexts, maybe one of them ended some borrows and some
              others didn't. As we need to end those borrows anyway (the join
              will detect them and ask to end them) we do it preemptively.
           *)
           ctxs := List.map (end_borrows_abs blids aids) !ctxs;
+          (* Note that the fixed ids are given by the original context, from *before*
+             we introduce fresh abstractions/reborrows for the shared values *)
           fixed_ids := Some (fst (compute_context_ids ctx0));
-          ctx0
+          ctx1
     in
 
     let fixed_ids = Option.get !fixed_ids in
-    let (ctx0', _), ctx1 =
-      loop_join_origin_with_continue_ctxs config loop_id fixed_ids ctx0 !ctxs
+    let (ctx1', _), ctx2 =
+      loop_join_origin_with_continue_ctxs config loop_id fixed_ids ctx1 !ctxs
     in
     ctxs := [];
-    if !ctx_upon_entry = None then ctx_upon_entry := Some ctx0';
-    ctx1
+    if !ctx_upon_entry = None then ctx_upon_entry := Some ctx1';
+    ctx2
   in
   (* Check if two contexts are equivalent - modulo alpha conversion on the
      existentially quantified borrows/abstractions/symbolic values.
@@ -2235,7 +2761,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     (* Compute the set of fixed ids - for the symbolic ids, we compute the
        intersection of ids between the original environment and [ctx1]
        and [ctx2] *)
-    let fixed_ids, _ = compute_context_ids (Option.get !ctx_upon_entry) in
+    let fixed_ids, _ = compute_context_ids ctx0 in
     let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
     let fixed_ids1, _ = compute_context_ids ctx1 in
     let fixed_ids2, _ = compute_context_ids ctx2 in
@@ -2249,7 +2775,10 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : bool =
     let fixed_ids = compute_fixed_ids ctx1 ctx2 in
     let check_equivalent = true in
-    Option.is_some (match_ctxs check_equivalent fixed_ids ctx1 ctx2)
+    let lookup_shared_value _ = raise (Failure "Unreachable") in
+    Option.is_some
+      (match_ctxs check_equivalent fixed_ids lookup_shared_value
+         lookup_shared_value ctx1 ctx2)
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
   let rec compute_fixed_point (ctx : C.eval_ctx) (i0 : int) (i : int) :
@@ -2278,7 +2807,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
       (* Check if we reached a fixed point: if not, iterate *)
       if equiv_ctxs ctx ctx1 then ctx1 else compute_fixed_point ctx1 i0 (i - 1)
   in
-  let fp = compute_fixed_point ctx0 max_num_iter max_num_iter in
+  let fp = compute_fixed_point ctx max_num_iter max_num_iter in
 
   (* Debug *)
   log#ldebug
@@ -2426,13 +2955,13 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
                     log#ldebug
                       (lazy
                         ("compute_loop_entry_fixed_point: merge FP \
-                          abstractions: "
-                        ^ V.AbstractionId.to_string !id0
-                        ^ " and "
-                        ^ V.AbstractionId.to_string id));
+                          abstraction: "
+                        ^ V.AbstractionId.to_string id
+                        ^ " into "
+                        ^ V.AbstractionId.to_string !id0));
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
-                      merge_abstractions loop_id abs_kind false !fp id !id0
+                      merge_into_abstraction loop_id abs_kind false !fp id !id0
                     in
                     fp := fp';
                     id0 := id0';
@@ -2440,6 +2969,11 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
                   with ValueMatchFailure _ -> raise (Failure "Unexpected"))
                 ids)
         !fp_ended_aids
+    in
+
+    (* Reorder the loans and borrows in the fresh abstractions in the fixed-point *)
+    let fp =
+      reorder_loans_borrows_in_fresh_abs (Option.get !fixed_ids).aids !fp
     in
 
     (* Update the abstraction's [can_end] field and their kinds.
@@ -2474,7 +3008,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     let update_kinds_can_end (remove_rg_id : bool) ctx =
       (update_loop_abstractions remove_rg_id)#visit_eval_ctx () ctx
     in
-    let fp = update_kinds_can_end false !fp in
+    let fp = update_kinds_can_end false fp in
 
     (* Sanity check: we still have a fixed point - we simply call [compute_fixed_point]
        while allowing exactly one iteration to see if it fails *)
@@ -2558,6 +3092,13 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
     }
   in
   ids
+
+(** Utility *)
+type loans_borrows_pair = {
+  loans : V.BorrowId.Set.t;
+  borrows : V.BorrowId.Set.t;
+}
+[@@deriving show, ord]
 
 (** For the abstractions in the fixed point, compute the correspondance between
     the borrows ids and the loans ids, if we want to introduce equivalent
@@ -2658,10 +3199,21 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
       ^ "\n\n"));
 
   (* Match the source context and the filtered target context *)
-  let check_equiv = false in
   let maps =
+    let check_equiv = false in
     let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
-    Option.get (match_ctxs check_equiv fixed_ids filt_tgt_ctx filt_src_ctx)
+    let open InterpreterBorrowsCore in
+    let lookup_shared_loan lid ctx : V.typed_value =
+      match snd (lookup_loan ek_all lid ctx) with
+      | Concrete (V.SharedLoan (_, v)) -> v
+      | Abstract (V.ASharedLoan (_, v, _)) -> v
+      | _ -> raise (Failure "Unreachable")
+    in
+    let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
+    let lookup_in_src id = lookup_shared_loan id src_ctx in
+    Option.get
+      (match_ctxs check_equiv fixed_ids lookup_in_tgt lookup_in_src filt_tgt_ctx
+         filt_src_ctx)
   in
 
   log#ldebug
@@ -2677,7 +3229,34 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
   in
 
   (* Sanity check: for every abstraction, the target loans and borrows are mapped
-     to the same set of source loans and borrows *)
+     to the same set of source loans and borrows.
+
+     For instance, if we map the [env_fp] to [env0] (only looking at the bindings,
+     ignoring the abstractions) below:
+     {[
+       env0 = {
+         abs@0 { ML l0 }
+         ls -> MB l0 (s2 : loops::List<T>)
+         i -> s1 : u32
+       }
+
+       env_fp = {
+         abs@0 { ML l0 }
+         ls -> MB l1 (s3 : loops::List<T>)
+         i -> s4 : u32
+         abs@fp {
+           MB l0
+           ML l1
+         }
+       }
+     ]}
+
+     We get that l1 is mapped to l0. From there, we see that abs@fp consumes
+     the same borrows that it gives: it is indeed an identity function.
+
+     TODO: we should also check the mappings for the shared values (to
+     make sure the abstractions are indeed the identity)...
+  *)
   List.iter
     (fun abs ->
       let ids, _ = compute_abs_ids abs in
@@ -2697,6 +3276,10 @@ let compute_fixed_point_id_correspondance (fixed_ids : ids_sets)
      - for every tgt borrow, find the corresponding src borrow ([l0], because
        we have: [borrows_map: { l1 -> l0 }])
      - from there, find the corresponding tgt loan ([l0])
+
+     Note that this borrow does not necessarily appear in the src_to_tgt_borrow_map,
+     if it actually corresponds to a borrows introduced when decomposing the
+     abstractions to move the shared values out of the source context abstractions.
   *)
   let tgt_borrow_to_loan = ref V.BorrowId.InjSubst.empty in
   let visit_tgt =
@@ -2878,7 +3461,46 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
      context, which results from joins during which we ended the loans which
      were introduced during the loop iterations)
   *)
-  let rec cf_reorganize_tgt : cm_fun =
+  (* End the borrows in the dummy values - TODO: is this useful? *)
+  let rec cf_reorganize_dummy_tgt : cm_fun =
+   fun cf tgt_ctx ->
+    (* Collect the dummy values in the target context *)
+    let _, _, tgt_dummies = ctx_split_fixed_new fixed_ids tgt_ctx in
+
+    (* Whenever we find a borrow which can be ended (doesn't contain loans)
+       we end it *)
+    let bid = ref None in
+    try
+      let visitor =
+        object
+          inherit [_] V.iter_typed_value
+
+          method! visit_SharedBorrow _ l =
+            bid := Some l;
+            raise Utils.Found
+
+          method! visit_MutBorrow _ l v =
+            if not (value_has_loans v.value) then (
+              bid := Some l;
+              raise Utils.Found)
+            else ()
+        end
+      in
+      List.iter (visitor#visit_typed_value ()) tgt_dummies;
+
+      log#ldebug
+        (lazy
+          ("match_ctx_with_target: after reorganizing dummies:\n"
+         ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- tgt_ctx: "
+         ^ eval_ctx_to_string tgt_ctx));
+
+      cf tgt_ctx
+    with Utils.Found ->
+      let cc = InterpreterBorrows.end_borrow config (Option.get !bid) in
+      comp cc cf_reorganize_dummy_tgt cf tgt_ctx
+  in
+  (* End the loans which lead to mismatches when joining *)
+  let rec cf_reorganize_join_tgt : cm_fun =
    fun cf tgt_ctx ->
     (* Collect fixed values in the source and target contexts: end the loans in the
        source context which don't appear in the target context *)
@@ -2946,7 +3568,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
         | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
             raise (Failure "Unexpected")
       in
-      comp cc cf_reorganize_tgt cf tgt_ctx
+      comp cc cf_reorganize_join_tgt cf tgt_ctx
   in
 
   (* Introduce the "identity" abstractions for the loop reentry.
@@ -2976,7 +3598,18 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     let check_equiv = false in
     let src_to_tgt_maps =
       let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
-      Option.get (match_ctxs check_equiv fixed_ids filt_src_ctx filt_tgt_ctx)
+      let open InterpreterBorrowsCore in
+      let lookup_shared_loan lid ctx : V.typed_value =
+        match snd (lookup_loan ek_all lid ctx) with
+        | Concrete (V.SharedLoan (_, v)) -> v
+        | Abstract (V.ASharedLoan (_, v, _)) -> v
+        | _ -> raise (Failure "Unreachable")
+      in
+      let lookup_in_src id = lookup_shared_loan id src_ctx in
+      let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
+      Option.get
+        (match_ctxs check_equiv fixed_ids lookup_in_src lookup_in_tgt
+           filt_src_ctx filt_tgt_ctx)
     in
     let tgt_to_src_borrow_map =
       V.BorrowId.Map.of_list
@@ -2988,8 +3621,9 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     (* Debug *)
     log#ldebug
       (lazy
-        ("match_ctx_with_target:cf_introduce_loop_fp_abs:"
-       ^ "\n\n- filt_tgt_ctx: "
+        ("match_ctx_with_target:cf_introduce_loop_fp_abs:" ^ "\n\n- tgt_ctx: "
+       ^ eval_ctx_to_string tgt_ctx ^ "\n\n- src_ctx: "
+       ^ eval_ctx_to_string src_ctx ^ "\n\n- filt_tgt_ctx: "
         ^ eval_ctx_to_string filt_tgt_ctx
         ^ "\n\n- filt_src_ctx: "
         ^ eval_ctx_to_string filt_src_ctx
@@ -2998,7 +3632,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
 
     (* Update the borrows and symbolic ids in the source context.
 
-       Going back to the [list_nth_mut_example], the source environment upon
+       Going back to the [list_nth_mut_example], the original environment upon
        re-entering the loop is:
 
        {[
@@ -3037,6 +3671,11 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
          _@2 -> MB l2 (@Box (ML l4))                      // tail
          _@3 -> MB l1 (s@3 : T)                           // hd
          abs@1 { MB l4, ML l5 }
+       ]}
+
+       Later, we will introduce the identity abstraction:
+       {[
+         abs@2 { MB l5, ML l6 }
        ]}
     *)
     let src_fresh_borrows_map = ref V.BorrowId.Map.empty in
@@ -3130,16 +3769,15 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
       end
     in
     let new_absl = List.map (visit_src#visit_abs ()) new_absl in
+    let new_absl = List.map (fun abs -> C.Abs abs) new_absl in
 
     (* Add the abstractions from the target context to the source context *)
-    let nenv =
-      List.append (List.map (fun abs -> C.Abs abs) new_absl) tgt_ctx.env
-    in
+    let nenv = List.append new_absl tgt_ctx.env in
     let tgt_ctx = { tgt_ctx with env = nenv } in
 
     log#ldebug
       (lazy
-        ("match_ctx_with_target:cf_introduce_loop_fp_abs:\n- result ctx:"
+        ("match_ctx_with_target:cf_introduce_loop_fp_abs:\n- result ctx:\n"
        ^ eval_ctx_to_string tgt_ctx));
 
     (* Sanity check *)
@@ -3165,7 +3803,8 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
   in
 
   (* Compose and continue *)
-  cf_reorganize_tgt cf_introduce_loop_fp_abs tgt_ctx
+  comp cf_reorganize_dummy_tgt cf_reorganize_join_tgt cf_introduce_loop_fp_abs
+    tgt_ctx
 
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
@@ -3224,6 +3863,12 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
 
   (* Compute a fresh loop id *)
   let loop_id = C.fresh_loop_id () in
+
+  log#ldebug
+    (lazy
+      ("eval_loop_symbolic:\nContext after shared borrows preparation:\n"
+     ^ eval_ctx_to_string ctx ^ "\n\n"));
+
   (* Compute the fixed point at the loop entrance *)
   let fp_ctx, fixed_ids =
     compute_loop_entry_fixed_point config loop_id eval_loop_body ctx
@@ -3282,9 +3927,58 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
     let old_ids, _ = compute_context_ids ctx in
     let fp_ids, fp_ids_maps = compute_context_ids fp_ctx in
     let fresh_sids = V.SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
+
+    (* Compute the set of symbolic values which appear in shared values inside
+       *fixed* abstractions: because we introduce fresh abstractions and reborrows
+       with {!prepare_ashared_loans}, those values are never accessed directly
+       inside the loop iterations: we can ignore them (and should, because
+       otherwise it leads to a very ugly translation with duplicated, unused
+       values) *)
+    let shared_sids_in_fixed_abs =
+      let fixed_absl =
+        List.filter
+          (fun (ee : C.env_elem) ->
+            match ee with
+            | C.Var _ | C.Frame -> false
+            | Abs abs -> V.AbstractionId.Set.mem abs.abs_id old_ids.aids)
+          ctx.env
+      in
+
+      (* Rem.: as we greedily expand the symbolic values containing borrows, and
+         in particular the (mutable/shared) borrows, we could simply list the
+         symbolic values appearing in the abstractions: those are necessarily
+         shared values. We prefer to be more general, in prevision of later
+         changes.
+      *)
+      let sids = ref V.SymbolicValueId.Set.empty in
+      let visitor =
+        object (self : 'self)
+          inherit [_] C.iter_env
+
+          method! visit_ASharedLoan inside_shared _ sv child_av =
+            self#visit_typed_value true sv;
+            self#visit_typed_avalue inside_shared child_av
+
+          method! visit_symbolic_value_id inside_shared sid =
+            if inside_shared then sids := V.SymbolicValueId.Set.add sid !sids
+        end
+      in
+      visitor#visit_env false fixed_absl;
+      !sids
+    in
+
+    (* Remove the shared symbolic values present in the fixed abstractions -
+       see comments for [shared_sids_in_fixed_abs]. *)
+    let sids_to_values = fp_ids_maps.sids_to_values in
+    let sids_to_values =
+      V.SymbolicValueId.Map.filter
+        (fun sid _ ->
+          not (V.SymbolicValueId.Set.mem sid shared_sids_in_fixed_abs))
+        sids_to_values
+    in
     (* The value ids should be listed in increasing order *)
     let input_svalues =
-      List.map snd (V.SymbolicValueId.Map.bindings fp_ids_maps.sids_to_values)
+      List.map snd (V.SymbolicValueId.Map.bindings sids_to_values)
     in
     (fresh_sids, input_svalues)
   in

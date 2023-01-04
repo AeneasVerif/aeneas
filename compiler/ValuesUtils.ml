@@ -11,6 +11,7 @@ let mk_unit_value : typed_value =
   { value = Adt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
 let mk_typed_value (ty : ety) (value : value) : typed_value = { value; ty }
+let mk_typed_avalue (ty : rty) (value : avalue) : typed_avalue = { value; ty }
 let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
 let mk_abottom (ty : rty) : typed_avalue = { value = ABottom; ty }
 let mk_aignored (ty : rty) : typed_avalue = { value = AIgnored; ty }
@@ -155,6 +156,11 @@ let rec value_strip_shared_loans (v : typed_value) : typed_value =
   | Loan (SharedLoan (_, v')) -> value_strip_shared_loans v'
   | _ -> v
 
+(** Check if a symbolic value has borrows *)
+let symbolic_value_has_borrows (infos : TA.type_infos) (sv : symbolic_value) :
+    bool =
+  ty_has_borrow_under_mut infos sv.sv_ty
+
 (** Check if a value has borrows in **a general sense**.
 
     It checks if:
@@ -168,7 +174,7 @@ let value_has_borrows (infos : TA.type_infos) (v : value) : bool =
       method! visit_borrow_content _env _ = raise Found
 
       method! visit_symbolic_value _ sv =
-        if ty_has_borrow_under_mut infos sv.sv_ty then raise Found else ()
+        if symbolic_value_has_borrows infos sv then raise Found else ()
     end
   in
   (* We use exceptions *)
@@ -218,3 +224,17 @@ let value_has_loans_or_borrows (infos : TA.type_infos) (v : value) : bool =
     obj#visit_value () v;
     false
   with Found -> true
+
+(** Remove the shared loans in a value *)
+let value_remove_shared_loans (v : typed_value) : typed_value =
+  let visitor =
+    object (self : 'self)
+      inherit [_] map_typed_value as super
+
+      method! visit_typed_value env v =
+        match v.value with
+        | Loan (SharedLoan (_, sv)) -> self#visit_typed_value env sv
+        | _ -> super#visit_typed_value env v
+    end
+  in
+  visitor#visit_typed_value () v

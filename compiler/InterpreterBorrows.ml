@@ -1633,7 +1633,7 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
   (* Accumulator to store the destructured values *)
   let avalues = ref [] in
   (* Utility function to store a value in the accumulator *)
-  let push_avalue av = avalues := av :: !avalues in
+  let push_avalue av = avalues := List.append !avalues [ av ] in
   (* We use this function to make sure we never register values (i.e.,
      loans or borrows) when we shouldn't - see it as a sanity check:
      for now, we don't allow nested borrows, which means we should register
@@ -1665,21 +1665,22 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
             let ignored = mk_aignored child_av.V.ty in
             let value = V.ALoan (V.ASharedLoan (bids, sv, ignored)) in
             push { V.value; ty };
+            (* Explore the child *)
+            list_avalues false push_fail child_av;
             (* Push the avalues introduced because we decomposed the inner loans -
                note that we pay attention to the order in which we introduce
                the avalues: we want to push them *after* the outer loan. If we
                didn't want that, we would have implemented [list_values] in
                exactly the same way as [list_avalues] (i.e., with a similar
                signature) *)
-            List.iter push avl;
-            (* Explore the child *)
-            list_avalues false push_fail child_av
+            List.iter push avl
         | V.AMutLoan (bid, child_av) ->
+            (* Explore the child *)
+            list_avalues false push_fail child_av;
+            (* Explore the whole loan *)
             let ignored = mk_aignored child_av.V.ty in
             let value = V.ALoan (V.AMutLoan (bid, ignored)) in
-            push { V.value; ty };
-            (* Explore the child *)
-            list_avalues false push_fail child_av
+            push { V.value; ty }
         | V.AIgnoredMutLoan (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
             assert (not (ty_has_borrows ctx.type_context.type_infos child_av.ty));
@@ -1702,11 +1703,12 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
         (* Explore the borrow content *)
         match bc with
         | V.AMutBorrow (bid, child_av) ->
+            (* Explore the child *)
+            list_avalues false push_fail child_av;
+            (* Explore the borrow *)
             let ignored = mk_aignored child_av.V.ty in
             let value = V.ABorrow (V.AMutBorrow (bid, ignored)) in
-            push { V.value; ty };
-            (* Explore the child *)
-            list_avalues false push_fail child_av
+            push { V.value; ty }
         | V.ASharedBorrow _ ->
             (* Nothing specific to do: keep the value as it is *)
             push av
@@ -1761,12 +1763,27 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
               let rty = ety_no_regions_to_rty ty in
               let av : V.typed_avalue =
                 assert (not (value_has_loans_or_borrows ctx sv.V.value));
+                (* We introduce fresh ids for the symbolic values *)
+                let mk_value_with_fresh_sids (v : V.typed_value) : V.typed_value
+                    =
+                  let visitor =
+                    object
+                      inherit [_] V.map_typed_avalue
+
+                      method! visit_symbolic_value_id _ _ =
+                        C.fresh_symbolic_value_id ()
+                    end
+                  in
+                  visitor#visit_typed_value () v
+                in
+                let sv = mk_value_with_fresh_sids sv in
+                (* Create the new avalue *)
                 let value =
                   V.ALoan (V.ASharedLoan (bids, sv, mk_aignored rty))
                 in
                 { V.value; ty = rty }
               in
-              let avl = List.append avl [ av ] in
+              let avl = List.append [ av ] avl in
               (avl, sv)
             else (avl, { v with V.value = V.Loan (V.SharedLoan (bids, sv)) })
         | MutLoan _ -> raise (Failure "Unreachable"))
@@ -1779,7 +1796,7 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
 
   (* Destructure the avalues *)
   List.iter (list_avalues true push_avalue) abs0.V.avalues;
-  let avalues = List.rev !avalues in
+  let avalues = !avalues in
   (* Update *)
   { abs0 with V.avalues; kind = abs_kind; can_end }
 
@@ -1969,14 +1986,15 @@ type merge_abstraction_info = {
     We compute the list of loan/borrow contents, maps from borrow/loan ids
     to borrow/loan contents, etc.
 
-    Note that this function is very specific to [merge_abstractions]: we
+    Note that this function is very specific to [merge_into_abstraction]: we
     have strong assumptions about the shape of the abstraction, and in
     particular that:
     - its values don't contain nested borrows
     - all the borrows are destructured (for instance, shared loans can't
       contain shared loans).
  *)
-let compute_merge_abstractions_info (abs : V.abs) : merge_abstraction_info =
+let compute_merge_abstraction_info (ctx : C.eval_ctx) (abs : V.abs) :
+    merge_abstraction_info =
   let loans : V.loan_id_set ref = ref V.BorrowId.Set.empty in
   let borrows : V.borrow_id_set ref = ref V.BorrowId.Set.empty in
   let borrows_loans : borrow_or_loan_id list ref = ref [] in
@@ -2086,9 +2104,9 @@ let compute_merge_abstractions_info (abs : V.abs) : merge_abstraction_info =
             raise (Failure "Unreachable"));
         super#visit_aborrow_content env bc
 
-      method! visit_symbolic_value _ _ =
-        (* Sanity check *)
-        raise (Failure "Unreachable")
+      method! visit_symbolic_value _ sv =
+        (* Sanity check: no borrows *)
+        assert (not (symbolic_value_has_borrows ctx sv))
     end
   in
 
@@ -2165,12 +2183,12 @@ type merge_duplicates_funcs = {
 
     Merge two abstractions into one, without updating the context.
  *)
-let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
+let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : C.eval_ctx)
     (abs0 : V.abs) (abs1 : V.abs) : V.abs =
   log#ldebug
     (lazy
-      ("merge_abstractions_aux:\n- abs0:\n" ^ abs_to_string ctx abs0
+      ("merge_into_abstraction_aux:\n- abs0:\n" ^ abs_to_string ctx abs0
      ^ "\n\n- abs1:\n" ^ abs_to_string ctx abs1));
 
   (* Check that the abstractions are destructured *)
@@ -2187,7 +2205,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
     loan_to_content = loan_to_content0;
     borrow_to_content = borrow_to_content0;
   } =
-    compute_merge_abstractions_info abs0
+    compute_merge_abstraction_info ctx abs0
   in
 
   let {
@@ -2197,7 +2215,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
     loan_to_content = loan_to_content1;
     borrow_to_content = borrow_to_content1;
   } =
-    compute_merge_abstractions_info abs1
+    compute_merge_abstraction_info ctx abs1
   in
 
   (* Sanity check: there is no loan/borrows which appears in both abstractions,
@@ -2227,7 +2245,16 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
   let merged_borrows = ref V.BorrowId.Set.empty in
   let merged_loans = ref V.BorrowId.Set.empty in
   let avalues = ref [] in
-  let push_avalue av = avalues := av :: !avalues in
+  let push_avalue av =
+    log#ldebug
+      (lazy
+        ("merge_into_abstraction_aux: push_avalue: "
+        ^ typed_avalue_to_string ctx av));
+    avalues := av :: !avalues
+  in
+  let push_opt_avalue av =
+    match av with None -> () | Some av -> push_avalue av
+  in
 
   let intersect =
     V.BorrowId.Set.union
@@ -2251,6 +2278,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
   let set_loan_as_merged id =
     merged_loans := V.BorrowId.Set.add id !merged_loans
   in
+  let set_loans_as_merged ids = V.BorrowId.Set.iter set_loan_as_merged ids in
 
   (* Some utility functions *)
   (* Merge two aborrow contents - note that those contents must have the same id *)
@@ -2284,13 +2312,13 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
   in
 
   let merge_aloan_contents (ty0 : T.rty) (lc0 : V.aloan_content) (ty1 : T.rty)
-      (lc1 : V.aloan_content) : V.typed_avalue =
+      (lc1 : V.aloan_content) : V.typed_avalue option =
     match (lc0, lc1) with
     | V.AMutLoan (id, child0), V.AMutLoan (_, child1) ->
         (* Register the loan id *)
         set_loan_as_merged id;
         (* Merge *)
-        (Option.get merge_funs).merge_amut_loans id ty0 child0 ty1 child1
+        Some ((Option.get merge_funs).merge_amut_loans id ty0 child0 ty1 child1)
     | ASharedLoan (ids0, sv0, child0), ASharedLoan (ids1, sv1, child1) ->
         (* Filter the ids *)
         let ids0 = filter_bids ids0 in
@@ -2298,14 +2326,30 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
         (* Check that the sets of ids are the same - if it is not the case, it
            means we actually need to merge more than 2 avalues: we ignore this
            case for now *)
-        assert (ids0 = ids1);
+        assert (V.BorrowId.Set.equal ids0 ids1);
         let ids = ids0 in
-        assert (not (V.BorrowId.Set.is_empty ids));
-        (* Register the loan ids *)
-        V.BorrowId.Set.iter set_loan_as_merged ids;
-        (* Merge *)
-        (Option.get merge_funs).merge_ashared_loans ids ty0 sv0 child0 ty1 sv1
-          child1
+        if V.BorrowId.Set.is_empty ids then (
+          (* If the set of ids is empty, we can eliminate this shared loan.
+             For now, we check that we can eliminate the whole shared value
+             altogether.
+             A more complete approach would be to explore the value and introduce
+             as many shared loans/borrows/etc. as necessary for the sub-values.
+             For now, we check that there are no such values that we would need
+             to preserve (in practice it works because we destructure the
+             shared values in the abstractions, and forbid nested borrows).
+          *)
+          assert (not (value_has_loans_or_borrows ctx sv0.V.value));
+          assert (not (value_has_loans_or_borrows ctx sv0.V.value));
+          assert (is_aignored child0.V.value);
+          assert (is_aignored child1.V.value);
+          None)
+        else (
+          (* Register the loan ids *)
+          set_loans_as_merged ids;
+          (* Merge *)
+          Some
+            ((Option.get merge_funs).merge_ashared_loans ids ty0 sv0 child0 ty1
+               sv1 child1))
     | _ ->
         (* Unreachable because those cases are ignored (ended/ignored borrows)
            or inconsistent *)
@@ -2316,7 +2360,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
      to register the merged loan ids: the caller doesn't do it (contrary to
      the borrow case) *)
   let merge_g_loan_contents (lc0 : g_loan_content_with_ty)
-      (lc1 : g_loan_content_with_ty) : V.typed_avalue =
+      (lc1 : g_loan_content_with_ty) : V.typed_avalue option =
     match (lc0, lc1) with
     | Concrete _, Concrete _ ->
         (* This can not happen: the values should have been destructured *)
@@ -2339,7 +2383,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
       | BorrowId bid ->
           log#ldebug
             (lazy
-              ("merge_abstractions_aux: merging borrow "
+              ("merge_into_abstraction_aux: merging borrow "
              ^ V.BorrowId.to_string bid));
 
           (* Check if the borrow has already been merged - this can happen
@@ -2386,7 +2430,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
           else (
             log#ldebug
               (lazy
-                ("merge_abstractions_aux: merging loan "
+                ("merge_into_abstraction_aux: merging loan "
                ^ V.BorrowId.to_string bid));
 
             (* Check if we need to filter it *)
@@ -2397,7 +2441,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
                 let lc0 = V.BorrowId.Map.find_opt bid loan_to_content0 in
                 let lc1 = V.BorrowId.Map.find_opt bid loan_to_content1 in
                 (* Merge *)
-                let av : V.typed_avalue =
+                let av : V.typed_avalue option =
                   match (lc0, lc1) with
                   | None, Some lc | Some lc, None -> (
                       match lc with
@@ -2414,8 +2458,11 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
                               assert (
                                 not (value_has_loans_or_borrows ctx sv.V.value));
                               let lc = V.ASharedLoan (bids, sv, child) in
-                              { V.value = V.ALoan lc; ty }
-                          | V.AMutLoan _ -> { V.value = V.ALoan lc; ty }
+                              set_loans_as_merged bids;
+                              Some { V.value = V.ALoan lc; ty }
+                          | V.AMutLoan _ ->
+                              set_loan_as_merged bid;
+                              Some { V.value = V.ALoan lc; ty }
                           | V.AEndedMutLoan _ | V.AEndedSharedLoan _
                           | V.AIgnoredMutLoan _ | V.AEndedIgnoredMutLoan _
                           | V.AIgnoredSharedLoan _ ->
@@ -2426,7 +2473,7 @@ let merge_abstractions_aux (abs_kind : V.abs_kind) (can_end : bool)
                       merge_g_loan_contents lc0 lc1
                   | None, None -> raise (Failure "Unreachable")
                 in
-                push_avalue av))
+                push_opt_avalue av))
     borrows_loans;
 
   (* Reverse the avalues (we visited the loans/borrows in order, but pushed
@@ -2488,7 +2535,7 @@ let ctx_merge_regions (ctx : C.eval_ctx) (rid : T.RegionId.id)
   let env = Substitute.env_subst_rids rsubst ctx.env in
   { ctx with C.env }
 
-let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
+let merge_into_abstraction (abs_kind : V.abs_kind) (can_end : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : C.eval_ctx)
     (abs_id0 : V.AbstractionId.id) (abs_id1 : V.AbstractionId.id) :
     C.eval_ctx * V.AbstractionId.id =
@@ -2497,10 +2544,12 @@ let merge_abstractions (abs_kind : V.abs_kind) (can_end : bool)
   let abs1 = C.ctx_lookup_abs ctx abs_id1 in
 
   (* Merge them *)
-  let nabs = merge_abstractions_aux abs_kind can_end merge_funs ctx abs0 abs1 in
+  let nabs =
+    merge_into_abstraction_aux abs_kind can_end merge_funs ctx abs0 abs1
+  in
 
-  (* Update the environment: replace the first abstraction with the result of the merge,
-     remove the second abstraction *)
+  (* Update the environment: replace the abstraction 1 with the result of the merge,
+     remove the abstraction 0 *)
   let ctx = fst (C.ctx_subst_abs ctx abs_id1 nabs) in
   let ctx = fst (C.ctx_remove_abs ctx abs_id0) in
 

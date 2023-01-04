@@ -551,3 +551,21 @@ class ['self] map_eval_ctx =
         let env = super#visit_env acc ctx.env in
         { ctx with env }
   end
+
+let env_iter_abs (f : V.abs -> unit) (env : env) : unit =
+  List.iter
+    (fun (ee : env_elem) ->
+      match ee with Var _ | Frame -> () | Abs abs -> f abs)
+    env
+
+let env_map_abs (f : V.abs -> V.abs) (env : env) : env =
+  List.map
+    (fun (ee : env_elem) ->
+      match ee with Var _ | Frame -> ee | Abs abs -> Abs (f abs))
+    env
+
+let env_filter_abs (f : V.abs -> bool) (env : env) : env =
+  List.filter
+    (fun (ee : env_elem) ->
+      match ee with Var _ | Frame -> true | Abs abs -> f abs)
+    env
