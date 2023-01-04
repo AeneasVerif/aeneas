@@ -353,43 +353,92 @@ Qed.
 (* This is the currently fostered approach : it reduces the number of needed lemmas and allows to easily leverage lia.
 *)
 
+(* Small helper. TODO: taken from below, remove redundancy. *)
+Ltac ltac_new_id2 prefix id suffix :=
+  let old := constr:(ident_to_string id) in
+  let new := constr:((prefix ++ old ++ suffix)%string) in
+  string_to_ident new.
+
+(* Written as a tactic to exploit proof by rewriting - I may miss another way *)
+Ltac scalar_success_tac X B :=
+  let H := fresh in
+  unfold mk_scalar;
+  remember (Sumbool.sumbool_of_bool (scalar_in_bounds _ X)) as H;
+  destruct H as [H|H];
+  lazymatch goal with
+  | [ H: _ = true |- _ ] =>
+    now apply f_equal, scalar_Z_inj
+  | [ H: _ = false |- _ ] =>
+    exfalso;
+    let Heq := ltac_new_id2 "Heq"%string H ""%string in
+    clear Heq;
+    now rewrite (proj2 (scalar_in_bounds_valid2 _ X) B) in H
+  end.
+
 Lemma S_scalar_bounds {ty} (n: scalar ty) :
   scalar_min ty <= to_Z n <= scalar_max ty.
 Proof.
-Admitted.
+exact (proj2_sig n).
+Qed.
 
 Lemma S_scalar_Z_inj {ty} (n m: scalar ty) :
   to_Z n = to_Z m -> n = m.
 Proof.
-Admitted.
+destruct m, n.
+apply ProofIrrelevanceTheory.subset_eq_compat.
+Qed.
 
 Lemma S_mk_bounded ty (x: Z) :
   scalar_min ty <= x <= scalar_max ty ->
   ∃n, mk_scalar ty x = Return n
    /\ to_Z n = x.
 Proof.
-Admitted.
+intro B.
+pose (n := (exist _ x B): scalar ty).
+exists n.
+split. 2: reflexivity.
+scalar_success_tac x B.
+Qed.
 
 Lemma S_add_bounded {ty} (n m: scalar ty) :
   scalar_min ty <= (to_Z n) + (to_Z m) <= scalar_max ty ->
   ∃x, scalar_add n m = Return x
    /\ to_Z x = (to_Z n) + (to_Z m).
 Proof.
-Admitted.
+intro B.
+pose (x := (exist _ (to_Z n + to_Z m) B): scalar ty).
+exists x.
+split. 2: reflexivity.
+unfold scalar_add.
+scalar_success_tac (to_Z n + to_Z m) B.
+Qed.
 
 Lemma S_sub_bounded {ty} (n m: scalar ty) :
   scalar_min ty <= (to_Z n) - (to_Z m) <= scalar_max ty ->
   ∃x, scalar_sub n m = Return x
    /\ to_Z x = (to_Z n) - (to_Z m).
 Proof.
-Admitted.
+(* TODO: Factorize common stuff more *)
+intro B.
+pose (x := (exist _ (to_Z n - to_Z m) B): scalar ty).
+exists x.
+split. 2: reflexivity.
+unfold scalar_sub.
+scalar_success_tac (to_Z n - to_Z m) B.
+Qed.
 
 Lemma S_mul_bounded {ty} (n m: scalar ty) :
   scalar_min ty <= (to_Z n) * (to_Z m) <= scalar_max ty ->
   ∃x, scalar_mul n m = Return x
    /\ to_Z x = (to_Z n) * (to_Z m).
 Proof.
-Admitted.
+intro B.
+pose (x := (exist _ (to_Z n * to_Z m) B): scalar ty).
+exists x.
+split. 2: reflexivity.
+unfold scalar_mul.
+scalar_success_tac (to_Z n * to_Z m) B.
+Qed.
 
 Lemma S_div_bounded {ty} (n m: scalar ty) :
   to_Z m <> 0 ->
@@ -397,12 +446,40 @@ Lemma S_div_bounded {ty} (n m: scalar ty) :
   ∃x, scalar_div n m = Return x
    /\ to_Z x = (to_Z n) / (to_Z m).
 Proof.
-Admitted.
+intros B0 B.
+pose (x := (exist _ (to_Z n / to_Z m) B): scalar ty).
+exists x.
+split. 2: reflexivity.
+unfold scalar_div.
+remember (to_Z m =? 0) as b.
+destruct b. 1: intuition.
+scalar_success_tac (to_Z n / to_Z m) B.
+Qed.
+
+Lemma S_rem_bounded {ty} (n m: scalar ty) :
+  scalar_min ty <= Z.rem (to_Z n) (to_Z m) <= scalar_max ty ->
+  ∃x, scalar_rem n m = Return x
+   /\ to_Z x = Z.rem (to_Z n) (to_Z m).
+Proof.
+intro B.
+pose (x := (exist _ (Z.rem (to_Z n) (to_Z m)) B): scalar ty).
+exists x.
+split. 2: reflexivity.
+unfold scalar_rem.
+scalar_success_tac (Z.rem (to_Z n) (to_Z m)) B.
+Qed.
 
 Lemma V_push_back_bounded {T} (v: vec T) (x: T) :
   vec_length v < usize_max ->
   ∃w, vec_push_back T v x = Return w
    /\ vec_to_list w = (vec_to_list v) ++ [x].
+Proof.
+Admitted.
+
+Lemma V_index_mut_fwd_bounded {T} (v: vec T) (i: usize) :
+  to_Z i < vec_length v ->
+  ∃x, vec_index_mut_fwd T v i = Return x
+   /\ nth_error (vec_to_list v) (usize_to_nat i) = Some x.
 Proof.
 Admitted.
 
@@ -419,9 +496,7 @@ Qed.
 *)
 
 (* TODO:
- - Decidable comparisons (Z.eqb)
- - Induction on scalars & vectors
- - Introduction of bounds for *all* scalars
+ - Induction vectors
  - Cleanup the ugly code
 *)
 
@@ -442,7 +517,7 @@ Ltac intro_scalar_bounds n :=
    Used for unknown scalar parameters which could be expressions.
    TODO: Match identifiers VS expressions to know which tactic to call.
 *)
-Ltac intro_scalar_expr_bounds n :=
+Ltac intro_scalar_anon_bounds n :=
   let H := fresh in
   assert (H := S_scalar_bounds n);
   simpl in H.
@@ -451,13 +526,13 @@ Example example_intro_scalar_bounds (a: usize) : to_Z a <= usize_max.
 Proof.
 pose (a_bounds := tt).
 intro_scalar_bounds a.
-intro_scalar_expr_bounds (1%usize).
+intro_scalar_anon_bounds (1%usize).
 exact (proj2 a_bounds0).
 Qed.
 
-(*  +--------------------+
-    | Tactics - rewrites |
-    +--------------------+
+(*  +---------------------------+
+    | Tactics - scalar rewrites |
+    +---------------------------+
 *)
 
 (* A first tactic which tries to abstract over the "S_sub_bounded" lemma. It :
@@ -475,8 +550,8 @@ Ltac rewrite_scalar_sub_tac a b x :=
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
   lazymatch goal with [ |- scalar_min T <= xVal ] =>
-    intro_scalar_expr_bounds a;
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
@@ -484,8 +559,8 @@ Ltac rewrite_scalar_sub_tac a b x :=
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
   lazymatch goal with [ |- xVal <= scalar_max T ] =>
-    intro_scalar_expr_bounds a;
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
@@ -512,13 +587,17 @@ Ltac rewrite_scalar_sub_tac a b x :=
   try rewrite res_bind_id
   end end.
 
+Tactic Notation "rewrite_scalar_sub" constr(a) constr(b) "as" simple_intropattern(x) :=
+  rewrite_scalar_sub_tac a b x.
+
 Tactic Notation "rewrite_scalar_sub" constr(a) constr(b) :=
   let x := fresh "x" in
   rewrite_scalar_sub_tac a b x.
 
-Tactic Notation "rewrite_scalar_sub" constr(a) constr(b) "as" simple_intropattern(x) :=
-  let x' := fresh x in
-  rewrite_scalar_sub_tac a b x'.
+Tactic Notation "rewrite_scalar_sub" "as" simple_intropattern(x) :=
+  lazymatch goal with [ |- context[ scalar_sub ?A ?B ]] =>
+    rewrite_scalar_sub A B as x
+  end.
 
 (* Other tactics, mainly implemented with copypaste *)
 
@@ -530,16 +609,16 @@ Ltac rewrite_scalar_add_tac a b x :=
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
   lazymatch goal with [ |- scalar_min T <= xVal ] =>
-    intro_scalar_expr_bounds a;
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
   lazymatch goal with [ |- xVal <= scalar_max T ] =>
-    intro_scalar_expr_bounds a;
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
@@ -566,6 +645,11 @@ Tactic Notation "rewrite_scalar_add" constr(a) constr(b) :=
 Tactic Notation "rewrite_scalar_add" constr(a) constr(b) "as" simple_intropattern(x) :=
   rewrite_scalar_add_tac a b x.
 
+Tactic Notation "rewrite_scalar_add" "as" simple_intropattern(x) :=
+  lazymatch goal with [ |- context[ scalar_add ?A ?B ]] =>
+    rewrite_scalar_add A B as x
+  end.
+
 (* scalar_mul *)
 Ltac rewrite_scalar_mul_tac a b x :=
   let T := constr:(scalar_ty_of a) in
@@ -574,16 +658,16 @@ Ltac rewrite_scalar_mul_tac a b x :=
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
   lazymatch goal with [ |- scalar_min T <= xVal ] =>
-    intro_scalar_expr_bounds a;
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
   lazymatch goal with [ |- xVal <= scalar_max T ] =>
-    intro_scalar_expr_bounds a;
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
@@ -610,31 +694,36 @@ Tactic Notation "rewrite_scalar_mul" constr(a) constr(b) :=
 Tactic Notation "rewrite_scalar_mul" constr(a) constr(b) "as" simple_intropattern(x) :=
   rewrite_scalar_mul_tac a b x.
 
+Tactic Notation "rewrite_scalar_mul" "as" simple_intropattern(x) :=
+  lazymatch goal with [ |- context[ scalar_mul ?A ?B ]] =>
+    rewrite_scalar_mul A B as x
+  end.
+
 (* scalar_div *)
-Ltac rewrite_scalar_div_tac a b xStr :=
+Ltac rewrite_scalar_div_tac a b x :=
   let T := constr:(scalar_ty_of a) in
   let xVal := constr:((to_Z a) / (to_Z b)) in
 
   let B0 := fresh "B0" in
   assert (B0: to_Z b <> 0);
   lazymatch goal with [ |- to_Z b <> 0 ] =>
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B1 := fresh "B1" in
   assert (B1: scalar_min T <= xVal);
   lazymatch goal with [ |- scalar_min T <= xVal ] =>
-    intro_scalar_expr_bounds a;
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
   let B2 := fresh "B2" in
   assert (B2: xVal <= scalar_max T);
   lazymatch goal with [ |- xVal <= scalar_max T ] =>
-    intro_scalar_expr_bounds a;
-    intro_scalar_expr_bounds b;
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
     simpl; try lia
   | [ |- _ ] =>
 
@@ -660,6 +749,65 @@ Tactic Notation "rewrite_scalar_div" constr(a) constr(b) :=
 
 Tactic Notation "rewrite_scalar_div" constr(a) constr(b) "as" simple_intropattern(x) :=
   rewrite_scalar_div_tac a b x.
+
+Tactic Notation "rewrite_scalar_div" "as" simple_intropattern(x) :=
+  lazymatch goal with [ |- context[ scalar_div ?A ?B ]] =>
+    rewrite_scalar_div A B as x
+  end.
+
+(* scalar_rem *)
+Ltac rewrite_scalar_rem_tac a b x :=
+  let T := constr:(scalar_ty_of a) in
+  let xVal := constr:(Z.rem (to_Z a) (to_Z b)) in
+
+  let B1 := fresh "B1" in
+  assert (B1: scalar_min T <= xVal);
+  lazymatch goal with [ |- scalar_min T <= xVal ] =>
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let B2 := fresh "B2" in
+  assert (B2: xVal <= scalar_max T);
+  lazymatch goal with [ |- xVal <= scalar_max T ] =>
+    intro_scalar_anon_bounds a;
+    intro_scalar_anon_bounds b;
+    simpl; try lia
+  | [ |- _ ] =>
+
+  let H := fresh "H" in
+  destruct (S_rem_bounded a b (conj B1 B2)) as (x, H);
+  clear B1 B2;
+
+  let Hx := ltac_new_id "H"%string x ""%string in
+  let Hr := fresh "Hr" in
+  destruct H as (Hr, Hx);
+
+  rewrite Hr;
+  clear Hr;
+  intro_scalar_bounds x;
+  
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
+  end end.
+
+Tactic Notation "rewrite_scalar_rem" constr(a) constr(b) :=
+  let x := fresh "x" in
+  rewrite_scalar_rem_tac a b x.
+
+Tactic Notation "rewrite_scalar_rem" constr(a) constr(b) "as" simple_intropattern(x) :=
+  rewrite_scalar_rem_tac a b x.
+
+Tactic Notation "rewrite_scalar_rem" "as" simple_intropattern(x) :=
+  lazymatch goal with [ |- context[ scalar_rem ?A ?B ]] =>
+    rewrite_scalar_rem A B as x
+  end.
+
+(*  +---------------------------+
+    | Tactics - vector rewrites |
+    +---------------------------+
+*)
 
 (* vec_push_back *)
 Ltac rewrite_vec_push_back_tac v x w :=
@@ -695,6 +843,50 @@ Tactic Notation "rewrite_vec_push_back" constr(v) constr(x) :=
 Tactic Notation "rewrite_vec_push_back" constr(v) constr(x) "as" simple_intropattern(w) :=
   rewrite_vec_push_back_tac v x w.
 
+Tactic Notation "rewrite_vec_push_back" "as" simple_intropattern(w) :=
+  lazymatch goal with [ |- context[ vec_push_back _ ?V ?X ]] =>
+    rewrite_vec_push_back V X as w
+  end.
+
+Ltac rewrite_vec_index_mut_fwd_tac v i x :=
+  let xVal := constr:(vec_index_mut_fwd _ v i) in
+
+  let B := fresh "B" in
+  assert (B: to_Z i < vec_length v);
+  lazymatch goal with [ |- to_Z i < vec_length v ] =>
+    let H := fresh "H" in
+    assert (H := vec_len_in_usize v);
+    simpl in H |- *; try lia
+  | [ |- _ ] =>
+
+  (* TODO *)
+  let H := fresh "H" in
+  destruct (V_index_mut_fwd_bounded v i B) as (x, H);
+  clear B;
+
+  let Hx := ltac_new_id "H"%string x ""%string in
+  let Hr := fresh "Hr" in
+  destruct H as (Hr, Hw);
+
+  rewrite Hr;
+  clear Hr;
+  
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
+  end.
+
+Tactic Notation "rewrite_vec_push_back" constr(v) constr(i) :=
+  let x := fresh "x" in
+  rewrite_vec_push_back_tac v i x.
+
+Tactic Notation "rewrite_vec_push_back" constr(v) constr(i) "as" simple_intropattern(x) :=
+  rewrite_vec_push_back_tac v i x.
+
+Tactic Notation "rewrite_vec_push_back" "as" simple_intropattern(x) :=
+  lazymatch goal with [ |- context[ vec_push_back _ ?V ?I ]] =>
+    rewrite_vec_push_back V I as x
+  end.
+
 (*  +-----------------------+
     | Tactics - comparisons |
     +-----------------------+
@@ -726,6 +918,11 @@ Tactic Notation "destruct_eqb" constr(a) constr(b) :=
 Tactic Notation "destruct_eqb" constr(a) constr(b) "as" simple_intropattern(h) :=
   destruct_eqb_tac a b h.
 
+Tactic Notation "destruct_eqb" "as" simple_intropattern(h) :=
+  lazymatch goal with [ |- context[ (to_Z ?A) =? (to_Z ?B) ]] =>
+    destruct_eqb A B as h
+  end.
+
 (* TODO: Define the same tactic for the other comparisons *)
 
 (*  +----------------------+
@@ -747,39 +944,69 @@ Ltac induction_usize_as_nat_tac s n :=
   apply (f_equal Z.of_nat) in HeqN;
   rewrite usize_nat_to_Z in HeqN;
   simpl in HeqN.
-  (* TODO: IH hypothesis should be on Z. *)
 
 Tactic Notation "induction_usize_to_nat" simple_intropattern(s) "as" simple_intropattern(n) :=
   induction_usize_as_nat_tac s n.
 
-(* Fuel destruction.
-   TODO: How can it be applied automatically ?
-   We need to detect fuel parameters, do we assume that they are the only "nat" values ?
+(* Unfold the fixpoint on the fuel, destruct the fuel, try to solve the case "fuel = 0" then refold the fixpoint because Coq unfold it a second time on the fuel destruction.
+   TODO: We need to detect fuel parameters (to be usable in progress tactic, otherwise we expand ~ any function), do we assume that they are the only "nat" values ?
 *)
-Ltac siphon_fuel fuel :=
-  (* TODO:
-   - Lookup in which function is the fuel called.
-   - Unfold it and lookup again until the fuel is matched.
-   - Destruct the fuel, try to solve the 0 case (with e.g. intuition).
-   - Fold the previously unfolded fixpoint (it's expanded twice).
-
-   If the function is already unfolded, detect match on fuel.
-  *)
+Ltac siphon fuel :=
   (* Do we want to recursively unfold functions ?
      Here we only allow it once.
   *)
-  lazymatch goal with
-  (* How to match the fixpoint ?
-  
-  | [ |- context[ (match _ with _ => _ end) fuel ] ] =>
-    destruct fuel;
-    only 1: intuition *)
-  | [ |- context[ ?F fuel ] ] =>
-    unfold F;
+  let siphon f := (
+    unfold f;
     destruct fuel;
     only 1: intuition;
-    fold F
+    fold f
+  ) in
+  (* Not lazy to allow failing on some match *)
+  match goal with
+  (* TODO: How to match the already unfolded fixpoint ?
+  | [ |- context[ (fix _ (match _ with _ => _ end)) fuel ] ] =>
+    destruct fuel;
+    only 1: intuition *)
+  (* TODO: How to match the nth argument in generality ?
+     To avoid duplicating branches. *)
+  (* TODO: How to give a single body for multiple clauses ?
+     To avoid factorizing the code in "siphon". *)
+  | [ |- context[ ?F fuel ] ] => siphon F
+  | [ |- context[ ?F _ fuel ] ] => siphon F
+  | [ |- context[ ?F _ _ fuel ] ] => siphon F
+  | [ |- context[ ?F _ _ _ fuel ] ] => siphon F
+  | [ |- context[ ?F _ _ _ _ fuel ] ] => siphon F
+  | [ |- context[ ?F _ _ _ _ _ fuel ] ] => siphon F
+  | [ |- context[ ?F _ _ _ _ _ _ fuel ] ] => siphon F
+  | [ |- context[ ?F _ _ _ _ _ _ _ fuel ] ] => siphon F
+  | [ |- context[ ?F _ _ _ _ _ _ _ _ fuel ] ] => siphon F
+  | [ |- context[ ?F _ _ _ _ _ _ _ _ _ fuel ] ] => siphon F
   end.
+
+(*  +----------------------+
+    | Tactics - dispatcher |
+    +----------------------+
+*)
+
+(* The goal here is to have a single tactic to progress.
+  Either it applies to a head normal term (but how to match it with ltac ?), or we specify the terms to which it applies.
+
+  For now the second case is more easily testable. It means that given e.g. "a" and "b" we match "to_Z a =? to_Z b", "scalar_add a b", ... And apply the corresponding tactic each time.
+
+  It's not clear however if it can really be useful.
+*)
+
+Ltac make_progress :=
+  lazymatch goal with
+  | [ |- context[ to_Z ?A =? to_Z ?B ] ] => destruct_eqb A B
+  | [ |- context[ scalar_add ?A ?B ] ] => rewrite_scalar_add A B
+  | [ |- context[ scalar_sub ?A ?B ] ] => rewrite_scalar_sub A B
+  | [ |- context[ scalar_mul ?A ?B ] ] => rewrite_scalar_mul A B
+  | [ |- context[ scalar_div ?A ?B ] ] => rewrite_scalar_div A B
+  | [ |- context[ vec_push_back _ ?A ?B ] ] => rewrite_vec_push_back A B
+  end.
+(* (λx.if x then y else z)a *)
+
 
 (*  +-------+
     | Tests |
@@ -807,7 +1034,7 @@ Proof.
 revert fuel.
 induction_usize_to_nat s as S;
 intro fuel;
-siphon_fuel fuel;
+siphon fuel;
 destruct_eqb s (0%usize) as Seq0.
 
 (* 0 case *)
@@ -817,17 +1044,15 @@ destruct_eqb s (0%usize) as Seq0.
 
 intro_scalar_bounds s.
 rewrite_scalar_sub s (1%usize) as r.
+simpl (to_Z 1 %usize) in *.
 
 (* Apply IH *)
 assert (B: usize_to_nat r = S). 1: {
   (* I'm sure there is a simple tactic for that ... *)
-  cut (Z.of_nat (usize_to_nat r) = Z.of_nat S). intuition.
+  cut (Z.of_nat (usize_to_nat r) = Z.of_nat S).
+  intuition.
   (* Can this fit in the induction ? *)
   rewrite usize_nat_to_Z.
-  (* Those simplification seem common (see below).
-     Is there a way to automate them ?
-  *)
-  simpl (to_Z 1 %usize) in *.
   lia.
 }
 assert (H := IHS r B fuel).
@@ -835,7 +1060,6 @@ assert (H := IHS r B fuel).
 destruct (usize_identity fuel r). 2: exact H.
 rewrite res_bind_value.
 rewrite <-H.
-simpl (to_Z 1 %usize) in *.
 
 rewrite_scalar_add r (1%usize) as r0.
 simpl (to_Z 1 %usize) in *.

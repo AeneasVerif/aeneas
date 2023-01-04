@@ -148,58 +148,19 @@ Lemma hm_allocate_slots_shape (T: Type) (n: usize) (v: vec (List_t T)) (fuel: na
     | Fail_ Failure => False
     end.
 Proof.
-
-remember (usize_to_nat n) as N.
-revert n HeqN fuel v.
-induction N; intros.
-
-(* TODO: Correct siphon_fuel
-revert fuel v;
-induction_usize_to_nat n as N; intros;
-siphon_fuel fuel;
-destruct_eqb n (0%usize) as Hn0.
-*)
+revert fuel v.
+induction_usize_to_nat n as N;
+intros;
+siphon fuel;
+destruct_eqb as Hn0.
 
 (* zero case *)
-1: {
-(* TODO: Coq unfolds the recursive def a second time with "destruct fuel" *)
-(* TODO: Tag fuel so a tactic can take care of it *)
-unfold hash_map_allocate_slots_fwd.
-destruct fuel. 1: trivial.
-fold hash_map_allocate_slots_fwd.
-
-apply (f_equal Z.of_nat) in HeqN.
-rewrite usize_nat_to_Z in HeqN.
-simpl in HeqN.
-
-simpl (to_Z 0 %usize).
-remember (to_Z n =? 0) as B.
-induction B ; apply eq_sym in HeqB ; simpl.
-- now rewrite app_nil_r. (* can use "autorewrite with list" *)
-- exfalso. lia.
-}
+1: now rewrite app_nil_r.
 
 (* successor case *)
-1: {
-(* TODO: How to factorize repetitions properly in both cases ? *)
-unfold hash_map_allocate_slots_fwd.
-destruct fuel. 1: trivial.
-fold hash_map_allocate_slots_fwd.
 
-(* Should be factorized with an induction tactic (same for the zero case). *)
-apply (f_equal Z.of_nat) in HeqN.
-rewrite usize_nat_to_Z in HeqN.
-simpl in HeqN.
-
-simpl (to_Z 0 %usize).
-
-remember (to_Z n =? 0) as B.
-induction B ; apply eq_sym in HeqB.
-1: { exfalso. lia. }
-
-rewrite_vec_push_back v (@ListNil T) as w.
-
-rewrite_scalar_sub n (1%usize) as y.
+rewrite_vec_push_back as w.
+rewrite_scalar_sub as y.
 
 simpl in Hy |- *.
 
@@ -216,7 +177,6 @@ rewrite app_assoc.
 (* To show implicit parameters or remove notations :
     Set Printing Explicit/All.
 *)
-
 (* For some reason, "rewrite" doesn't find the subterm, so we massage the goal with "change". *)
 change ((slots_to_chains v ++ [[]]) ++ repeat [] N) with ((fun v1 => v1 ++ repeat [] N) (slots_to_chains v ++ [[]])).
 rewrite P3.
@@ -230,7 +190,6 @@ apply IHN.
   simpl.
   unfold vec_length in H.
   lia.
-}
 Qed.
 
 Lemma hm_allocate_slots_inv (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat) :
@@ -256,14 +215,9 @@ intros.
 unfold hash_map_allocate_slots_fwd.
 fold hash_map_allocate_slots_fwd.
 
-simpl (to_Z 0%usize).
-remember (to_Z n =? 0) as B.
-induction B ; apply eq_sym in HeqB.
-1: { lia. }
-
-rewrite_vec_push_back v (@ListNil T) as "w"%string.
-
-rewrite_scalar_sub n (1%usize) as "m"%string.
+destruct_eqb as Hn0.
+rewrite_vec_push_back as w.
+rewrite_scalar_sub as m.
 simpl in Hm.
 
 apply (IHfuel m w). 2: lia.
@@ -282,34 +236,17 @@ Lemma hm_allocate_slots_fail (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat
     Z.of_nat fuel >= to_Z n ->
     hash_map_allocate_slots_fwd T fuel v n = Fail_ Failure.
 Proof.
-remember (usize_to_nat n) as N.
-revert n HeqN fuel v.
-induction N ; intros.
-
-(* Zero case *)
-1: {
-apply (f_equal Z.of_nat) in HeqN.
-rewrite usize_nat_to_Z in HeqN.
-simpl in HeqN.
-
+revert fuel v.
+induction_usize_to_nat n as N;
+intros;
 assert (vb := vec_len_in_usize v).
-lia.
-}
 
-(* Successor case *)
-1: {
-apply (f_equal Z.of_nat) in HeqN.
-rewrite usize_nat_to_Z in HeqN.
+1: lia. (* Zero case *)
 
-unfold hash_map_allocate_slots_fwd.
-destruct fuel. 1: lia.
-fold hash_map_allocate_slots_fwd.
+siphon fuel.
+destruct_eqb as B.
 
-simpl (to_Z 0%usize).
-remember (to_Z n =? 0) as B.
-induction B ; apply eq_sym in HeqB.
-1: { lia. }
-
+(* Custom tactics cannot be used as they aim for success. *)
 remember (vec_push_back (List_t T) v ListNil) as W.
 destruct W ; apply eq_sym in HeqW.
 2: { destruct e.
@@ -331,7 +268,6 @@ apply IHN.
 - admit. (* exploit HeqM *)
 - admit. (* exploit HeqW *)
 - admit. (* exploit HeqM *)
-}
 Admitted.
 
 (* New hashmap *)
@@ -354,10 +290,8 @@ intro bounds.
 unfold hash_map_new_with_capacity_fwd.
 
 assert (Hv: vec_length (vec_new (List_t T)) + to_Z capacity <= usize_max).
-1: {
-  simpl.
-  now rewrite (proj2 (S_scalar_bounds _)).
-}
+1: simpl ; now rewrite (proj2 (S_scalar_bounds _)).
+
 assert (Hslots := hm_allocate_slots_shape T capacity (vec_new _) fuel Hv).
 
 remember (hash_map_allocate_slots_fwd T fuel
@@ -366,17 +300,11 @@ remember (hash_map_allocate_slots_fwd T fuel
 destruct S. 2: exact Hslots.
 rewrite res_bind_value.
 
-rewrite_scalar_mul capacity max_load_dividend as "x"%string.
+rewrite_scalar_mul capacity max_load_dividend as x.
 
-rewrite_scalar_div x max_load_divisor as "y"%string.
-1: {
-  assert (H := Z_div_pos (to_Z x) (to_Z max_load_divisor)).
-  lia.
-}
-1: {
-  assert (H := Z_div_lt (to_Z x) (to_Z max_load_divisor)).
-  lia.
-}
+assert (Hx1 := Z_div_pos (to_Z x) (to_Z max_load_divisor)).
+assert (Hx2 := Z_div_lt (to_Z x) (to_Z max_load_divisor)).
+rewrite_scalar_div x max_load_divisor as y.
 
 (* Why do we need the subsequent change ? *)
 set (hm := {|
@@ -441,17 +369,14 @@ Lemma hm_insert_in_list_fwd_shape {T} fuel k v l :
   end.
 Proof.
 revert fuel k v.
-induction l ; intros.
-2: { (* Nil case *)
-  unfold hash_map_insert_in_list_fwd.
-  destruct fuel ; intuition.
-}
+induction l;
+intros;
+siphon fuel.
 
-unfold hash_map_insert_in_list_fwd.
-destruct fuel. 1: trivial.
-fold hash_map_insert_in_list_fwd.
+(* Nil case *)
+2: intuition.
 
-(* scalar_eqb should be a Notation *)
+(* The tactic doesn't help here: we really want "(k s= s) = true" instead of "to_Z k = to_Z s", because we rewrite "s=" twice. *)
 remember (s s= k) as B.
 rewrite Zeqb_sym in HeqB.
 destruct B ; apply eq_sym in HeqB.
@@ -477,15 +402,12 @@ Lemma hm_insert_in_list_back_shape {T} fuel k v l :
   end.
 Proof.
 revert fuel k v.
-induction l ; intros.
-2: { (* Nil case *)
-  unfold hash_map_insert_in_list_back, get_chain_value.
-  destruct fuel ; reflexivity.
-}
+induction l;
+intros;
+siphon fuel.
 
-unfold hash_map_insert_in_list_back.
-destruct fuel. 1: trivial.
-fold hash_map_insert_in_list_back.
+(* Nil case *)
+2: reflexivity.
 
 remember (s s= k) as B.
 destruct B ; apply eq_sym in HeqB.
@@ -503,6 +425,34 @@ destruct hm ; simpl. 2: auto.
 rewrite Zeqb_sym, HeqB.
 destruct (get_chain_value (to_chain l) k) ;
 f_equal ; apply H.
+Qed.
+
+Lemma hm_insert_no_resize_shape {T} (fuel: nat) (self: Hash_map_t T) (key: usize) (value: T) :
+  hm_invariants self ->
+  match hash_map_insert_no_resize_fwd_back T fuel self key value with
+  | Fail_ Failure   => False
+  | Fail_ OutOfFuel => True
+  | Return hm => hm_invariants hm
+            (* /\ spec_on_values self hm *)
+  end.
+Proof.
+intro inv.
+unfold hash_map_insert_no_resize_fwd_back.
+
+intro_scalar_bounds key.
+
+(* TODO Should treat hash_key_fwd as an opaque but non-failing function, to keep the 'hash' value separated. *)
+unfold hash_key_fwd.
+rewrite res_bind_value.
+
+(* TODO Need preconditions *)
+(* TODO(minor) Tactics shouldn't duplicate bounds *)
+rewrite_scalar_rem as pos. 1-2: admit.
+(* TODO Another simplification from projection *)
+unfold vec_len in Hpos. simpl in Hpos.
+
+
+
 Qed.
 
 End Hashmap_Properties.

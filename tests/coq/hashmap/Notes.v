@@ -111,3 +111,19 @@ Search (S _ >= _).
  - https://github.com/tchajed/ltac2-tutorial/blob/master/src/ltac2_tutorial.v
  - https://www.pédrot.fr/articles/coqpl2019.pdf
 *)
+
+(*    +---------------------+
+      | Questions about Coq |
+      +---------------------+
+*)
+(*
+    On Ltac:
+
+  How to visit a lambda-term (recursively inspect abstractions, applications and variables) ?
+
+  How to match a fixpoint ?
+
+  How to do a breath-first search ?
+*)
+
+

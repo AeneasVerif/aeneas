@@ -8,6 +8,6 @@ Primitives_Ext.v
 Hashmap_Types.v
 Hashmap_Funs.v
 Hashmap_Properties.v
-Examples.v
+Notes.v
 ltac2_string_to_ident.v
 ltac2_ident_to_string.v
