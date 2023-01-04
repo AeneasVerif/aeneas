@@ -2659,7 +2659,6 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
      environments upon loop *reentry*, and synthesize nothing by
      returning [None]
   *)
-  let ctx_upon_entry = ref None in
   let ctxs = ref [] in
   let register_ctx ctx = ctxs := ctx :: !ctxs in
 
@@ -2708,7 +2707,6 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
   (* Join the contexts at the loop entry - ctx1 is the current joined
      context (the context at the loop entry, after we called
      {!prepare_ashared_loans}, if this is the first iteration) *)
-  (* TODO: ctx_upon_entry is useless, it should be ctx0? *)
   let join_ctxs (ctx1 : C.eval_ctx) : C.eval_ctx =
     (* If this is the first iteration, end the borrows/loans/abs which
        appear in ctx1 and not in the other contexts, then compute the
@@ -2747,33 +2745,33 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     in
 
     let fixed_ids = Option.get !fixed_ids in
-    let (ctx1', _), ctx2 =
+    let (_, _), ctx2 =
       loop_join_origin_with_continue_ctxs config loop_id fixed_ids ctx1 !ctxs
     in
     ctxs := [];
-    if !ctx_upon_entry = None then ctx_upon_entry := Some ctx1';
     ctx2
+  in
+  (* Compute the set of fixed ids - for the symbolic ids, we compute the
+     intersection of ids between the original environment and the list
+     of new environments *)
+  let compute_fixed_ids (ctxl : C.eval_ctx list) : ids_sets =
+    let fixed_ids, _ = compute_context_ids ctx0 in
+    let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
+    let sids = ref sids in
+    List.iter
+      (fun ctx ->
+        let fixed_ids, _ = compute_context_ids ctx in
+        sids := V.SymbolicValueId.Set.inter !sids fixed_ids.sids)
+      ctxl;
+    let sids = !sids in
+    let fixed_ids = { aids; blids; borrow_ids; loan_ids; dids; rids; sids } in
+    fixed_ids
   in
   (* Check if two contexts are equivalent - modulo alpha conversion on the
      existentially quantified borrows/abstractions/symbolic values.
   *)
-  let compute_fixed_ids (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : ids_sets =
-    (* Compute the set of fixed ids - for the symbolic ids, we compute the
-       intersection of ids between the original environment and [ctx1]
-       and [ctx2] *)
-    let fixed_ids, _ = compute_context_ids ctx0 in
-    let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
-    let fixed_ids1, _ = compute_context_ids ctx1 in
-    let fixed_ids2, _ = compute_context_ids ctx2 in
-    let sids =
-      V.SymbolicValueId.Set.inter sids
-        (V.SymbolicValueId.Set.inter fixed_ids1.sids fixed_ids2.sids)
-    in
-    let fixed_ids = { aids; blids; borrow_ids; loan_ids; dids; rids; sids } in
-    fixed_ids
-  in
   let equiv_ctxs (ctx1 : C.eval_ctx) (ctx2 : C.eval_ctx) : bool =
-    let fixed_ids = compute_fixed_ids ctx1 ctx2 in
+    let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
     let check_equivalent = true in
     let lookup_shared_value _ = raise (Failure "Unreachable") in
     Option.is_some
@@ -3025,7 +3023,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     (* Return *)
     fp
   in
-  let fixed_ids = compute_fixed_ids (Option.get !ctx_upon_entry) fp in
+  let fixed_ids = compute_fixed_ids [ fp ] in
 
   (* Return *)
   (fp, fixed_ids)
@@ -3461,44 +3459,6 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
      context, which results from joins during which we ended the loans which
      were introduced during the loop iterations)
   *)
-  (* End the borrows in the dummy values - TODO: is this useful? *)
-  let rec cf_reorganize_dummy_tgt : cm_fun =
-   fun cf tgt_ctx ->
-    (* Collect the dummy values in the target context *)
-    let _, _, tgt_dummies = ctx_split_fixed_new fixed_ids tgt_ctx in
-
-    (* Whenever we find a borrow which can be ended (doesn't contain loans)
-       we end it *)
-    let bid = ref None in
-    try
-      let visitor =
-        object
-          inherit [_] V.iter_typed_value
-
-          method! visit_SharedBorrow _ l =
-            bid := Some l;
-            raise Utils.Found
-
-          method! visit_MutBorrow _ l v =
-            if not (value_has_loans v.value) then (
-              bid := Some l;
-              raise Utils.Found)
-            else ()
-        end
-      in
-      List.iter (visitor#visit_typed_value ()) tgt_dummies;
-
-      log#ldebug
-        (lazy
-          ("match_ctx_with_target: after reorganizing dummies:\n"
-         ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- tgt_ctx: "
-         ^ eval_ctx_to_string tgt_ctx));
-
-      cf tgt_ctx
-    with Utils.Found ->
-      let cc = InterpreterBorrows.end_borrow config (Option.get !bid) in
-      comp cc cf_reorganize_dummy_tgt cf tgt_ctx
-  in
   (* End the loans which lead to mismatches when joining *)
   let rec cf_reorganize_join_tgt : cm_fun =
    fun cf tgt_ctx ->
@@ -3803,8 +3763,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
   in
 
   (* Compose and continue *)
-  comp cf_reorganize_dummy_tgt cf_reorganize_join_tgt cf_introduce_loop_fp_abs
-    tgt_ctx
+  cf_reorganize_join_tgt cf_introduce_loop_fp_abs tgt_ctx
 
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (eval_loop_body : st_cm_fun) : st_cm_fun =
