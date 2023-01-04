@@ -259,6 +259,11 @@ let rvalue_get_place (rv : E.rvalue) : E.place option =
   | Ref (p, _) -> Some p
   | UnaryOp _ | BinaryOp _ | Global _ | Discriminant _ | Aggregate _ -> None
 
+(** See {!ValuesUtils.symbolic_value_has_borrows} *)
+let symbolic_value_has_borrows (ctx : C.eval_ctx) (sv : V.symbolic_value) : bool
+    =
+  ValuesUtils.symbolic_value_has_borrows ctx.type_context.type_infos sv
+
 (** See {!ValuesUtils.value_has_borrows}. *)
 let value_has_borrows (ctx : C.eval_ctx) (v : V.value) : bool =
   ValuesUtils.value_has_borrows ctx.type_context.type_infos v
@@ -266,6 +271,9 @@ let value_has_borrows (ctx : C.eval_ctx) (v : V.value) : bool =
 (** See {!ValuesUtils.value_has_loans_or_borrows}. *)
 let value_has_loans_or_borrows (ctx : C.eval_ctx) (v : V.value) : bool =
   ValuesUtils.value_has_loans_or_borrows ctx.type_context.type_infos v
+
+(** See {!ValuesUtils.value_has_loans}. *)
+let value_has_loans (v : V.value) : bool = ValuesUtils.value_has_loans v
 
 (** See {!compute_typed_value_ids}, {!compute_context_ids}, etc. *)
 type ids_sets = {
@@ -359,6 +367,12 @@ let compute_absl_ids (xl : V.abs list) : ids_sets * ids_to_values =
 (** Compute the sets of ids found in an abstraction. *)
 let compute_abs_ids (x : V.abs) : ids_sets * ids_to_values =
   compute_absl_ids [ x ]
+
+(** Compute the sets of ids found in an environment element. *)
+let compute_env_elem_ids (x : C.env_elem) : ids_sets * ids_to_values =
+  let compute, get_ids, get_ids_to_values = compute_ids () in
+  compute#visit_env_elem () x;
+  (get_ids (), get_ids_to_values ())
 
 (** Compute the sets of ids found in a list of contexts. *)
 let compute_contexts_ids (ctxl : C.eval_ctx list) : ids_sets * ids_to_values =

@@ -627,7 +627,14 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                   given_back_ls
             | V.AEndedProjBorrows _ | V.AIgnoredProjBorrows -> ())
         | V.AIgnored, _ -> ()
-        | _ -> raise (Failure "Erroneous typing"));
+        | _ ->
+            log#lerror
+              (lazy
+                ("Erroneous typing:" ^ "\n- raw value: "
+               ^ V.show_typed_avalue atv ^ "\n- value: "
+                ^ typed_avalue_to_string ctx atv
+                ^ "\n- type: " ^ rty_to_string ctx atv.V.ty));
+            raise (Failure "Erroneous typing"));
         (* Continue exploring to inspect the subterms *)
         super#visit_typed_avalue info atv
     end

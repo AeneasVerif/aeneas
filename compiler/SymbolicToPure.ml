@@ -245,6 +245,10 @@ let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
   let fmt = Print.PC.ctx_to_rtype_formatter fmt in
   Print.PV.symbolic_value_to_string fmt sv
 
+let typed_value_to_string (ctx : bs_ctx) (v : V.typed_value) : string =
+  let fmt = bs_ctx_to_ctx_formatter ctx in
+  Print.PV.typed_value_to_string fmt v
+
 let ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let fmt = bs_ctx_to_pp_ast_formatter ctx in
   let fmt = PrintPure.ast_to_type_formatter fmt in
@@ -2115,6 +2119,17 @@ and translate_forward_end (ectx : C.eval_ctx)
 
       (* Lookup the loop information *)
       let loop_info = LoopId.Map.find loop_id ctx.loops in
+
+      log#ldebug
+        (lazy
+          ("translate_forward_end:\n- loop_input_values:\n"
+          ^ V.SymbolicValueId.Map.show
+              (typed_value_to_string ctx)
+              loop_input_values
+          ^ "\n- loop_info.input_svl:\n"
+          ^ Print.list_to_string
+              (symbolic_value_to_string ctx)
+              loop_info.input_svl));
 
       (* Translate the input values *)
       let loop_input_values =

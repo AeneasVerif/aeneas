@@ -132,7 +132,7 @@ val abs_is_destructured : bool -> C.eval_ctx -> V.abs -> bool
 val convert_value_to_abstractions :
   V.abs_kind -> bool -> bool -> C.eval_ctx -> V.typed_value -> V.abs list
 
-(** See {!merge_abstractions}.
+(** See {!merge_into_abstraction}.
 
     Rem.: it may be more idiomatic to have a functor, but this seems a bit
     heavyweight, though.
@@ -199,9 +199,10 @@ type merge_duplicates_funcs = {
 
 (** Merge an abstraction into another abstraction.
 
-    We insert the result of the merge in place of the first abstraction (this
-    helps preserving the structure of the environment, when computing loop
-    fixed points for instance).
+    We insert the result of the merge in place of the second abstraction (and in
+    particular, we don't simply push the merged abstraction at the end of the
+    environment: this helps preserving the structure of the environment, when
+    computing loop fixed points for instance).
 
     When we merge two abstractions together, we remove the loans/borrows
     which appear in one and whose associated loans/borrows appear in the
@@ -236,7 +237,7 @@ type merge_duplicates_funcs = {
         abs'0 { mut_borrow l0, mut_loan l1 } // mut_borrow l0 !
         abs'1 { mut_borrow l0, mut_loan l2 } // mut_borrow l0 !
       ]}
-      If you want to forbid this, provide [None]. In that case, [merge_abstractions]
+      If you want to forbid this, provide [None]. In that case, [merge_into_abstraction]
       actually simply performs some sort of a union.
 
     - [ctx]
@@ -246,7 +247,7 @@ type merge_duplicates_funcs = {
     We return the updated context as well as the id of the new abstraction which
     results from the merge.
  *)
-val merge_abstractions :
+val merge_into_abstraction :
   V.abs_kind ->
   bool ->
   merge_duplicates_funcs option ->
