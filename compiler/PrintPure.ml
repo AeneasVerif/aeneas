@@ -521,7 +521,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
       let meta_s = meta_to_string fmt meta in
       let e = texpression_to_string fmt inside indent indent_incr e in
       match meta with
-      | Assignment _ ->
+      | Assignment _ | Tag _ ->
           let e = meta_s ^ "\n" ^ indent ^ e in
           if inside then "(" ^ e ^ ")" else e
       | MPlace _ -> "(" ^ meta_s ^ " " ^ e ^ ")")
@@ -655,6 +655,7 @@ and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
         ^ texpression_to_string fmt false "" "" rv
         ^ rp ^ ")"
     | MPlace mp -> "@mplace=" ^ mplace_to_string fmt mp
+    | Tag msg -> "@tag \"" ^ msg ^ "\""
   in
   "@meta[" ^ meta ^ "]"
 
