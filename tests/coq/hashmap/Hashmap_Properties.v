@@ -41,9 +41,6 @@ Fixpoint to_chain {T} (l: List_t T) : chain_t T :=
     | ListNil => nil
     end.
 
-Definition get_slots_len {T} (hm: Hash_map_t T) : usize :=
-    vec_len (List_t T) hm.(Hash_map_slots).
-
 Definition slots_to_chains {T} (slots: vec (List_t T)) : list (chain_t T) :=
   List.map to_chain (vec_to_list slots).
 
@@ -61,22 +58,28 @@ Fixpoint update_chain {T} (ch: chain_t T) (k: key_id) (v: T) :
   match ch with
   | [] => []
   | (k', v') :: t => if (k s= k')
-      then (k,  v)  :: t
+      then (k', v)  :: t
       else (k', v') :: update_chain t k v
   end.
 
 (* Hash *)
 
+(* Allows hash_key_fwd to succeed while keeping its implementation opaque with the lemma below. *)
 Definition get_hash (k: key_id) : hash_id :=
     (hash_key_fwd k) %return.
 
-Definition get_hash_pos {T} (hm: Hash_map_t T) (k: key_id) : result slot_id :=
-    scalar_rem (get_hash k) (get_slots_len hm).
+Lemma hash_key_success (k: key_id) :
+  hash_key_fwd k = Return (get_hash k).
+Proof.
+reflexivity.
+Qed.
+
+Definition get_hash_pos {T} (slots: vec (List_t T)) (k: key_id) : result slot_id :=
+  scalar_rem (get_hash k) (vec_len _ slots).
 
 (* Given hm, i, j: give key-value pair *)
-Definition get_kv {T} (hm: Hash_map_t T) (i: slot_id) (j: chain_id) : result (usize * T) :=
-    let l := slots_to_chains hm.(Hash_map_slots) in
-    ch <- res_of_opt (nth_error l (usize_to_nat i));
+Definition get_kv {T} (chains: list (chain_t T)) (i: slot_id) (j: chain_id) : result (usize * T) :=
+    ch <- res_of_opt (nth_error chains (usize_to_nat i));
     let kv := nth_error ch (usize_to_nat j) in
     res_of_opt kv.
 
@@ -87,6 +90,9 @@ Definition result_prop_bind {T} (x: result T) (p: T -> Prop) : Prop :=
     | Return x => p x
     end.
 
+Notation "x <-- c1 ; c2" := (result_prop_bind c1 (fun x => c2))
+  (at level 61, c1 at next level, right associativity).
+  
 (* Hashmap length *)
 
 Definition hm_length {T} (hm: Hash_map_t T) : usize :=
@@ -99,32 +105,38 @@ reflexivity.
 Qed.
 
 (* Main invariants *)
+(* Do we care keeping vec & scalars, i.e. size limits ? *)
 
-Notation "x <-- c1 ; c2" := (result_prop_bind c1 (fun x => c2))
-(at level 61, c1 at next level, right associativity).
-
-Definition key_is_in_hash_slot {T} (hm: Hash_map_t T) (i: slot_id) (j: chain_id) : Prop :=
-    kv <-- get_kv hm i j;
-    p  <-- get_hash_pos hm (fst kv);
+Definition key_is_in_hash_slot {T} (s: vec (List_t T)) (i: slot_id) (j: chain_id) : Prop :=
+    kv <-- get_kv (slots_to_chains s) i j;
+    p  <-- get_hash_pos s (fst kv);
     (p = i).
 
-Definition no_key_duplicate {T} (hm: Hash_map_t T) (i: slot_id) (j1 j2: chain_id) (p: j1 <> j2) : Prop :=
-    kv1 <-- get_kv hm i j1;
-    kv2 <-- get_kv hm i j2;
+Definition no_key_duplicate {T} (chains: list (chain_t T)) (i: slot_id) (j1 j2: chain_id) (p: j1 <> j2) : Prop :=
+    kv1 <-- get_kv chains i j1;
+    kv2 <-- get_kv chains i j2;
     (fst kv1 <> fst kv2).
 
-Definition hm_invariants {T} (hm: Hash_map_t T) :=
-    (∀i j, key_is_in_hash_slot hm i j) /\
-    (∀i j1 j2 p, no_key_duplicate hm i j1 j2 p).
+Definition hm_invariants {T} (s: vec (List_t T)) :=
+    (∀i j, key_is_in_hash_slot s i j) /\
+    (∀i j1 j2 p, no_key_duplicate (slots_to_chains s) i j1 j2 p).
 
 (* It may be easier to prove than no_key_duplicate *)
-Definition no_key_duplicate_v2 {T} (hm: Hash_map_t T) : Prop :=
-  let chains := slots_to_chains hm.(Hash_map_slots) in
+Definition no_key_duplicate_v2 {T} (chains: list (chain_t T)) : Prop :=
   NoDup (map fst (List.concat chains)).
 
-(*  +----------+
-    | Theorems |
-    +----------+
+(*  +----------------------------------+
+    | Theorems - functional invariants |
+    +----------------------------------+
+*)
+
+Definition update_chain_inv {T} (s0 s1: vec (List_t T)) (inv: hm_invariants s0) (i: slot_id) (k: key_id) (v: T) :
+  (slots_to_chains s0 = slots_to_chains s0) ->
+  hm_invariants s1
+
+(*  +--------------------+
+    | Theorems - hashmap |
+    +--------------------+
 *)
 
 (* The test from Hashmap_funs.v *)
@@ -451,8 +463,45 @@ rewrite_scalar_rem as pos. 1-2: admit.
 (* TODO Another simplification from projection *)
 unfold vec_len in Hpos. simpl in Hpos.
 
+rewrite_vec_index_mut_fwd as slot. 1: admit.
+
+assert (Hins := hm_insert_in_list_fwd_shape fuel key value slot).
+remember (hash_map_insert_in_list_fwd T fuel key value slot) as ins.
+destruct ins. 2: exact Hins.
+
+rewrite res_bind_value.
+destruct b.
+
+(* Value inserted case *)
+1: {
+admit.
+}
+(* Value not inserted *)
+1: {
+assert (Hins2 := hm_insert_in_list_back_shape fuel key value slot).
+remember (hash_map_insert_in_list_back T fuel key value slot) as ins2.
+destruct ins2. 2: exact Hins2.
+rename l into new_slot.
+simpl.
 
 
-Qed.
+
+rewrite_vec_index_mut_back as new_slots. 1: admit.
+
+(*set (new_self := {|
+    Hash_map_num_entries := Hash_map_num_entries self;
+    Hash_map_max_load_factor := Hash_map_max_load_factor self;
+    Hash_map_max_load := Hash_map_max_load self;
+    Hash_map_slots := new_slots;
+  |}).*)
+
+destruct inv as (key_in, no_dup).
+split ; intros.
+- unfold key_is_in_hash_slot, get_kv, get_hash_pos, get_slots_len.
+  simpl.
+  admit.
+- admit.
+}
+Admitted.
 
 End Hashmap_Properties.

@@ -123,6 +123,15 @@ destruct (Sumbool.sumbool_of_bool
 (scalar_le_max Usize (Z.of_nat (Datatypes.length w)))) ; discriminate.
 Qed.
 
+Fixpoint replace_list {T} (l: list T) (n: nat) (x: T) :=
+  match l with
+  | [] => []
+  | y :: t => match n with
+    | 0%nat => x :: t
+    | S n'  => y :: replace_list t n' x
+    end
+  end.
+
 (*
 Lemma vec_push_success {T} (v: vec T) (x: T) (b: vec_length v < usize_max) :
   vec_push_back T v x = Return (bounded_vec_push_back v x b).
@@ -480,6 +489,13 @@ Lemma V_index_mut_fwd_bounded {T} (v: vec T) (i: usize) :
   to_Z i < vec_length v ->
   ∃x, vec_index_mut_fwd T v i = Return x
    /\ nth_error (vec_to_list v) (usize_to_nat i) = Some x.
+Proof.
+Admitted.
+
+Lemma V_index_mut_back_bounded {T} (v: vec T) (i: usize) (x: T) :
+  to_Z i < vec_length v ->
+  ∃w, vec_index_mut_back T v i x = Return w
+   /\ vec_to_list w = replace_list (vec_to_list v) (usize_to_nat i) x.
 Proof.
 Admitted.
 
@@ -866,6 +882,45 @@ Ltac rewrite_vec_index_mut_fwd_tac v i x :=
 
   let Hx := ltac_new_id "H"%string x ""%string in
   let Hr := fresh "Hr" in
+  destruct H as (Hr, Hx);
+
+  rewrite Hr;
+  clear Hr;
+  
+  try rewrite res_bind_value;
+  try rewrite res_bind_id
+  end.
+
+Tactic Notation "rewrite_vec_index_mut_fwd" constr(v) constr(i) :=
+  let x := fresh "x" in
+  rewrite_vec_index_mut_fwd_tac v i x.
+
+Tactic Notation "rewrite_vec_index_mut_fwd" constr(v) constr(i) "as" simple_intropattern(x) :=
+  rewrite_vec_index_mut_fwd_tac v i x.
+
+Tactic Notation "rewrite_vec_index_mut_fwd" "as" simple_intropattern(x) :=
+  lazymatch goal with [ |- context[ vec_index_mut_fwd _ ?V ?I ]] =>
+    rewrite_vec_index_mut_fwd V I as x
+  end.
+
+Ltac rewrite_vec_index_mut_back_tac v i x w :=
+  let wVal := constr:(vec_index_mut_back _ v i x) in
+
+  let B := fresh "B" in
+  assert (B: to_Z i < vec_length v);
+  lazymatch goal with [ |- to_Z i < vec_length v ] =>
+    let H := fresh "H" in
+    assert (H := vec_len_in_usize v);
+    simpl in H |- *; try lia
+  | [ |- _ ] =>
+
+  (* TODO *)
+  let H := fresh "H" in
+  destruct (V_index_mut_back_bounded v i x B) as (w, H);
+  clear B;
+
+  let Hw := ltac_new_id "H"%string w ""%string in
+  let Hr := fresh "Hr" in
   destruct H as (Hr, Hw);
 
   rewrite Hr;
@@ -875,16 +930,16 @@ Ltac rewrite_vec_index_mut_fwd_tac v i x :=
   try rewrite res_bind_id
   end.
 
-Tactic Notation "rewrite_vec_push_back" constr(v) constr(i) :=
-  let x := fresh "x" in
-  rewrite_vec_push_back_tac v i x.
+Tactic Notation "rewrite_vec_index_mut_back" constr(v) constr(i) constr(x) :=
+  let w := fresh "w" in
+  rewrite_vec_index_mut_back_tac v i x w.
 
-Tactic Notation "rewrite_vec_push_back" constr(v) constr(i) "as" simple_intropattern(x) :=
-  rewrite_vec_push_back_tac v i x.
+Tactic Notation "rewrite_vec_index_mut_back" constr(v) constr(i) constr(x) "as" simple_intropattern(w) :=
+  rewrite_vec_index_mut_back_tac v i x w.
 
-Tactic Notation "rewrite_vec_push_back" "as" simple_intropattern(x) :=
-  lazymatch goal with [ |- context[ vec_push_back _ ?V ?I ]] =>
-    rewrite_vec_push_back V I as x
+Tactic Notation "rewrite_vec_index_mut_back" "as" simple_intropattern(w) :=
+  lazymatch goal with [ |- context[ vec_index_mut_back _ ?V ?I ?X ]] =>
+    rewrite_vec_index_mut_back V I X as w
   end.
 
 (*  +-----------------------+
