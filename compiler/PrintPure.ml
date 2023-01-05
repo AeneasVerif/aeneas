@@ -426,7 +426,7 @@ let fun_suffix (lp_id : LoopId.id option) (rg_id : T.RegionGroupId.id option) :
   let lp_suff =
     match lp_id with
     | None -> ""
-    | Some lp_id -> "^loop^" ^ LoopId.to_string lp_id
+    | Some lp_id -> "^loop" ^ LoopId.to_string lp_id
   in
 
   let rg_suff =

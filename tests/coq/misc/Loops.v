@@ -62,6 +62,29 @@ Definition sum_with_shared_borrows_fwd (n : nat) (max : u32) : result u32 :=
   sum_with_shared_borrows_loop_fwd n max (0%u32) (0%u32)
 .
 
+(** [loops::clear] *)
+Definition clear_loop_fwd_back
+  (n : nat) (v : vec u32) (i : usize) : result (vec u32) :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    let i0 := vec_len u32 v in
+    if i s< i0
+    then (
+      i1 <- usize_add i 1%usize;
+      v0 <- vec_index_mut_back u32 v i (0%u32);
+      v1 <- clear_loop_fwd n0 v0 i1;
+      let _ := v1 in
+      Return v0)
+    else Return v
+  end
+.
+
+(** [loops::clear] *)
+Definition clear_fwd_back (n : nat) (v : vec u32) : result (vec u32) :=
+  v0 <- clear_loop_fwd n v (0%usize); let _ := v0 in Return v
+.
+
 (** [loops::List] *)
 Inductive List_t (T : Type) :=
 | ListCons : T -> List_t T -> List_t T
@@ -70,6 +93,25 @@ Inductive List_t (T : Type) :=
 
 Arguments ListCons {T} _ _.
 Arguments ListNil {T}.
+
+(** [loops::list_mem] *)
+Fixpoint list_mem_loop_fwd
+  (n : nat) (i : u32) (ls : List_t u32) : result bool :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match ls with
+    | ListCons y tl =>
+      if y s= i then Return true else list_mem_loop_fwd n0 i tl
+    | ListNil => Return false
+    end
+  end
+.
+
+(** [loops::list_mem] *)
+Definition list_mem_fwd (n : nat) (x : u32) (ls : List_t u32) : result bool :=
+  list_mem_loop_fwd n x ls
+.
 
 (** [loops::list_nth_mut_loop] *)
 Fixpoint list_nth_mut_loop_loop_fwd
@@ -142,6 +184,100 @@ Fixpoint list_nth_shared_loop_loop_fwd
 Definition list_nth_shared_loop_fwd
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
   list_nth_shared_loop_loop_fwd T n ls i
+.
+
+(** [loops::id_mut] *)
+Definition id_mut_fwd (T : Type) (ls : List_t T) : result (List_t T) :=
+  Return ls
+.
+
+(** [loops::id_mut] *)
+Definition id_mut_back
+  (T : Type) (ls : List_t T) (ret : List_t T) : result (List_t T) :=
+  Return ret
+.
+
+(** [loops::id_shared] *)
+Definition id_shared_fwd (T : Type) (ls : List_t T) : result (List_t T) :=
+  Return ls
+.
+
+(** [loops::list_nth_mut_loop_with_id] *)
+Fixpoint list_nth_mut_loop_with_id_loop_fwd
+  (T : Type) (n : nat) (i : u32) (ls : List_t T) : result T :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match ls with
+    | ListCons x tl =>
+      if i s= 0%u32
+      then Return x
+      else (
+        i0 <- u32_sub i 1%u32; list_nth_mut_loop_with_id_loop_fwd T n0 i0 tl)
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::list_nth_mut_loop_with_id] *)
+Definition list_nth_mut_loop_with_id_fwd
+  (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
+  ls0 <- id_mut_fwd T ls; list_nth_mut_loop_with_id_loop_fwd T n i ls0
+.
+
+(** [loops::list_nth_mut_loop_with_id] *)
+Fixpoint list_nth_mut_loop_with_id_loop_back
+  (T : Type) (n : nat) (i : u32) (ls : List_t T) (ret : T) :
+  result (List_t T)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match ls with
+    | ListCons x tl =>
+      if i s= 0%u32
+      then Return (ListCons ret tl)
+      else (
+        i0 <- u32_sub i 1%u32;
+        l <- list_nth_mut_loop_with_id_loop_back T n0 i0 tl ret;
+        Return (ListCons x l))
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::list_nth_mut_loop_with_id] *)
+Definition list_nth_mut_loop_with_id_back
+  (T : Type) (n : nat) (ls : List_t T) (i : u32) (ret : T) :
+  result (List_t T)
+  :=
+  ls0 <- id_mut_fwd T ls;
+  l <- list_nth_mut_loop_with_id_loop_back T n i ls0 ret;
+  id_mut_back T ls l
+.
+
+(** [loops::list_nth_shared_loop_with_id] *)
+Fixpoint list_nth_shared_loop_with_id_loop_fwd
+  (T : Type) (n : nat) (l : List_t T) (i : u32) (ls : List_t T) : result T :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match ls with
+    | ListCons x tl =>
+      if i s= 0%u32
+      then Return x
+      else (
+        i0 <- u32_sub i 1%u32;
+        list_nth_shared_loop_with_id_loop_fwd T n0 l i0 tl)
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::list_nth_shared_loop_with_id] *)
+Definition list_nth_shared_loop_with_id_fwd
+  (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
+  ls0 <- id_shared_fwd T ls; list_nth_shared_loop_with_id_loop_fwd T n ls i ls0
 .
 
 (** [loops::list_nth_mut_loop_pair] *)

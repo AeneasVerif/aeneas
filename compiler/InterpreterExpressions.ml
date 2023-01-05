@@ -548,9 +548,22 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
     (cf : V.typed_value -> m_fun) : m_fun =
  fun ctx ->
   match bkind with
-  | E.Shared | E.TwoPhaseMut ->
+  | E.Shared | E.TwoPhaseMut | E.Shallow ->
+      (* **REMARK**: we treat shallow borrows like shared borrows. In theory,
+         this is incomplete. But in practice, this should allow to handle
+         many cases: in effect, we are simply forbidding match guards from
+         performing too many modifications in the environment, which is
+         probably not a too bad thing to do.
+      *)
+
       (* Access the value *)
-      let access = if bkind = E.Shared then Read else Write in
+      let access =
+        match bkind with
+        | E.Shared | E.Shallow -> Read
+        | E.TwoPhaseMut -> Write
+        | _ -> raise (Failure "Unreachable")
+      in
+
       let expand_prim_copy = false in
       let prepare =
         access_rplace_reorganize_and_read config expand_prim_copy access p
@@ -578,12 +591,21 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
         let ctx = write_place access p nv ctx in
         (* Compute the rvalue - simply a shared borrow with a the fresh id.
          * Note that the reference is *mutable* if we do a two-phase borrow *)
-        let rv_ty =
-          T.Ref (T.Erased, v.ty, if bkind = E.Shared then Shared else Mut)
+        let ref_kind =
+          match bkind with
+          | E.Shared | E.Shallow -> T.Shared
+          | E.TwoPhaseMut -> T.Mut
+          | _ -> raise (Failure "Unreachable")
         in
+        let rv_ty = T.Ref (T.Erased, v.ty, ref_kind) in
         let bc =
-          if bkind = E.Shared then V.SharedBorrow bid
-          else V.ReservedMutBorrow bid
+          match bkind with
+          | E.Shared | E.Shallow ->
+              (* See the remark at the beginning of the match branch: we
+                 handle shallow borrows like shared borrows *)
+              V.SharedBorrow bid
+          | E.TwoPhaseMut -> V.ReservedMutBorrow bid
+          | _ -> raise (Failure "Unreachable")
         in
         let rv : V.typed_value = { V.value = V.Borrow bc; ty = rv_ty } in
         (* Continue *)

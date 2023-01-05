@@ -753,6 +753,9 @@ let convert_avalue_to_given_back_value (abs_kind : V.abs_kind)
     | V.SynthRet _ -> V.SynthRetGivenBack
     | V.SynthInput _ -> V.SynthInputGivenBack
     | V.Loop _ -> V.LoopGivenBack
+    | V.Identity ->
+        (* Identity abstractions give back nothing *)
+        raise (Failure "Unreachable")
   in
   mk_fresh_symbolic_value sv_kind av.V.ty
 
@@ -1452,18 +1455,6 @@ let end_borrows config : V.BorrowId.Set.t -> cm_fun =
 
 let end_abstraction config = end_abstraction_aux config []
 let end_abstractions config = end_abstractions_aux config []
-
-(** Auxiliary function - call a function which requires a continuation,
-    and return the let context given to the continuation *)
-let get_cf_ctx_no_synth (f : cm_fun) (ctx : C.eval_ctx) : C.eval_ctx =
-  let nctx = ref None in
-  let cf ctx =
-    assert (!nctx = None);
-    nctx := Some ctx;
-    None
-  in
-  let _ = f cf ctx in
-  Option.get !nctx
 
 let end_borrow_no_synth config id ctx =
   get_cf_ctx_no_synth (end_borrow config id) ctx

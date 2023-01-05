@@ -69,6 +69,49 @@ let rec sum_with_shared_borrows_loop_fwd
 let sum_with_shared_borrows_fwd (max : u32) : result u32 =
   sum_with_shared_borrows_loop_fwd max 0 0
 
+(** [loops::clear] *)
+let clear_loop_fwd_back
+  (v : vec u32) (i : usize) :
+  Tot (result (vec u32)) (decreases (clear_decreases v i))
+  =
+  let i0 = vec_len u32 v in
+  if i < i0
+  then
+    begin match usize_add i 1 with
+    | Fail e -> Fail e
+    | Return i1 ->
+      begin match vec_index_mut_back u32 v i 0 with
+      | Fail e -> Fail e
+      | Return v0 ->
+        begin match clear_loop_fwd v0 i1 with
+        | Fail e -> Fail e
+        | Return _ -> Return v0
+        end
+      end
+    end
+  else Return v
+
+(** [loops::clear] *)
+let clear_fwd_back (v : vec u32) : result (vec u32) =
+  begin match clear_loop_fwd v 0 with
+  | Fail e -> Fail e
+  | Return _ -> Return v
+  end
+
+(** [loops::list_mem] *)
+let rec list_mem_loop_fwd
+  (i : u32) (ls : list_t u32) :
+  Tot (result bool) (decreases (list_mem_decreases i ls))
+  =
+  begin match ls with
+  | ListCons y tl -> if y = i then Return true else list_mem_loop_fwd i tl
+  | ListNil -> Return false
+  end
+
+(** [loops::list_mem] *)
+let list_mem_fwd (x : u32) (ls : list_t u32) : result bool =
+  list_mem_loop_fwd x ls
+
 (** [loops::list_nth_mut_loop] *)
 let rec list_nth_mut_loop_loop_fwd
   (t : Type0) (ls : list_t t) (i : u32) :
@@ -136,6 +179,101 @@ let rec list_nth_shared_loop_loop_fwd
 (** [loops::list_nth_shared_loop] *)
 let list_nth_shared_loop_fwd (t : Type0) (ls : list_t t) (i : u32) : result t =
   list_nth_shared_loop_loop_fwd t ls i
+
+(** [loops::id_mut] *)
+let id_mut_fwd (t : Type0) (ls : list_t t) : result (list_t t) = Return ls
+
+(** [loops::id_mut] *)
+let id_mut_back
+  (t : Type0) (ls : list_t t) (ret : list_t t) : result (list_t t) =
+  Return ret
+
+(** [loops::id_shared] *)
+let id_shared_fwd (t : Type0) (ls : list_t t) : result (list_t t) = Return ls
+
+(** [loops::list_nth_mut_loop_with_id] *)
+let rec list_nth_mut_loop_with_id_loop_fwd
+  (t : Type0) (i : u32) (ls : list_t t) :
+  Tot (result t) (decreases (list_nth_mut_loop_with_id_decreases t i ls))
+  =
+  begin match ls with
+  | ListCons x tl ->
+    if i = 0
+    then Return x
+    else
+      begin match u32_sub i 1 with
+      | Fail e -> Fail e
+      | Return i0 -> list_nth_mut_loop_with_id_loop_fwd t i0 tl
+      end
+  | ListNil -> Fail Failure
+  end
+
+(** [loops::list_nth_mut_loop_with_id] *)
+let list_nth_mut_loop_with_id_fwd
+  (t : Type0) (ls : list_t t) (i : u32) : result t =
+  begin match id_mut_fwd t ls with
+  | Fail e -> Fail e
+  | Return ls0 -> list_nth_mut_loop_with_id_loop_fwd t i ls0
+  end
+
+(** [loops::list_nth_mut_loop_with_id] *)
+let rec list_nth_mut_loop_with_id_loop_back
+  (t : Type0) (i : u32) (ls : list_t t) (ret : t) :
+  Tot (result (list_t t))
+  (decreases (list_nth_mut_loop_with_id_decreases t i ls))
+  =
+  begin match ls with
+  | ListCons x tl ->
+    if i = 0
+    then Return (ListCons ret tl)
+    else
+      begin match u32_sub i 1 with
+      | Fail e -> Fail e
+      | Return i0 ->
+        begin match list_nth_mut_loop_with_id_loop_back t i0 tl ret with
+        | Fail e -> Fail e
+        | Return l -> Return (ListCons x l)
+        end
+      end
+  | ListNil -> Fail Failure
+  end
+
+(** [loops::list_nth_mut_loop_with_id] *)
+let list_nth_mut_loop_with_id_back
+  (t : Type0) (ls : list_t t) (i : u32) (ret : t) : result (list_t t) =
+  begin match id_mut_fwd t ls with
+  | Fail e -> Fail e
+  | Return ls0 ->
+    begin match list_nth_mut_loop_with_id_loop_back t i ls0 ret with
+    | Fail e -> Fail e
+    | Return l -> id_mut_back t ls l
+    end
+  end
+
+(** [loops::list_nth_shared_loop_with_id] *)
+let rec list_nth_shared_loop_with_id_loop_fwd
+  (t : Type0) (l : list_t t) (i : u32) (ls : list_t t) :
+  Tot (result t) (decreases (list_nth_shared_loop_with_id_decreases t l i ls))
+  =
+  begin match ls with
+  | ListCons x tl ->
+    if i = 0
+    then Return x
+    else
+      begin match u32_sub i 1 with
+      | Fail e -> Fail e
+      | Return i0 -> list_nth_shared_loop_with_id_loop_fwd t l i0 tl
+      end
+  | ListNil -> Fail Failure
+  end
+
+(** [loops::list_nth_shared_loop_with_id] *)
+let list_nth_shared_loop_with_id_fwd
+  (t : Type0) (ls : list_t t) (i : u32) : result t =
+  begin match id_shared_fwd t ls with
+  | Fail e -> Fail e
+  | Return ls0 -> list_nth_shared_loop_with_id_loop_fwd t ls i ls0
+  end
 
 (** [loops::list_nth_mut_loop_pair] *)
 let rec list_nth_mut_loop_pair_loop_fwd

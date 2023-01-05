@@ -19,6 +19,12 @@ unfold
 let sum_with_shared_borrows_decreases (max : u32) (i : u32) (s : u32) : nat =
   admit ()
 
+(** [loops::clear]: decreases clause *)
+unfold let clear_decreases (v : vec u32) (i : usize) : nat = admit ()
+
+(** [loops::list_mem]: decreases clause *)
+unfold let list_mem_decreases (i : u32) (ls : list_t u32) : nat = admit ()
+
 (** [loops::list_nth_mut_loop]: decreases clause *)
 unfold
 let list_nth_mut_loop_decreases (t : Type0) (ls : list_t t) (i : u32) : nat =
@@ -28,6 +34,18 @@ let list_nth_mut_loop_decreases (t : Type0) (ls : list_t t) (i : u32) : nat =
 unfold
 let list_nth_shared_loop_decreases (t : Type0) (ls : list_t t) (i : u32) : nat
   =
+  admit ()
+
+(** [loops::list_nth_mut_loop_with_id]: decreases clause *)
+unfold
+let list_nth_mut_loop_with_id_decreases (t : Type0) (i : u32) (ls : list_t t) :
+  nat =
+  admit ()
+
+(** [loops::list_nth_shared_loop_with_id]: decreases clause *)
+unfold
+let list_nth_shared_loop_with_id_decreases (t : Type0) (l : list_t t) 
+  (i : u32) (ls : list_t t) : nat =
   admit ()
 
 (** [loops::list_nth_mut_loop_pair]: decreases clause *)

@@ -315,6 +315,7 @@ module Values = struct
         ^ ", loop abs kind: "
         ^ loop_abs_kind_to_string abs_kind
         ^ ")"
+    | Identity -> "Identity"
 
   let abs_to_string (fmt : value_formatter) (verbose : bool) (indent : string)
       (indent_incr : string) (abs : V.abs) : string =

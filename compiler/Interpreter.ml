@@ -138,7 +138,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return
   log#ldebug
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return:"
-     ^ "\n- back_id: "
+     ^ "\n- fname: "
+      ^ Print.fun_name_to_string fdef.name
+      ^ "\n- back_id: "
       ^ T.RegionGroupId.to_string back_id
       ^ "\n- loop_id: "
       ^ Print.option_to_string V.LoopId.to_string loop_id
@@ -213,6 +215,62 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       else ctx
     in
 
+    (* We now need to end the proper *input* abstractions - pay attention
+     * to the fact that we end the *input* abstractions, not the *return*
+     * abstractions (of course, the corresponding return abstractions will
+     * automatically be ended, because they consumed values coming from the
+     * input abstractions...) *)
+    (* End the parent abstractions and the current abstraction - note that we
+     * end them in an order which follows the regions hierarchy: it should lead
+     * to generated code which has a better consistency between the parent
+     * and children backward functions.
+     *
+     * Note that we don't end the same abstraction if we are *inside* a loop (i.e.,
+     * we are evaluating an [EndContinue]) or not.
+     *)
+    let current_abs_id, end_fun_synth_input =
+      let fun_abs_id =
+        (T.RegionGroupId.nth inst_sg.regions_hierarchy back_id).id
+      in
+      if not inside_loop then (fun_abs_id, true)
+      else
+        let pred (abs : V.abs) =
+          match abs.kind with
+          | V.Loop (_, rg_id', kind) ->
+              let rg_id' = Option.get rg_id' in
+              let is_ret =
+                match kind with V.LoopSynthInput -> true | V.LoopCall -> false
+              in
+              rg_id' = back_id && is_ret
+          | _ -> false
+        in
+        (* There is not necessarily an input synthesis abstraction specifically
+           for the loop.
+           If there is none, the input synthesis abstraction is actually the
+           function input synthesis abstraction.
+
+           Example:
+           ========
+           {[
+             fn clear(v: &mut Vec<u32>) {
+                 let mut i = 0;
+                 while i < v.len() {
+                     v[i] = 0;
+                     i += 1;
+                 }
+             }
+           ]}
+        *)
+        match C.ctx_find_abs ctx pred with
+        | Some abs -> (abs.abs_id, false)
+        | None -> (fun_abs_id, true)
+    in
+    log#ldebug
+      (lazy
+        ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
+          input abstraction: "
+        ^ V.AbstractionId.to_string current_abs_id));
+
     (* Set the proper abstractions as endable *)
     let ctx =
       let visit_loop_abs =
@@ -237,7 +295,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
                 assert (loop_id = Some loop_id');
                 { abs with can_end = true }
             | V.SynthInput rg_id' ->
-                if rg_id' = back_id && not inside_loop then
+                if rg_id' = back_id && end_fun_synth_input then
                   { abs with can_end = true }
                 else abs
             | _ ->
@@ -248,41 +306,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       visit_loop_abs#visit_eval_ctx () ctx
     in
 
-    (* We now need to end the proper *input* abstractions - pay attention
-     * to the fact that we end the *input* abstractions, not the *return*
-     * abstractions (of course, the corresponding return abstractions will
-     * automatically be ended, because they consumed values coming from the
-     * input abstractions...) *)
-    (* End the parent abstractions and the current abstraction - note that we
-     * end them in an order which follows the regions hierarchy: it should lead
-     * to generated code which has a better consistency between the parent
-     * and children backward functions.
-     *
-     * Note that we don't end the same abstraction if we are *inside* a loop (i.e.,
-     * we are evaluating an [EndContinue]) or not.
-     *)
-    let current_abs_id =
-      if not inside_loop then
-        (T.RegionGroupId.nth inst_sg.regions_hierarchy back_id).id
-      else
-        let pred (abs : V.abs) =
-          match abs.kind with
-          | V.Loop (_, rg_id', kind) ->
-              let rg_id' = Option.get rg_id' in
-              let is_ret =
-                match kind with V.LoopSynthInput -> true | V.LoopCall -> false
-              in
-              rg_id' = back_id && is_ret
-          | _ -> false
-        in
-        let abs = Option.get (C.ctx_find_abs ctx pred) in
-        abs.abs_id
-    in
-    log#ldebug
-      (lazy
-        ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
-          input abstraction: "
-        ^ V.AbstractionId.to_string current_abs_id));
     let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
     let cf_end_target_abs cf =
       List.fold_left
