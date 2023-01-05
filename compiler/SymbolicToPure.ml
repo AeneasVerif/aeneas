@@ -121,6 +121,7 @@ type bs_ctx = {
   bid : T.RegionGroupId.id option;  (** TODO: rename *)
   sg : fun_sig;
       (** The function signature - useful in particular to translate [Panic] *)
+  fwd_sg : fun_sig;  (** The signature of the forward function *)
   sv_to_var : var V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of
           a symbolic expansion or upon ending an abstraction, for instance)
@@ -2196,7 +2197,7 @@ and translate_forward_end (ectx : C.eval_ctx)
 
       (* Introduce a fresh output value for the forward function *)
       let ctx, output_var =
-        let output_ty = mk_simpl_tuple_ty ctx.sg.doutputs in
+        let output_ty = mk_simpl_tuple_ty ctx.fwd_sg.doutputs in
         fresh_var None output_ty ctx
       in
       let args, ctx, out_pats =
