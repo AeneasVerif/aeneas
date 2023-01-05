@@ -284,6 +284,10 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   in
   PrintPure.fun_decl_to_string fmt def
 
+let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
+  let fmt = bs_ctx_to_pp_ast_formatter ctx in
+  PrintPure.typed_pattern_to_string fmt p
+
 (* TODO: move *)
 let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   let fmt = bs_ctx_to_ast_formatter ctx in
@@ -2228,8 +2232,9 @@ and translate_forward_end (ectx : C.eval_ctx)
       (* Translate the end of the function *)
       let next_e = translate_end ctx in
 
-      (* Introduce the call to the loop in the generated AST *)
+      (* Introduce the call to the loop forward function in the generated AST *)
       let out_pat = mk_simpl_tuple_pattern out_pats in
+
       let loop_call =
         let fun_id = Fun (FromLlbc (fid, Some loop_id, None)) in
         let func = { id = FunOrOp fun_id; type_args = loop_info.type_args } in

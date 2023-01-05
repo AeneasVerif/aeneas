@@ -68,6 +68,11 @@ let mk_let (monadic : bool) (lv : typed_pattern) (re : texpression)
   let ty = next_e.ty in
   { e; ty }
 
+let mk_tag (msg : string) (next_e : texpression) : texpression =
+  let e = Meta (Tag msg, next_e) in
+  let ty = next_e.ty in
+  { e; ty }
+
 (** Type substitution *)
 let ty_substitute (tsubst : TypeVarId.id -> ty) (ty : ty) : ty =
   let obj =

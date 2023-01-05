@@ -519,6 +519,7 @@ and meta =
           The second (optional) mplace stores the origin.
         *)
   | MPlace of mplace  (** Meta-information about the origin of a value *)
+  | Tag of string  (** A tag - typically used for debugging *)
 [@@deriving
   show,
     visitors

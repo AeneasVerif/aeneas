@@ -483,6 +483,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           in
           ctx
       | MPlace mp -> add_right_constraint mp e ctx
+      | Tag _ -> ctx
     in
     let ctx, e = update_texpression e ctx in
     let e = mk_meta meta e in
@@ -1433,7 +1434,7 @@ let decompose_let_bindings (decompose_monadic : bool)
                  * - if not, make the decomposition in two steps
                  *)
                 match lv.value with
-                | PatVar _ ->
+                | PatVar _ | PatDummy ->
                     (* Variable: nothing to do *)
                     (monadic, lv, re, next_e)
                 | _ ->
@@ -1444,7 +1445,7 @@ let decompose_let_bindings (decompose_monadic : bool)
                     (* Visit the next expression *)
                     let next_e = self#visit_texpression env next_e in
                     (* Create the let-bindings *)
-                    (true, ltmp, re, mk_let false lv rtmp next_e)
+                    (monadic, ltmp, re, mk_let false lv rtmp next_e)
             in
             (* Decompose the nested let-patterns *)
             let lv, next_e =
