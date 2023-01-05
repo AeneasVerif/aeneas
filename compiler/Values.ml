@@ -939,6 +939,13 @@ type abs_kind =
           After we computed a fixed point, we give a unique region group
           identifier for each loop abstraction.
        *)
+  | Identity
+      (** An identity abstraction, which only consumes and provides shared
+          borrows/loans.
+
+          We introduce them to abstract the context a bit, for instance
+          to compute fixed-points.
+        *)
 [@@deriving show, ord]
 
 (** Ancestor for {!abs} iter visitor *)

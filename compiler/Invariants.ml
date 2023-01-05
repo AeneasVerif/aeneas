@@ -784,7 +784,7 @@ let check_symbolic_values (ctx : C.eval_ctx) : unit =
 
 let check_invariants (ctx : C.eval_ctx) : unit =
   if !Config.check_invariants then (
-    log#ldebug (lazy "Checking invariants");
+    log#ldebug (lazy ("Checking invariants:\n" ^ eval_ctx_to_string ctx));
     check_loans_borrows_relation_invariant ctx;
     check_borrowed_values_invariant ctx;
     check_typing_invariant ctx;

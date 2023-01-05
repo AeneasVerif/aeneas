@@ -1278,6 +1278,8 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | EvalGlobal (gid, sv, e) -> translate_global_eval gid sv e ctx
   | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
+  | IntroSymbolic (ectx, p, sv, v, e) ->
+      translate_intro_symbolic ectx p sv v e ctx
   | Meta (meta, e) -> translate_meta meta e ctx
   | ForwardEnd (ectx, loop_input_values, e, back_e) ->
       translate_forward_end ectx loop_input_values e back_e ctx
@@ -1521,6 +1523,7 @@ and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
   | V.Loop (loop_id, rg_id, abs_kind) ->
       translate_end_abstraction_loop ectx abs e ctx loop_id rg_id abs_kind
+  | V.Identity -> translate_end_abstraction_identity ectx abs e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpression
@@ -1706,6 +1709,20 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     assert (List.length inputs = List.length fwd_inputs);
     next_e)
   else mk_let effect_info.can_fail output call next_e
+
+and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
+    (e : S.expression) (ctx : bs_ctx) : texpression =
+  (* We simply check that the abstraction only contains shared borrows/loans,
+     and translate the next expression *)
+
+  (* We can do this simply by checking that it consumes and gives back nothing *)
+  let inputs = abs_to_consumed ctx ectx abs in
+  let ctx, outputs = abs_to_given_back None abs ctx in
+  assert (inputs = []);
+  assert (outputs = []);
+
+  (* Translate the next expression *)
+  translate_expression e ctx
 
 and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpression
@@ -2087,6 +2104,25 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
         List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches);
       { e; ty }
 
+and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
+    (sv : V.symbolic_value) (v : V.typed_value) (e : S.expression)
+    (ctx : bs_ctx) : texpression =
+  let mplace = translate_opt_mplace p in
+
+  (* Introduce a fresh variable for the symbolic value *)
+  let ctx, var = fresh_var_for_symbolic_value sv ctx in
+
+  (* Translate the value *)
+  let v = typed_value_to_texpression ctx ectx v in
+
+  (* Translate the next expression *)
+  let next_e = translate_expression e ctx in
+
+  (* Make the let-binding *)
+  let monadic = false in
+  let var = mk_typed_pattern_from_var var mplace in
+  mk_let monadic var v next_e
+
 and translate_forward_end (ectx : C.eval_ctx)
     (loop_input_values : V.typed_value S.symbolic_value_id_map option)
     (e : S.expression) (back_e : S.expression S.region_group_id_map)
@@ -2129,12 +2165,19 @@ and translate_forward_end (ectx : C.eval_ctx)
           ^ "\n- loop_info.input_svl:\n"
           ^ Print.list_to_string
               (symbolic_value_to_string ctx)
-              loop_info.input_svl));
+              loop_info.input_svl
+          ^ "\n"));
 
       (* Translate the input values *)
       let loop_input_values =
         List.map
-          (fun sv -> V.SymbolicValueId.Map.find sv.V.sv_id loop_input_values)
+          (fun sv ->
+            log#ldebug
+              (lazy
+                ("translate_forward_end: looking up input_svl: "
+                ^ V.SymbolicValueId.to_string sv.V.sv_id
+                ^ "\n"));
+            V.SymbolicValueId.Map.find sv.V.sv_id loop_input_values)
           loop_info.input_svl
       in
       let args =
@@ -2218,8 +2261,12 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     in
     log#ldebug
       (lazy
-        ("translate_loop:" ^ "\n- filtered svl: "
-        ^ (Print.list_to_string (symbolic_value_to_string ctx)) svl));
+        ("translate_loop:" ^ "\n- input_svalues: "
+        ^ (Print.list_to_string (symbolic_value_to_string ctx))
+            loop.input_svalues
+        ^ "\n- filtered svl: "
+        ^ (Print.list_to_string (symbolic_value_to_string ctx)) svl
+        ^ "\n"));
     let ctx, _ = fresh_vars_for_symbolic_values svl ctx in
     ctx
   in
@@ -2384,7 +2431,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
       ^ Print.fun_name_to_string def.A.name
       ^ " ("
       ^ Print.option_to_string T.RegionGroupId.to_string bid
-      ^ ")"));
+      ^ ")\n"));
 
   (* Translate the declaration *)
   let def_id = def.A.def_id in

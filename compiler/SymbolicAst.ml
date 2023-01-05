@@ -160,6 +160,22 @@ type expression =
           We use it to compute meaningful names for the variables we introduce,
           to prettify the generated code.
        *)
+  | IntroSymbolic of
+      Contexts.eval_ctx
+      * mplace option
+      * V.symbolic_value
+      * V.typed_value
+      * expression
+      (** We introduce a new symbolic value, equal to some other value.
+
+        This is used for instance when reorganizing the environment to compute
+        fixed points: we duplicate some shared symbolic values to destructure
+        the shared values, in order to make the environment a bit more general
+        (while losing precision of course).
+
+        The context is the evaluation context from before introducing the new
+        value. It has the same purpose as for the {!Return} case.
+      *)
   | ForwardEnd of
       Contexts.eval_ctx
       * V.typed_value symbolic_value_id_map option

@@ -8,8 +8,21 @@ module L = Logging
 open Utils
 open TypesUtils
 module PA = Print.EvalCtxLlbcAst
+open Cps
 
 (** Some utilities *)
+
+(** Auxiliary function - call a function which requires a continuation,
+    and return the let context given to the continuation *)
+let get_cf_ctx_no_synth (f : cm_fun) (ctx : C.eval_ctx) : C.eval_ctx =
+  let nctx = ref None in
+  let cf ctx =
+    assert (!nctx = None);
+    nctx := Some ctx;
+    None
+  in
+  let _ = f cf ctx in
+  Option.get !nctx
 
 let eval_ctx_to_string_no_filter = Print.Contexts.eval_ctx_to_string_no_filter
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
@@ -368,11 +381,15 @@ let compute_absl_ids (xl : V.abs list) : ids_sets * ids_to_values =
 let compute_abs_ids (x : V.abs) : ids_sets * ids_to_values =
   compute_absl_ids [ x ]
 
+(** Compute the sets of ids found in an environment. *)
+let compute_env_ids (x : C.env) : ids_sets * ids_to_values =
+  let compute, get_ids, get_ids_to_values = compute_ids () in
+  compute#visit_env () x;
+  (get_ids (), get_ids_to_values ())
+
 (** Compute the sets of ids found in an environment element. *)
 let compute_env_elem_ids (x : C.env_elem) : ids_sets * ids_to_values =
-  let compute, get_ids, get_ids_to_values = compute_ids () in
-  compute#visit_env_elem () x;
-  (get_ids (), get_ids_to_values ())
+  compute_env_ids [ x ]
 
 (** Compute the sets of ids found in a list of contexts. *)
 let compute_contexts_ids (ctxl : C.eval_ctx list) : ids_sets * ids_to_values =
