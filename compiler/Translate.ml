@@ -127,6 +127,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       SymbolicToPure.bid = None;
       (* Dummy for now *)
       sg = forward_sig.sg;
+      fwd_sg = forward_sig.sg;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
       var_counter;
