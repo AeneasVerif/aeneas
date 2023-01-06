@@ -2437,6 +2437,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   (* Update the context for the loop body *)
   let ctx_loop = { ctx_end with inside_loop = true } in
 
+  (* Add the input state *)
+  let input_state =
+    if ctx.sg.info.effect_info.stateful then Some ctx.state_var else None
+  in
+
   (* Translate the loop body *)
   let loop_body = translate_expression loop.loop_expr ctx_loop in
 
@@ -2448,7 +2453,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         loop_id;
         fuel0 = ctx.fuel0;
         fuel = ctx.fuel;
-        input_state = (if !Config.use_state then Some ctx.state_var else None);
+        input_state;
         inputs;
         inputs_lvs;
         back_output_tys;
