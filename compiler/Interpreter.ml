@@ -261,9 +261,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return
              }
            ]}
         *)
-        match C.ctx_find_abs ctx pred with
-        | Some abs -> (abs.abs_id, false)
-        | None -> (fun_abs_id, true)
+        let abs = Option.get (C.ctx_find_abs ctx pred) in
+        (abs.abs_id, false)
     in
     log#ldebug
       (lazy

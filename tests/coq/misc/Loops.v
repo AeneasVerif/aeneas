@@ -63,7 +63,7 @@ Definition sum_with_shared_borrows_fwd (n : nat) (max : u32) : result u32 :=
 .
 
 (** [loops::clear] *)
-Definition clear_loop_fwd_back
+Fixpoint clear_loop_fwd_back
   (n : nat) (v : vec u32) (i : usize) : result (vec u32) :=
   match n with
   | O => Fail_ OutOfFuel
@@ -73,16 +73,14 @@ Definition clear_loop_fwd_back
     then (
       i1 <- usize_add i 1%usize;
       v0 <- vec_index_mut_back u32 v i (0%u32);
-      v1 <- clear_loop_fwd n0 v0 i1;
-      let _ := v1 in
-      Return v0)
+      clear_loop_fwd_back n0 v0 i1)
     else Return v
   end
 .
 
 (** [loops::clear] *)
 Definition clear_fwd_back (n : nat) (v : vec u32) : result (vec u32) :=
-  v0 <- clear_loop_fwd n v (0%usize); let _ := v0 in Return v
+  clear_loop_fwd_back n v (0%usize)
 .
 
 (** [loops::List] *)

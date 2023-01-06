@@ -70,7 +70,7 @@ let sum_with_shared_borrows_fwd (max : u32) : result u32 =
   sum_with_shared_borrows_loop_fwd max 0 0
 
 (** [loops::clear] *)
-let clear_loop_fwd_back
+let rec clear_loop_fwd_back
   (v : vec u32) (i : usize) :
   Tot (result (vec u32)) (decreases (clear_decreases v i))
   =
@@ -82,21 +82,13 @@ let clear_loop_fwd_back
     | Return i1 ->
       begin match vec_index_mut_back u32 v i 0 with
       | Fail e -> Fail e
-      | Return v0 ->
-        begin match clear_loop_fwd v0 i1 with
-        | Fail e -> Fail e
-        | Return _ -> Return v0
-        end
+      | Return v0 -> clear_loop_fwd_back v0 i1
       end
     end
   else Return v
 
 (** [loops::clear] *)
-let clear_fwd_back (v : vec u32) : result (vec u32) =
-  begin match clear_loop_fwd v 0 with
-  | Fail e -> Fail e
-  | Return _ -> Return v
-  end
+let clear_fwd_back (v : vec u32) : result (vec u32) = clear_loop_fwd_back v 0
 
 (** [loops::list_mem] *)
 let rec list_mem_loop_fwd
