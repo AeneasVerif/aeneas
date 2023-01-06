@@ -259,8 +259,87 @@ let remove_loop_breaks (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
       ^ "\n"));
   f
 
+(** Remove the use of shallow borrows from a function.
+
+    In theory, this allows the code to do more things than what Rust allows,
+    and in particular it would allow to modify the variant of an enumeration
+    in a guard, while matching over this enumeration.
+
+    In practice, this is not a soundness issue.
+
+    The pass is implemented as follows:
+    - we look for all the variables which appear in pattern of the form and
+      remove them:
+      {[
+        let x = &shallow ...;
+        ...
+      ]}
+    - whenever we find such a variable [x], we remove all the subsequent
+      occurrences of [fake_read(x)].
+
+    We then check that [x] completely disappeared from the function body (for
+    sanity).
+ *)
+let remove_shallow_borrows (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
+  let f0 = f in
+  let filter_in_body (body : A.statement) : A.statement =
+    let filtered = ref E.VarId.Set.empty in
+
+    let filter_visitor =
+      object
+        inherit [_] A.map_statement as super
+
+        method! visit_Assign env p rv =
+          match (p.projection, rv) with
+          | [], E.Ref (_, E.Shallow) ->
+              (* Filter *)
+              filtered := E.VarId.Set.add p.var_id !filtered;
+              Nop
+          | _ ->
+              (* Don't filter *)
+              super#visit_Assign env p rv
+
+        method! visit_FakeRead env p =
+          if p.projection = [] && E.VarId.Set.mem p.var_id !filtered then
+            (* Filter *)
+            Nop
+          else super#visit_FakeRead env p
+      end
+    in
+
+    (* Filter the variables *)
+    let body = filter_visitor#visit_statement () body in
+
+    (* Check that the filtered variables completely disappeared from the body *)
+    let check_visitor =
+      object
+        inherit [_] A.iter_statement
+        method! visit_var_id _ id = assert (not (E.VarId.Set.mem id !filtered))
+      end
+    in
+    check_visitor#visit_statement () body;
+
+    (* Return the updated body *)
+    body
+  in
+
+  let body =
+    match f.body with
+    | None -> None
+    | Some body -> Some { body with body = filter_in_body body.body }
+  in
+  let f = { f with body } in
+  log#ldebug
+    (lazy
+      ("Before/after [remove_shallow_borrows]:\n"
+      ^ Print.Crate.crate_fun_decl_to_string crate f0
+      ^ "\n\n"
+      ^ Print.Crate.crate_fun_decl_to_string crate f
+      ^ "\n"));
+  f
+
 let apply_passes (crate : A.crate) : A.crate =
-  let passes = [ remove_loop_breaks crate ] in
+  let passes = [ remove_loop_breaks crate; remove_shallow_borrows crate ] in
   let functions =
     List.fold_left (fun fl pass -> List.map pass fl) crate.functions passes
   in
