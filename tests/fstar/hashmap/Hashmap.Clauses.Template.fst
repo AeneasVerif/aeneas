@@ -8,14 +8,14 @@ open Hashmap.Types
 
 (** [hashmap::HashMap::{0}::allocate_slots]: decreases clause *)
 unfold
-let hash_map_allocate_slots_decreases (t : Type0) (slots : vec (list_t t))
+let hash_map_allocate_slots_decreases (t : Type0) (v : vec (list_t t))
   (n : usize) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::clear_slots]: decreases clause *)
 unfold
-let hash_map_clear_slots_decreases (t : Type0) (slots : vec (list_t t))
-  (i : usize) : nat =
+let hash_map_clear_slots_decreases (t : Type0) (v : vec (list_t t)) (i : usize)
+  : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::insert_in_list]: decreases clause *)
@@ -30,37 +30,37 @@ let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
 
 (** [hashmap::HashMap::{0}::move_elements_from_list]: decreases clause *)
 unfold
-let hash_map_move_elements_from_list_decreases (t : Type0)
-  (ntable : hash_map_t t) (ls : list_t t) : nat =
+let hash_map_move_elements_from_list_decreases (t : Type0) (hm : hash_map_t t)
+  (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::move_elements]: decreases clause *)
 unfold
-let hash_map_move_elements_decreases (t : Type0) (ntable : hash_map_t t)
-  (slots : vec (list_t t)) (i : usize) : nat =
+let hash_map_move_elements_decreases (t : Type0) (hm : hash_map_t t)
+  (v : vec (list_t t)) (i : usize) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::contains_key_in_list]: decreases clause *)
 unfold
-let hash_map_contains_key_in_list_decreases (t : Type0) (key : usize)
+let hash_map_contains_key_in_list_decreases (t : Type0) (i : usize)
   (ls : list_t t) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::get_in_list]: decreases clause *)
 unfold
-let hash_map_get_in_list_decreases (t : Type0) (key : usize) (ls : list_t t) :
+let hash_map_get_in_list_decreases (t : Type0) (i : usize) (ls : list_t t) :
   nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::get_mut_in_list]: decreases clause *)
 unfold
-let hash_map_get_mut_in_list_decreases (t : Type0) (key : usize)
-  (ls : list_t t) : nat =
+let hash_map_get_mut_in_list_decreases (t : Type0) (i : usize) (ls : list_t t)
+  : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::remove_from_list]: decreases clause *)
 unfold
-let hash_map_remove_from_list_decreases (t : Type0) (key : usize)
-  (ls : list_t t) : nat =
+let hash_map_remove_from_list_decreases (t : Type0) (i : usize) (ls : list_t t)
+  : nat =
   admit ()
 

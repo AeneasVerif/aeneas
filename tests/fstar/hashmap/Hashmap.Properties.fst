@@ -620,11 +620,11 @@ let hash_map_new_fwd_lem t = hash_map_new_fwd_lem_aux t
 (*** clear_slots *)
 /// [clear_slots] doesn't fail and simply clears the slots starting at index i
 #push-options "--fuel 1"
-let rec hash_map_clear_slots_fwd_back_lem
+let rec hash_map_clear_slots_loop_fwd_back_lem
   (t : Type0) (slots : vec (list_t t)) (i : usize) :
   Lemma
   (ensures (
-    match hash_map_clear_slots_fwd_back t slots i with
+    match hash_map_clear_slots_loop_fwd_back t slots i with
     | Fail _ -> False
     | Return slots' ->
       // The length is preserved
@@ -645,8 +645,8 @@ let rec hash_map_clear_slots_fwd_back_lem
       begin match usize_add i 1 with
       | Fail _ -> ()
       | Return i1 ->
-        hash_map_clear_slots_fwd_back_lem t v i1;
-        begin match hash_map_clear_slots_fwd_back t v i1 with
+        hash_map_clear_slots_loop_fwd_back_lem t v i1;
+        begin match hash_map_clear_slots_loop_fwd_back t v i1 with
         | Fail _ -> ()
         | Return slots1 ->
           assert(length slots1 == length slots);
@@ -683,8 +683,8 @@ let hash_map_clear_fwd_back_lem_aux #t self =
   let p = self.hash_map_max_load_factor in
   let i = self.hash_map_max_load in
   let v = self.hash_map_slots in
-  hash_map_clear_slots_fwd_back_lem t v 0;
-  begin match hash_map_clear_slots_fwd_back t v 0 with
+  hash_map_clear_slots_loop_fwd_back_lem t v 0;
+  begin match hash_map_clear_slots_loop_fwd_back t v 0 with
   | Fail _ -> ()
   | Return slots1 ->
     slots_t_al_v_all_nil_is_empty_lem slots1;
@@ -2703,17 +2703,17 @@ let hash_map_get_fwd_lem #t self key = hash_map_get_fwd_lem_aux #t self key
 
 (**** get_mut_in_list'fwd *)
 
-val hash_map_get_mut_in_list_fwd_lem
+val hash_map_get_mut_in_list_loop_fwd_lem
   (#t : Type0) (key : usize) (ls : list_t t) :
   Lemma
   (ensures (
-    match hash_map_get_mut_in_list_fwd t key ls, slot_t_find_s key ls with
+    match hash_map_get_mut_in_list_loop_fwd t key ls, slot_t_find_s key ls with
     | Fail _, None -> True
     | Return x, Some x' -> x == x'
     | _ -> False))
 
 #push-options "--fuel 1"
-let rec hash_map_get_mut_in_list_fwd_lem #t key ls =
+let rec hash_map_get_mut_in_list_loop_fwd_lem #t key ls =
   begin match ls with
   | ListCons ckey cvalue ls0 ->
     let b = ckey = key in
@@ -2721,8 +2721,8 @@ let rec hash_map_get_mut_in_list_fwd_lem #t key ls =
     then ()
     else
       begin
-      hash_map_get_mut_in_list_fwd_lem key ls0;
-      match hash_map_get_mut_in_list_fwd t key ls0 with
+      hash_map_get_mut_in_list_loop_fwd_lem key ls0;
+      match hash_map_get_mut_in_list_loop_fwd t key ls0 with
       | Fail _ -> ()
       | Return x -> ()
       end
@@ -2754,8 +2754,8 @@ let hash_map_get_mut_fwd_lem_aux #t self key =
       | Fail _ -> ()
       | Return l ->
         begin
-        hash_map_get_mut_in_list_fwd_lem key l;
-        match hash_map_get_mut_in_list_fwd t key l with
+        hash_map_get_mut_in_list_loop_fwd_lem key l;
+        match hash_map_get_mut_in_list_loop_fwd t key l with
         | Fail _ -> ()
         | Return x -> ()
         end
@@ -2770,18 +2770,18 @@ let hash_map_get_mut_fwd_lem #t self key =
 
 (**** get_mut_in_list'back *)
 
-val hash_map_get_mut_in_list_back_lem
+val hash_map_get_mut_in_list_loop_back_lem
   (#t : Type0) (key : usize) (ls : list_t t) (ret : t) :
   Lemma
   (requires (Some? (slot_t_find_s key ls)))
   (ensures (
-    match hash_map_get_mut_in_list_back t key ls ret with
+    match hash_map_get_mut_in_list_loop_back t key ls ret with
     | Fail _ -> False
     | Return ls' -> list_t_v ls' == find_update (same_key key) (list_t_v ls) (key,ret)
     | _ -> False))
 
 #push-options "--fuel 1"
-let rec hash_map_get_mut_in_list_back_lem #t key ls ret =
+let rec hash_map_get_mut_in_list_loop_back_lem #t key ls ret =
   begin match ls with
   | ListCons ckey cvalue ls0 ->
     let b = ckey = key in
@@ -2789,8 +2789,8 @@ let rec hash_map_get_mut_in_list_back_lem #t key ls ret =
     then let ls1 = ListCons ckey ret ls0 in ()
     else
       begin
-      hash_map_get_mut_in_list_back_lem key ls0 ret;
-      match hash_map_get_mut_in_list_back t key ls0 ret with
+      hash_map_get_mut_in_list_loop_back_lem key ls0 ret;
+      match hash_map_get_mut_in_list_loop_back t key ls0 ret with
       | Fail _ -> ()
       | Return l -> let ls1 = ListCons ckey cvalue l in ()
       end
@@ -2828,8 +2828,8 @@ let hash_map_get_mut_back_lem_refin #t self key ret =
       | Fail _ -> ()
       | Return l ->
         begin
-        hash_map_get_mut_in_list_back_lem key l ret;
-        match hash_map_get_mut_in_list_back t key l ret with
+        hash_map_get_mut_in_list_loop_back_lem key l ret;
+        match hash_map_get_mut_in_list_loop_back t key l ret with
         | Fail _ -> ()
         | Return l0 ->
           begin match vec_index_mut_back (list_t t) v hash_mod l0 with
