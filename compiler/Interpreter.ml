@@ -126,7 +126,7 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
     the synthesis (mostly by ending abstractions).
 
     [is_regular_return]: [true] if we reached a [Return] instruction (i.e., the
-    result is {!Return} or {!LoopReturn}).
+    result is {!constructor:Cps.statement_eval_res.Return} or {!constructor:Cps.statement_eval_res.LoopReturn}).
 
     [inside_loop]: [true] if we are *inside* a loop (result [EndContinue]).
 *)

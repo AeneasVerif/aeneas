@@ -396,11 +396,11 @@ let ctx_lookup_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) : typed_value =
   in
   lookup_var ctx.env
 
-(** Push an uninitialized variable (which thus maps to {!Values.Bottom}) *)
+(** Push an uninitialized variable (which thus maps to {!constructor:Values.value.Bottom}) *)
 let ctx_push_uninitialized_var (ctx : eval_ctx) (var : var) : eval_ctx =
   ctx_push_var ctx var (mk_bottom var.var_ty)
 
-(** Push a list of uninitialized variables (which thus map to {!Values.Bottom}) *)
+(** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.Bottom}) *)
 let ctx_push_uninitialized_vars (ctx : eval_ctx) (vars : var list) : eval_ctx =
   let vars = List.map (fun v -> (v, mk_bottom v.var_ty)) vars in
   ctx_push_vars ctx vars

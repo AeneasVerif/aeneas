@@ -10,7 +10,7 @@ open InterpreterBorrowsCore
 
     Apply a proj_borrows on a shared borrow.
     Note that when projecting over shared values, we generate
-    {!V.abstract_shared_borrows}, not {!V.avalue}s.
+    {!type:V.abstract_shared_borrows}, not {!type:V.avalue}s.
 
     Parameters:
     [regions]

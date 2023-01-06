@@ -370,7 +370,7 @@ let destructure_new_abs (loop_id : V.LoopId.id)
     Note that we decompose only in the "fresh" abstractions (this is controled
     by the [old_aids] parameter).
 
-    TODO: how to factorize with {!destructure_abs}?
+    TODO: how to factorize with {!InterpreterBorrows.destructure_abs}?
  *)
 let decompose_shared_avalues (loop_id : V.LoopId.id)
     (old_aids : V.AbstractionId.Set.t) (ctx : C.eval_ctx) : C.eval_ctx =

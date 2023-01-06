@@ -16,8 +16,9 @@ open InterpreterExpressions
     Drop all the local variables (which has the effect of moving their values to
     dummy variables, after ending the proper borrows of course) but the return
     variable, move the return value out of the return variable, remove all the
-    local variables (but preserve the abstractions!), remove the {!C.Frame} indicator
-    delimiting the current frame and handle the return value to the continuation.
+    local variables (but preserve the abstractions!), remove the
+    {!constructor:C.env_elem.Frame} indicator delimiting the current frame and
+    handle the return value to the continuation.
 
     If the boolean is false, we don't move the return value, and call the
     continuation with [None].
