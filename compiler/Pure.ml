@@ -674,7 +674,7 @@ type fun_sig = {
           
           Non-decomposed ouputs (if the function can fail, but is not stateful):
           - [result T]
-          - [[result (T * T)]
+          - [[result (T * T)]]
        *)
   info : fun_sig_info;  (** Additional information *)
 }
