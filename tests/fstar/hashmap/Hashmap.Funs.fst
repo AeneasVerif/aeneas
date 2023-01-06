@@ -11,22 +11,27 @@ include Hashmap.Clauses
 let hash_key_fwd (k : usize) : result usize = Return k
 
 (** [hashmap::HashMap::{0}::allocate_slots] *)
-let rec hash_map_allocate_slots_fwd
-  (t : Type0) (slots : vec (list_t t)) (n : usize) :
+let rec hash_map_allocate_slots_loop_fwd
+  (t : Type0) (v : vec (list_t t)) (n : usize) :
   Tot (result (vec (list_t t)))
-  (decreases (hash_map_allocate_slots_decreases t slots n))
+  (decreases (hash_map_allocate_slots_decreases t v n))
   =
-  if n = 0
-  then Return slots
-  else
-    begin match vec_push_back (list_t t) slots ListNil with
+  if n > 0
+  then
+    begin match vec_push_back (list_t t) v ListNil with
     | Fail e -> Fail e
-    | Return slots0 ->
+    | Return slots ->
       begin match usize_sub n 1 with
       | Fail e -> Fail e
-      | Return i -> hash_map_allocate_slots_fwd t slots0 i
+      | Return n0 -> hash_map_allocate_slots_loop_fwd t slots n0
       end
     end
+  else Return v
+
+(** [hashmap::HashMap::{0}::allocate_slots] *)
+let hash_map_allocate_slots_fwd
+  (t : Type0) (slots : vec (list_t t)) (n : usize) : result (vec (list_t t)) =
+  hash_map_allocate_slots_loop_fwd t slots n
 
 (** [hashmap::HashMap::{0}::new_with_capacity] *)
 let hash_map_new_with_capacity_fwd
@@ -54,28 +59,33 @@ let hash_map_new_fwd (t : Type0) : result (hash_map_t t) =
   hash_map_new_with_capacity_fwd t 32 4 5
 
 (** [hashmap::HashMap::{0}::clear_slots] *)
-let rec hash_map_clear_slots_fwd_back
-  (t : Type0) (slots : vec (list_t t)) (i : usize) :
+let rec hash_map_clear_slots_loop_fwd_back
+  (t : Type0) (v : vec (list_t t)) (i : usize) :
   Tot (result (vec (list_t t)))
-  (decreases (hash_map_clear_slots_decreases t slots i))
+  (decreases (hash_map_clear_slots_decreases t v i))
   =
-  let i0 = vec_len (list_t t) slots in
+  let i0 = vec_len (list_t t) v in
   if i < i0
   then
-    begin match vec_index_mut_back (list_t t) slots i ListNil with
+    begin match usize_add i 1 with
     | Fail e -> Fail e
-    | Return slots0 ->
-      begin match usize_add i 1 with
+    | Return i1 ->
+      begin match vec_index_mut_back (list_t t) v i ListNil with
       | Fail e -> Fail e
-      | Return i1 -> hash_map_clear_slots_fwd_back t slots0 i1
+      | Return slots -> hash_map_clear_slots_loop_fwd_back t slots i1
       end
     end
-  else Return slots
+  else Return v
+
+(** [hashmap::HashMap::{0}::clear_slots] *)
+let hash_map_clear_slots_fwd_back
+  (t : Type0) (slots : vec (list_t t)) : result (vec (list_t t)) =
+  hash_map_clear_slots_loop_fwd_back t slots 0
 
 (** [hashmap::HashMap::{0}::clear] *)
 let hash_map_clear_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
-  begin match hash_map_clear_slots_fwd_back t self.hash_map_slots 0 with
+  begin match hash_map_clear_slots_fwd_back t self.hash_map_slots with
   | Fail e -> Fail e
   | Return v ->
     Return (Mkhash_map_t 0 self.hash_map_max_load_factor self.hash_map_max_load
@@ -87,36 +97,46 @@ let hash_map_len_fwd (t : Type0) (self : hash_map_t t) : result usize =
   Return self.hash_map_num_entries
 
 (** [hashmap::HashMap::{0}::insert_in_list] *)
-let rec hash_map_insert_in_list_fwd
+let rec hash_map_insert_in_list_loop_fwd
   (t : Type0) (key : usize) (value : t) (ls : list_t t) :
   Tot (result bool)
   (decreases (hash_map_insert_in_list_decreases t key value ls))
   =
   begin match ls with
-  | ListCons ckey cvalue ls0 ->
+  | ListCons ckey cvalue tl ->
     if ckey = key
     then Return false
-    else hash_map_insert_in_list_fwd t key value ls0
+    else hash_map_insert_in_list_loop_fwd t key value tl
   | ListNil -> Return true
   end
 
 (** [hashmap::HashMap::{0}::insert_in_list] *)
-let rec hash_map_insert_in_list_back
+let hash_map_insert_in_list_fwd
+  (t : Type0) (key : usize) (value : t) (ls : list_t t) : result bool =
+  hash_map_insert_in_list_loop_fwd t key value ls
+
+(** [hashmap::HashMap::{0}::insert_in_list] *)
+let rec hash_map_insert_in_list_loop_back
   (t : Type0) (key : usize) (value : t) (ls : list_t t) :
   Tot (result (list_t t))
   (decreases (hash_map_insert_in_list_decreases t key value ls))
   =
   begin match ls with
-  | ListCons ckey cvalue ls0 ->
+  | ListCons ckey cvalue tl ->
     if ckey = key
-    then Return (ListCons ckey value ls0)
+    then Return (ListCons ckey value tl)
     else
-      begin match hash_map_insert_in_list_back t key value ls0 with
+      begin match hash_map_insert_in_list_loop_back t key value tl with
       | Fail e -> Fail e
-      | Return ls1 -> Return (ListCons ckey cvalue ls1)
+      | Return l -> Return (ListCons ckey cvalue l)
       end
   | ListNil -> let l = ListNil in Return (ListCons key value l)
   end
+
+(** [hashmap::HashMap::{0}::insert_in_list] *)
+let hash_map_insert_in_list_back
+  (t : Type0) (key : usize) (value : t) (ls : list_t t) : result (list_t t) =
+  hash_map_insert_in_list_loop_back t key value ls
 
 (** [hashmap::HashMap::{0}::insert_no_resize] *)
 let hash_map_insert_no_resize_fwd_back
@@ -178,48 +198,62 @@ let core_num_u32_max_body : result u32 = Return 4294967295
 let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
 
 (** [hashmap::HashMap::{0}::move_elements_from_list] *)
-let rec hash_map_move_elements_from_list_fwd_back
-  (t : Type0) (ntable : hash_map_t t) (ls : list_t t) :
+let rec hash_map_move_elements_from_list_loop_fwd_back
+  (t : Type0) (hm : hash_map_t t) (ls : list_t t) :
   Tot (result (hash_map_t t))
-  (decreases (hash_map_move_elements_from_list_decreases t ntable ls))
+  (decreases (hash_map_move_elements_from_list_decreases t hm ls))
   =
   begin match ls with
   | ListCons k v tl ->
-    begin match hash_map_insert_no_resize_fwd_back t ntable k v with
+    begin match hash_map_insert_no_resize_fwd_back t hm k v with
     | Fail e -> Fail e
-    | Return ntable0 -> hash_map_move_elements_from_list_fwd_back t ntable0 tl
+    | Return ntable ->
+      hash_map_move_elements_from_list_loop_fwd_back t ntable tl
     end
-  | ListNil -> Return ntable
+  | ListNil -> Return hm
   end
 
+(** [hashmap::HashMap::{0}::move_elements_from_list] *)
+let hash_map_move_elements_from_list_fwd_back
+  (t : Type0) (ntable : hash_map_t t) (ls : list_t t) : result (hash_map_t t) =
+  hash_map_move_elements_from_list_loop_fwd_back t ntable ls
+
 (** [hashmap::HashMap::{0}::move_elements] *)
-let rec hash_map_move_elements_fwd_back
-  (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
+let rec hash_map_move_elements_loop_fwd_back
+  (t : Type0) (hm : hash_map_t t) (v : vec (list_t t)) (i : usize) :
   Tot (result ((hash_map_t t) & (vec (list_t t))))
-  (decreases (hash_map_move_elements_decreases t ntable slots i))
+  (decreases (hash_map_move_elements_decreases t hm v i))
   =
-  let i0 = vec_len (list_t t) slots in
+  let i0 = vec_len (list_t t) v in
   if i < i0
   then
-    begin match vec_index_mut_fwd (list_t t) slots i with
+    begin match vec_index_mut_fwd (list_t t) v i with
     | Fail e -> Fail e
     | Return l ->
       let ls = mem_replace_fwd (list_t t) l ListNil in
-      begin match hash_map_move_elements_from_list_fwd_back t ntable ls with
+      begin match hash_map_move_elements_from_list_fwd_back t hm ls with
       | Fail e -> Fail e
-      | Return ntable0 ->
-        let l0 = mem_replace_back (list_t t) l ListNil in
-        begin match vec_index_mut_back (list_t t) slots i l0 with
+      | Return ntable ->
+        begin match usize_add i 1 with
         | Fail e -> Fail e
-        | Return slots0 ->
-          begin match usize_add i 1 with
+        | Return i1 ->
+          let l0 = mem_replace_back (list_t t) l ListNil in
+          begin match vec_index_mut_back (list_t t) v i l0 with
           | Fail e -> Fail e
-          | Return i1 -> hash_map_move_elements_fwd_back t ntable0 slots0 i1
+          | Return slots ->
+            hash_map_move_elements_loop_fwd_back t ntable slots i1
           end
         end
       end
     end
-  else Return (ntable, slots)
+  else Return (hm, v)
+
+(** [hashmap::HashMap::{0}::move_elements] *)
+let hash_map_move_elements_fwd_back
+  (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
+  result ((hash_map_t t) & (vec (list_t t)))
+  =
+  hash_map_move_elements_loop_fwd_back t ntable slots i
 
 (** [hashmap::HashMap::{0}::try_resize] *)
 let hash_map_try_resize_fwd_back
@@ -278,18 +312,23 @@ let hash_map_insert_fwd_back
   end
 
 (** [hashmap::HashMap::{0}::contains_key_in_list] *)
-let rec hash_map_contains_key_in_list_fwd
-  (t : Type0) (key : usize) (ls : list_t t) :
+let rec hash_map_contains_key_in_list_loop_fwd
+  (t : Type0) (i : usize) (ls : list_t t) :
   Tot (result bool)
-  (decreases (hash_map_contains_key_in_list_decreases t key ls))
+  (decreases (hash_map_contains_key_in_list_decreases t i ls))
   =
   begin match ls with
-  | ListCons ckey x ls0 ->
-    if ckey = key
+  | ListCons ckey x tl ->
+    if ckey = i
     then Return true
-    else hash_map_contains_key_in_list_fwd t key ls0
+    else hash_map_contains_key_in_list_loop_fwd t i tl
   | ListNil -> Return false
   end
+
+(** [hashmap::HashMap::{0}::contains_key_in_list] *)
+let hash_map_contains_key_in_list_fwd
+  (t : Type0) (key : usize) (ls : list_t t) : result bool =
+  hash_map_contains_key_in_list_loop_fwd t key ls
 
 (** [hashmap::HashMap::{0}::contains_key] *)
 let hash_map_contains_key_fwd
@@ -309,15 +348,20 @@ let hash_map_contains_key_fwd
   end
 
 (** [hashmap::HashMap::{0}::get_in_list] *)
-let rec hash_map_get_in_list_fwd
-  (t : Type0) (key : usize) (ls : list_t t) :
-  Tot (result t) (decreases (hash_map_get_in_list_decreases t key ls))
+let rec hash_map_get_in_list_loop_fwd
+  (t : Type0) (i : usize) (ls : list_t t) :
+  Tot (result t) (decreases (hash_map_get_in_list_decreases t i ls))
   =
   begin match ls with
-  | ListCons ckey cvalue ls0 ->
-    if ckey = key then Return cvalue else hash_map_get_in_list_fwd t key ls0
+  | ListCons ckey cvalue tl ->
+    if ckey = i then Return cvalue else hash_map_get_in_list_loop_fwd t i tl
   | ListNil -> Fail Failure
   end
+
+(** [hashmap::HashMap::{0}::get_in_list] *)
+let hash_map_get_in_list_fwd
+  (t : Type0) (key : usize) (ls : list_t t) : result t =
+  hash_map_get_in_list_loop_fwd t key ls
 
 (** [hashmap::HashMap::{0}::get] *)
 let hash_map_get_fwd
@@ -337,35 +381,45 @@ let hash_map_get_fwd
   end
 
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
-let rec hash_map_get_mut_in_list_fwd
-  (t : Type0) (key : usize) (ls : list_t t) :
-  Tot (result t) (decreases (hash_map_get_mut_in_list_decreases t key ls))
+let rec hash_map_get_mut_in_list_loop_fwd
+  (t : Type0) (i : usize) (ls : list_t t) :
+  Tot (result t) (decreases (hash_map_get_mut_in_list_decreases t i ls))
   =
   begin match ls with
-  | ListCons ckey cvalue ls0 ->
-    if ckey = key
+  | ListCons ckey cvalue tl ->
+    if ckey = i
     then Return cvalue
-    else hash_map_get_mut_in_list_fwd t key ls0
+    else hash_map_get_mut_in_list_loop_fwd t i tl
   | ListNil -> Fail Failure
   end
 
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
-let rec hash_map_get_mut_in_list_back
-  (t : Type0) (key : usize) (ls : list_t t) (ret : t) :
+let hash_map_get_mut_in_list_fwd
+  (t : Type0) (ls : list_t t) (key : usize) : result t =
+  hash_map_get_mut_in_list_loop_fwd t key ls
+
+(** [hashmap::HashMap::{0}::get_mut_in_list] *)
+let rec hash_map_get_mut_in_list_loop_back
+  (t : Type0) (i : usize) (ls : list_t t) (ret : t) :
   Tot (result (list_t t))
-  (decreases (hash_map_get_mut_in_list_decreases t key ls))
+  (decreases (hash_map_get_mut_in_list_decreases t i ls))
   =
   begin match ls with
-  | ListCons ckey cvalue ls0 ->
-    if ckey = key
-    then Return (ListCons ckey ret ls0)
+  | ListCons ckey cvalue tl ->
+    if ckey = i
+    then Return (ListCons ckey ret tl)
     else
-      begin match hash_map_get_mut_in_list_back t key ls0 ret with
+      begin match hash_map_get_mut_in_list_loop_back t i tl ret with
       | Fail e -> Fail e
-      | Return ls1 -> Return (ListCons ckey cvalue ls1)
+      | Return l -> Return (ListCons ckey cvalue l)
       end
   | ListNil -> Fail Failure
   end
+
+(** [hashmap::HashMap::{0}::get_mut_in_list] *)
+let hash_map_get_mut_in_list_back
+  (t : Type0) (ls : list_t t) (key : usize) (ret : t) : result (list_t t) =
+  hash_map_get_mut_in_list_loop_back t key ls ret
 
 (** [hashmap::HashMap::{0}::get_mut] *)
 let hash_map_get_mut_fwd
@@ -380,7 +434,7 @@ let hash_map_get_mut_fwd
       begin match vec_index_mut_fwd (list_t t) self.hash_map_slots hash_mod
         with
       | Fail e -> Fail e
-      | Return l -> hash_map_get_mut_in_list_fwd t key l
+      | Return l -> hash_map_get_mut_in_list_fwd t l key
       end
     end
   end
@@ -401,7 +455,7 @@ let hash_map_get_mut_back
         with
       | Fail e -> Fail e
       | Return l ->
-        begin match hash_map_get_mut_in_list_back t key l ret with
+        begin match hash_map_get_mut_in_list_back t l key ret with
         | Fail e -> Fail e
         | Return l0 ->
           begin match
@@ -417,46 +471,56 @@ let hash_map_get_mut_back
   end
 
 (** [hashmap::HashMap::{0}::remove_from_list] *)
-let rec hash_map_remove_from_list_fwd
-  (t : Type0) (key : usize) (ls : list_t t) :
+let rec hash_map_remove_from_list_loop_fwd
+  (t : Type0) (i : usize) (ls : list_t t) :
   Tot (result (option t))
-  (decreases (hash_map_remove_from_list_decreases t key ls))
+  (decreases (hash_map_remove_from_list_decreases t i ls))
   =
   begin match ls with
   | ListCons ckey x tl ->
-    if ckey = key
+    if ckey = i
     then
       let mv_ls = mem_replace_fwd (list_t t) (ListCons ckey x tl) ListNil in
       begin match mv_ls with
-      | ListCons i cvalue tl0 -> Return (Some cvalue)
+      | ListCons i0 cvalue tl0 -> Return (Some cvalue)
       | ListNil -> Fail Failure
       end
-    else hash_map_remove_from_list_fwd t key tl
+    else hash_map_remove_from_list_loop_fwd t i tl
   | ListNil -> Return None
   end
 
 (** [hashmap::HashMap::{0}::remove_from_list] *)
-let rec hash_map_remove_from_list_back
-  (t : Type0) (key : usize) (ls : list_t t) :
+let hash_map_remove_from_list_fwd
+  (t : Type0) (key : usize) (ls : list_t t) : result (option t) =
+  hash_map_remove_from_list_loop_fwd t key ls
+
+(** [hashmap::HashMap::{0}::remove_from_list] *)
+let rec hash_map_remove_from_list_loop_back
+  (t : Type0) (i : usize) (ls : list_t t) :
   Tot (result (list_t t))
-  (decreases (hash_map_remove_from_list_decreases t key ls))
+  (decreases (hash_map_remove_from_list_decreases t i ls))
   =
   begin match ls with
   | ListCons ckey x tl ->
-    if ckey = key
+    if ckey = i
     then
       let mv_ls = mem_replace_fwd (list_t t) (ListCons ckey x tl) ListNil in
       begin match mv_ls with
-      | ListCons i cvalue tl0 -> Return tl0
+      | ListCons i0 cvalue tl0 -> Return tl0
       | ListNil -> Fail Failure
       end
     else
-      begin match hash_map_remove_from_list_back t key tl with
+      begin match hash_map_remove_from_list_loop_back t i tl with
       | Fail e -> Fail e
-      | Return tl0 -> Return (ListCons ckey x tl0)
+      | Return l -> Return (ListCons ckey x l)
       end
   | ListNil -> Return ListNil
   end
+
+(** [hashmap::HashMap::{0}::remove_from_list] *)
+let hash_map_remove_from_list_back
+  (t : Type0) (key : usize) (ls : list_t t) : result (list_t t) =
+  hash_map_remove_from_list_loop_back t key ls
 
 (** [hashmap::HashMap::{0}::remove] *)
 let hash_map_remove_fwd

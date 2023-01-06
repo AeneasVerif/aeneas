@@ -67,9 +67,7 @@ Definition rem_test_fwd (x : u32) (y : u32) : result u32 := u32_rem x y.
 Definition cast_test_fwd (x : u32) : result i32 := scalar_cast U32 I32 x.
 
 (** [no_nested_borrows::test2] *)
-Definition test2_fwd : result unit :=
-  i <- u32_add 23%u32 44%u32; let _ := i in Return tt
-.
+Definition test2_fwd : result unit := _ <- u32_add 23%u32 44%u32; Return tt.
 
 (** Unit test for [no_nested_borrows::test2] *)
 Check (test2_fwd )%return.

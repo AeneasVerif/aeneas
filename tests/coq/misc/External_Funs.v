@@ -46,10 +46,7 @@ Definition test_new_non_zero_u32_fwd
 
 (** [external::test_vec] *)
 Definition test_vec_fwd : result unit :=
-  let v := vec_new u32 in
-  v0 <- vec_push_back u32 v (0%u32);
-  let _ := v0 in
-  Return tt
+  let v := vec_new u32 in _ <- vec_push_back u32 v (0%u32); Return tt
 .
 
 (** Unit test for [external::test_vec] *)

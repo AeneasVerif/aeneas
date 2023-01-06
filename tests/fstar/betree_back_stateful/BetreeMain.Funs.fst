@@ -272,7 +272,7 @@ let betree_leaf_split_back0
             | Return (st1, _) ->
               begin match betree_store_leaf_node_fwd id1 content1 st1 with
               | Fail e -> Fail e
-              | Return (_, _) -> Return (st0, ())
+              | Return _ -> Return (st0, ())
               end
             end
           end
