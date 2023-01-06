@@ -243,9 +243,9 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
 (** Refresh the ids of the fresh abstractions.
 
     We do this because {!prepare_ashared_loans} introduces some non-fixed
-    abstractions in contexts which are later joined: we have to make sure
-    two contexts we join don't have non-fixed abstractions with the same ids.
- *)
+    abstractions in contexts which are later joined: we have to make sure two
+    contexts we join don't have non-fixed abstractions with the same ids.
+  *)
 let refresh_abs (old_abs : V.AbstractionId.Set.t) (ctx : C.eval_ctx) :
     C.eval_ctx =
   let ids, _ = compute_context_ids ctx in
@@ -1230,7 +1230,65 @@ module MakeJoinMatcher (S : MatchJoinState) : Matcher = struct
   let match_mut_borrows (ty : T.ety) (bid0 : V.borrow_id) (bv0 : V.typed_value)
       (bid1 : V.borrow_id) (bv1 : V.typed_value) (bv : V.typed_value) :
       V.borrow_id * V.typed_value =
-    if bid0 = bid1 then (bid0, bv)
+    if bid0 = bid1 then (
+      (* If the merged value is not the same as the original value, we introduce
+         an abstraction:
+
+         {[
+           { MB bid0, ML nbid }  // where nbid fresh
+         ]}
+
+         and we use bid' for the borrow id that we return.
+
+         We do this because we want to make sure that, whenever a mutably
+         borrowed value is modified in a loop iteration, then there is
+         a fresh abstraction between this borrowed value and the fixed
+         abstractions.
+      *)
+      assert (not (value_has_borrows S.ctx bv.V.value));
+
+      if bv0 = bv1 then (
+        assert (bv0 = bv);
+        (bid0, bv))
+      else
+        let rid = C.fresh_region_id () in
+        let nbid = C.fresh_borrow_id () in
+
+        let kind = T.Mut in
+        let bv_ty = ety_no_regions_to_rty bv.V.ty in
+        let borrow_ty = mk_ref_ty (T.Var rid) bv_ty kind in
+
+        let borrow_av =
+          let ty = borrow_ty in
+          let value = V.ABorrow (V.AMutBorrow (bid0, mk_aignored bv_ty)) in
+          mk_typed_avalue ty value
+        in
+
+        let loan_av =
+          let ty = borrow_ty in
+          let value = V.ALoan (V.AMutLoan (nbid, mk_aignored bv_ty)) in
+          mk_typed_avalue ty value
+        in
+
+        let avalues = [ borrow_av; loan_av ] in
+
+        (* Generate the abstraction *)
+        let abs =
+          {
+            V.abs_id = C.fresh_abstraction_id ();
+            kind = V.Loop (S.loop_id, None, LoopSynthInput);
+            can_end = true;
+            parents = V.AbstractionId.Set.empty;
+            original_parents = [];
+            regions = T.RegionId.Set.singleton rid;
+            ancestors_regions = T.RegionId.Set.empty;
+            avalues;
+          }
+        in
+        push_abs abs;
+
+        (* Return the new borrow *)
+        (nbid, bv))
     else
       (* We replace bid0 and bid1 with a fresh borrow id, and introduce
          an abstraction which links all of them:
@@ -2459,11 +2517,9 @@ let loop_join_origin_with_continue_ctxs (config : C.config)
 
     We do this because it makes it easier to compute joins and fixed points.
 
-    We return the new context and the set of fresh abs ids.
-
     **REMARK**:
-    As a side note, only reborrow the loan ids whose corresponding borrows appear in
-    values (i.e., not in abstractions).
+    As a side note, we only reborrow the loan ids whose corresponding borrows
+    appear in values (i.e., not in abstractions).
 
     For instance, if we have:
     {[
@@ -3019,23 +3075,12 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
           (* Retrieve the first id of the group *)
           match ids with
           | [] ->
-              (* This happens for instance in the following case (there
-                 is no "magic wand" linking the values before and after
-                 the loop, in particular because we return nothing):
-
-                 Example:
-                 ========
-                 {[
-                   fn clear(v: &mut Vec<u32>) {
-                       let mut i = 0;
-                       while i < v.len() {
-                           v[i] = 0;
-                           i += 1;
-                       }
-                   }
-                 ]}
+              (* We shouldn't get there: we actually introduce reborrows with
+                 {!prepare_ashared_loans} and in the [match_mut_borrows] function
+                 of {!MakeJoinMatcher} to introduce some fresh abstractions for
+                 this purpose.
               *)
-              ()
+              raise (Failure "Unexpected")
           | id0 :: ids ->
               let id0 = ref id0 in
               (* Add the proper region group into the abstraction *)

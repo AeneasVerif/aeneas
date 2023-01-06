@@ -159,7 +159,7 @@ let rec value_strip_shared_loans (v : typed_value) : typed_value =
 (** Check if a symbolic value has borrows *)
 let symbolic_value_has_borrows (infos : TA.type_infos) (sv : symbolic_value) :
     bool =
-  ty_has_borrow_under_mut infos sv.sv_ty
+  ty_has_borrows infos sv.sv_ty
 
 (** Check if a value has borrows in **a general sense**.
 
