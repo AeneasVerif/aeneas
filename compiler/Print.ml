@@ -343,7 +343,7 @@ module Contexts = struct
   let var_binder_to_string (bv : C.var_binder) : string =
     match bv.name with
     | None -> PV.var_id_to_string bv.index
-    | Some name -> name
+    | Some name -> name ^ "^" ^ E.VarId.to_string bv.index
 
   let dummy_var_id_to_string (bid : C.DummyVarId.id) : string =
     "_@" ^ C.DummyVarId.to_string bid

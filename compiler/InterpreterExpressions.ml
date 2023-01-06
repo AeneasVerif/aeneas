@@ -549,12 +549,11 @@ let eval_rvalue_ref (config : C.config) (p : E.place) (bkind : E.borrow_kind)
  fun ctx ->
   match bkind with
   | E.Shared | E.TwoPhaseMut | E.Shallow ->
-      (* **REMARK**: we treat shallow borrows like shared borrows. In theory,
-         this is incomplete. But in practice, this should allow to handle
-         many cases: in effect, we are simply forbidding match guards from
-         performing too many modifications in the environment, which is
-         probably not a too bad thing to do.
+      (* **REMARK**: we initially treated shallow borrows like shared borrows.
+         In practice this restricted the behaviour too much, so for now we
+         forbid them.
       *)
+      assert (bkind <> E.Shallow);
 
       (* Access the value *)
       let access =
