@@ -216,6 +216,11 @@ and loop = {
   input_svalues : V.symbolic_value list;  (** The input symbolic values *)
   fresh_svalues : V.symbolic_value_id_set;
       (** The symbolic values introduced by the loop fixed-point *)
+  rg_to_given_back_tys :
+    ((T.RegionId.Set.t * T.rty list) T.RegionGroupId.Map.t[@opaque]);
+      (** The map from region group ids to the types of the values given back
+          by the corresponding loop abstractions.
+       *)
   end_expr : expression;
       (** The end of the function (upon the moment it enters the loop) *)
   loop_expr : expression;  (** The symbolically executed loop body *)

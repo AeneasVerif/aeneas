@@ -184,6 +184,79 @@ Definition list_nth_shared_loop_fwd
   list_nth_shared_loop_loop_fwd T n ls i
 .
 
+(** [loops::get_elem_mut] *)
+Fixpoint get_elem_mut_loop_fwd
+  (n : nat) (x : usize) (ls : List_t usize) : result usize :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match ls with
+    | ListCons y tl =>
+      if y s= x then Return y else get_elem_mut_loop_fwd n0 x tl
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::get_elem_mut] *)
+Definition get_elem_mut_fwd
+  (n : nat) (slots : vec (List_t usize)) (x : usize) : result usize :=
+  l <- vec_index_mut_fwd (List_t usize) slots (0%usize);
+  get_elem_mut_loop_fwd n x l
+.
+
+(** [loops::get_elem_mut] *)
+Fixpoint get_elem_mut_loop_back
+  (n : nat) (x : usize) (ls : List_t usize) (ret : usize) :
+  result (List_t usize)
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match ls with
+    | ListCons y tl =>
+      if y s= x
+      then Return (ListCons ret tl)
+      else (l <- get_elem_mut_loop_back n0 x tl ret; Return (ListCons y l))
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::get_elem_mut] *)
+Definition get_elem_mut_back
+  (n : nat) (slots : vec (List_t usize)) (x : usize) (ret : usize) :
+  result (vec (List_t usize))
+  :=
+  l <- vec_index_mut_fwd (List_t usize) slots (0%usize);
+  l0 <- get_elem_mut_loop_back n x l ret;
+  vec_index_mut_back (List_t usize) slots (0%usize) l0
+.
+
+(** [loops::get_elem_shared] *)
+Fixpoint get_elem_shared_loop_fwd
+  (n : nat) (x : usize) (v : vec (List_t usize)) (l : List_t usize)
+  (ls : List_t usize) :
+  result usize
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n0 =>
+    match ls with
+    | ListCons y tl =>
+      if y s= x then Return y else get_elem_shared_loop_fwd n0 x v l tl
+    | ListNil => Fail_ Failure
+    end
+  end
+.
+
+(** [loops::get_elem_shared] *)
+Definition get_elem_shared_fwd
+  (n : nat) (slots : vec (List_t usize)) (x : usize) : result usize :=
+  l <- vec_index_fwd (List_t usize) slots (0%usize);
+  get_elem_shared_loop_fwd n x slots l l
+.
+
 (** [loops::id_mut] *)
 Definition id_mut_fwd (T : Type) (ls : List_t T) : result (List_t T) :=
   Return ls

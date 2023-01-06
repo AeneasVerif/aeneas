@@ -632,15 +632,26 @@ and loop_to_string (fmt : ast_formatter) (indent : string)
     ^ String.concat "; " (List.map (var_to_string type_fmt) loop.inputs)
     ^ "]"
   in
+  let back_output_tys =
+    let tys =
+      match loop.back_output_tys with
+      | None -> ""
+      | Some tys ->
+          String.concat "; "
+            (List.map (ty_to_string (ast_to_type_formatter fmt) false) tys)
+    in
+    "back_output_tys: [" ^ tys ^ "]"
+  in
   let fun_end =
     texpression_to_string fmt false indent2 indent_incr loop.fun_end
   in
   let loop_body =
     texpression_to_string fmt false indent2 indent_incr loop.loop_body
   in
-  "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ "fun_end: {\n" ^ indent2
-  ^ fun_end ^ "\n" ^ indent1 ^ "}\n" ^ indent1 ^ "loop_body: {\n" ^ indent2
-  ^ loop_body ^ "\n" ^ indent1 ^ "}\n" ^ indent ^ "}"
+  "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ back_output_tys ^ "\n"
+  ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n"
+  ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n"
+  ^ indent ^ "}"
 
 and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
   let meta =

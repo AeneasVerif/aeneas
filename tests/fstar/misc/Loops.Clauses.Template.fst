@@ -36,6 +36,16 @@ let list_nth_shared_loop_decreases (t : Type0) (ls : list_t t) (i : u32) : nat
   =
   admit ()
 
+(** [loops::get_elem_mut]: decreases clause *)
+unfold
+let get_elem_mut_decreases (x : usize) (ls : list_t usize) : nat = admit ()
+
+(** [loops::get_elem_shared]: decreases clause *)
+unfold
+let get_elem_shared_decreases (x : usize) (v : vec (list_t usize))
+  (l : list_t usize) (ls : list_t usize) : nat =
+  admit ()
+
 (** [loops::list_nth_mut_loop_with_id]: decreases clause *)
 unfold
 let list_nth_mut_loop_with_id_decreases (t : Type0) (i : u32) (ls : list_t t) :

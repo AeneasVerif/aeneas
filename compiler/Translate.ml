@@ -144,6 +144,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       backward_inputs = T.RegionGroupId.Map.empty;
       (* Empty for now *)
       backward_outputs = T.RegionGroupId.Map.empty;
+      loop_backward_outputs = None;
       (* Empty for now *)
       calls;
       abstractions;

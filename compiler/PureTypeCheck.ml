@@ -186,7 +186,12 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
           List.iter check_branch branches)
   | Loop loop ->
       assert (loop.fun_end.ty = e.ty);
-      assert (loop.loop_body.ty = e.ty);
+      (* If we translate forward functions, the type of the loop is the same
+         as the type of the parent expression - in case of backward functions,
+         the loop doesn't necessarily give back the same values as the parent
+         function
+      *)
+      assert (Option.is_some loop.back_output_tys || loop.loop_body.ty = e.ty);
       check_texpression ctx loop.fun_end;
       check_texpression ctx loop.loop_body
   | Meta (_, e_next) ->

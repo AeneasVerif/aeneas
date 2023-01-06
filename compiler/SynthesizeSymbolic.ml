@@ -163,10 +163,22 @@ let synthesize_forward_end (ctx : Contexts.eval_ctx)
 
 let synthesize_loop (loop_id : V.LoopId.id)
     (input_svalues : V.symbolic_value list)
-    (fresh_svalues : V.SymbolicValueId.Set.t) (end_expr : expression option)
-    (loop_expr : expression option) : expression option =
+    (fresh_svalues : V.SymbolicValueId.Set.t)
+    (rg_to_given_back_tys :
+      (T.RegionId.Set.t * T.rty list) T.RegionGroupId.Map.t)
+    (end_expr : expression option) (loop_expr : expression option) :
+    expression option =
   match (end_expr, loop_expr) with
   | None, None -> None
   | Some end_expr, Some loop_expr ->
-      Some (Loop { loop_id; input_svalues; fresh_svalues; end_expr; loop_expr })
+      Some
+        (Loop
+           {
+             loop_id;
+             input_svalues;
+             fresh_svalues;
+             rg_to_given_back_tys;
+             end_expr;
+             loop_expr;
+           })
   | _ -> raise (Failure "Unreachable")
