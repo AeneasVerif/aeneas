@@ -177,14 +177,16 @@ type formatter = {
             indices to derive unique names for the loops for instance - if there is
             exactly one loop, we don't need to use indices)
           - loop id (if pertinent)
-          - number of region groups (same comment as for the number of loops)
+          - number of region groups
           - region group information in case of a backward function
             ([None] if forward function)
           - pair:
             - do we generate the forward function (it may have been filtered)?
-            - the number of extracted backward functions (not necessarily equal
-              to the number of region groups, because we may have filtered
-              some of them)
+            - the number of *extracted backward functions* (same comment as for
+              the number of loops)
+              The number of extracted backward functions if not necessarily
+              equal to the number of region groups, because we may have
+              filtered some of them.
           TODO: use the fun id for the assumed functions.
        *)
   decreases_clause_name : A.FunDeclId.id -> fun_name -> string;

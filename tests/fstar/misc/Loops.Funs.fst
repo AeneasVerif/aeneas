@@ -172,6 +172,73 @@ let rec list_nth_shared_loop_loop_fwd
 let list_nth_shared_loop_fwd (t : Type0) (ls : list_t t) (i : u32) : result t =
   list_nth_shared_loop_loop_fwd t ls i
 
+(** [loops::get_elem_mut] *)
+let rec get_elem_mut_loop_fwd
+  (x : usize) (ls : list_t usize) :
+  Tot (result usize) (decreases (get_elem_mut_decreases x ls))
+  =
+  begin match ls with
+  | ListCons y tl -> if y = x then Return y else get_elem_mut_loop_fwd x tl
+  | ListNil -> Fail Failure
+  end
+
+(** [loops::get_elem_mut] *)
+let get_elem_mut_fwd (slots : vec (list_t usize)) (x : usize) : result usize =
+  begin match vec_index_mut_fwd (list_t usize) slots 0 with
+  | Fail e -> Fail e
+  | Return l -> get_elem_mut_loop_fwd x l
+  end
+
+(** [loops::get_elem_mut] *)
+let rec get_elem_mut_loop_back
+  (x : usize) (ls : list_t usize) (ret : usize) :
+  Tot (result (list_t usize)) (decreases (get_elem_mut_decreases x ls))
+  =
+  begin match ls with
+  | ListCons y tl ->
+    if y = x
+    then Return (ListCons ret tl)
+    else
+      begin match get_elem_mut_loop_back x tl ret with
+      | Fail e -> Fail e
+      | Return l -> Return (ListCons y l)
+      end
+  | ListNil -> Fail Failure
+  end
+
+(** [loops::get_elem_mut] *)
+let get_elem_mut_back
+  (slots : vec (list_t usize)) (x : usize) (ret : usize) :
+  result (vec (list_t usize))
+  =
+  begin match vec_index_mut_fwd (list_t usize) slots 0 with
+  | Fail e -> Fail e
+  | Return l ->
+    begin match get_elem_mut_loop_back x l ret with
+    | Fail e -> Fail e
+    | Return l0 -> vec_index_mut_back (list_t usize) slots 0 l0
+    end
+  end
+
+(** [loops::get_elem_shared] *)
+let rec get_elem_shared_loop_fwd
+  (x : usize) (v : vec (list_t usize)) (l : list_t usize) (ls : list_t usize) :
+  Tot (result usize) (decreases (get_elem_shared_decreases x v l ls))
+  =
+  begin match ls with
+  | ListCons y tl ->
+    if y = x then Return y else get_elem_shared_loop_fwd x v l tl
+  | ListNil -> Fail Failure
+  end
+
+(** [loops::get_elem_shared] *)
+let get_elem_shared_fwd
+  (slots : vec (list_t usize)) (x : usize) : result usize =
+  begin match vec_index_fwd (list_t usize) slots 0 with
+  | Fail e -> Fail e
+  | Return l -> get_elem_shared_loop_fwd x slots l l
+  end
+
 (** [loops::id_mut] *)
 let id_mut_fwd (t : Type0) (ls : list_t t) : result (list_t t) = Return ls
 

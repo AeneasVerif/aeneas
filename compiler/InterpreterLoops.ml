@@ -2785,8 +2785,11 @@ let prepare_ashared_loans_no_synth (loop_id : V.LoopId.id) (ctx : C.eval_ctx) :
   get_cf_ctx_no_synth (prepare_ashared_loans (Some loop_id)) ctx
 
 (** Compute a fixed-point for the context at the entry of the loop.
-    We also return the sets of fixed ids, and the list of symbolic values
-    that appear in the fixed point context.
+    We also return:
+    - the sets of fixed ids
+    - the map from region group id to the corresponding abstraction appearing
+      in the fixed point (this is useful to compute the return type of the loop
+      backward functions for instance).
 
     Rem.: the list of symbolic values should be computable by simply exploring
     the fixed point environment and listing all the symbolic values we find.
@@ -2794,7 +2797,8 @@ let prepare_ashared_loans_no_synth (loop_id : V.LoopId.id) (ctx : C.eval_ctx) :
     the values which are read or modified (some symbolic values may be ignored).
  *)
 let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
-    (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) : C.eval_ctx * ids_sets =
+    (eval_loop_body : st_cm_fun) (ctx0 : C.eval_ctx) :
+    C.eval_ctx * ids_sets * V.abs T.RegionGroupId.Map.t =
   (* The continuation for when we exit the loop - we register the
      environments upon loop *reentry*, and synthesize nothing by
      returning [None]
@@ -2963,7 +2967,7 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
      "horizontally": the symbolic values contained in the abstractions (typically
      the shared values) will be preserved.
   *)
-  let fp =
+  let fp, rg_to_abs =
     (* List the loop abstractions in the fixed-point *)
     let fp_aids, add_aid, _mem_aid = V.AbstractionId.Set.mk_stateful_set () in
 
@@ -3066,8 +3070,10 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
        se, but if it doesn't happen it is bizarre and worth investigating... *)
     assert (V.AbstractionId.Set.equal !aids_union !fp_aids);
 
-    (* Merge the abstractions which need to be merged *)
+    (* Merge the abstractions which need to be merged, and compute the map from
+       region id to abstraction id *)
     let fp = ref fp in
+    let rg_to_abs = ref T.RegionGroupId.Map.empty in
     let _ =
       T.RegionGroupId.Map.iter
         (fun rg_id ids ->
@@ -3108,9 +3114,13 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
                     id0 := id0';
                     ()
                   with ValueMatchFailure _ -> raise (Failure "Unexpected"))
-                ids)
+                ids;
+              (* Register the mapping *)
+              let abs = C.ctx_lookup_abs !fp !id0 in
+              rg_to_abs := T.RegionGroupId.Map.add_strict rg_id abs !rg_to_abs)
         !fp_ended_aids
     in
+    let rg_to_abs = !rg_to_abs in
 
     (* Reorder the loans and borrows in the fresh abstractions in the fixed-point *)
     let fp =
@@ -3164,12 +3174,12 @@ let compute_loop_entry_fixed_point (config : C.config) (loop_id : V.LoopId.id)
     in
 
     (* Return *)
-    fp
+    (fp, rg_to_abs)
   in
   let fixed_ids = compute_fixed_ids [ fp ] in
 
   (* Return *)
-  (fp, fixed_ids)
+  (fp, fixed_ids, rg_to_abs)
 
 (** Split an environment between the fixed abstractions, values, etc. and
     the new abstractions, values, etc.
@@ -4127,7 +4137,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
   let loop_id = C.fresh_loop_id () in
 
   (* Compute the fixed point at the loop entrance *)
-  let fp_ctx, fixed_ids =
+  let fp_ctx, fixed_ids, rg_to_abs =
     compute_loop_entry_fixed_point config loop_id eval_loop_body ctx
   in
 
@@ -4197,8 +4207,71 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
       ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
       ^ "\n\n"));
 
+  (* For every abstraction introduced by the fixed-point, compute the
+     types of the given back values.
+
+     We need to explore the abstractions, looking for the mutable borrows.
+     Moreover, we list the borrows in the same order as the loans (this
+     is important in {!SymbolicToPure}, where we expect the given back
+     values to have a specific order.
+  *)
+  let compute_abs_given_back_tys (abs : V.abs) : T.RegionId.Set.t * T.rty list =
+    let is_borrow (av : V.typed_avalue) : bool =
+      match av.V.value with
+      | ABorrow _ -> true
+      | ALoan _ -> false
+      | _ -> raise (Failure "Unreachable")
+    in
+    let borrows, loans = List.partition is_borrow abs.avalues in
+
+    let borrows =
+      List.filter_map
+        (fun av ->
+          match av.V.value with
+          | V.ABorrow (V.AMutBorrow (bid, child_av)) ->
+              assert (is_aignored child_av.V.value);
+              Some (bid, child_av.V.ty)
+          | V.ABorrow (V.ASharedBorrow _) -> None
+          | _ -> raise (Failure "Unreachable"))
+        borrows
+    in
+    let borrows = ref (V.BorrowId.Map.of_list borrows) in
+
+    let loan_ids =
+      List.filter_map
+        (fun av ->
+          match av.V.value with
+          | V.ALoan (V.AMutLoan (bid, child_av)) ->
+              assert (is_aignored child_av.V.value);
+              Some bid
+          | V.ALoan (V.ASharedLoan _) -> None
+          | _ -> raise (Failure "Unreachable"))
+        loans
+    in
+
+    (* List the given back types, in the order given by the loans *)
+    let given_back_tys =
+      List.map
+        (fun lid ->
+          let bid =
+            V.BorrowId.InjSubst.find lid fp_bl_corresp.loan_to_borrow_id_map
+          in
+          let ty = V.BorrowId.Map.find bid !borrows in
+          borrows := V.BorrowId.Map.remove bid !borrows;
+          ty)
+        loan_ids
+    in
+    assert (V.BorrowId.Map.is_empty !borrows);
+
+    (abs.regions, given_back_tys)
+  in
+  let rg_to_given_back =
+    T.RegionGroupId.Map.map compute_abs_given_back_tys rg_to_abs
+  in
+
   (* Put together *)
-  S.synthesize_loop loop_id input_svalues fresh_sids end_expr loop_expr
+  S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back end_expr
+    loop_expr
 
 (** Evaluate a loop *)
 let eval_loop (config : C.config) (eval_loop_body : st_cm_fun) : st_cm_fun =

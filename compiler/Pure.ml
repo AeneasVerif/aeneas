@@ -498,6 +498,9 @@ and loop = {
   inputs : var list;
   inputs_lvs : typed_pattern list;
       (** The inputs seen as patterns. See {!fun_body}. *)
+  back_output_tys : ty list option;
+      (** The types of the given back values, if we ar esynthesizing a backward
+          function *)
   loop_body : texpression;
 }
 
