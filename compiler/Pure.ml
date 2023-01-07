@@ -358,7 +358,7 @@ type qualif_id =
  *)
 type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]
 
-type var_id = VarId.id [@@deriving show]
+type var_id = VarId.id [@@deriving show, ord]
 
 (** Ancestor for {!iter_expression} visitor *)
 class ['self] iter_expression_base =
@@ -513,13 +513,20 @@ and texpression = { e : expression; ty : ty }
  *)
 and mvalue = (texpression[@opaque])
 
+(** Meta-information stored in the AST *)
 and meta =
   | Assignment of mplace * mvalue * mplace option
-      (** Meta-information stored in the AST.
+      (** Information about an assignment which occured in LLBC.
+          We use this to guide the heuristics which derive pretty names.
 
           The first mplace stores the destination.
           The mvalue stores the value which is put in the destination
           The second (optional) mplace stores the origin.
+        *)
+  | SymbolicAssignment of (var_id[@opaque]) * mvalue
+      (** Informationg linking a variable (from the pure AST) to an
+          expression.
+          We use this to guide the heuristics which derive pretty names.
         *)
   | MPlace of mplace  (** Meta-information about the origin of a value *)
   | Tag of string  (** A tag - typically used for debugging *)

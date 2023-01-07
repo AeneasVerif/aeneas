@@ -57,6 +57,8 @@ let compute_primitive_value_ty (cv : primitive_value) : ty =
   | Char _ -> Char
   | String _ -> Str
 
+let var_get_id (v : var) : VarId.id = v.id
+
 let mk_typed_pattern_from_primitive_value (cv : primitive_value) : typed_pattern
     =
   let ty = compute_primitive_value_ty cv in
@@ -72,6 +74,10 @@ let mk_tag (msg : string) (next_e : texpression) : texpression =
   let e = Meta (Tag msg, next_e) in
   let ty = next_e.ty in
   { e; ty }
+
+let mk_mplace (var_id : E.VarId.id) (name : string option)
+    (projection : mprojection) : mplace =
+  { var_id; name; projection }
 
 (** Type substitution *)
 let ty_substitute (tsubst : TypeVarId.id -> ty) (ty : ty) : ty =
