@@ -43,8 +43,8 @@ let get_elem_mut_decreases (x : usize) (ls : list_t usize) : list_t usize = ls
 
 (** [loops::get_elem_shared]: decreases clause *)
 unfold
-let get_elem_shared_decreases (x : usize) (v : vec (list_t usize))
-  (l : list_t usize) (ls : list_t usize) : list_t usize =
+let get_elem_shared_decreases (slots : vec (list_t usize)) (x : usize)
+  (ls : list_t usize) (ls0 : list_t usize) : list_t usize =
   ls
 
 (** [loops::list_nth_mut_loop_with_id]: decreases clause *)

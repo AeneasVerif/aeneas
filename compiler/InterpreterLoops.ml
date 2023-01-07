@@ -4106,9 +4106,45 @@ let compute_fp_ctx_symbolic_values (ctx : C.eval_ctx) (fp_ctx : C.eval_ctx) :
       sids_to_values
   in
 
-  (* The value ids should be listed in increasing order *)
+  (* List the input symbolic values in proper order.
+
+     We explore the environment, and order the symbolic values in the order
+     in which they are found - this way, the symbolic values found in a
+     variable [x] which appears before [y] are listed first, for instance.
+  *)
   let input_svalues =
-    List.map snd (V.SymbolicValueId.Map.bindings sids_to_values)
+    let found_sids = ref V.SymbolicValueId.Set.empty in
+    let ordered_sids = ref [] in
+
+    let visitor =
+      object (self : 'self)
+        inherit [_] C.iter_env
+
+        (** We lookup the shared values *)
+        method! visit_SharedBorrow env bid =
+          let open InterpreterBorrowsCore in
+          let v =
+            match snd (lookup_loan ek_all bid fp_ctx) with
+            | Concrete (V.SharedLoan (_, v)) -> v
+            | Abstract (V.ASharedLoan (_, v, _)) -> v
+            | _ -> raise (Failure "Unreachable")
+          in
+          self#visit_typed_value env v
+
+        method! visit_symbolic_value_id _ id =
+          if not (V.SymbolicValueId.Set.mem id !found_sids) then (
+            found_sids := V.SymbolicValueId.Set.add id !found_sids;
+            ordered_sids := id :: !ordered_sids)
+      end
+    in
+
+    (* TODO: why do we have to put a boolean here for the typechecker to be happy?
+       Is it because we use a similar visitor with booleans above?? *)
+    List.iter (visitor#visit_env_elem true) (List.rev fp_ctx.env);
+
+    List.filter_map
+      (fun id -> V.SymbolicValueId.Map.find_opt id sids_to_values)
+      (List.rev !ordered_sids)
   in
 
   log#ldebug

@@ -235,16 +235,16 @@ Definition get_elem_mut_back
 
 (** [loops::get_elem_shared] *)
 Fixpoint get_elem_shared_loop_fwd
-  (n : nat) (x : usize) (slots : vec (List_t usize)) (ls : List_t usize)
+  (n : nat) (slots : vec (List_t usize)) (x : usize) (ls : List_t usize)
   (ls0 : List_t usize) :
   result usize
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match ls0 with
+    match ls with
     | ListCons y tl =>
-      if y s= x then Return y else get_elem_shared_loop_fwd n0 x slots ls tl
+      if y s= x then Return y else get_elem_shared_loop_fwd n0 slots x tl ls0
     | ListNil => Fail_ Failure
     end
   end
@@ -254,7 +254,7 @@ Fixpoint get_elem_shared_loop_fwd
 Definition get_elem_shared_fwd
   (n : nat) (slots : vec (List_t usize)) (x : usize) : result usize :=
   l <- vec_index_fwd (List_t usize) slots (0%usize);
-  get_elem_shared_loop_fwd n x slots l l
+  get_elem_shared_loop_fwd n slots x l l
 .
 
 (** [loops::id_mut] *)

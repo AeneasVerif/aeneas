@@ -143,12 +143,15 @@ let remove_borrow_from_asb (bid : V.BorrowId.id)
     TODO: change the name "abstract"
  *)
 type ('a, 'b) concrete_or_abs = Concrete of 'a | Abstract of 'b
+[@@deriving show]
 
 (** Generic loan content: concrete or abstract *)
 type g_loan_content = (V.loan_content, V.aloan_content) concrete_or_abs
+[@@deriving show]
 
 (** Generic borrow content: concrete or abstract *)
 type g_borrow_content = (V.borrow_content, V.aborrow_content) concrete_or_abs
+[@@deriving show]
 
 type abs_or_var_id =
   | AbsId of V.AbstractionId.id
