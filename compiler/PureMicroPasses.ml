@@ -290,6 +290,17 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Add the constraint *)
     match (unmeta rv).e with Var vid -> add_constraint mp vid ctx | _ -> ctx
   in
+  let add_pure_var_value_constraint (var_id : VarId.id) (rv : texpression)
+      (ctx : pn_ctx) : pn_ctx =
+    (* Add the constraint *)
+    match (unmeta rv).e with
+    | Var vid -> (
+        (* Try to find a name for the vid *)
+        match VarId.Map.find_opt vid ctx.pure_vars with
+        | None -> ctx
+        | Some name -> add_pure_var_constraint var_id name ctx)
+    | _ -> ctx
+  in
   (* Specific case of constraint on left values *)
   let add_left_constraint (lv : typed_pattern) (ctx : pn_ctx) : pn_ctx =
     let obj =
@@ -484,6 +495,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             | _ -> ctx
           in
           ctx
+      | SymbolicAssignment (var_id, rvalue) ->
+          add_pure_var_value_constraint var_id rvalue ctx
       | MPlace mp -> add_right_constraint mp e ctx
       | Tag _ -> ctx
     in

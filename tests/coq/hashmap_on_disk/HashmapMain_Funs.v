@@ -15,7 +15,7 @@ Definition hashmap_hash_key_fwd (k : usize) : result usize := Return k.
 
 (** [hashmap_main::hashmap::HashMap::{0}::allocate_slots] *)
 Fixpoint hashmap_hash_map_allocate_slots_loop_fwd
-  (T : Type) (n : nat) (v : vec (Hashmap_list_t T)) (n0 : usize) :
+  (T : Type) (n : nat) (slots : vec (Hashmap_list_t T)) (n0 : usize) :
   result (vec (Hashmap_list_t T))
   :=
   match n with
@@ -23,10 +23,10 @@ Fixpoint hashmap_hash_map_allocate_slots_loop_fwd
   | S n1 =>
     if n0 s> 0%usize
     then (
-      slots <- vec_push_back (Hashmap_list_t T) v HashmapListNil;
+      slots0 <- vec_push_back (Hashmap_list_t T) slots HashmapListNil;
       n2 <- usize_sub n0 1%usize;
-      hashmap_hash_map_allocate_slots_loop_fwd T n1 slots n2)
-    else Return v
+      hashmap_hash_map_allocate_slots_loop_fwd T n1 slots0 n2)
+    else Return slots
   end
 .
 
@@ -60,19 +60,19 @@ Definition hashmap_hash_map_new_fwd
 
 (** [hashmap_main::hashmap::HashMap::{0}::clear_slots] *)
 Fixpoint hashmap_hash_map_clear_slots_loop_fwd_back
-  (T : Type) (n : nat) (v : vec (Hashmap_list_t T)) (i : usize) :
+  (T : Type) (n : nat) (slots : vec (Hashmap_list_t T)) (i : usize) :
   result (vec (Hashmap_list_t T))
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    let i0 := vec_len (Hashmap_list_t T) v in
+    let i0 := vec_len (Hashmap_list_t T) slots in
     if i s< i0
     then (
       i1 <- usize_add i 1%usize;
-      slots <- vec_index_mut_back (Hashmap_list_t T) v i HashmapListNil;
-      hashmap_hash_map_clear_slots_loop_fwd_back T n0 slots i1)
-    else Return v
+      slots0 <- vec_index_mut_back (Hashmap_list_t T) slots i HashmapListNil;
+      hashmap_hash_map_clear_slots_loop_fwd_back T n0 slots0 i1)
+    else Return slots
   end
 .
 
@@ -192,7 +192,8 @@ Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
 
 (** [hashmap_main::hashmap::HashMap::{0}::move_elements_from_list] *)
 Fixpoint hashmap_hash_map_move_elements_from_list_loop_fwd_back
-  (T : Type) (n : nat) (hm : Hashmap_hash_map_t T) (ls : Hashmap_list_t T) :
+  (T : Type) (n : nat) (ntable : Hashmap_hash_map_t T) (ls : Hashmap_list_t T)
+  :
   result (Hashmap_hash_map_t T)
   :=
   match n with
@@ -200,9 +201,9 @@ Fixpoint hashmap_hash_map_move_elements_from_list_loop_fwd_back
   | S n0 =>
     match ls with
     | HashmapListCons k v tl =>
-      ntable <- hashmap_hash_map_insert_no_resize_fwd_back T n0 hm k v;
-      hashmap_hash_map_move_elements_from_list_loop_fwd_back T n0 ntable tl
-    | HashmapListNil => Return hm
+      ntable0 <- hashmap_hash_map_insert_no_resize_fwd_back T n0 ntable k v;
+      hashmap_hash_map_move_elements_from_list_loop_fwd_back T n0 ntable0 tl
+    | HashmapListNil => Return ntable
     end
   end
 .
@@ -218,24 +219,25 @@ Definition hashmap_hash_map_move_elements_from_list_fwd_back
 
 (** [hashmap_main::hashmap::HashMap::{0}::move_elements] *)
 Fixpoint hashmap_hash_map_move_elements_loop_fwd_back
-  (T : Type) (n : nat) (hm : Hashmap_hash_map_t T) (v : vec (Hashmap_list_t T))
-  (i : usize) :
+  (T : Type) (n : nat) (ntable : Hashmap_hash_map_t T)
+  (slots : vec (Hashmap_list_t T)) (i : usize) :
   result ((Hashmap_hash_map_t T) * (vec (Hashmap_list_t T)))
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    let i0 := vec_len (Hashmap_list_t T) v in
+    let i0 := vec_len (Hashmap_list_t T) slots in
     if i s< i0
     then (
-      l <- vec_index_mut_fwd (Hashmap_list_t T) v i;
+      l <- vec_index_mut_fwd (Hashmap_list_t T) slots i;
       let ls := mem_replace_fwd (Hashmap_list_t T) l HashmapListNil in
-      ntable <- hashmap_hash_map_move_elements_from_list_fwd_back T n0 hm ls;
+      ntable0 <-
+        hashmap_hash_map_move_elements_from_list_fwd_back T n0 ntable ls;
       i1 <- usize_add i 1%usize;
       let l0 := mem_replace_back (Hashmap_list_t T) l HashmapListNil in
-      slots <- vec_index_mut_back (Hashmap_list_t T) v i l0;
-      hashmap_hash_map_move_elements_loop_fwd_back T n0 ntable slots i1)
-    else Return (hm, v)
+      slots0 <- vec_index_mut_back (Hashmap_list_t T) slots i l0;
+      hashmap_hash_map_move_elements_loop_fwd_back T n0 ntable0 slots0 i1)
+    else Return (ntable, slots)
   end
 .
 
@@ -288,15 +290,15 @@ Definition hashmap_hash_map_insert_fwd_back
 
 (** [hashmap_main::hashmap::HashMap::{0}::contains_key_in_list] *)
 Fixpoint hashmap_hash_map_contains_key_in_list_loop_fwd
-  (T : Type) (n : nat) (i : usize) (ls : Hashmap_list_t T) : result bool :=
+  (T : Type) (n : nat) (key : usize) (ls : Hashmap_list_t T) : result bool :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
     | HashmapListCons ckey t tl =>
-      if ckey s= i
+      if ckey s= key
       then Return true
-      else hashmap_hash_map_contains_key_in_list_loop_fwd T n0 i tl
+      else hashmap_hash_map_contains_key_in_list_loop_fwd T n0 key tl
     | HashmapListNil => Return false
     end
   end
@@ -322,15 +324,15 @@ Definition hashmap_hash_map_contains_key_fwd
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_in_list] *)
 Fixpoint hashmap_hash_map_get_in_list_loop_fwd
-  (T : Type) (n : nat) (i : usize) (ls : Hashmap_list_t T) : result T :=
+  (T : Type) (n : nat) (key : usize) (ls : Hashmap_list_t T) : result T :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
     | HashmapListCons ckey cvalue tl =>
-      if ckey s= i
+      if ckey s= key
       then Return cvalue
-      else hashmap_hash_map_get_in_list_loop_fwd T n0 i tl
+      else hashmap_hash_map_get_in_list_loop_fwd T n0 key tl
     | HashmapListNil => Fail_ Failure
     end
   end
@@ -356,15 +358,15 @@ Definition hashmap_hash_map_get_fwd
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 Fixpoint hashmap_hash_map_get_mut_in_list_loop_fwd
-  (T : Type) (n : nat) (i : usize) (ls : Hashmap_list_t T) : result T :=
+  (T : Type) (n : nat) (key : usize) (ls : Hashmap_list_t T) : result T :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
     | HashmapListCons ckey cvalue tl =>
-      if ckey s= i
+      if ckey s= key
       then Return cvalue
-      else hashmap_hash_map_get_mut_in_list_loop_fwd T n0 i tl
+      else hashmap_hash_map_get_mut_in_list_loop_fwd T n0 key tl
     | HashmapListNil => Fail_ Failure
     end
   end
@@ -378,7 +380,7 @@ Definition hashmap_hash_map_get_mut_in_list_fwd
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 Fixpoint hashmap_hash_map_get_mut_in_list_loop_back
-  (T : Type) (n : nat) (i : usize) (ls : Hashmap_list_t T) (ret : T) :
+  (T : Type) (n : nat) (key : usize) (ls : Hashmap_list_t T) (ret : T) :
   result (Hashmap_list_t T)
   :=
   match n with
@@ -386,10 +388,10 @@ Fixpoint hashmap_hash_map_get_mut_in_list_loop_back
   | S n0 =>
     match ls with
     | HashmapListCons ckey cvalue tl =>
-      if ckey s= i
+      if ckey s= key
       then Return (HashmapListCons ckey ret tl)
       else (
-        l <- hashmap_hash_map_get_mut_in_list_loop_back T n0 i tl ret;
+        l <- hashmap_hash_map_get_mut_in_list_loop_back T n0 key tl ret;
         Return (HashmapListCons ckey cvalue l))
     | HashmapListNil => Fail_ Failure
     end
@@ -437,7 +439,7 @@ Definition hashmap_hash_map_get_mut_back
 
 (** [hashmap_main::hashmap::HashMap::{0}::remove_from_list] *)
 Fixpoint hashmap_hash_map_remove_from_list_loop_fwd
-  (T : Type) (n : nat) (i : usize) (ls : Hashmap_list_t T) :
+  (T : Type) (n : nat) (key : usize) (ls : Hashmap_list_t T) :
   result (option T)
   :=
   match n with
@@ -445,16 +447,16 @@ Fixpoint hashmap_hash_map_remove_from_list_loop_fwd
   | S n0 =>
     match ls with
     | HashmapListCons ckey t tl =>
-      if ckey s= i
+      if ckey s= key
       then
         let mv_ls :=
           mem_replace_fwd (Hashmap_list_t T) (HashmapListCons ckey t tl)
             HashmapListNil in
         match mv_ls with
-        | HashmapListCons i0 cvalue tl0 => Return (Some cvalue)
+        | HashmapListCons i cvalue tl0 => Return (Some cvalue)
         | HashmapListNil => Fail_ Failure
         end
-      else hashmap_hash_map_remove_from_list_loop_fwd T n0 i tl
+      else hashmap_hash_map_remove_from_list_loop_fwd T n0 key tl
     | HashmapListNil => Return None
     end
   end
@@ -470,7 +472,7 @@ Definition hashmap_hash_map_remove_from_list_fwd
 
 (** [hashmap_main::hashmap::HashMap::{0}::remove_from_list] *)
 Fixpoint hashmap_hash_map_remove_from_list_loop_back
-  (T : Type) (n : nat) (i : usize) (ls : Hashmap_list_t T) :
+  (T : Type) (n : nat) (key : usize) (ls : Hashmap_list_t T) :
   result (Hashmap_list_t T)
   :=
   match n with
@@ -478,17 +480,17 @@ Fixpoint hashmap_hash_map_remove_from_list_loop_back
   | S n0 =>
     match ls with
     | HashmapListCons ckey t tl =>
-      if ckey s= i
+      if ckey s= key
       then
         let mv_ls :=
           mem_replace_fwd (Hashmap_list_t T) (HashmapListCons ckey t tl)
             HashmapListNil in
         match mv_ls with
-        | HashmapListCons i0 cvalue tl0 => Return tl0
+        | HashmapListCons i cvalue tl0 => Return tl0
         | HashmapListNil => Fail_ Failure
         end
       else (
-        l <- hashmap_hash_map_remove_from_list_loop_back T n0 i tl;
+        l <- hashmap_hash_map_remove_from_list_loop_back T n0 key tl;
         Return (HashmapListCons ckey t l))
     | HashmapListNil => Return HashmapListNil
     end

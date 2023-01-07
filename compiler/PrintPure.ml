@@ -521,7 +521,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
       let meta_s = meta_to_string fmt meta in
       let e = texpression_to_string fmt inside indent indent_incr e in
       match meta with
-      | Assignment _ | Tag _ ->
+      | Assignment _ | SymbolicAssignment _ | Tag _ ->
           let e = meta_s ^ "\n" ^ indent ^ e in
           if inside then "(" ^ e ^ ")" else e
       | MPlace _ -> "(" ^ meta_s ^ " " ^ e ^ ")")
@@ -665,6 +665,10 @@ and meta_to_string (fmt : ast_formatter) (meta : meta) : string =
         "@assign(" ^ mplace_to_string fmt lp ^ " := "
         ^ texpression_to_string fmt false "" "" rv
         ^ rp ^ ")"
+    | SymbolicAssignment (var_id, rv) ->
+        "@symb_assign(" ^ VarId.to_string var_id ^ " := "
+        ^ texpression_to_string fmt false "" "" rv
+        ^ ")"
     | MPlace mp -> "@mplace=" ^ mplace_to_string fmt mp
     | Tag msg -> "@tag \"" ^ msg ^ "\""
   in

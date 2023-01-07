@@ -103,6 +103,7 @@ type call_info = {
  *)
 type loop_info = {
   loop_id : LoopId.id;
+  input_vars : var list;
   input_svl : V.symbolic_value list;
   type_args : ty list;
   forward_inputs : texpression list option;
@@ -149,7 +150,7 @@ type bs_ctx = {
   fuel0 : VarId.id;
       (** The original fuel taken as input by the function (if we use fuel) *)
   fuel : VarId.id;
-  (* The fuel to use for the recursive calls (if we use fuel) *)
+      (** The fuel to use for the recursive calls (if we use fuel) *)
   forward_inputs : var list;
       (** The input parameters for the forward function corresponding to the
           translated Rust inputs (no fuel, no state).
@@ -169,6 +170,8 @@ type bs_ctx = {
           [None] if we are not inside a loop, [Some] otherwise (and whatever
           the kind of function we are translating: it will be [Some] even
           though we are synthesizing a forward function).
+
+          TODO: move to {!loop_info}
        *)
   calls : call_info V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
@@ -2254,6 +2257,7 @@ and translate_forward_end (ectx : C.eval_ctx)
       let args =
         List.map (typed_value_to_texpression ctx ectx) loop_input_values
       in
+      let org_args = args in
 
       (* Lookup the effect info for the loop function *)
       let fid = A.Regular ctx.fun_decl.A.def_id in
@@ -2316,7 +2320,31 @@ and translate_forward_end (ectx : C.eval_ctx)
       in
 
       (* Create the let expression with the loop call *)
-      mk_let effect_info.can_fail out_pat loop_call next_e
+      let e = mk_let effect_info.can_fail out_pat loop_call next_e in
+
+      (* Add meta-information linking the loop input parameters and the
+         loop input values - we use this to derive proper names.
+
+         There is something important here: as we group the end of the function
+         and the loop body in a {!Loop} node, when exploring the function
+         and applying micro passes, we introduce the variables specific to
+         the loop body before exploring both the loop body and the end of
+         the function. It means it is ok to reference some variables which might
+         actually be defined, in the end, in a different branch.
+
+         We then remove all the meta information from the body *before* calling
+         {!PureMicroPasses.decompose_loops}.
+      *)
+      let e =
+        let var_values = List.combine loop_info.input_vars org_args in
+        List.fold_right
+          (fun (var, arg) e ->
+            mk_meta (SymbolicAssignment (var_get_id var, arg)) e)
+          var_values e
+      in
+
+      (* Return *)
+      e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
@@ -2416,6 +2444,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     let loop_info =
       {
         loop_id;
+        input_vars = inputs;
         input_svl = loop.input_svalues;
         type_args;
         forward_inputs = None;

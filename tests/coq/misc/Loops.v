@@ -94,13 +94,13 @@ Arguments ListNil {T}.
 
 (** [loops::list_mem] *)
 Fixpoint list_mem_loop_fwd
-  (n : nat) (i : u32) (ls : List_t u32) : result bool :=
+  (n : nat) (x : u32) (ls : List_t u32) : result bool :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
     | ListCons y tl =>
-      if y s= i then Return true else list_mem_loop_fwd n0 i tl
+      if y s= x then Return true else list_mem_loop_fwd n0 x tl
     | ListNil => Return false
     end
   end
@@ -235,16 +235,16 @@ Definition get_elem_mut_back
 
 (** [loops::get_elem_shared] *)
 Fixpoint get_elem_shared_loop_fwd
-  (n : nat) (x : usize) (v : vec (List_t usize)) (l : List_t usize)
-  (ls : List_t usize) :
+  (n : nat) (x : usize) (slots : vec (List_t usize)) (ls : List_t usize)
+  (ls0 : List_t usize) :
   result usize
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match ls with
+    match ls0 with
     | ListCons y tl =>
-      if y s= x then Return y else get_elem_shared_loop_fwd n0 x v l tl
+      if y s= x then Return y else get_elem_shared_loop_fwd n0 x slots ls tl
     | ListNil => Fail_ Failure
     end
   end
@@ -329,17 +329,17 @@ Definition list_nth_mut_loop_with_id_back
 
 (** [loops::list_nth_shared_loop_with_id] *)
 Fixpoint list_nth_shared_loop_with_id_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (i : u32) (ls : List_t T) : result T :=
+  (T : Type) (n : nat) (ls : List_t T) (i : u32) (ls0 : List_t T) : result T :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match ls with
+    match ls0 with
     | ListCons x tl =>
       if i s= 0%u32
       then Return x
       else (
         i0 <- u32_sub i 1%u32;
-        list_nth_shared_loop_with_id_loop_fwd T n0 l i0 tl)
+        list_nth_shared_loop_with_id_loop_fwd T n0 ls i0 tl)
     | ListNil => Fail_ Failure
     end
   end
@@ -353,15 +353,15 @@ Definition list_nth_shared_loop_with_id_fwd
 
 (** [loops::list_nth_mut_loop_pair] *)
 Fixpoint list_nth_mut_loop_pair_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (x0, x1)
@@ -385,22 +385,22 @@ Definition list_nth_mut_loop_pair_fwd
 
 (** [loops::list_nth_mut_loop_pair] *)
 Fixpoint list_nth_mut_loop_pair_loop_back'a
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : T) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (ListCons ret tl0)
         else (
           i0 <- u32_sub i 1%u32;
-          l1 <- list_nth_mut_loop_pair_loop_back'a T n0 tl0 tl1 i0 ret;
-          Return (ListCons x0 l1))
+          l <- list_nth_mut_loop_pair_loop_back'a T n0 tl0 tl1 i0 ret;
+          Return (ListCons x0 l))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -418,22 +418,22 @@ Definition list_nth_mut_loop_pair_back'a
 
 (** [loops::list_nth_mut_loop_pair] *)
 Fixpoint list_nth_mut_loop_pair_loop_back'b
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : T) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (ListCons ret tl1)
         else (
           i0 <- u32_sub i 1%u32;
-          l1 <- list_nth_mut_loop_pair_loop_back'b T n0 tl0 tl1 i0 ret;
-          Return (ListCons x1 l1))
+          l <- list_nth_mut_loop_pair_loop_back'b T n0 tl0 tl1 i0 ret;
+          Return (ListCons x1 l))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -451,15 +451,15 @@ Definition list_nth_mut_loop_pair_back'b
 
 (** [loops::list_nth_shared_loop_pair] *)
 Fixpoint list_nth_shared_loop_pair_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (x0, x1)
@@ -483,15 +483,15 @@ Definition list_nth_shared_loop_pair_fwd
 
 (** [loops::list_nth_mut_loop_pair_merge] *)
 Fixpoint list_nth_mut_loop_pair_merge_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (x0, x1)
@@ -515,24 +515,24 @@ Definition list_nth_mut_loop_pair_merge_fwd
 
 (** [loops::list_nth_mut_loop_pair_merge] *)
 Fixpoint list_nth_mut_loop_pair_merge_loop_back
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : (T * T))
-  :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32)
+  (ret : (T * T)) :
   result ((List_t T) * (List_t T))
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then let (t, t0) := ret in Return (ListCons t tl0, ListCons t0 tl1)
         else (
           i0 <- u32_sub i 1%u32;
           p <- list_nth_mut_loop_pair_merge_loop_back T n0 tl0 tl1 i0 ret;
-          let (l1, l2) := p in
-          Return (ListCons x0 l1, ListCons x1 l2))
+          let (l, l0) := p in
+          Return (ListCons x0 l, ListCons x1 l0))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -551,15 +551,15 @@ Definition list_nth_mut_loop_pair_merge_back
 
 (** [loops::list_nth_shared_loop_pair_merge] *)
 Fixpoint list_nth_shared_loop_pair_merge_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (x0, x1)
@@ -583,15 +583,15 @@ Definition list_nth_shared_loop_pair_merge_fwd
 
 (** [loops::list_nth_mut_shared_loop_pair] *)
 Fixpoint list_nth_mut_shared_loop_pair_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (x0, x1)
@@ -615,22 +615,22 @@ Definition list_nth_mut_shared_loop_pair_fwd
 
 (** [loops::list_nth_mut_shared_loop_pair] *)
 Fixpoint list_nth_mut_shared_loop_pair_loop_back
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : T) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (ListCons ret tl0)
         else (
           i0 <- u32_sub i 1%u32;
-          l1 <- list_nth_mut_shared_loop_pair_loop_back T n0 tl0 tl1 i0 ret;
-          Return (ListCons x0 l1))
+          l <- list_nth_mut_shared_loop_pair_loop_back T n0 tl0 tl1 i0 ret;
+          Return (ListCons x0 l))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -648,15 +648,15 @@ Definition list_nth_mut_shared_loop_pair_back
 
 (** [loops::list_nth_mut_shared_loop_pair_merge] *)
 Fixpoint list_nth_mut_shared_loop_pair_merge_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (x0, x1)
@@ -680,23 +680,23 @@ Definition list_nth_mut_shared_loop_pair_merge_fwd
 
 (** [loops::list_nth_mut_shared_loop_pair_merge] *)
 Fixpoint list_nth_mut_shared_loop_pair_merge_loop_back
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : T) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (ListCons ret tl0)
         else (
           i0 <- u32_sub i 1%u32;
-          l1 <-
+          l <-
             list_nth_mut_shared_loop_pair_merge_loop_back T n0 tl0 tl1 i0 ret;
-          Return (ListCons x0 l1))
+          Return (ListCons x0 l))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -714,15 +714,15 @@ Definition list_nth_mut_shared_loop_pair_merge_back
 
 (** [loops::list_nth_shared_mut_loop_pair] *)
 Fixpoint list_nth_shared_mut_loop_pair_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (x0, x1)
@@ -746,22 +746,22 @@ Definition list_nth_shared_mut_loop_pair_fwd
 
 (** [loops::list_nth_shared_mut_loop_pair] *)
 Fixpoint list_nth_shared_mut_loop_pair_loop_back
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : T) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (ListCons ret tl1)
         else (
           i0 <- u32_sub i 1%u32;
-          l1 <- list_nth_shared_mut_loop_pair_loop_back T n0 tl0 tl1 i0 ret;
-          Return (ListCons x1 l1))
+          l <- list_nth_shared_mut_loop_pair_loop_back T n0 tl0 tl1 i0 ret;
+          Return (ListCons x1 l))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -779,15 +779,15 @@ Definition list_nth_shared_mut_loop_pair_back
 
 (** [loops::list_nth_shared_mut_loop_pair_merge] *)
 Fixpoint list_nth_shared_mut_loop_pair_merge_loop_fwd
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) :
   result (T * T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (x0, x1)
@@ -811,23 +811,23 @@ Definition list_nth_shared_mut_loop_pair_merge_fwd
 
 (** [loops::list_nth_shared_mut_loop_pair_merge] *)
 Fixpoint list_nth_shared_mut_loop_pair_merge_loop_back
-  (T : Type) (n : nat) (l : List_t T) (l0 : List_t T) (i : u32) (ret : T) :
+  (T : Type) (n : nat) (ls0 : List_t T) (ls1 : List_t T) (i : u32) (ret : T) :
   result (List_t T)
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match l with
+    match ls0 with
     | ListCons x0 tl0 =>
-      match l0 with
+      match ls1 with
       | ListCons x1 tl1 =>
         if i s= 0%u32
         then Return (ListCons ret tl1)
         else (
           i0 <- u32_sub i 1%u32;
-          l1 <-
+          l <-
             list_nth_shared_mut_loop_pair_merge_loop_back T n0 tl0 tl1 i0 ret;
-          Return (ListCons x1 l1))
+          Return (ListCons x1 l))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
