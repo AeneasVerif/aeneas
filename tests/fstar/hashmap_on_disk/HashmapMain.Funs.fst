@@ -410,35 +410,35 @@ let hashmap_hash_map_get_fwd
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 let rec hashmap_hash_map_get_mut_in_list_loop_fwd
-  (t : Type0) (key : usize) (ls : hashmap_list_t t) :
+  (t : Type0) (ls : hashmap_list_t t) (key : usize) :
   Tot (result t)
-  (decreases (hashmap_hash_map_get_mut_in_list_decreases t key ls))
+  (decreases (hashmap_hash_map_get_mut_in_list_decreases t ls key))
   =
   begin match ls with
   | HashmapListCons ckey cvalue tl ->
     if ckey = key
     then Return cvalue
-    else hashmap_hash_map_get_mut_in_list_loop_fwd t key tl
+    else hashmap_hash_map_get_mut_in_list_loop_fwd t tl key
   | HashmapListNil -> Fail Failure
   end
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 let hashmap_hash_map_get_mut_in_list_fwd
   (t : Type0) (ls : hashmap_list_t t) (key : usize) : result t =
-  hashmap_hash_map_get_mut_in_list_loop_fwd t key ls
+  hashmap_hash_map_get_mut_in_list_loop_fwd t ls key
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 let rec hashmap_hash_map_get_mut_in_list_loop_back
-  (t : Type0) (key : usize) (ls : hashmap_list_t t) (ret : t) :
+  (t : Type0) (ls : hashmap_list_t t) (key : usize) (ret : t) :
   Tot (result (hashmap_list_t t))
-  (decreases (hashmap_hash_map_get_mut_in_list_decreases t key ls))
+  (decreases (hashmap_hash_map_get_mut_in_list_decreases t ls key))
   =
   begin match ls with
   | HashmapListCons ckey cvalue tl ->
     if ckey = key
     then Return (HashmapListCons ckey ret tl)
     else
-      begin match hashmap_hash_map_get_mut_in_list_loop_back t key tl ret with
+      begin match hashmap_hash_map_get_mut_in_list_loop_back t tl key ret with
       | Fail e -> Fail e
       | Return l -> Return (HashmapListCons ckey cvalue l)
       end
@@ -450,7 +450,7 @@ let hashmap_hash_map_get_mut_in_list_back
   (t : Type0) (ls : hashmap_list_t t) (key : usize) (ret : t) :
   result (hashmap_list_t t)
   =
-  hashmap_hash_map_get_mut_in_list_loop_back t key ls ret
+  hashmap_hash_map_get_mut_in_list_loop_back t ls key ret
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut] *)
 let hashmap_hash_map_get_mut_fwd

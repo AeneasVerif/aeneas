@@ -332,7 +332,7 @@ Definition hash_map_get_fwd
 
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
 Fixpoint hash_map_get_mut_in_list_loop_fwd
-  (T : Type) (n : nat) (key : usize) (ls : List_t T) : result T :=
+  (T : Type) (n : nat) (ls : List_t T) (key : usize) : result T :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
@@ -340,7 +340,7 @@ Fixpoint hash_map_get_mut_in_list_loop_fwd
     | ListCons ckey cvalue tl =>
       if ckey s= key
       then Return cvalue
-      else hash_map_get_mut_in_list_loop_fwd T n0 key tl
+      else hash_map_get_mut_in_list_loop_fwd T n0 tl key
     | ListNil => Fail_ Failure
     end
   end
@@ -349,12 +349,12 @@ Fixpoint hash_map_get_mut_in_list_loop_fwd
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
 Definition hash_map_get_mut_in_list_fwd
   (T : Type) (n : nat) (ls : List_t T) (key : usize) : result T :=
-  hash_map_get_mut_in_list_loop_fwd T n key ls
+  hash_map_get_mut_in_list_loop_fwd T n ls key
 .
 
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
 Fixpoint hash_map_get_mut_in_list_loop_back
-  (T : Type) (n : nat) (key : usize) (ls : List_t T) (ret : T) :
+  (T : Type) (n : nat) (ls : List_t T) (key : usize) (ret : T) :
   result (List_t T)
   :=
   match n with
@@ -365,7 +365,7 @@ Fixpoint hash_map_get_mut_in_list_loop_back
       if ckey s= key
       then Return (ListCons ckey ret tl)
       else (
-        l <- hash_map_get_mut_in_list_loop_back T n0 key tl ret;
+        l <- hash_map_get_mut_in_list_loop_back T n0 tl key ret;
         Return (ListCons ckey cvalue l))
     | ListNil => Fail_ Failure
     end
@@ -377,7 +377,7 @@ Definition hash_map_get_mut_in_list_back
   (T : Type) (n : nat) (ls : List_t T) (key : usize) (ret : T) :
   result (List_t T)
   :=
-  hash_map_get_mut_in_list_loop_back T n key ls ret
+  hash_map_get_mut_in_list_loop_back T n ls key ret
 .
 
 (** [hashmap::HashMap::{0}::get_mut] *)

@@ -384,34 +384,34 @@ let hash_map_get_fwd
 
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
 let rec hash_map_get_mut_in_list_loop_fwd
-  (t : Type0) (key : usize) (ls : list_t t) :
-  Tot (result t) (decreases (hash_map_get_mut_in_list_decreases t key ls))
+  (t : Type0) (ls : list_t t) (key : usize) :
+  Tot (result t) (decreases (hash_map_get_mut_in_list_decreases t ls key))
   =
   begin match ls with
   | ListCons ckey cvalue tl ->
     if ckey = key
     then Return cvalue
-    else hash_map_get_mut_in_list_loop_fwd t key tl
+    else hash_map_get_mut_in_list_loop_fwd t tl key
   | ListNil -> Fail Failure
   end
 
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
 let hash_map_get_mut_in_list_fwd
   (t : Type0) (ls : list_t t) (key : usize) : result t =
-  hash_map_get_mut_in_list_loop_fwd t key ls
+  hash_map_get_mut_in_list_loop_fwd t ls key
 
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
 let rec hash_map_get_mut_in_list_loop_back
-  (t : Type0) (key : usize) (ls : list_t t) (ret : t) :
+  (t : Type0) (ls : list_t t) (key : usize) (ret : t) :
   Tot (result (list_t t))
-  (decreases (hash_map_get_mut_in_list_decreases t key ls))
+  (decreases (hash_map_get_mut_in_list_decreases t ls key))
   =
   begin match ls with
   | ListCons ckey cvalue tl ->
     if ckey = key
     then Return (ListCons ckey ret tl)
     else
-      begin match hash_map_get_mut_in_list_loop_back t key tl ret with
+      begin match hash_map_get_mut_in_list_loop_back t tl key ret with
       | Fail e -> Fail e
       | Return l -> Return (ListCons ckey cvalue l)
       end
@@ -421,7 +421,7 @@ let rec hash_map_get_mut_in_list_loop_back
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
 let hash_map_get_mut_in_list_back
   (t : Type0) (ls : list_t t) (key : usize) (ret : t) : result (list_t t) =
-  hash_map_get_mut_in_list_loop_back t key ls ret
+  hash_map_get_mut_in_list_loop_back t ls key ret
 
 (** [hashmap::HashMap::{0}::get_mut] *)
 let hash_map_get_mut_fwd

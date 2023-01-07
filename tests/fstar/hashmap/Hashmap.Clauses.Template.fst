@@ -54,8 +54,8 @@ let hash_map_get_in_list_decreases (t : Type0) (key : usize) (ls : list_t t) :
 
 (** [hashmap::HashMap::{0}::get_mut_in_list]: decreases clause *)
 unfold
-let hash_map_get_mut_in_list_decreases (t : Type0) (key : usize)
-  (ls : list_t t) : nat =
+let hash_map_get_mut_in_list_decreases (t : Type0) (ls : list_t t)
+  (key : usize) : nat =
   admit ()
 
 (** [hashmap::HashMap::{0}::remove_from_list]: decreases clause *)

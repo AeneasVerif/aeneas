@@ -358,7 +358,7 @@ Definition hashmap_hash_map_get_fwd
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 Fixpoint hashmap_hash_map_get_mut_in_list_loop_fwd
-  (T : Type) (n : nat) (key : usize) (ls : Hashmap_list_t T) : result T :=
+  (T : Type) (n : nat) (ls : Hashmap_list_t T) (key : usize) : result T :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
@@ -366,7 +366,7 @@ Fixpoint hashmap_hash_map_get_mut_in_list_loop_fwd
     | HashmapListCons ckey cvalue tl =>
       if ckey s= key
       then Return cvalue
-      else hashmap_hash_map_get_mut_in_list_loop_fwd T n0 key tl
+      else hashmap_hash_map_get_mut_in_list_loop_fwd T n0 tl key
     | HashmapListNil => Fail_ Failure
     end
   end
@@ -375,12 +375,12 @@ Fixpoint hashmap_hash_map_get_mut_in_list_loop_fwd
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 Definition hashmap_hash_map_get_mut_in_list_fwd
   (T : Type) (n : nat) (ls : Hashmap_list_t T) (key : usize) : result T :=
-  hashmap_hash_map_get_mut_in_list_loop_fwd T n key ls
+  hashmap_hash_map_get_mut_in_list_loop_fwd T n ls key
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] *)
 Fixpoint hashmap_hash_map_get_mut_in_list_loop_back
-  (T : Type) (n : nat) (key : usize) (ls : Hashmap_list_t T) (ret : T) :
+  (T : Type) (n : nat) (ls : Hashmap_list_t T) (key : usize) (ret : T) :
   result (Hashmap_list_t T)
   :=
   match n with
@@ -391,7 +391,7 @@ Fixpoint hashmap_hash_map_get_mut_in_list_loop_back
       if ckey s= key
       then Return (HashmapListCons ckey ret tl)
       else (
-        l <- hashmap_hash_map_get_mut_in_list_loop_back T n0 key tl ret;
+        l <- hashmap_hash_map_get_mut_in_list_loop_back T n0 tl key ret;
         Return (HashmapListCons ckey cvalue l))
     | HashmapListNil => Fail_ Failure
     end
@@ -403,7 +403,7 @@ Definition hashmap_hash_map_get_mut_in_list_back
   (T : Type) (n : nat) (ls : Hashmap_list_t T) (key : usize) (ret : T) :
   result (Hashmap_list_t T)
   :=
-  hashmap_hash_map_get_mut_in_list_loop_back T n key ls ret
+  hashmap_hash_map_get_mut_in_list_loop_back T n ls key ret
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::get_mut] *)

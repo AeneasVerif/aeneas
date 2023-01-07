@@ -222,13 +222,13 @@ let get_elem_mut_back
 
 (** [loops::get_elem_shared] *)
 let rec get_elem_shared_loop_fwd
-  (x : usize) (slots : vec (list_t usize)) (ls : list_t usize)
+  (slots : vec (list_t usize)) (x : usize) (ls : list_t usize)
   (ls0 : list_t usize) :
-  Tot (result usize) (decreases (get_elem_shared_decreases x slots ls ls0))
+  Tot (result usize) (decreases (get_elem_shared_decreases slots x ls ls0))
   =
-  begin match ls0 with
+  begin match ls with
   | ListCons y tl ->
-    if y = x then Return y else get_elem_shared_loop_fwd x slots ls tl
+    if y = x then Return y else get_elem_shared_loop_fwd slots x tl ls0
   | ListNil -> Fail Failure
   end
 
@@ -237,7 +237,7 @@ let get_elem_shared_fwd
   (slots : vec (list_t usize)) (x : usize) : result usize =
   begin match vec_index_fwd (list_t usize) slots 0 with
   | Fail e -> Fail e
-  | Return l -> get_elem_shared_loop_fwd x slots l l
+  | Return l -> get_elem_shared_loop_fwd slots x l l
   end
 
 (** [loops::id_mut] *)

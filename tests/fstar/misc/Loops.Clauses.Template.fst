@@ -42,7 +42,7 @@ let get_elem_mut_decreases (x : usize) (ls : list_t usize) : nat = admit ()
 
 (** [loops::get_elem_shared]: decreases clause *)
 unfold
-let get_elem_shared_decreases (x : usize) (slots : vec (list_t usize))
+let get_elem_shared_decreases (slots : vec (list_t usize)) (x : usize)
   (ls : list_t usize) (ls0 : list_t usize) : nat =
   admit ()
 
