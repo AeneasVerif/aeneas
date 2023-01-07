@@ -828,6 +828,14 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
             let dont_filter () =
               let re, used_re = self#visit_texpression env re in
               let used = VarId.Set.union used (used_re ()) in
+              (* Simplify the left pattern if it only contains dummy variables *)
+              let lv =
+                if all_dummies then
+                  let ty = lv.ty in
+                  let value = PatDummy in
+                  { value; ty }
+                else lv
+              in
               (Let (monadic, lv, re, e), fun _ -> used)
             in
             (* Potentially filter the let-binding *)
