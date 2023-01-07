@@ -2314,6 +2314,8 @@ and translate_forward_end (ectx : C.eval_ctx)
         let call = mk_apps func args in
         call
       in
+
+      (* Create the let expression with the loop call *)
       mk_let effect_info.can_fail out_pat loop_call next_e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =

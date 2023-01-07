@@ -272,8 +272,7 @@ let betree_leaf_split_back
             | Return (st0, _) ->
               begin match betree_store_leaf_node_fwd id1 content1 st0 with
               | Fail e -> Fail e
-              | Return (_, _) ->
-                betree_node_id_counter_fresh_id_back node_id_cnt0
+              | Return _ -> betree_node_id_counter_fresh_id_back node_id_cnt0
               end
             end
           end
@@ -603,7 +602,7 @@ and betree_node_lookup_back
                           betree_store_internal_node_fwd
                             node0.betree_internal_id msgs0 st2 with
                         | Fail e -> Fail e
-                        | Return (_, _) -> Return (BetreeNodeInternal node0)
+                        | Return _ -> Return (BetreeNodeInternal node0)
                         end
                       end
                     end
@@ -1126,8 +1125,7 @@ and betree_node_apply_messages_back
                   betree_store_internal_node_fwd node0.betree_internal_id
                     content1 st1 with
                 | Fail e -> Fail e
-                | Return (_, _) ->
-                  Return (BetreeNodeInternal node0, node_id_cnt0)
+                | Return _ -> Return (BetreeNodeInternal node0, node_id_cnt0)
                 end
               end
             end
@@ -1136,7 +1134,7 @@ and betree_node_apply_messages_back
               betree_store_internal_node_fwd node.betree_internal_id content0
                 st0 with
             | Fail e -> Fail e
-            | Return (_, _) -> Return (BetreeNodeInternal node, node_id_cnt)
+            | Return _ -> Return (BetreeNodeInternal node, node_id_cnt)
             end
         end
       end
@@ -1164,7 +1162,7 @@ and betree_node_apply_messages_back
                   betree_store_leaf_node_fwd node.betree_leaf_id BetreeListNil
                     st1 with
                 | Fail e -> Fail e
-                | Return (_, _) ->
+                | Return _ ->
                   begin match
                     betree_leaf_split_back node content0 params node_id_cnt st0
                     with
@@ -1179,7 +1177,7 @@ and betree_node_apply_messages_back
                 betree_store_leaf_node_fwd node.betree_leaf_id content0 st0
                 with
               | Fail e -> Fail e
-              | Return (_, _) ->
+              | Return _ ->
                 Return (BetreeNodeLeaf (Mkbetree_leaf_t node.betree_leaf_id
                   len), node_id_cnt)
               end
@@ -1234,7 +1232,7 @@ and betree_internal_flush_fwd
                     betree_node_apply_messages_back self.betree_internal_right
                       params node_id_cnt0 msgs_right st0 with
                   | Fail e -> Fail e
-                  | Return (_, _) -> Return (st1, BetreeListNil)
+                  | Return _ -> Return (st1, BetreeListNil)
                   end
                 end
               else Return (st0, msgs_right)
@@ -1251,7 +1249,7 @@ and betree_internal_flush_fwd
             betree_node_apply_messages_back self.betree_internal_right params
               node_id_cnt msgs_right st with
           | Fail e -> Fail e
-          | Return (_, _) -> Return (st0, msgs_left)
+          | Return _ -> Return (st0, msgs_left)
           end
         end
     end
@@ -1338,7 +1336,7 @@ let betree_node_apply_fwd
       betree_node_apply_messages_back self params node_id_cnt (BetreeListCons
         (key, new_msg) l) st with
     | Fail e -> Fail e
-    | Return (_, _) -> Return (st0, ())
+    | Return _ -> Return (st0, ())
     end
   end
 
@@ -1392,7 +1390,7 @@ let betree_be_tree_apply_fwd
         self.betree_be_tree_params self.betree_be_tree_node_id_cnt key msg st
       with
     | Fail e -> Fail e
-    | Return (_, _) -> Return (st0, ())
+    | Return _ -> Return (st0, ())
     end
   end
 
