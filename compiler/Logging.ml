@@ -24,6 +24,15 @@ let pure_to_extract_log = L.get_logger "MainLogger.ExtractBase"
 (** Logger for Interpreter *)
 let interpreter_log = L.get_logger "MainLogger.Interpreter"
 
+(** Logger for InterpreterLoopsMatchCtxs *)
+let loops_match_ctxs_log = L.get_logger "MainLogger.Interpreter.LoopsMatchCtxs"
+
+(** Logger for InterpreterLoopsJoinCtxs *)
+let loops_join_ctxs_log = L.get_logger "MainLogger.Interpreter.LoopsJoinCtxs"
+
+(** Logger for InterpreterLoopsFixedPoint *)
+let loops_fixed_point_log = L.get_logger "MainLogger.Interpreter.FixedPoint"
+
 (** Logger for InterpreterLoops *)
 let loops_log = L.get_logger "MainLogger.Interpreter.Loops"
 

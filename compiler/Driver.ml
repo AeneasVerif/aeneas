@@ -24,6 +24,9 @@ let _ =
   pre_passes_log#set_level EL.Info;
   interpreter_log#set_level EL.Info;
   statements_log#set_level EL.Info;
+  loops_match_ctxs_log#set_level EL.Info;
+  loops_join_ctxs_log#set_level EL.Info;
+  loops_fixed_point_log#set_level EL.Info;
   loops_log#set_level EL.Info;
   paths_log#set_level EL.Info;
   expressions_log#set_level EL.Info;
