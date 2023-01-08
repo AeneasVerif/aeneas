@@ -235,16 +235,13 @@ Definition get_elem_mut_back
 
 (** [loops::get_elem_shared] *)
 Fixpoint get_elem_shared_loop_fwd
-  (n : nat) (slots : vec (List_t usize)) (x : usize) (ls : List_t usize)
-  (ls0 : List_t usize) :
-  result usize
-  :=
+  (n : nat) (x : usize) (ls : List_t usize) : result usize :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
     | ListCons y tl =>
-      if y s= x then Return y else get_elem_shared_loop_fwd n0 slots x tl ls0
+      if y s= x then Return y else get_elem_shared_loop_fwd n0 x tl
     | ListNil => Fail_ Failure
     end
   end
@@ -254,7 +251,7 @@ Fixpoint get_elem_shared_loop_fwd
 Definition get_elem_shared_fwd
   (n : nat) (slots : vec (List_t usize)) (x : usize) : result usize :=
   l <- vec_index_fwd (List_t usize) slots (0%usize);
-  get_elem_shared_loop_fwd n slots x l l
+  get_elem_shared_loop_fwd n x l
 .
 
 (** [loops::id_mut] *)
@@ -329,17 +326,16 @@ Definition list_nth_mut_loop_with_id_back
 
 (** [loops::list_nth_shared_loop_with_id] *)
 Fixpoint list_nth_shared_loop_with_id_loop_fwd
-  (T : Type) (n : nat) (ls : List_t T) (i : u32) (ls0 : List_t T) : result T :=
+  (T : Type) (n : nat) (i : u32) (ls : List_t T) : result T :=
   match n with
   | O => Fail_ OutOfFuel
   | S n0 =>
-    match ls0 with
+    match ls with
     | ListCons x tl =>
       if i s= 0%u32
       then Return x
       else (
-        i0 <- u32_sub i 1%u32;
-        list_nth_shared_loop_with_id_loop_fwd T n0 ls i0 tl)
+        i0 <- u32_sub i 1%u32; list_nth_shared_loop_with_id_loop_fwd T n0 i0 tl)
     | ListNil => Fail_ Failure
     end
   end
@@ -348,7 +344,7 @@ Fixpoint list_nth_shared_loop_with_id_loop_fwd
 (** [loops::list_nth_shared_loop_with_id] *)
 Definition list_nth_shared_loop_with_id_fwd
   (T : Type) (n : nat) (ls : List_t T) (i : u32) : result T :=
-  ls0 <- id_shared_fwd T ls; list_nth_shared_loop_with_id_loop_fwd T n ls i ls0
+  ls0 <- id_shared_fwd T ls; list_nth_shared_loop_with_id_loop_fwd T n i ls0
 .
 
 (** [loops::list_nth_mut_loop_pair] *)

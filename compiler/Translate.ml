@@ -49,7 +49,7 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : A.fun_decl)
     TODO: maybe we should introduce a record for this.
 *)
 let translate_function_to_pure (trans_ctx : trans_ctx)
-    (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdMap.t)
+    (fun_sigs : SymbolicToPure.fun_sig_named_outputs RegularFunIdNotLoopMap.t)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t) (fdef : A.fun_decl)
     : pure_fun_translation_no_loops =
   (* Debug *)
@@ -66,7 +66,9 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   (* Convert the symbolic ASTs to pure ASTs: *)
 
   (* Initialize the context *)
-  let forward_sig = RegularFunIdMap.find (A.Regular def_id, None) fun_sigs in
+  let forward_sig =
+    RegularFunIdNotLoopMap.find (A.Regular def_id, None) fun_sigs
+  in
   let sv_to_var = V.SymbolicValueId.Map.empty in
   let var_counter = Pure.VarId.generator_zero in
   let state_var, var_counter = Pure.VarId.fresh var_counter in
@@ -194,7 +196,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
         (* Initialize the context - note that the ret_ty is not really
          * useful as we don't translate a body *)
         let backward_sg =
-          RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
+          RegularFunIdNotLoopMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
         let ctx = { ctx with bid = Some back_id; sg = backward_sg.sg } in
 
@@ -205,7 +207,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
            variables required by the backward function.
         *)
         let backward_sg =
-          RegularFunIdMap.find (A.Regular def_id, Some back_id) fun_sigs
+          RegularFunIdNotLoopMap.find (A.Regular def_id, Some back_id) fun_sigs
         in
         (* We need to ignore the forward inputs, and the state input (if there is) *)
         let backward_inputs =
@@ -325,9 +327,7 @@ let translate_module_to_pure (crate : A.crate) :
 
   (* Apply the micro-passes *)
   let pure_translations =
-    List.map
-      (Micro.apply_passes_to_pure_fun_translation trans_ctx)
-      pure_translations
+    Micro.apply_passes_to_pure_fun_translations trans_ctx pure_translations
   in
 
   (* Return *)
@@ -470,16 +470,16 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
 
 (** Utility.
 
-    Export a group of functions. See [export_functions_group].
+    Export a group of functions, used by {!export_functions_group}.
 
     We need this because for every function in Rust we may generate several functions
     in the translation (a forward function, several backward functions, loop
     functions, etc.). Those functions might call each other in different
-    ways (in particular, they may be mutually recursive, in which case we might
+    ways. In particular, they may be mutually recursive, in which case we might
     be able to group them into several groups of mutually recursive definitions,
-    etc.). For this reason, [export_functions_group] computes the dependency
+    etc. For this reason, {!export_functions_group} computes the dependency
     graph of the functions as well as their strongly connected components, and
-    gives each SCC at a time to [export_functions].
+    gives each SCC at a time to {!export_functions_group_scc}.
 
     Rem.: this function only extracts the function *declarations*. It doesn't
     extract the decrease clauses, nor does it extract the unit tests.
@@ -487,7 +487,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     Rem.: this function doesn't check [config.extract_fun_decls]: it should have
     been checked by the caller.
  *)
-let export_functions_declarations (fmt : Format.formatter) (config : gen_config)
+let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (decls : Pure.fun_decl list) : unit =
   (* Utility to check a function has a decrease clause *)
   let has_decreases_clause (def : Pure.fun_decl) : bool =
@@ -588,7 +588,7 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
 
    (* Extract the subgroups *)
    let export_subgroup (is_rec : bool) (decls : Pure.fun_decl list) : unit =
-     export_functions_declarations fmt config ctx is_rec decls
+     export_functions_group_scc fmt config ctx is_rec decls
    in
    List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
 

@@ -188,7 +188,7 @@ let group_reorder_fun_decls (decls : fun_decl list) :
     assert (FunIdSet.pairwise_disjoint (List.map FunIdSet.of_list sccs));
     (* Check that all the ids are in the sccs *)
     let scc_ids = FunIdSet.of_list (List.concat sccs) in
-    assert (scc_ids = ids)
+    assert (FunIdSet.equal scc_ids ids)
   in
 
   (* Group the declarations *)
