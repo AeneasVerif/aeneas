@@ -4072,7 +4072,7 @@ let compute_fp_ctx_symbolic_values (ctx : C.eval_ctx) (fp_ctx : C.eval_ctx) :
     *)
     let sids = ref V.SymbolicValueId.Set.empty in
     let visitor =
-      object (self : 'self)
+      object (self)
         inherit [_] C.iter_env
 
         method! visit_ASharedLoan inside_shared _ sv child_av =
@@ -4117,7 +4117,7 @@ let compute_fp_ctx_symbolic_values (ctx : C.eval_ctx) (fp_ctx : C.eval_ctx) :
     let ordered_sids = ref [] in
 
     let visitor =
-      object (self : 'self)
+      object (self)
         inherit [_] C.iter_env
 
         (** We lookup the shared values *)
@@ -4138,9 +4138,7 @@ let compute_fp_ctx_symbolic_values (ctx : C.eval_ctx) (fp_ctx : C.eval_ctx) :
       end
     in
 
-    (* TODO: why do we have to put a boolean here for the typechecker to be happy?
-       Is it because we use a similar visitor with booleans above?? *)
-    List.iter (visitor#visit_env_elem true) (List.rev fp_ctx.env);
+    List.iter (visitor#visit_env_elem ()) (List.rev fp_ctx.env);
 
     List.filter_map
       (fun id -> V.SymbolicValueId.Map.find_opt id sids_to_values)

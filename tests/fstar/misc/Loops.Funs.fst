@@ -222,14 +222,11 @@ let get_elem_mut_back
 
 (** [loops::get_elem_shared] *)
 let rec get_elem_shared_loop_fwd
-  (slots : vec (list_t usize)) (x : usize) (ls : list_t usize)
-  (ls0 : list_t usize) :
-  Tot (result usize)
-  (decreases (get_elem_shared_loop_decreases slots x ls ls0))
+  (x : usize) (ls : list_t usize) :
+  Tot (result usize) (decreases (get_elem_shared_loop_decreases x ls))
   =
   begin match ls with
-  | ListCons y tl ->
-    if y = x then Return y else get_elem_shared_loop_fwd slots x tl ls0
+  | ListCons y tl -> if y = x then Return y else get_elem_shared_loop_fwd x tl
   | ListNil -> Fail Failure
   end
 
@@ -238,7 +235,7 @@ let get_elem_shared_fwd
   (slots : vec (list_t usize)) (x : usize) : result usize =
   begin match vec_index_fwd (list_t usize) slots 0 with
   | Fail e -> Fail e
-  | Return l -> get_elem_shared_loop_fwd slots x l l
+  | Return l -> get_elem_shared_loop_fwd x l
   end
 
 (** [loops::id_mut] *)
@@ -313,18 +310,18 @@ let list_nth_mut_loop_with_id_back
 
 (** [loops::list_nth_shared_loop_with_id] *)
 let rec list_nth_shared_loop_with_id_loop_fwd
-  (t : Type0) (ls : list_t t) (i : u32) (ls0 : list_t t) :
+  (t : Type0) (i : u32) (ls : list_t t) :
   Tot (result t)
-  (decreases (list_nth_shared_loop_with_id_loop_decreases t ls i ls0))
+  (decreases (list_nth_shared_loop_with_id_loop_decreases t i ls))
   =
-  begin match ls0 with
+  begin match ls with
   | ListCons x tl ->
     if i = 0
     then Return x
     else
       begin match u32_sub i 1 with
       | Fail e -> Fail e
-      | Return i0 -> list_nth_shared_loop_with_id_loop_fwd t ls i0 tl
+      | Return i0 -> list_nth_shared_loop_with_id_loop_fwd t i0 tl
       end
   | ListNil -> Fail Failure
   end
@@ -334,7 +331,7 @@ let list_nth_shared_loop_with_id_fwd
   (t : Type0) (ls : list_t t) (i : u32) : result t =
   begin match id_shared_fwd t ls with
   | Fail e -> Fail e
-  | Return ls0 -> list_nth_shared_loop_with_id_loop_fwd t ls i ls0
+  | Return ls0 -> list_nth_shared_loop_with_id_loop_fwd t i ls0
   end
 
 (** [loops::list_nth_mut_loop_pair] *)

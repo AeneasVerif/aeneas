@@ -43,7 +43,7 @@ type fun_sig_named_outputs = {
 
 type fun_context = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
-  fun_sigs : fun_sig_named_outputs RegularFunIdMap.t;  (** *)
+  fun_sigs : fun_sig_named_outputs RegularFunIdNotLoopMap.t;  (** *)
   fun_infos : FA.fun_info A.FunDeclId.Map.t;
 }
 [@@deriving show]
@@ -318,7 +318,7 @@ let get_instantiated_fun_sig (fun_id : A.fun_id)
     inst_fun_sig =
   (* Lookup the non-instantiated function signature *)
   let sg =
-    (RegularFunIdMap.find (fun_id, back_id) ctx.fun_context.fun_sigs).sg
+    (RegularFunIdNotLoopMap.find (fun_id, back_id) ctx.fun_context.fun_sigs).sg
   in
   (* Create the substitution *)
   let tsubst = make_type_subst sg.type_params tys in
@@ -337,7 +337,7 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
 let bs_ctx_lookup_local_function_sig (def_id : A.FunDeclId.id)
     (back_id : T.RegionGroupId.id option) (ctx : bs_ctx) : fun_sig =
   let id = (A.Regular def_id, back_id) in
-  (RegularFunIdMap.find id ctx.fun_context.fun_sigs).sg
+  (RegularFunIdNotLoopMap.find id ctx.fun_context.fun_sigs).sg
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (args : texpression list) (ctx : bs_ctx) : bs_ctx =
@@ -2730,13 +2730,14 @@ let translate_type_decls (type_decls : T.type_decl list) : type_decl list =
 let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     (types_infos : TA.type_infos)
     (functions : (A.fun_id * string option list * A.fun_sig) list) :
-    fun_sig_named_outputs RegularFunIdMap.t =
+    fun_sig_named_outputs RegularFunIdNotLoopMap.t =
   (* For every function, translate the signatures of:
      - the forward function
      - the backward functions
   *)
   let translate_one (fun_id : A.fun_id) (input_names : string option list)
-      (sg : A.fun_sig) : (regular_fun_id * fun_sig_named_outputs) list =
+      (sg : A.fun_sig) : (regular_fun_id_not_loop * fun_sig_named_outputs) list
+      =
     (* The forward function *)
     let fwd_sg =
       translate_fun_sig fun_infos fun_id types_infos sg input_names None
@@ -2762,5 +2763,5 @@ let translate_fun_signatures (fun_infos : FA.fun_info A.FunDeclId.Map.t)
       (List.map (fun (id, names, sg) -> translate_one id names sg) functions)
   in
   List.fold_left
-    (fun m (id, sg) -> RegularFunIdMap.add id sg m)
-    RegularFunIdMap.empty translated
+    (fun m (id, sg) -> RegularFunIdNotLoopMap.add id sg m)
+    RegularFunIdNotLoopMap.empty translated

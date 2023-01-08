@@ -312,9 +312,13 @@ type pure_assumed_fun_id =
   | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
 [@@deriving show, ord]
 
+(** A function id for a non-assumed function *)
+type regular_fun_id = A.fun_id * LoopId.id option * T.RegionGroupId.id option
+[@@deriving show, ord]
+
 (** A function identifier *)
 type fun_id =
-  | FromLlbc of A.fun_id * LoopId.id option * T.RegionGroupId.id option
+  | FromLlbc of regular_fun_id
       (** A function coming from LLBC.
 
           The loop id is [None] if the function is actually the auxiliary function

@@ -3,13 +3,6 @@ open Pure
 (** Default logger *)
 let log = Logging.pure_utils_log
 
-(** We use this type as a key for lookups *)
-type regular_fun_id = A.fun_id * T.RegionGroupId.id option
-[@@deriving show, ord]
-
-(** We use this type as a key for lookups *)
-type fun_loop_id = A.FunDeclId.id * LoopId.id option [@@deriving show, ord]
-
 module RegularFunIdOrderedType = struct
   type t = regular_fun_id
 
@@ -20,6 +13,25 @@ module RegularFunIdOrderedType = struct
 end
 
 module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
+
+(** We use this type as a key for lookups *)
+type regular_fun_id_not_loop = A.fun_id * T.RegionGroupId.id option
+[@@deriving show, ord]
+
+(** We use this type as a key for lookups *)
+type fun_loop_id = A.FunDeclId.id * LoopId.id option [@@deriving show, ord]
+
+module RegularFunIdNotLoopOrderedType = struct
+  type t = regular_fun_id_not_loop
+
+  let compare = compare_regular_fun_id_not_loop
+  let to_string = show_regular_fun_id_not_loop
+  let pp_t = pp_regular_fun_id_not_loop
+  let show_t = show_regular_fun_id_not_loop
+end
+
+module RegularFunIdNotLoopMap =
+  Collections.MakeMap (RegularFunIdNotLoopOrderedType)
 
 module FunOrOpIdOrderedType = struct
   type t = fun_or_op_id
