@@ -427,13 +427,14 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fname ^ suffix
   in
 
-  let decreases_clause_name (_fid : A.FunDeclId.id) (fname : fun_name) : string
-      =
+  let decreases_clause_name (_fid : A.FunDeclId.id) (fname : fun_name)
+      (num_loops : int) (loop_id : LoopId.id option) : string =
     let fname = fun_name_to_snake_case fname in
+    let lp_suffix = default_fun_loop_suffix num_loops loop_id in
     (* Compute the suffix *)
     let suffix = "_decreases" in
     (* Concatenate *)
-    fname ^ suffix
+    fname ^ lp_suffix ^ suffix
   in
 
   let var_basename (_varset : StringSet.t) (basename : string option) (ty : ty)

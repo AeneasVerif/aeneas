@@ -189,7 +189,8 @@ type formatter = {
               filtered some of them.
           TODO: use the fun id for the assumed functions.
        *)
-  decreases_clause_name : A.FunDeclId.id -> fun_name -> string;
+  decreases_clause_name :
+    A.FunDeclId.id -> fun_name -> int -> LoopId.id option -> string;
       (** Generates the name of the definition used to prove/reason about
           termination. The generated code uses this clause where needed,
           but its body must be defined by the user.
@@ -198,6 +199,9 @@ type formatter = {
           - function id: this is especially useful to identify whether the
             function is an assumed function or a local function
           - function basename
+          - the number of loops in the parent function. This is used for
+            the same purpose as in {!field:fun_name}.
+          - loop identifier, if this is for a loop
        *)
   var_basename : StringSet.t -> string option -> ty -> string;
       (** Generates a variable basename.
@@ -678,7 +682,10 @@ let ctx_add_struct (def : type_decl) (ctx : extraction_ctx) :
 
 let ctx_add_decreases_clause (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let name = ctx.fmt.decreases_clause_name def.def_id def.basename in
+  let name =
+    ctx.fmt.decreases_clause_name def.def_id def.basename def.num_loops
+      def.loop_id
+  in
   ctx_add (DecreasesClauseId (Regular def.def_id, def.loop_id)) name ctx
 
 let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
@@ -801,6 +808,18 @@ let initialize_names_map (fmt : formatter) (init : names_map_init) : names_map =
 let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
   fmt.type_name def.name
 
+(** Helper function: generate a suffix for a function name, i.e., generates
+    a suffix like "_loop", "loop1", etc. to append to a function name.
+ *)
+let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option) :
+    string =
+  match loop_id with
+  | None -> ""
+  | Some loop_id ->
+      (* If this is for a loop, generally speaking, we append the loop index.
+         If this function admits only one loop, we omit it. *)
+      if num_loops = 1 then "_loop" else "_loop" ^ LoopId.to_string loop_id
+
 (** A helper function: generates a function suffix from a region group
     information.
     TODO: move all those helpers.
@@ -808,6 +827,8 @@ let compute_type_decl_name (fmt : formatter) (def : type_decl) : string =
 let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
     (num_region_groups : int) (rg : region_group_info option)
     ((keep_fwd, num_backs) : bool * int) : string =
+  let lp_suff = default_fun_loop_suffix num_loops loop_id in
+
   (* There are several cases:
      - [rg] is [Some]: this is a forward function:
        - we add "_fwd"
@@ -823,13 +844,6 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
      we could not add the "_fwd" suffix) to prevent name clashes between
      definitions (in particular between type and function definitions).
   *)
-  let lp_suff =
-    match loop_id with
-    | None -> ""
-    | Some loop_id ->
-        if num_loops = 1 then "_loop" else "_loop" ^ LoopId.to_string loop_id
-  in
-
   let rg_suff =
     match rg with
     | None -> "_fwd"

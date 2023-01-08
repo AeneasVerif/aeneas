@@ -509,7 +509,7 @@ val hash_map_allocate_slots_fwd_lem
      (forall (i:nat{i < length slots}). index slots' i == index slots i) /\
      // We allocate n additional empty slots
      (forall (i:nat{length slots <= i /\ i < length slots'}). index slots' i == ListNil)))
-  (decreases (hash_map_allocate_slots_decreases t slots n))
+  (decreases (hash_map_allocate_slots_loop_decreases t slots n))
 
 #push-options "--fuel 1"
 let rec hash_map_allocate_slots_fwd_lem t slots n =
@@ -633,7 +633,7 @@ let rec hash_map_clear_slots_loop_fwd_back_lem
       (forall (j:nat{j < i /\ j < length slots}). index slots' j == index slots j) /\
       // The slots after i are set to ListNil
       (forall (j:nat{i <= j /\ j < length slots}). index slots' j == ListNil)))
-  (decreases (hash_map_clear_slots_decreases t slots i))
+  (decreases (hash_map_clear_slots_loop_decreases t slots i))
   =
   let i0 = vec_len (list_t t) slots in
   let b = i < i0 in
@@ -717,7 +717,7 @@ val hash_map_insert_in_list_fwd_lem
     | Fail _ -> False
     | Return b ->
       b <==> (slot_t_find_s key ls == None)))
-  (decreases (hash_map_insert_in_list_decreases t key value ls))
+  (decreases (hash_map_insert_in_list_loop_decreases t key value ls))
 
 #push-options "--fuel 1"
 let rec hash_map_insert_in_list_fwd_lem t key value ls =
@@ -772,7 +772,7 @@ val hash_map_insert_in_list_back_lem_append_s
     | Fail _ -> False
     | Return ls' ->
       list_t_v ls' == list_t_v ls @ [(key,value)]))
-  (decreases (hash_map_insert_in_list_decreases t key value ls))
+  (decreases (hash_map_insert_in_list_loop_decreases t key value ls))
 
 #push-options "--fuel 1"
 let rec hash_map_insert_in_list_back_lem_append_s t key value ls =
@@ -803,7 +803,7 @@ val hash_map_insert_in_list_back_lem_update_s
     | Fail _ -> False
     | Return ls' ->
       list_t_v ls' == find_update (same_key key) (list_t_v ls) (key,value)))
-  (decreases (hash_map_insert_in_list_decreases t key value ls))
+  (decreases (hash_map_insert_in_list_loop_decreases t key value ls))
 
 #push-options "--fuel 1"
 let rec hash_map_insert_in_list_back_lem_update_s t key value ls =
@@ -1112,7 +1112,7 @@ val hash_map_insert_in_list_back_lem
        | Some _ ->
          list_t_v ls' == find_update (same_key key) (list_t_v ls) (key,value) /\
          list_t_len ls' = list_t_len ls)))
-  (decreases (hash_map_insert_in_list_decreases t key value ls))
+  (decreases (hash_map_insert_in_list_loop_decreases t key value ls))
 
 let hash_map_insert_in_list_back_lem t len key value ls =
   hash_map_insert_in_list_back_lem_s t key value ls;
@@ -1396,7 +1396,7 @@ val hash_map_move_elements_from_list_fwd_back_lem
       hash_map_t_v hm' == hm_v /\
       hash_map_t_same_params hm' ntable
     | _ -> False))
-  (decreases (hash_map_move_elements_from_list_decreases t ntable ls))
+  (decreases (hash_map_move_elements_from_list_loop_decreases t ntable ls))
 
 #push-options "--fuel 1"
 let rec hash_map_move_elements_from_list_fwd_back_lem t ntable ls =
@@ -1455,7 +1455,7 @@ let rec hash_map_move_elements_s_simpl
       ntable1 == ntable2 /\
       slots1 == slots2
     | _ -> False))
-  (decreases (hash_map_move_elements_decreases t ntable slots i))
+  (decreases (hash_map_move_elements_loop_decreases t ntable slots i))
   =
   if i < length slots
   then

@@ -545,6 +545,16 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   if config.extract_template_decreases_clauses then
     List.iter
       (fun (_, ((fwd, loop_fwds), _)) ->
+        (* We only generate decreases clauses for the forward functions, because
+           the termination argument should only depend on the forward inputs.
+           The backward functions thus use the same decreases clauses as the
+           forward function.
+
+           Rem.: we might filter backward functions in {!PureMicroPasses}, but
+           we don't remove forward functions. Instead, we remember if we should
+           filter those functions at extraction time with a boolean (see the
+           type of the [pure_ls] input parameter).
+        *)
         let extract_decrease decl =
           let has_decr_clause = has_decreases_clause decl in
           if has_decr_clause then

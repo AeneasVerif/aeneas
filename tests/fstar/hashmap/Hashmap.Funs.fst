@@ -14,7 +14,7 @@ let hash_key_fwd (k : usize) : result usize = Return k
 let rec hash_map_allocate_slots_loop_fwd
   (t : Type0) (slots : vec (list_t t)) (n : usize) :
   Tot (result (vec (list_t t)))
-  (decreases (hash_map_allocate_slots_decreases t slots n))
+  (decreases (hash_map_allocate_slots_loop_decreases t slots n))
   =
   if n > 0
   then
@@ -62,7 +62,7 @@ let hash_map_new_fwd (t : Type0) : result (hash_map_t t) =
 let rec hash_map_clear_slots_loop_fwd_back
   (t : Type0) (slots : vec (list_t t)) (i : usize) :
   Tot (result (vec (list_t t)))
-  (decreases (hash_map_clear_slots_decreases t slots i))
+  (decreases (hash_map_clear_slots_loop_decreases t slots i))
   =
   let i0 = vec_len (list_t t) slots in
   if i < i0
@@ -100,7 +100,7 @@ let hash_map_len_fwd (t : Type0) (self : hash_map_t t) : result usize =
 let rec hash_map_insert_in_list_loop_fwd
   (t : Type0) (key : usize) (value : t) (ls : list_t t) :
   Tot (result bool)
-  (decreases (hash_map_insert_in_list_decreases t key value ls))
+  (decreases (hash_map_insert_in_list_loop_decreases t key value ls))
   =
   begin match ls with
   | ListCons ckey cvalue tl ->
@@ -119,7 +119,7 @@ let hash_map_insert_in_list_fwd
 let rec hash_map_insert_in_list_loop_back
   (t : Type0) (key : usize) (value : t) (ls : list_t t) :
   Tot (result (list_t t))
-  (decreases (hash_map_insert_in_list_decreases t key value ls))
+  (decreases (hash_map_insert_in_list_loop_decreases t key value ls))
   =
   begin match ls with
   | ListCons ckey cvalue tl ->
@@ -201,7 +201,7 @@ let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
 let rec hash_map_move_elements_from_list_loop_fwd_back
   (t : Type0) (ntable : hash_map_t t) (ls : list_t t) :
   Tot (result (hash_map_t t))
-  (decreases (hash_map_move_elements_from_list_decreases t ntable ls))
+  (decreases (hash_map_move_elements_from_list_loop_decreases t ntable ls))
   =
   begin match ls with
   | ListCons k v tl ->
@@ -222,7 +222,7 @@ let hash_map_move_elements_from_list_fwd_back
 let rec hash_map_move_elements_loop_fwd_back
   (t : Type0) (ntable : hash_map_t t) (slots : vec (list_t t)) (i : usize) :
   Tot (result ((hash_map_t t) & (vec (list_t t))))
-  (decreases (hash_map_move_elements_decreases t ntable slots i))
+  (decreases (hash_map_move_elements_loop_decreases t ntable slots i))
   =
   let i0 = vec_len (list_t t) slots in
   if i < i0
@@ -315,7 +315,7 @@ let hash_map_insert_fwd_back
 let rec hash_map_contains_key_in_list_loop_fwd
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result bool)
-  (decreases (hash_map_contains_key_in_list_decreases t key ls))
+  (decreases (hash_map_contains_key_in_list_loop_decreases t key ls))
   =
   begin match ls with
   | ListCons ckey x tl ->
@@ -350,7 +350,7 @@ let hash_map_contains_key_fwd
 (** [hashmap::HashMap::{0}::get_in_list] *)
 let rec hash_map_get_in_list_loop_fwd
   (t : Type0) (key : usize) (ls : list_t t) :
-  Tot (result t) (decreases (hash_map_get_in_list_decreases t key ls))
+  Tot (result t) (decreases (hash_map_get_in_list_loop_decreases t key ls))
   =
   begin match ls with
   | ListCons ckey cvalue tl ->
@@ -385,7 +385,7 @@ let hash_map_get_fwd
 (** [hashmap::HashMap::{0}::get_mut_in_list] *)
 let rec hash_map_get_mut_in_list_loop_fwd
   (t : Type0) (ls : list_t t) (key : usize) :
-  Tot (result t) (decreases (hash_map_get_mut_in_list_decreases t ls key))
+  Tot (result t) (decreases (hash_map_get_mut_in_list_loop_decreases t ls key))
   =
   begin match ls with
   | ListCons ckey cvalue tl ->
@@ -404,7 +404,7 @@ let hash_map_get_mut_in_list_fwd
 let rec hash_map_get_mut_in_list_loop_back
   (t : Type0) (ls : list_t t) (key : usize) (ret : t) :
   Tot (result (list_t t))
-  (decreases (hash_map_get_mut_in_list_decreases t ls key))
+  (decreases (hash_map_get_mut_in_list_loop_decreases t ls key))
   =
   begin match ls with
   | ListCons ckey cvalue tl ->
@@ -476,7 +476,7 @@ let hash_map_get_mut_back
 let rec hash_map_remove_from_list_loop_fwd
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result (option t))
-  (decreases (hash_map_remove_from_list_decreases t key ls))
+  (decreases (hash_map_remove_from_list_loop_decreases t key ls))
   =
   begin match ls with
   | ListCons ckey x tl ->
@@ -500,7 +500,7 @@ let hash_map_remove_from_list_fwd
 let rec hash_map_remove_from_list_loop_back
   (t : Type0) (key : usize) (ls : list_t t) :
   Tot (result (list_t t))
-  (decreases (hash_map_remove_from_list_decreases t key ls))
+  (decreases (hash_map_remove_from_list_loop_decreases t key ls))
   =
   begin match ls with
   | ListCons ckey x tl ->
