@@ -10,7 +10,7 @@ include Loops.Clauses
 (** [loops::sum] *)
 let rec sum_loop_fwd
   (max : u32) (i : u32) (s : u32) :
-  Tot (result u32) (decreases (sum_decreases max i s))
+  Tot (result u32) (decreases (sum_loop_decreases max i s))
   =
   if i < max
   then
@@ -30,7 +30,7 @@ let sum_fwd (max : u32) : result u32 = sum_loop_fwd max 0 0
 (** [loops::sum_with_mut_borrows] *)
 let rec sum_with_mut_borrows_loop_fwd
   (max : u32) (mi : u32) (ms : u32) :
-  Tot (result u32) (decreases (sum_with_mut_borrows_decreases max mi ms))
+  Tot (result u32) (decreases (sum_with_mut_borrows_loop_decreases max mi ms))
   =
   if mi < max
   then
@@ -51,7 +51,7 @@ let sum_with_mut_borrows_fwd (max : u32) : result u32 =
 (** [loops::sum_with_shared_borrows] *)
 let rec sum_with_shared_borrows_loop_fwd
   (max : u32) (i : u32) (s : u32) :
-  Tot (result u32) (decreases (sum_with_shared_borrows_decreases max i s))
+  Tot (result u32) (decreases (sum_with_shared_borrows_loop_decreases max i s))
   =
   if i < max
   then
@@ -72,7 +72,7 @@ let sum_with_shared_borrows_fwd (max : u32) : result u32 =
 (** [loops::clear] *)
 let rec clear_loop_fwd_back
   (v : vec u32) (i : usize) :
-  Tot (result (vec u32)) (decreases (clear_decreases v i))
+  Tot (result (vec u32)) (decreases (clear_loop_decreases v i))
   =
   let i0 = vec_len u32 v in
   if i < i0
@@ -93,7 +93,7 @@ let clear_fwd_back (v : vec u32) : result (vec u32) = clear_loop_fwd_back v 0
 (** [loops::list_mem] *)
 let rec list_mem_loop_fwd
   (x : u32) (ls : list_t u32) :
-  Tot (result bool) (decreases (list_mem_decreases x ls))
+  Tot (result bool) (decreases (list_mem_loop_decreases x ls))
   =
   begin match ls with
   | ListCons y tl -> if y = x then Return true else list_mem_loop_fwd x tl
@@ -107,7 +107,7 @@ let list_mem_fwd (x : u32) (ls : list_t u32) : result bool =
 (** [loops::list_nth_mut_loop] *)
 let rec list_nth_mut_loop_loop_fwd
   (t : Type0) (ls : list_t t) (i : u32) :
-  Tot (result t) (decreases (list_nth_mut_loop_decreases t ls i))
+  Tot (result t) (decreases (list_nth_mut_loop_loop_decreases t ls i))
   =
   begin match ls with
   | ListCons x tl ->
@@ -128,7 +128,7 @@ let list_nth_mut_loop_fwd (t : Type0) (ls : list_t t) (i : u32) : result t =
 (** [loops::list_nth_mut_loop] *)
 let rec list_nth_mut_loop_loop_back
   (t : Type0) (ls : list_t t) (i : u32) (ret : t) :
-  Tot (result (list_t t)) (decreases (list_nth_mut_loop_decreases t ls i))
+  Tot (result (list_t t)) (decreases (list_nth_mut_loop_loop_decreases t ls i))
   =
   begin match ls with
   | ListCons x tl ->
@@ -154,7 +154,7 @@ let list_nth_mut_loop_back
 (** [loops::list_nth_shared_loop] *)
 let rec list_nth_shared_loop_loop_fwd
   (t : Type0) (ls : list_t t) (i : u32) :
-  Tot (result t) (decreases (list_nth_shared_loop_decreases t ls i))
+  Tot (result t) (decreases (list_nth_shared_loop_loop_decreases t ls i))
   =
   begin match ls with
   | ListCons x tl ->
@@ -175,7 +175,7 @@ let list_nth_shared_loop_fwd (t : Type0) (ls : list_t t) (i : u32) : result t =
 (** [loops::get_elem_mut] *)
 let rec get_elem_mut_loop_fwd
   (x : usize) (ls : list_t usize) :
-  Tot (result usize) (decreases (get_elem_mut_decreases x ls))
+  Tot (result usize) (decreases (get_elem_mut_loop_decreases x ls))
   =
   begin match ls with
   | ListCons y tl -> if y = x then Return y else get_elem_mut_loop_fwd x tl
@@ -192,7 +192,7 @@ let get_elem_mut_fwd (slots : vec (list_t usize)) (x : usize) : result usize =
 (** [loops::get_elem_mut] *)
 let rec get_elem_mut_loop_back
   (x : usize) (ls : list_t usize) (ret : usize) :
-  Tot (result (list_t usize)) (decreases (get_elem_mut_decreases x ls))
+  Tot (result (list_t usize)) (decreases (get_elem_mut_loop_decreases x ls))
   =
   begin match ls with
   | ListCons y tl ->
@@ -224,7 +224,8 @@ let get_elem_mut_back
 let rec get_elem_shared_loop_fwd
   (slots : vec (list_t usize)) (x : usize) (ls : list_t usize)
   (ls0 : list_t usize) :
-  Tot (result usize) (decreases (get_elem_shared_decreases slots x ls ls0))
+  Tot (result usize)
+  (decreases (get_elem_shared_loop_decreases slots x ls ls0))
   =
   begin match ls with
   | ListCons y tl ->
@@ -254,7 +255,7 @@ let id_shared_fwd (t : Type0) (ls : list_t t) : result (list_t t) = Return ls
 (** [loops::list_nth_mut_loop_with_id] *)
 let rec list_nth_mut_loop_with_id_loop_fwd
   (t : Type0) (i : u32) (ls : list_t t) :
-  Tot (result t) (decreases (list_nth_mut_loop_with_id_decreases t i ls))
+  Tot (result t) (decreases (list_nth_mut_loop_with_id_loop_decreases t i ls))
   =
   begin match ls with
   | ListCons x tl ->
@@ -280,7 +281,7 @@ let list_nth_mut_loop_with_id_fwd
 let rec list_nth_mut_loop_with_id_loop_back
   (t : Type0) (i : u32) (ls : list_t t) (ret : t) :
   Tot (result (list_t t))
-  (decreases (list_nth_mut_loop_with_id_decreases t i ls))
+  (decreases (list_nth_mut_loop_with_id_loop_decreases t i ls))
   =
   begin match ls with
   | ListCons x tl ->
@@ -314,7 +315,7 @@ let list_nth_mut_loop_with_id_back
 let rec list_nth_shared_loop_with_id_loop_fwd
   (t : Type0) (ls : list_t t) (i : u32) (ls0 : list_t t) :
   Tot (result t)
-  (decreases (list_nth_shared_loop_with_id_decreases t ls i ls0))
+  (decreases (list_nth_shared_loop_with_id_loop_decreases t ls i ls0))
   =
   begin match ls0 with
   | ListCons x tl ->
@@ -340,7 +341,7 @@ let list_nth_shared_loop_with_id_fwd
 let rec list_nth_mut_loop_pair_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
-  (decreases (list_nth_mut_loop_pair_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_loop_pair_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -367,7 +368,7 @@ let list_nth_mut_loop_pair_fwd
 let rec list_nth_mut_loop_pair_loop_back'a
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
-  (decreases (list_nth_mut_loop_pair_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_loop_pair_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -400,7 +401,7 @@ let list_nth_mut_loop_pair_back'a
 let rec list_nth_mut_loop_pair_loop_back'b
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
-  (decreases (list_nth_mut_loop_pair_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_loop_pair_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -433,7 +434,7 @@ let list_nth_mut_loop_pair_back'b
 let rec list_nth_shared_loop_pair_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
-  (decreases (list_nth_shared_loop_pair_decreases t ls0 ls1 i))
+  (decreases (list_nth_shared_loop_pair_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -460,7 +461,7 @@ let list_nth_shared_loop_pair_fwd
 let rec list_nth_mut_loop_pair_merge_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
-  (decreases (list_nth_mut_loop_pair_merge_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_loop_pair_merge_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -487,7 +488,7 @@ let list_nth_mut_loop_pair_merge_fwd
 let rec list_nth_mut_loop_pair_merge_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : (t & t)) :
   Tot (result ((list_t t) & (list_t t)))
-  (decreases (list_nth_mut_loop_pair_merge_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_loop_pair_merge_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -521,7 +522,7 @@ let list_nth_mut_loop_pair_merge_back
 let rec list_nth_shared_loop_pair_merge_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
-  (decreases (list_nth_shared_loop_pair_merge_decreases t ls0 ls1 i))
+  (decreases (list_nth_shared_loop_pair_merge_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -548,7 +549,7 @@ let list_nth_shared_loop_pair_merge_fwd
 let rec list_nth_mut_shared_loop_pair_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
-  (decreases (list_nth_mut_shared_loop_pair_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_shared_loop_pair_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -575,7 +576,7 @@ let list_nth_mut_shared_loop_pair_fwd
 let rec list_nth_mut_shared_loop_pair_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
-  (decreases (list_nth_mut_shared_loop_pair_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_shared_loop_pair_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -609,7 +610,7 @@ let list_nth_mut_shared_loop_pair_back
 let rec list_nth_mut_shared_loop_pair_merge_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
-  (decreases (list_nth_mut_shared_loop_pair_merge_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_shared_loop_pair_merge_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -637,7 +638,7 @@ let list_nth_mut_shared_loop_pair_merge_fwd
 let rec list_nth_mut_shared_loop_pair_merge_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
-  (decreases (list_nth_mut_shared_loop_pair_merge_decreases t ls0 ls1 i))
+  (decreases (list_nth_mut_shared_loop_pair_merge_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -671,7 +672,7 @@ let list_nth_mut_shared_loop_pair_merge_back
 let rec list_nth_shared_mut_loop_pair_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
-  (decreases (list_nth_shared_mut_loop_pair_decreases t ls0 ls1 i))
+  (decreases (list_nth_shared_mut_loop_pair_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -698,7 +699,7 @@ let list_nth_shared_mut_loop_pair_fwd
 let rec list_nth_shared_mut_loop_pair_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
-  (decreases (list_nth_shared_mut_loop_pair_decreases t ls0 ls1 i))
+  (decreases (list_nth_shared_mut_loop_pair_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -732,7 +733,7 @@ let list_nth_shared_mut_loop_pair_back
 let rec list_nth_shared_mut_loop_pair_merge_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
-  (decreases (list_nth_shared_mut_loop_pair_merge_decreases t ls0 ls1 i))
+  (decreases (list_nth_shared_mut_loop_pair_merge_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
@@ -760,7 +761,7 @@ let list_nth_shared_mut_loop_pair_merge_fwd
 let rec list_nth_shared_mut_loop_pair_merge_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
-  (decreases (list_nth_shared_mut_loop_pair_merge_decreases t ls0 ls1 i))
+  (decreases (list_nth_shared_mut_loop_pair_merge_loop_decreases t ls0 ls1 i))
   =
   begin match ls0 with
   | ListCons x0 tl0 ->
