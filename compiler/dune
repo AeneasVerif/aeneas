@@ -29,6 +29,10 @@
   InterpreterExpansion
   InterpreterExpressions
   Interpreter
+  InterpreterLoopsCore
+  InterpreterLoopsMatchCtxs
+  InterpreterLoopsJoinCtxs
+  InterpreterLoopsFixedPoint
   InterpreterLoops
   InterpreterPaths
   InterpreterProjectors
