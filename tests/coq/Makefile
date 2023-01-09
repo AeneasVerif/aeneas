@@ -9,10 +9,13 @@ COPY_MAKEFILES = $(addprefix copy-makefile-,$(ALL_DIRS))
 GEN_COQ_PROJECT = $(addprefix gen-coq-project-,$(ALL_DIRS))
 
 .PHONY: all
-all: $(COPY_MAKEFILES) $(GEN_COQ_PROJECT) $(VERIFY_DIRS)
+all: prepare-projects verify
 
-.PHONY: clean
-clean: $(CLEAN_DIRS)
+.PHONY: prepare-projects
+prepare-projects: $(COPY_MAKEFILES) $(GEN_COQ_PROJECT)
+
+.PHONY: verify
+verify: $(VERIFY_DIRS)
 
 .PHONY: verif-%
 verif-%:
@@ -33,6 +36,9 @@ gen-coq-project-%:
 	sed -i -z "s/"$*"\//\n/g" $*/_CoqProject # Insert breaks
 	sed -i -z "s/ \n/\n/g" $*/_CoqProject # Remove whitespaces at the end of lines
 	cat $*/_CoqProject
+
+.PHONY: clean
+clean: $(CLEAN_DIRS)
 
 .PHONY: clean-%
 clean-%:
