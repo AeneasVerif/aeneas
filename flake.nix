@@ -84,7 +84,7 @@
             export AENEAS_EXE=./aeneas.exe
 
             # Run the tests
-            make tests
+            make tests -j
           '';
           # Tests don't generate anything new as the generated files are
           # versionned, but the installation phase still needs to prodocue
@@ -96,6 +96,10 @@
           name = "aeneas_verify_fstar";
           src = ./tests/fstar;
           FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
+          buildPhase= ''
+            make prepare-projects
+            make verify -j
+          '';
           # The tests don't generate anything
           installPhase = "touch $out";
         };
@@ -104,6 +108,10 @@
           name = "aeneas_verify_coq";
           src = ./tests/coq;
           buildInputs = [ pkgs.coq ];
+          buildPhase= ''
+            make prepare-projects
+            make verify -j
+          '';
           # The tests don't generate anything
           installPhase = "touch $out";
         };
