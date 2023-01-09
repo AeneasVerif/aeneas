@@ -492,6 +492,39 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          borrowed value is modified in a loop iteration, then there is
          a fresh abstraction between this borrowed value and the fixed
          abstractions.
+
+         Example:
+         ========
+         {[
+           fn clear(v: &mut Vec<u32>) {
+               let mut i = 0;
+               while i < v.len() {
+                   v[i] = 0;
+                   i += 1;
+               }
+           }
+         ]}
+
+         When entering the loop, we have the following environment:
+         {[
+           abs'0 { ML l0 } // input abstraction
+           v -> MB l0 s0
+           i -> 0
+         ]}
+
+         At every iteration, we update the symbolic value of the vector [v]
+         (i.e., [s0]).
+
+         For now, because the translation of the loop is responsible of the
+         execution of the end of the function (up to the [return]), we want
+         the loop to reborrow the vector [v]: this way, the forward loop
+         function returns nothing (it returns what [clear] returns, that is
+         to say [unit]) while the backward loop function gives back a new value
+         for [v] (i.e., a new symbolic value which will replace [s0]).
+
+         In the future, we will also compute joins at the *loop exits*: when we
+         do so, we won't introduce reborrows like above: the forward loop function
+         will update [v], while the backward loop function will return nothing.
       *)
       assert (not (value_has_borrows S.ctx bv.V.value));
 
