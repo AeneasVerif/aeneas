@@ -617,14 +617,14 @@ let hash_map_new_fwd_lem_aux t =
 /// The lemma we reveal in the .fsti
 let hash_map_new_fwd_lem t = hash_map_new_fwd_lem_aux t
 
-(*** clear_slots *)
-/// [clear_slots] doesn't fail and simply clears the slots starting at index i
+(*** clear *)
+/// [clear]: the loop doesn't fail and simply clears the slots starting at index i
 #push-options "--fuel 1"
-let rec hash_map_clear_slots_loop_fwd_back_lem
+let rec hash_map_clear_loop_fwd_back_lem
   (t : Type0) (slots : vec (list_t t)) (i : usize) :
   Lemma
   (ensures (
-    match hash_map_clear_slots_loop_fwd_back t slots i with
+    match hash_map_clear_loop_fwd_back t slots i with
     | Fail _ -> False
     | Return slots' ->
       // The length is preserved
@@ -633,7 +633,7 @@ let rec hash_map_clear_slots_loop_fwd_back_lem
       (forall (j:nat{j < i /\ j < length slots}). index slots' j == index slots j) /\
       // The slots after i are set to ListNil
       (forall (j:nat{i <= j /\ j < length slots}). index slots' j == ListNil)))
-  (decreases (hash_map_clear_slots_loop_decreases t slots i))
+  (decreases (hash_map_clear_loop_decreases t slots i))
   =
   let i0 = vec_len (list_t t) slots in
   let b = i < i0 in
@@ -645,8 +645,8 @@ let rec hash_map_clear_slots_loop_fwd_back_lem
       begin match usize_add i 1 with
       | Fail _ -> ()
       | Return i1 ->
-        hash_map_clear_slots_loop_fwd_back_lem t v i1;
-        begin match hash_map_clear_slots_loop_fwd_back t v i1 with
+        hash_map_clear_loop_fwd_back_lem t v i1;
+        begin match hash_map_clear_loop_fwd_back t v i1 with
         | Fail _ -> ()
         | Return slots1 ->
           assert(length slots1 == length slots);
@@ -658,7 +658,6 @@ let rec hash_map_clear_slots_loop_fwd_back_lem
   else ()
 #pop-options
 
-(*** clear *)
 /// [clear] doesn't fail and turns the hash map into an empty map
 val hash_map_clear_fwd_back_lem_aux
   (#t : Type0) (self : hash_map_t t) :
@@ -683,8 +682,8 @@ let hash_map_clear_fwd_back_lem_aux #t self =
   let p = self.hash_map_max_load_factor in
   let i = self.hash_map_max_load in
   let v = self.hash_map_slots in
-  hash_map_clear_slots_loop_fwd_back_lem t v 0;
-  begin match hash_map_clear_slots_loop_fwd_back t v 0 with
+  hash_map_clear_loop_fwd_back_lem t v 0;
+  begin match hash_map_clear_loop_fwd_back t v 0 with
   | Fail _ -> ()
   | Return slots1 ->
     slots_t_al_v_all_nil_is_empty_lem slots1;

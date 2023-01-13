@@ -62,11 +62,11 @@ let hashmap_hash_map_new_with_capacity_fwd
 let hashmap_hash_map_new_fwd (t : Type0) : result (hashmap_hash_map_t t) =
   hashmap_hash_map_new_with_capacity_fwd t 32 4 5
 
-(** [hashmap_main::hashmap::HashMap::{0}::clear_slots] *)
-let rec hashmap_hash_map_clear_slots_loop_fwd_back
+(** [hashmap_main::hashmap::HashMap::{0}::clear] *)
+let rec hashmap_hash_map_clear_loop_fwd_back
   (t : Type0) (slots : vec (hashmap_list_t t)) (i : usize) :
   Tot (result (vec (hashmap_list_t t)))
-  (decreases (hashmap_hash_map_clear_slots_loop_decreases t slots i))
+  (decreases (hashmap_hash_map_clear_loop_decreases t slots i))
   =
   let i0 = vec_len (hashmap_list_t t) slots in
   if i < i0
@@ -77,23 +77,16 @@ let rec hashmap_hash_map_clear_slots_loop_fwd_back
       begin match vec_index_mut_back (hashmap_list_t t) slots i HashmapListNil
         with
       | Fail e -> Fail e
-      | Return slots0 -> hashmap_hash_map_clear_slots_loop_fwd_back t slots0 i1
+      | Return slots0 -> hashmap_hash_map_clear_loop_fwd_back t slots0 i1
       end
     end
   else Return slots
-
-(** [hashmap_main::hashmap::HashMap::{0}::clear_slots] *)
-let hashmap_hash_map_clear_slots_fwd_back
-  (t : Type0) (slots : vec (hashmap_list_t t)) :
-  result (vec (hashmap_list_t t))
-  =
-  hashmap_hash_map_clear_slots_loop_fwd_back t slots 0
 
 (** [hashmap_main::hashmap::HashMap::{0}::clear] *)
 let hashmap_hash_map_clear_fwd_back
   (t : Type0) (self : hashmap_hash_map_t t) : result (hashmap_hash_map_t t) =
   begin match
-    hashmap_hash_map_clear_slots_fwd_back t self.hashmap_hash_map_slots with
+    hashmap_hash_map_clear_loop_fwd_back t self.hashmap_hash_map_slots 0 with
   | Fail e -> Fail e
   | Return v ->
     Return (Mkhashmap_hash_map_t 0 self.hashmap_hash_map_max_load_factor

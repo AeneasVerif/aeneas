@@ -55,8 +55,8 @@ Definition hash_map_new_fwd (T : Type) (n : nat) : result (Hash_map_t T) :=
   hash_map_new_with_capacity_fwd T n (32%usize) (4%usize) (5%usize)
 .
 
-(** [hashmap::HashMap::{0}::clear_slots] *)
-Fixpoint hash_map_clear_slots_loop_fwd_back
+(** [hashmap::HashMap::{0}::clear] *)
+Fixpoint hash_map_clear_loop_fwd_back
   (T : Type) (n : nat) (slots : vec (List_t T)) (i : usize) :
   result (vec (List_t T))
   :=
@@ -68,21 +68,15 @@ Fixpoint hash_map_clear_slots_loop_fwd_back
     then (
       i1 <- usize_add i 1%usize;
       slots0 <- vec_index_mut_back (List_t T) slots i ListNil;
-      hash_map_clear_slots_loop_fwd_back T n0 slots0 i1)
+      hash_map_clear_loop_fwd_back T n0 slots0 i1)
     else Return slots
   end
-.
-
-(** [hashmap::HashMap::{0}::clear_slots] *)
-Definition hash_map_clear_slots_fwd_back
-  (T : Type) (n : nat) (slots : vec (List_t T)) : result (vec (List_t T)) :=
-  hash_map_clear_slots_loop_fwd_back T n slots (0%usize)
 .
 
 (** [hashmap::HashMap::{0}::clear] *)
 Definition hash_map_clear_fwd_back
   (T : Type) (n : nat) (self : Hash_map_t T) : result (Hash_map_t T) :=
-  v <- hash_map_clear_slots_fwd_back T n self.(Hash_map_slots);
+  v <- hash_map_clear_loop_fwd_back T n self.(Hash_map_slots) (0%usize);
   Return (mkHash_map_t (0%usize) self.(Hash_map_max_load_factor)
     self.(Hash_map_max_load) v)
 .
