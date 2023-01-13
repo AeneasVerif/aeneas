@@ -20,6 +20,8 @@ let mk_opt_place_from_op (op : E.operand) (ctx : Contexts.eval_ctx) :
   | E.Copy p | E.Move p -> Some (mk_mplace p ctx)
   | E.Constant _ -> None
 
+let mk_meta (m : meta) (e : expression) : expression = Meta (m, e)
+
 let synthesize_symbolic_expansion (sv : V.symbolic_value)
     (place : mplace option) (seel : V.symbolic_expansion option list)
     (el : expression list option) : expression option =

@@ -137,7 +137,7 @@ let rec hashmap_hash_map_insert_in_list_loop_back
     else
       begin match hashmap_hash_map_insert_in_list_loop_back t key value tl with
       | Fail e -> Fail e
-      | Return l -> Return (HashmapListCons ckey cvalue l)
+      | Return tl0 -> Return (HashmapListCons ckey cvalue tl0)
       end
   | HashmapListNil ->
     let l = HashmapListNil in Return (HashmapListCons key value l)
@@ -442,7 +442,7 @@ let rec hashmap_hash_map_get_mut_in_list_loop_back
     else
       begin match hashmap_hash_map_get_mut_in_list_loop_back t tl key ret with
       | Fail e -> Fail e
-      | Return l -> Return (HashmapListCons ckey cvalue l)
+      | Return tl0 -> Return (HashmapListCons ckey cvalue tl0)
       end
   | HashmapListNil -> Fail Failure
   end
@@ -553,7 +553,7 @@ let rec hashmap_hash_map_remove_from_list_loop_back
     else
       begin match hashmap_hash_map_remove_from_list_loop_back t key tl with
       | Fail e -> Fail e
-      | Return l -> Return (HashmapListCons ckey x l)
+      | Return tl0 -> Return (HashmapListCons ckey x tl0)
       end
   | HashmapListNil -> Return HashmapListNil
   end
