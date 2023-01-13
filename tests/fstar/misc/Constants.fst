@@ -96,14 +96,7 @@ let q3_c : i32 = eval_global q3_body
 
 (** [constants::get_z2] *)
 let get_z2_fwd : result i32 =
-  begin match get_z1_fwd with
-  | Fail e -> Fail e
-  | Return i ->
-    begin match add_fwd i q3_c with
-    | Fail e -> Fail e
-    | Return i0 -> add_fwd q1_c i0
-    end
-  end
+  let* i = get_z1_fwd in let* i0 = add_fwd i q3_c in add_fwd q1_c i0
 
 (** [constants::S1] *)
 let s1_body : result u32 = Return 6
