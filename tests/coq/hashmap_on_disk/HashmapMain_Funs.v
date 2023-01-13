@@ -58,8 +58,8 @@ Definition hashmap_hash_map_new_fwd
   hashmap_hash_map_new_with_capacity_fwd T n (32%usize) (4%usize) (5%usize)
 .
 
-(** [hashmap_main::hashmap::HashMap::{0}::clear_slots] *)
-Fixpoint hashmap_hash_map_clear_slots_loop_fwd_back
+(** [hashmap_main::hashmap::HashMap::{0}::clear] *)
+Fixpoint hashmap_hash_map_clear_loop_fwd_back
   (T : Type) (n : nat) (slots : vec (Hashmap_list_t T)) (i : usize) :
   result (vec (Hashmap_list_t T))
   :=
@@ -71,17 +71,9 @@ Fixpoint hashmap_hash_map_clear_slots_loop_fwd_back
     then (
       i1 <- usize_add i 1%usize;
       slots0 <- vec_index_mut_back (Hashmap_list_t T) slots i HashmapListNil;
-      hashmap_hash_map_clear_slots_loop_fwd_back T n0 slots0 i1)
+      hashmap_hash_map_clear_loop_fwd_back T n0 slots0 i1)
     else Return slots
   end
-.
-
-(** [hashmap_main::hashmap::HashMap::{0}::clear_slots] *)
-Definition hashmap_hash_map_clear_slots_fwd_back
-  (T : Type) (n : nat) (slots : vec (Hashmap_list_t T)) :
-  result (vec (Hashmap_list_t T))
-  :=
-  hashmap_hash_map_clear_slots_loop_fwd_back T n slots (0%usize)
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::clear] *)
@@ -89,7 +81,9 @@ Definition hashmap_hash_map_clear_fwd_back
   (T : Type) (n : nat) (self : Hashmap_hash_map_t T) :
   result (Hashmap_hash_map_t T)
   :=
-  v <- hashmap_hash_map_clear_slots_fwd_back T n self.(Hashmap_hash_map_slots);
+  v <-
+    hashmap_hash_map_clear_loop_fwd_back T n self.(Hashmap_hash_map_slots)
+      (0%usize);
   Return (mkHashmap_hash_map_t (0%usize)
     self.(Hashmap_hash_map_max_load_factor) self.(Hashmap_hash_map_max_load) v)
 .
