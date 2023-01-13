@@ -58,6 +58,8 @@ type call = {
 type meta =
   | Assignment of Contexts.eval_ctx * mplace * V.typed_value * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
+  | SymbolicAtPlace of Contexts.var_binder * V.symbolic_value
+      (** A symbolic value is at a given place *)
 [@@deriving show]
 
 type variant_id = T.VariantId.id [@@deriving show]

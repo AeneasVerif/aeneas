@@ -530,6 +530,7 @@ and meta =
   | SymbolicAssignment of (var_id[@opaque]) * mvalue
       (** Informationg linking a variable (from the pure AST) to an
           expression.
+
           We use this to guide the heuristics which derive pretty names.
         *)
   | MPlace of mplace  (** Meta-information about the origin of a value *)

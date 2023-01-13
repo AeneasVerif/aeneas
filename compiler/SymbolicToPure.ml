@@ -914,6 +914,13 @@ let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
       | _ -> raise (Failure "Unreachable"))
   | _ -> v
 
+(** Translate a symbolic value *)
+let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
+    texpression =
+  (* Translate the type *)
+  let var = lookup_var_for_symbolic_value sv ctx in
+  mk_texpression_from_var var
+
 (** Translate a typed value.
 
     It is used, for instance, on values used as inputs for function calls.
@@ -988,9 +995,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         | V.MutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
             translate v)
-    | Symbolic sv ->
-        let var = lookup_var_for_symbolic_value sv ctx in
-        mk_texpression_from_var var
+    | Symbolic sv -> symbolic_value_to_texpression ctx sv
   in
   (* Debugging *)
   log#ldebug
@@ -1287,6 +1292,14 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
   let call_info = V.FunCallId.Map.find call_id ctx.calls in
   let abs_ancestors = list_ancestor_abstractions ctx abs call_id in
   (call_info.forward, abs_ancestors)
+
+(** Add meta-information to an expression *)
+let mk_meta_symbolic_assignments (vars : var list) (values : texpression list)
+    (e : texpression) : texpression =
+  let var_values = List.combine vars values in
+  List.fold_right
+    (fun (var, arg) e -> mk_meta (SymbolicAssignment (var_get_id var, arg)) e)
+    var_values e
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
@@ -1891,8 +1904,10 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
          need to *transmit* to the loop backward function): they are not the
          values consumed upon ending the abstraction (i.e., we don't use
          [abs_to_consumed]) *)
-      let back_inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs in
-      let back_inputs = List.map mk_texpression_from_var back_inputs in
+      let back_inputs_vars =
+        T.RegionGroupId.Map.find rg_id ctx.backward_inputs
+      in
+      let back_inputs = List.map mk_texpression_from_var back_inputs_vars in
       (* If the function is stateful:
        * - add the state input argument
        * - generate a fresh state variable for the returned state
@@ -1953,7 +1968,9 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
          * a value containing mutable borrows, which can't be the case... *)
         assert (List.length inputs = List.length fwd_inputs);
         next_e)
-      else mk_let effect_info.can_fail output call next_e
+      else
+        (* Create the let-binding *)
+        mk_let effect_info.can_fail output call next_e
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (sval : V.symbolic_value)
     (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -2335,16 +2352,7 @@ and translate_forward_end (ectx : C.eval_ctx)
          We then remove all the meta information from the body *before* calling
          {!PureMicroPasses.decompose_loops}.
       *)
-      let e =
-        let var_values = List.combine loop_info.input_vars org_args in
-        List.fold_right
-          (fun (var, arg) e ->
-            mk_meta (SymbolicAssignment (var_get_id var, arg)) e)
-          var_values e
-      in
-
-      (* Return *)
-      e
+      mk_meta_symbolic_assignments loop_info.input_vars org_args e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
@@ -2507,6 +2515,14 @@ and translate_meta (meta : S.meta) (e : S.expression) (ctx : bs_ctx) :
         let rv = typed_value_to_texpression ctx ectx rv in
         let rp = translate_opt_mplace rp in
         Assignment (lp, rv, rp)
+    | S.SymbolicAtPlace (bv, sv) ->
+        (* We use {!SymbolicAtPlace} to provide information about the
+           symbolic values given back by the backward functions.
+           We simply encode this information as an assignment, for the
+           heuristics. *)
+        let mp = translate_mplace { bv; projection = [] } in
+        let sv = symbolic_value_to_texpression ctx sv in
+        Assignment (mp, sv, None)
   in
   let e = Meta (meta, next_e) in
   let ty = next_e.ty in
