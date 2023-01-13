@@ -253,7 +253,7 @@ let check_loans_borrows_relation_invariant (ctx : C.eval_ctx) : unit =
       method! visit_aborrow_content env bc =
         let _ =
           match bc with
-          | V.AMutBorrow (bid, _) -> register_borrow Mut bid
+          | V.AMutBorrow (bid, _, _) -> register_borrow Mut bid
           | V.ASharedBorrow bid -> register_borrow Shared bid
           | V.AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow Mut bid
           | V.AIgnoredMutBorrow (None, _)
@@ -361,7 +361,7 @@ let check_borrowed_values_invariant (ctx : C.eval_ctx) : unit =
         (* Update the info *)
         let info =
           match bc with
-          | V.AMutBorrow (_, _) -> set_outer_mut info
+          | V.AMutBorrow (_, _, _) -> set_outer_mut info
           | V.ASharedBorrow _ | V.AEndedSharedBorrow -> set_outer_shared info
           | V.AIgnoredMutBorrow _ | V.AEndedMutBorrow _
           | V.AEndedIgnoredMutBorrow _ ->
@@ -480,7 +480,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 let glc = lookup_borrow ek_all bid ctx in
                 match glc with
                 | Concrete (V.MutBorrow (_, bv)) -> assert (bv.V.ty = ty)
-                | Abstract (V.AMutBorrow (_, sv)) ->
+                | Abstract (V.AMutBorrow (_, sv, _)) ->
                     assert (Subst.erase_regions sv.V.ty = ty)
                 | _ -> raise (Failure "Inconsistent context")))
         | V.Symbolic sv, ty ->
@@ -547,7 +547,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
         | V.ABottom, _ -> (* Nothing to check *) ()
         | V.ABorrow bc, T.Ref (_, ref_ty, rkind) -> (
             match (bc, rkind) with
-            | V.AMutBorrow (_, av), T.Mut ->
+            | V.AMutBorrow (_, av, _), T.Mut ->
                 (* Check that the child value has the proper type *)
                 assert (av.V.ty = ref_ty)
             | V.ASharedBorrow bid, T.Shared -> (
@@ -578,7 +578,7 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 match glc with
                 | Concrete (V.MutBorrow (_, bv)) ->
                     assert (bv.V.ty = Subst.erase_regions borrowed_aty)
-                | Abstract (V.AMutBorrow (_, sv)) ->
+                | Abstract (V.AMutBorrow (_, sv, _)) ->
                     assert (
                       Subst.erase_regions sv.V.ty
                       = Subst.erase_regions borrowed_aty)

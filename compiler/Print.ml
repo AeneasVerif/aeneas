@@ -269,7 +269,7 @@ module Values = struct
   and aborrow_content_to_string (fmt : value_formatter) (bc : V.aborrow_content)
       : string =
     match bc with
-    | AMutBorrow (bid, av) ->
+    | AMutBorrow (bid, av, _) ->
         "&mut@" ^ V.BorrowId.to_string bid ^ " ("
         ^ typed_avalue_to_string fmt av
         ^ ")"
@@ -280,7 +280,7 @@ module Values = struct
         ^ ", "
         ^ typed_avalue_to_string fmt av
         ^ ")"
-    | AEndedMutBorrow (_mv, child) ->
+    | AEndedMutBorrow (_mv, child, _) ->
         "@ended_mut_borrow(" ^ typed_avalue_to_string fmt child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "

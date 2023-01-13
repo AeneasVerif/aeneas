@@ -1723,6 +1723,8 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) :
       ^ Print.option_to_string T.RegionGroupId.to_string def.back_id
       ^ ")"));
 
+  log#ldebug (lazy ("original decl:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
   (* First, find names for the variables which are unnamed *)
   let def = compute_pretty_names def in
   log#ldebug

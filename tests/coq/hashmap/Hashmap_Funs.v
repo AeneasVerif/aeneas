@@ -127,12 +127,12 @@ Fixpoint hash_map_insert_in_list_loop_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey cvalue tl =>
+    | ListCons ckey ls0 tl =>
       if ckey s= key
       then Return (ListCons ckey value tl)
       else (
-        l <- hash_map_insert_in_list_loop_back T n0 key value tl;
-        Return (ListCons ckey cvalue l))
+        ls1 <- hash_map_insert_in_list_loop_back T n0 key value tl;
+        Return (ListCons ckey ls0 ls1))
     | ListNil => let l := ListNil in Return (ListCons key value l)
     end
   end
@@ -183,9 +183,9 @@ Fixpoint hash_map_move_elements_from_list_loop_fwd_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons k v tl =>
-      ntable0 <- hash_map_insert_no_resize_fwd_back T n0 ntable k v;
-      hash_map_move_elements_from_list_loop_fwd_back T n0 ntable0 tl
+    | ListCons k ntable0 tl =>
+      ntable1 <- hash_map_insert_no_resize_fwd_back T n0 ntable k ntable0;
+      hash_map_move_elements_from_list_loop_fwd_back T n0 ntable1 tl
     | ListNil => Return ntable
     end
   end
@@ -211,13 +211,13 @@ Fixpoint hash_map_move_elements_loop_fwd_back
     let i0 := vec_len (List_t T) slots in
     if i s< i0
     then (
-      l <- vec_index_mut_fwd (List_t T) slots i;
-      let ls := mem_replace_fwd (List_t T) l ListNil in
+      slots0 <- vec_index_mut_fwd (List_t T) slots i;
+      let ls := mem_replace_fwd (List_t T) slots0 ListNil in
       ntable0 <- hash_map_move_elements_from_list_fwd_back T n0 ntable ls;
       i1 <- usize_add i 1%usize;
-      let l0 := mem_replace_back (List_t T) l ListNil in
-      slots0 <- vec_index_mut_back (List_t T) slots i l0;
-      hash_map_move_elements_loop_fwd_back T n0 ntable0 slots0 i1)
+      let l := mem_replace_back (List_t T) slots0 ListNil in
+      slots1 <- vec_index_mut_back (List_t T) slots i l;
+      hash_map_move_elements_loop_fwd_back T n0 ntable0 slots1 i1)
     else Return (ntable, slots)
   end
 .
@@ -361,12 +361,12 @@ Fixpoint hash_map_get_mut_in_list_loop_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey cvalue tl =>
+    | ListCons ckey ls0 tl =>
       if ckey s= key
       then Return (ListCons ckey ret tl)
       else (
-        l <- hash_map_get_mut_in_list_loop_back T n0 tl key ret;
-        Return (ListCons ckey cvalue l))
+        ls1 <- hash_map_get_mut_in_list_loop_back T n0 tl key ret;
+        Return (ListCons ckey ls0 ls1))
     | ListNil => Fail_ Failure
     end
   end
@@ -439,17 +439,18 @@ Fixpoint hash_map_remove_from_list_loop_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | ListCons ckey t tl =>
+    | ListCons ckey ls0 tl =>
       if ckey s= key
       then
-        let mv_ls := mem_replace_fwd (List_t T) (ListCons ckey t tl) ListNil in
+        let mv_ls := mem_replace_fwd (List_t T) (ListCons ckey ls0 tl) ListNil
+          in
         match mv_ls with
         | ListCons i cvalue tl0 => Return tl0
         | ListNil => Fail_ Failure
         end
       else (
-        l <- hash_map_remove_from_list_loop_back T n0 key tl;
-        Return (ListCons ckey t l))
+        ls1 <- hash_map_remove_from_list_loop_back T n0 key tl;
+        Return (ListCons ckey ls0 ls1))
     | ListNil => Return ListNil
     end
   end

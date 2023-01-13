@@ -135,7 +135,7 @@ let rec apply_proj_borrows (check_symbolic_no_ended : bool) (ctx : C.eval_ctx)
                     apply_proj_borrows check_symbolic_no_ended ctx
                       fresh_reborrow regions ancestors_regions bv ref_ty
                   in
-                  V.AMutBorrow (bid, bv)
+                  V.AMutBorrow (bid, bv, None)
               | V.SharedBorrow bid, T.Shared ->
                   (* Rem.: we don't need to also apply the projection on the
                      borrowed value, because for as long as the abstraction

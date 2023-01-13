@@ -124,7 +124,7 @@ class ['self] map_var_binder_base =
       fun _ x -> x
   end
 
-(** A binder used in an environment, to map a variable to a value *)
+(** A binder used in an environment, to map a variable to a value - TODO: this could be a {!GAst.var} *)
 type var_binder = {
   index : var_id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)

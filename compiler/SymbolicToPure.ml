@@ -1086,9 +1086,9 @@ and aloan_content_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 and aborrow_content_to_consumed (_ctx : bs_ctx) (bc : V.aborrow_content) :
     texpression option =
   match bc with
-  | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
+  | V.AMutBorrow _ | ASharedBorrow _ | AIgnoredMutBorrow _ ->
       raise (Failure "Unreachable")
-  | AEndedMutBorrow (_, _) ->
+  | AEndedMutBorrow _ ->
       (* We collect consumed values: ignore *)
       None
   | AEndedIgnoredMutBorrow _ ->
@@ -1226,9 +1226,9 @@ and aloan_content_to_given_back (_mp : mplace option) (lc : V.aloan_content)
 and aborrow_content_to_given_back (mp : mplace option) (bc : V.aborrow_content)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match bc with
-  | V.AMutBorrow (_, _) | ASharedBorrow _ | AIgnoredMutBorrow (_, _) ->
+  | V.AMutBorrow _ | ASharedBorrow _ | AIgnoredMutBorrow _ ->
       raise (Failure "Unreachable")
-  | AEndedMutBorrow (msv, _) ->
+  | AEndedMutBorrow (msv, _, _) ->
       (* Return the meta-symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv ctx in
       (ctx, Some (mk_typed_pattern_from_var var mp))

@@ -699,7 +699,10 @@ and aloan_content =
     ids)?
 *)
 and aborrow_content =
-  | AMutBorrow of borrow_id * typed_avalue
+  | AMutBorrow of
+      borrow_id
+      * typed_avalue
+      * ((Expressions.var_id * string option) option[@opaque])
       (** A mutable borrow owned by an abstraction.
       
           Is used when an abstraction "consumes" borrows, when giving borrows
@@ -719,6 +722,15 @@ and aborrow_content =
             > px -> ⊥
             > abs0 { a_mut_borrow l0 (U32 0) _ }
           ]}
+
+
+          The {!Expressions.var_id} field is meta information we use as a hint when
+          finding names for the values used in the translation: if [Some],
+          it should contain the id of the binder to which the fresh symbolic
+          value will be given back upon ending the borrow, so that we can
+          attempt to use this binder's name as a hint.
+
+          TODO: use {!Contexts.var_binder}.
      *)
   | ASharedBorrow of borrow_id
       (** A shared borrow owned by an abstraction.
@@ -803,9 +815,14 @@ and aborrow_content =
           id) and also remove the AEndedIgnoredMutBorrow variant.
           For now, we prefer to be more precise that required.
        *)
-  | AEndedMutBorrow of msymbolic_value * typed_avalue
+  | AEndedMutBorrow of
+      msymbolic_value
+      * typed_avalue
+      * ((Expressions.var_id * string option) option[@opaque])
       (** The sole purpose of {!AEndedMutBorrow} is to store the (symbolic) value
           that we gave back as a meta-value, to help with the synthesis.
+
+          For the {!Expressions.var_id} field: see {!AMutBorrow}.
        *)
   | AEndedSharedBorrow
       (** We don't really need {!AEndedSharedBorrow}: we simply want to be

@@ -85,7 +85,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
               ))
   in
 
-  (* The environment is used to keep track of the outer loans *)
+  (* We use the environment to keep track of the outer loans *)
   let obj =
     object
       inherit [_] C.map_eval_ctx as super
@@ -160,7 +160,7 @@ let end_borrow_get_borrow (allowed_abs : V.AbstractionId.id option)
 
       method! visit_ABorrow outer bc =
         match bc with
-        | V.AMutBorrow (bid, _) ->
+        | V.AMutBorrow (bid, _, _) ->
             (* Check if this is the borrow we are looking for *)
             if bid = l then (
               (* TODO: treat this case differently. We should not introduce
@@ -808,7 +808,7 @@ let give_back (config : C.config) (abs_id_opt : V.AbstractionId.id option)
       assert (Option.is_some (lookup_loan_opt sanity_ek l ctx));
       (* Update the context *)
       give_back_shared config l ctx
-  | Abstract (V.AMutBorrow (l', av)) ->
+  | Abstract (V.AMutBorrow (l', av, _)) ->
       (* Sanity check *)
       assert (l' = l);
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
@@ -877,8 +877,13 @@ let check_borrow_disappeared (fun_name : string) (l : V.BorrowId.id)
     which are inserted in the context. It is not obvious how to name those
     values. This function does the following:
     - it lists the symbolic values given back by the abstraction
-    - it explores the context, and in particular the *variables* in the context,
-      and try to use those variable names as hints for the future name derivations.
+    - it tries to reuse the hints stored in {!AEndedMutBorrow} (the optional
+      variable ids) to name those symbolic values.
+    - for the symbolic values which don't have such hints, it explores the context
+      and in particular the *variables* in the context, and tries to use those variable
+      names as hints for the future name derivations (if a symbolic value is
+      given back to the value a variable maps to, under some conditions, we
+      try to use this variable name as a hint).
 
     Example:
     ========
@@ -912,6 +917,7 @@ let check_borrow_disappeared (fun_name : string) (l : V.BorrowId.id)
 let add_naming_hints_for_abstraction_given_back_values (ctx : C.eval_ctx)
     (abs : V.abs) (e : SA.expression) : SA.expression =
   (* Retrieve the symbolic values given back by the abstraction *)
+  let meta_ls = ref [] in
   let svl =
     (* Rem.: there can't be a symbolic value appearing twice *)
     let svl = ref [] in
@@ -919,8 +925,13 @@ let add_naming_hints_for_abstraction_given_back_values (ctx : C.eval_ctx)
       object (self)
         inherit [_] V.iter_abs
 
-        method! visit_AEndedMutBorrow env sv child_av =
-          svl := sv :: !svl;
+        method! visit_AEndedMutBorrow env sv child_av opt_var_id =
+          (match opt_var_id with
+          | None -> svl := sv :: !svl
+          | Some (index, name) ->
+              (* There is a meta information: use it as a hint *)
+              let bv = { C.index; name } in
+              meta_ls := (bv, sv) :: !meta_ls);
           self#visit_typed_avalue env child_av
       end
     in
@@ -933,8 +944,7 @@ let add_naming_hints_for_abstraction_given_back_values (ctx : C.eval_ctx)
   in
 
   (* Explore the context to compute place meta information *)
-  let meta_ls =
-    let meta_ls = ref [] in
+  let _ =
     let visitor =
       object (self)
         inherit [_] C.iter_eval_ctx as super
@@ -978,9 +988,9 @@ let add_naming_hints_for_abstraction_given_back_values (ctx : C.eval_ctx)
           | Primitive _ | Bottom -> (* Do nothing *) ()
       end
     in
-    visitor#visit_eval_ctx None ctx;
-    !meta_ls
+    visitor#visit_eval_ctx None ctx
   in
+  let meta_ls = !meta_ls in
 
   (* Add the meta information *)
   List.fold_right
@@ -1318,12 +1328,12 @@ and end_abstraction_borrows (config : C.config) (chain : borrow_or_abs_ids)
           ^ aborrow_content_to_string ctx bc));
       let ctx =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | V.AMutBorrow (bid, av, var_id) ->
             (* First, convert the avalue to a (fresh symbolic) value *)
             let sv = convert_avalue_to_given_back_value abs.kind av in
             (* Replace the mut borrow to register the fact that we ended
              * it and store with it the freshly generated given back value *)
-            let ended_borrow = V.ABorrow (V.AEndedMutBorrow (sv, av)) in
+            let ended_borrow = V.ABorrow (V.AEndedMutBorrow (sv, av, var_id)) in
             let ctx = update_aborrow ek_all bid ended_borrow ctx in
             (* Give the value back *)
             let sv = mk_typed_value_from_symbolic_value sv in
@@ -1815,12 +1825,13 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
         assert allow_borrows;
         (* Explore the borrow content *)
         match bc with
-        | V.AMutBorrow (bid, child_av) ->
+        | V.AMutBorrow (bid, child_av, _) ->
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the borrow *)
             let ignored = mk_aignored child_av.V.ty in
-            let value = V.ABorrow (V.AMutBorrow (bid, ignored)) in
+            (* We forget the meta information (the var_id) on purpose: we use [None] *)
+            let value = V.ABorrow (V.AMutBorrow (bid, ignored, None)) in
             push { V.value; ty }
         | V.ASharedBorrow _ ->
             (* Nothing specific to do: keep the value as it is *)
@@ -2020,7 +2031,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
             let ref_ty = ety_no_regions_to_rty ref_ty in
             let ty = T.Ref (T.Var r_id, ref_ty, kind) in
             let ignored = mk_aignored ref_ty in
-            let av = V.ABorrow (V.AMutBorrow (bid, ignored)) in
+            let av = V.ABorrow (V.AMutBorrow (bid, ignored, None)) in
             let av = { V.value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
@@ -2199,7 +2210,7 @@ let compute_merge_abstraction_info (ctx : C.eval_ctx) (abs : V.abs) :
         in
         (* Explore the borrow content *)
         (match bc with
-        | V.AMutBorrow (bid, _) -> push_borrow bid (Abstract (ty, bc))
+        | V.AMutBorrow (bid, _, _) -> push_borrow bid (Abstract (ty, bc))
         | V.ASharedBorrow bid -> push_borrow bid (Abstract (ty, bc))
         | V.AProjSharedBorrow asb ->
             let register asb =
@@ -2398,7 +2409,8 @@ let merge_into_abstraction_aux (abs_kind : V.abs_kind) (can_end : bool)
   let merge_aborrow_contents (ty0 : T.rty) (bc0 : V.aborrow_content)
       (ty1 : T.rty) (bc1 : V.aborrow_content) : V.typed_avalue =
     match (bc0, bc1) with
-    | V.AMutBorrow (id, child0), V.AMutBorrow (_, child1) ->
+    | V.AMutBorrow (id, child0, _), V.AMutBorrow (_, child1, _) ->
+        (* We ignore the meta-information (the var_id) on purpose *)
         (Option.get merge_funs).merge_amut_borrows id ty0 child0 ty1 child1
     | ASharedBorrow id, ASharedBorrow _ ->
         (Option.get merge_funs).merge_ashared_borrows id ty0 ty1

@@ -131,13 +131,13 @@ let rec hashmap_hash_map_insert_in_list_loop_back
   (decreases (hashmap_hash_map_insert_in_list_loop_decreases t key value ls))
   =
   begin match ls with
-  | HashmapListCons ckey cvalue tl ->
+  | HashmapListCons ckey ls0 tl ->
     if ckey = key
     then Return (HashmapListCons ckey value tl)
     else
       begin match hashmap_hash_map_insert_in_list_loop_back t key value tl with
       | Fail e -> Fail e
-      | Return l -> Return (HashmapListCons ckey cvalue l)
+      | Return ls1 -> Return (HashmapListCons ckey ls0 ls1)
       end
   | HashmapListNil ->
     let l = HashmapListNil in Return (HashmapListCons key value l)
@@ -221,11 +221,12 @@ let rec hashmap_hash_map_move_elements_from_list_loop_fwd_back
     hashmap_hash_map_move_elements_from_list_loop_decreases t ntable ls))
   =
   begin match ls with
-  | HashmapListCons k v tl ->
-    begin match hashmap_hash_map_insert_no_resize_fwd_back t ntable k v with
+  | HashmapListCons k ntable0 tl ->
+    begin match hashmap_hash_map_insert_no_resize_fwd_back t ntable k ntable0
+      with
     | Fail e -> Fail e
-    | Return ntable0 ->
-      hashmap_hash_map_move_elements_from_list_loop_fwd_back t ntable0 tl
+    | Return ntable1 ->
+      hashmap_hash_map_move_elements_from_list_loop_fwd_back t ntable1 tl
     end
   | HashmapListNil -> Return ntable
   end
@@ -249,8 +250,8 @@ let rec hashmap_hash_map_move_elements_loop_fwd_back
   then
     begin match vec_index_mut_fwd (hashmap_list_t t) slots i with
     | Fail e -> Fail e
-    | Return l ->
-      let ls = mem_replace_fwd (hashmap_list_t t) l HashmapListNil in
+    | Return slots0 ->
+      let ls = mem_replace_fwd (hashmap_list_t t) slots0 HashmapListNil in
       begin match hashmap_hash_map_move_elements_from_list_fwd_back t ntable ls
         with
       | Fail e -> Fail e
@@ -258,11 +259,11 @@ let rec hashmap_hash_map_move_elements_loop_fwd_back
         begin match usize_add i 1 with
         | Fail e -> Fail e
         | Return i1 ->
-          let l0 = mem_replace_back (hashmap_list_t t) l HashmapListNil in
-          begin match vec_index_mut_back (hashmap_list_t t) slots i l0 with
+          let l = mem_replace_back (hashmap_list_t t) slots0 HashmapListNil in
+          begin match vec_index_mut_back (hashmap_list_t t) slots i l with
           | Fail e -> Fail e
-          | Return slots0 ->
-            hashmap_hash_map_move_elements_loop_fwd_back t ntable0 slots0 i1
+          | Return slots1 ->
+            hashmap_hash_map_move_elements_loop_fwd_back t ntable0 slots1 i1
           end
         end
       end
@@ -436,13 +437,13 @@ let rec hashmap_hash_map_get_mut_in_list_loop_back
   (decreases (hashmap_hash_map_get_mut_in_list_loop_decreases t ls key))
   =
   begin match ls with
-  | HashmapListCons ckey cvalue tl ->
+  | HashmapListCons ckey ls0 tl ->
     if ckey = key
     then Return (HashmapListCons ckey ret tl)
     else
       begin match hashmap_hash_map_get_mut_in_list_loop_back t tl key ret with
       | Fail e -> Fail e
-      | Return l -> Return (HashmapListCons ckey cvalue l)
+      | Return ls1 -> Return (HashmapListCons ckey ls0 ls1)
       end
   | HashmapListNil -> Fail Failure
   end
@@ -540,11 +541,11 @@ let rec hashmap_hash_map_remove_from_list_loop_back
   (decreases (hashmap_hash_map_remove_from_list_loop_decreases t key ls))
   =
   begin match ls with
-  | HashmapListCons ckey x tl ->
+  | HashmapListCons ckey ls0 tl ->
     if ckey = key
     then
       let mv_ls =
-        mem_replace_fwd (hashmap_list_t t) (HashmapListCons ckey x tl)
+        mem_replace_fwd (hashmap_list_t t) (HashmapListCons ckey ls0 tl)
           HashmapListNil in
       begin match mv_ls with
       | HashmapListCons i cvalue tl0 -> Return tl0
@@ -553,7 +554,7 @@ let rec hashmap_hash_map_remove_from_list_loop_back
     else
       begin match hashmap_hash_map_remove_from_list_loop_back t key tl with
       | Fail e -> Fail e
-      | Return l -> Return (HashmapListCons ckey x l)
+      | Return ls1 -> Return (HashmapListCons ckey ls0 ls1)
       end
   | HashmapListNil -> Return HashmapListNil
   end

@@ -436,9 +436,9 @@ let lookup_borrow_opt (ek : exploration_kind) (l : V.BorrowId.id)
 
       method! visit_aborrow_content env bc =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | V.AMutBorrow (bid, av, var_id) ->
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
-            else super#visit_AMutBorrow env bid av
+            else super#visit_AMutBorrow env bid av var_id
         | V.ASharedBorrow bid ->
             if bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env bid
@@ -553,9 +553,9 @@ let update_aborrow (ek : exploration_kind) (l : V.BorrowId.id) (nv : V.avalue)
 
       method! visit_ABorrow env bc =
         match bc with
-        | V.AMutBorrow (bid, av) ->
+        | V.AMutBorrow (bid, av, var_id) ->
             if bid = l then update ()
-            else V.ABorrow (super#visit_AMutBorrow env bid av)
+            else V.ABorrow (super#visit_AMutBorrow env bid av var_id)
         | V.ASharedBorrow bid ->
             if bid = l then update ()
             else V.ABorrow (super#visit_ASharedBorrow env bid)

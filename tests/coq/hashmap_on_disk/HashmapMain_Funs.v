@@ -135,12 +135,12 @@ Fixpoint hashmap_hash_map_insert_in_list_loop_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | HashmapListCons ckey cvalue tl =>
+    | HashmapListCons ckey ls0 tl =>
       if ckey s= key
       then Return (HashmapListCons ckey value tl)
       else (
-        l <- hashmap_hash_map_insert_in_list_loop_back T n0 key value tl;
-        Return (HashmapListCons ckey cvalue l))
+        ls1 <- hashmap_hash_map_insert_in_list_loop_back T n0 key value tl;
+        Return (HashmapListCons ckey ls0 ls1))
     | HashmapListNil =>
       let l := HashmapListNil in Return (HashmapListCons key value l)
     end
@@ -200,9 +200,10 @@ Fixpoint hashmap_hash_map_move_elements_from_list_loop_fwd_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | HashmapListCons k v tl =>
-      ntable0 <- hashmap_hash_map_insert_no_resize_fwd_back T n0 ntable k v;
-      hashmap_hash_map_move_elements_from_list_loop_fwd_back T n0 ntable0 tl
+    | HashmapListCons k ntable0 tl =>
+      ntable1 <-
+        hashmap_hash_map_insert_no_resize_fwd_back T n0 ntable k ntable0;
+      hashmap_hash_map_move_elements_from_list_loop_fwd_back T n0 ntable1 tl
     | HashmapListNil => Return ntable
     end
   end
@@ -229,14 +230,14 @@ Fixpoint hashmap_hash_map_move_elements_loop_fwd_back
     let i0 := vec_len (Hashmap_list_t T) slots in
     if i s< i0
     then (
-      l <- vec_index_mut_fwd (Hashmap_list_t T) slots i;
-      let ls := mem_replace_fwd (Hashmap_list_t T) l HashmapListNil in
+      slots0 <- vec_index_mut_fwd (Hashmap_list_t T) slots i;
+      let ls := mem_replace_fwd (Hashmap_list_t T) slots0 HashmapListNil in
       ntable0 <-
         hashmap_hash_map_move_elements_from_list_fwd_back T n0 ntable ls;
       i1 <- usize_add i 1%usize;
-      let l0 := mem_replace_back (Hashmap_list_t T) l HashmapListNil in
-      slots0 <- vec_index_mut_back (Hashmap_list_t T) slots i l0;
-      hashmap_hash_map_move_elements_loop_fwd_back T n0 ntable0 slots0 i1)
+      let l := mem_replace_back (Hashmap_list_t T) slots0 HashmapListNil in
+      slots1 <- vec_index_mut_back (Hashmap_list_t T) slots i l;
+      hashmap_hash_map_move_elements_loop_fwd_back T n0 ntable0 slots1 i1)
     else Return (ntable, slots)
   end
 .
@@ -387,12 +388,12 @@ Fixpoint hashmap_hash_map_get_mut_in_list_loop_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | HashmapListCons ckey cvalue tl =>
+    | HashmapListCons ckey ls0 tl =>
       if ckey s= key
       then Return (HashmapListCons ckey ret tl)
       else (
-        l <- hashmap_hash_map_get_mut_in_list_loop_back T n0 tl key ret;
-        Return (HashmapListCons ckey cvalue l))
+        ls1 <- hashmap_hash_map_get_mut_in_list_loop_back T n0 tl key ret;
+        Return (HashmapListCons ckey ls0 ls1))
     | HashmapListNil => Fail_ Failure
     end
   end
@@ -479,19 +480,19 @@ Fixpoint hashmap_hash_map_remove_from_list_loop_back
   | O => Fail_ OutOfFuel
   | S n0 =>
     match ls with
-    | HashmapListCons ckey t tl =>
+    | HashmapListCons ckey ls0 tl =>
       if ckey s= key
       then
         let mv_ls :=
-          mem_replace_fwd (Hashmap_list_t T) (HashmapListCons ckey t tl)
+          mem_replace_fwd (Hashmap_list_t T) (HashmapListCons ckey ls0 tl)
             HashmapListNil in
         match mv_ls with
         | HashmapListCons i cvalue tl0 => Return tl0
         | HashmapListNil => Fail_ Failure
         end
       else (
-        l <- hashmap_hash_map_remove_from_list_loop_back T n0 key tl;
-        Return (HashmapListCons ckey t l))
+        ls1 <- hashmap_hash_map_remove_from_list_loop_back T n0 key tl;
+        Return (HashmapListCons ckey ls0 ls1))
     | HashmapListNil => Return HashmapListNil
     end
   end

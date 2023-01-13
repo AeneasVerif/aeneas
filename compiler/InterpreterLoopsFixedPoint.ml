@@ -46,7 +46,7 @@ let reorder_loans_borrows_in_fresh_abs (old_abs_ids : V.AbstractionId.Set.t)
     *)
     let get_borrow_id (av : V.typed_avalue) : V.BorrowId.id =
       match av.V.value with
-      | V.ABorrow (V.AMutBorrow (bid, _) | V.ASharedBorrow bid) -> bid
+      | V.ABorrow (V.AMutBorrow (bid, _, _) | V.ASharedBorrow bid) -> bid
       | _ -> raise (Failure "Unexpected")
     in
     let get_loan_id (av : V.typed_avalue) : V.BorrowId.id =

@@ -304,7 +304,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         | ASharedBorrow bid0, ASharedBorrow bid1 ->
             log#ldebug (lazy "match_typed_avalues: shared borrows");
             M.match_ashared_borrows v0.V.ty bid0 v1.V.ty bid1 ty
-        | AMutBorrow (bid0, av0), AMutBorrow (bid1, av1) ->
+        | AMutBorrow (bid0, av0, _), AMutBorrow (bid1, av1, _) ->
+            (* We ignore the meta-information (the var_id) in the mut borrows *)
             log#ldebug (lazy "match_typed_avalues: mut borrows");
             log#ldebug
               (lazy
@@ -541,7 +542,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let borrow_av =
           let ty = borrow_ty in
-          let value = V.ABorrow (V.AMutBorrow (bid0, mk_aignored bv_ty)) in
+          let value =
+            V.ABorrow (V.AMutBorrow (bid0, mk_aignored bv_ty, None))
+          in
           mk_typed_avalue ty value
         in
 
@@ -591,7 +594,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (bid : V.borrow_id) (bv : V.typed_value) : V.typed_avalue =
         let bv_ty = ety_no_regions_to_rty bv.V.ty in
-        let value = V.ABorrow (V.AMutBorrow (bid, mk_aignored bv_ty)) in
+        let value = V.ABorrow (V.AMutBorrow (bid, mk_aignored bv_ty, None)) in
         { V.value; ty = borrow_ty }
       in
       let borrows = [ mk_aborrow bid0 bv0; mk_aborrow bid1 bv1 ] in
@@ -963,7 +966,7 @@ struct
 
   let match_amut_borrows _ty0 bid0 _av0 _ty1 bid1 _av1 ty av =
     let bid = match_borrow_id bid0 bid1 in
-    let value = V.ABorrow (V.AMutBorrow (bid, av)) in
+    let value = V.ABorrow (V.AMutBorrow (bid, av, None)) in
     { V.value; ty }
 
   let match_ashared_loans _ty0 ids0 _v0 _av0 _ty1 ids1 _v1 _av1 ty v av =
@@ -1440,15 +1443,22 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
          abs@2 { MB l5, ML l6 }
        ]}
     *)
-    (* First, compute the set of borrows which appear in the fresh abstractions
-       of the fixed-point: we want to introduce fresh ids only for those. *)
+    (* First, compute the set of borrows for which the corresponding loans in
+       the source context (the fixed-point) appear in the fresh abstractions:
+       we want to introduce fresh ids only for those.
+
+       At the same time, we check where those borrows appear, and in particular
+       if they appear inside variables: we want to use this information as hints
+       to derive pretty names in the translation.
+    *)
     let new_absl_ids, _ = compute_absl_ids new_absl in
     let src_fresh_borrows_map = ref V.BorrowId.Map.empty in
+    let src_aborrow_to_var_id = ref V.BorrowId.Map.empty in
     let visit_tgt =
       object
-        inherit [_] C.map_eval_ctx
+        inherit [_] C.map_eval_ctx as super
 
-        method! visit_borrow_id _ id =
+        method! visit_borrow_id env id =
           (* Map the borrow, if it needs to be mapped *)
           if
             (* We map the borrows for which we computed a mapping *)
@@ -1463,11 +1473,68 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
             let nid = C.fresh_borrow_id () in
             src_fresh_borrows_map :=
               V.BorrowId.Map.add src_id nid !src_fresh_borrows_map;
+            (* Also register meta-information about the name, if there is.
+               In the example above, we introduce a frsh borrow l6 for l1.
+               We also notice that in abs@fp, l1 is linked to l0: we want
+               to register meta-information for the aborrow l0 in abs@fp.
+            *)
+            (match env with
+            | None -> ()
+            | Some bv ->
+                (* This time, we see the borrow as an aloan (in abs@fp)
+                   and look for its corrsponding aborrow *)
+                let tgt_bid =
+                  V.BorrowId.InjSubst.find src_id
+                    fp_bl_maps.loan_to_borrow_id_map
+                in
+                src_aborrow_to_var_id :=
+                  V.BorrowId.Map.add tgt_bid bv !src_aborrow_to_var_id);
+            (* Return *)
             nid)
           else id
+
+        (** Override [visit_env_elem] to retrieve the binding name *)
+        method! visit_env_elem _ ee =
+          let env =
+            match ee with
+            | C.Var (C.VarBinder var, _) -> Some var
+            | Var (C.DummyBinder _, _) | Abs _ | Frame -> None
+          in
+          super#visit_env_elem env ee
+
+        (** Override [visit_env_elem] to propagate the binding name *)
+        method! visit_typed_value env v =
+          let env =
+            match v.V.value with
+            | Adt av -> (
+                (* We propagate the name inside boxes or tuples with only one field *)
+                match av.field_values with
+                | [ _ ] -> (
+                    let adt_id, _, _ = ty_as_adt v.V.ty in
+                    match adt_id with
+                    | Tuple | Assumed Box ->
+                        (* Propagate *)
+                        env
+                    | AdtId _ | Assumed (Vec | Option) -> None)
+                | _ -> None)
+            | Borrow bc -> (
+                match bc with
+                | V.MutBorrow (_, _) ->
+                    (* Propagate inside mut borrows *)
+                    env
+                | V.SharedBorrow _ | V.ReservedMutBorrow _ -> None)
+            | Loan _ ->
+                (* Don't propagate: we can't dive into mut loans, and there is no point
+                   in propagating inside shared loans: shared values can't be mutably
+                   borrowed.
+                *)
+                None
+            | Symbolic _ | Primitive _ | Bottom -> None
+          in
+          super#visit_typed_value env v
       end
     in
-    let tgt_ctx = visit_tgt#visit_eval_ctx () tgt_ctx in
+    let tgt_ctx = visit_tgt#visit_eval_ctx None tgt_ctx in
 
     log#ldebug
       (lazy
@@ -1485,7 +1552,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     *)
     assert Config.greedy_expand_symbolics_with_borrows;
 
-    (* Update the borrows and loans in the abstractions of the target context.
+    (* Update the borrows and loans in the abstractions of the source context.
 
        Going back to the [list_nth_mut] example and by using [src_fresh_borrows_map],
        we instantiate the fixed-point abstractions that we will insert into the
@@ -1510,6 +1577,23 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     let visit_src =
       object
         inherit [_] C.map_eval_ctx as super
+
+        (** We override this method to insert meta information.
+            
+            We don't update the borrow id *yet*: we do this in {!visit_borrow_id},
+            which handles shared borrows and mutable borrows.
+         *)
+        method! visit_AMutBorrow env bid child_av opt_var_id =
+          let opt_var_id =
+            match opt_var_id with
+            | Some _ -> opt_var_id
+            | None -> (
+                (* Lookup the information from the hints *)
+                match V.BorrowId.Map.find_opt bid !src_aborrow_to_var_id with
+                | None -> None
+                | Some bv -> Some (bv.C.index, bv.C.name))
+          in
+          super#visit_AMutBorrow env bid child_av opt_var_id
 
         method! visit_borrow_id _ bid =
           log#ldebug

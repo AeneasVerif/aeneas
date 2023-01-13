@@ -168,7 +168,7 @@ let eval_loop_symbolic (config : C.config) (eval_loop_body : st_cm_fun) :
       List.filter_map
         (fun av ->
           match av.V.value with
-          | V.ABorrow (V.AMutBorrow (bid, child_av)) ->
+          | V.ABorrow (V.AMutBorrow (bid, child_av, _)) ->
               assert (is_aignored child_av.V.value);
               Some (bid, child_av.V.ty)
           | V.ABorrow (V.ASharedBorrow _) -> None
