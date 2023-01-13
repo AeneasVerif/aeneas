@@ -25,11 +25,8 @@ let rec get_list_at_x_back
   | ListCons hd tl ->
     if hd = x
     then Return ret
-    else
-      begin match get_list_at_x_back tl x ret with
-      | Fail e -> Fail e
-      | Return tl0 -> Return (ListCons hd tl0)
-      end
+    else begin
+      let* tl0 = get_list_at_x_back tl x ret in Return (ListCons hd tl0) end
   | ListNil -> Return ret
   end
 

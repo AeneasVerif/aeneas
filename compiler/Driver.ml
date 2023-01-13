@@ -140,8 +140,9 @@ let () =
   let _ =
     match !backend with
     | FStar ->
-        (* F* supports monadic notations, but the encoding loses information *)
-        unfold_monadic_let_bindings := true
+        (* Some patterns are not supported *)
+        decompose_monadic_let_bindings := false;
+        decompose_nested_let_patterns := false
     | Coq ->
         (* Some patterns are not supported *)
         decompose_monadic_let_bindings := true;

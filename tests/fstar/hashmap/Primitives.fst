@@ -35,7 +35,9 @@ unfold let return (#a : Type0) (x : a) : result a = Return x
 // let* x = y in
 // ...
 // ```
-unfold let (let*) (#a #b : Type0) (m: result a) (f: a -> result b) : result b =
+unfold let (let*) (#a #b : Type0) (m: result a)
+  (f: (x:a) -> Pure (result b) (requires (m == Return x)) (ensures fun _ -> True)) :
+  result b =
   match m with
   | Return x -> f x
   | Fail e   -> Fail e

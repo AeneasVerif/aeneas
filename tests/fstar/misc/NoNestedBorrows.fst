@@ -52,8 +52,7 @@ let rem_test_fwd (x : u32) (y : u32) : result u32 = u32_rem x y
 let cast_test_fwd (x : u32) : result i32 = scalar_cast U32 I32 x
 
 (** [no_nested_borrows::test2] *)
-let test2_fwd : result unit =
-  begin match u32_add 23 44 with | Fail e -> Fail e | Return _ -> Return () end
+let test2_fwd : result unit = let* _ = u32_add 23 44 in Return ()
 
 (** Unit test for [no_nested_borrows::test2] *)
 let _ = assert_norm (test2_fwd = Return ())
@@ -64,28 +63,17 @@ let get_max_fwd (x : u32) (y : u32) : result u32 =
 
 (** [no_nested_borrows::test3] *)
 let test3_fwd : result unit =
-  begin match get_max_fwd 4 3 with
-  | Fail e -> Fail e
-  | Return x ->
-    begin match get_max_fwd 10 11 with
-    | Fail e -> Fail e
-    | Return y ->
-      begin match u32_add x y with
-      | Fail e -> Fail e
-      | Return z -> if not (z = 15) then Fail Failure else Return ()
-      end
-    end
-  end
+  let* x = get_max_fwd 4 3 in
+  let* y = get_max_fwd 10 11 in
+  let* z = u32_add x y in
+  if not (z = 15) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test3] *)
 let _ = assert_norm (test3_fwd = Return ())
 
 (** [no_nested_borrows::test_neg1] *)
 let test_neg1_fwd : result unit =
-  begin match i32_neg 3 with
-  | Fail e -> Fail e
-  | Return y -> if not (y = -3) then Fail Failure else Return ()
-  end
+  let* y = i32_neg 3 in if not (y = -3) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_neg1] *)
 let _ = assert_norm (test_neg1_fwd = Return ())
@@ -138,10 +126,7 @@ let test_panic_fwd (b : bool) : result unit =
 
 (** [no_nested_borrows::test_copy_int] *)
 let test_copy_int_fwd : result unit =
-  begin match copy_int_fwd 0 with
-  | Fail e -> Fail e
-  | Return y -> if not (0 = y) then Fail Failure else Return ()
-  end
+  let* y = copy_int_fwd 0 in if not (0 = y) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_copy_int] *)
 let _ = assert_norm (test_copy_int_fwd = Return ())
@@ -156,10 +141,8 @@ let is_cons_fwd (t : Type0) (l : list_t t) : result bool =
 (** [no_nested_borrows::test_is_cons] *)
 let test_is_cons_fwd : result unit =
   let l = ListNil in
-  begin match is_cons_fwd i32 (ListCons 0 l) with
-  | Fail e -> Fail e
-  | Return b -> if not b then Fail Failure else Return ()
-  end
+  let* b = is_cons_fwd i32 (ListCons 0 l) in
+  if not b then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_is_cons] *)
 let _ = assert_norm (test_is_cons_fwd = Return ())
@@ -174,11 +157,9 @@ let split_list_fwd (t : Type0) (l : list_t t) : result (t & (list_t t)) =
 (** [no_nested_borrows::test_split_list] *)
 let test_split_list_fwd : result unit =
   let l = ListNil in
-  begin match split_list_fwd i32 (ListCons 0 l) with
-  | Fail e -> Fail e
-  | Return p ->
-    let (hd, _) = p in if not (hd = 0) then Fail Failure else Return ()
-  end
+  let* p = split_list_fwd i32 (ListCons 0 l) in
+  let (hd, _) = p in
+  if not (hd = 0) then Fail Failure else Return ()
 
 (** Unit test for [no_nested_borrows::test_split_list] *)
 let _ = assert_norm (test_split_list_fwd = Return ())
@@ -194,24 +175,15 @@ let choose_back
 
 (** [no_nested_borrows::choose_test] *)
 let choose_test_fwd : result unit =
-  begin match choose_fwd i32 true 0 0 with
-  | Fail e -> Fail e
-  | Return z ->
-    begin match i32_add z 1 with
-    | Fail e -> Fail e
-    | Return z0 ->
-      if not (z0 = 1)
-      then Fail Failure
-      else
-        begin match choose_back i32 true 0 0 z0 with
-        | Fail e -> Fail e
-        | Return (x, y) ->
-          if not (x = 1)
-          then Fail Failure
-          else if not (y = 0) then Fail Failure else Return ()
-        end
-    end
-  end
+  let* z = choose_fwd i32 true 0 0 in
+  let* z0 = i32_add z 1 in
+  if not (z0 = 1)
+  then Fail Failure
+  else begin
+    let* (x, y) = choose_back i32 true 0 0 z0 in
+    if not (x = 1)
+    then Fail Failure
+    else if not (y = 0) then Fail Failure else Return () end
 
 (** Unit test for [no_nested_borrows::choose_test] *)
 let _ = assert_norm (choose_test_fwd = Return ())
@@ -232,11 +204,7 @@ and tree_t (t : Type0) =
 (** [no_nested_borrows::list_length] *)
 let rec list_length_fwd (t : Type0) (l : list_t t) : result u32 =
   begin match l with
-  | ListCons x l1 ->
-    begin match list_length_fwd t l1 with
-    | Fail e -> Fail e
-    | Return i -> u32_add 1 i
-    end
+  | ListCons x l1 -> let* i = list_length_fwd t l1 in u32_add 1 i
   | ListNil -> Return 0
   end
 
@@ -246,11 +214,7 @@ let rec list_nth_shared_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
   | ListCons x tl ->
     if i = 0
     then Return x
-    else
-      begin match u32_sub i 1 with
-      | Fail e -> Fail e
-      | Return i0 -> list_nth_shared_fwd t tl i0
-      end
+    else begin let* i0 = u32_sub i 1 in list_nth_shared_fwd t tl i0 end
   | ListNil -> Fail Failure
   end
 
@@ -260,11 +224,7 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
   | ListCons x tl ->
     if i = 0
     then Return x
-    else
-      begin match u32_sub i 1 with
-      | Fail e -> Fail e
-      | Return i0 -> list_nth_mut_fwd t tl i0
-      end
+    else begin let* i0 = u32_sub i 1 in list_nth_mut_fwd t tl i0 end
   | ListNil -> Fail Failure
   end
 
@@ -275,15 +235,10 @@ let rec list_nth_mut_back
   | ListCons x tl ->
     if i = 0
     then Return (ListCons ret tl)
-    else
-      begin match u32_sub i 1 with
-      | Fail e -> Fail e
-      | Return i0 ->
-        begin match list_nth_mut_back t tl i0 ret with
-        | Fail e -> Fail e
-        | Return tl0 -> Return (ListCons x tl0)
-        end
-      end
+    else begin
+      let* i0 = u32_sub i 1 in
+      let* tl0 = list_nth_mut_back t tl i0 ret in
+      Return (ListCons x tl0) end
   | ListNil -> Fail Failure
   end
 
@@ -305,57 +260,34 @@ let test_list_functions_fwd : result unit =
   let l = ListNil in
   let l0 = ListCons 2 l in
   let l1 = ListCons 1 l0 in
-  begin match list_length_fwd i32 (ListCons 0 l1) with
-  | Fail e -> Fail e
-  | Return i ->
-    if not (i = 3)
+  let* i = list_length_fwd i32 (ListCons 0 l1) in
+  if not (i = 3)
+  then Fail Failure
+  else begin
+    let* i0 = list_nth_shared_fwd i32 (ListCons 0 l1) 0 in
+    if not (i0 = 0)
     then Fail Failure
-    else
-      begin match list_nth_shared_fwd i32 (ListCons 0 l1) 0 with
-      | Fail e -> Fail e
-      | Return i0 ->
-        if not (i0 = 0)
+    else begin
+      let* i1 = list_nth_shared_fwd i32 (ListCons 0 l1) 1 in
+      if not (i1 = 1)
+      then Fail Failure
+      else begin
+        let* i2 = list_nth_shared_fwd i32 (ListCons 0 l1) 2 in
+        if not (i2 = 2)
         then Fail Failure
-        else
-          begin match list_nth_shared_fwd i32 (ListCons 0 l1) 1 with
-          | Fail e -> Fail e
-          | Return i1 ->
-            if not (i1 = 1)
+        else begin
+          let* ls = list_nth_mut_back i32 (ListCons 0 l1) 1 3 in
+          let* i3 = list_nth_shared_fwd i32 ls 0 in
+          if not (i3 = 0)
+          then Fail Failure
+          else begin
+            let* i4 = list_nth_shared_fwd i32 ls 1 in
+            if not (i4 = 3)
             then Fail Failure
-            else
-              begin match list_nth_shared_fwd i32 (ListCons 0 l1) 2 with
-              | Fail e -> Fail e
-              | Return i2 ->
-                if not (i2 = 2)
-                then Fail Failure
-                else
-                  begin match list_nth_mut_back i32 (ListCons 0 l1) 1 3 with
-                  | Fail e -> Fail e
-                  | Return ls ->
-                    begin match list_nth_shared_fwd i32 ls 0 with
-                    | Fail e -> Fail e
-                    | Return i3 ->
-                      if not (i3 = 0)
-                      then Fail Failure
-                      else
-                        begin match list_nth_shared_fwd i32 ls 1 with
-                        | Fail e -> Fail e
-                        | Return i4 ->
-                          if not (i4 = 3)
-                          then Fail Failure
-                          else
-                            begin match list_nth_shared_fwd i32 ls 2 with
-                            | Fail e -> Fail e
-                            | Return i5 ->
-                              if not (i5 = 2) then Fail Failure else Return ()
-                            end
-                        end
-                    end
-                  end
-              end
-          end
-      end
-  end
+            else begin
+              let* i5 = list_nth_shared_fwd i32 ls 2 in
+              if not (i5 = 2) then Fail Failure else Return () end end end end
+      end end
 
 (** Unit test for [no_nested_borrows::test_list_functions] *)
 let _ = assert_norm (test_list_functions_fwd = Return ())
@@ -433,37 +365,25 @@ let new_pair1_fwd : result (struct_with_pair_t u32 u32) =
 
 (** [no_nested_borrows::test_constants] *)
 let test_constants_fwd : result unit =
-  begin match new_tuple1_fwd with
-  | Fail e -> Fail e
-  | Return swt ->
-    let (i, _) = swt.struct_with_tuple_p in
-    if not (i = 1)
+  let* swt = new_tuple1_fwd in
+  let (i, _) = swt.struct_with_tuple_p in
+  if not (i = 1)
+  then Fail Failure
+  else begin
+    let* swt0 = new_tuple2_fwd in
+    let (i0, _) = swt0.struct_with_tuple_p in
+    if not (i0 = 1)
     then Fail Failure
-    else
-      begin match new_tuple2_fwd with
-      | Fail e -> Fail e
-      | Return swt0 ->
-        let (i0, _) = swt0.struct_with_tuple_p in
-        if not (i0 = 1)
+    else begin
+      let* swt1 = new_tuple3_fwd in
+      let (i1, _) = swt1.struct_with_tuple_p in
+      if not (i1 = 1)
+      then Fail Failure
+      else begin
+        let* swp = new_pair1_fwd in
+        if not (swp.struct_with_pair_p.pair_x = 1)
         then Fail Failure
-        else
-          begin match new_tuple3_fwd with
-          | Fail e -> Fail e
-          | Return swt1 ->
-            let (i1, _) = swt1.struct_with_tuple_p in
-            if not (i1 = 1)
-            then Fail Failure
-            else
-              begin match new_pair1_fwd with
-              | Fail e -> Fail e
-              | Return swp ->
-                if not (swp.struct_with_pair_p.pair_x = 1)
-                then Fail Failure
-                else Return ()
-              end
-          end
-      end
-  end
+        else Return () end end end
 
 (** Unit test for [no_nested_borrows::test_constants] *)
 let _ = assert_norm (test_constants_fwd = Return ())
