@@ -147,8 +147,8 @@ Fixpoint list_nth_mut_loop_loop_back
       then Return (ListCons ret tl)
       else (
         i0 <- u32_sub i 1%u32;
-        l <- list_nth_mut_loop_loop_back T n0 tl i0 ret;
-        Return (ListCons x l))
+        tl0 <- list_nth_mut_loop_loop_back T n0 tl i0 ret;
+        Return (ListCons x tl0))
     | ListNil => Fail_ Failure
     end
   end
@@ -217,7 +217,7 @@ Fixpoint get_elem_mut_loop_back
     | ListCons y tl =>
       if y s= x
       then Return (ListCons ret tl)
-      else (l <- get_elem_mut_loop_back n0 x tl ret; Return (ListCons y l))
+      else (tl0 <- get_elem_mut_loop_back n0 x tl ret; Return (ListCons y tl0))
     | ListNil => Fail_ Failure
     end
   end
@@ -307,8 +307,8 @@ Fixpoint list_nth_mut_loop_with_id_loop_back
       then Return (ListCons ret tl)
       else (
         i0 <- u32_sub i 1%u32;
-        l <- list_nth_mut_loop_with_id_loop_back T n0 i0 tl ret;
-        Return (ListCons x l))
+        tl0 <- list_nth_mut_loop_with_id_loop_back T n0 i0 tl ret;
+        Return (ListCons x tl0))
     | ListNil => Fail_ Failure
     end
   end
@@ -395,8 +395,8 @@ Fixpoint list_nth_mut_loop_pair_loop_back'a
         then Return (ListCons ret tl0)
         else (
           i0 <- u32_sub i 1%u32;
-          l <- list_nth_mut_loop_pair_loop_back'a T n0 tl0 tl1 i0 ret;
-          Return (ListCons x0 l))
+          tl00 <- list_nth_mut_loop_pair_loop_back'a T n0 tl0 tl1 i0 ret;
+          Return (ListCons x0 tl00))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -428,8 +428,8 @@ Fixpoint list_nth_mut_loop_pair_loop_back'b
         then Return (ListCons ret tl1)
         else (
           i0 <- u32_sub i 1%u32;
-          l <- list_nth_mut_loop_pair_loop_back'b T n0 tl0 tl1 i0 ret;
-          Return (ListCons x1 l))
+          tl10 <- list_nth_mut_loop_pair_loop_back'b T n0 tl0 tl1 i0 ret;
+          Return (ListCons x1 tl10))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -527,8 +527,8 @@ Fixpoint list_nth_mut_loop_pair_merge_loop_back
         else (
           i0 <- u32_sub i 1%u32;
           p <- list_nth_mut_loop_pair_merge_loop_back T n0 tl0 tl1 i0 ret;
-          let (l, l0) := p in
-          Return (ListCons x0 l, ListCons x1 l0))
+          let (tl00, tl10) := p in
+          Return (ListCons x0 tl00, ListCons x1 tl10))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -625,8 +625,8 @@ Fixpoint list_nth_mut_shared_loop_pair_loop_back
         then Return (ListCons ret tl0)
         else (
           i0 <- u32_sub i 1%u32;
-          l <- list_nth_mut_shared_loop_pair_loop_back T n0 tl0 tl1 i0 ret;
-          Return (ListCons x0 l))
+          tl00 <- list_nth_mut_shared_loop_pair_loop_back T n0 tl0 tl1 i0 ret;
+          Return (ListCons x0 tl00))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -690,9 +690,9 @@ Fixpoint list_nth_mut_shared_loop_pair_merge_loop_back
         then Return (ListCons ret tl0)
         else (
           i0 <- u32_sub i 1%u32;
-          l <-
+          tl00 <-
             list_nth_mut_shared_loop_pair_merge_loop_back T n0 tl0 tl1 i0 ret;
-          Return (ListCons x0 l))
+          Return (ListCons x0 tl00))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -756,8 +756,8 @@ Fixpoint list_nth_shared_mut_loop_pair_loop_back
         then Return (ListCons ret tl1)
         else (
           i0 <- u32_sub i 1%u32;
-          l <- list_nth_shared_mut_loop_pair_loop_back T n0 tl0 tl1 i0 ret;
-          Return (ListCons x1 l))
+          tl10 <- list_nth_shared_mut_loop_pair_loop_back T n0 tl0 tl1 i0 ret;
+          Return (ListCons x1 tl10))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure
@@ -821,9 +821,9 @@ Fixpoint list_nth_shared_mut_loop_pair_merge_loop_back
         then Return (ListCons ret tl1)
         else (
           i0 <- u32_sub i 1%u32;
-          l <-
+          tl10 <-
             list_nth_shared_mut_loop_pair_merge_loop_back T n0 tl0 tl1 i0 ret;
-          Return (ListCons x1 l))
+          Return (ListCons x1 tl10))
       | ListNil => Fail_ Failure
       end
     | ListNil => Fail_ Failure

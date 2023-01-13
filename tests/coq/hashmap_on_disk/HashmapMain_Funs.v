@@ -139,8 +139,8 @@ Fixpoint hashmap_hash_map_insert_in_list_loop_back
       if ckey s= key
       then Return (HashmapListCons ckey value tl)
       else (
-        l <- hashmap_hash_map_insert_in_list_loop_back T n0 key value tl;
-        Return (HashmapListCons ckey cvalue l))
+        tl0 <- hashmap_hash_map_insert_in_list_loop_back T n0 key value tl;
+        Return (HashmapListCons ckey cvalue tl0))
     | HashmapListNil =>
       let l := HashmapListNil in Return (HashmapListCons key value l)
     end
@@ -391,8 +391,8 @@ Fixpoint hashmap_hash_map_get_mut_in_list_loop_back
       if ckey s= key
       then Return (HashmapListCons ckey ret tl)
       else (
-        l <- hashmap_hash_map_get_mut_in_list_loop_back T n0 tl key ret;
-        Return (HashmapListCons ckey cvalue l))
+        tl0 <- hashmap_hash_map_get_mut_in_list_loop_back T n0 tl key ret;
+        Return (HashmapListCons ckey cvalue tl0))
     | HashmapListNil => Fail_ Failure
     end
   end
@@ -490,8 +490,8 @@ Fixpoint hashmap_hash_map_remove_from_list_loop_back
         | HashmapListNil => Fail_ Failure
         end
       else (
-        l <- hashmap_hash_map_remove_from_list_loop_back T n0 key tl;
-        Return (HashmapListCons ckey t l))
+        tl0 <- hashmap_hash_map_remove_from_list_loop_back T n0 key tl;
+        Return (HashmapListCons ckey t tl0))
     | HashmapListNil => Return HashmapListNil
     end
   end
