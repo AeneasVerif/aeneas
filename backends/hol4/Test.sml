@@ -414,6 +414,13 @@ val list_t_v_def = Define ‘
 open dep_rewrite
 open integerTheory
 
+(* Ignore a theorem.
+
+   To be used in conjunction with {!pop_assum} for instance.
+ *)
+fun IGNORE_TAC (_ : thm) : tactic = ALL_TAC
+
+
 Theorem INT_OF_NUM_INJ:
   !n m. &n = &m ==> n = m
 Proof
@@ -421,7 +428,35 @@ Proof
   fs [Num]
 QED
 
+Theorem NUM_SUB_EQ:
+  !(x y z : int). x = y - z ==> 0 <= x ==> 0 <= z ==> Num y = Num z + Num x
+Proof
+  rpt strip_tac >>
+  sg ‘0 <= y’ >- COOPER_TAC >>
+  rfs [] >>
+  (* Convert to integers *)
+  irule INT_OF_NUM_INJ >>
+  imp_res_tac (GSYM INT_OF_NUM) >>
+  (* Associativity of & *)
+  PURE_REWRITE_TAC [GSYM INT_ADD] >>
+  fs []
+QED
+
 Theorem NUM_SUB_1_EQ:
+  !(x y : int). x = y - 1 ==> 0 <= x ==> Num y = SUC (Num x)
+Proof
+  rpt strip_tac >>
+  (* Get rid of the SUC *)
+  sg ‘SUC (Num x) = 1 + Num x’ >-(rw [ADD]) >> rw [] >>
+  (* Massage a bit the goal *)
+  qsuff_tac ‘Num y = Num (y − 1) + Num 1’ >- COOPER_TAC >>
+  (* Apply the general theorem *)
+  irule NUM_SUB_EQ >>
+  COOPER_TAC
+QED
+
+(* TODO: remove *)
+Theorem NUM_SUB_1_EQ1:
   !i. 0 <= i - 1 ==> Num i = SUC (Num (i-1))
 Proof
   rpt strip_tac >>
@@ -456,12 +491,6 @@ fun ASSUME_TACL (thms : thm list) : tactic =
   in
   t thms
   end
-
-(* Drop/forget a theorem.
-
-   To be used in conjunction with {!pop_assum} for instance.
- *)
-fun DROP_TAC (_ : thm) : tactic = ALL_TAC
 
 (* The map from integer type to bounds lemmas *)
 val integer_bounds_lemmas =
@@ -728,6 +757,14 @@ fun dep_apply_in_subterms
     in () end
   end
 
+(* Return the set of free variables appearing in the residues of a term substitution *)
+fun free_vars_in_subst_residue (s: (term, term) Term.subst) : string Redblackset.set =
+  let
+    val free_vars = free_varsl (map (fn {redex=_, residue=x} => x) s);
+    val free_vars = map (fst o dest_var) free_vars;
+    val free_vars = Redblackset.fromList String.compare free_vars;
+  in free_vars end
+
 (* Attempt to instantiate a rewrite theorem.
 
    Remark: this theorem should be of the form:
@@ -738,19 +775,18 @@ fun dep_apply_in_subterms
    **REMARK**: the function raises a HOL_ERR exception if it fails.
    
    [forbid_vars]: forbid substituting with those vars (typically because
-   they are bound elsewhere).
+   we are maching in a subterm under lambdas, and some of those variables
+   are bounds in the outer lambdas).
 *)
-fun instantiate_dep_rewrite (forbid_vars : string Redblackset.set) (th : thm) (t : term) : thm =
+fun inst_match_concl (forbid_vars : string Redblackset.set) (th : thm) (t : term) : thm =
   let
-      (* Retrieve the lhs of the conclusion of the theorem *)
-      val l = lhs (concl th);
-      (* Match this lhs with the term *)
-      val (var_s, ty_s) = match_term l t;
-      (* Check that we are allowed to perform the substitution *)
-      val free_vars = free_varsl (map (fn {redex=_, residue=x} => x) var_s);
-      val free_vars = map (fst o dest_var) free_vars;
-      val free_vars = Redblackset.fromList String.compare free_vars;
-      val _ = assert Redblackset.isEmpty (Redblackset.intersection (free_vars, forbid_vars));
+    (* Retrieve the lhs of the conclusion of the theorem *)
+    val l = lhs (concl th);
+    (* Match this lhs with the term *)
+    val (var_s, ty_s) = match_term l t;
+    (* Check that we are allowed to perform the substitution *)
+    val free_vars = free_vars_in_subst_residue var_s;
+    val _ = assert Redblackset.isEmpty (Redblackset.intersection (free_vars, forbid_vars));
   in
     (* Perform the substitution *)
     INST var_s (INST_TYPE ty_s th)
@@ -763,16 +799,61 @@ val t = “u32_to_int (int_to_u32 3)”
 val th = (UNDISCH_ALL o SPEC_ALL) int_to_u32_id
 *)
 
-fun instantiate_dep_rewrites_in_terms (th : thm) (tl : term list) : thm list =
+(* Attempt to instantiate a theorem by matching its first premise.
+
+   Note that we make the hypothesis tha all the free variables which need
+   to be instantiated appear in the first premise, of course (the caller should
+   enforce this).
+
+   Remark: this theorem should be of the form:
+   ⊢ H0 ==> ... ==> Hn ==> H
+   
+   (without quantified variables).
+   
+   **REMARK**: the function raises a HOL_ERR exception if it fails.
+   
+   [forbid_vars]: see [inst_match_concl]
+*)
+fun inst_match_first_premise
+  (forbid_vars : string Redblackset.set) (th : thm) (t : term) : thm =
   let
-    val th = (UNDISCH_ALL o SPEC_ALL) th;
+    (* Retrieve the first premise *)
+    val l = (fst o dest_imp o concl) th;
+    (* Match this with the term *)
+    val (var_s, ty_s) = match_term l t;
+    (* Check that we are allowed to perform the substitution *)
+    val free_vars = free_vars_in_subst_residue var_s;
+    val _ = assert Redblackset.isEmpty (Redblackset.intersection (free_vars, forbid_vars));
+  in
+    (* Perform the substitution *)
+    INST var_s (INST_TYPE ty_s th)
+  end
+
+(*
+val forbid_vars = Redblackset.empty String.compare
+val t = “u32_to_int z = u32_to_int i − 1”
+val th = SPEC_ALL NUM_SUB_1_EQ
+*)
+
+(* Call a matching function on all the subterms in the provided list of term.
+   This is a generic function.
+
+   [try_match] should return an instantiated theorem, as well as a term which
+   identifies this theorem (the lhs of the equality, if this is a rewriting
+   theorem for instance - we use this to check for collisions, and discard
+   redundant instantiations).
+ *)
+fun inst_match_in_terms
+  (try_match: string Redblackset.set -> term -> term * thm)
+  (tl : term list) : thm list =
+  let
     (* We use a map when storing the theorems, to avoid storing the same theorem twice *)
     val inst_thms: (term, thm) Redblackmap.dict ref = ref (Redblackmap.mkDict Term.compare);
     fun try_instantiate bvars t =
       let
-        val inst_th = instantiate_dep_rewrite bvars th t;
+        val (inst_th_tm, inst_th) = try_match bvars t;
       in
-        inst_thms := Redblackmap.insert (!inst_thms, lhs (concl inst_th), inst_th)
+        inst_thms := Redblackmap.insert (!inst_thms, inst_th_tm, inst_th)
       end
       handle HOL_ERR _ => ();
     (* Explore the term *)
@@ -781,23 +862,67 @@ fun instantiate_dep_rewrites_in_terms (th : thm) (tl : term list) : thm list =
     map snd (Redblackmap.listItems (!inst_thms))
   end
 
+(* Given a rewriting theorem [th] which has premises, return all the
+   instantiations of this theorem which make its conclusion match subterms
+   in the provided list of term.
+ *)
+fun inst_match_concl_in_terms (th : thm) (tl : term list) : thm list =
+  let
+    val th = (UNDISCH_ALL o SPEC_ALL) th;
+    fun try_match bvars t =
+      let
+        val inst_th = inst_match_concl bvars th t;
+      in
+        (lhs (concl inst_th), inst_th)
+      end;
+  in
+    inst_match_in_terms try_match tl
+  end
+
 (*
 val t = “!x. u32_to_int (int_to_u32 x) = u32_to_int (int_to_u32 y)”
 val th = int_to_u32_id
 
-val thms = instantiate_dep_rewrites int_to_u32_id
-  “!x. u32_to_int (int_to_u32 x) = u32_to_int (int_to_u32 y)”
+val thms = inst_match_concl_in_terms int_to_u32_id [t]
 *)
 
-(* Attempt to apply dependent rewrites with a theorem *)
-fun apply_dep_rewrites_tac (prove_premise : tactic) (then_tac : thm_tactic) (th : thm) : tactic =
+
+(* Given a theorem [th] which has premises, return all the
+   instantiations of this theorem which make its first premise match subterms
+   in the provided list of term.
+ *)
+fun inst_match_first_premise_in_terms (th : thm) (tl : term list) : thm list =
+  let
+    val th = SPEC_ALL th;
+    fun try_match bvars t =
+      let
+        val inst_th = inst_match_first_premise bvars th t;
+      in
+        ((fst o dest_imp o concl) inst_th, inst_th)
+      end;
+  in
+    inst_match_in_terms try_match tl
+  end
+
+(*
+val t = “x = y - 1 ==> T”
+val th = SPEC_ALL NUM_SUB_1_EQ
+
+val thms = inst_match_first_premise_in_terms th [t]
+*)
+
+(* Attempt to apply dependent rewrites with a theorem by matching its
+   conclusion with subterms of the goal.
+ *)
+fun apply_dep_rewrites_match_concl_tac
+  (prove_premise : tactic) (then_tac : thm_tactic) (th : thm) : tactic =
   fn (asms, g) =>
     let
       (* Discharge the assumptions so that the goal is one single term *)
-      val thms = instantiate_dep_rewrites_in_terms th (g :: asms);
+      val thms = inst_match_concl_in_terms th (g :: asms);
       val thms = map thm_to_conj_implies thms;
-      (* Apply each theorem *)
     in
+      (* Apply each theorem *)
       MAP_EVERY (prove_premise_then_apply prove_premise then_tac) thms (asms, g)
     end
 
@@ -807,17 +932,38 @@ val (asms, g) = ([
   “u32_to_int (int_to_u32 2) = 2”
 ], “T”)
 
-apply_dep_rewrites_tac
+apply_dep_rewrites_match_concl_tac
   (FULL_SIMP_TAC simpLib.empty_ss all_integer_bounds >> COOPER_TAC)
   (fn th => FULL_SIMP_TAC simpLib.empty_ss [th])
   int_to_u32_id
 *)
 
+(* Attempt to apply dependent rewrites with a theorem by matching its
+   first premise with subterms of the goal.
+ *)
+fun apply_dep_rewrites_match_first_premise_tac
+  (prove_premise : tactic) (then_tac : thm_tactic) (th : thm) : tactic =
+  fn (asms, g) =>
+    let
+      (* Discharge the assumptions so that the goal is one single term *)
+      val thms = inst_match_first_premise_in_terms th (g :: asms);
+      val thms = map thm_to_conj_implies thms;
+      fun apply_tac th =
+        let
+          val th = thm_to_conj_implies th;
+        in
+          prove_premise_then_apply prove_premise then_tac th
+        end;
+    in
+      (* Apply each theorem *)
+      MAP_EVERY apply_tac thms (asms, g)
+    end
+
 (* See {!rewrite_all_int_conversion_ids}.
 
    Small utility which takes care of one rewriting.
 
-   TODO: we actually don't use it.
+   TODO: we actually don't use it. REMOVE?
  *)
 fun rewrite_int_conversion_id
   (asms_set: term Redblackset.set) (x : term) (ty : string) :
@@ -866,22 +1012,41 @@ fun rewrite_int_conversion_id
    
    **REMARK**: this function can fail, if it doesn't manage to prove the
    premises of the theorem to apply.
+
+   TODO: update
  *)
-val rewrite_all_int_conversion_ids : tactic =
+val rewrite_with_dep_int_lemmas : tactic =
   (* We're not trying to be smart: we just try to rewrite with each theorem at
      a time *)
   let
     val prove_premise = FULL_SIMP_TAC simpLib.empty_ss all_integer_bounds >> COOPER_TAC;
-    val then_tac = (fn th => FULL_SIMP_TAC simpLib.empty_ss [th]);
-    val rewr_tac = apply_dep_rewrites_tac prove_premise then_tac;
+    val then_tac1 = (fn th => FULL_SIMP_TAC simpLib.empty_ss [th]);
+    val rewr_tac1 = apply_dep_rewrites_match_concl_tac prove_premise then_tac1;
+    val then_tac2 = (fn th => FULL_SIMP_TAC simpLib.empty_ss [th]);
+    val rewr_tac2 = apply_dep_rewrites_match_first_premise_tac prove_premise then_tac2;
   in
-      MAP_EVERY rewr_tac integer_conversion_lemmas_list
+      MAP_EVERY rewr_tac1 integer_conversion_lemmas_list >>
+      MAP_EVERY rewr_tac2 [NUM_SUB_1_EQ]
   end
+
+(*
+apply_dep_rewrites_match_first_premise_tac prove_premise then_tac NUM_SUB_1_EQ
+
+sg ‘u32_to_int z = u32_to_int i − 1 /\ 0 ≤ u32_to_int z’ >- prove_premise
+
+prove_premise_then_apply prove_premise
+
+val thm = thm_to_conj_implies  (SPECL [“u32_to_int z”, “u32_to_int i”] NUM_SUB_1_EQ)
+
+val h = “u32_to_int z = u32_to_int i − 1 ∧ 0 ≤ u32_to_int z”
+*)
 
 (* Massage a bit the goal, for instance by introducing integer bounds in the
    assumptions.
 *)
-val massage : tactic = assume_bounds_for_all_int_vars >> rewrite_all_int_conversion_ids
+val massage : tactic =
+  assume_bounds_for_all_int_vars >>
+  rewrite_with_dep_int_lemmas
 
 (*
 SIMP_CONV arith_ss [ADD] “1 + (x : num)”
@@ -908,23 +1073,6 @@ Proof
   (* TODO: automate (should be in a massage) *)
   imp_res_tac U32_SUB_EQ >> fs [st_ex_bind_def, list_t_v_def] >> rw [] >>
   massage >> fs [] >> rw [] >>
-  (* Finish the proof by recursion *)
-  (* TODO: automate (it should be in massage).
-
-     Steps:
-     - rewrite: x = y - 1 => Num y = SUC x
-
-     TODO: generalize?
-     - x = y - z ==> 0 <= x ==> Num y = z + x
-     - then apply rewriting such as ADD (1 + ...)?
-     - or: two versions of the theorem, and we prioritize the first one:
-       x = y - 1 ==> 0 <= x ==> Num y = SUC z
-       x = y - z ==> 0 <= x ==> Num y = y - z
-     - or: EL (x + 1) ls = EL (SUC x) ls
-       (and other theorems like this)
-       (but there will be a loooot of theorems)
-  *)
-  qspec_then ‘u32_to_int z’ imp_res_tac NUM_SUB_1_EQ >> rw [] >> rfs [] >>
   (* TODO: automate this: we should be able to analyze the ‘nth ls z’,
      notice there is a quantified assumption in the context,
      and instantiate it properly.
