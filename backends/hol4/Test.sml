@@ -763,7 +763,7 @@ val t = “u32_to_int (int_to_u32 3)”
 val th = (UNDISCH_ALL o SPEC_ALL) int_to_u32_id
 *)
 
-fun instantiate_dep_rewrites (th : thm) (t : term) : thm list =
+fun instantiate_dep_rewrites_in_terms (th : thm) (tl : term list) : thm list =
   let
     val th = (UNDISCH_ALL o SPEC_ALL) th;
     (* We use a map when storing the theorems, to avoid storing the same theorem twice *)
@@ -776,7 +776,7 @@ fun instantiate_dep_rewrites (th : thm) (t : term) : thm list =
       end
       handle HOL_ERR _ => ();
     (* Explore the term *)
-    val _ = dep_apply_in_subterms try_instantiate (Redblackset.empty String.compare) t;
+    val _ = app (dep_apply_in_subterms try_instantiate (Redblackset.empty String.compare)) tl;
   in
     map snd (Redblackmap.listItems (!inst_thms))
   end
@@ -794,8 +794,7 @@ fun apply_dep_rewrites_tac (prove_premise : tactic) (then_tac : thm_tactic) (th 
   fn (asms, g) =>
     let
       (* Discharge the assumptions so that the goal is one single term *)
-      val dg = list_mk_imp (asms, g)
-      val thms = instantiate_dep_rewrites th dg;
+      val thms = instantiate_dep_rewrites_in_terms th (g :: asms);
       val thms = map thm_to_conj_implies thms;
       (* Apply each theorem *)
     in
@@ -884,6 +883,13 @@ val rewrite_all_int_conversion_ids : tactic =
 *)
 val massage : tactic = assume_bounds_for_all_int_vars >> rewrite_all_int_conversion_ids
 
+(*
+SIMP_CONV arith_ss [ADD] “1 + (x : num)”
+SIMP_CONV list_ss [ADD, EL] “EL (Num (1+x)) (t::list_t_v ls)”
+
+m “1 + x = SUC x”
+*)
+
 Theorem nth_lem:
   !(ls : 't list_t) (i : u32).
     u32_to_int i < int_of_num (LENGTH (list_t_v ls)) ==>
@@ -903,7 +909,21 @@ Proof
   imp_res_tac U32_SUB_EQ >> fs [st_ex_bind_def, list_t_v_def] >> rw [] >>
   massage >> fs [] >> rw [] >>
   (* Finish the proof by recursion *)
-  (* TODO: automate (it should be in massage) *)
+  (* TODO: automate (it should be in massage).
+
+     Steps:
+     - rewrite: x = y - 1 => Num y = SUC x
+
+     TODO: generalize?
+     - x = y - z ==> 0 <= x ==> Num y = z + x
+     - then apply rewriting such as ADD (1 + ...)?
+     - or: two versions of the theorem, and we prioritize the first one:
+       x = y - 1 ==> 0 <= x ==> Num y = SUC z
+       x = y - z ==> 0 <= x ==> Num y = y - z
+     - or: EL (x + 1) ls = EL (SUC x) ls
+       (and other theorems like this)
+       (but there will be a loooot of theorems)
+  *)
   qspec_then ‘u32_to_int z’ imp_res_tac NUM_SUB_1_EQ >> rw [] >> rfs [] >>
   (* TODO: automate this: we should be able to analyze the ‘nth ls z’,
      notice there is a quantified assumption in the context,
