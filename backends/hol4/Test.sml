@@ -1,6 +1,7 @@
 open HolKernel boolLib bossLib Parse
 
-val _ = new_theory"test"
+val primitives_theory_name = "Primitives"
+val _ = new_theory primitives_theory_name
 
 (* SML declarations  *)
 (* for example: *)
@@ -101,42 +102,14 @@ val _ = deprecate_int ()
 open arithmeticTheory
 
 
-val m = Hol_pp.print_apropos;
-val f = Hol_pp.print_find;
-
-(*
-m “SUC (x : num) + y = _”
-m “(ZERO : num) < SUC y”
-m “(_ : num) < SUC y”
-m “x < (y : num) <=> _”
-f "ADD"
-ADD
-
-val x  = “1:num”
-dest_term x
-val (x1, x2) = dest_comb x
-dest_term “0n:num”
-dest_term “ZERO:num”
-m “ZERO + (_ : num) = _”
-
-m “BIT1 _ = _”
-NUMERAL_DEF
-
-val x = “ZERO = (0:num)”
-dest_term x
-
-m “0 < SUC 0”
-*)
+val m = Hol_pp.print_apropos
+val f = Hol_pp.print_find
 
 (* Display types on/off: M-h C-t *)
 (* Move back: M-h b *)
 
 val _ = numLib.deprecate_num ()
 val _ = numLib.prefer_num ()
-
-(*
-m “!x. x = x”
-*)
 
 Theorem NAT_THM1:
   !(n : num). n < n + 1
@@ -166,7 +139,7 @@ val _ = prefer_int ()
 val _ = new_type ("u32", 0)
 val _ = new_type ("i32", 0)
 
-val u32_min_def = Define ‘u32_min = (0:int)’
+(*val u32_min_def = Define ‘u32_min = (0:int)’*)
 val u32_max_def = Define ‘u32_max = (4294967295:int)’
 
 (* TODO: change that *)
@@ -186,7 +159,7 @@ val _ = new_constant ("int_to_i32", “:int -> i32”)
 val u32_to_int_bounds =
   new_axiom (
     "u32_to_int_bounds",
-    “!n. u32_min <= u32_to_int n /\ u32_to_int n <= u32_max”)
+    “!n. 0 <= u32_to_int n /\ u32_to_int n <= u32_max”)
 
 val i32_to_int_bounds =
   new_axiom (
@@ -196,7 +169,7 @@ val i32_to_int_bounds =
 val int_to_u32_id =
   new_axiom (
     "int_to_u32_id",
-    “!n. u32_min <= n /\ n <= u32_max ==>
+    “!n. 0 <= n /\ n <= u32_max ==>
      u32_to_int (int_to_u32 n) = n”)
 
 val int_to_i32_id =
@@ -207,13 +180,13 @@ val int_to_i32_id =
 
 val mk_u32_def = Define
   ‘mk_u32 n =
-    if u32_min <= n /\ n <= u32_max then Return (int_to_u32 n)
+    if 0 <= n /\ n <= u32_max then Return (int_to_u32 n)
     else Fail Failure’
 
 val u32_add_def = Define ‘u32_add x y = mk_u32 ((u32_to_int x) + (u32_to_int y))’
 
 Theorem MK_U32_SUCCESS:
-  !n. u32_min <= n /\ n <= u32_max ==>
+  !n. 0 <= n /\ n <= u32_max ==>
   mk_u32 n = Return (int_to_u32 n)
 Proof
   rw[mk_u32_def]
@@ -229,18 +202,18 @@ Proof
   exists_tac “int_to_u32 (u32_to_int x + u32_to_int y)” >>
   imp_res_tac MK_U32_SUCCESS >>
   (* There is probably a better way of doing this *)
-  sg ‘u32_min <= u32_to_int x’ >- (rw[u32_to_int_bounds]) >>
-  sg ‘u32_min <= u32_to_int y’ >- (rw[u32_to_int_bounds]) >>
-  fs [u32_min_def, u32_add_def] >>
+  sg ‘0 <= u32_to_int x’ >- (rw[u32_to_int_bounds]) >>
+  sg ‘0 <= u32_to_int y’ >- (rw[u32_to_int_bounds]) >>
+  fs [u32_add_def] >>
   irule int_to_u32_id >>
-  fs[u32_min_def]
+  fs[]
 QED
 
 val u32_sub_def = Define ‘u32_sub x y = mk_u32 ((u32_to_int x) - (u32_to_int y))’
 
 Theorem U32_SUB_EQ:
   !x y.
-    u32_min <= u32_to_int x - u32_to_int y ==>
+    0 <= u32_to_int x - u32_to_int y ==>
     ?z. u32_sub x y = Return z /\ u32_to_int z = u32_to_int x - u32_to_int y
 Proof
   rpt gen_tac >>
@@ -250,13 +223,12 @@ Proof
   (* There is probably a better way of doing this *)
   sg ‘u32_to_int x − u32_to_int y ≤ u32_max’ >-(
     sg ‘u32_to_int x <= u32_max’ >- (rw[u32_to_int_bounds]) >>
-    sg ‘u32_min <= u32_to_int y’ >- (rw[u32_to_int_bounds]) >>
-    fs [u32_min_def] >>
+    sg ‘0 <= u32_to_int y’ >- (rw[u32_to_int_bounds]) >>
     COOPER_TAC
   ) >>
-  fs [u32_min_def, u32_sub_def] >>
+  fs [u32_sub_def] >>
   irule int_to_u32_id >>
-  fs[u32_min_def]
+  fs[]
 QED
 
 val mk_i32_def = Define
@@ -301,10 +273,10 @@ val VEC_TO_LIST_NUM_BOUNDS =
 
 Theorem VEC_TO_LIST_INT_BOUNDS:
   !v. let l = int_of_num (LENGTH (vec_to_list v)) in
-     u32_min <= l /\ l <= u32_max
+     0 <= l /\ l <= u32_max
 Proof
   gen_tac >>
-  rw [u32_min_def, u32_max_def] >>
+  rw [u32_max_def] >>
   assume_tac VEC_TO_LIST_NUM_BOUNDS >>
   fs[]
 QED
@@ -434,10 +406,8 @@ val nth_def = new_axiom ("nth_def", “
 
 (*** Examples of proofs on [nth] *)
 val list_t_v_def = Define ‘
-  list_t_v ls =
-    case ls of
-    | ListCons x tl => x :: list_t_v tl
-    | ListNil => []
+  list_t_v ListNil = [] /\
+  list_t_v (ListCons x tl) = x :: list_t_v tl
 ’
 
 (* TODO: move *)
@@ -475,6 +445,120 @@ QED
    - auto lookup of spec lemmas
 *)
 
+(* Add a list of theorems in the assumptions - TODO: move *)
+fun ASSUME_TACL (thms : thm list) : tactic =
+  let
+    fun t thms =
+      case thms of
+        [] => ALL_TAC
+      | thm :: thms => ASSUME_TAC thm >> t thms
+  in
+  t thms
+  end
+
+(* The map from integer type to bounds lemmas *)
+val integer_bounds_lemmas =
+  Redblackmap.fromList String.compare
+  [
+    ("u32", u32_to_int_bounds),
+    ("i32", i32_to_int_bounds)
+  ]
+
+(* The integer types *)
+val integer_types_names =
+  Redblackset.fromList String.compare
+  (map fst (Redblackmap.listItems integer_bounds_lemmas))
+
+(* See {!assume_bounds_for_all_int_vars}.
+
+   This tactic is in charge of adding assumptions for one variable.
+ *)
+
+fun assume_bounds_for_int_var
+  (asms: term Redblackset.set) (var : string) (ty : string) :
+  tactic =
+  let
+    (* Lookup the lemma to apply *)
+    val lemma = Redblackmap.find (integer_bounds_lemmas, ty);
+    (* Instantiate the lemma *)
+    val ty_t = mk_type (ty, []);
+    val var_t = mk_var (var, ty_t);
+    val lemma = SPEC var_t lemma;
+    (* Split the theorem into a list of conjuncts.
+
+       The bounds are typically a conjunction:
+       {[
+         ⊢ 0 ≤ u32_to_int x ∧ u32_to_int x ≤ u32_max: thm
+       ]}
+     *)
+    val lemmas = CONJUNCTS lemma;
+    (* Filter the conjuncts: some of them might already be in the context,
+       we don't want to introduce them again, as it would pollute it.
+     *)
+    val lemmas = filter (fn lem => not (Redblackset.member (asms, concl lem))) lemmas;
+   in
+  (* Introduce the assumptions in the context *)
+  ASSUME_TACL lemmas
+  end
+
+(* Introduce bound assumptions for all the machine integers in the context.
+
+   Exemple:
+   ========
+   If there is “x : u32” in the input set, then we introduce:
+   {[
+     0 <= u32_to_int x
+     u32_to_int x <= u32_max
+   ]}
+ *)
+fun assume_bounds_for_all_int_vars (asms, g) =
+  let
+    (* Compute the set of integer variables in the context *)
+    val vars = free_varsl (g :: asms);
+    (* Compute the set of assumptions already present in the context *)
+    val asms_set = Redblackset.fromList Term.compare vars;
+    (* Filter the variables to keep only the ones with type machine integer,
+       decompose the types at the same time *)
+    fun decompose_var (v : term) : (string * string) =
+      let
+        val (v, ty) = dest_var v;
+        val {Args=args, Thy=thy, Tyop=ty} = dest_thy_type ty;
+        val _ = assert null args;
+        val _ = assert (fn thy => thy = primitives_theory_name) thy;
+        val _ = assert (fn ty => Redblackset.member (integer_types_names, ty)) ty;
+      in (v, ty) end;
+    val vars = mapfilter decompose_var vars; 
+    (* Add assumptions for one variable *)
+    fun add_var_asm (v, ty) : tactic =
+      assume_bounds_for_int_var asms_set v ty;    
+    (* Add assumptions for all the variables *)
+    fun add_vars_asm vl : tactic =
+      case vl of
+        [] => ALL_TAC
+      | v :: vl =>
+        add_var_asm v >> add_vars_asm vl;
+  in
+    add_vars_asm vars (asms, g)
+  end
+
+(*
+dest_thy_type “:u32”
+val massage : tactic = assume_bounds_for_all_int_vars
+val vl = vars
+val (v::vl) = vl
+*)
+
+(*
+val (asms, g) = top_goal ()
+fun bounds_for_ints_in_list (vars : (string * hol_type) list) : tactic =
+  foldl
+  FAIL_TAC ""
+val var = "x"
+val ty = "u32"
+*)
+
+val massage : tactic = assume_bounds_for_all_int_vars
+
 Theorem nth_lem:
   !(ls : 't list_t) (i : u32).
     u32_to_int i < int_of_num (LENGTH (list_t_v ls)) ==>
@@ -483,47 +567,34 @@ Theorem nth_lem:
     | Fail _ => F
     | Loop => F
 Proof
-  Induct_on ‘ls’ >~ [‘ListNil’] >> rpt strip_tac >>
-  PURE_ONCE_REWRITE_TAC [nth_def] >> rw [] >-(
-    (* TODO: automate this *)
-    fs [list_t_v_def, LENGTH] >>
-    qspec_then ‘i’ assume_tac u32_to_int_bounds >>
-    rw [] >> fs [u32_min_def] >>
-    intLib.COOPER_TAC
-  ) >- (
-    PURE_ONCE_REWRITE_TAC [list_t_v_def] >>
-    rw [HD]
-  ) >>
+  Induct_on ‘ls’ >> fs [list_t_v_def, HD] >~ [‘ListNil’] >>
+  rpt strip_tac >> massage >>
+  PURE_ONCE_REWRITE_TAC [nth_def] >> rw [] >-(intLib.COOPER_TAC) >>
   (* TODO: we need specialized tactics here - first: subgoal *)
-  sg ‘u32_min <= u32_to_int i - u32_to_int (int_to_u32 1)’ >-(
-    fs [u32_min_def] >>
-    (* We need to detect that we're in the bounds, etc. *)
+  sg ‘0 <= u32_to_int i - u32_to_int (int_to_u32 1)’ >-(
+    (* TODO: automate *)
     DEP_ONCE_REWRITE_TAC [int_to_u32_id] >>
-    strip_tac >- (fs [u32_min_def, u32_max_def] >> COOPER_TAC) >>
-    sg ‘u32_min <= u32_to_int i’ >- (rw[u32_to_int_bounds]) >>
-    fs [u32_min_def] >>
+    strip_tac >- (fs [u32_max_def] >> COOPER_TAC) >>
     COOPER_TAC
   ) >>
+  (* TODO: automate *)
   imp_res_tac U32_SUB_EQ >> fs [st_ex_bind_def] >>
-  (* Automate this *)
   PURE_ONCE_REWRITE_TAC [list_t_v_def] >> rw [] >>
   (* Automate this *)
   sg ‘u32_to_int (int_to_u32 1) = 1’ >-(
     DEP_ONCE_REWRITE_TAC [int_to_u32_id] >>
-    fs [u32_min_def, u32_max_def] >> COOPER_TAC
+    fs [u32_max_def] >> COOPER_TAC
   ) >>
-  fs [] >>
+  massage >> fs [] >>
   (* TODO: automate this *)
-  sg ‘u32_min <= u32_to_int z’ >-(rw[u32_to_int_bounds]) >> fs [u32_min_def] >>
   qspec_then ‘u32_to_int z’ imp_res_tac NUM_SUB_1_EQ >> rw [] >>
   (* Finish the proof by recursion *)
   pop_last_assum (qspec_then ‘z’ assume_tac) >>
   pop_last_assum mp_tac >>
-  qspec_then ‘ListCons t ls’ assume_tac list_t_v_def >>
+  fs [list_t_v_def] >>
   rw [] >>
   fs [INT] >>
   sg ‘u32_to_int z < &LENGTH (list_t_v ls)’ >- COOPER_TAC >>
-  fs [] >>
   (* Rem.: rfs! *)
   rfs []
 QED
@@ -549,12 +620,6 @@ val nth_fuel_def = Define ‘
       Fail Failure
     od
  ’
-
-(*
-whileTheory.LEAST_DEF
-type_of “$LEAST”
-val x = “LEAST_DEF”
-*)
 
 val is_loop_def = Define ‘is_loop r = case r of Loop => T | _ => F’
  
