@@ -27,6 +27,8 @@ val st_ex_bind_def = Define `
     | Fail e => Fail e
     | Loop => Loop`;
 
+val bind_name = fst (dest_const “st_ex_bind”)
+
 val st_ex_return_def = Define `
   (st_ex_return : 'a -> 'a M) x =
     Return x`;
@@ -713,24 +715,42 @@ fun thm_to_conj_implies (thm : thm) : thm =
     val thm = PURE_REWRITE_RULE [GSYM satTheory.AND_IMP] thm;
   in thm end
 
+
+(* Like THEN1 and >-, but doesn't fail if the first subgoal is not completely
+   solved.
+
+   TODO: how to get the notation right?
+ *)
+fun op PARTIAL_THEN1 (tac1: tactic) (tac2: tactic) : tactic = tac1 THEN_LT (NTH_GOAL tac2 1)
+
 (* If the current goal is [asms ⊢ g], and given a lemma of the form
    [⊢ H ==> C], do the following:
-   - attempt to prove [asms ⊢ H] using the given tactic
-   - if it succeeds, call the theorem tactic with the theorem [asms ⊢ C]
+   - introduce [asms ⊢ H] as a subgoal and apply the given tactic on it
+   - also calls the theorem tactic with the theorem [asms ⊢ C]
    
    If the lemma is not an implication, we directly call the theorem tactic.
  *)
-fun prove_premise_then_apply (prove_hyp: tactic) (then_tac: thm_tactic) (thm : thm)  : tactic =
+fun intro_premise_then (premise_tac: tactic) (then_tac: thm_tactic) (thm : thm)  : tactic =
   let
     val c = concl thm;
     (* First case: there is a premise to prove *)
     fun prove_premise_then (h : term) =
-      SUBGOAL_THEN h (fn h_thm => then_tac (MP thm h_thm)) >- prove_hyp;
+      PARTIAL_THEN1 (SUBGOAL_THEN h (fn h_thm => then_tac (MP thm h_thm))) premise_tac;
     (* Second case: no premise to prove *)
     val no_prove_premise_then = then_tac thm;
   in
     if is_imp c then prove_premise_then (fst (dest_imp c)) else no_prove_premise_then
   end
+
+(* Same as {!intro_premise_then} but fails if the premise_tac fails to prove the premise *)
+fun prove_premise_then (premise_tac: tactic) (then_tac: thm_tactic) (thm : thm)  : tactic =
+  intro_premise_then
+    (premise_tac >> FAIL_TAC "prove_premise_then: could not prove premise")
+    then_tac thm
+
+(*
+val thm = th
+*)
 
 (* Call a function on all the subterms of a term *)
 fun dep_apply_in_subterms
@@ -923,7 +943,7 @@ fun apply_dep_rewrites_match_concl_tac
       val thms = map thm_to_conj_implies thms;
     in
       (* Apply each theorem *)
-      MAP_EVERY (prove_premise_then_apply prove_premise then_tac) thms (asms, g)
+      MAP_EVERY (prove_premise_then prove_premise then_tac) thms (asms, g)
     end
 
 (*
@@ -952,7 +972,7 @@ fun apply_dep_rewrites_match_first_premise_tac
         let
           val th = thm_to_conj_implies th;
         in
-          prove_premise_then_apply prove_premise then_tac th
+          prove_premise_then prove_premise then_tac th
         end;
     in
       (* Apply each theorem *)
@@ -997,7 +1017,7 @@ fun rewrite_int_conversion_id
     (* If the conclusion is not already in the assumptions, prove it, use
        it to rewrite the goal and add it in the assumptions, otherwise do nothing *)
     if already_in_asms then ALL_TAC
-    else prove_premise_then_apply prove_premise rewrite_then_assum lemma
+    else prove_premise_then prove_premise rewrite_then_assum lemma
  end
 
 (* Look for conversions from integers to machine integers and back.
@@ -1034,7 +1054,7 @@ apply_dep_rewrites_match_first_premise_tac prove_premise then_tac NUM_SUB_1_EQ
 
 sg ‘u32_to_int z = u32_to_int i − 1 /\ 0 ≤ u32_to_int z’ >- prove_premise
 
-prove_premise_then_apply prove_premise
+prove_premise_then prove_premise
 
 val thm = thm_to_conj_implies  (SPECL [“u32_to_int z”, “u32_to_int i”] NUM_SUB_1_EQ)
 
@@ -1048,12 +1068,314 @@ val massage : tactic =
   assume_bounds_for_all_int_vars >>
   rewrite_with_dep_int_lemmas
 
-(*
-SIMP_CONV arith_ss [ADD] “1 + (x : num)”
-SIMP_CONV list_ss [ADD, EL] “EL (Num (1+x)) (t::list_t_v ls)”
+(* Lexicographic order over pairs *)
+fun pair_compare (comp1 : 'a * 'a -> order) (comp2 : 'b * 'b -> order)
+  ((p1, p2) : (('a * 'b) * ('a * 'b))) : order =
+  let
+    val (x1, y1) = p1;
+    val (x2, y2) = p2;
+  in
+    case comp1 (x1, x2) of
+      LESS => LESS
+    | GREATER => GREATER
+    | EQUAL => comp2 (y1, y2)
+  end
 
-m “1 + x = SUC x”
+(* A constant name (theory, constant name) *)
+type const_name = string * string
+
+val const_name_compare = pair_compare String.compare String.compare
+
+(* The registered spec theorems, that {!progress} will automatically apply.
+
+   The keys are the function names (it is a pair, because constant names
+   are made of the theory name and the name of the constant itself).
+
+   Also note that we can store several specs per definition (in practice, when
+   looking up specs, we will try them all one by one, in a LIFO order).
+
+   We store theorems where all the premises are in the goal, with implications
+   (i.e.: [⊢ H0 ==> ... ==> Hn ==> H], not  [H0, ..., Hn ⊢ H]).
+
+   We do this because, when doing proofs by induction, {!progress} might have to
+   handle *unregistered* theorems coming the current goal assumptions and of the shape
+   (the conclusion of the theorem is an assumption, and we want to ignore this assumption):
+   {[
+     [∀i. u32_to_int i < &LENGTH (list_t_v ls) ⇒
+         case nth ls i of
+           Return x => ...
+         | ...      => ...]
+     ⊢ ∀i. u32_to_int i < &LENGTH (list_t_v ls) ⇒
+         case nth ls i of
+           Return x => ...
+         | ...      => ...
+   ]}
+ *)
+val reg_spec_thms: (const_name, thm) Redblackmap.dict ref =
+  ref (Redblackmap.mkDict const_name_compare)
+
+(* Retrieve the specified application in a spec theorem.
+
+   A spec theorem for a function [f] typically has the shape:
+   {[
+     !x0 ... xn.
+       H0 ==> ... Hm ==>
+         (exists ...
+           (exists ... . f y0 ... yp = ... /\ ...) \/
+           (exists ... . f y0 ... yp = ... /\ ...) \/
+           ...
+   ]}
+
+   Or:
+   {[
+    !x0 ... xn.
+      H0 ==> ... Hm ==>
+        case f y0 ... yp of
+          ... => ...
+        | ... =>  ...
+   ]}
+
+   We return: [f y0 ... yp]
 *)
+fun get_spec_app (t : term) : term =
+  let
+    (* Remove the universally quantified variables, the premises and
+       the existentially quantified variables *)
+    val t = (snd o strip_exists o snd o strip_imp o snd o strip_forall) t;
+    (* Remove the exists, take the first disjunct *)
+    val t = (hd o strip_disj o snd o strip_exists) t;
+    (* Split the conjunctions and take the first conjunct *)
+    val t = (hd o strip_conj) t;
+    (* Remove the case if there is, otherwise destruct the equality *)
+    val t =
+      if TypeBase.is_case t then let val (_, t, _) = TypeBase.dest_case t in t end
+      else (fst o dest_eq) t;
+  in t end
+
+(* Given a function call [f y0 ... yn] return the name of the function *)
+fun get_fun_name_from_app (t : term) : const_name =
+  let
+    val f = (fst o strip_comb) t;
+    val {Name=name, Thy=thy, Ty=_} = dest_thy_const f;
+    val cn = (thy, name);
+  in cn end
+
+(* Register a spec theorem in the spec database.
+
+   For the shape of spec theorems, see {!get_spec_thm_app}.
+ *)
+fun register_spec_thm (th: thm) : unit =
+  let
+    (* Transform the theroem a bit before storing it *)
+    val th = SPEC_ALL th;
+    (* Retrieve the app ([f x0 ... xn]) *)
+    val f = get_spec_app (concl th);
+    (* Retrieve the function name *)
+    val cn = get_fun_name_from_app f;
+  in
+    (* Store *)
+    reg_spec_thms := Redblackmap.insert (!reg_spec_thms, cn, th)
+  end
+
+(* TODO: I32_SUB_EQ *)
+val _ = app register_spec_thm [U32_ADD_EQ, U32_SUB_EQ, I32_ADD_EQ]
+
+(*
+app register_spec_thm [U32_ADD_EQ, U32_SUB_EQ, I32_ADD_EQ]
+Redblackmap.listItems (!reg_spec_thms)
+*)
+
+(*
+(* TODO: remove? *)
+datatype monadic_app_kind =
+ Call | Bind | Case
+*)
+
+(* Repeatedly destruct cases and return the last scrutinee we get *)
+fun strip_all_cases_get_scrutinee (t : term) : term =
+  if TypeBase.is_case t
+  then (strip_all_cases_get_scrutinee o fst o TypeBase.strip_case) t
+  else t
+
+(*
+TypeBase.dest_case “case ls of [] => T | _ => F”
+TypeBase.strip_case “case ls of [] => T | _ => F”
+TypeBase.strip_case “case (if b then [] else [0, 1]) of [] => T | _ => F”
+TypeBase.strip_case “3”
+TypeBase.dest_case “3”
+
+strip_all_cases_get_scrutinee “case ls of [] => T | _ => F”
+strip_all_cases_get_scrutinee “case (if b then [] else [0, 1]) of [] => T | _ => F”
+strip_all_cases_get_scrutinee “3”
+*)
+
+
+(* Provided the goal contains a call to a monadic function, return this function call.
+
+   The goal should be of the shape:
+   1.
+   {[
+     case (* potentially expanded function body *) of
+       ... => ...
+     | ... => ...
+   ]}
+
+   2. Or:
+   {[
+     exists ... .
+       ... (* potentially expanded function body *) = Return ... /\
+       ... (* Various properties *)
+   ]}
+
+   3. Or a disjunction of cases like the one above, below existential binders
+   (actually: note sure this last case exists in practice):
+   {[
+     exists ... .
+       (exists ... . (* body *) = Return ... /\ ...) \/
+       ...
+   ]}
+
+   The function body should be of the shape:
+   {[
+     x <- f y0 ... yn;
+     ...
+   ]}
+
+   Or (typically if we expanded the monadic binds):
+   {[
+     case f y0 ... yn of
+     ...
+   ]}
+
+   Or simply (typically if we reached the end of the function we're analyzing):
+   {[
+     f y0 ... yn
+   ]}
+
+   For all the above cases we would return [f y0 ... yn].
+ *)
+fun get_monadic_app_call (t : term) : term =
+  (* We do something slightly imprecise but hopefully general and robut *)
+  let
+     (* Case 3.: strip the existential binders, and take the first disjuntion *)
+     val t = (hd o strip_disj o snd o strip_exists) t;
+     (* Case 2.: strip the existential binders, and take the first conjunction *)
+     val t = (hd o strip_conj o snd o strip_exists) t;
+     (* If it is an equality, take the lhs *)
+     val t = if is_eq t then lhs t else t;
+     (* Expand the binders to transform them to cases *)
+     val t =
+       (rhs o concl) (REWRITE_CONV [st_ex_bind_def] t)
+       handle UNCHANGED => t;
+     (* Strip all the cases *)
+     val t = strip_all_cases_get_scrutinee t;
+  in t end
+
+(* Use the given theorem to progress by one step (we use this when
+   analyzing a function body: this goes forward by one call to a monadic function).
+
+   We transform the goal by:
+   - pushing the theorem premises to a subgoal
+   - adding the theorem conclusion in the assumptions in another goal, and
+     getting rid of the monadic call
+
+  Then [then_tac] receives as paramter the monadic call on which we applied
+  the lemma. This can be useful, for instance, to make a case disjunction.
+
+  This function is the most primitive of the [progress...] functions.
+ *)
+fun pure_progress_with (premise_tac : tactic)
+  (then_tac : term -> thm_tactic) (th : thm) : tactic =
+  fn (asms,g) =>
+  let
+    (* Remove all the universally quantified variables from the theorem *)
+    val th = SPEC_ALL th;
+    (* Retrieve the monadic call from the goal *)
+    val fgoal = get_monadic_app_call g;
+    (* Retrieve the app call from the theroem *)
+    val gth = get_spec_app (concl th);
+    (* Match and instantiate *)
+    val (var_s, ty_s) = match_term gth fgoal;
+    (* Instantiate the theorem *)
+    val th = INST var_s (INST_TYPE ty_s th);
+    (* Retrieve the premises of the theorem *)
+    val th = PURE_REWRITE_RULE [GSYM satTheory.AND_IMP] th;
+  in
+    (* Apply the theorem *)
+    intro_premise_then premise_tac (then_tac fgoal) th (asms, g)
+  end
+
+(*
+val (asms, g) = top_goal ()
+val t = g
+
+val th = U32_SUB_EQ
+
+val premise_tac =  massage >> TRY COOPER_TAC
+fun then_tac fgoal =
+  fn thm => ASSUME_TAC thm >> Cases_on ‘^fgoal’ >>
+  rw [] >> fs [st_ex_bind_def] >> massage >> fs []
+
+pure_progress_with premise_tac then_tac th
+*)
+
+fun progress_with (th : thm) : tactic =
+  let
+    val premise_tac = massage >> fs [] >> rw [] >> TRY COOPER_TAC;
+    fun then_tac fgoal thm =
+      ASSUME_TAC thm >> Cases_on ‘^fgoal’ >>
+      rw [] >> fs [st_ex_bind_def] >> massage >> fs [];
+  in
+    pure_progress_with premise_tac then_tac th
+  end
+
+(*
+progress_with U32_SUB_EQ
+*)
+
+(* This function lookups the theorem to use to make progress *)
+val progress : tactic =
+  fn (asms, g) =>
+  let
+    (* Retrieve the monadic call from the goal *)
+    val fgoal = get_monadic_app_call g;
+    val fname = get_fun_name_from_app fgoal;
+    (* Lookup the theorem: first look in the assumptions (we might want to
+       use the inductive hypothesis for instance) *)
+    fun asm_to_spec asm =
+      let
+        (* Fail if there are no universal quantifiers *)
+        val _ =
+          if is_forall asm then asm
+          else assert is_forall ((snd o strip_imp) asm);
+        val asm_fname = (get_fun_name_from_app o get_spec_app) asm;
+        (* Fail if the name is not the one we're looking for *)
+        val _ = assert (fn n => fname = n) asm_fname;
+      in
+        ASSUME asm
+      end
+    val asms_thl = mapfilter asm_to_spec asms;
+    (* Lookup a spec in the database *)
+    val thl =
+      case Redblackmap.peek (!reg_spec_thms, fname) of
+        NONE => asms_thl
+      | SOME spec => spec :: asms_thl;
+    val _ =
+      if null thl then
+        raise (failwith "progress: could not find a suitable theorem to apply")
+      else ();
+  in
+    (* Attempt to use the theorems one by one *)
+    MAP_FIRST progress_with thl (asms, g)
+  end
+
+(*
+val (asms, g) = top_goal ()
+*)
+
+(* TODO: no exfalso tactic?? *)
+val EX_FALSO : tactic =
+  SUBGOAL_THEN “F” (fn th => ASSUME_TAC th >> fs[])
 
 Theorem nth_lem:
   !(ls : 't list_t) (i : u32).
@@ -1063,29 +1385,13 @@ Theorem nth_lem:
     | Fail _ => F
     | Loop => F
 Proof
-  Induct_on ‘ls’ >> fs [list_t_v_def, HD] >~ [‘ListNil’] >>
-  rpt strip_tac >> massage >>
-  PURE_ONCE_REWRITE_TAC [nth_def] >> rw [] >-(intLib.COOPER_TAC) >>
-  (* TODO: we need specialized tactics here - first: subgoal *)
-  sg ‘0 <= u32_to_int i - u32_to_int (int_to_u32 1)’ >-(
-    massage >> COOPER_TAC
-  ) >>
-  (* TODO: automate (should be in a massage) *)
-  imp_res_tac U32_SUB_EQ >> fs [st_ex_bind_def, list_t_v_def] >> rw [] >>
-  massage >> fs [] >> rw [] >>
-  (* TODO: automate this: we should be able to analyze the ‘nth ls z’,
-     notice there is a quantified assumption in the context,
-     and instantiate it properly.
-
-     Remark: we can apply the resulting theorem only after rewriting it.
-     Possibility:
-     - do some default rewriting and try to apply it
-     - if it fails, simply add it in the assumptions for the user
-   *)
-  pop_last_assum (qspec_then ‘z’ assume_tac) >> rfs [] >>
-  pop_assum irule >>
-  COOPER_TAC
+  Induct_on ‘ls’ >> rw [list_t_v_def] >~ [‘ListNil’]
+  >-(massage >> EX_FALSO >> COOPER_TAC) >>
+  PURE_ONCE_REWRITE_TAC [nth_def] >> rw [] >>
+  progress >> progress
 QED
+
+(* *)
 
 (***
  * Example of how to get rid of the fuel in practice
