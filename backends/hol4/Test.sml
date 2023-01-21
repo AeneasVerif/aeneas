@@ -168,11 +168,8 @@ val i32_to_int_bounds =
     "i32_to_int_bounds",
     “!n. i32_min <= i32_to_int n /\ i32_to_int n <= i32_max”)
 
-val int_to_u32_id =
-  new_axiom (
-    "int_to_u32_id",
-    “!n. 0 <= n /\ n <= u32_max ==>
-     u32_to_int (int_to_u32 n) = n”)
+val int_to_u32_id = new_axiom ("int_to_u32_id",
+    “!n. 0 <= n /\ n <= u32_max ==> u32_to_int (int_to_u32 n) = n”)
 
 val int_to_i32_id =
   new_axiom (
