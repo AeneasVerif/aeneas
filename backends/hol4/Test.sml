@@ -1391,7 +1391,75 @@ Proof
   progress >> progress
 QED
 
-(* *)
+(* Example from the hashmap *)
+val _ = new_constant ("insert", “: u32 -> 't -> (u32 # 't) list_t -> (u32 # 't) list_t result”)
+val insert_def = new_axiom ("insert_def", “
+ insert (key : u32) (value : 't) (ls : (u32 # 't) list_t) : (u32 # 't) list_t result =
+  case ls of
+  | ListCons (ckey, cvalue) tl =>
+    if ckey = key
+    then Return (ListCons (ckey, value) tl)
+    else
+      do
+      tl0 <- insert key value tl;
+      Return (ListCons (ckey, cvalue) tl0)
+      od
+  | ListNil => Return (ListCons (key, value) ListNil)
+ ”)
+
+(* Property that keys are pairwise distinct *)
+val distinct_keys_def = Define ‘
+  distinct_keys (ls : (u32 # 't) list) =
+    !i j.
+      i < LENGTH ls ==>
+      j < LENGTH ls ==>
+      FST (EL i ls) = FST (EL j ls) ==>
+      i = j
+’
+
+val lookup_raw_def = Define ‘
+  lookup_raw key [] = NONE /\
+  lookup_raw key ((k, v) :: ls) =
+    if k = key then SOME v else lookup_raw key ls
+’
+
+val lookup_def = Define ‘
+  lookup key ls = lookup_raw key (list_t_v ls)
+’
+
+Theorem insert_lem:
+  !ls key value.
+    (* The keys are pairwise distinct *)
+    distinct_keys (list_t_v ls) ==>
+    case insert key value ls of
+    | Return ls1 =>
+      (* We updated the binding *)
+      lookup key ls1 = SOME value /\
+      (* The other bindings are left unchanged *)
+      (!k. k <> key ==> lookup k ls = lookup k ls1)
+    | Fail _ => F
+    | Loop => F
+Proof
+  Induct_on ‘ls’ >> rw [list_t_v_def] >~ [‘ListNil’] >>
+  PURE_ONCE_REWRITE_TAC [insert_def] >> rw []
+  >- (rw [lookup_def, lookup_raw_def, list_t_v_def])
+  >- (rw [lookup_def, lookup_raw_def, list_t_v_def]) >>
+  CASE_TAC >> rw []
+  >- (rw [lookup_def, lookup_raw_def, list_t_v_def])
+  >- (rw [lookup_def, lookup_raw_def, list_t_v_def]) >>
+  progress
+  >- (
+    fs [distinct_keys_def] >>
+    rpt strip_tac >>
+    first_assum (qspecl_then [‘SUC i’, ‘SUC j’] ASSUME_TAC) >>
+    fs []
+    (* Alternative: *)
+    (*
+      PURE_ONCE_REWRITE_TAC [GSYM prim_recTheory.INV_SUC_EQ] >>
+      first_assum irule >> fs []
+     *)) >>
+  fs [lookup_def, lookup_raw_def, list_t_v_def]
+QED
 
 (***
  * Example of how to get rid of the fuel in practice
