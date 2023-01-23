@@ -1,0 +1,9 @@
+INCLUDES =
+
+all: $(DEFAULT_TARGETS)
+.PHONY: all
+
+README_SOURCES = $(wildcard *Script.sml) $(wildcard *Lib.sml) $(wildcard *Syntax.sml)
+DIRS = $(wildcard */)
+README.md: $(README_SOURCES)
+	$(README_SOURCES)
