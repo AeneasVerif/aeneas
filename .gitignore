@@ -57,6 +57,11 @@ tests/fstar/misc/obj/
 *Makefile.coq
 *CoqMakefile.conf
 
+# HOL4
+.HOLMK
+.hollogs
+.holobjs
+
 # Misc
 /fstar-tests
 *~
