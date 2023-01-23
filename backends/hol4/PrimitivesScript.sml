@@ -4,8 +4,6 @@ open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
 val primitives_theory_name = "Primitives"
 val _ = new_theory primitives_theory_name
 
-(* TODO: val _ = export_theory(); *)
-
 (*** Result *)
 Datatype:
   error = Failure
@@ -667,9 +665,9 @@ Proof
 QED
 
 Theorem U16_ADD_EQ:
-  !x y.
+  !(x y).
     u16_to_int x + u16_to_int y <= u16_max ==>
-    ?z. u16_add x y = Return z /\ u16_to_int z = u16_to_int x + u16_to_int y
+    ?(z). u16_add x y = Return z /\ u16_to_int z = u16_to_int x + u16_to_int y
 Proof
   prove_arith_op_eq
 QED
@@ -1240,8 +1238,6 @@ Proof
   prove_arith_op_eq
 QED
 
-
-(*
 Theorem U16_DIV_EQ:
   !x y.
     u16_to_int y <> 0 ==>
@@ -1356,3 +1352,5 @@ val all_div_eqs = [
   U64_DIV_EQ,
   U128_DIV_EQ
 ]
+
+val _ = export_theory ()

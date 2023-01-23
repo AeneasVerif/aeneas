@@ -1,13 +1,9 @@
 open HolKernel boolLib bossLib Parse
 
-val primitives_theory_name = "Primitives"
+val primitives_theory_name = "Test"
 val _ = new_theory primitives_theory_name
 
-(* SML declarations  *)
-(* for example: *)
-(*val th = save_thm("SKOLEM_AGAIN",SKOLEM_THM) *)
-
-local open boolTheory integerTheory wordsTheory stringTheory in end
+open boolTheory integerTheory wordsTheory stringTheory
 
 Datatype:
   error = Failure
@@ -41,7 +37,7 @@ Overload monad_ignore_bind[local] = ``\x y. st_ex_bind x (\z. y)``
 (*Overload failwith = ``raise_Fail``*)
 
 (* Temporarily allow the monadic syntax *)
-val _ = monadsyntax.temp_add_monadsyntax ();
+val _ = monadsyntax.temp_add_monadsyntax ()
 
 val test1_def = Define `
   test1 (x : bool) = Return x`
@@ -57,22 +53,21 @@ val test_monad_def = Define `
     do
       x <- Return v;
       Return x
-    od`;
-
+    od`
 
 val test_monad2_def = Define `
   test_monad2 =
     do
       x <- Return T;
       Return x
-    od`;
+    od`
 
 val test_monad3_def = Define `
   test_monad3 x =
     do
       is_true x;
       Return x
-    od`;
+    od`
 
 (**
  *  Arithmetic
@@ -1747,3 +1742,5 @@ Theorem nth_def:
       Fail Failure
 
 *)
+
+val _ = export_theory ()
