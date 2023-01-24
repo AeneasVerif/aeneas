@@ -68,7 +68,7 @@ Proof
   rw [LE_EQ_GE] >>  
   sg ‘y <> 0’ >- COOPER_TAC >>
   qspecl_then [‘\x. x >= 0’, ‘x’, ‘y’] ASSUME_TAC INT_DIV_FORALL_P >>
-  fs [] >> POP_IGNORE_TAC >> rw [] >- COOPER_TAC >>
+  fs [] >> pop_ignore_tac >> rw [] >- COOPER_TAC >>
   fs [NOT_LT_EQ_GE] >>
   (* Proof by contradiction: assume k < 0 *)
   spose_not_then ASSUME_TAC >>

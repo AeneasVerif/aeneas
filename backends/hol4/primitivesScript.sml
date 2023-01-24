@@ -1,7 +1,7 @@
 open HolKernel boolLib bossLib Parse
 open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
 
-open primitivesArithTheory
+open primitivesArithTheory primitivesBaseTacLib
 
 val primitives_theory_name = "primitives"
 val _ = new_theory primitives_theory_name
@@ -185,11 +185,13 @@ val all_to_int_bounds_lemmas = [
    Note that for isize and usize, we write the lemmas in such a way that the
    proofs are easily automatable for constants.
  *)
+(* TODO: rename those *)
 val int_to_isize_id =
   new_axiom ("int_to_isize_id",
     “!n. (i16_min <= n \/ isize_min <= n) /\ (n <= i16_max \/ n <= isize_max) ==>
          isize_to_int (int_to_isize n) = n”)
 
+(* TODO: remove the condition on u16_max, and make the massage tactic automatically use usize_bounds *)
 val int_to_usize_id =
   new_axiom ("int_to_usize_id",
     “!n. 0 <= n /\ (n <= u16_max \/ n <= usize_max) ==> usize_to_int (int_to_usize n) = n”)
@@ -234,6 +236,7 @@ val int_to_u128_id =
   new_axiom ("int_to_u128_id",
     “!n. 0 <= n /\ n <= u128_max ==> u128_to_int (int_to_u128 n) = n”)
 
+(* TODO: rename *)
 val all_conversion_id_lemmas = [
   int_to_isize_id,
   int_to_i8_id,
@@ -248,6 +251,20 @@ val all_conversion_id_lemmas = [
   int_to_u64_id,
   int_to_u128_id
 ]
+
+val int_to_i8_i8_to_int = new_axiom ("int_to_i8_i8_to_int", “∀i. int_to_i8 (i8_to_int i) = i”)
+val int_to_i16_i16_to_int = new_axiom ("int_to_i16_i16_to_int", “∀i. int_to_i16 (i16_to_int i) = i”)
+val int_to_i32_i32_to_int = new_axiom ("int_to_i32_i32_to_int", “∀i. int_to_i32 (i32_to_int i) = i”)
+val int_to_i64_i64_to_int = new_axiom ("int_to_i64_i64_to_int", “∀i. int_to_i64 (i64_to_int i) = i”)
+val int_to_i128_i128_to_int = new_axiom ("int_to_i128_i128_to_int", “∀i. int_to_i128 (i128_to_int i) = i”)
+val int_to_isize_isize_to_int = new_axiom ("int_to_isize_isize_to_int", “∀i. int_to_isize (isize_to_int i) = i”)
+
+val int_to_u8_u8_to_int = new_axiom ("int_to_u8_u8_to_int", “∀i. int_to_u8 (u8_to_int i) = i”)
+val int_to_u16_u16_to_int = new_axiom ("int_to_u16_u16_to_int", “∀i. int_to_u16 (u16_to_int i) = i”)
+val int_to_u32_u32_to_int = new_axiom ("int_to_u32_u32_to_int", “∀i. int_to_u32 (u32_to_int i) = i”)
+val int_to_u64_u64_to_int = new_axiom ("int_to_u64_u64_to_int", “∀i. int_to_u64 (u64_to_int i) = i”)
+val int_to_u128_u128_to_int = new_axiom ("int_to_u128_u128_to_int", “∀i. int_to_u128 (u128_to_int i) = i”)
+val int_to_usize_usize_to_int = new_axiom ("int_to_usize_usize_to_int", “∀i. int_to_usize (usize_to_int i) = i”)
 
 (** Utilities to define the arithmetic operations *)
 val mk_isize_def = Define
@@ -1247,24 +1264,173 @@ val all_div_eqs = [
 
 val _ = new_type ("vec", 1)
 val _ = new_constant ("vec_to_list", “:'a vec -> 'a list”)
+(* TODO: we could also make ‘mk_vec’ return ‘'a vec’ (no result) *)
+val _ = new_constant ("mk_vec", “:'a list -> 'a vec result”)
+
 
 val VEC_TO_LIST_NUM_BOUNDS =
-  new_axiom (
-    "VEC_TO_LIST_BOUNDS",
+  new_axiom ("VEC_TO_LIST_BOUNDS",
     “!v. let l = LENGTH (vec_to_list v) in
-     (0:num) <= l /\ l <= (4294967295:num)”)
+     (0:num) <= l /\ l <= Num usize_max”)
 
 Theorem VEC_TO_LIST_INT_BOUNDS:
-  !v. let l = int_of_num (LENGTH (vec_to_list v)) in
-     0 <= l /\ l <= u32_max
+  !v. 0 <= int_of_num (LENGTH (vec_to_list v)) /\ int_of_num (LENGTH (vec_to_list v)) <= usize_max
 Proof
   gen_tac >>
-  rw [u32_max_def] >>
   assume_tac VEC_TO_LIST_NUM_BOUNDS >>
-  fs[]
+  pop_assum (qspec_then ‘v’ ASSUME_TAC) >>
+  pop_assum MP_TAC >>
+  PURE_ONCE_REWRITE_TAC [GSYM INT_LE] >>
+  sg ‘0 ≤ usize_max’ >- (ASSUME_TAC usize_bounds >> fs [u16_max_def] >> COOPER_TAC) >>
+  metis_tac [INT_OF_NUM]
 QED
 
-val VEC_LEN_DEF = Define ‘vec_len v = int_to_u32 (int_of_num (LENGTH (vec_to_list v)))’
+val VEC_LEN_DEF = Define ‘vec_len v = int_to_usize (int_of_num (LENGTH (vec_to_list v)))’
+Theorem VEC_LEN_SPEC:
+  ∀v.
+    vec_len v = int_to_usize (&(LENGTH (vec_to_list v))) ∧
+    0 ≤ &(LENGTH (vec_to_list v)) ∧ &(LENGTH (vec_to_list v)) ≤ usize_max
+Proof
+  gen_tac >> rw [VEC_LEN_DEF] >>
+  qspec_then ‘v’ ASSUME_TAC VEC_TO_LIST_INT_BOUNDS >>
+  fs []
+QED
 
+val MK_VEC_SPEC = new_axiom ("MK_VEC_SPEC", “∀l. &(LENGTH l) ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l”)
+
+val VEC_NEW_DEF = Define ‘vec_new = case mk_vec [] of Return v => v’
+Theorem VEC_NEW_SPEC:
+  vec_to_list vec_new = []
+Proof
+  rw [VEC_NEW_DEF] >>
+  qabbrev_tac ‘l = []’ >>
+  qspec_then ‘l’ ASSUME_TAC MK_VEC_SPEC >>
+  Cases_on ‘mk_vec l’ >>
+  rfs [markerTheory.Abbrev_def, NOT_LE_EQ_GT] >> fs [] >>
+  ASSUME_TAC usize_bounds >> fs[u16_max_def] >> TRY (ex_falso >> COOPER_TAC) >>
+  sg ‘0 ≤ usize_max’ >- COOPER_TAC >>
+  fs []
+QED
+
+val VEC_PUSH_DEF = Define ‘vec_push_back v x = mk_vec (vec_to_list v ++ [x])’
+Theorem VEC_PUSH_SPEC:
+  ∀v x. usize_to_int (vec_len v) < usize_max ⇒
+    ∃vx. vec_push_back v x = Return vx ∧
+    vec_to_list vx = vec_to_list v ++ [x]
+Proof
+  rpt strip_tac >> fs [VEC_PUSH_DEF] >>
+  qspec_then ‘v’ ASSUME_TAC VEC_LEN_SPEC >> rw [] >>
+  qspec_then ‘vec_to_list v ++ [x]’ ASSUME_TAC MK_VEC_SPEC >>
+  fs [VEC_LEN_DEF] >> rw [] >>
+  pop_assum irule >>
+  pop_last_assum MP_TAC >>
+  dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC all_conversion_id_lemmas >> fs [] >>
+  COOPER_TAC
+QED
+
+val UPDATE_DEF = Define ‘
+  update ([] : 'a list) (i : num) (y : 'a) : 'a list = [] ∧
+  update (_ :: ls) (0: num) y = y :: ls ∧
+  update (x :: ls) (SUC i) y = x :: update ls i y
+’
+
+Theorem UPDATE_LENGTH:
+  ∀ls i y. LENGTH (update ls i y) = LENGTH ls
+Proof
+  Induct_on ‘ls’ >> Cases_on ‘i’ >> rw [UPDATE_DEF]
+QED
+
+Theorem UPDATE_SPEC:
+  ∀ls i y. i < LENGTH ls ==>
+    LENGTH (update ls i y) = LENGTH ls ∧
+    EL i (update ls i y) = y ∧
+    ∀j. j < LENGTH ls ⇒ j ≠ i ⇒ EL j (update ls i y) = EL j ls
+Proof
+  Induct_on ‘ls’ >> Cases_on ‘i’ >> rw [UPDATE_DEF] >>
+  Cases_on ‘j’ >> fs []
+QED
+
+(* TODO: this is the base definition for index. Shall we remove the ‘return’ type? *)
+val VEC_INDEX_DEF = Define ‘
+  vec_index i v = if usize_to_int i ≤ usize_to_int (vec_len v) then Return (EL (Num (usize_to_int i)) (vec_to_list v)) else Fail Failure’
+
+(* TODO: shortcut for qspec_then ... ASSUME_TAC *)
+(* TODO: use cooper_tac everywhere *)
+(* TODO: use pure_once_rewrite_tac everywhere *)
+
+(* TODO: injectivity lemmas for ..._to_int *)
+Theorem USIZE_TO_INT_INJ:
+  ∀i j. usize_to_int i = usize_to_int j ⇔ i = j
+Proof
+  rpt strip_tac >>
+  qspec_assume ‘i’ int_to_usize_usize_to_int >>
+  qspec_assume ‘j’ int_to_usize_usize_to_int >>
+  metis_tac []
+QED
+
+Theorem USIZE_TO_INT_NEQ_INJ:
+  ∀i j. i <> j ==> usize_to_int i <> usize_to_int j
+Proof
+  metis_tac [USIZE_TO_INT_INJ]
+QED
+
+(* TODO: move *)
+Theorem INT_OF_NUM:
+  ∀i. 0 ≤ i ⇒ &Num i = i
+Proof
+  metis_tac[integerTheory.INT_OF_NUM]
+QED
+
+Theorem INT_OF_NUM_NEQ_INJ:
+  ∀n m. &n ≠ &m ⇒ n ≠ m
+Proof
+  metis_tac [INT_OF_NUM_INJ]
+QED
+
+(* TODO: automate: take assumption, intro first premise as subgoal *)
+
+val VEC_INSERT_BACK_DEF = Define ‘
+  vec_insert_back (v : 'a vec) (i : usize) (x : 'a) = mk_vec (update (vec_to_list v) (Num (usize_to_int i)) x)’
+Theorem VEC_INSERT_BACK_SPEC:
+  ∀v i x.
+    usize_to_int i < usize_to_int (vec_len v) ⇒
+    ∃nv. vec_insert_back v i x = Return nv ∧
+    vec_len v = vec_len nv ∧
+    vec_index i nv = Return x ∧
+    (* TODO: usize_to_int j ≠ usize_to_int i ? *)
+    (∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒ j ≠ i ⇒ vec_index j nv = vec_index j v)
+Proof
+  rpt strip_tac >> fs [VEC_INSERT_BACK_DEF] >>
+  qspec_assume ‘update (vec_to_list v) (Num (usize_to_int i)) x’ MK_VEC_SPEC >>
+  qspecl_assume [‘vec_to_list v’, ‘Num (usize_to_int i)’, ‘x’] UPDATE_LENGTH >>
+  fs [] >>
+  qspec_assume ‘v’ VEC_LEN_SPEC >>
+  rw [] >> gvs [] >>
+  fs [VEC_LEN_DEF, VEC_INDEX_DEF] >>
+  sg ‘usize_to_int (int_to_usize (&LENGTH (vec_to_list v))) = &LENGTH (vec_to_list v)’ >-(irule int_to_usize_id >> COOPER_TAC) >>
+  fs [] >>
+  qspecl_assume [‘vec_to_list v’, ‘Num (usize_to_int i)’, ‘x’] UPDATE_SPEC >> rfs [] >>
+  sg ‘Num (usize_to_int i) < LENGTH (vec_to_list v)’ >-(
+    (* TODO: automate *)
+    pure_once_rewrite_tac [GSYM INT_LT] >>
+    dep_pure_once_rewrite_tac [INT_OF_NUM] >>
+    qspec_assume ‘i’ usize_to_int_bounds >> fs []
+  ) >>
+  fs [] >>
+  (* Case: !j. j <> i ==> ... *)
+  rpt strip_tac >>
+  first_x_assum irule >>
+  rw [] >-(
+    (* TODO: automate *)
+    irule INT_OF_NUM_NEQ_INJ >>
+    dep_pure_rewrite_tac [INT_OF_NUM] >>
+    rw [usize_to_int_bounds] >>
+    metis_tac [USIZE_TO_INT_NEQ_INJ]
+  ) >>
+  (* TODO: automate *)
+  pure_once_rewrite_tac [GSYM INT_LT] >>
+  dep_pure_once_rewrite_tac [INT_OF_NUM] >>
+  qspec_assume ‘j’ usize_to_int_bounds >> fs []
+QED
 
 val _ = export_theory ()
