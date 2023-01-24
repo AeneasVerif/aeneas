@@ -1,6 +1,6 @@
 open HolKernel boolLib bossLib Parse
 
-val primitives_theory_name = "Test"
+val primitives_theory_name = "test"
 val _ = new_theory primitives_theory_name
 
 open boolTheory integerTheory wordsTheory stringTheory

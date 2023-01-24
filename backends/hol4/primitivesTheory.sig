@@ -1,8 +1,9 @@
-signature PrimitivesTheory =
+signature primitivesTheory =
 sig
   type thm = Thm.thm
   
   (*  Axioms  *)
+    val VEC_TO_LIST_BOUNDS : thm
     val i128_to_int_bounds : thm
     val i16_to_int_bounds : thm
     val i32_to_int_bounds : thm
@@ -131,10 +132,9 @@ sig
     val usize_mul_def : thm
     val usize_rem_def : thm
     val usize_sub_def : thm
+    val vec_len_def : thm
   
   (*  Theorems  *)
-    val GE_EQ_LE : thm
-    val GT_EQ_LT : thm
     val I128_ADD_EQ : thm
     val I128_DIV_EQ : thm
     val I128_MUL_EQ : thm
@@ -163,18 +163,6 @@ sig
     val ISIZE_DIV_EQ : thm
     val ISIZE_MUL_EQ : thm
     val ISIZE_SUB_EQ : thm
-    val LE_EQ_GE : thm
-    val LT_EQ_GT : thm
-    val NOT_GE_EQ_LT : thm
-    val NOT_GT_EQ_LE : thm
-    val NOT_LE_EQ_GT : thm
-    val NOT_LT_EQ_GE : thm
-    val POS_DIV_POS_IS_POS : thm
-    val POS_DIV_POS_LE : thm
-    val POS_DIV_POS_LE_INIT : thm
-    val POS_MOD_POS_IS_POS : thm
-    val POS_MOD_POS_LE_INIT : thm
-    val POS_MUL_POS_IS_POS : thm
     val U128_ADD_EQ : thm
     val U128_DIV_EQ : thm
     val U128_MUL_EQ : thm
@@ -205,6 +193,7 @@ sig
     val USIZE_MUL_EQ : thm
     val USIZE_REM_EQ : thm
     val USIZE_SUB_EQ : thm
+    val VEC_TO_LIST_INT_BOUNDS : thm
     val datatype_error : thm
     val datatype_result : thm
     val error2num_11 : thm
@@ -230,13 +219,11 @@ sig
     val result_induction : thm
     val result_nchotomy : thm
   
-  val Primitives_grammars : type_grammar.grammar * term_grammar.grammar
+  val primitives_grammars : type_grammar.grammar * term_grammar.grammar
 (*
-   [Omega] Parent theory of "Primitives"
+   [primitivesArith] Parent theory of "primitives"
    
-   [int_arith] Parent theory of "Primitives"
-   
-   [string] Parent theory of "Primitives"
+   [string] Parent theory of "primitives"
    
    [int_to_u128_id]  Axiom
       
@@ -368,6 +355,11 @@ sig
       
       [oracles: ] [axioms: isize_bounds] []
       ⊢ isize_min ≤ i16_min ∧ isize_max ≥ i16_max
+   
+   [VEC_TO_LIST_BOUNDS]  Axiom
+      
+      [oracles: ] [axioms: VEC_TO_LIST_BOUNDS] []
+      ⊢ ∀v. (let l = LENGTH (vec_to_list v) in 0 ≤ l ∧ l ≤ 4294967295)
    
    [bind_def]  Definition
       
@@ -891,13 +883,9 @@ sig
       
       ⊢ ∀x y. usize_sub x y = mk_usize (usize_to_int x − usize_to_int y)
    
-   [GE_EQ_LE]  Theorem
+   [vec_len_def]  Definition
       
-      ⊢ ∀x y. x ≥ y ⇔ y ≤ x
-   
-   [GT_EQ_LT]  Theorem
-      
-      ⊢ ∀x y. x > y ⇔ y < x
+      ⊢ ∀v. vec_len v = int_to_u32 (&LENGTH (vec_to_list v))
    
    [I128_ADD_EQ]  Theorem
       
@@ -1205,54 +1193,6 @@ sig
           ∃z. isize_sub x y = Return z ∧
               isize_to_int z = isize_to_int x − isize_to_int y
    
-   [LE_EQ_GE]  Theorem
-      
-      ⊢ ∀x y. x ≤ y ⇔ y ≥ x
-   
-   [LT_EQ_GT]  Theorem
-      
-      ⊢ ∀x y. x < y ⇔ y > x
-   
-   [NOT_GE_EQ_LT]  Theorem
-      
-      ⊢ ∀x y. ¬(x ≥ y) ⇔ x < y
-   
-   [NOT_GT_EQ_LE]  Theorem
-      
-      ⊢ ∀x y. ¬(x > y) ⇔ x ≤ y
-   
-   [NOT_LE_EQ_GT]  Theorem
-      
-      ⊢ ∀x y. ¬(x ≤ y) ⇔ x > y
-   
-   [NOT_LT_EQ_GE]  Theorem
-      
-      ⊢ ∀x y. ¬(x < y) ⇔ x ≥ y
-   
-   [POS_DIV_POS_IS_POS]  Theorem
-      
-      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x / y
-   
-   [POS_DIV_POS_LE]  Theorem
-      
-      ⊢ ∀x y d. 0 ≤ x ⇒ 0 ≤ y ⇒ 0 < d ⇒ x ≤ y ⇒ x / d ≤ y / d
-   
-   [POS_DIV_POS_LE_INIT]  Theorem
-      
-      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x / y ≤ x
-   
-   [POS_MOD_POS_IS_POS]  Theorem
-      
-      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x % y
-   
-   [POS_MOD_POS_LE_INIT]  Theorem
-      
-      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x % y ≤ x
-   
-   [POS_MUL_POS_IS_POS]  Theorem
-      
-      ⊢ ∀x y. 0 ≤ x ⇒ 0 ≤ y ⇒ 0 ≤ x * y
-   
    [U128_ADD_EQ]  Theorem
       
       [oracles: DISK_THM]
@@ -1554,6 +1494,11 @@ sig
           0 ≤ usize_to_int x − usize_to_int y ⇒
           ∃z. usize_sub x y = Return z ∧
               usize_to_int z = usize_to_int x − usize_to_int y
+   
+   [VEC_TO_LIST_INT_BOUNDS]  Theorem
+      
+      [oracles: DISK_THM] [axioms: VEC_TO_LIST_BOUNDS] []
+      ⊢ ∀v. (let l = &LENGTH (vec_to_list v) in 0 ≤ l ∧ l ≤ u32_max)
    
    [datatype_error]  Theorem
       
