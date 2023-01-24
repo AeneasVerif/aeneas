@@ -22,12 +22,12 @@ deriving Repr
 open result
 
 -- TODO: is there automated syntax for these discriminators?
-def is_ret (α: Type) (r: result α): Bool :=
+def is_ret {α: Type} (r: result α): Bool :=
   match r with
   | result.ret _ => true
   | result.fail _ => false
 
-def eval_global (α: Type) (x: result α) (h: is_ret α x): α :=
+def eval_global {α: Type} (x: result α) (h: is_ret x): α :=
   match x with
   | result.fail _ => by contradiction
   | result.ret x => x
@@ -83,12 +83,13 @@ def massert (b:Bool) : result Unit :=
 -- and
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/UInt.lean
 -- which both contain a fair amount of reasoning already!
-def USize.checked_sub (n: USize) (m: Nat): result USize :=
+def USize.checked_sub (n: USize) (m: USize): result USize :=
   -- NOTE: the test USize.toNat n - m >= 0 seems to always succeed?
-  if USize.toNat n >= m then
+  if n >= m then
     let n' := USize.toNat n
-    let r := USize.ofNatCore (n' - m) (by
-      have h: n' - m <= n' := by
+    let m' := USize.toNat n
+    let r := USize.ofNatCore (n' - m') (by
+      have h: n' - m' <= n' := by
         apply Nat.sub_le_of_le_add
         case h => rewrite [ Nat.add_comm ]; apply Nat.le_add_left
       apply Nat.lt_of_le_of_lt h
@@ -102,6 +103,24 @@ def USize.checked_sub (n: USize) (m: Nat): result USize :=
 def USize.checked_mul (n: USize) (m: USize): result USize := sorry
 def USize.checked_div (n: USize) (m: USize): result USize := sorry
 
+-- One needs to perform a little bit of reasoning in order to successfully
+-- inject constants into USize, so we provide a general-purpose macro
+
+syntax "intlit" : tactic
+
+macro_rules
+  | `(tactic| intlit) => `(tactic|
+    match USize.size, usize_size_eq with
+    | _, Or.inl rfl => decide
+    | _, Or.inr rfl => decide)
+
+-- This is how the macro is expected to be used
+#eval USize.ofNatCore 0 (by intlit)
+
+-- Also works for other integer types (at the expense of a needless disjunction)
+#eval UInt32.ofNatCore 0 (by intlit)
+
+-- Test behavior...
 #eval USize.checked_sub 10 20
 #eval USize.checked_sub 20 10
 -- NOTE: compare with concrete behavior here, which I do not think we want

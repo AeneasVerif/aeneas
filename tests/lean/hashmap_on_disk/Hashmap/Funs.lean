@@ -15,10 +15,10 @@ def hashmap_hash_map_allocate_slots_loop_fwd
   (T : Type) (slots : vec (hashmap_list_t T)) (n : USize) :
   result (vec (hashmap_list_t T))
   :=
-  if n > (USize.ofNatCore 0 (by simp))
+  if n > (USize.ofNatCore 0 (by intlit))
   then do
     let slots0: vec (hashmap_list_t T) <- @vec_push_back (hashmap_list_t T) slots HashmapListNil
-    let n0 <- USize.checked_sub n (USize.ofNatCore 1 (by simp))
+    let n0 <- USize.checked_sub n (USize.ofNatCore 1 (by intlit))
     hashmap_hash_map_allocate_slots_loop_fwd T slots0 n0
   else ret slots
 termination_by hashmap_hash_map_allocate_slots_loop_fwd _ _ n => n
