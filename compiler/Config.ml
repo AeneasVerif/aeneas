@@ -3,13 +3,13 @@
 (** {1 Backend choice} *)
 
 (** The choice of backend *)
-type backend = FStar | Coq
+type backend = FStar | Coq | Lean
 
-let backend_names = [ "fstar"; "coq" ]
+let backend_names = [ "fstar"; "coq"; "lean" ]
 
 (** Utility to compute the backend from an input parameter *)
 let backend_of_string (b : string) : backend option =
-  match b with "fstar" -> Some FStar | "coq" -> Some Coq | _ -> None
+  match b with "fstar" -> Some FStar | "coq" -> Some Coq | "lean" -> Some Lean | _ -> None
 
 let opt_backend : backend option ref = ref None
 
