@@ -1,0 +1,5 @@
+/build
+/lean_packages/*
+!/lean_packages/manifest.json
+/build
+/lake-packages/*
