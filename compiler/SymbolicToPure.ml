@@ -2615,6 +2615,8 @@ let wrap_in_match_fuel (fuel0 : VarId.id) (fuel : VarId.id) (body : texpression)
       let match_ty = body.ty in
       let match_e = Switch (fuel0, Match [ fail_branch; success_branch ]) in
       { e = match_e; ty = match_ty }
+  | Lean ->
+      failwith "Not handling fuel in Lean"
 
 let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   (* Translate *)

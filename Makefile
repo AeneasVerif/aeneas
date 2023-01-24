@@ -186,7 +186,7 @@ gen-llbcp-%:
 .PHONY: trans-%
 trans-%: CHARON_TEST_DIR = $(CHARON_TESTS_REGULAR_DIR)
 trans-%: FILE = $*
-trans-%: gen-llbc-% tfstar-% tcoq-%
+trans-%: gen-llbc-% tfstar-% tcoq-% tlean-%
 	echo "# Test $* done"
 
 # "p" stands for "Polonius"
@@ -220,6 +220,12 @@ tcoq-%:
 tcoqp-%: OPTIONS += -backend coq
 tcoqp-%: BACKEND_SUBDIR := coq
 tcoqp-%:
+	$(AENEAS_CMD)
+
+.PHONY: tlean-%
+tlean-%: OPTIONS += -backend lean -test-trans-units
+tlean-%: BACKEND_SUBDIR := lean
+tlean-%:
 	$(AENEAS_CMD)
 
 # Nix

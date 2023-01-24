@@ -118,7 +118,7 @@ type formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
-  type_decl_kind_to_qualif : decl_kind -> type_decl_kind option -> string;
+  type_decl_kind_to_qualif : decl_kind -> type_decl_kind option -> bool -> string;
       (** Compute the qualified for a type definition/declaration.
     
           For instance: "type", "and", etc.

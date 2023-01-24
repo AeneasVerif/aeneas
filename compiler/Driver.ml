@@ -147,6 +147,8 @@ let () =
         (* Some patterns are not supported *)
         decompose_monadic_let_bindings := true;
         decompose_nested_let_patterns := true
+    | Lean ->
+        ()
   in
 
   (* Retrieve and check the filename *)

@@ -1,3 +1,4 @@
-all:
-	cd fstar && $(MAKE) all
-	cd coq && $(MAKE) all
+all: test-fstar test-coq test-lean
+
+test-%:
+	cd $* && $(MAKE) all
