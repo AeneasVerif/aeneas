@@ -573,7 +573,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             F.pp_print_string fmt (int_name sv.int_ty);
             F.pp_print_string fmt ".ofNatCore ";
             Z.pp_print fmt sv.value;
-            F.pp_print_string fmt (" (by simp))"))
+            F.pp_print_string fmt (" (by intlit))"))
     | Bool b ->
         let b = if b then "true" else "false" in
         F.pp_print_string fmt b
