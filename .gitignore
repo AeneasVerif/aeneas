@@ -67,3 +67,4 @@ nohup.out
 *.txt
 */.#*
 *.smt2
+.DS_Store

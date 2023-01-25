@@ -5,7 +5,11 @@ package «hashmap» {
   -- add package configuration options here
 }
 
-lean_lib «Hashmap» {
+lean_lib «HashmapMain» {
+  -- add library configuration options here
+}
+
+lean_lib «Base» {
   -- add library configuration options here
 }
 
