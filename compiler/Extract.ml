@@ -175,8 +175,8 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | Lean ->
       [
-        (Result, result_return_id, "ret");
-        (Result, result_fail_id, "fail_"); (* TODO: why the _ *)
+        (Result, result_return_id, "result.ret");
+        (Result, result_fail_id, "result.fail");
         (Error, error_failure_id, "panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
@@ -218,7 +218,7 @@ let assumed_pure_functions : (pure_assumed_fun_id * string) list =
   | Lean ->
       [
         (Return, "return");
-        (Fail, "fail_");
+        (Fail, "fail");
         (Assert, "massert");
         (* TODO: figure out how to deal with this *)
         (FuelDecrease, "decrease");
@@ -296,7 +296,7 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
   if inside then F.pp_print_string fmt ")"
 
 let type_decl_kind_to_qualif (kind : decl_kind)
-    (type_kind : type_decl_kind option) (is_rec: bool): string =
+    (type_kind : type_decl_kind option): string =
   match !backend with
   | FStar -> (
       match kind with
@@ -321,8 +321,7 @@ let type_decl_kind_to_qualif (kind : decl_kind)
       | _ -> raise (Failure "Unexpected"))
   | Lean -> (
       match kind with
-      | SingleNonRec ->
-          if type_kind = Some Struct && not is_rec then "structure" else "inductive"
+      | SingleNonRec -> if type_kind = Some Struct then "structure" else "inductive"
       | SingleRec -> "inductive"
       | MutRecFirst -> "mutual inductive"
       | MutRecInner -> "inductive"
@@ -640,7 +639,8 @@ let print_decl_end_delimiter (fmt : F.formatter) (kind : decl_kind) =
     F.pp_print_cut fmt ();
     F.pp_print_string fmt ".")
 
-let unit_name = match !backend with | Lean -> "Unit" | Coq | FStar -> "unit"
+let unit_name () =
+  match !backend with | Lean -> "Unit" | Coq | FStar -> "unit"
 
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
@@ -653,7 +653,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       | Tuple ->
           (* This is a bit annoying, but in F*/Coq [()] is not the unit type:
            * we have to write [unit]... *)
-          if tys = [] then F.pp_print_string fmt unit_name
+          if tys = [] then F.pp_print_string fmt (unit_name ())
           else (
             F.pp_print_string fmt "(";
             Collections.List.iter_link
@@ -882,7 +882,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
   let _ =
     if !backend = FStar && fields = [] then (
       F.pp_print_space fmt ();
-      F.pp_print_string fmt unit_name)
+      F.pp_print_string fmt (unit_name ()))
     else if (not is_rec) || !backend = FStar then (
       F.pp_print_space fmt ();
       (* If Coq: print the constructor name *)
@@ -983,8 +983,7 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let is_rec = decl_is_from_rec_group kind in
-  let qualif = ctx.fmt.type_decl_kind_to_qualif kind type_kind is_rec in
+  let qualif = ctx.fmt.type_decl_kind_to_qualif kind type_kind in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   (* Print the type parameters *)
   let type_keyword = match !backend with FStar -> "Type0" | Coq | Lean -> "Type" in
@@ -1011,7 +1010,7 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
     let eq = match !backend with
       | FStar -> "="
       | Coq -> ":="
-      | Lean -> if type_kind = Some Struct && not is_rec then "where" else ":="
+      | Lean -> if type_kind = Some Struct && kind = SingleNonRec then "where" else ":="
     in
     F.pp_print_string fmt eq)
   else (

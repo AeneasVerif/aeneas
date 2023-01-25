@@ -708,7 +708,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
         custom_includes;
       Printf.fprintf out "Module %s.\n" module_name
   | Lean ->
-      Printf.fprintf out "import Primitives\nopen result\n\n";
+      Printf.fprintf out "import Base.Primitives\n";
       (* Add the custom imports *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_imports;
       (* Add the custom includes *)
@@ -845,11 +845,30 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
          trans_funs)
   in
 
+  let mkdir_if dest_dir =
+    if not (Sys.file_exists dest_dir) then (
+      log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
+      (* Create a directory with *default* permissions *)
+      Core_unix.mkdir_p dest_dir)
+  in
+
   (* Create the directory, if necessary *)
-  if not (Sys.file_exists dest_dir) then (
-    log#linfo (lazy ("Creating missing directory: " ^ dest_dir));
-    (* Create a directory with *default* permissions *)
-    Core_unix.mkdir_p dest_dir);
+  mkdir_if dest_dir;
+
+  let needs_clauses_module =
+    !Config.extract_decreases_clauses
+    && not (PureUtils.FunLoopIdSet.is_empty rec_functions)
+  in
+
+  (* Lean reflects the module hierarchy within the filesystem, so we need to
+     create more directories *)
+  if !Config.backend = Lean then begin
+    let (^^) = Filename.concat in
+    mkdir_if (dest_dir ^^ "Base");
+    mkdir_if (dest_dir ^^ module_name);
+    if needs_clauses_module then
+      mkdir_if (dest_dir ^^ module_name ^^ "Clauses");
+  end;
 
   (* Copy the "Primitives" file *)
   let _ =
@@ -859,7 +878,7 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
       match !Config.backend with
       | Config.FStar -> ("/backends/fstar/Primitives.fst", "Primitives.fst")
       | Config.Coq -> ("/backends/coq/Primitives.v", "Primitives.v")
-      | Config.Lean -> ("/backends/lean/Primitives.lean", "Primitives.lean")
+      | Config.Lean -> ("/backends/lean/Primitives.lean", "Base/Primitives.lean")
     in
     let src = open_in (exe_dir ^ primitives_src) in
     let tgt_filename = Filename.concat dest_dir primitives_destname in
@@ -889,7 +908,10 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
   in
 
   let module_delimiter =
-    match !Config.backend with FStar | Lean -> "." | Coq -> "_"
+    match !Config.backend with FStar -> "." | Coq -> "_" | Lean -> "."
+  in
+  let file_delimiter =
+    if !Config.backend = Lean then "/" else module_delimiter
   in
   let ext = match !Config.backend with FStar -> ".fst" | Coq -> ".v" | Lean -> ".lean" in
 
@@ -922,11 +944,10 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
       | Coq -> ".v"
       | Lean -> ".lean"
     in
-    let types_file_suffix = module_delimiter ^ "Types" in
     let types_filename =
-      extract_filebasename ^ types_file_suffix ^ types_filename_ext
+      extract_filebasename ^ file_delimiter ^ "Types" ^ types_filename_ext
     in
-    let types_module = module_name ^ types_file_suffix in
+    let types_module = module_name ^ module_delimiter ^ "Types" in
     let types_config =
       {
         base_gen_config with
@@ -940,16 +961,9 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
       ": type definitions" [] [];
 
     (* Extract the template clauses *)
-    let needs_clauses_module =
-      !Config.extract_decreases_clauses
-      && not (PureUtils.FunLoopIdSet.is_empty rec_functions)
-    in
     if needs_clauses_module && !Config.extract_template_decreases_clauses then (
-      let clauses_file_suffix =
-        module_delimiter ^ "Clauses" ^ module_delimiter ^ "Template"
-      in
-      let clauses_filename = extract_filebasename ^ clauses_file_suffix ^ ext in
-      let clauses_module = module_name ^ clauses_file_suffix in
+      let clauses_filename = extract_filebasename ^ file_delimiter ^ "Clauses" ^ file_delimiter ^ "Template" ^ ext in
+      let clauses_module = module_name ^ module_delimiter ^ "Clauses" ^ module_delimiter ^ "Template" in
       let clauses_config =
         { base_gen_config with extract_template_decreases_clauses = true }
       in
@@ -960,9 +974,8 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     (* Extract the opaque functions, if needed *)
     let opaque_funs_module =
       if has_opaque_funs then (
-        let opaque_file_suffix = module_delimiter ^ "Opaque" in
-        let opaque_filename = extract_filebasename ^ opaque_file_suffix ^ ext in
-        let opaque_module = module_name ^ opaque_file_suffix in
+        let opaque_filename = extract_filebasename ^ file_delimiter ^ "Opaque" ^ ext in
+        let opaque_module = module_name ^ module_delimiter ^ "Opaque" in
         let opaque_config =
           {
             base_gen_config with
@@ -979,9 +992,8 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     in
 
     (* Extract the functions *)
-    let fun_file_suffix = module_delimiter ^ "Funs" in
-    let fun_filename = extract_filebasename ^ fun_file_suffix ^ ext in
-    let fun_module = module_name ^ fun_file_suffix in
+    let fun_filename = extract_filebasename ^ file_delimiter ^ "Funs" ^ ext in
+    let fun_module = module_name ^ module_delimiter ^ "Funs" in
     let fun_config =
       {
         base_gen_config with
