@@ -137,13 +137,13 @@ let keywords () =
   in
   List.concat [ named_unops; named_binops; misc ]
 
-let assumed_adts : (assumed_ty * string) list =
+let assumed_adts () : (assumed_ty * string) list =
   [
     (State, "state");
     (Result, "result");
     (Error, "error");
     (Fuel, "nat");
-    (Option, "option");
+    (Option, if !backend = Lean then "Option" else "option");
     (Vec, "vec");
   ]
 
@@ -180,8 +180,8 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (Error, error_failure_id, "panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
-        (Option, option_some_id, "@some");
-        (Option, option_none_id, "@none");
+        (Option, option_some_id, "some");
+        (Option, option_none_id, "none");
       ]
 
 let assumed_llbc_functions :
@@ -228,7 +228,7 @@ let assumed_pure_functions (): (pure_assumed_fun_id * string) list =
 let names_map_init () : names_map_init =
   {
     keywords = keywords ();
-    assumed_adts;
+    assumed_adts = assumed_adts ();
     assumed_structs;
     assumed_variants = assumed_variants ();
     assumed_llbc_functions;
@@ -1380,6 +1380,9 @@ let extract_global_decl_register_names (ctx : extraction_ctx)
 
     TODO: we don't need something very generic anymore (some definitions used
     to be polymorphic).
+
+    TODO: this does roughly the same thing as extract_adt_cons -- make the
+    latter call the former
  *)
 let extract_adt_g_value
     (extract_value : extraction_ctx -> bool -> 'v -> extraction_ctx)
@@ -1696,7 +1699,7 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Open a box for the whole expression *)
   F.pp_open_hvbox fmt 0;
   (* Open parentheses *)
-  if inside then F.pp_print_string fmt "(";
+  if inside && !backend <> Lean then F.pp_print_string fmt "(";
   (* Extract the let-bindings *)
   let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : typed_pattern)
       (re : texpression) : extraction_ctx =
@@ -1728,7 +1731,7 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_print_space fmt ();
         let ctx = extract_typed_pattern ctx fmt true lv in
         F.pp_print_space fmt ();
-        let eq = match !backend with FStar -> "=" | Coq -> ":=" | Lean -> "<-" in
+        let eq = match !backend with FStar -> "=" | Coq -> ":=" | Lean -> if monadic then "<-" else ":=" in
         F.pp_print_string fmt eq;
         F.pp_print_space fmt ();
         extract_texpression ctx fmt false re;
@@ -1743,9 +1746,10 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (* Return *)
     ctx
   in
+  let exists_monadic = List.exists (fun (m, _, _) -> m) lets in
   (* If Lean, we rely on monadic blocks, so we insert a do and open a new box
      immediately *)
-  if !backend = Lean then begin
+  if !backend = Lean && exists_monadic then begin
     F.pp_open_vbox fmt ctx.indent_incr;
     F.pp_print_string fmt "do";
     F.pp_print_space fmt ();
@@ -1762,10 +1766,10 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Close the box for the next expression *)
   F.pp_close_box fmt ();
   (* do-box (Lean only) *)
-  if !backend = Lean then
+  if !backend = Lean && exists_monadic then
     F.pp_close_box fmt ();
   (* Close parentheses *)
-  if inside then F.pp_print_string fmt ")";
+  if inside && !backend <> Lean then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
   F.pp_close_box fmt ()
 
@@ -1807,8 +1811,10 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
              F.pp_print_space fmt ();
              F.pp_print_string fmt "begin";
              F.pp_print_space fmt ()
-         | Coq | Lean ->
+         | Coq ->
              F.pp_print_string fmt " (";
+             F.pp_print_cut fmt ()
+         | Lean ->
              F.pp_print_cut fmt ()
         );
         (* Print the branch expression *)
@@ -1819,7 +1825,9 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
          | FStar ->
              F.pp_print_space fmt ();
              F.pp_print_string fmt "end"
-         | Coq | Lean -> F.pp_print_string fmt ")");
+         | Coq -> F.pp_print_string fmt ")"
+         | Lean -> ()
+        );
         (* Close the box for the branch *)
         if not parenth then F.pp_close_box fmt ();
         (* Close the box for the then/else+branch *)
