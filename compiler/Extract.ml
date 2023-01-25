@@ -175,8 +175,8 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
       ]
   | Lean ->
       [
-        (Result, result_return_id, "result.ret");
-        (Result, result_fail_id, "result.fail");
+        (Result, result_return_id, "ret");
+        (Result, result_fail_id, "fail");
         (Error, error_failure_id, "panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
@@ -202,7 +202,7 @@ let assumed_llbc_functions :
     (VecIndexMut, rg0, "vec_index_mut_back");
   ]
 
-let assumed_pure_functions : (pure_assumed_fun_id * string) list =
+let assumed_pure_functions (): (pure_assumed_fun_id * string) list =
   match !backend with
   | FStar ->
       [
@@ -218,7 +218,7 @@ let assumed_pure_functions : (pure_assumed_fun_id * string) list =
   | Lean ->
       [
         (Return, "return");
-        (Fail, "fail");
+        (Fail, "fail_");
         (Assert, "massert");
         (* TODO: figure out how to deal with this *)
         (FuelDecrease, "decrease");
@@ -232,7 +232,7 @@ let names_map_init () : names_map_init =
     assumed_structs;
     assumed_variants = assumed_variants ();
     assumed_llbc_functions;
-    assumed_pure_functions;
+    assumed_pure_functions = assumed_pure_functions ();
   }
 
 let extract_unop (extract_expr : bool -> texpression -> unit)
@@ -1414,7 +1414,11 @@ let extract_adt_g_value
        *)
       let cons =
         match variant_id with
-        | Some vid -> ctx_get_variant adt_id vid ctx
+        | Some vid ->
+            if !backend = Lean then
+              ctx_get_type adt_id ctx ^ "." ^ ctx_get_variant adt_id vid ctx
+            else
+              ctx_get_variant adt_id vid ctx
         | None -> ctx_get_struct adt_id ctx
       in
       if inside && field_values <> [] then F.pp_print_string fmt "(";
@@ -1610,7 +1614,11 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
        *)
       let cons =
         match adt_cons.variant_id with
-        | Some vid -> ctx_get_variant adt_cons.adt_id vid ctx
+        | Some vid ->
+            if !backend = Lean then
+              ctx_get_type adt_cons.adt_id ctx ^ "." ^ ctx_get_variant adt_cons.adt_id vid ctx
+            else
+              ctx_get_variant adt_cons.adt_id vid ctx
         | None -> ctx_get_struct adt_cons.adt_id ctx
       in
       let use_parentheses = inside && args <> [] in
@@ -1725,7 +1733,8 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_print_space fmt ();
         extract_texpression ctx fmt false re;
         F.pp_print_space fmt ();
-        F.pp_print_string fmt "in";
+        if !backend <> Lean then
+          F.pp_print_string fmt "in";
         ctx)
     in
     (* Close the box for the let-binding *)
@@ -1734,6 +1743,13 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (* Return *)
     ctx
   in
+  (* If Lean, we rely on monadic blocks, so we insert a do and open a new box
+     immediately *)
+  if !backend = Lean then begin
+    F.pp_open_vbox fmt ctx.indent_incr;
+    F.pp_print_string fmt "do";
+    F.pp_print_space fmt ();
+  end;
   let ctx =
     List.fold_left
       (fun ctx (monadic, lv, re) -> extract_let ctx monadic lv re)
@@ -1745,6 +1761,9 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   extract_texpression ctx fmt false next_e;
   (* Close the box for the next expression *)
   F.pp_close_box fmt ();
+  (* do-box (Lean only) *)
+  if !backend = Lean then
+    F.pp_close_box fmt ();
   (* Close parentheses *)
   if inside then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
@@ -1852,7 +1871,9 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
       (* End the match *)
       F.pp_print_space fmt ();
-      F.pp_print_string fmt "end");
+      (* Relying on indentation in Lean *)
+      if !backend <> Lean then
+        F.pp_print_string fmt "end");
   (* Close parentheses *)
   if inside then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
