@@ -101,6 +101,7 @@ def USize.checked_sub (n: USize) (m: USize): result USize :=
 
 -- TODO: settle the style for usize_sub before we write these
 def USize.checked_add (n: USize) (m: USize): result USize := sorry
+def USize.checked_rem (n: USize) (m: USize): result USize := sorry
 def USize.checked_mul (n: USize) (m: USize): result USize := sorry
 def USize.checked_div (n: USize) (m: USize): result USize := sorry
 
