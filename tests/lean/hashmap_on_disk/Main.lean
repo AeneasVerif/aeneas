@@ -1,5 +1,5 @@
-import «Hashmap»
-import Hashmap.Primitives
+import «HashmapMain»
+import Base.Primitives
 
 def main : IO Unit :=
   IO.println s!"Hello, {hello}!"

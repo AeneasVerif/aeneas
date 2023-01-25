@@ -131,26 +131,28 @@ macro_rules
 
 def vec (α : Type u) := { l : List α // List.length l < USize.size }
 
-def vec_new : result (vec α) := return ⟨ [], by {
+def vec_new (α : Type u): result (vec α) := return ⟨ [], by {
   match USize.size, usize_size_eq with
   | _, Or.inl rfl => simp
   | _, Or.inr rfl => simp
   } ⟩
 
-def vec_len (v : vec α) : USize :=
+#check vec_new
+
+def vec_len (α : Type u) (v : vec α) : USize :=
   let ⟨ v, l ⟩ := v
   USize.ofNatCore (List.length v) l
 
 #eval do
-  return (vec_len (<- @vec_new Nat))
+  return (vec_len Nat (<- vec_new Nat))
  
-def vec_push_fwd (_ : vec α) (_ : α) : Unit := ()
+def vec_push_fwd (α : Type u) (_ : vec α) (_ : α) : Unit := ()
 
 -- TODO: more precise error condition here for the fail case
 -- TODO: I originally wrote `List.length v.val < USize.size - 1`; how can one
 -- make the proof work in that case? Probably need to import tactics from
 -- mathlib to deal with inequalities... would love to see an example.
-def vec_push_back (v : vec α) (x : α) : { res: result (vec α) //
+def vec_push_back (α : Type u) (v : vec α) (x : α) : { res: result (vec α) //
   match res with | fail _ => True | ret v' => List.length v'.val = List.length v.val + 1}
   :=
   if h : List.length v.val + 1 < USize.size then
@@ -168,7 +170,7 @@ def vec_push_back (v : vec α) (x : α) : { res: result (vec α) //
   -- select the `val` field if the context provides a type annotation. We
   -- annotate `x`, which relieves us of having to write `.val` on the right-hand
   -- side of the monadic let.
-  let x: vec Nat ← vec_push_back (<- vec_new) 1
+  let x: vec Nat ← vec_push_back Nat (<- vec_new Nat) 1
   -- TODO: strengthen post-condition above and do a demo to show that we can
   -- safely eliminate the `fail` case
-  return (vec_len x)
+  return (vec_len Nat x)
