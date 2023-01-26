@@ -1624,15 +1624,40 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
               ctx_get_variant adt_cons.adt_id vid ctx
         | None -> ctx_get_struct adt_cons.adt_id ctx
       in
-      let use_parentheses = inside && args <> [] in
-      if use_parentheses then F.pp_print_string fmt "(";
-      F.pp_print_string fmt cons;
-      Collections.List.iter
-        (fun v ->
-          F.pp_print_space fmt ();
-          extract_texpression ctx fmt true v)
-        args;
-      if use_parentheses then F.pp_print_string fmt ")"
+      let is_lean_struct = !backend = Lean && adt_cons.variant_id = None in
+      if is_lean_struct then
+        let decl_id = match adt_cons.adt_id with | AdtId id -> id | _ -> assert false in
+        let def_kind = (TypeDeclId.Map.find decl_id ctx.trans_ctx.type_context.type_decls).kind in
+        let fields = match def_kind with | T.Struct fields -> fields | _ -> assert false in
+        let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
+        F.pp_open_vbox fmt ctx.indent_incr;
+        F.pp_print_string fmt "{";
+        F.pp_print_space fmt ();
+        Collections.List.iter_link
+          (fun () ->
+            F.pp_print_string fmt ",";
+            F.pp_print_space fmt ()
+          )
+          (fun ((fid, _), e) ->
+            let f = ctx_get_field adt_cons.adt_id fid ctx in
+            F.pp_print_string fmt f;
+            F.pp_print_string fmt " := ";
+            extract_texpression ctx fmt true e
+          )
+          (List.combine fields args);
+        F.pp_print_space fmt ();
+        F.pp_close_box fmt ();
+        F.pp_print_string fmt "}";
+      else
+        let use_parentheses = inside && args <> [] in
+        if use_parentheses then F.pp_print_string fmt "(";
+        F.pp_print_string fmt cons;
+        Collections.List.iter
+          (fun v ->
+            F.pp_print_space fmt ();
+            extract_texpression ctx fmt true v)
+          args;
+        if use_parentheses then F.pp_print_string fmt ")"
 
 (** Subcase of the app case: ADT field projector.  *)
 and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
