@@ -185,85 +185,83 @@ val all_to_int_bounds_lemmas = [
    Note that for isize and usize, we write the lemmas in such a way that the
    proofs are easily automatable for constants.
  *)
-(* TODO: rename those *)
-val int_to_isize_id =
-  new_axiom ("int_to_isize_id",
-    “!n. (i16_min <= n \/ isize_min <= n) /\ (n <= i16_max \/ n <= isize_max) ==>
-         isize_to_int (int_to_isize n) = n”)
-
 (* TODO: remove the condition on u16_max, and make the massage tactic automatically use usize_bounds *)
-val int_to_usize_id =
-  new_axiom ("int_to_usize_id",
-    “!n. 0 <= n /\ (n <= u16_max \/ n <= usize_max) ==> usize_to_int (int_to_usize n) = n”)
+val isize_to_int_int_to_isize =
+  new_axiom ("isize_to_int_int_to_isize",
+    “!n. isize_min <= n /\ n <= isize_max ==> isize_to_int (int_to_isize n) = n”)
 
-val int_to_i8_id =
-  new_axiom ("int_to_i8_id",
+val i8_to_int_int_to_i8 =
+  new_axiom ("i8_to_int_int_to_i8",
     “!n. i8_min <= n /\ n <= i8_max ==> i8_to_int (int_to_i8 n) = n”)
 
-val int_to_i16_id =
-  new_axiom ("int_to_i16_id",
+val i16_to_int_int_to_i16 =
+  new_axiom ("i16_to_int_int_to_i16",
     “!n. i16_min <= n /\ n <= i16_max ==> i16_to_int (int_to_i16 n) = n”)
 
-val int_to_i32_id =
-  new_axiom ("int_to_i32_id",
+val i32_to_int_int_to_i32 =
+  new_axiom ("i32_to_int_int_to_i32",
     “!n. i32_min <= n /\ n <= i32_max ==> i32_to_int (int_to_i32 n) = n”)
 
-val int_to_i64_id =
-  new_axiom ("int_to_i64_id",
+val i64_to_int_int_to_i64 =
+  new_axiom ("i64_to_int_int_to_i64",
     “!n. i64_min <= n /\ n <= i64_max ==> i64_to_int (int_to_i64 n) = n”)
 
-val int_to_i128_id =
-  new_axiom ("int_to_i128_id",
+val i128_to_int_int_to_i128 =
+  new_axiom ("i128_to_int_int_to_i128",
     “!n. i128_min <= n /\ n <= i128_max ==> i128_to_int (int_to_i128 n) = n”)
 
-val int_to_u8_id =
-  new_axiom ("int_to_u8_id",
+val usize_to_int_int_to_usize =
+  new_axiom ("usize_to_int_int_to_usize",
+    “!n. 0 <= n /\ n <= usize_max ==> usize_to_int (int_to_usize n) = n”)
+
+val u8_to_int_int_to_u8 =
+  new_axiom ("u8_to_int_int_to_u8",
     “!n. 0 <= n /\ n <= u8_max ==> u8_to_int (int_to_u8 n) = n”)
 
-val int_to_u16_id =
-  new_axiom ("int_to_u16_id",
+val u16_to_int_int_to_u16 =
+  new_axiom ("u16_to_int_int_to_u16",
     “!n. 0 <= n /\ n <= u16_max ==> u16_to_int (int_to_u16 n) = n”)
 
-val int_to_u32_id =
-  new_axiom ("int_to_u32_id",
+val u32_to_int_int_to_u32 =
+  new_axiom ("u32_to_int_int_to_u32",
     “!n. 0 <= n /\ n <= u32_max ==> u32_to_int (int_to_u32 n) = n”)
 
-val int_to_u64_id =
-  new_axiom ("int_to_u64_id",
+val u64_to_int_int_to_u64 =
+  new_axiom ("u64_to_int_int_to_u64",
     “!n. 0 <= n /\ n <= u64_max ==> u64_to_int (int_to_u64 n) = n”)
 
-val int_to_u128_id =
-  new_axiom ("int_to_u128_id",
+val u128_to_int_int_to_u128 =
+  new_axiom ("u128_to_int_int_to_u128",
     “!n. 0 <= n /\ n <= u128_max ==> u128_to_int (int_to_u128 n) = n”)
 
 (* TODO: rename *)
 val all_conversion_id_lemmas = [
-  int_to_isize_id,
-  int_to_i8_id,
-  int_to_i16_id,
-  int_to_i32_id,
-  int_to_i64_id,
-  int_to_i128_id,
-  int_to_usize_id,
-  int_to_u8_id,
-  int_to_u16_id,
-  int_to_u32_id,
-  int_to_u64_id,
-  int_to_u128_id
+  isize_to_int_int_to_isize,
+  i8_to_int_int_to_i8,
+  i16_to_int_int_to_i16,
+  i32_to_int_int_to_i32,
+  i64_to_int_int_to_i64,
+  i128_to_int_int_to_i128,
+  usize_to_int_int_to_usize,
+  u8_to_int_int_to_u8,
+  u16_to_int_int_to_u16,
+  u32_to_int_int_to_u32,
+  u64_to_int_int_to_u64,
+  u128_to_int_int_to_u128
 ]
 
-val int_to_i8_i8_to_int = new_axiom ("int_to_i8_i8_to_int", “∀i. int_to_i8 (i8_to_int i) = i”)
-val int_to_i16_i16_to_int = new_axiom ("int_to_i16_i16_to_int", “∀i. int_to_i16 (i16_to_int i) = i”)
-val int_to_i32_i32_to_int = new_axiom ("int_to_i32_i32_to_int", “∀i. int_to_i32 (i32_to_int i) = i”)
-val int_to_i64_i64_to_int = new_axiom ("int_to_i64_i64_to_int", “∀i. int_to_i64 (i64_to_int i) = i”)
-val int_to_i128_i128_to_int = new_axiom ("int_to_i128_i128_to_int", “∀i. int_to_i128 (i128_to_int i) = i”)
+val int_to_i8_i8_to_int       = new_axiom ("int_to_i8_i8_to_int",       “∀i. int_to_i8 (i8_to_int i) = i”)
+val int_to_i16_i16_to_int     = new_axiom ("int_to_i16_i16_to_int",     “∀i. int_to_i16 (i16_to_int i) = i”)
+val int_to_i32_i32_to_int     = new_axiom ("int_to_i32_i32_to_int",     “∀i. int_to_i32 (i32_to_int i) = i”)
+val int_to_i64_i64_to_int     = new_axiom ("int_to_i64_i64_to_int",     “∀i. int_to_i64 (i64_to_int i) = i”)
+val int_to_i128_i128_to_int   = new_axiom ("int_to_i128_i128_to_int",   “∀i. int_to_i128 (i128_to_int i) = i”)
 val int_to_isize_isize_to_int = new_axiom ("int_to_isize_isize_to_int", “∀i. int_to_isize (isize_to_int i) = i”)
 
-val int_to_u8_u8_to_int = new_axiom ("int_to_u8_u8_to_int", “∀i. int_to_u8 (u8_to_int i) = i”)
-val int_to_u16_u16_to_int = new_axiom ("int_to_u16_u16_to_int", “∀i. int_to_u16 (u16_to_int i) = i”)
-val int_to_u32_u32_to_int = new_axiom ("int_to_u32_u32_to_int", “∀i. int_to_u32 (u32_to_int i) = i”)
-val int_to_u64_u64_to_int = new_axiom ("int_to_u64_u64_to_int", “∀i. int_to_u64 (u64_to_int i) = i”)
-val int_to_u128_u128_to_int = new_axiom ("int_to_u128_u128_to_int", “∀i. int_to_u128 (u128_to_int i) = i”)
+val int_to_u8_u8_to_int       = new_axiom ("int_to_u8_u8_to_int",       “∀i. int_to_u8 (u8_to_int i) = i”)
+val int_to_u16_u16_to_int     = new_axiom ("int_to_u16_u16_to_int",     “∀i. int_to_u16 (u16_to_int i) = i”)
+val int_to_u32_u32_to_int     = new_axiom ("int_to_u32_u32_to_int",     “∀i. int_to_u32 (u32_to_int i) = i”)
+val int_to_u64_u64_to_int     = new_axiom ("int_to_u64_u64_to_int",     “∀i. int_to_u64 (u64_to_int i) = i”)
+val int_to_u128_u128_to_int   = new_axiom ("int_to_u128_u128_to_int",   “∀i. int_to_u128 (u128_to_int i) = i”)
 val int_to_usize_usize_to_int = new_axiom ("int_to_usize_usize_to_int", “∀i. int_to_usize (usize_to_int i) = i”)
 
 (** Utilities to define the arithmetic operations *)
@@ -1266,14 +1264,11 @@ val vec_index_def = Define ‘
 (* TODO: use cooper_tac everywhere *)
 (* TODO: use pure_once_rewrite_tac everywhere *)
 
-(* TODO: injectivity lemmas for ..._to_int *)
+(*
 Theorem usize_to_int_inj:
   ∀i j. usize_to_int i = usize_to_int j ⇔ i = j
 Proof
-  rpt strip_tac >>
-  qspec_assume ‘i’ int_to_usize_usize_to_int >>
-  qspec_assume ‘j’ int_to_usize_usize_to_int >>
-  metis_tac []
+  metis_tac [int_to_usize_usize_to_int]
 QED
 
 Theorem usize_to_int_neq_inj:
@@ -1281,6 +1276,7 @@ Theorem usize_to_int_neq_inj:
 Proof
   metis_tac [usize_to_int_inj]
 QED
+*)
 
 Theorem int_of_num_neq_inj:
   ∀n m. &n ≠ &m ⇒ n ≠ m
@@ -1324,7 +1320,7 @@ Proof
   rw [] >> gvs [] >>
   fs [vec_len_def, vec_index_def] >>
   sg ‘usize_to_int (int_to_usize (&LENGTH (vec_to_list v))) = &LENGTH (vec_to_list v)’
-  >-(irule int_to_usize_id >> cooper_tac) >>
+  >-(irule usize_to_int_int_to_usize >> cooper_tac) >>
   fs [] >>
   qspecl_assume [‘vec_to_list v’, ‘Num (usize_to_int i)’, ‘x’] update_spec >> rfs [] >>
   sg ‘Num (usize_to_int i) < LENGTH (vec_to_list v)’ >-(
@@ -1342,15 +1338,13 @@ Proof
     irule int_of_num_neq_inj >>
     dep_pure_rewrite_tac [primitivesArithTheory.int_of_num] >>
     rw [usize_to_int_bounds] >>
-    metis_tac [usize_to_int_neq_inj]
+    metis_tac [int_to_usize_usize_to_int]
   ) >>
   (* TODO: automate *)
   pure_once_rewrite_tac [gsym INT_LT] >>
   dep_pure_once_rewrite_tac [primitivesArithTheory.int_of_num] >>
   qspec_assume ‘j’ usize_to_int_bounds >> fs []
 QED
-
-(* TODO: use lowercase everywhere for the theorem names *)
 
 
 (* Small experiment: trying to redefine common functions with integers instead of nums *)
@@ -1468,7 +1462,7 @@ Proof
   rw [] >> gvs [] >>
   fs [vec_len_def, vec_index_def] >>
   qspec_assume ‘i’ usize_to_int_bounds >>
-  sg_dep_rewrite_all_tac int_to_usize_id >- cooper_tac >> fs [] >>
+  sg_dep_rewrite_all_tac usize_to_int_int_to_usize >- cooper_tac >> fs [] >>
   sg_dep_rewrite_goal_tac index_update_diff >- cooper_tac >> fs [] >>
   rw [] >>
   irule index_update_same >> cooper_tac
