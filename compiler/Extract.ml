@@ -1626,6 +1626,9 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       in
       let is_lean_struct = !backend = Lean && adt_cons.variant_id = None in
       if is_lean_struct then
+        (* TODO: enclosing curly brace is indented too far to the right *)
+        (* TODO: when only one or two fields differ, considering using the with
+           syntax (peephole optimization) *)
         let decl_id = match adt_cons.adt_id with | AdtId id -> id | _ -> assert false in
         let def_kind = (TypeDeclId.Map.find decl_id ctx.trans_ctx.type_context.type_decls).kind in
         let fields = match def_kind with | T.Struct fields -> fields | _ -> assert false in
@@ -1673,8 +1676,9 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Extract the expression *)
       extract_texpression ctx fmt true arg;
-      (* We allow to break where the "." appears *)
-      F.pp_print_break fmt 0 0;
+      (* We allow to break where the "." appears (except Lean, it's a syntax error) *)
+      if !backend <> Lean then
+        F.pp_print_break fmt 0 0;
       F.pp_print_string fmt ".";
       (* If in Coq, the field projection has to be parenthesized *)
       (match !backend with
