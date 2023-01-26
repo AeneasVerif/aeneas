@@ -534,34 +534,35 @@ fun prove_arith_op_eq (asms, g) =
       | _ => failwith "Unexpected"
     val x = (snd o dest_comb) x_to_int;
     val y = (snd o dest_comb) y_to_int;
+    val rw_thms = int_rem_def :: List.concat [all_rem_defs, all_add_defs, all_sub_defs, all_mul_defs, all_div_defs, all_mk_int_defs, all_to_int_bounds_lemmas, all_conversion_id_lemmas];
     fun inst_first_lem arg lems =
-      MAP_FIRST (fn th => (ASSUME_TAC (SPEC arg th) handle HOL_ERR _ => FAIL_TAC "")) lems;
+      map_first (fn th => (assume_tac (SPEC arg th) handle HOL_ERR _ => fail_tac "")) lems;
   in
     (rpt gen_tac >>
-     rpt DISCH_TAC >>
-     ASSUME_TAC usize_bounds >> (* Only useful for usize of course *)
-     ASSUME_TAC isize_bounds >> (* Only useful for isize of course *)
-     rw (int_rem_def :: List.concat [all_rem_defs, all_add_defs, all_sub_defs, all_mul_defs, all_div_defs, all_mk_int_defs, all_to_int_bounds_lemmas, all_conversion_id_lemmas]) >>
-     fs (int_rem_def :: List.concat [all_rem_defs, all_add_defs, all_sub_defs, all_mul_defs, all_div_defs, all_mk_int_defs, all_to_int_bounds_lemmas, all_conversion_id_lemmas]) >>
+     rpt disch_tac >>
+     assume_tac usize_bounds >> (* Only useful for usize of course *)
+     assume_tac isize_bounds >> (* Only useful for isize of course *)
+     rw rw_thms >>
+     fs rw_thms >>
      inst_first_lem x all_to_int_bounds_lemmas >>
      inst_first_lem y all_to_int_bounds_lemmas >>
-     gs [NOT_LE_EQ_GT, NOT_LT_EQ_GE, NOT_GE_EQ_LT, NOT_GT_EQ_LE, GE_EQ_LE, GT_EQ_LT] >>
-     TRY COOPER_TAC >>
-     FIRST [
+     gs [not_le_eq_gt, not_lt_eq_ge, not_ge_eq_lt, not_gt_eq_le, ge_eq_le, gt_eq_lt] >>
+     try_tac cooper_tac >>
+     first_tac [
        (* For division *)
-       qspecl_then [‘^x_to_int’, ‘^y_to_int’] ASSUME_TAC POS_DIV_POS_IS_POS >>
-       qspecl_then [‘^x_to_int’, ‘^y_to_int’] ASSUME_TAC POS_DIV_POS_LE_INIT >>
-       COOPER_TAC,
+       qspecl_assume [‘^x_to_int’, ‘^y_to_int’] pos_div_pos_is_pos >>
+       qspecl_assume [‘^x_to_int’, ‘^y_to_int’] pos_div_pos_le_init >>
+       cooper_tac,
        (* For remainder *)
        dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC all_conversion_id_lemmas >> fs [] >>
-       qspecl_then [‘^x_to_int’, ‘^y_to_int’] ASSUME_TAC POS_MOD_POS_IS_POS >>
-       qspecl_then [‘^x_to_int’, ‘^y_to_int’] ASSUME_TAC POS_MOD_POS_LE_INIT >>
-       COOPER_TAC,
+       qspecl_assume [‘^x_to_int’, ‘^y_to_int’] pos_mod_pos_is_pos >>
+       qspecl_assume [‘^x_to_int’, ‘^y_to_int’] pos_mod_pos_le_init >>
+       cooper_tac,
        dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC all_conversion_id_lemmas >> fs []
      ]) (asms, g)
   end
 
-Theorem U8_ADD_EQ:
+Theorem u8_add_eq:
   !x y.
     u8_to_int x + u8_to_int y <= u8_max ==>
     ?z. u8_add x y = Return z /\ u8_to_int z = u8_to_int x + u8_to_int y
@@ -569,7 +570,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U16_ADD_EQ:
+Theorem u16_add_eq:
   !(x y).
     u16_to_int x + u16_to_int y <= u16_max ==>
     ?(z). u16_add x y = Return z /\ u16_to_int z = u16_to_int x + u16_to_int y
@@ -577,7 +578,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U32_ADD_EQ:
+Theorem u32_add_eq:
   !x y.
     u32_to_int x + u32_to_int y <= u32_max ==>
     ?z. u32_add x y = Return z /\ u32_to_int z = u32_to_int x + u32_to_int y
@@ -585,7 +586,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U64_ADD_EQ:
+Theorem u64_add_eq:
   !x y.
     u64_to_int x + u64_to_int y <= u64_max ==>
     ?z. u64_add x y = Return z /\ u64_to_int z = u64_to_int x + u64_to_int y
@@ -593,7 +594,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U128_ADD_EQ:
+Theorem u128_add_eq:
   !x y.
     u128_to_int x + u128_to_int y <= u128_max ==>
     ?z. u128_add x y = Return z /\ u128_to_int z = u128_to_int x + u128_to_int y
@@ -601,7 +602,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem USIZE_ADD_EQ:
+Theorem usize_add_eq:
   !x y.
     (usize_to_int x + usize_to_int y <= u16_max) \/ (usize_to_int x + usize_to_int y <= usize_max) ==>
     ?z. usize_add x y = Return z /\ usize_to_int z = usize_to_int x + usize_to_int y
@@ -609,7 +610,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I8_ADD_EQ:
+Theorem i8_add_eq:
   !x y.
     i8_min <= i8_to_int x + i8_to_int y ==>
     i8_to_int x + i8_to_int y <= i8_max ==>
@@ -618,7 +619,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I16_ADD_EQ:
+Theorem i16_add_eq:
   !x y.
     i16_min <= i16_to_int x + i16_to_int y ==>
     i16_to_int x + i16_to_int y <= i16_max ==>
@@ -627,7 +628,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I32_ADD_EQ:
+Theorem i32_add_eq:
   !x y.
     i32_min <= i32_to_int x + i32_to_int y ==>
     i32_to_int x + i32_to_int y <= i32_max ==>
@@ -636,7 +637,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I64_ADD_EQ:
+Theorem i64_add_eq:
   !x y.
     i64_min <= i64_to_int x + i64_to_int y ==>
     i64_to_int x + i64_to_int y <= i64_max ==>
@@ -645,7 +646,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I128_ADD_EQ:
+Theorem i128_add_eq:
   !x y.
     i128_min <= i128_to_int x + i128_to_int y ==>
     i128_to_int x + i128_to_int y <= i128_max ==>
@@ -654,7 +655,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem ISIZE_ADD_EQ:
+Theorem isize_add_eq:
   !x y.
     (i16_min <= isize_to_int x + isize_to_int y \/ isize_min <= isize_to_int x + isize_to_int y) ==>
     (isize_to_int x + isize_to_int y <= i16_max \/ isize_to_int x + isize_to_int y <= isize_max) ==>
@@ -664,21 +665,21 @@ Proof
 QED
 
 val all_add_eqs = [
-  ISIZE_ADD_EQ,
-  I8_ADD_EQ,
-  I16_ADD_EQ,
-  I32_ADD_EQ,
-  I64_ADD_EQ,
-  I128_ADD_EQ,
-  USIZE_ADD_EQ,
-  U8_ADD_EQ,
-  U16_ADD_EQ,
-  U32_ADD_EQ,
-  U64_ADD_EQ,
-  U128_ADD_EQ
+  isize_add_eq,
+  i8_add_eq,
+  i16_add_eq,
+  i32_add_eq,
+  i64_add_eq,
+  i128_add_eq,
+  usize_add_eq,
+  u8_add_eq,
+  u16_add_eq,
+  u32_add_eq,
+  u64_add_eq,
+  u128_add_eq
 ]
       
-Theorem U8_SUB_EQ:
+Theorem u8_sub_eq:
   !x y.
     0 <= u8_to_int x - u8_to_int y ==>
     ?z. u8_sub x y = Return z /\ u8_to_int z = u8_to_int x - u8_to_int y
@@ -686,7 +687,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U16_SUB_EQ:
+Theorem u16_sub_eq:
   !x y.
     0 <= u16_to_int x - u16_to_int y ==>
     ?z. u16_sub x y = Return z /\ u16_to_int z = u16_to_int x - u16_to_int y
@@ -694,7 +695,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U32_SUB_EQ:
+Theorem u32_sub_eq:
   !x y.
     0 <= u32_to_int x - u32_to_int y ==>
     ?z. u32_sub x y = Return z /\ u32_to_int z = u32_to_int x - u32_to_int y
@@ -702,7 +703,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U64_SUB_EQ:
+Theorem u64_sub_eq:
   !x y.
     0 <= u64_to_int x - u64_to_int y ==>
     ?z. u64_sub x y = Return z /\ u64_to_int z = u64_to_int x - u64_to_int y
@@ -710,7 +711,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U128_SUB_EQ:
+Theorem u128_sub_eq:
   !x y.
     0 <= u128_to_int x - u128_to_int y ==>
     ?z. u128_sub x y = Return z /\ u128_to_int z = u128_to_int x - u128_to_int y
@@ -718,7 +719,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem USIZE_SUB_EQ:
+Theorem usize_sub_eq:
   !x y.
     0 <= usize_to_int x - usize_to_int y ==>
     ?z. usize_sub x y = Return z /\ usize_to_int z = usize_to_int x - usize_to_int y
@@ -726,7 +727,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I8_SUB_EQ:
+Theorem i8_sub_eq:
   !x y.
     i8_min <= i8_to_int x - i8_to_int y ==>
     i8_to_int x - i8_to_int y <= i8_max ==>
@@ -735,7 +736,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I16_SUB_EQ:
+Theorem i16_sub_eq:
   !x y.
     i16_min <= i16_to_int x - i16_to_int y ==>
     i16_to_int x - i16_to_int y <= i16_max ==>
@@ -744,7 +745,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I32_SUB_EQ:
+Theorem i32_sub_eq:
   !x y.
     i32_min <= i32_to_int x - i32_to_int y ==>
     i32_to_int x - i32_to_int y <= i32_max ==>
@@ -753,7 +754,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I64_SUB_EQ:
+Theorem i64_sub_eq:
   !x y.
     i64_min <= i64_to_int x - i64_to_int y ==>
     i64_to_int x - i64_to_int y <= i64_max ==>
@@ -762,7 +763,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I128_SUB_EQ:
+Theorem i128_sub_eq:
   !x y.
     i128_min <= i128_to_int x - i128_to_int y ==>
     i128_to_int x - i128_to_int y <= i128_max ==>
@@ -771,7 +772,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem ISIZE_SUB_EQ:
+Theorem isize_sub_eq:
   !x y.
     (i16_min <= isize_to_int x - isize_to_int y \/ isize_min <= isize_to_int x - isize_to_int y) ==>
     (isize_to_int x - isize_to_int y <= i16_max \/ isize_to_int x - isize_to_int y <= isize_max) ==>
@@ -781,21 +782,21 @@ Proof
 QED
 
 val all_sub_eqs = [
-  ISIZE_SUB_EQ,
-  I8_SUB_EQ,
-  I16_SUB_EQ,
-  I32_SUB_EQ,
-  I64_SUB_EQ,
-  I128_SUB_EQ,
-  USIZE_SUB_EQ,
-  U8_SUB_EQ,
-  U16_SUB_EQ,
-  U32_SUB_EQ,
-  U64_SUB_EQ,
-  U128_SUB_EQ
+  isize_sub_eq,
+  i8_sub_eq,
+  i16_sub_eq,
+  i32_sub_eq,
+  i64_sub_eq,
+  i128_sub_eq,
+  usize_sub_eq,
+  u8_sub_eq,
+  u16_sub_eq,
+  u32_sub_eq,
+  u64_sub_eq,
+  u128_sub_eq
 ]
 
-Theorem U8_MUL_EQ:
+Theorem u8_mul_eq:
   !x y.
     u8_to_int x * u8_to_int y <= u8_max ==>
     ?z. u8_mul x y = Return z /\ u8_to_int z = u8_to_int x * u8_to_int y
@@ -803,7 +804,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U16_MUL_EQ:
+Theorem u16_mul_eq:
   !x y.
     u16_to_int x * u16_to_int y <= u16_max ==>
     ?z. u16_mul x y = Return z /\ u16_to_int z = u16_to_int x * u16_to_int y
@@ -811,7 +812,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U32_MUL_EQ:
+Theorem u32_mul_eq:
   !x y.
     u32_to_int x * u32_to_int y <= u32_max ==>
     ?z. u32_mul x y = Return z /\ u32_to_int z = u32_to_int x * u32_to_int y
@@ -819,7 +820,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U64_MUL_EQ:
+Theorem u64_mul_eq:
   !x y.
     u64_to_int x * u64_to_int y <= u64_max ==>
     ?z. u64_mul x y = Return z /\ u64_to_int z = u64_to_int x * u64_to_int y
@@ -827,7 +828,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U128_MUL_EQ:
+Theorem u128_mul_eq:
   !x y.
     u128_to_int x * u128_to_int y <= u128_max ==>
     ?z. u128_mul x y = Return z /\ u128_to_int z = u128_to_int x * u128_to_int y
@@ -835,7 +836,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem USIZE_MUL_EQ:
+Theorem usize_mul_eq:
   !x y.
     (usize_to_int x * usize_to_int y <= u16_max) \/ (usize_to_int x * usize_to_int y <= usize_max) ==>
     ?z. usize_mul x y = Return z /\ usize_to_int z = usize_to_int x * usize_to_int y
@@ -843,7 +844,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I8_MUL_EQ:
+Theorem i8_mul_eq:
   !x y.
     i8_min <= i8_to_int x * i8_to_int y ==>
     i8_to_int x * i8_to_int y <= i8_max ==>
@@ -852,7 +853,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I16_MUL_EQ:
+Theorem i16_mul_eq:
   !x y.
     i16_min <= i16_to_int x * i16_to_int y ==>
     i16_to_int x * i16_to_int y <= i16_max ==>
@@ -861,7 +862,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I32_MUL_EQ:
+Theorem i32_mul_eq:
   !x y.
     i32_min <= i32_to_int x * i32_to_int y ==>
     i32_to_int x * i32_to_int y <= i32_max ==>
@@ -870,7 +871,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I64_MUL_EQ:
+Theorem i64_mul_eq:
   !x y.
     i64_min <= i64_to_int x * i64_to_int y ==>
     i64_to_int x * i64_to_int y <= i64_max ==>
@@ -879,7 +880,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I128_MUL_EQ:
+Theorem i128_mul_eq:
   !x y.
     i128_min <= i128_to_int x * i128_to_int y ==>
     i128_to_int x * i128_to_int y <= i128_max ==>
@@ -888,7 +889,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem ISIZE_MUL_EQ:
+Theorem isize_mul_eq:
   !x y.
     (i16_min <= isize_to_int x * isize_to_int y \/ isize_min <= isize_to_int x * isize_to_int y) ==>
     (isize_to_int x * isize_to_int y <= i16_max \/ isize_to_int x * isize_to_int y <= isize_max) ==>
@@ -898,21 +899,21 @@ Proof
 QED
 
 val all_mul_eqs = [
-  ISIZE_MUL_EQ,
-  I8_MUL_EQ,
-  I16_MUL_EQ,
-  I32_MUL_EQ,
-  I64_MUL_EQ,
-  I128_MUL_EQ,
-  USIZE_MUL_EQ,
-  U8_MUL_EQ,
-  U16_MUL_EQ,
-  U32_MUL_EQ,
-  U64_MUL_EQ,
-  U128_MUL_EQ
+  isize_mul_eq,
+  i8_mul_eq,
+  i16_mul_eq,
+  i32_mul_eq,
+  i64_mul_eq,
+  i128_mul_eq,
+  usize_mul_eq,
+  u8_mul_eq,
+  u16_mul_eq,
+  u32_mul_eq,
+  u64_mul_eq,
+  u128_mul_eq
 ]
 
-Theorem U8_DIV_EQ:
+Theorem u8_div_eq:
   !x y.
     u8_to_int y <> 0 ==>
     ?z. u8_div x y = Return z /\ u8_to_int z = u8_to_int x / u8_to_int y
@@ -920,7 +921,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U16_DIV_EQ:
+Theorem u16_div_eq:
   !x y.
     u16_to_int y <> 0 ==>
     ?z. u16_div x y = Return z /\ u16_to_int z = u16_to_int x / u16_to_int y
@@ -928,7 +929,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U32_DIV_EQ:
+Theorem u32_div_eq:
   !x y.
     u32_to_int y <> 0 ==>
     ?z. u32_div x y = Return z /\ u32_to_int z = u32_to_int x / u32_to_int y
@@ -936,7 +937,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U64_DIV_EQ:
+Theorem u64_div_eq:
   !x y.
     u64_to_int y <> 0 ==>
     ?z. u64_div x y = Return z /\ u64_to_int z = u64_to_int x / u64_to_int y
@@ -944,7 +945,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U128_DIV_EQ:
+Theorem u128_div_eq:
   !x y.
     u128_to_int y <> 0 ==>
     ?z. u128_div x y = Return z /\ u128_to_int z = u128_to_int x / u128_to_int y
@@ -952,7 +953,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem USIZE_DIV_EQ:
+Theorem usize_div_eq:
   !x y.
     usize_to_int y <> 0 ==>
     ?z. usize_div x y = Return z /\ usize_to_int z = usize_to_int x / usize_to_int y
@@ -960,7 +961,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I8_DIV_EQ:
+Theorem i8_div_eq:
   !x y.
     i8_to_int y <> 0 ==>
     i8_min <= i8_to_int x / i8_to_int y ==>
@@ -970,7 +971,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I16_DIV_EQ:
+Theorem i16_div_eq:
   !x y.
     i16_to_int y <> 0 ==>
     i16_min <= i16_to_int x / i16_to_int y ==>
@@ -980,7 +981,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I32_DIV_EQ:
+Theorem i32_div_eq:
   !x y.
     i32_to_int y <> 0 ==>
     i32_min <= i32_to_int x / i32_to_int y ==>
@@ -990,7 +991,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I64_DIV_EQ:
+Theorem i64_div_eq:
   !x y.
     i64_to_int y <> 0 ==>
     i64_min <= i64_to_int x / i64_to_int y ==>
@@ -1000,7 +1001,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I128_DIV_EQ:
+Theorem i128_div_eq:
   !x y.
     i128_to_int y <> 0 ==>
     i128_min <= i128_to_int x / i128_to_int y ==>
@@ -1010,7 +1011,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem ISIZE_DIV_EQ:
+Theorem isize_div_eq:
   !x y.
     isize_to_int y <> 0 ==>
     (i16_min <= isize_to_int x / isize_to_int y \/ isize_min <= isize_to_int x / isize_to_int y) ==>
@@ -1021,21 +1022,21 @@ Proof
 QED
 
 val all_div_eqs = [
-  ISIZE_DIV_EQ,
-  I8_DIV_EQ,
-  I16_DIV_EQ,
-  I32_DIV_EQ,
-  I64_DIV_EQ,
-  I128_DIV_EQ,
-  USIZE_DIV_EQ,
-  U8_DIV_EQ,
-  U16_DIV_EQ,
-  U32_DIV_EQ,
-  U64_DIV_EQ,
-  U128_DIV_EQ
+  isize_div_eq,
+  i8_div_eq,
+  i16_div_eq,
+  i32_div_eq,
+  i64_div_eq,
+  i128_div_eq,
+  usize_div_eq,
+  u8_div_eq,
+  u16_div_eq,
+  u32_div_eq,
+  u64_div_eq,
+  u128_div_eq
 ]
 
-Theorem U8_REM_EQ:
+Theorem u8_rem_eq:
   !x y.
     u8_to_int y <> 0 ==>
     ?z. u8_rem x y = Return z /\ u8_to_int z = int_rem (u8_to_int x) (u8_to_int y)
@@ -1043,7 +1044,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U16_REM_EQ:
+Theorem u16_rem_eq:
   !x y.
     u16_to_int y <> 0 ==>
     ?z. u16_rem x y = Return z /\ u16_to_int z = int_rem (u16_to_int x) (u16_to_int y)
@@ -1051,7 +1052,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U32_REM_EQ:
+Theorem u32_rem_eq:
   !x y.
     u32_to_int y <> 0 ==>
     ?z. u32_rem x y = Return z /\ u32_to_int z = int_rem (u32_to_int x) (u32_to_int y)
@@ -1059,7 +1060,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U64_REM_EQ:
+Theorem u64_rem_eq:
   !x y.
     u64_to_int y <> 0 ==>
     ?z. u64_rem x y = Return z /\ u64_to_int z = int_rem (u64_to_int x) (u64_to_int y)
@@ -1067,7 +1068,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem U128_REM_EQ:
+Theorem u128_rem_eq:
   !x y.
     u128_to_int y <> 0 ==>
     ?z. u128_rem x y = Return z /\ u128_to_int z = int_rem (u128_to_int x) (u128_to_int y)
@@ -1075,7 +1076,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem USIZE_REM_EQ:
+Theorem usize_rem_eq:
   !x y.
     usize_to_int y <> 0 ==>
     ?z. usize_rem x y = Return z /\ usize_to_int z = int_rem (usize_to_int x) (usize_to_int y)
@@ -1083,7 +1084,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I8_REM_EQ:
+Theorem i8_rem_eq:
   !x y.
     i8_to_int y <> 0 ==>
     i8_min <= int_rem (i8_to_int x) (i8_to_int y) ==>
@@ -1093,7 +1094,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I16_REM_EQ:
+Theorem i16_rem_eq:
   !x y.
     i16_to_int y <> 0 ==>
     i16_min <= int_rem (i16_to_int x) (i16_to_int y) ==>
@@ -1103,7 +1104,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I32_REM_EQ:
+Theorem i32_rem_eq:
   !x y.
     i32_to_int y <> 0 ==>
     i32_min <= int_rem (i32_to_int x) (i32_to_int y) ==>
@@ -1113,7 +1114,7 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I64_REM_EQ:
+Theorem i64_rem_eq:
   !x y.
     i64_to_int y <> 0 ==>
     i64_min <= int_rem (i64_to_int x) (i64_to_int y) ==>
@@ -1123,140 +1124,43 @@ Proof
   prove_arith_op_eq
 QED
 
-Theorem I8_REM_EQ:
-  !x y.
-    i8_to_int y <> 0 ==>
-    i8_min <= int_rem (i8_to_int x) (i8_to_int y) ==>
-    int_rem (i8_to_int x) (i8_to_int y) <= i8_max ==>
-    ?z. i8_rem x y = Return z /\ i8_to_int z = int_rem (i8_to_int x) (i8_to_int y)
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem I8_REM_EQ:
-  !x y.
-    i8_to_int y <> 0 ==>
-    i8_min <= int_rem (i8_to_int x) (i8_to_int y) ==>
-    int_rem (i8_to_int x) (i8_to_int y) <= i8_max ==>
-    ?z. i8_rem x y = Return z /\ i8_to_int z = int_rem (i8_to_int x) (i8_to_int y)
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem U16_DIV_EQ:
-  !x y.
-    u16_to_int y <> 0 ==>
-    ?z. u16_div x y = Return z /\ u16_to_int z = u16_to_int x / u16_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem U32_DIV_EQ:
-  !x y.
-    u32_to_int y <> 0 ==>
-    ?z. u32_div x y = Return z /\ u32_to_int z = u32_to_int x / u32_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem U64_DIV_EQ:
-  !x y.
-    u64_to_int y <> 0 ==>
-    ?z. u64_div x y = Return z /\ u64_to_int z = u64_to_int x / u64_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem U128_DIV_EQ:
-  !x y.
-    u128_to_int y <> 0 ==>
-    ?z. u128_div x y = Return z /\ u128_to_int z = u128_to_int x / u128_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem USIZE_DIV_EQ:
-  !x y.
-    usize_to_int y <> 0 ==>
-    ?z. usize_div x y = Return z /\ usize_to_int z = usize_to_int x / usize_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem I8_DIV_EQ:
-  !x y.
-    i8_to_int y <> 0 ==>
-    i8_min <= i8_to_int x / i8_to_int y ==>
-    i8_to_int x / i8_to_int y <= i8_max ==>
-    ?z. i8_div x y = Return z /\ i8_to_int z = i8_to_int x / i8_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem I16_DIV_EQ:
-  !x y.
-    i16_to_int y <> 0 ==>
-    i16_min <= i16_to_int x / i16_to_int y ==>
-    i16_to_int x / i16_to_int y <= i16_max ==>
-    ?z. i16_div x y = Return z /\ i16_to_int z = i16_to_int x / i16_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem I32_DIV_EQ:
-  !x y.
-    i32_to_int y <> 0 ==>
-    i32_min <= i32_to_int x / i32_to_int y ==>
-    i32_to_int x / i32_to_int y <= i32_max ==>
-    ?z. i32_div x y = Return z /\ i32_to_int z = i32_to_int x / i32_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem I64_DIV_EQ:
-  !x y.
-    i64_to_int y <> 0 ==>
-    i64_min <= i64_to_int x / i64_to_int y ==>
-    i64_to_int x / i64_to_int y <= i64_max ==>
-    ?z. i64_div x y = Return z /\ i64_to_int z = i64_to_int x / i64_to_int y
-Proof
-  prove_arith_op_eq
-QED
-
-Theorem I128_DIV_EQ:
+Theorem i128_rem_eq:
   !x y.
     i128_to_int y <> 0 ==>
-    i128_min <= i128_to_int x / i128_to_int y ==>
-    i128_to_int x / i128_to_int y <= i128_max ==>
-    ?z. i128_div x y = Return z /\ i128_to_int z = i128_to_int x / i128_to_int y
+    i128_min <= int_rem (i128_to_int x) (i128_to_int y) ==>
+    int_rem (i128_to_int x) (i128_to_int y) <= i128_max ==>
+    ?z. i128_rem x y = Return z /\ i128_to_int z = int_rem (i128_to_int x) (i128_to_int y)
 Proof
   prove_arith_op_eq
 QED
 
-Theorem ISIZE_DIV_EQ:
+Theorem isize_rem_eq:
   !x y.
     isize_to_int y <> 0 ==>
-    (i16_min <= isize_to_int x / isize_to_int y \/ isize_min <= isize_to_int x / isize_to_int y) ==>
-    (isize_to_int x / isize_to_int y <= i16_max \/ isize_to_int x / isize_to_int y <= isize_max) ==>
-    ?z. isize_div x y = Return z /\ isize_to_int z = isize_to_int x / isize_to_int y
+    (i16_min <= int_rem (isize_to_int x) (isize_to_int y) \/
+     isize_min <= int_rem (isize_to_int x) (isize_to_int y)) ==>
+    (int_rem (isize_to_int x) (isize_to_int y) <= i16_max \/
+     int_rem (isize_to_int x) (isize_to_int y) <= isize_max) ==>
+    ?z. isize_rem x y = Return z /\ isize_to_int z = int_rem (isize_to_int x) (isize_to_int y)
 Proof
   prove_arith_op_eq
 QED
 
-val all_div_eqs = [
-  ISIZE_DIV_EQ,
-  I8_DIV_EQ,
-  I16_DIV_EQ,
-  I32_DIV_EQ,
-  I64_DIV_EQ,
-  I128_DIV_EQ,
-  USIZE_DIV_EQ,
-  U8_DIV_EQ,
-  U16_DIV_EQ,
-  U32_DIV_EQ,
-  U64_DIV_EQ,
-  U128_DIV_EQ
+val all_rem_eqs = [
+  isize_rem_eq,
+  i8_rem_eq,
+  i16_rem_eq,
+  i32_rem_eq,
+  i64_rem_eq,
+  i128_rem_eq,
+  usize_rem_eq,
+  u8_rem_eq,
+  u16_rem_eq,
+  u32_rem_eq,
+  u64_rem_eq,
+  u128_rem_eq
 ]
+
 
 (***
  * Vectors
@@ -1268,98 +1172,102 @@ val _ = new_constant ("vec_to_list", “:'a vec -> 'a list”)
 val _ = new_constant ("mk_vec", “:'a list -> 'a vec result”)
 
 
-val VEC_TO_LIST_NUM_BOUNDS =
-  new_axiom ("VEC_TO_LIST_BOUNDS",
+val vec_to_list_num_bounds =
+  new_axiom ("vec_to_list_num_bounds",
     “!v. let l = LENGTH (vec_to_list v) in
      (0:num) <= l /\ l <= Num usize_max”)
 
-Theorem VEC_TO_LIST_INT_BOUNDS:
+Theorem vec_to_list_int_bounds:
   !v. 0 <= int_of_num (LENGTH (vec_to_list v)) /\ int_of_num (LENGTH (vec_to_list v)) <= usize_max
 Proof
   gen_tac >>
-  assume_tac VEC_TO_LIST_NUM_BOUNDS >>
-  pop_assum (qspec_then ‘v’ ASSUME_TAC) >>
-  pop_assum MP_TAC >>
-  PURE_ONCE_REWRITE_TAC [GSYM INT_LE] >>
-  sg ‘0 ≤ usize_max’ >- (ASSUME_TAC usize_bounds >> fs [u16_max_def] >> COOPER_TAC) >>
+  assume_tac vec_to_list_num_bounds >>
+  pop_assum (qspec_assume ‘v’) >>
+  pop_assum mp_tac >>
+  pure_once_rewrite_tac [GSYM INT_LE] >>
+  sg ‘0 ≤ usize_max’ >- (assume_tac usize_bounds >> fs [u16_max_def] >> cooper_tac) >>
   metis_tac [INT_OF_NUM]
 QED
 
-val VEC_LEN_DEF = Define ‘vec_len v = int_to_usize (int_of_num (LENGTH (vec_to_list v)))’
-Theorem VEC_LEN_SPEC:
+val vec_len_def = Define ‘vec_len v = int_to_usize (int_of_num (LENGTH (vec_to_list v)))’
+Theorem vec_len_spec:
   ∀v.
     vec_len v = int_to_usize (&(LENGTH (vec_to_list v))) ∧
     0 ≤ &(LENGTH (vec_to_list v)) ∧ &(LENGTH (vec_to_list v)) ≤ usize_max
 Proof
-  gen_tac >> rw [VEC_LEN_DEF] >>
-  qspec_then ‘v’ ASSUME_TAC VEC_TO_LIST_INT_BOUNDS >>
+  gen_tac >> rw [vec_len_def] >>
+  qspec_assume ‘v’ vec_to_list_int_bounds >>
   fs []
 QED
 
-val MK_VEC_SPEC = new_axiom ("MK_VEC_SPEC", “∀l. &(LENGTH l) ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l”)
+val mk_vec_spec = new_axiom ("mk_vec_spec",
+  “∀l. &(LENGTH l) ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l”)
 
-val VEC_NEW_DEF = Define ‘vec_new = case mk_vec [] of Return v => v’
-Theorem VEC_NEW_SPEC:
+val vec_new_def = Define ‘vec_new = case mk_vec [] of Return v => v’
+Theorem vec_new_spec:
   vec_to_list vec_new = []
 Proof
-  rw [VEC_NEW_DEF] >>
+  rw [vec_new_def] >>
   qabbrev_tac ‘l = []’ >>
-  qspec_then ‘l’ ASSUME_TAC MK_VEC_SPEC >>
+  qspec_assume ‘l’ mk_vec_spec >>
   Cases_on ‘mk_vec l’ >>
-  rfs [markerTheory.Abbrev_def, NOT_LE_EQ_GT] >> fs [] >>
-  ASSUME_TAC usize_bounds >> fs[u16_max_def] >> TRY (ex_falso >> COOPER_TAC) >>
-  sg ‘0 ≤ usize_max’ >- COOPER_TAC >>
+  rfs [markerTheory.Abbrev_def, not_le_eq_gt] >> fs [] >>
+  assume_tac usize_bounds >> fs[u16_max_def] >> try_tac (exfalso >> cooper_tac) >>
+  sg ‘0 ≤ usize_max’ >- cooper_tac >>
   fs []
 QED
 
-val VEC_PUSH_DEF = Define ‘vec_push_back v x = mk_vec (vec_to_list v ++ [x])’
-Theorem VEC_PUSH_SPEC:
+val vec_push_def = Define ‘vec_push_back v x = mk_vec (vec_to_list v ++ [x])’
+Theorem vec_push_spec:
   ∀v x. usize_to_int (vec_len v) < usize_max ⇒
     ∃vx. vec_push_back v x = Return vx ∧
     vec_to_list vx = vec_to_list v ++ [x]
 Proof
-  rpt strip_tac >> fs [VEC_PUSH_DEF] >>
-  qspec_then ‘v’ ASSUME_TAC VEC_LEN_SPEC >> rw [] >>
-  qspec_then ‘vec_to_list v ++ [x]’ ASSUME_TAC MK_VEC_SPEC >>
-  fs [VEC_LEN_DEF] >> rw [] >>
+  rpt strip_tac >> fs [vec_push_def] >>
+  qspec_assume ‘v’ vec_len_spec >> rw [] >>
+  qspec_assume ‘vec_to_list v ++ [x]’ mk_vec_spec >>
+  fs [vec_len_def] >> rw [] >>
   pop_assum irule >>
-  pop_last_assum MP_TAC >>
+  pop_last_assum mp_tac >>
   dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC all_conversion_id_lemmas >> fs [] >>
-  COOPER_TAC
+  cooper_tac
 QED
 
-val UPDATE_DEF = Define ‘
+val update_def = Define ‘
   update ([] : 'a list) (i : num) (y : 'a) : 'a list = [] ∧
   update (_ :: ls) (0: num) y = y :: ls ∧
   update (x :: ls) (SUC i) y = x :: update ls i y
 ’
 
-Theorem UPDATE_LENGTH:
+Theorem update_length:
   ∀ls i y. LENGTH (update ls i y) = LENGTH ls
 Proof
-  Induct_on ‘ls’ >> Cases_on ‘i’ >> rw [UPDATE_DEF]
+  Induct_on ‘ls’ >> Cases_on ‘i’ >> rw [update_def]
 QED
 
-Theorem UPDATE_SPEC:
+Theorem update_spec:
   ∀ls i y. i < LENGTH ls ==>
     LENGTH (update ls i y) = LENGTH ls ∧
     EL i (update ls i y) = y ∧
     ∀j. j < LENGTH ls ⇒ j ≠ i ⇒ EL j (update ls i y) = EL j ls
 Proof
-  Induct_on ‘ls’ >> Cases_on ‘i’ >> rw [UPDATE_DEF] >>
+  Induct_on ‘ls’ >> Cases_on ‘i’ >> rw [update_def] >>
   Cases_on ‘j’ >> fs []
 QED
 
 (* TODO: this is the base definition for index. Shall we remove the ‘return’ type? *)
-val VEC_INDEX_DEF = Define ‘
-  vec_index i v = if usize_to_int i ≤ usize_to_int (vec_len v) then Return (EL (Num (usize_to_int i)) (vec_to_list v)) else Fail Failure’
+val vec_index_def = Define ‘
+  vec_index i v =
+    if usize_to_int i ≤ usize_to_int (vec_len v)
+    then Return (EL (Num (usize_to_int i)) (vec_to_list v))
+    else Fail Failure’
 
 (* TODO: shortcut for qspec_then ... ASSUME_TAC *)
 (* TODO: use cooper_tac everywhere *)
 (* TODO: use pure_once_rewrite_tac everywhere *)
 
 (* TODO: injectivity lemmas for ..._to_int *)
-Theorem USIZE_TO_INT_INJ:
+Theorem usize_to_int_inj:
   ∀i j. usize_to_int i = usize_to_int j ⇔ i = j
 Proof
   rpt strip_tac >>
@@ -1368,23 +1276,16 @@ Proof
   metis_tac []
 QED
 
-Theorem USIZE_TO_INT_NEQ_INJ:
+Theorem usize_to_int_neq_inj:
   ∀i j. i <> j ==> usize_to_int i <> usize_to_int j
 Proof
-  metis_tac [USIZE_TO_INT_INJ]
+  metis_tac [usize_to_int_inj]
 QED
 
-(* TODO: move *)
-Theorem INT_OF_NUM:
-  ∀i. 0 ≤ i ⇒ &Num i = i
-Proof
-  metis_tac[integerTheory.INT_OF_NUM]
-QED
-
-Theorem INT_OF_NUM_NEQ_INJ:
+Theorem int_of_num_neq_inj:
   ∀n m. &n ≠ &m ⇒ n ≠ m
 Proof
-  metis_tac [INT_OF_NUM_INJ]
+  metis_tac [int_of_num_inj]
 QED
 
 (* TODO: automate: take assumption, intro first premise as subgoal *)
@@ -1403,10 +1304,10 @@ QED
   &n < &m
 *)
 
-val VEC_INSERT_BACK_DEF = Define ‘
+val vec_insert_back_def = Define ‘
   vec_insert_back (v : 'a vec) (i : usize) (x : 'a) = mk_vec (update (vec_to_list v) (Num (usize_to_int i)) x)’
 
-Theorem VEC_INSERT_BACK_SPEC:
+Theorem vec_insert_back_spec:
   ∀v i x.
     usize_to_int i < usize_to_int (vec_len v) ⇒
     ∃nv. vec_insert_back v i x = Return nv ∧
@@ -1415,20 +1316,21 @@ Theorem VEC_INSERT_BACK_SPEC:
     (* TODO: usize_to_int j ≠ usize_to_int i ? *)
     (∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒ j ≠ i ⇒ vec_index j nv = vec_index j v)
 Proof
-  rpt strip_tac >> fs [VEC_INSERT_BACK_DEF] >>
-  qspec_assume ‘update (vec_to_list v) (Num (usize_to_int i)) x’ MK_VEC_SPEC >>
-  qspecl_assume [‘vec_to_list v’, ‘Num (usize_to_int i)’, ‘x’] UPDATE_LENGTH >>
+  rpt strip_tac >> fs [vec_insert_back_def] >>
+  qspec_assume ‘update (vec_to_list v) (Num (usize_to_int i)) x’ mk_vec_spec >>
+  qspecl_assume [‘vec_to_list v’, ‘Num (usize_to_int i)’, ‘x’] update_length >>
   fs [] >>
-  qspec_assume ‘v’ VEC_LEN_SPEC >>
+  qspec_assume ‘v’ vec_len_spec >>
   rw [] >> gvs [] >>
-  fs [VEC_LEN_DEF, VEC_INDEX_DEF] >>
-  sg ‘usize_to_int (int_to_usize (&LENGTH (vec_to_list v))) = &LENGTH (vec_to_list v)’ >-(irule int_to_usize_id >> COOPER_TAC) >>
+  fs [vec_len_def, vec_index_def] >>
+  sg ‘usize_to_int (int_to_usize (&LENGTH (vec_to_list v))) = &LENGTH (vec_to_list v)’
+  >-(irule int_to_usize_id >> cooper_tac) >>
   fs [] >>
-  qspecl_assume [‘vec_to_list v’, ‘Num (usize_to_int i)’, ‘x’] UPDATE_SPEC >> rfs [] >>
+  qspecl_assume [‘vec_to_list v’, ‘Num (usize_to_int i)’, ‘x’] update_spec >> rfs [] >>
   sg ‘Num (usize_to_int i) < LENGTH (vec_to_list v)’ >-(
     (* TODO: automate *)
-    pure_once_rewrite_tac [GSYM INT_LT] >>
-    dep_pure_once_rewrite_tac [INT_OF_NUM] >>
+    pure_once_rewrite_tac [gsym INT_LT] >>
+    dep_pure_once_rewrite_tac [primitivesArithTheory.int_of_num] >>
     qspec_assume ‘i’ usize_to_int_bounds >> fs []
   ) >>
   fs [] >>
@@ -1437,35 +1339,19 @@ Proof
   first_x_assum irule >>
   rw [] >-(
     (* TODO: automate *)
-    irule INT_OF_NUM_NEQ_INJ >>
-    dep_pure_rewrite_tac [INT_OF_NUM] >>
+    irule int_of_num_neq_inj >>
+    dep_pure_rewrite_tac [primitivesArithTheory.int_of_num] >>
     rw [usize_to_int_bounds] >>
-    metis_tac [USIZE_TO_INT_NEQ_INJ]
+    metis_tac [usize_to_int_neq_inj]
   ) >>
   (* TODO: automate *)
-  pure_once_rewrite_tac [GSYM INT_LT] >>
-  dep_pure_once_rewrite_tac [INT_OF_NUM] >>
+  pure_once_rewrite_tac [gsym INT_LT] >>
+  dep_pure_once_rewrite_tac [primitivesArithTheory.int_of_num] >>
   qspec_assume ‘j’ usize_to_int_bounds >> fs []
 QED
 
 (* TODO: use lowercase everywhere for the theorem names *)
 
-(* We generate and save an induction theorem for positive integers *)
-Theorem int_induction:
-  !(P : int -> bool). P 0 /\ (!i. 0 <= i /\ P i ==> P (i+1)) ==> !i. 0 <= i ==> P i
-Proof
-  ntac 4 strip_tac >>
-  Induct_on ‘Num i’ >> rpt strip_tac
-  >-(sg ‘i = 0’ >- cooper_tac >> fs []) >>
-  last_assum (qspec_assume ‘i-1’) >>
-  fs [] >> pop_assum irule >>
-  rw [] >> try_tac cooper_tac >>
-  first_assum (qspec_assume ‘i - 1’) >>
-  pop_assum irule >>
-  rw [] >> try_tac cooper_tac
-QED
-
-val _ = TypeBase.update_induction int_induction
 
 (* Small experiment: trying to redefine common functions with integers instead of nums *)
 val index_def = Define ‘
@@ -1479,7 +1365,9 @@ val len_def = Define ‘
 
 val update_def = Define ‘
   update ([] : 'a list) (i : int) (y : 'a) : 'a list = [] ∧
-  update (x :: ls) (i : int) y = if i = 0 then y :: ls else (if 0 < i then x :: update ls (i - 1) y else x :: ls)
+
+  update (x :: ls) (i : int) y =
+    if i = 0 then y :: ls else (if 0 < i then x :: update ls (i - 1) y else x :: ls)
 ’
 
 Theorem update_len:
@@ -1496,7 +1384,8 @@ Theorem update_spec:
     index i (update ls i y) = y ∧
     ∀j. j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls
 Proof
-  Induct_on ‘ls’ >> Cases_on ‘i = 0’ >> rw [update_def, len_def, index_def] >> try_tac (ex_falso >> cooper_tac) >>
+  Induct_on ‘ls’ >> Cases_on ‘i = 0’ >> rw [update_def, len_def, index_def] >>
+  try_tac (exfalso >> cooper_tac) >>
   try_tac (
     pop_last_assum (qspecl_assume [‘i' - 1’, ‘y’]) >>
     pop_assum sg_premise_tac >- cooper_tac >>
@@ -1550,10 +1439,14 @@ Proof
 QED
 
 val vec_index_def = Define ‘
-  vec_index i v = if usize_to_int i ≤ usize_to_int (vec_len v) then Return (index (usize_to_int i) (vec_to_list v)) else Fail Failure’
+  vec_index i v =
+    if usize_to_int i ≤ usize_to_int (vec_len v)
+    then Return (index (usize_to_int i) (vec_to_list v))
+    else Fail Failure’
 
 (* TODO: *)
-val mk_vec_spec = new_axiom ("mk_vec_spec", “∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l”)
+val mk_vec_spec = new_axiom ("mk_vec_spec",
+  “∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l”)
 
 (* Redefining ‘vec_insert_back’ *)
 val vec_insert_back_def = Define ‘

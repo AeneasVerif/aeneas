@@ -5,6 +5,9 @@ struct
 open HolKernel boolLib bossLib Parse
 open boolTheory arithmeticTheory integerTheory intLib listTheory
 
+(* Remark: below, we also have conversions *)
+val gsym = GSYM
+
 (* Ignore a theorem.
 
    To be used in conjunction with {!pop_assum} for instance.
@@ -13,11 +16,14 @@ fun ignore_tac (_ : thm) : tactic = ALL_TAC
 
 val pop_ignore_tac = pop_assum ignore_tac
 
-val try_tac = TRY
-
 (* TODO: no exfalso tactic?? *)
-val ex_falso : tactic =
+val exfalso : tactic =
   SUBGOAL_THEN “F” (fn th => ASSUME_TAC th >> fs[])
+
+val try_tac = TRY
+val first_tac = FIRST
+val map_first = MAP_FIRST
+val fail_tac = FAIL_TAC
 
 fun qspec_assume x th = qspec_then x assume_tac th
 fun qspecl_assume xl th = qspecl_then xl assume_tac th

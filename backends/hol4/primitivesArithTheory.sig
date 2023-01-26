@@ -3,23 +3,26 @@ sig
   type thm = Thm.thm
   
   (*  Theorems  *)
-    val GE_EQ_LE : thm
-    val GT_EQ_LT : thm
-    val INT_OF_NUM_INJ : thm
-    val LE_EQ_GE : thm
-    val LT_EQ_GT : thm
-    val NOT_GE_EQ_LT : thm
-    val NOT_GT_EQ_LE : thm
-    val NOT_LE_EQ_GT : thm
-    val NOT_LT_EQ_GE : thm
-    val NUM_SUB_1_EQ : thm
-    val NUM_SUB_EQ : thm
-    val POS_DIV_POS_IS_POS : thm
-    val POS_DIV_POS_LE : thm
-    val POS_DIV_POS_LE_INIT : thm
-    val POS_MOD_POS_IS_POS : thm
-    val POS_MOD_POS_LE_INIT : thm
-    val POS_MUL_POS_IS_POS : thm
+    val ge_eq_le : thm
+    val gt_eq_lt : thm
+    val int_add : thm
+    val int_induction : thm
+    val int_of_num : thm
+    val int_of_num_inj : thm
+    val le_eq_ge : thm
+    val lt_eq_gt : thm
+    val not_ge_eq_lt : thm
+    val not_gt_eq_le : thm
+    val not_le_eq_gt : thm
+    val not_lt_eq_ge : thm
+    val num_sub_1_eq : thm
+    val num_sub_eq : thm
+    val pos_div_pos_is_pos : thm
+    val pos_div_pos_le : thm
+    val pos_div_pos_le_init : thm
+    val pos_mod_pos_is_pos : thm
+    val pos_mod_pos_le_init : thm
+    val pos_mul_pos_is_pos : thm
   
   val primitivesArith_grammars : type_grammar.grammar * term_grammar.grammar
 (*
@@ -27,71 +30,83 @@ sig
    
    [int_arith] Parent theory of "primitivesArith"
    
-   [GE_EQ_LE]  Theorem
+   [ge_eq_le]  Theorem
       
       ⊢ ∀x y. x ≥ y ⇔ y ≤ x
    
-   [GT_EQ_LT]  Theorem
+   [gt_eq_lt]  Theorem
       
       ⊢ ∀x y. x > y ⇔ y < x
    
-   [INT_OF_NUM_INJ]  Theorem
+   [int_add]  Theorem
+      
+      ⊢ ∀m n. &(m + n) = &m + &n
+   
+   [int_induction]  Theorem
+      
+      ⊢ ∀P. P 0 ∧ (∀i. 0 ≤ i ∧ P i ⇒ P (i + 1)) ⇒ ∀i. 0 ≤ i ⇒ P i
+   
+   [int_of_num]  Theorem
+      
+      ⊢ ∀i. 0 ≤ i ⇒ &Num i = i
+   
+   [int_of_num_inj]  Theorem
       
       ⊢ ∀n m. &n = &m ⇒ n = m
    
-   [LE_EQ_GE]  Theorem
+   [le_eq_ge]  Theorem
       
       ⊢ ∀x y. x ≤ y ⇔ y ≥ x
    
-   [LT_EQ_GT]  Theorem
+   [lt_eq_gt]  Theorem
       
       ⊢ ∀x y. x < y ⇔ y > x
    
-   [NOT_GE_EQ_LT]  Theorem
+   [not_ge_eq_lt]  Theorem
       
       ⊢ ∀x y. ¬(x ≥ y) ⇔ x < y
    
-   [NOT_GT_EQ_LE]  Theorem
+   [not_gt_eq_le]  Theorem
       
       ⊢ ∀x y. ¬(x > y) ⇔ x ≤ y
    
-   [NOT_LE_EQ_GT]  Theorem
+   [not_le_eq_gt]  Theorem
       
       ⊢ ∀x y. ¬(x ≤ y) ⇔ x > y
    
-   [NOT_LT_EQ_GE]  Theorem
+   [not_lt_eq_ge]  Theorem
       
       ⊢ ∀x y. ¬(x < y) ⇔ x ≥ y
    
-   [NUM_SUB_1_EQ]  Theorem
+   [num_sub_1_eq]  Theorem
       
       ⊢ ∀x y. x = y − 1 ⇒ 0 ≤ x ⇒ Num y = SUC (Num x)
    
-   [NUM_SUB_EQ]  Theorem
+   [num_sub_eq]  Theorem
       
       ⊢ ∀x y z. x = y − z ⇒ 0 ≤ x ⇒ 0 ≤ z ⇒ Num y = Num z + Num x
    
-   [POS_DIV_POS_IS_POS]  Theorem
+   [pos_div_pos_is_pos]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x / y
    
-   [POS_DIV_POS_LE]  Theorem
+   [pos_div_pos_le]  Theorem
       
       ⊢ ∀x y d. 0 ≤ x ⇒ 0 ≤ y ⇒ 0 < d ⇒ x ≤ y ⇒ x / d ≤ y / d
    
-   [POS_DIV_POS_LE_INIT]  Theorem
+   [pos_div_pos_le_init]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x / y ≤ x
    
-   [POS_MOD_POS_IS_POS]  Theorem
+   [pos_mod_pos_is_pos]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x % y
    
-   [POS_MOD_POS_LE_INIT]  Theorem
+   [pos_mod_pos_le_init]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x % y ≤ x
    
-   [POS_MUL_POS_IS_POS]  Theorem
+   [pos_mul_pos_is_pos]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 ≤ y ⇒ 0 ≤ x * y
    
