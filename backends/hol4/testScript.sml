@@ -722,7 +722,7 @@ fun op PARTIAL_THEN1 (tac1: tactic) (tac2: tactic) : tactic = tac1 THEN_LT (NTH_
    
    If the lemma is not an implication, we directly call the theorem tactic.
  *)
-fun intro_premise_then (premise_tac: tactic) (then_tac: thm_tactic) (thm : thm)  : tactic =
+fun sg_premise_then (premise_tac: tactic) (then_tac: thm_tactic) (thm : thm)  : tactic =
   let
     val c = concl thm;
     (* First case: there is a premise to prove *)
@@ -734,9 +734,9 @@ fun intro_premise_then (premise_tac: tactic) (then_tac: thm_tactic) (thm : thm) 
     if is_imp c then prove_premise_then (fst (dest_imp c)) else no_prove_premise_then
   end
 
-(* Same as {!intro_premise_then} but fails if the premise_tac fails to prove the premise *)
+(* Same as {!sg_premise_then} but fails if the premise_tac fails to prove the premise *)
 fun prove_premise_then (premise_tac: tactic) (then_tac: thm_tactic) (thm : thm)  : tactic =
-  intro_premise_then
+  sg_premise_then
     (premise_tac >> FAIL_TAC "prove_premise_then: could not prove premise")
     then_tac thm
 
@@ -1294,7 +1294,7 @@ fun pure_progress_with (premise_tac : tactic)
     val th = PURE_REWRITE_RULE [GSYM satTheory.AND_IMP] th;
   in
     (* Apply the theorem *)
-    intro_premise_then premise_tac (then_tac fgoal) th (asms, g)
+    sg_premise_then premise_tac (then_tac fgoal) th (asms, g)
   end
 
 (*
