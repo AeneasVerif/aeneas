@@ -1389,8 +1389,23 @@ QED
 
 (* TODO: automate: take assumption, intro first premise as subgoal *)
 
+(* TODO: I think we should express as much as we could in terms of integers (not machine integers).
+
+   For instance:
+   - theorem below: ‘j <> i’ ~~> ‘usize_to_int j <> usize_to_int i’
+   - we should prove theorems like: ‘usize_eq i j <=> usize_to_int i = usize_to_int j’
+     (that we would automatically apply)
+*)
+
+(*
+  &(SUC n) = 1 + &n
+  n < m
+  &n < &m
+*)
+
 val VEC_INSERT_BACK_DEF = Define ‘
   vec_insert_back (v : 'a vec) (i : usize) (x : 'a) = mk_vec (update (vec_to_list v) (Num (usize_to_int i)) x)’
+
 Theorem VEC_INSERT_BACK_SPEC:
   ∀v i x.
     usize_to_int i < usize_to_int (vec_len v) ⇒
@@ -1432,5 +1447,167 @@ Proof
   dep_pure_once_rewrite_tac [INT_OF_NUM] >>
   qspec_assume ‘j’ usize_to_int_bounds >> fs []
 QED
+
+(* TODO: use lowercase everywhere for the theorem names *)
+
+(* We generate and save an induction theorem for positive integers *)
+Theorem int_induction:
+  !(P : int -> bool). P 0 /\ (!i. 0 <= i /\ P i ==> P (i+1)) ==> !i. 0 <= i ==> P i
+Proof
+  ntac 4 strip_tac >>
+  Induct_on ‘Num i’ >> rpt strip_tac
+  >-(sg ‘i = 0’ >- cooper_tac >> fs []) >>
+  last_assum (qspec_assume ‘i-1’) >>
+  fs [] >> pop_assum irule >>
+  rw [] >> try_tac cooper_tac >>
+  first_assum (qspec_assume ‘i - 1’) >>
+  pop_assum irule >>
+  rw [] >> try_tac cooper_tac
+QED
+
+val _ = TypeBase.update_induction int_induction
+
+(* Small experiment: trying to redefine common functions with integers instead of nums *)
+val index_def = Define ‘
+  index (i : int) (x :: ls) = if i = 0 then x else (if 0 < i then index (i - 1) ls else ARB)
+’
+
+val len_def = Define ‘
+  len [] : int = 0 /\
+  len (x :: ls) : int = 1 + len ls
+’
+
+val update_def = Define ‘
+  update ([] : 'a list) (i : int) (y : 'a) : 'a list = [] ∧
+  update (x :: ls) (i : int) y = if i = 0 then y :: ls else (if 0 < i then x :: update ls (i - 1) y else x :: ls)
+’
+
+Theorem update_len:
+  ∀ls i y. len (update ls i y) = len ls
+Proof
+  Induct_on ‘ls’ >> Cases_on ‘i’ >> rw [update_def, len_def]
+QED
+
+Theorem update_spec:
+  ∀ls i y.
+    0 <= i ==>
+    i < len ls ==>
+    len (update ls i y) = len ls ∧
+    index i (update ls i y) = y ∧
+    ∀j. j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls
+Proof
+  Induct_on ‘ls’ >> Cases_on ‘i = 0’ >> rw [update_def, len_def, index_def] >> try_tac (ex_falso >> cooper_tac) >>
+  try_tac (
+    pop_last_assum (qspecl_assume [‘i' - 1’, ‘y’]) >>
+    pop_assum sg_premise_tac >- cooper_tac >>
+    pop_assum sg_premise_tac >- cooper_tac >>
+    rw [])
+  >> (
+    pop_assum (qspec_assume ‘j - 1’) >>
+    pop_assum sg_premise_tac >- cooper_tac >>
+    pop_assum sg_premise_tac >- cooper_tac >>
+    rw [])
+QED
+
+Theorem index_update_same:
+  ∀ls i j y.
+    0 <= i ==>
+    i < len ls ==>
+    j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls
+Proof
+  rpt strip_tac >>
+  qspecl_assume [‘ls’, ‘i’, ‘y’] update_spec >>
+  rw []
+QED
+
+Theorem index_update_diff:
+  ∀ls i j y.
+    0 <= i ==>
+    i < len ls ==>
+    index i (update ls i y) = y
+Proof
+  rpt strip_tac >>
+  qspecl_assume [‘ls’, ‘i’, ‘y’] update_spec >>
+  rw []
+QED
+
+Theorem vec_to_list_int_bounds:
+  !v. 0 <= len (vec_to_list v) /\ len (vec_to_list v) <= usize_max
+Proof
+  (* TODO *)
+  cheat
+QED
+
+val vec_len_def = Define ‘vec_len v = int_to_usize (len (vec_to_list v))’
+Theorem vec_len_spec:
+  ∀v.
+    vec_len v = int_to_usize (len (vec_to_list v)) ∧
+    0 ≤ len (vec_to_list v) ∧ len (vec_to_list v) ≤ usize_max
+Proof
+  gen_tac >> rw [vec_len_def] >>
+  qspec_assume ‘v’ vec_to_list_int_bounds >>
+  fs []
+QED
+
+val vec_index_def = Define ‘
+  vec_index i v = if usize_to_int i ≤ usize_to_int (vec_len v) then Return (index (usize_to_int i) (vec_to_list v)) else Fail Failure’
+
+(* TODO: *)
+val mk_vec_spec = new_axiom ("mk_vec_spec", “∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l”)
+
+(* Redefining ‘vec_insert_back’ *)
+val vec_insert_back_def = Define ‘
+  vec_insert_back (v : 'a vec) (i : usize) (x : 'a) = mk_vec (update (vec_to_list v) (usize_to_int i) x)’
+
+Theorem vec_insert_back_spec:
+  ∀v i x.
+    usize_to_int i < usize_to_int (vec_len v) ⇒
+    ∃nv. vec_insert_back v i x = Return nv ∧
+    vec_len v = vec_len nv ∧
+    vec_index i nv = Return x ∧
+    (∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒ usize_to_int j ≠ usize_to_int i ⇒ vec_index j nv = vec_index j v)
+Proof
+  rpt strip_tac >> fs [vec_insert_back_def] >>
+  (* TODO: improve this? *)
+  qspec_assume ‘update (vec_to_list v) (usize_to_int i) x’ mk_vec_spec >>
+  sg_dep_rewrite_all_tac update_len >> fs [] >>
+  qspec_assume ‘v’ vec_len_spec >>
+  rw [] >> gvs [] >>
+  fs [vec_len_def, vec_index_def] >>
+  qspec_assume ‘i’ usize_to_int_bounds >>
+  sg_dep_rewrite_all_tac int_to_usize_id >- cooper_tac >> fs [] >>
+  sg_dep_rewrite_goal_tac index_update_diff >- cooper_tac >> fs [] >>
+  rw [] >>
+  irule index_update_same >> cooper_tac
+QED
+
+(* TODO: add theorems to the rewriting theorems
+from listSimps.sml:
+
+val LIST_ss = BasicProvers.thy_ssfrag "list"
+val _ = BasicProvers.logged_addfrags {thyname="list"} [LIST_EQ_ss]
+
+val list_rws = computeLib.add_thms
+  [
+   ALL_DISTINCT, APPEND, APPEND_NIL, CONS_11, DROP_compute, EL_restricted,
+   EL_simp_restricted, EVERY_DEF, EXISTS_DEF, FILTER, FIND_def, FLAT, FOLDL,
+   FOLDR, FRONT_DEF, GENLIST_AUX_compute, GENLIST_NUMERALS, HD, INDEX_FIND_def,
+   INDEX_OF_def, LAST_compute, LENGTH, LEN_DEF, LIST_APPLY_def, LIST_BIND_def,
+   LIST_IGNORE_BIND_def, LIST_LIFT2_def, LIST_TO_SET_THM, LLEX_def, LRC_def,
+   LUPDATE_compute, MAP, MAP2, NOT_CONS_NIL, NOT_NIL_CONS, NULL_DEF, oEL_def,
+   oHD_def,
+   PAD_LEFT, PAD_RIGHT, REVERSE_REV, REV_DEF, SHORTLEX_def, SNOC, SUM_ACC_DEF,
+   SUM_SUM_ACC,
+   TAKE_compute, TL, UNZIP, ZIP, computeLib.lazyfy_thm list_case_compute,
+   dropWhile_def, isPREFIX, list_size_def, nub_def, splitAtPki_def
+  ]
+
+fun list_compset () =
+   let
+      val base = reduceLib.num_compset()
+   in
+      list_rws base; base
+   end
+*)
 
 val _ = export_theory ()
