@@ -133,7 +133,7 @@ macro_rules
 
 def vec (α : Type u) := { l : List α // List.length l < USize.size }
 
-def vec_new (α : Type u): result (vec α) := return ⟨ [], by {
+def vec_new (α : Type u): vec α := ⟨ [], by {
   match USize.size, usize_size_eq with
   | _, Or.inl rfl => simp
   | _, Or.inr rfl => simp
@@ -145,8 +145,7 @@ def vec_len (α : Type u) (v : vec α) : USize :=
   let ⟨ v, l ⟩ := v
   USize.ofNatCore (List.length v) l
 
-#eval do
-  return (vec_len Nat (<- vec_new Nat))
+#eval vec_len Nat (vec_new Nat)
  
 def vec_push_fwd (α : Type u) (_ : vec α) (_ : α) : Unit := ()
 
@@ -172,7 +171,8 @@ def vec_push_back (α : Type u) (v : vec α) (x : α) : { res: result (vec α) /
   -- select the `val` field if the context provides a type annotation. We
   -- annotate `x`, which relieves us of having to write `.val` on the right-hand
   -- side of the monadic let.
-  let x: vec Nat ← vec_push_back Nat (<- vec_new Nat) 1
+  let v := vec_new Nat
+  let x: vec Nat ← (vec_push_back Nat v 1: result (vec Nat)) -- WHY do we need the type annotation here?
   -- TODO: strengthen post-condition above and do a demo to show that we can
   -- safely eliminate the `fail` case
   return (vec_len Nat x)
