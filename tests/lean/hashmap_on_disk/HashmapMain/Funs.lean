@@ -161,8 +161,7 @@ def hashmap_hash_map_insert_no_resize_fwd_back
         result.ret
           {
             hashmap_hash_map_num_entries := i0,
-            hashmap_hash_map_max_load_factor := self
-                                                  .hashmap_hash_map_max_load_factor,
+            hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
             hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
             hashmap_hash_map_slots := v
             }
@@ -175,8 +174,7 @@ def hashmap_hash_map_insert_no_resize_fwd_back
         result.ret
           {
             hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-            hashmap_hash_map_max_load_factor := self
-                                                  .hashmap_hash_map_max_load_factor,
+            hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
             hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
             hashmap_hash_map_slots := v
             }
@@ -405,8 +403,7 @@ def hashmap_hash_map_get_mut_back
     result.ret
       {
         hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-        hashmap_hash_map_max_load_factor := self
-                                              .hashmap_hash_map_max_load_factor,
+        hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
         hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
         hashmap_hash_map_slots := v
         }
@@ -506,8 +503,7 @@ def hashmap_hash_map_remove_back
         result.ret
           {
             hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-            hashmap_hash_map_max_load_factor := self
-                                                  .hashmap_hash_map_max_load_factor,
+            hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
             hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
             hashmap_hash_map_slots := v
             }
@@ -522,8 +518,7 @@ def hashmap_hash_map_remove_back
         result.ret
           {
             hashmap_hash_map_num_entries := i0,
-            hashmap_hash_map_max_load_factor := self
-                                                  .hashmap_hash_map_max_load_factor,
+            hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
             hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
             hashmap_hash_map_slots := v
             }
