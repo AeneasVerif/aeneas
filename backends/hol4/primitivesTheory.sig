@@ -3,8 +3,6 @@ sig
   type thm = Thm.thm
   
   (*  Axioms  *)
-    val MK_VEC_SPEC : thm
-    val VEC_TO_LIST_BOUNDS : thm
     val i128_to_int_bounds : thm
     val i16_to_int_bounds : thm
     val i32_to_int_bounds : thm
@@ -44,6 +42,7 @@ sig
     val u8_to_int_bounds : thm
     val usize_bounds : thm
     val usize_to_int_bounds : thm
+    val vec_to_list_num_bounds : thm
   
   (*  Definitions  *)
     val bind_def : thm
@@ -156,70 +155,6 @@ sig
     val vec_push_back_def : thm
   
   (*  Theorems  *)
-    val I128_ADD_EQ : thm
-    val I128_DIV_EQ : thm
-    val I128_MUL_EQ : thm
-    val I128_SUB_EQ : thm
-    val I16_ADD_EQ : thm
-    val I16_DIV_EQ : thm
-    val I16_MUL_EQ : thm
-    val I16_REM_EQ : thm
-    val I16_SUB_EQ : thm
-    val I32_ADD_EQ : thm
-    val I32_DIV_EQ : thm
-    val I32_MUL_EQ : thm
-    val I32_REM_EQ : thm
-    val I32_SUB_EQ : thm
-    val I64_ADD_EQ : thm
-    val I64_DIV_EQ : thm
-    val I64_MUL_EQ : thm
-    val I64_REM_EQ : thm
-    val I64_SUB_EQ : thm
-    val I8_ADD_EQ : thm
-    val I8_DIV_EQ : thm
-    val I8_MUL_EQ : thm
-    val I8_REM_EQ : thm
-    val I8_SUB_EQ : thm
-    val INT_OF_NUM : thm
-    val INT_OF_NUM_NEQ_INJ : thm
-    val ISIZE_ADD_EQ : thm
-    val ISIZE_DIV_EQ : thm
-    val ISIZE_MUL_EQ : thm
-    val ISIZE_SUB_EQ : thm
-    val U128_ADD_EQ : thm
-    val U128_DIV_EQ : thm
-    val U128_MUL_EQ : thm
-    val U128_REM_EQ : thm
-    val U128_SUB_EQ : thm
-    val U16_ADD_EQ : thm
-    val U16_DIV_EQ : thm
-    val U16_MUL_EQ : thm
-    val U16_REM_EQ : thm
-    val U16_SUB_EQ : thm
-    val U32_ADD_EQ : thm
-    val U32_DIV_EQ : thm
-    val U32_MUL_EQ : thm
-    val U32_REM_EQ : thm
-    val U32_SUB_EQ : thm
-    val U64_ADD_EQ : thm
-    val U64_DIV_EQ : thm
-    val U64_MUL_EQ : thm
-    val U64_REM_EQ : thm
-    val U64_SUB_EQ : thm
-    val U8_ADD_EQ : thm
-    val U8_DIV_EQ : thm
-    val U8_MUL_EQ : thm
-    val U8_REM_EQ : thm
-    val U8_SUB_EQ : thm
-    val USIZE_ADD_EQ : thm
-    val USIZE_DIV_EQ : thm
-    val USIZE_MUL_EQ : thm
-    val USIZE_REM_EQ : thm
-    val USIZE_SUB_EQ : thm
-    val USIZE_TO_INT_INJ : thm
-    val USIZE_TO_INT_NEQ_INJ : thm
-    val VEC_NEW_SPEC : thm
-    val VEC_TO_LIST_INT_BOUNDS : thm
     val datatype_error : thm
     val datatype_result : thm
     val error2num_11 : thm
@@ -233,9 +168,39 @@ sig
     val error_case_eq : thm
     val error_induction : thm
     val error_nchotomy : thm
+    val i128_add_eq : thm
+    val i128_div_eq : thm
+    val i128_mul_eq : thm
+    val i128_rem_eq : thm
+    val i128_sub_eq : thm
+    val i16_add_eq : thm
+    val i16_div_eq : thm
+    val i16_mul_eq : thm
+    val i16_rem_eq : thm
+    val i16_sub_eq : thm
+    val i32_add_eq : thm
+    val i32_div_eq : thm
+    val i32_mul_eq : thm
+    val i32_rem_eq : thm
+    val i32_sub_eq : thm
+    val i64_add_eq : thm
+    val i64_div_eq : thm
+    val i64_mul_eq : thm
+    val i64_rem_eq : thm
+    val i64_sub_eq : thm
+    val i8_add_eq : thm
+    val i8_div_eq : thm
+    val i8_mul_eq : thm
+    val i8_rem_eq : thm
+    val i8_sub_eq : thm
     val index_update_diff : thm
     val index_update_same : thm
-    val int_induction : thm
+    val int_of_num_neq_inj : thm
+    val isize_add_eq : thm
+    val isize_div_eq : thm
+    val isize_mul_eq : thm
+    val isize_rem_eq : thm
+    val isize_sub_eq : thm
     val num2error_11 : thm
     val num2error_ONTO : thm
     val num2error_error2num : thm
@@ -247,9 +212,41 @@ sig
     val result_distinct : thm
     val result_induction : thm
     val result_nchotomy : thm
+    val u128_add_eq : thm
+    val u128_div_eq : thm
+    val u128_mul_eq : thm
+    val u128_rem_eq : thm
+    val u128_sub_eq : thm
+    val u16_add_eq : thm
+    val u16_div_eq : thm
+    val u16_mul_eq : thm
+    val u16_rem_eq : thm
+    val u16_sub_eq : thm
+    val u32_add_eq : thm
+    val u32_div_eq : thm
+    val u32_mul_eq : thm
+    val u32_rem_eq : thm
+    val u32_sub_eq : thm
+    val u64_add_eq : thm
+    val u64_div_eq : thm
+    val u64_mul_eq : thm
+    val u64_rem_eq : thm
+    val u64_sub_eq : thm
+    val u8_add_eq : thm
+    val u8_div_eq : thm
+    val u8_mul_eq : thm
+    val u8_rem_eq : thm
+    val u8_sub_eq : thm
     val update_ind : thm
     val update_len : thm
     val update_spec : thm
+    val usize_add_eq : thm
+    val usize_div_eq : thm
+    val usize_mul_eq : thm
+    val usize_rem_eq : thm
+    val usize_sub_eq : thm
+    val usize_to_int_inj : thm
+    val usize_to_int_neq_inj : thm
     val vec_insert_back_spec : thm
     val vec_len_spec : thm
     val vec_to_list_int_bounds : thm
@@ -265,85 +262,120 @@ sig
       [oracles: ] [axioms: mk_vec_spec] []
       ⊢ ∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l
    
-   [VEC_TO_LIST_BOUNDS]  Axiom
+   [vec_to_list_num_bounds]  Axiom
       
-      [oracles: ] [axioms: VEC_TO_LIST_BOUNDS] []
+      [oracles: ] [axioms: vec_to_list_num_bounds] []
       ⊢ ∀v. (let l = LENGTH (vec_to_list v) in 0 ≤ l ∧ l ≤ Num usize_max)
    
-   [isize_bounds]  Axiom
+   [int_to_usize_usize_to_int]  Axiom
       
-      [oracles: ] [axioms: isize_bounds] []
-      ⊢ isize_min ≤ i16_min ∧ isize_max ≥ i16_max
+      [oracles: ] [axioms: int_to_usize_usize_to_int] []
+      ⊢ ∀i. int_to_usize (usize_to_int i) = i
    
-   [usize_bounds]  Axiom
+   [int_to_u128_u128_to_int]  Axiom
       
-      [oracles: ] [axioms: usize_bounds] [] ⊢ usize_max ≥ u16_max
+      [oracles: ] [axioms: int_to_u128_u128_to_int] []
+      ⊢ ∀i. int_to_u128 (u128_to_int i) = i
    
-   [isize_to_int_bounds]  Axiom
+   [int_to_u64_u64_to_int]  Axiom
       
-      [oracles: ] [axioms: isize_to_int_bounds] []
-      ⊢ ∀n. isize_min ≤ isize_to_int n ∧ isize_to_int n ≤ isize_max
+      [oracles: ] [axioms: int_to_u64_u64_to_int] []
+      ⊢ ∀i. int_to_u64 (u64_to_int i) = i
    
-   [i8_to_int_bounds]  Axiom
+   [int_to_u32_u32_to_int]  Axiom
       
-      [oracles: ] [axioms: i8_to_int_bounds] []
-      ⊢ ∀n. i8_min ≤ i8_to_int n ∧ i8_to_int n ≤ i8_max
+      [oracles: ] [axioms: int_to_u32_u32_to_int] []
+      ⊢ ∀i. int_to_u32 (u32_to_int i) = i
    
-   [i16_to_int_bounds]  Axiom
+   [int_to_u16_u16_to_int]  Axiom
       
-      [oracles: ] [axioms: i16_to_int_bounds] []
-      ⊢ ∀n. i16_min ≤ i16_to_int n ∧ i16_to_int n ≤ i16_max
+      [oracles: ] [axioms: int_to_u16_u16_to_int] []
+      ⊢ ∀i. int_to_u16 (u16_to_int i) = i
    
-   [i32_to_int_bounds]  Axiom
+   [int_to_u8_u8_to_int]  Axiom
       
-      [oracles: ] [axioms: i32_to_int_bounds] []
-      ⊢ ∀n. i32_min ≤ i32_to_int n ∧ i32_to_int n ≤ i32_max
+      [oracles: ] [axioms: int_to_u8_u8_to_int] []
+      ⊢ ∀i. int_to_u8 (u8_to_int i) = i
    
-   [i64_to_int_bounds]  Axiom
+   [int_to_isize_isize_to_int]  Axiom
       
-      [oracles: ] [axioms: i64_to_int_bounds] []
-      ⊢ ∀n. i64_min ≤ i64_to_int n ∧ i64_to_int n ≤ i64_max
+      [oracles: ] [axioms: int_to_isize_isize_to_int] []
+      ⊢ ∀i. int_to_isize (isize_to_int i) = i
    
-   [i128_to_int_bounds]  Axiom
+   [int_to_i128_i128_to_int]  Axiom
       
-      [oracles: ] [axioms: i128_to_int_bounds] []
-      ⊢ ∀n. i128_min ≤ i128_to_int n ∧ i128_to_int n ≤ i128_max
+      [oracles: ] [axioms: int_to_i128_i128_to_int] []
+      ⊢ ∀i. int_to_i128 (i128_to_int i) = i
    
-   [usize_to_int_bounds]  Axiom
+   [int_to_i64_i64_to_int]  Axiom
       
-      [oracles: ] [axioms: usize_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ usize_to_int n ∧ usize_to_int n ≤ usize_max
+      [oracles: ] [axioms: int_to_i64_i64_to_int] []
+      ⊢ ∀i. int_to_i64 (i64_to_int i) = i
    
-   [u8_to_int_bounds]  Axiom
+   [int_to_i32_i32_to_int]  Axiom
       
-      [oracles: ] [axioms: u8_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u8_to_int n ∧ u8_to_int n ≤ u8_max
+      [oracles: ] [axioms: int_to_i32_i32_to_int] []
+      ⊢ ∀i. int_to_i32 (i32_to_int i) = i
    
-   [u16_to_int_bounds]  Axiom
+   [int_to_i16_i16_to_int]  Axiom
       
-      [oracles: ] [axioms: u16_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u16_to_int n ∧ u16_to_int n ≤ u16_max
+      [oracles: ] [axioms: int_to_i16_i16_to_int] []
+      ⊢ ∀i. int_to_i16 (i16_to_int i) = i
    
-   [u32_to_int_bounds]  Axiom
+   [int_to_i8_i8_to_int]  Axiom
       
-      [oracles: ] [axioms: u32_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u32_to_int n ∧ u32_to_int n ≤ u32_max
+      [oracles: ] [axioms: int_to_i8_i8_to_int] []
+      ⊢ ∀i. int_to_i8 (i8_to_int i) = i
    
-   [u64_to_int_bounds]  Axiom
+   [int_to_u128_id]  Axiom
       
-      [oracles: ] [axioms: u64_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u64_to_int n ∧ u64_to_int n ≤ u64_max
+      [oracles: ] [axioms: int_to_u128_id] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u128_max ⇒ u128_to_int (int_to_u128 n) = n
    
-   [u128_to_int_bounds]  Axiom
+   [int_to_u64_id]  Axiom
       
-      [oracles: ] [axioms: u128_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u128_to_int n ∧ u128_to_int n ≤ u128_max
+      [oracles: ] [axioms: int_to_u64_id] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u64_max ⇒ u64_to_int (int_to_u64 n) = n
    
-   [int_to_isize_id]  Axiom
+   [int_to_u32_id]  Axiom
       
-      [oracles: ] [axioms: int_to_isize_id] []
-      ⊢ ∀n. (i16_min ≤ n ∨ isize_min ≤ n) ∧ (n ≤ i16_max ∨ n ≤ isize_max) ⇒
-            isize_to_int (int_to_isize n) = n
+      [oracles: ] [axioms: int_to_u32_id] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u32_max ⇒ u32_to_int (int_to_u32 n) = n
+   
+   [int_to_u16_id]  Axiom
+      
+      [oracles: ] [axioms: int_to_u16_id] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u16_max ⇒ u16_to_int (int_to_u16 n) = n
+   
+   [int_to_u8_id]  Axiom
+      
+      [oracles: ] [axioms: int_to_u8_id] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u8_max ⇒ u8_to_int (int_to_u8 n) = n
+   
+   [int_to_i128_id]  Axiom
+      
+      [oracles: ] [axioms: int_to_i128_id] []
+      ⊢ ∀n. i128_min ≤ n ∧ n ≤ i128_max ⇒ i128_to_int (int_to_i128 n) = n
+   
+   [int_to_i64_id]  Axiom
+      
+      [oracles: ] [axioms: int_to_i64_id] []
+      ⊢ ∀n. i64_min ≤ n ∧ n ≤ i64_max ⇒ i64_to_int (int_to_i64 n) = n
+   
+   [int_to_i32_id]  Axiom
+      
+      [oracles: ] [axioms: int_to_i32_id] []
+      ⊢ ∀n. i32_min ≤ n ∧ n ≤ i32_max ⇒ i32_to_int (int_to_i32 n) = n
+   
+   [int_to_i16_id]  Axiom
+      
+      [oracles: ] [axioms: int_to_i16_id] []
+      ⊢ ∀n. i16_min ≤ n ∧ n ≤ i16_max ⇒ i16_to_int (int_to_i16 n) = n
+   
+   [int_to_i8_id]  Axiom
+      
+      [oracles: ] [axioms: int_to_i8_id] []
+      ⊢ ∀n. i8_min ≤ n ∧ n ≤ i8_max ⇒ i8_to_int (int_to_i8 n) = n
    
    [int_to_usize_id]  Axiom
       
@@ -351,121 +383,80 @@ sig
       ⊢ ∀n. 0 ≤ n ∧ (n ≤ u16_max ∨ n ≤ usize_max) ⇒
             usize_to_int (int_to_usize n) = n
    
-   [int_to_i8_id]  Axiom
+   [int_to_isize_id]  Axiom
       
-      [oracles: ] [axioms: int_to_i8_id] []
-      ⊢ ∀n. i8_min ≤ n ∧ n ≤ i8_max ⇒ i8_to_int (int_to_i8 n) = n
+      [oracles: ] [axioms: int_to_isize_id] []
+      ⊢ ∀n. (i16_min ≤ n ∨ isize_min ≤ n) ∧ (n ≤ i16_max ∨ n ≤ isize_max) ⇒
+            isize_to_int (int_to_isize n) = n
    
-   [int_to_i16_id]  Axiom
+   [u128_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i16_id] []
-      ⊢ ∀n. i16_min ≤ n ∧ n ≤ i16_max ⇒ i16_to_int (int_to_i16 n) = n
+      [oracles: ] [axioms: u128_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u128_to_int n ∧ u128_to_int n ≤ u128_max
    
-   [int_to_i32_id]  Axiom
+   [u64_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i32_id] []
-      ⊢ ∀n. i32_min ≤ n ∧ n ≤ i32_max ⇒ i32_to_int (int_to_i32 n) = n
+      [oracles: ] [axioms: u64_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u64_to_int n ∧ u64_to_int n ≤ u64_max
    
-   [int_to_i64_id]  Axiom
+   [u32_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i64_id] []
-      ⊢ ∀n. i64_min ≤ n ∧ n ≤ i64_max ⇒ i64_to_int (int_to_i64 n) = n
+      [oracles: ] [axioms: u32_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u32_to_int n ∧ u32_to_int n ≤ u32_max
    
-   [int_to_i128_id]  Axiom
+   [u16_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i128_id] []
-      ⊢ ∀n. i128_min ≤ n ∧ n ≤ i128_max ⇒ i128_to_int (int_to_i128 n) = n
+      [oracles: ] [axioms: u16_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u16_to_int n ∧ u16_to_int n ≤ u16_max
    
-   [int_to_u8_id]  Axiom
+   [u8_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u8_id] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u8_max ⇒ u8_to_int (int_to_u8 n) = n
+      [oracles: ] [axioms: u8_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u8_to_int n ∧ u8_to_int n ≤ u8_max
    
-   [int_to_u16_id]  Axiom
+   [usize_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u16_id] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u16_max ⇒ u16_to_int (int_to_u16 n) = n
+      [oracles: ] [axioms: usize_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ usize_to_int n ∧ usize_to_int n ≤ usize_max
    
-   [int_to_u32_id]  Axiom
+   [i128_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u32_id] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u32_max ⇒ u32_to_int (int_to_u32 n) = n
+      [oracles: ] [axioms: i128_to_int_bounds] []
+      ⊢ ∀n. i128_min ≤ i128_to_int n ∧ i128_to_int n ≤ i128_max
    
-   [int_to_u64_id]  Axiom
+   [i64_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u64_id] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u64_max ⇒ u64_to_int (int_to_u64 n) = n
+      [oracles: ] [axioms: i64_to_int_bounds] []
+      ⊢ ∀n. i64_min ≤ i64_to_int n ∧ i64_to_int n ≤ i64_max
    
-   [int_to_u128_id]  Axiom
+   [i32_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u128_id] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u128_max ⇒ u128_to_int (int_to_u128 n) = n
+      [oracles: ] [axioms: i32_to_int_bounds] []
+      ⊢ ∀n. i32_min ≤ i32_to_int n ∧ i32_to_int n ≤ i32_max
    
-   [int_to_i8_i8_to_int]  Axiom
+   [i16_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i8_i8_to_int] []
-      ⊢ ∀i. int_to_i8 (i8_to_int i) = i
+      [oracles: ] [axioms: i16_to_int_bounds] []
+      ⊢ ∀n. i16_min ≤ i16_to_int n ∧ i16_to_int n ≤ i16_max
    
-   [int_to_i16_i16_to_int]  Axiom
+   [i8_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i16_i16_to_int] []
-      ⊢ ∀i. int_to_i16 (i16_to_int i) = i
+      [oracles: ] [axioms: i8_to_int_bounds] []
+      ⊢ ∀n. i8_min ≤ i8_to_int n ∧ i8_to_int n ≤ i8_max
    
-   [int_to_i32_i32_to_int]  Axiom
+   [isize_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i32_i32_to_int] []
-      ⊢ ∀i. int_to_i32 (i32_to_int i) = i
+      [oracles: ] [axioms: isize_to_int_bounds] []
+      ⊢ ∀n. isize_min ≤ isize_to_int n ∧ isize_to_int n ≤ isize_max
    
-   [int_to_i64_i64_to_int]  Axiom
+   [usize_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i64_i64_to_int] []
-      ⊢ ∀i. int_to_i64 (i64_to_int i) = i
+      [oracles: ] [axioms: usize_bounds] [] ⊢ usize_max ≥ u16_max
    
-   [int_to_i128_i128_to_int]  Axiom
+   [isize_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i128_i128_to_int] []
-      ⊢ ∀i. int_to_i128 (i128_to_int i) = i
-   
-   [int_to_isize_isize_to_int]  Axiom
-      
-      [oracles: ] [axioms: int_to_isize_isize_to_int] []
-      ⊢ ∀i. int_to_isize (isize_to_int i) = i
-   
-   [int_to_u8_u8_to_int]  Axiom
-      
-      [oracles: ] [axioms: int_to_u8_u8_to_int] []
-      ⊢ ∀i. int_to_u8 (u8_to_int i) = i
-   
-   [int_to_u16_u16_to_int]  Axiom
-      
-      [oracles: ] [axioms: int_to_u16_u16_to_int] []
-      ⊢ ∀i. int_to_u16 (u16_to_int i) = i
-   
-   [int_to_u32_u32_to_int]  Axiom
-      
-      [oracles: ] [axioms: int_to_u32_u32_to_int] []
-      ⊢ ∀i. int_to_u32 (u32_to_int i) = i
-   
-   [int_to_u64_u64_to_int]  Axiom
-      
-      [oracles: ] [axioms: int_to_u64_u64_to_int] []
-      ⊢ ∀i. int_to_u64 (u64_to_int i) = i
-   
-   [int_to_u128_u128_to_int]  Axiom
-      
-      [oracles: ] [axioms: int_to_u128_u128_to_int] []
-      ⊢ ∀i. int_to_u128 (u128_to_int i) = i
-   
-   [int_to_usize_usize_to_int]  Axiom
-      
-      [oracles: ] [axioms: int_to_usize_usize_to_int] []
-      ⊢ ∀i. int_to_usize (usize_to_int i) = i
-   
-   [MK_VEC_SPEC]  Axiom
-      
-      [oracles: ] [axioms: MK_VEC_SPEC] []
-      ⊢ ∀l. &LENGTH l ≤ usize_max ⇒
-            ∃v. mk_vec l = Return v ∧ vec_to_list v = l
+      [oracles: ] [axioms: isize_bounds] []
+      ⊢ isize_min ≤ i16_min ∧ isize_max ≥ i16_max
    
    [bind_def]  Definition
       
@@ -1035,643 +1026,6 @@ sig
       
       ⊢ ∀v x. vec_push_back v x = mk_vec (vec_to_list v ⧺ [x])
    
-   [I128_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i128_id, usize_bounds] []
-      ⊢ ∀x y.
-          i128_min ≤ i128_to_int x + i128_to_int y ⇒
-          i128_to_int x + i128_to_int y ≤ i128_max ⇒
-          ∃z. i128_add x y = Return z ∧
-              i128_to_int z = i128_to_int x + i128_to_int y
-   
-   [I128_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i128_id, usize_bounds] []
-      ⊢ ∀x y.
-          i128_to_int y ≠ 0 ⇒
-          i128_min ≤ i128_to_int x / i128_to_int y ⇒
-          i128_to_int x / i128_to_int y ≤ i128_max ⇒
-          ∃z. i128_div x y = Return z ∧
-              i128_to_int z = i128_to_int x / i128_to_int y
-   
-   [I128_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i128_id, usize_bounds] []
-      ⊢ ∀x y.
-          i128_min ≤ i128_to_int x * i128_to_int y ⇒
-          i128_to_int x * i128_to_int y ≤ i128_max ⇒
-          ∃z. i128_mul x y = Return z ∧
-              i128_to_int z = i128_to_int x * i128_to_int y
-   
-   [I128_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i128_id, usize_bounds] []
-      ⊢ ∀x y.
-          i128_min ≤ i128_to_int x − i128_to_int y ⇒
-          i128_to_int x − i128_to_int y ≤ i128_max ⇒
-          ∃z. i128_sub x y = Return z ∧
-              i128_to_int z = i128_to_int x − i128_to_int y
-   
-   [I16_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i16_id, usize_bounds] []
-      ⊢ ∀x y.
-          i16_min ≤ i16_to_int x + i16_to_int y ⇒
-          i16_to_int x + i16_to_int y ≤ i16_max ⇒
-          ∃z. i16_add x y = Return z ∧
-              i16_to_int z = i16_to_int x + i16_to_int y
-   
-   [I16_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i16_id, usize_bounds] []
-      ⊢ ∀x y.
-          i16_to_int y ≠ 0 ⇒
-          i16_min ≤ i16_to_int x / i16_to_int y ⇒
-          i16_to_int x / i16_to_int y ≤ i16_max ⇒
-          ∃z. i16_div x y = Return z ∧
-              i16_to_int z = i16_to_int x / i16_to_int y
-   
-   [I16_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i16_id, usize_bounds] []
-      ⊢ ∀x y.
-          i16_min ≤ i16_to_int x * i16_to_int y ⇒
-          i16_to_int x * i16_to_int y ≤ i16_max ⇒
-          ∃z. i16_mul x y = Return z ∧
-              i16_to_int z = i16_to_int x * i16_to_int y
-   
-   [I16_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i16_id, i16_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          i16_to_int y ≠ 0 ⇒
-          i16_min ≤ int_rem (i16_to_int x) (i16_to_int y) ⇒
-          int_rem (i16_to_int x) (i16_to_int y) ≤ i16_max ⇒
-          ∃z. i16_rem x y = Return z ∧
-              i16_to_int z = int_rem (i16_to_int x) (i16_to_int y)
-   
-   [I16_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i16_id, usize_bounds] []
-      ⊢ ∀x y.
-          i16_min ≤ i16_to_int x − i16_to_int y ⇒
-          i16_to_int x − i16_to_int y ≤ i16_max ⇒
-          ∃z. i16_sub x y = Return z ∧
-              i16_to_int z = i16_to_int x − i16_to_int y
-   
-   [I32_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i32_id, usize_bounds] []
-      ⊢ ∀x y.
-          i32_min ≤ i32_to_int x + i32_to_int y ⇒
-          i32_to_int x + i32_to_int y ≤ i32_max ⇒
-          ∃z. i32_add x y = Return z ∧
-              i32_to_int z = i32_to_int x + i32_to_int y
-   
-   [I32_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i32_id, usize_bounds] []
-      ⊢ ∀x y.
-          i32_to_int y ≠ 0 ⇒
-          i32_min ≤ i32_to_int x / i32_to_int y ⇒
-          i32_to_int x / i32_to_int y ≤ i32_max ⇒
-          ∃z. i32_div x y = Return z ∧
-              i32_to_int z = i32_to_int x / i32_to_int y
-   
-   [I32_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i32_id, usize_bounds] []
-      ⊢ ∀x y.
-          i32_min ≤ i32_to_int x * i32_to_int y ⇒
-          i32_to_int x * i32_to_int y ≤ i32_max ⇒
-          ∃z. i32_mul x y = Return z ∧
-              i32_to_int z = i32_to_int x * i32_to_int y
-   
-   [I32_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i32_id, i32_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          i32_to_int y ≠ 0 ⇒
-          i32_min ≤ int_rem (i32_to_int x) (i32_to_int y) ⇒
-          int_rem (i32_to_int x) (i32_to_int y) ≤ i32_max ⇒
-          ∃z. i32_rem x y = Return z ∧
-              i32_to_int z = int_rem (i32_to_int x) (i32_to_int y)
-   
-   [I32_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i32_id, usize_bounds] []
-      ⊢ ∀x y.
-          i32_min ≤ i32_to_int x − i32_to_int y ⇒
-          i32_to_int x − i32_to_int y ≤ i32_max ⇒
-          ∃z. i32_sub x y = Return z ∧
-              i32_to_int z = i32_to_int x − i32_to_int y
-   
-   [I64_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i64_id, usize_bounds] []
-      ⊢ ∀x y.
-          i64_min ≤ i64_to_int x + i64_to_int y ⇒
-          i64_to_int x + i64_to_int y ≤ i64_max ⇒
-          ∃z. i64_add x y = Return z ∧
-              i64_to_int z = i64_to_int x + i64_to_int y
-   
-   [I64_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i64_id, usize_bounds] []
-      ⊢ ∀x y.
-          i64_to_int y ≠ 0 ⇒
-          i64_min ≤ i64_to_int x / i64_to_int y ⇒
-          i64_to_int x / i64_to_int y ≤ i64_max ⇒
-          ∃z. i64_div x y = Return z ∧
-              i64_to_int z = i64_to_int x / i64_to_int y
-   
-   [I64_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i64_id, usize_bounds] []
-      ⊢ ∀x y.
-          i64_min ≤ i64_to_int x * i64_to_int y ⇒
-          i64_to_int x * i64_to_int y ≤ i64_max ⇒
-          ∃z. i64_mul x y = Return z ∧
-              i64_to_int z = i64_to_int x * i64_to_int y
-   
-   [I64_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i64_id, i64_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          i64_to_int y ≠ 0 ⇒
-          i64_min ≤ int_rem (i64_to_int x) (i64_to_int y) ⇒
-          int_rem (i64_to_int x) (i64_to_int y) ≤ i64_max ⇒
-          ∃z. i64_rem x y = Return z ∧
-              i64_to_int z = int_rem (i64_to_int x) (i64_to_int y)
-   
-   [I64_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i64_id, usize_bounds] []
-      ⊢ ∀x y.
-          i64_min ≤ i64_to_int x − i64_to_int y ⇒
-          i64_to_int x − i64_to_int y ≤ i64_max ⇒
-          ∃z. i64_sub x y = Return z ∧
-              i64_to_int z = i64_to_int x − i64_to_int y
-   
-   [I8_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i8_id, usize_bounds] []
-      ⊢ ∀x y.
-          i8_min ≤ i8_to_int x + i8_to_int y ⇒
-          i8_to_int x + i8_to_int y ≤ i8_max ⇒
-          ∃z. i8_add x y = Return z ∧
-              i8_to_int z = i8_to_int x + i8_to_int y
-   
-   [I8_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i8_id, usize_bounds] []
-      ⊢ ∀x y.
-          i8_to_int y ≠ 0 ⇒
-          i8_min ≤ i8_to_int x / i8_to_int y ⇒
-          i8_to_int x / i8_to_int y ≤ i8_max ⇒
-          ∃z. i8_div x y = Return z ∧
-              i8_to_int z = i8_to_int x / i8_to_int y
-   
-   [I8_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i8_id, usize_bounds] []
-      ⊢ ∀x y.
-          i8_min ≤ i8_to_int x * i8_to_int y ⇒
-          i8_to_int x * i8_to_int y ≤ i8_max ⇒
-          ∃z. i8_mul x y = Return z ∧
-              i8_to_int z = i8_to_int x * i8_to_int y
-   
-   [I8_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i8_id, i8_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          i8_to_int y ≠ 0 ⇒
-          i8_min ≤ int_rem (i8_to_int x) (i8_to_int y) ⇒
-          int_rem (i8_to_int x) (i8_to_int y) ≤ i8_max ⇒
-          ∃z. i8_rem x y = Return z ∧
-              i8_to_int z = int_rem (i8_to_int x) (i8_to_int y)
-   
-   [I8_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_i8_id, usize_bounds] []
-      ⊢ ∀x y.
-          i8_min ≤ i8_to_int x − i8_to_int y ⇒
-          i8_to_int x − i8_to_int y ≤ i8_max ⇒
-          ∃z. i8_sub x y = Return z ∧
-              i8_to_int z = i8_to_int x − i8_to_int y
-   
-   [INT_OF_NUM]  Theorem
-      
-      ⊢ ∀i. 0 ≤ i ⇒ &Num i = i
-   
-   [INT_OF_NUM_NEQ_INJ]  Theorem
-      
-      ⊢ ∀n m. &n ≠ &m ⇒ n ≠ m
-   
-   [ISIZE_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          i16_min ≤ isize_to_int x + isize_to_int y ∨
-          isize_min ≤ isize_to_int x + isize_to_int y ⇒
-          isize_to_int x + isize_to_int y ≤ i16_max ∨
-          isize_to_int x + isize_to_int y ≤ isize_max ⇒
-          ∃z. isize_add x y = Return z ∧
-              isize_to_int z = isize_to_int x + isize_to_int y
-   
-   [ISIZE_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          isize_to_int y ≠ 0 ⇒
-          i16_min ≤ isize_to_int x / isize_to_int y ∨
-          isize_min ≤ isize_to_int x / isize_to_int y ⇒
-          isize_to_int x / isize_to_int y ≤ i16_max ∨
-          isize_to_int x / isize_to_int y ≤ isize_max ⇒
-          ∃z. isize_div x y = Return z ∧
-              isize_to_int z = isize_to_int x / isize_to_int y
-   
-   [ISIZE_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          i16_min ≤ isize_to_int x * isize_to_int y ∨
-          isize_min ≤ isize_to_int x * isize_to_int y ⇒
-          isize_to_int x * isize_to_int y ≤ i16_max ∨
-          isize_to_int x * isize_to_int y ≤ isize_max ⇒
-          ∃z. isize_mul x y = Return z ∧
-              isize_to_int z = isize_to_int x * isize_to_int y
-   
-   [ISIZE_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          i16_min ≤ isize_to_int x − isize_to_int y ∨
-          isize_min ≤ isize_to_int x − isize_to_int y ⇒
-          isize_to_int x − isize_to_int y ≤ i16_max ∨
-          isize_to_int x − isize_to_int y ≤ isize_max ⇒
-          ∃z. isize_sub x y = Return z ∧
-              isize_to_int z = isize_to_int x − isize_to_int y
-   
-   [U128_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          u128_to_int x + u128_to_int y ≤ u128_max ⇒
-          ∃z. u128_add x y = Return z ∧
-              u128_to_int z = u128_to_int x + u128_to_int y
-   
-   [U128_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          u128_to_int y ≠ 0 ⇒
-          ∃z. u128_div x y = Return z ∧
-              u128_to_int z = u128_to_int x / u128_to_int y
-   
-   [U128_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          u128_to_int x * u128_to_int y ≤ u128_max ⇒
-          ∃z. u128_mul x y = Return z ∧
-              u128_to_int z = u128_to_int x * u128_to_int y
-   
-   [U128_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          u128_to_int y ≠ 0 ⇒
-          ∃z. u128_rem x y = Return z ∧
-              u128_to_int z = int_rem (u128_to_int x) (u128_to_int y)
-   
-   [U128_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          0 ≤ u128_to_int x − u128_to_int y ⇒
-          ∃z. u128_sub x y = Return z ∧
-              u128_to_int z = u128_to_int x − u128_to_int y
-   
-   [U16_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u16_to_int x + u16_to_int y ≤ u16_max ⇒
-          ∃z. u16_add x y = Return z ∧
-              u16_to_int z = u16_to_int x + u16_to_int y
-   
-   [U16_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u16_to_int y ≠ 0 ⇒
-          ∃z. u16_div x y = Return z ∧
-              u16_to_int z = u16_to_int x / u16_to_int y
-   
-   [U16_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u16_to_int x * u16_to_int y ≤ u16_max ⇒
-          ∃z. u16_mul x y = Return z ∧
-              u16_to_int z = u16_to_int x * u16_to_int y
-   
-   [U16_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u16_to_int y ≠ 0 ⇒
-          ∃z. u16_rem x y = Return z ∧
-              u16_to_int z = int_rem (u16_to_int x) (u16_to_int y)
-   
-   [U16_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          0 ≤ u16_to_int x − u16_to_int y ⇒
-          ∃z. u16_sub x y = Return z ∧
-              u16_to_int z = u16_to_int x − u16_to_int y
-   
-   [U32_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u32_to_int x + u32_to_int y ≤ u32_max ⇒
-          ∃z. u32_add x y = Return z ∧
-              u32_to_int z = u32_to_int x + u32_to_int y
-   
-   [U32_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u32_to_int y ≠ 0 ⇒
-          ∃z. u32_div x y = Return z ∧
-              u32_to_int z = u32_to_int x / u32_to_int y
-   
-   [U32_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u32_to_int x * u32_to_int y ≤ u32_max ⇒
-          ∃z. u32_mul x y = Return z ∧
-              u32_to_int z = u32_to_int x * u32_to_int y
-   
-   [U32_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u32_to_int y ≠ 0 ⇒
-          ∃z. u32_rem x y = Return z ∧
-              u32_to_int z = int_rem (u32_to_int x) (u32_to_int y)
-   
-   [U32_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          0 ≤ u32_to_int x − u32_to_int y ⇒
-          ∃z. u32_sub x y = Return z ∧
-              u32_to_int z = u32_to_int x − u32_to_int y
-   
-   [U64_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u64_to_int x + u64_to_int y ≤ u64_max ⇒
-          ∃z. u64_add x y = Return z ∧
-              u64_to_int z = u64_to_int x + u64_to_int y
-   
-   [U64_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u64_to_int y ≠ 0 ⇒
-          ∃z. u64_div x y = Return z ∧
-              u64_to_int z = u64_to_int x / u64_to_int y
-   
-   [U64_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u64_to_int x * u64_to_int y ≤ u64_max ⇒
-          ∃z. u64_mul x y = Return z ∧
-              u64_to_int z = u64_to_int x * u64_to_int y
-   
-   [U64_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u64_to_int y ≠ 0 ⇒
-          ∃z. u64_rem x y = Return z ∧
-              u64_to_int z = int_rem (u64_to_int x) (u64_to_int y)
-   
-   [U64_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          0 ≤ u64_to_int x − u64_to_int y ⇒
-          ∃z. u64_sub x y = Return z ∧
-              u64_to_int z = u64_to_int x − u64_to_int y
-   
-   [U8_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u8_to_int x + u8_to_int y ≤ u8_max ⇒
-          ∃z. u8_add x y = Return z ∧
-              u8_to_int z = u8_to_int x + u8_to_int y
-   
-   [U8_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u8_to_int y ≠ 0 ⇒
-          ∃z. u8_div x y = Return z ∧
-              u8_to_int z = u8_to_int x / u8_to_int y
-   
-   [U8_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u8_to_int x * u8_to_int y ≤ u8_max ⇒
-          ∃z. u8_mul x y = Return z ∧
-              u8_to_int z = u8_to_int x * u8_to_int y
-   
-   [U8_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          u8_to_int y ≠ 0 ⇒
-          ∃z. u8_rem x y = Return z ∧
-              u8_to_int z = int_rem (u8_to_int x) (u8_to_int y)
-   
-   [U8_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
-      []
-      ⊢ ∀x y.
-          0 ≤ u8_to_int x − u8_to_int y ⇒
-          ∃z. u8_sub x y = Return z ∧
-              u8_to_int z = u8_to_int x − u8_to_int y
-   
-   [USIZE_ADD_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          usize_to_int x + usize_to_int y ≤ u16_max ∨
-          usize_to_int x + usize_to_int y ≤ usize_max ⇒
-          ∃z. usize_add x y = Return z ∧
-              usize_to_int z = usize_to_int x + usize_to_int y
-   
-   [USIZE_DIV_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          usize_to_int y ≠ 0 ⇒
-          ∃z. usize_div x y = Return z ∧
-              usize_to_int z = usize_to_int x / usize_to_int y
-   
-   [USIZE_MUL_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          usize_to_int x * usize_to_int y ≤ u16_max ∨
-          usize_to_int x * usize_to_int y ≤ usize_max ⇒
-          ∃z. usize_mul x y = Return z ∧
-              usize_to_int z = usize_to_int x * usize_to_int y
-   
-   [USIZE_REM_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          usize_to_int y ≠ 0 ⇒
-          ∃z. usize_rem x y = Return z ∧
-              usize_to_int z = int_rem (usize_to_int x) (usize_to_int y)
-   
-   [USIZE_SUB_EQ]  Theorem
-      
-      [oracles: DISK_THM]
-      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
-       usize_bounds] []
-      ⊢ ∀x y.
-          0 ≤ usize_to_int x − usize_to_int y ⇒
-          ∃z. usize_sub x y = Return z ∧
-              usize_to_int z = usize_to_int x − usize_to_int y
-   
-   [USIZE_TO_INT_INJ]  Theorem
-      
-      [oracles: DISK_THM] [axioms: int_to_usize_usize_to_int] []
-      ⊢ ∀i j. usize_to_int i = usize_to_int j ⇔ i = j
-   
-   [USIZE_TO_INT_NEQ_INJ]  Theorem
-      
-      [oracles: DISK_THM] [axioms: int_to_usize_usize_to_int] []
-      ⊢ ∀i j. i ≠ j ⇒ usize_to_int i ≠ usize_to_int j
-   
-   [VEC_NEW_SPEC]  Theorem
-      
-      [oracles: DISK_THM] [axioms: usize_bounds, MK_VEC_SPEC] []
-      ⊢ vec_to_list vec_new = []
-   
-   [VEC_TO_LIST_INT_BOUNDS]  Theorem
-      
-      [oracles: DISK_THM] [axioms: usize_bounds, VEC_TO_LIST_BOUNDS] []
-      ⊢ ∀v. 0 ≤ &LENGTH (vec_to_list v) ∧
-            &LENGTH (vec_to_list v) ≤ usize_max
-   
    [datatype_error]  Theorem
       
       ⊢ DATATYPE (error Failure)
@@ -1726,6 +1080,271 @@ sig
       
       ⊢ ∀a. a = Failure
    
+   [i128_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i128_id, usize_bounds] []
+      ⊢ ∀x y.
+          i128_min ≤ i128_to_int x + i128_to_int y ⇒
+          i128_to_int x + i128_to_int y ≤ i128_max ⇒
+          ∃z. i128_add x y = Return z ∧
+              i128_to_int z = i128_to_int x + i128_to_int y
+   
+   [i128_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i128_id, usize_bounds] []
+      ⊢ ∀x y.
+          i128_to_int y ≠ 0 ⇒
+          i128_min ≤ i128_to_int x / i128_to_int y ⇒
+          i128_to_int x / i128_to_int y ≤ i128_max ⇒
+          ∃z. i128_div x y = Return z ∧
+              i128_to_int z = i128_to_int x / i128_to_int y
+   
+   [i128_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i128_id, usize_bounds] []
+      ⊢ ∀x y.
+          i128_min ≤ i128_to_int x * i128_to_int y ⇒
+          i128_to_int x * i128_to_int y ≤ i128_max ⇒
+          ∃z. i128_mul x y = Return z ∧
+              i128_to_int z = i128_to_int x * i128_to_int y
+   
+   [i128_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i128_id, i128_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          i128_to_int y ≠ 0 ⇒
+          i128_min ≤ int_rem (i128_to_int x) (i128_to_int y) ⇒
+          int_rem (i128_to_int x) (i128_to_int y) ≤ i128_max ⇒
+          ∃z. i128_rem x y = Return z ∧
+              i128_to_int z = int_rem (i128_to_int x) (i128_to_int y)
+   
+   [i128_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i128_id, usize_bounds] []
+      ⊢ ∀x y.
+          i128_min ≤ i128_to_int x − i128_to_int y ⇒
+          i128_to_int x − i128_to_int y ≤ i128_max ⇒
+          ∃z. i128_sub x y = Return z ∧
+              i128_to_int z = i128_to_int x − i128_to_int y
+   
+   [i16_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i16_id, usize_bounds] []
+      ⊢ ∀x y.
+          i16_min ≤ i16_to_int x + i16_to_int y ⇒
+          i16_to_int x + i16_to_int y ≤ i16_max ⇒
+          ∃z. i16_add x y = Return z ∧
+              i16_to_int z = i16_to_int x + i16_to_int y
+   
+   [i16_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i16_id, usize_bounds] []
+      ⊢ ∀x y.
+          i16_to_int y ≠ 0 ⇒
+          i16_min ≤ i16_to_int x / i16_to_int y ⇒
+          i16_to_int x / i16_to_int y ≤ i16_max ⇒
+          ∃z. i16_div x y = Return z ∧
+              i16_to_int z = i16_to_int x / i16_to_int y
+   
+   [i16_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i16_id, usize_bounds] []
+      ⊢ ∀x y.
+          i16_min ≤ i16_to_int x * i16_to_int y ⇒
+          i16_to_int x * i16_to_int y ≤ i16_max ⇒
+          ∃z. i16_mul x y = Return z ∧
+              i16_to_int z = i16_to_int x * i16_to_int y
+   
+   [i16_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i16_id, i16_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          i16_to_int y ≠ 0 ⇒
+          i16_min ≤ int_rem (i16_to_int x) (i16_to_int y) ⇒
+          int_rem (i16_to_int x) (i16_to_int y) ≤ i16_max ⇒
+          ∃z. i16_rem x y = Return z ∧
+              i16_to_int z = int_rem (i16_to_int x) (i16_to_int y)
+   
+   [i16_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i16_id, usize_bounds] []
+      ⊢ ∀x y.
+          i16_min ≤ i16_to_int x − i16_to_int y ⇒
+          i16_to_int x − i16_to_int y ≤ i16_max ⇒
+          ∃z. i16_sub x y = Return z ∧
+              i16_to_int z = i16_to_int x − i16_to_int y
+   
+   [i32_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i32_id, usize_bounds] []
+      ⊢ ∀x y.
+          i32_min ≤ i32_to_int x + i32_to_int y ⇒
+          i32_to_int x + i32_to_int y ≤ i32_max ⇒
+          ∃z. i32_add x y = Return z ∧
+              i32_to_int z = i32_to_int x + i32_to_int y
+   
+   [i32_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i32_id, usize_bounds] []
+      ⊢ ∀x y.
+          i32_to_int y ≠ 0 ⇒
+          i32_min ≤ i32_to_int x / i32_to_int y ⇒
+          i32_to_int x / i32_to_int y ≤ i32_max ⇒
+          ∃z. i32_div x y = Return z ∧
+              i32_to_int z = i32_to_int x / i32_to_int y
+   
+   [i32_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i32_id, usize_bounds] []
+      ⊢ ∀x y.
+          i32_min ≤ i32_to_int x * i32_to_int y ⇒
+          i32_to_int x * i32_to_int y ≤ i32_max ⇒
+          ∃z. i32_mul x y = Return z ∧
+              i32_to_int z = i32_to_int x * i32_to_int y
+   
+   [i32_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i32_id, i32_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          i32_to_int y ≠ 0 ⇒
+          i32_min ≤ int_rem (i32_to_int x) (i32_to_int y) ⇒
+          int_rem (i32_to_int x) (i32_to_int y) ≤ i32_max ⇒
+          ∃z. i32_rem x y = Return z ∧
+              i32_to_int z = int_rem (i32_to_int x) (i32_to_int y)
+   
+   [i32_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i32_id, usize_bounds] []
+      ⊢ ∀x y.
+          i32_min ≤ i32_to_int x − i32_to_int y ⇒
+          i32_to_int x − i32_to_int y ≤ i32_max ⇒
+          ∃z. i32_sub x y = Return z ∧
+              i32_to_int z = i32_to_int x − i32_to_int y
+   
+   [i64_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i64_id, usize_bounds] []
+      ⊢ ∀x y.
+          i64_min ≤ i64_to_int x + i64_to_int y ⇒
+          i64_to_int x + i64_to_int y ≤ i64_max ⇒
+          ∃z. i64_add x y = Return z ∧
+              i64_to_int z = i64_to_int x + i64_to_int y
+   
+   [i64_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i64_id, usize_bounds] []
+      ⊢ ∀x y.
+          i64_to_int y ≠ 0 ⇒
+          i64_min ≤ i64_to_int x / i64_to_int y ⇒
+          i64_to_int x / i64_to_int y ≤ i64_max ⇒
+          ∃z. i64_div x y = Return z ∧
+              i64_to_int z = i64_to_int x / i64_to_int y
+   
+   [i64_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i64_id, usize_bounds] []
+      ⊢ ∀x y.
+          i64_min ≤ i64_to_int x * i64_to_int y ⇒
+          i64_to_int x * i64_to_int y ≤ i64_max ⇒
+          ∃z. i64_mul x y = Return z ∧
+              i64_to_int z = i64_to_int x * i64_to_int y
+   
+   [i64_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i64_id, i64_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          i64_to_int y ≠ 0 ⇒
+          i64_min ≤ int_rem (i64_to_int x) (i64_to_int y) ⇒
+          int_rem (i64_to_int x) (i64_to_int y) ≤ i64_max ⇒
+          ∃z. i64_rem x y = Return z ∧
+              i64_to_int z = int_rem (i64_to_int x) (i64_to_int y)
+   
+   [i64_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i64_id, usize_bounds] []
+      ⊢ ∀x y.
+          i64_min ≤ i64_to_int x − i64_to_int y ⇒
+          i64_to_int x − i64_to_int y ≤ i64_max ⇒
+          ∃z. i64_sub x y = Return z ∧
+              i64_to_int z = i64_to_int x − i64_to_int y
+   
+   [i8_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i8_id, usize_bounds] []
+      ⊢ ∀x y.
+          i8_min ≤ i8_to_int x + i8_to_int y ⇒
+          i8_to_int x + i8_to_int y ≤ i8_max ⇒
+          ∃z. i8_add x y = Return z ∧
+              i8_to_int z = i8_to_int x + i8_to_int y
+   
+   [i8_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i8_id, usize_bounds] []
+      ⊢ ∀x y.
+          i8_to_int y ≠ 0 ⇒
+          i8_min ≤ i8_to_int x / i8_to_int y ⇒
+          i8_to_int x / i8_to_int y ≤ i8_max ⇒
+          ∃z. i8_div x y = Return z ∧
+              i8_to_int z = i8_to_int x / i8_to_int y
+   
+   [i8_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i8_id, usize_bounds] []
+      ⊢ ∀x y.
+          i8_min ≤ i8_to_int x * i8_to_int y ⇒
+          i8_to_int x * i8_to_int y ≤ i8_max ⇒
+          ∃z. i8_mul x y = Return z ∧
+              i8_to_int z = i8_to_int x * i8_to_int y
+   
+   [i8_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i8_id, i8_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          i8_to_int y ≠ 0 ⇒
+          i8_min ≤ int_rem (i8_to_int x) (i8_to_int y) ⇒
+          int_rem (i8_to_int x) (i8_to_int y) ≤ i8_max ⇒
+          ∃z. i8_rem x y = Return z ∧
+              i8_to_int z = int_rem (i8_to_int x) (i8_to_int y)
+   
+   [i8_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_i8_id, usize_bounds] []
+      ⊢ ∀x y.
+          i8_min ≤ i8_to_int x − i8_to_int y ⇒
+          i8_to_int x − i8_to_int y ≤ i8_max ⇒
+          ∃z. i8_sub x y = Return z ∧
+              i8_to_int z = i8_to_int x − i8_to_int y
+   
    [index_update_diff]  Theorem
       
       ⊢ ∀ls i j y. 0 ≤ i ⇒ i < len ls ⇒ index i (update ls i y) = y
@@ -1739,9 +1358,76 @@ sig
           j ≠ i ⇒
           index j (update ls i y) = index j ls
    
-   [int_induction]  Theorem
+   [int_of_num_neq_inj]  Theorem
       
-      ⊢ ∀P. P 0 ∧ (∀i. 0 ≤ i ∧ P i ⇒ P (i + 1)) ⇒ ∀i. 0 ≤ i ⇒ P i
+      ⊢ ∀n m. &n ≠ &m ⇒ n ≠ m
+   
+   [isize_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          i16_min ≤ isize_to_int x + isize_to_int y ∨
+          isize_min ≤ isize_to_int x + isize_to_int y ⇒
+          isize_to_int x + isize_to_int y ≤ i16_max ∨
+          isize_to_int x + isize_to_int y ≤ isize_max ⇒
+          ∃z. isize_add x y = Return z ∧
+              isize_to_int z = isize_to_int x + isize_to_int y
+   
+   [isize_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          isize_to_int y ≠ 0 ⇒
+          i16_min ≤ isize_to_int x / isize_to_int y ∨
+          isize_min ≤ isize_to_int x / isize_to_int y ⇒
+          isize_to_int x / isize_to_int y ≤ i16_max ∨
+          isize_to_int x / isize_to_int y ≤ isize_max ⇒
+          ∃z. isize_div x y = Return z ∧
+              isize_to_int z = isize_to_int x / isize_to_int y
+   
+   [isize_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          i16_min ≤ isize_to_int x * isize_to_int y ∨
+          isize_min ≤ isize_to_int x * isize_to_int y ⇒
+          isize_to_int x * isize_to_int y ≤ i16_max ∨
+          isize_to_int x * isize_to_int y ≤ isize_max ⇒
+          ∃z. isize_mul x y = Return z ∧
+              isize_to_int z = isize_to_int x * isize_to_int y
+   
+   [isize_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          isize_to_int y ≠ 0 ⇒
+          i16_min ≤ int_rem (isize_to_int x) (isize_to_int y) ∨
+          isize_min ≤ int_rem (isize_to_int x) (isize_to_int y) ⇒
+          int_rem (isize_to_int x) (isize_to_int y) ≤ i16_max ∨
+          int_rem (isize_to_int x) (isize_to_int y) ≤ isize_max ⇒
+          ∃z. isize_rem x y = Return z ∧
+              isize_to_int z = int_rem (isize_to_int x) (isize_to_int y)
+   
+   [isize_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_isize_id, isize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          i16_min ≤ isize_to_int x − isize_to_int y ∨
+          isize_min ≤ isize_to_int x − isize_to_int y ⇒
+          isize_to_int x − isize_to_int y ≤ i16_max ∨
+          isize_to_int x − isize_to_int y ≤ isize_max ⇒
+          ∃z. isize_sub x y = Return z ∧
+              isize_to_int z = isize_to_int x − isize_to_int y
    
    [num2error_11]  Theorem
       
@@ -1796,6 +1482,256 @@ sig
       
       ⊢ ∀rr. (∃a. rr = Return a) ∨ (∃e. rr = Fail e) ∨ rr = Loop
    
+   [u128_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          u128_to_int x + u128_to_int y ≤ u128_max ⇒
+          ∃z. u128_add x y = Return z ∧
+              u128_to_int z = u128_to_int x + u128_to_int y
+   
+   [u128_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          u128_to_int y ≠ 0 ⇒
+          ∃z. u128_div x y = Return z ∧
+              u128_to_int z = u128_to_int x / u128_to_int y
+   
+   [u128_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          u128_to_int x * u128_to_int y ≤ u128_max ⇒
+          ∃z. u128_mul x y = Return z ∧
+              u128_to_int z = u128_to_int x * u128_to_int y
+   
+   [u128_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          u128_to_int y ≠ 0 ⇒
+          ∃z. u128_rem x y = Return z ∧
+              u128_to_int z = int_rem (u128_to_int x) (u128_to_int y)
+   
+   [u128_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u128_id, u128_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          0 ≤ u128_to_int x − u128_to_int y ⇒
+          ∃z. u128_sub x y = Return z ∧
+              u128_to_int z = u128_to_int x − u128_to_int y
+   
+   [u16_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u16_to_int x + u16_to_int y ≤ u16_max ⇒
+          ∃z. u16_add x y = Return z ∧
+              u16_to_int z = u16_to_int x + u16_to_int y
+   
+   [u16_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u16_to_int y ≠ 0 ⇒
+          ∃z. u16_div x y = Return z ∧
+              u16_to_int z = u16_to_int x / u16_to_int y
+   
+   [u16_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u16_to_int x * u16_to_int y ≤ u16_max ⇒
+          ∃z. u16_mul x y = Return z ∧
+              u16_to_int z = u16_to_int x * u16_to_int y
+   
+   [u16_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u16_to_int y ≠ 0 ⇒
+          ∃z. u16_rem x y = Return z ∧
+              u16_to_int z = int_rem (u16_to_int x) (u16_to_int y)
+   
+   [u16_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u16_id, u16_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          0 ≤ u16_to_int x − u16_to_int y ⇒
+          ∃z. u16_sub x y = Return z ∧
+              u16_to_int z = u16_to_int x − u16_to_int y
+   
+   [u32_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u32_to_int x + u32_to_int y ≤ u32_max ⇒
+          ∃z. u32_add x y = Return z ∧
+              u32_to_int z = u32_to_int x + u32_to_int y
+   
+   [u32_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u32_to_int y ≠ 0 ⇒
+          ∃z. u32_div x y = Return z ∧
+              u32_to_int z = u32_to_int x / u32_to_int y
+   
+   [u32_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u32_to_int x * u32_to_int y ≤ u32_max ⇒
+          ∃z. u32_mul x y = Return z ∧
+              u32_to_int z = u32_to_int x * u32_to_int y
+   
+   [u32_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u32_to_int y ≠ 0 ⇒
+          ∃z. u32_rem x y = Return z ∧
+              u32_to_int z = int_rem (u32_to_int x) (u32_to_int y)
+   
+   [u32_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u32_id, u32_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          0 ≤ u32_to_int x − u32_to_int y ⇒
+          ∃z. u32_sub x y = Return z ∧
+              u32_to_int z = u32_to_int x − u32_to_int y
+   
+   [u64_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u64_to_int x + u64_to_int y ≤ u64_max ⇒
+          ∃z. u64_add x y = Return z ∧
+              u64_to_int z = u64_to_int x + u64_to_int y
+   
+   [u64_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u64_to_int y ≠ 0 ⇒
+          ∃z. u64_div x y = Return z ∧
+              u64_to_int z = u64_to_int x / u64_to_int y
+   
+   [u64_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u64_to_int x * u64_to_int y ≤ u64_max ⇒
+          ∃z. u64_mul x y = Return z ∧
+              u64_to_int z = u64_to_int x * u64_to_int y
+   
+   [u64_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u64_to_int y ≠ 0 ⇒
+          ∃z. u64_rem x y = Return z ∧
+              u64_to_int z = int_rem (u64_to_int x) (u64_to_int y)
+   
+   [u64_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u64_id, u64_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          0 ≤ u64_to_int x − u64_to_int y ⇒
+          ∃z. u64_sub x y = Return z ∧
+              u64_to_int z = u64_to_int x − u64_to_int y
+   
+   [u8_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u8_to_int x + u8_to_int y ≤ u8_max ⇒
+          ∃z. u8_add x y = Return z ∧
+              u8_to_int z = u8_to_int x + u8_to_int y
+   
+   [u8_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u8_to_int y ≠ 0 ⇒
+          ∃z. u8_div x y = Return z ∧
+              u8_to_int z = u8_to_int x / u8_to_int y
+   
+   [u8_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u8_to_int x * u8_to_int y ≤ u8_max ⇒
+          ∃z. u8_mul x y = Return z ∧
+              u8_to_int z = u8_to_int x * u8_to_int y
+   
+   [u8_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          u8_to_int y ≠ 0 ⇒
+          ∃z. u8_rem x y = Return z ∧
+              u8_to_int z = int_rem (u8_to_int x) (u8_to_int y)
+   
+   [u8_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_u8_id, u8_to_int_bounds, usize_bounds]
+      []
+      ⊢ ∀x y.
+          0 ≤ u8_to_int x − u8_to_int y ⇒
+          ∃z. u8_sub x y = Return z ∧
+              u8_to_int z = u8_to_int x − u8_to_int y
+   
    [update_ind]  Theorem
       
       ⊢ ∀P. (∀i y. P [] i y) ∧ (∀v0 ls y. P (v0::ls) 0 y) ∧
@@ -1813,6 +1749,68 @@ sig
           i < len ls ⇒
           len (update ls i y) = len ls ∧ index i (update ls i y) = y ∧
           ∀j. j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls
+   
+   [usize_add_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          usize_to_int x + usize_to_int y ≤ u16_max ∨
+          usize_to_int x + usize_to_int y ≤ usize_max ⇒
+          ∃z. usize_add x y = Return z ∧
+              usize_to_int z = usize_to_int x + usize_to_int y
+   
+   [usize_div_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          usize_to_int y ≠ 0 ⇒
+          ∃z. usize_div x y = Return z ∧
+              usize_to_int z = usize_to_int x / usize_to_int y
+   
+   [usize_mul_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          usize_to_int x * usize_to_int y ≤ u16_max ∨
+          usize_to_int x * usize_to_int y ≤ usize_max ⇒
+          ∃z. usize_mul x y = Return z ∧
+              usize_to_int z = usize_to_int x * usize_to_int y
+   
+   [usize_rem_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          usize_to_int y ≠ 0 ⇒
+          ∃z. usize_rem x y = Return z ∧
+              usize_to_int z = int_rem (usize_to_int x) (usize_to_int y)
+   
+   [usize_sub_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: isize_bounds, int_to_usize_id, usize_to_int_bounds,
+       usize_bounds] []
+      ⊢ ∀x y.
+          0 ≤ usize_to_int x − usize_to_int y ⇒
+          ∃z. usize_sub x y = Return z ∧
+              usize_to_int z = usize_to_int x − usize_to_int y
+   
+   [usize_to_int_inj]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_usize_usize_to_int] []
+      ⊢ ∀i j. usize_to_int i = usize_to_int j ⇔ i = j
+   
+   [usize_to_int_neq_inj]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_usize_usize_to_int] []
+      ⊢ ∀i j. i ≠ j ⇒ usize_to_int i ≠ usize_to_int j
    
    [vec_insert_back_spec]  Theorem
       
