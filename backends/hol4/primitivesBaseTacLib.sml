@@ -20,10 +20,12 @@ val pop_ignore_tac = pop_assum ignore_tac
 val exfalso : tactic =
   SUBGOAL_THEN “F” (fn th => ASSUME_TAC th >> fs[])
 
+val case_tac = CASE_TAC
 val try_tac = TRY
 val first_tac = FIRST
-val map_first = MAP_FIRST
+val map_first_tac = MAP_FIRST
 val fail_tac = FAIL_TAC
+val map_every_tac = MAP_EVERY
 
 fun qspec_assume x th = qspec_then x assume_tac th
 fun qspecl_assume xl th = qspecl_then xl assume_tac th
@@ -31,8 +33,8 @@ fun first_qspec_assume x = first_assum (qspec_assume x)
 fun first_qspecl_assume xl = first_assum (qspecl_assume xl)
 
 val all_tac = all_tac
-val cooper_tac = COOPER_TAC
 val pure_rewrite_tac = PURE_REWRITE_TAC
+val pure_asm_rewrite_tac = PURE_ASM_REWRITE_TAC
 val pure_once_rewrite_tac = PURE_ONCE_REWRITE_TAC
 
 (* Dependent rewrites *)
@@ -419,7 +421,7 @@ apply_dep_rewrites_match_concl_tac
 
    Leaves the premises as subgoals if [prove_premise] doesn't prove them.
  *)
-fun apply_dep_rewrites_match_first_premise_tac
+fun apply_dep_rewrites_match_first_premise_with_all_tac
   (keep : thm -> bool)
   (prove_premise : tactic) (then_tac : thm_tactic) (th : thm) : tactic =
   fn (asms, g) =>
@@ -435,7 +437,90 @@ fun apply_dep_rewrites_match_first_premise_tac
         end;
     in
       (* Apply each theorem *)
-      MAP_EVERY apply_tac thms (asms, g)
+      map_every_tac apply_tac thms (asms, g)
     end
+
+val cooper_tac = COOPER_TAC
+
+(* TODO: COOPER_TAC fails in the proof below, because of x <> y. We should
+   create an issue/PR for HOL4.
+
+Theorem cooper_fail:
+  ∀(x y : 'a). x ≠ y ==> 0 ≤ i ==> i ≠ 0 ⇒ 0 < i
+Proof
+  rw [] >> cooper_tac
+QED
+
+*)
+
+(* Filter the assumptions in the goal *)
+fun filter_assums_tac (keep : term -> bool) : tactic =
+  fn (asms, g) =>
+  let
+    val kept_asms = filter keep asms
+    (* The validation function *)
+    fun valid thms =
+      case thms of
+        [th] =>
+        let
+          (* Being a bit brutal - will optimize later *)
+          val tac = ntac (length asms) strip_tac >> irule th >> pure_asm_rewrite_tac []
+          val th = prove (list_mk_imp (asms, g), tac)
+          val th = foldl (fn (_, th) => UNDISCH th) th asms
+        in th end
+      | _ => failwith "filter_assums: expected exactly one theorem"
+  in
+    ([(kept_asms, g)], valid)
+  end
+
+(* Destruct the conjunctions in the assumptions *)
+val dest_assums_conjs_tac : tactic =
+  fn (asms, g) =>
+  let
+    (* Destruct the conjunctions *)
+    val dest_asms = flatten (map (rev o strip_conj) asms)
+    (* The validation function *)
+    fun valid thms =
+      case thms of
+        [th] =>
+        let
+          (* Being a bit brutal - will optimize later *)
+          val tac = ntac (length asms) strip_tac >> irule th >> pure_asm_rewrite_tac []
+          val th = prove (list_mk_imp (asms, g), tac)
+          val th = foldl (fn (_, th) => UNDISCH th) th asms
+        in th end
+      | _ => failwith "dest_assums_conjs: expected exactly one theorem"
+  in
+    ([(dest_asms, g)], valid)
+  end
+
+(* Defining those here so that they are evaluated once and for all (parsing
+   depends on the context) *)
+val int_tac_int_ty = “:int”
+val int_tac_pat = “(x : 'a) <> (y : 'a)”
+
+(* We boost COOPER_TAC a bit *)
+fun int_tac (asms, g) =
+  let
+    (* Following the bug we discovered in COOPER_TAC, we filter all the
+       inequalities which terms are not between terms of type “:int”.
+
+       TODO: issue/PR for HOL4
+     *)
+    fun keep (asm : term) : bool =
+      let
+        val (_, s) = match_term int_tac_pat asm
+      in
+        case s of
+          [{redex = _, residue = ty}] => ty = int_tac_int_ty
+        | [] => (* Can happen if the term has exactly the same types as the pattern - unlikely *) false
+        | _ =>  failwith "int_tac: match error"
+      end
+      handle HOL_ERR _ => true
+   in
+     (dest_assums_conjs_tac >>
+      filter_assums_tac keep >>
+      first_tac [cooper_tac, exfalso >> cooper_tac]) (asms, g)
+   end
 
 end

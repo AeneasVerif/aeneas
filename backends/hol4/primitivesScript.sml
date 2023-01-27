@@ -125,8 +125,8 @@ val all_bound_defs = [
 ]
 
 (* The following bounds are valid for all architectures *)
-val isize_bounds = new_axiom ("isize_bounds", “isize_min <= i16_min /\ isize_max >= i16_max”)
-val usize_bounds = new_axiom ("usize_bounds", “usize_max >= u16_max”)
+val isize_bounds = new_axiom ("isize_bounds", “isize_min <= i16_min /\ i16_max <= isize_max”)
+val usize_bounds = new_axiom ("usize_bounds", “u16_max <= usize_max”)
 
 (* Conversion bounds *)
 val isize_to_int_bounds = new_axiom ("isize_to_int_bounds",
@@ -534,7 +534,7 @@ fun prove_arith_op_eq (asms, g) =
     val y = (snd o dest_comb) y_to_int;
     val rw_thms = int_rem_def :: List.concat [all_rem_defs, all_add_defs, all_sub_defs, all_mul_defs, all_div_defs, all_mk_int_defs, all_to_int_bounds_lemmas, all_conversion_id_lemmas];
     fun inst_first_lem arg lems =
-      map_first (fn th => (assume_tac (SPEC arg th) handle HOL_ERR _ => fail_tac "")) lems;
+      map_first_tac (fn th => (assume_tac (SPEC arg th) handle HOL_ERR _ => fail_tac "")) lems;
   in
     (rpt gen_tac >>
      rpt disch_tac >>
@@ -661,21 +661,6 @@ Theorem isize_add_eq:
 Proof
   prove_arith_op_eq
 QED
-
-val all_add_eqs = [
-  isize_add_eq,
-  i8_add_eq,
-  i16_add_eq,
-  i32_add_eq,
-  i64_add_eq,
-  i128_add_eq,
-  usize_add_eq,
-  u8_add_eq,
-  u16_add_eq,
-  u32_add_eq,
-  u64_add_eq,
-  u128_add_eq
-]
       
 Theorem u8_sub_eq:
   !x y.
@@ -779,21 +764,6 @@ Proof
   prove_arith_op_eq
 QED
 
-val all_sub_eqs = [
-  isize_sub_eq,
-  i8_sub_eq,
-  i16_sub_eq,
-  i32_sub_eq,
-  i64_sub_eq,
-  i128_sub_eq,
-  usize_sub_eq,
-  u8_sub_eq,
-  u16_sub_eq,
-  u32_sub_eq,
-  u64_sub_eq,
-  u128_sub_eq
-]
-
 Theorem u8_mul_eq:
   !x y.
     u8_to_int x * u8_to_int y <= u8_max ==>
@@ -895,21 +865,6 @@ Theorem isize_mul_eq:
 Proof
   prove_arith_op_eq
 QED
-
-val all_mul_eqs = [
-  isize_mul_eq,
-  i8_mul_eq,
-  i16_mul_eq,
-  i32_mul_eq,
-  i64_mul_eq,
-  i128_mul_eq,
-  usize_mul_eq,
-  u8_mul_eq,
-  u16_mul_eq,
-  u32_mul_eq,
-  u64_mul_eq,
-  u128_mul_eq
-]
 
 Theorem u8_div_eq:
   !x y.
@@ -1018,21 +973,6 @@ Theorem isize_div_eq:
 Proof
   prove_arith_op_eq
 QED
-
-val all_div_eqs = [
-  isize_div_eq,
-  i8_div_eq,
-  i16_div_eq,
-  i32_div_eq,
-  i64_div_eq,
-  i128_div_eq,
-  usize_div_eq,
-  u8_div_eq,
-  u16_div_eq,
-  u32_div_eq,
-  u64_div_eq,
-  u128_div_eq
-]
 
 Theorem u8_rem_eq:
   !x y.
@@ -1143,21 +1083,6 @@ Theorem isize_rem_eq:
 Proof
   prove_arith_op_eq
 QED
-
-val all_rem_eqs = [
-  isize_rem_eq,
-  i8_rem_eq,
-  i16_rem_eq,
-  i32_rem_eq,
-  i64_rem_eq,
-  i128_rem_eq,
-  usize_rem_eq,
-  u8_rem_eq,
-  u16_rem_eq,
-  u32_rem_eq,
-  u64_rem_eq,
-  u128_rem_eq
-]
 
 
 (***

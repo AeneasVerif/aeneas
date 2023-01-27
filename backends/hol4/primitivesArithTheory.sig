@@ -3,6 +3,7 @@ sig
   type thm = Thm.thm
   
   (*  Theorems  *)
+    val add_sub_same_eq : thm
     val ge_eq_le : thm
     val gt_eq_lt : thm
     val int_add : thm
@@ -30,6 +31,10 @@ sig
    [Omega] Parent theory of "primitivesArith"
    
    [int_arith] Parent theory of "primitivesArith"
+   
+   [add_sub_same_eq]  Theorem
+      
+      ⊢ ∀i j. i + j − j = i
    
    [ge_eq_le]  Theorem
       

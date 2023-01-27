@@ -78,6 +78,13 @@ Proof
   fs [Num]
 QED
 
+(* TODO: use as rewriting theorem by default? *)
+Theorem add_sub_same_eq:
+  ∀(i j : int). i + j - j = i
+Proof
+  cooper_tac
+QED
+
 Theorem num_sub_eq:
   !(x y z : int). x = y - z ==> 0 <= x ==> 0 <= z ==> Num y = Num z + Num x
 Proof

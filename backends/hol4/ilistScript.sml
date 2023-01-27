@@ -26,9 +26,24 @@ val len_def = Define ‘
    “index (i : int) [] = EL (Num i) []”
  *)
 val index_def = Define ‘
-  index (i : int) [] = EL (Num i) [] ∧
   index (i : int) (x :: ls) = if i = 0 then x else (if 0 < i then index (i - 1) ls else ARB)
 ’
+
+(* We use the following theorem as a rewriting theorem for [index]: it performs
+   better with the rewritings.
+
+   TODO: we could even write:
+   if (0 < i) ∨ (i > 0) ∨ ((0 ≤ i ∨ i >= 0) ∧ (i ≠ 0 ∨ 0 ≠ i)) then ...
+ *)
+Theorem index_eq:
+  (∀x ls. index 0 (x :: ls) = x) ∧
+  (∀i x ls. index i (x :: ls) =
+    if (0 < i) ∨ (0 ≤ i ∧ i ≠ 0) then index (i - 1) ls
+    else (if i = 0 then x else ARB))
+Proof
+  rw [index_def] >> fs [] >>
+  exfalso >> cooper_tac
+QED
 
 val update_def = Define ‘
   update ([] : 'a list) (i : int) (y : 'a) : 'a list = [] ∧
@@ -36,6 +51,20 @@ val update_def = Define ‘
   update (x :: ls) (i : int) y =
     if i = 0 then y :: ls else (if 0 < i then x :: update ls (i - 1) y else x :: ls)
 ’
+
+Theorem update_eq:
+  (∀i y. update ([] : 'a list) (i : int) (y : 'a) : 'a list = []) ∧
+
+  (∀x ls y. update (x :: ls) 0 y = y :: ls) ∧
+
+  (∀x ls i y.
+   update (x :: ls) i y =
+     if (0 < i) ∨ (0 ≤ i ∧ i ≠ 0) then x :: update ls (i - 1) y
+     else if i < 0 then x :: ls else y :: ls)
+Proof
+  rw [update_def] >> fs [] >>
+  exfalso >> cooper_tac
+QED
 
 Theorem len_eq_LENGTH:
   ∀ls. len ls = &(LENGTH ls)
@@ -49,11 +78,9 @@ Theorem index_eq_EL:
     i < len ls ⇒
     index i ls = EL (Num i) ls
 Proof  
-  Induct_on ‘ls’ >> rpt strip_tac >> fs [len_def, index_def] >>
+  Induct_on ‘ls’ >> rpt strip_tac >> fs [len_def, index_eq] >- int_tac >>
   Cases_on ‘i = 0’ >> fs [] >>
-  (* TODO: automate *)
-  sg ‘0 < i’ >- cooper_tac >> fs [] >>
-  Cases_on ‘Num i’ >- (exfalso >> cooper_tac) >> fs [] >>
+  Cases_on ‘Num i’ >- (int_tac) >> fs [] >>
   last_assum (qspec_assume ‘i - 1’) >>
   pop_assum sg_premise_tac >- cooper_tac >>
   sg ‘n = Num (i - 1)’ >- cooper_tac >> fs [] >>
