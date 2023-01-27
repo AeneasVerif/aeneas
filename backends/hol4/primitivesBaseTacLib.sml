@@ -234,6 +234,8 @@ val th = SPEC_ALL NUM_SUB_1_EQ
    identifies this theorem (the lhs of the equality, if this is a rewriting
    theorem for instance - we use this to check for collisions, and discard
    redundant instantiations).
+   It takes as input the set of bound variables (it should not perform
+   substitutions with variables belonging to this set).
  *)
 fun inst_match_in_terms
   (try_match: string Redblackset.set -> term -> term * thm)
@@ -258,9 +260,10 @@ fun inst_match_in_terms
    instantiations of this theorem which make its conclusion match subterms
    in the provided list of term.
 
-   [ignore]: if the conclusion of a theorem matches a term in this set, ignore it.
+   [keep]: if this function returns false on an instantiated theorem, ignore
+   the theorem.
  *)
-fun inst_match_concl_in_terms (ignore : term Redblackset.set) (th : thm) (tl : term list) : thm list =
+fun inst_match_concl_in_terms (keep : thm -> bool) (th : thm) (tl : term list) : thm list =
   let
     val th = (UNDISCH_ALL o SPEC_ALL) th;
     fun try_match bvars t =
@@ -269,8 +272,8 @@ fun inst_match_concl_in_terms (ignore : term Redblackset.set) (th : thm) (tl : t
         val c = concl inst_th;
       in
         (* Check that we mustn't ignore the theorem *)
-        if Redblackset.member (ignore, c) then failwith "inst_match_concl_in_terms: already in the assumptions"
-        else (lhs (concl inst_th), inst_th)
+        if keep inst_th then (lhs (concl inst_th), inst_th)
+        else failwith "inst_match_concl_in_terms: ignore theorem"
       end;
   in
     inst_match_in_terms try_match tl
@@ -288,14 +291,15 @@ val thms = inst_match_concl_in_terms int_to_u32_id [t]
    instantiations of this theorem which make its first premise match subterms
    in the provided list of term.
  *)
-fun inst_match_first_premise_in_terms (th : thm) (tl : term list) : thm list =
+fun inst_match_first_premise_in_terms (keep : thm -> bool) (th : thm) (tl : term list) : thm list =
   let
     val th = SPEC_ALL th;
     fun try_match bvars t =
       let
         val inst_th = inst_match_first_premise bvars th t;
       in
-        ((fst o dest_imp o concl) inst_th, inst_th)
+        if keep inst_th then  ((fst o dest_imp o concl) inst_th, inst_th)
+        else failwith "inst_match_first_premise_in_terms: ignore theorem"
       end;
   in
     inst_match_in_terms try_match tl
@@ -318,8 +322,9 @@ fun apply_dep_rewrites_match_concl_with_terms_tac
   (prove_premise : tactic) (then_tac : thm_tactic) (tl : term list) (th : thm) : tactic =
   let
     val ignore = Redblackset.fromList Term.compare tl;
+    fun keep th = not (Redblackset.member (ignore, concl th));
     (* Discharge the assumptions so that the goal is one single term *)
-    val thms = inst_match_concl_in_terms ignore th tl;
+    val thms = inst_match_concl_in_terms keep th tl;
     val thms = map thm_to_conj_implies thms;
   in
     (* Apply each theorem *)
@@ -415,11 +420,12 @@ apply_dep_rewrites_match_concl_tac
    Leaves the premises as subgoals if [prove_premise] doesn't prove them.
  *)
 fun apply_dep_rewrites_match_first_premise_tac
+  (keep : thm -> bool)
   (prove_premise : tactic) (then_tac : thm_tactic) (th : thm) : tactic =
   fn (asms, g) =>
     let
       (* Discharge the assumptions so that the goal is one single term *)
-      val thms = inst_match_first_premise_in_terms th (g :: asms);
+      val thms = inst_match_first_premise_in_terms keep th (g :: asms);
       val thms = map thm_to_conj_implies thms;
       fun apply_tac th =
         let
