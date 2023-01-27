@@ -6,8 +6,27 @@ val _ = new_theory "primitivesArith"
 
 (* TODO: we need a better library of lemmas about arithmetic *)
 
-(* We generate and save an induction theorem for positive integers *)
-Theorem int_induction:
+val not_le_eq_gt = store_thm("not_le_eq_gt", “!(x y: int). ~(x <= y) <=> x > y”, cooper_tac)
+val not_lt_eq_ge = store_thm("not_lt_eq_ge", “!(x y: int). ~(x < y) <=> x >= y”, cooper_tac)
+(* TODO: add gsymed versions of those as rewriting theorems by default (we only want to
+   manipulate ‘<’ and ‘≤’) *)
+val not_ge_eq_lt = store_thm("not_ge_eq_lt", “!(x y: int). ~(x >= y) <=> x < y”, cooper_tac)
+val not_gt_eq_le = store_thm("not_gt_eq_le", “!(x y: int). ~(x > y) <=> x <= y”, cooper_tac)
+
+val ge_eq_le = store_thm("ge_eq_le", “!(x y : int). x >= y <=> y <= x”, cooper_tac)
+val le_eq_ge = store_thm("le_eq_ge", “!(x y : int). x <= y <=> y >= x”, cooper_tac)
+val gt_eq_lt = store_thm("gt_eq_lt", “!(x y : int). x > y <=> y < x”, cooper_tac)
+val lt_eq_gt = store_thm("lt_eq_gt", “!(x y : int). x < y <=> y > x”, cooper_tac)
+
+(*
+ * We generate and save an induction theorem for positive integers
+ *)
+
+(* This is the induction theorem we want.
+
+   Unfortunately, it often can't be applied by [Induct_on].
+ *)
+Theorem int_induction_ideal:
   !(P : int -> bool). P 0 /\ (!i. 0 <= i /\ P i ==> P (i+1)) ==> !i. 0 <= i ==> P i
 Proof
   ntac 4 strip_tac >>
@@ -21,20 +40,26 @@ Proof
   rw [] >> try_tac cooper_tac
 QED
 
+(* This induction theorem works well with [Induct_on] *)
+Theorem int_induction:
+  !(P : int -> bool). (∀i. i < 0 ⇒ P i) ∧ P 0 /\ (!i. P i ==> P (i+1)) ==> !i. P i
+Proof
+  ntac 3 strip_tac >>
+  Cases_on ‘i < 0’ >- (last_assum irule >> fs []) >>
+  fs [not_lt_eq_ge] >>
+  Induct_on ‘Num i’ >> rpt strip_tac >> pop_last_assum ignore_tac
+  >-(sg ‘i = 0’ >- cooper_tac >> fs []) >>
+  last_assum (qspec_assume ‘i-1’) >>
+  fs [] >> pop_assum irule >>
+  rw [] >> try_tac cooper_tac >>
+  first_assum (qspec_assume ‘i - 1’) >>
+  pop_assum irule >>
+  rw [] >> try_tac cooper_tac
+QED
+
 val _ = TypeBase.update_induction int_induction
 
-(* TODO: add those as rewriting theorems by default *)
-val not_le_eq_gt = store_thm("not_le_eq_gt", “!(x y: int). ~(x <= y) <=> x > y”, cooper_tac)
-val not_lt_eq_ge = store_thm("not_lt_eq_ge", “!(x y: int). ~(x < y) <=> x >= y”, cooper_tac)
-val not_ge_eq_lt = store_thm("not_ge_eq_lt", “!(x y: int). ~(x >= y) <=> x < y”, cooper_tac)
-val not_gt_eq_le = store_thm("not_gt_eq_le", “!(x y: int). ~(x > y) <=> x <= y”, cooper_tac)
-
-val ge_eq_le = store_thm("ge_eq_le", “!(x y : int). x >= y <=> y <= x”, cooper_tac)
-val le_eq_ge = store_thm("le_eq_ge", “!(x y : int). x <= y <=> y >= x”, cooper_tac)
-val gt_eq_lt = store_thm("gt_eq_lt", “!(x y : int). x > y <=> y < x”, cooper_tac)
-val lt_eq_gt = store_thm("lt_eq_gt", “!(x y : int). x < y <=> y > x”, cooper_tac)
-
-Theorem int_of_num:
+Theorem int_of_num_id:
   ∀i. 0 ≤ i ⇒ &Num i = i
 Proof
   fs [INT_OF_NUM]
@@ -64,7 +89,7 @@ Proof
   imp_res_tac int_of_num >>
   (* Associativity of & *)
   pure_rewrite_tac [int_add] >>
-  fs []
+  cooper_tac
 QED
 
 Theorem num_sub_1_eq:

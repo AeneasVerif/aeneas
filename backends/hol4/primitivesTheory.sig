@@ -85,14 +85,12 @@ sig
     val i8_mul_def : thm
     val i8_rem_def : thm
     val i8_sub_def : thm
-    val index_def : thm
     val int_rem_def : thm
     val isize_add_def : thm
     val isize_div_def : thm
     val isize_mul_def : thm
     val isize_rem_def : thm
     val isize_sub_def : thm
-    val len_def : thm
     val massert_def : thm
     val mem_replace_back_def : thm
     val mem_replace_fwd_def : thm
@@ -142,7 +140,6 @@ sig
     val u8_mul_def : thm
     val u8_rem_def : thm
     val u8_sub_def : thm
-    val update_def : thm
     val usize_add_def : thm
     val usize_div_def : thm
     val usize_mul_def : thm
@@ -151,8 +148,6 @@ sig
     val vec_index_def : thm
     val vec_insert_back_def : thm
     val vec_len_def : thm
-    val vec_new_def : thm
-    val vec_push_back_def : thm
   
   (*  Theorems  *)
     val datatype_error : thm
@@ -237,7 +232,6 @@ sig
     val u8_mul_eq : thm
     val u8_rem_eq : thm
     val u8_sub_eq : thm
-    val update_ind : thm
     val update_len : thm
     val update_spec : thm
     val usize_add_eq : thm
@@ -251,134 +245,76 @@ sig
   
   val primitives_grammars : type_grammar.grammar * term_grammar.grammar
 (*
-   [primitivesArith] Parent theory of "primitives"
+   [ilist] Parent theory of "primitives"
    
-   [string] Parent theory of "primitives"
-   
-   [mk_vec_spec]  Axiom
+   [isize_bounds]  Axiom
       
-      [oracles: ] [axioms: mk_vec_spec] []
-      ⊢ ∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l
+      [oracles: ] [axioms: isize_bounds] []
+      ⊢ isize_min ≤ i16_min ∧ isize_max ≥ i16_max
    
-   [vec_to_list_num_bounds]  Axiom
+   [usize_bounds]  Axiom
       
-      [oracles: ] [axioms: vec_to_list_num_bounds] []
-      ⊢ ∀v. (let l = LENGTH (vec_to_list v) in 0 ≤ l ∧ l ≤ Num usize_max)
+      [oracles: ] [axioms: usize_bounds] [] ⊢ usize_max ≥ u16_max
    
-   [int_to_usize_usize_to_int]  Axiom
+   [isize_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_usize_usize_to_int] []
-      ⊢ ∀i. int_to_usize (usize_to_int i) = i
+      [oracles: ] [axioms: isize_to_int_bounds] []
+      ⊢ ∀n. isize_min ≤ isize_to_int n ∧ isize_to_int n ≤ isize_max
    
-   [int_to_u128_u128_to_int]  Axiom
+   [i8_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u128_u128_to_int] []
-      ⊢ ∀i. int_to_u128 (u128_to_int i) = i
+      [oracles: ] [axioms: i8_to_int_bounds] []
+      ⊢ ∀n. i8_min ≤ i8_to_int n ∧ i8_to_int n ≤ i8_max
    
-   [int_to_u64_u64_to_int]  Axiom
+   [i16_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u64_u64_to_int] []
-      ⊢ ∀i. int_to_u64 (u64_to_int i) = i
+      [oracles: ] [axioms: i16_to_int_bounds] []
+      ⊢ ∀n. i16_min ≤ i16_to_int n ∧ i16_to_int n ≤ i16_max
    
-   [int_to_u32_u32_to_int]  Axiom
+   [i32_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u32_u32_to_int] []
-      ⊢ ∀i. int_to_u32 (u32_to_int i) = i
+      [oracles: ] [axioms: i32_to_int_bounds] []
+      ⊢ ∀n. i32_min ≤ i32_to_int n ∧ i32_to_int n ≤ i32_max
    
-   [int_to_u16_u16_to_int]  Axiom
+   [i64_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u16_u16_to_int] []
-      ⊢ ∀i. int_to_u16 (u16_to_int i) = i
+      [oracles: ] [axioms: i64_to_int_bounds] []
+      ⊢ ∀n. i64_min ≤ i64_to_int n ∧ i64_to_int n ≤ i64_max
    
-   [int_to_u8_u8_to_int]  Axiom
+   [i128_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_u8_u8_to_int] []
-      ⊢ ∀i. int_to_u8 (u8_to_int i) = i
+      [oracles: ] [axioms: i128_to_int_bounds] []
+      ⊢ ∀n. i128_min ≤ i128_to_int n ∧ i128_to_int n ≤ i128_max
    
-   [int_to_isize_isize_to_int]  Axiom
+   [usize_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_isize_isize_to_int] []
-      ⊢ ∀i. int_to_isize (isize_to_int i) = i
+      [oracles: ] [axioms: usize_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ usize_to_int n ∧ usize_to_int n ≤ usize_max
    
-   [int_to_i128_i128_to_int]  Axiom
+   [u8_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i128_i128_to_int] []
-      ⊢ ∀i. int_to_i128 (i128_to_int i) = i
+      [oracles: ] [axioms: u8_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u8_to_int n ∧ u8_to_int n ≤ u8_max
    
-   [int_to_i64_i64_to_int]  Axiom
+   [u16_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i64_i64_to_int] []
-      ⊢ ∀i. int_to_i64 (i64_to_int i) = i
+      [oracles: ] [axioms: u16_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u16_to_int n ∧ u16_to_int n ≤ u16_max
    
-   [int_to_i32_i32_to_int]  Axiom
+   [u32_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i32_i32_to_int] []
-      ⊢ ∀i. int_to_i32 (i32_to_int i) = i
+      [oracles: ] [axioms: u32_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u32_to_int n ∧ u32_to_int n ≤ u32_max
    
-   [int_to_i16_i16_to_int]  Axiom
+   [u64_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i16_i16_to_int] []
-      ⊢ ∀i. int_to_i16 (i16_to_int i) = i
+      [oracles: ] [axioms: u64_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u64_to_int n ∧ u64_to_int n ≤ u64_max
    
-   [int_to_i8_i8_to_int]  Axiom
+   [u128_to_int_bounds]  Axiom
       
-      [oracles: ] [axioms: int_to_i8_i8_to_int] []
-      ⊢ ∀i. int_to_i8 (i8_to_int i) = i
-   
-   [u128_to_int_int_to_u128]  Axiom
-      
-      [oracles: ] [axioms: u128_to_int_int_to_u128] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u128_max ⇒ u128_to_int (int_to_u128 n) = n
-   
-   [u64_to_int_int_to_u64]  Axiom
-      
-      [oracles: ] [axioms: u64_to_int_int_to_u64] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u64_max ⇒ u64_to_int (int_to_u64 n) = n
-   
-   [u32_to_int_int_to_u32]  Axiom
-      
-      [oracles: ] [axioms: u32_to_int_int_to_u32] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u32_max ⇒ u32_to_int (int_to_u32 n) = n
-   
-   [u16_to_int_int_to_u16]  Axiom
-      
-      [oracles: ] [axioms: u16_to_int_int_to_u16] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u16_max ⇒ u16_to_int (int_to_u16 n) = n
-   
-   [u8_to_int_int_to_u8]  Axiom
-      
-      [oracles: ] [axioms: u8_to_int_int_to_u8] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ u8_max ⇒ u8_to_int (int_to_u8 n) = n
-   
-   [usize_to_int_int_to_usize]  Axiom
-      
-      [oracles: ] [axioms: usize_to_int_int_to_usize] []
-      ⊢ ∀n. 0 ≤ n ∧ n ≤ usize_max ⇒ usize_to_int (int_to_usize n) = n
-   
-   [i128_to_int_int_to_i128]  Axiom
-      
-      [oracles: ] [axioms: i128_to_int_int_to_i128] []
-      ⊢ ∀n. i128_min ≤ n ∧ n ≤ i128_max ⇒ i128_to_int (int_to_i128 n) = n
-   
-   [i64_to_int_int_to_i64]  Axiom
-      
-      [oracles: ] [axioms: i64_to_int_int_to_i64] []
-      ⊢ ∀n. i64_min ≤ n ∧ n ≤ i64_max ⇒ i64_to_int (int_to_i64 n) = n
-   
-   [i32_to_int_int_to_i32]  Axiom
-      
-      [oracles: ] [axioms: i32_to_int_int_to_i32] []
-      ⊢ ∀n. i32_min ≤ n ∧ n ≤ i32_max ⇒ i32_to_int (int_to_i32 n) = n
-   
-   [i16_to_int_int_to_i16]  Axiom
-      
-      [oracles: ] [axioms: i16_to_int_int_to_i16] []
-      ⊢ ∀n. i16_min ≤ n ∧ n ≤ i16_max ⇒ i16_to_int (int_to_i16 n) = n
-   
-   [i8_to_int_int_to_i8]  Axiom
-      
-      [oracles: ] [axioms: i8_to_int_int_to_i8] []
-      ⊢ ∀n. i8_min ≤ n ∧ n ≤ i8_max ⇒ i8_to_int (int_to_i8 n) = n
+      [oracles: ] [axioms: u128_to_int_bounds] []
+      ⊢ ∀n. 0 ≤ u128_to_int n ∧ u128_to_int n ≤ u128_max
    
    [isize_to_int_int_to_isize]  Axiom
       
@@ -386,74 +322,131 @@ sig
       ⊢ ∀n. isize_min ≤ n ∧ n ≤ isize_max ⇒
             isize_to_int (int_to_isize n) = n
    
-   [u128_to_int_bounds]  Axiom
+   [i8_to_int_int_to_i8]  Axiom
       
-      [oracles: ] [axioms: u128_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u128_to_int n ∧ u128_to_int n ≤ u128_max
+      [oracles: ] [axioms: i8_to_int_int_to_i8] []
+      ⊢ ∀n. i8_min ≤ n ∧ n ≤ i8_max ⇒ i8_to_int (int_to_i8 n) = n
    
-   [u64_to_int_bounds]  Axiom
+   [i16_to_int_int_to_i16]  Axiom
       
-      [oracles: ] [axioms: u64_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u64_to_int n ∧ u64_to_int n ≤ u64_max
+      [oracles: ] [axioms: i16_to_int_int_to_i16] []
+      ⊢ ∀n. i16_min ≤ n ∧ n ≤ i16_max ⇒ i16_to_int (int_to_i16 n) = n
    
-   [u32_to_int_bounds]  Axiom
+   [i32_to_int_int_to_i32]  Axiom
       
-      [oracles: ] [axioms: u32_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u32_to_int n ∧ u32_to_int n ≤ u32_max
+      [oracles: ] [axioms: i32_to_int_int_to_i32] []
+      ⊢ ∀n. i32_min ≤ n ∧ n ≤ i32_max ⇒ i32_to_int (int_to_i32 n) = n
    
-   [u16_to_int_bounds]  Axiom
+   [i64_to_int_int_to_i64]  Axiom
       
-      [oracles: ] [axioms: u16_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u16_to_int n ∧ u16_to_int n ≤ u16_max
+      [oracles: ] [axioms: i64_to_int_int_to_i64] []
+      ⊢ ∀n. i64_min ≤ n ∧ n ≤ i64_max ⇒ i64_to_int (int_to_i64 n) = n
    
-   [u8_to_int_bounds]  Axiom
+   [i128_to_int_int_to_i128]  Axiom
       
-      [oracles: ] [axioms: u8_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ u8_to_int n ∧ u8_to_int n ≤ u8_max
+      [oracles: ] [axioms: i128_to_int_int_to_i128] []
+      ⊢ ∀n. i128_min ≤ n ∧ n ≤ i128_max ⇒ i128_to_int (int_to_i128 n) = n
    
-   [usize_to_int_bounds]  Axiom
+   [usize_to_int_int_to_usize]  Axiom
       
-      [oracles: ] [axioms: usize_to_int_bounds] []
-      ⊢ ∀n. 0 ≤ usize_to_int n ∧ usize_to_int n ≤ usize_max
+      [oracles: ] [axioms: usize_to_int_int_to_usize] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ usize_max ⇒ usize_to_int (int_to_usize n) = n
    
-   [i128_to_int_bounds]  Axiom
+   [u8_to_int_int_to_u8]  Axiom
       
-      [oracles: ] [axioms: i128_to_int_bounds] []
-      ⊢ ∀n. i128_min ≤ i128_to_int n ∧ i128_to_int n ≤ i128_max
+      [oracles: ] [axioms: u8_to_int_int_to_u8] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u8_max ⇒ u8_to_int (int_to_u8 n) = n
    
-   [i64_to_int_bounds]  Axiom
+   [u16_to_int_int_to_u16]  Axiom
       
-      [oracles: ] [axioms: i64_to_int_bounds] []
-      ⊢ ∀n. i64_min ≤ i64_to_int n ∧ i64_to_int n ≤ i64_max
+      [oracles: ] [axioms: u16_to_int_int_to_u16] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u16_max ⇒ u16_to_int (int_to_u16 n) = n
    
-   [i32_to_int_bounds]  Axiom
+   [u32_to_int_int_to_u32]  Axiom
       
-      [oracles: ] [axioms: i32_to_int_bounds] []
-      ⊢ ∀n. i32_min ≤ i32_to_int n ∧ i32_to_int n ≤ i32_max
+      [oracles: ] [axioms: u32_to_int_int_to_u32] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u32_max ⇒ u32_to_int (int_to_u32 n) = n
    
-   [i16_to_int_bounds]  Axiom
+   [u64_to_int_int_to_u64]  Axiom
       
-      [oracles: ] [axioms: i16_to_int_bounds] []
-      ⊢ ∀n. i16_min ≤ i16_to_int n ∧ i16_to_int n ≤ i16_max
+      [oracles: ] [axioms: u64_to_int_int_to_u64] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u64_max ⇒ u64_to_int (int_to_u64 n) = n
    
-   [i8_to_int_bounds]  Axiom
+   [u128_to_int_int_to_u128]  Axiom
       
-      [oracles: ] [axioms: i8_to_int_bounds] []
-      ⊢ ∀n. i8_min ≤ i8_to_int n ∧ i8_to_int n ≤ i8_max
+      [oracles: ] [axioms: u128_to_int_int_to_u128] []
+      ⊢ ∀n. 0 ≤ n ∧ n ≤ u128_max ⇒ u128_to_int (int_to_u128 n) = n
    
-   [isize_to_int_bounds]  Axiom
+   [int_to_i8_i8_to_int]  Axiom
       
-      [oracles: ] [axioms: isize_to_int_bounds] []
-      ⊢ ∀n. isize_min ≤ isize_to_int n ∧ isize_to_int n ≤ isize_max
+      [oracles: ] [axioms: int_to_i8_i8_to_int] []
+      ⊢ ∀i. int_to_i8 (i8_to_int i) = i
    
-   [usize_bounds]  Axiom
+   [int_to_i16_i16_to_int]  Axiom
       
-      [oracles: ] [axioms: usize_bounds] [] ⊢ usize_max ≥ u16_max
+      [oracles: ] [axioms: int_to_i16_i16_to_int] []
+      ⊢ ∀i. int_to_i16 (i16_to_int i) = i
    
-   [isize_bounds]  Axiom
+   [int_to_i32_i32_to_int]  Axiom
       
-      [oracles: ] [axioms: isize_bounds] []
-      ⊢ isize_min ≤ i16_min ∧ isize_max ≥ i16_max
+      [oracles: ] [axioms: int_to_i32_i32_to_int] []
+      ⊢ ∀i. int_to_i32 (i32_to_int i) = i
+   
+   [int_to_i64_i64_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_i64_i64_to_int] []
+      ⊢ ∀i. int_to_i64 (i64_to_int i) = i
+   
+   [int_to_i128_i128_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_i128_i128_to_int] []
+      ⊢ ∀i. int_to_i128 (i128_to_int i) = i
+   
+   [int_to_isize_isize_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_isize_isize_to_int] []
+      ⊢ ∀i. int_to_isize (isize_to_int i) = i
+   
+   [int_to_u8_u8_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_u8_u8_to_int] []
+      ⊢ ∀i. int_to_u8 (u8_to_int i) = i
+   
+   [int_to_u16_u16_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_u16_u16_to_int] []
+      ⊢ ∀i. int_to_u16 (u16_to_int i) = i
+   
+   [int_to_u32_u32_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_u32_u32_to_int] []
+      ⊢ ∀i. int_to_u32 (u32_to_int i) = i
+   
+   [int_to_u64_u64_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_u64_u64_to_int] []
+      ⊢ ∀i. int_to_u64 (u64_to_int i) = i
+   
+   [int_to_u128_u128_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_u128_u128_to_int] []
+      ⊢ ∀i. int_to_u128 (u128_to_int i) = i
+   
+   [int_to_usize_usize_to_int]  Axiom
+      
+      [oracles: ] [axioms: int_to_usize_usize_to_int] []
+      ⊢ ∀i. int_to_usize (usize_to_int i) = i
+   
+   [vec_to_list_num_bounds]  Axiom
+      
+      [oracles: ] [axioms: vec_to_list_num_bounds] []
+      ⊢ ∀v. 0 ≤ LENGTH (vec_to_list v) ∧
+            LENGTH (vec_to_list v) ≤ Num usize_max
+   
+   [mk_vec_spec]  Axiom
+      
+      [oracles: ] [axioms: mk_vec_spec] []
+      ⊢ ∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l
    
    [bind_def]  Definition
       
@@ -648,12 +641,6 @@ sig
       
       ⊢ ∀x y. i8_sub x y = mk_i8 (i8_to_int x − i8_to_int y)
    
-   [index_def]  Definition
-      
-      ⊢ ∀i x ls.
-          index i (x::ls) =
-          if i = 0 then x else if 0 < i then index (i − 1) ls else ARB
-   
    [int_rem_def]  Definition
       
       ⊢ ∀x y.
@@ -685,10 +672,6 @@ sig
    [isize_sub_def]  Definition
       
       ⊢ ∀x y. isize_sub x y = mk_isize (isize_to_int x − isize_to_int y)
-   
-   [len_def]  Definition
-      
-      ⊢ len [] = 0 ∧ ∀x ls. len (x::ls) = 1 + len ls
    
    [massert_def]  Definition
       
@@ -961,15 +944,6 @@ sig
       
       ⊢ ∀x y. u8_sub x y = mk_u8 (u8_to_int x − u8_to_int y)
    
-   [update_def]  Definition
-      
-      ⊢ (∀i y. update [] i y = []) ∧
-        ∀x ls i y.
-          update (x::ls) i y =
-          if i = 0 then y::ls
-          else if 0 < i then x::update ls (i − 1) y
-          else x::ls
-   
    [usize_add_def]  Definition
       
       ⊢ ∀x y. usize_add x y = mk_usize (usize_to_int x + usize_to_int y)
@@ -1013,15 +987,6 @@ sig
    [vec_len_def]  Definition
       
       ⊢ ∀v. vec_len v = int_to_usize (len (vec_to_list v))
-   
-   [vec_new_def]  Definition
-      
-      ⊢ vec_new =
-        case mk_vec [] of Return v => v | Fail v2 => ARB | Loop => ARB
-   
-   [vec_push_back_def]  Definition
-      
-      ⊢ ∀v x. vec_push_back v x = mk_vec (vec_to_list v ⧺ [x])
    
    [datatype_error]  Theorem
       
@@ -1729,12 +1694,6 @@ sig
           ∃z. u8_sub x y = Return z ∧
               u8_to_int z = u8_to_int x − u8_to_int y
    
-   [update_ind]  Theorem
-      
-      ⊢ ∀P. (∀i y. P [] i y) ∧ (∀v0 ls y. P (v0::ls) 0 y) ∧
-            (∀x ls i y. P ls i y ⇒ P (x::ls) (SUC i) y) ⇒
-            ∀v v1 v2. P v v1 v2
-   
    [update_len]  Theorem
       
       ⊢ ∀ls i y. len (update ls i y) = len ls
@@ -1801,9 +1760,9 @@ sig
    
    [vec_insert_back_spec]  Theorem
       
-      [oracles: DISK_THM, cheat]
-      [axioms: usize_to_int_bounds, usize_to_int_int_to_usize, mk_vec_spec]
-      []
+      [oracles: DISK_THM]
+      [axioms: vec_to_list_num_bounds, usize_bounds,
+       usize_to_int_int_to_usize, usize_to_int_bounds, mk_vec_spec] []
       ⊢ ∀v i x.
           usize_to_int i < usize_to_int (vec_len v) ⇒
           ∃nv.
@@ -1815,13 +1774,13 @@ sig
    
    [vec_len_spec]  Theorem
       
-      [oracles: DISK_THM, cheat] [axioms: ] []
+      [oracles: DISK_THM] [axioms: usize_bounds, vec_to_list_num_bounds] []
       ⊢ ∀v. vec_len v = int_to_usize (len (vec_to_list v)) ∧
             0 ≤ len (vec_to_list v) ∧ len (vec_to_list v) ≤ usize_max
    
    [vec_to_list_int_bounds]  Theorem
       
-      [oracles: cheat] [axioms: ] []
+      [oracles: DISK_THM] [axioms: usize_bounds, vec_to_list_num_bounds] []
       ⊢ ∀v. 0 ≤ len (vec_to_list v) ∧ len (vec_to_list v) ≤ usize_max
    
    

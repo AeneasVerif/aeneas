@@ -7,7 +7,8 @@ sig
     val gt_eq_lt : thm
     val int_add : thm
     val int_induction : thm
-    val int_of_num : thm
+    val int_induction_ideal : thm
+    val int_of_num_id : thm
     val int_of_num_inj : thm
     val le_eq_ge : thm
     val lt_eq_gt : thm
@@ -44,9 +45,13 @@ sig
    
    [int_induction]  Theorem
       
+      ⊢ ∀P. (∀i. i < 0 ⇒ P i) ∧ P 0 ∧ (∀i. P i ⇒ P (i + 1)) ⇒ ∀i. P i
+   
+   [int_induction_ideal]  Theorem
+      
       ⊢ ∀P. P 0 ∧ (∀i. 0 ≤ i ∧ P i ⇒ P (i + 1)) ⇒ ∀i. 0 ≤ i ⇒ P i
    
-   [int_of_num]  Theorem
+   [int_of_num_id]  Theorem
       
       ⊢ ∀i. 0 ≤ i ⇒ &Num i = i
    
