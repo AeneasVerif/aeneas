@@ -190,7 +190,6 @@ sig
     val i8_sub_eq : thm
     val index_update_diff : thm
     val index_update_same : thm
-    val int_of_num_neq_inj : thm
     val isize_add_eq : thm
     val isize_div_eq : thm
     val isize_mul_eq : thm
@@ -1319,10 +1318,6 @@ sig
           j < len ls ⇒
           j ≠ i ⇒
           index j (update ls i y) = index j ls
-   
-   [int_of_num_neq_inj]  Theorem
-      
-      ⊢ ∀n m. &n ≠ &m ⇒ n ≠ m
    
    [isize_add_eq]  Theorem
       
