@@ -249,11 +249,11 @@ sig
    [isize_bounds]  Axiom
       
       [oracles: ] [axioms: isize_bounds] []
-      ⊢ isize_min ≤ i16_min ∧ isize_max ≥ i16_max
+      ⊢ isize_min ≤ i16_min ∧ i16_max ≤ isize_max
    
    [usize_bounds]  Axiom
       
-      [oracles: ] [axioms: usize_bounds] [] ⊢ usize_max ≥ u16_max
+      [oracles: ] [axioms: usize_bounds] [] ⊢ u16_max ≤ usize_max
    
    [isize_to_int_bounds]  Axiom
       
