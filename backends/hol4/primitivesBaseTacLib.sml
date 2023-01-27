@@ -330,7 +330,7 @@ fun apply_dep_rewrites_match_concl_with_terms_tac
     val thms = map thm_to_conj_implies thms;
   in
     (* Apply each theorem *)
-    MAP_EVERY (sg_premise_then prove_premise then_tac) thms
+    map_every_tac (try_tac o sg_premise_then prove_premise then_tac) thms
   end
 
 (* Attempt to apply dependent rewrites with a theorem by matching its
@@ -497,30 +497,35 @@ val dest_assums_conjs_tac : tactic =
 (* Defining those here so that they are evaluated once and for all (parsing
    depends on the context) *)
 val int_tac_int_ty = “:int”
-val int_tac_pat = “(x : 'a) <> (y : 'a)”
+val int_tac_num_ty = “:num”
+val int_tac_pat1 = “(x : 'a) <> (y : 'a)”
+val int_tac_pat2 = “(x : 'a) = (y : 'a)”
 
 (* We boost COOPER_TAC a bit *)
 fun int_tac (asms, g) =
   let
     (* Following the bug we discovered in COOPER_TAC, we filter all the
-       inequalities which terms are not between terms of type “:int”.
+       inequalities/equalities which terms are not between terms of type “:int”
+       or “:num”.
 
        TODO: issue/PR for HOL4
      *)
-    fun keep (asm : term) : bool =
+    fun keep_with_pat (asm : term) (pat : term) : bool =
       let
-        val (_, s) = match_term int_tac_pat asm
+        val (_, s) = match_term pat asm
       in
         case s of
-          [{redex = _, residue = ty}] => ty = int_tac_int_ty
+          [{redex = _, residue = ty}] => (ty = int_tac_int_ty orelse ty = int_tac_num_ty)
         | [] => (* Can happen if the term has exactly the same types as the pattern - unlikely *) false
         | _ =>  failwith "int_tac: match error"
       end
       handle HOL_ERR _ => true
-   in
-     (dest_assums_conjs_tac >>
-      filter_assums_tac keep >>
-      first_tac [cooper_tac, exfalso >> cooper_tac]) (asms, g)
-   end
+    fun keep (asm : term) : bool =
+      forall (keep_with_pat asm) [int_tac_pat1, int_tac_pat2]
+ in
+   (dest_assums_conjs_tac >>
+    filter_assums_tac keep >>
+    first_tac [cooper_tac, exfalso >> cooper_tac]) (asms, g)
+ end
 
 end
