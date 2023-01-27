@@ -1,7 +1,7 @@
 open HolKernel boolLib bossLib Parse
 open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
 
-open primitivesArithTheory primitivesBaseTacLib
+open primitivesArithTheory primitivesBaseTacLib ilistTheory
 
 val primitives_theory_name = "primitives"
 val _ = new_theory primitives_theory_name
@@ -1169,12 +1169,11 @@ val _ = new_constant ("vec_to_list", “:'a vec -> 'a list”)
 (* TODO: we could also make ‘mk_vec’ return ‘'a vec’ (no result) *)
 val _ = new_constant ("mk_vec", “:'a list -> 'a vec result”)
 
-
 val vec_to_list_num_bounds =
   new_axiom ("vec_to_list_num_bounds",
-    “!v. let l = LENGTH (vec_to_list v) in
-     (0:num) <= l /\ l <= Num usize_max”)
+    “!v. (0:num) <= LENGTH (vec_to_list v) /\ LENGTH (vec_to_list v) <= Num usize_max”)
 
+(*
 Theorem vec_to_list_int_bounds:
   !v. 0 <= int_of_num (LENGTH (vec_to_list v)) /\ int_of_num (LENGTH (vec_to_list v)) <= usize_max
 Proof
@@ -1252,13 +1251,16 @@ Proof
   Induct_on ‘ls’ >> Cases_on ‘i’ >> rw [update_def] >>
   Cases_on ‘j’ >> fs []
 QED
+*)
 
+(*
 (* TODO: this is the base definition for index. Shall we remove the ‘return’ type? *)
 val vec_index_def = Define ‘
   vec_index i v =
     if usize_to_int i ≤ usize_to_int (vec_len v)
     then Return (EL (Num (usize_to_int i)) (vec_to_list v))
     else Fail Failure’
+*)
 
 (* TODO: shortcut for qspec_then ... ASSUME_TAC *)
 (* TODO: use cooper_tac everywhere *)
@@ -1300,6 +1302,7 @@ QED
   &n < &m
 *)
 
+(*
 val vec_insert_back_def = Define ‘
   vec_insert_back (v : 'a vec) (i : usize) (x : 'a) = mk_vec (update (vec_to_list v) (Num (usize_to_int i)) x)’
 
@@ -1326,7 +1329,7 @@ Proof
   sg ‘Num (usize_to_int i) < LENGTH (vec_to_list v)’ >-(
     (* TODO: automate *)
     pure_once_rewrite_tac [gsym INT_LT] >>
-    dep_pure_once_rewrite_tac [primitivesArithTheory.int_of_num] >>
+    dep_pure_once_rewrite_tac [int_of_num_id] >>
     qspec_assume ‘i’ usize_to_int_bounds >> fs []
   ) >>
   fs [] >>
@@ -1336,33 +1339,16 @@ Proof
   rw [] >-(
     (* TODO: automate *)
     irule int_of_num_neq_inj >>
-    dep_pure_rewrite_tac [primitivesArithTheory.int_of_num] >>
+    dep_pure_rewrite_tac [int_of_num_id] >>
     rw [usize_to_int_bounds] >>
     metis_tac [int_to_usize_usize_to_int]
   ) >>
   (* TODO: automate *)
   pure_once_rewrite_tac [gsym INT_LT] >>
-  dep_pure_once_rewrite_tac [primitivesArithTheory.int_of_num] >>
+  dep_pure_once_rewrite_tac [int_of_num_id] >>
   qspec_assume ‘j’ usize_to_int_bounds >> fs []
 QED
-
-
-(* Small experiment: trying to redefine common functions with integers instead of nums *)
-val index_def = Define ‘
-  index (i : int) (x :: ls) = if i = 0 then x else (if 0 < i then index (i - 1) ls else ARB)
-’
-
-val len_def = Define ‘
-  len [] : int = 0 /\
-  len (x :: ls) : int = 1 + len ls
-’
-
-val update_def = Define ‘
-  update ([] : 'a list) (i : int) (y : 'a) : 'a list = [] ∧
-
-  update (x :: ls) (i : int) y =
-    if i = 0 then y :: ls else (if 0 < i then x :: update ls (i - 1) y else x :: ls)
-’
+*)
 
 Theorem update_len:
   ∀ls i y. len (update ls i y) = len ls
@@ -1417,8 +1403,11 @@ QED
 Theorem vec_to_list_int_bounds:
   !v. 0 <= len (vec_to_list v) /\ len (vec_to_list v) <= usize_max
 Proof
-  (* TODO *)
-  cheat
+  gen_tac >>
+  qspec_assume ‘v’ vec_to_list_num_bounds >>
+  fs [len_eq_LENGTH] >>
+  assume_tac usize_bounds >> fs [u16_max_def] >>
+  cooper_tac
 QED
 
 val vec_len_def = Define ‘vec_len v = int_to_usize (len (vec_to_list v))’
@@ -1438,7 +1427,6 @@ val vec_index_def = Define ‘
     then Return (index (usize_to_int i) (vec_to_list v))
     else Fail Failure’
 
-(* TODO: *)
 val mk_vec_spec = new_axiom ("mk_vec_spec",
   “∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l”)
 
