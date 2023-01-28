@@ -1992,6 +1992,11 @@ let extract_fun_input_parameters_types (ctx : extraction_ctx)
   in
   List.iter extract_param def.signature.inputs
 
+let assert_backend_supports_decreases_clauses () =
+  match !backend with
+  | FStar | Lean -> ()
+  | _ -> failwith "decreases clauses only supported for the Lean & F* backends"
+
 (** Extract a decrease clause function template body.
 
     Only for F*.
@@ -2010,7 +2015,8 @@ let extract_fun_input_parameters_types (ctx : extraction_ctx)
  *)
 let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
-  assert (!backend = FStar);
+  assert_backend_supports_decreases_clauses ();
+
   (* Retrieve the function name *)
   let def_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
   (* Add a break before *)
@@ -2022,14 +2028,16 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
    * one line *)
   F.pp_open_hvbox fmt 0;
   (* Add the [unfold] keyword *)
-  F.pp_print_string fmt "unfold";
-  F.pp_print_space fmt ();
+  if !backend = FStar then begin
+    F.pp_print_string fmt "unfold";
+    F.pp_print_space fmt ();
+  end;
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT = admit()" *)
   F.pp_open_hvbox fmt ctx.indent_incr;
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
-  F.pp_print_string fmt ("let " ^ def_name);
+  F.pp_print_string fmt ((if !backend = FStar then "let " else "def ") ^ def_name);
   F.pp_print_space fmt ();
   (* Extract the parameters *)
   let space = ref true in
@@ -2038,15 +2046,15 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_string fmt ":";
   (* Print the signature *)
   F.pp_print_space fmt ();
-  F.pp_print_string fmt "nat";
+  F.pp_print_string fmt (if !backend = FStar then "nat" else "Nat");
   (* Print the "=" *)
   F.pp_print_space fmt ();
-  F.pp_print_string fmt "=";
+  F.pp_print_string fmt (if !backend = FStar then "=" else ":=");
   (* Close the box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_close_box fmt ();
   F.pp_print_space fmt ();
   (* Print the "admit ()" *)
-  F.pp_print_string fmt "admit ()";
+  F.pp_print_string fmt (if !backend = FStar then "admit ()" else "sorry");
   (* Close the box for "let FUN_NAME (PARAMS) : EFFECT = admit()" *)
   F.pp_close_box fmt ();
   (* Close the box for the whole definition *)
@@ -2128,7 +2136,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     if is_opaque then extract_fun_input_parameters_types ctx fmt def;
     (* [Tot] *)
     if has_decreases_clause then (
-      assert (!backend = FStar);
+      assert_backend_supports_decreases_clauses ();
       F.pp_print_string fmt "Tot";
       F.pp_print_space fmt ());
     extract_ty ctx fmt has_decreases_clause def.signature.output;
@@ -2137,7 +2145,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (* Print the decrease clause - rk.: a function with a decreases clause
      * is necessarily a transparent function *)
     if has_decreases_clause then (
-      assert (!backend = FStar);
+      assert_backend_supports_decreases_clauses ();
       F.pp_print_space fmt ();
       (* Open a box for the decreases clause *)
       F.pp_open_hovbox fmt ctx.indent_incr;

@@ -353,6 +353,9 @@ type gen_config = {
       (** If [true], extract the opaque declarations, otherwise ignore. *)
   extract_state_type : bool;
       (** If [true], generate a definition/declaration for the state type *)
+  extract_globals : bool;
+      (** If [true], generate a definition/declaration for top-level (global)
+          declarations *)
   interface : bool;
       (** [true] if we generate an interface file, [false] otherwise.
           For now, this only impacts whether we use [val] or [assume val] for the
@@ -463,8 +466,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
 
   let is_opaque = Option.is_none body.Pure.body in
   if
-    ((not is_opaque) && config.extract_transparent)
-    || (is_opaque && config.extract_opaque)
+    config.extract_globals && (
+      ((not is_opaque) && config.extract_transparent)
+      || (is_opaque && config.extract_opaque)
+    )
   then
     Extract.extract_global_decl ctx.extract_ctx fmt global body config.interface
 
@@ -926,6 +931,7 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
         extract_transparent = true;
         extract_opaque = false;
         extract_state_type = false;
+        extract_globals = false;
         interface = false;
         test_trans_unit_functions = false;
       }
@@ -998,12 +1004,13 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
       {
         base_gen_config with
         extract_fun_decls = true;
+        extract_globals = true;
         test_trans_unit_functions = !Config.test_trans_unit_functions;
       }
     in
     let clauses_module =
       if needs_clauses_module then
-        [ module_name ^ module_delimiter ^ "Clauses" ]
+        [ module_name ^ module_delimiter ^ "Clauses" ^ module_delimiter ^ "Template"]
       else []
     in
     extract_file fun_config gen_ctx fun_filename crate.A.name fun_module
@@ -1020,6 +1027,7 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
         extract_transparent = true;
         extract_opaque = true;
         extract_state_type = !Config.use_state;
+        extract_globals = true;
         interface = false;
         test_trans_unit_functions = !Config.test_trans_unit_functions;
       }
