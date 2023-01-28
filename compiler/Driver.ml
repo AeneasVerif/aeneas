@@ -95,28 +95,19 @@ let () =
         " Forbid backward functions from updating the state" );
       ( "-template-clauses",
         Arg.Set extract_template_decreases_clauses,
-        " Generate templates for the required decreases clauses, in a\n\
-        \                         dedicated file. Reauires -decreases-clauses"
+        " Generate templates for the required decreases clauses, in a \
+          dedicated file. Implies -decreases-clauses"
       );
       ( "-no-split-files",
         Arg.Clear split_files,
-        " Don't split the definitions between different files for types,\n\
-        \                         functions, etc." );
+        " Don't split the definitions between different files for types, \
+          functions, etc." );
       ( "-no-check-inv",
         Arg.Clear check_invariants,
-        " Deactivate the invariant sanity checks performed at every step of\n\
-        \                         evaluation. Dramatically saves speed." );
+        " Deactivate the invariant sanity checks performed at every step of \
+          evaluation. Dramatically saves speed." );
     ]
   in
-  (* Sanity check: -template-clauses ==> not -no-decrease-clauses *)
-  assert (!extract_decreases_clauses || not !extract_template_decreases_clauses);
-  (* Sanity check: -backward-no-state-update ==> not -no-state *)
-  assert ((not !backward_no_state_update) || !use_state);
-  (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
-  assert (
-    (not !use_fuel)
-    || (not !extract_decreases_clauses)
-       && not !extract_template_decreases_clauses);
 
   let spec = Arg.align spec in
   let filenames = ref [] in
@@ -126,6 +117,19 @@ let () =
     print_string usage;
     exit 1
   in
+
+  if !extract_template_decreases_clauses then
+    extract_decreases_clauses := true;
+
+  (* Sanity check (now that the arguments are parsed!): -template-clauses ==> decrease-clauses *)
+  assert (!extract_decreases_clauses || not !extract_template_decreases_clauses);
+  (* Sanity check: -backward-no-state-update ==> -state *)
+  assert ((not !backward_no_state_update) || !use_state);
+  (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
+  assert (
+    (not !use_fuel)
+    || (not !extract_decreases_clauses)
+       && not !extract_template_decreases_clauses);
 
   (* Check that the user specified a backend *)
   let _ =

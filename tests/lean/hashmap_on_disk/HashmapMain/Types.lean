@@ -16,11 +16,6 @@ structure hashmap_hash_map_t (T : Type) where
   hashmap_hash_map_slots : vec (hashmap_list_t T)
 
 
-/- [core::num::u32::{9}::MAX] -/
-def core_num_u32_max_body : result UInt32 :=
-  result.ret (UInt32.ofNatCore 4294967295 (by intlit))
-def core_num_u32_max_c : UInt32 := eval_global core_num_u32_max_body (by simp)
-
 /- The state type used in the state-error monad -/
 axiom state : Type
 
