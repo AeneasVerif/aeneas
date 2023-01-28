@@ -1,3 +1,5 @@
+import Lean
+
 -------------
 -- PRELUDE --
 -------------
@@ -10,14 +12,14 @@ inductive error where
    | arrayOutOfBounds: error
    | maximumSizeExceeded: error
    | panic: error
-deriving Repr
+deriving Repr, BEq
 
 open error
 
 inductive result (α : Type u) where
   | ret (v: α): result α
   | fail (e: error): result α 
-deriving Repr
+deriving Repr, BEq
 
 open result
 
@@ -48,7 +50,9 @@ instance : Pure result where
 def massert (b:Bool) : result Unit :=
   if b then return () else fail assertionFailure
 
--- Machine integers
+----------------------
+-- MACHINE INTEGERS --
+----------------------
 
 -- NOTE: we reuse the USize type from prelude.lean, because at least we know
 -- it's defined in an idiomatic style that is going to make proofs easy (and
@@ -123,13 +127,16 @@ macro_rules
 #eval UInt32.ofNatCore 0 (by intlit)
 
 -- Test behavior...
-#eval USize.checked_sub 10 20
+#eval assert! USize.checked_sub 10 20 == fail integerOverflow; 0
+
 #eval USize.checked_sub 20 10
 -- NOTE: compare with concrete behavior here, which I do not think we want
 #eval USize.sub 0 1
 #eval UInt8.add 255 255
 
--- Vectors
+-------------
+-- VECTORS --
+-------------
 
 def vec (α : Type u) := { l : List α // List.length l < USize.size }
 
@@ -176,3 +183,21 @@ def vec_push_back (α : Type u) (v : vec α) (x : α) : { res: result (vec α) /
   -- TODO: strengthen post-condition above and do a demo to show that we can
   -- safely eliminate the `fail` case
   return (vec_len Nat x)
+
+--------------------
+-- ASSERT COMMAND --
+--------------------
+
+open Lean Elab Command Term Meta
+
+syntax (name := assert) "#assert" term: command
+
+@[command_elab assert]
+def assertImpl : CommandElab := fun (stx: Syntax) => do
+  logInfo "Hello World"
+
+def ignore (a: Prop) (x: a) := ()
+
+#eval ignore (2 == 2) (by simp)
+
+#assert (2 == 2)
