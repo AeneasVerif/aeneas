@@ -5,6 +5,10 @@ struct
 open HolKernel boolLib bossLib Parse
 open boolTheory arithmeticTheory integerTheory intLib listTheory
 
+val debug = ref false
+
+fun print_dbg msg = if !debug then print msg else ()
+
 (* Remark: below, we also have conversions *)
 val gsym = GSYM
 
@@ -241,7 +245,7 @@ val th = SPEC_ALL NUM_SUB_1_EQ
  *)
 fun inst_match_in_terms
   (try_match: string Redblackset.set -> term -> term * thm)
-  (tl : term list) : thm list =
+  (tml : term list) : thm list =
   let
     (* We use a map when storing the theorems, to avoid storing the same theorem twice *)
     val inst_thms: (term, thm) Redblackmap.dict ref = ref (Redblackmap.mkDict Term.compare);
@@ -253,7 +257,7 @@ fun inst_match_in_terms
       end
       handle HOL_ERR _ => ();
     (* Explore the term *)
-    val _ = app (dep_apply_in_subterms try_instantiate (Redblackset.empty String.compare)) tl;
+    val _ = List.app (dep_apply_in_subterms try_instantiate (Redblackset.empty String.compare)) tml;
   in
     map snd (Redblackmap.listItems (!inst_thms))
   end
@@ -265,20 +269,24 @@ fun inst_match_in_terms
    [keep]: if this function returns false on an instantiated theorem, ignore
    the theorem.
  *)
-fun inst_match_concl_in_terms (keep : thm -> bool) (th : thm) (tl : term list) : thm list =
+fun inst_match_concl_in_terms (keep : thm -> bool) (th : thm) (tml : term list) : thm list =
   let
     val th = (UNDISCH_ALL o SPEC_ALL) th;
     fun try_match bvars t =
       let
-        val inst_th = inst_match_concl bvars th t;
-        val c = concl inst_th;
+        val _ = print_dbg ("inst_match_concl_in_terms: " ^ term_to_string t ^ "\n")
+        val inst_th = inst_match_concl bvars th t
+        val c = concl inst_th
+        val _ = print_dbg ("inst_match_concl_in_terms: matched with success\n")
       in
         (* Check that we mustn't ignore the theorem *)
         if keep inst_th then (lhs (concl inst_th), inst_th)
-        else failwith "inst_match_concl_in_terms: ignore theorem"
+        else
+          let val _ = print_dbg ("inst_match_concl_in_terms: matched failed\n") in
+          failwith "inst_match_concl_in_terms: ignore theorem" end
       end;
   in
-    inst_match_in_terms try_match tl
+    inst_match_in_terms try_match tml
   end
 
 (*
@@ -293,7 +301,7 @@ val thms = inst_match_concl_in_terms int_to_u32_id [t]
    instantiations of this theorem which make its first premise match subterms
    in the provided list of term.
  *)
-fun inst_match_first_premise_in_terms (keep : thm -> bool) (th : thm) (tl : term list) : thm list =
+fun inst_match_first_premise_in_terms (keep : thm -> bool) (th : thm) (tml : term list) : thm list =
   let
     val th = SPEC_ALL th;
     fun try_match bvars t =
@@ -304,7 +312,7 @@ fun inst_match_first_premise_in_terms (keep : thm -> bool) (th : thm) (tl : term
         else failwith "inst_match_first_premise_in_terms: ignore theorem"
       end;
   in
-    inst_match_in_terms try_match tl
+    inst_match_in_terms try_match tml
   end
 
 (*
@@ -321,13 +329,15 @@ val thms = inst_match_first_premise_in_terms th [t]
    Leaves the premises as subgoals if [prove_premise] doesn't prove them.
  *)
 fun apply_dep_rewrites_match_concl_with_terms_tac
-  (prove_premise : tactic) (then_tac : thm_tactic) (tl : term list) (th : thm) : tactic =
+  (prove_premise : tactic) (then_tac : thm_tactic)
+  (ignore_tml : term list)
+  (tml : term list) (th : thm) : tactic =
   let
-    val ignore = Redblackset.fromList Term.compare tl;
-    fun keep th = not (Redblackset.member (ignore, concl th));
+    val ignore = Redblackset.fromList Term.compare ignore_tml
+    fun keep th = not (Redblackset.member (ignore, concl th))
     (* Discharge the assumptions so that the goal is one single term *)
-    val thms = inst_match_concl_in_terms keep th tl;
-    val thms = map thm_to_conj_implies thms;
+    val thms = inst_match_concl_in_terms keep th tml
+    val thms = map thm_to_conj_implies thms
   in
     (* Apply each theorem *)
     map_every_tac (try_tac o sg_premise_then prove_premise then_tac) thms
@@ -340,14 +350,16 @@ fun apply_dep_rewrites_match_concl_with_terms_tac
  *)
 fun apply_dep_rewrites_match_concl_with_all_tac
   (prove_premise : tactic) (then_tac : thm_tactic) (th : thm) : tactic =
-  fn (asms, g) => apply_dep_rewrites_match_concl_with_terms_tac prove_premise then_tac (g :: asms) th (asms, g)
+  fn (asms, g) =>
+  apply_dep_rewrites_match_concl_with_terms_tac prove_premise then_tac asms (g :: asms) th (asms, g)
 
 (* Same as {!apply_dep_rewrites_match_concl_with_all_tac} but we only match the
    conclusion of the goal.
  *)
 fun apply_dep_rewrites_match_concl_with_goal_tac
   (prove_premise : tactic) (then_tac : thm_tactic) (th : thm) : tactic =
-  fn (asms, g) => apply_dep_rewrites_match_concl_with_terms_tac prove_premise then_tac [g] th (asms, g)
+  fn (asms, g) =>
+  apply_dep_rewrites_match_concl_with_terms_tac prove_premise then_tac asms [g] th (asms, g)
 
 (* A theorem might be of the shape: [H => A = B /\ C = D], in which
    case we can split it into:
@@ -362,7 +374,7 @@ fun split_rewrite_thm (th : thm) : thm list =
     val t = concl th;
     val (vars, t) = strip_forall t;
     val (impl, t) = strip_imp t;
-    val tl = strip_conj t;
+    val tml = strip_conj t;
     fun mk_goal (t : term) = list_mk_forall (vars, (list_mk_imp (impl, t)))
     val prove_tac =
       rpt gen_tac >> rpt disch_tac >>
@@ -375,7 +387,7 @@ fun split_rewrite_thm (th : thm) : thm list =
     fun transform_th (th : thm) : thm =
       (GEN_ALL o thm_to_conj_implies o SPEC_ALL o UNDISCH_ALL o SPEC_ALL) th
   in
-    map (transform_th o mk_th) tl
+    map (transform_th o mk_th) tml
   end
 
 (* A dependent rewrite tactic which introduces the premises in a new goal.
@@ -527,5 +539,56 @@ fun int_tac (asms, g) =
     filter_assums_tac keep >>
     first_tac [cooper_tac, exfalso >> cooper_tac]) (asms, g)
  end
+
+(* Repeatedly destruct cases and return the last scrutinee we get *)
+fun strip_all_cases_get_scrutinee (t : term) : term =
+  if TypeBase.is_case t
+  then
+    (* Remark.: [strip_case] is too smart for what we want.
+       For instance: (fst o strip_case) “if i = 0 then ... else ...”
+       returns “i” while we want to get “i = 0”.
+
+       We use [dest_case] for this reason.
+     *)
+    (strip_all_cases_get_scrutinee o (fn (_, x, _) => x) o TypeBase.dest_case) t
+  else t
+
+(*
+TypeBase.dest_case “case ls of [] => T | _ => F”
+TypeBase.strip_case “case ls of [] => T | _ => F”
+TypeBase.strip_case “case (if b then [] else [0, 1]) of [] => T | _ => F”
+TypeBase.strip_case “3”
+TypeBase.dest_case “3”
+
+strip_all_cases_get_scrutinee “case ls of [] => T | _ => F”
+strip_all_cases_get_scrutinee “case (if b then [] else [0, 1]) of [] => T | _ => F”
+strip_all_cases_get_scrutinee “3”
+*)
+
+(* Lexicographic order over pairs *)
+fun pair_compare (comp1 : 'a * 'a -> order) (comp2 : 'b * 'b -> order)
+  ((p1, p2) : (('a * 'b) * ('a * 'b))) : order =
+  let
+    val (x1, y1) = p1;
+    val (x2, y2) = p2;
+  in
+    case comp1 (x1, x2) of
+      LESS => LESS
+    | GREATER => GREATER
+    | EQUAL => comp2 (y1, y2)
+  end
+
+(* A constant name (theory, constant name) *)
+type const_name = string * string
+
+val const_name_compare = pair_compare String.compare String.compare
+
+(* Given a function call [f y0 ... yn] return the name of the function *)
+fun get_fun_name_from_app (t : term) : const_name =
+  let
+    val f = (fst o strip_comb) t;
+    val {Name=name, Thy=thy, Ty=_} = dest_thy_const f;
+    val cn = (thy, name);
+  in cn end
 
 end

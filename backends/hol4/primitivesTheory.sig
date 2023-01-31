@@ -451,7 +451,7 @@ sig
       
       ⊢ ∀x f.
           monad_bind x f =
-          case x of Return y => f y | Fail e => Fail e | Loop => Loop
+          case x of Return y => f y | Fail e => Fail e | Diverge => Diverge
    
    [error_BIJ]  Definition
       
@@ -781,13 +781,13 @@ sig
       
       ⊢ (∀a f f1 v. result_CASE (Return a) f f1 v = f a) ∧
         (∀a f f1 v. result_CASE (Fail a) f f1 v = f1 a) ∧
-        ∀f f1 v. result_CASE Loop f f1 v = v
+        ∀f f1 v. result_CASE Diverge f f1 v = v
    
    [result_size_def]  Definition
       
       ⊢ (∀f a. result_size f (Return a) = 1 + f a) ∧
         (∀f a. result_size f (Fail a) = 1 + error_size a) ∧
-        ∀f. result_size f Loop = 0
+        ∀f. result_size f Diverge = 0
    
    [return_def]  Definition
       
@@ -993,7 +993,7 @@ sig
    
    [datatype_result]  Theorem
       
-      ⊢ DATATYPE (result Return Fail Loop)
+      ⊢ DATATYPE (result Return Fail Diverge)
    
    [error2num_11]  Theorem
       
@@ -1411,33 +1411,33 @@ sig
       
       ⊢ ∀f0 f1 f2. ∃fn.
           (∀a. fn (Return a) = f0 a) ∧ (∀a. fn (Fail a) = f1 a) ∧
-          fn Loop = f2
+          fn Diverge = f2
    
    [result_case_cong]  Theorem
       
       ⊢ ∀M M' f f1 v.
           M = M' ∧ (∀a. M' = Return a ⇒ f a = f' a) ∧
-          (∀a. M' = Fail a ⇒ f1 a = f1' a) ∧ (M' = Loop ⇒ v = v') ⇒
+          (∀a. M' = Fail a ⇒ f1 a = f1' a) ∧ (M' = Diverge ⇒ v = v') ⇒
           result_CASE M f f1 v = result_CASE M' f' f1' v'
    
    [result_case_eq]  Theorem
       
       ⊢ result_CASE x f f1 v = v' ⇔
         (∃a. x = Return a ∧ f a = v') ∨ (∃e. x = Fail e ∧ f1 e = v') ∨
-        x = Loop ∧ v = v'
+        x = Diverge ∧ v = v'
    
    [result_distinct]  Theorem
       
-      ⊢ (∀a' a. Return a ≠ Fail a') ∧ (∀a. Return a ≠ Loop) ∧
-        ∀a. Fail a ≠ Loop
+      ⊢ (∀a' a. Return a ≠ Fail a') ∧ (∀a. Return a ≠ Diverge) ∧
+        ∀a. Fail a ≠ Diverge
    
    [result_induction]  Theorem
       
-      ⊢ ∀P. (∀a. P (Return a)) ∧ (∀e. P (Fail e)) ∧ P Loop ⇒ ∀r. P r
+      ⊢ ∀P. (∀a. P (Return a)) ∧ (∀e. P (Fail e)) ∧ P Diverge ⇒ ∀r. P r
    
    [result_nchotomy]  Theorem
       
-      ⊢ ∀rr. (∃a. rr = Return a) ∨ (∃e. rr = Fail e) ∨ rr = Loop
+      ⊢ ∀rr. (∃a. rr = Return a) ∨ (∃e. rr = Fail e) ∨ rr = Diverge
    
    [u128_add_eq]  Theorem
       

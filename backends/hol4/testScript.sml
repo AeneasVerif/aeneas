@@ -1481,6 +1481,7 @@ val nth_fuel_P_def = Define ‘
   nth_fuel_P ls i n = ~is_loop (nth_fuel n ls i)
 ’
 
+(* TODO: this is not the theorem we want: we want the one below *)
 Theorem nth_fuel_mono:
   !n m ls i.
     n <= m ==>
@@ -1533,7 +1534,7 @@ Proof
   pop_assum mp_tac >> CASE_TAC >> fs []
 QED
 
-Theorem nth_fuel_least_fail_mono:
+(*Theorem nth_fuel_least_fail_mono:
   !n ls i.
     n < $LEAST (nth_fuel_P ls i) ==>
     nth_fuel n ls i = Loop
@@ -1544,7 +1545,7 @@ Proof
   fs [nth_fuel_P_def, is_loop_def] >>
   pop_assum mp_tac >>
   CASE_TAC
-QED
+QED*)
 
 Theorem nth_fuel_least_success_mono:
   !n ls i.
@@ -1593,7 +1594,7 @@ val nth_expand_def = Define ‘
       Fail Failure
 ’             
 
-(* Prove the important theorems *)
+(* Prove the important theorems: termination case *)
 Theorem nth_def_terminates:
   !ls i.
   (?n. nth_fuel_P ls i n) ==>
@@ -1635,7 +1636,7 @@ Proof
   imp_res_tac nth_fuel_least_success_mono >> fs []
 QED
 
-(* Prove the important theorems *)
+(* Prove the important theorems: divergence case *)
 Theorem nth_def_loop:
   !ls i.
   (!n. ~nth_fuel_P ls i n) ==>

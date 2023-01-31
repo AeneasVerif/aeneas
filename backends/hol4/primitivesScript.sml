@@ -12,7 +12,7 @@ Datatype:
 End
 
 Datatype:
-  result = Return 'a | Fail error | Loop
+  result = Return 'a | Fail error | Diverge
 End
 
 Type M = ``: 'a result``
@@ -22,7 +22,7 @@ val bind_def = Define `
     case x of
       Return y => f y
     | Fail e => Fail e
-    | Loop => Loop`;
+    | Diverge => Diverge`;
 
 val bind_name = fst (dest_const “bind”)
 

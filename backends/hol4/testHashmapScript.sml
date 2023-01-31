@@ -37,17 +37,6 @@ val list_t_v_def = Define ‘
   list_t_v (ListCons x tl) = x :: list_t_v tl
 ’
 
-(* TODO: move *)
-Theorem index_eq:
-  (∀x ls. index 0 (x :: ls) = x) ∧
-  (∀i x ls. index i (x :: ls) =
-    if (0 < i) ∨ (0 ≤ i ∧ i ≠ 0) then index (i - 1) ls
-    else (if i = 0 then x else ARB))
-Proof
-  rw [index_def] >> fs [] >>
-  exfalso >> cooper_tac
-QED
-
 Theorem nth_mut_fwd_spec:
   !(ls : 't list_t) (i : u32).
     u32_to_int i < len (list_t_v ls) ==>
@@ -57,7 +46,7 @@ Theorem nth_mut_fwd_spec:
     | Loop => F
 Proof
   Induct_on ‘ls’ >> rw [list_t_v_def, len_def] >~ [‘ListNil’]
-  >-(massage >> exfalso >> cooper_tac) >>
+  >-(massage >> int_tac) >>
   pure_once_rewrite_tac [nth_mut_fwd_def] >> rw [] >>
   fs [index_eq] >>
   progress >> progress
@@ -108,6 +97,7 @@ Theorem insert_lem:
       lookup key ls1 = SOME value /\
       (* The other bindings are left unchanged *)
       (!k. k <> key ==> lookup k ls = lookup k ls1)
+      (* TODO: invariant *)
     | Fail _ => F
     | Loop => F
 Proof

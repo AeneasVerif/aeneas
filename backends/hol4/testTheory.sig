@@ -102,7 +102,6 @@ sig
     val nth_fuel_P_mono : thm
     val nth_fuel_def : thm
     val nth_fuel_ind : thm
-    val nth_fuel_least_fail_mono : thm
     val nth_fuel_least_success_mono : thm
     val nth_fuel_mono : thm
     val num2error_11 : thm
@@ -694,10 +693,6 @@ sig
                   P n' tl i0) ⇒
                P n ls i) ⇒
             ∀v v1 v2. P v v1 v2
-   
-   [nth_fuel_least_fail_mono]  Theorem
-      
-      ⊢ ∀n ls i. n < $LEAST (nth_fuel_P ls i) ⇒ nth_fuel n ls i = Loop
    
    [nth_fuel_least_success_mono]  Theorem
       
