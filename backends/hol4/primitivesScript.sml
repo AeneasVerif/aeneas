@@ -36,6 +36,9 @@ Overload monad_bind = ``bind``
 Overload monad_unitbind = ``\x y. bind x (\z. y)``
 Overload monad_ignore_bind = ``\x y. bind x (\z. y)``
 
+val is_diverge_def = Define ‘
+  is_diverge (r: 'a result) : bool = case r of Diverge => T | _ => F’
+
 (* Allow the use of monadic syntax *)
 val _ = monadsyntax.enable_monadsyntax ()
 
