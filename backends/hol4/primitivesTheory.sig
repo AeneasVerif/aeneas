@@ -86,6 +86,7 @@ sig
     val i8_rem_def : thm
     val i8_sub_def : thm
     val int_rem_def : thm
+    val is_diverge_def : thm
     val isize_add_def : thm
     val isize_div_def : thm
     val isize_mul_def : thm
@@ -645,6 +646,11 @@ sig
       ⊢ ∀x y.
           int_rem x y =
           if x ≥ 0 ∧ y ≥ 0 ∨ x < 0 ∧ y < 0 then x % y else -(x % y)
+   
+   [is_diverge_def]  Definition
+      
+      ⊢ ∀r. is_diverge r ⇔
+            case r of Return v2 => F | Fail v3 => F | Diverge => T
    
    [isize_add_def]  Definition
       
