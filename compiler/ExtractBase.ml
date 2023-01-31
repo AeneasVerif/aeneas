@@ -203,6 +203,21 @@ type formatter = {
             the same purpose as in {!field:fun_name}.
           - loop identifier, if this is for a loop
        *)
+  terminates_clause_name :
+    A.FunDeclId.id -> fun_name -> int -> LoopId.id option -> string;
+      (** Generates the name of the measure used to prove/reason about
+          termination. The generated code uses this clause where needed,
+          but its body must be defined by the user. Lean only.
+
+          Inputs:
+          - function id: this is especially useful to identify whether the
+            function is an assumed function or a local function
+          - function basename
+          - the number of loops in the parent function. This is used for
+            the same purpose as in {!field:fun_name}.
+          - loop identifier, if this is for a loop
+       *)
+
   var_basename : StringSet.t -> string option -> ty -> string;
       (** Generates a variable basename.
 
@@ -281,6 +296,12 @@ type id =
   | FunId of fun_id
   | DecreasesClauseId of (A.fun_id * LoopId.id option)
       (** The definition which provides the decreases/termination clause.
+          We insert calls to this clause to prove/reason about termination:
+          the body of those clauses must be defined by the user, in the
+          proper files.
+       *)
+  | TerminatesClauseId of (A.fun_id * LoopId.id option)
+      (** The definition which provides the decreases/termination measure.
           We insert calls to this clause to prove/reason about termination:
           the body of those clauses must be defined by the user, in the
           proper files.
@@ -486,6 +507,19 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
         | Some lid -> ", loop: " ^ LoopId.to_string lid
       in
       "decreases clause for function: " ^ fun_name ^ loop
+  | TerminatesClauseId (fid, lid) ->
+      let fun_name =
+        match fid with
+        | Regular fid ->
+            Print.fun_name_to_string (A.FunDeclId.Map.find fid fun_decls).name
+        | Assumed aid -> A.show_assumed_fun_id aid
+      in
+      let loop =
+        match lid with
+        | None -> ""
+        | Some lid -> ", loop: " ^ LoopId.to_string lid
+      in
+      "terminates clause for function: " ^ fun_name ^ loop
   | TypeId id -> "type name: " ^ get_type_name id
   | StructId id -> "struct constructor of: " ^ get_type_name id
   | VariantId (id, variant_id) ->
@@ -596,6 +630,10 @@ let ctx_get_decreases_clause (def_id : A.FunDeclId.id)
     (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
   ctx_get (DecreasesClauseId (Regular def_id, loop_id)) ctx
 
+let ctx_get_terminates_clause (def_id : A.FunDeclId.id)
+    (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
+  ctx_get (TerminatesClauseId (Regular def_id, loop_id)) ctx
+
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (basename : string) (id : TypeVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
@@ -687,6 +725,14 @@ let ctx_add_decreases_clause (def : fun_decl) (ctx : extraction_ctx) :
       def.loop_id
   in
   ctx_add (DecreasesClauseId (Regular def.def_id, def.loop_id)) name ctx
+
+let ctx_add_terminates_clause (def : fun_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let name =
+    ctx.fmt.terminates_clause_name def.def_id def.basename def.num_loops
+      def.loop_id
+  in
+  ctx_add (TerminatesClauseId (Regular def.def_id, def.loop_id)) name ctx
 
 let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
     extraction_ctx =

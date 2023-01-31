@@ -6,6 +6,8 @@ import Lean
 
 -- Results & monadic combinators
 
+-- TODO: use syntactic conventions and capitalize error, result, etc.
+
 inductive error where
    | assertionFailure: error
    | integerOverflow: error
@@ -23,16 +25,23 @@ deriving Repr, BEq
 
 open result
 
+/- HELPERS -/
+
 -- TODO: is there automated syntax for these discriminators?
 def is_ret {α: Type} (r: result α): Bool :=
   match r with
   | result.ret _ => true
   | result.fail _ => false
 
-def eval_global {α: Type} (x: result α) (h: is_ret x): α :=
+def massert (b:Bool) : result Unit :=
+  if b then .ret () else fail assertionFailure
+
+def eval_global {α: Type} (x: result α) (_: is_ret x): α :=
   match x with
   | result.fail _ => by contradiction
   | result.ret x => x
+
+/- DO-DSL SUPPORT -/
 
 def bind (x: result α) (f: α -> result β) : result β :=
   match x with
@@ -47,8 +56,26 @@ instance : Bind result where
 instance : Pure result where
   pure := fun x => ret x
 
-def massert (b:Bool) : result Unit :=
-  if b then return () else fail assertionFailure
+/- CUSTOM-DSL SUPPORT -/
+
+-- Let-binding the result of a monadic operation is oftentimes not sufficient,
+-- because we may need a hypothesis for equational reasoning in the scope. We
+-- rely on subtype, and a custom let-binding operator, in effect recreating our
+-- own variant of the do-dsl
+
+def result.attach : (o : result α) → result { x : α // o = ret x }
+  | .ret x => .ret ⟨x, rfl⟩
+  | .fail e   => .fail e
+
+macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
+  `(doElem| let ⟨$e, $h⟩ ← result.attach $f)
+
+-- Silly example of the kind of reasoning that this notation enables
+#eval do
+  let h: y <-- .ret (0: Nat)
+  let _: y = 0 := by cases h; simp
+  let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
+  .ret r
 
 ----------------------
 -- MACHINE INTEGERS --
