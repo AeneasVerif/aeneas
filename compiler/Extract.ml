@@ -2130,6 +2130,7 @@ let extract_termination_and_decreasing (ctx: extraction_ctx) (fmt: F.formatter) 
   F.pp_print_space fmt ();
   (* Tuple of the arguments *)
   let vars = List.map (fun (v: var) -> v.id) def_body.inputs in
+
   if List.length vars = 1 then
     F.pp_print_string fmt (ctx_get_var (List.hd vars) ctx_body)
   else begin
@@ -2345,12 +2346,17 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   if has_decreases_clause && !backend = Lean then begin
     let def_body = Option.get def.body in
     let vars = List.map (fun (v: var) -> v.id) def_body.inputs in
+    let num_fwd_inputs =
+      def.signature.info.num_fwd_inputs_with_fuel_with_state
+    in
+    let vars = Collections.List.prefix num_fwd_inputs vars in
+
     (* terminates_by *)
     let terminates_name = ctx_get_terminates_clause def.def_id def.loop_id ctx in
     F.pp_print_break fmt 0 0;
-    F.pp_open_hvbox fmt ctx.indent_incr;
+    F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt "termination_by";
-    F.pp_open_hvbox fmt ctx.indent_incr;
+    F.pp_open_hovbox fmt 0;
     F.pp_print_space fmt ();
     F.pp_print_string fmt def_name;
     F.pp_print_space fmt ();
@@ -2361,7 +2367,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=>";
     F.pp_close_box fmt ();
-    F.pp_open_hbox fmt ();
+    F.pp_open_hovbox fmt 0;
     F.pp_print_space fmt ();
     F.pp_print_string fmt terminates_name;
     F.pp_print_space fmt ();
