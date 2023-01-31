@@ -2258,14 +2258,16 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (* [Tot] *)
     if has_decreases_clause then (
       assert_backend_supports_decreases_clauses ();
-      F.pp_print_string fmt "Tot";
-      F.pp_print_space fmt ());
+      if !backend = FStar then begin
+        F.pp_print_string fmt "Tot";
+        F.pp_print_space fmt ()
+      end);
     extract_ty ctx fmt has_decreases_clause def.signature.output;
     (* Close the box for the return type *)
     F.pp_close_box fmt ();
     (* Print the decrease clause - rk.: a function with a decreases clause
      * is necessarily a transparent function *)
-    if has_decreases_clause then (
+    if has_decreases_clause && !backend = FStar then (
       assert_backend_supports_decreases_clauses ();
       F.pp_print_space fmt ();
       (* Open a box for the decreases clause *)
@@ -2339,6 +2341,59 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   print_decl_end_delimiter fmt kind;
   (* Close the outer box for the definition *)
   F.pp_close_box fmt ();
+  (* Termination clause *)
+  if has_decreases_clause && !backend = Lean then begin
+    let def_body = Option.get def.body in
+    let vars = List.map (fun (v: var) -> v.id) def_body.inputs in
+    (* terminates_by *)
+    let terminates_name = ctx_get_terminates_clause def.def_id def.loop_id ctx in
+    F.pp_print_break fmt 0 0;
+    F.pp_open_hvbox fmt ctx.indent_incr;
+    F.pp_print_string fmt "termination_by";
+    F.pp_open_hvbox fmt ctx.indent_incr;
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt def_name;
+    F.pp_print_space fmt ();
+    Collections.List.iter_link
+      (F.pp_print_space fmt)
+      (fun v -> F.pp_print_string fmt (ctx_get_var v ctx_body))
+      vars;
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "=>";
+    F.pp_close_box fmt ();
+    F.pp_open_hbox fmt ();
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt terminates_name;
+    F.pp_print_space fmt ();
+    List.iter
+      (fun (p : type_var) ->
+        let pname = ctx_get_type_var p.index ctx in
+        F.pp_print_string fmt pname;
+        F.pp_print_space fmt ())
+      def.signature.type_params;
+    List.iter
+      (fun v ->
+        F.pp_print_string fmt (ctx_get_var v ctx_body);
+        F.pp_print_space fmt ())
+      vars;
+    F.pp_close_box fmt ();
+    F.pp_close_box fmt ();
+
+    let decreases_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
+    F.pp_print_break fmt 0 0;
+    F.pp_open_hvbox fmt ctx.indent_incr;
+    F.pp_print_string fmt "decreasing_by";
+    F.pp_print_space fmt ();
+    F.pp_open_hvbox fmt ctx.indent_incr;
+    F.pp_print_string fmt decreases_name;
+    F.pp_print_space fmt ();
+    Collections.List.iter_link
+      (F.pp_print_space fmt)
+      (fun v -> F.pp_print_string fmt (ctx_get_var v ctx_body))
+      vars;
+    F.pp_close_box fmt ();
+    F.pp_close_box fmt ()
+  end;
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
