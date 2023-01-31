@@ -1213,6 +1213,32 @@ val def_qt = ‘
 
 val even_def = DefineDiv def_qt
 
+(* Complexigying the above definition *)
+val def_qt = ‘
+  (even (i : int) : bool result =
+    if i = 0 then
+      do
+        b <- Return T;
+        Return b
+      od
+    else do
+      b <- odd (i - 1);
+      Return b
+      od
+    ) /\
+  (odd (i : int) : bool result =
+    if i = 0 then
+      do
+        b <- Return F;
+        Return b
+      od
+    else do
+      b <- even (i - 1);
+      Return b
+      od)
+’
+
+val even_def = DefineDiv def_qt
 
 Datatype:
   list_t =
