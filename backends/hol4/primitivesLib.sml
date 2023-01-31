@@ -181,24 +181,6 @@ val massage : tactic =
   assume_bounds_for_all_int_vars >>
   rewrite_with_dep_int_lemmas
 
-(* Lexicographic order over pairs *)
-fun pair_compare (comp1 : 'a * 'a -> order) (comp2 : 'b * 'b -> order)
-  ((p1, p2) : (('a * 'b) * ('a * 'b))) : order =
-  let
-    val (x1, y1) = p1;
-    val (x2, y2) = p2;
-  in
-    case comp1 (x1, x2) of
-      LESS => LESS
-    | GREATER => GREATER
-    | EQUAL => comp2 (y1, y2)
-  end
-
-(* A constant name (theory, constant name) *)
-type const_name = string * string
-
-val const_name_compare = pair_compare String.compare String.compare
-
 (* The registered spec theorems, that {!progress} will automatically apply.
 
    The keys are the function names (it is a pair, because constant names
@@ -264,14 +246,6 @@ fun get_spec_app (t : term) : term =
       if TypeBase.is_case t then let val (_, t, _) = TypeBase.dest_case t in t end
       else (fst o dest_eq) t;
   in t end
-
-(* Given a function call [f y0 ... yn] return the name of the function *)
-fun get_fun_name_from_app (t : term) : const_name =
-  let
-    val f = (fst o strip_comb) t;
-    val {Name=name, Thy=thy, Ty=_} = dest_thy_const f;
-    val cn = (thy, name);
-  in cn end
 
 (* Register a spec theorem in the spec database.
 
@@ -375,25 +349,6 @@ val all_vec_lems = [
   vec_insert_back_spec
 ]
 val _ = app register_spec_thm all_vec_lems
-
-(* Repeatedly destruct cases and return the last scrutinee we get *)
-fun strip_all_cases_get_scrutinee (t : term) : term =
-  if TypeBase.is_case t
-  then (strip_all_cases_get_scrutinee o fst o TypeBase.strip_case) t
-  else t
-
-(*
-TypeBase.dest_case “case ls of [] => T | _ => F”
-TypeBase.strip_case “case ls of [] => T | _ => F”
-TypeBase.strip_case “case (if b then [] else [0, 1]) of [] => T | _ => F”
-TypeBase.strip_case “3”
-TypeBase.dest_case “3”
-
-strip_all_cases_get_scrutinee “case ls of [] => T | _ => F”
-strip_all_cases_get_scrutinee “case (if b then [] else [0, 1]) of [] => T | _ => F”
-strip_all_cases_get_scrutinee “3”
-*)
-
 
 (* Provided the goal contains a call to a monadic function, return this function call.
 

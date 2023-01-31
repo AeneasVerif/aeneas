@@ -15,7 +15,6 @@ sig
   
   (*  Theorems  *)
     val datatype_list_t : thm
-    val index_eq : thm
     val insert_lem : thm
     val list_t_11 : thm
     val list_t_Axiom : thm
@@ -102,15 +101,6 @@ sig
       
       ⊢ DATATYPE (list_t ListCons ListNil)
    
-   [index_eq]  Theorem
-      
-      ⊢ (∀x ls. index 0 (x::ls) = x) ∧
-        ∀i x ls.
-          index i (x::ls) =
-          if 0 < i ∨ 0 ≤ i ∧ i ≠ 0 then index (i − 1) ls
-          else if i = 0 then x
-          else ARB
-   
    [insert_lem]  Theorem
       
       [oracles: DISK_THM] [axioms: insert_def] []
@@ -120,8 +110,8 @@ sig
             Return ls1 =>
               lookup key ls1 = SOME value ∧
               ∀k. k ≠ key ⇒ lookup k ls = lookup k ls1
-          | Fail v1 => F
-          | Loop => F
+          | Fail v3 => F
+          | Diverge => F
    
    [list_t_11]  Theorem
       
@@ -194,8 +184,8 @@ sig
           u32_to_int i < len (list_t_v ls) ⇒
           case nth_mut_fwd ls i of
             Return x => x = index (u32_to_int i) (list_t_v ls)
-          | Fail v1 => F
-          | Loop => F
+          | Fail v3 => F
+          | Diverge => F
    
    
 *)
