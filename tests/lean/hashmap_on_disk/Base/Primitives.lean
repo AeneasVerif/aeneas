@@ -1,6 +1,5 @@
 import Lean
 import Init.Data.List.Basic
-import Mathlib
 
 -------------
 -- PRELUDE --
@@ -155,12 +154,11 @@ def USize.checked_mul (n: USize) (m: USize): result USize :=
     .fail integerOverflow
 
 def USize.checked_div (n: USize) (m: USize): result USize :=
-  if h: m > 0 then
+  if m > 0 then
     .ret ⟨ n.val / m.val, by
-      simp_arith
       have h1: n.val < USize.size := n.val.isLt
       have h2: n.val.val / m.val.val <= n.val.val := @Nat.div_le_self n.val m.val
-      sorry
+      apply Nat.lt_of_le_of_lt h2 h1
     ⟩
   else
     .fail integerOverflow
