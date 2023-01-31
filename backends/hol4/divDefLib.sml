@@ -7,12 +7,10 @@ open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
 open primitivesLib
 
 (* TODO:
-pred_def_thms -> pred_defs
-pred_def_thm -> pred_def
 raw_def_thms -> raw_defs
 raw_def_thm -> raw_def
 
-fuel_defs_thm -> fuel_defs (and split the theorem)
+fuel_defs -> fuel_defs (and split the theorem)
 *)
 
 (* TODO: move *)
@@ -105,60 +103,6 @@ fun mk_diverge_tm (ty : hol_type) : term =
     diverge_tm
   end
 
-(*
-(* TODO: move *)
-fun strip_pair_type (ty : hol_type) : hol_type list =
-  let
-    val {Args=args, Thy=thy, Tyop=tyop} = dest_thy_type ty
-  in
-    if thy = "pair" andalso tyop = "prod" then
-      case args of
-        [x, y] => x :: strip_pair_type y
-      | _ => failwith "Unexpected"
-    else [ty]
-  end
-  handle HOL_ERR _ => [ty]
-
-fun list_mk_pair_type (tys : hol_type list) : hol_type =
-  case tys of
-    [] => failwith "Unexpected"
-  | [x] => x
-  | x :: tys =>
-    mk_thy_type {Args = [x, list_mk_pair_type tys], Thy="pair", Tyop="prod"}
-
-fun strip_sum_type (ty : hol_type) : hol_type list =
-  let
-    val {Args=args, Thy=thy, Tyop=tyop} = dest_thy_type ty
-  in
-    if thy = "sum" andalso tyop = "sum" then
-      case args of
-        [x, y] => x :: strip_sum_type y
-      | _ => failwith "Unexpected"
-    else [ty]
-  end
-  handle HOL_ERR _ => [ty]
-
-fun list_mk_sum_type (tys : hol_type list) : hol_type =
-  case tys of
-    [] => failwith "Unexpected"
-  | [x] => x
-  | x :: tys =>
-    mk_thy_type {Args = [x, list_mk_sum_type tys], Thy="sum", Tyop="sum"}
-*)
-
-
-(*
-val ty = “: ('a # 'b) # num # int”
-strip_pair_type ty
-list_mk_pair_type (strip_pair_type ty)
-
-val ty = “: ('a + 'b) + num + int”
-strip_sum_type ty
-list_mk_sum_type (strip_sum_type ty)
-
-val ty = “: (num # 'a # bool) + (num # int # bool) + (num # 'a)”
-*)
-
 (* Small utility: we sometimes need to generate a termination measure for
    the fuel definitions.
 
@@ -242,7 +186,7 @@ val num_ty::rem_tys = tys
 val (tuple_var, tuple_case) = hd tuple_cases
 *)
 
-fun mk_fuel_defs (def_tms : term list) : thm =
+fun mk_fuel_defs (def_tms : term list) : thm list =
   let
     (* Retrieve the identifiers.
 
@@ -323,22 +267,14 @@ fun mk_fuel_defs (def_tms : term list) : thm =
        val temp_def = Hol_defn def_name ‘^fuel_defs_conj’
        Defn.tgoal temp_def
      *)
-     val fuel_defs_thm = tDefine def_name ‘^fuel_defs_conj’ prove_termination_tac
+     val fuel_defs = tDefine def_name ‘^fuel_defs_conj’ prove_termination_tac
    in
-     fuel_defs_thm
+     CONJUNCTS fuel_defs
    end
 
 (*
-val (asms, g) = top_goal ()
-
-val rty = ref “:num”
-val ty = !rty
-(hd o snd o dest_type) ty
-*)
-
-(*
-val (fuel_tms, fuel_defs_thm) = mk_fuel_defs def_tms
-val fuel_def_tms = map (snd o strip_forall) ((strip_conj o concl) fuel_defs_thm)
+val (fuel_tms, fuel_defs) = mk_fuel_defs def_tms
+val fuel_def_tms = map (snd o strip_forall) ((strip_conj o concl) fuel_defs)
 val (def_tm, fuel_def_tm) = hd (zip def_tms fuel_def_tms)
 *)
 
@@ -373,7 +309,7 @@ fun mk_fuel_predicate_defs (def_tm, fuel_def_tm) : thm =
   end
 
 (*
-val pred_def_thms = map mk_fuel_predicate_defs (zip def_tms fuel_def_tms)
+val pred_defs = map mk_fuel_predicate_defs (zip def_tms fuel_def_tms)
 *)
 
 (* Tactic which makes progress in a proof by making a case disjunction (we use
@@ -381,26 +317,7 @@ val pred_def_thms = map mk_fuel_predicate_defs (zip def_tms fuel_def_tms)
 fun case_progress (asms, g) =
   let
     val scrut = (strip_all_cases_get_scrutinee o lhs) g
-  in Cases_on ‘^scrut’ (asms, g) end
-
-(* Tactic to prove the fuel monotonicity theorem - TODO: move below *)
-fun prove_fuel_mono_tac (pred_def_thms : thm list) (fuel_defs_thm : thm) =
-  Induct_on ‘^fuel_var0’ >-(
-    (* The ___P predicates are false: n is 0 *)
-    fs pred_def_thms >>
-    fs [is_diverge_def] >>
-    pure_once_rewrite_tac [fuel_defs_thm] >> fs []) >>
-  gen_tac >>
-  Cases_on ‘^fuel_var1’ >-(
-    (* Contradiction: SUC n < 0 *)
-    rw [] >> exfalso >> int_tac) >>
-  fs pred_def_thms >>
-  fs [is_diverge_def] >>
-  pure_once_rewrite_tac [fuel_defs_thm] >> fs [bind_def] >>
-  (* Split the goals *)
-  rw [] >>
-  (* Explore all the paths *)
-  rpt (case_progress >> fs [])
+  in Cases_on ‘^scrut’ (asms, g) end  
 
 (* Prove the fuel monotonicity properties.
 
@@ -411,10 +328,10 @@ fun prove_fuel_mono_tac (pred_def_thms : thm list) (fuel_defs_thm : thm) =
        (!i. n <= m ==> odd___P i n ==> odd___fuel n i = odd___fuel m i)
    ]}
 *)
-fun prove_fuel_mono (pred_def_thms : thm list) (fuel_defs_thm : thm) : thm =
+fun prove_fuel_mono (pred_defs : thm list) (fuel_defs : thm list) : thm =
   let
-    val pred_tms = map (lhs o snd o strip_forall o concl) pred_def_thms
-    val fuel_tms = map (lhs o snd o strip_forall o concl) (CONJUNCTS fuel_defs_thm)
+    val pred_tms = map (lhs o snd o strip_forall o concl) pred_defs
+    val fuel_tms = map (lhs o snd o strip_forall o concl) fuel_defs
     val pred_fuel_tms = zip pred_tms fuel_tms
     (* Generate terms of the shape:
        !i. n <= m ==> even___P i n ==> even___fuel n i = even___fuel m i
@@ -439,13 +356,31 @@ fun prove_fuel_mono (pred_def_thms : thm list) (fuel_defs_thm : thm) : thm =
      val fuel_eq_tms = list_mk_conj fuel_eq_tms
      (* Qantify over the fuels *)
      val fuel_eq_tms = list_mk_forall ([fuel_var0, fuel_var1], fuel_eq_tms)
+     (* The tactic for the proof *)
+     val prove_tac =
+       Induct_on ‘^fuel_var0’ >-(
+         (* The ___P predicates are false: n is 0 *)
+         fs pred_defs >>
+         fs [is_diverge_def] >>
+         pure_once_rewrite_tac fuel_defs >> fs []) >>
+       gen_tac >>
+       Cases_on ‘^fuel_var1’ >-(
+         (* Contradiction: SUC n < 0 *)
+         rw [] >> exfalso >> int_tac) >>
+       fs pred_defs >>
+       fs [is_diverge_def] >>
+       pure_once_rewrite_tac fuel_defs >> fs [bind_def] >>
+       (* Split the goals *)
+       rw [] >>
+       (* Explore all the paths *)
+       rpt (case_progress >> fs [])
    in
      (* Prove *)
-     save_goal_and_prove (fuel_eq_tms, prove_fuel_mono_tac pred_def_thms fuel_defs_thm)
+     save_goal_and_prove (fuel_eq_tms, prove_tac)
    end
 
 (*
-val fuel_mono_thm = prove_fuel_mono pred_def_thms fuel_defs_thm
+val fuel_mono_thm = prove_fuel_mono pred_defs fuel_defs
 *)
 
 (* Prove the property about the least upper bound.
@@ -460,13 +395,13 @@ val fuel_mono_thm = prove_fuel_mono pred_def_thms fuel_defs_thm
 
    TODO: merge with other functions? (prove_pred_imp_fuel_eq_raw_thms)
 *)
-fun prove_least_fuel_mono (pred_def_thms : thm list) (fuel_mono_thm : thm) : thm list =
+fun prove_least_fuel_mono (pred_defs : thm list) (fuel_mono_thm : thm) : thm list =
   let
     val thl = (CONJUNCTS o SPECL [fuel_var0, fuel_var1]) fuel_mono_thm
-    fun mk_least_fuel_thm (pred_def_thm, mono_thm) : thm =
+    fun mk_least_fuel_thm (pred_def, mono_thm) : thm =
       let
         (* Retrieve the predicate, without the fuel *)
-        val pred_tm = (lhs o snd o strip_forall o concl) pred_def_thm
+        val pred_tm = (lhs o snd o strip_forall o concl) pred_def
         val (pred_tm, args) = strip_comb pred_tm
         val args = rev (tl (rev args))
         val pred_tm = list_mk_comb (pred_tm, args)
@@ -485,7 +420,7 @@ fun prove_least_fuel_mono (pred_def_thms : thm list) (fuel_mono_thm : thm) : thm
         th
       end
   in
-    map mk_least_fuel_thm (zip pred_def_thms thl)
+    map mk_least_fuel_thm (zip pred_defs thl)
   end
 
 (* Prove theorems of the shape:
@@ -496,11 +431,11 @@ fun prove_least_fuel_mono (pred_def_thms : thm list) (fuel_mono_thm : thm) : thm
 
    TODO: merge with other functions? (prove_pred_imp_fuel_eq_raw_thms)
  *)
-fun prove_least_pred_thms (pred_def_thms : thm list) : thm list =
+fun prove_least_pred_thms (pred_defs : thm list) : thm list =
   let
-    fun prove_least_pred_thm (pred_def_thm : thm) : thm =
+    fun prove_least_pred_thm (pred_def : thm) : thm =
       let
-        val pred_tm = (lhs o snd o strip_forall o concl) pred_def_thm
+        val pred_tm = (lhs o snd o strip_forall o concl) pred_def
         val (pred_no_fuel_tm, args) = strip_comb pred_tm
         val args = rev (tl (rev args))
         val pred_no_fuel_tm = list_mk_comb (pred_no_fuel_tm, args)
@@ -529,12 +464,12 @@ fun prove_least_pred_thms (pred_def_thms : thm list) : thm list =
         save_goal_and_prove (tm, prove_tac)
       end
   in
-    map prove_least_pred_thm pred_def_thms
+    map prove_least_pred_thm pred_defs
   end
 
 
 (*
-val least_pred_thms = prove_least_pred_thms pred_def_thms
+val least_pred_thms = prove_least_pred_thms pred_defs
 
 val least_pred_thm = hd least_pred_thms
 *)
@@ -545,11 +480,11 @@ val least_pred_thm = hd least_pred_thms
      !n i. even___P i n ==> even___P i ($LEAST (even___P i))
    ]}
 *)
-fun prove_pred_n_imp_pred_least_thms (pred_def_thms : thm list) : thm list =
+fun prove_pred_n_imp_pred_least_thms (pred_defs : thm list) : thm list =
   let
-    fun prove_pred_n_imp_pred_least (pred_def_thm : thm) : thm =
+    fun prove_pred_n_imp_pred_least (pred_def : thm) : thm =
       let
-        val pred_tm = (lhs o snd o strip_forall o concl) pred_def_thm
+        val pred_tm = (lhs o snd o strip_forall o concl) pred_def
         val (pred_no_fuel_tm, args) = strip_comb pred_tm
         val args = rev (tl (rev args))
         val pred_no_fuel_tm = list_mk_comb (pred_no_fuel_tm, args)
@@ -575,12 +510,12 @@ fun prove_pred_n_imp_pred_least_thms (pred_def_thms : thm list) : thm list =
         save_goal_and_prove (tm, prove_tac)
       end
   in
-    map prove_pred_n_imp_pred_least pred_def_thms
+    map prove_pred_n_imp_pred_least pred_defs
   end
 
 (*
-val (pred_def_thm, mono_thm) = hd (zip pred_def_thms thl)
-val least_fuel_mono_thms = prove_least_fuel_mono pred_def_thms fuel_defs_thm fuel_mono_thm
+val (pred_def, mono_thm) = hd (zip pred_defs thl)
+val least_fuel_mono_thms = prove_least_fuel_mono pred_defs fuel_defs fuel_mono_thm
 
 val least_fuel_mono_thm = hd least_fuel_mono_thms
 *)
@@ -591,16 +526,16 @@ val least_fuel_mono_thm = hd least_fuel_mono_thms
      even i = if (?n. even___P i n) then even___P ($LEAST (even___P i)) i else Diverge
    ]}
  *)
-fun define_raw_defs (def_tms : term list) (pred_def_thms : thm list) (fuel_defs_thm : thm) : thm list =
+fun define_raw_defs (def_tms : term list) (pred_defs : thm list) (fuel_defs : thm list) : thm list =
   let
-    fun define_raw_def (def_tm, (pred_def_thm, fuel_def_thm)) : thm =
+    fun define_raw_def (def_tm, (pred_def, fuel_def)) : thm =
       let
         val app = lhs def_tm
-        val pred_tm = (lhs o snd o strip_forall o concl) pred_def_thm
+        val pred_tm = (lhs o snd o strip_forall o concl) pred_def
         (* Make the “?n. even___P i n” term *)
         val exists_fuel_tm = mk_exists (fuel_var0, pred_tm)
         (* Make the “even___fuel ($LEAST (even___P i)) i” term *)
-        val fuel_tm = (lhs o snd o strip_forall o concl) fuel_def_thm
+        val fuel_tm = (lhs o snd o strip_forall o concl) fuel_def
         val (pred_tm, args) = strip_comb pred_tm
         val args = rev (tl (rev args))
         val pred_tm = list_mk_comb (pred_tm, args)
@@ -616,48 +551,40 @@ fun define_raw_defs (def_tms : term list) (pred_def_thms : thm list) (fuel_defs_
         Define ‘^raw_def_tm’
       end
   in
-    map define_raw_def (zip def_tms (zip pred_def_thms (CONJUNCTS fuel_defs_thm)))
+    map define_raw_def (zip def_tms (zip pred_defs fuel_defs))
   end
 
 (*
-val raw_def_thms = define_raw_defs def_tms pred_def_thms fuel_defs_thm
+val raw_defs = define_raw_defs def_tms pred_defs fuel_defs
  *)
-
-(*
-val pred_def_thm = hd pred_def_thms
-
-val pred_n_imp_pred_least_thms = prove_pred_n_imp_pred_least_thms pred_def_thms
-
-val pred_n_imp_pred_least_thm = hd pred_n_imp_pred_least_thms
-*)
 
 (* Prove theorems of the shape:
 
    !n i. even___P i n ==> even___fuel n i = even i
  *)
-fun prove_pred_imp_fuel_eq_raw_def_thms
-  (pred_def_thms : thm list)
+fun prove_pred_imp_fuel_eq_raw_defs
+  (pred_defs : thm list)
   (fuel_def_tms : term list)
   (least_fuel_mono_thms : thm list)
   (least_pred_thms : thm list)
   (pred_n_imp_pred_least_thms : thm list)
-  (raw_def_thms : thm list) :
+  (raw_defs : thm list) :
   thm list =
   let
-    fun prove_thm (pred_def_thm,
+    fun prove_thm (pred_def,
                    (fuel_def_tm,
                     (least_fuel_mono_thm,
                      (least_pred_thm,
-                      (pred_n_imp_pred_least_thm, raw_def_thm))))) : thm =
+                      (pred_n_imp_pred_least_thm, raw_def))))) : thm =
       let
         (* Generate: “even___P i n” *)
-        val pred_tm = (lhs o snd o strip_forall o concl) pred_def_thm
+        val pred_tm = (lhs o snd o strip_forall o concl) pred_def
         val (pred_no_fuel_tm, args) = strip_comb pred_tm
         val args = rev (tl (rev args))
         (* Generate: “even___fuel n i” *)
         val fuel_tm = lhs fuel_def_tm
         (* Generate: “even i” *)
-        val raw_def_tm = (lhs o snd o strip_forall o concl) raw_def_thm
+        val raw_def_tm = (lhs o snd o strip_forall o concl) raw_def
         (* Generate: “even___fuel n i = even i” *)
         val tm = mk_eq (fuel_tm, raw_def_tm)
         (* Add the implication *)
@@ -669,7 +596,7 @@ fun prove_pred_imp_fuel_eq_raw_def_thms
         val prove_tac =
           rpt gen_tac >>
           strip_tac >>
-          fs raw_def_thms >>
+          fs raw_defs >>
           (* Case on ‘?n. even___P i n’ *)
           CASE_TAC >> fs [] >>
           (* Use the monotonicity property *)
@@ -680,23 +607,15 @@ fun prove_pred_imp_fuel_eq_raw_def_thms
         save_goal_and_prove (tm, prove_tac)
       end
   in
-    map prove_thm (zip pred_def_thms (zip fuel_def_tms (zip least_fuel_mono_thms
-                   (zip least_pred_thms (zip pred_n_imp_pred_least_thms raw_def_thms)))))
+    map prove_thm (zip pred_defs (zip fuel_def_tms (zip least_fuel_mono_thms
+                   (zip least_pred_thms (zip pred_n_imp_pred_least_thms raw_defs)))))
   end
 
 (*
-val pred_imp_fuel_eq_raw_def_thms =
-  prove_pred_imp_fuel_eq_raw_def_thms
-    pred_def_thms fuel_def_tms least_fuel_mono_thms least_pred_thms
-    pred_n_imp_pred_least_thms raw_def_thms
-
-val (pred_def_thm,
-                   (fuel_def_tm,
-                    (least_fuel_mono_thm,
-                     (least_pred_thm,
-                      (pred_n_imp_pred_least_thm, raw_def_thm))))) =
-  hd (zip pred_def_thms (zip fuel_def_tms (zip least_fuel_mono_thms
-                   (zip least_pred_thms (zip pred_n_imp_pred_least_thms raw_def_thms)))))
+val pred_imp_fuel_eq_raw_defs =
+  prove_pred_imp_fuel_eq_raw_defs
+    pred_defs fuel_def_tms least_fuel_mono_thms least_pred_thms
+    pred_n_imp_pred_least_thms raw_defs
  *)
 
 
@@ -754,8 +673,8 @@ val expand_defs = gen_expand_defs def_tms
  *)
 fun mk_termination_diverge_tms
   (def_tms : term list)
-  (pred_def_thms : thm list)
-  (raw_def_thms : thm list)
+  (pred_defs : thm list)
+  (raw_defs : thm list)
   (expand_defs : thm list) :
   (term * term) list =
   let
@@ -769,33 +688,33 @@ fun mk_termination_diverge_tms
        where on the left we have *variables* and on the right we have
        the "raw" definitions.
      *)
-    fun mk_fun_subst (def_tm, raw_def_thm) =
+    fun mk_fun_subst (def_tm, raw_def) =
       let
         val var = (fst o strip_comb o lhs) def_tm
-        val f = (fst o strip_comb o lhs o snd o strip_forall o concl) raw_def_thm
+        val f = (fst o strip_comb o lhs o snd o strip_forall o concl) raw_def
       in
         (var |-> f)
       end
-    val fun_subst = map mk_fun_subst (zip def_tms raw_def_thms)
+    val fun_subst = map mk_fun_subst (zip def_tms raw_defs)
   
-    fun mk_tm (pred_def_thm, (raw_def_thm, expand_def)) :
+    fun mk_tm (pred_def, (raw_def, expand_def)) :
       term * term =
       let
         (* “even___P i n” *)
-        val pred_tm = (lhs o snd o strip_forall o concl) pred_def_thm
+        val pred_tm = (lhs o snd o strip_forall o concl) pred_def
         (* “even i = even___expand even odd i” *)
         val expand_tm = (lhs o snd o strip_forall o concl) expand_def
         val expand_tm = subst fun_subst expand_tm
-        val fun_tm = (lhs o snd o strip_forall o concl) raw_def_thm
+        val fun_tm = (lhs o snd o strip_forall o concl) raw_def
         val fun_eq_tm = mk_eq (fun_tm, expand_tm)
       in (pred_tm, fun_eq_tm) end
   in
-    map mk_tm (zip pred_def_thms (zip raw_def_thms expand_defs))
+    map mk_tm (zip pred_defs (zip raw_defs expand_defs))
   end
 
 (*
 val term_div_tms =
-  mk_termination_diverge_tms pred_def_thms raw_def_thms expand_defs
+  mk_termination_diverge_tms pred_defs raw_defs expand_defs
 *)
 
 (* Prove the termination lemmas:
@@ -808,26 +727,26 @@ val term_div_tms =
  *)
 fun prove_termination_thms
   (term_div_tms : (term * term) list)
-  (fuel_defs_thm : thm)
-  (pred_def_thms : thm list)
-  (raw_def_thms : thm list)
+  (fuel_defs : thm list)
+  (pred_defs : thm list)
+  (raw_defs : thm list)
   (expand_defs : thm list)
   (pred_n_imp_pred_least_thms : thm list)
-  (pred_imp_fuel_eq_raw_def_thms : thm list)
+  (pred_imp_fuel_eq_raw_defs : thm list)
   : thm list =
   let
     (* Create a map from functions in the recursive group to lemmas
        to apply *)
-    fun mk_rec_fun_eq_pair (fuel_def_thm, eq_th) =
+    fun mk_rec_fun_eq_pair (fuel_def, eq_th) =
       let
-        val rfun = (get_fun_name_from_app o lhs o snd o strip_forall o concl) fuel_def_thm
+        val rfun = (get_fun_name_from_app o lhs o snd o strip_forall o concl) fuel_def
       in
         (rfun, eq_th)
       end
     val rec_fun_eq_map =
       Redblackmap.fromList const_name_compare (
         map mk_rec_fun_eq_pair
-          (zip (CONJUNCTS fuel_defs_thm) pred_imp_fuel_eq_raw_def_thms))
+          (zip fuel_defs pred_imp_fuel_eq_raw_defs))
 
     (* Small tactic which rewrites the recursive calls *)
     fun rewrite_rec_call (asms, g) =
@@ -844,7 +763,7 @@ fun prove_termination_thms
         val eq_th = INST var_s (INST_TYPE ty_s eq_th)
         val eq_th = thm_to_conj_implies eq_th
         (* Some tactics *)
-        val premise_tac = fs pred_def_thms >> fs [is_diverge_def]
+        val premise_tac = fs pred_defs >> fs [is_diverge_def]
       in
         (* Apply the theorem, prove the premise, and rewrite *)
         (prove_premise_then premise_tac assume_tac eq_th >> fs []) (asms, g)
@@ -870,7 +789,7 @@ fun prove_termination_thms
           disch_tac >>
 
           (* Expand the raw definition and get rid of the ‘?n ...’ *)
-          pure_once_rewrite_tac raw_def_thms >>
+          pure_once_rewrite_tac raw_defs >>
           pure_asm_rewrite_tac [] >>
 
           (* Simplify *)
@@ -884,14 +803,14 @@ fun prove_termination_thms
           last_x_assum ignore_tac >>
 
           (* Expand *)
-          fs pred_def_thms >>
+          fs pred_defs >>
           fs [is_diverge_def] >>
           fs expand_defs >>
 
           (* We need to be a bit careful when expanding the definitions which use fuel:
              it can make the simplifier loop. *)
           rpt (pop_assum mp_tac) >>
-          pure_once_rewrite_tac [fuel_defs_thm]  >>
+          pure_once_rewrite_tac fuel_defs >>
           rpt disch_tac >>
 
           (* Expand the binds *)
@@ -909,17 +828,9 @@ fun prove_termination_thms
 
 (*
 val termination_thms =
-  prove_termination_thms term_div_tms fuel_defs_thm pred_def_thms
-    raw_def_thms expand_defs pred_n_imp_pred_least_thms
-    pred_imp_fuel_eq_raw_def_thms
-
-val expand_def = hd expand_defs
-
-val all_args = (zip pred_def_thms (zip raw_def_thms (zip expand_defs pred_n_imp_pred_least_thms)))
-val (pred_def_thm, (raw_def_thm, (expand_def,  pred_n_imp_pred_least_thm))) = hd all_args
-val (pred_def_thm, (raw_def_thm, (expand_def,  pred_n_imp_pred_least_thm))) = hd (tl all_args)
-
-set_goal ([], tm)
+  prove_termination_thms term_div_tms fuel_defs pred_defs
+    raw_defs expand_defs pred_n_imp_pred_least_thms
+    pred_imp_fuel_eq_raw_defs
 *)
 
 (* Prove the divergence lemmas:
@@ -937,18 +848,18 @@ set_goal ([], tm)
  *)
 fun prove_divergence_thms
   (term_div_tms : (term * term) list)
-  (fuel_defs_thm : thm)
-  (pred_def_thms : thm list)
-  (raw_def_thms : thm list)
+  (fuel_defs : thm list)
+  (pred_defs : thm list)
+  (raw_defs : thm list)
   (expand_defs : thm list)
   : thm list =
   let
     (* Create a set containing the names of all the functions in the recursive group *)
-    fun get_rec_fun_id (fuel_def_thm : thm) =
-     (get_fun_name_from_app o lhs o snd o strip_forall o concl) fuel_def_thm
+    fun get_rec_fun_id (fuel_def : thm) =
+     (get_fun_name_from_app o lhs o snd o strip_forall o concl) fuel_def
     val rec_fun_set =
       Redblackset.fromList const_name_compare (
-        map get_rec_fun_id raw_def_thms)
+        map get_rec_fun_id raw_defs)
 
     (* Small tactic which rewrites the recursive calls *)
     fun rewrite_rec_call (asms, g) =
@@ -971,18 +882,18 @@ fun prove_divergence_thms
                a conversion to rewrite “odd i” to a term which contains
                the “?n. odd___P i n” we are looking for.
              *)
-            val exists_g = (rhs o concl) (PURE_REWRITE_CONV raw_def_thms scrut)
+            val exists_g = (rhs o concl) (PURE_REWRITE_CONV raw_defs scrut)
             val (_, exists_g, _) = TypeBase.dest_case exists_g
             (* The tactic to prove the subgoal *)
             val prove_sg_tac =
-              pure_rewrite_tac raw_def_thms >>
+              pure_rewrite_tac raw_defs >>
               Cases_on ‘^exists_g’ >> pure_asm_rewrite_tac [] >> fs [] >>
               (* There must only remain the positive case (i.e., “?n. ...”):
                  we have a contradiction *)
               exfalso >>
               (* The end of the proof is done by opening the definitions *)
               pop_assum mp_tac >>
-              fs pred_def_thms >> fs [is_diverge_def]
+              fs pred_defs >> fs [is_diverge_def]
           in
             (SUBGOAL_THEN g assume_tac >- prove_sg_tac >> fs []) (asms, g)
           end
@@ -1012,7 +923,7 @@ fun prove_divergence_thms
         val prove_tac =
           rpt gen_tac >>
 
-          pure_rewrite_tac raw_def_thms >>
+          pure_rewrite_tac raw_defs >>
           rpt disch_tac >>
 
           (* This allows to simplify the “?n. even___P i n” *)
@@ -1021,14 +932,14 @@ fun prove_divergence_thms
           last_x_assum ignore_tac >>
 
           (* Expand *)
-          fs pred_def_thms >> fs [is_diverge_def] >>
+          fs pred_defs >> fs [is_diverge_def] >>
           fs expand_defs >>
 
           (* We need to be a bit careful when expanding the definitions which use fuel:
              it can make the simplifier loop.
            *)
           pop_assum mp_tac >>
-          pure_once_rewrite_tac [fuel_defs_thm]  >>
+          pure_once_rewrite_tac fuel_defs  >>
           rpt disch_tac >> fs [] >>
 
           (* Evaluate all the paths *)
@@ -1044,16 +955,10 @@ fun prove_divergence_thms
 val divergence_thms =
   prove_divergence_thms
     term_div_tms
-    fuel_defs_thm
-    pred_def_thms
-    raw_def_thms
+    fuel_defs
+    pred_defs
+    raw_defs
     expand_defs
-
-val (pred_tm, fun_eq_tm) = hd term_div_tms
-
-set_goal ([], tm)
-
-val (asms, g) = top_goal ()
 *)
 
 (* Prove the final lemmas:
@@ -1070,7 +975,7 @@ fun prove_final_eqs
   (term_div_tms : (term * term) list)
   (termination_thms : thm list)
   (divergence_thms : thm list)
-  (raw_def_thms : thm list)
+  (raw_defs : thm list)
   : thm list =
   let
     fun prove_one ((pred_tm, fun_eq_tm), (termination_thm, divergence_thm)) : thm =
@@ -1078,7 +983,7 @@ fun prove_final_eqs
         val (_, args) = strip_comb (lhs fun_eq_tm)
         val g = list_mk_forall (args, fun_eq_tm)
         (* We make a case disjunction of the subgoal: “exists n. even___P i n” *)
-        val exists_g = (rhs o concl) (PURE_REWRITE_CONV raw_def_thms (lhs fun_eq_tm))
+        val exists_g = (rhs o concl) (PURE_REWRITE_CONV raw_defs (lhs fun_eq_tm))
         val (_, exists_g, _) = TypeBase.dest_case exists_g
         val prove_tac =
           rpt gen_tac >>
@@ -1125,20 +1030,19 @@ fun DefineDiv (def_qt : term quotation) =
              if i = 0 then Return T else odd_fuel (i - 1))
        ]}
      *)
-     (* TODO: list of theorems *)
-     val fuel_defs_thm = mk_fuel_defs def_tms
+     val fuel_defs = mk_fuel_defs def_tms
 
      (* Generate the predicate definitions.
      
         {[ even___P n i = = ~is_diverge (even___fuel n i) ]}
       *)
-     val fuel_def_tms = map (snd o strip_forall) ((strip_conj o concl) fuel_defs_thm)
-     val pred_def_thms = map mk_fuel_predicate_defs (zip def_tms fuel_def_tms)
+     val fuel_def_tms = map (snd o strip_forall o concl) fuel_defs
+     val pred_defs = map mk_fuel_predicate_defs (zip def_tms fuel_def_tms)
      
      (* Prove the monotonicity property for the fuel, all at once
 
       *)
-     val fuel_mono_thm = prove_fuel_mono pred_def_thms fuel_defs_thm
+     val fuel_mono_thm = prove_fuel_mono pred_defs fuel_defs
      
      (* Prove the individual fuel functions - TODO: update
 
@@ -1146,21 +1050,21 @@ fun DefineDiv (def_qt : term quotation) =
           !n i. $LEAST (even___P i) <= n ==> even___fuel n i = even___fuel ($LEAST (even___P i)) i
         ]}
       *)
-     val least_fuel_mono_thms = prove_least_fuel_mono pred_def_thms fuel_mono_thm
+     val least_fuel_mono_thms = prove_least_fuel_mono pred_defs fuel_mono_thm
 
      (*
        {[
          !n i. even___P i n ==> $LEAST (even___P i) <= n
        ]}
       *)
-     val least_pred_thms = prove_least_pred_thms pred_def_thms
+     val least_pred_thms = prove_least_pred_thms pred_defs
 
      (*
        {[
          !n i. even___P i n ==> even___P i ($LEAST (even___P i))
        ]}
       *)
-     val pred_n_imp_pred_least_thms = prove_pred_n_imp_pred_least_thms pred_def_thms
+     val pred_n_imp_pred_least_thms = prove_pred_n_imp_pred_least_thms pred_defs
 
      (*
        "Raw" definitions:
@@ -1169,30 +1073,30 @@ fun DefineDiv (def_qt : term quotation) =
          even i = if (?n. even___P i n) then even___P ($LEAST (even___P i)) i else Diverge
        ]}
       *)
-     val raw_def_thms = define_raw_defs def_tms pred_def_thms fuel_defs_thm
+     val raw_defs = define_raw_defs def_tms pred_defs fuel_defs
 
      (*
        !n i. even___P i n ==> even___fuel n i = even i
       *)
-     val pred_imp_fuel_eq_raw_def_thms =
-       prove_pred_imp_fuel_eq_raw_def_thms
-         pred_def_thms fuel_def_tms least_fuel_mono_thms
-         least_pred_thms pred_n_imp_pred_least_thms raw_def_thms
+     val pred_imp_fuel_eq_raw_defs =
+       prove_pred_imp_fuel_eq_raw_defs
+         pred_defs fuel_def_tms least_fuel_mono_thms
+         least_pred_thms pred_n_imp_pred_least_thms raw_defs
 
      (* "Expand" definitions *)
      val expand_defs = gen_expand_defs def_tms
 
      (* Small utility *)
-     val term_div_tms = mk_termination_diverge_tms def_tms pred_def_thms raw_def_thms expand_defs
+     val term_div_tms = mk_termination_diverge_tms def_tms pred_defs raw_defs expand_defs
 
      (* Termination theorems *)
      val termination_thms =
-       prove_termination_thms term_div_tms fuel_defs_thm pred_def_thms
-         raw_def_thms expand_defs pred_n_imp_pred_least_thms pred_imp_fuel_eq_raw_def_thms
+       prove_termination_thms term_div_tms fuel_defs pred_defs
+         raw_defs expand_defs pred_n_imp_pred_least_thms pred_imp_fuel_eq_raw_defs
 
      (* Divergence theorems *)
      val divergence_thms =
-       prove_divergence_thms term_div_tms fuel_defs_thm pred_def_thms raw_def_thms expand_defs
+       prove_divergence_thms term_div_tms fuel_defs pred_defs raw_defs expand_defs
 
      (* Final theorems:
 
@@ -1201,8 +1105,20 @@ fun DefineDiv (def_qt : term quotation) =
           ⊢ ∀i. odd i = odd___E even odd i
         ]}
       *)
-     val final_eqs = prove_final_eqs term_div_tms termination_thms divergence_thms raw_def_thms
+     val final_eqs = prove_final_eqs term_div_tms termination_thms divergence_thms raw_defs
   in
     (* We return the final equations, which act as rewriting theorems *)
     final_eqs
   end
+
+(*
+val def_qt = ‘
+  (even (i : int) : bool result =
+    if i = 0 then Return T else odd (i - 1)) /\
+  (odd (i : int) : bool result =
+    if i = 0 then Return F else even (i - 1))
+’
+
+val even_def = DefineDiv def_qt
+
+*)
