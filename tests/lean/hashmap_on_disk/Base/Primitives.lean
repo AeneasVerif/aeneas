@@ -1,4 +1,6 @@
 import Lean
+import Init.Data.List.Basic
+import Mathlib
 
 -------------
 -- PRELUDE --
@@ -130,11 +132,38 @@ def USize.checked_sub (n: USize) (m: USize): result USize :=
   else
     fail integerOverflow
 
--- TODO: settle the style for usize_sub before we write these
-def USize.checked_add (n: USize) (m: USize): result USize := sorry
-def USize.checked_rem (n: USize) (m: USize): result USize := sorry
-def USize.checked_mul (n: USize) (m: USize): result USize := sorry
-def USize.checked_div (n: USize) (m: USize): result USize := sorry
+def USize.checked_add (n: USize) (m: USize): result USize :=
+  if h: n.val + m.val < USize.size then
+    .ret ⟨ n.val + m.val, h ⟩
+  else
+    .fail integerOverflow
+
+def USize.checked_rem (n: USize) (m: USize): result USize :=
+  if h: m > 0 then
+    .ret ⟨ n.val % m.val, by
+      have h1: m.val < USize.size := m.val.isLt
+      have h2: n.val.val % m.val.val < m.val.val := @Nat.mod_lt n.val m.val h
+      apply Nat.lt_trans h2 h1
+    ⟩
+  else
+    .fail integerOverflow
+
+def USize.checked_mul (n: USize) (m: USize): result USize :=
+  if h: n.val * m.val < USize.size then
+    .ret ⟨ n.val * m.val, h ⟩
+  else
+    .fail integerOverflow
+
+def USize.checked_div (n: USize) (m: USize): result USize :=
+  if h: m > 0 then
+    .ret ⟨ n.val / m.val, by
+      simp_arith
+      have h1: n.val < USize.size := n.val.isLt
+      have h2: n.val.val / m.val.val <= n.val.val := @Nat.div_le_self n.val m.val
+      sorry
+    ⟩
+  else
+    .fail integerOverflow
 
 -- One needs to perform a little bit of reasoning in order to successfully
 -- inject constants into USize, so we provide a general-purpose macro
@@ -165,6 +194,8 @@ macro_rules
 -- VECTORS --
 -------------
 
+-- Note: unlike F*, Lean seems to use strict upper bounds (e.g. USize.size)
+-- rather than maximum values (usize_max).
 def vec (α : Type u) := { l : List α // List.length l < USize.size }
 
 def vec_new (α : Type u): vec α := ⟨ [], by {
@@ -183,11 +214,12 @@ def vec_len (α : Type u) (v : vec α) : USize :=
  
 def vec_push_fwd (α : Type u) (_ : vec α) (_ : α) : Unit := ()
 
--- TODO: more precise error condition here for the fail case
+-- NOTE: old version trying to use a subtype notation, but probably better to
+-- leave result elimination to auxiliary lemmas with suitable preconditions
 -- TODO: I originally wrote `List.length v.val < USize.size - 1`; how can one
 -- make the proof work in that case? Probably need to import tactics from
 -- mathlib to deal with inequalities... would love to see an example.
-def vec_push_back (α : Type u) (v : vec α) (x : α) : { res: result (vec α) //
+def vec_push_back_old (α : Type u) (v : vec α) (x : α) : { res: result (vec α) //
   match res with | fail _ => True | ret v' => List.length v'.val = List.length v.val + 1}
   :=
   if h : List.length v.val + 1 < USize.size then
@@ -206,10 +238,75 @@ def vec_push_back (α : Type u) (v : vec α) (x : α) : { res: result (vec α) /
   -- annotate `x`, which relieves us of having to write `.val` on the right-hand
   -- side of the monadic let.
   let v := vec_new Nat
-  let x: vec Nat ← (vec_push_back Nat v 1: result (vec Nat)) -- WHY do we need the type annotation here?
+  let x: vec Nat ← (vec_push_back_old Nat v 1: result (vec Nat)) -- WHY do we need the type annotation here?
   -- TODO: strengthen post-condition above and do a demo to show that we can
   -- safely eliminate the `fail` case
   return (vec_len Nat x)
+
+def vec_push_back (α : Type u) (v : vec α) (x : α) : result (vec α)
+  :=
+  if h : List.length v.val + 1 < USize.size then
+    return ⟨List.concat v.val x,
+      by
+        rw [List.length_concat]
+        assumption
+     ⟩
+  else
+    fail maximumSizeExceeded
+
+def vec_insert_fwd (α : Type u) (v: vec α) (i: USize) (_: α): result Unit :=
+  if i.val < List.length v.val then
+    .ret ()
+  else
+    .fail arrayOutOfBounds
+
+def vec_insert_back (α : Type u) (v: vec α) (i: USize) (x: α): result (vec α) :=
+  if i.val < List.length v.val then
+    .ret ⟨ List.set v.val i.val x, by
+      have h: List.length v.val < USize.size := v.property
+      rewrite [ List.length_set v.val i.val x ]
+      assumption
+    ⟩
+  else
+    .fail arrayOutOfBounds
+
+def vec_index_fwd (α : Type u) (v: vec α) (i: USize): result α :=
+  if h: i.val < List.length v.val then
+    .ret (List.get v.val ⟨i.val, h⟩)
+  else
+    .fail arrayOutOfBounds
+
+def vec_index_back (α : Type u) (v: vec α) (i: USize) (_: α): result Unit :=
+  if i.val < List.length v.val then
+    .ret ()
+  else
+    .fail arrayOutOfBounds
+
+def vec_index_mut_fwd (α : Type u) (v: vec α) (i: USize): result α :=
+  if h: i.val < List.length v.val then
+    .ret (List.get v.val ⟨i.val, h⟩)
+  else
+    .fail arrayOutOfBounds
+
+def vec_index_mut_back (α : Type u) (v: vec α) (i: USize) (x: α): result (vec α) :=
+  if i.val < List.length v.val then
+    .ret ⟨ List.set v.val i.val x, by
+      have h: List.length v.val < USize.size := v.property
+      rewrite [ List.length_set v.val i.val x ]
+      assumption
+    ⟩
+  else
+    .fail arrayOutOfBounds
+
+----------
+-- MISC --
+----------
+
+def mem_replace_fwd (a : Type) (x : a) (_ : a) : a :=
+  x
+
+def mem_replace_back (a : Type) (_ : a) (y : a) : a :=
+  y
 
 --------------------
 -- ASSERT COMMAND --
@@ -220,10 +317,10 @@ open Lean Elab Command Term Meta
 syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
-def assertImpl : CommandElab := fun (stx: Syntax) => do
+def assertImpl : CommandElab := fun (_stx: Syntax) => do
   logInfo "Hello World"
 
-def ignore (a: Prop) (x: a) := ()
+def ignore (a: Prop) (_x: a) := ()
 
 #eval ignore (2 == 2) (by simp)
 
