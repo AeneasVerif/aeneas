@@ -21,7 +21,9 @@ def hashmap_hash_map_allocate_slots_loop_fwd
       let n0 <- USize.checked_sub n (USize.ofNatCore 1 (by intlit)) 
       hashmap_hash_map_allocate_slots_loop_fwd T slots0 n0
   else result.ret slots
-termination_by hashmap_hash_map_allocate_slots_loop_fwd slots n => hashmap_hash_map_allocate_slots_loop_terminates T slots n 
+termination_by hashmap_hash_map_allocate_slots_loop_fwd slots n =>
+                                                                  hashmap_hash_map_allocate_slots_loop_terminates
+                                                                  T slots n 
 decreasing_by hashmap_hash_map_allocate_slots_loop_decreases slots n
 
 /- [hashmap_main::hashmap::HashMap::{0}::allocate_slots] -/
@@ -71,7 +73,9 @@ def hashmap_hash_map_clear_slots_loop_fwd_back
           hashmap_list_t.HashmapListNil 
       hashmap_hash_map_clear_slots_loop_fwd_back T slots0 i1
   else result.ret slots
-termination_by hashmap_hash_map_clear_slots_loop_fwd_back slots i => hashmap_hash_map_clear_slots_loop_terminates T slots i 
+termination_by hashmap_hash_map_clear_slots_loop_fwd_back slots i =>
+                                                                    hashmap_hash_map_clear_slots_loop_terminates
+                                                                    T slots i 
 decreasing_by hashmap_hash_map_clear_slots_loop_decreases slots i
 
 /- [hashmap_main::hashmap::HashMap::{0}::clear_slots] -/
@@ -210,11 +214,9 @@ def hashmap_hash_map_insert_no_resize_fwd_back
         hashmap_hash_map_move_elements_from_list_loop_fwd_back T ntable0 tl
     | hashmap_list_t.HashmapListNil => result.ret ntable
     
-  termination_by
-                  hashmap_hash_map_move_elements_from_list_loop_fwd_back
-                  ntable
-                  ls
-                  => hashmap_hash_map_move_elements_from_list_loop_terminates T ntable ls 
+  termination_by hashmap_hash_map_move_elements_from_list_loop_fwd_back ntable
+                ls => hashmap_hash_map_move_elements_from_list_loop_terminates
+                     T ntable ls 
   decreasing_by
     hashmap_hash_map_move_elements_from_list_loop_decreases ntable ls
   
@@ -344,7 +346,9 @@ def hashmap_hash_map_insert_no_resize_fwd_back
         else hashmap_hash_map_get_in_list_loop_fwd T key tl
       | hashmap_list_t.HashmapListNil => result.fail error.panic
       
-    termination_by hashmap_hash_map_get_in_list_loop_fwd key ls => hashmap_hash_map_get_in_list_loop_terminates T key ls 
+    termination_by hashmap_hash_map_get_in_list_loop_fwd key ls =>
+                                                                  hashmap_hash_map_get_in_list_loop_terminates
+                                                                  T key ls 
     decreasing_by hashmap_hash_map_get_in_list_loop_decreases key ls
     
     /- [hashmap_main::hashmap::HashMap::{0}::get_in_list] -/
@@ -397,9 +401,9 @@ def hashmap_hash_map_insert_no_resize_fwd_back
             result.ret (hashmap_list_t.HashmapListCons ckey cvalue l)
       | hashmap_list_t.HashmapListNil => result.fail error.panic
       
-    termination_by hashmap_hash_map_get_mut_in_list_loop_back ls key ret0 =>
-       hashmap_hash_map_get_mut_in_list_loop_terminates T ls key ret0 
-    decreasing_by hashmap_hash_map_get_mut_in_list_loop_decreases ls key ret0
+    termination_by hashmap_hash_map_get_mut_in_list_loop_back ls key =>
+       hashmap_hash_map_get_mut_in_list_loop_terminates T ls key 
+    decreasing_by hashmap_hash_map_get_mut_in_list_loop_decreases ls key
     
     /- [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] -/
     def hashmap_hash_map_get_mut_in_list_back
