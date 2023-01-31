@@ -186,6 +186,32 @@ val num_ty::rem_tys = tys
 val (tuple_var, tuple_case) = hd tuple_cases
 *)
 
+(* Get the smallest id which make the names unique (or to be more precise:
+   such that the names don't correspond to already defined constants).
+
+   We do this for {!mk_fuel_defs}: for some reason, the termination proof
+   fails if we try to reuse the same names as before.
+ *)
+fun get_smallest_unique_id_for_names (names : string list) : string =
+  let
+    (* Not trying to be smart here *)
+    val i : int option ref = ref NONE
+    fun get_i () = case !i of NONE => "" | SOME i => int_to_string i
+    fun incr_i () =
+      i := (case !i of NONE => SOME 0 | SOME i => SOME (i+1))
+    val continue = ref true
+    fun name_is_ok (name : string) : bool =
+      not (is_const (Parse.parse_in_context [] [QUOTE (name ^ get_i ())]))
+      handle HOL_ERR _ => false
+    val _ =
+      while !continue do (
+        let val _ = (continue := not (forall name_is_ok names)) in
+        if !continue then incr_i () else () end
+      )
+  in
+    get_i ()
+  end
+
 fun mk_fuel_defs (def_tms : term list) : thm list =
   let
     (* Retrieve the identifiers.
@@ -194,6 +220,7 @@ fun mk_fuel_defs (def_tms : term list) : thm list =
        We want to retrive: id = “even”
      *)
     val ids = map (fst o strip_comb o lhs) def_tms
+
     (* In the definitions, replace the identifiers by new identifiers which use
        fuel.
 
@@ -204,12 +231,14 @@ fun mk_fuel_defs (def_tms : term list) : thm list =
            | SUC fuel' => 
              if i = 0 then Return T else odd_fuel fuel' (i - 1))”
      *)
+     val names = map ((fn s => s ^ fuel_def_suffix) o fst o dest_var) ids
+     val index = get_smallest_unique_id_for_names names
      fun mk_fuel_id (id : term) : term =
        let
          val (id_str, ty) = dest_var id
          (* Note: we use symbols forbidden in the generation of code to
             prevent name collisions *)
-         val fuel_id_str = id_str ^ fuel_def_suffix
+         val fuel_id_str = id_str ^ fuel_def_suffix ^ index
          val fuel_id = mk_var (fuel_id_str, num_ty --> ty)
        in fuel_id end
      val fuel_ids = map mk_fuel_id ids
@@ -251,10 +280,9 @@ fun mk_fuel_defs (def_tms : term list) : thm list =
      (* The definition name *)
      val def_name = (fst o dest_var o hd) fuel_ids
      (* The tactic to prove the termination *)
-     val rty = ref “:bool”
+     val rty = ref “:bool” (* This is useful for debugging *)
      fun prove_termination_tac (asms, g) =
        let
-         val _ = print_term g
          val r_tm = (fst o dest_exists) g
          val _ = rty := type_of r_tm
          val ty = (hd o snd o dest_type) (!rty)
@@ -262,6 +290,7 @@ fun mk_fuel_defs (def_tms : term list) : thm list =
        in
          WF_REL_TAC ‘^m_tm’ (asms, g)
        end
+
      (* Define the fuel definitions *)
      (*
        val temp_def = Hol_defn def_name ‘^fuel_defs_conj’
