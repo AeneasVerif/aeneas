@@ -264,7 +264,7 @@ def hashmap_hash_map_insert_no_resize_fwd_back
   def hashmap_hash_map_try_resize_fwd_back
     (T : Type) (self : hashmap_hash_map_t T) : result (hashmap_hash_map_t T) :=
     do
-      let max_usize <- scalar_cast U32 Usize core_num_u32_max_c 
+      let max_usize <- scalar_cast USize core_num_u32_max_c 
       let capacity := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots 
       let n1 <- USize.checked_div max_usize (USize.ofNatCore 2 (by intlit)) 
       let (i, i0) := self.hashmap_hash_map_max_load_factor 
@@ -401,7 +401,7 @@ def hashmap_hash_map_insert_no_resize_fwd_back
             result.ret (hashmap_list_t.HashmapListCons ckey cvalue l)
       | hashmap_list_t.HashmapListNil => result.fail error.panic
       
-    termination_by hashmap_hash_map_get_mut_in_list_loop_back ls key =>
+    termination_by hashmap_hash_map_get_mut_in_list_loop_back ls key ret0 =>
        hashmap_hash_map_get_mut_in_list_loop_terminates T ls key 
     decreasing_by hashmap_hash_map_get_mut_in_list_loop_decreases ls key
     

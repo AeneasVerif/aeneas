@@ -251,13 +251,18 @@ let extract_unop (extract_expr : bool -> texpression -> unit)
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt "scalar_cast";
       F.pp_print_space fmt ();
-      F.pp_print_string fmt
-        (StringUtils.capitalize_first_letter
-           (PrintPure.integer_type_to_string src));
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt
-        (StringUtils.capitalize_first_letter
-           (PrintPure.integer_type_to_string tgt));
+      if !backend <> Lean then begin
+        F.pp_print_string fmt
+          (StringUtils.capitalize_first_letter
+             (PrintPure.integer_type_to_string src));
+        F.pp_print_space fmt ()
+      end;
+      if !backend = Lean then
+        F.pp_print_string fmt (int_name tgt)
+      else
+        F.pp_print_string fmt
+          (StringUtils.capitalize_first_letter
+             (PrintPure.integer_type_to_string tgt));
       F.pp_print_space fmt ();
       extract_expr true arg;
       if inside then F.pp_print_string fmt ")"
@@ -2345,11 +2350,11 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Termination clause *)
   if has_decreases_clause && !backend = Lean then begin
     let def_body = Option.get def.body in
-    let vars = List.map (fun (v: var) -> v.id) def_body.inputs in
+    let all_vars = List.map (fun (v: var) -> v.id) def_body.inputs in
     let num_fwd_inputs =
       def.signature.info.num_fwd_inputs_with_fuel_with_state
     in
-    let vars = Collections.List.prefix num_fwd_inputs vars in
+    let vars = Collections.List.prefix num_fwd_inputs all_vars in
 
     (* terminates_by *)
     let terminates_name = ctx_get_terminates_clause def.def_id def.loop_id ctx in
@@ -2363,7 +2368,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     Collections.List.iter_link
       (F.pp_print_space fmt)
       (fun v -> F.pp_print_string fmt (ctx_get_var v ctx_body))
-      vars;
+      all_vars;
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=>";
     F.pp_close_box fmt ();

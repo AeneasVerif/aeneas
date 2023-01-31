@@ -1,5 +1,6 @@
 import Lean
 import Init.Data.List.Basic
+import Mathlib.Tactic.RunCmd
 
 -------------
 -- PRELUDE --
@@ -140,7 +141,7 @@ def USize.checked_add (n: USize) (m: USize): result USize :=
 def USize.checked_rem (n: USize) (m: USize): result USize :=
   if h: m > 0 then
     .ret ⟨ n.val % m.val, by
-      have h1: m.val < USize.size := m.val.isLt
+      have h1: ↑m.val < USize.size := m.val.isLt
       have h2: n.val.val % m.val.val < m.val.val := @Nat.mod_lt n.val m.val h
       apply Nat.lt_trans h2 h1
     ⟩
@@ -156,10 +157,33 @@ def USize.checked_mul (n: USize) (m: USize): result USize :=
 def USize.checked_div (n: USize) (m: USize): result USize :=
   if m > 0 then
     .ret ⟨ n.val / m.val, by
-      have h1: n.val < USize.size := n.val.isLt
+      have h1: ↑n.val < USize.size := n.val.isLt
       have h2: n.val.val / m.val.val <= n.val.val := @Nat.div_le_self n.val m.val
       apply Nat.lt_of_le_of_lt h2 h1
     ⟩
+  else
+    .fail integerOverflow
+
+class MachineInteger (t: Type) where
+  size: Nat
+  val: t -> Fin size
+  ofNatCore: (n:Nat) -> LT.lt n size -> t
+
+set_option hygiene false in
+run_cmd
+  for typeName in [`UInt8, `UInt16, `UInt32, `UInt64, `USize].map Lean.mkIdent do
+  Lean.Elab.Command.elabCommand (← `(
+    namespace $typeName
+    instance: MachineInteger $typeName where
+      size := size
+      val := val
+      ofNatCore := ofNatCore
+    end $typeName
+  ))
+
+def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): result dst :=
+  if h: MachineInteger.val x < MachineInteger.size dst then
+    .ret (MachineInteger.ofNatCore (MachineInteger.val x).val h)
   else
     .fail integerOverflow
 
