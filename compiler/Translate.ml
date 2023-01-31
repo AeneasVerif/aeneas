@@ -563,7 +563,10 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
         let extract_decrease decl =
           let has_decr_clause = has_decreases_clause decl in
           if has_decr_clause then
-            Extract.extract_template_decreases_clause ctx.extract_ctx fmt decl
+            if !Config.backend = Lean then
+              Extract.extract_termination_and_decreasing ctx.extract_ctx fmt decl
+            else
+              Extract.extract_template_decreases_clause ctx.extract_ctx fmt decl
         in
         extract_decrease fwd;
         List.iter extract_decrease loop_fwds)
