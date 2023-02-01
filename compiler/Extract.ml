@@ -1661,25 +1661,25 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         Collections.List.iter_link
           (fun () ->
             F.pp_print_string fmt ",";
-            F.pp_close_box fmt ();
             F.pp_print_space fmt ()
           )
           (fun ((fid, _), e) ->
-            F.pp_open_hovbox fmt 0;
+            F.pp_open_hvbox fmt ctx.indent_incr;
             let f = ctx_get_field adt_cons.adt_id fid ctx in
             F.pp_print_string fmt f;
             F.pp_print_string fmt " := ";
             F.pp_open_hvbox fmt ctx.indent_incr;
             extract_texpression ctx fmt true e;
+            F.pp_close_box fmt ();
             F.pp_close_box fmt ()
           )
           (List.combine fields args);
         F.pp_close_box fmt ();
         F.pp_close_box fmt ();
         F.pp_close_box fmt ();
-        F.pp_close_box fmt ();
         F.pp_print_space fmt ();
-        F.pp_print_string fmt "}"
+        F.pp_print_string fmt "}";
+        F.pp_close_box fmt ()
       else
         let use_parentheses = inside && args <> [] in
         if use_parentheses then F.pp_print_string fmt "(";
