@@ -5,7 +5,7 @@ import HashmapMain.Types
 import HashmapMain.Opaque
 import HashmapMain.Clauses.Template
 
-section variable (opaque_defs: OpaqueDecls)
+section variable (opaque_defs: OpaqueDefs)
 
 /- [hashmap_main::hashmap::hash_key] -/
 def hashmap_hash_key_fwd (k : USize) : result USize := result.ret k
@@ -654,5 +654,5 @@ def insert_on_disk_fwd
 def main_fwd : result Unit := result.ret ()
 
 /- Unit test for [hashmap_main::main] -/
-#assert (main_fwd = ret ())
+#assert (main_fwd = .ret ())
 

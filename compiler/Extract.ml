@@ -476,10 +476,8 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   in
   let fun_name (fname : fun_name) (num_loops : int) (loop_id : LoopId.id option)
       (num_rgs : int) (rg : region_group_info option) (filter_info : bool * int)
-      (missing_body: bool)
       : string =
     let fname = fun_name_to_snake_case fname in
-    let fname = if !backend = Lean && missing_body then "opaque_defs." ^ fname else fname in
     (* Compute the suffix *)
     let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
     (* Concatenate *)
@@ -1581,7 +1579,10 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       (* Open a box for the function call *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the function name *)
-      let fun_name = ctx_get_function fun_id ctx in
+      let fun_name = Option.value
+        ~default:(ctx_get_function fun_id ctx)
+        (ctx_maybe_get (DeclaredId fun_id) ctx)
+      in
       F.pp_print_string fmt fun_name;
       (* Print the type parameters *)
       List.iter
@@ -2612,7 +2613,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "=";
         F.pp_print_space fmt ();
         let success = ctx_get_variant (Assumed Result) result_return_id ctx in
-        F.pp_print_string fmt (success ^ " ())")
+        F.pp_print_string fmt ("." ^ success ^ " ())")
     );
     (* Close the box for the test *)
     F.pp_close_box fmt ();

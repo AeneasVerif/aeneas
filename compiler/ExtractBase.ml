@@ -168,7 +168,6 @@ type formatter = {
     int ->
     region_group_info option ->
     bool * int ->
-    bool ->
     string;
       (** Compute the name of a regular (non-assumed) function.
 
@@ -188,7 +187,6 @@ type formatter = {
               The number of extracted backward functions if not necessarily
               equal to the number of region groups, because we may have
               filtered some of them.
-          - whether there is a body or not (indicates assumed function)
           TODO: use the fun id for the assumed functions.
        *)
   decreases_clause_name :
@@ -296,6 +294,7 @@ type formatter = {
 type id =
   | GlobalId of A.GlobalDeclId.id
   | FunId of fun_id
+  | DeclaredId of fun_id
   | DecreasesClauseId of (A.fun_id * LoopId.id option)
       (** The definition which provides the decreases/termination clause.
           We insert calls to this clause to prove/reason about termination:
@@ -472,6 +471,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | GlobalId gid ->
       let name = (A.GlobalDeclId.Map.find gid global_decls).name in
       "global name: " ^ Print.global_name_to_string name
+  | DeclaredId fid
   | FunId fid -> (
       match fid with
       | FromLlbc (fid, lp_id, rg_id) ->
@@ -584,8 +584,11 @@ let ctx_add (id : id) (name : string) (ctx : extraction_ctx) : extraction_ctx =
   let names_map = names_map_add id_to_string id name ctx.names_map in
   { ctx with names_map }
 
+let ctx_maybe_get (id : id) (ctx : extraction_ctx) : string option =
+  IdMap.find_opt id ctx.names_map.id_to_name
+
 let ctx_get (id : id) (ctx : extraction_ctx) : string =
-  match IdMap.find_opt id ctx.names_map.id_to_name with
+  match ctx_maybe_get id ctx with
   | Some s -> s
   | None ->
       log#serror ("Could not find: " ^ id_to_string id ctx);
@@ -776,7 +779,14 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
   in
   let name =
     ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
-      (keep_fwd, num_backs) (def.body = None)
+      (keep_fwd, num_backs)
+  in
+  let ctx = if def.body = None && !Config.backend = Lean then
+    ctx_add
+      (DeclaredId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))
+      ("opaque_defs." ^ name) ctx
+  else
+    ctx
   in
   ctx_add
     (FunId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))
