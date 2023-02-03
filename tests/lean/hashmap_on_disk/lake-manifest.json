@@ -1,0 +1,27 @@
+{"version": 4,
+ "packagesDir": "./lake-packages",
+ "packages":
+ [{"git":
+   {"url": "https://github.com/leanprover-community/mathlib4.git",
+    "subDir?": null,
+    "rev": "583f6cfa4bced545c797216b32600d6211b753f9",
+    "name": "mathlib",
+    "inputRev?": null}},
+  {"git":
+   {"url": "https://github.com/gebner/quote4",
+    "subDir?": null,
+    "rev": "7ac99aa3fac487bec1d5860e751b99c7418298cf",
+    "name": "Qq",
+    "inputRev?": "master"}},
+  {"git":
+   {"url": "https://github.com/JLimperg/aesop",
+    "subDir?": null,
+    "rev": "ccff5d4ae7411c5fe741f3139950e8bddf353dea",
+    "name": "aesop",
+    "inputRev?": "master"}},
+  {"git":
+   {"url": "https://github.com/leanprover/std4",
+    "subDir?": null,
+    "rev": "cda27d551340756d5ed6f9b83716a9db799c5537",
+    "name": "std",
+    "inputRev?": "main"}}]}

@@ -661,13 +661,24 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
    *)
   if config.extract_state_type && config.extract_fun_decls then
     export_state_type ();
+  if config.extract_opaque && config.extract_fun_decls && !Config.backend = Lean then begin
+    Format.pp_print_break fmt 0 0;
+    Format.pp_open_vbox fmt ctx.extract_ctx.indent_incr;
+    Format.pp_print_string fmt "structure OpaqueDefs where";
+    Format.pp_print_break fmt 0 0
+  end;
   List.iter export_decl_group ctx.crate.declarations;
+  if config.extract_opaque && !Config.backend = Lean then begin
+    Format.pp_close_box fmt ()
+  end;
   if config.extract_state_type && not config.extract_fun_decls then
     export_state_type ()
 
 let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
     (rust_module_name : string) (module_name : string) (custom_msg : string)
-    (custom_imports : string list) (custom_includes : string list) : unit =
+    ?(custom_variables: string list = [])
+    (custom_imports : string list) (custom_includes : string list)
+    : unit =
   (* Open the file and create the formatter *)
   let out = open_out filename in
   let fmt = Format.formatter_of_out_channel out in
@@ -720,7 +731,11 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
       (* Add the custom imports *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_imports;
       (* Add the custom includes *)
-      List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_includes
+      List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_includes;
+      if custom_variables <> [] then begin
+        Printf.fprintf out "\n";
+        List.iter (fun m -> Printf.fprintf out "%s\n" m) custom_variables
+      end
   );
   (* From now onwards, we use the formatter *)
   (* Set the margin *)
@@ -1016,8 +1031,10 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
         [ module_name ^ module_delimiter ^ "Clauses" ^ module_delimiter ^ "Template"]
       else []
     in
+    let custom_variables = if has_opaque_funs then [ "section variable (opaque_defs: OpaqueDefs)" ] else [] in
     extract_file fun_config gen_ctx fun_filename crate.A.name fun_module
       ": function definitions" []
+      ~custom_variables
       ([ types_module ] @ opaque_funs_module @ clauses_module))
   else
     let gen_config =

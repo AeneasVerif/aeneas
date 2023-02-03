@@ -15,7 +15,5 @@ structure hashmap_hash_map_t (T : Type) where
   hashmap_hash_map_max_load : USize
   hashmap_hash_map_slots : vec (hashmap_list_t T)
 
-
-/- The state type used in the state-error monad -/
-axiom state : Type
+/- The state type used in the state-error monad -/ axiom state : Type
 

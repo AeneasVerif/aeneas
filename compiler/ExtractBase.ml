@@ -168,6 +168,7 @@ type formatter = {
     int ->
     region_group_info option ->
     bool * int ->
+    bool ->
     string;
       (** Compute the name of a regular (non-assumed) function.
 
@@ -187,6 +188,7 @@ type formatter = {
               The number of extracted backward functions if not necessarily
               equal to the number of region groups, because we may have
               filtered some of them.
+          - whether there is a body or not (indicates assumed function)
           TODO: use the fun id for the assumed functions.
        *)
   decreases_clause_name :
@@ -774,7 +776,7 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
   in
   let name =
     ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
-      (keep_fwd, num_backs)
+      (keep_fwd, num_backs) (def.body = None)
   in
   ctx_add
     (FunId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))

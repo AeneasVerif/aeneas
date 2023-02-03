@@ -5,6 +5,8 @@ import HashmapMain.Types
 import HashmapMain.Opaque
 import HashmapMain.Clauses.Template
 
+section variable (opaque_defs: OpaqueDecls)
+
 /- [hashmap_main::hashmap::hash_key] -/
 def hashmap_hash_key_fwd (k : USize) : result USize := result.ret k
 
@@ -637,15 +639,15 @@ def hashmap_test1_fwd : result Unit :=
             
 
 /- Unit test for [hashmap_main::hashmap::test1] -/
-#assert (hashmap_test1_fwd = ret ())
+#assert (hashmap_test1_fwd = .ret ())
 
 /- [hashmap_main::insert_on_disk] -/
 def insert_on_disk_fwd
   (key : USize) (value : UInt64) (st : state) : result (state × Unit) :=
   do
-    let (st0, hm) <- hashmap_utils_deserialize_fwd st 
+    let (st0, hm) <- opaque_defs.hashmap_utils_deserialize_fwd st 
     let hm0 <- hashmap_hash_map_insert_fwd_back UInt64 hm key value 
-    let (st1, _) <- hashmap_utils_serialize_fwd hm0 st0 
+    let (st1, _) <- opaque_defs.hashmap_utils_serialize_fwd hm0 st0 
     result.ret (st1, ())
 
 /- [hashmap_main::main] -/
