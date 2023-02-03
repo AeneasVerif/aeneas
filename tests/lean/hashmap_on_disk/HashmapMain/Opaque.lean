@@ -3,7 +3,7 @@
 import Base.Primitives
 import HashmapMain.Types
 
-structure OpaqueDecls where
+structure OpaqueDefs where
   
   /- [hashmap_main::hashmap_utils::deserialize] -/
   hashmap_utils_deserialize_fwd
