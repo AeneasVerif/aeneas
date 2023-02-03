@@ -476,8 +476,10 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   in
   let fun_name (fname : fun_name) (num_loops : int) (loop_id : LoopId.id option)
       (num_rgs : int) (rg : region_group_info option) (filter_info : bool * int)
+      (missing_body: bool)
       : string =
     let fname = fun_name_to_snake_case fname in
+    let fname = if !backend = Lean && missing_body then "opaque_defs." ^ fname else fname in
     (* Compute the suffix *)
     let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
     (* Concatenate *)
@@ -1371,7 +1373,6 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
       ctx
   in
   let ctx = List.fold_left register_decreases ctx (fwd :: loop_fwds) in
-  (* Register the function names *)
   let register_fun ctx f = ctx_add_fun_decl (keep_fwd, def) f ctx in
   let register_funs ctx fl = List.fold_left register_fun ctx fl in
   (* Register the forward functions' names *)
@@ -2227,7 +2228,12 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let use_forall = is_opaque_coq && def.signature.type_params <> [] in
   (* *)
   let qualif = ctx.fmt.fun_decl_kind_to_qualif kind in
-  F.pp_print_string fmt (qualif ^ " " ^ def_name);
+  (* For Lean: we generate a record of assumed functions *)
+  if not (!backend = Lean && (kind = Assumed || kind = Declared)) then begin
+    F.pp_print_string fmt qualif;
+    F.pp_print_space fmt ()
+  end;
+  F.pp_print_string fmt def_name;
   F.pp_print_space fmt ();
   if use_forall then (
     F.pp_print_string fmt ":";

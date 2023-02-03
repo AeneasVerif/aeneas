@@ -1,4 +1,5 @@
 import Lean
+import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 
@@ -75,7 +76,7 @@ macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
 -- Silly example of the kind of reasoning that this notation enables
 #eval do
   let h: y <-- .ret (0: Nat)
-  let _: y = 0 := by cases h; simp
+  let _: y = 0 := by cases h; decide
   let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
   .ret r
 
@@ -111,6 +112,23 @@ macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
 -- library_search." Try to settle this with a Lean expert on what is the most
 -- productive way to go about this?
 
+-- One needs to perform a little bit of reasoning in order to successfully
+-- inject constants into USize, so we provide a general-purpose macro
+
+syntax "intlit" : tactic
+
+macro_rules
+  | `(tactic| intlit) => `(tactic|
+    match USize.size, usize_size_eq with
+    | _, Or.inl rfl => decide
+    | _, Or.inr rfl => decide)
+
+-- This is how the macro is expected to be used
+#eval USize.ofNatCore 0 (by intlit)
+
+-- Also works for other integer types (at the expense of a needless disjunction)
+#eval UInt32.ofNatCore 0 (by intlit)
+
 -- Further thoughts: look at what has been done here:
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/Fin/Basic.lean
 -- and
@@ -133,7 +151,12 @@ def USize.checked_sub (n: USize) (m: USize): result USize :=
     fail integerOverflow
 
 def USize.checked_add (n: USize) (m: USize): result USize :=
-  if h: n.val + m.val < USize.size then
+  if h: n.val.val + m.val.val <= 4294967295 then
+    .ret ⟨ n.val.val + m.val.val, by
+      have h': 4294967295 < USize.size := by intlit
+      apply Nat.lt_of_le_of_lt h h'
+    ⟩
+  else if h: n.val + m.val < USize.size then
     .ret ⟨ n.val + m.val, h ⟩
   else
     .fail integerOverflow
@@ -149,7 +172,12 @@ def USize.checked_rem (n: USize) (m: USize): result USize :=
     .fail integerOverflow
 
 def USize.checked_mul (n: USize) (m: USize): result USize :=
-  if h: n.val * m.val < USize.size then
+    if h: n.val.val * m.val.val <= 4294967295 then
+    .ret ⟨ n.val.val * m.val.val, by
+      have h': 4294967295 < USize.size := by intlit
+      apply Nat.lt_of_le_of_lt h h'
+    ⟩
+  else if h: n.val * m.val < USize.size then
     .ret ⟨ n.val * m.val, h ⟩
   else
     .fail integerOverflow
@@ -187,22 +215,6 @@ def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineIntege
   else
     .fail integerOverflow
 
--- One needs to perform a little bit of reasoning in order to successfully
--- inject constants into USize, so we provide a general-purpose macro
-
-syntax "intlit" : tactic
-
-macro_rules
-  | `(tactic| intlit) => `(tactic|
-    match USize.size, usize_size_eq with
-    | _, Or.inl rfl => decide
-    | _, Or.inr rfl => decide)
-
--- This is how the macro is expected to be used
-#eval USize.ofNatCore 0 (by intlit)
-
--- Also works for other integer types (at the expense of a needless disjunction)
-#eval UInt32.ofNatCore 0 (by intlit)
 
 -- Test behavior...
 #eval assert! USize.checked_sub 10 20 == fail integerOverflow; 0
@@ -267,7 +279,14 @@ def vec_push_back_old (α : Type u) (v : vec α) (x : α) : { res: result (vec �
 
 def vec_push_back (α : Type u) (v : vec α) (x : α) : result (vec α)
   :=
-  if h : List.length v.val + 1 < USize.size then
+  if h : List.length v.val + 1 <= 4294967295 then
+    return ⟨ List.concat v.val x,
+      by
+        rw [List.length_concat]
+        have h': 4294967295 < USize.size := by intlit
+        apply Nat.lt_of_le_of_lt h h'
+    ⟩
+  else if h: List.length v.val + 1 < USize.size then
     return ⟨List.concat v.val x,
       by
         rw [List.length_concat]
@@ -340,10 +359,15 @@ syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
 def assertImpl : CommandElab := fun (_stx: Syntax) => do
-  logInfo "Hello World"
+  logInfo "Reducing and asserting: "
+  logInfo _stx[1]
+  runTermElabM (fun _ => do
+    let e ← Term.elabTerm _stx[1] none
+    logInfo (Expr.dbgToString e)
+    -- How to evaluate the term and compare the result to true?
+    pure ())
+  -- logInfo (Expr.dbgToString (``true))
+  -- throwError "TODO: assert"
 
-def ignore (a: Prop) (_x: a) := ()
-
-#eval ignore (2 == 2) (by simp)
-
+#eval 2 == 2
 #assert (2 == 2)
