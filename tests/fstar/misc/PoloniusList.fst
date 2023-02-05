@@ -25,8 +25,7 @@ let rec get_list_at_x_back
   | ListCons hd tl ->
     if hd = x
     then Return ret
-    else begin
-      let* tl0 = get_list_at_x_back tl x ret in Return (ListCons hd tl0) end
+    else let* tl0 = get_list_at_x_back tl x ret in Return (ListCons hd tl0)
   | ListNil -> Return ret
   end
 

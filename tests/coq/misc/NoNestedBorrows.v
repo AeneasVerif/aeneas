@@ -46,28 +46,36 @@ Arguments SumLeft {T1} {T2} _.
 Arguments SumRight {T1} {T2} _.
 
 (** [no_nested_borrows::neg_test] *)
-Definition neg_test_fwd (x : i32) : result i32 := i32_neg x.
+Definition neg_test_fwd (x : i32) : result i32 :=
+  i32_neg x.
 
 (** [no_nested_borrows::add_test] *)
-Definition add_test_fwd (x : u32) (y : u32) : result u32 := u32_add x y.
+Definition add_test_fwd (x : u32) (y : u32) : result u32 :=
+  u32_add x y.
 
 (** [no_nested_borrows::subs_test] *)
-Definition subs_test_fwd (x : u32) (y : u32) : result u32 := u32_sub x y.
+Definition subs_test_fwd (x : u32) (y : u32) : result u32 :=
+  u32_sub x y.
 
 (** [no_nested_borrows::div_test] *)
-Definition div_test_fwd (x : u32) (y : u32) : result u32 := u32_div x y.
+Definition div_test_fwd (x : u32) (y : u32) : result u32 :=
+  u32_div x y.
 
 (** [no_nested_borrows::div_test1] *)
-Definition div_test1_fwd (x : u32) : result u32 := u32_div x 2%u32.
+Definition div_test1_fwd (x : u32) : result u32 :=
+  u32_div x 2%u32.
 
 (** [no_nested_borrows::rem_test] *)
-Definition rem_test_fwd (x : u32) (y : u32) : result u32 := u32_rem x y.
+Definition rem_test_fwd (x : u32) (y : u32) : result u32 :=
+  u32_rem x y.
 
 (** [no_nested_borrows::cast_test] *)
-Definition cast_test_fwd (x : u32) : result i32 := scalar_cast U32 I32 x.
+Definition cast_test_fwd (x : u32) : result i32 :=
+  scalar_cast U32 I32 x.
 
 (** [no_nested_borrows::test2] *)
-Definition test2_fwd : result unit := _ <- u32_add 23%u32 44%u32; Return tt.
+Definition test2_fwd : result unit :=
+  _ <- u32_add 23%u32 44%u32; Return tt.
 
 (** Unit test for [no_nested_borrows::test2] *)
 Check (test2_fwd )%return.
@@ -122,7 +130,8 @@ Definition refs_test2_fwd : result unit :=
 Check (refs_test2_fwd )%return.
 
 (** [no_nested_borrows::test_list1] *)
-Definition test_list1_fwd : result unit := Return tt.
+Definition test_list1_fwd : result unit :=
+  Return tt.
 
 (** Unit test for [no_nested_borrows::test_list1] *)
 Check (test_list1_fwd )%return.
@@ -138,7 +147,8 @@ Definition test_box1_fwd : result unit :=
 Check (test_box1_fwd )%return.
 
 (** [no_nested_borrows::copy_int] *)
-Definition copy_int_fwd (x : i32) : result i32 := Return x.
+Definition copy_int_fwd (x : i32) : result i32 :=
+  Return x.
 
 (** [no_nested_borrows::test_unreachable] *)
 Definition test_unreachable_fwd (b : bool) : result unit :=
@@ -468,7 +478,8 @@ Definition test_constants_fwd : result unit :=
 Check (test_constants_fwd )%return.
 
 (** [no_nested_borrows::test_weird_borrows1] *)
-Definition test_weird_borrows1_fwd : result unit := Return tt.
+Definition test_weird_borrows1_fwd : result unit :=
+  Return tt.
 
 (** Unit test for [no_nested_borrows::test_weird_borrows1] *)
 Check (test_weird_borrows1_fwd )%return.
@@ -485,7 +496,8 @@ Definition test_shared_borrow_bool1_fwd (b : bool) : result u32 :=
 .
 
 (** [no_nested_borrows::test_shared_borrow_bool2] *)
-Definition test_shared_borrow_bool2_fwd : result u32 := Return (0%u32).
+Definition test_shared_borrow_bool2_fwd : result u32 :=
+  Return (0%u32).
 
 (** [no_nested_borrows::test_shared_borrow_enum1] *)
 Definition test_shared_borrow_enum1_fwd (l : List_t u32) : result u32 :=
@@ -496,6 +508,7 @@ Definition test_shared_borrow_enum1_fwd (l : List_t u32) : result u32 :=
 .
 
 (** [no_nested_borrows::test_shared_borrow_enum2] *)
-Definition test_shared_borrow_enum2_fwd : result u32 := Return (0%u32).
+Definition test_shared_borrow_enum2_fwd : result u32 :=
+  Return (0%u32).
 
 End NoNestedBorrows .
