@@ -8,7 +8,8 @@ import HashmapMain.Clauses.Clauses
 section variable (opaque_defs: OpaqueDefs)
 
 /- [hashmap_main::hashmap::hash_key] -/
-def hashmap_hash_key_fwd (k : USize) : result USize := result.ret k
+def hashmap_hash_key_fwd (k : USize) : result USize :=
+  result.ret k
 
 /- [hashmap_main::hashmap::HashMap::{0}::allocate_slots] -/
 def hashmap_hash_map_allocate_slots_loop_fwd
@@ -638,7 +639,8 @@ def insert_on_disk_fwd
     result.ret (st1, ())
 
 /- [hashmap_main::main] -/
-def main_fwd : result Unit := result.ret ()
+def main_fwd : result Unit :=
+  result.ret ()
 
 /- Unit test for [hashmap_main::main] -/
 #assert (main_fwd = .ret ())

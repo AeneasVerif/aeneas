@@ -221,7 +221,8 @@ def get_elem_shared_fwd
     get_elem_shared_loop_fwd x l
 
 /- [loops::id_mut] -/
-def id_mut_fwd (T : Type) (ls : list_t T) : result (list_t T) := result.ret ls
+def id_mut_fwd (T : Type) (ls : list_t T) : result (list_t T) :=
+  result.ret ls
 
 /- [loops::id_mut] -/
 def id_mut_back

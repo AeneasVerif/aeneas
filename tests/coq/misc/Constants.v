@@ -23,7 +23,8 @@ Definition x2_body : result u32 := Return (3%u32).
 Definition x2_c : u32 := x2_body%global.
 
 (** [constants::incr] *)
-Definition incr_fwd (n : u32) : result u32 := u32_add n 1%u32.
+Definition incr_fwd (n : u32) : result u32 :=
+  u32_add n 1%u32.
 
 (** [constants::X3] *)
 Definition x3_body : result u32 := incr_fwd (32%u32).
@@ -80,7 +81,8 @@ Definition y_body : result (Wrap_t i32) := wrap_new_fwd i32 (2%i32).
 Definition y_c : Wrap_t i32 := y_body%global.
 
 (** [constants::unwrap_y] *)
-Definition unwrap_y_fwd : result i32 := Return y_c.(Wrap_val).
+Definition unwrap_y_fwd : result i32 :=
+  Return y_c.(Wrap_val).
 
 (** [constants::YVAL] *)
 Definition yval_body : result i32 := unwrap_y_fwd.
@@ -91,10 +93,12 @@ Definition get_z1_z1_body : result i32 := Return (3%i32).
 Definition get_z1_z1_c : i32 := get_z1_z1_body%global.
 
 (** [constants::get_z1] *)
-Definition get_z1_fwd : result i32 := Return get_z1_z1_c.
+Definition get_z1_fwd : result i32 :=
+  Return get_z1_z1_c.
 
 (** [constants::add] *)
-Definition add_fwd (a : i32) (b : i32) : result i32 := i32_add a b.
+Definition add_fwd (a : i32) (b : i32) : result i32 :=
+  i32_add a b.
 
 (** [constants::Q1] *)
 Definition q1_body : result i32 := Return (5%i32).

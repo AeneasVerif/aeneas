@@ -7,7 +7,8 @@ Local Open Scope Primitives_scope.
 Module Paper.
 
 (** [paper::ref_incr] *)
-Definition ref_incr_fwd_back (x : i32) : result i32 := i32_add x 1%i32.
+Definition ref_incr_fwd_back (x : i32) : result i32 :=
+  i32_add x 1%i32.
 
 (** [paper::test_incr] *)
 Definition test_incr_fwd : result unit :=

@@ -30,7 +30,8 @@ structure OpaqueDefs where
   | SumRight : T2 -> sum_t T1 T2
   
   /- [no_nested_borrows::neg_test] -/
-  def neg_test_fwd (x : Int32) : result Int32 := Int32.checked_neg x
+  def neg_test_fwd (x : Int32) : result Int32 :=
+    Int32.checked_neg x
   
   /- [no_nested_borrows::add_test] -/
   def add_test_fwd (x : UInt32) (y : UInt32) : result UInt32 :=
@@ -53,7 +54,8 @@ structure OpaqueDefs where
     UInt32.checked_rem x y
   
   /- [no_nested_borrows::cast_test] -/
-  def cast_test_fwd (x : UInt32) : result Int32 := scalar_cast Int32 x
+  def cast_test_fwd (x : UInt32) : result Int32 :=
+    scalar_cast Int32 x
   
   /- [no_nested_borrows::test2] -/
   def test2_fwd : result Unit :=
@@ -128,7 +130,8 @@ structure OpaqueDefs where
   #assert (refs_test2_fwd = .ret ())
   
   /- [no_nested_borrows::test_list1] -/
-  def test_list1_fwd : result Unit := result.ret ()
+  def test_list1_fwd : result Unit :=
+    result.ret ()
   
   /- Unit test for [no_nested_borrows::test_list1] -/
   #assert (test_list1_fwd = .ret ())
@@ -145,7 +148,8 @@ structure OpaqueDefs where
   #assert (test_box1_fwd = .ret ())
   
   /- [no_nested_borrows::copy_int] -/
-  def copy_int_fwd (x : Int32) : result Int32 := result.ret x
+  def copy_int_fwd (x : Int32) : result Int32 :=
+    result.ret x
   
   /- [no_nested_borrows::test_unreachable] -/
   def test_unreachable_fwd (b : Bool) : result Unit :=
@@ -240,7 +244,8 @@ structure OpaqueDefs where
   #assert (choose_test_fwd = .ret ())
   
   /- [no_nested_borrows::test_char] -/
-  def test_char_fwd : result Char := result.ret 'a'
+  def test_char_fwd : result Char :=
+    result.ret 'a'
   
   /- [no_nested_borrows::NodeElem] -/
   mutual inductive node_elem_t (T : Type) :=
@@ -389,16 +394,19 @@ structure OpaqueDefs where
   /- [no_nested_borrows::id_mut_pair1] -/
   def id_mut_pair1_back
     (T1 T2 : Type) (x : T1) (y : T2) (ret0 : (T1 × T2)) : result (T1 × T2) :=
-    let (t, t0) := ret0 result.ret (t, t0)
+    let (t, t0) := ret0
+    result.ret (t, t0)
   
   /- [no_nested_borrows::id_mut_pair2] -/
   def id_mut_pair2_fwd (T1 T2 : Type) (p : (T1 × T2)) : result (T1 × T2) :=
-    let (t, t0) := p result.ret (t, t0)
+    let (t, t0) := p
+    result.ret (t, t0)
   
   /- [no_nested_borrows::id_mut_pair2] -/
   def id_mut_pair2_back
     (T1 T2 : Type) (p : (T1 × T2)) (ret0 : (T1 × T2)) : result (T1 × T2) :=
-    let (t, t0) := ret0 result.ret (t, t0)
+    let (t, t0) := ret0
+    result.ret (t, t0)
   
   /- [no_nested_borrows::id_mut_pair3] -/
   def id_mut_pair3_fwd (T1 T2 : Type) (x : T1) (y : T2) : result (T1 × T2) :=
@@ -416,7 +424,8 @@ structure OpaqueDefs where
   
   /- [no_nested_borrows::id_mut_pair4] -/
   def id_mut_pair4_fwd (T1 T2 : Type) (p : (T1 × T2)) : result (T1 × T2) :=
-    let (t, t0) := p result.ret (t, t0)
+    let (t, t0) := p
+    result.ret (t, t0)
   
   /- [no_nested_borrows::id_mut_pair4] -/
   def id_mut_pair4_back'a
@@ -505,7 +514,8 @@ structure OpaqueDefs where
   #assert (test_constants_fwd = .ret ())
   
   /- [no_nested_borrows::test_weird_borrows1] -/
-  def test_weird_borrows1_fwd : result Unit := result.ret ()
+  def test_weird_borrows1_fwd : result Unit :=
+    result.ret ()
   
   /- Unit test for [no_nested_borrows::test_weird_borrows1] -/
   #assert (test_weird_borrows1_fwd = .ret ())

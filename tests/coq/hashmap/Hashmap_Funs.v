@@ -9,7 +9,8 @@ Import Hashmap_Types.
 Module Hashmap_Funs.
 
 (** [hashmap::hash_key] *)
-Definition hash_key_fwd (k : usize) : result usize := Return k.
+Definition hash_key_fwd (k : usize) : result usize :=
+  Return k.
 
 (** [hashmap::HashMap::{0}::allocate_slots] *)
 Fixpoint hash_map_allocate_slots_loop_fwd
