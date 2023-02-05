@@ -2379,9 +2379,11 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       ctx_get_terminates_clause def.def_id def.loop_id ctx
     in
     F.pp_print_break fmt 0 0;
+    (* Open a box for the whole {terminates_by CALL => DECREASES } *)
+    F.pp_open_hvbox fmt ctx.indent_incr;
+    (* Open a box for {terminates_by CALL =>} *)
     F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt "termination_by";
-    F.pp_open_hovbox fmt 0;
     F.pp_print_space fmt ();
     F.pp_print_string fmt def_name;
     List.iter
@@ -2391,9 +2393,11 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       all_vars;
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=>";
+    (* Close the box for {terminates_by CALL =>} *)
     F.pp_close_box fmt ();
-    F.pp_open_hovbox fmt 0;
     F.pp_print_space fmt ();
+    (* Open the box for {DECREASES} *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt terminates_name;
     List.iter
       (fun (p : type_var) ->
@@ -2406,7 +2410,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt (ctx_get_var v ctx_body))
       vars;
+    (* Close the box for {DECREASES} *)
     F.pp_close_box fmt ();
+    (* Close the box for the whole {terminates_by CALL => DECREASES } *)
     F.pp_close_box fmt ();
 
     let decreases_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
