@@ -1848,8 +1848,12 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
 and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (scrut : texpression) (body : switch_body) : unit =
-  (* Open a box for the whole expression *)
-  F.pp_open_hvbox fmt 0;
+  (* Open a box for the whole expression.
+
+     In the case of Lean, we rely on indentation to delimit the end of the
+     branches, and need to insert line breaks: we thus use a vbox.
+  *)
+  if !Config.backend = Lean then F.pp_open_vbox fmt 0 else F.pp_open_hvbox fmt 0;
   (* Open parentheses *)
   if inside then F.pp_print_string fmt "(";
   (* Extract the switch *)
@@ -1863,6 +1867,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       extract_texpression ctx fmt scrut_inside scrut;
       (* Close the box for the [if e] *)
       F.pp_close_box fmt ();
+
       (* Extract the branches *)
       let extract_branch (is_then : bool) (e_branch : texpression) : unit =
         F.pp_print_space fmt ();
@@ -1954,10 +1959,10 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
       List.iter extract_branch branches;
 
-      (* End the match *)
-      F.pp_print_space fmt ();
-      (* Relying on indentation in Lean *)
-      if !backend <> Lean then F.pp_print_string fmt "end");
+      (* End the match - we rely on indentation in Lean *)
+      if !backend <> Lean then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "end"));
   (* Close parentheses *)
   if inside then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
@@ -2370,9 +2375,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ();
   (* Coq: add a "." *)
   print_decl_end_delimiter fmt kind;
-  (* Close the outer box for the definition *)
-  F.pp_close_box fmt ();
-  (* Termination clause *)
+  (* Termination clause and proof for Lean *)
   if has_decreases_clause && !backend = Lean then (
     let def_body = Option.get def.body in
     let all_vars = List.map (fun (v : var) -> v.id) def_body.inputs in
@@ -2381,14 +2384,14 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     in
     let vars = Collections.List.prefix num_fwd_inputs all_vars in
 
-    (* terminates_by *)
+    (* termination_by *)
     let terminates_name =
       ctx_get_terminates_clause def.def_id def.loop_id ctx
     in
     F.pp_print_break fmt 0 0;
-    (* Open a box for the whole [terminates_by CALL => DECREASES] *)
+    (* Open a box for the whole [termination_by CALL => DECREASES] *)
     F.pp_open_hvbox fmt ctx.indent_incr;
-    (* Open a box for {terminates_by CALL =>} *)
+    (* Open a box for {termination_by CALL =>} *)
     F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt "termination_by";
     F.pp_print_space fmt ();
@@ -2400,7 +2403,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       all_vars;
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=>";
-    (* Close the box for [terminates_by CALL =>] *)
+    (* Close the box for [termination_by CALL =>] *)
     F.pp_close_box fmt ();
     F.pp_print_space fmt ();
     (* Open the box for [DECREASES] *)
@@ -2419,12 +2422,13 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       vars;
     (* Close the box for [DECREASES] *)
     F.pp_close_box fmt ();
-    (* Close the box for the whole [terminates_by CALL => DECREASES] *)
+    (* Close the box for the whole [termination_by CALL => DECREASES] *)
     F.pp_close_box fmt ();
 
-    let decreases_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
     F.pp_print_break fmt 0 0;
+    (* Open a box for the [decreasing by ...] *)
     F.pp_open_hvbox fmt ctx.indent_incr;
+    let decreases_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
     F.pp_print_string fmt "decreasing_by";
     F.pp_print_space fmt ();
     F.pp_open_hvbox fmt ctx.indent_incr;
@@ -2435,7 +2439,10 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt (ctx_get_var v ctx_body))
       vars;
     F.pp_close_box fmt ();
+    (* Close the box for the [decreasing by ...] *)
     F.pp_close_box fmt ());
+  (* Close the outer box for the definition *)
+  F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 

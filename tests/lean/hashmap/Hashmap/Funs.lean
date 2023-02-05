@@ -98,7 +98,6 @@ def hash_map_insert_in_list_loop_fwd
     then result.ret false
     else hash_map_insert_in_list_loop_fwd T key value tl
   | list_t.ListNil => result.ret true
-  
 termination_by hash_map_insert_in_list_loop_fwd key value ls =>
   hash_map_insert_in_list_loop_terminates T key value ls
 decreasing_by hash_map_insert_in_list_loop_decreases key value ls
@@ -122,7 +121,6 @@ def hash_map_insert_in_list_loop_back
   | list_t.ListNil =>
     let l := list_t.ListNil
     result.ret (list_t.ListCons key value l)
-  
 termination_by hash_map_insert_in_list_loop_back key value ls =>
   hash_map_insert_in_list_loop_terminates T key value ls
 decreasing_by hash_map_insert_in_list_loop_decreases key value ls
@@ -185,7 +183,6 @@ def hash_map_move_elements_from_list_loop_fwd_back
       let ntable0 <- hash_map_insert_no_resize_fwd_back T ntable k v
       hash_map_move_elements_from_list_loop_fwd_back T ntable0 tl
   | list_t.ListNil => result.ret ntable
-  
 termination_by hash_map_move_elements_from_list_loop_fwd_back ntable ls =>
   hash_map_move_elements_from_list_loop_terminates T ntable ls
 decreasing_by hash_map_move_elements_from_list_loop_decreases ntable ls
@@ -277,7 +274,6 @@ def hash_map_contains_key_in_list_loop_fwd
     then result.ret true
     else hash_map_contains_key_in_list_loop_fwd T key tl
   | list_t.ListNil => result.ret false
-  
 termination_by hash_map_contains_key_in_list_loop_fwd key ls =>
   hash_map_contains_key_in_list_loop_terminates T key ls
 decreasing_by hash_map_contains_key_in_list_loop_decreases key ls
@@ -306,7 +302,6 @@ def hash_map_get_in_list_loop_fwd
     then result.ret cvalue
     else hash_map_get_in_list_loop_fwd T key tl
   | list_t.ListNil => result.fail error.panic
-  
 termination_by hash_map_get_in_list_loop_fwd key ls =>
   hash_map_get_in_list_loop_terminates T key ls
 decreasing_by hash_map_get_in_list_loop_decreases key ls
@@ -335,7 +330,6 @@ def hash_map_get_mut_in_list_loop_fwd
     then result.ret cvalue
     else hash_map_get_mut_in_list_loop_fwd T tl key
   | list_t.ListNil => result.fail error.panic
-  
 termination_by hash_map_get_mut_in_list_loop_fwd ls key =>
   hash_map_get_mut_in_list_loop_terminates T ls key
 decreasing_by hash_map_get_mut_in_list_loop_decreases ls key
@@ -357,7 +351,6 @@ def hash_map_get_mut_in_list_loop_back
         let tl0 <- hash_map_get_mut_in_list_loop_back T tl key ret0
         result.ret (list_t.ListCons ckey cvalue tl0)
   | list_t.ListNil => result.fail error.panic
-  
 termination_by hash_map_get_mut_in_list_loop_back ls key ret0 =>
   hash_map_get_mut_in_list_loop_terminates T ls key
 decreasing_by hash_map_get_mut_in_list_loop_decreases ls key
@@ -409,10 +402,8 @@ def hash_map_remove_from_list_loop_fwd
       match mv_ls with
       | list_t.ListCons i cvalue tl0 => result.ret (Option.some cvalue)
       | list_t.ListNil => result.fail error.panic
-      
     else hash_map_remove_from_list_loop_fwd T key tl
   | list_t.ListNil => result.ret Option.none
-  
 termination_by hash_map_remove_from_list_loop_fwd key ls =>
   hash_map_remove_from_list_loop_terminates T key ls
 decreasing_by hash_map_remove_from_list_loop_decreases key ls
@@ -434,13 +425,11 @@ def hash_map_remove_from_list_loop_back
       match mv_ls with
       | list_t.ListCons i cvalue tl0 => result.ret tl0
       | list_t.ListNil => result.fail error.panic
-      
     else
       do
         let tl0 <- hash_map_remove_from_list_loop_back T key tl
         result.ret (list_t.ListCons ckey t tl0)
   | list_t.ListNil => result.ret list_t.ListNil
-  
 termination_by hash_map_remove_from_list_loop_back key ls =>
   hash_map_remove_from_list_loop_terminates T key ls
 decreasing_by hash_map_remove_from_list_loop_decreases key ls
@@ -466,7 +455,6 @@ def hash_map_remove_fwd
         let _ <- USize.checked_sub self.hash_map_num_entries
           (USize.ofNatCore 1 (by intlit))
         result.ret (Option.some x0)
-    
 
 /- [hashmap::HashMap::{0}::remove] -/
 def hash_map_remove_back
@@ -502,7 +490,6 @@ def hash_map_remove_back
             hash_map_max_load := self.hash_map_max_load,
             hash_map_slots := v
           }
-    
 
 /- [hashmap::test1] -/
 def test1_fwd : result Unit :=
@@ -565,7 +552,6 @@ def test1_fwd : result Unit :=
                           if not (i3 = (UInt64.ofNatCore 256 (by intlit)))
                           then result.fail error.panic
                           else result.ret ()
-            
 
 /- Unit test for [hashmap::test1] -/
 #assert (test1_fwd = .ret ())
