@@ -20,8 +20,7 @@ def hash_map_allocate_slots_loop_fwd
       hash_map_allocate_slots_loop_fwd T slots0 n0
   else result.ret slots
 termination_by hash_map_allocate_slots_loop_fwd slots n =>
-                                                          hash_map_allocate_slots_loop_terminates
-                                                          T slots n
+  hash_map_allocate_slots_loop_terminates T slots n
 decreasing_by hash_map_allocate_slots_loop_decreases slots n
 
 /- [hashmap::HashMap::{0}::allocate_slots] -/
@@ -67,8 +66,7 @@ def hash_map_clear_loop_fwd_back
       hash_map_clear_loop_fwd_back T slots0 i1
   else result.ret slots
 termination_by hash_map_clear_loop_fwd_back slots i =>
-                                                      hash_map_clear_loop_terminates
-                                                      T slots i
+  hash_map_clear_loop_terminates T slots i
 decreasing_by hash_map_clear_loop_decreases slots i
 
 /- [hashmap::HashMap::{0}::clear] -/
@@ -101,8 +99,7 @@ def hash_map_insert_in_list_loop_fwd
   | list_t.ListNil => result.ret true
   
 termination_by hash_map_insert_in_list_loop_fwd key value ls =>
-                                                               hash_map_insert_in_list_loop_terminates
-                                                               T key value ls
+  hash_map_insert_in_list_loop_terminates T key value ls
 decreasing_by hash_map_insert_in_list_loop_decreases key value ls
 
 /- [hashmap::HashMap::{0}::insert_in_list] -/
@@ -125,8 +122,7 @@ def hash_map_insert_in_list_loop_back
     let l := list_t.ListNil result.ret (list_t.ListCons key value l)
   
 termination_by hash_map_insert_in_list_loop_back key value ls =>
-                                                                hash_map_insert_in_list_loop_terminates
-                                                                T key value ls
+  hash_map_insert_in_list_loop_terminates T key value ls
 decreasing_by hash_map_insert_in_list_loop_decreases key value ls
 
 /- [hashmap::HashMap::{0}::insert_in_list] -/
@@ -189,7 +185,7 @@ def hash_map_move_elements_from_list_loop_fwd_back
   | list_t.ListNil => result.ret ntable
   
 termination_by hash_map_move_elements_from_list_loop_fwd_back ntable ls =>
-   hash_map_move_elements_from_list_loop_terminates T ntable ls
+  hash_map_move_elements_from_list_loop_terminates T ntable ls
 decreasing_by hash_map_move_elements_from_list_loop_decreases ntable ls
 
 /- [hashmap::HashMap::{0}::move_elements_from_list] -/
@@ -215,7 +211,7 @@ def hash_map_move_elements_loop_fwd_back
       hash_map_move_elements_loop_fwd_back T ntable0 slots0 i1
   else result.ret (ntable, slots)
 termination_by hash_map_move_elements_loop_fwd_back ntable slots i =>
-   hash_map_move_elements_loop_terminates T ntable slots i
+  hash_map_move_elements_loop_terminates T ntable slots i
 decreasing_by hash_map_move_elements_loop_decreases ntable slots i
 
 /- [hashmap::HashMap::{0}::move_elements] -/
@@ -281,8 +277,7 @@ def hash_map_contains_key_in_list_loop_fwd
   | list_t.ListNil => result.ret false
   
 termination_by hash_map_contains_key_in_list_loop_fwd key ls =>
-                                                               hash_map_contains_key_in_list_loop_terminates
-                                                               T key ls
+  hash_map_contains_key_in_list_loop_terminates T key ls
 decreasing_by hash_map_contains_key_in_list_loop_decreases key ls
 
 /- [hashmap::HashMap::{0}::contains_key_in_list] -/
@@ -311,8 +306,7 @@ def hash_map_get_in_list_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by hash_map_get_in_list_loop_fwd key ls =>
-                                                      hash_map_get_in_list_loop_terminates
-                                                      T key ls
+  hash_map_get_in_list_loop_terminates T key ls
 decreasing_by hash_map_get_in_list_loop_decreases key ls
 
 /- [hashmap::HashMap::{0}::get_in_list] -/
@@ -341,8 +335,7 @@ def hash_map_get_mut_in_list_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by hash_map_get_mut_in_list_loop_fwd ls key =>
-                                                          hash_map_get_mut_in_list_loop_terminates
-                                                          T ls key
+  hash_map_get_mut_in_list_loop_terminates T ls key
 decreasing_by hash_map_get_mut_in_list_loop_decreases ls key
 
 /- [hashmap::HashMap::{0}::get_mut_in_list] -/
@@ -364,8 +357,7 @@ def hash_map_get_mut_in_list_loop_back
   | list_t.ListNil => result.fail error.panic
   
 termination_by hash_map_get_mut_in_list_loop_back ls key ret0 =>
-                                                                hash_map_get_mut_in_list_loop_terminates
-                                                                T ls key
+  hash_map_get_mut_in_list_loop_terminates T ls key
 decreasing_by hash_map_get_mut_in_list_loop_decreases ls key
 
 /- [hashmap::HashMap::{0}::get_mut_in_list] -/
@@ -420,8 +412,7 @@ def hash_map_remove_from_list_loop_fwd
   | list_t.ListNil => result.ret Option.none
   
 termination_by hash_map_remove_from_list_loop_fwd key ls =>
-                                                           hash_map_remove_from_list_loop_terminates
-                                                           T key ls
+  hash_map_remove_from_list_loop_terminates T key ls
 decreasing_by hash_map_remove_from_list_loop_decreases key ls
 
 /- [hashmap::HashMap::{0}::remove_from_list] -/
@@ -449,8 +440,7 @@ def hash_map_remove_from_list_loop_back
   | list_t.ListNil => result.ret list_t.ListNil
   
 termination_by hash_map_remove_from_list_loop_back key ls =>
-                                                            hash_map_remove_from_list_loop_terminates
-                                                            T key ls
+  hash_map_remove_from_list_loop_terminates T key ls
 decreasing_by hash_map_remove_from_list_loop_decreases key ls
 
 /- [hashmap::HashMap::{0}::remove_from_list] -/
