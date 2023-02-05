@@ -5,7 +5,8 @@ import Hashmap.Types
 import Hashmap.Clauses.Clauses
 
 /- [hashmap::hash_key] -/
-def hash_key_fwd (k : USize) : result USize := result.ret k
+def hash_key_fwd (k : USize) : result USize :=
+  result.ret k
 
 /- [hashmap::HashMap::{0}::allocate_slots] -/
 def hash_map_allocate_slots_loop_fwd
@@ -119,7 +120,8 @@ def hash_map_insert_in_list_loop_back
         let tl0 <- hash_map_insert_in_list_loop_back T key value tl
         result.ret (list_t.ListCons ckey cvalue tl0)
   | list_t.ListNil =>
-    let l := list_t.ListNil result.ret (list_t.ListCons key value l)
+    let l := list_t.ListNil
+    result.ret (list_t.ListCons key value l)
   
 termination_by hash_map_insert_in_list_loop_back key value ls =>
   hash_map_insert_in_list_loop_terminates T key value ls

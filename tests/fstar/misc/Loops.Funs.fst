@@ -13,13 +13,12 @@ let rec sum_loop_fwd
   Tot (result u32) (decreases (sum_loop_decreases max i s))
   =
   if i < max
-  then begin
-    let* s0 = u32_add s i in let* i0 = u32_add i 1 in sum_loop_fwd max i0 s0
-    end
+  then let* s0 = u32_add s i in let* i0 = u32_add i 1 in sum_loop_fwd max i0 s0
   else u32_mul s 2
 
 (** [loops::sum] *)
-let sum_fwd (max : u32) : result u32 = sum_loop_fwd max 0 0
+let sum_fwd (max : u32) : result u32 =
+  sum_loop_fwd max 0 0
 
 (** [loops::sum_with_mut_borrows] *)
 let rec sum_with_mut_borrows_loop_fwd
@@ -27,10 +26,10 @@ let rec sum_with_mut_borrows_loop_fwd
   Tot (result u32) (decreases (sum_with_mut_borrows_loop_decreases max mi ms))
   =
   if mi < max
-  then begin
+  then
     let* ms0 = u32_add ms mi in
     let* mi0 = u32_add mi 1 in
-    sum_with_mut_borrows_loop_fwd max mi0 ms0 end
+    sum_with_mut_borrows_loop_fwd max mi0 ms0
   else u32_mul ms 2
 
 (** [loops::sum_with_mut_borrows] *)
@@ -43,10 +42,10 @@ let rec sum_with_shared_borrows_loop_fwd
   Tot (result u32) (decreases (sum_with_shared_borrows_loop_decreases max i s))
   =
   if i < max
-  then begin
+  then
     let* i0 = u32_add i 1 in
     let* s0 = u32_add s i0 in
-    sum_with_shared_borrows_loop_fwd max i0 s0 end
+    sum_with_shared_borrows_loop_fwd max i0 s0
   else u32_mul s 2
 
 (** [loops::sum_with_shared_borrows] *)
@@ -60,14 +59,15 @@ let rec clear_loop_fwd_back
   =
   let i0 = vec_len u32 v in
   if i < i0
-  then begin
+  then
     let* i1 = usize_add i 1 in
     let* v0 = vec_index_mut_back u32 v i 0 in
-    clear_loop_fwd_back v0 i1 end
+    clear_loop_fwd_back v0 i1
   else Return v
 
 (** [loops::clear] *)
-let clear_fwd_back (v : vec u32) : result (vec u32) = clear_loop_fwd_back v 0
+let clear_fwd_back (v : vec u32) : result (vec u32) =
+  clear_loop_fwd_back v 0
 
 (** [loops::list_mem] *)
 let rec list_mem_loop_fwd
@@ -92,7 +92,7 @@ let rec list_nth_mut_loop_loop_fwd
   | ListCons x tl ->
     if i = 0
     then Return x
-    else begin let* i0 = u32_sub i 1 in list_nth_mut_loop_loop_fwd t tl i0 end
+    else let* i0 = u32_sub i 1 in list_nth_mut_loop_loop_fwd t tl i0
   | ListNil -> Fail Failure
   end
 
@@ -109,10 +109,10 @@ let rec list_nth_mut_loop_loop_back
   | ListCons x tl ->
     if i = 0
     then Return (ListCons ret tl)
-    else begin
+    else
       let* i0 = u32_sub i 1 in
       let* tl0 = list_nth_mut_loop_loop_back t tl i0 ret in
-      Return (ListCons x tl0) end
+      Return (ListCons x tl0)
   | ListNil -> Fail Failure
   end
 
@@ -130,8 +130,7 @@ let rec list_nth_shared_loop_loop_fwd
   | ListCons x tl ->
     if i = 0
     then Return x
-    else begin let* i0 = u32_sub i 1 in list_nth_shared_loop_loop_fwd t tl i0
-      end
+    else let* i0 = u32_sub i 1 in list_nth_shared_loop_loop_fwd t tl i0
   | ListNil -> Fail Failure
   end
 
@@ -163,8 +162,7 @@ let rec get_elem_mut_loop_back
   | ListCons y tl ->
     if y = x
     then Return (ListCons ret tl)
-    else begin
-      let* tl0 = get_elem_mut_loop_back x tl ret in Return (ListCons y tl0) end
+    else let* tl0 = get_elem_mut_loop_back x tl ret in Return (ListCons y tl0)
   | ListNil -> Fail Failure
   end
 
@@ -193,7 +191,8 @@ let get_elem_shared_fwd
   let* l = vec_index_fwd (list_t usize) slots 0 in get_elem_shared_loop_fwd x l
 
 (** [loops::id_mut] *)
-let id_mut_fwd (t : Type0) (ls : list_t t) : result (list_t t) = Return ls
+let id_mut_fwd (t : Type0) (ls : list_t t) : result (list_t t) =
+  Return ls
 
 (** [loops::id_mut] *)
 let id_mut_back
@@ -201,7 +200,8 @@ let id_mut_back
   Return ret
 
 (** [loops::id_shared] *)
-let id_shared_fwd (t : Type0) (ls : list_t t) : result (list_t t) = Return ls
+let id_shared_fwd (t : Type0) (ls : list_t t) : result (list_t t) =
+  Return ls
 
 (** [loops::list_nth_mut_loop_with_id] *)
 let rec list_nth_mut_loop_with_id_loop_fwd
@@ -212,8 +212,7 @@ let rec list_nth_mut_loop_with_id_loop_fwd
   | ListCons x tl ->
     if i = 0
     then Return x
-    else begin
-      let* i0 = u32_sub i 1 in list_nth_mut_loop_with_id_loop_fwd t i0 tl end
+    else let* i0 = u32_sub i 1 in list_nth_mut_loop_with_id_loop_fwd t i0 tl
   | ListNil -> Fail Failure
   end
 
@@ -232,10 +231,10 @@ let rec list_nth_mut_loop_with_id_loop_back
   | ListCons x tl ->
     if i = 0
     then Return (ListCons ret tl)
-    else begin
+    else
       let* i0 = u32_sub i 1 in
       let* tl0 = list_nth_mut_loop_with_id_loop_back t i0 tl ret in
-      Return (ListCons x tl0) end
+      Return (ListCons x tl0)
   | ListNil -> Fail Failure
   end
 
@@ -256,9 +255,7 @@ let rec list_nth_shared_loop_with_id_loop_fwd
   | ListCons x tl ->
     if i = 0
     then Return x
-    else begin
-      let* i0 = u32_sub i 1 in list_nth_shared_loop_with_id_loop_fwd t i0 tl
-      end
+    else let* i0 = u32_sub i 1 in list_nth_shared_loop_with_id_loop_fwd t i0 tl
   | ListNil -> Fail Failure
   end
 
@@ -280,9 +277,8 @@ let rec list_nth_mut_loop_pair_loop_fwd
     | ListCons x1 tl1 ->
       if i = 0
       then Return (x0, x1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in list_nth_mut_loop_pair_loop_fwd t tl0 tl1 i0
-        end
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -305,10 +301,10 @@ let rec list_nth_mut_loop_pair_loop_back'a
     | ListCons x1 tl1 ->
       if i = 0
       then Return (ListCons ret tl0)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
         let* tl00 = list_nth_mut_loop_pair_loop_back'a t tl0 tl1 i0 ret in
-        Return (ListCons x0 tl00) end
+        Return (ListCons x0 tl00)
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -333,10 +329,10 @@ let rec list_nth_mut_loop_pair_loop_back'b
     | ListCons x1 tl1 ->
       if i = 0
       then Return (ListCons ret tl1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
         let* tl10 = list_nth_mut_loop_pair_loop_back'b t tl0 tl1 i0 ret in
-        Return (ListCons x1 tl10) end
+        Return (ListCons x1 tl10)
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -361,9 +357,9 @@ let rec list_nth_shared_loop_pair_loop_fwd
     | ListCons x1 tl1 ->
       if i = 0
       then Return (x0, x1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
-        list_nth_shared_loop_pair_loop_fwd t tl0 tl1 i0 end
+        list_nth_shared_loop_pair_loop_fwd t tl0 tl1 i0
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -386,9 +382,9 @@ let rec list_nth_mut_loop_pair_merge_loop_fwd
     | ListCons x1 tl1 ->
       if i = 0
       then Return (x0, x1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
-        list_nth_mut_loop_pair_merge_loop_fwd t tl0 tl1 i0 end
+        list_nth_mut_loop_pair_merge_loop_fwd t tl0 tl1 i0
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -411,11 +407,11 @@ let rec list_nth_mut_loop_pair_merge_loop_back
     | ListCons x1 tl1 ->
       if i = 0
       then let (x, x2) = ret in Return (ListCons x tl0, ListCons x2 tl1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
         let* (tl00, tl10) =
           list_nth_mut_loop_pair_merge_loop_back t tl0 tl1 i0 ret in
-        Return (ListCons x0 tl00, ListCons x1 tl10) end
+        Return (ListCons x0 tl00, ListCons x1 tl10)
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -440,9 +436,9 @@ let rec list_nth_shared_loop_pair_merge_loop_fwd
     | ListCons x1 tl1 ->
       if i = 0
       then Return (x0, x1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
-        list_nth_shared_loop_pair_merge_loop_fwd t tl0 tl1 i0 end
+        list_nth_shared_loop_pair_merge_loop_fwd t tl0 tl1 i0
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -465,9 +461,9 @@ let rec list_nth_mut_shared_loop_pair_loop_fwd
     | ListCons x1 tl1 ->
       if i = 0
       then Return (x0, x1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
-        list_nth_mut_shared_loop_pair_loop_fwd t tl0 tl1 i0 end
+        list_nth_mut_shared_loop_pair_loop_fwd t tl0 tl1 i0
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -490,10 +486,10 @@ let rec list_nth_mut_shared_loop_pair_loop_back
     | ListCons x1 tl1 ->
       if i = 0
       then Return (ListCons ret tl0)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
         let* tl00 = list_nth_mut_shared_loop_pair_loop_back t tl0 tl1 i0 ret in
-        Return (ListCons x0 tl00) end
+        Return (ListCons x0 tl00)
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -518,9 +514,9 @@ let rec list_nth_mut_shared_loop_pair_merge_loop_fwd
     | ListCons x1 tl1 ->
       if i = 0
       then Return (x0, x1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
-        list_nth_mut_shared_loop_pair_merge_loop_fwd t tl0 tl1 i0 end
+        list_nth_mut_shared_loop_pair_merge_loop_fwd t tl0 tl1 i0
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -543,11 +539,11 @@ let rec list_nth_mut_shared_loop_pair_merge_loop_back
     | ListCons x1 tl1 ->
       if i = 0
       then Return (ListCons ret tl0)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
         let* tl00 =
           list_nth_mut_shared_loop_pair_merge_loop_back t tl0 tl1 i0 ret in
-        Return (ListCons x0 tl00) end
+        Return (ListCons x0 tl00)
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -572,9 +568,9 @@ let rec list_nth_shared_mut_loop_pair_loop_fwd
     | ListCons x1 tl1 ->
       if i = 0
       then Return (x0, x1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
-        list_nth_shared_mut_loop_pair_loop_fwd t tl0 tl1 i0 end
+        list_nth_shared_mut_loop_pair_loop_fwd t tl0 tl1 i0
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -597,10 +593,10 @@ let rec list_nth_shared_mut_loop_pair_loop_back
     | ListCons x1 tl1 ->
       if i = 0
       then Return (ListCons ret tl1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
         let* tl10 = list_nth_shared_mut_loop_pair_loop_back t tl0 tl1 i0 ret in
-        Return (ListCons x1 tl10) end
+        Return (ListCons x1 tl10)
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -625,9 +621,9 @@ let rec list_nth_shared_mut_loop_pair_merge_loop_fwd
     | ListCons x1 tl1 ->
       if i = 0
       then Return (x0, x1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
-        list_nth_shared_mut_loop_pair_merge_loop_fwd t tl0 tl1 i0 end
+        list_nth_shared_mut_loop_pair_merge_loop_fwd t tl0 tl1 i0
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure
@@ -650,11 +646,11 @@ let rec list_nth_shared_mut_loop_pair_merge_loop_back
     | ListCons x1 tl1 ->
       if i = 0
       then Return (ListCons ret tl1)
-      else begin
+      else
         let* i0 = u32_sub i 1 in
         let* tl10 =
           list_nth_shared_mut_loop_pair_merge_loop_back t tl0 tl1 i0 ret in
-        Return (ListCons x1 tl10) end
+        Return (ListCons x1 tl10)
     | ListNil -> Fail Failure
     end
   | ListNil -> Fail Failure

@@ -1756,8 +1756,13 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (e : texpression) : unit =
   let lets, next_e = destruct_lets e in
-  (* Open a box for the whole expression *)
-  F.pp_open_hvbox fmt 0;
+  (* Open a box for the whole expression.
+
+     In the case of Lean, we use a vbox so that line breaks are inserted
+     at the end of every let-binding: let-bindings are indeed not ended
+     with an "in" keyword.
+  *)
+  if !Config.backend = Lean then F.pp_open_vbox fmt 0 else F.pp_open_hvbox fmt 0;
   (* Open parentheses *)
   if inside && !backend <> Lean then F.pp_print_string fmt "(";
   (* Extract the let-bindings *)
@@ -1804,12 +1809,7 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_print_string fmt eq;
         F.pp_print_space fmt ();
         extract_texpression ctx fmt false re;
-        (* In Lean, monadic let-bindings don't require to end with "in".
-
-           TODO: does this work because we add a line break? This is very annoying,
-           because we need to enforce there will be a line break. In order to fix
-           this, we should open a vbox instead of an hov_box.
-        *)
+        (* In Lean, monadic let-bindings don't require to end with "in" *)
         if !backend <> Lean then (
           F.pp_print_space fmt ();
           F.pp_print_string fmt "in");
@@ -1855,51 +1855,54 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Extract the switch *)
   (match body with
   | If (e_then, e_else) ->
-      (* Open a box for the [if] *)
+      (* Open a box for the [if e] *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       F.pp_print_string fmt "if";
       F.pp_print_space fmt ();
-      let scrut_inside = PureUtils.let_group_requires_parentheses scrut in
+      let scrut_inside = PureUtils.texpression_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;
-      (* Close the box for the [if] *)
+      (* Close the box for the [if e] *)
       F.pp_close_box fmt ();
       (* Extract the branches *)
       let extract_branch (is_then : bool) (e_branch : texpression) : unit =
         F.pp_print_space fmt ();
         (* Open a box for the then/else+branch *)
-        F.pp_open_hovbox fmt ctx.indent_incr;
+        F.pp_open_hvbox fmt ctx.indent_incr;
+        (* Open a box for the then/else + space + opening parenthesis *)
+        F.pp_open_hovbox fmt 0;
         let then_or_else = if is_then then "then" else "else" in
         F.pp_print_string fmt then_or_else;
-        let parenth = PureUtils.let_group_requires_parentheses e_branch in
-        (* Open a box for the branch - we do this only if it is not a parenthesized
-           group of nested let bindings.
-        *)
-        if not parenth then (
-          F.pp_print_space fmt ();
-          F.pp_open_hovbox fmt ctx.indent_incr);
+        let parenth = PureUtils.texpression_requires_parentheses e_branch in
         (* Open the parenthesized expression *)
-        (if parenth then
-         match !backend with
-         | FStar ->
-             F.pp_print_space fmt ();
-             F.pp_print_string fmt "begin";
-             F.pp_print_space fmt ()
-         | Coq ->
-             F.pp_print_string fmt " (";
-             F.pp_print_cut fmt ()
-         | Lean -> F.pp_print_cut fmt ());
+        let print_space_after_parenth =
+          if parenth then (
+            match !backend with
+            | FStar ->
+                F.pp_print_space fmt ();
+                F.pp_print_string fmt "begin";
+                F.pp_print_space fmt
+            | Coq | Lean ->
+                F.pp_print_space fmt ();
+                F.pp_print_string fmt "(";
+                F.pp_print_cut fmt)
+          else F.pp_print_space fmt
+        in
+        (* Close the box for the then/else + space + opening parenthesis *)
+        F.pp_close_box fmt ();
+        print_space_after_parenth ();
+        (* Open a box for the branch *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the branch expression *)
         extract_texpression ctx fmt false e_branch;
+        (* Close the box for the branch *)
+        F.pp_close_box fmt ();
         (* Close the parenthesized expression *)
         (if parenth then
          match !backend with
          | FStar ->
              F.pp_print_space fmt ();
              F.pp_print_string fmt "end"
-         | Coq -> F.pp_print_string fmt ")"
-         | Lean -> ());
-        (* Close the box for the branch *)
-        if not parenth then F.pp_close_box fmt ();
+         | Coq | Lean -> F.pp_print_string fmt ")");
         (* Close the box for the then/else+branch *)
         F.pp_close_box fmt ()
       in
@@ -1915,7 +1918,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       in
       F.pp_print_string fmt match_begin;
       F.pp_print_space fmt ();
-      let scrut_inside = PureUtils.let_group_requires_parentheses scrut in
+      let scrut_inside = PureUtils.texpression_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;
       F.pp_print_space fmt ();
       F.pp_print_string fmt "with";
@@ -1926,14 +1929,18 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       let extract_branch (br : match_branch) : unit =
         F.pp_print_space fmt ();
         (* Open a box for the pattern+branch *)
+        F.pp_open_hvbox fmt ctx.indent_incr;
+        (* Open a box for the pattern *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        F.pp_print_string fmt "|";
         (* Print the pattern *)
+        F.pp_print_string fmt "|";
         F.pp_print_space fmt ();
         let ctx = extract_typed_pattern ctx fmt false br.pat in
         F.pp_print_space fmt ();
         let arrow = match !backend with FStar -> "->" | Coq | Lean -> "=>" in
         F.pp_print_string fmt arrow;
+        (* Close the box for the pattern *)
+        F.pp_close_box fmt ();
         F.pp_print_space fmt ();
         (* Open a box for the branch *)
         F.pp_open_hovbox fmt ctx.indent_incr;
@@ -2228,7 +2235,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open two boxes for the definition, so that whenever possible it gets printed on
    * one line and indents are correct *)
   F.pp_open_hvbox fmt 0;
-  F.pp_open_hvbox fmt ctx.indent_incr;
+  F.pp_open_vbox fmt ctx.indent_incr;
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
@@ -2379,7 +2386,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       ctx_get_terminates_clause def.def_id def.loop_id ctx
     in
     F.pp_print_break fmt 0 0;
-    (* Open a box for the whole {terminates_by CALL => DECREASES } *)
+    (* Open a box for the whole [terminates_by CALL => DECREASES] *)
     F.pp_open_hvbox fmt ctx.indent_incr;
     (* Open a box for {terminates_by CALL =>} *)
     F.pp_open_hovbox fmt ctx.indent_incr;
@@ -2393,10 +2400,10 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       all_vars;
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=>";
-    (* Close the box for {terminates_by CALL =>} *)
+    (* Close the box for [terminates_by CALL =>] *)
     F.pp_close_box fmt ();
     F.pp_print_space fmt ();
-    (* Open the box for {DECREASES} *)
+    (* Open the box for [DECREASES] *)
     F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt terminates_name;
     List.iter
@@ -2410,9 +2417,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt (ctx_get_var v ctx_body))
       vars;
-    (* Close the box for {DECREASES} *)
+    (* Close the box for [DECREASES] *)
     F.pp_close_box fmt ();
-    (* Close the box for the whole {terminates_by CALL => DECREASES } *)
+    (* Close the box for the whole [terminates_by CALL => DECREASES] *)
     F.pp_close_box fmt ();
 
     let decreases_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in

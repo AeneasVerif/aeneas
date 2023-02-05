@@ -82,7 +82,8 @@ structure OpaqueDefs where
   def y_c : wrap_t Int32 := eval_global y_body (by simp)
   
   /- [constants::unwrap_y] -/
-  def unwrap_y_fwd : result Int32 := result.ret y_c.wrap_val
+  def unwrap_y_fwd : result Int32 :=
+    result.ret y_c.wrap_val
   
   /- [constants::YVAL] -/
   def yval_body : result Int32 := unwrap_y_fwd
@@ -94,10 +95,12 @@ structure OpaqueDefs where
   def get_z1_z1_c : Int32 := eval_global get_z1_z1_body (by simp)
   
   /- [constants::get_z1] -/
-  def get_z1_fwd : result Int32 := result.ret get_z1_z1_c
+  def get_z1_fwd : result Int32 :=
+    result.ret get_z1_z1_c
   
   /- [constants::add] -/
-  def add_fwd (a : Int32) (b : Int32) : result Int32 := Int32.checked_add a b
+  def add_fwd (a : Int32) (b : Int32) : result Int32 :=
+    Int32.checked_add a b
   
   /- [constants::Q1] -/
   def q1_body : result Int32 := result.ret (Int32.ofNatCore 5 (by intlit))
