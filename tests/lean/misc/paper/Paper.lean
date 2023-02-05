@@ -21,12 +21,16 @@ structure OpaqueDefs where
   
   /- [paper::choose] -/
   def choose_fwd (T : Type) (b : Bool) (x : T) (y : T) : result T :=
-    if b then result.ret x else result.ret y
+    if b
+    then result.ret x
+    else result.ret y
   
   /- [paper::choose] -/
   def choose_back
     (T : Type) (b : Bool) (x : T) (y : T) (ret0 : T) : result (T × T) :=
-    if b then result.ret (ret0, y) else result.ret (x, ret0)
+    if b
+    then result.ret (ret0, y)
+    else result.ret (x, ret0)
   
   /- [paper::test_choose] -/
   def test_choose_fwd : result Unit :=
@@ -68,7 +72,6 @@ structure OpaqueDefs where
           let i0 <- UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_mut_fwd T tl i0
     | list_t.ListNil => result.fail error.panic
-    
   
   /- [paper::list_nth_mut] -/
   def list_nth_mut_back
@@ -83,7 +86,6 @@ structure OpaqueDefs where
           let tl0 <- list_nth_mut_back T tl i0 ret0
           result.ret (list_t.ListCons x tl0)
     | list_t.ListNil => result.fail error.panic
-    
   
   /- [paper::sum] -/
   def sum_fwd (l : list_t Int32) : result Int32 :=
@@ -92,7 +94,6 @@ structure OpaqueDefs where
                                 let i <- sum_fwd tl
                                 Int32.checked_add x i
     | list_t.ListNil => result.ret (Int32.ofNatCore 0 (by intlit))
-    
   
   /- [paper::test_nth] -/
   def test_nth_fwd : result Unit :=
