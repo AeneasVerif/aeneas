@@ -102,12 +102,6 @@ mkBetree_be_tree_t {
 }
 .
 
-(** [core::num::u64::{10}::MAX] *)
-Definition core_num_u64_max_body : result u64 :=
-  Return (18446744073709551615%u64)
-.
-Definition core_num_u64_max_c : u64 := core_num_u64_max_body%global.
-
 (** The state type used in the state-error monad *)
 Axiom state : Type.
 

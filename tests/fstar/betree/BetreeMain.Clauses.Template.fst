@@ -6,10 +6,6 @@ open BetreeMain.Types
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [core::num::u64::{10}::MAX] *)
-let core_num_u64_max_body : result u64 = Return 18446744073709551615
-let core_num_u64_max_c : u64 = eval_global core_num_u64_max_body
-
 (** [betree_main::betree::List::{1}::len]: decreases clause *)
 unfold
 let betree_list_len_decreases (t : Type0) (self : betree_list_t t) : nat =
