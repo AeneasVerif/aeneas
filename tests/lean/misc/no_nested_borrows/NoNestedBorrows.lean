@@ -69,7 +69,9 @@ structure OpaqueDefs where
   
   /- [no_nested_borrows::get_max] -/
   def get_max_fwd (x : UInt32) (y : UInt32) : result UInt32 :=
-    if x >= y then result.ret x else result.ret y
+    if x >= y
+    then result.ret x
+    else result.ret y
   
   /- [no_nested_borrows::test3] -/
   def test3_fwd : result Unit :=
@@ -153,11 +155,15 @@ structure OpaqueDefs where
   
   /- [no_nested_borrows::test_unreachable] -/
   def test_unreachable_fwd (b : Bool) : result Unit :=
-    if b then result.fail error.panic else result.ret ()
+    if b
+    then result.fail error.panic
+    else result.ret ()
   
   /- [no_nested_borrows::test_panic] -/
   def test_panic_fwd (b : Bool) : result Unit :=
-    if b then result.fail error.panic else result.ret ()
+    if b
+    then result.fail error.panic
+    else result.ret ()
   
   /- [no_nested_borrows::test_copy_int] -/
   def test_copy_int_fwd : result Unit :=
@@ -175,7 +181,6 @@ structure OpaqueDefs where
     match l with
     | list_t.ListCons t l0 => result.ret true
     | list_t.ListNil => result.ret false
-    
   
   /- [no_nested_borrows::test_is_cons] -/
   def test_is_cons_fwd : result Unit :=
@@ -183,7 +188,9 @@ structure OpaqueDefs where
       let l := list_t.ListNil
       let b <-
         is_cons_fwd Int32 (list_t.ListCons (Int32.ofNatCore 0 (by intlit)) l)
-      if not b then result.fail error.panic else result.ret ()
+      if not b
+      then result.fail error.panic
+      else result.ret ()
   
   /- Unit test for [no_nested_borrows::test_is_cons] -/
   #assert (test_is_cons_fwd = .ret ())
@@ -193,7 +200,6 @@ structure OpaqueDefs where
     match l with
     | list_t.ListCons hd tl => result.ret (hd, tl)
     | list_t.ListNil => result.fail error.panic
-    
   
   /- [no_nested_borrows::test_split_list] -/
   def test_split_list_fwd : result Unit :=
@@ -212,12 +218,16 @@ structure OpaqueDefs where
   
   /- [no_nested_borrows::choose] -/
   def choose_fwd (T : Type) (b : Bool) (x : T) (y : T) : result T :=
-    if b then result.ret x else result.ret y
+    if b
+    then result.ret x
+    else result.ret y
   
   /- [no_nested_borrows::choose] -/
   def choose_back
     (T : Type) (b : Bool) (x : T) (y : T) (ret0 : T) : result (T × T) :=
-    if b then result.ret (ret0, y) else result.ret (x, ret0)
+    if b
+    then result.ret (ret0, y)
+    else result.ret (x, ret0)
   
   /- [no_nested_borrows::choose_test] -/
   def choose_test_fwd : result Unit :=
@@ -265,7 +275,6 @@ structure OpaqueDefs where
         let i <- list_length_fwd T l1
         UInt32.checked_add (UInt32.ofNatCore 1 (by intlit)) i
     | list_t.ListNil => result.ret (UInt32.ofNatCore 0 (by intlit))
-    
   
   /- [no_nested_borrows::list_nth_shared] -/
   def list_nth_shared_fwd (T : Type) (l : list_t T) (i : UInt32) : result T :=
@@ -278,7 +287,6 @@ structure OpaqueDefs where
           let i0 <- UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_shared_fwd T tl i0
     | list_t.ListNil => result.fail error.panic
-    
   
   /- [no_nested_borrows::list_nth_mut] -/
   def list_nth_mut_fwd (T : Type) (l : list_t T) (i : UInt32) : result T :=
@@ -291,7 +299,6 @@ structure OpaqueDefs where
           let i0 <- UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_mut_fwd T tl i0
     | list_t.ListNil => result.fail error.panic
-    
   
   /- [no_nested_borrows::list_nth_mut] -/
   def list_nth_mut_back
@@ -306,7 +313,6 @@ structure OpaqueDefs where
           let tl0 <- list_nth_mut_back T tl i0 ret0
           result.ret (list_t.ListCons x tl0)
     | list_t.ListNil => result.fail error.panic
-    
   
   /- [no_nested_borrows::list_rev_aux] -/
   def list_rev_aux_fwd
@@ -314,7 +320,6 @@ structure OpaqueDefs where
     match li with
     | list_t.ListCons hd tl => list_rev_aux_fwd T tl (list_t.ListCons hd lo)
     | list_t.ListNil => result.ret lo
-    
   
   /- [no_nested_borrows::list_rev] -/
   def list_rev_fwd_back (T : Type) (l : list_t T) : result (list_t T) :=
@@ -542,7 +547,6 @@ structure OpaqueDefs where
     match l with
     | list_t.ListCons i l0 => result.ret (UInt32.ofNatCore 1 (by intlit))
     | list_t.ListNil => result.ret (UInt32.ofNatCore 0 (by intlit))
-    
   
   /- [no_nested_borrows::test_shared_borrow_enum2] -/
   def test_shared_borrow_enum2_fwd : result UInt32 :=
