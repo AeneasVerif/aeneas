@@ -32,8 +32,7 @@ def sum_with_mut_borrows_loop_fwd
       sum_with_mut_borrows_loop_fwd max mi0 ms0
   else UInt32.checked_mul ms (UInt32.ofNatCore 2 (by intlit))
 termination_by sum_with_mut_borrows_loop_fwd max mi ms =>
-                                                         sum_with_mut_borrows_loop_terminates
-                                                         max mi ms
+  sum_with_mut_borrows_loop_terminates max mi ms
 decreasing_by sum_with_mut_borrows_loop_decreases max mi ms
 
 /- [loops::sum_with_mut_borrows] -/
@@ -52,8 +51,7 @@ def sum_with_shared_borrows_loop_fwd
       sum_with_shared_borrows_loop_fwd max i0 s0
   else UInt32.checked_mul s (UInt32.ofNatCore 2 (by intlit))
 termination_by sum_with_shared_borrows_loop_fwd max i s =>
-                                                          sum_with_shared_borrows_loop_terminates
-                                                          max i s
+  sum_with_shared_borrows_loop_terminates max i s
 decreasing_by sum_with_shared_borrows_loop_decreases max i s
 
 /- [loops::sum_with_shared_borrows] -/
@@ -106,8 +104,7 @@ def list_nth_mut_loop_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_loop_fwd ls i =>
-                                                 list_nth_mut_loop_loop_terminates
-                                                 T ls i
+  list_nth_mut_loop_loop_terminates T ls i
 decreasing_by list_nth_mut_loop_loop_decreases ls i
 
 /- [loops::list_nth_mut_loop] -/
@@ -129,8 +126,7 @@ def list_nth_mut_loop_loop_back
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_loop_back ls i ret0 =>
-                                                       list_nth_mut_loop_loop_terminates
-                                                       T ls i
+  list_nth_mut_loop_loop_terminates T ls i
 decreasing_by list_nth_mut_loop_loop_decreases ls i
 
 /- [loops::list_nth_mut_loop] -/
@@ -152,8 +148,7 @@ def list_nth_shared_loop_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_shared_loop_loop_fwd ls i =>
-                                                    list_nth_shared_loop_loop_terminates
-                                                    T ls i
+  list_nth_shared_loop_loop_terminates T ls i
 decreasing_by list_nth_shared_loop_loop_decreases ls i
 
 /- [loops::list_nth_shared_loop] -/
@@ -191,8 +186,8 @@ def get_elem_mut_loop_back
         result.ret (list_t.ListCons y tl0)
   | list_t.ListNil => result.fail error.panic
   
-termination_by get_elem_mut_loop_back x ls ret0 => get_elem_mut_loop_terminates
-                                                  x ls
+termination_by get_elem_mut_loop_back x ls ret0 =>
+  get_elem_mut_loop_terminates x ls
 decreasing_by get_elem_mut_loop_decreases x ls
 
 /- [loops::get_elem_mut] -/
@@ -214,8 +209,8 @@ def get_elem_shared_loop_fwd
     if y = x then result.ret y else get_elem_shared_loop_fwd x tl
   | list_t.ListNil => result.fail error.panic
   
-termination_by get_elem_shared_loop_fwd x ls => get_elem_shared_loop_terminates
-                                               x ls
+termination_by get_elem_shared_loop_fwd x ls =>
+  get_elem_shared_loop_terminates x ls
 decreasing_by get_elem_shared_loop_decreases x ls
 
 /- [loops::get_elem_shared] -/
@@ -251,8 +246,7 @@ def list_nth_mut_loop_with_id_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_with_id_loop_fwd i ls =>
-                                                         list_nth_mut_loop_with_id_loop_terminates
-                                                         T i ls
+  list_nth_mut_loop_with_id_loop_terminates T i ls
 decreasing_by list_nth_mut_loop_with_id_loop_decreases i ls
 
 /- [loops::list_nth_mut_loop_with_id] -/
@@ -277,8 +271,7 @@ def list_nth_mut_loop_with_id_loop_back
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_with_id_loop_back i ls ret0 =>
-                                                               list_nth_mut_loop_with_id_loop_terminates
-                                                               T i ls
+  list_nth_mut_loop_with_id_loop_terminates T i ls
 decreasing_by list_nth_mut_loop_with_id_loop_decreases i ls
 
 /- [loops::list_nth_mut_loop_with_id] -/
@@ -303,8 +296,7 @@ def list_nth_shared_loop_with_id_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_shared_loop_with_id_loop_fwd i ls =>
-                                                            list_nth_shared_loop_with_id_loop_terminates
-                                                            T i ls
+  list_nth_shared_loop_with_id_loop_terminates T i ls
 decreasing_by list_nth_shared_loop_with_id_loop_decreases i ls
 
 /- [loops::list_nth_shared_loop_with_id] -/
@@ -334,8 +326,7 @@ def list_nth_mut_loop_pair_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_pair_loop_fwd ls0 ls1 i =>
-                                                           list_nth_mut_loop_pair_loop_terminates
-                                                           T ls0 ls1 i
+  list_nth_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_loop_pair] -/
@@ -366,8 +357,7 @@ def list_nth_mut_loop_pair_loop_back'a
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_pair_loop_back'a ls0 ls1 i ret0 =>
-                                                                   list_nth_mut_loop_pair_loop_terminates
-                                                                   T ls0 ls1 i
+  list_nth_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_loop_pair] -/
@@ -398,8 +388,7 @@ def list_nth_mut_loop_pair_loop_back'b
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_pair_loop_back'b ls0 ls1 i ret0 =>
-                                                                   list_nth_mut_loop_pair_loop_terminates
-                                                                   T ls0 ls1 i
+  list_nth_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_loop_pair] -/
@@ -429,8 +418,7 @@ def list_nth_shared_loop_pair_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_shared_loop_pair_loop_fwd ls0 ls1 i =>
-                                                              list_nth_shared_loop_pair_loop_terminates
-                                                              T ls0 ls1 i
+  list_nth_shared_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_loop_pair_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_shared_loop_pair] -/
@@ -460,8 +448,7 @@ def list_nth_mut_loop_pair_merge_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_pair_merge_loop_fwd ls0 ls1 i =>
-                                                                 list_nth_mut_loop_pair_merge_loop_terminates
-                                                                 T ls0 ls1 i
+  list_nth_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_merge_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_loop_pair_merge] -/
@@ -495,7 +482,7 @@ def list_nth_mut_loop_pair_merge_loop_back
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_loop_pair_merge_loop_back ls0 ls1 i ret0 =>
-   list_nth_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
+  list_nth_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_merge_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_loop_pair_merge] -/
@@ -525,8 +512,7 @@ def list_nth_shared_loop_pair_merge_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_shared_loop_pair_merge_loop_fwd ls0 ls1 i =>
-                                                                    list_nth_shared_loop_pair_merge_loop_terminates
-                                                                    T ls0 ls1 i
+  list_nth_shared_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_loop_pair_merge_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_shared_loop_pair_merge] -/
@@ -556,8 +542,7 @@ def list_nth_mut_shared_loop_pair_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_shared_loop_pair_loop_fwd ls0 ls1 i =>
-                                                                  list_nth_mut_shared_loop_pair_loop_terminates
-                                                                  T ls0 ls1 i
+  list_nth_mut_shared_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_shared_loop_pair_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_loop_pair] -/
@@ -588,7 +573,7 @@ def list_nth_mut_shared_loop_pair_loop_back
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_shared_loop_pair_loop_back ls0 ls1 i ret0 =>
-   list_nth_mut_shared_loop_pair_loop_terminates T ls0 ls1 i
+  list_nth_mut_shared_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_shared_loop_pair_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_loop_pair] -/
@@ -618,7 +603,7 @@ def list_nth_mut_shared_loop_pair_merge_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_shared_loop_pair_merge_loop_fwd ls0 ls1 i =>
-   list_nth_mut_shared_loop_pair_merge_loop_terminates T ls0 ls1 i
+  list_nth_mut_shared_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_shared_loop_pair_merge_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_loop_pair_merge] -/
@@ -650,7 +635,7 @@ def list_nth_mut_shared_loop_pair_merge_loop_back
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_mut_shared_loop_pair_merge_loop_back ls0 ls1 i ret0 =>
-   list_nth_mut_shared_loop_pair_merge_loop_terminates T ls0 ls1 i
+  list_nth_mut_shared_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_shared_loop_pair_merge_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_loop_pair_merge] -/
@@ -680,8 +665,7 @@ def list_nth_shared_mut_loop_pair_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_shared_mut_loop_pair_loop_fwd ls0 ls1 i =>
-                                                                  list_nth_shared_mut_loop_pair_loop_terminates
-                                                                  T ls0 ls1 i
+  list_nth_shared_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_mut_loop_pair_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_shared_mut_loop_pair] -/
@@ -712,7 +696,7 @@ def list_nth_shared_mut_loop_pair_loop_back
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_shared_mut_loop_pair_loop_back ls0 ls1 i ret0 =>
-   list_nth_shared_mut_loop_pair_loop_terminates T ls0 ls1 i
+  list_nth_shared_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_mut_loop_pair_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_shared_mut_loop_pair] -/
@@ -742,7 +726,7 @@ def list_nth_shared_mut_loop_pair_merge_loop_fwd
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_shared_mut_loop_pair_merge_loop_fwd ls0 ls1 i =>
-   list_nth_shared_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
+  list_nth_shared_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_mut_loop_pair_merge_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_shared_mut_loop_pair_merge] -/
@@ -774,7 +758,7 @@ def list_nth_shared_mut_loop_pair_merge_loop_back
   | list_t.ListNil => result.fail error.panic
   
 termination_by list_nth_shared_mut_loop_pair_merge_loop_back ls0 ls1 i ret0 =>
-   list_nth_shared_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
+  list_nth_shared_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_mut_loop_pair_merge_loop_decreases ls0 ls1 i
 
 /- [loops::list_nth_shared_mut_loop_pair_merge] -/
