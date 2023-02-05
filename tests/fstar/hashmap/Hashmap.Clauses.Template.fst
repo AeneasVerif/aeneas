@@ -24,10 +24,6 @@ let hash_map_insert_in_list_loop_decreases (t : Type0) (key : usize)
   (value : t) (ls : list_t t) : nat =
   admit ()
 
-(** [core::num::u32::{9}::MAX] *)
-let core_num_u32_max_body : result u32 = Return 4294967295
-let core_num_u32_max_c : u32 = eval_global core_num_u32_max_body
-
 (** [hashmap::HashMap::{0}::move_elements_from_list]: decreases clause *)
 unfold
 let hash_map_move_elements_from_list_loop_decreases (t : Type0)

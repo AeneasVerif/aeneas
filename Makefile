@@ -115,43 +115,57 @@ AENEAS_CMD = $(AENEAS_EXE) $(CHARON_TEST_DIR)/llbc/$(FILE).llbc -dest tests/$(BA
 # Add specific options to some tests
 trans-no_nested_borrows trans-paper: \
 	OPTIONS += -test-units -test-trans-units -no-split-files -no-state
-trans-no_nested_borrows trans-paper: SUBDIR:=misc
+trans-no_nested_borrows trans-paper: SUBDIR := misc
 tfstar-no_nested_borrows tfstar-paper:
+tlean-no_nested_borrows: SUBDIR := misc/no_nested_borrows
+tlean-paper: SUBDIR := misc/paper
 
 trans-loops: OPTIONS += -no-state
 trans-loops: SUBDIR := misc
 tfstar-loops: OPTIONS += -decreases-clauses -template-clauses
 tcoq-loops: OPTIONS += -use-fuel -no-split-files
+tlean-loops: SUBDIR := misc/loops
+tlean-loops: OPTIONS += -decreases-clauses -template-clauses
 
 trans-hashmap: OPTIONS += -no-state
-trans-hashmap: SUBDIR:=hashmap
+trans-hashmap: SUBDIR := hashmap
 tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap: OPTIONS += -use-fuel
+tlean-hashmap: OPTIONS += -decreases-clauses -template-clauses
 
 trans-hashmap_main: OPTIONS +=
-trans-hashmap_main: SUBDIR:=hashmap_on_disk
+trans-hashmap_main: SUBDIR := hashmap_on_disk
 tfstar-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap_main: OPTIONS += -use-fuel
+tlean-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
 
 transp-polonius_list: OPTIONS += -test-units -test-trans-units -no-split-files -no-state
-transp-polonius_list: SUBDIR:=misc
+transp-polonius_list: SUBDIR := misc
 tfstarp-polonius_list: OPTIONS +=
 tcoqp-polonius_list: OPTIONS +=
+tleanp-polonius_list: SUBDIR := misc/polonius_list
+tleanp-polonius_list: OPTIONS +=
 
 trans-constants: OPTIONS += -test-units -test-trans-units -no-split-files -no-state
-trans-constants: SUBDIR:=misc
+trans-constants: SUBDIR := misc
 tfstar-constants: OPTIONS +=
 tcoq-constants: OPTIONS +=
+tlean-constants: SUBDIR := misc/constants
+tlean-constants: OPTIONS +=
 
 trans-external: OPTIONS +=
-trans-external: SUBDIR:=misc
+trans-external: SUBDIR := misc
 tfstar-external: OPTIONS +=
+tcoq-external: OPTIONS +=
+tlean-external: SUBDIR := misc/external
+tlean-external: OPTIONS +=
 
 BETREE_FSTAR_OPTIONS = -decreases-clauses -template-clauses
 transp-betree_main: OPTIONS += -backward-no-state-update
 transp-betree_main: SUBDIR:=betree
 tfstarp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
 tcoqp-betree_main: OPTIONS += -use-fuel
+tleanp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
 
 # Additional test on the betree: translate it without `-backward-no-state-update`.
 # This generates very ugly code, but is good to test the translation.
@@ -226,6 +240,13 @@ tcoqp-%:
 tlean-%: OPTIONS += -backend lean -test-trans-units
 tlean-%: BACKEND_SUBDIR := lean
 tlean-%:
+	$(AENEAS_CMD)
+
+# "p" stands for "Polonius"
+.PHONY: tleanp-%
+tleanp-%: OPTIONS += -backend lean -test-trans-units
+tleanp-%: BACKEND_SUBDIR := lean
+tleanp-%:
 	$(AENEAS_CMD)
 
 # Nix
