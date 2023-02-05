@@ -31,8 +31,4 @@ Arguments Hash_map_max_load_factor {T}.
 Arguments Hash_map_max_load {T}.
 Arguments Hash_map_slots {T}.
 
-(** [core::num::u32::{9}::MAX] *)
-Definition core_num_u32_max_body : result u32 := Return (4294967295%u32).
-Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
-
 End Hashmap_Types .

@@ -31,10 +31,6 @@ Arguments Hashmap_hash_map_max_load_factor {T}.
 Arguments Hashmap_hash_map_max_load {T}.
 Arguments Hashmap_hash_map_slots {T}.
 
-(** [core::num::u32::{9}::MAX] *)
-Definition core_num_u32_max_body : result u32 := Return (4294967295%u32).
-Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
-
 (** The state type used in the state-error monad *)
 Axiom state : Type.
 
