@@ -7,9 +7,9 @@ structure OpaqueDefs where
   
   /- [hashmap_main::hashmap_utils::deserialize] -/
   hashmap_utils_deserialize_fwd
-    : state -> result (state × (hashmap_hash_map_t UInt64))
+    : State -> Result (State × (hashmap_hash_map_t UInt64))
   
   /- [hashmap_main::hashmap_utils::serialize] -/
   hashmap_utils_serialize_fwd
-    : hashmap_hash_map_t UInt64 -> state -> result (state × Unit)
+    : hashmap_hash_map_t UInt64 -> State -> Result (State × Unit)
   
