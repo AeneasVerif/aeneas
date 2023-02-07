@@ -77,6 +77,10 @@ macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
   let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
   .ret r
 
+-- TODO: ideally, `let <--` would automatically pick the name for the fresh
+-- hypothesis, of the form `h_x` where `x` is the name of the variable, with
+-- collision-avoidance. That way, code generation would be simpler.
+
 ----------------------
 -- MACHINE INTEGERS --
 ----------------------
@@ -361,6 +365,10 @@ def mem_replace_back (a : Type) (_ : a) (y : a) : a :=
 open Lean Elab Command Term Meta
 
 syntax (name := assert) "#assert" term: command
+
+-- TODO: figure out how to make #assert behave as #eval followed by a compiler
+-- error if the term doesn't reduce to True. Once we have that, add some inline
+-- tests for the arithmetic operations, notably `rem`
 
 @[command_elab assert]
 def assertImpl : CommandElab := fun (_stx: Syntax) => do
