@@ -9,69 +9,69 @@ import Mathlib.Tactic.RunCmd
 
 -- Results & monadic combinators
 
--- TODO: use syntactic conventions and capitalize error, result, etc.
+-- TODO: use syntactic conventions and capitalize Error, Result, etc.
 
-inductive error where
-   | assertionFailure: error
-   | integerOverflow: error
-   | arrayOutOfBounds: error
-   | maximumSizeExceeded: error
-   | panic: error
+inductive Error where
+   | assertionFailure: Error
+   | integerOverflow: Error
+   | arrayOutOfBounds: Error
+   | maximumSizeExceeded: Error
+   | panic: Error
 deriving Repr, BEq
 
-open error
+open Error
 
-inductive result (α : Type u) where
-  | ret (v: α): result α
-  | fail (e: error): result α 
+inductive Result (α : Type u) where
+  | ret (v: α): Result α
+  | fail (e: Error): Result α 
 deriving Repr, BEq
 
-open result
+open Result
 
 /- HELPERS -/
 
 -- TODO: is there automated syntax for these discriminators?
-def is_ret {α: Type} (r: result α): Bool :=
+def is_ret {α: Type} (r: Result α): Bool :=
   match r with
-  | result.ret _ => true
-  | result.fail _ => false
+  | Result.ret _ => true
+  | Result.fail _ => false
 
-def massert (b:Bool) : result Unit :=
+def massert (b:Bool) : Result Unit :=
   if b then .ret () else fail assertionFailure
 
-def eval_global {α: Type} (x: result α) (_: is_ret x): α :=
+def eval_global {α: Type} (x: Result α) (_: is_ret x): α :=
   match x with
-  | result.fail _ => by contradiction
-  | result.ret x => x
+  | Result.fail _ => by contradiction
+  | Result.ret x => x
 
 /- DO-DSL SUPPORT -/
 
-def bind (x: result α) (f: α -> result β) : result β :=
+def bind (x: Result α) (f: α -> Result β) : Result β :=
   match x with
   | ret v  => f v 
   | fail v => fail v
 
--- Allows using result in do-blocks
-instance : Bind result where
+-- Allows using Result in do-blocks
+instance : Bind Result where
   bind := bind
 
 -- Allows using return x in do-blocks
-instance : Pure result where
+instance : Pure Result where
   pure := fun x => ret x
 
 /- CUSTOM-DSL SUPPORT -/
 
--- Let-binding the result of a monadic operation is oftentimes not sufficient,
+-- Let-binding the Result of a monadic operation is oftentimes not sufficient,
 -- because we may need a hypothesis for equational reasoning in the scope. We
 -- rely on subtype, and a custom let-binding operator, in effect recreating our
 -- own variant of the do-dsl
 
-def result.attach : (o : result α) → result { x : α // o = ret x }
+def Result.attach : (o : Result α) → Result { x : α // o = ret x }
   | .ret x => .ret ⟨x, rfl⟩
   | .fail e   => .fail e
 
 macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
-  `(doElem| let ⟨$e, $h⟩ ← result.attach $f)
+  `(doElem| let ⟨$e, $h⟩ ← Result.attach $f)
 
 -- Silly example of the kind of reasoning that this notation enables
 #eval do
@@ -99,8 +99,8 @@ macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
 -- total function over nats...? the hypothesis in the if condition is not used
 -- in the then-branch which confuses me quite a bit
 
--- TODO: add a refinement for the result (just like vec_push_back below) that
--- explains that the toNat of the result (in the case of success) is the sub of
+-- TODO: add a refinement for the Result (just like vec_push_back below) that
+-- explains that the toNat of the Result (in the case of success) is the sub of
 -- the toNat of the arguments (i.e. intrinsic specification)
 -- ... do we want intrinsic specifications for the builtins? that might require
 -- some careful type annotations in the monadic notation for clients, but may
@@ -134,7 +134,7 @@ macro_rules
 -- and
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/UInt.lean
 -- which both contain a fair amount of reasoning already!
-def USize.checked_sub (n: USize) (m: USize): result USize :=
+def USize.checked_sub (n: USize) (m: USize): Result USize :=
   -- NOTE: the test USize.toNat n - m >= 0 seems to always succeed?
   if n >= m then
     let n' := USize.toNat n
@@ -150,7 +150,7 @@ def USize.checked_sub (n: USize) (m: USize): result USize :=
   else
     fail integerOverflow
 
-def USize.checked_add (n: USize) (m: USize): result USize :=
+def USize.checked_add (n: USize) (m: USize): Result USize :=
   if h: n.val.val + m.val.val <= 4294967295 then
     .ret ⟨ n.val.val + m.val.val, by
       have h': 4294967295 < USize.size := by intlit
@@ -161,7 +161,7 @@ def USize.checked_add (n: USize) (m: USize): result USize :=
   else
     .fail integerOverflow
 
-def USize.checked_rem (n: USize) (m: USize): result USize :=
+def USize.checked_rem (n: USize) (m: USize): Result USize :=
   if h: m > 0 then
     .ret ⟨ n.val % m.val, by
       have h1: ↑m.val < USize.size := m.val.isLt
@@ -171,7 +171,7 @@ def USize.checked_rem (n: USize) (m: USize): result USize :=
   else
     .fail integerOverflow
 
-def USize.checked_mul (n: USize) (m: USize): result USize :=
+def USize.checked_mul (n: USize) (m: USize): Result USize :=
     if h: n.val.val * m.val.val <= 4294967295 then
     .ret ⟨ n.val.val * m.val.val, by
       have h': 4294967295 < USize.size := by intlit
@@ -182,7 +182,7 @@ def USize.checked_mul (n: USize) (m: USize): result USize :=
   else
     .fail integerOverflow
 
-def USize.checked_div (n: USize) (m: USize): result USize :=
+def USize.checked_div (n: USize) (m: USize): Result USize :=
   if m > 0 then
     .ret ⟨ n.val / m.val, by
       have h1: ↑n.val < USize.size := n.val.isLt
@@ -209,7 +209,7 @@ run_cmd
     end $typeName
   ))
 
-def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): result dst :=
+def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): Result dst :=
   if h: MachineInteger.val x < MachineInteger.size dst then
     .ret (MachineInteger.ofNatCore (MachineInteger.val x).val h)
   else
@@ -249,11 +249,11 @@ def vec_len (α : Type u) (v : vec α) : USize :=
 def vec_push_fwd (α : Type u) (_ : vec α) (_ : α) : Unit := ()
 
 -- NOTE: old version trying to use a subtype notation, but probably better to
--- leave result elimination to auxiliary lemmas with suitable preconditions
+-- leave Result elimination to auxiliary lemmas with suitable preconditions
 -- TODO: I originally wrote `List.length v.val < USize.size - 1`; how can one
 -- make the proof work in that case? Probably need to import tactics from
 -- mathlib to deal with inequalities... would love to see an example.
-def vec_push_back_old (α : Type u) (v : vec α) (x : α) : { res: result (vec α) //
+def vec_push_back_old (α : Type u) (v : vec α) (x : α) : { res: Result (vec α) //
   match res with | fail _ => True | ret v' => List.length v'.val = List.length v.val + 1}
   :=
   if h : List.length v.val + 1 < USize.size then
@@ -272,12 +272,12 @@ def vec_push_back_old (α : Type u) (v : vec α) (x : α) : { res: result (vec �
   -- annotate `x`, which relieves us of having to write `.val` on the right-hand
   -- side of the monadic let.
   let v := vec_new Nat
-  let x: vec Nat ← (vec_push_back_old Nat v 1: result (vec Nat)) -- WHY do we need the type annotation here?
+  let x: vec Nat ← (vec_push_back_old Nat v 1: Result (vec Nat)) -- WHY do we need the type annotation here?
   -- TODO: strengthen post-condition above and do a demo to show that we can
   -- safely eliminate the `fail` case
   return (vec_len Nat x)
 
-def vec_push_back (α : Type u) (v : vec α) (x : α) : result (vec α)
+def vec_push_back (α : Type u) (v : vec α) (x : α) : Result (vec α)
   :=
   if h : List.length v.val + 1 <= 4294967295 then
     return ⟨ List.concat v.val x,
@@ -295,13 +295,13 @@ def vec_push_back (α : Type u) (v : vec α) (x : α) : result (vec α)
   else
     fail maximumSizeExceeded
 
-def vec_insert_fwd (α : Type u) (v: vec α) (i: USize) (_: α): result Unit :=
+def vec_insert_fwd (α : Type u) (v: vec α) (i: USize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_insert_back (α : Type u) (v: vec α) (i: USize) (x: α): result (vec α) :=
+def vec_insert_back (α : Type u) (v: vec α) (i: USize) (x: α): Result (vec α) :=
   if i.val < List.length v.val then
     .ret ⟨ List.set v.val i.val x, by
       have h: List.length v.val < USize.size := v.property
@@ -311,25 +311,25 @@ def vec_insert_back (α : Type u) (v: vec α) (i: USize) (x: α): result (vec α
   else
     .fail arrayOutOfBounds
 
-def vec_index_fwd (α : Type u) (v: vec α) (i: USize): result α :=
+def vec_index_fwd (α : Type u) (v: vec α) (i: USize): Result α :=
   if h: i.val < List.length v.val then
     .ret (List.get v.val ⟨i.val, h⟩)
   else
     .fail arrayOutOfBounds
 
-def vec_index_back (α : Type u) (v: vec α) (i: USize) (_: α): result Unit :=
+def vec_index_back (α : Type u) (v: vec α) (i: USize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_fwd (α : Type u) (v: vec α) (i: USize): result α :=
+def vec_index_mut_fwd (α : Type u) (v: vec α) (i: USize): Result α :=
   if h: i.val < List.length v.val then
     .ret (List.get v.val ⟨i.val, h⟩)
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_back (α : Type u) (v: vec α) (i: USize) (x: α): result (vec α) :=
+def vec_index_mut_back (α : Type u) (v: vec α) (i: USize) (x: α): Result (vec α) :=
   if i.val < List.length v.val then
     .ret ⟨ List.set v.val i.val x, by
       have h: List.length v.val < USize.size := v.property
@@ -364,7 +364,7 @@ def assertImpl : CommandElab := fun (_stx: Syntax) => do
   runTermElabM (fun _ => do
     let e ← Term.elabTerm _stx[1] none
     logInfo (Expr.dbgToString e)
-    -- How to evaluate the term and compare the result to true?
+    -- How to evaluate the term and compare the Result to true?
     pure ())
   -- logInfo (Expr.dbgToString (``true))
   -- throwError "TODO: assert"

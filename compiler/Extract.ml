@@ -138,12 +138,17 @@ let keywords () =
   List.concat [ named_unops; named_binops; misc ]
 
 let assumed_adts () : (assumed_ty * string) list =
-  [
+  List.map (fun (t, s) ->
+    if !backend = Lean then
+      t, Printf.sprintf "%c%s" (Char.uppercase_ascii s.[0]) (String.sub s 1 (String.length s - 1))
+    else
+      t, s
+  ) [
     (State, "state");
     (Result, "result");
     (Error, "error");
     (Fuel, "nat");
-    (Option, if !backend = Lean then "Option" else "option");
+    (Option, "option");
     (Vec, "vec");
   ]
 
