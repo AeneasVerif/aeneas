@@ -9,8 +9,6 @@ import Mathlib.Tactic.RunCmd
 
 -- Results & monadic combinators
 
--- TODO: use syntactic conventions and capitalize Error, Result, etc.
-
 inductive Error where
    | assertionFailure: Error
    | integerOverflow: Error
@@ -30,8 +28,7 @@ open Result
 
 /- HELPERS -/
 
--- TODO: is there automated syntax for these discriminators?
-def is_ret {α: Type} (r: Result α): Bool :=
+def ret? {α: Type} (r: Result α): Bool :=
   match r with
   | Result.ret _ => true
   | Result.fail _ => false
@@ -39,7 +36,7 @@ def is_ret {α: Type} (r: Result α): Bool :=
 def massert (b:Bool) : Result Unit :=
   if b then .ret () else fail assertionFailure
 
-def eval_global {α: Type} (x: Result α) (_: is_ret x): α :=
+def eval_global {α: Type} (x: Result α) (_: ret? x): α :=
   match x with
   | Result.fail _ => by contradiction
   | Result.ret x => x
@@ -80,40 +77,35 @@ macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
   let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
   .ret r
 
+-- TODO: ideally, `let <--` would automatically pick the name for the fresh
+-- hypothesis, of the form `h_x` where `x` is the name of the variable, with
+-- collision-avoidance. That way, code generation would be simpler.
+
 ----------------------
 -- MACHINE INTEGERS --
 ----------------------
 
--- NOTE: we reuse the USize type from prelude.lean, because at least we know
--- it's defined in an idiomatic style that is going to make proofs easy (and
--- indeed, several proofs here are much shortened compared to Aymeric's earlier
--- attempt.) This is not stricto sensu the *correct* thing to do, because one
--- can query at run-time the value of USize, which we do *not* want to do (we
--- don't know what target we'll run on!), but when the day comes, we'll just
--- define our own USize.
--- ANOTHER NOTE: there is USize.sub but it has wraparound semantics, which is
--- not something we want to define (I think), so we use our own monadic sub (but
--- is it in line with the Rust behavior?)
+-- NOTE: we reuse the fixed-width integer types from prelude.lean: UInt8, ...,
+-- USize. They are generally defined in an idiomatic style, except that there is
+-- not a single type class to rule them all (more on that below). The absence of
+-- type class is intentional, and allows the Lean compiler to efficiently map
+-- them to machine integers during compilation.
 
--- TODO: I am somewhat under the impression that subtraction is defined as a
--- total function over nats...? the hypothesis in the if condition is not used
--- in the then-branch which confuses me quite a bit
-
--- TODO: add a refinement for the Result (just like vec_push_back below) that
--- explains that the toNat of the Result (in the case of success) is the sub of
--- the toNat of the arguments (i.e. intrinsic specification)
--- ... do we want intrinsic specifications for the builtins? that might require
--- some careful type annotations in the monadic notation for clients, but may
--- give us more "for free"
+-- USize is designed properly: you cannot reduce `getNumBits` using the
+-- simplifier, meaning that proofs do not depend on the compile-time value of
+-- USize.size. (Lean assumes 32 or 64-bit platforms, and Rust doesn't really
+-- support, at least officially, 16-bit microcontrollers, so this seems like a
+-- fine design decision for now.)
 
 -- Note from Chris Bailey: "If there's more than one salient property of your
 -- definition then the subtyping strategy might get messy, and the property part
 -- of a subtype is less discoverable by the simplifier or tactics like
--- library_search." Try to settle this with a Lean expert on what is the most
--- productive way to go about this?
+-- library_search." So, we will not add refinements on the return values of the
+-- operations defined on Primitives, but will rather rely on custom lemmas to
+-- invert on possible return values of the primitive operations.
 
--- One needs to perform a little bit of reasoning in order to successfully
--- inject constants into USize, so we provide a general-purpose macro
+-- Machine integer constants, done via `ofNatCore`, which requires a proof that
+-- the `Nat` fits within the desired integer type. We provide a custom tactic.
 
 syntax "intlit" : tactic
 
@@ -128,6 +120,15 @@ macro_rules
 
 -- Also works for other integer types (at the expense of a needless disjunction)
 #eval UInt32.ofNatCore 0 (by intlit)
+
+-- The machine integer operations (e.g. sub) are always total, which is not what
+-- we want. We therefore define "checked" variants, below. Note that we add a
+-- tiny bit of complexity for the USize variant: we first check whether the
+-- result is < 2^32; if it is, we can compute the definition, rather than
+-- returning a term that is computationally stuck (the comparison to USize.size
+-- cannot reduce at compile-time, per the remark about regarding `getNumBits`).
+-- This is useful for the various #asserts that we want to reduce at
+-- type-checking time.
 
 -- Further thoughts: look at what has been done here:
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/Fin/Basic.lean
@@ -192,6 +193,20 @@ def USize.checked_div (n: USize) (m: USize): Result USize :=
   else
     .fail integerOverflow
 
+
+-- Test behavior...
+#eval assert! USize.checked_sub 10 20 == fail integerOverflow; 0
+
+#eval USize.checked_sub 20 10
+-- NOTE: compare with concrete behavior here, which I do not think we want
+#eval USize.sub 0 1
+#eval UInt8.add 255 255
+
+-- We now define a type class that subsumes the various machine integer types, so
+-- as to write a concise definition for scalar_cast, rather than exhaustively
+-- enumerating all of the possible pairs. We remark that Rust has sane semantics
+-- and fails if a cast operation would involve a truncation or modulo.
+
 class MachineInteger (t: Type) where
   size: Nat
   val: t -> Fin size
@@ -209,20 +224,14 @@ run_cmd
     end $typeName
   ))
 
+-- Aeneas only instantiates the destination type (`src` is implicit). We rely on
+-- Lean to infer `src`.
+
 def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): Result dst :=
   if h: MachineInteger.val x < MachineInteger.size dst then
     .ret (MachineInteger.ofNatCore (MachineInteger.val x).val h)
   else
     .fail integerOverflow
-
-
--- Test behavior...
-#eval assert! USize.checked_sub 10 20 == fail integerOverflow; 0
-
-#eval USize.checked_sub 20 10
--- NOTE: compare with concrete behavior here, which I do not think we want
-#eval USize.sub 0 1
-#eval UInt8.add 255 255
 
 -------------
 -- VECTORS --
@@ -357,6 +366,10 @@ open Lean Elab Command Term Meta
 
 syntax (name := assert) "#assert" term: command
 
+-- TODO: figure out how to make #assert behave as #eval followed by a compiler
+-- error if the term doesn't reduce to True. Once we have that, add some inline
+-- tests for the arithmetic operations, notably `rem`
+
 @[command_elab assert]
 def assertImpl : CommandElab := fun (_stx: Syntax) => do
   logInfo "Reducing and asserting: "
@@ -364,7 +377,7 @@ def assertImpl : CommandElab := fun (_stx: Syntax) => do
   runTermElabM (fun _ => do
     let e ← Term.elabTerm _stx[1] none
     logInfo (Expr.dbgToString e)
-    -- How to evaluate the term and compare the Result to true?
+    -- TODO: How to evaluate the term and compare the Result to true?
     pure ())
   -- logInfo (Expr.dbgToString (``true))
   -- throwError "TODO: assert"

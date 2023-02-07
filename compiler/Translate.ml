@@ -661,6 +661,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
    *)
   if config.extract_state_type && config.extract_fun_decls then
     export_state_type ();
+
+  (* For Lean, we parameterize the entire development by a section variable
+     called opaque_defs, of type OpaqueDefs. The code below emits the type
+     definition for OpaqueDefs, which is a structure, in which each field is one
+     of the functions marked as Opaque. We emit the `structure ...` bit here,
+     then rely on `extract_fun_decl` to be aware of this, and skip the keyword
+     (e.g. "axiom" or "val") so as to generate valid syntax for records. *)
   if config.extract_opaque && config.extract_fun_decls && !Config.backend = Lean
   then (
     Format.pp_print_break fmt 0 0;
@@ -670,6 +677,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   List.iter export_decl_group ctx.crate.declarations;
   if config.extract_opaque && !Config.backend = Lean then
     Format.pp_close_box fmt ();
+
   if config.extract_state_type && not config.extract_fun_decls then
     export_state_type ()
 
