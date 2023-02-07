@@ -6,7 +6,8 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [paper::ref_incr] *)
-let ref_incr_fwd_back (x : i32) : result i32 = i32_add x 1
+let ref_incr_fwd_back (x : i32) : result i32 =
+  i32_add x 1
 
 (** [paper::test_incr] *)
 let test_incr_fwd : result unit =
@@ -31,11 +32,11 @@ let test_choose_fwd : result unit =
   let* z0 = i32_add z 1 in
   if not (z0 = 1)
   then Fail Failure
-  else begin
+  else
     let* (x, y) = choose_back i32 true 0 0 z0 in
     if not (x = 1)
     then Fail Failure
-    else if not (y = 0) then Fail Failure else Return () end
+    else if not (y = 0) then Fail Failure else Return ()
 
 (** Unit test for [paper::test_choose] *)
 let _ = assert_norm (test_choose_fwd = Return ())
@@ -51,7 +52,7 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
   | ListCons x tl ->
     if i = 0
     then Return x
-    else begin let* i0 = u32_sub i 1 in list_nth_mut_fwd t tl i0 end
+    else let* i0 = u32_sub i 1 in list_nth_mut_fwd t tl i0
   | ListNil -> Fail Failure
   end
 
@@ -62,10 +63,10 @@ let rec list_nth_mut_back
   | ListCons x tl ->
     if i = 0
     then Return (ListCons ret tl)
-    else begin
+    else
       let* i0 = u32_sub i 1 in
       let* tl0 = list_nth_mut_back t tl i0 ret in
-      Return (ListCons x tl0) end
+      Return (ListCons x tl0)
   | ListNil -> Fail Failure
   end
 

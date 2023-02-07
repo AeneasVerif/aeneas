@@ -8,7 +8,8 @@ include Hashmap.Clauses
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap::hash_key] *)
-let hash_key_fwd (k : usize) : result usize = Return k
+let hash_key_fwd (k : usize) : result usize =
+  Return k
 
 (** [hashmap::HashMap::{0}::allocate_slots] *)
 let rec hash_map_allocate_slots_loop_fwd
@@ -17,10 +18,10 @@ let rec hash_map_allocate_slots_loop_fwd
   (decreases (hash_map_allocate_slots_loop_decreases t slots n))
   =
   if n > 0
-  then begin
+  then
     let* slots0 = vec_push_back (list_t t) slots ListNil in
     let* n0 = usize_sub n 1 in
-    hash_map_allocate_slots_loop_fwd t slots0 n0 end
+    hash_map_allocate_slots_loop_fwd t slots0 n0
   else Return slots
 
 (** [hashmap::HashMap::{0}::allocate_slots] *)
@@ -52,10 +53,10 @@ let rec hash_map_clear_loop_fwd_back
   =
   let i0 = vec_len (list_t t) slots in
   if i < i0
-  then begin
+  then
     let* i1 = usize_add i 1 in
     let* slots0 = vec_index_mut_back (list_t t) slots i ListNil in
-    hash_map_clear_loop_fwd_back t slots0 i1 end
+    hash_map_clear_loop_fwd_back t slots0 i1
   else Return slots
 
 (** [hashmap::HashMap::{0}::clear] *)
@@ -98,9 +99,9 @@ let rec hash_map_insert_in_list_loop_back
   | ListCons ckey cvalue tl ->
     if ckey = key
     then Return (ListCons ckey value tl)
-    else begin
+    else
       let* tl0 = hash_map_insert_in_list_loop_back t key value tl in
-      Return (ListCons ckey cvalue tl0) end
+      Return (ListCons ckey cvalue tl0)
   | ListNil -> let l = ListNil in Return (ListCons key value l)
   end
 
@@ -120,17 +121,17 @@ let hash_map_insert_no_resize_fwd_back
   let* l = vec_index_mut_fwd (list_t t) self.hash_map_slots hash_mod in
   let* inserted = hash_map_insert_in_list_fwd t key value l in
   if inserted
-  then begin
+  then
     let* i0 = usize_add self.hash_map_num_entries 1 in
     let* l0 = hash_map_insert_in_list_back t key value l in
     let* v = vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 in
     Return (Mkhash_map_t i0 self.hash_map_max_load_factor
-      self.hash_map_max_load v) end
-  else begin
+      self.hash_map_max_load v)
+  else
     let* l0 = hash_map_insert_in_list_back t key value l in
     let* v = vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 in
     Return (Mkhash_map_t self.hash_map_num_entries
-      self.hash_map_max_load_factor self.hash_map_max_load v) end
+      self.hash_map_max_load_factor self.hash_map_max_load v)
 
 (** [core::num::u32::{9}::MAX] *)
 let core_num_u32_max_body : result u32 = Return 4294967295
@@ -162,14 +163,14 @@ let rec hash_map_move_elements_loop_fwd_back
   =
   let i0 = vec_len (list_t t) slots in
   if i < i0
-  then begin
+  then
     let* l = vec_index_mut_fwd (list_t t) slots i in
     let ls = mem_replace_fwd (list_t t) l ListNil in
     let* ntable0 = hash_map_move_elements_from_list_fwd_back t ntable ls in
     let* i1 = usize_add i 1 in
     let l0 = mem_replace_back (list_t t) l ListNil in
     let* slots0 = vec_index_mut_back (list_t t) slots i l0 in
-    hash_map_move_elements_loop_fwd_back t ntable0 slots0 i1 end
+    hash_map_move_elements_loop_fwd_back t ntable0 slots0 i1
   else Return (ntable, slots)
 
 (** [hashmap::HashMap::{0}::move_elements] *)
@@ -188,13 +189,13 @@ let hash_map_try_resize_fwd_back
   let (i, i0) = self.hash_map_max_load_factor in
   let* i1 = usize_div n1 i in
   if capacity <= i1
-  then begin
+  then
     let* i2 = usize_mul capacity 2 in
     let* ntable = hash_map_new_with_capacity_fwd t i2 i i0 in
     let* (ntable0, _) =
       hash_map_move_elements_fwd_back t ntable self.hash_map_slots 0 in
     Return (Mkhash_map_t self.hash_map_num_entries (i, i0)
-      ntable0.hash_map_max_load ntable0.hash_map_slots) end
+      ntable0.hash_map_max_load ntable0.hash_map_slots)
   else
     Return (Mkhash_map_t self.hash_map_num_entries (i, i0)
       self.hash_map_max_load self.hash_map_slots)
@@ -293,9 +294,9 @@ let rec hash_map_get_mut_in_list_loop_back
   | ListCons ckey cvalue tl ->
     if ckey = key
     then Return (ListCons ckey ret tl)
-    else begin
+    else
       let* tl0 = hash_map_get_mut_in_list_loop_back t tl key ret in
-      Return (ListCons ckey cvalue tl0) end
+      Return (ListCons ckey cvalue tl0)
   | ListNil -> Fail Failure
   end
 
@@ -366,9 +367,9 @@ let rec hash_map_remove_from_list_loop_back
       | ListCons i cvalue tl0 -> Return tl0
       | ListNil -> Fail Failure
       end
-    else begin
+    else
       let* tl0 = hash_map_remove_from_list_loop_back t key tl in
-      Return (ListCons ckey x tl0) end
+      Return (ListCons ckey x tl0)
   | ListNil -> Return ListNil
   end
 
@@ -423,31 +424,31 @@ let test1_fwd : result unit =
   let* i = hash_map_get_fwd u64 hm3 128 in
   if not (i = 18)
   then Fail Failure
-  else begin
+  else
     let* hm4 = hash_map_get_mut_back u64 hm3 1024 56 in
     let* i0 = hash_map_get_fwd u64 hm4 1024 in
     if not (i0 = 56)
     then Fail Failure
-    else begin
+    else
       let* x = hash_map_remove_fwd u64 hm4 1024 in
       begin match x with
       | None -> Fail Failure
       | Some x0 ->
         if not (x0 = 56)
         then Fail Failure
-        else begin
+        else
           let* hm5 = hash_map_remove_back u64 hm4 1024 in
           let* i1 = hash_map_get_fwd u64 hm5 0 in
           if not (i1 = 42)
           then Fail Failure
-          else begin
+          else
             let* i2 = hash_map_get_fwd u64 hm5 128 in
             if not (i2 = 18)
             then Fail Failure
-            else begin
+            else
               let* i3 = hash_map_get_fwd u64 hm5 1056 in
-              if not (i3 = 256) then Fail Failure else Return () end end end
-      end end end
+              if not (i3 = 256) then Fail Failure else Return ()
+      end
 
 (** Unit test for [hashmap::test1] *)
 let _ = assert_norm (test1_fwd = Return ())

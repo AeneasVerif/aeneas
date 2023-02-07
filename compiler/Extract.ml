@@ -17,9 +17,9 @@ let int_name (int_ty : integer_type) =
   let isize, usize, i_format, u_format =
     match !backend with
     | FStar | Coq ->
-        "isize", "usize", format_of_string "i%d", format_of_string "u%d"
+        ("isize", "usize", format_of_string "i%d", format_of_string "u%d")
     | Lean ->
-        "ISize", "USize", format_of_string "Int%d", format_of_string "UInt%d"
+        ("ISize", "USize", format_of_string "Int%d", format_of_string "UInt%d")
   in
   match int_ty with
   | Isize -> isize
@@ -39,11 +39,10 @@ let int_name (int_ty : integer_type) =
 let unop_name (unop : unop) : string =
   match unop with
   | Not -> ( match !backend with FStar | Lean -> "not" | Coq -> "negb")
-  | Neg (int_ty: integer_type) ->
-      begin match !backend with
+  | Neg (int_ty : integer_type) -> (
+      match !backend with
       | Lean -> int_name int_ty ^ ".checked_neg"
-      | _ -> int_name int_ty ^ "_neg"
-      end
+      | _ -> int_name int_ty ^ "_neg")
   | Cast _ -> raise (Failure "Unsupported")
 
 (** Small helper to compute the name of a binary operation (note that many
@@ -74,8 +73,8 @@ let keywords () =
   let named_binops = [ E.Div; Rem; Add; Sub; Mul ] in
   let named_binops =
     List.concat_map
-       (fun bn -> List.map (fun it -> named_binop_name bn it) T.all_int_types)
-       named_binops
+      (fun bn -> List.map (fun it -> named_binop_name bn it) T.all_int_types)
+      named_binops
   in
   let misc =
     match !backend with
@@ -132,8 +131,7 @@ let keywords () =
           "tt";
           "char_of_byte";
         ]
-    | Lean ->
-        [] (* TODO *)
+    | Lean -> [] (* TODO *)
   in
   List.concat [ named_unops; named_binops; misc ]
 
@@ -207,7 +205,7 @@ let assumed_llbc_functions :
     (VecIndexMut, rg0, "vec_index_mut_back");
   ]
 
-let assumed_pure_functions (): (pure_assumed_fun_id * string) list =
+let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
   match !backend with
   | FStar ->
       [
@@ -256,14 +254,12 @@ let extract_unop (extract_expr : bool -> texpression -> unit)
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt "scalar_cast";
       F.pp_print_space fmt ();
-      if !backend <> Lean then begin
+      if !backend <> Lean then (
         F.pp_print_string fmt
           (StringUtils.capitalize_first_letter
              (PrintPure.integer_type_to_string src));
-        F.pp_print_space fmt ()
-      end;
-      if !backend = Lean then
-        F.pp_print_string fmt (int_name tgt)
+        F.pp_print_space fmt ());
+      if !backend = Lean then F.pp_print_string fmt (int_name tgt)
       else
         F.pp_print_string fmt
           (StringUtils.capitalize_first_letter
@@ -289,7 +285,9 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
         | Gt -> ">"
         | _ -> raise (Failure "Unreachable")
       in
-      let binop = match !backend with FStar | Lean -> binop | Coq -> "s" ^ binop in
+      let binop =
+        match !backend with FStar | Lean -> binop | Coq -> "s" ^ binop
+      in
       extract_expr false arg0;
       F.pp_print_space fmt ();
       F.pp_print_string fmt binop;
@@ -306,7 +304,7 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
   if inside then F.pp_print_string fmt ")"
 
 let type_decl_kind_to_qualif (kind : decl_kind)
-    (type_kind : type_decl_kind option): string =
+    (type_kind : type_decl_kind option) : string =
   match !backend with
   | FStar -> (
       match kind with
@@ -331,7 +329,8 @@ let type_decl_kind_to_qualif (kind : decl_kind)
       | _ -> raise (Failure "Unexpected"))
   | Lean -> (
       match kind with
-      | SingleNonRec -> if type_kind = Some Struct then "structure" else "inductive"
+      | SingleNonRec ->
+          if type_kind = Some Struct then "structure" else "inductive"
       | SingleRec -> "inductive"
       | MutRecFirst -> "mutual inductive"
       | MutRecInner -> "inductive"
@@ -368,7 +367,6 @@ let fun_decl_kind_to_qualif (kind : decl_kind) =
       | MutRecLast -> "def" (* TODO: need to print end afterwards *)
       | Assumed -> "axiom"
       | Declared -> "axiom")
-
 
 (**
    [ctx]: we use the context to lookup type definitions, to retrieve type names.
@@ -444,7 +442,9 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     let name = get_type_name name in
     let name = List.map to_snake_case name in
     let name = String.concat "_" name in
-    match !backend with FStar | Lean -> name | Coq -> capitalize_first_letter name
+    match !backend with
+    | FStar | Lean -> name
+    | Coq -> capitalize_first_letter name
   in
   let type_name name = type_name_to_snake_case name ^ "_t" in
   let field_name (def_name : name) (field_id : FieldId.id)
@@ -592,7 +592,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             F.pp_print_string fmt (int_name sv.int_ty);
             F.pp_print_string fmt ".ofNatCore ";
             Z.pp_print fmt sv.value;
-            F.pp_print_string fmt (" (by intlit))"))
+            F.pp_print_string fmt " (by intlit))")
     | Bool b ->
         let b = if b then "true" else "false" in
         F.pp_print_string fmt b
@@ -612,7 +612,6 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             in
             F.pp_print_string fmt c;
             if inside then F.pp_print_string fmt ")")
-
     | String s ->
         (* We need to replace all the line breaks *)
         let s =
@@ -660,8 +659,7 @@ let print_decl_end_delimiter (fmt : F.formatter) (kind : decl_kind) =
     F.pp_print_cut fmt ();
     F.pp_print_string fmt ".")
 
-let unit_name () =
-  match !backend with | Lean -> "Unit" | Coq | FStar -> "unit"
+let unit_name () = match !backend with Lean -> "Unit" | Coq | FStar -> "unit"
 
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
@@ -680,7 +678,9 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
             Collections.List.iter_link
               (fun () ->
                 F.pp_print_space fmt ();
-                let product = match !backend with FStar -> "&" | Coq -> "*" | Lean -> "×" in
+                let product =
+                  match !backend with FStar -> "&" | Coq -> "*" | Lean -> "×"
+                in
                 F.pp_print_string fmt product;
                 F.pp_print_space fmt ())
               (extract_ty ctx fmt true) tys;
@@ -911,8 +911,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       if !backend = Coq && not is_rec then (
         F.pp_print_string fmt (ctx_get_struct (AdtId def.def_id) ctx);
         F.pp_print_string fmt " ");
-      if !backend <> Lean then
-        F.pp_print_string fmt "{";
+      if !backend <> Lean then F.pp_print_string fmt "{";
       F.pp_print_break fmt 1 ctx.indent_incr;
       (* The body itself *)
       F.pp_open_hvbox fmt 0;
@@ -925,8 +924,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt ":";
         F.pp_print_space fmt ();
         extract_ty ctx fmt false f.field_ty;
-        if !backend <> Lean then
-          F.pp_print_string fmt ";";
+        if !backend <> Lean then F.pp_print_string fmt ";";
         F.pp_close_box fmt ()
       in
       let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
@@ -936,8 +934,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       (* Close *)
       F.pp_close_box fmt ();
       F.pp_print_space fmt ();
-      if !backend <> Lean then
-        F.pp_print_string fmt "}")
+      if !backend <> Lean then F.pp_print_string fmt "}")
     else (
       (* We extract for Coq, and we have a recursive record, or a record in
          a group of mutually recursive types: we extract it as an inductive type
@@ -950,12 +947,12 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
   ()
 
 (** Extract a nestable, muti-line comment *)
-let extract_comment (fmt: F.formatter) (s: string): unit =
+let extract_comment (fmt : F.formatter) (s : string) : unit =
   match !backend with
   | Coq | FStar ->
       F.pp_print_string fmt "(** ";
       F.pp_print_string fmt s;
-      F.pp_print_string fmt " *)";
+      F.pp_print_string fmt " *)"
   | Lean ->
       F.pp_print_string fmt "/- ";
       F.pp_print_string fmt s;
@@ -1007,7 +1004,9 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let qualif = ctx.fmt.type_decl_kind_to_qualif kind type_kind in
   F.pp_print_string fmt (qualif ^ " " ^ def_name);
   (* Print the type parameters *)
-  let type_keyword = match !backend with FStar -> "Type0" | Coq | Lean -> "Type" in
+  let type_keyword =
+    match !backend with FStar -> "Type0" | Coq | Lean -> "Type"
+  in
   if def.type_params <> [] then (
     if use_forall then (
       F.pp_print_space fmt ();
@@ -1028,10 +1027,13 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
-    let eq = match !backend with
+    let eq =
+      match !backend with
       | FStar -> "="
       | Coq -> ":="
-      | Lean -> if type_kind = Some Struct && kind = SingleNonRec then "where" else ":="
+      | Lean ->
+          if type_kind = Some Struct && kind = SingleNonRec then "where"
+          else ":="
     in
     F.pp_print_string fmt eq)
   else (
@@ -1312,18 +1314,15 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
   let state_name = ctx_get_assumed_type State ctx in
   (* The syntax for Lean and Coq is almost identical. *)
   let print_axiom () =
-    if !backend = Coq then
-      F.pp_print_string fmt "Axiom"
-    else
-      F.pp_print_string fmt "axiom";
+    if !backend = Coq then F.pp_print_string fmt "Axiom"
+    else F.pp_print_string fmt "axiom";
     F.pp_print_space fmt ();
     F.pp_print_string fmt state_name;
     F.pp_print_space fmt ();
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
     F.pp_print_string fmt "Type";
-    if !backend = Coq then
-      F.pp_print_string fmt "."
+    if !backend = Coq then F.pp_print_string fmt "."
   in
   (* The kind should be [Assumed] or [Declared] *)
   (match kind with
@@ -1341,8 +1340,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
           F.pp_print_string fmt ":";
           F.pp_print_space fmt ();
           F.pp_print_string fmt "Type0"
-      | Coq | Lean ->
-          print_axiom ())
+      | Coq | Lean -> print_axiom ())
   | Declared -> (
       match !backend with
       | FStar ->
@@ -1353,8 +1351,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
           F.pp_print_string fmt ":";
           F.pp_print_space fmt ();
           F.pp_print_string fmt "Type0"
-      | Coq | Lean ->
-          print_axiom ()));
+      | Coq | Lean -> print_axiom ()));
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
@@ -1372,8 +1369,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
     if has_decreases_clause def then
       let ctx = ctx_add_decreases_clause def ctx in
       ctx_add_terminates_clause def ctx
-    else
-      ctx
+    else ctx
   in
   let ctx = List.fold_left register_decreases ctx (fwd :: loop_fwds) in
   let register_fun ctx f = ctx_add_fun_decl (keep_fwd, def) f ctx in
@@ -1444,8 +1440,7 @@ let extract_adt_g_value
         | Some vid ->
             if !backend = Lean then
               ctx_get_type adt_id ctx ^ "." ^ ctx_get_variant adt_id vid ctx
-            else
-              ctx_get_variant adt_id vid ctx
+            else ctx_get_variant adt_id vid ctx
         | None -> ctx_get_struct adt_id ctx
       in
       if inside && field_values <> [] then F.pp_print_string fmt "(";
@@ -1584,9 +1579,10 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       (* Open a box for the function call *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the function name *)
-      let fun_name = Option.value
-        ~default:(ctx_get_function fun_id ctx)
-        (ctx_maybe_get (DeclaredId fun_id) ctx)
+      let fun_name =
+        Option.value
+          ~default:(ctx_get_function fun_id ctx)
+          (ctx_maybe_get (DeclaredId fun_id) ctx)
       in
       F.pp_print_string fmt fun_name;
       (* Print the type parameters *)
@@ -1646,18 +1642,26 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         match adt_cons.variant_id with
         | Some vid ->
             if !backend = Lean then
-              ctx_get_type adt_cons.adt_id ctx ^ "." ^ ctx_get_variant adt_cons.adt_id vid ctx
-            else
-              ctx_get_variant adt_cons.adt_id vid ctx
+              ctx_get_type adt_cons.adt_id ctx
+              ^ "."
+              ^ ctx_get_variant adt_cons.adt_id vid ctx
+            else ctx_get_variant adt_cons.adt_id vid ctx
         | None -> ctx_get_struct adt_cons.adt_id ctx
       in
       let is_lean_struct = !backend = Lean && adt_cons.variant_id = None in
-      if is_lean_struct then
+      if is_lean_struct then (
         (* TODO: when only one or two fields differ, considering using the with
            syntax (peephole optimization) *)
-        let decl_id = match adt_cons.adt_id with | AdtId id -> id | _ -> assert false in
-        let def_kind = (TypeDeclId.Map.find decl_id ctx.trans_ctx.type_context.type_decls).kind in
-        let fields = match def_kind with | T.Struct fields -> fields | _ -> assert false in
+        let decl_id =
+          match adt_cons.adt_id with AdtId id -> id | _ -> assert false
+        in
+        let def_kind =
+          (TypeDeclId.Map.find decl_id ctx.trans_ctx.type_context.type_decls)
+            .kind
+        in
+        let fields =
+          match def_kind with T.Struct fields -> fields | _ -> assert false
+        in
         let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
         F.pp_open_hvbox fmt 0;
         F.pp_open_hvbox fmt ctx.indent_incr;
@@ -1668,8 +1672,7 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         Collections.List.iter_link
           (fun () ->
             F.pp_print_string fmt ",";
-            F.pp_print_space fmt ()
-          )
+            F.pp_print_space fmt ())
           (fun ((fid, _), e) ->
             F.pp_open_hvbox fmt ctx.indent_incr;
             let f = ctx_get_field adt_cons.adt_id fid ctx in
@@ -1678,15 +1681,14 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
             F.pp_open_hvbox fmt ctx.indent_incr;
             extract_texpression ctx fmt true e;
             F.pp_close_box fmt ();
-            F.pp_close_box fmt ()
-          )
+            F.pp_close_box fmt ())
           (List.combine fields args);
         F.pp_close_box fmt ();
         F.pp_close_box fmt ();
         F.pp_close_box fmt ();
         F.pp_print_space fmt ();
         F.pp_print_string fmt "}";
-        F.pp_close_box fmt ()
+        F.pp_close_box fmt ())
       else
         let use_parentheses = inside && args <> [] in
         if use_parentheses then F.pp_print_string fmt "(";
@@ -1713,15 +1715,13 @@ and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
       (* Extract the expression *)
       extract_texpression ctx fmt true arg;
       (* We allow to break where the "." appears (except Lean, it's a syntax error) *)
-      if !backend <> Lean then
-        F.pp_print_break fmt 0 0;
+      if !backend <> Lean then F.pp_print_break fmt 0 0;
       F.pp_print_string fmt ".";
       (* If in Coq, the field projection has to be parenthesized *)
       (match !backend with
       | FStar -> F.pp_print_string fmt field_name
       | Coq -> F.pp_print_string fmt ("(" ^ field_name ^ ")")
-      | Lean -> F.pp_print_string fmt field_name
-      );
+      | Lean -> F.pp_print_string fmt field_name);
       (* Close the box *)
       F.pp_close_box fmt ()
   | arg :: args ->
@@ -1761,8 +1761,13 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (e : texpression) : unit =
   let lets, next_e = destruct_lets e in
-  (* Open a box for the whole expression *)
-  F.pp_open_hvbox fmt 0;
+  (* Open a box for the whole expression.
+
+     In the case of Lean, we use a vbox so that line breaks are inserted
+     at the end of every let-binding: let-bindings are indeed not ended
+     with an "in" keyword.
+  *)
+  if !Config.backend = Lean then F.pp_open_vbox fmt 0 else F.pp_open_hvbox fmt 0;
   (* Open parentheses *)
   if inside && !backend <> Lean then F.pp_print_string fmt "(";
   (* Extract the let-bindings *)
@@ -1785,7 +1790,11 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       if monadic && !backend = Coq then (
         let ctx = extract_typed_pattern ctx fmt true lv in
         F.pp_print_space fmt ();
-        let arrow = match !backend with FStar -> "<--" | Coq -> "<-" | Lean -> failwith "impossible" in
+        let arrow =
+          match !backend with
+          | Coq -> "<-"
+          | FStar | Lean -> failwith "impossible"
+        in
         F.pp_print_string fmt arrow;
         F.pp_print_space fmt ();
         extract_texpression ctx fmt false re;
@@ -1796,13 +1805,19 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_print_space fmt ();
         let ctx = extract_typed_pattern ctx fmt true lv in
         F.pp_print_space fmt ();
-        let eq = match !backend with FStar -> "=" | Coq -> ":=" | Lean -> if monadic then "<-" else ":=" in
+        let eq =
+          match !backend with
+          | FStar -> "="
+          | Coq -> ":="
+          | Lean -> if monadic then "<-" else ":="
+        in
         F.pp_print_string fmt eq;
         F.pp_print_space fmt ();
         extract_texpression ctx fmt false re;
-        F.pp_print_space fmt ();
-        if !backend <> Lean then
-          F.pp_print_string fmt "in";
+        (* In Lean, monadic let-bindings don't require to end with "in" *)
+        if !backend <> Lean then (
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "in");
         ctx)
     in
     (* Close the box for the let-binding *)
@@ -1814,11 +1829,10 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   let exists_monadic = List.exists (fun (m, _, _) -> m) lets in
   (* If Lean, we rely on monadic blocks, so we insert a do and open a new box
      immediately *)
-  if !backend = Lean && exists_monadic then begin
+  if !backend = Lean && exists_monadic then (
     F.pp_open_vbox fmt ctx.indent_incr;
     F.pp_print_string fmt "do";
-    F.pp_print_space fmt ();
-  end;
+    F.pp_print_space fmt ());
   let ctx =
     List.fold_left
       (fun ctx (monadic, lv, re) -> extract_let ctx monadic lv re)
@@ -1831,8 +1845,7 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Close the box for the next expression *)
   F.pp_close_box fmt ();
   (* do-box (Lean only) *)
-  if !backend = Lean && exists_monadic then
-    F.pp_close_box fmt ();
+  if !backend = Lean && exists_monadic then F.pp_close_box fmt ();
   (* Close parentheses *)
   if inside && !backend <> Lean then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
@@ -1840,61 +1853,66 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
 and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (scrut : texpression) (body : switch_body) : unit =
-  (* Open a box for the whole expression *)
-  F.pp_open_hvbox fmt 0;
+  (* Open a box for the whole expression.
+
+     In the case of Lean, we rely on indentation to delimit the end of the
+     branches, and need to insert line breaks: we thus use a vbox.
+  *)
+  if !Config.backend = Lean then F.pp_open_vbox fmt 0 else F.pp_open_hvbox fmt 0;
   (* Open parentheses *)
   if inside then F.pp_print_string fmt "(";
   (* Extract the switch *)
   (match body with
   | If (e_then, e_else) ->
-      (* Open a box for the [if] *)
+      (* Open a box for the [if e] *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       F.pp_print_string fmt "if";
       F.pp_print_space fmt ();
-      let scrut_inside = PureUtils.let_group_requires_parentheses scrut in
+      let scrut_inside = PureUtils.texpression_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;
-      (* Close the box for the [if] *)
+      (* Close the box for the [if e] *)
       F.pp_close_box fmt ();
+
       (* Extract the branches *)
       let extract_branch (is_then : bool) (e_branch : texpression) : unit =
         F.pp_print_space fmt ();
         (* Open a box for the then/else+branch *)
-        F.pp_open_hovbox fmt ctx.indent_incr;
+        F.pp_open_hvbox fmt ctx.indent_incr;
+        (* Open a box for the then/else + space + opening parenthesis *)
+        F.pp_open_hovbox fmt 0;
         let then_or_else = if is_then then "then" else "else" in
         F.pp_print_string fmt then_or_else;
-        let parenth = PureUtils.let_group_requires_parentheses e_branch in
-        (* Open a box for the branch - we do this only if it is not a parenthesized
-           group of nested let bindings.
-        *)
-        if not parenth then (
-          F.pp_print_space fmt ();
-          F.pp_open_hovbox fmt ctx.indent_incr);
+        let parenth = PureUtils.texpression_requires_parentheses e_branch in
         (* Open the parenthesized expression *)
-        (if parenth then
-         match !backend with
-         | FStar ->
-             F.pp_print_space fmt ();
-             F.pp_print_string fmt "begin";
-             F.pp_print_space fmt ()
-         | Coq ->
-             F.pp_print_string fmt " (";
-             F.pp_print_cut fmt ()
-         | Lean ->
-             F.pp_print_cut fmt ()
-        );
+        let print_space_after_parenth =
+          if parenth then (
+            match !backend with
+            | FStar ->
+                F.pp_print_space fmt ();
+                F.pp_print_string fmt "begin";
+                F.pp_print_space fmt
+            | Coq | Lean ->
+                F.pp_print_space fmt ();
+                F.pp_print_string fmt "(";
+                F.pp_print_cut fmt)
+          else F.pp_print_space fmt
+        in
+        (* Close the box for the then/else + space + opening parenthesis *)
+        F.pp_close_box fmt ();
+        print_space_after_parenth ();
+        (* Open a box for the branch *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the branch expression *)
         extract_texpression ctx fmt false e_branch;
+        (* Close the box for the branch *)
+        F.pp_close_box fmt ();
         (* Close the parenthesized expression *)
         (if parenth then
          match !backend with
          | FStar ->
              F.pp_print_space fmt ();
              F.pp_print_string fmt "end"
-         | Coq -> F.pp_print_string fmt ")"
-         | Lean -> ()
-        );
-        (* Close the box for the branch *)
-        if not parenth then F.pp_close_box fmt ();
+         | Coq | Lean -> F.pp_print_string fmt ")");
         (* Close the box for the then/else+branch *)
         F.pp_close_box fmt ()
       in
@@ -1910,7 +1928,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       in
       F.pp_print_string fmt match_begin;
       F.pp_print_space fmt ();
-      let scrut_inside = PureUtils.let_group_requires_parentheses scrut in
+      let scrut_inside = PureUtils.texpression_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;
       F.pp_print_space fmt ();
       F.pp_print_string fmt "with";
@@ -1921,14 +1939,18 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       let extract_branch (br : match_branch) : unit =
         F.pp_print_space fmt ();
         (* Open a box for the pattern+branch *)
+        F.pp_open_hvbox fmt ctx.indent_incr;
+        (* Open a box for the pattern *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        F.pp_print_string fmt "|";
         (* Print the pattern *)
+        F.pp_print_string fmt "|";
         F.pp_print_space fmt ();
         let ctx = extract_typed_pattern ctx fmt false br.pat in
         F.pp_print_space fmt ();
         let arrow = match !backend with FStar -> "->" | Coq | Lean -> "=>" in
         F.pp_print_string fmt arrow;
+        (* Close the box for the pattern *)
+        F.pp_close_box fmt ();
         F.pp_print_space fmt ();
         (* Open a box for the branch *)
         F.pp_open_hovbox fmt ctx.indent_incr;
@@ -1942,11 +1964,10 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
       List.iter extract_branch branches;
 
-      (* End the match *)
-      F.pp_print_space fmt ();
-      (* Relying on indentation in Lean *)
-      if !backend <> Lean then
-        F.pp_print_string fmt "end");
+      (* End the match - we rely on indentation in Lean *)
+      if !backend <> Lean then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "end"));
   (* Close parentheses *)
   if inside then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
@@ -1983,7 +2004,9 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
       def.signature.type_params;
     F.pp_print_string fmt ":";
     F.pp_print_space fmt ();
-    let type_keyword = match !backend with FStar -> "Type0" | Coq | Lean -> "Type" in
+    let type_keyword =
+      match !backend with FStar -> "Type0" | Coq | Lean -> "Type"
+    in
     F.pp_print_string fmt (type_keyword ^ ")");
     (* Close the box for the type parameters *)
     F.pp_close_box fmt ());
@@ -2058,7 +2081,8 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt ("[" ^ Print.fun_name_to_string def.basename ^ "]: decreases clause");
+  extract_comment fmt
+    ("[" ^ Print.fun_name_to_string def.basename ^ "]: decreases clause");
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -2107,7 +2131,8 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     defines a proof script (allowed to refer to function arguments) that proves
     termination.
 *)
-let extract_termination_and_decreasing (ctx: extraction_ctx) (fmt: F.formatter) (def: fun_decl): unit =
+let extract_termination_and_decreasing (ctx : extraction_ctx)
+    (fmt : F.formatter) (def : fun_decl) : unit =
   assert (!backend = Lean);
 
   (* Retrieve the function name *)
@@ -2116,7 +2141,8 @@ let extract_termination_and_decreasing (ctx: extraction_ctx) (fmt: F.formatter) 
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt ("[" ^ Print.fun_name_to_string def.basename ^ "]: termination measure");
+  extract_comment fmt
+    ("[" ^ Print.fun_name_to_string def.basename ^ "]: termination measure");
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -2141,11 +2167,11 @@ let extract_termination_and_decreasing (ctx: extraction_ctx) (fmt: F.formatter) 
   F.pp_close_box fmt ();
   F.pp_print_space fmt ();
   (* Tuple of the arguments *)
-  let vars = List.map (fun (v: var) -> v.id) def_body.inputs in
+  let vars = List.map (fun (v : var) -> v.id) def_body.inputs in
 
   if List.length vars = 1 then
     F.pp_print_string fmt (ctx_get_var (List.hd vars) ctx_body)
-  else begin
+  else (
     F.pp_open_hovbox fmt 0;
     F.pp_print_string fmt "(";
     Collections.List.iter_link
@@ -2155,8 +2181,7 @@ let extract_termination_and_decreasing (ctx: extraction_ctx) (fmt: F.formatter) 
       (fun v -> F.pp_print_string fmt (ctx_get_var v ctx_body))
       vars;
     F.pp_print_string fmt ")";
-    F.pp_close_box fmt ();
-  end;
+    F.pp_close_box fmt ());
   (* Close the box for "let FUN_NAME (PARAMS) : EFFECT = admit()" *)
   F.pp_close_box fmt ();
   (* Close the box for the whole definition *)
@@ -2181,9 +2206,9 @@ let extract_termination_and_decreasing (ctx: extraction_ctx) (fmt: F.formatter) 
   F.pp_open_hovbox fmt 0;
   F.pp_print_string fmt "| `(tactic| ";
   F.pp_print_string fmt def_name;
-  F.pp_print_space fmt ();
-  Collections.List.iter_link (F.pp_print_space fmt)
+  List.iter
     (fun v ->
+      F.pp_print_space fmt ();
       F.pp_print_string fmt "$";
       F.pp_print_string fmt (ctx_get_var v ctx_body))
     vars;
@@ -2220,7 +2245,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open two boxes for the definition, so that whenever possible it gets printed on
    * one line and indents are correct *)
   F.pp_open_hvbox fmt 0;
-  F.pp_open_hvbox fmt ctx.indent_incr;
+  F.pp_open_vbox fmt ctx.indent_incr;
   (* Open a box for "let FUN_NAME (PARAMS) : EFFECT =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "let FUN_NAME" *)
@@ -2235,10 +2260,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* *)
   let qualif = ctx.fmt.fun_decl_kind_to_qualif kind in
   (* For Lean: we generate a record of assumed functions *)
-  if not (!backend = Lean && (kind = Assumed || kind = Declared)) then begin
+  if not (!backend = Lean && (kind = Assumed || kind = Declared)) then (
     F.pp_print_string fmt qualif;
-    F.pp_print_space fmt ()
-  end;
+    F.pp_print_space fmt ());
   F.pp_print_string fmt def_name;
   F.pp_print_space fmt ();
   if use_forall then (
@@ -2276,10 +2300,9 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (* [Tot] *)
     if has_decreases_clause then (
       assert_backend_supports_decreases_clauses ();
-      if !backend = FStar then begin
+      if !backend = FStar then (
         F.pp_print_string fmt "Tot";
-        F.pp_print_space fmt ()
-      end);
+        F.pp_print_space fmt ()));
     extract_ty ctx fmt has_decreases_clause def.signature.output;
     (* Close the box for the return type *)
     F.pp_close_box fmt ();
@@ -2357,66 +2380,74 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ();
   (* Coq: add a "." *)
   print_decl_end_delimiter fmt kind;
-  (* Close the outer box for the definition *)
-  F.pp_close_box fmt ();
-  (* Termination clause *)
-  if has_decreases_clause && !backend = Lean then begin
+  (* Termination clause and proof for Lean *)
+  if has_decreases_clause && !backend = Lean then (
     let def_body = Option.get def.body in
-    let all_vars = List.map (fun (v: var) -> v.id) def_body.inputs in
+    let all_vars = List.map (fun (v : var) -> v.id) def_body.inputs in
     let num_fwd_inputs =
       def.signature.info.num_fwd_inputs_with_fuel_with_state
     in
     let vars = Collections.List.prefix num_fwd_inputs all_vars in
 
-    (* terminates_by *)
-    let terminates_name = ctx_get_terminates_clause def.def_id def.loop_id ctx in
+    (* termination_by *)
+    let terminates_name =
+      ctx_get_terminates_clause def.def_id def.loop_id ctx
+    in
     F.pp_print_break fmt 0 0;
+    (* Open a box for the whole [termination_by CALL => DECREASES] *)
+    F.pp_open_hvbox fmt ctx.indent_incr;
+    (* Open a box for {termination_by CALL =>} *)
     F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt "termination_by";
-    F.pp_open_hovbox fmt 0;
     F.pp_print_space fmt ();
     F.pp_print_string fmt def_name;
-    F.pp_print_space fmt ();
-    Collections.List.iter_link
-      (F.pp_print_space fmt)
-      (fun v -> F.pp_print_string fmt (ctx_get_var v ctx_body))
+    List.iter
+      (fun v ->
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt (ctx_get_var v ctx_body))
       all_vars;
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=>";
+    (* Close the box for [termination_by CALL =>] *)
     F.pp_close_box fmt ();
-    F.pp_open_hovbox fmt 0;
     F.pp_print_space fmt ();
+    (* Open the box for [DECREASES] *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt terminates_name;
-    F.pp_print_space fmt ();
     List.iter
       (fun (p : type_var) ->
         let pname = ctx_get_type_var p.index ctx in
-        F.pp_print_string fmt pname;
-        F.pp_print_space fmt ())
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt pname)
       def.signature.type_params;
     List.iter
       (fun v ->
-        F.pp_print_string fmt (ctx_get_var v ctx_body);
-        F.pp_print_space fmt ())
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt (ctx_get_var v ctx_body))
       vars;
+    (* Close the box for [DECREASES] *)
     F.pp_close_box fmt ();
+    (* Close the box for the whole [termination_by CALL => DECREASES] *)
     F.pp_close_box fmt ();
 
-    let decreases_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
     F.pp_print_break fmt 0 0;
+    (* Open a box for the [decreasing by ...] *)
     F.pp_open_hvbox fmt ctx.indent_incr;
+    let decreases_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
     F.pp_print_string fmt "decreasing_by";
     F.pp_print_space fmt ();
     F.pp_open_hvbox fmt ctx.indent_incr;
     F.pp_print_string fmt decreases_name;
-    F.pp_print_space fmt ();
-    Collections.List.iter_link
-      (F.pp_print_space fmt)
-      (fun v -> F.pp_print_string fmt (ctx_get_var v ctx_body))
+    List.iter
+      (fun v ->
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt (ctx_get_var v ctx_body))
       vars;
     F.pp_close_box fmt ();
-    F.pp_close_box fmt ()
-  end;
+    (* Close the box for the [decreasing by ...] *)
+    F.pp_close_box fmt ());
+  (* Close the outer box for the definition *)
+  F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
@@ -2566,7 +2597,8 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     (* Add a break before *)
     F.pp_print_break fmt 0 0;
     (* Print a comment *)
-    extract_comment fmt ("Unit test for [" ^ Print.fun_name_to_string def.basename ^ "]");
+    extract_comment fmt
+      ("Unit test for [" ^ Print.fun_name_to_string def.basename ^ "]");
     F.pp_print_space fmt ();
     (* Open a box for the test *)
     F.pp_open_hovbox fmt ctx.indent_incr;
@@ -2618,8 +2650,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "=";
         F.pp_print_space fmt ();
         let success = ctx_get_variant (Assumed Result) result_return_id ctx in
-        F.pp_print_string fmt ("." ^ success ^ " ())")
-    );
+        F.pp_print_string fmt ("." ^ success ^ " ())"));
     (* Close the box for the test *)
     F.pp_close_box fmt ();
     (* Add a break after *)

@@ -51,7 +51,7 @@ type decl_kind =
       (** The first definition of a group of mutually-recursive definitions.
 
           F*:  [type x0 = ... and x1 = ...]
-          Coq: [Fixpoing x0 := ... with x1 := ...]
+          Coq: [Fixpoint x0 := ... with x1 := ...]
        *)
   | MutRecInner
       (** An inner definition in a group of mutually-recursive definitions. *)
@@ -217,7 +217,6 @@ type formatter = {
             the same purpose as in {!field:fun_name}.
           - loop identifier, if this is for a loop
        *)
-
   var_basename : StringSet.t -> string option -> ty -> string;
       (** Generates a variable basename.
 
@@ -471,8 +470,7 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | GlobalId gid ->
       let name = (A.GlobalDeclId.Map.find gid global_decls).name in
       "global name: " ^ Print.global_name_to_string name
-  | DeclaredId fid
-  | FunId fid -> (
+  | DeclaredId fid | FunId fid -> (
       match fid with
       | FromLlbc (fid, lp_id, rg_id) ->
           let fun_name =
@@ -781,12 +779,12 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
       (keep_fwd, num_backs)
   in
-  let ctx = if def.body = None && !Config.backend = Lean then
-    ctx_add
-      (DeclaredId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))
-      ("opaque_defs." ^ name) ctx
-  else
-    ctx
+  let ctx =
+    if def.body = None && !Config.backend = Lean then
+      ctx_add
+        (DeclaredId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))
+        ("opaque_defs." ^ name) ctx
+    else ctx
   in
   ctx_add
     (FunId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))

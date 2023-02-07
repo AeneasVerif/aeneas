@@ -11,7 +11,8 @@ Import HashmapMain_Opaque.
 Module HashmapMain_Funs.
 
 (** [hashmap_main::hashmap::hash_key] *)
-Definition hashmap_hash_key_fwd (k : usize) : result usize := Return k.
+Definition hashmap_hash_key_fwd (k : usize) : result usize :=
+  Return k.
 
 (** [hashmap_main::hashmap::HashMap::{0}::allocate_slots] *)
 Fixpoint hashmap_hash_map_allocate_slots_loop_fwd
@@ -598,7 +599,8 @@ Definition insert_on_disk_fwd
 .
 
 (** [hashmap_main::main] *)
-Definition main_fwd : result unit := Return tt.
+Definition main_fwd : result unit :=
+  Return tt.
 
 (** Unit test for [hashmap_main::main] *)
 Check (main_fwd )%return.

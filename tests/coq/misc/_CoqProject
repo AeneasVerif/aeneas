@@ -3,12 +3,12 @@
 -arg -w
 -arg all
 
-Loops.v
-Primitives.v
-External_Funs.v
 Constants.v
-PoloniusList.v
 External_Types.v
+Primitives.v
+Loops.v
+External_Funs.v
+PoloniusList.v
 NoNestedBorrows.v
 External_Opaque.v
 Paper.v

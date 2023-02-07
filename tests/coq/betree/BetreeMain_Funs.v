@@ -1156,6 +1156,7 @@ Definition betree_be_tree_lookup_back
 .
 
 (** [betree_main::main] *)
-Definition main_fwd : result unit := Return tt.
+Definition main_fwd : result unit :=
+  Return tt.
 
 End BetreeMain_Funs .

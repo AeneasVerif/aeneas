@@ -22,14 +22,16 @@ let x2_body : result u32 = Return 3
 let x2_c : u32 = eval_global x2_body
 
 (** [constants::incr] *)
-let incr_fwd (n : u32) : result u32 = u32_add n 1
+let incr_fwd (n : u32) : result u32 =
+  u32_add n 1
 
 (** [constants::X3] *)
 let x3_body : result u32 = incr_fwd 32
 let x3_c : u32 = eval_global x3_body
 
 (** [constants::mk_pair0] *)
-let mk_pair0_fwd (x : u32) (y : u32) : result (u32 & u32) = Return (x, y)
+let mk_pair0_fwd (x : u32) (y : u32) : result (u32 & u32) =
+  Return (x, y)
 
 (** [constants::Pair] *)
 type pair_t (t1 t2 : Type0) = { pair_x : t1; pair_y : t2; }
@@ -66,7 +68,8 @@ let y_body : result (wrap_t i32) = wrap_new_fwd i32 2
 let y_c : wrap_t i32 = eval_global y_body
 
 (** [constants::unwrap_y] *)
-let unwrap_y_fwd : result i32 = Return y_c.wrap_val
+let unwrap_y_fwd : result i32 =
+  Return y_c.wrap_val
 
 (** [constants::YVAL] *)
 let yval_body : result i32 = unwrap_y_fwd
@@ -77,10 +80,12 @@ let get_z1_z1_body : result i32 = Return 3
 let get_z1_z1_c : i32 = eval_global get_z1_z1_body
 
 (** [constants::get_z1] *)
-let get_z1_fwd : result i32 = Return get_z1_z1_c
+let get_z1_fwd : result i32 =
+  Return get_z1_z1_c
 
 (** [constants::add] *)
-let add_fwd (a : i32) (b : i32) : result i32 = i32_add a b
+let add_fwd (a : i32) (b : i32) : result i32 =
+  i32_add a b
 
 (** [constants::Q1] *)
 let q1_body : result i32 = Return 5
