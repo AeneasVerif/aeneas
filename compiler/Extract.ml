@@ -1809,7 +1809,8 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
           match !backend with
           | FStar -> "="
           | Coq -> ":="
-          | Lean -> if monadic then "<-" else ":="
+          (* TODO: switch to ⟵ once issues are fixed *)
+          | Lean -> if monadic then "←" else ":="
         in
         F.pp_print_string fmt eq;
         F.pp_print_space fmt ();
@@ -1867,6 +1868,8 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (* Open a box for the [if e] *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       F.pp_print_string fmt "if";
+      if !backend = Lean then
+        F.pp_print_string fmt " h:";
       F.pp_print_space fmt ();
       let scrut_inside = PureUtils.texpression_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;
@@ -1924,7 +1927,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the [match ... with] *)
       let match_begin =
-        match !backend with FStar -> "begin match" | Coq | Lean -> "match"
+        match !backend with FStar -> "begin match" | Coq -> "match" | Lean -> "match h:"
       in
       F.pp_print_string fmt match_begin;
       F.pp_print_space fmt ();
@@ -2647,7 +2650,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "()");
         F.pp_print_space fmt ();
-        F.pp_print_string fmt "=";
+        F.pp_print_string fmt "==";
         F.pp_print_space fmt ();
         let success = ctx_get_variant (Assumed Result) result_return_id ctx in
         F.pp_print_string fmt ("." ^ success ^ " ())"));
