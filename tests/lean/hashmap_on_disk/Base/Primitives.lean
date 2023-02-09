@@ -63,23 +63,27 @@ instance : Pure Result where
 -- rely on subtype, and a custom let-binding operator, in effect recreating our
 -- own variant of the do-dsl
 
-def Result.attach : (o : Result α) → Result { x : α // o = ret x }
+def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
+  match o with
   | .ret x => .ret ⟨x, rfl⟩
-  | .fail e   => .fail e
+  | .fail e => .fail e
 
-macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
-  `(doElem| let ⟨$e, $h⟩ ← Result.attach $f)
+macro "let" e:term " ⟵ " f:term : doElem =>
+  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
 
--- Silly example of the kind of reasoning that this notation enables
+-- TODO: any way to factorize both definitions?
+macro "let" e:term " <-- " f:term : doElem =>
+  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
+
+-- We call the hypothesis `h`, in effect making it unavailable to the user
+-- (because too much shadowing). But in practice, once can use the French single
+-- quote notation (input with f< and f>), where `‹ h ›` finds a suitable
+-- hypothesis in the context, this is equivalent to `have x: h := by assumption in x`
 #eval do
-  let h: y <-- .ret (0: Nat)
-  let _: y = 0 := by cases h; decide
+  let y <-- .ret (0: Nat)
+  let _: y = 0 := by cases ‹ ret 0 = ret y › ; decide
   let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
   .ret r
-
--- TODO: ideally, `let <--` would automatically pick the name for the fresh
--- hypothesis, of the form `h_x` where `x` is the name of the variable, with
--- collision-avoidance. That way, code generation would be simpler.
 
 ----------------------
 -- MACHINE INTEGERS --
@@ -151,13 +155,14 @@ def USize.checked_sub (n: USize) (m: USize): Result USize :=
   else
     fail integerOverflow
 
+@[simp]
+theorem usize_fits (n: Nat) (h: n <= 4294967295): n < USize.size :=
+  match USize.size, usize_size_eq with
+  | _, Or.inl rfl => Nat.lt_of_le_of_lt h (by decide)
+  | _, Or.inr rfl => Nat.lt_of_le_of_lt h (by decide)
+
 def USize.checked_add (n: USize) (m: USize): Result USize :=
-  if h: n.val.val + m.val.val <= 4294967295 then
-    .ret ⟨ n.val.val + m.val.val, by
-      have h': 4294967295 < USize.size := by intlit
-      apply Nat.lt_of_le_of_lt h h'
-    ⟩
-  else if h: n.val + m.val < USize.size then
+  if h: n.val + m.val < USize.size then
     .ret ⟨ n.val + m.val, h ⟩
   else
     .fail integerOverflow
@@ -173,12 +178,7 @@ def USize.checked_rem (n: USize) (m: USize): Result USize :=
     .fail integerOverflow
 
 def USize.checked_mul (n: USize) (m: USize): Result USize :=
-    if h: n.val.val * m.val.val <= 4294967295 then
-    .ret ⟨ n.val.val * m.val.val, by
-      have h': 4294967295 < USize.size := by intlit
-      apply Nat.lt_of_le_of_lt h h'
-    ⟩
-  else if h: n.val * m.val < USize.size then
+  if h: n.val * m.val < USize.size then
     .ret ⟨ n.val * m.val, h ⟩
   else
     .fail integerOverflow
@@ -192,7 +192,6 @@ def USize.checked_div (n: USize) (m: USize): Result USize :=
     ⟩
   else
     .fail integerOverflow
-
 
 -- Test behavior...
 #eval assert! USize.checked_sub 10 20 == fail integerOverflow; 0
@@ -358,6 +357,10 @@ def mem_replace_fwd (a : Type) (x : a) (_ : a) : a :=
 def mem_replace_back (a : Type) (_ : a) (y : a) : a :=
   y
 
+/-- Aeneas-translated function -- useful to reduce non-recursive definitions.
+ Use with `simp [ aeneas ]` -/
+register_simp_attr aeneas
+
 --------------------
 -- ASSERT COMMAND --
 --------------------
@@ -366,21 +369,24 @@ open Lean Elab Command Term Meta
 
 syntax (name := assert) "#assert" term: command
 
--- TODO: figure out how to make #assert behave as #eval followed by a compiler
--- error if the term doesn't reduce to True. Once we have that, add some inline
--- tests for the arithmetic operations, notably `rem`
-
 @[command_elab assert]
+unsafe
 def assertImpl : CommandElab := fun (_stx: Syntax) => do
-  logInfo "Reducing and asserting: "
-  logInfo _stx[1]
   runTermElabM (fun _ => do
-    let e ← Term.elabTerm _stx[1] none
-    logInfo (Expr.dbgToString e)
-    -- TODO: How to evaluate the term and compare the Result to true?
+    let r ← evalTerm Bool (mkConst ``Bool) _stx[1]
+    if not r then
+      logInfo "Assertion failed for: "
+      logInfo _stx[1]
+      logError "Expression reduced to false"
     pure ())
-  -- logInfo (Expr.dbgToString (``true))
-  -- throwError "TODO: assert"
 
 #eval 2 == 2
 #assert (2 == 2)
+
+-------------------
+-- SANITY CHECKS --
+-------------------
+
+-- TODO: add more once we have signed integers
+
+#assert (USize.checked_rem 1 2 == .ret 1)
