@@ -3,6 +3,16 @@
 import Base.Primitives
 import HashmapMain.Types
 
+def hashmap_list_length (l: hashmap_list_t T) :=
+  match l with
+  | .HashmapListNil => 0
+  | .HashmapListCons _ _ l => 1 + hashmap_list_length l
+
+theorem hashmap_list_length_cons (T: Type) k v (tl: hashmap_list_t T):
+  hashmap_list_length (hashmap_list_t.HashmapListCons k v tl) = 1 + hashmap_list_length tl
+:=
+  by rfl
+
 /- [hashmap_main::hashmap::HashMap::{0}::allocate_slots]: termination measure -/
 @[simp]
 def hashmap_hash_map_allocate_slots_loop_terminates (T : Type)
@@ -31,13 +41,18 @@ macro_rules
 @[simp]
 def hashmap_hash_map_insert_in_list_loop_terminates (T : Type) (key : USize)
   (value : T) (ls : hashmap_list_t T) :=
-  (key, value, ls)
+  hashmap_list_length ls
 
 syntax "hashmap_hash_map_insert_in_list_loop_decreases" term+ : tactic
 
 macro_rules
 | `(tactic| hashmap_hash_map_insert_in_list_loop_decreases $key $value $ls) =>
-  `(tactic| sorry)
+  `(tactic|
+    simp_wf;
+    have h (n: Nat): n < 1 + n := (by simp_arith);
+    rewrite [ hashmap_list_length_cons ];
+    apply h
+  )
 
 /- [hashmap_main::hashmap::HashMap::{0}::move_elements_from_list]: termination measure -/
 @[simp]

@@ -16,12 +16,12 @@ def hashmap_hash_map_allocate_slots_loop_fwd
   (T : Type) (slots : Vec (hashmap_list_t T)) (n : USize) :
   (Result (Vec (hashmap_list_t T)))
   :=
-  if h: n > (USize.ofNatCore 0 (by intlit))
+  if 𝒽: n > (USize.ofNatCore 0 (by intlit))
   then
     do
-      let slots0 ←
+      let slots0 ⟵
         vec_push_back (hashmap_list_t T) slots hashmap_list_t.HashmapListNil
-      let n0 ← USize.checked_sub n (USize.ofNatCore 1 (by intlit))
+      let n0 ⟵ USize.checked_sub n (USize.ofNatCore 1 (by intlit))
       hashmap_hash_map_allocate_slots_loop_fwd T slots0 n0
   else Result.ret slots
 termination_by hashmap_hash_map_allocate_slots_loop_fwd slots n =>
@@ -43,9 +43,9 @@ def hashmap_hash_map_new_with_capacity_fwd
   :=
   do
     let v := vec_new (hashmap_list_t T)
-    let slots ← hashmap_hash_map_allocate_slots_fwd T v capacity
-    let i ← USize.checked_mul capacity max_load_dividend
-    let i0 ← USize.checked_div i max_load_divisor
+    let slots ⟵ hashmap_hash_map_allocate_slots_fwd T v capacity
+    let i ⟵ USize.checked_mul capacity max_load_dividend
+    let i0 ⟵ USize.checked_div i max_load_divisor
     Result.ret
       {
         hashmap_hash_map_num_entries := (USize.ofNatCore 0 (by intlit)),
@@ -66,11 +66,11 @@ def hashmap_hash_map_clear_slots_loop_fwd_back
   (Result (Vec (hashmap_list_t T)))
   :=
   let i0 := vec_len (hashmap_list_t T) slots
-  if h: i < i0
+  if 𝒽: i < i0
   then
     do
-      let i1 ← USize.checked_add i (USize.ofNatCore 1 (by intlit))
-      let slots0 ←
+      let i1 ⟵ USize.checked_add i (USize.ofNatCore 1 (by intlit))
+      let slots0 ⟵
         vec_index_mut_back (hashmap_list_t T) slots i
           hashmap_list_t.HashmapListNil
       hashmap_hash_map_clear_slots_loop_fwd_back T slots0 i1
@@ -91,7 +91,7 @@ def hashmap_hash_map_clear_slots_fwd_back
 def hashmap_hash_map_clear_fwd_back
   (T : Type) (self : hashmap_hash_map_t T) : Result (hashmap_hash_map_t T) :=
   do
-    let v ←
+    let v ⟵
       hashmap_hash_map_clear_slots_fwd_back T self.hashmap_hash_map_slots
     Result.ret
       {
@@ -111,9 +111,9 @@ def hashmap_hash_map_insert_in_list_loop_fwd
   (T : Type) (key : USize) (value : T) (ls : hashmap_list_t T) :
   (Result Bool)
   :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons ckey cvalue tl =>
-    if h: ckey = key
+    if 𝒽: ckey = key
     then Result.ret false
     else hashmap_hash_map_insert_in_list_loop_fwd T key value tl
   | hashmap_list_t.HashmapListNil => Result.ret true
@@ -131,13 +131,14 @@ def hashmap_hash_map_insert_in_list_loop_back
   (T : Type) (key : USize) (value : T) (ls : hashmap_list_t T) :
   (Result (hashmap_list_t T))
   :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons ckey cvalue tl =>
-    if h: ckey = key
+    if 𝒽: ckey = key
     then Result.ret (hashmap_list_t.HashmapListCons ckey value tl)
     else
       do
-        let tl0 ← hashmap_hash_map_insert_in_list_loop_back T key value tl
+        let foobar := hashmap_hash_map_insert_in_list_loop_back T key value tl
+        let tl0 ⟵ foobar
         Result.ret (hashmap_list_t.HashmapListCons ckey cvalue tl0)
   | hashmap_list_t.HashmapListNil =>
     let l := hashmap_list_t.HashmapListNil
@@ -159,19 +160,19 @@ def hashmap_hash_map_insert_no_resize_fwd_back
   Result (hashmap_hash_map_t T)
   :=
   do
-    let hash ← hashmap_hash_key_fwd key
+    let hash ⟵ hashmap_hash_key_fwd key
     let i := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots
-    let hash_mod ← USize.checked_rem hash i
-    let l ←
+    let hash_mod ⟵ USize.checked_rem hash i
+    let l ⟵
       vec_index_mut_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
-    let inserted ← hashmap_hash_map_insert_in_list_fwd T key value l
-    if h: inserted
+    let inserted ⟵ hashmap_hash_map_insert_in_list_fwd T key value l
+    if 𝒽: inserted
     then
       do
-        let i0 ← USize.checked_add self.hashmap_hash_map_num_entries
+        let i0 ⟵ USize.checked_add self.hashmap_hash_map_num_entries
           (USize.ofNatCore 1 (by intlit))
-        let l0 ← hashmap_hash_map_insert_in_list_back T key value l
-        let v ←
+        let l0 ⟵ hashmap_hash_map_insert_in_list_back T key value l
+        let v ⟵
           vec_index_mut_back (hashmap_list_t T) self.hashmap_hash_map_slots
             hash_mod l0
         Result.ret
@@ -183,8 +184,8 @@ def hashmap_hash_map_insert_no_resize_fwd_back
           }
     else
       do
-        let l0 ← hashmap_hash_map_insert_in_list_back T key value l
-        let v ←
+        let l0 ⟵ hashmap_hash_map_insert_in_list_back T key value l
+        let v ⟵
           vec_index_mut_back (hashmap_list_t T) self.hashmap_hash_map_slots
             hash_mod l0
         Result.ret
@@ -205,10 +206,10 @@ def hashmap_hash_map_move_elements_from_list_loop_fwd_back
   (T : Type) (ntable : hashmap_hash_map_t T) (ls : hashmap_list_t T) :
   (Result (hashmap_hash_map_t T))
   :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons k v tl =>
     do
-      let ntable0 ← hashmap_hash_map_insert_no_resize_fwd_back T ntable k v
+      let ntable0 ⟵ hashmap_hash_map_insert_no_resize_fwd_back T ntable k v
       hashmap_hash_map_move_elements_from_list_loop_fwd_back T ntable0 tl
   | hashmap_list_t.HashmapListNil => Result.ret ntable
 termination_by hashmap_hash_map_move_elements_from_list_loop_fwd_back ntable ls
@@ -230,18 +231,18 @@ def hashmap_hash_map_move_elements_loop_fwd_back
   (Result ((hashmap_hash_map_t T) × (Vec (hashmap_list_t T))))
   :=
   let i0 := vec_len (hashmap_list_t T) slots
-  if h: i < i0
+  if 𝒽: i < i0
   then
     do
-      let l ← vec_index_mut_fwd (hashmap_list_t T) slots i
+      let l ⟵ vec_index_mut_fwd (hashmap_list_t T) slots i
       let ls :=
         mem_replace_fwd (hashmap_list_t T) l hashmap_list_t.HashmapListNil
-      let ntable0 ←
+      let ntable0 ⟵
         hashmap_hash_map_move_elements_from_list_fwd_back T ntable ls
-      let i1 ← USize.checked_add i (USize.ofNatCore 1 (by intlit))
+      let i1 ⟵ USize.checked_add i (USize.ofNatCore 1 (by intlit))
       let l0 :=
         mem_replace_back (hashmap_list_t T) l hashmap_list_t.HashmapListNil
-      let slots0 ← vec_index_mut_back (hashmap_list_t T) slots i l0
+      let slots0 ⟵ vec_index_mut_back (hashmap_list_t T) slots i l0
       hashmap_hash_map_move_elements_loop_fwd_back T ntable0 slots0 i1
   else Result.ret (ntable, slots)
 termination_by hashmap_hash_map_move_elements_loop_fwd_back ntable slots i =>
@@ -260,17 +261,17 @@ def hashmap_hash_map_move_elements_fwd_back
 def hashmap_hash_map_try_resize_fwd_back
   (T : Type) (self : hashmap_hash_map_t T) : Result (hashmap_hash_map_t T) :=
   do
-    let max_usize ← scalar_cast USize core_num_u32_max_c
+    let max_usize ⟵ scalar_cast USize core_num_u32_max_c
     let capacity := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots
-    let n1 ← USize.checked_div max_usize (USize.ofNatCore 2 (by intlit))
+    let n1 ⟵ USize.checked_div max_usize (USize.ofNatCore 2 (by intlit))
     let (i, i0) := self.hashmap_hash_map_max_load_factor
-    let i1 ← USize.checked_div n1 i
-    if h: capacity <= i1
+    let i1 ⟵ USize.checked_div n1 i
+    if 𝒽: capacity <= i1
     then
       do
-        let i2 ← USize.checked_mul capacity (USize.ofNatCore 2 (by intlit))
-        let ntable ← hashmap_hash_map_new_with_capacity_fwd T i2 i i0
-        let (ntable0, _) ←
+        let i2 ⟵ USize.checked_mul capacity (USize.ofNatCore 2 (by intlit))
+        let ntable ⟵ hashmap_hash_map_new_with_capacity_fwd T i2 i i0
+        let (ntable0, _) ⟵
           hashmap_hash_map_move_elements_fwd_back T ntable
             self.hashmap_hash_map_slots (USize.ofNatCore 0 (by intlit))
         Result.ret
@@ -295,18 +296,18 @@ def hashmap_hash_map_insert_fwd_back
   Result (hashmap_hash_map_t T)
   :=
   do
-    let self0 ← hashmap_hash_map_insert_no_resize_fwd_back T self key value
-    let i ← hashmap_hash_map_len_fwd T self0
-    if h: i > self0.hashmap_hash_map_max_load
+    let self0 ⟵ hashmap_hash_map_insert_no_resize_fwd_back T self key value
+    let i ⟵ hashmap_hash_map_len_fwd T self0
+    if 𝒽: i > self0.hashmap_hash_map_max_load
     then hashmap_hash_map_try_resize_fwd_back T self0
     else Result.ret self0
 
 /- [hashmap_main::hashmap::HashMap::{0}::contains_key_in_list] -/
 def hashmap_hash_map_contains_key_in_list_loop_fwd
   (T : Type) (key : USize) (ls : hashmap_list_t T) : (Result Bool) :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons ckey t tl =>
-    if h: ckey = key
+    if 𝒽: ckey = key
     then Result.ret true
     else hashmap_hash_map_contains_key_in_list_loop_fwd T key tl
   | hashmap_list_t.HashmapListNil => Result.ret false
@@ -323,19 +324,19 @@ def hashmap_hash_map_contains_key_in_list_fwd
 def hashmap_hash_map_contains_key_fwd
   (T : Type) (self : hashmap_hash_map_t T) (key : USize) : Result Bool :=
   do
-    let hash ← hashmap_hash_key_fwd key
+    let hash ⟵ hashmap_hash_key_fwd key
     let i := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots
-    let hash_mod ← USize.checked_rem hash i
-    let l ←
+    let hash_mod ⟵ USize.checked_rem hash i
+    let l ⟵
       vec_index_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
     hashmap_hash_map_contains_key_in_list_fwd T key l
 
 /- [hashmap_main::hashmap::HashMap::{0}::get_in_list] -/
 def hashmap_hash_map_get_in_list_loop_fwd
   (T : Type) (key : USize) (ls : hashmap_list_t T) : (Result T) :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons ckey cvalue tl =>
-    if h: ckey = key
+    if 𝒽: ckey = key
     then Result.ret cvalue
     else hashmap_hash_map_get_in_list_loop_fwd T key tl
   | hashmap_list_t.HashmapListNil => Result.fail Error.panic
@@ -352,19 +353,19 @@ def hashmap_hash_map_get_in_list_fwd
 def hashmap_hash_map_get_fwd
   (T : Type) (self : hashmap_hash_map_t T) (key : USize) : Result T :=
   do
-    let hash ← hashmap_hash_key_fwd key
+    let hash ⟵ hashmap_hash_key_fwd key
     let i := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots
-    let hash_mod ← USize.checked_rem hash i
-    let l ←
+    let hash_mod ⟵ USize.checked_rem hash i
+    let l ⟵
       vec_index_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
     hashmap_hash_map_get_in_list_fwd T key l
 
 /- [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] -/
 def hashmap_hash_map_get_mut_in_list_loop_fwd
   (T : Type) (ls : hashmap_list_t T) (key : USize) : (Result T) :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons ckey cvalue tl =>
-    if h: ckey = key
+    if 𝒽: ckey = key
     then Result.ret cvalue
     else hashmap_hash_map_get_mut_in_list_loop_fwd T tl key
   | hashmap_list_t.HashmapListNil => Result.fail Error.panic
@@ -382,13 +383,14 @@ def hashmap_hash_map_get_mut_in_list_loop_back
   (T : Type) (ls : hashmap_list_t T) (key : USize) (ret0 : T) :
   (Result (hashmap_list_t T))
   :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons ckey cvalue tl =>
-    if h: ckey = key
+    if 𝒽: ckey = key
     then Result.ret (hashmap_list_t.HashmapListCons ckey ret0 tl)
     else
       do
-        let tl0 ← hashmap_hash_map_get_mut_in_list_loop_back T tl key ret0
+        let foobar := hashmap_hash_map_get_mut_in_list_loop_back T tl key ret0
+        let tl0 ⟵ foobar
         Result.ret (hashmap_list_t.HashmapListCons ckey cvalue tl0)
   | hashmap_list_t.HashmapListNil => Result.fail Error.panic
 termination_by hashmap_hash_map_get_mut_in_list_loop_back ls key ret0 =>
@@ -406,10 +408,10 @@ def hashmap_hash_map_get_mut_in_list_back
 def hashmap_hash_map_get_mut_fwd
   (T : Type) (self : hashmap_hash_map_t T) (key : USize) : Result T :=
   do
-    let hash ← hashmap_hash_key_fwd key
+    let hash ⟵ hashmap_hash_key_fwd key
     let i := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots
-    let hash_mod ← USize.checked_rem hash i
-    let l ←
+    let hash_mod ⟵ USize.checked_rem hash i
+    let l ⟵
       vec_index_mut_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
     hashmap_hash_map_get_mut_in_list_fwd T l key
 
@@ -419,13 +421,13 @@ def hashmap_hash_map_get_mut_back
   Result (hashmap_hash_map_t T)
   :=
   do
-    let hash ← hashmap_hash_key_fwd key
+    let hash ⟵ hashmap_hash_key_fwd key
     let i := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots
-    let hash_mod ← USize.checked_rem hash i
-    let l ←
+    let hash_mod ⟵ USize.checked_rem hash i
+    let l ⟵
       vec_index_mut_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
-    let l0 ← hashmap_hash_map_get_mut_in_list_back T l key ret0
-    let v ←
+    let l0 ⟵ hashmap_hash_map_get_mut_in_list_back T l key ret0
+    let v ⟵
       vec_index_mut_back (hashmap_list_t T) self.hashmap_hash_map_slots
         hash_mod l0
     Result.ret
@@ -439,14 +441,14 @@ def hashmap_hash_map_get_mut_back
 /- [hashmap_main::hashmap::HashMap::{0}::remove_from_list] -/
 def hashmap_hash_map_remove_from_list_loop_fwd
   (T : Type) (key : USize) (ls : hashmap_list_t T) : (Result (Option T)) :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons ckey t tl =>
-    if h: ckey = key
+    if 𝒽: ckey = key
     then
       let mv_ls :=
         mem_replace_fwd (hashmap_list_t T) (hashmap_list_t.HashmapListCons ckey
           t tl) hashmap_list_t.HashmapListNil
-      match h: mv_ls with
+      match 𝒽: mv_ls with
       | hashmap_list_t.HashmapListCons i cvalue tl0 =>
         Result.ret (Option.some cvalue)
       | hashmap_list_t.HashmapListNil => Result.fail Error.panic
@@ -466,19 +468,20 @@ def hashmap_hash_map_remove_from_list_loop_back
   (T : Type) (key : USize) (ls : hashmap_list_t T) :
   (Result (hashmap_list_t T))
   :=
-  match h: ls with
+  match 𝒽: ls with
   | hashmap_list_t.HashmapListCons ckey t tl =>
-    if h: ckey = key
+    if 𝒽: ckey = key
     then
       let mv_ls :=
         mem_replace_fwd (hashmap_list_t T) (hashmap_list_t.HashmapListCons ckey
           t tl) hashmap_list_t.HashmapListNil
-      match h: mv_ls with
+      match 𝒽: mv_ls with
       | hashmap_list_t.HashmapListCons i cvalue tl0 => Result.ret tl0
       | hashmap_list_t.HashmapListNil => Result.fail Error.panic
     else
       do
-        let tl0 ← hashmap_hash_map_remove_from_list_loop_back T key tl
+        let foobar := hashmap_hash_map_remove_from_list_loop_back T key tl
+        let tl0 ⟵ foobar
         Result.ret (hashmap_list_t.HashmapListCons ckey t tl0)
   | hashmap_list_t.HashmapListNil => Result.ret hashmap_list_t.HashmapListNil
 termination_by hashmap_hash_map_remove_from_list_loop_back key ls =>
@@ -496,17 +499,17 @@ def hashmap_hash_map_remove_from_list_back
 def hashmap_hash_map_remove_fwd
   (T : Type) (self : hashmap_hash_map_t T) (key : USize) : Result (Option T) :=
   do
-    let hash ← hashmap_hash_key_fwd key
+    let hash ⟵ hashmap_hash_key_fwd key
     let i := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots
-    let hash_mod ← USize.checked_rem hash i
-    let l ←
+    let hash_mod ⟵ USize.checked_rem hash i
+    let l ⟵
       vec_index_mut_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
-    let x ← hashmap_hash_map_remove_from_list_fwd T key l
-    match h: x with
+    let x ⟵ hashmap_hash_map_remove_from_list_fwd T key l
+    match 𝒽: x with
     | Option.none => Result.ret Option.none
     | Option.some x0 =>
       do
-        let _ ← USize.checked_sub self.hashmap_hash_map_num_entries
+        let _ ⟵ USize.checked_sub self.hashmap_hash_map_num_entries
           (USize.ofNatCore 1 (by intlit))
         Result.ret (Option.some x0)
 
@@ -516,17 +519,17 @@ def hashmap_hash_map_remove_back
   Result (hashmap_hash_map_t T)
   :=
   do
-    let hash ← hashmap_hash_key_fwd key
+    let hash ⟵ hashmap_hash_key_fwd key
     let i := vec_len (hashmap_list_t T) self.hashmap_hash_map_slots
-    let hash_mod ← USize.checked_rem hash i
-    let l ←
+    let hash_mod ⟵ USize.checked_rem hash i
+    let l ⟵
       vec_index_mut_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
-    let x ← hashmap_hash_map_remove_from_list_fwd T key l
-    match h: x with
+    let x ⟵ hashmap_hash_map_remove_from_list_fwd T key l
+    match 𝒽: x with
     | Option.none =>
       do
-        let l0 ← hashmap_hash_map_remove_from_list_back T key l
-        let v ←
+        let l0 ⟵ hashmap_hash_map_remove_from_list_back T key l
+        let v ⟵
           vec_index_mut_back (hashmap_list_t T) self.hashmap_hash_map_slots
             hash_mod l0
         Result.ret
@@ -538,10 +541,10 @@ def hashmap_hash_map_remove_back
           }
     | Option.some x0 =>
       do
-        let i0 ← USize.checked_sub self.hashmap_hash_map_num_entries
+        let i0 ⟵ USize.checked_sub self.hashmap_hash_map_num_entries
           (USize.ofNatCore 1 (by intlit))
-        let l0 ← hashmap_hash_map_remove_from_list_back T key l
-        let v ←
+        let l0 ⟵ hashmap_hash_map_remove_from_list_back T key l
+        let v ⟵
           vec_index_mut_back (hashmap_list_t T) self.hashmap_hash_map_slots
             hash_mod l0
         Result.ret
@@ -555,67 +558,68 @@ def hashmap_hash_map_remove_back
 /- [hashmap_main::hashmap::test1] -/
 def hashmap_test1_fwd : Result Unit :=
   do
-    let hm ← hashmap_hash_map_new_fwd UInt64
-    let hm0 ←
+    let hm ⟵ hashmap_hash_map_new_fwd UInt64
+    let hm0 ⟵
       hashmap_hash_map_insert_fwd_back UInt64 hm
         (USize.ofNatCore 0 (by intlit)) (UInt64.ofNatCore 42 (by intlit))
-    let hm1 ←
+    let hm1 ⟵
       hashmap_hash_map_insert_fwd_back UInt64 hm0
         (USize.ofNatCore 128 (by intlit)) (UInt64.ofNatCore 18 (by intlit))
-    let hm2 ←
+    let hm2 ⟵
       hashmap_hash_map_insert_fwd_back UInt64 hm1
         (USize.ofNatCore 1024 (by intlit)) (UInt64.ofNatCore 138 (by intlit))
-    let hm3 ←
+    let hm3 ⟵
       hashmap_hash_map_insert_fwd_back UInt64 hm2
         (USize.ofNatCore 1056 (by intlit)) (UInt64.ofNatCore 256 (by intlit))
-    let i ←
+    let i ⟵
       hashmap_hash_map_get_fwd UInt64 hm3 (USize.ofNatCore 128 (by intlit))
-    if h: not (i = (UInt64.ofNatCore 18 (by intlit)))
+    if 𝒽: not (i = (UInt64.ofNatCore 18 (by intlit)))
     then Result.fail Error.panic
     else
       do
-        let hm4 ←
+        let hm4 ⟵
           hashmap_hash_map_get_mut_back UInt64 hm3
             (USize.ofNatCore 1024 (by intlit))
             (UInt64.ofNatCore 56 (by intlit))
-        let i0 ←
+        let i0 ⟵
           hashmap_hash_map_get_fwd UInt64 hm4
             (USize.ofNatCore 1024 (by intlit))
-        if h: not (i0 = (UInt64.ofNatCore 56 (by intlit)))
+        if 𝒽: not (i0 = (UInt64.ofNatCore 56 (by intlit)))
         then Result.fail Error.panic
         else
           do
-            let x ←
+            let x ⟵
               hashmap_hash_map_remove_fwd UInt64 hm4
                 (USize.ofNatCore 1024 (by intlit))
-            match h: x with
+            match 𝒽: x with
             | Option.none => Result.fail Error.panic
             | Option.some x0 =>
-              if h: not (x0 = (UInt64.ofNatCore 56 (by intlit)))
+              if 𝒽: not (x0 = (UInt64.ofNatCore 56 (by intlit)))
               then Result.fail Error.panic
               else
                 do
-                  let hm5 ←
+                  let hm5 ⟵
                     hashmap_hash_map_remove_back UInt64 hm4
                       (USize.ofNatCore 1024 (by intlit))
-                  let i1 ←
+                  let i1 ⟵
                     hashmap_hash_map_get_fwd UInt64 hm5
                       (USize.ofNatCore 0 (by intlit))
-                  if h: not (i1 = (UInt64.ofNatCore 42 (by intlit)))
+                  if 𝒽: not (i1 = (UInt64.ofNatCore 42 (by intlit)))
                   then Result.fail Error.panic
                   else
                     do
-                      let i2 ←
+                      let i2 ⟵
                         hashmap_hash_map_get_fwd UInt64 hm5
                           (USize.ofNatCore 128 (by intlit))
-                      if h: not (i2 = (UInt64.ofNatCore 18 (by intlit)))
+                      if 𝒽: not (i2 = (UInt64.ofNatCore 18 (by intlit)))
                       then Result.fail Error.panic
                       else
                         do
-                          let i3 ←
+                          let i3 ⟵
                             hashmap_hash_map_get_fwd UInt64 hm5
                               (USize.ofNatCore 1056 (by intlit))
-                          if h: not (i3 = (UInt64.ofNatCore 256 (by intlit)))
+                          if 𝒽: not (i3 =
+                            (UInt64.ofNatCore 256 (by intlit)))
                           then Result.fail Error.panic
                           else Result.ret ()
 
@@ -626,9 +630,9 @@ def hashmap_test1_fwd : Result Unit :=
 def insert_on_disk_fwd
   (key : USize) (value : UInt64) (st : State) : Result (State × Unit) :=
   do
-    let (st0, hm) ← opaque_defs.hashmap_utils_deserialize_fwd st
-    let hm0 ← hashmap_hash_map_insert_fwd_back UInt64 hm key value
-    let (st1, _) ← opaque_defs.hashmap_utils_serialize_fwd hm0 st0
+    let (st0, hm) ⟵ opaque_defs.hashmap_utils_deserialize_fwd st
+    let hm0 ⟵ hashmap_hash_map_insert_fwd_back UInt64 hm key value
+    let (st1, _) ⟵ opaque_defs.hashmap_utils_serialize_fwd hm0 st0
     Result.ret (st1, ())
 
 /- [hashmap_main::main] -/

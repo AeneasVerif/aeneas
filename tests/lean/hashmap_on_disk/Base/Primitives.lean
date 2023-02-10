@@ -69,11 +69,11 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
   | .fail e => .fail e
 
 macro "let" e:term " ⟵ " f:term : doElem =>
-  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
+  `(doElem| let ⟨$e, 𝒽⟩ ← Result.attach $f)
 
 -- TODO: any way to factorize both definitions?
 macro "let" e:term " <-- " f:term : doElem =>
-  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
+  `(doElem| let ⟨$e, 𝒽⟩ ← Result.attach $f)
 
 -- We call the hypothesis `h`, in effect making it unavailable to the user
 -- (because too much shadowing). But in practice, once can use the French single
