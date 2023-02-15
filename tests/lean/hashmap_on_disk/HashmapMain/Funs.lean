@@ -137,8 +137,8 @@ def hashmap_hash_map_insert_in_list_loop_back
     then Result.ret (hashmap_list_t.HashmapListCons ckey value tl)
     else
       do
-        let foobar := hashmap_hash_map_insert_in_list_loop_back T key value tl
-        let tl0 ⟵ foobar
+        let workaround := hashmap_hash_map_insert_in_list_loop_back T key value tl
+        let tl0 ⟵ workaround
         Result.ret (hashmap_list_t.HashmapListCons ckey cvalue tl0)
   | hashmap_list_t.HashmapListNil =>
     let l := hashmap_list_t.HashmapListNil
@@ -389,8 +389,8 @@ def hashmap_hash_map_get_mut_in_list_loop_back
     then Result.ret (hashmap_list_t.HashmapListCons ckey ret0 tl)
     else
       do
-        let foobar := hashmap_hash_map_get_mut_in_list_loop_back T tl key ret0
-        let tl0 ⟵ foobar
+        let workaround := hashmap_hash_map_get_mut_in_list_loop_back T tl key ret0
+        let tl0 ⟵ workaround
         Result.ret (hashmap_list_t.HashmapListCons ckey cvalue tl0)
   | hashmap_list_t.HashmapListNil => Result.fail Error.panic
 termination_by hashmap_hash_map_get_mut_in_list_loop_back ls key ret0 =>
@@ -480,8 +480,8 @@ def hashmap_hash_map_remove_from_list_loop_back
       | hashmap_list_t.HashmapListNil => Result.fail Error.panic
     else
       do
-        let foobar := hashmap_hash_map_remove_from_list_loop_back T key tl
-        let tl0 ⟵ foobar
+        let workaround := hashmap_hash_map_remove_from_list_loop_back T key tl
+        let tl0 ⟵ workaround
         Result.ret (hashmap_list_t.HashmapListCons ckey t tl0)
   | hashmap_list_t.HashmapListNil => Result.ret hashmap_list_t.HashmapListNil
 termination_by hashmap_hash_map_remove_from_list_loop_back key ls =>
@@ -555,6 +555,11 @@ def hashmap_hash_map_remove_back
             hashmap_hash_map_slots := v
           }
 
+set_option trace.Compiler.simp true
+set_option trace.Meta.Tactic.simp true
+set_option maxHeartbeats 2000000
+
+-- FIXME: this type-checks instantly if using <-, but errors out with timeouts when using <--
 /- [hashmap_main::hashmap::test1] -/
 def hashmap_test1_fwd : Result Unit :=
   do
@@ -588,7 +593,7 @@ def hashmap_test1_fwd : Result Unit :=
         then Result.fail Error.panic
         else
           do
-            let x ⟵
+           let x ⟵
               hashmap_hash_map_remove_fwd UInt64 hm4
                 (USize.ofNatCore 1024 (by intlit))
             match 𝒽: x with
@@ -622,6 +627,9 @@ def hashmap_test1_fwd : Result Unit :=
                             (UInt64.ofNatCore 256 (by intlit)))
                           then Result.fail Error.panic
                           else Result.ret ()
+
+set_option trace.Compiler.simp false
+set_option trace.Meta.Tactic.simp false
 
 /- Unit test for [hashmap_main::hashmap::test1] -/
 #assert (hashmap_test1_fwd == .ret ())

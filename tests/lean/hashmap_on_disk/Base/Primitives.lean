@@ -43,6 +43,7 @@ def eval_global {α: Type} (x: Result α) (_: ret? x): α :=
 
 /- DO-DSL SUPPORT -/
 
+@[inline]
 def bind (x: Result α) (f: α -> Result β) : Result β :=
   match x with
   | ret v  => f v 
@@ -63,6 +64,7 @@ instance : Pure Result where
 -- rely on subtype, and a custom let-binding operator, in effect recreating our
 -- own variant of the do-dsl
 
+@[inline]
 def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
   match o with
   | .ret x => .ret ⟨x, rfl⟩
