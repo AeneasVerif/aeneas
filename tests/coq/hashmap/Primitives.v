@@ -37,6 +37,9 @@ Definition fail_ {A: Type} (e: error) : result A := Fail_ e.
 Notation "x <- c1 ; c2" := (bind c1 (fun x => c2))
   (at level 61, c1 at next level, right associativity).
 
+Notation "x ← c1 ; c2" := (bind c1 (fun x => c2))
+(at level 61, c1 at next level, right associativity).
+
 (** Monadic assert *)
 Definition massert (b: bool) : result unit :=
   if b then Return tt else Fail_ Failure.
@@ -54,6 +57,9 @@ Definition eval_result_refl {A} {x} (a: result A) (p: a = Return x) : A :=
           end)
         I (Return x) p')
   end p.
+
+(* This is only reduced for constants (see "aeSimpl"), to avoid bloated partial results when calling "simpl". *)
+Arguments eval_result_refl : simpl never.
 
 Notation "x %global" := (eval_result_refl x eq_refl) (at level 40).
 Notation "x %return" := (eval_result_refl x eq_refl) (at level 40).

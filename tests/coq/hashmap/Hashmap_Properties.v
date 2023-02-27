@@ -4,6 +4,7 @@ Import Primitives.
 Require Import Primitives_Ext.
 Import Primitives_Ext.
 Require Import Coq.ZArith.ZArith.
+Require Import Coq.ZArith.Zquot.
 Require Import Coq.Lists.List.
 Local Open Scope Primitives_scope.
 Require Export Hashmap_Types.
@@ -26,6 +27,85 @@ Module Hashmap_Properties.
     +-------------+
 *)
 
+(* Generic utilities - to put in Primitives_Ext *)
+
+(* Like "injection" but on the goal :
+   Given a constructor f, goes from a = b to f a = f b.
+   The constructor takes the type explicitly, e.g. "@Some".
+   There may already exist something like that somewhere ...
+*)
+Ltac injection_goal f :=
+  lazymatch goal with [ |- ?a = ?b ] =>
+    let T := type of a in
+    let H := fresh in
+    let eq := fresh in
+    assert (H: f T a = f T b -> a = b);
+    only 1: (intro eq; now injection eq);
+    apply H; clear H
+  end.
+
+Definition option_map {A B} (f: A -> B) (o: option A) : option B :=
+  match o with
+  | None => None
+  | Some a => Some (f a)
+  end.
+
+Lemma nat_eqb_refl (n: nat) : (n =? n)%nat = true.
+Proof.
+unfold Nat.eqb.
+induction n.
+- reflexivity.
+- exact IHn.
+Qed.
+
+Lemma replace_list_len {T} (l: list T) (i: nat) (x: T) :
+  List.length (replace_list l i x) = List.length l.
+Proof.
+revert i.
+unfold replace_list.
+induction l. 1: reflexivity.
+intro. simpl.
+destruct i. 1: reflexivity.
+simpl.
+now rewrite (IHl i).
+Qed.
+
+Lemma replace_list_map {A B} (l: list A) (i: nat) (x: A) (f: A -> B) :
+  map f (replace_list l i x) = replace_list (map f l) i (f x).
+Proof.
+revert i.
+induction l. 1: trivial.
+intro.
+destruct i. 1: trivial.
+simpl. f_equal.
+apply IHl.
+Qed.
+
+Lemma nth_error_repeat_dis {T} (n m: nat) (x: T) :
+  nth_error (repeat x m) n = Some x \/
+  nth_error (repeat x m) n = None.
+Proof.
+destruct (le_lt_dec m n)%nat as [H|H].
+- right.
+  assert (List.length (repeat x m) <= n)%nat by now rewrite repeat_length.
+  now rewrite <-(proj2 (nth_error_None _ _) H0).
+- left. exact (nth_error_repeat x H).
+Qed.
+
+Lemma nth_error_empty T (n: nat) :
+  nth_error ([]: list T) n = None.
+Proof.
+now destruct n.
+Qed.
+
+Lemma nth_error_map {A B} (l: list A) (f: A -> B) (n: nat) :
+  nth_error (map f l) n = option_map f (nth_error l n).
+Proof.
+revert n.
+induction l; intro; destruct n; intuition.
+apply IHl.
+Qed.
+
 (* Utilities for the hashmap *)
 
 Definition key_id   := usize.
@@ -33,40 +113,13 @@ Definition hash_id  := usize.
 Definition slot_id  := usize.
 Definition chain_id := usize.
 
-Definition chain_t T := list (key_id * T).
-
-Fixpoint to_chain {T} (l: List_t T) : chain_t T :=
-    match l with
-    | ListCons n x t => cons (n, x) (to_chain t)
-    | ListNil => nil
-    end.
-
-Definition slots_to_chains {T} (slots: vec (List_t T)) : list (chain_t T) :=
-  List.map to_chain (vec_to_list slots).
-
-Fixpoint get_chain_value {T} (ch: chain_t T) (k: key_id) :
-    option T :=
-  match ch with
-  | [] => None
-  | (k', v) :: t => if (k s= k')
-      then Some v
-      else get_chain_value t k
-  end.
-
-Fixpoint update_chain {T} (ch: chain_t T) (k: key_id) (v: T) :
-    chain_t T :=
-  match ch with
-  | [] => []
-  | (k', v') :: t => if (k s= k')
-      then (k', v)  :: t
-      else (k', v') :: update_chain t k v
-  end.
-
 (* Hash *)
 
 (* Allows hash_key_fwd to succeed while keeping its implementation opaque with the lemma below. *)
 Definition get_hash (k: key_id) : hash_id :=
     (hash_key_fwd k) %return.
+
+Arguments get_hash : simpl never.
 
 Lemma hash_key_success (k: key_id) :
   hash_key_fwd k = Return (get_hash k).
@@ -74,25 +127,10 @@ Proof.
 reflexivity.
 Qed.
 
-Definition get_hash_pos {T} (slots: vec (List_t T)) (k: key_id) : result slot_id :=
-  scalar_rem (get_hash k) (vec_len _ slots).
+(* As a monadic lemma, without pre- nor post-conditions. *)
+Lemma hash_key_success2 {k} :
+  ∃x, hash_key_fwd k = Return x.
 
-(* Given hm, i, j: give key-value pair *)
-Definition get_kv {T} (chains: list (chain_t T)) (i: slot_id) (j: chain_id) : result (usize * T) :=
-    ch <- res_of_opt (nth_error chains (usize_to_nat i));
-    let kv := nth_error ch (usize_to_nat j) in
-    res_of_opt kv.
-
-Definition result_prop_bind {T} (x: result T) (p: T -> Prop) : Prop :=
-    match x with
-    | Fail_ Failure => True
-    | Fail_ OutOfFuel => True
-    | Return x => p x
-    end.
-
-Notation "x <-- c1 ; c2" := (result_prop_bind c1 (fun x => c2))
-  (at level 61, c1 at next level, right associativity).
-  
 (* Hashmap length *)
 
 Definition hm_length {T} (hm: Hash_map_t T) : usize :=
@@ -104,35 +142,229 @@ Proof.
 reflexivity.
 Qed.
 
+(* Functional hashmap *)
+
+(* The hashmap is represented as a list of slots *)
+Definition chain_t T := list (nat * T).
+Definition slots_t T := list (chain_t T).
+
+(* Do we want to avoid optionals ?
+Definition index_t {T} (l: list T) := { i: nat | (i < List.length l)%nat }. *)
+
+Fixpoint clean_chain {T} (l: List_t T) : chain_t T :=
+  match l with
+  | ListCons n x t => (usize_to_nat n, x) :: clean_chain t
+  | ListNil => nil
+  end.
+
+Definition clean_slots {T} (slots: vec (List_t T)) : slots_t T :=
+  List.map clean_chain (vec_to_list slots).
+
+Definition slot_values_count {T} (s: slots_t T) :=
+  fold_left Nat.add (map (@List.length _) s) 0%nat.
+
+Fixpoint get_chain_value {T} (ch: chain_t T) (k: nat) : option T :=
+  match ch with
+  | [] => None
+  | (k', v) :: t => if (k =? k')%nat
+      then Some v
+      else get_chain_value t k
+  end.
+
+Fixpoint update_chain {T} (ch: chain_t T) (k: nat) (v: T) : chain_t T :=
+  match ch with
+  | [] => []
+  | (k', v') :: t => if (k =? k')%nat
+      then (k', v)  :: t
+      else (k', v') :: update_chain t k v
+  end.
+
+Definition slot_update {T} (s: slots_t T) (i k: nat) (v: T) : slots_t T :=
+  match nth_error s i with
+  | None => s
+  | Some ch => replace_list s i (update_chain ch k v)
+  end.
+
+Definition slot_insert {T} (s: slots_t T) (i: nat) (x: nat * T) : slots_t T :=
+  match nth_error s i with
+  | None => s
+  | Some ch => replace_list s i (ch ++ [x])
+  end.
+
 (* Main invariants *)
-(* Do we care keeping vec & scalars, i.e. size limits ? *)
 
-Definition key_is_in_hash_slot {T} (s: vec (List_t T)) (i: slot_id) (j: chain_id) : Prop :=
-    kv <-- get_kv (slots_to_chains s) i j;
-    p  <-- get_hash_pos s (fst kv);
-    (p = i).
+Definition get_hash_pos {T} (s: slots_t T) (k: nat) : nat :=
+  k mod (List.length s).
 
-Definition no_key_duplicate {T} (chains: list (chain_t T)) (i: slot_id) (j1 j2: chain_id) (p: j1 <> j2) : Prop :=
-    kv1 <-- get_kv chains i j1;
-    kv2 <-- get_kv chains i j2;
-    (fst kv1 <> fst kv2).
+(* Given hm, i, j: give key-value pair *)
+Definition get_kv {T} (s: slots_t T) (i j: nat) : option (nat * T) :=
+  match nth_error s i with
+  | None => None
+  | Some ch => nth_error ch j
+  end.
 
-Definition hm_invariants {T} (s: vec (List_t T)) :=
-    (∀i j, key_is_in_hash_slot s i j) /\
-    (∀i j1 j2 p, no_key_duplicate (slots_to_chains s) i j1 j2 p).
+Definition option_prop_bind {T} (x: option T) (f: T -> Prop) : Prop :=
+  match x with
+  | None => True
+  | Some x => f x
+  end.
 
-(* It may be easier to prove than no_key_duplicate *)
-Definition no_key_duplicate_v2 {T} (chains: list (chain_t T)) : Prop :=
-  NoDup (map fst (List.concat chains)).
+Notation "x <-- c1 ; c2" := (option_prop_bind c1 (fun x => c2))
+  (at level 61, c1 at next level, right associativity).
+  
+Definition key_is_in_hash_slot {T} (s: slots_t T) (i j: nat) : Prop :=
+  kv <-- get_kv s i j;
+  (get_hash_pos s (fst kv) = i).
+
+Definition no_key_duplicate {T} (s: slots_t T) (i j1 j2: nat) (p: j1 <> j2) : Prop :=
+  kv1 <-- get_kv s i j1;
+  kv2 <-- get_kv s i j2;
+  (fst kv1 <> fst kv2).
+
+Definition slots_invariants {T} (s: slots_t T) :=
+  (∀i j, key_is_in_hash_slot s i j) /\
+  (∀i j1 j2 p, no_key_duplicate s i j1 j2 p).
+
+Definition hm_invariants {T} (hm: Hash_map_t T) :=
+  slots_invariants (clean_slots (Hash_map_slots hm)).
 
 (*  +----------------------------------+
     | Theorems - functional invariants |
     +----------------------------------+
 *)
 
-Definition update_chain_inv {T} (s0 s1: vec (List_t T)) (inv: hm_invariants s0) (i: slot_id) (k: key_id) (v: T) :
-  (slots_to_chains s0 = slots_to_chains s0) ->
-  hm_invariants s1
+Lemma slot_update_len {T} (s: slots_t T) (i k: nat) (v: T) :
+  List.length (slot_update s i k v) = List.length s.
+Proof.
+unfold slot_update.
+destruct (nth_error s i). 2: reflexivity.
+now rewrite replace_list_len.
+Qed.
+
+Lemma update_chain_len {T} (ch: chain_t T) (k: nat) (v: T) :
+  List.length (update_chain ch k v) = List.length ch.
+Proof.
+induction ch. 1: trivial.
+simpl.
+destruct a.
+destruct (k =? n)%nat. 1: trivial.
+simpl.
+now rewrite IHch.
+Qed.
+
+Lemma replace_list_eq {T} (l: list T) (i: nat) :
+  match nth_error l i with
+  | None => True
+  | Some x => replace_list l i x = l
+  end.
+Proof.
+revert l.
+induction i; intro.
+1: destruct l; reflexivity.
+
+destruct l; simpl.
+1: trivial.
+
+assert (H := IHi l).
+destruct (nth_error l i).
+- now f_equal.
+- trivial. 
+Qed.
+
+Lemma slot_update_count {T} (s: slots_t T) (i k: nat) (v: T) :
+  slot_values_count (slot_update s i k v) = slot_values_count s.
+Proof.
+unfold slot_update.
+remember (nth_error s i) as C.
+destruct C. 2: trivial.
+unfold slot_values_count.
+f_equal.
+rewrite replace_list_map.
+rewrite update_chain_len.
+set (length := Datatypes.length (A:=nat * T)).
+assert (H := replace_list_eq (map length s) i).
+remember (nth_error (map length s) i) as N.
+destruct N; rewrite nth_error_map in HeqN.
+- (* Rewrite issue : we isolate the rewrite target *)
+  change ((fun x => Some n = option_map length x)(nth_error s i)) in HeqN.
+  rewrite <-HeqC in HeqN. simpl in HeqN.
+  injection HeqN. intro. now rewrite <-H0.
+- (* Same issue here *)
+  change ((fun x => None = option_map length x)(nth_error s i)) in HeqN.
+  rewrite <-HeqC in HeqN.
+  inversion HeqN.
+Qed.
+
+Lemma slot_insert_count {T} (s: slots_t T) (i: nat) (x: (nat * T)) :
+  (* i < length s -> *)
+  slot_values_count (slot_insert s i x) = S (slot_values_count s).
+Proof.
+admit.
+Admitted.
+
+Lemma slot_update_same_keys {T} (s: slots_t T) (i k: nat) (v: T) :
+  ∀a b,
+  match (get_kv s a b, get_kv (slot_update s i k v) a b) with
+  | (None, None) => True
+  | (Some kv1, Some kv2) => fst kv1 = fst kv2
+  | _ => False
+  end.
+Proof.
+intros.
+remember (get_kv s a b) as X.
+remember (get_kv (slot_update s i k v) a b) as Y.
+destruct X, Y. 4: reflexivity.
+1: {
+unfold get_kv in *.
+admit.
+}
+(* For 2-3: nth_error must have same shape on lists of same length. *)
+admit.
+admit.
+Admitted.
+
+Lemma inv_empty T (n: nat) : slots_invariants (repeat ([]: chain_t T) n).
+Proof.
+unfold slots_invariants.
+split; intros;
+try unfold key_is_in_hash_slot, no_key_duplicate, get_kv;
+destruct (nth_error_repeat_dis i n ([]: chain_t T));
+rewrite H;
+try exact I;
+now rewrite nth_error_empty.
+Qed.
+
+Lemma inv_update {T} (s: slots_t T) (i k: nat) (v: T) :
+  slots_invariants s -> slots_invariants (slot_update s i k v).
+Proof.
+intro inv.
+destruct inv as (inv0, inv1).
+
+unfold slots_invariants.
+split; intros.
+- unfold key_is_in_hash_slot in *.
+  assert (H0 := inv0 i0 j).
+  assert (H1 := slot_update_same_keys s i k v i0 j).
+  set (s' := slot_update s i k v) in *.
+  destruct (get_kv s i0 j), (get_kv s' i0 j);
+  simpl in *; try trivial. 2: now exfalso.
+  rewrite <-H1. unfold get_hash_pos in *. simpl.
+  unfold s'.
+  now rewrite slot_update_len.
+- unfold no_key_duplicate in *.
+  assert (H0 := inv1 i0 j1 j2 p).
+  assert (H1 := slot_update_same_keys s i k v i0 j1).
+  assert (H2 := slot_update_same_keys s i k v i0 j2).
+  set (s' := slot_update s i k v) in *.
+  now destruct (get_kv s i0 j1),  (get_kv s i0 j2),
+           (get_kv s' i0 j1), (get_kv s' i0 j2);
+  simpl in *; intuition.
+Qed.
+
+Lemma inv_insert {T} (s: slots_t T) (i: nat) (x: nat * T) :
+  slots_invariants s -> slots_invariants (slot_insert s i x).
+Proof.
+Admitted.
 
 (*  +--------------------+
     | Theorems - hashmap |
@@ -153,8 +385,8 @@ Qed.
 Lemma hm_allocate_slots_shape (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat) :
     vec_length v + to_Z n <= usize_max ->
     match hash_map_allocate_slots_fwd T fuel v n with
-    | Return v' => slots_to_chains v' =
-      (slots_to_chains v) ++
+    | Return v' => clean_slots v' =
+      (clean_slots v) ++
       (repeat [] (usize_to_nat n))
     | Fail_ OutOfFuel => True
     | Fail_ Failure => False
@@ -164,22 +396,21 @@ revert fuel v.
 induction_usize_to_nat n as N;
 intros;
 siphon fuel;
-destruct_eqb as Hn0.
+aeStep as Hn0.
 
 (* zero case *)
 1: now rewrite app_nil_r.
 
 (* successor case *)
+aeStep as w.
+aeStep as y.
 
-rewrite_vec_push_back as w.
-rewrite_scalar_sub as y.
+simpl.
 
-simpl in Hy |- *.
-
-assert (P3: ((slots_to_chains v) ++ [[]]: list (chain_t T)) = slots_to_chains w).
+assert (P3: ((clean_slots v) ++ [[]]: list (chain_t T)) = clean_slots w).
 1: {
-  change ([[]]) with (map (@to_chain T) [ListNil]).
-  unfold slots_to_chains.
+  change ([[]]) with (map (@clean_chain T) [ListNil]).
+  unfold clean_slots.
   rewrite <-map_app.
   now rewrite <-Hw.
 }
@@ -190,7 +421,7 @@ rewrite app_assoc.
     Set Printing Explicit/All.
 *)
 (* For some reason, "rewrite" doesn't find the subterm, so we massage the goal with "change". *)
-change ((slots_to_chains v ++ [[]]) ++ repeat [] N) with ((fun v1 => v1 ++ repeat [] N) (slots_to_chains v ++ [[]])).
+change ((clean_slots v ++ [[]]) ++ repeat [] N) with ((fun v1 => v1 ++ repeat [] N) (clean_slots v ++ [[]])).
 rewrite P3.
 
 apply IHN.
@@ -206,7 +437,7 @@ Qed.
 
 Lemma hm_allocate_slots_inv (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat) :
     match hash_map_allocate_slots_fwd T fuel (vec_new _) n with
-    | Return v' => slots_to_chains v' = repeat [] (usize_to_nat n)
+    | Return v' => clean_slots v' = repeat [] (usize_to_nat n)
     | Fail_ OutOfFuel => True
     | Fail_ Failure => False
     end.
@@ -227,10 +458,9 @@ intros.
 unfold hash_map_allocate_slots_fwd.
 fold hash_map_allocate_slots_fwd.
 
-destruct_eqb as Hn0.
-rewrite_vec_push_back as w.
-rewrite_scalar_sub as m.
-simpl in Hm.
+aeStep as Hn0.
+aeStep as w.
+aeStep as m.
 
 apply (IHfuel m w). 2: lia.
 
@@ -265,6 +495,7 @@ destruct W ; apply eq_sym in HeqW.
 - reflexivity.
 - exfalso. apply (vec_push_back_fuel _ _ HeqW).
 }
+(* TODO: Replace by "simpl". However, the rewrite then doesn't work as expected, no idea why for now. *)
 rewrite res_bind_value.
 
 remember (usize_sub n 1%usize) as M.
@@ -273,8 +504,7 @@ destruct M ; apply eq_sym in HeqM.
 - reflexivity.
 - exfalso. apply (scalar_sub_fuel _ _ HeqM).
 }
-rewrite res_bind_value.
-rewrite res_bind_id.
+aeSimpl.
 
 apply IHN.
 - admit. (* exploit HeqM *)
@@ -284,7 +514,7 @@ Admitted.
 
 (* New hashmap *)
 
-Lemma hm_new_success T fuel capacity max_load_dividend max_load_divisor :
+Lemma hm_new_inv T fuel capacity max_load_dividend max_load_divisor :
      (0 < to_Z max_load_dividend
    /\ to_Z max_load_dividend < to_Z max_load_divisor
    /\ 0 < to_Z capacity
@@ -310,55 +540,21 @@ remember (hash_map_allocate_slots_fwd T fuel
 (vec_new _) capacity) as S.
 
 destruct S. 2: exact Hslots.
-rewrite res_bind_value.
+aeSimpl.
 
-rewrite_scalar_mul capacity max_load_dividend as x.
+aeStep as x.
 
 assert (Hx1 := Z_div_pos (to_Z x) (to_Z max_load_divisor)).
 assert (Hx2 := Z_div_lt (to_Z x) (to_Z max_load_divisor)).
-rewrite_scalar_div x max_load_divisor as y.
+aeStep as y.
 
-(* Why do we need the subsequent change ? *)
-set (hm := {|
-Hash_map_num_entries := 0 %usize;
-Hash_map_max_load_factor := (max_load_dividend, max_load_divisor);
-Hash_map_max_load := y;
-Hash_map_slots := v
-|}).
-change ({|
-Hash_map_num_entries := 0 %usize;
-Hash_map_max_load_factor := (max_load_dividend, max_load_divisor);
-Hash_map_max_load := y;
-Hash_map_slots := v
-|}) with hm.
-
-(* Invariants are easy as long as slots are empty *)
-assert (G: ∀i, ∀j, get_kv hm i j = Fail_ Failure).
-1: {
-intros.
-unfold get_kv.
-simpl (Hash_map_slots hm).
+(* Invariants *)
+unfold hm_length, hm_invariants.
+split. 2: now aeStep.
+simpl clean_slots.
 simpl in Hslots.
 rewrite Hslots.
-
-remember ((usize_to_nat i) <? (usize_to_nat capacity))%nat as C.
-destruct C ; apply eq_sym in HeqC.
-- rewrite Nat.ltb_lt in HeqC.
-  rewrite nth_error_repeat. 2: exact HeqC.
-  destruct (usize_to_nat j) ; reflexivity.
-- rewrite Nat.ltb_ge in HeqC.
-  rewrite (proj2 (nth_error_None _ _)).
-  + reflexivity.
-  + now rewrite repeat_length.
-}
-
-(* The invariants *)
-split. 2: now unfold hm_length.
-split ; intros.
-- unfold key_is_in_hash_slot.
-  now rewrite G.
-- unfold no_key_duplicate.
-  now rewrite G.
+apply inv_empty.
 Qed.
 
 Example hm_new_no_fail T : ∃fuel,
@@ -375,7 +571,7 @@ Qed.
 Lemma hm_insert_in_list_fwd_shape {T} fuel k v l :
   match hash_map_insert_in_list_fwd T fuel k v l with
   | Return b => Bool.Is_true b <->
-      get_chain_value (to_chain l) k = None
+      get_chain_value (clean_chain l) (usize_to_nat k) = None
   | Fail_ OutOfFuel => True
   | Fail_ Failure => False
   end.
@@ -388,26 +584,31 @@ siphon fuel.
 (* Nil case *)
 2: intuition.
 
-(* The tactic doesn't help here: we really want "(k s= s) = true" instead of "to_Z k = to_Z s", because we rewrite "s=" twice. *)
-remember (s s= k) as B.
-rewrite Zeqb_sym in HeqB.
-destruct B ; apply eq_sym in HeqB.
-- split. 1: intuition.
+aeStep as B.
+- apply scalar_Z_inj in B. rewrite B.
+  split. 1: intuition.
   intro H.
-  unfold to_chain, get_chain_value in H.
-  rewrite HeqB in H.
-  inversion H.
-- rewrite res_bind_id.
-  simpl.
-  rewrite HeqB.
+  unfold clean_chain, get_chain_value in H.
+  now rewrite nat_eqb_refl in H.
+- simpl.
+  (* Annoying small things *)
+  assert (H: (usize_to_nat k =? usize_to_nat s)%nat = false). {
+    apply not_true_iff_false.
+    rewrite Nat.eqb_eq.
+    intro. apply B.
+    apply usize_nat_inj in H.
+    now rewrite H.
+  }
+  rewrite H.
   apply IHl.
 Qed.
 
 Lemma hm_insert_in_list_back_shape {T} fuel k v l :
+  let k' := usize_to_nat k in 
   match hash_map_insert_in_list_back T fuel k v l with
-  | Return l' => match get_chain_value (to_chain l) k with
-    | None   => to_chain l' = (to_chain l) ++ [(k, v)]
-    | Some _ => to_chain l' = update_chain (to_chain l) k v
+  | Return l' => match get_chain_value (clean_chain l) k' with
+    | None   => clean_chain l' = (clean_chain l) ++ [(k', v)]
+    | Some _ => clean_chain l' = update_chain (clean_chain l) k' v
   end
   | Fail_ OutOfFuel => True
   | Fail_ Failure => False
@@ -421,87 +622,318 @@ siphon fuel.
 (* Nil case *)
 2: reflexivity.
 
-remember (s s= k) as B.
-destruct B ; apply eq_sym in HeqB.
-1: { (* Lots of small changes on B... *)
-simpl.
-rewrite Zeqb_sym, HeqB.
-rewrite Z.eqb_eq in HeqB.
-apply scalar_Z_inj in HeqB.
-now rewrite HeqB.
-}
+aeStep as B.
+- apply scalar_Z_inj in B. rewrite B.
+  unfold k'. simpl.
+  now rewrite nat_eqb_refl.
+- assert (H := IHl fuel k v).
+  set (hm := hash_map_insert_in_list_back T fuel k v l) in *.
+  destruct hm ; simpl. 2: auto.
+  unfold k' in *.
+  assert (H0: (usize_to_nat k =? usize_to_nat s)%nat = false). {
+    apply not_true_iff_false.
+    rewrite Nat.eqb_eq.
+    intro. apply B.
+    apply usize_nat_inj in H0.
+    now rewrite H0.
+  }
+  rewrite H0.
+  destruct (get_chain_value (clean_chain l) (usize_to_nat k)) ;
+  f_equal ; apply H.
+Qed.
+(*
+Fixpoint slot_find_rec {T} (s: slots_t T) (i k: nat) : option (nat * T) :=
+  match s with
+  | [] => None
+  | ch :: s' => match get_chain_value ch k with
+    | None => slot_find_rec s' (S i) k
+    | Some v => Some (i, v)
+  end end.
 
-assert (H := IHl fuel k v).
-set (hm := hash_map_insert_in_list_back T fuel k v l) in *.
-destruct hm ; simpl. 2: auto.
-rewrite Zeqb_sym, HeqB.
-destruct (get_chain_value (to_chain l) k) ;
-f_equal ; apply H.
+Definition slot_find {T} (s: slots_t T) (k: nat) : option (nat * T) := slot_find_rec s 0%nat k.
+
+
+Lemma slot_find_some {T} (s: slots_t T) (i k: nat) (v: T) :
+  slot_find s k = Some (i, v) ->
+  get_chain_value (nth_error s i) k = v.
+Proof.
+
 Qed.
 
+Fixpoint slot_find2 {T} (s: slots_t T) (k: nat) : option (nat * T) :=
+  option_map snd (find (fun kv => (fst kv =? k)%nat) (List.concat s)).
+
+Definition slot_insert_or_update {T} (s: slots_t T) (i k: nat) (v: T) : slots_t T :=
+  match nth_error s i with
+  | None => s
+  | Some ch => slot_update s i k v
+  end.
+
+Notation clean_hm hm := (clean_slots (Hash_map_slots hm)).
+
 Lemma hm_insert_no_resize_shape {T} (fuel: nat) (self: Hash_map_t T) (key: usize) (value: T) :
-  hm_invariants self ->
+    (0 < vec_length (Hash_map_slots self)
+  /\ to_Z (Hash_map_num_entries self) < usize_max)
+  ->
   match hash_map_insert_no_resize_fwd_back T fuel self key value with
   | Fail_ Failure   => False
   | Fail_ OutOfFuel => True
-  | Return hm => hm_invariants hm
-            (* /\ spec_on_values self hm *)
+  | Return hm => ∃i, (i < List.length (clean_hm self))%nat /\
+  clean_hm hm = slot_insert_or_update (clean_hm self) (usize_to_nat key) i value
   end.
 Proof.
-intro inv.
+intro bounds.
 unfold hash_map_insert_no_resize_fwd_back.
 
 intro_scalar_bounds key.
 
-(* TODO Should treat hash_key_fwd as an opaque but non-failing function, to keep the 'hash' value separated. *)
-unfold hash_key_fwd.
+(* Keep the hash opaque for clarity *)
+rewrite hash_key_success.
 rewrite res_bind_value.
+set (hash := get_hash key).
+intro_scalar_bounds hash.
 
 (* TODO Need preconditions *)
 (* TODO(minor) Tactics shouldn't duplicate bounds *)
-rewrite_scalar_rem as pos. 1-2: admit.
+assert (B := Zrem_lt_pos (to_Z hash) (vec_length (Hash_map_slots self))).
+rewrite_scalar_rem as pos.
+
 (* TODO Another simplification from projection *)
 unfold vec_len in Hpos. simpl in Hpos.
 
-rewrite_vec_index_mut_fwd as slot. 1: admit.
+rewrite_vec_index_mut_fwd as slot.
 
 assert (Hins := hm_insert_in_list_fwd_shape fuel key value slot).
 remember (hash_map_insert_in_list_fwd T fuel key value slot) as ins.
-destruct ins. 2: exact Hins.
+destruct ins. 2: intuition.
 
 rewrite res_bind_value.
 destruct b.
-
-(* Value inserted case *)
 1: {
-admit.
+rewrite_scalar_add as size.
+assert (Hins2 := hm_insert_in_list_back_shape fuel key value slot).
+remember (hash_map_insert_in_list_back T fuel key value slot) as ins2.
+destruct ins2. 2: intuition.
+rename l into new_slot.
+simpl in Hins, Hins2 |- *.
+
+rewrite_vec_index_mut_back as new_slots.
+
+destruct Hins. clear H0.
+assert (H0 := H I). clear H.
+
+exists (usize_to_nat pos).
+split. 1: { admit. (* nat <-> Z issues *) }
+
+unfold clean_slots. simpl.
+unfold slot_insert_or_update.
+rewrite Hnew_slots.
+set (s := vec_to_list (Hash_map_slots self)).
+unfold slot_find.
+
+remember (get_chain_value (clean_chain slot) (usize_to_nat key)) as ch in Hins2.
+destruct ch. 1: { exfalso. rewrite H0 in Heqch. inversion Heqch. }
+
+unfold hm_invariants. simpl.
+assert (clean_slots new_slots = slot_insert (clean_slots (Hash_map_slots self)) (usize_to_nat pos) (usize_to_nat key, value)).
+2: { rewrite H. now apply inv_insert. }
 }
-(* Value not inserted *)
+Qed.
+  *)
+
+Notation slots_count_nat hm := (List.length (clean_slots (Hash_map_slots hm))).
+Notation slots_count_Z hm := (vec_length (Hash_map_slots hm)).
+
+Lemma slots_count_eq {T} (hm: Hash_map_t T) : Z.of_nat (slots_count_nat hm) = slots_count_Z hm.
+Proof.
+unfold vec_length, clean_slots.
+now rewrite List.map_length.
+Qed.
+
+Notation entries_count_Z hm := (to_Z (Hash_map_num_entries hm)).
+
+Lemma hm_insert_no_resize_inv {T} (fuel: nat) (self: Hash_map_t T) (key: usize) (value: T) :
+    (0 < slots_count_Z self
+  /\ entries_count_Z self < usize_max)
+  -> hm_invariants self
+  -> match hash_map_insert_no_resize_fwd_back T fuel self key value with
+  | Fail_ Failure   => False
+  | Fail_ OutOfFuel => True
+  | Return hm => hm_invariants hm
+    /\ slots_count_Z hm = slots_count_Z self
+    /\ (entries_count_Z hm = entries_count_Z self
+     \/ entries_count_Z hm = entries_count_Z self + 1)
+  end.
+Proof.
+intros bounds inv.
+unfold hash_map_insert_no_resize_fwd_back.
+
+intro_scalar_bounds key.
+
+(* Keep the hash opaque for clarity *)
+rewrite hash_key_success.
+simpl.
+set (hash := get_hash key).
+intro_scalar_bounds hash.
+
+assert (B := Zrem_lt_pos (to_Z hash) (vec_length (Hash_map_slots self))).
+aeStep as pos.
+
+(* TODO Another simplification from projection
+   TODO Unfolding leaks under "to_Z".
+*)
+unfold vec_len in Hpos. simpl in Hpos.
+
+aeStep as slot.
+
+assert (Hins := hm_insert_in_list_fwd_shape fuel key value slot).
+remember (hash_map_insert_in_list_fwd T fuel key value slot) as ins.
+destruct ins. 2: intuition.
+
+simpl.
+destruct b.
+
+(* Value inserted *)
+1: {
+aeStep as size.
+assert (Hins2 := hm_insert_in_list_back_shape fuel key value slot).
+remember (hash_map_insert_in_list_back T fuel key value slot) as ins2.
+destruct ins2. 2: intuition.
+rename l into new_slot.
+simpl in Hins, Hins2 |- *.
+
+aeStep as new_slots.
+
+destruct Hins. clear H0.
+assert (H0 := H I). clear H.
+remember (get_chain_value (clean_chain slot) (usize_to_nat key)) as ch in Hins2.
+destruct ch. 1: { exfalso. rewrite H0 in Heqch. inversion Heqch. }
+
+unfold hm_invariants. simpl.
+assert (clean_slots new_slots = slot_insert (clean_slots (Hash_map_slots self)) (usize_to_nat pos) (usize_to_nat key, value)).
+2: {
+  rewrite H.
+  split. now apply inv_insert.
+  split.
+  - unfold vec_length.
+    rewrite Hnew_slots.
+    now rewrite replace_list_len.
+  - simpl in Hsize. lia.
+}
+
+(* The functional proof, part I *)
+unfold clean_slots.
+rewrite Hnew_slots.
+rewrite replace_list_map.
+unfold slot_insert.
+set (s := vec_to_list (Hash_map_slots self)) in *.
+set (i := usize_to_nat pos) in *.
+remember (nth_error (map clean_chain s) i) as C.
+destruct C.
+2: {
+  exfalso.
+  rewrite nth_error_map, Hslot in HeqC.
+  inversion HeqC.
+}
+f_equal.
+rewrite Hins2.
+f_equal.
+injection_goal @Some.
+rewrite HeqC.
+rewrite nth_error_map.
+rewrite Hslot.
+reflexivity.
+}
+(* Value not inserted.
+   TODO: Should factorize with the first branch.
+*)
 1: {
 assert (Hins2 := hm_insert_in_list_back_shape fuel key value slot).
 remember (hash_map_insert_in_list_back T fuel key value slot) as ins2.
-destruct ins2. 2: exact Hins2.
+destruct ins2. 2: intuition.
 rename l into new_slot.
-simpl.
+simpl in Hins, Hins2 |- *.
 
+aeStep as new_slots.
 
+destruct Hins. clear H.
+remember (get_chain_value (clean_chain slot) (usize_to_nat key)) as ch in Hins2.
+destruct ch. 2: { exfalso. now apply H0. }
 
-rewrite_vec_index_mut_back as new_slots. 1: admit.
-
-(*set (new_self := {|
-    Hash_map_num_entries := Hash_map_num_entries self;
-    Hash_map_max_load_factor := Hash_map_max_load_factor self;
-    Hash_map_max_load := Hash_map_max_load self;
-    Hash_map_slots := new_slots;
-  |}).*)
-
-destruct inv as (key_in, no_dup).
-split ; intros.
-- unfold key_is_in_hash_slot, get_kv, get_hash_pos, get_slots_len.
-  simpl.
-  admit.
-- admit.
+unfold hm_invariants. simpl.
+assert (clean_slots new_slots = slot_update (clean_slots (Hash_map_slots self)) (usize_to_nat pos) (usize_to_nat key) value).
+2: {
+  rewrite H.
+  split. now apply inv_update.
+  split.
+  - unfold vec_length.
+    rewrite Hnew_slots.
+    now rewrite replace_list_len.
+  - lia.
 }
-Admitted.
+
+(* The functional proof, part II (mostly copied) *)
+unfold clean_slots.
+rewrite Hnew_slots.
+rewrite replace_list_map.
+unfold slot_update.
+set (s := vec_to_list (Hash_map_slots self)) in *.
+set (i := usize_to_nat pos) in *.
+remember (nth_error (map clean_chain s) i) as C.
+destruct C.
+2: {
+  exfalso.
+  rewrite nth_error_map, Hslot in HeqC.
+  inversion HeqC.
+}
+f_equal.
+rewrite Hins2.
+f_equal.
+injection_goal @Some.
+rewrite HeqC.
+rewrite nth_error_map.
+rewrite Hslot.
+reflexivity.
+}
+Qed.
+
+Fixpoint list_t_length {T} (l: List_t T) :=
+  match l with
+  | ListNil => 0%nat
+  | ListCons _ _ t => S (list_t_length t)
+  end.
+
+Lemma hm_move_elements_from_list_inv {T} (fuel: nat) (self: Hash_map_t T) (l: List_t T) :
+    (0 < vec_length (Hash_map_slots self)
+  /\ entries_count_Z self + Z.of_nat (list_t_length l) <= usize_max)
+  -> hm_invariants self
+  -> match hash_map_move_elements_from_list_fwd_back T fuel self l with
+  | Fail_ Failure   => False
+  | Fail_ OutOfFuel => True
+  | Return hm => hm_invariants hm /\
+      slots_count_Z hm = slots_count_Z self
+  end.
+Proof.
+revert fuel self.
+induction l;
+intros fuel self bounds inv;
+siphon fuel.
+2: split; trivial.
+
+simpl in *.
+assert (B0: 0 < vec_length (Hash_map_slots self)
+∧ entries_count_Z self < usize_max) by lia.
+assert (H := hm_insert_no_resize_inv fuel self s t B0 inv).
+
+remember (hash_map_insert_no_resize_fwd_back T fuel self s t) as R.
+destruct R. 2: trivial.
+aeSimpl.
+destruct H as (invH, (s_count, e_count)).
+
+rewrite <-s_count.
+apply IHl. 2: intuition.
+
+lia.
+Qed.
 
 End Hashmap_Properties.

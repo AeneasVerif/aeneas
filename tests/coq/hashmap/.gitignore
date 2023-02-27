@@ -1,0 +1,17 @@
+
+# Latex auxiliary files (not global rules due to removing e.g. pdf and log extensions).
+*.fdb_latexmk
+*.synctex.gz
+*.pdf
+*.aux
+*.lof
+*.log
+*.lot
+*.fls
+*.out
+*.toc
+*.fmt
+*.fot
+*.cb
+*.cb2
+.*.lb

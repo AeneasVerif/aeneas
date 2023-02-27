@@ -1,0 +1,26 @@
+
+\documentclass{article}
+
+\title{Aeneas Coq backend}
+
+\begin{document}
+
+\maketitle
+
+[problem to solve (Coq backend for Aeneas functions, result)]
+
+[high-level solution (open tactics with typeclasses)]
+
+[structure (step/solve/simpl)]
+
+[limitations \& TODOs]
+
+We should have 3 high-level commands :
+
+\begin{itemize}
+\item "aeSimpl" which uniformises the context with a typeclass giving which hypotheses should be added, and simplifies the goal. It applies some directed equations which are for now hardcoded but should be given by another typeclass.
+\item "aeSolve" which tries to solve the current goal. It's largely based on "lia" but also call some utilities such as "easy".
+\item "aeStep" which progress on the current goal by reaching its head variable in some sense. For that, it lookup lemmas on the goal head variable from "MonadicLemma" and "ApplicableLemma".
+\end{itemize}
+
+\end{document}
