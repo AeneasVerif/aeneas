@@ -911,6 +911,9 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
 
 (** Simplify the lets immediately followed by a return.
 
+    [ignore_monadic_rec_let]: don't apply this transformation on monadic let rec bindings.
+      This is for Lean. Also see {!val:Config.decompose_monadic_rec_let_bindings}.
+
     Ex.:
     {[
       x <-- f y;
@@ -921,7 +924,25 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
       f y
     ]}
  *)
-let simplify_let_then_return _ctx def =
+let simplify_let_then_return ignore_monadic_rec_let ctx def =
+  (* Lookup the definition group, so that we can check which calls are
+     recursive. *)
+  let decl_group =
+    (* Note that global bodies can't be recursive *)
+    if ignore_monadic_rec_let && not def.is_global_decl_body then
+      A.FunDeclId.Map.find def.def_id ctx.fun_context.fun_decl_groups
+    else A.FunDeclId.Set.empty
+  in
+
+  (* Check if an expression is a recursive call *)
+  let is_rec_call (e : texpression) : bool =
+    let app, _ = destruct_apps e in
+    match app.e with
+    | Qualif { id = FunOrOp (Fun (FromLlbc (Regular fid, _, _))); _ } ->
+        A.FunDeclId.Set.mem fid decl_group
+    | _ -> false
+  in
+
   let expr_visitor =
     object (self)
       inherit [_] map_expression
@@ -941,7 +962,9 @@ let simplify_let_then_return _ctx def =
             | None -> not_simpl_e
             | Some lv_v ->
                 let lv_v =
-                  if monadic then mk_result_return_texpression lv_v else lv_v
+                  if monadic && not (ignore_monadic_rec_let && is_rec_call rv)
+                  then mk_result_return_texpression lv_v
+                  else lv_v
                 in
                 if lv_v = next_e then rv.e else not_simpl_e)
     end
@@ -1670,7 +1693,9 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
        f y
      ]}
   *)
-  let def = simplify_let_then_return ctx def in
+  let def =
+    simplify_let_then_return !Config.decompose_monadic_rec_let_bindings ctx def
+  in
   log#ldebug
     (lazy ("simplify_let_then_return:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
