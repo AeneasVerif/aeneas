@@ -279,7 +279,10 @@ let translate_module_to_pure (crate : A.crate) :
     FA.analyze_module crate fun_context.C.fun_decls
       global_context.C.global_decls !Config.use_state
   in
-  let fun_context = { fun_decls = fun_context.fun_decls; fun_infos } in
+  let fun_decl_groups = LlbcAstUtils.compute_fun_decl_groups_map crate in
+  let fun_context =
+    { fun_decls = fun_context.fun_decls; fun_infos; fun_decl_groups }
+  in
   let trans_ctx = { type_context; fun_context; global_context } in
 
   (* Translate all the type definitions *)

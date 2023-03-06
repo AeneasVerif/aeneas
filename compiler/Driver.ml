@@ -96,16 +96,15 @@ let () =
       ( "-template-clauses",
         Arg.Set extract_template_decreases_clauses,
         " Generate templates for the required decreases clauses, in a \
-          dedicated file. Implies -decreases-clauses"
-      );
+         dedicated file. Implies -decreases-clauses" );
       ( "-no-split-files",
         Arg.Clear split_files,
         " Don't split the definitions between different files for types, \
-          functions, etc." );
+         functions, etc." );
       ( "-no-check-inv",
         Arg.Clear check_invariants,
         " Deactivate the invariant sanity checks performed at every step of \
-          evaluation. Dramatically saves speed." );
+         evaluation. Dramatically saves speed." );
     ]
   in
 
@@ -118,8 +117,7 @@ let () =
     exit 1
   in
 
-  if !extract_template_decreases_clauses then
-    extract_decreases_clauses := true;
+  if !extract_template_decreases_clauses then extract_decreases_clauses := true;
 
   (* Sanity check (now that the arguments are parsed!): -template-clauses ==> decrease-clauses *)
   assert (!extract_decreases_clauses || not !extract_template_decreases_clauses);
@@ -152,7 +150,8 @@ let () =
         decompose_monadic_let_bindings := true;
         decompose_nested_let_patterns := true
     | Lean ->
-        ()
+        (* This patern is not supported due to a bug in Lean *)
+        decompose_monadic_rec_let_bindings := true
   in
 
   (* Retrieve and check the filename *)
