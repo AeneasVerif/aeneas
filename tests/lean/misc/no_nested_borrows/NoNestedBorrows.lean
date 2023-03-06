@@ -287,7 +287,8 @@ structure OpaqueDefs where
       else
         do
           let i0 ⟵ UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
-          list_nth_shared_fwd T tl i0
+          let t ⟵ list_nth_shared_fwd T tl i0
+          Result.ret t
     | list_t.ListNil => Result.fail Error.panic
   
   /- [no_nested_borrows::list_nth_mut] -/
@@ -299,7 +300,8 @@ structure OpaqueDefs where
       else
         do
           let i0 ⟵ UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
-          list_nth_mut_fwd T tl i0
+          let t ⟵ list_nth_mut_fwd T tl i0
+          Result.ret t
     | list_t.ListNil => Result.fail Error.panic
   
   /- [no_nested_borrows::list_nth_mut] -/
@@ -320,7 +322,10 @@ structure OpaqueDefs where
   def list_rev_aux_fwd
     (T : Type) (li : list_t T) (lo : list_t T) : Result (list_t T) :=
     match 𝒽: li with
-    | list_t.ListCons hd tl => list_rev_aux_fwd T tl (list_t.ListCons hd lo)
+    | list_t.ListCons hd tl =>
+      do
+        let l ⟵ list_rev_aux_fwd T tl (list_t.ListCons hd lo)
+        Result.ret l
     | list_t.ListNil => Result.ret lo
   
   /- [no_nested_borrows::list_rev] -/

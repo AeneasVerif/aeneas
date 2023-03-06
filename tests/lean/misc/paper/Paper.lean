@@ -70,7 +70,8 @@ structure OpaqueDefs where
       else
         do
           let i0 ⟵ UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
-          list_nth_mut_fwd T tl i0
+          let t ⟵ list_nth_mut_fwd T tl i0
+          Result.ret t
     | list_t.ListNil => Result.fail Error.panic
   
   /- [paper::list_nth_mut] -/
