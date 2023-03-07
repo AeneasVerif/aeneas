@@ -562,11 +562,15 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
         let extract_decrease decl =
           let has_decr_clause = has_decreases_clause decl in
           if has_decr_clause then
-            if !Config.backend = Lean then
-              Extract.extract_termination_and_decreasing ctx.extract_ctx fmt
-                decl
-            else
-              Extract.extract_template_decreases_clause ctx.extract_ctx fmt decl
+            match !Config.backend with
+            | Lean ->
+                Extract.extract_template_lean_termination_and_decreasing
+                  ctx.extract_ctx fmt decl
+            | FStar ->
+                Extract.extract_template_fstar_decreases_clause ctx.extract_ctx
+                  fmt decl
+            | Coq ->
+                raise (Failure "Coq doesn't have decreases/termination clauses")
         in
         extract_decrease fwd;
         List.iter extract_decrease loop_fwds)
