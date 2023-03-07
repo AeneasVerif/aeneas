@@ -134,7 +134,7 @@ let () =
     match !opt_backend with
     | Some b -> backend := b
     | None ->
-        print_string "Backend not specified (use the `-backend` argument)\n";
+        log#error "Backend not specified (use the `-backend` argument)";
         fail ()
   in
 
@@ -151,7 +151,11 @@ let () =
         decompose_nested_let_patterns := true
     | Lean ->
         (* The Lean backend is experimental: print a warning *)
-        log#lwarning (lazy "The Lean backend is experimental")
+        log#lwarning (lazy "The Lean backend is experimental");
+        (* We don't support fuel for the Lean backend *)
+        if !use_fuel then (
+          log#error "The Lean backend doesn't support the -use-fuel option";
+          fail ())
   in
 
   (* Retrieve and check the filename *)
