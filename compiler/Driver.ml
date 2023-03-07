@@ -219,11 +219,6 @@ let () =
       (* Test the unit functions with the concrete interpreter *)
       if !test_unit_functions then I.Test.test_unit_functions m;
 
-      (* Evaluate the symbolic interpreter on the functions, ignoring the
-       * functions which contain loops - TODO: remove *)
-      let synthesize = true in
-      I.Test.test_functions_symbolic synthesize m;
-
       (* Translate the functions *)
       Translate.translate_crate filename dest_dir m;
 
