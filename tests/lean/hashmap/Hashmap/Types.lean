@@ -13,6 +13,6 @@ structure hash_map_t (T : Type) where
   hash_map_num_entries : USize
   hash_map_max_load_factor : (USize × USize)
   hash_map_max_load : USize
-  hash_map_slots : vec (list_t T)
+  hash_map_slots : Vec (list_t T)
 
 

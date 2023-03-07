@@ -4,5 +4,5 @@ import Base.Primitives
 
 /- [core::num::nonzero::NonZeroU32] -/
 axiom core_num_nonzero_non_zero_u32_t : Type
-/- The state type used in the state-error monad -/ axiom state : Type
+/- The state type used in the state-error monad -/ axiom State : Type
 

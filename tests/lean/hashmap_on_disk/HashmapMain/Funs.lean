@@ -60,8 +60,8 @@ def hashmap_hash_map_new_fwd (T : Type) : Result (hashmap_hash_map_t T) :=
   hashmap_hash_map_new_with_capacity_fwd T (USize.ofNatCore 32 (by intlit))
     (USize.ofNatCore 4 (by intlit)) (USize.ofNatCore 5 (by intlit))
 
-/- [hashmap_main::hashmap::HashMap::{0}::clear_slots] -/
-def hashmap_hash_map_clear_slots_loop_fwd_back
+/- [hashmap_main::hashmap::HashMap::{0}::clear] -/
+def hashmap_hash_map_clear_loop_fwd_back
   (T : Type) (slots : Vec (hashmap_list_t T)) (i : USize) :
   (Result (Vec (hashmap_list_t T)))
   :=
@@ -73,26 +73,19 @@ def hashmap_hash_map_clear_slots_loop_fwd_back
       let slots0 ←
         vec_index_mut_back (hashmap_list_t T) slots i
           hashmap_list_t.HashmapListNil
-      hashmap_hash_map_clear_slots_loop_fwd_back T slots0 i1
+      hashmap_hash_map_clear_loop_fwd_back T slots0 i1
   else Result.ret slots
-termination_by hashmap_hash_map_clear_slots_loop_fwd_back slots i =>
-  hashmap_hash_map_clear_slots_loop_terminates T slots i
-decreasing_by hashmap_hash_map_clear_slots_loop_decreases slots i
-
-/- [hashmap_main::hashmap::HashMap::{0}::clear_slots] -/
-def hashmap_hash_map_clear_slots_fwd_back
-  (T : Type) (slots : Vec (hashmap_list_t T)) :
-  Result (Vec (hashmap_list_t T))
-  :=
-  hashmap_hash_map_clear_slots_loop_fwd_back T slots
-    (USize.ofNatCore 0 (by intlit))
+termination_by hashmap_hash_map_clear_loop_fwd_back slots i =>
+  hashmap_hash_map_clear_loop_terminates T slots i
+decreasing_by hashmap_hash_map_clear_loop_decreases slots i
 
 /- [hashmap_main::hashmap::HashMap::{0}::clear] -/
 def hashmap_hash_map_clear_fwd_back
   (T : Type) (self : hashmap_hash_map_t T) : Result (hashmap_hash_map_t T) :=
   do
     let v ←
-      hashmap_hash_map_clear_slots_fwd_back T self.hashmap_hash_map_slots
+      hashmap_hash_map_clear_loop_fwd_back T self.hashmap_hash_map_slots
+        (USize.ofNatCore 0 (by intlit))
     Result.ret
       {
         hashmap_hash_map_num_entries := (USize.ofNatCore 0 (by intlit)),
