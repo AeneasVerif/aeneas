@@ -69,13 +69,7 @@ let rec hash_map_clear_loop_fwd_back
 let hash_map_clear_fwd_back
   (t : Type0) (self : hash_map_t t) : result (hash_map_t t) =
   let* v = hash_map_clear_loop_fwd_back t self.hash_map_slots 0 in
-  Return
-    {
-      hash_map_num_entries = 0;
-      hash_map_max_load_factor = self.hash_map_max_load_factor;
-      hash_map_max_load = self.hash_map_max_load;
-      hash_map_slots = v
-    }
+  Return { self where hash_map_num_entries = 0; hash_map_slots = v }
 
 (** [hashmap::HashMap::{0}::len] *)
 let hash_map_len_fwd (t : Type0) (self : hash_map_t t) : result usize =
@@ -136,23 +130,11 @@ let hash_map_insert_no_resize_fwd_back
     let* i0 = usize_add self.hash_map_num_entries 1 in
     let* l0 = hash_map_insert_in_list_back t key value l in
     let* v = vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 in
-    Return
-      {
-        hash_map_num_entries = i0;
-        hash_map_max_load_factor = self.hash_map_max_load_factor;
-        hash_map_max_load = self.hash_map_max_load;
-        hash_map_slots = v
-      }
+    Return { self where hash_map_num_entries = i0; hash_map_slots = v }
   else
     let* l0 = hash_map_insert_in_list_back t key value l in
     let* v = vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 in
-    Return
-      {
-        hash_map_num_entries = self.hash_map_num_entries;
-        hash_map_max_load_factor = self.hash_map_max_load_factor;
-        hash_map_max_load = self.hash_map_max_load;
-        hash_map_slots = v
-      }
+    Return { self where hash_map_slots = v }
 
 (** [core::num::u32::{9}::MAX] *)
 let core_num_u32_max_body : result u32 = Return 4294967295
@@ -217,19 +199,12 @@ let hash_map_try_resize_fwd_back
       hash_map_move_elements_fwd_back t ntable self.hash_map_slots 0 in
     Return
       {
-        hash_map_num_entries = self.hash_map_num_entries;
-        hash_map_max_load_factor = (i, i0);
-        hash_map_max_load = ntable0.hash_map_max_load;
-        hash_map_slots = ntable0.hash_map_slots
+        ntable0
+          where
+          hash_map_num_entries = self.hash_map_num_entries;
+          hash_map_max_load_factor = (i, i0)
       }
-  else
-    Return
-      {
-        hash_map_num_entries = self.hash_map_num_entries;
-        hash_map_max_load_factor = (i, i0);
-        hash_map_max_load = self.hash_map_max_load;
-        hash_map_slots = self.hash_map_slots
-      }
+  else Return { self where hash_map_max_load_factor = (i, i0) }
 
 (** [hashmap::HashMap::{0}::insert] *)
 let hash_map_insert_fwd_back
@@ -356,13 +331,7 @@ let hash_map_get_mut_back
   let* l = vec_index_mut_fwd (list_t t) self.hash_map_slots hash_mod in
   let* l0 = hash_map_get_mut_in_list_back t l key ret in
   let* v = vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 in
-  Return
-    {
-      hash_map_num_entries = self.hash_map_num_entries;
-      hash_map_max_load_factor = self.hash_map_max_load_factor;
-      hash_map_max_load = self.hash_map_max_load;
-      hash_map_slots = v
-    }
+  Return { self where hash_map_slots = v }
 
 (** [hashmap::HashMap::{0}::remove_from_list] *)
 let rec hash_map_remove_from_list_loop_fwd
@@ -440,24 +409,12 @@ let hash_map_remove_back
   | None ->
     let* l0 = hash_map_remove_from_list_back t key l in
     let* v = vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 in
-    Return
-      {
-        hash_map_num_entries = self.hash_map_num_entries;
-        hash_map_max_load_factor = self.hash_map_max_load_factor;
-        hash_map_max_load = self.hash_map_max_load;
-        hash_map_slots = v
-      }
+    Return { self where hash_map_slots = v }
   | Some x0 ->
     let* i0 = usize_sub self.hash_map_num_entries 1 in
     let* l0 = hash_map_remove_from_list_back t key l in
     let* v = vec_index_mut_back (list_t t) self.hash_map_slots hash_mod l0 in
-    Return
-      {
-        hash_map_num_entries = i0;
-        hash_map_max_load_factor = self.hash_map_max_load_factor;
-        hash_map_max_load = self.hash_map_max_load;
-        hash_map_slots = v
-      }
+    Return { self where hash_map_num_entries = i0; hash_map_slots = v }
   end
 
 (** [hashmap::test1] *)

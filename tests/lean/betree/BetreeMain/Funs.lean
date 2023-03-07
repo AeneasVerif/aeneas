@@ -919,8 +919,7 @@ def betree_node_apply_messages_back
         do
           let _ ← betree_store_leaf_node_fwd node.betree_leaf_id content0 st0
           Result.ret (betree_node_t.BetreeNodeLeaf
-            { betree_leaf_id := node.betree_leaf_id, betree_leaf_size := len },
-            node_id_cnt)
+            { node with betree_leaf_size := len }, node_id_cnt)
 termination_by betree_node_apply_messages_back self params node_id_cnt msgs st
   =>
   betree_node_apply_messages_terminates self params node_id_cnt msgs st
@@ -1091,11 +1090,7 @@ def betree_be_tree_apply_back
       betree_node_apply_back self.betree_be_tree_root
         self.betree_be_tree_params self.betree_be_tree_node_id_cnt key msg st
     Result.ret
-      {
-        betree_be_tree_params := self.betree_be_tree_params,
-        betree_be_tree_node_id_cnt := nic,
-        betree_be_tree_root := n
-      }
+      { self with betree_be_tree_node_id_cnt := nic, betree_be_tree_root := n }
 
 /- [betree_main::betree::BeTree::{6}::insert] -/
 def betree_be_tree_insert_fwd
@@ -1177,12 +1172,7 @@ def betree_be_tree_lookup_back
   :=
   do
     let n ← betree_node_lookup_back self.betree_be_tree_root key st
-    Result.ret
-      {
-        betree_be_tree_params := self.betree_be_tree_params,
-        betree_be_tree_node_id_cnt := self.betree_be_tree_node_id_cnt,
-        betree_be_tree_root := n
-      }
+    Result.ret { self with betree_be_tree_root := n }
 
 /- [betree_main::main] -/
 def main_fwd : Result Unit :=

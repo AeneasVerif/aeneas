@@ -515,23 +515,11 @@ and betree_internal_lookup_in_children_back
   then
     let* (st1, n) =
       betree_node_lookup_back self.betree_internal_left key st st0 in
-    Return (st1,
-      {
-        betree_internal_id = self.betree_internal_id;
-        betree_internal_pivot = self.betree_internal_pivot;
-        betree_internal_left = n;
-        betree_internal_right = self.betree_internal_right
-      })
+    Return (st1, { self where betree_internal_left = n })
   else
     let* (st1, n) =
       betree_node_lookup_back self.betree_internal_right key st st0 in
-    Return (st1,
-      {
-        betree_internal_id = self.betree_internal_id;
-        betree_internal_pivot = self.betree_internal_pivot;
-        betree_internal_left = self.betree_internal_left;
-        betree_internal_right = n
-      })
+    Return (st1, { self where betree_internal_right = n })
 
 (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings] *)
 let rec betree_node_lookup_mut_in_bindings_fwd
@@ -848,8 +836,7 @@ and betree_node_apply_messages_back'a
       Return (st4, (BetreeNodeInternal new_node, node_id_cnt0))
     else
       let* _ = betree_store_leaf_node_fwd node.betree_leaf_id content0 st1 in
-      Return (st0, (BetreeNodeLeaf
-        { betree_leaf_id = node.betree_leaf_id; betree_leaf_size = len },
+      Return (st0, (BetreeNodeLeaf { node where betree_leaf_size = len },
         node_id_cnt))
   end
 
@@ -992,20 +979,9 @@ and betree_internal_flush_back'a
         betree_node_apply_messages_back1 self.betree_internal_right params
           node_id_cnt0 msgs_right st3 st5 in
       Return (st0,
-        ({
-           betree_internal_id = self.betree_internal_id;
-           betree_internal_pivot = self.betree_internal_pivot;
-           betree_internal_left = n;
-           betree_internal_right = n0
-         }, node_id_cnt1))
-    else
-      Return (st0,
-        ({
-           betree_internal_id = self.betree_internal_id;
-           betree_internal_pivot = self.betree_internal_pivot;
-           betree_internal_left = n;
-           betree_internal_right = self.betree_internal_right
-         }, node_id_cnt0))
+        ({ self where betree_internal_left = n; betree_internal_right = n0 },
+        node_id_cnt1))
+    else Return (st0, ({ self where betree_internal_left = n }, node_id_cnt0))
   else
     let* (st1, _) =
       betree_node_apply_messages_fwd self.betree_internal_right params
@@ -1016,13 +992,7 @@ and betree_internal_flush_back'a
     let* _ =
       betree_node_apply_messages_back1 self.betree_internal_right params
         node_id_cnt msgs_right st st2 in
-    Return (st0,
-      ({
-         betree_internal_id = self.betree_internal_id;
-         betree_internal_pivot = self.betree_internal_pivot;
-         betree_internal_left = self.betree_internal_left;
-         betree_internal_right = n
-       }, node_id_cnt0))
+    Return (st0, ({ self where betree_internal_right = n }, node_id_cnt0))
 
 (** [betree_main::betree::Internal::{4}::flush] *)
 and betree_internal_flush_back1
@@ -1184,11 +1154,7 @@ let betree_be_tree_apply_back
     betree_node_apply_back1 self.betree_be_tree_root self.betree_be_tree_params
       self.betree_be_tree_node_id_cnt key msg st st2 in
   Return (st0,
-    {
-      betree_be_tree_params = self.betree_be_tree_params;
-      betree_be_tree_node_id_cnt = nic;
-      betree_be_tree_root = n
-    })
+    { self where betree_be_tree_node_id_cnt = nic; betree_be_tree_root = n })
 
 (** [betree_main::betree::BeTree::{6}::insert] *)
 let betree_be_tree_insert_fwd
@@ -1269,12 +1235,7 @@ let betree_be_tree_lookup_back
   =
   let* (st1, n) = betree_node_lookup_back self.betree_be_tree_root key st st0
     in
-  Return (st1,
-    {
-      betree_be_tree_params = self.betree_be_tree_params;
-      betree_be_tree_node_id_cnt = self.betree_be_tree_node_id_cnt;
-      betree_be_tree_root = n
-    })
+  Return (st1, { self where betree_be_tree_root = n })
 
 (** [betree_main::main] *)
 let main_fwd : result unit =
