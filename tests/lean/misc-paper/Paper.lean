@@ -58,57 +58,56 @@ structure OpaqueDefs where
   
   /- [paper::List] -/
   inductive list_t (T : Type) :=
-  | ListCons : T -> list_t T -> list_t T
-  | ListNil : list_t T
+  | Cons : T -> list_t T -> list_t T
+  | Nil : list_t T
   
   /- [paper::list_nth_mut] -/
   def list_nth_mut_fwd (T : Type) (l : list_t T) (i : UInt32) : Result T :=
     match h: l with
-    | list_t.ListCons x tl =>
+    | list_t.Cons x tl =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret x
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_mut_fwd T tl i0
-    | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
   
   /- [paper::list_nth_mut] -/
   def list_nth_mut_back
     (T : Type) (l : list_t T) (i : UInt32) (ret0 : T) : Result (list_t T) :=
     match h: l with
-    | list_t.ListCons x tl =>
+    | list_t.Cons x tl =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
-      then Result.ret (list_t.ListCons ret0 tl)
+      then Result.ret (list_t.Cons ret0 tl)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let tl0 ← list_nth_mut_back T tl i0 ret0
-          Result.ret (list_t.ListCons x tl0)
-    | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x tl0)
+    | list_t.Nil => Result.fail Error.panic
   
   /- [paper::sum] -/
   def sum_fwd (l : list_t Int32) : Result Int32 :=
     match h: l with
-    | list_t.ListCons x tl => do
-                                let i ← sum_fwd tl
-                                Int32.checked_add x i
-    | list_t.ListNil => Result.ret (Int32.ofNatCore 0 (by intlit))
+    | list_t.Cons x tl => do
+                            let i ← sum_fwd tl
+                            Int32.checked_add x i
+    | list_t.Nil => Result.ret (Int32.ofNatCore 0 (by intlit))
   
   /- [paper::test_nth] -/
   def test_nth_fwd : Result Unit :=
     do
-      let l := list_t.ListNil
-      let l0 := list_t.ListCons (Int32.ofNatCore 3 (by intlit)) l
-      let l1 := list_t.ListCons (Int32.ofNatCore 2 (by intlit)) l0
+      let l := list_t.Nil
+      let l0 := list_t.Cons (Int32.ofNatCore 3 (by intlit)) l
+      let l1 := list_t.Cons (Int32.ofNatCore 2 (by intlit)) l0
       let x ←
-        list_nth_mut_fwd Int32 (list_t.ListCons (Int32.ofNatCore 1 (by intlit))
-          l1) (UInt32.ofNatCore 2 (by intlit))
+        list_nth_mut_fwd Int32 (list_t.Cons (Int32.ofNatCore 1 (by intlit)) l1)
+          (UInt32.ofNatCore 2 (by intlit))
       let x0 ← Int32.checked_add x (Int32.ofNatCore 1 (by intlit))
       let l2 ←
-        list_nth_mut_back Int32 (list_t.ListCons
-          (Int32.ofNatCore 1 (by intlit)) l1) (UInt32.ofNatCore 2 (by intlit))
-          x0
+        list_nth_mut_back Int32 (list_t.Cons (Int32.ofNatCore 1 (by intlit))
+          l1) (UInt32.ofNatCore 2 (by intlit)) x0
       let i ← sum_fwd l2
       if h: not (i = (Int32.ofNatCore 7 (by intlit)))
       then Result.fail Error.panic

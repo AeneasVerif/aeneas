@@ -11,29 +11,29 @@ structure OpaqueDefs where
   
   /- [no_nested_borrows::List] -/
   inductive list_t (T : Type) :=
-  | ListCons : T -> list_t T -> list_t T
-  | ListNil : list_t T
+  | Cons : T -> list_t T -> list_t T
+  | Nil : list_t T
   
   /- [no_nested_borrows::One] -/
   inductive one_t (T1 : Type) :=
-  | OneOne : T1 -> one_t T1
+  | One : T1 -> one_t T1
   
   /- [no_nested_borrows::EmptyEnum] -/
   inductive empty_enum_t :=
-  | EmptyEnumEmpty : empty_enum_t
+  | Empty : empty_enum_t
   
   /- [no_nested_borrows::Enum] -/
   inductive enum_t :=
-  | EnumVariant1 : enum_t
-  | EnumVariant2 : enum_t
+  | Variant1 : enum_t
+  | Variant2 : enum_t
   
   /- [no_nested_borrows::EmptyStruct] -/
   structure empty_struct_t where
   
   /- [no_nested_borrows::Sum] -/
   inductive sum_t (T1 T2 : Type) :=
-  | SumLeft : T1 -> sum_t T1 T2
-  | SumRight : T2 -> sum_t T1 T2
+  | Left : T1 -> sum_t T1 T2
+  | Right : T2 -> sum_t T1 T2
   
   /- [no_nested_borrows::neg_test] -/
   def neg_test_fwd (x : Int32) : Result Int32 :=
@@ -187,15 +187,15 @@ structure OpaqueDefs where
   /- [no_nested_borrows::is_cons] -/
   def is_cons_fwd (T : Type) (l : list_t T) : Result Bool :=
     match h: l with
-    | list_t.ListCons t l0 => Result.ret true
-    | list_t.ListNil => Result.ret false
+    | list_t.Cons t l0 => Result.ret true
+    | list_t.Nil => Result.ret false
   
   /- [no_nested_borrows::test_is_cons] -/
   def test_is_cons_fwd : Result Unit :=
     do
-      let l := list_t.ListNil
+      let l := list_t.Nil
       let b ←
-        is_cons_fwd Int32 (list_t.ListCons (Int32.ofNatCore 0 (by intlit)) l)
+        is_cons_fwd Int32 (list_t.Cons (Int32.ofNatCore 0 (by intlit)) l)
       if h: not b
       then Result.fail Error.panic
       else Result.ret ()
@@ -206,16 +206,15 @@ structure OpaqueDefs where
   /- [no_nested_borrows::split_list] -/
   def split_list_fwd (T : Type) (l : list_t T) : Result (T × (list_t T)) :=
     match h: l with
-    | list_t.ListCons hd tl => Result.ret (hd, tl)
-    | list_t.ListNil => Result.fail Error.panic
+    | list_t.Cons hd tl => Result.ret (hd, tl)
+    | list_t.Nil => Result.fail Error.panic
   
   /- [no_nested_borrows::test_split_list] -/
   def test_split_list_fwd : Result Unit :=
     do
-      let l := list_t.ListNil
+      let l := list_t.Nil
       let p ←
-        split_list_fwd Int32 (list_t.ListCons (Int32.ofNatCore 0 (by intlit))
-          l)
+        split_list_fwd Int32 (list_t.Cons (Int32.ofNatCore 0 (by intlit)) l)
       let (hd, _) := p
       if h: not (hd = (Int32.ofNatCore 0 (by intlit)))
       then Result.fail Error.panic
@@ -267,88 +266,87 @@ structure OpaqueDefs where
   
   /- [no_nested_borrows::NodeElem] -/
   mutual inductive node_elem_t (T : Type) :=
-  | NodeElemCons : tree_t T -> node_elem_t T -> node_elem_t T
-  | NodeElemNil : node_elem_t T
+  | Cons : tree_t T -> node_elem_t T -> node_elem_t T
+  | Nil : node_elem_t T
   
   /- [no_nested_borrows::Tree] -/
   inductive tree_t (T : Type) :=
-  | TreeLeaf : T -> tree_t T
-  | TreeNode : T -> node_elem_t T -> tree_t T -> tree_t T
+  | Leaf : T -> tree_t T
+  | Node : T -> node_elem_t T -> tree_t T -> tree_t T
   
   /- [no_nested_borrows::list_length] -/
   def list_length_fwd (T : Type) (l : list_t T) : Result UInt32 :=
     match h: l with
-    | list_t.ListCons t l1 =>
+    | list_t.Cons t l1 =>
       do
         let i ← list_length_fwd T l1
         UInt32.checked_add (UInt32.ofNatCore 1 (by intlit)) i
-    | list_t.ListNil => Result.ret (UInt32.ofNatCore 0 (by intlit))
+    | list_t.Nil => Result.ret (UInt32.ofNatCore 0 (by intlit))
   
   /- [no_nested_borrows::list_nth_shared] -/
   def list_nth_shared_fwd (T : Type) (l : list_t T) (i : UInt32) : Result T :=
     match h: l with
-    | list_t.ListCons x tl =>
+    | list_t.Cons x tl =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret x
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_shared_fwd T tl i0
-    | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
   
   /- [no_nested_borrows::list_nth_mut] -/
   def list_nth_mut_fwd (T : Type) (l : list_t T) (i : UInt32) : Result T :=
     match h: l with
-    | list_t.ListCons x tl =>
+    | list_t.Cons x tl =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret x
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_mut_fwd T tl i0
-    | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
   
   /- [no_nested_borrows::list_nth_mut] -/
   def list_nth_mut_back
     (T : Type) (l : list_t T) (i : UInt32) (ret0 : T) : Result (list_t T) :=
     match h: l with
-    | list_t.ListCons x tl =>
+    | list_t.Cons x tl =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
-      then Result.ret (list_t.ListCons ret0 tl)
+      then Result.ret (list_t.Cons ret0 tl)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let tl0 ← list_nth_mut_back T tl i0 ret0
-          Result.ret (list_t.ListCons x tl0)
-    | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x tl0)
+    | list_t.Nil => Result.fail Error.panic
   
   /- [no_nested_borrows::list_rev_aux] -/
   def list_rev_aux_fwd
     (T : Type) (li : list_t T) (lo : list_t T) : Result (list_t T) :=
     match h: li with
-    | list_t.ListCons hd tl => list_rev_aux_fwd T tl (list_t.ListCons hd lo)
-    | list_t.ListNil => Result.ret lo
+    | list_t.Cons hd tl => list_rev_aux_fwd T tl (list_t.Cons hd lo)
+    | list_t.Nil => Result.ret lo
   
   /- [no_nested_borrows::list_rev] -/
   def list_rev_fwd_back (T : Type) (l : list_t T) : Result (list_t T) :=
-    let li := mem_replace_fwd (list_t T) l list_t.ListNil
-    list_rev_aux_fwd T li list_t.ListNil
+    let li := mem_replace_fwd (list_t T) l list_t.Nil
+    list_rev_aux_fwd T li list_t.Nil
   
   /- [no_nested_borrows::test_list_functions] -/
   def test_list_functions_fwd : Result Unit :=
     do
-      let l := list_t.ListNil
-      let l0 := list_t.ListCons (Int32.ofNatCore 2 (by intlit)) l
-      let l1 := list_t.ListCons (Int32.ofNatCore 1 (by intlit)) l0
+      let l := list_t.Nil
+      let l0 := list_t.Cons (Int32.ofNatCore 2 (by intlit)) l
+      let l1 := list_t.Cons (Int32.ofNatCore 1 (by intlit)) l0
       let i ←
-        list_length_fwd Int32 (list_t.ListCons (Int32.ofNatCore 0 (by intlit))
-          l1)
+        list_length_fwd Int32 (list_t.Cons (Int32.ofNatCore 0 (by intlit)) l1)
       if h: not (i = (UInt32.ofNatCore 3 (by intlit)))
       then Result.fail Error.panic
       else
         do
           let i0 ←
-            list_nth_shared_fwd Int32 (list_t.ListCons
+            list_nth_shared_fwd Int32 (list_t.Cons
               (Int32.ofNatCore 0 (by intlit)) l1)
               (UInt32.ofNatCore 0 (by intlit))
           if h: not (i0 = (Int32.ofNatCore 0 (by intlit)))
@@ -356,7 +354,7 @@ structure OpaqueDefs where
           else
             do
               let i1 ←
-                list_nth_shared_fwd Int32 (list_t.ListCons
+                list_nth_shared_fwd Int32 (list_t.Cons
                   (Int32.ofNatCore 0 (by intlit)) l1)
                   (UInt32.ofNatCore 1 (by intlit))
               if h: not (i1 = (Int32.ofNatCore 1 (by intlit)))
@@ -364,7 +362,7 @@ structure OpaqueDefs where
               else
                 do
                   let i2 ←
-                    list_nth_shared_fwd Int32 (list_t.ListCons
+                    list_nth_shared_fwd Int32 (list_t.Cons
                       (Int32.ofNatCore 0 (by intlit)) l1)
                       (UInt32.ofNatCore 2 (by intlit))
                   if h: not (i2 = (Int32.ofNatCore 2 (by intlit)))
@@ -372,7 +370,7 @@ structure OpaqueDefs where
                   else
                     do
                       let ls ←
-                        list_nth_mut_back Int32 (list_t.ListCons
+                        list_nth_mut_back Int32 (list_t.Cons
                           (Int32.ofNatCore 0 (by intlit)) l1)
                           (UInt32.ofNatCore 1 (by intlit))
                           (Int32.ofNatCore 3 (by intlit))
@@ -550,8 +548,8 @@ structure OpaqueDefs where
   /- [no_nested_borrows::test_shared_borrow_enum1] -/
   def test_shared_borrow_enum1_fwd (l : list_t UInt32) : Result UInt32 :=
     match h: l with
-    | list_t.ListCons i l0 => Result.ret (UInt32.ofNatCore 1 (by intlit))
-    | list_t.ListNil => Result.ret (UInt32.ofNatCore 0 (by intlit))
+    | list_t.Cons i l0 => Result.ret (UInt32.ofNatCore 1 (by intlit))
+    | list_t.Nil => Result.ret (UInt32.ofNatCore 0 (by intlit))
   
   /- [no_nested_borrows::test_shared_borrow_enum2] -/
   def test_shared_borrow_enum2_fwd : Result UInt32 :=
