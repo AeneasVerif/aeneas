@@ -517,6 +517,25 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
   | Loop loop ->
       let e = loop_to_string fmt indent indent_incr loop in
       if inside then "(" ^ e ^ ")" else e
+  | StructUpdate supd ->
+      let s =
+        match supd.init with
+        | None -> ""
+        | Some vid -> " " ^ fmt.var_id_to_string vid ^ " with"
+      in
+      let field_names = Option.get (fmt.adt_field_names supd.struct_id None) in
+      let indent1 = indent ^ indent_incr in
+      let indent2 = indent1 ^ indent_incr in
+      let fields =
+        List.map
+          (fun (fid, fe) ->
+            let field = FieldId.nth field_names fid in
+            let fe = texpression_to_string fmt false indent2 indent_incr fe in
+            "\n" ^ indent1 ^ field ^ " := " ^ fe ^ ";")
+          supd.updates
+      in
+      let bl = if fields = [] then "" else "\n" ^ indent in
+      "{" ^ s ^ String.concat "" fields ^ bl ^ "}"
   | Meta (meta, e) -> (
       let meta_s = meta_to_string fmt meta in
       let e = texpression_to_string fmt inside indent indent_incr e in

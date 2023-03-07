@@ -388,6 +388,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Let (monadic, lb, re, e) -> update_let monadic lb re e ctx
       | Switch (scrut, body) -> update_switch_body scrut body ctx
       | Loop loop -> update_loop loop ctx
+      | StructUpdate supd -> update_struct_update supd ctx
       | Meta (meta, e) -> update_meta meta e ctx
     in
     (ctx, { e; ty })
@@ -474,6 +475,18 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       }
     in
     (ctx, Loop loop)
+  and update_struct_update (supd : struct_update) (ctx : pn_ctx) :
+      pn_ctx * expression =
+    let { struct_id; init; updates } = supd in
+    let ctx, updates =
+      List.fold_left_map
+        (fun ctx (fid, fe) ->
+          let ctx, fe = update_texpression fe ctx in
+          (ctx, (fid, fe)))
+        ctx updates
+    in
+    let supd = { struct_id; init; updates } in
+    (ctx, StructUpdate supd)
   (* *)
   and update_meta (meta : meta) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
@@ -534,6 +547,89 @@ let remove_meta (def : fun_decl) : fun_decl =
   | None -> def
   | Some body ->
       let body = { body with body = PureUtils.remove_meta body.body } in
+      { def with body = Some body }
+
+(** Introduce the special structure create/update expressions.
+
+    Upon generating the pure code, we introduce structure values by using
+    the structure constructors:
+    {[
+      Cons x0 ... xn
+    ]}
+
+    This micro-pass turns those into expressions which use structure syntax:
+    {[
+      {
+        f0 := x0;
+        ...
+        fn := xn;
+      }
+    ]}
+ *)
+let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let obj =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_texpression env (e : texpression) =
+        match e.e with
+        | App _ -> (
+            let app, args = destruct_apps e in
+            let ignore () =
+              mk_apps
+                (self#visit_texpression env app)
+                (List.map (self#visit_texpression env) args)
+            in
+            match app.e with
+            | Qualif
+                {
+                  id = AdtCons { adt_id = AdtId adt_id; variant_id = None };
+                  type_args = _;
+                } ->
+                (* Lookup the def *)
+                let decl =
+                  TypeDeclId.Map.find adt_id ctx.type_context.type_decls
+                in
+                (* Check that there are as many arguments as there are fields - note
+                   that the def should have a body (otherwise we couldn't use the
+                   constructor) *)
+                let fields = TypesUtils.type_decl_get_fields decl None in
+                if List.length fields = List.length args then
+                  (* Check if the definition is recursive *)
+                  let is_rec =
+                    match
+                      TypeDeclId.Map.find adt_id
+                        ctx.type_context.type_decls_groups
+                    with
+                    | NonRec _ -> false
+                    | Rec _ -> true
+                  in
+                  (* Convert, if possible - note that for now for Lean and Coq
+                     we don't support the structure syntax on recursive structures *)
+                  if
+                    (!Config.backend <> Lean && !Config.backend <> Coq)
+                    || not is_rec
+                  then
+                    let struct_id = adt_id in
+                    let init = None in
+                    let updates =
+                      FieldId.mapi
+                        (fun fid fe -> (fid, self#visit_texpression env fe))
+                        args
+                    in
+                    let ne = { struct_id; init; updates } in
+                    let nty = e.ty in
+                    { e = StructUpdate ne; ty = nty }
+                  else ignore ()
+                else ignore ()
+            | _ -> ignore ())
+        | _ -> super#visit_texpression env e
+    end
+  in
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body = { body with body = obj#visit_texpression () body.body } in
       { def with body = Some body }
 
 (** Inline the useless variable (re-)assignments:
@@ -604,6 +700,7 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
                       true (* primitive function call *)
                   | FunOrOp (Fun _) -> false (* non-primitive function call *)
                   | _ -> false)
+              | StructUpdate _ -> true (* ADT constructor *)
               | _ -> false
             in
             let filter =
@@ -737,6 +834,12 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
       method! visit_texpression env e =
         match e.e with
         | Var _ | Const _ -> fun _ -> false
+        | StructUpdate _ ->
+            (* There shouldn't be monadic calls in structure updates - also
+               note that by returning [false] we are conservative: we might
+               *prevent* possible optimisations (i.e., filtering some function
+               calls), which is sound. *)
+            fun _ -> false
         | Let (_, _, re, e) -> (
             match opt_destruct_function_call re with
             | None -> fun () -> self#visit_texpression env e ()
@@ -829,7 +932,7 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
         | Var _ | Const _ | App _ | Qualif _
         | Switch (_, _)
         | Meta (_, _)
-        | Abs _ ->
+        | StructUpdate _ | Abs _ ->
             super#visit_expression env e
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)
@@ -1601,6 +1704,11 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let def = unit_vars_to_unit def in
   log#ldebug
     (lazy ("unit_vars_to_unit:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+
+  (* Introduce the special structure create/update expressions *)
+  let def = intro_struct_updates ctx def in
+  log#ldebug
+    (lazy ("intro_struct_updates:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Inline the useless variable reassignments *)
   let inline_named_vars = true in
