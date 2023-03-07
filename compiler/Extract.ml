@@ -1498,9 +1498,6 @@ let extract_global_decl_register_names (ctx : extraction_ctx)
 
     TODO: we don't need something very generic anymore (some definitions used
     to be polymorphic).
-
-    TODO: this does roughly the same thing as extract_adt_cons -- make the
-    latter call the former
  *)
 let extract_adt_g_value
     (extract_value : extraction_ctx -> bool -> 'v -> extraction_ctx)
@@ -1508,8 +1505,10 @@ let extract_adt_g_value
     (variant_id : VariantId.id option) (field_values : 'v list) (ty : ty) :
     extraction_ctx =
   match ty with
-  | Adt (Tuple, _) ->
+  | Adt (Tuple, type_args) ->
       (* Tuple *)
+      (* For now, we only support fully applied tuple constructors *)
+      assert (List.length type_args = List.length field_values);
       (* This is very annoying: in Coq, we can't write [()] for the value of
          type [unit], we have to write [tt]. *)
       if !backend = Coq && field_values = [] then (
@@ -1547,7 +1546,8 @@ let extract_adt_g_value
             | _ -> ctx_get_variant adt_id vid ctx)
         | None -> ctx_get_struct with_opaque_pre adt_id ctx
       in
-      if inside && field_values <> [] then F.pp_print_string fmt "(";
+      let use_parentheses = inside && field_values <> [] in
+      if use_parentheses then F.pp_print_string fmt "(";
       F.pp_print_string fmt cons;
       let ctx =
         Collections.List.fold_left
@@ -1556,7 +1556,7 @@ let extract_adt_g_value
             extract_value ctx true v)
           ctx field_values
       in
-      if inside && field_values <> [] then F.pp_print_string fmt ")";
+      if use_parentheses then F.pp_print_string fmt ")";
       ctx
   | _ -> raise (Failure "Inconsistent typed value")
 
@@ -1717,54 +1717,15 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (adt_cons : adt_cons_id) (type_args : ty list) (args : texpression list) :
     unit =
-  match adt_cons.adt_id with
-  | Tuple ->
-      (* Tuple *)
-      (* For now, we only support fully applied tuple constructors *)
-      (* This is very annoying: in Coq, we can't write [()] for the value of
-         type [unit], we have to write [tt]. *)
-      assert (List.length type_args = List.length args);
-      if !backend = Coq && args = [] then F.pp_print_string fmt "tt"
-      else (
-        F.pp_print_string fmt "(";
-        Collections.List.iter_link
-          (fun () ->
-            F.pp_print_string fmt ",";
-            F.pp_print_space fmt ())
-          (fun v -> extract_texpression ctx fmt false v)
-          args;
-        F.pp_print_string fmt ")")
-  | _ ->
-      (* TODO: this duplicates [extrac_adt_g_value] *)
-      (* "Regular" ADT *)
-      (* We print something of the form: [Cons field0 ... fieldn].
-       * We could update the code to print something of the form:
-       * [{ field0=...; ...; fieldn=...; }] in case of fully
-       * applied structure constructors.
-       *)
-      let cons =
-        (* The ADT shouldn't be opaque *)
-        let with_opaque_pre = false in
-        match adt_cons.variant_id with
-        | Some vid -> (
-            (* In the case of Lean, we might have to add the type name as a prefix *)
-            match (!backend, adt_cons.adt_id) with
-            | Lean, Assumed _ ->
-                ctx_get_type with_opaque_pre adt_cons.adt_id ctx
-                ^ "."
-                ^ ctx_get_variant adt_cons.adt_id vid ctx
-            | _ -> ctx_get_variant adt_cons.adt_id vid ctx)
-        | None -> ctx_get_struct with_opaque_pre adt_cons.adt_id ctx
-      in
-      let use_parentheses = inside && args <> [] in
-      if use_parentheses then F.pp_print_string fmt "(";
-      F.pp_print_string fmt cons;
-      Collections.List.iter
-        (fun v ->
-          F.pp_print_space fmt ();
-          extract_texpression ctx fmt true v)
-        args;
-      if use_parentheses then F.pp_print_string fmt ")"
+  let e_ty = Adt (adt_cons.adt_id, type_args) in
+  let _ =
+    extract_adt_g_value
+      (fun ctx inside e ->
+        extract_texpression ctx fmt inside e;
+        ctx)
+      fmt ctx inside adt_cons.variant_id args e_ty
+  in
+  ()
 
 (** Subcase of the app case: ADT field projector.  *)
 and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
