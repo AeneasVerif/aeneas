@@ -77,11 +77,19 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   let fuel, var_counter = Pure.VarId.fresh var_counter in
   let calls = V.FunCallId.Map.empty in
   let abstractions = V.AbstractionId.Map.empty in
+  let recursive_type_decls =
+    T.TypeDeclId.Set.of_list
+      (List.filter_map
+         (fun (tid, g) ->
+           match g with Charon.GAst.NonRec _ -> None | Rec _ -> Some tid)
+         (T.TypeDeclId.Map.bindings trans_ctx.type_context.type_decls_groups))
+  in
   let type_context =
     {
-      SymbolicToPure.types_infos = type_context.type_infos;
+      SymbolicToPure.type_infos = type_context.type_infos;
       llbc_type_decls = type_context.type_decls;
       type_decls = pure_type_decls;
+      recursive_decls = recursive_type_decls;
     }
   in
   let fun_context =

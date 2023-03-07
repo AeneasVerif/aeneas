@@ -194,6 +194,30 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       assert (Option.is_some loop.back_output_tys || loop.loop_body.ty = e.ty);
       check_texpression ctx loop.fun_end;
       check_texpression ctx loop.loop_body
+  | StructUpdate supd ->
+      (* Check the init value *)
+      (if Option.is_some supd.init then
+       match VarId.Map.find_opt (Option.get supd.init) ctx.env with
+       | None -> ()
+       | Some ty -> assert (ty = e.ty));
+      (* Check the fields *)
+      (* Retrieve and check the expected field type *)
+      let adt_id, adt_type_args =
+        match e.ty with
+        | Adt (type_id, tys) -> (type_id, tys)
+        | _ -> raise (Failure "Unreachable")
+      in
+      assert (adt_id = AdtId supd.struct_id);
+      let variant_id = None in
+      let expected_field_tys =
+        get_adt_field_types ctx.type_decls adt_id variant_id adt_type_args
+      in
+      List.iter
+        (fun (fid, fe) ->
+          let expected_field_ty = FieldId.nth expected_field_tys fid in
+          assert (expected_field_ty = fe.ty);
+          check_texpression ctx fe)
+        supd.updates
   | Meta (_, e_next) ->
       assert (e_next.ty = e.ty);
       check_texpression ctx e_next

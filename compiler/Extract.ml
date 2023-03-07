@@ -1617,6 +1617,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | Let (_, _, _, _) -> extract_lets ctx fmt inside e
   | Switch (scrut, body) -> extract_Switch ctx fmt inside scrut body
   | Meta (_, e) -> extract_texpression ctx fmt inside e
+  | StructUpdate supd -> extract_StructUpdate ctx fmt inside supd
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
       raise (Failure "Unreachable")
@@ -1748,57 +1749,15 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
             else ctx_get_variant adt_cons.adt_id vid ctx
         | None -> ctx_get_struct with_opaque_pre adt_cons.adt_id ctx
       in
-      let is_lean_struct = !backend = Lean && adt_cons.variant_id = None in
-      if is_lean_struct then (
-        (* TODO: when only one or two fields differ, considering using the with
-           syntax (peephole optimization) *)
-        let decl_id =
-          match adt_cons.adt_id with AdtId id -> id | _ -> assert false
-        in
-        let def_kind =
-          (TypeDeclId.Map.find decl_id ctx.trans_ctx.type_context.type_decls)
-            .kind
-        in
-        let fields =
-          match def_kind with T.Struct fields -> fields | _ -> assert false
-        in
-        let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
-        F.pp_open_hvbox fmt 0;
-        F.pp_open_hvbox fmt ctx.indent_incr;
-        F.pp_print_string fmt "{";
-        F.pp_print_space fmt ();
-        F.pp_open_hvbox fmt ctx.indent_incr;
-        F.pp_open_hvbox fmt 0;
-        Collections.List.iter_link
-          (fun () ->
-            F.pp_print_string fmt ",";
-            F.pp_print_space fmt ())
-          (fun ((fid, _), e) ->
-            F.pp_open_hvbox fmt ctx.indent_incr;
-            let f = ctx_get_field adt_cons.adt_id fid ctx in
-            F.pp_print_string fmt f;
-            F.pp_print_string fmt " := ";
-            F.pp_open_hvbox fmt ctx.indent_incr;
-            extract_texpression ctx fmt true e;
-            F.pp_close_box fmt ();
-            F.pp_close_box fmt ())
-          (List.combine fields args);
-        F.pp_close_box fmt ();
-        F.pp_close_box fmt ();
-        F.pp_close_box fmt ();
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "}";
-        F.pp_close_box fmt ())
-      else
-        let use_parentheses = inside && args <> [] in
-        if use_parentheses then F.pp_print_string fmt "(";
-        F.pp_print_string fmt cons;
-        Collections.List.iter
-          (fun v ->
-            F.pp_print_space fmt ();
-            extract_texpression ctx fmt true v)
-          args;
-        if use_parentheses then F.pp_print_string fmt ")"
+      let use_parentheses = inside && args <> [] in
+      if use_parentheses then F.pp_print_string fmt "(";
+      F.pp_print_string fmt cons;
+      Collections.List.iter
+        (fun v ->
+          F.pp_print_space fmt ();
+          extract_texpression ctx fmt true v)
+        args;
+      if use_parentheses then F.pp_print_string fmt ")"
 
 (** Subcase of the app case: ADT field projector.  *)
 and extract_field_projector (ctx : extraction_ctx) (fmt : F.formatter)
@@ -2076,6 +2035,50 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   (* Close parentheses *)
   if inside then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
+  F.pp_close_box fmt ()
+
+and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
+    (_inside : bool) (supd : struct_update) : unit =
+  (* We can't update a subset of the fields in Coq (i.e., we can do
+     [{| x:= 3; y := 4 |}], but there is no syntax for [{| s with x := 3 |}]) *)
+  assert (!backend <> Coq || supd.init = None);
+  F.pp_open_hvbox fmt 0;
+  F.pp_open_hvbox fmt ctx.indent_incr;
+  let lb, rb =
+    match !backend with Lean | FStar -> ("{", "}") | Coq -> ("{|", "|}")
+  in
+  F.pp_print_string fmt lb;
+  F.pp_print_space fmt ();
+  F.pp_open_hvbox fmt ctx.indent_incr;
+  if supd.init <> None then (
+    let var_name = ctx_get_var (Option.get supd.init) ctx in
+    F.pp_print_string fmt var_name;
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "where";
+    F.pp_print_space fmt ());
+  F.pp_open_hvbox fmt 0;
+  let delimiter = match !backend with Lean -> "," | Coq | FStar -> ";" in
+  let assign = match !backend with Coq | Lean -> ":=" | FStar -> "=" in
+  Collections.List.iter_link
+    (fun () ->
+      F.pp_print_string fmt delimiter;
+      F.pp_print_space fmt ())
+    (fun (fid, fe) ->
+      F.pp_open_hvbox fmt ctx.indent_incr;
+      let f = ctx_get_field (AdtId supd.struct_id) fid ctx in
+      F.pp_print_string fmt f;
+      F.pp_print_string fmt (" " ^ assign);
+      F.pp_print_space fmt ();
+      F.pp_open_hvbox fmt ctx.indent_incr;
+      extract_texpression ctx fmt true fe;
+      F.pp_close_box fmt ();
+      F.pp_close_box fmt ())
+    supd.updates;
+  F.pp_close_box fmt ();
+  F.pp_close_box fmt ();
+  F.pp_close_box fmt ();
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt rb;
   F.pp_close_box fmt ()
 
 (** Insert a space, if necessary *)
