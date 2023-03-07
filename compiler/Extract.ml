@@ -973,8 +973,9 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     if !backend = FStar && fields = [] then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt (unit_name ()))
+    else if !backend = Lean && fields = [] then ()
     else if (not is_rec) || !backend <> Coq then (
-      F.pp_print_space fmt ();
+      if !backend <> Lean then F.pp_print_space fmt ();
       (* If Coq: print the constructor name *)
       (* TODO: remove superfluous test not is_rec below *)
       if !backend = Coq && not is_rec then (
@@ -985,10 +986,14 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       if !backend <> Lean then F.pp_print_string fmt "{";
       F.pp_print_break fmt 1 ctx.indent_incr;
       (* The body itself *)
-      F.pp_open_hvbox fmt 0;
+      (* Open a box for the body *)
+      (match !backend with
+      | Coq | FStar -> F.pp_open_hvbox fmt 0
+      | Lean -> F.pp_open_vbox fmt 0);
       (* Print the fields *)
       let print_field (field_id : FieldId.id) (f : field) : unit =
         let field_name = ctx_get_field (AdtId def.def_id) field_id ctx in
+        (* Open a box for the field *)
         F.pp_open_box fmt ctx.indent_incr;
         F.pp_print_string fmt field_name;
         F.pp_print_space fmt ();
@@ -996,20 +1001,21 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         extract_ty ctx fmt false f.field_ty;
         if !backend <> Lean then F.pp_print_string fmt ";";
+        (* Close the box for the field *)
         F.pp_close_box fmt ()
       in
       let fields = FieldId.mapi (fun fid f -> (fid, f)) fields in
       Collections.List.iter_link (F.pp_print_space fmt)
         (fun (fid, f) -> print_field fid f)
         fields;
-      (* Close *)
+      (* Close the box for the body *)
       F.pp_close_box fmt ();
-      F.pp_print_space fmt ();
-      if !backend <> Lean then F.pp_print_string fmt "}")
+      if !backend <> Lean then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "}"))
     else (
       (* We extract for Coq, and we have a recursive record, or a record in
-         a group of mutually recursive types: we extract it as an inductive type
-      *)
+         a group of mutually recursive types: we extract it as an inductive type *)
       assert (is_rec && !backend = Coq);
       let with_opaque_pre = false in
       let cons_name = ctx_get_struct with_opaque_pre (AdtId def.def_id) ctx in
@@ -1068,10 +1074,13 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   extract_comment fmt ("[" ^ Print.name_to_string def.name ^ "]");
-  F.pp_print_space fmt ();
+  F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
-   * one line *)
-  F.pp_open_hvbox fmt 0;
+   * one line. Note however that in the case of Lean line breaks are important
+   * for parsing: we thus use a hovbox. *)
+  (match !backend with
+  | Coq | FStar -> F.pp_open_hvbox fmt 0
+  | Lean -> F.pp_open_vbox fmt 0);
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
@@ -1111,7 +1120,7 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
     in
     F.pp_print_string fmt eq)
   else (
-    (* Otherwise print ": Type0" *)
+    (* Otherwise print ": Type" *)
     if use_forall then F.pp_print_string fmt ","
     else (
       F.pp_print_space fmt ();
@@ -1384,7 +1393,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
   F.pp_print_break fmt 0 0;
   (* Print a comment  *)
   extract_comment fmt "The state type used in the state-error monad";
-  F.pp_print_space fmt ();
+  F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
   F.pp_open_hvbox fmt 0;
@@ -1392,8 +1401,13 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
   let state_name = ctx_get_assumed_type State ctx in
   (* The syntax for Lean and Coq is almost identical. *)
   let print_axiom () =
-    if !backend = Coq then F.pp_print_string fmt "Axiom"
-    else F.pp_print_string fmt "axiom";
+    let axiom =
+      match !backend with
+      | Coq -> "Axiom"
+      | Lean -> "axiom"
+      | FStar -> raise (Failure "Unexpected")
+    in
+    F.pp_print_string fmt axiom;
     F.pp_print_space fmt ();
     F.pp_print_string fmt state_name;
     F.pp_print_space fmt ();

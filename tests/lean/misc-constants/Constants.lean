@@ -35,7 +35,9 @@ structure OpaqueDefs where
     Result.ret (x, y)
   
   /- [constants::Pair] -/
-  structure pair_t (T1 T2 : Type) where  pair_x : T1 pair_y : T2 
+  structure pair_t (T1 T2 : Type) where
+    pair_x : T1
+    pair_y : T2
   
   /- [constants::mk_pair1] -/
   def mk_pair1_fwd (x : UInt32) (y : UInt32) : Result (pair_t UInt32 UInt32) :=
@@ -70,7 +72,8 @@ structure OpaqueDefs where
   def p3_c : pair_t UInt32 UInt32 := eval_global p3_body (by simp)
   
   /- [constants::Wrap] -/
-  structure wrap_t (T : Type) where  wrap_val : T 
+  structure wrap_t (T : Type) where
+    wrap_val : T
   
   /- [constants::Wrap::{0}::new] -/
   def wrap_new_fwd (T : Type) (val : T) : Result (wrap_t T) :=
