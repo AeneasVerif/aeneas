@@ -225,7 +225,7 @@ let () =
       I.Test.test_functions_symbolic synthesize m;
 
       (* Translate the functions *)
-      Translate.translate_module filename dest_dir m;
+      Translate.translate_crate filename dest_dir m;
 
       (* Print total elapsed time *)
       log#linfo
