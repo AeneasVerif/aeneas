@@ -118,7 +118,6 @@ let dont_use_field_projectors = ref false
 (** Deconstructing ADTs which have only one variant with let-bindings is not always
     supported: this parameter controls whether we use let-bindings in such situations or not.
   *)
-
 let always_deconstruct_adts_with_matches = ref false
 
 (** Controls whether we need to use a state to model the external world
