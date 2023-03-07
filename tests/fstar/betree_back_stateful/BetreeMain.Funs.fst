@@ -46,7 +46,7 @@ let betree_fresh_node_id_back (counter : u64) : result u64 =
 
 (** [betree_main::betree::NodeIdCounter::{0}::new] *)
 let betree_node_id_counter_new_fwd : result betree_node_id_counter_t =
-  Return (Mkbetree_node_id_counter_t 0)
+  Return { betree_node_id_counter_next_node_id = 0 }
 
 (** [betree_main::betree::NodeIdCounter::{0}::fresh_id] *)
 let betree_node_id_counter_fresh_id_fwd
@@ -58,7 +58,7 @@ let betree_node_id_counter_fresh_id_fwd
 let betree_node_id_counter_fresh_id_back
   (self : betree_node_id_counter_t) : result betree_node_id_counter_t =
   let* i = u64_add self.betree_node_id_counter_next_node_id 1 in
-  Return (Mkbetree_node_id_counter_t i)
+  Return { betree_node_id_counter_next_node_id = i }
 
 (** [core::num::u64::{10}::MAX] *)
 let core_num_u64_max_body : result u64 = Return 18446744073709551615
@@ -188,11 +188,19 @@ let betree_leaf_split_fwd
   let* id1 = betree_node_id_counter_fresh_id_fwd node_id_cnt0 in
   let* (st0, _) = betree_store_leaf_node_fwd id0 content0 st in
   let* (st1, _) = betree_store_leaf_node_fwd id1 content1 st0 in
-  let n = BetreeNodeLeaf (Mkbetree_leaf_t id0 params.betree_params_split_size)
-    in
-  let n0 = BetreeNodeLeaf (Mkbetree_leaf_t id1 params.betree_params_split_size)
-    in
-  Return (st1, Mkbetree_internal_t self.betree_leaf_id pivot n n0)
+  let n = BetreeNodeLeaf
+    { betree_leaf_id = id0; betree_leaf_size = params.betree_params_split_size
+    } in
+  let n0 = BetreeNodeLeaf
+    { betree_leaf_id = id1; betree_leaf_size = params.betree_params_split_size
+    } in
+  Return (st1,
+    {
+      betree_internal_id = self.betree_leaf_id;
+      betree_internal_pivot = pivot;
+      betree_internal_left = n;
+      betree_internal_right = n0
+    })
 
 (** [betree_main::betree::Leaf::{3}::split] *)
 let betree_leaf_split_back0
@@ -507,13 +515,23 @@ and betree_internal_lookup_in_children_back
   then
     let* (st1, n) =
       betree_node_lookup_back self.betree_internal_left key st st0 in
-    Return (st1, Mkbetree_internal_t self.betree_internal_id
-      self.betree_internal_pivot n self.betree_internal_right)
+    Return (st1,
+      {
+        betree_internal_id = self.betree_internal_id;
+        betree_internal_pivot = self.betree_internal_pivot;
+        betree_internal_left = n;
+        betree_internal_right = self.betree_internal_right
+      })
   else
     let* (st1, n) =
       betree_node_lookup_back self.betree_internal_right key st st0 in
-    Return (st1, Mkbetree_internal_t self.betree_internal_id
-      self.betree_internal_pivot self.betree_internal_left n)
+    Return (st1,
+      {
+        betree_internal_id = self.betree_internal_id;
+        betree_internal_pivot = self.betree_internal_pivot;
+        betree_internal_left = self.betree_internal_left;
+        betree_internal_right = n
+      })
 
 (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings] *)
 let rec betree_node_lookup_mut_in_bindings_fwd
@@ -830,7 +848,8 @@ and betree_node_apply_messages_back'a
       Return (st4, (BetreeNodeInternal new_node, node_id_cnt0))
     else
       let* _ = betree_store_leaf_node_fwd node.betree_leaf_id content0 st1 in
-      Return (st0, (BetreeNodeLeaf (Mkbetree_leaf_t node.betree_leaf_id len),
+      Return (st0, (BetreeNodeLeaf
+        { betree_leaf_id = node.betree_leaf_id; betree_leaf_size = len },
         node_id_cnt))
   end
 
@@ -972,11 +991,21 @@ and betree_internal_flush_back'a
       let* _ =
         betree_node_apply_messages_back1 self.betree_internal_right params
           node_id_cnt0 msgs_right st3 st5 in
-      Return (st0, (Mkbetree_internal_t self.betree_internal_id
-        self.betree_internal_pivot n n0, node_id_cnt1))
+      Return (st0,
+        ({
+           betree_internal_id = self.betree_internal_id;
+           betree_internal_pivot = self.betree_internal_pivot;
+           betree_internal_left = n;
+           betree_internal_right = n0
+         }, node_id_cnt1))
     else
-      Return (st0, (Mkbetree_internal_t self.betree_internal_id
-        self.betree_internal_pivot n self.betree_internal_right, node_id_cnt0))
+      Return (st0,
+        ({
+           betree_internal_id = self.betree_internal_id;
+           betree_internal_pivot = self.betree_internal_pivot;
+           betree_internal_left = n;
+           betree_internal_right = self.betree_internal_right
+         }, node_id_cnt0))
   else
     let* (st1, _) =
       betree_node_apply_messages_fwd self.betree_internal_right params
@@ -987,8 +1016,13 @@ and betree_internal_flush_back'a
     let* _ =
       betree_node_apply_messages_back1 self.betree_internal_right params
         node_id_cnt msgs_right st st2 in
-    Return (st0, (Mkbetree_internal_t self.betree_internal_id
-      self.betree_internal_pivot self.betree_internal_left n, node_id_cnt0))
+    Return (st0,
+      ({
+         betree_internal_id = self.betree_internal_id;
+         betree_internal_pivot = self.betree_internal_pivot;
+         betree_internal_left = self.betree_internal_left;
+         betree_internal_right = n
+       }, node_id_cnt0))
 
 (** [betree_main::betree::Internal::{4}::flush] *)
 and betree_internal_flush_back1
@@ -1106,8 +1140,17 @@ let betree_be_tree_new_fwd
   let* id = betree_node_id_counter_fresh_id_fwd node_id_cnt in
   let* (st0, _) = betree_store_leaf_node_fwd id BetreeListNil st in
   let* node_id_cnt0 = betree_node_id_counter_fresh_id_back node_id_cnt in
-  Return (st0, Mkbetree_be_tree_t (Mkbetree_params_t min_flush_size split_size)
-    node_id_cnt0 (BetreeNodeLeaf (Mkbetree_leaf_t id 0)))
+  Return (st0,
+    {
+      betree_be_tree_params =
+        {
+          betree_params_min_flush_size = min_flush_size;
+          betree_params_split_size = split_size
+        };
+      betree_be_tree_node_id_cnt = node_id_cnt0;
+      betree_be_tree_root =
+        (BetreeNodeLeaf { betree_leaf_id = id; betree_leaf_size = 0 })
+    })
 
 (** [betree_main::betree::BeTree::{6}::apply] *)
 let betree_be_tree_apply_fwd
@@ -1140,7 +1183,12 @@ let betree_be_tree_apply_back
   let* _ =
     betree_node_apply_back1 self.betree_be_tree_root self.betree_be_tree_params
       self.betree_be_tree_node_id_cnt key msg st st2 in
-  Return (st0, Mkbetree_be_tree_t self.betree_be_tree_params nic n)
+  Return (st0,
+    {
+      betree_be_tree_params = self.betree_be_tree_params;
+      betree_be_tree_node_id_cnt = nic;
+      betree_be_tree_root = n
+    })
 
 (** [betree_main::betree::BeTree::{6}::insert] *)
 let betree_be_tree_insert_fwd
@@ -1221,8 +1269,12 @@ let betree_be_tree_lookup_back
   =
   let* (st1, n) = betree_node_lookup_back self.betree_be_tree_root key st st0
     in
-  Return (st1, Mkbetree_be_tree_t self.betree_be_tree_params
-    self.betree_be_tree_node_id_cnt n)
+  Return (st1,
+    {
+      betree_be_tree_params = self.betree_be_tree_params;
+      betree_be_tree_node_id_cnt = self.betree_be_tree_node_id_cnt;
+      betree_be_tree_root = n
+    })
 
 (** [betree_main::main] *)
 let main_fwd : result unit =

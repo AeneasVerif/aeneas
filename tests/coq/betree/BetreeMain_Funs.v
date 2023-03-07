@@ -56,7 +56,7 @@ Definition betree_fresh_node_id_back (counter : u64) : result u64 :=
 
 (** [betree_main::betree::NodeIdCounter::{0}::new] *)
 Definition betree_node_id_counter_new_fwd : result Betree_node_id_counter_t :=
-  Return (mkBetree_node_id_counter_t (0%u64))
+  Return {| Betree_node_id_counter_next_node_id := (0%u64) |}
 .
 
 (** [betree_main::betree::NodeIdCounter::{0}::fresh_id] *)
@@ -70,7 +70,7 @@ Definition betree_node_id_counter_fresh_id_fwd
 Definition betree_node_id_counter_fresh_id_back
   (self : Betree_node_id_counter_t) : result Betree_node_id_counter_t :=
   i <- u64_add self.(Betree_node_id_counter_next_node_id) 1%u64;
-  Return (mkBetree_node_id_counter_t i)
+  Return {| Betree_node_id_counter_next_node_id := i |}
 .
 
 (** [core::num::u64::{10}::MAX] *)
@@ -223,10 +223,16 @@ Definition betree_leaf_split_fwd
   let (st0, _) := p1 in
   p2 <- betree_store_leaf_node_fwd id1 content1 st0;
   let (st1, _) := p2 in
-  let n0 := BetreeNodeLeaf (mkBetree_leaf_t id0
-    params.(Betree_params_split_size)) in
-  let n1 := BetreeNodeLeaf (mkBetree_leaf_t id1
-    params.(Betree_params_split_size)) in
+  let n0 := BetreeNodeLeaf
+    {|
+      Betree_leaf_id := id0;
+      Betree_leaf_size := params.(Betree_params_split_size)
+    |} in
+  let n1 := BetreeNodeLeaf
+    {|
+      Betree_leaf_id := id1;
+      Betree_leaf_size := params.(Betree_params_split_size)
+    |} in
   Return (st1, mkBetree_internal_t self.(Betree_leaf_id) pivot n0 n1)
 .
 
@@ -903,8 +909,9 @@ with betree_node_apply_messages_back
         Return (BetreeNodeInternal new_node, node_id_cnt0))
       else (
         _ <- betree_store_leaf_node_fwd node.(Betree_leaf_id) content0 st0;
-        Return (BetreeNodeLeaf (mkBetree_leaf_t node.(Betree_leaf_id) len),
-          node_id_cnt))
+        Return (BetreeNodeLeaf
+          {| Betree_leaf_id := node.(Betree_leaf_id); Betree_leaf_size := len
+          |}, node_id_cnt))
     end
   end
 
@@ -1045,8 +1052,18 @@ Definition betree_be_tree_new_fwd
   p <- betree_store_leaf_node_fwd id BetreeListNil st;
   let (st0, _) := p in
   node_id_cnt0 <- betree_node_id_counter_fresh_id_back node_id_cnt;
-  Return (st0, mkBetree_be_tree_t (mkBetree_params_t min_flush_size split_size)
-    node_id_cnt0 (BetreeNodeLeaf (mkBetree_leaf_t id (0%u64))))
+  Return (st0,
+    {|
+      Betree_be_tree_params :=
+        {|
+          Betree_params_min_flush_size := min_flush_size;
+          Betree_params_split_size := split_size
+        |};
+      Betree_be_tree_node_id_cnt := node_id_cnt0;
+      Betree_be_tree_root :=
+        (BetreeNodeLeaf
+          {| Betree_leaf_id := id; Betree_leaf_size := (0%u64) |})
+    |})
 .
 
 (** [betree_main::betree::BeTree::{6}::apply] *)
@@ -1075,7 +1092,12 @@ Definition betree_be_tree_apply_back
     betree_node_apply_back n self.(Betree_be_tree_root)
       self.(Betree_be_tree_params) self.(Betree_be_tree_node_id_cnt) key msg st;
   let (n0, nic) := p in
-  Return (mkBetree_be_tree_t self.(Betree_be_tree_params) nic n0)
+  Return
+    {|
+      Betree_be_tree_params := self.(Betree_be_tree_params);
+      Betree_be_tree_node_id_cnt := nic;
+      Betree_be_tree_root := n0
+    |}
 .
 
 (** [betree_main::betree::BeTree::{6}::insert] *)
@@ -1151,8 +1173,12 @@ Definition betree_be_tree_lookup_back
   result Betree_be_tree_t
   :=
   n0 <- betree_node_lookup_back n self.(Betree_be_tree_root) key st;
-  Return (mkBetree_be_tree_t self.(Betree_be_tree_params)
-    self.(Betree_be_tree_node_id_cnt) n0)
+  Return
+    {|
+      Betree_be_tree_params := self.(Betree_be_tree_params);
+      Betree_be_tree_node_id_cnt := self.(Betree_be_tree_node_id_cnt);
+      Betree_be_tree_root := n0
+    |}
 .
 
 (** [betree_main::main] *)

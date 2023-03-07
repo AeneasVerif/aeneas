@@ -423,17 +423,17 @@ Arguments Struct_with_tuple_p {T1} {T2}.
 
 (** [no_nested_borrows::new_tuple1] *)
 Definition new_tuple1_fwd : result (Struct_with_tuple_t u32 u32) :=
-  Return (mkStruct_with_tuple_t (1%u32, 2%u32))
+  Return {| Struct_with_tuple_p := (1%u32, 2%u32) |}
 .
 
 (** [no_nested_borrows::new_tuple2] *)
 Definition new_tuple2_fwd : result (Struct_with_tuple_t i16 i16) :=
-  Return (mkStruct_with_tuple_t (1%i16, 2%i16))
+  Return {| Struct_with_tuple_p := (1%i16, 2%i16) |}
 .
 
 (** [no_nested_borrows::new_tuple3] *)
 Definition new_tuple3_fwd : result (Struct_with_tuple_t u64 i64) :=
-  Return (mkStruct_with_tuple_t (1%u64, 2%i64))
+  Return {| Struct_with_tuple_p := (1%u64, 2%i64) |}
 .
 
 (** [no_nested_borrows::StructWithPair] *)
@@ -448,7 +448,7 @@ Arguments Struct_with_pair_p {T1} {T2}.
 
 (** [no_nested_borrows::new_pair1] *)
 Definition new_pair1_fwd : result (Struct_with_pair_t u32 u32) :=
-  Return (mkStruct_with_pair_t (mkPair_t (1%u32) (2%u32)))
+  Return {| Struct_with_pair_p := {| Pair_x := (1%u32); Pair_y := (2%u32) |} |}
 .
 
 (** [no_nested_borrows::test_constants] *)

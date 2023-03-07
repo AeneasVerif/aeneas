@@ -458,24 +458,24 @@ structure OpaqueDefs where
   def new_tuple1_fwd : Result (struct_with_tuple_t UInt32 UInt32) :=
     Result.ret
     {
-      struct_with_tuple_p := ((UInt32.ofNatCore 1 (by intlit)),
-                               (UInt32.ofNatCore 2 (by intlit)))
+      struct_with_tuple_p :=
+        ((UInt32.ofNatCore 1 (by intlit)), (UInt32.ofNatCore 2 (by intlit)))
     }
   
   /- [no_nested_borrows::new_tuple2] -/
   def new_tuple2_fwd : Result (struct_with_tuple_t Int16 Int16) :=
     Result.ret
     {
-      struct_with_tuple_p := ((Int16.ofNatCore 1 (by intlit)),
-                               (Int16.ofNatCore 2 (by intlit)))
+      struct_with_tuple_p :=
+        ((Int16.ofNatCore 1 (by intlit)), (Int16.ofNatCore 2 (by intlit)))
     }
   
   /- [no_nested_borrows::new_tuple3] -/
   def new_tuple3_fwd : Result (struct_with_tuple_t UInt64 Int64) :=
     Result.ret
     {
-      struct_with_tuple_p := ((UInt64.ofNatCore 1 (by intlit)),
-                               (Int64.ofNatCore 2 (by intlit)))
+      struct_with_tuple_p :=
+        ((UInt64.ofNatCore 1 (by intlit)), (Int64.ofNatCore 2 (by intlit)))
     }
   
   /- [no_nested_borrows::StructWithPair] -/
@@ -486,10 +486,11 @@ structure OpaqueDefs where
   def new_pair1_fwd : Result (struct_with_pair_t UInt32 UInt32) :=
     Result.ret
     {
-      struct_with_pair_p := {
-                              pair_x := (UInt32.ofNatCore 1 (by intlit)),
-                              pair_y := (UInt32.ofNatCore 2 (by intlit))
-                            }
+      struct_with_pair_p :=
+        {
+          pair_x := (UInt32.ofNatCore 1 (by intlit)),
+          pair_y := (UInt32.ofNatCore 2 (by intlit))
+        }
     }
   
   /- [no_nested_borrows::test_constants] -/
