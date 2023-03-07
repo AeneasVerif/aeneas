@@ -4,15 +4,9 @@ open Lake DSL
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git"
 
-package «loops» {
-  -- add package configuration options here
-}
+package «loops» {}
 
-lean_lib «Base» {
-  -- add library configuration options here
-}
+lean_lib «Base» {}
 
-lean_lib «Loops» {
-  -- add library configuration options here
-}
-
+@[default_target]
+lean_lib «Loops» {}

@@ -20,9 +20,8 @@ inductive betree_message_t :=
 
 /- [betree_main::betree::Leaf] -/
 structure betree_leaf_t where
-
-  betree_leaf_id : UInt64 betree_leaf_size : UInt64
-
+  betree_leaf_id : UInt64
+  betree_leaf_size : UInt64
 
 /- [betree_main::betree::Node] -/
 mutual inductive betree_node_t :=
@@ -31,31 +30,26 @@ mutual inductive betree_node_t :=
 
 /- [betree_main::betree::Internal] -/
 inductive betree_internal_t :=
-
   betree_internal_id : UInt64
   betree_internal_pivot : UInt64
   betree_internal_left : betree_node_t
   betree_internal_right : betree_node_t
 
-
 /- [betree_main::betree::Params] -/
 structure betree_params_t where
-
-  betree_params_min_flush_size : UInt64 betree_params_split_size : UInt64
-
+  betree_params_min_flush_size : UInt64
+  betree_params_split_size : UInt64
 
 /- [betree_main::betree::NodeIdCounter] -/
 structure betree_node_id_counter_t where
-
   betree_node_id_counter_next_node_id : UInt64
-
 
 /- [betree_main::betree::BeTree] -/
 structure betree_be_tree_t where
-
   betree_be_tree_params : betree_params_t
   betree_be_tree_node_id_cnt : betree_node_id_counter_t
   betree_be_tree_root : betree_node_t
 
-/- The state type used in the state-error monad -/ axiom State : Type
+/- The state type used in the state-error monad -/
+axiom State : Type
 

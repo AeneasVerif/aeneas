@@ -9,11 +9,11 @@ inductive hashmap_list_t (T : Type) :=
 
 /- [hashmap_main::hashmap::HashMap] -/
 structure hashmap_hash_map_t (T : Type) where
-
   hashmap_hash_map_num_entries : USize
   hashmap_hash_map_max_load_factor : (USize × USize)
   hashmap_hash_map_max_load : USize
   hashmap_hash_map_slots : Vec (hashmap_list_t T)
 
-/- The state type used in the state-error monad -/ axiom State : Type
+/- The state type used in the state-error monad -/
+axiom State : Type
 

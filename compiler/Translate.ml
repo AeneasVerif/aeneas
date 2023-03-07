@@ -679,18 +679,20 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
      of the functions marked as Opaque. We emit the `structure ...` bit here,
      then rely on `extract_fun_decl` to be aware of this, and skip the keyword
      (e.g. "axiom" or "val") so as to generate valid syntax for records. *)
-  if config.extract_opaque && config.extract_fun_decls && !Config.backend = Lean
-  then (
+  let wrap_in_sig =
+    config.extract_opaque && config.extract_fun_decls && !Config.backend = Lean
+  in
+  if wrap_in_sig then (
     Format.pp_print_break fmt 0 0;
     Format.pp_open_vbox fmt ctx.extract_ctx.indent_incr;
     Format.pp_print_string fmt "structure OpaqueDefs where";
     Format.pp_print_break fmt 0 0);
   List.iter export_decl_group ctx.crate.declarations;
-  if config.extract_opaque && !Config.backend = Lean then
-    Format.pp_close_box fmt ();
 
   if config.extract_state_type && not config.extract_fun_decls then
-    export_state_type ()
+    export_state_type ();
+
+  if wrap_in_sig then Format.pp_close_box fmt ()
 
 let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
     (rust_module_name : string) (module_name : string) (custom_msg : string)
@@ -1117,6 +1119,19 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       *)
   | Lean ->
       (*
+       * Generate the library entry point, if the crate is split between
+       * different files.
+       *)
+      if !Config.split_files then (
+        let filename = Filename.concat dest_dir (module_name ^ ".lean") in
+        let out = open_out filename in
+        (* Write *)
+        Printf.fprintf out "import %s.Funs\n" module_name;
+        (* Flush and close the file, log *)
+        close_out out;
+        log#linfo (lazy ("Generated: " ^ filename)));
+
+      (*
        * Generate the lakefile.lean file
        *)
 
@@ -1131,14 +1146,11 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
         "  \"https://github.com/leanprover-community/mathlib4.git\"\n\n";
 
       let package_name = StringUtils.to_snake_case module_name in
-      Printf.fprintf out "package «%s» {\n" package_name;
-      Printf.fprintf out "  -- add package configuration options here\n}\n\n";
+      Printf.fprintf out "package «%s» {}\n\n" package_name;
 
-      Printf.fprintf out "lean_lib «Base» {\n";
-      Printf.fprintf out "  -- add library configuration options here\n}\n\n";
+      Printf.fprintf out "lean_lib «Base» {}\n\n";
 
-      Printf.fprintf out "lean_lib «%s» {\n" module_name;
-      Printf.fprintf out "  -- add library configuration options here\n}\n\n";
+      Printf.fprintf out "@[default_target]\nlean_lib «%s» {}\n" module_name;
 
       (* No default target for now.
          Format would be:

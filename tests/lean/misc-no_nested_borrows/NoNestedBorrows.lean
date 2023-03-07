@@ -5,7 +5,9 @@ import Base.Primitives
 structure OpaqueDefs where
   
   /- [no_nested_borrows::Pair] -/
-  structure pair_t (T1 T2 : Type) where  pair_x : T1 pair_y : T2 
+  structure pair_t (T1 T2 : Type) where
+    pair_x : T1
+    pair_y : T2
   
   /- [no_nested_borrows::List] -/
   inductive list_t (T : Type) :=
@@ -13,16 +15,20 @@ structure OpaqueDefs where
   | ListNil : list_t T
   
   /- [no_nested_borrows::One] -/
-  inductive one_t (T1 : Type) := | OneOne : T1 -> one_t T1
+  inductive one_t (T1 : Type) :=
+  | OneOne : T1 -> one_t T1
   
   /- [no_nested_borrows::EmptyEnum] -/
-  inductive empty_enum_t := | EmptyEnumEmpty : empty_enum_t
+  inductive empty_enum_t :=
+  | EmptyEnumEmpty : empty_enum_t
   
   /- [no_nested_borrows::Enum] -/
-  inductive enum_t := | EnumVariant1 : enum_t | EnumVariant2 : enum_t
+  inductive enum_t :=
+  | EnumVariant1 : enum_t
+  | EnumVariant2 : enum_t
   
   /- [no_nested_borrows::EmptyStruct] -/
-  structure empty_struct_t where   
+  structure empty_struct_t where
   
   /- [no_nested_borrows::Sum] -/
   inductive sum_t (T1 T2 : Type) :=
@@ -446,9 +452,7 @@ structure OpaqueDefs where
   
   /- [no_nested_borrows::StructWithTuple] -/
   structure struct_with_tuple_t (T1 T2 : Type) where
-  
     struct_with_tuple_p : (T1 × T2)
-  
   
   /- [no_nested_borrows::new_tuple1] -/
   def new_tuple1_fwd : Result (struct_with_tuple_t UInt32 UInt32) :=
@@ -476,9 +480,7 @@ structure OpaqueDefs where
   
   /- [no_nested_borrows::StructWithPair] -/
   structure struct_with_pair_t (T1 T2 : Type) where
-  
     struct_with_pair_p : pair_t T1 T2
-  
   
   /- [no_nested_borrows::new_pair1] -/
   def new_pair1_fwd : Result (struct_with_pair_t UInt32 UInt32) :=

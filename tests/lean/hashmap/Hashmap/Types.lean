@@ -9,10 +9,8 @@ inductive list_t (T : Type) :=
 
 /- [hashmap::HashMap] -/
 structure hash_map_t (T : Type) where
-
   hash_map_num_entries : USize
   hash_map_max_load_factor : (USize × USize)
   hash_map_max_load : USize
   hash_map_slots : Vec (list_t T)
-
 
