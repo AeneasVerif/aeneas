@@ -4,6 +4,6 @@ import Base.Primitives
 
 /- [loops::List] -/
 inductive list_t (T : Type) :=
-| ListCons : T -> list_t T -> list_t T
-| ListNil : list_t T
+| Cons : T -> list_t T -> list_t T
+| Nil : list_t T
 
