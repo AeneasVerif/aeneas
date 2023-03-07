@@ -66,24 +66,26 @@ let () =
     [
       ( "-backend",
         Arg.Symbol (backend_names, set_backend),
-        " Specify the backend to which to extract" );
+        " Specify the target backend" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
       ( "-no-filter-useless-calls",
         Arg.Clear filter_useless_monadic_calls,
-        " Do not filter the useless function calls, when possible" );
+        " Do not filter the useless function calls" );
       ( "-no-filter-useless-funs",
         Arg.Clear filter_useless_functions,
         " Do not filter the useless forward/backward functions" );
       ( "-test-units",
         Arg.Set test_unit_functions,
-        " Test the unit functions with the concrete interpreter" );
+        " Test the unit functions with the concrete (i.e., not symbolic) \
+         interpreter" );
       ( "-test-trans-units",
         Arg.Set test_trans_unit_functions,
-        " Test the translated unit functions with the target theorem\n\
-        \                             prover's normalizer" );
+        " Test the translated unit functions with the target theorem prover's \
+         normalizer" );
       ( "-decreases-clauses",
         Arg.Set extract_decreases_clauses,
-        " Use decreases clauses for the recursive definitions" );
+        " Use decreases clauses/termination measures for the recursive \
+         definitions" );
       ( "-no-state",
         Arg.Clear use_state,
         " Do not use state-error monads, simply use error monads" );
@@ -95,16 +97,16 @@ let () =
         " Forbid backward functions from updating the state" );
       ( "-template-clauses",
         Arg.Set extract_template_decreases_clauses,
-        " Generate templates for the required decreases clauses, in a \
-         dedicated file. Implies -decreases-clauses" );
+        " Generate templates for the required decreases clauses/termination \
+         measures, in a dedicated file. Implies -decreases-clauses" );
       ( "-no-split-files",
         Arg.Clear split_files,
-        " Don't split the definitions between different files for types, \
+        " Do not split the definitions between different files for types, \
          functions, etc." );
       ( "-no-check-inv",
         Arg.Clear check_invariants,
-        " Deactivate the invariant sanity checks performed at every step of \
-         evaluation. Dramatically saves speed." );
+        " Deactivate the invariant sanity checks performed at every evaluation \
+         step. Dramatically increases speed." );
     ]
   in
 

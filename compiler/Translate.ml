@@ -825,12 +825,14 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
   let ctx =
     List.fold_left
       (fun ctx (keep_fwd, defs) ->
-        (* We generate a decrease clause for all the recursive functions *)
+        (* If requested by the user, register termination measures and decreases
+           proofs for all the recursive functions *)
         let fwd_def = fst (fst defs) in
         let gen_decr_clause (def : Pure.fun_decl) =
-          PureUtils.FunLoopIdSet.mem
-            (def.Pure.def_id, def.Pure.loop_id)
-            rec_functions
+          !Config.extract_decreases_clauses
+          && PureUtils.FunLoopIdSet.mem
+               (def.Pure.def_id, def.Pure.loop_id)
+               rec_functions
         in
         (* Register the names, only if the function is not a global body -
          * those are handled later *)
