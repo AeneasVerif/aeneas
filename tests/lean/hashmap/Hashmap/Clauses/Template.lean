@@ -5,7 +5,7 @@ import Hashmap.Types
 
 /- [hashmap::HashMap::{0}::allocate_slots]: termination measure -/
 @[simp]
-def hash_map_allocate_slots_loop_terminates (T : Type) (slots : vec (list_t T))
+def hash_map_allocate_slots_loop_terminates (T : Type) (slots : Vec (list_t T))
   (n : USize) :=
   (slots, n)
 
@@ -16,7 +16,7 @@ macro_rules
 
 /- [hashmap::HashMap::{0}::clear]: termination measure -/
 @[simp]
-def hash_map_clear_loop_terminates (T : Type) (slots : vec (list_t T))
+def hash_map_clear_loop_terminates (T : Type) (slots : Vec (list_t T))
   (i : USize) :=
   (slots, i)
 
@@ -52,7 +52,7 @@ macro_rules
 /- [hashmap::HashMap::{0}::move_elements]: termination measure -/
 @[simp]
 def hash_map_move_elements_loop_terminates (T : Type) (ntable : hash_map_t T)
-  (slots : vec (list_t T)) (i : USize) :=
+  (slots : Vec (list_t T)) (i : USize) :=
   (ntable, slots, i)
 
 syntax "hash_map_move_elements_loop_decreases" term+ : tactic

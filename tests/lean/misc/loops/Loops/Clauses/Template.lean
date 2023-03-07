@@ -35,7 +35,7 @@ macro_rules
 | `(tactic| sum_with_shared_borrows_loop_decreases $max $i $s) =>`(tactic| sorry)
 
 /- [loops::clear]: termination measure -/
-@[simp] def clear_loop_terminates (v : vec UInt32) (i : USize) := (v, i)
+@[simp] def clear_loop_terminates (v : Vec UInt32) (i : USize) := (v, i)
 
 syntax "clear_loop_decreases" term+ : tactic
 

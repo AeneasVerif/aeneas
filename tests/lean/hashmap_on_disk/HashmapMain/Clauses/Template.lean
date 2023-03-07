@@ -15,17 +15,16 @@ macro_rules
 | `(tactic| hashmap_hash_map_allocate_slots_loop_decreases $slots $n) =>
   `(tactic| sorry)
 
-/- [hashmap_main::hashmap::HashMap::{0}::clear_slots]: termination measure -/
+/- [hashmap_main::hashmap::HashMap::{0}::clear]: termination measure -/
 @[simp]
-def hashmap_hash_map_clear_slots_loop_terminates (T : Type)
+def hashmap_hash_map_clear_loop_terminates (T : Type)
   (slots : Vec (hashmap_list_t T)) (i : USize) :=
   (slots, i)
 
-syntax "hashmap_hash_map_clear_slots_loop_decreases" term+ : tactic
+syntax "hashmap_hash_map_clear_loop_decreases" term+ : tactic
 
 macro_rules
-| `(tactic| hashmap_hash_map_clear_slots_loop_decreases $slots $i) =>
-  `(tactic| sorry)
+| `(tactic| hashmap_hash_map_clear_loop_decreases $slots $i) =>`(tactic| sorry)
 
 /- [hashmap_main::hashmap::HashMap::{0}::insert_in_list]: termination measure -/
 @[simp]
