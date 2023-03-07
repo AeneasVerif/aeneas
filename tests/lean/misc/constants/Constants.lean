@@ -5,64 +5,64 @@ import Base.Primitives
 structure OpaqueDefs where
   
   /- [constants::X0] -/
-  def x0_body : result UInt32 := result.ret (UInt32.ofNatCore 0 (by intlit))
+  def x0_body : Result UInt32 := Result.ret (UInt32.ofNatCore 0 (by intlit))
   def x0_c : UInt32 := eval_global x0_body (by simp)
   
   /- [core::num::u32::{9}::MAX] -/
-  def core_num_u32_max_body : result UInt32 :=
-    result.ret (UInt32.ofNatCore 4294967295 (by intlit))
+  def core_num_u32_max_body : Result UInt32 :=
+    Result.ret (UInt32.ofNatCore 4294967295 (by intlit))
   def core_num_u32_max_c : UInt32 :=
     eval_global core_num_u32_max_body (by simp)
   
   /- [constants::X1] -/
-  def x1_body : result UInt32 := result.ret core_num_u32_max_c
+  def x1_body : Result UInt32 := Result.ret core_num_u32_max_c
   def x1_c : UInt32 := eval_global x1_body (by simp)
   
   /- [constants::X2] -/
-  def x2_body : result UInt32 := result.ret (UInt32.ofNatCore 3 (by intlit))
+  def x2_body : Result UInt32 := Result.ret (UInt32.ofNatCore 3 (by intlit))
   def x2_c : UInt32 := eval_global x2_body (by simp)
   
   /- [constants::incr] -/
-  def incr_fwd (n : UInt32) : result UInt32 :=
+  def incr_fwd (n : UInt32) : Result UInt32 :=
     UInt32.checked_add n (UInt32.ofNatCore 1 (by intlit))
   
   /- [constants::X3] -/
-  def x3_body : result UInt32 := incr_fwd (UInt32.ofNatCore 32 (by intlit))
+  def x3_body : Result UInt32 := incr_fwd (UInt32.ofNatCore 32 (by intlit))
   def x3_c : UInt32 := eval_global x3_body (by simp)
   
   /- [constants::mk_pair0] -/
-  def mk_pair0_fwd (x : UInt32) (y : UInt32) : result (UInt32 × UInt32) :=
-    result.ret (x, y)
+  def mk_pair0_fwd (x : UInt32) (y : UInt32) : Result (UInt32 × UInt32) :=
+    Result.ret (x, y)
   
   /- [constants::Pair] -/
   structure pair_t (T1 T2 : Type) where  pair_x : T1 pair_y : T2 
   
   /- [constants::mk_pair1] -/
-  def mk_pair1_fwd (x : UInt32) (y : UInt32) : result (pair_t UInt32 UInt32) :=
-    result.ret { pair_x := x, pair_y := y }
+  def mk_pair1_fwd (x : UInt32) (y : UInt32) : Result (pair_t UInt32 UInt32) :=
+    Result.ret { pair_x := x, pair_y := y }
   
   /- [constants::P0] -/
-  def p0_body : result (UInt32 × UInt32) :=
+  def p0_body : Result (UInt32 × UInt32) :=
     mk_pair0_fwd (UInt32.ofNatCore 0 (by intlit))
       (UInt32.ofNatCore 1 (by intlit))
   def p0_c : (UInt32 × UInt32) := eval_global p0_body (by simp)
   
   /- [constants::P1] -/
-  def p1_body : result (pair_t UInt32 UInt32) :=
+  def p1_body : Result (pair_t UInt32 UInt32) :=
     mk_pair1_fwd (UInt32.ofNatCore 0 (by intlit))
       (UInt32.ofNatCore 1 (by intlit))
   def p1_c : pair_t UInt32 UInt32 := eval_global p1_body (by simp)
   
   /- [constants::P2] -/
-  def p2_body : result (UInt32 × UInt32) :=
-    result.ret
+  def p2_body : Result (UInt32 × UInt32) :=
+    Result.ret
     ((UInt32.ofNatCore 0 (by intlit)),
     (UInt32.ofNatCore 1 (by intlit)))
   def p2_c : (UInt32 × UInt32) := eval_global p2_body (by simp)
   
   /- [constants::P3] -/
-  def p3_body : result (pair_t UInt32 UInt32) :=
-    result.ret
+  def p3_body : Result (pair_t UInt32 UInt32) :=
+    Result.ret
     {
       pair_x := (UInt32.ofNatCore 0 (by intlit)),
       pair_y := (UInt32.ofNatCore 1 (by intlit))
@@ -73,68 +73,68 @@ structure OpaqueDefs where
   structure wrap_t (T : Type) where  wrap_val : T 
   
   /- [constants::Wrap::{0}::new] -/
-  def wrap_new_fwd (T : Type) (val : T) : result (wrap_t T) :=
-    result.ret { wrap_val := val }
+  def wrap_new_fwd (T : Type) (val : T) : Result (wrap_t T) :=
+    Result.ret { wrap_val := val }
   
   /- [constants::Y] -/
-  def y_body : result (wrap_t Int32) :=
+  def y_body : Result (wrap_t Int32) :=
     wrap_new_fwd Int32 (Int32.ofNatCore 2 (by intlit))
   def y_c : wrap_t Int32 := eval_global y_body (by simp)
   
   /- [constants::unwrap_y] -/
-  def unwrap_y_fwd : result Int32 :=
-    result.ret y_c.wrap_val
+  def unwrap_y_fwd : Result Int32 :=
+    Result.ret y_c.wrap_val
   
   /- [constants::YVAL] -/
-  def yval_body : result Int32 := unwrap_y_fwd
+  def yval_body : Result Int32 := unwrap_y_fwd
   def yval_c : Int32 := eval_global yval_body (by simp)
   
   /- [constants::get_z1::Z1] -/
-  def get_z1_z1_body : result Int32 :=
-    result.ret (Int32.ofNatCore 3 (by intlit))
+  def get_z1_z1_body : Result Int32 :=
+    Result.ret (Int32.ofNatCore 3 (by intlit))
   def get_z1_z1_c : Int32 := eval_global get_z1_z1_body (by simp)
   
   /- [constants::get_z1] -/
-  def get_z1_fwd : result Int32 :=
-    result.ret get_z1_z1_c
+  def get_z1_fwd : Result Int32 :=
+    Result.ret get_z1_z1_c
   
   /- [constants::add] -/
-  def add_fwd (a : Int32) (b : Int32) : result Int32 :=
+  def add_fwd (a : Int32) (b : Int32) : Result Int32 :=
     Int32.checked_add a b
   
   /- [constants::Q1] -/
-  def q1_body : result Int32 := result.ret (Int32.ofNatCore 5 (by intlit))
+  def q1_body : Result Int32 := Result.ret (Int32.ofNatCore 5 (by intlit))
   def q1_c : Int32 := eval_global q1_body (by simp)
   
   /- [constants::Q2] -/
-  def q2_body : result Int32 := result.ret q1_c
+  def q2_body : Result Int32 := Result.ret q1_c
   def q2_c : Int32 := eval_global q2_body (by simp)
   
   /- [constants::Q3] -/
-  def q3_body : result Int32 := add_fwd q2_c (Int32.ofNatCore 3 (by intlit))
+  def q3_body : Result Int32 := add_fwd q2_c (Int32.ofNatCore 3 (by intlit))
   def q3_c : Int32 := eval_global q3_body (by simp)
   
   /- [constants::get_z2] -/
-  def get_z2_fwd : result Int32 :=
+  def get_z2_fwd : Result Int32 :=
     do
-      let i <- get_z1_fwd
-      let i0 <- add_fwd i q3_c
+      let i ← get_z1_fwd
+      let i0 ← add_fwd i q3_c
       add_fwd q1_c i0
   
   /- [constants::S1] -/
-  def s1_body : result UInt32 := result.ret (UInt32.ofNatCore 6 (by intlit))
+  def s1_body : Result UInt32 := Result.ret (UInt32.ofNatCore 6 (by intlit))
   def s1_c : UInt32 := eval_global s1_body (by simp)
   
   /- [constants::S2] -/
-  def s2_body : result UInt32 := incr_fwd s1_c
+  def s2_body : Result UInt32 := incr_fwd s1_c
   def s2_c : UInt32 := eval_global s2_body (by simp)
   
   /- [constants::S3] -/
-  def s3_body : result (pair_t UInt32 UInt32) := result.ret p3_c
+  def s3_body : Result (pair_t UInt32 UInt32) := Result.ret p3_c
   def s3_c : pair_t UInt32 UInt32 := eval_global s3_body (by simp)
   
   /- [constants::S4] -/
-  def s4_body : result (pair_t UInt32 UInt32) :=
+  def s4_body : Result (pair_t UInt32 UInt32) :=
     mk_pair1_fwd (UInt32.ofNatCore 7 (by intlit))
       (UInt32.ofNatCore 8 (by intlit))
   def s4_c : pair_t UInt32 UInt32 := eval_global s4_body (by simp)

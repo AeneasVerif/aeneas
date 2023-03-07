@@ -6,23 +6,23 @@ import External.Types
 structure OpaqueDefs where
   
   /- [core::mem::swap] -/
-  core_mem_swap_fwd (T : Type) : T -> T -> state -> result (state × Unit)
+  core_mem_swap_fwd (T : Type) : T -> T -> State -> Result (State × Unit)
   
   /- [core::mem::swap] -/
   core_mem_swap_back0
-    (T : Type) : T -> T -> state -> state -> result (state × T)
+    (T : Type) : T -> T -> State -> State -> Result (State × T)
   
   /- [core::mem::swap] -/
   core_mem_swap_back1
-    (T : Type) : T -> T -> state -> state -> result (state × T)
+    (T : Type) : T -> T -> State -> State -> Result (State × T)
   
   /- [core::num::nonzero::NonZeroU32::{14}::new] -/
   core_num_nonzero_non_zero_u32_new_fwd
     :
-    UInt32 -> state -> result (state × (Option
+    UInt32 -> State -> Result (State × (Option
       core_num_nonzero_non_zero_u32_t))
   
   /- [core::option::Option::{0}::unwrap] -/
   core_option_option_unwrap_fwd
-    (T : Type) : Option T -> state -> result (state × T)
+    (T : Type) : Option T -> State -> Result (State × T)
   

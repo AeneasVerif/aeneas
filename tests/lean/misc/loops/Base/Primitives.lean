@@ -9,74 +9,79 @@ import Mathlib.Tactic.RunCmd
 
 -- Results & monadic combinators
 
--- TODO: use syntactic conventions and capitalize error, result, etc.
-
-inductive error where
-   | assertionFailure: error
-   | integerOverflow: error
-   | arrayOutOfBounds: error
-   | maximumSizeExceeded: error
-   | panic: error
+inductive Error where
+   | assertionFailure: Error
+   | integerOverflow: Error
+   | arrayOutOfBounds: Error
+   | maximumSizeExceeded: Error
+   | panic: Error
 deriving Repr, BEq
 
-open error
+open Error
 
-inductive result (α : Type u) where
-  | ret (v: α): result α
-  | fail (e: error): result α 
+inductive Result (α : Type u) where
+  | ret (v: α): Result α
+  | fail (e: Error): Result α
 deriving Repr, BEq
 
-open result
+open Result
 
 /- HELPERS -/
 
--- TODO: is there automated syntax for these discriminators?
-def is_ret {α: Type} (r: result α): Bool :=
+def ret? {α: Type} (r: Result α): Bool :=
   match r with
-  | result.ret _ => true
-  | result.fail _ => false
+  | Result.ret _ => true
+  | Result.fail _ => false
 
-def massert (b:Bool) : result Unit :=
+def massert (b:Bool) : Result Unit :=
   if b then .ret () else fail assertionFailure
 
-def eval_global {α: Type} (x: result α) (_: is_ret x): α :=
+def eval_global {α: Type} (x: Result α) (_: ret? x): α :=
   match x with
-  | result.fail _ => by contradiction
-  | result.ret x => x
+  | Result.fail _ => by contradiction
+  | Result.ret x => x
 
 /- DO-DSL SUPPORT -/
 
-def bind (x: result α) (f: α -> result β) : result β :=
+def bind (x: Result α) (f: α -> Result β) : Result β :=
   match x with
   | ret v  => f v 
   | fail v => fail v
 
--- Allows using result in do-blocks
-instance : Bind result where
+-- Allows using Result in do-blocks
+instance : Bind Result where
   bind := bind
 
 -- Allows using return x in do-blocks
-instance : Pure result where
+instance : Pure Result where
   pure := fun x => ret x
 
 /- CUSTOM-DSL SUPPORT -/
 
--- Let-binding the result of a monadic operation is oftentimes not sufficient,
+-- Let-binding the Result of a monadic operation is oftentimes not sufficient,
 -- because we may need a hypothesis for equational reasoning in the scope. We
 -- rely on subtype, and a custom let-binding operator, in effect recreating our
 -- own variant of the do-dsl
 
-def result.attach : (o : result α) → result { x : α // o = ret x }
+def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
+  match o with
   | .ret x => .ret ⟨x, rfl⟩
-  | .fail e   => .fail e
+  | .fail e => .fail e
 
-macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
-  `(doElem| let ⟨$e, $h⟩ ← result.attach $f)
+macro "let" e:term " ⟵ " f:term : doElem =>
+  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
 
--- Silly example of the kind of reasoning that this notation enables
+-- TODO: any way to factorize both definitions?
+macro "let" e:term " <-- " f:term : doElem =>
+  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
+
+-- We call the hypothesis `h`, in effect making it unavailable to the user
+-- (because too much shadowing). But in practice, once can use the French single
+-- quote notation (input with f< and f>), where `‹ h ›` finds a suitable
+-- hypothesis in the context, this is equivalent to `have x: h := by assumption in x`
 #eval do
-  let h: y <-- .ret (0: Nat)
-  let _: y = 0 := by cases h; decide
+  let y <-- .ret (0: Nat)
+  let _: y = 0 := by cases ‹ ret 0 = ret y › ; decide
   let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
   .ret r
 
@@ -84,36 +89,27 @@ macro "let" h:ident " : " e:term " <-- " f:term : doElem =>
 -- MACHINE INTEGERS --
 ----------------------
 
--- NOTE: we reuse the USize type from prelude.lean, because at least we know
--- it's defined in an idiomatic style that is going to make proofs easy (and
--- indeed, several proofs here are much shortened compared to Aymeric's earlier
--- attempt.) This is not stricto sensu the *correct* thing to do, because one
--- can query at run-time the value of USize, which we do *not* want to do (we
--- don't know what target we'll run on!), but when the day comes, we'll just
--- define our own USize.
--- ANOTHER NOTE: there is USize.sub but it has wraparound semantics, which is
--- not something we want to define (I think), so we use our own monadic sub (but
--- is it in line with the Rust behavior?)
+-- NOTE: we reuse the fixed-width integer types from prelude.lean: UInt8, ...,
+-- USize. They are generally defined in an idiomatic style, except that there is
+-- not a single type class to rule them all (more on that below). The absence of
+-- type class is intentional, and allows the Lean compiler to efficiently map
+-- them to machine integers during compilation.
 
--- TODO: I am somewhat under the impression that subtraction is defined as a
--- total function over nats...? the hypothesis in the if condition is not used
--- in the then-branch which confuses me quite a bit
-
--- TODO: add a refinement for the result (just like vec_push_back below) that
--- explains that the toNat of the result (in the case of success) is the sub of
--- the toNat of the arguments (i.e. intrinsic specification)
--- ... do we want intrinsic specifications for the builtins? that might require
--- some careful type annotations in the monadic notation for clients, but may
--- give us more "for free"
+-- USize is designed properly: you cannot reduce `getNumBits` using the
+-- simplifier, meaning that proofs do not depend on the compile-time value of
+-- USize.size. (Lean assumes 32 or 64-bit platforms, and Rust doesn't really
+-- support, at least officially, 16-bit microcontrollers, so this seems like a
+-- fine design decision for now.)
 
 -- Note from Chris Bailey: "If there's more than one salient property of your
 -- definition then the subtyping strategy might get messy, and the property part
 -- of a subtype is less discoverable by the simplifier or tactics like
--- library_search." Try to settle this with a Lean expert on what is the most
--- productive way to go about this?
+-- library_search." So, we will not add refinements on the return values of the
+-- operations defined on Primitives, but will rather rely on custom lemmas to
+-- invert on possible return values of the primitive operations.
 
--- One needs to perform a little bit of reasoning in order to successfully
--- inject constants into USize, so we provide a general-purpose macro
+-- Machine integer constants, done via `ofNatCore`, which requires a proof that
+-- the `Nat` fits within the desired integer type. We provide a custom tactic.
 
 syntax "intlit" : tactic
 
@@ -129,12 +125,21 @@ macro_rules
 -- Also works for other integer types (at the expense of a needless disjunction)
 #eval UInt32.ofNatCore 0 (by intlit)
 
+-- The machine integer operations (e.g. sub) are always total, which is not what
+-- we want. We therefore define "checked" variants, below. Note that we add a
+-- tiny bit of complexity for the USize variant: we first check whether the
+-- result is < 2^32; if it is, we can compute the definition, rather than
+-- returning a term that is computationally stuck (the comparison to USize.size
+-- cannot reduce at compile-time, per the remark about regarding `getNumBits`).
+-- This is useful for the various #asserts that we want to reduce at
+-- type-checking time.
+
 -- Further thoughts: look at what has been done here:
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/Fin/Basic.lean
 -- and
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/UInt.lean
 -- which both contain a fair amount of reasoning already!
-def USize.checked_sub (n: USize) (m: USize): result USize :=
+def USize.checked_sub (n: USize) (m: USize): Result USize :=
   -- NOTE: the test USize.toNat n - m >= 0 seems to always succeed?
   if n >= m then
     let n' := USize.toNat n
@@ -150,18 +155,19 @@ def USize.checked_sub (n: USize) (m: USize): result USize :=
   else
     fail integerOverflow
 
-def USize.checked_add (n: USize) (m: USize): result USize :=
-  if h: n.val.val + m.val.val <= 4294967295 then
-    .ret ⟨ n.val.val + m.val.val, by
-      have h': 4294967295 < USize.size := by intlit
-      apply Nat.lt_of_le_of_lt h h'
-    ⟩
-  else if h: n.val + m.val < USize.size then
+@[simp]
+theorem usize_fits (n: Nat) (h: n <= 4294967295): n < USize.size :=
+  match USize.size, usize_size_eq with
+  | _, Or.inl rfl => Nat.lt_of_le_of_lt h (by decide)
+  | _, Or.inr rfl => Nat.lt_of_le_of_lt h (by decide)
+
+def USize.checked_add (n: USize) (m: USize): Result USize :=
+  if h: n.val + m.val < USize.size then
     .ret ⟨ n.val + m.val, h ⟩
   else
     .fail integerOverflow
 
-def USize.checked_rem (n: USize) (m: USize): result USize :=
+def USize.checked_rem (n: USize) (m: USize): Result USize :=
   if h: m > 0 then
     .ret ⟨ n.val % m.val, by
       have h1: ↑m.val < USize.size := m.val.isLt
@@ -171,18 +177,13 @@ def USize.checked_rem (n: USize) (m: USize): result USize :=
   else
     .fail integerOverflow
 
-def USize.checked_mul (n: USize) (m: USize): result USize :=
-    if h: n.val.val * m.val.val <= 4294967295 then
-    .ret ⟨ n.val.val * m.val.val, by
-      have h': 4294967295 < USize.size := by intlit
-      apply Nat.lt_of_le_of_lt h h'
-    ⟩
-  else if h: n.val * m.val < USize.size then
+def USize.checked_mul (n: USize) (m: USize): Result USize :=
+  if h: n.val * m.val < USize.size then
     .ret ⟨ n.val * m.val, h ⟩
   else
     .fail integerOverflow
 
-def USize.checked_div (n: USize) (m: USize): result USize :=
+def USize.checked_div (n: USize) (m: USize): Result USize :=
   if m > 0 then
     .ret ⟨ n.val / m.val, by
       have h1: ↑n.val < USize.size := n.val.isLt
@@ -191,6 +192,19 @@ def USize.checked_div (n: USize) (m: USize): result USize :=
     ⟩
   else
     .fail integerOverflow
+
+-- Test behavior...
+#eval assert! USize.checked_sub 10 20 == fail integerOverflow; 0
+
+#eval USize.checked_sub 20 10
+-- NOTE: compare with concrete behavior here, which I do not think we want
+#eval USize.sub 0 1
+#eval UInt8.add 255 255
+
+-- We now define a type class that subsumes the various machine integer types, so
+-- as to write a concise definition for scalar_cast, rather than exhaustively
+-- enumerating all of the possible pairs. We remark that Rust has sane semantics
+-- and fails if a cast operation would involve a truncation or modulo.
 
 class MachineInteger (t: Type) where
   size: Nat
@@ -209,20 +223,14 @@ run_cmd
     end $typeName
   ))
 
-def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): result dst :=
+-- Aeneas only instantiates the destination type (`src` is implicit). We rely on
+-- Lean to infer `src`.
+
+def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): Result dst :=
   if h: MachineInteger.val x < MachineInteger.size dst then
     .ret (MachineInteger.ofNatCore (MachineInteger.val x).val h)
   else
     .fail integerOverflow
-
-
--- Test behavior...
-#eval assert! USize.checked_sub 10 20 == fail integerOverflow; 0
-
-#eval USize.checked_sub 20 10
--- NOTE: compare with concrete behavior here, which I do not think we want
-#eval USize.sub 0 1
-#eval UInt8.add 255 255
 
 -------------
 -- VECTORS --
@@ -230,9 +238,9 @@ def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineIntege
 
 -- Note: unlike F*, Lean seems to use strict upper bounds (e.g. USize.size)
 -- rather than maximum values (usize_max).
-def vec (α : Type u) := { l : List α // List.length l < USize.size }
+def Vec (α : Type u) := { l : List α // List.length l < USize.size }
 
-def vec_new (α : Type u): vec α := ⟨ [], by {
+def vec_new (α : Type u): Vec α := ⟨ [], by {
   match USize.size, usize_size_eq with
   | _, Or.inl rfl => simp
   | _, Or.inr rfl => simp
@@ -240,20 +248,20 @@ def vec_new (α : Type u): vec α := ⟨ [], by {
 
 #check vec_new
 
-def vec_len (α : Type u) (v : vec α) : USize :=
+def vec_len (α : Type u) (v : Vec α) : USize :=
   let ⟨ v, l ⟩ := v
   USize.ofNatCore (List.length v) l
 
 #eval vec_len Nat (vec_new Nat)
  
-def vec_push_fwd (α : Type u) (_ : vec α) (_ : α) : Unit := ()
+def vec_push_fwd (α : Type u) (_ : Vec α) (_ : α) : Unit := ()
 
 -- NOTE: old version trying to use a subtype notation, but probably better to
--- leave result elimination to auxiliary lemmas with suitable preconditions
+-- leave Result elimination to auxiliary lemmas with suitable preconditions
 -- TODO: I originally wrote `List.length v.val < USize.size - 1`; how can one
 -- make the proof work in that case? Probably need to import tactics from
 -- mathlib to deal with inequalities... would love to see an example.
-def vec_push_back_old (α : Type u) (v : vec α) (x : α) : { res: result (vec α) //
+def vec_push_back_old (α : Type u) (v : Vec α) (x : α) : { res: Result (Vec α) //
   match res with | fail _ => True | ret v' => List.length v'.val = List.length v.val + 1}
   :=
   if h : List.length v.val + 1 < USize.size then
@@ -272,12 +280,12 @@ def vec_push_back_old (α : Type u) (v : vec α) (x : α) : { res: result (vec �
   -- annotate `x`, which relieves us of having to write `.val` on the right-hand
   -- side of the monadic let.
   let v := vec_new Nat
-  let x: vec Nat ← (vec_push_back_old Nat v 1: result (vec Nat)) -- WHY do we need the type annotation here?
+  let x: Vec Nat ← (vec_push_back_old Nat v 1: Result (Vec Nat)) -- WHY do we need the type annotation here?
   -- TODO: strengthen post-condition above and do a demo to show that we can
   -- safely eliminate the `fail` case
   return (vec_len Nat x)
 
-def vec_push_back (α : Type u) (v : vec α) (x : α) : result (vec α)
+def vec_push_back (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
   :=
   if h : List.length v.val + 1 <= 4294967295 then
     return ⟨ List.concat v.val x,
@@ -295,13 +303,13 @@ def vec_push_back (α : Type u) (v : vec α) (x : α) : result (vec α)
   else
     fail maximumSizeExceeded
 
-def vec_insert_fwd (α : Type u) (v: vec α) (i: USize) (_: α): result Unit :=
+def vec_insert_fwd (α : Type u) (v: Vec α) (i: USize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_insert_back (α : Type u) (v: vec α) (i: USize) (x: α): result (vec α) :=
+def vec_insert_back (α : Type u) (v: Vec α) (i: USize) (x: α): Result (Vec α) :=
   if i.val < List.length v.val then
     .ret ⟨ List.set v.val i.val x, by
       have h: List.length v.val < USize.size := v.property
@@ -311,25 +319,25 @@ def vec_insert_back (α : Type u) (v: vec α) (i: USize) (x: α): result (vec α
   else
     .fail arrayOutOfBounds
 
-def vec_index_fwd (α : Type u) (v: vec α) (i: USize): result α :=
+def vec_index_fwd (α : Type u) (v: Vec α) (i: USize): Result α :=
   if h: i.val < List.length v.val then
     .ret (List.get v.val ⟨i.val, h⟩)
   else
     .fail arrayOutOfBounds
 
-def vec_index_back (α : Type u) (v: vec α) (i: USize) (_: α): result Unit :=
+def vec_index_back (α : Type u) (v: Vec α) (i: USize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_fwd (α : Type u) (v: vec α) (i: USize): result α :=
+def vec_index_mut_fwd (α : Type u) (v: Vec α) (i: USize): Result α :=
   if h: i.val < List.length v.val then
     .ret (List.get v.val ⟨i.val, h⟩)
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_back (α : Type u) (v: vec α) (i: USize) (x: α): result (vec α) :=
+def vec_index_mut_back (α : Type u) (v: Vec α) (i: USize) (x: α): Result (Vec α) :=
   if i.val < List.length v.val then
     .ret ⟨ List.set v.val i.val x, by
       have h: List.length v.val < USize.size := v.property
@@ -349,6 +357,10 @@ def mem_replace_fwd (a : Type) (x : a) (_ : a) : a :=
 def mem_replace_back (a : Type) (_ : a) (y : a) : a :=
   y
 
+/-- Aeneas-translated function -- useful to reduce non-recursive definitions.
+ Use with `simp [ aeneas ]` -/
+register_simp_attr aeneas
+
 --------------------
 -- ASSERT COMMAND --
 --------------------
@@ -358,16 +370,23 @@ open Lean Elab Command Term Meta
 syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
+unsafe
 def assertImpl : CommandElab := fun (_stx: Syntax) => do
-  logInfo "Reducing and asserting: "
-  logInfo _stx[1]
   runTermElabM (fun _ => do
-    let e ← Term.elabTerm _stx[1] none
-    logInfo (Expr.dbgToString e)
-    -- How to evaluate the term and compare the result to true?
+    let r ← evalTerm Bool (mkConst ``Bool) _stx[1]
+    if not r then
+      logInfo "Assertion failed for: "
+      logInfo _stx[1]
+      logError "Expression reduced to false"
     pure ())
-  -- logInfo (Expr.dbgToString (``true))
-  -- throwError "TODO: assert"
 
 #eval 2 == 2
 #assert (2 == 2)
+
+-------------------
+-- SANITY CHECKS --
+-------------------
+
+-- TODO: add more once we have signed integers
+
+#assert (USize.checked_rem 1 2 == .ret 1)
