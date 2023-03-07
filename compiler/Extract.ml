@@ -136,19 +136,22 @@ let keywords () =
   List.concat [ named_unops; named_binops; misc ]
 
 let assumed_adts () : (assumed_ty * string) list =
-  List.map (fun (t, s) ->
-    if !backend = Lean then
-      t, Printf.sprintf "%c%s" (Char.uppercase_ascii s.[0]) (String.sub s 1 (String.length s - 1))
-    else
-      t, s
-  ) [
-    (State, "state");
-    (Result, "result");
-    (Error, "error");
-    (Fuel, "nat");
-    (Option, "option");
-    (Vec, "vec");
-  ]
+  List.map
+    (fun (t, s) ->
+      if !backend = Lean then
+        ( t,
+          Printf.sprintf "%c%s"
+            (Char.uppercase_ascii s.[0])
+            (String.sub s 1 (String.length s - 1)) )
+      else (t, s))
+    [
+      (State, "state");
+      (Result, "result");
+      (Error, "error");
+      (Fuel, "nat");
+      (Option, "option");
+      (Vec, "vec");
+    ]
 
 let assumed_structs : (assumed_ty * string) list = []
 
@@ -1868,8 +1871,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (* Open a box for the [if e] *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       F.pp_print_string fmt "if";
-      if !backend = Lean then
-        F.pp_print_string fmt " h:";
+      if !backend = Lean then F.pp_print_string fmt " h:";
       F.pp_print_space fmt ();
       let scrut_inside = PureUtils.texpression_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;
@@ -1927,7 +1929,10 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the [match ... with] *)
       let match_begin =
-        match !backend with FStar -> "begin match" | Coq -> "match" | Lean -> "match h:"
+        match !backend with
+        | FStar -> "begin match"
+        | Coq -> "match"
+        | Lean -> "match h:"
       in
       F.pp_print_string fmt match_begin;
       F.pp_print_space fmt ();
@@ -2059,9 +2064,9 @@ let assert_backend_supports_decreases_clauses () =
   | FStar | Lean -> ()
   | _ -> failwith "decreases clauses only supported for the Lean & F* backends"
 
-(** Extract a decrease clause function template body.
+(** Extract a decreases clause function template body.
 
-    Only for F*.
+    For F* only.
 
     In order to help the user, we can generate a template for the functions
     required by the decreases clauses for. We simply generate definitions of
@@ -2075,8 +2080,8 @@ let assert_backend_supports_decreases_clauses () =
       let f_fwd (t : Type0) (x : t) : Tot ... (decreases (f_decrease t x)) = ...
     ]}
  *)
-let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
-    (def : fun_decl) : unit =
+let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
+    (fmt : F.formatter) (def : fun_decl) : unit =
   assert (!backend = FStar);
 
   (* Retrieve the function name *)
@@ -2123,7 +2128,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
-(** Extract templates for the termination_by and decreases_by clauses of a
+(** Extract templates for the [termination_by] and [decreases_by] clauses of a
     recursive function definition.
 
     For Lean only.
@@ -2134,7 +2139,7 @@ let extract_template_decreases_clause (ctx : extraction_ctx) (fmt : F.formatter)
     defines a proof script (allowed to refer to function arguments) that proves
     termination.
 *)
-let extract_termination_and_decreasing (ctx : extraction_ctx)
+let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
   assert (!backend = Lean);
 
@@ -2196,11 +2201,13 @@ let extract_termination_and_decreasing (ctx : extraction_ctx)
   let def_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
+  extract_comment fmt
+    ("[" ^ Print.fun_name_to_string def.basename ^ "]: decreases_by tactic");
+  F.pp_print_space fmt ();
   F.pp_open_hvbox fmt 0;
   F.pp_print_string fmt "syntax \"";
   F.pp_print_string fmt def_name;
   F.pp_print_string fmt "\" term+ : tactic";
-  F.pp_print_break fmt 0 0;
   F.pp_print_break fmt 0 0;
   (* macro_rules | `(tactic| fact_termination_proof $x) => `(tactic| ( *)
   F.pp_print_string fmt "macro_rules";
