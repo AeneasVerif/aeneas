@@ -549,34 +549,4 @@ module Test = struct
     in
 
     ()
-
-  (** Small helper *)
-  let fun_decl_is_transparent (def : A.fun_decl) : bool =
-    Option.is_some def.body
-
-  (** Execute the symbolic interpreter on a list of functions.
-
-      TODO: for now we ignore the functions which contain loops, because
-      they are not supported by the symbolic interpreter.
-   *)
-  let test_functions_symbolic (synthesize : bool) (crate : A.crate) : unit =
-    (* Filter the functions which contain loops *)
-    let no_loop_funs =
-      List.filter
-        (fun f -> not (LlbcAstUtils.fun_decl_has_loops f))
-        crate.functions
-    in
-    (* Filter the opaque functions *)
-    let no_loop_funs = List.filter fun_decl_is_transparent no_loop_funs in
-    let type_context, fun_context, global_context =
-      compute_type_fun_global_contexts crate
-    in
-    let test_fun (def : A.fun_decl) : unit =
-      (* Execute the function - note that as the symbolic interpreter explores
-       * all the path, some executions are expected to "panic": we thus don't
-       * check the return value *)
-      test_function_symbolic synthesize type_context fun_context global_context
-        def
-    in
-    List.iter test_fun no_loop_funs
 end
