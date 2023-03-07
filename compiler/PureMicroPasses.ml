@@ -1178,8 +1178,47 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 List.length filt_var_projs = List.length updates
                 && List.for_all (fun y -> y = x) filt_var_projs
               then { e with e = Var x }
-              else (* TODO *)
-                super#visit_texpression env e
+              else if
+                (* Attempt to create an "update" expression (i.e., of
+                   the shape [{ x with f := v }]).
+
+                   This is not supported by Coq *)
+                !Config.backend <> Coq
+              then (
+                (* Compute the number of occurrences of each variable *)
+                let occurs = ref VarId.Map.empty in
+                List.iter
+                  (fun x ->
+                    let num =
+                      match VarId.Map.find_opt x !occurs with
+                      | None -> 1
+                      | Some n -> n + 1
+                    in
+                    occurs := VarId.Map.add x num !occurs)
+                  filt_var_projs;
+                (* Find the max - note that we can initialize the max at 0,
+                   because there is at least one variable *)
+                let max = ref 0 in
+                let x = ref x in
+                List.iter
+                  (fun (y, n) ->
+                    if n > !max then (
+                      max := n;
+                      x := y))
+                  (VarId.Map.bindings !occurs);
+                (* Create the update expression *)
+                let updates =
+                  List.filter_map
+                    (fun ((fid, fe), y_opt) ->
+                      if y_opt = Some !x then None else Some (fid, fe))
+                    (List.combine updates var_projs)
+                in
+                let supd =
+                  StructUpdate { struct_id; init = Some !x; updates }
+                in
+                let e = { e with e = supd } in
+                super#visit_texpression env e)
+              else super#visit_texpression env e
         | _ -> super#visit_texpression env e
     end
   in
