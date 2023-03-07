@@ -9,7 +9,11 @@ let backend_names = [ "fstar"; "coq"; "lean" ]
 
 (** Utility to compute the backend from an input parameter *)
 let backend_of_string (b : string) : backend option =
-  match b with "fstar" -> Some FStar | "coq" -> Some Coq | "lean" -> Some Lean | _ -> None
+  match b with
+  | "fstar" -> Some FStar
+  | "coq" -> Some Coq
+  | "lean" -> Some Lean
+  | _ -> None
 
 let opt_backend : backend option ref = ref None
 
@@ -174,16 +178,21 @@ let test_unit_functions = ref false
  *)
 let test_trans_unit_functions = ref false
 
-(** If [true], insert [decreases] clauses for all the recursive definitions.
+(** If [true], use decreases clauses/termination measures for all the recursive definitions.
 
-    The body of such clauses must be defined by the user.
+    More precisely:
+    - for F*, we generate definitions which use decreases clauses
+    - for Lean, we generate definitions which use termination measures and
+      decreases proofs
+
+    The body of such clauses/proofs must be defined by the user.
  *)
 let extract_decreases_clauses = ref false
 
-(** In order to help the user, we can generate "template" decrease clauses
-    (i.e., definitions with proper signatures but dummy bodies) in a
-    dedicated file.
- *)
+(** In order to help the user, we can generate "template" decrease clauses/ termination
+   measures (i.e., definitions with proper signatures but dummy bodies) in a dedicated
+   file.
+*)
 let extract_template_decreases_clauses = ref false
 
 (** {1 Micro passes} *)
