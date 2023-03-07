@@ -84,7 +84,7 @@
             export AENEAS_EXE=./aeneas.exe
 
             # Run the tests
-            make tests -j
+            make tests -j $NIX_BUILD_CORES
           '';
           # Tests don't generate anything new as the generated files are
           # versionned, but the installation phase still needs to prodocue
@@ -98,7 +98,7 @@
           FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
           buildPhase= ''
             make prepare-projects
-            make verify -j
+            make verify -j $NIX_BUILD_CORES
           '';
           # The tests don't generate anything
           installPhase = "touch $out";
@@ -110,7 +110,7 @@
           buildInputs = [ pkgs.coq ];
           buildPhase= ''
             make prepare-projects
-            make verify -j
+            make verify -j $NIX_BUILD_CORES
           '';
           # The tests don't generate anything
           installPhase = "touch $out";
