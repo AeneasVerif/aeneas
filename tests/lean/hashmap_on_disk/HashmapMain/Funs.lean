@@ -49,8 +49,8 @@ def hashmap_hash_map_new_with_capacity_fwd
     Result.ret
       {
         hashmap_hash_map_num_entries := (USize.ofNatCore 0 (by intlit)),
-        hashmap_hash_map_max_load_factor := (max_load_dividend,
-                                              max_load_divisor),
+        hashmap_hash_map_max_load_factor :=
+          (max_load_dividend, max_load_divisor),
         hashmap_hash_map_max_load := i0,
         hashmap_hash_map_slots := slots
       }
@@ -96,7 +96,8 @@ def hashmap_hash_map_clear_fwd_back
     Result.ret
       {
         hashmap_hash_map_num_entries := (USize.ofNatCore 0 (by intlit)),
-        hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
+        hashmap_hash_map_max_load_factor :=
+          self.hashmap_hash_map_max_load_factor,
         hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
         hashmap_hash_map_slots := v
       }
@@ -177,7 +178,8 @@ def hashmap_hash_map_insert_no_resize_fwd_back
         Result.ret
           {
             hashmap_hash_map_num_entries := i0,
-            hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
+            hashmap_hash_map_max_load_factor :=
+              self.hashmap_hash_map_max_load_factor,
             hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
             hashmap_hash_map_slots := v
           }
@@ -190,7 +192,8 @@ def hashmap_hash_map_insert_no_resize_fwd_back
         Result.ret
           {
             hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-            hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
+            hashmap_hash_map_max_load_factor :=
+              self.hashmap_hash_map_max_load_factor,
             hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
             hashmap_hash_map_slots := v
           }
@@ -431,7 +434,8 @@ def hashmap_hash_map_get_mut_back
     Result.ret
       {
         hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-        hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
+        hashmap_hash_map_max_load_factor :=
+          self.hashmap_hash_map_max_load_factor,
         hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
         hashmap_hash_map_slots := v
       }
@@ -532,7 +536,8 @@ def hashmap_hash_map_remove_back
         Result.ret
           {
             hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-            hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
+            hashmap_hash_map_max_load_factor :=
+              self.hashmap_hash_map_max_load_factor,
             hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
             hashmap_hash_map_slots := v
           }
@@ -547,7 +552,8 @@ def hashmap_hash_map_remove_back
         Result.ret
           {
             hashmap_hash_map_num_entries := i0,
-            hashmap_hash_map_max_load_factor := self.hashmap_hash_map_max_load_factor,
+            hashmap_hash_map_max_load_factor :=
+              self.hashmap_hash_map_max_load_factor,
             hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
             hashmap_hash_map_slots := v
           }

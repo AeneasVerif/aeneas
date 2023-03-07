@@ -223,13 +223,7 @@ def betree_leaf_split_fwd
         betree_leaf_id := id1,
         betree_leaf_size := params.betree_params_split_size
       }
-    Result.ret (st1,
-      {
-        betree_internal_id := self.betree_leaf_id,
-        betree_internal_pivot := pivot,
-        betree_internal_left := n,
-        betree_internal_right := n0
-      })
+    Result.ret (st1, mkbetree_internal_t self.betree_leaf_id pivot n n0)
 
 /- [betree_main::betree::Leaf::{3}::split] -/
 def betree_leaf_split_back
@@ -380,8 +374,8 @@ mutual def betree_node_lookup_fwd
   match h: self with
   | betree_node_t.BetreeNodeInternal node =>
     do
-      let (st0, msgs) ←
-        betree_load_internal_node_fwd node.betree_internal_id st
+      let (mkbetree_internal_t i i0 n n0) := node
+      let (st0, msgs) ← betree_load_internal_node_fwd i st
       let pending ← betree_node_lookup_first_message_for_key_fwd key msgs
       match h: pending with
       | betree_list_t.BetreeListCons p l =>
@@ -390,7 +384,8 @@ mutual def betree_node_lookup_fwd
         then
           do
             let (st1, opt) ←
-              betree_internal_lookup_in_children_fwd node key st0
+              betree_internal_lookup_in_children_fwd (mkbetree_internal_t i i0
+                n n0) key st0
             let _ ←
               betree_node_lookup_first_message_for_key_back key msgs
                 (betree_list_t.BetreeListCons (k, msg) l)
@@ -414,25 +409,27 @@ mutual def betree_node_lookup_fwd
           | betree_message_t.BetreeMessageUpsert ufs =>
             do
               let (st1, v) ←
-                betree_internal_lookup_in_children_fwd node key st0
+                betree_internal_lookup_in_children_fwd (mkbetree_internal_t i
+                  i0 n n0) key st0
               let (st2, v0) ←
                 betree_node_apply_upserts_fwd (betree_list_t.BetreeListCons (k,
                   betree_message_t.BetreeMessageUpsert ufs) l) v key st1
               let node0 ←
-                betree_internal_lookup_in_children_back node key st0
+                betree_internal_lookup_in_children_back (mkbetree_internal_t i
+                  i0 n n0) key st0
+              let (mkbetree_internal_t i1 _ _ _) := node0
               let pending0 ←
                 betree_node_apply_upserts_back (betree_list_t.BetreeListCons
                   (k, betree_message_t.BetreeMessageUpsert ufs) l) v key st1
               let msgs0 ←
                 betree_node_lookup_first_message_for_key_back key msgs pending0
-              let (st3, _) ←
-                betree_store_internal_node_fwd node0.betree_internal_id msgs0
-                  st2
+              let (st3, _) ← betree_store_internal_node_fwd i1 msgs0 st2
               Result.ret (st3, Option.some v0)
       | betree_list_t.BetreeListNil =>
         do
           let (st1, opt) ←
-            betree_internal_lookup_in_children_fwd node key st0
+            betree_internal_lookup_in_children_fwd (mkbetree_internal_t i i0 n
+              n0) key st0
           let _ ←
             betree_node_lookup_first_message_for_key_back key msgs
               betree_list_t.BetreeListNil
@@ -454,8 +451,8 @@ def betree_node_lookup_back
   match h: self with
   | betree_node_t.BetreeNodeInternal node =>
     do
-      let (st0, msgs) ←
-        betree_load_internal_node_fwd node.betree_internal_id st
+      let (mkbetree_internal_t i i0 n n0) := node
+      let (st0, msgs) ← betree_load_internal_node_fwd i st
       let pending ← betree_node_lookup_first_message_for_key_fwd key msgs
       match h: pending with
       | betree_list_t.BetreeListCons p l =>
@@ -466,7 +463,9 @@ def betree_node_lookup_back
             let _ ←
               betree_node_lookup_first_message_for_key_back key msgs
                 (betree_list_t.BetreeListCons (k, msg) l)
-            let node0 ← betree_internal_lookup_in_children_back node key st0
+            let node0 ←
+              betree_internal_lookup_in_children_back (mkbetree_internal_t i i0
+                n n0) key st0
             Result.ret (betree_node_t.BetreeNodeInternal node0)
         else
           match h: msg with
@@ -476,38 +475,44 @@ def betree_node_lookup_back
                 betree_node_lookup_first_message_for_key_back key msgs
                   (betree_list_t.BetreeListCons (k,
                   betree_message_t.BetreeMessageInsert v) l)
-              Result.ret (betree_node_t.BetreeNodeInternal node)
+              Result.ret (betree_node_t.BetreeNodeInternal (mkbetree_internal_t
+                i i0 n n0))
           | betree_message_t.BetreeMessageDelete =>
             do
               let _ ←
                 betree_node_lookup_first_message_for_key_back key msgs
                   (betree_list_t.BetreeListCons (k,
                   betree_message_t.BetreeMessageDelete) l)
-              Result.ret (betree_node_t.BetreeNodeInternal node)
+              Result.ret (betree_node_t.BetreeNodeInternal (mkbetree_internal_t
+                i i0 n n0))
           | betree_message_t.BetreeMessageUpsert ufs =>
             do
               let (st1, v) ←
-                betree_internal_lookup_in_children_fwd node key st0
+                betree_internal_lookup_in_children_fwd (mkbetree_internal_t i
+                  i0 n n0) key st0
               let (st2, _) ←
                 betree_node_apply_upserts_fwd (betree_list_t.BetreeListCons (k,
                   betree_message_t.BetreeMessageUpsert ufs) l) v key st1
               let node0 ←
-                betree_internal_lookup_in_children_back node key st0
+                betree_internal_lookup_in_children_back (mkbetree_internal_t i
+                  i0 n n0) key st0
+              let (mkbetree_internal_t i1 i2 n1 n2) := node0
               let pending0 ←
                 betree_node_apply_upserts_back (betree_list_t.BetreeListCons
                   (k, betree_message_t.BetreeMessageUpsert ufs) l) v key st1
               let msgs0 ←
                 betree_node_lookup_first_message_for_key_back key msgs pending0
-              let _ ←
-                betree_store_internal_node_fwd node0.betree_internal_id msgs0
-                  st2
-              Result.ret (betree_node_t.BetreeNodeInternal node0)
+              let _ ← betree_store_internal_node_fwd i1 msgs0 st2
+              Result.ret (betree_node_t.BetreeNodeInternal (mkbetree_internal_t
+                i1 i2 n1 n2))
       | betree_list_t.BetreeListNil =>
         do
           let _ ←
             betree_node_lookup_first_message_for_key_back key msgs
               betree_list_t.BetreeListNil
-          let node0 ← betree_internal_lookup_in_children_back node key st0
+          let node0 ←
+            betree_internal_lookup_in_children_back (mkbetree_internal_t i i0 n
+              n0) key st0
           Result.ret (betree_node_t.BetreeNodeInternal node0)
   | betree_node_t.BetreeNodeLeaf node =>
     do
@@ -523,9 +528,10 @@ def betree_internal_lookup_in_children_fwd
   (self : betree_internal_t) (key : UInt64) (st : State) :
   (Result (State × (Option UInt64)))
   :=
-  if h: key < self.betree_internal_pivot
-  then betree_node_lookup_fwd self.betree_internal_left key st
-  else betree_node_lookup_fwd self.betree_internal_right key st
+  let (mkbetree_internal_t _ i n n0) := self
+  if h: key < i
+  then betree_node_lookup_fwd n key st
+  else betree_node_lookup_fwd n0 key st
 termination_by betree_internal_lookup_in_children_fwd self key st =>
   betree_internal_lookup_in_children_terminates self key st
 decreasing_by betree_internal_lookup_in_children_decreases self key st
@@ -535,27 +541,16 @@ def betree_internal_lookup_in_children_back
   (self : betree_internal_t) (key : UInt64) (st : State) :
   (Result betree_internal_t)
   :=
-  if h: key < self.betree_internal_pivot
+  let (mkbetree_internal_t i i0 n n0) := self
+  if h: key < i0
   then
     do
-      let n ← betree_node_lookup_back self.betree_internal_left key st
-      Result.ret
-        {
-          betree_internal_id := self.betree_internal_id,
-          betree_internal_pivot := self.betree_internal_pivot,
-          betree_internal_left := n,
-          betree_internal_right := self.betree_internal_right
-        }
+      let n1 ← betree_node_lookup_back n key st
+      Result.ret (mkbetree_internal_t i i0 n1 n0)
   else
     do
-      let n ← betree_node_lookup_back self.betree_internal_right key st
-      Result.ret
-        {
-          betree_internal_id := self.betree_internal_id,
-          betree_internal_pivot := self.betree_internal_pivot,
-          betree_internal_left := self.betree_internal_left,
-          betree_internal_right := n
-        }
+      let n1 ← betree_node_lookup_back n0 key st
+      Result.ret (mkbetree_internal_t i i0 n n1)
 termination_by betree_internal_lookup_in_children_back self key st =>
   betree_internal_lookup_in_children_terminates self key st
 decreasing_by betree_internal_lookup_in_children_decreases self key st
@@ -819,8 +814,8 @@ mutual def betree_node_apply_messages_fwd
   match h: self with
   | betree_node_t.BetreeNodeInternal node =>
     do
-      let (st0, content) ←
-        betree_load_internal_node_fwd node.betree_internal_id st
+      let (mkbetree_internal_t i i0 n n0) := node
+      let (st0, content) ← betree_load_internal_node_fwd i st
       let content0 ←
         betree_node_apply_messages_to_internal_fwd_back content msgs
       let num_msgs ←
@@ -829,17 +824,17 @@ mutual def betree_node_apply_messages_fwd
       then
         do
           let (st1, content1) ←
-            betree_internal_flush_fwd node params node_id_cnt content0 st0
+            betree_internal_flush_fwd (mkbetree_internal_t i i0 n n0) params
+              node_id_cnt content0 st0
           let (node0, _) ←
-            betree_internal_flush_back node params node_id_cnt content0 st0
-          let (st2, _) ←
-            betree_store_internal_node_fwd node0.betree_internal_id content1
-              st1
+            betree_internal_flush_back (mkbetree_internal_t i i0 n n0) params
+              node_id_cnt content0 st0
+          let (mkbetree_internal_t i1 _ _ _) := node0
+          let (st2, _) ← betree_store_internal_node_fwd i1 content1 st1
           Result.ret (st2, ())
       else
         do
-          let (st1, _) ←
-            betree_store_internal_node_fwd node.betree_internal_id content0 st0
+          let (st1, _) ← betree_store_internal_node_fwd i content0 st0
           Result.ret (st1, ())
   | betree_node_t.BetreeNodeLeaf node =>
     do
@@ -878,8 +873,8 @@ def betree_node_apply_messages_back
   match h: self with
   | betree_node_t.BetreeNodeInternal node =>
     do
-      let (st0, content) ←
-        betree_load_internal_node_fwd node.betree_internal_id st
+      let (mkbetree_internal_t i i0 n n0) := node
+      let (st0, content) ← betree_load_internal_node_fwd i st
       let content0 ←
         betree_node_apply_messages_to_internal_fwd_back content msgs
       let num_msgs ←
@@ -888,18 +883,20 @@ def betree_node_apply_messages_back
       then
         do
           let (st1, content1) ←
-            betree_internal_flush_fwd node params node_id_cnt content0 st0
+            betree_internal_flush_fwd (mkbetree_internal_t i i0 n n0) params
+              node_id_cnt content0 st0
           let (node0, node_id_cnt0) ←
-            betree_internal_flush_back node params node_id_cnt content0 st0
-          let _ ←
-            betree_store_internal_node_fwd node0.betree_internal_id content1
-              st1
-          Result.ret (betree_node_t.BetreeNodeInternal node0, node_id_cnt0)
+            betree_internal_flush_back (mkbetree_internal_t i i0 n n0) params
+              node_id_cnt content0 st0
+          let (mkbetree_internal_t i1 i2 n1 n2) := node0
+          let _ ← betree_store_internal_node_fwd i1 content1 st1
+          Result.ret (betree_node_t.BetreeNodeInternal (mkbetree_internal_t i1
+            i2 n1 n2), node_id_cnt0)
       else
         do
-          let _ ←
-            betree_store_internal_node_fwd node.betree_internal_id content0 st0
-          Result.ret (betree_node_t.BetreeNodeInternal node, node_id_cnt)
+          let _ ← betree_store_internal_node_fwd i content0 st0
+          Result.ret (betree_node_t.BetreeNodeInternal (mkbetree_internal_t i
+            i0 n n0), node_id_cnt)
   | betree_node_t.BetreeNodeLeaf node =>
     do
       let (st0, content) ← betree_load_leaf_node_fwd node.betree_leaf_id st
@@ -938,41 +935,36 @@ def betree_internal_flush_fwd
   (Result (State × (betree_list_t (UInt64 × betree_message_t))))
   :=
   do
-    let p ←
-      betree_list_partition_at_pivot_fwd betree_message_t content
-        self.betree_internal_pivot
+    let (mkbetree_internal_t _ i n n0) := self
+    let p ← betree_list_partition_at_pivot_fwd betree_message_t content i
     let (msgs_left, msgs_right) := p
     let len_left ← betree_list_len_fwd (UInt64 × betree_message_t) msgs_left
     if h: len_left >= params.betree_params_min_flush_size
     then
       do
         let (st0, _) ←
-          betree_node_apply_messages_fwd self.betree_internal_left params
-            node_id_cnt msgs_left st
+          betree_node_apply_messages_fwd n params node_id_cnt msgs_left st
         let (_, node_id_cnt0) ←
-          betree_node_apply_messages_back self.betree_internal_left params
-            node_id_cnt msgs_left st
+          betree_node_apply_messages_back n params node_id_cnt msgs_left st
         let len_right ←
           betree_list_len_fwd (UInt64 × betree_message_t) msgs_right
         if h: len_right >= params.betree_params_min_flush_size
         then
           do
             let (st1, _) ←
-              betree_node_apply_messages_fwd self.betree_internal_right params
-                node_id_cnt0 msgs_right st0
+              betree_node_apply_messages_fwd n0 params node_id_cnt0 msgs_right
+                st0
             let _ ←
-              betree_node_apply_messages_back self.betree_internal_right params
-                node_id_cnt0 msgs_right st0
+              betree_node_apply_messages_back n0 params node_id_cnt0 msgs_right
+                st0
             Result.ret (st1, betree_list_t.BetreeListNil)
         else Result.ret (st0, msgs_right)
     else
       do
         let (st0, _) ←
-          betree_node_apply_messages_fwd self.betree_internal_right params
-            node_id_cnt msgs_right st
+          betree_node_apply_messages_fwd n0 params node_id_cnt msgs_right st
         let _ ←
-          betree_node_apply_messages_back self.betree_internal_right params
-            node_id_cnt msgs_right st
+          betree_node_apply_messages_back n0 params node_id_cnt msgs_right st
         Result.ret (st0, msgs_left)
 termination_by betree_internal_flush_fwd self params node_id_cnt content st =>
   betree_internal_flush_terminates self params node_id_cnt content st
@@ -987,55 +979,32 @@ def betree_internal_flush_back
   (Result (betree_internal_t × betree_node_id_counter_t))
   :=
   do
-    let p ←
-      betree_list_partition_at_pivot_fwd betree_message_t content
-        self.betree_internal_pivot
+    let (mkbetree_internal_t i i0 n n0) := self
+    let p ← betree_list_partition_at_pivot_fwd betree_message_t content i0
     let (msgs_left, msgs_right) := p
     let len_left ← betree_list_len_fwd (UInt64 × betree_message_t) msgs_left
     if h: len_left >= params.betree_params_min_flush_size
     then
       do
         let (st0, _) ←
-          betree_node_apply_messages_fwd self.betree_internal_left params
-            node_id_cnt msgs_left st
-        let (n, node_id_cnt0) ←
-          betree_node_apply_messages_back self.betree_internal_left params
-            node_id_cnt msgs_left st
+          betree_node_apply_messages_fwd n params node_id_cnt msgs_left st
+        let (n1, node_id_cnt0) ←
+          betree_node_apply_messages_back n params node_id_cnt msgs_left st
         let len_right ←
           betree_list_len_fwd (UInt64 × betree_message_t) msgs_right
         if h: len_right >= params.betree_params_min_flush_size
         then
           do
-            let (n0, node_id_cnt1) ←
-              betree_node_apply_messages_back self.betree_internal_right params
-                node_id_cnt0 msgs_right st0
-            Result.ret
-              ({
-                 betree_internal_id := self.betree_internal_id,
-                 betree_internal_pivot := self.betree_internal_pivot,
-                 betree_internal_left := n,
-                 betree_internal_right := n0
-               }, node_id_cnt1)
-        else
-          Result.ret
-            ({
-               betree_internal_id := self.betree_internal_id,
-               betree_internal_pivot := self.betree_internal_pivot,
-               betree_internal_left := n,
-               betree_internal_right := self.betree_internal_right
-             }, node_id_cnt0)
+            let (n2, node_id_cnt1) ←
+              betree_node_apply_messages_back n0 params node_id_cnt0 msgs_right
+                st0
+            Result.ret (mkbetree_internal_t i i0 n1 n2, node_id_cnt1)
+        else Result.ret (mkbetree_internal_t i i0 n1 n0, node_id_cnt0)
     else
       do
-        let (n, node_id_cnt0) ←
-          betree_node_apply_messages_back self.betree_internal_right params
-            node_id_cnt msgs_right st
-        Result.ret
-          ({
-             betree_internal_id := self.betree_internal_id,
-             betree_internal_pivot := self.betree_internal_pivot,
-             betree_internal_left := self.betree_internal_left,
-             betree_internal_right := n
-           }, node_id_cnt0)
+        let (n1, node_id_cnt0) ←
+          betree_node_apply_messages_back n0 params node_id_cnt msgs_right st
+        Result.ret (mkbetree_internal_t i i0 n n1, node_id_cnt0)
 termination_by betree_internal_flush_back self params node_id_cnt content st =>
   betree_internal_flush_terminates self params node_id_cnt content st
 decreasing_by
@@ -1082,16 +1051,18 @@ def betree_be_tree_new_fwd
     let node_id_cnt0 ← betree_node_id_counter_fresh_id_back node_id_cnt
     Result.ret (st0,
       {
-        betree_be_tree_params := {
-                                   betree_params_min_flush_size := min_flush_size,
-                                   betree_params_split_size := split_size
-                                 },
+        betree_be_tree_params :=
+          {
+            betree_params_min_flush_size := min_flush_size,
+            betree_params_split_size := split_size
+          },
         betree_be_tree_node_id_cnt := node_id_cnt0,
-        betree_be_tree_root := (betree_node_t.BetreeNodeLeaf
-                                 {
-                                   betree_leaf_id := id,
-                                   betree_leaf_size := (UInt64.ofNatCore 0 (by intlit))
-                                 })
+        betree_be_tree_root :=
+          (betree_node_t.BetreeNodeLeaf
+            {
+              betree_leaf_id := id,
+              betree_leaf_size := (UInt64.ofNatCore 0 (by intlit))
+            })
       })
 
 /- [betree_main::betree::BeTree::{6}::apply] -/

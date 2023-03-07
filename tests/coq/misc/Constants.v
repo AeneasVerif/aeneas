@@ -44,7 +44,7 @@ Arguments Pair_y {T1} {T2}.
 
 (** [constants::mk_pair1] *)
 Definition mk_pair1_fwd (x : u32) (y : u32) : result (Pair_t u32 u32) :=
-  Return (mkPair_t x y)
+  Return {| Pair_x := x; Pair_y := y |}
 .
 
 (** [constants::P0] *)
@@ -61,7 +61,7 @@ Definition p2_c : (u32 * u32) := p2_body%global.
 
 (** [constants::P3] *)
 Definition p3_body : result (Pair_t u32 u32) :=
-  Return (mkPair_t (0%u32) (1%u32))
+  Return {| Pair_x := (0%u32); Pair_y := (1%u32) |}
 .
 Definition p3_c : Pair_t u32 u32 := p3_body%global.
 
@@ -73,7 +73,7 @@ Arguments Wrap_val {T}.
 
 (** [constants::Wrap::{0}::new] *)
 Definition wrap_new_fwd (T : Type) (val : T) : result (Wrap_t T) :=
-  Return (mkWrap_t val)
+  Return {| Wrap_val := val |}
 .
 
 (** [constants::Y] *)
