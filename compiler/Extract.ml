@@ -492,22 +492,31 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     fname ^ suffix
   in
 
-  let decreases_clause_name (_fid : A.FunDeclId.id) (fname : fun_name)
+  let termination_measure_name (_fid : A.FunDeclId.id) (fname : fun_name)
       (num_loops : int) (loop_id : LoopId.id option) : string =
     let fname = fun_name_to_snake_case fname in
     let lp_suffix = default_fun_loop_suffix num_loops loop_id in
     (* Compute the suffix *)
-    let suffix = "_decreases" in
+    let suffix =
+      match !Config.backend with
+      | FStar -> "_decreases"
+      | Lean -> "_terminates"
+      | Coq -> raise (Failure "Unexpected")
+    in
     (* Concatenate *)
     fname ^ lp_suffix ^ suffix
   in
 
-  let terminates_clause_name (_fid : A.FunDeclId.id) (fname : fun_name)
+  let decreases_proof_name (_fid : A.FunDeclId.id) (fname : fun_name)
       (num_loops : int) (loop_id : LoopId.id option) : string =
     let fname = fun_name_to_snake_case fname in
     let lp_suffix = default_fun_loop_suffix num_loops loop_id in
     (* Compute the suffix *)
-    let suffix = "_terminates" in
+    let suffix =
+      match !Config.backend with
+      | Lean -> "_decreases"
+      | FStar | Coq -> raise (Failure "Unexpected")
+    in
     (* Concatenate *)
     fname ^ lp_suffix ^ suffix
   in
@@ -640,8 +649,8 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     type_name;
     global_name;
     fun_name;
-    decreases_clause_name;
-    terminates_clause_name;
+    termination_measure_name;
+    decreases_proof_name;
     var_basename;
     type_var_basename;
     append_index;
@@ -1370,8 +1379,12 @@ let extract_fun_decl_register_names (ctx : extraction_ctx) (keep_fwd : bool)
   (* Register the decrease clauses, if necessary *)
   let register_decreases ctx def =
     if has_decreases_clause def then
-      let ctx = ctx_add_decreases_clause def ctx in
-      ctx_add_terminates_clause def ctx
+      (* Add the termination measure *)
+      let ctx = ctx_add_termination_measure def ctx in
+      (* Add the decreases proof for Lean only *)
+      match !Config.backend with
+      | Coq | FStar -> ctx
+      | Lean -> ctx_add_decreases_proof def ctx
     else ctx
   in
   let ctx = List.fold_left register_decreases ctx (fwd :: loop_fwds) in
@@ -2085,7 +2098,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   assert (!backend = FStar);
 
   (* Retrieve the function name *)
-  let def_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
+  let def_name = ctx_get_termination_measure def.def_id def.loop_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -2142,9 +2155,11 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
 let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
   assert (!backend = Lean);
-
+  (*
+   * Extract a template for the termination measure
+   *)
   (* Retrieve the function name *)
-  let def_name = ctx_get_terminates_clause def.def_id def.loop_id ctx in
+  let def_name = ctx_get_termination_measure def.def_id def.loop_id ctx in
   let def_body = Option.get def.body in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
@@ -2197,8 +2212,10 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0;
 
-  (* Now extract a template for the termination proof *)
-  let def_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
+  (*
+   * Extract a template for the decreases proof
+   *)
+  let def_name = ctx_get_decreases_proof def.def_id def.loop_id ctx in
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
   extract_comment fmt
@@ -2329,7 +2346,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
       (* Open a box for the decreases term *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* The name of the decrease clause *)
-      let decr_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
+      let decr_name = ctx_get_termination_measure def.def_id def.loop_id ctx in
       F.pp_print_string fmt decr_name;
       (* Print the type parameters *)
       List.iter
@@ -2401,7 +2418,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* termination_by *)
     let terminates_name =
-      ctx_get_terminates_clause def.def_id def.loop_id ctx
+      ctx_get_termination_measure def.def_id def.loop_id ctx
     in
     F.pp_print_break fmt 0 0;
     (* Open a box for the whole [termination_by CALL => DECREASES] *)
@@ -2443,7 +2460,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_break fmt 0 0;
     (* Open a box for the [decreasing by ...] *)
     F.pp_open_hvbox fmt ctx.indent_incr;
-    let decreases_name = ctx_get_decreases_clause def.def_id def.loop_id ctx in
+    let decreases_name = ctx_get_decreases_proof def.def_id def.loop_id ctx in
     F.pp_print_string fmt "decreasing_by";
     F.pp_print_space fmt ();
     F.pp_open_hvbox fmt ctx.indent_incr;
