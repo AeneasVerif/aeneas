@@ -64,7 +64,11 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
   | FStar | Coq -> int_name int_ty ^ "_" ^ binop
 
 (** A list of keywords/identifiers used by the backend and with which we
-    want to check collision. *)
+    want to check collision.
+
+    Remark: this is useful mostly to look for collisions when generating
+    names for *variables*.
+ *)
 let keywords () =
   let named_unops =
     unop_name Not
@@ -80,58 +84,108 @@ let keywords () =
     match !backend with
     | FStar ->
         [
-          "let";
-          "rec";
-          "in";
-          "fun";
-          "fn";
-          "val";
-          "int";
-          "list";
-          "FStar";
-          "FStar.Mul";
-          "type";
-          "match";
-          "with";
           "assert";
           "assert_norm";
           "assume";
+          "else";
+          "fun";
+          "fn";
+          "FStar";
+          "FStar.Mul";
+          "if";
+          "in";
+          "include";
+          "int";
+          "let";
+          "list";
+          "match";
+          "not";
+          "open";
+          "rec";
+          "scalar_cast";
+          "then";
+          "type";
           "Type0";
           "Type";
           "unit";
-          "not";
-          "scalar_cast";
+          "val";
+          "with";
         ]
     | Coq ->
         [
-          "Record";
-          "Inductive";
-          "Fixpoint";
-          "Definition";
+          "assert";
           "Arguments";
-          "Notation";
+          "Axiom";
+          "char_of_byte";
           "Check";
+          "Declare";
+          "Definition";
+          "else";
+          "End";
+          "fun";
+          "Fixpoint";
+          "if";
+          "in";
+          "int";
+          "Inductive";
+          "Import";
+          "let";
+          "Lemma";
+          "match";
+          "Module";
+          "not";
+          "Notation";
+          "Proof";
+          "Qed";
+          "rec";
+          "Record";
+          "Require";
+          "Scope";
           "Search";
           "SearchPattern";
-          "Axiom";
-          "Type";
           "Set";
-          "let";
-          "rec";
-          "in";
-          "unit";
-          "fun";
-          "type";
-          "int";
-          "match";
-          "with";
-          "assert";
-          "not";
+          "then";
           (* [tt] is unit *)
           "tt";
-          "char_of_byte";
+          "type";
+          "Type";
+          "unit";
+          "with";
         ]
-    | Lean -> [] (* TODO *)
+    | Lean ->
+        [
+          "by";
+          "class";
+          "decreasing_by";
+          "def";
+          "deriving";
+          "do";
+          "else";
+          "end";
+          "for";
+          "have";
+          "if";
+          "inductive";
+          "instance";
+          "import";
+          "let";
+          "macro";
+          "match";
+          "namespace";
+          "open";
+          "return";
+          "run_cmd";
+          "set_option";
+          "simp";
+          "structure";
+          "syntax";
+          "termination_by";
+          "then";
+          "Type";
+          "unsafe";
+          "where";
+          "with";
+        ]
   in
   List.concat [ named_unops; named_binops; misc ]
 
@@ -222,14 +276,8 @@ let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
       [ (Return, "return_"); (Fail, "fail_"); (Assert, "massert") ]
   | Lean ->
-      [
-        (Return, "return");
-        (Fail, "fail_");
-        (Assert, "massert");
-        (* TODO: figure out how to deal with this *)
-        (FuelDecrease, "decrease");
-        (FuelEqZero, "is_zero");
-      ]
+      (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
+      [ (Return, "return"); (Fail, "fail_"); (Assert, "massert") ]
 
 let names_map_init () : names_map_init =
   {
