@@ -350,7 +350,14 @@ type gen_config = {
   extract_transparent : bool;
       (** If [true], extract the transparent declarations, otherwise ignore. *)
   extract_opaque : bool;
-      (** If [true], extract the opaque declarations, otherwise ignore. *)
+      (** If [true], extract the opaque declarations, otherwise ignore.
+
+          For now, this controls only the opaque *functions*, not the opaque
+          globals or types.
+          TODO: update this. This is not trivial if we want to extract the opaque
+          types in an opaque module, because some non-opaque types may refer
+          to opaque types and vice-versa.
+       *)
   extract_state_type : bool;
       (** If [true], generate a definition/declaration for the state type *)
   extract_globals : bool;
@@ -787,7 +794,15 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
     mk_formatter_and_names_map trans_ctx crate.name
       variant_concatenate_type_name
   in
-  let ctx = { ExtractBase.trans_ctx; names_map; fmt; indent_incr = 2 } in
+  let ctx =
+    {
+      ExtractBase.trans_ctx;
+      names_map;
+      fmt;
+      indent_incr = 2;
+      use_opaque_pre = !Config.split_files;
+    }
+  in
 
   (* We need to compute which functions are recursive, in order to know
    * whether we should generate a decrease clause or not. *)
@@ -1033,6 +1048,12 @@ let translate_module (filename : string) (dest_dir : string) (crate : A.crate) :
             extract_transparent = false;
             extract_opaque = true;
             interface = true;
+          }
+        in
+        let gen_ctx =
+          {
+            gen_ctx with
+            extract_ctx = { gen_ctx.extract_ctx with use_opaque_pre = false };
           }
         in
         extract_file opaque_config gen_ctx opaque_filename crate.A.name
