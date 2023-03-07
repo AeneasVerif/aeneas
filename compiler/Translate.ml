@@ -796,7 +796,11 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   (* Initialize the extraction context - for now we extract only to F*.
    * We initialize the names map by registering the keywords used in the
    * language, as well as some primitive names ("u32", etc.) *)
-  let variant_concatenate_type_name = true in
+  let variant_concatenate_type_name =
+    (* For Lean, we exploit the fact that the variant name should always be
+       prefixed with the type name to prevent collisions *)
+    match !Config.backend with Coq | FStar -> true | Lean -> false
+  in
   let mk_formatter_and_names_map = Extract.mk_formatter_and_names_map in
   let fmt, names_map =
     mk_formatter_and_names_map trans_ctx crate.name

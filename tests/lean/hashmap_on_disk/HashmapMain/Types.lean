@@ -4,8 +4,8 @@ import Base.Primitives
 
 /- [hashmap_main::hashmap::List] -/
 inductive hashmap_list_t (T : Type) :=
-| HashmapListCons : USize -> T -> hashmap_list_t T -> hashmap_list_t T
-| HashmapListNil : hashmap_list_t T
+| Cons : USize -> T -> hashmap_list_t T -> hashmap_list_t T
+| Nil : hashmap_list_t T
 
 /- [hashmap_main::hashmap::HashMap] -/
 structure hashmap_hash_map_t (T : Type) where

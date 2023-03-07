@@ -805,6 +805,13 @@ let ctx_add_variant (def : type_decl) (variant_id : VariantId.id)
     (variant : variant) (ctx : extraction_ctx) : extraction_ctx * string =
   let is_opaque = false in
   let name = ctx.fmt.variant_name def.name variant.variant_name in
+  (* Add the type name prefix for Lean *)
+  let name =
+    if !Config.backend = Lean then
+      let type_name = ctx.fmt.type_name def.name in
+      type_name ^ "." ^ name
+    else name
+  in
   let ctx =
     ctx_add is_opaque (VariantId (AdtId def.def_id, variant_id)) name ctx
   in

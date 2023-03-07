@@ -915,8 +915,10 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
 
      Note that we already printed: [type s =]
   *)
-  let print_variant variant_id v =
-    let cons_name = ctx_get_variant (AdtId def.def_id) variant_id ctx in
+  let print_variant _variant_id (v : variant) =
+    (* We don't lookup the name, because it may have a prefix for the type
+       id (in the case of Lean) *)
+    let cons_name = ctx.fmt.variant_name def.name v.variant_name in
     let fields = v.fields in
     extract_type_decl_variant ctx fmt def_name type_params cons_name fields
   in
@@ -1535,12 +1537,14 @@ let extract_adt_g_value
         (* The ADT shouldn't be opaque *)
         let with_opaque_pre = false in
         match variant_id with
-        | Some vid ->
-            if !backend = Lean then
-              ctx_get_type with_opaque_pre adt_id ctx
-              ^ "."
-              ^ ctx_get_variant adt_id vid ctx
-            else ctx_get_variant adt_id vid ctx
+        | Some vid -> (
+            (* In the case of Lean, we might have to add the type name as a prefix *)
+            match (!backend, adt_id) with
+            | Lean, Assumed _ ->
+                ctx_get_type with_opaque_pre adt_id ctx
+                ^ "."
+                ^ ctx_get_variant adt_id vid ctx
+            | _ -> ctx_get_variant adt_id vid ctx)
         | None -> ctx_get_struct with_opaque_pre adt_id ctx
       in
       if inside && field_values <> [] then F.pp_print_string fmt "(";
@@ -1731,6 +1735,7 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
           args;
         F.pp_print_string fmt ")")
   | _ ->
+      (* TODO: this duplicates [extrac_adt_g_value] *)
       (* "Regular" ADT *)
       (* We print something of the form: [Cons field0 ... fieldn].
        * We could update the code to print something of the form:
@@ -1741,12 +1746,14 @@ and extract_adt_cons (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         (* The ADT shouldn't be opaque *)
         let with_opaque_pre = false in
         match adt_cons.variant_id with
-        | Some vid ->
-            if !backend = Lean then
-              ctx_get_type with_opaque_pre adt_cons.adt_id ctx
-              ^ "."
-              ^ ctx_get_variant adt_cons.adt_id vid ctx
-            else ctx_get_variant adt_cons.adt_id vid ctx
+        | Some vid -> (
+            (* In the case of Lean, we might have to add the type name as a prefix *)
+            match (!backend, adt_cons.adt_id) with
+            | Lean, Assumed _ ->
+                ctx_get_type with_opaque_pre adt_cons.adt_id ctx
+                ^ "."
+                ^ ctx_get_variant adt_cons.adt_id vid ctx
+            | _ -> ctx_get_variant adt_cons.adt_id vid ctx)
         | None -> ctx_get_struct with_opaque_pre adt_cons.adt_id ctx
       in
       let use_parentheses = inside && args <> [] in

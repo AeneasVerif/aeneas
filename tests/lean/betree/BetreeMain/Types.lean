@@ -4,19 +4,19 @@ import Base.Primitives
 
 /- [betree_main::betree::List] -/
 inductive betree_list_t (T : Type) :=
-| BetreeListCons : T -> betree_list_t T -> betree_list_t T
-| BetreeListNil : betree_list_t T
+| Cons : T -> betree_list_t T -> betree_list_t T
+| Nil : betree_list_t T
 
 /- [betree_main::betree::UpsertFunState] -/
 inductive betree_upsert_fun_state_t :=
-| BetreeUpsertFunStateAdd : UInt64 -> betree_upsert_fun_state_t
-| BetreeUpsertFunStateSub : UInt64 -> betree_upsert_fun_state_t
+| Add : UInt64 -> betree_upsert_fun_state_t
+| Sub : UInt64 -> betree_upsert_fun_state_t
 
 /- [betree_main::betree::Message] -/
 inductive betree_message_t :=
-| BetreeMessageInsert : UInt64 -> betree_message_t
-| BetreeMessageDelete : betree_message_t
-| BetreeMessageUpsert : betree_upsert_fun_state_t -> betree_message_t
+| Insert : UInt64 -> betree_message_t
+| Delete : betree_message_t
+| Upsert : betree_upsert_fun_state_t -> betree_message_t
 
 /- [betree_main::betree::Leaf] -/
 structure betree_leaf_t where
@@ -25,8 +25,8 @@ structure betree_leaf_t where
 
 /- [betree_main::betree::Node] -/
 mutual inductive betree_node_t :=
-| BetreeNodeInternal : betree_internal_t -> betree_node_t
-| BetreeNodeLeaf : betree_leaf_t -> betree_node_t
+| Internal : betree_internal_t -> betree_node_t
+| Leaf : betree_leaf_t -> betree_node_t
 
 /- [betree_main::betree::Internal] -/
 inductive betree_internal_t :=

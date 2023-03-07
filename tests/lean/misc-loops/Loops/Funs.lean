@@ -79,11 +79,11 @@ def clear_fwd_back (v : Vec UInt32) : Result (Vec UInt32) :=
 /- [loops::list_mem] -/
 def list_mem_loop_fwd (x : UInt32) (ls : list_t UInt32) : (Result Bool) :=
   match h: ls with
-  | list_t.ListCons y tl =>
+  | list_t.Cons y tl =>
     if h: y = x
     then Result.ret true
     else list_mem_loop_fwd x tl
-  | list_t.ListNil => Result.ret false
+  | list_t.Nil => Result.ret false
 termination_by list_mem_loop_fwd x ls => list_mem_loop_terminates x ls
 decreasing_by list_mem_loop_decreases x ls
 
@@ -95,14 +95,14 @@ def list_mem_fwd (x : UInt32) (ls : list_t UInt32) : Result Bool :=
 def list_nth_mut_loop_loop_fwd
   (T : Type) (ls : list_t T) (i : UInt32) : (Result T) :=
   match h: ls with
-  | list_t.ListCons x tl =>
+  | list_t.Cons x tl =>
     if h: i = (UInt32.ofNatCore 0 (by intlit))
     then Result.ret x
     else
       do
         let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
         list_nth_mut_loop_loop_fwd T tl i0
-  | list_t.ListNil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_loop_fwd ls i =>
   list_nth_mut_loop_loop_terminates T ls i
 decreasing_by list_nth_mut_loop_loop_decreases ls i
@@ -115,15 +115,15 @@ def list_nth_mut_loop_fwd (T : Type) (ls : list_t T) (i : UInt32) : Result T :=
 def list_nth_mut_loop_loop_back
   (T : Type) (ls : list_t T) (i : UInt32) (ret0 : T) : (Result (list_t T)) :=
   match h: ls with
-  | list_t.ListCons x tl =>
+  | list_t.Cons x tl =>
     if h: i = (UInt32.ofNatCore 0 (by intlit))
-    then Result.ret (list_t.ListCons ret0 tl)
+    then Result.ret (list_t.Cons ret0 tl)
     else
       do
         let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
         let tl0 ← list_nth_mut_loop_loop_back T tl i0 ret0
-        Result.ret (list_t.ListCons x tl0)
-  | list_t.ListNil => Result.fail Error.panic
+        Result.ret (list_t.Cons x tl0)
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_loop_back ls i ret0 =>
   list_nth_mut_loop_loop_terminates T ls i
 decreasing_by list_nth_mut_loop_loop_decreases ls i
@@ -137,14 +137,14 @@ def list_nth_mut_loop_back
 def list_nth_shared_loop_loop_fwd
   (T : Type) (ls : list_t T) (i : UInt32) : (Result T) :=
   match h: ls with
-  | list_t.ListCons x tl =>
+  | list_t.Cons x tl =>
     if h: i = (UInt32.ofNatCore 0 (by intlit))
     then Result.ret x
     else
       do
         let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
         list_nth_shared_loop_loop_fwd T tl i0
-  | list_t.ListNil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_shared_loop_loop_fwd ls i =>
   list_nth_shared_loop_loop_terminates T ls i
 decreasing_by list_nth_shared_loop_loop_decreases ls i
@@ -157,11 +157,11 @@ def list_nth_shared_loop_fwd
 /- [loops::get_elem_mut] -/
 def get_elem_mut_loop_fwd (x : USize) (ls : list_t USize) : (Result USize) :=
   match h: ls with
-  | list_t.ListCons y tl =>
+  | list_t.Cons y tl =>
     if h: y = x
     then Result.ret y
     else get_elem_mut_loop_fwd x tl
-  | list_t.ListNil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by get_elem_mut_loop_fwd x ls => get_elem_mut_loop_terminates x ls
 decreasing_by get_elem_mut_loop_decreases x ls
 
@@ -176,14 +176,14 @@ def get_elem_mut_fwd (slots : Vec (list_t USize)) (x : USize) : Result USize :=
 def get_elem_mut_loop_back
   (x : USize) (ls : list_t USize) (ret0 : USize) : (Result (list_t USize)) :=
   match h: ls with
-  | list_t.ListCons y tl =>
+  | list_t.Cons y tl =>
     if h: y = x
-    then Result.ret (list_t.ListCons ret0 tl)
+    then Result.ret (list_t.Cons ret0 tl)
     else
       do
         let tl0 ← get_elem_mut_loop_back x tl ret0
-        Result.ret (list_t.ListCons y tl0)
-  | list_t.ListNil => Result.fail Error.panic
+        Result.ret (list_t.Cons y tl0)
+  | list_t.Nil => Result.fail Error.panic
 termination_by get_elem_mut_loop_back x ls ret0 =>
   get_elem_mut_loop_terminates x ls
 decreasing_by get_elem_mut_loop_decreases x ls
@@ -203,11 +203,11 @@ def get_elem_mut_back
 def get_elem_shared_loop_fwd
   (x : USize) (ls : list_t USize) : (Result USize) :=
   match h: ls with
-  | list_t.ListCons y tl =>
+  | list_t.Cons y tl =>
     if h: y = x
     then Result.ret y
     else get_elem_shared_loop_fwd x tl
-  | list_t.ListNil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by get_elem_shared_loop_fwd x ls =>
   get_elem_shared_loop_terminates x ls
 decreasing_by get_elem_shared_loop_decreases x ls
@@ -237,14 +237,14 @@ def id_shared_fwd (T : Type) (ls : list_t T) : Result (list_t T) :=
 def list_nth_mut_loop_with_id_loop_fwd
   (T : Type) (i : UInt32) (ls : list_t T) : (Result T) :=
   match h: ls with
-  | list_t.ListCons x tl =>
+  | list_t.Cons x tl =>
     if h: i = (UInt32.ofNatCore 0 (by intlit))
     then Result.ret x
     else
       do
         let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
         list_nth_mut_loop_with_id_loop_fwd T i0 tl
-  | list_t.ListNil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_with_id_loop_fwd i ls =>
   list_nth_mut_loop_with_id_loop_terminates T i ls
 decreasing_by list_nth_mut_loop_with_id_loop_decreases i ls
@@ -260,15 +260,15 @@ def list_nth_mut_loop_with_id_fwd
 def list_nth_mut_loop_with_id_loop_back
   (T : Type) (i : UInt32) (ls : list_t T) (ret0 : T) : (Result (list_t T)) :=
   match h: ls with
-  | list_t.ListCons x tl =>
+  | list_t.Cons x tl =>
     if h: i = (UInt32.ofNatCore 0 (by intlit))
-    then Result.ret (list_t.ListCons ret0 tl)
+    then Result.ret (list_t.Cons ret0 tl)
     else
       do
         let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
         let tl0 ← list_nth_mut_loop_with_id_loop_back T i0 tl ret0
-        Result.ret (list_t.ListCons x tl0)
-  | list_t.ListNil => Result.fail Error.panic
+        Result.ret (list_t.Cons x tl0)
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_with_id_loop_back i ls ret0 =>
   list_nth_mut_loop_with_id_loop_terminates T i ls
 decreasing_by list_nth_mut_loop_with_id_loop_decreases i ls
@@ -285,14 +285,14 @@ def list_nth_mut_loop_with_id_back
 def list_nth_shared_loop_with_id_loop_fwd
   (T : Type) (i : UInt32) (ls : list_t T) : (Result T) :=
   match h: ls with
-  | list_t.ListCons x tl =>
+  | list_t.Cons x tl =>
     if h: i = (UInt32.ofNatCore 0 (by intlit))
     then Result.ret x
     else
       do
         let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
         list_nth_shared_loop_with_id_loop_fwd T i0 tl
-  | list_t.ListNil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_shared_loop_with_id_loop_fwd i ls =>
   list_nth_shared_loop_with_id_loop_terminates T i ls
 decreasing_by list_nth_shared_loop_with_id_loop_decreases i ls
@@ -310,17 +310,17 @@ def list_nth_mut_loop_pair_loop_fwd
   (Result (T × T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_mut_loop_pair_loop_fwd T tl0 tl1 i0
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_pair_loop_fwd ls0 ls1 i =>
   list_nth_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_loop_decreases ls0 ls1 i
@@ -338,18 +338,18 @@ def list_nth_mut_loop_pair_loop_back'a
   (Result (list_t T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
-      then Result.ret (list_t.ListCons ret0 tl0)
+      then Result.ret (list_t.Cons ret0 tl0)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let tl00 ← list_nth_mut_loop_pair_loop_back'a T tl0 tl1 i0 ret0
-          Result.ret (list_t.ListCons x0 tl00)
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x0 tl00)
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_pair_loop_back'a ls0 ls1 i ret0 =>
   list_nth_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_loop_decreases ls0 ls1 i
@@ -367,18 +367,18 @@ def list_nth_mut_loop_pair_loop_back'b
   (Result (list_t T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
-      then Result.ret (list_t.ListCons ret0 tl1)
+      then Result.ret (list_t.Cons ret0 tl1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let tl10 ← list_nth_mut_loop_pair_loop_back'b T tl0 tl1 i0 ret0
-          Result.ret (list_t.ListCons x1 tl10)
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x1 tl10)
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_pair_loop_back'b ls0 ls1 i ret0 =>
   list_nth_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_loop_decreases ls0 ls1 i
@@ -396,17 +396,17 @@ def list_nth_shared_loop_pair_loop_fwd
   (Result (T × T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_shared_loop_pair_loop_fwd T tl0 tl1 i0
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_shared_loop_pair_loop_fwd ls0 ls1 i =>
   list_nth_shared_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_loop_pair_loop_decreases ls0 ls1 i
@@ -424,17 +424,17 @@ def list_nth_mut_loop_pair_merge_loop_fwd
   (Result (T × T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_mut_loop_pair_merge_loop_fwd T tl0 tl1 i0
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_pair_merge_loop_fwd ls0 ls1 i =>
   list_nth_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_merge_loop_decreases ls0 ls1 i
@@ -452,21 +452,21 @@ def list_nth_mut_loop_pair_merge_loop_back
   (Result ((list_t T) × (list_t T)))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then
         let (t, t0) := ret0
-        Result.ret (list_t.ListCons t tl0, list_t.ListCons t0 tl1)
+        Result.ret (list_t.Cons t tl0, list_t.Cons t0 tl1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let (tl00, tl10) ←
             list_nth_mut_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.ListCons x0 tl00, list_t.ListCons x1 tl10)
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x0 tl00, list_t.Cons x1 tl10)
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_loop_pair_merge_loop_back ls0 ls1 i ret0 =>
   list_nth_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_loop_pair_merge_loop_decreases ls0 ls1 i
@@ -484,17 +484,17 @@ def list_nth_shared_loop_pair_merge_loop_fwd
   (Result (T × T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_shared_loop_pair_merge_loop_fwd T tl0 tl1 i0
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_shared_loop_pair_merge_loop_fwd ls0 ls1 i =>
   list_nth_shared_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_loop_pair_merge_loop_decreases ls0 ls1 i
@@ -512,17 +512,17 @@ def list_nth_mut_shared_loop_pair_loop_fwd
   (Result (T × T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_mut_shared_loop_pair_loop_fwd T tl0 tl1 i0
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_shared_loop_pair_loop_fwd ls0 ls1 i =>
   list_nth_mut_shared_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_shared_loop_pair_loop_decreases ls0 ls1 i
@@ -540,19 +540,19 @@ def list_nth_mut_shared_loop_pair_loop_back
   (Result (list_t T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
-      then Result.ret (list_t.ListCons ret0 tl0)
+      then Result.ret (list_t.Cons ret0 tl0)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let tl00 ←
             list_nth_mut_shared_loop_pair_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.ListCons x0 tl00)
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x0 tl00)
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_shared_loop_pair_loop_back ls0 ls1 i ret0 =>
   list_nth_mut_shared_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_shared_loop_pair_loop_decreases ls0 ls1 i
@@ -570,17 +570,17 @@ def list_nth_mut_shared_loop_pair_merge_loop_fwd
   (Result (T × T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_mut_shared_loop_pair_merge_loop_fwd T tl0 tl1 i0
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_shared_loop_pair_merge_loop_fwd ls0 ls1 i =>
   list_nth_mut_shared_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_shared_loop_pair_merge_loop_decreases ls0 ls1 i
@@ -598,19 +598,19 @@ def list_nth_mut_shared_loop_pair_merge_loop_back
   (Result (list_t T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
-      then Result.ret (list_t.ListCons ret0 tl0)
+      then Result.ret (list_t.Cons ret0 tl0)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let tl00 ←
             list_nth_mut_shared_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.ListCons x0 tl00)
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x0 tl00)
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_mut_shared_loop_pair_merge_loop_back ls0 ls1 i ret0 =>
   list_nth_mut_shared_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_mut_shared_loop_pair_merge_loop_decreases ls0 ls1 i
@@ -628,17 +628,17 @@ def list_nth_shared_mut_loop_pair_loop_fwd
   (Result (T × T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_shared_mut_loop_pair_loop_fwd T tl0 tl1 i0
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_shared_mut_loop_pair_loop_fwd ls0 ls1 i =>
   list_nth_shared_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_mut_loop_pair_loop_decreases ls0 ls1 i
@@ -656,19 +656,19 @@ def list_nth_shared_mut_loop_pair_loop_back
   (Result (list_t T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
-      then Result.ret (list_t.ListCons ret0 tl1)
+      then Result.ret (list_t.Cons ret0 tl1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let tl10 ←
             list_nth_shared_mut_loop_pair_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.ListCons x1 tl10)
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x1 tl10)
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_shared_mut_loop_pair_loop_back ls0 ls1 i ret0 =>
   list_nth_shared_mut_loop_pair_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_mut_loop_pair_loop_decreases ls0 ls1 i
@@ -686,17 +686,17 @@ def list_nth_shared_mut_loop_pair_merge_loop_fwd
   (Result (T × T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           list_nth_shared_mut_loop_pair_merge_loop_fwd T tl0 tl1 i0
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_shared_mut_loop_pair_merge_loop_fwd ls0 ls1 i =>
   list_nth_shared_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_mut_loop_pair_merge_loop_decreases ls0 ls1 i
@@ -714,19 +714,19 @@ def list_nth_shared_mut_loop_pair_merge_loop_back
   (Result (list_t T))
   :=
   match h: ls0 with
-  | list_t.ListCons x0 tl0 =>
+  | list_t.Cons x0 tl0 =>
     match h: ls1 with
-    | list_t.ListCons x1 tl1 =>
+    | list_t.Cons x1 tl1 =>
       if h: i = (UInt32.ofNatCore 0 (by intlit))
-      then Result.ret (list_t.ListCons ret0 tl1)
+      then Result.ret (list_t.Cons ret0 tl1)
       else
         do
           let i0 ← UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
           let tl10 ←
             list_nth_shared_mut_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.ListCons x1 tl10)
-    | list_t.ListNil => Result.fail Error.panic
-  | list_t.ListNil => Result.fail Error.panic
+          Result.ret (list_t.Cons x1 tl10)
+    | list_t.Nil => Result.fail Error.panic
+  | list_t.Nil => Result.fail Error.panic
 termination_by list_nth_shared_mut_loop_pair_merge_loop_back ls0 ls1 i ret0 =>
   list_nth_shared_mut_loop_pair_merge_loop_terminates T ls0 ls1 i
 decreasing_by list_nth_shared_mut_loop_pair_merge_loop_decreases ls0 ls1 i
