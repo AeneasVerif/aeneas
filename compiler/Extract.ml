@@ -2061,13 +2061,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
     let var_name = ctx_get_var (Option.get supd.init) ctx in
     F.pp_print_string fmt var_name;
     F.pp_print_space fmt ();
-    let where_keyword =
-      match !backend with
-      | FStar -> "where"
-      | Lean -> "with"
-      | Coq -> raise (Failure "Unreachable")
-    in
-    F.pp_print_string fmt where_keyword;
+    F.pp_print_string fmt "with";
     F.pp_print_space fmt ());
   F.pp_open_hvbox fmt 0;
   let delimiter = match !backend with Lean -> "," | Coq | FStar -> ";" in
