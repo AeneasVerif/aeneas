@@ -117,14 +117,14 @@ trans-no_nested_borrows trans-paper: \
 	OPTIONS += -test-units -test-trans-units -no-split-files -no-state
 trans-no_nested_borrows trans-paper: SUBDIR := misc
 tfstar-no_nested_borrows tfstar-paper:
-tlean-no_nested_borrows: SUBDIR := misc/no_nested_borrows
-tlean-paper: SUBDIR := misc/paper
+tlean-no_nested_borrows: SUBDIR := misc-no_nested_borrows
+tlean-paper: SUBDIR := misc-paper
 
 trans-loops: OPTIONS += -no-state
 trans-loops: SUBDIR := misc
 tfstar-loops: OPTIONS += -decreases-clauses -template-clauses
 tcoq-loops: OPTIONS += -use-fuel -no-split-files
-tlean-loops: SUBDIR := misc/loops
+tlean-loops: SUBDIR := misc-loops
 tlean-loops: OPTIONS += -decreases-clauses -template-clauses
 
 trans-hashmap: OPTIONS += -no-state
@@ -143,21 +143,21 @@ transp-polonius_list: OPTIONS += -test-units -test-trans-units -no-split-files -
 transp-polonius_list: SUBDIR := misc
 tfstarp-polonius_list: OPTIONS +=
 tcoqp-polonius_list: OPTIONS +=
-tleanp-polonius_list: SUBDIR := misc/polonius_list
+tleanp-polonius_list: SUBDIR := misc-polonius_list
 tleanp-polonius_list: OPTIONS +=
 
 trans-constants: OPTIONS += -test-units -test-trans-units -no-split-files -no-state
 trans-constants: SUBDIR := misc
 tfstar-constants: OPTIONS +=
 tcoq-constants: OPTIONS +=
-tlean-constants: SUBDIR := misc/constants
+tlean-constants: SUBDIR := misc-constants
 tlean-constants: OPTIONS +=
 
 trans-external: OPTIONS +=
 trans-external: SUBDIR := misc
 tfstar-external: OPTIONS +=
 tcoq-external: OPTIONS +=
-tlean-external: SUBDIR := misc/external
+tlean-external: SUBDIR := misc-external
 tlean-external: OPTIONS +=
 
 BETREE_FSTAR_OPTIONS = -decreases-clauses -template-clauses
@@ -207,7 +207,7 @@ trans-%: gen-llbc-% tfstar-% tcoq-% tlean-%
 .PHONY: transp-%
 transp-%: CHARON_TEST_DIR = $(CHARON_TESTS_POLONIUS_DIR)
 transp-%: FILE = $*
-transp-%: gen-llbcp-% tfstarp-% tcoqp-%
+transp-%: gen-llbcp-% tfstarp-% tcoqp-% tleanp-%
 	echo "# Test $* done"
 
 .PHONY: tfstar-%
