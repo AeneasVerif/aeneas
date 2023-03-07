@@ -88,11 +88,10 @@ def hashmap_hash_map_clear_fwd_back
         (USize.ofNatCore 0 (by intlit))
     Result.ret
       {
-        hashmap_hash_map_num_entries := (USize.ofNatCore 0 (by intlit)),
-        hashmap_hash_map_max_load_factor :=
-          self.hashmap_hash_map_max_load_factor,
-        hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
-        hashmap_hash_map_slots := v
+        self
+          with
+          hashmap_hash_map_num_entries := (USize.ofNatCore 0 (by intlit)),
+          hashmap_hash_map_slots := v
       }
 
 /- [hashmap_main::hashmap::HashMap::{0}::len] -/
@@ -170,11 +169,9 @@ def hashmap_hash_map_insert_no_resize_fwd_back
             hash_mod l0
         Result.ret
           {
-            hashmap_hash_map_num_entries := i0,
-            hashmap_hash_map_max_load_factor :=
-              self.hashmap_hash_map_max_load_factor,
-            hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
-            hashmap_hash_map_slots := v
+            self
+              with
+              hashmap_hash_map_num_entries := i0, hashmap_hash_map_slots := v
           }
     else
       do
@@ -182,14 +179,7 @@ def hashmap_hash_map_insert_no_resize_fwd_back
         let v ←
           vec_index_mut_back (hashmap_list_t T) self.hashmap_hash_map_slots
             hash_mod l0
-        Result.ret
-          {
-            hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-            hashmap_hash_map_max_load_factor :=
-              self.hashmap_hash_map_max_load_factor,
-            hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
-            hashmap_hash_map_slots := v
-          }
+        Result.ret { self with hashmap_hash_map_slots := v }
 
 /- [core::num::u32::{9}::MAX] -/
 def core_num_u32_max_body : Result UInt32 :=
@@ -271,19 +261,12 @@ def hashmap_hash_map_try_resize_fwd_back
             self.hashmap_hash_map_slots (USize.ofNatCore 0 (by intlit))
         Result.ret
           {
-            hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-            hashmap_hash_map_max_load_factor := (i, i0),
-            hashmap_hash_map_max_load := ntable0.hashmap_hash_map_max_load,
-            hashmap_hash_map_slots := ntable0.hashmap_hash_map_slots
+            ntable0
+              with
+              hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
+              hashmap_hash_map_max_load_factor := (i, i0)
           }
-    else
-      Result.ret
-        {
-          hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-          hashmap_hash_map_max_load_factor := (i, i0),
-          hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
-          hashmap_hash_map_slots := self.hashmap_hash_map_slots
-        }
+    else Result.ret { self with hashmap_hash_map_max_load_factor := (i, i0) }
 
 /- [hashmap_main::hashmap::HashMap::{0}::insert] -/
 def hashmap_hash_map_insert_fwd_back
@@ -424,14 +407,7 @@ def hashmap_hash_map_get_mut_back
     let v ←
       vec_index_mut_back (hashmap_list_t T) self.hashmap_hash_map_slots
         hash_mod l0
-    Result.ret
-      {
-        hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-        hashmap_hash_map_max_load_factor :=
-          self.hashmap_hash_map_max_load_factor,
-        hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
-        hashmap_hash_map_slots := v
-      }
+    Result.ret { self with hashmap_hash_map_slots := v }
 
 /- [hashmap_main::hashmap::HashMap::{0}::remove_from_list] -/
 def hashmap_hash_map_remove_from_list_loop_fwd
@@ -526,14 +502,7 @@ def hashmap_hash_map_remove_back
         let v ←
           vec_index_mut_back (hashmap_list_t T) self.hashmap_hash_map_slots
             hash_mod l0
-        Result.ret
-          {
-            hashmap_hash_map_num_entries := self.hashmap_hash_map_num_entries,
-            hashmap_hash_map_max_load_factor :=
-              self.hashmap_hash_map_max_load_factor,
-            hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
-            hashmap_hash_map_slots := v
-          }
+        Result.ret { self with hashmap_hash_map_slots := v }
     | Option.some x0 =>
       do
         let i0 ← USize.checked_sub self.hashmap_hash_map_num_entries
@@ -544,11 +513,9 @@ def hashmap_hash_map_remove_back
             hash_mod l0
         Result.ret
           {
-            hashmap_hash_map_num_entries := i0,
-            hashmap_hash_map_max_load_factor :=
-              self.hashmap_hash_map_max_load_factor,
-            hashmap_hash_map_max_load := self.hashmap_hash_map_max_load,
-            hashmap_hash_map_slots := v
+            self
+              with
+              hashmap_hash_map_num_entries := i0, hashmap_hash_map_slots := v
           }
 
 /- [hashmap_main::hashmap::test1] -/
