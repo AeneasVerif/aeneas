@@ -913,8 +913,10 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   if !Config.backend = Lean then (
     let ( ^^ ) = Filename.concat in
     mkdir_if (dest_dir ^^ "Base");
-    mkdir_if (dest_dir ^^ module_name);
-    if needs_clauses_module then mkdir_if (dest_dir ^^ module_name ^^ "Clauses"));
+    if !Config.split_files then mkdir_if (dest_dir ^^ module_name);
+    if needs_clauses_module then (
+      assert !Config.split_files;
+      mkdir_if (dest_dir ^^ module_name ^^ "Clauses")));
 
   (* Copy the "Primitives" file *)
   let _ =
