@@ -973,7 +973,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     if !backend = FStar && fields = [] then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt (unit_name ()))
-    else if (not is_rec) || !backend = FStar then (
+    else if (not is_rec) || !backend <> Coq then (
       F.pp_print_space fmt ();
       (* If Coq: print the constructor name *)
       (* TODO: remove superfluous test not is_rec below *)
