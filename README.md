@@ -14,10 +14,9 @@ Wall in Pompei, digital image from Michael Lahanis.
 Aeneas is a verification toolchain for Rust programs.  It relies on a translation from Rusts's MIR
 internal language to a pure lamdba calculus.  It is intended to be used in combination with
 [Charon](https://github.com/Kachoc/charon), which compiles Rust programs to an intermediate
-representation called LLBC. It currently has a backend for the [F\*](https://www.fstar-lang.org)
-theorem prover, and we intend to add backends for other provers such as
-[Coq](https://coq.inria.fr/), [HOL4](https://hol-theorem-prover.org/) or
-[LEAN](https://leanprover.github.io/).
+representation called LLBC. It currently has backends for the [F\*](https://www.fstar-lang.org)
+theorem prover and the [Coq](https://coq.inria.fr/) proof assistant, and we intend to add 
+backends for other provers such as [HOL4](https://hol-theorem-prover.org/) or [LEAN](https://leanprover.github.io/).
 
 ## Project Structure
 
