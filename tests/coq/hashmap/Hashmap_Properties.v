@@ -1,4 +1,9 @@
 
+(*
+This is a file to experiment with tactics.
+It's not maintained alongside changes from primitives, so lots of proofs are broken.
+*)
+
 Require Import Primitives.
 Import Primitives.
 Require Import Primitives_Ext.
@@ -22,12 +27,19 @@ Import ListNotations.
 
 Module Hashmap_Properties.
 
-(*  +-------------+
-    | Definitions |
-    +-------------+
-*)
+Set Keyed Unification.
 
-(* Generic utilities - to put in Primitives_Ext *)
+(* Generic utilities - TODO: See what to put in Primitives_Ext *)
+
+(* This kind of "no oof failure" tactic should be generalized for most primitives.
+But total correctness in this framework is sub-optimal anyway.
+*)
+Lemma scalar_sub_fuel {T} (n m: scalar T) :
+  scalar_sub n m <> Fail_ OutOfFuel.
+Proof.
+unfold scalar_sub, mk_scalar.
+destruct (Sumbool.sumbool_of_bool (scalar_in_bounds T (to_Z n - to_Z m))) ; discriminate.
+Qed.
 
 (* Like "injection" but on the goal :
    Given a constructor f, goes from a = b to f a = f b.
@@ -106,6 +118,9 @@ induction l; intro; destruct n; intuition.
 apply IHl.
 Qed.
 
+Lemma cons_app_sing {T} {x: T} {t: list T} : x :: t = [x] ++ t.
+intuition. Qed.
+
 (* Utilities for the hashmap *)
 
 Definition key_id   := usize.
@@ -130,6 +145,7 @@ Qed.
 (* As a monadic lemma, without pre- nor post-conditions. *)
 Lemma hash_key_success2 {k} :
   ∃x, hash_key_fwd k = Return x.
+Proof. now exists k. Qed.
 
 (* Hashmap length *)
 
@@ -396,16 +412,14 @@ revert fuel v.
 induction_usize_to_nat n as N;
 intros;
 siphon fuel;
-aeStep as Hn0.
+aeProgressOnce n0;
+try aeSolve.
 
 (* zero case *)
 1: now rewrite app_nil_r.
 
 (* successor case *)
-aeStep as w.
-aeStep as y.
-
-simpl.
+aeProgress w y.
 
 assert (P3: ((clean_slots v) ++ [[]]: list (chain_t T)) = clean_slots w).
 1: {
@@ -417,11 +431,6 @@ assert (P3: ((clean_slots v) ++ [[]]: list (chain_t T)) = clean_slots w).
 rewrite cons_app_sing.
 rewrite app_assoc.
 
-(* To show implicit parameters or remove notations :
-    Set Printing Explicit/All.
-*)
-(* For some reason, "rewrite" doesn't find the subterm, so we massage the goal with "change". *)
-change ((clean_slots v ++ [[]]) ++ repeat [] N) with ((fun v1 => v1 ++ repeat [] N) (clean_slots v ++ [[]])).
 rewrite P3.
 
 apply IHN.
@@ -443,7 +452,7 @@ Lemma hm_allocate_slots_inv (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat)
     end.
 Proof.
 apply hm_allocate_slots_shape.
-apply (S_scalar_bounds n).
+aeProgress.
 Qed.
 
 Lemma hm_allocate_slots_fuel (T: Type) (n: usize) (v: vec (List_t T)) (fuel: nat) :
@@ -458,9 +467,7 @@ intros.
 unfold hash_map_allocate_slots_fwd.
 fold hash_map_allocate_slots_fwd.
 
-aeStep as Hn0.
-aeStep as w.
-aeStep as m.
+aeProgress Hn0 w m.
 
 apply (IHfuel m w). 2: lia.
 
@@ -486,7 +493,7 @@ assert (vb := vec_len_in_usize v).
 1: lia. (* Zero case *)
 
 siphon fuel.
-destruct_eqb as B.
+aeProgress B.
 
 (* Custom tactics cannot be used as they aim for success. *)
 remember (vec_push_back (List_t T) v ListNil) as W.
@@ -531,8 +538,7 @@ Proof.
 intro bounds.
 unfold hash_map_new_with_capacity_fwd.
 
-assert (Hv: vec_length (vec_new (List_t T)) + to_Z capacity <= usize_max).
-1: simpl ; now rewrite (proj2 (S_scalar_bounds _)).
+assert (Hv: vec_length (vec_new (List_t T)) + to_Z capacity <= usize_max) by aeSolve.
 
 assert (Hslots := hm_allocate_slots_shape T capacity (vec_new _) fuel Hv).
 
@@ -540,17 +546,17 @@ remember (hash_map_allocate_slots_fwd T fuel
 (vec_new _) capacity) as S.
 
 destruct S. 2: exact Hslots.
-aeSimpl.
 
-aeStep as x.
+
+aeProgressOnce x.
 
 assert (Hx1 := Z_div_pos (to_Z x) (to_Z max_load_divisor)).
 assert (Hx2 := Z_div_lt (to_Z x) (to_Z max_load_divisor)).
-aeStep as y.
+aeProgressOnce y.
 
 (* Invariants *)
 unfold hm_length, hm_invariants.
-split. 2: now aeStep.
+split. 2: aeSolve.
 simpl clean_slots.
 simpl in Hslots.
 rewrite Hslots.
@@ -584,7 +590,7 @@ siphon fuel.
 (* Nil case *)
 2: intuition.
 
-aeStep as B.
+aeProgressOnce B. aeSimpl.
 - apply scalar_Z_inj in B. rewrite B.
   split. 1: intuition.
   intro H.
@@ -622,7 +628,7 @@ siphon fuel.
 (* Nil case *)
 2: reflexivity.
 
-aeStep as B.
+aeProgressOnce B.
 - apply scalar_Z_inj in B. rewrite B.
   unfold k'. simpl.
   now rewrite nat_eqb_refl.
@@ -768,23 +774,22 @@ Proof.
 intros bounds inv.
 unfold hash_map_insert_no_resize_fwd_back.
 
-intro_scalar_bounds key.
+rewrite hash_key_success.
+aeSimpl.
 
 (* Keep the hash opaque for clarity *)
-rewrite hash_key_success.
-simpl.
 set (hash := get_hash key).
-intro_scalar_bounds hash.
+aeSimpl.
 
 assert (B := Zrem_lt_pos (to_Z hash) (vec_length (Hash_map_slots self))).
-aeStep as pos.
+aeProgressOnce pos.
 
 (* TODO Another simplification from projection
    TODO Unfolding leaks under "to_Z".
 *)
 unfold vec_len in Hpos. simpl in Hpos.
 
-aeStep as slot.
+aeProgressOnce slot.
 
 assert (Hins := hm_insert_in_list_fwd_shape fuel key value slot).
 remember (hash_map_insert_in_list_fwd T fuel key value slot) as ins.
@@ -795,14 +800,14 @@ destruct b.
 
 (* Value inserted *)
 1: {
-aeStep as size.
+aeProgressOnce size.
 assert (Hins2 := hm_insert_in_list_back_shape fuel key value slot).
 remember (hash_map_insert_in_list_back T fuel key value slot) as ins2.
 destruct ins2. 2: intuition.
 rename l into new_slot.
 simpl in Hins, Hins2 |- *.
 
-aeStep as new_slots.
+aeProgressOnce new_slots.
 
 destruct Hins. clear H0.
 assert (H0 := H I). clear H.
@@ -854,7 +859,7 @@ destruct ins2. 2: intuition.
 rename l into new_slot.
 simpl in Hins, Hins2 |- *.
 
-aeStep as new_slots.
+aeProgressOnce new_slots.
 
 destruct Hins. clear H.
 remember (get_chain_value (clean_chain slot) (usize_to_nat key)) as ch in Hins2.

@@ -1,4 +1,5 @@
 
+Require Import Coq.Unicode.Utf8.
 Require Import Primitives_Ext.
 Require Import Coq.ZArith.ZArith.
 Require Import Lia.
@@ -75,6 +76,17 @@ Global Hint Resolve add_zero_r: core.
 
 Example e7 a : add a _0 = a.
 auto. Qed.
+
+(* Implications are also accepted by "auto", but not equivalences (neither by "autorewrite"). *)
+
+Axiom ax_f: N → N.
+Axiom ax_f_inj: ∀a b, ax_f a = ax_f b → a = b.
+
+Global Hint Resolve ax_f_inj: core.
+
+Example e8 a b: ax_f a = ax_f b → a = b.
+auto.
+Qed.
 
 End Example_Hints.
 
