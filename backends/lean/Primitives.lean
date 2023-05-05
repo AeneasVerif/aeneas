@@ -3,6 +3,28 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 
+--------------------
+-- ASSERT COMMAND --
+--------------------
+
+open Lean Elab Command Term Meta
+
+syntax (name := assert) "#assert" term: command
+
+@[command_elab assert]
+unsafe
+def assertImpl : CommandElab := fun (_stx: Syntax) => do
+  runTermElabM (fun _ => do
+    let r ← evalTerm Bool (mkConst ``Bool) _stx[1]
+    if not r then
+      logInfo "Assertion failed for: "
+      logInfo _stx[1]
+      logError "Expression reduced to false"
+    pure ())
+
+#eval 2 == 2
+#assert (2 == 2)
+
 -------------
 -- PRELUDE --
 -------------
@@ -12,6 +34,7 @@ import Mathlib.Tactic.RunCmd
 inductive Error where
    | assertionFailure: Error
    | integerOverflow: Error
+   | divisionByZero: Error
    | arrayOutOfBounds: Error
    | maximumSizeExceeded: Error
    | panic: Error
@@ -125,222 +148,425 @@ macro_rules
 -- Also works for other integer types (at the expense of a needless disjunction)
 #eval UInt32.ofNatCore 0 (by intlit)
 
--- The machine integer operations (e.g. sub) are always total, which is not what
--- we want. We therefore define "checked" variants, below. Note that we add a
--- tiny bit of complexity for the USize variant: we first check whether the
--- result is < 2^32; if it is, we can compute the definition, rather than
--- returning a term that is computationally stuck (the comparison to USize.size
--- cannot reduce at compile-time, per the remark about regarding `getNumBits`).
+open System.Platform.getNumBits
+
+-- TODO: is there a way of only importing System.Platform.getNumBits?
+--
+@[simp] def size_num_bits : Nat := (System.Platform.getNumBits ()).val
+
+-- Remark: Lean seems to use < for the comparisons with the upper bounds by convention.
+-- We keep the F* convention for now.
+@[simp] def Isize.min : Int := - (HPow.hPow 2 (size_num_bits - 1))
+@[simp] def Isize.max : Int := (HPow.hPow 2 (size_num_bits - 1)) - 1
+@[simp] def I8.min    : Int := - (HPow.hPow 2 7)
+@[simp] def I8.max    : Int := HPow.hPow 2 7 - 1
+@[simp] def I16.min   : Int := - (HPow.hPow 2 15)
+@[simp] def I16.max   : Int := HPow.hPow 2 15 - 1
+@[simp] def I32.min   : Int := -(HPow.hPow 2 31)
+@[simp] def I32.max   : Int := HPow.hPow 2 31 - 1
+@[simp] def I64.min   : Int := -(HPow.hPow 2 63)
+@[simp] def I64.max   : Int := HPow.hPow 2 63 - 1
+@[simp] def I128.min  : Int := -(HPow.hPow 2 127)
+@[simp] def I128.max  : Int := HPow.hPow 2 127 - 1
+@[simp] def Usize.min : Int := 0
+@[simp] def Usize.max : Int := HPow.hPow 2 size_num_bits - 1
+@[simp] def U8.min    : Int := 0
+@[simp] def U8.max    : Int := HPow.hPow 2 8 - 1
+@[simp] def U16.min   : Int := 0
+@[simp] def U16.max   : Int := HPow.hPow 2 16 - 1
+@[simp] def U32.min   : Int := 0
+@[simp] def U32.max   : Int := HPow.hPow 2 32 - 1
+@[simp] def U64.min   : Int := 0
+@[simp] def U64.max   : Int := HPow.hPow 2 64 - 1
+@[simp] def U128.min  : Int := 0
+@[simp] def U128.max  : Int := HPow.hPow 2 128 - 1
+
+#assert (I8.min   == -128)
+#assert (I8.max   == 127)
+#assert (I16.min  == -32768)
+#assert (I16.max  == 32767)
+#assert (I32.min  == -2147483648)
+#assert (I32.max  == 2147483647)
+#assert (I64.min  == -9223372036854775808)
+#assert (I64.max  == 9223372036854775807)
+#assert (I128.min == -170141183460469231731687303715884105728)
+#assert (I128.max == 170141183460469231731687303715884105727)
+#assert (U8.min   == 0)
+#assert (U8.max   == 255)
+#assert (U16.min  == 0)
+#assert (U16.max  == 65535)
+#assert (U32.min  == 0)
+#assert (U32.max  == 4294967295)
+#assert (U64.min  == 0)
+#assert (U64.max  == 18446744073709551615)
+#assert (U128.min == 0)
+#assert (U128.max == 340282366920938463463374607431768211455)
+
+inductive ScalarTy :=
+| Isize
+| I8
+| I16
+| I32
+| I64
+| I128
+| Usize
+| U8
+| U16
+| U32
+| U64
+| U128
+
+def Scalar.min (ty : ScalarTy) : Int :=
+  match ty with
+  | .Isize => Isize.min
+  | .I8    => I8.min
+  | .I16   => I16.min
+  | .I32   => I32.min
+  | .I64   => I64.min
+  | .I128  => I128.min
+  | .Usize => Usize.min
+  | .U8    => U8.min
+  | .U16   => U16.min
+  | .U32   => U32.min
+  | .U64   => U64.min
+  | .U128  => U128.min
+
+def Scalar.max (ty : ScalarTy) : Int :=
+  match ty with
+  | .Isize => Isize.max
+  | .I8    => I8.max
+  | .I16   => I16.max
+  | .I32   => I32.max
+  | .I64   => I64.max
+  | .I128  => I128.max
+  | .Usize => Usize.max
+  | .U8    => U8.max
+  | .U16   => U16.max
+  | .U32   => U32.max
+  | .U64   => U64.max
+  | .U128  => U128.max
+
+-- "Conservative" bounds
+-- We use those because we can't compare to the isize bounds (which can't
+-- reduce at compile-time). Whenever we perform an arithmetic operation like
+-- addition we need to check that the result is in bounds: we first compare
+-- to the conservative bounds, which reduce, then compare to the real bounds.
 -- This is useful for the various #asserts that we want to reduce at
 -- type-checking time.
+def Scalar.cMin (ty : ScalarTy) : Int :=
+  match ty with
+  | .Isize => I32.min
+  | _ => Scalar.min ty
+
+def Scalar.cMax (ty : ScalarTy) : Int :=
+  match ty with
+  | .Isize => I32.max
+  | .Usize => U32.max
+  | _ => Scalar.max ty
+
+structure Scalar (ty : ScalarTy) where
+  val : Int
+  hmin : Scalar.min ty <= val
+  hmax : val <= Scalar.max ty
+
+def Scalar.ofIntCore {ty : ScalarTy} (x : Int)
+  (hmin : Scalar.min ty <= x) (hmax : x <= Scalar.max ty) : Scalar ty :=
+  { val := x, hmin := hmin, hmax := hmax }
+
+def Scalar.ofInt {ty : ScalarTy} (x : Int)
+  (h : Scalar.min ty <= x && x <= Scalar.max ty) : Scalar ty :=
+  let hmin: Scalar.min ty <= x := by sorry
+  let hmax: x <= Scalar.max ty := by sorry
+  Scalar.ofIntCore x hmin hmax
 
 -- Further thoughts: look at what has been done here:
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/Fin/Basic.lean
 -- and
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/UInt.lean
 -- which both contain a fair amount of reasoning already!
-def USize.checked_sub (n: USize) (m: USize): Result USize :=
-  -- NOTE: the test USize.toNat n - m >= 0 seems to always succeed?
-  if n >= m then
-    let n' := USize.toNat n
-    let m' := USize.toNat n
-    let r := USize.ofNatCore (n' - m') (by
-      have h: n' - m' <= n' := by
-        apply Nat.sub_le_of_le_add
-        case h => rewrite [ Nat.add_comm ]; apply Nat.le_add_left
-      apply Nat.lt_of_le_of_lt h
-      apply n.val.isLt
-    )
-    return r
-  else
-    fail integerOverflow
+def Scalar.tryMk (ty : ScalarTy) (x : Int) : Result (Scalar ty) :=
+  -- TODO: write this with only one if then else
+  if hmin_cons: Scalar.cMin ty <= x || Scalar.min ty <= x then
+    if hmax_cons: x <= Scalar.cMax ty || x <= Scalar.max ty then
+      let hmin: Scalar.min ty <= x := by sorry
+      let hmax: x <= Scalar.max ty := by sorry
+      return Scalar.ofIntCore x hmin hmax
+    else fail integerOverflow
+  else fail integerOverflow
 
-@[simp]
-theorem usize_fits (n: Nat) (h: n <= 4294967295): n < USize.size :=
-  match USize.size, usize_size_eq with
-  | _, Or.inl rfl => Nat.lt_of_le_of_lt h (by decide)
-  | _, Or.inr rfl => Nat.lt_of_le_of_lt h (by decide)
+def Scalar.neg {ty : ScalarTy} (x : Scalar ty) : Result (Scalar ty) := Scalar.tryMk ty (- x.val)
 
-def USize.checked_add (n: USize) (m: USize): Result USize :=
-  if h: n.val + m.val < USize.size then
-    .ret ⟨ n.val + m.val, h ⟩
-  else
-    .fail integerOverflow
+def Scalar.div {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
+  if y.val != 0 then Scalar.tryMk ty (x.val / y.val) else fail divisionByZero
 
-def USize.checked_rem (n: USize) (m: USize): Result USize :=
-  if h: m > 0 then
-    .ret ⟨ n.val % m.val, by
-      have h1: ↑m.val < USize.size := m.val.isLt
-      have h2: n.val.val % m.val.val < m.val.val := @Nat.mod_lt n.val m.val h
-      apply Nat.lt_trans h2 h1
-    ⟩
-  else
-    .fail integerOverflow
+-- Checking that the % operation in Lean computes the same as the remainder operation in Rust
+#assert 1 % 2 = (1:Int)
+#assert (-1) % 2 = -1
+#assert 1 % (-2) = 1
+#assert (-1) % (-2) = -1
 
-def USize.checked_mul (n: USize) (m: USize): Result USize :=
-  if h: n.val * m.val < USize.size then
-    .ret ⟨ n.val * m.val, h ⟩
-  else
-    .fail integerOverflow
+def Scalar.rem {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
+  if y.val != 0 then Scalar.tryMk ty (x.val % y.val) else fail divisionByZero
 
-def USize.checked_div (n: USize) (m: USize): Result USize :=
-  if m > 0 then
-    .ret ⟨ n.val / m.val, by
-      have h1: ↑n.val < USize.size := n.val.isLt
-      have h2: n.val.val / m.val.val <= n.val.val := @Nat.div_le_self n.val m.val
-      apply Nat.lt_of_le_of_lt h2 h1
-    ⟩
-  else
-    .fail integerOverflow
+def Scalar.add {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
+  Scalar.tryMk ty (x.val + y.val)
 
--- Test behavior...
-#eval assert! USize.checked_sub 10 20 == fail integerOverflow; 0
+def Scalar.sub {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
+  Scalar.tryMk ty (x.val - y.val)
 
-#eval USize.checked_sub 20 10
--- NOTE: compare with concrete behavior here, which I do not think we want
-#eval USize.sub 0 1
-#eval UInt8.add 255 255
+def Scalar.mul {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
+  Scalar.tryMk ty (x.val * y.val)
 
--- We now define a type class that subsumes the various machine integer types, so
--- as to write a concise definition for scalar_cast, rather than exhaustively
--- enumerating all of the possible pairs. We remark that Rust has sane semantics
--- and fails if a cast operation would involve a truncation or modulo.
+-- TODO: instances of +, -, * etc. for scalars
 
-class MachineInteger (t: Type) where
-  size: Nat
-  val: t -> Fin size
-  ofNatCore: (n:Nat) -> LT.lt n size -> t
+-- Cast an integer from a [src_ty] to a [tgt_ty]
+-- TODO: check the semantics of casts in Rust
+def Scalar.cast {src_ty : ScalarTy} (tgt_ty : ScalarTy) (x : Scalar src_ty) : Result (Scalar tgt_ty) :=
+  Scalar.tryMk tgt_ty x.val
 
-set_option hygiene false in
-run_cmd
-  for typeName in [`UInt8, `UInt16, `UInt32, `UInt64, `USize].map Lean.mkIdent do
-  Lean.Elab.Command.elabCommand (← `(
-    namespace $typeName
-    instance: MachineInteger $typeName where
-      size := size
-      val := val
-      ofNatCore := ofNatCore
-    end $typeName
-  ))
+-- The scalar types
+def Isize := Scalar .Isize
+def I8    := Scalar .I8
+def I16   := Scalar .I16
+def I32   := Scalar .I32
+def I64   := Scalar .I64
+def I128  := Scalar .I128
+def Usize := Scalar .Usize
+def U8    := Scalar .U8
+def U16   := Scalar .U16
+def U32   := Scalar .U32
+def U64   := Scalar .U64
+def U128  := Scalar .U128
 
--- Aeneas only instantiates the destination type (`src` is implicit). We rely on
--- Lean to infer `src`.
+-- TODO: below: not sure this is the best way.
+-- Should we rather overload operations like +, -, etc.?
+-- Also, it is possible to automate the generation of those definitions
+-- with macros (but would it be a good idea? It would be less easy to
+-- read the file, which is not supposed to change a lot)
 
-def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): Result dst :=
-  if h: MachineInteger.val x < MachineInteger.size dst then
-    .ret (MachineInteger.ofNatCore (MachineInteger.val x).val h)
-  else
-    .fail integerOverflow
+-- Negation
+def Isize.neg := @Scalar.neg .Isize
+def I8.neg    := @Scalar.neg .I8
+def I16.neg   := @Scalar.neg .I16
+def I32.neg   := @Scalar.neg .I32
+def I64.neg   := @Scalar.neg .I64
+def I128.neg  := @Scalar.neg .I128
+
+-- Division
+def Isize.div := @Scalar.div .Isize
+def I8.div    := @Scalar.div .I8
+def I16.div   := @Scalar.div .I16
+def I32.div   := @Scalar.div .I32
+def I64.div   := @Scalar.div .I64
+def I128.div  := @Scalar.div .I128
+def Usize.div := @Scalar.div .Usize
+def U8.div    := @Scalar.div .U8
+def U16.div   := @Scalar.div .U16
+def U32.div   := @Scalar.div .U32
+def U64.div   := @Scalar.div .U64
+def U128.div  := @Scalar.div .U128
+
+-- Remainder
+def Isize.rem := @Scalar.rem .Isize
+def I8.rem    := @Scalar.rem .I8
+def I16.rem   := @Scalar.rem .I16
+def I32.rem   := @Scalar.rem .I32
+def I64.rem   := @Scalar.rem .I64
+def I128.rem  := @Scalar.rem .I128
+def Usize.rem := @Scalar.rem .Usize
+def U8.rem    := @Scalar.rem .U8
+def U16.rem   := @Scalar.rem .U16
+def U32.rem   := @Scalar.rem .U32
+def U64.rem   := @Scalar.rem .U64
+def U128.rem  := @Scalar.rem .U128
+
+-- Addition
+def Isize.add := @Scalar.add .Isize
+def I8.add    := @Scalar.add .I8
+def I16.add   := @Scalar.add .I16
+def I32.add   := @Scalar.add .I32
+def I64.add   := @Scalar.add .I64
+def I128.add  := @Scalar.add .I128
+def Usize.add := @Scalar.add .Usize
+def U8.add    := @Scalar.add .U8
+def U16.add   := @Scalar.add .U16
+def U32.add   := @Scalar.add .U32
+def U64.add   := @Scalar.add .U64
+def U128.add  := @Scalar.add .U128
+
+-- Substraction
+def Isize.sub := @Scalar.sub .Isize
+def I8.sub    := @Scalar.sub .I8
+def I16.sub   := @Scalar.sub .I16
+def I32.sub   := @Scalar.sub .I32
+def I64.sub   := @Scalar.sub .I64
+def I128.sub  := @Scalar.sub .I128
+def Usize.sub := @Scalar.sub .Usize
+def U8.sub    := @Scalar.sub .U8
+def U16.sub   := @Scalar.sub .U16
+def U32.sub   := @Scalar.sub .U32
+def U64.sub   := @Scalar.sub .U64
+def U128.sub  := @Scalar.sub .U128
+
+-- Multiplication
+def Isize.mul := @Scalar.mul .Isize
+def I8.mul    := @Scalar.mul .I8
+def I16.mul   := @Scalar.mul .I16
+def I32.mul   := @Scalar.mul .I32
+def I64.mul   := @Scalar.mul .I64
+def I128.mul  := @Scalar.mul .I128
+def Usize.mul := @Scalar.mul .Usize
+def U8.mul    := @Scalar.mul .U8
+def U16.mul   := @Scalar.mul .U16
+def U32.mul   := @Scalar.mul .U32
+def U64.mul   := @Scalar.mul .U64
+def U128.mul  := @Scalar.mul .U128
+
+-- ofIntCore
+def Isize.ofIntCore := @Scalar.ofIntCore .Isize
+def I8.ofIntCore    := @Scalar.ofIntCore .I8
+def I16.ofIntCore   := @Scalar.ofIntCore .I16
+def I32.ofIntCore   := @Scalar.ofIntCore .I32
+def I64.ofIntCore   := @Scalar.ofIntCore .I64
+def I128.ofIntCore  := @Scalar.ofIntCore .I128
+def Usize.ofIntCore := @Scalar.ofIntCore .Usize
+def U8.ofIntCore    := @Scalar.ofIntCore .U8
+def U16.ofIntCore   := @Scalar.ofIntCore .U16
+def U32.ofIntCore   := @Scalar.ofIntCore .U32
+def U64.ofIntCore   := @Scalar.ofIntCore .U64
+def U128.ofIntCore  := @Scalar.ofIntCore .U128
+
+-- ofInt
+def Isize.ofInt := @Scalar.ofInt .Isize
+def I8.ofInt    := @Scalar.ofInt .I8
+def I16.ofInt   := @Scalar.ofInt .I16
+def I32.ofInt   := @Scalar.ofInt .I32
+def I64.ofInt   := @Scalar.ofInt .I64
+def I128.ofInt  := @Scalar.ofInt .I128
+def Usize.ofInt := @Scalar.ofInt .Usize
+def U8.ofInt    := @Scalar.ofInt .U8
+def U16.ofInt   := @Scalar.ofInt .U16
+def U32.ofInt   := @Scalar.ofInt .U32
+def U64.ofInt   := @Scalar.ofInt .U64
+def U128.ofInt  := @Scalar.ofInt .U128
+
+
+theorem Scalar.eq_of_val_eq {ty} : ∀ {i j : Scalar ty}, Eq i.val j.val → Eq i j
+  | ⟨_, _, _⟩, ⟨_, _, _⟩, rfl => rfl
+
+theorem Scalar.val_eq_of_eq {ty} {i j : Scalar ty} (h : Eq i j) : Eq i.val j.val :=
+  h ▸ rfl
+
+theorem Scalar.ne_of_val_ne {ty} {i j : Scalar ty} (h : Not (Eq i.val j.val)) : Not (Eq i j) :=
+  fun h' => absurd (val_eq_of_eq h') h
+
+instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
+  fun i j =>
+    match decEq i.val j.val with
+    | isTrue h  => isTrue (Scalar.eq_of_val_eq h)
+    | isFalse h => isFalse (Scalar.ne_of_val_ne h)
+
+instance {ty} : LT (Scalar ty) where
+  lt a b := LT.lt a.val b.val
+
+instance {ty} : LE (Scalar ty) where
+  le a b := LE.le a.val b.val
+
+instance Scalar.decLt {ty} (a b : Scalar ty) : Decidable (LT.lt a b) := Int.decLt ..
+instance Scalar.decLe {ty} (a b : Scalar ty) : Decidable (LE.le a b) := Int.decLe ..
+
+def Scalar.toInt {ty} (n : Scalar ty) : Int := n.val
+
+-- -- We now define a type class that subsumes the various machine integer types, so
+-- -- as to write a concise definition for scalar_cast, rather than exhaustively
+-- -- enumerating all of the possible pairs. We remark that Rust has sane semantics
+-- -- and fails if a cast operation would involve a truncation or modulo.
+
+-- class MachineInteger (t: Type) where
+--   size: Nat
+--   val: t -> Fin size
+--   ofNatCore: (n:Nat) -> LT.lt n size -> t
+
+-- set_option hygiene false in
+-- run_cmd
+--   for typeName in [`UInt8, `UInt16, `UInt32, `UInt64, `USize].map Lean.mkIdent do
+--   Lean.Elab.Command.elabCommand (← `(
+--     namespace $typeName
+--     instance: MachineInteger $typeName where
+--       size := size
+--       val := val
+--       ofNatCore := ofNatCore
+--     end $typeName
+--   ))
+
+-- -- Aeneas only instantiates the destination type (`src` is implicit). We rely on
+-- -- Lean to infer `src`.
+
+-- def scalar_cast { src: Type } (dst: Type) [ MachineInteger src ] [ MachineInteger dst ] (x: src): Result dst :=
+--   if h: MachineInteger.val x < MachineInteger.size dst then
+--     .ret (MachineInteger.ofNatCore (MachineInteger.val x).val h)
+--   else
+--     .fail integerOverflow
 
 -------------
 -- VECTORS --
 -------------
 
--- Note: unlike F*, Lean seems to use strict upper bounds (e.g. USize.size)
--- rather than maximum values (usize_max).
-def vec (α : Type u) := { l : List α // List.length l < USize.size }
+def Vec (α : Type u) := { l : List α // List.length l <= Usize.max }
 
-def vec_new (α : Type u): vec α := ⟨ [], by {
-  match USize.size, usize_size_eq with
-  | _, Or.inl rfl => simp
-  | _, Or.inr rfl => simp
-  } ⟩
+def vec_new (α : Type u): Vec α := ⟨ [], by sorry ⟩
 
-#check vec_new
-
-def vec_len (α : Type u) (v : vec α) : USize :=
+def vec_len (α : Type u) (v : Vec α) : Usize :=
   let ⟨ v, l ⟩ := v
-  USize.ofNatCore (List.length v) l
-
-#eval vec_len Nat (vec_new Nat)
+  Usize.ofIntCore (List.length v) (by sorry) l
  
-def vec_push_fwd (α : Type u) (_ : vec α) (_ : α) : Unit := ()
+def vec_push_fwd (α : Type u) (_ : Vec α) (_ : α) : Unit := ()
 
--- NOTE: old version trying to use a subtype notation, but probably better to
--- leave Result elimination to auxiliary lemmas with suitable preconditions
--- TODO: I originally wrote `List.length v.val < USize.size - 1`; how can one
--- make the proof work in that case? Probably need to import tactics from
--- mathlib to deal with inequalities... would love to see an example.
-def vec_push_back_old (α : Type u) (v : vec α) (x : α) : { res: Result (vec α) //
-  match res with | fail _ => True | ret v' => List.length v'.val = List.length v.val + 1}
+def vec_push_back (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
   :=
-  if h : List.length v.val + 1 < USize.size then
-    ⟨ return ⟨List.concat v.val x,
-      by
-        rw [List.length_concat]
-        assumption
-     ⟩, by simp ⟩
-  else
-    ⟨ fail maximumSizeExceeded, by simp ⟩
-
-#eval do
-  -- NOTE: the // notation is syntactic sugar for Subtype, a refinement with
-  -- fields val and property. However, Lean's elaborator can automatically
-  -- select the `val` field if the context provides a type annotation. We
-  -- annotate `x`, which relieves us of having to write `.val` on the right-hand
-  -- side of the monadic let.
-  let v := vec_new Nat
-  let x: vec Nat ← (vec_push_back_old Nat v 1: Result (vec Nat)) -- WHY do we need the type annotation here?
-  -- TODO: strengthen post-condition above and do a demo to show that we can
-  -- safely eliminate the `fail` case
-  return (vec_len Nat x)
-
-def vec_push_back (α : Type u) (v : vec α) (x : α) : Result (vec α)
-  :=
-  if h : List.length v.val + 1 <= 4294967295 then
-    return ⟨ List.concat v.val x,
-      by
-        rw [List.length_concat]
-        have h': 4294967295 < USize.size := by intlit
-        apply Nat.lt_of_le_of_lt h h'
-    ⟩
-  else if h: List.length v.val + 1 < USize.size then
-    return ⟨List.concat v.val x,
-      by
-        rw [List.length_concat]
-        assumption
-     ⟩
+  if h : List.length v.val <= U32.max || List.length v.val <= Usize.max then
+    return ⟨ List.concat v.val x, by sorry ⟩
   else
     fail maximumSizeExceeded
 
-def vec_insert_fwd (α : Type u) (v: vec α) (i: USize) (_: α): Result Unit :=
+def vec_insert_fwd (α : Type u) (v: Vec α) (i: USize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_insert_back (α : Type u) (v: vec α) (i: USize) (x: α): Result (vec α) :=
+def vec_insert_back (α : Type u) (v: Vec α) (i: USize) (x: α): Result (Vec α) :=
   if i.val < List.length v.val then
     .ret ⟨ List.set v.val i.val x, by
-      have h: List.length v.val < USize.size := v.property
+      have h: List.length v.val <= Usize.max := v.property
       rewrite [ List.length_set v.val i.val x ]
       assumption
     ⟩
   else
     .fail arrayOutOfBounds
 
-def vec_index_fwd (α : Type u) (v: vec α) (i: USize): Result α :=
+def vec_index_fwd (α : Type u) (v: Vec α) (i: USize): Result α :=
   if h: i.val < List.length v.val then
     .ret (List.get v.val ⟨i.val, h⟩)
   else
     .fail arrayOutOfBounds
 
-def vec_index_back (α : Type u) (v: vec α) (i: USize) (_: α): Result Unit :=
+def vec_index_back (α : Type u) (v: Vec α) (i: USize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_fwd (α : Type u) (v: vec α) (i: USize): Result α :=
+def vec_index_mut_fwd (α : Type u) (v: Vec α) (i: USize): Result α :=
   if h: i.val < List.length v.val then
     .ret (List.get v.val ⟨i.val, h⟩)
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_back (α : Type u) (v: vec α) (i: USize) (x: α): Result (vec α) :=
+def vec_index_mut_back (α : Type u) (v: Vec α) (i: USize) (x: α): Result (Vec α) :=
   if i.val < List.length v.val then
     .ret ⟨ List.set v.val i.val x, by
-      have h: List.length v.val < USize.size := v.property
+      have h: List.length v.val <= Usize.max := v.property
       rewrite [ List.length_set v.val i.val x ]
       assumption
     ⟩
@@ -360,33 +586,3 @@ def mem_replace_back (a : Type) (_ : a) (y : a) : a :=
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.
  Use with `simp [ aeneas ]` -/
 register_simp_attr aeneas
-
---------------------
--- ASSERT COMMAND --
---------------------
-
-open Lean Elab Command Term Meta
-
-syntax (name := assert) "#assert" term: command
-
-@[command_elab assert]
-unsafe
-def assertImpl : CommandElab := fun (_stx: Syntax) => do
-  runTermElabM (fun _ => do
-    let r ← evalTerm Bool (mkConst ``Bool) _stx[1]
-    if not r then
-      logInfo "Assertion failed for: "
-      logInfo _stx[1]
-      logError "Expression reduced to false"
-    pure ())
-
-#eval 2 == 2
-#assert (2 == 2)
-
--------------------
--- SANITY CHECKS --
--------------------
-
--- TODO: add more once we have signed integers
-
-#assert (USize.checked_rem 1 2 == .ret 1)
