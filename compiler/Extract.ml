@@ -18,8 +18,7 @@ let int_name (int_ty : integer_type) =
     match !backend with
     | FStar | Coq ->
         ("isize", "usize", format_of_string "i%d", format_of_string "u%d")
-    | Lean ->
-        ("ISize", "USize", format_of_string "Int%d", format_of_string "UInt%d")
+    | Lean -> ("Isize", "Usize", format_of_string "I%d", format_of_string "U%d")
   in
   match int_ty with
   | Isize -> isize
@@ -40,9 +39,7 @@ let unop_name (unop : unop) : string =
   match unop with
   | Not -> ( match !backend with FStar | Lean -> "not" | Coq -> "negb")
   | Neg (int_ty : integer_type) -> (
-      match !backend with
-      | Lean -> int_name int_ty ^ ".checked_neg"
-      | _ -> int_name int_ty ^ "_neg")
+      match !backend with Lean -> "-" | _ -> int_name int_ty ^ "_neg")
   | Cast _ -> raise (Failure "Unsupported")
 
 (** Small helper to compute the name of a binary operation (note that many
@@ -59,8 +56,9 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
     | Mul -> "mul"
     | _ -> raise (Failure "Unreachable")
   in
+  (* Remark: the Lean case is actually not used *)
   match !backend with
-  | Lean -> int_name int_ty ^ ".checked_" ^ binop
+  | Lean -> int_name int_ty ^ "." ^ binop
   | FStar | Coq -> int_name int_ty ^ "_" ^ binop
 
 (** A list of keywords/identifiers used by the backend and with which we
@@ -303,14 +301,19 @@ let extract_unop (extract_expr : bool -> texpression -> unit)
   | Cast (src, tgt) ->
       (* The source type is an implicit parameter *)
       if inside then F.pp_print_string fmt "(";
-      F.pp_print_string fmt "scalar_cast";
+      let cast_str =
+        match !backend with
+        | Coq | FStar -> "scalar_cast"
+        | Lean -> (* TODO: I8.cast, I16.cast, etc.*) "Scalar.cast"
+      in
+      F.pp_print_string fmt cast_str;
       F.pp_print_space fmt ();
       if !backend <> Lean then (
         F.pp_print_string fmt
           (StringUtils.capitalize_first_letter
              (PrintPure.integer_type_to_string src));
         F.pp_print_space fmt ());
-      if !backend = Lean then F.pp_print_string fmt (int_name tgt)
+      if !backend = Lean then F.pp_print_string fmt ("." ^ int_name tgt)
       else
         F.pp_print_string fmt
           (StringUtils.capitalize_first_letter
@@ -323,9 +326,9 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (binop : E.binop)
     (int_ty : integer_type) (arg0 : texpression) (arg1 : texpression) : unit =
   if inside then F.pp_print_string fmt "(";
-  (* Some binary operations have a special treatment *)
-  (match binop with
-  | Eq | Lt | Le | Ne | Ge | Gt ->
+  (* Some binary operations have a special notation depending on the backend *)
+  (match (!backend, binop) with
+  | _, (Eq | Lt | Le | Ne | Ge | Gt) | Lean, (Div | Rem | Add | Sub | Mul) ->
       let binop =
         match binop with
         | Eq -> "="
@@ -334,6 +337,11 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
         | Ne -> if !backend = Lean then "!=" else "<>"
         | Ge -> ">="
         | Gt -> ">"
+        | Div -> "/"
+        | Rem -> "%"
+        | Add -> "+"
+        | Sub -> "-"
+        | Mul -> "*"
         | _ -> raise (Failure "Unreachable")
       in
       let binop =
@@ -344,14 +352,14 @@ let extract_binop (extract_expr : bool -> texpression -> unit)
       F.pp_print_string fmt binop;
       F.pp_print_space fmt ();
       extract_expr false arg1
-  | Div | Rem | Add | Sub | Mul ->
+  | _, (Div | Rem | Add | Sub | Mul) ->
       let binop = named_binop_name binop int_ty in
       F.pp_print_string fmt binop;
       F.pp_print_space fmt ();
       extract_expr false arg0;
       F.pp_print_space fmt ();
       extract_expr false arg1
-  | BitXor | BitAnd | BitOr | Shl | Shr -> raise Unimplemented);
+  | _, (BitXor | BitAnd | BitOr | Shl | Shr) -> raise Unimplemented);
   if inside then F.pp_print_string fmt ")"
 
 let type_decl_kind_to_qualif (kind : decl_kind)
@@ -654,8 +662,20 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
         | Lean ->
             F.pp_print_string fmt "(";
             F.pp_print_string fmt (int_name sv.int_ty);
-            F.pp_print_string fmt ".ofNatCore ";
-            Z.pp_print fmt sv.value;
+            F.pp_print_string fmt ".ofInt ";
+            (* Something very annoying: negated values like `-3` are
+               ambiguous in Lean because of conversions, so we have to
+               be extremely explicit with negative numbers.
+            *)
+            if Z.lt sv.value Z.zero then (
+              F.pp_print_string fmt "(";
+              F.pp_print_string fmt "-";
+              F.pp_print_string fmt "(";
+              Z.pp_print fmt (Z.neg sv.value);
+              F.pp_print_string fmt ":Int";
+              F.pp_print_string fmt ")";
+              F.pp_print_string fmt ")")
+            else Z.pp_print fmt sv.value;
             F.pp_print_string fmt " (by intlit))")
     | Bool b ->
         let b = if b then "true" else "false" in
