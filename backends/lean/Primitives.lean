@@ -325,18 +325,20 @@ def Scalar.cast {src_ty : ScalarTy} (tgt_ty : ScalarTy) (x : Scalar src_ty) : Re
   Scalar.tryMk tgt_ty x.val
 
 -- The scalar types
-def Isize := Scalar .Isize
-def I8    := Scalar .I8
-def I16   := Scalar .I16
-def I32   := Scalar .I32
-def I64   := Scalar .I64
-def I128  := Scalar .I128
-def Usize := Scalar .Usize
-def U8    := Scalar .U8
-def U16   := Scalar .U16
-def U32   := Scalar .U32
-def U64   := Scalar .U64
-def U128  := Scalar .U128
+-- We declare the definitions as reducible so that Lean can unfold them (useful
+-- for type class resolution for instance).
+@[reducible] def Isize := Scalar .Isize
+@[reducible] def I8    := Scalar .I8
+@[reducible] def I16   := Scalar .I16
+@[reducible] def I32   := Scalar .I32
+@[reducible] def I64   := Scalar .I64
+@[reducible] def I128  := Scalar .I128
+@[reducible] def Usize := Scalar .Usize
+@[reducible] def U8    := Scalar .U8
+@[reducible] def U16   := Scalar .U16
+@[reducible] def U32   := Scalar .U32
+@[reducible] def U64   := Scalar .U64
+@[reducible] def U128  := Scalar .U128
 
 -- TODO: below: not sure this is the best way.
 -- Should we rather overload operations like +, -, etc.?
@@ -345,84 +347,50 @@ def U128  := Scalar .U128
 -- read the file, which is not supposed to change a lot)
 
 -- Negation
-def Isize.neg := @Scalar.neg .Isize
-def I8.neg    := @Scalar.neg .I8
-def I16.neg   := @Scalar.neg .I16
-def I32.neg   := @Scalar.neg .I32
-def I64.neg   := @Scalar.neg .I64
-def I128.neg  := @Scalar.neg .I128
 
--- Division
-def Isize.div := @Scalar.div .Isize
-def I8.div    := @Scalar.div .I8
-def I16.div   := @Scalar.div .I16
-def I32.div   := @Scalar.div .I32
-def I64.div   := @Scalar.div .I64
-def I128.div  := @Scalar.div .I128
-def Usize.div := @Scalar.div .Usize
-def U8.div    := @Scalar.div .U8
-def U16.div   := @Scalar.div .U16
-def U32.div   := @Scalar.div .U32
-def U64.div   := @Scalar.div .U64
-def U128.div  := @Scalar.div .U128
+/--
+Remark: there is no heterogeneous negation in the Lean prelude: we thus introduce
+one here.
 
--- Remainder
-def Isize.rem := @Scalar.rem .Isize
-def I8.rem    := @Scalar.rem .I8
-def I16.rem   := @Scalar.rem .I16
-def I32.rem   := @Scalar.rem .I32
-def I64.rem   := @Scalar.rem .I64
-def I128.rem  := @Scalar.rem .I128
-def Usize.rem := @Scalar.rem .Usize
-def U8.rem    := @Scalar.rem .U8
-def U16.rem   := @Scalar.rem .U16
-def U32.rem   := @Scalar.rem .U32
-def U64.rem   := @Scalar.rem .U64
-def U128.rem  := @Scalar.rem .U128
+The notation typeclass for heterogeneous addition.
+This enables the notation `- a : β` where `a : α`.
+-/
+class HNeg (α : Type u) (β : outParam (Type v)) where
+  /-- `- a` computes the negation of `a`.
+  The meaning of this notation is type-dependent. -/
+  hNeg : α → β
+
+prefix:75  "-"   => HNeg.hNeg
+
+instance : HNeg Isize (Result Isize) where hNeg x := Scalar.neg x
+instance : HNeg I8 (Result I8) where hNeg x := Scalar.neg x
+instance : HNeg I16 (Result I16) where hNeg x := Scalar.neg x
+instance : HNeg I32 (Result I32) where hNeg x := Scalar.neg x
+instance : HNeg I64 (Result I64) where hNeg x := Scalar.neg x
+instance : HNeg I128 (Result I128) where hNeg x := Scalar.neg x
 
 -- Addition
-def Isize.add := @Scalar.add .Isize
-def I8.add    := @Scalar.add .I8
-def I16.add   := @Scalar.add .I16
-def I32.add   := @Scalar.add .I32
-def I64.add   := @Scalar.add .I64
-def I128.add  := @Scalar.add .I128
-def Usize.add := @Scalar.add .Usize
-def U8.add    := @Scalar.add .U8
-def U16.add   := @Scalar.add .U16
-def U32.add   := @Scalar.add .U32
-def U64.add   := @Scalar.add .U64
-def U128.add  := @Scalar.add .U128
+instance {ty} : HAdd (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
+  hAdd x y := Scalar.add x y
 
 -- Substraction
-def Isize.sub := @Scalar.sub .Isize
-def I8.sub    := @Scalar.sub .I8
-def I16.sub   := @Scalar.sub .I16
-def I32.sub   := @Scalar.sub .I32
-def I64.sub   := @Scalar.sub .I64
-def I128.sub  := @Scalar.sub .I128
-def Usize.sub := @Scalar.sub .Usize
-def U8.sub    := @Scalar.sub .U8
-def U16.sub   := @Scalar.sub .U16
-def U32.sub   := @Scalar.sub .U32
-def U64.sub   := @Scalar.sub .U64
-def U128.sub  := @Scalar.sub .U128
+instance {ty} : HSub (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
+  hSub x y := Scalar.sub x y
 
 -- Multiplication
-def Isize.mul := @Scalar.mul .Isize
-def I8.mul    := @Scalar.mul .I8
-def I16.mul   := @Scalar.mul .I16
-def I32.mul   := @Scalar.mul .I32
-def I64.mul   := @Scalar.mul .I64
-def I128.mul  := @Scalar.mul .I128
-def Usize.mul := @Scalar.mul .Usize
-def U8.mul    := @Scalar.mul .U8
-def U16.mul   := @Scalar.mul .U16
-def U32.mul   := @Scalar.mul .U32
-def U64.mul   := @Scalar.mul .U64
-def U128.mul  := @Scalar.mul .U128
+instance {ty} : HMul (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
+  hMul x y := Scalar.mul x y
+
+-- Division
+instance {ty} : HDiv (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
+  hDiv x y := Scalar.div x y
+
+-- Remainder
+instance {ty} : HMod (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
+  hMod x y := Scalar.rem x y
 
 -- ofIntCore
+-- TODO: typeclass?
 def Isize.ofIntCore := @Scalar.ofIntCore .Isize
 def I8.ofIntCore    := @Scalar.ofIntCore .I8
 def I16.ofIntCore   := @Scalar.ofIntCore .I16
@@ -436,7 +404,8 @@ def U32.ofIntCore   := @Scalar.ofIntCore .U32
 def U64.ofIntCore   := @Scalar.ofIntCore .U64
 def U128.ofIntCore  := @Scalar.ofIntCore .U128
 
--- ofInt
+--  ofInt
+-- TODO: typeclass?
 def Isize.ofInt := @Scalar.ofInt .Isize
 def I8.ofInt    := @Scalar.ofInt .I8
 def I16.ofInt   := @Scalar.ofInt .I16
@@ -450,6 +419,14 @@ def U32.ofInt   := @Scalar.ofInt .U32
 def U64.ofInt   := @Scalar.ofInt .U64
 def U128.ofInt  := @Scalar.ofInt .U128
 
+-- Comparisons
+instance {ty} : LT (Scalar ty) where
+  lt a b := LT.lt a.val b.val
+
+instance {ty} : LE (Scalar ty) where le a b := LE.le a.val b.val
+
+instance Scalar.decLt {ty} (a b : Scalar ty) : Decidable (LT.lt a b) := Int.decLt ..
+instance Scalar.decLe {ty} (a b : Scalar ty) : Decidable (LE.le a b) := Int.decLe ..
 
 theorem Scalar.eq_of_val_eq {ty} : ∀ {i j : Scalar ty}, Eq i.val j.val → Eq i j
   | ⟨_, _, _⟩, ⟨_, _, _⟩, rfl => rfl
@@ -465,15 +442,6 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
     match decEq i.val j.val with
     | isTrue h  => isTrue (Scalar.eq_of_val_eq h)
     | isFalse h => isFalse (Scalar.ne_of_val_ne h)
-
-instance {ty} : LT (Scalar ty) where
-  lt a b := LT.lt a.val b.val
-
-instance {ty} : LE (Scalar ty) where
-  le a b := LE.le a.val b.val
-
-instance Scalar.decLt {ty} (a b : Scalar ty) : Decidable (LT.lt a b) := Int.decLt ..
-instance Scalar.decLe {ty} (a b : Scalar ty) : Decidable (LE.le a b) := Int.decLe ..
 
 def Scalar.toInt {ty} (n : Scalar ty) : Int := n.val
 
