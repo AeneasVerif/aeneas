@@ -197,14 +197,25 @@ let assumed_adts () : (assumed_ty * string) list =
             (Char.uppercase_ascii s.[0])
             (String.sub s 1 (String.length s - 1)) )
       else (t, s))
-    [
-      (State, "state");
-      (Result, "result");
-      (Error, "error");
-      (Fuel, "nat");
-      (Option, "option");
-      (Vec, "vec");
-    ]
+    (match !backend with
+    | Lean ->
+        [
+          (State, "State");
+          (Result, "Result");
+          (Error, "Error");
+          (Fuel, "Nat");
+          (Option, "Option");
+          (Vec, "Vec");
+        ]
+    | Coq | FStar ->
+        [
+          (State, "state");
+          (Result, "result");
+          (Error, "error");
+          (Fuel, "nat");
+          (Option, "option");
+          (Vec, "vec");
+        ])
 
 let assumed_structs : (assumed_ty * string) list = []
 
@@ -1004,7 +1015,9 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt (unit_name ()))
     else if !backend = Lean && fields = [] then ()
-    else if (not is_rec) || !backend <> Coq then (
+      (* If the definition is recursive, we may need to extract it as an inductive
+         (instead of a record) *)
+    else if (not is_rec) || (!backend <> Coq && !backend <> Lean) then (
       if !backend <> Lean then F.pp_print_space fmt ();
       (* If Coq: print the constructor name *)
       (* TODO: remove superfluous test not is_rec below *)
@@ -1044,9 +1057,9 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "}"))
     else (
-      (* We extract for Coq, and we have a recursive record, or a record in
+      (* We extract for Coq or Lean, and we have a recursive record, or a record in
          a group of mutually recursive types: we extract it as an inductive type *)
-      assert (is_rec && !backend = Coq);
+      assert (is_rec && (!backend = Coq || !backend = Lean));
       let with_opaque_pre = false in
       let cons_name = ctx_get_struct with_opaque_pre (AdtId def.def_id) ctx in
       let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
@@ -2224,7 +2237,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
 
-(** Extract templates for the [termination_by] and [decreases_by] clauses of a
+(** Extract templates for the [termination_by] and [decreasing_by] clauses of a
     recursive function definition.
 
     For Lean only.
@@ -2490,8 +2503,6 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ());
   (* Close the inner box for the definition *)
   F.pp_close_box fmt ();
-  (* Coq: add a "." *)
-  print_decl_end_delimiter fmt kind;
   (* Termination clause and proof for Lean *)
   if has_decreases_clause && !backend = Lean then (
     let def_body = Option.get def.body in
@@ -2558,6 +2569,8 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_close_box fmt ();
     (* Close the box for the [decreasing by ...] *)
     F.pp_close_box fmt ());
+  (* Add the definition group end delimiter *)
+  print_decl_end_delimiter fmt kind;
   (* Close the outer box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)

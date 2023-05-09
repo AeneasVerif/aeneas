@@ -237,17 +237,28 @@ tcoqp-%:
 	$(AENEAS_CMD)
 
 .PHONY: tlean-%
-tlean-%: OPTIONS += -backend lean -test-trans-units
+# TODO: add  -test-trans-units once we remove all the sorry from Primitives.lean
+tlean-%: OPTIONS += -backend lean
 tlean-%: BACKEND_SUBDIR := lean
 tlean-%:
 	$(AENEAS_CMD)
 
+
+
 # "p" stands for "Polonius"
 .PHONY: tleanp-%
-tleanp-%: OPTIONS += -backend lean -test-trans-units
+
+# TODO: for now we don't extract the betree for Lean because we need to implement
+# proper support for the proofs of termination for the mutually recursive functions.
+tleanp-betree_main:
+	echo "Ignoring Lean betree"
+
+# TODO: add  -test-trans-units once we remove all the sorry from Primitives.lean
+tleanp-%: OPTIONS += -backend lean
 tleanp-%: BACKEND_SUBDIR := lean
 tleanp-%:
 	$(AENEAS_CMD)
+
 
 # Nix
 .PHONY: nix

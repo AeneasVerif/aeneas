@@ -112,17 +112,13 @@ macro "let" e:term " <-- " f:term : doElem =>
 -- MACHINE INTEGERS --
 ----------------------
 
--- NOTE: we reuse the fixed-width integer types from prelude.lean: UInt8, ...,
--- USize. They are generally defined in an idiomatic style, except that there is
--- not a single type class to rule them all (more on that below). The absence of
--- type class is intentional, and allows the Lean compiler to efficiently map
--- them to machine integers during compilation.
+-- We redefine our machine integers types.
 
--- USize is designed properly: you cannot reduce `getNumBits` using the
--- simplifier, meaning that proofs do not depend on the compile-time value of
--- USize.size. (Lean assumes 32 or 64-bit platforms, and Rust doesn't really
--- support, at least officially, 16-bit microcontrollers, so this seems like a
--- fine design decision for now.)
+-- For Isize/Usize, we reuse `getNumBits` from `USize`. You cannot reduce `getNumBits`
+-- using the simplifier, meaning that proofs do not depend on the compile-time value of
+-- USize.size. (Lean assumes 32 or 64-bit platforms, and Rust doesn't really support, at
+-- least officially, 16-bit microcontrollers, so this seems like a fine design decision
+-- for now.)
 
 -- Note from Chris Bailey: "If there's more than one salient property of your
 -- definition then the subtyping strategy might get messy, and the property part
@@ -133,20 +129,6 @@ macro "let" e:term " <-- " f:term : doElem =>
 
 -- Machine integer constants, done via `ofNatCore`, which requires a proof that
 -- the `Nat` fits within the desired integer type. We provide a custom tactic.
-
-syntax "intlit" : tactic
-
-macro_rules
-  | `(tactic| intlit) => `(tactic|
-    match USize.size, usize_size_eq with
-    | _, Or.inl rfl => decide
-    | _, Or.inr rfl => decide)
-
--- This is how the macro is expected to be used
-#eval USize.ofNatCore 0 (by intlit)
-
--- Also works for other integer types (at the expense of a needless disjunction)
-#eval UInt32.ofNatCore 0 (by intlit)
 
 open System.Platform.getNumBits
 
@@ -264,10 +246,18 @@ def Scalar.cMax (ty : ScalarTy) : Int :=
   | .Usize => U32.max
   | _ => Scalar.max ty
 
+theorem Scalar.cMin_bound ty : Scalar.min ty <= Scalar.cMin ty := by sorry
+theorem Scalar.cMax_bound ty : Scalar.min ty <= Scalar.cMin ty := by sorry
+
 structure Scalar (ty : ScalarTy) where
   val : Int
   hmin : Scalar.min ty <= val
   hmax : val <= Scalar.max ty
+
+theorem Scalar.bound_suffices (ty : ScalarTy) (x : Int) :
+  Scalar.cMin ty <= x && x <= Scalar.cMax ty ->
+  (decide (Scalar.min ty ≤ x) && decide (x ≤ Scalar.max ty)) = true
+  := by sorry
 
 def Scalar.ofIntCore {ty : ScalarTy} (x : Int)
   (hmin : Scalar.min ty <= x) (hmax : x <= Scalar.max ty) : Scalar ty :=
@@ -445,6 +435,12 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
 
 def Scalar.toInt {ty} (n : Scalar ty) : Int := n.val
 
+-- Tactic to prove that integers are in bounds
+syntax "intlit" : tactic
+
+macro_rules
+  | `(tactic| intlit) => `(tactic| apply Scalar.bound_suffices ; decide)
+
 -- -- We now define a type class that subsumes the various machine integer types, so
 -- -- as to write a concise definition for scalar_cast, rather than exhaustively
 -- -- enumerating all of the possible pairs. We remark that Rust has sane semantics
@@ -497,14 +493,22 @@ def vec_push_back (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
   else
     fail maximumSizeExceeded
 
-def vec_insert_fwd (α : Type u) (v: Vec α) (i: USize) (_: α): Result Unit :=
+def vec_insert_fwd (α : Type u) (v: Vec α) (i: Usize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_insert_back (α : Type u) (v: Vec α) (i: USize) (x: α): Result (Vec α) :=
+def vec_insert_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α) :=
   if i.val < List.length v.val then
+    -- TODO: maybe we should redefine a list library which uses integers
+    -- (instead of natural numbers)
+    let i : Nat :=
+      match i.val with
+      | .ofNat n => n
+      | .negSucc n => by sorry -- TODO: we can't get here
+    let isLt: i < USize.size := by sorry
+    let i : Fin USize.size := { val := i, isLt := isLt }
     .ret ⟨ List.set v.val i.val x, by
       have h: List.length v.val <= Usize.max := v.property
       rewrite [ List.length_set v.val i.val x ]
@@ -513,26 +517,46 @@ def vec_insert_back (α : Type u) (v: Vec α) (i: USize) (x: α): Result (Vec α
   else
     .fail arrayOutOfBounds
 
-def vec_index_fwd (α : Type u) (v: Vec α) (i: USize): Result α :=
-  if h: i.val < List.length v.val then
+def vec_index_fwd (α : Type u) (v: Vec α) (i: Usize): Result α :=
+  if i.val < List.length v.val then
+    let i : Nat :=
+      match i.val with
+      | .ofNat n => n
+      | .negSucc n => by sorry -- TODO: we can't get here
+    let isLt: i < USize.size := by sorry
+    let i : Fin USize.size := { val := i, isLt := isLt }
+    let h: i < List.length v.val := by sorry
     .ret (List.get v.val ⟨i.val, h⟩)
   else
     .fail arrayOutOfBounds
 
-def vec_index_back (α : Type u) (v: Vec α) (i: USize) (_: α): Result Unit :=
+def vec_index_back (α : Type u) (v: Vec α) (i: Usize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_fwd (α : Type u) (v: Vec α) (i: USize): Result α :=
-  if h: i.val < List.length v.val then
+def vec_index_mut_fwd (α : Type u) (v: Vec α) (i: Usize): Result α :=
+  if i.val < List.length v.val then
+    let i : Nat :=
+      match i.val with
+      | .ofNat n => n
+      | .negSucc n => by sorry -- TODO: we can't get here
+    let isLt: i < USize.size := by sorry
+    let i : Fin USize.size := { val := i, isLt := isLt }
+    let h: i < List.length v.val := by sorry
     .ret (List.get v.val ⟨i.val, h⟩)
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_back (α : Type u) (v: Vec α) (i: USize) (x: α): Result (Vec α) :=
+def vec_index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α) :=
   if i.val < List.length v.val then
+    let i : Nat :=
+      match i.val with
+      | .ofNat n => n
+      | .negSucc n => by sorry -- TODO: we can't get here
+    let isLt: i < USize.size := by sorry
+    let i : Fin USize.size := { val := i, isLt := isLt }
     .ret ⟨ List.set v.val i.val x, by
       have h: List.length v.val <= Usize.max := v.property
       rewrite [ List.length_set v.val i.val x ]
