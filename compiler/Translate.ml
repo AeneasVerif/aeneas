@@ -686,14 +686,26 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
      definition for OpaqueDefs, which is a structure, in which each field is one
      of the functions marked as Opaque. We emit the `structure ...` bit here,
      then rely on `extract_fun_decl` to be aware of this, and skip the keyword
-     (e.g. "axiom" or "val") so as to generate valid syntax for records. *)
+     (e.g. "axiom" or "val") so as to generate valid syntax for records.
+
+     We also generate such a structure only if there actually are opaque
+     definitions.
+  *)
   let wrap_in_sig =
     config.extract_opaque && config.extract_fun_decls && !Config.backend = Lean
+    &&
+    let _, opaque_funs = module_has_opaque_decls ctx in
+    opaque_funs
   in
   if wrap_in_sig then (
+    (* We change the name of the structure depending on whether we *only*
+       extract opaque definitions, or if we extract all definitions *)
+    let struct_name =
+      if config.extract_transparent then "Definitions" else "OpaqueDefs"
+    in
     Format.pp_print_break fmt 0 0;
     Format.pp_open_vbox fmt ctx.extract_ctx.indent_incr;
-    Format.pp_print_string fmt "structure OpaqueDefs where";
+    Format.pp_print_string fmt ("structure " ^ struct_name ^ " where");
     Format.pp_print_break fmt 0 0);
   List.iter export_decl_group ctx.crate.declarations;
 
