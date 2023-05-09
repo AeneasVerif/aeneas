@@ -183,6 +183,7 @@ let keywords () =
           "unsafe";
           "where";
           "with";
+          "opaque_defs";
         ]
   in
   List.concat [ named_unops; named_binops; misc ]
@@ -738,11 +739,18 @@ let mk_formatter_and_names_map (ctx : trans_ctx) (crate_name : string)
   let names_map = initialize_names_map fmt (names_map_init ()) in
   (fmt, names_map)
 
-(** In Coq, a group of definitions must be ended with a "." *)
+(** In some provers, groups of definitions must be delimited.
+
+    - in Coq, *every* group (including singletons) must end with "."
+    - in Lean, groups of mutually recursive definitions must end with "end"
+ *)
 let print_decl_end_delimiter (fmt : F.formatter) (kind : decl_kind) =
   if !backend = Coq && decl_is_last_from_group kind then (
     F.pp_print_cut fmt ();
     F.pp_print_string fmt ".")
+  else if !backend = Lean && kind = MutRecLast then (
+    F.pp_print_cut fmt ();
+    F.pp_print_string fmt "end")
 
 let unit_name () = match !backend with Lean -> "Unit" | Coq | FStar -> "unit"
 
