@@ -19,8 +19,7 @@ structure OpaqueDefs where
   /- [core::num::nonzero::NonZeroU32::{14}::new] -/
   core_num_nonzero_non_zero_u32_new_fwd
     :
-    UInt32 -> State -> Result (State × (Option
-      core_num_nonzero_non_zero_u32_t))
+    U32 -> State -> Result (State × (Option core_num_nonzero_non_zero_u32_t))
   
   /- [core::option::Option::{0}::unwrap] -/
   core_option_option_unwrap_fwd
