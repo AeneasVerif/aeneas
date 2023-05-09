@@ -262,7 +262,7 @@ tleanp-%:
 
 # Nix
 .PHONY: nix
-nix: nix-aeneas-tests nix-aeneas-verify-fstar nix-aeneas-verify-coq
+nix: nix-aeneas-tests nix-aeneas-verify-fstar nix-aeneas-verify-coq nix-aeneas-verify-lean
 
 .PHONY: nix-aeneas-tests
 nix-aeneas-tests:
@@ -275,3 +275,7 @@ nix-aeneas-verify-fstar:
 .PHONY: nix-aeneas-verify-coq
 nix-aeneas-verify-coq:
 	nix build .#checks.x86_64-linux.aeneas-verify-coq --show-trace -L
+
+.PHONY: nix-aeneas-verify-lean
+nix-aeneas-verify-lean:
+	nix build .#checks.x86_64-linux.aeneas-verify-lean --show-trace -L
