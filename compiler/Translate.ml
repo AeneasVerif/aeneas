@@ -716,8 +716,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
 
 let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
     (rust_module_name : string) (module_name : string) (custom_msg : string)
-    ?(custom_variables : string list = []) (custom_imports : string list)
-    (custom_includes : string list) : unit =
+    (custom_imports : string list) (custom_includes : string list) : unit =
   (* Open the file and create the formatter *)
   let out = open_out filename in
   let fmt = Format.formatter_of_out_channel out in
@@ -770,10 +769,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
       (* Add the custom imports *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_imports;
       (* Add the custom includes *)
-      List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_includes;
-      if custom_variables <> [] then (
-        Printf.fprintf out "\n";
-        List.iter (fun m -> Printf.fprintf out "%s\n" m) custom_variables));
+      List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_includes);
   (* From now onwards, we use the formatter *)
   (* Set the margin *)
   Format.pp_set_margin fmt 80;
@@ -1066,6 +1062,18 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          extract_filebasename ^ file_delimiter ^ "Opaque" ^ opaque_ext
        in
        let opaque_module = module_name ^ module_delimiter ^ "Opaque" in
+       let opaque_imported_module =
+         (* In the case of Lean, we declare an interface (a record) containing
+            the opaque definitions, and we leave it to the user to provide an
+            instance of this module.
+
+            TODO: do the same for Coq.
+            TODO: do the same for the type definitions.
+         *)
+         if !Config.backend = Lean then
+           module_name ^ module_delimiter ^ "ExternalFuns"
+         else opaque_module
+       in
        let opaque_config =
          {
            base_gen_config with
@@ -1083,7 +1091,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        in
        extract_file opaque_config gen_ctx opaque_filename crate.A.name
          opaque_module ": opaque function definitions" [] [ types_module ];
-       [ opaque_module ])
+       [ opaque_imported_module ])
      else []
    in
 
@@ -1106,12 +1114,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        [ module_name ^ clauses_submodule ^ module_delimiter ^ "Clauses" ]
      else []
    in
-   let custom_variables =
-     if has_opaque_funs then [ "section variable (opaque_defs: OpaqueDefs)" ]
-     else []
-   in
    extract_file fun_config gen_ctx fun_filename crate.A.name fun_module
-     ": function definitions" [] ~custom_variables
+     ": function definitions" []
      ([ types_module ] @ opaque_funs_module @ clauses_module))
   else
     let gen_config =
