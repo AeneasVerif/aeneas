@@ -13,6 +13,7 @@ sig
     val index_eq_EL : thm
     val len_append : thm
     val len_eq_LENGTH : thm
+    val len_pos : thm
     val update_eq : thm
   
   val ilist_grammars : type_grammar.grammar * term_grammar.grammar
@@ -67,6 +68,10 @@ sig
    [len_eq_LENGTH]  Theorem
       
       ⊢ ∀ls. len ls = &LENGTH ls
+   
+   [len_pos]  Theorem
+      
+      ⊢ ∀ls. 0 ≤ len ls
    
    [update_eq]  Theorem
       

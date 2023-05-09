@@ -476,7 +476,16 @@ fun filter_assums_tac (keep : term -> bool) : tactic =
         [th] =>
         let
           (* Being a bit brutal - will optimize later *)
-          val tac = ntac (length asms) strip_tac >> irule th >> pure_asm_rewrite_tac []
+          val tac = ntac (length asms) strip_tac >>
+            (* Small subtlety: we have to use the primitive irule here,
+               because otherwise it won't work with goals of the shape
+               “x <> y”, as those are actually of the shape: “x = y ==> F”:
+               irule will attempt to match “F” with the goal, which will fail.
+             *)
+            prim_irule th >>
+            (* Prove the assumptions of the theorem by using the assumptions
+               in goal. TODO: simply use ‘simp []’? *)
+            pure_asm_rewrite_tac [] >> SIMP_TAC bool_ss []
           val th = prove (list_mk_imp (asms, g), tac)
           val th = foldl (fn (_, th) => UNDISCH th) th asms
         in th end
@@ -497,7 +506,16 @@ val dest_assums_conjs_tac : tactic =
         [th] =>
         let
           (* Being a bit brutal - will optimize later *)
-          val tac = ntac (length asms) strip_tac >> irule th >> pure_asm_rewrite_tac []
+          val tac = ntac (length asms) strip_tac >>
+            (* Small subtlety: we have to use the primitive irule here,
+               because otherwise it won't work with goals of the shape
+               “x <> y”, as those are actually of the shape: “x = y ==> F”:
+               irule will attempt to match “F” with the goal, which will fail.
+             *)
+            prim_irule th >>
+            (* Prove the assumptions of the theorem by using the assumptions
+               in goal. TODO: simply use ‘simp []’? *)
+            pure_asm_rewrite_tac [] >> SIMP_TAC bool_ss []
           val th = prove (list_mk_imp (asms, g), tac)
           val th = foldl (fn (_, th) => UNDISCH th) th asms
         in th end
@@ -508,32 +526,37 @@ val dest_assums_conjs_tac : tactic =
 
 (* Defining those here so that they are evaluated once and for all (parsing
    depends on the context) *)
-val int_tac_int_ty = “:int”
-val int_tac_num_ty = “:num”
-val int_tac_pat1 = “(x : 'a) <> (y : 'a)”
-val int_tac_pat2 = “(x : 'a) = (y : 'a)”
+val int_tac_pats = [
+    “x: int = y”,
+    “x: int <= y”,
+    “x: int < y”,
+    “x: int >= y”,
+    “x: int > y”,
+    “x: num = y”,
+    “x: num <= y”,
+    “x: num < y”,
+    “x: num >= y”,
+    “x: num > y”
+]
+val int_tac_ops = Redblackset.fromList Term.compare (map (fst o strip_comb) int_tac_pats)  
 
 (* We boost COOPER_TAC a bit *)
 fun int_tac (asms, g) =
   let
-    (* Following the bug we discovered in COOPER_TAC, we filter all the
-       inequalities/equalities which terms are not between terms of type “:int”
-       or “:num”.
+    (* Following the bug we discovered in COOPER_TAC, we keep only the terms:
+       - which are inequalities/equalities between terms of type “:int” or “:num”.
+       - which are comparisons of terms of tyep “:int” or “:num”
 
        TODO: issue/PR for HOL4
      *)
-    fun keep_with_pat (asm : term) (pat : term) : bool =
-      let
-        val (_, s) = match_term pat asm
-      in
-        case s of
-          [{redex = _, residue = ty}] => (ty = int_tac_int_ty orelse ty = int_tac_num_ty)
-        | [] => (* Can happen if the term has exactly the same types as the pattern - unlikely *) false
-        | _ =>  failwith "int_tac: match error"
-      end
-      handle HOL_ERR _ => true
-    fun keep (asm : term) : bool =
-      forall (keep_with_pat asm) [int_tac_pat1, int_tac_pat2]
+    fun keep (x : term) : bool =
+    let
+      val x = if is_neg x then dest_neg x else x
+    in
+      case strip_comb x of
+        (y, [_, _]) => Redblackset.member (int_tac_ops, y)
+      | _ => false
+    end
  in
    (dest_assums_conjs_tac >>
     filter_assums_tac keep >>

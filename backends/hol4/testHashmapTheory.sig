@@ -15,7 +15,13 @@ sig
   
   (*  Theorems  *)
     val datatype_list_t : thm
+    val distinct_keys_cons : thm
+    val distinct_keys_insert : thm
+    val distinct_keys_insert_index_neq : thm
+    val distinct_keys_tail : thm
+    val insert_index_neq : thm
     val insert_lem : thm
+    val insert_lem_aux : thm
     val list_t_11 : thm
     val list_t_Axiom : thm
     val list_t_case_cong : thm
@@ -52,12 +58,10 @@ sig
       ⊢ ∀ls.
           distinct_keys ls ⇔
           ∀i j.
-            0 < i ⇒
-            i < len ls ⇒
-            0 < j ⇒
+            0 ≤ i ⇒
+            i < j ⇒
             j < len ls ⇒
-            FST (index i ls) = FST (index j ls) ⇒
-            i = j
+            FST (index i ls) ≠ FST (index j ls)
    
    [list_t_TY_DEF]  Definition
       
@@ -101,6 +105,48 @@ sig
       
       ⊢ DATATYPE (list_t ListCons ListNil)
    
+   [distinct_keys_cons]  Theorem
+      
+      ⊢ ∀k v ls.
+          (∀i. 0 ≤ i ⇒ i < len ls ⇒ FST (index i ls) ≠ k) ⇒
+          distinct_keys ls ⇒
+          distinct_keys ((k,v)::ls)
+   
+   [distinct_keys_insert]  Theorem
+      
+      [oracles: DISK_THM] [axioms: insert_def] []
+      ⊢ ∀k v ls0 ls1.
+          distinct_keys (list_t_v ls0) ⇒
+          insert k v ls0 = Return ls1 ⇒
+          distinct_keys (list_t_v ls1)
+   
+   [distinct_keys_insert_index_neq]  Theorem
+      
+      [oracles: DISK_THM] [axioms: insert_def] []
+      ⊢ ∀k v q r ls0 ls1 i.
+          distinct_keys ((q,r)::list_t_v ls0) ⇒
+          q ≠ k ⇒
+          insert k v ls0 = Return ls1 ⇒
+          0 ≤ i ⇒
+          i < len (list_t_v ls1) ⇒
+          FST (index i (list_t_v ls1)) ≠ q
+   
+   [distinct_keys_tail]  Theorem
+      
+      ⊢ ∀k v ls. distinct_keys ((k,v)::ls) ⇒ distinct_keys ls
+   
+   [insert_index_neq]  Theorem
+      
+      [oracles: DISK_THM] [axioms: insert_def] []
+      ⊢ ∀q k v ls0 ls1 i.
+          (∀j. 0 ≤ j ∧ j < len (list_t_v ls0) ⇒
+               q ≠ FST (index j (list_t_v ls0))) ⇒
+          q ≠ k ⇒
+          insert k v ls0 = Return ls1 ⇒
+          0 ≤ i ⇒
+          i < len (list_t_v ls1) ⇒
+          FST (index i (list_t_v ls1)) ≠ q
+   
    [insert_lem]  Theorem
       
       [oracles: DISK_THM] [axioms: insert_def] []
@@ -109,8 +155,20 @@ sig
           case insert key value ls of
             Return ls1 =>
               lookup key ls1 = SOME value ∧
+              (∀k. k ≠ key ⇒ lookup k ls = lookup k ls1) ∧
+              distinct_keys (list_t_v ls1)
+          | Fail v1 => F
+          | Diverge => F
+   
+   [insert_lem_aux]  Theorem
+      
+      [oracles: DISK_THM] [axioms: insert_def] []
+      ⊢ ∀ls key value.
+          case insert key value ls of
+            Return ls1 =>
+              lookup key ls1 = SOME value ∧
               ∀k. k ≠ key ⇒ lookup k ls = lookup k ls1
-          | Fail v3 => F
+          | Fail v1 => F
           | Diverge => F
    
    [list_t_11]  Theorem
@@ -184,7 +242,7 @@ sig
           u32_to_int i < len (list_t_v ls) ⇒
           case nth_mut_fwd ls i of
             Return x => x = index (u32_to_int i) (list_t_v ls)
-          | Fail v3 => F
+          | Fail v1 => F
           | Diverge => F
    
    

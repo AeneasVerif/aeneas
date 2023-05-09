@@ -72,6 +72,14 @@ Proof
   Induct_on ‘ls’ >> fs [len_def] >> cooper_tac
 QED
 
+Theorem len_pos:
+  ∀ls. 0 ≤ len ls
+Proof
+  strip_tac >>
+  qspec_assume ‘ls’ len_eq_LENGTH >>
+  cooper_tac
+QED
+
 Theorem index_eq_EL:
   ∀(i: int) ls.
     0 ≤ i ⇒
