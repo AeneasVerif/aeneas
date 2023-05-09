@@ -2,9 +2,7 @@
 -- [external]: function definitions
 import Base.Primitives
 import External.Types
-import External.Opaque
-
-section variable (opaque_defs: OpaqueDefs)
+import External.ExternalFuns
 
 /- [external::swap] -/
 def swap_fwd
@@ -28,9 +26,7 @@ def swap_back
 
 /- [external::test_new_non_zero_u32] -/
 def test_new_non_zero_u32_fwd
-  (x : UInt32) (st : State) :
-  Result (State × core_num_nonzero_non_zero_u32_t)
-  :=
+  (x : U32) (st : State) : Result (State × core_num_nonzero_non_zero_u32_t) :=
   do
     let (st0, opt) ← opaque_defs.core_num_nonzero_non_zero_u32_new_fwd x st
     opaque_defs.core_option_option_unwrap_fwd core_num_nonzero_non_zero_u32_t
@@ -39,12 +35,9 @@ def test_new_non_zero_u32_fwd
 /- [external::test_vec] -/
 def test_vec_fwd : Result Unit :=
   do
-    let v := vec_new UInt32
-    let _ ← vec_push_back UInt32 v (UInt32.ofNatCore 0 (by intlit))
+    let v := vec_new U32
+    let _ ← vec_push_back U32 v (U32.ofInt 0 (by intlit))
     Result.ret ()
-
-/- Unit test for [external::test_vec] -/
-#assert (test_vec_fwd == .ret ())
 
 /- [external::custom_swap] -/
 def custom_swap_fwd
@@ -68,26 +61,24 @@ def custom_swap_back
 
 /- [external::test_custom_swap] -/
 def test_custom_swap_fwd
-  (x : UInt32) (y : UInt32) (st : State) : Result (State × Unit) :=
+  (x : U32) (y : U32) (st : State) : Result (State × Unit) :=
   do
-    let (st0, _) ← custom_swap_fwd UInt32 x y st
+    let (st0, _) ← custom_swap_fwd U32 x y st
     Result.ret (st0, ())
 
 /- [external::test_custom_swap] -/
 def test_custom_swap_back
-  (x : UInt32) (y : UInt32) (st : State) (st0 : State) :
-  Result (State × (UInt32 × UInt32))
+  (x : U32) (y : U32) (st : State) (st0 : State) :
+  Result (State × (U32 × U32))
   :=
-  custom_swap_back UInt32 x y st (UInt32.ofNatCore 1 (by intlit)) st0
+  custom_swap_back U32 x y st (U32.ofInt 1 (by intlit)) st0
 
 /- [external::test_swap_non_zero] -/
-def test_swap_non_zero_fwd
-  (x : UInt32) (st : State) : Result (State × UInt32) :=
+def test_swap_non_zero_fwd (x : U32) (st : State) : Result (State × U32) :=
   do
-    let (st0, _) ← swap_fwd UInt32 x (UInt32.ofNatCore 0 (by intlit)) st
-    let (st1, (x0, _)) ←
-      swap_back UInt32 x (UInt32.ofNatCore 0 (by intlit)) st st0
-    if h: x0 = (UInt32.ofNatCore 0 (by intlit))
+    let (st0, _) ← swap_fwd U32 x (U32.ofInt 0 (by intlit)) st
+    let (st1, (x0, _)) ← swap_back U32 x (U32.ofInt 0 (by intlit)) st st0
+    if h: x0 = (U32.ofInt 0 (by intlit))
     then Result.fail Error.panic
     else Result.ret (st1, x0)
 
