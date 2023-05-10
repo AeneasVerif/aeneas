@@ -150,6 +150,9 @@ val integer_conversion_lemmas_list = [
   u128_to_int_int_to_u128
 ]
 
+(* Using a net for efficiency *)
+val integer_conversion_lemmas_net = net_of_rewrite_thms integer_conversion_lemmas_list
+
 (* Look for conversions from integers to machine integers and back.
    {[
      u32_to_int (int_to_u32 x)
@@ -161,17 +164,19 @@ val integer_conversion_lemmas_list = [
    ]}
  *)
 val rewrite_with_dep_int_lemmas : tactic =
-  (* We're not trying to be smart: we just try to rewrite with each theorem at
-     a time *)
   let
-    val prove_premise = full_simp_tac simpLib.empty_ss integer_bounds_defs_list >> int_tac;
-    val then_tac1 = (fn th => full_simp_tac simpLib.empty_ss [th]);
-    val rewr_tac1 = apply_dep_rewrites_match_concl_with_all_tac prove_premise then_tac1;
-    val then_tac2 = (fn th => full_simp_tac simpLib.empty_ss [th]);
-    val rewr_tac2 = apply_dep_rewrites_match_first_premise_with_all_tac (fn _ => true) prove_premise then_tac2;
+    val prove_premise = full_simp_tac simpLib.empty_ss integer_bounds_defs_list >> int_tac
+    (* Rewriting based on matching the conclusion. *)
+    val then_tac1 = (fn th => full_simp_tac simpLib.empty_ss [th])
+    val rewr_tac1 = apply_dep_rewrites_match_concl_with_all_tac prove_premise then_tac1
+    (* Rewriting based on matching the first premise.
+       We're not trying to be smart: we just try to rewrite with each theorem at
+       a time.
+       Remark: this is not used for now. *)
+    val then_tac2 = (fn th => full_simp_tac simpLib.empty_ss [th])
+    val rewr_tac2 = apply_dep_rewrites_match_first_premise_with_all_tac (fn _ => true) prove_premise then_tac2
   in
-      map_every_tac rewr_tac1 integer_conversion_lemmas_list >>
-      map_every_tac rewr_tac2 []
+    rewr_tac1 integer_conversion_lemmas_net
   end
 
 (* Massage a bit the goal, for instance by introducing integer bounds in the
