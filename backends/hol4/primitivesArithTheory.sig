@@ -7,6 +7,7 @@ sig
     val ge_eq_le : thm
     val gt_eq_lt : thm
     val int_add : thm
+    val int_add_minus_same_eq : thm
     val int_induction : thm
     val int_induction_ideal : thm
     val int_of_num_id : thm
@@ -47,6 +48,10 @@ sig
    [int_add]  Theorem
       
       ⊢ ∀m n. &(m + n) = &m + &n
+   
+   [int_add_minus_same_eq]  Theorem
+      
+      ⊢ ∀i j. i + j − j = i
    
    [int_induction]  Theorem
       
