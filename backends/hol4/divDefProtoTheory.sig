@@ -18,6 +18,7 @@ sig
     val fix_fixed_eq : thm
     val fix_fixed_terminates : thm
     val fix_fixed_termination_rec_case : thm
+    val fix_fixed_termination_rec_case_aux : thm
     val fix_fuel_compute : thm
     val fix_fuel_mono : thm
     val fix_fuel_mono_least : thm
@@ -127,6 +128,15 @@ sig
           fix_fuel_P f y m ⇒
           fix_fuel ($LEAST (fix_fuel_P f x)) f x =
           fix_fuel ($LEAST (fix_fuel_P f y)) f y
+   
+   [fix_fixed_termination_rec_case_aux]  Theorem
+      
+      ⊢ ∀x y n m.
+          is_valid_fp_body f ⇒
+          (∀g. f g x = g y) ⇒
+          fix_fuel_P f x n ⇒
+          fix_fuel_P f y m ⇒
+          fix_fuel n f x = fix_fuel m f y
    
    [fix_fuel_compute]  Theorem
       
