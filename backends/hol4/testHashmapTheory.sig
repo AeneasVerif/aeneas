@@ -7,18 +7,25 @@ sig
   
   (*  Definitions  *)
     val distinct_keys_def : thm
+    val distinct_keys_f_def : thm
+    val for_all_def : thm
     val list_t_TY_DEF : thm
     val list_t_case_def : thm
     val list_t_size_def : thm
     val list_t_v_def : thm
     val lookup_def : thm
+    val pairwise_rel_def : thm
   
   (*  Theorems  *)
     val datatype_list_t : thm
     val distinct_keys_cons : thm
+    val distinct_keys_f_eq_distinct_keys : thm
+    val distinct_keys_f_insert : thm
+    val distinct_keys_f_insert_for_all : thm
     val distinct_keys_insert : thm
     val distinct_keys_insert_index_neq : thm
     val distinct_keys_tail : thm
+    val for_all_quant : thm
     val insert_index_neq : thm
     val insert_lem : thm
     val insert_lem_aux : thm
@@ -34,6 +41,7 @@ sig
     val nth_mut_fwd_def : thm
     val nth_mut_fwd_ind : thm
     val nth_mut_fwd_spec : thm
+    val pairwise_rel_quant : thm
   
   val testHashmap_grammars : type_grammar.grammar * term_grammar.grammar
 (*
@@ -62,6 +70,15 @@ sig
             i < j ⇒
             j < len ls ⇒
             FST (index i ls) ≠ FST (index j ls)
+   
+   [distinct_keys_f_def]  Definition
+      
+      ⊢ ∀ls. distinct_keys_f ls ⇔ pairwise_rel (λx y. FST x ≠ FST y) ls
+   
+   [for_all_def]  Definition
+      
+      ⊢ (∀p. for_all p [] ⇔ T) ∧
+        ∀p x ls. for_all p (x::ls) ⇔ p x ∧ for_all p ls
    
    [list_t_TY_DEF]  Definition
       
@@ -101,6 +118,12 @@ sig
       
       ⊢ ∀key ls. lookup key ls = lookup_raw key (list_t_v ls)
    
+   [pairwise_rel_def]  Definition
+      
+      ⊢ (∀p. pairwise_rel p [] ⇔ T) ∧
+        ∀p x ls.
+          pairwise_rel p (x::ls) ⇔ for_all (p x) ls ∧ pairwise_rel p ls
+   
    [datatype_list_t]  Theorem
       
       ⊢ DATATYPE (list_t ListCons ListNil)
@@ -111,6 +134,28 @@ sig
           (∀i. 0 ≤ i ⇒ i < len ls ⇒ FST (index i ls) ≠ k) ⇒
           distinct_keys ls ⇒
           distinct_keys ((k,v)::ls)
+   
+   [distinct_keys_f_eq_distinct_keys]  Theorem
+      
+      ⊢ ∀ls. distinct_keys_f ls ⇔ distinct_keys ls
+   
+   [distinct_keys_f_insert]  Theorem
+      
+      [oracles: DISK_THM] [axioms: insert_def] []
+      ⊢ ∀k v ls0 ls1.
+          distinct_keys_f (list_t_v ls0) ⇒
+          insert k v ls0 = Return ls1 ⇒
+          distinct_keys_f (list_t_v ls1)
+   
+   [distinct_keys_f_insert_for_all]  Theorem
+      
+      [oracles: DISK_THM] [axioms: insert_def] []
+      ⊢ ∀k v k1 ls0 ls1.
+          k1 ≠ k ⇒
+          for_all (λy. k1 ≠ FST y) (list_t_v ls0) ⇒
+          pairwise_rel (λx y. FST x ≠ FST y) (list_t_v ls0) ⇒
+          insert k v ls0 = Return ls1 ⇒
+          for_all (λy. k1 ≠ FST y) (list_t_v ls1)
    
    [distinct_keys_insert]  Theorem
       
@@ -134,6 +179,10 @@ sig
    [distinct_keys_tail]  Theorem
       
       ⊢ ∀k v ls. distinct_keys ((k,v)::ls) ⇒ distinct_keys ls
+   
+   [for_all_quant]  Theorem
+      
+      ⊢ ∀p ls. for_all p ls ⇔ ∀i. 0 ≤ i ⇒ i < len ls ⇒ p (index i ls)
    
    [insert_index_neq]  Theorem
       
@@ -244,6 +293,12 @@ sig
             Return x => x = index (u32_to_int i) (list_t_v ls)
           | Fail v1 => F
           | Diverge => F
+   
+   [pairwise_rel_quant]  Theorem
+      
+      ⊢ ∀p ls.
+          pairwise_rel p ls ⇔
+          ∀i j. 0 ≤ i ⇒ i < j ⇒ j < len ls ⇒ p (index i ls) (index j ls)
    
    
 *)

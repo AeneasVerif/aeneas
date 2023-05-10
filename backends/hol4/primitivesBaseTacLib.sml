@@ -31,6 +31,7 @@ val map_first_tac = MAP_FIRST
 val fail_tac = FAIL_TAC
 val map_every_tac = MAP_EVERY
 
+(* TODO: rename assume to asm *)
 fun qspec_assume x th = qspec_then x assume_tac th
 fun qspecl_assume xl th = qspecl_then xl assume_tac th
 fun first_qspec_assume x = first_assum (qspec_assume x)
@@ -40,6 +41,11 @@ val all_tac = all_tac
 val pure_rewrite_tac = PURE_REWRITE_TAC
 val pure_asm_rewrite_tac = PURE_ASM_REWRITE_TAC
 val pure_once_rewrite_tac = PURE_ONCE_REWRITE_TAC
+
+val pat_undisch_tac = Q.PAT_UNDISCH_TAC
+
+val equiv_is_imp = prove (“∀x y. ((x ⇒ y) ∧ (y ⇒ x)) ⇒ (x ⇔ y)”, metis_tac [])
+val equiv_tac = irule equiv_is_imp >> conj_tac
 
 (* Dependent rewrites *)
 val dep_pure_once_rewrite_tac = dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC
@@ -493,6 +499,10 @@ fun filter_assums_tac (keep : term -> bool) : tactic =
   in
     ([(kept_asms, g)], valid)
   end
+  
+(* For debugging *)
+val dest_assums_conjs_th = ref sumTheory.EXISTS_SUM
+val dest_assums_conjs_goal = ref “T”
 
 (* Destruct the conjunctions in the assumptions *)
 val dest_assums_conjs_tac : tactic =
@@ -505,6 +515,8 @@ val dest_assums_conjs_tac : tactic =
       case thms of
         [th] =>
         let
+          (* Save the theorem for debugging *)
+          val _ = dest_assums_conjs_th := th
           (* Being a bit brutal - will optimize later *)
           val tac = ntac (length asms) strip_tac >>
             (* Small subtlety: we have to use the primitive irule here,
@@ -515,8 +527,13 @@ val dest_assums_conjs_tac : tactic =
             prim_irule th >>
             (* Prove the assumptions of the theorem by using the assumptions
                in goal. TODO: simply use ‘simp []’? *)
-            pure_asm_rewrite_tac [] >> SIMP_TAC bool_ss []
-          val th = prove (list_mk_imp (asms, g), tac)
+            pure_asm_rewrite_tac [] >> SIMP_TAC bool_ss [] >> 
+            (* We may need to finish the job with metis - TODO: there must be a better way *)
+            metis_tac []
+          (* Save the goal for debugging *)
+          val ng = list_mk_imp (asms, g)
+          val _ = dest_assums_conjs_goal := ng
+          val th = prove (ng, tac)
           val th = foldl (fn (_, th) => UNDISCH th) th asms
         in th end
       | _ => failwith "dest_assums_conjs: expected exactly one theorem"
@@ -538,7 +555,7 @@ val int_tac_pats = [
     “x: num >= y”,
     “x: num > y”
 ]
-val int_tac_ops = Redblackset.fromList Term.compare (map (fst o strip_comb) int_tac_pats)  
+val int_tac_ops = Redblackset.fromList Term.compare (map (fst o strip_comb) int_tac_pats)
 
 (* We boost COOPER_TAC a bit *)
 fun int_tac (asms, g) =
@@ -560,7 +577,7 @@ fun int_tac (asms, g) =
  in
    (dest_assums_conjs_tac >>
     filter_assums_tac keep >>
-    first_tac [cooper_tac, exfalso >> cooper_tac]) (asms, g)
+    first_tac [cooper_tac, exfalso >- cooper_tac]) (asms, g)
  end
 
 (* Repeatedly destruct cases and return the last scrutinee we get *)

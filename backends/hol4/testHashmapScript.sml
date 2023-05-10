@@ -111,6 +111,10 @@ Proof
   fs [lookup_def, lookup_raw_def, list_t_v_def]
 QED
 
+(*
+ * Invariant proof 1
+ *)
+
 Theorem distinct_keys_cons:
   ∀ k v ls.
   (∀ i. 0 ≤ i ⇒ i < len ls ⇒ FST (index i ls) ≠ k) ⇒
@@ -278,6 +282,140 @@ Proof
   qspecl_assume [‘ls’, ‘key’, ‘value’] insert_lem_aux >>
   case_tac >> fs [] >>
   metis_tac [distinct_keys_insert]
+QED
+
+(*
+ * Invariant proof 2: functional version of the invariant
+ *)
+val for_all_def = Define ‘
+  for_all p [] = T ∧
+  for_all p (x :: ls) = (p x ∧ for_all p ls)
+’
+
+val pairwise_rel_def = Define ‘
+  pairwise_rel p [] = T ∧
+  pairwise_rel p (x :: ls) = (for_all (p x) ls ∧ pairwise_rel p ls)
+’
+
+val distinct_keys_f_def = Define ‘
+  distinct_keys_f (ls : (u32 # 't) list) =
+    pairwise_rel (\x y. FST x ≠ FST y) ls
+’
+
+Theorem distinct_keys_f_insert_for_all:
+  ∀k v k1 ls0 ls1.
+  k1 ≠ k ⇒
+  for_all (λy. k1 ≠ FST y) (list_t_v ls0) ⇒
+  pairwise_rel (λx y. FST x ≠ FST y) (list_t_v ls0) ⇒
+  insert k v ls0 = Return ls1 ⇒
+  for_all (λy. k1 ≠ FST y) (list_t_v ls1)
+Proof
+  Induct_on ‘ls0’ >> rw [pairwise_rel_def] >~ [‘ListNil’] >>
+  gvs [list_t_v_def, pairwise_rel_def, for_all_def]
+  >-(gvs [MK_BOUNDED insert_def 1, bind_def, list_t_v_def, for_all_def]) >>
+  pat_undisch_tac ‘insert _ _ _ = _’ >>
+  simp [MK_BOUNDED insert_def 1, bind_def] >>
+  Cases_on ‘t’ >> rw [] >> gvs [list_t_v_def, pairwise_rel_def, for_all_def] >>
+  Cases_on ‘insert k v ls0’ >>
+  gvs [distinct_keys_f_def, list_t_v_def, pairwise_rel_def, for_all_def] >>
+  metis_tac []
+QED
+
+Theorem distinct_keys_f_insert:
+  ∀ k v ls0 ls1.
+  distinct_keys_f (list_t_v ls0) ⇒
+  insert k v ls0 = Return ls1 ⇒
+  distinct_keys_f (list_t_v ls1)
+Proof
+  Induct_on ‘ls0’ >> rw [distinct_keys_f_def] >~ [‘ListNil’]
+  >-(
+    fs [list_t_v_def, insert_def] >>
+    gvs [list_t_v_def, pairwise_rel_def, for_all_def]) >>
+  last_x_assum (qspecl_assume [‘k’, ‘v’]) >>
+  pat_undisch_tac ‘insert _ _ _ = _’ >>
+  simp [MK_BOUNDED insert_def 1, bind_def] >>
+  (* TODO: improve case_tac *)
+  Cases_on ‘t’ >> rw [] >> gvs [list_t_v_def, pairwise_rel_def, for_all_def] >>
+  Cases_on ‘insert k v ls0’ >>
+  gvs [distinct_keys_f_def, list_t_v_def, pairwise_rel_def, for_all_def] >>
+  metis_tac [distinct_keys_f_insert_for_all]
+QED
+
+(*
+ * Proving equivalence between the two version - exercise.
+ *)
+Theorem for_all_quant:
+  ∀p ls. for_all p ls ⇔ ∀i. 0 ≤ i ⇒ i < len ls ⇒ p (index i ls)
+Proof
+  strip_tac >> Induct_on ‘ls’
+  >-(rw [for_all_def, len_def] >> int_tac) >>
+  rw [for_all_def, len_def, index_eq] >>
+  equiv_tac
+  >-(
+    rw [] >>
+    Cases_on ‘i = 0’ >> fs [] >>
+    first_x_assum irule >>
+    int_tac) >>
+  rw []
+  >-(
+    first_x_assum (qspec_assume ‘0’) >> fs [] >>
+    first_x_assum irule >>
+    qspec_assume ‘ls’ len_pos >>
+    int_tac) >>
+  first_x_assum (qspec_assume ‘i + 1’) >>
+  fs [] >>
+  sg ‘i + 1 ≠ 0 ∧ i + 1 - 1 = i’ >- int_tac >> fs [] >>
+  first_x_assum irule >> int_tac
+QED
+
+Theorem pairwise_rel_quant:
+  ∀p ls. pairwise_rel p ls ⇔
+    (∀i j. 0 ≤ i ⇒ i < j ⇒ j < len ls ⇒ p (index i ls) (index j ls))
+Proof
+  strip_tac >> Induct_on ‘ls’
+  >-(rw [pairwise_rel_def, len_def] >> int_tac) >>
+  rw [pairwise_rel_def, len_def] >>
+  equiv_tac
+  >-(
+    (* ==> *)
+    rw [] >>
+    sg ‘0 < j’ >- int_tac >>
+    Cases_on ‘i = 0’
+    >-(
+      simp [index_eq] >>
+      qspecl_assume [‘p h’, ‘ls’] (iffLR for_all_quant) >>
+      first_x_assum irule >> fs [] >> int_tac
+    ) >>
+    rw [index_eq] >>
+    first_x_assum irule >> int_tac
+  ) >>
+  (* <== *)
+  rw []
+  >-(
+    rw [for_all_quant] >>
+    first_x_assum (qspecl_assume [‘0’, ‘i + 1’]) >>
+    sg ‘0 < i + 1 ∧ i + 1 - 1 = i’ >- int_tac >>
+    fs [index_eq] >>
+    first_x_assum irule >> int_tac
+  ) >>
+  sg ‘pairwise_rel p ls’
+  >-(
+    rw [pairwise_rel_def] >>
+    first_x_assum (qspecl_assume [‘i' + 1’, ‘j' + 1’]) >>
+    sg ‘0 < i' + 1 ∧ 0 < j' + 1’ >- int_tac >>
+    fs [index_eq, int_add_minus_same_eq] >>
+    first_x_assum irule >> int_tac
+  ) >>
+  fs []
+QED
+
+Theorem distinct_keys_f_eq_distinct_keys:
+  ∀ ls.
+  distinct_keys_f ls ⇔ distinct_keys ls
+Proof
+  rw [distinct_keys_def, distinct_keys_f_def] >>
+  qspecl_assume [‘(λx y. FST x ≠ FST y)’, ‘ls’] pairwise_rel_quant >>
+  fs []
 QED
 
 val _ = export_theory ()
