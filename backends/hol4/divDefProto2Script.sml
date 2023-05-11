@@ -298,23 +298,9 @@ Proof
   metis_tac []
 QED  
 
-(*
- * Attempt to make the lemmas work with more general types
- * (we want ‘: 'a -> 'b result’, not ‘:'a -> 'a result’).
- *)
-val simp_types_def = Define ‘
-  simp_types (f : 'a -> 'b result) : ('a + 'b) -> ('a + 'b) result =
-    \x. case x of
-    | INL x =>
-      (case f x of
-       | Fail e => Fail e
-       | Diverge => Diverge
-       | Return y =>
-         Return (INR y))
-    | INR _ => Fail Failure
-’
-
-(* Testing on an example *)
+(*======================
+ * Example 1: nth
+ *======================*)
 Datatype:
   list_t =
     ListCons 't list_t
@@ -326,6 +312,10 @@ val nth_body_def = Define ‘
   nth_body (f : (('t list_t # u32) + 't) -> (('t list_t # u32) + 't) result)
     (x : (('t list_t # u32) + 't)) :
     (('t list_t # u32) + 't) result =
+    (* Destruct the input. We need this to call the proper function in case
+       of mutually recursive definitions, but also to eliminate arguments
+       which correspond to the output value (the input type is the same
+       as the output type). *)
     case x of
     | INL x => (
       let (ls, i) = x in
@@ -337,6 +327,8 @@ val nth_body_def = Define ‘
           do
           i0 <- u32_sub i (int_to_u32 1);
           r <- f (INL (tl, i0));
+          (* Eliminate the invalid outputs. This is not necessary here,
+             but it is in the case of non tail call recursive calls. *)
           case r of
           | INL _ => Fail Failure
           | INR i1 => Return (INR i1)
@@ -344,13 +336,6 @@ val nth_body_def = Define ‘
       | ListNil => Fail Failure)
     | INR _ => Fail Failure
 ’
-
-(* TODO: move *)
-Theorem is_valid_suffice:
-  ∃y. ∀g. g x = g y
-Proof
-  metis_tac []
-QED
 
 (* We first prove the theorem with ‘SUC (SUC n)’ where ‘n’ is a variable
    to prevent this quantity from being rewritten to 2 *)
@@ -401,6 +386,10 @@ val nth_raw_def = Define ‘
       | INR x => Return x
 ’
 
+(* Rewrite the goal once, and on the left part of the goal seen as an application *)
+fun pure_once_rewrite_left_tac ths =
+  CONV_TAC (PATH_CONV "l" (PURE_ONCE_REWRITE_CONV ths))
+
 Theorem nth_def:
   ∀ls i. nth (ls : 't list_t) (i : u32) : 't result =
     case ls of
@@ -417,13 +406,10 @@ Proof
   rpt strip_tac >>
   (* Expand the raw definition *)
   pure_rewrite_tac [nth_raw_def] >>
-  (* Use the fixed-point equality *)
-  sg ‘fix nth_body (INL (ls,i)) = nth_body (fix nth_body) (INL (ls,i))’
-  >- (simp_tac bool_ss [HO_MATCH_MP fix_fixed_eq nth_body_is_valid]) >>
-  pop_assum (fn th => pure_asm_rewrite_tac [th]) >>
+  (* Use the fixed-point equality - the rewrite must only be applied *on the left* of the equality, in the goal *)
+  pure_once_rewrite_left_tac [HO_MATCH_MP fix_fixed_eq nth_body_is_valid] >>
   (* Expand the body definition *)
-  qspecl_assume [‘fix nth_body’, ‘(INL (ls, i))’] nth_body_def >>
-  pop_assum (fn th => pure_rewrite_tac [th, LET_THM]) >>
+  pure_rewrite_tac [nth_body_def] >>
   (* Explore all the paths - maybe we can be smarter, but this is fast and really easy *)
   fs [bind_def] >>
   Cases_on ‘ls’ >> fs [] >>
@@ -431,6 +417,151 @@ Proof
   Cases_on ‘u32_sub i (int_to_u32 1)’ >> fs [] >>
   Cases_on ‘fix nth_body (INL (l,a))’ >> fs [] >>
   Cases_on ‘a'’ >> fs []
+QED
+
+(*======================
+ * Example 2: even, odd
+ *======================*)
+
+val even_odd_body_def = Define ‘
+  even_odd_body
+    (f : (int + int + bool) -> (int + int + bool) result)
+    (x : int + int + bool) : (int + int + bool) result =
+    case x of
+    | INL i =>
+      (* Even *)
+      if i = 0 then Return (INR (INR T))
+      else
+        (case f (INR (INL (i - 1))) of
+         | Fail e => Fail e
+         | Diverge => Diverge
+         | Return r =>
+           (* Eliminate the unwanted results *)
+           case r of
+           | INL _ => Fail Failure
+           | INR (INL _) => Fail Failure
+           | INR (INR b) => Return (INR (INR b))
+           )
+    | INR x =>
+      case x of
+      | INL i =>
+        (* Odd *)
+        if i = 0 then Return (INR (INR F))
+        else
+          (case f (INL (i - 1)) of
+           | Fail e => Fail e
+           | Diverge => Diverge
+           | Return r =>
+             (* Eliminate the unwanted results *)
+             case r of
+             | INL _ => Fail Failure
+             | INR (INL _) => Fail Failure
+             | INR (INR b) => Return (INR (INR b))
+             )
+      | INR _ =>
+        (* This case is for the return value *)
+        Fail Failure
+’
+
+Theorem even_odd_body_is_valid_aux:
+  is_valid_fp_body (SUC (SUC n)) even_odd_body
+Proof
+  pure_once_rewrite_tac [is_valid_fp_body_def] >>
+  gen_tac >>
+  (* Expand *)
+  fs [even_odd_body_def, bind_def] >>
+  (* TODO: automate this *)
+  Cases_on ‘x’ >> fs []
+  >-(
+    Cases_on ‘x' = 0’ >> fs [] >>
+    (* Recursive call *)
+    disj2_tac >>
+    qexists ‘\g x. case x of | INL _ => Fail Failure | INR (INL _) => Fail Failure | INR (INR i1) => Return (INR (INR i1))’ >>
+    qexists ‘INR (INL (x' − 1))’ >>
+    conj_tac
+    >-(pure_once_rewrite_tac [is_valid_fp_body_def] >> fs []) >>
+    fs []) >>
+  Cases_on ‘y’ >> fs []  >>
+  Cases_on ‘x = 0’ >> fs []  >>
+  (* Recursive call *)
+  disj2_tac >>
+  qexists ‘\g x. case x of | INL _ => Fail Failure | INR (INL _) => Fail Failure | INR (INR i1) => Return (INR (INR i1))’ >>
+  qexists ‘INL (x − 1)’ >>
+  conj_tac
+  >-(pure_once_rewrite_tac [is_valid_fp_body_def] >> fs []) >>
+  fs []
+QED
+
+Theorem even_odd_body_is_valid:
+  is_valid_fp_body (SUC (SUC 0)) even_odd_body
+Proof
+  irule even_odd_body_is_valid_aux
+QED
+
+val even_raw_def = Define ‘
+  even (i : int) =
+    case fix even_odd_body (INL i) of
+    | Fail e => Fail e
+    | Diverge => Diverge
+    | Return r =>
+      case r of
+      | INL _ => Fail Failure
+      | INR (INL _) => Fail Failure
+      | INR (INR b) => Return b
+’
+
+val odd_raw_def = Define ‘
+  odd (i : int) =
+    case fix even_odd_body (INR (INL i)) of
+    | Fail e => Fail e
+    | Diverge => Diverge
+    | Return r =>
+      case r of
+      | INL _ => Fail Failure
+      | INR (INL _) => Fail Failure
+      | INR (INR b) => Return b
+’
+
+Theorem even_def:
+  ∀i. even (i : int) : bool result =
+    if i = 0 then Return T else odd (i - 1)
+Proof
+  gen_tac >>
+  (* Expand the definition *)
+  pure_once_rewrite_tac [even_raw_def] >>
+  (* Use the fixed-point equality *)
+  pure_once_rewrite_left_tac [HO_MATCH_MP fix_fixed_eq even_odd_body_is_valid] >>
+  (* Expand the body definition *)
+  pure_rewrite_tac [even_odd_body_def] >>
+  (* Expand all the definitions from the group *)
+  pure_rewrite_tac [even_raw_def, odd_raw_def] >>
+  (* Explore all the paths - maybe we can be smarter, but this is fast and really easy *)
+  fs [bind_def] >>
+  Cases_on ‘i = 0’ >> fs [] >>
+  Cases_on ‘fix even_odd_body (INR (INL (i − 1)))’ >> fs [] >>
+  Cases_on ‘a’ >> fs [] >>
+  Cases_on ‘y’ >> fs []
+QED
+
+Theorem odd_def:
+  ∀i. odd (i : int) : bool result =
+    if i = 0 then Return F else even (i - 1)
+Proof
+  gen_tac >>
+  (* Expand the definition *)
+  pure_once_rewrite_tac [odd_raw_def] >>
+  (* Use the fixed-point equality *)
+  pure_once_rewrite_left_tac [HO_MATCH_MP fix_fixed_eq even_odd_body_is_valid] >>
+  (* Expand the body definition *)
+  pure_rewrite_tac [even_odd_body_def] >>
+  (* Expand all the definitions from the group *)
+  pure_rewrite_tac [even_raw_def, odd_raw_def] >>
+  (* Explore all the paths - maybe we can be smarter, but this is fast and really easy *)
+  fs [bind_def] >>
+  Cases_on ‘i = 0’ >> fs [] >>
+  Cases_on ‘fix even_odd_body (INL (i − 1))’ >> fs [] >>
+  Cases_on ‘a’ >> fs [] >>
+  Cases_on ‘y’ >> fs []
 QED
 
 val _ = export_theory ()
