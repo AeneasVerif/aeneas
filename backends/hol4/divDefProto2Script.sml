@@ -15,8 +15,8 @@ val _ = new_theory "divDefProto2"
  * TODO: this works! Cleanup.
  *)
 val fix_fuel_def = Define ‘
-  (fix_fuel (0 : num) (f : ('a -> 'a result) -> 'a -> 'a result) (x : 'a) : 'a result = Diverge) ∧
-  (fix_fuel (SUC n) (f : ('a -> 'a result) -> 'a -> 'a result) (x : 'a) : 'a result = f (fix_fuel n f) x)
+  (fix_fuel (0 : num) (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result = Diverge) ∧
+  (fix_fuel (SUC n) (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result = f (fix_fuel n f) x)
 ’
 
 val fix_fuel_P_def = Define ‘
@@ -24,7 +24,7 @@ val fix_fuel_P_def = Define ‘
 ’
 
 val fix_def = Define ‘
-  fix (f : ('a -> 'a result) -> 'a -> 'a result) (x : 'a) : 'a result =
+  fix (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result =
     if (∃ n. fix_fuel_P f x n) then fix_fuel ($LEAST (fix_fuel_P f x)) f x else Diverge
 ’
 
@@ -288,391 +288,188 @@ Proof
   Cases_on ‘f (fix_fuel n'' f) x’ >> fs [] >> metis_tac []
 QED
 
-(*
-Type ft = ``: 'a -> ('a result + (num # num # 'a))``
-
-val fix_fuel_def = Define ‘
-  (fix_fuel (0 : num) (fs : ('a ft) list)
-            (i : num) (x : 'a) : 'a result = Diverge) ∧
-  
-  (fix_fuel (SUC n) fs i x =
-    case EL i fs x of
-    | INL r => r
-    | INR (j, k, y) =>
-      case fix_fuel n fs j y of
-      | Fail e => Fail e
-      | Diverge => Diverge
-      | Return z =>
-        fix_fuel n fs k z)
-’
-
-val fix_fuel_P_def = Define ‘
-  fix_fuel_P fs i x n = ~(is_diverge (fix_fuel n fs i x))
-’
-
-val fix_def = Define ‘
-  fix (fs : ('a ft) list) (i : num) (x : 'a) : 'a result =
-    if (∃ n. fix_fuel_P fs i x n)
-    then fix_fuel ($LEAST (fix_fuel_P fs i x)) fs i x
-    else Diverge
-’
-
-Theorem fix_fuel_mono:
-  ∀f. is_valid_fp_body f ⇒
-    ∀n x. fix_fuel_P f x n ⇒
-     ∀ m. n ≤ m ⇒
-       fix_fuel n f x = fix_fuel m f x
+Theorem fix_fixed_eq:
+  ∀N f. is_valid_fp_body N f ⇒ ∀x. fix f x = f (fix f) x
 Proof
-  ntac 2 strip_tac >>
-  Induct_on ‘n’ >> rpt strip_tac
-  >- (fs [fix_fuel_P_def, is_diverge_def, fix_fuel_def]) >>
-  Cases_on ‘m’ >- int_tac >> fs [] >>
-  fs [is_valid_fp_body_def] >>
-  fs [fix_fuel_P_def, is_diverge_def, fix_fuel_def] >>
-
-  (*(* Use the validity property *)
-  last_assum (qspec_assume ‘x’) >> (* TODO: consume? *) *)
-
-  (*pop_assum ignore_tac >> (* TODO: not sure *) *)
-  Induct_on ‘N’ >- fs [eval_ftree_def] >>
   rw [] >>
-  rw [eval_ftree_def] >>
-  Cases_on ‘h x’ >> fs [] >>
-  Cases_on ‘y’ >> fs [] >>
-  Cases_on ‘y'’ >> fs [] >>
-  
-  last_assum (qspec_assume ‘q’) >>
-  Cases_on ‘fix_fuel n f q’ >> fs [] >>
-  
-  Cases_on ‘N’ >> fs [eval_ftree_def] >>
-  
-  Cases_on ‘y’ >> fs [] >>
-  Cases_on ‘y'’ >> fs [] >>
-  rw [] >>
-  (* This makes a case disjunction on the validity property *)
-  rw []
-  >-((* Case 1: the continuation doesn't matter *) fs []) >>
-  (* Case 2: the continuation *does* matter (i.e., there is a recursive call *)
-  (* Instantiate the validity property with the different continuations *)
-  first_assum (qspec_assume ‘fix_fuel n f’) >>
-  first_assum (qspec_assume ‘fix_fuel n' f’) >>
-  last_assum (qspec_assume ‘y’) >>
-  fs []
-QED
+  Cases_on ‘∃n. fix_fuel_P f x n’
+  >- (irule fix_fixed_terminates >> metis_tac []) >>
+  irule fix_fixed_diverges >>
+  metis_tac []
+QED  
 
-
-
-Type ft = ``: ('a -> 'a result) -> 'a -> ('a result + (num # 'a))``
-
-val fix_fuel_def = Define ‘
-  (fix_fuel (0 : num) (fs : ('a ft) list) (g : 'a -> 'a result)
-            (i : num) (x : 'a) : 'a result = Diverge) ∧
-  
-  (fix_fuel (SUC n) fs g i x =
-    case EL i fs g x of
-    | INL r => r
-    | INR (j, y) =>
-      case g y of
-      | Fail e => Fail e
-      | Diverge => Diverge
-      | Return z => fix_fuel n fs g j z)
+(*
+ * Attempt to make the lemmas work with more general types
+ * (we want ‘: 'a -> 'b result’, not ‘:'a -> 'a result’).
+ *)
+val simp_types_def = Define ‘
+  simp_types (f : 'a -> 'b result) : ('a + 'b) -> ('a + 'b) result =
+    \x. case x of
+    | INL x =>
+      (case f x of
+       | Fail e => Fail e
+       | Diverge => Diverge
+       | Return y =>
+         Return (INR y))
+    | INR _ => Fail Failure
 ’
 
-val fix_fuel_def = Define ‘
-  (fix_fuel (0 : num) (fs : ('a ft) list) g (i : num) (x : 'a) : 'a result = Diverge) ∧
-  
-  (fix_fuel (SUC n) fs g i x =
-    case EL i fs x of
-    | INL r => r
-    | INR (j, y) =>
-      case g y of
-      | Fail e => Fail e
-      | Diverge => Diverge
-      | Return z => fix_fuel n fs g j z)
-’
-
-val fix_fuel_def = Define ‘
-  (fix_fuel (0 : num) (f : ('a -> 'a result) -> 'a -> 'a result) (x : 'a) : 'a result = Diverge) ∧
-  (fix_fuel (SUC n) (f : ('a -> 'a result) -> 'a -> 'a result) (x : 'a) : 'a result = f (fix_fuel n f) x)
-’
-
-val fix_fuel_P_def = Define ‘
-  fix_fuel_P f x n = ~(is_diverge (fix_fuel n f x))
-’
-
-val fix_def = Define ‘
-  fix (f : ('a -> 'a result) -> 'a -> 'a result) (x : 'a) : 'a result =
-    if (∃ n. fix_fuel_P f x n) then fix_fuel ($LEAST (fix_fuel_P f x)) f x else Diverge
-’
-
-(*Datatype:
-  ftree = Rec (('a -> ('a result + ('a # num))) # ftree list) | NRec ('a -> 'a result)
+(* Testing on an example *)
+Datatype:
+  list_t =
+    ListCons 't list_t
+  | ListNil
 End
 
-Type frtree = ``: ('b -> ('b result + ('a # num))) list``
-Type ftree = “: ('a, 'b) frtree # ('b result + ('a # num))”
-*)
-
-val eval_ftree_def = Define ‘
-  (eval_ftree 0 (g : 'a -> 'a result)
-    (fs : ('a -> ('a result + ('a # num))) list) x = Diverge) ∧
-
-  (eval_ftree (SUC n) g fs x =
+(* We use this version of the body to prove that the body is valid *)
+val nth_body_valid_def = Define ‘
+  nth_body_valid (f : (('t list_t # u32) + 't) -> (('t list_t # u32) + 't) result)
+    (x : (('t list_t # u32) + 't)) :
+    (('t list_t # u32) + 't) result =
     case x of
-    | INL r => r
-    | INR (y, i) =>
-      case g y of
-      | Fail e => Fail e
-      | Diverge => Diverge
-      | Return z =>
-        let f = EL i fs in
-        eval_ftree n g fs (f z))
+    | INL x => (
+      let (ls, i) = x in
+      case ls of
+      | ListCons x tl =>
+        if u32_to_int i = (0:int)
+        then Return (INR x)
+        else
+          do
+          i0 <- u32_sub i (int_to_u32 1);
+          r <- f (INL (tl, i0));
+          case r of
+          | INL _ => Fail Failure
+          | INR i1 => Return (INR i1)
+          od
+      | ListNil => Fail Failure)
+    | INR _ => Fail Failure
 ’
 
-Theorem fix_fuel_mono:
-  ∀N fs i.
-  let f = (\g x. eval_ftree N g fs (INR (x, i))) in
-  ∀n x. fix_fuel_P f x n ⇒
-  ∀ m. n ≤ m ⇒ fix_fuel n f x = fix_fuel m f x
+(* TODO: move *)
+Theorem is_valid_suffice:
+  ∃y. ∀g. g x = g y
 Proof
-  Induct_on ‘N’
+  metis_tac []
+QED
+
+Theorem nth_body_valid_is_valid:
+  is_valid_fp_body (SUC (SUC 0)) nth_body_valid
+Proof
+  pure_once_rewrite_tac [is_valid_fp_body_def] >>
+  gen_tac >>
+  (* TODO: automate this *)
+  Cases_on ‘x’ >> fs [] >>
+  (* Expand *)
+  fs [nth_body_valid_def, bind_def] >>
+  (* Explore all paths *)
+  Cases_on ‘x'’ >> fs [] >>
+  Cases_on ‘q’ >> fs [] >>
+  Cases_on ‘u32_to_int r = 0’ >> fs [] >>
+  Cases_on ‘u32_sub r (int_to_u32 1)’ >> fs [] >>
+  disj2_tac >>
+  (* This is hard *)
+  qexists ‘\g x. case x of | INL _ => Fail Failure | INR i1 => Return (INR i1)’ >>
+  qexists ‘INL (l, a)’ >>
+  conj_tac
   >-(
-    fs [eval_ftree_def] >>
-
-  ntac 2 strip_tac >>
-  Induct_on ‘n’ >> rpt strip_tac
-  >- (fs [fix_fuel_P_def, is_diverge_def, fix_fuel_def]) >>
-  Cases_on ‘m’ >- int_tac >> fs [] >>
-  fs [is_valid_fp_body_def] >>
-  fs [fix_fuel_P_def, is_diverge_def, fix_fuel_def] >>
-
-
-val is_valid_fp_body_def = Define ‘
-  is_valid_fp_body (f : ('a -> 'b result) -> 'a -> 'b result) =
-    (∃N ft. ∀x g. f g x = eval_ftree N g ft (x, i))
-’
-
-val eval_ftree_def = Define ‘
-  (eval_ftree 0 (g : 'a -> 'b result)
-    (fs : ('b -> ('b result + ('a # num))) list, x : 'b result + ('a # num)) = Diverge) ∧
-  
-  (eval_ftree (SUC n) g (fs, x) =
-    case x of
-    | INL r => r
-    | INR (y, i) =>
-      case g y of
-      | Fail e => Fail e
-      | Diverge => Diverge
-      | Return z =>
-        let f = EL i fs in
-        eval_ftree n g (fs, f z))
-’
-
-val is_valid_fp_body_def = Define ‘
-  is_valid_fp_body (f : ('a -> 'b result) -> 'a -> 'b result) =
-    (∃N ft h. ∀x g. f g x = eval_ftree N g (ft, h x))
-’
-
-Theorem fix_fuel_mono:
-  let f = (\x. eval_ftree N g (ft, h x)) in
-  ∀n x. fix_fuel_P f x n ⇒
-   ∀ m. n ≤ m ⇒ fix_fuel n f x = fix_fuel m f x
-Proof
-
-
-Theorem fix_fuel_mono:
-  ∀f. is_valid_fp_body f ⇒
-    ∀n x. fix_fuel_P f x n ⇒
-     ∀ m. n ≤ m ⇒
-       fix_fuel n f x = fix_fuel m f x
-Proof
-  ntac 2 strip_tac >>
-  Induct_on ‘n’ >> rpt strip_tac
-  >- (fs [fix_fuel_P_def, is_diverge_def, fix_fuel_def]) >>
-  Cases_on ‘m’ >- int_tac >> fs [] >>
-  fs [is_valid_fp_body_def] >>
-  fs [fix_fuel_P_def, is_diverge_def, fix_fuel_def] >>
-
-  (*(* Use the validity property *)
-  last_assum (qspec_assume ‘x’) >> (* TODO: consume? *) *)
-
-  (*pop_assum ignore_tac >> (* TODO: not sure *) *)
-  Induct_on ‘N’ >- fs [eval_ftree_def] >>
-  rw [] >>
-  rw [eval_ftree_def] >>
-  Cases_on ‘h x’ >> fs [] >>
-  Cases_on ‘y’ >> fs [] >>
-  Cases_on ‘y'’ >> fs [] >>
-  
-  last_assum (qspec_assume ‘q’) >>
-  Cases_on ‘fix_fuel n f q’ >> fs [] >>
-  
-  Cases_on ‘N’ >> fs [eval_ftree_def] >>
-  
-  Cases_on ‘y’ >> fs [] >>
-  Cases_on ‘y'’ >> fs [] >>
-  rw [] >>
-  (* This makes a case disjunction on the validity property *)
-  rw []
-  >-((* Case 1: the continuation doesn't matter *) fs []) >>
-  (* Case 2: the continuation *does* matter (i.e., there is a recursive call *)
-  (* Instantiate the validity property with the different continuations *)
-  first_assum (qspec_assume ‘fix_fuel n f’) >>
-  first_assum (qspec_assume ‘fix_fuel n' f’) >>
-  last_assum (qspec_assume ‘y’) >>
-  fs []
+    (* Prove that the body of h is valid *)
+    sg ‘1 = SUC 0’ >- fs [] >>
+    pop_assum (fn th => pure_rewrite_tac [th]) >>
+    pure_once_rewrite_tac [is_valid_fp_body_def] >>
+    (* *)
+    fs []) >>
+  gen_tac >>
+  (* Explore all paths *)
+  Cases_on ‘g (INL (l,a))’ >> fs [] >>
+  Cases_on ‘a'’ >> fs []
 QED
 
+(* We prove that ‘nth_body_valid’ is equivalent to ‘nth_body’ *)
+val nth_body1_def = Define ‘
+  nth_body1 (f : (('t list_t # u32) + 't) -> (('t list_t # u32) + 't) result)
+    (x : (('t list_t # u32) + 't)) :
+    (('t list_t # u32) + 't) result =
+    case x of
+    | INL x => (
+      let (ls, i) = x in
+      case ls of
+      | ListCons x tl =>
+        if u32_to_int i = (0:int)
+        then Return (INR x)
+        else
+          do
+          i0 <- u32_sub i (int_to_u32 1);
+          r <- case f (INL (tl, i0)) of
+               | Fail e => Fail e
+               | Diverge => Diverge
+               | Return r =>
+                 case r of
+                 | INL _ => Fail Failure
+                 | INR i1 => Return i1;
+          Return (INR r)
+          od
+      | ListNil => Fail Failure)
+    | INR _ => Fail Failure
+’
 
-val length_ftree = “
-(
-  [
-    (\n. INL (return (1 + n)))
-  ],
-  (case ls of
-   | ListCons x tl =>
-     INR (tl, 0)
-   | ListNil => INL (return 0))
-) : ('a list_t, int) ftree
-”
-
-val eval_length_ftree = mk_icomb (“eval_ftree 1 g”, length_ftree)
-
-Theorem length_body_eq:
-  eval_ftree (SUC (SUC 0)) g
-  (
-    [
-      (\n. INL (Return (1 + n)))
-    ],
-    (case ls of
-     | ListCons x tl =>
-       INR (tl, 0)
-     | ListNil => INL (Return 0))
-  ) =
-  case ls of
-  | ListCons x tl =>
-    do
-      n <- g tl;
-      Return (1 + n)
-    od
-  | ListNil => Return 0
+Theorem nth_body_valid_eq:
+  nth_body_valid = nth_body1
 Proof
-  fs [eval_ftree_def, bind_def] >>
-  Cases_on ‘ls’ >> fs []
+  ntac 2 (irule EQ_EXT >> gen_tac) >>
+  pure_rewrite_tac [nth_body_valid_def, nth_body1_def, bind_def, LET_DEF] >>
+  (* TODO: automate *)
+  Cases_on ‘x'’ >> fs [] >>
+  Cases_on ‘x''’ >> fs [] >>
+  Cases_on ‘q’ >> fs [] >>
+  Cases_on ‘u32_to_int r = 0’ >> fs [] >>
+  Cases_on ‘u32_sub r (int_to_u32 1)’ >> fs [] >>
+  Cases_on ‘x (INL (l,a))’ >> fs [] >>
+  Cases_on ‘a'’ >> fs []
 QED
 
-val eval_ftree_def = Define ‘
-  eval_ftree 0 (fs : ('a, 'b) ftree) (g : 'a -> 'b result) (x : 'b result + ('a # num)) = Diverge ∧
-  
-  eval_ftree (SUC n) fs g x =
-    case x of
-    | INL r => r
-    | INR (y, i) =>
-      case g y of
-      | Fail e => Fail e
-      | Diverge => Diverge
-      | Return z =>
-        let f = EL i fs in
-        eval_ftree n fs g (f z)
+val nth_raw_def = Define ‘
+  nth (ls : 't list_t) (i : u32) =
+    case fix nth_body1 (INL (ls, i)) of
+    | Fail e => Fail e
+    | Diverge => Diverge
+    | Return r =>
+      case r of
+      | INL _ => Fail Failure
+      | INR x => Return x
 ’
 
-val length_body_funs_def = Define 
-
-“
-[
-  (\ls. case ls of
-   | ListCons x tl =>
-     INR (tl, 1)
-   | ListNil => INL (return 0)),
-  (\n. INL (return (1 + n)))
-]
-”
-
-
-
-“:('a, 'b) FT”
-
-Define 
-
-val nth_body = Define ‘
-  
-
-’
-
-“INL”
-“INR”
-
-“
-  Rec (
+Theorem nth_def:
+  ∀ls i. nth (ls : 't list_t) (i : u32) : 't result =
     case ls of
     | ListCons x tl =>
-      do
-        INR (tl, 0)
-      od
-    | ListNil => INL (return 0),
-    [NRec (\n. return (1 + n))])
-”
-
-“
-  case ls of
-  | ListCons x tl =>
-    if u32_to_int i = (0:int)
-    then (Return x)
-    else
-      do
-      i0 <- u32_sub i (int_to_u32 1);
-      y <- nth tl i0;
-      return y
-      od
-  | ListNil => Fail Failure
-”
-
-
-“:'a + 'b”
-“:'a # 'b”
-
-(*** Encoding of a function *)
-Datatype:
-  ('a, 'b) test = Return ('a -> 'b)
-End
-
-val tyax =
-      new_type_definition ("three",
-        Q.prove(`?p. (\(x,y). ~(x /\ y)) p`, cheat))
-
-val three_bij = define_new_type_bijections
-                      {name="three_tybij", ABS="abs3", REP="rep3", tyax=tyax}
-type_of “rep3”
-type_of “abs3”
-
-m “”
-
-                Q.EXISTS_TAC `(F,F)` THEN GEN_BETA_TAC THEN REWRITE_TAC []));
-
-“Return (\x. x)”
-
-Datatype:
-  ftree = Rec ('a -> ('a result + ('a # ftree))) | NRec ('a -> 'a result)
-End
-
-Datatype:
-  'a ftree = Rec ('a -> ('a result + ('a # ftree))) | NRec ('a -> 'a result)
-End
-
-Datatype:
-  ftree = Rec ('a -> ('a result + ('a # ftree))) | NRec ('a -> 'a result)
-End
-
-Datatype:
-  result = Return 'a | Fail error | Diverge
-End
-
-Type M = ``: 'a result``
-
-
-val fix_def = Define ‘
-  fix (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result =
-    if (∃ n. fix_fuel_P f x n) then fix_fuel ($LEAST (fix_fuel_P f x)) f x else Diverge
-’
+      if u32_to_int i = (0:int)
+      then (Return x)
+      else
+        do
+        i0 <- u32_sub i (int_to_u32 1);
+        nth tl i0
+        od
+    | ListNil => Fail Failure
+Proof
+  rpt strip_tac >>
+  (* Expand the raw definition *)
+  pure_rewrite_tac [nth_raw_def] >>
+  (* Use the fixed-point equality *)
+  sg ‘fix nth_body1 (INL (ls,i)) = nth_body1 (fix nth_body1) (INL (ls,i))’
+  >- (
+    pure_rewrite_tac [GSYM nth_body_valid_eq] >>
+    simp_tac bool_ss [HO_MATCH_MP fix_fixed_eq nth_body_valid_is_valid]) >>
+  pop_assum (fn th => pure_asm_rewrite_tac [th]) >>
+  (* Expand the body definition *)
+  qspecl_assume [‘fix nth_body1’, ‘(INL (ls, i))’] nth_body1_def >>
+  pop_assum (fn th => pure_rewrite_tac [th, LET_THM]) >>
+  (* Do we really have to explore all the paths again? If yes, nth_body1 is useless *)
+  fs [bind_def] >>
+  Cases_on ‘ls’ >> fs [] >>
+  Cases_on ‘u32_to_int i = 0’ >> fs [] >>
+  Cases_on ‘u32_sub i (int_to_u32 1)’ >> fs [] >>
+  Cases_on ‘fix nth_body1 (INL (l,a))’ >> fs [] >>
+  Cases_on ‘a'’ >> fs []
+QED
 
 val _ = export_theory ()
