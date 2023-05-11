@@ -18,6 +18,7 @@ val le_eq_ge = store_thm("le_eq_ge", “!(x y : int). x <= y <=> y >= x”, coop
 val gt_eq_lt = store_thm("gt_eq_lt", “!(x y : int). x > y <=> y < x”, cooper_tac)
 val lt_eq_gt = store_thm("lt_eq_gt", “!(x y : int). x < y <=> y > x”, cooper_tac)
 
+(* Miscelleanous *)
 Theorem int_add_minus_same_eq:
   ∀ (i j : int). i + j - j = i
 Proof
