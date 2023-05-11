@@ -322,8 +322,8 @@ Datatype:
 End
 
 (* We use this version of the body to prove that the body is valid *)
-val nth_body_valid_def = Define ‘
-  nth_body_valid (f : (('t list_t # u32) + 't) -> (('t list_t # u32) + 't) result)
+val nth_body_def = Define ‘
+  nth_body (f : (('t list_t # u32) + 't) -> (('t list_t # u32) + 't) result)
     (x : (('t list_t # u32) + 't)) :
     (('t list_t # u32) + 't) result =
     case x of
@@ -352,15 +352,17 @@ Proof
   metis_tac []
 QED
 
-Theorem nth_body_valid_is_valid:
-  is_valid_fp_body (SUC (SUC 0)) nth_body_valid
+(* We first prove the theorem with ‘SUC (SUC n)’ where ‘n’ is a variable
+   to prevent this quantity from being rewritten to 2 *)
+Theorem nth_body_is_valid_aux:
+  is_valid_fp_body (SUC (SUC n)) nth_body
 Proof
   pure_once_rewrite_tac [is_valid_fp_body_def] >>
   gen_tac >>
   (* TODO: automate this *)
   Cases_on ‘x’ >> fs [] >>
   (* Expand *)
-  fs [nth_body_valid_def, bind_def] >>
+  fs [nth_body_def, bind_def] >>
   (* Explore all paths *)
   Cases_on ‘x'’ >> fs [] >>
   Cases_on ‘q’ >> fs [] >>
@@ -373,8 +375,6 @@ Proof
   conj_tac
   >-(
     (* Prove that the body of h is valid *)
-    sg ‘1 = SUC 0’ >- fs [] >>
-    pop_assum (fn th => pure_rewrite_tac [th]) >>
     pure_once_rewrite_tac [is_valid_fp_body_def] >>
     (* *)
     fs []) >>
@@ -384,52 +384,15 @@ Proof
   Cases_on ‘a'’ >> fs []
 QED
 
-(* We prove that ‘nth_body_valid’ is equivalent to ‘nth_body’ *)
-val nth_body1_def = Define ‘
-  nth_body1 (f : (('t list_t # u32) + 't) -> (('t list_t # u32) + 't) result)
-    (x : (('t list_t # u32) + 't)) :
-    (('t list_t # u32) + 't) result =
-    case x of
-    | INL x => (
-      let (ls, i) = x in
-      case ls of
-      | ListCons x tl =>
-        if u32_to_int i = (0:int)
-        then Return (INR x)
-        else
-          do
-          i0 <- u32_sub i (int_to_u32 1);
-          r <- case f (INL (tl, i0)) of
-               | Fail e => Fail e
-               | Diverge => Diverge
-               | Return r =>
-                 case r of
-                 | INL _ => Fail Failure
-                 | INR i1 => Return i1;
-          Return (INR r)
-          od
-      | ListNil => Fail Failure)
-    | INR _ => Fail Failure
-’
-
-Theorem nth_body_valid_eq:
-  nth_body_valid = nth_body1
+Theorem nth_body_is_valid:
+  is_valid_fp_body (SUC (SUC 0)) nth_body
 Proof
-  ntac 2 (irule EQ_EXT >> gen_tac) >>
-  pure_rewrite_tac [nth_body_valid_def, nth_body1_def, bind_def, LET_DEF] >>
-  (* TODO: automate *)
-  Cases_on ‘x'’ >> fs [] >>
-  Cases_on ‘x''’ >> fs [] >>
-  Cases_on ‘q’ >> fs [] >>
-  Cases_on ‘u32_to_int r = 0’ >> fs [] >>
-  Cases_on ‘u32_sub r (int_to_u32 1)’ >> fs [] >>
-  Cases_on ‘x (INL (l,a))’ >> fs [] >>
-  Cases_on ‘a'’ >> fs []
+  irule nth_body_is_valid_aux
 QED
 
 val nth_raw_def = Define ‘
   nth (ls : 't list_t) (i : u32) =
-    case fix nth_body1 (INL (ls, i)) of
+    case fix nth_body (INL (ls, i)) of
     | Fail e => Fail e
     | Diverge => Diverge
     | Return r =>
@@ -455,20 +418,18 @@ Proof
   (* Expand the raw definition *)
   pure_rewrite_tac [nth_raw_def] >>
   (* Use the fixed-point equality *)
-  sg ‘fix nth_body1 (INL (ls,i)) = nth_body1 (fix nth_body1) (INL (ls,i))’
-  >- (
-    pure_rewrite_tac [GSYM nth_body_valid_eq] >>
-    simp_tac bool_ss [HO_MATCH_MP fix_fixed_eq nth_body_valid_is_valid]) >>
+  sg ‘fix nth_body (INL (ls,i)) = nth_body (fix nth_body) (INL (ls,i))’
+  >- (simp_tac bool_ss [HO_MATCH_MP fix_fixed_eq nth_body_is_valid]) >>
   pop_assum (fn th => pure_asm_rewrite_tac [th]) >>
   (* Expand the body definition *)
-  qspecl_assume [‘fix nth_body1’, ‘(INL (ls, i))’] nth_body1_def >>
+  qspecl_assume [‘fix nth_body’, ‘(INL (ls, i))’] nth_body_def >>
   pop_assum (fn th => pure_rewrite_tac [th, LET_THM]) >>
-  (* Do we really have to explore all the paths again? If yes, nth_body1 is useless *)
+  (* Explore all the paths - maybe we can be smarter, but this is fast and really easy *)
   fs [bind_def] >>
   Cases_on ‘ls’ >> fs [] >>
   Cases_on ‘u32_to_int i = 0’ >> fs [] >>
   Cases_on ‘u32_sub i (int_to_u32 1)’ >> fs [] >>
-  Cases_on ‘fix nth_body1 (INL (l,a))’ >> fs [] >>
+  Cases_on ‘fix nth_body (INL (l,a))’ >> fs [] >>
   Cases_on ‘a'’ >> fs []
 QED
 
