@@ -3,6 +3,7 @@ sig
   type thm = Thm.thm
   
   (*  Definitions  *)
+    val even_odd_body_def : thm
     val fix_def : thm
     val fix_fuel_P_def : thm
     val fix_fuel_def : thm
@@ -10,12 +11,13 @@ sig
     val list_t_TY_DEF : thm
     val list_t_case_def : thm
     val list_t_size_def : thm
-    val nth_body1_def : thm
-    val nth_body_valid_def : thm
-    val simp_types_def : thm
+    val nth_body_def : thm
   
   (*  Theorems  *)
     val datatype_list_t : thm
+    val even_def : thm
+    val even_odd_body_is_valid : thm
+    val even_odd_body_is_valid_aux : thm
     val fix_fixed_diverges : thm
     val fix_fixed_eq : thm
     val fix_fixed_terminates : thm
@@ -30,7 +32,6 @@ sig
     val fix_not_diverge_implies_fix_fuel : thm
     val fix_not_diverge_implies_fix_fuel_aux : thm
     val is_valid_fp_body_compute : thm
-    val is_valid_suffice : thm
     val list_t_11 : thm
     val list_t_Axiom : thm
     val list_t_case_cong : thm
@@ -38,13 +39,37 @@ sig
     val list_t_distinct : thm
     val list_t_induction : thm
     val list_t_nchotomy : thm
-    val nth_body_valid_eq : thm
-    val nth_body_valid_is_valid : thm
+    val nth_body_is_valid : thm
+    val nth_body_is_valid_aux : thm
     val nth_def : thm
+    val odd_def : thm
   
   val divDefProto2_grammars : type_grammar.grammar * term_grammar.grammar
 (*
    [primitives] Parent theory of "divDefProto2"
+   
+   [even_odd_body_def]  Definition
+      
+      ⊢ ∀f x.
+          even_odd_body f x =
+          case x of
+            INL 0 => Return (INR (INR T))
+          | INL i =>
+            (case f (INR (INL (i − 1))) of
+               Return (INL v) => Fail Failure
+             | Return (INR (INL v2)) => Fail Failure
+             | Return (INR (INR b)) => Return (INR (INR b))
+             | Fail e => Fail e
+             | Diverge => Diverge)
+          | INR (INL 0) => Return (INR (INR F))
+          | INR (INL i) =>
+            (case f (INL (i − 1)) of
+               Return (INL v) => Fail Failure
+             | Return (INR (INL v2)) => Fail Failure
+             | Return (INR (INR b)) => Return (INR (INR b))
+             | Fail e => Fail e
+             | Diverge => Diverge)
+          | INR (INR v5) => Fail Failure
    
    [fix_def]  Definition
       
@@ -101,36 +126,10 @@ sig
            list_t_size f (ListCons a0 a1) = 1 + (f a0 + list_t_size f a1)) ∧
         ∀f. list_t_size f ListNil = 0
    
-   [nth_body1_def]  Definition
+   [nth_body_def]  Definition
       
       ⊢ ∀f x.
-          nth_body1 f x =
-          case x of
-            INL x =>
-              (let
-                 (ls,i) = x
-               in
-                 case ls of
-                   ListCons x tl =>
-                     if u32_to_int i = 0 then Return (INR x)
-                     else
-                       do
-                         i0 <- u32_sub i (int_to_u32 1);
-                         r <-
-                           case f (INL (tl,i0)) of
-                             Return (INL v) => Fail Failure
-                           | Return (INR i1) => Return i1
-                           | Fail e => Fail e
-                           | Diverge => Diverge;
-                         Return (INR r)
-                       od
-                 | ListNil => Fail Failure)
-          | INR v3 => Fail Failure
-   
-   [nth_body_valid_def]  Definition
-      
-      ⊢ ∀f x.
-          nth_body_valid f x =
+          nth_body f x =
           case x of
             INL x =>
               (let
@@ -150,21 +149,21 @@ sig
                  | ListNil => Fail Failure)
           | INR v2 => Fail Failure
    
-   [simp_types_def]  Definition
-      
-      ⊢ ∀f. simp_types f =
-            (λx'.
-                 case x' of
-                   INL x =>
-                     (case f x of
-                        Return y => Return (INR y)
-                      | Fail e => Fail e
-                      | Diverge => Diverge)
-                 | INR v1 => Fail Failure)
-   
    [datatype_list_t]  Theorem
       
       ⊢ DATATYPE (list_t ListCons ListNil)
+   
+   [even_def]  Theorem
+      
+      ⊢ ∀i. even i = if i = 0 then Return T else odd (i − 1)
+   
+   [even_odd_body_is_valid]  Theorem
+      
+      ⊢ is_valid_fp_body (SUC (SUC 0)) even_odd_body
+   
+   [even_odd_body_is_valid_aux]  Theorem
+      
+      ⊢ is_valid_fp_body (SUC (SUC n)) even_odd_body
    
    [fix_fixed_diverges]  Theorem
       
@@ -273,10 +272,6 @@ sig
                 is_valid_fp_body (NUMERAL (BIT1 n)) h ∧
                 ∀g. f g x = do z <- g y; h g z od
    
-   [is_valid_suffice]  Theorem
-      
-      ⊢ ∃y. ∀g. g x = g y
-   
    [list_t_11]  Theorem
       
       ⊢ ∀a0 a1 a0' a1'.
@@ -312,13 +307,13 @@ sig
       
       ⊢ ∀ll. (∃t l. ll = ListCons t l) ∨ ll = ListNil
    
-   [nth_body_valid_eq]  Theorem
+   [nth_body_is_valid]  Theorem
       
-      ⊢ nth_body_valid = nth_body1
+      ⊢ is_valid_fp_body (SUC (SUC 0)) nth_body
    
-   [nth_body_valid_is_valid]  Theorem
+   [nth_body_is_valid_aux]  Theorem
       
-      ⊢ is_valid_fp_body (SUC (SUC 0)) nth_body_valid
+      ⊢ is_valid_fp_body (SUC (SUC n)) nth_body
    
    [nth_def]  Theorem
       
@@ -329,6 +324,10 @@ sig
               if u32_to_int i = 0 then Return x
               else do i0 <- u32_sub i (int_to_u32 1); nth tl i0 od
           | ListNil => Fail Failure
+   
+   [odd_def]  Theorem
+      
+      ⊢ ∀i. odd i = if i = 0 then Return F else even (i − 1)
    
    
 *)
