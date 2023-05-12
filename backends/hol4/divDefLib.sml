@@ -664,7 +664,9 @@ fun prove_body_is_valid_tac_step (asms, g) =
             - we have to prove that ‘h’ is valid
             - we have to finish the proof of validity for the current body
           *)
-         conj_tac >> fs [case_result_switch_eq])
+         conj_tac >> fs [case_result_switch_eq, bind_def] >>
+         (* The first subgoal should have been eliminated *)
+         gen_tac)
       end
   in
     (* If recursive call: special treatment. Otherwise, we do a simple disjunction *)
@@ -687,24 +689,24 @@ fun prove_body_is_valid_tac (body_def : thm option) : tactic =
 (* Prove that a body satisfies the validity condition of the fixed point *)
 fun prove_body_is_valid (body : term) : thm =
   let
-    (* Explore the body and count the number of occurrences of nested recursive
-       calls so that we can properly instantiate the ‘N’ argument of ‘is_valid_fp_body’.
+    (* Explore the body and count the number of occurrences of recursive
+       calls so that we can properly instantiate the ‘N’ argument of ‘is_valid_fp_body’
+       (note: we compute an overapproximation).
 
        We first retrieve the name of the continuation parameter.
+
        Rem.: we generated fresh names so that, for instance, the continuation name
        doesn't collide with other names. Because of this, we don't need to look for
        collisions when exploring the body (and in the worst case, we would cound
-       an overapproximation of the number of recursive calls, which is perfectly
-       valid).
+       an overapproximation of the number of recursive calls).
      *)
     val fcont = (hd o fst o strip_abs) body
     val fcont_name = (fst o dest_var) fcont
-    fun max x y = if x > y then x else y
     fun count_body_rec_calls (body : term) : int =
       case dest_term body of
         VAR (name, _) => if name = fcont_name then 1 else 0
       | CONST _ => 0
-      | COMB (x, y) => max (count_body_rec_calls x) (count_body_rec_calls y)
+      | COMB (x, y) => count_body_rec_calls x + count_body_rec_calls y
       | LAMB (_, x) => count_body_rec_calls x
     val num_rec_calls = count_body_rec_calls body
 
@@ -722,7 +724,6 @@ fun prove_body_is_valid (body : term) : thm =
     (* Generate the lemma statement *)
     val is_valid_tm = list_mk_icomb (is_valid_fp_body_tm, [n_tm, body])
     val is_valid_thm = prove (is_valid_tm, prove_body_is_valid_tac NONE)
-
     (* Replace ‘nvar’ with ‘0’ *)
     val is_valid_thm = INST [nvar |-> zero_num_tm] is_valid_thm
   in
@@ -894,6 +895,10 @@ fun DefineDiv (def_qt : term quotation) =
 
     (* Prove the final equations *)
     val def_eqs = prove_def_eqs body_is_valid def_tms raw_defs
+
+    (* Save the definitions *)
+    val thm_names = map (fn x => x ^ "_def") fnames
+    val _ = map save_thm (zip thm_names def_eqs)
   in
     def_eqs
   end
