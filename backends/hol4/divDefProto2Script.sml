@@ -8,7 +8,6 @@ open primitivesLib
 
 val _ = new_theory "divDefProto2"
 
-
 (*
  * Test with a general validity predicate.
  *

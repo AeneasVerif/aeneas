@@ -47,10 +47,13 @@ val pat_undisch_tac = Q.PAT_UNDISCH_TAC
 val equiv_is_imp = prove (“∀x y. ((x ⇒ y) ∧ (y ⇒ x)) ⇒ (x ⇔ y)”, metis_tac [])
 val equiv_tac = irule equiv_is_imp >> conj_tac
 
+(* Rewrite the goal once, and on the left part of the goal seen as an application *)
+fun pure_once_rewrite_left_tac ths =
+  CONV_TAC (PATH_CONV "l" (PURE_ONCE_REWRITE_CONV ths))
+
 (* Dependent rewrites *)
 val dep_pure_once_rewrite_tac = dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC
 val dep_pure_rewrite_tac = dep_rewrite.DEP_PURE_REWRITE_TAC
-
 
 (* Add a list of theorems in the assumptions *)
 fun assume_tacl (thms : thm list) : tactic =
