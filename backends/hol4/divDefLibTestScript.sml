@@ -8,11 +8,15 @@ open primitivesLib
 open divDefTheory divDefLib
 
 val [even_def, odd_def] = DefineDiv ‘
-  (even (i : int) : bool result =
-    if i = 0 then Return T else odd (i - 1)) /\
-  (odd (i : int) : bool result =
-    if i = 0 then Return F else even (i - 1))
+  (even (i : int) : bool result = if i = 0 then Return T else odd (i - 1)) /\
+  (odd (i : int) : bool result = if i = 0 then Return F else even (i - 1))
 ’
+
+Datatype:
+  list_t =
+    ListCons 't list_t
+  | ListNil
+End
 
 val [nth_def] = DefineDiv ‘
   nth (ls : 't list_t) (i : u32) : 't result =

@@ -445,8 +445,14 @@ fun mk_body (fnames : string list) (in_out_tys : (hol_type * hol_type) list)
            | CONST _ => tm
            | LAMB (x, tm) =>
              let
-               (* The variable might shadow one of the functions *)
-               val fnames_set = Redblackset.delete (fnames_set, (fst o dest_var) x)
+               (* The variable might shadow one of the functions: remove it from
+                  the set of function names - remark: Redblackset.delete raises
+                  [NotFound] if the value is not present in the set *)
+               val varname = (fst o dest_var) x
+               val fnames_set =
+                 if Redblackset.member (fnames_set, varname)
+                 then Redblackset.delete (fnames_set, varname)
+                 else fnames_set
                (* Update the term in the lambda *)
                val tm = replace_rec_calls fnames_set tm
              in
@@ -468,6 +474,7 @@ fun mk_body (fnames : string list) (in_out_tys : (hol_type * hol_type) list)
                else
                  (* Rec call: replace *)
                  let
+                   val _ = print_dbg ("replace_rec_calls: rec call\n\n")
                    val _ = replace_rec_calls_rec_call_tm := tm
                    (* First, find the index of the function *)
                    val fname = (fst o dest_var) app
