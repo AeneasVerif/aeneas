@@ -1,4 +1,11 @@
-(* Prototype: divDefLib but with general combinators *)
+(* This file introduces a fixed-point operator to define potentially diverging
+   functions so that the user doesn't have to prove termination at *definition time*
+   but can prove it in an extrinsic manner.
+
+   See divDefLib for a library which uses this fixed-point operator in an automated
+   manner, and divDefExampleScript for hand-written and well commented examples of
+   how to use it.
+ *)
 
 open HolKernel boolLib bossLib Parse
 open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
@@ -6,27 +13,34 @@ open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
 open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
 open primitivesLib
 
-val _ = new_theory "divDefProto2"
+val _ = new_theory "divDef"
 
-(*
- * Test with a general validity predicate.
- *
- * TODO: this works! Cleanup.
- *)
+(*======================
+ * Fixed-point operator
+ *======================*)
+
+(* An auxiliary operator which uses some fuel *)
 val fix_fuel_def = Define ‘
   (fix_fuel (0 : num) (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result = Diverge) ∧
   (fix_fuel (SUC n) (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result = f (fix_fuel n f) x)
 ’
 
+(* An auxiliary predicate *)
 val fix_fuel_P_def = Define ‘
   fix_fuel_P f x n = ~(is_diverge (fix_fuel n f x))
 ’
 
+(* The fixed point operator *)
 val fix_def = Define ‘
   fix (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result =
     if (∃ n. fix_fuel_P f x n) then fix_fuel ($LEAST (fix_fuel_P f x)) f x else Diverge
 ’
 
+(* A validity condition.
+
+   If a function body ‘f’ satisfies this condition, then we have the fixed point
+   equation ‘fix f = f (fix f)’ (see [fix_fixed_eq]).
+ *)
 val is_valid_fp_body_def = Define ‘
   (is_valid_fp_body (0 : num) (f : ('a -> 'a result) -> 'a -> 'a result) = F) ∧
   
@@ -35,9 +49,11 @@ val is_valid_fp_body_def = Define ‘
          (∃ h y. is_valid_fp_body n h ∧
                   ∀g. f g x = do z <- g y; h g z od))
 ’
-
+(*======================
+ * Lemmas
+ *======================*)
 (* Auxiliary lemma.
-   We generalize the goal of fix_fuel_mono in the case the fuel is non-empty
+   We generalize the goal of [fix_fuel_mono] in the case the fuel is non-empty
    (this allows us to unfold definitions like ‘fix_fuel’ once, and reveal
    a first intermediate function).
 
@@ -93,6 +109,7 @@ Proof
   gvs []
 QED
 
+(* ‘fix_fuel’ is monotonous over the fuel *)
 Theorem fix_fuel_mono:
   ∀N f. is_valid_fp_body N f ⇒
     ∀n x. fix_fuel_P f x n ⇒
@@ -108,7 +125,6 @@ Proof
   gvs [fix_fuel_def]
 QED
 
-(* TODO: remove? *)
 Theorem fix_fuel_mono_least:
   ∀N f. is_valid_fp_body N f ⇒
     ∀n x. fix_fuel_P f x n ⇒
@@ -149,7 +165,11 @@ Proof
   rw []
 QED
 
-(* If ‘g (fix f) x’ doesn't diverge, we can exhibit some fuel *)
+(* If ‘g (fix f) x’ doesn't diverge, we can write it in terms of ‘g (fix_fuel n f)’
+   for some fuel ‘n’.
+
+   This is an auxiliary lemma used to prove [fix_not_diverge_implies_fix_fuel]
+ *)
 Theorem fix_not_diverge_implies_fix_fuel_aux:
   ∀N M g f. is_valid_fp_body M f ⇒
     is_valid_fp_body N g ⇒
@@ -215,7 +235,8 @@ Proof
   first_x_assum (fn th => assume_tac (GSYM th)) >> fs []
 QED
 
-(* If ‘g (fix f) x’ doesn't diverge, we can exhibit some fuel *)
+(* If ‘g (fix f) x’ doesn't diverge, we can write it in terms of ‘g (fix_fuel n f)’
+   for some fuel ‘n’. *)
 Theorem fix_not_diverge_implies_fix_fuel:
   ∀N f. is_valid_fp_body N f ⇒
      ∀x. f (fix f) x ≠ Diverge ⇒
@@ -224,6 +245,7 @@ Proof
   metis_tac [fix_not_diverge_implies_fix_fuel_aux]
 QED    
 
+(* ‘fix’ satisfies the fixed point equation in case the evaluation diverges *)
 Theorem fix_fixed_diverges:
   ∀N f. is_valid_fp_body N f ⇒ ∀x. ~(∃ n. fix_fuel_P f x n) ⇒ fix f x = f (fix f) x
 Proof
@@ -272,6 +294,7 @@ Proof
   metis_tac [fix_fuel_not_diverge_eq_fix_aux]
 QED
 
+(* ‘fix’ satisfies the fixed point equation in case the evaluation terminates *)
 Theorem fix_fixed_terminates:
   ∀N f. is_valid_fp_body N f ⇒ ∀x n. fix_fuel_P f x n ⇒ fix f x = f (fix f) x
 Proof
@@ -287,6 +310,7 @@ Proof
   Cases_on ‘f (fix_fuel n'' f) x’ >> fs [] >> metis_tac []
 QED
 
+(* The final fixed point equation *)
 Theorem fix_fixed_eq:
   ∀N f. is_valid_fp_body N f ⇒ ∀x. fix f x = f (fix f) x
 Proof
@@ -295,272 +319,33 @@ Proof
   >- (irule fix_fixed_terminates >> metis_tac []) >>
   irule fix_fixed_diverges >>
   metis_tac []
-QED  
-
-(*======================
- * Example 1: nth
- *======================*)
-Datatype:
-  list_t =
-    ListCons 't list_t
-  | ListNil
-End
-
-(* We use this version of the body to prove that the body is valid *)
-val nth_body_def = Define ‘
-  nth_body (f : (('t list_t # u32) + 't) -> (('t list_t # u32) + 't) result)
-    (x : (('t list_t # u32) + 't)) :
-    (('t list_t # u32) + 't) result =
-    (* Destruct the input. We need this to call the proper function in case
-       of mutually recursive definitions, but also to eliminate arguments
-       which correspond to the output value (the input type is the same
-       as the output type). *)
-    case x of
-    | INL x => (
-      let (ls, i) = x in
-      case ls of
-      | ListCons x tl =>
-        if u32_to_int i = (0:int)
-        then Return (INR x)
-        else
-          do
-          i0 <- u32_sub i (int_to_u32 1);
-          r <- f (INL (tl, i0));
-          (* Eliminate the invalid outputs. This is not necessary here,
-             but it is in the case of non tail call recursive calls. *)
-          case r of
-          | INL _ => Fail Failure
-          | INR i1 => Return (INR i1)
-          od
-      | ListNil => Fail Failure)
-    | INR _ => Fail Failure
-’
-
-(* We first prove the theorem with ‘SUC (SUC n)’ where ‘n’ is a variable
-   to prevent this quantity from being rewritten to 2 *)
-Theorem nth_body_is_valid_aux:
-  is_valid_fp_body (SUC (SUC n)) nth_body
-Proof
-  pure_once_rewrite_tac [is_valid_fp_body_def] >>
-  gen_tac >>
-  (* TODO: automate this *)
-  Cases_on ‘x’ >> fs [] >>
-  (* Expand *)
-  fs [nth_body_def, bind_def] >>
-  (* Explore all paths *)
-  Cases_on ‘x'’ >> fs [] >>
-  Cases_on ‘q’ >> fs [] >>
-  Cases_on ‘u32_to_int r = 0’ >> fs [] >>
-  Cases_on ‘u32_sub r (int_to_u32 1)’ >> fs [] >>
-  disj2_tac >>
-  (* This is hard *)
-  qexists ‘\g x. case x of | INL _ => Fail Failure | INR i1 => Return (INR i1)’ >>
-  qexists ‘INL (l, a)’ >>
-  conj_tac
-  >-(
-    (* Prove that the body of h is valid *)
-    pure_once_rewrite_tac [is_valid_fp_body_def] >>
-    (* *)
-    fs []) >>
-  gen_tac >>
-  (* Explore all paths *)
-  Cases_on ‘g (INL (l,a))’ >> fs [] >>
-  Cases_on ‘a'’ >> fs []
 QED
 
-Theorem nth_body_is_valid:
-  is_valid_fp_body (SUC (SUC 0)) nth_body
+(*===============================
+ * Utilities for the automation
+ *===============================*)
+
+(* This theorem is important to shape the goal when proving that a body
+   satifies the fixed point validity property.
+
+   Important: this theorem (and its usafe) relies on the fact that errors are just
+   transmitted to the caller (in particular, without modification).
+ *)
+Theorem case_result_switch_eq:
+  (case (case x of Return y => f y | Fail e => Fail e | Diverge => Diverge) of
+  | Return y => g y
+  | Fail e => Fail e
+  | Diverge => Diverge) =
+  (case x of
+   | Return y =>
+     (case f y of
+     | Return y => g y
+     | Fail e => Fail e
+     | Diverge => Diverge)
+  | Fail e => Fail e
+  | Diverge => Diverge)
 Proof
-  irule nth_body_is_valid_aux
-QED
-
-val nth_raw_def = Define ‘
-  nth (ls : 't list_t) (i : u32) =
-    case fix nth_body (INL (ls, i)) of
-    | Fail e => Fail e
-    | Diverge => Diverge
-    | Return r =>
-      case r of
-      | INL _ => Fail Failure
-      | INR x => Return x
-’
-
-(* Rewrite the goal once, and on the left part of the goal seen as an application *)
-fun pure_once_rewrite_left_tac ths =
-  CONV_TAC (PATH_CONV "l" (PURE_ONCE_REWRITE_CONV ths))
-
-Theorem nth_def:
-  ∀ls i. nth (ls : 't list_t) (i : u32) : 't result =
-    case ls of
-    | ListCons x tl =>
-      if u32_to_int i = (0:int)
-      then (Return x)
-      else
-        do
-        i0 <- u32_sub i (int_to_u32 1);
-        nth tl i0
-        od
-    | ListNil => Fail Failure
-Proof
-  rpt strip_tac >>
-  (* Expand the raw definition *)
-  pure_rewrite_tac [nth_raw_def] >>
-  (* Use the fixed-point equality - the rewrite must only be applied *on the left* of the equality, in the goal *)
-  pure_once_rewrite_left_tac [HO_MATCH_MP fix_fixed_eq nth_body_is_valid] >>
-  (* Expand the body definition *)
-  pure_rewrite_tac [nth_body_def] >>
-  (* Explore all the paths - maybe we can be smarter, but this is fast and really easy *)
-  fs [bind_def] >>
-  Cases_on ‘ls’ >> fs [] >>
-  Cases_on ‘u32_to_int i = 0’ >> fs [] >>
-  Cases_on ‘u32_sub i (int_to_u32 1)’ >> fs [] >>
-  Cases_on ‘fix nth_body (INL (l,a))’ >> fs [] >>
-  Cases_on ‘a'’ >> fs []
-QED
-
-(*======================
- * Example 2: even, odd
- *======================*)
-
-val even_odd_body_def = Define ‘
-  even_odd_body
-    (f : (int + int + bool) -> (int + int + bool) result)
-    (x : int + int + bool) : (int + int + bool) result =
-    case x of
-    | INL i =>
-      (* Even *)
-      if i = 0 then Return (INR (INR T))
-      else
-        (case f (INR (INL (i - 1))) of
-         | Fail e => Fail e
-         | Diverge => Diverge
-         | Return r =>
-           (* Eliminate the unwanted results *)
-           case r of
-           | INL _ => Fail Failure
-           | INR (INL _) => Fail Failure
-           | INR (INR b) => Return (INR (INR b))
-           )
-    | INR x =>
-      case x of
-      | INL i =>
-        (* Odd *)
-        if i = 0 then Return (INR (INR F))
-        else
-          (case f (INL (i - 1)) of
-           | Fail e => Fail e
-           | Diverge => Diverge
-           | Return r =>
-             (* Eliminate the unwanted results *)
-             case r of
-             | INL _ => Fail Failure
-             | INR (INL _) => Fail Failure
-             | INR (INR b) => Return (INR (INR b))
-             )
-      | INR _ =>
-        (* This case is for the return value *)
-        Fail Failure
-’
-
-Theorem even_odd_body_is_valid_aux:
-  is_valid_fp_body (SUC (SUC n)) even_odd_body
-Proof
-  pure_once_rewrite_tac [is_valid_fp_body_def] >>
-  gen_tac >>
-  (* Expand *)
-  fs [even_odd_body_def, bind_def] >>
-  (* TODO: automate this *)
   Cases_on ‘x’ >> fs []
-  >-(
-    Cases_on ‘x' = 0’ >> fs [] >>
-    (* Recursive call *)
-    disj2_tac >>
-    qexists ‘\g x. case x of | INL _ => Fail Failure | INR (INL _) => Fail Failure | INR (INR i1) => Return (INR (INR i1))’ >>
-    qexists ‘INR (INL (x' − 1))’ >>
-    conj_tac
-    >-(pure_once_rewrite_tac [is_valid_fp_body_def] >> fs []) >>
-    fs []) >>
-  Cases_on ‘y’ >> fs []  >>
-  Cases_on ‘x = 0’ >> fs []  >>
-  (* Recursive call *)
-  disj2_tac >>
-  qexists ‘\g x. case x of | INL _ => Fail Failure | INR (INL _) => Fail Failure | INR (INR i1) => Return (INR (INR i1))’ >>
-  qexists ‘INL (x − 1)’ >>
-  conj_tac
-  >-(pure_once_rewrite_tac [is_valid_fp_body_def] >> fs []) >>
-  fs []
-QED
-
-Theorem even_odd_body_is_valid:
-  is_valid_fp_body (SUC (SUC 0)) even_odd_body
-Proof
-  irule even_odd_body_is_valid_aux
-QED
-
-val even_raw_def = Define ‘
-  even (i : int) =
-    case fix even_odd_body (INL i) of
-    | Fail e => Fail e
-    | Diverge => Diverge
-    | Return r =>
-      case r of
-      | INL _ => Fail Failure
-      | INR (INL _) => Fail Failure
-      | INR (INR b) => Return b
-’
-
-val odd_raw_def = Define ‘
-  odd (i : int) =
-    case fix even_odd_body (INR (INL i)) of
-    | Fail e => Fail e
-    | Diverge => Diverge
-    | Return r =>
-      case r of
-      | INL _ => Fail Failure
-      | INR (INL _) => Fail Failure
-      | INR (INR b) => Return b
-’
-
-Theorem even_def:
-  ∀i. even (i : int) : bool result =
-    if i = 0 then Return T else odd (i - 1)
-Proof
-  gen_tac >>
-  (* Expand the definition *)
-  pure_once_rewrite_tac [even_raw_def] >>
-  (* Use the fixed-point equality *)
-  pure_once_rewrite_left_tac [HO_MATCH_MP fix_fixed_eq even_odd_body_is_valid] >>
-  (* Expand the body definition *)
-  pure_rewrite_tac [even_odd_body_def] >>
-  (* Expand all the definitions from the group *)
-  pure_rewrite_tac [even_raw_def, odd_raw_def] >>
-  (* Explore all the paths - maybe we can be smarter, but this is fast and really easy *)
-  fs [bind_def] >>
-  Cases_on ‘i = 0’ >> fs [] >>
-  Cases_on ‘fix even_odd_body (INR (INL (i − 1)))’ >> fs [] >>
-  Cases_on ‘a’ >> fs [] >>
-  Cases_on ‘y’ >> fs []
-QED
-
-Theorem odd_def:
-  ∀i. odd (i : int) : bool result =
-    if i = 0 then Return F else even (i - 1)
-Proof
-  gen_tac >>
-  (* Expand the definition *)
-  pure_once_rewrite_tac [odd_raw_def] >>
-  (* Use the fixed-point equality *)
-  pure_once_rewrite_left_tac [HO_MATCH_MP fix_fixed_eq even_odd_body_is_valid] >>
-  (* Expand the body definition *)
-  pure_rewrite_tac [even_odd_body_def] >>
-  (* Expand all the definitions from the group *)
-  pure_rewrite_tac [even_raw_def, odd_raw_def] >>
-  (* Explore all the paths - maybe we can be smarter, but this is fast and really easy *)
-  fs [bind_def] >>
-  Cases_on ‘i = 0’ >> fs [] >>
-  Cases_on ‘fix even_odd_body (INL (i − 1))’ >> fs [] >>
-  Cases_on ‘a’ >> fs [] >>
-  Cases_on ‘y’ >> fs []
 QED
 
 val _ = export_theory ()

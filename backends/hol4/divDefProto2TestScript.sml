@@ -57,29 +57,6 @@ fun prove_valid_case_progress
 val (asms, g) = top_goal ()
 *)
 
-(* TODO: move *)
-(* This theorem is important to shape the goal when proving that a body
-   satifies the fixed point validity property.
-
-   Importantly: this theorem relies on the fact that errors are just transmitted
-   to the caller (in particular, without modification).
- *)
-Theorem case_result_switch_eq:
-  (case (case x of Return y => f y | Fail e => Fail e | Diverge => Diverge) of
-  | Return y => g y
-  | Fail e => Fail e
-  | Diverge => Diverge) =
-  (case x of
-   | Return y =>
-     (case f y of
-     | Return y => g y
-     | Fail e => Fail e
-     | Diverge => Diverge)
-  | Fail e => Fail e
-  | Diverge => Diverge)
-Proof
-  Cases_on ‘x’ >> fs []
-QED
 
 (* Tactic to prove that a body is valid: perform one step. *)
 fun prove_body_is_valid_tac_step (asms, g) =

@@ -1,4 +1,4 @@
-signature testDivDefTheory =
+signature divDefNoFixLibTestTheory =
 sig
   type thm = Thm.thm
   
@@ -40,9 +40,9 @@ sig
     val nth_mut_fwd___fuel_def : thm
     val nth_mut_fwd___fuel_ind : thm
   
-  val testDivDef_grammars : type_grammar.grammar * term_grammar.grammar
+  val divDefNoFixLibTest_grammars : type_grammar.grammar * term_grammar.grammar
 (*
-   [primitives] Parent theory of "testDivDef"
+   [primitives] Parent theory of "divDefNoFixLibTest"
    
    [even___E_def]  Definition
       

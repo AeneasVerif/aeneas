@@ -2,9 +2,9 @@ open HolKernel boolLib bossLib Parse
 open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
 
 open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
-open primitivesLib divDefLib
+open primitivesLib divDefNoFixLib
 
-val _ = new_theory "testDivDef"
+val _ = new_theory "divDefNoFixLibTest"
 
 val def_qt = ‘
   (even (i : int) : bool result =
