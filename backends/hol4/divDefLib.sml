@@ -896,9 +896,14 @@ fun DefineDiv (def_qt : term quotation) =
     (* Prove the final equations *)
     val def_eqs = prove_def_eqs body_is_valid def_tms raw_defs
 
-    (* Save the definitions *)
+    (* Save the final equations as definitions.
+
+       Note that because we use the same names, doing this overrides the "raw"
+       definitions, which are then forgotten, which means we don't need to
+       manually delete them.
+     *)
     val thm_names = map (fn x => x ^ "_def") fnames
-    val _ = map save_thm (zip thm_names def_eqs)
+    val _ = map store_definition (zip thm_names def_eqs)
   in
     def_eqs
   end
