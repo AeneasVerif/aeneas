@@ -5,14 +5,20 @@ sig
   (*  Definitions  *)
     val btree_TY_DEF : thm
     val btree_case_def : thm
+    val btree_height_def : thm
     val btree_size_def : thm
+    val even_def : thm
     val list_t_TY_DEF : thm
     val list_t_case_def : thm
     val list_t_size_def : thm
     val node_TY_DEF : thm
     val node_case_def : thm
+    val nth_def : thm
+    val odd_def : thm
     val tree_TY_DEF : thm
     val tree_case_def : thm
+    val tree_height_def : thm
+    val tree_nodes_height_def : thm
     val tree_size_def : thm
   
   (*  Theorems  *)
@@ -21,13 +27,11 @@ sig
     val btree_case_cong : thm
     val btree_case_eq : thm
     val btree_distinct : thm
-    val btree_height_def : thm
     val btree_induction : thm
     val btree_nchotomy : thm
     val datatype_btree : thm
     val datatype_list_t : thm
     val datatype_tree : thm
-    val even_def : thm
     val list_t_11 : thm
     val list_t_Axiom : thm
     val list_t_case_cong : thm
@@ -41,17 +45,13 @@ sig
     val node_case_eq : thm
     val node_induction : thm
     val node_nchotomy : thm
-    val nth_def : thm
-    val odd_def : thm
     val tree_11 : thm
     val tree_Axiom : thm
     val tree_case_cong : thm
     val tree_case_eq : thm
     val tree_distinct : thm
-    val tree_height_def : thm
     val tree_induction : thm
     val tree_nchotomy : thm
-    val tree_nodes_height_def : thm
     val tree_size_eq : thm
   
   val divDefLibTest_grammars : type_grammar.grammar * term_grammar.grammar
@@ -83,12 +83,29 @@ sig
       ⊢ (∀a f f1. btree_CASE (BLeaf a) f f1 = f a) ∧
         ∀a0 a1 f f1. btree_CASE (BNode a0 a1) f f1 = f1 a0 a1
    
+   [btree_height_def]  Definition
+      
+      ⊢ ∀tree.
+          btree_height tree =
+          case tree of
+            BLeaf v => Return 1
+          | BNode l r =>
+            do
+              hl <- btree_height l;
+              hr <- btree_height r;
+              Return (hl + hr)
+            od
+   
    [btree_size_def]  Definition
       
       ⊢ (∀f a. btree_size f (BLeaf a) = 1 + f a) ∧
         ∀f a0 a1.
           btree_size f (BNode a0 a1) =
           1 + (btree_size f a0 + btree_size f a1)
+   
+   [even_def]  Definition
+      
+      ⊢ ∀i. even i = if i = 0 then Return T else odd (i − 1)
    
    [list_t_TY_DEF]  Definition
       
@@ -163,6 +180,20 @@ sig
       
       ⊢ ∀a f. node_CASE (Node a) f = f a
    
+   [nth_def]  Definition
+      
+      ⊢ ∀ls i.
+          nth ls i =
+          case ls of
+            ListCons x tl =>
+              if u32_to_int i = 0 then Return x
+              else do i0 <- u32_sub i (int_to_u32 1); nth tl i0 od
+          | ListNil => Fail Failure
+   
+   [odd_def]  Definition
+      
+      ⊢ ∀i. odd i = if i = 0 then Return F else even (i − 1)
+   
    [tree_TY_DEF]  Definition
       
       ⊢ ∃rep.
@@ -208,6 +239,27 @@ sig
       ⊢ (∀a f f1. tree_CASE (TLeaf a) f f1 = f a) ∧
         ∀a f f1. tree_CASE (TNode a) f f1 = f1 a
    
+   [tree_height_def]  Definition
+      
+      ⊢ ∀tree.
+          tree_height tree =
+          case tree of
+            TLeaf v => Return 1
+          | TNode (Node ls) => tree_nodes_height ls
+   
+   [tree_nodes_height_def]  Definition
+      
+      ⊢ ∀ls.
+          tree_nodes_height ls =
+          case ls of
+            [] => Return 0
+          | t::tl =>
+            do
+              h1 <- tree_height t;
+              h2 <- tree_nodes_height tl;
+              Return (h1 + h2)
+            od
+   
    [tree_size_def]  Definition
       
       ⊢ (∀f a. tree_size f (TLeaf a) = 1 + f a) ∧
@@ -244,19 +296,6 @@ sig
       
       ⊢ ∀a1 a0 a. BLeaf a ≠ BNode a0 a1
    
-   [btree_height_def]  Theorem
-      
-      ⊢ ∀tree.
-          btree_height tree =
-          case tree of
-            BLeaf v => Return 1
-          | BNode l r =>
-            do
-              hl <- btree_height l;
-              hr <- btree_height r;
-              Return (hl + hr)
-            od
-   
    [btree_induction]  Theorem
       
       ⊢ ∀P. (∀a. P (BLeaf a)) ∧ (∀b b0. P b ∧ P b0 ⇒ P (BNode b b0)) ⇒
@@ -277,10 +316,6 @@ sig
    [datatype_tree]  Theorem
       
       ⊢ DATATYPE (tree TLeaf TNode ∧ node Node)
-   
-   [even_def]  Theorem
-      
-      ⊢ ∀i. even i = if i = 0 then Return T else odd (i − 1)
    
    [list_t_11]  Theorem
       
@@ -350,20 +385,6 @@ sig
       
       ⊢ ∀nn. ∃l. nn = Node l
    
-   [nth_def]  Theorem
-      
-      ⊢ ∀ls i.
-          nth ls i =
-          case ls of
-            ListCons x tl =>
-              if u32_to_int i = 0 then Return x
-              else do i0 <- u32_sub i (int_to_u32 1); nth tl i0 od
-          | ListNil => Fail Failure
-   
-   [odd_def]  Theorem
-      
-      ⊢ ∀i. odd i = if i = 0 then Return F else even (i − 1)
-   
    [tree_11]  Theorem
       
       ⊢ (∀a a'. TLeaf a = TLeaf a' ⇔ a = a') ∧
@@ -392,14 +413,6 @@ sig
       
       ⊢ ∀a' a. TLeaf a ≠ TNode a'
    
-   [tree_height_def]  Theorem
-      
-      ⊢ ∀tree.
-          tree_height tree =
-          case tree of
-            TLeaf v => Return 1
-          | TNode (Node ls) => tree_nodes_height ls
-   
    [tree_induction]  Theorem
       
       ⊢ ∀P0 P1 P2.
@@ -411,19 +424,6 @@ sig
    [tree_nchotomy]  Theorem
       
       ⊢ ∀tt. (∃a. tt = TLeaf a) ∨ ∃n. tt = TNode n
-   
-   [tree_nodes_height_def]  Theorem
-      
-      ⊢ ∀ls.
-          tree_nodes_height ls =
-          case ls of
-            [] => Return 0
-          | t::tl =>
-            do
-              h1 <- tree_height t;
-              h2 <- tree_nodes_height tl;
-              Return (h1 + h2)
-            od
    
    [tree_size_eq]  Theorem
       
