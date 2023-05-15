@@ -49,6 +49,9 @@ deriving Repr, BEq
 
 open Result
 
+instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
+  Inhabited.mk (fail panic)
+
 /- HELPERS -/
 
 def ret? {α: Type} (r: Result α): Bool :=
