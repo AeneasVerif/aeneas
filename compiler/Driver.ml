@@ -211,6 +211,19 @@ let () =
            functions";
         fail ());
 
+      (* We don't support mutually recursive definitions with decreases clauses in Lean *)
+      if
+        !backend = Lean && !extract_decreases_clauses
+        && List.exists
+             (function Aeneas.LlbcAst.Fun (Rec (_ :: _)) -> true | _ -> false)
+             m.declarations
+      then (
+        log#error
+          "The Lean backend doesn't support the use of \
+           decreasing_by/termination_by clauses with mutually recursive \
+           definitions";
+        fail ());
+
       (* Apply the pre-passes *)
       let m = PrePasses.apply_passes m in
 
