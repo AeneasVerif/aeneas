@@ -20,35 +20,36 @@ val _ = new_theory "divDef"
  *======================*)
 
 (* An auxiliary operator which uses some fuel *)
-val fix_fuel_def = Define ‘
+Definition fix_fuel_def:
   (fix_fuel (0 : num) (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result = Diverge) ∧
   (fix_fuel (SUC n) (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result = f (fix_fuel n f) x)
-’
+End
 
 (* An auxiliary predicate *)
-val fix_fuel_P_def = Define ‘
+Definition fix_fuel_P_def:
   fix_fuel_P f x n = ~(is_diverge (fix_fuel n f x))
-’
+End
 
 (* The fixed point operator *)
-val fix_def = Define ‘
+Definition fix_def:
   fix (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result =
     if (∃ n. fix_fuel_P f x n) then fix_fuel ($LEAST (fix_fuel_P f x)) f x else Diverge
-’
+End
 
 (* A validity condition.
 
    If a function body ‘f’ satisfies this condition, then we have the fixed point
    equation ‘fix f = f (fix f)’ (see [fix_fixed_eq]).
  *)
-val is_valid_fp_body_def = Define ‘
+Definition is_valid_fp_body_def:
   (is_valid_fp_body (0 : num) (f : ('a -> 'a result) -> 'a -> 'a result) = F) ∧
   
   (is_valid_fp_body (SUC n) (f : ('a -> 'a result) -> 'a -> 'a result) =
     ∀x. (∀g h. f g x = f h x) ∨
          (∃ h y. is_valid_fp_body n h ∧
                   ∀g. f g x = do z <- g y; h g z od))
-’
+End
+
 (*======================
  * Lemmas
  *======================*)
