@@ -16,9 +16,11 @@
    by the fixed point upon defining ‘explore_tree’ and ‘explore_node’:
 
    {[
-     Datatype tree:
-     | Leaf : int
-     | Node : tree list
+     Datatype:
+       tree =
+         Leaf int
+       | Node (tree list)
+     End
 
      explore_tree (t : tree) : tree =
        case t of
