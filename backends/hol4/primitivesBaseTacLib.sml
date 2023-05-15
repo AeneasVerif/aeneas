@@ -25,6 +25,7 @@ val exfalso : tactic =
   SUBGOAL_THEN “F” (fn th => ASSUME_TAC th >> fs[])
 
 val case_tac = CASE_TAC
+val top_case_tac = BasicProvers.TOP_CASE_TAC
 val try_tac = TRY
 val first_tac = FIRST
 val map_first_tac = MAP_FIRST

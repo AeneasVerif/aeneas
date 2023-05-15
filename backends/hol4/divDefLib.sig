@@ -34,7 +34,10 @@
 
    Remark: "Partial recursive functions in higher-order logic", Alexander Krauss,
    introduces an interesting approach by means of an inductive. It could be
-   interesting to try and compare.
+   interesting to try and compare. One advantage of the current approach, though,
+   is that it is compatible with an "execution" through [EVAL]. But if we manage
+   to make [EVAL] use arbitrary rewriting theorems, then it doesn't make a
+   difference.
  *)
 
 signature divDefLib =

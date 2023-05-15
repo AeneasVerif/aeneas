@@ -24,7 +24,12 @@ val fail_tm = “Fail : error -> 'a result”
 val fail_failure_tm = “Fail Failure : 'a result”
 val diverge_tm = “Diverge : 'a result”
 
+(* Switch to use ‘fix_exec’ (leading to executable definitions) and ‘fix’ (non
+   executable) *)
+val use_fix_exec = ref true
+
 val fix_tm = “fix”
+val fix_exec_tm = “fix_exec”
 val is_valid_fp_body_tm = “is_valid_fp_body”
 
 fun mk_result (ty : hol_type) : hol_type = Type.type_subst [ alpha_ty |-> ty ] result_ty
@@ -744,8 +749,8 @@ fun mk_raw_defs (in_out_tys : (hol_type * hol_type) list)
     (* Retrieve the body *)
     val body = (List.last o snd o strip_comb o concl) body_is_valid
 
-    (* Create the term ‘fix body’ *)
-    val fixed_body = mk_icomb (fix_tm, body)
+    (* Create the term ‘fix_exec body’ *)
+    val fixed_body = mk_icomb (if !use_fix_exec then fix_exec_tm else fix_tm, body)
 
     (* For every function in the group, generate the equation that we will
        use as definition. In particular:
@@ -814,12 +819,13 @@ fun prove_def_eq_tac
   (body_def : thm option) : tactic =
   let
     val body_def_thm = case body_def of SOME th => [th] | NONE => []
+    val fix_eq = if !use_fix_exec then fix_exec_fixed_eq else fix_fixed_eq
   in
     rpt gen_tac >>
     (* Expand the definition *)
     pure_once_rewrite_tac [current_raw_def] >>
     (* Use the fixed-point equality *)
-    pure_once_rewrite_left_tac [HO_MATCH_MP fix_fixed_eq is_valid] >>
+    pure_once_rewrite_left_tac [HO_MATCH_MP fix_eq is_valid] >>
     (* Expand the body definition *)
     pure_rewrite_tac body_def_thm >>
     (* Expand all the definitions from the group *)
@@ -896,13 +902,12 @@ fun DefineDiv (def_qt : term quotation) =
     (* Prove the final equations *)
     val def_eqs = prove_def_eqs body_is_valid def_tms raw_defs
 
-    (* Save the final equations as definitions.
-
-       Note that because we use the same names, doing this overrides the "raw"
-       definitions, which are then forgotten, which means we don't need to
-       manually delete them.
-     *)
+    (* Save the final equations as definitions. *)
     val thm_names = map (fn x => x ^ "_def") fnames
+    (* Because [store_definition] overrides existing names, it seems that in
+       practice we don't really need to  delete the previous definitions
+       (we still do it: it doesn't cost much). *)
+    val _ = map delete_binding thm_names
     val _ = map store_definition (zip thm_names def_eqs)
   in
     def_eqs

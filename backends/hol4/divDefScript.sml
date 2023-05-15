@@ -36,6 +36,22 @@ Definition fix_def:
     if (∃ n. fix_fuel_P f x n) then fix_fuel ($LEAST (fix_fuel_P f x)) f x else Diverge
 End
 
+(* An "executable" fixed point operator - useful for unit tests: we first test
+   if ‘fix_fuel_P f x’ is true for a high quantity of fuel, otherwise we use
+   ‘fix’ (which is not executable).
+
+   We prove later that, under some constraints: ‘∀n. fix_nexec n f = fix f’
+ *)
+Definition fix_nexec_def:
+  fix_nexec (n : num) (f : ('a -> 'b result) -> 'a -> 'b result) (x : 'a) : 'b result =
+    if (fix_fuel_P f x n) then fix_fuel n f x else fix f x
+End
+
+(* We fix a quantity of fuel for ’fix_nexec *)
+Definition fix_exec_def:
+  fix_exec = fix_nexec 1000000
+End
+
 (* A validity condition.
 
    If a function body ‘f’ satisfies this condition, then we have the fixed point
@@ -50,9 +66,9 @@ Definition is_valid_fp_body_def:
                   ∀g. f g x = do z <- g y; h g z od))
 End
 
-(*======================
- * Lemmas
- *======================*)
+(*=====================================*
+ * Lemmas about ‘fix_fuel’ and ‘fix’
+ *=====================================*)
 (* Auxiliary lemma.
    We generalize the goal of [fix_fuel_mono] in the case the fuel is non-empty
    (this allows us to unfold definitions like ‘fix_fuel’ once, and reveal
@@ -321,6 +337,36 @@ Proof
   irule fix_fixed_diverges >>
   metis_tac []
 QED
+
+(*===============================
+ * Lemmas about ‘fix_exec’
+ *===============================*)
+
+(* Prove that ‘fix_nexec’ is equivalent to ‘fix’ *)
+Theorem fix_nexec_eq_fix:
+  ∀ N f n. is_valid_fp_body N f ⇒ fix_nexec n f = fix f
+Proof
+  rw [] >>
+  rpt (irule EQ_EXT >> gen_tac) >>
+  fs [fix_nexec_def, fix_def] >>
+  top_case_tac >>
+  case_tac >> fs [] >>
+  (* Use the properties of the least upper bound *)
+  qspec_assume ‘fix_fuel_P f x’ whileTheory.LEAST_EXISTS_IMP >>
+  pop_assum sg_premise_tac >- metis_tac [] >> fs [] >>
+  (* Use the monotonicity property *)
+  irule fix_fuel_mono_least >> metis_tac []
+QED
+
+(* Prove the fixed point property for ‘fix_exec’ *)
+Theorem fix_exec_fixed_eq:
+  ∀N f. is_valid_fp_body N f ⇒ ∀x. fix_exec f x = f (fix_exec f) x
+Proof
+  rw [fix_exec_def] >>
+  imp_res_tac fix_nexec_eq_fix >> fs [] >>
+  irule fix_fixed_eq >> fs [] >> metis_tac []
+QED
+
 
 (*===============================
  * Utilities for the automation
