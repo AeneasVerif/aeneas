@@ -46,7 +46,7 @@ Definition test_new_non_zero_u32_fwd
 
 (** [external::test_vec] *)
 Definition test_vec_fwd : result unit :=
-  let v := vec_new u32 in _ <- vec_push_back u32 v (0%u32); Return tt
+  let v := vec_new u32 in _ <- vec_push_back u32 v 0%u32; Return tt
 .
 
 (** Unit test for [external::test_vec] *)
@@ -89,15 +89,15 @@ Definition test_custom_swap_back
   (x : u32) (y : u32) (st : state) (st0 : state) :
   result (state * (u32 * u32))
   :=
-  custom_swap_back u32 x y st (1%u32) st0
+  custom_swap_back u32 x y st 1%u32 st0
 .
 
 (** [external::test_swap_non_zero] *)
 Definition test_swap_non_zero_fwd
   (x : u32) (st : state) : result (state * u32) :=
-  p <- swap_fwd u32 x (0%u32) st;
+  p <- swap_fwd u32 x 0%u32 st;
   let (st0, _) := p in
-  p0 <- swap_back u32 x (0%u32) st st0;
+  p0 <- swap_back u32 x 0%u32 st st0;
   let (st1, p1) := p0 in
   let (x0, _) := p1 in
   if x0 s= 0%u32 then Fail_ Failure else Return (st1, x0)

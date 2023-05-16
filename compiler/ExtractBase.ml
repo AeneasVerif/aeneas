@@ -98,6 +98,19 @@ let decl_is_from_mut_rec_group (kind : decl_kind) : bool =
   | SingleNonRec | SingleRec | Assumed | Declared -> false
   | MutRecFirst | MutRecInner | MutRecLast -> true
 
+let decl_is_first_from_group (kind : decl_kind) : bool =
+  match kind with
+  | SingleNonRec | SingleRec | MutRecFirst | Assumed | Declared -> true
+  | MutRecLast | MutRecInner -> false
+
+(** Return [true] if the declaration is not the last from its group of declarations.
+
+    We need this because in some provers (e.g., HOL4), we need to delimit
+    the inner declarations (with `/\` for instance).
+ *)
+let decl_is_not_last_from_group (kind : decl_kind) : bool =
+  not (decl_is_last_from_group kind)
+
 (* TODO: this should a module we give to a functor! *)
 
 type type_decl_kind = Enum | Struct
@@ -118,15 +131,20 @@ type formatter = {
   char_name : string;
   int_name : integer_type -> string;
   str_name : string;
-  type_decl_kind_to_qualif : decl_kind -> type_decl_kind option -> string;
+  type_decl_kind_to_qualif :
+    decl_kind -> type_decl_kind option -> string option;
       (** Compute the qualified for a type definition/declaration.
 
           For instance: "type", "and", etc.
+
+          Remark: can return [None] for some backends like HOL4.
        *)
-  fun_decl_kind_to_qualif : decl_kind -> string;
+  fun_decl_kind_to_qualif : decl_kind -> string option;
       (** Compute the qualified for a function definition/declaration.
 
           For instance: "let", "let rec", "and", etc.
+
+          Remark: can return [None] for some backends like HOL4.
        *)
   field_name : name -> FieldId.id -> string option -> string;
       (** Inputs:

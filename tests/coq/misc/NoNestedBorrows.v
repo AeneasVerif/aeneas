@@ -87,8 +87,8 @@ Definition get_max_fwd (x : u32) (y : u32) : result u32 :=
 
 (** [no_nested_borrows::test3] *)
 Definition test3_fwd : result unit :=
-  x <- get_max_fwd (4%u32) (3%u32);
-  y <- get_max_fwd (10%u32) (11%u32);
+  x <- get_max_fwd 4%u32 3%u32;
+  y <- get_max_fwd 10%u32 11%u32;
   z <- u32_add x y;
   if negb (z s= 15%u32) then Fail_ Failure else Return tt
 .
@@ -98,8 +98,7 @@ Check (test3_fwd )%return.
 
 (** [no_nested_borrows::test_neg1] *)
 Definition test_neg1_fwd : result unit :=
-  y <- i32_neg (3%i32);
-  if negb (y s= (-3)%i32) then Fail_ Failure else Return tt
+  y <- i32_neg 3%i32; if negb (y s= (-3)%i32) then Fail_ Failure else Return tt
 .
 
 (** Unit test for [no_nested_borrows::test_neg1] *)
@@ -162,7 +161,7 @@ Definition test_panic_fwd (b : bool) : result unit :=
 
 (** [no_nested_borrows::test_copy_int] *)
 Definition test_copy_int_fwd : result unit :=
-  y <- copy_int_fwd (0%i32);
+  y <- copy_int_fwd 0%i32;
   if negb (0%i32 s= y) then Fail_ Failure else Return tt
 .
 
@@ -177,7 +176,7 @@ Definition is_cons_fwd (T : Type) (l : List_t T) : result bool :=
 (** [no_nested_borrows::test_is_cons] *)
 Definition test_is_cons_fwd : result unit :=
   let l := ListNil in
-  b <- is_cons_fwd i32 (ListCons (0%i32) l);
+  b <- is_cons_fwd i32 (ListCons 0%i32 l);
   if negb b then Fail_ Failure else Return tt
 .
 
@@ -196,7 +195,7 @@ Definition split_list_fwd
 (** [no_nested_borrows::test_split_list] *)
 Definition test_split_list_fwd : result unit :=
   let l := ListNil in
-  p <- split_list_fwd i32 (ListCons (0%i32) l);
+  p <- split_list_fwd i32 (ListCons 0%i32 l);
   let (hd, _) := p in
   if negb (hd s= 0%i32) then Fail_ Failure else Return tt
 .
@@ -217,12 +216,12 @@ Definition choose_back
 
 (** [no_nested_borrows::choose_test] *)
 Definition choose_test_fwd : result unit :=
-  z <- choose_fwd i32 true (0%i32) (0%i32);
+  z <- choose_fwd i32 true 0%i32 0%i32;
   z0 <- i32_add z 1%i32;
   if negb (z0 s= 1%i32)
   then Fail_ Failure
   else (
-    p <- choose_back i32 true (0%i32) (0%i32) z0;
+    p <- choose_back i32 true 0%i32 0%i32 z0;
     let (x, y) := p in
     if negb (x s= 1%i32)
     then Fail_ Failure
@@ -258,7 +257,7 @@ Arguments TreeNode {T} _ _ _.
 Fixpoint list_length_fwd (T : Type) (l : List_t T) : result u32 :=
   match l with
   | ListCons t l1 => i <- list_length_fwd T l1; u32_add 1%u32 i
-  | ListNil => Return (0%u32)
+  | ListNil => Return 0%u32
   end
 .
 
@@ -317,34 +316,34 @@ Definition list_rev_fwd_back (T : Type) (l : List_t T) : result (List_t T) :=
 (** [no_nested_borrows::test_list_functions] *)
 Definition test_list_functions_fwd : result unit :=
   let l := ListNil in
-  let l0 := ListCons (2%i32) l in
-  let l1 := ListCons (1%i32) l0 in
-  i <- list_length_fwd i32 (ListCons (0%i32) l1);
+  let l0 := ListCons 2%i32 l in
+  let l1 := ListCons 1%i32 l0 in
+  i <- list_length_fwd i32 (ListCons 0%i32 l1);
   if negb (i s= 3%u32)
   then Fail_ Failure
   else (
-    i0 <- list_nth_shared_fwd i32 (ListCons (0%i32) l1) (0%u32);
+    i0 <- list_nth_shared_fwd i32 (ListCons 0%i32 l1) 0%u32;
     if negb (i0 s= 0%i32)
     then Fail_ Failure
     else (
-      i1 <- list_nth_shared_fwd i32 (ListCons (0%i32) l1) (1%u32);
+      i1 <- list_nth_shared_fwd i32 (ListCons 0%i32 l1) 1%u32;
       if negb (i1 s= 1%i32)
       then Fail_ Failure
       else (
-        i2 <- list_nth_shared_fwd i32 (ListCons (0%i32) l1) (2%u32);
+        i2 <- list_nth_shared_fwd i32 (ListCons 0%i32 l1) 2%u32;
         if negb (i2 s= 2%i32)
         then Fail_ Failure
         else (
-          ls <- list_nth_mut_back i32 (ListCons (0%i32) l1) (1%u32) (3%i32);
-          i3 <- list_nth_shared_fwd i32 ls (0%u32);
+          ls <- list_nth_mut_back i32 (ListCons 0%i32 l1) 1%u32 3%i32;
+          i3 <- list_nth_shared_fwd i32 ls 0%u32;
           if negb (i3 s= 0%i32)
           then Fail_ Failure
           else (
-            i4 <- list_nth_shared_fwd i32 ls (1%u32);
+            i4 <- list_nth_shared_fwd i32 ls 1%u32;
             if negb (i4 s= 3%i32)
             then Fail_ Failure
             else (
-              i5 <- list_nth_shared_fwd i32 ls (2%u32);
+              i5 <- list_nth_shared_fwd i32 ls 2%u32;
               if negb (i5 s= 2%i32) then Fail_ Failure else Return tt))))))
 .
 
@@ -448,7 +447,7 @@ Arguments Struct_with_pair_p {T1} {T2}.
 
 (** [no_nested_borrows::new_pair1] *)
 Definition new_pair1_fwd : result (Struct_with_pair_t u32 u32) :=
-  Return {| Struct_with_pair_p := {| Pair_x := (1%u32); Pair_y := (2%u32) |} |}
+  Return {| Struct_with_pair_p := {| Pair_x := 1%u32; Pair_y := 2%u32 |} |}
 .
 
 (** [no_nested_borrows::test_constants] *)
@@ -486,29 +485,26 @@ Check (test_weird_borrows1_fwd )%return.
 
 (** [no_nested_borrows::test_mem_replace] *)
 Definition test_mem_replace_fwd_back (px : u32) : result u32 :=
-  let y := mem_replace_fwd u32 px (1%u32) in
-  if negb (y s= 0%u32) then Fail_ Failure else Return (2%u32)
+  let y := mem_replace_fwd u32 px 1%u32 in
+  if negb (y s= 0%u32) then Fail_ Failure else Return 2%u32
 .
 
 (** [no_nested_borrows::test_shared_borrow_bool1] *)
 Definition test_shared_borrow_bool1_fwd (b : bool) : result u32 :=
-  if b then Return (0%u32) else Return (1%u32)
+  if b then Return 0%u32 else Return 1%u32
 .
 
 (** [no_nested_borrows::test_shared_borrow_bool2] *)
 Definition test_shared_borrow_bool2_fwd : result u32 :=
-  Return (0%u32).
+  Return 0%u32.
 
 (** [no_nested_borrows::test_shared_borrow_enum1] *)
 Definition test_shared_borrow_enum1_fwd (l : List_t u32) : result u32 :=
-  match l with
-  | ListCons i l0 => Return (1%u32)
-  | ListNil => Return (0%u32)
-  end
+  match l with | ListCons i l0 => Return 1%u32 | ListNil => Return 0%u32 end
 .
 
 (** [no_nested_borrows::test_shared_borrow_enum2] *)
 Definition test_shared_borrow_enum2_fwd : result u32 :=
-  Return (0%u32).
+  Return 0%u32.
 
 End NoNestedBorrows .

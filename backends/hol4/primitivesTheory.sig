@@ -50,46 +50,77 @@ sig
     val error_CASE : thm
     val error_TY_DEF : thm
     val error_size_def : thm
+    val get_return_value_def : thm
     val i128_add_def : thm
     val i128_div_def : thm
+    val i128_ge_def : thm
+    val i128_gt_def : thm
+    val i128_le_def : thm
+    val i128_lt_def : thm
     val i128_max_def : thm
     val i128_min_def : thm
     val i128_mul_def : thm
+    val i128_neg_def : thm
     val i128_rem_def : thm
     val i128_sub_def : thm
     val i16_add_def : thm
     val i16_div_def : thm
+    val i16_ge_def : thm
+    val i16_gt_def : thm
+    val i16_le_def : thm
+    val i16_lt_def : thm
     val i16_max_def : thm
     val i16_min_def : thm
     val i16_mul_def : thm
+    val i16_neg_def : thm
     val i16_rem_def : thm
     val i16_sub_def : thm
     val i32_add_def : thm
     val i32_div_def : thm
+    val i32_ge_def : thm
+    val i32_gt_def : thm
+    val i32_le_def : thm
+    val i32_lt_def : thm
     val i32_max_def : thm
     val i32_min_def : thm
     val i32_mul_def : thm
+    val i32_neg_def : thm
     val i32_rem_def : thm
     val i32_sub_def : thm
     val i64_add_def : thm
     val i64_div_def : thm
+    val i64_ge_def : thm
+    val i64_gt_def : thm
+    val i64_le_def : thm
+    val i64_lt_def : thm
     val i64_max_def : thm
     val i64_min_def : thm
     val i64_mul_def : thm
+    val i64_neg_def : thm
     val i64_rem_def : thm
     val i64_sub_def : thm
     val i8_add_def : thm
     val i8_div_def : thm
+    val i8_ge_def : thm
+    val i8_gt_def : thm
+    val i8_le_def : thm
+    val i8_lt_def : thm
     val i8_max_def : thm
     val i8_min_def : thm
     val i8_mul_def : thm
+    val i8_neg_def : thm
     val i8_rem_def : thm
     val i8_sub_def : thm
     val int_rem_def : thm
     val is_diverge_def : thm
     val isize_add_def : thm
     val isize_div_def : thm
+    val isize_ge_def : thm
+    val isize_gt_def : thm
+    val isize_le_def : thm
+    val isize_lt_def : thm
     val isize_mul_def : thm
+    val isize_neg_def : thm
     val isize_rem_def : thm
     val isize_sub_def : thm
     val massert_def : thm
@@ -113,36 +144,60 @@ sig
     val return_def : thm
     val u128_add_def : thm
     val u128_div_def : thm
+    val u128_ge_def : thm
+    val u128_gt_def : thm
+    val u128_le_def : thm
+    val u128_lt_def : thm
     val u128_max_def : thm
     val u128_mul_def : thm
     val u128_rem_def : thm
     val u128_sub_def : thm
     val u16_add_def : thm
     val u16_div_def : thm
+    val u16_ge_def : thm
+    val u16_gt_def : thm
+    val u16_le_def : thm
+    val u16_lt_def : thm
     val u16_max_def : thm
     val u16_mul_def : thm
     val u16_rem_def : thm
     val u16_sub_def : thm
     val u32_add_def : thm
     val u32_div_def : thm
+    val u32_ge_def : thm
+    val u32_gt_def : thm
+    val u32_le_def : thm
+    val u32_lt_def : thm
     val u32_max_def : thm
     val u32_mul_def : thm
     val u32_rem_def : thm
     val u32_sub_def : thm
     val u64_add_def : thm
     val u64_div_def : thm
+    val u64_ge_def : thm
+    val u64_gt_def : thm
+    val u64_le_def : thm
+    val u64_lt_def : thm
     val u64_max_def : thm
     val u64_mul_def : thm
     val u64_rem_def : thm
     val u64_sub_def : thm
     val u8_add_def : thm
     val u8_div_def : thm
+    val u8_ge_def : thm
+    val u8_gt_def : thm
+    val u8_le_def : thm
+    val u8_lt_def : thm
     val u8_max_def : thm
     val u8_mul_def : thm
     val u8_rem_def : thm
     val u8_sub_def : thm
     val usize_add_def : thm
     val usize_div_def : thm
+    val usize_ge_def : thm
+    val usize_gt_def : thm
+    val usize_le_def : thm
+    val usize_lt_def : thm
     val usize_mul_def : thm
     val usize_rem_def : thm
     val usize_sub_def : thm
@@ -167,26 +222,31 @@ sig
     val i128_add_eq : thm
     val i128_div_eq : thm
     val i128_mul_eq : thm
+    val i128_neg_eq : thm
     val i128_rem_eq : thm
     val i128_sub_eq : thm
     val i16_add_eq : thm
     val i16_div_eq : thm
     val i16_mul_eq : thm
+    val i16_neg_eq : thm
     val i16_rem_eq : thm
     val i16_sub_eq : thm
     val i32_add_eq : thm
     val i32_div_eq : thm
     val i32_mul_eq : thm
+    val i32_neg_eq : thm
     val i32_rem_eq : thm
     val i32_sub_eq : thm
     val i64_add_eq : thm
     val i64_div_eq : thm
     val i64_mul_eq : thm
+    val i64_neg_eq : thm
     val i64_rem_eq : thm
     val i64_sub_eq : thm
     val i8_add_eq : thm
     val i8_div_eq : thm
     val i8_mul_eq : thm
+    val i8_neg_eq : thm
     val i8_rem_eq : thm
     val i8_sub_eq : thm
     val index_update_diff : thm
@@ -194,6 +254,7 @@ sig
     val isize_add_eq : thm
     val isize_div_eq : thm
     val isize_mul_eq : thm
+    val isize_neg_eq : thm
     val isize_rem_eq : thm
     val isize_sub_eq : thm
     val num2error_11 : thm
@@ -471,6 +532,10 @@ sig
       
       ⊢ ∀x. error_size x = 0
    
+   [get_return_value_def]  Definition
+      
+      ⊢ ∀x. get_return_value (Return x) = x
+   
    [i128_add_def]  Definition
       
       ⊢ ∀x y. i128_add x y = mk_i128 (i128_to_int x + i128_to_int y)
@@ -481,6 +546,22 @@ sig
           i128_div x y =
           if i128_to_int y = 0 then Fail Failure
           else mk_i128 (i128_to_int x / i128_to_int y)
+   
+   [i128_ge_def]  Definition
+      
+      ⊢ ∀x y. i128_ge x y ⇔ i128_to_int x ≥ i128_to_int y
+   
+   [i128_gt_def]  Definition
+      
+      ⊢ ∀x y. i128_gt x y ⇔ i128_to_int x > i128_to_int y
+   
+   [i128_le_def]  Definition
+      
+      ⊢ ∀x y. i128_le x y ⇔ i128_to_int x ≤ i128_to_int y
+   
+   [i128_lt_def]  Definition
+      
+      ⊢ ∀x y. i128_lt x y ⇔ i128_to_int x < i128_to_int y
    
    [i128_max_def]  Definition
       
@@ -493,6 +574,10 @@ sig
    [i128_mul_def]  Definition
       
       ⊢ ∀x y. i128_mul x y = mk_i128 (i128_to_int x * i128_to_int y)
+   
+   [i128_neg_def]  Definition
+      
+      ⊢ ∀x. i128_neg x = mk_i128 (-i128_to_int x)
    
    [i128_rem_def]  Definition
       
@@ -516,6 +601,22 @@ sig
           if i16_to_int y = 0 then Fail Failure
           else mk_i16 (i16_to_int x / i16_to_int y)
    
+   [i16_ge_def]  Definition
+      
+      ⊢ ∀x y. i16_ge x y ⇔ i16_to_int x ≥ i16_to_int y
+   
+   [i16_gt_def]  Definition
+      
+      ⊢ ∀x y. i16_gt x y ⇔ i16_to_int x > i16_to_int y
+   
+   [i16_le_def]  Definition
+      
+      ⊢ ∀x y. i16_le x y ⇔ i16_to_int x ≤ i16_to_int y
+   
+   [i16_lt_def]  Definition
+      
+      ⊢ ∀x y. i16_lt x y ⇔ i16_to_int x < i16_to_int y
+   
    [i16_max_def]  Definition
       
       ⊢ i16_max = 32767
@@ -527,6 +628,10 @@ sig
    [i16_mul_def]  Definition
       
       ⊢ ∀x y. i16_mul x y = mk_i16 (i16_to_int x * i16_to_int y)
+   
+   [i16_neg_def]  Definition
+      
+      ⊢ ∀x. i16_neg x = mk_i16 (-i16_to_int x)
    
    [i16_rem_def]  Definition
       
@@ -550,6 +655,22 @@ sig
           if i32_to_int y = 0 then Fail Failure
           else mk_i32 (i32_to_int x / i32_to_int y)
    
+   [i32_ge_def]  Definition
+      
+      ⊢ ∀x y. i32_ge x y ⇔ i32_to_int x ≥ i32_to_int y
+   
+   [i32_gt_def]  Definition
+      
+      ⊢ ∀x y. i32_gt x y ⇔ i32_to_int x > i32_to_int y
+   
+   [i32_le_def]  Definition
+      
+      ⊢ ∀x y. i32_le x y ⇔ i32_to_int x ≤ i32_to_int y
+   
+   [i32_lt_def]  Definition
+      
+      ⊢ ∀x y. i32_lt x y ⇔ i32_to_int x < i32_to_int y
+   
    [i32_max_def]  Definition
       
       ⊢ i32_max = 2147483647
@@ -561,6 +682,10 @@ sig
    [i32_mul_def]  Definition
       
       ⊢ ∀x y. i32_mul x y = mk_i32 (i32_to_int x * i32_to_int y)
+   
+   [i32_neg_def]  Definition
+      
+      ⊢ ∀x. i32_neg x = mk_i32 (-i32_to_int x)
    
    [i32_rem_def]  Definition
       
@@ -584,6 +709,22 @@ sig
           if i64_to_int y = 0 then Fail Failure
           else mk_i64 (i64_to_int x / i64_to_int y)
    
+   [i64_ge_def]  Definition
+      
+      ⊢ ∀x y. i64_ge x y ⇔ i64_to_int x ≥ i64_to_int y
+   
+   [i64_gt_def]  Definition
+      
+      ⊢ ∀x y. i64_gt x y ⇔ i64_to_int x > i64_to_int y
+   
+   [i64_le_def]  Definition
+      
+      ⊢ ∀x y. i64_le x y ⇔ i64_to_int x ≤ i64_to_int y
+   
+   [i64_lt_def]  Definition
+      
+      ⊢ ∀x y. i64_lt x y ⇔ i64_to_int x < i64_to_int y
+   
    [i64_max_def]  Definition
       
       ⊢ i64_max = 9223372036854775807
@@ -595,6 +736,10 @@ sig
    [i64_mul_def]  Definition
       
       ⊢ ∀x y. i64_mul x y = mk_i64 (i64_to_int x * i64_to_int y)
+   
+   [i64_neg_def]  Definition
+      
+      ⊢ ∀x. i64_neg x = mk_i64 (-i64_to_int x)
    
    [i64_rem_def]  Definition
       
@@ -618,6 +763,22 @@ sig
           if i8_to_int y = 0 then Fail Failure
           else mk_i8 (i8_to_int x / i8_to_int y)
    
+   [i8_ge_def]  Definition
+      
+      ⊢ ∀x y. i8_ge x y ⇔ i8_to_int x ≥ i8_to_int y
+   
+   [i8_gt_def]  Definition
+      
+      ⊢ ∀x y. i8_gt x y ⇔ i8_to_int x > i8_to_int y
+   
+   [i8_le_def]  Definition
+      
+      ⊢ ∀x y. i8_le x y ⇔ i8_to_int x ≤ i8_to_int y
+   
+   [i8_lt_def]  Definition
+      
+      ⊢ ∀x y. i8_lt x y ⇔ i8_to_int x < i8_to_int y
+   
    [i8_max_def]  Definition
       
       ⊢ i8_max = 127
@@ -629,6 +790,10 @@ sig
    [i8_mul_def]  Definition
       
       ⊢ ∀x y. i8_mul x y = mk_i8 (i8_to_int x * i8_to_int y)
+   
+   [i8_neg_def]  Definition
+      
+      ⊢ ∀x. i8_neg x = mk_i8 (-i8_to_int x)
    
    [i8_rem_def]  Definition
       
@@ -663,9 +828,29 @@ sig
           if isize_to_int y = 0 then Fail Failure
           else mk_isize (isize_to_int x / isize_to_int y)
    
+   [isize_ge_def]  Definition
+      
+      ⊢ ∀x y. isize_ge x y ⇔ isize_to_int x ≥ isize_to_int y
+   
+   [isize_gt_def]  Definition
+      
+      ⊢ ∀x y. isize_gt x y ⇔ isize_to_int x > isize_to_int y
+   
+   [isize_le_def]  Definition
+      
+      ⊢ ∀x y. isize_le x y ⇔ isize_to_int x ≤ isize_to_int y
+   
+   [isize_lt_def]  Definition
+      
+      ⊢ ∀x y. isize_lt x y ⇔ isize_to_int x < isize_to_int y
+   
    [isize_mul_def]  Definition
       
       ⊢ ∀x y. isize_mul x y = mk_isize (isize_to_int x * isize_to_int y)
+   
+   [isize_neg_def]  Definition
+      
+      ⊢ ∀x. isize_neg x = mk_isize (-isize_to_int x)
    
    [isize_rem_def]  Definition
       
@@ -810,6 +995,22 @@ sig
           if u128_to_int y = 0 then Fail Failure
           else mk_u128 (u128_to_int x / u128_to_int y)
    
+   [u128_ge_def]  Definition
+      
+      ⊢ ∀x y. u128_ge x y ⇔ u128_to_int x ≥ u128_to_int y
+   
+   [u128_gt_def]  Definition
+      
+      ⊢ ∀x y. u128_gt x y ⇔ u128_to_int x > u128_to_int y
+   
+   [u128_le_def]  Definition
+      
+      ⊢ ∀x y. u128_le x y ⇔ u128_to_int x ≤ u128_to_int y
+   
+   [u128_lt_def]  Definition
+      
+      ⊢ ∀x y. u128_lt x y ⇔ u128_to_int x < u128_to_int y
+   
    [u128_max_def]  Definition
       
       ⊢ u128_max = 340282366920938463463374607431768211455
@@ -839,6 +1040,22 @@ sig
           u16_div x y =
           if u16_to_int y = 0 then Fail Failure
           else mk_u16 (u16_to_int x / u16_to_int y)
+   
+   [u16_ge_def]  Definition
+      
+      ⊢ ∀x y. u16_ge x y ⇔ u16_to_int x ≥ u16_to_int y
+   
+   [u16_gt_def]  Definition
+      
+      ⊢ ∀x y. u16_gt x y ⇔ u16_to_int x > u16_to_int y
+   
+   [u16_le_def]  Definition
+      
+      ⊢ ∀x y. u16_le x y ⇔ u16_to_int x ≤ u16_to_int y
+   
+   [u16_lt_def]  Definition
+      
+      ⊢ ∀x y. u16_lt x y ⇔ u16_to_int x < u16_to_int y
    
    [u16_max_def]  Definition
       
@@ -870,6 +1087,22 @@ sig
           if u32_to_int y = 0 then Fail Failure
           else mk_u32 (u32_to_int x / u32_to_int y)
    
+   [u32_ge_def]  Definition
+      
+      ⊢ ∀x y. u32_ge x y ⇔ u32_to_int x ≥ u32_to_int y
+   
+   [u32_gt_def]  Definition
+      
+      ⊢ ∀x y. u32_gt x y ⇔ u32_to_int x > u32_to_int y
+   
+   [u32_le_def]  Definition
+      
+      ⊢ ∀x y. u32_le x y ⇔ u32_to_int x ≤ u32_to_int y
+   
+   [u32_lt_def]  Definition
+      
+      ⊢ ∀x y. u32_lt x y ⇔ u32_to_int x < u32_to_int y
+   
    [u32_max_def]  Definition
       
       ⊢ u32_max = 4294967295
@@ -899,6 +1132,22 @@ sig
           u64_div x y =
           if u64_to_int y = 0 then Fail Failure
           else mk_u64 (u64_to_int x / u64_to_int y)
+   
+   [u64_ge_def]  Definition
+      
+      ⊢ ∀x y. u64_ge x y ⇔ u64_to_int x ≥ u64_to_int y
+   
+   [u64_gt_def]  Definition
+      
+      ⊢ ∀x y. u64_gt x y ⇔ u64_to_int x > u64_to_int y
+   
+   [u64_le_def]  Definition
+      
+      ⊢ ∀x y. u64_le x y ⇔ u64_to_int x ≤ u64_to_int y
+   
+   [u64_lt_def]  Definition
+      
+      ⊢ ∀x y. u64_lt x y ⇔ u64_to_int x < u64_to_int y
    
    [u64_max_def]  Definition
       
@@ -930,6 +1179,22 @@ sig
           if u8_to_int y = 0 then Fail Failure
           else mk_u8 (u8_to_int x / u8_to_int y)
    
+   [u8_ge_def]  Definition
+      
+      ⊢ ∀x y. u8_ge x y ⇔ u8_to_int x ≥ u8_to_int y
+   
+   [u8_gt_def]  Definition
+      
+      ⊢ ∀x y. u8_gt x y ⇔ u8_to_int x > u8_to_int y
+   
+   [u8_le_def]  Definition
+      
+      ⊢ ∀x y. u8_le x y ⇔ u8_to_int x ≤ u8_to_int y
+   
+   [u8_lt_def]  Definition
+      
+      ⊢ ∀x y. u8_lt x y ⇔ u8_to_int x < u8_to_int y
+   
    [u8_max_def]  Definition
       
       ⊢ u8_max = 255
@@ -959,6 +1224,22 @@ sig
           usize_div x y =
           if usize_to_int y = 0 then Fail Failure
           else mk_usize (usize_to_int x / usize_to_int y)
+   
+   [usize_ge_def]  Definition
+      
+      ⊢ ∀x y. usize_ge x y ⇔ usize_to_int x ≥ usize_to_int y
+   
+   [usize_gt_def]  Definition
+      
+      ⊢ ∀x y. usize_gt x y ⇔ usize_to_int x > usize_to_int y
+   
+   [usize_le_def]  Definition
+      
+      ⊢ ∀x y. usize_le x y ⇔ usize_to_int x ≤ usize_to_int y
+   
+   [usize_lt_def]  Definition
+      
+      ⊢ ∀x y. usize_lt x y ⇔ usize_to_int x < usize_to_int y
    
    [usize_mul_def]  Definition
       
@@ -1078,6 +1359,15 @@ sig
           ∃z. i128_mul x y = Return z ∧
               i128_to_int z = i128_to_int x * i128_to_int y
    
+   [i128_neg_eq]  Theorem
+      
+      [oracles: DISK_THM] [axioms: i128_to_int_int_to_i128, isize_bounds]
+      []
+      ⊢ ∀x y.
+          i128_min ≤ -i128_to_int x ⇒
+          -i128_to_int x ≤ i128_max ⇒
+          ∃y. i128_neg x = Return y ∧ i128_to_int y = -i128_to_int x
+   
    [i128_rem_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1130,6 +1420,14 @@ sig
           i16_to_int x * i16_to_int y ≤ i16_max ⇒
           ∃z. i16_mul x y = Return z ∧
               i16_to_int z = i16_to_int x * i16_to_int y
+   
+   [i16_neg_eq]  Theorem
+      
+      [oracles: DISK_THM] [axioms: i16_to_int_int_to_i16, isize_bounds] []
+      ⊢ ∀x y.
+          i16_min ≤ -i16_to_int x ⇒
+          -i16_to_int x ≤ i16_max ⇒
+          ∃y. i16_neg x = Return y ∧ i16_to_int y = -i16_to_int x
    
    [i16_rem_eq]  Theorem
       
@@ -1184,6 +1482,14 @@ sig
           ∃z. i32_mul x y = Return z ∧
               i32_to_int z = i32_to_int x * i32_to_int y
    
+   [i32_neg_eq]  Theorem
+      
+      [oracles: DISK_THM] [axioms: i32_to_int_int_to_i32, isize_bounds] []
+      ⊢ ∀x y.
+          i32_min ≤ -i32_to_int x ⇒
+          -i32_to_int x ≤ i32_max ⇒
+          ∃y. i32_neg x = Return y ∧ i32_to_int y = -i32_to_int x
+   
    [i32_rem_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1237,6 +1543,14 @@ sig
           ∃z. i64_mul x y = Return z ∧
               i64_to_int z = i64_to_int x * i64_to_int y
    
+   [i64_neg_eq]  Theorem
+      
+      [oracles: DISK_THM] [axioms: i64_to_int_int_to_i64, isize_bounds] []
+      ⊢ ∀x y.
+          i64_min ≤ -i64_to_int x ⇒
+          -i64_to_int x ≤ i64_max ⇒
+          ∃y. i64_neg x = Return y ∧ i64_to_int y = -i64_to_int x
+   
    [i64_rem_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1289,6 +1603,14 @@ sig
           i8_to_int x * i8_to_int y ≤ i8_max ⇒
           ∃z. i8_mul x y = Return z ∧
               i8_to_int z = i8_to_int x * i8_to_int y
+   
+   [i8_neg_eq]  Theorem
+      
+      [oracles: DISK_THM] [axioms: i8_to_int_int_to_i8, isize_bounds] []
+      ⊢ ∀x y.
+          i8_min ≤ -i8_to_int x ⇒
+          -i8_to_int x ≤ i8_max ⇒
+          ∃y. i8_neg x = Return y ∧ i8_to_int y = -i8_to_int x
    
    [i8_rem_eq]  Theorem
       
@@ -1364,6 +1686,15 @@ sig
           isize_to_int x * isize_to_int y ≤ isize_max ⇒
           ∃z. isize_mul x y = Return z ∧
               isize_to_int z = isize_to_int x * isize_to_int y
+   
+   [isize_neg_eq]  Theorem
+      
+      [oracles: DISK_THM] [axioms: isize_to_int_int_to_isize, isize_bounds]
+      []
+      ⊢ ∀x y.
+          isize_min ≤ -isize_to_int x ⇒
+          -isize_to_int x ≤ isize_max ⇒
+          ∃y. isize_neg x = Return y ∧ isize_to_int y = -isize_to_int x
    
    [isize_rem_eq]  Theorem
       

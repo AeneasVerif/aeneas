@@ -2642,7 +2642,7 @@ let wrap_in_match_fuel (fuel0 : VarId.id) (fuel : VarId.id) (body : texpression)
       let match_ty = body.ty in
       let match_e = Switch (fuel0, Match [ fail_branch; success_branch ]) in
       { e = match_e; ty = match_ty }
-  | Lean ->
+  | Lean | HOL4 ->
       (* We should have checked the command line arguments before *)
       raise (Failure "Unexpected")
 

@@ -169,7 +169,7 @@ let rec let_group_requires_parentheses (e : texpression) : bool =
 let texpression_requires_parentheses e =
   match !Config.backend with
   | FStar | Lean -> false
-  | Coq -> let_group_requires_parentheses e
+  | Coq | HOL4 -> let_group_requires_parentheses e
 
 let is_var (e : texpression) : bool =
   match e.e with Var _ -> true | _ -> false

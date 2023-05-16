@@ -17,37 +17,52 @@ End
 
 Type M = ``: 'a result``
 
-val bind_def = Define `
+Definition bind_def:
   (bind : 'a M -> ('a -> 'b M) -> 'b M) x f =
     case x of
       Return y => f y
     | Fail e => Fail e
-    | Diverge => Diverge`;
+    | Diverge => Diverge
+End
 
 val bind_name = fst (dest_const “bind”)
 
-val return_def = Define `
+Definition return_def:
   (return : 'a -> 'a M) x =
-    Return x`;
+    Return x
+End
 
-val massert_def = Define ‘massert b = if b then Return () else Fail Failure’
+Definition massert_def:
+  massert b = if b then Return () else Fail Failure
+End
 
 Overload monad_bind = ``bind``
 Overload monad_unitbind = ``\x y. bind x (\z. y)``
 Overload monad_ignore_bind = ``\x y. bind x (\z. y)``
 
-val is_diverge_def = Define ‘
-  is_diverge (r: 'a result) : bool = case r of Diverge => T | _ => F’
+Definition is_diverge_def:
+  is_diverge (r: 'a result) : bool = case r of Diverge => T | _ => F
+End
 
 (* Allow the use of monadic syntax *)
 val _ = monadsyntax.enable_monadsyntax ()
+
+(*** For the globals *)
+Definition get_return_value_def:
+  get_return_value (Return x) = x
+End
 
 (*** Misc *)
 Type char = “:char”
 Type string = “:string”
 
-val mem_replace_fwd_def = Define ‘mem_replace_fwd (x : 'a) (y :'a) : 'a = x’
-val mem_replace_back_def = Define ‘mem_replace_back (x : 'a) (y :'a) : 'a = y’
+Definition mem_replace_fwd_def:
+  mem_replace_fwd (x : 'a) (y :'a) : 'a = x
+End
+
+Definition mem_replace_back_def:
+  mem_replace_back (x : 'a) (y :'a) : 'a = y
+End
 
 (*** Scalars *)
 (* Remark: most of the following code was partially generated *)
@@ -343,6 +358,21 @@ val all_mk_int_defs = [
   mk_u128_def
 ]
 
+val isize_neg_def = Define ‘isize_neg x = mk_isize (- (isize_to_int x))’
+val i8_neg_def    = Define ‘i8_neg x    = mk_i8 (- (i8_to_int x))’
+val i16_neg_def   = Define ‘i16_neg x   = mk_i16 (- (i16_to_int x))’
+val i32_neg_def   = Define ‘i32_neg x   = mk_i32 (- (i32_to_int x))’
+val i64_neg_def   = Define ‘i64_neg x   = mk_i64 (- (i64_to_int x))’
+val i128_neg_def  = Define ‘i128_neg x  = mk_i128 (- (i128_to_int x))’
+
+val all_neg_defs = [
+  isize_neg_def,
+  i8_neg_def,
+  i16_neg_def,
+  i32_neg_def,
+  i64_neg_def,
+  i128_neg_def
+]
 
 val isize_add_def = Define ‘isize_add x y = mk_isize ((isize_to_int x) + (isize_to_int y))’
 val i8_add_def    = Define ‘i8_add x y    = mk_i8 ((i8_to_int x) + (i8_to_int y))’
@@ -526,6 +556,71 @@ val all_rem_defs = [
 val (asms,g) = top_goal ()
 *)
 
+fun prove_arith_unop_eq (asms, g) =
+  let
+    val rw_thms = List.concat [all_neg_defs, all_mk_int_defs, all_conversion_id_lemmas]
+  in
+    (rpt gen_tac >>
+     rpt disch_tac >>
+     assume_tac isize_bounds >> (* Only useful for isize of course *)
+     rw rw_thms) (asms, g)
+  end
+
+Theorem isize_neg_eq:
+  !x y.
+    isize_min ≤ - isize_to_int x ⇒
+    - isize_to_int x ≤ isize_max ⇒
+    ?y. isize_neg x = Return y /\ isize_to_int y = - isize_to_int x
+Proof
+  prove_arith_unop_eq
+QED
+
+Theorem i8_neg_eq:
+  !x y.
+    i8_min ≤ - i8_to_int x ⇒
+    - i8_to_int x ≤ i8_max ⇒
+    ?y. i8_neg x = Return y /\ i8_to_int y = - i8_to_int x
+Proof
+  prove_arith_unop_eq
+QED
+
+Theorem i16_neg_eq:
+  !x y.
+    i16_min ≤ - i16_to_int x ⇒
+    - i16_to_int x ≤ i16_max ⇒
+    ?y. i16_neg x = Return y /\ i16_to_int y = - i16_to_int x
+Proof
+  prove_arith_unop_eq
+QED
+
+Theorem i32_neg_eq:
+  !x y.
+    i32_min ≤ - i32_to_int x ⇒
+    - i32_to_int x ≤ i32_max ⇒
+    ?y. i32_neg x = Return y /\ i32_to_int y = - i32_to_int x
+Proof
+  prove_arith_unop_eq
+QED
+
+Theorem i64_neg_eq:
+  !x y.
+    i64_min ≤ - i64_to_int x ⇒
+    - i64_to_int x ≤ i64_max ⇒
+    ?y. i64_neg x = Return y /\ i64_to_int y = - i64_to_int x
+Proof
+  prove_arith_unop_eq
+QED
+
+Theorem i128_neg_eq:
+  !x y.
+    i128_min ≤ - i128_to_int x ⇒
+    - i128_to_int x ≤ i128_max ⇒
+    ?y. i128_neg x = Return y /\ i128_to_int y = - i128_to_int x
+Proof
+  prove_arith_unop_eq
+QED
+
+
 fun prove_arith_op_eq (asms, g) =
   let
     val (_, t) = (dest_exists o snd o strip_imp o snd o strip_forall) g;
@@ -565,7 +660,7 @@ fun prove_arith_op_eq (asms, g) =
 
 Theorem u8_add_eq:
   !x y.
-    u8_to_int x + u8_to_int y <= u8_max ==>
+    u8_to_int x + u8_to_int y <= u8_max ⇒
     ?z. u8_add x y = Return z /\ u8_to_int z = u8_to_int x + u8_to_int y
 Proof
   prove_arith_op_eq
@@ -573,7 +668,7 @@ QED
 
 Theorem u16_add_eq:
   !(x y).
-    u16_to_int x + u16_to_int y <= u16_max ==>
+    u16_to_int x + u16_to_int y <= u16_max ⇒
     ?(z). u16_add x y = Return z /\ u16_to_int z = u16_to_int x + u16_to_int y
 Proof
   prove_arith_op_eq
@@ -581,7 +676,7 @@ QED
 
 Theorem u32_add_eq:
   !x y.
-    u32_to_int x + u32_to_int y <= u32_max ==>
+    u32_to_int x + u32_to_int y <= u32_max ⇒
     ?z. u32_add x y = Return z /\ u32_to_int z = u32_to_int x + u32_to_int y
 Proof
   prove_arith_op_eq
@@ -589,7 +684,7 @@ QED
 
 Theorem u64_add_eq:
   !x y.
-    u64_to_int x + u64_to_int y <= u64_max ==>
+    u64_to_int x + u64_to_int y <= u64_max ⇒
     ?z. u64_add x y = Return z /\ u64_to_int z = u64_to_int x + u64_to_int y
 Proof
   prove_arith_op_eq
@@ -597,7 +692,7 @@ QED
 
 Theorem u128_add_eq:
   !x y.
-    u128_to_int x + u128_to_int y <= u128_max ==>
+    u128_to_int x + u128_to_int y <= u128_max ⇒
     ?z. u128_add x y = Return z /\ u128_to_int z = u128_to_int x + u128_to_int y
 Proof
   prove_arith_op_eq
@@ -605,7 +700,7 @@ QED
 
 Theorem usize_add_eq:
   !x y.
-    (usize_to_int x + usize_to_int y <= u16_max) \/ (usize_to_int x + usize_to_int y <= usize_max) ==>
+    (usize_to_int x + usize_to_int y <= u16_max) \/ (usize_to_int x + usize_to_int y <= usize_max) ⇒
     ?z. usize_add x y = Return z /\ usize_to_int z = usize_to_int x + usize_to_int y
 Proof
   prove_arith_op_eq
@@ -613,8 +708,8 @@ QED
 
 Theorem i8_add_eq:
   !x y.
-    i8_min <= i8_to_int x + i8_to_int y ==>
-    i8_to_int x + i8_to_int y <= i8_max ==>
+    i8_min <= i8_to_int x + i8_to_int y ⇒
+    i8_to_int x + i8_to_int y <= i8_max ⇒
     ?z. i8_add x y = Return z /\ i8_to_int z = i8_to_int x + i8_to_int y
 Proof
   prove_arith_op_eq
@@ -622,8 +717,8 @@ QED
 
 Theorem i16_add_eq:
   !x y.
-    i16_min <= i16_to_int x + i16_to_int y ==>
-    i16_to_int x + i16_to_int y <= i16_max ==>
+    i16_min <= i16_to_int x + i16_to_int y ⇒
+    i16_to_int x + i16_to_int y <= i16_max ⇒
     ?z. i16_add x y = Return z /\ i16_to_int z = i16_to_int x + i16_to_int y
 Proof
   prove_arith_op_eq
@@ -631,8 +726,8 @@ QED
 
 Theorem i32_add_eq:
   !x y.
-    i32_min <= i32_to_int x + i32_to_int y ==>
-    i32_to_int x + i32_to_int y <= i32_max ==>
+    i32_min <= i32_to_int x + i32_to_int y ⇒
+    i32_to_int x + i32_to_int y <= i32_max ⇒
     ?z. i32_add x y = Return z /\ i32_to_int z = i32_to_int x + i32_to_int y
 Proof
   prove_arith_op_eq
@@ -640,8 +735,8 @@ QED
 
 Theorem i64_add_eq:
   !x y.
-    i64_min <= i64_to_int x + i64_to_int y ==>
-    i64_to_int x + i64_to_int y <= i64_max ==>
+    i64_min <= i64_to_int x + i64_to_int y ⇒
+    i64_to_int x + i64_to_int y <= i64_max ⇒
     ?z. i64_add x y = Return z /\ i64_to_int z = i64_to_int x + i64_to_int y
 Proof
   prove_arith_op_eq
@@ -649,8 +744,8 @@ QED
 
 Theorem i128_add_eq:
   !x y.
-    i128_min <= i128_to_int x + i128_to_int y ==>
-    i128_to_int x + i128_to_int y <= i128_max ==>
+    i128_min <= i128_to_int x + i128_to_int y ⇒
+    i128_to_int x + i128_to_int y <= i128_max ⇒
     ?z. i128_add x y = Return z /\ i128_to_int z = i128_to_int x + i128_to_int y
 Proof
   prove_arith_op_eq
@@ -658,8 +753,8 @@ QED
 
 Theorem isize_add_eq:
   !x y.
-    (i16_min <= isize_to_int x + isize_to_int y \/ isize_min <= isize_to_int x + isize_to_int y) ==>
-    (isize_to_int x + isize_to_int y <= i16_max \/ isize_to_int x + isize_to_int y <= isize_max) ==>
+    (i16_min <= isize_to_int x + isize_to_int y \/ isize_min <= isize_to_int x + isize_to_int y) ⇒
+    (isize_to_int x + isize_to_int y <= i16_max \/ isize_to_int x + isize_to_int y <= isize_max) ⇒
     ?z. isize_add x y = Return z /\ isize_to_int z = isize_to_int x + isize_to_int y
 Proof
   prove_arith_op_eq
@@ -667,7 +762,7 @@ QED
       
 Theorem u8_sub_eq:
   !x y.
-    0 <= u8_to_int x - u8_to_int y ==>
+    0 <= u8_to_int x - u8_to_int y ⇒
     ?z. u8_sub x y = Return z /\ u8_to_int z = u8_to_int x - u8_to_int y
 Proof
   prove_arith_op_eq
@@ -675,7 +770,7 @@ QED
 
 Theorem u16_sub_eq:
   !x y.
-    0 <= u16_to_int x - u16_to_int y ==>
+    0 <= u16_to_int x - u16_to_int y ⇒
     ?z. u16_sub x y = Return z /\ u16_to_int z = u16_to_int x - u16_to_int y
 Proof
   prove_arith_op_eq
@@ -683,7 +778,7 @@ QED
 
 Theorem u32_sub_eq:
   !x y.
-    0 <= u32_to_int x - u32_to_int y ==>
+    0 <= u32_to_int x - u32_to_int y ⇒
     ?z. u32_sub x y = Return z /\ u32_to_int z = u32_to_int x - u32_to_int y
 Proof
   prove_arith_op_eq
@@ -691,7 +786,7 @@ QED
 
 Theorem u64_sub_eq:
   !x y.
-    0 <= u64_to_int x - u64_to_int y ==>
+    0 <= u64_to_int x - u64_to_int y ⇒
     ?z. u64_sub x y = Return z /\ u64_to_int z = u64_to_int x - u64_to_int y
 Proof
   prove_arith_op_eq
@@ -699,7 +794,7 @@ QED
 
 Theorem u128_sub_eq:
   !x y.
-    0 <= u128_to_int x - u128_to_int y ==>
+    0 <= u128_to_int x - u128_to_int y ⇒
     ?z. u128_sub x y = Return z /\ u128_to_int z = u128_to_int x - u128_to_int y
 Proof
   prove_arith_op_eq
@@ -707,7 +802,7 @@ QED
 
 Theorem usize_sub_eq:
   !x y.
-    0 <= usize_to_int x - usize_to_int y ==>
+    0 <= usize_to_int x - usize_to_int y ⇒
     ?z. usize_sub x y = Return z /\ usize_to_int z = usize_to_int x - usize_to_int y
 Proof
   prove_arith_op_eq
@@ -715,8 +810,8 @@ QED
 
 Theorem i8_sub_eq:
   !x y.
-    i8_min <= i8_to_int x - i8_to_int y ==>
-    i8_to_int x - i8_to_int y <= i8_max ==>
+    i8_min <= i8_to_int x - i8_to_int y ⇒
+    i8_to_int x - i8_to_int y <= i8_max ⇒
     ?z. i8_sub x y = Return z /\ i8_to_int z = i8_to_int x - i8_to_int y
 Proof
   prove_arith_op_eq
@@ -724,8 +819,8 @@ QED
 
 Theorem i16_sub_eq:
   !x y.
-    i16_min <= i16_to_int x - i16_to_int y ==>
-    i16_to_int x - i16_to_int y <= i16_max ==>
+    i16_min <= i16_to_int x - i16_to_int y ⇒
+    i16_to_int x - i16_to_int y <= i16_max ⇒
     ?z. i16_sub x y = Return z /\ i16_to_int z = i16_to_int x - i16_to_int y
 Proof
   prove_arith_op_eq
@@ -733,8 +828,8 @@ QED
 
 Theorem i32_sub_eq:
   !x y.
-    i32_min <= i32_to_int x - i32_to_int y ==>
-    i32_to_int x - i32_to_int y <= i32_max ==>
+    i32_min <= i32_to_int x - i32_to_int y ⇒
+    i32_to_int x - i32_to_int y <= i32_max ⇒
     ?z. i32_sub x y = Return z /\ i32_to_int z = i32_to_int x - i32_to_int y
 Proof
   prove_arith_op_eq
@@ -742,8 +837,8 @@ QED
 
 Theorem i64_sub_eq:
   !x y.
-    i64_min <= i64_to_int x - i64_to_int y ==>
-    i64_to_int x - i64_to_int y <= i64_max ==>
+    i64_min <= i64_to_int x - i64_to_int y ⇒
+    i64_to_int x - i64_to_int y <= i64_max ⇒
     ?z. i64_sub x y = Return z /\ i64_to_int z = i64_to_int x - i64_to_int y
 Proof
   prove_arith_op_eq
@@ -751,8 +846,8 @@ QED
 
 Theorem i128_sub_eq:
   !x y.
-    i128_min <= i128_to_int x - i128_to_int y ==>
-    i128_to_int x - i128_to_int y <= i128_max ==>
+    i128_min <= i128_to_int x - i128_to_int y ⇒
+    i128_to_int x - i128_to_int y <= i128_max ⇒
     ?z. i128_sub x y = Return z /\ i128_to_int z = i128_to_int x - i128_to_int y
 Proof
   prove_arith_op_eq
@@ -760,8 +855,8 @@ QED
 
 Theorem isize_sub_eq:
   !x y.
-    (i16_min <= isize_to_int x - isize_to_int y \/ isize_min <= isize_to_int x - isize_to_int y) ==>
-    (isize_to_int x - isize_to_int y <= i16_max \/ isize_to_int x - isize_to_int y <= isize_max) ==>
+    (i16_min <= isize_to_int x - isize_to_int y \/ isize_min <= isize_to_int x - isize_to_int y) ⇒
+    (isize_to_int x - isize_to_int y <= i16_max \/ isize_to_int x - isize_to_int y <= isize_max) ⇒
     ?z. isize_sub x y = Return z /\ isize_to_int z = isize_to_int x - isize_to_int y
 Proof
   prove_arith_op_eq
@@ -769,7 +864,7 @@ QED
 
 Theorem u8_mul_eq:
   !x y.
-    u8_to_int x * u8_to_int y <= u8_max ==>
+    u8_to_int x * u8_to_int y <= u8_max ⇒
     ?z. u8_mul x y = Return z /\ u8_to_int z = u8_to_int x * u8_to_int y
 Proof
   prove_arith_op_eq
@@ -777,7 +872,7 @@ QED
 
 Theorem u16_mul_eq:
   !x y.
-    u16_to_int x * u16_to_int y <= u16_max ==>
+    u16_to_int x * u16_to_int y <= u16_max ⇒
     ?z. u16_mul x y = Return z /\ u16_to_int z = u16_to_int x * u16_to_int y
 Proof
   prove_arith_op_eq
@@ -785,7 +880,7 @@ QED
 
 Theorem u32_mul_eq:
   !x y.
-    u32_to_int x * u32_to_int y <= u32_max ==>
+    u32_to_int x * u32_to_int y <= u32_max ⇒
     ?z. u32_mul x y = Return z /\ u32_to_int z = u32_to_int x * u32_to_int y
 Proof
   prove_arith_op_eq
@@ -793,7 +888,7 @@ QED
 
 Theorem u64_mul_eq:
   !x y.
-    u64_to_int x * u64_to_int y <= u64_max ==>
+    u64_to_int x * u64_to_int y <= u64_max ⇒
     ?z. u64_mul x y = Return z /\ u64_to_int z = u64_to_int x * u64_to_int y
 Proof
   prove_arith_op_eq
@@ -801,7 +896,7 @@ QED
 
 Theorem u128_mul_eq:
   !x y.
-    u128_to_int x * u128_to_int y <= u128_max ==>
+    u128_to_int x * u128_to_int y <= u128_max ⇒
     ?z. u128_mul x y = Return z /\ u128_to_int z = u128_to_int x * u128_to_int y
 Proof
   prove_arith_op_eq
@@ -809,7 +904,7 @@ QED
 
 Theorem usize_mul_eq:
   !x y.
-    (usize_to_int x * usize_to_int y <= u16_max) \/ (usize_to_int x * usize_to_int y <= usize_max) ==>
+    (usize_to_int x * usize_to_int y <= u16_max) \/ (usize_to_int x * usize_to_int y <= usize_max) ⇒
     ?z. usize_mul x y = Return z /\ usize_to_int z = usize_to_int x * usize_to_int y
 Proof
   prove_arith_op_eq
@@ -817,8 +912,8 @@ QED
 
 Theorem i8_mul_eq:
   !x y.
-    i8_min <= i8_to_int x * i8_to_int y ==>
-    i8_to_int x * i8_to_int y <= i8_max ==>
+    i8_min <= i8_to_int x * i8_to_int y ⇒
+    i8_to_int x * i8_to_int y <= i8_max ⇒
     ?z. i8_mul x y = Return z /\ i8_to_int z = i8_to_int x * i8_to_int y
 Proof
   prove_arith_op_eq
@@ -826,8 +921,8 @@ QED
 
 Theorem i16_mul_eq:
   !x y.
-    i16_min <= i16_to_int x * i16_to_int y ==>
-    i16_to_int x * i16_to_int y <= i16_max ==>
+    i16_min <= i16_to_int x * i16_to_int y ⇒
+    i16_to_int x * i16_to_int y <= i16_max ⇒
     ?z. i16_mul x y = Return z /\ i16_to_int z = i16_to_int x * i16_to_int y
 Proof
   prove_arith_op_eq
@@ -835,8 +930,8 @@ QED
 
 Theorem i32_mul_eq:
   !x y.
-    i32_min <= i32_to_int x * i32_to_int y ==>
-    i32_to_int x * i32_to_int y <= i32_max ==>
+    i32_min <= i32_to_int x * i32_to_int y ⇒
+    i32_to_int x * i32_to_int y <= i32_max ⇒
     ?z. i32_mul x y = Return z /\ i32_to_int z = i32_to_int x * i32_to_int y
 Proof
   prove_arith_op_eq
@@ -844,8 +939,8 @@ QED
 
 Theorem i64_mul_eq:
   !x y.
-    i64_min <= i64_to_int x * i64_to_int y ==>
-    i64_to_int x * i64_to_int y <= i64_max ==>
+    i64_min <= i64_to_int x * i64_to_int y ⇒
+    i64_to_int x * i64_to_int y <= i64_max ⇒
     ?z. i64_mul x y = Return z /\ i64_to_int z = i64_to_int x * i64_to_int y
 Proof
   prove_arith_op_eq
@@ -853,8 +948,8 @@ QED
 
 Theorem i128_mul_eq:
   !x y.
-    i128_min <= i128_to_int x * i128_to_int y ==>
-    i128_to_int x * i128_to_int y <= i128_max ==>
+    i128_min <= i128_to_int x * i128_to_int y ⇒
+    i128_to_int x * i128_to_int y <= i128_max ⇒
     ?z. i128_mul x y = Return z /\ i128_to_int z = i128_to_int x * i128_to_int y
 Proof
   prove_arith_op_eq
@@ -862,8 +957,8 @@ QED
 
 Theorem isize_mul_eq:
   !x y.
-    (i16_min <= isize_to_int x * isize_to_int y \/ isize_min <= isize_to_int x * isize_to_int y) ==>
-    (isize_to_int x * isize_to_int y <= i16_max \/ isize_to_int x * isize_to_int y <= isize_max) ==>
+    (i16_min <= isize_to_int x * isize_to_int y \/ isize_min <= isize_to_int x * isize_to_int y) ⇒
+    (isize_to_int x * isize_to_int y <= i16_max \/ isize_to_int x * isize_to_int y <= isize_max) ⇒
     ?z. isize_mul x y = Return z /\ isize_to_int z = isize_to_int x * isize_to_int y
 Proof
   prove_arith_op_eq
@@ -871,7 +966,7 @@ QED
 
 Theorem u8_div_eq:
   !x y.
-    u8_to_int y <> 0 ==>
+    u8_to_int y <> 0 ⇒
     ?z. u8_div x y = Return z /\ u8_to_int z = u8_to_int x / u8_to_int y
 Proof
   prove_arith_op_eq
@@ -879,7 +974,7 @@ QED
 
 Theorem u16_div_eq:
   !x y.
-    u16_to_int y <> 0 ==>
+    u16_to_int y <> 0 ⇒
     ?z. u16_div x y = Return z /\ u16_to_int z = u16_to_int x / u16_to_int y
 Proof
   prove_arith_op_eq
@@ -887,7 +982,7 @@ QED
 
 Theorem u32_div_eq:
   !x y.
-    u32_to_int y <> 0 ==>
+    u32_to_int y <> 0 ⇒
     ?z. u32_div x y = Return z /\ u32_to_int z = u32_to_int x / u32_to_int y
 Proof
   prove_arith_op_eq
@@ -895,7 +990,7 @@ QED
 
 Theorem u64_div_eq:
   !x y.
-    u64_to_int y <> 0 ==>
+    u64_to_int y <> 0 ⇒
     ?z. u64_div x y = Return z /\ u64_to_int z = u64_to_int x / u64_to_int y
 Proof
   prove_arith_op_eq
@@ -903,7 +998,7 @@ QED
 
 Theorem u128_div_eq:
   !x y.
-    u128_to_int y <> 0 ==>
+    u128_to_int y <> 0 ⇒
     ?z. u128_div x y = Return z /\ u128_to_int z = u128_to_int x / u128_to_int y
 Proof
   prove_arith_op_eq
@@ -911,7 +1006,7 @@ QED
 
 Theorem usize_div_eq:
   !x y.
-    usize_to_int y <> 0 ==>
+    usize_to_int y <> 0 ⇒
     ?z. usize_div x y = Return z /\ usize_to_int z = usize_to_int x / usize_to_int y
 Proof
   prove_arith_op_eq
@@ -919,9 +1014,9 @@ QED
 
 Theorem i8_div_eq:
   !x y.
-    i8_to_int y <> 0 ==>
-    i8_min <= i8_to_int x / i8_to_int y ==>
-    i8_to_int x / i8_to_int y <= i8_max ==>
+    i8_to_int y <> 0 ⇒
+    i8_min <= i8_to_int x / i8_to_int y ⇒
+    i8_to_int x / i8_to_int y <= i8_max ⇒
     ?z. i8_div x y = Return z /\ i8_to_int z = i8_to_int x / i8_to_int y
 Proof
   prove_arith_op_eq
@@ -929,9 +1024,9 @@ QED
 
 Theorem i16_div_eq:
   !x y.
-    i16_to_int y <> 0 ==>
-    i16_min <= i16_to_int x / i16_to_int y ==>
-    i16_to_int x / i16_to_int y <= i16_max ==>
+    i16_to_int y <> 0 ⇒
+    i16_min <= i16_to_int x / i16_to_int y ⇒
+    i16_to_int x / i16_to_int y <= i16_max ⇒
     ?z. i16_div x y = Return z /\ i16_to_int z = i16_to_int x / i16_to_int y
 Proof
   prove_arith_op_eq
@@ -939,9 +1034,9 @@ QED
 
 Theorem i32_div_eq:
   !x y.
-    i32_to_int y <> 0 ==>
-    i32_min <= i32_to_int x / i32_to_int y ==>
-    i32_to_int x / i32_to_int y <= i32_max ==>
+    i32_to_int y <> 0 ⇒
+    i32_min <= i32_to_int x / i32_to_int y ⇒
+    i32_to_int x / i32_to_int y <= i32_max ⇒
     ?z. i32_div x y = Return z /\ i32_to_int z = i32_to_int x / i32_to_int y
 Proof
   prove_arith_op_eq
@@ -949,9 +1044,9 @@ QED
 
 Theorem i64_div_eq:
   !x y.
-    i64_to_int y <> 0 ==>
-    i64_min <= i64_to_int x / i64_to_int y ==>
-    i64_to_int x / i64_to_int y <= i64_max ==>
+    i64_to_int y <> 0 ⇒
+    i64_min <= i64_to_int x / i64_to_int y ⇒
+    i64_to_int x / i64_to_int y <= i64_max ⇒
     ?z. i64_div x y = Return z /\ i64_to_int z = i64_to_int x / i64_to_int y
 Proof
   prove_arith_op_eq
@@ -959,9 +1054,9 @@ QED
 
 Theorem i128_div_eq:
   !x y.
-    i128_to_int y <> 0 ==>
-    i128_min <= i128_to_int x / i128_to_int y ==>
-    i128_to_int x / i128_to_int y <= i128_max ==>
+    i128_to_int y <> 0 ⇒
+    i128_min <= i128_to_int x / i128_to_int y ⇒
+    i128_to_int x / i128_to_int y <= i128_max ⇒
     ?z. i128_div x y = Return z /\ i128_to_int z = i128_to_int x / i128_to_int y
 Proof
   prove_arith_op_eq
@@ -969,9 +1064,9 @@ QED
 
 Theorem isize_div_eq:
   !x y.
-    isize_to_int y <> 0 ==>
-    (i16_min <= isize_to_int x / isize_to_int y \/ isize_min <= isize_to_int x / isize_to_int y) ==>
-    (isize_to_int x / isize_to_int y <= i16_max \/ isize_to_int x / isize_to_int y <= isize_max) ==>
+    isize_to_int y <> 0 ⇒
+    (i16_min <= isize_to_int x / isize_to_int y \/ isize_min <= isize_to_int x / isize_to_int y) ⇒
+    (isize_to_int x / isize_to_int y <= i16_max \/ isize_to_int x / isize_to_int y <= isize_max) ⇒
     ?z. isize_div x y = Return z /\ isize_to_int z = isize_to_int x / isize_to_int y
 Proof
   prove_arith_op_eq
@@ -979,7 +1074,7 @@ QED
 
 Theorem u8_rem_eq:
   !x y.
-    u8_to_int y <> 0 ==>
+    u8_to_int y <> 0 ⇒
     ?z. u8_rem x y = Return z /\ u8_to_int z = int_rem (u8_to_int x) (u8_to_int y)
 Proof
   prove_arith_op_eq
@@ -987,7 +1082,7 @@ QED
 
 Theorem u16_rem_eq:
   !x y.
-    u16_to_int y <> 0 ==>
+    u16_to_int y <> 0 ⇒
     ?z. u16_rem x y = Return z /\ u16_to_int z = int_rem (u16_to_int x) (u16_to_int y)
 Proof
   prove_arith_op_eq
@@ -995,7 +1090,7 @@ QED
 
 Theorem u32_rem_eq:
   !x y.
-    u32_to_int y <> 0 ==>
+    u32_to_int y <> 0 ⇒
     ?z. u32_rem x y = Return z /\ u32_to_int z = int_rem (u32_to_int x) (u32_to_int y)
 Proof
   prove_arith_op_eq
@@ -1003,7 +1098,7 @@ QED
 
 Theorem u64_rem_eq:
   !x y.
-    u64_to_int y <> 0 ==>
+    u64_to_int y <> 0 ⇒
     ?z. u64_rem x y = Return z /\ u64_to_int z = int_rem (u64_to_int x) (u64_to_int y)
 Proof
   prove_arith_op_eq
@@ -1011,7 +1106,7 @@ QED
 
 Theorem u128_rem_eq:
   !x y.
-    u128_to_int y <> 0 ==>
+    u128_to_int y <> 0 ⇒
     ?z. u128_rem x y = Return z /\ u128_to_int z = int_rem (u128_to_int x) (u128_to_int y)
 Proof
   prove_arith_op_eq
@@ -1019,7 +1114,7 @@ QED
 
 Theorem usize_rem_eq:
   !x y.
-    usize_to_int y <> 0 ==>
+    usize_to_int y <> 0 ⇒
     ?z. usize_rem x y = Return z /\ usize_to_int z = int_rem (usize_to_int x) (usize_to_int y)
 Proof
   prove_arith_op_eq
@@ -1027,9 +1122,9 @@ QED
 
 Theorem i8_rem_eq:
   !x y.
-    i8_to_int y <> 0 ==>
-    i8_min <= int_rem (i8_to_int x) (i8_to_int y) ==>
-    int_rem (i8_to_int x) (i8_to_int y) <= i8_max ==>
+    i8_to_int y <> 0 ⇒
+    i8_min <= int_rem (i8_to_int x) (i8_to_int y) ⇒
+    int_rem (i8_to_int x) (i8_to_int y) <= i8_max ⇒
     ?z. i8_rem x y = Return z /\ i8_to_int z = int_rem (i8_to_int x) (i8_to_int y)
 Proof
   prove_arith_op_eq
@@ -1037,9 +1132,9 @@ QED
 
 Theorem i16_rem_eq:
   !x y.
-    i16_to_int y <> 0 ==>
-    i16_min <= int_rem (i16_to_int x) (i16_to_int y) ==>
-    int_rem (i16_to_int x) (i16_to_int y) <= i16_max ==>
+    i16_to_int y <> 0 ⇒
+    i16_min <= int_rem (i16_to_int x) (i16_to_int y) ⇒
+    int_rem (i16_to_int x) (i16_to_int y) <= i16_max ⇒
     ?z. i16_rem x y = Return z /\ i16_to_int z = int_rem (i16_to_int x) (i16_to_int y)
 Proof
   prove_arith_op_eq
@@ -1047,9 +1142,9 @@ QED
 
 Theorem i32_rem_eq:
   !x y.
-    i32_to_int y <> 0 ==>
-    i32_min <= int_rem (i32_to_int x) (i32_to_int y) ==>
-    int_rem (i32_to_int x) (i32_to_int y) <= i32_max ==>
+    i32_to_int y <> 0 ⇒
+    i32_min <= int_rem (i32_to_int x) (i32_to_int y) ⇒
+    int_rem (i32_to_int x) (i32_to_int y) <= i32_max ⇒
     ?z. i32_rem x y = Return z /\ i32_to_int z = int_rem (i32_to_int x) (i32_to_int y)
 Proof
   prove_arith_op_eq
@@ -1057,9 +1152,9 @@ QED
 
 Theorem i64_rem_eq:
   !x y.
-    i64_to_int y <> 0 ==>
-    i64_min <= int_rem (i64_to_int x) (i64_to_int y) ==>
-    int_rem (i64_to_int x) (i64_to_int y) <= i64_max ==>
+    i64_to_int y <> 0 ⇒
+    i64_min <= int_rem (i64_to_int x) (i64_to_int y) ⇒
+    int_rem (i64_to_int x) (i64_to_int y) <= i64_max ⇒
     ?z. i64_rem x y = Return z /\ i64_to_int z = int_rem (i64_to_int x) (i64_to_int y)
 Proof
   prove_arith_op_eq
@@ -1067,9 +1162,9 @@ QED
 
 Theorem i128_rem_eq:
   !x y.
-    i128_to_int y <> 0 ==>
-    i128_min <= int_rem (i128_to_int x) (i128_to_int y) ==>
-    int_rem (i128_to_int x) (i128_to_int y) <= i128_max ==>
+    i128_to_int y <> 0 ⇒
+    i128_min <= int_rem (i128_to_int x) (i128_to_int y) ⇒
+    int_rem (i128_to_int x) (i128_to_int y) <= i128_max ⇒
     ?z. i128_rem x y = Return z /\ i128_to_int z = int_rem (i128_to_int x) (i128_to_int y)
 Proof
   prove_arith_op_eq
@@ -1077,15 +1172,207 @@ QED
 
 Theorem isize_rem_eq:
   !x y.
-    isize_to_int y <> 0 ==>
+    isize_to_int y <> 0 ⇒
     (i16_min <= int_rem (isize_to_int x) (isize_to_int y) \/
-     isize_min <= int_rem (isize_to_int x) (isize_to_int y)) ==>
+     isize_min <= int_rem (isize_to_int x) (isize_to_int y)) ⇒
     (int_rem (isize_to_int x) (isize_to_int y) <= i16_max \/
-     int_rem (isize_to_int x) (isize_to_int y) <= isize_max) ==>
+     int_rem (isize_to_int x) (isize_to_int y) <= isize_max) ⇒
     ?z. isize_rem x y = Return z /\ isize_to_int z = int_rem (isize_to_int x) (isize_to_int y)
 Proof
   prove_arith_op_eq
 QED
+
+Definition u8_lt_def:
+  u8_lt x y = (u8_to_int x < u8_to_int y)
+End
+
+Definition u16_lt_def:
+  u16_lt x y = (u16_to_int x < u16_to_int y)
+End
+
+Definition u32_lt_def:
+  u32_lt x y = (u32_to_int x < u32_to_int y)
+End
+
+Definition u64_lt_def:
+  u64_lt x y = (u64_to_int x < u64_to_int y)
+End
+
+Definition u128_lt_def:
+  u128_lt x y = (u128_to_int x < u128_to_int y)
+End
+
+Definition usize_lt_def:
+  usize_lt x y = (usize_to_int x < usize_to_int y)
+End
+
+Definition i8_lt_def:
+  i8_lt x y = (i8_to_int x < i8_to_int y)
+End
+
+Definition i16_lt_def:
+  i16_lt x y = (i16_to_int x < i16_to_int y)
+End
+
+Definition i32_lt_def:
+  i32_lt x y = (i32_to_int x < i32_to_int y)
+End
+
+Definition i64_lt_def:
+  i64_lt x y = (i64_to_int x < i64_to_int y)
+End
+
+Definition i128_lt_def:
+  i128_lt x y = (i128_to_int x < i128_to_int y)
+End
+
+Definition isize_lt_def:
+  isize_lt x y = (isize_to_int x < isize_to_int y)
+End
+
+Definition u8_le_def:
+  u8_le x y = (u8_to_int x ≤ u8_to_int y)
+End
+
+Definition u16_le_def:
+  u16_le x y = (u16_to_int x ≤ u16_to_int y)
+End
+
+Definition u32_le_def:
+  u32_le x y = (u32_to_int x ≤ u32_to_int y)
+End
+
+Definition u64_le_def:
+  u64_le x y = (u64_to_int x ≤ u64_to_int y)
+End
+
+Definition u128_le_def:
+  u128_le x y = (u128_to_int x ≤ u128_to_int y)
+End
+
+Definition usize_le_def:
+  usize_le x y = (usize_to_int x ≤ usize_to_int y)
+End
+
+Definition i8_le_def:
+  i8_le x y = (i8_to_int x ≤ i8_to_int y)
+End
+
+Definition i16_le_def:
+  i16_le x y = (i16_to_int x ≤ i16_to_int y)
+End
+
+Definition i32_le_def:
+  i32_le x y = (i32_to_int x ≤ i32_to_int y)
+End
+
+Definition i64_le_def:
+  i64_le x y = (i64_to_int x ≤ i64_to_int y)
+End
+
+Definition i128_le_def:
+  i128_le x y = (i128_to_int x ≤ i128_to_int y)
+End
+
+Definition isize_le_def:
+  isize_le x y = (isize_to_int x ≤ isize_to_int y)
+End
+
+Definition u8_gt_def:
+  u8_gt x y = (u8_to_int x > u8_to_int y)
+End
+
+Definition u16_gt_def:
+  u16_gt x y = (u16_to_int x > u16_to_int y)
+End
+
+Definition u32_gt_def:
+  u32_gt x y = (u32_to_int x > u32_to_int y)
+End
+
+Definition u64_gt_def:
+  u64_gt x y = (u64_to_int x > u64_to_int y)
+End
+
+Definition u128_gt_def:
+  u128_gt x y = (u128_to_int x > u128_to_int y)
+End
+
+Definition usize_gt_def:
+  usize_gt x y = (usize_to_int x > usize_to_int y)
+End
+
+Definition i8_gt_def:
+  i8_gt x y = (i8_to_int x > i8_to_int y)
+End
+
+Definition i16_gt_def:
+  i16_gt x y = (i16_to_int x > i16_to_int y)
+End
+
+Definition i32_gt_def:
+  i32_gt x y = (i32_to_int x > i32_to_int y)
+End
+
+Definition i64_gt_def:
+  i64_gt x y = (i64_to_int x > i64_to_int y)
+End
+
+Definition i128_gt_def:
+  i128_gt x y = (i128_to_int x > i128_to_int y)
+End
+
+Definition isize_gt_def:
+  isize_gt x y = (isize_to_int x > isize_to_int y)
+End
+
+Definition u8_ge_def:
+  u8_ge x y = (u8_to_int x >= u8_to_int y)
+End
+
+Definition u16_ge_def:
+  u16_ge x y = (u16_to_int x >= u16_to_int y)
+End
+
+Definition u32_ge_def:
+  u32_ge x y = (u32_to_int x >= u32_to_int y)
+End
+
+Definition u64_ge_def:
+  u64_ge x y = (u64_to_int x >= u64_to_int y)
+End
+
+Definition u128_ge_def:
+  u128_ge x y = (u128_to_int x >= u128_to_int y)
+End
+
+Definition usize_ge_def:
+  usize_ge x y = (usize_to_int x >= usize_to_int y)
+End
+
+Definition i8_ge_def:
+  i8_ge x y = (i8_to_int x >= i8_to_int y)
+End
+
+Definition i16_ge_def:
+  i16_ge x y = (i16_to_int x >= i16_to_int y)
+End
+
+Definition i32_ge_def:
+  i32_ge x y = (i32_to_int x >= i32_to_int y)
+End
+
+Definition i64_ge_def:
+  i64_ge x y = (i64_to_int x >= i64_to_int y)
+End
+
+Definition i128_ge_def:
+  i128_ge x y = (i128_to_int x >= i128_to_int y)
+End
+
+Definition isize_ge_def:
+  isize_ge x y = (isize_to_int x >= isize_to_int y)
+End
 
 
 (***
@@ -1109,8 +1396,8 @@ QED
 
 Theorem update_spec:
   ∀ls i y.
-    0 <= i ==>
-    i < len ls ==>
+    0 <= i ⇒
+    i < len ls ⇒
     len (update ls i y) = len ls ∧
     index i (update ls i y) = y ∧
     ∀j. j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls
@@ -1131,8 +1418,8 @@ QED
 
 Theorem index_update_same:
   ∀ls i j y.
-    0 <= i ==>
-    i < len ls ==>
+    0 <= i ⇒
+    i < len ls ⇒
     j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls
 Proof
   rpt strip_tac >>
@@ -1142,8 +1429,8 @@ QED
 
 Theorem index_update_diff:
   ∀ls i j y.
-    0 <= i ==>
-    i < len ls ==>
+    0 <= i ⇒
+    i < len ls ⇒
     index i (update ls i y) = y
 Proof
   rpt strip_tac >>
