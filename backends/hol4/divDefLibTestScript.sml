@@ -1,11 +1,6 @@
 (* Examples which use divDefLib.DefineDiv *)
 
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
-
-open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
-open primitivesLib
-open divDefTheory divDefLib
+open primitivesLib divDefLib
 
 val _ = new_theory "divDefLibTest"
 

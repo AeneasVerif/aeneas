@@ -49,7 +49,7 @@ Definition hash_map_new_with_capacity_fwd
   i0 <- usize_div i max_load_divisor;
   Return
     {|
-      Hash_map_num_entries := (0%usize);
+      Hash_map_num_entries := 0%usize;
       Hash_map_max_load_factor := (max_load_dividend, max_load_divisor);
       Hash_map_max_load := i0;
       Hash_map_slots := slots
@@ -58,7 +58,7 @@ Definition hash_map_new_with_capacity_fwd
 
 (** [hashmap::HashMap::{0}::new] *)
 Definition hash_map_new_fwd (T : Type) (n : nat) : result (Hash_map_t T) :=
-  hash_map_new_with_capacity_fwd T n (32%usize) (4%usize) (5%usize)
+  hash_map_new_with_capacity_fwd T n 32%usize 4%usize 5%usize
 .
 
 (** [hashmap::HashMap::{0}::clear] *)
@@ -82,10 +82,10 @@ Fixpoint hash_map_clear_loop_fwd_back
 (** [hashmap::HashMap::{0}::clear] *)
 Definition hash_map_clear_fwd_back
   (T : Type) (n : nat) (self : Hash_map_t T) : result (Hash_map_t T) :=
-  v <- hash_map_clear_loop_fwd_back T n self.(Hash_map_slots) (0%usize);
+  v <- hash_map_clear_loop_fwd_back T n self.(Hash_map_slots) 0%usize;
   Return
     {|
-      Hash_map_num_entries := (0%usize);
+      Hash_map_num_entries := 0%usize;
       Hash_map_max_load_factor := self.(Hash_map_max_load_factor);
       Hash_map_max_load := self.(Hash_map_max_load);
       Hash_map_slots := v
@@ -186,7 +186,7 @@ Definition hash_map_insert_no_resize_fwd_back
 .
 
 (** [core::num::u32::{9}::MAX] *)
-Definition core_num_u32_max_body : result u32 := Return (4294967295%u32).
+Definition core_num_u32_max_body : result u32 := Return 4294967295%u32.
 Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
 
 (** [hashmap::HashMap::{0}::move_elements_from_list] *)
@@ -259,8 +259,7 @@ Definition hash_map_try_resize_fwd_back
     i2 <- usize_mul capacity 2%usize;
     ntable <- hash_map_new_with_capacity_fwd T n i2 i i0;
     p <-
-      hash_map_move_elements_fwd_back T n ntable self.(Hash_map_slots)
-        (0%usize);
+      hash_map_move_elements_fwd_back T n ntable self.(Hash_map_slots) 0%usize;
     let (ntable0, _) := p in
     Return
       {|
@@ -546,36 +545,36 @@ Definition hash_map_remove_back
 (** [hashmap::test1] *)
 Definition test1_fwd (n : nat) : result unit :=
   hm <- hash_map_new_fwd u64 n;
-  hm0 <- hash_map_insert_fwd_back u64 n hm (0%usize) (42%u64);
-  hm1 <- hash_map_insert_fwd_back u64 n hm0 (128%usize) (18%u64);
-  hm2 <- hash_map_insert_fwd_back u64 n hm1 (1024%usize) (138%u64);
-  hm3 <- hash_map_insert_fwd_back u64 n hm2 (1056%usize) (256%u64);
-  i <- hash_map_get_fwd u64 n hm3 (128%usize);
+  hm0 <- hash_map_insert_fwd_back u64 n hm 0%usize 42%u64;
+  hm1 <- hash_map_insert_fwd_back u64 n hm0 128%usize 18%u64;
+  hm2 <- hash_map_insert_fwd_back u64 n hm1 1024%usize 138%u64;
+  hm3 <- hash_map_insert_fwd_back u64 n hm2 1056%usize 256%u64;
+  i <- hash_map_get_fwd u64 n hm3 128%usize;
   if negb (i s= 18%u64)
   then Fail_ Failure
   else (
-    hm4 <- hash_map_get_mut_back u64 n hm3 (1024%usize) (56%u64);
-    i0 <- hash_map_get_fwd u64 n hm4 (1024%usize);
+    hm4 <- hash_map_get_mut_back u64 n hm3 1024%usize 56%u64;
+    i0 <- hash_map_get_fwd u64 n hm4 1024%usize;
     if negb (i0 s= 56%u64)
     then Fail_ Failure
     else (
-      x <- hash_map_remove_fwd u64 n hm4 (1024%usize);
+      x <- hash_map_remove_fwd u64 n hm4 1024%usize;
       match x with
       | None => Fail_ Failure
       | Some x0 =>
         if negb (x0 s= 56%u64)
         then Fail_ Failure
         else (
-          hm5 <- hash_map_remove_back u64 n hm4 (1024%usize);
-          i1 <- hash_map_get_fwd u64 n hm5 (0%usize);
+          hm5 <- hash_map_remove_back u64 n hm4 1024%usize;
+          i1 <- hash_map_get_fwd u64 n hm5 0%usize;
           if negb (i1 s= 42%u64)
           then Fail_ Failure
           else (
-            i2 <- hash_map_get_fwd u64 n hm5 (128%usize);
+            i2 <- hash_map_get_fwd u64 n hm5 128%usize;
             if negb (i2 s= 18%u64)
             then Fail_ Failure
             else (
-              i3 <- hash_map_get_fwd u64 n hm5 (1056%usize);
+              i3 <- hash_map_get_fwd u64 n hm5 1056%usize;
               if negb (i3 s= 256%u64) then Fail_ Failure else Return tt)))
       end))
 .

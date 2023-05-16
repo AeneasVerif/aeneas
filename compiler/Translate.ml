@@ -407,10 +407,9 @@ let module_has_opaque_decls (ctx : gen_ctx) : bool * bool =
     the declaration, if both booleans are [true]).
  *)
 let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
-    (kind : ExtractBase.decl_kind) (id : Pure.TypeDeclId.id)
-    (extract_decl : bool) (extract_extra_info : bool) : unit =
-  (* Retrieve the declaration *)
-  let def = Pure.TypeDeclId.Map.find id ctx.trans_types in
+    (type_decl_group : Pure.TypeDeclId.Set.t) (kind : ExtractBase.decl_kind)
+    (def : Pure.type_decl) (extract_decl : bool) (extract_extra_info : bool) :
+    unit =
   (* Update the kind, if the type is opaque *)
   let is_opaque, kind =
     match def.kind with
@@ -427,7 +426,8 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (is_opaque && config.extract_opaque)
     || ((not is_opaque) && config.extract_transparent)
   then (
-    if extract_decl then Extract.extract_type_decl ctx.extract_ctx fmt kind def;
+    if extract_decl then
+      Extract.extract_type_decl ctx.extract_ctx fmt type_decl_group kind def;
     if extract_extra_info then
       Extract.extract_type_decl_extra_info ctx.extract_ctx fmt kind def)
 
@@ -438,9 +438,11 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
  *)
 let export_types_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (ids : Pure.TypeDeclId.id list) : unit =
+  assert (ids <> []);
   let export_type = export_type fmt config ctx in
-  let export_type_decl kind id = export_type kind id true false in
-  let export_type_extra_info kind id = export_type kind id false true in
+  let ids_set = Pure.TypeDeclId.Set.of_list ids in
+  let export_type_decl kind id = export_type ids_set kind id true false in
+  let export_type_extra_info kind id = export_type ids_set kind id false true in
 
   (* Rem.: we shouldn't have (mutually) recursive opaque types *)
   let num_decls = List.length ids in
@@ -452,22 +454,51 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     else if i = num_decls - 1 then ExtractBase.MutRecLast
     else ExtractBase.MutRecInner
   in
-  (* Extract the type declarations *)
+
+  (* Retrieve the declarations *)
+  let defs =
+    List.map (fun id -> Pure.TypeDeclId.Map.find id ctx.trans_types) ids
+  in
+
+  (* Extract the type declarations.
+
+     Because some declaration groups are delimited, we wrap the declarations
+     between [{start,end}_type_decl_group].
+
+     Ex.:
+     ====
+     When targeting HOL4, the calls to [{start,end}_type_decl_group] would generate
+     the [Datatype] and [End] delimiters in the snippet of code below:
+
+     {[
+       Datatype:
+         tree =
+           TLeaf 'a
+         | TNode node ;
+
+         node =
+           Node (tree list)
+       End
+     ]}
+  *)
+  Extract.start_type_decl_group ctx.extract_ctx fmt is_rec defs;
   List.iteri
-    (fun i id ->
+    (fun i def ->
       let kind = kind_from_index i in
-      export_type_decl kind id)
-    ids;
+      export_type_decl kind def)
+    defs;
+  Extract.end_type_decl_group fmt is_rec defs;
+
   (* Export the extra information (ex.: [Arguments] instructions in Coq) *)
   List.iteri
-    (fun i id ->
+    (fun i def ->
       let kind = kind_from_index i in
-      export_type_extra_info kind id)
-    ids
+      export_type_extra_info kind def)
+    defs
 
 (** Export a global declaration.
 
-    TODO: check correct behaviour with opaque globals.
+    TODO: check correct behavior with opaque globals.
  *)
 let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : A.GlobalDeclId.id) : unit =
@@ -485,6 +516,11 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     && (((not is_opaque) && config.extract_transparent)
        || (is_opaque && config.extract_opaque))
   then
+    (* We don't wrap global declaration groups between calls to functions
+       [{start, end}_global_decl_group] (which don't exist): global declaration
+       groups are always singletons, so the [extract_global_decl] function
+       takes care of generating the delimiters.
+    *)
     Extract.extract_global_decl ctx.extract_ctx fmt global body config.interface
 
 (** Utility.
@@ -519,6 +555,20 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
   let is_mut_rec = List.length decls > 1 in
   assert ((not is_mut_rec) || is_rec);
   let decls_length = List.length decls in
+  (* We open and close the declaration group with [{start, end}_fun_decl_group].
+
+     Some backends require the groups to be delimited. For instance, if we target
+     HOL4, the calls to [{start, end}_fun_decl_group] would generate the
+     [val ... = Define `] and [`] delimiters in the snippet of code below:
+
+     {[
+       val ... = Define `
+         (even (i : num) : bool result = if i = 0 then Return T else odd (i - 1)) /\
+         (odd (i : num) : bool result = if i = 0 then Return F else even (i - 1))
+       `
+     ]}
+  *)
+  Extract.start_fun_decl_group ctx.extract_ctx fmt is_rec decls;
   List.iteri
     (fun i def ->
       let is_opaque = Option.is_none def.Pure.body in
@@ -545,7 +595,8 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
         ((not is_opaque) && config.extract_transparent)
         || (is_opaque && config.extract_opaque)
       then Extract.extract_fun_decl ctx.extract_ctx fmt kind has_decr_clause def)
-    decls
+    decls;
+  Extract.end_fun_decl_group fmt is_rec decls
 
 (** Export a group of function declarations.
 
@@ -586,6 +637,9 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
                   fmt decl
             | Coq ->
                 raise (Failure "Coq doesn't have decreases/termination clauses")
+            | HOL4 ->
+                raise
+                  (Failure "HOL4 doesn't have decreases/termination clauses")
         in
         extract_decrease fwd;
         List.iter extract_decrease loop_fwds)
@@ -610,14 +664,14 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
 
   (* Extract the function definitions *)
   (if config.extract_fun_decls then
-   (* Group the mutually recursive definitions *)
-   let subgroups = ReorderDecls.group_reorder_fun_decls decls in
+     (* Group the mutually recursive definitions *)
+     let subgroups = ReorderDecls.group_reorder_fun_decls decls in
 
-   (* Extract the subgroups *)
-   let export_subgroup (is_rec : bool) (decls : Pure.fun_decl list) : unit =
-     export_functions_group_scc fmt config ctx is_rec decls
-   in
-   List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
+     (* Extract the subgroups *)
+     let export_subgroup (is_rec : bool) (decls : Pure.fun_decl list) : unit =
+       export_functions_group_scc fmt config ctx is_rec decls
+     in
+     List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
 
   (* Insert unit tests if necessary *)
   if config.test_trans_unit_functions then
@@ -733,7 +787,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
   | Lean ->
       Printf.fprintf out "-- THIS FILE WAS AUTOMATICALLY GENERATED BY AENEAS\n";
       Printf.fprintf out "-- [%s]%s\n" rust_module_name custom_msg
-  | Coq | FStar ->
+  | Coq | FStar | HOL4 ->
       Printf.fprintf out
         "(** THIS FILE WAS AUTOMATICALLY GENERATED BY AENEAS *)\n";
       Printf.fprintf out "(** [%s]%s *)\n" rust_module_name custom_msg);
@@ -769,7 +823,17 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
       (* Add the custom imports *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_imports;
       (* Add the custom includes *)
-      List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_includes);
+      List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_includes
+  | HOL4 ->
+      Printf.fprintf out "open primitivesLib divDefLib\n";
+      (* Add the custom imports and includes *)
+      let imports = custom_imports @ custom_includes in
+      if imports <> [] then
+        let imports = String.concat " " imports in
+        Printf.fprintf out "open %s\n\n" imports
+      else Printf.fprintf out "\n";
+      (* Initialize the theory *)
+      Printf.fprintf out "val _ = new_theory \"%s\"\n\n" module_name);
   (* From now onwards, we use the formatter *)
   (* Set the margin *)
   Format.pp_set_margin fmt 80;
@@ -787,6 +851,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
   (* Close the module *)
   (match !Config.backend with
   | FStar | Lean -> ()
+  | HOL4 -> Printf.fprintf out "val _ = export_theory \"%s\"\n" module_name
   | Coq -> Printf.fprintf out "End %s .\n" module_name);
 
   (* Some logging *)
@@ -807,7 +872,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   let variant_concatenate_type_name =
     (* For Lean, we exploit the fact that the variant name should always be
        prefixed with the type name to prevent collisions *)
-    match !Config.backend with Coq | FStar -> true | Lean -> false
+    match !Config.backend with Coq | FStar | HOL4 -> true | Lean -> false
   in
   let mk_formatter_and_names_map = Extract.mk_formatter_and_names_map in
   let fmt, names_map =
@@ -896,6 +961,11 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
         let basename = Filename.basename filename in
         (* Convert the case *)
         let module_name = StringUtils.to_camel_case basename in
+        let module_name =
+          if !Config.backend = HOL4 then
+            StringUtils.lowercase_first_letter module_name
+          else module_name
+        in
         (* Concatenate *)
         (module_name, Filename.concat dest_dir module_name)
   in
@@ -938,30 +1008,34 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       assert !Config.split_files;
       mkdir_if (dest_dir ^^ module_name ^^ "Clauses")));
 
-  (* Copy the "Primitives" file *)
+  (* Copy the "Primitives" file, if necessary *)
   let _ =
     (* Retrieve the executable's directory *)
     let exe_dir = Filename.dirname Sys.argv.(0) in
-    let primitives_src, primitives_destname =
+    let primitives_src_dest =
       match !Config.backend with
-      | Config.FStar -> ("/backends/fstar/Primitives.fst", "Primitives.fst")
-      | Config.Coq -> ("/backends/coq/Primitives.v", "Primitives.v")
-      | Config.Lean -> ("/backends/lean/Primitives.lean", "Base/Primitives.lean")
+      | FStar -> Some ("/backends/fstar/Primitives.fst", "Primitives.fst")
+      | Coq -> Some ("/backends/coq/Primitives.v", "Primitives.v")
+      | Lean -> Some ("/backends/lean/Primitives.lean", "Base/Primitives.lean")
+      | HOL4 -> None
     in
-    let src = open_in (exe_dir ^ primitives_src) in
-    let tgt_filename = Filename.concat dest_dir primitives_destname in
-    let tgt = open_out tgt_filename in
-    (* Very annoying: I couldn't find a "cp" function in the OCaml libraries... *)
-    try
-      while true do
-        (* We copy line by line *)
-        let line = input_line src in
-        Printf.fprintf tgt "%s\n" line
-      done
-    with End_of_file ->
-      close_in src;
-      close_out tgt;
-      log#linfo (lazy ("Copied:    " ^ tgt_filename))
+    match primitives_src_dest with
+    | None -> ()
+    | Some (primitives_src, primitives_destname) -> (
+        let src = open_in (exe_dir ^ primitives_src) in
+        let tgt_filename = Filename.concat dest_dir primitives_destname in
+        let tgt = open_out tgt_filename in
+        (* Very annoying: I couldn't find a "cp" function in the OCaml libraries... *)
+        try
+          while true do
+            (* We copy line by line *)
+            let line = input_line src in
+            Printf.fprintf tgt "%s\n" line
+          done
+        with End_of_file ->
+          close_in src;
+          close_out tgt;
+          log#linfo (lazy ("Copied:    " ^ tgt_filename)))
   in
 
   (* Extract the file(s) *)
@@ -976,14 +1050,22 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   in
 
   let module_delimiter =
-    match !Config.backend with FStar -> "." | Coq -> "_" | Lean -> "."
+    match !Config.backend with
+    | FStar -> "."
+    | Coq -> "_"
+    | Lean -> "."
+    | HOL4 -> "_"
   in
   let file_delimiter =
     if !Config.backend = Lean then "/" else module_delimiter
   in
   (* File extension for the "regular" modules *)
   let ext =
-    match !Config.backend with FStar -> ".fst" | Coq -> ".v" | Lean -> ".lean"
+    match !Config.backend with
+    | FStar -> ".fst"
+    | Coq -> ".v"
+    | Lean -> ".lean"
+    | HOL4 -> "Script.sml"
   in
   (* File extension for the opaque module *)
   let opaque_ext =
@@ -991,161 +1073,165 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
     | FStar -> ".fsti"
     | Coq -> ".v"
     | Lean -> ".lean"
+    | HOL4 -> "Script.sml"
   in
 
   (* Extract one or several files, depending on the configuration *)
   (if !Config.split_files then (
-   let base_gen_config =
-     {
-       extract_types = false;
-       extract_decreases_clauses = !Config.extract_decreases_clauses;
-       extract_template_decreases_clauses = false;
-       extract_fun_decls = false;
-       extract_transparent = true;
-       extract_opaque = false;
-       extract_state_type = false;
-       extract_globals = false;
-       interface = false;
-       test_trans_unit_functions = false;
-     }
-   in
+     let base_gen_config =
+       {
+         extract_types = false;
+         extract_decreases_clauses = !Config.extract_decreases_clauses;
+         extract_template_decreases_clauses = false;
+         extract_fun_decls = false;
+         extract_transparent = true;
+         extract_opaque = false;
+         extract_state_type = false;
+         extract_globals = false;
+         interface = false;
+         test_trans_unit_functions = false;
+       }
+     in
 
-   (* Check if there are opaque types and functions - in which case we need
-    * to split *)
-   let has_opaque_types, has_opaque_funs = module_has_opaque_decls gen_ctx in
-   let has_opaque_types = has_opaque_types || !Config.use_state in
+     (* Check if there are opaque types and functions - in which case we need
+      * to split *)
+     let has_opaque_types, has_opaque_funs = module_has_opaque_decls gen_ctx in
+     let has_opaque_types = has_opaque_types || !Config.use_state in
 
-   (* Extract the types *)
-   (* If there are opaque types, we extract in an interface *)
-   let types_filename_ext =
-     match !Config.backend with
-     | FStar -> if has_opaque_types then ".fsti" else ".fst"
-     | Coq -> ".v"
-     | Lean -> ".lean"
-   in
-   let types_filename =
-     extract_filebasename ^ file_delimiter ^ "Types" ^ types_filename_ext
-   in
-   let types_module = module_name ^ module_delimiter ^ "Types" in
-   let types_config =
-     {
-       base_gen_config with
-       extract_types = true;
-       extract_opaque = true;
-       extract_state_type = !Config.use_state;
-       interface = has_opaque_types;
-     }
-   in
-   extract_file types_config gen_ctx types_filename crate.A.name types_module
-     ": type definitions" [] [];
+     (* Extract the types *)
+     (* If there are opaque types, we extract in an interface *)
+     let types_filename_ext =
+       match !Config.backend with
+       | FStar -> if has_opaque_types then ".fsti" else ".fst"
+       | Coq -> ".v"
+       | Lean -> ".lean"
+       | HOL4 -> "Script.sml"
+     in
+     let types_filename =
+       extract_filebasename ^ file_delimiter ^ "Types" ^ types_filename_ext
+     in
+     let types_module = module_name ^ module_delimiter ^ "Types" in
+     let types_config =
+       {
+         base_gen_config with
+         extract_types = true;
+         extract_opaque = true;
+         extract_state_type = !Config.use_state;
+         interface = has_opaque_types;
+       }
+     in
+     extract_file types_config gen_ctx types_filename crate.A.name types_module
+       ": type definitions" [] [];
 
-   (* Extract the template clauses *)
-   (if needs_clauses_module && !Config.extract_template_decreases_clauses then
-    let template_clauses_filename =
-      extract_filebasename ^ file_delimiter ^ "Clauses" ^ file_delimiter
-      ^ "Template" ^ ext
-    in
-    let template_clauses_module =
-      module_name ^ module_delimiter ^ "Clauses" ^ module_delimiter ^ "Template"
-    in
-    let template_clauses_config =
-      { base_gen_config with extract_template_decreases_clauses = true }
-    in
-    extract_file template_clauses_config gen_ctx template_clauses_filename
-      crate.A.name template_clauses_module
-      ": templates for the decreases clauses" [ types_module ] []);
+     (* Extract the template clauses *)
+     (if needs_clauses_module && !Config.extract_template_decreases_clauses then
+        let template_clauses_filename =
+          extract_filebasename ^ file_delimiter ^ "Clauses" ^ file_delimiter
+          ^ "Template" ^ ext
+        in
+        let template_clauses_module =
+          module_name ^ module_delimiter ^ "Clauses" ^ module_delimiter
+          ^ "Template"
+        in
+        let template_clauses_config =
+          { base_gen_config with extract_template_decreases_clauses = true }
+        in
+        extract_file template_clauses_config gen_ctx template_clauses_filename
+          crate.A.name template_clauses_module
+          ": templates for the decreases clauses" [ types_module ] []);
 
-   (* Extract the opaque functions, if needed *)
-   let opaque_funs_module =
-     if has_opaque_funs then (
-       let opaque_filename =
-         extract_filebasename ^ file_delimiter ^ "Opaque" ^ opaque_ext
-       in
-       let opaque_module = module_name ^ module_delimiter ^ "Opaque" in
-       let opaque_imported_module =
-         (* In the case of Lean, we declare an interface (a record) containing
-            the opaque definitions, and we leave it to the user to provide an
-            instance of this module.
+     (* Extract the opaque functions, if needed *)
+     let opaque_funs_module =
+       if has_opaque_funs then (
+         let opaque_filename =
+           extract_filebasename ^ file_delimiter ^ "Opaque" ^ opaque_ext
+         in
+         let opaque_module = module_name ^ module_delimiter ^ "Opaque" in
+         let opaque_imported_module =
+           (* In the case of Lean, we declare an interface (a record) containing
+              the opaque definitions, and we leave it to the user to provide an
+              instance of this module.
 
-            TODO: do the same for Coq.
-            TODO: do the same for the type definitions.
-         *)
-         if !Config.backend = Lean then
-           module_name ^ module_delimiter ^ "ExternalFuns"
-         else opaque_module
-       in
-       let opaque_config =
-         {
-           base_gen_config with
-           extract_fun_decls = true;
-           extract_transparent = false;
-           extract_opaque = true;
-           interface = true;
-         }
-       in
-       let gen_ctx =
-         {
-           gen_ctx with
-           extract_ctx = { gen_ctx.extract_ctx with use_opaque_pre = false };
-         }
-       in
-       extract_file opaque_config gen_ctx opaque_filename crate.A.name
-         opaque_module ": opaque function definitions" [] [ types_module ];
-       [ opaque_imported_module ])
-     else []
-   in
+              TODO: do the same for Coq.
+              TODO: do the same for the type definitions.
+           *)
+           if !Config.backend = Lean then
+             module_name ^ module_delimiter ^ "ExternalFuns"
+           else opaque_module
+         in
+         let opaque_config =
+           {
+             base_gen_config with
+             extract_fun_decls = true;
+             extract_transparent = false;
+             extract_opaque = true;
+             interface = true;
+           }
+         in
+         let gen_ctx =
+           {
+             gen_ctx with
+             extract_ctx = { gen_ctx.extract_ctx with use_opaque_pre = false };
+           }
+         in
+         extract_file opaque_config gen_ctx opaque_filename crate.A.name
+           opaque_module ": opaque function definitions" [] [ types_module ];
+         [ opaque_imported_module ])
+       else []
+     in
 
-   (* Extract the functions *)
-   let fun_filename = extract_filebasename ^ file_delimiter ^ "Funs" ^ ext in
-   let fun_module = module_name ^ module_delimiter ^ "Funs" in
-   let fun_config =
-     {
-       base_gen_config with
-       extract_fun_decls = true;
-       extract_globals = true;
-       test_trans_unit_functions = !Config.test_trans_unit_functions;
-     }
-   in
-   let clauses_module =
-     if needs_clauses_module then
-       let clauses_submodule =
-         if !Config.backend = Lean then module_delimiter ^ "Clauses" else ""
-       in
-       [ module_name ^ clauses_submodule ^ module_delimiter ^ "Clauses" ]
-     else []
-   in
-   extract_file fun_config gen_ctx fun_filename crate.A.name fun_module
-     ": function definitions" []
-     ([ types_module ] @ opaque_funs_module @ clauses_module))
-  else
-    let gen_config =
-      {
-        extract_types = true;
-        extract_decreases_clauses = !Config.extract_decreases_clauses;
-        extract_template_decreases_clauses =
-          !Config.extract_template_decreases_clauses;
-        extract_fun_decls = true;
-        extract_transparent = true;
-        extract_opaque = true;
-        extract_state_type = !Config.use_state;
-        extract_globals = true;
-        interface = false;
-        test_trans_unit_functions = !Config.test_trans_unit_functions;
-      }
-    in
-    (* Add the extension for F* *)
-    let extract_filename = extract_filebasename ^ ext in
-    extract_file gen_config gen_ctx extract_filename crate.A.name module_name ""
-      [] []);
+     (* Extract the functions *)
+     let fun_filename = extract_filebasename ^ file_delimiter ^ "Funs" ^ ext in
+     let fun_module = module_name ^ module_delimiter ^ "Funs" in
+     let fun_config =
+       {
+         base_gen_config with
+         extract_fun_decls = true;
+         extract_globals = true;
+         test_trans_unit_functions = !Config.test_trans_unit_functions;
+       }
+     in
+     let clauses_module =
+       if needs_clauses_module then
+         let clauses_submodule =
+           if !Config.backend = Lean then module_delimiter ^ "Clauses" else ""
+         in
+         [ module_name ^ clauses_submodule ^ module_delimiter ^ "Clauses" ]
+       else []
+     in
+     extract_file fun_config gen_ctx fun_filename crate.A.name fun_module
+       ": function definitions" []
+       ([ types_module ] @ opaque_funs_module @ clauses_module))
+   else
+     let gen_config =
+       {
+         extract_types = true;
+         extract_decreases_clauses = !Config.extract_decreases_clauses;
+         extract_template_decreases_clauses =
+           !Config.extract_template_decreases_clauses;
+         extract_fun_decls = true;
+         extract_transparent = true;
+         extract_opaque = true;
+         extract_state_type = !Config.use_state;
+         extract_globals = true;
+         interface = false;
+         test_trans_unit_functions = !Config.test_trans_unit_functions;
+       }
+     in
+     (* Add the extension for F* *)
+     let extract_filename = extract_filebasename ^ ext in
+     extract_file gen_config gen_ctx extract_filename crate.A.name module_name
+       "" [] []);
 
   (* Generate the build file *)
   match !Config.backend with
-  | Coq | FStar ->
+  | Coq | FStar | HOL4 ->
       ()
       (* Nothing to do - TODO: we might want to generate the _CoqProject file for Coq.
          But then we can't modify it if we want to add more files for the proofs
          for instance. But we might want to put the proofs elsewhere anyway.
          Remark: there is the same problem for Lean actually.
+         Maybe generate it if the user asks for it?
       *)
   | Lean ->
       (*

@@ -249,8 +249,10 @@ def choose_test_fwd : Result Unit :=
 def test_char_fwd : Result Char :=
   Result.ret 'a'
 
+mutual
+
 /- [no_nested_borrows::NodeElem] -/
-mutual inductive node_elem_t (T : Type) :=
+inductive node_elem_t (T : Type) :=
 | Cons : tree_t T -> node_elem_t T -> node_elem_t T
 | Nil : node_elem_t T
 
@@ -258,6 +260,7 @@ mutual inductive node_elem_t (T : Type) :=
 inductive tree_t (T : Type) :=
 | Leaf : T -> tree_t T
 | Node : T -> node_elem_t T -> tree_t T -> tree_t T
+
 end
 
 /- [no_nested_borrows::list_length] -/

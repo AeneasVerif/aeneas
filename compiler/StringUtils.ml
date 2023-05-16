@@ -96,6 +96,11 @@ let capitalize_first_letter (s : string) : string =
   let s = match s with [] -> s | c :: s' -> uppercase_ascii c :: s' in
   string_of_chars s
 
+let lowercase_first_letter (s : string) : string =
+  let s = string_to_chars s in
+  let s = match s with [] -> s | c :: s' -> lowercase_ascii c :: s' in
+  string_of_chars s
+
 (** Unit tests *)
 let _ =
   assert (to_camel_case "hello_world" = "HelloWorld");

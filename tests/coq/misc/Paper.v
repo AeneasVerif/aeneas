@@ -12,7 +12,7 @@ Definition ref_incr_fwd_back (x : i32) : result i32 :=
 
 (** [paper::test_incr] *)
 Definition test_incr_fwd : result unit :=
-  x <- ref_incr_fwd_back (0%i32);
+  x <- ref_incr_fwd_back 0%i32;
   if negb (x s= 1%i32) then Fail_ Failure else Return tt
 .
 
@@ -32,12 +32,12 @@ Definition choose_back
 
 (** [paper::test_choose] *)
 Definition test_choose_fwd : result unit :=
-  z <- choose_fwd i32 true (0%i32) (0%i32);
+  z <- choose_fwd i32 true 0%i32 0%i32;
   z0 <- i32_add z 1%i32;
   if negb (z0 s= 1%i32)
   then Fail_ Failure
   else (
-    p <- choose_back i32 true (0%i32) (0%i32) z0;
+    p <- choose_back i32 true 0%i32 0%i32 z0;
     let (x, y) := p in
     if negb (x s= 1%i32)
     then Fail_ Failure
@@ -86,18 +86,18 @@ Fixpoint list_nth_mut_back
 Fixpoint sum_fwd (l : List_t i32) : result i32 :=
   match l with
   | ListCons x tl => i <- sum_fwd tl; i32_add x i
-  | ListNil => Return (0%i32)
+  | ListNil => Return 0%i32
   end
 .
 
 (** [paper::test_nth] *)
 Definition test_nth_fwd : result unit :=
   let l := ListNil in
-  let l0 := ListCons (3%i32) l in
-  let l1 := ListCons (2%i32) l0 in
-  x <- list_nth_mut_fwd i32 (ListCons (1%i32) l1) (2%u32);
+  let l0 := ListCons 3%i32 l in
+  let l1 := ListCons 2%i32 l0 in
+  x <- list_nth_mut_fwd i32 (ListCons 1%i32 l1) 2%u32;
   x0 <- i32_add x 1%i32;
-  l2 <- list_nth_mut_back i32 (ListCons (1%i32) l1) (2%u32) x0;
+  l2 <- list_nth_mut_back i32 (ListCons 1%i32 l1) 2%u32 x0;
   i <- sum_fwd l2;
   if negb (i s= 7%i32) then Fail_ Failure else Return tt
 .

@@ -56,7 +56,7 @@ Definition betree_fresh_node_id_back (counter : u64) : result u64 :=
 
 (** [betree_main::betree::NodeIdCounter::{0}::new] *)
 Definition betree_node_id_counter_new_fwd : result Betree_node_id_counter_t :=
-  Return {| Betree_node_id_counter_next_node_id := (0%u64) |}
+  Return {| Betree_node_id_counter_next_node_id := 0%u64 |}
 .
 
 (** [betree_main::betree::NodeIdCounter::{0}::fresh_id] *)
@@ -75,7 +75,7 @@ Definition betree_node_id_counter_fresh_id_back
 
 (** [core::num::u64::{10}::MAX] *)
 Definition core_num_u64_max_body : result u64 :=
-  Return (18446744073709551615%u64)
+  Return 18446744073709551615%u64
 .
 Definition core_num_u64_max_c : u64 := core_num_u64_max_body%global.
 
@@ -86,7 +86,7 @@ Definition betree_upsert_update_fwd
   | None =>
     match st with
     | BetreeUpsertFunStateAdd v => Return v
-    | BetreeUpsertFunStateSub i => Return (0%u64)
+    | BetreeUpsertFunStateSub i => Return 0%u64
     end
   | Some prev0 =>
     match st with
@@ -94,7 +94,7 @@ Definition betree_upsert_update_fwd
       margin <- u64_sub core_num_u64_max_c prev0;
       if margin s>= v then u64_add prev0 v else Return core_num_u64_max_c
     | BetreeUpsertFunStateSub v =>
-      if prev0 s>= v then u64_sub prev0 v else Return (0%u64)
+      if prev0 s>= v then u64_sub prev0 v else Return 0%u64
     end
   end
 .
@@ -107,7 +107,7 @@ Fixpoint betree_list_len_fwd
   | S n0 =>
     match self with
     | BetreeListCons t tl => i <- betree_list_len_fwd T n0 tl; u64_add 1%u64 i
-    | BetreeListNil => Return (0%u64)
+    | BetreeListNil => Return 0%u64
     end
   end
 .
@@ -1061,8 +1061,7 @@ Definition betree_be_tree_new_fwd
         |};
       Betree_be_tree_node_id_cnt := node_id_cnt0;
       Betree_be_tree_root :=
-        (BetreeNodeLeaf
-          {| Betree_leaf_id := id; Betree_leaf_size := (0%u64) |})
+        (BetreeNodeLeaf {| Betree_leaf_id := id; Betree_leaf_size := 0%u64 |})
     |})
 .
 
