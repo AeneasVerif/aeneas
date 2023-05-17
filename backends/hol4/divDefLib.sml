@@ -1,12 +1,7 @@
 structure divDefLib :> divDefLib =
 struct
 
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
-
-open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
-open primitivesLib
-open divDefTheory
+open primitivesBaseTacLib primitivesLib divDefTheory
 
 val dbg = ref false
 fun print_dbg s = if (!dbg) then print s else ()
@@ -907,7 +902,7 @@ fun DefineDiv (def_qt : term quotation) =
     (* Because [store_definition] overrides existing names, it seems that in
        practice we don't really need to  delete the previous definitions
        (we still do it: it doesn't cost much). *)
-    val _ = map delete_binding thm_names
+    val _ = app delete_binding thm_names
     val _ = map store_definition (zip thm_names def_eqs)
   in
     def_eqs

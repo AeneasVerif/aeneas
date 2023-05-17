@@ -1,5 +1,4 @@
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory
+open arithmeticTheory integerTheory
 open primitivesBaseTacLib
 
 val _ = new_theory "primitivesArith"

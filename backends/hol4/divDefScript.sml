@@ -7,11 +7,7 @@
    how to use it.
  *)
 
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
-
-open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
-open primitivesLib
+open primitivesArithTheory primitivesBaseTacLib primitivesTheory primitivesLib
 
 val _ = new_theory "divDef"
 

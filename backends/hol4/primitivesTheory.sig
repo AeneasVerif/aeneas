@@ -225,30 +225,35 @@ sig
     val i128_neg_eq : thm
     val i128_rem_eq : thm
     val i128_sub_eq : thm
+    val i128_to_int_int_to_i128_unfold : thm
     val i16_add_eq : thm
     val i16_div_eq : thm
     val i16_mul_eq : thm
     val i16_neg_eq : thm
     val i16_rem_eq : thm
     val i16_sub_eq : thm
+    val i16_to_int_int_to_i16_unfold : thm
     val i32_add_eq : thm
     val i32_div_eq : thm
     val i32_mul_eq : thm
     val i32_neg_eq : thm
     val i32_rem_eq : thm
     val i32_sub_eq : thm
+    val i32_to_int_int_to_i32_unfold : thm
     val i64_add_eq : thm
     val i64_div_eq : thm
     val i64_mul_eq : thm
     val i64_neg_eq : thm
     val i64_rem_eq : thm
     val i64_sub_eq : thm
+    val i64_to_int_int_to_i64_unfold : thm
     val i8_add_eq : thm
     val i8_div_eq : thm
     val i8_mul_eq : thm
     val i8_neg_eq : thm
     val i8_rem_eq : thm
     val i8_sub_eq : thm
+    val i8_to_int_int_to_i8_unfold : thm
     val index_update_diff : thm
     val index_update_same : thm
     val isize_add_eq : thm
@@ -257,6 +262,7 @@ sig
     val isize_neg_eq : thm
     val isize_rem_eq : thm
     val isize_sub_eq : thm
+    val isize_to_int_int_to_isize_unfold : thm
     val num2error_11 : thm
     val num2error_ONTO : thm
     val num2error_error2num : thm
@@ -273,26 +279,31 @@ sig
     val u128_mul_eq : thm
     val u128_rem_eq : thm
     val u128_sub_eq : thm
+    val u128_to_int_int_to_u128_unfold : thm
     val u16_add_eq : thm
     val u16_div_eq : thm
     val u16_mul_eq : thm
     val u16_rem_eq : thm
     val u16_sub_eq : thm
+    val u16_to_int_int_to_u16_unfold : thm
     val u32_add_eq : thm
     val u32_div_eq : thm
     val u32_mul_eq : thm
     val u32_rem_eq : thm
     val u32_sub_eq : thm
+    val u32_to_int_int_to_u32_unfold : thm
     val u64_add_eq : thm
     val u64_div_eq : thm
     val u64_mul_eq : thm
     val u64_rem_eq : thm
     val u64_sub_eq : thm
+    val u64_to_int_int_to_u64_unfold : thm
     val u8_add_eq : thm
     val u8_div_eq : thm
     val u8_mul_eq : thm
     val u8_rem_eq : thm
     val u8_sub_eq : thm
+    val u8_to_int_int_to_u8_unfold : thm
     val update_len : thm
     val update_spec : thm
     val usize_add_eq : thm
@@ -300,6 +311,7 @@ sig
     val usize_mul_eq : thm
     val usize_rem_eq : thm
     val usize_sub_eq : thm
+    val usize_to_int_int_to_usize_unfold : thm
     val vec_insert_back_spec : thm
     val vec_len_spec : thm
     val vec_to_list_int_bounds : thm
@@ -307,6 +319,8 @@ sig
   val primitives_grammars : type_grammar.grammar * term_grammar.grammar
 (*
    [ilist] Parent theory of "primitives"
+   
+   [string] Parent theory of "primitives"
    
    [isize_bounds]  Axiom
       
@@ -1390,6 +1404,14 @@ sig
           ∃z. i128_sub x y = Return z ∧
               i128_to_int z = i128_to_int x − i128_to_int y
    
+   [i128_to_int_int_to_i128_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, i128_to_int_int_to_i128, isize_bounds] []
+      ⊢ ∀n. i128_to_int (int_to_i128 n) =
+            if i128_min ≤ n ∧ n ≤ i128_max then n
+            else i128_to_int (int_to_i128 n)
+   
    [i16_add_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1450,6 +1472,14 @@ sig
           i16_to_int x − i16_to_int y ≤ i16_max ⇒
           ∃z. i16_sub x y = Return z ∧
               i16_to_int z = i16_to_int x − i16_to_int y
+   
+   [i16_to_int_int_to_i16_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, i16_to_int_int_to_i16, isize_bounds] []
+      ⊢ ∀n. i16_to_int (int_to_i16 n) =
+            if i16_min ≤ n ∧ n ≤ i16_max then n
+            else i16_to_int (int_to_i16 n)
    
    [i32_add_eq]  Theorem
       
@@ -1512,6 +1542,14 @@ sig
           ∃z. i32_sub x y = Return z ∧
               i32_to_int z = i32_to_int x − i32_to_int y
    
+   [i32_to_int_int_to_i32_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, i32_to_int_int_to_i32, isize_bounds] []
+      ⊢ ∀n. i32_to_int (int_to_i32 n) =
+            if i32_min ≤ n ∧ n ≤ i32_max then n
+            else i32_to_int (int_to_i32 n)
+   
    [i64_add_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1573,6 +1611,14 @@ sig
           ∃z. i64_sub x y = Return z ∧
               i64_to_int z = i64_to_int x − i64_to_int y
    
+   [i64_to_int_int_to_i64_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, i64_to_int_int_to_i64, isize_bounds] []
+      ⊢ ∀n. i64_to_int (int_to_i64 n) =
+            if i64_min ≤ n ∧ n ≤ i64_max then n
+            else i64_to_int (int_to_i64 n)
+   
    [i8_add_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1633,6 +1679,13 @@ sig
           i8_to_int x − i8_to_int y ≤ i8_max ⇒
           ∃z. i8_sub x y = Return z ∧
               i8_to_int z = i8_to_int x − i8_to_int y
+   
+   [i8_to_int_int_to_i8_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, i8_to_int_int_to_i8, isize_bounds] []
+      ⊢ ∀n. i8_to_int (int_to_i8 n) =
+            if i8_min ≤ n ∧ n ≤ i8_max then n else i8_to_int (int_to_i8 n)
    
    [index_update_diff]  Theorem
       
@@ -1722,6 +1775,14 @@ sig
           isize_to_int x − isize_to_int y ≤ isize_max ⇒
           ∃z. isize_sub x y = Return z ∧
               isize_to_int z = isize_to_int x − isize_to_int y
+   
+   [isize_to_int_int_to_isize_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, isize_to_int_int_to_isize, isize_bounds] []
+      ⊢ ∀n. isize_to_int (int_to_isize n) =
+            if i16_min ≤ n ∧ n ≤ i16_max then n
+            else isize_to_int (int_to_isize n)
    
    [num2error_11]  Theorem
       
@@ -1826,6 +1887,13 @@ sig
           ∃z. u128_sub x y = Return z ∧
               u128_to_int z = u128_to_int x − u128_to_int y
    
+   [u128_to_int_int_to_u128_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, u128_to_int_int_to_u128, isize_bounds] []
+      ⊢ ∀n. u128_to_int (int_to_u128 n) =
+            if 0 ≤ n ∧ n ≤ u128_max then n else u128_to_int (int_to_u128 n)
+   
    [u16_add_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1875,6 +1943,13 @@ sig
           0 ≤ u16_to_int x − u16_to_int y ⇒
           ∃z. u16_sub x y = Return z ∧
               u16_to_int z = u16_to_int x − u16_to_int y
+   
+   [u16_to_int_int_to_u16_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, u16_to_int_int_to_u16, isize_bounds] []
+      ⊢ ∀n. u16_to_int (int_to_u16 n) =
+            if 0 ≤ n ∧ n ≤ u16_max then n else u16_to_int (int_to_u16 n)
    
    [u32_add_eq]  Theorem
       
@@ -1926,6 +2001,13 @@ sig
           ∃z. u32_sub x y = Return z ∧
               u32_to_int z = u32_to_int x − u32_to_int y
    
+   [u32_to_int_int_to_u32_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, u32_to_int_int_to_u32, isize_bounds] []
+      ⊢ ∀n. u32_to_int (int_to_u32 n) =
+            if 0 ≤ n ∧ n ≤ u32_max then n else u32_to_int (int_to_u32 n)
+   
    [u64_add_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1976,6 +2058,13 @@ sig
           ∃z. u64_sub x y = Return z ∧
               u64_to_int z = u64_to_int x − u64_to_int y
    
+   [u64_to_int_int_to_u64_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, u64_to_int_int_to_u64, isize_bounds] []
+      ⊢ ∀n. u64_to_int (int_to_u64 n) =
+            if 0 ≤ n ∧ n ≤ u64_max then n else u64_to_int (int_to_u64 n)
+   
    [u8_add_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -2025,6 +2114,13 @@ sig
           0 ≤ u8_to_int x − u8_to_int y ⇒
           ∃z. u8_sub x y = Return z ∧
               u8_to_int z = u8_to_int x − u8_to_int y
+   
+   [u8_to_int_int_to_u8_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, u8_to_int_int_to_u8, isize_bounds] []
+      ⊢ ∀n. u8_to_int (int_to_u8 n) =
+            if 0 ≤ n ∧ n ≤ u8_max then n else u8_to_int (int_to_u8 n)
    
    [update_len]  Theorem
       
@@ -2089,6 +2185,14 @@ sig
           0 ≤ usize_to_int x − usize_to_int y ⇒
           ∃z. usize_sub x y = Return z ∧
               usize_to_int z = usize_to_int x − usize_to_int y
+   
+   [usize_to_int_int_to_usize_unfold]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_bounds, usize_to_int_int_to_usize, isize_bounds] []
+      ⊢ ∀n. usize_to_int (int_to_usize n) =
+            if 0 ≤ n ∧ n ≤ u16_max then n
+            else usize_to_int (int_to_usize n)
    
    [vec_insert_back_spec]  Theorem
       

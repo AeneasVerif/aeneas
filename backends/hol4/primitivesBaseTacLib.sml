@@ -2,8 +2,7 @@
 structure primitivesBaseTacLib =
 struct
 
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory
+open HolKernel boolLib bossLib intLib
 
 val debug = ref false
 

@@ -1,11 +1,6 @@
 (* Manually written examples of how to use the fixed-point operator from divDefScript *)
 
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
-
-open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
-open primitivesLib
-open divDefTheory
+open primitivesLib divDefTheory
 
 val _ = new_theory "divDefExample"
 

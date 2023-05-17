@@ -3,11 +3,7 @@
 structure divDefNoFixLib :> divDefNoFixLib =
 struct
 
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
-
-open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
-open primitivesLib
+open primitivesArithTheory primitivesBaseTacLib primitivesLib
 
 val case_result_same_eq = prove (
   “!(r : 'a result).
@@ -849,7 +845,7 @@ fun prove_termination_thms
       in
         (* Apply the theorem, prove the premise, and rewrite *)
         (prove_premise_then premise_tac assume_tac eq_th >> fs []) (asms, g)
-      end handle NotFound => all_tac (asms, g)
+      end handle Redblackmap.NotFound => all_tac (asms, g)
           | HOL_ERR _ => all_tac (asms, g) (* Getting the function name can also fail *)
   
     fun prove_one ((pred_tm, fun_eq_tm), pred_n_imp_pred_least_thm) :
