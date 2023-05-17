@@ -1,6 +1,7 @@
 (* Examples which use divDefLib.DefineDiv *)
 
-open primitivesLib divDefLib
+open HolKernel
+open divDefLib
 
 val _ = new_theory "divDefLibTest"
 

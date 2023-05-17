@@ -1,8 +1,5 @@
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
-
-open primitivesArithTheory primitivesBaseTacLib ilistTheory primitivesTheory
-open primitivesLib divDefNoFixLib
+open HolKernel
+open divDefNoFixLib
 
 val _ = new_theory "divDefNoFixLibTest"
 

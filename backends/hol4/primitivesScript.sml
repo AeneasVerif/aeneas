@@ -1,10 +1,7 @@
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
-
+open stringTheory
 open primitivesArithTheory primitivesBaseTacLib ilistTheory
 
-val primitives_theory_name = "primitives"
-val _ = new_theory primitives_theory_name
+val _ = new_theory "primitives"
 
 (*** Result *)
 Datatype:
@@ -203,7 +200,6 @@ val all_to_int_bounds_lemmas = [
    Note that for isize and usize, we write the lemmas in such a way that the
    proofs are easily automatable for constants.
  *)
-(* TODO: remove the condition on u16_max, and make the massage tactic automatically use usize_bounds *)
 val isize_to_int_int_to_isize =
   new_axiom ("isize_to_int_int_to_isize",
     “!n. isize_min <= n /\ n <= isize_max ==> isize_to_int (int_to_isize n) = n”)
@@ -252,8 +248,7 @@ val u128_to_int_int_to_u128 =
   new_axiom ("u128_to_int_int_to_u128",
     “!n. 0 <= n /\ n <= u128_max ==> u128_to_int (int_to_u128 n) = n”)
 
-(* TODO: rename *)
-val all_conversion_id_lemmas = [
+val all_int_to_scalar_to_int_lemmas = [
   isize_to_int_int_to_isize,
   i8_to_int_int_to_i8,
   i16_to_int_int_to_i16,
@@ -268,6 +263,103 @@ val all_conversion_id_lemmas = [
   u128_to_int_int_to_u128
 ]
 
+val prove_int_to_scalar_to_int_unfold_tac =
+  assume_tac isize_bounds >> (* Only useful for isize of course *)
+  assume_tac usize_bounds >> (* Only useful for usize of course *)
+  rw [] >> MAP_FIRST irule all_int_to_scalar_to_int_lemmas >> int_tac
+
+(* Custom unfolding lemmas for the purpose of evaluation *)
+
+(* For isize, we don't use isize_{min,max} (which are opaque) but i16_{min,max} *)
+Theorem isize_to_int_int_to_isize_unfold:
+  ∀n. isize_to_int (int_to_isize n) = if i16_min <= n /\ n <= i16_max then n else isize_to_int (int_to_isize n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem i8_to_int_int_to_i8_unfold:
+  ∀n. i8_to_int (int_to_i8 n) = if i8_min <= n /\ n <= i8_max then n else i8_to_int (int_to_i8 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem i16_to_int_int_to_i16_unfold:
+  ∀n. i16_to_int (int_to_i16 n) = if i16_min <= n /\ n <= i16_max then n else i16_to_int (int_to_i16 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem i32_to_int_int_to_i32_unfold:
+  ∀n. i32_to_int (int_to_i32 n) = if i32_min <= n /\ n <= i32_max then n else i32_to_int (int_to_i32 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem i64_to_int_int_to_i64_unfold:
+  ∀n. i64_to_int (int_to_i64 n) = if i64_min <= n /\ n <= i64_max then n else i64_to_int (int_to_i64 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem i128_to_int_int_to_i128_unfold:
+  ∀n. i128_to_int (int_to_i128 n) = if i128_min <= n /\ n <= i128_max then n else i128_to_int (int_to_i128 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+(* For usize, we don't use isize_{min,max} (which are opaque) but u16_{min,max} *)
+Theorem usize_to_int_int_to_usize_unfold:
+  ∀n. usize_to_int (int_to_usize n) = if 0 ≤ n ∧ n <= u16_max then n else usize_to_int (int_to_usize n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem u8_to_int_int_to_u8_unfold:
+  ∀n. u8_to_int (int_to_u8 n) = if 0 <= n /\ n <= u8_max then n else u8_to_int (int_to_u8 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem u16_to_int_int_to_u16_unfold:
+  ∀n. u16_to_int (int_to_u16 n) = if 0 <= n /\ n <= u16_max then n else u16_to_int (int_to_u16 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem u32_to_int_int_to_u32_unfold:
+  ∀n. u32_to_int (int_to_u32 n) = if 0 <= n /\ n <= u32_max then n else u32_to_int (int_to_u32 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem u64_to_int_int_to_u64_unfold:
+  ∀n. u64_to_int (int_to_u64 n) = if 0 <= n /\ n <= u64_max then n else u64_to_int (int_to_u64 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+Theorem u128_to_int_int_to_u128_unfold:
+  ∀n. u128_to_int (int_to_u128 n) = if 0 <= n /\ n <= u128_max then n else u128_to_int (int_to_u128 n)
+Proof
+  prove_int_to_scalar_to_int_unfold_tac
+QED
+
+val all_int_to_scalar_to_int_unfold_lemmas = [
+  isize_to_int_int_to_isize_unfold,
+  i8_to_int_int_to_i8_unfold,
+  i16_to_int_int_to_i16_unfold,
+  i32_to_int_int_to_i32_unfold,
+  i64_to_int_int_to_i64_unfold,
+  i128_to_int_int_to_i128_unfold,
+  usize_to_int_int_to_usize_unfold,
+  u8_to_int_int_to_u8_unfold,
+  u16_to_int_int_to_u16_unfold,
+  u32_to_int_int_to_u32_unfold,
+  u64_to_int_int_to_u64_unfold,
+  u128_to_int_int_to_u128_unfold
+]
+val _ = evalLib.add_unfold_thms (all_int_to_scalar_to_int_unfold_lemmas)
+
 val int_to_i8_i8_to_int       = new_axiom ("int_to_i8_i8_to_int",       “∀i. int_to_i8 (i8_to_int i) = i”)
 val int_to_i16_i16_to_int     = new_axiom ("int_to_i16_i16_to_int",     “∀i. int_to_i16 (i16_to_int i) = i”)
 val int_to_i32_i32_to_int     = new_axiom ("int_to_i32_i32_to_int",     “∀i. int_to_i32 (i32_to_int i) = i”)
@@ -281,6 +373,22 @@ val int_to_u32_u32_to_int     = new_axiom ("int_to_u32_u32_to_int",     “∀i.
 val int_to_u64_u64_to_int     = new_axiom ("int_to_u64_u64_to_int",     “∀i. int_to_u64 (u64_to_int i) = i”)
 val int_to_u128_u128_to_int   = new_axiom ("int_to_u128_u128_to_int",   “∀i. int_to_u128 (u128_to_int i) = i”)
 val int_to_usize_usize_to_int = new_axiom ("int_to_usize_usize_to_int", “∀i. int_to_usize (usize_to_int i) = i”)
+
+val all_scalar_to_int_to_scalar_lemmas = [
+  int_to_i8_i8_to_int,
+  int_to_i16_i16_to_int,
+  int_to_i32_i32_to_int,
+  int_to_i64_i64_to_int,
+  int_to_i128_i128_to_int,
+  int_to_isize_isize_to_int,
+  int_to_u8_u8_to_int,
+  int_to_u16_u16_to_int,
+  int_to_u32_u32_to_int,
+  int_to_u64_u64_to_int,
+  int_to_u128_u128_to_int,
+  int_to_usize_usize_to_int
+]
+val _ = evalLib.add_rewrites all_scalar_to_int_to_scalar_lemmas
 
 (** Utilities to define the arithmetic operations *)
 val mk_isize_def = Define
@@ -558,7 +666,7 @@ val (asms,g) = top_goal ()
 
 fun prove_arith_unop_eq (asms, g) =
   let
-    val rw_thms = List.concat [all_neg_defs, all_mk_int_defs, all_conversion_id_lemmas]
+    val rw_thms = List.concat [all_neg_defs, all_mk_int_defs, all_int_to_scalar_to_int_lemmas]
   in
     (rpt gen_tac >>
      rpt disch_tac >>
@@ -630,7 +738,7 @@ fun prove_arith_op_eq (asms, g) =
       | _ => failwith "Unexpected"
     val x = (snd o dest_comb) x_to_int;
     val y = (snd o dest_comb) y_to_int;
-    val rw_thms = int_rem_def :: List.concat [all_rem_defs, all_add_defs, all_sub_defs, all_mul_defs, all_div_defs, all_mk_int_defs, all_to_int_bounds_lemmas, all_conversion_id_lemmas];
+    val rw_thms = int_rem_def :: List.concat [all_rem_defs, all_add_defs, all_sub_defs, all_mul_defs, all_div_defs, all_mk_int_defs, all_to_int_bounds_lemmas, all_int_to_scalar_to_int_lemmas];
     fun inst_first_lem arg lems =
       map_first_tac (fn th => (assume_tac (SPEC arg th) handle HOL_ERR _ => fail_tac "")) lems;
   in
@@ -650,11 +758,11 @@ fun prove_arith_op_eq (asms, g) =
        qspecl_assume [‘^x_to_int’, ‘^y_to_int’] pos_div_pos_le_init >>
        cooper_tac,
        (* For remainder *)
-       dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC all_conversion_id_lemmas >> fs [] >>
+       dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC all_int_to_scalar_to_int_lemmas >> fs [] >>
        qspecl_assume [‘^x_to_int’, ‘^y_to_int’] pos_mod_pos_is_pos >>
        qspecl_assume [‘^x_to_int’, ‘^y_to_int’] pos_mod_pos_le_init >>
        cooper_tac,
-       dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC all_conversion_id_lemmas >> fs []
+       dep_rewrite.DEP_PURE_ONCE_REWRITE_TAC all_int_to_scalar_to_int_lemmas >> fs []
      ]) (asms, g)
   end
 

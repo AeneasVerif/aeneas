@@ -20,8 +20,6 @@ sig
 (*
    [primitivesArith] Parent theory of "ilist"
    
-   [string] Parent theory of "ilist"
-   
    [index_def]  Definition
       
       ⊢ ∀i x ls.

@@ -1,6 +1,4 @@
-open HolKernel boolLib bossLib Parse
-open boolTheory arithmeticTheory integerTheory intLib listTheory stringTheory
-
+open listTheory
 open primitivesArithTheory primitivesBaseTacLib
 
 (* The following theory contains alternative definitions of functions operating
