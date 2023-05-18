@@ -96,6 +96,16 @@ val _ = new_constant ("u32_to_int",   “:u32 -> int”)
 val _ = new_constant ("u64_to_int",   “:u64 -> int”)
 val _ = new_constant ("u128_to_int",  “:u128 -> int”)
 
+(* The functions which convert integers to machine scalars don't fail.
+
+   If we were to write a model of those functions, we would return an arbitrary
+   element (or saturate) if the input integer is not in bounds.
+
+   This design choice makes it a lot easier to manipulate those functions.
+   Moreover, it allows to define and prove rewriting theorems and custom
+   unfolding theorems which are necessary to evaluate terms (when doing
+   unit tests). For instance, we can prove: “int_to_isize (isize_to_int i) = i”.
+ *)
 val _ = new_constant ("int_to_isize", “:int -> isize”)
 val _ = new_constant ("int_to_i8", “:int -> i8”)
 val _ = new_constant ("int_to_i16", “:int -> i16”)
@@ -388,7 +398,21 @@ val all_scalar_to_int_to_scalar_lemmas = [
   int_to_u128_u128_to_int,
   int_to_usize_usize_to_int
 ]
-val _ = evalLib.add_rewrites all_scalar_to_int_to_scalar_lemmas
+
+val _ = BasicProvers.export_rewrites [
+  "int_to_i8_i8_to_int",
+  "int_to_i16_i16_to_int",
+  "int_to_i32_i32_to_int",
+  "int_to_i64_i64_to_int",
+  "int_to_i128_i128_to_int",
+  "int_to_isize_isize_to_int",
+  "int_to_u8_u8_to_int",
+  "int_to_u16_u16_to_int",
+  "int_to_u32_u32_to_int",
+  "int_to_u64_u64_to_int",
+  "int_to_u128_u128_to_int",
+  "int_to_usize_usize_to_int"
+]
 
 (** Utilities to define the arithmetic operations *)
 val mk_isize_def = Define
@@ -1489,8 +1513,16 @@ End
 
 val _ = new_type ("vec", 1)
 val _ = new_constant ("vec_to_list", “:'a vec -> 'a list”)
-(* TODO: we could also make ‘mk_vec’ return ‘'a vec’ (no result) *)
-val _ = new_constant ("mk_vec", “:'a list -> 'a vec result”)
+
+(* Similarly to the "int_to_scalar" functions, the “mk_vec” function always
+   succeeds (it must however make sure vectors have a length which is at most
+   usize_max). In case the input list is too long, a model could return
+   an arbitrary vector (a truncated vector for instance).
+
+   Once again, this design choice makes it a lot easier to manipulate vectors,
+   and allows to define and prove simpler rewriting and unfolding theorems.
+ *)
+val _ = new_constant ("mk_vec", “:'a list -> 'a vec”)
 
 val vec_to_list_num_bounds =
   new_axiom ("vec_to_list_num_bounds",
@@ -1573,17 +1605,28 @@ val vec_index_def = Define ‘
     then Return (index (usize_to_int i) (vec_to_list v))
     else Fail Failure’
 
-val mk_vec_spec = new_axiom ("mk_vec_spec",
-  “∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l”)
+val mk_vec_axiom = new_axiom ("mk_vec_axiom",
+  “∀l. len l ≤ usize_max ⇒ vec_to_list (mk_vec l) = l”)
 
-(* Redefining ‘vec_insert_back’ *)
+(* A custom unfolding theorem for evaluation *)
+Theorem mk_vec_unfold:
+  ∀l. vec_to_list (mk_vec l) = if len l ≤ usize_max then l else vec_to_list (mk_vec l)
+Proof
+  metis_tac [mk_vec_axiom]
+QED
+val _ = evalLib.add_unfold_thm mk_vec_unfold
+
+(* Defining ‘vec_insert_back’ *)
 val vec_insert_back_def = Define ‘
-  vec_insert_back (v : 'a vec) (i : usize) (x : 'a) = mk_vec (update (vec_to_list v) (usize_to_int i) x)’
+  vec_insert_back (v : 'a vec) (i : usize) (x : 'a) =
+    if usize_to_int i < usize_to_int (vec_len v) then
+      Return (mk_vec (update (vec_to_list v) (usize_to_int i) x))
+    else Fail Failure’
 
 Theorem vec_insert_back_spec:
   ∀v i x.
     usize_to_int i < usize_to_int (vec_len v) ⇒
-    ∃nv. vec_insert_back v i x = Return nv ∧
+    ∃ nv. vec_insert_back v i x = Return nv ∧
     vec_len v = vec_len nv ∧
     vec_index i nv = Return x ∧
     (∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒
@@ -1591,17 +1634,15 @@ Theorem vec_insert_back_spec:
           vec_index j nv = vec_index j v)
 Proof
   rpt strip_tac >> fs [vec_insert_back_def] >>
-  (* TODO: improve this? *)
-  qspec_assume ‘update (vec_to_list v) (usize_to_int i) x’ mk_vec_spec >>
+  qspec_assume ‘update (vec_to_list v) (usize_to_int i) x’ mk_vec_axiom >>
   sg_dep_rewrite_all_tac update_len >> fs [] >>
-  qspec_assume ‘v’ vec_len_spec >>
-  rw [] >> gvs [] >>
+  qspec_assume ‘v’ vec_len_spec >> gvs [] >>
   fs [vec_len_def, vec_index_def] >>
   qspec_assume ‘i’ usize_to_int_bounds >>
   sg_dep_rewrite_all_tac usize_to_int_int_to_usize >- cooper_tac >> fs [] >>
-  sg_dep_rewrite_goal_tac index_update_diff >- cooper_tac >> fs [] >>
-  rw [] >>
-  irule index_update_same >> cooper_tac
+  rw []
+  >- (irule index_update_diff >> cooper_tac) >>
+  sg_dep_rewrite_all_tac index_update_same >- cooper_tac >> fs []
 QED
 
 (* TODO: add theorems to the rewriting theorems
