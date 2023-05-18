@@ -36,14 +36,14 @@ fun apply_stc_update (ADD_SSFRAG ssf, ss) = ss ++ ssf
 (* A stateful theorems collection *)
 datatype stc = STC_CON of {
     name        : string,
-    thy_ssfrag  : (string -> ssfrag),
-    thy_simpset : (string -> simpset option),
-    get_ss      : (unit -> simpset),
-    export_thms : (string list -> unit)
+    thy_ssfrag  : string -> simpLib.ssfrag,
+    thy_simpset : string -> simpset option,
+    get_ss      : unit -> simpset,
+    export_thms : string list -> unit
 }
 
 (* Create a stateful theorems collection *)
-fun create_stateful_theorem_set (stc_name : string) : stc =
+fun create_stateful_theorem_set (stc_name : string) =
   let
 (* val stc_name = "testStc" *)
 
@@ -168,6 +168,9 @@ fun create_stateful_theorem_set (stc_name : string) : stc =
               get_ss = get_ss, export_thms = export_thms }
   end
 
+fun rewrite_thms_of_simpset (ss : simpset) : thm list =
+  List.concat (map simpLib.frag_rewrites (simpLib.ssfrags_of ss))
+
 (*
 (* Create a stateful theorems collection *)
 val STC_CON { name = stc_name, thy_ssfrag = thy_ssfrag, thy_simpset = thy_simpset, get_ss = get_ss, export_thms = export_thms } =
@@ -186,5 +189,8 @@ fun rewrite_thms_of_simpset (ss : simpset) : thm list =
 
 rewrite_thms_of_simpset (get_ss ())
 *)
+
+val STC_CON { name = stc_name, thy_ssfrag = thy_ssfrag, thy_simpset = thy_simpset, get_ss = get_ss, export_thms = export_thms } =
+  create_stateful_theorem_set "testStc1"
 
 end
