@@ -28,7 +28,7 @@ sig
     val isize_bounds : thm
     val isize_to_int_bounds : thm
     val isize_to_int_int_to_isize : thm
-    val mk_vec_spec : thm
+    val mk_vec_axiom : thm
     val u128_to_int_bounds : thm
     val u128_to_int_int_to_u128 : thm
     val u16_to_int_bounds : thm
@@ -263,6 +263,7 @@ sig
     val isize_rem_eq : thm
     val isize_sub_eq : thm
     val isize_to_int_int_to_isize_unfold : thm
+    val mk_vec_unfold : thm
     val num2error_11 : thm
     val num2error_ONTO : thm
     val num2error_error2num : thm
@@ -518,10 +519,10 @@ sig
       ⊢ ∀v. 0 ≤ LENGTH (vec_to_list v) ∧
             LENGTH (vec_to_list v) ≤ Num usize_max
    
-   [mk_vec_spec]  Axiom
+   [mk_vec_axiom]  Axiom
       
-      [oracles: ] [axioms: mk_vec_spec] []
-      ⊢ ∀l. len l ≤ usize_max ⇒ ∃v. mk_vec l = Return v ∧ vec_to_list v = l
+      [oracles: ] [axioms: mk_vec_axiom] []
+      ⊢ ∀l. len l ≤ usize_max ⇒ vec_to_list (mk_vec l) = l
    
    [bind_def]  Definition
       
@@ -1282,7 +1283,9 @@ sig
       
       ⊢ ∀v i x.
           vec_insert_back v i x =
-          mk_vec (update (vec_to_list v) (usize_to_int i) x)
+          if usize_to_int i < usize_to_int (vec_len v) then
+            Return (mk_vec (update (vec_to_list v) (usize_to_int i) x))
+          else Fail Failure
    
    [vec_len_def]  Definition
       
@@ -1784,6 +1787,12 @@ sig
             if i16_min ≤ n ∧ n ≤ i16_max then n
             else isize_to_int (int_to_isize n)
    
+   [mk_vec_unfold]  Theorem
+      
+      [oracles: DISK_THM] [axioms: mk_vec_axiom] []
+      ⊢ ∀l. vec_to_list (mk_vec l) =
+            if len l ≤ usize_max then l else vec_to_list (mk_vec l)
+   
    [num2error_11]  Theorem
       
       ⊢ ∀r r'. r < 1 ⇒ r' < 1 ⇒ (num2error r = num2error r' ⇔ r = r')
@@ -2198,7 +2207,7 @@ sig
       
       [oracles: DISK_THM]
       [axioms: vec_to_list_num_bounds, usize_bounds,
-       usize_to_int_int_to_usize, usize_to_int_bounds, mk_vec_spec] []
+       usize_to_int_int_to_usize, usize_to_int_bounds, mk_vec_axiom] []
       ⊢ ∀v i x.
           usize_to_int i < usize_to_int (vec_len v) ⇒
           ∃nv.
