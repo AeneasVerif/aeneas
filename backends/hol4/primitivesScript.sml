@@ -504,6 +504,33 @@ val all_mk_int_defs = [
   mk_u128_def
 ]
 
+(* Unfolding theorems for “mk_usize” and “mk_isize”: we need specific unfolding
+   theorems because the isize/usize bounds are opaque, and may make the evaluation
+   get stuck in the unit tests *)
+Theorem mk_usize_unfold:
+  ∀ n. mk_usize n =
+    if 0 ≤ n ∧ (n ≤ u16_max ∨ n ≤ usize_max) then Return (int_to_usize n)
+    else Fail Failure
+Proof
+  rw [mk_usize_def] >> fs [] >>
+  assume_tac usize_bounds >>
+  int_tac
+QED
+val _ = evalLib.add_unfold_thm "mk_usize_unfold"
+
+Theorem mk_isize_unfold:
+  ∀ n. mk_isize n =
+    if (i16_min ≤ n ∨ isize_min ≤ n) ∧
+       (n ≤ i16_max ∨ n ≤ isize_max)
+    then Return (int_to_isize n)
+    else Fail Failure
+Proof
+  rw [mk_isize_def] >> fs [] >>
+  assume_tac isize_bounds >>
+  int_tac
+QED
+val _ = evalLib.add_unfold_thm "mk_isize_unfold"
+
 val isize_neg_def = Define ‘isize_neg x = mk_isize (- (isize_to_int x))’
 val i8_neg_def    = Define ‘i8_neg x    = mk_i8 (- (i8_to_int x))’
 val i16_neg_def   = Define ‘i16_neg x   = mk_i16 (- (i16_to_int x))’
@@ -1520,6 +1547,98 @@ Definition isize_ge_def:
   isize_ge x y = (isize_to_int x >= isize_to_int y)
 End
 
+
+(* Equality theorems for the comparisons between integers - used by evalLib *)
+
+val prove_scalar_eq_equiv_tac = metis_tac all_scalar_to_int_to_scalar_lemmas
+
+Theorem isize_eq_equiv:
+  ∀x y. (x = y) = (isize_to_int x = isize_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem i8_eq_equiv:
+  ∀x y. (x = y) = (i8_to_int x = i8_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem i16_eq_equiv:
+  ∀x y. (x = y) = (i16_to_int x = i16_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem i32_eq_equiv:
+  ∀x y. (x = y) = (i32_to_int x = i32_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem i64_eq_equiv:
+  ∀x y. (x = y) = (i64_to_int x = i64_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem i128_eq_equiv:
+  ∀x y. (x = y) = (i128_to_int x = i128_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem usize_eq_equiv:
+  ∀x y. (x = y) = (usize_to_int x = usize_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem u8_eq_equiv:
+  ∀x y. (x = y) = (u8_to_int x = u8_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem u16_eq_equiv:
+  ∀x y. (x = y) = (u16_to_int x = u16_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem u32_eq_equiv:
+  ∀x y. (x = y) = (u32_to_int x = u32_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem u64_eq_equiv:
+  ∀x y. (x = y) = (u64_to_int x = u64_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+Theorem u128_eq_equiv:
+  ∀x y. (x = y) = (u128_to_int x = u128_to_int y)
+Proof
+  prove_scalar_eq_equiv_tac
+QED
+
+(* Remark.: don't move this up, it will break some proofs *)
+val _ = BasicProvers.export_rewrites [
+  "isize_eq_equiv",
+  "i8_eq_equiv",
+  "i16_eq_equiv",
+  "i32_eq_equiv",
+  "i64_eq_equiv",
+  "i128_eq_equiv",
+  "usize_eq_equiv",
+  "u8_eq_equiv",
+  "u16_eq_equiv",
+  "u32_eq_equiv",
+  "u64_eq_equiv",
+  "u128_eq_equiv"
+]
 
 (***
  * Vectors

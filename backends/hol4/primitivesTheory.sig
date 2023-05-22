@@ -221,6 +221,7 @@ sig
     val error_nchotomy : thm
     val i128_add_eq : thm
     val i128_div_eq : thm
+    val i128_eq_equiv : thm
     val i128_mul_eq : thm
     val i128_neg_eq : thm
     val i128_rem_eq : thm
@@ -228,6 +229,7 @@ sig
     val i128_to_int_int_to_i128_unfold : thm
     val i16_add_eq : thm
     val i16_div_eq : thm
+    val i16_eq_equiv : thm
     val i16_mul_eq : thm
     val i16_neg_eq : thm
     val i16_rem_eq : thm
@@ -235,6 +237,7 @@ sig
     val i16_to_int_int_to_i16_unfold : thm
     val i32_add_eq : thm
     val i32_div_eq : thm
+    val i32_eq_equiv : thm
     val i32_mul_eq : thm
     val i32_neg_eq : thm
     val i32_rem_eq : thm
@@ -242,6 +245,7 @@ sig
     val i32_to_int_int_to_i32_unfold : thm
     val i64_add_eq : thm
     val i64_div_eq : thm
+    val i64_eq_equiv : thm
     val i64_mul_eq : thm
     val i64_neg_eq : thm
     val i64_rem_eq : thm
@@ -249,6 +253,7 @@ sig
     val i64_to_int_int_to_i64_unfold : thm
     val i8_add_eq : thm
     val i8_div_eq : thm
+    val i8_eq_equiv : thm
     val i8_mul_eq : thm
     val i8_neg_eq : thm
     val i8_rem_eq : thm
@@ -258,11 +263,14 @@ sig
     val index_update_same : thm
     val isize_add_eq : thm
     val isize_div_eq : thm
+    val isize_eq_equiv : thm
     val isize_mul_eq : thm
     val isize_neg_eq : thm
     val isize_rem_eq : thm
     val isize_sub_eq : thm
     val isize_to_int_int_to_isize_unfold : thm
+    val mk_isize_unfold : thm
+    val mk_usize_unfold : thm
     val mk_vec_unfold : thm
     val num2error_11 : thm
     val num2error_ONTO : thm
@@ -277,30 +285,35 @@ sig
     val result_nchotomy : thm
     val u128_add_eq : thm
     val u128_div_eq : thm
+    val u128_eq_equiv : thm
     val u128_mul_eq : thm
     val u128_rem_eq : thm
     val u128_sub_eq : thm
     val u128_to_int_int_to_u128_unfold : thm
     val u16_add_eq : thm
     val u16_div_eq : thm
+    val u16_eq_equiv : thm
     val u16_mul_eq : thm
     val u16_rem_eq : thm
     val u16_sub_eq : thm
     val u16_to_int_int_to_u16_unfold : thm
     val u32_add_eq : thm
     val u32_div_eq : thm
+    val u32_eq_equiv : thm
     val u32_mul_eq : thm
     val u32_rem_eq : thm
     val u32_sub_eq : thm
     val u32_to_int_int_to_u32_unfold : thm
     val u64_add_eq : thm
     val u64_div_eq : thm
+    val u64_eq_equiv : thm
     val u64_mul_eq : thm
     val u64_rem_eq : thm
     val u64_sub_eq : thm
     val u64_to_int_int_to_u64_unfold : thm
     val u8_add_eq : thm
     val u8_div_eq : thm
+    val u8_eq_equiv : thm
     val u8_mul_eq : thm
     val u8_rem_eq : thm
     val u8_sub_eq : thm
@@ -309,6 +322,7 @@ sig
     val update_spec : thm
     val usize_add_eq : thm
     val usize_div_eq : thm
+    val usize_eq_equiv : thm
     val usize_mul_eq : thm
     val usize_rem_eq : thm
     val usize_sub_eq : thm
@@ -1366,6 +1380,11 @@ sig
           ∃z. i128_div x y = Return z ∧
               i128_to_int z = i128_to_int x / i128_to_int y
    
+   [i128_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_i128_i128_to_int] []
+      ⊢ ∀x y. x = y ⇔ i128_to_int x = i128_to_int y
+   
    [i128_mul_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1436,6 +1455,11 @@ sig
           ∃z. i16_div x y = Return z ∧
               i16_to_int z = i16_to_int x / i16_to_int y
    
+   [i16_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_i16_i16_to_int] []
+      ⊢ ∀x y. x = y ⇔ i16_to_int x = i16_to_int y
+   
    [i16_mul_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1504,6 +1528,11 @@ sig
           i32_to_int x / i32_to_int y ≤ i32_max ⇒
           ∃z. i32_div x y = Return z ∧
               i32_to_int z = i32_to_int x / i32_to_int y
+   
+   [i32_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_i32_i32_to_int] []
+      ⊢ ∀x y. x = y ⇔ i32_to_int x = i32_to_int y
    
    [i32_mul_eq]  Theorem
       
@@ -1574,6 +1603,11 @@ sig
           ∃z. i64_div x y = Return z ∧
               i64_to_int z = i64_to_int x / i64_to_int y
    
+   [i64_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_i64_i64_to_int] []
+      ⊢ ∀x y. x = y ⇔ i64_to_int x = i64_to_int y
+   
    [i64_mul_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1642,6 +1676,11 @@ sig
           i8_to_int x / i8_to_int y ≤ i8_max ⇒
           ∃z. i8_div x y = Return z ∧
               i8_to_int z = i8_to_int x / i8_to_int y
+   
+   [i8_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_i8_i8_to_int] []
+      ⊢ ∀x y. x = y ⇔ i8_to_int x = i8_to_int y
    
    [i8_mul_eq]  Theorem
       
@@ -1730,6 +1769,11 @@ sig
           ∃z. isize_div x y = Return z ∧
               isize_to_int z = isize_to_int x / isize_to_int y
    
+   [isize_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_isize_isize_to_int] []
+      ⊢ ∀x y. x = y ⇔ isize_to_int x = isize_to_int y
+   
    [isize_mul_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1786,6 +1830,24 @@ sig
       ⊢ ∀n. isize_to_int (int_to_isize n) =
             if i16_min ≤ n ∧ n ≤ i16_max then n
             else isize_to_int (int_to_isize n)
+   
+   [mk_isize_unfold]  Theorem
+      
+      [oracles: DISK_THM] [axioms: isize_bounds] []
+      ⊢ ∀n. mk_isize n =
+            if
+              (i16_min ≤ n ∨ isize_min ≤ n) ∧ (n ≤ i16_max ∨ n ≤ isize_max)
+            then
+              Return (int_to_isize n)
+            else Fail Failure
+   
+   [mk_usize_unfold]  Theorem
+      
+      [oracles: DISK_THM] [axioms: usize_bounds] []
+      ⊢ ∀n. mk_usize n =
+            if 0 ≤ n ∧ (n ≤ u16_max ∨ n ≤ usize_max) then
+              Return (int_to_usize n)
+            else Fail Failure
    
    [mk_vec_unfold]  Theorem
       
@@ -1866,6 +1928,11 @@ sig
           ∃z. u128_div x y = Return z ∧
               u128_to_int z = u128_to_int x / u128_to_int y
    
+   [u128_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_u128_u128_to_int] []
+      ⊢ ∀x y. x = y ⇔ u128_to_int x = u128_to_int y
+   
    [u128_mul_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -1922,6 +1989,11 @@ sig
           u16_to_int y ≠ 0 ⇒
           ∃z. u16_div x y = Return z ∧
               u16_to_int z = u16_to_int x / u16_to_int y
+   
+   [u16_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_u16_u16_to_int] []
+      ⊢ ∀x y. x = y ⇔ u16_to_int x = u16_to_int y
    
    [u16_mul_eq]  Theorem
       
@@ -1980,6 +2052,11 @@ sig
           ∃z. u32_div x y = Return z ∧
               u32_to_int z = u32_to_int x / u32_to_int y
    
+   [u32_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_u32_u32_to_int] []
+      ⊢ ∀x y. x = y ⇔ u32_to_int x = u32_to_int y
+   
    [u32_mul_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -2037,6 +2114,11 @@ sig
           ∃z. u64_div x y = Return z ∧
               u64_to_int z = u64_to_int x / u64_to_int y
    
+   [u64_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_u64_u64_to_int] []
+      ⊢ ∀x y. x = y ⇔ u64_to_int x = u64_to_int y
+   
    [u64_mul_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -2093,6 +2175,11 @@ sig
           u8_to_int y ≠ 0 ⇒
           ∃z. u8_div x y = Return z ∧
               u8_to_int z = u8_to_int x / u8_to_int y
+   
+   [u8_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_u8_u8_to_int] []
+      ⊢ ∀x y. x = y ⇔ u8_to_int x = u8_to_int y
    
    [u8_mul_eq]  Theorem
       
@@ -2164,6 +2251,11 @@ sig
           ∃z. usize_div x y = Return z ∧
               usize_to_int z = usize_to_int x / usize_to_int y
    
+   [usize_eq_equiv]  Theorem
+      
+      [oracles: DISK_THM] [axioms: int_to_usize_usize_to_int] []
+      ⊢ ∀x y. x = y ⇔ usize_to_int x = usize_to_int y
+   
    [usize_mul_eq]  Theorem
       
       [oracles: DISK_THM]
@@ -2207,7 +2299,8 @@ sig
       
       [oracles: DISK_THM]
       [axioms: vec_to_list_num_bounds, usize_bounds,
-       usize_to_int_int_to_usize, usize_to_int_bounds, mk_vec_axiom] []
+       int_to_usize_usize_to_int, usize_to_int_bounds,
+       usize_to_int_int_to_usize, mk_vec_axiom] []
       ⊢ ∀v i x.
           usize_to_int i < usize_to_int (vec_len v) ⇒
           ∃nv.
@@ -2219,7 +2312,9 @@ sig
    
    [vec_len_spec]  Theorem
       
-      [oracles: DISK_THM] [axioms: usize_bounds, vec_to_list_num_bounds] []
+      [oracles: DISK_THM]
+      [axioms: int_to_usize_usize_to_int, usize_bounds,
+       vec_to_list_num_bounds] []
       ⊢ ∀v. vec_len v = int_to_usize (len (vec_to_list v)) ∧
             0 ≤ len (vec_to_list v) ∧ len (vec_to_list v) ≤ usize_max
    

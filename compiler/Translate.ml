@@ -851,7 +851,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
   (* Close the module *)
   (match !Config.backend with
   | FStar | Lean -> ()
-  | HOL4 -> Printf.fprintf out "val _ = export_theory \"%s\"\n" module_name
+  | HOL4 -> Printf.fprintf out "val _ = export_theory ()\n"
   | Coq -> Printf.fprintf out "End %s .\n" module_name);
 
   (* Some logging *)
