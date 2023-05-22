@@ -791,7 +791,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
             else Z.pp_print fmt sv.value;
             F.pp_print_string fmt " (by intlit))")
     | Bool b ->
-        let b = if b then "true" else "false" in
+        let b =
+          match !backend with
+          | HOL4 -> if b then "T" else "F"
+          | Coq | FStar | Lean -> if b then "true" else "false"
+        in
         F.pp_print_string fmt b
     | Char c -> (
         match !backend with
@@ -2262,14 +2266,15 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
        *   let* x = y in // monadic
        *   ...
        * ]}
+       * TODO: cleanup
        * *)
-      if monadic && !backend = Coq then (
+      if monadic && (!backend = Coq || !backend = HOL4) then (
         let ctx = extract_typed_pattern ctx fmt true lv in
         F.pp_print_space fmt ();
         let arrow =
           match !backend with
-          | Coq -> "<-"
-          | FStar | Lean | HOL4 -> raise (Failure "impossible")
+          | Coq | HOL4 -> "<-"
+          | FStar | Lean -> raise (Failure "impossible")
         in
         F.pp_print_string fmt arrow;
         F.pp_print_space fmt ();
@@ -2304,15 +2309,14 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
         F.pp_print_string fmt eq;
         F.pp_print_space fmt ();
         extract_texpression ctx fmt false re;
-        (* End the monadic let-binding *)
+        (* End the let-binding *)
         (match !backend with
         | Lean ->
-            (* In Lean, monadic let-bindings don't require to end with anything *)
+            (* In Lean, (monadic) let-bindings don't require to end with anything *)
             ()
-        | Coq | FStar ->
+        | Coq | FStar | HOL4 ->
             F.pp_print_space fmt ();
-            F.pp_print_string fmt "in"
-        | HOL4 -> F.pp_print_string fmt ";");
+            F.pp_print_string fmt "in");
         ctx)
     in
     (* Close the box for the let-binding *)

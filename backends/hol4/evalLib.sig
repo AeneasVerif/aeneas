@@ -8,10 +8,7 @@ sig
 
   include Abbrev
 
-  (* The following functions allow to register custom unfolding theorems *)
-  (* TODO: permanence of theorems? *)
-  val add_unfold : term * thm -> unit
-  val add_unfolds : (term * thm) list -> unit
+  (* The following functions allow to *persistently* register custom unfolding theorems *)
   val add_unfold_thm : thm -> unit
   val add_unfold_thms : thm list -> unit
 

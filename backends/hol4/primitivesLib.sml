@@ -511,4 +511,19 @@ val progress : tactic =
     map_first_tac progress_with thl (asms, g)
   end
 
+(* Small utility: check that a term evaluates to “Return” (used by the unit tests) *)
+fun assert_return (tm0 : term) : unit =
+  let
+    (* Evaluate the term *)
+    val tm = evalLib.eval tm0
+    (* Deconstruct it *)
+    val (app, _) = strip_comb tm
+    val {Thy, Name, ...} = dest_thy_const app
+    handle HOL_ERR _ => raise (mk_HOL_ERR "primitivesLib" "assert_return" ("The term doesn't evaluate to “Return ...”: " ^ term_to_string tm ^ "\n, final result: " ^ term_to_string tm))
+  in
+    if Thy = "primitives" andalso Name = "Return" then ()
+    else
+      raise (mk_HOL_ERR "primitivesLib" "assert_return" ("The term doesn't evaluate to “Return ...”: " ^ term_to_string tm ^ "\n, final result: " ^ term_to_string tm))
+  end
+
 end

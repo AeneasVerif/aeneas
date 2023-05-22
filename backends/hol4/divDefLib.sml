@@ -904,6 +904,8 @@ fun DefineDiv (def_qt : term quotation) =
        (we still do it: it doesn't cost much). *)
     val _ = app delete_binding thm_names
     val _ = map store_definition (zip thm_names def_eqs)
+    (* Also save the custom unfoldings, for evaluation (unit tests) *)
+    val _ = evalLib.add_unfold_thms thm_names
   in
     def_eqs
   end
