@@ -2241,7 +2241,33 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 
 and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (e : texpression) : unit =
-  let lets, next_e = destruct_lets e in
+  (* Destruct the lets.
+
+     Note that in the case of HOL4, we stop destructing the lets if at some point
+     the "kind" (monadic or non-monadic) of the lets changes.
+
+     We do this because in HOL4 the parsing is not very powerful:
+     if we mix monadic let-bindings and non monadic let-bindings, we have to
+     wrap the let-bindings inside a [do ... od] whenever we need to extract
+     a monadic let-binding non immediately inside a monadic let-binding.
+
+     Ex.:
+     {[
+       do
+         x <- ...;
+         let y = f x in
+         do
+           z <- g y;
+           ...
+         od
+       od
+     ]}
+  *)
+  let lets, next_e =
+    match !backend with
+    | HOL4 -> destruct_lets_no_interleave e
+    | FStar | Coq | Lean -> destruct_lets e
+  in
   (* Open a box for the whole expression.
 
      In the case of Lean, we use a vbox so that line breaks are inserted
@@ -2325,10 +2351,21 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
     (* Return *)
     ctx
   in
-  let exists_monadic = List.exists (fun (m, _, _) -> m) lets in
   (* If Lean and HOL4, we rely on monadic blocks, so we insert a do and open a new box
      immediately *)
-  if (!backend = Lean || !backend = HOL4) && exists_monadic then (
+  let wrap_in_do_od =
+    match !backend with
+    | Lean ->
+        (* For Lean, we wrap in a block iff at least one of the let-bindings is monadic *)
+        List.exists (fun (m, _, _) -> m) lets
+    | HOL4 ->
+        (* HOL4 is similar to HOL4, but we add a sanity check *)
+        let wrap_in_do = List.exists (fun (m, _, _) -> m) lets in
+        if wrap_in_do then assert (List.for_all (fun (m, _, _) -> m) lets);
+        wrap_in_do
+    | FStar | Coq -> false
+  in
+  if wrap_in_do_od then (
     F.pp_open_vbox fmt (if !backend = Lean then ctx.indent_incr else 0);
     F.pp_print_string fmt "do";
     F.pp_print_space fmt ());
@@ -2345,7 +2382,7 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
   F.pp_close_box fmt ();
 
   (* do-box (Lean and HOL4 only) *)
-  if (!backend = Lean || !backend = HOL4) && exists_monadic then (
+  if wrap_in_do_od then (
     if !backend = HOL4 then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt "od");
@@ -2512,17 +2549,45 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
   else (
     F.pp_open_hvbox fmt 0;
     F.pp_open_hvbox fmt ctx.indent_incr;
-    let lb, rb =
+    (* Inner/outer brackets: there are several syntaxes for the field updates.
+
+       For instance, in F*:
+       {[
+         { x with f = ..., ... }
+       ]}
+
+       In HOL4:
+       {[
+         x with <| f = ..., ... |>
+       ]}
+
+       In the above examples:
+       - in F*, the { } brackets are "outer" brackets
+       - in HOL4, the <| |> brackets are "inner" brackets
+    *)
+    (* Outer brackets *)
+    let olb, orb =
       match !backend with
       | Lean | FStar -> (Some "{", Some "}")
       | Coq -> (Some "{|", Some "|}")
       | HOL4 -> (None, None)
     in
-    (match lb with
-    | Some lb ->
-        F.pp_print_string fmt lb;
-        F.pp_print_space fmt ()
-    | None -> ());
+    (* Inner brackets *)
+    let ilb, irb =
+      match !backend with
+      | Lean | FStar | Coq -> (None, None)
+      | HOL4 -> (Some "<|", Some "|>")
+    in
+    (* Helper *)
+    let print_bracket (is_left : bool) b =
+      match b with
+      | Some b ->
+          if not is_left then F.pp_print_space fmt ();
+          F.pp_print_string fmt b;
+          if is_left then F.pp_print_space fmt ()
+      | None -> ()
+    in
+    print_bracket true olb;
     let need_paren = inside && !backend = HOL4 in
     if need_paren then F.pp_print_string fmt "(";
     F.pp_open_hvbox fmt ctx.indent_incr;
@@ -2532,6 +2597,7 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt "with";
       F.pp_print_space fmt ());
+    print_bracket true ilb;
     F.pp_open_hvbox fmt 0;
     let delimiter =
       match !backend with Lean -> "," | Coq | FStar | HOL4 -> ";"
@@ -2555,14 +2621,11 @@ and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_close_box fmt ())
       supd.updates;
     F.pp_close_box fmt ();
+    print_bracket false irb;
     F.pp_close_box fmt ();
     F.pp_close_box fmt ();
     if need_paren then F.pp_print_string fmt ")";
-    (match rb with
-    | Some rb ->
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt rb
-    | None -> ());
+    print_bracket false orb;
     F.pp_close_box fmt ())
 
 (** Insert a space, if necessary *)

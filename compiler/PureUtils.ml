@@ -220,6 +220,30 @@ let rec destruct_lets (e : texpression) :
       ((monadic, lv, re) :: lets, last_e)
   | _ -> ([], e)
 
+(** Destruct an expression into a list of nested lets, where there
+    is no interleaving between monadic and non-monadic lets.
+ *)
+let destruct_lets_no_interleave (e : texpression) :
+    (bool * typed_pattern * texpression) list * texpression =
+  (* Find the "kind" of the first let (monadic or non-monadic) *)
+  let m =
+    match e.e with
+    | Let (monadic, _, _, _) -> monadic
+    | _ -> raise (Failure "Unreachable")
+  in
+  (* Destruct the rest *)
+  let rec destruct_lets (e : texpression) :
+      (bool * typed_pattern * texpression) list * texpression =
+    match e.e with
+    | Let (monadic, lv, re, next_e) ->
+        if monadic = m then
+          let lets, last_e = destruct_lets next_e in
+          ((monadic, lv, re) :: lets, last_e)
+        else ([], e)
+    | _ -> ([], e)
+  in
+  destruct_lets e
+
 (** Destruct an [App] expression into an expression and a list of arguments.
 
     We simply destruct the expression as long as it is of the form [App (f, x)].
