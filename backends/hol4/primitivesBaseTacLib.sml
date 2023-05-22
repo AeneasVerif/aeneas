@@ -648,9 +648,27 @@ fun strip_all_cases_get_scrutinee (t : term) : term =
        For instance: (fst o strip_case) “if i = 0 then ... else ...”
        returns “i” while we want to get “i = 0”.
 
-       We use [dest_case] for this reason.
+       Also, [dest_case] sometimes fails.
+       
+       Ex.:
+       {[
+         val t = “result_CASE (if T then Return 0 else Fail Failure) (λy. Return ()) Fail Diverge”
+         dest_case t
+       ]}
+       TODO: file an issue
+
+       We use a custom function [get_case_scrutinee] instead of [dest_case] for this reason.
      *)
-    (strip_all_cases_get_scrutinee o (fn (_, x, _) => x) o TypeBase.dest_case) t
+    let
+      fun get_case_scrutinee t =
+        let
+          val (_, tms) = strip_comb t
+        in
+          hd tms
+        end
+    in
+    (strip_all_cases_get_scrutinee o get_case_scrutinee) t
+    end
   else t
 
 (*

@@ -13,6 +13,7 @@ sig
     val list_t_size_def : thm
     val node_TY_DEF : thm
     val node_case_def : thm
+    val nth0_def : thm
     val nth_def : thm
     val odd_def : thm
     val tree_TY_DEF : thm
@@ -179,6 +180,14 @@ sig
    [node_case_def]  Definition
       
       ⊢ ∀a f. node_CASE (Node a) f = f a
+   
+   [nth0_def]  Definition
+      
+      ⊢ ∀ls i.
+          nth0 ls i =
+          case ls of
+            ListCons x tl => if i = 0 then Return x else nth0 tl (i − 1)
+          | ListNil => Fail Failure
    
    [nth_def]  Definition
       

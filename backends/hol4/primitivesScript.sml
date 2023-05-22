@@ -368,7 +368,21 @@ val all_int_to_scalar_to_int_unfold_lemmas = [
   u64_to_int_int_to_u64_unfold,
   u128_to_int_int_to_u128_unfold
 ]
-val _ = evalLib.add_unfold_thms (all_int_to_scalar_to_int_unfold_lemmas)
+
+val _ = evalLib.add_unfold_thms [
+  "isize_to_int_int_to_isize_unfold",
+  "i8_to_int_int_to_i8_unfold",
+  "i16_to_int_int_to_i16_unfold",
+  "i32_to_int_int_to_i32_unfold",
+  "i64_to_int_int_to_i64_unfold",
+  "i128_to_int_int_to_i128_unfold",
+  "usize_to_int_int_to_usize_unfold",
+  "u8_to_int_int_to_u8_unfold",
+  "u16_to_int_int_to_u16_unfold",
+  "u32_to_int_int_to_u32_unfold",
+  "u64_to_int_int_to_u64_unfold",
+  "u128_to_int_int_to_u128_unfold"
+]
 
 val int_to_i8_i8_to_int       = new_axiom ("int_to_i8_i8_to_int",       “∀i. int_to_i8 (i8_to_int i) = i”)
 val int_to_i16_i16_to_int     = new_axiom ("int_to_i16_i16_to_int",     “∀i. int_to_i16 (i16_to_int i) = i”)
@@ -1614,7 +1628,7 @@ Theorem mk_vec_unfold:
 Proof
   metis_tac [mk_vec_axiom]
 QED
-val _ = evalLib.add_unfold_thm mk_vec_unfold
+val _ = evalLib.add_unfold_thm "mk_vec_unfold"
 
 (* Defining ‘vec_insert_back’ *)
 val vec_insert_back_def = Define ‘
@@ -1644,34 +1658,5 @@ Proof
   >- (irule index_update_diff >> cooper_tac) >>
   sg_dep_rewrite_all_tac index_update_same >- cooper_tac >> fs []
 QED
-
-(* TODO: add theorems to the rewriting theorems
-from listSimps.sml:
-
-val LIST_ss = BasicProvers.thy_ssfrag "list"
-val _ = BasicProvers.logged_addfrags {thyname="list"} [LIST_EQ_ss]
-
-val list_rws = computeLib.add_thms
-  [
-   ALL_DISTINCT, APPEND, APPEND_NIL, CONS_11, DROP_compute, EL_restricted,
-   EL_simp_restricted, EVERY_DEF, EXISTS_DEF, FILTER, FIND_def, FLAT, FOLDL,
-   FOLDR, FRONT_DEF, GENLIST_AUX_compute, GENLIST_NUMERALS, HD, INDEX_FIND_def,
-   INDEX_OF_def, LAST_compute, LENGTH, LEN_DEF, LIST_APPLY_def, LIST_BIND_def,
-   LIST_IGNORE_BIND_def, LIST_LIFT2_def, LIST_TO_SET_THM, LLEX_def, LRC_def,
-   LUPDATE_compute, MAP, MAP2, NOT_CONS_NIL, NOT_NIL_CONS, NULL_DEF, oEL_def,
-   oHD_def,
-   PAD_LEFT, PAD_RIGHT, REVERSE_REV, REV_DEF, SHORTLEX_def, SNOC, SUM_ACC_DEF,
-   SUM_SUM_ACC,
-   TAKE_compute, TL, UNZIP, ZIP, computeLib.lazyfy_thm list_case_compute,
-   dropWhile_def, isPREFIX, list_size_def, nub_def, splitAtPki_def
-  ]
-
-fun list_compset () =
-   let
-      val base = reduceLib.num_compset()
-   in
-      list_rws base; base
-   end
-*)
 
 val _ = export_theory ()

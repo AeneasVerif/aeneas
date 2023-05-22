@@ -13,6 +13,21 @@ Datatype:
   | ListNil
 End
 
+(* A version of [nth] which doesn't use machine integers *)
+val [nth0_def] = DefineDiv ‘
+  nth0 (ls : 't list_t) (i : int) : 't result =
+    case ls of
+    | ListCons x tl =>
+      if i = (0:int)
+      then (Return x)
+      else
+        do
+        nth0 tl (i - 1)
+        od
+    | ListNil => Fail Failure
+’
+val _ = primitivesLib.assert_return “nth0 (ListCons 0 ListNil) 0”
+
 val [nth_def] = DefineDiv ‘
   nth (ls : 't list_t) (i : u32) : 't result =
     case ls of
@@ -26,6 +41,7 @@ val [nth_def] = DefineDiv ‘
         od
     | ListNil => Fail Failure
 ’
+val _ = primitivesLib.assert_return “nth (ListCons 0 ListNil) (int_to_u32 0)”
 
 (* even, odd *)
 
