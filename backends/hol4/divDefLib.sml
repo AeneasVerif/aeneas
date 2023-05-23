@@ -606,25 +606,9 @@ fun prove_body_is_valid_tac_step (asms, g) =
          ∃h y. is_valid_fp_body n h ∧ ∀g. ... g x = ... od
        ]}   
      *)
-    (* Retrieve the scrutinee in the goal (‘x’).
-       There are two cases:
-       - either the function has the shape:
-         {[
-           (λ(y,z). ...) x
-         ]}
-         in which case we need to destruct ‘x’
-       - or we have a normal ‘case ... of’
-     *)
+    (* Retrieve the scrutinee in the goal (‘x’) *)
     val body = (lhs o snd o strip_forall o fst o dest_disj) g
-    val scrut =
-      let
-        val (app, x) = dest_comb body
-        val (app, _) = dest_comb app
-        val {Name=name, Thy=thy, Ty = _ } = dest_thy_const app
-      in
-        if thy = "pair" andalso name = "UNCURRY" then x else failwith "not a curried argument"
-      end
-      handle HOL_ERR _ => strip_all_cases_get_scrutinee body
+    val scrut = strip_all_cases_get_scrutinee_or_curried body
     (* Retrieve the first quantified continuations from the goal (‘g’) *)
     val qc = (hd o fst o strip_forall o fst o dest_disj) g
     (* Check if the scrutinee is a recursive call *)
@@ -723,6 +707,7 @@ fun prove_body_is_valid (body : term) : thm =
 
     (* Generate the lemma statement *)
     val is_valid_tm = list_mk_icomb (is_valid_fp_body_tm, [n_tm, body])
+
     val is_valid_thm = prove (is_valid_tm, prove_body_is_valid_tac NONE)
     (* Replace ‘nvar’ with ‘0’ *)
     val is_valid_thm = INST [nvar |-> zero_num_tm] is_valid_thm
@@ -902,7 +887,7 @@ fun DefineDiv (def_qt : term quotation) =
     (* Because [store_definition] overrides existing names, it seems that in
        practice we don't really need to  delete the previous definitions
        (we still do it: it doesn't cost much). *)
-    val _ = app delete_binding thm_names
+    val _ = List.app delete_binding thm_names
     val _ = map store_definition (zip thm_names def_eqs)
     (* Also save the custom unfoldings, for evaluation (unit tests) *)
     val _ = evalLib.add_unfold_thms thm_names
