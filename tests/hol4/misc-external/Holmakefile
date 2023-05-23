@@ -1,0 +1,5 @@
+# This file was automatically generated - modify ../Holmakefile.template instead
+INCLUDES =  ../../../backends/hol4
+
+all: $(DEFAULT_TARGETS)
+.PHONY: all
