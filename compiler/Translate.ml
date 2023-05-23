@@ -567,36 +567,51 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
          (odd (i : num) : bool result = if i = 0 then Return F else even (i - 1))
        `
      ]}
+
+     TODO: in practice splitting the code this way doesn't work so well: merge
+     the start/end decl group functions with the extract_fun_decl function?
   *)
-  Extract.start_fun_decl_group ctx.extract_ctx fmt is_rec decls;
-  List.iteri
-    (fun i def ->
-      let is_opaque = Option.is_none def.Pure.body in
-      let kind =
-        if is_opaque then
-          if config.interface then ExtractBase.Declared else ExtractBase.Assumed
-        else if not is_rec then ExtractBase.SingleNonRec
-        else if is_mut_rec then
-          (* If the functions are mutually recursive, we need to distinguish:
-           * - the first of the group
-           * - the last of the group
-           * - the inner functions
-           *)
-          if i = 0 then ExtractBase.MutRecFirst
-          else if i = decls_length - 1 then ExtractBase.MutRecLast
-          else ExtractBase.MutRecInner
-        else ExtractBase.SingleRec
-      in
-      let has_decr_clause =
-        has_decreases_clause def && config.extract_decreases_clauses
-      in
-      (* Check if the definition needs to be filtered or not *)
-      if
-        ((not is_opaque) && config.extract_transparent)
-        || (is_opaque && config.extract_opaque)
-      then Extract.extract_fun_decl ctx.extract_ctx fmt kind has_decr_clause def)
-    decls;
-  Extract.end_fun_decl_group fmt is_rec decls
+  (* Filter the definitions - we generate a list of continuations *)
+  let extract_defs =
+    List.mapi
+      (fun i def ->
+        let is_opaque = Option.is_none def.Pure.body in
+        let kind =
+          if is_opaque then
+            if config.interface then ExtractBase.Declared
+            else ExtractBase.Assumed
+          else if not is_rec then ExtractBase.SingleNonRec
+          else if is_mut_rec then
+            (* If the functions are mutually recursive, we need to distinguish:
+             * - the first of the group
+             * - the last of the group
+             * - the inner functions
+             *)
+            if i = 0 then ExtractBase.MutRecFirst
+            else if i = decls_length - 1 then ExtractBase.MutRecLast
+            else ExtractBase.MutRecInner
+          else ExtractBase.SingleRec
+        in
+        let has_decr_clause =
+          has_decreases_clause def && config.extract_decreases_clauses
+        in
+        (* Check if the definition needs to be filtered or not *)
+        if
+          ((not is_opaque) && config.extract_transparent)
+          || (is_opaque && config.extract_opaque)
+        then
+          Some
+            (fun () ->
+              Extract.extract_fun_decl ctx.extract_ctx fmt kind has_decr_clause
+                def)
+        else None)
+      decls
+  in
+  let extract_defs = List.filter_map (fun x -> x) extract_defs in
+  if extract_defs <> [] then (
+    Extract.start_fun_decl_group ctx.extract_ctx fmt is_rec decls;
+    List.iter (fun f -> f ()) extract_defs;
+    Extract.end_fun_decl_group fmt is_rec decls)
 
 (** Export a group of function declarations.
 
@@ -828,6 +843,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
       Printf.fprintf out "open primitivesLib divDefLib\n";
       (* Add the custom imports and includes *)
       let imports = custom_imports @ custom_includes in
+      (* The imports are a list of module names: we need to add a "Theory" suffix *)
+      let imports = List.map (fun s -> s ^ "Theory") imports in
       if imports <> [] then
         let imports = String.concat " " imports in
         Printf.fprintf out "open %s\n\n" imports

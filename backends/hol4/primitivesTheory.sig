@@ -201,9 +201,16 @@ sig
     val usize_mul_def : thm
     val usize_rem_def : thm
     val usize_sub_def : thm
+    val vec_index_back_def : thm
     val vec_index_def : thm
+    val vec_index_fwd_def : thm
+    val vec_index_mut_back_def : thm
+    val vec_index_mut_fwd_def : thm
     val vec_insert_back_def : thm
     val vec_len_def : thm
+    val vec_new_def : thm
+    val vec_push_back_def : thm
+    val vec_update_def : thm
   
   (*  Theorems  *)
     val datatype_error : thm
@@ -327,9 +334,18 @@ sig
     val usize_rem_eq : thm
     val usize_sub_eq : thm
     val usize_to_int_int_to_usize_unfold : thm
+    val vec_index_back_spec : thm
+    val vec_index_fwd_spec : thm
+    val vec_index_mut_back_spec : thm
+    val vec_index_mut_fwd_spec : thm
     val vec_insert_back_spec : thm
     val vec_len_spec : thm
+    val vec_len_vec_new : thm
+    val vec_push_back_spec : thm
+    val vec_push_back_unfold : thm
     val vec_to_list_int_bounds : thm
+    val vec_to_list_vec_new : thm
+    val vec_update_eq : thm
   
   val primitives_grammars : type_grammar.grammar * term_grammar.grammar
 (*
@@ -1285,12 +1301,39 @@ sig
       
       ⊢ ∀x y. usize_sub x y = mk_usize (usize_to_int x − usize_to_int y)
    
+   [vec_index_back_def]  Definition
+      
+      ⊢ ∀v i.
+          vec_index_back v i =
+          if usize_to_int i < usize_to_int (vec_len v) then Return ()
+          else Fail Failure
+   
    [vec_index_def]  Definition
       
-      ⊢ ∀i v.
-          vec_index i v =
+      ⊢ ∀v i. vec_index v i = index (usize_to_int i) (vec_to_list v)
+   
+   [vec_index_fwd_def]  Definition
+      
+      ⊢ ∀v i.
+          vec_index_fwd v i =
           if usize_to_int i ≤ usize_to_int (vec_len v) then
-            Return (index (usize_to_int i) (vec_to_list v))
+            Return (vec_index v i)
+          else Fail Failure
+   
+   [vec_index_mut_back_def]  Definition
+      
+      ⊢ ∀v i x.
+          vec_index_mut_back v i x =
+          if usize_to_int i ≤ usize_to_int (vec_len v) then
+            Return (vec_update v i x)
+          else Fail Failure
+   
+   [vec_index_mut_fwd_def]  Definition
+      
+      ⊢ ∀v i.
+          vec_index_mut_fwd v i =
+          if usize_to_int i ≤ usize_to_int (vec_len v) then
+            Return (vec_index v i)
           else Fail Failure
    
    [vec_insert_back_def]  Definition
@@ -1298,12 +1341,30 @@ sig
       ⊢ ∀v i x.
           vec_insert_back v i x =
           if usize_to_int i < usize_to_int (vec_len v) then
-            Return (mk_vec (update (vec_to_list v) (usize_to_int i) x))
+            Return (vec_update v i x)
           else Fail Failure
    
    [vec_len_def]  Definition
       
       ⊢ ∀v. vec_len v = int_to_usize (len (vec_to_list v))
+   
+   [vec_new_def]  Definition
+      
+      ⊢ vec_new = mk_vec []
+   
+   [vec_push_back_def]  Definition
+      
+      ⊢ ∀v x.
+          vec_push_back v x =
+          if usize_to_int (vec_len v) < usize_max then
+            Return (mk_vec (vec_to_list v ⧺ [x]))
+          else Fail Failure
+   
+   [vec_update_def]  Definition
+      
+      ⊢ ∀v i x.
+          vec_update v i x =
+          mk_vec (update (vec_to_list v) (usize_to_int i) x)
    
    [datatype_error]  Theorem
       
@@ -1851,9 +1912,9 @@ sig
    
    [mk_vec_unfold]  Theorem
       
-      [oracles: DISK_THM] [axioms: mk_vec_axiom] []
+      [oracles: DISK_THM] [axioms: mk_vec_axiom, usize_bounds] []
       ⊢ ∀l. vec_to_list (mk_vec l) =
-            if len l ≤ usize_max then l else vec_to_list (mk_vec l)
+            if len l ≤ u16_max then l else vec_to_list (mk_vec l)
    
    [num2error_11]  Theorem
       
@@ -2295,20 +2356,35 @@ sig
             if 0 ≤ n ∧ n ≤ u16_max then n
             else usize_to_int (int_to_usize n)
    
-   [vec_insert_back_spec]  Theorem
+   [vec_index_back_spec]  Theorem
       
-      [oracles: DISK_THM]
-      [axioms: vec_to_list_num_bounds, usize_bounds,
-       int_to_usize_usize_to_int, usize_to_int_bounds,
-       usize_to_int_int_to_usize, mk_vec_axiom] []
+      ⊢ ∀v i.
+          usize_to_int i < usize_to_int (vec_len v) ⇒
+          vec_index_back v i = Return ()
+   
+   [vec_index_fwd_spec]  Theorem
+      
+      ⊢ ∀v i.
+          usize_to_int i < usize_to_int (vec_len v) ⇒
+          vec_index_fwd v i = Return (vec_index v i)
+   
+   [vec_index_mut_back_spec]  Theorem
+      
       ⊢ ∀v i x.
           usize_to_int i < usize_to_int (vec_len v) ⇒
-          ∃nv.
-            vec_insert_back v i x = Return nv ∧ vec_len v = vec_len nv ∧
-            vec_index i nv = Return x ∧
-            ∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒
-                usize_to_int j ≠ usize_to_int i ⇒
-                vec_index j nv = vec_index j v
+          vec_index_mut_back v i x = Return (vec_update v i x)
+   
+   [vec_index_mut_fwd_spec]  Theorem
+      
+      ⊢ ∀v i.
+          usize_to_int i < usize_to_int (vec_len v) ⇒
+          vec_index_mut_fwd v i = Return (vec_index v i)
+   
+   [vec_insert_back_spec]  Theorem
+      
+      ⊢ ∀v i x.
+          usize_to_int i < usize_to_int (vec_len v) ⇒
+          vec_insert_back v i x = Return (vec_update v i x)
    
    [vec_len_spec]  Theorem
       
@@ -2318,10 +2394,61 @@ sig
       ⊢ ∀v. vec_len v = int_to_usize (len (vec_to_list v)) ∧
             0 ≤ len (vec_to_list v) ∧ len (vec_to_list v) ≤ usize_max
    
+   [vec_len_vec_new]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: mk_vec_axiom, int_to_usize_usize_to_int,
+       usize_to_int_int_to_usize, usize_bounds] []
+      ⊢ vec_len vec_new = int_to_usize 0
+   
+   [vec_push_back_spec]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: usize_to_int_int_to_usize, mk_vec_axiom,
+       int_to_usize_usize_to_int, usize_bounds, vec_to_list_num_bounds] []
+      ⊢ ∀v x.
+          usize_to_int (vec_len v) < usize_max ⇒
+          ∃nv.
+            vec_push_back v x = Return nv ∧
+            vec_to_list nv = vec_to_list v ⧺ [x]
+   
+   [vec_push_back_unfold]  Theorem
+      
+      [oracles: DISK_THM] [axioms: usize_bounds] []
+      ⊢ ∀v x.
+          vec_push_back v x =
+          if
+            usize_to_int (vec_len v) < u16_max ∨
+            usize_to_int (vec_len v) < usize_max
+          then
+            Return (mk_vec (vec_to_list v ⧺ [x]))
+          else Fail Failure
+   
    [vec_to_list_int_bounds]  Theorem
       
       [oracles: DISK_THM] [axioms: usize_bounds, vec_to_list_num_bounds] []
       ⊢ ∀v. 0 ≤ len (vec_to_list v) ∧ len (vec_to_list v) ≤ usize_max
+   
+   [vec_to_list_vec_new]  Theorem
+      
+      [oracles: DISK_THM] [axioms: mk_vec_axiom, usize_bounds] []
+      ⊢ vec_to_list vec_new = []
+   
+   [vec_update_eq]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: vec_to_list_num_bounds, usize_bounds,
+       int_to_usize_usize_to_int, usize_to_int_bounds,
+       usize_to_int_int_to_usize, mk_vec_axiom] []
+      ⊢ ∀v i x.
+          usize_to_int i < usize_to_int (vec_len v) ⇒
+          (let
+             nv = vec_update v i x
+           in
+             vec_len v = vec_len nv ∧ vec_index nv i = x ∧
+             ∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒
+                 usize_to_int j ≠ usize_to_int i ⇒
+                 vec_index nv j = vec_index v j)
    
    
 *)

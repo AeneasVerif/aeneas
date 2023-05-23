@@ -249,7 +249,7 @@ let assumed_adts () : (assumed_ty * string) list =
           (Result, "result");
           (Error, "error");
           (Fuel, "num");
-          (Option, "OPTION");
+          (Option, "option");
           (Vec, "vec");
         ])
 
@@ -1532,7 +1532,7 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt
-    ("val _ = new_type (\"" ^ def_name ^ ", " ^ string_of_int num_params ^ ")");
+    ("val _ = new_type (\"" ^ def_name ^ "\", " ^ string_of_int num_params ^ ")");
   F.pp_print_space fmt ()
 
 (** Extract an empty record type declaration to HOL4.
@@ -1874,7 +1874,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "Type0"
       | HOL4 ->
-          F.pp_print_string fmt ("val _ = new_type (" ^ state_name ^ ", 0)")
+          F.pp_print_string fmt ("val _ = new_type (\"" ^ state_name ^ "\", 0)")
       | Coq | Lean -> print_axiom ())
   | Declared -> (
       match !backend with
@@ -1887,7 +1887,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "Type0"
       | HOL4 ->
-          F.pp_print_string fmt ("val _ = new_type (" ^ state_name ^ ", 0)")
+          F.pp_print_string fmt ("val _ = new_type (\"" ^ state_name ^ "\", 0)")
       | Coq | Lean -> print_axiom ()));
   (* Close the box for the definition *)
   F.pp_close_box fmt ();
@@ -3158,26 +3158,34 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Retrieve the definition name *)
   let with_opaque_pre = false in
   let def_name =
-    ctx_get_local_function with_opaque_pre def.def_id None None ctx
+    ctx_get_local_function with_opaque_pre def.def_id def.loop_id def.back_id
+      ctx
   in
   (* Add the type parameters - note that we need those bindings only for the
    * generation of the type (they are not top-level) *)
   let ctx, _ = ctx_add_type_params def.signature.type_params ctx in
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0;
   (* Open a box for the whole definition *)
-  F.pp_open_hovbox fmt ctx.indent_incr;
+  F.pp_open_hvbox fmt ctx.indent_incr;
   (* Generate: `val _ = new_constant ("...",` *)
-  F.pp_print_string fmt ("val _ = new_constant (\"" ^ def_name ^ ", ");
+  F.pp_print_string fmt ("val _ = new_constant (\"" ^ def_name ^ "\",");
+  F.pp_print_space fmt ();
   (* Open a box for the type *)
-  F.pp_open_hvbox fmt 0;
+  F.pp_open_hovbox fmt 0;
+  F.pp_print_string fmt "“:";
   (* Generate the type *)
   extract_fun_input_parameters_types ctx fmt def;
   extract_ty ctx fmt TypeDeclId.Set.empty false def.signature.output;
   (* Close the box for the type *)
+  F.pp_print_string fmt "”";
   F.pp_close_box fmt ();
   (* Close the parenthesis opened for the inputs of `new_constant` *)
   F.pp_print_string fmt ")";
   (* Close the box for the definition *)
-  F.pp_close_box fmt ()
+  F.pp_close_box fmt ();
+  (* Add breaks to insert new lines between definitions *)
+  F.pp_print_break fmt 0 0
 
 (** Extract a function declaration.
 
@@ -3210,6 +3218,15 @@ let extract_global_decl_body_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (name : string) (ty : ty)
     (extract_body : (F.formatter -> unit) Option.t) : unit =
   let is_opaque = Option.is_none extract_body in
+
+  (* HOL4: Definition wrapper *)
+  if !backend = HOL4 then (
+    (* Open a vertical box: we *must* break lines *)
+    F.pp_open_vbox fmt 0;
+    F.pp_print_string fmt ("Definition " ^ name ^ "_def:");
+    F.pp_print_space fmt ();
+    F.pp_open_vbox fmt ctx.indent_incr;
+    F.pp_print_string fmt (String.make ctx.indent_incr ' '));
 
   (* Open the definition boxes (depth=0) *)
   F.pp_open_hvbox fmt 0;
@@ -3267,7 +3284,14 @@ let extract_global_decl_body_gen (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_string fmt ".");
 
   (* Close the outer definition box (depth=0) *)
-  F.pp_close_box fmt ()
+  F.pp_close_box fmt ();
+
+  (* HOL4: Definition wrapper *)
+  if !backend = HOL4 then (
+    F.pp_close_box fmt ();
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "End";
+    F.pp_close_box fmt ())
 
 (** Extract an opaque global declaration for HOL4.
 

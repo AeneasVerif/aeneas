@@ -1661,6 +1661,9 @@ val vec_to_list_num_bounds =
   new_axiom ("vec_to_list_num_bounds",
     “!v. (0:num) <= LENGTH (vec_to_list v) /\ LENGTH (vec_to_list v) <= Num usize_max”)
 
+val mk_vec_axiom = new_axiom ("mk_vec_axiom",
+  “∀l. len l ≤ usize_max ⇒ vec_to_list (mk_vec l) = l”)
+
 Theorem update_len:
   ∀ls i y. len (update ls i y) = len ls
 Proof
@@ -1732,41 +1735,61 @@ Proof
   fs []
 QED
 
-val vec_index_def = Define ‘
-  vec_index i v =
-    if usize_to_int i ≤ usize_to_int (vec_len v)
-    then Return (index (usize_to_int i) (vec_to_list v))
-    else Fail Failure’
+Definition vec_new_def:
+  vec_new = mk_vec []
+End
 
-val mk_vec_axiom = new_axiom ("mk_vec_axiom",
-  “∀l. len l ≤ usize_max ⇒ vec_to_list (mk_vec l) = l”)
-
-(* A custom unfolding theorem for evaluation *)
-Theorem mk_vec_unfold:
-  ∀l. vec_to_list (mk_vec l) = if len l ≤ usize_max then l else vec_to_list (mk_vec l)
+Theorem vec_to_list_vec_new:
+  vec_to_list vec_new = []
 Proof
+  fs [vec_new_def] >>
+  sg_dep_rewrite_all_tac mk_vec_axiom >> fs [len_def] >>
+  assume_tac usize_bounds >> fs [u16_max_def] >> int_tac
+QED
+val _ = BasicProvers.export_rewrites ["vec_to_list_vec_new"]
+
+Theorem vec_len_vec_new:
+  vec_len vec_new = int_to_usize 0
+Proof
+  fs [vec_len_def, vec_new_def] >>
+  sg_dep_rewrite_all_tac usize_to_int_int_to_usize >> fs [len_def, u16_max_def] >>
+  assume_tac usize_bounds >> fs [u16_max_def] >> int_tac
+QED
+val _ = BasicProvers.export_rewrites ["vec_len_vec_new"]
+
+(* A custom unfolding theorem for evaluation - we compare to “u16_max” rather
+   than “usize_max” on purpose. *)
+Theorem mk_vec_unfold:
+  ∀l. vec_to_list (mk_vec l) = if len l ≤ u16_max then l else vec_to_list (mk_vec l)
+Proof
+  rw [] >> Cases_on ‘len l ≤ u16_max’ >> fs [] >>
+  assume_tac usize_bounds >>
+  sg ‘len l ≤ usize_max’ >- int_tac >>
   metis_tac [mk_vec_axiom]
 QED
 val _ = evalLib.add_unfold_thm "mk_vec_unfold"
 
-(* Defining ‘vec_insert_back’ *)
-val vec_insert_back_def = Define ‘
-  vec_insert_back (v : 'a vec) (i : usize) (x : 'a) =
-    if usize_to_int i < usize_to_int (vec_len v) then
-      Return (mk_vec (update (vec_to_list v) (usize_to_int i) x))
-    else Fail Failure’
+(* Helper *)
+Definition vec_index_def:
+  vec_index v i = index (usize_to_int i) (vec_to_list v)
+End
 
-Theorem vec_insert_back_spec:
-  ∀v i x.
-    usize_to_int i < usize_to_int (vec_len v) ⇒
-    ∃ nv. vec_insert_back v i x = Return nv ∧
-    vec_len v = vec_len nv ∧
-    vec_index i nv = Return x ∧
-    (∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒
-          usize_to_int j ≠ usize_to_int i ⇒
-          vec_index j nv = vec_index j v)
+(* Helper *)
+Definition vec_update_def:
+  vec_update v i x = mk_vec (update (vec_to_list v) (usize_to_int i) x)
+End
+
+Theorem vec_update_eq:
+ ∀ v i x.
+   usize_to_int i < usize_to_int (vec_len v) ⇒
+   let nv = vec_update v i x in
+   vec_len v = vec_len nv ∧
+      vec_index nv i = x ∧
+      (∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒
+            usize_to_int j ≠ usize_to_int i ⇒
+            vec_index nv j = vec_index v j)
 Proof
-  rpt strip_tac >> fs [vec_insert_back_def] >>
+  rpt strip_tac >> fs [vec_update_def] >>
   qspec_assume ‘update (vec_to_list v) (usize_to_int i) x’ mk_vec_axiom >>
   sg_dep_rewrite_all_tac update_len >> fs [] >>
   qspec_assume ‘v’ vec_len_spec >> gvs [] >>
@@ -1776,6 +1799,112 @@ Proof
   rw []
   >- (irule index_update_diff >> cooper_tac) >>
   sg_dep_rewrite_all_tac index_update_same >- cooper_tac >> fs []
+QED
+
+Definition vec_index_fwd_def:
+  vec_index_fwd v i =
+    if usize_to_int i ≤ usize_to_int (vec_len v)
+    then Return (vec_index v i)
+    else Fail Failure
+End
+
+Definition vec_index_back_def:
+  vec_index_back v i =
+    if usize_to_int i < usize_to_int (vec_len v) then Return () else Fail Failure
+End
+
+Definition vec_index_mut_fwd_def:
+  vec_index_mut_fwd v i =
+    if usize_to_int i ≤ usize_to_int (vec_len v)
+    then Return (vec_index v i)
+    else Fail Failure
+End
+
+Definition vec_index_mut_back_def:
+  vec_index_mut_back v i x =
+    if usize_to_int i ≤ usize_to_int (vec_len v)
+    then Return (vec_update v i x)
+    else Fail Failure
+End
+
+Theorem vec_index_fwd_spec:
+  ∀v i.
+    usize_to_int i < usize_to_int (vec_len v) ⇒
+    vec_index_fwd v i = Return (vec_index v i)
+Proof
+  rw [vec_index_fwd_def]
+QED
+
+Theorem vec_index_back_spec:
+  ∀v i.
+    usize_to_int i < usize_to_int (vec_len v) ⇒
+    vec_index_back v i = Return ()
+Proof
+  rw [vec_index_back_def]
+QED
+
+Theorem vec_index_mut_fwd_spec:
+  ∀v i.
+    usize_to_int i < usize_to_int (vec_len v) ⇒
+    vec_index_mut_fwd v i = Return (vec_index v i)
+Proof
+  rw [vec_index_mut_fwd_def]
+QED
+
+Theorem vec_index_mut_back_spec:
+  ∀v i x.
+    usize_to_int i < usize_to_int (vec_len v) ⇒
+    vec_index_mut_back v i x = Return (vec_update v i x)
+Proof
+  rw [vec_index_mut_back_def]
+QED
+
+Definition vec_insert_back_def:
+  vec_insert_back (v : 'a vec) (i : usize) (x : 'a) =
+    if usize_to_int i < usize_to_int (vec_len v) then
+      Return (vec_update v i x)
+    else Fail Failure
+End
+
+Theorem vec_insert_back_spec:
+  ∀v i x.
+    usize_to_int i < usize_to_int (vec_len v) ⇒
+    vec_insert_back v i x = Return (vec_update v i x)
+Proof
+  rw [vec_insert_back_def]
+QED
+
+Definition vec_push_back_def:
+  vec_push_back (v : 'a vec) (x : 'a) : ('a vec) result =
+    if usize_to_int (vec_len v) < usize_max then
+      Return (mk_vec ((vec_to_list v) ++ [x]))
+    else Fail Failure
+End
+
+Theorem vec_push_back_unfold:
+  ∀ v x. vec_push_back (v : 'a vec) (x : 'a) : ('a vec) result =
+    if usize_to_int (vec_len v) < u16_max ∨ usize_to_int (vec_len v) < usize_max then
+      Return (mk_vec ((vec_to_list v) ++ [x]))
+    else Fail Failure
+Proof
+  assume_tac usize_bounds >>
+  rw [vec_push_back_def] >> fs [] >>
+  int_tac
+QED
+val _ = evalLib.add_unfold_thm "vec_push_back_unfold"
+
+Theorem vec_push_back_spec:
+  ∀ v x.
+    usize_to_int (vec_len v) < usize_max ⇒
+    ∃ nv. vec_push_back v x = Return nv ∧
+    vec_to_list nv = vec_to_list v ++ [x]
+Proof
+  rw [vec_push_back_def, vec_len_def] >>
+  qspec_assume ‘v’ vec_len_spec >>
+  sg_dep_rewrite_all_tac usize_to_int_int_to_usize >- int_tac >> fs [] >>
+  sg_dep_rewrite_all_tac mk_vec_axiom
+  >- (fs [len_append, len_def, vec_len_def] >> int_tac) >>
+  fs []
 QED
 
 val _ = export_theory ()
