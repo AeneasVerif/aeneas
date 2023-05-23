@@ -640,36 +640,59 @@ fun int_tac (asms, g) =
     first_tac [cooper_tac, exfalso >- cooper_tac]) (asms, g)
  end
 
+(* Remark.: [strip_case] is too smart for what we want.
+   For instance: (fst o strip_case) “if i = 0 then ... else ...”
+   returns “i” while we want to get “i = 0”.
+
+   Also, [dest_case] sometimes fails.
+
+   Ex.:
+   {[
+     val t = “result_CASE (if T then Return 0 else Fail Failure) (λy. Return ()) Fail Diverge”
+     dest_case t
+   ]}
+   TODO: file an issue
+
+   We use a custom function [get_case_scrutinee] instead of [dest_case] for this reason.
+ *)
+fun get_case_scrutinee t =
+  let
+    val (_, tms) = strip_comb t
+  in
+    hd tms
+  end
+
 (* Repeatedly destruct cases and return the last scrutinee we get *)
 fun strip_all_cases_get_scrutinee (t : term) : term =
   if TypeBase.is_case t
   then
-    (* Remark.: [strip_case] is too smart for what we want.
-       For instance: (fst o strip_case) “if i = 0 then ... else ...”
-       returns “i” while we want to get “i = 0”.
-
-       Also, [dest_case] sometimes fails.
-       
-       Ex.:
-       {[
-         val t = “result_CASE (if T then Return 0 else Fail Failure) (λy. Return ()) Fail Diverge”
-         dest_case t
-       ]}
-       TODO: file an issue
-
-       We use a custom function [get_case_scrutinee] instead of [dest_case] for this reason.
-     *)
-    let
-      fun get_case_scrutinee t =
-        let
-          val (_, tms) = strip_comb t
-        in
-          hd tms
-        end
-    in
     (strip_all_cases_get_scrutinee o get_case_scrutinee) t
-    end
   else t
+
+(* Same as [strip_all_cases_get_scrutinee *but* if at some point we reach term
+   of the shape:
+   {[
+     (λ(y,z). ...) x
+   ]}
+   then we return the ‘x’
+ *)
+fun strip_all_cases_get_scrutinee_or_curried (t : term) : term =
+    let
+      (* Check if we have a term of the shape “(λ(y,z). ...) x” *)
+      val scrut =
+        let
+          val (app, x) = dest_comb t
+          val (app, _) = dest_comb app
+          val {Name=name, Thy=thy, Ty = _ } = dest_thy_const app
+        in
+          if thy = "pair" andalso name = "UNCURRY" then x else failwith "not a curried argument"
+        end
+        handle HOL_ERR _ =>
+          if TypeBase.is_case t
+          then
+            (strip_all_cases_get_scrutinee_or_curried o get_case_scrutinee) t
+          else t
+    in scrut end
 
 (*
 TypeBase.dest_case “case ls of [] => T | _ => F”
