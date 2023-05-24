@@ -248,8 +248,9 @@ def hashmap_hash_map_move_elements_loop_fwd_back
       let i1 ⟵ i + (Usize.ofInt 1 (by intlit))
       let l0 := mem_replace_back (hashmap_list_t T) l hashmap_list_t.Nil
       let slots0 ⟵ vec_index_mut_back (hashmap_list_t T) slots i l0
-      let p ⟵
+      let p :=
         hashmap_hash_map_move_elements_loop_fwd_back T ntable0 slots0 i1
+      let p ⟵ p
       let (hm, v) := p
       Result.ret (hm, v)
   else Result.ret (ntable, slots)
