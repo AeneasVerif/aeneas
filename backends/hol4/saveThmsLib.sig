@@ -25,15 +25,20 @@ sig
   (* The user-provided functions *)
   type 'key key_fns = {
     compare : 'key * 'key -> order,
-    get_key_from_thm : thm -> 'key
+    (* Retrieve the key from the theorem and normalize it at the same time *)
+    get_key_normalize_thm : thm -> ('key * thm)
   }
 
   (* The functions we return to the user to manipulate the map *)
   type 'key map_fns = {
     (* Persistently save a theorem *)
     save_thm : string -> unit,
+    (* Persistently delete a theorem *)
+    delete_thm : string -> unit,
     (* Temporarily save a theorem *)
     temp_save_thm : thm -> unit,
+    (* Temporarily delete a theorem *)
+    temp_delete_thm : thm -> unit,
     (* Get the key set *)
     get_keys : unit -> 'key Redblackset.set,
     (* Get the theorems map *)

@@ -2388,24 +2388,20 @@ sig
    
    [vec_len_spec]  Theorem
       
-      [oracles: DISK_THM]
-      [axioms: int_to_usize_usize_to_int, usize_bounds,
-       vec_to_list_num_bounds] []
+      [oracles: DISK_THM] [axioms: usize_bounds, vec_to_list_num_bounds] []
       ⊢ ∀v. vec_len v = int_to_usize (len (vec_to_list v)) ∧
             0 ≤ len (vec_to_list v) ∧ len (vec_to_list v) ≤ usize_max
    
    [vec_len_vec_new]  Theorem
       
-      [oracles: DISK_THM]
-      [axioms: mk_vec_axiom, int_to_usize_usize_to_int,
-       usize_to_int_int_to_usize, usize_bounds] []
+      [oracles: DISK_THM] [axioms: mk_vec_axiom, usize_bounds] []
       ⊢ vec_len vec_new = int_to_usize 0
    
    [vec_push_back_spec]  Theorem
       
       [oracles: DISK_THM]
-      [axioms: usize_to_int_int_to_usize, mk_vec_axiom,
-       int_to_usize_usize_to_int, usize_bounds, vec_to_list_num_bounds] []
+      [axioms: usize_to_int_int_to_usize, mk_vec_axiom, usize_bounds,
+       vec_to_list_num_bounds] []
       ⊢ ∀v x.
           usize_to_int (vec_len v) < usize_max ⇒
           ∃nv.
@@ -2438,8 +2434,7 @@ sig
       
       [oracles: DISK_THM]
       [axioms: vec_to_list_num_bounds, usize_bounds,
-       int_to_usize_usize_to_int, usize_to_int_bounds,
-       usize_to_int_int_to_usize, mk_vec_axiom] []
+       usize_to_int_int_to_usize, usize_to_int_bounds, mk_vec_axiom] []
       ⊢ ∀v i x.
           usize_to_int i < usize_to_int (vec_len v) ⇒
           (let

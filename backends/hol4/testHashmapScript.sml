@@ -51,7 +51,7 @@ Proof
   progress >> progress
 QED
 
-val _ = register_spec_thm nth_mut_fwd_spec
+val _ = save_spec_thm "nth_mut_fwd_spec"
 
 val _ = new_constant ("insert", “: u32 -> 't -> (u32 # 't) list_t -> (u32 # 't) list_t result”)
 val insert_def = new_axiom ("insert_def", “
@@ -177,9 +177,7 @@ Proof
     Cases_on ‘q' = k’ >> rw []
     >- (fs [list_t_v_def, index_eq]) >>
     Cases_on ‘insert k v ls0’ >> fs [] >>
-    (* TODO: would be good to have a tactic which inverts equalities of the
-       shape ‘ListCons (q',r) a = ls1’ *)
-    sg ‘ls1 = ListCons (q',r) a’ >- fs [] >> fs [list_t_v_def, index_eq] >>
+    gvs [list_t_v_def, index_eq] >>
     first_x_assum (qspec_assume ‘0’) >>
     fs [len_def] >>
     strip_tac >>
@@ -193,7 +191,7 @@ Proof
     fs [list_t_v_def, index_eq, len_def] >>
     first_x_assum (qspec_assume ‘i’) >> rfs []) >>
   Cases_on ‘insert k v ls0’ >> fs [] >>
-  sg ‘ls1 = ListCons (q',r) a’ >- fs [] >> fs [list_t_v_def, index_eq] >>
+  gvs [list_t_v_def, index_eq] >>
   last_x_assum (qspec_assume ‘i - 1’) >>
   fs [len_def] >>
   sg ‘0 ≤ i - 1 ∧ i - 1 < len (list_t_v a)’ >- int_tac >> fs [] >>
@@ -250,13 +248,11 @@ Proof
     last_x_assum (qspecl_assume [‘i’, ‘j’]) >>
     rfs [list_t_v_def, len_def] >>
     sg ‘0 < j’ >- int_tac >>
-    Cases_on ‘i = 0’ >> fs [index_eq] >>
-    sg ‘0 < i’ >- int_tac >> fs []) >>
+    Cases_on ‘i = 0’ >> gvs [index_eq]) >>
   (* k ≠ q: recursion *)
   Cases_on ‘insert k v ls0’ >> fs [bind_def] >>
   last_x_assum (qspecl_assume [‘k’, ‘v’, ‘a’]) >>
-  rfs [] >>
-  sg ‘ls1 = ListCons (q,r) a’ >- fs [] >> fs [list_t_v_def] >>
+  gvs [list_t_v_def] >>
   imp_res_tac distinct_keys_tail >> fs [] >>
   irule distinct_keys_cons >> rw [] >>
   metis_tac [distinct_keys_insert_index_neq]

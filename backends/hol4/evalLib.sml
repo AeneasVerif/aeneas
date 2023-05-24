@@ -27,61 +27,113 @@ fun get_const_name (tm : term) : const_name =
     (thy, name)
   end
 
-(* Create the persistent collection, which is a pair:
-   (set of constants, map from constant name to theorem)
- *)
-type state = term Redblackset.set * (const_name, thm) Redblackmap.dict
-fun get_custom_unfold_const (th : thm) : term = (fst o strip_comb o lhs o snd o strip_forall o concl) th
-
-(* Small helper *)
-fun add_to_state (th : thm) (s, m) =
+(* Create the persistent collection of rewrite theorems - TODO: more efficient
+   collection than a list? *)
+val (add_rewrite_thm, get_rewrite_thms) =
   let
-    val k = get_custom_unfold_const th
-    val name = get_const_name k
-    val s = Redblackset.add (s, k)
-    val m = Redblackmap.insert (m, name, th)
+    (* Small helper *)
+    fun add_to_state (th : thm) s = th :: s
+
+    (* Persistently update the maps given a delta  *)
+    fun apply_delta (delta : ThmSetData.setdelta) st =
+      case delta of
+        ThmSetData.ADD (_, th) => add_to_state th st
+      | ThmSetData.REMOVE _ =>
+        raise mk_HOL_ERR "evalLib" "apply_delta" ("Unexpected REMOVE")
+
+    (* Initialize the collection *)
+    val init_state = []
+    val {update_global_value, (* Local update *)
+         record_delta, (* Global update *)
+         get_global_value = get_rewrite_thms,
+         ...} =
+        ThmSetData.export_with_ancestry {
+          settype = "evalLib_rewrite_theorems",
+          delta_ops = {apply_to_global = apply_delta,
+                       uptodate_delta = K true,
+                       thy_finaliser = NONE,
+                       initial_value = init_state,
+                       apply_delta = apply_delta}
+        }
+
+    fun add_rewrite_thm (s : string) : unit =
+      let
+        val th = saveThmsLib.lookup_thm s
+      in
+        (* Record the delta - for persistence for the future sessions *)
+        record_delta (ThmSetData.ADD th);
+        (* Update the global value - for the current session: record_delta
+           doesn't update the state of the current session *)
+        update_global_value (add_to_state (snd th))
+      end
   in
-    (s, m)
+    (add_rewrite_thm, get_rewrite_thms)
   end
 
-(* Persistently update the maps given a delta  *)
-fun apply_delta (delta : ThmSetData.setdelta) st =
-  case delta of
-    ThmSetData.ADD (_, th) => add_to_state th st
-  | ThmSetData.REMOVE _ =>
-    raise mk_HOL_ERR "saveThmsLib" "create_map" ("Unexpected REMOVE")
+fun add_rewrite_thms (ls : string list) : unit =
+  app add_rewrite_thm ls
 
-(* Initialize the collection *)
-val init_state = (Redblackset.empty compare, Redblackmap.mkDict const_name_compare)
-val {update_global_value, (* Local update *)
-     record_delta, (* Global update *)
-     get_global_value,
-     ...} =
-    ThmSetData.export_with_ancestry {
-      settype = "custom_unfold_theorems",
-      delta_ops = {apply_to_global = apply_delta,
-                   uptodate_delta = K true,
-                   thy_finaliser = NONE,
-                   initial_value = init_state,
-                   apply_delta = apply_delta}
-    }
 
-fun add_unfold_thm (s : string) : unit =
+(* Create the persistent collection of unfolding theorems, which is a pair:
+   (set of constants, map from constant name to theorem)
+ *)
+type unfold_state = term Redblackset.set * (const_name, thm) Redblackmap.dict
+fun get_custom_unfold_const (th : thm) : term = (fst o strip_comb o lhs o snd o strip_forall o concl) th
+
+val (add_unfold_thm, get_unfold_thms_map) =
   let
-    val th = saveThmsLib.lookup_thm s
+    (* Small helper *)
+    fun add_to_state (th : thm) (s, m) =
+      let
+        val k = get_custom_unfold_const th
+        val name = get_const_name k
+        val s = Redblackset.add (s, k)
+        val m = Redblackmap.insert (m, name, th)
+      in
+        (s, m)
+      end
+
+    (* Persistently update the maps given a delta  *)
+    fun apply_delta (delta : ThmSetData.setdelta) st =
+      case delta of
+        ThmSetData.ADD (_, th) => add_to_state th st
+      | ThmSetData.REMOVE _ =>
+        raise mk_HOL_ERR "evalLib" "apply_delta" ("Unexpected REMOVE")
+
+    (* Initialize the collection *)
+    val init_state = (Redblackset.empty compare, Redblackmap.mkDict const_name_compare)
+    val {update_global_value, (* Local update *)
+         record_delta, (* Global update *)
+         get_global_value = get_unfold_thms_map,
+         ...} =
+        ThmSetData.export_with_ancestry {
+          settype = "evalLib_unfold_theorems",
+          delta_ops = {apply_to_global = apply_delta,
+                       uptodate_delta = K true,
+                       thy_finaliser = NONE,
+                       initial_value = init_state,
+                       apply_delta = apply_delta}
+        }
+
+    fun add_unfold_thm (s : string) : unit =
+      let
+        val th = saveThmsLib.lookup_thm s
+      in
+        (* Record the delta - for persistence for the future sessions *)
+        record_delta (ThmSetData.ADD th);
+        (* Update the global value - for the current session: record_delta
+           doesn't update the state of the current session *)
+        update_global_value (add_to_state (snd th))
+      end
   in
-    (* Record the delta - for persistence for the future sessions *)
-      record_delta (ThmSetData.ADD th);
-    (* Update the global value - for the current session: record_delta
-       doesn't update the state of the current session *)
-    update_global_value (add_to_state (snd th))
+    (add_unfold_thm, get_unfold_thms_map)
   end
 
 fun add_unfold_thms (ls : string list) : unit =
   app add_unfold_thm ls
 
 fun get_unfold_thms () : thm list =
-  map snd (Redblackmap.listItems (snd (get_global_value ())))
+  map snd (Redblackmap.listItems (snd (get_unfold_thms_map ())))
 
 (* Apply a custom unfolding to the term, if possible.
 
@@ -90,7 +142,7 @@ fun get_unfold_thms () : thm list =
 fun apply_custom_unfold (tm : term) : thm =
   let
     (* Retrieve the custom unfoldings *)
-    val custom_unfolds = snd (get_global_value ())
+    val custom_unfolds = snd (get_unfold_thms_map ())
 
     (* Remove all the matches to find the top-most scrutinee *)
     val scrut = strip_all_cases_get_scrutinee tm
@@ -148,7 +200,7 @@ fun apply_custom_unfold (tm : term) : thm =
 fun eval_conv tm =
   let
     (* TODO: optimize: we recompute the list each time... *)
-    val restr_tms = Redblackset.listItems (fst (get_global_value ()))
+    val restr_tms = Redblackset.listItems (fst (get_unfold_thms_map ()))
     (* We do the following:
        - use the standard EVAL conv, but restrains it from unfolding terms for
          which we have custom unfolding theorems
@@ -156,7 +208,7 @@ fun eval_conv tm =
        - simplify
      *)
     val standard_eval = RESTR_EVAL_CONV restr_tms
-    val simp_no_fail_conv = (fn x => SIMP_CONV (srw_ss ()) [] x handle UNCHANGED => REFL x)
+    val simp_no_fail_conv = (fn x => SIMP_CONV (srw_ss ()) (get_rewrite_thms ()) x handle UNCHANGED => REFL x)
     val one_step_conv = standard_eval THENC (apply_custom_unfold THENC simp_no_fail_conv)
     (* Wrap the conversion such that it fails if the term is unchanged *)
     fun one_step_changed_conv tm = (CHANGED_CONV one_step_conv) tm
