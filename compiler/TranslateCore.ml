@@ -15,6 +15,7 @@ type type_context = C.type_context [@@deriving show]
 type fun_context = {
   fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_infos : FA.fun_info A.FunDeclId.Map.t;
+  fun_decl_groups : A.FunDeclId.Set.t A.FunDeclId.Map.t;
 }
 [@@deriving show]
 

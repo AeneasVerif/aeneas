@@ -911,6 +911,9 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
 
 (** Simplify the lets immediately followed by a return.
 
+    [ignore_monadic_rec_let]: don't apply this transformation on monadic let rec bindings.
+      This is for Lean. Also see {!val:Config.decompose_monadic_rec_let_bindings}.
+
     Ex.:
     {[
       x <-- f y;
@@ -921,7 +924,25 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
       f y
     ]}
  *)
-let simplify_let_then_return _ctx def =
+let simplify_let_then_return ignore_monadic_rec_let ctx def =
+  (* Lookup the definition group, so that we can check which calls are
+     recursive. *)
+  let decl_group =
+    (* Note that global bodies can't be recursive *)
+    if ignore_monadic_rec_let && not def.is_global_decl_body then
+      A.FunDeclId.Map.find def.def_id ctx.fun_context.fun_decl_groups
+    else A.FunDeclId.Set.empty
+  in
+
+  (* Check if an expression is a recursive call *)
+  let is_rec_call (e : texpression) : bool =
+    let app, _ = destruct_apps e in
+    match app.e with
+    | Qualif { id = FunOrOp (Fun (FromLlbc (Regular fid, _, _))); _ } ->
+        A.FunDeclId.Set.mem fid decl_group
+    | _ -> false
+  in
+
   let expr_visitor =
     object (self)
       inherit [_] map_expression
@@ -941,7 +962,9 @@ let simplify_let_then_return _ctx def =
             | None -> not_simpl_e
             | Some lv_v ->
                 let lv_v =
-                  if monadic then mk_result_return_texpression lv_v else lv_v
+                  if monadic && not (ignore_monadic_rec_let && is_rec_call rv)
+                  then mk_result_return_texpression lv_v
+                  else lv_v
                 in
                 if lv_v = next_e then rv.e else not_simpl_e)
     end
@@ -1394,14 +1417,25 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
     {!decompose_nested_let_patterns}.
 
     [decompose_monadic]: always decompose a monadic let-binding
+    [decompose_rec_monadic]: decompose the monadic let-bindings in case of recursive
+      function calls. See {!val:Config.decompose_monadic_rec_let_bindings}.
     [decompose_nested_pats]: decompose the nested patterns
  *)
 let decompose_let_bindings (decompose_monadic : bool)
-    (decompose_nested_pats : bool) (_ctx : trans_ctx) (def : fun_decl) :
-    fun_decl =
+    (decompose_rec_monadic : bool) (decompose_nested_pats : bool)
+    (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
   | Some body ->
+      (* Lookup the definition group, so that we can check which calls are
+         recursive. *)
+      let decl_group =
+        (* Note that global bodies can't be recursive *)
+        if decompose_rec_monadic && not def.is_global_decl_body then
+          A.FunDeclId.Map.find def.def_id ctx.fun_context.fun_decl_groups
+        else A.FunDeclId.Set.empty
+      in
+
       (* Set up the var id generator *)
       let cnt = get_body_min_var_counter body in
       let _, fresh_id = VarId.mk_stateful_generator cnt in
@@ -1462,6 +1496,15 @@ let decompose_let_bindings (decompose_monadic : bool)
         (!patterns, lv)
       in
 
+      (* Check if an expression is a recursive call *)
+      let is_rec_call (e : texpression) : bool =
+        let app, _ = destruct_apps e in
+        match app.e with
+        | Qualif { id = FunOrOp (Fun (FromLlbc (Regular fid, _, _))); _ } ->
+            A.FunDeclId.Set.mem fid decl_group
+        | _ -> false
+      in
+
       (* It is a very simple map *)
       let visit_lets =
         object (self)
@@ -1470,10 +1513,13 @@ let decompose_let_bindings (decompose_monadic : bool)
           method! visit_Let env monadic lv re next_e =
             (* Decompose the monadic let-bindings *)
             let monadic, lv, re, next_e =
-              if (not monadic) || not decompose_monadic then
-                (monadic, lv, re, next_e)
+              if
+                (not monadic)
+                || ((not decompose_monadic) && not decompose_rec_monadic)
+              then (monadic, lv, re, next_e)
               else
-                (* If monadic, we need to check if the left-value is a variable:
+                (* If this is a monadic binding, and we (potentially) decompose
+                   monadic bindings, we need to check if the left-value is a variable:
                  * - if yes, don't decompose
                  * - if not, make the decomposition in two steps
                  *)
@@ -1482,14 +1528,19 @@ let decompose_let_bindings (decompose_monadic : bool)
                     (* Variable: nothing to do *)
                     (monadic, lv, re, next_e)
                 | _ ->
-                    (* Not a variable: decompose if required *)
-                    (* Introduce a temporary variable to receive the value of the
-                     * monadic binding *)
-                    let ltmp, rtmp = mk_fresh lv.ty in
-                    (* Visit the next expression *)
-                    let next_e = self#visit_texpression env next_e in
-                    (* Create the let-bindings *)
-                    (monadic, ltmp, re, mk_let false lv rtmp next_e)
+                    (* Not a variable: decompose if necessary *)
+                    if
+                      decompose_monadic
+                      || (decompose_rec_monadic && is_rec_call re)
+                    then
+                      (* Introduce a temporary variable to receive the value of the
+                       * monadic binding *)
+                      let ltmp, rtmp = mk_fresh lv.ty in
+                      (* Visit the next expression *)
+                      let next_e = self#visit_texpression env next_e in
+                      (* Create the let-bindings *)
+                      (monadic, ltmp, re, mk_let false lv rtmp next_e)
+                    else (* Nothing to do *) (monadic, lv, re, next_e)
             in
             (* Decompose the nested let-patterns *)
             let lv, next_e =
@@ -1520,7 +1571,7 @@ let decompose_let_bindings (decompose_monadic : bool)
  *)
 let decompose_monadic_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl
     =
-  decompose_let_bindings true false ctx def
+  decompose_let_bindings true false false ctx def
 
 (** Decompose the nested let patterns.
 
@@ -1528,7 +1579,15 @@ let decompose_monadic_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl
  *)
 let decompose_nested_let_patterns (ctx : trans_ctx) (def : fun_decl) : fun_decl
     =
-  decompose_let_bindings false true ctx def
+  decompose_let_bindings false false true ctx def
+
+(** Decompose the recursive monadic let-bindings.
+
+    See the explanations in {!val:Config.decompose_monadic_rec_let_bindings}
+ *)
+let decompose_monadic_rec_let_bindings (ctx : trans_ctx) (def : fun_decl) :
+    fun_decl =
+  decompose_let_bindings false true false ctx def
 
 (** Unfold the monadic let-bindings to explicit matches. *)
 let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
@@ -1634,7 +1693,9 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
        f y
      ]}
   *)
-  let def = simplify_let_then_return ctx def in
+  let def =
+    simplify_let_then_return !Config.decompose_monadic_rec_let_bindings ctx def
+  in
   log#ldebug
     (lazy ("simplify_let_then_return:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
@@ -1664,6 +1725,25 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       log#ldebug
         (lazy
           "ignoring decompose_monadic_let_bindings due to the configuration\n");
+      def)
+  in
+
+  (* Decompose the recursive monadic let bindings - used by Lean *)
+  let def =
+    if
+      !Config.decompose_monadic_rec_let_bindings
+      && not !Config.decompose_monadic_let_bindings
+    then (
+      let def = decompose_monadic_rec_let_bindings ctx def in
+      log#ldebug
+        (lazy
+          ("decompose_monadic_rec_let_bindings:\n\n"
+         ^ fun_decl_to_string ctx def ^ "\n"));
+      def)
+    else (
+      log#ldebug
+        (lazy
+          "ignoring decompose_monadic_rec_let_bindings due to the configuration\n");
       def)
   in
 

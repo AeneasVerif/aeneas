@@ -5,56 +5,56 @@ import Base.Primitives
 structure OpaqueDefs where
   
   /- [paper::ref_incr] -/
-  def ref_incr_fwd_back (x : Int32) : result Int32 :=
+  def ref_incr_fwd_back (x : Int32) : Result Int32 :=
     Int32.checked_add x (Int32.ofNatCore 1 (by intlit))
   
   /- [paper::test_incr] -/
-  def test_incr_fwd : result Unit :=
+  def test_incr_fwd : Result Unit :=
     do
-      let x <- ref_incr_fwd_back (Int32.ofNatCore 0 (by intlit))
-      if not (x = (Int32.ofNatCore 1 (by intlit)))
-      then result.fail error.panic
-      else result.ret ()
+      let x ⟵ ref_incr_fwd_back (Int32.ofNatCore 0 (by intlit))
+      if 𝒽: not (x = (Int32.ofNatCore 1 (by intlit)))
+      then Result.fail Error.panic
+      else Result.ret ()
   
   /- Unit test for [paper::test_incr] -/
-  #assert (test_incr_fwd = .ret ())
+  #assert (test_incr_fwd == .ret ())
   
   /- [paper::choose] -/
-  def choose_fwd (T : Type) (b : Bool) (x : T) (y : T) : result T :=
-    if b
-    then result.ret x
-    else result.ret y
+  def choose_fwd (T : Type) (b : Bool) (x : T) (y : T) : Result T :=
+    if 𝒽: b
+    then Result.ret x
+    else Result.ret y
   
   /- [paper::choose] -/
   def choose_back
-    (T : Type) (b : Bool) (x : T) (y : T) (ret0 : T) : result (T × T) :=
-    if b
-    then result.ret (ret0, y)
-    else result.ret (x, ret0)
+    (T : Type) (b : Bool) (x : T) (y : T) (ret0 : T) : Result (T × T) :=
+    if 𝒽: b
+    then Result.ret (ret0, y)
+    else Result.ret (x, ret0)
   
   /- [paper::test_choose] -/
-  def test_choose_fwd : result Unit :=
+  def test_choose_fwd : Result Unit :=
     do
-      let z <-
+      let z ⟵
         choose_fwd Int32 true (Int32.ofNatCore 0 (by intlit))
           (Int32.ofNatCore 0 (by intlit))
-      let z0 <- Int32.checked_add z (Int32.ofNatCore 1 (by intlit))
-      if not (z0 = (Int32.ofNatCore 1 (by intlit)))
-      then result.fail error.panic
+      let z0 ⟵ Int32.checked_add z (Int32.ofNatCore 1 (by intlit))
+      if 𝒽: not (z0 = (Int32.ofNatCore 1 (by intlit)))
+      then Result.fail Error.panic
       else
         do
-          let (x, y) <-
+          let (x, y) ⟵
             choose_back Int32 true (Int32.ofNatCore 0 (by intlit))
               (Int32.ofNatCore 0 (by intlit)) z0
-          if not (x = (Int32.ofNatCore 1 (by intlit)))
-          then result.fail error.panic
+          if 𝒽: not (x = (Int32.ofNatCore 1 (by intlit)))
+          then Result.fail Error.panic
           else
-            if not (y = (Int32.ofNatCore 0 (by intlit)))
-            then result.fail error.panic
-            else result.ret ()
+            if 𝒽: not (y = (Int32.ofNatCore 0 (by intlit)))
+            then Result.fail Error.panic
+            else Result.ret ()
   
   /- Unit test for [paper::test_choose] -/
-  #assert (test_choose_fwd = .ret ())
+  #assert (test_choose_fwd == .ret ())
   
   /- [paper::List] -/
   inductive list_t (T : Type) :=
@@ -62,67 +62,68 @@ structure OpaqueDefs where
   | ListNil : list_t T
   
   /- [paper::list_nth_mut] -/
-  def list_nth_mut_fwd (T : Type) (l : list_t T) (i : UInt32) : result T :=
-    match l with
+  def list_nth_mut_fwd (T : Type) (l : list_t T) (i : UInt32) : Result T :=
+    match 𝒽: l with
     | list_t.ListCons x tl =>
-      if i = (UInt32.ofNatCore 0 (by intlit))
-      then result.ret x
+      if 𝒽: i = (UInt32.ofNatCore 0 (by intlit))
+      then Result.ret x
       else
         do
-          let i0 <- UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
-          list_nth_mut_fwd T tl i0
-    | list_t.ListNil => result.fail error.panic
+          let i0 ⟵ UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
+          let t ⟵ list_nth_mut_fwd T tl i0
+          Result.ret t
+    | list_t.ListNil => Result.fail Error.panic
   
   /- [paper::list_nth_mut] -/
   def list_nth_mut_back
-    (T : Type) (l : list_t T) (i : UInt32) (ret0 : T) : result (list_t T) :=
-    match l with
+    (T : Type) (l : list_t T) (i : UInt32) (ret0 : T) : Result (list_t T) :=
+    match 𝒽: l with
     | list_t.ListCons x tl =>
-      if i = (UInt32.ofNatCore 0 (by intlit))
-      then result.ret (list_t.ListCons ret0 tl)
+      if 𝒽: i = (UInt32.ofNatCore 0 (by intlit))
+      then Result.ret (list_t.ListCons ret0 tl)
       else
         do
-          let i0 <- UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
-          let tl0 <- list_nth_mut_back T tl i0 ret0
-          result.ret (list_t.ListCons x tl0)
-    | list_t.ListNil => result.fail error.panic
+          let i0 ⟵ UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
+          let tl0 ⟵ list_nth_mut_back T tl i0 ret0
+          Result.ret (list_t.ListCons x tl0)
+    | list_t.ListNil => Result.fail Error.panic
   
   /- [paper::sum] -/
-  def sum_fwd (l : list_t Int32) : result Int32 :=
-    match l with
+  def sum_fwd (l : list_t Int32) : Result Int32 :=
+    match 𝒽: l with
     | list_t.ListCons x tl => do
-                                let i <- sum_fwd tl
+                                let i ⟵ sum_fwd tl
                                 Int32.checked_add x i
-    | list_t.ListNil => result.ret (Int32.ofNatCore 0 (by intlit))
+    | list_t.ListNil => Result.ret (Int32.ofNatCore 0 (by intlit))
   
   /- [paper::test_nth] -/
-  def test_nth_fwd : result Unit :=
+  def test_nth_fwd : Result Unit :=
     do
       let l := list_t.ListNil
       let l0 := list_t.ListCons (Int32.ofNatCore 3 (by intlit)) l
       let l1 := list_t.ListCons (Int32.ofNatCore 2 (by intlit)) l0
-      let x <-
+      let x ⟵
         list_nth_mut_fwd Int32 (list_t.ListCons (Int32.ofNatCore 1 (by intlit))
           l1) (UInt32.ofNatCore 2 (by intlit))
-      let x0 <- Int32.checked_add x (Int32.ofNatCore 1 (by intlit))
-      let l2 <-
+      let x0 ⟵ Int32.checked_add x (Int32.ofNatCore 1 (by intlit))
+      let l2 ⟵
         list_nth_mut_back Int32 (list_t.ListCons
           (Int32.ofNatCore 1 (by intlit)) l1) (UInt32.ofNatCore 2 (by intlit))
           x0
-      let i <- sum_fwd l2
-      if not (i = (Int32.ofNatCore 7 (by intlit)))
-      then result.fail error.panic
-      else result.ret ()
+      let i ⟵ sum_fwd l2
+      if 𝒽: not (i = (Int32.ofNatCore 7 (by intlit)))
+      then Result.fail Error.panic
+      else Result.ret ()
   
   /- Unit test for [paper::test_nth] -/
-  #assert (test_nth_fwd = .ret ())
+  #assert (test_nth_fwd == .ret ())
   
   /- [paper::call_choose] -/
-  def call_choose_fwd (p : (UInt32 × UInt32)) : result UInt32 :=
+  def call_choose_fwd (p : (UInt32 × UInt32)) : Result UInt32 :=
     do
       let (px, py) := p
-      let pz <- choose_fwd UInt32 true px py
-      let pz0 <- UInt32.checked_add pz (UInt32.ofNatCore 1 (by intlit))
-      let (px0, _) <- choose_back UInt32 true px py pz0
-      result.ret px0
+      let pz ⟵ choose_fwd UInt32 true px py
+      let pz0 ⟵ UInt32.checked_add pz (UInt32.ofNatCore 1 (by intlit))
+      let (px0, _) ⟵ choose_back UInt32 true px py pz0
+      Result.ret px0
   

@@ -9,7 +9,11 @@ let backend_names = [ "fstar"; "coq"; "lean" ]
 
 (** Utility to compute the backend from an input parameter *)
 let backend_of_string (b : string) : backend option =
-  match b with "fstar" -> Some FStar | "coq" -> Some Coq | "lean" -> Some Lean | _ -> None
+  match b with
+  | "fstar" -> Some FStar
+  | "coq" -> Some Coq
+  | "lean" -> Some Lean
+  | _ -> None
 
 let opt_backend : backend option ref = ref None
 
@@ -222,6 +226,16 @@ let decompose_monadic_let_bindings = ref false
     ]}
  *)
 let decompose_nested_let_patterns = ref false
+
+(** Temporary: for Lean only.
+
+    Decompose recursive monadic let-bindings.
+    This is due to a bug in Lean: if we don't decompose those bindings,
+    Lean sometimes fails to typecheck the definitions we generate.
+    See {!PureMicroPasses.decompose_monadic_rec_let_bindings}.
+    TODO: remove once we fix the bug.
+ *)
+let decompose_monadic_rec_let_bindings = ref false
 
 (** Controls the unfolding of monadic let-bindings to explicit matches:
 

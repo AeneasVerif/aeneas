@@ -21,7 +21,7 @@ open Error
 
 inductive Result (α : Type u) where
   | ret (v: α): Result α
-  | fail (e: Error): Result α 
+  | fail (e: Error): Result α
 deriving Repr, BEq
 
 open Result

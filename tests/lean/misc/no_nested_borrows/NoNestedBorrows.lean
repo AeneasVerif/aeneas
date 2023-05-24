@@ -30,232 +30,234 @@ structure OpaqueDefs where
   | SumRight : T2 -> sum_t T1 T2
   
   /- [no_nested_borrows::neg_test] -/
-  def neg_test_fwd (x : Int32) : result Int32 :=
+  def neg_test_fwd (x : Int32) : Result Int32 :=
     Int32.checked_neg x
   
   /- [no_nested_borrows::add_test] -/
-  def add_test_fwd (x : UInt32) (y : UInt32) : result UInt32 :=
+  def add_test_fwd (x : UInt32) (y : UInt32) : Result UInt32 :=
     UInt32.checked_add x y
   
   /- [no_nested_borrows::subs_test] -/
-  def subs_test_fwd (x : UInt32) (y : UInt32) : result UInt32 :=
+  def subs_test_fwd (x : UInt32) (y : UInt32) : Result UInt32 :=
     UInt32.checked_sub x y
   
   /- [no_nested_borrows::div_test] -/
-  def div_test_fwd (x : UInt32) (y : UInt32) : result UInt32 :=
+  def div_test_fwd (x : UInt32) (y : UInt32) : Result UInt32 :=
     UInt32.checked_div x y
   
   /- [no_nested_borrows::div_test1] -/
-  def div_test1_fwd (x : UInt32) : result UInt32 :=
+  def div_test1_fwd (x : UInt32) : Result UInt32 :=
     UInt32.checked_div x (UInt32.ofNatCore 2 (by intlit))
   
   /- [no_nested_borrows::rem_test] -/
-  def rem_test_fwd (x : UInt32) (y : UInt32) : result UInt32 :=
+  def rem_test_fwd (x : UInt32) (y : UInt32) : Result UInt32 :=
     UInt32.checked_rem x y
   
   /- [no_nested_borrows::cast_test] -/
-  def cast_test_fwd (x : UInt32) : result Int32 :=
+  def cast_test_fwd (x : UInt32) : Result Int32 :=
     scalar_cast Int32 x
   
   /- [no_nested_borrows::test2] -/
-  def test2_fwd : result Unit :=
+  def test2_fwd : Result Unit :=
     do
-      let _ <- UInt32.checked_add (UInt32.ofNatCore 23 (by intlit))
+      let _ ⟵ UInt32.checked_add (UInt32.ofNatCore 23 (by intlit))
         (UInt32.ofNatCore 44 (by intlit))
-      result.ret ()
+      Result.ret ()
   
   /- Unit test for [no_nested_borrows::test2] -/
-  #assert (test2_fwd = .ret ())
+  #assert (test2_fwd == .ret ())
   
   /- [no_nested_borrows::get_max] -/
-  def get_max_fwd (x : UInt32) (y : UInt32) : result UInt32 :=
-    if x >= y
-    then result.ret x
-    else result.ret y
+  def get_max_fwd (x : UInt32) (y : UInt32) : Result UInt32 :=
+    if 𝒽: x >= y
+    then Result.ret x
+    else Result.ret y
   
   /- [no_nested_borrows::test3] -/
-  def test3_fwd : result Unit :=
+  def test3_fwd : Result Unit :=
     do
-      let x <-
+      let x ⟵
         get_max_fwd (UInt32.ofNatCore 4 (by intlit))
           (UInt32.ofNatCore 3 (by intlit))
-      let y <-
+      let y ⟵
         get_max_fwd (UInt32.ofNatCore 10 (by intlit))
           (UInt32.ofNatCore 11 (by intlit))
-      let z <- UInt32.checked_add x y
-      if not (z = (UInt32.ofNatCore 15 (by intlit)))
-      then result.fail error.panic
-      else result.ret ()
+      let z ⟵ UInt32.checked_add x y
+      if 𝒽: not (z = (UInt32.ofNatCore 15 (by intlit)))
+      then Result.fail Error.panic
+      else Result.ret ()
   
   /- Unit test for [no_nested_borrows::test3] -/
-  #assert (test3_fwd = .ret ())
+  #assert (test3_fwd == .ret ())
   
   /- [no_nested_borrows::test_neg1] -/
-  def test_neg1_fwd : result Unit :=
+  def test_neg1_fwd : Result Unit :=
     do
-      let y <- Int32.checked_neg (Int32.ofNatCore 3 (by intlit))
-      if not (y = (Int32.ofNatCore -3 (by intlit)))
-      then result.fail error.panic
-      else result.ret ()
+      let y ⟵ Int32.checked_neg (Int32.ofNatCore 3 (by intlit))
+      if 𝒽: not (y = (Int32.ofNatCore -3 (by intlit)))
+      then Result.fail Error.panic
+      else Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_neg1] -/
-  #assert (test_neg1_fwd = .ret ())
+  #assert (test_neg1_fwd == .ret ())
   
   /- [no_nested_borrows::refs_test1] -/
-  def refs_test1_fwd : result Unit :=
-    if not ((Int32.ofNatCore 1 (by intlit)) = (Int32.ofNatCore 1 (by intlit)))
-    then result.fail error.panic
-    else result.ret ()
+  def refs_test1_fwd : Result Unit :=
+    if 𝒽: not ((Int32.ofNatCore 1 (by intlit)) =
+      (Int32.ofNatCore 1 (by intlit)))
+    then Result.fail Error.panic
+    else Result.ret ()
   
   /- Unit test for [no_nested_borrows::refs_test1] -/
-  #assert (refs_test1_fwd = .ret ())
+  #assert (refs_test1_fwd == .ret ())
   
   /- [no_nested_borrows::refs_test2] -/
-  def refs_test2_fwd : result Unit :=
-    if not ((Int32.ofNatCore 2 (by intlit)) = (Int32.ofNatCore 2 (by intlit)))
-    then result.fail error.panic
+  def refs_test2_fwd : Result Unit :=
+    if 𝒽: not ((Int32.ofNatCore 2 (by intlit)) =
+      (Int32.ofNatCore 2 (by intlit)))
+    then Result.fail Error.panic
     else
-      if not ((Int32.ofNatCore 0 (by intlit)) =
+      if 𝒽: not ((Int32.ofNatCore 0 (by intlit)) =
         (Int32.ofNatCore 0 (by intlit)))
-      then result.fail error.panic
+      then Result.fail Error.panic
       else
-        if not ((Int32.ofNatCore 2 (by intlit)) =
+        if 𝒽: not ((Int32.ofNatCore 2 (by intlit)) =
           (Int32.ofNatCore 2 (by intlit)))
-        then result.fail error.panic
+        then Result.fail Error.panic
         else
-          if not ((Int32.ofNatCore 2 (by intlit)) =
+          if 𝒽: not ((Int32.ofNatCore 2 (by intlit)) =
             (Int32.ofNatCore 2 (by intlit)))
-          then result.fail error.panic
-          else result.ret ()
+          then Result.fail Error.panic
+          else Result.ret ()
   
   /- Unit test for [no_nested_borrows::refs_test2] -/
-  #assert (refs_test2_fwd = .ret ())
+  #assert (refs_test2_fwd == .ret ())
   
   /- [no_nested_borrows::test_list1] -/
-  def test_list1_fwd : result Unit :=
-    result.ret ()
+  def test_list1_fwd : Result Unit :=
+    Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_list1] -/
-  #assert (test_list1_fwd = .ret ())
+  #assert (test_list1_fwd == .ret ())
   
   /- [no_nested_borrows::test_box1] -/
-  def test_box1_fwd : result Unit :=
+  def test_box1_fwd : Result Unit :=
     let b := (Int32.ofNatCore 1 (by intlit))
     let x := b
-    if not (x = (Int32.ofNatCore 1 (by intlit)))
-    then result.fail error.panic
-    else result.ret ()
+    if 𝒽: not (x = (Int32.ofNatCore 1 (by intlit)))
+    then Result.fail Error.panic
+    else Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_box1] -/
-  #assert (test_box1_fwd = .ret ())
+  #assert (test_box1_fwd == .ret ())
   
   /- [no_nested_borrows::copy_int] -/
-  def copy_int_fwd (x : Int32) : result Int32 :=
-    result.ret x
+  def copy_int_fwd (x : Int32) : Result Int32 :=
+    Result.ret x
   
   /- [no_nested_borrows::test_unreachable] -/
-  def test_unreachable_fwd (b : Bool) : result Unit :=
-    if b
-    then result.fail error.panic
-    else result.ret ()
+  def test_unreachable_fwd (b : Bool) : Result Unit :=
+    if 𝒽: b
+    then Result.fail Error.panic
+    else Result.ret ()
   
   /- [no_nested_borrows::test_panic] -/
-  def test_panic_fwd (b : Bool) : result Unit :=
-    if b
-    then result.fail error.panic
-    else result.ret ()
+  def test_panic_fwd (b : Bool) : Result Unit :=
+    if 𝒽: b
+    then Result.fail Error.panic
+    else Result.ret ()
   
   /- [no_nested_borrows::test_copy_int] -/
-  def test_copy_int_fwd : result Unit :=
+  def test_copy_int_fwd : Result Unit :=
     do
-      let y <- copy_int_fwd (Int32.ofNatCore 0 (by intlit))
-      if not ((Int32.ofNatCore 0 (by intlit)) = y)
-      then result.fail error.panic
-      else result.ret ()
+      let y ⟵ copy_int_fwd (Int32.ofNatCore 0 (by intlit))
+      if 𝒽: not ((Int32.ofNatCore 0 (by intlit)) = y)
+      then Result.fail Error.panic
+      else Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_copy_int] -/
-  #assert (test_copy_int_fwd = .ret ())
+  #assert (test_copy_int_fwd == .ret ())
   
   /- [no_nested_borrows::is_cons] -/
-  def is_cons_fwd (T : Type) (l : list_t T) : result Bool :=
-    match l with
-    | list_t.ListCons t l0 => result.ret true
-    | list_t.ListNil => result.ret false
+  def is_cons_fwd (T : Type) (l : list_t T) : Result Bool :=
+    match 𝒽: l with
+    | list_t.ListCons t l0 => Result.ret true
+    | list_t.ListNil => Result.ret false
   
   /- [no_nested_borrows::test_is_cons] -/
-  def test_is_cons_fwd : result Unit :=
+  def test_is_cons_fwd : Result Unit :=
     do
       let l := list_t.ListNil
-      let b <-
+      let b ⟵
         is_cons_fwd Int32 (list_t.ListCons (Int32.ofNatCore 0 (by intlit)) l)
-      if not b
-      then result.fail error.panic
-      else result.ret ()
+      if 𝒽: not b
+      then Result.fail Error.panic
+      else Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_is_cons] -/
-  #assert (test_is_cons_fwd = .ret ())
+  #assert (test_is_cons_fwd == .ret ())
   
   /- [no_nested_borrows::split_list] -/
-  def split_list_fwd (T : Type) (l : list_t T) : result (T × (list_t T)) :=
-    match l with
-    | list_t.ListCons hd tl => result.ret (hd, tl)
-    | list_t.ListNil => result.fail error.panic
+  def split_list_fwd (T : Type) (l : list_t T) : Result (T × (list_t T)) :=
+    match 𝒽: l with
+    | list_t.ListCons hd tl => Result.ret (hd, tl)
+    | list_t.ListNil => Result.fail Error.panic
   
   /- [no_nested_borrows::test_split_list] -/
-  def test_split_list_fwd : result Unit :=
+  def test_split_list_fwd : Result Unit :=
     do
       let l := list_t.ListNil
-      let p <-
+      let p ⟵
         split_list_fwd Int32 (list_t.ListCons (Int32.ofNatCore 0 (by intlit))
           l)
       let (hd, _) := p
-      if not (hd = (Int32.ofNatCore 0 (by intlit)))
-      then result.fail error.panic
-      else result.ret ()
+      if 𝒽: not (hd = (Int32.ofNatCore 0 (by intlit)))
+      then Result.fail Error.panic
+      else Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_split_list] -/
-  #assert (test_split_list_fwd = .ret ())
+  #assert (test_split_list_fwd == .ret ())
   
   /- [no_nested_borrows::choose] -/
-  def choose_fwd (T : Type) (b : Bool) (x : T) (y : T) : result T :=
-    if b
-    then result.ret x
-    else result.ret y
+  def choose_fwd (T : Type) (b : Bool) (x : T) (y : T) : Result T :=
+    if 𝒽: b
+    then Result.ret x
+    else Result.ret y
   
   /- [no_nested_borrows::choose] -/
   def choose_back
-    (T : Type) (b : Bool) (x : T) (y : T) (ret0 : T) : result (T × T) :=
-    if b
-    then result.ret (ret0, y)
-    else result.ret (x, ret0)
+    (T : Type) (b : Bool) (x : T) (y : T) (ret0 : T) : Result (T × T) :=
+    if 𝒽: b
+    then Result.ret (ret0, y)
+    else Result.ret (x, ret0)
   
   /- [no_nested_borrows::choose_test] -/
-  def choose_test_fwd : result Unit :=
+  def choose_test_fwd : Result Unit :=
     do
-      let z <-
+      let z ⟵
         choose_fwd Int32 true (Int32.ofNatCore 0 (by intlit))
           (Int32.ofNatCore 0 (by intlit))
-      let z0 <- Int32.checked_add z (Int32.ofNatCore 1 (by intlit))
-      if not (z0 = (Int32.ofNatCore 1 (by intlit)))
-      then result.fail error.panic
+      let z0 ⟵ Int32.checked_add z (Int32.ofNatCore 1 (by intlit))
+      if 𝒽: not (z0 = (Int32.ofNatCore 1 (by intlit)))
+      then Result.fail Error.panic
       else
         do
-          let (x, y) <-
+          let (x, y) ⟵
             choose_back Int32 true (Int32.ofNatCore 0 (by intlit))
               (Int32.ofNatCore 0 (by intlit)) z0
-          if not (x = (Int32.ofNatCore 1 (by intlit)))
-          then result.fail error.panic
+          if 𝒽: not (x = (Int32.ofNatCore 1 (by intlit)))
+          then Result.fail Error.panic
           else
-            if not (y = (Int32.ofNatCore 0 (by intlit)))
-            then result.fail error.panic
-            else result.ret ()
+            if 𝒽: not (y = (Int32.ofNatCore 0 (by intlit)))
+            then Result.fail Error.panic
+            else Result.ret ()
   
   /- Unit test for [no_nested_borrows::choose_test] -/
-  #assert (choose_test_fwd = .ret ())
+  #assert (choose_test_fwd == .ret ())
   
   /- [no_nested_borrows::test_char] -/
-  def test_char_fwd : result Char :=
-    result.ret 'a'
+  def test_char_fwd : Result Char :=
+    Result.ret 'a'
   
   /- [no_nested_borrows::NodeElem] -/
   mutual inductive node_elem_t (T : Type) :=
@@ -268,179 +270,185 @@ structure OpaqueDefs where
   | TreeNode : T -> node_elem_t T -> tree_t T -> tree_t T
   
   /- [no_nested_borrows::list_length] -/
-  def list_length_fwd (T : Type) (l : list_t T) : result UInt32 :=
-    match l with
+  def list_length_fwd (T : Type) (l : list_t T) : Result UInt32 :=
+    match 𝒽: l with
     | list_t.ListCons t l1 =>
       do
-        let i <- list_length_fwd T l1
+        let i ⟵ list_length_fwd T l1
         UInt32.checked_add (UInt32.ofNatCore 1 (by intlit)) i
-    | list_t.ListNil => result.ret (UInt32.ofNatCore 0 (by intlit))
+    | list_t.ListNil => Result.ret (UInt32.ofNatCore 0 (by intlit))
   
   /- [no_nested_borrows::list_nth_shared] -/
-  def list_nth_shared_fwd (T : Type) (l : list_t T) (i : UInt32) : result T :=
-    match l with
+  def list_nth_shared_fwd (T : Type) (l : list_t T) (i : UInt32) : Result T :=
+    match 𝒽: l with
     | list_t.ListCons x tl =>
-      if i = (UInt32.ofNatCore 0 (by intlit))
-      then result.ret x
+      if 𝒽: i = (UInt32.ofNatCore 0 (by intlit))
+      then Result.ret x
       else
         do
-          let i0 <- UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
-          list_nth_shared_fwd T tl i0
-    | list_t.ListNil => result.fail error.panic
+          let i0 ⟵ UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
+          let t ⟵ list_nth_shared_fwd T tl i0
+          Result.ret t
+    | list_t.ListNil => Result.fail Error.panic
   
   /- [no_nested_borrows::list_nth_mut] -/
-  def list_nth_mut_fwd (T : Type) (l : list_t T) (i : UInt32) : result T :=
-    match l with
+  def list_nth_mut_fwd (T : Type) (l : list_t T) (i : UInt32) : Result T :=
+    match 𝒽: l with
     | list_t.ListCons x tl =>
-      if i = (UInt32.ofNatCore 0 (by intlit))
-      then result.ret x
+      if 𝒽: i = (UInt32.ofNatCore 0 (by intlit))
+      then Result.ret x
       else
         do
-          let i0 <- UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
-          list_nth_mut_fwd T tl i0
-    | list_t.ListNil => result.fail error.panic
+          let i0 ⟵ UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
+          let t ⟵ list_nth_mut_fwd T tl i0
+          Result.ret t
+    | list_t.ListNil => Result.fail Error.panic
   
   /- [no_nested_borrows::list_nth_mut] -/
   def list_nth_mut_back
-    (T : Type) (l : list_t T) (i : UInt32) (ret0 : T) : result (list_t T) :=
-    match l with
+    (T : Type) (l : list_t T) (i : UInt32) (ret0 : T) : Result (list_t T) :=
+    match 𝒽: l with
     | list_t.ListCons x tl =>
-      if i = (UInt32.ofNatCore 0 (by intlit))
-      then result.ret (list_t.ListCons ret0 tl)
+      if 𝒽: i = (UInt32.ofNatCore 0 (by intlit))
+      then Result.ret (list_t.ListCons ret0 tl)
       else
         do
-          let i0 <- UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
-          let tl0 <- list_nth_mut_back T tl i0 ret0
-          result.ret (list_t.ListCons x tl0)
-    | list_t.ListNil => result.fail error.panic
+          let i0 ⟵ UInt32.checked_sub i (UInt32.ofNatCore 1 (by intlit))
+          let tl0 ⟵ list_nth_mut_back T tl i0 ret0
+          Result.ret (list_t.ListCons x tl0)
+    | list_t.ListNil => Result.fail Error.panic
   
   /- [no_nested_borrows::list_rev_aux] -/
   def list_rev_aux_fwd
-    (T : Type) (li : list_t T) (lo : list_t T) : result (list_t T) :=
-    match li with
-    | list_t.ListCons hd tl => list_rev_aux_fwd T tl (list_t.ListCons hd lo)
-    | list_t.ListNil => result.ret lo
+    (T : Type) (li : list_t T) (lo : list_t T) : Result (list_t T) :=
+    match 𝒽: li with
+    | list_t.ListCons hd tl =>
+      do
+        let l ⟵ list_rev_aux_fwd T tl (list_t.ListCons hd lo)
+        Result.ret l
+    | list_t.ListNil => Result.ret lo
   
   /- [no_nested_borrows::list_rev] -/
-  def list_rev_fwd_back (T : Type) (l : list_t T) : result (list_t T) :=
+  def list_rev_fwd_back (T : Type) (l : list_t T) : Result (list_t T) :=
     let li := mem_replace_fwd (list_t T) l list_t.ListNil
     list_rev_aux_fwd T li list_t.ListNil
   
   /- [no_nested_borrows::test_list_functions] -/
-  def test_list_functions_fwd : result Unit :=
+  def test_list_functions_fwd : Result Unit :=
     do
       let l := list_t.ListNil
       let l0 := list_t.ListCons (Int32.ofNatCore 2 (by intlit)) l
       let l1 := list_t.ListCons (Int32.ofNatCore 1 (by intlit)) l0
-      let i <-
+      let i ⟵
         list_length_fwd Int32 (list_t.ListCons (Int32.ofNatCore 0 (by intlit))
           l1)
-      if not (i = (UInt32.ofNatCore 3 (by intlit)))
-      then result.fail error.panic
+      if 𝒽: not (i = (UInt32.ofNatCore 3 (by intlit)))
+      then Result.fail Error.panic
       else
         do
-          let i0 <-
+          let i0 ⟵
             list_nth_shared_fwd Int32 (list_t.ListCons
               (Int32.ofNatCore 0 (by intlit)) l1)
               (UInt32.ofNatCore 0 (by intlit))
-          if not (i0 = (Int32.ofNatCore 0 (by intlit)))
-          then result.fail error.panic
+          if 𝒽: not (i0 = (Int32.ofNatCore 0 (by intlit)))
+          then Result.fail Error.panic
           else
             do
-              let i1 <-
+              let i1 ⟵
                 list_nth_shared_fwd Int32 (list_t.ListCons
                   (Int32.ofNatCore 0 (by intlit)) l1)
                   (UInt32.ofNatCore 1 (by intlit))
-              if not (i1 = (Int32.ofNatCore 1 (by intlit)))
-              then result.fail error.panic
+              if 𝒽: not (i1 = (Int32.ofNatCore 1 (by intlit)))
+              then Result.fail Error.panic
               else
                 do
-                  let i2 <-
+                  let i2 ⟵
                     list_nth_shared_fwd Int32 (list_t.ListCons
                       (Int32.ofNatCore 0 (by intlit)) l1)
                       (UInt32.ofNatCore 2 (by intlit))
-                  if not (i2 = (Int32.ofNatCore 2 (by intlit)))
-                  then result.fail error.panic
+                  if 𝒽: not (i2 = (Int32.ofNatCore 2 (by intlit)))
+                  then Result.fail Error.panic
                   else
                     do
-                      let ls <-
+                      let ls ⟵
                         list_nth_mut_back Int32 (list_t.ListCons
                           (Int32.ofNatCore 0 (by intlit)) l1)
                           (UInt32.ofNatCore 1 (by intlit))
                           (Int32.ofNatCore 3 (by intlit))
-                      let i3 <-
+                      let i3 ⟵
                         list_nth_shared_fwd Int32 ls
                           (UInt32.ofNatCore 0 (by intlit))
-                      if not (i3 = (Int32.ofNatCore 0 (by intlit)))
-                      then result.fail error.panic
+                      if 𝒽: not (i3 = (Int32.ofNatCore 0 (by intlit)))
+                      then Result.fail Error.panic
                       else
                         do
-                          let i4 <-
+                          let i4 ⟵
                             list_nth_shared_fwd Int32 ls
                               (UInt32.ofNatCore 1 (by intlit))
-                          if not (i4 = (Int32.ofNatCore 3 (by intlit)))
-                          then result.fail error.panic
+                          if 𝒽: not (i4 = (Int32.ofNatCore 3 (by intlit)))
+                          then Result.fail Error.panic
                           else
                             do
-                              let i5 <-
+                              let i5 ⟵
                                 list_nth_shared_fwd Int32 ls
                                   (UInt32.ofNatCore 2 (by intlit))
-                              if not (i5 = (Int32.ofNatCore 2 (by intlit)))
-                              then result.fail error.panic
-                              else result.ret ()
+                              if 𝒽: not (i5 =
+                                (Int32.ofNatCore 2 (by intlit)))
+                              then Result.fail Error.panic
+                              else Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_list_functions] -/
-  #assert (test_list_functions_fwd = .ret ())
+  #assert (test_list_functions_fwd == .ret ())
   
   /- [no_nested_borrows::id_mut_pair1] -/
-  def id_mut_pair1_fwd (T1 T2 : Type) (x : T1) (y : T2) : result (T1 × T2) :=
-    result.ret (x, y)
+  def id_mut_pair1_fwd (T1 T2 : Type) (x : T1) (y : T2) : Result (T1 × T2) :=
+    Result.ret (x, y)
   
   /- [no_nested_borrows::id_mut_pair1] -/
   def id_mut_pair1_back
-    (T1 T2 : Type) (x : T1) (y : T2) (ret0 : (T1 × T2)) : result (T1 × T2) :=
+    (T1 T2 : Type) (x : T1) (y : T2) (ret0 : (T1 × T2)) : Result (T1 × T2) :=
     let (t, t0) := ret0
-    result.ret (t, t0)
+    Result.ret (t, t0)
   
   /- [no_nested_borrows::id_mut_pair2] -/
-  def id_mut_pair2_fwd (T1 T2 : Type) (p : (T1 × T2)) : result (T1 × T2) :=
+  def id_mut_pair2_fwd (T1 T2 : Type) (p : (T1 × T2)) : Result (T1 × T2) :=
     let (t, t0) := p
-    result.ret (t, t0)
+    Result.ret (t, t0)
   
   /- [no_nested_borrows::id_mut_pair2] -/
   def id_mut_pair2_back
-    (T1 T2 : Type) (p : (T1 × T2)) (ret0 : (T1 × T2)) : result (T1 × T2) :=
+    (T1 T2 : Type) (p : (T1 × T2)) (ret0 : (T1 × T2)) : Result (T1 × T2) :=
     let (t, t0) := ret0
-    result.ret (t, t0)
+    Result.ret (t, t0)
   
   /- [no_nested_borrows::id_mut_pair3] -/
-  def id_mut_pair3_fwd (T1 T2 : Type) (x : T1) (y : T2) : result (T1 × T2) :=
-    result.ret (x, y)
+  def id_mut_pair3_fwd (T1 T2 : Type) (x : T1) (y : T2) : Result (T1 × T2) :=
+    Result.ret (x, y)
   
   /- [no_nested_borrows::id_mut_pair3] -/
   def id_mut_pair3_back'a
-    (T1 T2 : Type) (x : T1) (y : T2) (ret0 : T1) : result T1 :=
-    result.ret ret0
+    (T1 T2 : Type) (x : T1) (y : T2) (ret0 : T1) : Result T1 :=
+    Result.ret ret0
   
   /- [no_nested_borrows::id_mut_pair3] -/
   def id_mut_pair3_back'b
-    (T1 T2 : Type) (x : T1) (y : T2) (ret0 : T2) : result T2 :=
-    result.ret ret0
+    (T1 T2 : Type) (x : T1) (y : T2) (ret0 : T2) : Result T2 :=
+    Result.ret ret0
   
   /- [no_nested_borrows::id_mut_pair4] -/
-  def id_mut_pair4_fwd (T1 T2 : Type) (p : (T1 × T2)) : result (T1 × T2) :=
+  def id_mut_pair4_fwd (T1 T2 : Type) (p : (T1 × T2)) : Result (T1 × T2) :=
     let (t, t0) := p
-    result.ret (t, t0)
+    Result.ret (t, t0)
   
   /- [no_nested_borrows::id_mut_pair4] -/
   def id_mut_pair4_back'a
-    (T1 T2 : Type) (p : (T1 × T2)) (ret0 : T1) : result T1 :=
-    result.ret ret0
+    (T1 T2 : Type) (p : (T1 × T2)) (ret0 : T1) : Result T1 :=
+    Result.ret ret0
   
   /- [no_nested_borrows::id_mut_pair4] -/
   def id_mut_pair4_back'b
-    (T1 T2 : Type) (p : (T1 × T2)) (ret0 : T2) : result T2 :=
-    result.ret ret0
+    (T1 T2 : Type) (p : (T1 × T2)) (ret0 : T2) : Result T2 :=
+    Result.ret ret0
   
   /- [no_nested_borrows::StructWithTuple] -/
   structure struct_with_tuple_t (T1 T2 : Type) where
@@ -449,24 +457,24 @@ structure OpaqueDefs where
   
   
   /- [no_nested_borrows::new_tuple1] -/
-  def new_tuple1_fwd : result (struct_with_tuple_t UInt32 UInt32) :=
-    result.ret
+  def new_tuple1_fwd : Result (struct_with_tuple_t UInt32 UInt32) :=
+    Result.ret
     {
       struct_with_tuple_p := ((UInt32.ofNatCore 1 (by intlit)),
                                (UInt32.ofNatCore 2 (by intlit)))
     }
   
   /- [no_nested_borrows::new_tuple2] -/
-  def new_tuple2_fwd : result (struct_with_tuple_t Int16 Int16) :=
-    result.ret
+  def new_tuple2_fwd : Result (struct_with_tuple_t Int16 Int16) :=
+    Result.ret
     {
       struct_with_tuple_p := ((Int16.ofNatCore 1 (by intlit)),
                                (Int16.ofNatCore 2 (by intlit)))
     }
   
   /- [no_nested_borrows::new_tuple3] -/
-  def new_tuple3_fwd : result (struct_with_tuple_t UInt64 Int64) :=
-    result.ret
+  def new_tuple3_fwd : Result (struct_with_tuple_t UInt64 Int64) :=
+    Result.ret
     {
       struct_with_tuple_p := ((UInt64.ofNatCore 1 (by intlit)),
                                (Int64.ofNatCore 2 (by intlit)))
@@ -479,8 +487,8 @@ structure OpaqueDefs where
   
   
   /- [no_nested_borrows::new_pair1] -/
-  def new_pair1_fwd : result (struct_with_pair_t UInt32 UInt32) :=
-    result.ret
+  def new_pair1_fwd : Result (struct_with_pair_t UInt32 UInt32) :=
+    Result.ret
     {
       struct_with_pair_p := {
                               pair_x := (UInt32.ofNatCore 1 (by intlit)),
@@ -489,66 +497,66 @@ structure OpaqueDefs where
     }
   
   /- [no_nested_borrows::test_constants] -/
-  def test_constants_fwd : result Unit :=
+  def test_constants_fwd : Result Unit :=
     do
-      let swt <- new_tuple1_fwd
+      let swt ⟵ new_tuple1_fwd
       let (i, _) := swt.struct_with_tuple_p
-      if not (i = (UInt32.ofNatCore 1 (by intlit)))
-      then result.fail error.panic
+      if 𝒽: not (i = (UInt32.ofNatCore 1 (by intlit)))
+      then Result.fail Error.panic
       else
         do
-          let swt0 <- new_tuple2_fwd
+          let swt0 ⟵ new_tuple2_fwd
           let (i0, _) := swt0.struct_with_tuple_p
-          if not (i0 = (Int16.ofNatCore 1 (by intlit)))
-          then result.fail error.panic
+          if 𝒽: not (i0 = (Int16.ofNatCore 1 (by intlit)))
+          then Result.fail Error.panic
           else
             do
-              let swt1 <- new_tuple3_fwd
+              let swt1 ⟵ new_tuple3_fwd
               let (i1, _) := swt1.struct_with_tuple_p
-              if not (i1 = (UInt64.ofNatCore 1 (by intlit)))
-              then result.fail error.panic
+              if 𝒽: not (i1 = (UInt64.ofNatCore 1 (by intlit)))
+              then Result.fail Error.panic
               else
                 do
-                  let swp <- new_pair1_fwd
-                  if not (swp.struct_with_pair_p.pair_x =
+                  let swp ⟵ new_pair1_fwd
+                  if 𝒽: not (swp.struct_with_pair_p.pair_x =
                     (UInt32.ofNatCore 1 (by intlit)))
-                  then result.fail error.panic
-                  else result.ret ()
+                  then Result.fail Error.panic
+                  else Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_constants] -/
-  #assert (test_constants_fwd = .ret ())
+  #assert (test_constants_fwd == .ret ())
   
   /- [no_nested_borrows::test_weird_borrows1] -/
-  def test_weird_borrows1_fwd : result Unit :=
-    result.ret ()
+  def test_weird_borrows1_fwd : Result Unit :=
+    Result.ret ()
   
   /- Unit test for [no_nested_borrows::test_weird_borrows1] -/
-  #assert (test_weird_borrows1_fwd = .ret ())
+  #assert (test_weird_borrows1_fwd == .ret ())
   
   /- [no_nested_borrows::test_mem_replace] -/
-  def test_mem_replace_fwd_back (px : UInt32) : result UInt32 :=
+  def test_mem_replace_fwd_back (px : UInt32) : Result UInt32 :=
     let y := mem_replace_fwd UInt32 px (UInt32.ofNatCore 1 (by intlit))
-    if not (y = (UInt32.ofNatCore 0 (by intlit)))
-    then result.fail error.panic
-    else result.ret (UInt32.ofNatCore 2 (by intlit))
+    if 𝒽: not (y = (UInt32.ofNatCore 0 (by intlit)))
+    then Result.fail Error.panic
+    else Result.ret (UInt32.ofNatCore 2 (by intlit))
   
   /- [no_nested_borrows::test_shared_borrow_bool1] -/
-  def test_shared_borrow_bool1_fwd (b : Bool) : result UInt32 :=
-    if b
-    then result.ret (UInt32.ofNatCore 0 (by intlit))
-    else result.ret (UInt32.ofNatCore 1 (by intlit))
+  def test_shared_borrow_bool1_fwd (b : Bool) : Result UInt32 :=
+    if 𝒽: b
+    then Result.ret (UInt32.ofNatCore 0 (by intlit))
+    else Result.ret (UInt32.ofNatCore 1 (by intlit))
   
   /- [no_nested_borrows::test_shared_borrow_bool2] -/
-  def test_shared_borrow_bool2_fwd : result UInt32 :=
-    result.ret (UInt32.ofNatCore 0 (by intlit))
+  def test_shared_borrow_bool2_fwd : Result UInt32 :=
+    Result.ret (UInt32.ofNatCore 0 (by intlit))
   
   /- [no_nested_borrows::test_shared_borrow_enum1] -/
-  def test_shared_borrow_enum1_fwd (l : list_t UInt32) : result UInt32 :=
-    match l with
-    | list_t.ListCons i l0 => result.ret (UInt32.ofNatCore 1 (by intlit))
-    | list_t.ListNil => result.ret (UInt32.ofNatCore 0 (by intlit))
+  def test_shared_borrow_enum1_fwd (l : list_t UInt32) : Result UInt32 :=
+    match 𝒽: l with
+    | list_t.ListCons i l0 => Result.ret (UInt32.ofNatCore 1 (by intlit))
+    | list_t.ListNil => Result.ret (UInt32.ofNatCore 0 (by intlit))
   
   /- [no_nested_borrows::test_shared_borrow_enum2] -/
-  def test_shared_borrow_enum2_fwd : result UInt32 :=
-    result.ret (UInt32.ofNatCore 0 (by intlit))
+  def test_shared_borrow_enum2_fwd : Result UInt32 :=
+    Result.ret (UInt32.ofNatCore 0 (by intlit))
   

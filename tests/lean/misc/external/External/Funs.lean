@@ -8,86 +8,86 @@ section variable (opaque_defs: OpaqueDefs)
 
 /- [external::swap] -/
 def swap_fwd
-  (T : Type) (x : T) (y : T) (st : state) : result (state × Unit) :=
+  (T : Type) (x : T) (y : T) (st : State) : Result (State × Unit) :=
   do
-    let (st0, _) <- opaque_defs.core_mem_swap_fwd T x y st
-    let (st1, _) <- opaque_defs.core_mem_swap_back0 T x y st st0
-    let (st2, _) <- opaque_defs.core_mem_swap_back1 T x y st st1
-    result.ret (st2, ())
+    let (st0, _) ⟵ opaque_defs.core_mem_swap_fwd T x y st
+    let (st1, _) ⟵ opaque_defs.core_mem_swap_back0 T x y st st0
+    let (st2, _) ⟵ opaque_defs.core_mem_swap_back1 T x y st st1
+    Result.ret (st2, ())
 
 /- [external::swap] -/
 def swap_back
-  (T : Type) (x : T) (y : T) (st : state) (st0 : state) :
-  result (state × (T × T))
+  (T : Type) (x : T) (y : T) (st : State) (st0 : State) :
+  Result (State × (T × T))
   :=
   do
-    let (st1, _) <- opaque_defs.core_mem_swap_fwd T x y st
-    let (st2, x0) <- opaque_defs.core_mem_swap_back0 T x y st st1
-    let (_, y0) <- opaque_defs.core_mem_swap_back1 T x y st st2
-    result.ret (st0, (x0, y0))
+    let (st1, _) ⟵ opaque_defs.core_mem_swap_fwd T x y st
+    let (st2, x0) ⟵ opaque_defs.core_mem_swap_back0 T x y st st1
+    let (_, y0) ⟵ opaque_defs.core_mem_swap_back1 T x y st st2
+    Result.ret (st0, (x0, y0))
 
 /- [external::test_new_non_zero_u32] -/
 def test_new_non_zero_u32_fwd
-  (x : UInt32) (st : state) :
-  result (state × core_num_nonzero_non_zero_u32_t)
+  (x : UInt32) (st : State) :
+  Result (State × core_num_nonzero_non_zero_u32_t)
   :=
   do
-    let (st0, opt) <- opaque_defs.core_num_nonzero_non_zero_u32_new_fwd x st
+    let (st0, opt) ⟵ opaque_defs.core_num_nonzero_non_zero_u32_new_fwd x st
     opaque_defs.core_option_option_unwrap_fwd core_num_nonzero_non_zero_u32_t
       opt st0
 
 /- [external::test_vec] -/
-def test_vec_fwd : result Unit :=
+def test_vec_fwd : Result Unit :=
   do
     let v := vec_new UInt32
-    let _ <- vec_push_back UInt32 v (UInt32.ofNatCore 0 (by intlit))
-    result.ret ()
+    let _ ⟵ vec_push_back UInt32 v (UInt32.ofNatCore 0 (by intlit))
+    Result.ret ()
 
 /- Unit test for [external::test_vec] -/
-#assert (test_vec_fwd = .ret ())
+#assert (test_vec_fwd == .ret ())
 
 /- [external::custom_swap] -/
 def custom_swap_fwd
-  (T : Type) (x : T) (y : T) (st : state) : result (state × T) :=
+  (T : Type) (x : T) (y : T) (st : State) : Result (State × T) :=
   do
-    let (st0, _) <- opaque_defs.core_mem_swap_fwd T x y st
-    let (st1, x0) <- opaque_defs.core_mem_swap_back0 T x y st st0
-    let (st2, _) <- opaque_defs.core_mem_swap_back1 T x y st st1
-    result.ret (st2, x0)
+    let (st0, _) ⟵ opaque_defs.core_mem_swap_fwd T x y st
+    let (st1, x0) ⟵ opaque_defs.core_mem_swap_back0 T x y st st0
+    let (st2, _) ⟵ opaque_defs.core_mem_swap_back1 T x y st st1
+    Result.ret (st2, x0)
 
 /- [external::custom_swap] -/
 def custom_swap_back
-  (T : Type) (x : T) (y : T) (st : state) (ret0 : T) (st0 : state) :
-  result (state × (T × T))
+  (T : Type) (x : T) (y : T) (st : State) (ret0 : T) (st0 : State) :
+  Result (State × (T × T))
   :=
   do
-    let (st1, _) <- opaque_defs.core_mem_swap_fwd T x y st
-    let (st2, _) <- opaque_defs.core_mem_swap_back0 T x y st st1
-    let (_, y0) <- opaque_defs.core_mem_swap_back1 T x y st st2
-    result.ret (st0, (ret0, y0))
+    let (st1, _) ⟵ opaque_defs.core_mem_swap_fwd T x y st
+    let (st2, _) ⟵ opaque_defs.core_mem_swap_back0 T x y st st1
+    let (_, y0) ⟵ opaque_defs.core_mem_swap_back1 T x y st st2
+    Result.ret (st0, (ret0, y0))
 
 /- [external::test_custom_swap] -/
 def test_custom_swap_fwd
-  (x : UInt32) (y : UInt32) (st : state) : result (state × Unit) :=
+  (x : UInt32) (y : UInt32) (st : State) : Result (State × Unit) :=
   do
-    let (st0, _) <- custom_swap_fwd UInt32 x y st
-    result.ret (st0, ())
+    let (st0, _) ⟵ custom_swap_fwd UInt32 x y st
+    Result.ret (st0, ())
 
 /- [external::test_custom_swap] -/
 def test_custom_swap_back
-  (x : UInt32) (y : UInt32) (st : state) (st0 : state) :
-  result (state × (UInt32 × UInt32))
+  (x : UInt32) (y : UInt32) (st : State) (st0 : State) :
+  Result (State × (UInt32 × UInt32))
   :=
   custom_swap_back UInt32 x y st (UInt32.ofNatCore 1 (by intlit)) st0
 
 /- [external::test_swap_non_zero] -/
 def test_swap_non_zero_fwd
-  (x : UInt32) (st : state) : result (state × UInt32) :=
+  (x : UInt32) (st : State) : Result (State × UInt32) :=
   do
-    let (st0, _) <- swap_fwd UInt32 x (UInt32.ofNatCore 0 (by intlit)) st
-    let (st1, (x0, _)) <-
+    let (st0, _) ⟵ swap_fwd UInt32 x (UInt32.ofNatCore 0 (by intlit)) st
+    let (st1, (x0, _)) ⟵
       swap_back UInt32 x (UInt32.ofNatCore 0 (by intlit)) st st0
-    if x0 = (UInt32.ofNatCore 0 (by intlit))
-    then result.fail error.panic
-    else result.ret (st1, x0)
+    if 𝒽: x0 = (UInt32.ofNatCore 0 (by intlit))
+    then Result.fail Error.panic
+    else Result.ret (st1, x0)
 
