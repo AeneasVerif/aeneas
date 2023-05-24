@@ -38,7 +38,7 @@ type pair_t (t1 t2 : Type0) = { pair_x : t1; pair_y : t2; }
 
 (** [constants::mk_pair1] *)
 let mk_pair1_fwd (x : u32) (y : u32) : result (pair_t u32 u32) =
-  Return (Mkpair_t x y)
+  Return { pair_x = x; pair_y = y }
 
 (** [constants::P0] *)
 let p0_body : result (u32 & u32) = mk_pair0_fwd 0 1
@@ -53,7 +53,7 @@ let p2_body : result (u32 & u32) = Return (0, 1)
 let p2_c : (u32 & u32) = eval_global p2_body
 
 (** [constants::P3] *)
-let p3_body : result (pair_t u32 u32) = Return (Mkpair_t 0 1)
+let p3_body : result (pair_t u32 u32) = Return { pair_x = 0; pair_y = 1 }
 let p3_c : pair_t u32 u32 = eval_global p3_body
 
 (** [constants::Wrap] *)
@@ -61,7 +61,7 @@ type wrap_t (t : Type0) = { wrap_val : t; }
 
 (** [constants::Wrap::{0}::new] *)
 let wrap_new_fwd (t : Type0) (val0 : t) : result (wrap_t t) =
-  Return (Mkwrap_t val0)
+  Return { wrap_val = val0 }
 
 (** [constants::Y] *)
 let y_body : result (wrap_t i32) = wrap_new_fwd i32 2

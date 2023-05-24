@@ -353,15 +353,15 @@ type struct_with_tuple_t (t1 t2 : Type0) = { struct_with_tuple_p : (t1 & t2); }
 
 (** [no_nested_borrows::new_tuple1] *)
 let new_tuple1_fwd : result (struct_with_tuple_t u32 u32) =
-  Return (Mkstruct_with_tuple_t (1, 2))
+  Return { struct_with_tuple_p = (1, 2) }
 
 (** [no_nested_borrows::new_tuple2] *)
 let new_tuple2_fwd : result (struct_with_tuple_t i16 i16) =
-  Return (Mkstruct_with_tuple_t (1, 2))
+  Return { struct_with_tuple_p = (1, 2) }
 
 (** [no_nested_borrows::new_tuple3] *)
 let new_tuple3_fwd : result (struct_with_tuple_t u64 i64) =
-  Return (Mkstruct_with_tuple_t (1, 2))
+  Return { struct_with_tuple_p = (1, 2) }
 
 (** [no_nested_borrows::StructWithPair] *)
 type struct_with_pair_t (t1 t2 : Type0) =
@@ -371,7 +371,7 @@ type struct_with_pair_t (t1 t2 : Type0) =
 
 (** [no_nested_borrows::new_pair1] *)
 let new_pair1_fwd : result (struct_with_pair_t u32 u32) =
-  Return (Mkstruct_with_pair_t (Mkpair_t 1 2))
+  Return { struct_with_pair_p = { pair_x = 1; pair_y = 2 } }
 
 (** [no_nested_borrows::test_constants] *)
 let test_constants_fwd : result unit =

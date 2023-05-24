@@ -66,27 +66,67 @@ let error_out_of_fuel_id = VariantId.of_int 1
 let fuel_zero_id = VariantId.of_int 0
 let fuel_succ_id = VariantId.of_int 1
 
-type type_id = AdtId of TypeDeclId.id | Tuple | Assumed of assumed_ty
-[@@deriving show, ord]
+type type_decl_id = TypeDeclId.id [@@deriving show, ord]
+type type_var_id = TypeVarId.id [@@deriving show, ord]
+
+(** Ancestor for iter visitor for [ty] *)
+class ['self] iter_type_id_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.iter
+    method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
+    method visit_assumed_ty : 'env -> assumed_ty -> unit = fun _ _ -> ()
+  end
+
+(** Ancestor for map visitor for [ty] *)
+class ['self] map_type_id_base =
+  object (_self : 'self)
+    inherit [_] VisitorsRuntime.map
+
+    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id =
+      fun _ x -> x
+
+    method visit_assumed_ty : 'env -> assumed_ty -> assumed_ty = fun _ x -> x
+  end
+
+type type_id = AdtId of type_decl_id | Tuple | Assumed of assumed_ty
+[@@deriving
+  show,
+    ord,
+    visitors
+      {
+        name = "iter_type_id";
+        variety = "iter";
+        ancestors = [ "iter_type_id_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "map_type_id";
+        variety = "map";
+        ancestors = [ "map_type_id_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        concrete = true;
+        polymorphic = false;
+      }]
 
 (** Ancestor for iter visitor for [ty] *)
 class ['self] iter_ty_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.iter
-    method visit_id : 'env -> TypeVarId.id -> unit = fun _ _ -> ()
-    method visit_type_id : 'env -> type_id -> unit = fun _ _ -> ()
+    inherit [_] iter_type_id
+    method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
     method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
 class ['self] map_ty_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.map
-    method visit_id : 'env -> TypeVarId.id -> TypeVarId.id = fun _ id -> id
-    method visit_type_id : 'env -> type_id -> type_id = fun _ id -> id
+    inherit [_] map_type_id
+    method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
 
     method visit_integer_type : 'env -> integer_type -> integer_type =
-      fun _ ity -> ity
+      fun _ x -> x
   end
 
 type ty =
@@ -98,7 +138,7 @@ type ty =
           be able to only give back part of the ADT. We need a way to encode
           such "partial" ADTs.
        *)
-  | TypeVar of TypeVarId.id
+  | TypeVar of type_var_id
   | Bool
   | Char
   | Integer of integer_type
@@ -362,6 +402,7 @@ type qualif_id =
  *)
 type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]
 
+type field_id = FieldId.id [@@deriving show, ord]
 type var_id = VarId.id [@@deriving show, ord]
 
 (** Ancestor for {!iter_expression} visitor *)
@@ -372,6 +413,8 @@ class ['self] iter_expression_base =
     method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
+    method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
+    method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_expression} visitor *)
@@ -385,6 +428,11 @@ class ['self] map_expression_base =
     method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
+
+    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id =
+      fun _ x -> x
+
+    method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_expression} visitor *)
@@ -398,6 +446,11 @@ class virtual ['self] reduce_expression_base =
     method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
+
+    method visit_type_decl_id : 'env -> type_decl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_expression} visitor *)
@@ -415,6 +468,12 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
 
     method visit_loop_id : 'env -> loop_id -> loop_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_field_id : 'env -> field_id -> field_id * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -477,6 +536,7 @@ type expression =
        *)
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
+  | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
   | Meta of (meta[@opaque]) * texpression  (** Meta-information *)
 
 and switch_body = If of texpression * texpression | Match of match_branch list
@@ -506,6 +566,27 @@ and loop = {
       (** The types of the given back values, if we ar esynthesizing a backward
           function *)
   loop_body : texpression;
+}
+
+(** Structure creation/update.
+
+    This expression is not strictly necessary, but allows for nice syntax, which
+    is important to work easily with the generated code.
+
+    If {!init} is [None], it defines a structure creation:
+    {[
+      { x := 3; y := true; }
+    ]}
+
+    If {!init} is [Some], it defines a structure update:
+    {[
+      { s with x := 3 }
+    ]}
+ *)
+and struct_update = {
+  struct_id : type_decl_id;
+  init : var_id option;
+  updates : (field_id * texpression) list;
 }
 
 and texpression = { e : expression; ty : ty }

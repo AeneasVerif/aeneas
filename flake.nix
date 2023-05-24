@@ -2,13 +2,19 @@
   description = "Aeneas";
 
   inputs = {
+    # Remark: when adding inputs here, don't forget to also add them in the list
+    # of outputs below!
     charon.url = "github:aeneasverif/charon";
     flake-utils.follows = "charon/flake-utils";
     nixpkgs.follows = "charon/nixpkgs";
     hacl-nix.url = "github:hacl-star/hacl-nix";
+    lean.url = "github:leanprover/lean4";
+    lake.url = "github:leanprover/lake";
   };
 
-  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix }:
+  # Remark: keep the list of outputs in sync with the list of inputs above
+  # (see above remark)
+  outputs = { self, charon, flake-utils, nixpkgs, hacl-nix, lean, lake }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -84,7 +90,7 @@
             export AENEAS_EXE=./aeneas.exe
 
             # Run the tests
-            make tests -j
+            make tests -j $NIX_BUILD_CORES
           '';
           # Tests don't generate anything new as the generated files are
           # versionned, but the installation phase still needs to prodocue
@@ -98,7 +104,7 @@
           FSTAR_EXE = "${hacl-nix.packages.${system}.fstar}/bin/fstar.exe";
           buildPhase= ''
             make prepare-projects
-            make verify -j
+            make verify -j $NIX_BUILD_CORES
           '';
           # The tests don't generate anything
           installPhase = "touch $out";
@@ -110,7 +116,23 @@
           buildInputs = [ pkgs.coq ];
           buildPhase= ''
             make prepare-projects
-            make verify -j
+            make verify -j $NIX_BUILD_CORES
+          '';
+          # The tests don't generate anything
+          installPhase = "touch $out";
+        };
+        # Replay the Lean proofs.
+        aeneas-verify-lean = pkgs.stdenv.mkDerivation {
+          name = "aeneas_verify_lean";
+          src = ./tests/lean;
+          #LAKE_EXE = lean.packages.${system};
+          #buildInputs = [lean.packages.${system}.lake-dev];
+          buildInputs = [lean.packages.${system} lake.packages.${system}.cli];
+          #buildInputs = [lake.packages.${system}.cli];
+          buildPhase= ''
+            make prepare-projects
+            #make verify -j $NIX_BUILD_CORES
+            make verify
           '';
           # The tests don't generate anything
           installPhase = "touch $out";
@@ -120,7 +142,7 @@
           inherit aeneas;
           default = aeneas;
         };
-        checks = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq; };
-        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq; };
+        checks = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean; };
+        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean; };
       });
 }

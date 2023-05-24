@@ -66,24 +66,26 @@ let () =
     [
       ( "-backend",
         Arg.Symbol (backend_names, set_backend),
-        " Specify the backend to which to extract" );
+        " Specify the target backend" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
       ( "-no-filter-useless-calls",
         Arg.Clear filter_useless_monadic_calls,
-        " Do not filter the useless function calls, when possible" );
+        " Do not filter the useless function calls" );
       ( "-no-filter-useless-funs",
         Arg.Clear filter_useless_functions,
         " Do not filter the useless forward/backward functions" );
       ( "-test-units",
         Arg.Set test_unit_functions,
-        " Test the unit functions with the concrete interpreter" );
+        " Test the unit functions with the concrete (i.e., not symbolic) \
+         interpreter" );
       ( "-test-trans-units",
         Arg.Set test_trans_unit_functions,
-        " Test the translated unit functions with the target theorem\n\
-        \                         prover's normalizer" );
+        " Test the translated unit functions with the target theorem prover's \
+         normalizer" );
       ( "-decreases-clauses",
         Arg.Set extract_decreases_clauses,
-        " Use decreases clauses for the recursive definitions" );
+        " Use decreases clauses/termination measures for the recursive \
+         definitions" );
       ( "-no-state",
         Arg.Clear use_state,
         " Do not use state-error monads, simply use error monads" );
@@ -95,16 +97,16 @@ let () =
         " Forbid backward functions from updating the state" );
       ( "-template-clauses",
         Arg.Set extract_template_decreases_clauses,
-        " Generate templates for the required decreases clauses, in a \
-         dedicated file. Implies -decreases-clauses" );
+        " Generate templates for the required decreases clauses/termination \
+         measures, in a dedicated file. Implies -decreases-clauses" );
       ( "-no-split-files",
         Arg.Clear split_files,
-        " Don't split the definitions between different files for types, \
+        " Do not split the definitions between different files for types, \
          functions, etc." );
       ( "-no-check-inv",
         Arg.Clear check_invariants,
-        " Deactivate the invariant sanity checks performed at every step of \
-         evaluation. Dramatically saves speed." );
+        " Deactivate the invariant sanity checks performed at every evaluation \
+         step. Dramatically increases speed." );
     ]
   in
 
@@ -134,7 +136,7 @@ let () =
     match !opt_backend with
     | Some b -> backend := b
     | None ->
-        print_string "Backend not specified (use the `-backend` argument)\n";
+        log#error "Backend not specified (use the `-backend` argument)";
         fail ()
   in
 
@@ -151,7 +153,13 @@ let () =
         decompose_nested_let_patterns := true
     | Lean ->
         (* This patern is not supported due to a bug in Lean *)
-        decompose_monadic_rec_let_bindings := true
+        decompose_monadic_rec_let_bindings := true;
+        (* The Lean backend is experimental: print a warning *)
+        log#lwarning (lazy "The Lean backend is experimental");
+        (* We don't support fuel for the Lean backend *)
+        if !use_fuel then (
+          log#error "The Lean backend doesn't support the -use-fuel option";
+          fail ())
   in
 
   (* Retrieve and check the filename *)
@@ -187,6 +195,37 @@ let () =
       log#linfo (lazy ("Imported: " ^ filename));
       log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
 
+      (* Print a warning if the crate contains loops (loops are experimental for now) *)
+      let has_loops =
+        List.exists Aeneas.LlbcAstUtils.fun_decl_has_loops m.functions
+      in
+      if has_loops then log#lwarning (lazy "Support for loops is experimental");
+
+      (* If we target Lean, we request the crates to be split into several files
+         whenever there are opaque functions *)
+      if
+        !backend = Lean
+        && List.exists (fun (d : A.fun_decl) -> d.body = None) m.functions
+        && not !split_files
+      then (
+        log#error
+          "For Lean, we request the -split-file option whenever using opaque \
+           functions";
+        fail ());
+
+      (* We don't support mutually recursive definitions with decreases clauses in Lean *)
+      if
+        !backend = Lean && !extract_decreases_clauses
+        && List.exists
+             (function Aeneas.LlbcAst.Fun (Rec (_ :: _)) -> true | _ -> false)
+             m.declarations
+      then (
+        log#error
+          "The Lean backend doesn't support the use of \
+           decreasing_by/termination_by clauses with mutually recursive \
+           definitions";
+        fail ());
+
       (* Apply the pre-passes *)
       let m = PrePasses.apply_passes m in
 
@@ -195,13 +234,8 @@ let () =
       (* Test the unit functions with the concrete interpreter *)
       if !test_unit_functions then I.Test.test_unit_functions m;
 
-      (* Evaluate the symbolic interpreter on the functions, ignoring the
-       * functions which contain loops - TODO: remove *)
-      let synthesize = true in
-      I.Test.test_functions_symbolic synthesize m;
-
       (* Translate the functions *)
-      Translate.translate_module filename dest_dir m;
+      Translate.translate_crate filename dest_dir m;
 
       (* Print total elapsed time *)
       log#linfo

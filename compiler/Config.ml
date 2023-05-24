@@ -118,7 +118,6 @@ let dont_use_field_projectors = ref false
 (** Deconstructing ADTs which have only one variant with let-bindings is not always
     supported: this parameter controls whether we use let-bindings in such situations or not.
   *)
-
 let always_deconstruct_adts_with_matches = ref false
 
 (** Controls whether we need to use a state to model the external world
@@ -178,16 +177,21 @@ let test_unit_functions = ref false
  *)
 let test_trans_unit_functions = ref false
 
-(** If [true], insert [decreases] clauses for all the recursive definitions.
+(** If [true], use decreases clauses/termination measures for all the recursive definitions.
 
-    The body of such clauses must be defined by the user.
+    More precisely:
+    - for F*, we generate definitions which use decreases clauses
+    - for Lean, we generate definitions which use termination measures and
+      decreases proofs
+
+    The body of such clauses/proofs must be defined by the user.
  *)
 let extract_decreases_clauses = ref false
 
-(** In order to help the user, we can generate "template" decrease clauses
-    (i.e., definitions with proper signatures but dummy bodies) in a
-    dedicated file.
- *)
+(** In order to help the user, we can generate "template" decrease clauses/ termination
+   measures (i.e., definitions with proper signatures but dummy bodies) in a dedicated
+   file.
+*)
 let extract_template_decreases_clauses = ref false
 
 (** {1 Micro passes} *)
