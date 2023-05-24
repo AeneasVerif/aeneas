@@ -3,11 +3,11 @@ import HashmapMain.Types
 
 def hashmap_list_length (l: hashmap_list_t T) :=
   match l with
-  | .HashmapListNil => 0
-  | .HashmapListCons _ _ l => 1 + hashmap_list_length l
+  | .Nil => 0
+  | .Cons _ _ l => 1 + hashmap_list_length l
 
 theorem hashmap_list_length_cons (T: Type) k v (tl: hashmap_list_t T):
-  hashmap_list_length (hashmap_list_t.HashmapListCons k v tl) = 1 + hashmap_list_length tl
+  hashmap_list_length (hashmap_list_t.Cons k v tl) = 1 + hashmap_list_length tl
 :=
   by rfl
 
