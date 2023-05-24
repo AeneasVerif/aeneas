@@ -8,6 +8,14 @@ sig
 
   include Abbrev
 
+  (* The following functions allow to *persistently* register custom rewriting theorems.
+
+     Remark: it is important that we allow to save rewriting theorems without forcing
+     the user to save them in, say, srw_ss.
+   *)
+  val add_rewrite_thm : thm -> unit
+  val add_rewrite_thms : thm list -> unit
+
   (* The following functions allow to *persistently* register custom unfolding theorems *)
   val add_unfold_thm : thm -> unit
   val add_unfold_thms : thm list -> unit

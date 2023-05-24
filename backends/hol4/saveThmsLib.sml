@@ -8,32 +8,35 @@ type thname = KernelSig.kernelname
 (* The user-provided functions *)
 type 'key key_fns = {
   compare : 'key * 'key -> order,
-  get_key_from_thm : thm -> 'key
+  get_key_normalize_thm : thm -> ('key * thm)
 }
 
 (* The functions we return to the user to manipulate the map *)
 type 'key map_fns = {
   (* Persistently save a theorem *)
   save_thm : string -> unit,
+  (* Persistently delete a theorem *)
+  delete_thm : string -> unit,
   (* Temporarily save a theorem *)
   temp_save_thm : thm -> unit,
+  (* Temporarily delete a theorem *)
+  temp_delete_thm : thm -> unit,
   (* Get the key set *)
   get_keys : unit -> 'key Redblackset.set,
   (* Get the theorems map *)
   get_map : unit -> ('key, thm) Redblackmap.dict
 }
 
-(* This function is adapted from ThmSetData.sml.
+(* This function is adapted from ThmSetData.sml *)
+fun get_Kname (s : string) : thname =
+  case String.fields (equal #".") s of
+    [s0] => {Thy = current_theory(), Name = s}
+  | [s1,s2] => {Thy = s1, Name = s2}
+  | _ => raise mk_HOL_ERR "saveThmsLib" "get_Kname" ("Malformed name: " ^ s)
 
-   It raises an exception if it can't find a theorem.
- *)
 fun lookup_thm (s : string) : thname * thm =
   let
-    val name =
-     case String.fields (equal #".") s of
-         [s0] => {Thy = current_theory(), Name = s}
-       | [s1,s2] => {Thy = s1, Name = s2}
-       | _ => raise mk_HOL_ERR "saveThmsLib" "lookup_thm" ("Malformed name: " ^ s)
+    val name = get_Kname s
     fun lookup_exn {Thy,Name} = DB.fetch Thy Name
   in
     (name, lookup_exn name)
@@ -45,14 +48,26 @@ type 'key state = 'key Redblackset.set * ('key, thm) Redblackmap.dict
 (* Initialize a persistent map *)
 fun create_map (kf : 'key key_fns) (name : string) : 'key map_fns =
   let
-     val { compare, get_key_from_thm } = kf
+     val { compare, get_key_normalize_thm } = kf
      
      (* Small helper *)
-     fun add_to_state (th : thm) (s, m) =
+     fun add_to_state (th : thm) (s, m) : 'key state =
        let
-         val k = get_key_from_thm th
+         val (k, th) = get_key_normalize_thm th
          val s = Redblackset.add (s, k)
          val m = Redblackmap.insert (m, k, th)
+       in
+         (s, m)
+       end
+
+     (* Small helper *)
+     fun remove_from_state (th : thm) ((s, m) : 'key state) : 'key state =
+       let
+         val (k, _) = get_key_normalize_thm th
+         (* For deletion: we have to test whether the element/key is there or not,
+            because otherwise the functions raise the exception NotFound *)
+         val s = if Redblackset.member (s, k) then Redblackset.delete (s, k) else s
+         val m = if Option.isSome (Redblackmap.peek (m, k)) then fst (Redblackmap.remove (m, k)) else m
        in
          (s, m)
        end
@@ -61,8 +76,12 @@ fun create_map (kf : 'key key_fns) (name : string) : 'key map_fns =
      fun apply_delta (delta : ThmSetData.setdelta) st =
        case delta of
          ThmSetData.ADD (_, th) => add_to_state th st
-       | ThmSetData.REMOVE _ =>
-         raise mk_HOL_ERR "saveThmsLib" "create_map" ("Unexpected REMOVE")
+       | ThmSetData.REMOVE th_name =>
+         let
+           val (_, th) = lookup_thm th_name
+         in
+           remove_from_state th st
+         end
 
      (* Initialize the dictionary *)
      val init_state = (Redblackset.empty compare, Redblackmap.mkDict compare)
@@ -85,6 +104,10 @@ fun create_map (kf : 'key key_fns) (name : string) : 'key map_fns =
      fun temp_save_thm (th : thm) : unit =
        update_global_value (add_to_state th)
 
+     (* Temporarily delete theorem *)
+     fun temp_delete_thm (th : thm) : unit =
+       update_global_value (remove_from_state th)
+
      (* Persistently save a theorem *)
      fun save_thm (s : string) : unit =
        let
@@ -96,11 +119,22 @@ fun create_map (kf : 'key key_fns) (name : string) : 'key map_fns =
            temp_save_thm (snd th)
        end
 
+     (* Persistently delete a theorem *)
+     fun delete_thm (s : string) : unit =
+       let
+         val (_, th) = lookup_thm s
+       in
+         (* Similar to [save_thm] *)
+         record_delta (ThmSetData.REMOVE s);
+         temp_delete_thm th
+       end
+
      (* *)
      val get_keys = fst o get_global_value
      val get_map = snd o get_global_value
   in
-    { save_thm = save_thm, temp_save_thm = temp_save_thm,
+    { save_thm = save_thm, delete_thm = delete_thm,
+      temp_save_thm = temp_save_thm, temp_delete_thm = temp_delete_thm,
       get_keys = get_keys, get_map = get_map }
   end
 

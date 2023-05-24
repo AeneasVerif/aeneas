@@ -183,34 +183,6 @@ val massage : tactic =
   assume_bounds_for_all_int_vars >>
   rewrite_with_dep_int_lemmas
 
-(* The registered spec theorems, that {!progress} will automatically apply.
-
-   The keys are the function names (it is a pair, because constant names
-   are made of the theory name and the name of the constant itself).
-
-   Also note that we can store several specs per definition (in practice, when
-   looking up specs, we will try them all one by one, in a LIFO order).
-
-   We store theorems where all the premises are in the goal, with implications
-   (i.e.: [⊢ H0 ==> ... ==> Hn ==> H], not  [H0, ..., Hn ⊢ H]).
-
-   We do this because, when doing proofs by induction, {!progress} might have to
-   handle *unregistered* theorems coming the current goal assumptions and of the shape
-   (the conclusion of the theorem is an assumption, and we want to ignore this assumption):
-   {[
-     [∀i. u32_to_int i < &LENGTH (list_t_v ls) ⇒
-         case nth ls i of
-           Return x => ...
-         | ...      => ...]
-     ⊢ ∀i. u32_to_int i < &LENGTH (list_t_v ls) ⇒
-         case nth ls i of
-           Return x => ...
-         | ...      => ...
-   ]}
- *)
-val reg_spec_thms: (const_name, thm) Redblackmap.dict ref =
-  ref (Redblackmap.mkDict const_name_compare)
-
 (* Retrieve the specified application in a spec theorem.
 
    A spec theorem for a function [f] typically has the shape:
@@ -249,11 +221,33 @@ fun get_spec_app (t : term) : term =
       else (fst o dest_eq) t;
   in t end
 
-(* Register a spec theorem in the spec database.
+(* Create the persistent collection of spec theorems, that {!progress} will automatically apply.
 
-   For the shape of spec theorems, see {!get_spec_thm_app}.
+   The keys are the function names (it is a pair, because constant names
+   are made of the theory name and the name of the constant itself).
+
+   Also note that we can store several specs per definition (in practice, when
+   looking up specs, we will try them all one by one, in a LIFO order).
+
+   We store theorems where all the premises are in the goal, with implications
+   (i.e.: [⊢ H0 ==> ... ==> Hn ==> H], not  [H0, ..., Hn ⊢ H]).
+
+   We do this because, when doing proofs by induction, {!progress} might have to
+   handle *unregistered* theorems coming from the current goal assumptions and of the shape
+   (the conclusion of the theorem is also present as an assumption, and we want to ignore
+    this assumption):
+   {[
+     [∀i. u32_to_int i < &LENGTH (list_t_v ls) ⇒
+         case nth ls i of
+           Return x => ...
+         | ...      => ...]
+     ⊢ ∀i. u32_to_int i < &LENGTH (list_t_v ls) ⇒
+         case nth ls i of
+           Return x => ...
+         | ...      => ...
+   ]}
  *)
-fun register_spec_thm (th: thm) : unit =
+fun get_key_normalize_thm (th : thm) : const_name * thm =
   let
     (* Transform the theroem a bit before storing it *)
     val th = SPEC_ALL th;
@@ -262,95 +256,110 @@ fun register_spec_thm (th: thm) : unit =
     (* Retrieve the function name *)
     val cn = get_fun_name_from_app f;
   in
-    (* Store *)
-    reg_spec_thms := Redblackmap.insert (!reg_spec_thms, cn, th)
+    (* Return *)
+    (cn, th)
   end
 
+val { save_thm = save_spec_thm,
+      delete_thm = delete_spec_thm,
+      temp_save_thm = temp_save_spec_thm,
+      temp_delete_thm = temp_delete_spec_thm,
+      get_map = get_spec_thms, ... } =
+  saveThmsLib.create_map {
+    compare = const_name_compare,
+    get_key_normalize_thm = get_key_normalize_thm
+  } "spec_theorems"
+
+val save_spec_thms = app save_spec_thm
+
 val all_add_eqs = [
-  isize_add_eq,
-  i8_add_eq,
-  i16_add_eq,
-  i32_add_eq,
-  i64_add_eq,
-  i128_add_eq,
-  usize_add_eq,
-  u8_add_eq,
-  u16_add_eq,
-  u32_add_eq,
-  u64_add_eq,
-  u128_add_eq
+  "primitives.isize_add_eq",
+  "primitives.i8_add_eq",
+  "primitives.i16_add_eq",
+  "primitives.i32_add_eq",
+  "primitives.i64_add_eq",
+  "primitives.i128_add_eq",
+  "primitives.usize_add_eq",
+  "primitives.u8_add_eq",
+  "primitives.u16_add_eq",
+  "primitives.u32_add_eq",
+  "primitives.u64_add_eq",
+  "primitives.u128_add_eq"
 ]
-val _ = app register_spec_thm all_add_eqs
+val _ = save_spec_thms all_add_eqs
 
 val all_sub_eqs = [
-  isize_sub_eq,
-  i8_sub_eq,
-  i16_sub_eq,
-  i32_sub_eq,
-  i64_sub_eq,
-  i128_sub_eq,
-  usize_sub_eq,
-  u8_sub_eq,
-  u16_sub_eq,
-  u32_sub_eq,
-  u64_sub_eq,
-  u128_sub_eq
+  "primitives.isize_sub_eq",
+  "primitives.i8_sub_eq",
+  "primitives.i16_sub_eq",
+  "primitives.i32_sub_eq",
+  "primitives.i64_sub_eq",
+  "primitives.i128_sub_eq",
+  "primitives.usize_sub_eq",
+  "primitives.u8_sub_eq",
+  "primitives.u16_sub_eq",
+  "primitives.u32_sub_eq",
+  "primitives.u64_sub_eq",
+  "primitives.u128_sub_eq"
 ]
-val _ = app register_spec_thm all_sub_eqs
+val _ = save_spec_thms all_sub_eqs
 
 val all_mul_eqs = [
-  isize_mul_eq,
-  i8_mul_eq,
-  i16_mul_eq,
-  i32_mul_eq,
-  i64_mul_eq,
-  i128_mul_eq,
-  usize_mul_eq,
-  u8_mul_eq,
-  u16_mul_eq,
-  u32_mul_eq,
-  u64_mul_eq,
-  u128_mul_eq
+  "primitives.isize_mul_eq",
+  "primitives.i8_mul_eq",
+  "primitives.i16_mul_eq",
+  "primitives.i32_mul_eq",
+  "primitives.i64_mul_eq",
+  "primitives.i128_mul_eq",
+  "primitives.usize_mul_eq",
+  "primitives.u8_mul_eq",
+  "primitives.u16_mul_eq",
+  "primitives.u32_mul_eq",
+  "primitives.u64_mul_eq",
+  "primitives.u128_mul_eq"
 ]
-val _ = app register_spec_thm all_mul_eqs
+val _ = save_spec_thms all_mul_eqs
 
 val all_div_eqs = [
-  isize_div_eq,
-  i8_div_eq,
-  i16_div_eq,
-  i32_div_eq,
-  i64_div_eq,
-  i128_div_eq,
-  usize_div_eq,
-  u8_div_eq,
-  u16_div_eq,
-  u32_div_eq,
-  u64_div_eq,
-  u128_div_eq
+  "primitives.isize_div_eq",
+  "primitives.i8_div_eq",
+  "primitives.i16_div_eq",
+  "primitives.i32_div_eq",
+  "primitives.i64_div_eq",
+  "primitives.i128_div_eq",
+  "primitives.usize_div_eq",
+  "primitives.u8_div_eq",
+  "primitives.u16_div_eq",
+  "primitives.u32_div_eq",
+  "primitives.u64_div_eq",
+  "primitives.u128_div_eq"
 ]
-val _ = app register_spec_thm all_div_eqs
+val _ = save_spec_thms all_div_eqs
 
 val all_rem_eqs = [
-  isize_rem_eq,
-  i8_rem_eq,
-  i16_rem_eq,
-  i32_rem_eq,
-  i64_rem_eq,
-  i128_rem_eq,
-  usize_rem_eq,
-  u8_rem_eq,
-  u16_rem_eq,
-  u32_rem_eq,
-  u64_rem_eq,
-  u128_rem_eq
+  "primitives.isize_rem_eq",
+  "primitives.i8_rem_eq",
+  "primitives.i16_rem_eq",
+  "primitives.i32_rem_eq",
+  "primitives.i64_rem_eq",
+  "primitives.i128_rem_eq",
+  "primitives.usize_rem_eq",
+  "primitives.u8_rem_eq",
+  "primitives.u16_rem_eq",
+  "primitives.u32_rem_eq",
+  "primitives.u64_rem_eq",
+  "primitives.u128_rem_eq"
 ]
-val _ = app register_spec_thm all_rem_eqs
+val _ = save_spec_thms all_rem_eqs
 
-val all_vec_lems = [
-  vec_len_spec,
-  vec_insert_back_spec
+val _ = save_spec_thms [
+  "primitives.vec_index_fwd_spec",
+  "primitives.vec_index_back_spec",
+  "primitives.vec_index_mut_fwd_spec",
+  "primitives.vec_index_mut_back_spec",
+  "primitives.vec_insert_back_spec",
+  "primitives.vec_push_back_spec"
 ]
-val _ = app register_spec_thm all_vec_lems
 
 (* Provided the goal contains a call to a monadic function, return this function call.
 
@@ -499,7 +508,7 @@ val progress : tactic =
     val asms_thl = mapfilter asm_to_spec asms;
     (* Lookup a spec in the database *)
     val thl =
-      case Redblackmap.peek (!reg_spec_thms, fname) of
+      case Redblackmap.peek (get_spec_thms (), fname) of
         NONE => asms_thl
       | SOME spec => spec :: asms_thl;
     val _ =

@@ -1624,8 +1624,8 @@ Proof
   prove_scalar_eq_equiv_tac
 QED
 
-(* Remark.: don't move this up, it will break some proofs *)
-val _ = BasicProvers.export_rewrites [
+
+val _ = evalLib.add_rewrite_thms [
   "isize_eq_equiv",
   "i8_eq_equiv",
   "i16_eq_equiv",
