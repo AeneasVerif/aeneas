@@ -64,7 +64,7 @@ def cast_test_fwd (x : U32) : Result I32 :=
 /- [no_nested_borrows::test2] -/
 def test2_fwd : Result Unit :=
   do
-    let _ ← (U32.ofInt 23 (by intlit)) + (U32.ofInt 44 (by intlit))
+    let _ ⟵ (U32.ofInt 23 (by intlit)) + (U32.ofInt 44 (by intlit))
     Result.ret ()
 
 /- Unit test for [no_nested_borrows::test2] -/
@@ -72,17 +72,17 @@ def test2_fwd : Result Unit :=
 
 /- [no_nested_borrows::get_max] -/
 def get_max_fwd (x : U32) (y : U32) : Result U32 :=
-  if h: x >= y
+  if 𝒽: x >= y
   then Result.ret x
   else Result.ret y
 
 /- [no_nested_borrows::test3] -/
 def test3_fwd : Result Unit :=
   do
-    let x ← get_max_fwd (U32.ofInt 4 (by intlit)) (U32.ofInt 3 (by intlit))
-    let y ← get_max_fwd (U32.ofInt 10 (by intlit)) (U32.ofInt 11 (by intlit))
-    let z ← x + y
-    if h: not (z = (U32.ofInt 15 (by intlit)))
+    let x ⟵ get_max_fwd (U32.ofInt 4 (by intlit)) (U32.ofInt 3 (by intlit))
+    let y ⟵ get_max_fwd (U32.ofInt 10 (by intlit)) (U32.ofInt 11 (by intlit))
+    let z ⟵ x + y
+    if 𝒽: not (z = (U32.ofInt 15 (by intlit)))
     then Result.fail Error.panic
     else Result.ret ()
 
@@ -92,8 +92,8 @@ def test3_fwd : Result Unit :=
 /- [no_nested_borrows::test_neg1] -/
 def test_neg1_fwd : Result Unit :=
   do
-    let y ← - (I32.ofInt 3 (by intlit))
-    if h: not (y = (I32.ofInt (-(3:Int)) (by intlit)))
+    let y ⟵ - (I32.ofInt 3 (by intlit))
+    if 𝒽: not (y = (I32.ofInt (-(3:Int)) (by intlit)))
     then Result.fail Error.panic
     else Result.ret ()
 
@@ -102,7 +102,7 @@ def test_neg1_fwd : Result Unit :=
 
 /- [no_nested_borrows::refs_test1] -/
 def refs_test1_fwd : Result Unit :=
-  if h: not ((I32.ofInt 1 (by intlit)) = (I32.ofInt 1 (by intlit)))
+  if 𝒽: not ((I32.ofInt 1 (by intlit)) = (I32.ofInt 1 (by intlit)))
   then Result.fail Error.panic
   else Result.ret ()
 
@@ -111,16 +111,16 @@ def refs_test1_fwd : Result Unit :=
 
 /- [no_nested_borrows::refs_test2] -/
 def refs_test2_fwd : Result Unit :=
-  if h: not ((I32.ofInt 2 (by intlit)) = (I32.ofInt 2 (by intlit)))
+  if 𝒽: not ((I32.ofInt 2 (by intlit)) = (I32.ofInt 2 (by intlit)))
   then Result.fail Error.panic
   else
-    if h: not ((I32.ofInt 0 (by intlit)) = (I32.ofInt 0 (by intlit)))
+    if 𝒽: not ((I32.ofInt 0 (by intlit)) = (I32.ofInt 0 (by intlit)))
     then Result.fail Error.panic
     else
-      if h: not ((I32.ofInt 2 (by intlit)) = (I32.ofInt 2 (by intlit)))
+      if 𝒽: not ((I32.ofInt 2 (by intlit)) = (I32.ofInt 2 (by intlit)))
       then Result.fail Error.panic
       else
-        if h: not ((I32.ofInt 2 (by intlit)) = (I32.ofInt 2 (by intlit)))
+        if 𝒽: not ((I32.ofInt 2 (by intlit)) = (I32.ofInt 2 (by intlit)))
         then Result.fail Error.panic
         else Result.ret ()
 
@@ -138,7 +138,7 @@ def test_list1_fwd : Result Unit :=
 def test_box1_fwd : Result Unit :=
   let b := (I32.ofInt 1 (by intlit))
   let x := b
-  if h: not (x = (I32.ofInt 1 (by intlit)))
+  if 𝒽: not (x = (I32.ofInt 1 (by intlit)))
   then Result.fail Error.panic
   else Result.ret ()
 
@@ -151,21 +151,21 @@ def copy_int_fwd (x : I32) : Result I32 :=
 
 /- [no_nested_borrows::test_unreachable] -/
 def test_unreachable_fwd (b : Bool) : Result Unit :=
-  if h: b
+  if 𝒽: b
   then Result.fail Error.panic
   else Result.ret ()
 
 /- [no_nested_borrows::test_panic] -/
 def test_panic_fwd (b : Bool) : Result Unit :=
-  if h: b
+  if 𝒽: b
   then Result.fail Error.panic
   else Result.ret ()
 
 /- [no_nested_borrows::test_copy_int] -/
 def test_copy_int_fwd : Result Unit :=
   do
-    let y ← copy_int_fwd (I32.ofInt 0 (by intlit))
-    if h: not ((I32.ofInt 0 (by intlit)) = y)
+    let y ⟵ copy_int_fwd (I32.ofInt 0 (by intlit))
+    if 𝒽: not ((I32.ofInt 0 (by intlit)) = y)
     then Result.fail Error.panic
     else Result.ret ()
 
@@ -174,7 +174,7 @@ def test_copy_int_fwd : Result Unit :=
 
 /- [no_nested_borrows::is_cons] -/
 def is_cons_fwd (T : Type) (l : list_t T) : Result Bool :=
-  match h: l with
+  match 𝒽: l with
   | list_t.Cons t l0 => Result.ret true
   | list_t.Nil => Result.ret false
 
@@ -182,8 +182,8 @@ def is_cons_fwd (T : Type) (l : list_t T) : Result Bool :=
 def test_is_cons_fwd : Result Unit :=
   do
     let l := list_t.Nil
-    let b ← is_cons_fwd I32 (list_t.Cons (I32.ofInt 0 (by intlit)) l)
-    if h: not b
+    let b ⟵ is_cons_fwd I32 (list_t.Cons (I32.ofInt 0 (by intlit)) l)
+    if 𝒽: not b
     then Result.fail Error.panic
     else Result.ret ()
 
@@ -192,7 +192,7 @@ def test_is_cons_fwd : Result Unit :=
 
 /- [no_nested_borrows::split_list] -/
 def split_list_fwd (T : Type) (l : list_t T) : Result (T × (list_t T)) :=
-  match h: l with
+  match 𝒽: l with
   | list_t.Cons hd tl => Result.ret (hd, tl)
   | list_t.Nil => Result.fail Error.panic
 
@@ -200,9 +200,9 @@ def split_list_fwd (T : Type) (l : list_t T) : Result (T × (list_t T)) :=
 def test_split_list_fwd : Result Unit :=
   do
     let l := list_t.Nil
-    let p ← split_list_fwd I32 (list_t.Cons (I32.ofInt 0 (by intlit)) l)
+    let p ⟵ split_list_fwd I32 (list_t.Cons (I32.ofInt 0 (by intlit)) l)
     let (hd, _) := p
-    if h: not (hd = (I32.ofInt 0 (by intlit)))
+    if 𝒽: not (hd = (I32.ofInt 0 (by intlit)))
     then Result.fail Error.panic
     else Result.ret ()
 
@@ -211,34 +211,34 @@ def test_split_list_fwd : Result Unit :=
 
 /- [no_nested_borrows::choose] -/
 def choose_fwd (T : Type) (b : Bool) (x : T) (y : T) : Result T :=
-  if h: b
+  if 𝒽: b
   then Result.ret x
   else Result.ret y
 
 /- [no_nested_borrows::choose] -/
 def choose_back
   (T : Type) (b : Bool) (x : T) (y : T) (ret0 : T) : Result (T × T) :=
-  if h: b
+  if 𝒽: b
   then Result.ret (ret0, y)
   else Result.ret (x, ret0)
 
 /- [no_nested_borrows::choose_test] -/
 def choose_test_fwd : Result Unit :=
   do
-    let z ←
+    let z ⟵
       choose_fwd I32 true (I32.ofInt 0 (by intlit)) (I32.ofInt 0 (by intlit))
-    let z0 ← z + (I32.ofInt 1 (by intlit))
-    if h: not (z0 = (I32.ofInt 1 (by intlit)))
+    let z0 ⟵ z + (I32.ofInt 1 (by intlit))
+    if 𝒽: not (z0 = (I32.ofInt 1 (by intlit)))
     then Result.fail Error.panic
     else
       do
-        let (x, y) ←
+        let (x, y) ⟵
           choose_back I32 true (I32.ofInt 0 (by intlit))
             (I32.ofInt 0 (by intlit)) z0
-        if h: not (x = (I32.ofInt 1 (by intlit)))
+        if 𝒽: not (x = (I32.ofInt 1 (by intlit)))
         then Result.fail Error.panic
         else
-          if h: not (y = (I32.ofInt 0 (by intlit)))
+          if 𝒽: not (y = (I32.ofInt 0 (by intlit)))
           then Result.fail Error.panic
           else Result.ret ()
 
@@ -262,55 +262,61 @@ end
 
 /- [no_nested_borrows::list_length] -/
 def list_length_fwd (T : Type) (l : list_t T) : Result U32 :=
-  match h: l with
+  match 𝒽: l with
   | list_t.Cons t l1 =>
     do
-      let i ← list_length_fwd T l1
+      let i ⟵ list_length_fwd T l1
       (U32.ofInt 1 (by intlit)) + i
   | list_t.Nil => Result.ret (U32.ofInt 0 (by intlit))
 
 /- [no_nested_borrows::list_nth_shared] -/
 def list_nth_shared_fwd (T : Type) (l : list_t T) (i : U32) : Result T :=
-  match h: l with
+  match 𝒽: l with
   | list_t.Cons x tl =>
-    if h: i = (U32.ofInt 0 (by intlit))
+    if 𝒽: i = (U32.ofInt 0 (by intlit))
     then Result.ret x
     else
       do
-        let i0 ← i - (U32.ofInt 1 (by intlit))
-        list_nth_shared_fwd T tl i0
+        let i0 ⟵ i - (U32.ofInt 1 (by intlit))
+        let t ⟵ list_nth_shared_fwd T tl i0
+        Result.ret t
   | list_t.Nil => Result.fail Error.panic
 
 /- [no_nested_borrows::list_nth_mut] -/
 def list_nth_mut_fwd (T : Type) (l : list_t T) (i : U32) : Result T :=
-  match h: l with
+  match 𝒽: l with
   | list_t.Cons x tl =>
-    if h: i = (U32.ofInt 0 (by intlit))
+    if 𝒽: i = (U32.ofInt 0 (by intlit))
     then Result.ret x
-    else do
-           let i0 ← i - (U32.ofInt 1 (by intlit))
-           list_nth_mut_fwd T tl i0
+    else
+      do
+        let i0 ⟵ i - (U32.ofInt 1 (by intlit))
+        let t ⟵ list_nth_mut_fwd T tl i0
+        Result.ret t
   | list_t.Nil => Result.fail Error.panic
 
 /- [no_nested_borrows::list_nth_mut] -/
 def list_nth_mut_back
   (T : Type) (l : list_t T) (i : U32) (ret0 : T) : Result (list_t T) :=
-  match h: l with
+  match 𝒽: l with
   | list_t.Cons x tl =>
-    if h: i = (U32.ofInt 0 (by intlit))
+    if 𝒽: i = (U32.ofInt 0 (by intlit))
     then Result.ret (list_t.Cons ret0 tl)
     else
       do
-        let i0 ← i - (U32.ofInt 1 (by intlit))
-        let tl0 ← list_nth_mut_back T tl i0 ret0
+        let i0 ⟵ i - (U32.ofInt 1 (by intlit))
+        let tl0 ⟵ list_nth_mut_back T tl i0 ret0
         Result.ret (list_t.Cons x tl0)
   | list_t.Nil => Result.fail Error.panic
 
 /- [no_nested_borrows::list_rev_aux] -/
 def list_rev_aux_fwd
   (T : Type) (li : list_t T) (lo : list_t T) : Result (list_t T) :=
-  match h: li with
-  | list_t.Cons hd tl => list_rev_aux_fwd T tl (list_t.Cons hd lo)
+  match 𝒽: li with
+  | list_t.Cons hd tl =>
+    do
+      let l ⟵ list_rev_aux_fwd T tl (list_t.Cons hd lo)
+      Result.ret l
   | list_t.Nil => Result.ret lo
 
 /- [no_nested_borrows::list_rev] -/
@@ -324,52 +330,52 @@ def test_list_functions_fwd : Result Unit :=
     let l := list_t.Nil
     let l0 := list_t.Cons (I32.ofInt 2 (by intlit)) l
     let l1 := list_t.Cons (I32.ofInt 1 (by intlit)) l0
-    let i ← list_length_fwd I32 (list_t.Cons (I32.ofInt 0 (by intlit)) l1)
-    if h: not (i = (U32.ofInt 3 (by intlit)))
+    let i ⟵ list_length_fwd I32 (list_t.Cons (I32.ofInt 0 (by intlit)) l1)
+    if 𝒽: not (i = (U32.ofInt 3 (by intlit)))
     then Result.fail Error.panic
     else
       do
-        let i0 ←
+        let i0 ⟵
           list_nth_shared_fwd I32 (list_t.Cons (I32.ofInt 0 (by intlit)) l1)
             (U32.ofInt 0 (by intlit))
-        if h: not (i0 = (I32.ofInt 0 (by intlit)))
+        if 𝒽: not (i0 = (I32.ofInt 0 (by intlit)))
         then Result.fail Error.panic
         else
           do
-            let i1 ←
+            let i1 ⟵
               list_nth_shared_fwd I32 (list_t.Cons (I32.ofInt 0 (by intlit))
                 l1) (U32.ofInt 1 (by intlit))
-            if h: not (i1 = (I32.ofInt 1 (by intlit)))
+            if 𝒽: not (i1 = (I32.ofInt 1 (by intlit)))
             then Result.fail Error.panic
             else
               do
-                let i2 ←
+                let i2 ⟵
                   list_nth_shared_fwd I32 (list_t.Cons
                     (I32.ofInt 0 (by intlit)) l1) (U32.ofInt 2 (by intlit))
-                if h: not (i2 = (I32.ofInt 2 (by intlit)))
+                if 𝒽: not (i2 = (I32.ofInt 2 (by intlit)))
                 then Result.fail Error.panic
                 else
                   do
-                    let ls ←
+                    let ls ⟵
                       list_nth_mut_back I32 (list_t.Cons
                         (I32.ofInt 0 (by intlit)) l1) (U32.ofInt 1 (by intlit))
                         (I32.ofInt 3 (by intlit))
-                    let i3 ←
+                    let i3 ⟵
                       list_nth_shared_fwd I32 ls (U32.ofInt 0 (by intlit))
-                    if h: not (i3 = (I32.ofInt 0 (by intlit)))
+                    if 𝒽: not (i3 = (I32.ofInt 0 (by intlit)))
                     then Result.fail Error.panic
                     else
                       do
-                        let i4 ←
+                        let i4 ⟵
                           list_nth_shared_fwd I32 ls (U32.ofInt 1 (by intlit))
-                        if h: not (i4 = (I32.ofInt 3 (by intlit)))
+                        if 𝒽: not (i4 = (I32.ofInt 3 (by intlit)))
                         then Result.fail Error.panic
                         else
                           do
-                            let i5 ←
+                            let i5 ⟵
                               list_nth_shared_fwd I32 ls
                                 (U32.ofInt 2 (by intlit))
-                            if h: not (i5 = (I32.ofInt 2 (by intlit)))
+                            if 𝒽: not (i5 = (I32.ofInt 2 (by intlit)))
                             then Result.fail Error.panic
                             else Result.ret ()
 
@@ -472,26 +478,26 @@ def new_pair1_fwd : Result (struct_with_pair_t U32 U32) :=
 /- [no_nested_borrows::test_constants] -/
 def test_constants_fwd : Result Unit :=
   do
-    let swt ← new_tuple1_fwd
+    let swt ⟵ new_tuple1_fwd
     let (i, _) := swt.struct_with_tuple_p
-    if h: not (i = (U32.ofInt 1 (by intlit)))
+    if 𝒽: not (i = (U32.ofInt 1 (by intlit)))
     then Result.fail Error.panic
     else
       do
-        let swt0 ← new_tuple2_fwd
+        let swt0 ⟵ new_tuple2_fwd
         let (i0, _) := swt0.struct_with_tuple_p
-        if h: not (i0 = (I16.ofInt 1 (by intlit)))
+        if 𝒽: not (i0 = (I16.ofInt 1 (by intlit)))
         then Result.fail Error.panic
         else
           do
-            let swt1 ← new_tuple3_fwd
+            let swt1 ⟵ new_tuple3_fwd
             let (i1, _) := swt1.struct_with_tuple_p
-            if h: not (i1 = (U64.ofInt 1 (by intlit)))
+            if 𝒽: not (i1 = (U64.ofInt 1 (by intlit)))
             then Result.fail Error.panic
             else
               do
-                let swp ← new_pair1_fwd
-                if h: not (swp.struct_with_pair_p.pair_x =
+                let swp ⟵ new_pair1_fwd
+                if 𝒽: not (swp.struct_with_pair_p.pair_x =
                   (U32.ofInt 1 (by intlit)))
                 then Result.fail Error.panic
                 else Result.ret ()
@@ -509,13 +515,13 @@ def test_weird_borrows1_fwd : Result Unit :=
 /- [no_nested_borrows::test_mem_replace] -/
 def test_mem_replace_fwd_back (px : U32) : Result U32 :=
   let y := mem_replace_fwd U32 px (U32.ofInt 1 (by intlit))
-  if h: not (y = (U32.ofInt 0 (by intlit)))
+  if 𝒽: not (y = (U32.ofInt 0 (by intlit)))
   then Result.fail Error.panic
   else Result.ret (U32.ofInt 2 (by intlit))
 
 /- [no_nested_borrows::test_shared_borrow_bool1] -/
 def test_shared_borrow_bool1_fwd (b : Bool) : Result U32 :=
-  if h: b
+  if 𝒽: b
   then Result.ret (U32.ofInt 0 (by intlit))
   else Result.ret (U32.ofInt 1 (by intlit))
 
@@ -525,7 +531,7 @@ def test_shared_borrow_bool2_fwd : Result U32 :=
 
 /- [no_nested_borrows::test_shared_borrow_enum1] -/
 def test_shared_borrow_enum1_fwd (l : list_t U32) : Result U32 :=
-  match h: l with
+  match 𝒽: l with
   | list_t.Cons i l0 => Result.ret (U32.ofInt 1 (by intlit))
   | list_t.Nil => Result.ret (U32.ofInt 0 (by intlit))
 

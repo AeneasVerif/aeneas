@@ -108,8 +108,8 @@ def q3_c : I32 := eval_global q3_body (by simp)
 /- [constants::get_z2] -/
 def get_z2_fwd : Result I32 :=
   do
-    let i ← get_z1_fwd
-    let i0 ← add_fwd i q3_c
+    let i ⟵ get_z1_fwd
+    let i0 ⟵ add_fwd i q3_c
     add_fwd q1_c i0
 
 /- [constants::S1] -/

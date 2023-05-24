@@ -49,8 +49,13 @@ Definition hashmap_hash_map_new_with_capacity_fwd
   slots <- hashmap_hash_map_allocate_slots_fwd T n v capacity;
   i <- usize_mul capacity max_load_dividend;
   i0 <- usize_div i max_load_divisor;
-  Return (mkHashmap_hash_map_t (0%usize) (max_load_dividend, max_load_divisor)
-    i0 slots)
+  Return
+    {|
+      Hashmap_hash_map_num_entries := (0%usize);
+      Hashmap_hash_map_max_load_factor := (max_load_dividend, max_load_divisor);
+      Hashmap_hash_map_max_load := i0;
+      Hashmap_hash_map_slots := slots
+    |}
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::new] *)
@@ -91,8 +96,14 @@ Definition hashmap_hash_map_clear_fwd_back
   result (Hashmap_hash_map_t T)
   :=
   v <- hashmap_hash_map_clear_slots_fwd_back T n self.(Hashmap_hash_map_slots);
-  Return (mkHashmap_hash_map_t (0%usize)
-    self.(Hashmap_hash_map_max_load_factor) self.(Hashmap_hash_map_max_load) v)
+  Return
+    {|
+      Hashmap_hash_map_num_entries := (0%usize);
+      Hashmap_hash_map_max_load_factor :=
+        self.(Hashmap_hash_map_max_load_factor);
+      Hashmap_hash_map_max_load := self.(Hashmap_hash_map_max_load);
+      Hashmap_hash_map_slots := v
+    |}
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::len] *)
@@ -175,16 +186,27 @@ Definition hashmap_hash_map_insert_no_resize_fwd_back
     v <-
       vec_index_mut_back (Hashmap_list_t T) self.(Hashmap_hash_map_slots)
         hash_mod l0;
-    Return (mkHashmap_hash_map_t i0 self.(Hashmap_hash_map_max_load_factor)
-      self.(Hashmap_hash_map_max_load) v))
+    Return
+      {|
+        Hashmap_hash_map_num_entries := i0;
+        Hashmap_hash_map_max_load_factor :=
+          self.(Hashmap_hash_map_max_load_factor);
+        Hashmap_hash_map_max_load := self.(Hashmap_hash_map_max_load);
+        Hashmap_hash_map_slots := v
+      |})
   else (
     l0 <- hashmap_hash_map_insert_in_list_back T n key value l;
     v <-
       vec_index_mut_back (Hashmap_list_t T) self.(Hashmap_hash_map_slots)
         hash_mod l0;
-    Return (mkHashmap_hash_map_t self.(Hashmap_hash_map_num_entries)
-      self.(Hashmap_hash_map_max_load_factor) self.(Hashmap_hash_map_max_load)
-      v))
+    Return
+      {|
+        Hashmap_hash_map_num_entries := self.(Hashmap_hash_map_num_entries);
+        Hashmap_hash_map_max_load_factor :=
+          self.(Hashmap_hash_map_max_load_factor);
+        Hashmap_hash_map_max_load := self.(Hashmap_hash_map_max_load);
+        Hashmap_hash_map_slots := v
+      |})
 .
 
 (** [core::num::u32::{9}::MAX] *)
@@ -269,11 +291,21 @@ Definition hashmap_hash_map_try_resize_fwd_back
       hashmap_hash_map_move_elements_fwd_back T n ntable
         self.(Hashmap_hash_map_slots) (0%usize);
     let (ntable0, _) := p in
-    Return (mkHashmap_hash_map_t self.(Hashmap_hash_map_num_entries) (i, i0)
-      ntable0.(Hashmap_hash_map_max_load) ntable0.(Hashmap_hash_map_slots)))
+    Return
+      {|
+        Hashmap_hash_map_num_entries := self.(Hashmap_hash_map_num_entries);
+        Hashmap_hash_map_max_load_factor := (i, i0);
+        Hashmap_hash_map_max_load := ntable0.(Hashmap_hash_map_max_load);
+        Hashmap_hash_map_slots := ntable0.(Hashmap_hash_map_slots)
+      |})
   else
-    Return (mkHashmap_hash_map_t self.(Hashmap_hash_map_num_entries) (i, i0)
-      self.(Hashmap_hash_map_max_load) self.(Hashmap_hash_map_slots))
+    Return
+      {|
+        Hashmap_hash_map_num_entries := self.(Hashmap_hash_map_num_entries);
+        Hashmap_hash_map_max_load_factor := (i, i0);
+        Hashmap_hash_map_max_load := self.(Hashmap_hash_map_max_load);
+        Hashmap_hash_map_slots := self.(Hashmap_hash_map_slots)
+      |}
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::insert] *)
@@ -434,8 +466,14 @@ Definition hashmap_hash_map_get_mut_back
   v <-
     vec_index_mut_back (Hashmap_list_t T) self.(Hashmap_hash_map_slots)
       hash_mod l0;
-  Return (mkHashmap_hash_map_t self.(Hashmap_hash_map_num_entries)
-    self.(Hashmap_hash_map_max_load_factor) self.(Hashmap_hash_map_max_load) v)
+  Return
+    {|
+      Hashmap_hash_map_num_entries := self.(Hashmap_hash_map_num_entries);
+      Hashmap_hash_map_max_load_factor :=
+        self.(Hashmap_hash_map_max_load_factor);
+      Hashmap_hash_map_max_load := self.(Hashmap_hash_map_max_load);
+      Hashmap_hash_map_slots := v
+    |}
 .
 
 (** [hashmap_main::hashmap::HashMap::{0}::remove_from_list] *)
@@ -542,17 +580,28 @@ Definition hashmap_hash_map_remove_back
     v <-
       vec_index_mut_back (Hashmap_list_t T) self.(Hashmap_hash_map_slots)
         hash_mod l0;
-    Return (mkHashmap_hash_map_t self.(Hashmap_hash_map_num_entries)
-      self.(Hashmap_hash_map_max_load_factor) self.(Hashmap_hash_map_max_load)
-      v)
+    Return
+      {|
+        Hashmap_hash_map_num_entries := self.(Hashmap_hash_map_num_entries);
+        Hashmap_hash_map_max_load_factor :=
+          self.(Hashmap_hash_map_max_load_factor);
+        Hashmap_hash_map_max_load := self.(Hashmap_hash_map_max_load);
+        Hashmap_hash_map_slots := v
+      |}
   | Some x0 =>
     i0 <- usize_sub self.(Hashmap_hash_map_num_entries) 1%usize;
     l0 <- hashmap_hash_map_remove_from_list_back T n key l;
     v <-
       vec_index_mut_back (Hashmap_list_t T) self.(Hashmap_hash_map_slots)
         hash_mod l0;
-    Return (mkHashmap_hash_map_t i0 self.(Hashmap_hash_map_max_load_factor)
-      self.(Hashmap_hash_map_max_load) v)
+    Return
+      {|
+        Hashmap_hash_map_num_entries := i0;
+        Hashmap_hash_map_max_load_factor :=
+          self.(Hashmap_hash_map_max_load_factor);
+        Hashmap_hash_map_max_load := self.(Hashmap_hash_map_max_load);
+        Hashmap_hash_map_slots := v
+      |}
   end
 .
 

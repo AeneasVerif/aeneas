@@ -8,9 +8,9 @@ import External.ExternalFuns
 def swap_fwd
   (T : Type) (x : T) (y : T) (st : State) : Result (State × Unit) :=
   do
-    let (st0, _) ← opaque_defs.core_mem_swap_fwd T x y st
-    let (st1, _) ← opaque_defs.core_mem_swap_back0 T x y st st0
-    let (st2, _) ← opaque_defs.core_mem_swap_back1 T x y st st1
+    let (st0, _) ⟵ opaque_defs.core_mem_swap_fwd T x y st
+    let (st1, _) ⟵ opaque_defs.core_mem_swap_back0 T x y st st0
+    let (st2, _) ⟵ opaque_defs.core_mem_swap_back1 T x y st st1
     Result.ret (st2, ())
 
 /- [external::swap] -/
@@ -19,16 +19,16 @@ def swap_back
   Result (State × (T × T))
   :=
   do
-    let (st1, _) ← opaque_defs.core_mem_swap_fwd T x y st
-    let (st2, x0) ← opaque_defs.core_mem_swap_back0 T x y st st1
-    let (_, y0) ← opaque_defs.core_mem_swap_back1 T x y st st2
+    let (st1, _) ⟵ opaque_defs.core_mem_swap_fwd T x y st
+    let (st2, x0) ⟵ opaque_defs.core_mem_swap_back0 T x y st st1
+    let (_, y0) ⟵ opaque_defs.core_mem_swap_back1 T x y st st2
     Result.ret (st0, (x0, y0))
 
 /- [external::test_new_non_zero_u32] -/
 def test_new_non_zero_u32_fwd
   (x : U32) (st : State) : Result (State × core_num_nonzero_non_zero_u32_t) :=
   do
-    let (st0, opt) ← opaque_defs.core_num_nonzero_non_zero_u32_new_fwd x st
+    let (st0, opt) ⟵ opaque_defs.core_num_nonzero_non_zero_u32_new_fwd x st
     opaque_defs.core_option_option_unwrap_fwd core_num_nonzero_non_zero_u32_t
       opt st0
 
@@ -36,16 +36,16 @@ def test_new_non_zero_u32_fwd
 def test_vec_fwd : Result Unit :=
   do
     let v := vec_new U32
-    let _ ← vec_push_back U32 v (U32.ofInt 0 (by intlit))
+    let _ ⟵ vec_push_back U32 v (U32.ofInt 0 (by intlit))
     Result.ret ()
 
 /- [external::custom_swap] -/
 def custom_swap_fwd
   (T : Type) (x : T) (y : T) (st : State) : Result (State × T) :=
   do
-    let (st0, _) ← opaque_defs.core_mem_swap_fwd T x y st
-    let (st1, x0) ← opaque_defs.core_mem_swap_back0 T x y st st0
-    let (st2, _) ← opaque_defs.core_mem_swap_back1 T x y st st1
+    let (st0, _) ⟵ opaque_defs.core_mem_swap_fwd T x y st
+    let (st1, x0) ⟵ opaque_defs.core_mem_swap_back0 T x y st st0
+    let (st2, _) ⟵ opaque_defs.core_mem_swap_back1 T x y st st1
     Result.ret (st2, x0)
 
 /- [external::custom_swap] -/
@@ -54,16 +54,16 @@ def custom_swap_back
   Result (State × (T × T))
   :=
   do
-    let (st1, _) ← opaque_defs.core_mem_swap_fwd T x y st
-    let (st2, _) ← opaque_defs.core_mem_swap_back0 T x y st st1
-    let (_, y0) ← opaque_defs.core_mem_swap_back1 T x y st st2
+    let (st1, _) ⟵ opaque_defs.core_mem_swap_fwd T x y st
+    let (st2, _) ⟵ opaque_defs.core_mem_swap_back0 T x y st st1
+    let (_, y0) ⟵ opaque_defs.core_mem_swap_back1 T x y st st2
     Result.ret (st0, (ret0, y0))
 
 /- [external::test_custom_swap] -/
 def test_custom_swap_fwd
   (x : U32) (y : U32) (st : State) : Result (State × Unit) :=
   do
-    let (st0, _) ← custom_swap_fwd U32 x y st
+    let (st0, _) ⟵ custom_swap_fwd U32 x y st
     Result.ret (st0, ())
 
 /- [external::test_custom_swap] -/
@@ -76,9 +76,9 @@ def test_custom_swap_back
 /- [external::test_swap_non_zero] -/
 def test_swap_non_zero_fwd (x : U32) (st : State) : Result (State × U32) :=
   do
-    let (st0, _) ← swap_fwd U32 x (U32.ofInt 0 (by intlit)) st
-    let (st1, (x0, _)) ← swap_back U32 x (U32.ofInt 0 (by intlit)) st st0
-    if h: x0 = (U32.ofInt 0 (by intlit))
+    let (st0, _) ⟵ swap_fwd U32 x (U32.ofInt 0 (by intlit)) st
+    let (st1, (x0, _)) ⟵ swap_back U32 x (U32.ofInt 0 (by intlit)) st st0
+    if 𝒽: x0 = (U32.ofInt 0 (by intlit))
     then Result.fail Error.panic
     else Result.ret (st1, x0)
 

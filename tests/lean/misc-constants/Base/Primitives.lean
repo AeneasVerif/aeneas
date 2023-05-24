@@ -69,6 +69,7 @@ def eval_global {α: Type} (x: Result α) (_: ret? x): α :=
 
 /- DO-DSL SUPPORT -/
 
+@[inline]
 def bind (x: Result α) (f: α -> Result β) : Result β :=
   match x with
   | ret v  => f v 
@@ -87,29 +88,40 @@ instance : Pure Result where
 -- Let-binding the Result of a monadic operation is oftentimes not sufficient,
 -- because we may need a hypothesis for equational reasoning in the scope. We
 -- rely on subtype, and a custom let-binding operator, in effect recreating our
--- own variant of the do-dsl
+-- own variant of the do-dsl. Previous versions of this operator (see git
+-- history) had a performance issue, but Gabriel Ebner provided the workaround
+-- below.
 
+@[inline]
 def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
   match o with
   | .ret x => .ret ⟨x, rfl⟩
   | .fail e => .fail e
 
-macro "let" e:term " ⟵ " f:term : doElem =>
-  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
+@[inline, simp]
+def Result.attachBind (o : Result α) (k : (a : α) → o = ret a → Result β) : Result β :=
+  o.attach >>= fun a => k a.1 a.2
 
--- TODO: any way to factorize both definitions?
+local syntax "let<-helper" term "with" ident ":" term : term
+macro_rules
+  | `(assert! let<-helper $t with $h : $x; $rest) =>
+    `(Result.attachBind $t fun $x $h => $rest)
+
+macro "let" e:term " ⟵ " f:term : doElem =>
+  `(doElem| assert! let<-helper $f with 𝒽 : $e)
+
 macro "let" e:term " <-- " f:term : doElem =>
-  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
+  `(doElem| let $e ⟵ $f)
 
 -- We call the hypothesis `h`, in effect making it unavailable to the user
 -- (because too much shadowing). But in practice, once can use the French single
 -- quote notation (input with f< and f>), where `‹ h ›` finds a suitable
 -- hypothesis in the context, this is equivalent to `have x: h := by assumption in x`
-#eval do
-  let y <-- .ret (0: Nat)
+/-def foobar := do
+  let y ⟵ .ret (0: Nat)
   let _: y = 0 := by cases ‹ ret 0 = ret y › ; decide
   let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
-  .ret r
+  .ret r-/
 
 ----------------------
 -- MACHINE INTEGERS --

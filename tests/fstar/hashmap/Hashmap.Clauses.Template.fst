@@ -12,9 +12,9 @@ let hash_map_allocate_slots_loop_decreases (t : Type0) (slots : vec (list_t t))
   (n : usize) : nat =
   admit ()
 
-(** [hashmap::HashMap::{0}::clear]: decreases clause *)
+(** [hashmap::HashMap::{0}::clear_slots]: decreases clause *)
 unfold
-let hash_map_clear_loop_decreases (t : Type0) (slots : vec (list_t t))
+let hash_map_clear_slots_loop_decreases (t : Type0) (slots : vec (list_t t))
   (i : usize) : nat =
   admit ()
 
