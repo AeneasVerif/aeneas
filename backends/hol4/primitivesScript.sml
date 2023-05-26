@@ -24,6 +24,13 @@ End
 
 val bind_name = fst (dest_const “bind”)
 
+Theorem bind_return_fail_div_eq:
+  (bind (Return x) f = f x) ∧ (bind (Fail e) f = Fail e) ∧ (bind Diverge f = Diverge)
+Proof
+  fs [bind_def]
+QED
+val _ = BasicProvers.export_rewrites ["bind_return_fail_div_eq"]
+
 Definition return_def:
   (return : 'a -> 'a M) x =
     Return x
@@ -272,6 +279,23 @@ val all_int_to_scalar_to_int_lemmas = [
   u64_to_int_int_to_u64,
   u128_to_int_int_to_u128
 ]
+
+(* Additional conversion lemmas  for isize/usize *)
+Theorem isize_to_int_int_to_isize_i16_bounds:
+  !n. i16_min <= n /\ n <= i16_max ==> isize_to_int (int_to_isize n) = n
+Proof
+  rw [] >> irule isize_to_int_int_to_isize >>
+  assume_tac isize_bounds >>
+  int_tac
+QED
+
+Theorem usize_to_int_int_to_usize_u16_bounds:
+  !n. 0 <= n /\ n <= u16_max ==> usize_to_int (int_to_usize n) = n
+Proof
+  rw [] >> irule usize_to_int_int_to_usize >>
+  assume_tac usize_bounds >>
+  int_tac
+QED
 
 val prove_int_to_scalar_to_int_unfold_tac =
   assume_tac isize_bounds >> (* Only useful for isize of course *)
@@ -677,13 +701,19 @@ val all_div_defs = [
    In HOL4, it has the sign of the divisor.
  *)
 val int_rem_def = Define ‘int_rem (x : int) (y : int) : int =
-  if (x >= 0 /\ y >= 0) \/ (x < 0 /\ y < 0) then x % y else -(x % y)’
+  if (0 ≤ x /\ 0 ≤ y) \/ (x < 0 /\ y < 0) then x % y else -(x % y)’
 
 (* Checking consistency with Rust *)
 val _ = prove(“int_rem 1 2 = 1”, EVAL_TAC)
 val _ = prove(“int_rem (-1) 2 = -1”, EVAL_TAC)
 val _ = prove(“int_rem 1 (-2) = 1”, EVAL_TAC)
 val _ = prove(“int_rem (-1) (-2) = -1”, EVAL_TAC)
+
+Theorem pos_rem_pos_ineqs:
+  ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ int_rem x y ∧ int_rem x y < y
+Proof
+  rw [int_rem_def] >> metis_tac [pos_mod_pos_ineqs]
+QED
 
 val isize_rem_def = Define ‘isize_rem x y =
   if isize_to_int y = 0 then Fail Failure else mk_isize (int_rem (isize_to_int x) (isize_to_int y))’
@@ -1781,13 +1811,14 @@ End
 
 Theorem vec_update_eq:
  ∀ v i x.
-   usize_to_int i < usize_to_int (vec_len v) ⇒
    let nv = vec_update v i x in
-   vec_len v = vec_len nv ∧
+   len (vec_to_list nv) = len (vec_to_list v) ∧
+   len (update (vec_to_list v) (usize_to_int i) x) = len (vec_to_list v) ∧
+   (usize_to_int i < len (vec_to_list v) ⇒
       vec_index nv i = x ∧
       (∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒
             usize_to_int j ≠ usize_to_int i ⇒
-            vec_index nv j = vec_index v j)
+            vec_index nv j = vec_index v j))
 Proof
   rpt strip_tac >> fs [vec_update_def] >>
   qspec_assume ‘update (vec_to_list v) (usize_to_int i) x’ mk_vec_axiom >>

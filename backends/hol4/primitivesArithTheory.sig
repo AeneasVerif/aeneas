@@ -23,8 +23,10 @@ sig
     val pos_div_pos_is_pos : thm
     val pos_div_pos_le : thm
     val pos_div_pos_le_init : thm
+    val pos_mod_pos_ineqs : thm
     val pos_mod_pos_is_pos : thm
     val pos_mod_pos_le_init : thm
+    val pos_mod_pos_lt : thm
     val pos_mul_pos_is_pos : thm
   
   val primitivesArith_grammars : type_grammar.grammar * term_grammar.grammar
@@ -113,6 +115,10 @@ sig
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x / y ≤ x
    
+   [pos_mod_pos_ineqs]  Theorem
+      
+      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x % y ∧ x % y < y
+   
    [pos_mod_pos_is_pos]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x % y
@@ -120,6 +126,10 @@ sig
    [pos_mod_pos_le_init]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x % y ≤ x
+   
+   [pos_mod_pos_lt]  Theorem
+      
+      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x % y < y
    
    [pos_mul_pos_is_pos]  Theorem
       
