@@ -293,15 +293,28 @@ fun inst_match_concl_in_terms (keep : thm -> bool) (ths : thm Net.net) (tml : te
     (* Then, match more precisely for every theorem found *)
     fun try_match (bvars : string Redblackset.set) t th =
       let
-        val _ = print_dbg ("inst_match_concl_in_terms: " ^ term_to_string t ^ "\n")
+        val _ = print_dbg ("inst_match_concl_in_terms:\n- thm: " ^ thm_to_string th ^
+                           "\n- term: " ^ term_to_string t ^ "\n")
         val inst_th = inst_match_concl bvars th t
         val c = concl inst_th
         val _ = print_dbg ("inst_match_concl_in_terms: matched with success\n")
       in
         (* Check that we mustn't ignore the theorem *)
-        if keep inst_th then (lhs (concl inst_th), inst_th)
+        if keep inst_th then
+          let val _ = print_dbg "inst_match_concl_in_terms: keeping theorem\n\n" in
+          (* There are several possibilities:
+             - initially, we only kept the lhs of the conclusion (with premises)
+               of the theorem
+             - now, we keep the whole theorem
+             The reason is that it happens that we can prove the premise of some
+             instantiation but not on another instantiation, even though the
+             conclusion is the same: in that case we want to keep both.
+             For instance:
+             
+           *)
+          (concl (DISCH_ALL inst_th), inst_th) end
         else
-          let val _ = print_dbg ("inst_match_concl_in_terms: matched failed\n") in
+          let val _ = print_dbg ("inst_match_concl_in_terms: ignore theorem\n\n") in
           failwith "inst_match_concl_in_terms: ignore theorem" end
       end
     (* Compose *)
@@ -311,8 +324,19 @@ fun inst_match_concl_in_terms (keep : thm -> bool) (ths : thm Net.net) (tml : te
       in
         mapfilter (try_match bvars t) matched_thms
       end
+    (* *)
+    val thms = inst_match_in_terms try_match_on_thms tml
+    (* Debug *)
+    val _ =
+      if !debug then
+        let
+          val thms_s = String.concatWith "\n" (map thm_to_string thms)
+        in
+          print ("inst_match_concl_in_terms: instantiated theorems:\n" ^ thms_s ^ "\n\n")
+        end
+      else ()
   in
-    inst_match_in_terms try_match_on_thms tml
+    thms
   end
 
 (*

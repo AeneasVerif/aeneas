@@ -213,6 +213,7 @@ sig
     val vec_update_def : thm
   
   (*  Theorems  *)
+    val bind_return_fail_div_eq : thm
     val datatype_error : thm
     val datatype_result : thm
     val error2num_11 : thm
@@ -275,6 +276,7 @@ sig
     val isize_neg_eq : thm
     val isize_rem_eq : thm
     val isize_sub_eq : thm
+    val isize_to_int_int_to_isize_i16_bounds : thm
     val isize_to_int_int_to_isize_unfold : thm
     val mk_isize_unfold : thm
     val mk_usize_unfold : thm
@@ -283,6 +285,7 @@ sig
     val num2error_ONTO : thm
     val num2error_error2num : thm
     val num2error_thm : thm
+    val pos_rem_pos_ineqs : thm
     val result_11 : thm
     val result_Axiom : thm
     val result_case_cong : thm
@@ -333,6 +336,7 @@ sig
     val usize_mul_eq : thm
     val usize_rem_eq : thm
     val usize_sub_eq : thm
+    val usize_to_int_int_to_usize_u16_bounds : thm
     val usize_to_int_int_to_usize_unfold : thm
     val vec_index_back_spec : thm
     val vec_index_fwd_spec : thm
@@ -855,7 +859,7 @@ sig
       
       ⊢ ∀x y.
           int_rem x y =
-          if x ≥ 0 ∧ y ≥ 0 ∨ x < 0 ∧ y < 0 then x % y else -(x % y)
+          if 0 ≤ x ∧ 0 ≤ y ∨ x < 0 ∧ y < 0 then x % y else -(x % y)
    
    [is_diverge_def]  Definition
       
@@ -1365,6 +1369,11 @@ sig
       ⊢ ∀v i x.
           vec_update v i x =
           mk_vec (update (vec_to_list v) (usize_to_int i) x)
+   
+   [bind_return_fail_div_eq]  Theorem
+      
+      ⊢ monad_bind (Return x) f = f x ∧ monad_bind (Fail e) f = Fail e ∧
+        monad_bind Diverge f = Diverge
    
    [datatype_error]  Theorem
       
@@ -1884,6 +1893,12 @@ sig
           ∃z. isize_sub x y = Return z ∧
               isize_to_int z = isize_to_int x − isize_to_int y
    
+   [isize_to_int_int_to_isize_i16_bounds]  Theorem
+      
+      [oracles: DISK_THM] [axioms: isize_to_int_int_to_isize, isize_bounds]
+      []
+      ⊢ ∀n. i16_min ≤ n ∧ n ≤ i16_max ⇒ isize_to_int (int_to_isize n) = n
+   
    [isize_to_int_int_to_isize_unfold]  Theorem
       
       [oracles: DISK_THM]
@@ -1931,6 +1946,10 @@ sig
    [num2error_thm]  Theorem
       
       ⊢ num2error 0 = Failure
+   
+   [pos_rem_pos_ineqs]  Theorem
+      
+      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ int_rem x y ∧ int_rem x y < y
    
    [result_11]  Theorem
       
@@ -2348,6 +2367,11 @@ sig
           ∃z. usize_sub x y = Return z ∧
               usize_to_int z = usize_to_int x − usize_to_int y
    
+   [usize_to_int_int_to_usize_u16_bounds]  Theorem
+      
+      [oracles: DISK_THM] [axioms: usize_to_int_int_to_usize, usize_bounds]
+      [] ⊢ ∀n. 0 ≤ n ∧ n ≤ u16_max ⇒ usize_to_int (int_to_usize n) = n
+   
    [usize_to_int_int_to_usize_unfold]  Theorem
       
       [oracles: DISK_THM]
@@ -2436,14 +2460,17 @@ sig
       [axioms: vec_to_list_num_bounds, usize_bounds,
        usize_to_int_int_to_usize, usize_to_int_bounds, mk_vec_axiom] []
       ⊢ ∀v i x.
-          usize_to_int i < usize_to_int (vec_len v) ⇒
           (let
              nv = vec_update v i x
            in
-             vec_len v = vec_len nv ∧ vec_index nv i = x ∧
-             ∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒
-                 usize_to_int j ≠ usize_to_int i ⇒
-                 vec_index nv j = vec_index v j)
+             len (vec_to_list nv) = len (vec_to_list v) ∧
+             len (update (vec_to_list v) (usize_to_int i) x) =
+             len (vec_to_list v) ∧
+             (usize_to_int i < len (vec_to_list v) ⇒
+              vec_index nv i = x ∧
+              ∀j. usize_to_int j < usize_to_int (vec_len nv) ⇒
+                  usize_to_int j ≠ usize_to_int i ⇒
+                  vec_index nv j = vec_index v j))
    
    
 *)

@@ -6,6 +6,23 @@ open primitivesBaseTacLib primitivesTheory
 
 val primitives_theory_name = "primitives"
 
+val debug = ref false
+
+fun print_dbg msg = if !debug then print msg else ()
+
+fun print_dbg_goal msg (asms, g) =
+  if !debug then
+    let
+      val asms_s = map term_to_string asms
+      val g_s = term_to_string g
+      val s = "[" ^ (String.concatWith ", " asms_s) ^ "]" ^ " ⊢ " ^ g_s
+      val _ = print (msg ^ "goal: " ^ s ^ "\n")
+    in
+      ALL_TAC (asms, g)
+    end
+  else
+    ALL_TAC (asms, g)
+
 (* Small utility: compute the set of assumptions in the context.
 
    We isolate this code in a utility in order to be able to improve it:
@@ -144,7 +161,10 @@ val integer_conversion_lemmas_list = [
   u16_to_int_int_to_u16,
   u32_to_int_int_to_u32,
   u64_to_int_int_to_u64,
-  u128_to_int_int_to_u128
+  u128_to_int_int_to_u128,
+  (* Additional conservative lemmas for isize/usize *)
+  isize_to_int_int_to_isize_i16_bounds,
+  usize_to_int_int_to_usize_u16_bounds
 ]
 
 (* Using a net for efficiency *)
@@ -162,7 +182,9 @@ val integer_conversion_lemmas_net = net_of_rewrite_thms integer_conversion_lemma
  *)
 val rewrite_with_dep_int_lemmas : tactic =
   let
-    val prove_premise = full_simp_tac simpLib.empty_ss integer_bounds_defs_list >> int_tac
+    val prove_premise =
+      (print_dbg_goal "rewrite_with_dep_int_lemmas: prove_premise:\n" >>
+       full_simp_tac simpLib.empty_ss integer_bounds_defs_list >> int_tac)
     (* Rewriting based on matching the conclusion. *)
     val then_tac1 = (fn th => full_simp_tac simpLib.empty_ss [th])
     val rewr_tac1 = apply_dep_rewrites_match_concl_with_all_tac prove_premise then_tac1
@@ -515,9 +537,18 @@ val progress : tactic =
       if null thl then
         raise (failwith "progress: could not find a suitable theorem to apply")
       else ();
+    (* Small helper to remove the equality introduced by the applied spec
+       (of the shape “f x = Return y” for instance), if there is *)
+    val remove_eq = try_tac (qpat_x_assum ‘^fgoal = _’ ignore_tac)
+    
   in
-    (* Attempt to use the theorems one by one *)
-    map_first_tac progress_with thl (asms, g)
+    (* We do 3 operations:
+       - attempt to use the theorems one by one
+       - remove (if there is) the equality introduced by the applied spec
+         (of the shape “f x = Return y” for instance)
+       - refold the monadic let-bindings
+     *)
+    (map_first_tac progress_with thl >> remove_eq >> fs [GSYM bind_def]) (asms, g)
   end
 
 (* Small utility: check that a term evaluates to “Return” (used by the unit tests) *)

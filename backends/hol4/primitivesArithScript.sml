@@ -209,4 +209,18 @@ Proof
   cooper_tac
 QED
 
+Theorem pos_mod_pos_lt:
+  ∀ x y. 0 ≤ x ⇒ 0 < y ⇒ x % y < y
+Proof
+  rw [] >>
+  qspecl_assume [‘x’, ‘y’] integerTheory.INT_MOD_BOUNDS >>
+  sg ‘y ≠ 0 ∧ ~(y < 0)’ >- int_tac >> fs []
+QED
+
+Theorem pos_mod_pos_ineqs:
+  ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x % y ∧ x % y < y
+Proof
+  metis_tac [pos_mod_pos_is_pos, pos_mod_pos_lt]
+QED
+
 val _ = export_theory ()
