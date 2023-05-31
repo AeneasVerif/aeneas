@@ -476,7 +476,7 @@ val _ = save_spec_thm "hash_map_clear_fwd_back_spec"
 
 Theorem hash_map_len_spec:
   ∀ hm.
-    hash_map_t_inv hm ⇒
+    hash_map_t_base_inv hm ⇒
     ∃ x. hash_map_len_fwd hm = Return x ∧
     usize_to_int x = len_s hm
 Proof
@@ -1439,6 +1439,64 @@ Proof
   >- (irule pos_mod_pos_lt >> fs [] >> int_tac) >> fs []
 QED
 val _ = save_spec_thm "hash_map_try_resize_fwd_back_spec"
+
+Theorem hash_map_insert_fwd_back_spec:
+  ∀ hm key value.
+    hash_map_t_inv hm ⇒
+    (* We can insert *)
+    (lookup_s hm key = NONE ⇒ len_s hm < usize_max) ⇒
+    ∃ hm1. hash_map_insert_fwd_back hm key value = Return hm1 ∧
+    (* We preserve the invariant *)
+    hash_map_t_inv hm1 ∧
+    (* We updated the binding for key *)
+    lookup_s hm1 key = SOME value /\
+    (* The other bindings are left unchanged *)
+    (!k. k <> key ==> lookup_s hm k = lookup_s hm1 k) ∧
+    (* Reasoning about the length *)
+    (case lookup_s hm key of
+     | NONE => len_s hm1 = len_s hm + 1
+     | SOME _ => len_s hm1 = len_s hm)
+Proof
+  rw [hash_map_insert_fwd_back_def] >>
+  progress
+  >- (fs [hash_map_t_inv_def]) >>
+  gvs [] >>
+  progress >>
+  Cases_on ‘~(usize_gt x a.hash_map_max_load)’ >> fs []
+  >-(
+    gvs [hash_map_t_inv_def, hash_map_same_params_def] >>
+    sg ‘len_s a = usize_to_int a.hash_map_num_entries’
+    >- (fs [hash_map_t_base_inv_def, len_s_def]) >>
+    fs [usize_gt_def] >>
+    sg ‘usize_to_int a.hash_map_num_entries ≤ usize_to_int hm.hash_map_max_load’ >- int_tac >>
+    fs [] >>
+    Cases_on ‘hm.hash_map_max_load_factor’ >> fs []
+  ) >>
+  gvs [] >>
+  progress >>
+  fs [hash_map_just_before_resize_pred_def, usize_gt_def, hash_map_same_params_def] >>
+  (* The length is the same: two cases depending on whether the map was already saturated or not *)
+  fs [hash_map_t_inv_def] >> Cases_on ‘hm.hash_map_max_load_factor’ >> fs [] >>
+  (* Remaining case: the map was not saturated *)
+  (* Reasoning about the length in the cases the key was already present or not *)
+  Cases_on ‘lookup_s hm key’ >> gvs []
+  >-(
+    Cases_on ‘~(len (vec_to_list hm.hash_map_slots) * 2 * usize_to_int q ≤ usize_max)’ >> fs []
+    >- int_tac >>
+    (* Not already present: we incremented the length. The map is also not saturated *)
+    disj1_tac >>
+    sg ‘len_s hm ≤ usize_to_int hm.hash_map_max_load’
+    >- (gvs [hash_map_t_base_inv_def, len_s_def]) >>
+    fs [hash_map_t_base_inv_def, len_s_def] >>
+    int_tac
+  ) >>
+  (* The length is the same and the map was not saturated but we resized: contradiction *)
+  exfalso >>
+  sg ‘len_s hm ≤ usize_to_int hm.hash_map_max_load’
+  >- (gvs [hash_map_t_base_inv_def, len_s_def]) >>
+  int_tac  
+QED
+val _ = save_spec_thm "hash_map_insert_fwd_back_spec"
 
 (*
 Theorem nth_mut_fwd_spec:
