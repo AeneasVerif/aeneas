@@ -3,12 +3,14 @@ sig
   type thm = Thm.thm
   
   (*  Definitions  *)
+    val drop_def : thm
     val index_def : thm
     val len_def : thm
     val update_def : thm
   
   (*  Theorems  *)
     val append_len_eq : thm
+    val drop_eq : thm
     val index_eq : thm
     val index_eq_EL : thm
     val len_append : thm
@@ -19,6 +21,13 @@ sig
   val ilist_grammars : type_grammar.grammar * term_grammar.grammar
 (*
    [primitivesArith] Parent theory of "ilist"
+   
+   [drop_def]  Definition
+      
+      ⊢ (∀i. drop i [] = []) ∧
+        ∀i x ls.
+          drop i (x::ls) =
+          if i < 0 then x::ls else if i = 0 then x::ls else drop (i − 1) ls
    
    [index_def]  Definition
       
@@ -45,6 +54,13 @@ sig
            len l1 = len l1' ⇒ (l1 ⧺ l2 = l1' ⧺ l2' ⇔ l1 = l1' ∧ l2 = l2')) ∧
         ∀l1 l2 l1' l2'.
           len l2 = len l2' ⇒ (l1 ⧺ l2 = l1' ⧺ l2' ⇔ l1 = l1' ∧ l2 = l2')
+   
+   [drop_eq]  Theorem
+      
+      ⊢ (∀i. drop i [] = []) ∧ (∀ls. drop 0 ls = ls) ∧
+        ∀i x ls.
+          drop i (x::ls) =
+          if 0 < i ∨ 0 ≤ i ∧ i ≠ 0 then drop (i − 1) ls else x::ls
    
    [index_eq]  Theorem
       
