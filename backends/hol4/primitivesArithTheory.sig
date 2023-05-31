@@ -14,6 +14,8 @@ sig
     val int_of_num_inj : thm
     val le_eq_ge : thm
     val lt_eq_gt : thm
+    val mul_pos_left_le : thm
+    val mul_pos_right_le : thm
     val not_ge_eq_lt : thm
     val not_gt_eq_le : thm
     val not_le_eq_gt : thm
@@ -23,11 +25,14 @@ sig
     val pos_div_pos_is_pos : thm
     val pos_div_pos_le : thm
     val pos_div_pos_le_init : thm
+    val pos_div_pos_mul_le : thm
     val pos_mod_pos_ineqs : thm
     val pos_mod_pos_is_pos : thm
     val pos_mod_pos_le_init : thm
     val pos_mod_pos_lt : thm
+    val pos_mul_left_pos_le : thm
     val pos_mul_pos_is_pos : thm
+    val pos_mul_right_pos_le : thm
   
   val primitivesArith_grammars : type_grammar.grammar * term_grammar.grammar
 (*
@@ -79,6 +84,14 @@ sig
       
       ⊢ ∀x y. x < y ⇔ y > x
    
+   [mul_pos_left_le]  Theorem
+      
+      ⊢ ∀a x y. 0 ≤ a ⇒ x ≤ y ⇒ a * x ≤ a * y
+   
+   [mul_pos_right_le]  Theorem
+      
+      ⊢ ∀a x y. 0 ≤ a ⇒ x ≤ y ⇒ x * a ≤ y * a
+   
    [not_ge_eq_lt]  Theorem
       
       ⊢ ∀x y. ¬(x ≥ y) ⇔ x < y
@@ -115,6 +128,10 @@ sig
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x / y ≤ x
    
+   [pos_div_pos_mul_le]  Theorem
+      
+      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x / y * y ≤ x
+   
    [pos_mod_pos_ineqs]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x % y ∧ x % y < y
@@ -131,9 +148,17 @@ sig
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x % y < y
    
+   [pos_mul_left_pos_le]  Theorem
+      
+      ⊢ ∀a x. 0 < a ⇒ 0 ≤ x ⇒ x ≤ a * x
+   
    [pos_mul_pos_is_pos]  Theorem
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 ≤ y ⇒ 0 ≤ x * y
+   
+   [pos_mul_right_pos_le]  Theorem
+      
+      ⊢ ∀a x. 0 < a ⇒ 0 ≤ x ⇒ x ≤ x * a
    
    
 *)

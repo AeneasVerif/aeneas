@@ -272,7 +272,7 @@ fun get_spec_app (t : term) : term =
 fun get_key_normalize_thm (th : thm) : const_name * thm =
   let
     (* Transform the theroem a bit before storing it *)
-    val th = SPEC_ALL th;
+    val th = (SPEC_ALL o BETA_RULE o PURE_REWRITE_RULE [LET_DEF]) th;
     (* Retrieve the app ([f x0 ... xn]) *)
     val f = get_spec_app (concl th);
     (* Retrieve the function name *)
@@ -532,7 +532,7 @@ val progress : tactic =
     val thl =
       case Redblackmap.peek (get_spec_thms (), fname) of
         NONE => asms_thl
-      | SOME spec => spec :: asms_thl;
+      | SOME spec => asms_thl @ [spec];
     val _ =
       if null thl then
         raise (failwith "progress: could not find a suitable theorem to apply")

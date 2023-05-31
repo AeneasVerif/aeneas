@@ -64,6 +64,25 @@ Proof
   exfalso >> cooper_tac
 QED
 
+Definition drop_def:
+  drop (i : int) ([] : 'a list) = [] ∧
+  drop (i : int) (x :: ls) =
+    if i < 0 then x :: ls
+    else if i = 0 then x :: ls
+    else drop (i - 1) ls
+End
+
+Theorem drop_eq:
+  (∀ i. drop i [] = []) ∧
+  (∀ ls. drop 0 ls = ls) ∧
+  (∀ i x ls. drop i (x :: ls) =
+    if (0 < i) ∨ (0 ≤ i ∧ i ≠ 0) then drop (i - 1) ls
+    else x :: ls)
+Proof
+  rw [drop_def] >> fs [] >> try_tac int_tac >>
+  Cases_on ‘ls’ >> fs [drop_def]
+QED
+
 Theorem len_eq_LENGTH:
   ∀ls. len ls = &(LENGTH ls)
 Proof

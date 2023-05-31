@@ -162,6 +162,12 @@ Proof
   metis_tac [INT_LE_ADDR]
 QED
 
+Theorem pos_div_pos_ge:
+  !(x y d : int). 0 <= x ==> 0 <= y ==> 0 < d ==> x >= y ==> x / d >= y / d
+Proof
+  metis_tac [pos_div_pos_le, ge_eq_le]
+QED
+
 Theorem pos_div_pos_le_init:
   !(x y : int). 0 <= x ==> 0 < y ==> x / y <= x
 Proof
@@ -221,6 +227,118 @@ Theorem pos_mod_pos_ineqs:
   ∀x y. 0 ≤ x ⇒ 0 < y ⇒ 0 ≤ x % y ∧ x % y < y
 Proof
   metis_tac [pos_mod_pos_is_pos, pos_mod_pos_lt]
+QED
+
+Theorem mul_pos_left_le:
+  ∀ (a x y : int). 0 ≤ a ⇒ x ≤ y ⇒ a * x ≤ a * y
+Proof
+  rw [] >> Cases_on ‘a = 0’ >> fs [] >>
+  sg ‘0 < a’ >- cooper_tac >>
+  metis_tac [integerTheory.INT_LE_MONO]
+QED
+
+Theorem mul_pos_right_le:
+  ∀ (a x y : int). 0 ≤ a ⇒ x ≤ y ⇒ x * a ≤ y * a
+Proof
+  rw [mul_pos_left_le, integerTheory.INT_MUL_COMM]
+QED
+
+Theorem mul_pos_left_lt:
+  ∀ (a x y : int). 0 < a ⇒ x < y ⇒ a * x < a * y
+Proof
+  metis_tac [integerTheory.INT_LT_MONO]
+QED
+
+Theorem mul_pos_right_lt:
+  ∀ (a x y : int). 0 < a ⇒ x < y ⇒ x * a < y * a
+Proof
+  metis_tac [mul_pos_left_lt, integerTheory.INT_MUL_COMM]
+QED
+
+Theorem pos_mul_left_pos_le:
+  ∀ a x. 0 < a ⇒ 0 ≤ x ⇒ x ≤ a * x
+Proof
+  rw [] >>
+  Cases_on ‘a = 1’ >> fs [] >>
+  sg ‘0 ≤ (a - 1) * x’ >- (irule pos_mul_pos_is_pos >> int_tac) >>
+  sg ‘x ≤ x + (a - 1) * x’ >- fs [] >>
+  sg ‘a * x = 1 * x + (a - 1) * x’ >- fs [GSYM integerTheory.INT_RDISTRIB] >>
+  fs []
+QED
+
+Theorem pos_mul_right_pos_le:
+  ∀ a x. 0 < a ⇒ 0 ≤ x ⇒ x ≤ x * a
+Proof
+  metis_tac [pos_mul_left_pos_le, integerTheory.INT_MUL_COMM]
+QED
+
+Theorem pos_mul_left_pos_lt:
+  ∀ a x. 1 < a ⇒ 0 < x ⇒ x < a * x
+Proof
+  rw [] >>
+  sg ‘a * x = 1 * x + (a - 1) * x’
+  >- (fs [GSYM integerTheory.INT_RDISTRIB]) >>
+  fs [] >>
+  sg ‘(a − 1) * x = 1 * x + (a - 2) * x’
+  >- (
+    fs [GSYM integerTheory.INT_RDISTRIB] >>
+    sg ‘1 + (a − 2) = a - 1’ >- int_tac >>
+    fs []
+    ) >>
+  fs [] >>
+  sg ‘0 ≤ (a − 2) * x’ >- (irule pos_mul_pos_is_pos >> int_tac) >>
+  int_tac
+QED
+
+Theorem pos_mul_right_pos_lt:
+  ∀ a x. 1 < a ⇒ 0 < x ⇒ x < x * a
+Proof
+  metis_tac [pos_mul_left_pos_lt, integerTheory.INT_MUL_COMM]
+QED
+
+Theorem pos_div_pos_mul_le:
+  ∀ x y. 0 ≤ x ⇒ 0 < y ⇒ (x / y) * y ≤ x
+Proof
+  rw [] >>
+  qspec_assume ‘y’ integerTheory.INT_DIVISION >>
+  sg ‘y ≠ 0 ∧ ~(y < 0)’ >- int_tac >> fs [] >>
+  first_x_assum (qspec_assume ‘x’) >>
+  fs [] >>
+  (* TODO: int_tac loops here *)
+  cooper_tac
+QED
+
+Theorem pos_mul_pos_div_pos_decompose:
+  ∀ x y z. 0 ≤ x ⇒ 0 ≤ y ⇒ 0 < z ⇒ x / z + y / z ≤ (x + y) / z
+Proof
+  rw [] >>
+  sg ‘z ≠ 0’ >- int_tac >>
+  sg ‘(x / z * z + x % z) + (y / z * z + y % z) = (x + y) / z * z + (x + y) % z’ >- metis_tac [integerTheory.INT_DIVISION] >>
+  sg ‘(x + y) % z = ((x % z) + (y % z)) % z’ >- metis_tac [integerTheory.INT_MOD_PLUS] >>
+  sg ‘0 ≤ (x % z) ∧ 0 ≤ (y % z)’ >- metis_tac [pos_mod_pos_is_pos] >>
+  sg ‘0 ≤ (x % z) + (y % z)’ >- int_tac >>
+  sg ‘((x % z) + (y % z)) % z ≤ (x % z) + (y % z)’ >- metis_tac [pos_mod_pos_le_init] >>
+  sg ‘x / z * z + y / z * z ≤ (x + y) / z * z’ >- int_tac >>
+  sg ‘x / z * z + y / z * z = (x / z + y / z) * z’ >- fs [integerTheory.INT_RDISTRIB] >> fs [] >>
+  sg ‘0 ≤ x / z’ >- (irule pos_div_pos_is_pos >> fs []) >>
+  sg ‘0 ≤ y / z’ >- (irule pos_div_pos_is_pos >> fs []) >>
+  sg ‘0 ≤ (x + y) / z’ >- (irule pos_div_pos_is_pos >> fs []) >>
+  sg ‘(x / z + y / z) * z / z ≤ (x + y) / z * z / z’
+  >- ( 
+    irule pos_div_pos_le >> fs [] >>
+    rw [] >> irule pos_mul_pos_is_pos >> fs []) >>
+  imp_res_tac integerTheory.INT_DIV_RMUL >>
+  metis_tac []
+QED
+
+Theorem pos_mul_2_div_pos_decompose:
+  ∀ x y. 0 ≤ x ⇒ 0 < y ⇒ x / y + x / y ≤ x * 2 / y
+Proof
+  rw [] >>
+  qspecl_assume [‘x’, ‘x’, ‘y’] pos_mul_pos_div_pos_decompose >> gvs [] >>
+  sg ‘x * 2 = (x * 1) + (x * 1)’
+  >- (pure_rewrite_tac [GSYM integerTheory.INT_LDISTRIB] >> fs []) >>
+  fs []  
 QED
 
 val _ = export_theory ()
