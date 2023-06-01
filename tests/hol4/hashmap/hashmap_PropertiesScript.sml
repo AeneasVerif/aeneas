@@ -203,7 +203,11 @@ Definition hash_map_t_base_inv_def:
     )
 End
 
-(* The invariant that we reveal to the user *)
+(* The invariant that we reveal to the user.
+
+   The conditions about the hash map load factor are a overkill, but we
+   want to see how the non-linear arithmetic proofs go.
+ *)
 Definition hash_map_t_inv_def:
   hash_map_t_inv (hm : 't hash_map_t) : bool = (
     (* Base invariant *)
