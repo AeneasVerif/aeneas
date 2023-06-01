@@ -12,8 +12,8 @@ Theorem EVERY_quant_equiv:
   ∀p ls. EVERY p ls ⇔ ∀i. 0 ≤ i ⇒ i < len ls ⇒ p (index i ls)
 Proof
   strip_tac >> Induct_on ‘ls’
-  >-(rw [EVERY_DEF, len_def] >> int_tac) >>
-  rw [EVERY_DEF, len_def, index_eq] >>
+  >-(rw [EVERY_DEF] >> int_tac) >>
+  rw [EVERY_DEF, index_eq] >>
   equiv_tac
   >-(
     rw [] >>
@@ -38,8 +38,8 @@ Theorem pairwise_rel_quant_equiv:
     (∀i j. 0 ≤ i ⇒ i < j ⇒ j < len ls ⇒ p (index i ls) (index j ls))
 Proof
   strip_tac >> Induct_on ‘ls’
-  >-(rw [pairwise_rel_def, len_def] >> int_tac) >>
-  rw [pairwise_rel_def, len_def] >>
+  >-(rw [pairwise_rel_def] >> int_tac) >>
+  rw [pairwise_rel_def] >>
   equiv_tac
   >-(
     (* ==> *)
@@ -74,6 +74,12 @@ Proof
   fs []
 QED
 
+(* TODO: the context tends to quickly saturate. In particular:
+   - sg_prove_premise_tac leaves the proven assumption in the context, while it shouldn't
+   - maybe massage shouldn't leave the introduced inequalities in the context: it is very noisy.
+     For instance, int_tac could introduce those inequalities.
+ *)
+
 Type key_t = “:usize”
 
 val distinct_keys_def = Define ‘
@@ -86,27 +92,33 @@ Definition list_t_v_def:
   (list_t_v (ListNil : 't list_t) : (key_t # 't) list = []) /\
   (list_t_v (ListCons k v tl) = (k, v) :: list_t_v tl)
 End
+val _ = export_rewrites ["list_t_v_def"]
 
 (* Invariants *)
+(* TODO: add to srw_ss *)
 Definition lookup_def:
   lookup key [] = NONE /\
   lookup key ((k, v) :: ls) =
     if k = key then SOME v else lookup key ls
 End
+val _ = export_rewrites ["lookup_def"]
 
 Definition slot_t_lookup_def:
   slot_t_lookup key ls = lookup key (list_t_v ls)
 End
+val _ = export_rewrites ["slot_t_lookup_def"]
 
 Definition remove_def:
   remove key [] = [] ∧
   remove key ((k, v) :: ls) =
     if k = key then ls else (k, v) :: remove key ls
 End
+val _ = export_rewrites ["remove_def"]
 
 Definition slot_t_remove_def:
   slot_t_remove key ls = remove key (list_t_v ls)
 End
+val _ = export_rewrites ["slot_t_remove_def"]
 
 Definition hash_mod_key_def:
   hash_mod_key k (l : int) : int =
@@ -114,11 +126,14 @@ Definition hash_mod_key_def:
     | Return k => usize_to_int k % l
     | _ => ARB
 End
+val _ = export_rewrites ["hashmap_Funs.hash_key_fwd_def", "hash_mod_key_def"]
+val _ = export_rewrites ["primitives.mem_replace_fwd_def", "primitives.mem_replace_back_def"]
 
 Definition slot_s_inv_hash_def:
   slot_s_inv_hash (l : int) (i : int) (ls : (key_t # 'b) list) : bool =
     ∀ k v. MEM (k, v) ls ⇒ hash_mod_key k l = i
 End
+val _ = export_rewrites ["slot_s_inv_hash_def"]
 
 Definition slot_s_inv_def:
   slot_s_inv (l : int) (i : int) (ls : (key_t # 'b) list) : bool = (
@@ -126,6 +141,7 @@ Definition slot_s_inv_def:
     slot_s_inv_hash l i ls
   )
 End
+val _ = export_rewrites ["slot_s_inv_def"]
 
 (* TODO: try with this invariant:
 
@@ -159,6 +175,7 @@ Definition slots_s_inv_def:
   slots_s_inv (s : 'a list_t list) =
     ∀ (i : int). 0 ≤ i ⇒ i < len s ⇒ slot_t_inv (len s) i (index i s)
 End
+val _ = export_rewrites ["slots_s_inv_def"]
 
 Definition slots_t_inv_def:
   slots_t_inv (s : 'a list_t vec) = slots_s_inv (vec_to_list s)
@@ -173,6 +190,7 @@ Definition hash_map_t_base_inv_def:
     slots_t_inv hm.hash_map_slots ∧
     (* The capacity must be > 0 (otherwise we can't resize, because when we
        resize we multiply the capacity by two) *)
+    (* TODO: write it as 0 < ... *)
     len (vec_to_list hm.hash_map_slots) > 0 ∧
     (* Load computation *)
     (let capacity = len (vec_to_list hm.hash_map_slots) in
@@ -270,7 +288,7 @@ Proof
     sg ‘v = usize_to_int n - 1’ >- int_tac >> fs [] >>
     (* *)
     progress >>
-    fs [vec_len_def, len_append, len_def] >>
+    fs [vec_len_def] >>
     int_tac
   ) >>
   fs [] >>
@@ -288,11 +306,11 @@ Theorem hash_map_allocate_slots_fwd_spec:
 Proof
   rw [] >>
   pure_once_rewrite_tac [hash_map_allocate_slots_fwd_def] >>
-  progress >> gvs [len_def, slots_t_inv_def, slots_s_inv_def, slot_s_inv_hash_def] >>
-  rw [slot_t_inv_def, slot_s_inv_def, slot_s_inv_hash_def]
-  >- fs [EVERY_quant_equiv, distinct_keys_def, pairwise_rel_def, list_t_v_def] >>
+  progress >> gvs [slots_t_inv_def] >>
+  rw [slot_t_inv_def]
+  >- fs [EVERY_quant_equiv, distinct_keys_def, pairwise_rel_def] >>
   fs [EVERY_quant_equiv] >>
-  qpat_assum ‘∀i. _’ sg_dep_rewrite_all_tac >> gvs [list_t_v_def]
+  qpat_assum ‘∀i. _’ sg_dep_rewrite_all_tac >> gvs []
 QED
 val _ = save_spec_thm "hash_map_allocate_slots_fwd_spec"
 
@@ -300,7 +318,7 @@ val _ = save_spec_thm "hash_map_allocate_slots_fwd_spec"
 Theorem FLAT_ListNil_is_nil:
   EVERY (λx. x = ListNil) ls ⇒ FLAT (MAP list_t_v ls) = []
 Proof
-  Induct_on ‘ls’ >> fs [list_t_v_def]
+  Induct_on ‘ls’ >> fs []
 QED
 
 Theorem hash_map_new_with_capacity_fwd_spec:
@@ -323,27 +341,27 @@ Proof
   progress >>
   gvs [hash_map_t_inv_def, hash_map_t_base_inv_def, hash_map_t_al_v_def, hash_map_t_v_def] >>
   rw []
-  >-(massage >> sg_dep_rewrite_goal_tac FLAT_ListNil_is_nil >> fs [len_def])
+  >-(massage >> sg_dep_rewrite_goal_tac FLAT_ListNil_is_nil >> fs [])
   >-(int_tac)
   >-(massage >> metis_tac [])
   >-(fs [len_s_def, hash_map_t_al_v_def, hash_map_t_v_def] >>
-     sg_dep_rewrite_goal_tac FLAT_ListNil_is_nil >> fs [len_def]) >>
-  fs [lookup_s_def, slots_t_lookup_def, slot_t_lookup_def] >>
+     sg_dep_rewrite_goal_tac FLAT_ListNil_is_nil >> fs []) >>
+  fs [lookup_s_def, slots_t_lookup_def] >>
   fs [EVERY_quant_equiv] >>
   (* TODO: sg_dep_rewrite_goal_tac does weird things here *)
   first_x_assum (qspec_assume ‘hash_mod_key k (usize_to_int capacity)’) >>
   first_x_assum sg_premise_tac
   >- (
-    fs [hash_mod_key_def, hash_key_fwd_def] >>
+    fs [] >>
     massage >>
     irule pos_mod_pos_is_pos >> fs []) >>
   first_x_assum sg_premise_tac
   >-(
-    fs [hash_mod_key_def, hash_key_fwd_def] >>
+    fs [] >>
     massage >>
     irule pos_mod_pos_lt >> fs []
   ) >>  
-  fs [list_t_v_def, lookup_def]
+  fs []
 QED
 val _ = save_spec_thm "hash_map_new_with_capacity_fwd_spec"
 
@@ -442,19 +460,19 @@ Proof
   rw [hash_map_clear_fwd_back_def] >>
   progress >>
   fs [len_s_def, hash_map_t_al_v_def, hash_map_t_v_def, lookup_s_def] >>
-  fs [slots_t_lookup_def, slot_t_lookup_def, len_def] >> rw []
+  fs [slots_t_lookup_def] >> rw []
   >-((* Prove that the invariant is preserved *)
-   fs [hash_map_t_inv_def, hash_map_t_base_inv_def, hash_map_t_al_v_def, hash_map_t_v_def, len_def] >>
+   fs [hash_map_t_inv_def, hash_map_t_base_inv_def, hash_map_t_al_v_def, hash_map_t_v_def] >>
    massage >> fs [] >>
    conj_tac
    >-(
-     fs [slots_t_inv_def, slots_s_inv_def] >>
-     rw [slot_t_inv_def, slot_s_inv_def, slot_s_inv_hash_def, list_t_v_def, distinct_keys_def, pairwise_rel_def]) >>
+     fs [slots_t_inv_def] >>
+     rw [slot_t_inv_def, distinct_keys_def, pairwise_rel_def]) >>
    Cases_on ‘hm.hash_map_max_load_factor’ >> gvs [] >>
    disj1_tac >>
    irule pos_div_pos_is_pos >>
    int_tac) >>
-  fs [hash_mod_key_def, hash_key_fwd_def] >>
+  fs [] >>
   (* TODO: would like to do: qpat_assum ‘∀j. _’ sg_dep_rewrite_goal_tac >> *)
   first_x_assum (qspec_assume ‘usize_to_int k % len (vec_to_list hm.hash_map_slots)’) >>
   fs [] >>
@@ -465,7 +483,7 @@ Proof
   >-(fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
   fs [] >>
   sg ‘~(len (vec_to_list hm.hash_map_slots) < 0)’ >- int_tac >>
-  fs [list_t_v_def, lookup_def]
+  fs []
 QED
 val _ = save_spec_thm "hash_map_clear_fwd_back_spec"
   
@@ -495,7 +513,7 @@ Theorem hash_map_insert_in_list_loop_fwd_spec:
     (b ⇔ slot_t_lookup key ls = NONE)
 Proof
   Induct_on ‘ls’ >> pure_once_rewrite_tac [hash_map_insert_in_list_loop_fwd_def] >>
-  fs [slot_t_lookup_def, lookup_def, list_t_v_def] >>
+  fs [] >>
   rw []
 QED
 val _ = save_spec_thm "hash_map_insert_in_list_loop_fwd_spec"
@@ -524,17 +542,13 @@ Theorem hash_map_insert_in_list_loop_back_spec_aux:
      | NONE => len (list_t_v ls1) = len (list_t_v ls) + 1
      | SOME _ => len (list_t_v ls1) = len (list_t_v ls))
 Proof
-  Induct_on ‘ls’ >> rw [list_t_v_def] >~ [‘ListNil’] >>
+  Induct_on ‘ls’ >> rw [] >~ [‘ListNil’] >>
   pure_once_rewrite_tac [hash_map_insert_in_list_loop_back_def]
-  >- (rw [slot_t_lookup_def, lookup_def, list_t_v_def, len_def, slot_s_inv_hash_def]) >>
-  fs [] >>
-  case_tac >> fs []
-  >-(fs [slot_t_lookup_def, lookup_def, list_t_v_def, len_def, slot_s_inv_hash_def] >>
-     metis_tac []) >>
-  progress >>
-  fs [slot_t_lookup_def, lookup_def, list_t_v_def, len_def] >>
-  rw []
-  >-(fs [slot_s_inv_hash_def] >> metis_tac []) >>
+  >- (rw []) >>
+  fs [] >- metis_tac [] >>
+  progress >> fs [] >> rw []
+  >- (metis_tac [])
+  >- (metis_tac []) >>
   case_tac >> fs [] >> int_tac
 QED
 
@@ -548,13 +562,13 @@ Theorem hash_map_insert_in_list_loop_back_EVERY_distinct_keys:
   EVERY (λy. k1 ≠ FST y) (list_t_v ls1)
 Proof
   Induct_on ‘ls0’ >> rw [pairwise_rel_def] >~ [‘ListNil’] >>
-  gvs [list_t_v_def, pairwise_rel_def, EVERY_DEF]
-  >-(gvs [MK_BOUNDED hash_map_insert_in_list_loop_back_def 1, bind_def, list_t_v_def, EVERY_DEF]) >>
+  gvs [pairwise_rel_def, EVERY_DEF]
+  >-(gvs [MK_BOUNDED hash_map_insert_in_list_loop_back_def 1, bind_def, EVERY_DEF]) >>
   pat_undisch_tac ‘hash_map_insert_in_list_loop_back _ _ _ = _’ >>
   simp [MK_BOUNDED hash_map_insert_in_list_loop_back_def 1, bind_def] >>
-  Cases_on ‘u = k’ >> rw [] >> gvs [list_t_v_def, pairwise_rel_def, EVERY_DEF] >>
+  Cases_on ‘u = k’ >> rw [] >> gvs [pairwise_rel_def, EVERY_DEF] >>
   Cases_on ‘hash_map_insert_in_list_loop_back k v ls0’ >>
-  gvs [distinct_keys_def, list_t_v_def, pairwise_rel_def, EVERY_DEF] >>
+  gvs [distinct_keys_def, pairwise_rel_def, EVERY_DEF] >>
   metis_tac []
 QED
 
@@ -566,14 +580,14 @@ Theorem hash_map_insert_in_list_loop_back_distinct_keys:
 Proof
   Induct_on ‘ls0’ >> rw [distinct_keys_def] >~ [‘ListNil’]
   >-(
-    fs [list_t_v_def, hash_map_insert_in_list_loop_back_def] >>
-    gvs [list_t_v_def, pairwise_rel_def, EVERY_DEF]) >>
+    fs [hash_map_insert_in_list_loop_back_def] >>
+    gvs [pairwise_rel_def, EVERY_DEF]) >>
   last_x_assum (qspecl_assume [‘k’, ‘v’]) >>
   pat_undisch_tac ‘hash_map_insert_in_list_loop_back _ _ _ = _’ >>
   simp [MK_BOUNDED hash_map_insert_in_list_loop_back_def 1, bind_def] >>
-  Cases_on ‘u = k’ >> rw [] >> gvs [list_t_v_def, pairwise_rel_def, EVERY_DEF] >>
+  Cases_on ‘u = k’ >> rw [] >> gvs [pairwise_rel_def, EVERY_DEF] >>
   Cases_on ‘hash_map_insert_in_list_loop_back k v ls0’ >>
-  gvs [distinct_keys_def, list_t_v_def, pairwise_rel_def, EVERY_DEF] >>
+  gvs [distinct_keys_def, pairwise_rel_def, EVERY_DEF] >>
   metis_tac [hash_map_insert_in_list_loop_back_EVERY_distinct_keys]
 QED
 
@@ -599,11 +613,11 @@ Theorem hash_map_insert_in_list_loop_back_spec:
     (∀l. slot_s_inv_hash l (hash_mod_key key l) (list_t_v ls) ⇒
      insert_in_slot_t_rel l key value ls ls1)
 Proof
-  rw [slot_t_inv_def, slot_s_inv_def] >>
+  rw [slot_t_inv_def] >>
   qspecl_assume [‘ls’, ‘key’, ‘value’] hash_map_insert_in_list_loop_back_spec_aux >>
   fs [] >>
   qspecl_assume [‘key’, ‘value’, ‘ls’, ‘ls1’] hash_map_insert_in_list_loop_back_distinct_keys >>
-  gvs [insert_in_slot_t_rel_def, slot_t_inv_def, slot_s_inv_def]
+  gvs [insert_in_slot_t_rel_def, slot_t_inv_def] >> metis_tac []
 QED
 val _ = save_spec_thm "hash_map_insert_in_list_loop_back_spec"
 
@@ -655,6 +669,7 @@ Proof
   fs [hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_slots_fupd_def] >>
   fs [hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_num_entries_fupd_def]
 QED
+val hash_map_insert_no_resize_fwd_back_branches_eq = SIMP_RULE (srw_ss ()) [] hash_map_insert_no_resize_fwd_back_branches_eq
 
 Theorem hash_map_cond_incr_thm:
   ∀ hm key a.
@@ -713,14 +728,15 @@ Proof
   fs [hash_map_insert_no_resize_fwd_back_branches_eq] >>
   qspecl_assume [‘hm’, ‘key’, ‘a’] hash_map_cond_incr_thm >> gvs [] >>
   pop_assum sg_premise_tac
-  >- (fs [lookup_s_def, slots_t_lookup_def, slot_t_lookup_def, hash_mod_key_def, hash_key_fwd_def, vec_index_def, int_rem_def]) >>
+  >- (fs [lookup_s_def, slots_t_lookup_def, vec_index_def, int_rem_def]) >>
   fs [] >>
   (* TODO: lemma? *)
   sg ‘let l = len (vec_to_list hm.hash_map_slots) in
       slot_t_inv l (usize_to_int key % l) (index (usize_to_int key % l) (vec_to_list hm.hash_map_slots))’
-  >-(fs [hash_map_t_base_inv_def, slots_t_inv_def, slots_s_inv_def] >>
+  >-(fs [hash_map_t_base_inv_def, slots_t_inv_def] >>
      last_x_assum (qspec_assume ‘usize_to_int a’) >>
-     gvs [vec_index_def, int_rem_def, slot_t_inv_def, slot_s_inv_def]) >>
+     gvs [vec_index_def, int_rem_def, slot_t_inv_def] >>
+     metis_tac []) >>
   fs [] >>
   sg ‘usize_to_int a = usize_to_int key % len (vec_to_list hm.hash_map_slots)’
   >-(fs [int_rem_def]) >>
@@ -728,7 +744,7 @@ Proof
   >-(fs [int_rem_def]) >>
   fs [] >>
   sg ‘distinct_keys (list_t_v (vec_index hm.hash_map_slots a))’
-  >-(fs [slot_t_inv_def, slot_s_inv_def, vec_index_def]) >>
+  >-(fs [slot_t_inv_def, vec_index_def]) >>
   fs [hash_map_insert_in_list_back_def] >>
   progress >>
   progress >- ((* TODO: *) massage >> fs []) >>
@@ -737,12 +753,9 @@ Proof
   (* Prove the post-condition *)
   qexists ‘a'’ >>
   rw [hash_map_same_params_def]
-  >-(gvs [insert_in_slot_t_rel_def, hash_mod_key_def, hash_key_fwd_def, vec_index_def, vec_update_def, slot_t_inv_def, slot_s_inv_def] >>
-     metis_tac [])
-  >-(
-    fs [hash_mod_key_def, hash_key_fwd_def, vec_index_def, vec_update_def] >>
-    sg_dep_rewrite_goal_tac mk_vec_axiom >> gvs []) >>
-  gvs [lookup_s_def, slots_t_lookup_def, slot_t_lookup_def, hash_mod_key_def, hash_key_fwd_def, vec_index_def] >>
+  >-(gvs [insert_in_slot_t_rel_def, vec_index_def, vec_update_def, slot_t_inv_def] >>
+     metis_tac []) >>
+  gvs [lookup_s_def, slots_t_lookup_def, vec_index_def] >>
   case_tac >> fs []
 QED
 
@@ -755,12 +768,12 @@ Theorem len_FLAT_MAP_update:
 Proof
   strip_tac >>
   Induct_on ‘ls’
-  >-(rw [len_def] >> int_tac) >>
+  >-(rw [] >> int_tac) >>
   rw [] >>
-  fs [len_def, index_def, update_def] >>
-  Cases_on ‘i = 0’ >> fs [len_append]
+  fs [index_def, update_def] >>
+  Cases_on ‘i = 0’ >> fs []
   >- int_tac >>
-  sg ‘0 < i’ >- int_tac >> fs [len_append] >>
+  sg ‘0 < i’ >- int_tac >> fs [] >>
   first_x_assum (qspec_assume ‘i - 1’) >>
   fs [] >>
   (* TODO: automate *)
@@ -804,39 +817,39 @@ Proof
     rw []
     >-(
       sg_dep_rewrite_goal_tac len_FLAT_MAP_update
-      >-(fs [hash_mod_key_def, hash_key_fwd_def]) >>
+      >-(fs []) >>
       fs [insert_in_slot_t_rel_def] >>
-      fs [hash_mod_key_def, hash_key_fwd_def] >>
+      fs [] >>
       Cases_on ‘lookup_s hm key’ >>
-      fs [lookup_s_def, slots_t_lookup_def, slot_t_lookup_def, hash_mod_key_def, hash_key_fwd_def] >>
+      fs [lookup_s_def, slots_t_lookup_def] >>
       int_tac) >>
-    fs [slots_t_inv_def, slots_s_inv_def] >>
+    fs [slots_t_inv_def] >>
     rw [] >>
     (* Proof of the slot property: has the slot been updated∃ *)
     Cases_on ‘i = hash_mod_key key (len (vec_to_list hm.hash_map_slots))’ >> fs []
     >-(
       sg_dep_rewrite_goal_tac index_update_diff
-      >-(fs [hash_mod_key_def, hash_key_fwd_def]) >>
+      >-(fs []) >>
       fs [insert_in_slot_t_rel_def]) >>
     sg_dep_rewrite_goal_tac index_update_same
-    >-(fs [hash_mod_key_def, hash_key_fwd_def]) >>
+    >-(fs []) >>
     fs []) >>
   (* Prove the rest of the postcondition *)
   rw []
   >-((* The binding for key is updated *)
      fs [lookup_s_def, slots_t_lookup_def] >>
      sg_dep_rewrite_goal_tac index_update_diff
-     >-(fs [hash_mod_key_def, hash_key_fwd_def]) >>
+     >-(fs []) >>
      fs [insert_in_slot_t_rel_def])
   >-((* The other bindings are unchanged *)
      fs [lookup_s_def, slots_t_lookup_def] >>
      Cases_on ‘hash_mod_key k (len (vec_to_list hm.hash_map_slots)) = hash_mod_key key (len (vec_to_list hm.hash_map_slots))’ >> gvs []
      >-(
         sg_dep_rewrite_goal_tac index_update_diff
-        >-(fs [hash_mod_key_def, hash_key_fwd_def]) >>
+        >-(fs []) >>
         fs [insert_in_slot_t_rel_def]) >>
      sg_dep_rewrite_goal_tac index_update_same
-     >-(fs [hash_mod_key_def, hash_key_fwd_def] >> irule pos_mod_pos_lt >> massage >> fs []) >>
+     >-(fs [] >> irule pos_mod_pos_lt >> massage >> fs []) >>
      fs [insert_in_slot_t_rel_def]) >>
   (* Length *)
   Cases_on ‘lookup_s hm key’ >>
@@ -862,8 +875,8 @@ Theorem distinct_keys_lookup_NONE:
   lookup k ls = NONE
 Proof
   Induct_on ‘ls’ >> rw [] >>
-  fs [distinct_keys_def, pairwise_rel_def, EVERY_DEF, lookup_def] >>
-  Cases_on ‘h’ >> fs [lookup_def]
+  fs [distinct_keys_def, pairwise_rel_def, EVERY_DEF] >>
+  Cases_on ‘h’ >> fs []
 QED
 
 Theorem hash_map_move_elements_from_list_fwd_back_spec:
@@ -886,14 +899,11 @@ Proof
   (* TODO: improve massage to not only look at variables *)
   qspec_assume ‘hm.hash_map_num_entries’ usize_to_int_bounds >> fs [] >>
   (* TODO: automate *)
-  qspec_assume ‘list_t_v ls’ len_pos
-  >-(fs [slot_t_lookup_def, lookup_def, list_t_v_def])
-  >-(fs [len_def, list_t_v_def]) >>
+  qspec_assume ‘list_t_v ls’ len_pos >>
   (* Recursive case *)
+  progress >>
   progress
-  >-(fs [len_s_def, hash_map_t_base_inv_def, list_t_v_def, len_def] >> int_tac) >>
-  progress
-  >-(Cases_on ‘lookup_s hm u’ >> fs [len_s_def, hash_map_t_base_inv_def, list_t_v_def, len_def] >> int_tac) >>
+  >-(Cases_on ‘lookup_s hm u’ >> fs [len_s_def, hash_map_t_base_inv_def] >> int_tac) >>
   (* Prove the postcondition *)
   (* Drop the induction hypothesis *)
   last_x_assum ignore_tac >>
@@ -905,7 +915,7 @@ Proof
   fs [hash_map_same_params_def] >>
   (* *)
   sg ‘distinct_keys (list_t_v ls)’
-  >-(fs [distinct_keys_def, list_t_v_def, pairwise_rel_def, EVERY_DEF]) >>
+  >-(fs [distinct_keys_def, pairwise_rel_def, EVERY_DEF]) >>
   fs [] >>
   (* For some reason, if we introduce an assumption with [sg], the rewriting
      doesn't work (and I couldn't find any typing issue) *)
@@ -913,45 +923,25 @@ Proof
   first_assum sg_premise_tac
   >-(
     rw [] >>
-    sg ‘k ≠ u’ >-(irule distinct_keys_MEM_not_eq >> metis_tac [list_t_v_def]) >>
+    sg ‘k ≠ u’ >-(irule distinct_keys_MEM_not_eq >> metis_tac []) >>
     last_x_assum (qspec_assume ‘k’) >>
     gvs [] >>
     first_x_assum (qspecl_assume [‘k’, ‘v’]) >>
-    gvs [list_t_v_def]) >>
+    gvs []) >>
   gvs[] >>
   (* *)
   rw []
   >-(
-    sg ‘k ≠ u’ >-(fs [slot_t_lookup_def, lookup_def, list_t_v_def] >> Cases_on ‘u = k’ >> fs []) >>
-    last_x_assum (qspec_assume ‘k’) >> gvs [] >>
     first_x_assum (qspec_assume ‘k’) >>
     first_x_assum (qspec_assume ‘k’) >>
-    gvs [slot_t_lookup_def, list_t_v_def, lookup_def])
-  >-(
-    first_x_assum (qspec_assume ‘k’) >>
-    first_x_assum (qspec_assume ‘k’) >>
-    fs [slot_t_lookup_def, list_t_v_def, lookup_def] >>
-    Cases_on ‘u = k’ >> gvs [] >>  
+    fs [] >>
     sg ‘lookup k (list_t_v ls) = NONE’ >-(irule distinct_keys_lookup_NONE >> metis_tac []) >>
-    fs []) >>
+    gvs []) >>
   (* The length *)
-  fs [len_def, list_t_v_def] >>
+  fs [] >>
   int_tac
 QED
 val _ = save_spec_thm "hash_map_move_elements_from_list_fwd_back_spec"
-
-(* TODO: move *)
-Theorem drop_more_than_length:
-  ∀ ls i.
-  len ls ≤ i ⇒
-  drop i ls = []
-Proof
-  Induct_on ‘ls’ >>
-  rw [len_def, drop_def] >>
-  qspec_assume ‘ls’ len_pos >> try_tac int_tac >>
-  last_x_assum irule >>
-  int_tac
-QED
 
 (* TODO: induction theorem for vectors *)
 Theorem len_index_FLAT_MAP_list_t_v:
@@ -959,7 +949,7 @@ Theorem len_index_FLAT_MAP_list_t_v:
     0 ≤ i ⇒ i < len slots ⇒
     len (list_t_v (index i slots)) ≤ len (FLAT (MAP list_t_v (drop i slots)))
 Proof
-  Induct_on ‘slots’ >> rw [vec_index_def, drop_def, index_def, len_def, len_append, len_pos, update_def, drop_eq] >> try_tac int_tac >> fs [] >>
+  Induct_on ‘slots’ >> rw [vec_index_def, drop_def, index_def, len_pos, update_def, drop_eq] >> try_tac int_tac >> fs [] >>
   last_x_assum (qspec_assume ‘i - 1’) >>
   sg ‘0 ≤ i − 1 ∧ i − 1 < len slots’ >- int_tac >> fs []
 QED
@@ -971,22 +961,9 @@ Theorem len_vec_FLAT_drop_update:
   len (list_t_v (index i slots)) +
   len (FLAT (MAP list_t_v (drop (i + 1) (update slots i ListNil))))
 Proof
-  Induct_on ‘slots’ >> fs [len_def, drop_def, update_def, len_append, len_pos, index_def] >> rw [] >> try_tac int_tac >> fs [drop_eq, len_append] >>
+  Induct_on ‘slots’ >> fs [drop_def, update_def, len_pos, index_def] >> rw [] >> try_tac int_tac >> fs [drop_eq, len_append] >>
   last_x_assum (qspec_assume ‘i - 1’) >>
   sg ‘0 ≤ i − 1 ∧ i − 1 < len slots ∧ ~(i + 1 < 0) ∧ ~(i + 1 = 0)’ >- int_tac >> fs [] >> sg ‘i + 1 - 1 = i’ >- int_tac >> fs [drop_def]
-QED
-
-(* TODO: move *)
-(* TODO: add to srw_ss () ? *)
-Theorem vec_to_list_vec_update:
-  ∀ v i x. vec_to_list (vec_update v i x) = update (vec_to_list v) (usize_to_int i) x
-Proof
-  rw [vec_update_def] >>
-  qspec_assume ‘v’ vec_len_spec >>
-  qspecl_assume [‘v’, ‘i’, ‘x’] vec_update_eq >> fs [] >>
-  qspecl_assume [‘vec_to_list v’, ‘usize_to_int i’, ‘x’] update_len >>
-  sg_dep_rewrite_all_tac mk_vec_axiom >- fs [] >>
-  fs []  
 QED
 
 Theorem MEM_EVERY_not:
@@ -1006,9 +983,9 @@ Theorem MEM_distinct_keys_lookup:
     distinct_keys ls ⇒
     lookup k ls = SOME v
 Proof
-  Induct_on ‘ls’ >> fs [lookup_def, distinct_keys_def, pairwise_rel_def] >>
-  rw [lookup_def] >> fs [lookup_def] >>
-  Cases_on ‘h’ >> fs [lookup_def] >> rw [] >>
+  Induct_on ‘ls’ >> fs [distinct_keys_def, pairwise_rel_def] >>
+  rw [] >> fs [] >>
+  Cases_on ‘h’ >> fs [] >> rw [] >>
   (* Absurd *)
   exfalso >>
   metis_tac [MEM_EVERY_not]
@@ -1020,9 +997,9 @@ Theorem lookup_distinct_keys_MEM:
     distinct_keys ls ⇒
     MEM (k, v) ls
 Proof
-  Induct_on ‘ls’ >> fs [lookup_def, distinct_keys_def, pairwise_rel_def] >>
-  rw [lookup_def] >> fs [lookup_def] >>
-  Cases_on ‘h’ >> fs [lookup_def] >> rw [] >>
+  Induct_on ‘ls’ >> fs [distinct_keys_def, pairwise_rel_def] >>
+  rw [] >> fs [] >>
+  Cases_on ‘h’ >> fs [] >> rw [] >>
   Cases_on ‘q = k’ >> fs []
 QED
 
@@ -1036,23 +1013,23 @@ Theorem key_MEM_j_lookup_i_is_NONE:
   slot_t_lookup k (index (usize_to_int i) (vec_to_list slots)) = NONE
 Proof
   rw [] >>
-  fs [slot_t_inv_def, slot_s_inv_def, slot_s_inv_hash_def] >>
+  fs [slot_t_inv_def] >>
   (* *)
   first_assum (qspec_assume ‘j’) >> fs [] >>
   pop_assum sg_premise_tac >- int_tac >> fs [] >>
   first_x_assum imp_res_tac >>
-  fs [hash_mod_key_def, hash_key_fwd_def] >>
+  fs [] >>
   (* Prove by contradiction *)
   first_assum (qspec_assume ‘usize_to_int i’) >> fs [] >>
   pop_assum sg_premise_tac >- int_tac >> fs [] >>
   Cases_on ‘slot_t_lookup k (index (usize_to_int i) (vec_to_list slots))’ >> fs [] >>
   sg ‘MEM (k,v) (list_t_v (index (usize_to_int i) (vec_to_list slots)))’
   >- (
-    fs [slot_t_lookup_def] >>
+    fs [] >>
     metis_tac [lookup_distinct_keys_MEM]
   ) >>
   qpat_x_assum ‘∀k. _’ imp_res_tac >>
-  fs [hash_mod_key_def, hash_key_fwd_def]
+  fs []
 QED  
 
 (* TODO: the names introduced by progress are random, which is confusing.
@@ -1095,31 +1072,31 @@ Proof
   massage
   >-(
     case_tac >- int_tac >> fs [] >>
-    sg_dep_rewrite_goal_tac drop_more_than_length >-(int_tac) >> fs [len_def] >>
+    sg_dep_rewrite_goal_tac drop_more_than_length >-(int_tac) >> fs [] >>
     strip_tac >> Cases_on ‘lookup_s hm k’ >> fs [] >>
-    fs [hash_mod_key_def, hash_key_fwd_def] >>
+    fs [] >>
     (* Contradiction *)
     rw [] >> int_tac
     )
   >-(
     (* Same as above - TODO: this is a bit annoying, update the invariant principle (maybe base case is ≤ 0 ?) *)
-    sg_dep_rewrite_goal_tac drop_more_than_length >-(int_tac) >> fs [len_def] >>
+    sg_dep_rewrite_goal_tac drop_more_than_length >-(int_tac) >> fs [] >>
     strip_tac >> Cases_on ‘lookup_s hm k’ >> fs [] >>
-    fs [hash_mod_key_def, hash_key_fwd_def] >>
+    fs [] >>
     (* Contradiction *)
     rw [] >> int_tac) >>
   (* Recursive case *)
   case_tac >> fs [] >>
   (* Eliminate the trivial case *)
   try_tac (
-    sg_dep_rewrite_goal_tac drop_more_than_length >-(int_tac) >> fs [len_def] >>
+    sg_dep_rewrite_goal_tac drop_more_than_length >-(int_tac) >> fs [] >>
     strip_tac >> Cases_on ‘lookup_s hm k’ >> fs [] >>
-    fs [hash_mod_key_def, hash_key_fwd_def] >>
+    fs [] >>
     (* Contradiction *)
     rw [] >> int_tac) >>
   progress >- (fs [vec_len_def] >> massage >> fs []) >>
   progress >- (
-    fs [mem_replace_fwd_def, vec_index_def] >>
+    fs [vec_index_def] >>
     qspecl_assume [‘vec_to_list slots’, ‘usize_to_int i’] len_index_FLAT_MAP_list_t_v >>
     gvs [] >> int_tac) >>
   (* We just evaluated the call to “hash_map_move_elements_from_list_fwd_back”: prove the assumptions
@@ -1127,27 +1104,26 @@ Proof
   qpat_x_assum ‘_ ⇒ _’ sg_premise_tac
   >-(
     first_x_assum (qspec_assume ‘usize_to_int i’) >> gvs [vec_index_def] >>
-    rw [mem_replace_fwd_def]
+    rw []
     >-(first_x_assum irule >> metis_tac []) >>
-    fs [slot_t_inv_def, slot_s_inv_def]) >>
-  gvs [mem_replace_fwd_def] >>
+    fs [slot_t_inv_def]) >>
+  gvs [] >>
   (* Continue going forward *)
   progress >>
   progress >- (fs [vec_len_def] >> massage >> fs []) >>
-  progress >> fs [mem_replace_back_def, mem_replace_fwd_def] >> qspecl_assume [‘slots’, ‘i’, ‘ListNil’] vec_update_eq >>
+  progress >> fs [] >> qspecl_assume [‘slots’, ‘i’, ‘ListNil’] vec_update_eq >>
   gvs [] >>
   (* Drop the induction hypothesis *)
   last_x_assum ignore_tac
   (* TODO: when we update the theorem, progress lookups the stored (deprecated) rather than
      the inductive hypothesis *)
   (* The preconditions of the recursive call *)
-  >- (int_tac)
   >- (
     qspecl_assume [‘vec_to_list slots’, ‘usize_to_int i’] len_vec_FLAT_drop_update >> gvs [] >>
-    gvs [vec_to_list_vec_update, vec_index_def] >>
+    gvs [vec_index_def] >>
     int_tac)
   >-(
-    fs [vec_to_list_vec_update] >>
+    fs [] >>
     sg_dep_rewrite_goal_tac index_update_same
     >-(fs [] >> int_tac) >>
     fs [] >>
@@ -1158,17 +1134,18 @@ Proof
     (* Prove that index j (update slots i) = index j slots *)
     pop_assum (qspec_assume ‘int_to_usize j’) >> gvs [] >> massage >> gvs [] >>
     fs [vec_len_def] >>
-    fs [vec_to_list_vec_update] >>
     massage >> gvs [] >>
     sg ‘j ≠ usize_to_int i’ >- int_tac >> gvs [vec_index_def, vec_update_def] >>
     massage >>
-    sg_dep_rewrite_all_tac mk_vec_axiom >- fs [] >> gvs [] >>
     (* Use the fact that slot_t_lookup k (index i ... slots) = NONE *)
     last_x_assum (qspec_assume ‘k’) >>
     first_assum sg_premise_tac
     >- (
-      sg ‘usize_to_int i < j’ >- int_tac >>
-      metis_tac [key_MEM_j_lookup_i_is_NONE]) >>
+      sg ‘usize_to_int i < j’ >- int_tac >> fs [] >>
+      (* TODO: we have to rewrite key_MEM_j_lookup_i_is_NONE before applying
+         metis_tac *)
+      assume_tac key_MEM_j_lookup_i_is_NONE >> fs [] >>
+      metis_tac []) >>
     gvs [] >>
     (* Use the fact that as the key is in the slots after i, it can't be in “hm” (yet) *)
     last_x_assum (qspec_assume ‘j’) >> gvs [] >>
@@ -1180,12 +1157,11 @@ Proof
     (* Reasoning about the length *)
     qspecl_assume [‘vec_to_list slots’, ‘usize_to_int i’] len_vec_FLAT_drop_update >>
     gvs [] >>
-    fs [vec_to_list_vec_update] >>
     fs [GSYM integerTheory.INT_ADD_ASSOC, vec_index_def]) >>
   (* Same params *)
   fs [hash_map_same_params_def] >>
   (* Lookup properties *)
-  strip_tac >> fs [hash_mod_key_def, hash_key_fwd_def] >>
+  strip_tac >> fs [] >>
   sg ‘usize_to_int k % len (vec_to_list slots) < len (vec_to_list slots)’
   >- (irule pos_mod_pos_lt >> massage >> fs [] >> int_tac) >> fs [] >>
   Cases_on ‘usize_to_int i = usize_to_int k % len (vec_to_list slots)’ >> fs []
@@ -1194,14 +1170,14 @@ Proof
     sg ‘~ (usize_to_int k % len (vec_to_list slots) + 1 ≤ usize_to_int k % len (vec_to_list slots))’ >- int_tac >> fs [] >>
     (* Is the key is slot i ? *)
     (* TODO: use key_MEM_j_lookup_i_is_NONE? *)
-    Cases_on ‘slot_t_lookup k (vec_index slots i)’ >> gvs [slot_t_lookup_def, vec_index_def] >>
+    Cases_on ‘slot_t_lookup k (vec_index slots i)’ >> gvs [vec_index_def] >>
     (* The key can't be in “hm” *)
     last_x_assum (qspec_assume ‘usize_to_int i’) >>
     pop_assum sg_premise_tac >> fs [] >>
     pop_assum sg_premise_tac >> fs [] >>
     pop_assum (qspecl_assume [‘k’, ‘x’]) >>
     pop_assum sg_premise_tac
-    >-(irule lookup_distinct_keys_MEM >> gvs [slot_t_inv_def, slot_s_inv_def]) >> fs []) >>
+    >-(irule lookup_distinct_keys_MEM >> gvs [slot_t_inv_def]) >> fs []) >>
   (* Here: usize_to_int i ≠ usize_to_int k % len (vec_to_list slots) *)
   Cases_on ‘usize_to_int i ≤ usize_to_int k % len (vec_to_list slots)’ >> fs []
   >- (
@@ -1217,15 +1193,15 @@ Proof
       first_x_assum irule  >>
       last_x_assum (qspec_assume ‘usize_to_int i’) >> gvs [] >>
       (* Prove by contradiction - TODO: turn this into a lemma? *)
-      gvs [slot_t_inv_def, slot_s_inv_def, slot_s_inv_hash_def, hash_mod_key_def, hash_key_fwd_def] >>
+      gvs [slot_t_inv_def] >>
       Cases_on ‘slot_t_lookup k (vec_index slots i)’ >> fs [vec_index_def] >> exfalso >>
-      fs [slot_t_lookup_def] >>
+      fs [] >>
       imp_res_tac lookup_distinct_keys_MEM >>
       sg ‘usize_to_int k % len (vec_to_list slots) = usize_to_int i’ >- metis_tac [] >> fs []
       ) >>
     fs [] >>
     case_tac >>
-    fs [vec_to_list_vec_update] >>
+    fs [] >>
     sg_dep_rewrite_goal_tac index_update_same >> fs []
   ) >>
   (* Here: usize_to_int i > usize_to_int k % ... *)
@@ -1237,10 +1213,10 @@ Proof
     last_x_assum (qspec_assume ‘usize_to_int i’) >>
     pop_assum sg_premise_tac >> fs [] >>
     pop_assum sg_premise_tac >> fs [] >>
-    gvs [slot_t_inv_def, slot_s_inv_def, slot_s_inv_hash_def, hash_mod_key_def, hash_key_fwd_def] >>
+    gvs [slot_t_inv_def] >>
     (* Prove by contradiction *)
     Cases_on ‘slot_t_lookup k (vec_index slots i)’ >> fs [vec_index_def] >> exfalso >>
-    fs [slot_t_lookup_def] >>
+    fs [] >>
     imp_res_tac lookup_distinct_keys_MEM >>
     sg ‘usize_to_int k % len (vec_to_list slots) = usize_to_int i’ >- metis_tac [] >> fs []
   ) >>
@@ -1402,7 +1378,7 @@ Proof
      (* TODO: automate *)
      qspec_assume ‘hm.hash_map_num_entries’ usize_to_int_bounds >> fs [] >>
      int_tac)
-  >-(fs [hash_map_t_base_inv_def, slots_t_inv_def, slots_s_inv_def]) >>
+  >-(fs [hash_map_t_base_inv_def, slots_t_inv_def]) >>
   pure_rewrite_tac [hash_map_t_inv_def] >>
   fs [len_s_def, hash_map_t_base_inv_def, hash_map_t_al_v_def, hash_map_t_v_def, drop_eq] >>
   gvs [] >>
@@ -1431,7 +1407,7 @@ Proof
     int_tac) >>
   rw [] >>
   first_x_assum (qspec_assume ‘k’) >>
-  gvs [hash_mod_key_def, hash_key_fwd_def, slots_t_lookup_def, slot_t_lookup_def, lookup_s_def] >>
+  gvs [slots_t_lookup_def, lookup_s_def] >>
   massage >>
   sg ‘0 ≤ usize_to_int k % len (vec_to_list hm.hash_map_slots)’
   >- (irule pos_mod_pos_is_pos >> fs [] >> int_tac) >> fs [] >>
@@ -1498,359 +1474,479 @@ Proof
 QED
 val _ = save_spec_thm "hash_map_insert_fwd_back_spec"
 
-(*
-Theorem nth_mut_fwd_spec:
-  !(ls : 't list_t) (i : u32).
-    u32_to_int i < len (list_t_v ls) ==>
-    case nth_mut_fwd ls i of
-    | Return x => x = index (u32_to_int i) (list_t_v ls)
-    | Fail _ => F
-    | Diverge => F
+Theorem hash_map_contains_key_in_list_fwd_spec:
+  ∀ key ls.
+  hash_map_contains_key_in_list_fwd key ls = Return (slot_t_lookup key ls ≠ NONE)
 Proof
-  Induct_on ‘ls’ >> rw [list_t_v_def, len_def] >~ [‘ListNil’]
-  >-(massage >> int_tac) >>
-  pure_once_rewrite_tac [nth_mut_fwd_def] >> rw [] >>
-  fs [index_eq] >>
-  progress >> progress
+  fs [hash_map_contains_key_in_list_fwd_def] >>
+  Induct_on ‘ls’ >>
+  pure_once_rewrite_tac [hash_map_contains_key_in_list_loop_fwd_def] >>
+  fs [] >>
+  (* There remains only the recursive case *)
+  rw []
 QED
+val _ = save_spec_thm "hash_map_contains_key_in_list_fwd_spec"
 
-val _ = save_spec_thm "nth_mut_fwd_spec"
-
-val _ = new_constant ("insert", “: u32 -> 't -> (u32 # 't) list_t -> (u32 # 't) list_t result”)
-val insert_def = new_axiom ("insert_def", “
- insert (key : u32) (value : 't) (ls : (u32 # 't) list_t) : (u32 # 't) list_t result =
-  case ls of
-  | ListCons (ckey, cvalue) tl =>
-    if ckey = key
-    then Return (ListCons (ckey, value) tl)
-    else
-      do
-      tl0 <- insert key value tl;
-      Return (ListCons (ckey, cvalue) tl0)
-      od
-  | ListNil => Return (ListCons (key, value) ListNil)
- ”)
-
-(* Property that keys are pairwise distinct *)
-val distinct_keys_def = Define ‘
-  distinct_keys (ls : (u32 # 't) list) =
-    !i j.
-      0 ≤ i ⇒ i < j ⇒ j < len ls ⇒
-      FST (index i ls) ≠ FST (index j ls)
-’
-
-(* Lemma about ‘insert’, without the invariant *)
-Theorem insert_lem_aux:
-  !ls key value.
-    (* The keys are pairwise distinct *)
-    case insert key value ls of
-    | Return ls1 =>
-      (* We updated the binding *)
-      lookup key ls1 = SOME value /\
-      (* The other bindings are left unchanged *)
-      (!k. k <> key ==> lookup k ls = lookup k ls1)
-    | Fail _ => F
-    | Diverge => F
+Theorem hash_map_contains_key_fwd_spec:
+  ∀ hm key.
+  hash_map_t_inv hm ⇒
+  hash_map_contains_key_fwd hm key = Return (lookup_s hm key ≠ NONE)
 Proof
-  Induct_on ‘ls’ >> rw [list_t_v_def] >~ [‘ListNil’] >>
-  pure_once_rewrite_tac [insert_def] >> rw []
-  >- (rw [lookup_def, lookup_raw_def, list_t_v_def])
-  >- (rw [lookup_def, lookup_raw_def, list_t_v_def]) >>
-  case_tac >> rw []
-  >- (rw [lookup_def, lookup_raw_def, list_t_v_def])
-  >- (rw [lookup_def, lookup_raw_def, list_t_v_def]) >>
-  progress >>
-  fs [lookup_def, lookup_raw_def, list_t_v_def]
-QED
-
-(*
- * Invariant proof 1
- *)
-
-Theorem distinct_keys_cons:
-  ∀ k v ls.
-  (∀ i. 0 ≤ i ⇒ i < len ls ⇒ FST (index i ls) ≠ k) ⇒
-  distinct_keys ls ⇒
-  distinct_keys ((k,v) :: ls)
-Proof
+  fs [hash_map_contains_key_fwd_def] >>
+  fs [hash_key_fwd_def] >>
   rw [] >>
-  rw [distinct_keys_def] >>
-  Cases_on ‘i = 0’ >> fs []
+  (* TODO: automate *)
+  qspec_assume ‘hm.hash_map_slots’ vec_len_spec >> fs [] >>
+  progress >> gvs []
+  >- (
+    fs [hash_map_t_inv_def, hash_map_t_base_inv_def, vec_len_def] >>
+    massage >> int_tac) >>
+  progress >> massage >> gvs [int_rem_def]
+  >- (irule pos_mod_pos_lt >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
+  progress >>
+  fs [lookup_s_def, vec_index_def, slots_t_lookup_def]
+QED
+val _ = save_spec_thm "hash_map_contains_key_fwd_spec"
+
+Theorem hash_map_get_in_list_fwd_spec:
+  ∀ ls key.
+  case hash_map_get_in_list_fwd key ls of
+  | Diverge => F
+  | Fail _ => slot_t_lookup key ls = NONE
+  | Return x => slot_t_lookup key ls = SOME x
+Proof
+  fs [hash_map_get_in_list_fwd_def] >>
+  Induct_on ‘ls’ >> pure_once_rewrite_tac [hash_map_get_in_list_loop_fwd_def] >>
+  fs [] >>
+  rw []
+QED
+val _ = save_spec_thm "hash_map_get_in_list_fwd_spec"
+
+Theorem hash_map_get_fwd_spec:
+  ∀ hm key.
+  hash_map_t_inv hm ⇒
+  case hash_map_get_fwd hm key of
+  | Diverge => F
+  | Fail _ => lookup_s hm key = NONE
+  | Return x => lookup_s hm key = SOME x
+Proof
+  rw [hash_map_get_fwd_def] >>
+  fs [hash_key_fwd_def] >>
+  (* TODO: automate *)
+  qspec_assume ‘hm.hash_map_slots’ vec_len_spec >> fs [] >>
+  progress >> gvs []
+  >- (
+    fs [hash_map_t_inv_def, hash_map_t_base_inv_def, vec_len_def] >>
+    massage >> int_tac) >>
+  progress >> massage >> gvs [int_rem_def]
+  >- (irule pos_mod_pos_lt >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
+  progress >>
+  gvs [lookup_s_def, vec_index_def, slots_t_lookup_def]
+QED
+val _ = save_spec_thm "hash_map_get_fwd_spec"
+
+Theorem hash_map_get_mut_in_list_fwd_spec:
+  ∀ ls key.
+  case hash_map_get_mut_in_list_fwd ls key of
+  | Diverge => F
+  | Fail _ => slot_t_lookup key ls = NONE
+  | Return x => slot_t_lookup key ls = SOME x
+Proof
+  fs [hash_map_get_mut_in_list_fwd_def] >>
+  Induct_on ‘ls’ >> pure_once_rewrite_tac [hash_map_get_mut_in_list_loop_fwd_def] >>
+  fs [] >>
+  rw []
+QED
+val _ = save_spec_thm "hash_map_get_mut_in_list_fwd_spec"
+
+Theorem hash_map_get_mut_fwd_spec:
+  ∀ hm key.
+  hash_map_t_inv hm ⇒
+  case hash_map_get_mut_fwd hm key of
+  | Diverge => F
+  | Fail _ => lookup_s hm key = NONE
+  | Return x => lookup_s hm key = SOME x
+Proof
+  rw [hash_map_get_mut_fwd_def] >>
+  fs [hash_key_fwd_def] >>
+  (* TODO: automate *)
+  qspec_assume ‘hm.hash_map_slots’ vec_len_spec >> fs [] >>
+  progress >> gvs []
+  >- (
+    fs [hash_map_t_inv_def, hash_map_t_base_inv_def, vec_len_def] >>
+    massage >> int_tac) >>
+  progress >> massage >> gvs [int_rem_def]
+  >- (irule pos_mod_pos_lt >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
+  progress >>
+  gvs [lookup_s_def, vec_index_def, slots_t_lookup_def]
+QED
+val _ = save_spec_thm "hash_map_get_mut_fwd_spec"
+
+Theorem hash_map_get_mut_in_list_back_spec:
+  ∀ ls key nx.
+  slot_t_lookup key ls ≠ NONE ⇒
+  ∃ nls. hash_map_get_mut_in_list_back ls key nx = Return nls ∧
+  slot_t_lookup key nls = SOME nx ∧
+  (∀ k. k ≠ key ⇒ slot_t_lookup k nls = slot_t_lookup k ls)
+Proof
+  fs [hash_map_get_mut_in_list_back_def] >>
+  Induct_on ‘ls’ >> pure_once_rewrite_tac [hash_map_get_mut_in_list_loop_back_def] >>
+  fs [] >>
+  rw [] >>
+  fs [] >>
+  progress >>
+  fs []  
+QED
+val _ = save_spec_thm "hash_map_get_mut_in_list_back_spec"
+
+Theorem hash_map_get_mut_back_spec:
+  ∀ hm key nx.
+  lookup_s hm key ≠ NONE ⇒
+  hash_map_t_inv hm ⇒
+  ∃ hm1. hash_map_get_mut_back hm key nx = Return hm1 ∧
+  lookup_s hm1 key = SOME nx ∧
+  (∀ k. k ≠ key ⇒ lookup_s hm1 k = lookup_s hm k)
+Proof
+  rw [hash_map_get_mut_back_def] >>
+  fs [hash_key_fwd_def] >>
+  (* TODO: automate *)
+  qspec_assume ‘hm.hash_map_slots’ vec_len_spec >> fs [] >>
+  progress >> gvs []
+  >- (
+    fs [hash_map_t_inv_def, hash_map_t_base_inv_def, vec_len_def] >>
+    massage >> int_tac) >>
+  progress >> massage >> gvs [int_rem_def]
+  (* TODO: we did this proof many times *)
+  >- (irule pos_mod_pos_lt >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
+  progress >>
+  gvs [lookup_s_def, vec_index_def, slots_t_lookup_def] >>
+  progress
+  (* TODO: again the same proof *)
+  >- (massage >> irule pos_mod_pos_lt >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
+  gvs [] >>
+  conj_tac
   >-(
-    (* Use the first hypothesis *)
-    fs [index_eq] >>
-    last_x_assum (qspecl_assume [‘j - 1’]) >>
-    sg ‘0 ≤ j - 1’ >- int_tac >>
-    fs [len_def] >>
-    sg ‘j - 1 < len ls’ >- int_tac >>
+    sg_dep_rewrite_goal_tac index_update_diff
+    >- (fs [] >> irule pos_mod_pos_lt >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
     fs []
   ) >>
-  (* Use the second hypothesis *)
-  sg ‘0 < i’ >- int_tac >>
-  sg ‘0 < j’ >- int_tac >>
-  fs [distinct_keys_def, index_eq, len_def] >>
-  first_x_assum (qspecl_assume [‘i - 1’, ‘j - 1’]) >>
-  sg ‘0 ≤ i - 1 ∧ i - 1 < j - 1 ∧ j - 1 < len ls’ >- int_tac >>
+  rw [] >>
+  Cases_on ‘usize_to_int k % len (vec_to_list hm.hash_map_slots) = usize_to_int key % len (vec_to_list hm.hash_map_slots)’ >>
+  fs []
+  >- (
+    sg_dep_rewrite_goal_tac index_update_diff
+    >- (fs [] >> irule pos_mod_pos_lt >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
+    fs []
+  ) >>
+  sg_dep_rewrite_goal_tac index_update_same
+  >- (
+    rw []
+    >- (irule pos_mod_pos_lt >> massage >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac)
+    >- (irule pos_mod_pos_lt >> massage >> fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac)
+  ) >>
   fs []
 QED
+val _ = save_spec_thm "hash_map_get_mut_back_spec"
 
-Theorem distinct_keys_tail:
-  ∀ k v ls.
-  distinct_keys ((k,v) :: ls) ⇒
-  distinct_keys ls
+Theorem hash_map_remove_from_list_fwd_spec:
+  ∀ key l i ls.
+  hash_map_remove_from_list_fwd key ls = Return (slot_t_lookup key ls)
 Proof
-  rw [distinct_keys_def] >>
-  last_x_assum (qspecl_assume [‘i + 1’, ‘j + 1’]) >>
-  fs [len_def] >>
-  sg ‘0 ≤ i + 1 ∧ i + 1 < j + 1 ∧ j + 1 < 1 + len ls’ >- int_tac >> fs [] >>
-  sg ‘0 < i + 1 ∧ 0 < j + 1’ >- int_tac >> fs [index_eq] >>
-  sg ‘i + 1 - 1 = i ∧ j + 1 - 1 = j’ >- int_tac >> fs []
-QED
-
-Theorem insert_index_neq:
-  ∀ q k v ls0 ls1 i.
-  (∀ j. 0 ≤ j ∧ j < len (list_t_v ls0) ⇒ q ≠ FST (index j (list_t_v ls0))) ⇒
-  q ≠ k ⇒
-  insert k v ls0 = Return ls1 ⇒
-  0 ≤ i ⇒
-  i < len (list_t_v ls1) ⇒
-  FST (index i (list_t_v ls1)) ≠ q
-Proof
-  ntac 3 strip_tac >>
-  Induct_on ‘ls0’ >> rw [] >~ [‘ListNil’]
-  >-(
-    fs [insert_def] >>
-    sg ‘ls1 = ListCons (k,v) ListNil’ >- fs [] >> fs [list_t_v_def, len_def] >>
-    sg ‘i = 0’ >- int_tac >> fs [index_eq]) >>
-  Cases_on ‘t’ >>
-  Cases_on ‘i = 0’ >> fs []
-  >-(
-    qpat_x_assum ‘insert _ _ _ = _’ mp_tac >>
-    simp [MK_BOUNDED insert_def 1, bind_def] >>
-    Cases_on ‘q' = k’ >> rw []
-    >- (fs [list_t_v_def, index_eq]) >>
-    Cases_on ‘insert k v ls0’ >> fs [] >>
-    gvs [list_t_v_def, index_eq] >>
-    first_x_assum (qspec_assume ‘0’) >>
-    fs [len_def] >>
-    strip_tac >>
-    qspec_assume ‘list_t_v ls0’ len_pos >>
-    sg ‘0 < 1 + len (list_t_v ls0)’ >- int_tac >>
-    fs []) >>
-  qpat_x_assum ‘insert _ _ _ = _’ mp_tac >>
-  simp [MK_BOUNDED insert_def 1, bind_def] >>
-  Cases_on ‘q' = k’ >> rw []
-  >-(
-    fs [list_t_v_def, index_eq, len_def] >>
-    first_x_assum (qspec_assume ‘i’) >> rfs []) >>
-  Cases_on ‘insert k v ls0’ >> fs [] >>
-  gvs [list_t_v_def, index_eq] >>
-  last_x_assum (qspec_assume ‘i - 1’) >>
-  fs [len_def] >>
-  sg ‘0 ≤ i - 1 ∧ i - 1 < len (list_t_v a)’ >- int_tac >> fs [] >>
-  first_x_assum irule >>
+  fs [hash_map_remove_from_list_fwd_def] >>
+  Induct_on ‘ls’ >> pure_once_rewrite_tac [hash_map_remove_from_list_loop_fwd_def] >>
   rw [] >>
-  last_x_assum (qspec_assume ‘j + 1’) >>
-  rfs [] >>
-  sg ‘j + 1 < 1 + len (list_t_v ls0) ∧ j + 1 − 1 = j ∧ j + 1 ≠ 0’ >- int_tac >> fs []
-QED
-
-Theorem distinct_keys_insert_index_neq:
-  ∀ k v q r ls0 ls1 i.
-  distinct_keys ((q,r)::list_t_v ls0) ⇒
-  q ≠ k ⇒
-  insert k v ls0 = Return ls1 ⇒
-  0 ≤ i ⇒
-  i < len (list_t_v ls1) ⇒
-  FST (index i (list_t_v ls1)) ≠ q
-Proof
-  rw [] >>
-  (* Use the first assumption to prove the following assertion *)
-  sg ‘∀ j. 0 ≤ j ∧ j < len (list_t_v ls0) ⇒ q ≠ FST (index j (list_t_v ls0))’
-  >-(
-    strip_tac >>
-    fs [distinct_keys_def] >>
-    last_x_assum (qspecl_assume [‘0’, ‘j + 1’]) >>
-    fs [index_eq] >>
-    sg ‘j + 1 - 1 = j’ >- int_tac >> fs [len_def] >>
-    rw []>>
-    first_x_assum irule >> int_tac) >>
-  qspecl_assume [‘q’, ‘k’, ‘v’, ‘ls0’, ‘ls1’, ‘i’] insert_index_neq >>
-  fs []
-QED
-
-Theorem distinct_keys_insert:
-  ∀ k v ls0 ls1.
-  distinct_keys (list_t_v ls0) ⇒
-  insert k v ls0 = Return ls1 ⇒
-  distinct_keys (list_t_v ls1)
-Proof
-  Induct_on ‘ls0’ >~ [‘ListNil’]
-  >-(
-    rw [distinct_keys_def, list_t_v_def, insert_def] >>
-    fs [list_t_v_def, len_def] >>
-    int_tac) >>  
-  Cases >>
-  pure_once_rewrite_tac [insert_def] >> fs[] >>
-  rw [] >> fs []
-  >-(
-    (* k = q *)
-    last_x_assum ignore_tac >>
-    fs [distinct_keys_def] >>
-    rw [] >>
-    last_x_assum (qspecl_assume [‘i’, ‘j’]) >>
-    rfs [list_t_v_def, len_def] >>
-    sg ‘0 < j’ >- int_tac >>
-    Cases_on ‘i = 0’ >> gvs [index_eq]) >>
-  (* k ≠ q: recursion *)
-  Cases_on ‘insert k v ls0’ >> fs [bind_def] >>
-  last_x_assum (qspecl_assume [‘k’, ‘v’, ‘a’]) >>
-  gvs [list_t_v_def] >>
-  imp_res_tac distinct_keys_tail >> fs [] >>
-  irule distinct_keys_cons >> rw [] >>
-  metis_tac [distinct_keys_insert_index_neq]
-QED  
-
-Theorem insert_lem:
-  !ls key value.
-    (* The keys are pairwise distinct *)
-    distinct_keys (list_t_v ls) ==>
-    case insert key value ls of
-    | Return ls1 =>
-      (* We updated the binding *)
-      lookup key ls1 = SOME value /\
-      (* The other bindings are left unchanged *)
-      (!k. k <> key ==> lookup k ls = lookup k ls1) ∧
-      (* The keys are still pairwise disjoint *)
-      distinct_keys (list_t_v ls1)
-    | Fail _ => F
-    | Diverge => F
-Proof
-  rw [] >>
-  qspecl_assume [‘ls’, ‘key’, ‘value’] insert_lem_aux >>
-  case_tac >> fs [] >>
-  metis_tac [distinct_keys_insert]
-QED
-
-(*
- * Invariant proof 2: functional version of the invariant
- *)
-
-Theorem distinct_keys_f_insert_for_all:
-  ∀k v k1 ls0 ls1.
-  k1 ≠ k ⇒
-  for_all (λy. k1 ≠ FST y) (list_t_v ls0) ⇒
-  pairwise_rel (λx y. FST x ≠ FST y) (list_t_v ls0) ⇒
-  insert k v ls0 = Return ls1 ⇒
-  for_all (λy. k1 ≠ FST y) (list_t_v ls1)
-Proof
-  Induct_on ‘ls0’ >> rw [pairwise_rel_def] >~ [‘ListNil’] >>
-  gvs [list_t_v_def, pairwise_rel_def, for_all_def]
-  >-(gvs [MK_BOUNDED insert_def 1, bind_def, list_t_v_def, for_all_def]) >>
-  pat_undisch_tac ‘insert _ _ _ = _’ >>
-  simp [MK_BOUNDED insert_def 1, bind_def] >>
-  Cases_on ‘t’ >> rw [] >> gvs [list_t_v_def, pairwise_rel_def, for_all_def] >>
-  Cases_on ‘insert k v ls0’ >>
-  gvs [distinct_keys_f_def, list_t_v_def, pairwise_rel_def, for_all_def] >>
   metis_tac []
 QED
+val _ = save_spec_thm "hash_map_remove_from_list_fwd_spec"
 
-Theorem distinct_keys_f_insert:
-  ∀ k v ls0 ls1.
-  distinct_keys_f (list_t_v ls0) ⇒
-  insert k v ls0 = Return ls1 ⇒
-  distinct_keys_f (list_t_v ls1)
+Theorem lookup_SOME_not_empty:
+  ∀ ls k. lookup k ls ≠ NONE ⇒ 0 < len ls
 Proof
-  Induct_on ‘ls0’ >> rw [distinct_keys_f_def] >~ [‘ListNil’]
-  >-(
-    fs [list_t_v_def, insert_def] >>
-    gvs [list_t_v_def, pairwise_rel_def, for_all_def]) >>
-  last_x_assum (qspecl_assume [‘k’, ‘v’]) >>
-  pat_undisch_tac ‘insert _ _ _ = _’ >>
-  simp [MK_BOUNDED insert_def 1, bind_def] >>
-  (* TODO: improve case_tac *)
-  Cases_on ‘t’ >> rw [] >> gvs [list_t_v_def, pairwise_rel_def, for_all_def] >>
-  Cases_on ‘insert k v ls0’ >>
-  gvs [distinct_keys_f_def, list_t_v_def, pairwise_rel_def, for_all_def] >>
-  metis_tac [distinct_keys_f_insert_for_all]
+  Induct_on ‘ls’ >> fs [] >> rw [] >>
+  qspec_assume ‘ls’ len_pos >>
+  int_tac
 QED
 
-(*
- * Proving equivalence between the two version - exercise.
- *)
-Theorem for_all_quant:
-  ∀p ls. for_all p ls ⇔ ∀i. 0 ≤ i ⇒ i < len ls ⇒ p (index i ls)
+Theorem slot_t_lookup_SOME_not_empty:
+  ∀ ls i k.
+  0 ≤ i ⇒
+  i < len ls ⇒
+  slot_t_lookup k (index i ls) ≠ NONE ⇒
+  0 < len (FLAT (MAP list_t_v ls))
 Proof
-  strip_tac >> Induct_on ‘ls’
-  >-(rw [for_all_def, len_def] >> int_tac) >>
-  rw [for_all_def, len_def, index_eq] >>
-  equiv_tac
+  Induct_on ‘ls’ >> rw [] >> try_tac int_tac >>
+  gvs [index_eq] >>
+  Cases_on ‘i = 0’ >> fs []
   >-(
-    rw [] >>
-    Cases_on ‘i = 0’ >> fs [] >>
-    first_x_assum irule >>
-    int_tac) >>
+    qspec_assume ‘FLAT (MAP list_t_v ls)’ len_pos >>
+    imp_res_tac lookup_SOME_not_empty >> int_tac
+  ) >>
+  qspec_assume ‘list_t_v h’ len_pos >>
+  last_x_assum (qspecl_assume [‘i - 1’, ‘k’]) >>
+  sg ‘0 ≤ i - 1 ∧ i - 1 < len ls ∧ i ≠ 0’ >- int_tac >>
+  gvs [] >>
+  int_tac
+QED
+
+Theorem lookup_s_SOME_not_empty:
+  ∀ hm key.
+    hash_map_t_inv hm ⇒
+    lookup_s hm key ≠ NONE ⇒ 0 < len_s hm
+Proof
+  rw [lookup_s_def, slots_t_lookup_def, len_s_def, hash_map_t_al_v_def, hash_map_t_v_def] >>
+  sg ‘0 < len (vec_to_list hm.hash_map_slots)’
+  >- (fs [hash_map_t_inv_def, hash_map_t_base_inv_def] >> int_tac) >>
+  irule slot_t_lookup_SOME_not_empty >>
+  qexists ‘usize_to_int key % len (vec_to_list hm.hash_map_slots)’ >>
+  qexists ‘key’ >>
   rw []
-  >-(
-    first_x_assum (qspec_assume ‘0’) >> fs [] >>
-    first_x_assum irule >>
-    qspec_assume ‘ls’ len_pos >>
-    int_tac) >>
-  first_x_assum (qspec_assume ‘i + 1’) >>
-  fs [] >>
-  sg ‘i + 1 ≠ 0 ∧ i + 1 - 1 = i’ >- int_tac >> fs [] >>
-  first_x_assum irule >> int_tac
+  >-(irule pos_mod_pos_is_pos >> massage >> int_tac) >>
+  irule pos_mod_pos_lt >> massage >> int_tac
 QED
 
-Theorem pairwise_rel_quant:
-  ∀p ls. pairwise_rel p ls ⇔
-    (∀i j. 0 ≤ i ⇒ i < j ⇒ j < len ls ⇒ p (index i ls) (index j ls))
+Theorem hash_map_remove_fwd_spec:
+  ∀ hm key.
+  hash_map_t_inv hm ⇒
+  hash_map_remove_fwd hm key = Return (lookup_s hm key)
 Proof
-  strip_tac >> Induct_on ‘ls’
-  >-(rw [pairwise_rel_def, len_def] >> int_tac) >>
-  rw [pairwise_rel_def, len_def] >>
-  equiv_tac
-  >-(
-    (* ==> *)
-    rw [] >>
-    sg ‘0 < j’ >- int_tac >>
-    Cases_on ‘i = 0’
-    >-(
-      simp [index_eq] >>
-      qspecl_assume [‘p h’, ‘ls’] (iffLR for_all_quant) >>
-      first_x_assum irule >> fs [] >> int_tac
+  rw [hash_map_remove_fwd_def] >>
+  (* TODO: automate *)
+  qspec_assume ‘hm.hash_map_slots’ vec_len_spec >> fs [] >>
+  sg ‘0 < usize_to_int (vec_len hm.hash_map_slots)’
+  >- (fs [hash_map_t_inv_def, hash_map_t_base_inv_def, vec_len_def] >> massage >> int_tac) >>
+  fs [vec_len_def] >> massage >>
+  (* TODO: rewriting for: usize_to_int (int_to_usize (len (vec_to_list v))) = len (vec_to_list v) *)
+  progress >>
+  progress >> fs [int_rem_def, vec_len_def] >> massage
+  >- (irule pos_mod_pos_lt >> fs []) >>
+  progress >>
+  gvs [lookup_s_def, slots_t_lookup_def, vec_index_def] >>
+  case_tac >> fs [] >>
+  progress >>
+  (* Prove that we can decrement the number of entries *)
+  qspecl_assume [‘hm’, ‘key’] lookup_s_SOME_not_empty >>
+  gvs [lookup_s_def, slots_t_lookup_def, len_s_def, hash_map_t_inv_def, hash_map_t_base_inv_def] >>
+  int_tac
+QED
+val _ = save_spec_thm "hash_map_remove_fwd_spec"
+
+Theorem every_distinct_remove_every_distinct:
+  ∀ k0 k1 ls0.
+  EVERY (λy. k1 ≠ FST y) ls0 ⇒
+  EVERY (λy. k1 ≠ FST y) (remove k0 ls0)
+Proof
+  Induct_on ‘ls0’ >> fs [] >> rw [] >>
+  Cases_on ‘h’ >> fs [] >>
+  case_tac >> fs []
+QED
+
+Theorem hash_map_remove_from_list_back_spec:
+  ∀ key ls.
+  ∃ ls1. hash_map_remove_from_list_back key ls = Return ls1 ∧
+  (∀ l i. slot_t_inv l i ls ⇒
+    slot_t_inv l i ls1 ∧
+    list_t_v ls1 = remove key (list_t_v ls) ∧
+    slot_t_lookup key ls1 = NONE ∧
+    (∀ k. k ≠ key ⇒ slot_t_lookup k ls1 = slot_t_lookup k ls) ∧
+    (case slot_t_lookup key ls of
+     | NONE => len (list_t_v ls1) = len (list_t_v ls)
+     | SOME _ => len (list_t_v ls1) = len (list_t_v ls) - 1))
+Proof
+  fs [hash_map_remove_from_list_back_def] >>
+  Induct_on ‘ls’ >> pure_once_rewrite_tac [hash_map_remove_from_list_loop_back_def] >>
+  fs [slot_t_inv_def] >>
+  fs [distinct_keys_def, pairwise_rel_def] >>
+  rw []
+  >- (metis_tac [])
+  >- (
+    last_x_assum ignore_tac >>
+    pop_assum ignore_tac >>
+    pop_assum ignore_tac >>
+    Induct_on ‘ls’ >> fs []
+  ) >>
+  progress >>
+  rw [] >> gvs [pairwise_rel_def]
+  >- metis_tac [every_distinct_remove_every_distinct]
+  >- metis_tac []
+  >- metis_tac []
+  >- metis_tac []
+  >- metis_tac [] >>
+  case_tac >> fs [] >- metis_tac [] >>
+  first_x_assum (qspecl_assume [‘l’, ‘i’]) >> gvs [] >>
+  pop_assum sg_premise_tac >- metis_tac [] >> fs []
+QED
+val _ = save_spec_thm "hash_map_remove_from_list_back_spec"
+
+(* TODO: automate this *)
+Theorem hash_map_remove_back_branch_eq:
+  ∀ key hm a.
+  (case lookup key (list_t_v (vec_index hm.hash_map_slots a)) of
+    NONE =>
+      do
+        l0 <-
+          hash_map_remove_from_list_back key
+            (vec_index hm.hash_map_slots a);
+        v <- vec_index_mut_back hm.hash_map_slots a l0;
+        Return (hm with hash_map_slots := v)
+      od
+  | SOME x0 =>
+    do
+      i0 <- usize_sub hm.hash_map_num_entries (int_to_usize 1);
+      l0 <-
+        hash_map_remove_from_list_back key
+          (vec_index hm.hash_map_slots a);
+      v <- vec_index_mut_back hm.hash_map_slots a l0;
+      Return
+        (hm with <|hash_map_num_entries := i0; hash_map_slots := v|>)
+    od) =
+  (do
+   i0 <- (case lookup key (list_t_v (vec_index hm.hash_map_slots a)) of
+         | NONE => Return hm.hash_map_num_entries
+         | SOME _ => usize_sub hm.hash_map_num_entries (int_to_usize 1));
+   l0 <-
+     hash_map_remove_from_list_back key
+       (vec_index hm.hash_map_slots a);
+   v <- vec_index_mut_back hm.hash_map_slots a l0;
+   Return
+     (hm with <|hash_map_num_entries := i0; hash_map_slots := v|>)
+   od)
+Proof
+  rw [bind_def] >>
+  rpt (case_tac >> fs []) >>
+  Cases_on ‘hm’ >> fs [] >>
+  fs [hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_slots_fupd_def,
+      hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_num_entries_fupd_def]
+QED
+
+(* TODO: this doesn't work very well *)
+Theorem lookup_cond_decr_entries_eq:
+  ∀ hm key i.
+  hash_map_t_inv hm ⇒
+  usize_to_int i < len (vec_to_list hm.hash_map_slots) ⇒
+  ∃ j.
+  (case lookup key (list_t_v (vec_index hm.hash_map_slots i)) of
+    NONE => Return hm.hash_map_num_entries
+  | SOME v => usize_sub hm.hash_map_num_entries (int_to_usize 1)) = Return j ∧
+  (lookup key (list_t_v (vec_index hm.hash_map_slots i)) = NONE ⇒ j = hm.hash_map_num_entries) ∧
+  (lookup key (list_t_v (vec_index hm.hash_map_slots i)) ≠ NONE ⇒
+   usize_to_int j + 1 = usize_to_int hm.hash_map_num_entries)
+Proof
+  rw [] >>
+  case_tac >>
+  progress >>
+  qspecl_assume [‘vec_to_list hm.hash_map_slots’, ‘usize_to_int i’, ‘key’] slot_t_lookup_SOME_not_empty >>
+  gvs [vec_index_def] >>
+  fs [hash_map_t_inv_def, hash_map_t_base_inv_def, hash_map_t_al_v_def, hash_map_t_v_def] >>
+  int_tac
+QED
+
+(* TODO: when saving a spec theorem, check that all the variables which appear
+   in the pre/postconditions also appear in the application *)
+Theorem hash_map_remove_back_spec:
+  ∀ hm key.
+  hash_map_t_inv hm ⇒
+  ∃ hm1. hash_map_remove_back hm key = Return hm1 ∧
+  hash_map_t_inv hm1 ∧
+  lookup_s hm1 key = NONE ∧
+  (∀ k. k ≠ key ⇒ lookup_s hm1 k = lookup_s hm k) ∧
+  (case lookup_s hm key of
+   | NONE => len_s hm1 = len_s hm
+   | SOME _ => len_s hm1 = len_s hm - 1)
+Proof
+  rw [hash_map_remove_back_def] >>
+  (* TODO: automate *)
+  qspec_assume ‘hm.hash_map_slots’ vec_len_spec >>
+  fs [vec_len_def] >>
+  sg ‘0 < usize_to_int (vec_len hm.hash_map_slots)’
+  >-(fs [hash_map_t_inv_def, hash_map_t_base_inv_def, gt_eq_lt, vec_len_def] >> massage >> fs []) >>
+  (* TODO: we have to prove this several times - it would be good to remember the preconditions
+     we proved, sometimes *)
+  sg ‘usize_to_int key % len (vec_to_list hm.hash_map_slots) < usize_to_int (vec_len hm.hash_map_slots)’
+  >- (fs [vec_len_def] >> massage >> irule pos_mod_pos_lt >> int_tac) >>
+  (* TODO: add a rewriting rule *)
+  sg ‘usize_to_int (vec_len hm.hash_map_slots) = len (vec_to_list hm.hash_map_slots)’
+  >- (fs [vec_len_def] >> massage >> fs []) >>
+  fs [vec_len_def] >>
+  massage >>
+  progress >>
+  progress >> fs [int_rem_def, vec_len_def] >>
+  progress >>
+  gvs [] >>
+  fs [hash_map_remove_back_branch_eq] >>
+  qspecl_assume [‘hm’, ‘key’, ‘a’] lookup_cond_decr_entries_eq >>
+  gvs [] >>
+  progress >>
+  progress >> fs [vec_len_def] >>
+  (* Prove the post-condition *)
+  sg ‘let i = usize_to_int key % len (vec_to_list hm.hash_map_slots) in
+      slot_t_inv (len (vec_to_list hm.hash_map_slots)) i (index i (vec_to_list hm.hash_map_slots))’
+  >- (fs [hash_map_t_inv_def, hash_map_t_base_inv_def, slots_t_inv_def]) >> fs [] >>
+  gvs [vec_index_def] >>
+  qpat_assum ‘∀l. _’ imp_res_tac >>
+  rw []
+  >- (
+    fs [hash_map_t_inv_def, hash_map_t_base_inv_def, hash_map_t_al_v_def, hash_map_t_v_def] >>
+    rw []
+    >- (
+      (* The num_entries has been correctly updated *)
+      sg_dep_rewrite_goal_tac len_FLAT_MAP_update >- int_tac >> fs [] >> pop_assum ignore_tac >> gvs [] >>
+      (* Case analysis on: ‘lookup key (index (key % len slots) slots)’ *)
+      pop_assum mp_tac >> case_tac >> fs [] >>
+      int_tac
+    )
+    >- (
+      fs [slots_t_inv_def] >> rw [] >>
+      (* TODO: this is annoying: we proved this many times *)
+      last_x_assum (qspec_assume ‘i’) >>
+      gvs [vec_index_def] >>
+      qpat_x_assum ‘∀l. _’ imp_res_tac >>
+      Cases_on ‘i = usize_to_int key % len (vec_to_list hm.hash_map_slots)’ >> fs []
+      >- (
+        sg_dep_rewrite_goal_tac index_update_diff
+        >- (fs [] >> int_tac) >> fs []
+      ) >>
+      sg_dep_rewrite_goal_tac index_update_same
+      >- (fs [] >> int_tac) >> fs []
     ) >>
-    rw [index_eq] >>
-    first_x_assum irule >> int_tac
+    (* num_entries ≤ max_load *)
+    Cases_on ‘lookup key (list_t_v (index
+                (usize_to_int key % len (vec_to_list hm.hash_map_slots))
+                (vec_to_list hm.hash_map_slots)))’ >> gvs [] >>
+    (* Remains the case where we decrment num_entries - TODO: this is too much work, should be easier *)
+    gvs [usize_sub_def, mk_usize_def] >>
+    massage >>
+    sg ‘0 ≤ len_s hm - 1 ∧ len_s hm - 1 ≤ usize_max’
+    >- (fs [len_s_def, hash_map_t_al_v_def, hash_map_t_v_def] >> int_tac) >>
+    fs [len_s_def, hash_map_t_al_v_def, hash_map_t_v_def] >>
+    gvs [] >>
+    massage >>
+    Cases_on ‘hm.hash_map_max_load_factor’ >> gvs [] >>
+    disj1_tac >> int_tac)
+  >- (
+    fs [lookup_s_def, slots_t_lookup_def] >>
+    (* TODO: we did this too many times *)
+    sg_dep_rewrite_goal_tac index_update_diff
+    >- (fs [] >> int_tac) >> fs [] >>
+    metis_tac []
+  )
+  >- (
+    (* Lookup of k ≠ key *)
+    fs [lookup_s_def, slots_t_lookup_def] >>
+    Cases_on ‘usize_to_int k % len (vec_to_list hm.hash_map_slots) = usize_to_int key % len (vec_to_list hm.hash_map_slots)’ >> fs []
+    >- (
+      sg_dep_rewrite_goal_tac index_update_diff
+      >- (fs [] >> int_tac) >> fs [] >>
+      metis_tac []) >>
+    sg_dep_rewrite_goal_tac index_update_same
+    >- (rw [] >> try_tac int_tac >> irule pos_mod_pos_lt >> fs [] >> massage >> fs []) >> fs [] >>
+    case_tac >> fs [] >>
+    metis_tac []
   ) >>
-  (* <== *)
-  rw []
-  >-(
-    rw [for_all_quant] >>
-    first_x_assum (qspecl_assume [‘0’, ‘i + 1’]) >>
-    sg ‘0 < i + 1 ∧ i + 1 - 1 = i’ >- int_tac >>
-    fs [index_eq] >>
-    first_x_assum irule >> int_tac
-  ) >>
-  sg ‘pairwise_rel p ls’
-  >-(
-    rw [pairwise_rel_def] >>
-    first_x_assum (qspecl_assume [‘i' + 1’, ‘j' + 1’]) >>
-    sg ‘0 < i' + 1 ∧ 0 < j' + 1’ >- int_tac >>
-    fs [index_eq, int_add_minus_same_eq] >>
-    first_x_assum irule >> int_tac
-  ) >>
-  fs []
+  (* The length is correctly updated *)
+  fs [lookup_s_def, len_s_def, slots_t_lookup_def, hash_map_t_al_v_def, hash_map_t_v_def] >>
+  case_tac >> gvs [] >>  
+  sg_dep_rewrite_goal_tac len_FLAT_MAP_update >> fs [] >> int_tac
 QED
-
-Theorem distinct_keys_f_eq_distinct_keys:
-  ∀ ls.
-  distinct_keys_f ls ⇔ distinct_keys ls
-Proof
-  rw [distinct_keys_def, distinct_keys_f_def] >>
-  qspecl_assume [‘(λx y. FST x ≠ FST y)’, ‘ls’] pairwise_rel_quant >>
-  fs []
-QED
+val _ = save_spec_thm "hash_map_remove_back_spec"
 
 val _ = export_theory ()
-*)
