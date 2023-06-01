@@ -9,7 +9,9 @@
     nixpkgs.follows = "charon/nixpkgs";
     hacl-nix.url = "github:hacl-star/hacl-nix";
     lean.url = "github:leanprover/lean4";
-    lake.url = "github:leanprover/lake";
+    #lake.url = "github:leanprover/lake";
+    lake.url = "github:leanprover/lake/lean4-master";
+    #lake.flake = false;
   };
 
   # Remark: keep the list of outputs in sync with the list of inputs above
@@ -52,6 +54,7 @@
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
+          duneVersion = "3";
           src = ./compiler;
           buildInputs = [ easy_logging ocamlgraph unionFind charon.packages.${system}.charon-ml ]
             ++ (with ocamlPackages; [

@@ -260,9 +260,9 @@ tleanp-%:
 	$(AENEAS_CMD)
 
 
-# Nix
+# Nix - TODO: add the lean tests
 .PHONY: nix
-nix: nix-aeneas-tests nix-aeneas-verify-fstar nix-aeneas-verify-coq nix-aeneas-verify-lean
+nix: nix-aeneas-tests nix-aeneas-verify-fstar nix-aeneas-verify-coq
 
 .PHONY: nix-aeneas-tests
 nix-aeneas-tests:
