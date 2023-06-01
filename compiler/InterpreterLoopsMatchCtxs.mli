@@ -42,7 +42,7 @@ val compute_abs_borrows_loans_maps :
     variant for instance) it calls the corresponding specialized function from
     {!InterpreterLoopsCore.PrimMatcher}.
  *)
-module MakeMatcher : functor (PM : PrimMatcher) -> Matcher
+module MakeMatcher : functor (_ : PrimMatcher) -> Matcher
 
 (** A matcher for joins (we use joins to compute loop fixed points).
 
@@ -58,7 +58,7 @@ module MakeMatcher : functor (PM : PrimMatcher) -> Matcher
     The join matcher is used to match the *concrete* values only. For this
     reason, we fail on the functions which match avalues.
  *)
-module MakeJoinMatcher : functor (S : MatchJoinState) -> PrimMatcher
+module MakeJoinMatcher : functor (_ : MatchJoinState) -> PrimMatcher
 
 (** An auxiliary matcher that we use for two purposes:
     - to check if two contexts are equivalent modulo id substitution (i.e.,
@@ -67,7 +67,7 @@ module MakeJoinMatcher : functor (S : MatchJoinState) -> PrimMatcher
       target context to the values and borrows in a source context (see
       {!match_ctx_with_target}).
  *)
-module MakeCheckEquivMatcher : functor (S : MatchCheckEquivState) ->
+module MakeCheckEquivMatcher : functor (_ : MatchCheckEquivState) ->
   CheckEquivMatcher
 
 (** Compute whether two contexts are equivalent modulo an identifier substitution.
