@@ -16,6 +16,7 @@ val len_def = Define ‘
   len [] : int = 0 /\
   len (x :: ls) : int = 1 + len ls
 ’
+val _ = BasicProvers.export_rewrites ["len_def"]
 
 (* Return the ith element of a list.
 
@@ -117,6 +118,7 @@ Theorem len_append:
 Proof
   rw [len_eq_LENGTH] >> cooper_tac
 QED
+val _ = BasicProvers.export_rewrites ["len_append"]
 
 Theorem append_len_eq:
   (∀l1 l2 l1' l2'.
@@ -127,6 +129,18 @@ Theorem append_len_eq:
         (l1 ⧺ l2 = l1' ⧺ l2' ⇔ l1 = l1' ∧ l2 = l2'))
 Proof
   rw [len_eq_LENGTH] >> fs [APPEND_11_LENGTH]
+QED
+
+Theorem drop_more_than_length:
+  ∀ ls i.
+  len ls ≤ i ⇒
+  drop i ls = []
+Proof
+  Induct_on ‘ls’ >>
+  rw [drop_def] >>
+  qspec_assume ‘ls’ len_pos >> try_tac int_tac >>
+  last_x_assum irule >>
+  int_tac
 QED
 
 (* TODO: prove more theorems, and add rewriting theorems *)

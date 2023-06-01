@@ -15,13 +15,16 @@ sig
     val le_eq_ge : thm
     val lt_eq_gt : thm
     val mul_pos_left_le : thm
+    val mul_pos_left_lt : thm
     val mul_pos_right_le : thm
+    val mul_pos_right_lt : thm
     val not_ge_eq_lt : thm
     val not_gt_eq_le : thm
     val not_le_eq_gt : thm
     val not_lt_eq_ge : thm
     val num_sub_1_eq : thm
     val num_sub_eq : thm
+    val pos_div_pos_ge : thm
     val pos_div_pos_is_pos : thm
     val pos_div_pos_le : thm
     val pos_div_pos_le_init : thm
@@ -30,9 +33,13 @@ sig
     val pos_mod_pos_is_pos : thm
     val pos_mod_pos_le_init : thm
     val pos_mod_pos_lt : thm
+    val pos_mul_2_div_pos_decompose : thm
     val pos_mul_left_pos_le : thm
+    val pos_mul_left_pos_lt : thm
+    val pos_mul_pos_div_pos_decompose : thm
     val pos_mul_pos_is_pos : thm
     val pos_mul_right_pos_le : thm
+    val pos_mul_right_pos_lt : thm
   
   val primitivesArith_grammars : type_grammar.grammar * term_grammar.grammar
 (*
@@ -88,9 +95,17 @@ sig
       
       ⊢ ∀a x y. 0 ≤ a ⇒ x ≤ y ⇒ a * x ≤ a * y
    
+   [mul_pos_left_lt]  Theorem
+      
+      ⊢ ∀a x y. 0 < a ⇒ x < y ⇒ a * x < a * y
+   
    [mul_pos_right_le]  Theorem
       
       ⊢ ∀a x y. 0 ≤ a ⇒ x ≤ y ⇒ x * a ≤ y * a
+   
+   [mul_pos_right_lt]  Theorem
+      
+      ⊢ ∀a x y. 0 < a ⇒ x < y ⇒ x * a < y * a
    
    [not_ge_eq_lt]  Theorem
       
@@ -115,6 +130,10 @@ sig
    [num_sub_eq]  Theorem
       
       ⊢ ∀x y z. x = y − z ⇒ 0 ≤ x ⇒ 0 ≤ z ⇒ Num y = Num z + Num x
+   
+   [pos_div_pos_ge]  Theorem
+      
+      ⊢ ∀x y d. 0 ≤ x ⇒ 0 ≤ y ⇒ 0 < d ⇒ x ≥ y ⇒ x / d ≥ y / d
    
    [pos_div_pos_is_pos]  Theorem
       
@@ -148,9 +167,21 @@ sig
       
       ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x % y < y
    
+   [pos_mul_2_div_pos_decompose]  Theorem
+      
+      ⊢ ∀x y. 0 ≤ x ⇒ 0 < y ⇒ x / y + x / y ≤ x * 2 / y
+   
    [pos_mul_left_pos_le]  Theorem
       
       ⊢ ∀a x. 0 < a ⇒ 0 ≤ x ⇒ x ≤ a * x
+   
+   [pos_mul_left_pos_lt]  Theorem
+      
+      ⊢ ∀a x. 1 < a ⇒ 0 < x ⇒ x < a * x
+   
+   [pos_mul_pos_div_pos_decompose]  Theorem
+      
+      ⊢ ∀x y z. 0 ≤ x ⇒ 0 ≤ y ⇒ 0 < z ⇒ x / z + y / z ≤ (x + y) / z
    
    [pos_mul_pos_is_pos]  Theorem
       
@@ -159,6 +190,10 @@ sig
    [pos_mul_right_pos_le]  Theorem
       
       ⊢ ∀a x. 0 < a ⇒ 0 ≤ x ⇒ x ≤ x * a
+   
+   [pos_mul_right_pos_lt]  Theorem
+      
+      ⊢ ∀a x. 1 < a ⇒ 0 < x ⇒ x < x * a
    
    
 *)

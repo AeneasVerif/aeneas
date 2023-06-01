@@ -11,6 +11,7 @@ sig
   (*  Theorems  *)
     val append_len_eq : thm
     val drop_eq : thm
+    val drop_more_than_length : thm
     val index_eq : thm
     val index_eq_EL : thm
     val len_append : thm
@@ -61,6 +62,10 @@ sig
         ∀i x ls.
           drop i (x::ls) =
           if 0 < i ∨ 0 ≤ i ∧ i ≠ 0 then drop (i − 1) ls else x::ls
+   
+   [drop_more_than_length]  Theorem
+      
+      ⊢ ∀ls i. len ls ≤ i ⇒ drop i ls = []
    
    [index_eq]  Theorem
       

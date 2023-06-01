@@ -278,6 +278,7 @@ sig
     val isize_sub_eq : thm
     val isize_to_int_int_to_isize_i16_bounds : thm
     val isize_to_int_int_to_isize_unfold : thm
+    val len_update : thm
     val mk_isize_unfold : thm
     val mk_usize_unfold : thm
     val mk_vec_unfold : thm
@@ -349,6 +350,7 @@ sig
     val vec_push_back_unfold : thm
     val vec_to_list_int_bounds : thm
     val vec_to_list_vec_new : thm
+    val vec_to_list_vec_update : thm
     val vec_update_eq : thm
   
   val primitives_grammars : type_grammar.grammar * term_grammar.grammar
@@ -1907,6 +1909,10 @@ sig
             if i16_min ≤ n ∧ n ≤ i16_max then n
             else isize_to_int (int_to_isize n)
    
+   [len_update]  Theorem
+      
+      ⊢ ∀ls i y. len (update ls i y) = len ls
+   
    [mk_isize_unfold]  Theorem
       
       [oracles: DISK_THM] [axioms: isize_bounds] []
@@ -2305,10 +2311,11 @@ sig
    [update_spec]  Theorem
       
       ⊢ ∀ls i y.
-          0 ≤ i ⇒
-          i < len ls ⇒
-          len (update ls i y) = len ls ∧ index i (update ls i y) = y ∧
-          ∀j. j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls
+          len (update ls i y) = len ls ∧
+          (0 ≤ i ⇒
+           i < len ls ⇒
+           index i (update ls i y) = y ∧
+           ∀j. j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls)
    
    [usize_add_eq]  Theorem
       
@@ -2453,6 +2460,15 @@ sig
       
       [oracles: DISK_THM] [axioms: mk_vec_axiom, usize_bounds] []
       ⊢ vec_to_list vec_new = []
+   
+   [vec_to_list_vec_update]  Theorem
+      
+      [oracles: DISK_THM]
+      [axioms: mk_vec_axiom, usize_to_int_bounds,
+       usize_to_int_int_to_usize, usize_bounds, vec_to_list_num_bounds] []
+      ⊢ ∀v i x.
+          vec_to_list (vec_update v i x) =
+          update (vec_to_list v) (usize_to_int i) x
    
    [vec_update_eq]  Theorem
       

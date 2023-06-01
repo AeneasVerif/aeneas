@@ -1702,16 +1702,16 @@ QED
 
 Theorem update_spec:
   ∀ls i y.
-    0 <= i ⇒
-    i < len ls ⇒
     len (update ls i y) = len ls ∧
-    index i (update ls i y) = y ∧
-    ∀j. j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls
+    (0 <= i ⇒
+     i < len ls ⇒
+     index i (update ls i y) = y ∧
+     ∀j. j < len ls ⇒ j ≠ i ⇒ index j (update ls i y) = index j ls)
 Proof
   Induct_on ‘ls’ >> Cases_on ‘i = 0’ >> rw [update_def, len_def, index_def] >>
   try_tac (exfalso >> cooper_tac) >>
   try_tac (
-    pop_last_assum (qspecl_assume [‘i' - 1’, ‘y’]) >>
+    pop_last_assum (qspecl_assume [‘i' - 1’, ‘y’]) >> fs [] >>
     pop_assum sg_premise_tac >- cooper_tac >>
     pop_assum sg_premise_tac >- cooper_tac >>
     rw [])
@@ -1721,6 +1721,13 @@ Proof
     pop_assum sg_premise_tac >- cooper_tac >>
     rw [])
 QED
+
+Theorem len_update:
+  ∀ ls i y. len (update ls i y) = len ls
+Proof
+ fs [update_spec]
+QED
+val _ = BasicProvers.export_rewrites ["len_update"]
 
 Theorem index_update_same:
   ∀ls i j y.
@@ -1831,6 +1838,18 @@ Proof
   >- (irule index_update_diff >> cooper_tac) >>
   sg_dep_rewrite_all_tac index_update_same >- cooper_tac >> fs []
 QED
+
+Theorem vec_to_list_vec_update:
+  ∀ v i x. vec_to_list (vec_update v i x) = update (vec_to_list v) (usize_to_int i) x
+Proof
+  rw [vec_update_def] >>
+  qspec_assume ‘v’ vec_len_spec >>
+  qspecl_assume [‘v’, ‘i’, ‘x’] vec_update_eq >> fs [] >>
+  qspecl_assume [‘vec_to_list v’, ‘usize_to_int i’, ‘x’] update_len >>
+  sg_dep_rewrite_all_tac mk_vec_axiom >- fs [] >>
+  fs []
+QED
+val _ = export_rewrites ["vec_to_list_vec_update"]
 
 Definition vec_index_fwd_def:
   vec_index_fwd v i =
