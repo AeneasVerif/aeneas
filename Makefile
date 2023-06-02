@@ -7,7 +7,7 @@ endif
 default: build
 
 .PHONY: all
-all: build-test-verify nix
+all: build-tests-verify nix
 
 ####################################
 # Variables customizable by the user
@@ -53,7 +53,7 @@ SUBDIR :=
 ####################################
 
 # Build the project, test it and verify the generated files
-.PHONY: build-test-verify
+.PHONY: build-tests-verify
 build-tests-verify: build tests verify
 
 # Build the project
