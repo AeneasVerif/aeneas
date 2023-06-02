@@ -61,6 +61,10 @@ tests/fstar/misc/obj/
 .HOLMK
 .hollogs
 .holobjs
+*.dat
+*.ui
+*.uo
+*Theory.sml
 
 # Misc
 /fstar-tests

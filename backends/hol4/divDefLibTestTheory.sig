@@ -53,7 +53,6 @@ sig
     val tree_distinct : thm
     val tree_induction : thm
     val tree_nchotomy : thm
-    val tree_size_eq : thm
   
   val divDefLibTest_grammars : type_grammar.grammar * term_grammar.grammar
 (*
@@ -433,10 +432,6 @@ sig
    [tree_nchotomy]  Theorem
       
       ⊢ ∀tt. (∃a. tt = TLeaf a) ∨ ∃n. tt = TNode n
-   
-   [tree_size_eq]  Theorem
-      
-      ⊢ tree1_size f = list_size (tree_size f)
    
    
 *)

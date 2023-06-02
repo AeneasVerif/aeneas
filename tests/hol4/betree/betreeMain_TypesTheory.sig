@@ -4,11 +4,29 @@ sig
   
   (*  Definitions  *)
     val betree_be_tree_t_TY_DEF : thm
+    val betree_be_tree_t_betree_be_tree_node_id_cnt : thm
+    val betree_be_tree_t_betree_be_tree_node_id_cnt_fupd : thm
+    val betree_be_tree_t_betree_be_tree_params : thm
+    val betree_be_tree_t_betree_be_tree_params_fupd : thm
+    val betree_be_tree_t_betree_be_tree_root : thm
+    val betree_be_tree_t_betree_be_tree_root_fupd : thm
     val betree_be_tree_t_case_def : thm
     val betree_be_tree_t_size_def : thm
     val betree_internal_t_TY_DEF : thm
+    val betree_internal_t_betree_internal_id : thm
+    val betree_internal_t_betree_internal_id_fupd : thm
+    val betree_internal_t_betree_internal_left : thm
+    val betree_internal_t_betree_internal_left_fupd : thm
+    val betree_internal_t_betree_internal_pivot : thm
+    val betree_internal_t_betree_internal_pivot_fupd : thm
+    val betree_internal_t_betree_internal_right : thm
+    val betree_internal_t_betree_internal_right_fupd : thm
     val betree_internal_t_case_def : thm
     val betree_leaf_t_TY_DEF : thm
+    val betree_leaf_t_betree_leaf_id : thm
+    val betree_leaf_t_betree_leaf_id_fupd : thm
+    val betree_leaf_t_betree_leaf_size : thm
+    val betree_leaf_t_betree_leaf_size_fupd : thm
     val betree_leaf_t_case_def : thm
     val betree_leaf_t_size_def : thm
     val betree_list_t_TY_DEF : thm
@@ -18,41 +36,23 @@ sig
     val betree_message_t_case_def : thm
     val betree_message_t_size_def : thm
     val betree_node_id_counter_t_TY_DEF : thm
+    val betree_node_id_counter_t_betree_node_id_counter_next_node_id : thm
+    val betree_node_id_counter_t_betree_node_id_counter_next_node_id_fupd : thm
     val betree_node_id_counter_t_case_def : thm
     val betree_node_id_counter_t_size_def : thm
     val betree_node_t_TY_DEF : thm
     val betree_node_t_case_def : thm
     val betree_node_t_size_def : thm
     val betree_params_t_TY_DEF : thm
+    val betree_params_t_betree_params_min_flush_size : thm
+    val betree_params_t_betree_params_min_flush_size_fupd : thm
+    val betree_params_t_betree_params_split_size : thm
+    val betree_params_t_betree_params_split_size_fupd : thm
     val betree_params_t_case_def : thm
     val betree_params_t_size_def : thm
     val betree_upsert_fun_state_t_TY_DEF : thm
     val betree_upsert_fun_state_t_case_def : thm
     val betree_upsert_fun_state_t_size_def : thm
-    val recordtype_betree_be_tree_t_seldef_betree_be_tree_node_id_cnt_def : thm
-    val recordtype_betree_be_tree_t_seldef_betree_be_tree_node_id_cnt_fupd_def : thm
-    val recordtype_betree_be_tree_t_seldef_betree_be_tree_params_def : thm
-    val recordtype_betree_be_tree_t_seldef_betree_be_tree_params_fupd_def : thm
-    val recordtype_betree_be_tree_t_seldef_betree_be_tree_root_def : thm
-    val recordtype_betree_be_tree_t_seldef_betree_be_tree_root_fupd_def : thm
-    val recordtype_betree_internal_t_seldef_betree_internal_id_def : thm
-    val recordtype_betree_internal_t_seldef_betree_internal_id_fupd_def : thm
-    val recordtype_betree_internal_t_seldef_betree_internal_left_def : thm
-    val recordtype_betree_internal_t_seldef_betree_internal_left_fupd_def : thm
-    val recordtype_betree_internal_t_seldef_betree_internal_pivot_def : thm
-    val recordtype_betree_internal_t_seldef_betree_internal_pivot_fupd_def : thm
-    val recordtype_betree_internal_t_seldef_betree_internal_right_def : thm
-    val recordtype_betree_internal_t_seldef_betree_internal_right_fupd_def : thm
-    val recordtype_betree_leaf_t_seldef_betree_leaf_id_def : thm
-    val recordtype_betree_leaf_t_seldef_betree_leaf_id_fupd_def : thm
-    val recordtype_betree_leaf_t_seldef_betree_leaf_size_def : thm
-    val recordtype_betree_leaf_t_seldef_betree_leaf_size_fupd_def : thm
-    val recordtype_betree_node_id_counter_t_seldef_betree_node_id_counter_next_node_id_def : thm
-    val recordtype_betree_node_id_counter_t_seldef_betree_node_id_counter_next_node_id_fupd_def : thm
-    val recordtype_betree_params_t_seldef_betree_params_min_flush_size_def : thm
-    val recordtype_betree_params_t_seldef_betree_params_min_flush_size_fupd_def : thm
-    val recordtype_betree_params_t_seldef_betree_params_split_size_def : thm
-    val recordtype_betree_params_t_seldef_betree_params_split_size_fupd_def : thm
   
   (*  Theorems  *)
     val EXISTS_betree_be_tree_t : thm
@@ -204,6 +204,38 @@ sig
                       $var$('betree_be_tree_t') a0') ⇒
                    $var$('betree_be_tree_t') a0') rep
    
+   [betree_be_tree_t_betree_be_tree_node_id_cnt]  Definition
+      
+      ⊢ ∀b b0 b1.
+          (betree_be_tree_t b b0 b1).betree_be_tree_node_id_cnt = b0
+   
+   [betree_be_tree_t_betree_be_tree_node_id_cnt_fupd]  Definition
+      
+      ⊢ ∀f b b0 b1.
+          betree_be_tree_t b b0 b1 with
+          betree_be_tree_node_id_cnt updated_by f =
+          betree_be_tree_t b (f b0) b1
+   
+   [betree_be_tree_t_betree_be_tree_params]  Definition
+      
+      ⊢ ∀b b0 b1. (betree_be_tree_t b b0 b1).betree_be_tree_params = b
+   
+   [betree_be_tree_t_betree_be_tree_params_fupd]  Definition
+      
+      ⊢ ∀f b b0 b1.
+          betree_be_tree_t b b0 b1 with betree_be_tree_params updated_by f =
+          betree_be_tree_t (f b) b0 b1
+   
+   [betree_be_tree_t_betree_be_tree_root]  Definition
+      
+      ⊢ ∀b b0 b1. (betree_be_tree_t b b0 b1).betree_be_tree_root = b1
+   
+   [betree_be_tree_t_betree_be_tree_root_fupd]  Definition
+      
+      ⊢ ∀f b b0 b1.
+          betree_be_tree_t b b0 b1 with betree_be_tree_root updated_by f =
+          betree_be_tree_t b b0 (f b1)
+   
    [betree_be_tree_t_case_def]  Definition
       
       ⊢ ∀a0 a1 a2 f.
@@ -246,6 +278,51 @@ sig
                       $var$('betree_internal_t') a1') ⇒
                    $var$('betree_internal_t') a1') rep
    
+   [betree_internal_t_betree_internal_id]  Definition
+      
+      ⊢ ∀u u0 b b0. (betree_internal_t u u0 b b0).betree_internal_id = u
+   
+   [betree_internal_t_betree_internal_id_fupd]  Definition
+      
+      ⊢ ∀f u u0 b b0.
+          betree_internal_t u u0 b b0 with betree_internal_id updated_by f =
+          betree_internal_t (f u) u0 b b0
+   
+   [betree_internal_t_betree_internal_left]  Definition
+      
+      ⊢ ∀u u0 b b0. (betree_internal_t u u0 b b0).betree_internal_left = b
+   
+   [betree_internal_t_betree_internal_left_fupd]  Definition
+      
+      ⊢ ∀f u u0 b b0.
+          betree_internal_t u u0 b b0 with
+          betree_internal_left updated_by f =
+          betree_internal_t u u0 (f b) b0
+   
+   [betree_internal_t_betree_internal_pivot]  Definition
+      
+      ⊢ ∀u u0 b b0.
+          (betree_internal_t u u0 b b0).betree_internal_pivot = u0
+   
+   [betree_internal_t_betree_internal_pivot_fupd]  Definition
+      
+      ⊢ ∀f u u0 b b0.
+          betree_internal_t u u0 b b0 with
+          betree_internal_pivot updated_by f =
+          betree_internal_t u (f u0) b b0
+   
+   [betree_internal_t_betree_internal_right]  Definition
+      
+      ⊢ ∀u u0 b b0.
+          (betree_internal_t u u0 b b0).betree_internal_right = b0
+   
+   [betree_internal_t_betree_internal_right_fupd]  Definition
+      
+      ⊢ ∀f u u0 b b0.
+          betree_internal_t u u0 b b0 with
+          betree_internal_right updated_by f =
+          betree_internal_t u u0 b (f b0)
+   
    [betree_internal_t_case_def]  Definition
       
       ⊢ ∀a0 a1 a2 a3 f.
@@ -266,6 +343,26 @@ sig
                                 (λn. ind_type$BOTTOM)) a0 a1) ⇒
                       $var$('betree_leaf_t') a0') ⇒
                    $var$('betree_leaf_t') a0') rep
+   
+   [betree_leaf_t_betree_leaf_id]  Definition
+      
+      ⊢ ∀u u0. (betree_leaf_t u u0).betree_leaf_id = u
+   
+   [betree_leaf_t_betree_leaf_id_fupd]  Definition
+      
+      ⊢ ∀f u u0.
+          betree_leaf_t u u0 with betree_leaf_id updated_by f =
+          betree_leaf_t (f u) u0
+   
+   [betree_leaf_t_betree_leaf_size]  Definition
+      
+      ⊢ ∀u u0. (betree_leaf_t u u0).betree_leaf_size = u0
+   
+   [betree_leaf_t_betree_leaf_size_fupd]  Definition
+      
+      ⊢ ∀f u u0.
+          betree_leaf_t u u0 with betree_leaf_size updated_by f =
+          betree_leaf_t u (f u0)
    
    [betree_leaf_t_case_def]  Definition
       
@@ -355,6 +452,19 @@ sig
                       $var$('betree_node_id_counter_t') a0) ⇒
                    $var$('betree_node_id_counter_t') a0) rep
    
+   [betree_node_id_counter_t_betree_node_id_counter_next_node_id]  Definition
+      
+      ⊢ ∀u. (betree_node_id_counter_t u).
+            betree_node_id_counter_next_node_id =
+            u
+   
+   [betree_node_id_counter_t_betree_node_id_counter_next_node_id_fupd]  Definition
+      
+      ⊢ ∀f u.
+          betree_node_id_counter_t u with
+          betree_node_id_counter_next_node_id updated_by f =
+          betree_node_id_counter_t (f u)
+   
    [betree_node_id_counter_t_case_def]  Definition
       
       ⊢ ∀a f.
@@ -424,6 +534,27 @@ sig
                       $var$('betree_params_t') a0') ⇒
                    $var$('betree_params_t') a0') rep
    
+   [betree_params_t_betree_params_min_flush_size]  Definition
+      
+      ⊢ ∀u u0. (betree_params_t u u0).betree_params_min_flush_size = u
+   
+   [betree_params_t_betree_params_min_flush_size_fupd]  Definition
+      
+      ⊢ ∀f u u0.
+          betree_params_t u u0 with
+          betree_params_min_flush_size updated_by f =
+          betree_params_t (f u) u0
+   
+   [betree_params_t_betree_params_split_size]  Definition
+      
+      ⊢ ∀u u0. (betree_params_t u u0).betree_params_split_size = u0
+   
+   [betree_params_t_betree_params_split_size_fupd]  Definition
+      
+      ⊢ ∀f u u0.
+          betree_params_t u u0 with betree_params_split_size updated_by f =
+          betree_params_t u (f u0)
+   
    [betree_params_t_case_def]  Definition
       
       ⊢ ∀a0 a1 f. betree_params_t_CASE (betree_params_t a0 a1) f = f a0 a1
@@ -462,137 +593,6 @@ sig
       
       ⊢ (∀a. betree_upsert_fun_state_t_size (BetreeUpsertFunStateAdd a) = 1) ∧
         ∀a. betree_upsert_fun_state_t_size (BetreeUpsertFunStateSub a) = 1
-   
-   [recordtype_betree_be_tree_t_seldef_betree_be_tree_node_id_cnt_def]  Definition
-      
-      ⊢ ∀b b0 b1.
-          (betree_be_tree_t b b0 b1).betree_be_tree_node_id_cnt = b0
-   
-   [recordtype_betree_be_tree_t_seldef_betree_be_tree_node_id_cnt_fupd_def]  Definition
-      
-      ⊢ ∀f b b0 b1.
-          betree_be_tree_t b b0 b1 with
-          betree_be_tree_node_id_cnt updated_by f =
-          betree_be_tree_t b (f b0) b1
-   
-   [recordtype_betree_be_tree_t_seldef_betree_be_tree_params_def]  Definition
-      
-      ⊢ ∀b b0 b1. (betree_be_tree_t b b0 b1).betree_be_tree_params = b
-   
-   [recordtype_betree_be_tree_t_seldef_betree_be_tree_params_fupd_def]  Definition
-      
-      ⊢ ∀f b b0 b1.
-          betree_be_tree_t b b0 b1 with betree_be_tree_params updated_by f =
-          betree_be_tree_t (f b) b0 b1
-   
-   [recordtype_betree_be_tree_t_seldef_betree_be_tree_root_def]  Definition
-      
-      ⊢ ∀b b0 b1. (betree_be_tree_t b b0 b1).betree_be_tree_root = b1
-   
-   [recordtype_betree_be_tree_t_seldef_betree_be_tree_root_fupd_def]  Definition
-      
-      ⊢ ∀f b b0 b1.
-          betree_be_tree_t b b0 b1 with betree_be_tree_root updated_by f =
-          betree_be_tree_t b b0 (f b1)
-   
-   [recordtype_betree_internal_t_seldef_betree_internal_id_def]  Definition
-      
-      ⊢ ∀u u0 b b0. (betree_internal_t u u0 b b0).betree_internal_id = u
-   
-   [recordtype_betree_internal_t_seldef_betree_internal_id_fupd_def]  Definition
-      
-      ⊢ ∀f u u0 b b0.
-          betree_internal_t u u0 b b0 with betree_internal_id updated_by f =
-          betree_internal_t (f u) u0 b b0
-   
-   [recordtype_betree_internal_t_seldef_betree_internal_left_def]  Definition
-      
-      ⊢ ∀u u0 b b0. (betree_internal_t u u0 b b0).betree_internal_left = b
-   
-   [recordtype_betree_internal_t_seldef_betree_internal_left_fupd_def]  Definition
-      
-      ⊢ ∀f u u0 b b0.
-          betree_internal_t u u0 b b0 with
-          betree_internal_left updated_by f =
-          betree_internal_t u u0 (f b) b0
-   
-   [recordtype_betree_internal_t_seldef_betree_internal_pivot_def]  Definition
-      
-      ⊢ ∀u u0 b b0.
-          (betree_internal_t u u0 b b0).betree_internal_pivot = u0
-   
-   [recordtype_betree_internal_t_seldef_betree_internal_pivot_fupd_def]  Definition
-      
-      ⊢ ∀f u u0 b b0.
-          betree_internal_t u u0 b b0 with
-          betree_internal_pivot updated_by f =
-          betree_internal_t u (f u0) b b0
-   
-   [recordtype_betree_internal_t_seldef_betree_internal_right_def]  Definition
-      
-      ⊢ ∀u u0 b b0.
-          (betree_internal_t u u0 b b0).betree_internal_right = b0
-   
-   [recordtype_betree_internal_t_seldef_betree_internal_right_fupd_def]  Definition
-      
-      ⊢ ∀f u u0 b b0.
-          betree_internal_t u u0 b b0 with
-          betree_internal_right updated_by f =
-          betree_internal_t u u0 b (f b0)
-   
-   [recordtype_betree_leaf_t_seldef_betree_leaf_id_def]  Definition
-      
-      ⊢ ∀u u0. (betree_leaf_t u u0).betree_leaf_id = u
-   
-   [recordtype_betree_leaf_t_seldef_betree_leaf_id_fupd_def]  Definition
-      
-      ⊢ ∀f u u0.
-          betree_leaf_t u u0 with betree_leaf_id updated_by f =
-          betree_leaf_t (f u) u0
-   
-   [recordtype_betree_leaf_t_seldef_betree_leaf_size_def]  Definition
-      
-      ⊢ ∀u u0. (betree_leaf_t u u0).betree_leaf_size = u0
-   
-   [recordtype_betree_leaf_t_seldef_betree_leaf_size_fupd_def]  Definition
-      
-      ⊢ ∀f u u0.
-          betree_leaf_t u u0 with betree_leaf_size updated_by f =
-          betree_leaf_t u (f u0)
-   
-   [recordtype_betree_node_id_counter_t_seldef_betree_node_id_counter_next_node_id_def]  Definition
-      
-      ⊢ ∀u. (betree_node_id_counter_t u).
-            betree_node_id_counter_next_node_id =
-            u
-   
-   [recordtype_betree_node_id_counter_t_seldef_betree_node_id_counter_next_node_id_fupd_def]  Definition
-      
-      ⊢ ∀f u.
-          betree_node_id_counter_t u with
-          betree_node_id_counter_next_node_id updated_by f =
-          betree_node_id_counter_t (f u)
-   
-   [recordtype_betree_params_t_seldef_betree_params_min_flush_size_def]  Definition
-      
-      ⊢ ∀u u0. (betree_params_t u u0).betree_params_min_flush_size = u
-   
-   [recordtype_betree_params_t_seldef_betree_params_min_flush_size_fupd_def]  Definition
-      
-      ⊢ ∀f u u0.
-          betree_params_t u u0 with
-          betree_params_min_flush_size updated_by f =
-          betree_params_t (f u) u0
-   
-   [recordtype_betree_params_t_seldef_betree_params_split_size_def]  Definition
-      
-      ⊢ ∀u u0. (betree_params_t u u0).betree_params_split_size = u0
-   
-   [recordtype_betree_params_t_seldef_betree_params_split_size_fupd_def]  Definition
-      
-      ⊢ ∀f u u0.
-          betree_params_t u u0 with betree_params_split_size updated_by f =
-          betree_params_t u (f u0)
    
    [EXISTS_betree_be_tree_t]  Theorem
       

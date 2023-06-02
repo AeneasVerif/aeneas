@@ -1040,7 +1040,7 @@ QED
 
 (* TODO: the names introduced by progress are random, which is confusing.
    It also makes the proofs less stable.
-   Try to use the names given by the let-bindings. *)
+   Update the progress tactic to use the names given by the let-bindings. *)
 
 Theorem hash_map_move_elements_loop_fwd_back_spec_aux:
   ∀ hm slots i n.
@@ -1138,16 +1138,17 @@ Proof
     fs [])
   >-(
     (* Prove that index j (update slots i) = index j slots *)
-    pop_assum (qspec_assume ‘int_to_usize j’) >> gvs [] >> massage >> gvs [] >>
+    first_x_assum (qspec_assume ‘int_to_usize j’) >> gvs [] >> massage >> gvs [] >>
     fs [vec_len_def] >>
     massage >> gvs [] >>
     sg ‘j ≠ usize_to_int i’ >- int_tac >> gvs [vec_index_def, vec_update_def] >>
     massage >>
     (* Use the fact that slot_t_lookup k (index i ... slots) = NONE *)
-    last_x_assum (qspec_assume ‘k’) >>
+    first_x_assum (qspec_assume ‘k’) >>
     first_assum sg_premise_tac
     >- (
       sg ‘usize_to_int i < j’ >- int_tac >> fs [] >>
+      sg ‘usize_to_int i ≤ j’ >- int_tac >> fs [] >>
       (* TODO: we have to rewrite key_MEM_j_lookup_i_is_NONE before applying
          metis_tac *)
       assume_tac key_MEM_j_lookup_i_is_NONE >> fs [] >>
@@ -1156,7 +1157,8 @@ Proof
     (* Use the fact that as the key is in the slots after i, it can't be in “hm” (yet) *)
     last_x_assum (qspec_assume ‘j’) >> gvs [] >>
     first_x_assum sg_premise_tac >- (int_tac) >> gvs [] >>
-    first_x_assum imp_res_tac) >>
+    first_x_assum imp_res_tac >>
+    metis_tac []) >>
   (* The conclusion of the theorem (the post-condition) *)
   conj_tac
   >-(

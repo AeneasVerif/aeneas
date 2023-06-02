@@ -23,6 +23,10 @@ sig
     val p3_c_def : thm
     val pair_t_TY_DEF : thm
     val pair_t_case_def : thm
+    val pair_t_pair_x : thm
+    val pair_t_pair_x_fupd : thm
+    val pair_t_pair_y : thm
+    val pair_t_pair_y_fupd : thm
     val pair_t_size_def : thm
     val q1_body_def : thm
     val q1_c_def : thm
@@ -30,12 +34,6 @@ sig
     val q2_c_def : thm
     val q3_body_def : thm
     val q3_c_def : thm
-    val recordtype_pair_t_seldef_pair_x_def : thm
-    val recordtype_pair_t_seldef_pair_x_fupd_def : thm
-    val recordtype_pair_t_seldef_pair_y_def : thm
-    val recordtype_pair_t_seldef_pair_y_fupd_def : thm
-    val recordtype_wrap_t_seldef_wrap_val_def : thm
-    val recordtype_wrap_t_seldef_wrap_val_fupd_def : thm
     val s1_body_def : thm
     val s1_c_def : thm
     val s2_body_def : thm
@@ -49,6 +47,8 @@ sig
     val wrap_t_TY_DEF : thm
     val wrap_t_case_def : thm
     val wrap_t_size_def : thm
+    val wrap_t_wrap_val : thm
+    val wrap_t_wrap_val_fupd : thm
     val x0_body_def : thm
     val x0_c_def : thm
     val x1_body_def : thm
@@ -198,6 +198,22 @@ sig
       
       ⊢ ∀a0 a1 f. pair_t_CASE (pair_t a0 a1) f = f a0 a1
    
+   [pair_t_pair_x]  Definition
+      
+      ⊢ ∀t t0. (pair_t t t0).pair_x = t
+   
+   [pair_t_pair_x_fupd]  Definition
+      
+      ⊢ ∀f t t0. pair_t t t0 with pair_x updated_by f = pair_t (f t) t0
+   
+   [pair_t_pair_y]  Definition
+      
+      ⊢ ∀t t0. (pair_t t t0).pair_y = t0
+   
+   [pair_t_pair_y_fupd]  Definition
+      
+      ⊢ ∀f t t0. pair_t t t0 with pair_y updated_by f = pair_t t (f t0)
+   
    [pair_t_size_def]  Definition
       
       ⊢ ∀f f1 a0 a1. pair_t_size f f1 (pair_t a0 a1) = 1 + (f a0 + f1 a1)
@@ -225,30 +241,6 @@ sig
    [q3_c_def]  Definition
       
       ⊢ q3_c = get_return_value q3_body
-   
-   [recordtype_pair_t_seldef_pair_x_def]  Definition
-      
-      ⊢ ∀t t0. (pair_t t t0).pair_x = t
-   
-   [recordtype_pair_t_seldef_pair_x_fupd_def]  Definition
-      
-      ⊢ ∀f t t0. pair_t t t0 with pair_x updated_by f = pair_t (f t) t0
-   
-   [recordtype_pair_t_seldef_pair_y_def]  Definition
-      
-      ⊢ ∀t t0. (pair_t t t0).pair_y = t0
-   
-   [recordtype_pair_t_seldef_pair_y_fupd_def]  Definition
-      
-      ⊢ ∀f t t0. pair_t t t0 with pair_y updated_by f = pair_t t (f t0)
-   
-   [recordtype_wrap_t_seldef_wrap_val_def]  Definition
-      
-      ⊢ ∀t. (wrap_t t).wrap_val = t
-   
-   [recordtype_wrap_t_seldef_wrap_val_fupd_def]  Definition
-      
-      ⊢ ∀f t. wrap_t t with wrap_val updated_by f = wrap_t (f t)
    
    [s1_body_def]  Definition
       
@@ -310,6 +302,14 @@ sig
    [wrap_t_size_def]  Definition
       
       ⊢ ∀f a. wrap_t_size f (wrap_t a) = 1 + f a
+   
+   [wrap_t_wrap_val]  Definition
+      
+      ⊢ ∀t. (wrap_t t).wrap_val = t
+   
+   [wrap_t_wrap_val_fupd]  Definition
+      
+      ⊢ ∀f t. wrap_t t with wrap_val updated_by f = wrap_t (f t)
    
    [x0_body_def]  Definition
       
