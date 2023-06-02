@@ -124,7 +124,7 @@
           # The tests don't generate anything
           installPhase = "touch $out";
         };
-        # Replay the Lean proofs.
+        # Replay the Lean proofs. TODO: doesn't work
         aeneas-verify-lean = pkgs.stdenv.mkDerivation {
           name = "aeneas_verify_lean";
           src = ./tests/lean;
