@@ -5,12 +5,12 @@ sig
   (*  Definitions  *)
     val even___E_def : thm
     val even___P_def : thm
-    val even___fuel0_def_UNION_extract0 : thm
-    val even___fuel0_def_UNION_extract1 : thm
-    val even___fuel0_def_UNION_primitive : thm
-    val even___fuel_def_UNION_extract0 : thm
-    val even___fuel_def_UNION_extract1 : thm
-    val even___fuel_def_UNION_primitive : thm
+    val even___fuel0_UNION_extract0_def : thm
+    val even___fuel0_UNION_extract1_def : thm
+    val even___fuel0_UNION_primitive_def : thm
+    val even___fuel_UNION_extract0_def : thm
+    val even___fuel_UNION_extract1_def : thm
+    val even___fuel_UNION_primitive_def : thm
     val even_def : thm
     val list_t_TY_DEF : thm
     val list_t_case_def : thm
@@ -56,17 +56,17 @@ sig
       ⊢ ∀i $var$($n).
           even___P i $var$($n) ⇔ ¬is_diverge (even___fuel0 $var$($n) i)
    
-   [even___fuel0_def_UNION_extract0]  Definition
+   [even___fuel0_UNION_extract0_def]  Definition
       
-      ⊢ ∀x x0. even___fuel0 x x0 = even___fuel0_def_UNION (INL (x,x0))
+      ⊢ ∀x x0. even___fuel0 x x0 = even___fuel0_UNION (INL (x,x0))
    
-   [even___fuel0_def_UNION_extract1]  Definition
+   [even___fuel0_UNION_extract1_def]  Definition
       
-      ⊢ ∀x x0. odd___fuel0 x x0 = even___fuel0_def_UNION (INR (x,x0))
+      ⊢ ∀x x0. odd___fuel0 x x0 = even___fuel0_UNION (INR (x,x0))
    
-   [even___fuel0_def_UNION_primitive]  Definition
+   [even___fuel0_UNION_primitive_def]  Definition
       
-      ⊢ even___fuel0_def_UNION =
+      ⊢ even___fuel0_UNION =
         WFREC
           (@R. WF R ∧
                (∀i $var$($n) $var$($m).
@@ -75,7 +75,7 @@ sig
                ∀i $var$($n) $var$($m).
                  $var$($n) = SUC $var$($m) ∧ i ≠ 0 ⇒
                  R (INL ($var$($m),i − 1)) (INR ($var$($n),i)))
-          (λeven___fuel0_def_UNION a.
+          (λeven___fuel0_UNION a.
                case a of
                  INL ($var$($n),i) =>
                    I
@@ -85,9 +85,7 @@ sig
                         if i = 0 then do b <- Return T; Return b od
                         else
                           do
-                            b <-
-                              even___fuel0_def_UNION
-                                (INR ($var$($m),i − 1));
+                            b <- even___fuel0_UNION (INR ($var$($m),i − 1));
                             Return b
                           od)
                | INR ($var$($n'),i') =>
@@ -98,22 +96,21 @@ sig
                       if i' = 0 then do b <- Return F; Return b od
                       else
                         do
-                          b <-
-                            even___fuel0_def_UNION (INL ($var$($m),i' − 1));
+                          b <- even___fuel0_UNION (INL ($var$($m),i' − 1));
                           Return b
                         od))
    
-   [even___fuel_def_UNION_extract0]  Definition
+   [even___fuel_UNION_extract0_def]  Definition
       
-      ⊢ ∀x x0. even___fuel x x0 = even___fuel_def_UNION (INL (x,x0))
+      ⊢ ∀x x0. even___fuel x x0 = even___fuel_UNION (INL (x,x0))
    
-   [even___fuel_def_UNION_extract1]  Definition
+   [even___fuel_UNION_extract1_def]  Definition
       
-      ⊢ ∀x x0. odd___fuel x x0 = even___fuel_def_UNION (INR (x,x0))
+      ⊢ ∀x x0. odd___fuel x x0 = even___fuel_UNION (INR (x,x0))
    
-   [even___fuel_def_UNION_primitive]  Definition
+   [even___fuel_UNION_primitive_def]  Definition
       
-      ⊢ even___fuel_def_UNION =
+      ⊢ even___fuel_UNION =
         WFREC
           (@R. WF R ∧
                (∀i $var$($n) $var$($m).
@@ -122,7 +119,7 @@ sig
                ∀i $var$($n) $var$($m).
                  $var$($n) = SUC $var$($m) ∧ i ≠ 0 ⇒
                  R (INL ($var$($m),i − 1)) (INR ($var$($n),i)))
-          (λeven___fuel_def_UNION a.
+          (λeven___fuel_UNION a.
                case a of
                  INL ($var$($n),i) =>
                    I
@@ -130,14 +127,14 @@ sig
                         0 => Diverge
                       | SUC $var$($m) =>
                         if i = 0 then Return T
-                        else even___fuel_def_UNION (INR ($var$($m),i − 1)))
+                        else even___fuel_UNION (INR ($var$($m),i − 1)))
                | INR ($var$($n'),i') =>
                  I
                    (case $var$($n') of
                       0 => Diverge
                     | SUC $var$($m) =>
                       if i' = 0 then Return F
-                      else even___fuel_def_UNION (INL ($var$($m),i' − 1))))
+                      else even___fuel_UNION (INL ($var$($m),i' − 1))))
    
    [even_def]  Definition
       

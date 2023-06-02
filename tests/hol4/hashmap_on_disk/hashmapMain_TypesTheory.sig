@@ -5,18 +5,18 @@ sig
   (*  Definitions  *)
     val hashmap_hash_map_t_TY_DEF : thm
     val hashmap_hash_map_t_case_def : thm
+    val hashmap_hash_map_t_hashmap_hash_map_max_load : thm
+    val hashmap_hash_map_t_hashmap_hash_map_max_load_factor : thm
+    val hashmap_hash_map_t_hashmap_hash_map_max_load_factor_fupd : thm
+    val hashmap_hash_map_t_hashmap_hash_map_max_load_fupd : thm
+    val hashmap_hash_map_t_hashmap_hash_map_num_entries : thm
+    val hashmap_hash_map_t_hashmap_hash_map_num_entries_fupd : thm
+    val hashmap_hash_map_t_hashmap_hash_map_slots : thm
+    val hashmap_hash_map_t_hashmap_hash_map_slots_fupd : thm
     val hashmap_hash_map_t_size_def : thm
     val hashmap_list_t_TY_DEF : thm
     val hashmap_list_t_case_def : thm
     val hashmap_list_t_size_def : thm
-    val recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_max_load_def : thm
-    val recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_max_load_factor_def : thm
-    val recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_max_load_factor_fupd_def : thm
-    val recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_max_load_fupd_def : thm
-    val recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_num_entries_def : thm
-    val recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_num_entries_fupd_def : thm
-    val recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_slots_def : thm
-    val recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_slots_fupd_def : thm
   
   (*  Theorems  *)
     val EXISTS_hashmap_hash_map_t : thm
@@ -73,6 +73,54 @@ sig
           hashmap_hash_map_t_CASE (hashmap_hash_map_t a0 a1 a2 a3) f =
           f a0 a1 a2 a3
    
+   [hashmap_hash_map_t_hashmap_hash_map_max_load]  Definition
+      
+      ⊢ ∀u p u0 v.
+          (hashmap_hash_map_t u p u0 v).hashmap_hash_map_max_load = u0
+   
+   [hashmap_hash_map_t_hashmap_hash_map_max_load_factor]  Definition
+      
+      ⊢ ∀u p u0 v.
+          (hashmap_hash_map_t u p u0 v).hashmap_hash_map_max_load_factor =
+          p
+   
+   [hashmap_hash_map_t_hashmap_hash_map_max_load_factor_fupd]  Definition
+      
+      ⊢ ∀f u p u0 v.
+          hashmap_hash_map_t u p u0 v with
+          hashmap_hash_map_max_load_factor updated_by f =
+          hashmap_hash_map_t u (f p) u0 v
+   
+   [hashmap_hash_map_t_hashmap_hash_map_max_load_fupd]  Definition
+      
+      ⊢ ∀f u p u0 v.
+          hashmap_hash_map_t u p u0 v with
+          hashmap_hash_map_max_load updated_by f =
+          hashmap_hash_map_t u p (f u0) v
+   
+   [hashmap_hash_map_t_hashmap_hash_map_num_entries]  Definition
+      
+      ⊢ ∀u p u0 v.
+          (hashmap_hash_map_t u p u0 v).hashmap_hash_map_num_entries = u
+   
+   [hashmap_hash_map_t_hashmap_hash_map_num_entries_fupd]  Definition
+      
+      ⊢ ∀f u p u0 v.
+          hashmap_hash_map_t u p u0 v with
+          hashmap_hash_map_num_entries updated_by f =
+          hashmap_hash_map_t (f u) p u0 v
+   
+   [hashmap_hash_map_t_hashmap_hash_map_slots]  Definition
+      
+      ⊢ ∀u p u0 v. (hashmap_hash_map_t u p u0 v).hashmap_hash_map_slots = v
+   
+   [hashmap_hash_map_t_hashmap_hash_map_slots_fupd]  Definition
+      
+      ⊢ ∀f u p u0 v.
+          hashmap_hash_map_t u p u0 v with
+          hashmap_hash_map_slots updated_by f =
+          hashmap_hash_map_t u p u0 (f v)
+   
    [hashmap_hash_map_t_size_def]  Definition
       
       ⊢ ∀f a0 a1 a2 a3.
@@ -110,54 +158,6 @@ sig
            hashmap_list_t_size f (HashmapListCons a0 a1 a2) =
            1 + (f a1 + hashmap_list_t_size f a2)) ∧
         ∀f. hashmap_list_t_size f HashmapListNil = 0
-   
-   [recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_max_load_def]  Definition
-      
-      ⊢ ∀u p u0 v.
-          (hashmap_hash_map_t u p u0 v).hashmap_hash_map_max_load = u0
-   
-   [recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_max_load_factor_def]  Definition
-      
-      ⊢ ∀u p u0 v.
-          (hashmap_hash_map_t u p u0 v).hashmap_hash_map_max_load_factor =
-          p
-   
-   [recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_max_load_factor_fupd_def]  Definition
-      
-      ⊢ ∀f u p u0 v.
-          hashmap_hash_map_t u p u0 v with
-          hashmap_hash_map_max_load_factor updated_by f =
-          hashmap_hash_map_t u (f p) u0 v
-   
-   [recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_max_load_fupd_def]  Definition
-      
-      ⊢ ∀f u p u0 v.
-          hashmap_hash_map_t u p u0 v with
-          hashmap_hash_map_max_load updated_by f =
-          hashmap_hash_map_t u p (f u0) v
-   
-   [recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_num_entries_def]  Definition
-      
-      ⊢ ∀u p u0 v.
-          (hashmap_hash_map_t u p u0 v).hashmap_hash_map_num_entries = u
-   
-   [recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_num_entries_fupd_def]  Definition
-      
-      ⊢ ∀f u p u0 v.
-          hashmap_hash_map_t u p u0 v with
-          hashmap_hash_map_num_entries updated_by f =
-          hashmap_hash_map_t (f u) p u0 v
-   
-   [recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_slots_def]  Definition
-      
-      ⊢ ∀u p u0 v. (hashmap_hash_map_t u p u0 v).hashmap_hash_map_slots = v
-   
-   [recordtype_hashmap_hash_map_t_seldef_hashmap_hash_map_slots_fupd_def]  Definition
-      
-      ⊢ ∀f u p u0 v.
-          hashmap_hash_map_t u p u0 v with
-          hashmap_hash_map_slots updated_by f =
-          hashmap_hash_map_t u p u0 (f v)
    
    [EXISTS_hashmap_hash_map_t]  Theorem
       
