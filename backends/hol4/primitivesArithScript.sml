@@ -46,21 +46,15 @@ Proof
   rw [] >> try_tac cooper_tac
 QED
 
-(* This induction theorem works well with [Induct_on] *)
+(* THIS INDUCTION theorem works well with [Induct_on] *)
 Theorem int_induction:
   !(P : int -> bool). (∀i. i < 0 ⇒ P i) ∧ P 0 /\ (!i. P i ==> P (i+1)) ==> !i. P i
 Proof
-  ntac 3 strip_tac >>
-  Cases_on ‘i < 0’ >- (last_assum irule >> fs []) >>
-  fs [not_lt_eq_ge] >>
-  Induct_on ‘Num i’ >> rpt strip_tac >> pop_last_assum ignore_tac
-  >-(sg ‘i = 0’ >- cooper_tac >> fs []) >>
-  last_assum (qspec_assume ‘i-1’) >>
-  fs [] >> pop_assum irule >>
-  rw [] >> try_tac cooper_tac >>
-  first_assum (qspec_assume ‘i - 1’) >>
-  pop_assum irule >>
-  rw [] >> try_tac cooper_tac
+  rw [] >>
+  qspec_assume ‘P’ int_induction_ideal >>
+  gvs [] >>
+  Cases_on ‘0 ≤ i’ >> gvs [] >>
+  last_x_assum irule >> int_tac
 QED
 
 val _ = TypeBase.update_induction int_induction
