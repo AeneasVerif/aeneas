@@ -206,7 +206,7 @@ fun get_smallest_unique_id_for_names (names : string list) : string =
       handle HOL_ERR _ => false
     val _ =
       while !continue do (
-        let val _ = (continue := not (forall name_is_ok names)) in
+        let val _ = (continue := not (all name_is_ok names)) in
         if !continue then incr_i () else () end
       )
   in

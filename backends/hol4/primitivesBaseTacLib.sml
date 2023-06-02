@@ -17,6 +17,14 @@ val gsym = GSYM
  *)
 fun ignore_tac (_ : thm) : tactic = ALL_TAC
 
+(* REMARK: the last github version of HOL4 defines some functions which seem
+   to be absent from the last release version (which is older). As a consequence,
+   the Nix flake fails if we don't redefine those here.
+ *)
+val pop_last_assum = last_x_assum
+val qexists = qexists_tac
+(* END OF REMARK *)
+
 val pop_ignore_tac = pop_assum ignore_tac
 
 (* TODO: no exfalso tactic?? *)

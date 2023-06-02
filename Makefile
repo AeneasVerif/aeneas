@@ -283,7 +283,7 @@ thol4p-%:
 
 # Nix - TODO: add the lean tests
 .PHONY: nix
-nix: nix-aeneas-tests nix-aeneas-verify-fstar nix-aeneas-verify-coq
+nix: nix-aeneas-tests nix-aeneas-verify-fstar nix-aeneas-verify-coq nix-aeneas-verify-hol4
 
 .PHONY: nix-aeneas-tests
 nix-aeneas-tests:
@@ -300,3 +300,7 @@ nix-aeneas-verify-coq:
 .PHONY: nix-aeneas-verify-lean
 nix-aeneas-verify-lean:
 	nix build .#checks.x86_64-linux.aeneas-verify-lean --show-trace -L
+
+.PHONY: nix-aeneas-verify-hol4
+nix-aeneas-verify-hol4:
+	nix build .#checks.x86_64-linux.aeneas-verify-hol4 --show-trace -L

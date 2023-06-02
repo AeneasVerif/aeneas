@@ -670,8 +670,10 @@ Proof
   case_tac >>
   case_tac >>
   Cases_on ‘hm’ >> fs [] >>
-  fs [hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_slots_fupd_def] >>
-  fs [hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_num_entries_fupd_def]
+  (* Remark: we initially used directly hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_slots_fupd_def
+     and hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_num_entries_fupd_def,
+     but it fails in the Nix derivation *)
+  fs (TypeBase.updates_of “:'a hash_map_t”)
 QED
 val hash_map_insert_no_resize_fwd_back_branches_eq = SIMP_RULE (srw_ss ()) [] hash_map_insert_no_resize_fwd_back_branches_eq
 
@@ -1818,8 +1820,7 @@ Proof
   rw [bind_def] >>
   rpt (case_tac >> fs []) >>
   Cases_on ‘hm’ >> fs [] >>
-  fs [hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_slots_fupd_def,
-      hashmap_TypesTheory.recordtype_hash_map_t_seldef_hash_map_num_entries_fupd_def]
+  fs (TypeBase.updates_of “:'a hash_map_t”)
 QED
 
 (* TODO: this doesn't work very well *)
