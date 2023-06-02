@@ -109,7 +109,7 @@
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
           '';
-          # The tests don't generate anything
+          # The tests don't generate anything - TODO: actually they do
           installPhase = "touch $out";
         };
         # Replay the Coq proofs.
@@ -121,7 +121,7 @@
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
           '';
-          # The tests don't generate anything
+          # The tests don't generate anything - TODO: actually they do
           installPhase = "touch $out";
         };
         # Replay the Lean proofs. TODO: doesn't work
@@ -137,7 +137,30 @@
             #make verify -j $NIX_BUILD_CORES
             make verify
           '';
-          # The tests don't generate anything
+        };
+        # Replay the HOL4 proofs
+        #
+        # Remark: we tried to have two targets, one for ./backends/hol4 and
+        # one for ./tests/hol4 but we didn't manage to make ./tests/hol4
+        # reuse the build of ./backends/hol4.
+        aeneas-verify-hol4 = pkgs.stdenv.mkDerivation {
+          name = "aeneas_verify_hol4";
+          # Remark: we tried to filter the sources to only include ./backends/hol4
+          # and ./tests/hol4 (see comment below), but it didn't work
+          src = ./.;
+          # src = pkgs.lib.cleanSourceWith {
+          #   src = ./.;
+          #   filter = path: type:
+          #     pkgs.lib.hasPrefix (toString ./backends/hol4) path
+          #     || pkgs.lib.hasPrefix (toString ./tests/hol4) path;
+          # };
+          buildInputs = [ pkgs.hol ];
+          buildPhase= ''
+            cd ./tests/hol4
+            make prepare-projects
+            make verify -j $NIX_BUILD_CORES
+          '';
+          # The build doesn't generate anything
           installPhase = "touch $out";
         };
       in {
@@ -145,7 +168,7 @@
           inherit aeneas;
           default = aeneas;
         };
-        checks = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean; };
-        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean; };
+        checks = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean aeneas-verify-hol4; };
+        hydraJobs = { inherit aeneas aeneas-tests aeneas-verify-fstar aeneas-verify-coq aeneas-verify-lean aeneas-verify-hol4; };
       });
 }
