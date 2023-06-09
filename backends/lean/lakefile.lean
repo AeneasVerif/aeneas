@@ -8,4 +8,4 @@ require mathlib from git
 package «base» {}
 
 @[default_target]
-lean_lib «Primitives» {}
+lean_lib «Base» {}

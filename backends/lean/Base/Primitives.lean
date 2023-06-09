@@ -282,6 +282,7 @@ structure Scalar (ty : ScalarTy) where
   val : Int
   hmin : Scalar.min ty ≤ val
   hmax : val ≤ Scalar.max ty
+deriving Repr
 
 theorem Scalar.bound_suffices (ty : ScalarTy) (x : Int) :
   Scalar.cMin ty ≤ x ∧ x ≤ Scalar.cMax ty ->
@@ -296,8 +297,24 @@ def Scalar.ofIntCore {ty : ScalarTy} (x : Int)
 
 def Scalar.ofInt {ty : ScalarTy} (x : Int)
   (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : Scalar ty :=
-  let ⟨ hmin, hmax ⟩ := h
-  Scalar.ofIntCore x hmin hmax
+  -- Remark: we initially wrote:
+  --  let ⟨ hmin, hmax ⟩ := h
+  --  Scalar.ofIntCore x hmin hmax
+  -- We updated to the line below because a similar pattern in `Scalar.tryMk`
+  -- made reduction block. Both versions seem to work for `Scalar.ofInt`, though.
+  -- TODO: investigate
+  Scalar.ofIntCore x h.left h.right
+
+@[simp] def Scalar.check_bounds (ty : ScalarTy) (x : Int) : Bool :=
+  (Scalar.cMin ty ≤ x || Scalar.min ty ≤ x) ∧ (x ≤ Scalar.cMax ty || x ≤ Scalar.max ty)
+
+theorem Scalar.check_bounds_prop {ty : ScalarTy} {x : Int} (h: Scalar.check_bounds ty x) :
+  Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty := by
+  simp at *
+  have ⟨ hmin, hmax ⟩ := h
+  have hbmin := Scalar.cMin_bound ty
+  have hbmax := Scalar.cMax_bound ty
+  cases hmin <;> cases hmax <;> apply And.intro <;> linarith
 
 -- Further thoughts: look at what has been done here:
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/Fin/Basic.lean
@@ -305,16 +322,15 @@ def Scalar.ofInt {ty : ScalarTy} (x : Int)
 -- https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Data/UInt.lean
 -- which both contain a fair amount of reasoning already!
 def Scalar.tryMk (ty : ScalarTy) (x : Int) : Result (Scalar ty) :=
-  -- TODO: write this with only one if then else
-  if h: (Scalar.cMin ty ≤ x || Scalar.min ty ≤ x) && (x ≤ Scalar.cMax ty || x ≤ Scalar.max ty) then
-    let h: Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty := by
-      simp at *
-      have ⟨ hmin, hmax ⟩ := h
-      have hbmin := Scalar.cMin_bound ty
-      have hbmax := Scalar.cMax_bound ty
-      cases hmin <;> cases hmax <;> apply And.intro <;> linarith
-    let ⟨ hmin, hmax ⟩ := h
-    return Scalar.ofIntCore x hmin hmax
+  if h:Scalar.check_bounds ty x then
+    -- If we do:
+    -- ```
+    -- let ⟨ hmin, hmax ⟩ := (Scalar.check_bounds_prop h)
+    -- Scalar.ofIntCore x hmin hmax
+    -- ```
+    -- then normalization blocks (for instance, some proofs which use reflexivity fail).
+    -- However, the version below doesn't block reduction (TODO: investigate):
+    return Scalar.ofInt x (Scalar.check_bounds_prop h)
   else fail integerOverflow
 
 def Scalar.neg {ty : ScalarTy} (x : Scalar ty) : Result (Scalar ty) := Scalar.tryMk ty (- x.val)
@@ -626,11 +642,8 @@ def vec_index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec
 -- MISC --
 ----------
 
-def mem_replace_fwd (a : Type) (x : a) (_ : a) : a :=
-  x
-
-def mem_replace_back (a : Type) (_ : a) (y : a) : a :=
-  y
+@[simp] def mem_replace_fwd (a : Type) (x : a) (_ : a) : a := x
+@[simp] def mem_replace_back (a : Type) (_ : a) (y : a) : a := y
 
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.
  Use with `simp [ aeneas ]` -/
