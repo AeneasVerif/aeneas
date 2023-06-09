@@ -4,6 +4,8 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 
+namespace Primitives
+
 --------------------
 -- ASSERT COMMAND --Std.
 --------------------
@@ -46,6 +48,7 @@ open Error
 inductive Result (α : Type u) where
   | ret (v: α): Result α
   | fail (e: Error): Result α
+  | div
 deriving Repr, BEq
 
 open Result
@@ -53,20 +56,28 @@ open Result
 instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
   Inhabited.mk (fail panic)
 
+instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
+  Nonempty.intro div
+
 /- HELPERS -/
 
 def ret? {α: Type} (r: Result α): Bool :=
   match r with
-  | Result.ret _ => true
-  | Result.fail _ => false
+  | ret _ => true
+  | fail _ | div => false
+
+def div? {α: Type} (r: Result α): Bool :=
+  match r with
+  | div => true
+  | ret _ | fail _ => false
 
 def massert (b:Bool) : Result Unit :=
-  if b then .ret () else fail assertionFailure
+  if b then ret () else fail assertionFailure
 
 def eval_global {α: Type} (x: Result α) (_: ret? x): α :=
   match x with
-  | Result.fail _ => by contradiction
-  | Result.ret x => x
+  | fail _ | div => by contradiction
+  | ret x => x
 
 /- DO-DSL SUPPORT -/
 
@@ -74,6 +85,7 @@ def bind (x: Result α) (f: α -> Result β) : Result β :=
   match x with
   | ret v  => f v 
   | fail v => fail v
+  | div => div
 
 -- Allows using Result in do-blocks
 instance : Bind Result where
@@ -92,8 +104,9 @@ instance : Pure Result where
 
 def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
   match o with
-  | .ret x => .ret ⟨x, rfl⟩
-  | .fail e => .fail e
+  | ret x => ret ⟨x, rfl⟩
+  | fail e => fail e
+  | div => div
 
 macro "let" e:term " ⟵ " f:term : doElem =>
   `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
@@ -648,3 +661,5 @@ def vec_index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.
  Use with `simp [ aeneas ]` -/
 register_simp_attr aeneas
+
+end Primitives
