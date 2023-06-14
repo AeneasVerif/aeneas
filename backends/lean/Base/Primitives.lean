@@ -526,6 +526,7 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
 def Scalar.toInt {ty} (n : Scalar ty) : Int := n.val
 
 -- Tactic to prove that integers are in bounds
+-- TODO: use this: https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/instance.20with.20tactic.20autoparam
 syntax "intlit" : tactic
 
 macro_rules

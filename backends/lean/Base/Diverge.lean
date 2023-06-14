@@ -11,6 +11,27 @@ open Result
 
 variable {a b : Type}
 
+/-
+TODO:
+- we want an easier to use cases:
+  - keeps in the goal an equation of the shape: `t = case`
+  - if called on Prop terms, uses Classical.em
+  Actually, the cases from mathlib seems already quite powerful
+  (https://leanprover-community.github.io/mathlib_docs/tactics.html#cases)
+  For instance: cases h : e
+  Also: cases_matching
+- better split tactic
+- we need conversions to operate on the head of applications.
+  Actually, something like this works:
+  ```
+  conv at Hl =>
+    apply congr_fun
+    simp [fix_fuel_P]
+  ```
+  Maybe we need a rpt ... ; focus?
+- simplifier/rewriter have a strange behavior sometimes
+-/
+
 /-! # The least fixed point definition and its properties -/
 
 def least_p (p : Nat → Prop) (n : Nat) : Prop := p n ∧ (∀ m, m < n → ¬ p m)
@@ -115,9 +136,7 @@ theorem fix_fuel_mono {f : (a → Result b) → a → Result b} (Hmono : is_mono
     match m with
     | 0 =>
       exfalso
-      -- TODO: annoying to do those conversions by hand - try zify?
-      have : n1 + 1 ≤ (0 : Int) := by simp [*] at *
-      have : 0 ≤ n1 := by simp [*] at *
+      zify at *
       linarith
     | Nat.succ m1 =>
       simp_arith at Hle
@@ -188,9 +207,9 @@ theorem fix_fixed_eq_terminates (f : (a → Result b) → a → Result b) (Hmono
   fix f x = f (fix f) x := by
   have Hl := fix_fuel_P_least Hmono He
   -- TODO: better control of simplification
-  have Heq : fix_fuel_P f x (least (fix_fuel_P f x)) = fix_fuel_pred f x (least (fix_fuel_P f x)) :=
-    by simp [fix_fuel_P]
-  simp [Heq] at Hl; clear Heq
+  conv at Hl =>
+    apply congr_fun
+    simp [fix_fuel_P]
   -- The least upper bound is > 0
   have ⟨ n, Hsucc ⟩ : ∃ n, least (fix_fuel_P f x) = Nat.succ n := by
     revert Hl
