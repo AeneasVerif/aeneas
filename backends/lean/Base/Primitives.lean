@@ -20,9 +20,8 @@ def assertImpl : CommandElab := fun (_stx: Syntax) => do
   runTermElabM (fun _ => do
     let r ← evalTerm Bool (mkConst ``Bool) _stx[1]
     if not r then
-      logInfo "Assertion failed for: "
-      logInfo _stx[1]
-      logError "Expression reduced to false"
+      logInfo ("Assertion failed for:\n" ++ _stx[1])
+      throwError ("Expression reduced to false:\n"  ++ _stx[1])
     pure ())
 
 #eval 2 == 2
