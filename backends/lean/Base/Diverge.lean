@@ -497,33 +497,8 @@ namespace Ex1
       if i = 0 then .ret hd
       else f (tl, i - 1)
 
-  theorem list_nth_body_mono : is_mono (@list_nth_body a) := by
-    simp [is_mono]; intro g h Hr (ls, i); simp [result_rel, list_nth_body]
-    cases ls <;> simp
-    rename_i hd tl
-    -- TODO: making a case disjunction over `i = 0` is annoying, we need a more
-    -- general tactic for this
-    cases (Classical.em (Eq i 0)) <;> simp [*] at *
-    apply Hr
-
-  theorem list_nth_body_cont : is_cont (@list_nth_body a) := by
-    rw [is_cont]; intro (ls, i) Hdiv; simp [list_nth_body, fix_fuel] at *
-    cases ls <;> simp at *
-    -- TODO: automate this
-    cases (Classical.em (Eq i 0)) <;> simp [*] at *
-    -- Recursive call
-    apply Hdiv
-
-  /- Making the monotonicity/continuity proofs more systematic -/
-  
-  theorem list_nth_body_mono2 : ∀ x, is_mono_p (λ f => @list_nth_body a f x) := by
-    intro x
-    simp [list_nth_body]
-    split <;> simp
-    split <;> simp
-
-  theorem list_nth_body_cont2: ∀ f x, is_cont_p f (λ f => @list_nth_body a f x) := by
-    intro f x
+  theorem list_nth_body_valid: ∀ k x, is_valid_p k (λ k => @list_nth_body a k x) := by
+    intro k x
     simp [list_nth_body]
     split <;> simp
     split <;> simp
@@ -539,12 +514,9 @@ namespace Ex1
         if i = 0 then .ret hd
         else list_nth tl (i - 1)
     := by
-    have Hvalid : is_valid (@list_nth_body a) :=
-      is_valid.intro list_nth_body_mono list_nth_body_cont
-    have Heq := fix_fixed_eq Hvalid
-    simp [Heq, list_nth]
-    conv => lhs; rw [list_nth_body]
-    simp [Heq]
+    have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_valid a)
+    simp [list_nth]
+    conv => lhs; rw [Heq]
 
 end Ex1
 
@@ -591,181 +563,6 @@ namespace Ex2
     conv => lhs; rw [Heq]
 
 end Ex2
-
-namespace Ex3
-  /- Higher-order example -/
-  open Primitives Fix
-
-  variable {a b : Type}
-
-  /- An auxiliary function, which doesn't require the fixed-point -/
-  def map (f : a → Result b) (ls : List a) : Result (List b) :=
-    match ls with
-    | [] => .ret []
-    | hd :: tl =>
-      do
-        -- TODO: monadic syntax
-        match f hd with
-        | .ret hd =>
-          match map f tl with
-          | .ret tl =>
-            .ret (hd :: tl)
-          | r => r
-        | .fail e => .fail e
-        | .div => .div
-
-  theorem map_is_mono {{f g : a → Result b}} (Hr : marrow_rel f g) :
-    ∀ ls, result_rel (map f ls) (map g ls) := by
-    intro ls; induction ls <;> simp [result_rel, map]
-    case cons hd tl Hi =>
-    have Hr1 := Hr hd; simp [result_rel] at Hr1
-    -- TODO: reverting is annoying
-    revert Hr1
-    cases f hd <;> intro Hr1 <;> simp [*]
-    -- ret case
-    simp [result_rel] at Hi
-    -- TODO: annoying
-    revert Hi
-    cases map f tl <;> intro Hi <;> simp [*]
-
-  -- Auxiliary definition
-  def map_fix_fuel (n0 n1 : Nat) (f : (a → Result b) → a → Result b) (ls : List a) : Result (List b) :=
-    match ls with
-    | [] => .ret []
-    | hd :: tl =>
-      do
-        match fix_fuel n0 f hd with
-        | .ret hd =>
-          match map (fix_fuel n1 f) tl with
-          | .ret tl =>
-            .ret (hd :: tl)
-          | r => r
-        | .fail e => .fail e
-        | .div => .div
-
-  def exists_map_fix_fuel_not_div_imp {{f : (a → Result b) → a → Result b}} {{ls : List a}}
-    (Hmono : is_mono f) :
-    (∃ n0 n1, map_fix_fuel n0 n1 f ls ≠ .div) →
-    ∃ n2, map (fix_fuel n2 f) ls ≠ .div := by
-    intro ⟨ n0, n1, Hnd ⟩
-    exists n0 + n1
-    have Hineq0 : n0 ≤ n0 + n1 := by linarith
-    have Hineq1 : n1 ≤ n0 + n1 := by linarith
-    simp [map_fix_fuel] at Hnd
-    -- TODO: I would like a rewrite_once tactic
-    unfold map; simp
-    --
-    revert Hnd
-    cases ls <;> simp
-    rename_i hd tl
-    -- Use the monotonicity of fix_fuel
-    have Hfmono := fix_fuel_mono Hmono Hineq0 hd
-    simp [result_rel] at Hfmono; revert Hfmono
-    cases fix_fuel n0 f hd <;> intro <;> simp [*]
-    -- Use the monotonicity of map
-    have Hfmono := fix_fuel_mono Hmono Hineq1
-    have Hmmono := map_is_mono Hfmono tl
-    simp [result_rel] at Hmmono; revert Hmmono
-    cases map (fix_fuel n1 f) tl <;> intro <;> simp [*]
-
-  -- TODO: it is simpler to prove the contrapositive of is_cont than is_cont itself.
-  -- The proof is still quite technical: think of a criteria whose proof is simpler
-  -- to automate.
-  theorem map_is_cont_contra_aux {{f : (a → Result b) → a → Result b}} (Hmono : is_mono f) :
-    ∀ ls, map (fix f) ls ≠ .div →
-    ∃ n0 n1, map_fix_fuel n0 n1 f ls ≠ .div
-    := by
-    intro ls; induction ls <;> simp [result_rel, map_fix_fuel, map]
-    simp [fix]
-    case cons hd tl Hi =>
-    -- Instantiate the first n and do a case disjunction
-    intro Hf; exists (least (fix_fuel_P f hd)); revert Hf
-    cases fix_fuel (least (fix_fuel_P f hd)) f hd <;> simp
-    -- Use the induction hyp
-    have Hr := Classical.em (map (fix f) tl = .div)
-    simp [fix] at *
-    cases Hr <;> simp_all
-    have Hj : ∃ n2, map (fix_fuel n2 f) tl ≠ .div := exists_map_fix_fuel_not_div_imp Hmono Hi
-    revert Hj; intro ⟨ n2, Hj ⟩
-    intro Hf; exists n2; revert Hf
-    revert Hj; cases map (fix_fuel n2 f) tl <;> simp_all
-
-  theorem map_is_cont_contra {{f : (a → Result b) → a → Result b}} (Hmono : is_mono f) :
-    ∀ ls, map (fix f) ls ≠ .div →
-    ∃ n, map (fix_fuel n f) ls ≠ .div
-    := by
-    intro ls Hf
-    have Hc := map_is_cont_contra_aux Hmono ls Hf
-    apply exists_map_fix_fuel_not_div_imp <;> assumption
-
-  theorem map_is_cont  {{f : (a → Result b) → a → Result b}} (Hmono : is_mono f) :
-    ∀ ls, (Hc : ∀ n, map (fix_fuel n f) ls = .div) →
-    map (fix f) ls = .div
-    := by
-    intro ls Hc
-    -- TODO: is there a tactic for proofs by contraposition?
-    apply Classical.byContradiction; intro Hndiv
-    let ⟨ n, Hcc ⟩ := map_is_cont_contra Hmono ls Hndiv
-    simp_all  
-
-  /- An example which uses map -/
-  inductive Tree (a : Type) :=
-  | leaf (x : a)
-  | node (tl : List (Tree a))
-
-  def id_body (f : Tree a → Result (Tree a)) (t : Tree a) : Result (Tree a) :=
-    match t with
-    | .leaf x => .ret (.leaf x)
-    | .node tl =>
-      match map f tl with
-      | .div => .div
-      | .fail e => .fail e
-      | .ret tl => .ret (.node tl)
-
-  theorem id_body_mono : is_mono (@id_body a) := by
-    simp [is_mono]; intro g h Hr t; simp [result_rel, id_body]
-    cases t <;> simp
-    rename_i tl
-    have Hmmono := map_is_mono Hr tl
-    revert Hmmono; simp [result_rel]
-    cases map g tl <;> simp_all
-
-  theorem id_body_cont : is_cont (@id_body a) := by
-    rw [is_cont]; intro t Hdiv
-    simp [fix_fuel] at *
-    -- TODO: weird things are happening with the rewriter and the simplifier here
-    rw [id_body]
-    simp [id_body] at Hdiv
-    --
-    cases t <;> simp at *
-    rename_i tl
-    -- TODO: automate this
-    have Hmc := map_is_cont id_body_mono tl
-    have Hdiv : ∀ (n : ℕ), map (fix_fuel n id_body) tl = Result.div := by
-      intro n
-      have Hdiv := Hdiv n; revert Hdiv
-      cases map (fix_fuel n id_body) tl <;> simp_all
-    have Hmc := Hmc Hdiv; revert Hmc
-    cases map (fix id_body) tl <;> simp_all
-
-  noncomputable def id (t : Tree a) := fix id_body t
-
-  theorem id_eq (t : Tree a) :
-    id t =
-      match t with
-      | .leaf x => .ret (.leaf x)
-      | .node tl =>
-        match map id tl with
-        | .div => .div
-        | .fail e => .fail e
-        | .ret tl => .ret (.node tl)
-    := by
-    have Hvalid : is_valid (@id_body a) :=
-      is_valid.intro id_body_mono id_body_cont
-    have Heq := fix_fixed_eq Hvalid
-    conv => lhs; rw [id, Heq, id_body]
-
-end Ex3
 
 namespace Ex4
   /- Higher-order example -/
