@@ -3,12 +3,32 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Tauto
---import Mathlib.Logic
+
+/-
+TODO:
+- we want an easier to use cases:
+  - keeps in the goal an equation of the shape: `t = case`
+  - if called on Prop terms, uses Classical.em
+  Actually, the cases from mathlib seems already quite powerful
+  (https://leanprover-community.github.io/mathlib_docs/tactics.html#cases)
+  For instance: cases h : e
+  Also: cases_matching
+- better split tactic
+- we need conversions to operate on the head of applications.
+  Actually, something like this works:
+  ```
+  conv at Hl =>
+    apply congr_fun
+    simp [fix_fuel_P]
+  ```
+  Maybe we need a rpt ... ; focus?
+- simplifier/rewriter have a strange behavior sometimes
+-/
 
 namespace Diverge
 
 namespace Primitives
+/-! # Copy-pasting from Primitives to make the file self-contained -/
 
 inductive Error where
    | assertionFailure: Error
@@ -28,12 +48,6 @@ inductive Result (α : Type u) where
 deriving Repr, BEq
 
 open Result
-
--- instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
---   Inhabited.mk (fail panic)
-
--- instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
---   Nonempty.intro div
 
 def bind (x: Result α) (f: α -> Result β) : Result β :=
   match x with
@@ -71,312 +85,276 @@ end Primitives
 
 namespace Fix
 
-open Primitives
-open Result
+  open Primitives
+  open Result
 
-variable {a b c d : Type}
+  variable {a b c d : Type}
 
-/-
-TODO:
-- we want an easier to use cases:
-  - keeps in the goal an equation of the shape: `t = case`
-  - if called on Prop terms, uses Classical.em
-  Actually, the cases from mathlib seems already quite powerful
-  (https://leanprover-community.github.io/mathlib_docs/tactics.html#cases)
-  For instance: cases h : e
-  Also: cases_matching
-- better split tactic
-- we need conversions to operate on the head of applications.
-  Actually, something like this works:
-  ```
-  conv at Hl =>
-    apply congr_fun
-    simp [fix_fuel_P]
-  ```
-  Maybe we need a rpt ... ; focus?
-- simplifier/rewriter have a strange behavior sometimes
--/
+  /-! # The least fixed point definition and its properties -/
 
-/-! # The least fixed point definition and its properties -/
+  def least_p (p : Nat → Prop) (n : Nat) : Prop := p n ∧ (∀ m, m < n → ¬ p m)
+  noncomputable def least (p : Nat → Prop) : Nat :=
+    Classical.epsilon (least_p p)
 
-def least_p (p : Nat → Prop) (n : Nat) : Prop := p n ∧ (∀ m, m < n → ¬ p m)
-noncomputable def least (p : Nat → Prop) : Nat :=
-  Classical.epsilon (least_p p)
+  -- Auxiliary theorem for [least_spec]: if there exists an `n` satisfying `p`,
+  -- there there exists a least `m` satisfying `p`.
+  theorem least_spec_aux (p : Nat → Prop) : ∀ (n : Nat), (hn : p n) → ∃ m, least_p p m := by
+    apply Nat.strongRec'
+    intros n hi hn
+    -- Case disjunction on: is n the smallest n satisfying p?
+    match Classical.em (∀ m, m < n → ¬ p m) with
+    | .inl hlt =>
+      -- Yes: trivial
+      exists n
+    | .inr hlt =>
+      simp at *
+      let ⟨ m, ⟨ hmlt, hm ⟩ ⟩ := hlt
+      have hi := hi m hmlt hm
+      apply hi
 
--- Auxiliary theorem for [least_spec]: if there exists an `n` satisfying `p`,
--- there there exists a least `m` satisfying `p`.
-theorem least_spec_aux (p : Nat → Prop) : ∀ (n : Nat), (hn : p n) → ∃ m, least_p p m := by
-  apply Nat.strongRec'
-  intros n hi hn
-  -- Case disjunction on: is n the smallest n satisfying p?
-  match Classical.em (∀ m, m < n → ¬ p m) with
-  | .inl hlt =>
-    -- Yes: trivial
-    exists n
-  | .inr hlt =>
-    simp at *
-    let ⟨ m, ⟨ hmlt, hm ⟩ ⟩ := hlt
-    have hi := hi m hmlt hm
-    apply hi
+  -- The specification of [least]: either `p` is never satisfied, or it is satisfied
+  -- by `least p` and no `n < least p` satisfies `p`.
+  theorem least_spec (p : Nat → Prop) : (∀ n, ¬ p n) ∨ (p (least p) ∧ ∀ n, n < least p → ¬ p n) := by
+    -- Case disjunction on the existence of an `n` which satisfies `p`
+    match Classical.em (∀ n, ¬ p n) with
+    | .inl h =>
+      -- There doesn't exist: trivial
+      apply (Or.inl h)
+    | .inr h =>
+      -- There exists: we simply use `least_spec_aux` in combination with the property
+      -- of the epsilon operator
+      simp at *
+      let ⟨ n, hn ⟩ := h
+      apply Or.inr
+      have hl := least_spec_aux p n hn
+      have he := Classical.epsilon_spec hl
+      apply he
 
--- The specification of [least]: either `p` is never satisfied, or it is satisfied
--- by `least p` and no `n < least p` satisfies `p`.
-theorem least_spec (p : Nat → Prop) : (∀ n, ¬ p n) ∨ (p (least p) ∧ ∀ n, n < least p → ¬ p n) := by
-  -- Case disjunction on the existence of an `n` which satisfies `p`
-  match Classical.em (∀ n, ¬ p n) with
-  | .inl h =>
-    -- There doesn't exist: trivial
-    apply (Or.inl h)
-  | .inr h =>
-    -- There exists: we simply use `least_spec_aux` in combination with the property
-    -- of the epsilon operator
-    simp at *
-    let ⟨ n, hn ⟩ := h
-    apply Or.inr
-    have hl := least_spec_aux p n hn
-    have he := Classical.epsilon_spec hl
-    apply he
+  /-! # The fixed point definitions -/
 
-/-! # The fixed point definitions -/
+  def fix_fuel (n : Nat) (f : (a → Result b) → a → Result b) (x : a) : Result b :=
+    match n with
+    | 0 => .div
+    | n + 1 =>
+      f (fix_fuel n f) x
 
-def fix_fuel (n : Nat) (f : (a → Result b) → a → Result b) (x : a) : Result b :=
-  match n with
-  | 0 => .div
-  | n + 1 =>
-    f (fix_fuel n f) x
+  @[simp] def fix_fuel_pred (f : (a → Result b) → a → Result b) (x : a) (n : Nat) :=
+    not (div? (fix_fuel n f x))
 
-@[simp] def fix_fuel_pred (f : (a → Result b) → a → Result b) (x : a) (n : Nat) :=
-  not (div? (fix_fuel n f x))
+  def fix_fuel_P (f : (a → Result b) → a → Result b) (x : a) (n : Nat) : Prop :=
+    fix_fuel_pred f x n
 
-def fix_fuel_P (f : (a → Result b) → a → Result b) (x : a) (n : Nat) : Prop :=
-  fix_fuel_pred f x n
+  noncomputable def fix (f : (a → Result b) → a → Result b) (x : a) : Result b :=
+    fix_fuel (least (fix_fuel_P f x)) f x
 
-noncomputable def fix (f : (a → Result b) → a → Result b) (x : a) : Result b :=
-  fix_fuel (least (fix_fuel_P f x)) f x
+  /-! # The validity property -/
 
-/-! # The proof of the fixed point equation -/
+  -- Monotonicity relation over results
+  -- TODO: generalize (we should parameterize the definition by a relation over `a`)
+  def result_rel {a : Type u} (x1 x2 : Result a) : Prop :=
+    match x1 with
+    | div => True
+    | fail _ => x2 = x1
+    | ret _ => x2 = x1 -- TODO: generalize
 
--- Monotonicity relation over results
--- TODO: generalize
-def result_rel {a : Type u} (x1 x2 : Result a) : Prop :=
-  match x1 with
-  | div => True
-  | fail _ => x2 = x1
-  | ret _ => x2 = x1 -- TODO: generalize
+  -- Monotonicity relation over monadic arrows (i.e., Kleisli arrows)
+  def karrow_rel (k1 k2 : a → Result b) : Prop :=
+    ∀ x, result_rel (k1 x) (k2 x)
 
--- Monotonicity relation over monadic arrows
--- TODO: Kleisli arrow
--- TODO: generalize
-def marrow_rel (f g : a → Result b) : Prop :=
-  ∀ x, result_rel (f x) (g x)
+  -- Monotonicity property for function bodies
+  def is_mono (f : (a → Result b) → a → Result b) : Prop :=
+    ∀ {{k1 k2}}, karrow_rel k1 k2 → karrow_rel (f k1) (f k2)
 
--- Monotonicity property
-def is_mono (f : (a → Result b) → a → Result b) : Prop :=
-  ∀ {{g h}}, marrow_rel g h → marrow_rel (f g) (f h)
+  -- "Continuity" property.
+  -- We need this, and this looks a lot like continuity. Also see this paper:
+  -- https://inria.hal.science/file/index/docid/216187/filename/tarski.pdf
+  -- We define our "continuity" criteria so that it gives us what we need to
+  -- prove the fixed-point equation, and we can also easily manipulate it.
+  def is_cont (f : (a → Result b) → a → Result b) : Prop :=
+    ∀ x, (Hdiv : ∀ n, fix_fuel (.succ n) f x = div) → f (fix f) x = div
 
--- "Continuity" property.
--- We need this, and this looks a lot like continuity. Also see this paper:
--- https://inria.hal.science/file/index/docid/216187/filename/tarski.pdf
-def is_cont (f : (a → Result b) → a → Result b) : Prop :=
-  ∀ x, (Hdiv : ∀ n, fix_fuel (.succ n) f x = div) → f (fix f) x = div
+  /-! # The proof of the fixed-point equation -/
+  theorem fix_fuel_mono {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
+    ∀ {{n m}}, n ≤ m → karrow_rel (fix_fuel n f) (fix_fuel m f) := by
+    intros n
+    induction n
+    case zero => simp [karrow_rel, fix_fuel, result_rel]
+    case succ n1 Hi =>
+      intros m Hle x
+      simp [result_rel]
+      match m with
+      | 0 =>
+        exfalso
+        zify at *
+        linarith
+      | Nat.succ m1 =>
+        simp_arith at Hle
+        simp [fix_fuel]
+        have Hi := Hi Hle
+        have Hmono := Hmono Hi x
+        simp [result_rel] at Hmono
+        apply Hmono
 
--- Validity property for a body
-structure is_valid (f : (a → Result b) → a → Result b) :=
-  intro::
-  hmono : is_mono f
-  hcont : is_cont f
+  @[simp] theorem neg_fix_fuel_P {f : (a → Result b) → a → Result b} {x : a} {n : Nat} :
+    ¬ fix_fuel_P f x n ↔ (fix_fuel n f x = div) := by
+    simp [fix_fuel_P, div?]
+    cases fix_fuel n f x <;> simp  
 
-/-
-
- -/
-
-theorem fix_fuel_mono {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
-  ∀ {{n m}}, n ≤ m → marrow_rel (fix_fuel n f) (fix_fuel m f) := by
-  intros n
-  induction n
-  case zero => simp [marrow_rel, fix_fuel, result_rel]
-  case succ n1 Hi =>
-    intros m Hle x
+  theorem fix_fuel_fix_mono {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
+    ∀ n, karrow_rel (fix_fuel n f) (fix f) := by
+    intros n x
     simp [result_rel]
-    match m with
-    | 0 =>
-      exfalso
-      zify at *
-      linarith
-    | Nat.succ m1 =>
-      simp_arith at Hle
-      simp [fix_fuel]
-      have Hi := Hi Hle
-      have Hmono := Hmono Hi x
-      simp [result_rel] at Hmono
-      apply Hmono
+    have Hl := least_spec (fix_fuel_P f x)
+    simp at Hl
+    match Hl with
+    | .inl Hl => simp [*]
+    | .inr ⟨ Hl, Hn ⟩ =>
+      match Classical.em (fix_fuel n f x = div) with
+      | .inl Hd =>
+        simp [*]
+      | .inr Hd =>
+        have Hineq : least (fix_fuel_P f x) ≤ n := by
+          -- Proof by contradiction
+          cases Classical.em (least (fix_fuel_P f x) ≤ n) <;> simp [*]
+          simp at *
+          rename_i Hineq
+          have Hn := Hn n Hineq
+          contradiction
+        have Hfix : ¬ (fix f x = div) := by
+          simp [fix]
+          -- By property of the least upper bound
+          revert Hd Hl
+          -- TODO: there is no conversion to select the head of a function!
+          conv => lhs; apply congr_fun; apply congr_fun; apply congr_fun; simp [fix_fuel_P, div?]
+          cases fix_fuel (least (fix_fuel_P f x)) f x <;> simp
+        have Hmono := fix_fuel_mono Hmono Hineq x
+        simp [result_rel] at Hmono
+        simp [fix] at *
+        cases Heq: fix_fuel (least (fix_fuel_P f x)) f x <;>
+        cases Heq':fix_fuel n f x <;>
+        simp_all
 
-@[simp] theorem neg_fix_fuel_P {f : (a → Result b) → a → Result b} {x : a} {n : Nat} :
-  ¬ fix_fuel_P f x n ↔ (fix_fuel n f x = div) := by
-  simp [fix_fuel_P, div?]
-  cases fix_fuel n f x <;> simp  
+  theorem fix_fuel_P_least {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
+    ∀ {{x n}}, fix_fuel_P f x n → fix_fuel_P f x (least (fix_fuel_P f x)) := by
+    intros x n Hf
+    have Hfmono := fix_fuel_fix_mono Hmono n x
+    -- TODO: there is no conversion to select the head of a function!
+    conv => apply congr_fun; simp [fix_fuel_P]
+    simp [fix_fuel_P] at Hf
+    revert Hf Hfmono
+    simp [div?, result_rel, fix]
+    cases fix_fuel n f x <;> simp_all
 
-theorem fix_fuel_fix_mono {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
-  ∀ n, marrow_rel (fix_fuel n f) (fix f) := by
-  intros n x
-  simp [result_rel]
-  have Hl := least_spec (fix_fuel_P f x)
-  simp at Hl
-  match Hl with
-  | .inl Hl => simp [*]
-  | .inr ⟨ Hl, Hn ⟩ =>
-    match Classical.em (fix_fuel n f x = div) with
-    | .inl Hd =>
-      simp [*]
-    | .inr Hd =>
-      have Hineq : least (fix_fuel_P f x) ≤ n := by
-        -- Proof by contradiction
-        cases Classical.em (least (fix_fuel_P f x) ≤ n) <;> simp [*]
-        simp at *
-        rename_i Hineq
-        have Hn := Hn n Hineq
-        contradiction
-      have Hfix : ¬ (fix f x = div) := by
-        simp [fix]
-        -- By property of the least upper bound
-        revert Hd Hl
-        -- TODO: there is no conversion to select the head of a function!
-        have : fix_fuel_P f x (least (fix_fuel_P f x)) = fix_fuel_pred f x (least (fix_fuel_P f x)) :=
-          by simp[fix_fuel_P]
-        simp [this, div?]
-        clear this
-        cases fix_fuel (least (fix_fuel_P f x)) f x <;> simp
-      have Hmono := fix_fuel_mono Hmono Hineq x
-      simp [result_rel] at Hmono
-      -- TODO: there is no conversion to select the head of a function!
-      revert Hmono Hfix Hd
-      simp [fix]
-      -- TODO: it would be good if cases actually introduces an equation: this
-      -- way we wouldn't have to do all the book-keeping
-      cases fix_fuel (least (fix_fuel_P f x)) f x <;> cases fix_fuel n f x <;>
-      intros <;> simp [*] at *  
-
-theorem fix_fuel_P_least {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
-  ∀ {{x n}}, fix_fuel_P f x n → fix_fuel_P f x (least (fix_fuel_P f x)) := by
-  intros x n Hf
-  have Hfmono := fix_fuel_fix_mono Hmono n x
-  revert Hf Hfmono
-  -- TODO: would be good to be able to unfold fix_fuel_P only on the left
-  simp [fix_fuel_P, div?, result_rel, fix]
-  cases fix_fuel n f x <;> simp_all
-
--- Prove the fixed point equation in the case there exists some fuel for which
--- the execution terminates
-theorem fix_fixed_eq_terminates (f : (a → Result b) → a → Result b) (Hmono : is_mono f)
-  (x : a) (n : Nat) (He : fix_fuel_P f x n) :
-  fix f x = f (fix f) x := by
-  have Hl := fix_fuel_P_least Hmono He
-  -- TODO: better control of simplification
-  conv at Hl =>
-    apply congr_fun
-    simp [fix_fuel_P]
-  -- The least upper bound is > 0
-  have ⟨ n, Hsucc ⟩ : ∃ n, least (fix_fuel_P f x) = Nat.succ n := by
+  -- Prove the fixed point equation in the case there exists some fuel for which
+  -- the execution terminates
+  theorem fix_fixed_eq_terminates (f : (a → Result b) → a → Result b) (Hmono : is_mono f)
+    (x : a) (n : Nat) (He : fix_fuel_P f x n) :
+    fix f x = f (fix f) x := by
+    have Hl := fix_fuel_P_least Hmono He
+    -- TODO: better control of simplification
+    conv at Hl =>
+      apply congr_fun
+      simp [fix_fuel_P]
+    -- The least upper bound is > 0
+    have ⟨ n, Hsucc ⟩ : ∃ n, least (fix_fuel_P f x) = Nat.succ n := by
+      revert Hl
+      simp [div?]
+      cases least (fix_fuel_P f x) <;> simp [fix_fuel]
+    simp [Hsucc] at Hl
     revert Hl
-    simp [div?]
-    cases least (fix_fuel_P f x) <;> simp [fix_fuel]
-  simp [Hsucc] at Hl
-  revert Hl
-  simp [*, div?, fix, fix_fuel]
-  -- Use the monotonicity
-  have Hfixmono := fix_fuel_fix_mono Hmono n
-  have Hvm := Hmono Hfixmono x
-  -- Use functional extensionality
-  simp [result_rel, fix] at Hvm
-  revert Hvm
-  split <;> simp [*] <;> intros <;> simp [*]
+    simp [*, div?, fix, fix_fuel]
+    -- Use the monotonicity
+    have Hfixmono := fix_fuel_fix_mono Hmono n
+    have Hvm := Hmono Hfixmono x
+    -- Use functional extensionality
+    simp [result_rel, fix] at Hvm
+    revert Hvm
+    split <;> simp [*] <;> intros <;> simp [*]
 
--- The final fixed point equation
--- TODO: remove the `forall x`
-theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_valid f) :
-  ∀ x, fix f x = f (fix f) x := by
-  intros x
-  -- conv => lhs; simp [fix]
-  -- Case disjunction: is there a fuel such that the execution successfully execute?
-  match Classical.em (∃ n, fix_fuel_P f x n) with
-  | .inr He =>
-    -- No fuel: the fixed point evaluates to `div`
-    --simp [fix] at *
-    simp at *
-    conv => lhs; simp [fix]
-    have Hel := He (Nat.succ (least (fix_fuel_P f x))); simp [*, fix_fuel] at *; clear Hel
-    -- Use the "continuity" of `f`
-    have He : ∀ n, fix_fuel (.succ n) f x = div := by intros; simp [*]
-    have Hcont := Hvalid.hcont x He
-    simp [Hcont]
-  | .inl ⟨ n, He ⟩ => apply fix_fixed_eq_terminates f Hvalid.hmono x n He
+  -- The final fixed point equation
+  -- TODO: remove the `forall x`
+  theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}}
+    (Hmono : is_mono f) (Hcont : is_cont f) :
+    ∀ x, fix f x = f (fix f) x := by
+    intros x
+    -- Case disjunction: is there a fuel such that the execution successfully execute?
+    match Classical.em (∃ n, fix_fuel_P f x n) with
+    | .inr He =>
+      -- No fuel: the fixed point evaluates to `div`
+      --simp [fix] at *
+      simp at *
+      conv => lhs; simp [fix]
+      have Hel := He (Nat.succ (least (fix_fuel_P f x))); simp [*, fix_fuel] at *; clear Hel
+      -- Use the "continuity" of `f`
+      have He : ∀ n, fix_fuel (.succ n) f x = div := by intros; simp [*]
+      have Hcont := Hcont x He
+      simp [Hcont]
+    | .inl ⟨ n, He ⟩ => apply fix_fixed_eq_terminates f Hmono x n He
 
-  /- Making the proofs more systematic -/
-  
-  -- TODO: rewrite is_mono in terms of is_mono_p
-  def is_mono_p (body : (a → Result b) → Result c) : Prop :=
-    ∀ {{g h}}, marrow_rel g h → result_rel (body g) (body h)
 
-  @[simp] theorem is_mono_p_same (x : Result c) :
+  /-! # Making the proofs of validity manageable (and automatable) -/
+
+  -- Monotonicity property for expressions
+  def is_mono_p (e : (a → Result b) → Result c) : Prop :=
+    ∀ {{k1 k2}}, karrow_rel k1 k2 → result_rel (e k1) (e k2)
+
+  theorem is_mono_p_same (x : Result c) :
     @is_mono_p a b c (λ _ => x) := by
-    simp [is_mono_p, marrow_rel, result_rel]
+    simp [is_mono_p, karrow_rel, result_rel]
     split <;> simp
 
-  -- TODO: remove
-  @[simp] theorem is_mono_p_tail_rec (x : a) :
+  theorem is_mono_p_rec (x : a) :
     @is_mono_p a b b (λ f => f x) := by
-    simp_all [is_mono_p, marrow_rel, result_rel]
+    simp_all [is_mono_p, karrow_rel, result_rel]
 
-  -- TODO: rewrite is_cont in terms of is_cont_p
-  def is_cont_p (f : (a → Result b) → a → Result b)
-    (body : (a → Result b) → Result c) : Prop :=
-    (Hc : ∀ n, body (fix_fuel n f) = .div) →
-    body (fix f) = .div
-
-  @[simp] theorem is_cont_p_same (f : (a → Result b) → a → Result b) (x : Result c) :
-    is_cont_p f (λ _ => x) := by
-    simp [is_cont_p]
-
-  -- TODO: remove
-  @[simp] theorem is_cont_p_tail_rec (f : (a → Result b) → a → Result b) (x : a) :
-    is_cont_p f (λ f => f x) := by
-    simp_all [is_cont_p, fix]
-
-  -- Lean is good at unification: we can write a very general version
+  -- The important lemma about `is_mono_p`
   theorem is_mono_p_bind
     (g : (a → Result b) → Result c)
     (h : c → (a → Result b) → Result d) :
     is_mono_p g →
     (∀ y, is_mono_p (h y)) →
-    is_mono_p (λ f => do let y ← g f; h y f) := by
+    is_mono_p (λ k => do let y ← g k; h y k) := by
     intro hg hh
     simp [is_mono_p]
     intro fg fh Hrgh
-    simp [marrow_rel, result_rel]
+    simp [karrow_rel, result_rel]
     have hg := hg Hrgh; simp [result_rel] at hg
     cases heq0: g fg <;> simp_all
     rename_i y _
     have hh := hh y Hrgh; simp [result_rel] at hh
     simp_all
 
-  -- Lean is good at unification: we can write a very general version
-  -- (in particular, it will manage to figure out `g` and `h` when we
-  -- apply the lemma)
+  -- Continuity property for expressions - note that we take the continuation
+  -- as parameter
+  def is_cont_p (k : (a → Result b) → a → Result b)
+    (e : (a → Result b) → Result c) : Prop :=
+    (Hc : ∀ n, e (fix_fuel n k) = .div) →
+    e (fix k) = .div
+
+  theorem is_cont_p_same (k : (a → Result b) → a → Result b) (x : Result c) :
+    is_cont_p k (λ _ => x) := by
+    simp [is_cont_p]
+
+  theorem is_cont_p_rec (f : (a → Result b) → a → Result b) (x : a) :
+    is_cont_p f (λ f => f x) := by
+    simp_all [is_cont_p, fix]
+
+  -- The important lemma about `is_cont_p`
   theorem is_cont_p_bind
-    (f : (a → Result b) → a → Result b)
-    (Hfmono : is_mono f)
+    (k : (a → Result b) → a → Result b)
+    (Hkmono : is_mono k)
     (g : (a → Result b) → Result c)
     (h : c → (a → Result b) → Result d) :
     is_mono_p g →
-    is_cont_p f g →
+    is_cont_p k g →
     (∀ y, is_mono_p (h y)) →
-    (∀ y, is_cont_p f (h y)) →
-    is_cont_p f (λ f => do let y ← g f; h y f) := by
+    (∀ y, is_cont_p k (h y)) →
+    is_cont_p k (λ k => do let y ← g k; h y k) := by
     intro Hgmono Hgcont Hhmono Hhcont
     simp [is_cont_p]
     intro Hdiv
-    -- Case on `g (fix... f)`: is there an n s.t. it terminates?
-    cases Classical.em (∀ n, g (fix_fuel n f) = .div) <;> rename_i Hn
+    -- Case on `g (fix... k)`: is there an n s.t. it terminates?
+    cases Classical.em (∀ n, g (fix_fuel n k) = .div) <;> rename_i Hn
     . -- Case 1: g diverges
       have Hgcont := Hgcont Hn
       simp_all
@@ -384,20 +362,20 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
       simp at Hn
       let ⟨ n, Hn ⟩ := Hn
       have Hdivn := Hdiv n
-      have Hffmono := fix_fuel_fix_mono Hfmono n
+      have Hffmono := fix_fuel_fix_mono Hkmono n
       have Hgeq := Hgmono Hffmono
       simp [result_rel] at Hgeq
-      cases Heq: g (fix_fuel n f) <;> rename_i y <;> simp_all
+      cases Heq: g (fix_fuel n k) <;> rename_i y <;> simp_all
       -- Remains the .ret case
       -- Use Hdiv to prove that: ∀ n, h y (fix_fuel n f) = div
       -- We do this in two steps: first we prove it for m ≥ n
-      have Hhdiv: ∀ m, h y (fix_fuel m f) = .div := by
-        have Hhdiv : ∀ m, n ≤ m → h y (fix_fuel m f) = .div := by
+      have Hhdiv: ∀ m, h y (fix_fuel m k) = .div := by
+        have Hhdiv : ∀ m, n ≤ m → h y (fix_fuel m k) = .div := by
           -- We use the fact that `g (fix_fuel n f) = .div`, combined with Hdiv
           intro m Hle
           have Hdivm := Hdiv m
           -- Monotonicity of g
-          have Hffmono := fix_fuel_mono Hfmono Hle
+          have Hffmono := fix_fuel_mono Hkmono Hle
           have Hgmono := Hgmono Hffmono
           -- We need to clear Hdiv because otherwise simp_all rewrites Hdivm with Hdiv
           clear Hdiv
@@ -407,42 +385,41 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
         cases Classical.em (n ≤ m) <;> rename_i Hl
         . apply Hhdiv; assumption
         . simp at Hl
-          -- Make a case disjunction on `h y (fix_fuel m f)`: if it is not equal
+          -- Make a case disjunction on `h y (fix_fuel m k)`: if it is not equal
           -- to div, use the monotonicity of `h y`
           have Hle : m ≤ n := by linarith
-          have Hffmono := fix_fuel_mono Hfmono Hle
+          have Hffmono := fix_fuel_mono Hkmono Hle
           have Hmono := Hhmono y Hffmono
           simp [result_rel] at Hmono
-          cases Heq: h y (fix_fuel m f) <;> simp_all
+          cases Heq: h y (fix_fuel m k) <;> simp_all
       -- We can now use the continuity hypothesis for h
       apply Hhcont; assumption
 
-  -- TODO: move
+  -- The validity property for an expression
   def is_valid_p (k : (a → Result b) → a → Result b)
-    (body : (a → Result b) → Result c) : Prop :=
-    is_mono_p body ∧
-    (is_mono k → is_cont_p k body)
+    (e : (a → Result b) → Result c) : Prop :=
+    is_mono_p e ∧
+    (is_mono k → is_cont_p k e)
 
-  @[simp] theorem is_valid_p_same (f : (a → Result b) → a → Result b) (x : Result c) :
-    is_valid_p f (λ _ => x) := by
-    simp [is_valid_p]
+  @[simp] theorem is_valid_p_same (k : (a → Result b) → a → Result b) (x : Result c) :
+    is_valid_p k (λ _ => x) := by
+    simp [is_valid_p, is_mono_p_same, is_cont_p_same]
 
-  @[simp] theorem is_valid_p_rec (f : (a → Result b) → a → Result b) (x : a) :
-    is_valid_p f (λ f => f x) := by
-    simp [is_valid_p]
+  @[simp] theorem is_valid_p_rec (k : (a → Result b) → a → Result b) (x : a) :
+    is_valid_p k (λ k => k x) := by
+    simp_all [is_valid_p, is_mono_p_rec, is_cont_p_rec]
 
   -- Lean is good at unification: we can write a very general version
   -- (in particular, it will manage to figure out `g` and `h` when we
   -- apply the lemma)
   theorem is_valid_p_bind
-    {{f : (a → Result b) → a → Result b}}
+    {{k : (a → Result b) → a → Result b}}
     {{g : (a → Result b) → Result c}}
     {{h : c → (a → Result b) → Result d}}
-    (Hgvalid : is_valid_p f g)
-    (Hhvalid : ∀ y, is_valid_p f (h y)) :
-    is_valid_p f (λ f => do let y ← g f; h y f) := by
+    (Hgvalid : is_valid_p k g)
+    (Hhvalid : ∀ y, is_valid_p k (h y)) :
+    is_valid_p k (λ k => do let y ← g k; h y k) := by
     let ⟨ Hgmono, Hgcont ⟩ := Hgvalid
-    -- TODO: conversion to move forall below and conjunction?
     simp [is_valid_p, forall_and] at Hhvalid
     have ⟨ Hhmono, Hhcont ⟩ := Hhvalid
     simp [← imp_forall_iff] at Hhcont
@@ -450,36 +427,37 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
     . -- Monotonicity
       apply is_mono_p_bind <;> assumption
     . -- Continuity
-      intro Hfmono
-      have Hgcont := Hgcont Hfmono
-      have Hhcont := Hhcont Hfmono
+      intro Hkmono
+      have Hgcont := Hgcont Hkmono
+      have Hhcont := Hhcont Hkmono
       apply is_cont_p_bind <;> assumption
 
-  theorem is_valid_p_imp_is_valid {{body : (a → Result b) → a → Result b}}
-    (Hvalid : ∀ f x, is_valid_p f (λ f => body f x)) :
-    is_valid body := by
-    have Hmono : is_mono body := by
+  theorem is_valid_p_imp_is_valid {{e : (a → Result b) → a → Result b}}
+    (Hvalid : ∀ k x, is_valid_p k (λ k => e k x)) :
+    is_mono e ∧ is_cont e := by
+    have Hmono : is_mono e := by
       intro f h Hr x
       have Hmono := Hvalid (λ _ _ => .div) x
       have Hmono := Hmono.left
       apply Hmono; assumption
-    have Hcont : is_cont body := by
+    have Hcont : is_cont e := by
       intro x Hdiv
-      have Hcont := (Hvalid body x).right Hmono
+      have Hcont := (Hvalid e x).right Hmono
       simp [is_cont_p] at Hcont
       apply Hcont
       intro n
       have Hdiv := Hdiv n
       simp [fix_fuel] at Hdiv
       simp [*]
-    apply is_valid.intro Hmono Hcont
+    simp [*]
 
   -- TODO: functional extensionality
-  theorem is_valid_p_fix_fixed_eq {{body : (a → Result b) → a → Result b}}
-    (Hvalid : ∀ f x, is_valid_p f (λ f => body f x)) :
-    fix body = body (fix body) := by
+  theorem is_valid_p_fix_fixed_eq {{e : (a → Result b) → a → Result b}}
+    (Hvalid : ∀ k x, is_valid_p k (λ k => e k x)) :
+    fix e = e (fix e) := by
     apply funext
-    exact fix_fixed_eq (is_valid_p_imp_is_valid Hvalid)
+    have ⟨ Hmono, Hcont ⟩ := is_valid_p_imp_is_valid Hvalid
+    exact fix_fixed_eq Hmono Hcont
 
 end Fix
 
@@ -487,7 +465,7 @@ namespace Ex1
   /- An example of use of the fixed-point -/
   open Primitives Fix
 
-  variable {a : Type} (f : (List a × Int) → Result a)
+  variable {a : Type} (k : (List a × Int) → Result a)
 
   def list_nth_body (x : (List a × Int)) : Result a :=
     let (ls, i) := x
@@ -495,9 +473,9 @@ namespace Ex1
     | [] => .fail .panic
     | hd :: tl =>
       if i = 0 then .ret hd
-      else f (tl, i - 1)
+      else k (tl, i - 1)
 
-  theorem list_nth_body_valid: ∀ k x, is_valid_p k (λ k => @list_nth_body a k x) := by
+  theorem list_nth_body_is_valid: ∀ k x, is_valid_p k (λ k => @list_nth_body a k x) := by
     intro k x
     simp [list_nth_body]
     split <;> simp
@@ -506,6 +484,7 @@ namespace Ex1
   noncomputable
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
+  -- The unfolding equation
   theorem list_nth_eq (ls : List a) (i : Int) :
     list_nth ls i =
       match ls with
@@ -514,17 +493,18 @@ namespace Ex1
         if i = 0 then .ret hd
         else list_nth tl (i - 1)
     := by
-    have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_valid a)
+    have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_is_valid a)
     simp [list_nth]
     conv => lhs; rw [Heq]
 
 end Ex1
 
 namespace Ex2
-  /- Same as Ex1, but we make the body of nth non tail-rec -/
+  /- Same as Ex1, but we make the body of nth non tail-rec (this is mostly
+     to see what happens when there are let-bindings) -/
   open Primitives Fix
 
-  variable {a : Type} (f : (List a × Int) → Result a)
+  variable {a : Type} (k : (List a × Int) → Result a)
 
   def list_nth_body (x : (List a × Int)) : Result a :=
     let (ls, i) := x
@@ -534,10 +514,10 @@ namespace Ex2
       if i = 0 then .ret hd
       else
         do
-          let y ← f (tl, i - 1)
+          let y ← k (tl, i - 1)
           .ret y
 
-  theorem list_nth_body_valid: ∀ k x, is_valid_p k (λ k => @list_nth_body a k x) := by
+  theorem list_nth_body_is_valid: ∀ k x, is_valid_p k (λ k => @list_nth_body a k x) := by
     intro k x
     simp [list_nth_body]
     split <;> simp
@@ -547,6 +527,7 @@ namespace Ex2
   noncomputable
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
+  -- The unfolding equation
   theorem list_nth_eq (ls : List a) (i : Int) :
     (list_nth ls i =
        match ls with
@@ -558,7 +539,7 @@ namespace Ex2
              let y ← list_nth tl (i - 1)
              .ret y)
     := by
-    have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_valid a)
+    have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_is_valid a)
     simp [list_nth]
     conv => lhs; rw [Heq]
 
@@ -577,7 +558,7 @@ namespace Ex3
        the functions in the mutually recursive group may not have the same
        return type.
    -/
-  variable (f : (Int ⊕ Int) → Result (Bool ⊕ Bool))
+  variable (k : (Int ⊕ Int) → Result (Bool ⊕ Bool))
 
   def is_even_is_odd_body (x : (Int ⊕ Int)) : Result (Bool ⊕ Bool) :=
     match x with
@@ -591,7 +572,7 @@ namespace Ex3
             do
               -- Call `odd`: we need to wrap the input value in `.inr`, then
               -- extract the output value
-              let r ← f (.inr (i- 1))
+              let r ← k (.inr (i- 1))
               match r with
               | .inl _ => .fail .panic -- Invalid output
               | .inr b => .ret b
@@ -607,7 +588,7 @@ namespace Ex3
             do
               -- Call `is_even`: we need to wrap the input value in .inr, then
               -- extract the output value
-              let r ← f (.inl (i- 1))
+              let r ← k (.inl (i- 1))
               match r with
               | .inl b => .ret b
               | .inr _ => .fail .panic -- Invalid output
@@ -642,7 +623,8 @@ namespace Ex3
 
   -- TODO: move
   -- TODO: this is not enough
-  theorem swap_if_bind {a b : Type} (e : Prop) [Decidable e] (x y : Result a) (f : a → Result b) :
+  theorem swap_if_bind {a b : Type} (e : Prop) [Decidable e]
+    (x y : Result a) (f : a → Result b) :
     (do
       let z ← (if e then x else y)
       f z)
@@ -651,6 +633,7 @@ namespace Ex3
      else do let z ← y; f z) := by
     split <;> simp
 
+  -- The unfolding equation for `is_even`
   theorem is_even_eq (i : Int) :
     is_even i = (if i = 0 then .ret true else is_odd (i - 1))
     := by
@@ -668,6 +651,7 @@ namespace Ex3
     rename_i v
     split <;> simp
 
+  -- The unfolding equation for `is_odd`
   theorem is_odd_eq (i : Int) :
       is_odd i = (if i = 0 then .ret false else is_even (i - 1))
     := by
@@ -699,7 +683,6 @@ namespace Ex4
         .ret (hd :: tl)
 
   /- The validity theorem for `map`, generic in `f` -/
-  /- TODO: rename the continuation to k in all the lemma statements -/
   theorem map_is_valid
     {{f : (a → Result b) → a → Result c}}
     (Hfvalid : ∀ k x, is_valid_p k (λ k => f k x))
@@ -724,7 +707,6 @@ namespace Ex4
         let tl ← map f tl
         .ret (.node tl)
 
-  /- TODO: make the naming consistent (suffix with "_is") -/
   theorem id_body_is_valid :
     ∀ k x, is_valid_p k (λ k => @id_body a k x) := by
     intro k x
@@ -736,6 +718,7 @@ namespace Ex4
 
   noncomputable def id (t : Tree a) := fix id_body t
 
+  -- The unfolding equation
   theorem id_eq (t : Tree a) :
     (id t =
        match t with

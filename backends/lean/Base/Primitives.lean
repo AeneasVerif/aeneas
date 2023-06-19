@@ -94,6 +94,10 @@ instance : Bind Result where
 instance : Pure Result where
   pure := fun x => ret x
 
+@[simp] theorem bind_ret (x : α) (f : α → Result β) : bind (.ret x) f = f x := by simp [bind]
+@[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
+@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
+
 /- CUSTOM-DSL SUPPORT -/
 
 -- Let-binding the Result of a monadic operation is oftentimes not sufficient,
@@ -123,6 +127,15 @@ macro "let" e:term " <-- " f:term : doElem =>
   let _: y = 0 := by cases ‹ ret 0 = ret y › ; decide
   let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
   .ret r
+
+@[simp] theorem bind_tc_ret (x : α) (f : α → Result β) :
+  (do let y ← .ret x; f y) = f x := by simp [Bind.bind, bind]
+
+@[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
+  (do let y ← fail x; f y) = fail x := by simp [Bind.bind, bind]
+
+@[simp] theorem bind_tc_div (f : α → Result β) :
+  (do let y ← div; f y) = div := by simp [Bind.bind, bind]
 
 ----------------------
 -- MACHINE INTEGERS --
