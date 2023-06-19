@@ -4,6 +4,7 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Tauto
+--import Mathlib.Logic
 
 namespace Diverge
 
@@ -291,7 +292,7 @@ theorem fix_fixed_eq_terminates (f : (a → Result b) → a → Result b) (Hmono
   split <;> simp [*] <;> intros <;> simp [*]
 
 -- The final fixed point equation
-theorem fix_fixed_eq (f : (a → Result b) → a → Result b) (Hvalid : is_valid f) :
+theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_valid f) :
   ∀ x, fix f x = f (fix f) x := by
   intros x
   -- conv => lhs; simp [fix]
@@ -320,7 +321,7 @@ theorem fix_fixed_eq (f : (a → Result b) → a → Result b) (Hvalid : is_vali
     simp [is_mono_p, marrow_rel, result_rel]
     split <;> simp
 
-  -- TODO: generalize
+  -- TODO: remove
   @[simp] theorem is_mono_p_tail_rec (x : a) :
     @is_mono_p a b (λ f => f x) := by
     simp_all [is_mono_p, marrow_rel, result_rel]
@@ -335,30 +336,147 @@ theorem fix_fixed_eq (f : (a → Result b) → a → Result b) (Hvalid : is_vali
     is_cont_p f (λ _ => x) := by
     simp [is_cont_p]
 
-  -- TODO: generalize
+  -- TODO: remove
   @[simp] theorem is_cont_p_tail_rec (f : (a → Result b) → a → Result b) (x : a) :
     is_cont_p f (λ f => f x) := by
     simp_all [is_cont_p, fix]
 
-/-
-(∀ n, fix_fuel n f x = div)
+  -- Lean is good at unification: we can write a very general version
+  theorem is_mono_p_bind
+    (g : (a → Result b) → Result b)
+    (h : b → (a → Result b) → Result b) :
+    is_mono_p g →
+    (∀ y, is_mono_p (h y)) →
+    is_mono_p (λ f => do let y ← g f; h y f) := by
+    intro hg hh
+    simp [is_mono_p]
+    intro fg fh Hrgh
+    simp [marrow_rel, result_rel]
+    have hg := hg Hrgh; simp [result_rel] at hg
+    cases heq0: g fg <;> simp_all
+    rename_i y _
+    have hh := hh y Hrgh; simp [result_rel] at hh
+    simp_all
 
-⊢ f (fun y => fix_fuel (least (fix_fuel_P f y)) f y) x = div
+  -- Lean is good at unification: we can write a very general version
+  -- (in particular, it will manage to figure out `g` and `h` when we
+  -- apply the lemma)
+  theorem is_cont_p_bind
+    (f : (a → Result b) → a → Result b)
+    (Hfmono : is_mono f)
+    (g : (a → Result b) → Result b)
+    (h : b → (a → Result b) → Result b) :
+    is_mono_p g →
+    is_cont_p f g →
+    (∀ y, is_mono_p (h y)) →
+    (∀ y, is_cont_p f (h y)) →
+    is_cont_p f (λ f => do let y ← g f; h y f) := by
+    intro Hgmono Hgcont Hhmono Hhcont
+    simp [is_cont_p]
+    intro Hdiv
+    -- Case on `g (fix... f)`: is there an n s.t. it terminates?
+    cases Classical.em (∀ n, g (fix_fuel n f) = .div) <;> rename_i Hn
+    . -- Case 1: g diverges
+      have Hgcont := Hgcont Hn
+      simp_all
+    . -- Case 2: g doesn't diverge
+      simp at Hn
+      let ⟨ n, Hn ⟩ := Hn
+      have Hdivn := Hdiv n
+      have Hffmono := fix_fuel_fix_mono Hfmono n
+      have Hgeq := Hgmono Hffmono
+      simp [result_rel] at Hgeq
+      cases Heq: g (fix_fuel n f) <;> rename_i y <;> simp_all
+      -- Remains the .ret case
+      -- Use Hdiv to prove that: ∀ n, h y (fix_fuel n f) = div
+      -- We do this in two steps: first we prove it for m ≥ n
+      have Hhdiv: ∀ m, h y (fix_fuel m f) = .div := by
+        have Hhdiv : ∀ m, n ≤ m → h y (fix_fuel m f) = .div := by
+          -- We use the fact that `g (fix_fuel n f) = .div`, combined with Hdiv
+          intro m Hle
+          have Hdivm := Hdiv m
+          -- Monotonicity of g
+          have Hffmono := fix_fuel_mono Hfmono Hle
+          have Hgmono := Hgmono Hffmono
+          -- We need to clear Hdiv because otherwise simp_all rewrites Hdivm with Hdiv
+          clear Hdiv
+          simp_all [result_rel]
+        intro m
+        -- TODO: we shouldn't need the excluded middle here because it is decidable
+        cases Classical.em (n ≤ m) <;> rename_i Hl
+        . apply Hhdiv; assumption
+        . simp at Hl
+          -- Make a case disjunction on `h y (fix_fuel m f)`: if it is not equal
+          -- to div, use the monotonicity of `h y`
+          have Hle : m ≤ n := by linarith
+          have Hffmono := fix_fuel_mono Hfmono Hle
+          have Hmono := Hhmono y Hffmono
+          simp [result_rel] at Hmono
+          cases Heq: h y (fix_fuel m f) <;> simp_all
+      -- We can now use the continuity hypothesis for h
+      apply Hhcont; assumption
 
-(? x. p x) ==> p (epsilon p)
+  -- TODO: move
+  def is_valid_p (f : (a → Result b) → a → Result b)
+    (body : (a → Result b) → Result b) : Prop :=
+    is_mono_p body ∧
+    (is_mono f → is_cont_p f body)
 
+  @[simp] theorem is_valid_p_same (f : (a → Result b) → a → Result b) (x : Result b) :
+    is_valid_p f (λ _ => x) := by
+    simp [is_valid_p]
 
-P (nf : a -> option Nat) :=
-  match nf x with
-  | None => forall n, fix_fuel n f x = div
-  | Some n => fix_fuel n f x <> div
+  @[simp] theorem is_valid_p_rec (f : (a → Result b) → a → Result b) (x : a) :
+    is_valid_p f (λ f => f x) := by
+    simp [is_valid_p]
 
-TODO: theorem de Tarsky,
-Gilles Dowek (Introduction à la théorie des langages de programmation)
+  -- Lean is good at unification: we can write a very general version
+  -- (in particular, it will manage to figure out `g` and `h` when we
+  -- apply the lemma)
+  theorem is_valid_p_bind
+    {{f : (a → Result b) → a → Result b}}
+    {{g : (a → Result b) → Result b}}
+    {{h : b → (a → Result b) → Result b}}
+    (Hgvalid : is_valid_p f g)
+    (Hhvalid : ∀ y, is_valid_p f (h y)) :
+    is_valid_p f (λ f => do let y ← g f; h y f) := by
+    let ⟨ Hgmono, Hgcont ⟩ := Hgvalid
+    -- TODO: conversion to move forall below and conjunction?
+    simp [is_valid_p, forall_and] at Hhvalid
+    have ⟨ Hhmono, Hhcont ⟩ := Hhvalid
+    simp [← imp_forall_iff] at Hhcont
+    simp [is_valid_p]; constructor
+    . -- Monotonicity
+      apply is_mono_p_bind <;> assumption
+    . -- Continuity
+      intro Hfmono
+      have Hgcont := Hgcont Hfmono
+      have Hhcont := Hhcont Hfmono
+      apply is_cont_p_bind <;> assumption
 
-fix_f is f s.t.: f x = f (fix f) x ∧ ! g. g x = g (fix g) x ==> f <= g
+  theorem is_valid_p_imp_is_valid {{body : (a → Result b) → a → Result b}}
+    (Hvalid : ∀ f x, is_valid_p f (λ f => body f x)) :
+    is_valid body := by
+    have Hmono : is_mono body := by
+      intro f h Hr x
+      have Hmono := Hvalid (λ _ _ => .div) x
+      have Hmono := Hmono.left
+      apply Hmono; assumption
+    have Hcont : is_cont body := by
+      intro x Hdiv
+      have Hcont := (Hvalid body x).right Hmono
+      simp [is_cont_p] at Hcont
+      apply Hcont
+      intro n
+      have Hdiv := Hdiv n
+      simp [fix_fuel] at Hdiv
+      simp [*]
+    apply is_valid.intro Hmono Hcont
 
--/  
+  theorem is_valid_p_fix_fixed_eq {{body : (a → Result b) → a → Result b}}
+    (Hvalid : ∀ f x, is_valid_p f (λ f => body f x)) :
+    ∀ x, fix body x = body (fix body) x :=
+    fix_fixed_eq (is_valid_p_imp_is_valid Hvalid)
 
 end Fix
 
@@ -420,7 +538,7 @@ namespace Ex1
     := by
     have Hvalid : is_valid (@list_nth_body a) :=
       is_valid.intro list_nth_body_mono list_nth_body_cont
-    have Heq := fix_fixed_eq (@list_nth_body a) Hvalid
+    have Heq := fix_fixed_eq Hvalid
     simp [Heq, list_nth]
     conv => lhs; rw [list_nth_body]
     simp [Heq]
@@ -444,117 +562,28 @@ namespace Ex2
           let y ← f (tl, i - 1)
           .ret y
 
-  -- Lean is good at applying lemmas: we can write a very general version
-  theorem is_mono_p_bind
-    (g : (a → Result b) → Result b)
-    (h : b → (a → Result b) → Result b) :
-    is_mono_p g →
-    (∀ y, is_mono_p (h y)) →
-    is_mono_p (λ f => do let y ← g f; h y f) := by
-    intro hg hh
-    simp [is_mono_p]
-    intro fg fh Hrgh
-    simp [marrow_rel, result_rel]
-    have hg := hg Hrgh; simp [result_rel] at hg
-    cases heq0: g fg <;> simp_all
-    rename_i y _
-    have hh := hh y Hrgh; simp [result_rel] at hh
-    simp_all
-
-  -- Lean is good at applying lemmas: we can write a very general version
-  theorem is_cont_p_bind
-    (f : (a → Result b) → a → Result b)
-    (g : (a → Result b) → Result b)
-    (h : b → (a → Result b) → Result b) :
-    is_cont_p f (λ f => g f) →
-    (∀ y, is_cont_p f (h y)) →
-    is_cont_p f (λ f => do let y ← g f; h y f) := by
-    intro Hg Hh
-    simp [is_cont_p]
-    intro Hdiv
-    -- Case on `g (fix... f)`: is there an n s.t. it terminates?
-    cases Classical.em (∀ n, g (fix_fuel n f) = .div) <;> rename_i Hn
-    . -- Case 1: g diverges
-      have Hg := Hg Hn
-      simp_all
-    . -- Case 2: g doesn't diverge
-      simp at Hn
-      let ⟨ n, Hn ⟩ := Hn
-      have Hdivn := Hdiv n
-      -- TODO: we need monotonicity of g and f
-      have Hgmono : is_mono_p g := by sorry
-      have Hfmono : is_mono f := by sorry
-      have Hffmono := fix_fuel_fix_mono Hfmono n
-      have Hgeq := Hgmono Hffmono
-      simp [result_rel] at Hgeq
-      cases Heq: g (fix_fuel n f) <;> rename_i y <;> simp_all
-      -- Remains the .ret case
-      -- TODO: we need monotonicity of h?
-      have Hhmono : is_mono_p (h y) := by sorry
-      -- Use Hdiv to prove that: ∀ n, h y (fix_fuel n f) = div
-      -- We do this in two steps: first we prove it for m ≥ n
-      have Hhdiv: ∀ m, h y (fix_fuel m f) = .div := by
-        have Hhdiv : ∀ m, n ≤ m → h y (fix_fuel m f) = .div := by
-          -- We use the fact that `g (fix_fuel n f) = .div`, combined with Hdiv
-          intro m Hle
-          have Hdivm := Hdiv m
-          -- Monotonicity of g
-          have Hffmono := fix_fuel_mono Hfmono Hle
-          have Hgmono := Hgmono Hffmono
-          -- We need to clear Hdiv because otherwise simp_all rewrites Hdivm with Hdiv
-          clear Hdiv
-          simp_all [result_rel]
-        intro m
-        -- TODO: we shouldn't need the excluded middle here because it is decidable
-        cases Classical.em (n ≤ m) <;> rename_i Hl
-        . apply Hhdiv; assumption
-        . simp at Hl
-          -- Make a case disjunction on `h y (fix_fuel m f)`: if it is not equal
-          -- to div, use the monotonicity of `h y`
-          have Hle : m ≤ n := by linarith
-          have Hffmono := fix_fuel_mono Hfmono Hle
-          have Hmono := Hhmono Hffmono
-          simp [result_rel] at Hmono
-          cases Heq: h y (fix_fuel m f) <;> simp_all
-      -- We can now use the continuity hypothesis for h
-      apply Hh; assumption
-
-
-  -- TODO: what is the name of this theorem?
-  -- theorem eta_app_eq (x : a) (f : a → b) : f x = (λ x => f x) x := by simp
-  -- theorem eta_eq (x : a) (f : a → b) : (λ x => f x) = f := by simp
-
-  --set_option pp.funBinderTypes true
-  --set_option pp.explicit true
-  --set_option pp.notation false
-
-  theorem list_nth_body_mono : ∀ x, is_mono_p (λ f => @list_nth_body a f x) := by
-    intro x
-    simp [list_nth_body]
-    split <;> simp
-    split <;> simp
-    apply is_mono_p_bind <;> intros <;> simp
-
-  theorem list_nth_body_cont2: ∀ f x, is_cont_p f (λ f => @list_nth_body a f x) := by
+  theorem list_nth_body_valid: ∀ f x, is_valid_p f (λ f => @list_nth_body a f x) := by
     intro f x
     simp [list_nth_body]
     split <;> simp
     split <;> simp
+    apply is_valid_p_bind <;> intros <;> simp_all
 
   noncomputable
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
   theorem list_nth_eq (ls : List a) (i : Int) :
-    list_nth ls i =
-      match ls with
-      | [] => .fail .panic
-      | hd :: tl =>
-        if i = 0 then .ret hd
-        else list_nth tl (i - 1)
+    (list_nth ls i =
+       match ls with
+       | [] => .fail .panic
+       | hd :: tl =>
+         if i = 0 then .ret hd
+         else
+           do
+             let y ← list_nth tl (i - 1)
+             .ret y)
     := by
-    have Hvalid : is_valid (@list_nth_body a) :=
-      is_valid.intro list_nth_body_mono list_nth_body_cont
-    have Heq := fix_fixed_eq (@list_nth_body a) Hvalid
+    have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_valid a)
     simp [Heq, list_nth]
     conv => lhs; rw [list_nth_body]
     simp [Heq]
@@ -731,7 +760,7 @@ namespace Ex3
     := by
     have Hvalid : is_valid (@id_body a) :=
       is_valid.intro id_body_mono id_body_cont
-    have Heq := fix_fixed_eq (@id_body a) Hvalid
+    have Heq := fix_fixed_eq Hvalid
     conv => lhs; rw [id, Heq, id_body]
 
 end Ex3
