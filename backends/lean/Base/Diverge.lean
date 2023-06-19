@@ -74,7 +74,7 @@ namespace Fix
 open Primitives
 open Result
 
-variable {a b : Type}
+variable {a b c d : Type}
 
 /-
 TODO:
@@ -292,6 +292,7 @@ theorem fix_fixed_eq_terminates (f : (a → Result b) → a → Result b) (Hmono
   split <;> simp [*] <;> intros <;> simp [*]
 
 -- The final fixed point equation
+-- TODO: remove the `forall x`
 theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_valid f) :
   ∀ x, fix f x = f (fix f) x := by
   intros x
@@ -313,26 +314,26 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
   /- Making the proofs more systematic -/
   
   -- TODO: rewrite is_mono in terms of is_mono_p
-  def is_mono_p (body : (a → Result b) → Result b) : Prop :=
+  def is_mono_p (body : (a → Result b) → Result c) : Prop :=
     ∀ {{g h}}, marrow_rel g h → result_rel (body g) (body h)
 
-  @[simp] theorem is_mono_p_same (x : Result b) :
-    @is_mono_p a b (λ _ => x) := by
+  @[simp] theorem is_mono_p_same (x : Result c) :
+    @is_mono_p a b c (λ _ => x) := by
     simp [is_mono_p, marrow_rel, result_rel]
     split <;> simp
 
   -- TODO: remove
   @[simp] theorem is_mono_p_tail_rec (x : a) :
-    @is_mono_p a b (λ f => f x) := by
+    @is_mono_p a b b (λ f => f x) := by
     simp_all [is_mono_p, marrow_rel, result_rel]
 
   -- TODO: rewrite is_cont in terms of is_cont_p
   def is_cont_p (f : (a → Result b) → a → Result b)
-    (body : (a → Result b) → Result b) : Prop :=
+    (body : (a → Result b) → Result c) : Prop :=
     (Hc : ∀ n, body (fix_fuel n f) = .div) →
     body (fix f) = .div
 
-  @[simp] theorem is_cont_p_same (f : (a → Result b) → a → Result b) (x : Result b) :
+  @[simp] theorem is_cont_p_same (f : (a → Result b) → a → Result b) (x : Result c) :
     is_cont_p f (λ _ => x) := by
     simp [is_cont_p]
 
@@ -343,8 +344,8 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
 
   -- Lean is good at unification: we can write a very general version
   theorem is_mono_p_bind
-    (g : (a → Result b) → Result b)
-    (h : b → (a → Result b) → Result b) :
+    (g : (a → Result b) → Result c)
+    (h : c → (a → Result b) → Result d) :
     is_mono_p g →
     (∀ y, is_mono_p (h y)) →
     is_mono_p (λ f => do let y ← g f; h y f) := by
@@ -364,8 +365,8 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
   theorem is_cont_p_bind
     (f : (a → Result b) → a → Result b)
     (Hfmono : is_mono f)
-    (g : (a → Result b) → Result b)
-    (h : b → (a → Result b) → Result b) :
+    (g : (a → Result b) → Result c)
+    (h : c → (a → Result b) → Result d) :
     is_mono_p g →
     is_cont_p f g →
     (∀ y, is_mono_p (h y)) →
@@ -417,12 +418,12 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
       apply Hhcont; assumption
 
   -- TODO: move
-  def is_valid_p (f : (a → Result b) → a → Result b)
-    (body : (a → Result b) → Result b) : Prop :=
+  def is_valid_p (k : (a → Result b) → a → Result b)
+    (body : (a → Result b) → Result c) : Prop :=
     is_mono_p body ∧
-    (is_mono f → is_cont_p f body)
+    (is_mono k → is_cont_p k body)
 
-  @[simp] theorem is_valid_p_same (f : (a → Result b) → a → Result b) (x : Result b) :
+  @[simp] theorem is_valid_p_same (f : (a → Result b) → a → Result b) (x : Result c) :
     is_valid_p f (λ _ => x) := by
     simp [is_valid_p]
 
@@ -435,8 +436,8 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
   -- apply the lemma)
   theorem is_valid_p_bind
     {{f : (a → Result b) → a → Result b}}
-    {{g : (a → Result b) → Result b}}
-    {{h : b → (a → Result b) → Result b}}
+    {{g : (a → Result b) → Result c}}
+    {{h : c → (a → Result b) → Result d}}
     (Hgvalid : is_valid_p f g)
     (Hhvalid : ∀ y, is_valid_p f (h y)) :
     is_valid_p f (λ f => do let y ← g f; h y f) := by
@@ -473,10 +474,12 @@ theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}} (Hvalid : is_va
       simp [*]
     apply is_valid.intro Hmono Hcont
 
+  -- TODO: functional extensionality
   theorem is_valid_p_fix_fixed_eq {{body : (a → Result b) → a → Result b}}
     (Hvalid : ∀ f x, is_valid_p f (λ f => body f x)) :
-    ∀ x, fix body x = body (fix body) x :=
-    fix_fixed_eq (is_valid_p_imp_is_valid Hvalid)
+    fix body = body (fix body) := by
+    apply funext
+    exact fix_fixed_eq (is_valid_p_imp_is_valid Hvalid)
 
 end Fix
 
@@ -562,8 +565,8 @@ namespace Ex2
           let y ← f (tl, i - 1)
           .ret y
 
-  theorem list_nth_body_valid: ∀ f x, is_valid_p f (λ f => @list_nth_body a f x) := by
-    intro f x
+  theorem list_nth_body_valid: ∀ k x, is_valid_p k (λ k => @list_nth_body a k x) := by
+    intro k x
     simp [list_nth_body]
     split <;> simp
     split <;> simp
@@ -584,9 +587,8 @@ namespace Ex2
              .ret y)
     := by
     have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_valid a)
-    simp [Heq, list_nth]
-    conv => lhs; rw [list_nth_body]
-    simp [Heq]
+    simp [list_nth]
+    conv => lhs; rw [Heq]
 
 end Ex2
 
@@ -764,5 +766,74 @@ namespace Ex3
     conv => lhs; rw [id, Heq, id_body]
 
 end Ex3
+
+namespace Ex4
+  /- Higher-order example -/
+  open Primitives Fix
+
+  variable {a b : Type}
+
+  /- An auxiliary function, which doesn't require the fixed-point -/
+  def map (f : a → Result b) (ls : List a) : Result (List b) :=
+    match ls with
+    | [] => .ret []
+    | hd :: tl =>
+      do
+        let hd ← f hd
+        let tl ← map f tl
+        .ret (hd :: tl)
+
+  /- The validity theorem for `map`, generic in `f` -/
+  /- TODO: rename the condition to k in all the lemma statements -/
+  theorem map_is_valid
+    {{f : (a → Result b) → a → Result c}}
+    (Hfvalid : ∀ k x, is_valid_p k (λ k => f k x))
+    (k : (a → Result b) → a → Result b)
+    (ls : List a) :
+    is_valid_p k (λ k => map (f k) ls) := by
+    induction ls <;> simp [map]
+    apply is_valid_p_bind <;> simp_all
+    intros
+    apply is_valid_p_bind <;> simp_all
+
+  /- An example which uses map -/
+  inductive Tree (a : Type) :=
+  | leaf (x : a)
+  | node (tl : List (Tree a))
+
+  def id_body (f : Tree a → Result (Tree a)) (t : Tree a) : Result (Tree a) :=
+    match t with
+    | .leaf x => .ret (.leaf x)
+    | .node tl =>
+      do
+        let tl ← map f tl
+        .ret (.node tl)
+
+  /- TODO: make the naming consistent (suffix with "_is") -/
+  theorem id_body_is_valid :
+    ∀ k x, is_valid_p k (λ k => @id_body a k x) := by
+    intro k x
+    simp [id_body]
+    split <;> simp
+    apply is_valid_p_bind <;> simp_all
+    -- We have to show that `map k tl` is valid
+    apply map_is_valid; simp
+
+  noncomputable def id (t : Tree a) := fix id_body t
+
+  theorem id_eq (t : Tree a) :
+    (id t =
+       match t with
+       | .leaf x => .ret (.leaf x)
+       | .node tl =>
+       do
+         let tl ← map id tl
+         .ret (.node tl))
+    := by
+    have Heq := is_valid_p_fix_fixed_eq (@id_body_is_valid a)
+    simp [id]
+    conv => lhs; rw [Heq]; simp; rw [id_body]
+
+end Ex4
 
 end Diverge
