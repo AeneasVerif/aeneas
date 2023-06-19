@@ -564,6 +564,124 @@ namespace Ex2
 
 end Ex2
 
+namespace Ex3
+  /- Mutually recursive functions -/
+  open Primitives Fix
+
+  /- Because we have mutually recursive functions, we use a sum for the inputs
+     and the output types:
+     - inputs: the sum allows to select the function to call in the recursive
+       calls (and the functions may not have the same input types)
+     - outpus: this case is degenerate because `even` and `odd` both have the
+       return type `Bool`, but generally speaking we need a sum type because
+       the functions in the mutually recursive group may not have the same
+       return type.
+   -/
+  variable (f : (Int ⊕ Int) → Result (Bool ⊕ Bool))
+
+  def is_even_is_odd_body (x : (Int ⊕ Int)) : Result (Bool ⊕ Bool) :=
+    match x with
+    | .inl i =>
+      -- Body of `is_even`
+      if i = 0
+      then .ret (.inl true) -- We return .inl because this is `is_even`
+      else
+        do
+          let b ←
+            do
+              -- Call `odd`: we need to wrap the input value in `.inr`, then
+              -- extract the output value
+              let r ← f (.inr (i- 1))
+              match r with
+              | .inl _ => .fail .panic -- Invalid output
+              | .inr b => .ret b
+          -- Wrap the return value
+          .ret (.inl b)
+    | .inr i =>
+      -- Body of `is_odd`
+      if i = 0
+      then .ret (.inr false) -- We return .inr because this is `is_odd`
+      else
+        do
+          let b ←
+            do
+              -- Call `is_even`: we need to wrap the input value in .inr, then
+              -- extract the output value
+              let r ← f (.inl (i- 1))
+              match r with
+              | .inl b => .ret b
+              | .inr _ => .fail .panic -- Invalid output
+          -- Wrap the return value
+          .ret (.inr b)
+
+  theorem is_even_is_odd_body_is_valid:
+    ∀ k x, is_valid_p k (λ k => is_even_is_odd_body k x) := by
+    intro k x
+    simp [is_even_is_odd_body]
+    split <;> simp <;> split <;> simp
+    apply is_valid_p_bind; simp
+    intros; split <;> simp
+    apply is_valid_p_bind; simp
+    intros; split <;> simp
+
+  noncomputable
+  def is_even (i : Int): Result Bool :=
+    do
+      let r ← fix is_even_is_odd_body (.inl i)
+      match r with
+      | .inl b => .ret b
+      | .inr _ => .fail .panic
+
+  noncomputable
+  def is_odd (i : Int): Result Bool :=
+    do
+      let r ← fix is_even_is_odd_body (.inr i)
+      match r with
+      | .inl _ => .fail .panic
+      | .inr b => .ret b
+
+  -- TODO: move
+  -- TODO: this is not enough
+  theorem swap_if_bind {a b : Type} (e : Prop) [Decidable e] (x y : Result a) (f : a → Result b) :
+    (do
+      let z ← (if e then x else y)
+      f z)
+     =
+    (if e then do let z ← x; f z
+     else do let z ← y; f z) := by
+    split <;> simp
+
+  theorem is_even_eq (i : Int) :
+    is_even i = (if i = 0 then .ret true else is_odd (i - 1))
+    := by
+    have Heq := is_valid_p_fix_fixed_eq is_even_is_odd_body_is_valid
+    simp [is_even, is_odd]
+    conv => lhs; rw [Heq]; simp; rw [is_even_is_odd_body]; simp
+    -- Very annoying: we need to swap the matches
+    -- Doing this with rewriting lemmas is hard generally speaking
+    -- (especially as we may have to generate lemmas for user-defined
+    -- inductives on the fly).
+    -- The simplest is to repeatedly split then simplify (we identify
+    -- the outer match or monadic let-binding, and split on its scrutinee)
+    split <;> simp
+    cases H0 : fix is_even_is_odd_body (Sum.inr (i - 1)) <;> simp
+    rename_i v
+    split <;> simp
+
+  theorem is_odd_eq (i : Int) :
+      is_odd i = (if i = 0 then .ret false else is_even (i - 1))
+    := by
+    have Heq := is_valid_p_fix_fixed_eq is_even_is_odd_body_is_valid
+    simp [is_even, is_odd]
+    conv => lhs; rw [Heq]; simp; rw [is_even_is_odd_body]; simp
+    -- Same remark as for `even`
+    split <;> simp
+    cases H0 : fix is_even_is_odd_body (Sum.inl (i - 1)) <;> simp
+    rename_i v
+    split <;> simp
+
+end Ex3
+
 namespace Ex4
   /- Higher-order example -/
   open Primitives Fix
@@ -581,7 +699,7 @@ namespace Ex4
         .ret (hd :: tl)
 
   /- The validity theorem for `map`, generic in `f` -/
-  /- TODO: rename the condition to k in all the lemma statements -/
+  /- TODO: rename the continuation to k in all the lemma statements -/
   theorem map_is_valid
     {{f : (a → Result b) → a → Result c}}
     (Hfvalid : ∀ k x, is_valid_p k (λ k => f k x))
