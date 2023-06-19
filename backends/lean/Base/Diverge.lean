@@ -1,12 +1,76 @@
 import Lean
-import Base.Primitives
+import Lean.Meta.Tactic.Simp
+import Init.Data.List.Basic
+import Mathlib.Tactic.RunCmd
+import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.Tauto
 
 namespace Diverge
 
-open Primitives
+namespace Primitives
+
+inductive Error where
+   | assertionFailure: Error
+   | integerOverflow: Error
+   | divisionByZero: Error
+   | arrayOutOfBounds: Error
+   | maximumSizeExceeded: Error
+   | panic: Error
+deriving Repr, BEq
+
+open Error
+
+inductive Result (α : Type u) where
+  | ret (v: α): Result α
+  | fail (e: Error): Result α
+  | div
+deriving Repr, BEq
+
+open Result
+
+-- instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
+--   Inhabited.mk (fail panic)
+
+-- instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
+--   Nonempty.intro div
+
+def bind (x: Result α) (f: α -> Result β) : Result β :=
+  match x with
+  | ret v  => f v 
+  | fail v => fail v
+  | div => div
+
+@[simp] theorem bind_ret (x : α) (f : α → Result β) : bind (.ret x) f = f x := by simp [bind]
+@[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
+@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
+
+-- Allows using Result in do-blocks
+instance : Bind Result where
+  bind := bind
+
+-- Allows using return x in do-blocks
+instance : Pure Result where
+  pure := fun x => ret x
+
+@[simp] theorem bind_tc_ret (x : α) (f : α → Result β) :
+  (do let y ← .ret x; f y) = f x := by simp [Bind.bind, bind]
+
+@[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
+  (do let y ← fail x; f y) = fail x := by simp [Bind.bind, bind]
+
+@[simp] theorem bind_tc_div (f : α → Result β) :
+  (do let y ← div; f y) = div := by simp [Bind.bind, bind]
+
+def div? {α: Type} (r: Result α): Bool :=
+  match r with
+  | div => true
+  | ret _ | fail _ => false
+
+end Primitives
 
 namespace Fix
 
+open Primitives
 open Result
 
 variable {a b : Type}
@@ -123,7 +187,7 @@ structure is_valid (f : (a → Result b) → a → Result b) :=
 
 /-
 
- -/  
+ -/
 
 theorem fix_fuel_mono {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
   ∀ {{n m}}, n ≤ m → marrow_rel (fix_fuel n f) (fix_fuel m f) := by
@@ -244,7 +308,38 @@ theorem fix_fixed_eq (f : (a → Result b) → a → Result b) (Hvalid : is_vali
     have Hcont := Hvalid.hcont x He
     simp [Hcont]
   | .inl ⟨ n, He ⟩ => apply fix_fixed_eq_terminates f Hvalid.hmono x n He
+
+  /- Making the proofs more systematic -/
   
+  -- TODO: rewrite is_mono in terms of is_mono_p
+  def is_mono_p (body : (a → Result b) → Result b) : Prop :=
+    ∀ {{g h}}, marrow_rel g h → result_rel (body g) (body h)
+
+  @[simp] theorem is_mono_p_same (x : Result b) :
+    @is_mono_p a b (λ _ => x) := by
+    simp [is_mono_p, marrow_rel, result_rel]
+    split <;> simp
+
+  -- TODO: generalize
+  @[simp] theorem is_mono_p_tail_rec (x : a) :
+    @is_mono_p a b (λ f => f x) := by
+    simp_all [is_mono_p, marrow_rel, result_rel]
+
+  -- TODO: rewrite is_cont in terms of is_cont_p
+  def is_cont_p (f : (a → Result b) → a → Result b)
+    (body : (a → Result b) → Result b) : Prop :=
+    (Hc : ∀ n, body (fix_fuel n f) = .div) →
+    body (fix f) = .div
+
+  @[simp] theorem is_cont_p_same (f : (a → Result b) → a → Result b) (x : Result b) :
+    is_cont_p f (λ _ => x) := by
+    simp [is_cont_p]
+
+  -- TODO: generalize
+  @[simp] theorem is_cont_p_tail_rec (f : (a → Result b) → a → Result b) (x : a) :
+    is_cont_p f (λ f => f x) := by
+    simp_all [is_cont_p, fix]
+
 /-
 (∀ n, fix_fuel n f x = div)
 
@@ -269,7 +364,7 @@ end Fix
 
 namespace Ex1
   /- An example of use of the fixed-point -/
-  open Fix
+  open Primitives Fix
 
   variable {a : Type} (f : (List a × Int) → Result a)
 
@@ -298,6 +393,20 @@ namespace Ex1
     -- Recursive call
     apply Hdiv
 
+  /- Making the monotonicity/continuity proofs more systematic -/
+  
+  theorem list_nth_body_mono2 : ∀ x, is_mono_p (λ f => @list_nth_body a f x) := by
+    intro x
+    simp [list_nth_body]
+    split <;> simp
+    split <;> simp
+
+  theorem list_nth_body_cont2: ∀ f x, is_cont_p f (λ f => @list_nth_body a f x) := by
+    intro f x
+    simp [list_nth_body]
+    split <;> simp
+    split <;> simp
+
   noncomputable
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
@@ -319,8 +428,142 @@ namespace Ex1
 end Ex1
 
 namespace Ex2
+  /- Same as Ex1, but we make the body of nth non tail-rec -/
+  open Primitives Fix
+
+  variable {a : Type} (f : (List a × Int) → Result a)
+
+  def list_nth_body (x : (List a × Int)) : Result a :=
+    let (ls, i) := x
+    match ls with
+    | [] => .fail .panic
+    | hd :: tl =>
+      if i = 0 then .ret hd
+      else
+        do
+          let y ← f (tl, i - 1)
+          .ret y
+
+  -- Lean is good at applying lemmas: we can write a very general version
+  theorem is_mono_p_bind
+    (g : (a → Result b) → Result b)
+    (h : b → (a → Result b) → Result b) :
+    is_mono_p g →
+    (∀ y, is_mono_p (h y)) →
+    is_mono_p (λ f => do let y ← g f; h y f) := by
+    intro hg hh
+    simp [is_mono_p]
+    intro fg fh Hrgh
+    simp [marrow_rel, result_rel]
+    have hg := hg Hrgh; simp [result_rel] at hg
+    cases heq0: g fg <;> simp_all
+    rename_i y _
+    have hh := hh y Hrgh; simp [result_rel] at hh
+    simp_all
+
+  -- Lean is good at applying lemmas: we can write a very general version
+  theorem is_cont_p_bind
+    (f : (a → Result b) → a → Result b)
+    (g : (a → Result b) → Result b)
+    (h : b → (a → Result b) → Result b) :
+    is_cont_p f (λ f => g f) →
+    (∀ y, is_cont_p f (h y)) →
+    is_cont_p f (λ f => do let y ← g f; h y f) := by
+    intro Hg Hh
+    simp [is_cont_p]
+    intro Hdiv
+    -- Case on `g (fix... f)`: is there an n s.t. it terminates?
+    cases Classical.em (∀ n, g (fix_fuel n f) = .div) <;> rename_i Hn
+    . -- Case 1: g diverges
+      have Hg := Hg Hn
+      simp_all
+    . -- Case 2: g doesn't diverge
+      simp at Hn
+      let ⟨ n, Hn ⟩ := Hn
+      have Hdivn := Hdiv n
+      -- TODO: we need monotonicity of g and f
+      have Hgmono : is_mono_p g := by sorry
+      have Hfmono : is_mono f := by sorry
+      have Hffmono := fix_fuel_fix_mono Hfmono n
+      have Hgeq := Hgmono Hffmono
+      simp [result_rel] at Hgeq
+      cases Heq: g (fix_fuel n f) <;> rename_i y <;> simp_all
+      -- Remains the .ret case
+      -- TODO: we need monotonicity of h?
+      have Hhmono : is_mono_p (h y) := by sorry
+      -- Use Hdiv to prove that: ∀ n, h y (fix_fuel n f) = div
+      -- We do this in two steps: first we prove it for m ≥ n
+      have Hhdiv: ∀ m, h y (fix_fuel m f) = .div := by
+        have Hhdiv : ∀ m, n ≤ m → h y (fix_fuel m f) = .div := by
+          -- We use the fact that `g (fix_fuel n f) = .div`, combined with Hdiv
+          intro m Hle
+          have Hdivm := Hdiv m
+          -- Monotonicity of g
+          have Hffmono := fix_fuel_mono Hfmono Hle
+          have Hgmono := Hgmono Hffmono
+          -- We need to clear Hdiv because otherwise simp_all rewrites Hdivm with Hdiv
+          clear Hdiv
+          simp_all [result_rel]
+        intro m
+        -- TODO: we shouldn't need the excluded middle here because it is decidable
+        cases Classical.em (n ≤ m) <;> rename_i Hl
+        . apply Hhdiv; assumption
+        . simp at Hl
+          -- Make a case disjunction on `h y (fix_fuel m f)`: if it is not equal
+          -- to div, use the monotonicity of `h y`
+          have Hle : m ≤ n := by linarith
+          have Hffmono := fix_fuel_mono Hfmono Hle
+          have Hmono := Hhmono Hffmono
+          simp [result_rel] at Hmono
+          cases Heq: h y (fix_fuel m f) <;> simp_all
+      -- We can now use the continuity hypothesis for h
+      apply Hh; assumption
+
+
+  -- TODO: what is the name of this theorem?
+  -- theorem eta_app_eq (x : a) (f : a → b) : f x = (λ x => f x) x := by simp
+  -- theorem eta_eq (x : a) (f : a → b) : (λ x => f x) = f := by simp
+
+  --set_option pp.funBinderTypes true
+  --set_option pp.explicit true
+  --set_option pp.notation false
+
+  theorem list_nth_body_mono : ∀ x, is_mono_p (λ f => @list_nth_body a f x) := by
+    intro x
+    simp [list_nth_body]
+    split <;> simp
+    split <;> simp
+    apply is_mono_p_bind <;> intros <;> simp
+
+  theorem list_nth_body_cont2: ∀ f x, is_cont_p f (λ f => @list_nth_body a f x) := by
+    intro f x
+    simp [list_nth_body]
+    split <;> simp
+    split <;> simp
+
+  noncomputable
+  def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
+
+  theorem list_nth_eq (ls : List a) (i : Int) :
+    list_nth ls i =
+      match ls with
+      | [] => .fail .panic
+      | hd :: tl =>
+        if i = 0 then .ret hd
+        else list_nth tl (i - 1)
+    := by
+    have Hvalid : is_valid (@list_nth_body a) :=
+      is_valid.intro list_nth_body_mono list_nth_body_cont
+    have Heq := fix_fixed_eq (@list_nth_body a) Hvalid
+    simp [Heq, list_nth]
+    conv => lhs; rw [list_nth_body]
+    simp [Heq]
+
+end Ex2
+
+namespace Ex3
   /- Higher-order example -/
-  open Fix
+  open Primitives Fix
 
   variable {a b : Type}
 
@@ -330,6 +573,7 @@ namespace Ex2
     | [] => .ret []
     | hd :: tl =>
       do
+        -- TODO: monadic syntax
         match f hd with
         | .ret hd =>
           match map f tl with
@@ -423,7 +667,7 @@ namespace Ex2
     have Hc := map_is_cont_contra_aux Hmono ls Hf
     apply exists_map_fix_fuel_not_div_imp <;> assumption
 
-  theorem map_is_cont {{f : (a → Result b) → a → Result b}} (Hmono : is_mono f) :
+  theorem map_is_cont  {{f : (a → Result b) → a → Result b}} (Hmono : is_mono f) :
     ∀ ls, (Hc : ∀ n, map (fix_fuel n f) ls = .div) →
     map (fix f) ls = .div
     := by
@@ -431,7 +675,7 @@ namespace Ex2
     -- TODO: is there a tactic for proofs by contraposition?
     apply Classical.byContradiction; intro Hndiv
     let ⟨ n, Hcc ⟩ := map_is_cont_contra Hmono ls Hndiv
-    simp_all
+    simp_all  
 
   /- An example which uses map -/
   inductive Tree (a : Type) :=
@@ -490,6 +734,6 @@ namespace Ex2
     have Heq := fix_fixed_eq (@id_body a) Hvalid
     conv => lhs; rw [id, Heq, id_body]
 
-end Ex2
+end Ex3
 
 end Diverge
