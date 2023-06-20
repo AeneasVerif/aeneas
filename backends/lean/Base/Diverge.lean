@@ -271,9 +271,7 @@ namespace Fix
     revert Hvm
     split <;> simp [*] <;> intros <;> simp [*]
 
-  -- The final fixed point equation
-  -- TODO: remove the `forall x`
-  theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}}
+  theorem fix_fixed_eq_forall {{f : (a → Result b) → a → Result b}}
     (Hmono : is_mono f) (Hcont : is_cont f) :
     ∀ x, fix f x = f (fix f) x := by
     intros x
@@ -291,6 +289,14 @@ namespace Fix
       simp [Hcont]
     | .inl ⟨ n, He ⟩ => apply fix_fixed_eq_terminates f Hmono x n He
 
+  -- The final fixed point equation
+  theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}}
+    (Hmono : is_mono f) (Hcont : is_cont f) :
+    fix f = f (fix f) := by
+    have Heq := fix_fixed_eq_forall Hmono Hcont
+    have Heq1 : fix f = (λ x => fix f x) := by simp
+    rw [Heq1]
+    conv => lhs; ext; simp [Heq]
 
   /-! # Making the proofs of validity manageable (and automatable) -/
 
@@ -451,11 +457,9 @@ namespace Fix
       simp [*]
     simp [*]
 
-  -- TODO: functional extensionality
   theorem is_valid_p_fix_fixed_eq {{e : (a → Result b) → a → Result b}}
     (Hvalid : ∀ k x, is_valid_p k (λ k => e k x)) :
     fix e = e (fix e) := by
-    apply funext
     have ⟨ Hmono, Hcont ⟩ := is_valid_p_imp_is_valid Hvalid
     exact fix_fixed_eq Hmono Hcont
 
@@ -484,7 +488,7 @@ namespace Ex1
   noncomputable
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
-  -- The unfolding equation
+  -- The unfolding equation - diverges if `i < 0`
   theorem list_nth_eq (ls : List a) (i : Int) :
     list_nth ls i =
       match ls with
@@ -527,7 +531,7 @@ namespace Ex2
   noncomputable
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
-  -- The unfolding equation
+  -- The unfolding equation - diverges if `i < 0`
   theorem list_nth_eq (ls : List a) (i : Int) :
     (list_nth ls i =
        match ls with
@@ -553,10 +557,10 @@ namespace Ex3
      and the output types:
      - inputs: the sum allows to select the function to call in the recursive
        calls (and the functions may not have the same input types)
-     - outpus: this case is degenerate because `even` and `odd` both have the
+     - outputs: this case is degenerate because `even` and `odd` have the same
        return type `Bool`, but generally speaking we need a sum type because
-       the functions in the mutually recursive group may not have the same
-       return type.
+       the functions in the mutually recursive group may have different
+       return types.
    -/
   variable (k : (Int ⊕ Int) → Result (Bool ⊕ Bool))
 
@@ -565,7 +569,7 @@ namespace Ex3
     | .inl i =>
       -- Body of `is_even`
       if i = 0
-      then .ret (.inl true) -- We return .inl because this is `is_even`
+      then .ret (.inl true) -- We use .inl because this is `is_even`
       else
         do
           let b ←
@@ -581,7 +585,7 @@ namespace Ex3
     | .inr i =>
       -- Body of `is_odd`
       if i = 0
-      then .ret (.inr false) -- We return .inr because this is `is_odd`
+      then .ret (.inr false) -- We use .inr because this is `is_odd`
       else
         do
           let b ←
@@ -633,7 +637,7 @@ namespace Ex3
      else do let z ← y; f z) := by
     split <;> simp
 
-  -- The unfolding equation for `is_even`
+  -- The unfolding equation for `is_even` - diverges if `i < 0`
   theorem is_even_eq (i : Int) :
     is_even i = (if i = 0 then .ret true else is_odd (i - 1))
     := by
@@ -651,9 +655,9 @@ namespace Ex3
     rename_i v
     split <;> simp
 
-  -- The unfolding equation for `is_odd`
+  -- The unfolding equation for `is_odd` - diverges if `i < 0`
   theorem is_odd_eq (i : Int) :
-      is_odd i = (if i = 0 then .ret false else is_even (i - 1))
+    is_odd i = (if i = 0 then .ret false else is_even (i - 1))
     := by
     have Heq := is_valid_p_fix_fixed_eq is_even_is_odd_body_is_valid
     simp [is_even, is_odd]
