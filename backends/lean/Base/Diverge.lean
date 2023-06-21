@@ -703,12 +703,12 @@ namespace Ex4
   | leaf (x : a)
   | node (tl : List (Tree a))
 
-  def id_body (f : Tree a → Result (Tree a)) (t : Tree a) : Result (Tree a) :=
+  def id_body (k : Tree a → Result (Tree a)) (t : Tree a) : Result (Tree a) :=
     match t with
     | .leaf x => .ret (.leaf x)
     | .node tl =>
       do
-        let tl ← map f tl
+        let tl ← map k tl
         .ret (.node tl)
 
   theorem id_body_is_valid :
