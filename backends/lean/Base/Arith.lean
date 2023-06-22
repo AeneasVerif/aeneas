@@ -75,7 +75,28 @@ class IsScalar (a : Type) where
 
 instance (ty : ScalarTy) : IsScalar (Scalar ty) where
 
---example (ty : ScalarTy) : IsScalar (Scalar ty) := _
+example (ty : ScalarTy) : IsScalar (Scalar ty) := inferInstance
+
+-- TODO: lookup doesn't work
+class HasProp {a : Type} (x : a) where
+  prop_ty : Prop
+  prop : prop_ty
+
+class HasProp' (a : Type) where
+  prop_ty : a → Prop
+  prop : ∀ x:a, prop_ty x
+
+instance {ty : ScalarTy} (x : Scalar x) : HasProp x where
+  -- prop_ty is inferred
+  prop := And.intro x.hmin x.hmax
+
+instance (ty : ScalarTy) : HasProp' (Scalar ty) where
+  -- prop_ty is inferred
+  prop := λ x => And.intro x.hmin x.hmax
+
+example {a : Type} (x : a) [HasProp x] : Prop :=
+  let i : HasProp x := inferInstance
+  i.prop_ty
 
 open Lean Lean.Elab Command Term Lean.Meta
 
@@ -95,6 +116,40 @@ def isScalarExpr (e : Expr) : MetaM Bool := do
   match r with
   | .some _ => pure true
   | _       => pure false
+
+#check @HasProp'.prop
+
+-- Return an instance of `HasProp` for `e` if it has some
+def lookupHasProp (e : Expr) : MetaM (Option Expr) := do
+  logInfo f!"lookupHasProp"
+  -- TODO: do we need Lean.observing?
+  -- This actually eliminates the error messages
+  Lean.observing? do
+    logInfo f!"lookupHasProp: observing"
+    let ty ← Lean.Meta.inferType e
+    let hasProp ← mkAppM `Arith.HasProp' #[ty]
+    let hasPropInst ← trySynthInstance hasProp
+    match hasPropInst with
+    | LOption.some i =>
+      logInfo m!"Found HasProp instance"
+      let i_prop ← mkProjection i `prop
+      some (← mkAppM' i_prop #[e])
+    | _ => none
+
+-- Auxiliary function for `collectHasPropInstances`
+private partial def collectHasPropInstancesAux (hs : HashSet Expr) (e : Expr) : MetaM (HashSet Expr) := do
+  -- We do it in a very simpler manner: we deconstruct applications,
+  -- and recursively explore the sub-expressions. Note that we do
+  -- not go inside foralls and abstractions (should we?).
+  e.withApp fun f args => do
+    let hasPropInst ← lookupHasProp f
+    let hs := Option.getD (hasPropInst.map hs.insert) hs
+    let hs ← args.foldlM collectHasPropInstancesAux hs
+    pure hs
+
+-- Explore a term and return the instances of `HasProp` found for the sub-expressions
+def collectHasPropInstances (e : Expr) : MetaM (HashSet Expr) :=
+  collectHasPropInstancesAux HashSet.empty e
 
 -- Explore a term and return the set of scalar expressions found inside
 partial def collectScalarExprsAux (hs : HashSet Expr) (e : Expr) : MetaM (HashSet Expr) := do
@@ -125,22 +180,43 @@ def getScalarExprsFromMainCtx : Tactic.TacticM (HashSet Expr) := do
   -- Return
   pure hs
 
-
-#check TSyntax
-#check mkIdent
--- TODO: addDecl?
--- Project the scalar expressions into the context, to retrieve the bound inequalities
--- def projectScalarExpr (e: Expr) : Tactic.TacticM Unit := do
---   let e ← `($e)
---   let e ← Lean.Elab.Term.elabTerm `($e) none
---   Lean.Elab.Tactic.evalCases `($e)
+-- Collect the instances of `HasProp` for the subexpressions in the context
+def getHasPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
+  Lean.Elab.Tactic.withMainContext do
+  -- Get the local context
+  let ctx ← Lean.MonadLCtx.getLCtx
+  -- Just a matter of precaution
+  let ctx ← instantiateLCtxMVars ctx
+  -- Initialize the hashset
+  let hs := HashSet.empty
+  -- Explore the declarations
+  let decls ← ctx.getDecls
+  let hs ← decls.foldlM (fun hs d => collectHasPropInstancesAux hs d.toExpr) hs
+  -- Return
+  pure hs
 
 elab "list_scalar_exprs" : tactic => do
+  logInfo m!"Listing scalar expressions"
   let hs ← getScalarExprsFromMainCtx
   hs.forM fun e => do
-    dbg_trace f!"+ Scalar expression: {e}"
+    logInfo m!"+ Scalar expression: {e}"
 
-#check LocalContext
+example (x y : U32) (z : Usize) : True := by
+  list_scalar_exprs
+  simp
+
+elab "display_has_prop_instances" : tactic => do
+  logInfo m!"Displaying the HasProp instances"
+  let hs ← getHasPropInstancesFromMainCtx
+  hs.forM fun e => do
+    logInfo m!"+ HasProp instance: {e}"
+
+example (x : U32) : True := by
+  let i : HasProp' U32 := inferInstance
+  have p := @HasProp'.prop _ i x
+  simp only [HasProp'.prop_ty] at p
+  display_has_prop_instances
+  simp
 
 elab "list_local_decls_1" : tactic =>
   Lean.Elab.Tactic.withMainContext do
@@ -169,18 +245,12 @@ elab "list_local_decls_1" : tactic =>
     | _       => dbg_trace f!"  Not a scalar"; pure .none
   pure ()
 
-def evalCustomLet (name : Name) (val : Syntax) : Tactic.TacticM Unit :=
+def evalAddDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool := false) : Tactic.TacticM Unit :=
   -- I don't think we need that
   Lean.Elab.Tactic.withMainContext do
-  --
-  let val ← elabTerm val .none
-  let type ← inferType val
-  -- In some situations, the type will be left as a metavariable (for instance,
-  -- if the term is `3`, Lean has the choice between `Nat` and `Int` and will
-  -- not choose): we force the instantiation of the meta-variable
-  synthesizeSyntheticMVarsUsingDefault
   -- Insert the new declaration
-  withLetDecl name type val fun nval => do
+  let withDecl := if asLet then withLetDecl name type val else withLocalDeclD name type
+  withDecl fun nval => do
     -- For debugging
     let lctx ← Lean.MonadLCtx.getLCtx
     let fid := nval.fvarId!
@@ -192,6 +262,11 @@ def evalCustomLet (name : Name) (val : Syntax) : Tactic.TacticM Unit :=
     let mvarId ← Tactic.getMainGoal
     let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
     let newVal ← mkLetFVars #[nval] newMVar
+    -- There are two cases:
+    -- - asLet is true: newVal is `let $name := $val in $newMVar`
+    -- - asLet is false: ewVal is `λ $name => $newMVar`
+    --   We need to apply it to `val`
+    let newVal := if asLet then newVal else mkAppN newVal #[val]
     -- Focus on the current goal
     Tactic.focus do
     -- Assign the main goal.
@@ -202,18 +277,62 @@ def evalCustomLet (name : Name) (val : Syntax) : Tactic.TacticM Unit :=
     -- we focused on the current goal
     Lean.Elab.Tactic.setGoals [newMVar.mvarId!]
 
-elab "custom_let " n:ident " := " v:term : tactic =>
-  evalCustomLet n.getId v
+def evalAddDeclSyntax (name : Name) (val : Syntax) (asLet : Bool := false) : Tactic.TacticM Unit :=
+  -- I don't think we need that
+  Lean.Elab.Tactic.withMainContext do
+  --
+  let val ← elabTerm val .none
+  let type ← inferType val
+  -- In some situations, the type will be left as a metavariable (for instance,
+  -- if the term is `3`, Lean has the choice between `Nat` and `Int` and will
+  -- not choose): we force the instantiation of the meta-variable
+  synthesizeSyntheticMVarsUsingDefault
+  --
+  evalAddDecl name val type asLet
 
--- Insert x = 3 in the context
 elab "custom_let " n:ident " := " v:term : tactic =>
-  evalCustomLet n.getId v
+  evalAddDeclSyntax n.getId v (asLet := true)
+
+elab "custom_have " n:ident " := " v:term : tactic =>
+  evalAddDeclSyntax n.getId v (asLet := false)
 
 example : Nat := by
   custom_let x := 4
-  apply x
+  custom_have y := 4
+  apply y
 
 example (x : Bool) : Nat := by
   cases x <;> custom_let x := 3 <;> apply x
+
+#check mkIdent
+#check Syntax
+
+-- Lookup the instances of `HasProp' for all the sub-expressions in the context,
+-- and introduce the corresponding assumptions
+elab "intro_has_prop_instances" : tactic => do
+  logInfo m!"Introducing the HasProp instances"
+  let hs ← getHasPropInstancesFromMainCtx
+  hs.forM fun e => do
+    let type ← inferType e
+    let name := `h
+    evalAddDecl name e type (asLet := false)
+    -- Simplify to unfold the `prop_ty` projector
+    --let simpTheorems :=  ++ [``HasProp'.prop_ty]
+    let simpTheorems ← Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
+    -- Add the equational theorem for `HashProp'.prop_ty`
+    let simpTheorems ← simpTheorems.addDeclToUnfold ``HasProp'.prop_ty
+    let congrTheorems ← getSimpCongrTheorems
+    let ctx : Simp.Context := { simpTheorems := #[simpTheorems], congrTheorems }
+    -- Where to apply the simplifier
+    let loc := Tactic.Location.targets #[mkIdent name] false
+    -- Apply the simplifier
+    let _ ← Tactic.simpLocation ctx (discharge? := .none) loc
+    pure ()
+    -- simpLocation
+
+example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
+  intro_has_prop_instances
+  simp [*]
+
 
 end Arith
