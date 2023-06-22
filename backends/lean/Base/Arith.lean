@@ -168,36 +168,27 @@ elab "list_local_decls_1" : tactic =>
     | .some _ => dbg_trace f!"  Scalar expression"; pure r
     | _       => dbg_trace f!"  Not a scalar"; pure .none
   pure ()
-    -- match ← Lean.observing? (Lean.Meta.mkAppM `Scalar.toInt #[decl.toExpr]) with
-    -- | .none => dbg_trace f!"  Not a scalar"
-    -- | .some _ => dbg_trace f!"  Scalar expression"
 
-#check Lean.Environment.addDecl  
-#check Expr
-#check LocalContext
-#check MVarId
-#check Lean.Elab.Tactic.setGoals
-#check Lean.Elab.Tactic.Context
-#check withLocalDecl
-#check Lean.MVarId.assert
-#check LocalDecl
-
--- Insert x = 3 in the context
-elab "custom_let" : tactic =>
+def evalCustomLet (name : Name) (val : Syntax) : Tactic.TacticM Unit :=
   -- I don't think we need that
   Lean.Elab.Tactic.withMainContext do
   --
-  let type := (Expr.const `Nat [])
-  let val : Expr  := .lit (.natVal 3)
-  let n := `x -- the name is "x"
-  withLetDecl n type val fun nval => do
+  let val ← elabTerm val .none
+  let type ← inferType val
+  -- In some situations, the type will be left as a metavariable (for instance,
+  -- if the term is `3`, Lean has the choice between `Nat` and `Int` and will
+  -- not choose): we force the instantiation of the meta-variable
+  synthesizeSyntheticMVarsUsingDefault
+  -- Insert the new declaration
+  withLetDecl name type val fun nval => do
     -- For debugging
     let lctx ← Lean.MonadLCtx.getLCtx
     let fid := nval.fvarId!
     let decl := lctx.get! fid
-    dbg_trace f!"  nval: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
+        -- Remark: logInfo instantiates the mvars (contrary to dbg_trace):
+    logInfo m!"  new decl: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
     --
-    -- Tranform the main goal `m0?` to `let x = nval in m1?`
+    -- Tranform the main goal `?m0` to `let x = nval in ?m1`
     let mvarId ← Tactic.getMainGoal
     let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
     let newVal ← mkLetFVars #[nval] newMVar
@@ -211,11 +202,18 @@ elab "custom_let" : tactic =>
     -- we focused on the current goal
     Lean.Elab.Tactic.setGoals [newMVar.mvarId!]
 
+elab "custom_let " n:ident " := " v:term : tactic =>
+  evalCustomLet n.getId v
+
+-- Insert x = 3 in the context
+elab "custom_let " n:ident " := " v:term : tactic =>
+  evalCustomLet n.getId v
+
 example : Nat := by
-  custom_let
+  custom_let x := 4
   apply x
 
 example (x : Bool) : Nat := by
-  cases x <;> custom_let <;> apply x
+  cases x <;> custom_let x := 3 <;> apply x
 
 end Arith
