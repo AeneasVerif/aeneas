@@ -5,6 +5,8 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
+-- TODO: there is no Omega tactic for now - it seems it hasn't been ported yet
+--import Mathlib.Tactic.Omega
 import Base.Primitives
 
 /-
@@ -77,26 +79,19 @@ instance (ty : ScalarTy) : IsScalar (Scalar ty) where
 
 example (ty : ScalarTy) : IsScalar (Scalar ty) := inferInstance
 
--- TODO: lookup doesn't work
-class HasProp {a : Type} (x : a) where
-  prop_ty : Prop
-  prop : prop_ty
-
-class HasProp' (a : Type) where
+-- Remark: I tried a version of the shape `HasProp {a : Type} (x : a)`
+-- but the lookup didn't work
+class HasProp (a : Type) where
   prop_ty : a → Prop
   prop : ∀ x:a, prop_ty x
 
-instance {ty : ScalarTy} (x : Scalar x) : HasProp x where
-  -- prop_ty is inferred
-  prop := And.intro x.hmin x.hmax
-
-instance (ty : ScalarTy) : HasProp' (Scalar ty) where
+instance (ty : ScalarTy) : HasProp (Scalar ty) where
   -- prop_ty is inferred
   prop := λ x => And.intro x.hmin x.hmax
 
-example {a : Type} (x : a) [HasProp x] : Prop :=
-  let i : HasProp x := inferInstance
-  i.prop_ty
+instance (a : Type) : HasProp (Vec a) where
+  prop_ty := λ v => v.val.length ≤ Scalar.max ScalarTy.Usize
+  prop := λ ⟨ _, l ⟩ => l
 
 open Lean Lean.Elab Command Term Lean.Meta
 
@@ -117,8 +112,6 @@ def isScalarExpr (e : Expr) : MetaM Bool := do
   | .some _ => pure true
   | _       => pure false
 
-#check @HasProp'.prop
-
 -- Return an instance of `HasProp` for `e` if it has some
 def lookupHasProp (e : Expr) : MetaM (Option Expr) := do
   logInfo f!"lookupHasProp"
@@ -127,7 +120,7 @@ def lookupHasProp (e : Expr) : MetaM (Option Expr) := do
   Lean.observing? do
     logInfo f!"lookupHasProp: observing"
     let ty ← Lean.Meta.inferType e
-    let hasProp ← mkAppM `Arith.HasProp' #[ty]
+    let hasProp ← mkAppM ``Arith.HasProp #[ty]
     let hasPropInst ← trySynthInstance hasProp
     match hasPropInst with
     | LOption.some i =>
@@ -212,9 +205,9 @@ elab "display_has_prop_instances" : tactic => do
     logInfo m!"+ HasProp instance: {e}"
 
 example (x : U32) : True := by
-  let i : HasProp' U32 := inferInstance
-  have p := @HasProp'.prop _ i x
-  simp only [HasProp'.prop_ty] at p
+  let i : HasProp U32 := inferInstance
+  have p := @HasProp.prop _ i x
+  simp only [HasProp.prop_ty] at p
   display_has_prop_instances
   simp
 
@@ -304,10 +297,7 @@ example : Nat := by
 example (x : Bool) : Nat := by
   cases x <;> custom_let x := 3 <;> apply x
 
-#check mkIdent
-#check Syntax
-
--- Lookup the instances of `HasProp' for all the sub-expressions in the context,
+-- Lookup the instances of `HasProp for all the sub-expressions in the context,
 -- and introduce the corresponding assumptions
 elab "intro_has_prop_instances" : tactic => do
   logInfo m!"Introducing the HasProp instances"
@@ -317,10 +307,9 @@ elab "intro_has_prop_instances" : tactic => do
     let name := `h
     evalAddDecl name e type (asLet := false)
     -- Simplify to unfold the `prop_ty` projector
-    --let simpTheorems :=  ++ [``HasProp'.prop_ty]
     let simpTheorems ← Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
     -- Add the equational theorem for `HashProp'.prop_ty`
-    let simpTheorems ← simpTheorems.addDeclToUnfold ``HasProp'.prop_ty
+    let simpTheorems ← simpTheorems.addDeclToUnfold ``HasProp.prop_ty
     let congrTheorems ← getSimpCongrTheorems
     let ctx : Simp.Context := { simpTheorems := #[simpTheorems], congrTheorems }
     -- Where to apply the simplifier
@@ -328,11 +317,32 @@ elab "intro_has_prop_instances" : tactic => do
     -- Apply the simplifier
     let _ ← Tactic.simpLocation ctx (discharge? := .none) loc
     pure ()
-    -- simpLocation
 
 example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
   intro_has_prop_instances
   simp [*]
 
+example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
+  intro_has_prop_instances
+  simp_all [Scalar.max, Scalar.min]
+
+-- A tactic to solve linear arithmetic goals
+syntax "int_tac" : tactic
+macro_rules
+  | `(tactic| int_tac) =>
+    `(tactic|
+      intro_has_prop_instances;
+      have := Scalar.cMin_bound ScalarTy.Usize;
+      have := Scalar.cMin_bound ScalarTy.Isize;
+      have := Scalar.cMax_bound ScalarTy.Usize;
+      have := Scalar.cMax_bound ScalarTy.Isize;
+      simp only [*, Scalar.max, Scalar.min, Scalar.cMin, Scalar.cMax] at *;
+      linarith)
+
+example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
+  int_tac
+
+example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
+  int_tac
 
 end Arith
