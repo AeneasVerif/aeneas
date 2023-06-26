@@ -321,7 +321,6 @@ namespace Fix
     simp_all [is_mono_p, karrow_rel, result_rel]
 
   -- The important lemma about `is_mono_p`
-  -- TODO: generalize d?
   theorem is_mono_p_bind
     (g : ((x:a) → Result (b x)) → Result c)
     (h : c → ((x:a) → Result (b x)) → Result d) :
@@ -700,24 +699,28 @@ namespace Ex4
       let b ← k 0 (i - 1)
       .ret b
 
-  inductive Funs : List (Type 0) → List (Type 0) → Type 1 :=
+  inductive Funs : List (Type u) → List (Type u) → Type (u + 1) :=
     | Nil : Funs [] []
-    | Cons {ity oty : Type 0} {itys otys : List (Type 0)} (f : ity → Result oty) (tl : Funs itys otys) : Funs (ity :: itys) (oty :: otys)
+    | Cons {ity oty : Type u} {itys otys : List (Type u)}
+           (f : ity → Result oty) (tl : Funs itys otys) : Funs (ity :: itys) (oty :: otys)
 
-  theorem Funs.length_eq {itys otys : List (Type 0)} (fl : Funs itys otys) : itys.length = otys.length :=
+  theorem Funs.length_eq {itys otys : List (Type)} (fl : Funs itys otys) :
+    itys.length = otys.length :=
     match fl with
     | .Nil => by simp
     | .Cons f tl =>
       have h:= Funs.length_eq tl
       by simp [h]
 
-  @[simp] def Funs.cast_fin {itys otys : List (Type 0)} (fl : Funs itys otys) (i : Fin itys.length) : Fin otys.length :=
+  @[simp] def Funs.cast_fin {itys otys : List (Type)}
+    (fl : Funs itys otys) (i : Fin itys.length) : Fin otys.length :=
     ⟨ i.val, by have h:= fl.length_eq; have h1:= i.isLt; simp_all ⟩
 
-  @[simp] def bodies (k : (i : Fin 2) → input_ty i → Result (output_ty i)) : Funs [Int, Int] [Bool, Bool] :=
+  @[simp] def bodies (k : (i : Fin 2) → input_ty i → Result (output_ty i)) :
+    Funs [Int, Int] [Bool, Bool] :=
     Funs.Cons (is_even_body k) (Funs.Cons (is_odd_body k) Funs.Nil)
 
-  @[simp] def get_fun {itys otys : List (Type 0)} (fl : Funs itys otys) :
+  @[simp] def get_fun {itys otys : List (Type)} (fl : Funs itys otys) :
     (i : Fin itys.length) → itys.get i → Result (otys.get (fl.cast_fin i)) :=
     match fl with
     | .Nil => λ i => by have h:= i.isLt; simp at h
@@ -734,11 +737,18 @@ namespace Ex4
           cases Heq: i.val <;> simp_all
           simp_arith
         let j: Fin itys1.length := ⟨ j, Hj ⟩
-        Eq.mp (by cases Heq: i; rename_i val isLt; cases Heq': j; rename_i val' isLt; cases val <;> simp_all [List.get]) (get_fun tl j)
+        Eq.mp
+          (by
+            cases Heq: i; rename_i val isLt;
+            cases Heq': j; rename_i val' isLt;
+            cases val <;> simp_all [List.get])
+          (get_fun tl j)
 
-  def body (k : (i : Fin 2) → input_ty i → Result (output_ty i)) (i: Fin 2) : input_ty i → Result (output_ty i) := get_fun (bodies k) i
+  def body (k : (i : Fin 2) → input_ty i → Result (output_ty i)) (i: Fin 2) :
+    input_ty i → Result (output_ty i) := get_fun (bodies k) i
 
-  def fix_ {n : Nat} {ity oty : Fin n → Type 0} (f : ((i:Fin n) → ity i → Result (oty i)) → (i:Fin n) → ity i → Result (oty i)) :
+  def fix_ {n : Nat} {ity oty : Fin n → Type}
+    (f : ((i:Fin n) → ity i → Result (oty i)) → (i:Fin n) → ity i → Result (oty i)) :
     (i:Fin n) → ity i → Result (oty i) :=
     sorry
 
