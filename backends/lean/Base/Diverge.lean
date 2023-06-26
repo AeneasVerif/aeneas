@@ -88,7 +88,8 @@ namespace Fix
   open Primitives
   open Result
 
-  variable {a b c d : Type}
+  variable {a : Type} {b : a → Type}
+  variable {c d : Type}
 
   /-! # The least fixed point definition and its properties -/
 
@@ -132,19 +133,23 @@ namespace Fix
 
   /-! # The fixed point definitions -/
 
-  def fix_fuel (n : Nat) (f : (a → Result b) → a → Result b) (x : a) : Result b :=
+  def fix_fuel (n : Nat) (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) (x : a) :
+    Result (b x) :=
     match n with
     | 0 => .div
     | n + 1 =>
       f (fix_fuel n f) x
 
-  @[simp] def fix_fuel_pred (f : (a → Result b) → a → Result b) (x : a) (n : Nat) :=
+  @[simp] def fix_fuel_pred (f : ((x:a) → Result (b x)) → (x:a) → Result (b x))
+    (x : a) (n : Nat) :=
     not (div? (fix_fuel n f x))
 
-  def fix_fuel_P (f : (a → Result b) → a → Result b) (x : a) (n : Nat) : Prop :=
+  def fix_fuel_P (f : ((x:a) → Result (b x)) → (x:a) → Result (b x))
+    (x : a) (n : Nat) : Prop :=
     fix_fuel_pred f x n
 
-  noncomputable def fix (f : (a → Result b) → a → Result b) (x : a) : Result b :=
+  noncomputable
+  def fix (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) (x : a) : Result (b x) :=
     fix_fuel (least (fix_fuel_P f x)) f x
 
   /-! # The validity property -/
@@ -158,11 +163,11 @@ namespace Fix
     | ret _ => x2 = x1 -- TODO: generalize
 
   -- Monotonicity relation over monadic arrows (i.e., Kleisli arrows)
-  def karrow_rel (k1 k2 : a → Result b) : Prop :=
+  def karrow_rel (k1 k2 : (x:a) → Result (b x)) : Prop :=
     ∀ x, result_rel (k1 x) (k2 x)
 
   -- Monotonicity property for function bodies
-  def is_mono (f : (a → Result b) → a → Result b) : Prop :=
+  def is_mono (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) : Prop :=
     ∀ {{k1 k2}}, karrow_rel k1 k2 → karrow_rel (f k1) (f k2)
 
   -- "Continuity" property.
@@ -170,11 +175,12 @@ namespace Fix
   -- https://inria.hal.science/file/index/docid/216187/filename/tarski.pdf
   -- We define our "continuity" criteria so that it gives us what we need to
   -- prove the fixed-point equation, and we can also easily manipulate it.
-  def is_cont (f : (a → Result b) → a → Result b) : Prop :=
+  def is_cont (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) : Prop :=
     ∀ x, (Hdiv : ∀ n, fix_fuel (.succ n) f x = div) → f (fix f) x = div
 
   /-! # The proof of the fixed-point equation -/
-  theorem fix_fuel_mono {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
+  theorem fix_fuel_mono {f : ((x:a) → Result (b x)) → (x:a) → Result (b x)}
+    (Hmono : is_mono f) :
     ∀ {{n m}}, n ≤ m → karrow_rel (fix_fuel n f) (fix_fuel m f) := by
     intros n
     induction n
@@ -195,12 +201,13 @@ namespace Fix
         simp [result_rel] at Hmono
         apply Hmono
 
-  @[simp] theorem neg_fix_fuel_P {f : (a → Result b) → a → Result b} {x : a} {n : Nat} :
+  @[simp] theorem neg_fix_fuel_P
+    {f : ((x:a) → Result (b x)) → (x:a) → Result (b x)} {x : a} {n : Nat} :
     ¬ fix_fuel_P f x n ↔ (fix_fuel n f x = div) := by
     simp [fix_fuel_P, div?]
     cases fix_fuel n f x <;> simp  
 
-  theorem fix_fuel_fix_mono {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
+  theorem fix_fuel_fix_mono {f : ((x:a) → Result (b x)) → (x:a) → Result (b x)} (Hmono : is_mono f) :
     ∀ n, karrow_rel (fix_fuel n f) (fix f) := by
     intros n x
     simp [result_rel]
@@ -234,7 +241,7 @@ namespace Fix
         cases Heq':fix_fuel n f x <;>
         simp_all
 
-  theorem fix_fuel_P_least {f : (a → Result b) → a → Result b} (Hmono : is_mono f) :
+  theorem fix_fuel_P_least {f : ((x:a) → Result (b x)) → (x:a) → Result (b x)} (Hmono : is_mono f) :
     ∀ {{x n}}, fix_fuel_P f x n → fix_fuel_P f x (least (fix_fuel_P f x)) := by
     intros x n Hf
     have Hfmono := fix_fuel_fix_mono Hmono n x
@@ -247,7 +254,7 @@ namespace Fix
 
   -- Prove the fixed point equation in the case there exists some fuel for which
   -- the execution terminates
-  theorem fix_fixed_eq_terminates (f : (a → Result b) → a → Result b) (Hmono : is_mono f)
+  theorem fix_fixed_eq_terminates (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) (Hmono : is_mono f)
     (x : a) (n : Nat) (He : fix_fuel_P f x n) :
     fix f x = f (fix f) x := by
     have Hl := fix_fuel_P_least Hmono He
@@ -271,7 +278,7 @@ namespace Fix
     revert Hvm
     split <;> simp [*] <;> intros <;> simp [*]
 
-  theorem fix_fixed_eq_forall {{f : (a → Result b) → a → Result b}}
+  theorem fix_fixed_eq_forall {{f : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
     (Hmono : is_mono f) (Hcont : is_cont f) :
     ∀ x, fix f x = f (fix f) x := by
     intros x
@@ -290,7 +297,7 @@ namespace Fix
     | .inl ⟨ n, He ⟩ => apply fix_fixed_eq_terminates f Hmono x n He
 
   -- The final fixed point equation
-  theorem fix_fixed_eq {{f : (a → Result b) → a → Result b}}
+  theorem fix_fixed_eq {{f : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
     (Hmono : is_mono f) (Hcont : is_cont f) :
     fix f = f (fix f) := by
     have Heq := fix_fixed_eq_forall Hmono Hcont
@@ -301,7 +308,7 @@ namespace Fix
   /-! # Making the proofs of validity manageable (and automatable) -/
 
   -- Monotonicity property for expressions
-  def is_mono_p (e : (a → Result b) → Result c) : Prop :=
+  def is_mono_p (e : ((x:a) → Result (b x)) → Result c) : Prop :=
     ∀ {{k1 k2}}, karrow_rel k1 k2 → result_rel (e k1) (e k2)
 
   theorem is_mono_p_same (x : Result c) :
@@ -310,16 +317,17 @@ namespace Fix
     split <;> simp
 
   theorem is_mono_p_rec (x : a) :
-    @is_mono_p a b b (λ f => f x) := by
+    @is_mono_p a b (b x) (λ f => f x) := by
     simp_all [is_mono_p, karrow_rel, result_rel]
 
   -- The important lemma about `is_mono_p`
+  -- TODO: generalize d?
   theorem is_mono_p_bind
-    (g : (a → Result b) → Result c)
-    (h : c → (a → Result b) → Result d) :
+    (g : ((x:a) → Result (b x)) → Result c)
+    (h : c → ((x:a) → Result (b x)) → Result d) :
     is_mono_p g →
     (∀ y, is_mono_p (h y)) →
-    is_mono_p (λ k => do let y ← g k; h y k) := by
+    @is_mono_p a b d (λ k => do let y ← g k; h y k) := by
     intro hg hh
     simp [is_mono_p]
     intro fg fh Hrgh
@@ -332,25 +340,26 @@ namespace Fix
 
   -- Continuity property for expressions - note that we take the continuation
   -- as parameter
-  def is_cont_p (k : (a → Result b) → a → Result b)
-    (e : (a → Result b) → Result c) : Prop :=
+  def is_cont_p (k : ((x:a) → Result (b x)) → (x:a) → Result (b x))
+    (e : ((x:a) → Result (b x)) → Result c) : Prop :=
     (Hc : ∀ n, e (fix_fuel n k) = .div) →
     e (fix k) = .div
 
-  theorem is_cont_p_same (k : (a → Result b) → a → Result b) (x : Result c) :
+  theorem is_cont_p_same (k : ((x:a) → Result (b x)) → (x:a) → Result (b x))
+    (x : Result c) :
     is_cont_p k (λ _ => x) := by
     simp [is_cont_p]
 
-  theorem is_cont_p_rec (f : (a → Result b) → a → Result b) (x : a) :
+  theorem is_cont_p_rec (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) (x : a) :
     is_cont_p f (λ f => f x) := by
     simp_all [is_cont_p, fix]
 
   -- The important lemma about `is_cont_p`
   theorem is_cont_p_bind
-    (k : (a → Result b) → a → Result b)
+    (k : ((x:a) → Result (b x)) → (x:a) → Result (b x))
     (Hkmono : is_mono k)
-    (g : (a → Result b) → Result c)
-    (h : c → (a → Result b) → Result d) :
+    (g : ((x:a) → Result (b x)) → Result c)
+    (h : c → ((x:a) → Result (b x)) → Result d) :
     is_mono_p g →
     is_cont_p k g →
     (∀ y, is_mono_p (h y)) →
@@ -402,16 +411,18 @@ namespace Fix
       apply Hhcont; assumption
 
   -- The validity property for an expression
-  def is_valid_p (k : (a → Result b) → a → Result b)
-    (e : (a → Result b) → Result c) : Prop :=
+  def is_valid_p (k : ((x:a) → Result (b x)) → (x:a) → Result (b x))
+    (e : ((x:a) → Result (b x)) → Result c) : Prop :=
     is_mono_p e ∧
     (is_mono k → is_cont_p k e)
 
-  @[simp] theorem is_valid_p_same (k : (a → Result b) → a → Result b) (x : Result c) :
+  @[simp] theorem is_valid_p_same
+    (k : ((x:a) → Result (b x)) → (x:a) → Result (b x)) (x : Result c) :
     is_valid_p k (λ _ => x) := by
     simp [is_valid_p, is_mono_p_same, is_cont_p_same]
 
-  @[simp] theorem is_valid_p_rec (k : (a → Result b) → a → Result b) (x : a) :
+  @[simp] theorem is_valid_p_rec
+    (k : ((x:a) → Result (b x)) → (x:a) → Result (b x)) (x : a) :
     is_valid_p k (λ k => k x) := by
     simp_all [is_valid_p, is_mono_p_rec, is_cont_p_rec]
 
@@ -419,9 +430,9 @@ namespace Fix
   -- (in particular, it will manage to figure out `g` and `h` when we
   -- apply the lemma)
   theorem is_valid_p_bind
-    {{k : (a → Result b) → a → Result b}}
-    {{g : (a → Result b) → Result c}}
-    {{h : c → (a → Result b) → Result d}}
+    {{k : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
+    {{g : ((x:a) → Result (b x)) → Result c}}
+    {{h : c → ((x:a) → Result (b x)) → Result d}}
     (Hgvalid : is_valid_p k g)
     (Hhvalid : ∀ y, is_valid_p k (h y)) :
     is_valid_p k (λ k => do let y ← g k; h y k) := by
@@ -438,7 +449,7 @@ namespace Fix
       have Hhcont := Hhcont Hkmono
       apply is_cont_p_bind <;> assumption
 
-  theorem is_valid_p_imp_is_valid {{e : (a → Result b) → a → Result b}}
+  theorem is_valid_p_imp_is_valid {{e : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
     (Hvalid : ∀ k x, is_valid_p k (λ k => e k x)) :
     is_mono e ∧ is_cont e := by
     have Hmono : is_mono e := by
@@ -457,7 +468,7 @@ namespace Fix
       simp [*]
     simp [*]
 
-  theorem is_valid_p_fix_fixed_eq {{e : (a → Result b) → a → Result b}}
+  theorem is_valid_p_fix_fixed_eq {{e : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
     (Hvalid : ∀ k x, is_valid_p k (λ k => e k x)) :
     fix e = e (fix e) := by
     have ⟨ Hmono, Hcont ⟩ := is_valid_p_imp_is_valid Hvalid
@@ -624,18 +635,6 @@ namespace Ex3
       match r with
       | .inl _ => .fail .panic
       | .inr b => .ret b
-
-  -- TODO: move
-  -- TODO: this is not enough
-  theorem swap_if_bind {a b : Type} (e : Prop) [Decidable e]
-    (x y : Result a) (f : a → Result b) :
-    (do
-      let z ← (if e then x else y)
-      f z)
-     =
-    (if e then do let z ← x; f z
-     else do let z ← y; f z) := by
-    split <;> simp
 
   -- The unfolding equation for `is_even` - diverges if `i < 0`
   theorem is_even_eq (i : Int) :
