@@ -522,20 +522,6 @@ namespace FixI
   def is_valid (f : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)) : Prop :=
     ∀ k i x, is_valid_p k (λ k => f k i x)
 
-  @[simp] theorem kk_to_gen_kk_of_gen
-    (k : (x: (i:id) × a i) → Result (b x.fst)) :
-    kk_to_gen (kk_of_gen kk) = kk := by
-    simp [kk_to_gen, kk_of_gen]
-
-  @[simp] theorem k_to_gen_k_of_gen
-    (k : ((x: (i:id) × a i) → Result (b x.fst)) → (x: (i:id) × a i) → Result (b x.fst)) :
-    k_to_gen (k_of_gen kk) = kk := by
-    simp [k_to_gen, k_of_gen]
-    apply funext
-    intro kk_1
-    -- TODO: some simplifications don't work
-    simp [kk_to_gen, kk_of_gen]    
-
   noncomputable def fix
     (f : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)) :
     (i:id) → a i → Result (b i) :=
@@ -548,10 +534,8 @@ namespace FixI
     have Hvalid' : Fix.is_valid (k_to_gen f) := by
       intro k x
       simp [is_valid, is_valid_p] at Hvalid
-      --simp [Fix.is_valid_p]
       let ⟨ i, x ⟩ := x
       have Hvalid := Hvalid (k_of_gen k) i x
-      -- TODO: some simplifications don't work
       simp [k_to_gen, k_of_gen, kk_to_gen, kk_of_gen] at Hvalid
       refine Hvalid
     have Heq := Fix.is_valid_fix_fixed_eq Hvalid'
