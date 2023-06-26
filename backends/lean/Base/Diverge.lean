@@ -448,17 +448,20 @@ namespace Fix
       have Hhcont := Hhcont Hkmono
       apply is_cont_p_bind <;> assumption
 
-  theorem is_valid_p_imp_is_valid {{e : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
-    (Hvalid : ∀ k x, is_valid_p k (λ k => e k x)) :
-    is_mono e ∧ is_cont e := by
-    have Hmono : is_mono e := by
+  def is_valid (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) : Prop :=
+    ∀ k x, is_valid_p k (λ k => f k x)
+
+  theorem is_valid_p_imp_is_valid {{f : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
+    (Hvalid : is_valid f) :
+    is_mono f ∧ is_cont f := by
+    have Hmono : is_mono f := by
       intro f h Hr x
       have Hmono := Hvalid (λ _ _ => .div) x
       have Hmono := Hmono.left
       apply Hmono; assumption
-    have Hcont : is_cont e := by
+    have Hcont : is_cont f := by
       intro x Hdiv
-      have Hcont := (Hvalid e x).right Hmono
+      have Hcont := (Hvalid f x).right Hmono
       simp [is_cont_p] at Hcont
       apply Hcont
       intro n
@@ -467,13 +470,95 @@ namespace Fix
       simp [*]
     simp [*]
 
-  theorem is_valid_p_fix_fixed_eq {{e : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
-    (Hvalid : ∀ k x, is_valid_p k (λ k => e k x)) :
-    fix e = e (fix e) := by
+  theorem is_valid_fix_fixed_eq {{f : ((x:a) → Result (b x)) → (x:a) → Result (b x)}}
+    (Hvalid : is_valid f) :
+    fix f = f (fix f) := by
     have ⟨ Hmono, Hcont ⟩ := is_valid_p_imp_is_valid Hvalid
     exact fix_fixed_eq Hmono Hcont
 
 end Fix
+
+namespace FixI
+  /- Indexed fixed-point: definitions with indexed types, convenient to use for mutually
+     recursive definitions. We simply port the definitions and proofs from Fix to a more
+     specific case.
+   -/
+  open Primitives Fix
+
+  -- The index type
+  variable {id : Type}
+
+  -- The input/output types
+  variable {a b : id → Type}
+
+  -- Monotonicity relation over monadic arrows (i.e., Kleisli arrows)
+  def karrow_rel (k1 k2 : (i:id) → a i → Result (b i)) : Prop :=
+    ∀ i x, result_rel (k1 i x) (k2 i x)
+
+  def kk_to_gen (k : (i:id) → a i → Result (b i)) :
+    (x: (i:id) × a i) → Result (b x.fst) :=
+    λ ⟨ i, x ⟩ => k i x
+
+  def kk_of_gen (k : (x: (i:id) × a i) → Result (b x.fst)) :
+    (i:id) → a i → Result (b i) :=
+    λ i x => k ⟨ i, x ⟩
+
+  def k_to_gen (k : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)) :
+    ((x: (i:id) × a i) → Result (b x.fst)) → (x: (i:id) × a i) → Result (b x.fst) :=
+    λ kk => kk_to_gen (k (kk_of_gen kk))
+
+  def k_of_gen (k : ((x: (i:id) × a i) → Result (b x.fst)) → (x: (i:id) × a i) → Result (b x.fst)) :
+    ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i) :=
+    λ kk => kk_of_gen (k (kk_to_gen kk))
+
+  def e_to_gen (e : ((i:id) → a i → Result (b i)) → Result c) :
+    ((x: (i:id) × a i) → Result (b x.fst)) → Result c :=
+    λ k => e (kk_of_gen k)
+
+  def is_valid_p (k : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i))
+    (e : ((i:id) → a i → Result (b i)) → Result c) : Prop :=
+    Fix.is_valid_p (k_to_gen k) (e_to_gen e)
+
+  def is_valid (f : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)) : Prop :=
+    ∀ k i x, is_valid_p k (λ k => f k i x)
+
+  @[simp] theorem kk_to_gen_kk_of_gen
+    (k : (x: (i:id) × a i) → Result (b x.fst)) :
+    kk_to_gen (kk_of_gen kk) = kk := by
+    simp [kk_to_gen, kk_of_gen]
+
+  @[simp] theorem k_to_gen_k_of_gen
+    (k : ((x: (i:id) × a i) → Result (b x.fst)) → (x: (i:id) × a i) → Result (b x.fst)) :
+    k_to_gen (k_of_gen kk) = kk := by
+    simp [k_to_gen, k_of_gen]
+    apply funext
+    intro kk_1
+    -- TODO: some simplifications don't work
+    simp [kk_to_gen, kk_of_gen]    
+
+  noncomputable def fix
+    (f : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)) :
+    (i:id) → a i → Result (b i) :=
+    kk_of_gen (Fix.fix (k_to_gen f))
+
+  theorem is_valid_fix_fixed_eq
+    {{f : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)}}
+    (Hvalid : is_valid f) :
+    fix f = f (fix f) := by
+    have Hvalid' : Fix.is_valid (k_to_gen f) := by
+      intro k x
+      simp [is_valid, is_valid_p] at Hvalid
+      --simp [Fix.is_valid_p]
+      let ⟨ i, x ⟩ := x
+      have Hvalid := Hvalid (k_of_gen k) i x
+      -- TODO: some simplifications don't work
+      simp [k_to_gen, k_of_gen, kk_to_gen, kk_of_gen] at Hvalid
+      refine Hvalid
+    have Heq := Fix.is_valid_fix_fixed_eq Hvalid'
+    simp [fix]
+    conv => lhs; rw [Heq]
+
+end FixI
 
 namespace Ex1
   /- An example of use of the fixed-point -/
@@ -507,7 +592,7 @@ namespace Ex1
         if i = 0 then .ret hd
         else list_nth tl (i - 1)
     := by
-    have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_is_valid a)
+    have Heq := is_valid_fix_fixed_eq (@list_nth_body_is_valid a)
     simp [list_nth]
     conv => lhs; rw [Heq]
 
@@ -553,7 +638,7 @@ namespace Ex2
              let y ← list_nth tl (i - 1)
              .ret y)
     := by
-    have Heq := is_valid_p_fix_fixed_eq (@list_nth_body_is_valid a)
+    have Heq := is_valid_fix_fixed_eq (@list_nth_body_is_valid a)
     simp [list_nth]
     conv => lhs; rw [Heq]
 
@@ -639,7 +724,7 @@ namespace Ex3
   theorem is_even_eq (i : Int) :
     is_even i = (if i = 0 then .ret true else is_odd (i - 1))
     := by
-    have Heq := is_valid_p_fix_fixed_eq is_even_is_odd_body_is_valid
+    have Heq := is_valid_fix_fixed_eq is_even_is_odd_body_is_valid
     simp [is_even, is_odd]
     conv => lhs; rw [Heq]; simp; rw [is_even_is_odd_body]; simp
     -- Very annoying: we need to swap the matches
@@ -657,7 +742,7 @@ namespace Ex3
   theorem is_odd_eq (i : Int) :
     is_odd i = (if i = 0 then .ret false else is_even (i - 1))
     := by
-    have Heq := is_valid_p_fix_fixed_eq is_even_is_odd_body_is_valid
+    have Heq := is_valid_fix_fixed_eq is_even_is_odd_body_is_valid
     simp [is_even, is_odd]
     conv => lhs; rw [Heq]; simp; rw [is_even_is_odd_body]; simp
     -- Same remark as for `even`
@@ -670,7 +755,7 @@ end Ex3
 
 namespace Ex4
   /- Mutually recursive functions - 2nd encoding -/
-  open Primitives Fix
+  open Primitives FixI
 
   attribute [local simp] List.get
 
@@ -747,15 +832,13 @@ namespace Ex4
   def body (k : (i : Fin 2) → input_ty i → Result (output_ty i)) (i: Fin 2) :
     input_ty i → Result (output_ty i) := get_fun (bodies k) i
 
-  def fix_ {n : Nat} {ity oty : Fin n → Type}
-    (f : ((i:Fin n) → ity i → Result (oty i)) → (i:Fin n) → ity i → Result (oty i)) :
-    (i:Fin n) → ity i → Result (oty i) :=
-    sorry
+  theorem body_is_valid : is_valid body := by sorry
 
-  theorem body_fix_eq : fix_ body = body (fix_ body) := sorry
+  theorem body_fix_eq : fix body = body (fix body) :=
+    is_valid_fix_fixed_eq body_is_valid
 
-  def is_even (i : Int) : Result Bool := fix_ body 0 i
-  def is_odd (i : Int) : Result Bool := fix_ body 1 i
+  noncomputable def is_even (i : Int) : Result Bool := fix body 0 i
+  noncomputable def is_odd (i : Int) : Result Bool := fix body 1 i
 
   theorem is_even_eq (i : Int) : is_even i =
     (if i = 0
@@ -839,7 +922,7 @@ namespace Ex5
          let tl ← map id tl
          .ret (.node tl))
     := by
-    have Heq := is_valid_p_fix_fixed_eq (@id_body_is_valid a)
+    have Heq := is_valid_fix_fixed_eq (@id_body_is_valid a)
     simp [id]
     conv => lhs; rw [Heq]; simp; rw [id_body]
 
