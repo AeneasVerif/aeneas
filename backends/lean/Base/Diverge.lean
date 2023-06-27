@@ -544,28 +544,40 @@ namespace FixI
 
   /- Some utilities to define the mutually recursive functions -/
 
-  inductive Funs : List (Type u) → List (Type u) → Type (u + 1) :=
-    | Nil : Funs [] []
-    | Cons {ity oty : Type u} {itys otys : List (Type u)}
-           (f : ity → Result oty) (tl : Funs itys otys) : Funs (ity :: itys) (oty :: otys)
+  -- TODO: use more
+  @[simp] def kk_ty (id : Type) (a b : id → Type) := (i:id) → a i → Result (b i)
+  @[simp] def k_ty (id : Type) (a b : id → Type) := kk_ty id a b → kk_ty id a b
 
-  theorem Funs.length_eq {itys otys : List (Type)} (fl : Funs itys otys) :
-    itys.length = otys.length :=
+  -- Initially, we had left out the parameters id, a and b.
+  -- However, by parameterizing Funs with those parameters, we can state
+  -- and prove lemmas like Funs.is_valid_p_is_valid_p
+  inductive Funs (id : Type) (a b : id → Type) :
+    List (Type u) → List (Type u) → Type (u + 1) :=
+    | Nil : Funs id a b [] []
+    | Cons {ity oty : Type u} {itys otys : List (Type u)}
+           (f : kk_ty id a b → ity → Result oty) (tl : Funs id a b itys otys) :
+           Funs id a b (ity :: itys) (oty :: otys)
+
+  theorem Funs.length_eq {itys otys : List (Type)} (fl : Funs id a b itys otys) :
+    otys.length = itys.length :=
     match fl with
     | .Nil => by simp
     | .Cons f tl =>
       have h:= Funs.length_eq tl
       by simp [h]
 
-  @[simp] def Funs.cast_fin {itys otys : List (Type)}
-    (fl : Funs itys otys) (i : Fin itys.length) : Fin otys.length :=
-    ⟨ i.val, by have h:= fl.length_eq; have h1:= i.isLt; simp_all ⟩
+  def fin_cast {n m : Nat} (h : m = n) (i : Fin n) : Fin m :=
+    ⟨ i.val, by have h1:= i.isLt; simp_all ⟩
 
-  def get_fun {itys otys : List (Type)} (fl : Funs itys otys) :
-    (i : Fin itys.length) → itys.get i → Result (otys.get (fl.cast_fin i)) :=
+  @[simp] def Funs.cast_fin {itys otys : List (Type)}
+    (fl : Funs id a b itys otys) (i : Fin itys.length) : Fin otys.length :=
+    fin_cast (fl.length_eq) i
+
+  def get_fun {itys otys : List (Type)} (fl : Funs id a b itys otys) :
+    (i : Fin itys.length) → kk_ty id a b → itys.get i → Result (otys.get (fl.cast_fin i)) :=
     match fl with
     | .Nil => λ i => by have h:= i.isLt; simp at h
-    | @Funs.Cons ity oty itys1 otys1 f tl =>
+    | @Funs.Cons id a b ity oty itys1 otys1 f tl =>
       λ i =>
       if h: i.val = 0 then
         Eq.mp (by cases i; simp_all [List.get]) f
@@ -582,9 +594,8 @@ namespace FixI
           (by
             cases Heq: i; rename_i val isLt;
             cases Heq': j; rename_i val' isLt;
-            cases val <;> simp_all [List.get])
+            cases val <;> simp_all [List.get, fin_cast])
           (get_fun tl j)
-
 
   -- TODO: move
   theorem add_one_le_iff_le_ne (n m : Nat) (h1 : m ≤ n) (h2 : m ≠ n) : m + 1 ≤ n := by
@@ -612,7 +623,7 @@ namespace FixI
     := by
     generalize h: (n - m) = k
     revert m
-    induction k
+    induction k -- TODO: induction h rather?
     case zero =>
       simp_all
       intro m h1 h2
@@ -682,6 +693,65 @@ namespace FixI
     apply Fix.is_valid_p_bind
     . apply Hgvalid
     . apply Hhvalid
+
+  def Funs.is_valid_p
+    (k : k_ty id a b)
+    (fl : Funs id a b itys otys) :
+    Prop :=
+    match fl with
+    | .Nil => True
+    | .Cons f fl => (∀ x, FixI.is_valid_p k (λ k => f k x)) ∧ fl.is_valid_p k
+
+  #check Subtype
+  def Funs.is_valid_p_is_valid_p_aux
+    {k : k_ty id a b}
+    {itys otys : List Type}
+    (Heq : List.length otys = List.length itys)
+    (fl : Funs id a b itys otys) (Hvalid : is_valid_p k fl) :
+    ∀ (i : Fin itys.length) (x : itys.get i), FixI.is_valid_p k (fun k => get_fun fl i k x) := by
+    -- Prepare the induction
+    have ⟨ n, Hn ⟩ : { n : Nat // itys.length = n } := ⟨ itys.length, by rfl ⟩
+    revert itys otys Heq fl Hvalid
+    induction n
+    --
+    case zero =>
+      intro itys otys Heq fl Hvalid Hlen;
+      have Heq: itys = [] := by cases itys <;> simp_all
+      have Heq: otys = [] := by cases otys <;> simp_all
+      intro i x
+      simp_all
+      have Hi := i.isLt
+      simp_all
+    case succ n Hn =>
+      intro itys otys Heq fl Hvalid Hlen i x;
+      cases fl <;> simp at *
+      rename_i ity oty itys otys f fl
+      have ⟨ Hvf, Hvalid ⟩ := Hvalid
+      have Hvf1: is_valid_p k fl := by
+        simp_all [Funs.is_valid_p]
+      have Hn := @Hn itys otys (by simp[*]) fl Hvf1 (by simp [*])
+      -- Case disjunction on i
+      match i with
+      | ⟨ 0, _ ⟩ =>
+        simp at x
+        simp [get_fun]
+        apply (Hvf x)
+      | ⟨ .succ j, HiLt ⟩ =>
+        simp_arith at HiLt
+        simp at x
+        let j : Fin (List.length itys) := ⟨ j, by simp_arith [HiLt] ⟩
+        have Hn := Hn j x
+        apply Hn
+
+  def Funs.is_valid_p_is_valid_p
+    (itys otys : List (Type)) (Heq: otys.length = itys.length := by decide)
+    (k : k_ty (Fin (List.length itys)) (List.get itys) fun i => List.get otys (fin_cast Heq i))
+    (fl : Funs (Fin itys.length) itys.get (λ i => otys.get (fin_cast Heq i)) itys otys) :
+    fl.is_valid_p k  →
+    ∀ (i : Fin itys.length) (x : itys.get i), FixI.is_valid_p k (fun k => get_fun fl i k x)
+    := by
+    intro Hvalid
+    apply is_valid_p_is_valid_p_aux <;> simp [*]
 
 end FixI
 
@@ -909,12 +979,12 @@ namespace Ex4
       let b ← k 0 (i - 1)
       .ret b
 
-  @[simp] def bodies (k : (i : Fin 2) → input_ty i → Result (output_ty i)) :
-    Funs [Int, Int] [Bool, Bool] :=
-    Funs.Cons (is_even_body k) (Funs.Cons (is_odd_body k) Funs.Nil)
+  @[simp] def bodies :
+    Funs (Fin 2) input_ty output_ty [Int, Int] [Bool, Bool] :=
+    Funs.Cons (is_even_body) (Funs.Cons (is_odd_body) Funs.Nil)
 
   def body (k : (i : Fin 2) → input_ty i → Result (output_ty i)) (i: Fin 2) :
-    input_ty i → Result (output_ty i) := get_fun (bodies k) i
+    input_ty i → Result (output_ty i) := get_fun bodies i k
 
   theorem body_is_valid : is_valid body := by
     -- Split the proof into proofs of validity of the individual bodies
@@ -925,6 +995,21 @@ namespace Ex4
     simp [for_all_fin]
     repeat (unfold for_all_fin_aux; simp)
     simp [get_fun]
+    (repeat (apply And.intro)) <;> intro x <;> simp at x <;>
+    simp [is_even_body, is_odd_body]
+    -- Prove the validity of the individual bodies
+    . split <;> simp
+      apply is_valid_p_bind <;> simp
+    . split <;> simp
+      apply is_valid_p_bind <;> simp
+
+  theorem body_is_valid' : is_valid body := by
+    -- Split the proof into proofs of validity of the individual bodies
+    rw [is_valid]
+    simp [body]
+    intro k
+    apply (Funs.is_valid_p_is_valid_p [Int, Int] [Bool, Bool])
+    simp [Funs.is_valid_p]
     (repeat (apply And.intro)) <;> intro x <;> simp at x <;>
     simp [is_even_body, is_odd_body]
     -- Prove the validity of the individual bodies
