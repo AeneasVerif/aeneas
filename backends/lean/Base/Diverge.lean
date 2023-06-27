@@ -542,6 +542,147 @@ namespace FixI
     simp [fix]
     conv => lhs; rw [Heq]
 
+  /- Some utilities to define the mutually recursive functions -/
+
+  inductive Funs : List (Type u) → List (Type u) → Type (u + 1) :=
+    | Nil : Funs [] []
+    | Cons {ity oty : Type u} {itys otys : List (Type u)}
+           (f : ity → Result oty) (tl : Funs itys otys) : Funs (ity :: itys) (oty :: otys)
+
+  theorem Funs.length_eq {itys otys : List (Type)} (fl : Funs itys otys) :
+    itys.length = otys.length :=
+    match fl with
+    | .Nil => by simp
+    | .Cons f tl =>
+      have h:= Funs.length_eq tl
+      by simp [h]
+
+  @[simp] def Funs.cast_fin {itys otys : List (Type)}
+    (fl : Funs itys otys) (i : Fin itys.length) : Fin otys.length :=
+    ⟨ i.val, by have h:= fl.length_eq; have h1:= i.isLt; simp_all ⟩
+
+  def get_fun {itys otys : List (Type)} (fl : Funs itys otys) :
+    (i : Fin itys.length) → itys.get i → Result (otys.get (fl.cast_fin i)) :=
+    match fl with
+    | .Nil => λ i => by have h:= i.isLt; simp at h
+    | @Funs.Cons ity oty itys1 otys1 f tl =>
+      λ i =>
+      if h: i.val = 0 then
+        Eq.mp (by cases i; simp_all [List.get]) f
+      else
+        let j := i.val - 1
+        have Hj: j < itys1.length := by
+          have Hi := i.isLt
+          simp at Hi
+          revert Hi
+          cases Heq: i.val <;> simp_all
+          simp_arith
+        let j: Fin itys1.length := ⟨ j, Hj ⟩
+        Eq.mp
+          (by
+            cases Heq: i; rename_i val isLt;
+            cases Heq': j; rename_i val' isLt;
+            cases val <;> simp_all [List.get])
+          (get_fun tl j)
+
+
+  -- TODO: move
+  theorem add_one_le_iff_le_ne (n m : Nat) (h1 : m ≤ n) (h2 : m ≠ n) : m + 1 ≤ n := by
+    -- Damn, those proofs on natural numbers are hard - I wish Omega was in mathlib4...
+    simp [Nat.add_one_le_iff]
+    simp [Nat.lt_iff_le_and_ne]
+    simp_all
+
+  def for_all_fin_aux {n : Nat} (f : Fin n → Prop) (m : Nat) (h : m ≤ n) : Prop :=
+    if heq: m = n then True
+    else
+      f ⟨ m, by simp_all [Nat.lt_iff_le_and_ne] ⟩ ∧
+      for_all_fin_aux f (m + 1) (by simp_all [add_one_le_iff_le_ne])
+  termination_by for_all_fin_aux n _ m h => n - m
+  decreasing_by
+    simp_wf
+    apply Nat.sub_add_lt_sub <;> simp_all
+    simp_all [add_one_le_iff_le_ne]
+
+  def for_all_fin {n : Nat} (f : Fin n → Prop) := for_all_fin_aux f 0 (by simp)
+
+  theorem for_all_fin_aux_imp_forall {n : Nat} (f : Fin n → Prop) (m : Nat) :
+    (h : m ≤ n) →
+    for_all_fin_aux f m h → ∀ i, m ≤ i.val → f i
+    := by
+    generalize h: (n - m) = k
+    revert m
+    induction k
+    case zero =>
+      simp_all
+      intro m h1 h2
+      have h: n = m := by
+        linarith
+      unfold for_all_fin_aux; simp_all
+      simp_all
+      -- There is no i s.t. m ≤ i
+      intro i h3; cases i; simp_all
+      linarith
+    case succ k hi =>
+      simp_all
+      intro m hk hmn
+      intro hf i hmi
+      have hne: m ≠ n := by
+        have hineq := Nat.lt_of_sub_eq_succ hk
+        linarith
+      -- m = i?
+      if heq: m = i then
+        -- Yes: simply use the `for_all_fin_aux` hyp
+        unfold for_all_fin_aux at hf
+        simp_all
+        tauto
+      else
+        -- No: use the induction hypothesis
+        have hlt: m < i := by simp_all [Nat.lt_iff_le_and_ne]
+        have hineq: m + 1 ≤ n := by
+          have hineq := Nat.lt_of_sub_eq_succ hk
+          simp [*, Nat.add_one_le_iff]
+        have heq1: n - (m + 1) = k := by
+          -- TODO: very annoying arithmetic proof
+          simp [Nat.sub_eq_iff_eq_add hineq]
+          have hineq1: m ≤ n := by linarith
+          simp [Nat.sub_eq_iff_eq_add hineq1] at hk
+          simp_arith [hk]
+        have hi := hi (m + 1) heq1 hineq
+        apply hi <;> simp_all
+        . unfold for_all_fin_aux at hf
+          simp_all
+        . simp_all [add_one_le_iff_le_ne]
+
+  theorem for_all_fin_imp_forall (n : Nat) (f : Fin n → Prop) :
+    for_all_fin f → ∀ i, f i
+    := by
+    intro Hf i
+    apply for_all_fin_aux_imp_forall <;> try assumption
+    simp
+
+  /- Automating the proofs -/
+  @[simp] theorem is_valid_p_same
+    (k : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)) (x : Result c) :
+    is_valid_p k (λ _ => x) := by
+    simp [is_valid_p, k_to_gen, e_to_gen]
+
+  @[simp] theorem is_valid_p_rec
+     (k : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)) (i : id) (x : a i) :
+    is_valid_p k (λ k => k i x) := by
+    simp [is_valid_p, k_to_gen, e_to_gen, kk_to_gen, kk_of_gen]
+
+  theorem is_valid_p_bind
+    {{k : ((i:id) → a i → Result (b i)) → (i:id) → a i → Result (b i)}}
+    {{g : ((i:id) → a i → Result (b i)) → Result c}}
+    {{h : c → ((i:id) → a i → Result (b i)) → Result d}}
+    (Hgvalid : is_valid_p k g)
+    (Hhvalid : ∀ y, is_valid_p k (h y)) :
+    is_valid_p k (λ k => do let y ← g k; h y k) := by
+    apply Fix.is_valid_p_bind
+    . apply Hgvalid
+    . apply Hhvalid
+
 end FixI
 
 namespace Ex1
@@ -768,55 +909,29 @@ namespace Ex4
       let b ← k 0 (i - 1)
       .ret b
 
-  inductive Funs : List (Type u) → List (Type u) → Type (u + 1) :=
-    | Nil : Funs [] []
-    | Cons {ity oty : Type u} {itys otys : List (Type u)}
-           (f : ity → Result oty) (tl : Funs itys otys) : Funs (ity :: itys) (oty :: otys)
-
-  theorem Funs.length_eq {itys otys : List (Type)} (fl : Funs itys otys) :
-    itys.length = otys.length :=
-    match fl with
-    | .Nil => by simp
-    | .Cons f tl =>
-      have h:= Funs.length_eq tl
-      by simp [h]
-
-  @[simp] def Funs.cast_fin {itys otys : List (Type)}
-    (fl : Funs itys otys) (i : Fin itys.length) : Fin otys.length :=
-    ⟨ i.val, by have h:= fl.length_eq; have h1:= i.isLt; simp_all ⟩
-
   @[simp] def bodies (k : (i : Fin 2) → input_ty i → Result (output_ty i)) :
     Funs [Int, Int] [Bool, Bool] :=
     Funs.Cons (is_even_body k) (Funs.Cons (is_odd_body k) Funs.Nil)
 
-  @[simp] def get_fun {itys otys : List (Type)} (fl : Funs itys otys) :
-    (i : Fin itys.length) → itys.get i → Result (otys.get (fl.cast_fin i)) :=
-    match fl with
-    | .Nil => λ i => by have h:= i.isLt; simp at h
-    | @Funs.Cons ity oty itys1 otys1 f tl =>
-      λ i =>
-      if h: i.val = 0 then
-        Eq.mp (by cases i; simp_all [List.get]) f
-      else
-        let j := i.val - 1
-        have Hj: j < itys1.length := by
-          have Hi := i.isLt
-          simp at Hi
-          revert Hi
-          cases Heq: i.val <;> simp_all
-          simp_arith
-        let j: Fin itys1.length := ⟨ j, Hj ⟩
-        Eq.mp
-          (by
-            cases Heq: i; rename_i val isLt;
-            cases Heq': j; rename_i val' isLt;
-            cases val <;> simp_all [List.get])
-          (get_fun tl j)
-
   def body (k : (i : Fin 2) → input_ty i → Result (output_ty i)) (i: Fin 2) :
     input_ty i → Result (output_ty i) := get_fun (bodies k) i
 
-  theorem body_is_valid : is_valid body := by sorry
+  theorem body_is_valid : is_valid body := by
+    -- Split the proof into proofs of validity of the individual bodies
+    rw [is_valid]
+    simp [body]
+    intro k
+    apply for_all_fin_imp_forall
+    simp [for_all_fin]
+    repeat (unfold for_all_fin_aux; simp)
+    simp [get_fun]
+    (repeat (apply And.intro)) <;> intro x <;> simp at x <;>
+    simp [is_even_body, is_odd_body]
+    -- Prove the validity of the individual bodies
+    . split <;> simp
+      apply is_valid_p_bind <;> simp
+    . split <;> simp
+      apply is_valid_p_bind <;> simp
 
   theorem body_fix_eq : fix body = body (fix body) :=
     is_valid_fix_fixed_eq body_is_valid
