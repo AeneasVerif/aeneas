@@ -25,6 +25,11 @@ TODO:
 - simplifier/rewriter have a strange behavior sometimes
 -/
 
+
+/- TODO: this is very useful, but is there more? -/
+set_option profiler true
+set_option profiler.threshold 100
+
 namespace Diverge
 
 namespace Primitives
@@ -533,10 +538,10 @@ namespace FixI
     fix f = f (fix f) := by
     have Hvalid' : Fix.is_valid (k_to_gen f) := by
       intro k x
-      simp [is_valid, is_valid_p] at Hvalid
+      simp only [is_valid, is_valid_p] at Hvalid
       let ⟨ i, x ⟩ := x
       have Hvalid := Hvalid (k_of_gen k) i x
-      simp [k_to_gen, k_of_gen, kk_to_gen, kk_of_gen] at Hvalid
+      simp only [k_to_gen, k_of_gen, kk_to_gen, kk_of_gen] at Hvalid
       refine Hvalid
     have Heq := Fix.is_valid_fix_fixed_eq Hvalid'
     simp [fix]
@@ -612,7 +617,7 @@ namespace FixI
   termination_by for_all_fin_aux n _ m h => n - m
   decreasing_by
     simp_wf
-    apply Nat.sub_add_lt_sub <;> simp_all
+    apply Nat.sub_add_lt_sub <;> simp
     simp_all [add_one_le_iff_le_ne]
 
   def for_all_fin {n : Nat} (f : Fin n → Prop) := for_all_fin_aux f 0 (by simp)
@@ -665,6 +670,7 @@ namespace FixI
           simp_all
         . simp_all [add_one_le_iff_le_ne]
 
+  -- TODO: this is not necessary anymore
   theorem for_all_fin_imp_forall (n : Nat) (f : Fin n → Prop) :
     for_all_fin f → ∀ i, f i
     := by
@@ -702,7 +708,6 @@ namespace FixI
     | .Nil => True
     | .Cons f fl => (∀ x, FixI.is_valid_p k (λ k => f k x)) ∧ fl.is_valid_p k
 
-  #check Subtype
   def Funs.is_valid_p_is_valid_p_aux
     {k : k_ty id a b}
     {itys otys : List Type}
@@ -724,11 +729,11 @@ namespace FixI
       simp_all
     case succ n Hn =>
       intro itys otys Heq fl Hvalid Hlen i x;
-      cases fl <;> simp at *
+      cases fl <;> simp at Hlen i x Heq Hvalid
       rename_i ity oty itys otys f fl
       have ⟨ Hvf, Hvalid ⟩ := Hvalid
       have Hvf1: is_valid_p k fl := by
-        simp_all [Funs.is_valid_p]
+        simp [Hvalid, Funs.is_valid_p]
       have Hn := @Hn itys otys (by simp[*]) fl Hvf1 (by simp [*])
       -- Case disjunction on i
       match i with
@@ -989,29 +994,12 @@ namespace Ex4
   theorem body_is_valid : is_valid body := by
     -- Split the proof into proofs of validity of the individual bodies
     rw [is_valid]
-    simp [body]
-    intro k
-    apply for_all_fin_imp_forall
-    simp [for_all_fin]
-    repeat (unfold for_all_fin_aux; simp)
-    simp [get_fun]
-    (repeat (apply And.intro)) <;> intro x <;> simp at x <;>
-    simp [is_even_body, is_odd_body]
-    -- Prove the validity of the individual bodies
-    . split <;> simp
-      apply is_valid_p_bind <;> simp
-    . split <;> simp
-      apply is_valid_p_bind <;> simp
-
-  theorem body_is_valid' : is_valid body := by
-    -- Split the proof into proofs of validity of the individual bodies
-    rw [is_valid]
-    simp [body]
+    simp only [body]
     intro k
     apply (Funs.is_valid_p_is_valid_p [Int, Int] [Bool, Bool])
     simp [Funs.is_valid_p]
     (repeat (apply And.intro)) <;> intro x <;> simp at x <;>
-    simp [is_even_body, is_odd_body]
+    simp only [is_even_body, is_odd_body]
     -- Prove the validity of the individual bodies
     . split <;> simp
       apply is_valid_p_bind <;> simp
@@ -1088,11 +1076,15 @@ namespace Ex5
   theorem id_body_is_valid :
     ∀ k x, is_valid_p k (λ k => @id_body a k x) := by
     intro k x
-    simp [id_body]
+    simp only [id_body]
     split <;> simp
-    apply is_valid_p_bind <;> simp_all
+    apply is_valid_p_bind <;> simp [*]
     -- We have to show that `map k tl` is valid
-    apply map_is_valid; simp
+    apply map_is_valid;
+    -- Remark: if we don't do the intro, then the last step is expensive:
+    -- "typeclass inference of Nonempty took 119ms"
+    intro k x
+    simp only [is_valid_p_same, is_valid_p_rec]
 
   noncomputable def id (t : Tree a) := fix id_body t
 
