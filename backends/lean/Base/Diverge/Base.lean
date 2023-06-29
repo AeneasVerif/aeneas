@@ -4,6 +4,9 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 
+-- For debugging
+import Base.Diverge.ElabBase
+
 /-
 TODO:
 - we want an easier to use cases:
