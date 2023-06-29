@@ -5,6 +5,7 @@ namespace Diverge
 open Lean Elab Term Meta
 
 initialize registerTraceClass `Diverge.elab (inherited := true)
+initialize registerTraceClass `Diverge.def.sigmas (inherited := true)
 initialize registerTraceClass `Diverge.def (inherited := true)
 
 -- TODO: move

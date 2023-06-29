@@ -560,6 +560,7 @@ namespace FixI
     kk_ty id a b → kk_ty id a b
 
   def in_out_ty : Type (imax (u + 1) (v + 1)) := (in_ty : Type u) × ((x:in_ty) → Type v)
+  -- TODO: remove?
   @[simp] def mk_in_out_ty (in_ty : Type u) (out_ty : in_ty → Type v) :
     in_out_ty :=
     Sigma.mk in_ty out_ty
@@ -1143,7 +1144,7 @@ namespace Ex6
         if i = 0 then .ret hd
         else list_nth tl (i - 1)
     := by
-    have Heq := is_valid_fix_fixed_eq (@list_nth_body_is_valid a)
+    have Heq := is_valid_fix_fixed_eq list_nth_body_is_valid
     simp [list_nth]
     conv => lhs; rw [Heq]
 
