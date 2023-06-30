@@ -554,14 +554,14 @@ namespace FixI
   /- Some utilities to define the mutually recursive functions -/
 
   -- TODO: use more
-  @[simp] def kk_ty (id : Type u) (a : id → Type v) (b : (i:id) → (x:a i) → Type w) :=
+  abbrev kk_ty (id : Type u) (a : id → Type v) (b : (i:id) → (x:a i) → Type w) :=
     (i:id) → (x:a i) → Result (b i x)
-  @[simp] def k_ty (id : Type u) (a : id → Type v) (b : (i:id) → (x:a i) → Type w) :=
+  abbrev k_ty (id : Type u) (a : id → Type v) (b : (i:id) → (x:a i) → Type w) :=
     kk_ty id a b → kk_ty id a b
 
-  def in_out_ty : Type (imax (u + 1) (v + 1)) := (in_ty : Type u) × ((x:in_ty) → Type v)
+  abbrev in_out_ty : Type (imax (u + 1) (v + 1)) := (in_ty : Type u) × ((x:in_ty) → Type v)
   -- TODO: remove?
-  @[simp] def mk_in_out_ty (in_ty : Type u) (out_ty : in_ty → Type v) :
+  abbrev mk_in_out_ty (in_ty : Type u) (out_ty : in_ty → Type v) :
     in_out_ty :=
     Sigma.mk in_ty out_ty
 

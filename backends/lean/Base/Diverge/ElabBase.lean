@@ -4,13 +4,14 @@ namespace Diverge
 
 open Lean Elab Term Meta
 
-initialize registerTraceClass `Diverge.elab (inherited := true)
-initialize registerTraceClass `Diverge.def.sigmas (inherited := true)
-initialize registerTraceClass `Diverge.def (inherited := true)
+initialize registerTraceClass `Diverge.elab
+initialize registerTraceClass `Diverge.def
+initialize registerTraceClass `Diverge.def.sigmas
+initialize registerTraceClass `Diverge.def.genBody
 
 -- TODO: move
 -- TODO: small helper
-def explore_term (incr : String) (e : Expr) : TermElabM Unit :=
+def explore_term (incr : String) (e : Expr) : MetaM Unit :=
   match e with
   | .bvar _ => do logInfo m!"{incr}bvar: {e}"; return ()
   | .fvar _ => do logInfo m!"{incr}fvar: {e}"; return ()
@@ -77,5 +78,43 @@ private def test2 (x : Nat) : Nat := x
 
 print_decl test1
 print_decl test2
+
+-- We adapted this from AbstractNestedProofs.visit
+-- A map visitor function for expressions
+partial def mapVisit (k : Expr → MetaM Expr) (e : Expr) : MetaM Expr := do
+  let mapVisitBinders (xs : Array Expr) (k2 : MetaM Expr) : MetaM Expr := do
+    let localInstances ← getLocalInstances
+    let mut lctx ← getLCtx
+    for x in xs do
+      let xFVarId := x.fvarId!
+      let localDecl ← xFVarId.getDecl
+      let type      ← mapVisit k localDecl.type
+      let localDecl := localDecl.setType type
+      let localDecl ← match localDecl.value? with
+         | some value => let value ← mapVisit k value; pure <| localDecl.setValue value
+         | none       => pure localDecl
+      lctx :=lctx.modifyLocalDecl xFVarId fun _ => localDecl
+    withLCtx lctx localInstances k2
+  -- TODO: use a cache? (Lean.checkCache)
+  -- Explore
+  let e ← k e
+  match e with
+  | .bvar _
+  | .fvar _
+  | .mvar _
+  | .sort _
+  | .lit _
+  | .const _ _ => pure e
+  | .app .. => do e.withApp fun f args => return mkAppN f (← args.mapM (mapVisit k))
+  | .lam .. =>
+    lambdaLetTelescope e fun xs b =>
+      mapVisitBinders xs do mkLambdaFVars xs (← mapVisit k b) (usedLetOnly := false)
+  | .forallE .. => do
+    forallTelescope e fun xs b => mapVisitBinders xs do mkForallFVars xs (← mapVisit k b)
+  | .letE .. => do
+    lambdaLetTelescope e fun xs b => mapVisitBinders xs do
+      mkLambdaFVars xs (← mapVisit k b) (usedLetOnly := false)
+  | .mdata _ b => return e.updateMData! (← mapVisit k b)
+  | .proj _ _ b => return e.updateProj! (← mapVisit k b)
 
 end Diverge
