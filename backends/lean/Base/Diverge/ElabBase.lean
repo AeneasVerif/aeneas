@@ -9,6 +9,7 @@ initialize registerTraceClass `Diverge.def
 initialize registerTraceClass `Diverge.def.sigmas
 initialize registerTraceClass `Diverge.def.genBody
 initialize registerTraceClass `Diverge.def.valid
+initialize registerTraceClass `Diverge.def.unfold
 
 -- TODO: move
 -- TODO: small helper
