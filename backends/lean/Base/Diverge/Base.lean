@@ -434,6 +434,23 @@ namespace Fix
     is_valid_p k (λ k => k x) := by
     simp_all [is_valid_p, is_mono_p_rec, is_cont_p_rec]
 
+  theorem is_valid_p_ite
+    (k : ((x:a) → Result (b x)) → (x:a) → Result (b x))
+    (cond : Prop) [h : Decidable cond]
+    {e1 e2 : ((x:a) → Result (b x)) → Result c}
+    (he1: is_valid_p k e1) (he2 : is_valid_p k e2) :
+    is_valid_p k (ite cond e1 e2) := by
+    split <;> assumption
+
+  theorem is_valid_p_dite
+    (k : ((x:a) → Result (b x)) → (x:a) → Result (b x))
+    (cond : Prop) [h : Decidable cond]
+    {e1 : cond → ((x:a) → Result (b x)) → Result c}
+    {e2 : Not cond → ((x:a) → Result (b x)) → Result c}
+    (he1: ∀ x, is_valid_p k (e1 x)) (he2 : ∀ x, is_valid_p k (e2 x)) :
+    is_valid_p k (dite cond e1 e2) := by
+    split <;> simp [*]
+
   -- Lean is good at unification: we can write a very general version
   -- (in particular, it will manage to figure out `g` and `h` when we
   -- apply the lemma)
@@ -680,6 +697,24 @@ namespace FixI
     is_valid_p k (λ k => k i x) := by
     simp [is_valid_p, k_to_gen, e_to_gen, kk_to_gen, kk_of_gen]
 
+  theorem is_valid_p_ite
+    (k : ((i:id) → (x:a i) → Result (b i x)) → (i:id) → (x:a i) → Result (b i x))
+    (cond : Prop) [h : Decidable cond]
+    {e1 e2 : ((i:id) → (x:a i) → Result (b i x)) → Result c}
+    (he1: is_valid_p k e1) (he2 : is_valid_p k e2) :
+    is_valid_p k (λ k => ite cond (e1 k) (e2 k)) := by
+    split <;> assumption
+
+  theorem is_valid_p_dite
+    (k : ((i:id) → (x:a i) → Result (b i x)) → (i:id) → (x:a i) → Result (b i x))
+    (cond : Prop) [h : Decidable cond]
+    {e1 : ((i:id) → (x:a i) → Result (b i x)) → cond → Result c}
+    {e2 : ((i:id) → (x:a i) → Result (b i x)) → Not cond → Result c}
+    (he1: ∀ x, is_valid_p k (λ k => e1 k x))
+    (he2 : ∀ x, is_valid_p k (λ k => e2 k x)) :
+    is_valid_p k (λ k => dite cond (e1 k) (e2 k)) := by
+    split <;> simp [*]
+
   theorem is_valid_p_bind
     {{k : ((i:id) → (x:a i) → Result (b i x)) → (i:id) → (x:a i) → Result (b i x)}}
     {{g : ((i:id) → (x:a i) → Result (b i x)) → Result c}}
@@ -698,6 +733,9 @@ namespace FixI
     match fl with
     | .Nil => True
     | .Cons f fl => (∀ x, FixI.is_valid_p k (λ k => f k x)) ∧ fl.is_valid_p k
+
+  theorem Funs.is_valid_p_Nil (k : k_ty id a b) :
+    Funs.is_valid_p k Funs.Nil := by simp [Funs.is_valid_p]
 
   def Funs.is_valid_p_is_valid_p_aux
     {k : k_ty id a b}
@@ -1116,7 +1154,7 @@ namespace Ex6
   def body (k : (i : Fin 1) → (x : input_ty i) → Result (output_ty i x)) (i: Fin 1) :
     (x : input_ty i) → Result (output_ty i x) := get_fun bodies i k
 
-  theorem list_nth_body_is_valid: is_valid body := by
+  theorem body_is_valid: is_valid body := by
     -- Split the proof into proofs of validity of the individual bodies
     rw [is_valid]
     simp only [body]
@@ -1131,6 +1169,20 @@ namespace Ex6
     split <;> simp
     split <;> simp
 
+  -- Writing the proof terms explicitly
+  theorem list_nth_body_is_valid' (k : k_ty (Fin 1) input_ty output_ty)
+    (x : (a : Type u) × List a × Int) : is_valid_p k (fun k => list_nth_body k x) :=
+    let ⟨ a, ls, i ⟩ := x
+    match ls with
+    | [] => is_valid_p_same k (.fail .panic)
+    | hd :: tl =>
+      is_valid_p_ite k (Eq i 0) (is_valid_p_same k (.ret hd)) (is_valid_p_rec k 0 ⟨a, tl, i-1⟩)
+
+  theorem body_is_valid' : is_valid body :=
+    fun k =>
+    Funs.is_valid_p_is_valid_p tys k bodies
+      (And.intro (list_nth_body_is_valid' k) (Funs.is_valid_p_Nil k))
+
   noncomputable
   def list_nth {a: Type u} (ls : List a) (i : Int) : Result a :=
     fix body 0 ⟨ a, ls , i ⟩
@@ -1144,8 +1196,28 @@ namespace Ex6
         if i = 0 then .ret hd
         else list_nth tl (i - 1)
     := by
-    have Heq := is_valid_fix_fixed_eq list_nth_body_is_valid
+    have Heq := is_valid_fix_fixed_eq body_is_valid
     simp [list_nth]
     conv => lhs; rw [Heq]
+
+  -- Write the proof term explicitly: the generation of the proof term (without tactics)
+  -- is automatable, and the proof term is actually a lot simpler and smaller when we
+  -- don't use tactics.
+  theorem list_nth_eq'.{u} {a : Type u} (ls : List a) (i : Int) :
+    list_nth ls i =
+      match ls with
+      | [] => .fail .panic
+      | hd :: tl =>
+        if i = 0 then .ret hd
+        else list_nth tl (i - 1)
+    :=
+    -- Use the fixed-point equation
+    have Heq := is_valid_fix_fixed_eq body_is_valid.{u}
+    -- Add the index
+    have Heqi := congr_fun Heq 0
+    -- Add the input
+    have Heqix := congr_fun Heqi { fst := a, snd := (ls, i) }
+    -- Done
+    Heqix
 
 end Ex6
