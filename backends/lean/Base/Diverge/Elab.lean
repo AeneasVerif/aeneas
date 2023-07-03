@@ -378,17 +378,22 @@ mutual
 partial def proveExprIsValid (k_var kk_var : Expr) (e : Expr) : MetaM Expr := do
   trace[Diverge.def.valid] "proveValid: {e}"
   match e with
+  | .const _ _ => throwError "Unimplemented" -- Shouldn't get there?
   | .bvar _
   | .fvar _
-  | .mvar _
-  | .sort _
   | .lit _
-  | .const _ _ => throwError "Unimplemented"
+  | .mvar _
+  | .sort _ => throwError "Unreachable"
   | .lam .. => throwError "Unimplemented"
   | .forallE .. => throwError "Unreachable" -- Shouldn't get there
-  | .letE .. => throwError "TODO"
-    -- lambdaLetTelescope e fun xs b => mapVisitBinders xs do
-    --  mkLambdaFVars xs (← mapVisit k b) (usedLetOnly := false)
+  | .letE dName dTy dValue body _nonDep => do
+    -- Introduce a local declaration for the let-binding
+    withLetDecl dName dTy dValue fun decl => do
+    let isValid ← proveExprIsValid k_var kk_var body
+    -- Add the let-binding around (rem.: the let-binding should be
+    -- *inside* the `is_valid_p`, not outside, but because it reduces
+    -- in the end it doesn't matter)
+    mkLetFVars #[decl] isValid
   | .mdata _ b => proveExprIsValid k_var kk_var b
   | .proj _ _ _ =>
     -- The projection shouldn't use the continuation
@@ -962,5 +967,13 @@ mutual
   divergent def bar (i : Int) : Result Nat :=
     if i > 20 then foo (i / 20) else .ret 42
 end
+
+-- Testing dependent branching and let-bindings
+-- TODO: why the linter warning?
+divergent def is_non_zero (i : Int) : Result Bool :=
+  if _h:i = 0 then return false
+  else
+    let b := true
+    return b
 
 end Diverge
