@@ -1010,6 +1010,11 @@ let end_type_decl_group (fmt : F.formatter) (is_rec : bool)
 let unit_name () =
   match !backend with Lean -> "Unit" | Coq | FStar | HOL4 -> "unit"
 
+(** Small helper *)
+let extract_arrow (fmt : F.formatter) () : unit =
+  if !Config.backend = Lean then F.pp_print_string fmt "→"
+  else F.pp_print_string fmt "->"
+
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
 
@@ -1103,7 +1108,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt "(";
       extract_rec false arg_ty;
       F.pp_print_space fmt ();
-      F.pp_print_string fmt "->";
+      extract_arrow fmt ();
       F.pp_print_space fmt ();
       extract_rec false ret_ty;
       if inside then F.pp_print_string fmt ")"
@@ -1191,7 +1196,7 @@ let extract_type_decl_variant (ctx : extraction_ctx) (fmt : F.formatter)
     (* Print the arrow [->] *)
     if !backend <> HOL4 then (
       F.pp_print_space fmt ();
-      F.pp_print_string fmt "->");
+      extract_arrow fmt ());
     (* Close the field box *)
     F.pp_close_box fmt ();
     (* Return *)
@@ -2268,7 +2273,8 @@ and extract_Abs (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       ctx xl
   in
   F.pp_print_space fmt ();
-  F.pp_print_string fmt "->";
+  if !backend = Lean then F.pp_print_string fmt "=>"
+  else F.pp_print_string fmt "->";
   F.pp_print_space fmt ();
   (* Print the body *)
   extract_texpression ctx fmt false e;
@@ -2750,7 +2756,7 @@ let extract_fun_input_parameters_types (ctx : extraction_ctx)
     let inside = false in
     extract_ty ctx fmt TypeDeclId.Set.empty inside ty;
     F.pp_print_space fmt ();
-    F.pp_print_string fmt "->";
+    extract_arrow fmt ();
     F.pp_print_space fmt ()
   in
   List.iter extract_param def.signature.inputs
