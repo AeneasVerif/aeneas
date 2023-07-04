@@ -834,11 +834,13 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (filename : string)
         custom_includes;
       Printf.fprintf out "Module %s.\n" module_name
   | Lean ->
-      Printf.fprintf out "import Base.Primitives\n";
+      Printf.fprintf out "import Base\n";
       (* Add the custom imports *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_imports;
       (* Add the custom includes *)
-      List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_includes
+      List.iter (fun m -> Printf.fprintf out "import %s\n" m) custom_includes;
+      (* Always open the Primitives namespace *)
+      Printf.fprintf out "open Primitives\n"
   | HOL4 ->
       Printf.fprintf out "open primitivesLib divDefLib\n";
       (* Add the custom imports and includes *)
@@ -903,6 +905,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       fmt;
       indent_incr = 2;
       use_opaque_pre = !Config.split_files;
+      use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
     }
   in
 
@@ -1019,7 +1022,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
      create more directories *)
   if !Config.backend = Lean then (
     let ( ^^ ) = Filename.concat in
-    mkdir_if (dest_dir ^^ "Base");
     if !Config.split_files then mkdir_if (dest_dir ^^ module_name);
     if needs_clauses_module then (
       assert !Config.split_files;
@@ -1033,7 +1035,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       match !Config.backend with
       | FStar -> Some ("/backends/fstar/Primitives.fst", "Primitives.fst")
       | Coq -> Some ("/backends/coq/Primitives.v", "Primitives.v")
-      | Lean -> Some ("/backends/lean/Primitives.lean", "Base/Primitives.lean")
+      | Lean -> None
       | HOL4 -> None
     in
     match primitives_src_dest with
@@ -1265,38 +1267,36 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
         log#linfo (lazy ("Generated: " ^ filename)));
 
       (*
-       * Generate the lakefile.lean file
+       * Generate the lakefile.lean file, if the user asks for it
        *)
+      if !Config.lean_gen_lakefile then (
+        (* Open the file *)
+        let filename = Filename.concat dest_dir "lakefile.lean" in
+        let out = open_out filename in
 
-      (* Open the file *)
-      let filename = Filename.concat dest_dir "lakefile.lean" in
-      let out = open_out filename in
+        (* Generate the content *)
+        Printf.fprintf out "import Lake\nopen Lake DSL\n\n";
+        Printf.fprintf out "require mathlib from git\n";
+        Printf.fprintf out
+          "  \"https://github.com/leanprover-community/mathlib4.git\"\n\n";
 
-      (* Generate the content *)
-      Printf.fprintf out "import Lake\nopen Lake DSL\n\n";
-      Printf.fprintf out "require mathlib from git\n";
-      Printf.fprintf out
-        "  \"https://github.com/leanprover-community/mathlib4.git\"\n\n";
+        let package_name = StringUtils.to_snake_case module_name in
+        Printf.fprintf out "package «%s» {}\n\n" package_name;
 
-      let package_name = StringUtils.to_snake_case module_name in
-      Printf.fprintf out "package «%s» {}\n\n" package_name;
+        Printf.fprintf out "@[default_target]\nlean_lib «%s» {}\n" module_name;
 
-      Printf.fprintf out "lean_lib «Base» {}\n\n";
+        (* No default target for now.
+           Format would be:
+           {[
+             @[default_target]
+               lean_exe «package_name» {
+               root := `Main
+             }
+           ]}
+        *)
 
-      Printf.fprintf out "@[default_target]\nlean_lib «%s» {}\n" module_name;
+        (* Flush and close the file *)
+        close_out out;
 
-      (* No default target for now.
-         Format would be:
-         {[
-           @[default_target]
-           lean_exe «package_name» {
-             root := `Main
-           }
-         ]}
-      *)
-
-      (* Flush and close the file *)
-      close_out out;
-
-      (* Logging *)
-      log#linfo (lazy ("Generated: " ^ filename))
+        (* Logging *)
+        log#linfo (lazy ("Generated: " ^ filename)))

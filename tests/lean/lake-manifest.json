@@ -7,10 +7,11 @@
     "rev": "c43db94a8f495dad37829e9d7ad65483d68c86b8",
     "name": "proofwidgets",
     "inputRev?": "v0.0.11"}},
+  {"path": {"name": "Base", "dir": "./../../backends/lean"}},
   {"git":
    {"url": "https://github.com/leanprover-community/mathlib4.git",
     "subDir?": null,
-    "rev": "4f103b3696795c62e76fb89d177efb91c29afdf5",
+    "rev": "cb02d09e1d5611d22efc2b406e7893f246b2f51e",
     "name": "mathlib",
     "inputRev?": null}},
   {"git":

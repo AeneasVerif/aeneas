@@ -107,6 +107,9 @@ let () =
         Arg.Clear check_invariants,
         " Deactivate the invariant sanity checks performed at every evaluation \
          step. Dramatically increases speed." );
+      ( "-lean-default-lakefile",
+        Arg.Clear lean_gen_lakefile,
+        " Generate a default lakefile.lean (Lean only)" );
     ]
   in
 
@@ -130,6 +133,9 @@ let () =
     (not !use_fuel)
     || (not !extract_decreases_clauses)
        && not !extract_template_decreases_clauses);
+  if !lean_gen_lakefile && not (!backend = Lean) then
+    log#error
+      "The -lean-default-lakefile option is valid only for the Lean backend";
 
   (* Check that the user specified a backend *)
   let _ =

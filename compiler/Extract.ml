@@ -505,10 +505,10 @@ let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
   | Lean -> (
       match kind with
       | SingleNonRec -> Some "def"
-      | SingleRec -> Some "def"
-      | MutRecFirst -> Some "mutual def"
-      | MutRecInner -> Some "def"
-      | MutRecLast -> Some "def"
+      | SingleRec -> Some "divergent def"
+      | MutRecFirst -> Some "mutual divergent def"
+      | MutRecInner -> Some "divergent def"
+      | MutRecLast -> Some "divergent def"
       | Assumed -> Some "axiom"
       | Declared -> Some "axiom")
   | HOL4 -> None
@@ -2327,9 +2327,7 @@ and extract_lets (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
           match !backend with
           | FStar -> "="
           | Coq -> ":="
-          | Lean ->
-              (* TODO: switch to ⟵ once issues are fixed *)
-              if monadic then "←" else ":="
+          | Lean -> if monadic then "←" else ":="
           | HOL4 -> if monadic then "<-" else "="
         in
         F.pp_print_string fmt eq;
@@ -2409,7 +2407,7 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (_inside : bool)
       (* Open a box for the [if e] *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       F.pp_print_string fmt "if";
-      if !backend = Lean then F.pp_print_string fmt " h:";
+      if !backend = Lean && ctx.use_dep_ite then F.pp_print_string fmt " h:";
       F.pp_print_space fmt ();
       let scrut_inside = PureUtils.texpression_requires_parentheses scrut in
       extract_texpression ctx fmt scrut_inside scrut;

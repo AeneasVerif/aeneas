@@ -162,6 +162,11 @@ let backward_no_state_update = ref false
  *)
 let split_files = ref true
 
+(** For Lean, controls whether we generate a lakefile or not.
+
+ *)
+let lean_gen_lakefile = ref false
+
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that
     they don't panic.

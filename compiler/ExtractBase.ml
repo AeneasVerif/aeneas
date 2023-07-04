@@ -539,6 +539,16 @@ type extraction_ctx = {
           use it.
           Also see {!names_map.opaque_ids}.
        *)
+  use_dep_ite : bool;
+      (** For Lean: do we use dependent-if then else expressions?
+
+          Example:
+          {[
+            if h: b then ... else ...
+            -- ^^
+            -- makes the if then else dependent
+          ]}
+        *)
 }
 
 (** Debugging function, used when communicating name collisions to the user,

@@ -1,40 +1,35 @@
 ALL_DIRS ?= $(filter-out %~ lean-toolchain% Makefile%, $(wildcard *))
 
+# TODO: remove
 UPDATE_DIRS = $(addprefix update-,$(ALL_DIRS))
 
+# TODO: remove
 VERIFY_DIRS = $(addprefix verif-,$(ALL_DIRS))
 
+# TODO: remove
 CLEAN_DIRS = $(addprefix clean-,$(ALL_DIRS))
 
+# TODO: remove
 COPY_LEAN_TOOLCHAIN = $(addprefix copy-lean-toolchain-,$(ALL_DIRS))
 
 .PHONY: all
 all: prepare-projects verify
 
 .PHONY: prepare-projects
-prepare-projects: $(COPY_LEAN_TOOLCHAIN)
+prepare-projects: copy-lean-toolchain
 
 .PHONY: prepare-projects
-copy-lean-toolchain-%:
-	cp lean-toolchain $*
+copy-lean-toolchain:
+	cp ../../backends/lean/lean-toolchain .
 
 .PHONY: update
-update: $(UPDATE_DIRS)
-
-.PHONY: update-%
-update-%:
-	cd $* && lake update
+update:
+	lake update
 
 .PHONY: verify
-verify: $(VERIFY_DIRS)
-
-.PHONY: verif-%
-verif-%:
-	cd $* && lake build
+verify:
+	lake build
 
 .PHONY: clean
-clean: $(CLEAN_DIRS)
-
-.PHONY: clean-%
-clean-%:
-	cd $* && lake clean
+clean:
+	lake clean
