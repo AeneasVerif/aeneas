@@ -57,6 +57,12 @@ deriving Repr, BEq
 
 open Result
 
+instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
+  Inhabited.mk (fail panic)
+
+instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
+  Nonempty.intro div
+
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α -> Result β) : Result β :=
   match x with
   | ret v  => f v 
@@ -156,7 +162,14 @@ namespace Fix
     (x : a) (n : Nat) : Prop :=
     fix_fuel_pred f x n
 
-  noncomputable
+  partial
+  def fixImpl (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) (x : a) : Result (b x) :=
+    f (fixImpl f) x
+
+  -- The fact that `fix` is implemented by `fixImpl` allows us to not mark the
+  -- functions defined with the fixed-point as noncomputable. One big advantage
+  -- is that it allows us to evaluate those functions, for instance with #eval.
+  @[implemented_by fixImpl]
   def fix (f : ((x:a) → Result (b x)) → (x:a) → Result (b x)) (x : a) : Result (b x) :=
     fix_fuel (least (fix_fuel_P f x)) f x
 
@@ -548,7 +561,7 @@ namespace FixI
   def is_valid (f : ((i:id) → (x:a i) → Result (b i x)) → (i:id) → (x:a i) → Result (b i x)) : Prop :=
     ∀ k i x, is_valid_p k (λ k => f k i x)
 
-  noncomputable def fix
+  def fix
     (f : ((i:id) → (x:a i) → Result (b i x)) → (i:id) → (x:a i) → Result (b i x)) :
     (i:id) → (x:a i) → Result (b i x) :=
     kk_of_gen (Fix.fix (k_to_gen f))
@@ -808,7 +821,6 @@ namespace Ex1
     split <;> simp
     split <;> simp
 
-  noncomputable
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
   -- The unfolding equation - diverges if `i < 0`
@@ -851,7 +863,6 @@ namespace Ex2
     split <;> simp
     apply is_valid_p_bind <;> intros <;> simp_all
 
-  noncomputable
   def list_nth (ls : List a) (i : Int) : Result a := fix list_nth_body (ls, i)
 
   -- The unfolding equation - diverges if `i < 0`
@@ -932,7 +943,6 @@ namespace Ex3
     apply is_valid_p_bind; simp
     intros; split <;> simp
 
-  noncomputable
   def is_even (i : Int): Result Bool :=
     do
       let r ← fix is_even_is_odd_body (.inl i)
@@ -940,7 +950,6 @@ namespace Ex3
       | .inl b => .ret b
       | .inr _ => .fail .panic
 
-  noncomputable
   def is_odd (i : Int): Result Bool :=
     do
       let r ← fix is_even_is_odd_body (.inr i)
@@ -1032,8 +1041,8 @@ namespace Ex4
   theorem body_fix_eq : fix body = body (fix body) :=
     is_valid_fix_fixed_eq body_is_valid
 
-  noncomputable def is_even (i : Int) : Result Bool := fix body 0 i
-  noncomputable def is_odd (i : Int) : Result Bool := fix body 1 i
+  def is_even (i : Int) : Result Bool := fix body 0 i
+  def is_odd (i : Int) : Result Bool := fix body 1 i
 
   theorem is_even_eq (i : Int) : is_even i =
     (if i = 0
@@ -1052,7 +1061,6 @@ namespace Ex4
        .ret b) := by
     simp [is_even, is_odd];
     conv => lhs; rw [body_fix_eq]
-
 end Ex4
 
 namespace Ex5
@@ -1109,7 +1117,7 @@ namespace Ex5
     intro k x
     simp only [is_valid_p_same, is_valid_p_rec]
 
-  noncomputable def id (t : Tree a) := fix id_body t
+  def id (t : Tree a) := fix id_body t
 
   -- The unfolding equation
   theorem id_eq (t : Tree a) :
@@ -1183,7 +1191,6 @@ namespace Ex6
     Funs.is_valid_p_is_valid_p tys k bodies
       (And.intro (list_nth_body_is_valid' k) (Funs.is_valid_p_Nil k))
 
-  noncomputable
   def list_nth {a: Type u} (ls : List a) (i : Int) : Result a :=
     fix body 0 ⟨ a, ls , i ⟩
 
