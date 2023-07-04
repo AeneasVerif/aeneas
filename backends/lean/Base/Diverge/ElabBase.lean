@@ -83,7 +83,10 @@ print_decl test1
 print_decl test2
 
 -- A map visitor function for expressions (adapted from `AbstractNestedProofs.visit`)
-partial def mapVisit (k : Expr → MetaM Expr) (e : Expr) : MetaM Expr := do
+-- The continuation takes as parameters:
+-- - the current depth of the expression (useful for printing/debugging)
+-- - the expression to explore
+partial def mapVisit (k : Nat → Expr → MetaM Expr) (e : Expr) : MetaM Expr := do
   let mapVisitBinders (xs : Array Expr) (k2 : MetaM Expr) : MetaM Expr := do
     let localInstances ← getLocalInstances
     let mut lctx ← getLCtx
@@ -98,25 +101,27 @@ partial def mapVisit (k : Expr → MetaM Expr) (e : Expr) : MetaM Expr := do
       lctx :=lctx.modifyLocalDecl xFVarId fun _ => localDecl
     withLCtx lctx localInstances k2
   -- TODO: use a cache? (Lean.checkCache)
-  -- Explore
-  let e ← k e
-  match e with
-  | .bvar _
-  | .fvar _
-  | .mvar _
-  | .sort _
-  | .lit _
-  | .const _ _ => pure e
-  | .app .. => do e.withApp fun f args => return mkAppN f (← args.mapM (mapVisit k))
-  | .lam .. =>
-    lambdaLetTelescope e fun xs b =>
-      mapVisitBinders xs do mkLambdaFVars xs (← mapVisit k b) (usedLetOnly := false)
-  | .forallE .. => do
-    forallTelescope e fun xs b => mapVisitBinders xs do mkForallFVars xs (← mapVisit k b)
-  | .letE .. => do
-    lambdaLetTelescope e fun xs b => mapVisitBinders xs do
-      mkLambdaFVars xs (← mapVisit k b) (usedLetOnly := false)
-  | .mdata _ b => return e.updateMData! (← mapVisit k b)
-  | .proj _ _ b => return e.updateProj! (← mapVisit k b)
+  let rec visit (i : Nat) (e : Expr) : MetaM Expr := do
+    -- Explore
+    let e ← k i e
+    match e with
+    | .bvar _
+    | .fvar _
+    | .mvar _
+    | .sort _
+    | .lit _
+    | .const _ _ => pure e
+    | .app .. => do e.withApp fun f args => return mkAppN f (← args.mapM (visit (i + 1)))
+    | .lam .. =>
+      lambdaLetTelescope e fun xs b =>
+        mapVisitBinders xs do mkLambdaFVars xs (← visit (i + 1) b) (usedLetOnly := false)
+    | .forallE .. => do
+      forallTelescope e fun xs b => mapVisitBinders xs do mkForallFVars xs (← visit (i + 1) b)
+    | .letE .. => do
+      lambdaLetTelescope e fun xs b => mapVisitBinders xs do
+        mkLambdaFVars xs (← visit (i + 1) b) (usedLetOnly := false)
+    | .mdata _ b => return e.updateMData! (← visit (i + 1) b)
+    | .proj _ _ b => return e.updateProj! (← visit (i + 1) b)
+  visit 0 e
 
 end Diverge
