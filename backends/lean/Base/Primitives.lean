@@ -60,12 +60,12 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 
 /- HELPERS -/
 
-def ret? {α: Type} (r: Result α): Bool :=
+def ret? {α: Type u} (r: Result α): Bool :=
   match r with
   | ret _ => true
   | fail _ | div => false
 
-def div? {α: Type} (r: Result α): Bool :=
+def div? {α: Type u} (r: Result α): Bool :=
   match r with
   | div => true
   | ret _ | fail _ => false
@@ -73,14 +73,14 @@ def div? {α: Type} (r: Result α): Bool :=
 def massert (b:Bool) : Result Unit :=
   if b then ret () else fail assertionFailure
 
-def eval_global {α: Type} (x: Result α) (_: ret? x): α :=
+def eval_global {α: Type u} (x: Result α) (_: ret? x): α :=
   match x with
   | fail _ | div => by contradiction
   | ret x => x
 
 /- DO-DSL SUPPORT -/
 
-def bind (x: Result α) (f: α -> Result β) : Result β :=
+def bind {α : Type u} {β : Type v} (x: Result α) (f: α -> Result β) : Result β :=
   match x with
   | ret v  => f v 
   | fail v => fail v
@@ -110,23 +110,6 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ret x } :=
   | ret x => ret ⟨x, rfl⟩
   | fail e => fail e
   | div => div
-
-macro "let" e:term " ⟵ " f:term : doElem =>
-  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
-
--- TODO: any way to factorize both definitions?
-macro "let" e:term " <-- " f:term : doElem =>
-  `(doElem| let ⟨$e, h⟩ ← Result.attach $f)
-
--- We call the hypothesis `h`, in effect making it unavailable to the user
--- (because too much shadowing). But in practice, once can use the French single
--- quote notation (input with f< and f>), where `‹ h ›` finds a suitable
--- hypothesis in the context, this is equivalent to `have x: h := by assumption in x`
-#eval do
-  let y <-- .ret (0: Nat)
-  let _: y = 0 := by cases ‹ ret 0 = ret y › ; decide
-  let r: { x: Nat // x = 0 } := ⟨ y, by assumption ⟩
-  .ret r
 
 @[simp] theorem bind_tc_ret (x : α) (f : α → Result β) :
   (do let y ← .ret x; f y) = f x := by simp [Bind.bind, bind]

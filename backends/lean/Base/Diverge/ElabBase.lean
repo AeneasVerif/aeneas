@@ -4,6 +4,7 @@ namespace Diverge
 
 open Lean Elab Term Meta
 
+-- We can't define and use trace classes in the same file
 initialize registerTraceClass `Diverge.elab
 initialize registerTraceClass `Diverge.def
 initialize registerTraceClass `Diverge.def.sigmas
@@ -11,8 +12,8 @@ initialize registerTraceClass `Diverge.def.genBody
 initialize registerTraceClass `Diverge.def.valid
 initialize registerTraceClass `Diverge.def.unfold
 
--- TODO: move
--- TODO: small helper
+-- Useful helper to explore definitions and figure out the variant
+-- of their sub-expressions.
 def explore_term (incr : String) (e : Expr) : MetaM Unit :=
   match e with
   | .bvar _ => do logInfo m!"{incr}bvar: {e}"; return ()
@@ -81,8 +82,7 @@ private def test2 (x : Nat) : Nat := x
 print_decl test1
 print_decl test2
 
--- We adapted this from AbstractNestedProofs.visit
--- A map visitor function for expressions
+-- A map visitor function for expressions (adapted from `AbstractNestedProofs.visit`)
 partial def mapVisit (k : Expr → MetaM Expr) (e : Expr) : MetaM Expr := do
   let mapVisitBinders (xs : Array Expr) (k2 : MetaM Expr) : MetaM Expr := do
     let localInstances ← getLocalInstances

@@ -174,7 +174,7 @@ private def list_nth_out_ty_inner (a :Type) (scrut1: @Sigma (List a) (fun (_ls :
                  (fun (_ls : List a) => Int)
                  (fun (_scrut1:@Sigma (List a) (fun (_ls : List a) => Int)) => Type)
                  scrut1
-                 (fun (_ls : List a) (_i : Int) => Diverge.Primitives.Result a)
+                 (fun (_ls : List a) (_i : Int) => Primitives.Result a)
 
 private def list_nth_out_ty_outer (scrut0 : @Sigma (Type) (fun (a:Type) =>
                       @Sigma (List a) (fun (_ls : List a) => Int))) :=

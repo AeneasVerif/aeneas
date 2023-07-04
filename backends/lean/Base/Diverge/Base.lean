@@ -4,8 +4,7 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 
--- For debugging
-import Base.Diverge.ElabBase
+import Base.Primitives
 
 /-
 TODO:
@@ -34,68 +33,6 @@ set_option profiler true
 set_option profiler.threshold 100
 
 namespace Diverge
-
-namespace Primitives
-/-! # Copy-pasting from Primitives to make the file self-contained -/
-
-inductive Error where
-   | assertionFailure: Error
-   | integerOverflow: Error
-   | divisionByZero: Error
-   | arrayOutOfBounds: Error
-   | maximumSizeExceeded: Error
-   | panic: Error
-deriving Repr, BEq
-
-open Error
-
-inductive Result (α : Type u) where
-  | ret (v: α): Result α
-  | fail (e: Error): Result α
-  | div
-deriving Repr, BEq
-
-open Result
-
-instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
-  Inhabited.mk (fail panic)
-
-instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
-  Nonempty.intro div
-
-def bind {α : Type u} {β : Type v} (x: Result α) (f: α -> Result β) : Result β :=
-  match x with
-  | ret v  => f v 
-  | fail v => fail v
-  | div => div
-
-@[simp] theorem bind_ret (x : α) (f : α → Result β) : bind (.ret x) f = f x := by simp [bind]
-@[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
-@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
-
--- Allows using Result in do-blocks
-instance : Bind Result where
-  bind := bind
-
--- Allows using return x in do-blocks
-instance : Pure Result where
-  pure := fun x => ret x
-
-@[simp] theorem bind_tc_ret (x : α) (f : α → Result β) :
-  (do let y ← .ret x; f y) = f x := by simp [Bind.bind, bind]
-
-@[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
-  (do let y ← fail x; f y) = fail x := by simp [Bind.bind, bind]
-
-@[simp] theorem bind_tc_div (f : α → Result β) :
-  (do let y ← div; f y) = div := by simp [Bind.bind, bind]
-
-def div? {α: Type u} (r: Result α): Bool :=
-  match r with
-  | div => true
-  | ret _ | fail _ => false
-
-end Primitives
 
 namespace Fix
 
