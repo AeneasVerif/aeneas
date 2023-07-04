@@ -5,6 +5,8 @@ import External.Types
 import External.ExternalFuns
 open Primitives
 
+namespace External
+
 /- [external::swap] -/
 def swap_fwd
   (T : Type) (x : T) (y : T) (st : State) : Result (State × Unit) :=
@@ -86,3 +88,4 @@ def test_swap_non_zero_fwd (x : U32) (st : State) : Result (State × U32) :=
     then Result.fail Error.panic
     else Result.ret (st1, x0)
 
+end External

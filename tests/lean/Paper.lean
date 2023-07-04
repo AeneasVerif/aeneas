@@ -3,6 +3,8 @@
 import Base
 open Primitives
 
+namespace Paper
+
 /- [paper::ref_incr] -/
 def ref_incr_fwd_back (x : I32) : Result I32 :=
   x + (I32.ofInt 1 (by intlit))
@@ -56,13 +58,13 @@ def test_choose_fwd : Result Unit :=
 
 /- [paper::List] -/
 inductive list_t (T : Type) :=
-| Cons : T -> list_t T -> list_t T
+| Cons : T → list_t T → list_t T
 | Nil : list_t T
 
 /- [paper::list_nth_mut] -/
 divergent def list_nth_mut_fwd
   (T : Type) (l : list_t T) (i : U32) : Result T :=
-  match h: l with
+  match l with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
@@ -74,7 +76,7 @@ divergent def list_nth_mut_fwd
 /- [paper::list_nth_mut] -/
 divergent def list_nth_mut_back
   (T : Type) (l : list_t T) (i : U32) (ret0 : T) : Result (list_t T) :=
-  match h: l with
+  match l with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret (list_t.Cons ret0 tl)
@@ -87,7 +89,7 @@ divergent def list_nth_mut_back
 
 /- [paper::sum] -/
 divergent def sum_fwd (l : list_t I32) : Result I32 :=
-  match h: l with
+  match l with
   | list_t.Cons x tl => do
                           let i ← sum_fwd tl
                           x + i
@@ -123,3 +125,4 @@ def call_choose_fwd (p : (U32 × U32)) : Result U32 :=
     let (px0, _) ← choose_back U32 true px py pz0
     Result.ret px0
 
+end Paper

@@ -5,6 +5,8 @@ import HashmapMain.Types
 import HashmapMain.ExternalFuns
 open Primitives
 
+namespace HashmapMain
+
 /- [hashmap_main::hashmap::hash_key] -/
 def hashmap_hash_key_fwd (k : Usize) : Result Usize :=
   Result.ret k
@@ -92,7 +94,7 @@ def hashmap_hash_map_len_fwd
 /- [hashmap_main::hashmap::HashMap::{0}::insert_in_list] -/
 divergent def hashmap_hash_map_insert_in_list_loop_fwd
   (T : Type) (key : Usize) (value : T) (ls : hashmap_list_t T) : Result Bool :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons ckey cvalue tl =>
     if ckey = key
     then Result.ret false
@@ -109,7 +111,7 @@ divergent def hashmap_hash_map_insert_in_list_loop_back
   (T : Type) (key : Usize) (value : T) (ls : hashmap_list_t T) :
   Result (hashmap_list_t T)
   :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons ckey cvalue tl =>
     if ckey = key
     then Result.ret (hashmap_list_t.Cons ckey value tl)
@@ -173,7 +175,7 @@ divergent def hashmap_hash_map_move_elements_from_list_loop_fwd_back
   (T : Type) (ntable : hashmap_hash_map_t T) (ls : hashmap_list_t T) :
   Result (hashmap_hash_map_t T)
   :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons k v tl =>
     do
       let ntable0 ← hashmap_hash_map_insert_no_resize_fwd_back T ntable k v
@@ -256,7 +258,7 @@ def hashmap_hash_map_insert_fwd_back
 /- [hashmap_main::hashmap::HashMap::{0}::contains_key_in_list] -/
 divergent def hashmap_hash_map_contains_key_in_list_loop_fwd
   (T : Type) (key : Usize) (ls : hashmap_list_t T) : Result Bool :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons ckey t tl =>
     if ckey = key
     then Result.ret true
@@ -282,7 +284,7 @@ def hashmap_hash_map_contains_key_fwd
 /- [hashmap_main::hashmap::HashMap::{0}::get_in_list] -/
 divergent def hashmap_hash_map_get_in_list_loop_fwd
   (T : Type) (key : Usize) (ls : hashmap_list_t T) : Result T :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons ckey cvalue tl =>
     if ckey = key
     then Result.ret cvalue
@@ -308,7 +310,7 @@ def hashmap_hash_map_get_fwd
 /- [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list] -/
 divergent def hashmap_hash_map_get_mut_in_list_loop_fwd
   (T : Type) (ls : hashmap_list_t T) (key : Usize) : Result T :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons ckey cvalue tl =>
     if ckey = key
     then Result.ret cvalue
@@ -325,7 +327,7 @@ divergent def hashmap_hash_map_get_mut_in_list_loop_back
   (T : Type) (ls : hashmap_list_t T) (key : Usize) (ret0 : T) :
   Result (hashmap_list_t T)
   :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons ckey cvalue tl =>
     if ckey = key
     then Result.ret (hashmap_list_t.Cons ckey ret0 tl)
@@ -373,14 +375,14 @@ def hashmap_hash_map_get_mut_back
 /- [hashmap_main::hashmap::HashMap::{0}::remove_from_list] -/
 divergent def hashmap_hash_map_remove_from_list_loop_fwd
   (T : Type) (key : Usize) (ls : hashmap_list_t T) : Result (Option T) :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons ckey t tl =>
     if ckey = key
     then
       let mv_ls :=
         mem_replace_fwd (hashmap_list_t T) (hashmap_list_t.Cons ckey t tl)
           hashmap_list_t.Nil
-      match h: mv_ls with
+      match mv_ls with
       | hashmap_list_t.Cons i cvalue tl0 => Result.ret (Option.some cvalue)
       | hashmap_list_t.Nil => Result.fail Error.panic
     else hashmap_hash_map_remove_from_list_loop_fwd T key tl
@@ -396,14 +398,14 @@ divergent def hashmap_hash_map_remove_from_list_loop_back
   (T : Type) (key : Usize) (ls : hashmap_list_t T) :
   Result (hashmap_list_t T)
   :=
-  match h: ls with
+  match ls with
   | hashmap_list_t.Cons ckey t tl =>
     if ckey = key
     then
       let mv_ls :=
         mem_replace_fwd (hashmap_list_t T) (hashmap_list_t.Cons ckey t tl)
           hashmap_list_t.Nil
-      match h: mv_ls with
+      match mv_ls with
       | hashmap_list_t.Cons i cvalue tl0 => Result.ret tl0
       | hashmap_list_t.Nil => Result.fail Error.panic
     else
@@ -429,7 +431,7 @@ def hashmap_hash_map_remove_fwd
     let l ←
       vec_index_mut_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
     let x ← hashmap_hash_map_remove_from_list_fwd T key l
-    match h: x with
+    match x with
     | Option.none => Result.ret Option.none
     | Option.some x0 =>
       do
@@ -449,7 +451,7 @@ def hashmap_hash_map_remove_back
     let l ←
       vec_index_mut_fwd (hashmap_list_t T) self.hashmap_hash_map_slots hash_mod
     let x ← hashmap_hash_map_remove_from_list_fwd T key l
-    match h: x with
+    match x with
     | Option.none =>
       do
         let l0 ← hashmap_hash_map_remove_from_list_back T key l
@@ -505,7 +507,7 @@ def hashmap_test1_fwd : Result Unit :=
             let x ←
               hashmap_hash_map_remove_fwd U64 hm4
                 (Usize.ofInt 1024 (by intlit))
-            match h: x with
+            match x with
             | Option.none => Result.fail Error.panic
             | Option.some x0 =>
               if not (x0 = (U64.ofInt 56 (by intlit)))
@@ -555,3 +557,4 @@ def main_fwd : Result Unit :=
 /- Unit test for [hashmap_main::main] -/
 #assert (main_fwd == .ret ())
 
+end HashmapMain

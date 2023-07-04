@@ -3,6 +3,8 @@
 import Base
 open Primitives
 
+namespace NoNestedBorrows
+
 /- [no_nested_borrows::Pair] -/
 structure pair_t (T1 T2 : Type) where
   pair_x : T1
@@ -10,12 +12,12 @@ structure pair_t (T1 T2 : Type) where
 
 /- [no_nested_borrows::List] -/
 inductive list_t (T : Type) :=
-| Cons : T -> list_t T -> list_t T
+| Cons : T → list_t T → list_t T
 | Nil : list_t T
 
 /- [no_nested_borrows::One] -/
 inductive one_t (T1 : Type) :=
-| One : T1 -> one_t T1
+| One : T1 → one_t T1
 
 /- [no_nested_borrows::EmptyEnum] -/
 inductive empty_enum_t :=
@@ -31,8 +33,8 @@ structure empty_struct_t where
 
 /- [no_nested_borrows::Sum] -/
 inductive sum_t (T1 T2 : Type) :=
-| Left : T1 -> sum_t T1 T2
-| Right : T2 -> sum_t T1 T2
+| Left : T1 → sum_t T1 T2
+| Right : T2 → sum_t T1 T2
 
 /- [no_nested_borrows::neg_test] -/
 def neg_test_fwd (x : I32) : Result I32 :=
@@ -175,7 +177,7 @@ def test_copy_int_fwd : Result Unit :=
 
 /- [no_nested_borrows::is_cons] -/
 def is_cons_fwd (T : Type) (l : list_t T) : Result Bool :=
-  match h: l with
+  match l with
   | list_t.Cons t l0 => Result.ret true
   | list_t.Nil => Result.ret false
 
@@ -193,7 +195,7 @@ def test_is_cons_fwd : Result Unit :=
 
 /- [no_nested_borrows::split_list] -/
 def split_list_fwd (T : Type) (l : list_t T) : Result (T × (list_t T)) :=
-  match h: l with
+  match l with
   | list_t.Cons hd tl => Result.ret (hd, tl)
   | list_t.Nil => Result.fail Error.panic
 
@@ -254,19 +256,19 @@ mutual
 
 /- [no_nested_borrows::NodeElem] -/
 inductive node_elem_t (T : Type) :=
-| Cons : tree_t T -> node_elem_t T -> node_elem_t T
+| Cons : tree_t T → node_elem_t T → node_elem_t T
 | Nil : node_elem_t T
 
 /- [no_nested_borrows::Tree] -/
 inductive tree_t (T : Type) :=
-| Leaf : T -> tree_t T
-| Node : T -> node_elem_t T -> tree_t T -> tree_t T
+| Leaf : T → tree_t T
+| Node : T → node_elem_t T → tree_t T → tree_t T
 
 end
 
 /- [no_nested_borrows::list_length] -/
 divergent def list_length_fwd (T : Type) (l : list_t T) : Result U32 :=
-  match h: l with
+  match l with
   | list_t.Cons t l1 =>
     do
       let i ← list_length_fwd T l1
@@ -276,7 +278,7 @@ divergent def list_length_fwd (T : Type) (l : list_t T) : Result U32 :=
 /- [no_nested_borrows::list_nth_shared] -/
 divergent def list_nth_shared_fwd
   (T : Type) (l : list_t T) (i : U32) : Result T :=
-  match h: l with
+  match l with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
@@ -289,7 +291,7 @@ divergent def list_nth_shared_fwd
 /- [no_nested_borrows::list_nth_mut] -/
 divergent def list_nth_mut_fwd
   (T : Type) (l : list_t T) (i : U32) : Result T :=
-  match h: l with
+  match l with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
@@ -301,7 +303,7 @@ divergent def list_nth_mut_fwd
 /- [no_nested_borrows::list_nth_mut] -/
 divergent def list_nth_mut_back
   (T : Type) (l : list_t T) (i : U32) (ret0 : T) : Result (list_t T) :=
-  match h: l with
+  match l with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret (list_t.Cons ret0 tl)
@@ -315,7 +317,7 @@ divergent def list_nth_mut_back
 /- [no_nested_borrows::list_rev_aux] -/
 divergent def list_rev_aux_fwd
   (T : Type) (li : list_t T) (lo : list_t T) : Result (list_t T) :=
-  match h: li with
+  match li with
   | list_t.Cons hd tl => list_rev_aux_fwd T tl (list_t.Cons hd lo)
   | list_t.Nil => Result.ret lo
 
@@ -531,7 +533,7 @@ def test_shared_borrow_bool2_fwd : Result U32 :=
 
 /- [no_nested_borrows::test_shared_borrow_enum1] -/
 def test_shared_borrow_enum1_fwd (l : list_t U32) : Result U32 :=
-  match h: l with
+  match l with
   | list_t.Cons i l0 => Result.ret (U32.ofInt 1 (by intlit))
   | list_t.Nil => Result.ret (U32.ofInt 0 (by intlit))
 
@@ -539,3 +541,4 @@ def test_shared_borrow_enum1_fwd (l : list_t U32) : Result U32 :=
 def test_shared_borrow_enum2_fwd : Result U32 :=
   Result.ret (U32.ofInt 0 (by intlit))
 
+end NoNestedBorrows

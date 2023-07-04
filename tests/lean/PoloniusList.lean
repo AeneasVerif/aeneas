@@ -3,15 +3,17 @@
 import Base
 open Primitives
 
+namespace PoloniusList
+
 /- [polonius_list::List] -/
 inductive list_t (T : Type) :=
-| Cons : T -> list_t T -> list_t T
+| Cons : T → list_t T → list_t T
 | Nil : list_t T
 
 /- [polonius_list::get_list_at_x] -/
 divergent def get_list_at_x_fwd
   (ls : list_t U32) (x : U32) : Result (list_t U32) :=
-  match h: ls with
+  match ls with
   | list_t.Cons hd tl =>
     if hd = x
     then Result.ret (list_t.Cons hd tl)
@@ -21,7 +23,7 @@ divergent def get_list_at_x_fwd
 /- [polonius_list::get_list_at_x] -/
 divergent def get_list_at_x_back
   (ls : list_t U32) (x : U32) (ret0 : list_t U32) : Result (list_t U32) :=
-  match h: ls with
+  match ls with
   | list_t.Cons hd tl =>
     if hd = x
     then Result.ret ret0
@@ -31,3 +33,4 @@ divergent def get_list_at_x_back
         Result.ret (list_t.Cons hd tl0)
   | list_t.Nil => Result.ret ret0
 
+end PoloniusList

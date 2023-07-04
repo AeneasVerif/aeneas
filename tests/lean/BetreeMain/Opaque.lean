@@ -4,28 +4,32 @@ import Base
 import BetreeMain.Types
 open Primitives
 
+namespace BetreeMain
+
 structure OpaqueDefs where
   
   /- [betree_main::betree_utils::load_internal_node] -/
   betree_utils_load_internal_node_fwd
     :
-    U64 -> State -> Result (State × (betree_list_t (U64 × betree_message_t)))
+    U64 → State → Result (State × (betree_list_t (U64 ×
+      betree_message_t)))
   
   /- [betree_main::betree_utils::store_internal_node] -/
   betree_utils_store_internal_node_fwd
     :
-    U64 -> betree_list_t (U64 × betree_message_t) -> State -> Result (State ×
-      Unit)
+    U64 → betree_list_t (U64 × betree_message_t) → State → Result (State
+      × Unit)
   
   /- [betree_main::betree_utils::load_leaf_node] -/
   betree_utils_load_leaf_node_fwd
-    : U64 -> State -> Result (State × (betree_list_t (U64 × U64)))
+    : U64 → State → Result (State × (betree_list_t (U64 × U64)))
   
   /- [betree_main::betree_utils::store_leaf_node] -/
   betree_utils_store_leaf_node_fwd
-    : U64 -> betree_list_t (U64 × U64) -> State -> Result (State × Unit)
+    : U64 → betree_list_t (U64 × U64) → State → Result (State × Unit)
   
   /- [core::option::Option::{0}::unwrap] -/
   core_option_option_unwrap_fwd
-    (T : Type) : Option T -> State -> Result (State × T)
+    (T : Type) : Option T → State → Result (State × T)
   
+end BetreeMain

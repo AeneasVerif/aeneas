@@ -4,25 +4,29 @@ import Base
 import External.Types
 open Primitives
 
+namespace External
+
 structure OpaqueDefs where
   
   /- [core::mem::swap] -/
-  core_mem_swap_fwd (T : Type) : T -> T -> State -> Result (State × Unit)
+  core_mem_swap_fwd (T : Type) : T → T → State → Result (State × Unit)
   
   /- [core::mem::swap] -/
   core_mem_swap_back0
-    (T : Type) : T -> T -> State -> State -> Result (State × T)
+    (T : Type) : T → T → State → State → Result (State × T)
   
   /- [core::mem::swap] -/
   core_mem_swap_back1
-    (T : Type) : T -> T -> State -> State -> Result (State × T)
+    (T : Type) : T → T → State → State → Result (State × T)
   
   /- [core::num::nonzero::NonZeroU32::{14}::new] -/
   core_num_nonzero_non_zero_u32_new_fwd
     :
-    U32 -> State -> Result (State × (Option core_num_nonzero_non_zero_u32_t))
+    U32 → State → Result (State × (Option
+      core_num_nonzero_non_zero_u32_t))
   
   /- [core::option::Option::{0}::unwrap] -/
   core_option_option_unwrap_fwd
-    (T : Type) : Option T -> State -> Result (State × T)
+    (T : Type) : Option T → State → Result (State × T)
   
+end External

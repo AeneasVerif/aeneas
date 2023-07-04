@@ -3,8 +3,11 @@
 import Base
 open Primitives
 
+namespace Loops
+
 /- [loops::List] -/
 inductive list_t (T : Type) :=
-| Cons : T -> list_t T -> list_t T
+| Cons : T → list_t T → list_t T
 | Nil : list_t T
 
+end Loops

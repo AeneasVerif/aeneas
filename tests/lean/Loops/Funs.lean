@@ -4,6 +4,8 @@ import Base
 import Loops.Types
 open Primitives
 
+namespace Loops
+
 /- [loops::sum] -/
 divergent def sum_loop_fwd (max : U32) (i : U32) (s : U32) : Result U32 :=
   if i < max
@@ -68,7 +70,7 @@ def clear_fwd_back (v : Vec U32) : Result (Vec U32) :=
 
 /- [loops::list_mem] -/
 divergent def list_mem_loop_fwd (x : U32) (ls : list_t U32) : Result Bool :=
-  match h: ls with
+  match ls with
   | list_t.Cons y tl =>
     if y = x
     then Result.ret true
@@ -82,7 +84,7 @@ def list_mem_fwd (x : U32) (ls : list_t U32) : Result Bool :=
 /- [loops::list_nth_mut_loop] -/
 divergent def list_nth_mut_loop_loop_fwd
   (T : Type) (ls : list_t T) (i : U32) : Result T :=
-  match h: ls with
+  match ls with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
@@ -99,7 +101,7 @@ def list_nth_mut_loop_fwd (T : Type) (ls : list_t T) (i : U32) : Result T :=
 /- [loops::list_nth_mut_loop] -/
 divergent def list_nth_mut_loop_loop_back
   (T : Type) (ls : list_t T) (i : U32) (ret0 : T) : Result (list_t T) :=
-  match h: ls with
+  match ls with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret (list_t.Cons ret0 tl)
@@ -118,7 +120,7 @@ def list_nth_mut_loop_back
 /- [loops::list_nth_shared_loop] -/
 divergent def list_nth_shared_loop_loop_fwd
   (T : Type) (ls : list_t T) (i : U32) : Result T :=
-  match h: ls with
+  match ls with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
@@ -135,7 +137,7 @@ def list_nth_shared_loop_fwd (T : Type) (ls : list_t T) (i : U32) : Result T :=
 /- [loops::get_elem_mut] -/
 divergent def get_elem_mut_loop_fwd
   (x : Usize) (ls : list_t Usize) : Result Usize :=
-  match h: ls with
+  match ls with
   | list_t.Cons y tl =>
     if y = x
     then Result.ret y
@@ -152,7 +154,7 @@ def get_elem_mut_fwd (slots : Vec (list_t Usize)) (x : Usize) : Result Usize :=
 /- [loops::get_elem_mut] -/
 divergent def get_elem_mut_loop_back
   (x : Usize) (ls : list_t Usize) (ret0 : Usize) : Result (list_t Usize) :=
-  match h: ls with
+  match ls with
   | list_t.Cons y tl =>
     if y = x
     then Result.ret (list_t.Cons ret0 tl)
@@ -176,7 +178,7 @@ def get_elem_mut_back
 /- [loops::get_elem_shared] -/
 divergent def get_elem_shared_loop_fwd
   (x : Usize) (ls : list_t Usize) : Result Usize :=
-  match h: ls with
+  match ls with
   | list_t.Cons y tl =>
     if y = x
     then Result.ret y
@@ -206,7 +208,7 @@ def id_shared_fwd (T : Type) (ls : list_t T) : Result (list_t T) :=
 /- [loops::list_nth_mut_loop_with_id] -/
 divergent def list_nth_mut_loop_with_id_loop_fwd
   (T : Type) (i : U32) (ls : list_t T) : Result T :=
-  match h: ls with
+  match ls with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
@@ -226,7 +228,7 @@ def list_nth_mut_loop_with_id_fwd
 /- [loops::list_nth_mut_loop_with_id] -/
 divergent def list_nth_mut_loop_with_id_loop_back
   (T : Type) (i : U32) (ls : list_t T) (ret0 : T) : Result (list_t T) :=
-  match h: ls with
+  match ls with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret (list_t.Cons ret0 tl)
@@ -248,7 +250,7 @@ def list_nth_mut_loop_with_id_back
 /- [loops::list_nth_shared_loop_with_id] -/
 divergent def list_nth_shared_loop_with_id_loop_fwd
   (T : Type) (i : U32) (ls : list_t T) : Result T :=
-  match h: ls with
+  match ls with
   | list_t.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
@@ -268,9 +270,9 @@ def list_nth_shared_loop_with_id_fwd
 /- [loops::list_nth_mut_loop_pair] -/
 divergent def list_nth_mut_loop_pair_loop_fwd
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
@@ -291,9 +293,9 @@ divergent def list_nth_mut_loop_pair_loop_back'a
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
   Result (list_t T)
   :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (list_t.Cons ret0 tl0)
@@ -317,9 +319,9 @@ divergent def list_nth_mut_loop_pair_loop_back'b
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
   Result (list_t T)
   :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (list_t.Cons ret0 tl1)
@@ -341,9 +343,9 @@ def list_nth_mut_loop_pair_back'b
 /- [loops::list_nth_shared_loop_pair] -/
 divergent def list_nth_shared_loop_pair_loop_fwd
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
@@ -362,9 +364,9 @@ def list_nth_shared_loop_pair_fwd
 /- [loops::list_nth_mut_loop_pair_merge] -/
 divergent def list_nth_mut_loop_pair_merge_loop_fwd
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
@@ -385,9 +387,9 @@ divergent def list_nth_mut_loop_pair_merge_loop_back
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : (T × T)) :
   Result ((list_t T) × (list_t T))
   :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then
@@ -412,9 +414,9 @@ def list_nth_mut_loop_pair_merge_back
 /- [loops::list_nth_shared_loop_pair_merge] -/
 divergent def list_nth_shared_loop_pair_merge_loop_fwd
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
@@ -433,9 +435,9 @@ def list_nth_shared_loop_pair_merge_fwd
 /- [loops::list_nth_mut_shared_loop_pair] -/
 divergent def list_nth_mut_shared_loop_pair_loop_fwd
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
@@ -456,9 +458,9 @@ divergent def list_nth_mut_shared_loop_pair_loop_back
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
   Result (list_t T)
   :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (list_t.Cons ret0 tl0)
@@ -481,9 +483,9 @@ def list_nth_mut_shared_loop_pair_back
 /- [loops::list_nth_mut_shared_loop_pair_merge] -/
 divergent def list_nth_mut_shared_loop_pair_merge_loop_fwd
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
@@ -504,9 +506,9 @@ divergent def list_nth_mut_shared_loop_pair_merge_loop_back
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
   Result (list_t T)
   :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (list_t.Cons ret0 tl0)
@@ -529,9 +531,9 @@ def list_nth_mut_shared_loop_pair_merge_back
 /- [loops::list_nth_shared_mut_loop_pair] -/
 divergent def list_nth_shared_mut_loop_pair_loop_fwd
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
@@ -552,9 +554,9 @@ divergent def list_nth_shared_mut_loop_pair_loop_back
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
   Result (list_t T)
   :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (list_t.Cons ret0 tl1)
@@ -577,9 +579,9 @@ def list_nth_shared_mut_loop_pair_back
 /- [loops::list_nth_shared_mut_loop_pair_merge] -/
 divergent def list_nth_shared_mut_loop_pair_merge_loop_fwd
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
@@ -600,9 +602,9 @@ divergent def list_nth_shared_mut_loop_pair_merge_loop_back
   (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
   Result (list_t T)
   :=
-  match h: ls0 with
+  match ls0 with
   | list_t.Cons x0 tl0 =>
-    match h: ls1 with
+    match ls1 with
     | list_t.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (list_t.Cons ret0 tl1)
@@ -622,3 +624,4 @@ def list_nth_shared_mut_loop_pair_merge_back
   :=
   list_nth_shared_mut_loop_pair_merge_loop_back T ls0 ls1 i ret0
 
+end Loops

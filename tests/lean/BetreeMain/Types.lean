@@ -3,21 +3,23 @@
 import Base
 open Primitives
 
+namespace BetreeMain
+
 /- [betree_main::betree::List] -/
 inductive betree_list_t (T : Type) :=
-| Cons : T -> betree_list_t T -> betree_list_t T
+| Cons : T → betree_list_t T → betree_list_t T
 | Nil : betree_list_t T
 
 /- [betree_main::betree::UpsertFunState] -/
 inductive betree_upsert_fun_state_t :=
-| Add : U64 -> betree_upsert_fun_state_t
-| Sub : U64 -> betree_upsert_fun_state_t
+| Add : U64 → betree_upsert_fun_state_t
+| Sub : U64 → betree_upsert_fun_state_t
 
 /- [betree_main::betree::Message] -/
 inductive betree_message_t :=
-| Insert : U64 -> betree_message_t
+| Insert : U64 → betree_message_t
 | Delete : betree_message_t
-| Upsert : betree_upsert_fun_state_t -> betree_message_t
+| Upsert : betree_upsert_fun_state_t → betree_message_t
 
 /- [betree_main::betree::Leaf] -/
 structure betree_leaf_t where
@@ -28,17 +30,12 @@ mutual
 
 /- [betree_main::betree::Node] -/
 inductive betree_node_t :=
-| Internal : betree_internal_t -> betree_node_t
-| Leaf : betree_leaf_t -> betree_node_t
+| Internal : betree_internal_t → betree_node_t
+| Leaf : betree_leaf_t → betree_node_t
 
 /- [betree_main::betree::Internal] -/
 inductive betree_internal_t :=
-| mkbetree_internal_t :
-  U64 ->
-  U64 ->
-  betree_node_t ->
-  betree_node_t ->
-  betree_internal_t
+| mk : U64 → U64 → betree_node_t → betree_node_t → betree_internal_t
 
 end
 
@@ -60,3 +57,4 @@ structure betree_be_tree_t where
 /- The state type used in the state-error monad -/
 axiom State : Type
 
+end BetreeMain
