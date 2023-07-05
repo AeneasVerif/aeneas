@@ -297,3 +297,10 @@ let filter_useless_monadic_calls = ref true
       dynamically check for that).
  *)
 let filter_useless_functions = ref true
+
+(** Obsolete. TODO: remove.
+
+    For Lean we used to parameterize the entire development by a section variable
+    called opaque_defs, of type OpaqueDefs.
+  *)
+let wrap_opaque_in_sig = ref false

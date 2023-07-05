@@ -2,8 +2,7 @@
 -- [polonius_list]
 import Base
 open Primitives
-
-namespace PoloniusList
+namespace polonius_list
 
 /- [polonius_list::List] -/
 inductive list_t (T : Type) :=
@@ -33,4 +32,4 @@ divergent def get_list_at_x_back
         Result.ret (list_t.Cons hd tl0)
   | list_t.Nil => Result.ret ret0
 
-end PoloniusList
+end polonius_list

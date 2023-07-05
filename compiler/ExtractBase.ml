@@ -240,7 +240,9 @@ type formatter = {
           - loop identifier, if this is for a loop
        *)
   opaque_pre : unit -> string;
-      (** The prefix to use for opaque definitions.
+      (** TODO: obsolete, remove.
+
+          The prefix to use for opaque definitions.
 
           We need this because for some backends like Lean and Coq, we group
           opaque definitions in module signatures, meaning that using those

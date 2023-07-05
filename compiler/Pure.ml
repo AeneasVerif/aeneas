@@ -18,16 +18,19 @@ module GlobalDeclId = A.GlobalDeclId
     (they monotonically increase across functions) while in {!module:Pure} we want
     the indices to start at 0 for every function.
  *)
-module LoopId = IdGen ()
+module LoopId =
+IdGen ()
 
 type loop_id = LoopId.id [@@deriving show, ord]
 
 (** We give an identifier to every phase of the synthesis (forward, backward
     for group of regions 0, etc.) *)
-module SynthPhaseId = IdGen ()
+module SynthPhaseId =
+IdGen ()
 
 (** Pay attention to the fact that we also define a {!E.VarId} module in Values *)
-module VarId = IdGen ()
+module VarId =
+IdGen ()
 
 type integer_type = T.integer_type [@@deriving show, ord]
 
@@ -723,6 +726,7 @@ type fun_sig_info = {
  *)
 type fun_sig = {
   type_params : type_var list;
+      (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
   inputs : ty list;
       (** The input types.
 

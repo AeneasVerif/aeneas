@@ -2,8 +2,7 @@
 -- [constants]
 import Base
 open Primitives
-
-namespace Constants
+namespace constants
 
 /- [constants::X0] -/
 def x0_body : Result U32 := Result.ret (U32.ofInt 0 (by intlit))
@@ -69,11 +68,11 @@ structure wrap_t (T : Type) where
   wrap_val : T
 
 /- [constants::Wrap::{0}::new] -/
-def wrap_new_fwd (T : Type) (val : T) : Result (wrap_t T) :=
+def Wrap.new_fwd (T : Type) (val : T) : Result (wrap_t T) :=
   Result.ret { wrap_val := val }
 
 /- [constants::Y] -/
-def y_body : Result (wrap_t I32) := wrap_new_fwd I32 (I32.ofInt 2 (by intlit))
+def y_body : Result (wrap_t I32) := Wrap.new_fwd I32 (I32.ofInt 2 (by intlit))
 def y_c : wrap_t I32 := eval_global y_body (by simp)
 
 /- [constants::unwrap_y] -/
@@ -132,4 +131,4 @@ def s4_body : Result (pair_t U32 U32) :=
   mk_pair1_fwd (U32.ofInt 7 (by intlit)) (U32.ofInt 8 (by intlit))
 def s4_c : pair_t U32 U32 := eval_global s4_body (by simp)
 
-end Constants
+end constants

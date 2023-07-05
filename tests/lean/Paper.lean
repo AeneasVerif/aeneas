@@ -2,8 +2,7 @@
 -- [paper]
 import Base
 open Primitives
-
-namespace Paper
+namespace paper
 
 /- [paper::ref_incr] -/
 def ref_incr_fwd_back (x : I32) : Result I32 :=
@@ -125,4 +124,4 @@ def call_choose_fwd (p : (U32 × U32)) : Result U32 :=
     let (px0, _) ← choose_back U32 true px py pz0
     Result.ret px0
 
-end Paper
+end paper

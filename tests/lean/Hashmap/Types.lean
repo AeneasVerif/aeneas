@@ -2,8 +2,7 @@
 -- [hashmap]: type definitions
 import Base
 open Primitives
-
-namespace Hashmap
+namespace hashmap
 
 /- [hashmap::List] -/
 inductive list_t (T : Type) :=
@@ -17,4 +16,4 @@ structure hash_map_t (T : Type) where
   hash_map_max_load : Usize
   hash_map_slots : Vec (list_t T)
 
-end Hashmap
+end hashmap

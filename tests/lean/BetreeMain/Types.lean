@@ -2,8 +2,7 @@
 -- [betree_main]: type definitions
 import Base
 open Primitives
-
-namespace BetreeMain
+namespace betree_main
 
 /- [betree_main::betree::List] -/
 inductive betree_list_t (T : Type) :=
@@ -57,4 +56,4 @@ structure betree_be_tree_t where
 /- The state type used in the state-error monad -/
 axiom State : Type
 
-end BetreeMain
+end betree_main

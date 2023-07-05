@@ -3,8 +3,7 @@
 import Base
 import Loops.Types
 open Primitives
-
-namespace Loops
+namespace loops
 
 /- [loops::sum] -/
 divergent def sum_loop_fwd (max : U32) (i : U32) (s : U32) : Result U32 :=
@@ -624,4 +623,4 @@ def list_nth_shared_mut_loop_pair_merge_back
   :=
   list_nth_shared_mut_loop_pair_merge_loop_back T ls0 ls1 i ret0
 
-end Loops
+end loops

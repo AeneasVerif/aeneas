@@ -2,8 +2,7 @@
 -- [no_nested_borrows]
 import Base
 open Primitives
-
-namespace NoNestedBorrows
+namespace no_nested_borrows
 
 /- [no_nested_borrows::Pair] -/
 structure pair_t (T1 T2 : Type) where
@@ -541,4 +540,4 @@ def test_shared_borrow_enum1_fwd (l : list_t U32) : Result U32 :=
 def test_shared_borrow_enum2_fwd : Result U32 :=
   Result.ret (U32.ofInt 0 (by intlit))
 
-end NoNestedBorrows
+end no_nested_borrows

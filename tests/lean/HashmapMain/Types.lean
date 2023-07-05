@@ -2,8 +2,7 @@
 -- [hashmap_main]: type definitions
 import Base
 open Primitives
-
-namespace HashmapMain
+namespace hashmap_main
 
 /- [hashmap_main::hashmap::List] -/
 inductive hashmap_list_t (T : Type) :=
@@ -20,4 +19,4 @@ structure hashmap_hash_map_t (T : Type) where
 /- The state type used in the state-error monad -/
 axiom State : Type
 
-end HashmapMain
+end hashmap_main

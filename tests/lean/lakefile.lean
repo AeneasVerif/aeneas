@@ -8,15 +8,12 @@ require Base from "../../backends/lean"
 
 package «tests» {}
 
-@[default_target]
-lean_lib «Tests» {}
-
-lean_lib betreeMain
-lean_lib constants
-lean_lib external
-lean_lib hashmap
-lean_lib hashmapMain
-lean_lib loops
-lean_lib noNestedBorrows
-lean_lib paper
-lean_lib poloniusList
+@[default_target] lean_lib betreeMain
+@[default_target] lean_lib constants
+@[default_target] lean_lib external
+@[default_target] lean_lib hashmap
+@[default_target] lean_lib hashmapMain
+@[default_target] lean_lib loops
+@[default_target] lean_lib noNestedBorrows
+@[default_target] lean_lib paper
+@[default_target] lean_lib poloniusList

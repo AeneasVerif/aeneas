@@ -625,13 +625,12 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     in
     prefix ^ tname ^ suffix
   in
-  let get_fun_name = get_name in
-  let fun_name_to_snake_case (fname : fun_name) : string =
-    let fname = get_fun_name fname in
-    (* Converting to snake case should be a no-op, but it doesn't cost much *)
-    let fname = List.map to_snake_case fname in
-    (* Concatenate the elements *)
-    String.concat "_" fname
+  let get_fun_name fname =
+    let fname = get_name fname in
+    (* TODO: don't convert to snake case for Coq, HOL4, F* *)
+    match !backend with
+    | FStar | Coq | HOL4 -> String.concat "_" (List.map to_snake_case fname)
+    | Lean -> String.concat "." fname
   in
   let global_name (name : global_name) : string =
     (* Converting to snake case also lowercases the letters (in Rust, global
@@ -642,7 +641,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   let fun_name (fname : fun_name) (num_loops : int) (loop_id : LoopId.id option)
       (num_rgs : int) (rg : region_group_info option) (filter_info : bool * int)
       : string =
-    let fname = fun_name_to_snake_case fname in
+    let fname = get_fun_name fname in
     (* Compute the suffix *)
     let suffix = default_fun_suffix num_loops loop_id num_rgs rg filter_info in
     (* Concatenate *)
@@ -651,7 +650,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
 
   let termination_measure_name (_fid : A.FunDeclId.id) (fname : fun_name)
       (num_loops : int) (loop_id : LoopId.id option) : string =
-    let fname = fun_name_to_snake_case fname in
+    let fname = get_fun_name fname in
     let lp_suffix = default_fun_loop_suffix num_loops loop_id in
     (* Compute the suffix *)
     let suffix =
@@ -666,7 +665,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
 
   let decreases_proof_name (_fid : A.FunDeclId.id) (fname : fun_name)
       (num_loops : int) (loop_id : LoopId.id option) : string =
-    let fname = fun_name_to_snake_case fname in
+    let fname = get_fun_name fname in
     let lp_suffix = default_fun_loop_suffix num_loops loop_id in
     (* Compute the suffix *)
     let suffix =
@@ -681,7 +680,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   let opaque_pre () =
     match !Config.backend with
     | FStar | Coq | HOL4 -> ""
-    | Lean -> "opaque_defs."
+    | Lean -> if !Config.wrap_opaque_in_sig then "opaque_defs." else ""
   in
 
   let var_basename (_varset : StringSet.t) (basename : string option) (ty : ty)
@@ -2981,8 +2980,11 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let use_forall = is_opaque_coq && def.signature.type_params <> [] in
   (* Print the qualifier ("assume", etc.).
 
-     For Lean: we generate a record of assumed functions *)
-  (if not (!backend = Lean && (kind = Assumed || kind = Declared)) then
+     if `wrap_opaque_in_sig`: we generate a record of assumed funcions.
+     TODO: this is obsolete.
+  *)
+  (if not (!Config.wrap_opaque_in_sig && (kind = Assumed || kind = Declared))
+   then
      let qualif = ctx.fmt.fun_decl_kind_to_qualif kind in
      match qualif with
      | Some qualif ->

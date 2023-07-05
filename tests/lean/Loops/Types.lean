@@ -2,12 +2,11 @@
 -- [loops]: type definitions
 import Base
 open Primitives
-
-namespace Loops
+namespace loops
 
 /- [loops::List] -/
 inductive list_t (T : Type) :=
 | Cons : T → list_t T → list_t T
 | Nil : list_t T
 
-end Loops
+end loops
