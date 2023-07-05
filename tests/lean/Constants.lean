@@ -34,12 +34,12 @@ def mk_pair0_fwd (x : U32) (y : U32) : Result (U32 × U32) :=
   Result.ret (x, y)
 
 /- [constants::Pair] -/
-structure pair_t (T1 T2 : Type) where
+structure Pair (T1 T2 : Type) where
   pair_x : T1
   pair_y : T2
 
 /- [constants::mk_pair1] -/
-def mk_pair1_fwd (x : U32) (y : U32) : Result (pair_t U32 U32) :=
+def mk_pair1_fwd (x : U32) (y : U32) : Result (Pair U32 U32) :=
   Result.ret { pair_x := x, pair_y := y }
 
 /- [constants::P0] -/
@@ -48,9 +48,9 @@ def p0_body : Result (U32 × U32) :=
 def p0_c : (U32 × U32) := eval_global p0_body (by simp)
 
 /- [constants::P1] -/
-def p1_body : Result (pair_t U32 U32) :=
+def p1_body : Result (Pair U32 U32) :=
   mk_pair1_fwd (U32.ofInt 0 (by intlit)) (U32.ofInt 1 (by intlit))
-def p1_c : pair_t U32 U32 := eval_global p1_body (by simp)
+def p1_c : Pair U32 U32 := eval_global p1_body (by simp)
 
 /- [constants::P2] -/
 def p2_body : Result (U32 × U32) :=
@@ -58,22 +58,22 @@ def p2_body : Result (U32 × U32) :=
 def p2_c : (U32 × U32) := eval_global p2_body (by simp)
 
 /- [constants::P3] -/
-def p3_body : Result (pair_t U32 U32) :=
+def p3_body : Result (Pair U32 U32) :=
   Result.ret
   { pair_x := (U32.ofInt 0 (by intlit)), pair_y := (U32.ofInt 1 (by intlit)) }
-def p3_c : pair_t U32 U32 := eval_global p3_body (by simp)
+def p3_c : Pair U32 U32 := eval_global p3_body (by simp)
 
 /- [constants::Wrap] -/
-structure wrap_t (T : Type) where
+structure Wrap (T : Type) where
   wrap_val : T
 
 /- [constants::Wrap::{0}::new] -/
-def Wrap.new_fwd (T : Type) (val : T) : Result (wrap_t T) :=
+def Wrap.new_fwd (T : Type) (val : T) : Result (Wrap T) :=
   Result.ret { wrap_val := val }
 
 /- [constants::Y] -/
-def y_body : Result (wrap_t I32) := Wrap.new_fwd I32 (I32.ofInt 2 (by intlit))
-def y_c : wrap_t I32 := eval_global y_body (by simp)
+def y_body : Result (Wrap I32) := Wrap.new_fwd I32 (I32.ofInt 2 (by intlit))
+def y_c : Wrap I32 := eval_global y_body (by simp)
 
 /- [constants::unwrap_y] -/
 def unwrap_y_fwd : Result I32 :=
@@ -123,12 +123,12 @@ def s2_body : Result U32 := incr_fwd s1_c
 def s2_c : U32 := eval_global s2_body (by simp)
 
 /- [constants::S3] -/
-def s3_body : Result (pair_t U32 U32) := Result.ret p3_c
-def s3_c : pair_t U32 U32 := eval_global s3_body (by simp)
+def s3_body : Result (Pair U32 U32) := Result.ret p3_c
+def s3_c : Pair U32 U32 := eval_global s3_body (by simp)
 
 /- [constants::S4] -/
-def s4_body : Result (pair_t U32 U32) :=
+def s4_body : Result (Pair U32 U32) :=
   mk_pair1_fwd (U32.ofInt 7 (by intlit)) (U32.ofInt 8 (by intlit))
-def s4_c : pair_t U32 U32 := eval_global s4_body (by simp)
+def s4_c : Pair U32 U32 := eval_global s4_body (by simp)
 
 end constants

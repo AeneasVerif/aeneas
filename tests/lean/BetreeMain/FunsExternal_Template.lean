@@ -8,22 +8,21 @@ open betree_main
 
 /- [betree_main::betree_utils::load_internal_node] -/
 axiom betree_utils.load_internal_node_fwd
-  :
-  U64 → State → Result (State × (betree_list_t (U64 × betree_message_t)))
+  : U64 → State → Result (State × (betree.List (U64 × betree.Message)))
 
 /- [betree_main::betree_utils::store_internal_node] -/
 axiom betree_utils.store_internal_node_fwd
   :
-  U64 → betree_list_t (U64 × betree_message_t) → State → Result (State
-    × Unit)
+  U64 → betree.List (U64 × betree.Message) → State → Result (State ×
+    Unit)
 
 /- [betree_main::betree_utils::load_leaf_node] -/
 axiom betree_utils.load_leaf_node_fwd
-  : U64 → State → Result (State × (betree_list_t (U64 × U64)))
+  : U64 → State → Result (State × (betree.List (U64 × U64)))
 
 /- [betree_main::betree_utils::store_leaf_node] -/
 axiom betree_utils.store_leaf_node_fwd
-  : U64 → betree_list_t (U64 × U64) → State → Result (State × Unit)
+  : U64 → betree.List (U64 × U64) → State → Result (State × Unit)
 
 /- [core::option::Option::{0}::unwrap] -/
 axiom core.option.Option.unwrap_fwd

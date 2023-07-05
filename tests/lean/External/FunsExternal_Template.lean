@@ -20,8 +20,7 @@ axiom core.mem.swap_back1
 
 /- [core::num::nonzero::NonZeroU32::{14}::new] -/
 axiom core.num.nonzero.NonZeroU32.new_fwd
-  :
-  U32 → State → Result (State × (Option core_num_nonzero_non_zero_u32_t))
+  : U32 → State → Result (State × (Option core.num.nonzero.NonZeroU32))
 
 /- [core::option::Option::{0}::unwrap] -/
 axiom core.option.Option.unwrap_fwd

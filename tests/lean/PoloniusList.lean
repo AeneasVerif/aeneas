@@ -5,31 +5,31 @@ open Primitives
 namespace polonius_list
 
 /- [polonius_list::List] -/
-inductive list_t (T : Type) :=
-| Cons : T → list_t T → list_t T
-| Nil : list_t T
+inductive List (T : Type) :=
+| Cons : T → List T → List T
+| Nil : List T
 
 /- [polonius_list::get_list_at_x] -/
 divergent def get_list_at_x_fwd
-  (ls : list_t U32) (x : U32) : Result (list_t U32) :=
+  (ls : List U32) (x : U32) : Result (List U32) :=
   match ls with
-  | list_t.Cons hd tl =>
+  | List.Cons hd tl =>
     if hd = x
-    then Result.ret (list_t.Cons hd tl)
+    then Result.ret (List.Cons hd tl)
     else get_list_at_x_fwd tl x
-  | list_t.Nil => Result.ret list_t.Nil
+  | List.Nil => Result.ret List.Nil
 
 /- [polonius_list::get_list_at_x] -/
 divergent def get_list_at_x_back
-  (ls : list_t U32) (x : U32) (ret0 : list_t U32) : Result (list_t U32) :=
+  (ls : List U32) (x : U32) (ret0 : List U32) : Result (List U32) :=
   match ls with
-  | list_t.Cons hd tl =>
+  | List.Cons hd tl =>
     if hd = x
     then Result.ret ret0
     else
       do
         let tl0 ← get_list_at_x_back tl x ret0
-        Result.ret (list_t.Cons hd tl0)
-  | list_t.Nil => Result.ret ret0
+        Result.ret (List.Cons hd tl0)
+  | List.Nil => Result.ret ret0
 
 end polonius_list

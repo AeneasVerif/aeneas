@@ -28,10 +28,10 @@ def swap_back
 
 /- [external::test_new_non_zero_u32] -/
 def test_new_non_zero_u32_fwd
-  (x : U32) (st : State) : Result (State × core_num_nonzero_non_zero_u32_t) :=
+  (x : U32) (st : State) : Result (State × core.num.nonzero.NonZeroU32) :=
   do
     let (st0, opt) ← core.num.nonzero.NonZeroU32.new_fwd x st
-    core.option.Option.unwrap_fwd core_num_nonzero_non_zero_u32_t opt st0
+    core.option.Option.unwrap_fwd core.num.nonzero.NonZeroU32 opt st0
 
 /- [external::test_vec] -/
 def test_vec_fwd : Result Unit :=

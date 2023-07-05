@@ -8,9 +8,9 @@ open hashmap_main
 
 /- [hashmap_main::hashmap_utils::deserialize] -/
 axiom hashmap_utils.deserialize_fwd
-  : State → Result (State × (hashmap_hash_map_t U64))
+  : State → Result (State × (hashmap.HashMap U64))
 
 /- [hashmap_main::hashmap_utils::serialize] -/
 axiom hashmap_utils.serialize_fwd
-  : hashmap_hash_map_t U64 → State → Result (State × Unit)
+  : hashmap.HashMap U64 → State → Result (State × Unit)
 

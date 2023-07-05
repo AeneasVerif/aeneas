@@ -9,13 +9,13 @@ namespace betree_main
 /- [betree_main::betree::load_internal_node] -/
 def betree.load_internal_node_fwd
   (id : U64) (st : State) :
-  Result (State × (betree_list_t (U64 × betree_message_t)))
+  Result (State × (betree.List (U64 × betree.Message)))
   :=
   betree_utils.load_internal_node_fwd id st
 
 /- [betree_main::betree::store_internal_node] -/
 def betree.store_internal_node_fwd
-  (id : U64) (content : betree_list_t (U64 × betree_message_t)) (st : State) :
+  (id : U64) (content : betree.List (U64 × betree.Message)) (st : State) :
   Result (State × Unit)
   :=
   do
@@ -24,12 +24,12 @@ def betree.store_internal_node_fwd
 
 /- [betree_main::betree::load_leaf_node] -/
 def betree.load_leaf_node_fwd
-  (id : U64) (st : State) : Result (State × (betree_list_t (U64 × U64))) :=
+  (id : U64) (st : State) : Result (State × (betree.List (U64 × U64))) :=
   betree_utils.load_leaf_node_fwd id st
 
 /- [betree_main::betree::store_leaf_node] -/
 def betree.store_leaf_node_fwd
-  (id : U64) (content : betree_list_t (U64 × U64)) (st : State) :
+  (id : U64) (content : betree.List (U64 × U64)) (st : State) :
   Result (State × Unit)
   :=
   do
@@ -47,13 +47,13 @@ def betree.fresh_node_id_back (counter : U64) : Result U64 :=
   counter + (U64.ofInt 1 (by intlit))
 
 /- [betree_main::betree::NodeIdCounter::{0}::new] -/
-def betree.NodeIdCounter.new_fwd : Result betree_node_id_counter_t :=
+def betree.NodeIdCounter.new_fwd : Result betree.NodeIdCounter :=
   Result.ret
   { betree_node_id_counter_next_node_id := (U64.ofInt 0 (by intlit)) }
 
 /- [betree_main::betree::NodeIdCounter::{0}::fresh_id] -/
 def betree.NodeIdCounter.fresh_id_fwd
-  (self : betree_node_id_counter_t) : Result U64 :=
+  (self : betree.NodeIdCounter) : Result U64 :=
   do
     let _ ← self.betree_node_id_counter_next_node_id +
       (U64.ofInt 1 (by intlit))
@@ -61,7 +61,7 @@ def betree.NodeIdCounter.fresh_id_fwd
 
 /- [betree_main::betree::NodeIdCounter::{0}::fresh_id] -/
 def betree.NodeIdCounter.fresh_id_back
-  (self : betree_node_id_counter_t) : Result betree_node_id_counter_t :=
+  (self : betree.NodeIdCounter) : Result betree.NodeIdCounter :=
   do
     let i ← self.betree_node_id_counter_next_node_id +
       (U64.ofInt 1 (by intlit))
@@ -74,113 +74,112 @@ def core_num_u64_max_c : U64 := eval_global core_num_u64_max_body (by simp)
 
 /- [betree_main::betree::upsert_update] -/
 def betree.upsert_update_fwd
-  (prev : Option U64) (st : betree_upsert_fun_state_t) : Result U64 :=
+  (prev : Option U64) (st : betree.UpsertFunState) : Result U64 :=
   match prev with
   | Option.none =>
     match st with
-    | betree_upsert_fun_state_t.Add v => Result.ret v
-    | betree_upsert_fun_state_t.Sub i => Result.ret (U64.ofInt 0 (by intlit))
+    | betree.UpsertFunState.Add v => Result.ret v
+    | betree.UpsertFunState.Sub i => Result.ret (U64.ofInt 0 (by intlit))
   | Option.some prev0 =>
     match st with
-    | betree_upsert_fun_state_t.Add v =>
+    | betree.UpsertFunState.Add v =>
       do
         let margin ← core_num_u64_max_c - prev0
         if margin >= v
         then prev0 + v
         else Result.ret core_num_u64_max_c
-    | betree_upsert_fun_state_t.Sub v =>
+    | betree.UpsertFunState.Sub v =>
       if prev0 >= v
       then prev0 - v
       else Result.ret (U64.ofInt 0 (by intlit))
 
 /- [betree_main::betree::List::{1}::len] -/
 divergent def betree.List.len_fwd
-  (T : Type) (self : betree_list_t T) : Result U64 :=
+  (T : Type) (self : betree.List T) : Result U64 :=
   match self with
-  | betree_list_t.Cons t tl =>
+  | betree.List.Cons t tl =>
     do
       let i ← betree.List.len_fwd T tl
       (U64.ofInt 1 (by intlit)) + i
-  | betree_list_t.Nil => Result.ret (U64.ofInt 0 (by intlit))
+  | betree.List.Nil => Result.ret (U64.ofInt 0 (by intlit))
 
 /- [betree_main::betree::List::{1}::split_at] -/
 divergent def betree.List.split_at_fwd
-  (T : Type) (self : betree_list_t T) (n : U64) :
-  Result ((betree_list_t T) × (betree_list_t T))
+  (T : Type) (self : betree.List T) (n : U64) :
+  Result ((betree.List T) × (betree.List T))
   :=
   if n = (U64.ofInt 0 (by intlit))
-  then Result.ret (betree_list_t.Nil, self)
+  then Result.ret (betree.List.Nil, self)
   else
     match self with
-    | betree_list_t.Cons hd tl =>
+    | betree.List.Cons hd tl =>
       do
         let i ← n - (U64.ofInt 1 (by intlit))
         let p ← betree.List.split_at_fwd T tl i
         let (ls0, ls1) := p
         let l := ls0
-        Result.ret (betree_list_t.Cons hd l, ls1)
-    | betree_list_t.Nil => Result.fail Error.panic
+        Result.ret (betree.List.Cons hd l, ls1)
+    | betree.List.Nil => Result.fail Error.panic
 
 /- [betree_main::betree::List::{1}::push_front] -/
 def betree.List.push_front_fwd_back
-  (T : Type) (self : betree_list_t T) (x : T) : Result (betree_list_t T) :=
-  let tl := mem_replace_fwd (betree_list_t T) self betree_list_t.Nil
+  (T : Type) (self : betree.List T) (x : T) : Result (betree.List T) :=
+  let tl := mem_replace_fwd (betree.List T) self betree.List.Nil
   let l := tl
-  Result.ret (betree_list_t.Cons x l)
+  Result.ret (betree.List.Cons x l)
 
 /- [betree_main::betree::List::{1}::pop_front] -/
-def betree.List.pop_front_fwd (T : Type) (self : betree_list_t T) : Result T :=
-  let ls := mem_replace_fwd (betree_list_t T) self betree_list_t.Nil
+def betree.List.pop_front_fwd (T : Type) (self : betree.List T) : Result T :=
+  let ls := mem_replace_fwd (betree.List T) self betree.List.Nil
   match ls with
-  | betree_list_t.Cons x tl => Result.ret x
-  | betree_list_t.Nil => Result.fail Error.panic
+  | betree.List.Cons x tl => Result.ret x
+  | betree.List.Nil => Result.fail Error.panic
 
 /- [betree_main::betree::List::{1}::pop_front] -/
 def betree.List.pop_front_back
-  (T : Type) (self : betree_list_t T) : Result (betree_list_t T) :=
-  let ls := mem_replace_fwd (betree_list_t T) self betree_list_t.Nil
+  (T : Type) (self : betree.List T) : Result (betree.List T) :=
+  let ls := mem_replace_fwd (betree.List T) self betree.List.Nil
   match ls with
-  | betree_list_t.Cons x tl => Result.ret tl
-  | betree_list_t.Nil => Result.fail Error.panic
+  | betree.List.Cons x tl => Result.ret tl
+  | betree.List.Nil => Result.fail Error.panic
 
 /- [betree_main::betree::List::{1}::hd] -/
-def betree.List.hd_fwd (T : Type) (self : betree_list_t T) : Result T :=
+def betree.List.hd_fwd (T : Type) (self : betree.List T) : Result T :=
   match self with
-  | betree_list_t.Cons hd l => Result.ret hd
-  | betree_list_t.Nil => Result.fail Error.panic
+  | betree.List.Cons hd l => Result.ret hd
+  | betree.List.Nil => Result.fail Error.panic
 
 /- [betree_main::betree::List::{2}::head_has_key] -/
 def betree.List.head_has_key_fwd
-  (T : Type) (self : betree_list_t (U64 × T)) (key : U64) : Result Bool :=
+  (T : Type) (self : betree.List (U64 × T)) (key : U64) : Result Bool :=
   match self with
-  | betree_list_t.Cons hd l => let (i, _) := hd
-                               Result.ret (i = key)
-  | betree_list_t.Nil => Result.ret false
+  | betree.List.Cons hd l => let (i, _) := hd
+                             Result.ret (i = key)
+  | betree.List.Nil => Result.ret false
 
 /- [betree_main::betree::List::{2}::partition_at_pivot] -/
 divergent def betree.List.partition_at_pivot_fwd
-  (T : Type) (self : betree_list_t (U64 × T)) (pivot : U64) :
-  Result ((betree_list_t (U64 × T)) × (betree_list_t (U64 × T)))
+  (T : Type) (self : betree.List (U64 × T)) (pivot : U64) :
+  Result ((betree.List (U64 × T)) × (betree.List (U64 × T)))
   :=
   match self with
-  | betree_list_t.Cons hd tl =>
+  | betree.List.Cons hd tl =>
     let (i, t) := hd
     if i >= pivot
-    then Result.ret (betree_list_t.Nil, betree_list_t.Cons (i, t) tl)
+    then Result.ret (betree.List.Nil, betree.List.Cons (i, t) tl)
     else
       do
         let p ← betree.List.partition_at_pivot_fwd T tl pivot
         let (ls0, ls1) := p
         let l := ls0
-        Result.ret (betree_list_t.Cons (i, t) l, ls1)
-  | betree_list_t.Nil => Result.ret (betree_list_t.Nil, betree_list_t.Nil)
+        Result.ret (betree.List.Cons (i, t) l, ls1)
+  | betree.List.Nil => Result.ret (betree.List.Nil, betree.List.Nil)
 
 /- [betree_main::betree::Leaf::{3}::split] -/
 def betree.Leaf.split_fwd
-  (self : betree_leaf_t) (content : betree_list_t (U64 × U64))
-  (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
-  (st : State) :
-  Result (State × betree_internal_t)
+  (self : betree.Leaf) (content : betree.List (U64 × U64))
+  (params : betree.Params) (node_id_cnt : betree.NodeIdCounter) (st : State) :
+  Result (State × betree.Internal)
   :=
   do
     let p ←
@@ -194,24 +193,23 @@ def betree.Leaf.split_fwd
     let id1 ← betree.NodeIdCounter.fresh_id_fwd node_id_cnt0
     let (st0, _) ← betree.store_leaf_node_fwd id0 content0 st
     let (st1, _) ← betree.store_leaf_node_fwd id1 content1 st0
-    let n := betree_node_t.Leaf
+    let n := betree.Node.Leaf
       {
         betree_leaf_id := id0,
         betree_leaf_size := params.betree_params_split_size
       }
-    let n0 := betree_node_t.Leaf
+    let n0 := betree.Node.Leaf
       {
         betree_leaf_id := id1,
         betree_leaf_size := params.betree_params_split_size
       }
-    Result.ret (st1, betree_internal_t.mk self.betree_leaf_id pivot n n0)
+    Result.ret (st1, betree.Internal.mk self.betree_leaf_id pivot n n0)
 
 /- [betree_main::betree::Leaf::{3}::split] -/
 def betree.Leaf.split_back
-  (self : betree_leaf_t) (content : betree_list_t (U64 × U64))
-  (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
-  (st : State) :
-  Result betree_node_id_counter_t
+  (self : betree.Leaf) (content : betree.List (U64 × U64))
+  (params : betree.Params) (node_id_cnt : betree.NodeIdCounter) (st : State) :
+  Result betree.NodeIdCounter
   :=
   do
     let p ←
@@ -228,9 +226,9 @@ def betree.Leaf.split_back
 
 /- [betree_main::betree::Node::{5}::lookup_in_bindings] -/
 divergent def betree.Node.lookup_in_bindings_fwd
-  (key : U64) (bindings : betree_list_t (U64 × U64)) : Result (Option U64) :=
+  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
   match bindings with
-  | betree_list_t.Cons hd tl =>
+  | betree.List.Cons hd tl =>
     let (i, i0) := hd
     if i = key
     then Result.ret (Option.some i0)
@@ -238,29 +236,29 @@ divergent def betree.Node.lookup_in_bindings_fwd
       if i > key
       then Result.ret Option.none
       else betree.Node.lookup_in_bindings_fwd key tl
-  | betree_list_t.Nil => Result.ret Option.none
+  | betree.List.Nil => Result.ret Option.none
 
 /- [betree_main::betree::Node::{5}::lookup_first_message_for_key] -/
 divergent def betree.Node.lookup_first_message_for_key_fwd
-  (key : U64) (msgs : betree_list_t (U64 × betree_message_t)) :
-  Result (betree_list_t (U64 × betree_message_t))
+  (key : U64) (msgs : betree.List (U64 × betree.Message)) :
+  Result (betree.List (U64 × betree.Message))
   :=
   match msgs with
-  | betree_list_t.Cons x next_msgs =>
+  | betree.List.Cons x next_msgs =>
     let (i, m) := x
     if i >= key
-    then Result.ret (betree_list_t.Cons (i, m) next_msgs)
+    then Result.ret (betree.List.Cons (i, m) next_msgs)
     else betree.Node.lookup_first_message_for_key_fwd key next_msgs
-  | betree_list_t.Nil => Result.ret betree_list_t.Nil
+  | betree.List.Nil => Result.ret betree.List.Nil
 
 /- [betree_main::betree::Node::{5}::lookup_first_message_for_key] -/
 divergent def betree.Node.lookup_first_message_for_key_back
-  (key : U64) (msgs : betree_list_t (U64 × betree_message_t))
-  (ret0 : betree_list_t (U64 × betree_message_t)) :
-  Result (betree_list_t (U64 × betree_message_t))
+  (key : U64) (msgs : betree.List (U64 × betree.Message))
+  (ret0 : betree.List (U64 × betree.Message)) :
+  Result (betree.List (U64 × betree.Message))
   :=
   match msgs with
-  | betree_list_t.Cons x next_msgs =>
+  | betree.List.Cons x next_msgs =>
     let (i, m) := x
     if i >= key
     then Result.ret ret0
@@ -268,134 +266,134 @@ divergent def betree.Node.lookup_first_message_for_key_back
       do
         let next_msgs0 ←
           betree.Node.lookup_first_message_for_key_back key next_msgs ret0
-        Result.ret (betree_list_t.Cons (i, m) next_msgs0)
-  | betree_list_t.Nil => Result.ret ret0
+        Result.ret (betree.List.Cons (i, m) next_msgs0)
+  | betree.List.Nil => Result.ret ret0
 
 /- [betree_main::betree::Node::{5}::apply_upserts] -/
 divergent def betree.Node.apply_upserts_fwd
-  (msgs : betree_list_t (U64 × betree_message_t)) (prev : Option U64)
-  (key : U64) (st : State) :
+  (msgs : betree.List (U64 × betree.Message)) (prev : Option U64) (key : U64)
+  (st : State) :
   Result (State × U64)
   :=
   do
-    let b ← betree.List.head_has_key_fwd betree_message_t msgs key
+    let b ← betree.List.head_has_key_fwd betree.Message msgs key
     if b
     then
       do
-        let msg ← betree.List.pop_front_fwd (U64 × betree_message_t) msgs
+        let msg ← betree.List.pop_front_fwd (U64 × betree.Message) msgs
         let (_, m) := msg
         match m with
-        | betree_message_t.Insert i => Result.fail Error.panic
-        | betree_message_t.Delete => Result.fail Error.panic
-        | betree_message_t.Upsert s =>
+        | betree.Message.Insert i => Result.fail Error.panic
+        | betree.Message.Delete => Result.fail Error.panic
+        | betree.Message.Upsert s =>
           do
             let v ← betree.upsert_update_fwd prev s
             let msgs0 ←
-              betree.List.pop_front_back (U64 × betree_message_t) msgs
+              betree.List.pop_front_back (U64 × betree.Message) msgs
             betree.Node.apply_upserts_fwd msgs0 (Option.some v) key st
     else
       do
         let (st0, v) ← core.option.Option.unwrap_fwd U64 prev st
         let _ ←
-          betree.List.push_front_fwd_back (U64 × betree_message_t) msgs (key,
-            betree_message_t.Insert v)
+          betree.List.push_front_fwd_back (U64 × betree.Message) msgs (key,
+            betree.Message.Insert v)
         Result.ret (st0, v)
 
 /- [betree_main::betree::Node::{5}::apply_upserts] -/
 divergent def betree.Node.apply_upserts_back
-  (msgs : betree_list_t (U64 × betree_message_t)) (prev : Option U64)
-  (key : U64) (st : State) :
-  Result (betree_list_t (U64 × betree_message_t))
+  (msgs : betree.List (U64 × betree.Message)) (prev : Option U64) (key : U64)
+  (st : State) :
+  Result (betree.List (U64 × betree.Message))
   :=
   do
-    let b ← betree.List.head_has_key_fwd betree_message_t msgs key
+    let b ← betree.List.head_has_key_fwd betree.Message msgs key
     if b
     then
       do
-        let msg ← betree.List.pop_front_fwd (U64 × betree_message_t) msgs
+        let msg ← betree.List.pop_front_fwd (U64 × betree.Message) msgs
         let (_, m) := msg
         match m with
-        | betree_message_t.Insert i => Result.fail Error.panic
-        | betree_message_t.Delete => Result.fail Error.panic
-        | betree_message_t.Upsert s =>
+        | betree.Message.Insert i => Result.fail Error.panic
+        | betree.Message.Delete => Result.fail Error.panic
+        | betree.Message.Upsert s =>
           do
             let v ← betree.upsert_update_fwd prev s
             let msgs0 ←
-              betree.List.pop_front_back (U64 × betree_message_t) msgs
+              betree.List.pop_front_back (U64 × betree.Message) msgs
             betree.Node.apply_upserts_back msgs0 (Option.some v) key st
     else
       do
         let (_, v) ← core.option.Option.unwrap_fwd U64 prev st
-        betree.List.push_front_fwd_back (U64 × betree_message_t) msgs (key,
-          betree_message_t.Insert v)
+        betree.List.push_front_fwd_back (U64 × betree.Message) msgs (key,
+          betree.Message.Insert v)
 
 /- [betree_main::betree::Node::{5}::lookup] -/
 mutual divergent def betree.Node.lookup_fwd
-  (self : betree_node_t) (key : U64) (st : State) :
+  (self : betree.Node) (key : U64) (st : State) :
   Result (State × (Option U64))
   :=
   match self with
-  | betree_node_t.Internal node =>
+  | betree.Node.Internal node =>
     do
       let ⟨ i, i0, n, n0 ⟩ := node
       let (st0, msgs) ← betree.load_internal_node_fwd i st
       let pending ← betree.Node.lookup_first_message_for_key_fwd key msgs
       match pending with
-      | betree_list_t.Cons p l =>
+      | betree.List.Cons p l =>
         let (k, msg) := p
         if k != key
         then
           do
             let (st1, opt) ←
-              betree.Internal.lookup_in_children_fwd (betree_internal_t.mk i i0
-                n n0) key st0
+              betree.Internal.lookup_in_children_fwd (betree.Internal.mk i i0 n
+                n0) key st0
             let _ ←
               betree.Node.lookup_first_message_for_key_back key msgs
-                (betree_list_t.Cons (k, msg) l)
+                (betree.List.Cons (k, msg) l)
             Result.ret (st1, opt)
         else
           match msg with
-          | betree_message_t.Insert v =>
+          | betree.Message.Insert v =>
             do
               let _ ←
                 betree.Node.lookup_first_message_for_key_back key msgs
-                  (betree_list_t.Cons (k, betree_message_t.Insert v) l)
+                  (betree.List.Cons (k, betree.Message.Insert v) l)
               Result.ret (st0, Option.some v)
-          | betree_message_t.Delete =>
+          | betree.Message.Delete =>
             do
               let _ ←
                 betree.Node.lookup_first_message_for_key_back key msgs
-                  (betree_list_t.Cons (k, betree_message_t.Delete) l)
+                  (betree.List.Cons (k, betree.Message.Delete) l)
               Result.ret (st0, Option.none)
-          | betree_message_t.Upsert ufs =>
+          | betree.Message.Upsert ufs =>
             do
               let (st1, v) ←
-                betree.Internal.lookup_in_children_fwd (betree_internal_t.mk i
-                  i0 n n0) key st0
+                betree.Internal.lookup_in_children_fwd (betree.Internal.mk i i0
+                  n n0) key st0
               let (st2, v0) ←
-                betree.Node.apply_upserts_fwd (betree_list_t.Cons (k,
-                  betree_message_t.Upsert ufs) l) v key st1
+                betree.Node.apply_upserts_fwd (betree.List.Cons (k,
+                  betree.Message.Upsert ufs) l) v key st1
               let node0 ←
-                betree.Internal.lookup_in_children_back (betree_internal_t.mk i
+                betree.Internal.lookup_in_children_back (betree.Internal.mk i
                   i0 n n0) key st0
               let ⟨ i1, _, _, _ ⟩ := node0
               let pending0 ←
-                betree.Node.apply_upserts_back (betree_list_t.Cons (k,
-                  betree_message_t.Upsert ufs) l) v key st1
+                betree.Node.apply_upserts_back (betree.List.Cons (k,
+                  betree.Message.Upsert ufs) l) v key st1
               let msgs0 ←
                 betree.Node.lookup_first_message_for_key_back key msgs pending0
               let (st3, _) ← betree.store_internal_node_fwd i1 msgs0 st2
               Result.ret (st3, Option.some v0)
-      | betree_list_t.Nil =>
+      | betree.List.Nil =>
         do
           let (st1, opt) ←
-            betree.Internal.lookup_in_children_fwd (betree_internal_t.mk i i0 n
+            betree.Internal.lookup_in_children_fwd (betree.Internal.mk i i0 n
               n0) key st0
           let _ ←
             betree.Node.lookup_first_message_for_key_back key msgs
-              betree_list_t.Nil
+              betree.List.Nil
           Result.ret (st1, opt)
-  | betree_node_t.Leaf node =>
+  | betree.Node.Leaf node =>
     do
       let (st0, bindings) ← betree.load_leaf_node_fwd node.betree_leaf_id st
       let opt ← betree.Node.lookup_in_bindings_fwd key bindings
@@ -403,80 +401,78 @@ mutual divergent def betree.Node.lookup_fwd
 
 /- [betree_main::betree::Node::{5}::lookup] -/
 divergent def betree.Node.lookup_back
-  (self : betree_node_t) (key : U64) (st : State) : Result betree_node_t :=
+  (self : betree.Node) (key : U64) (st : State) : Result betree.Node :=
   match self with
-  | betree_node_t.Internal node =>
+  | betree.Node.Internal node =>
     do
       let ⟨ i, i0, n, n0 ⟩ := node
       let (st0, msgs) ← betree.load_internal_node_fwd i st
       let pending ← betree.Node.lookup_first_message_for_key_fwd key msgs
       match pending with
-      | betree_list_t.Cons p l =>
+      | betree.List.Cons p l =>
         let (k, msg) := p
         if k != key
         then
           do
             let _ ←
               betree.Node.lookup_first_message_for_key_back key msgs
-                (betree_list_t.Cons (k, msg) l)
+                (betree.List.Cons (k, msg) l)
             let node0 ←
-              betree.Internal.lookup_in_children_back (betree_internal_t.mk i
-                i0 n n0) key st0
-            Result.ret (betree_node_t.Internal node0)
+              betree.Internal.lookup_in_children_back (betree.Internal.mk i i0
+                n n0) key st0
+            Result.ret (betree.Node.Internal node0)
         else
           match msg with
-          | betree_message_t.Insert v =>
+          | betree.Message.Insert v =>
             do
               let _ ←
                 betree.Node.lookup_first_message_for_key_back key msgs
-                  (betree_list_t.Cons (k, betree_message_t.Insert v) l)
-              Result.ret (betree_node_t.Internal (betree_internal_t.mk i i0 n
-                n0))
-          | betree_message_t.Delete =>
+                  (betree.List.Cons (k, betree.Message.Insert v) l)
+              Result.ret (betree.Node.Internal (betree.Internal.mk i i0 n n0))
+          | betree.Message.Delete =>
             do
               let _ ←
                 betree.Node.lookup_first_message_for_key_back key msgs
-                  (betree_list_t.Cons (k, betree_message_t.Delete) l)
-              Result.ret (betree_node_t.Internal (betree_internal_t.mk i i0 n
-                n0))
-          | betree_message_t.Upsert ufs =>
+                  (betree.List.Cons (k, betree.Message.Delete) l)
+              Result.ret (betree.Node.Internal (betree.Internal.mk i i0 n n0))
+          | betree.Message.Upsert ufs =>
             do
               let (st1, v) ←
-                betree.Internal.lookup_in_children_fwd (betree_internal_t.mk i
-                  i0 n n0) key st0
+                betree.Internal.lookup_in_children_fwd (betree.Internal.mk i i0
+                  n n0) key st0
               let (st2, _) ←
-                betree.Node.apply_upserts_fwd (betree_list_t.Cons (k,
-                  betree_message_t.Upsert ufs) l) v key st1
+                betree.Node.apply_upserts_fwd (betree.List.Cons (k,
+                  betree.Message.Upsert ufs) l) v key st1
               let node0 ←
-                betree.Internal.lookup_in_children_back (betree_internal_t.mk i
+                betree.Internal.lookup_in_children_back (betree.Internal.mk i
                   i0 n n0) key st0
               let ⟨ i1, i2, n1, n2 ⟩ := node0
               let pending0 ←
-                betree.Node.apply_upserts_back (betree_list_t.Cons (k,
-                  betree_message_t.Upsert ufs) l) v key st1
+                betree.Node.apply_upserts_back (betree.List.Cons (k,
+                  betree.Message.Upsert ufs) l) v key st1
               let msgs0 ←
                 betree.Node.lookup_first_message_for_key_back key msgs pending0
               let _ ← betree.store_internal_node_fwd i1 msgs0 st2
-              Result.ret (betree_node_t.Internal (betree_internal_t.mk i1 i2 n1
+              Result.ret (betree.Node.Internal (betree.Internal.mk i1 i2 n1
                 n2))
-      | betree_list_t.Nil =>
+      | betree.List.Nil =>
         do
           let _ ←
             betree.Node.lookup_first_message_for_key_back key msgs
-              betree_list_t.Nil
+              betree.List.Nil
           let node0 ←
-            betree.Internal.lookup_in_children_back (betree_internal_t.mk i i0
-              n n0) key st0
-          Result.ret (betree_node_t.Internal node0)
-  | betree_node_t.Leaf node =>
+            betree.Internal.lookup_in_children_back (betree.Internal.mk i i0 n
+              n0) key st0
+          Result.ret (betree.Node.Internal node0)
+  | betree.Node.Leaf node =>
     do
       let (_, bindings) ← betree.load_leaf_node_fwd node.betree_leaf_id st
       let _ ← betree.Node.lookup_in_bindings_fwd key bindings
-      Result.ret (betree_node_t.Leaf node)
+      Result.ret (betree.Node.Leaf node)
 
 /- [betree_main::betree::Internal::{4}::lookup_in_children] -/
 divergent def betree.Internal.lookup_in_children_fwd
-  (self : betree_internal_t) (key : U64) (st : State) :
+  (self : betree.Internal) (key : U64) (st : State) :
   Result (State × (Option U64))
   :=
   let ⟨ _, i, n, n0 ⟩ := self
@@ -486,57 +482,55 @@ divergent def betree.Internal.lookup_in_children_fwd
 
 /- [betree_main::betree::Internal::{4}::lookup_in_children] -/
 divergent def betree.Internal.lookup_in_children_back
-  (self : betree_internal_t) (key : U64) (st : State) :
-  Result betree_internal_t
-  :=
+  (self : betree.Internal) (key : U64) (st : State) : Result betree.Internal :=
   let ⟨ i, i0, n, n0 ⟩ := self
   if key < i0
   then
     do
       let n1 ← betree.Node.lookup_back n key st
-      Result.ret (betree_internal_t.mk i i0 n1 n0)
+      Result.ret (betree.Internal.mk i i0 n1 n0)
   else
     do
       let n1 ← betree.Node.lookup_back n0 key st
-      Result.ret (betree_internal_t.mk i i0 n n1)
+      Result.ret (betree.Internal.mk i i0 n n1)
 
 end
 
 /- [betree_main::betree::Node::{5}::lookup_mut_in_bindings] -/
 divergent def betree.Node.lookup_mut_in_bindings_fwd
-  (key : U64) (bindings : betree_list_t (U64 × U64)) :
-  Result (betree_list_t (U64 × U64))
+  (key : U64) (bindings : betree.List (U64 × U64)) :
+  Result (betree.List (U64 × U64))
   :=
   match bindings with
-  | betree_list_t.Cons hd tl =>
+  | betree.List.Cons hd tl =>
     let (i, i0) := hd
     if i >= key
-    then Result.ret (betree_list_t.Cons (i, i0) tl)
+    then Result.ret (betree.List.Cons (i, i0) tl)
     else betree.Node.lookup_mut_in_bindings_fwd key tl
-  | betree_list_t.Nil => Result.ret betree_list_t.Nil
+  | betree.List.Nil => Result.ret betree.List.Nil
 
 /- [betree_main::betree::Node::{5}::lookup_mut_in_bindings] -/
 divergent def betree.Node.lookup_mut_in_bindings_back
-  (key : U64) (bindings : betree_list_t (U64 × U64))
-  (ret0 : betree_list_t (U64 × U64)) :
-  Result (betree_list_t (U64 × U64))
+  (key : U64) (bindings : betree.List (U64 × U64))
+  (ret0 : betree.List (U64 × U64)) :
+  Result (betree.List (U64 × U64))
   :=
   match bindings with
-  | betree_list_t.Cons hd tl =>
+  | betree.List.Cons hd tl =>
     let (i, i0) := hd
     if i >= key
     then Result.ret ret0
     else
       do
         let tl0 ← betree.Node.lookup_mut_in_bindings_back key tl ret0
-        Result.ret (betree_list_t.Cons (i, i0) tl0)
-  | betree_list_t.Nil => Result.ret ret0
+        Result.ret (betree.List.Cons (i, i0) tl0)
+  | betree.List.Nil => Result.ret ret0
 
 /- [betree_main::betree::Node::{5}::apply_to_leaf] -/
 def betree.Node.apply_to_leaf_fwd_back
-  (bindings : betree_list_t (U64 × U64)) (key : U64)
-  (new_msg : betree_message_t) :
-  Result (betree_list_t (U64 × U64))
+  (bindings : betree.List (U64 × U64)) (key : U64) (new_msg : betree.Message)
+  :
+  Result (betree.List (U64 × U64))
   :=
   do
     let bindings0 ← betree.Node.lookup_mut_in_bindings_fwd key bindings
@@ -546,17 +540,17 @@ def betree.Node.apply_to_leaf_fwd_back
       do
         let hd ← betree.List.pop_front_fwd (U64 × U64) bindings0
         match new_msg with
-        | betree_message_t.Insert v =>
+        | betree.Message.Insert v =>
           do
             let bindings1 ← betree.List.pop_front_back (U64 × U64) bindings0
             let bindings2 ←
               betree.List.push_front_fwd_back (U64 × U64) bindings1 (key, v)
             betree.Node.lookup_mut_in_bindings_back key bindings bindings2
-        | betree_message_t.Delete =>
+        | betree.Message.Delete =>
           do
             let bindings1 ← betree.List.pop_front_back (U64 × U64) bindings0
             betree.Node.lookup_mut_in_bindings_back key bindings bindings1
-        | betree_message_t.Upsert s =>
+        | betree.Message.Upsert s =>
           do
             let (_, i) := hd
             let v ← betree.upsert_update_fwd (Option.some i) s
@@ -566,14 +560,14 @@ def betree.Node.apply_to_leaf_fwd_back
             betree.Node.lookup_mut_in_bindings_back key bindings bindings2
     else
       match new_msg with
-      | betree_message_t.Insert v =>
+      | betree.Message.Insert v =>
         do
           let bindings1 ←
             betree.List.push_front_fwd_back (U64 × U64) bindings0 (key, v)
           betree.Node.lookup_mut_in_bindings_back key bindings bindings1
-      | betree_message_t.Delete =>
+      | betree.Message.Delete =>
         betree.Node.lookup_mut_in_bindings_back key bindings bindings0
-      | betree_message_t.Upsert s =>
+      | betree.Message.Upsert s =>
         do
           let v ← betree.upsert_update_fwd Option.none s
           let bindings1 ←
@@ -582,170 +576,170 @@ def betree.Node.apply_to_leaf_fwd_back
 
 /- [betree_main::betree::Node::{5}::apply_messages_to_leaf] -/
 divergent def betree.Node.apply_messages_to_leaf_fwd_back
-  (bindings : betree_list_t (U64 × U64))
-  (new_msgs : betree_list_t (U64 × betree_message_t)) :
-  Result (betree_list_t (U64 × U64))
+  (bindings : betree.List (U64 × U64))
+  (new_msgs : betree.List (U64 × betree.Message)) :
+  Result (betree.List (U64 × U64))
   :=
   match new_msgs with
-  | betree_list_t.Cons new_msg new_msgs_tl =>
+  | betree.List.Cons new_msg new_msgs_tl =>
     do
       let (i, m) := new_msg
       let bindings0 ← betree.Node.apply_to_leaf_fwd_back bindings i m
       betree.Node.apply_messages_to_leaf_fwd_back bindings0 new_msgs_tl
-  | betree_list_t.Nil => Result.ret bindings
+  | betree.List.Nil => Result.ret bindings
 
 /- [betree_main::betree::Node::{5}::filter_messages_for_key] -/
 divergent def betree.Node.filter_messages_for_key_fwd_back
-  (key : U64) (msgs : betree_list_t (U64 × betree_message_t)) :
-  Result (betree_list_t (U64 × betree_message_t))
+  (key : U64) (msgs : betree.List (U64 × betree.Message)) :
+  Result (betree.List (U64 × betree.Message))
   :=
   match msgs with
-  | betree_list_t.Cons p l =>
+  | betree.List.Cons p l =>
     let (k, m) := p
     if k = key
     then
       do
         let msgs0 ←
-          betree.List.pop_front_back (U64 × betree_message_t)
-            (betree_list_t.Cons (k, m) l)
+          betree.List.pop_front_back (U64 × betree.Message) (betree.List.Cons
+            (k, m) l)
         betree.Node.filter_messages_for_key_fwd_back key msgs0
-    else Result.ret (betree_list_t.Cons (k, m) l)
-  | betree_list_t.Nil => Result.ret betree_list_t.Nil
+    else Result.ret (betree.List.Cons (k, m) l)
+  | betree.List.Nil => Result.ret betree.List.Nil
 
 /- [betree_main::betree::Node::{5}::lookup_first_message_after_key] -/
 divergent def betree.Node.lookup_first_message_after_key_fwd
-  (key : U64) (msgs : betree_list_t (U64 × betree_message_t)) :
-  Result (betree_list_t (U64 × betree_message_t))
+  (key : U64) (msgs : betree.List (U64 × betree.Message)) :
+  Result (betree.List (U64 × betree.Message))
   :=
   match msgs with
-  | betree_list_t.Cons p next_msgs =>
+  | betree.List.Cons p next_msgs =>
     let (k, m) := p
     if k = key
     then betree.Node.lookup_first_message_after_key_fwd key next_msgs
-    else Result.ret (betree_list_t.Cons (k, m) next_msgs)
-  | betree_list_t.Nil => Result.ret betree_list_t.Nil
+    else Result.ret (betree.List.Cons (k, m) next_msgs)
+  | betree.List.Nil => Result.ret betree.List.Nil
 
 /- [betree_main::betree::Node::{5}::lookup_first_message_after_key] -/
 divergent def betree.Node.lookup_first_message_after_key_back
-  (key : U64) (msgs : betree_list_t (U64 × betree_message_t))
-  (ret0 : betree_list_t (U64 × betree_message_t)) :
-  Result (betree_list_t (U64 × betree_message_t))
+  (key : U64) (msgs : betree.List (U64 × betree.Message))
+  (ret0 : betree.List (U64 × betree.Message)) :
+  Result (betree.List (U64 × betree.Message))
   :=
   match msgs with
-  | betree_list_t.Cons p next_msgs =>
+  | betree.List.Cons p next_msgs =>
     let (k, m) := p
     if k = key
     then
       do
         let next_msgs0 ←
           betree.Node.lookup_first_message_after_key_back key next_msgs ret0
-        Result.ret (betree_list_t.Cons (k, m) next_msgs0)
+        Result.ret (betree.List.Cons (k, m) next_msgs0)
     else Result.ret ret0
-  | betree_list_t.Nil => Result.ret ret0
+  | betree.List.Nil => Result.ret ret0
 
 /- [betree_main::betree::Node::{5}::apply_to_internal] -/
 def betree.Node.apply_to_internal_fwd_back
-  (msgs : betree_list_t (U64 × betree_message_t)) (key : U64)
-  (new_msg : betree_message_t) :
-  Result (betree_list_t (U64 × betree_message_t))
+  (msgs : betree.List (U64 × betree.Message)) (key : U64)
+  (new_msg : betree.Message) :
+  Result (betree.List (U64 × betree.Message))
   :=
   do
     let msgs0 ← betree.Node.lookup_first_message_for_key_fwd key msgs
-    let b ← betree.List.head_has_key_fwd betree_message_t msgs0 key
+    let b ← betree.List.head_has_key_fwd betree.Message msgs0 key
     if b
     then
       match new_msg with
-      | betree_message_t.Insert i =>
+      | betree.Message.Insert i =>
         do
           let msgs1 ← betree.Node.filter_messages_for_key_fwd_back key msgs0
           let msgs2 ←
-            betree.List.push_front_fwd_back (U64 × betree_message_t) msgs1
-              (key, betree_message_t.Insert i)
+            betree.List.push_front_fwd_back (U64 × betree.Message) msgs1 (key,
+              betree.Message.Insert i)
           betree.Node.lookup_first_message_for_key_back key msgs msgs2
-      | betree_message_t.Delete =>
+      | betree.Message.Delete =>
         do
           let msgs1 ← betree.Node.filter_messages_for_key_fwd_back key msgs0
           let msgs2 ←
-            betree.List.push_front_fwd_back (U64 × betree_message_t) msgs1
-              (key, betree_message_t.Delete)
+            betree.List.push_front_fwd_back (U64 × betree.Message) msgs1 (key,
+              betree.Message.Delete)
           betree.Node.lookup_first_message_for_key_back key msgs msgs2
-      | betree_message_t.Upsert s =>
+      | betree.Message.Upsert s =>
         do
-          let p ← betree.List.hd_fwd (U64 × betree_message_t) msgs0
+          let p ← betree.List.hd_fwd (U64 × betree.Message) msgs0
           let (_, m) := p
           match m with
-          | betree_message_t.Insert prev =>
+          | betree.Message.Insert prev =>
             do
               let v ← betree.upsert_update_fwd (Option.some prev) s
               let msgs1 ←
-                betree.List.pop_front_back (U64 × betree_message_t) msgs0
+                betree.List.pop_front_back (U64 × betree.Message) msgs0
               let msgs2 ←
-                betree.List.push_front_fwd_back (U64 × betree_message_t) msgs1
-                  (key, betree_message_t.Insert v)
+                betree.List.push_front_fwd_back (U64 × betree.Message) msgs1
+                  (key, betree.Message.Insert v)
               betree.Node.lookup_first_message_for_key_back key msgs msgs2
-          | betree_message_t.Delete =>
+          | betree.Message.Delete =>
             do
               let v ← betree.upsert_update_fwd Option.none s
               let msgs1 ←
-                betree.List.pop_front_back (U64 × betree_message_t) msgs0
+                betree.List.pop_front_back (U64 × betree.Message) msgs0
               let msgs2 ←
-                betree.List.push_front_fwd_back (U64 × betree_message_t) msgs1
-                  (key, betree_message_t.Insert v)
+                betree.List.push_front_fwd_back (U64 × betree.Message) msgs1
+                  (key, betree.Message.Insert v)
               betree.Node.lookup_first_message_for_key_back key msgs msgs2
-          | betree_message_t.Upsert ufs =>
+          | betree.Message.Upsert ufs =>
             do
               let msgs1 ←
                 betree.Node.lookup_first_message_after_key_fwd key msgs0
               let msgs2 ←
-                betree.List.push_front_fwd_back (U64 × betree_message_t) msgs1
-                  (key, betree_message_t.Upsert s)
+                betree.List.push_front_fwd_back (U64 × betree.Message) msgs1
+                  (key, betree.Message.Upsert s)
               let msgs3 ←
                 betree.Node.lookup_first_message_after_key_back key msgs0 msgs2
               betree.Node.lookup_first_message_for_key_back key msgs msgs3
     else
       do
         let msgs1 ←
-          betree.List.push_front_fwd_back (U64 × betree_message_t) msgs0 (key,
+          betree.List.push_front_fwd_back (U64 × betree.Message) msgs0 (key,
             new_msg)
         betree.Node.lookup_first_message_for_key_back key msgs msgs1
 
 /- [betree_main::betree::Node::{5}::apply_messages_to_internal] -/
 divergent def betree.Node.apply_messages_to_internal_fwd_back
-  (msgs : betree_list_t (U64 × betree_message_t))
-  (new_msgs : betree_list_t (U64 × betree_message_t)) :
-  Result (betree_list_t (U64 × betree_message_t))
+  (msgs : betree.List (U64 × betree.Message))
+  (new_msgs : betree.List (U64 × betree.Message)) :
+  Result (betree.List (U64 × betree.Message))
   :=
   match new_msgs with
-  | betree_list_t.Cons new_msg new_msgs_tl =>
+  | betree.List.Cons new_msg new_msgs_tl =>
     do
       let (i, m) := new_msg
       let msgs0 ← betree.Node.apply_to_internal_fwd_back msgs i m
       betree.Node.apply_messages_to_internal_fwd_back msgs0 new_msgs_tl
-  | betree_list_t.Nil => Result.ret msgs
+  | betree.List.Nil => Result.ret msgs
 
 /- [betree_main::betree::Node::{5}::apply_messages] -/
 mutual divergent def betree.Node.apply_messages_fwd
-  (self : betree_node_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t)
-  (msgs : betree_list_t (U64 × betree_message_t)) (st : State) :
+  (self : betree.Node) (params : betree.Params)
+  (node_id_cnt : betree.NodeIdCounter)
+  (msgs : betree.List (U64 × betree.Message)) (st : State) :
   Result (State × Unit)
   :=
   match self with
-  | betree_node_t.Internal node =>
+  | betree.Node.Internal node =>
     do
       let ⟨ i, i0, n, n0 ⟩ := node
       let (st0, content) ← betree.load_internal_node_fwd i st
       let content0 ←
         betree.Node.apply_messages_to_internal_fwd_back content msgs
-      let num_msgs ← betree.List.len_fwd (U64 × betree_message_t) content0
+      let num_msgs ← betree.List.len_fwd (U64 × betree.Message) content0
       if num_msgs >= params.betree_params_min_flush_size
       then
         do
           let (st1, content1) ←
-            betree.Internal.flush_fwd (betree_internal_t.mk i i0 n n0) params
+            betree.Internal.flush_fwd (betree.Internal.mk i i0 n n0) params
               node_id_cnt content0 st0
           let (node0, _) ←
-            betree.Internal.flush_back (betree_internal_t.mk i i0 n n0) params
+            betree.Internal.flush_back (betree.Internal.mk i i0 n n0) params
               node_id_cnt content0 st0
           let ⟨ i1, _, _, _ ⟩ := node0
           let (st2, _) ← betree.store_internal_node_fwd i1 content1 st1
@@ -754,7 +748,7 @@ mutual divergent def betree.Node.apply_messages_fwd
         do
           let (st1, _) ← betree.store_internal_node_fwd i content0 st0
           Result.ret (st1, ())
-  | betree_node_t.Leaf node =>
+  | betree.Node.Leaf node =>
     do
       let (st0, content) ← betree.load_leaf_node_fwd node.betree_leaf_id st
       let content0 ← betree.Node.apply_messages_to_leaf_fwd_back content msgs
@@ -766,8 +760,7 @@ mutual divergent def betree.Node.apply_messages_fwd
           let (st1, _) ←
             betree.Leaf.split_fwd node content0 params node_id_cnt st0
           let (st2, _) ←
-            betree.store_leaf_node_fwd node.betree_leaf_id betree_list_t.Nil
-              st1
+            betree.store_leaf_node_fwd node.betree_leaf_id betree.List.Nil st1
           Result.ret (st2, ())
       else
         do
@@ -777,38 +770,38 @@ mutual divergent def betree.Node.apply_messages_fwd
 
 /- [betree_main::betree::Node::{5}::apply_messages] -/
 divergent def betree.Node.apply_messages_back
-  (self : betree_node_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t)
-  (msgs : betree_list_t (U64 × betree_message_t)) (st : State) :
-  Result (betree_node_t × betree_node_id_counter_t)
+  (self : betree.Node) (params : betree.Params)
+  (node_id_cnt : betree.NodeIdCounter)
+  (msgs : betree.List (U64 × betree.Message)) (st : State) :
+  Result (betree.Node × betree.NodeIdCounter)
   :=
   match self with
-  | betree_node_t.Internal node =>
+  | betree.Node.Internal node =>
     do
       let ⟨ i, i0, n, n0 ⟩ := node
       let (st0, content) ← betree.load_internal_node_fwd i st
       let content0 ←
         betree.Node.apply_messages_to_internal_fwd_back content msgs
-      let num_msgs ← betree.List.len_fwd (U64 × betree_message_t) content0
+      let num_msgs ← betree.List.len_fwd (U64 × betree.Message) content0
       if num_msgs >= params.betree_params_min_flush_size
       then
         do
           let (st1, content1) ←
-            betree.Internal.flush_fwd (betree_internal_t.mk i i0 n n0) params
+            betree.Internal.flush_fwd (betree.Internal.mk i i0 n n0) params
               node_id_cnt content0 st0
           let (node0, node_id_cnt0) ←
-            betree.Internal.flush_back (betree_internal_t.mk i i0 n n0) params
+            betree.Internal.flush_back (betree.Internal.mk i i0 n n0) params
               node_id_cnt content0 st0
           let ⟨ i1, i2, n1, n2 ⟩ := node0
           let _ ← betree.store_internal_node_fwd i1 content1 st1
-          Result.ret (betree_node_t.Internal (betree_internal_t.mk i1 i2 n1
-            n2), node_id_cnt0)
+          Result.ret (betree.Node.Internal (betree.Internal.mk i1 i2 n1 n2),
+            node_id_cnt0)
       else
         do
           let _ ← betree.store_internal_node_fwd i content0 st0
-          Result.ret (betree_node_t.Internal (betree_internal_t.mk i i0 n n0),
+          Result.ret (betree.Node.Internal (betree.Internal.mk i i0 n n0),
             node_id_cnt)
-  | betree_node_t.Leaf node =>
+  | betree.Node.Leaf node =>
     do
       let (st0, content) ← betree.load_leaf_node_fwd node.betree_leaf_id st
       let content0 ← betree.Node.apply_messages_to_leaf_fwd_back content msgs
@@ -820,29 +813,28 @@ divergent def betree.Node.apply_messages_back
           let (st1, new_node) ←
             betree.Leaf.split_fwd node content0 params node_id_cnt st0
           let _ ←
-            betree.store_leaf_node_fwd node.betree_leaf_id betree_list_t.Nil
-              st1
+            betree.store_leaf_node_fwd node.betree_leaf_id betree.List.Nil st1
           let node_id_cnt0 ←
             betree.Leaf.split_back node content0 params node_id_cnt st0
-          Result.ret (betree_node_t.Internal new_node, node_id_cnt0)
+          Result.ret (betree.Node.Internal new_node, node_id_cnt0)
       else
         do
           let _ ← betree.store_leaf_node_fwd node.betree_leaf_id content0 st0
-          Result.ret (betree_node_t.Leaf { node with betree_leaf_size := len },
+          Result.ret (betree.Node.Leaf { node with betree_leaf_size := len },
             node_id_cnt)
 
 /- [betree_main::betree::Internal::{4}::flush] -/
 divergent def betree.Internal.flush_fwd
-  (self : betree_internal_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t)
-  (content : betree_list_t (U64 × betree_message_t)) (st : State) :
-  Result (State × (betree_list_t (U64 × betree_message_t)))
+  (self : betree.Internal) (params : betree.Params)
+  (node_id_cnt : betree.NodeIdCounter)
+  (content : betree.List (U64 × betree.Message)) (st : State) :
+  Result (State × (betree.List (U64 × betree.Message)))
   :=
   do
     let ⟨ _, i, n, n0 ⟩ := self
-    let p ← betree.List.partition_at_pivot_fwd betree_message_t content i
+    let p ← betree.List.partition_at_pivot_fwd betree.Message content i
     let (msgs_left, msgs_right) := p
-    let len_left ← betree.List.len_fwd (U64 × betree_message_t) msgs_left
+    let len_left ← betree.List.len_fwd (U64 × betree.Message) msgs_left
     if len_left >= params.betree_params_min_flush_size
     then
       do
@@ -851,7 +843,7 @@ divergent def betree.Internal.flush_fwd
         let (_, node_id_cnt0) ←
           betree.Node.apply_messages_back n params node_id_cnt msgs_left st
         let len_right ←
-          betree.List.len_fwd (U64 × betree_message_t) msgs_right
+          betree.List.len_fwd (U64 × betree.Message) msgs_right
         if len_right >= params.betree_params_min_flush_size
         then
           do
@@ -861,7 +853,7 @@ divergent def betree.Internal.flush_fwd
             let _ ←
               betree.Node.apply_messages_back n0 params node_id_cnt0 msgs_right
                 st0
-            Result.ret (st1, betree_list_t.Nil)
+            Result.ret (st1, betree.List.Nil)
         else Result.ret (st0, msgs_right)
     else
       do
@@ -873,16 +865,16 @@ divergent def betree.Internal.flush_fwd
 
 /- [betree_main::betree::Internal::{4}::flush] -/
 divergent def betree.Internal.flush_back
-  (self : betree_internal_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t)
-  (content : betree_list_t (U64 × betree_message_t)) (st : State) :
-  Result (betree_internal_t × betree_node_id_counter_t)
+  (self : betree.Internal) (params : betree.Params)
+  (node_id_cnt : betree.NodeIdCounter)
+  (content : betree.List (U64 × betree.Message)) (st : State) :
+  Result (betree.Internal × betree.NodeIdCounter)
   :=
   do
     let ⟨ i, i0, n, n0 ⟩ := self
-    let p ← betree.List.partition_at_pivot_fwd betree_message_t content i0
+    let p ← betree.List.partition_at_pivot_fwd betree.Message content i0
     let (msgs_left, msgs_right) := p
-    let len_left ← betree.List.len_fwd (U64 × betree_message_t) msgs_left
+    let len_left ← betree.List.len_fwd (U64 × betree.Message) msgs_left
     if len_left >= params.betree_params_min_flush_size
     then
       do
@@ -891,60 +883,60 @@ divergent def betree.Internal.flush_back
         let (n1, node_id_cnt0) ←
           betree.Node.apply_messages_back n params node_id_cnt msgs_left st
         let len_right ←
-          betree.List.len_fwd (U64 × betree_message_t) msgs_right
+          betree.List.len_fwd (U64 × betree.Message) msgs_right
         if len_right >= params.betree_params_min_flush_size
         then
           do
             let (n2, node_id_cnt1) ←
               betree.Node.apply_messages_back n0 params node_id_cnt0 msgs_right
                 st0
-            Result.ret (betree_internal_t.mk i i0 n1 n2, node_id_cnt1)
-        else Result.ret (betree_internal_t.mk i i0 n1 n0, node_id_cnt0)
+            Result.ret (betree.Internal.mk i i0 n1 n2, node_id_cnt1)
+        else Result.ret (betree.Internal.mk i i0 n1 n0, node_id_cnt0)
     else
       do
         let (n1, node_id_cnt0) ←
           betree.Node.apply_messages_back n0 params node_id_cnt msgs_right st
-        Result.ret (betree_internal_t.mk i i0 n n1, node_id_cnt0)
+        Result.ret (betree.Internal.mk i i0 n n1, node_id_cnt0)
 
 end
 
 /- [betree_main::betree::Node::{5}::apply] -/
 def betree.Node.apply_fwd
-  (self : betree_node_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t) (key : U64)
-  (new_msg : betree_message_t) (st : State) :
+  (self : betree.Node) (params : betree.Params)
+  (node_id_cnt : betree.NodeIdCounter) (key : U64) (new_msg : betree.Message)
+  (st : State) :
   Result (State × Unit)
   :=
   do
-    let l := betree_list_t.Nil
+    let l := betree.List.Nil
     let (st0, _) ←
-      betree.Node.apply_messages_fwd self params node_id_cnt
-        (betree_list_t.Cons (key, new_msg) l) st
+      betree.Node.apply_messages_fwd self params node_id_cnt (betree.List.Cons
+        (key, new_msg) l) st
     let _ ←
-      betree.Node.apply_messages_back self params node_id_cnt
-        (betree_list_t.Cons (key, new_msg) l) st
+      betree.Node.apply_messages_back self params node_id_cnt (betree.List.Cons
+        (key, new_msg) l) st
     Result.ret (st0, ())
 
 /- [betree_main::betree::Node::{5}::apply] -/
 def betree.Node.apply_back
-  (self : betree_node_t) (params : betree_params_t)
-  (node_id_cnt : betree_node_id_counter_t) (key : U64)
-  (new_msg : betree_message_t) (st : State) :
-  Result (betree_node_t × betree_node_id_counter_t)
+  (self : betree.Node) (params : betree.Params)
+  (node_id_cnt : betree.NodeIdCounter) (key : U64) (new_msg : betree.Message)
+  (st : State) :
+  Result (betree.Node × betree.NodeIdCounter)
   :=
-  let l := betree_list_t.Nil
-  betree.Node.apply_messages_back self params node_id_cnt (betree_list_t.Cons
+  let l := betree.List.Nil
+  betree.Node.apply_messages_back self params node_id_cnt (betree.List.Cons
     (key, new_msg) l) st
 
 /- [betree_main::betree::BeTree::{6}::new] -/
 def betree.BeTree.new_fwd
   (min_flush_size : U64) (split_size : U64) (st : State) :
-  Result (State × betree_be_tree_t)
+  Result (State × betree.BeTree)
   :=
   do
     let node_id_cnt ← betree.NodeIdCounter.new_fwd
     let id ← betree.NodeIdCounter.fresh_id_fwd node_id_cnt
-    let (st0, _) ← betree.store_leaf_node_fwd id betree_list_t.Nil st
+    let (st0, _) ← betree.store_leaf_node_fwd id betree.List.Nil st
     let node_id_cnt0 ← betree.NodeIdCounter.fresh_id_back node_id_cnt
     Result.ret (st0,
       {
@@ -955,7 +947,7 @@ def betree.BeTree.new_fwd
           },
         betree_be_tree_node_id_cnt := node_id_cnt0,
         betree_be_tree_root :=
-          (betree_node_t.Leaf
+          (betree.Node.Leaf
             {
               betree_leaf_id := id,
               betree_leaf_size := (U64.ofInt 0 (by intlit))
@@ -964,7 +956,7 @@ def betree.BeTree.new_fwd
 
 /- [betree_main::betree::BeTree::{6}::apply] -/
 def betree.BeTree.apply_fwd
-  (self : betree_be_tree_t) (key : U64) (msg : betree_message_t) (st : State) :
+  (self : betree.BeTree) (key : U64) (msg : betree.Message) (st : State) :
   Result (State × Unit)
   :=
   do
@@ -978,8 +970,8 @@ def betree.BeTree.apply_fwd
 
 /- [betree_main::betree::BeTree::{6}::apply] -/
 def betree.BeTree.apply_back
-  (self : betree_be_tree_t) (key : U64) (msg : betree_message_t) (st : State) :
-  Result betree_be_tree_t
+  (self : betree.BeTree) (key : U64) (msg : betree.Message) (st : State) :
+  Result betree.BeTree
   :=
   do
     let (n, nic) ←
@@ -990,74 +982,66 @@ def betree.BeTree.apply_back
 
 /- [betree_main::betree::BeTree::{6}::insert] -/
 def betree.BeTree.insert_fwd
-  (self : betree_be_tree_t) (key : U64) (value : U64) (st : State) :
+  (self : betree.BeTree) (key : U64) (value : U64) (st : State) :
   Result (State × Unit)
   :=
   do
     let (st0, _) ←
-      betree.BeTree.apply_fwd self key (betree_message_t.Insert value) st
+      betree.BeTree.apply_fwd self key (betree.Message.Insert value) st
     let _ ←
-      betree.BeTree.apply_back self key (betree_message_t.Insert value) st
+      betree.BeTree.apply_back self key (betree.Message.Insert value) st
     Result.ret (st0, ())
 
 /- [betree_main::betree::BeTree::{6}::insert] -/
 def betree.BeTree.insert_back
-  (self : betree_be_tree_t) (key : U64) (value : U64) (st : State) :
-  Result betree_be_tree_t
+  (self : betree.BeTree) (key : U64) (value : U64) (st : State) :
+  Result betree.BeTree
   :=
-  betree.BeTree.apply_back self key (betree_message_t.Insert value) st
+  betree.BeTree.apply_back self key (betree.Message.Insert value) st
 
 /- [betree_main::betree::BeTree::{6}::delete] -/
 def betree.BeTree.delete_fwd
-  (self : betree_be_tree_t) (key : U64) (st : State) :
-  Result (State × Unit)
-  :=
+  (self : betree.BeTree) (key : U64) (st : State) : Result (State × Unit) :=
   do
-    let (st0, _) ←
-      betree.BeTree.apply_fwd self key betree_message_t.Delete st
-    let _ ← betree.BeTree.apply_back self key betree_message_t.Delete st
+    let (st0, _) ← betree.BeTree.apply_fwd self key betree.Message.Delete st
+    let _ ← betree.BeTree.apply_back self key betree.Message.Delete st
     Result.ret (st0, ())
 
 /- [betree_main::betree::BeTree::{6}::delete] -/
 def betree.BeTree.delete_back
-  (self : betree_be_tree_t) (key : U64) (st : State) :
-  Result betree_be_tree_t
-  :=
-  betree.BeTree.apply_back self key betree_message_t.Delete st
+  (self : betree.BeTree) (key : U64) (st : State) : Result betree.BeTree :=
+  betree.BeTree.apply_back self key betree.Message.Delete st
 
 /- [betree_main::betree::BeTree::{6}::upsert] -/
 def betree.BeTree.upsert_fwd
-  (self : betree_be_tree_t) (key : U64) (upd : betree_upsert_fun_state_t)
-  (st : State) :
+  (self : betree.BeTree) (key : U64) (upd : betree.UpsertFunState) (st : State)
+  :
   Result (State × Unit)
   :=
   do
     let (st0, _) ←
-      betree.BeTree.apply_fwd self key (betree_message_t.Upsert upd) st
-    let _ ←
-      betree.BeTree.apply_back self key (betree_message_t.Upsert upd) st
+      betree.BeTree.apply_fwd self key (betree.Message.Upsert upd) st
+    let _ ← betree.BeTree.apply_back self key (betree.Message.Upsert upd) st
     Result.ret (st0, ())
 
 /- [betree_main::betree::BeTree::{6}::upsert] -/
 def betree.BeTree.upsert_back
-  (self : betree_be_tree_t) (key : U64) (upd : betree_upsert_fun_state_t)
-  (st : State) :
-  Result betree_be_tree_t
+  (self : betree.BeTree) (key : U64) (upd : betree.UpsertFunState) (st : State)
+  :
+  Result betree.BeTree
   :=
-  betree.BeTree.apply_back self key (betree_message_t.Upsert upd) st
+  betree.BeTree.apply_back self key (betree.Message.Upsert upd) st
 
 /- [betree_main::betree::BeTree::{6}::lookup] -/
 def betree.BeTree.lookup_fwd
-  (self : betree_be_tree_t) (key : U64) (st : State) :
+  (self : betree.BeTree) (key : U64) (st : State) :
   Result (State × (Option U64))
   :=
   betree.Node.lookup_fwd self.betree_be_tree_root key st
 
 /- [betree_main::betree::BeTree::{6}::lookup] -/
 def betree.BeTree.lookup_back
-  (self : betree_be_tree_t) (key : U64) (st : State) :
-  Result betree_be_tree_t
-  :=
+  (self : betree.BeTree) (key : U64) (st : State) : Result betree.BeTree :=
   do
     let n ← betree.Node.lookup_back self.betree_be_tree_root key st
     Result.ret { self with betree_be_tree_root := n }

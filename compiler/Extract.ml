@@ -601,7 +601,11 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | FStar | Lean | HOL4 -> name
     | Coq -> capitalize_first_letter name
   in
-  let type_name name = type_name_to_snake_case name ^ "_t" in
+  let type_name name =
+    match !backend with
+    | FStar | Coq | HOL4 -> type_name_to_snake_case name ^ "_t"
+    | Lean -> String.concat "." (get_type_name name)
+  in
   let field_name (def_name : name) (field_id : FieldId.id)
       (field_name : string option) : string =
     let def_name = type_name_to_snake_case def_name ^ "_" in
@@ -610,10 +614,13 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
     | None -> def_name ^ FieldId.to_string field_id
   in
   let variant_name (def_name : name) (variant : string) : string =
-    let variant = to_camel_case variant in
-    if variant_concatenate_type_name then
-      type_name_to_camel_case def_name ^ variant
-    else variant
+    match !backend with
+    | FStar | Coq | HOL4 ->
+        let variant = to_camel_case variant in
+        if variant_concatenate_type_name then
+          type_name_to_camel_case def_name ^ variant
+        else variant
+    | Lean -> variant
   in
   let struct_constructor (basename : name) : string =
     let tname = type_name basename in

@@ -5,53 +5,53 @@ open Primitives
 namespace betree_main
 
 /- [betree_main::betree::List] -/
-inductive betree_list_t (T : Type) :=
-| Cons : T → betree_list_t T → betree_list_t T
-| Nil : betree_list_t T
+inductive betree.List (T : Type) :=
+| Cons : T → betree.List T → betree.List T
+| Nil : betree.List T
 
 /- [betree_main::betree::UpsertFunState] -/
-inductive betree_upsert_fun_state_t :=
-| Add : U64 → betree_upsert_fun_state_t
-| Sub : U64 → betree_upsert_fun_state_t
+inductive betree.UpsertFunState :=
+| Add : U64 → betree.UpsertFunState
+| Sub : U64 → betree.UpsertFunState
 
 /- [betree_main::betree::Message] -/
-inductive betree_message_t :=
-| Insert : U64 → betree_message_t
-| Delete : betree_message_t
-| Upsert : betree_upsert_fun_state_t → betree_message_t
+inductive betree.Message :=
+| Insert : U64 → betree.Message
+| Delete : betree.Message
+| Upsert : betree.UpsertFunState → betree.Message
 
 /- [betree_main::betree::Leaf] -/
-structure betree_leaf_t where
+structure betree.Leaf where
   betree_leaf_id : U64
   betree_leaf_size : U64
 
 mutual
 
 /- [betree_main::betree::Node] -/
-inductive betree_node_t :=
-| Internal : betree_internal_t → betree_node_t
-| Leaf : betree_leaf_t → betree_node_t
+inductive betree.Node :=
+| Internal : betree.Internal → betree.Node
+| Leaf : betree.Leaf → betree.Node
 
 /- [betree_main::betree::Internal] -/
-inductive betree_internal_t :=
-| mk : U64 → U64 → betree_node_t → betree_node_t → betree_internal_t
+inductive betree.Internal :=
+| mk : U64 → U64 → betree.Node → betree.Node → betree.Internal
 
 end
 
 /- [betree_main::betree::Params] -/
-structure betree_params_t where
+structure betree.Params where
   betree_params_min_flush_size : U64
   betree_params_split_size : U64
 
 /- [betree_main::betree::NodeIdCounter] -/
-structure betree_node_id_counter_t where
+structure betree.NodeIdCounter where
   betree_node_id_counter_next_node_id : U64
 
 /- [betree_main::betree::BeTree] -/
-structure betree_be_tree_t where
-  betree_be_tree_params : betree_params_t
-  betree_be_tree_node_id_cnt : betree_node_id_counter_t
-  betree_be_tree_root : betree_node_t
+structure betree.BeTree where
+  betree_be_tree_params : betree.Params
+  betree_be_tree_node_id_cnt : betree.NodeIdCounter
+  betree_be_tree_root : betree.Node
 
 /- The state type used in the state-error monad -/
 axiom State : Type

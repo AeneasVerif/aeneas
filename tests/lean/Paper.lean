@@ -56,56 +56,55 @@ def test_choose_fwd : Result Unit :=
 #assert (test_choose_fwd == .ret ())
 
 /- [paper::List] -/
-inductive list_t (T : Type) :=
-| Cons : T → list_t T → list_t T
-| Nil : list_t T
+inductive List (T : Type) :=
+| Cons : T → List T → List T
+| Nil : List T
 
 /- [paper::list_nth_mut] -/
-divergent def list_nth_mut_fwd
-  (T : Type) (l : list_t T) (i : U32) : Result T :=
+divergent def list_nth_mut_fwd (T : Type) (l : List T) (i : U32) : Result T :=
   match l with
-  | list_t.Cons x tl =>
+  | List.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
     else do
            let i0 ← i - (U32.ofInt 1 (by intlit))
            list_nth_mut_fwd T tl i0
-  | list_t.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [paper::list_nth_mut] -/
 divergent def list_nth_mut_back
-  (T : Type) (l : list_t T) (i : U32) (ret0 : T) : Result (list_t T) :=
+  (T : Type) (l : List T) (i : U32) (ret0 : T) : Result (List T) :=
   match l with
-  | list_t.Cons x tl =>
+  | List.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
-    then Result.ret (list_t.Cons ret0 tl)
+    then Result.ret (List.Cons ret0 tl)
     else
       do
         let i0 ← i - (U32.ofInt 1 (by intlit))
         let tl0 ← list_nth_mut_back T tl i0 ret0
-        Result.ret (list_t.Cons x tl0)
-  | list_t.Nil => Result.fail Error.panic
+        Result.ret (List.Cons x tl0)
+  | List.Nil => Result.fail Error.panic
 
 /- [paper::sum] -/
-divergent def sum_fwd (l : list_t I32) : Result I32 :=
+divergent def sum_fwd (l : List I32) : Result I32 :=
   match l with
-  | list_t.Cons x tl => do
-                          let i ← sum_fwd tl
-                          x + i
-  | list_t.Nil => Result.ret (I32.ofInt 0 (by intlit))
+  | List.Cons x tl => do
+                        let i ← sum_fwd tl
+                        x + i
+  | List.Nil => Result.ret (I32.ofInt 0 (by intlit))
 
 /- [paper::test_nth] -/
 def test_nth_fwd : Result Unit :=
   do
-    let l := list_t.Nil
-    let l0 := list_t.Cons (I32.ofInt 3 (by intlit)) l
-    let l1 := list_t.Cons (I32.ofInt 2 (by intlit)) l0
+    let l := List.Nil
+    let l0 := List.Cons (I32.ofInt 3 (by intlit)) l
+    let l1 := List.Cons (I32.ofInt 2 (by intlit)) l0
     let x ←
-      list_nth_mut_fwd I32 (list_t.Cons (I32.ofInt 1 (by intlit)) l1)
+      list_nth_mut_fwd I32 (List.Cons (I32.ofInt 1 (by intlit)) l1)
         (U32.ofInt 2 (by intlit))
     let x0 ← x + (I32.ofInt 1 (by intlit))
     let l2 ←
-      list_nth_mut_back I32 (list_t.Cons (I32.ofInt 1 (by intlit)) l1)
+      list_nth_mut_back I32 (List.Cons (I32.ofInt 1 (by intlit)) l1)
         (U32.ofInt 2 (by intlit)) x0
     let i ← sum_fwd l2
     if not (i = (I32.ofInt 7 (by intlit)))

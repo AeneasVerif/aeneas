@@ -5,8 +5,8 @@ open Primitives
 namespace loops
 
 /- [loops::List] -/
-inductive list_t (T : Type) :=
-| Cons : T → list_t T → list_t T
-| Nil : list_t T
+inductive List (T : Type) :=
+| Cons : T → List T → List T
+| Nil : List T
 
 end loops

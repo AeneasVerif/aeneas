@@ -68,179 +68,175 @@ def clear_fwd_back (v : Vec U32) : Result (Vec U32) :=
   clear_loop_fwd_back v (Usize.ofInt 0 (by intlit))
 
 /- [loops::list_mem] -/
-divergent def list_mem_loop_fwd (x : U32) (ls : list_t U32) : Result Bool :=
+divergent def list_mem_loop_fwd (x : U32) (ls : List U32) : Result Bool :=
   match ls with
-  | list_t.Cons y tl =>
-    if y = x
-    then Result.ret true
-    else list_mem_loop_fwd x tl
-  | list_t.Nil => Result.ret false
+  | List.Cons y tl => if y = x
+                      then Result.ret true
+                      else list_mem_loop_fwd x tl
+  | List.Nil => Result.ret false
 
 /- [loops::list_mem] -/
-def list_mem_fwd (x : U32) (ls : list_t U32) : Result Bool :=
+def list_mem_fwd (x : U32) (ls : List U32) : Result Bool :=
   list_mem_loop_fwd x ls
 
 /- [loops::list_nth_mut_loop] -/
 divergent def list_nth_mut_loop_loop_fwd
-  (T : Type) (ls : list_t T) (i : U32) : Result T :=
+  (T : Type) (ls : List T) (i : U32) : Result T :=
   match ls with
-  | list_t.Cons x tl =>
+  | List.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
     else
       do
         let i0 ← i - (U32.ofInt 1 (by intlit))
         list_nth_mut_loop_loop_fwd T tl i0
-  | list_t.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop] -/
-def list_nth_mut_loop_fwd (T : Type) (ls : list_t T) (i : U32) : Result T :=
+def list_nth_mut_loop_fwd (T : Type) (ls : List T) (i : U32) : Result T :=
   list_nth_mut_loop_loop_fwd T ls i
 
 /- [loops::list_nth_mut_loop] -/
 divergent def list_nth_mut_loop_loop_back
-  (T : Type) (ls : list_t T) (i : U32) (ret0 : T) : Result (list_t T) :=
+  (T : Type) (ls : List T) (i : U32) (ret0 : T) : Result (List T) :=
   match ls with
-  | list_t.Cons x tl =>
+  | List.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
-    then Result.ret (list_t.Cons ret0 tl)
+    then Result.ret (List.Cons ret0 tl)
     else
       do
         let i0 ← i - (U32.ofInt 1 (by intlit))
         let tl0 ← list_nth_mut_loop_loop_back T tl i0 ret0
-        Result.ret (list_t.Cons x tl0)
-  | list_t.Nil => Result.fail Error.panic
+        Result.ret (List.Cons x tl0)
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop] -/
 def list_nth_mut_loop_back
-  (T : Type) (ls : list_t T) (i : U32) (ret0 : T) : Result (list_t T) :=
+  (T : Type) (ls : List T) (i : U32) (ret0 : T) : Result (List T) :=
   list_nth_mut_loop_loop_back T ls i ret0
 
 /- [loops::list_nth_shared_loop] -/
 divergent def list_nth_shared_loop_loop_fwd
-  (T : Type) (ls : list_t T) (i : U32) : Result T :=
+  (T : Type) (ls : List T) (i : U32) : Result T :=
   match ls with
-  | list_t.Cons x tl =>
+  | List.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
     else
       do
         let i0 ← i - (U32.ofInt 1 (by intlit))
         list_nth_shared_loop_loop_fwd T tl i0
-  | list_t.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_loop] -/
-def list_nth_shared_loop_fwd (T : Type) (ls : list_t T) (i : U32) : Result T :=
+def list_nth_shared_loop_fwd (T : Type) (ls : List T) (i : U32) : Result T :=
   list_nth_shared_loop_loop_fwd T ls i
 
 /- [loops::get_elem_mut] -/
 divergent def get_elem_mut_loop_fwd
-  (x : Usize) (ls : list_t Usize) : Result Usize :=
+  (x : Usize) (ls : List Usize) : Result Usize :=
   match ls with
-  | list_t.Cons y tl =>
+  | List.Cons y tl =>
     if y = x
     then Result.ret y
     else get_elem_mut_loop_fwd x tl
-  | list_t.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::get_elem_mut] -/
-def get_elem_mut_fwd (slots : Vec (list_t Usize)) (x : Usize) : Result Usize :=
+def get_elem_mut_fwd (slots : Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-    let l ←
-      vec_index_mut_fwd (list_t Usize) slots (Usize.ofInt 0 (by intlit))
+    let l ← vec_index_mut_fwd (List Usize) slots (Usize.ofInt 0 (by intlit))
     get_elem_mut_loop_fwd x l
 
 /- [loops::get_elem_mut] -/
 divergent def get_elem_mut_loop_back
-  (x : Usize) (ls : list_t Usize) (ret0 : Usize) : Result (list_t Usize) :=
+  (x : Usize) (ls : List Usize) (ret0 : Usize) : Result (List Usize) :=
   match ls with
-  | list_t.Cons y tl =>
+  | List.Cons y tl =>
     if y = x
-    then Result.ret (list_t.Cons ret0 tl)
+    then Result.ret (List.Cons ret0 tl)
     else
       do
         let tl0 ← get_elem_mut_loop_back x tl ret0
-        Result.ret (list_t.Cons y tl0)
-  | list_t.Nil => Result.fail Error.panic
+        Result.ret (List.Cons y tl0)
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::get_elem_mut] -/
 def get_elem_mut_back
-  (slots : Vec (list_t Usize)) (x : Usize) (ret0 : Usize) :
-  Result (Vec (list_t Usize))
+  (slots : Vec (List Usize)) (x : Usize) (ret0 : Usize) :
+  Result (Vec (List Usize))
   :=
   do
-    let l ←
-      vec_index_mut_fwd (list_t Usize) slots (Usize.ofInt 0 (by intlit))
+    let l ← vec_index_mut_fwd (List Usize) slots (Usize.ofInt 0 (by intlit))
     let l0 ← get_elem_mut_loop_back x l ret0
-    vec_index_mut_back (list_t Usize) slots (Usize.ofInt 0 (by intlit)) l0
+    vec_index_mut_back (List Usize) slots (Usize.ofInt 0 (by intlit)) l0
 
 /- [loops::get_elem_shared] -/
 divergent def get_elem_shared_loop_fwd
-  (x : Usize) (ls : list_t Usize) : Result Usize :=
+  (x : Usize) (ls : List Usize) : Result Usize :=
   match ls with
-  | list_t.Cons y tl =>
+  | List.Cons y tl =>
     if y = x
     then Result.ret y
     else get_elem_shared_loop_fwd x tl
-  | list_t.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::get_elem_shared] -/
 def get_elem_shared_fwd
-  (slots : Vec (list_t Usize)) (x : Usize) : Result Usize :=
+  (slots : Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-    let l ← vec_index_fwd (list_t Usize) slots (Usize.ofInt 0 (by intlit))
+    let l ← vec_index_fwd (List Usize) slots (Usize.ofInt 0 (by intlit))
     get_elem_shared_loop_fwd x l
 
 /- [loops::id_mut] -/
-def id_mut_fwd (T : Type) (ls : list_t T) : Result (list_t T) :=
+def id_mut_fwd (T : Type) (ls : List T) : Result (List T) :=
   Result.ret ls
 
 /- [loops::id_mut] -/
-def id_mut_back
-  (T : Type) (ls : list_t T) (ret0 : list_t T) : Result (list_t T) :=
+def id_mut_back (T : Type) (ls : List T) (ret0 : List T) : Result (List T) :=
   Result.ret ret0
 
 /- [loops::id_shared] -/
-def id_shared_fwd (T : Type) (ls : list_t T) : Result (list_t T) :=
+def id_shared_fwd (T : Type) (ls : List T) : Result (List T) :=
   Result.ret ls
 
 /- [loops::list_nth_mut_loop_with_id] -/
 divergent def list_nth_mut_loop_with_id_loop_fwd
-  (T : Type) (i : U32) (ls : list_t T) : Result T :=
+  (T : Type) (i : U32) (ls : List T) : Result T :=
   match ls with
-  | list_t.Cons x tl =>
+  | List.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
     else
       do
         let i0 ← i - (U32.ofInt 1 (by intlit))
         list_nth_mut_loop_with_id_loop_fwd T i0 tl
-  | list_t.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop_with_id] -/
 def list_nth_mut_loop_with_id_fwd
-  (T : Type) (ls : list_t T) (i : U32) : Result T :=
+  (T : Type) (ls : List T) (i : U32) : Result T :=
   do
     let ls0 ← id_mut_fwd T ls
     list_nth_mut_loop_with_id_loop_fwd T i ls0
 
 /- [loops::list_nth_mut_loop_with_id] -/
 divergent def list_nth_mut_loop_with_id_loop_back
-  (T : Type) (i : U32) (ls : list_t T) (ret0 : T) : Result (list_t T) :=
+  (T : Type) (i : U32) (ls : List T) (ret0 : T) : Result (List T) :=
   match ls with
-  | list_t.Cons x tl =>
+  | List.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
-    then Result.ret (list_t.Cons ret0 tl)
+    then Result.ret (List.Cons ret0 tl)
     else
       do
         let i0 ← i - (U32.ofInt 1 (by intlit))
         let tl0 ← list_nth_mut_loop_with_id_loop_back T i0 tl ret0
-        Result.ret (list_t.Cons x tl0)
-  | list_t.Nil => Result.fail Error.panic
+        Result.ret (List.Cons x tl0)
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop_with_id] -/
 def list_nth_mut_loop_with_id_back
-  (T : Type) (ls : list_t T) (i : U32) (ret0 : T) : Result (list_t T) :=
+  (T : Type) (ls : List T) (i : U32) (ret0 : T) : Result (List T) :=
   do
     let ls0 ← id_mut_fwd T ls
     let l ← list_nth_mut_loop_with_id_loop_back T i ls0 ret0
@@ -248,378 +244,377 @@ def list_nth_mut_loop_with_id_back
 
 /- [loops::list_nth_shared_loop_with_id] -/
 divergent def list_nth_shared_loop_with_id_loop_fwd
-  (T : Type) (i : U32) (ls : list_t T) : Result T :=
+  (T : Type) (i : U32) (ls : List T) : Result T :=
   match ls with
-  | list_t.Cons x tl =>
+  | List.Cons x tl =>
     if i = (U32.ofInt 0 (by intlit))
     then Result.ret x
     else
       do
         let i0 ← i - (U32.ofInt 1 (by intlit))
         list_nth_shared_loop_with_id_loop_fwd T i0 tl
-  | list_t.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_loop_with_id] -/
 def list_nth_shared_loop_with_id_fwd
-  (T : Type) (ls : list_t T) (i : U32) : Result T :=
+  (T : Type) (ls : List T) (i : U32) : Result T :=
   do
     let ls0 ← id_shared_fwd T ls
     list_nth_shared_loop_with_id_loop_fwd T i ls0
 
 /- [loops::list_nth_mut_loop_pair] -/
 divergent def list_nth_mut_loop_pair_loop_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           list_nth_mut_loop_pair_loop_fwd T tl0 tl1 i0
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop_pair] -/
 def list_nth_mut_loop_pair_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_mut_loop_pair_loop_fwd T ls0 ls1 i
 
 /- [loops::list_nth_mut_loop_pair] -/
 divergent def list_nth_mut_loop_pair_loop_back'a
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
-      then Result.ret (list_t.Cons ret0 tl0)
+      then Result.ret (List.Cons ret0 tl0)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           let tl00 ← list_nth_mut_loop_pair_loop_back'a T tl0 tl1 i0 ret0
-          Result.ret (list_t.Cons x0 tl00)
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+          Result.ret (List.Cons x0 tl00)
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop_pair] -/
 def list_nth_mut_loop_pair_back'a
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   list_nth_mut_loop_pair_loop_back'a T ls0 ls1 i ret0
 
 /- [loops::list_nth_mut_loop_pair] -/
 divergent def list_nth_mut_loop_pair_loop_back'b
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
-      then Result.ret (list_t.Cons ret0 tl1)
+      then Result.ret (List.Cons ret0 tl1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           let tl10 ← list_nth_mut_loop_pair_loop_back'b T tl0 tl1 i0 ret0
-          Result.ret (list_t.Cons x1 tl10)
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+          Result.ret (List.Cons x1 tl10)
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop_pair] -/
 def list_nth_mut_loop_pair_back'b
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   list_nth_mut_loop_pair_loop_back'b T ls0 ls1 i ret0
 
 /- [loops::list_nth_shared_loop_pair] -/
 divergent def list_nth_shared_loop_pair_loop_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           list_nth_shared_loop_pair_loop_fwd T tl0 tl1 i0
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_loop_pair] -/
 def list_nth_shared_loop_pair_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_shared_loop_pair_loop_fwd T ls0 ls1 i
 
 /- [loops::list_nth_mut_loop_pair_merge] -/
 divergent def list_nth_mut_loop_pair_merge_loop_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           list_nth_mut_loop_pair_merge_loop_fwd T tl0 tl1 i0
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop_pair_merge] -/
 def list_nth_mut_loop_pair_merge_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_mut_loop_pair_merge_loop_fwd T ls0 ls1 i
 
 /- [loops::list_nth_mut_loop_pair_merge] -/
 divergent def list_nth_mut_loop_pair_merge_loop_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : (T × T)) :
-  Result ((list_t T) × (list_t T))
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : (T × T)) :
+  Result ((List T) × (List T))
   :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
-      then
-        let (t, t0) := ret0
-        Result.ret (list_t.Cons t tl0, list_t.Cons t0 tl1)
+      then let (t, t0) := ret0
+           Result.ret (List.Cons t tl0, List.Cons t0 tl1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           let (tl00, tl10) ←
             list_nth_mut_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.Cons x0 tl00, list_t.Cons x1 tl10)
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+          Result.ret (List.Cons x0 tl00, List.Cons x1 tl10)
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_loop_pair_merge] -/
 def list_nth_mut_loop_pair_merge_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : (T × T)) :
-  Result ((list_t T) × (list_t T))
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : (T × T)) :
+  Result ((List T) × (List T))
   :=
   list_nth_mut_loop_pair_merge_loop_back T ls0 ls1 i ret0
 
 /- [loops::list_nth_shared_loop_pair_merge] -/
 divergent def list_nth_shared_loop_pair_merge_loop_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           list_nth_shared_loop_pair_merge_loop_fwd T tl0 tl1 i0
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_loop_pair_merge] -/
 def list_nth_shared_loop_pair_merge_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_shared_loop_pair_merge_loop_fwd T ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_loop_pair] -/
 divergent def list_nth_mut_shared_loop_pair_loop_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           list_nth_mut_shared_loop_pair_loop_fwd T tl0 tl1 i0
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_shared_loop_pair] -/
 def list_nth_mut_shared_loop_pair_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_mut_shared_loop_pair_loop_fwd T ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_loop_pair] -/
 divergent def list_nth_mut_shared_loop_pair_loop_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
-      then Result.ret (list_t.Cons ret0 tl0)
+      then Result.ret (List.Cons ret0 tl0)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           let tl00 ←
             list_nth_mut_shared_loop_pair_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.Cons x0 tl00)
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+          Result.ret (List.Cons x0 tl00)
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_shared_loop_pair] -/
 def list_nth_mut_shared_loop_pair_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   list_nth_mut_shared_loop_pair_loop_back T ls0 ls1 i ret0
 
 /- [loops::list_nth_mut_shared_loop_pair_merge] -/
 divergent def list_nth_mut_shared_loop_pair_merge_loop_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           list_nth_mut_shared_loop_pair_merge_loop_fwd T tl0 tl1 i0
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_shared_loop_pair_merge] -/
 def list_nth_mut_shared_loop_pair_merge_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_mut_shared_loop_pair_merge_loop_fwd T ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_loop_pair_merge] -/
 divergent def list_nth_mut_shared_loop_pair_merge_loop_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
-      then Result.ret (list_t.Cons ret0 tl0)
+      then Result.ret (List.Cons ret0 tl0)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           let tl00 ←
             list_nth_mut_shared_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.Cons x0 tl00)
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+          Result.ret (List.Cons x0 tl00)
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_mut_shared_loop_pair_merge] -/
 def list_nth_mut_shared_loop_pair_merge_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   list_nth_mut_shared_loop_pair_merge_loop_back T ls0 ls1 i ret0
 
 /- [loops::list_nth_shared_mut_loop_pair] -/
 divergent def list_nth_shared_mut_loop_pair_loop_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           list_nth_shared_mut_loop_pair_loop_fwd T tl0 tl1 i0
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_mut_loop_pair] -/
 def list_nth_shared_mut_loop_pair_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_shared_mut_loop_pair_loop_fwd T ls0 ls1 i
 
 /- [loops::list_nth_shared_mut_loop_pair] -/
 divergent def list_nth_shared_mut_loop_pair_loop_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
-      then Result.ret (list_t.Cons ret0 tl1)
+      then Result.ret (List.Cons ret0 tl1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           let tl10 ←
             list_nth_shared_mut_loop_pair_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.Cons x1 tl10)
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+          Result.ret (List.Cons x1 tl10)
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_mut_loop_pair] -/
 def list_nth_shared_mut_loop_pair_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   list_nth_shared_mut_loop_pair_loop_back T ls0 ls1 i ret0
 
 /- [loops::list_nth_shared_mut_loop_pair_merge] -/
 divergent def list_nth_shared_mut_loop_pair_merge_loop_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
       then Result.ret (x0, x1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           list_nth_shared_mut_loop_pair_merge_loop_fwd T tl0 tl1 i0
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_mut_loop_pair_merge] -/
 def list_nth_shared_mut_loop_pair_merge_fwd
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) : Result (T × T) :=
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   list_nth_shared_mut_loop_pair_merge_loop_fwd T ls0 ls1 i
 
 /- [loops::list_nth_shared_mut_loop_pair_merge] -/
 divergent def list_nth_shared_mut_loop_pair_merge_loop_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   match ls0 with
-  | list_t.Cons x0 tl0 =>
+  | List.Cons x0 tl0 =>
     match ls1 with
-    | list_t.Cons x1 tl1 =>
+    | List.Cons x1 tl1 =>
       if i = (U32.ofInt 0 (by intlit))
-      then Result.ret (list_t.Cons ret0 tl1)
+      then Result.ret (List.Cons ret0 tl1)
       else
         do
           let i0 ← i - (U32.ofInt 1 (by intlit))
           let tl10 ←
             list_nth_shared_mut_loop_pair_merge_loop_back T tl0 tl1 i0 ret0
-          Result.ret (list_t.Cons x1 tl10)
-    | list_t.Nil => Result.fail Error.panic
-  | list_t.Nil => Result.fail Error.panic
+          Result.ret (List.Cons x1 tl10)
+    | List.Nil => Result.fail Error.panic
+  | List.Nil => Result.fail Error.panic
 
 /- [loops::list_nth_shared_mut_loop_pair_merge] -/
 def list_nth_shared_mut_loop_pair_merge_back
-  (T : Type) (ls0 : list_t T) (ls1 : list_t T) (i : U32) (ret0 : T) :
-  Result (list_t T)
+  (T : Type) (ls0 : List T) (ls1 : List T) (i : U32) (ret0 : T) :
+  Result (List T)
   :=
   list_nth_shared_mut_loop_pair_merge_loop_back T ls0 ls1 i ret0
 
