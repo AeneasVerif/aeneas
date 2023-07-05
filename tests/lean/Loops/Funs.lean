@@ -54,12 +54,12 @@ def sum_with_shared_borrows_fwd (max : U32) : Result U32 :=
 /- [loops::clear] -/
 divergent def clear_loop_fwd_back
   (v : Vec U32) (i : Usize) : Result (Vec U32) :=
-  let i0 := vec_len U32 v
+  let i0 := Vec.len U32 v
   if i < i0
   then
     do
       let i1 ← i + (Usize.ofInt 1 (by intlit))
-      let v0 ← vec_index_mut_back U32 v i (U32.ofInt 0 (by intlit))
+      let v0 ← Vec.index_mut_back U32 v i (U32.ofInt 0 (by intlit))
       clear_loop_fwd_back v0 i1
   else Result.ret v
 
@@ -145,7 +145,7 @@ divergent def get_elem_mut_loop_fwd
 /- [loops::get_elem_mut] -/
 def get_elem_mut_fwd (slots : Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-    let l ← vec_index_mut_fwd (List Usize) slots (Usize.ofInt 0 (by intlit))
+    let l ← Vec.index_mut (List Usize) slots (Usize.ofInt 0 (by intlit))
     get_elem_mut_loop_fwd x l
 
 /- [loops::get_elem_mut] -/
@@ -167,9 +167,9 @@ def get_elem_mut_back
   Result (Vec (List Usize))
   :=
   do
-    let l ← vec_index_mut_fwd (List Usize) slots (Usize.ofInt 0 (by intlit))
+    let l ← Vec.index_mut (List Usize) slots (Usize.ofInt 0 (by intlit))
     let l0 ← get_elem_mut_loop_back x l ret0
-    vec_index_mut_back (List Usize) slots (Usize.ofInt 0 (by intlit)) l0
+    Vec.index_mut_back (List Usize) slots (Usize.ofInt 0 (by intlit)) l0
 
 /- [loops::get_elem_shared] -/
 divergent def get_elem_shared_loop_fwd
@@ -185,7 +185,7 @@ divergent def get_elem_shared_loop_fwd
 def get_elem_shared_fwd
   (slots : Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-    let l ← vec_index_fwd (List Usize) slots (Usize.ofInt 0 (by intlit))
+    let l ← Vec.index (List Usize) slots (Usize.ofInt 0 (by intlit))
     get_elem_shared_loop_fwd x l
 
 /- [loops::id_mut] -/

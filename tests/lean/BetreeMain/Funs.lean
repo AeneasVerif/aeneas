@@ -124,13 +124,13 @@ divergent def betree.List.split_at_fwd
 /- [betree_main::betree::List::{1}::push_front] -/
 def betree.List.push_front_fwd_back
   (T : Type) (self : betree.List T) (x : T) : Result (betree.List T) :=
-  let tl := mem_replace_fwd (betree.List T) self betree.List.Nil
+  let tl := mem.replace_fwd (betree.List T) self betree.List.Nil
   let l := tl
   Result.ret (betree.List.Cons x l)
 
 /- [betree_main::betree::List::{1}::pop_front] -/
 def betree.List.pop_front_fwd (T : Type) (self : betree.List T) : Result T :=
-  let ls := mem_replace_fwd (betree.List T) self betree.List.Nil
+  let ls := mem.replace_fwd (betree.List T) self betree.List.Nil
   match ls with
   | betree.List.Cons x tl => Result.ret x
   | betree.List.Nil => Result.fail Error.panic
@@ -138,7 +138,7 @@ def betree.List.pop_front_fwd (T : Type) (self : betree.List T) : Result T :=
 /- [betree_main::betree::List::{1}::pop_front] -/
 def betree.List.pop_front_back
   (T : Type) (self : betree.List T) : Result (betree.List T) :=
-  let ls := mem_replace_fwd (betree.List T) self betree.List.Nil
+  let ls := mem.replace_fwd (betree.List T) self betree.List.Nil
   match ls with
   | betree.List.Cons x tl => Result.ret tl
   | betree.List.Nil => Result.fail Error.panic

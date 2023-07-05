@@ -300,23 +300,40 @@ let assumed_variants () : (assumed_ty * VariantId.id * string) list =
         (Option, option_none_id, "NONE");
       ]
 
-let assumed_llbc_functions :
+let assumed_llbc_functions () :
     (A.assumed_fun_id * T.RegionGroupId.id option * string) list =
   let rg0 = Some T.RegionGroupId.zero in
-  [
-    (Replace, None, "mem_replace_fwd");
-    (Replace, rg0, "mem_replace_back");
-    (VecNew, None, "vec_new");
-    (VecPush, None, "vec_push_fwd") (* Shouldn't be used *);
-    (VecPush, rg0, "vec_push_back");
-    (VecInsert, None, "vec_insert_fwd") (* Shouldn't be used *);
-    (VecInsert, rg0, "vec_insert_back");
-    (VecLen, None, "vec_len");
-    (VecIndex, None, "vec_index_fwd");
-    (VecIndex, rg0, "vec_index_back") (* shouldn't be used *);
-    (VecIndexMut, None, "vec_index_mut_fwd");
-    (VecIndexMut, rg0, "vec_index_mut_back");
-  ]
+  match !backend with
+  | FStar | Coq | HOL4 ->
+      [
+        (Replace, None, "mem_replace_fwd");
+        (Replace, rg0, "mem_replace_back");
+        (VecNew, None, "vec_new");
+        (VecPush, None, "vec_push_fwd") (* Shouldn't be used *);
+        (VecPush, rg0, "vec_push_back");
+        (VecInsert, None, "vec_insert_fwd") (* Shouldn't be used *);
+        (VecInsert, rg0, "vec_insert_back");
+        (VecLen, None, "vec_len");
+        (VecIndex, None, "vec_index_fwd");
+        (VecIndex, rg0, "vec_index_back") (* shouldn't be used *);
+        (VecIndexMut, None, "vec_index_mut_fwd");
+        (VecIndexMut, rg0, "vec_index_mut_back");
+      ]
+  | Lean ->
+      [
+        (Replace, None, "mem.replace_fwd");
+        (Replace, rg0, "mem.replace_back");
+        (VecNew, None, "Vec.new");
+        (VecPush, None, "Vec.push_fwd") (* Shouldn't be used *);
+        (VecPush, rg0, "Vec.push");
+        (VecInsert, None, "Vec.insert_fwd") (* Shouldn't be used *);
+        (VecInsert, rg0, "Vec.insert");
+        (VecLen, None, "Vec.len");
+        (VecIndex, None, "Vec.index");
+        (VecIndex, rg0, "Vec.index_back") (* shouldn't be used *);
+        (VecIndexMut, None, "Vec.index_mut");
+        (VecIndexMut, rg0, "Vec.index_mut_back");
+      ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
   match !backend with
@@ -344,7 +361,7 @@ let names_map_init () : names_map_init =
     assumed_adts = assumed_adts ();
     assumed_structs;
     assumed_variants = assumed_variants ();
-    assumed_llbc_functions;
+    assumed_llbc_functions = assumed_llbc_functions ();
     assumed_pure_functions = assumed_pure_functions ();
   }
 

@@ -36,8 +36,8 @@ def test_new_non_zero_u32_fwd
 /- [external::test_vec] -/
 def test_vec_fwd : Result Unit :=
   do
-    let v := vec_new U32
-    let _ ← vec_push_back U32 v (U32.ofInt 0 (by intlit))
+    let v := Vec.new U32
+    let _ ← Vec.push U32 v (U32.ofInt 0 (by intlit))
     Result.ret ()
 
 /- Unit test for [external::test_vec] -/

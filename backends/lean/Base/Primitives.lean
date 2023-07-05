@@ -564,15 +564,17 @@ macro_rules
 
 def Vec (α : Type u) := { l : List α // List.length l ≤ Usize.max }
 
-def vec_new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
+def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
 
-def vec_len (α : Type u) (v : Vec α) : Usize :=
+def Vec.len (α : Type u) (v : Vec α) : Usize :=
   let ⟨ v, l ⟩ := v
   Usize.ofIntCore (List.length v) (by simp [Scalar.min]) l
  
-def vec_push_fwd (α : Type u) (_ : Vec α) (_ : α) : Unit := ()
+-- This shouldn't be used
+def Vec.push_fwd (α : Type u) (_ : Vec α) (_ : α) : Unit := ()
 
-def vec_push_back (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
+-- This is actually the backward function
+def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
   :=
   let nlen := List.length v.val + 1
   if h : nlen ≤ U32.max || nlen ≤ Usize.max then
@@ -588,13 +590,15 @@ def vec_push_back (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
   else
     fail maximumSizeExceeded
 
-def vec_insert_fwd (α : Type u) (v: Vec α) (i: Usize) (_: α): Result Unit :=
+-- This shouldn't be used
+def Vec.insert_fwd (α : Type u) (v: Vec α) (i: Usize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_insert_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α) :=
+-- This is actually the backward function
+def Vec.insert (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α) :=
   if i.val < List.length v.val then
     -- TODO: maybe we should redefine a list library which uses integers
     -- (instead of natural numbers)
@@ -607,7 +611,7 @@ def vec_insert_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α
   else
     .fail arrayOutOfBounds
 
-def vec_index_to_fin {α : Type u} {v: Vec α} {i: Usize} (h : i.val < List.length v.val) :
+def Vec.index_to_fin {α : Type u} {v: Vec α} {i: Usize} (h : i.val < List.length v.val) :
   Fin (List.length v.val) :=
   let j := i.val.toNat
   let h: j < List.length v.val := by
@@ -616,29 +620,30 @@ def vec_index_to_fin {α : Type u} {v: Vec α} {i: Usize} (h : i.val < List.leng
     assumption
   ⟨j, h⟩
 
-def vec_index_fwd (α : Type u) (v: Vec α) (i: Usize): Result α :=
+def Vec.index (α : Type u) (v: Vec α) (i: Usize): Result α :=
   if h: i.val < List.length v.val then
-    let i := vec_index_to_fin h
+    let i := Vec.index_to_fin h
     .ret (List.get v.val i)
   else
     .fail arrayOutOfBounds
 
-def vec_index_back (α : Type u) (v: Vec α) (i: Usize) (_: α): Result Unit :=
+-- This shouldn't be used
+def Vec.index_back (α : Type u) (v: Vec α) (i: Usize) (_: α): Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_fwd (α : Type u) (v: Vec α) (i: Usize): Result α :=
+def Vec.index_mut (α : Type u) (v: Vec α) (i: Usize): Result α :=
   if h: i.val < List.length v.val then
-    let i := vec_index_to_fin h
+    let i := Vec.index_to_fin h
     .ret (List.get v.val i)
   else
     .fail arrayOutOfBounds
 
-def vec_index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α) :=
+def Vec.index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α) :=
   if h: i.val < List.length v.val then
-    let i := vec_index_to_fin h
+    let i := Vec.index_to_fin h
     .ret ⟨ List.set v.val i x, by
       have h: List.length v.val ≤ Usize.max := v.property
       simp [*] at *
@@ -651,8 +656,8 @@ def vec_index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec
 -- MISC --
 ----------
 
-@[simp] def mem_replace_fwd (a : Type) (x : a) (_ : a) : a := x
-@[simp] def mem_replace_back (a : Type) (_ : a) (y : a) : a := y
+@[simp] def mem.replace_fwd (a : Type) (x : a) (_ : a) : a := x
+@[simp] def mem.replace_back (a : Type) (_ : a) (y : a) : a := y
 
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.
  Use with `simp [ aeneas ]` -/

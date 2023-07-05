@@ -321,7 +321,7 @@ divergent def list_rev_aux_fwd
 
 /- [no_nested_borrows::list_rev] -/
 def list_rev_fwd_back (T : Type) (l : List T) : Result (List T) :=
-  let li := mem_replace_fwd (List T) l List.Nil
+  let li := mem.replace_fwd (List T) l List.Nil
   list_rev_aux_fwd T li List.Nil
 
 /- [no_nested_borrows::test_list_functions] -/
@@ -514,7 +514,7 @@ def test_weird_borrows1_fwd : Result Unit :=
 
 /- [no_nested_borrows::test_mem_replace] -/
 def test_mem_replace_fwd_back (px : U32) : Result U32 :=
-  let y := mem_replace_fwd U32 px (U32.ofInt 1 (by intlit))
+  let y := mem.replace_fwd U32 px (U32.ofInt 1 (by intlit))
   if not (y = (U32.ofInt 0 (by intlit)))
   then Result.fail Error.panic
   else Result.ret (U32.ofInt 2 (by intlit))
