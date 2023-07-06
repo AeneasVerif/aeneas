@@ -5,11 +5,12 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [paper::ref_incr] *)
+(** [paper::ref_incr]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 let ref_incr_fwd_back (x : i32) : result i32 =
   i32_add x 1
 
-(** [paper::test_incr] *)
+(** [paper::test_incr]: forward function *)
 let test_incr_fwd : result unit =
   let* x = ref_incr_fwd_back 0 in
   if not (x = 1) then Fail Failure else Return ()
@@ -17,16 +18,16 @@ let test_incr_fwd : result unit =
 (** Unit test for [paper::test_incr] *)
 let _ = assert_norm (test_incr_fwd = Return ())
 
-(** [paper::choose] *)
+(** [paper::choose]: forward function *)
 let choose_fwd (t : Type0) (b : bool) (x : t) (y : t) : result t =
   if b then Return x else Return y
 
-(** [paper::choose] *)
+(** [paper::choose]: backward function 0 *)
 let choose_back
   (t : Type0) (b : bool) (x : t) (y : t) (ret : t) : result (t & t) =
   if b then Return (ret, y) else Return (x, ret)
 
-(** [paper::test_choose] *)
+(** [paper::test_choose]: forward function *)
 let test_choose_fwd : result unit =
   let* z = choose_fwd i32 true 0 0 in
   let* z0 = i32_add z 1 in
@@ -46,7 +47,7 @@ type list_t (t : Type0) =
 | ListCons : t -> list_t t -> list_t t
 | ListNil : list_t t
 
-(** [paper::list_nth_mut] *)
+(** [paper::list_nth_mut]: forward function *)
 let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
   begin match l with
   | ListCons x tl ->
@@ -56,7 +57,7 @@ let rec list_nth_mut_fwd (t : Type0) (l : list_t t) (i : u32) : result t =
   | ListNil -> Fail Failure
   end
 
-(** [paper::list_nth_mut] *)
+(** [paper::list_nth_mut]: backward function 0 *)
 let rec list_nth_mut_back
   (t : Type0) (l : list_t t) (i : u32) (ret : t) : result (list_t t) =
   begin match l with
@@ -70,14 +71,14 @@ let rec list_nth_mut_back
   | ListNil -> Fail Failure
   end
 
-(** [paper::sum] *)
+(** [paper::sum]: forward function *)
 let rec sum_fwd (l : list_t i32) : result i32 =
   begin match l with
   | ListCons x tl -> let* i = sum_fwd tl in i32_add x i
   | ListNil -> Return 0
   end
 
-(** [paper::test_nth] *)
+(** [paper::test_nth]: forward function *)
 let test_nth_fwd : result unit =
   let l = ListNil in
   let l0 = ListCons 3 l in
@@ -91,7 +92,7 @@ let test_nth_fwd : result unit =
 (** Unit test for [paper::test_nth] *)
 let _ = assert_norm (test_nth_fwd = Return ())
 
-(** [paper::call_choose] *)
+(** [paper::call_choose]: forward function *)
 let call_choose_fwd (p : (u32 & u32)) : result u32 =
   let (px, py) = p in
   let* pz = choose_fwd u32 true px py in

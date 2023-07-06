@@ -21,7 +21,7 @@ let x1_c : u32 = eval_global x1_body
 let x2_body : result u32 = Return 3
 let x2_c : u32 = eval_global x2_body
 
-(** [constants::incr] *)
+(** [constants::incr]: forward function *)
 let incr_fwd (n : u32) : result u32 =
   u32_add n 1
 
@@ -29,14 +29,14 @@ let incr_fwd (n : u32) : result u32 =
 let x3_body : result u32 = incr_fwd 32
 let x3_c : u32 = eval_global x3_body
 
-(** [constants::mk_pair0] *)
+(** [constants::mk_pair0]: forward function *)
 let mk_pair0_fwd (x : u32) (y : u32) : result (u32 & u32) =
   Return (x, y)
 
 (** [constants::Pair] *)
 type pair_t (t1 t2 : Type0) = { pair_x : t1; pair_y : t2; }
 
-(** [constants::mk_pair1] *)
+(** [constants::mk_pair1]: forward function *)
 let mk_pair1_fwd (x : u32) (y : u32) : result (pair_t u32 u32) =
   Return { pair_x = x; pair_y = y }
 
@@ -59,7 +59,7 @@ let p3_c : pair_t u32 u32 = eval_global p3_body
 (** [constants::Wrap] *)
 type wrap_t (t : Type0) = { wrap_val : t; }
 
-(** [constants::Wrap::{0}::new] *)
+(** [constants::Wrap::{0}::new]: forward function *)
 let wrap_new_fwd (t : Type0) (val0 : t) : result (wrap_t t) =
   Return { wrap_val = val0 }
 
@@ -67,7 +67,7 @@ let wrap_new_fwd (t : Type0) (val0 : t) : result (wrap_t t) =
 let y_body : result (wrap_t i32) = wrap_new_fwd i32 2
 let y_c : wrap_t i32 = eval_global y_body
 
-(** [constants::unwrap_y] *)
+(** [constants::unwrap_y]: forward function *)
 let unwrap_y_fwd : result i32 =
   Return y_c.wrap_val
 
@@ -79,11 +79,11 @@ let yval_c : i32 = eval_global yval_body
 let get_z1_z1_body : result i32 = Return 3
 let get_z1_z1_c : i32 = eval_global get_z1_z1_body
 
-(** [constants::get_z1] *)
+(** [constants::get_z1]: forward function *)
 let get_z1_fwd : result i32 =
   Return get_z1_z1_c
 
-(** [constants::add] *)
+(** [constants::add]: forward function *)
 let add_fwd (a : i32) (b : i32) : result i32 =
   i32_add a b
 
@@ -99,7 +99,7 @@ let q2_c : i32 = eval_global q2_body
 let q3_body : result i32 = add_fwd q2_c 3
 let q3_c : i32 = eval_global q3_body
 
-(** [constants::get_z2] *)
+(** [constants::get_z2]: forward function *)
 let get_z2_fwd : result i32 =
   let* i = get_z1_fwd in let* i0 = add_fwd i q3_c in add_fwd q1_c i0
 

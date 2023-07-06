@@ -7,7 +7,7 @@ val _ = new_theory "external_Funs"
 
 
 val swap_fwd_def = Define ‘
-  (** [external::swap] *)
+  (** [external::swap]: forward function *)
   swap_fwd (x : 't) (y : 't) (st : state) : (state # unit) result =
     do
     (st0, _) <- core_mem_swap_fwd x y st;
@@ -18,7 +18,7 @@ val swap_fwd_def = Define ‘
 ’
 
 val swap_back_def = Define ‘
-  (** [external::swap] *)
+  (** [external::swap]: backward function 0 *)
   swap_back
     (x : 't) (y : 't) (st : state) (st0 : state) : (state # ('t # 't)) result =
     do
@@ -30,7 +30,7 @@ val swap_back_def = Define ‘
 ’
 
 val test_new_non_zero_u32_fwd_def = Define ‘
-  (** [external::test_new_non_zero_u32] *)
+  (** [external::test_new_non_zero_u32]: forward function *)
   test_new_non_zero_u32_fwd
     (x : u32) (st : state) : (state # core_num_nonzero_non_zero_u32_t) result =
     do
@@ -40,7 +40,7 @@ val test_new_non_zero_u32_fwd_def = Define ‘
 ’
 
 val test_vec_fwd_def = Define ‘
-  (** [external::test_vec] *)
+  (** [external::test_vec]: forward function *)
   test_vec_fwd : unit result =
     let v = vec_new in do
                        _ <- vec_push_back v (int_to_u32 0);
@@ -52,7 +52,7 @@ val test_vec_fwd_def = Define ‘
 val _ = assert_return (“test_vec_fwd”)
 
 val custom_swap_fwd_def = Define ‘
-  (** [external::custom_swap] *)
+  (** [external::custom_swap]: forward function *)
   custom_swap_fwd (x : 't) (y : 't) (st : state) : (state # 't) result =
     do
     (st0, _) <- core_mem_swap_fwd x y st;
@@ -63,7 +63,7 @@ val custom_swap_fwd_def = Define ‘
 ’
 
 val custom_swap_back_def = Define ‘
-  (** [external::custom_swap] *)
+  (** [external::custom_swap]: backward function 0 *)
   custom_swap_back
     (x : 't) (y : 't) (st : state) (ret : 't) (st0 : state) :
     (state # ('t # 't)) result
@@ -77,7 +77,7 @@ val custom_swap_back_def = Define ‘
 ’
 
 val test_custom_swap_fwd_def = Define ‘
-  (** [external::test_custom_swap] *)
+  (** [external::test_custom_swap]: forward function *)
   test_custom_swap_fwd
     (x : u32) (y : u32) (st : state) : (state # unit) result =
     do
@@ -87,7 +87,7 @@ val test_custom_swap_fwd_def = Define ‘
 ’
 
 val test_custom_swap_back_def = Define ‘
-  (** [external::test_custom_swap] *)
+  (** [external::test_custom_swap]: backward function 0 *)
   test_custom_swap_back
     (x : u32) (y : u32) (st : state) (st0 : state) :
     (state # (u32 # u32)) result
@@ -96,7 +96,7 @@ val test_custom_swap_back_def = Define ‘
 ’
 
 val test_swap_non_zero_fwd_def = Define ‘
-  (** [external::test_swap_non_zero] *)
+  (** [external::test_swap_non_zero]: forward function *)
   test_swap_non_zero_fwd (x : u32) (st : state) : (state # u32) result =
     do
     (st0, _) <- swap_fwd x (int_to_u32 0) st;

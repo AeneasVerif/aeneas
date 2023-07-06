@@ -9,17 +9,16 @@ inductive List (T : Type) :=
 | Cons : T → List T → List T
 | Nil : List T
 
-/- [polonius_list::get_list_at_x] -/
-divergent def get_list_at_x_fwd
-  (ls : List U32) (x : U32) : Result (List U32) :=
+/- [polonius_list::get_list_at_x]: forward function -/
+divergent def get_list_at_x (ls : List U32) (x : U32) : Result (List U32) :=
   match ls with
   | List.Cons hd tl =>
     if hd = x
     then Result.ret (List.Cons hd tl)
-    else get_list_at_x_fwd tl x
+    else get_list_at_x tl x
   | List.Nil => Result.ret List.Nil
 
-/- [polonius_list::get_list_at_x] -/
+/- [polonius_list::get_list_at_x]: backward function 0 -/
 divergent def get_list_at_x_back
   (ls : List U32) (x : U32) (ret0 : List U32) : Result (List U32) :=
   match ls with

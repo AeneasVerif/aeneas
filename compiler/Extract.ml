@@ -321,7 +321,7 @@ let assumed_llbc_functions () :
       ]
   | Lean ->
       [
-        (Replace, None, "mem.replace_fwd");
+        (Replace, None, "mem.replace");
         (Replace, rg0, "mem.replace_back");
         (VecNew, None, "Vec.new");
         (VecPush, None, "Vec.push_fwd") (* Shouldn't be used *);
@@ -1426,16 +1426,26 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
   ()
 
 (** Extract a nestable, muti-line comment *)
-let extract_comment (fmt : F.formatter) (s : string) : unit =
-  match !backend with
-  | Coq | FStar | HOL4 ->
-      F.pp_print_string fmt "(** ";
+let extract_comment (fmt : F.formatter) (sl : string list) : unit =
+  (* Delimiters, space after we break a line *)
+  let ld, space, rd =
+    match !backend with
+    | Coq | FStar | HOL4 -> ("(** ", 4, " *)")
+    | Lean -> ("/- ", 3, " -/")
+  in
+  F.pp_open_vbox fmt space;
+  F.pp_print_string fmt ld;
+  (match sl with
+  | [] -> ()
+  | s :: sl ->
       F.pp_print_string fmt s;
-      F.pp_print_string fmt " *)"
-  | Lean ->
-      F.pp_print_string fmt "/- ";
-      F.pp_print_string fmt s;
-      F.pp_print_string fmt " -/"
+      List.iter
+        (fun s ->
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt s)
+        sl);
+  F.pp_print_string fmt rd;
+  F.pp_close_box fmt ()
 
 (** Extract a type declaration.
 
@@ -1475,7 +1485,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
     F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt ("[" ^ Print.name_to_string def.name ^ "]");
+  extract_comment fmt [ "[" ^ Print.name_to_string def.name ^ "]" ];
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important
@@ -1872,7 +1882,7 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment  *)
-  extract_comment fmt "The state type used in the state-error monad";
+  extract_comment fmt [ "The state type used in the state-error monad" ];
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -2817,7 +2827,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   extract_comment fmt
-    ("[" ^ Print.fun_name_to_string def.basename ^ "]: decreases clause");
+    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: decreases clause" ];
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -2879,7 +2889,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   extract_comment fmt
-    ("[" ^ Print.fun_name_to_string def.basename ^ "]: termination measure");
+    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: termination measure" ];
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -2933,7 +2943,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
   extract_comment fmt
-    ("[" ^ Print.fun_name_to_string def.basename ^ "]: decreases_by tactic");
+    [ "[" ^ Print.fun_name_to_string def.basename ^ "]: decreases_by tactic" ];
   F.pp_print_space fmt ();
   F.pp_open_hvbox fmt 0;
   F.pp_print_string fmt "syntax \"";
@@ -2962,6 +2972,40 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   F.pp_close_box fmt ();
   F.pp_print_break fmt 0 0
 
+let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
+    (def : fun_decl) : unit =
+  let { keep_fwd; num_backs } =
+    PureUtils.RegularFunIdMap.find
+      (A.Regular def.def_id, def.loop_id, def.back_id)
+      ctx.fun_name_info
+  in
+  let comment_pre = "[" ^ Print.fun_name_to_string def.basename ^ "]: " in
+  let comment =
+    let loop_comment =
+      match def.loop_id with
+      | None -> ""
+      | Some id -> "loop " ^ LoopId.to_string id ^ ": "
+    in
+    let fwd_back_comment =
+      match def.back_id with
+      | None -> [ "forward function" ]
+      | Some id ->
+          (* Check if there is only one backward function, and no forward function *)
+          if (not keep_fwd) && num_backs = 1 then
+            [
+              "merged forward/backward function";
+              "(there is a single backward function, and the forward function \
+               returns ())";
+            ]
+          else [ "backward function " ^ T.RegionGroupId.to_string id ]
+    in
+    match fwd_back_comment with
+    | [] -> raise (Failure "Unreachable")
+    | [ s ] -> [ comment_pre ^ loop_comment ^ s ]
+    | s :: sl -> (comment_pre ^ loop_comment ^ s) :: sl
+  in
+  extract_comment fmt comment
+
 (** Extract a function declaration.
 
     This function is for all function declarations and all backends **at the exception**
@@ -2981,8 +3025,8 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
     F.pp_print_break fmt 0 0;
-  (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment fmt ("[" ^ Print.fun_name_to_string def.basename ^ "]");
+  (* Print a comment to link the extracted definition to its original rust definition *)
+  extract_fun_comment ctx fmt def;
   F.pp_print_space fmt ();
   (* Open two boxes for the definition, so that whenever possible it gets printed on
    * one line and indents are correct *)
@@ -3236,6 +3280,8 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   (* Open a box for the whole definition *)
   F.pp_open_hvbox fmt ctx.indent_incr;
+  (* Print a comment to link the extracted definition to its original rust definition *)
+  extract_fun_comment ctx fmt def;
   (* Generate: `val _ = new_constant ("...",` *)
   F.pp_print_string fmt ("val _ = new_constant (\"" ^ def_name ^ "\",");
   F.pp_print_space fmt ();
@@ -3411,7 +3457,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
-  extract_comment fmt ("[" ^ Print.global_name_to_string global.name ^ "]");
+  extract_comment fmt [ "[" ^ Print.global_name_to_string global.name ^ "]" ];
   F.pp_print_space fmt ();
 
   let with_opaque_pre = false in
@@ -3485,7 +3531,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_print_break fmt 0 0;
     (* Print a comment *)
     extract_comment fmt
-      ("Unit test for [" ^ Print.fun_name_to_string def.basename ^ "]");
+      [ "Unit test for [" ^ Print.fun_name_to_string def.basename ^ "]" ];
     F.pp_print_space fmt ();
     (* Open a box for the test *)
     F.pp_open_hovbox fmt ctx.indent_incr;

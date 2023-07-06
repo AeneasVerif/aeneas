@@ -910,11 +910,14 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        prefixed with the type name to prevent collisions *)
     match !Config.backend with Coq | FStar | HOL4 -> true | Lean -> false
   in
+  (* Initialize the names map (we insert the names of the "primitives"
+     declarations, and insert the names of the local declarations later) *)
   let mk_formatter_and_names_map = Extract.mk_formatter_and_names_map in
   let fmt, names_map =
     mk_formatter_and_names_map trans_ctx crate.name
       variant_concatenate_type_name
   in
+  (* Put everything in the context *)
   let ctx =
     {
       ExtractBase.trans_ctx;
@@ -923,6 +926,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
       indent_incr = 2;
       use_opaque_pre = !Config.split_files;
       use_dep_ite = !Config.backend = Lean && !Config.extract_decreases_clauses;
+      fun_name_info = PureUtils.RegularFunIdMap.empty;
     }
   in
 

@@ -6,25 +6,25 @@ import BetreeMain.Types
 open Primitives
 open betree_main
 
-/- [betree_main::betree_utils::load_internal_node] -/
-axiom betree_utils.load_internal_node_fwd
+/- [betree_main::betree_utils::load_internal_node]: forward function -/
+axiom betree_utils.load_internal_node
   : U64 → State → Result (State × (betree.List (U64 × betree.Message)))
 
-/- [betree_main::betree_utils::store_internal_node] -/
-axiom betree_utils.store_internal_node_fwd
+/- [betree_main::betree_utils::store_internal_node]: forward function -/
+axiom betree_utils.store_internal_node
   :
   U64 → betree.List (U64 × betree.Message) → State → Result (State ×
     Unit)
 
-/- [betree_main::betree_utils::load_leaf_node] -/
-axiom betree_utils.load_leaf_node_fwd
+/- [betree_main::betree_utils::load_leaf_node]: forward function -/
+axiom betree_utils.load_leaf_node
   : U64 → State → Result (State × (betree.List (U64 × U64)))
 
-/- [betree_main::betree_utils::store_leaf_node] -/
-axiom betree_utils.store_leaf_node_fwd
+/- [betree_main::betree_utils::store_leaf_node]: forward function -/
+axiom betree_utils.store_leaf_node
   : U64 → betree.List (U64 × U64) → State → Result (State × Unit)
 
-/- [core::option::Option::{0}::unwrap] -/
-axiom core.option.Option.unwrap_fwd
+/- [core::option::Option::{0}::unwrap]: forward function -/
+axiom core.option.Option.unwrap
   (T : Type) : Option T → State → Result (State × T)
 

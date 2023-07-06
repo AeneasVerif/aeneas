@@ -10,7 +10,7 @@ type list_t (t : Type0) =
 | ListCons : t -> list_t t -> list_t t
 | ListNil : list_t t
 
-(** [polonius_list::get_list_at_x] *)
+(** [polonius_list::get_list_at_x]: forward function *)
 let rec get_list_at_x_fwd (ls : list_t u32) (x : u32) : result (list_t u32) =
   begin match ls with
   | ListCons hd tl ->
@@ -18,7 +18,7 @@ let rec get_list_at_x_fwd (ls : list_t u32) (x : u32) : result (list_t u32) =
   | ListNil -> Return ListNil
   end
 
-(** [polonius_list::get_list_at_x] *)
+(** [polonius_list::get_list_at_x]: backward function 0 *)
 let rec get_list_at_x_back
   (ls : list_t u32) (x : u32) (ret : list_t u32) : result (list_t u32) =
   begin match ls with

@@ -6,11 +6,12 @@ Require Import Coq.ZArith.ZArith.
 Local Open Scope Primitives_scope.
 Module Paper.
 
-(** [paper::ref_incr] *)
+(** [paper::ref_incr]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition ref_incr_fwd_back (x : i32) : result i32 :=
   i32_add x 1%i32.
 
-(** [paper::test_incr] *)
+(** [paper::test_incr]: forward function *)
 Definition test_incr_fwd : result unit :=
   x <- ref_incr_fwd_back 0%i32;
   if negb (x s= 1%i32) then Fail_ Failure else Return tt
@@ -19,18 +20,18 @@ Definition test_incr_fwd : result unit :=
 (** Unit test for [paper::test_incr] *)
 Check (test_incr_fwd )%return.
 
-(** [paper::choose] *)
+(** [paper::choose]: forward function *)
 Definition choose_fwd (T : Type) (b : bool) (x : T) (y : T) : result T :=
   if b then Return x else Return y
 .
 
-(** [paper::choose] *)
+(** [paper::choose]: backward function 0 *)
 Definition choose_back
   (T : Type) (b : bool) (x : T) (y : T) (ret : T) : result (T * T) :=
   if b then Return (ret, y) else Return (x, ret)
 .
 
-(** [paper::test_choose] *)
+(** [paper::test_choose]: forward function *)
 Definition test_choose_fwd : result unit :=
   z <- choose_fwd i32 true 0%i32 0%i32;
   z0 <- i32_add z 1%i32;
@@ -56,7 +57,7 @@ Inductive List_t (T : Type) :=
 Arguments ListCons {T} _ _.
 Arguments ListNil {T}.
 
-(** [paper::list_nth_mut] *)
+(** [paper::list_nth_mut]: forward function *)
 Fixpoint list_nth_mut_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
   match l with
   | ListCons x tl =>
@@ -67,7 +68,7 @@ Fixpoint list_nth_mut_fwd (T : Type) (l : List_t T) (i : u32) : result T :=
   end
 .
 
-(** [paper::list_nth_mut] *)
+(** [paper::list_nth_mut]: backward function 0 *)
 Fixpoint list_nth_mut_back
   (T : Type) (l : List_t T) (i : u32) (ret : T) : result (List_t T) :=
   match l with
@@ -82,7 +83,7 @@ Fixpoint list_nth_mut_back
   end
 .
 
-(** [paper::sum] *)
+(** [paper::sum]: forward function *)
 Fixpoint sum_fwd (l : List_t i32) : result i32 :=
   match l with
   | ListCons x tl => i <- sum_fwd tl; i32_add x i
@@ -90,7 +91,7 @@ Fixpoint sum_fwd (l : List_t i32) : result i32 :=
   end
 .
 
-(** [paper::test_nth] *)
+(** [paper::test_nth]: forward function *)
 Definition test_nth_fwd : result unit :=
   let l := ListNil in
   let l0 := ListCons 3%i32 l in
@@ -105,7 +106,7 @@ Definition test_nth_fwd : result unit :=
 (** Unit test for [paper::test_nth] *)
 Check (test_nth_fwd )%return.
 
-(** [paper::call_choose] *)
+(** [paper::call_choose]: forward function *)
 Definition call_choose_fwd (p : (u32 * u32)) : result u32 :=
   let (px, py) := p in
   pz <- choose_fwd u32 true px py;

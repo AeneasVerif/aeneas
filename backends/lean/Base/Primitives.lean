@@ -656,7 +656,7 @@ def Vec.index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec
 -- MISC --
 ----------
 
-@[simp] def mem.replace_fwd (a : Type) (x : a) (_ : a) : a := x
+@[simp] def mem.replace (a : Type) (x : a) (_ : a) : a := x
 @[simp] def mem.replace_back (a : Type) (_ : a) (y : a) : a := y
 
 /-- Aeneas-translated function -- useful to reduce non-recursive definitions.

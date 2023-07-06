@@ -10,7 +10,7 @@ Require Export BetreeMain_Opaque.
 Import BetreeMain_Opaque.
 Module BetreeMain_Funs.
 
-(** [betree_main::betree::load_internal_node] *)
+(** [betree_main::betree::load_internal_node]: forward function *)
 Definition betree_load_internal_node_fwd
   (id : u64) (st : state) :
   result (state * (Betree_list_t (u64 * Betree_message_t)))
@@ -18,7 +18,7 @@ Definition betree_load_internal_node_fwd
   betree_utils_load_internal_node_fwd id st
 .
 
-(** [betree_main::betree::store_internal_node] *)
+(** [betree_main::betree::store_internal_node]: forward function *)
 Definition betree_store_internal_node_fwd
   (id : u64) (content : Betree_list_t (u64 * Betree_message_t)) (st : state) :
   result (state * unit)
@@ -28,13 +28,13 @@ Definition betree_store_internal_node_fwd
   Return (st0, tt)
 .
 
-(** [betree_main::betree::load_leaf_node] *)
+(** [betree_main::betree::load_leaf_node]: forward function *)
 Definition betree_load_leaf_node_fwd
   (id : u64) (st : state) : result (state * (Betree_list_t (u64 * u64))) :=
   betree_utils_load_leaf_node_fwd id st
 .
 
-(** [betree_main::betree::store_leaf_node] *)
+(** [betree_main::betree::store_leaf_node]: forward function *)
 Definition betree_store_leaf_node_fwd
   (id : u64) (content : Betree_list_t (u64 * u64)) (st : state) :
   result (state * unit)
@@ -44,29 +44,29 @@ Definition betree_store_leaf_node_fwd
   Return (st0, tt)
 .
 
-(** [betree_main::betree::fresh_node_id] *)
+(** [betree_main::betree::fresh_node_id]: forward function *)
 Definition betree_fresh_node_id_fwd (counter : u64) : result u64 :=
   _ <- u64_add counter 1%u64; Return counter
 .
 
-(** [betree_main::betree::fresh_node_id] *)
+(** [betree_main::betree::fresh_node_id]: backward function 0 *)
 Definition betree_fresh_node_id_back (counter : u64) : result u64 :=
   u64_add counter 1%u64
 .
 
-(** [betree_main::betree::NodeIdCounter::{0}::new] *)
+(** [betree_main::betree::NodeIdCounter::{0}::new]: forward function *)
 Definition betree_node_id_counter_new_fwd : result Betree_node_id_counter_t :=
   Return {| Betree_node_id_counter_next_node_id := 0%u64 |}
 .
 
-(** [betree_main::betree::NodeIdCounter::{0}::fresh_id] *)
+(** [betree_main::betree::NodeIdCounter::{0}::fresh_id]: forward function *)
 Definition betree_node_id_counter_fresh_id_fwd
   (self : Betree_node_id_counter_t) : result u64 :=
   _ <- u64_add self.(Betree_node_id_counter_next_node_id) 1%u64;
   Return self.(Betree_node_id_counter_next_node_id)
 .
 
-(** [betree_main::betree::NodeIdCounter::{0}::fresh_id] *)
+(** [betree_main::betree::NodeIdCounter::{0}::fresh_id]: backward function 0 *)
 Definition betree_node_id_counter_fresh_id_back
   (self : Betree_node_id_counter_t) : result Betree_node_id_counter_t :=
   i <- u64_add self.(Betree_node_id_counter_next_node_id) 1%u64;
@@ -79,7 +79,7 @@ Definition core_num_u64_max_body : result u64 :=
 .
 Definition core_num_u64_max_c : u64 := core_num_u64_max_body%global.
 
-(** [betree_main::betree::upsert_update] *)
+(** [betree_main::betree::upsert_update]: forward function *)
 Definition betree_upsert_update_fwd
   (prev : option u64) (st : Betree_upsert_fun_state_t) : result u64 :=
   match prev with
@@ -99,7 +99,7 @@ Definition betree_upsert_update_fwd
   end
 .
 
-(** [betree_main::betree::List::{1}::len] *)
+(** [betree_main::betree::List::{1}::len]: forward function *)
 Fixpoint betree_list_len_fwd
   (T : Type) (n : nat) (self : Betree_list_t T) : result u64 :=
   match n with
@@ -112,7 +112,7 @@ Fixpoint betree_list_len_fwd
   end
 .
 
-(** [betree_main::betree::List::{1}::split_at] *)
+(** [betree_main::betree::List::{1}::split_at]: forward function *)
 Fixpoint betree_list_split_at_fwd
   (T : Type) (n : nat) (self : Betree_list_t T) (n0 : u64) :
   result ((Betree_list_t T) * (Betree_list_t T))
@@ -135,7 +135,8 @@ Fixpoint betree_list_split_at_fwd
   end
 .
 
-(** [betree_main::betree::List::{1}::push_front] *)
+(** [betree_main::betree::List::{1}::push_front]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition betree_list_push_front_fwd_back
   (T : Type) (self : Betree_list_t T) (x : T) : result (Betree_list_t T) :=
   let tl := mem_replace_fwd (Betree_list_t T) self BetreeListNil in
@@ -143,7 +144,7 @@ Definition betree_list_push_front_fwd_back
   Return (BetreeListCons x l)
 .
 
-(** [betree_main::betree::List::{1}::pop_front] *)
+(** [betree_main::betree::List::{1}::pop_front]: forward function *)
 Definition betree_list_pop_front_fwd
   (T : Type) (self : Betree_list_t T) : result T :=
   let ls := mem_replace_fwd (Betree_list_t T) self BetreeListNil in
@@ -153,7 +154,7 @@ Definition betree_list_pop_front_fwd
   end
 .
 
-(** [betree_main::betree::List::{1}::pop_front] *)
+(** [betree_main::betree::List::{1}::pop_front]: backward function 0 *)
 Definition betree_list_pop_front_back
   (T : Type) (self : Betree_list_t T) : result (Betree_list_t T) :=
   let ls := mem_replace_fwd (Betree_list_t T) self BetreeListNil in
@@ -163,7 +164,7 @@ Definition betree_list_pop_front_back
   end
 .
 
-(** [betree_main::betree::List::{1}::hd] *)
+(** [betree_main::betree::List::{1}::hd]: forward function *)
 Definition betree_list_hd_fwd (T : Type) (self : Betree_list_t T) : result T :=
   match self with
   | BetreeListCons hd l => Return hd
@@ -171,7 +172,7 @@ Definition betree_list_hd_fwd (T : Type) (self : Betree_list_t T) : result T :=
   end
 .
 
-(** [betree_main::betree::List::{2}::head_has_key] *)
+(** [betree_main::betree::List::{2}::head_has_key]: forward function *)
 Definition betree_list_head_has_key_fwd
   (T : Type) (self : Betree_list_t (u64 * T)) (key : u64) : result bool :=
   match self with
@@ -180,7 +181,7 @@ Definition betree_list_head_has_key_fwd
   end
 .
 
-(** [betree_main::betree::List::{2}::partition_at_pivot] *)
+(** [betree_main::betree::List::{2}::partition_at_pivot]: forward function *)
 Fixpoint betree_list_partition_at_pivot_fwd
   (T : Type) (n : nat) (self : Betree_list_t (u64 * T)) (pivot : u64) :
   result ((Betree_list_t (u64 * T)) * (Betree_list_t (u64 * T)))
@@ -203,7 +204,7 @@ Fixpoint betree_list_partition_at_pivot_fwd
   end
 .
 
-(** [betree_main::betree::Leaf::{3}::split] *)
+(** [betree_main::betree::Leaf::{3}::split]: forward function *)
 Definition betree_leaf_split_fwd
   (n : nat) (self : Betree_leaf_t) (content : Betree_list_t (u64 * u64))
   (params : Betree_params_t) (node_id_cnt : Betree_node_id_counter_t)
@@ -236,7 +237,7 @@ Definition betree_leaf_split_fwd
   Return (st1, mkBetree_internal_t self.(Betree_leaf_id) pivot n0 n1)
 .
 
-(** [betree_main::betree::Leaf::{3}::split] *)
+(** [betree_main::betree::Leaf::{3}::split]: backward function 2 *)
 Definition betree_leaf_split_back
   (n : nat) (self : Betree_leaf_t) (content : Betree_list_t (u64 * u64))
   (params : Betree_params_t) (node_id_cnt : Betree_node_id_counter_t)
@@ -257,7 +258,7 @@ Definition betree_leaf_split_back
   betree_node_id_counter_fresh_id_back node_id_cnt0
 .
 
-(** [betree_main::betree::Node::{5}::lookup_in_bindings] *)
+(** [betree_main::betree::Node::{5}::lookup_in_bindings]: forward function *)
 Fixpoint betree_node_lookup_in_bindings_fwd
   (n : nat) (key : u64) (bindings : Betree_list_t (u64 * u64)) :
   result (option u64)
@@ -279,7 +280,7 @@ Fixpoint betree_node_lookup_in_bindings_fwd
   end
 .
 
-(** [betree_main::betree::Node::{5}::lookup_first_message_for_key] *)
+(** [betree_main::betree::Node::{5}::lookup_first_message_for_key]: forward function *)
 Fixpoint betree_node_lookup_first_message_for_key_fwd
   (n : nat) (key : u64) (msgs : Betree_list_t (u64 * Betree_message_t)) :
   result (Betree_list_t (u64 * Betree_message_t))
@@ -298,7 +299,7 @@ Fixpoint betree_node_lookup_first_message_for_key_fwd
   end
 .
 
-(** [betree_main::betree::Node::{5}::lookup_first_message_for_key] *)
+(** [betree_main::betree::Node::{5}::lookup_first_message_for_key]: backward function 0 *)
 Fixpoint betree_node_lookup_first_message_for_key_back
   (n : nat) (key : u64) (msgs : Betree_list_t (u64 * Betree_message_t))
   (ret : Betree_list_t (u64 * Betree_message_t)) :
@@ -321,7 +322,7 @@ Fixpoint betree_node_lookup_first_message_for_key_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::apply_upserts] *)
+(** [betree_main::betree::Node::{5}::apply_upserts]: forward function *)
 Fixpoint betree_node_apply_upserts_fwd
   (n : nat) (msgs : Betree_list_t (u64 * Betree_message_t)) (prev : option u64)
   (key : u64) (st : state) :
@@ -353,7 +354,7 @@ Fixpoint betree_node_apply_upserts_fwd
   end
 .
 
-(** [betree_main::betree::Node::{5}::apply_upserts] *)
+(** [betree_main::betree::Node::{5}::apply_upserts]: backward function 0 *)
 Fixpoint betree_node_apply_upserts_back
   (n : nat) (msgs : Betree_list_t (u64 * Betree_message_t)) (prev : option u64)
   (key : u64) (st : state) :
@@ -383,7 +384,7 @@ Fixpoint betree_node_apply_upserts_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::lookup] *)
+(** [betree_main::betree::Node::{5}::lookup]: forward function *)
 Fixpoint betree_node_lookup_fwd
   (n : nat) (self : Betree_node_t) (key : u64) (st : state) :
   result (state * (option u64))
@@ -455,7 +456,7 @@ Fixpoint betree_node_lookup_fwd
     end
   end
 
-(** [betree_main::betree::Node::{5}::lookup] *)
+(** [betree_main::betree::Node::{5}::lookup]: backward function 0 *)
 with betree_node_lookup_back
   (n : nat) (self : Betree_node_t) (key : u64) (st : state) :
   result Betree_node_t
@@ -524,7 +525,7 @@ with betree_node_lookup_back
     end
   end
 
-(** [betree_main::betree::Internal::{4}::lookup_in_children] *)
+(** [betree_main::betree::Internal::{4}::lookup_in_children]: forward function *)
 with betree_internal_lookup_in_children_fwd
   (n : nat) (self : Betree_internal_t) (key : u64) (st : state) :
   result (state * (option u64))
@@ -537,7 +538,7 @@ with betree_internal_lookup_in_children_fwd
     else betree_node_lookup_fwd n0 self.(Betree_internal_right) key st
   end
 
-(** [betree_main::betree::Internal::{4}::lookup_in_children] *)
+(** [betree_main::betree::Internal::{4}::lookup_in_children]: backward function 0 *)
 with betree_internal_lookup_in_children_back
   (n : nat) (self : Betree_internal_t) (key : u64) (st : state) :
   result Betree_internal_t
@@ -557,7 +558,7 @@ with betree_internal_lookup_in_children_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::lookup_mut_in_bindings] *)
+(** [betree_main::betree::Node::{5}::lookup_mut_in_bindings]: forward function *)
 Fixpoint betree_node_lookup_mut_in_bindings_fwd
   (n : nat) (key : u64) (bindings : Betree_list_t (u64 * u64)) :
   result (Betree_list_t (u64 * u64))
@@ -576,7 +577,7 @@ Fixpoint betree_node_lookup_mut_in_bindings_fwd
   end
 .
 
-(** [betree_main::betree::Node::{5}::lookup_mut_in_bindings] *)
+(** [betree_main::betree::Node::{5}::lookup_mut_in_bindings]: backward function 0 *)
 Fixpoint betree_node_lookup_mut_in_bindings_back
   (n : nat) (key : u64) (bindings : Betree_list_t (u64 * u64))
   (ret : Betree_list_t (u64 * u64)) :
@@ -598,7 +599,8 @@ Fixpoint betree_node_lookup_mut_in_bindings_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::apply_to_leaf] *)
+(** [betree_main::betree::Node::{5}::apply_to_leaf]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition betree_node_apply_to_leaf_fwd_back
   (n : nat) (bindings : Betree_list_t (u64 * u64)) (key : u64)
   (new_msg : Betree_message_t) :
@@ -642,7 +644,8 @@ Definition betree_node_apply_to_leaf_fwd_back
     end
 .
 
-(** [betree_main::betree::Node::{5}::apply_messages_to_leaf] *)
+(** [betree_main::betree::Node::{5}::apply_messages_to_leaf]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Fixpoint betree_node_apply_messages_to_leaf_fwd_back
   (n : nat) (bindings : Betree_list_t (u64 * u64))
   (new_msgs : Betree_list_t (u64 * Betree_message_t)) :
@@ -661,7 +664,8 @@ Fixpoint betree_node_apply_messages_to_leaf_fwd_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::filter_messages_for_key] *)
+(** [betree_main::betree::Node::{5}::filter_messages_for_key]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Fixpoint betree_node_filter_messages_for_key_fwd_back
   (n : nat) (key : u64) (msgs : Betree_list_t (u64 * Betree_message_t)) :
   result (Betree_list_t (u64 * Betree_message_t))
@@ -684,7 +688,7 @@ Fixpoint betree_node_filter_messages_for_key_fwd_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::lookup_first_message_after_key] *)
+(** [betree_main::betree::Node::{5}::lookup_first_message_after_key]: forward function *)
 Fixpoint betree_node_lookup_first_message_after_key_fwd
   (n : nat) (key : u64) (msgs : Betree_list_t (u64 * Betree_message_t)) :
   result (Betree_list_t (u64 * Betree_message_t))
@@ -703,7 +707,7 @@ Fixpoint betree_node_lookup_first_message_after_key_fwd
   end
 .
 
-(** [betree_main::betree::Node::{5}::lookup_first_message_after_key] *)
+(** [betree_main::betree::Node::{5}::lookup_first_message_after_key]: backward function 0 *)
 Fixpoint betree_node_lookup_first_message_after_key_back
   (n : nat) (key : u64) (msgs : Betree_list_t (u64 * Betree_message_t))
   (ret : Betree_list_t (u64 * Betree_message_t)) :
@@ -726,7 +730,8 @@ Fixpoint betree_node_lookup_first_message_after_key_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::apply_to_internal] *)
+(** [betree_main::betree::Node::{5}::apply_to_internal]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition betree_node_apply_to_internal_fwd_back
   (n : nat) (msgs : Betree_list_t (u64 * Betree_message_t)) (key : u64)
   (new_msg : Betree_message_t) :
@@ -784,7 +789,8 @@ Definition betree_node_apply_to_internal_fwd_back
     betree_node_lookup_first_message_for_key_back n key msgs msgs1)
 .
 
-(** [betree_main::betree::Node::{5}::apply_messages_to_internal] *)
+(** [betree_main::betree::Node::{5}::apply_messages_to_internal]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Fixpoint betree_node_apply_messages_to_internal_fwd_back
   (n : nat) (msgs : Betree_list_t (u64 * Betree_message_t))
   (new_msgs : Betree_list_t (u64 * Betree_message_t)) :
@@ -803,7 +809,7 @@ Fixpoint betree_node_apply_messages_to_internal_fwd_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::apply_messages] *)
+(** [betree_main::betree::Node::{5}::apply_messages]: forward function *)
 Fixpoint betree_node_apply_messages_fwd
   (n : nat) (self : Betree_node_t) (params : Betree_params_t)
   (node_id_cnt : Betree_node_id_counter_t)
@@ -859,7 +865,7 @@ Fixpoint betree_node_apply_messages_fwd
     end
   end
 
-(** [betree_main::betree::Node::{5}::apply_messages] *)
+(** [betree_main::betree::Node::{5}::apply_messages]: backward function 0 *)
 with betree_node_apply_messages_back
   (n : nat) (self : Betree_node_t) (params : Betree_params_t)
   (node_id_cnt : Betree_node_id_counter_t)
@@ -915,7 +921,7 @@ with betree_node_apply_messages_back
     end
   end
 
-(** [betree_main::betree::Internal::{4}::flush] *)
+(** [betree_main::betree::Internal::{4}::flush]: forward function *)
 with betree_internal_flush_fwd
   (n : nat) (self : Betree_internal_t) (params : Betree_params_t)
   (node_id_cnt : Betree_node_id_counter_t)
@@ -963,7 +969,7 @@ with betree_internal_flush_fwd
       Return (st0, msgs_left))
   end
 
-(** [betree_main::betree::Internal::{4}::flush] *)
+(** [betree_main::betree::Internal::{4}::flush]: backward function 0 *)
 with betree_internal_flush_back
   (n : nat) (self : Betree_internal_t) (params : Betree_params_t)
   (node_id_cnt : Betree_node_id_counter_t)
@@ -1012,7 +1018,7 @@ with betree_internal_flush_back
   end
 .
 
-(** [betree_main::betree::Node::{5}::apply] *)
+(** [betree_main::betree::Node::{5}::apply]: forward function *)
 Definition betree_node_apply_fwd
   (n : nat) (self : Betree_node_t) (params : Betree_params_t)
   (node_id_cnt : Betree_node_id_counter_t) (key : u64)
@@ -1030,7 +1036,7 @@ Definition betree_node_apply_fwd
   Return (st0, tt)
 .
 
-(** [betree_main::betree::Node::{5}::apply] *)
+(** [betree_main::betree::Node::{5}::apply]: backward function 0 *)
 Definition betree_node_apply_back
   (n : nat) (self : Betree_node_t) (params : Betree_params_t)
   (node_id_cnt : Betree_node_id_counter_t) (key : u64)
@@ -1042,7 +1048,7 @@ Definition betree_node_apply_back
     (key, new_msg) l) st
 .
 
-(** [betree_main::betree::BeTree::{6}::new] *)
+(** [betree_main::betree::BeTree::{6}::new]: forward function *)
 Definition betree_be_tree_new_fwd
   (min_flush_size : u64) (split_size : u64) (st : state) :
   result (state * Betree_be_tree_t)
@@ -1065,7 +1071,7 @@ Definition betree_be_tree_new_fwd
     |})
 .
 
-(** [betree_main::betree::BeTree::{6}::apply] *)
+(** [betree_main::betree::BeTree::{6}::apply]: forward function *)
 Definition betree_be_tree_apply_fwd
   (n : nat) (self : Betree_be_tree_t) (key : u64) (msg : Betree_message_t)
   (st : state) :
@@ -1081,7 +1087,7 @@ Definition betree_be_tree_apply_fwd
   Return (st0, tt)
 .
 
-(** [betree_main::betree::BeTree::{6}::apply] *)
+(** [betree_main::betree::BeTree::{6}::apply]: backward function 0 *)
 Definition betree_be_tree_apply_back
   (n : nat) (self : Betree_be_tree_t) (key : u64) (msg : Betree_message_t)
   (st : state) :
@@ -1099,7 +1105,7 @@ Definition betree_be_tree_apply_back
     |}
 .
 
-(** [betree_main::betree::BeTree::{6}::insert] *)
+(** [betree_main::betree::BeTree::{6}::insert]: forward function *)
 Definition betree_be_tree_insert_fwd
   (n : nat) (self : Betree_be_tree_t) (key : u64) (value : u64) (st : state) :
   result (state * unit)
@@ -1110,7 +1116,7 @@ Definition betree_be_tree_insert_fwd
   Return (st0, tt)
 .
 
-(** [betree_main::betree::BeTree::{6}::insert] *)
+(** [betree_main::betree::BeTree::{6}::insert]: backward function 0 *)
 Definition betree_be_tree_insert_back
   (n : nat) (self : Betree_be_tree_t) (key : u64) (value : u64) (st : state) :
   result Betree_be_tree_t
@@ -1118,7 +1124,7 @@ Definition betree_be_tree_insert_back
   betree_be_tree_apply_back n self key (BetreeMessageInsert value) st
 .
 
-(** [betree_main::betree::BeTree::{6}::delete] *)
+(** [betree_main::betree::BeTree::{6}::delete]: forward function *)
 Definition betree_be_tree_delete_fwd
   (n : nat) (self : Betree_be_tree_t) (key : u64) (st : state) :
   result (state * unit)
@@ -1129,7 +1135,7 @@ Definition betree_be_tree_delete_fwd
   Return (st0, tt)
 .
 
-(** [betree_main::betree::BeTree::{6}::delete] *)
+(** [betree_main::betree::BeTree::{6}::delete]: backward function 0 *)
 Definition betree_be_tree_delete_back
   (n : nat) (self : Betree_be_tree_t) (key : u64) (st : state) :
   result Betree_be_tree_t
@@ -1137,7 +1143,7 @@ Definition betree_be_tree_delete_back
   betree_be_tree_apply_back n self key BetreeMessageDelete st
 .
 
-(** [betree_main::betree::BeTree::{6}::upsert] *)
+(** [betree_main::betree::BeTree::{6}::upsert]: forward function *)
 Definition betree_be_tree_upsert_fwd
   (n : nat) (self : Betree_be_tree_t) (key : u64)
   (upd : Betree_upsert_fun_state_t) (st : state) :
@@ -1149,7 +1155,7 @@ Definition betree_be_tree_upsert_fwd
   Return (st0, tt)
 .
 
-(** [betree_main::betree::BeTree::{6}::upsert] *)
+(** [betree_main::betree::BeTree::{6}::upsert]: backward function 0 *)
 Definition betree_be_tree_upsert_back
   (n : nat) (self : Betree_be_tree_t) (key : u64)
   (upd : Betree_upsert_fun_state_t) (st : state) :
@@ -1158,7 +1164,7 @@ Definition betree_be_tree_upsert_back
   betree_be_tree_apply_back n self key (BetreeMessageUpsert upd) st
 .
 
-(** [betree_main::betree::BeTree::{6}::lookup] *)
+(** [betree_main::betree::BeTree::{6}::lookup]: forward function *)
 Definition betree_be_tree_lookup_fwd
   (n : nat) (self : Betree_be_tree_t) (key : u64) (st : state) :
   result (state * (option u64))
@@ -1166,7 +1172,7 @@ Definition betree_be_tree_lookup_fwd
   betree_node_lookup_fwd n self.(Betree_be_tree_root) key st
 .
 
-(** [betree_main::betree::BeTree::{6}::lookup] *)
+(** [betree_main::betree::BeTree::{6}::lookup]: backward function 0 *)
 Definition betree_be_tree_lookup_back
   (n : nat) (self : Betree_be_tree_t) (key : u64) (st : state) :
   result Betree_be_tree_t
@@ -1180,7 +1186,7 @@ Definition betree_be_tree_lookup_back
     |}
 .
 
-(** [betree_main::main] *)
+(** [betree_main::main]: forward function *)
 Definition main_fwd : result unit :=
   Return tt.
 

@@ -520,6 +520,8 @@ let basename_to_unique (names_set : StringSet.t)
   in
   if StringSet.mem basename names_set then gen 0 else basename
 
+type fun_name_info = { keep_fwd : bool; num_backs : int }
+
 (** Extraction context.
 
     Note that the extraction context contains information coming from the
@@ -550,6 +552,15 @@ type extraction_ctx = {
             -- ^^
             -- makes the if then else dependent
           ]}
+        *)
+  fun_name_info : fun_name_info PureUtils.RegularFunIdMap.t;
+      (** Information used to filter and name functions - we use it
+          to print comments in the generated code, to help link
+          the generated code to the original code (information such
+          as: "this function is the backward function of ...", or
+          "this function is the merged forward/backward function of ..."
+          in case a Rust function only has one backward translation
+          and we filter the forward function because it returns unit.
         *)
 }
 
@@ -930,9 +941,15 @@ let ctx_add_fun_decl (trans_group : bool * pure_fun_translation)
     ctx.fmt.fun_name def.basename def.num_loops def.loop_id num_rgs rg_info
       (keep_fwd, num_backs)
   in
-  ctx_add is_opaque
-    (FunId (FromLlbc (A.Regular def_id, def.loop_id, def.back_id)))
-    def_name ctx
+  let fun_id = (A.Regular def_id, def.loop_id, def.back_id) in
+  let ctx = ctx_add is_opaque (FunId (FromLlbc fun_id)) def_name ctx in
+  (* Add the name info *)
+  {
+    ctx with
+    fun_name_info =
+      PureUtils.RegularFunIdMap.add fun_id { keep_fwd; num_backs }
+        ctx.fun_name_info;
+  }
 
 type names_map_init = {
   keywords : string list;
@@ -1053,13 +1070,24 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
      definitions (in particular between type and function definitions).
   *)
   let rg_suff =
+    (* TODO: make all the backends match what is done for Lean *)
     match rg with
-    | None -> "_fwd"
+    | None -> (
+        match !Config.backend with
+        | FStar | Coq | HOL4 -> "_fwd"
+        | Lean ->
+            (* In order to avoid name conflicts:
+             * - if the forward is eliminated, we add the suffix "_fwd" (it won't be used)
+             * - otherwise, no suffix (because the backward functions will have a suffix)
+             *)
+            if num_backs = 1 && not keep_fwd then "_fwd" else "")
     | Some rg ->
         assert (num_region_groups > 0 && num_backs > 0);
         if num_backs = 1 then
           (* Exactly one backward function *)
-          if not keep_fwd then "_fwd_back" else "_back"
+          match !Config.backend with
+          | FStar | Coq | HOL4 -> if not keep_fwd then "_fwd_back" else "_back"
+          | Lean -> if not keep_fwd then "" else "_back"
         else if
           (* Several region groups/backward functions:
              - if all the regions in the group have names, we use those names

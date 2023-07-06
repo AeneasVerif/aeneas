@@ -7,7 +7,7 @@ include Loops.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [loops::sum] *)
+(** [loops::sum]: loop 0: forward function *)
 let rec sum_loop_fwd
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_loop_decreases max i s))
@@ -16,11 +16,11 @@ let rec sum_loop_fwd
   then let* s0 = u32_add s i in let* i0 = u32_add i 1 in sum_loop_fwd max i0 s0
   else u32_mul s 2
 
-(** [loops::sum] *)
+(** [loops::sum]: forward function *)
 let sum_fwd (max : u32) : result u32 =
   sum_loop_fwd max 0 0
 
-(** [loops::sum_with_mut_borrows] *)
+(** [loops::sum_with_mut_borrows]: loop 0: forward function *)
 let rec sum_with_mut_borrows_loop_fwd
   (max : u32) (mi : u32) (ms : u32) :
   Tot (result u32) (decreases (sum_with_mut_borrows_loop_decreases max mi ms))
@@ -32,11 +32,11 @@ let rec sum_with_mut_borrows_loop_fwd
     sum_with_mut_borrows_loop_fwd max mi0 ms0
   else u32_mul ms 2
 
-(** [loops::sum_with_mut_borrows] *)
+(** [loops::sum_with_mut_borrows]: forward function *)
 let sum_with_mut_borrows_fwd (max : u32) : result u32 =
   sum_with_mut_borrows_loop_fwd max 0 0
 
-(** [loops::sum_with_shared_borrows] *)
+(** [loops::sum_with_shared_borrows]: loop 0: forward function *)
 let rec sum_with_shared_borrows_loop_fwd
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (sum_with_shared_borrows_loop_decreases max i s))
@@ -48,11 +48,12 @@ let rec sum_with_shared_borrows_loop_fwd
     sum_with_shared_borrows_loop_fwd max i0 s0
   else u32_mul s 2
 
-(** [loops::sum_with_shared_borrows] *)
+(** [loops::sum_with_shared_borrows]: forward function *)
 let sum_with_shared_borrows_fwd (max : u32) : result u32 =
   sum_with_shared_borrows_loop_fwd max 0 0
 
-(** [loops::clear] *)
+(** [loops::clear]: loop 0: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 let rec clear_loop_fwd_back
   (v : vec u32) (i : usize) :
   Tot (result (vec u32)) (decreases (clear_loop_decreases v i))
@@ -65,11 +66,12 @@ let rec clear_loop_fwd_back
     clear_loop_fwd_back v0 i1
   else Return v
 
-(** [loops::clear] *)
+(** [loops::clear]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 let clear_fwd_back (v : vec u32) : result (vec u32) =
   clear_loop_fwd_back v 0
 
-(** [loops::list_mem] *)
+(** [loops::list_mem]: loop 0: forward function *)
 let rec list_mem_loop_fwd
   (x : u32) (ls : list_t u32) :
   Tot (result bool) (decreases (list_mem_loop_decreases x ls))
@@ -79,11 +81,11 @@ let rec list_mem_loop_fwd
   | ListNil -> Return false
   end
 
-(** [loops::list_mem] *)
+(** [loops::list_mem]: forward function *)
 let list_mem_fwd (x : u32) (ls : list_t u32) : result bool =
   list_mem_loop_fwd x ls
 
-(** [loops::list_nth_mut_loop] *)
+(** [loops::list_nth_mut_loop]: loop 0: forward function *)
 let rec list_nth_mut_loop_loop_fwd
   (t : Type0) (ls : list_t t) (i : u32) :
   Tot (result t) (decreases (list_nth_mut_loop_loop_decreases t ls i))
@@ -96,11 +98,11 @@ let rec list_nth_mut_loop_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop] *)
+(** [loops::list_nth_mut_loop]: forward function *)
 let list_nth_mut_loop_fwd (t : Type0) (ls : list_t t) (i : u32) : result t =
   list_nth_mut_loop_loop_fwd t ls i
 
-(** [loops::list_nth_mut_loop] *)
+(** [loops::list_nth_mut_loop]: loop 0: backward function 0 *)
 let rec list_nth_mut_loop_loop_back
   (t : Type0) (ls : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t)) (decreases (list_nth_mut_loop_loop_decreases t ls i))
@@ -116,12 +118,12 @@ let rec list_nth_mut_loop_loop_back
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop] *)
+(** [loops::list_nth_mut_loop]: backward function 0 *)
 let list_nth_mut_loop_back
   (t : Type0) (ls : list_t t) (i : u32) (ret : t) : result (list_t t) =
   list_nth_mut_loop_loop_back t ls i ret
 
-(** [loops::list_nth_shared_loop] *)
+(** [loops::list_nth_shared_loop]: loop 0: forward function *)
 let rec list_nth_shared_loop_loop_fwd
   (t : Type0) (ls : list_t t) (i : u32) :
   Tot (result t) (decreases (list_nth_shared_loop_loop_decreases t ls i))
@@ -134,11 +136,11 @@ let rec list_nth_shared_loop_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_shared_loop] *)
+(** [loops::list_nth_shared_loop]: forward function *)
 let list_nth_shared_loop_fwd (t : Type0) (ls : list_t t) (i : u32) : result t =
   list_nth_shared_loop_loop_fwd t ls i
 
-(** [loops::get_elem_mut] *)
+(** [loops::get_elem_mut]: loop 0: forward function *)
 let rec get_elem_mut_loop_fwd
   (x : usize) (ls : list_t usize) :
   Tot (result usize) (decreases (get_elem_mut_loop_decreases x ls))
@@ -148,12 +150,12 @@ let rec get_elem_mut_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::get_elem_mut] *)
+(** [loops::get_elem_mut]: forward function *)
 let get_elem_mut_fwd (slots : vec (list_t usize)) (x : usize) : result usize =
   let* l = vec_index_mut_fwd (list_t usize) slots 0 in
   get_elem_mut_loop_fwd x l
 
-(** [loops::get_elem_mut] *)
+(** [loops::get_elem_mut]: loop 0: backward function 0 *)
 let rec get_elem_mut_loop_back
   (x : usize) (ls : list_t usize) (ret : usize) :
   Tot (result (list_t usize)) (decreases (get_elem_mut_loop_decreases x ls))
@@ -166,7 +168,7 @@ let rec get_elem_mut_loop_back
   | ListNil -> Fail Failure
   end
 
-(** [loops::get_elem_mut] *)
+(** [loops::get_elem_mut]: backward function 0 *)
 let get_elem_mut_back
   (slots : vec (list_t usize)) (x : usize) (ret : usize) :
   result (vec (list_t usize))
@@ -175,7 +177,7 @@ let get_elem_mut_back
   let* l0 = get_elem_mut_loop_back x l ret in
   vec_index_mut_back (list_t usize) slots 0 l0
 
-(** [loops::get_elem_shared] *)
+(** [loops::get_elem_shared]: loop 0: forward function *)
 let rec get_elem_shared_loop_fwd
   (x : usize) (ls : list_t usize) :
   Tot (result usize) (decreases (get_elem_shared_loop_decreases x ls))
@@ -185,25 +187,25 @@ let rec get_elem_shared_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::get_elem_shared] *)
+(** [loops::get_elem_shared]: forward function *)
 let get_elem_shared_fwd
   (slots : vec (list_t usize)) (x : usize) : result usize =
   let* l = vec_index_fwd (list_t usize) slots 0 in get_elem_shared_loop_fwd x l
 
-(** [loops::id_mut] *)
+(** [loops::id_mut]: forward function *)
 let id_mut_fwd (t : Type0) (ls : list_t t) : result (list_t t) =
   Return ls
 
-(** [loops::id_mut] *)
+(** [loops::id_mut]: backward function 0 *)
 let id_mut_back
   (t : Type0) (ls : list_t t) (ret : list_t t) : result (list_t t) =
   Return ret
 
-(** [loops::id_shared] *)
+(** [loops::id_shared]: forward function *)
 let id_shared_fwd (t : Type0) (ls : list_t t) : result (list_t t) =
   Return ls
 
-(** [loops::list_nth_mut_loop_with_id] *)
+(** [loops::list_nth_mut_loop_with_id]: loop 0: forward function *)
 let rec list_nth_mut_loop_with_id_loop_fwd
   (t : Type0) (i : u32) (ls : list_t t) :
   Tot (result t) (decreases (list_nth_mut_loop_with_id_loop_decreases t i ls))
@@ -216,12 +218,12 @@ let rec list_nth_mut_loop_with_id_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop_with_id] *)
+(** [loops::list_nth_mut_loop_with_id]: forward function *)
 let list_nth_mut_loop_with_id_fwd
   (t : Type0) (ls : list_t t) (i : u32) : result t =
   let* ls0 = id_mut_fwd t ls in list_nth_mut_loop_with_id_loop_fwd t i ls0
 
-(** [loops::list_nth_mut_loop_with_id] *)
+(** [loops::list_nth_mut_loop_with_id]: loop 0: backward function 0 *)
 let rec list_nth_mut_loop_with_id_loop_back
   (t : Type0) (i : u32) (ls : list_t t) (ret : t) :
   Tot (result (list_t t))
@@ -238,14 +240,14 @@ let rec list_nth_mut_loop_with_id_loop_back
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop_with_id] *)
+(** [loops::list_nth_mut_loop_with_id]: backward function 0 *)
 let list_nth_mut_loop_with_id_back
   (t : Type0) (ls : list_t t) (i : u32) (ret : t) : result (list_t t) =
   let* ls0 = id_mut_fwd t ls in
   let* l = list_nth_mut_loop_with_id_loop_back t i ls0 ret in
   id_mut_back t ls l
 
-(** [loops::list_nth_shared_loop_with_id] *)
+(** [loops::list_nth_shared_loop_with_id]: loop 0: forward function *)
 let rec list_nth_shared_loop_with_id_loop_fwd
   (t : Type0) (i : u32) (ls : list_t t) :
   Tot (result t)
@@ -259,13 +261,13 @@ let rec list_nth_shared_loop_with_id_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_shared_loop_with_id] *)
+(** [loops::list_nth_shared_loop_with_id]: forward function *)
 let list_nth_shared_loop_with_id_fwd
   (t : Type0) (ls : list_t t) (i : u32) : result t =
   let* ls0 = id_shared_fwd t ls in
   list_nth_shared_loop_with_id_loop_fwd t i ls0
 
-(** [loops::list_nth_mut_loop_pair] *)
+(** [loops::list_nth_mut_loop_pair]: loop 0: forward function *)
 let rec list_nth_mut_loop_pair_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -284,12 +286,12 @@ let rec list_nth_mut_loop_pair_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop_pair] *)
+(** [loops::list_nth_mut_loop_pair]: forward function *)
 let list_nth_mut_loop_pair_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_mut_loop_pair_loop_fwd t ls0 ls1 i
 
-(** [loops::list_nth_mut_loop_pair] *)
+(** [loops::list_nth_mut_loop_pair]: loop 0: backward function 0 *)
 let rec list_nth_mut_loop_pair_loop_back'a
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
@@ -310,14 +312,14 @@ let rec list_nth_mut_loop_pair_loop_back'a
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop_pair] *)
+(** [loops::list_nth_mut_loop_pair]: backward function 0 *)
 let list_nth_mut_loop_pair_back'a
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   result (list_t t)
   =
   list_nth_mut_loop_pair_loop_back'a t ls0 ls1 i ret
 
-(** [loops::list_nth_mut_loop_pair] *)
+(** [loops::list_nth_mut_loop_pair]: loop 0: backward function 1 *)
 let rec list_nth_mut_loop_pair_loop_back'b
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
@@ -338,14 +340,14 @@ let rec list_nth_mut_loop_pair_loop_back'b
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop_pair] *)
+(** [loops::list_nth_mut_loop_pair]: backward function 1 *)
 let list_nth_mut_loop_pair_back'b
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   result (list_t t)
   =
   list_nth_mut_loop_pair_loop_back'b t ls0 ls1 i ret
 
-(** [loops::list_nth_shared_loop_pair] *)
+(** [loops::list_nth_shared_loop_pair]: loop 0: forward function *)
 let rec list_nth_shared_loop_pair_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -365,12 +367,12 @@ let rec list_nth_shared_loop_pair_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_shared_loop_pair] *)
+(** [loops::list_nth_shared_loop_pair]: forward function *)
 let list_nth_shared_loop_pair_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_shared_loop_pair_loop_fwd t ls0 ls1 i
 
-(** [loops::list_nth_mut_loop_pair_merge] *)
+(** [loops::list_nth_mut_loop_pair_merge]: loop 0: forward function *)
 let rec list_nth_mut_loop_pair_merge_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -390,12 +392,12 @@ let rec list_nth_mut_loop_pair_merge_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop_pair_merge] *)
+(** [loops::list_nth_mut_loop_pair_merge]: forward function *)
 let list_nth_mut_loop_pair_merge_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_mut_loop_pair_merge_loop_fwd t ls0 ls1 i
 
-(** [loops::list_nth_mut_loop_pair_merge] *)
+(** [loops::list_nth_mut_loop_pair_merge]: loop 0: backward function 0 *)
 let rec list_nth_mut_loop_pair_merge_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : (t & t)) :
   Tot (result ((list_t t) & (list_t t)))
@@ -417,14 +419,14 @@ let rec list_nth_mut_loop_pair_merge_loop_back
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_loop_pair_merge] *)
+(** [loops::list_nth_mut_loop_pair_merge]: backward function 0 *)
 let list_nth_mut_loop_pair_merge_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : (t & t)) :
   result ((list_t t) & (list_t t))
   =
   list_nth_mut_loop_pair_merge_loop_back t ls0 ls1 i ret
 
-(** [loops::list_nth_shared_loop_pair_merge] *)
+(** [loops::list_nth_shared_loop_pair_merge]: loop 0: forward function *)
 let rec list_nth_shared_loop_pair_merge_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -444,12 +446,12 @@ let rec list_nth_shared_loop_pair_merge_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_shared_loop_pair_merge] *)
+(** [loops::list_nth_shared_loop_pair_merge]: forward function *)
 let list_nth_shared_loop_pair_merge_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_shared_loop_pair_merge_loop_fwd t ls0 ls1 i
 
-(** [loops::list_nth_mut_shared_loop_pair] *)
+(** [loops::list_nth_mut_shared_loop_pair]: loop 0: forward function *)
 let rec list_nth_mut_shared_loop_pair_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -469,12 +471,12 @@ let rec list_nth_mut_shared_loop_pair_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_shared_loop_pair] *)
+(** [loops::list_nth_mut_shared_loop_pair]: forward function *)
 let list_nth_mut_shared_loop_pair_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_mut_shared_loop_pair_loop_fwd t ls0 ls1 i
 
-(** [loops::list_nth_mut_shared_loop_pair] *)
+(** [loops::list_nth_mut_shared_loop_pair]: loop 0: backward function 0 *)
 let rec list_nth_mut_shared_loop_pair_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
@@ -495,14 +497,14 @@ let rec list_nth_mut_shared_loop_pair_loop_back
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_shared_loop_pair] *)
+(** [loops::list_nth_mut_shared_loop_pair]: backward function 0 *)
 let list_nth_mut_shared_loop_pair_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   result (list_t t)
   =
   list_nth_mut_shared_loop_pair_loop_back t ls0 ls1 i ret
 
-(** [loops::list_nth_mut_shared_loop_pair_merge] *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0: forward function *)
 let rec list_nth_mut_shared_loop_pair_merge_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -522,12 +524,12 @@ let rec list_nth_mut_shared_loop_pair_merge_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_shared_loop_pair_merge] *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: forward function *)
 let list_nth_mut_shared_loop_pair_merge_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_mut_shared_loop_pair_merge_loop_fwd t ls0 ls1 i
 
-(** [loops::list_nth_mut_shared_loop_pair_merge] *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0: backward function 0 *)
 let rec list_nth_mut_shared_loop_pair_merge_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
@@ -549,14 +551,14 @@ let rec list_nth_mut_shared_loop_pair_merge_loop_back
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_mut_shared_loop_pair_merge] *)
+(** [loops::list_nth_mut_shared_loop_pair_merge]: backward function 0 *)
 let list_nth_mut_shared_loop_pair_merge_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   result (list_t t)
   =
   list_nth_mut_shared_loop_pair_merge_loop_back t ls0 ls1 i ret
 
-(** [loops::list_nth_shared_mut_loop_pair] *)
+(** [loops::list_nth_shared_mut_loop_pair]: loop 0: forward function *)
 let rec list_nth_shared_mut_loop_pair_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -576,12 +578,12 @@ let rec list_nth_shared_mut_loop_pair_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_shared_mut_loop_pair] *)
+(** [loops::list_nth_shared_mut_loop_pair]: forward function *)
 let list_nth_shared_mut_loop_pair_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_shared_mut_loop_pair_loop_fwd t ls0 ls1 i
 
-(** [loops::list_nth_shared_mut_loop_pair] *)
+(** [loops::list_nth_shared_mut_loop_pair]: loop 0: backward function 1 *)
 let rec list_nth_shared_mut_loop_pair_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
@@ -602,14 +604,14 @@ let rec list_nth_shared_mut_loop_pair_loop_back
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_shared_mut_loop_pair] *)
+(** [loops::list_nth_shared_mut_loop_pair]: backward function 1 *)
 let list_nth_shared_mut_loop_pair_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   result (list_t t)
   =
   list_nth_shared_mut_loop_pair_loop_back t ls0 ls1 i ret
 
-(** [loops::list_nth_shared_mut_loop_pair_merge] *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0: forward function *)
 let rec list_nth_shared_mut_loop_pair_merge_loop_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) :
   Tot (result (t & t))
@@ -629,12 +631,12 @@ let rec list_nth_shared_mut_loop_pair_merge_loop_fwd
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_shared_mut_loop_pair_merge] *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: forward function *)
 let list_nth_shared_mut_loop_pair_merge_fwd
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) : result (t & t) =
   list_nth_shared_mut_loop_pair_merge_loop_fwd t ls0 ls1 i
 
-(** [loops::list_nth_shared_mut_loop_pair_merge] *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0: backward function 0 *)
 let rec list_nth_shared_mut_loop_pair_merge_loop_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   Tot (result (list_t t))
@@ -656,7 +658,7 @@ let rec list_nth_shared_mut_loop_pair_merge_loop_back
   | ListNil -> Fail Failure
   end
 
-(** [loops::list_nth_shared_mut_loop_pair_merge] *)
+(** [loops::list_nth_shared_mut_loop_pair_merge]: backward function 0 *)
 let list_nth_shared_mut_loop_pair_merge_back
   (t : Type0) (ls0 : list_t t) (ls1 : list_t t) (i : u32) (ret : t) :
   result (list_t t)

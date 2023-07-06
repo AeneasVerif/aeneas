@@ -7,7 +7,7 @@ val _ = new_theory "loops_Funs"
 
 
 val [sum_loop_fwd_def] = DefineDiv ‘
-  (** [loops::sum] *)
+  (** [loops::sum]: loop 0: forward function *)
   sum_loop_fwd (max : u32) (i : u32) (s : u32) : u32 result =
     if u32_lt i max
     then (
@@ -20,13 +20,13 @@ val [sum_loop_fwd_def] = DefineDiv ‘
 ’
 
 val sum_fwd_def = Define ‘
-  (** [loops::sum] *)
+  (** [loops::sum]: forward function *)
   sum_fwd (max : u32) : u32 result =
     sum_loop_fwd max (int_to_u32 0) (int_to_u32 0)
 ’
 
 val [sum_with_mut_borrows_loop_fwd_def] = DefineDiv ‘
-  (** [loops::sum_with_mut_borrows] *)
+  (** [loops::sum_with_mut_borrows]: loop 0: forward function *)
   sum_with_mut_borrows_loop_fwd
     (max : u32) (mi : u32) (ms : u32) : u32 result =
     if u32_lt mi max
@@ -40,13 +40,13 @@ val [sum_with_mut_borrows_loop_fwd_def] = DefineDiv ‘
 ’
 
 val sum_with_mut_borrows_fwd_def = Define ‘
-  (** [loops::sum_with_mut_borrows] *)
+  (** [loops::sum_with_mut_borrows]: forward function *)
   sum_with_mut_borrows_fwd (max : u32) : u32 result =
     sum_with_mut_borrows_loop_fwd max (int_to_u32 0) (int_to_u32 0)
 ’
 
 val [sum_with_shared_borrows_loop_fwd_def] = DefineDiv ‘
-  (** [loops::sum_with_shared_borrows] *)
+  (** [loops::sum_with_shared_borrows]: loop 0: forward function *)
   sum_with_shared_borrows_loop_fwd
     (max : u32) (i : u32) (s : u32) : u32 result =
     if u32_lt i max
@@ -60,13 +60,14 @@ val [sum_with_shared_borrows_loop_fwd_def] = DefineDiv ‘
 ’
 
 val sum_with_shared_borrows_fwd_def = Define ‘
-  (** [loops::sum_with_shared_borrows] *)
+  (** [loops::sum_with_shared_borrows]: forward function *)
   sum_with_shared_borrows_fwd (max : u32) : u32 result =
     sum_with_shared_borrows_loop_fwd max (int_to_u32 0) (int_to_u32 0)
 ’
 
 val [clear_loop_fwd_back_def] = DefineDiv ‘
-  (** [loops::clear] *)
+  (** [loops::clear]: loop 0: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   clear_loop_fwd_back (v : u32 vec) (i : usize) : u32 vec result =
     let i0 = vec_len v in
     if usize_lt i i0
@@ -80,13 +81,14 @@ val [clear_loop_fwd_back_def] = DefineDiv ‘
 ’
 
 val clear_fwd_back_def = Define ‘
-  (** [loops::clear] *)
+  (** [loops::clear]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   clear_fwd_back (v : u32 vec) : u32 vec result =
     clear_loop_fwd_back v (int_to_usize 0)
 ’
 
 val [list_mem_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_mem] *)
+  (** [loops::list_mem]: loop 0: forward function *)
   list_mem_loop_fwd (x : u32) (ls : u32 list_t) : bool result =
     (case ls of
     | ListCons y tl => if y = x then Return T else list_mem_loop_fwd x tl
@@ -94,13 +96,13 @@ val [list_mem_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_mem_fwd_def = Define ‘
-  (** [loops::list_mem] *)
+  (** [loops::list_mem]: forward function *)
   list_mem_fwd (x : u32) (ls : u32 list_t) : bool result =
     list_mem_loop_fwd x ls
 ’
 
 val [list_nth_mut_loop_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop] *)
+  (** [loops::list_nth_mut_loop]: loop 0: forward function *)
   list_nth_mut_loop_loop_fwd (ls : 't list_t) (i : u32) : 't result =
     (case ls of
     | ListCons x tl =>
@@ -115,13 +117,13 @@ val [list_nth_mut_loop_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_fwd_def = Define ‘
-  (** [loops::list_nth_mut_loop] *)
+  (** [loops::list_nth_mut_loop]: forward function *)
   list_nth_mut_loop_fwd (ls : 't list_t) (i : u32) : 't result =
     list_nth_mut_loop_loop_fwd ls i
 ’
 
 val [list_nth_mut_loop_loop_back_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop] *)
+  (** [loops::list_nth_mut_loop]: loop 0: backward function 0 *)
   list_nth_mut_loop_loop_back
     (ls : 't list_t) (i : u32) (ret : 't) : 't list_t result =
     (case ls of
@@ -138,14 +140,14 @@ val [list_nth_mut_loop_loop_back_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_back_def = Define ‘
-  (** [loops::list_nth_mut_loop] *)
+  (** [loops::list_nth_mut_loop]: backward function 0 *)
   list_nth_mut_loop_back
     (ls : 't list_t) (i : u32) (ret : 't) : 't list_t result =
     list_nth_mut_loop_loop_back ls i ret
 ’
 
 val [list_nth_shared_loop_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_shared_loop] *)
+  (** [loops::list_nth_shared_loop]: loop 0: forward function *)
   list_nth_shared_loop_loop_fwd (ls : 't list_t) (i : u32) : 't result =
     (case ls of
     | ListCons x tl =>
@@ -160,13 +162,13 @@ val [list_nth_shared_loop_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_shared_loop_fwd_def = Define ‘
-  (** [loops::list_nth_shared_loop] *)
+  (** [loops::list_nth_shared_loop]: forward function *)
   list_nth_shared_loop_fwd (ls : 't list_t) (i : u32) : 't result =
     list_nth_shared_loop_loop_fwd ls i
 ’
 
 val [get_elem_mut_loop_fwd_def] = DefineDiv ‘
-  (** [loops::get_elem_mut] *)
+  (** [loops::get_elem_mut]: loop 0: forward function *)
   get_elem_mut_loop_fwd (x : usize) (ls : usize list_t) : usize result =
     (case ls of
     | ListCons y tl => if y = x then Return y else get_elem_mut_loop_fwd x tl
@@ -174,7 +176,7 @@ val [get_elem_mut_loop_fwd_def] = DefineDiv ‘
 ’
 
 val get_elem_mut_fwd_def = Define ‘
-  (** [loops::get_elem_mut] *)
+  (** [loops::get_elem_mut]: forward function *)
   get_elem_mut_fwd (slots : usize list_t vec) (x : usize) : usize result =
     do
     l <- vec_index_mut_fwd slots (int_to_usize 0);
@@ -183,7 +185,7 @@ val get_elem_mut_fwd_def = Define ‘
 ’
 
 val [get_elem_mut_loop_back_def] = DefineDiv ‘
-  (** [loops::get_elem_mut] *)
+  (** [loops::get_elem_mut]: loop 0: backward function 0 *)
   get_elem_mut_loop_back
     (x : usize) (ls : usize list_t) (ret : usize) : usize list_t result =
     (case ls of
@@ -199,7 +201,7 @@ val [get_elem_mut_loop_back_def] = DefineDiv ‘
 ’
 
 val get_elem_mut_back_def = Define ‘
-  (** [loops::get_elem_mut] *)
+  (** [loops::get_elem_mut]: backward function 0 *)
   get_elem_mut_back
     (slots : usize list_t vec) (x : usize) (ret : usize) :
     usize list_t vec result
@@ -212,7 +214,7 @@ val get_elem_mut_back_def = Define ‘
 ’
 
 val [get_elem_shared_loop_fwd_def] = DefineDiv ‘
-  (** [loops::get_elem_shared] *)
+  (** [loops::get_elem_shared]: loop 0: forward function *)
   get_elem_shared_loop_fwd (x : usize) (ls : usize list_t) : usize result =
     (case ls of
     | ListCons y tl =>
@@ -221,7 +223,7 @@ val [get_elem_shared_loop_fwd_def] = DefineDiv ‘
 ’
 
 val get_elem_shared_fwd_def = Define ‘
-  (** [loops::get_elem_shared] *)
+  (** [loops::get_elem_shared]: forward function *)
   get_elem_shared_fwd (slots : usize list_t vec) (x : usize) : usize result =
     do
     l <- vec_index_fwd slots (int_to_usize 0);
@@ -230,25 +232,25 @@ val get_elem_shared_fwd_def = Define ‘
 ’
 
 val id_mut_fwd_def = Define ‘
-  (** [loops::id_mut] *)
+  (** [loops::id_mut]: forward function *)
   id_mut_fwd (ls : 't list_t) : 't list_t result =
     Return ls
 ’
 
 val id_mut_back_def = Define ‘
-  (** [loops::id_mut] *)
+  (** [loops::id_mut]: backward function 0 *)
   id_mut_back (ls : 't list_t) (ret : 't list_t) : 't list_t result =
     Return ret
 ’
 
 val id_shared_fwd_def = Define ‘
-  (** [loops::id_shared] *)
+  (** [loops::id_shared]: forward function *)
   id_shared_fwd (ls : 't list_t) : 't list_t result =
     Return ls
 ’
 
 val [list_nth_mut_loop_with_id_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop_with_id] *)
+  (** [loops::list_nth_mut_loop_with_id]: loop 0: forward function *)
   list_nth_mut_loop_with_id_loop_fwd (i : u32) (ls : 't list_t) : 't result =
     (case ls of
     | ListCons x tl =>
@@ -263,7 +265,7 @@ val [list_nth_mut_loop_with_id_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_with_id_fwd_def = Define ‘
-  (** [loops::list_nth_mut_loop_with_id] *)
+  (** [loops::list_nth_mut_loop_with_id]: forward function *)
   list_nth_mut_loop_with_id_fwd (ls : 't list_t) (i : u32) : 't result =
     do
     ls0 <- id_mut_fwd ls;
@@ -272,7 +274,7 @@ val list_nth_mut_loop_with_id_fwd_def = Define ‘
 ’
 
 val [list_nth_mut_loop_with_id_loop_back_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop_with_id] *)
+  (** [loops::list_nth_mut_loop_with_id]: loop 0: backward function 0 *)
   list_nth_mut_loop_with_id_loop_back
     (i : u32) (ls : 't list_t) (ret : 't) : 't list_t result =
     (case ls of
@@ -289,7 +291,7 @@ val [list_nth_mut_loop_with_id_loop_back_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_with_id_back_def = Define ‘
-  (** [loops::list_nth_mut_loop_with_id] *)
+  (** [loops::list_nth_mut_loop_with_id]: backward function 0 *)
   list_nth_mut_loop_with_id_back
     (ls : 't list_t) (i : u32) (ret : 't) : 't list_t result =
     do
@@ -300,7 +302,7 @@ val list_nth_mut_loop_with_id_back_def = Define ‘
 ’
 
 val [list_nth_shared_loop_with_id_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_shared_loop_with_id] *)
+  (** [loops::list_nth_shared_loop_with_id]: loop 0: forward function *)
   list_nth_shared_loop_with_id_loop_fwd
     (i : u32) (ls : 't list_t) : 't result =
     (case ls of
@@ -316,7 +318,7 @@ val [list_nth_shared_loop_with_id_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_shared_loop_with_id_fwd_def = Define ‘
-  (** [loops::list_nth_shared_loop_with_id] *)
+  (** [loops::list_nth_shared_loop_with_id]: forward function *)
   list_nth_shared_loop_with_id_fwd (ls : 't list_t) (i : u32) : 't result =
     do
     ls0 <- id_shared_fwd ls;
@@ -325,7 +327,7 @@ val list_nth_shared_loop_with_id_fwd_def = Define ‘
 ’
 
 val [list_nth_mut_loop_pair_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop_pair] *)
+  (** [loops::list_nth_mut_loop_pair]: loop 0: forward function *)
   list_nth_mut_loop_pair_loop_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     (case ls0 of
@@ -344,14 +346,14 @@ val [list_nth_mut_loop_pair_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_pair_fwd_def = Define ‘
-  (** [loops::list_nth_mut_loop_pair] *)
+  (** [loops::list_nth_mut_loop_pair]: forward function *)
   list_nth_mut_loop_pair_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     list_nth_mut_loop_pair_loop_fwd ls0 ls1 i
 ’
 
 val [list_nth_mut_loop_pair_loop_back'a_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop_pair] *)
+  (** [loops::list_nth_mut_loop_pair]: loop 0: backward function 0 *)
   list_nth_mut_loop_pair_loop_back'a
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -373,7 +375,7 @@ val [list_nth_mut_loop_pair_loop_back'a_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_pair_back'a_def = Define ‘
-  (** [loops::list_nth_mut_loop_pair] *)
+  (** [loops::list_nth_mut_loop_pair]: backward function 0 *)
   list_nth_mut_loop_pair_back'a
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -382,7 +384,7 @@ val list_nth_mut_loop_pair_back'a_def = Define ‘
 ’
 
 val [list_nth_mut_loop_pair_loop_back'b_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop_pair] *)
+  (** [loops::list_nth_mut_loop_pair]: loop 0: backward function 1 *)
   list_nth_mut_loop_pair_loop_back'b
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -404,7 +406,7 @@ val [list_nth_mut_loop_pair_loop_back'b_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_pair_back'b_def = Define ‘
-  (** [loops::list_nth_mut_loop_pair] *)
+  (** [loops::list_nth_mut_loop_pair]: backward function 1 *)
   list_nth_mut_loop_pair_back'b
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -413,7 +415,7 @@ val list_nth_mut_loop_pair_back'b_def = Define ‘
 ’
 
 val [list_nth_shared_loop_pair_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_shared_loop_pair] *)
+  (** [loops::list_nth_shared_loop_pair]: loop 0: forward function *)
   list_nth_shared_loop_pair_loop_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     (case ls0 of
@@ -432,14 +434,14 @@ val [list_nth_shared_loop_pair_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_shared_loop_pair_fwd_def = Define ‘
-  (** [loops::list_nth_shared_loop_pair] *)
+  (** [loops::list_nth_shared_loop_pair]: forward function *)
   list_nth_shared_loop_pair_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     list_nth_shared_loop_pair_loop_fwd ls0 ls1 i
 ’
 
 val [list_nth_mut_loop_pair_merge_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop_pair_merge] *)
+  (** [loops::list_nth_mut_loop_pair_merge]: loop 0: forward function *)
   list_nth_mut_loop_pair_merge_loop_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     (case ls0 of
@@ -458,14 +460,14 @@ val [list_nth_mut_loop_pair_merge_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_pair_merge_fwd_def = Define ‘
-  (** [loops::list_nth_mut_loop_pair_merge] *)
+  (** [loops::list_nth_mut_loop_pair_merge]: forward function *)
   list_nth_mut_loop_pair_merge_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     list_nth_mut_loop_pair_merge_loop_fwd ls0 ls1 i
 ’
 
 val [list_nth_mut_loop_pair_merge_loop_back_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_loop_pair_merge] *)
+  (** [loops::list_nth_mut_loop_pair_merge]: loop 0: backward function 0 *)
   list_nth_mut_loop_pair_merge_loop_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : ('t # 't)) :
     ('t list_t # 't list_t) result
@@ -488,7 +490,7 @@ val [list_nth_mut_loop_pair_merge_loop_back_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_loop_pair_merge_back_def = Define ‘
-  (** [loops::list_nth_mut_loop_pair_merge] *)
+  (** [loops::list_nth_mut_loop_pair_merge]: backward function 0 *)
   list_nth_mut_loop_pair_merge_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : ('t # 't)) :
     ('t list_t # 't list_t) result
@@ -497,7 +499,7 @@ val list_nth_mut_loop_pair_merge_back_def = Define ‘
 ’
 
 val [list_nth_shared_loop_pair_merge_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_shared_loop_pair_merge] *)
+  (** [loops::list_nth_shared_loop_pair_merge]: loop 0: forward function *)
   list_nth_shared_loop_pair_merge_loop_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     (case ls0 of
@@ -516,14 +518,14 @@ val [list_nth_shared_loop_pair_merge_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_shared_loop_pair_merge_fwd_def = Define ‘
-  (** [loops::list_nth_shared_loop_pair_merge] *)
+  (** [loops::list_nth_shared_loop_pair_merge]: forward function *)
   list_nth_shared_loop_pair_merge_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     list_nth_shared_loop_pair_merge_loop_fwd ls0 ls1 i
 ’
 
 val [list_nth_mut_shared_loop_pair_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_shared_loop_pair] *)
+  (** [loops::list_nth_mut_shared_loop_pair]: loop 0: forward function *)
   list_nth_mut_shared_loop_pair_loop_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     (case ls0 of
@@ -542,14 +544,14 @@ val [list_nth_mut_shared_loop_pair_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_shared_loop_pair_fwd_def = Define ‘
-  (** [loops::list_nth_mut_shared_loop_pair] *)
+  (** [loops::list_nth_mut_shared_loop_pair]: forward function *)
   list_nth_mut_shared_loop_pair_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     list_nth_mut_shared_loop_pair_loop_fwd ls0 ls1 i
 ’
 
 val [list_nth_mut_shared_loop_pair_loop_back_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_shared_loop_pair] *)
+  (** [loops::list_nth_mut_shared_loop_pair]: loop 0: backward function 0 *)
   list_nth_mut_shared_loop_pair_loop_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -571,7 +573,7 @@ val [list_nth_mut_shared_loop_pair_loop_back_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_shared_loop_pair_back_def = Define ‘
-  (** [loops::list_nth_mut_shared_loop_pair] *)
+  (** [loops::list_nth_mut_shared_loop_pair]: backward function 0 *)
   list_nth_mut_shared_loop_pair_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -580,7 +582,7 @@ val list_nth_mut_shared_loop_pair_back_def = Define ‘
 ’
 
 val [list_nth_mut_shared_loop_pair_merge_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_shared_loop_pair_merge] *)
+  (** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0: forward function *)
   list_nth_mut_shared_loop_pair_merge_loop_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     (case ls0 of
@@ -599,14 +601,14 @@ val [list_nth_mut_shared_loop_pair_merge_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_shared_loop_pair_merge_fwd_def = Define ‘
-  (** [loops::list_nth_mut_shared_loop_pair_merge] *)
+  (** [loops::list_nth_mut_shared_loop_pair_merge]: forward function *)
   list_nth_mut_shared_loop_pair_merge_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     list_nth_mut_shared_loop_pair_merge_loop_fwd ls0 ls1 i
 ’
 
 val [list_nth_mut_shared_loop_pair_merge_loop_back_def] = DefineDiv ‘
-  (** [loops::list_nth_mut_shared_loop_pair_merge] *)
+  (** [loops::list_nth_mut_shared_loop_pair_merge]: loop 0: backward function 0 *)
   list_nth_mut_shared_loop_pair_merge_loop_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -628,7 +630,7 @@ val [list_nth_mut_shared_loop_pair_merge_loop_back_def] = DefineDiv ‘
 ’
 
 val list_nth_mut_shared_loop_pair_merge_back_def = Define ‘
-  (** [loops::list_nth_mut_shared_loop_pair_merge] *)
+  (** [loops::list_nth_mut_shared_loop_pair_merge]: backward function 0 *)
   list_nth_mut_shared_loop_pair_merge_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -637,7 +639,7 @@ val list_nth_mut_shared_loop_pair_merge_back_def = Define ‘
 ’
 
 val [list_nth_shared_mut_loop_pair_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_shared_mut_loop_pair] *)
+  (** [loops::list_nth_shared_mut_loop_pair]: loop 0: forward function *)
   list_nth_shared_mut_loop_pair_loop_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     (case ls0 of
@@ -656,14 +658,14 @@ val [list_nth_shared_mut_loop_pair_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_shared_mut_loop_pair_fwd_def = Define ‘
-  (** [loops::list_nth_shared_mut_loop_pair] *)
+  (** [loops::list_nth_shared_mut_loop_pair]: forward function *)
   list_nth_shared_mut_loop_pair_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     list_nth_shared_mut_loop_pair_loop_fwd ls0 ls1 i
 ’
 
 val [list_nth_shared_mut_loop_pair_loop_back_def] = DefineDiv ‘
-  (** [loops::list_nth_shared_mut_loop_pair] *)
+  (** [loops::list_nth_shared_mut_loop_pair]: loop 0: backward function 1 *)
   list_nth_shared_mut_loop_pair_loop_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -685,7 +687,7 @@ val [list_nth_shared_mut_loop_pair_loop_back_def] = DefineDiv ‘
 ’
 
 val list_nth_shared_mut_loop_pair_back_def = Define ‘
-  (** [loops::list_nth_shared_mut_loop_pair] *)
+  (** [loops::list_nth_shared_mut_loop_pair]: backward function 1 *)
   list_nth_shared_mut_loop_pair_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -694,7 +696,7 @@ val list_nth_shared_mut_loop_pair_back_def = Define ‘
 ’
 
 val [list_nth_shared_mut_loop_pair_merge_loop_fwd_def] = DefineDiv ‘
-  (** [loops::list_nth_shared_mut_loop_pair_merge] *)
+  (** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0: forward function *)
   list_nth_shared_mut_loop_pair_merge_loop_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     (case ls0 of
@@ -713,14 +715,14 @@ val [list_nth_shared_mut_loop_pair_merge_loop_fwd_def] = DefineDiv ‘
 ’
 
 val list_nth_shared_mut_loop_pair_merge_fwd_def = Define ‘
-  (** [loops::list_nth_shared_mut_loop_pair_merge] *)
+  (** [loops::list_nth_shared_mut_loop_pair_merge]: forward function *)
   list_nth_shared_mut_loop_pair_merge_fwd
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) : ('t # 't) result =
     list_nth_shared_mut_loop_pair_merge_loop_fwd ls0 ls1 i
 ’
 
 val [list_nth_shared_mut_loop_pair_merge_loop_back_def] = DefineDiv ‘
-  (** [loops::list_nth_shared_mut_loop_pair_merge] *)
+  (** [loops::list_nth_shared_mut_loop_pair_merge]: loop 0: backward function 0 *)
   list_nth_shared_mut_loop_pair_merge_loop_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result
@@ -742,7 +744,7 @@ val [list_nth_shared_mut_loop_pair_merge_loop_back_def] = DefineDiv ‘
 ’
 
 val list_nth_shared_mut_loop_pair_merge_back_def = Define ‘
-  (** [loops::list_nth_shared_mut_loop_pair_merge] *)
+  (** [loops::list_nth_shared_mut_loop_pair_merge]: backward function 0 *)
   list_nth_shared_mut_loop_pair_merge_back
     (ls0 : 't list_t) (ls1 : 't list_t) (i : u32) (ret : 't) :
     't list_t result

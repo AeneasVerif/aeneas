@@ -22,7 +22,7 @@ Definition x1_c : u32 := x1_body%global.
 Definition x2_body : result u32 := Return 3%u32.
 Definition x2_c : u32 := x2_body%global.
 
-(** [constants::incr] *)
+(** [constants::incr]: forward function *)
 Definition incr_fwd (n : u32) : result u32 :=
   u32_add n 1%u32.
 
@@ -30,7 +30,7 @@ Definition incr_fwd (n : u32) : result u32 :=
 Definition x3_body : result u32 := incr_fwd 32%u32.
 Definition x3_c : u32 := x3_body%global.
 
-(** [constants::mk_pair0] *)
+(** [constants::mk_pair0]: forward function *)
 Definition mk_pair0_fwd (x : u32) (y : u32) : result (u32 * u32) :=
   Return (x, y)
 .
@@ -42,7 +42,7 @@ Arguments mkPair_t {T1} {T2} _ _.
 Arguments Pair_x {T1} {T2}.
 Arguments Pair_y {T1} {T2}.
 
-(** [constants::mk_pair1] *)
+(** [constants::mk_pair1]: forward function *)
 Definition mk_pair1_fwd (x : u32) (y : u32) : result (Pair_t u32 u32) :=
   Return {| Pair_x := x; Pair_y := y |}
 .
@@ -71,7 +71,7 @@ Record Wrap_t (T : Type) := mkWrap_t { Wrap_val : T; }.
 Arguments mkWrap_t {T} _.
 Arguments Wrap_val {T}.
 
-(** [constants::Wrap::{0}::new] *)
+(** [constants::Wrap::{0}::new]: forward function *)
 Definition wrap_new_fwd (T : Type) (val : T) : result (Wrap_t T) :=
   Return {| Wrap_val := val |}
 .
@@ -80,7 +80,7 @@ Definition wrap_new_fwd (T : Type) (val : T) : result (Wrap_t T) :=
 Definition y_body : result (Wrap_t i32) := wrap_new_fwd i32 2%i32.
 Definition y_c : Wrap_t i32 := y_body%global.
 
-(** [constants::unwrap_y] *)
+(** [constants::unwrap_y]: forward function *)
 Definition unwrap_y_fwd : result i32 :=
   Return y_c.(Wrap_val).
 
@@ -92,11 +92,11 @@ Definition yval_c : i32 := yval_body%global.
 Definition get_z1_z1_body : result i32 := Return 3%i32.
 Definition get_z1_z1_c : i32 := get_z1_z1_body%global.
 
-(** [constants::get_z1] *)
+(** [constants::get_z1]: forward function *)
 Definition get_z1_fwd : result i32 :=
   Return get_z1_z1_c.
 
-(** [constants::add] *)
+(** [constants::add]: forward function *)
 Definition add_fwd (a : i32) (b : i32) : result i32 :=
   i32_add a b.
 
@@ -112,7 +112,7 @@ Definition q2_c : i32 := q2_body%global.
 Definition q3_body : result i32 := add_fwd q2_c 3%i32.
 Definition q3_c : i32 := q3_body%global.
 
-(** [constants::get_z2] *)
+(** [constants::get_z2]: forward function *)
 Definition get_z2_fwd : result i32 :=
   i <- get_z1_fwd; i0 <- add_fwd i q3_c; add_fwd q1_c i0
 .

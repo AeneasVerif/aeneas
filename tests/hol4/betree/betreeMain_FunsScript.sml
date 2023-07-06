@@ -7,7 +7,7 @@ val _ = new_theory "betreeMain_Funs"
 
 
 val betree_load_internal_node_fwd_def = Define ‘
-  (** [betree_main::betree::load_internal_node] *)
+  (** [betree_main::betree::load_internal_node]: forward function *)
   betree_load_internal_node_fwd
     (id : u64) (st : state) :
     (state # (u64 # betree_message_t) betree_list_t) result
@@ -16,7 +16,7 @@ val betree_load_internal_node_fwd_def = Define ‘
 ’
 
 val betree_store_internal_node_fwd_def = Define ‘
-  (** [betree_main::betree::store_internal_node] *)
+  (** [betree_main::betree::store_internal_node]: forward function *)
   betree_store_internal_node_fwd
     (id : u64) (content : (u64 # betree_message_t) betree_list_t) (st : state)
     :
@@ -29,14 +29,14 @@ val betree_store_internal_node_fwd_def = Define ‘
 ’
 
 val betree_load_leaf_node_fwd_def = Define ‘
-  (** [betree_main::betree::load_leaf_node] *)
+  (** [betree_main::betree::load_leaf_node]: forward function *)
   betree_load_leaf_node_fwd
     (id : u64) (st : state) : (state # (u64 # u64) betree_list_t) result =
     betree_utils_load_leaf_node_fwd id st
 ’
 
 val betree_store_leaf_node_fwd_def = Define ‘
-  (** [betree_main::betree::store_leaf_node] *)
+  (** [betree_main::betree::store_leaf_node]: forward function *)
   betree_store_leaf_node_fwd
     (id : u64) (content : (u64 # u64) betree_list_t) (st : state) :
     (state # unit) result
@@ -48,7 +48,7 @@ val betree_store_leaf_node_fwd_def = Define ‘
 ’
 
 val betree_fresh_node_id_fwd_def = Define ‘
-  (** [betree_main::betree::fresh_node_id] *)
+  (** [betree_main::betree::fresh_node_id]: forward function *)
   betree_fresh_node_id_fwd (counter : u64) : u64 result =
     do
     _ <- u64_add counter (int_to_u64 1);
@@ -57,19 +57,19 @@ val betree_fresh_node_id_fwd_def = Define ‘
 ’
 
 val betree_fresh_node_id_back_def = Define ‘
-  (** [betree_main::betree::fresh_node_id] *)
+  (** [betree_main::betree::fresh_node_id]: backward function 0 *)
   betree_fresh_node_id_back (counter : u64) : u64 result =
     u64_add counter (int_to_u64 1)
 ’
 
 val betree_node_id_counter_new_fwd_def = Define ‘
-  (** [betree_main::betree::NodeIdCounter::{0}::new] *)
+  (** [betree_main::betree::NodeIdCounter::{0}::new]: forward function *)
   betree_node_id_counter_new_fwd : betree_node_id_counter_t result =
     Return (<| betree_node_id_counter_next_node_id := (int_to_u64 0) |>)
 ’
 
 val betree_node_id_counter_fresh_id_fwd_def = Define ‘
-  (** [betree_main::betree::NodeIdCounter::{0}::fresh_id] *)
+  (** [betree_main::betree::NodeIdCounter::{0}::fresh_id]: forward function *)
   betree_node_id_counter_fresh_id_fwd
     (self : betree_node_id_counter_t) : u64 result =
     do
@@ -79,7 +79,7 @@ val betree_node_id_counter_fresh_id_fwd_def = Define ‘
 ’
 
 val betree_node_id_counter_fresh_id_back_def = Define ‘
-  (** [betree_main::betree::NodeIdCounter::{0}::fresh_id] *)
+  (** [betree_main::betree::NodeIdCounter::{0}::fresh_id]: backward function 0 *)
   betree_node_id_counter_fresh_id_back
     (self : betree_node_id_counter_t) : betree_node_id_counter_t result =
     do
@@ -97,7 +97,7 @@ Definition core_num_u64_max_c_def:
 End
 
 val betree_upsert_update_fwd_def = Define ‘
-  (** [betree_main::betree::upsert_update] *)
+  (** [betree_main::betree::upsert_update]: forward function *)
   betree_upsert_update_fwd
     (prev : u64 option) (st : betree_upsert_fun_state_t) : u64 result =
     (case prev of
@@ -117,7 +117,7 @@ val betree_upsert_update_fwd_def = Define ‘
 ’
 
 val [betree_list_len_fwd_def] = DefineDiv ‘
-  (** [betree_main::betree::List::{1}::len] *)
+  (** [betree_main::betree::List::{1}::len]: forward function *)
   betree_list_len_fwd (self : 't betree_list_t) : u64 result =
     (case self of
     | BetreeListCons t tl =>
@@ -129,7 +129,7 @@ val [betree_list_len_fwd_def] = DefineDiv ‘
 ’
 
 val [betree_list_split_at_fwd_def] = DefineDiv ‘
-  (** [betree_main::betree::List::{1}::split_at] *)
+  (** [betree_main::betree::List::{1}::split_at]: forward function *)
   betree_list_split_at_fwd
     (self : 't betree_list_t) (n : u64) :
     ('t betree_list_t # 't betree_list_t) result
@@ -148,7 +148,8 @@ val [betree_list_split_at_fwd_def] = DefineDiv ‘
 ’
 
 val betree_list_push_front_fwd_back_def = Define ‘
-  (** [betree_main::betree::List::{1}::push_front] *)
+  (** [betree_main::betree::List::{1}::push_front]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   betree_list_push_front_fwd_back
     (self : 't betree_list_t) (x : 't) : 't betree_list_t result =
     let tl = mem_replace_fwd self BetreeListNil in
@@ -157,7 +158,7 @@ val betree_list_push_front_fwd_back_def = Define ‘
 ’
 
 val betree_list_pop_front_fwd_def = Define ‘
-  (** [betree_main::betree::List::{1}::pop_front] *)
+  (** [betree_main::betree::List::{1}::pop_front]: forward function *)
   betree_list_pop_front_fwd (self : 't betree_list_t) : 't result =
     let ls = mem_replace_fwd self BetreeListNil in
     (case ls of
@@ -166,7 +167,7 @@ val betree_list_pop_front_fwd_def = Define ‘
 ’
 
 val betree_list_pop_front_back_def = Define ‘
-  (** [betree_main::betree::List::{1}::pop_front] *)
+  (** [betree_main::betree::List::{1}::pop_front]: backward function 0 *)
   betree_list_pop_front_back
     (self : 't betree_list_t) : 't betree_list_t result =
     let ls = mem_replace_fwd self BetreeListNil in
@@ -176,7 +177,7 @@ val betree_list_pop_front_back_def = Define ‘
 ’
 
 val betree_list_hd_fwd_def = Define ‘
-  (** [betree_main::betree::List::{1}::hd] *)
+  (** [betree_main::betree::List::{1}::hd]: forward function *)
   betree_list_hd_fwd (self : 't betree_list_t) : 't result =
     (case self of
     | BetreeListCons hd l => Return hd
@@ -184,7 +185,7 @@ val betree_list_hd_fwd_def = Define ‘
 ’
 
 val betree_list_head_has_key_fwd_def = Define ‘
-  (** [betree_main::betree::List::{2}::head_has_key] *)
+  (** [betree_main::betree::List::{2}::head_has_key]: forward function *)
   betree_list_head_has_key_fwd
     (self : (u64 # 't) betree_list_t) (key : u64) : bool result =
     (case self of
@@ -193,7 +194,7 @@ val betree_list_head_has_key_fwd_def = Define ‘
 ’
 
 val [betree_list_partition_at_pivot_fwd_def] = DefineDiv ‘
-  (** [betree_main::betree::List::{2}::partition_at_pivot] *)
+  (** [betree_main::betree::List::{2}::partition_at_pivot]: forward function *)
   betree_list_partition_at_pivot_fwd
     (self : (u64 # 't) betree_list_t) (pivot : u64) :
     ((u64 # 't) betree_list_t # (u64 # 't) betree_list_t) result
@@ -214,7 +215,7 @@ val [betree_list_partition_at_pivot_fwd_def] = DefineDiv ‘
 ’
 
 val betree_leaf_split_fwd_def = Define ‘
-  (** [betree_main::betree::Leaf::{3}::split] *)
+  (** [betree_main::betree::Leaf::{3}::split]: forward function *)
   betree_leaf_split_fwd
     (self : betree_leaf_t) (content : (u64 # u64) betree_list_t)
     (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
@@ -256,7 +257,7 @@ val betree_leaf_split_fwd_def = Define ‘
 ’
 
 val betree_leaf_split_back_def = Define ‘
-  (** [betree_main::betree::Leaf::{3}::split] *)
+  (** [betree_main::betree::Leaf::{3}::split]: backward function 2 *)
   betree_leaf_split_back
     (self : betree_leaf_t) (content : (u64 # u64) betree_list_t)
     (params : betree_params_t) (node_id_cnt : betree_node_id_counter_t)
@@ -279,7 +280,7 @@ val betree_leaf_split_back_def = Define ‘
 ’
 
 val [betree_node_lookup_in_bindings_fwd_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::lookup_in_bindings] *)
+  (** [betree_main::betree::Node::{5}::lookup_in_bindings]: forward function *)
   betree_node_lookup_in_bindings_fwd
     (key : u64) (bindings : (u64 # u64) betree_list_t) : u64 option result =
     (case bindings of
@@ -295,7 +296,7 @@ val [betree_node_lookup_in_bindings_fwd_def] = DefineDiv ‘
 ’
 
 val [betree_node_lookup_first_message_for_key_fwd_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::lookup_first_message_for_key] *)
+  (** [betree_main::betree::Node::{5}::lookup_first_message_for_key]: forward function *)
   betree_node_lookup_first_message_for_key_fwd
     (key : u64) (msgs : (u64 # betree_message_t) betree_list_t) :
     (u64 # betree_message_t) betree_list_t result
@@ -310,7 +311,7 @@ val [betree_node_lookup_first_message_for_key_fwd_def] = DefineDiv ‘
 ’
 
 val [betree_node_lookup_first_message_for_key_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::lookup_first_message_for_key] *)
+  (** [betree_main::betree::Node::{5}::lookup_first_message_for_key]: backward function 0 *)
   betree_node_lookup_first_message_for_key_back
     (key : u64) (msgs : (u64 # betree_message_t) betree_list_t)
     (ret : (u64 # betree_message_t) betree_list_t) :
@@ -331,7 +332,7 @@ val [betree_node_lookup_first_message_for_key_back_def] = DefineDiv ‘
 ’
 
 val [betree_node_apply_upserts_fwd_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::apply_upserts] *)
+  (** [betree_main::betree::Node::{5}::apply_upserts]: forward function *)
   betree_node_apply_upserts_fwd
     (msgs : (u64 # betree_message_t) betree_list_t) (prev : u64 option)
     (key : u64) (st : state) :
@@ -364,7 +365,7 @@ val [betree_node_apply_upserts_fwd_def] = DefineDiv ‘
 ’
 
 val [betree_node_apply_upserts_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::apply_upserts] *)
+  (** [betree_main::betree::Node::{5}::apply_upserts]: backward function 0 *)
   betree_node_apply_upserts_back
     (msgs : (u64 # betree_message_t) betree_list_t) (prev : u64 option)
     (key : u64) (st : state) :
@@ -396,7 +397,7 @@ val [betree_node_apply_upserts_back_def] = DefineDiv ‘
 ’
 
 val [betree_node_lookup_fwd_def, betree_node_lookup_back_def, betree_internal_lookup_in_children_fwd_def, betree_internal_lookup_in_children_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::lookup] *)
+  (** [betree_main::betree::Node::{5}::lookup]: forward function *)
   (betree_node_lookup_fwd
      (self : betree_node_t) (key : u64) (st : state) :
      (state # u64 option) result
@@ -466,7 +467,7 @@ val [betree_node_lookup_fwd_def, betree_node_lookup_back_def, betree_internal_lo
       od))
   /\
   
-  (** [betree_main::betree::Node::{5}::lookup] *)
+  (** [betree_main::betree::Node::{5}::lookup]: backward function 0 *)
   (betree_node_lookup_back
      (self : betree_node_t) (key : u64) (st : state) : betree_node_t result =
     (case self of
@@ -534,7 +535,7 @@ val [betree_node_lookup_fwd_def, betree_node_lookup_back_def, betree_internal_lo
       od))
   /\
   
-  (** [betree_main::betree::Internal::{4}::lookup_in_children] *)
+  (** [betree_main::betree::Internal::{4}::lookup_in_children]: forward function *)
   (betree_internal_lookup_in_children_fwd
      (self : betree_internal_t) (key : u64) (st : state) :
      (state # u64 option) result
@@ -544,7 +545,7 @@ val [betree_node_lookup_fwd_def, betree_node_lookup_back_def, betree_internal_lo
     else betree_node_lookup_fwd self.betree_internal_right key st)
   /\
   
-  (** [betree_main::betree::Internal::{4}::lookup_in_children] *)
+  (** [betree_main::betree::Internal::{4}::lookup_in_children]: backward function 0 *)
   betree_internal_lookup_in_children_back
     (self : betree_internal_t) (key : u64) (st : state) :
     betree_internal_t result
@@ -563,7 +564,7 @@ val [betree_node_lookup_fwd_def, betree_node_lookup_back_def, betree_internal_lo
 ’
 
 val [betree_node_lookup_mut_in_bindings_fwd_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings] *)
+  (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings]: forward function *)
   betree_node_lookup_mut_in_bindings_fwd
     (key : u64) (bindings : (u64 # u64) betree_list_t) :
     (u64 # u64) betree_list_t result
@@ -578,7 +579,7 @@ val [betree_node_lookup_mut_in_bindings_fwd_def] = DefineDiv ‘
 ’
 
 val [betree_node_lookup_mut_in_bindings_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings] *)
+  (** [betree_main::betree::Node::{5}::lookup_mut_in_bindings]: backward function 0 *)
   betree_node_lookup_mut_in_bindings_back
     (key : u64) (bindings : (u64 # u64) betree_list_t)
     (ret : (u64 # u64) betree_list_t) :
@@ -598,7 +599,8 @@ val [betree_node_lookup_mut_in_bindings_back_def] = DefineDiv ‘
 ’
 
 val betree_node_apply_to_leaf_fwd_back_def = Define ‘
-  (** [betree_main::betree::Node::{5}::apply_to_leaf] *)
+  (** [betree_main::betree::Node::{5}::apply_to_leaf]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   betree_node_apply_to_leaf_fwd_back
     (bindings : (u64 # u64) betree_list_t) (key : u64)
     (new_msg : betree_message_t) :
@@ -651,7 +653,8 @@ val betree_node_apply_to_leaf_fwd_back_def = Define ‘
 ’
 
 val [betree_node_apply_messages_to_leaf_fwd_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::apply_messages_to_leaf] *)
+  (** [betree_main::betree::Node::{5}::apply_messages_to_leaf]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   betree_node_apply_messages_to_leaf_fwd_back
     (bindings : (u64 # u64) betree_list_t)
     (new_msgs : (u64 # betree_message_t) betree_list_t) :
@@ -668,7 +671,8 @@ val [betree_node_apply_messages_to_leaf_fwd_back_def] = DefineDiv ‘
 ’
 
 val [betree_node_filter_messages_for_key_fwd_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::filter_messages_for_key] *)
+  (** [betree_main::betree::Node::{5}::filter_messages_for_key]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   betree_node_filter_messages_for_key_fwd_back
     (key : u64) (msgs : (u64 # betree_message_t) betree_list_t) :
     (u64 # betree_message_t) betree_list_t result
@@ -687,7 +691,7 @@ val [betree_node_filter_messages_for_key_fwd_back_def] = DefineDiv ‘
 ’
 
 val [betree_node_lookup_first_message_after_key_fwd_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::lookup_first_message_after_key] *)
+  (** [betree_main::betree::Node::{5}::lookup_first_message_after_key]: forward function *)
   betree_node_lookup_first_message_after_key_fwd
     (key : u64) (msgs : (u64 # betree_message_t) betree_list_t) :
     (u64 # betree_message_t) betree_list_t result
@@ -702,7 +706,7 @@ val [betree_node_lookup_first_message_after_key_fwd_def] = DefineDiv ‘
 ’
 
 val [betree_node_lookup_first_message_after_key_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::lookup_first_message_after_key] *)
+  (** [betree_main::betree::Node::{5}::lookup_first_message_after_key]: backward function 0 *)
   betree_node_lookup_first_message_after_key_back
     (key : u64) (msgs : (u64 # betree_message_t) betree_list_t)
     (ret : (u64 # betree_message_t) betree_list_t) :
@@ -723,7 +727,8 @@ val [betree_node_lookup_first_message_after_key_back_def] = DefineDiv ‘
 ’
 
 val betree_node_apply_to_internal_fwd_back_def = Define ‘
-  (** [betree_main::betree::Node::{5}::apply_to_internal] *)
+  (** [betree_main::betree::Node::{5}::apply_to_internal]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   betree_node_apply_to_internal_fwd_back
     (msgs : (u64 # betree_message_t) betree_list_t) (key : u64)
     (new_msg : betree_message_t) :
@@ -789,7 +794,8 @@ val betree_node_apply_to_internal_fwd_back_def = Define ‘
 ’
 
 val [betree_node_apply_messages_to_internal_fwd_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::apply_messages_to_internal] *)
+  (** [betree_main::betree::Node::{5}::apply_messages_to_internal]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   betree_node_apply_messages_to_internal_fwd_back
     (msgs : (u64 # betree_message_t) betree_list_t)
     (new_msgs : (u64 # betree_message_t) betree_list_t) :
@@ -806,7 +812,7 @@ val [betree_node_apply_messages_to_internal_fwd_back_def] = DefineDiv ‘
 ’
 
 val [betree_node_apply_messages_fwd_def, betree_node_apply_messages_back_def, betree_internal_flush_fwd_def, betree_internal_flush_back_def] = DefineDiv ‘
-  (** [betree_main::betree::Node::{5}::apply_messages] *)
+  (** [betree_main::betree::Node::{5}::apply_messages]: forward function *)
   (betree_node_apply_messages_fwd
      (self : betree_node_t) (params : betree_params_t)
      (node_id_cnt : betree_node_id_counter_t)
@@ -861,7 +867,7 @@ val [betree_node_apply_messages_fwd_def, betree_node_apply_messages_back_def, be
       od))
   /\
   
-  (** [betree_main::betree::Node::{5}::apply_messages] *)
+  (** [betree_main::betree::Node::{5}::apply_messages]: backward function 0 *)
   (betree_node_apply_messages_back
      (self : betree_node_t) (params : betree_params_t)
      (node_id_cnt : betree_node_id_counter_t)
@@ -918,7 +924,7 @@ val [betree_node_apply_messages_fwd_def, betree_node_apply_messages_back_def, be
       od))
   /\
   
-  (** [betree_main::betree::Internal::{4}::flush] *)
+  (** [betree_main::betree::Internal::{4}::flush]: forward function *)
   (betree_internal_flush_fwd
      (self : betree_internal_t) (params : betree_params_t)
      (node_id_cnt : betree_node_id_counter_t)
@@ -967,7 +973,7 @@ val [betree_node_apply_messages_fwd_def, betree_node_apply_messages_back_def, be
     od)
   /\
   
-  (** [betree_main::betree::Internal::{4}::flush] *)
+  (** [betree_main::betree::Internal::{4}::flush]: backward function 0 *)
   betree_internal_flush_back
     (self : betree_internal_t) (params : betree_params_t)
     (node_id_cnt : betree_node_id_counter_t)
@@ -1016,7 +1022,7 @@ val [betree_node_apply_messages_fwd_def, betree_node_apply_messages_back_def, be
 ’
 
 val betree_node_apply_fwd_def = Define ‘
-  (** [betree_main::betree::Node::{5}::apply] *)
+  (** [betree_main::betree::Node::{5}::apply]: forward function *)
   betree_node_apply_fwd
     (self : betree_node_t) (params : betree_params_t)
     (node_id_cnt : betree_node_id_counter_t) (key : u64)
@@ -1036,7 +1042,7 @@ val betree_node_apply_fwd_def = Define ‘
 ’
 
 val betree_node_apply_back_def = Define ‘
-  (** [betree_main::betree::Node::{5}::apply] *)
+  (** [betree_main::betree::Node::{5}::apply]: backward function 0 *)
   betree_node_apply_back
     (self : betree_node_t) (params : betree_params_t)
     (node_id_cnt : betree_node_id_counter_t) (key : u64)
@@ -1049,7 +1055,7 @@ val betree_node_apply_back_def = Define ‘
 ’
 
 val betree_be_tree_new_fwd_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::new] *)
+  (** [betree_main::betree::BeTree::{6}::new]: forward function *)
   betree_be_tree_new_fwd
     (min_flush_size : u64) (split_size : u64) (st : state) :
     (state # betree_be_tree_t) result
@@ -1075,7 +1081,7 @@ val betree_be_tree_new_fwd_def = Define ‘
 ’
 
 val betree_be_tree_apply_fwd_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::apply] *)
+  (** [betree_main::betree::BeTree::{6}::apply]: forward function *)
   betree_be_tree_apply_fwd
     (self : betree_be_tree_t) (key : u64) (msg : betree_message_t) (st : state)
     :
@@ -1093,7 +1099,7 @@ val betree_be_tree_apply_fwd_def = Define ‘
 ’
 
 val betree_be_tree_apply_back_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::apply] *)
+  (** [betree_main::betree::BeTree::{6}::apply]: backward function 0 *)
   betree_be_tree_apply_back
     (self : betree_be_tree_t) (key : u64) (msg : betree_message_t) (st : state)
     :
@@ -1113,7 +1119,7 @@ val betree_be_tree_apply_back_def = Define ‘
 ’
 
 val betree_be_tree_insert_fwd_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::insert] *)
+  (** [betree_main::betree::BeTree::{6}::insert]: forward function *)
   betree_be_tree_insert_fwd
     (self : betree_be_tree_t) (key : u64) (value : u64) (st : state) :
     (state # unit) result
@@ -1127,7 +1133,7 @@ val betree_be_tree_insert_fwd_def = Define ‘
 ’
 
 val betree_be_tree_insert_back_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::insert] *)
+  (** [betree_main::betree::BeTree::{6}::insert]: backward function 0 *)
   betree_be_tree_insert_back
     (self : betree_be_tree_t) (key : u64) (value : u64) (st : state) :
     betree_be_tree_t result
@@ -1136,7 +1142,7 @@ val betree_be_tree_insert_back_def = Define ‘
 ’
 
 val betree_be_tree_delete_fwd_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::delete] *)
+  (** [betree_main::betree::BeTree::{6}::delete]: forward function *)
   betree_be_tree_delete_fwd
     (self : betree_be_tree_t) (key : u64) (st : state) :
     (state # unit) result
@@ -1149,7 +1155,7 @@ val betree_be_tree_delete_fwd_def = Define ‘
 ’
 
 val betree_be_tree_delete_back_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::delete] *)
+  (** [betree_main::betree::BeTree::{6}::delete]: backward function 0 *)
   betree_be_tree_delete_back
     (self : betree_be_tree_t) (key : u64) (st : state) :
     betree_be_tree_t result
@@ -1158,7 +1164,7 @@ val betree_be_tree_delete_back_def = Define ‘
 ’
 
 val betree_be_tree_upsert_fwd_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::upsert] *)
+  (** [betree_main::betree::BeTree::{6}::upsert]: forward function *)
   betree_be_tree_upsert_fwd
     (self : betree_be_tree_t) (key : u64) (upd : betree_upsert_fun_state_t)
     (st : state) :
@@ -1172,7 +1178,7 @@ val betree_be_tree_upsert_fwd_def = Define ‘
 ’
 
 val betree_be_tree_upsert_back_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::upsert] *)
+  (** [betree_main::betree::BeTree::{6}::upsert]: backward function 0 *)
   betree_be_tree_upsert_back
     (self : betree_be_tree_t) (key : u64) (upd : betree_upsert_fun_state_t)
     (st : state) :
@@ -1182,7 +1188,7 @@ val betree_be_tree_upsert_back_def = Define ‘
 ’
 
 val betree_be_tree_lookup_fwd_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::lookup] *)
+  (** [betree_main::betree::BeTree::{6}::lookup]: forward function *)
   betree_be_tree_lookup_fwd
     (self : betree_be_tree_t) (key : u64) (st : state) :
     (state # u64 option) result
@@ -1191,7 +1197,7 @@ val betree_be_tree_lookup_fwd_def = Define ‘
 ’
 
 val betree_be_tree_lookup_back_def = Define ‘
-  (** [betree_main::betree::BeTree::{6}::lookup] *)
+  (** [betree_main::betree::BeTree::{6}::lookup]: backward function 0 *)
   betree_be_tree_lookup_back
     (self : betree_be_tree_t) (key : u64) (st : state) :
     betree_be_tree_t result
@@ -1203,7 +1209,7 @@ val betree_be_tree_lookup_back_def = Define ‘
 ’
 
 val main_fwd_def = Define ‘
-  (** [betree_main::main] *)
+  (** [betree_main::main]: forward function *)
   main_fwd : unit result =
     Return ()
 ’

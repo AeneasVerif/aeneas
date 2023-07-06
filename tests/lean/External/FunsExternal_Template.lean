@@ -6,23 +6,22 @@ import External.Types
 open Primitives
 open external
 
-/- [core::mem::swap] -/
-axiom core.mem.swap_fwd
-  (T : Type) : T → T → State → Result (State × Unit)
+/- [core::mem::swap]: forward function -/
+axiom core.mem.swap (T : Type) : T → T → State → Result (State × Unit)
 
-/- [core::mem::swap] -/
+/- [core::mem::swap]: backward function 0 -/
 axiom core.mem.swap_back0
   (T : Type) : T → T → State → State → Result (State × T)
 
-/- [core::mem::swap] -/
+/- [core::mem::swap]: backward function 1 -/
 axiom core.mem.swap_back1
   (T : Type) : T → T → State → State → Result (State × T)
 
-/- [core::num::nonzero::NonZeroU32::{14}::new] -/
-axiom core.num.nonzero.NonZeroU32.new_fwd
+/- [core::num::nonzero::NonZeroU32::{14}::new]: forward function -/
+axiom core.num.nonzero.NonZeroU32.new
   : U32 → State → Result (State × (Option core.num.nonzero.NonZeroU32))
 
-/- [core::option::Option::{0}::unwrap] -/
-axiom core.option.Option.unwrap_fwd
+/- [core::option::Option::{0}::unwrap]: forward function -/
+axiom core.option.Option.unwrap
   (T : Type) : Option T → State → Result (State × T)
 

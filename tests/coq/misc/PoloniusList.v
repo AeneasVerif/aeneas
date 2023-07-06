@@ -15,7 +15,7 @@ Inductive List_t (T : Type) :=
 Arguments ListCons {T} _ _.
 Arguments ListNil {T}.
 
-(** [polonius_list::get_list_at_x] *)
+(** [polonius_list::get_list_at_x]: forward function *)
 Fixpoint get_list_at_x_fwd (ls : List_t u32) (x : u32) : result (List_t u32) :=
   match ls with
   | ListCons hd tl =>
@@ -24,7 +24,7 @@ Fixpoint get_list_at_x_fwd (ls : List_t u32) (x : u32) : result (List_t u32) :=
   end
 .
 
-(** [polonius_list::get_list_at_x] *)
+(** [polonius_list::get_list_at_x]: backward function 0 *)
 Fixpoint get_list_at_x_back
   (ls : List_t u32) (x : u32) (ret : List_t u32) : result (List_t u32) :=
   match ls with

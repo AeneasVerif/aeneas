@@ -7,13 +7,13 @@ val _ = new_theory "hashmap_Funs"
 
 
 val hash_key_fwd_def = Define ‘
-  (** [hashmap::hash_key] *)
+  (** [hashmap::hash_key]: forward function *)
   hash_key_fwd (k : usize) : usize result =
     Return k
 ’
 
 val [hash_map_allocate_slots_loop_fwd_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::allocate_slots] *)
+  (** [hashmap::HashMap::{0}::allocate_slots]: loop 0: forward function *)
   hash_map_allocate_slots_loop_fwd
     (slots : 't list_t vec) (n : usize) : 't list_t vec result =
     if usize_gt n (int_to_usize 0)
@@ -27,14 +27,14 @@ val [hash_map_allocate_slots_loop_fwd_def] = DefineDiv ‘
 ’
 
 val hash_map_allocate_slots_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::allocate_slots] *)
+  (** [hashmap::HashMap::{0}::allocate_slots]: forward function *)
   hash_map_allocate_slots_fwd
     (slots : 't list_t vec) (n : usize) : 't list_t vec result =
     hash_map_allocate_slots_loop_fwd slots n
 ’
 
 val hash_map_new_with_capacity_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::new_with_capacity] *)
+  (** [hashmap::HashMap::{0}::new_with_capacity]: forward function *)
   hash_map_new_with_capacity_fwd
     (capacity : usize) (max_load_dividend : usize) (max_load_divisor : usize) :
     't hash_map_t result
@@ -55,14 +55,15 @@ val hash_map_new_with_capacity_fwd_def = Define ‘
 ’
 
 val hash_map_new_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::new] *)
+  (** [hashmap::HashMap::{0}::new]: forward function *)
   hash_map_new_fwd : 't hash_map_t result =
     hash_map_new_with_capacity_fwd (int_to_usize 32) (int_to_usize 4)
       (int_to_usize 5)
 ’
 
 val [hash_map_clear_loop_fwd_back_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::clear] *)
+  (** [hashmap::HashMap::{0}::clear]: loop 0: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_clear_loop_fwd_back
     (slots : 't list_t vec) (i : usize) : 't list_t vec result =
     let i0 = vec_len slots in
@@ -77,7 +78,8 @@ val [hash_map_clear_loop_fwd_back_def] = DefineDiv ‘
 ’
 
 val hash_map_clear_fwd_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::clear] *)
+  (** [hashmap::HashMap::{0}::clear]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_clear_fwd_back (self : 't hash_map_t) : 't hash_map_t result =
     do
     v <- hash_map_clear_loop_fwd_back self.hash_map_slots (int_to_usize 0);
@@ -91,13 +93,13 @@ val hash_map_clear_fwd_back_def = Define ‘
 ’
 
 val hash_map_len_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::len] *)
+  (** [hashmap::HashMap::{0}::len]: forward function *)
   hash_map_len_fwd (self : 't hash_map_t) : usize result =
     Return self.hash_map_num_entries
 ’
 
 val [hash_map_insert_in_list_loop_fwd_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::insert_in_list] *)
+  (** [hashmap::HashMap::{0}::insert_in_list]: loop 0: forward function *)
   hash_map_insert_in_list_loop_fwd
     (key : usize) (value : 't) (ls : 't list_t) : bool result =
     (case ls of
@@ -109,14 +111,14 @@ val [hash_map_insert_in_list_loop_fwd_def] = DefineDiv ‘
 ’
 
 val hash_map_insert_in_list_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::insert_in_list] *)
+  (** [hashmap::HashMap::{0}::insert_in_list]: forward function *)
   hash_map_insert_in_list_fwd
     (key : usize) (value : 't) (ls : 't list_t) : bool result =
     hash_map_insert_in_list_loop_fwd key value ls
 ’
 
 val [hash_map_insert_in_list_loop_back_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::insert_in_list] *)
+  (** [hashmap::HashMap::{0}::insert_in_list]: loop 0: backward function 0 *)
   hash_map_insert_in_list_loop_back
     (key : usize) (value : 't) (ls : 't list_t) : 't list_t result =
     (case ls of
@@ -132,14 +134,15 @@ val [hash_map_insert_in_list_loop_back_def] = DefineDiv ‘
 ’
 
 val hash_map_insert_in_list_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::insert_in_list] *)
+  (** [hashmap::HashMap::{0}::insert_in_list]: backward function 0 *)
   hash_map_insert_in_list_back
     (key : usize) (value : 't) (ls : 't list_t) : 't list_t result =
     hash_map_insert_in_list_loop_back key value ls
 ’
 
 val hash_map_insert_no_resize_fwd_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::insert_no_resize] *)
+  (** [hashmap::HashMap::{0}::insert_no_resize]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_insert_no_resize_fwd_back
     (self : 't hash_map_t) (key : usize) (value : 't) : 't hash_map_t result =
     do
@@ -176,7 +179,8 @@ Definition core_num_u32_max_c_def:
 End
 
 val [hash_map_move_elements_from_list_loop_fwd_back_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::move_elements_from_list] *)
+  (** [hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_move_elements_from_list_loop_fwd_back
     (ntable : 't hash_map_t) (ls : 't list_t) : 't hash_map_t result =
     (case ls of
@@ -189,14 +193,16 @@ val [hash_map_move_elements_from_list_loop_fwd_back_def] = DefineDiv ‘
 ’
 
 val hash_map_move_elements_from_list_fwd_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::move_elements_from_list] *)
+  (** [hashmap::HashMap::{0}::move_elements_from_list]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_move_elements_from_list_fwd_back
     (ntable : 't hash_map_t) (ls : 't list_t) : 't hash_map_t result =
     hash_map_move_elements_from_list_loop_fwd_back ntable ls
 ’
 
 val [hash_map_move_elements_loop_fwd_back_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::move_elements] *)
+  (** [hashmap::HashMap::{0}::move_elements]: loop 0: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_move_elements_loop_fwd_back
     (ntable : 't hash_map_t) (slots : 't list_t vec) (i : usize) :
     ('t hash_map_t # 't list_t vec) result
@@ -221,7 +227,8 @@ val [hash_map_move_elements_loop_fwd_back_def] = DefineDiv ‘
 ’
 
 val hash_map_move_elements_fwd_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::move_elements] *)
+  (** [hashmap::HashMap::{0}::move_elements]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_move_elements_fwd_back
     (ntable : 't hash_map_t) (slots : 't list_t vec) (i : usize) :
     ('t hash_map_t # 't list_t vec) result
@@ -230,7 +237,8 @@ val hash_map_move_elements_fwd_back_def = Define ‘
 ’
 
 val hash_map_try_resize_fwd_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::try_resize] *)
+  (** [hashmap::HashMap::{0}::try_resize]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_try_resize_fwd_back (self : 't hash_map_t) : 't hash_map_t result =
     do
     max_usize <- mk_usize (u32_to_int core_num_u32_max_c);
@@ -263,7 +271,8 @@ val hash_map_try_resize_fwd_back_def = Define ‘
 ’
 
 val hash_map_insert_fwd_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::insert] *)
+  (** [hashmap::HashMap::{0}::insert]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   hash_map_insert_fwd_back
     (self : 't hash_map_t) (key : usize) (value : 't) : 't hash_map_t result =
     do
@@ -276,7 +285,7 @@ val hash_map_insert_fwd_back_def = Define ‘
 ’
 
 val [hash_map_contains_key_in_list_loop_fwd_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::contains_key_in_list] *)
+  (** [hashmap::HashMap::{0}::contains_key_in_list]: loop 0: forward function *)
   hash_map_contains_key_in_list_loop_fwd
     (key : usize) (ls : 't list_t) : bool result =
     (case ls of
@@ -288,14 +297,14 @@ val [hash_map_contains_key_in_list_loop_fwd_def] = DefineDiv ‘
 ’
 
 val hash_map_contains_key_in_list_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::contains_key_in_list] *)
+  (** [hashmap::HashMap::{0}::contains_key_in_list]: forward function *)
   hash_map_contains_key_in_list_fwd
     (key : usize) (ls : 't list_t) : bool result =
     hash_map_contains_key_in_list_loop_fwd key ls
 ’
 
 val hash_map_contains_key_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::contains_key] *)
+  (** [hashmap::HashMap::{0}::contains_key]: forward function *)
   hash_map_contains_key_fwd
     (self : 't hash_map_t) (key : usize) : bool result =
     do
@@ -310,7 +319,7 @@ val hash_map_contains_key_fwd_def = Define ‘
 ’
 
 val [hash_map_get_in_list_loop_fwd_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::get_in_list] *)
+  (** [hashmap::HashMap::{0}::get_in_list]: loop 0: forward function *)
   hash_map_get_in_list_loop_fwd (key : usize) (ls : 't list_t) : 't result =
     (case ls of
     | ListCons ckey cvalue tl =>
@@ -321,13 +330,13 @@ val [hash_map_get_in_list_loop_fwd_def] = DefineDiv ‘
 ’
 
 val hash_map_get_in_list_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::get_in_list] *)
+  (** [hashmap::HashMap::{0}::get_in_list]: forward function *)
   hash_map_get_in_list_fwd (key : usize) (ls : 't list_t) : 't result =
     hash_map_get_in_list_loop_fwd key ls
 ’
 
 val hash_map_get_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::get] *)
+  (** [hashmap::HashMap::{0}::get]: forward function *)
   hash_map_get_fwd (self : 't hash_map_t) (key : usize) : 't result =
     do
     hash <- hash_key_fwd key;
@@ -341,7 +350,7 @@ val hash_map_get_fwd_def = Define ‘
 ’
 
 val [hash_map_get_mut_in_list_loop_fwd_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::get_mut_in_list] *)
+  (** [hashmap::HashMap::{0}::get_mut_in_list]: loop 0: forward function *)
   hash_map_get_mut_in_list_loop_fwd
     (ls : 't list_t) (key : usize) : 't result =
     (case ls of
@@ -353,13 +362,13 @@ val [hash_map_get_mut_in_list_loop_fwd_def] = DefineDiv ‘
 ’
 
 val hash_map_get_mut_in_list_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::get_mut_in_list] *)
+  (** [hashmap::HashMap::{0}::get_mut_in_list]: forward function *)
   hash_map_get_mut_in_list_fwd (ls : 't list_t) (key : usize) : 't result =
     hash_map_get_mut_in_list_loop_fwd ls key
 ’
 
 val [hash_map_get_mut_in_list_loop_back_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::get_mut_in_list] *)
+  (** [hashmap::HashMap::{0}::get_mut_in_list]: loop 0: backward function 0 *)
   hash_map_get_mut_in_list_loop_back
     (ls : 't list_t) (key : usize) (ret : 't) : 't list_t result =
     (case ls of
@@ -375,14 +384,14 @@ val [hash_map_get_mut_in_list_loop_back_def] = DefineDiv ‘
 ’
 
 val hash_map_get_mut_in_list_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::get_mut_in_list] *)
+  (** [hashmap::HashMap::{0}::get_mut_in_list]: backward function 0 *)
   hash_map_get_mut_in_list_back
     (ls : 't list_t) (key : usize) (ret : 't) : 't list_t result =
     hash_map_get_mut_in_list_loop_back ls key ret
 ’
 
 val hash_map_get_mut_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::get_mut] *)
+  (** [hashmap::HashMap::{0}::get_mut]: forward function *)
   hash_map_get_mut_fwd (self : 't hash_map_t) (key : usize) : 't result =
     do
     hash <- hash_key_fwd key;
@@ -396,7 +405,7 @@ val hash_map_get_mut_fwd_def = Define ‘
 ’
 
 val hash_map_get_mut_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::get_mut] *)
+  (** [hashmap::HashMap::{0}::get_mut]: backward function 0 *)
   hash_map_get_mut_back
     (self : 't hash_map_t) (key : usize) (ret : 't) : 't hash_map_t result =
     do
@@ -413,7 +422,7 @@ val hash_map_get_mut_back_def = Define ‘
 ’
 
 val [hash_map_remove_from_list_loop_fwd_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::remove_from_list] *)
+  (** [hashmap::HashMap::{0}::remove_from_list]: loop 0: forward function *)
   hash_map_remove_from_list_loop_fwd
     (key : usize) (ls : 't list_t) : 't option result =
     (case ls of
@@ -429,14 +438,14 @@ val [hash_map_remove_from_list_loop_fwd_def] = DefineDiv ‘
 ’
 
 val hash_map_remove_from_list_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::remove_from_list] *)
+  (** [hashmap::HashMap::{0}::remove_from_list]: forward function *)
   hash_map_remove_from_list_fwd
     (key : usize) (ls : 't list_t) : 't option result =
     hash_map_remove_from_list_loop_fwd key ls
 ’
 
 val [hash_map_remove_from_list_loop_back_def] = DefineDiv ‘
-  (** [hashmap::HashMap::{0}::remove_from_list] *)
+  (** [hashmap::HashMap::{0}::remove_from_list]: loop 0: backward function 1 *)
   hash_map_remove_from_list_loop_back
     (key : usize) (ls : 't list_t) : 't list_t result =
     (case ls of
@@ -456,14 +465,14 @@ val [hash_map_remove_from_list_loop_back_def] = DefineDiv ‘
 ’
 
 val hash_map_remove_from_list_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::remove_from_list] *)
+  (** [hashmap::HashMap::{0}::remove_from_list]: backward function 1 *)
   hash_map_remove_from_list_back
     (key : usize) (ls : 't list_t) : 't list_t result =
     hash_map_remove_from_list_loop_back key ls
 ’
 
 val hash_map_remove_fwd_def = Define ‘
-  (** [hashmap::HashMap::{0}::remove] *)
+  (** [hashmap::HashMap::{0}::remove]: forward function *)
   hash_map_remove_fwd (self : 't hash_map_t) (key : usize) : 't option result =
     do
     hash <- hash_key_fwd key;
@@ -484,7 +493,7 @@ val hash_map_remove_fwd_def = Define ‘
 ’
 
 val hash_map_remove_back_def = Define ‘
-  (** [hashmap::HashMap::{0}::remove] *)
+  (** [hashmap::HashMap::{0}::remove]: backward function 0 *)
   hash_map_remove_back
     (self : 't hash_map_t) (key : usize) : 't hash_map_t result =
     do
@@ -513,7 +522,7 @@ val hash_map_remove_back_def = Define ‘
 ’
 
 val test1_fwd_def = Define ‘
-  (** [hashmap::test1] *)
+  (** [hashmap::test1]: forward function *)
   test1_fwd : unit result =
     do
     hm <- hash_map_new_fwd;

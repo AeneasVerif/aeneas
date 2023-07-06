@@ -6,11 +6,11 @@ import HashmapMain.Types
 open Primitives
 open hashmap_main
 
-/- [hashmap_main::hashmap_utils::deserialize] -/
-axiom hashmap_utils.deserialize_fwd
+/- [hashmap_main::hashmap_utils::deserialize]: forward function -/
+axiom hashmap_utils.deserialize
   : State → Result (State × (hashmap.HashMap U64))
 
-/- [hashmap_main::hashmap_utils::serialize] -/
-axiom hashmap_utils.serialize_fwd
+/- [hashmap_main::hashmap_utils::serialize]: forward function -/
+axiom hashmap_utils.serialize
   : hashmap.HashMap U64 → State → Result (State × Unit)
 

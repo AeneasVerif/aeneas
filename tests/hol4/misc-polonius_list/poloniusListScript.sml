@@ -11,7 +11,7 @@ Datatype:
 End
 
 val [get_list_at_x_fwd_def] = DefineDiv ‘
-  (** [polonius_list::get_list_at_x] *)
+  (** [polonius_list::get_list_at_x]: forward function *)
   get_list_at_x_fwd (ls : u32 list_t) (x : u32) : u32 list_t result =
     (case ls of
     | ListCons hd tl =>
@@ -20,7 +20,7 @@ val [get_list_at_x_fwd_def] = DefineDiv ‘
 ’
 
 val [get_list_at_x_back_def] = DefineDiv ‘
-  (** [polonius_list::get_list_at_x] *)
+  (** [polonius_list::get_list_at_x]: backward function 0 *)
   get_list_at_x_back
     (ls : u32 list_t) (x : u32) (ret : u32 list_t) : u32 list_t result =
     (case ls of
