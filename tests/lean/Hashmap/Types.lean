@@ -11,9 +11,9 @@ inductive List (T : Type) :=
 
 /- [hashmap::HashMap] -/
 structure HashMap (T : Type) where
-  hash_map_num_entries : Usize
-  hash_map_max_load_factor : (Usize × Usize)
-  hash_map_max_load : Usize
-  hash_map_slots : Vec (List T)
+  num_entries : Usize
+  max_load_factor : (Usize × Usize)
+  max_load : Usize
+  slots : Vec (List T)
 
 end hashmap

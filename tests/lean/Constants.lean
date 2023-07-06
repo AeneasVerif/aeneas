@@ -35,12 +35,12 @@ def mk_pair0 (x : U32) (y : U32) : Result (U32 × U32) :=
 
 /- [constants::Pair] -/
 structure Pair (T1 T2 : Type) where
-  pair_x : T1
-  pair_y : T2
+  x : T1
+  y : T2
 
 /- [constants::mk_pair1]: forward function -/
 def mk_pair1 (x : U32) (y : U32) : Result (Pair U32 U32) :=
-  Result.ret { pair_x := x, pair_y := y }
+  Result.ret { x := x, y := y }
 
 /- [constants::P0] -/
 def p0_body : Result (U32 × U32) :=
@@ -59,17 +59,16 @@ def p2_c : (U32 × U32) := eval_global p2_body (by simp)
 
 /- [constants::P3] -/
 def p3_body : Result (Pair U32 U32) :=
-  Result.ret
-  { pair_x := (U32.ofInt 0 (by intlit)), pair_y := (U32.ofInt 1 (by intlit)) }
+  Result.ret { x := (U32.ofInt 0 (by intlit)), y := (U32.ofInt 1 (by intlit)) }
 def p3_c : Pair U32 U32 := eval_global p3_body (by simp)
 
 /- [constants::Wrap] -/
 structure Wrap (T : Type) where
-  wrap_val : T
+  val : T
 
 /- [constants::Wrap::{0}::new]: forward function -/
 def Wrap.new (T : Type) (val : T) : Result (Wrap T) :=
-  Result.ret { wrap_val := val }
+  Result.ret { val := val }
 
 /- [constants::Y] -/
 def y_body : Result (Wrap I32) := Wrap.new I32 (I32.ofInt 2 (by intlit))
@@ -77,7 +76,7 @@ def y_c : Wrap I32 := eval_global y_body (by simp)
 
 /- [constants::unwrap_y]: forward function -/
 def unwrap_y : Result I32 :=
-  Result.ret y_c.wrap_val
+  Result.ret y_c.val
 
 /- [constants::YVAL] -/
 def yval_body : Result I32 := unwrap_y

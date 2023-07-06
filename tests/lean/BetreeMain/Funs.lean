@@ -48,23 +48,20 @@ def betree.fresh_node_id_back (counter : U64) : Result U64 :=
 
 /- [betree_main::betree::NodeIdCounter::{0}::new]: forward function -/
 def betree.NodeIdCounter.new : Result betree.NodeIdCounter :=
-  Result.ret
-  { betree_node_id_counter_next_node_id := (U64.ofInt 0 (by intlit)) }
+  Result.ret { next_node_id := (U64.ofInt 0 (by intlit)) }
 
 /- [betree_main::betree::NodeIdCounter::{0}::fresh_id]: forward function -/
 def betree.NodeIdCounter.fresh_id (self : betree.NodeIdCounter) : Result U64 :=
   do
-    let _ ← self.betree_node_id_counter_next_node_id +
-      (U64.ofInt 1 (by intlit))
-    Result.ret self.betree_node_id_counter_next_node_id
+    let _ ← self.next_node_id + (U64.ofInt 1 (by intlit))
+    Result.ret self.next_node_id
 
 /- [betree_main::betree::NodeIdCounter::{0}::fresh_id]: backward function 0 -/
 def betree.NodeIdCounter.fresh_id_back
   (self : betree.NodeIdCounter) : Result betree.NodeIdCounter :=
   do
-    let i ← self.betree_node_id_counter_next_node_id +
-      (U64.ofInt 1 (by intlit))
-    Result.ret { betree_node_id_counter_next_node_id := i }
+    let i ← self.next_node_id + (U64.ofInt 1 (by intlit))
+    Result.ret { next_node_id := i }
 
 /- [core::num::u64::{10}::MAX] -/
 def core_num_u64_max_body : Result U64 :=
@@ -181,8 +178,7 @@ def betree.Leaf.split
   Result (State × betree.Internal)
   :=
   do
-    let p ←
-      betree.List.split_at (U64 × U64) content params.betree_params_split_size
+    let p ← betree.List.split_at (U64 × U64) content params.split_size
     let (content0, content1) := p
     let p0 ← betree.List.hd (U64 × U64) content1
     let (pivot, _) := p0
@@ -191,17 +187,9 @@ def betree.Leaf.split
     let id1 ← betree.NodeIdCounter.fresh_id node_id_cnt0
     let (st0, _) ← betree.store_leaf_node id0 content0 st
     let (st1, _) ← betree.store_leaf_node id1 content1 st0
-    let n := betree.Node.Leaf
-      {
-        betree_leaf_id := id0,
-        betree_leaf_size := params.betree_params_split_size
-      }
-    let n0 := betree.Node.Leaf
-      {
-        betree_leaf_id := id1,
-        betree_leaf_size := params.betree_params_split_size
-      }
-    Result.ret (st1, betree.Internal.mk self.betree_leaf_id pivot n n0)
+    let n := betree.Node.Leaf { id := id0, size := params.split_size }
+    let n0 := betree.Node.Leaf { id := id1, size := params.split_size }
+    Result.ret (st1, betree.Internal.mk self.id pivot n n0)
 
 /- [betree_main::betree::Leaf::{3}::split]: backward function 2 -/
 def betree.Leaf.split_back
@@ -210,8 +198,7 @@ def betree.Leaf.split_back
   Result betree.NodeIdCounter
   :=
   do
-    let p ←
-      betree.List.split_at (U64 × U64) content params.betree_params_split_size
+    let p ← betree.List.split_at (U64 × U64) content params.split_size
     let (content0, content1) := p
     let _ ← betree.List.hd (U64 × U64) content1
     let id0 ← betree.NodeIdCounter.fresh_id node_id_cnt
@@ -392,7 +379,7 @@ mutual divergent def betree.Node.lookup
           Result.ret (st1, opt)
   | betree.Node.Leaf node =>
     do
-      let (st0, bindings) ← betree.load_leaf_node node.betree_leaf_id st
+      let (st0, bindings) ← betree.load_leaf_node node.id st
       let opt ← betree.Node.lookup_in_bindings key bindings
       Result.ret (st0, opt)
 
@@ -463,7 +450,7 @@ divergent def betree.Node.lookup_back
           Result.ret (betree.Node.Internal node0)
   | betree.Node.Leaf node =>
     do
-      let (_, bindings) ← betree.load_leaf_node node.betree_leaf_id st
+      let (_, bindings) ← betree.load_leaf_node node.id st
       let _ ← betree.Node.lookup_in_bindings key bindings
       Result.ret (betree.Node.Leaf node)
 
@@ -732,7 +719,7 @@ mutual divergent def betree.Node.apply_messages
       let (st0, content) ← betree.load_internal_node i st
       let content0 ← betree.Node.apply_messages_to_internal content msgs
       let num_msgs ← betree.List.len (U64 × betree.Message) content0
-      if num_msgs >= params.betree_params_min_flush_size
+      if num_msgs >= params.min_flush_size
       then
         do
           let (st1, content1) ←
@@ -750,22 +737,20 @@ mutual divergent def betree.Node.apply_messages
           Result.ret (st1, ())
   | betree.Node.Leaf node =>
     do
-      let (st0, content) ← betree.load_leaf_node node.betree_leaf_id st
+      let (st0, content) ← betree.load_leaf_node node.id st
       let content0 ← betree.Node.apply_messages_to_leaf content msgs
       let len ← betree.List.len (U64 × U64) content0
-      let i ← (U64.ofInt 2 (by intlit)) * params.betree_params_split_size
+      let i ← (U64.ofInt 2 (by intlit)) * params.split_size
       if len >= i
       then
         do
           let (st1, _) ←
             betree.Leaf.split node content0 params node_id_cnt st0
-          let (st2, _) ←
-            betree.store_leaf_node node.betree_leaf_id betree.List.Nil st1
+          let (st2, _) ← betree.store_leaf_node node.id betree.List.Nil st1
           Result.ret (st2, ())
       else
         do
-          let (st1, _) ←
-            betree.store_leaf_node node.betree_leaf_id content0 st0
+          let (st1, _) ← betree.store_leaf_node node.id content0 st0
           Result.ret (st1, ())
 
 /- [betree_main::betree::Node::{5}::apply_messages]: backward function 0 -/
@@ -782,7 +767,7 @@ divergent def betree.Node.apply_messages_back
       let (st0, content) ← betree.load_internal_node i st
       let content0 ← betree.Node.apply_messages_to_internal content msgs
       let num_msgs ← betree.List.len (U64 × betree.Message) content0
-      if num_msgs >= params.betree_params_min_flush_size
+      if num_msgs >= params.min_flush_size
       then
         do
           let (st1, content1) ←
@@ -802,25 +787,23 @@ divergent def betree.Node.apply_messages_back
             node_id_cnt)
   | betree.Node.Leaf node =>
     do
-      let (st0, content) ← betree.load_leaf_node node.betree_leaf_id st
+      let (st0, content) ← betree.load_leaf_node node.id st
       let content0 ← betree.Node.apply_messages_to_leaf content msgs
       let len ← betree.List.len (U64 × U64) content0
-      let i ← (U64.ofInt 2 (by intlit)) * params.betree_params_split_size
+      let i ← (U64.ofInt 2 (by intlit)) * params.split_size
       if len >= i
       then
         do
           let (st1, new_node) ←
             betree.Leaf.split node content0 params node_id_cnt st0
-          let _ ←
-            betree.store_leaf_node node.betree_leaf_id betree.List.Nil st1
+          let _ ← betree.store_leaf_node node.id betree.List.Nil st1
           let node_id_cnt0 ←
             betree.Leaf.split_back node content0 params node_id_cnt st0
           Result.ret (betree.Node.Internal new_node, node_id_cnt0)
       else
         do
-          let _ ← betree.store_leaf_node node.betree_leaf_id content0 st0
-          Result.ret (betree.Node.Leaf { node with betree_leaf_size := len },
-            node_id_cnt)
+          let _ ← betree.store_leaf_node node.id content0 st0
+          Result.ret (betree.Node.Leaf { node with size := len }, node_id_cnt)
 
 /- [betree_main::betree::Internal::{4}::flush]: forward function -/
 divergent def betree.Internal.flush
@@ -834,7 +817,7 @@ divergent def betree.Internal.flush
     let p ← betree.List.partition_at_pivot betree.Message content i
     let (msgs_left, msgs_right) := p
     let len_left ← betree.List.len (U64 × betree.Message) msgs_left
-    if len_left >= params.betree_params_min_flush_size
+    if len_left >= params.min_flush_size
     then
       do
         let (st0, _) ←
@@ -842,7 +825,7 @@ divergent def betree.Internal.flush
         let (_, node_id_cnt0) ←
           betree.Node.apply_messages_back n params node_id_cnt msgs_left st
         let len_right ← betree.List.len (U64 × betree.Message) msgs_right
-        if len_right >= params.betree_params_min_flush_size
+        if len_right >= params.min_flush_size
         then
           do
             let (st1, _) ←
@@ -872,7 +855,7 @@ divergent def betree.Internal.flush_back
     let p ← betree.List.partition_at_pivot betree.Message content i0
     let (msgs_left, msgs_right) := p
     let len_left ← betree.List.len (U64 × betree.Message) msgs_left
-    if len_left >= params.betree_params_min_flush_size
+    if len_left >= params.min_flush_size
     then
       do
         let (st0, _) ←
@@ -880,7 +863,7 @@ divergent def betree.Internal.flush_back
         let (n1, node_id_cnt0) ←
           betree.Node.apply_messages_back n params node_id_cnt msgs_left st
         let len_right ← betree.List.len (U64 × betree.Message) msgs_right
-        if len_right >= params.betree_params_min_flush_size
+        if len_right >= params.min_flush_size
         then
           do
             let (n2, node_id_cnt1) ←
@@ -936,18 +919,11 @@ def betree.BeTree.new
     let node_id_cnt0 ← betree.NodeIdCounter.fresh_id_back node_id_cnt
     Result.ret (st0,
       {
-        betree_be_tree_params :=
-          {
-            betree_params_min_flush_size := min_flush_size,
-            betree_params_split_size := split_size
-          },
-        betree_be_tree_node_id_cnt := node_id_cnt0,
-        betree_be_tree_root :=
-          (betree.Node.Leaf
-            {
-              betree_leaf_id := id,
-              betree_leaf_size := (U64.ofInt 0 (by intlit))
-            })
+        params :=
+          { min_flush_size := min_flush_size, split_size := split_size },
+        node_id_cnt := node_id_cnt0,
+        root :=
+          (betree.Node.Leaf { id := id, size := (U64.ofInt 0 (by intlit)) })
       })
 
 /- [betree_main::betree::BeTree::{6}::apply]: forward function -/
@@ -957,11 +933,9 @@ def betree.BeTree.apply
   :=
   do
     let (st0, _) ←
-      betree.Node.apply self.betree_be_tree_root self.betree_be_tree_params
-        self.betree_be_tree_node_id_cnt key msg st
+      betree.Node.apply self.root self.params self.node_id_cnt key msg st
     let _ ←
-      betree.Node.apply_back self.betree_be_tree_root
-        self.betree_be_tree_params self.betree_be_tree_node_id_cnt key msg st
+      betree.Node.apply_back self.root self.params self.node_id_cnt key msg st
     Result.ret (st0, ())
 
 /- [betree_main::betree::BeTree::{6}::apply]: backward function 0 -/
@@ -971,10 +945,8 @@ def betree.BeTree.apply_back
   :=
   do
     let (n, nic) ←
-      betree.Node.apply_back self.betree_be_tree_root
-        self.betree_be_tree_params self.betree_be_tree_node_id_cnt key msg st
-    Result.ret
-      { self with betree_be_tree_node_id_cnt := nic, betree_be_tree_root := n }
+      betree.Node.apply_back self.root self.params self.node_id_cnt key msg st
+    Result.ret { self with node_id_cnt := nic, root := n }
 
 /- [betree_main::betree::BeTree::{6}::insert]: forward function -/
 def betree.BeTree.insert
@@ -1033,14 +1005,14 @@ def betree.BeTree.lookup
   (self : betree.BeTree) (key : U64) (st : State) :
   Result (State × (Option U64))
   :=
-  betree.Node.lookup self.betree_be_tree_root key st
+  betree.Node.lookup self.root key st
 
 /- [betree_main::betree::BeTree::{6}::lookup]: backward function 0 -/
 def betree.BeTree.lookup_back
   (self : betree.BeTree) (key : U64) (st : State) : Result betree.BeTree :=
   do
-    let n ← betree.Node.lookup_back self.betree_be_tree_root key st
-    Result.ret { self with betree_be_tree_root := n }
+    let n ← betree.Node.lookup_back self.root key st
+    Result.ret { self with root := n }
 
 /- [betree_main::main]: forward function -/
 def main : Result Unit :=

@@ -922,6 +922,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
     {
       ExtractBase.trans_ctx;
       names_map;
+      unsafe_names_map = { id_to_name = ExtractBase.IdMap.empty };
       fmt;
       indent_incr = 2;
       use_opaque_pre = !Config.split_files;

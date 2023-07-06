@@ -625,10 +625,15 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
   in
   let field_name (def_name : name) (field_id : FieldId.id)
       (field_name : string option) : string =
-    let def_name = type_name_to_snake_case def_name ^ "_" in
-    match field_name with
-    | Some field_name -> def_name ^ field_name
-    | None -> def_name ^ FieldId.to_string field_id
+    let field_name =
+      match field_name with
+      | Some field_name -> field_name
+      | None -> FieldId.to_string field_id
+    in
+    if !Config.record_fields_short_names then field_name
+    else
+      let def_name = type_name_to_snake_case def_name ^ "_" in
+      def_name ^ field_name
   in
   let variant_name (def_name : name) (variant : string) : string =
     match !backend with

@@ -416,7 +416,7 @@ module IdSet = Collections.MakeSet (IdOrderedType)
 
     We use it for lookups (during the translation) and to check for name clashes.
 
-    [id_to_string] is for debugging.
+    [id_to_name] is for debugging.
   *)
 type names_map = {
   id_to_name : string IdMap.t;
@@ -427,7 +427,9 @@ type names_map = {
        *)
   names_set : StringSet.t;
   opaque_ids : IdSet.t;
-      (** The set of opaque definitions.
+      (** TODO: this is obsolete. Remove.
+
+          The set of opaque definitions.
 
           See {!formatter.opaque_pre} for detailed explanations about why
           we need to know which definitions are opaque to compute names.
@@ -488,6 +490,20 @@ let names_map_add_function (id_to_string : id -> string) (is_opaque : bool)
     (fid : fun_id) (name : string) (nm : names_map) : names_map =
   names_map_add id_to_string is_opaque (FunId fid) name nm
 
+(** The unsafe names map stores mappings from identifiers to names which might
+    collide. For some backends and some names, it might be acceptable to have
+    collisions. For instance, in Lean, different records can have fields with
+    the same name because Lean uses the typing information to resolve the
+    ambiguities.
+
+    This map complements the {!names_map}, which checks for collisions.
+  *)
+type unsafe_names_map = { id_to_name : string IdMap.t }
+
+let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
+    unsafe_names_map =
+  { id_to_name = IdMap.add id name nm.id_to_name }
+
 (** Make a (variable) basename unique (by adding an index).
 
     We do this in an inefficient manner (by testing all indices starting from
@@ -532,6 +548,11 @@ type fun_name_info = { keep_fwd : bool; num_backs : int }
 type extraction_ctx = {
   trans_ctx : trans_ctx;
   names_map : names_map;
+      (** The map for id to names, where we forbid name collisions
+          (ex.: we always forbid function name collisions). *)
+  unsafe_names_map : unsafe_names_map;
+      (** The map for id to names, where we allow name collisions
+          (ex.: we might allow record field name collisions). *)
   fmt : formatter;
   indent_incr : int;
       (** The indent increment we insert whenever we need to indent more *)
@@ -690,23 +711,42 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
   | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
   | VarId id -> "var_id: " ^ VarId.to_string id
 
+(** We might not check for collisions for some specific ids (ex.: field names) *)
+let allow_collisions (id : id) : bool =
+  match id with
+  | FieldId (_, _) -> !Config.record_fields_short_names
+  | _ -> false
+
 let ctx_add (is_opaque : bool) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
-  (* The id_to_string function to print nice debugging messages if there are
-   * collisions *)
-  let id_to_string (id : id) : string = id_to_string id ctx in
-  let names_map = names_map_add id_to_string is_opaque id name ctx.names_map in
-  { ctx with names_map }
+  (* We do not use the same name map if we allow/disallow collisions *)
+  if allow_collisions id then (
+    assert (not is_opaque);
+    {
+      ctx with
+      unsafe_names_map = unsafe_names_map_add id name ctx.unsafe_names_map;
+    })
+  else
+    (* The id_to_string function to print nice debugging messages if there are
+     * collisions *)
+    let id_to_string (id : id) : string = id_to_string id ctx in
+    let names_map =
+      names_map_add id_to_string is_opaque id name ctx.names_map
+    in
+    { ctx with names_map }
 
 (** [with_opaque_pre]: if [true] and the definition is opaque, add the opaque prefix *)
 let ctx_get (with_opaque_pre : bool) (id : id) (ctx : extraction_ctx) : string =
-  match IdMap.find_opt id ctx.names_map.id_to_name with
-  | Some s ->
-      let is_opaque = IdSet.mem id ctx.names_map.opaque_ids in
-      if with_opaque_pre && is_opaque then ctx.fmt.opaque_pre () ^ s else s
-  | None ->
-      log#serror ("Could not find: " ^ id_to_string id ctx);
-      raise Not_found
+  (* We do not use the same name map if we allow/disallow collisions *)
+  if allow_collisions id then IdMap.find id ctx.unsafe_names_map.id_to_name
+  else
+    match IdMap.find_opt id ctx.names_map.id_to_name with
+    | Some s ->
+        let is_opaque = IdSet.mem id ctx.names_map.opaque_ids in
+        if with_opaque_pre && is_opaque then ctx.fmt.opaque_pre () ^ s else s
+    | None ->
+        log#serror ("Could not find: " ^ id_to_string id ctx);
+        raise Not_found
 
 let ctx_get_global (with_opaque_pre : bool) (id : A.GlobalDeclId.id)
     (ctx : extraction_ctx) : string =

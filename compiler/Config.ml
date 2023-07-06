@@ -304,3 +304,14 @@ let filter_useless_functions = ref true
     called opaque_defs, of type OpaqueDefs.
   *)
 let wrap_opaque_in_sig = ref false
+
+(** Use short names for the record fields.
+
+    Some backends can't disambiguate records when their field names have collisions.
+    When this happens, we use long names, by which we concatenate the record
+    names with the field names, and check whether there are name collisions.
+
+    For backends which can disambiguate records (typically by using the typing
+    information), we use short names (i.e., the original field names).
+ *)
+let record_fields_short_names = ref false

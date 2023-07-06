@@ -11,10 +11,10 @@ inductive hashmap.List (T : Type) :=
 
 /- [hashmap_main::hashmap::HashMap] -/
 structure hashmap.HashMap (T : Type) where
-  hashmap_hash_map_num_entries : Usize
-  hashmap_hash_map_max_load_factor : (Usize × Usize)
-  hashmap_hash_map_max_load : Usize
-  hashmap_hash_map_slots : Vec (hashmap.List T)
+  num_entries : Usize
+  max_load_factor : (Usize × Usize)
+  max_load : Usize
+  slots : Vec (hashmap.List T)
 
 /- The state type used in the state-error monad -/
 axiom State : Type

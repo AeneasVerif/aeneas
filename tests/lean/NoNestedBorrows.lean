@@ -6,8 +6,8 @@ namespace no_nested_borrows
 
 /- [no_nested_borrows::Pair] -/
 structure Pair (T1 T2 : Type) where
-  pair_x : T1
-  pair_y : T2
+  x : T1
+  y : T2
 
 /- [no_nested_borrows::List] -/
 inductive List (T : Type) :=
@@ -431,71 +431,52 @@ def id_mut_pair4_back'b
 
 /- [no_nested_borrows::StructWithTuple] -/
 structure StructWithTuple (T1 T2 : Type) where
-  struct_with_tuple_p : (T1 × T2)
+  p : (T1 × T2)
 
 /- [no_nested_borrows::new_tuple1]: forward function -/
 def new_tuple1 : Result (StructWithTuple U32 U32) :=
-  Result.ret
-  {
-    struct_with_tuple_p :=
-      ((U32.ofInt 1 (by intlit)), (U32.ofInt 2 (by intlit)))
-  }
+  Result.ret { p := ((U32.ofInt 1 (by intlit)), (U32.ofInt 2 (by intlit))) }
 
 /- [no_nested_borrows::new_tuple2]: forward function -/
 def new_tuple2 : Result (StructWithTuple I16 I16) :=
-  Result.ret
-  {
-    struct_with_tuple_p :=
-      ((I16.ofInt 1 (by intlit)), (I16.ofInt 2 (by intlit)))
-  }
+  Result.ret { p := ((I16.ofInt 1 (by intlit)), (I16.ofInt 2 (by intlit))) }
 
 /- [no_nested_borrows::new_tuple3]: forward function -/
 def new_tuple3 : Result (StructWithTuple U64 I64) :=
-  Result.ret
-  {
-    struct_with_tuple_p :=
-      ((U64.ofInt 1 (by intlit)), (I64.ofInt 2 (by intlit)))
-  }
+  Result.ret { p := ((U64.ofInt 1 (by intlit)), (I64.ofInt 2 (by intlit))) }
 
 /- [no_nested_borrows::StructWithPair] -/
 structure StructWithPair (T1 T2 : Type) where
-  struct_with_pair_p : Pair T1 T2
+  p : Pair T1 T2
 
 /- [no_nested_borrows::new_pair1]: forward function -/
 def new_pair1 : Result (StructWithPair U32 U32) :=
   Result.ret
-  {
-    struct_with_pair_p :=
-      {
-        pair_x := (U32.ofInt 1 (by intlit)),
-        pair_y := (U32.ofInt 2 (by intlit))
-      }
-  }
+  { p := { x := (U32.ofInt 1 (by intlit)), y := (U32.ofInt 2 (by intlit)) } }
 
 /- [no_nested_borrows::test_constants]: forward function -/
 def test_constants : Result Unit :=
   do
     let swt ← new_tuple1
-    let (i, _) := swt.struct_with_tuple_p
+    let (i, _) := swt.p
     if not (i = (U32.ofInt 1 (by intlit)))
     then Result.fail Error.panic
     else
       do
         let swt0 ← new_tuple2
-        let (i0, _) := swt0.struct_with_tuple_p
+        let (i0, _) := swt0.p
         if not (i0 = (I16.ofInt 1 (by intlit)))
         then Result.fail Error.panic
         else
           do
             let swt1 ← new_tuple3
-            let (i1, _) := swt1.struct_with_tuple_p
+            let (i1, _) := swt1.p
             if not (i1 = (U64.ofInt 1 (by intlit)))
             then Result.fail Error.panic
             else
               do
                 let swp ← new_pair1
-                if not (swp.struct_with_pair_p.pair_x =
-                  (U32.ofInt 1 (by intlit)))
+                if not (swp.p.x = (U32.ofInt 1 (by intlit)))
                 then Result.fail Error.panic
                 else Result.ret ()
 

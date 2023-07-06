@@ -22,8 +22,8 @@ inductive betree.Message :=
 
 /- [betree_main::betree::Leaf] -/
 structure betree.Leaf where
-  betree_leaf_id : U64
-  betree_leaf_size : U64
+  id : U64
+  size : U64
 
 mutual
 
@@ -40,18 +40,18 @@ end
 
 /- [betree_main::betree::Params] -/
 structure betree.Params where
-  betree_params_min_flush_size : U64
-  betree_params_split_size : U64
+  min_flush_size : U64
+  split_size : U64
 
 /- [betree_main::betree::NodeIdCounter] -/
 structure betree.NodeIdCounter where
-  betree_node_id_counter_next_node_id : U64
+  next_node_id : U64
 
 /- [betree_main::betree::BeTree] -/
 structure betree.BeTree where
-  betree_be_tree_params : betree.Params
-  betree_be_tree_node_id_cnt : betree.NodeIdCounter
-  betree_be_tree_root : betree.Node
+  params : betree.Params
+  node_id_cnt : betree.NodeIdCounter
+  root : betree.Node
 
 /- The state type used in the state-error monad -/
 axiom State : Type
