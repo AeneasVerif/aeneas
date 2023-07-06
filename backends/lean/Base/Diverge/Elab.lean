@@ -843,6 +843,8 @@ partial def proveUnfoldingThms (isValidThm : Expr) (inOutTys : Array (Expr × Ex
       all := [name]
     }
     addDecl decl
+    -- Add the unfolding theorem to the equation compiler
+    eqnsAttribute.add preDef.declName #[name]
     trace[Diverge.def.unfold] "proveUnfoldingThms: added thm: {name}:\n{thmTy}"
   let rec prove (i : Nat) : MetaM Unit := do
     if i = preDefs.size then pure ()
@@ -1011,6 +1013,13 @@ def Term.elabMutualDef (vars : Array Expr) (views : Array DefView) : TermElabM U
     withFunLocalDecls headers fun funFVars => do
       for view in views, funFVar in funFVars do
         addLocalVarInfo view.declId funFVar
+        -- Add fake use site to prevent "unused variable" warning (if the
+        -- function is actually not recursive, Lean would print this warning).
+        -- Remark: we could detect this case and encode the function without
+        -- using the fixed-point. In practice it shouldn't happen however:
+        -- we define non-recursive functions with the `divergent` keyword
+        -- only for testing purposes.
+        addTermInfo' view.declId funFVar
       let values ←
         try
           let values ← elabFunValues headers
@@ -1091,7 +1100,8 @@ namespace Tests
     . intro i hpos h; simp at h; linarith
     . rename_i hd tl ih
       intro i hpos h
-      rw [list_nth.unfold]; simp
+      -- We can directly use `rw [list_nth]`!
+      rw [list_nth]; simp
       split <;> simp [*]
       . tauto
       . -- TODO: we shouldn't have to do that
@@ -1147,7 +1157,7 @@ namespace Tests
     let ls1 := ls
     match ls1 with
     | [] => Result.ret False
-    | x :: tl => Result.ret True
+    | _ :: _ => Result.ret True
 
   #check isCons.unfold
 
