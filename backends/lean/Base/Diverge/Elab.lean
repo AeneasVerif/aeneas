@@ -2,6 +2,7 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
+import Base.Utils
 import Base.Diverge.Base
 import Base.Diverge.ElabBase
 
@@ -13,6 +14,7 @@ namespace Diverge
 syntax (name := divergentDef)
   declModifiers "divergent" "def" declId ppIndent(optDeclSig) declVal : command
 
+open Utils
 open Lean Elab Term Meta Primitives Lean.Meta
 
 /- The following was copied from the `wfRecursion` function. -/
