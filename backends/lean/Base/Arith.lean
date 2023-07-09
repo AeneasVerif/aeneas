@@ -231,7 +231,7 @@ example (x y : Int) (h0 : x ≠ y) (h1 : ¬ x = y) : True := by
 
 set_option trace.Arith false
 
-def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (k : Expr → Tactic.TacticM Unit) : Tactic.TacticM Unit :=
+def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : Tactic.TacticM Expr :=
   -- I don't think we need that
   Lean.Elab.Tactic.withMainContext do
   -- Insert the new declaration
@@ -256,10 +256,11 @@ def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (k : Expr �
     mvarId.assign newVal
     let goals ← Tactic.getUnsolvedGoals
     Lean.Elab.Tactic.setGoals (newMVar.mvarId! :: goals)
-    -- Call the continuation
-    k nval
+    -- Return the new value - note: we are in the *new* context, created
+    -- after the declaration was added, so it will persist
+    pure nval
 
-def addDeclSyntax (name : Name) (val : Syntax) (asLet : Bool) (k : Expr → Tactic.TacticM Unit) : Tactic.TacticM Unit :=
+def addDeclSyntax (name : Name) (val : Syntax) (asLet : Bool) : Tactic.TacticM Unit :=
   -- I don't think we need that
   Lean.Elab.Tactic.withMainContext do
   --
@@ -270,13 +271,13 @@ def addDeclSyntax (name : Name) (val : Syntax) (asLet : Bool) (k : Expr → Tact
   -- not choose): we force the instantiation of the meta-variable
   synthesizeSyntheticMVarsUsingDefault
   --
-  addDecl name val type asLet k
+  let _ ← addDecl name val type asLet
 
-elab "custom_let " n:ident " := " v:term : tactic =>
-  addDeclSyntax n.getId v (asLet := true) (λ _ => pure ())
+elab "custom_let " n:ident " := " v:term : tactic => do
+  addDeclSyntax n.getId v (asLet := true)
 
 elab "custom_have " n:ident " := " v:term : tactic =>
-  addDeclSyntax n.getId v (asLet := false) (λ _ => pure ())
+  addDeclSyntax n.getId v (asLet := false)
 
 example : Nat := by
   custom_let x := 4
@@ -287,13 +288,13 @@ example (x : Bool) : Nat := by
   cases x <;> custom_let x := 3 <;> apply x
 
 -- Lookup instances in a context and introduce them with additional declarations.
-def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr)) (k : Expr → Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr)) : Tactic.TacticM (Array Expr) := do
   let hs ← collectInstancesFromMainCtx lookup
-  hs.forM fun e => do
+  hs.toArray.mapM fun e => do
     let type ← inferType e
     let name ← mkFreshUserName `h
     -- Add a declaration
-    addDecl name e type (asLet := false) λ nval => do
+    let nval ← addDecl name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
     let simpTheorems ← Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
     -- Add the equational theorem for the decl to unfold
@@ -304,14 +305,14 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     let loc := Tactic.Location.targets #[mkIdent name] false
     -- Apply the simplifier
     let _ ← Tactic.simpLocation ctx (discharge? := .none) loc
-    -- Call the continuation
-    k nval
+    -- Return the new value
+    pure nval
 
 -- Lookup the instances of `HasProp for all the sub-expressions in the context,
 -- and introduce the corresponding assumptions
 elab "intro_has_prop_instances" : tactic => do
   trace[Arith] "Introducing the HasProp instances"
-  introInstances ``HasProp.prop_ty lookupHasProp (fun _ => pure ())
+  let _ ← introInstances ``HasProp.prop_ty lookupHasProp
 
 example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
   intro_has_prop_instances
@@ -322,7 +323,7 @@ example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
   simp_all [Scalar.max, Scalar.min]
 
 -- Tactic to split on a disjunction
-def splitDisj (h : Expr) : Tactic.TacticM Unit := do
+def splitDisj (h : Expr) (kleft kright : Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   trace[Arith] "assumption on which to split: {h}"
   -- Retrieve the main goal
   Lean.Elab.Tactic.withMainContext do
@@ -361,14 +362,23 @@ def splitDisj (h : Expr) : Tactic.TacticM Unit := do
   trace[Arith] "main goal: {mgoal}"
   mgoal.assign casesExpr
   let goals ← Tactic.getUnsolvedGoals
-  Tactic.setGoals (mleft :: mright :: goals)
+  -- Focus on the left
+  Tactic.setGoals [mleft]
+  kleft
+  let leftGoals ← Tactic.getUnsolvedGoals
+  -- Focus on the right
+  Tactic.setGoals [mright]
+  kright
+  let rightGoals ← Tactic.getUnsolvedGoals
+  -- Put all the goals back
+  Tactic.setGoals (leftGoals ++ rightGoals ++ goals)
   trace[Arith] "new goals: {← Tactic.getUnsolvedGoals}"
 
 elab "split_disj " n:ident : tactic => do
   Lean.Elab.Tactic.withMainContext do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
-  splitDisj fvar
+  splitDisj fvar (fun _ => pure ()) (fun _ => pure ())
 
 example (x y : Int) (h0 : x ≤ y ∨ x ≥ y) : x ≤ y ∨ x ≥ y := by
   split_disj h0
@@ -379,7 +389,7 @@ example (x y : Int) (h0 : x ≤ y ∨ x ≥ y) : x ≤ y ∨ x ≥ y := by
 -- and introduce the corresponding assumptions
 elab "intro_prop_has_imp_instances" : tactic => do
   trace[Arith] "Introducing the PropHasImp instances"
-  introInstances ``PropHasImp.concl lookupPropHasImp (fun _ => pure ())
+  let _ ← introInstances ``PropHasImp.concl lookupPropHasImp
 
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   intro_prop_has_imp_instances
@@ -388,7 +398,7 @@ example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   . linarith
   . linarith
 
-syntax "int_tac_preprocess" : tactic
+--syntax "int_tac_preprocess" : tactic
 
 /- Boosting a bit the linarith tac.
 
@@ -399,31 +409,41 @@ syntax "int_tac_preprocess" : tactic
  -/
 def intTacPreprocess : Tactic.TacticM Unit := do
   Lean.Elab.Tactic.withMainContext do
-  -- Get the local context
-  let ctx ← Lean.MonadLCtx.getLCtx
-  -- Just a matter of precaution
-  let ctx ← instantiateLCtxMVars ctx
-  -- Explore the declarations - Remark: we don't explore the subexpressions
-  -- (we could, but it is rarely necessary, because terms of the shape `x ≠ y`
-  -- are often introduced because of branchings in the code, and using `split`
-  -- introduces exactly the assumptions `x = y` and `x ≠ y`).
-  let decls ← ctx.getDecls
-  for decl in decls do
-    let ty ← Lean.Meta.inferType decl.toExpr
-    ty.withApp fun f args => do
-      trace[Arith] "decl: {f} {args}"
-      -- Check if this is an inequality between integers
-  pure ()
-
--- TODO: int_tac
+  -- Lookup the instances of PropHasImp (this is how we detect assumptions
+  -- of the proper shape), introduce assumptions in the context and split
+  -- on those
+  -- TODO: get rid of the assumption that we split
+  let rec splitOnAsms (asms : List Expr) : Tactic.TacticM Unit :=
+    match asms with
+    | [] => pure ()
+    | asm :: asms =>
+      let k := splitOnAsms asms
+      splitDisj asm k k
+  -- Introduce
+  let asms ← introInstances ``PropHasImp.concl lookupPropHasImp
+  -- Split
+  splitOnAsms asms.toList
 
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess
 
 example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
   int_tac_preprocess
-  simp_all
-  int_tac_preprocess
+  linarith
+  linarith
+
+syntax "int_tac" : tactic
+macro_rules
+  | `(tactic| int_tac) =>
+    `(tactic|
+      int_tac_preprocess <;>
+      linarith)
+
+example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by int_tac
+
+-- Checking that things append correctly when there are several disjunctions
+example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
+  int_tac_preprocess <;> apply And.intro <;> linarith
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
 syntax "scalar_tac" : tactic
