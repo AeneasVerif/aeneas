@@ -183,17 +183,12 @@ elab "display_has_prop_instances" : tactic => do
   hs.forM fun e => do
     trace[Arith] "+ HasProp instance: {e}"
 
-
-set_option trace.Arith true
-
 example (x : U32) : True := by
   let i : HasProp U32 := inferInstance
   have p := @HasProp.prop _ i x
   simp only [HasProp.prop_ty] at p
   display_has_prop_instances
   simp
-
-set_option trace.Arith false
 
 -- Return an instance of `PropHasImp` for `e` if it has some
 def lookupPropHasImp (e : Expr) : MetaM (Option Expr) := do
@@ -223,13 +218,9 @@ elab "display_prop_has_imp_instances" : tactic => do
   hs.forM fun e => do
     trace[Arith] "+ PropHasImp instance: {e}"
 
-set_option trace.Arith true
-
-example (x y : Int) (h0 : x ≠ y) (h1 : ¬ x = y) : True := by
+example (x y : Int) (_ : x ≠ y) (_ : ¬ x = y) : True := by
   display_prop_has_imp_instances
   simp
-
-set_option trace.Arith false
 
 def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : Tactic.TacticM Expr :=
   -- I don't think we need that
@@ -322,12 +313,15 @@ example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
   intro_has_prop_instances
   simp_all [Scalar.max, Scalar.min]
 
--- Tactic to split on a disjunction
+-- Tactic to split on a disjunction.
+-- The expression `h` should be an fvar.
 def splitDisj (h : Expr) (kleft kright : Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   trace[Arith] "assumption on which to split: {h}"
   -- Retrieve the main goal
   Lean.Elab.Tactic.withMainContext do
   let goalType ← Lean.Elab.Tactic.getMainTarget
+  let hDecl := (← getLCtx).get! h.fvarId!
+  let hName := hDecl.userName
   -- Case disjunction
   let hTy ← inferType h
   hTy.withApp fun f xs => do
@@ -341,14 +335,16 @@ def splitDisj (h : Expr) (kleft kright : Tactic.TacticM Unit) : Tactic.TacticM U
   -- - the match branch
   -- - a fresh new mvar id
   let mkGoal (hTy : Expr) (nGoalName : String) : MetaM (Expr × MVarId) := do
-    -- Introduce a variable for the assumption (`a` or `b`)
-    let asmName ← mkFreshUserName `h
-    withLocalDeclD asmName hTy fun var => do
+    -- Introduce a variable for the assumption (`a` or `b`). Note that we reuse
+    -- the name of the assumption we split.
+    withLocalDeclD hName hTy fun var => do
     -- The new goal
     let mgoal ← mkFreshExprSyntheticOpaqueMVar goalType (tag := Name.mkSimple nGoalName)
+    -- Clear the assumption that we split
+    let mgoal ← mgoal.mvarId!.tryClearMany #[h.fvarId!]
     -- The branch expression
-    let branch ← mkLambdaFVars #[var] mgoal
-    pure (branch, mgoal.mvarId!)
+    let branch ← mkLambdaFVars #[var] (mkMVar mgoal)
+    pure (branch, mgoal)
   let (inl, mleft) ← mkGoal a "left"
   let (inr, mright) ← mkGoal b "right"
   trace[Arith] "left: {inl}: {mleft}"
@@ -398,8 +394,6 @@ example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   . linarith
   . linarith
 
---syntax "int_tac_preprocess" : tactic
-
 /- Boosting a bit the linarith tac.
 
    We do the following:
@@ -412,7 +406,7 @@ def intTacPreprocess : Tactic.TacticM Unit := do
   -- Lookup the instances of PropHasImp (this is how we detect assumptions
   -- of the proper shape), introduce assumptions in the context and split
   -- on those
-  -- TODO: get rid of the assumption that we split
+  -- TODO: get rid of the assumptions that we split
   let rec splitOnAsms (asms : List Expr) : Tactic.TacticM Unit :=
     match asms with
     | [] => pure ()
@@ -436,14 +430,16 @@ syntax "int_tac" : tactic
 macro_rules
   | `(tactic| int_tac) =>
     `(tactic|
+      (repeat (apply And.intro)) <;> -- TODO: improve this
       int_tac_preprocess <;>
       linarith)
 
-example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by int_tac
+example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
+  int_tac
 
 -- Checking that things append correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
-  int_tac_preprocess <;> apply And.intro <;> linarith
+  int_tac
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
 syntax "scalar_tac" : tactic
@@ -457,8 +453,7 @@ macro_rules
       have := Scalar.cMax_bound ScalarTy.Isize;
       -- TODO: not too sure about that
       simp only [*, Scalar.max, Scalar.min, Scalar.cMin, Scalar.cMax] at *;
-      -- TODO: use int_tac
-      linarith)
+      int_tac)
 
 example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
   scalar_tac
