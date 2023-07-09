@@ -8,6 +8,7 @@ import Mathlib.Tactic.Linarith
 -- TODO: there is no Omega tactic for now - it seems it hasn't been ported yet
 --import Mathlib.Tactic.Omega
 import Base.Primitives
+import Base.ArithBase
 
 /-
 Mathlib tactics:
@@ -53,9 +54,24 @@ namespace Arith
 
 open Primitives
 
---set_option pp.explicit true
---set_option pp.notation false
---set_option pp.coercions false
+-- TODO: move?
+theorem ne_zero_is_lt_or_gt {x : Int} (hne : x ≠ 0) : x < 0 ∨ x > 0 := by
+  cases h: x <;> simp_all
+  . rename_i n;
+    cases n <;> simp_all
+  . apply Int.negSucc_lt_zero
+
+-- TODO: move?
+theorem ne_is_lt_or_gt {x y : Int} (hne : x ≠ y) : x < y ∨ x > y := by
+  have hne : x - y ≠ 0 := by
+    simp
+    intro h
+    have: x = y := by linarith
+    simp_all
+  have h := ne_zero_is_lt_or_gt hne
+  match h with
+  | .inl _ => left; linarith
+  | .inr _ => right; linarith
 
 -- TODO: move
 instance Vec.cast (a : Type): Coe (Vec a) (List a)  where coe := λ v => v.val
@@ -71,17 +87,9 @@ instance Vec.cast (a : Type): Coe (Vec a) (List a)  where coe := λ v => v.val
  -/
 def Scalar.toInt {ty : ScalarTy} (x : Scalar ty) : Int := x.val
 
--- We use this type-class to test if an expression is a scalar (if we manage
--- to lookup an instance of this type-class, then it is)
-class IsScalar (a : Type) where
-
-instance (ty : ScalarTy) : IsScalar (Scalar ty) where
-
-example (ty : ScalarTy) : IsScalar (Scalar ty) := inferInstance
-
 -- Remark: I tried a version of the shape `HasProp {a : Type} (x : a)`
 -- but the lookup didn't work
-class HasProp (a : Type) where
+class HasProp (a : Sort u) where
   prop_ty : a → Prop
   prop : ∀ x:a, prop_ty x
 
@@ -93,116 +101,90 @@ instance (a : Type) : HasProp (Vec a) where
   prop_ty := λ v => v.val.length ≤ Scalar.max ScalarTy.Usize
   prop := λ ⟨ _, l ⟩ => l
 
+class PropHasImp (x : Prop) where
+  concl : Prop
+  prop : x → concl
+
+-- This also works for `x ≠ y` because this expression reduces to `¬ x = y`
+-- and `Ne` is marked as `reducible`
+instance (x y : Int) : PropHasImp (¬ x = y) where
+  concl := x < y ∨ x > y
+  prop := λ (h:x ≠ y) => ne_is_lt_or_gt h
+
 open Lean Lean.Elab Command Term Lean.Meta
 
--- Return true if the expression is a scalar expression
-def isScalarExpr (e : Expr) : MetaM Bool := do
-  -- Try to convert the expression to a scalar
-  -- TODO: I tried to do it with Lean.Meta.mkAppM but it didn't work: how
-  -- do we allow Lean to perform (controlled) unfoldings for instantiation
-  -- purposes?
-  let r ← Lean.observing? do
-    let ty ← Lean.Meta.inferType e
-    let isScalar ← mkAppM `Arith.IsScalar #[ty]
-    let isScalar ← trySynthInstance isScalar
-    match isScalar with
-    | LOption.some x => some x
-    | _ => none
-  match r with
-  | .some _ => pure true
-  | _       => pure false
+-- Small utility: print all the declarations in the context
+elab "print_all_decls" : tactic => do
+  let ctx ← Lean.MonadLCtx.getLCtx
+  for decl in ← ctx.getDecls do
+    let ty ← Lean.Meta.inferType decl.toExpr
+    logInfo m!"{decl.toExpr} : {ty}"
+  pure ()
+
+-- Explore a term by decomposing the applications (we explore the applied
+-- functions and their arguments, but ignore lambdas, forall, etc. -
+-- should we go inside?).
+partial def foldTermApps (k : α → Expr → MetaM α) (s : α) (e : Expr) : MetaM α := do
+  -- We do it in a very simpler manner: we deconstruct applications,
+  -- and recursively explore the sub-expressions. Note that we do
+  -- not go inside foralls and abstractions (should we?).
+  e.withApp fun f args => do
+    let s ← k s f
+    args.foldlM (foldTermApps k) s
+
+-- Provided a function `k` which lookups type class instances on an expression,
+-- collect all the instances lookuped by applying `k` on the sub-expressions of `e`.
+def collectInstances
+  (k : Expr → MetaM (Option Expr)) (s : HashSet Expr) (e : Expr) : MetaM (HashSet Expr) := do
+  let k s e := do
+    match ← k e with
+    | none => pure s
+    | some i => pure (s.insert i)
+  foldTermApps k s e
+
+-- Similar to `collectInstances`, but explores all the local declarations in the
+-- main context.
+def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.TacticM (HashSet Expr) := do
+  Lean.Elab.Tactic.withMainContext do
+  -- Get the local context
+  let ctx ← Lean.MonadLCtx.getLCtx
+  -- Just a matter of precaution
+  let ctx ← instantiateLCtxMVars ctx
+  -- Initialize the hashset
+  let hs := HashSet.empty
+  -- Explore the declarations
+  let decls ← ctx.getDecls
+  decls.foldlM (fun hs d => collectInstances k hs d.toExpr) hs
 
 -- Return an instance of `HasProp` for `e` if it has some
 def lookupHasProp (e : Expr) : MetaM (Option Expr) := do
-  logInfo f!"lookupHasProp"
+  trace[Arith] "lookupHasProp"
   -- TODO: do we need Lean.observing?
   -- This actually eliminates the error messages
   Lean.observing? do
-    logInfo f!"lookupHasProp: observing"
+    trace[Arith] "lookupHasProp: observing"
     let ty ← Lean.Meta.inferType e
-    let hasProp ← mkAppM ``Arith.HasProp #[ty]
+    let hasProp ← mkAppM ``HasProp #[ty]
     let hasPropInst ← trySynthInstance hasProp
     match hasPropInst with
     | LOption.some i =>
-      logInfo m!"Found HasProp instance"
-      let i_prop ← mkProjection i `prop
+      trace[Arith] "Found HasProp instance"
+      let i_prop ← mkProjection i (Name.mkSimple "prop")
       some (← mkAppM' i_prop #[e])
     | _ => none
 
--- Auxiliary function for `collectHasPropInstances`
-private partial def collectHasPropInstancesAux (hs : HashSet Expr) (e : Expr) : MetaM (HashSet Expr) := do
-  -- We do it in a very simpler manner: we deconstruct applications,
-  -- and recursively explore the sub-expressions. Note that we do
-  -- not go inside foralls and abstractions (should we?).
-  e.withApp fun f args => do
-    let hasPropInst ← lookupHasProp f
-    let hs := Option.getD (hasPropInst.map hs.insert) hs
-    let hs ← args.foldlM collectHasPropInstancesAux hs
-    pure hs
-
--- Explore a term and return the instances of `HasProp` found for the sub-expressions
-def collectHasPropInstances (e : Expr) : MetaM (HashSet Expr) :=
-  collectHasPropInstancesAux HashSet.empty e
-
--- Explore a term and return the set of scalar expressions found inside
-partial def collectScalarExprsAux (hs : HashSet Expr) (e : Expr) : MetaM (HashSet Expr) := do
-  -- We do it in a very simpler manner: we deconstruct applications,
-  -- and recursively explore the sub-expressions. Note that we do
-  -- not go inside foralls and abstractions (should we?).
-  e.withApp fun f args => do
-    let hs ← if ← isScalarExpr f then pure (hs.insert f) else pure hs
-    let hs ← args.foldlM collectScalarExprsAux hs
-    pure hs
-
--- Explore a term and return the list of scalar expressions found inside
-def collectScalarExprs (e : Expr) : MetaM (HashSet Expr) :=
-  collectScalarExprsAux HashSet.empty e
-
--- Collect the scalar expressions in the context
-def getScalarExprsFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  Lean.Elab.Tactic.withMainContext do
-  -- Get the local context
-  let ctx ← Lean.MonadLCtx.getLCtx
-  -- Just a matter of precaution
-  let ctx ← instantiateLCtxMVars ctx
-  -- Initialize the hashset
-  let hs := HashSet.empty
-  -- Explore the declarations
-  let decls ← ctx.getDecls
-  let hs ← decls.foldlM (fun hs d => collectScalarExprsAux hs d.toExpr) hs
-  -- Return
-  pure hs
-
 -- Collect the instances of `HasProp` for the subexpressions in the context
-def getHasPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  Lean.Elab.Tactic.withMainContext do
-  -- Get the local context
-  let ctx ← Lean.MonadLCtx.getLCtx
-  -- Just a matter of precaution
-  let ctx ← instantiateLCtxMVars ctx
-  -- Initialize the hashset
-  let hs := HashSet.empty
-  -- Explore the declarations
-  let decls ← ctx.getDecls
-  let hs ← decls.foldlM (fun hs d => collectHasPropInstancesAux hs d.toExpr) hs
-  -- Return
-  pure hs
-
-elab "list_scalar_exprs" : tactic => do
-  logInfo m!"Listing scalar expressions"
-  let hs ← getScalarExprsFromMainCtx
-  hs.forM fun e => do
-    logInfo m!"+ Scalar expression: {e}"
-
-example (x y : U32) (z : Usize) : True := by
-  list_scalar_exprs
-  simp
+def collectHasPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
+  collectInstancesFromMainCtx lookupHasProp
 
 elab "display_has_prop_instances" : tactic => do
-  logInfo m!"Displaying the HasProp instances"
-  let hs ← getHasPropInstancesFromMainCtx
+  trace[Arith] "Displaying the HasProp instances"
+  let hs ← collectHasPropInstancesFromMainCtx
   hs.forM fun e => do
-    logInfo m!"+ HasProp instance: {e}"
+    trace[Arith] "+ HasProp instance: {e}"
+
+
+set_option trace.Arith true
 
 example (x : U32) : True := by
   let i : HasProp U32 := inferInstance
@@ -211,34 +193,45 @@ example (x : U32) : True := by
   display_has_prop_instances
   simp
 
-elab "list_local_decls_1" : tactic =>
-  Lean.Elab.Tactic.withMainContext do
-  -- Get the local context
-  let ctx ← Lean.MonadLCtx.getLCtx
-  let ctx ← instantiateLCtxMVars ctx
-  let decls ← ctx.getDecls
-  -- Filter the scalar expressions
-  let decls ← decls.filterMapM fun decl: Lean.LocalDecl => do
-    let declExpr := decl.toExpr
-    let declName := decl.userName
-    let declType ← Lean.Meta.inferType declExpr
-    dbg_trace f!"+ local decl: name: {declName} | expr: {declExpr} | ty: {declType}"
-    -- Try to convert the expression to a scalar
-    -- TODO: I tried to do it with Lean.Meta.mkAppM but it didn't work: how
-    -- do we allow Lean to perform (controlled) unfoldings for instantiation
-    -- purposes?
-    let r ← Lean.observing? do
-      let isScalar ← mkAppM `Arith.IsScalar #[declType]
-      let isScalar ← trySynthInstance isScalar
-      match isScalar with
-      | LOption.some x => some x
-      | _ => none
-    match r with
-    | .some _ => dbg_trace f!"  Scalar expression"; pure r
-    | _       => dbg_trace f!"  Not a scalar"; pure .none
-  pure ()
+set_option trace.Arith false
 
-def evalAddDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool := false) : Tactic.TacticM Unit :=
+-- Return an instance of `PropHasImp` for `e` if it has some
+def lookupPropHasImp (e : Expr) : MetaM (Option Expr) := do
+  trace[Arith] "lookupPropHasImp"
+  -- TODO: do we need Lean.observing?
+  -- This actually eliminates the error messages
+  Lean.observing? do
+    trace[Arith] "lookupPropHasImp: observing"
+    let ty ← Lean.Meta.inferType e
+    trace[Arith] "lookupPropHasImp: ty: {ty}"
+    let cl ← mkAppM ``PropHasImp #[ty]
+    let inst ← trySynthInstance cl
+    match inst with
+    | LOption.some i =>
+      trace[Arith] "Found PropHasImp instance"
+      let i_prop ←  mkProjection i (Name.mkSimple "prop")
+      some (← mkAppM' i_prop #[e])
+    | _ => none
+
+-- Collect the instances of `PropHasImp` for the subexpressions in the context
+def collectPropHasImpInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
+  collectInstancesFromMainCtx lookupPropHasImp
+
+elab "display_prop_has_imp_instances" : tactic => do
+  trace[Arith] "Displaying the PropHasImp instances"
+  let hs ← collectPropHasImpInstancesFromMainCtx
+  hs.forM fun e => do
+    trace[Arith] "+ PropHasImp instance: {e}"
+
+set_option trace.Arith true
+
+example (x y : Int) (h0 : x ≠ y) (h1 : ¬ x = y) : True := by
+  display_prop_has_imp_instances
+  simp
+
+set_option trace.Arith false
+
+def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (k : Expr → Tactic.TacticM Unit) : Tactic.TacticM Unit :=
   -- I don't think we need that
   Lean.Elab.Tactic.withMainContext do
   -- Insert the new declaration
@@ -248,8 +241,7 @@ def evalAddDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool := false)
     let lctx ← Lean.MonadLCtx.getLCtx
     let fid := nval.fvarId!
     let decl := lctx.get! fid
-        -- Remark: logInfo instantiates the mvars (contrary to dbg_trace):
-    logInfo m!"  new decl: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
+    trace[Arith] "  new decl: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
     --
     -- Tranform the main goal `?m0` to `let x = nval in ?m1`
     let mvarId ← Tactic.getMainGoal
@@ -260,17 +252,14 @@ def evalAddDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool := false)
     -- - asLet is false: ewVal is `λ $name => $newMVar`
     --   We need to apply it to `val`
     let newVal := if asLet then newVal else mkAppN newVal #[val]
-    -- Focus on the current goal
-    Tactic.focus do
-    -- Assign the main goal.
-    -- We must do this *after* we focused on the current goal, because
-    -- after we assigned the meta variable the goal is considered as solved
+    -- Assign the main goal and update the current goal
     mvarId.assign newVal
-    -- Replace the list of goals with the new goal - we can do this because
-    -- we focused on the current goal
-    Lean.Elab.Tactic.setGoals [newMVar.mvarId!]
+    let goals ← Tactic.getUnsolvedGoals
+    Lean.Elab.Tactic.setGoals (newMVar.mvarId! :: goals)
+    -- Call the continuation
+    k nval
 
-def evalAddDeclSyntax (name : Name) (val : Syntax) (asLet : Bool := false) : Tactic.TacticM Unit :=
+def addDeclSyntax (name : Name) (val : Syntax) (asLet : Bool) (k : Expr → Tactic.TacticM Unit) : Tactic.TacticM Unit :=
   -- I don't think we need that
   Lean.Elab.Tactic.withMainContext do
   --
@@ -281,13 +270,13 @@ def evalAddDeclSyntax (name : Name) (val : Syntax) (asLet : Bool := false) : Tac
   -- not choose): we force the instantiation of the meta-variable
   synthesizeSyntheticMVarsUsingDefault
   --
-  evalAddDecl name val type asLet
+  addDecl name val type asLet k
 
 elab "custom_let " n:ident " := " v:term : tactic =>
-  evalAddDeclSyntax n.getId v (asLet := true)
+  addDeclSyntax n.getId v (asLet := true) (λ _ => pure ())
 
 elab "custom_have " n:ident " := " v:term : tactic =>
-  evalAddDeclSyntax n.getId v (asLet := false)
+  addDeclSyntax n.getId v (asLet := false) (λ _ => pure ())
 
 example : Nat := by
   custom_let x := 4
@@ -297,26 +286,32 @@ example : Nat := by
 example (x : Bool) : Nat := by
   cases x <;> custom_let x := 3 <;> apply x
 
--- Lookup the instances of `HasProp for all the sub-expressions in the context,
--- and introduce the corresponding assumptions
-elab "intro_has_prop_instances" : tactic => do
-  logInfo m!"Introducing the HasProp instances"
-  let hs ← getHasPropInstancesFromMainCtx
+-- Lookup instances in a context and introduce them with additional declarations.
+def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr)) (k : Expr → Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+  let hs ← collectInstancesFromMainCtx lookup
   hs.forM fun e => do
     let type ← inferType e
-    let name := `h
-    evalAddDecl name e type (asLet := false)
-    -- Simplify to unfold the `prop_ty` projector
+    let name ← mkFreshUserName `h
+    -- Add a declaration
+    addDecl name e type (asLet := false) λ nval => do
+    -- Simplify to unfold the declaration to unfold (i.e., the projector)
     let simpTheorems ← Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
-    -- Add the equational theorem for `HashProp'.prop_ty`
-    let simpTheorems ← simpTheorems.addDeclToUnfold ``HasProp.prop_ty
+    -- Add the equational theorem for the decl to unfold
+    let simpTheorems ← simpTheorems.addDeclToUnfold declToUnfold
     let congrTheorems ← getSimpCongrTheorems
     let ctx : Simp.Context := { simpTheorems := #[simpTheorems], congrTheorems }
     -- Where to apply the simplifier
     let loc := Tactic.Location.targets #[mkIdent name] false
     -- Apply the simplifier
     let _ ← Tactic.simpLocation ctx (discharge? := .none) loc
-    pure ()
+    -- Call the continuation
+    k nval
+
+-- Lookup the instances of `HasProp for all the sub-expressions in the context,
+-- and introduce the corresponding assumptions
+elab "intro_has_prop_instances" : tactic => do
+  trace[Arith] "Introducing the HasProp instances"
+  introInstances ``HasProp.prop_ty lookupHasProp (fun _ => pure ())
 
 example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
   intro_has_prop_instances
@@ -326,23 +321,129 @@ example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
   intro_has_prop_instances
   simp_all [Scalar.max, Scalar.min]
 
--- A tactic to solve linear arithmetic goals
-syntax "int_tac" : tactic
+-- Tactic to split on a disjunction
+def splitDisj (h : Expr) : Tactic.TacticM Unit := do
+  trace[Arith] "assumption on which to split: {h}"
+  -- Retrieve the main goal
+  Lean.Elab.Tactic.withMainContext do
+  let goalType ← Lean.Elab.Tactic.getMainTarget
+  -- Case disjunction
+  let hTy ← inferType h
+  hTy.withApp fun f xs => do
+  trace[Arith] "as app: {f} {xs}"
+  -- Sanity check
+  if ¬ (f.isConstOf ``Or ∧ xs.size = 2) then throwError "Invalid argument to splitDisj"
+  let a := xs.get! 0
+  let b := xs.get! 1
+  -- Introduce the new goals
+  -- Returns:
+  -- - the match branch
+  -- - a fresh new mvar id
+  let mkGoal (hTy : Expr) (nGoalName : String) : MetaM (Expr × MVarId) := do
+    -- Introduce a variable for the assumption (`a` or `b`)
+    let asmName ← mkFreshUserName `h
+    withLocalDeclD asmName hTy fun var => do
+    -- The new goal
+    let mgoal ← mkFreshExprSyntheticOpaqueMVar goalType (tag := Name.mkSimple nGoalName)
+    -- The branch expression
+    let branch ← mkLambdaFVars #[var] mgoal
+    pure (branch, mgoal.mvarId!)
+  let (inl, mleft) ← mkGoal a "left"
+  let (inr, mright) ← mkGoal b "right"
+  trace[Arith] "left: {inl}: {mleft}"
+  trace[Arith] "right: {inr}: {mright}"
+  -- Create the match expression
+  withLocalDeclD (← mkFreshUserName `h) hTy fun hVar => do
+  let motive ← mkLambdaFVars #[hVar] goalType
+  let casesExpr ← mkAppOptM ``Or.casesOn #[a, b, motive, h, inl, inr]
+  let mgoal ← Tactic.getMainGoal
+  trace[Arith] "goals: {← Tactic.getUnsolvedGoals}"
+  trace[Arith] "main goal: {mgoal}"
+  mgoal.assign casesExpr
+  let goals ← Tactic.getUnsolvedGoals
+  Tactic.setGoals (mleft :: mright :: goals)
+  trace[Arith] "new goals: {← Tactic.getUnsolvedGoals}"
+
+elab "split_disj " n:ident : tactic => do
+  Lean.Elab.Tactic.withMainContext do
+  let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
+  let fvar := mkFVar decl.fvarId
+  splitDisj fvar
+
+example (x y : Int) (h0 : x ≤ y ∨ x ≥ y) : x ≤ y ∨ x ≥ y := by
+  split_disj h0
+  . left; assumption
+  . right; assumption
+
+-- Lookup the instances of `PropHasImp for all the sub-expressions in the context,
+-- and introduce the corresponding assumptions
+elab "intro_prop_has_imp_instances" : tactic => do
+  trace[Arith] "Introducing the PropHasImp instances"
+  introInstances ``PropHasImp.concl lookupPropHasImp (fun _ => pure ())
+
+example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
+  intro_prop_has_imp_instances
+  rename_i h
+  split_disj h
+  . linarith
+  . linarith
+
+syntax "int_tac_preprocess" : tactic
+
+/- Boosting a bit the linarith tac.
+
+   We do the following:
+   - for all the assumptions of the shape `(x : Int) ≠ y` or `¬ (x = y), we
+     introduce two goals with the assumptions `x < y` and `x > y`
+     TODO: we could create a PR for mathlib.
+ -/
+def intTacPreprocess : Tactic.TacticM Unit := do
+  Lean.Elab.Tactic.withMainContext do
+  -- Get the local context
+  let ctx ← Lean.MonadLCtx.getLCtx
+  -- Just a matter of precaution
+  let ctx ← instantiateLCtxMVars ctx
+  -- Explore the declarations - Remark: we don't explore the subexpressions
+  -- (we could, but it is rarely necessary, because terms of the shape `x ≠ y`
+  -- are often introduced because of branchings in the code, and using `split`
+  -- introduces exactly the assumptions `x = y` and `x ≠ y`).
+  let decls ← ctx.getDecls
+  for decl in decls do
+    let ty ← Lean.Meta.inferType decl.toExpr
+    ty.withApp fun f args => do
+      trace[Arith] "decl: {f} {args}"
+      -- Check if this is an inequality between integers
+  pure ()
+
+-- TODO: int_tac
+
+elab "int_tac_preprocess" : tactic =>
+  intTacPreprocess
+
+example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
+  int_tac_preprocess
+  simp_all
+  int_tac_preprocess
+
+-- A tactic to solve linear arithmetic goals in the presence of scalars
+syntax "scalar_tac" : tactic
 macro_rules
-  | `(tactic| int_tac) =>
+  | `(tactic| scalar_tac) =>
     `(tactic|
       intro_has_prop_instances;
       have := Scalar.cMin_bound ScalarTy.Usize;
       have := Scalar.cMin_bound ScalarTy.Isize;
       have := Scalar.cMax_bound ScalarTy.Usize;
       have := Scalar.cMax_bound ScalarTy.Isize;
+      -- TODO: not too sure about that
       simp only [*, Scalar.max, Scalar.min, Scalar.cMin, Scalar.cMax] at *;
+      -- TODO: use int_tac
       linarith)
 
 example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
-  int_tac
+  scalar_tac
 
 example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
-  int_tac
+  scalar_tac
 
 end Arith
