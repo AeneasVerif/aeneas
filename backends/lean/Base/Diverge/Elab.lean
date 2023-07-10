@@ -14,8 +14,8 @@ namespace Diverge
 syntax (name := divergentDef)
   declModifiers "divergent" "def" declId ppIndent(optDeclSig) declVal : command
 
-open Utils
 open Lean Elab Term Meta Primitives Lean.Meta
+open Utils
 
 /- The following was copied from the `wfRecursion` function. -/
 
@@ -46,21 +46,6 @@ def getSigmaTypes (ty : Expr) : MetaM (Expr × Expr) := do
     throwError "Invalid argument to getSigmaTypes: {ty}"
   else
     pure (args.get! 0, args.get! 1)
-
-/- Like `lambdaTelescopeN` but only destructs a fixed number of lambdas -/
-def lambdaTelescopeN (e : Expr) (n : Nat) (k : Array Expr → Expr → MetaM α) : MetaM α :=
-  lambdaTelescope e fun xs body => do
-  if xs.size < n then throwError "lambdaTelescopeN: not enough lambdas";
-  let xs := xs.extract 0 n
-  let ys := xs.extract n xs.size
-  let body ← mkLambdaFVars ys body
-  k xs body
-
-/- Like `lambdaTelescope`, but only destructs one lambda
-   TODO: is there an equivalent of this function somewhere in the
-   standard library? -/
-def lambdaOne (e : Expr) (k : Expr → Expr → MetaM α) : MetaM α :=
-  lambdaTelescopeN e 1 λ xs b => k (xs.get! 0) b
 
 /- Generate a Sigma type from a list of *variables* (all the expressions
    must be variables).

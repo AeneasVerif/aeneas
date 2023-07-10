@@ -8,7 +8,8 @@ import Mathlib.Tactic.Linarith
 -- TODO: there is no Omega tactic for now - it seems it hasn't been ported yet
 --import Mathlib.Tactic.Omega
 import Base.Primitives
-import Base.ArithBase
+import Base.Utils
+import Base.Arith.Base
 
 /-
 Mathlib tactics:
@@ -222,62 +223,6 @@ example (x y : Int) (_ : x ≠ y) (_ : ¬ x = y) : True := by
   display_prop_has_imp_instances
   simp
 
-def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : Tactic.TacticM Expr :=
-  -- I don't think we need that
-  Lean.Elab.Tactic.withMainContext do
-  -- Insert the new declaration
-  let withDecl := if asLet then withLetDecl name type val else withLocalDeclD name type
-  withDecl fun nval => do
-    -- For debugging
-    let lctx ← Lean.MonadLCtx.getLCtx
-    let fid := nval.fvarId!
-    let decl := lctx.get! fid
-    trace[Arith] "  new decl: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
-    --
-    -- Tranform the main goal `?m0` to `let x = nval in ?m1`
-    let mvarId ← Tactic.getMainGoal
-    let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
-    let newVal ← mkLetFVars #[nval] newMVar
-    -- There are two cases:
-    -- - asLet is true: newVal is `let $name := $val in $newMVar`
-    -- - asLet is false: ewVal is `λ $name => $newMVar`
-    --   We need to apply it to `val`
-    let newVal := if asLet then newVal else mkAppN newVal #[val]
-    -- Assign the main goal and update the current goal
-    mvarId.assign newVal
-    let goals ← Tactic.getUnsolvedGoals
-    Lean.Elab.Tactic.setGoals (newMVar.mvarId! :: goals)
-    -- Return the new value - note: we are in the *new* context, created
-    -- after the declaration was added, so it will persist
-    pure nval
-
-def addDeclSyntax (name : Name) (val : Syntax) (asLet : Bool) : Tactic.TacticM Unit :=
-  -- I don't think we need that
-  Lean.Elab.Tactic.withMainContext do
-  --
-  let val ← elabTerm val .none
-  let type ← inferType val
-  -- In some situations, the type will be left as a metavariable (for instance,
-  -- if the term is `3`, Lean has the choice between `Nat` and `Int` and will
-  -- not choose): we force the instantiation of the meta-variable
-  synthesizeSyntheticMVarsUsingDefault
-  --
-  let _ ← addDecl name val type asLet
-
-elab "custom_let " n:ident " := " v:term : tactic => do
-  addDeclSyntax n.getId v (asLet := true)
-
-elab "custom_have " n:ident " := " v:term : tactic =>
-  addDeclSyntax n.getId v (asLet := false)
-
-example : Nat := by
-  custom_let x := 4
-  custom_have y := 4
-  apply y
-
-example (x : Bool) : Nat := by
-  cases x <;> custom_let x := 3 <;> apply x
-
 -- Lookup instances in a context and introduce them with additional declarations.
 def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr)) : Tactic.TacticM (Array Expr) := do
   let hs ← collectInstancesFromMainCtx lookup
@@ -285,7 +230,7 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     let type ← inferType e
     let name ← mkFreshUserName `h
     -- Add a declaration
-    let nval ← addDecl name e type (asLet := false)
+    let nval ← Utils.addDecl name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
     let simpTheorems ← Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
     -- Add the equational theorem for the decl to unfold

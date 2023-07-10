@@ -116,4 +116,99 @@ partial def mapVisit (k : Nat → Expr → MetaM Expr) (e : Expr) : MetaM Expr :
     | .proj _ _ b => return e.updateProj! (← visit (i + 1) b)
   visit 0 e
 
+section Methods
+  variable [MonadLiftT MetaM m] [MonadControlT MetaM m] [Monad m] [MonadError m]
+  variable {a : Type}
+
+  /- Like `lambdaTelescopeN` but only destructs a fixed number of lambdas -/
+  def lambdaTelescopeN (e : Expr) (n : Nat) (k : Array Expr → Expr → m a) : m a :=
+    lambdaTelescope e fun xs body => do
+    if xs.size < n then throwError "lambdaTelescopeN: not enough lambdas"
+    let xs := xs.extract 0 n
+    let ys := xs.extract n xs.size
+    let body ← liftMetaM (mkLambdaFVars ys body)
+    k xs body
+
+  /- Like `lambdaTelescope`, but only destructs one lambda
+     TODO: is there an equivalent of this function somewhere in the
+     standard library? -/
+  def lambdaOne (e : Expr) (k : Expr → Expr → m a) : m a :=
+    lambdaTelescopeN e 1 λ xs b => k (xs.get! 0) b
+
+  def isExists (e : Expr) : Bool := e.getAppFn.isConstOf ``Exists ∧ e.getAppNumArgs = 2
+
+  -- Remark: Lean doesn't find the inhabited and nonempty instances if we don'
+  -- put them explicitely in the signature
+  partial def existsTelescopeProcess [Inhabited (m a)] [Nonempty (m a)]
+    (fvars : Array Expr) (e : Expr) (k : Array Expr → Expr → m a) : m a := do
+    -- Attempt to deconstruct an existential
+    if isExists e then do
+      let p := e.appArg!
+      lambdaOne p fun x ne =>
+      existsTelescopeProcess (fvars.push x) ne k
+    else
+      -- No existential: call the continuation
+      k fvars e
+
+  def existsTelescope [Inhabited (m a)] [Nonempty (m a)] (e : Expr) (k : Array Expr → Expr → m a) : m a := do
+    existsTelescopeProcess #[] e k
+
+end Methods
+
+def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : Tactic.TacticM Expr :=
+  -- I don't think we need that
+  Lean.Elab.Tactic.withMainContext do
+  -- Insert the new declaration
+  let withDecl := if asLet then withLetDecl name type val else withLocalDeclD name type
+  withDecl fun nval => do
+    -- For debugging
+    let lctx ← Lean.MonadLCtx.getLCtx
+    let fid := nval.fvarId!
+    let decl := lctx.get! fid
+    trace[Arith] "  new decl: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
+    --
+    -- Tranform the main goal `?m0` to `let x = nval in ?m1`
+    let mvarId ← Tactic.getMainGoal
+    let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
+    let newVal ← mkLetFVars #[nval] newMVar
+    -- There are two cases:
+    -- - asLet is true: newVal is `let $name := $val in $newMVar`
+    -- - asLet is false: ewVal is `λ $name => $newMVar`
+    --   We need to apply it to `val`
+    let newVal := if asLet then newVal else mkAppN newVal #[val]
+    -- Assign the main goal and update the current goal
+    mvarId.assign newVal
+    let goals ← Tactic.getUnsolvedGoals
+    Lean.Elab.Tactic.setGoals (newMVar.mvarId! :: goals)
+    -- Return the new value - note: we are in the *new* context, created
+    -- after the declaration was added, so it will persist
+    pure nval
+
+def addDeclSyntax (name : Name) (val : Syntax) (asLet : Bool) : Tactic.TacticM Unit :=
+  -- I don't think we need that
+  Lean.Elab.Tactic.withMainContext do
+  --
+  let val ← elabTerm val .none
+  let type ← inferType val
+  -- In some situations, the type will be left as a metavariable (for instance,
+  -- if the term is `3`, Lean has the choice between `Nat` and `Int` and will
+  -- not choose): we force the instantiation of the meta-variable
+  synthesizeSyntheticMVarsUsingDefault
+  --
+  let _ ← addDecl name val type asLet
+
+elab "custom_let " n:ident " := " v:term : tactic => do
+  addDeclSyntax n.getId v (asLet := true)
+
+elab "custom_have " n:ident " := " v:term : tactic =>
+  addDeclSyntax n.getId v (asLet := false)
+
+example : Nat := by
+  custom_let x := 4
+  custom_have y := 4
+  apply y
+
+example (x : Bool) : Nat := by
+  cases x <;> custom_let x := 3 <;> apply x
+
 end Utils
