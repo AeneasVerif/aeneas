@@ -146,7 +146,7 @@ def collectInstances
 -- Similar to `collectInstances`, but explores all the local declarations in the
 -- main context.
 def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.TacticM (HashSet Expr) := do
-  Lean.Elab.Tactic.withMainContext do
+  Tactic.withMainContext do
   -- Get the local context
   let ctx ← Lean.MonadLCtx.getLCtx
   -- Just a matter of precaution
@@ -263,8 +263,8 @@ example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
 def splitDisj (h : Expr) (kleft kright : Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   trace[Arith] "assumption on which to split: {h}"
   -- Retrieve the main goal
-  Lean.Elab.Tactic.withMainContext do
-  let goalType ← Lean.Elab.Tactic.getMainTarget
+  Tactic.withMainContext do
+  let goalType ← Tactic.getMainTarget
   let hDecl := (← getLCtx).get! h.fvarId!
   let hName := hDecl.userName
   -- Case disjunction
@@ -316,7 +316,7 @@ def splitDisj (h : Expr) (kleft kright : Tactic.TacticM Unit) : Tactic.TacticM U
   trace[Arith] "new goals: {← Tactic.getUnsolvedGoals}"
 
 elab "split_disj " n:ident : tactic => do
-  Lean.Elab.Tactic.withMainContext do
+  Tactic.withMainContext do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
   splitDisj fvar (fun _ => pure ()) (fun _ => pure ())
@@ -347,7 +347,7 @@ example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
      TODO: we could create a PR for mathlib.
  -/
 def intTacPreprocess : Tactic.TacticM Unit := do
-  Lean.Elab.Tactic.withMainContext do
+  Tactic.withMainContext do
   -- Lookup the instances of PropHasImp (this is how we detect assumptions
   -- of the proper shape), introduce assumptions in the context and split
   -- on those
@@ -366,24 +366,40 @@ def intTacPreprocess : Tactic.TacticM Unit := do
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess
 
+def intTac : Tactic.TacticM Unit := do
+  Tactic.withMainContext do
+  Tactic.focus do
+  -- Preprocess - wondering if we should do this before or after splitting
+  -- the goal. I think before leads to a smaller proof term?
+  Tactic.allGoals intTacPreprocess
+  -- Split the conjunctions in the goal
+  Utils.repeatTac Utils.splitConjTarget
+  -- Call linarith
+  let linarith :=
+    let cfg : Linarith.LinarithConfig := {
+      -- We do this with our custom preprocessing
+      splitNe := false
+    }
+    Tactic.liftMetaFinishingTactic <| Linarith.linarith false [] cfg
+  Tactic.allGoals linarith
+
+elab "int_tac" : tactic =>
+  intTac
+
 example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
   int_tac_preprocess
   linarith
   linarith
-
-syntax "int_tac" : tactic
-macro_rules
-  | `(tactic| int_tac) =>
-    `(tactic|
-      (repeat (apply And.intro)) <;> -- TODO: improve this
-      int_tac_preprocess <;>
-      linarith)
 
 example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
   int_tac
 
 -- Checking that things append correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
+  int_tac
+
+-- Checking that things append correctly when there are several disjunctions
+example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
   int_tac
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars

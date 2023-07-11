@@ -1,4 +1,5 @@
 import Lean
+import Mathlib.Tactic.Core
 
 namespace Utils
 
@@ -210,5 +211,32 @@ example : Nat := by
 
 example (x : Bool) : Nat := by
   cases x <;> custom_let x := 3 <;> apply x
+
+-- Repeatedly apply a tactic
+partial def repeatTac (tac : Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+  try
+    tac
+    Tactic.allGoals (Tactic.focus (repeatTac tac))
+  -- TODO: does this restore the state?
+  catch _ => pure ()
+
+def firstTac (tacl : List (Tactic.TacticM Unit)) : Tactic.TacticM Unit := do
+  match tacl with
+  | [] => pure ()
+  | tac :: tacl =>
+    try tac
+    catch _ => firstTac tacl
+
+-- Split the goal if it is a conjunction
+def splitConjTarget : Tactic.TacticM Unit := do
+  Tactic.withMainContext do
+  let and_intro := Expr.const ``And.intro []
+  let mvarIds' ← _root_.Lean.MVarId.apply (← Tactic.getMainGoal) and_intro
+  Term.synthesizeSyntheticMVarsNoPostponing
+  Tactic.replaceMainGoal mvarIds'
+
+-- Taken from Lean.Elab.Tactic.evalAssumption
+def assumptionTac : Tactic.TacticM Unit :=
+  Tactic.liftMetaTactic fun mvarId => do mvarId.assumption; pure []
 
 end Utils
