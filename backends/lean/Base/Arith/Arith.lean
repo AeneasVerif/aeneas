@@ -339,13 +339,17 @@ def scalarTac : Tactic.TacticM Unit := do
   let add (e : Expr) : Tactic.TacticM Unit := do
     let ty ← inferType e
     let _ ← Utils.addDeclTac (← mkFreshUserName `h) e ty (asLet := false)
-  add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Usize []])
   add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Isize []])
   add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
   add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
   -- Reveal the concrete bounds - TODO: not too sure about that.
   -- Maybe we should reveal the "concrete" bounds (after normalization)
-  Utils.simpAt [``Scalar.max, ``Scalar.min, ``Scalar.cMin, ``Scalar.cMax] [] [] .wildcard
+  Utils.simpAt [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
+                ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
+                ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
+                ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
+                ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max
+                ] [] [] .wildcard
   -- Apply the integer tactic
   intTac
 

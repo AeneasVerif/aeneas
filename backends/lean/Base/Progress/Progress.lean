@@ -92,9 +92,10 @@ def progressLookupTheorem (asmTac : TacticM Unit) : TacticM Unit := do
       if ← isConj (← inferType h) then
         splitConjTac h (fun h _ => k h)
       else k h
-    -- Simplify the target by using the equality
+    -- Simplify the target by using the equality and some monad simplifications
     splitConj fun h => do
-    simpAt [] [] [h.fvarId!] (.targets #[] true)
+    simpAt [] [``Primitives.bind_tc_ret, ``Primitives.bind_tc_fail, ``Primitives.bind_tc_div]
+           [h.fvarId!] (.targets #[] true)
     -- Clear the equality
     let mgoal ← getMainGoal
     let mgoal ← mgoal.tryClearMany #[h.fvarId!]
