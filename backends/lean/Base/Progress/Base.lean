@@ -60,7 +60,7 @@ section Methods
     trace[Progress] "Theorem: {th}"
     -- Dive into the quantified variables and the assumptions
     forallTelescope th fun fvars th => do
-    trace[Progress] "All argumens: {fvars}"
+    trace[Progress] "All arguments: {fvars}"
   /-  -- Filter the argumens which are not propositions
     let rec getFirstPropIdx (i : Nat) : MetaM Nat := do
       if i ≥ fargs.size then pure i

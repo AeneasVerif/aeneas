@@ -11,49 +11,9 @@ import Base.Primitives
 import Base.Utils
 import Base.Arith.Base
 
-/-
-Mathlib tactics:
-- rcases: https://leanprover-community.github.io/mathlib_docs/tactics.html#rcases
-- split_ifs: https://leanprover-community.github.io/mathlib_docs/tactics.html#split_ifs
-- norm_num: https://leanprover-community.github.io/mathlib_docs/tactics.html#norm_num
-- should we use linarith or omega?
-- hint: https://leanprover-community.github.io/mathlib_docs/tactics.html#hint
-- classical: https://leanprover-community.github.io/mathlib_docs/tactics.html#classical
--/
-
-namespace List
-
-  -- TODO: I could not find this function??
-  @[simp] def flatten {a : Type u} : List (List a) → List a
-  | [] => []
-  | x :: ls => x ++ flatten ls
-
-end List
-
-namespace Lean
-
-namespace LocalContext
-
-  open Lean Lean.Elab Command Term Lean.Meta
-
-  -- Small utility: return the list of declarations in the context, from
-  -- the last to the first.
-  def getAllDecls (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) :=
-    lctx.foldrM (fun d ls => do let d ← instantiateLocalDeclMVars d; pure (d :: ls)) []
-
-  -- Return the list of declarations in the context, but filter the
-  -- declarations which are considered as implementation details
-  def getDecls (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) := do
-    let ls ← lctx.getAllDecls
-    pure (ls.filter (fun d => not d.isImplementationDetail))
-
-end LocalContext
-
-end Lean
-
 namespace Arith
 
-open Primitives
+open Primitives Utils
 
 -- TODO: move?
 theorem ne_zero_is_lt_or_gt {x : Int} (hne : x ≠ 0) : x < 0 ∨ x > 0 := by

@@ -6,28 +6,6 @@ import Mathlib.Tactic.Linarith
 
 import Base.Primitives
 
-/-
-TODO:
-- we want an easier to use cases:
-  - keeps in the goal an equation of the shape: `t = case`
-  - if called on Prop terms, uses Classical.em
-  Actually, the cases from mathlib seems already quite powerful
-  (https://leanprover-community.github.io/mathlib_docs/tactics.html#cases)
-  For instance: cases h : e
-  Also: **casesm**
-- better split tactic
-- we need conversions to operate on the head of applications.
-  Actually, something like this works:
-  ```
-  conv at Hl =>
-    apply congr_fun
-    simp [fix_fuel_P]
-  ```
-  Maybe we need a rpt ... ; focus?
-- simplifier/rewriter have a strange behavior sometimes
--/
-
-
 /- TODO: this is very useful, but is there more? -/
 set_option profiler true
 set_option profiler.threshold 100
