@@ -356,8 +356,14 @@ def Scalar.ofIntCore {ty : ScalarTy} (x : Int)
   (hmin : Scalar.min ty ≤ x) (hmax : x ≤ Scalar.max ty) : Scalar ty :=
   { val := x, hmin := hmin, hmax := hmax }
 
+-- Tactic to prove that integers are in bounds
+-- TODO: use this: https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/instance.20with.20tactic.20autoparam
+syntax "intlit" : tactic
+macro_rules
+  | `(tactic| intlit) => `(tactic| apply Scalar.bound_suffices; decide)
+
 def Scalar.ofInt {ty : ScalarTy} (x : Int)
-  (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : Scalar ty :=
+  (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty := by intlit) : Scalar ty :=
   -- Remark: we initially wrote:
   --  let ⟨ hmin, hmax ⟩ := h
   --  Scalar.ofIntCore x hmin hmax
@@ -572,13 +578,6 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
     | isFalse h => isFalse (Scalar.ne_of_val_ne h)
 
 def Scalar.toInt {ty} (n : Scalar ty) : Int := n.val
-
--- Tactic to prove that integers are in bounds
--- TODO: use this: https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/instance.20with.20tactic.20autoparam
-syntax "intlit" : tactic
-
-macro_rules
-  | `(tactic| intlit) => `(tactic| apply Scalar.bound_suffices ; decide)
 
 -- -- We now define a type class that subsumes the various machine integer types, so
 -- -- as to write a concise definition for scalar_cast, rather than exhaustively

@@ -7,13 +7,13 @@ namespace paper
 /- [paper::ref_incr]: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
 def ref_incr (x : I32) : Result I32 :=
-  x + (I32.ofInt 1 (by intlit))
+  x + (I32.ofInt 1)
 
 /- [paper::test_incr]: forward function -/
 def test_incr : Result Unit :=
   do
-    let x ← ref_incr (I32.ofInt 0 (by intlit))
-    if not (x = (I32.ofInt 1 (by intlit)))
+    let x ← ref_incr (I32.ofInt 0)
+    if not (x = (I32.ofInt 1))
     then Result.fail Error.panic
     else Result.ret ()
 
@@ -36,20 +36,17 @@ def choose_back
 /- [paper::test_choose]: forward function -/
 def test_choose : Result Unit :=
   do
-    let z ←
-      choose I32 true (I32.ofInt 0 (by intlit)) (I32.ofInt 0 (by intlit))
-    let z0 ← z + (I32.ofInt 1 (by intlit))
-    if not (z0 = (I32.ofInt 1 (by intlit)))
+    let z ← choose I32 true (I32.ofInt 0) (I32.ofInt 0)
+    let z0 ← z + (I32.ofInt 1)
+    if not (z0 = (I32.ofInt 1))
     then Result.fail Error.panic
     else
       do
-        let (x, y) ←
-          choose_back I32 true (I32.ofInt 0 (by intlit))
-            (I32.ofInt 0 (by intlit)) z0
-        if not (x = (I32.ofInt 1 (by intlit)))
+        let (x, y) ← choose_back I32 true (I32.ofInt 0) (I32.ofInt 0) z0
+        if not (x = (I32.ofInt 1))
         then Result.fail Error.panic
         else
-          if not (y = (I32.ofInt 0 (by intlit)))
+          if not (y = (I32.ofInt 0))
           then Result.fail Error.panic
           else Result.ret ()
 
@@ -65,10 +62,10 @@ inductive List (T : Type) :=
 divergent def list_nth_mut (T : Type) (l : List T) (i : U32) : Result T :=
   match l with
   | List.Cons x tl =>
-    if i = (U32.ofInt 0 (by intlit))
+    if i = (U32.ofInt 0)
     then Result.ret x
     else do
-           let i0 ← i - (U32.ofInt 1 (by intlit))
+           let i0 ← i - (U32.ofInt 1)
            list_nth_mut T tl i0
   | List.Nil => Result.fail Error.panic
 
@@ -77,11 +74,11 @@ divergent def list_nth_mut_back
   (T : Type) (l : List T) (i : U32) (ret0 : T) : Result (List T) :=
   match l with
   | List.Cons x tl =>
-    if i = (U32.ofInt 0 (by intlit))
+    if i = (U32.ofInt 0)
     then Result.ret (List.Cons ret0 tl)
     else
       do
-        let i0 ← i - (U32.ofInt 1 (by intlit))
+        let i0 ← i - (U32.ofInt 1)
         let tl0 ← list_nth_mut_back T tl i0 ret0
         Result.ret (List.Cons x tl0)
   | List.Nil => Result.fail Error.panic
@@ -92,23 +89,20 @@ divergent def sum (l : List I32) : Result I32 :=
   | List.Cons x tl => do
                         let i ← sum tl
                         x + i
-  | List.Nil => Result.ret (I32.ofInt 0 (by intlit))
+  | List.Nil => Result.ret (I32.ofInt 0)
 
 /- [paper::test_nth]: forward function -/
 def test_nth : Result Unit :=
   do
     let l := List.Nil
-    let l0 := List.Cons (I32.ofInt 3 (by intlit)) l
-    let l1 := List.Cons (I32.ofInt 2 (by intlit)) l0
-    let x ←
-      list_nth_mut I32 (List.Cons (I32.ofInt 1 (by intlit)) l1)
-        (U32.ofInt 2 (by intlit))
-    let x0 ← x + (I32.ofInt 1 (by intlit))
+    let l0 := List.Cons (I32.ofInt 3) l
+    let l1 := List.Cons (I32.ofInt 2) l0
+    let x ← list_nth_mut I32 (List.Cons (I32.ofInt 1) l1) (U32.ofInt 2)
+    let x0 ← x + (I32.ofInt 1)
     let l2 ←
-      list_nth_mut_back I32 (List.Cons (I32.ofInt 1 (by intlit)) l1)
-        (U32.ofInt 2 (by intlit)) x0
+      list_nth_mut_back I32 (List.Cons (I32.ofInt 1) l1) (U32.ofInt 2) x0
     let i ← sum l2
-    if not (i = (I32.ofInt 7 (by intlit)))
+    if not (i = (I32.ofInt 7))
     then Result.fail Error.panic
     else Result.ret ()
 
@@ -120,7 +114,7 @@ def call_choose (p : (U32 × U32)) : Result U32 :=
   do
     let (px, py) := p
     let pz ← choose U32 true px py
-    let pz0 ← pz + (U32.ofInt 1 (by intlit))
+    let pz0 ← pz + (U32.ofInt 1)
     let (px0, _) ← choose_back U32 true px py pz0
     Result.ret px0
 

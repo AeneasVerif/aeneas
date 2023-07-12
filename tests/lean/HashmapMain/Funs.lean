@@ -15,11 +15,11 @@ divergent def hashmap.HashMap.allocate_slots_loop
   (T : Type) (slots : Vec (hashmap.List T)) (n : Usize) :
   Result (Vec (hashmap.List T))
   :=
-  if n > (Usize.ofInt 0 (by intlit))
+  if n > (Usize.ofInt 0)
   then
     do
       let slots0 ← Vec.push (hashmap.List T) slots hashmap.List.Nil
-      let n0 ← n - (Usize.ofInt 1 (by intlit))
+      let n0 ← n - (Usize.ofInt 1)
       hashmap.HashMap.allocate_slots_loop T slots0 n0
   else Result.ret slots
 
@@ -43,7 +43,7 @@ def hashmap.HashMap.new_with_capacity
     let i0 ← i / max_load_divisor
     Result.ret
       {
-        num_entries := (Usize.ofInt 0 (by intlit)),
+        num_entries := (Usize.ofInt 0),
         max_load_factor := (max_load_dividend, max_load_divisor),
         max_load := i0,
         slots := slots
@@ -51,8 +51,8 @@ def hashmap.HashMap.new_with_capacity
 
 /- [hashmap_main::hashmap::HashMap::{0}::new]: forward function -/
 def hashmap.HashMap.new (T : Type) : Result (hashmap.HashMap T) :=
-  hashmap.HashMap.new_with_capacity T (Usize.ofInt 32 (by intlit))
-    (Usize.ofInt 4 (by intlit)) (Usize.ofInt 5 (by intlit))
+  hashmap.HashMap.new_with_capacity T (Usize.ofInt 32) (Usize.ofInt 4)
+    (Usize.ofInt 5)
 
 /- [hashmap_main::hashmap::HashMap::{0}::clear]: loop 0: merged forward/backward function
    (there is a single backward function, and the forward function returns ()) -/
@@ -64,7 +64,7 @@ divergent def hashmap.HashMap.clear_loop
   if i < i0
   then
     do
-      let i1 ← i + (Usize.ofInt 1 (by intlit))
+      let i1 ← i + (Usize.ofInt 1)
       let slots0 ←
         Vec.index_mut_back (hashmap.List T) slots i hashmap.List.Nil
       hashmap.HashMap.clear_loop T slots0 i1
@@ -75,10 +75,8 @@ divergent def hashmap.HashMap.clear_loop
 def hashmap.HashMap.clear
   (T : Type) (self : hashmap.HashMap T) : Result (hashmap.HashMap T) :=
   do
-    let v ←
-      hashmap.HashMap.clear_loop T self.slots (Usize.ofInt 0 (by intlit))
-    Result.ret
-      { self with num_entries := (Usize.ofInt 0 (by intlit)), slots := v }
+    let v ← hashmap.HashMap.clear_loop T self.slots (Usize.ofInt 0)
+    Result.ret { self with num_entries := (Usize.ofInt 0), slots := v }
 
 /- [hashmap_main::hashmap::HashMap::{0}::len]: forward function -/
 def hashmap.HashMap.len (T : Type) (self : hashmap.HashMap T) : Result Usize :=
@@ -138,7 +136,7 @@ def hashmap.HashMap.insert_no_resize
     if inserted
     then
       do
-        let i0 ← self.num_entries + (Usize.ofInt 1 (by intlit))
+        let i0 ← self.num_entries + (Usize.ofInt 1)
         let l0 ← hashmap.HashMap.insert_in_list_back T key value l
         let v ← Vec.index_mut_back (hashmap.List T) self.slots hash_mod l0
         Result.ret { self with num_entries := i0, slots := v }
@@ -149,8 +147,7 @@ def hashmap.HashMap.insert_no_resize
         Result.ret { self with slots := v }
 
 /- [core::num::u32::{9}::MAX] -/
-def core_num_u32_max_body : Result U32 :=
-  Result.ret (U32.ofInt 4294967295 (by intlit))
+def core_num_u32_max_body : Result U32 := Result.ret (U32.ofInt 4294967295)
 def core_num_u32_max_c : U32 := eval_global core_num_u32_max_body (by simp)
 
 /- [hashmap_main::hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
@@ -188,7 +185,7 @@ divergent def hashmap.HashMap.move_elements_loop
       let l ← Vec.index_mut (hashmap.List T) slots i
       let ls := mem.replace (hashmap.List T) l hashmap.List.Nil
       let ntable0 ← hashmap.HashMap.move_elements_from_list T ntable ls
-      let i1 ← i + (Usize.ofInt 1 (by intlit))
+      let i1 ← i + (Usize.ofInt 1)
       let l0 := mem.replace_back (hashmap.List T) l hashmap.List.Nil
       let slots0 ← Vec.index_mut_back (hashmap.List T) slots i l0
       hashmap.HashMap.move_elements_loop T ntable0 slots0 i1
@@ -210,17 +207,16 @@ def hashmap.HashMap.try_resize
   do
     let max_usize ← Scalar.cast .Usize core_num_u32_max_c
     let capacity := Vec.len (hashmap.List T) self.slots
-    let n1 ← max_usize / (Usize.ofInt 2 (by intlit))
+    let n1 ← max_usize / (Usize.ofInt 2)
     let (i, i0) := self.max_load_factor
     let i1 ← n1 / i
     if capacity <= i1
     then
       do
-        let i2 ← capacity * (Usize.ofInt 2 (by intlit))
+        let i2 ← capacity * (Usize.ofInt 2)
         let ntable ← hashmap.HashMap.new_with_capacity T i2 i i0
         let (ntable0, _) ←
-          hashmap.HashMap.move_elements T ntable self.slots
-            (Usize.ofInt 0 (by intlit))
+          hashmap.HashMap.move_elements T ntable self.slots (Usize.ofInt 0)
         Result.ret
           {
             ntable0
@@ -411,7 +407,7 @@ def hashmap.HashMap.remove
     | Option.none => Result.ret Option.none
     | Option.some x0 =>
       do
-        let _ ← self.num_entries - (Usize.ofInt 1 (by intlit))
+        let _ ← self.num_entries - (Usize.ofInt 1)
         Result.ret (Option.some x0)
 
 /- [hashmap_main::hashmap::HashMap::{0}::remove]: backward function 0 -/
@@ -433,7 +429,7 @@ def hashmap.HashMap.remove_back
         Result.ret { self with slots := v }
     | Option.some x0 =>
       do
-        let i0 ← self.num_entries - (Usize.ofInt 1 (by intlit))
+        let i0 ← self.num_entries - (Usize.ofInt 1)
         let l0 ← hashmap.HashMap.remove_from_list_back T key l
         let v ← Vec.index_mut_back (hashmap.List T) self.slots hash_mod l0
         Result.ret { self with num_entries := i0, slots := v }
@@ -442,60 +438,48 @@ def hashmap.HashMap.remove_back
 def hashmap.test1 : Result Unit :=
   do
     let hm ← hashmap.HashMap.new U64
-    let hm0 ←
-      hashmap.HashMap.insert U64 hm (Usize.ofInt 0 (by intlit))
-        (U64.ofInt 42 (by intlit))
-    let hm1 ←
-      hashmap.HashMap.insert U64 hm0 (Usize.ofInt 128 (by intlit))
-        (U64.ofInt 18 (by intlit))
+    let hm0 ← hashmap.HashMap.insert U64 hm (Usize.ofInt 0) (U64.ofInt 42)
+    let hm1 ← hashmap.HashMap.insert U64 hm0 (Usize.ofInt 128) (U64.ofInt 18)
     let hm2 ←
-      hashmap.HashMap.insert U64 hm1 (Usize.ofInt 1024 (by intlit))
-        (U64.ofInt 138 (by intlit))
+      hashmap.HashMap.insert U64 hm1 (Usize.ofInt 1024) (U64.ofInt 138)
     let hm3 ←
-      hashmap.HashMap.insert U64 hm2 (Usize.ofInt 1056 (by intlit))
-        (U64.ofInt 256 (by intlit))
-    let i ← hashmap.HashMap.get U64 hm3 (Usize.ofInt 128 (by intlit))
-    if not (i = (U64.ofInt 18 (by intlit)))
+      hashmap.HashMap.insert U64 hm2 (Usize.ofInt 1056) (U64.ofInt 256)
+    let i ← hashmap.HashMap.get U64 hm3 (Usize.ofInt 128)
+    if not (i = (U64.ofInt 18))
     then Result.fail Error.panic
     else
       do
         let hm4 ←
-          hashmap.HashMap.get_mut_back U64 hm3 (Usize.ofInt 1024 (by intlit))
-            (U64.ofInt 56 (by intlit))
-        let i0 ← hashmap.HashMap.get U64 hm4 (Usize.ofInt 1024 (by intlit))
-        if not (i0 = (U64.ofInt 56 (by intlit)))
+          hashmap.HashMap.get_mut_back U64 hm3 (Usize.ofInt 1024)
+            (U64.ofInt 56)
+        let i0 ← hashmap.HashMap.get U64 hm4 (Usize.ofInt 1024)
+        if not (i0 = (U64.ofInt 56))
         then Result.fail Error.panic
         else
           do
-            let x ←
-              hashmap.HashMap.remove U64 hm4 (Usize.ofInt 1024 (by intlit))
+            let x ← hashmap.HashMap.remove U64 hm4 (Usize.ofInt 1024)
             match x with
             | Option.none => Result.fail Error.panic
             | Option.some x0 =>
-              if not (x0 = (U64.ofInt 56 (by intlit)))
+              if not (x0 = (U64.ofInt 56))
               then Result.fail Error.panic
               else
                 do
                   let hm5 ←
-                    hashmap.HashMap.remove_back U64 hm4
-                      (Usize.ofInt 1024 (by intlit))
-                  let i1 ←
-                    hashmap.HashMap.get U64 hm5 (Usize.ofInt 0 (by intlit))
-                  if not (i1 = (U64.ofInt 42 (by intlit)))
+                    hashmap.HashMap.remove_back U64 hm4 (Usize.ofInt 1024)
+                  let i1 ← hashmap.HashMap.get U64 hm5 (Usize.ofInt 0)
+                  if not (i1 = (U64.ofInt 42))
                   then Result.fail Error.panic
                   else
                     do
-                      let i2 ←
-                        hashmap.HashMap.get U64 hm5
-                          (Usize.ofInt 128 (by intlit))
-                      if not (i2 = (U64.ofInt 18 (by intlit)))
+                      let i2 ← hashmap.HashMap.get U64 hm5 (Usize.ofInt 128)
+                      if not (i2 = (U64.ofInt 18))
                       then Result.fail Error.panic
                       else
                         do
                           let i3 ←
-                            hashmap.HashMap.get U64 hm5
-                              (Usize.ofInt 1056 (by intlit))
-                          if not (i3 = (U64.ofInt 256 (by intlit)))
+                            hashmap.HashMap.get U64 hm5 (Usize.ofInt 1056)
+                          if not (i3 = (U64.ofInt 256))
                           then Result.fail Error.panic
                           else Result.ret ()
 

@@ -9,9 +9,15 @@
     "inputRev?": "v0.0.11"}},
   {"path": {"name": "Base", "dir": "./../../backends/lean"}},
   {"git":
+   {"url": "https://github.com/mhuisi/lean4-cli.git",
+    "subDir?": null,
+    "rev": "5a858c32963b6b19be0d477a30a1f4b6c120be7e",
+    "name": "Cli",
+    "inputRev?": "nightly"}},
+  {"git":
    {"url": "https://github.com/leanprover-community/mathlib4.git",
     "subDir?": null,
-    "rev": "bb4fb766e41dd3a64197263ec132c7f9c4b50065",
+    "rev": "82fe7e902b01fe686b91c19550f1e228ad2dec1c",
     "name": "mathlib",
     "inputRev?": null}},
   {"git":

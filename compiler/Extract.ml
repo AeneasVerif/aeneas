@@ -820,7 +820,7 @@ let mk_formatter (ctx : trans_ctx) (crate_name : string)
               F.pp_print_string fmt ")";
               F.pp_print_string fmt ")")
             else Z.pp_print fmt sv.value;
-            F.pp_print_string fmt " (by intlit))")
+            F.pp_print_string fmt ")")
     | Bool b ->
         let b =
           match !backend with

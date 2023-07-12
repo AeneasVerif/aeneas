@@ -36,7 +36,7 @@ def test_new_non_zero_u32
 def test_vec : Result Unit :=
   do
     let v := Vec.new U32
-    let _ ← Vec.push U32 v (U32.ofInt 0 (by intlit))
+    let _ ← Vec.push U32 v (U32.ofInt 0)
     Result.ret ()
 
 /- Unit test for [external::test_vec] -/
@@ -74,14 +74,14 @@ def test_custom_swap_back
   (x : U32) (y : U32) (st : State) (st0 : State) :
   Result (State × (U32 × U32))
   :=
-  custom_swap_back U32 x y st (U32.ofInt 1 (by intlit)) st0
+  custom_swap_back U32 x y st (U32.ofInt 1) st0
 
 /- [external::test_swap_non_zero]: forward function -/
 def test_swap_non_zero (x : U32) (st : State) : Result (State × U32) :=
   do
-    let (st0, _) ← swap U32 x (U32.ofInt 0 (by intlit)) st
-    let (st1, (x0, _)) ← swap_back U32 x (U32.ofInt 0 (by intlit)) st st0
-    if x0 = (U32.ofInt 0 (by intlit))
+    let (st0, _) ← swap U32 x (U32.ofInt 0) st
+    let (st1, (x0, _)) ← swap_back U32 x (U32.ofInt 0) st st0
+    if x0 = (U32.ofInt 0)
     then Result.fail Error.panic
     else Result.ret (st1, x0)
 
