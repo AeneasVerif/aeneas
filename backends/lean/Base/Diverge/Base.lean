@@ -14,7 +14,7 @@ TODO:
   Actually, the cases from mathlib seems already quite powerful
   (https://leanprover-community.github.io/mathlib_docs/tactics.html#cases)
   For instance: cases h : e
-  Also: cases_matching
+  Also: **casesm**
 - better split tactic
 - we need conversions to operate on the head of applications.
   Actually, something like this works:

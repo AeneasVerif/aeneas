@@ -10,26 +10,6 @@ open Utils
 -- We can't define and use trace classes in the same file
 initialize registerTraceClass `Progress
 
--- Return the first conjunct if the expression is a conjunction, or the
--- expression itself otherwise. Also return the second conjunct if it is a
--- conjunction.
-def getFirstConj (e : Expr) : MetaM (Expr × Option Expr) := do
-  e.withApp fun f args =>
-  if f.isConstOf ``And ∧ args.size = 2 then pure (args.get! 0, some (args.get! 1))
-  else pure (e, none)
-
--- Destruct an equaliy and return the two sides
-def destEq (e : Expr) : MetaM (Expr × Expr) := do
-  e.withApp fun f args =>
-  if f.isConstOf ``Eq ∧ args.size = 3 then pure (args.get! 1, args.get! 2)
-  else throwError "Not an equality: {e}"
-
--- Return the set of FVarIds in the expression
-partial def getFVarIds (e : Expr) (hs : HashSet FVarId := HashSet.empty) : MetaM (HashSet FVarId) := do
-  e.withApp fun body args => do
-  let hs := if body.isFVar then hs.insert body.fvarId! else hs
-  args.foldlM (fun hs arg => getFVarIds arg hs) hs
-
 /- # Progress tactic -/
 
 structure PSpecDesc where
@@ -103,7 +83,7 @@ section Methods
     existsTelescope th fun evars th => do
     trace[Progress] "Existentials: {evars}"
     -- Take the first conjunct
-    let (th, post) ← getFirstConj th
+    let (th, post) ← optSplitConj th
     -- Destruct the equality
     let (th, ret) ← destEq th
     -- Destruct the application to get the name
@@ -169,7 +149,5 @@ initialize pspecAttr : PSpecAttr ← do
 
 def PSpecAttr.find? (s : PSpecAttr) (name : Name) : MetaM (Option Name) := do
   return (s.ext.getState (← getEnv)).find? name
-  --return s.ext.find? (← getEnv) name
-
 
 end Progress

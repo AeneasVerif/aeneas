@@ -21,9 +21,6 @@ namespace Test
   #eval pspecAttr.find? ``Primitives.Vec.index
 end Test
 
-#check isDefEq
-#check allGoals
-
 def progressLookupTheorem (asmTac : TacticM Unit) : TacticM Unit := do
   withMainContext do
   -- Retrieve the goal
@@ -80,7 +77,28 @@ def progressLookupTheorem (asmTac : TacticM Unit) : TacticM Unit := do
   let th ← mkAppOptM thName (mvars.map some)
   let asmName ← mkFreshUserName `h
   let thTy ← inferType th
-  let thAsm ← Utils.addDecl asmName th thTy (asLet := false)
+  let thAsm ← Utils.addDeclTac asmName th thTy (asLet := false)
+  withMainContext do -- The context changed - TODO: remove once addDeclTac is updated
+  let ngoal ← getMainGoal
+  trace[Progress] "current goal: {ngoal}"
+  trace[Progress] "current goal: {← ngoal.isAssigned}"
+  -- The assumption should be of the shape:
+  -- `∃ x1 ... xn, f args = ... ∧ ...`
+  -- We introduce the existentially quantified variables and split the top-most
+  -- conjunction if there is one
+  splitAllExistsTac thAsm fun h => do
+    -- Split the conjunction
+    let splitConj (k : Expr → TacticM Unit) : TacticM Unit := do
+      if ← isConj (← inferType h) then
+        splitConjTac h (fun h _ => k h)
+      else k h
+    -- Simplify the target by using the equality
+    splitConj fun h => do
+    simpAt [] [] [h.fvarId!] (.targets #[] true)
+    -- Clear the equality
+    let mgoal ← getMainGoal
+    let mgoal ← mgoal.tryClearMany #[h.fvarId!]
+    setGoals (mgoal :: (← getUnsolvedGoals))
   -- Update the set of goals
   let curGoals ← getUnsolvedGoals
   let newGoals := mvars.map Expr.mvarId!
@@ -94,7 +112,7 @@ def progressLookupTheorem (asmTac : TacticM Unit) : TacticM Unit := do
   pure ()
 
 elab "progress" : tactic => do
-  progressLookupTheorem (firstTac [assumptionTac, Arith.intTac])
+  progressLookupTheorem (firstTac [assumptionTac, Arith.scalarTac])
 
 namespace Test
   open Primitives
@@ -103,10 +121,12 @@ namespace Test
 
   @[pspec]
   theorem vec_index_test2 (α : Type u) (v: Vec α) (i: Usize) (h: i.val < v.val.length) :
-    ∃ x, v.index α i = .ret x := by
+    ∃ (x: α), v.index α i = .ret x := by
       progress
-      tauto
-      
+      simp
+
+  set_option trace.Progress false
+
 end Test
 
 end Progress

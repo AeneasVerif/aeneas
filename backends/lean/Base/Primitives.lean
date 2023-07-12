@@ -175,27 +175,28 @@ open System.Platform.getNumBits
 @[simp] def U128.min  : Int := 0
 @[simp] def U128.max  : Int := HPow.hPow 2 128 - 1
 
-#assert (I8.min   == -128)
-#assert (I8.max   == 127)
-#assert (I16.min  == -32768)
-#assert (I16.max  == 32767)
-#assert (I32.min  == -2147483648)
-#assert (I32.max  == 2147483647)
-#assert (I64.min  == -9223372036854775808)
-#assert (I64.max  == 9223372036854775807)
-#assert (I128.min == -170141183460469231731687303715884105728)
-#assert (I128.max == 170141183460469231731687303715884105727)
-#assert (U8.min   == 0)
-#assert (U8.max   == 255)
-#assert (U16.min  == 0)
-#assert (U16.max  == 65535)
-#assert (U32.min  == 0)
-#assert (U32.max  == 4294967295)
-#assert (U64.min  == 0)
-#assert (U64.max  == 18446744073709551615)
-#assert (U128.min == 0)
-#assert (U128.max == 340282366920938463463374607431768211455)
-
+-- The normalized bounds
+@[simp] def I8.norm_min   := -128
+@[simp] def I8.norm_max   := 127
+@[simp] def I16.norm_min  := -32768
+@[simp] def I16.norm_max  := 32767
+@[simp] def I32.norm_min  := -2147483648
+@[simp] def I32.norm_max  := 2147483647
+@[simp] def I64.norm_min  := -9223372036854775808
+@[simp] def I64.norm_max  := 9223372036854775807
+@[simp] def I128.norm_min := -170141183460469231731687303715884105728
+@[simp] def I128.norm_max := 170141183460469231731687303715884105727
+@[simp] def U8.norm_min   := 0
+@[simp] def U8.norm_max   := 255
+@[simp] def U16.norm_min  := 0
+@[simp] def U16.norm_max  := 65535
+@[simp] def U32.norm_min  := 0
+@[simp] def U32.norm_max  := 4294967295
+@[simp] def U64.norm_min  := 0
+@[simp] def U64.norm_max  := 18446744073709551615
+@[simp] def U128.norm_min := 0
+@[simp] def U128.norm_max := 340282366920938463463374607431768211455
+    
 inductive ScalarTy :=
 | Isize
 | I8
@@ -240,6 +241,46 @@ def Scalar.max (ty : ScalarTy) : Int :=
   | .U64   => U64.max
   | .U128  => U128.max
 
+@[simp] def Scalar.norm_min (ty : ScalarTy) : Int :=
+  match ty with
+  -- We can't normalize the bounds for isize/usize
+  | .Isize => Isize.min
+  | .Usize => Usize.min
+  --
+  | .I8    => I8.norm_min
+  | .I16   => I16.norm_min
+  | .I32   => I32.norm_min
+  | .I64   => I64.norm_min
+  | .I128  => I128.norm_min
+  | .U8    => U8.norm_min
+  | .U16   => U16.norm_min
+  | .U32   => U32.norm_min
+  | .U64   => U64.norm_min
+  | .U128  => U128.norm_min
+
+@[simp] def Scalar.norm_max (ty : ScalarTy) : Int :=
+  match ty with
+  -- We can't normalize the bounds for isize/usize
+  | .Isize => Isize.max
+  | .Usize => Usize.max
+  --
+  | .I8    => I8.norm_max
+  | .I16   => I16.norm_max
+  | .I32   => I32.norm_max
+  | .I64   => I64.norm_max
+  | .I128  => I128.norm_max
+  | .U8    => U8.norm_max
+  | .U16   => U16.norm_max
+  | .U32   => U32.norm_max
+  | .U64   => U64.norm_max
+  | .U128  => U128.norm_max
+
+def Scalar.norm_min_eq (ty : ScalarTy) : Scalar.min ty = Scalar.norm_min ty := by
+  cases ty <;> rfl
+
+def Scalar.norm_max_eq (ty : ScalarTy) : Scalar.max ty = Scalar.norm_max ty := by
+  cases ty <;> rfl
+
 -- "Conservative" bounds
 -- We use those because we can't compare to the isize bounds (which can't
 -- reduce at compile-time). Whenever we perform an arithmetic operation like
@@ -249,13 +290,13 @@ def Scalar.max (ty : ScalarTy) : Int :=
 -- type-checking time.
 def Scalar.cMin (ty : ScalarTy) : Int :=
   match ty with
-  | .Isize => I32.min
+  | .Isize => Scalar.min .I32
   | _ => Scalar.min ty
 
 def Scalar.cMax (ty : ScalarTy) : Int :=
   match ty with
-  | .Isize => I32.max
-  | .Usize => U32.max
+  | .Isize => Scalar.max .I32
+  | .Usize => Scalar.max .U32
   | _ => Scalar.max ty
 
 theorem Scalar.cMin_bound ty : Scalar.min ty ≤ Scalar.cMin ty := by

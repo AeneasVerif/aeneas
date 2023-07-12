@@ -1,9 +1,10 @@
 import Lean
 import Mathlib.Tactic.Core
+import Mathlib.Tactic.LeftRight
 
 namespace Utils
 
-open Lean Elab Term Meta
+open Lean Elab Term Meta Tactic
 
 -- Useful helper to explore definitions and figure out the variant
 -- of their sub-expressions.
@@ -156,9 +157,10 @@ section Methods
 
 end Methods
 
-def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : Tactic.TacticM Expr :=
+-- TODO: this should take a continuation
+def addDeclTac (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : TacticM Expr :=
   -- I don't think we need that
-  Lean.Elab.Tactic.withMainContext do
+  withMainContext do
   -- Insert the new declaration
   let withDecl := if asLet then withLetDecl name type val else withLocalDeclD name type
   withDecl fun nval => do
@@ -169,7 +171,7 @@ def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : Tactic.Tac
     trace[Arith] "  new decl: \"{decl.userName}\" ({nval}) : {decl.type} := {decl.value}"
     --
     -- Tranform the main goal `?m0` to `let x = nval in ?m1`
-    let mvarId ← Tactic.getMainGoal
+    let mvarId ← getMainGoal
     let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
     let newVal ← mkLetFVars #[nval] newMVar
     -- There are two cases:
@@ -179,30 +181,30 @@ def addDecl (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : Tactic.Tac
     let newVal := if asLet then newVal else mkAppN newVal #[val]
     -- Assign the main goal and update the current goal
     mvarId.assign newVal
-    let goals ← Tactic.getUnsolvedGoals
-    Lean.Elab.Tactic.setGoals (newMVar.mvarId! :: goals)
+    let goals ← getUnsolvedGoals
+    setGoals (newMVar.mvarId! :: goals)
     -- Return the new value - note: we are in the *new* context, created
     -- after the declaration was added, so it will persist
     pure nval
 
-def addDeclSyntax (name : Name) (val : Syntax) (asLet : Bool) : Tactic.TacticM Unit :=
+def addDeclTacSyntax (name : Name) (val : Syntax) (asLet : Bool) : TacticM Unit :=
   -- I don't think we need that
-  Lean.Elab.Tactic.withMainContext do
+  withMainContext do
   --
-  let val ← elabTerm val .none
+  let val ← Term.elabTerm val .none
   let type ← inferType val
   -- In some situations, the type will be left as a metavariable (for instance,
   -- if the term is `3`, Lean has the choice between `Nat` and `Int` and will
   -- not choose): we force the instantiation of the meta-variable
   synthesizeSyntheticMVarsUsingDefault
   --
-  let _ ← addDecl name val type asLet
+  let _ ← addDeclTac name val type asLet
 
 elab "custom_let " n:ident " := " v:term : tactic => do
-  addDeclSyntax n.getId v (asLet := true)
+  addDeclTacSyntax n.getId v (asLet := true)
 
 elab "custom_have " n:ident " := " v:term : tactic =>
-  addDeclSyntax n.getId v (asLet := false)
+  addDeclTacSyntax n.getId v (asLet := false)
 
 example : Nat := by
   custom_let x := 4
@@ -213,14 +215,14 @@ example (x : Bool) : Nat := by
   cases x <;> custom_let x := 3 <;> apply x
 
 -- Repeatedly apply a tactic
-partial def repeatTac (tac : Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
   try
     tac
-    Tactic.allGoals (Tactic.focus (repeatTac tac))
+    allGoals (focus (repeatTac tac))
   -- TODO: does this restore the state?
   catch _ => pure ()
 
-def firstTac (tacl : List (Tactic.TacticM Unit)) : Tactic.TacticM Unit := do
+def firstTac (tacl : List (TacticM Unit)) : TacticM Unit := do
   match tacl with
   | [] => pure ()
   | tac :: tacl =>
@@ -228,15 +230,216 @@ def firstTac (tacl : List (Tactic.TacticM Unit)) : Tactic.TacticM Unit := do
     catch _ => firstTac tacl
 
 -- Split the goal if it is a conjunction
-def splitConjTarget : Tactic.TacticM Unit := do
-  Tactic.withMainContext do
+def splitConjTarget : TacticM Unit := do
+  withMainContext do
   let and_intro := Expr.const ``And.intro []
-  let mvarIds' ← _root_.Lean.MVarId.apply (← Tactic.getMainGoal) and_intro
+  let mvarIds' ← _root_.Lean.MVarId.apply (← getMainGoal) and_intro
   Term.synthesizeSyntheticMVarsNoPostponing
-  Tactic.replaceMainGoal mvarIds'
+  replaceMainGoal mvarIds'
 
--- Taken from Lean.Elab.Tactic.evalAssumption
-def assumptionTac : Tactic.TacticM Unit :=
-  Tactic.liftMetaTactic fun mvarId => do mvarId.assumption; pure []
+-- Taken from Lean.Elab.evalAssumption
+def assumptionTac : TacticM Unit :=
+  liftMetaTactic fun mvarId => do mvarId.assumption; pure []
+
+def isConj (e : Expr) : MetaM Bool :=
+  e.withApp fun f args => pure (f.isConstOf ``And ∧ args.size = 2)
+
+-- Return the first conjunct if the expression is a conjunction, or the
+-- expression itself otherwise. Also return the second conjunct if it is a
+-- conjunction.
+def optSplitConj (e : Expr) : MetaM (Expr × Option Expr) := do
+  e.withApp fun f args =>
+  if f.isConstOf ``And ∧ args.size = 2 then pure (args.get! 0, some (args.get! 1))
+  else pure (e, none)
+
+-- Destruct an equaliy and return the two sides
+def destEq (e : Expr) : MetaM (Expr × Expr) := do
+  e.withApp fun f args =>
+  if f.isConstOf ``Eq ∧ args.size = 3 then pure (args.get! 1, args.get! 2)
+  else throwError "Not an equality: {e}"
+
+-- Return the set of FVarIds in the expression
+partial def getFVarIds (e : Expr) (hs : HashSet FVarId := HashSet.empty) : MetaM (HashSet FVarId) := do
+  e.withApp fun body args => do
+  let hs := if body.isFVar then hs.insert body.fvarId! else hs
+  args.foldlM (fun hs arg => getFVarIds arg hs) hs
+
+-- Tactic to split on a disjunction.
+-- The expression `h` should be an fvar.
+-- TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance
+def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
+  trace[Arith] "assumption on which to split: {h}"
+  -- Retrieve the main goal
+  withMainContext do
+  let goalType ← getMainTarget
+  let hDecl := (← getLCtx).get! h.fvarId!
+  let hName := hDecl.userName
+  -- Case disjunction
+  let hTy ← inferType h
+  hTy.withApp fun f xs => do
+  trace[Arith] "as app: {f} {xs}"
+  -- Sanity check
+  if ¬ (f.isConstOf ``Or ∧ xs.size = 2) then throwError "Invalid argument to splitDisjTac"
+  let a := xs.get! 0
+  let b := xs.get! 1
+  -- Introduce the new goals
+  -- Returns:
+  -- - the match branch
+  -- - a fresh new mvar id
+  let mkGoal (hTy : Expr) (nGoalName : String) : MetaM (Expr × MVarId) := do
+    -- Introduce a variable for the assumption (`a` or `b`). Note that we reuse
+    -- the name of the assumption we split.
+    withLocalDeclD hName hTy fun var => do
+    -- The new goal
+    let mgoal ← mkFreshExprSyntheticOpaqueMVar goalType (tag := Name.mkSimple nGoalName)
+    -- Clear the assumption that we split
+    let mgoal ← mgoal.mvarId!.tryClearMany #[h.fvarId!]
+    -- The branch expression
+    let branch ← mkLambdaFVars #[var] (mkMVar mgoal)
+    pure (branch, mgoal)
+  let (inl, mleft) ← mkGoal a "left"
+  let (inr, mright) ← mkGoal b "right"
+  trace[Arith] "left: {inl}: {mleft}"
+  trace[Arith] "right: {inr}: {mright}"
+  -- Create the match expression
+  withLocalDeclD (← mkFreshUserName `h) hTy fun hVar => do
+  let motive ← mkLambdaFVars #[hVar] goalType
+  let casesExpr ← mkAppOptM ``Or.casesOn #[a, b, motive, h, inl, inr]
+  let mgoal ← getMainGoal
+  trace[Arith] "goals: {← getUnsolvedGoals}"
+  trace[Arith] "main goal: {mgoal}"
+  mgoal.assign casesExpr
+  let goals ← getUnsolvedGoals
+  -- Focus on the left
+  setGoals [mleft]
+  withMainContext kleft
+  let leftGoals ← getUnsolvedGoals
+  -- Focus on the right
+  setGoals [mright]
+  withMainContext kright
+  let rightGoals ← getUnsolvedGoals
+  -- Put all the goals back
+  setGoals (leftGoals ++ rightGoals ++ goals)
+  trace[Arith] "new goals: {← getUnsolvedGoals}"
+
+elab "split_disj " n:ident : tactic => do
+  withMainContext do
+  let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
+  let fvar := mkFVar decl.fvarId
+  splitDisjTac fvar (fun _ => pure ()) (fun _ => pure ())
+
+example (x y : Int) (h0 : x ≤ y ∨ x ≥ y) : x ≤ y ∨ x ≥ y := by
+  split_disj h0
+  . left; assumption
+  . right; assumption
+
+
+-- Tactic to split on an exists
+def splitExistsTac (h : Expr) (k : Expr → Expr → TacticM α) : TacticM α := do
+  withMainContext do
+  let goal ←  getMainGoal
+  let hTy ← inferType h
+  if isExists hTy then do
+    let newGoals ← goal.cases h.fvarId! #[]
+    -- There should be exactly one goal
+    match newGoals.toList with
+    | [ newGoal ] =>
+      -- Set the new goal
+      let goals ← getUnsolvedGoals
+      setGoals (newGoal.mvarId :: goals)
+      -- There should be exactly two fields
+      let fields := newGoal.fields
+      withMainContext do
+      k (fields.get! 0) (fields.get! 1)
+    | _ =>
+      throwError "Unreachable"
+  else
+    throwError "Not a conjunction"
+
+partial def splitAllExistsTac [Inhabited α] (h : Expr) (k : Expr → TacticM α) : TacticM α := do
+  try
+    splitExistsTac h (fun _ body => splitAllExistsTac body k)
+  catch _ => k h
+
+-- Tactic to split on a conjunction.
+def splitConjTac (h : Expr) (k : Expr → Expr → TacticM α)  : TacticM α := do
+  withMainContext do
+  let goal ←  getMainGoal
+  let hTy ← inferType h
+  if ← isConj hTy then do
+    let newGoals ← goal.cases h.fvarId! #[]
+    -- There should be exactly one goal
+    match newGoals.toList with
+    | [ newGoal ] =>
+      -- Set the new goal
+      let goals ← getUnsolvedGoals
+      setGoals (newGoal.mvarId :: goals)
+      -- There should be exactly two fields
+      let fields := newGoal.fields
+      withMainContext do
+      k (fields.get! 0) (fields.get! 1)
+    | _ =>
+      throwError "Unreachable"
+  else
+    throwError "Not a conjunction"
+
+elab "split_conj " n:ident : tactic => do
+  withMainContext do
+  let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
+  let fvar := mkFVar decl.fvarId
+  splitConjTac fvar (fun _ _ =>  pure ())
+
+elab "split_all_exists " n:ident : tactic => do
+  withMainContext do
+  let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
+  let fvar := mkFVar decl.fvarId
+  splitAllExistsTac fvar (fun _ =>  pure ())
+
+example (h : a ∧ b) : a := by
+  split_all_exists h
+  split_conj h
+  assumption
+
+example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
+  split_all_exists h
+  rename_i x y z h
+  exists x + y + z
+
+/- Call the simp tactic.
+   The initialization of the context is adapted from Tactic.elabSimpArgs.
+   Something very annoying is that there is no function which allows to
+   initialize a simp context without doing an elaboration - as a consequence
+   we write our own here. -/
+def simpAt (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId)
+  (loc : Tactic.Location) :
+  Tactic.TacticM Unit := do
+  -- Initialize with the builtin simp theorems
+  let simpThms ← Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
+  -- Add the equational theorem for the declarations to unfold
+  let simpThms ←
+    declsToUnfold.foldlM (fun thms decl => thms.addDeclToUnfold decl) simpThms
+  -- Add the hypotheses and the rewriting theorems
+  let simpThms ←
+    hypsToUse.foldlM (fun thms fvarId =>
+      -- post: TODO: don't know what that is
+      -- inv: invert the equality
+      thms.add (.fvar fvarId) #[] (mkFVar fvarId) (post := false) (inv := false)
+      -- thms.eraseCore (.fvar fvar)
+      ) simpThms
+  -- Add the rewriting theorems to use
+  let simpThms ←
+    thms.foldlM (fun thms thmName => do
+      let info ← getConstInfo thmName
+      if (← isProp info.type) then
+        -- post: TODO: don't know what that is
+        -- inv: invert the equality
+        thms.addConst thmName (post := false) (inv := false)
+      else
+        throwError "Not a proposition: {thmName}"
+      ) simpThms
+  let congrTheorems ← getSimpCongrTheorems
+  let ctx : Simp.Context := { simpTheorems := #[simpThms], congrTheorems }
+  -- Apply the simplifier
+  let _ ← Tactic.simpLocation ctx (discharge? := .none) loc
 
 end Utils
