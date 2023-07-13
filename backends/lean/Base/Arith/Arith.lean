@@ -15,25 +15,6 @@ namespace Arith
 
 open Primitives Utils
 
--- TODO: move?
-theorem ne_zero_is_lt_or_gt {x : Int} (hne : x ≠ 0) : x < 0 ∨ x > 0 := by
-  cases h: x <;> simp_all
-  . rename_i n;
-    cases n <;> simp_all
-  . apply Int.negSucc_lt_zero
-
--- TODO: move?
-theorem ne_is_lt_or_gt {x y : Int} (hne : x ≠ y) : x < y ∨ x > y := by
-  have hne : x - y ≠ 0 := by
-    simp
-    intro h
-    have: x = y := by linarith
-    simp_all
-  have h := ne_zero_is_lt_or_gt hne
-  match h with
-  | .inl _ => left; linarith
-  | .inr _ => right; linarith
-
 -- TODO: move
 instance Vec.cast (a : Type): Coe (Vec a) (List a)  where coe := λ v => v.val
 
@@ -48,17 +29,21 @@ instance Vec.cast (a : Type): Coe (Vec a) (List a)  where coe := λ v => v.val
  -/
 def Scalar.toInt {ty : ScalarTy} (x : Scalar ty) : Int := x.val
 
--- Remark: I tried a version of the shape `HasProp {a : Type} (x : a)`
+-- Remark: I tried a version of the shape `HasScalarProp {a : Type} (x : a)`
 -- but the lookup didn't work
-class HasProp (a : Sort u) where
+class HasScalarProp (a : Sort u) where
   prop_ty : a → Prop
   prop : ∀ x:a, prop_ty x
 
-instance (ty : ScalarTy) : HasProp (Scalar ty) where
+class HasIntProp (a : Sort u) where
+  prop_ty : a → Prop
+  prop : ∀ x:a, prop_ty x
+
+instance (ty : ScalarTy) : HasScalarProp (Scalar ty) where
   -- prop_ty is inferred
   prop := λ x => And.intro x.hmin x.hmax
 
-instance (a : Type) : HasProp (Vec a) where
+instance (a : Type) : HasScalarProp (Vec a) where
   prop_ty := λ v => v.val.length ≤ Scalar.max ScalarTy.Usize
   prop := λ ⟨ _, l ⟩ => l
 
@@ -117,37 +102,49 @@ def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.Tact
   let decls ← ctx.getDecls
   decls.foldlM (fun hs d => collectInstances k hs d.toExpr) hs
 
--- Return an instance of `HasProp` for `e` if it has some
-def lookupHasProp (e : Expr) : MetaM (Option Expr) := do
-  trace[Arith] "lookupHasProp"
+-- Helper
+def lookupProp (fName : String) (className : Name) (e : Expr) : MetaM (Option Expr) := do
+  trace[Arith] fName
   -- TODO: do we need Lean.observing?
   -- This actually eliminates the error messages
   Lean.observing? do
-    trace[Arith] "lookupHasProp: observing"
+    trace[Arith] m!"{fName}: observing"
     let ty ← Lean.Meta.inferType e
-    let hasProp ← mkAppM ``HasProp #[ty]
+    let hasProp ← mkAppM className #[ty]
     let hasPropInst ← trySynthInstance hasProp
     match hasPropInst with
     | LOption.some i =>
-      trace[Arith] "Found HasProp instance"
+      trace[Arith] "Found HasScalarProp instance"
       let i_prop ← mkProjection i (Name.mkSimple "prop")
       some (← mkAppM' i_prop #[e])
     | _ => none
 
--- Collect the instances of `HasProp` for the subexpressions in the context
-def collectHasPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
-  collectInstancesFromMainCtx lookupHasProp
+-- Return an instance of `HasIntProp` for `e` if it has some
+def lookupHasIntProp (e : Expr) : MetaM (Option Expr) :=
+  lookupProp "lookupHasScalarProp" ``HasIntProp e
+
+-- Return an instance of `HasScalarProp` for `e` if it has some
+def lookupHasScalarProp (e : Expr) : MetaM (Option Expr) :=
+  lookupProp "lookupHasScalarProp" ``HasScalarProp e
+
+-- Collect the instances of `HasIntProp` for the subexpressions in the context
+def collectHasIntPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
+  collectInstancesFromMainCtx lookupHasIntProp
+
+-- Collect the instances of `HasScalarProp` for the subexpressions in the context
+def collectHasScalarPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
+  collectInstancesFromMainCtx lookupHasScalarProp
 
 elab "display_has_prop_instances" : tactic => do
-  trace[Arith] "Displaying the HasProp instances"
-  let hs ← collectHasPropInstancesFromMainCtx
+  trace[Arith] "Displaying the HasScalarProp instances"
+  let hs ← collectHasScalarPropInstancesFromMainCtx
   hs.forM fun e => do
-    trace[Arith] "+ HasProp instance: {e}"
+    trace[Arith] "+ HasScalarProp instance: {e}"
 
 example (x : U32) : True := by
-  let i : HasProp U32 := inferInstance
-  have p := @HasProp.prop _ i x
-  simp only [HasProp.prop_ty] at p
+  let i : HasScalarProp U32 := inferInstance
+  have p := @HasScalarProp.prop _ i x
+  simp only [HasScalarProp.prop_ty] at p
   display_has_prop_instances
   simp
 
@@ -196,14 +193,18 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
     -- Return the new value
     pure nval
 
-def introHasPropInstances : Tactic.TacticM (Array Expr) := do
-  trace[Arith] "Introducing the HasProp instances"
-  introInstances ``HasProp.prop_ty lookupHasProp
+def introHasIntPropInstances : Tactic.TacticM (Array Expr) := do
+  trace[Arith] "Introducing the HasIntProp instances"
+  introInstances ``HasIntProp.prop_ty lookupHasIntProp
 
--- Lookup the instances of `HasProp for all the sub-expressions in the context,
+def introHasScalarPropInstances : Tactic.TacticM (Array Expr) := do
+  trace[Arith] "Introducing the HasScalarProp instances"
+  introInstances ``HasScalarProp.prop_ty lookupHasScalarProp
+
+-- Lookup the instances of `HasScalarProp for all the sub-expressions in the context,
 -- and introduce the corresponding assumptions
 elab "intro_has_prop_instances" : tactic => do
-  let _ ← introHasPropInstances
+  let _ ← introHasScalarPropInstances
 
 example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
   intro_has_prop_instances
@@ -246,6 +247,7 @@ def intTacPreprocess : Tactic.TacticM Unit := do
       let k := splitOnAsms asms
       Utils.splitDisjTac asm k k
   -- Introduce
+  let _ ← introHasIntPropInstances
   let asms ← introInstances ``PropHasImp.concl lookupPropHasImp
   -- Split
   splitOnAsms asms.toList
@@ -289,29 +291,35 @@ example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
   int_tac
 
+def scalarTacPreprocess (tac : Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+   Tactic.withMainContext do
+   -- Introduce the scalar bounds
+   let _ ← introHasScalarPropInstances
+   Tactic.allGoals do
+   -- Inroduce the bounds for the isize/usize types
+   let add (e : Expr) : Tactic.TacticM Unit := do
+     let ty ← inferType e
+     let _ ← Utils.addDeclTac (← mkFreshUserName `h) e ty (asLet := false)
+   add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Isize []])
+   add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
+   add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
+   -- Reveal the concrete bounds - TODO: not too sure about that.
+   -- Maybe we should reveal the "concrete" bounds (after normalization)
+   Utils.simpAt [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
+                 ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
+                 ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
+                 ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
+                 ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max
+                 ] [] [] .wildcard
+   -- Finish the proof
+   tac
+
+elab "scalar_tac_preprocess" : tactic =>
+  scalarTacPreprocess intTacPreprocess
+
 -- A tactic to solve linear arithmetic goals in the presence of scalars
 def scalarTac : Tactic.TacticM Unit := do
-  Tactic.withMainContext do
-  -- Introduce the scalar bounds
-  let _ ← introHasPropInstances
-  Tactic.allGoals do
-  -- Inroduce the bounds for the isize/usize types
-  let add (e : Expr) : Tactic.TacticM Unit := do
-    let ty ← inferType e
-    let _ ← Utils.addDeclTac (← mkFreshUserName `h) e ty (asLet := false)
-  add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Isize []])
-  add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
-  add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
-  -- Reveal the concrete bounds - TODO: not too sure about that.
-  -- Maybe we should reveal the "concrete" bounds (after normalization)
-  Utils.simpAt [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
-                ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
-                ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
-                ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
-                ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max
-                ] [] [] .wildcard
-  -- Apply the integer tactic
-  intTac
+  scalarTacPreprocess intTac
 
 elab "scalar_tac" : tactic =>
   scalarTac
