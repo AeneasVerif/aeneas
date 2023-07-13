@@ -303,8 +303,7 @@ def scalarTacPreprocess (tac : Tactic.TacticM Unit) : Tactic.TacticM Unit := do
    add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Isize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
-   -- Reveal the concrete bounds - TODO: not too sure about that.
-   -- Maybe we should reveal the "concrete" bounds (after normalization)
+   -- Reveal the concrete bounds
    Utils.simpAt [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
                  ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
                  ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
