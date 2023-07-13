@@ -396,13 +396,21 @@ example (x y : Int) (h0 : x ≤ y ∨ x ≥ y) : x ≤ y ∨ x ≥ y := by
   . right; assumption
 
 
--- Tactic to split on an exists
-def splitExistsTac (h : Expr) (k : Expr → Expr → TacticM α) : TacticM α := do
+-- Tactic to split on an exists.
+-- `h` must be an FVar
+def splitExistsTac (h : Expr) (optId : Option Name) (k : Expr → Expr → TacticM α) : TacticM α := do
   withMainContext do
   let goal ←  getMainGoal
   let hTy ← inferType h
   if isExists hTy then do
-    let newGoals ← goal.cases h.fvarId! #[]
+    -- Try to use the user-provided names
+    let altVarNames ←
+      match optId with
+      | none => pure #[]
+      | some id => do
+        let hDecl ← h.fvarId!.getDecl
+        pure #[{ varNames := [id, hDecl.userName] }]
+    let newGoals ← goal.cases h.fvarId! altVarNames
     -- There should be exactly one goal
     match newGoals.toList with
     | [ newGoal ] =>
@@ -418,18 +426,37 @@ def splitExistsTac (h : Expr) (k : Expr → Expr → TacticM α) : TacticM α :=
   else
     throwError "Not a conjunction"
 
-partial def splitAllExistsTac [Inhabited α] (h : Expr) (k : Expr → TacticM α) : TacticM α := do
+-- TODO: move
+def listTryPopHead (ls : List α) : Option α × List α :=
+  match ls with
+  | [] => (none, ls)
+  | hd :: tl => (some hd, tl)
+
+/- Destruct all the existentials appearing in `h`, and introduce them as variables
+   in the context.
+
+   If `ids` is not empty, we use it to name the introduced variables. We
+   transmit the stripped expression and the remaining ids to the continuation.
+ -/
+partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List Name) (k : Expr → List Name → TacticM α) : TacticM α := do
   try
-    splitExistsTac h (fun _ body => splitAllExistsTac body k)
-  catch _ => k h
+    let (optId, ids) := listTryPopHead ids
+    splitExistsTac h optId (fun _ body => splitAllExistsTac body ids k)
+  catch _ => k h ids
 
 -- Tactic to split on a conjunction.
-def splitConjTac (h : Expr) (k : Expr → Expr → TacticM α)  : TacticM α := do
+def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr → TacticM α)  : TacticM α := do
   withMainContext do
   let goal ←  getMainGoal
   let hTy ← inferType h
   if ← isConj hTy then do
-    let newGoals ← goal.cases h.fvarId! #[]
+    -- Try to use the user-provided names
+    let altVarNames ←
+      match optIds with
+      | none => pure #[]
+      | some (id0, id1) => do
+        pure #[{ varNames := [id0, id1] }]
+    let newGoals ← goal.cases h.fvarId! altVarNames
     -- There should be exactly one goal
     match newGoals.toList with
     | [ newGoal ] =>
@@ -449,13 +476,13 @@ elab "split_conj " n:ident : tactic => do
   withMainContext do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
-  splitConjTac fvar (fun _ _ =>  pure ())
+  splitConjTac fvar none (fun _ _ =>  pure ())
 
 elab "split_all_exists " n:ident : tactic => do
   withMainContext do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
-  splitAllExistsTac fvar (fun _ =>  pure ())
+  splitAllExistsTac fvar [] (fun _ _ => pure ())
 
 example (h : a ∧ b) : a := by
   split_all_exists h
