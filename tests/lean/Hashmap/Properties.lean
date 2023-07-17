@@ -3,7 +3,6 @@ import Hashmap.Funs
 open Primitives
 open Result
 
-
 namespace List
 
 theorem index_ne
@@ -43,29 +42,6 @@ theorem index_eq
         simp at *
         apply index_eq <;> scalar_tac
 
-end List
-
-
-namespace Primitives
-
-@[pspec]
-theorem Vec.index_mut_spec
-  {α : Type u} [Inhabited α] (v: Vec α) (i: Usize) (h: i.val < v.val.len) :
-  ∃ x,
-    v.index_mut α i = ret x ∧ x = v.val.index i.val
-  := by sorry
-
-@[pspec]
-theorem Vec.index_mut_back_spec
-  {α : Type u} (v: Vec α) (i: Usize) (x:α) :
-  i.val < v.val.len → ∃ nv, 
-    v.index_mut_back α i x = ret nv ∧ nv.val = v.val.update i.val x
-  := by sorry
-
-end Primitives
-
-namespace List
-
 def allP {α : Type u} (l : List α) (p: α → Prop) : Prop :=
   foldr (fun a r => p a ∧ r) True l
 
@@ -77,7 +53,6 @@ theorem allP_nil {α : Type u} (p: α → Prop) : allP [] p :=
 theorem allP_cons {α : Type u} (hd: α) (tl : List α) (p: α → Prop) :
   allP (hd :: tl) p ↔ p hd ∧ allP tl p
   := by simp [allP, foldr]
-
 
 def pairwise_rel 
   {α : Type u} (rel : α → α → Prop) (l: List α) : Prop
