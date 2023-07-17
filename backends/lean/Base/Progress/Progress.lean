@@ -7,6 +7,7 @@ namespace Progress
 open Lean Elab Term Meta Tactic
 open Utils
 
+/-
 -- TODO: remove
 namespace Test
   open Primitives
@@ -20,6 +21,7 @@ namespace Test
 
   #eval pspecAttr.find? ``Primitives.Vec.index
 end Test
+-/
 
 inductive TheoremOrLocal where
 | Theorem (thName : Name)
@@ -200,6 +202,7 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
 elab "progress" args:progressArgs : tactic =>
   evalProgress args
 
+/-
 -- TODO: remove
 namespace Test
   open Primitives
@@ -215,5 +218,6 @@ namespace Test
   set_option trace.Progress false
 
 end Test
+-/
 
 end Progress

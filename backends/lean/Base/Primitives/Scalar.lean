@@ -2,6 +2,7 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Mathlib.Tactic.Linarith
 import Base.Primitives.Base
+import Base.Diverge.Base
 
 namespace Primitives
 

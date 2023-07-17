@@ -11,11 +11,26 @@ def len (ls : List α) : Int :=
   | [] => 0
   | _ :: tl => 1 + len tl
 
+@[simp] theorem len_nil : len ([] : List α) = 0 := by simp [len]
+@[simp] theorem len_cons : len ((x :: tl) : List α) = 1 + len tl := by simp [len]
+
+theorem len_pos : 0 ≤ (ls : List α).len := by
+  induction ls <;> simp [*]
+  linarith
+
+instance (a : Type u) : Arith.HasIntProp (List a) where
+  prop_ty := λ ls => 0 ≤ ls.len
+  prop := λ ls => ls.len_pos
+
 -- Remark: if i < 0, then the result is none
 def indexOpt (ls : List α) (i : Int) : Option α :=
   match ls with
   | [] => none
   | hd :: tl => if i = 0 then some hd else indexOpt tl (i - 1)
+
+@[simp] theorem indexOpt_nil : indexOpt ([] : List α) i = none := by simp [indexOpt]
+@[simp] theorem indexOpt_zero_cons : indexOpt ((x :: tl) : List α) 0 = some x := by simp [indexOpt]
+@[simp] theorem indexOpt_nzero_cons (hne : i ≠ 0) : indexOpt ((x :: tl) : List α) i = indexOpt tl (i - 1) := by simp [*, indexOpt]
 
 -- Remark: if i < 0, then the result is the defaul element
 def index [Inhabited α] (ls : List α) (i : Int) : α :=
@@ -23,6 +38,43 @@ def index [Inhabited α] (ls : List α) (i : Int) : α :=
   | [] => Inhabited.default
   | x :: tl =>
     if i = 0 then x else index tl (i - 1)
+
+@[simp] theorem index_zero_cons [Inhabited α] : index ((x :: tl) : List α) 0 = x := by simp [index]
+@[simp] theorem index_nzero_cons [Inhabited α] (hne : i ≠ 0) : index ((x :: tl) : List α) i = index tl (i - 1) := by simp [*, index]
+
+theorem indexOpt_bounds (ls : List α) (i : Int) :
+  ls.indexOpt i = none ↔ i < 0 ∨ ls.len ≤ i :=
+  match ls with
+  | [] =>
+    have : ¬ (i < 0) → 0 ≤ i := by intro; linarith -- TODO: simplify (we could boost int_tac)
+    by simp; tauto
+  | _ :: tl =>
+    have := indexOpt_bounds tl (i - 1)
+    if h: i = 0 then
+      by
+        simp [*];
+        -- TODO: int_tac/scalar_tac should also explore the goal!
+        have := tl.len_pos
+        linarith
+    else by
+      simp [*]
+      constructor <;> intros <;>
+      -- TODO: tactic to split all disjunctions
+      rename_i hor <;> cases hor <;>
+      first | left; int_tac | right; int_tac
+
+theorem indexOpt_eq_index [Inhabited α] (ls : List α) (i : Int) :
+  0 ≤ i →
+  i < ls.len →
+  ls.indexOpt i = some (ls.index i) :=
+  match ls with
+  | [] => by simp; intros; linarith
+  | hd :: tl =>
+    if h: i = 0 then
+      by simp [*]
+    else
+      have hi := indexOpt_eq_index tl (i - 1)
+      by simp [*]; intros;  apply hi <;> int_tac
 
 -- Remark: the list is unchanged if the index is not in bounds (in particular
 -- if it is < 0)
@@ -41,12 +93,6 @@ def idrop (i : Int) (ls : List α) : List α :=
 section Lemmas
 
 variable {α : Type u} 
-
-@[simp] theorem len_nil : len ([] : List α) = 0 := by simp [len]
-@[simp] theorem len_cons : len ((x :: tl) : List α) = 1 + len tl := by simp [len]
-
-@[simp] theorem index_zero_cons [Inhabited α] : index ((x :: tl) : List α) 0 = x := by simp [index]
-@[simp] theorem index_nzero_cons [Inhabited α] (hne : i ≠ 0) : index ((x :: tl) : List α) i = index tl (i - 1) := by simp [*, index]
 
 @[simp] theorem update_nil : update ([] : List α) i y = [] := by simp [update]
 @[simp] theorem update_zero_cons : update ((x :: tl) : List α) 0 y = y :: tl := by simp [update]
@@ -80,14 +126,6 @@ theorem length_update (ls : List α) (i : Int) (x : α) : (ls.update i x).length
 theorem len_update (ls : List α) (i : Int) (x : α) : (ls.update i x).len = ls.len := by
   simp [len_eq_length]
 
-
-theorem len_pos : 0 ≤ (ls : List α).len := by
-  induction ls <;> simp [*]
-  linarith
-
-instance (a : Type u) : Arith.HasIntProp (List a) where
-  prop_ty := λ ls => 0 ≤ ls.len
-  prop := λ ls => ls.len_pos
 
 theorem left_length_eq_append_eq (l1 l2 l1' l2' : List α) (heq : l1.length = l1'.length) :
   l1 ++ l2 = l1' ++ l2' ↔ l1 = l1' ∧ l2 = l2' := by

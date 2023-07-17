@@ -3,8 +3,7 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
-
-import Base.Primitives
+import Base.Primitives.Base
 
 /- TODO: this is very useful, but is there more? -/
 set_option profiler true

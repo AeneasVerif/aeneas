@@ -6,6 +6,7 @@ import Mathlib.Tactic.Linarith
 import Base.IList
 import Base.Primitives.Scalar
 import Base.Arith
+import Base.Progress.Base
 
 namespace Primitives
 
@@ -56,58 +57,80 @@ def Vec.push (α : Type u) (v : Vec α) (x : α) : Result (Vec α)
     fail maximumSizeExceeded
 
 -- This shouldn't be used
-def Vec.insert_fwd (α : Type u) (v: Vec α) (i: Usize) (_: α): Result Unit :=
-  if i.val < List.length v.val then
+def Vec.insert_fwd (α : Type u) (v: Vec α) (i: Usize) (_: α) : Result Unit :=
+  if i.val < v.length then
     .ret ()
   else
     .fail arrayOutOfBounds
 
 -- This is actually the backward function
-def Vec.insert (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α) :=
-  if i.val < List.length v.val then
-    -- TODO: maybe we should redefine a list library which uses integers
-    -- (instead of natural numbers)
+def Vec.insert (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
+  if i.val < v.length then
     .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
   else
     .fail arrayOutOfBounds
 
--- TODO: remove
-def Vec.index_to_fin {α : Type u} {v: Vec α} {i: Usize} (h : i.val < List.length v.val) :
-  Fin (List.length v.val) :=
-  let j := i.val.toNat
-  let h: j < List.length v.val := by
-    have heq := @Int.toNat_lt (List.length v.val) i.val i.hmin
-    apply heq.mpr
-    assumption
-  ⟨j, h⟩
+@[pspec]
+theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α) :
+  i.val < v.length →
+  ∃ nv, v.insert α i x = ret nv ∧ nv.val = v.val.update i.val x := by
+  intro h
+  simp [insert, *]
 
-def Vec.index (α : Type u) (v: Vec α) (i: Usize): Result α :=
+def Vec.index (α : Type u) (v: Vec α) (i: Usize) : Result α :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some x => ret x
 
+@[pspec]
+theorem Vec.index_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize) :
+  i.val < v.length →
+  v.index α i = ret (v.val.index i.val) := by
+  intro
+  simp only [index]
+  -- TODO: dependent rewrite
+  have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp[length] at *; simp [*])
+  simp only [*]
+
 -- This shouldn't be used
-def Vec.index_back (α : Type u) (v: Vec α) (i: Usize) (_: α): Result Unit :=
+def Vec.index_back (α : Type u) (v: Vec α) (i: Usize) (_: α) : Result Unit :=
   if i.val < List.length v.val then
     .ret ()
   else
     .fail arrayOutOfBounds
 
-def Vec.index_mut (α : Type u) (v: Vec α) (i: Usize): Result α :=
-  if h: i.val < List.length v.val then
-    let i := Vec.index_to_fin h
-    .ret (List.get v.val i)
-  else
-    .fail arrayOutOfBounds
+def Vec.index_mut (α : Type u) (v: Vec α) (i: Usize) : Result α :=
+  match v.val.indexOpt i.val with
+  | none => fail .arrayOutOfBounds
+  | some x => ret x
 
-def Vec.index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α): Result (Vec α) :=
-  if h: i.val < List.length v.val then
-    let i := Vec.index_to_fin h
-    .ret ⟨ List.set v.val i x, by
-      have h: List.length v.val ≤ Usize.max := v.property
-      simp [*] at *
-    ⟩
-  else
-    .fail arrayOutOfBounds
+@[pspec]
+theorem Vec.index_mut_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize) :
+  i.val < v.length →
+  v.index_mut α i = ret (v.val.index i.val) := by
+  intro
+  simp only [index_mut]
+  -- TODO: dependent rewrite
+  have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp[length] at *; simp [*])
+  simp only [*]
+
+def Vec.index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
+  match v.val.indexOpt i.val with
+  | none => fail .arrayOutOfBounds
+  | some _ =>
+    .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
+
+@[pspec]
+theorem Vec.index_mut_back_spec {α : Type u} (v: Vec α) (i: Usize) (x : α) :
+  i.val < v.length →
+  ∃ nv, v.index_mut_back α i x = ret nv ∧
+  nv.val = v.val.update i.val x
+  := by
+  intro
+  simp only [index_mut_back]
+  have h := List.indexOpt_bounds v.val i.val
+  split
+  . simp_all [length]; cases h <;> scalar_tac
+  . simp_all
 
 end Primitives

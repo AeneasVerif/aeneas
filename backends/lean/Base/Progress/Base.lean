@@ -1,6 +1,7 @@
 import Lean
+import Std.Lean.HashSet
 import Base.Utils
-import Base.Primitives
+import Base.Primitives.Base
 
 namespace Progress
 
