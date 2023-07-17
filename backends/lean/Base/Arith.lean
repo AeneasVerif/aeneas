@@ -1,1 +1,2 @@
-import Base.Arith.Arith
+import Base.Arith.Int
+import Base.Arith.Scalar

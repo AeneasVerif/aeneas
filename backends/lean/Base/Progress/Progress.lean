@@ -7,6 +7,7 @@ namespace Progress
 open Lean Elab Term Meta Tactic
 open Utils
 
+-- TODO: remove
 namespace Test
   open Primitives
 
@@ -199,6 +200,7 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
 elab "progress" args:progressArgs : tactic =>
   evalProgress args
 
+-- TODO: remove
 namespace Test
   open Primitives
 
