@@ -16,9 +16,6 @@ namespace Arith
 open Primitives Utils
 
 -- TODO: move
-instance Vec.cast (a : Type): Coe (Vec a) (List a)  where coe := λ v => v.val
-
--- TODO: move
 /- Remark: we can't write the following instance because of restrictions about
    the type class parameters (`ty` doesn't appear in the return type, which is
    forbidden):

@@ -616,6 +616,9 @@ def Scalar.toInt {ty} (n : Scalar ty) : Int := n.val
 
 def Vec (α : Type u) := { l : List α // List.length l ≤ Usize.max }
 
+-- TODO: do we really need it? It should be with Subtype by default
+instance Vec.cast (a : Type): Coe (Vec a) (List a)  where coe := λ v => v.val
+
 def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
 
 def Vec.len (α : Type u) (v : Vec α) : Usize :=
