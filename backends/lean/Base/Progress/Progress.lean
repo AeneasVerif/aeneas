@@ -15,7 +15,6 @@ namespace Test
   @[pspec]
   theorem vec_index_test (α : Type u) (v: Vec α) (i: Usize) (h: i.val < v.val.length) :
     ∃ x, v.index α i = .ret x := by
-      apply
       sorry
 
   #eval pspecAttr.find? ``Primitives.Vec.index
@@ -195,7 +194,6 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
       args.map Syntax.getId
     else #[]
   trace[Progress] "Ids: {ids}"
-  --if args[0] ≠ some "as" then throwError "Invalid syntax: should be: `progress as ⟨ ... ⟩`"
   progressAsmsOrLookupTheorem ids (firstTac [assumptionTac, Arith.scalarTac])
 
 elab "progress" args:progressArgs : tactic =>
@@ -205,7 +203,6 @@ namespace Test
   open Primitives
 
   set_option trace.Progress true
-  set_option pp.rawOnError true
 
   @[pspec]
   theorem vec_index_test2 (α : Type u) (v: Vec α) (i: Usize) (h: i.val < v.val.length) :

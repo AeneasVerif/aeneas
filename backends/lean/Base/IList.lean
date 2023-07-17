@@ -7,7 +7,6 @@ import Base.Arith
 
 namespace List
 
-#check List.get
 def len (ls : List α) : Int :=
   match ls with
   | [] => 0
