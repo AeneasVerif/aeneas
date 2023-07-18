@@ -38,7 +38,8 @@ def Vec.len (α : Type u) (v : Vec α) : Usize :=
   let ⟨ v, l ⟩ := v
   Usize.ofIntCore (List.length v) (by simp [Scalar.min, Usize.min]) l
 
-def Vec.length {α : Type u} (v : Vec α) : Int := v.val.len
+@[simp]
+abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.len
 
 -- This shouldn't be used
 def Vec.push_fwd (α : Type u) (_ : Vec α) (_ : α) : Unit := ()
@@ -89,7 +90,7 @@ theorem Vec.index_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize) :
   intro
   simp only [index]
   -- TODO: dependent rewrite
-  have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp[length] at *; simp [*])
+  have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
   simp only [*]
 
 -- This shouldn't be used
@@ -111,13 +112,14 @@ theorem Vec.index_mut_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize) :
   intro
   simp only [index_mut]
   -- TODO: dependent rewrite
-  have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp[length] at *; simp [*])
+  have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
   simp only [*]
 
 def Vec.index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some _ =>
+    -- TODO: int_tac: introduce the refinements in the context?
     .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
 
 @[pspec]
