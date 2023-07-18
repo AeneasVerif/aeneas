@@ -134,7 +134,10 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
       in
       (* Combine *)
       combine params_b tys_b
-  | T.Array ty1, T.Array ty2 | T.Slice ty1, T.Slice ty2 -> compare ty1 ty2
+  | T.Array (ty1, l1), T.Array (ty2, l2) ->
+      assert (l1 = l2);
+      compare ty1 ty2
+  | T.Slice ty1, T.Slice ty2 -> compare ty1 ty2
   | T.Ref (r1, ty1, kind1), T.Ref (r2, ty2, kind2) ->
       (* Sanity check *)
       assert (kind1 = kind2);

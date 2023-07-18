@@ -145,7 +145,7 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
             in
             let param_infos = Some param_infos in
             { ty_info with param_infos })
-    | Array ty | Slice ty ->
+    | Array (ty, _) | Slice ty ->
         (* Just dive in *)
         analyze expl_info ty_info ty
     | Ref (r, rty, rkind) ->

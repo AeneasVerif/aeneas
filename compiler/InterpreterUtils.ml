@@ -274,6 +274,7 @@ let rvalue_get_place (rv : E.rvalue) : E.place option =
   | Use (Constant _) -> None
   | Ref (p, _) -> Some p
   | UnaryOp _ | BinaryOp _ | Global _ | Discriminant _ | Aggregate _ -> None
+  | Len p -> Some p
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows (ctx : C.eval_ctx) (sv : V.symbolic_value) : bool

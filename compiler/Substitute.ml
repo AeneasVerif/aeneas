@@ -253,8 +253,15 @@ let rvalue_substitute (tsubst : T.TypeVarId.id -> T.ety) (rv : E.rvalue) :
                 variant_id,
                 regions,
                 List.map (ty_substitute rsubst tsubst) tys )
+          | E.AggregatedRange ty ->
+              let rsubst r = r in
+              E.AggregatedRange (ty_substitute rsubst tsubst ty)
+          | E.AggregatedArray ty ->
+              let rsubst r = r in
+              E.AggregatedArray (ty_substitute rsubst tsubst ty)
       in
       E.Aggregate (kind, ops)
+    | E.Len p -> E.Len (p_subst p)
 
 (** Apply a type substitution to an assertion *)
 let assertion_substitute (tsubst : T.TypeVarId.id -> T.ety) (a : A.assertion) :

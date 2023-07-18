@@ -70,7 +70,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
           method! visit_rvalue _env rv =
             match rv with
-            | Use _ | Ref _ | Global _ | Discriminant _ | Aggregate _ -> ()
+            | Len _ | Use _ | Ref _ | Global _ | Discriminant _ | Aggregate _ -> ()
             | UnaryOp (uop, _) -> can_fail := EU.unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := EU.binop_can_fail bop || !can_fail

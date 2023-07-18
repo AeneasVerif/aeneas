@@ -450,6 +450,7 @@ let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   | A.VecLen -> "alloc::vec::Vec::len"
   | A.VecIndex -> "core::ops::index::Index<alloc::vec::Vec>::index"
   | A.VecIndexMut -> "core::ops::index::IndexMut<alloc::vec::Vec>::index_mut"
+  | A.ArraySlice -> "arrayslice"
 
 let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
   match fid with
