@@ -169,7 +169,10 @@ let rec match_types (match_distinct_types : 'r T.ty -> 'r T.ty -> 'r T.ty)
   | Integer int_ty0, Integer int_ty1 ->
       assert (int_ty0 = int_ty1);
       ty0
-  | Array ty0, Array ty1 | Slice ty0, Slice ty1 -> match_rec ty0 ty1
+  | Array (ty0, l0), Array (ty1, l1) ->
+      assert (l0 = l1);
+      match_rec ty0 ty1
+  | Slice ty0, Slice ty1 -> match_rec ty0 ty1
   | Ref (r0, ty0, k0), Ref (r1, ty1, k1) ->
       let r = match_regions r0 r1 in
       let ty = match_rec ty0 ty1 in

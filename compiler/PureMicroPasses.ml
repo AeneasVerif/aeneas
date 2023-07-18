@@ -1555,7 +1555,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     assert (args = []);
                     mk_unit_rvalue
                 | ( ( A.Replace | A.VecNew | A.VecPush | A.VecInsert | A.VecLen
-                    | A.VecIndex | A.VecIndexMut ),
+                    | A.VecIndex | A.VecIndexMut | A.ArraySlice ),
                     _ ) ->
                     super#visit_texpression env e)
             | _ -> super#visit_texpression env e)

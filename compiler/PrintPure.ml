@@ -148,7 +148,7 @@ let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
   | Char -> "char"
   | Integer int_ty -> integer_type_to_string int_ty
   | Str -> "str"
-  | Array aty -> "[" ^ ty_to_string fmt false aty ^ "; ?]"
+  | Array (aty, l) -> "[" ^ ty_to_string fmt false aty ^ "; " ^ scalar_value_to_string l ^ "]"
   | Slice sty -> "[" ^ ty_to_string fmt false sty ^ "]"
   | Arrow (arg_ty, ret_ty) ->
       let ty =

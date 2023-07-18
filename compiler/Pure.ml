@@ -146,7 +146,7 @@ type ty =
   | Char
   | Integer of integer_type
   | Str
-  | Array of ty (* TODO: this should be an assumed type?... *)
+  | Array of ty * (PV.scalar_value [@opaque]) (* TODO: this should be an assumed type?... *)
   | Slice of ty (* TODO: this should be an assumed type?... *)
   | Arrow of ty * ty
 [@@deriving

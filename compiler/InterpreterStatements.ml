@@ -628,6 +628,7 @@ let eval_non_local_function_call_concrete (config : C.config)
               (* Should have been treated above *) raise (Failure "Unreachable")
           | VecNew | VecPush | VecInsert | VecLen | VecIndex | VecIndexMut ->
               eval_vec_function_concrete config fid region_params type_params
+          | ArraySlice -> failwith "TODO: Implement"
         in
 
         let cc = comp cc cf_eval_body in
@@ -818,6 +819,7 @@ let rec eval_statement (config : C.config) (st : A.statement) : st_cm_fun =
                   | E.Use _
                   | E.Ref (_, (E.Shared | E.Mut | E.TwoPhaseMut | E.Shallow))
                   | E.UnaryOp _ | E.BinaryOp _ | E.Discriminant _
+                  | E.Len _
                   | E.Aggregate _ ->
                       let rp = rvalue_get_place rvalue in
                       let rp =

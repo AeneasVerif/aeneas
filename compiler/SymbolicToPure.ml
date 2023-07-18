@@ -406,7 +406,7 @@ let rec translate_sty (ty : T.sty) : ty =
   | Never -> raise (Failure "Unreachable")
   | Integer int_ty -> Integer int_ty
   | Str -> Str
-  | Array ty -> Array (translate ty)
+  | Array (ty, l) -> Array (translate ty, l)
   | Slice ty -> Slice (translate ty)
   | Ref (_, rty, _) -> translate rty
 
@@ -494,9 +494,9 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
   | Never -> raise (Failure "Unreachable")
   | Integer int_ty -> Integer int_ty
   | Str -> Str
-  | Array ty ->
+  | Array (ty, l) ->
       assert (not (TypesUtils.ty_has_borrows type_infos ty));
-      Array (translate ty)
+      Array (translate ty, l)
   | Slice ty ->
       assert (not (TypesUtils.ty_has_borrows type_infos ty));
       Slice (translate ty)
@@ -560,9 +560,9 @@ let rec translate_back_ty (type_infos : TA.type_infos)
   | Never -> raise (Failure "Unreachable")
   | Integer int_ty -> wrap (Integer int_ty)
   | Str -> wrap Str
-  | Array ty -> (
+  | Array (ty, l) -> (
       assert (not (TypesUtils.ty_has_borrows type_infos ty));
-      match translate ty with None -> None | Some ty -> Some (Array ty))
+      match translate ty with None -> None | Some ty -> Some (Array (ty, l)))
   | Slice ty -> (
       assert (not (TypesUtils.ty_has_borrows type_infos ty));
       match translate ty with None -> None | Some ty -> Some (Slice ty))
@@ -1132,6 +1132,7 @@ let translate_mprojection_elem (pe : E.projection_elem) :
   match pe with
   | Deref | DerefBox -> None
   | Field (pkind, field_id) -> Some { pkind; field_id }
+  | Offset _ -> failwith "TODO: Implement"
 
 let translate_mprojection (p : E.projection) : mprojection =
   List.filter_map translate_mprojection_elem p
@@ -1528,6 +1529,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           }
         in
         (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None)
+    | S.Unop (E.SliceNew _) -> failwith "TODO: Also need extension of values to support arrays"
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->

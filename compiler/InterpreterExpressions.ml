@@ -689,9 +689,20 @@ let eval_rvalue_aggregate (config : C.config)
         let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
         (* Call the continuation *)
         cf aggregated ctx
+    (* TODO: To implement this, we need to extend the current values.
+       The current proposal is to add support for constant generics in T.Adt as an
+        additional field, which will be used to represent array lengths.
+        An array or a slice will then be an Adt with no constructor name containing a list of values
+    *)
+    | E.AggregatedRange _ty -> failwith "TODO: eval_rvalue_aggregate aggregatedrange"
+    | E.AggregatedArray _ty -> failwith "TODO: eval_rvalue_aggregate aggregatedarray"
   in
   (* Compose and apply *)
   comp eval_ops compute cf
+
+let eval_len (_config : C.config) (_p : E.place)
+    (_cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
+  failwith "TODO: Implement eval_len"
 
 let eval_rvalue_not_global (config : C.config) (rvalue : E.rvalue)
     (cf : (V.typed_value, eval_error) result -> m_fun) : m_fun =
@@ -716,6 +727,7 @@ let eval_rvalue_not_global (config : C.config) (rvalue : E.rvalue)
         (Failure
            "Unreachable: discriminant reads should have been eliminated from \
             the AST")
+  | E.Len p -> eval_len config p cf ctx 
   | E.Global _ -> raise (Failure "Unreachable")
 
 let eval_fake_read (config : C.config) (p : E.place) : cm_fun =
