@@ -28,6 +28,12 @@ theorem ne_is_lt_or_gt {x y : Int} (hne : x ≠ y) : x < y ∨ x > y := by
   | .inl _ => left; linarith
   | .inr _ => right; linarith
 
+-- TODO: move?
+theorem add_one_le_iff_le_ne (n m : Nat) (h1 : m ≤ n) (h2 : m ≠ n) : m + 1 ≤ n := by
+  -- Damn, those proofs on natural numbers are hard - I wish Omega was in mathlib4...
+  simp [Nat.add_one_le_iff]
+  simp [Nat.lt_iff_le_and_ne]
+  simp_all
 
 /- Induction over positive integers -/
 -- TODO: move

@@ -4,6 +4,7 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 import Base.Primitives.Base
+import Base.Arith.Base
 
 /- TODO: this is very useful, but is there more? -/
 set_option profiler true
@@ -537,23 +538,16 @@ namespace FixI
         let j: Fin tys1.length := ⟨ j, jLt ⟩
         Eq.mp (by simp) (get_fun tl j)
 
-  -- TODO: move
-  theorem add_one_le_iff_le_ne (n m : Nat) (h1 : m ≤ n) (h2 : m ≠ n) : m + 1 ≤ n := by
-    -- Damn, those proofs on natural numbers are hard - I wish Omega was in mathlib4...
-    simp [Nat.add_one_le_iff]
-    simp [Nat.lt_iff_le_and_ne]
-    simp_all
-
   def for_all_fin_aux {n : Nat} (f : Fin n → Prop) (m : Nat) (h : m ≤ n) : Prop :=
     if heq: m = n then True
     else
       f ⟨ m, by simp_all [Nat.lt_iff_le_and_ne] ⟩ ∧
-      for_all_fin_aux f (m + 1) (by simp_all [add_one_le_iff_le_ne])
+      for_all_fin_aux f (m + 1) (by simp_all [Arith.add_one_le_iff_le_ne])
   termination_by for_all_fin_aux n _ m h => n - m
   decreasing_by
     simp_wf
     apply Nat.sub_add_lt_sub <;> simp
-    simp_all [add_one_le_iff_le_ne]
+    simp_all [Arith.add_one_le_iff_le_ne]
 
   def for_all_fin {n : Nat} (f : Fin n → Prop) := for_all_fin_aux f 0 (by simp)
 
@@ -603,7 +597,7 @@ namespace FixI
         apply hi <;> simp_all
         . unfold for_all_fin_aux at hf
           simp_all
-        . simp_all [add_one_le_iff_le_ne]
+        . simp_all [Arith.add_one_le_iff_le_ne]
 
   -- TODO: this is not necessary anymore
   theorem for_all_fin_imp_forall (n : Nat) (f : Fin n → Prop) :
