@@ -58,10 +58,10 @@ section Methods
   def withPSpec [Inhabited (m a)] [Nonempty (m a)] (th : Expr) (k : PSpecDesc → m a)
     (sanityChecks : Bool := false) :
     m a := do
-    trace[Progress] "Theorem: {th}"
+    trace[Progress] "Proposition: {th}"
     -- Dive into the quantified variables and the assumptions
     forallTelescope th fun fvars th => do
-    trace[Progress] "All arguments: {fvars}"
+    trace[Progress] "Universally quantified arguments and assumptions: {fvars}"
   /-  -- Filter the argumens which are not propositions
     let rec getFirstPropIdx (i : Nat) : MetaM Nat := do
       if i ≥ fargs.size then pure i
@@ -83,12 +83,16 @@ section Methods
     -- Dive into the existentials
     existsTelescope th fun evars th => do
     trace[Progress] "Existentials: {evars}"
+    trace[Progress] "Proposition after stripping the quantifiers: {th}"
     -- Take the first conjunct
     let (th, post) ← optSplitConj th
+    trace[Progress] "After splitting the conjunction:\n- eq: {th}\n- post: {post}"
     -- Destruct the equality
     let (th, ret) ← destEq th
+    trace[Progress] "After splitting the equality:\n- lhs: {th}\n- rhs: {ret}"
     -- Destruct the application to get the name
-    th.withApp fun f args => do
+    th.consumeMData.withApp fun f args => do
+    trace[Progress] "After stripping the arguments:\n- f: {f}\n- args: {args}"
     if ¬ f.isConst then throwError "Not a constant: {f}"
     -- Compute the set of universally quantified variables which appear in the function arguments
     let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
@@ -114,6 +118,7 @@ section Methods
       post := post
     }
     k thDesc
+
 end Methods
 
 

@@ -43,6 +43,10 @@ namespace List
 
 end List
 
+-- TODO: move?
+@[simp]
+theorem neq_imp {α : Type u} {x y : α} (h : ¬ x = y) : ¬ y = x := by intro; simp_all
+
 namespace Lean
 
 namespace LocalContext

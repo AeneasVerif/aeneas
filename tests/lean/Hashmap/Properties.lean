@@ -105,6 +105,8 @@ theorem insert_in_list_spec {α : Type} (key: Usize) (value: α) (ls: List α) :
         simp [h]
     else
       by
+        -- TODO: use progress: detect that this is a recursive call, or give
+        -- the possibility of specifying an identifier
         have ⟨ b, hi ⟩ := insert_in_list_spec key value tl
         exists b
         simp [insert_in_list, List.lookup]
@@ -112,13 +114,12 @@ theorem insert_in_list_spec {α : Type} (key: Usize) (value: α) (ls: List α) :
         simp [h]
         simp [insert_in_list] at hi
         exact hi
-   
-/--
+
 @[pspec]
 theorem insert_in_list_spec2 {α : Type} (key: Usize) (value: α) (ls: List α) :
   ∃ b,
     insert_in_list α key value ls = ret b ∧
-    (b = (List.lookup ls.v key = none))
+    (b ↔ (List.lookup ls.v key = none))
   := by
   induction ls
   case Nil => simp [insert_in_list, insert_in_list_loop, List.lookup]
@@ -130,11 +131,12 @@ theorem insert_in_list_spec2 {α : Type} (key: Usize) (value: α) (ls: List α) 
      simp [h]
     else
      conv =>
-       rhs; ext; arg 1; simp [h] -- TODO: Simplify
-     simp [insert_in_list] at ih;
-     progress -- TODO: Does not work
---/
-    
+       rhs; ext; left; simp [h] -- TODO: Simplify
+     simp only [insert_in_list] at ih;
+     -- TODO: give the possibility of using underscores
+     progress as ⟨ b h ⟩
+     simp [*]
+
 @[pspec]
 theorem insert_in_list_back_spec {α : Type} (key: Usize) (value: α) (l0: List α) :
   ∃ l1,
@@ -150,8 +152,7 @@ theorem insert_in_list_back_spec {α : Type} (key: Usize) (value: α) (l0: List 
          rw [insert_in_list_loop_back]
          simp [h, List.lookup]
          intro k1 h1
-         have h2 : ¬(key = k1) := by tauto -- TODO: Why is the order of args in eq swapped
-         simp [h2]
+         simp [*]
      else
        by
          simp [insert_in_list_back, List.lookup]
@@ -159,12 +160,9 @@ theorem insert_in_list_back_spec {α : Type} (key: Usize) (value: α) (l0: List 
          simp [h, List.lookup]
          have ⟨tl0 , _, _ ⟩ := insert_in_list_back_spec key value tl -- TODO: Use progress
          simp [insert_in_list_back] at *
-         simp [*]
-         have : ¬ (key = k) := by tauto
          simp [List.lookup, *]
          simp (config := {contextual := true}) [*]
         
 end HashMap
--- def distinct_keys {α : Type u}
 
 end hashmap

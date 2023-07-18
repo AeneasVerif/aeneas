@@ -55,14 +55,20 @@ def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (ids : Array Name)
       let thDecl := env.constants.find! thName
       pure thDecl.type
     | .Local asmDecl => pure asmDecl.type
+  trace[Progress] "theorem/assumption type: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
   -- withNewMCtxDepth do
   let (mvars, binders, thExBody) ← forallMetaTelescope thTy
+  trace[Progress] "After stripping foralls: {thExBody}"
   -- Introduce the existentially quantified variables and the post-condition
   -- in the context
   let thBody ←
     existsTelescope thExBody fun _evars thBody => do
+    trace[Progress] "After stripping existentials: {thBody}"
+    let (thBody, _) ← optSplitConj thBody
+    trace[Progress] "After splitting the conjunction: {thBody}"
     let (thBody, _) ← destEq thBody
+    trace[Progress] "After splitting equality: {thBody}"
     -- There shouldn't be any existential variables in thBody
     pure thBody
   -- Match the body with the target
@@ -152,6 +158,7 @@ def progressAsmsOrLookupTheorem (ids : Array Name) (asmTac : TacticM Unit) : Tac
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
   let goalTy ← mgoal.getType
+  trace[Progress] "goal: {goalTy}"
   -- Dive into the goal to lookup the theorem
   let (fName, fLevels, args) ← do
     withPSpec goalTy fun desc =>
@@ -188,7 +195,7 @@ syntax progressArgs := ("as" " ⟨ " (ident)+ " ⟩")?
 def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
   let args := args.raw
   -- Process the arguments to retrieve the identifiers to use
-  trace[Progress] "Progressing arguments: {args}"
+  trace[Progress] "Progress arguments: {args}"
   let args := args.getArgs
   let ids :=
     if args.size > 0 then
@@ -196,7 +203,7 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
       let args := (args.get! 2).getArgs
       args.map Syntax.getId
     else #[]
-  trace[Progress] "Ids: {ids}"
+  trace[Progress] "User-provided ids: {ids}"
   progressAsmsOrLookupTheorem ids (firstTac [assumptionTac, Arith.scalarTac])
 
 elab "progress" args:progressArgs : tactic =>
