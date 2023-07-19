@@ -211,9 +211,28 @@ initialize pspecClassAttr : PSpecClassAttr ← do
 def PSpecAttr.find? (s : PSpecAttr) (name : Name) : MetaM (Option Name) := do
   return (s.ext.getState (← getEnv)).find? name
 
+def PSpecAttr.getState (s : PSpecAttr) : MetaM (NameMap Name) := do
+  pure (s.ext.getState (← getEnv))
+
 def PSpecClassAttr.find? (s : PSpecClassAttr) (className argName : Name) : MetaM (Option Name) := do
   match (s.ext.getState (← getEnv)).find? className with
   | none => return none
   | some map => return map.find? argName
+
+def PSpecClassAttr.getState (s : PSpecClassAttr) : MetaM (NameMap (NameMap Name)) := do
+  pure (s.ext.getState (← getEnv))
+
+def showStoredPSpec : MetaM Unit := do
+  let st ← pspecAttr.getState
+  let s := st.toList.foldl (fun s (f, th) => f!"{s}\n{f} → {th}") f!""
+  IO.println s
+
+def showStoredPSpecClass : MetaM Unit := do
+  let st ← pspecClassAttr.getState
+  let s := st.toList.foldl (fun s (f, m) =>
+    let ms := m.toList.foldl (fun s (f, th) =>
+      f!"{s}\n  {f} → {th}") f!""
+    f!"{s}\n{f} → [{ms}]") f!""
+  IO.println s
 
 end Progress

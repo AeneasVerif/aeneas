@@ -208,7 +208,7 @@ def progressAsmsOrLookupTheorem (withTh : Option TheoremOrLocal) (ids : Array Na
             catch _ => none
         | none =>
           trace[Progress] "Could not find a pspec theorem for {fName}"
-          throwError "TODO"
+          pure none
     match res with
     | some .Ok => return ()
     | some (.Error msg) => throwError msg
@@ -228,7 +228,7 @@ def progressAsmsOrLookupTheorem (withTh : Option TheoremOrLocal) (ids : Array Na
                 pure (some res)
               catch _ => none
           | none =>
-            trace[Progress] "Could not find a pspec theorem for {fName}"
+            trace[Progress] "Could not find a class pspec theorem for ({fName}, {argName})"
             pure none
       match res with
       | some .Ok => return ()
@@ -287,11 +287,22 @@ elab "progress" args:progressArgs : tactic =>
 /-
 -- TODO: remove
 namespace Test
-  open Primitives
+  open Primitives Result
 
   set_option trace.Progress true
-  set_option pp.rawOnError true
 
+  -- #eval do pspecClassAttr.getState
+  -- #eval showStoredPSpec
+  -- #eval showStoredPSpecClass
+
+/-  theorem Scalar.add_spec {ty} {x y : Scalar ty}
+    (hmin : Scalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ Scalar.max ty) :
+    ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+    progress
+    simp [*] -/
+
+/-
   @[pspec]
   theorem vec_index_test2 (α : Type u) (v: Vec α) (i: Usize) (h: i.val < v.val.length) :
     ∃ (x: α), v.index α i = .ret x := by
@@ -299,7 +310,7 @@ namespace Test
       simp
 
   set_option trace.Progress false
-
+-/
 end Test -/
 
 end Progress
