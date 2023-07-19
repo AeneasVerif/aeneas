@@ -218,8 +218,6 @@ def progressAsmsOrLookupTheorem (withTh : Option TheoremOrLocal) (ids : Array Na
 
 syntax progressArgs := ("with" ident)? ("as" " ⟨ " (ident)+ " ⟩")?
 
-#check Environment
-#check ConstMap
 def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
   let args := args.raw
   -- Process the arguments to retrieve the identifiers to use
