@@ -121,19 +121,42 @@ section Methods
 
 end Methods
 
-
 def getPSpecFunName (th : Expr) : MetaM Name :=
   withPSpec th (fun d => do pure d.fName) true
 
+def getPSpecClassFunNames (th : Expr) : MetaM (Name × Name) :=
+  withPSpec th (fun d => do
+    let arg0 := d.args.get! 0
+    arg0.withApp fun f _ => do
+    if ¬ f.isConst then throwError "Not a constant: {f}"
+    pure (d.fName, f.constName)
+    ) true
+
+-- "Regular" pspec attribute
 structure PSpecAttr where
   attr : AttributeImpl
   ext  : MapDeclarationExtension Name
   deriving Inhabited
 
+/- pspec attribute for type classes: we use the name of the type class to
+   lookup another map. We use the *first* argument of the type class to lookup
+   into this second map.
+
+   Example:
+   ========
+   We use type classes for addition. For instance, the addition between two
+   U32 is written (without syntactic sugar) as `HAdd.add (Scalar ) x y`. As a consequence,
+   we store the theorem through the bindings: HAdd.add → Scalar → ...
+-/
+structure PSpecClassAttr where
+  attr : AttributeImpl
+  ext  : MapDeclarationExtension (NameMap Name)
+  deriving Inhabited
+
 /- The persistent map from function to pspec theorems. -/
 initialize pspecAttr : PSpecAttr ← do
   let ext ← mkMapDeclarationExtension `pspecMap
-  let attrImpl := {
+  let attrImpl : AttributeImpl := {
     name := `pspec
     descr := "Marks theorems to use with the `progress` tactic"
     add := fun thName stx attrKind => do
@@ -153,7 +176,44 @@ initialize pspecAttr : PSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
+/- The persistent map from type classes to pspec theorems -/
+initialize pspecClassAttr : PSpecClassAttr ← do
+  let ext : MapDeclarationExtension (NameMap Name) ← mkMapDeclarationExtension `pspecClassMap
+  let attrImpl : AttributeImpl  := {
+    name := `cpspec
+    descr := "Marks theorems to use for type classes with the `progress` tactic"
+    add := fun thName stx attrKind => do
+      Attribute.Builtin.ensureNoArgs stx
+      -- TODO: use the attribute kind
+      unless attrKind == AttributeKind.global do
+        throwError "invalid attribute 'cpspec', must be global"
+      -- Lookup the theorem
+      let env ← getEnv
+      let thDecl := env.constants.find! thName
+      let (fName, argName) ← MetaM.run' (getPSpecClassFunNames thDecl.type)
+      trace[Progress] "Registering class spec theorem for ({fName}, {argName})"
+      -- Update the entry if there is one, add an entry if there is none
+      let env :=
+        match (ext.getState (← getEnv)).find? fName with
+        | none =>
+          let m := RBMap.ofList [(argName, thName)]
+          ext.addEntry env (fName, m)
+        | some m =>
+          let m := m.insert argName thName
+          ext.addEntry env (fName, m)
+      setEnv env
+      pure ()
+  }
+  registerBuiltinAttribute attrImpl
+  pure { attr := attrImpl, ext := ext }
+
+
 def PSpecAttr.find? (s : PSpecAttr) (name : Name) : MetaM (Option Name) := do
   return (s.ext.getState (← getEnv)).find? name
+
+def PSpecClassAttr.find? (s : PSpecClassAttr) (className argName : Name) : MetaM (Option Name) := do
+  match (s.ext.getState (← getEnv)).find? className with
+  | none => return none
+  | some map => return map.find? argName
 
 end Progress

@@ -152,6 +152,15 @@ def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (ids : Array Name)
     --
     pure .Ok
 
+-- Small utility: if `args` is not empty, return the name of the app in the first
+-- arg, if it is a const.
+def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
+  if args.size = 0 then pure none
+  else
+    (args.get! 0).withApp fun f _ => do
+    if f.isConst then pure (some f.constName)
+    else pure none
+
 -- The array of ids are identifiers to use when introducing fresh variables
 def progressAsmsOrLookupTheorem (withTh : Option TheoremOrLocal) (ids : Array Name) (asmTac : TacticM Unit) : TacticM Unit := do
   withMainContext do
@@ -187,34 +196,57 @@ def progressAsmsOrLookupTheorem (withTh : Option TheoremOrLocal) (ids : Array Na
     -- It failed: try to lookup a theorem
     -- TODO: use a list of theorems, and try them one by one?
     trace[Progress] "No assumption succeeded: trying to lookup a theorem"
-    let thName ← do
-      match ← pspecAttr.find? fName with
-      | none => throwError "Could not find a pspec theorem for {fName}"
-      | some thName => pure thName
-    trace[Progress] "Lookuped up theorem: {thName}"
-    -- Apply the theorem
-    let res ← do
-      try
-        let res ← progressWith fnExpr (.Theorem thName) ids asmTac
-        pure (some res)
-      catch _ => none
+    let res ←
+        match ← pspecAttr.find? fName with
+        | some thName =>
+          trace[Progress] "Lookuped up theorem: {thName}"
+          -- Apply the theorem
+          let res ← do
+            try
+              let res ← progressWith fnExpr (.Theorem thName) ids asmTac
+              pure (some res)
+            catch _ => none
+        | none =>
+          trace[Progress] "Could not find a pspec theorem for {fName}"
+          throwError "TODO"
     match res with
     | some .Ok => return ()
     | some (.Error msg) => throwError msg
     | none =>
-    -- Try a recursive call - we try the assumptions of kind "auxDecl"
-    let ctx ← Lean.MonadLCtx.getLCtx
-    let decls ← ctx.getAllDecls
-    let decls := decls.filter (λ decl => match decl.kind with
-      | .default | .implDetail => false | .auxDecl => true)
-    for decl in decls.reverse do
-      trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fnExpr (.Local decl) ids asmTac catch _ => continue
+      -- It failed: try to lookup a *class* spec theorem
+      let res ← do
+        match ← getFirstArgAppName args with
+        | none => none
+        | some argName => do
+          match ← pspecClassAttr.find? fName argName with
+          | some thName =>
+            trace[Progress] "Lookuped up class theorem: {thName}"
+            -- Apply the theorem
+            let res ← do
+              try
+                let res ← progressWith fnExpr (.Theorem thName) ids asmTac
+                pure (some res)
+              catch _ => none
+          | none =>
+            trace[Progress] "Could not find a pspec theorem for {fName}"
+            pure none
       match res with
-      | .Ok => return ()
-      | .Error msg => throwError msg
-    -- Nothing worked: failed
-    throwError "Progress failed"
+      | some .Ok => return ()
+      | some (.Error msg) => throwError msg
+      | none =>
+      -- Try a recursive call - we try the assumptions of kind "auxDecl"
+      let ctx ← Lean.MonadLCtx.getLCtx
+      let decls ← ctx.getAllDecls
+      let decls := decls.filter (λ decl => match decl.kind with
+        | .default | .implDetail => false | .auxDecl => true)
+      for decl in decls.reverse do
+        trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
+        let res ← do try progressWith fnExpr (.Local decl) ids asmTac catch _ => continue
+        match res with
+        | .Ok => return ()
+        | .Error msg => throwError msg
+      -- Nothing worked: failed
+      throwError "Progress failed"
 
 syntax progressArgs := ("with" ident)? ("as" " ⟨ " (ident)+ " ⟩")?
 
