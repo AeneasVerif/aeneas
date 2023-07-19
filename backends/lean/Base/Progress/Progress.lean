@@ -291,16 +291,15 @@ namespace Test
 
   set_option trace.Progress true
 
-  -- #eval do pspecClassAttr.getState
-  -- #eval showStoredPSpec
-  -- #eval showStoredPSpecClass
+  #eval showStoredPSpec
+  #eval showStoredPSpecClass
 
-/-  theorem Scalar.add_spec {ty} {x y : Scalar ty}
+  theorem Scalar.add_spec {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
     progress
-    simp [*] -/
+    simp [*]
 
 /-
   @[pspec]
