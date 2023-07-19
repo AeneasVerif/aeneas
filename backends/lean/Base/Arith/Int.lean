@@ -32,14 +32,6 @@ instance (x y : Int) : PropHasImp (¬ x = y) where
 
 open Lean Lean.Elab Lean.Meta
 
--- Small utility: print all the declarations in the context
-elab "print_all_decls" : tactic => do
-  let ctx ← Lean.MonadLCtx.getLCtx
-  for decl in ← ctx.getDecls do
-    let ty ← Lean.Meta.inferType decl.toExpr
-    logInfo m!"{decl.toExpr} : {ty}"
-  pure ()
-
 -- Explore a term by decomposing the applications (we explore the applied
 -- functions and their arguments, but ignore lambdas, forall, etc. -
 -- should we go inside?).

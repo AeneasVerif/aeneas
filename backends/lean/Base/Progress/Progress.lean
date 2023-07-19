@@ -55,7 +55,7 @@ def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (ids : Array Name)
       let thDecl := env.constants.find! thName
       pure thDecl.type
     | .Local asmDecl => pure asmDecl.type
-  trace[Progress] "theorem/assumption type: {thTy}"
+  trace[Progress] "Looked up theorem/assumption type: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
   -- withNewMCtxDepth do
   let (mvars, binders, thExBody) ← forallMetaTelescope thTy
@@ -84,7 +84,7 @@ def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (ids : Array Name)
   let th ← do
     match th with
     | .Theorem thName => mkAppOptM thName (mvars.map some)
-    |  .Local decl => mkAppOptM' (mkFVar decl.fvarId) (mvars.map some)
+    | .Local decl => mkAppOptM' (mkFVar decl.fvarId) (mvars.map some)
   let asmName ← mkFreshUserName `h
   let thTy ← inferType th
   let thAsm ← Utils.addDeclTac asmName th thTy (asLet := false)
@@ -153,7 +153,7 @@ def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (ids : Array Name)
     pure .Ok
 
 -- The array of ids are identifiers to use when introducing fresh variables
-def progressAsmsOrLookupTheorem (ids : Array Name) (asmTac : TacticM Unit) : TacticM Unit := do
+def progressAsmsOrLookupTheorem (withTh : Option TheoremOrLocal) (ids : Array Name) (asmTac : TacticM Unit) : TacticM Unit := do
   withMainContext do
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
@@ -167,44 +167,89 @@ def progressAsmsOrLookupTheorem (ids : Array Name) (asmTac : TacticM Unit) : Tac
   -- TODO: this should be in the pspec desc
   let fnExpr := mkAppN (.const fName fLevels) args
   trace[Progress] "Function: {fName}"
-  -- Try all the assumptions one by one and if it fails try to lookup a theorem
-  let ctx ← Lean.MonadLCtx.getLCtx
-  let decls ← ctx.getDecls
-  for decl in decls.reverse do
-    trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
-    try
-      match ← progressWith fnExpr (.Local decl) ids asmTac with
+  -- If the user provided a theorem/assumption: use it.
+  -- Otherwise, lookup one.
+  match withTh with
+  | some th => do
+    match ← progressWith fnExpr th ids asmTac with
+    | .Ok => return ()
+    | .Error msg => throwError msg
+  | none =>
+    -- Try all the assumptions one by one and if it fails try to lookup a theorem.
+    let ctx ← Lean.MonadLCtx.getLCtx
+    let decls ← ctx.getDecls
+    for decl in decls.reverse do
+      trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
+      let res ← do try progressWith fnExpr (.Local decl) ids asmTac catch _ => continue
+      match res with
       | .Ok => return ()
       | .Error msg => throwError msg
-    catch _ => continue
-  -- It failed: try to lookup a theorem
-  -- TODO: use a list of theorems, and try them one by one?
-  trace[Progress] "No assumption succeeded: trying to lookup a theorem"
-  let thName ← do
-    match ← pspecAttr.find? fName with
-    | none => throwError "Could not find a pspec theorem for {fName}"
-    | some thName => pure thName
-  trace[Progress] "Lookuped up: {thName}"
-  -- Apply the theorem
-  match ← progressWith fnExpr (.Theorem thName) ids asmTac with
-  | .Ok => return ()
-  | .Error msg => throwError msg
+    -- It failed: try to lookup a theorem
+    -- TODO: use a list of theorems, and try them one by one?
+    trace[Progress] "No assumption succeeded: trying to lookup a theorem"
+    let thName ← do
+      match ← pspecAttr.find? fName with
+      | none => throwError "Could not find a pspec theorem for {fName}"
+      | some thName => pure thName
+    trace[Progress] "Lookuped up theorem: {thName}"
+    -- Apply the theorem
+    let res ← do
+      try
+        let res ← progressWith fnExpr (.Theorem thName) ids asmTac
+        pure (some res)
+      catch _ => none
+    match res with
+    | some .Ok => return ()
+    | some (.Error msg) => throwError msg
+    | none =>
+    -- Try a recursive call - we try the assumptions of kind "auxDecl"
+    let ctx ← Lean.MonadLCtx.getLCtx
+    let decls ← ctx.getAllDecls
+    let decls := decls.filter (λ decl => match decl.kind with
+      | .default | .implDetail => false | .auxDecl => true)
+    for decl in decls.reverse do
+      trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
+      let res ← do try progressWith fnExpr (.Local decl) ids asmTac catch _ => continue
+      match res with
+      | .Ok => return ()
+      | .Error msg => throwError msg
+    -- Nothing worked: failed
+    throwError "Progress failed"
 
-syntax progressArgs := ("as" " ⟨ " (ident)+ " ⟩")?
+syntax progressArgs := ("with" ident)? ("as" " ⟨ " (ident)+ " ⟩")?
 
+#check Environment
+#check ConstMap
 def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
   let args := args.raw
   -- Process the arguments to retrieve the identifiers to use
   trace[Progress] "Progress arguments: {args}"
   let args := args.getArgs
-  let ids :=
-    if args.size > 0 then
-      let args := (args.get! 0).getArgs
-      let args := (args.get! 2).getArgs
-      args.map Syntax.getId
-    else #[]
+  let withArg := (args.get! 0).getArgs
+  let withArg ← do
+    if withArg.size > 0 then
+      let id := withArg.get! 1
+      trace[Progress] "With arg: {id}"
+      -- Attempt to lookup a local declaration
+      match (← getLCtx).findFromUserName? id.getId with
+      | some decl => do
+        trace[Progress] "With arg: local decl"
+        pure (some (.Local decl))
+      | none => do
+        -- Not a local declaration: should be a theorem
+        trace[Progress] "With arg: theorem"
+        addCompletionInfo <| CompletionInfo.id id id.getId (danglingDot := false) {} none
+        let cs ← resolveGlobalConstWithInfos id
+        match cs with
+        | [] => throwError "Could not find theorem {id}"
+        | id :: _ =>
+          pure (some (.Theorem id))
+    else pure none
+  let args := (args.get! 1).getArgs
+  let args := (args.get! 2).getArgs
+  let ids := args.map Syntax.getId
   trace[Progress] "User-provided ids: {ids}"
-  progressAsmsOrLookupTheorem ids (firstTac [assumptionTac, Arith.scalarTac])
+  progressAsmsOrLookupTheorem withArg ids (firstTac [assumptionTac, Arith.scalarTac])
 
 elab "progress" args:progressArgs : tactic =>
   evalProgress args
@@ -215,16 +260,16 @@ namespace Test
   open Primitives
 
   set_option trace.Progress true
+  set_option pp.rawOnError true
 
   @[pspec]
   theorem vec_index_test2 (α : Type u) (v: Vec α) (i: Usize) (h: i.val < v.val.length) :
     ∃ (x: α), v.index α i = .ret x := by
-      progress as ⟨ x ⟩
+      progress with vec_index_test as ⟨ x ⟩
       simp
 
   set_option trace.Progress false
 
-end Test
--/
+end Test -/
 
 end Progress

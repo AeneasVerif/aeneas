@@ -142,6 +142,25 @@ private def test2 (x : Nat) : Nat := x
 print_decl test1
 print_decl test2
 
+#check LocalDecl
+
+def printDecls (decls : List LocalDecl) : MetaM Unit := do
+  let decls ← decls.foldrM (λ decl msg => do
+    pure (m!"\n{decl.toExpr} : {← inferType decl.toExpr}" ++ msg)) m!""
+  logInfo m!"# Ctx decls:{decls}"
+
+-- Small utility: print all the declarations in the context (including the "implementation details")
+elab "print_all_ctx_decls" : tactic => do
+  let ctx ← Lean.MonadLCtx.getLCtx
+  let decls ← ctx.getAllDecls
+  printDecls decls
+
+-- Small utility: print all declarations in the context
+elab "print_ctx_decls" : tactic => do
+  let ctx ← Lean.MonadLCtx.getLCtx
+  let decls ← ctx.getDecls
+  printDecls decls
+
 -- A map visitor function for expressions (adapted from `AbstractNestedProofs.visit`)
 -- The continuation takes as parameters:
 -- - the current depth of the expression (useful for printing/debugging)

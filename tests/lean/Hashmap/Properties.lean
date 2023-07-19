@@ -115,6 +115,37 @@ theorem insert_in_list_spec {α : Type} (key: Usize) (value: α) (ls: List α) :
         simp [insert_in_list] at hi
         exact hi
 
+set_option trace.Progress true
+@[pspec]
+theorem insert_in_list_spec1 {α : Type} (key: Usize) (value: α) (ls: List α) :
+  ∃ b,
+    insert_in_list α key value ls = ret b ∧
+    (b ↔ List.lookup ls.v key = none)
+  := match ls with
+  | .Nil => by simp [insert_in_list, insert_in_list_loop, List.lookup]
+  | .Cons k v tl =>
+    if h: k = key then -- TODO: The order of k/key matters
+      by
+        simp [insert_in_list, List.lookup]
+        rw [insert_in_list_loop]
+        simp [h]
+    else
+      by
+        simp only [insert_in_list]
+        rw [insert_in_list_loop]
+        conv => rhs; ext; simp [*]
+        progress as ⟨ b hi ⟩
+
+        -- TODO: use progress: detect that this is a recursive call, or give
+        -- the possibility of specifying an identifier
+        have ⟨ b, hi ⟩ := insert_in_list_spec key value tl
+        exists b
+        simp [insert_in_list, List.lookup]
+        rw [insert_in_list_loop] -- TODO: Using it in simp leads to infinite recursion
+        simp [h]
+        simp [insert_in_list] at hi
+        exact hi
+
 @[pspec]
 theorem insert_in_list_spec2 {α : Type} (key: Usize) (value: α) (ls: List α) :
   ∃ b,
@@ -130,8 +161,7 @@ theorem insert_in_list_spec2 {α : Type} (key: Usize) (value: α) (ls: List α) 
     if h: k = key then
      simp [h]
     else
-     conv =>
-       rhs; ext; left; simp [h] -- TODO: Simplify
+     conv => rhs; ext; left; simp [h] -- TODO: Simplify
      simp only [insert_in_list] at ih;
      -- TODO: give the possibility of using underscores
      progress as ⟨ b h ⟩
