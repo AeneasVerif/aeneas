@@ -138,11 +138,8 @@ open Lean.Elab.Command
 
 private def test1 : Nat := 0
 private def test2 (x : Nat) : Nat := x
-
 print_decl test1
 print_decl test2
-
-#check LocalDecl
 
 def printDecls (decls : List LocalDecl) : MetaM Unit := do
   let decls ← decls.foldrM (λ decl msg => do
