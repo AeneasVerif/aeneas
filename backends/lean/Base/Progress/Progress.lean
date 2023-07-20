@@ -27,6 +27,9 @@ inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
 
+instance : ToMessageData TheoremOrLocal where
+  toMessageData := λ x => match x with | .Theorem thName => m!"{thName}" | .Local asm => m!"{asm.userName}"
+
 /- Type to propagate the errors of `progressWith`.
    We need this because we use the exceptions to backtrack, when trying to
    use the assumptions for instance. When there is actually an error we want
@@ -161,6 +164,32 @@ def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
     if f.isConst then pure (some f.constName)
     else pure none
 
+def getFirstArg (args : Array Expr) : Option Expr := do
+  if args.size = 0 then none
+  else some (args.get! 0)
+
+/- Helper: try to lookup a theorem and apply it, or continue with another tactic
+   if it fails -/
+def tryLookupApply (ids : Array Name) (asmTac : TacticM Unit) (fnExpr : Expr)
+  (kind : String) (th : Option TheoremOrLocal) (x : TacticM Unit) : TacticM Unit := do
+  let res ← do
+    match th with
+    | none =>
+      trace[Progress] "Could not find a {kind}"
+      pure none
+    | some th => do
+      trace[Progress] "Lookuped up {kind}: {th}"
+      -- Apply the theorem
+      let res ← do
+        try
+          let res ← progressWith fnExpr th ids asmTac
+          pure (some res)
+        catch _ => none
+  match res with
+  | some .Ok => return ()
+  | some (.Error msg) => throwError msg
+  | none => x
+
 -- The array of ids are identifiers to use when introducing fresh variables
 def progressAsmsOrLookupTheorem (withTh : Option TheoremOrLocal) (ids : Array Name) (asmTac : TacticM Unit) : TacticM Unit := do
   withMainContext do
@@ -196,57 +225,40 @@ def progressAsmsOrLookupTheorem (withTh : Option TheoremOrLocal) (ids : Array Na
     -- It failed: try to lookup a theorem
     -- TODO: use a list of theorems, and try them one by one?
     trace[Progress] "No assumption succeeded: trying to lookup a theorem"
-    let res ←
-        match ← pspecAttr.find? fName with
-        | some thName =>
-          trace[Progress] "Lookuped up theorem: {thName}"
-          -- Apply the theorem
-          let res ← do
-            try
-              let res ← progressWith fnExpr (.Theorem thName) ids asmTac
-              pure (some res)
-            catch _ => none
-        | none =>
-          trace[Progress] "Could not find a pspec theorem for {fName}"
-          pure none
-    match res with
-    | some .Ok => return ()
-    | some (.Error msg) => throwError msg
-    | none =>
-      -- It failed: try to lookup a *class* spec theorem
-      let res ← do
-        match ← getFirstArgAppName args with
-        | none => none
-        | some argName => do
-          match ← pspecClassAttr.find? fName argName with
-          | some thName =>
-            trace[Progress] "Lookuped up class theorem: {thName}"
-            -- Apply the theorem
-            let res ← do
-              try
-                let res ← progressWith fnExpr (.Theorem thName) ids asmTac
-                pure (some res)
-              catch _ => none
-          | none =>
-            trace[Progress] "Could not find a class pspec theorem for ({fName}, {argName})"
-            pure none
+    let pspec ← do
+      let thName ← pspecAttr.find? fName
+      pure (thName.map fun th => .Theorem th)
+    tryLookupApply ids asmTac fnExpr "pspec theorem" pspec do
+    -- It failed: try to lookup a *class* expr spec theorem (those are more
+    -- specific than class spec theorems)
+    let pspecClassExpr ← do
+      match getFirstArg args with
+      | none => pure none
+      | some arg => do
+        let thName ← pspecClassExprAttr.find? fName arg
+        pure (thName.map fun th => .Theorem th)
+    tryLookupApply ids asmTac fnExpr "pspec class expr theorem" pspecClassExpr do
+    -- It failed: try to lookup a *class* spec theorem
+    let pspecClass ← do
+      match ← getFirstArgAppName args with
+      | none => pure none
+      | some argName => do
+        let thName ← pspecClassAttr.find? fName argName
+        pure (thName.map fun th => .Theorem th)
+    tryLookupApply ids asmTac fnExpr "pspec class theorem" pspecClass do
+    -- Try a recursive call - we try the assumptions of kind "auxDecl"
+    let ctx ← Lean.MonadLCtx.getLCtx
+    let decls ← ctx.getAllDecls
+    let decls := decls.filter (λ decl => match decl.kind with
+      | .default | .implDetail => false | .auxDecl => true)
+    for decl in decls.reverse do
+      trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
+      let res ← do try progressWith fnExpr (.Local decl) ids asmTac catch _ => continue
       match res with
-      | some .Ok => return ()
-      | some (.Error msg) => throwError msg
-      | none =>
-      -- Try a recursive call - we try the assumptions of kind "auxDecl"
-      let ctx ← Lean.MonadLCtx.getLCtx
-      let decls ← ctx.getAllDecls
-      let decls := decls.filter (λ decl => match decl.kind with
-        | .default | .implDetail => false | .auxDecl => true)
-      for decl in decls.reverse do
-        trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-        let res ← do try progressWith fnExpr (.Local decl) ids asmTac catch _ => continue
-        match res with
-        | .Ok => return ()
-        | .Error msg => throwError msg
-      -- Nothing worked: failed
-      throwError "Progress failed"
+      | .Ok => return ()
+      | .Error msg => throwError msg
+    -- Nothing worked: failed
+    throwError "Progress failed"
 
 syntax progressArgs := ("with" ident)? ("as" " ⟨ " (ident)+ " ⟩")?
 
