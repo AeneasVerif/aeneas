@@ -6,7 +6,8 @@ open Result
 namespace List
 
 -- TODO: we don't want to use the original List.lookup because it uses BEq
--- TODO: rewrite rule: match x == y with ... -> if x = y then ... else ... ?
+-- TODO: rewrite rule: match x == y with ... -> if x = y then ... else ... ? (actually doesn't work because of sugar)
+-- TODO: move?
 @[simp]
 def lookup' {α : Type} (ls: _root_.List (Usize × α)) (key: Usize) : Option α :=
   match ls with
@@ -49,6 +50,7 @@ end List
 @[simp] theorem neq_imp_nbeq_rev [BEq α] [LawfulBEq α] (x y : α) (heq : ¬ x = y) : ¬ y == x := by simp [*]
 
 -- TODO: move
+-- TODO: this doesn't work because of sugar
 theorem match_lawful_beq [BEq α] [LawfulBEq α] [DecidableEq α] (x y : α) :
   (x == y) = (if x = y then true else false) := by
   split <;> simp_all
@@ -161,47 +163,6 @@ def slot_s_inv (l i : Int) (ls : Core.List (Usize × α)) : Prop :=
 def slot_t_inv (l i : Int) (s : List α) : Prop := slot_s_inv l i s.v
 
 theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
-  (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v) :
-  ∃ l1,
-    insert_in_list_back α key value l0 = ret l1 ∧
-    -- We update the binding
-    l1.lookup key = value ∧
-    (∀ k, k ≠ key → l1.lookup k = l0.lookup k) ∧
-    -- We preserve part of the key invariant
-    slot_s_inv_hash l (hash_mod_key key l) l1.v ∧
-    -- Reasoning about the length
-    match l0.lookup key with
-    | none => l1.len = l0.len + 1
-    | some _ => l1.len = l0.len
-  := match l0 with
-  | .Nil => by
-    simp (config := {contextual := true}) [insert_in_list_back, insert_in_list_loop_back, List.v, slot_s_inv_hash]
-  | .Cons k v tl0 =>
-     if h: k = key then
-       by
-         simp [insert_in_list_back]
-         rw [insert_in_list_loop_back]
-         simp [h]
-         constructor
-         . intros; simp [*]
-         . simp [List.v, slot_s_inv_hash] at *
-           simp [*]
-     else
-       by
-         simp [insert_in_list_back]
-         rw [insert_in_list_loop_back]
-         simp [h]
-         have : slot_s_inv_hash l (hash_mod_key key l) (List.v tl0) := by
-           simp_all [List.v, slot_s_inv_hash]
-         progress keep as heq as ⟨ tl1 hp1 hp2 hp3 hp4 ⟩
-         simp only [insert_in_list_back] at heq
-         have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by
-           simp [List.v, slot_s_inv_hash] at *
-           simp [*]
-         -- TODO: canonize addition by default?
-         simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
-
-theorem insert_in_list_back_spec_aux1 {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   ∃ l1,
@@ -220,43 +181,41 @@ theorem insert_in_list_back_spec_aux1 {α : Type} (l : Int) (key: Usize) (value:
     -- We need this auxiliary property to prove that the keys distinct properties is preserved
     (∀ k, k ≠ key → l0.v.allP (λ (k1, _) => k ≠ k1) → l1.v.allP (λ (k1, _) => k ≠ k1))
   := match l0 with
-  | .Nil => by
+  | .Nil => by checkpoint
     simp (config := {contextual := true})
       [insert_in_list_back, insert_in_list_loop_back,
        List.v, slot_s_inv_hash, distinct_keys, List.pairwise_rel]
   | .Cons k v tl0 =>
-     if h: k = key then
-       by
-         simp [insert_in_list_back]
-         rw [insert_in_list_loop_back]
-         simp [h]
-         split_target_conjs
-         . intros; simp [*]
-         . simp [List.v, slot_s_inv_hash] at *
-           simp [*]
-         . simp [*, distinct_keys] at *
-           apply hdk
-         . tauto
-     else
-       by
-         simp [insert_in_list_back]
-         rw [insert_in_list_loop_back]
-         simp [h]
-         have : slot_s_inv_hash l (hash_mod_key key l) (List.v tl0) := by
-           simp_all [List.v, slot_s_inv_hash]
-         have : distinct_keys (List.v tl0) := by
-           simp [distinct_keys] at hdk
-           simp [hdk, distinct_keys]
-         progress keep as heq as ⟨ tl1 hp1 hp2 hp3 hp4 hp5 hp6 ⟩ -- TODO: naming is weird
-         simp only [insert_in_list_back] at heq
-         have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by
-           simp [List.v, slot_s_inv_hash] at *
-           simp [*]
-         have : distinct_keys ((k, v) :: List.v tl1) := by
-           simp [distinct_keys] at *
-           simp [*]
-         -- TODO: canonize addition by default?
-         simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
+     if h: k = key then by checkpoint
+       simp [insert_in_list_back]
+       rw [insert_in_list_loop_back]
+       simp [h]
+       split_target_conjs
+       . intros; simp [*]
+       . simp [List.v, slot_s_inv_hash] at *
+         simp [*]
+       . simp [*, distinct_keys] at *
+         apply hdk
+       . tauto
+     else by checkpoint
+       simp [insert_in_list_back]
+       rw [insert_in_list_loop_back]
+       simp [h]
+       have : slot_s_inv_hash l (hash_mod_key key l) (List.v tl0) := by checkpoint
+         simp_all [List.v, slot_s_inv_hash]
+       have : distinct_keys (List.v tl0) := by checkpoint
+         simp [distinct_keys] at hdk
+         simp [hdk, distinct_keys]
+       progress keep as heq as ⟨ tl1 hp1 hp2 hp3 hp4 hp5 hp6 ⟩
+       simp only [insert_in_list_back] at heq
+       have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by checkpoint
+         simp [List.v, slot_s_inv_hash] at *
+         simp [*]
+       have : distinct_keys ((k, v) :: List.v tl1) := by checkpoint
+         simp [distinct_keys] at *
+         simp [*]
+       -- TODO: canonize addition by default?
+       simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
 
 end HashMap
 
