@@ -438,7 +438,7 @@ instance {ty} : HDiv (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
 instance {ty} : HMod (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
   hMod x y := Scalar.rem x y
 
--- TODO: make progress work at a more fine grained level (see `Scalar.add_unsigned_spec`)
+-- Generic theorem - shouldn't be used much
 @[cpspec]
 theorem Scalar.add_spec {ty} {x y : Scalar ty}
   (hmin : Scalar.min ty ≤ x.val + y.val)
@@ -460,7 +460,32 @@ theorem Scalar.add_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
     cases ty <;> simp [min] at * <;> linarith
   apply add_spec <;> assumption
 
--- TODO: make it finer grained
+/- Fine-grained theorems -/
+@[cepspec] theorem Usize.add_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+  apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U8.add_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+  apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U16.add_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+  apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U32.add_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+  apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U64.add_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+  apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U128.add_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
+  ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+  apply Scalar.add_unsigned_spec <;> simp only [Scalar.max, *]
+
+-- Generic theorem - shouldn't be used much
 @[cpspec]
 theorem Scalar.sub_spec {ty} {x y : Scalar ty}
   (hmin : Scalar.min ty ≤ x.val - y.val)
@@ -484,8 +509,32 @@ theorem Scalar.sub_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   intros
   apply sub_spec <;> assumption
 
--- TODO: make it finer grained
-@[cpspec]
+/- Fine-grained theorems -/
+@[cepspec] theorem Usize.sub_spec {x y : Usize} (hmin : Usize.min ≤ x.val - y.val) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
+  apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
+
+@[cepspec] theorem U8.sub_spec {x y : U8} (hmin : U8.min ≤ x.val - y.val) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
+  apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
+
+@[cepspec] theorem U16.sub_spec {x y : U16} (hmin : U16.min ≤ x.val - y.val) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
+  apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
+
+@[cepspec] theorem U32.sub_spec {x y : U32} (hmin : U32.min ≤ x.val - y.val) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
+  apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
+
+@[cepspec] theorem U64.sub_spec {x y : U64} (hmin : U64.min ≤ x.val - y.val) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
+  apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
+
+@[cepspec] theorem U128.sub_spec {x y : U128} (hmin : U128.min ≤ x.val - y.val) :
+  ∃ z, x - y = ret z ∧ z.val = x.val - y.val := by
+  apply Scalar.sub_unsigned_spec <;> simp only [Scalar.min, *]
+
+-- Generic theorem - shouldn't be used much
 theorem Scalar.mul_spec {ty} {x y : Scalar ty}
   (hmin : Scalar.min ty ≤ x.val * y.val)
   (hmax : x.val * y.val ≤ Scalar.max ty) :
@@ -506,7 +555,32 @@ theorem Scalar.mul_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
     cases ty <;> simp at * <;> apply mul_nonneg hx hy
   apply mul_spec <;> assumption
 
--- TODO: make it finer grained
+/- Fine-grained theorems -/
+@[cepspec] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
+  apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U8.mul_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
+  apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U16.mul_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
+  apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U32.mul_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
+  apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U64.mul_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
+  apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
+
+@[cepspec] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
+  ∃ z, x * y = ret z ∧ z.val = x.val * y.val := by
+  apply Scalar.mul_unsigned_spec <;> simp only [Scalar.max, *]
+
+-- Generic theorem - shouldn't be used much
 @[cpspec]
 theorem Scalar.div_spec {ty} {x y : Scalar ty}
   (hnz : y.val ≠ 0)
@@ -534,7 +608,32 @@ theorem Scalar.div_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   simp [*] at hs
   apply hs
 
--- TODO: make it finer grained
+/- Fine-grained theorems -/
+@[cepspec] theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
+  ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
+  apply Scalar.div_unsigned_spec <;> simp [*]
+
+@[cepspec] theorem U8.div_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
+  ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
+  apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
+
+@[cepspec] theorem U16.div_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
+  ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
+  apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
+
+@[cepspec] theorem U32.div_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
+  ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
+  apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
+
+@[cepspec] theorem U64.div_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
+  ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
+  apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
+
+@[cepspec] theorem U128.div_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
+  ∃ z, x / y = ret z ∧ z.val = x.val / y.val := by
+  apply Scalar.div_unsigned_spec <;> simp [Scalar.max, *]
+
+-- Generic theorem - shouldn't be used much
 @[cpspec]
 theorem Scalar.rem_spec {ty} {x y : Scalar ty}
   (hnz : y.val ≠ 0)
@@ -548,7 +647,7 @@ theorem Scalar.rem_spec {ty} {x y : Scalar ty}
 
 theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : Scalar ty}
   (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ret z ∧ z.val = scalar_rem x.val y.val := by
+  ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
   have h : Scalar.min ty = 0 := by cases ty <;> simp at *
   have hx := x.hmin
   have hy := y.hmin
@@ -564,6 +663,30 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   have hs := @rem_spec ty x y hnz
   simp [*] at hs
   simp [*]
+
+@[cepspec] theorem Usize.rem_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
+  apply Scalar.rem_unsigned_spec <;> simp [*]
+
+@[cepspec] theorem U8.rem_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
+  apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
+
+@[cepspec] theorem U16.rem_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
+  apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
+
+@[cepspec] theorem U32.rem_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
+  apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
+
+@[cepspec] theorem U64.rem_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
+  apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
+
+@[cepspec] theorem U128.rem_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ret z ∧ z.val = x.val % y.val := by
+  apply Scalar.rem_unsigned_spec <;> simp [Scalar.max, *]
 
 -- ofIntCore
 -- TODO: typeclass?

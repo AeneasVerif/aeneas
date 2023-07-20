@@ -240,7 +240,7 @@ initialize pspecClassExprAttr : PSpecClassExprAttr ← do
       -- We store two bindings:
       -- - arg to theorem name
       -- - reduced arg to theorem name
-      let rarg ← MetaM.run' (reduce arg)
+      let rarg ← MetaM.run' (reduceAll arg)
       trace[Progress] "Registering class spec theorem for ({fName}, {arg}) and ({fName}, {rarg})"
       -- Update the entry if there is one, add an entry if there is none
       let env :=
