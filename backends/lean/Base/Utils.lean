@@ -308,8 +308,23 @@ def firstTac (tacl : List (TacticM Unit)) : TacticM Unit := do
   match tacl with
   | [] => pure ()
   | tac :: tacl =>
-    try tac
+    -- Should use try ... catch or Lean.observing?
+    -- Generally speaking we should use Lean.observing? to restore the state,
+    -- but with tactics the try ... catch variant seems to work
+    try do
+      tac
+      -- Check that there are no remaining goals
+      let gl ← Tactic.getUnsolvedGoals
+      if ¬ gl.isEmpty then throwError "tactic failed"
     catch _ => firstTac tacl
+/-    let res ← Lean.observing? do
+      tac
+      -- Check that there are no remaining goals
+      let gl ← Tactic.getUnsolvedGoals
+      if ¬ gl.isEmpty then throwError "tactic failed"
+    match res with
+    | some _ => pure ()
+    | none => firstTac tacl -/
 
 -- Split the goal if it is a conjunction
 def splitConjTarget : TacticM Unit := do
@@ -424,12 +439,13 @@ def splitExistsTac (h : Expr) (optId : Option Name) (k : Expr → Expr → Tacti
   let hTy ← inferType h
   if isExists hTy then do
     -- Try to use the user-provided names
-    let altVarNames ←
-      match optId with
-      | none => pure #[]
-      | some id => do
-        let hDecl ← h.fvarId!.getDecl
-        pure #[{ varNames := [id, hDecl.userName] }]
+    let altVarNames ← do
+      let hDecl ← h.fvarId!.getDecl
+      let id ← do
+        match optId with
+        | none => mkFreshUserName `x
+        | some id => pure id
+      pure #[{ varNames := [id, hDecl.userName] }]
     let newGoals ← goal.cases h.fvarId! altVarNames
     -- There should be exactly one goal
     match newGoals.toList with
@@ -511,7 +527,7 @@ example (h : a ∧ b) : a := by
 
 example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
   split_all_exists h
-  rename_i x y z h
+  rename_i x y z
   exists x + y + z
 
 /- Call the simp tactic.

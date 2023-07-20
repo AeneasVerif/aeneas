@@ -19,6 +19,7 @@ structure PSpecDesc where
   -- The existentially quantified variables
   evars : Array Expr
   -- The function
+  fExpr : Expr
   fName : Name
   -- The function arguments
   fLevels : List Level
@@ -60,21 +61,30 @@ section Methods
     m a := do
     trace[Progress] "Proposition: {th}"
     -- Dive into the quantified variables and the assumptions
-    forallTelescope th fun fvars th => do
+    forallTelescope th.consumeMData fun fvars th => do
     trace[Progress] "Universally quantified arguments and assumptions: {fvars}"
     -- Dive into the existentials
-    existsTelescope th fun evars th => do
+    existsTelescope th.consumeMData fun evars th => do
     trace[Progress] "Existentials: {evars}"
     trace[Progress] "Proposition after stripping the quantifiers: {th}"
     -- Take the first conjunct
-    let (th, post) ← optSplitConj th
+    let (th, post) ← optSplitConj th.consumeMData
     trace[Progress] "After splitting the conjunction:\n- eq: {th}\n- post: {post}"
     -- Destruct the equality
-    let (th, ret) ← destEq th
+    let (mExpr, ret) ← destEq th.consumeMData
     trace[Progress] "After splitting the equality:\n- lhs: {th}\n- rhs: {ret}"
-    -- Destruct the application to get the name
-    th.consumeMData.withApp fun f args => do
-    trace[Progress] "After stripping the arguments:\n- f: {f}\n- args: {args}"
+    -- Destruct the monadic application to dive into the bind, if necessary (this
+    -- is for when we use `withPSpec` inside of the `progress` tactic), and
+    -- destruct the application to get the function name
+    mExpr.consumeMData.withApp fun mf margs => do
+    trace[Progress] "After stripping the arguments of the monad expression:\n- mf: {mf}\n- margs: {margs}"
+    let (fExpr, f, args) ← do
+      if mf.isConst ∧ mf.constName = ``Bind.bind then do
+        -- Dive into the bind
+        let fExpr := margs.get! 4
+        fExpr.consumeMData.withApp fun f args => pure (fExpr, f, args)
+      else pure (mExpr, mf, margs)
+    trace[Progress] "After stripping the arguments of the function call:\n- f: {f}\n- args: {args}"
     if ¬ f.isConst then throwError "Not a constant: {f}"
     -- Compute the set of universally quantified variables which appear in the function arguments
     let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
@@ -94,6 +104,7 @@ section Methods
     let thDesc := {
       fvars := fvars
       evars := evars
+      fExpr
       fName := f.constName!
       fLevels := f.constLevels!
       args := args

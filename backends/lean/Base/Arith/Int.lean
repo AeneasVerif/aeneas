@@ -198,7 +198,7 @@ def intTac (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   -- Split the conjunctions in the goal
   Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call linarith
-  let linarith :=
+  let linarith := do
     let cfg : Linarith.LinarithConfig := {
       -- We do this with our custom preprocessing
       splitNe := false

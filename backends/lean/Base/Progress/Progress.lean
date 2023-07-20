@@ -7,22 +7,6 @@ namespace Progress
 open Lean Elab Term Meta Tactic
 open Utils
 
-/-
--- TODO: remove
-namespace Test
-  open Primitives
-
-  set_option trace.Progress true
-
-  @[pspec]
-  theorem vec_index_test (α : Type u) (v: Vec α) (i: Usize) (h: i.val < v.val.length) :
-    ∃ x, v.index α i = .ret x := by
-      sorry
-
-  #eval pspecAttr.find? ``Primitives.Vec.index
-end Test
--/
-
 inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
@@ -39,7 +23,7 @@ inductive ProgressError
 | Error (msg : MessageData)
 deriving Inhabited
 
-def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (keep : Option Name) (ids : Array Name)
+def progressWith (fExpr : Expr) (th : TheoremOrLocal) (keep : Option Name) (ids : Array Name)
   (asmTac : TacticM Unit) : TacticM ProgressError := do
   /- Apply the theorem
      We try to match the theorem with the goal
@@ -66,7 +50,7 @@ def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (keep : Option Name) (ids
   -- Introduce the existentially quantified variables and the post-condition
   -- in the context
   let thBody ←
-    existsTelescope thExBody fun _evars thBody => do
+    existsTelescope thExBody.consumeMData fun _evars thBody => do
     trace[Progress] "After stripping existentials: {thBody}"
     let (thBody, _) ← optSplitConj thBody
     trace[Progress] "After splitting the conjunction: {thBody}"
@@ -75,9 +59,9 @@ def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (keep : Option Name) (ids
     -- There shouldn't be any existential variables in thBody
     pure thBody
   -- Match the body with the target
-  trace[Progress] "Maching `{thBody}` with `{fnExpr}`"
-  let ok ← isDefEq thBody fnExpr
-  if ¬ ok then throwError "Could not unify the theorem with the target:\n- theorem: {thBody}\n- target: {fnExpr}"
+  trace[Progress] "Matching `{thBody}` with `{fExpr}`"
+  let ok ← isDefEq thBody fExpr
+  if ¬ ok then throwError "Could not unify the theorem with the target:\n- theorem: {thBody}\n- target: {fExpr}"
   let mgoal ← Tactic.getMainGoal
   postprocessAppMVars `progress mgoal mvars binders true true
   Term.synthesizeSyntheticMVarsNoPostponing
@@ -139,8 +123,9 @@ def progressWith (fnExpr : Expr) (th : TheoremOrLocal) (keep : Option Name) (ids
         match ids with
         | [] => pure .Ok -- Stop
         | nid :: ids => do
+          trace[Progress] "Splitting post: {hPost}"
           -- Split
-          if ← isConj hPost then
+          if ← isConj (← inferType hPost) then
             splitConjTac hPost (some (nid, curPostId)) (λ _ nhPost => splitPost nhPost ids)
           else return (.Error m!"Too many ids provided ({nid :: ids}) not enough conjuncts to split in the postcondition")
       splitPost hPost ids
@@ -175,7 +160,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 
 /- Helper: try to lookup a theorem and apply it, or continue with another tactic
    if it fails -/
-def tryLookupApply (keep : Option Name) (ids : Array Name) (asmTac : TacticM Unit) (fnExpr : Expr)
+def tryLookupApply (keep : Option Name) (ids : Array Name) (asmTac : TacticM Unit) (fExpr : Expr)
   (kind : String) (th : Option TheoremOrLocal) (x : TacticM Unit) : TacticM Unit := do
   let res ← do
     match th with
@@ -187,7 +172,7 @@ def tryLookupApply (keep : Option Name) (ids : Array Name) (asmTac : TacticM Uni
       -- Apply the theorem
       let res ← do
         try
-          let res ← progressWith fnExpr th keep ids asmTac
+          let res ← progressWith fExpr th keep ids asmTac
           pure (some res)
         catch _ => none
   match res with
@@ -203,18 +188,16 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
   let goalTy ← mgoal.getType
   trace[Progress] "goal: {goalTy}"
   -- Dive into the goal to lookup the theorem
-  let (fName, fLevels, args) ← do
+  let (fExpr, fName, args) ← do
     withPSpec goalTy fun desc =>
-    -- TODO: check that no universally quantified variables in the arguments
-    pure (desc.fName, desc.fLevels, desc.args)
-  -- TODO: this should be in the pspec desc
-  let fnExpr := mkAppN (.const fName fLevels) args
+    -- TODO: check that no quantified variables in the arguments
+    pure (desc.fExpr, desc.fName, desc.args)
   trace[Progress] "Function: {fName}"
   -- If the user provided a theorem/assumption: use it.
   -- Otherwise, lookup one.
   match withTh with
   | some th => do
-    match ← progressWith fnExpr th keep ids asmTac with
+    match ← progressWith fExpr th keep ids asmTac with
     | .Ok => return ()
     | .Error msg => throwError msg
   | none =>
@@ -223,7 +206,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     let decls ← ctx.getDecls
     for decl in decls.reverse do
       trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fnExpr (.Local decl) keep ids asmTac catch _ => continue
+      let res ← do try progressWith fExpr (.Local decl) keep ids asmTac catch _ => continue
       match res with
       | .Ok => return ()
       | .Error msg => throwError msg
@@ -233,7 +216,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     let pspec ← do
       let thName ← pspecAttr.find? fName
       pure (thName.map fun th => .Theorem th)
-    tryLookupApply keep ids asmTac fnExpr "pspec theorem" pspec do
+    tryLookupApply keep ids asmTac fExpr "pspec theorem" pspec do
     -- It failed: try to lookup a *class* expr spec theorem (those are more
     -- specific than class spec theorems)
     let pspecClassExpr ← do
@@ -242,7 +225,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
       | some arg => do
         let thName ← pspecClassExprAttr.find? fName arg
         pure (thName.map fun th => .Theorem th)
-    tryLookupApply keep ids asmTac fnExpr "pspec class expr theorem" pspecClassExpr do
+    tryLookupApply keep ids asmTac fExpr "pspec class expr theorem" pspecClassExpr do
     -- It failed: try to lookup a *class* spec theorem
     let pspecClass ← do
       match ← getFirstArgAppName args with
@@ -250,7 +233,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
       | some argName => do
         let thName ← pspecClassAttr.find? fName argName
         pure (thName.map fun th => .Theorem th)
-    tryLookupApply keep ids asmTac fnExpr "pspec class theorem" pspecClass do
+    tryLookupApply keep ids asmTac fExpr "pspec class theorem" pspecClass do
     -- Try a recursive call - we try the assumptions of kind "auxDecl"
     let ctx ← Lean.MonadLCtx.getLCtx
     let decls ← ctx.getAllDecls
@@ -258,7 +241,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
       | .default | .implDetail => false | .auxDecl => true)
     for decl in decls.reverse do
       trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fnExpr (.Local decl) keep ids asmTac catch _ => continue
+      let res ← do try progressWith fExpr (.Local decl) keep ids asmTac catch _ => continue
       match res with
       | .Ok => return ()
       | .Error msg => throwError msg
@@ -310,7 +293,6 @@ elab "progress" args:progressArgs : tactic =>
   evalProgress args
 
 /-
--- TODO: remove
 namespace Test
   open Primitives Result
 
@@ -319,22 +301,14 @@ namespace Test
   #eval showStoredPSpec
   #eval showStoredPSpecClass
 
-  theorem Scalar.add_spec1 {ty} {x y : Scalar ty}
+  example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
-    progress keep as h with Scalar.add_spec as ⟨ z ⟩
+--    progress keep as h with Scalar.add_spec as ⟨ z ⟩
+    progress keep as h
     simp [*]
 
-/-
-  @[pspec]
-  theorem vec_index_test2 (α : Type u) (v: Vec α) (i: Usize) (h: i.val < v.val.length) :
-    ∃ (x: α), v.index α i = .ret x := by
-      progress with vec_index_test as ⟨ x ⟩
-      simp
-
-  set_option trace.Progress false
--/
 end Test -/
 
 end Progress
