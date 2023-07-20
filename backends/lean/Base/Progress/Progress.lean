@@ -118,17 +118,17 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal) (keep : Option Name) (ids 
         match hPost with
         | none => do return (.Error m!"Too many ids provided ({ids}): there is no postcondition to split")
         | some hPost => pure hPost
-      let curPostId := (← hPost.fvarId!.getDecl).userName
-      let rec splitPost (hPost : Expr) (ids : List Name) : TacticM ProgressError := do
+      let rec splitPost (prevId : Name) (hPost : Expr) (ids : List Name) : TacticM ProgressError := do
         match ids with
         | [] => pure .Ok -- Stop
         | nid :: ids => do
           trace[Progress] "Splitting post: {hPost}"
           -- Split
           if ← isConj (← inferType hPost) then
-            splitConjTac hPost (some (nid, curPostId)) (λ _ nhPost => splitPost nhPost ids)
+            splitConjTac hPost (some (prevId, nid)) (λ _ nhPost => splitPost nid nhPost ids)
           else return (.Error m!"Too many ids provided ({nid :: ids}) not enough conjuncts to split in the postcondition")
-      splitPost hPost ids
+      let curPostId := (← hPost.fvarId!.getDecl).userName
+      splitPost curPostId hPost ids
     else return .Ok
   match res with
   | .Error _ => return res -- Can we get there? We're using "return"
