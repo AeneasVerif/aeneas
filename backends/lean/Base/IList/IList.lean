@@ -175,6 +175,73 @@ theorem idrop_eq_nil_of_le (hineq : ls.len ≤ i) : idrop i ls = [] := by
     apply hi
     linarith
 
+@[simp]
+theorem index_ne
+  {α : Type u} [Inhabited α] (l: List α) (i: ℤ) (j: ℤ) (x: α) :
+   0 ≤ i → i < l.len → 0 ≤ j → j < l.len → j ≠ i →
+    (l.update i x).index j = l.index j
+  :=
+  λ _ _ _ _ _ => match l with
+  | [] => by simp at *
+  | hd :: tl =>
+    if h: i = 0 then
+      have : j ≠ 0 := by scalar_tac
+      by simp [*]
+    else if h : j = 0 then
+      have : i ≠ 0 := by scalar_tac
+      by simp [*]
+    else
+      by
+        simp [*]
+        simp at *
+        apply index_ne <;> scalar_tac
+
+@[simp]
+theorem index_eq
+  {α : Type u} [Inhabited α] (l: List α) (i: ℤ) (x: α) :
+   0 ≤ i → i < l.len →
+    (l.update i x).index i = x
+  :=
+  fun _ _ => match l with
+  | [] => by simp at *; exfalso; scalar_tac -- TODO: exfalso needed. Son FIXME
+  | hd :: tl =>
+    if h: i = 0 then
+      by
+        simp [*]
+    else
+      by
+        simp [*]
+        simp at *
+        apply index_eq <;> scalar_tac
+
+def allP {α : Type u} (l : List α) (p: α → Prop) : Prop :=
+  foldr (fun a r => p a ∧ r) True l
+
+@[simp]
+theorem allP_nil {α : Type u} (p: α → Prop) : allP [] p :=
+  by simp [allP, foldr]
+
+@[simp]
+theorem allP_cons {α : Type u} (hd: α) (tl : List α) (p: α → Prop) :
+  allP (hd :: tl) p ↔ p hd ∧ allP tl p
+  := by simp [allP, foldr]
+
+def pairwise_rel
+  {α : Type u} (rel : α → α → Prop) (l: List α) : Prop
+  := match l with
+  | [] => True
+  | hd :: tl => allP tl (rel hd) ∧ pairwise_rel rel tl
+
+@[simp]
+theorem pairwise_rel_nil {α : Type u} (rel : α → α → Prop) :
+  pairwise_rel rel []
+  := by simp [pairwise_rel]
+
+@[simp]
+theorem pairwise_rel_cons {α : Type u} (rel : α → α → Prop) (hd: α) (tl: List α) :
+  pairwise_rel rel (hd :: tl) ↔ allP tl (rel hd) ∧ pairwise_rel rel tl
+  := by simp [pairwise_rel]
+
 end Lemmas
 
 end List

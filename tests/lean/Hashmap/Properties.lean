@@ -3,75 +3,6 @@ import Hashmap.Funs
 open Primitives
 open Result
 
-namespace List
-
-theorem index_ne
-  {α : Type u} [Inhabited α] (l: List α) (i: ℤ) (j: ℤ) (x: α) :
-   0 ≤ i → i < l.len → 0 ≤ j → j < l.len → j ≠ i →
-    (l.update i x).index j = l.index j
-  :=
-  λ _ _ _ _ _ => match l with
-  | [] => by simp at *
-  | hd :: tl =>
-    if h: i = 0 then
-      have : j ≠ 0 := by scalar_tac
-      by simp [*]
-    else if h : j = 0 then
-      have : i ≠ 0 := by scalar_tac
-      by simp [*]
-    else
-      by
-        simp [*]
-        simp at *
-        apply index_ne <;> scalar_tac
-
-theorem index_eq
-  {α : Type u} [Inhabited α] (l: List α) (i: ℤ) (x: α) :
-   0 ≤ i → i < l.len →
-    (l.update i x).index i = x
-  :=
-  fun _ _ => match l with
-  | [] => by simp at *; exfalso; scalar_tac -- TODO: exfalso needed. Son FIXME
-  | hd :: tl =>
-    if h: i = 0 then
-      by
-        simp [*]
-    else
-      by
-        simp [*]
-        simp at *
-        apply index_eq <;> scalar_tac
-
-def allP {α : Type u} (l : List α) (p: α → Prop) : Prop :=
-  foldr (fun a r => p a ∧ r) True l
-
-@[simp]
-theorem allP_nil {α : Type u} (p: α → Prop) : allP [] p :=
-  by simp [allP, foldr]
-
-@[simp]
-theorem allP_cons {α : Type u} (hd: α) (tl : List α) (p: α → Prop) :
-  allP (hd :: tl) p ↔ p hd ∧ allP tl p
-  := by simp [allP, foldr]
-
-def pairwise_rel 
-  {α : Type u} (rel : α → α → Prop) (l: List α) : Prop
-  := match l with
-  | [] => True
-  | hd :: tl => allP tl (rel hd) ∧ pairwise_rel rel tl
-
-@[simp]
-theorem pairwise_rel_nil {α : Type u} (rel : α → α → Prop) :
-  pairwise_rel rel []
-  := by simp [pairwise_rel]
-
-@[simp]
-theorem pairwise_rel_cons {α : Type u} (rel : α → α → Prop) (hd: α) (tl: List α) :
-  pairwise_rel rel (hd :: tl) ↔ allP tl (rel hd) ∧ pairwise_rel rel tl
-  := by simp [pairwise_rel]
-
-end List
-
 namespace hashmap
 
 namespace List
@@ -104,18 +35,16 @@ theorem insert_in_list_spec {α : Type} (key: Usize) (value: α) (ls: List α) :
         rw [insert_in_list_loop]
         simp [h]
     else
+      have ⟨ b, hi ⟩ := insert_in_list_spec key value tl
       by
-        -- TODO: use progress: detect that this is a recursive call, or give
-        -- the possibility of specifying an identifier
-        have ⟨ b, hi ⟩ := insert_in_list_spec key value tl
         exists b
         simp [insert_in_list, List.lookup]
-        rw [insert_in_list_loop] -- TODO: Using it in simp leads to infinite recursion
+        rw [insert_in_list_loop] -- TODO: Using simp leads to infinite recursion
         simp [h]
         simp [insert_in_list] at hi
         exact hi
 
-set_option trace.Progress true
+-- Variation: use progress
 @[pspec]
 theorem insert_in_list_spec1 {α : Type} (key: Usize) (value: α) (ls: List α) :
   ∃ b,
@@ -134,18 +63,13 @@ theorem insert_in_list_spec1 {α : Type} (key: Usize) (value: α) (ls: List α) 
         simp only [insert_in_list]
         rw [insert_in_list_loop]
         conv => rhs; ext; simp [*]
-        progress as ⟨ b hi ⟩
-
-        -- TODO: use progress: detect that this is a recursive call, or give
-        -- the possibility of specifying an identifier
-        have ⟨ b, hi ⟩ := insert_in_list_spec key value tl
+        progress keep as heq as ⟨ b hi ⟩
+        simp only [insert_in_list] at heq
         exists b
-        simp [insert_in_list, List.lookup]
-        rw [insert_in_list_loop] -- TODO: Using it in simp leads to infinite recursion
-        simp [h]
-        simp [insert_in_list] at hi
-        exact hi
+        simp only [heq, hi]
+        simp [*, List.lookup]
 
+-- Variation: use tactics from the beginning
 @[pspec]
 theorem insert_in_list_spec2 {α : Type} (key: Usize) (value: α) (ls: List α) :
   ∃ b,
