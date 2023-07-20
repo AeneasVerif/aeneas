@@ -326,14 +326,6 @@ def firstTac (tacl : List (TacticM Unit)) : TacticM Unit := do
     | some _ => pure ()
     | none => firstTac tacl -/
 
--- Split the goal if it is a conjunction
-def splitConjTarget : TacticM Unit := do
-  withMainContext do
-  let and_intro := Expr.const ``And.intro []
-  let mvarIds' ← _root_.Lean.MVarId.apply (← getMainGoal) and_intro
-  Term.synthesizeSyntheticMVarsNoPostponing
-  replaceMainGoal mvarIds'
-
 -- Taken from Lean.Elab.evalAssumption
 def assumptionTac : TacticM Unit :=
   liftMetaTactic fun mvarId => do mvarId.assumption; pure []
@@ -348,6 +340,24 @@ def optSplitConj (e : Expr) : MetaM (Expr × Option Expr) := do
   e.withApp fun f args =>
   if f.isConstOf ``And ∧ args.size = 2 then pure (args.get! 0, some (args.get! 1))
   else pure (e, none)
+
+-- Split the goal if it is a conjunction
+def splitConjTarget : TacticM Unit := do
+  withMainContext do
+  let g ← getMainTarget
+  -- The tactic was initially implemened with `_root_.Lean.MVarId.apply`
+  -- but it tended to mess the goal by unfolding terms, even when it failed
+  let (l, r) ← optSplitConj g
+  match r with
+  | none => do throwError "The goal is not a conjunction"
+  | some r => do
+    let lmvar ← mkFreshExprSyntheticOpaqueMVar l
+    let rmvar ← mkFreshExprSyntheticOpaqueMVar r
+    let and_intro ← mkAppM ``And.intro #[lmvar, rmvar]
+    let g ← getMainGoal
+    g.assign and_intro
+    let goals ← getUnsolvedGoals
+    setGoals (lmvar.mvarId! :: rmvar.mvarId! :: goals)
 
 -- Destruct an equaliy and return the two sides
 def destEq (e : Expr) : MetaM (Expr × Expr) := do
@@ -519,6 +529,10 @@ elab "split_all_exists " n:ident : tactic => do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
   splitAllExistsTac fvar [] (fun _ _ => pure ())
+
+elab "split_target_conjs" : tactic =>
+  withMainContext do
+  repeatTac splitConjTarget
 
 example (h : a ∧ b) : a := by
   split_all_exists h
