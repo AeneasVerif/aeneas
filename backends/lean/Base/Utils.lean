@@ -484,9 +484,12 @@ def listTryPopHead (ls : List α) : Option α × List α :=
    If `ids` is not empty, we use it to name the introduced variables. We
    transmit the stripped expression and the remaining ids to the continuation.
  -/
-partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List Name) (k : Expr → List Name → TacticM α) : TacticM α := do
+partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name)) (k : Expr → List (Option Name) → TacticM α) : TacticM α := do
   try
-    let (optId, ids) := listTryPopHead ids
+    let (optId, ids) :=
+      match ids with
+      | [] => (none, [])
+      | x :: ids => (x, ids)
     splitExistsTac h optId (fun _ body => splitAllExistsTac body ids k)
   catch _ => k h ids
 
