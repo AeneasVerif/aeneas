@@ -307,7 +307,18 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
     let args := (args.get! 2).getArgs
     (args.get! 3).getArgs.size > 0
   trace[Progress] "Split post: {splitPost}"
-  progressAsmsOrLookupTheorem keep withArg ids splitPost (firstTac [assumptionTac, Arith.scalarTac])
+  /- For scalarTac we have a fast track: if the goal is not a linear
+     arithmetic goal, we skip (note that otherwise, scalarTac would try
+     to prove a contradiction) -/
+  let scalarTac : TacticM Unit := do
+    if ← Arith.goalIsLinearInt then
+      -- Also: we don't try to split the goal if it is a conjunction
+      -- (it shouldn't be)
+      Arith.scalarTac false
+    else
+      throwError "Not a linear arithmetic goal"
+  progressAsmsOrLookupTheorem keep withArg ids splitPost (
+    firstTac [assumptionTac, scalarTac])
 
 elab "progress" args:progressArgs : tactic =>
   evalProgress args

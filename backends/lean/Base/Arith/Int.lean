@@ -24,11 +24,28 @@ class PropHasImp (x : Prop) where
   concl : Prop
   prop : x → concl
 
+instance (p : Int → Prop) : HasIntProp (Subtype p) where
+  prop_ty := λ x => p x
+  prop := λ x => x.property
+
 -- This also works for `x ≠ y` because this expression reduces to `¬ x = y`
 -- and `Ne` is marked as `reducible`
 instance (x y : Int) : PropHasImp (¬ x = y) where
   concl := x < y ∨ x > y
   prop := λ (h:x ≠ y) => ne_is_lt_or_gt h
+
+-- Check if a proposition is a linear integer proposition.
+-- We notably use this to check the goals.
+class IsLinearIntProp (x : Prop) where
+
+instance (x y : Int) : IsLinearIntProp (x < y) where
+instance (x y : Int) : IsLinearIntProp (x > y) where
+instance (x y : Int) : IsLinearIntProp (x ≤ y) where
+instance (x y : Int) : IsLinearIntProp (x ≥ y) where
+instance (x y : Int) : IsLinearIntProp (x ≥ y) where
+/- It seems we don't need to do any special preprocessing when the *goal*
+   has the following shape - I guess `linarith` automatically calls `intro` -/
+instance (x y : Int) : IsLinearIntProp (¬ x = y) where
 
 open Lean Lean.Elab Lean.Meta
 
@@ -189,14 +206,27 @@ def intTacPreprocess (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM U
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ())
 
-def intTac (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+-- Check if the goal is a linear arithmetic goal
+def goalIsLinearInt : Tactic.TacticM Bool := do
+  Tactic.withMainContext do
+  let gty ← Tactic.getMainTarget
+  match ← trySynthInstance (← mkAppM ``IsLinearIntProp #[gty]) with
+  | .some _ => pure true
+  | _ => pure false
+
+def intTac (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
+  let g ← Tactic.getMainGoal
+  trace[Arith] "Original goal: {g}"
+  -- Introduce all the universally quantified variables (includes the assumptions)
+  let (_, g) ← g.intros
+  Tactic.setGoals [g]
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
   Tactic.allGoals (intTacPreprocess extraPreprocess)
   -- Split the conjunctions in the goal
-  Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
+  if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call linarith
   let linarith := do
     let cfg : Linarith.LinarithConfig := {
@@ -204,10 +234,25 @@ def intTac (extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
       splitNe := false
     }
     Tactic.liftMetaFinishingTactic <| Linarith.linarith false [] cfg
-  Tactic.allGoals linarith
+  Tactic.allGoals do
+    -- We check if the goal is a linear arithmetic goal: if yes, we directly
+    -- call linarith, otherwise we first apply exfalso (we do this because
+    -- linarith is too general and sometimes fails to do this correctly).
+    if ← goalIsLinearInt then do
+      trace[Arith] "linarith goal: {← Tactic.getMainGoal}"
+      linarith
+    else do
+      let g ← Tactic.getMainGoal
+      let gs ← g.apply (Expr.const ``False.elim [.zero])
+      let goals ← Tactic.getGoals
+      Tactic.setGoals (gs ++ goals)
+      Tactic.allGoals do
+        trace[Arith] "linarith goal: {← Tactic.getMainGoal}"
+        linarith
 
-elab "int_tac" : tactic =>
-  intTac (do pure ())
+elab "int_tac" args:(" split_goal"?): tactic =>
+  let split := args.raw.getArgs.size > 0
+  intTac split (do pure ())
 
 example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
   int_tac_preprocess
@@ -219,10 +264,14 @@ example (x : Int) (h0: 0 ≤ x) (h1: x ≠ 0) : 0 < x := by
 
 -- Checking that things append correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
-  int_tac
+  int_tac split_goal
 
 -- Checking that things append correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
+  int_tac split_goal
+
+-- Checking that we can prove exfalso
+example (a : Prop) (x : Int) (h0: 0 < x) (h1: x < 0) : a := by
   int_tac
 
 end Arith

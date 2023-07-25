@@ -28,11 +28,11 @@ elab "scalar_tac_preprocess" : tactic =>
   intTacPreprocess scalarTacExtraPreprocess
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
-def scalarTac : Tactic.TacticM Unit := do
-  intTac scalarTacExtraPreprocess
+def scalarTac (splitGoalConjs : Bool) : Tactic.TacticM Unit := do
+  intTac splitGoalConjs scalarTacExtraPreprocess
 
 elab "scalar_tac" : tactic =>
-  scalarTac
+  scalarTac false
 
 instance (ty : ScalarTy) : HasIntProp (Scalar ty) where
   -- prop_ty is inferred

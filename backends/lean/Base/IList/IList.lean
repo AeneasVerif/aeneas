@@ -46,21 +46,18 @@ theorem indexOpt_bounds (ls : List α) (i : Int) :
   ls.indexOpt i = none ↔ i < 0 ∨ ls.len ≤ i :=
   match ls with
   | [] =>
-    have : ¬ (i < 0) → 0 ≤ i := by intro; linarith -- TODO: simplify (we could boost int_tac)
+    have : ¬ (i < 0) → 0 ≤ i := by int_tac
     by simp; tauto
   | _ :: tl =>
     have := indexOpt_bounds tl (i - 1)
     if h: i = 0 then
       by
         simp [*];
-        -- TODO: int_tac/scalar_tac should also explore the goal!
-        have := tl.len_pos
-        linarith
+        int_tac
     else by
       simp [*]
       constructor <;> intros <;>
-      -- TODO: tactic to split all disjunctions
-      rename_i hor <;> cases hor <;>
+      casesm* _ ∨ _ <;> -- splits all the disjunctions
       first | left; int_tac | right; int_tac
 
 theorem indexOpt_eq_index [Inhabited α] (ls : List α) (i : Int) :
@@ -125,7 +122,6 @@ theorem length_update (ls : List α) (i : Int) (x : α) : (ls.update i x).length
 @[simp]
 theorem len_update (ls : List α) (i : Int) (x : α) : (ls.update i x).len = ls.len := by
   simp [len_eq_length]
-
 
 theorem left_length_eq_append_eq (l1 l2 l1' l2' : List α) (heq : l1.length = l1'.length) :
   l1 ++ l2 = l1' ++ l2' ↔ l1 = l1' ∧ l2 = l2' := by
@@ -203,7 +199,7 @@ theorem index_eq
     (l.update i x).index i = x
   :=
   fun _ _ => match l with
-  | [] => by simp at *; exfalso; scalar_tac -- TODO: exfalso needed. Son FIXME
+  | [] => by simp at *; scalar_tac
   | hd :: tl =>
     if h: i = 0 then
       by

@@ -16,20 +16,19 @@ open Result Error
 -- VECTORS --
 -------------
 
-def Vec (α : Type u) := { l : List α // List.length l ≤ Usize.max }
+def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
 -- TODO: do we really need it? It should be with Subtype by default
-instance Vec.cast (a : Type): Coe (Vec a) (List a)  where coe := λ v => v.val
+instance Vec.cast (a : Type u): Coe (Vec a) (List a)  where coe := λ v => v.val
 
-instance (a : Type) : Arith.HasIntProp (Vec a) where
-  prop_ty := λ v => v.val.length ≤ Scalar.max ScalarTy.Usize
-  prop := λ ⟨ _, l ⟩ => l
+instance (a : Type u) : Arith.HasIntProp (Vec a) where
+  prop_ty := λ v => v.val.len ≤ Scalar.max ScalarTy.Usize
+  prop := λ ⟨ _, l ⟩ => by simp[Scalar.max, List.len_eq_length, *]
 
-example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
-  intro_has_int_prop_instances
-  simp_all [Scalar.max, Scalar.min]
+@[simp]
+abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.len
 
-example {a: Type} (v : Vec a) : v.val.length ≤ Scalar.max ScalarTy.Usize := by
+example {a: Type u} (v : Vec a) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
 def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
@@ -37,9 +36,6 @@ def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usiz
 def Vec.len (α : Type u) (v : Vec α) : Usize :=
   let ⟨ v, l ⟩ := v
   Usize.ofIntCore (List.length v) (by simp [Scalar.min, Usize.min]) l
-
-@[simp]
-abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.len
 
 -- This shouldn't be used
 def Vec.push_fwd (α : Type u) (_ : Vec α) (_ : α) : Unit := ()
@@ -115,11 +111,14 @@ theorem Vec.index_mut_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize) :
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
   simp only [*]
 
+instance {α : Type u} (p : Vec α → Prop) : Arith.HasIntProp (Subtype p) where
+  prop_ty := λ x => p x
+  prop := λ x => x.property
+
 def Vec.index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    -- TODO: int_tac: introduce the refinements in the context?
     .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
 
 @[pspec]
