@@ -94,7 +94,7 @@ theorem insert_in_list_spec1 {α : Type} (key: Usize) (value: α) (ls: List α) 
         simp only [insert_in_list]
         rw [insert_in_list_loop]
         conv => rhs; ext; simp [*]
-        progress keep as heq as ⟨ b hi ⟩
+        progress keep as heq as ⟨ b, hi ⟩
         simp only [insert_in_list] at heq
         exists b
 
@@ -116,34 +116,8 @@ theorem insert_in_list_spec2 {α : Type} (key: Usize) (value: α) (ls: List α) 
      conv => rhs; ext; left; simp [h] -- TODO: Simplify
      simp only [insert_in_list] at ih;
      -- TODO: give the possibility of using underscores
-     progress as ⟨ b h ⟩
+     progress as ⟨ b, h ⟩
      simp [*]
-
-theorem insert_in_list_back_spec {α : Type} (key: Usize) (value: α) (l0: List α) :
-  ∃ l1,
-    insert_in_list_back α key value l0 = ret l1 ∧
-    -- We update the binding
-    l1.lookup key = value ∧
-    (∀ k, k ≠ key → l1.lookup k = l0.lookup k)
-  := match l0 with
-  | .Nil => by
-    simp (config := {contextual := true}) [insert_in_list_back, insert_in_list_loop_back]
-  | .Cons k v tl =>
-     if h: k = key then
-       by
-         simp [insert_in_list_back]
-         rw [insert_in_list_loop_back]
-         simp [h]
-         intro k1 h1
-         simp [*]
-     else
-       by
-         simp [insert_in_list_back]
-         rw [insert_in_list_loop_back]
-         simp [h]
-         progress keep as heq as ⟨ tl hp1 hp2 ⟩
-         simp [insert_in_list_back] at heq
-         simp (config := {contextual := true}) [*]
 
 def distinct_keys (ls : Core.List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
 
@@ -190,7 +164,7 @@ theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: 
        simp [insert_in_list_back]
        rw [insert_in_list_loop_back]
        simp [h]
-       split_target_conjs
+       split_conjs
        . intros; simp [*]
        . simp [List.v, slot_s_inv_hash] at *
          simp [*]
@@ -206,7 +180,7 @@ theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: 
        have : distinct_keys (List.v tl0) := by checkpoint
          simp [distinct_keys] at hdk
          simp [hdk, distinct_keys]
-       progress keep as heq as ⟨ tl1 hp1 hp2 hp3 hp4 hp5 hp6 ⟩
+       progress keep as heq as ⟨ tl1 .. ⟩
        simp only [insert_in_list_back] at heq
        have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by checkpoint
          simp [List.v, slot_s_inv_hash] at *

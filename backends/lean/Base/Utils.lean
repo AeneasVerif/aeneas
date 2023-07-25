@@ -499,7 +499,10 @@ def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr 
     -- Try to use the user-provided names
     let altVarNames ←
       match optIds with
-      | none => pure #[]
+      | none => do
+        let id0 ← mkFreshUserName `h
+        let id1 ← mkFreshUserName `h
+        pure #[{ varNames := [id0, id1] }]
       | some (id0, id1) => do
         pure #[{ varNames := [id0, id1] }]
     let newGoals ← goal.cases h.fvarId! altVarNames
@@ -518,29 +521,61 @@ def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr 
   else
     throwError "Not a conjunction"
 
-elab "split_conj " n:ident : tactic => do
-  withMainContext do
-  let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
-  let fvar := mkFVar decl.fvarId
-  splitConjTac fvar none (fun _ _ =>  pure ())
+-- Tactic to fully split a conjunction
+partial def splitFullConjTacAux [Inhabited α] [Nonempty α] (l : List Expr) (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
+  try
+    splitConjTac h none (λ h1 h2 =>
+      splitFullConjTacAux l h1 (λ l1 =>
+        splitFullConjTacAux l1 h2 (λ l2 =>
+          k l2)))
+  catch _ =>
+    k (h :: l)
 
-elab "split_all_exists " n:ident : tactic => do
+-- Tactic to fully split a conjunction
+def splitFullConjTac [Inhabited α] [Nonempty α] (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
+  splitFullConjTacAux [] h (λ l => k l.reverse)
+
+syntax optAtArgs := ("at" ident)?
+def elabOptAtArgs (args : TSyntax `Utils.optAtArgs) : TacticM (Option Expr) := do
+  withMainContext do
+  let args := (args.raw.getArgs.get! 0).getArgs
+  if args.size > 0 then do
+    let n := (args.get! 1).getId
+    let decl ← Lean.Meta.getLocalDeclFromUserName n
+    let fvar := mkFVar decl.fvarId
+    pure (some fvar)
+  else
+    pure none
+
+elab "split_conj" args:optAtArgs : tactic => do
+  withMainContext do
+  match ← elabOptAtArgs args with
+  | some fvar =>
+    splitConjTac fvar none (fun _ _ =>  pure ())
+  | none =>
+    splitConjTarget
+
+elab "split_conjs" args:optAtArgs : tactic => do
+  withMainContext do
+  match ← elabOptAtArgs args with
+  | some fvar =>
+    splitFullConjTac fvar (fun _ =>  pure ())
+  | none =>
+    repeatTac splitConjTarget
+
+elab "split_existsl" " at " n:ident : tactic => do
   withMainContext do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
   splitAllExistsTac fvar [] (fun _ _ => pure ())
 
-elab "split_target_conjs" : tactic =>
-  withMainContext do
-  repeatTac splitConjTarget
-
 example (h : a ∧ b) : a := by
-  split_all_exists h
-  split_conj h
+  split_existsl at h
+  split_conj at h
   assumption
 
 example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
-  split_all_exists h
+  split_existsl at h
   rename_i x y z
   exists x + y + z
 

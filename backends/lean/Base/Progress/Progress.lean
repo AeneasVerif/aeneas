@@ -23,7 +23,8 @@ inductive ProgressError
 | Error (msg : MessageData)
 deriving Inhabited
 
-def progressWith (fExpr : Expr) (th : TheoremOrLocal) (keep : Option Name) (ids : Array Name)
+def progressWith (fExpr : Expr) (th : TheoremOrLocal)
+  (keep : Option Name) (ids : Array Name) (splitPost : Bool)
   (asmTac : TacticM Unit) : TacticM ProgressError := do
   /- Apply the theorem
      We try to match the theorem with the goal
@@ -112,24 +113,31 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal) (keep : Option Name) (ids 
         mgoal.tryClearMany #[hEq.fvarId!]
     setGoals (mgoal :: (← getUnsolvedGoals))
     trace[Progress] "Goal after splitting eq and post and simplifying the target: {mgoal}"
-    -- Continue splitting following the ids provided by the user
-    if ¬ ids.isEmpty then
-      let hPost ←
-        match hPost with
-        | none => do return (.Error m!"Too many ids provided ({ids}): there is no postcondition to split")
-        | some hPost => pure hPost
-      let rec splitPost (prevId : Name) (hPost : Expr) (ids : List Name) : TacticM ProgressError := do
+    -- Continue splitting following the post following the user's instructions
+    match hPost with
+    | none =>
+      -- Sanity check
+      if ¬ ids.isEmpty then
+        return (.Error m!"Too many ids provided ({ids}): there is no postcondition to split")
+      else return .Ok
+    | some hPost => do
+      let rec splitPostWithIds (prevId : Name) (hPost : Expr) (ids : List Name) : TacticM ProgressError := do
         match ids with
-        | [] => pure .Ok -- Stop
+        | [] =>
+          /- We used all the user provided ids.
+             Split the remaining conjunctions by using fresh ids if the user
+             instructed to fully split the post-condition, otherwise stop -/
+          if splitPost then
+            splitFullConjTac hPost (λ _ => pure .Ok)
+          else pure .Ok
         | nid :: ids => do
           trace[Progress] "Splitting post: {hPost}"
           -- Split
           if ← isConj (← inferType hPost) then
-            splitConjTac hPost (some (prevId, nid)) (λ _ nhPost => splitPost nid nhPost ids)
+            splitConjTac hPost (some (prevId, nid)) (λ _ nhPost => splitPostWithIds nid nhPost ids)
           else return (.Error m!"Too many ids provided ({nid :: ids}) not enough conjuncts to split in the postcondition")
       let curPostId := (← hPost.fvarId!.getDecl).userName
-      splitPost curPostId hPost ids
-    else return .Ok
+      splitPostWithIds curPostId hPost ids
   match res with
   | .Error _ => return res -- Can we get there? We're using "return"
   | .Ok =>
@@ -160,7 +168,8 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 
 /- Helper: try to lookup a theorem and apply it, or continue with another tactic
    if it fails -/
-def tryLookupApply (keep : Option Name) (ids : Array Name) (asmTac : TacticM Unit) (fExpr : Expr)
+def tryLookupApply (keep : Option Name) (ids : Array Name) (splitPost : Bool)
+  (asmTac : TacticM Unit) (fExpr : Expr)
   (kind : String) (th : Option TheoremOrLocal) (x : TacticM Unit) : TacticM Unit := do
   let res ← do
     match th with
@@ -172,7 +181,7 @@ def tryLookupApply (keep : Option Name) (ids : Array Name) (asmTac : TacticM Uni
       -- Apply the theorem
       let res ← do
         try
-          let res ← progressWith fExpr th keep ids asmTac
+          let res ← progressWith fExpr th keep ids splitPost asmTac
           pure (some res)
         catch _ => none
   match res with
@@ -181,7 +190,8 @@ def tryLookupApply (keep : Option Name) (ids : Array Name) (asmTac : TacticM Uni
   | none => x
 
 -- The array of ids are identifiers to use when introducing fresh variables
-def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrLocal) (ids : Array Name) (asmTac : TacticM Unit) : TacticM Unit := do
+def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrLocal)
+  (ids : Array Name) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM Unit := do
   withMainContext do
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
@@ -197,7 +207,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
   -- Otherwise, lookup one.
   match withTh with
   | some th => do
-    match ← progressWith fExpr th keep ids asmTac with
+    match ← progressWith fExpr th keep ids splitPost asmTac with
     | .Ok => return ()
     | .Error msg => throwError msg
   | none =>
@@ -206,7 +216,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     let decls ← ctx.getDecls
     for decl in decls.reverse do
       trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fExpr (.Local decl) keep ids asmTac catch _ => continue
+      let res ← do try progressWith fExpr (.Local decl) keep ids splitPost asmTac catch _ => continue
       match res with
       | .Ok => return ()
       | .Error msg => throwError msg
@@ -216,7 +226,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     let pspec ← do
       let thName ← pspecAttr.find? fName
       pure (thName.map fun th => .Theorem th)
-    tryLookupApply keep ids asmTac fExpr "pspec theorem" pspec do
+    tryLookupApply keep ids splitPost asmTac fExpr "pspec theorem" pspec do
     -- It failed: try to lookup a *class* expr spec theorem (those are more
     -- specific than class spec theorems)
     let pspecClassExpr ← do
@@ -225,7 +235,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
       | some arg => do
         let thName ← pspecClassExprAttr.find? fName arg
         pure (thName.map fun th => .Theorem th)
-    tryLookupApply keep ids asmTac fExpr "pspec class expr theorem" pspecClassExpr do
+    tryLookupApply keep ids splitPost asmTac fExpr "pspec class expr theorem" pspecClassExpr do
     -- It failed: try to lookup a *class* spec theorem
     let pspecClass ← do
       match ← getFirstArgAppName args with
@@ -233,7 +243,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
       | some argName => do
         let thName ← pspecClassAttr.find? fName argName
         pure (thName.map fun th => .Theorem th)
-    tryLookupApply keep ids asmTac fExpr "pspec class theorem" pspecClass do
+    tryLookupApply keep ids splitPost asmTac fExpr "pspec class theorem" pspecClass do
     -- Try a recursive call - we try the assumptions of kind "auxDecl"
     let ctx ← Lean.MonadLCtx.getLCtx
     let decls ← ctx.getAllDecls
@@ -241,14 +251,14 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
       | .default | .implDetail => false | .auxDecl => true)
     for decl in decls.reverse do
       trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fExpr (.Local decl) keep ids asmTac catch _ => continue
+      let res ← do try progressWith fExpr (.Local decl) keep ids splitPost asmTac catch _ => continue
       match res with
       | .Ok => return ()
       | .Error msg => throwError msg
     -- Nothing worked: failed
     throwError "Progress failed"
 
-syntax progressArgs := ("keep" ("as" (ident))?)? ("with" ident)? ("as" " ⟨ " (ident)+ " ⟩")?
+syntax progressArgs := ("keep" ("as" (ident))?)? ("with" ident)? ("as" " ⟨ " ident,* " .."? " ⟩")?
 
 def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
   let args := args.raw
@@ -263,8 +273,8 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
       else do pure (some (← mkFreshUserName `h))
     else pure none
   trace[Progress] "Keep: {keep}"
-  let withArg := (args.get! 1).getArgs
   let withArg ← do
+    let withArg := (args.get! 1).getArgs
     if withArg.size > 0 then
       let id := withArg.get! 1
       trace[Progress] "With arg: {id}"
@@ -283,20 +293,25 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
         | id :: _ =>
           pure (some (.Theorem id))
     else pure none
-  let args := (args.get! 2).getArgs
-  let args := (args.get! 2).getArgs
-  let ids := args.map Syntax.getId
+  let ids :=
+    let args := (args.get! 2).getArgs
+    let args := (args.get! 2).getSepArgs
+    args.map Syntax.getId
   trace[Progress] "User-provided ids: {ids}"
-  progressAsmsOrLookupTheorem keep withArg ids (firstTac [assumptionTac, Arith.scalarTac])
+  let splitPost : Bool :=
+    let args := (args.get! 2).getArgs
+    (args.get! 3).getArgs.size > 0
+  trace[Progress] "Split post: {splitPost}"
+  progressAsmsOrLookupTheorem keep withArg ids splitPost (firstTac [assumptionTac, Arith.scalarTac])
 
 elab "progress" args:progressArgs : tactic =>
   evalProgress args
 
-/-
-namespace Test
+/-namespace Test
   open Primitives Result
 
   set_option trace.Progress true
+  set_option pp.rawOnError true
 
   #eval showStoredPSpec
   #eval showStoredPSpecClass
@@ -306,9 +321,9 @@ namespace Test
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
 --    progress keep as h with Scalar.add_spec as ⟨ z ⟩
-    progress keep as h
+    progress keep as h as ⟨ z, h1 .. ⟩
     simp [*]
 
-end Test -/
+end Test-/
 
 end Progress
