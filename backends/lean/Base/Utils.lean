@@ -1,6 +1,7 @@
 import Lean
 import Mathlib.Tactic.Core
 import Mathlib.Tactic.LeftRight
+import Base.UtilsBase
 
 /-
 Mathlib tactics:
@@ -331,13 +332,13 @@ def assumptionTac : TacticM Unit :=
   liftMetaTactic fun mvarId => do mvarId.assumption; pure []
 
 def isConj (e : Expr) : MetaM Bool :=
-  e.withApp fun f args => pure (f.isConstOf ``And ∧ args.size = 2)
+  e.consumeMData.withApp fun f args => pure (f.isConstOf ``And ∧ args.size = 2)
 
 -- Return the first conjunct if the expression is a conjunction, or the
 -- expression itself otherwise. Also return the second conjunct if it is a
 -- conjunction.
 def optSplitConj (e : Expr) : MetaM (Expr × Option Expr) := do
-  e.withApp fun f args =>
+  e.consumeMData.withApp fun f args =>
   if f.isConstOf ``And ∧ args.size = 2 then pure (args.get! 0, some (args.get! 1))
   else pure (e, none)
 
@@ -345,6 +346,7 @@ def optSplitConj (e : Expr) : MetaM (Expr × Option Expr) := do
 def splitConjTarget : TacticM Unit := do
   withMainContext do
   let g ← getMainTarget
+  trace[Utils] "splitConjTarget: goal: {g}"
   -- The tactic was initially implemened with `_root_.Lean.MVarId.apply`
   -- but it tended to mess the goal by unfolding terms, even when it failed
   let (l, r) ← optSplitConj g
@@ -525,18 +527,26 @@ def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr 
     throwError "Not a conjunction"
 
 -- Tactic to fully split a conjunction
-partial def splitFullConjTacAux [Inhabited α] [Nonempty α] (l : List Expr) (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
+partial def splitFullConjTacAux [Inhabited α] [Nonempty α] (keepCurrentName : Bool) (l : List Expr) (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
   try
-    splitConjTac h none (λ h1 h2 =>
-      splitFullConjTacAux l h1 (λ l1 =>
-        splitFullConjTacAux l1 h2 (λ l2 =>
+    let ids ← do
+      if keepCurrentName then do
+        let cur := (← h.fvarId!.getDecl).userName
+        let nid ← mkFreshUserName `h
+        pure (some (cur, nid))
+      else
+        pure none
+    splitConjTac h ids (λ h1 h2 =>
+      splitFullConjTacAux keepCurrentName l h1 (λ l1 =>
+        splitFullConjTacAux keepCurrentName l1 h2 (λ l2 =>
           k l2)))
   catch _ =>
     k (h :: l)
 
 -- Tactic to fully split a conjunction
-def splitFullConjTac [Inhabited α] [Nonempty α] (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
-  splitFullConjTacAux [] h (λ l => k l.reverse)
+-- `keepCurrentName`: if `true`, then the first conjunct has the name of the original assumption
+def splitFullConjTac [Inhabited α] [Nonempty α] (keepCurrentName : Bool) (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
+  splitFullConjTacAux keepCurrentName [] h (λ l => k l.reverse)
 
 syntax optAtArgs := ("at" ident)?
 def elabOptAtArgs (args : TSyntax `Utils.optAtArgs) : TacticM (Option Expr) := do
@@ -553,17 +563,21 @@ def elabOptAtArgs (args : TSyntax `Utils.optAtArgs) : TacticM (Option Expr) := d
 elab "split_conj" args:optAtArgs : tactic => do
   withMainContext do
   match ← elabOptAtArgs args with
-  | some fvar =>
+  | some fvar => do
+    trace[Utils] "split at {fvar}"
     splitConjTac fvar none (fun _ _ =>  pure ())
-  | none =>
+  | none => do
+    trace[Utils] "split goal"
     splitConjTarget
 
 elab "split_conjs" args:optAtArgs : tactic => do
   withMainContext do
   match ← elabOptAtArgs args with
   | some fvar =>
-    splitFullConjTac fvar (fun _ =>  pure ())
+    trace[Utils] "split at {fvar}"
+    splitFullConjTac false fvar (fun _ =>  pure ())
   | none =>
+    trace[Utils] "split goal"
     repeatTac splitConjTarget
 
 elab "split_existsl" " at " n:ident : tactic => do

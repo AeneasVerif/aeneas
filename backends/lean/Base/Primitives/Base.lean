@@ -76,7 +76,7 @@ def eval_global {α: Type u} (x: Result α) (_: ret? x): α :=
 
 /- DO-DSL SUPPORT -/
 
-def bind {α : Type u} {β : Type v} (x: Result α) (f: α -> Result β) : Result β :=
+def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   match x with
   | ret v  => f v 
   | fail v => fail v

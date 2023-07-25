@@ -1,6 +1,7 @@
 import Lean
 import Base.Arith
 import Base.Progress.Base
+import Base.Primitives -- TODO: remove?
 
 namespace Progress
 
@@ -41,7 +42,12 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     match th with
     | .Theorem thName =>
       let thDecl := env.constants.find! thName
-      pure thDecl.type
+      -- We have to introduce fresh meta-variables for the universes already
+      let ul : List (Name × Level) ←
+        thDecl.levelParams.mapM (λ x => do pure (x, ← mkFreshLevelMVar))
+      let ulMap : HashMap Name Level := HashMap.ofList ul
+      let thTy := thDecl.type.instantiateLevelParamsCore (λ x => ulMap.find! x)
+      pure thTy
     | .Local asmDecl => pure asmDecl.type
   trace[Progress] "Looked up theorem/assumption type: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
@@ -129,15 +135,16 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
              Split the remaining conjunctions by using fresh ids if the user
              instructed to fully split the post-condition, otherwise stop -/
           if splitPost then
-            splitFullConjTac hPost (λ _ => pure .Ok)
+            splitFullConjTac true hPost (λ _ => pure .Ok)
           else pure .Ok
         | nid :: ids => do
-          trace[Progress] "Splitting post: {hPost}"
+          trace[Progress] "Splitting post: {← inferType hPost}"
           -- Split
           let nid ← do
             match nid with
             | none => mkFreshUserName `h
             | some nid => pure nid
+          trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
           if ← isConj (← inferType hPost) then
             splitConjTac hPost (some (prevId, nid)) (λ _ nhPost => splitPostWithIds nid nhPost ids)
           else return (.Error m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition")
@@ -323,7 +330,7 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
 elab "progress" args:progressArgs : tactic =>
   evalProgress args
 
-/- namespace Test
+namespace Test
   open Primitives Result
 
   set_option trace.Progress true
@@ -336,10 +343,25 @@ elab "progress" args:progressArgs : tactic =>
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
---    progress keep as h with Scalar.add_spec as ⟨ z ⟩
     progress keep as h as ⟨ x, h1 .. ⟩
     simp [*]
 
-end Test -/
+  example {ty} {x y : Scalar ty}
+    (hmin : Scalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ Scalar.max ty) :
+    ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
+    progress keep as h with Scalar.add_spec as ⟨ z ⟩
+    simp [*]
+
+  /- Checking that universe instantiation works: the original spec uses
+     `α : Type u` where u is quantified, while here we use `α : Type 0` -/
+  example {α : Type} (v: Vec α) (i: Usize) (x : α)
+    (hbounds : i.val < v.length) :
+    ∃ nv, v.index_mut_back α i x = ret nv ∧
+    nv.val = v.val.update i.val x := by
+    progress
+    simp [*]
+
+end Test
 
 end Progress

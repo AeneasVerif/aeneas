@@ -123,6 +123,10 @@ theorem length_update (ls : List α) (i : Int) (x : α) : (ls.update i x).length
 theorem len_update (ls : List α) (i : Int) (x : α) : (ls.update i x).len = ls.len := by
   simp [len_eq_length]
 
+@[simp]
+theorem len_map (ls : List α) (f : α → β) : (ls.map f).len = ls.len := by
+  simp [len_eq_length]
+
 theorem left_length_eq_append_eq (l1 l2 l1' l2' : List α) (heq : l1.length = l1'.length) :
   l1 ++ l2 = l1' ++ l2' ↔ l1 = l1' ∧ l2 = l2' := by
   revert l1'
@@ -209,6 +213,43 @@ theorem index_eq
         simp [*]
         simp at *
         apply index_eq <;> scalar_tac
+
+theorem update_map_eq {α : Type u} {β : Type v} (ls : List α) (i : Int) (x : α) (f : α → β) :
+  (ls.update i x).map f = (ls.map f).update i (f x) :=
+  match ls with
+  | [] => by simp
+  | hd :: tl =>
+    if h : i = 0 then by simp [*]
+    else
+      have hi := update_map_eq tl (i - 1) x f
+      by simp [*]
+
+theorem len_flatten_update_eq {α : Type u} (ls : List (List α)) (i : Int) (x : List α)
+  (h0 : 0 ≤ i) (h1 : i < ls.len) :
+  (ls.update i x).flatten.len = ls.flatten.len + x.len - (ls.index i).len :=
+  match ls with
+  | [] => by simp at h1; int_tac
+  | hd :: tl => by
+    simp at h1
+    if h : i = 0 then simp [*]; int_tac
+    else
+      have hi := len_flatten_update_eq tl (i - 1) x (by int_tac) (by int_tac)
+      simp [*]
+      int_tac
+
+@[simp]
+theorem index_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β] (ls : List α) (i : Int) (f : α → β)
+  (h0 : 0 ≤ i) (h1 : i < ls.len) :
+  (ls.map f).index i = f (ls.index i) :=
+  match ls with
+  | [] => by simp at h1; int_tac
+  | hd :: tl =>
+    if h : i = 0 then by
+      simp [*]
+    else
+      have hi := index_map_eq tl (i - 1) f (by int_tac) (by simp at h1; int_tac)
+      by
+        simp [*]
 
 def allP {α : Type u} (l : List α) (p: α → Prop) : Prop :=
   foldr (fun a r => p a ∧ r) True l

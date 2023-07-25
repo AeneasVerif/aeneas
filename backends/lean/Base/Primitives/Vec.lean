@@ -75,10 +75,9 @@ def Vec.insert (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
     .fail arrayOutOfBounds
 
 @[pspec]
-theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α) :
-  i.val < v.length →
+theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
+  (hbound : i.val < v.length) :
   ∃ nv, v.insert α i x = ret nv ∧ nv.val = v.val.update i.val x := by
-  intro h
   simp [insert, *]
 
 def Vec.index (α : Type u) (v: Vec α) (i: Usize) : Result α :=
@@ -87,10 +86,9 @@ def Vec.index (α : Type u) (v: Vec α) (i: Usize) : Result α :=
   | some x => ret x
 
 @[pspec]
-theorem Vec.index_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize) :
-  i.val < v.length →
+theorem Vec.index_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+  (hbound : i.val < v.length) :
   v.index α i = ret (v.val.index i.val) := by
-  intro
   simp only [index]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
@@ -109,10 +107,9 @@ def Vec.index_mut (α : Type u) (v: Vec α) (i: Usize) : Result α :=
   | some x => ret x
 
 @[pspec]
-theorem Vec.index_mut_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize) :
-  i.val < v.length →
+theorem Vec.index_mut_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+  (hbound : i.val < v.length) :
   v.index_mut α i = ret (v.val.index i.val) := by
-  intro
   simp only [index_mut]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
@@ -129,12 +126,11 @@ def Vec.index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Ve
     .ret ⟨ v.val.update i.val x, by have := v.property; simp [*] ⟩
 
 @[pspec]
-theorem Vec.index_mut_back_spec {α : Type u} (v: Vec α) (i: Usize) (x : α) :
-  i.val < v.length →
+theorem Vec.index_mut_back_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
+  (hbound : i.val < v.length) :
   ∃ nv, v.index_mut_back α i x = ret nv ∧
   nv.val = v.val.update i.val x
   := by
-  intro
   simp only [index_mut_back]
   have h := List.indexOpt_bounds v.val i.val
   split

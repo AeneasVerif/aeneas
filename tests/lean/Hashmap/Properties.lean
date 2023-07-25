@@ -55,6 +55,7 @@ theorem match_lawful_beq [BEq α] [LawfulBEq α] [DecidableEq α] (x y : α) :
   (x == y) = (if x = y then true else false) := by
   split <;> simp_all
 
+@[pspec]
 theorem insert_in_list_spec0 {α : Type} (key: Usize) (value: α) (ls: List α) :
   ∃ b,
     insert_in_list α key value ls = ret b ∧
@@ -125,6 +126,10 @@ def hash_mod_key (k : Usize) (l : Int) : Int :=
   match hash_key k with
   | .ret k => k.val % l
   | _ => 0
+
+@[simp]
+theorem hash_mod_key_eq : hash_mod_key k l = k.val % l := by
+  simp [hash_mod_key, hash_key]
 
 def slot_s_inv_hash (l i : Int) (ls : Core.List (Usize × α)) : Prop :=
   ls.allP (λ (k, _) => hash_mod_key k l = i)
@@ -246,6 +251,7 @@ theorem insert_in_list_back_spec {α : Type} (l : Int) (key: Usize) (value: α) 
   progress with insert_in_list_back_spec_aux as ⟨ l1 .. ⟩
   exists l1
 
+@[simp]
 def slots_t_lookup (s : Core.List (List α)) (k : Usize) : Option α :=
   let i := hash_mod_key k s.len
   let slot := s.index i
@@ -260,7 +266,15 @@ abbrev len_s (hm : HashMap α) : Int := hm.al_v.len
 set_option trace.Progress true
 /-set_option pp.explicit true
 set_option pp.universes true
-set_option pp.notation false-/
+set_option pp.notation false -/
+
+-- Remark: α and β must live in the same universe, otherwise the
+-- bind doesn't work
+theorem if_update_eq
+  {α β : Type u} (b : Bool) (y : α) (e : Result α) (f : α → Result β) :
+  (if b then Bind.bind e f else f y) = Bind.bind (if b then e else pure y) f
+  := by
+  split <;> simp [Pure.pure]
 
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
@@ -270,18 +284,112 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   -- We updated the binding for key
   nhm.lookup key = some value ∧
   -- We left the other bindings unchanged
-  (∀ k, k ≠ key → nhm.lookup k = hm.lookup k) ∧
+  (∀ k, ¬ k = key → nhm.lookup k = hm.lookup k) ∧
   -- Reasoning about the length
   (match hm.lookup key with
    | none => nhm.len_s = hm.len_s + 1
    | some _ => nhm.len_s = hm.len_s) := by
   rw [insert_no_resize]
   simp [hash_key]
-  have : (Vec.len (List α) hm.slots).val ≠ 0 := by
+  have _ : (Vec.len (List α) hm.slots).val ≠ 0 := by checkpoint
    intro
    simp_all [inv]
-  progress as ⟨ hash_mod ⟩
+  -- TODO: progress keep as ⟨ ... ⟩ : conflict
+  progress keep as h as ⟨ hash_mod, hhm ⟩
+  have _ : 0 ≤ hash_mod.val := by checkpoint scalar_tac
+  have _ : hash_mod.val < Vec.length hm.slots := by sorry
+  -- have h := Primitives.Vec.index_mut_spec hm.slots hash_mod
+  -- TODO: change the spec of Vec.index_mut to introduce a let-binding.
+  -- or: make progress introduce the let-binding by itself (this is clearer)
   progress
+  -- TODO: make progress use the names written in the goal
+  progress as ⟨ inserted ⟩
+  rw [if_update_eq] -- TODO: necessary because we don't have a join
+  -- TODO: progress to ...
+  have hipost :
+    ∃ i0, (if inserted = true then hm.num_entries + Usize.ofInt 1 else pure hm.num_entries) = ret i0 ∧
+    i0.val = if inserted then hm.num_entries.val + 1 else hm.num_entries.val
+    := by sorry
+  progress as ⟨ i0 ⟩
+  -- TODO: progress "eager" to match premises with assumptions while instantiating
+  -- meta-variables
+  have h_slot : slot_s_inv_hash hm.slots.length hash_mod.val (hm.slots.v.index hash_mod.val).v := by sorry
+  have hd : distinct_keys (hm.slots.v.index hash_mod.val).v := by checkpoint
+    simp [inv, slots_t_inv, slot_t_inv] at hinv
+    have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
+    simp [h]
+  -- TODO: hide the variables and only keep the props
+  -- TODO: allow providing terms to progress to instantiate the meta variables
+  -- which are not propositions
+  progress as ⟨ l0, _, _, _, hlen .. ⟩
+  . checkpoint exact hm.slots.length
+  . checkpoint simp_all
+  . -- Finishing the proof
+    progress as ⟨ v ⟩
+    -- TODO: update progress to automate that
+    let nhm : HashMap α := { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
+    exists nhm
+    have hupdt : lookup nhm key = some value := by checkpoint
+      simp [lookup, List.lookup] at *
+      simp_all
+    have hlkp : ∀ k, ¬ k = key → nhm.lookup k = hm.lookup k := by checkpoint
+      simp [lookup, List.lookup] at *
+      intro k hk
+      -- We have to make a case disjunction: either the hashes are different,
+      -- in which case we don't even lookup the same slots, or the hashes
+      -- are the same, in which case we have to reason about what happens
+      -- in one slot
+      let k_hash_mod := k.val % v.val.len
+      have _ : 0 ≤ k_hash_mod := by sorry
+      have _ : k_hash_mod < Vec.length hm.slots := by sorry
+      if h_hm : k_hash_mod = hash_mod.val then
+        simp_all
+      else
+        simp_all
+    have _ :
+      match hm.lookup key with
+      | none => nhm.len_s = hm.len_s + 1
+      | some _ => nhm.len_s = hm.len_s := by checkpoint
+      simp only [lookup, List.lookup, len_s, al_v, HashMap.v, slots_t_lookup] at *
+      -- We have to do a case disjunction
+      simp_all
+      simp [_root_.List.update_map_eq]
+      -- TODO: dependent rewrites
+      have _ : key.val % hm.slots.val.len < (List.map List.v hm.slots.val).len := by
+        simp [*]
+      simp [_root_.List.len_flatten_update_eq, *]
+      split <;>
+      rename_i heq <;>
+      simp [heq] at hlen <;>
+      -- TODO: canonize addition by default? We need a tactic to simplify arithmetic equalities
+      -- with addition and substractions ((ℤ, +) is a ring or something - there should exist a tactic
+      -- somewhere in mathlib?)
+      simp [Int.add_assoc, Int.add_comm, Int.add_left_comm] <;>
+      int_tac
+    have hinv : inv nhm := by
+      simp [inv] at *
+      split_conjs
+      . match h: lookup hm key with
+        | none =>
+          simp [h, lookup] at *
+          simp_all
+        | some _ =>
+          simp_all [lookup]
+      . simp [slots_t_inv, slot_t_inv] at *
+        intro i hipos _
+        have hs := hinv.right.left i hipos (by simp_all)
+        -- We need a case disjunction
+        if i = key.val % _root_.List.len hm.slots.val then
+          simp_all
+        else
+          simp_all
+      . match h: lookup hm key with
+        | none =>
+          simp [h] at *
+          simp [*]
+        | some _ =>
+          simp_all
+    simp_all
 
 end HashMap
 

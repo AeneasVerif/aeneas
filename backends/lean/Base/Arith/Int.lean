@@ -43,6 +43,7 @@ instance (x y : Int) : IsLinearIntProp (x > y) where
 instance (x y : Int) : IsLinearIntProp (x ≤ y) where
 instance (x y : Int) : IsLinearIntProp (x ≥ y) where
 instance (x y : Int) : IsLinearIntProp (x ≥ y) where
+instance (x y : Int) : IsLinearIntProp (x = y) where
 /- It seems we don't need to do any special preprocessing when the *goal*
    has the following shape - I guess `linarith` automatically calls `intro` -/
 instance (x y : Int) : IsLinearIntProp (¬ x = y) where
