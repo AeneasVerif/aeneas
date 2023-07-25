@@ -660,10 +660,8 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   simp [h] at hx hy
   have hmin : 0 ≤ x.val % y.val := Int.emod_nonneg x.val hnz
   have hmax : x.val % y.val ≤ Scalar.max ty := by
-    have h := @Int.ediv_emod_unique x.val y.val (x.val % y.val) (x.val / y.val)
-    simp at h
-    have : 0 < y.val := by int_tac
-    simp [*] at h
+    have h : 0 < y.val := by int_tac
+    have h := Int.emod_lt_of_pos x.val h
     have := y.hmax
     linarith
   have hs := @rem_spec ty x y hnz
@@ -723,6 +721,47 @@ def U16.ofInt   := @Scalar.ofInt .U16
 def U32.ofInt   := @Scalar.ofInt .U32
 def U64.ofInt   := @Scalar.ofInt .U64
 def U128.ofInt  := @Scalar.ofInt .U128
+
+-- TODO: factor those lemmas out
+@[simp] theorem Scalar.ofInt_val_eq {ty} (h : Scalar.min ty ≤ x ∧ x ≤ Scalar.max ty) : (Scalar.ofInt x h).val = x := by
+  simp [Scalar.ofInt, Scalar.ofIntCore]
+
+@[simp] theorem Isize.ofInt_val_eq (h : Scalar.min ScalarTy.Isize ≤ x ∧ x ≤ Scalar.max ScalarTy.Isize) : (Isize.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I8.ofInt_val_eq (h : Scalar.min ScalarTy.I8 ≤ x ∧ x ≤ Scalar.max ScalarTy.I8) : (I8.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I16.ofInt_val_eq (h : Scalar.min ScalarTy.I16 ≤ x ∧ x ≤ Scalar.max ScalarTy.I16) : (I16.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I32.ofInt_val_eq (h : Scalar.min ScalarTy.I32 ≤ x ∧ x ≤ Scalar.max ScalarTy.I32) : (I32.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I64.ofInt_val_eq (h : Scalar.min ScalarTy.I64 ≤ x ∧ x ≤ Scalar.max ScalarTy.I64) : (I64.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem I128.ofInt_val_eq (h : Scalar.min ScalarTy.I128 ≤ x ∧ x ≤ Scalar.max ScalarTy.I128) : (I128.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem Usize.ofInt_val_eq (h : Scalar.min ScalarTy.Usize ≤ x ∧ x ≤ Scalar.max ScalarTy.Usize) : (Usize.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U8.ofInt_val_eq (h : Scalar.min ScalarTy.U8 ≤ x ∧ x ≤ Scalar.max ScalarTy.U8) : (U8.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U16.ofInt_val_eq (h : Scalar.min ScalarTy.U16 ≤ x ∧ x ≤ Scalar.max ScalarTy.U16) : (U16.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U32.ofInt_val_eq (h : Scalar.min ScalarTy.U32 ≤ x ∧ x ≤ Scalar.max ScalarTy.U32) : (U32.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U64.ofInt_val_eq (h : Scalar.min ScalarTy.U64 ≤ x ∧ x ≤ Scalar.max ScalarTy.U64) : (U64.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
+@[simp] theorem U128.ofInt_val_eq (h : Scalar.min ScalarTy.U128 ≤ x ∧ x ≤ Scalar.max ScalarTy.U128) : (U128.ofInt x h).val = x := by
+  apply Scalar.ofInt_val_eq h
+
 
 -- Comparisons
 instance {ty} : LT (Scalar ty) where

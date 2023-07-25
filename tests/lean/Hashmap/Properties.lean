@@ -263,11 +263,6 @@ def lookup (hm : HashMap α) (k : Usize) : Option α :=
 @[simp]
 abbrev len_s (hm : HashMap α) : Int := hm.al_v.len
 
-set_option trace.Progress true
-/-set_option pp.explicit true
-set_option pp.universes true
-set_option pp.notation false -/
-
 -- Remark: α and β must live in the same universe, otherwise the
 -- bind doesn't work
 theorem if_update_eq
@@ -297,7 +292,12 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   -- TODO: progress keep as ⟨ ... ⟩ : conflict
   progress keep as h as ⟨ hash_mod, hhm ⟩
   have _ : 0 ≤ hash_mod.val := by checkpoint scalar_tac
-  have _ : hash_mod.val < Vec.length hm.slots := by sorry
+  have _ : hash_mod.val < Vec.length hm.slots := by
+    have : 0 < hm.slots.val.len := by
+      simp [inv] at hinv
+      simp [hinv]
+    -- TODO: we want to automate that
+    simp [*, Int.emod_lt_of_pos]
   -- have h := Primitives.Vec.index_mut_spec hm.slots hash_mod
   -- TODO: change the spec of Vec.index_mut to introduce a let-binding.
   -- or: make progress introduce the let-binding by itself (this is clearer)
@@ -309,11 +309,26 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   have hipost :
     ∃ i0, (if inserted = true then hm.num_entries + Usize.ofInt 1 else pure hm.num_entries) = ret i0 ∧
     i0.val = if inserted then hm.num_entries.val + 1 else hm.num_entries.val
-    := by sorry
+    := by
+    if inserted then
+      simp [*]
+      have : hm.num_entries.val + (Usize.ofInt 1).val ≤ Usize.max := by
+        simp [lookup] at hnsat
+        simp_all
+        simp [inv] at hinv
+        int_tac
+      progress
+      simp_all
+    else
+      simp_all [Pure.pure]
   progress as ⟨ i0 ⟩
   -- TODO: progress "eager" to match premises with assumptions while instantiating
   -- meta-variables
-  have h_slot : slot_s_inv_hash hm.slots.length hash_mod.val (hm.slots.v.index hash_mod.val).v := by sorry
+  have h_slot : slot_s_inv_hash hm.slots.length hash_mod.val (hm.slots.v.index hash_mod.val).v := by
+    simp [inv] at hinv
+    have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
+    simp [slot_t_inv] at h
+    simp [h]
   have hd : distinct_keys (hm.slots.v.index hash_mod.val).v := by checkpoint
     simp [inv, slots_t_inv, slot_t_inv] at hinv
     have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
@@ -329,10 +344,11 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     -- TODO: update progress to automate that
     let nhm : HashMap α := { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
     exists nhm
+    -- TODO: later I don't want to inline nhm - we need to control simp
     have hupdt : lookup nhm key = some value := by checkpoint
       simp [lookup, List.lookup] at *
       simp_all
-    have hlkp : ∀ k, ¬ k = key → nhm.lookup k = hm.lookup k := by checkpoint
+    have hlkp : ∀ k, ¬ k = key → nhm.lookup k = hm.lookup k := by
       simp [lookup, List.lookup] at *
       intro k hk
       -- We have to make a case disjunction: either the hashes are different,
@@ -340,8 +356,19 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       -- are the same, in which case we have to reason about what happens
       -- in one slot
       let k_hash_mod := k.val % v.val.len
-      have _ : 0 ≤ k_hash_mod := by sorry
-      have _ : k_hash_mod < Vec.length hm.slots := by sorry
+      have : 0 < hm.slots.val.len := by simp_all [inv]
+      have hvpos : 0 < v.val.len := by simp_all
+      have hvnz: v.val.len ≠ 0 := by
+        simp_all
+      have _ : 0 ≤ k_hash_mod := by
+        -- TODO: we want to automate this
+        simp
+        apply Int.emod_nonneg k.val hvnz
+      have _ : k_hash_mod < Vec.length hm.slots := by
+        -- TODO: we want to automate this
+        simp
+        have h := Int.emod_lt_of_pos k.val hvpos
+        simp_all
       if h_hm : k_hash_mod = hash_mod.val then
         simp_all
       else
@@ -377,18 +404,13 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
           simp_all [lookup]
       . simp [slots_t_inv, slot_t_inv] at *
         intro i hipos _
-        have hs := hinv.right.left i hipos (by simp_all)
+        have _ := hinv.right.left i hipos (by simp_all)
         -- We need a case disjunction
         if i = key.val % _root_.List.len hm.slots.val then
           simp_all
         else
           simp_all
-      . match h: lookup hm key with
-        | none =>
-          simp [h] at *
-          simp [*]
-        | some _ =>
-          simp_all
+      . simp_all
     simp_all
 
 end HashMap
