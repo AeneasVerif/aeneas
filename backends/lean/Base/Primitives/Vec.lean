@@ -22,20 +22,27 @@ def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
 instance Vec.cast (a : Type u): Coe (Vec a) (List a)  where coe := λ v => v.val
 
 instance (a : Type u) : Arith.HasIntProp (Vec a) where
-  prop_ty := λ v => v.val.len ≤ Scalar.max ScalarTy.Usize
+  prop_ty := λ v => 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize
   prop := λ ⟨ _, l ⟩ => by simp[Scalar.max, List.len_eq_length, *]
 
 @[simp]
 abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.len
+
+@[simp]
+abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
 
 example {a: Type u} (v : Vec a) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
 def Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
 
+-- TODO: very annoying that the α is an explicit parameter
 def Vec.len (α : Type u) (v : Vec α) : Usize :=
-  let ⟨ v, l ⟩ := v
-  Usize.ofIntCore (List.length v) (by simp [Scalar.min, Usize.min]) l
+  Usize.ofIntCore v.val.len (by scalar_tac) (by scalar_tac)
+
+@[simp]
+theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len α v).val = v.length :=
+  by rfl
 
 -- This shouldn't be used
 def Vec.push_fwd (α : Type u) (_ : Vec α) (_ : α) : Unit := ()

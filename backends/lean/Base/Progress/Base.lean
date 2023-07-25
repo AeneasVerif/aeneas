@@ -81,8 +81,8 @@ section Methods
     let (fExpr, f, args) ← do
       if mf.isConst ∧ mf.constName = ``Bind.bind then do
         -- Dive into the bind
-        let fExpr := margs.get! 4
-        fExpr.consumeMData.withApp fun f args => pure (fExpr, f, args)
+        let fExpr := (margs.get! 4).consumeMData
+        fExpr.withApp fun f args => pure (fExpr, f, args)
       else pure (mExpr, mf, margs)
     trace[Progress] "After stripping the arguments of the function call:\n- f: {f}\n- args: {args}"
     if ¬ f.isConst then throwError "Not a constant: {f}"

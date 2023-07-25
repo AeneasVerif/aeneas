@@ -225,6 +225,8 @@ def intTac (splitGoalConjs : Bool) (extraPreprocess :  Tactic.TacticM Unit) : Ta
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
   Tactic.allGoals (intTacPreprocess extraPreprocess)
+  -- More preprocessing
+  Tactic.allGoals (Utils.simpAt [] [``nat_zero_eq_int_zero] [] .wildcard)
   -- Split the conjunctions in the goal
   if splitGoalConjs then Tactic.allGoals (Utils.repeatTac Utils.splitConjTarget)
   -- Call linarith

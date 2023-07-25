@@ -53,4 +53,8 @@ theorem int_pos_ind (p : Int → Prop) :
     rename_i m
     cases m <;> simp_all
 
+-- We sometimes need this to make sure no natural numbers appear in the goals
+-- TODO: there is probably something more general to do
+theorem nat_zero_eq_int_zero : (0 : Nat) = (0 : Int) := by simp
+
 end Arith

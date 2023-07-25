@@ -66,27 +66,33 @@ def U128.smin  : Int := 0
 def U128.smax  : Int := HPow.hPow 2 128 - 1
 
 -- The "normalized" bounds, that we use in practice
-def I8.min    := -128
-def I8.max   := 127
-def I16.min  := -32768
-def I16.max  := 32767
-def I32.min  := -2147483648
-def I32.max  := 2147483647
-def I64.min  := -9223372036854775808
-def I64.max  := 9223372036854775807
-def I128.min := -170141183460469231731687303715884105728
-def I128.max := 170141183460469231731687303715884105727
-@[simp] def U8.min   := 0
-def U8.max   := 255
-@[simp] def U16.min  := 0
-def U16.max  := 65535
-@[simp] def U32.min  := 0
-def U32.max  := 4294967295
-@[simp] def U64.min  := 0
-def U64.max  := 18446744073709551615
-@[simp] def U128.min := 0
-def U128.max := 340282366920938463463374607431768211455
-@[simp] def Usize.min := 0
+def I8.min    : Int   := -128
+def I8.max    : Int   := 127
+def I16.min   : Int  := -32768
+def I16.max   : Int  := 32767
+def I32.min   : Int  := -2147483648
+def I32.max   : Int  := 2147483647
+def I64.min   : Int  := -9223372036854775808
+def I64.max   : Int  := 9223372036854775807
+def I128.min  : Int := -170141183460469231731687303715884105728
+def I128.max  : Int := 170141183460469231731687303715884105727
+@[simp]
+def U8.min    : Int   := 0
+def U8.max    : Int   := 255
+@[simp]
+def U16.min   : Int  := 0
+def U16.max   : Int  := 65535
+@[simp]
+def U32.min   : Int  := 0
+def U32.max   : Int  := 4294967295
+@[simp]
+def U64.min   : Int  := 0
+def U64.max   : Int  := 18446744073709551615
+@[simp]
+def U128.min  : Int := 0
+def U128.max  : Int := 340282366920938463463374607431768211455
+@[simp]
+def Usize.min : Int := 0
 
 def Isize.refined_min : { n:Int // n = I32.min ∨ n = I64.min } :=
   ⟨ Isize.smin, by

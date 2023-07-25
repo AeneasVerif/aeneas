@@ -58,9 +58,9 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     let (thBody, _) ← destEq thBody
     trace[Progress] "After splitting equality: {thBody}"
     -- There shouldn't be any existential variables in thBody
-    pure thBody
+    pure thBody.consumeMData
   -- Match the body with the target
-  trace[Progress] "Matching `{thBody}` with `{fExpr}`"
+  trace[Progress] "Matching:\n- body:\n{thBody}\n- target:\n{fExpr}"
   let ok ← isDefEq thBody fExpr
   if ¬ ok then throwError "Could not unify the theorem with the target:\n- theorem: {thBody}\n- target: {fExpr}"
   let mgoal ← Tactic.getMainGoal

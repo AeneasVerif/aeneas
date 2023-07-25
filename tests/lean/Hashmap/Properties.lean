@@ -136,6 +136,40 @@ def slot_s_inv (l i : Int) (ls : Core.List (Usize × α)) : Prop :=
 
 def slot_t_inv (l i : Int) (s : List α) : Prop := slot_s_inv l i s.v
 
+-- Interpret the hashmap as a list of lists
+def v (hm : HashMap α) : Core.List (Core.List (Usize × α)) :=
+  hm.slots.val.map List.v
+
+-- Interpret the hashmap as an associative list
+def al_v (hm : HashMap α) : Core.List (Usize × α) :=
+  hm.v.flatten
+
+-- TODO: automatic derivation
+instance : Inhabited (List α) where
+  default := .Nil
+
+@[simp]
+def slots_s_inv (s : Core.List (List α)) : Prop :=
+  ∀ (i : Int), 0 ≤ i → i < s.len → slot_t_inv s.len i (s.index i)
+
+def slots_t_inv (s : Vec (List α)) : Prop :=
+  slots_s_inv s.v
+
+@[simp]
+def base_inv (hm : HashMap α) : Prop :=
+  -- [num_entries] correctly tracks the number of entries
+  hm.num_entries.val = hm.al_v.len ∧
+  -- Slots invariant
+  slots_t_inv hm.slots ∧
+  -- The capacity must be > 0 (otherwise we can't resize)
+  0 < hm.slots.length
+  -- TODO: load computation
+
+def inv (hm : HashMap α) : Prop :=
+  -- Base invariant
+  base_inv hm
+  -- TODO: either the hashmap is not overloaded, or we can't resize it
+
 theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
@@ -190,6 +224,64 @@ theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: 
          simp [*]
        -- TODO: canonize addition by default?
        simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
+
+@[pspec]
+theorem insert_in_list_back_spec {α : Type} (l : Int) (key: Usize) (value: α) (l0: List α)
+  (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
+  (hdk : distinct_keys l0.v) :
+  ∃ l1,
+    insert_in_list_back α key value l0 = ret l1 ∧
+    -- We update the binding
+    l1.lookup key = value ∧
+    (∀ k, k ≠ key → l1.lookup k = l0.lookup k) ∧
+    -- We preserve part of the key invariant
+    slot_s_inv_hash l (hash_mod_key key l) l1.v ∧
+    -- Reasoning about the length
+    (match l0.lookup key with
+     | none => l1.len = l0.len + 1
+     | some _ => l1.len = l0.len) ∧
+    -- The keys are distinct
+    distinct_keys l1.v
+  := by
+  progress with insert_in_list_back_spec_aux as ⟨ l1 .. ⟩
+  exists l1
+
+def slots_t_lookup (s : Core.List (List α)) (k : Usize) : Option α :=
+  let i := hash_mod_key k s.len
+  let slot := s.index i
+  slot.lookup k
+
+def lookup (hm : HashMap α) (k : Usize) : Option α :=
+  slots_t_lookup hm.slots.val k
+
+@[simp]
+abbrev len_s (hm : HashMap α) : Int := hm.al_v.len
+
+set_option trace.Progress true
+/-set_option pp.explicit true
+set_option pp.universes true
+set_option pp.notation false-/
+
+theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
+  (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
+  ∃ nhm, hm.insert_no_resize α key value = ret nhm  ∧
+  -- We preserve the invariant
+  nhm.inv ∧
+  -- We updated the binding for key
+  nhm.lookup key = some value ∧
+  -- We left the other bindings unchanged
+  (∀ k, k ≠ key → nhm.lookup k = hm.lookup k) ∧
+  -- Reasoning about the length
+  (match hm.lookup key with
+   | none => nhm.len_s = hm.len_s + 1
+   | some _ => nhm.len_s = hm.len_s) := by
+  rw [insert_no_resize]
+  simp [hash_key]
+  have : (Vec.len (List α) hm.slots).val ≠ 0 := by
+   intro
+   simp_all [inv]
+  progress as ⟨ hash_mod ⟩
+  progress
 
 end HashMap
 
