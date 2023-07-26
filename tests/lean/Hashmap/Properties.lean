@@ -271,7 +271,8 @@ theorem if_update_eq
   := by
   split <;> simp [Pure.pure]
 
--- TODO: move: small helper
+-- Small helper
+-- TODO: move, and introduce a better solution with nice syntax
 def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
   ⟨ x, by simp ⟩
 
@@ -328,8 +329,6 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     else
       simp [*, Pure.pure]
   progress as ⟨ i0 ⟩
-  -- TODO: progress "eager" to match premises with assumptions while instantiating
-  -- meta-variables
   have h_slot : slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v
     := by
     simp [inv] at hinv
