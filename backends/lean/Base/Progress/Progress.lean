@@ -79,7 +79,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     match th with
     | .Theorem thName => mkAppOptM thName (mvars.map some)
     | .Local decl => mkAppOptM' (mkFVar decl.fvarId) (mvars.map some)
-  let asmName ← do match keep with | none => mkFreshUserName `h | some n => do pure n
+  let asmName ← do match keep with | none => mkFreshAnonPropUserName | some n => do pure n
   let thTy ← inferType th
   let thAsm ← Utils.addDeclTac asmName th thTy (asLet := false)
   withMainContext do -- The context changed - TODO: remove once addDeclTac is updated
@@ -101,8 +101,8 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
         let hName := (← h.fvarId!.getDecl).userName
         let (optIds, ids) ← do
           match ids with
-          | [] => do pure (some (hName, ← mkFreshUserName `h), [])
-          | none :: ids => do pure (some (hName, ← mkFreshUserName `h), ids)
+          | [] => do pure (some (hName, ← mkFreshAnonPropUserName), [])
+          | none :: ids => do pure (some (hName, ← mkFreshAnonPropUserName), ids)
           | some id :: ids => do pure (some (hName, id), ids)
         splitConjTac h optIds (fun hEq hPost => k hEq (some hPost) ids)
       else k h none ids
@@ -142,7 +142,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
           -- Split
           let nid ← do
             match nid with
-            | none => mkFreshUserName `h
+            | none => mkFreshAnonPropUserName
             | some nid => pure nid
           trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
           if ← isConj (← inferType hPost) then
@@ -270,23 +270,26 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     -- Nothing worked: failed
     throwError "Progress failed"
 
-syntax progressArgs := ("keep" ("as" (ident))?)? ("with" ident)? ("as" " ⟨ " (ident <|> "_"),* " .."? " ⟩")?
+syntax progressArgs := ("keep" (ident <|> "_"))? ("with" ident)? ("as" " ⟨ " (ident <|> "_"),* " .."? " ⟩")?
 
 def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
   let args := args.raw
   -- Process the arguments to retrieve the identifiers to use
   trace[Progress] "Progress arguments: {args}"
-  let args := args.getArgs
+  let (keepArg, withArg, asArgs) ←
+    match args.getArgs.toList with
+    | [keepArg, withArg, asArgs] => do pure (keepArg, withArg, asArgs)
+    | _ => throwError "Unexpected: invalid arguments"
   let keep : Option Name ← do
-    let args := (args.get! 0).getArgs
-    if args.size > 0 then do
-      let args := (args.get! 1).getArgs
-      if args.size > 0 then pure (some (args.get! 1).getId)
-      else do pure (some (← mkFreshUserName `h))
-    else pure none
+    let args := keepArg.getArgs
+    trace[Progress] "Keep args: {args}"
+    let arg := args.get! 1
+    trace[Progress] "Keep arg: {arg}"
+    if arg.isIdent then pure (some arg.getId)
+    else do pure (some (← mkFreshAnonPropUserName))
   trace[Progress] "Keep: {keep}"
   let withArg ← do
-    let withArg := (args.get! 1).getArgs
+    let withArg := withArg.getArgs
     if withArg.size > 0 then
       let id := withArg.get! 1
       trace[Progress] "With arg: {id}"
@@ -306,12 +309,12 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
           pure (some (.Theorem id))
     else pure none
   let ids :=
-    let args := (args.get! 2).getArgs
+    let args := asArgs.getArgs
     let args := (args.get! 2).getSepArgs
     args.map (λ s => if s.isIdent then some s.getId else none)
   trace[Progress] "User-provided ids: {ids}"
   let splitPost : Bool :=
-    let args := (args.get! 2).getArgs
+    let args := asArgs.getArgs
     (args.get! 3).getArgs.size > 0
   trace[Progress] "Split post: {splitPost}"
   /- For scalarTac we have a fast track: if the goal is not a linear
@@ -343,15 +346,15 @@ namespace Test
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
-    progress keep as h as ⟨ x, h1 .. ⟩
-    simp [*]
+    progress keep _ as ⟨ z, h1 .. ⟩
+    simp [*, h1]
 
   example {ty} {x y : Scalar ty}
     (hmin : Scalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ Scalar.max ty) :
     ∃ z, x + y = ret z ∧ z.val = x.val + y.val := by
-    progress keep as h with Scalar.add_spec as ⟨ z ⟩
-    simp [*]
+    progress keep h with Scalar.add_spec as ⟨ z ⟩
+    simp [*, h]
 
   /- Checking that universe instantiation works: the original spec uses
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/

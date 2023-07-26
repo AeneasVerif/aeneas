@@ -12,7 +12,7 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
    -- Inroduce the bounds for the isize/usize types
    let add (e : Expr) : Tactic.TacticM Unit := do
      let ty ← inferType e
-     let _ ← Utils.addDeclTac (← mkFreshUserName `h) e ty (asLet := false)
+     let _ ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) e ty (asLet := false)
    add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Isize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
    add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])

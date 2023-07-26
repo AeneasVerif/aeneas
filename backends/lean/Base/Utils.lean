@@ -201,6 +201,10 @@ partial def mapVisit (k : Nat → Expr → MetaM Expr) (e : Expr) : MetaM Expr :
     | .proj _ _ b => return e.updateProj! (← visit (i + 1) b)
   visit 0 e
 
+-- Generate a fresh user name for an anonymous proposition to introduce in the
+-- assumptions
+def mkFreshAnonPropUserName := mkFreshUserName `_
+
 section Methods
   variable [MonadLiftT MetaM m] [MonadControlT MetaM m] [Monad m] [MonadError m]
   variable {a : Type}
@@ -411,7 +415,7 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   trace[Arith] "left: {inl}: {mleft}"
   trace[Arith] "right: {inr}: {mright}"
   -- Create the match expression
-  withLocalDeclD (← mkFreshUserName `h) hTy fun hVar => do
+  withLocalDeclD (← mkFreshAnonPropUserName) hTy fun hVar => do
   let motive ← mkLambdaFVars #[hVar] goalType
   let casesExpr ← mkAppOptM ``Or.casesOn #[a, b, motive, h, inl, inr]
   let mgoal ← getMainGoal
@@ -505,8 +509,8 @@ def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr 
     let altVarNames ←
       match optIds with
       | none => do
-        let id0 ← mkFreshUserName `h
-        let id1 ← mkFreshUserName `h
+        let id0 ← mkFreshAnonPropUserName
+        let id1 ← mkFreshAnonPropUserName
         pure #[{ varNames := [id0, id1] }]
       | some (id0, id1) => do
         pure #[{ varNames := [id0, id1] }]
@@ -532,7 +536,7 @@ partial def splitFullConjTacAux [Inhabited α] [Nonempty α] (keepCurrentName : 
     let ids ← do
       if keepCurrentName then do
         let cur := (← h.fvarId!.getDecl).userName
-        let nid ← mkFreshUserName `h
+        let nid ← mkFreshAnonPropUserName
         pure (some (cur, nid))
       else
         pure none

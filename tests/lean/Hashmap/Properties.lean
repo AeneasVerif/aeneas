@@ -95,7 +95,7 @@ theorem insert_in_list_spec1 {α : Type} (key: Usize) (value: α) (ls: List α) 
         simp only [insert_in_list]
         rw [insert_in_list_loop]
         conv => rhs; ext; simp [*]
-        progress keep as heq as ⟨ b, hi ⟩
+        progress keep heq as ⟨ b, hi ⟩
         simp only [insert_in_list] at heq
         exists b
 
@@ -219,7 +219,7 @@ theorem insert_in_list_back_spec_aux {α : Type} (l : Int) (key: Usize) (value: 
        have : distinct_keys (List.v tl0) := by checkpoint
          simp [distinct_keys] at hdk
          simp [hdk, distinct_keys]
-       progress keep as heq as ⟨ tl1 .. ⟩
+       progress keep heq as ⟨ tl1 .. ⟩
        simp only [insert_in_list_back] at heq
        have : slot_s_inv_hash l (hash_mod_key key l) (List.v (List.Cons k v tl1)) := by checkpoint
          simp [List.v, slot_s_inv_hash] at *
@@ -289,8 +289,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   have _ : (Vec.len (List α) hm.slots).val ≠ 0 := by checkpoint
    intro
    simp_all [inv]
-  -- TODO: progress keep as ⟨ ... ⟩ : conflict
-  progress keep as h as ⟨ hash_mod, hhm ⟩
+  progress keep _ as ⟨ hash_mod, hhm ⟩
   have _ : 0 ≤ hash_mod.val := by checkpoint scalar_tac
   have _ : hash_mod.val < Vec.length hm.slots := by
     have : 0 < hm.slots.val.len := by
@@ -324,11 +323,12 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   progress as ⟨ i0 ⟩
   -- TODO: progress "eager" to match premises with assumptions while instantiating
   -- meta-variables
-  have h_slot : slot_s_inv_hash hm.slots.length hash_mod.val (hm.slots.v.index hash_mod.val).v := by
+  have h_slot : slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length)
+    (List.v (List.index (hm.slots.val) hash_mod.val)) := by
     simp [inv] at hinv
-    have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
-    simp [slot_t_inv] at h
-    simp [h]
+    have h := (hinv.right.left hash_mod.val (by assumption) (by assumption)).right
+    simp [slot_t_inv, hhm] at h
+    simp [h, hhm]
   have hd : distinct_keys (hm.slots.v.index hash_mod.val).v := by checkpoint
     simp [inv, slots_t_inv, slot_t_inv] at hinv
     have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
@@ -337,88 +337,87 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   -- TODO: allow providing terms to progress to instantiate the meta variables
   -- which are not propositions
   progress as ⟨ l0, _, _, _, hlen .. ⟩
-  . checkpoint exact hm.slots.length
-  . checkpoint simp_all
-  . -- Finishing the proof
-    progress keep as hv as ⟨ v, h_veq ⟩
-    -- TODO: update progress to automate that
-    let nhm : HashMap α := { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
-    exists nhm
-    -- TODO: later I don't want to inline nhm - we need to control simp
-    have hupdt : lookup nhm key = some value := by checkpoint
-      simp [lookup, List.lookup] at *
-      simp_all
-    have hlkp : ∀ k, ¬ k = key → nhm.lookup k = hm.lookup k := by
-      simp [lookup, List.lookup] at *
-      intro k hk
-      -- We have to make a case disjunction: either the hashes are different,
-      -- in which case we don't even lookup the same slots, or the hashes
-      -- are the same, in which case we have to reason about what happens
-      -- in one slot
-      let k_hash_mod := k.val % v.val.len
-      have : 0 < hm.slots.val.len := by simp_all [inv]
-      have hvpos : 0 < v.val.len := by simp_all
-      have hvnz: v.val.len ≠ 0 := by
-        simp_all
-      have _ : 0 ≤ k_hash_mod := by
-        -- TODO: we want to automate this
-        simp
-        apply Int.emod_nonneg k.val hvnz
-      have _ : k_hash_mod < Vec.length hm.slots := by
-        -- TODO: we want to automate this
-        simp
-        have h := Int.emod_lt_of_pos k.val hvpos
-        simp_all
-      if h_hm : k_hash_mod = hash_mod.val then
-        simp_all
-      else
-        simp_all
-    have _ :
-      match hm.lookup key with
-      | none => nhm.len_s = hm.len_s + 1
-      | some _ => nhm.len_s = hm.len_s := by checkpoint
-      simp only [lookup, List.lookup, len_s, al_v, HashMap.v, slots_t_lookup] at *
-      -- We have to do a case disjunction
-      simp_all
-      simp [_root_.List.update_map_eq]
-      -- TODO: dependent rewrites
-      have _ : key.val % hm.slots.val.len < (List.map List.v hm.slots.val).len := by
-        simp [*]
-      simp [_root_.List.len_flatten_update_eq, *]
-      split <;>
-      rename_i heq <;>
-      simp [heq] at hlen <;>
-      -- TODO: canonize addition by default? We need a tactic to simplify arithmetic equalities
-      -- with addition and substractions ((ℤ, +) is a ring or something - there should exist a tactic
-      -- somewhere in mathlib?)
-      simp [Int.add_assoc, Int.add_comm, Int.add_left_comm] <;>
-      int_tac
-    have hinv : inv nhm := by
-      simp [inv] at *
-      split_conjs
-      . match h: lookup hm key with
-        | none =>
-          simp [h, lookup] at *
-          simp_all
-        | some _ =>
-          simp_all [lookup]
-      . simp [slots_t_inv, slot_t_inv] at *
-        intro i hipos _
-        have _ := hinv.right.left i hipos (by simp_all)
-        simp [hhm, h_veq] at * -- TODO: annoying
-        -- We need a case disjunction
-        if h_ieq : i = key.val % _root_.List.len hm.slots.val then
-          -- TODO: simp_all loops (investigate).
-          -- Also, it is annoying to do this kind
-          -- of rewritings by hand. We could have a different simp
-          -- which safely substitutes variables when we have an
-          -- equality `x = ...` and `x` doesn't appear in the rhs
-          simp [h_ieq] at *
-          simp [*]
-        else
-          simp [*]
-      . simp [*]
+  -- Finishing the proof
+  progress keep hv as ⟨ v, h_veq ⟩
+  -- TODO: update progress to automate that
+  let nhm : HashMap α := { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
+  exists nhm
+  -- TODO: later I don't want to inline nhm - we need to control simp
+  have hupdt : lookup nhm key = some value := by checkpoint
+    simp [lookup, List.lookup] at *
     simp_all
+  have hlkp : ∀ k, ¬ k = key → nhm.lookup k = hm.lookup k := by
+    simp [lookup, List.lookup] at *
+    intro k hk
+    -- We have to make a case disjunction: either the hashes are different,
+    -- in which case we don't even lookup the same slots, or the hashes
+    -- are the same, in which case we have to reason about what happens
+    -- in one slot
+    let k_hash_mod := k.val % v.val.len
+    have : 0 < hm.slots.val.len := by simp_all [inv]
+    have hvpos : 0 < v.val.len := by simp_all
+    have hvnz: v.val.len ≠ 0 := by
+      simp_all
+    have _ : 0 ≤ k_hash_mod := by
+      -- TODO: we want to automate this
+      simp
+      apply Int.emod_nonneg k.val hvnz
+    have _ : k_hash_mod < Vec.length hm.slots := by
+      -- TODO: we want to automate this
+      simp
+      have h := Int.emod_lt_of_pos k.val hvpos
+      simp_all
+    if h_hm : k_hash_mod = hash_mod.val then
+      simp_all
+    else
+      simp_all
+  have _ :
+    match hm.lookup key with
+    | none => nhm.len_s = hm.len_s + 1
+    | some _ => nhm.len_s = hm.len_s := by checkpoint
+    simp only [lookup, List.lookup, len_s, al_v, HashMap.v, slots_t_lookup] at *
+    -- We have to do a case disjunction
+    simp_all
+    simp [_root_.List.update_map_eq]
+    -- TODO: dependent rewrites
+    have _ : key.val % hm.slots.val.len < (List.map List.v hm.slots.val).len := by
+      simp [*]
+    simp [_root_.List.len_flatten_update_eq, *]
+    split <;>
+    rename_i heq <;>
+    simp [heq] at hlen <;>
+    -- TODO: canonize addition by default? We need a tactic to simplify arithmetic equalities
+    -- with addition and substractions ((ℤ, +) is a ring or something - there should exist a tactic
+    -- somewhere in mathlib?)
+    simp [Int.add_assoc, Int.add_comm, Int.add_left_comm] <;>
+    int_tac
+  have hinv : inv nhm := by
+    simp [inv] at *
+    split_conjs
+    . match h: lookup hm key with
+      | none =>
+        simp [h, lookup] at *
+        simp_all
+      | some _ =>
+        simp_all [lookup]
+    . simp [slots_t_inv, slot_t_inv] at *
+      intro i hipos _
+      have _ := hinv.right.left i hipos (by simp_all)
+      simp [hhm, h_veq] at * -- TODO: annoying
+      -- We need a case disjunction
+      if h_ieq : i = key.val % _root_.List.len hm.slots.val then
+        -- TODO: simp_all fails: "(deterministic) timeout at 'whnf'"
+        -- Also, it is annoying to do this kind
+        -- of rewritings by hand. We could have a different simp
+        -- which safely substitutes variables when we have an
+        -- equality `x = ...` and `x` doesn't appear in the rhs
+        simp [h_ieq] at *
+        simp [*]
+      else
+        simp [*]
+    . -- TODO: simp[*] fails: "(deterministic) timeout at 'whnf'"
+      simp [hinv, h_veq]
+  simp_all
 
 end HashMap
 

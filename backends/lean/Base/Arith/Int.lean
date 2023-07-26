@@ -147,7 +147,7 @@ def introInstances (declToUnfold : Name) (lookup : Expr → MetaM (Option Expr))
   let hs ← collectInstancesFromMainCtx lookup
   hs.toArray.mapM fun e => do
     let type ← inferType e
-    let name ← mkFreshUserName `h
+    let name ← mkFreshAnonPropUserName
     -- Add a declaration
     let nval ← Utils.addDeclTac name e type (asLet := false)
     -- Simplify to unfold the declaration to unfold (i.e., the projector)
