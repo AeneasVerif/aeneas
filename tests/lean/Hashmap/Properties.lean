@@ -271,6 +271,10 @@ theorem if_update_eq
   := by
   split <;> simp [Pure.pure]
 
+-- TODO: move: small helper
+def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
+  ⟨ x, by simp ⟩
+
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
   ∃ nhm, hm.insert_no_resize α key value = ret nhm  ∧
@@ -342,10 +346,10 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   progress as ⟨ l0, _, _, _, hlen .. ⟩
   progress keep hv as ⟨ v, h_veq ⟩
   -- TODO: update progress to automate that
-  let nhm : HashMap α := { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
-  exists nhm
   -- TODO: later I don't want to inline nhm - we need to control simp: deactivate
-  -- zeta reduction?
+  -- zeta reduction? For now I have to do this peculiar manipulation
+  have ⟨ nhm, nhm_eq ⟩ := @mk_opaque (HashMap α) { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
+  exists nhm
   have hupdt : lookup nhm key = some value := by checkpoint
     simp [lookup, List.lookup] at *
     simp_all
@@ -406,7 +410,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     . simp [slots_t_inv, slot_t_inv] at *
       intro i hipos _
       have _ := hinv.right.left i hipos (by simp_all)
-      simp [hhm, h_veq] at * -- TODO: annoying, we do that because simp_all fails below
+      simp [hhm, h_veq, nhm_eq] at * -- TODO: annoying, we do that because simp_all fails below
       -- We need a case disjunction
       if h_ieq : i = key.val % _root_.List.len hm.slots.val then
         -- TODO: simp_all fails: "(deterministic) timeout at 'whnf'"
@@ -419,7 +423,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       else
         simp [*]
     . -- TODO: simp[*] fails: "(deterministic) timeout at 'whnf'"
-      simp [hinv, h_veq]
+      simp [hinv, h_veq, nhm_eq]
   simp_all
 
 end HashMap
