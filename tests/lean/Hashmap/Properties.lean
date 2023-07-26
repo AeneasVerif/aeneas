@@ -340,7 +340,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   . checkpoint exact hm.slots.length
   . checkpoint simp_all
   . -- Finishing the proof
-    progress as ⟨ v ⟩
+    progress keep as hv as ⟨ v, h_veq ⟩
     -- TODO: update progress to automate that
     let nhm : HashMap α := { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
     exists nhm
@@ -405,12 +405,19 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       . simp [slots_t_inv, slot_t_inv] at *
         intro i hipos _
         have _ := hinv.right.left i hipos (by simp_all)
+        simp [hhm, h_veq] at * -- TODO: annoying
         -- We need a case disjunction
-        if i = key.val % _root_.List.len hm.slots.val then
-          simp_all
+        if h_ieq : i = key.val % _root_.List.len hm.slots.val then
+          -- TODO: simp_all loops (investigate).
+          -- Also, it is annoying to do this kind
+          -- of rewritings by hand. We could have a different simp
+          -- which safely substitutes variables when we have an
+          -- equality `x = ...` and `x` doesn't appear in the rhs
+          simp [h_ieq] at *
+          simp [*]
         else
-          simp_all
-      . simp_all
+          simp [*]
+      . simp [*]
     simp_all
 
 end HashMap
