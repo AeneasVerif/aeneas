@@ -85,14 +85,19 @@ def Vec.index (α : Type u) (v: Vec α) (i: Usize) : Result α :=
   | none => fail .arrayOutOfBounds
   | some x => ret x
 
+/- In the theorems below: we don't always need the `∃ ..`, but we use one
+   so that `progress` introduces an opaque variable and an equality. This
+   helps control the context.
+ -/
+
 @[pspec]
 theorem Vec.index_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index α i = ret (v.val.index i.val) := by
+  ∃ x, v.index α i = ret x ∧ x = v.val.index i.val := by
   simp only [index]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
-  simp only [*]
+  simp [*]
 
 -- This shouldn't be used
 def Vec.index_back (α : Type u) (v: Vec α) (i: Usize) (_: α) : Result Unit :=
@@ -109,11 +114,11 @@ def Vec.index_mut (α : Type u) (v: Vec α) (i: Usize) : Result α :=
 @[pspec]
 theorem Vec.index_mut_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut α i = ret (v.val.index i.val) := by
+  ∃ x, v.index_mut α i = ret x ∧ x = v.val.index i.val := by
   simp only [index_mut]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
-  simp only [*]
+  simp [*]
 
 instance {α : Type u} (p : Vec α → Prop) : Arith.HasIntProp (Subtype p) where
   prop_ty := λ x => p x

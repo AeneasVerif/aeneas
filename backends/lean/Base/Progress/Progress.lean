@@ -162,6 +162,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     allGoals asmTac
     let newGoals ← getUnsolvedGoals
     setGoals (newGoals ++ curGoals)
+    trace[Progress] "progress: replaced the goals"
     --
     pure .Ok
 
@@ -281,12 +282,15 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
     | [keepArg, withArg, asArgs] => do pure (keepArg, withArg, asArgs)
     | _ => throwError "Unexpected: invalid arguments"
   let keep : Option Name ← do
+    trace[Progress] "Keep arg: {keepArg}"
     let args := keepArg.getArgs
-    trace[Progress] "Keep args: {args}"
-    let arg := args.get! 1
-    trace[Progress] "Keep arg: {arg}"
-    if arg.isIdent then pure (some arg.getId)
-    else do pure (some (← mkFreshAnonPropUserName))
+    if args.size > 0 then do
+      trace[Progress] "Keep args: {args}"
+      let arg := args.get! 1
+      trace[Progress] "Keep arg: {arg}"
+      if arg.isIdent then pure (some arg.getId)
+      else do pure (some (← mkFreshAnonPropUserName))
+    else do pure none
   trace[Progress] "Keep: {keep}"
   let withArg ← do
     let withArg := withArg.getArgs
@@ -328,7 +332,10 @@ def evalProgress (args : TSyntax `Progress.progressArgs) : TacticM Unit := do
     else
       throwError "Not a linear arithmetic goal"
   progressAsmsOrLookupTheorem keep withArg ids splitPost (
+    withMainContext do
+    trace[Progress] "trying to solve assumption: {← getMainGoal}"
     firstTac [assumptionTac, scalarTac])
+  trace[Diverge] "Progress done"
 
 elab "progress" args:progressArgs : tactic =>
   evalProgress args

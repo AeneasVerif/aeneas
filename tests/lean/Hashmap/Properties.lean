@@ -285,7 +285,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
    | none => nhm.len_s = hm.len_s + 1
    | some _ => nhm.len_s = hm.len_s) := by
   rw [insert_no_resize]
-  simp [hash_key]
+  simp only [hash_key, bind_tc_ret] -- TODO: annoying
   have _ : (Vec.len (List α) hm.slots).val ≠ 0 := by checkpoint
    intro
    simp_all [inv]
@@ -297,10 +297,9 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       simp [hinv]
     -- TODO: we want to automate that
     simp [*, Int.emod_lt_of_pos]
-  -- have h := Primitives.Vec.index_mut_spec hm.slots hash_mod
   -- TODO: change the spec of Vec.index_mut to introduce a let-binding.
   -- or: make progress introduce the let-binding by itself (this is clearer)
-  progress
+  progress as ⟨ l, h_leq ⟩
   -- TODO: make progress use the names written in the goal
   progress as ⟨ inserted ⟩
   rw [if_update_eq] -- TODO: necessary because we don't have a join
@@ -311,38 +310,42 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     := by
     if inserted then
       simp [*]
-      have : hm.num_entries.val + (Usize.ofInt 1).val ≤ Usize.max := by
+      have hbounds : hm.num_entries.val + (Usize.ofInt 1).val ≤ Usize.max := by
         simp [lookup] at hnsat
         simp_all
         simp [inv] at hinv
         int_tac
-      progress
-      simp_all
+      -- TODO: progress fails in command line mode with "index out of bounds"
+      -- and I have no idea how to fix this. The error happens after progress
+      -- introduced the new goals. It must be when we exit the "withApp", etc.
+      -- helpers.
+      have ⟨ z, hp ⟩ := Usize.add_spec hbounds
+      simp [hp]
     else
-      simp_all [Pure.pure]
+      simp [*, Pure.pure]
   progress as ⟨ i0 ⟩
   -- TODO: progress "eager" to match premises with assumptions while instantiating
   -- meta-variables
-  have h_slot : slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length)
-    (List.v (List.index (hm.slots.val) hash_mod.val)) := by
+  have h_slot : slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v
+    := by
     simp [inv] at hinv
     have h := (hinv.right.left hash_mod.val (by assumption) (by assumption)).right
     simp [slot_t_inv, hhm] at h
-    simp [h, hhm]
-  have hd : distinct_keys (hm.slots.v.index hash_mod.val).v := by checkpoint
+    simp [h, hhm, h_leq]
+  have hd : distinct_keys l.v := by checkpoint
     simp [inv, slots_t_inv, slot_t_inv] at hinv
     have h := hinv.right.left hash_mod.val (by assumption) (by assumption)
-    simp [h]
+    simp [h, h_leq]
   -- TODO: hide the variables and only keep the props
   -- TODO: allow providing terms to progress to instantiate the meta variables
   -- which are not propositions
   progress as ⟨ l0, _, _, _, hlen .. ⟩
-  -- Finishing the proof
   progress keep hv as ⟨ v, h_veq ⟩
   -- TODO: update progress to automate that
   let nhm : HashMap α := { num_entries := i0, max_load_factor := hm.max_load_factor, max_load := hm.max_load, slots := v }
   exists nhm
-  -- TODO: later I don't want to inline nhm - we need to control simp
+  -- TODO: later I don't want to inline nhm - we need to control simp: deactivate
+  -- zeta reduction?
   have hupdt : lookup nhm key = some value := by checkpoint
     simp [lookup, List.lookup] at *
     simp_all
@@ -387,7 +390,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     rename_i heq <;>
     simp [heq] at hlen <;>
     -- TODO: canonize addition by default? We need a tactic to simplify arithmetic equalities
-    -- with addition and substractions ((ℤ, +) is a ring or something - there should exist a tactic
+    -- with addition and substractions ((ℤ, +) is a group or something - there should exist a tactic
     -- somewhere in mathlib?)
     simp [Int.add_assoc, Int.add_comm, Int.add_left_comm] <;>
     int_tac
@@ -403,7 +406,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     . simp [slots_t_inv, slot_t_inv] at *
       intro i hipos _
       have _ := hinv.right.left i hipos (by simp_all)
-      simp [hhm, h_veq] at * -- TODO: annoying
+      simp [hhm, h_veq] at * -- TODO: annoying, we do that because simp_all fails below
       -- We need a case disjunction
       if h_ieq : i = key.val % _root_.List.len hm.slots.val then
         -- TODO: simp_all fails: "(deterministic) timeout at 'whnf'"
