@@ -3,7 +3,7 @@
 -arg -w
 -arg all
 
-Primitives.v
 BetreeMain_Types.v
+Primitives.v
 BetreeMain_Funs.v
 BetreeMain_Opaque.v

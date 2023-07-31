@@ -107,6 +107,9 @@ let () =
         Arg.Clear check_invariants,
         " Deactivate the invariant sanity checks performed at every evaluation \
          step. Dramatically increases speed." );
+      ( "-lean-default-lakefile",
+        Arg.Clear lean_gen_lakefile,
+        " Generate a default lakefile.lean (Lean only)" );
     ]
   in
 
@@ -130,6 +133,9 @@ let () =
     (not !use_fuel)
     || (not !extract_decreases_clauses)
        && not !extract_template_decreases_clauses);
+  if !lean_gen_lakefile && not (!backend = Lean) then
+    log#error
+      "The -lean-default-lakefile option is valid only for the Lean backend";
 
   (* Check that the user specified a backend *)
   let _ =
@@ -157,7 +163,9 @@ let () =
         (* We don't support fuel for the Lean backend *)
         if !use_fuel then (
           log#error "The Lean backend doesn't support the -use-fuel option";
-          fail ())
+          fail ());
+        (* Lean can disambiguate the field names *)
+        record_fields_short_names := true
     | HOL4 ->
         (* We don't support fuel for the HOL4 backend *)
         if !use_fuel then (

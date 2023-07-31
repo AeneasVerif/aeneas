@@ -38,49 +38,49 @@ Datatype:
 End
 
 val neg_test_fwd_def = Define ‘
-  (** [no_nested_borrows::neg_test] *)
+  (** [no_nested_borrows::neg_test]: forward function *)
   neg_test_fwd (x : i32) : i32 result =
     i32_neg x
 ’
 
 val add_test_fwd_def = Define ‘
-  (** [no_nested_borrows::add_test] *)
+  (** [no_nested_borrows::add_test]: forward function *)
   add_test_fwd (x : u32) (y : u32) : u32 result =
     u32_add x y
 ’
 
 val subs_test_fwd_def = Define ‘
-  (** [no_nested_borrows::subs_test] *)
+  (** [no_nested_borrows::subs_test]: forward function *)
   subs_test_fwd (x : u32) (y : u32) : u32 result =
     u32_sub x y
 ’
 
 val div_test_fwd_def = Define ‘
-  (** [no_nested_borrows::div_test] *)
+  (** [no_nested_borrows::div_test]: forward function *)
   div_test_fwd (x : u32) (y : u32) : u32 result =
     u32_div x y
 ’
 
 val div_test1_fwd_def = Define ‘
-  (** [no_nested_borrows::div_test1] *)
+  (** [no_nested_borrows::div_test1]: forward function *)
   div_test1_fwd (x : u32) : u32 result =
     u32_div x (int_to_u32 2)
 ’
 
 val rem_test_fwd_def = Define ‘
-  (** [no_nested_borrows::rem_test] *)
+  (** [no_nested_borrows::rem_test]: forward function *)
   rem_test_fwd (x : u32) (y : u32) : u32 result =
     u32_rem x y
 ’
 
 val cast_test_fwd_def = Define ‘
-  (** [no_nested_borrows::cast_test] *)
+  (** [no_nested_borrows::cast_test]: forward function *)
   cast_test_fwd (x : u32) : i32 result =
     mk_i32 (u32_to_int x)
 ’
 
 val test2_fwd_def = Define ‘
-  (** [no_nested_borrows::test2] *)
+  (** [no_nested_borrows::test2]: forward function *)
   test2_fwd : unit result =
     do
     _ <- u32_add (int_to_u32 23) (int_to_u32 44);
@@ -92,13 +92,13 @@ val test2_fwd_def = Define ‘
 val _ = assert_return (“test2_fwd”)
 
 val get_max_fwd_def = Define ‘
-  (** [no_nested_borrows::get_max] *)
+  (** [no_nested_borrows::get_max]: forward function *)
   get_max_fwd (x : u32) (y : u32) : u32 result =
     if u32_ge x y then Return x else Return y
 ’
 
 val test3_fwd_def = Define ‘
-  (** [no_nested_borrows::test3] *)
+  (** [no_nested_borrows::test3]: forward function *)
   test3_fwd : unit result =
     do
     x <- get_max_fwd (int_to_u32 4) (int_to_u32 3);
@@ -112,7 +112,7 @@ val test3_fwd_def = Define ‘
 val _ = assert_return (“test3_fwd”)
 
 val test_neg1_fwd_def = Define ‘
-  (** [no_nested_borrows::test_neg1] *)
+  (** [no_nested_borrows::test_neg1]: forward function *)
   test_neg1_fwd : unit result =
     do
     y <- i32_neg (int_to_i32 3);
@@ -124,7 +124,7 @@ val test_neg1_fwd_def = Define ‘
 val _ = assert_return (“test_neg1_fwd”)
 
 val refs_test1_fwd_def = Define ‘
-  (** [no_nested_borrows::refs_test1] *)
+  (** [no_nested_borrows::refs_test1]: forward function *)
   refs_test1_fwd : unit result =
     if ~ (int_to_i32 1 = int_to_i32 1) then Fail Failure else Return ()
 ’
@@ -133,7 +133,7 @@ val refs_test1_fwd_def = Define ‘
 val _ = assert_return (“refs_test1_fwd”)
 
 val refs_test2_fwd_def = Define ‘
-  (** [no_nested_borrows::refs_test2] *)
+  (** [no_nested_borrows::refs_test2]: forward function *)
   refs_test2_fwd : unit result =
     if ~ (int_to_i32 2 = int_to_i32 2)
     then Fail Failure
@@ -151,7 +151,7 @@ val refs_test2_fwd_def = Define ‘
 val _ = assert_return (“refs_test2_fwd”)
 
 val test_list1_fwd_def = Define ‘
-  (** [no_nested_borrows::test_list1] *)
+  (** [no_nested_borrows::test_list1]: forward function *)
   test_list1_fwd : unit result =
     Return ()
 ’
@@ -160,7 +160,7 @@ val test_list1_fwd_def = Define ‘
 val _ = assert_return (“test_list1_fwd”)
 
 val test_box1_fwd_def = Define ‘
-  (** [no_nested_borrows::test_box1] *)
+  (** [no_nested_borrows::test_box1]: forward function *)
   test_box1_fwd : unit result =
     let b = int_to_i32 1 in
     let x = b in
@@ -171,25 +171,25 @@ val test_box1_fwd_def = Define ‘
 val _ = assert_return (“test_box1_fwd”)
 
 val copy_int_fwd_def = Define ‘
-  (** [no_nested_borrows::copy_int] *)
+  (** [no_nested_borrows::copy_int]: forward function *)
   copy_int_fwd (x : i32) : i32 result =
     Return x
 ’
 
 val test_unreachable_fwd_def = Define ‘
-  (** [no_nested_borrows::test_unreachable] *)
+  (** [no_nested_borrows::test_unreachable]: forward function *)
   test_unreachable_fwd (b : bool) : unit result =
     if b then Fail Failure else Return ()
 ’
 
 val test_panic_fwd_def = Define ‘
-  (** [no_nested_borrows::test_panic] *)
+  (** [no_nested_borrows::test_panic]: forward function *)
   test_panic_fwd (b : bool) : unit result =
     if b then Fail Failure else Return ()
 ’
 
 val test_copy_int_fwd_def = Define ‘
-  (** [no_nested_borrows::test_copy_int] *)
+  (** [no_nested_borrows::test_copy_int]: forward function *)
   test_copy_int_fwd : unit result =
     do
     y <- copy_int_fwd (int_to_i32 0);
@@ -201,13 +201,13 @@ val test_copy_int_fwd_def = Define ‘
 val _ = assert_return (“test_copy_int_fwd”)
 
 val is_cons_fwd_def = Define ‘
-  (** [no_nested_borrows::is_cons] *)
+  (** [no_nested_borrows::is_cons]: forward function *)
   is_cons_fwd (l : 't list_t) : bool result =
     (case l of | ListCons t l0 => Return T | ListNil => Return F)
 ’
 
 val test_is_cons_fwd_def = Define ‘
-  (** [no_nested_borrows::test_is_cons] *)
+  (** [no_nested_borrows::test_is_cons]: forward function *)
   test_is_cons_fwd : unit result =
     let l = ListNil in
     do
@@ -220,13 +220,13 @@ val test_is_cons_fwd_def = Define ‘
 val _ = assert_return (“test_is_cons_fwd”)
 
 val split_list_fwd_def = Define ‘
-  (** [no_nested_borrows::split_list] *)
+  (** [no_nested_borrows::split_list]: forward function *)
   split_list_fwd (l : 't list_t) : ('t # 't list_t) result =
     (case l of | ListCons hd tl => Return (hd, tl) | ListNil => Fail Failure)
 ’
 
 val test_split_list_fwd_def = Define ‘
-  (** [no_nested_borrows::test_split_list] *)
+  (** [no_nested_borrows::test_split_list]: forward function *)
   test_split_list_fwd : unit result =
     let l = ListNil in
     do
@@ -240,19 +240,19 @@ val test_split_list_fwd_def = Define ‘
 val _ = assert_return (“test_split_list_fwd”)
 
 val choose_fwd_def = Define ‘
-  (** [no_nested_borrows::choose] *)
+  (** [no_nested_borrows::choose]: forward function *)
   choose_fwd (b : bool) (x : 't) (y : 't) : 't result =
     if b then Return x else Return y
 ’
 
 val choose_back_def = Define ‘
-  (** [no_nested_borrows::choose] *)
+  (** [no_nested_borrows::choose]: backward function 0 *)
   choose_back (b : bool) (x : 't) (y : 't) (ret : 't) : ('t # 't) result =
     if b then Return (ret, y) else Return (x, ret)
 ’
 
 val choose_test_fwd_def = Define ‘
-  (** [no_nested_borrows::choose_test] *)
+  (** [no_nested_borrows::choose_test]: forward function *)
   choose_test_fwd : unit result =
     do
     z <- choose_fwd T (int_to_i32 0) (int_to_i32 0);
@@ -273,7 +273,7 @@ val choose_test_fwd_def = Define ‘
 val _ = assert_return (“choose_test_fwd”)
 
 val test_char_fwd_def = Define ‘
-  (** [no_nested_borrows::test_char] *)
+  (** [no_nested_borrows::test_char]: forward function *)
   test_char_fwd : char result =
     Return #"a"
 ’
@@ -287,7 +287,7 @@ Datatype:
 End
 
 val [list_length_fwd_def] = DefineDiv ‘
-  (** [no_nested_borrows::list_length] *)
+  (** [no_nested_borrows::list_length]: forward function *)
   list_length_fwd (l : 't list_t) : u32 result =
     (case l of
     | ListCons t l1 => do
@@ -298,7 +298,7 @@ val [list_length_fwd_def] = DefineDiv ‘
 ’
 
 val [list_nth_shared_fwd_def] = DefineDiv ‘
-  (** [no_nested_borrows::list_nth_shared] *)
+  (** [no_nested_borrows::list_nth_shared]: forward function *)
   list_nth_shared_fwd (l : 't list_t) (i : u32) : 't result =
     (case l of
     | ListCons x tl =>
@@ -312,7 +312,7 @@ val [list_nth_shared_fwd_def] = DefineDiv ‘
 ’
 
 val [list_nth_mut_fwd_def] = DefineDiv ‘
-  (** [no_nested_borrows::list_nth_mut] *)
+  (** [no_nested_borrows::list_nth_mut]: forward function *)
   list_nth_mut_fwd (l : 't list_t) (i : u32) : 't result =
     (case l of
     | ListCons x tl =>
@@ -326,7 +326,7 @@ val [list_nth_mut_fwd_def] = DefineDiv ‘
 ’
 
 val [list_nth_mut_back_def] = DefineDiv ‘
-  (** [no_nested_borrows::list_nth_mut] *)
+  (** [no_nested_borrows::list_nth_mut]: backward function 0 *)
   list_nth_mut_back (l : 't list_t) (i : u32) (ret : 't) : 't list_t result =
     (case l of
     | ListCons x tl =>
@@ -342,7 +342,7 @@ val [list_nth_mut_back_def] = DefineDiv ‘
 ’
 
 val [list_rev_aux_fwd_def] = DefineDiv ‘
-  (** [no_nested_borrows::list_rev_aux] *)
+  (** [no_nested_borrows::list_rev_aux]: forward function *)
   list_rev_aux_fwd (li : 't list_t) (lo : 't list_t) : 't list_t result =
     (case li of
     | ListCons hd tl => list_rev_aux_fwd tl (ListCons hd lo)
@@ -350,13 +350,14 @@ val [list_rev_aux_fwd_def] = DefineDiv ‘
 ’
 
 val list_rev_fwd_back_def = Define ‘
-  (** [no_nested_borrows::list_rev] *)
+  (** [no_nested_borrows::list_rev]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   list_rev_fwd_back (l : 't list_t) : 't list_t result =
     let li = mem_replace_fwd l ListNil in list_rev_aux_fwd li ListNil
 ’
 
 val test_list_functions_fwd_def = Define ‘
-  (** [no_nested_borrows::test_list_functions] *)
+  (** [no_nested_borrows::test_list_functions]: forward function *)
   test_list_functions_fwd : unit result =
     let l = ListNil in
     let l0 = ListCons (int_to_i32 2) l in
@@ -411,63 +412,63 @@ val test_list_functions_fwd_def = Define ‘
 val _ = assert_return (“test_list_functions_fwd”)
 
 val id_mut_pair1_fwd_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair1] *)
+  (** [no_nested_borrows::id_mut_pair1]: forward function *)
   id_mut_pair1_fwd (x : 't1) (y : 't2) : ('t1 # 't2) result =
     Return (x, y)
 ’
 
 val id_mut_pair1_back_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair1] *)
+  (** [no_nested_borrows::id_mut_pair1]: backward function 0 *)
   id_mut_pair1_back
     (x : 't1) (y : 't2) (ret : ('t1 # 't2)) : ('t1 # 't2) result =
     let (t, t0) = ret in Return (t, t0)
 ’
 
 val id_mut_pair2_fwd_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair2] *)
+  (** [no_nested_borrows::id_mut_pair2]: forward function *)
   id_mut_pair2_fwd (p : ('t1 # 't2)) : ('t1 # 't2) result =
     let (t, t0) = p in Return (t, t0)
 ’
 
 val id_mut_pair2_back_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair2] *)
+  (** [no_nested_borrows::id_mut_pair2]: backward function 0 *)
   id_mut_pair2_back
     (p : ('t1 # 't2)) (ret : ('t1 # 't2)) : ('t1 # 't2) result =
     let (t, t0) = ret in Return (t, t0)
 ’
 
 val id_mut_pair3_fwd_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair3] *)
+  (** [no_nested_borrows::id_mut_pair3]: forward function *)
   id_mut_pair3_fwd (x : 't1) (y : 't2) : ('t1 # 't2) result =
     Return (x, y)
 ’
 
 val id_mut_pair3_back'a_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair3] *)
+  (** [no_nested_borrows::id_mut_pair3]: backward function 0 *)
   id_mut_pair3_back'a (x : 't1) (y : 't2) (ret : 't1) : 't1 result =
     Return ret
 ’
 
 val id_mut_pair3_back'b_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair3] *)
+  (** [no_nested_borrows::id_mut_pair3]: backward function 1 *)
   id_mut_pair3_back'b (x : 't1) (y : 't2) (ret : 't2) : 't2 result =
     Return ret
 ’
 
 val id_mut_pair4_fwd_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair4] *)
+  (** [no_nested_borrows::id_mut_pair4]: forward function *)
   id_mut_pair4_fwd (p : ('t1 # 't2)) : ('t1 # 't2) result =
     let (t, t0) = p in Return (t, t0)
 ’
 
 val id_mut_pair4_back'a_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair4] *)
+  (** [no_nested_borrows::id_mut_pair4]: backward function 0 *)
   id_mut_pair4_back'a (p : ('t1 # 't2)) (ret : 't1) : 't1 result =
     Return ret
 ’
 
 val id_mut_pair4_back'b_def = Define ‘
-  (** [no_nested_borrows::id_mut_pair4] *)
+  (** [no_nested_borrows::id_mut_pair4]: backward function 1 *)
   id_mut_pair4_back'b (p : ('t1 # 't2)) (ret : 't2) : 't2 result =
     Return ret
 ’
@@ -478,19 +479,19 @@ Datatype:
 End
 
 val new_tuple1_fwd_def = Define ‘
-  (** [no_nested_borrows::new_tuple1] *)
+  (** [no_nested_borrows::new_tuple1]: forward function *)
   new_tuple1_fwd : (u32, u32) struct_with_tuple_t result =
     Return (<| struct_with_tuple_p := (int_to_u32 1, int_to_u32 2) |>)
 ’
 
 val new_tuple2_fwd_def = Define ‘
-  (** [no_nested_borrows::new_tuple2] *)
+  (** [no_nested_borrows::new_tuple2]: forward function *)
   new_tuple2_fwd : (i16, i16) struct_with_tuple_t result =
     Return (<| struct_with_tuple_p := (int_to_i16 1, int_to_i16 2) |>)
 ’
 
 val new_tuple3_fwd_def = Define ‘
-  (** [no_nested_borrows::new_tuple3] *)
+  (** [no_nested_borrows::new_tuple3]: forward function *)
   new_tuple3_fwd : (u64, i64) struct_with_tuple_t result =
     Return (<| struct_with_tuple_p := (int_to_u64 1, int_to_i64 2) |>)
 ’
@@ -501,7 +502,7 @@ Datatype:
 End
 
 val new_pair1_fwd_def = Define ‘
-  (** [no_nested_borrows::new_pair1] *)
+  (** [no_nested_borrows::new_pair1]: forward function *)
   new_pair1_fwd : (u32, u32) struct_with_pair_t result =
     Return
     (<|
@@ -511,7 +512,7 @@ val new_pair1_fwd_def = Define ‘
 ’
 
 val test_constants_fwd_def = Define ‘
-  (** [no_nested_borrows::test_constants] *)
+  (** [no_nested_borrows::test_constants]: forward function *)
   test_constants_fwd : unit result =
     do
     swt <- new_tuple1_fwd;
@@ -546,7 +547,7 @@ val test_constants_fwd_def = Define ‘
 val _ = assert_return (“test_constants_fwd”)
 
 val test_weird_borrows1_fwd_def = Define ‘
-  (** [no_nested_borrows::test_weird_borrows1] *)
+  (** [no_nested_borrows::test_weird_borrows1]: forward function *)
   test_weird_borrows1_fwd : unit result =
     Return ()
 ’
@@ -555,26 +556,27 @@ val test_weird_borrows1_fwd_def = Define ‘
 val _ = assert_return (“test_weird_borrows1_fwd”)
 
 val test_mem_replace_fwd_back_def = Define ‘
-  (** [no_nested_borrows::test_mem_replace] *)
+  (** [no_nested_borrows::test_mem_replace]: merged forward/backward function
+      (there is a single backward function, and the forward function returns ()) *)
   test_mem_replace_fwd_back (px : u32) : u32 result =
     let y = mem_replace_fwd px (int_to_u32 1) in
     if ~ (y = int_to_u32 0) then Fail Failure else Return (int_to_u32 2)
 ’
 
 val test_shared_borrow_bool1_fwd_def = Define ‘
-  (** [no_nested_borrows::test_shared_borrow_bool1] *)
+  (** [no_nested_borrows::test_shared_borrow_bool1]: forward function *)
   test_shared_borrow_bool1_fwd (b : bool) : u32 result =
     if b then Return (int_to_u32 0) else Return (int_to_u32 1)
 ’
 
 val test_shared_borrow_bool2_fwd_def = Define ‘
-  (** [no_nested_borrows::test_shared_borrow_bool2] *)
+  (** [no_nested_borrows::test_shared_borrow_bool2]: forward function *)
   test_shared_borrow_bool2_fwd : u32 result =
     Return (int_to_u32 0)
 ’
 
 val test_shared_borrow_enum1_fwd_def = Define ‘
-  (** [no_nested_borrows::test_shared_borrow_enum1] *)
+  (** [no_nested_borrows::test_shared_borrow_enum1]: forward function *)
   test_shared_borrow_enum1_fwd (l : u32 list_t) : u32 result =
     (case l of
     | ListCons i l0 => Return (int_to_u32 1)
@@ -582,7 +584,7 @@ val test_shared_borrow_enum1_fwd_def = Define ‘
 ’
 
 val test_shared_borrow_enum2_fwd_def = Define ‘
-  (** [no_nested_borrows::test_shared_borrow_enum2] *)
+  (** [no_nested_borrows::test_shared_borrow_enum2]: forward function *)
   test_shared_borrow_enum2_fwd : u32 result =
     Return (int_to_u32 0)
 ’

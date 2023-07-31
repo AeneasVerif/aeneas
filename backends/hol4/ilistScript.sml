@@ -23,6 +23,8 @@ val _ = BasicProvers.export_rewrites ["len_def"]
    Remark: we initially added the following case, so that we wouldn't need the
    premise [i < len ls] is [index_eq_EL]:
    “index (i : int) [] = EL (Num i) []”
+
+   TODO: this can be simplified. See the Lean backend.
  *)
 val index_def = Define ‘
   index (i : int) (x :: ls) = if i = 0 then x else (if 0 < i then index (i - 1) ls else ARB)
@@ -44,6 +46,7 @@ Proof
   exfalso >> cooper_tac
 QED
 
+(* TODO: this can be simplified. See the Lean backend. *)
 val update_def = Define ‘
   update ([] : 'a list) (i : int) (y : 'a) : 'a list = [] ∧
 

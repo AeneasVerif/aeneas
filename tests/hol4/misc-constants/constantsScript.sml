@@ -38,7 +38,7 @@ Definition x2_c_def:
 End
 
 val incr_fwd_def = Define ‘
-  (** [constants::incr] *)
+  (** [constants::incr]: forward function *)
   incr_fwd (n : u32) : u32 result =
     u32_add n (int_to_u32 1)
 ’
@@ -52,7 +52,7 @@ Definition x3_c_def:
 End
 
 val mk_pair0_fwd_def = Define ‘
-  (** [constants::mk_pair0] *)
+  (** [constants::mk_pair0]: forward function *)
   mk_pair0_fwd (x : u32) (y : u32) : (u32 # u32) result =
     Return (x, y)
 ’
@@ -63,7 +63,7 @@ Datatype:
 End
 
 val mk_pair1_fwd_def = Define ‘
-  (** [constants::mk_pair1] *)
+  (** [constants::mk_pair1]: forward function *)
   mk_pair1_fwd (x : u32) (y : u32) : (u32, u32) pair_t result =
     Return (<| pair_x := x; pair_y := y |>)
 ’
@@ -108,7 +108,7 @@ Datatype:
 End
 
 val wrap_new_fwd_def = Define ‘
-  (** [constants::Wrap::{0}::new] *)
+  (** [constants::Wrap::{0}::new]: forward function *)
   wrap_new_fwd (val : 't) : 't wrap_t result =
     Return (<| wrap_val := val |>)
 ’
@@ -122,7 +122,7 @@ Definition y_c_def:
 End
 
 val unwrap_y_fwd_def = Define ‘
-  (** [constants::unwrap_y] *)
+  (** [constants::unwrap_y]: forward function *)
   unwrap_y_fwd : i32 result =
     Return y_c.wrap_val
 ’
@@ -144,13 +144,13 @@ Definition get_z1_z1_c_def:
 End
 
 val get_z1_fwd_def = Define ‘
-  (** [constants::get_z1] *)
+  (** [constants::get_z1]: forward function *)
   get_z1_fwd : i32 result =
     Return get_z1_z1_c
 ’
 
 val add_fwd_def = Define ‘
-  (** [constants::add] *)
+  (** [constants::add]: forward function *)
   add_fwd (a : i32) (b : i32) : i32 result =
     i32_add a b
 ’
@@ -180,7 +180,7 @@ Definition q3_c_def:
 End
 
 val get_z2_fwd_def = Define ‘
-  (** [constants::get_z2] *)
+  (** [constants::get_z2]: forward function *)
   get_z2_fwd : i32 result =
     do
     i <- get_z1_fwd;

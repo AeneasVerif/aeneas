@@ -8,11 +8,11 @@ Require Export Hashmap_Types.
 Import Hashmap_Types.
 Module Hashmap_Funs.
 
-(** [hashmap::hash_key] *)
+(** [hashmap::hash_key]: forward function *)
 Definition hash_key_fwd (k : usize) : result usize :=
   Return k.
 
-(** [hashmap::HashMap::{0}::allocate_slots] *)
+(** [hashmap::HashMap::{0}::allocate_slots]: loop 0: forward function *)
 Fixpoint hash_map_allocate_slots_loop_fwd
   (T : Type) (n : nat) (slots : vec (List_t T)) (n0 : usize) :
   result (vec (List_t T))
@@ -29,7 +29,7 @@ Fixpoint hash_map_allocate_slots_loop_fwd
   end
 .
 
-(** [hashmap::HashMap::{0}::allocate_slots] *)
+(** [hashmap::HashMap::{0}::allocate_slots]: forward function *)
 Definition hash_map_allocate_slots_fwd
   (T : Type) (n : nat) (slots : vec (List_t T)) (n0 : usize) :
   result (vec (List_t T))
@@ -37,7 +37,7 @@ Definition hash_map_allocate_slots_fwd
   hash_map_allocate_slots_loop_fwd T n slots n0
 .
 
-(** [hashmap::HashMap::{0}::new_with_capacity] *)
+(** [hashmap::HashMap::{0}::new_with_capacity]: forward function *)
 Definition hash_map_new_with_capacity_fwd
   (T : Type) (n : nat) (capacity : usize) (max_load_dividend : usize)
   (max_load_divisor : usize) :
@@ -56,12 +56,13 @@ Definition hash_map_new_with_capacity_fwd
     |}
 .
 
-(** [hashmap::HashMap::{0}::new] *)
+(** [hashmap::HashMap::{0}::new]: forward function *)
 Definition hash_map_new_fwd (T : Type) (n : nat) : result (Hash_map_t T) :=
   hash_map_new_with_capacity_fwd T n 32%usize 4%usize 5%usize
 .
 
-(** [hashmap::HashMap::{0}::clear] *)
+(** [hashmap::HashMap::{0}::clear]: loop 0: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Fixpoint hash_map_clear_loop_fwd_back
   (T : Type) (n : nat) (slots : vec (List_t T)) (i : usize) :
   result (vec (List_t T))
@@ -79,7 +80,8 @@ Fixpoint hash_map_clear_loop_fwd_back
   end
 .
 
-(** [hashmap::HashMap::{0}::clear] *)
+(** [hashmap::HashMap::{0}::clear]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition hash_map_clear_fwd_back
   (T : Type) (n : nat) (self : Hash_map_t T) : result (Hash_map_t T) :=
   v <- hash_map_clear_loop_fwd_back T n self.(Hash_map_slots) 0%usize;
@@ -92,12 +94,12 @@ Definition hash_map_clear_fwd_back
     |}
 .
 
-(** [hashmap::HashMap::{0}::len] *)
+(** [hashmap::HashMap::{0}::len]: forward function *)
 Definition hash_map_len_fwd (T : Type) (self : Hash_map_t T) : result usize :=
   Return self.(Hash_map_num_entries)
 .
 
-(** [hashmap::HashMap::{0}::insert_in_list] *)
+(** [hashmap::HashMap::{0}::insert_in_list]: loop 0: forward function *)
 Fixpoint hash_map_insert_in_list_loop_fwd
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result bool
@@ -115,7 +117,7 @@ Fixpoint hash_map_insert_in_list_loop_fwd
   end
 .
 
-(** [hashmap::HashMap::{0}::insert_in_list] *)
+(** [hashmap::HashMap::{0}::insert_in_list]: forward function *)
 Definition hash_map_insert_in_list_fwd
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result bool
@@ -123,7 +125,7 @@ Definition hash_map_insert_in_list_fwd
   hash_map_insert_in_list_loop_fwd T n key value ls
 .
 
-(** [hashmap::HashMap::{0}::insert_in_list] *)
+(** [hashmap::HashMap::{0}::insert_in_list]: loop 0: backward function 0 *)
 Fixpoint hash_map_insert_in_list_loop_back
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result (List_t T)
@@ -143,7 +145,7 @@ Fixpoint hash_map_insert_in_list_loop_back
   end
 .
 
-(** [hashmap::HashMap::{0}::insert_in_list] *)
+(** [hashmap::HashMap::{0}::insert_in_list]: backward function 0 *)
 Definition hash_map_insert_in_list_back
   (T : Type) (n : nat) (key : usize) (value : T) (ls : List_t T) :
   result (List_t T)
@@ -151,7 +153,8 @@ Definition hash_map_insert_in_list_back
   hash_map_insert_in_list_loop_back T n key value ls
 .
 
-(** [hashmap::HashMap::{0}::insert_no_resize] *)
+(** [hashmap::HashMap::{0}::insert_no_resize]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition hash_map_insert_no_resize_fwd_back
   (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) (value : T) :
   result (Hash_map_t T)
@@ -189,7 +192,8 @@ Definition hash_map_insert_no_resize_fwd_back
 Definition core_num_u32_max_body : result u32 := Return 4294967295%u32.
 Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
 
-(** [hashmap::HashMap::{0}::move_elements_from_list] *)
+(** [hashmap::HashMap::{0}::move_elements_from_list]: loop 0: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Fixpoint hash_map_move_elements_from_list_loop_fwd_back
   (T : Type) (n : nat) (ntable : Hash_map_t T) (ls : List_t T) :
   result (Hash_map_t T)
@@ -206,7 +210,8 @@ Fixpoint hash_map_move_elements_from_list_loop_fwd_back
   end
 .
 
-(** [hashmap::HashMap::{0}::move_elements_from_list] *)
+(** [hashmap::HashMap::{0}::move_elements_from_list]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition hash_map_move_elements_from_list_fwd_back
   (T : Type) (n : nat) (ntable : Hash_map_t T) (ls : List_t T) :
   result (Hash_map_t T)
@@ -214,7 +219,8 @@ Definition hash_map_move_elements_from_list_fwd_back
   hash_map_move_elements_from_list_loop_fwd_back T n ntable ls
 .
 
-(** [hashmap::HashMap::{0}::move_elements] *)
+(** [hashmap::HashMap::{0}::move_elements]: loop 0: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Fixpoint hash_map_move_elements_loop_fwd_back
   (T : Type) (n : nat) (ntable : Hash_map_t T) (slots : vec (List_t T))
   (i : usize) :
@@ -237,7 +243,8 @@ Fixpoint hash_map_move_elements_loop_fwd_back
   end
 .
 
-(** [hashmap::HashMap::{0}::move_elements] *)
+(** [hashmap::HashMap::{0}::move_elements]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition hash_map_move_elements_fwd_back
   (T : Type) (n : nat) (ntable : Hash_map_t T) (slots : vec (List_t T))
   (i : usize) :
@@ -246,7 +253,8 @@ Definition hash_map_move_elements_fwd_back
   hash_map_move_elements_loop_fwd_back T n ntable slots i
 .
 
-(** [hashmap::HashMap::{0}::try_resize] *)
+(** [hashmap::HashMap::{0}::try_resize]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition hash_map_try_resize_fwd_back
   (T : Type) (n : nat) (self : Hash_map_t T) : result (Hash_map_t T) :=
   max_usize <- scalar_cast U32 Usize core_num_u32_max_c;
@@ -278,7 +286,8 @@ Definition hash_map_try_resize_fwd_back
       |}
 .
 
-(** [hashmap::HashMap::{0}::insert] *)
+(** [hashmap::HashMap::{0}::insert]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
 Definition hash_map_insert_fwd_back
   (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) (value : T) :
   result (Hash_map_t T)
@@ -290,7 +299,7 @@ Definition hash_map_insert_fwd_back
   else Return self0
 .
 
-(** [hashmap::HashMap::{0}::contains_key_in_list] *)
+(** [hashmap::HashMap::{0}::contains_key_in_list]: loop 0: forward function *)
 Fixpoint hash_map_contains_key_in_list_loop_fwd
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result bool :=
   match n with
@@ -306,13 +315,13 @@ Fixpoint hash_map_contains_key_in_list_loop_fwd
   end
 .
 
-(** [hashmap::HashMap::{0}::contains_key_in_list] *)
+(** [hashmap::HashMap::{0}::contains_key_in_list]: forward function *)
 Definition hash_map_contains_key_in_list_fwd
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result bool :=
   hash_map_contains_key_in_list_loop_fwd T n key ls
 .
 
-(** [hashmap::HashMap::{0}::contains_key] *)
+(** [hashmap::HashMap::{0}::contains_key]: forward function *)
 Definition hash_map_contains_key_fwd
   (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) : result bool :=
   hash <- hash_key_fwd key;
@@ -322,7 +331,7 @@ Definition hash_map_contains_key_fwd
   hash_map_contains_key_in_list_fwd T n key l
 .
 
-(** [hashmap::HashMap::{0}::get_in_list] *)
+(** [hashmap::HashMap::{0}::get_in_list]: loop 0: forward function *)
 Fixpoint hash_map_get_in_list_loop_fwd
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result T :=
   match n with
@@ -338,13 +347,13 @@ Fixpoint hash_map_get_in_list_loop_fwd
   end
 .
 
-(** [hashmap::HashMap::{0}::get_in_list] *)
+(** [hashmap::HashMap::{0}::get_in_list]: forward function *)
 Definition hash_map_get_in_list_fwd
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result T :=
   hash_map_get_in_list_loop_fwd T n key ls
 .
 
-(** [hashmap::HashMap::{0}::get] *)
+(** [hashmap::HashMap::{0}::get]: forward function *)
 Definition hash_map_get_fwd
   (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) : result T :=
   hash <- hash_key_fwd key;
@@ -354,7 +363,7 @@ Definition hash_map_get_fwd
   hash_map_get_in_list_fwd T n key l
 .
 
-(** [hashmap::HashMap::{0}::get_mut_in_list] *)
+(** [hashmap::HashMap::{0}::get_mut_in_list]: loop 0: forward function *)
 Fixpoint hash_map_get_mut_in_list_loop_fwd
   (T : Type) (n : nat) (ls : List_t T) (key : usize) : result T :=
   match n with
@@ -370,13 +379,13 @@ Fixpoint hash_map_get_mut_in_list_loop_fwd
   end
 .
 
-(** [hashmap::HashMap::{0}::get_mut_in_list] *)
+(** [hashmap::HashMap::{0}::get_mut_in_list]: forward function *)
 Definition hash_map_get_mut_in_list_fwd
   (T : Type) (n : nat) (ls : List_t T) (key : usize) : result T :=
   hash_map_get_mut_in_list_loop_fwd T n ls key
 .
 
-(** [hashmap::HashMap::{0}::get_mut_in_list] *)
+(** [hashmap::HashMap::{0}::get_mut_in_list]: loop 0: backward function 0 *)
 Fixpoint hash_map_get_mut_in_list_loop_back
   (T : Type) (n : nat) (ls : List_t T) (key : usize) (ret : T) :
   result (List_t T)
@@ -396,7 +405,7 @@ Fixpoint hash_map_get_mut_in_list_loop_back
   end
 .
 
-(** [hashmap::HashMap::{0}::get_mut_in_list] *)
+(** [hashmap::HashMap::{0}::get_mut_in_list]: backward function 0 *)
 Definition hash_map_get_mut_in_list_back
   (T : Type) (n : nat) (ls : List_t T) (key : usize) (ret : T) :
   result (List_t T)
@@ -404,7 +413,7 @@ Definition hash_map_get_mut_in_list_back
   hash_map_get_mut_in_list_loop_back T n ls key ret
 .
 
-(** [hashmap::HashMap::{0}::get_mut] *)
+(** [hashmap::HashMap::{0}::get_mut]: forward function *)
 Definition hash_map_get_mut_fwd
   (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) : result T :=
   hash <- hash_key_fwd key;
@@ -414,7 +423,7 @@ Definition hash_map_get_mut_fwd
   hash_map_get_mut_in_list_fwd T n l key
 .
 
-(** [hashmap::HashMap::{0}::get_mut] *)
+(** [hashmap::HashMap::{0}::get_mut]: backward function 0 *)
 Definition hash_map_get_mut_back
   (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) (ret : T) :
   result (Hash_map_t T)
@@ -434,7 +443,7 @@ Definition hash_map_get_mut_back
     |}
 .
 
-(** [hashmap::HashMap::{0}::remove_from_list] *)
+(** [hashmap::HashMap::{0}::remove_from_list]: loop 0: forward function *)
 Fixpoint hash_map_remove_from_list_loop_fwd
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result (option T) :=
   match n with
@@ -455,13 +464,13 @@ Fixpoint hash_map_remove_from_list_loop_fwd
   end
 .
 
-(** [hashmap::HashMap::{0}::remove_from_list] *)
+(** [hashmap::HashMap::{0}::remove_from_list]: forward function *)
 Definition hash_map_remove_from_list_fwd
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result (option T) :=
   hash_map_remove_from_list_loop_fwd T n key ls
 .
 
-(** [hashmap::HashMap::{0}::remove_from_list] *)
+(** [hashmap::HashMap::{0}::remove_from_list]: loop 0: backward function 1 *)
 Fixpoint hash_map_remove_from_list_loop_back
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result (List_t T) :=
   match n with
@@ -484,13 +493,13 @@ Fixpoint hash_map_remove_from_list_loop_back
   end
 .
 
-(** [hashmap::HashMap::{0}::remove_from_list] *)
+(** [hashmap::HashMap::{0}::remove_from_list]: backward function 1 *)
 Definition hash_map_remove_from_list_back
   (T : Type) (n : nat) (key : usize) (ls : List_t T) : result (List_t T) :=
   hash_map_remove_from_list_loop_back T n key ls
 .
 
-(** [hashmap::HashMap::{0}::remove] *)
+(** [hashmap::HashMap::{0}::remove]: forward function *)
 Definition hash_map_remove_fwd
   (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) :
   result (option T)
@@ -507,7 +516,7 @@ Definition hash_map_remove_fwd
   end
 .
 
-(** [hashmap::HashMap::{0}::remove] *)
+(** [hashmap::HashMap::{0}::remove]: backward function 0 *)
 Definition hash_map_remove_back
   (T : Type) (n : nat) (self : Hash_map_t T) (key : usize) :
   result (Hash_map_t T)
@@ -542,7 +551,7 @@ Definition hash_map_remove_back
   end
 .
 
-(** [hashmap::test1] *)
+(** [hashmap::test1]: forward function *)
 Definition test1_fwd (n : nat) : result unit :=
   hm <- hash_map_new_fwd u64 n;
   hm0 <- hash_map_insert_fwd_back u64 n hm 0%usize 42%u64;

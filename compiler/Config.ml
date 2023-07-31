@@ -162,6 +162,11 @@ let backward_no_state_update = ref false
  *)
 let split_files = ref true
 
+(** For Lean, controls whether we generate a lakefile or not.
+
+ *)
+let lean_gen_lakefile = ref false
+
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that
     they don't panic.
@@ -292,3 +297,21 @@ let filter_useless_monadic_calls = ref true
       dynamically check for that).
  *)
 let filter_useless_functions = ref true
+
+(** Obsolete. TODO: remove.
+
+    For Lean we used to parameterize the entire development by a section variable
+    called opaque_defs, of type OpaqueDefs.
+  *)
+let wrap_opaque_in_sig = ref false
+
+(** Use short names for the record fields.
+
+    Some backends can't disambiguate records when their field names have collisions.
+    When this happens, we use long names, by which we concatenate the record
+    names with the field names, and check whether there are name collisions.
+
+    For backends which can disambiguate records (typically by using the typing
+    information), we use short names (i.e., the original field names).
+ *)
+let record_fields_short_names = ref false
