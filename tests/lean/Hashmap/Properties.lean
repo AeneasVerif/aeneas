@@ -276,6 +276,14 @@ theorem if_update_eq
 def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
   ⟨ x, by simp ⟩
 
+--set_option profiler true
+--set_option profiler.threshold 10
+--set_option trace.profiler true
+
+-- For pretty printing (useful when copy-pasting goals)
+attribute [pp_dot] List.length -- use the dot notation when printing
+set_option pp.coercions false -- do not print coercions with ↑ (this doesn't parse)
+
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
   ∃ nhm, hm.insert_no_resize α key value = ret nhm  ∧
@@ -324,6 +332,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       -- and I have no idea how to fix this. The error happens after progress
       -- introduced the new goals. It must be when we exit the "withApp", etc.
       -- helpers.
+      -- progress as ⟨ z, hp ⟩
       have ⟨ z, hp ⟩ := Usize.add_spec hbounds
       simp [hp]
     else
