@@ -56,17 +56,17 @@ type tc_ctx = {
   env : ty VarId.Map.t;  (** Environment from variables to types *)
 }
 
-let check_primitive_value (v : primitive_value) (ty : ty) : unit =
+let check_literal (v : literal) (ty : ty) : unit =
   match (ty, v) with
   | Integer int_ty, PV.Scalar sv -> assert (int_ty = sv.PV.int_ty)
-  | Bool, Bool _ | Char, Char _ | Str, String _ -> ()
+  | Bool, Bool _ | Char, Char _ -> ()
   | _ -> raise (Failure "Inconsistent type")
 
 let rec check_typed_pattern (ctx : tc_ctx) (v : typed_pattern) : tc_ctx =
   log#ldebug (lazy ("check_typed_pattern: " ^ show_typed_pattern v));
   match v.value with
   | PatConstant cv ->
-      check_primitive_value cv v.ty;
+      check_literal cv v.ty;
       ctx
   | PatDummy -> ctx
   | PatVar (var, _) ->
@@ -108,7 +108,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       match VarId.Map.find_opt var_id ctx.env with
       | None -> ()
       | Some ty -> assert (ty = e.ty))
-  | Const cv -> check_primitive_value cv e.ty
+  | Const cv -> check_literal cv e.ty
   | App (app, arg) ->
       let input_ty, output_ty = destruct_arrow app.ty in
       assert (input_ty = arg.ty);
@@ -197,9 +197,9 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
   | StructUpdate supd ->
       (* Check the init value *)
       (if Option.is_some supd.init then
-       match VarId.Map.find_opt (Option.get supd.init) ctx.env with
-       | None -> ()
-       | Some ty -> assert (ty = e.ty));
+         match VarId.Map.find_opt (Option.get supd.init) ctx.env with
+         | None -> ()
+         | Some ty -> assert (ty = e.ty));
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
       let adt_id, adt_type_args =

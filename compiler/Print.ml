@@ -19,6 +19,8 @@ module Values = struct
     r_to_string : T.RegionId.id -> string;
     type_var_id_to_string : T.TypeVarId.id -> string;
     type_decl_id_to_string : T.TypeDeclId.id -> string;
+    const_generic_var_id_to_string : T.ConstGenericVarId.id -> string;
+    global_decl_id_to_string : T.GlobalDeclId.id -> string;
     adt_variant_to_string : T.TypeDeclId.id -> T.VariantId.id -> string;
     var_id_to_string : E.VarId.id -> string;
     adt_field_names :
@@ -30,6 +32,8 @@ module Values = struct
       PT.r_to_string = PT.erased_region_to_string;
       PT.type_var_id_to_string = fmt.type_var_id_to_string;
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
     }
 
   let value_to_rtype_formatter (fmt : value_formatter) : PT.rtype_formatter =
@@ -37,6 +41,8 @@ module Values = struct
       PT.r_to_string = PT.region_to_string fmt.r_to_string;
       PT.type_var_id_to_string = fmt.type_var_id_to_string;
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
     }
 
   let value_to_stype_formatter (fmt : value_formatter) : PT.stype_formatter =
@@ -44,6 +50,8 @@ module Values = struct
       PT.r_to_string = PT.region_to_string fmt.rvar_to_string;
       PT.type_var_id_to_string = fmt.type_var_id_to_string;
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
     }
 
   let var_id_to_string (id : E.VarId.id) : string =
@@ -72,16 +80,16 @@ module Values = struct
       string =
     let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
     match v.value with
-    | Primitive cv -> PPV.primitive_value_to_string cv
+    | Primitive cv -> PPV.literal_to_string cv
     | Adt av -> (
         let field_values =
           List.map (typed_value_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.Adt (T.Tuple, _, _) ->
+        | T.Adt (T.Tuple, _, _, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.Adt (T.AdtId def_id, _, _) ->
+        | T.Adt (T.AdtId def_id, _, _, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -103,7 +111,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.Adt (T.Assumed aty, _, _) -> (
+        | T.Adt (T.Assumed aty, _, _, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
@@ -188,10 +196,10 @@ module Values = struct
           List.map (typed_avalue_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.Adt (T.Tuple, _, _) ->
+        | T.Adt (T.Tuple, _, _, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.Adt (T.AdtId def_id, _, _) ->
+        | T.Adt (T.AdtId def_id, _, _, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -213,7 +221,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.Adt (T.Assumed aty, _, _) -> (
+        | T.Adt (T.Assumed aty, _, _, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
@@ -425,6 +433,8 @@ module Contexts = struct
       PV.r_to_string = fmt.r_to_string;
       PV.type_var_id_to_string = fmt.type_var_id_to_string;
       PV.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PV.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+      PV.global_decl_id_to_string = fmt.global_decl_id_to_string;
       PV.adt_variant_to_string = fmt.adt_variant_to_string;
       PV.var_id_to_string = fmt.var_id_to_string;
       PV.adt_field_names = fmt.adt_field_names;
@@ -450,8 +460,16 @@ module Contexts = struct
       let v = C.lookup_type_var ctx vid in
       v.name
     in
+    let const_generic_var_id_to_string vid =
+      let v = C.lookup_const_generic_var ctx vid in
+      v.name
+    in
     let type_decl_id_to_string def_id =
       let def = C.ctx_lookup_type_decl ctx def_id in
+      name_to_string def.name
+    in
+    let global_decl_id_to_string def_id =
+      let def = C.ctx_lookup_global_decl ctx def_id in
       name_to_string def.name
     in
     let adt_variant_to_string =
@@ -469,6 +487,8 @@ module Contexts = struct
       r_to_string;
       type_var_id_to_string;
       type_decl_id_to_string;
+      const_generic_var_id_to_string;
+      global_decl_id_to_string;
       adt_variant_to_string;
       var_id_to_string;
       adt_field_names;
@@ -492,6 +512,7 @@ module Contexts = struct
       r_to_string = ctx_fmt.PV.r_to_string;
       type_var_id_to_string = ctx_fmt.PV.type_var_id_to_string;
       type_decl_id_to_string = ctx_fmt.PV.type_decl_id_to_string;
+      const_generic_var_id_to_string = ctx_fmt.PV.const_generic_var_id_to_string;
       adt_variant_to_string = ctx_fmt.PV.adt_variant_to_string;
       var_id_to_string = ctx_fmt.PV.var_id_to_string;
       adt_field_names = ctx_fmt.PV.adt_field_names;

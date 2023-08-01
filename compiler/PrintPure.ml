@@ -55,8 +55,10 @@ let fun_name_to_string = Print.fun_name_to_string
 let global_name_to_string = Print.global_name_to_string
 let option_to_string = Print.option_to_string
 let type_var_to_string = Print.Types.type_var_to_string
-let integer_type_to_string = Print.Types.integer_type_to_string
+let integer_type_to_string = Print.PrimitiveValues.integer_type_to_string
+let literal_type_to_string = Print.PrimitiveValues.literal_type_to_string
 let scalar_value_to_string = Print.PrimitiveValues.scalar_value_to_string
+let literal_to_string = Print.PrimitiveValues.literal_to_string
 
 let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     (type_params : type_var list) : type_formatter =
@@ -392,7 +394,7 @@ let adt_g_value_to_string (fmt : value_formatter)
 let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
     string =
   match v.value with
-  | PatConstant cv -> Print.PrimitiveValues.primitive_value_to_string cv
+  | PatConstant cv -> literal_to_string cv
   | PatVar (v, None) -> var_to_string (ast_to_type_formatter fmt) v
   | PatVar (v, Some mp) ->
       let mp = "[@mplace=" ^ mplace_to_string fmt mp ^ "]" in
@@ -450,6 +452,16 @@ let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   | A.VecLen -> "alloc::vec::Vec::len"
   | A.VecIndex -> "core::ops::index::Index<alloc::vec::Vec>::index"
   | A.VecIndexMut -> "core::ops::index::IndexMut<alloc::vec::Vec>::index_mut"
+  | ArraySharedIndex -> "@ArraySharedIndex"
+  | ArrayMutIndex -> "@ArrayMutIndex"
+  | ArrayToSharedSlice -> "@ArrayToSharedSlice"
+  | ArrayToMutSlice -> "@ArrayToMutSlice"
+  | ArraySharedSubslice -> "@ArraySharedSubslice"
+  | ArrayMutSubslice -> "@ArrayMutSubslice"
+  | SliceSharedIndex -> "@SliceSharedIndex"
+  | SliceMutIndex -> "@SliceMutIndex"
+  | SliceSharedSubslice -> "@SliceSharedSubslice"
+  | SliceMutSubslice -> "@SliceMutSubslice"
 
 let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
   match fid with
@@ -495,7 +507,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
   | Var var_id ->
       let s = fmt.var_id_to_string var_id in
       if inside then "(" ^ s ^ ")" else s
-  | Const cv -> Print.PrimitiveValues.primitive_value_to_string cv
+  | Const cv -> literal_to_string cv
   | App _ ->
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
       let app, args = destruct_apps e in

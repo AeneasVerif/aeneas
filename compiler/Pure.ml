@@ -187,7 +187,7 @@ type type_decl = {
 [@@deriving show]
 
 type scalar_value = V.scalar_value [@@deriving show]
-type primitive_value = V.primitive_value [@@deriving show]
+type literal = V.literal [@@deriving show]
 
 (** Because we introduce a lot of temporary variables, the list of variables
     is not fixed: we thus must carry all its information with the variable
@@ -232,10 +232,7 @@ type variant_id = VariantId.id [@@deriving show]
 class ['self] iter_typed_pattern_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.iter
-
-    method visit_primitive_value : 'env -> primitive_value -> unit =
-      fun _ _ -> ()
-
+    method visit_literal : 'env -> literal -> unit = fun _ _ -> ()
     method visit_var : 'env -> var -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_ty : 'env -> ty -> unit = fun _ _ -> ()
@@ -246,10 +243,7 @@ class ['self] iter_typed_pattern_base =
 class ['self] map_typed_pattern_base =
   object (_self : 'self)
     inherit [_] VisitorsRuntime.map
-
-    method visit_primitive_value : 'env -> primitive_value -> primitive_value =
-      fun _ x -> x
-
+    method visit_literal : 'env -> literal -> literal = fun _ x -> x
     method visit_var : 'env -> var -> var = fun _ x -> x
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
     method visit_ty : 'env -> ty -> ty = fun _ x -> x
@@ -260,10 +254,7 @@ class ['self] map_typed_pattern_base =
 class virtual ['self] reduce_typed_pattern_base =
   object (self : 'self)
     inherit [_] VisitorsRuntime.reduce
-
-    method visit_primitive_value : 'env -> primitive_value -> 'a =
-      fun _ _ -> self#zero
-
+    method visit_literal : 'env -> literal -> 'a = fun _ _ -> self#zero
     method visit_var : 'env -> var -> 'a = fun _ _ -> self#zero
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
     method visit_ty : 'env -> ty -> 'a = fun _ _ -> self#zero
@@ -275,8 +266,7 @@ class virtual ['self] mapreduce_typed_pattern_base =
   object (self : 'self)
     inherit [_] VisitorsRuntime.mapreduce
 
-    method visit_primitive_value
-        : 'env -> primitive_value -> primitive_value * 'a =
+    method visit_literal : 'env -> literal -> literal * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_var : 'env -> var -> var * 'a = fun _ x -> (x, self#zero)
@@ -292,7 +282,7 @@ class virtual ['self] mapreduce_typed_pattern_base =
 
 (** A pattern (which appears on the left of assignments, in matches, etc.). *)
 type pattern =
-  | PatConstant of primitive_value
+  | PatConstant of literal
       (** {!PatConstant} is necessary because we merge the switches over integer
           values and the matches over enumerations *)
   | PatVar of var * mplace option
@@ -486,7 +476,7 @@ class virtual ['self] mapreduce_expression_base =
  *)
 type expression =
   | Var of var_id  (** a variable *)
-  | Const of primitive_value
+  | Const of literal
   | App of texpression * texpression
       (** Application of a function to an argument.
 

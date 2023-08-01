@@ -32,7 +32,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
       (* Match on the symbolic value type to know which can of expansion happened *)
       let expansion =
         match sv.V.sv_ty with
-        | T.Bool -> (
+        | T.Literal PV.Bool -> (
             (* Boolean expansion: there should be two branches *)
             match ls with
             | [
@@ -41,7 +41,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             ] ->
                 ExpandBool (true_exp, false_exp)
             | _ -> raise (Failure "Ill-formed boolean expansion"))
-        | T.Integer int_ty ->
+        | T.Literal (PV.Integer int_ty) ->
             (* Switch over an integer: split between the "regular" branches
                and the "otherwise" branch (which should be the last branch) *)
             let branches, otherwise = C.List.pop_last ls in
@@ -64,7 +64,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             assert (otherwise_see = None);
             (* Return *)
             ExpandInt (int_ty, branches, otherwise)
-        | T.Adt (_, _, _) ->
+        | T.Adt (_, _, _, _) ->
             (* Branching: it is necessarily an enumeration expansion *)
             let get_variant (see : V.symbolic_expansion option) :
                 T.VariantId.id option * V.symbolic_value list =
@@ -85,7 +85,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             match ls with
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
             | _ -> raise (Failure "Ill-formed borrow expansion"))
-        | T.TypeVar _ | Char | Never | Str | Array _ | Slice _ ->
+        | T.TypeVar _ | T.Literal Char | Never ->
             raise (Failure "Ill-formed symbolic expansion")
       in
       Some (Expansion (place, sv, expansion))

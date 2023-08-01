@@ -53,6 +53,8 @@ module Sig = struct
   (** Type parameter [T] of id 0 *)
   let type_param_0 : T.type_var = { T.index = tvar_id_0; name = "T" }
 
+  let empty_const_generic_params : T.const_generic_var list = []
+
   let mk_ref_ty (r : T.RegionVarId.id T.region) (ty : T.sty) (is_mut : bool) :
       T.sty =
     let ref_kind = if is_mut then T.Mut else T.Shared in
@@ -73,6 +75,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
+      const_generic_params = empty_const_generic_params;
       inputs;
       output;
     }
@@ -84,6 +87,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy = [];
       type_params = [ type_param_0 ] (* <T> *);
+      const_generic_params = empty_const_generic_params;
       inputs = [ tvar_0 (* T *) ];
       output = mk_box_ty tvar_0 (* Box<T> *);
     }
@@ -95,6 +99,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy = [];
       type_params = [ type_param_0 ] (* <T> *);
+      const_generic_params = empty_const_generic_params;
       inputs = [ mk_box_ty tvar_0 (* Box<T> *) ];
       output = mk_unit_ty (* () *);
     }
@@ -112,6 +117,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy;
       type_params = [ type_param_0 ] (* <T> *);
+      const_generic_params = empty_const_generic_params;
       inputs =
         [ mk_ref_ty rvar_0 (mk_box_ty tvar_0) is_mut (* &'a (mut) Box<T> *) ];
       output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *);
@@ -135,6 +141,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
+      const_generic_params = empty_const_generic_params;
       inputs;
       output;
     }
@@ -157,6 +164,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
+      const_generic_params = empty_const_generic_params;
       inputs;
       output;
     }
@@ -180,6 +188,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
+      const_generic_params = empty_const_generic_params;
       inputs;
       output;
     }
@@ -199,6 +208,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
+      const_generic_params = empty_const_generic_params;
       inputs;
       output;
     }
@@ -223,6 +233,7 @@ module Sig = struct
       num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
+      const_generic_params = empty_const_generic_params;
       inputs;
       output;
     }

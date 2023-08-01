@@ -62,18 +62,16 @@ let dest_arrow_ty (ty : ty) : ty * ty =
   | Arrow (arg_ty, ret_ty) -> (arg_ty, ret_ty)
   | _ -> raise (Failure "Unreachable")
 
-let compute_primitive_value_ty (cv : primitive_value) : ty =
+let compute_literal_ty (cv : literal) : ty =
   match cv with
   | PV.Scalar sv -> Integer sv.PV.int_ty
   | Bool _ -> Bool
   | Char _ -> Char
-  | String _ -> Str
 
 let var_get_id (v : var) : VarId.id = v.id
 
-let mk_typed_pattern_from_primitive_value (cv : primitive_value) : typed_pattern
-    =
-  let ty = compute_primitive_value_ty cv in
+let mk_typed_pattern_from_literal (cv : literal) : typed_pattern =
+  let ty = compute_literal_ty cv in
   { value = PatConstant cv; ty }
 
 let mk_let (monadic : bool) (lv : typed_pattern) (re : texpression)
