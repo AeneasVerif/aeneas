@@ -420,18 +420,20 @@ let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
 
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_replace_concrete (_config : C.config)
-    (_region_params : T.erased_region list) (_type_params : T.ety list) : cm_fun
-    =
+    (_region_params : T.erased_region list) (_type_params : T.ety list)
+    (_cg_params : T.const_generic list) : cm_fun =
  fun _cf _ctx -> raise Unimplemented
 
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_new_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (cg_params : T.const_generic list) : cm_fun =
  fun cf ctx ->
   (* Check and retrieve the arguments *)
-  match (region_params, type_params, ctx.env) with
+  match (region_params, type_params, cg_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
+      [],
       Var (VarBinder input_var, input_value)
       :: Var (_ret_var, _)
       :: C.Frame :: _ ) ->
@@ -468,12 +470,13 @@ let eval_box_new_concrete (config : C.config)
     and [std::DerefMut::deref_mut] - see {!eval_non_local_function_call} *)
 let eval_box_deref_mut_or_shared_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
-    (is_mut : bool) : cm_fun =
+    (cg_params : T.const_generic list) (is_mut : bool) : cm_fun =
  fun cf ctx ->
   (* Check the arguments *)
-  match (region_params, type_params, ctx.env) with
+  match (region_params, type_params, cg_params, ctx.env) with
   | ( [],
       [ boxed_ty ],
+      [],
       Var (VarBinder input_var, input_value)
       :: Var (_ret_var, _)
       :: C.Frame :: _ ) ->
@@ -513,15 +516,19 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
 
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_deref_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (cg_params : T.const_generic list) : cm_fun =
   let is_mut = false in
-  eval_box_deref_mut_or_shared_concrete config region_params type_params is_mut
+  eval_box_deref_mut_or_shared_concrete config region_params type_params
+    cg_params is_mut
 
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_deref_mut_concrete (config : C.config)
-    (region_params : T.erased_region list) (type_params : T.ety list) : cm_fun =
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (cg_params : T.const_generic list) : cm_fun =
   let is_mut = true in
-  eval_box_deref_mut_or_shared_concrete config region_params type_params is_mut
+  eval_box_deref_mut_or_shared_concrete config region_params type_params
+    cg_params is_mut
 
 (** Auxiliary function - see {!eval_non_local_function_call}.
 
@@ -543,11 +550,11 @@ let eval_box_deref_mut_concrete (config : C.config)
     the destination (by setting it to [()]).
 *)
 let eval_box_free (config : C.config) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) : cm_fun
-    =
+    (type_params : T.ety list) (cg_params : T.const_generic list)
+    (args : E.operand list) (dest : E.place) : cm_fun =
  fun cf ctx ->
-  match (region_params, type_params, args) with
-  | [], [ boxed_ty ], [ E.Move input_box_place ] ->
+  match (region_params, type_params, cg_params, args) with
+  | [], [ boxed_ty ], [], [ E.Move input_box_place ] ->
       (* Required type checking *)
       let input_box = InterpreterPaths.read_place Write input_box_place ctx in
       (let input_ty = ty_get_box input_box.V.ty in
@@ -565,15 +572,15 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
 
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_vec_function_concrete (_config : C.config) (_fid : A.assumed_fun_id)
-    (_region_params : T.erased_region list) (_type_params : T.ety list) : cm_fun
-    =
+    (_region_params : T.erased_region list) (_type_params : T.ety list)
+    (_cg_params : T.const_generic list) : cm_fun =
  fun _cf _ctx -> raise Unimplemented
 
 (** Evaluate a non-local function call in concrete mode *)
 let eval_non_local_function_call_concrete (config : C.config)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (args : E.operand list) (dest : E.place) : cm_fun
-    =
+    (type_params : T.ety list) (cg_params : T.const_generic list)
+    (args : E.operand list) (dest : E.place) : cm_fun =
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
      - the function is box_free
@@ -582,7 +589,7 @@ let eval_non_local_function_call_concrete (config : C.config)
   match fid with
   | A.BoxFree ->
       (* Degenerate case: box_free *)
-      eval_box_free config region_params type_params args dest
+      eval_box_free config region_params type_params cg_params args dest
   | _ ->
       (* "Normal" case: not box_free *)
       (* Evaluate the operands *)
@@ -605,6 +612,7 @@ let eval_non_local_function_call_concrete (config : C.config)
         let ret_vid = E.VarId.zero in
         let ret_ty =
           get_non_local_function_return_type fid region_params type_params
+            cg_params
         in
         let ret_var = mk_var ret_vid (Some "@return") ret_ty in
         let cc = comp cc (push_uninitialized_var ret_var) in
@@ -622,15 +630,25 @@ let eval_non_local_function_call_concrete (config : C.config)
          * access to a body. *)
         let cf_eval_body : cm_fun =
           match fid with
-          | A.Replace -> eval_replace_concrete config region_params type_params
-          | BoxNew -> eval_box_new_concrete config region_params type_params
-          | BoxDeref -> eval_box_deref_concrete config region_params type_params
+          | A.Replace ->
+              eval_replace_concrete config region_params type_params cg_params
+          | BoxNew ->
+              eval_box_new_concrete config region_params type_params cg_params
+          | BoxDeref ->
+              eval_box_deref_concrete config region_params type_params cg_params
           | BoxDerefMut ->
               eval_box_deref_mut_concrete config region_params type_params
+                cg_params
           | BoxFree ->
               (* Should have been treated above *) raise (Failure "Unreachable")
           | VecNew | VecPush | VecInsert | VecLen | VecIndex | VecIndexMut ->
               eval_vec_function_concrete config fid region_params type_params
+                cg_params
+          | ArraySharedIndex | ArrayMutIndex | ArrayToSharedSlice
+          | ArrayToMutSlice | ArraySharedSubslice | ArrayMutSubslice
+          | SliceSharedIndex | SliceMutIndex | SliceSharedSubslice
+          | SliceMutSubslice ->
+              raise (Failure "Unimplemented")
         in
 
         let cc = comp cc cf_eval_body in
@@ -644,8 +662,8 @@ let eval_non_local_function_call_concrete (config : C.config)
       (* Compose and apply *)
       comp cf_eval_ops cf_eval_call
 
-let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
-    A.inst_fun_sig =
+let instantiate_fun_sig (type_params : T.ety list)
+    (cg_params : T.const_generic list) (sg : A.fun_sig) : A.inst_fun_sig =
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let rg_abs_ids_bindings =
@@ -674,13 +692,12 @@ let instantiate_fun_sig (type_params : T.ety list) (sg : A.fun_sig) :
    * work to do to properly handle full type parametrization.
    * *)
   let rtype_params = List.map ety_no_regions_to_rty type_params in
-  let tsubst =
-    Subst.make_type_subst
-      (List.map (fun v -> v.T.index) sg.type_params)
-      rtype_params
+  let tsubst = Subst.make_type_subst_from_vars sg.type_params rtype_params in
+  let cgsubst =
+    Subst.make_const_generic_subst_from_vars sg.const_generic_params cg_params
   in
   (* Substitute the signature *)
-  let inst_sig = Subst.substitute_signature asubst rsubst tsubst sg in
+  let inst_sig = Subst.substitute_signature asubst rsubst tsubst cgsubst sg in
   (* Return *)
   inst_sig
 
@@ -912,7 +929,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
         let cf_if (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
          fun ctx ->
           match op_v.value with
-          | V.Primitive (PV.Bool b) ->
+          | V.Literal (PV.Bool b) ->
               (* Evaluate the if and the branch body *)
               let cf_branch cf : m_fun =
                 (* Branch *)
@@ -940,7 +957,7 @@ and eval_switch (config : C.config) (switch : A.switch) : st_cm_fun =
         let cf_switch (cf : st_m_fun) (op_v : V.typed_value) : m_fun =
          fun ctx ->
           match op_v.value with
-          | V.Primitive (PV.Scalar sv) ->
+          | V.Literal (PV.Scalar sv) ->
               (* Evaluate the branch *)
               let cf_eval_branch cf =
                 (* Sanity check *)
@@ -1035,7 +1052,8 @@ and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
     (region_args : T.erased_region list) (type_args : T.ety list)
-    (args : E.operand list) (dest : E.place) : st_cm_fun =
+    (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
+    st_cm_fun =
  fun cf ctx ->
   assert (region_args = []);
 
@@ -1052,11 +1070,13 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
     | Some body -> body
   in
   let tsubst =
-    Subst.make_type_subst
-      (List.map (fun v -> v.T.index) def.A.signature.type_params)
-      type_args
+    Subst.make_type_subst_from_vars def.A.signature.type_params type_args
   in
-  let locals, body_st = Subst.fun_body_substitute_in_body tsubst body in
+  let cgsubst =
+    Subst.make_const_generic_subst_from_vars
+      def.A.signature.const_generic_params cg_args
+  in
+  let locals, body_st = Subst.fun_body_substitute_in_body tsubst cgsubst body in
 
   (* Evaluate the input operands *)
   assert (List.length args = body.A.arg_count);

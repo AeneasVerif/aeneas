@@ -107,6 +107,7 @@ type loop_info = {
   input_vars : var list;
   input_svl : V.symbolic_value list;
   type_args : ty list;
+  const_generic_args : const_generic list;
   forward_inputs : texpression list option;
       (** The forward inputs are initialized at [None] *)
   forward_output_no_state_no_result : var option;
@@ -460,10 +461,28 @@ let translate_type_decl (def : T.type_decl) : type_decl =
   let kind = translate_type_decl_kind def.T.kind in
   { def_id; name; type_params; const_generic_params; kind }
 
+let translate_type_id (id : T.type_id) : type_id =
+  match id with
+  | AdtId adt_id -> AdtId adt_id
+  | T.Assumed aty ->
+      let aty =
+        match aty with
+        | T.Vec -> Vec
+        | T.Option -> Option
+        | T.Array -> Array
+        | T.Slice -> Slice
+        | T.Str -> Str
+        | T.Box ->
+            (* Boxes have to be eliminated: this type id shouldn't
+               be translated *)
+            raise (Failure "Unreachable")
+      in
+      Assumed aty
+  | T.Tuple -> Tuple
+
 (** Translate a type, seen as an input/output of a forward function
     (preserve all borrows, etc.)
 *)
-
 let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
   let translate = translate_fwd_ty type_infos in
   match ty with
@@ -474,17 +493,11 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
       let t_tys = List.map translate tys in
       (* Eliminate boxes and simplify tuples *)
       match type_id with
-      | AdtId _ | T.Assumed (T.Vec | T.Option) ->
+      | AdtId _ | T.Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str) ->
           (* No general parametricity for now *)
           assert (not (List.exists (TypesUtils.ty_has_borrows type_infos) tys));
-          let type_id =
-            match type_id with
-            | AdtId adt_id -> AdtId adt_id
-            | T.Assumed T.Vec -> Assumed Vec
-            | T.Assumed T.Option -> Assumed Option
-            | _ -> raise (Failure "Unreachable")
-          in
-          Adt (type_id, t_tys)
+          let type_id = translate_type_id type_id in
+          Adt (type_id, t_tys, cgs)
       | Tuple ->
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
              identity *)
@@ -501,17 +514,8 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
                    "Unreachable: box/vec/option receives exactly one type \
                     parameter")))
   | TypeVar vid -> TypeVar vid
-  | Bool -> Bool
-  | Char -> Char
   | Never -> raise (Failure "Unreachable")
-  | Integer int_ty -> Integer int_ty
-  | Str -> Str
-  | Array ty ->
-      assert (not (TypesUtils.ty_has_borrows type_infos ty));
-      Array (translate ty)
-  | Slice ty ->
-      assert (not (TypesUtils.ty_has_borrows type_infos ty));
-      Slice (translate ty)
+  | Literal lty -> Literal lty
   | Ref (_, rty, _) -> translate rty
 
 (** Simply calls [translate_fwd_ty] *)
@@ -531,21 +535,15 @@ let rec translate_back_ty (type_infos : TA.type_infos)
   (* A small helper for "leave" types *)
   let wrap ty = if inside_mut then Some ty else None in
   match ty with
-  | T.Adt (type_id, _, tys) -> (
+  | T.Adt (type_id, _, tys, cgs) -> (
       match type_id with
-      | T.AdtId _ | Assumed (T.Vec | T.Option) ->
+      | T.AdtId _ | Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str) ->
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows type_infos ty));
-          let type_id =
-            match type_id with
-            | T.AdtId id -> AdtId id
-            | T.Assumed T.Vec -> Assumed Vec
-            | T.Assumed T.Option -> Assumed Option
-            | T.Tuple | T.Assumed T.Box -> raise (Failure "Unreachable")
-          in
+          let type_id = translate_type_id type_id in
           if inside_mut then
             let tys_t = List.filter_map translate tys in
-            Some (Adt (type_id, tys_t))
+            Some (Adt (type_id, tys_t, cgs))
           else None
       | Assumed T.Box -> (
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
@@ -567,17 +565,8 @@ let rec translate_back_ty (type_infos : TA.type_infos)
                * is the identity *)
               Some (mk_simpl_tuple_ty tys_t)))
   | TypeVar vid -> wrap (TypeVar vid)
-  | Bool -> wrap Bool
-  | Char -> wrap Char
   | Never -> raise (Failure "Unreachable")
-  | Integer int_ty -> wrap (Integer int_ty)
-  | Str -> wrap Str
-  | Array ty -> (
-      assert (not (TypesUtils.ty_has_borrows type_infos ty));
-      match translate ty with None -> None | Some ty -> Some (Array ty))
-  | Slice ty -> (
-      assert (not (TypesUtils.ty_has_borrows type_infos ty));
-      match translate ty with None -> None | Some ty -> Some (Slice ty))
+  | Literal lty -> wrap (Literal lty)
   | Ref (r, rty, rkind) -> (
       match rkind with
       | T.Shared ->
@@ -813,8 +802,9 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
     (* Wrap in a result type *)
     if effect_info.can_fail then mk_result_ty output else output
   in
-  (* Type parameters *)
+  (* Type/const generic parameters *)
   let type_params = sg.type_params in
+  let const_generic_params = sg.const_generic_params in
   (* Return *)
   let has_fuel = fuel <> [] in
   let num_fwd_inputs_no_state = List.length fwd_inputs in
@@ -842,7 +832,9 @@ let translate_fun_sig (fun_infos : FA.fun_info A.FunDeclId.Map.t)
       effect_info;
     }
   in
-  let sg = { type_params; inputs; output; doutputs; info } in
+  let sg =
+    { type_params; const_generic_params; inputs; output; doutputs; info }
+  in
   { sg; output_names }
 
 let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * typed_pattern =
@@ -921,7 +913,7 @@ let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
 (** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_typed_value (v : V.typed_value) : V.typed_value =
   match (v.value, v.ty) with
-  | V.Adt av, T.Adt (T.Assumed T.Box, _, _) -> (
+  | V.Adt av, T.Adt (T.Assumed T.Box, _, _, _) -> (
       match av.field_values with
       | [ bv ] -> unbox_typed_value bv
       | _ -> raise (Failure "Unreachable"))
@@ -960,26 +952,22 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
   (* Translate the value *)
   let value =
     match v.value with
-    | V.Primitive cv -> { e = Const cv; ty }
+    | V.Literal cv -> { e = Const cv; ty }
     | Adt av -> (
         let variant_id = av.variant_id in
         let field_values = List.map translate av.field_values in
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
-        | T.Adt (T.Tuple, _, _) ->
+        | T.Adt (T.Tuple, _, _, _) ->
             assert (variant_id = None);
             mk_simpl_tuple_texpression field_values
         | _ ->
-            (* Retrieve the type and the translated type arguments from the
-             * translated type (simpler this way) *)
-            let adt_id, type_args =
-              match ty with
-              | Adt (type_id, tys) -> (type_id, tys)
-              | _ -> raise (Failure "Unreachable")
-            in
+            (* Retrieve the type, the translated type arguments and the
+             * const generic arguments from the translated type (simpler this way) *)
+            let adt_id, type_args, const_generic_args = ty_as_adt ty in
             (* Create the constructor *)
             let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
-            let qualif = { id = qualif_id; type_args } in
+            let qualif = { id = qualif_id; type_args; const_generic_args } in
             let cons_e = Qualif qualif in
             let field_tys =
               List.map (fun (v : texpression) -> v.ty) field_values
@@ -1046,9 +1034,10 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         (* Translate the field values *)
         let field_values = List.filter_map translate adt_v.field_values in
         (* For now, only tuples can contain borrows *)
-        let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
+        let adt_id, _, _, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | T.AdtId _ | T.Assumed (T.Box | T.Vec | T.Option) ->
+        | T.AdtId _
+        | T.Assumed (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str) ->
             assert (field_values = []);
             None
         | T.Tuple ->
@@ -1189,11 +1178,12 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         in
         let field_values = List.filter_map (fun x -> x) field_values in
         (* For now, only tuples can contain borrows - note that if we gave
-         * something like a [&mut Vec] to a function, we give give back the
+         * something like a [&mut Vec] to a function, we give back the
          * vector value upon visiting the "abstraction borrow" node *)
-        let adt_id, _, _ = TypesUtils.ty_as_adt av.ty in
+        let adt_id, _, _, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
-        | T.AdtId _ | T.Assumed (T.Box | T.Vec | T.Option) ->
+        | T.AdtId _
+        | T.Assumed (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str) ->
             assert (field_values = []);
             (ctx, None)
         | T.Tuple ->
@@ -1463,6 +1453,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
   (* Translate the function call *)
   let type_args = List.map (ctx_translate_fwd_ty ctx) call.type_params in
+  let const_generic_args = call.const_generic_params in
   let args =
     let args = List.map (typed_value_to_texpression ctx call.ctx) call.args in
     let args_mplaces = List.map translate_opt_mplace call.args_places in
@@ -1540,6 +1531,19 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           }
         in
         (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None)
+    | S.Unop (E.SliceNew tgt_len) ->
+        (* The cast can fail if the length of the source array is not
+           big enough *)
+        let effect_info =
+          {
+            can_fail = true;
+            stateful_group = false;
+            stateful = false;
+            can_diverge = false;
+            is_rec = false;
+          }
+        in
+        (ctx, Unop (SliceNew tgt_len), effect_info, args, None)
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -1564,7 +1568,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     | None -> dest
     | Some out_state -> mk_simpl_tuple_pattern [ out_state; dest ]
   in
-  let func = { id = FunOrOp fun_id; type_args } in
+  let func = { id = FunOrOp fun_id; type_args; const_generic_args } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
   let ret_ty =
     if effect_info.can_fail then mk_result_ty dest_v.ty else dest_v.ty
@@ -1625,13 +1629,13 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
    *   to the backward function, and which consumed the values [consumed_i],
    *   we introduce:
    *   {[
-         *   let v_i = consumed_i in
-         *   ...
-   *   ]}
+       *   let v_i = consumed_i in
+       *   ...
+         *   ]}
    *   Then, when we reach the [Return] node, we introduce:
    *   {[
-         *   (v_i)
-   *   ]}
+       *   (v_i)
+       *   ]}
    * *)
   (* First, get the given back variables.
 
@@ -1696,6 +1700,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     get_fun_effect_info ctx.fun_context.fun_infos fun_id None (Some rg_id)
   in
   let type_args = List.map (ctx_translate_fwd_ty ctx) call.type_params in
+  let const_generic_args = call.const_generic_params in
   (* Retrieve the original call and the parent abstractions *)
   let _forward, backwards = get_abs_ancestors ctx abs call_id in
   (* Retrieve the values consumed when we called the forward function and
@@ -1744,7 +1749,10 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   in
   (* Sanity check: there is the proper number of inputs and outputs, and they have the proper type *)
   let _ =
-    let inst_sg = get_instantiated_fun_sig fun_id (Some rg_id) type_args ctx in
+    let inst_sg =
+      get_instantiated_fun_sig fun_id (Some rg_id) type_args const_generic_args
+        ctx
+    in
     log#ldebug
       (lazy
         ("\n- fun_id: " ^ A.show_fun_id fun_id ^ "\n- inputs ("
@@ -1787,7 +1795,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     if effect_info.can_fail then mk_result_ty output.ty else output.ty
   in
   let func_ty = mk_arrows input_tys ret_ty in
-  let func = { id = FunOrOp func; type_args } in
+  let func = { id = FunOrOp func; type_args; const_generic_args } in
   let func = { e = Qualif func; ty = func_ty } in
   let call = mk_apps func args in
   (* **Optimization**:
@@ -1850,7 +1858,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
      {[
        let id_back x nx =
          let s = nx in // the name [s] is not important (only collision matters)
-         ...
+                                                        ...
      ]}
 
      This let-binding later gets inlined, during a micro-pass.
@@ -1911,6 +1919,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       in
       let loop_info = LoopId.Map.find loop_id ctx.loops in
       let type_args = loop_info.type_args in
+      let const_generic_args = loop_info.const_generic_args in
       let fwd_inputs = Option.get loop_info.forward_inputs in
       (* Retrieve the additional backward inputs. Note that those are actually
          the backward inputs of the function we are synthesizing (and that we
@@ -1959,7 +1968,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       in
       let func_ty = mk_arrows input_tys ret_ty in
       let func = Fun (FromLlbc (fun_id, Some loop_id, Some rg_id)) in
-      let func = { id = FunOrOp func; type_args } in
+      let func = { id = FunOrOp func; type_args; const_generic_args } in
       let func = { e = Qualif func; ty = func_ty } in
       let call = mk_apps func args in
       (* **Optimization**:
@@ -2019,7 +2028,9 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (sval : V.symbolic_value)
     (e : S.expression) (ctx : bs_ctx) : texpression =
   let ctx, var = fresh_var_for_symbolic_value sval ctx in
   let decl = A.GlobalDeclId.Map.find gid ctx.global_context.llbc_global_decls in
-  let global_expr = { id = Global gid; type_args = [] } in
+  let global_expr =
+    { id = Global gid; type_args = []; const_generic_args = [] }
+  in
   (* We use translate_fwd_ty to translate the global type *)
   let ty = ctx_translate_fwd_ty ctx decl.ty in
   let gval = { e = Qualif global_expr; ty } in
@@ -2032,8 +2043,14 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
   let monadic = true in
   let v = typed_value_to_texpression ctx ectx v in
   let args = [ v ] in
-  let func = { id = FunOrOp (Fun (Pure Assert)); type_args = [] } in
-  let func_ty = mk_arrow Bool mk_unit_ty in
+  let func =
+    {
+      id = FunOrOp (Fun (Pure Assert));
+      type_args = [];
+      const_generic_args = [];
+    }
+  in
+  let func_ty = mk_arrow (Literal Bool) mk_unit_ty in
   let func = { e = Qualif func; ty = func_ty } in
   let assertion = mk_apps func args in
   mk_let monadic (mk_dummy_pattern mk_unit_ty) assertion next_e
@@ -2048,13 +2065,13 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
   match exp with
   | ExpandNoBranch (sexp, e) -> (
       match sexp with
-      | V.SePrimitive _ ->
-          (* Actually, we don't *register* symbolic expansions to constant
-           * values in the symbolic ADT *)
+      | V.SeLiteral _ ->
+          (* We do not *register* symbolic expansions to literal
+                   * values in the symbolic ADT *)
           raise (Failure "Unreachable")
       | SeMutRef (_, nsv) | SeSharedRef (_, nsv) ->
           (* The (mut/shared) borrow type is extracted to identity: we thus simply
-           * introduce an reassignment *)
+                   * introduce an reassignment *)
           let ctx, var = fresh_var_for_symbolic_value nsv ctx in
           let next_e = translate_expression e ctx in
           let monadic = false in
@@ -2075,10 +2092,10 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
                && !Config.always_deconstruct_adts_with_matches) ->
           (* There is exactly one branch: no branching.
 
-             We can decompose the ADT value with a let-binding, unless
-             the backend doesn't support this (see {!Config.always_deconstruct_adts_with_matches}):
-             we *ignore* this branch (and go to the next one) if the ADT is a custom
-             adt, and [always_deconstruct_adts_with_matches] is true.
+                     We can decompose the ADT value with a let-binding, unless
+                     the backend doesn't support this (see {!Config.always_deconstruct_adts_with_matches}):
+                     we *ignore* this branch (and go to the next one) if the ADT is a custom
+                     adt, and [always_deconstruct_adts_with_matches] is true.
           *)
           translate_ExpandAdt_one_branch sv scrutinee scrutinee_mplace
             variant_id svl branch ctx
@@ -2127,14 +2144,14 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :
           match_branch =
         (* We don't need to update the context: we don't introduce any
-         * new values/variables *)
+           * new values/variables *)
         let branch = translate_expression branch_e ctx in
-        let pat = mk_typed_pattern_from_primitive_value (PV.Scalar v) in
+        let pat = mk_typed_pattern_from_literal (PV.Scalar v) in
         { pat; branch }
       in
       let branches = List.map translate_branch branches in
       let otherwise = translate_expression otherwise ctx in
-      let pat_ty = Integer int_ty in
+      let pat_ty = Literal (Integer int_ty) in
       let otherwise_pat : typed_pattern = { value = PatDummy; ty = pat_ty } in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }
@@ -2154,18 +2171,18 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
 
    There are several possibilities:
    - if the ADT is an enumeration, we attempt to deconstruct it with a let-binding:
-     {[
-       let Cons x0 ... xn = y in
-       ...
-     ]}
+   {[
+     let Cons x0 ... xn = y in
+     ...
+   ]}
 
    - if the ADT is a structure, we attempt to introduce one let-binding per field:
-     {[
-       let x0 = y.f0 in
-       ...
+   {[
+     let x0 = y.f0 in
+     ...
        let xn = y.fn in
        ...
-     ]}
+   ]}
 
    Of course, this is not always possible depending on the backend.
    Also, recursive structures, and more specifically structures mutually recursive
@@ -2179,14 +2196,14 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
     (branch : S.expression) (ctx : bs_ctx) : texpression =
   (* TODO: always introduce a match, and use micro-passes to turn the
      the match into a let? *)
-  let type_id, _, _ = TypesUtils.ty_as_adt sv.V.sv_ty in
+  let type_id, _, _, _ = TypesUtils.ty_as_adt sv.V.sv_ty in
   let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
   let branch = translate_expression branch ctx in
   match type_id with
   | T.AdtId adt_id ->
       (* Detect if this is an enumeration or not *)
       let tdef = bs_ctx_lookup_llbc_type_decl adt_id ctx in
-      let is_enum = type_decl_is_enum tdef in
+      let is_enum = TypesUtils.type_decl_is_enum tdef in
       (* We deconstruct the ADT with a let-binding in two situations:
          - if the ADT is an enumeration (which must have exactly one branch)
          - if we forbid using field projectors.
@@ -2214,14 +2231,10 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
          * field.
          * We use the [dest] variable in order not to have to recompute
          * the type of the result of the projection... *)
-        let adt_id, type_args =
-          match scrutinee.ty with
-          | Adt (adt_id, tys) -> (adt_id, tys)
-          | _ -> raise (Failure "Unreachable")
-        in
+        let adt_id, type_args, const_generic_args = ty_as_adt scrutinee.ty in
         let gen_field_proj (field_id : FieldId.id) (dest : var) : texpression =
           let proj_kind = { adt_id; field_id } in
-          let qualif = { id = Proj proj_kind; type_args } in
+          let qualif = { id = Proj proj_kind; type_args; const_generic_args } in
           let proj_e = Qualif qualif in
           let proj_ty = mk_arrow scrutinee.ty dest.ty in
           let proj = { e = proj_e; ty = proj_ty } in
@@ -2253,12 +2266,12 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
         (mk_typed_pattern_from_var var None)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
-  | T.Assumed T.Vec ->
-      (* We can't expand vector values: we can access the fields only
+  | T.Assumed (T.Vec | T.Array | T.Slice | T.Str) ->
+      (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
-       * know how to expand a vector, because it has a variable number
+       * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
-      raise (Failure "Can't expand a vector value")
+      raise (Failure "Attempt to expand a non-expandable value")
   | T.Assumed T.Option ->
       (* We shouldn't get there in the "one-branch" case: options have
        * two variants *)
@@ -2394,7 +2407,13 @@ and translate_forward_end (ectx : C.eval_ctx)
 
       let loop_call =
         let fun_id = Fun (FromLlbc (fid, Some loop_id, None)) in
-        let func = { id = FunOrOp fun_id; type_args = loop_info.type_args } in
+        let func =
+          {
+            id = FunOrOp fun_id;
+            type_args = loop_info.type_args;
+            const_generic_args = loop_info.const_generic_args;
+          }
+        in
         let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
         let ret_ty =
           if effect_info.can_fail then mk_result_ty out_pat.ty else out_pat.ty
@@ -2515,7 +2534,12 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
        (and will introduce the outputs at that moment, together with the actual
        call to the loop forward function *)
     let type_args =
-      List.map (fun ty -> TypeVar ty.T.index) ctx.sg.type_params
+      List.map (fun (ty : T.type_var) -> TypeVar ty.T.index) ctx.sg.type_params
+    in
+    let const_generic_args =
+      List.map
+        (fun (cg : T.const_generic_var) -> T.ConstGenericVar cg.T.index)
+        ctx.sg.const_generic_params
     in
 
     let loop_info =
@@ -2524,6 +2548,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         input_vars = inputs;
         input_svl = loop.input_svalues;
         type_args;
+        const_generic_args;
         forward_inputs = None;
         forward_output_no_state_no_result = None;
       }
@@ -2611,14 +2636,26 @@ let wrap_in_match_fuel (fuel0 : VarId.id) (fuel : VarId.id) (body : texpression)
       *)
       (* Create the expression: [fuel0 = 0] *)
       let check_fuel =
-        let func = { id = FunOrOp (Fun (Pure FuelEqZero)); type_args = [] } in
+        let func =
+          {
+            id = FunOrOp (Fun (Pure FuelEqZero));
+            type_args = [];
+            const_generic_args = [];
+          }
+        in
         let func_ty = mk_arrow mk_fuel_ty mk_bool_ty in
         let func = { e = Qualif func; ty = func_ty } in
         mk_app func fuel0
       in
       (* Create the expression: [decrease fuel0] *)
       let decrease_fuel =
-        let func = { id = FunOrOp (Fun (Pure FuelDecrease)); type_args = [] } in
+        let func =
+          {
+            id = FunOrOp (Fun (Pure FuelDecrease));
+            type_args = [];
+            const_generic_args = [];
+          }
+        in
         let func_ty = mk_arrow mk_fuel_ty mk_fuel_ty in
         let func = { e = Qualif func; ty = func_ty } in
         mk_app func fuel0

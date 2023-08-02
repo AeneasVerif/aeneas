@@ -197,8 +197,8 @@ type type_decl = {
 }
 [@@deriving show]
 
-type scalar_value = V.scalar_value [@@deriving show]
-type literal = V.literal [@@deriving show]
+type scalar_value = V.scalar_value [@@deriving show, ord]
+type literal = V.literal [@@deriving show, ord]
 
 (** Because we introduce a lot of temporary variables, the list of variables
     is not fixed: we thus must carry all its information with the variable
@@ -343,7 +343,11 @@ and typed_pattern = { value : pattern; ty : ty }
         polymorphic = false;
       }]
 
-type unop = Not | Neg of integer_type | Cast of integer_type * integer_type
+type unop =
+  | Not
+  | Neg of integer_type
+  | Cast of integer_type * integer_type
+  | SliceNew of scalar_value
 [@@deriving show, ord]
 
 (** Identifiers of assumed functions that we use only in the pure translation *)

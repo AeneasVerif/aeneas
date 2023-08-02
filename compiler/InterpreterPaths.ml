@@ -359,7 +359,8 @@ let write_place (access : access_kind) (p : E.place) (nv : V.typed_value)
 
 let compute_expanded_bottom_adt_value (tyctx : T.type_decl T.TypeDeclId.Map.t)
     (def_id : T.TypeDeclId.id) (opt_variant_id : T.VariantId.id option)
-    (regions : T.erased_region list) (types : T.ety list) : V.typed_value =
+    (regions : T.erased_region list) (types : T.ety list)
+    (cgs : T.const_generic list) : V.typed_value =
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
@@ -368,12 +369,12 @@ let compute_expanded_bottom_adt_value (tyctx : T.type_decl T.TypeDeclId.Map.t)
   assert (List.length regions = List.length def.T.region_params);
   (* Compute the field types *)
   let field_types =
-    Subst.type_decl_get_instantiated_field_etypes def opt_variant_id types
+    Subst.type_decl_get_instantiated_field_etypes def opt_variant_id types cgs
   in
   (* Initialize the expanded value *)
   let fields = List.map mk_bottom field_types in
   let av = V.Adt { variant_id = opt_variant_id; field_values = fields } in
-  let ty = T.Adt (T.AdtId def_id, regions, types) in
+  let ty = T.Adt (T.AdtId def_id, regions, types, cgs) in
   { V.value = av; V.ty }
 
 let compute_expanded_bottom_option_value (variant_id : T.VariantId.id)
@@ -386,7 +387,7 @@ let compute_expanded_bottom_option_value (variant_id : T.VariantId.id)
     else raise (Failure "Unreachable")
   in
   let av = V.Adt { variant_id = Some variant_id; field_values } in
-  let ty = T.Adt (T.Assumed T.Option, [], [ param_ty ]) in
+  let ty = T.Adt (T.Assumed T.Option, [], [ param_ty ], []) in
   { V.value = av; ty }
 
 let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
@@ -394,7 +395,7 @@ let compute_expanded_bottom_tuple_value (field_types : T.ety list) :
   (* Generate the field values *)
   let fields = List.map mk_bottom field_types in
   let v = V.Adt { variant_id = None; field_values = fields } in
-  let ty = T.Adt (T.Tuple, [], field_types) in
+  let ty = T.Adt (T.Tuple, [], field_types, []) in
   { V.value = v; V.ty }
 
 (** Auxiliary helper to expand {!V.Bottom} values.
@@ -446,16 +447,16 @@ let expand_bottom_value_from_projection (access : access_kind) (p : E.place)
     match (pe, ty) with
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
-        T.Adt (T.AdtId def_id', regions, types) ) ->
+        T.Adt (T.AdtId def_id', regions, types, cgs) ) ->
         assert (def_id = def_id');
         compute_expanded_bottom_adt_value ctx.type_context.type_decls def_id
-          opt_variant_id regions types
+          opt_variant_id regions types cgs
     (* Option *)
-    | Field (ProjOption variant_id, _), T.Adt (T.Assumed T.Option, [], [ ty ])
-      ->
+    | ( Field (ProjOption variant_id, _),
+        T.Adt (T.Assumed T.Option, [], [ ty ], []) ) ->
         compute_expanded_bottom_option_value variant_id ty
     (* Tuples *)
-    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys) ->
+    | Field (ProjTuple arity, _), T.Adt (T.Tuple, [], tys, []) ->
         assert (arity = List.length tys);
         (* Generate the field values *)
         compute_expanded_bottom_tuple_value tys

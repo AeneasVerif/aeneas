@@ -98,9 +98,9 @@ let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
 
 let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
     (abstractions : V.AbstractionId.id list) (type_params : T.ety list)
-    (args : V.typed_value list) (args_places : mplace option list)
-    (dest : V.symbolic_value) (dest_place : mplace option)
-    (e : expression option) : expression option =
+    (const_generic_params : T.const_generic list) (args : V.typed_value list)
+    (args_places : mplace option list) (dest : V.symbolic_value)
+    (dest_place : mplace option) (e : expression option) : expression option =
   Option.map
     (fun e ->
       let call =
@@ -109,6 +109,7 @@ let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
           ctx;
           abstractions;
           type_params;
+          const_generic_params;
           args;
           dest;
           args_places;
@@ -125,24 +126,25 @@ let synthesize_global_eval (gid : A.GlobalDeclId.id) (dest : V.symbolic_value)
 let synthesize_regular_function_call (fun_id : A.fun_id)
     (call_id : V.FunCallId.id) (ctx : Contexts.eval_ctx)
     (abstractions : V.AbstractionId.id list) (type_params : T.ety list)
-    (args : V.typed_value list) (args_places : mplace option list)
-    (dest : V.symbolic_value) (dest_place : mplace option)
-    (e : expression option) : expression option =
+    (const_generic_params : T.const_generic list) (args : V.typed_value list)
+    (args_places : mplace option list) (dest : V.symbolic_value)
+    (dest_place : mplace option) (e : expression option) : expression option =
   synthesize_function_call
     (Fun (fun_id, call_id))
-    ctx abstractions type_params args args_places dest dest_place e
+    ctx abstractions type_params const_generic_params args args_places dest
+    dest_place e
 
 let synthesize_unary_op (ctx : Contexts.eval_ctx) (unop : E.unop)
     (arg : V.typed_value) (arg_place : mplace option) (dest : V.symbolic_value)
     (dest_place : mplace option) (e : expression option) : expression option =
-  synthesize_function_call (Unop unop) ctx [] [] [ arg ] [ arg_place ] dest
+  synthesize_function_call (Unop unop) ctx [] [] [] [ arg ] [ arg_place ] dest
     dest_place e
 
 let synthesize_binary_op (ctx : Contexts.eval_ctx) (binop : E.binop)
     (arg0 : V.typed_value) (arg0_place : mplace option) (arg1 : V.typed_value)
     (arg1_place : mplace option) (dest : V.symbolic_value)
     (dest_place : mplace option) (e : expression option) : expression option =
-  synthesize_function_call (Binop binop) ctx [] [] [ arg0; arg1 ]
+  synthesize_function_call (Binop binop) ctx [] [] [] [ arg0; arg1 ]
     [ arg0_place; arg1_place ] dest dest_place e
 
 let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : V.abs)

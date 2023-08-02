@@ -43,7 +43,10 @@ type call = {
           borrows (we need to perform lookups).
        *)
   abstractions : V.AbstractionId.id list;
+  (* TODO: rename to "...args" *)
   type_params : T.ety list;
+  (* TODO: rename to "...args" *)
+  const_generic_params : T.const_generic list;
   args : V.typed_value list;
   args_places : mplace option list;  (** Meta information *)
   dest : V.symbolic_value;

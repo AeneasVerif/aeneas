@@ -532,6 +532,7 @@ let unop_to_string (unop : unop) : string =
   | Cast (src, tgt) ->
       "cast<" ^ integer_type_to_string src ^ "," ^ integer_type_to_string tgt
       ^ ">"
+  | SliceNew tgt_len -> "array_to_slice<" ^ scalar_value_to_string tgt_len ^ ">"
 
 let binop_to_string = Print.Expressions.binop_to_string
 
