@@ -1537,19 +1537,6 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           }
         in
         (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, None)
-    | S.Unop (E.SliceNew tgt_len) ->
-        (* The cast can fail if the length of the source array is not
-           big enough *)
-        let effect_info =
-          {
-            can_fail = true;
-            stateful_group = false;
-            stateful = false;
-            can_diverge = false;
-            is_rec = false;
-          }
-        in
-        (ctx, Unop (SliceNew tgt_len), effect_info, args, None)
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->

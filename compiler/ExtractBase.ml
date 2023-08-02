@@ -286,6 +286,8 @@ type formatter = {
        *)
   type_var_basename : StringSet.t -> string -> string;
       (** Generates a type variable basename. *)
+  const_generic_var_basename : StringSet.t -> string -> string;
+      (** Generates a const generic variable basename. *)
   append_index : string -> int -> string;
       (** Appends an index to a name - we use this to generate unique
           names: when doing so, the role of the formatter is just to concatenate
@@ -392,6 +394,7 @@ type id =
           them here.
        *)
   | TypeVarId of TypeVarId.id
+  | ConstGenericVarId of ConstGenericVarId.id
   | VarId of VarId.id
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
@@ -710,6 +713,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       "field name: " ^ field_name
   | UnknownId -> "keyword"
   | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
+  | ConstGenericVarId id ->
+      "const_generic_var_id: " ^ ConstGenericVarId.to_string id
   | VarId id -> "var_id: " ^ VarId.to_string id
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
@@ -788,6 +793,11 @@ let ctx_get_type_var (id : TypeVarId.id) (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get is_opaque (TypeVarId id) ctx
 
+let ctx_get_const_generic_var (id : ConstGenericVarId.id) (ctx : extraction_ctx)
+    : string =
+  let is_opaque = false in
+  ctx_get is_opaque (ConstGenericVarId id) ctx
+
 let ctx_get_field (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
   let is_opaque = false in
@@ -821,6 +831,19 @@ let ctx_add_type_var (basename : string) (id : TypeVarId.id)
     basename_to_unique ctx.names_map.names_set ctx.fmt.append_index name
   in
   let ctx = ctx_add is_opaque (TypeVarId id) name ctx in
+  (ctx, name)
+
+(** Generate a unique const generic variable name and add it to the context *)
+let ctx_add_const_generic_var (basename : string) (id : ConstGenericVarId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let is_opaque = false in
+  let name =
+    ctx.fmt.const_generic_var_basename ctx.names_map.names_set basename
+  in
+  let name =
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index name
+  in
+  let ctx = ctx_add is_opaque (ConstGenericVarId id) name ctx in
   (ctx, name)
 
 (** See {!ctx_add_type_var} *)
