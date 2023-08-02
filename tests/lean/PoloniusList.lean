@@ -2,6 +2,7 @@
 -- [polonius_list]
 import Base
 open Primitives
+
 namespace polonius_list
 
 /- [polonius_list::List] -/

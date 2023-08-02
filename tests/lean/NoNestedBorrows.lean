@@ -2,6 +2,7 @@
 -- [no_nested_borrows]
 import Base
 open Primitives
+
 namespace no_nested_borrows
 
 /- [no_nested_borrows::Pair] -/

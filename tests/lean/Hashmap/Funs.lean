@@ -3,6 +3,7 @@
 import Base
 import Hashmap.Types
 open Primitives
+
 namespace hashmap
 
 /- [hashmap::hash_key]: forward function -/

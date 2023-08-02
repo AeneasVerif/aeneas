@@ -4,6 +4,7 @@ import Base
 import HashmapMain.Types
 import HashmapMain.FunsExternal
 open Primitives
+
 namespace hashmap_main
 
 /- [hashmap_main::hashmap::hash_key]: forward function -/

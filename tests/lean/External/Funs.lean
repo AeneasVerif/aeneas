@@ -4,6 +4,7 @@ import Base
 import External.Types
 import External.FunsExternal
 open Primitives
+
 namespace external
 
 /- [external::swap]: forward function -/

@@ -2,6 +2,7 @@
 -- [external]: type definitions
 import Base
 open Primitives
+
 namespace external
 
 /- [core::num::nonzero::NonZeroU32] -/

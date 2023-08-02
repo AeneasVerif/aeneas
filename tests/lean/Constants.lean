@@ -2,6 +2,7 @@
 -- [constants]
 import Base
 open Primitives
+
 namespace constants
 
 /- [constants::X0] -/

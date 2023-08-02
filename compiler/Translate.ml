@@ -855,7 +855,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       (* Always open the Primitives namespace *)
       Printf.fprintf out "open Primitives\n";
       (* If we are inside the namespace: declare it, otherwise: open it *)
-      if fi.in_namespace then Printf.fprintf out "namespace %s\n" fi.namespace
+      if fi.in_namespace then Printf.fprintf out "\nnamespace %s\n" fi.namespace
       else Printf.fprintf out "open %s\n" fi.namespace
   | HOL4 ->
       Printf.fprintf out "open primitivesLib divDefLib\n";
