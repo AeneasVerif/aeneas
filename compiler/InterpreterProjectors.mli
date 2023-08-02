@@ -55,7 +55,16 @@ val prepare_reborrows :
   bool ->
   (V.BorrowId.id -> V.BorrowId.id) * (C.eval_ctx -> C.eval_ctx)
 
-(** Apply (and reduce) a projector over borrows to a value.
+(** Apply (and reduce) a projector over borrows to an avalue.
+    We use this for instance to spread the borrows present in the inputs
+    of a function into the regions introduced for this function. For instance:
+    {[
+      fn f<'a, 'b, T>(x: &'a T, y: &'b T)
+    ]}
+    If we call `f` with `x -> shared_borrow l0` and `y -> shared_borrow l1`, then
+    for the region introduced for `'a` we need to project the value for `x` to
+    a shared aborrow, and we need to ignore the borrow in `y`, because it belongs
+    to the other region.
 
     Parameters:
     - [check_symbolic_no_ended]: controls whether we check or not whether

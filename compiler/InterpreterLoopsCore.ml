@@ -60,8 +60,7 @@ module type PrimMatcher = sig
   val match_rtys : T.rty -> T.rty -> T.rty
 
   (** The input primitive values are not equal *)
-  val match_distinct_primitive_values :
-    T.ety -> V.primitive_value -> V.primitive_value -> V.typed_value
+  val match_distinct_literals : T.ety -> V.literal -> V.literal -> V.typed_value
 
   (** The input ADTs don't have the same variant *)
   val match_distinct_adts : T.ety -> V.adt_value -> V.adt_value -> V.typed_value

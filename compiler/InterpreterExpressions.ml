@@ -94,24 +94,23 @@ let access_rplace_reorganize (config : C.config) (expand_prim_copy : bool)
     ctx
 
 (** Convert an operand constant operand value to a typed value *)
-let primitive_to_typed_value (ty : T.ety) (cv : V.primitive_value) :
+let literal_to_typed_value (ty : PV.literal_type) (cv : V.literal) :
     V.typed_value =
   (* Check the type while converting - we actually need some information
      * contained in the type *)
   log#ldebug
     (lazy
-      ("primitive_to_typed_value:" ^ "\n- cv: "
-      ^ Print.PrimitiveValues.primitive_value_to_string cv));
+      ("literal_to_typed_value:" ^ "\n- cv: "
+      ^ Print.PrimitiveValues.literal_to_string cv));
   match (ty, cv) with
   (* Scalar, boolean... *)
-  | T.Bool, Bool v -> { V.value = V.Primitive (Bool v); ty }
-  | T.Char, Char v -> { V.value = V.Primitive (Char v); ty }
-  | T.Str, String v -> { V.value = V.Primitive (String v); ty }
-  | T.Integer int_ty, PV.Scalar v ->
+  | PV.Bool, Bool v -> { V.value = V.Literal (Bool v); ty = T.Literal ty }
+  | Char, Char v -> { V.value = V.Literal (Char v); ty = T.Literal ty }
+  | Integer int_ty, PV.Scalar v ->
       (* Check the type and the ranges *)
       assert (int_ty = v.int_ty);
       assert (check_scalar_value_in_range v);
-      { V.value = V.Primitive (PV.Scalar v); ty }
+      { V.value = V.Literal (PV.Scalar v); ty = T.Literal ty }
   (* Remaining cases (invalid) *)
   | _, _ -> raise (Failure "Improperly typed constant value")
 
@@ -138,14 +137,16 @@ let rec copy_value (allow_adt_copy : bool) (config : C.config)
    * the fact that we have exhaustive matches below makes very obvious the cases
    * in which we need to fail *)
   match v.V.value with
-  | V.Primitive _ -> (ctx, v)
+  | V.Literal _ -> (ctx, v)
   | V.Adt av ->
       (* Sanity check *)
       (match v.V.ty with
-      | T.Adt (T.Assumed (T.Box | Vec), _, _) ->
+      | T.Adt (T.Assumed (T.Box | Vec), _, _, _) ->
           raise (Failure "Can't copy an assumed value other than Option")
-      | T.Adt (T.AdtId _, _, _) -> assert allow_adt_copy
-      | T.Adt ((T.Assumed Option | T.Tuple), _, _) -> () (* Ok *)
+      | T.Adt (T.AdtId _, _, _, _) -> assert allow_adt_copy
+      | T.Adt ((T.Assumed Option | T.Tuple), _, _, _) -> () (* Ok *)
+      | T.Adt (T.Assumed (Slice | T.Array), [], [ ty ], []) ->
+          assert (ty_is_primitively_copyable ty)
       | _ -> raise (Failure "Unreachable"));
       let ctx, fields =
         List.fold_left_map
@@ -231,7 +232,7 @@ let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
     match op with
     | Expressions.Constant (ty, cv) ->
         (* No need to reorganize the context *)
-        primitive_to_typed_value ty cv |> ignore;
+        literal_to_typed_value ty cv |> ignore;
         cf ctx
     | Expressions.Copy p ->
         (* Access the value *)
@@ -259,7 +260,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
-  | Expressions.Constant (ty, cv) -> cf (primitive_to_typed_value ty cv) ctx
+  | Expressions.Constant (ty, cv) -> cf (literal_to_typed_value ty cv) ctx
   | Expressions.Copy p ->
       (* Access the value *)
       let access = Read in

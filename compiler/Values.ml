@@ -147,7 +147,7 @@ class ['self] map_typed_value_base =
 
 (** An untyped value, used in the environments *)
 type value =
-  | Primitive of literal  (** Non-symbolic primitive value *)
+  | Literal of literal  (** Non-symbolic primitive value *)
   | Adt of adt_value  (** Enumerations and structures *)
   | Bottom  (** No value (uninitialized or moved value) *)
   | Borrow of borrow_content  (** A borrowed value *)
@@ -1014,7 +1014,7 @@ type abs = {
     TODO: this should rather be name "expanded_symbolic"
  *)
 type symbolic_expansion =
-  | SePrimitive of literal
+  | SeLiteral of literal
   | SeAdt of (VariantId.id option * symbolic_value list)
   | SeMutRef of BorrowId.id * symbolic_value
   | SeSharedRef of BorrowId.Set.t * symbolic_value

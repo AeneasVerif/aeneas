@@ -32,7 +32,11 @@ IdGen ()
 module VarId =
 IdGen ()
 
+module ConstGenericVarId = T.ConstGenericVarId
+
 type integer_type = T.integer_type [@@deriving show, ord]
+type const_generic_var = T.const_generic_var [@@deriving show, ord]
+type const_generic = T.const_generic [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -50,7 +54,16 @@ type integer_type = T.integer_type [@@deriving show, ord]
         this state is opaque to Aeneas (the user can define it, or leave it as
         assumed)
   *)
-type assumed_ty = State | Result | Error | Fuel | Vec | Option
+type assumed_ty =
+  | State
+  | Result
+  | Error
+  | Fuel
+  | Vec
+  | Option
+  | Array
+  | Slice
+  | Str
 [@@deriving show, ord]
 
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather
@@ -114,26 +127,28 @@ type type_id = AdtId of type_decl_id | Tuple | Assumed of assumed_ty
         polymorphic = false;
       }]
 
+type literal_type = T.literal_type [@@deriving show, ord]
+
 (** Ancestor for iter visitor for [ty] *)
 class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] iter_type_id
+    inherit! [_] T.iter_const_generic
+    inherit! [_] PV.iter_literal_type
     method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
-    method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
 class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] map_type_id
+    inherit! [_] T.map_const_generic
+    inherit! [_] PV.map_literal_type
     method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
-
-    method visit_integer_type : 'env -> integer_type -> integer_type =
-      fun _ x -> x
   end
 
 type ty =
-  | Adt of type_id * ty list
+  | Adt of type_id * ty list * const_generic list
       (** {!Adt} encodes ADTs and tuples and assumed types.
 
           TODO: what about the ended regions? (ADTs may be parameterized
@@ -142,12 +157,7 @@ type ty =
           such "partial" ADTs.
        *)
   | TypeVar of type_var_id
-  | Bool
-  | Char
-  | Integer of integer_type
-  | Str
-  | Array of ty (* TODO: this should be an assumed type?... *)
-  | Slice of ty (* TODO: this should be an assumed type?... *)
+  | Literal of literal_type
   | Arrow of ty * ty
 [@@deriving
   show,
@@ -182,6 +192,7 @@ type type_decl = {
   def_id : TypeDeclId.id;
   name : name;
   type_params : type_var list;
+  const_generic_params : const_generic_var list;
   kind : type_decl_kind;
 }
 [@@deriving show]
@@ -393,7 +404,12 @@ type qualif_id =
     which explains why we have the [type_params] field: a function or ADT
     constructor is always fully instantiated.
  *)
-type qualif = { id : qualif_id; type_args : ty list } [@@deriving show]
+type qualif = {
+  id : qualif_id;
+  type_args : ty list;
+  const_generic_args : const_generic list;
+}
+[@@deriving show]
 
 type field_id = FieldId.id [@@deriving show, ord]
 type var_id = VarId.id [@@deriving show, ord]
@@ -716,6 +732,7 @@ type fun_sig_info = {
  *)
 type fun_sig = {
   type_params : type_var list;
+  const_generic_params : const_generic_var list;
       (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
   inputs : ty list;
       (** The input types.

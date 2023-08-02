@@ -97,7 +97,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
       match (pe, v.V.value, v.V.ty) with
       | ( Field (((ProjAdt (_, _) | ProjOption _) as proj_kind), field_id),
           V.Adt adt,
-          T.Adt (type_id, _, _) ) -> (
+          T.Adt (type_id, _, _, _) ) -> (
           (* Check consistency *)
           (match (proj_kind, type_id) with
           | ProjAdt (def_id, opt_variant_id), T.AdtId def_id' ->
@@ -119,7 +119,8 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
               let updated = { v with value = nadt } in
               Ok (ctx, { res with updated }))
       (* Tuples *)
-      | Field (ProjTuple arity, field_id), V.Adt adt, T.Adt (T.Tuple, _, _) -> (
+      | Field (ProjTuple arity, field_id), V.Adt adt, T.Adt (T.Tuple, _, _, _)
+        -> (
           assert (arity = List.length adt.field_values);
           let fv = T.FieldId.nth adt.field_values field_id in
           (* Project *)
@@ -144,7 +145,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
       (* Box dereferencement *)
       | ( DerefBox,
           Adt { variant_id = None; field_values = [ bv ] },
-          T.Adt (T.Assumed T.Box, _, _) ) -> (
+          T.Adt (T.Assumed T.Box, _, _, _) ) -> (
           (* We allow moving inside of boxes. In practice, this kind of
            * manipulations should happen only inside unsage code, so
            * it shouldn't happen due to user code, and we leverage it
@@ -249,7 +250,7 @@ let rec access_projection (access : projection_access) (ctx : C.eval_ctx)
                     in
                     Ok (ctx, { res with updated = nv })
               else Error (FailSharedLoan bids))
-      | (_, (V.Primitive _ | V.Adt _ | V.Bottom | V.Borrow _), _) as r ->
+      | (_, (V.Literal _ | V.Adt _ | V.Bottom | V.Borrow _), _) as r ->
           let pe, v, ty = r in
           let pe = "- pe: " ^ E.show_projection_elem pe in
           let v = "- v:\n" ^ V.show_value v in

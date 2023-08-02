@@ -1733,7 +1733,7 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
   and list_values (v : V.typed_value) : V.typed_avalue list * V.typed_value =
     let ty = v.V.ty in
     match v.V.value with
-    | Primitive _ -> ([], v)
+    | Literal _ -> ([], v)
     | Adt adt ->
         let avll, field_values =
           List.split (List.map list_values adt.field_values)
@@ -1841,7 +1841,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
 
     let ty = v.V.ty in
     match v.V.value with
-    | V.Primitive _ -> ([], v)
+    | V.Literal _ -> ([], v)
     | V.Bottom ->
         (* Can happen: we *do* convert dummy values to abstractions, and dummy
            values can contain bottoms *)

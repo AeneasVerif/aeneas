@@ -36,8 +36,8 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             (* Boolean expansion: there should be two branches *)
             match ls with
             | [
-             (Some (V.SePrimitive (PV.Bool true)), true_exp);
-             (Some (V.SePrimitive (PV.Bool false)), false_exp);
+             (Some (V.SeLiteral (PV.Bool true)), true_exp);
+             (Some (V.SeLiteral (PV.Bool false)), false_exp);
             ] ->
                 ExpandBool (true_exp, false_exp)
             | _ -> raise (Failure "Ill-formed boolean expansion"))
@@ -50,7 +50,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             let get_scalar (see : V.symbolic_expansion option) : V.scalar_value
                 =
               match see with
-              | Some (V.SePrimitive (PV.Scalar cv)) ->
+              | Some (V.SeLiteral (PV.Scalar cv)) ->
                   assert (cv.PV.int_ty = int_ty);
                   cv
               | _ -> raise (Failure "Unreachable")

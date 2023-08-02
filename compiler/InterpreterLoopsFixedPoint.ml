@@ -109,6 +109,7 @@ let prepare_ashared_loans (loop_id : V.LoopId.id option) : cm_fun =
       (fun r -> if T.RegionId.Set.mem r rids then nrid else r)
       (fun x -> x)
       (fun x -> x)
+      (fun x -> x)
       (fun id ->
         let nid = C.fresh_symbolic_value_id () in
         let sv = V.SymbolicValueId.Map.find id absl_id_maps.sids_to_values in

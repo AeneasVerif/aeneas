@@ -80,7 +80,7 @@ module Values = struct
       string =
     let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
     match v.value with
-    | Primitive cv -> PPV.literal_to_string cv
+    | Literal cv -> PPV.literal_to_string cv
     | Adt av -> (
         let field_values =
           List.map (typed_value_to_string fmt) av.field_values

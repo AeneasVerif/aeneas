@@ -87,24 +87,28 @@ let add_borrow_or_abs_id_to_chain (msg : string) (id : borrow_or_abs_id)
 
 (** Helper function.
   
-    This function allows to define in a generic way a comparison of region types.
+    This function allows to define in a generic way a comparison of **region types**.
     See [projections_interesect] for instance.
     
     [default]: default boolean to return, when comparing types with no regions
     [combine]: how to combine booleans
     [compare_regions]: how to compare regions
+
+    TODO: is there a way of deriving such a comparison?
  *)
 let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
     (compare_regions : T.RegionId.id T.region -> T.RegionId.id T.region -> bool)
     (ty1 : T.rty) (ty2 : T.rty) : bool =
   let compare = compare_rtys default combine compare_regions in
   match (ty1, ty2) with
-  | T.Bool, T.Bool | T.Char, T.Char | T.Str, T.Str -> default
-  | T.Integer int_ty1, T.Integer int_ty2 ->
-      assert (int_ty1 = int_ty2);
+  | T.Literal lit1, T.Literal lit2 ->
+      assert (lit1 = lit2);
       default
-  | T.Adt (id1, regions1, tys1), T.Adt (id2, regions2, tys2) ->
+  | T.Adt (id1, regions1, tys1, cgs1), T.Adt (id2, regions2, tys2, cgs2) ->
       assert (id1 = id2);
+      (* There are no regions in the const generics, so we ignore them,
+         but we still check they are the same, for sanity *)
+      assert (cgs1 = cgs2);
 
       (* The check for the ADTs is very crude: we simply compare the arguments
        * two by two.
@@ -134,7 +138,6 @@ let rec compare_rtys (default : bool) (combine : bool -> bool -> bool)
       in
       (* Combine *)
       combine params_b tys_b
-  | T.Array ty1, T.Array ty2 | T.Slice ty1, T.Slice ty2 -> compare ty1 ty2
   | T.Ref (r1, ty1, kind1), T.Ref (r2, ty2, kind2) ->
       (* Sanity check *)
       assert (kind1 = kind2);

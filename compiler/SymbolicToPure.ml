@@ -240,6 +240,8 @@ let bs_ctx_to_ctx_formatter (ctx : bs_ctx) : Print.Contexts.ctx_formatter =
     r_to_string;
     type_var_id_to_string;
     type_decl_id_to_string = ast_fmt.type_decl_id_to_string;
+    const_generic_var_id_to_string = ast_fmt.const_generic_var_id_to_string;
+    global_decl_id_to_string = ast_fmt.global_decl_id_to_string;
     adt_variant_to_string = ast_fmt.adt_variant_to_string;
     var_id_to_string;
     adt_field_names = ast_fmt.adt_field_names;
@@ -247,10 +249,12 @@ let bs_ctx_to_ctx_formatter (ctx : bs_ctx) : Print.Contexts.ctx_formatter =
 
 let bs_ctx_to_pp_ast_formatter (ctx : bs_ctx) : PrintPure.ast_formatter =
   let type_params = ctx.fun_decl.signature.type_params in
+  let cg_params = ctx.fun_decl.signature.const_generic_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
   PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
+    cg_params
 
 let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
   let fmt = bs_ctx_to_ctx_formatter ctx in
@@ -273,8 +277,12 @@ let rty_to_string (ctx : bs_ctx) (ty : T.rty) : string =
 
 let type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let type_params = def.type_params in
+  let cg_params = def.const_generic_params in
   let type_decls = ctx.type_context.llbc_type_decls in
-  let fmt = PrintPure.mk_type_formatter type_decls type_params in
+  let global_decls = ctx.global_context.llbc_global_decls in
+  let fmt =
+    PrintPure.mk_type_formatter type_decls global_decls type_params cg_params
+  in
   PrintPure.type_decl_to_string fmt def
 
 let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
@@ -283,21 +291,25 @@ let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let type_params = sg.type_params in
+  let cg_params = sg.const_generic_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
   let fmt =
     PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
+      cg_params
   in
   PrintPure.fun_sig_to_string fmt sg
 
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let type_params = def.signature.type_params in
+  let cg_params = def.signature.const_generic_params in
   let type_decls = ctx.type_context.llbc_type_decls in
   let fun_decls = ctx.fun_context.llbc_fun_decls in
   let global_decls = ctx.global_context.llbc_global_decls in
   let fmt =
     PrintPure.mk_ast_formatter type_decls fun_decls global_decls type_params
+      cg_params
   in
   PrintPure.fun_decl_to_string fmt def
 
@@ -315,16 +327,17 @@ let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
   Print.Values.abs_to_string fmt verbose indent indent_incr abs
 
 let get_instantiated_fun_sig (fun_id : A.fun_id)
-    (back_id : T.RegionGroupId.id option) (tys : ty list) (ctx : bs_ctx) :
-    inst_fun_sig =
+    (back_id : T.RegionGroupId.id option) (tys : ty list)
+    (cgs : const_generic list) (ctx : bs_ctx) : inst_fun_sig =
   (* Lookup the non-instantiated function signature *)
   let sg =
     (RegularFunIdNotLoopMap.find (fun_id, back_id) ctx.fun_context.fun_sigs).sg
   in
   (* Create the substitution *)
   let tsubst = make_type_subst sg.type_params tys in
+  let cgsubst = make_const_generic_subst sg.const_generic_params cgs in
   (* Apply *)
-  fun_sig_substitute tsubst sg
+  fun_sig_substitute tsubst cgsubst sg
 
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
@@ -380,17 +393,17 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
 let rec translate_sty (ty : T.sty) : ty =
   let translate = translate_sty in
   match ty with
-  | T.Adt (type_id, regions, tys) -> (
+  | T.Adt (type_id, regions, tys, cgs) -> (
       (* Can't translate types with regions for now *)
       assert (regions = []);
       let tys = List.map translate tys in
       match type_id with
-      | T.AdtId adt_id -> Adt (AdtId adt_id, tys)
+      | T.AdtId adt_id -> Adt (AdtId adt_id, tys, cgs)
       | T.Tuple -> mk_simpl_tuple_ty tys
       | T.Assumed aty -> (
           match aty with
-          | T.Vec -> Adt (Assumed Vec, tys)
-          | T.Option -> Adt (Assumed Option, tys)
+          | T.Vec -> Adt (Assumed Vec, tys, cgs)
+          | T.Option -> Adt (Assumed Option, tys, cgs)
           | T.Box -> (
               (* Eliminate the boxes *)
               match tys with
@@ -399,15 +412,13 @@ let rec translate_sty (ty : T.sty) : ty =
                   raise
                     (Failure
                        "Box/vec/option type with incorrect number of arguments")
-              )))
+              )
+          | T.Array -> Adt (Assumed Array, tys, cgs)
+          | T.Slice -> Adt (Assumed Slice, tys, cgs)
+          | T.Str -> Adt (Assumed Str, tys, cgs)))
   | TypeVar vid -> TypeVar vid
-  | Bool -> Bool
-  | Char -> Char
+  | Literal ty -> Literal ty
   | Never -> raise (Failure "Unreachable")
-  | Integer int_ty -> Integer int_ty
-  | Str -> Str
-  | Array ty -> Array (translate ty)
-  | Slice ty -> Slice (translate ty)
   | Ref (_, rty, _) -> translate rty
 
 let translate_field (f : T.field) : field =
@@ -445,8 +456,9 @@ let translate_type_decl (def : T.type_decl) : type_decl =
   (* Can't translate types with regions for now *)
   assert (def.region_params = []);
   let type_params = def.type_params in
+  let const_generic_params = def.const_generic_params in
   let kind = translate_type_decl_kind def.T.kind in
-  { def_id; name; type_params; kind }
+  { def_id; name; type_params; const_generic_params; kind }
 
 (** Translate a type, seen as an input/output of a forward function
     (preserve all borrows, etc.)
@@ -455,7 +467,7 @@ let translate_type_decl (def : T.type_decl) : type_decl =
 let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
   let translate = translate_fwd_ty type_infos in
   match ty with
-  | T.Adt (type_id, regions, tys) -> (
+  | T.Adt (type_id, regions, tys, cgs) -> (
       (* Can't translate types with regions for now *)
       assert (regions = []);
       (* Translate the type parameters *)

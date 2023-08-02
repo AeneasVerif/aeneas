@@ -149,7 +149,7 @@ let eval_assertion_concrete (config : C.config) (assertion : A.assertion) :
   let eval_assert cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match v.value with
-    | Primitive (Bool b) ->
+    | Literal (Bool b) ->
         (* Branch *)
         if b = assertion.expected then cf Unit ctx else cf Panic ctx
     | _ ->
@@ -172,26 +172,26 @@ let eval_assertion (config : C.config) (assertion : A.assertion) : st_cm_fun =
   (* Evaluate the assertion *)
   let eval_assert cf (v : V.typed_value) : m_fun =
    fun ctx ->
-    assert (v.ty = T.Bool);
+    assert (v.ty = T.Literal PV.Bool);
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
      * know the concrete value of the boolean we test, we use this value
      * even if we are in symbolic mode. Note that this case should be
      * extremely rare... *)
     match v.value with
-    | Primitive (Bool _) ->
+    | Literal (Bool _) ->
         (* Delegate to the concrete evaluation function *)
         eval_assertion_concrete config assertion cf ctx
     | Symbolic sv ->
         assert (config.mode = C.SymbolicMode);
-        assert (sv.V.sv_ty = T.Bool);
+        assert (sv.V.sv_ty = T.Literal PV.Bool);
         (* We continue the execution as if the test had succeeded, and thus
          * perform the symbolic expansion: sv ~~> true.
          * We will of course synthesize an assertion in the generated code
          * (see below). *)
         let ctx =
           apply_symbolic_expansion_non_borrow config sv
-            (V.SePrimitive (PV.Bool true)) ctx
+            (V.SeLiteral (PV.Bool true)) ctx
         in
         (* Continue *)
         let expr = cf Unit ctx in
@@ -232,7 +232,8 @@ let set_discriminant (config : C.config) (p : E.place)
   let update_value cf (v : V.typed_value) : m_fun =
    fun ctx ->
     match (v.V.ty, v.V.value) with
-    | ( T.Adt (((T.AdtId _ | T.Assumed T.Option) as type_id), regions, types),
+    | ( T.Adt
+          (((T.AdtId _ | T.Assumed T.Option) as type_id), regions, types, cgs),
         V.Adt av ) -> (
         (* There are two situations:
            - either the discriminant is already the proper one (in which case we
@@ -252,7 +253,7 @@ let set_discriminant (config : C.config) (p : E.place)
                 | T.AdtId def_id ->
                     compute_expanded_bottom_adt_value
                       ctx.type_context.type_decls def_id (Some variant_id)
-                      regions types
+                      regions types cgs
                 | T.Assumed T.Option ->
                     assert (regions = []);
                     compute_expanded_bottom_option_value variant_id
@@ -260,13 +261,14 @@ let set_discriminant (config : C.config) (p : E.place)
                 | _ -> raise (Failure "Unreachable")
               in
               assign_to_place config bottom_v p (cf Unit) ctx)
-    | ( T.Adt (((T.AdtId _ | T.Assumed T.Option) as type_id), regions, types),
+    | ( T.Adt
+          (((T.AdtId _ | T.Assumed T.Option) as type_id), regions, types, cgs),
         V.Bottom ) ->
         let bottom_v =
           match type_id with
           | T.AdtId def_id ->
               compute_expanded_bottom_adt_value ctx.type_context.type_decls
-                def_id (Some variant_id) regions types
+                def_id (Some variant_id) regions types cgs
           | T.Assumed T.Option ->
               assert (regions = []);
               compute_expanded_bottom_option_value variant_id
@@ -285,7 +287,7 @@ let set_discriminant (config : C.config) (p : E.place)
          * or reset an already initialized value, really. *)
         raise (Failure "Unexpected value")
     | _, (V.Adt _ | V.Bottom) -> raise (Failure "Inconsistent state")
-    | _, (V.Primitive _ | V.Borrow _ | V.Loan _) ->
+    | _, (V.Literal _ | V.Borrow _ | V.Loan _) ->
         raise (Failure "Unexpected value")
   in
   (* Compose and apply *)
@@ -302,20 +304,21 @@ let push_frame : cm_fun = fun cf ctx -> cf (ctx_push_frame ctx)
     instantiation of a non-local function.
  *)
 let get_non_local_function_return_type (fid : A.assumed_fun_id)
-    (region_params : T.erased_region list) (type_params : T.ety list) : T.ety =
+    (region_params : T.erased_region list) (type_params : T.ety list)
+    (const_generic_params : T.const_generic list) : T.ety =
   (* [Box::free] has a special treatment *)
-  match (fid, region_params, type_params) with
-  | A.BoxFree, [], [ _ ] -> mk_unit_ty
+  match (fid, region_params, type_params, const_generic_params) with
+  | A.BoxFree, [], [ _ ], [] -> mk_unit_ty
   | _ ->
       (* Retrieve the function's signature *)
       let sg = Assumed.get_assumed_sig fid in
       (* Instantiate the return type  *)
-      let tsubst =
-        Subst.make_type_subst
-          (List.map (fun v -> v.T.index) sg.type_params)
-          type_params
+      let tsubst = Subst.make_type_subst_from_vars sg.type_params type_params in
+      let cgsubst =
+        Subst.make_const_generic_subst_from_vars sg.const_generic_params
+          const_generic_params
       in
-      Subst.erase_regions_substitute_types tsubst sg.output
+      Subst.erase_regions_substitute_types tsubst cgsubst sg.output
 
 let move_return_value (config : C.config) (pop_return_value : bool)
     (cf : V.typed_value option -> m_fun) : m_fun =
@@ -443,7 +446,7 @@ let eval_box_new_concrete (config : C.config)
       (* Create the new box *)
       let cf_create cf (moved_input_value : V.typed_value) : m_fun =
         (* Create the box value *)
-        let box_ty = T.Adt (T.Assumed T.Box, [], [ boxed_ty ]) in
+        let box_ty = T.Adt (T.Assumed T.Box, [], [ boxed_ty ], []) in
         let box_v =
           V.Adt { variant_id = None; field_values = [ moved_input_value ] }
         in
