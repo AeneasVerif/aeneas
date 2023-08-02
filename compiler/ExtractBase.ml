@@ -878,6 +878,20 @@ let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :
     (fun ctx (var : type_var) -> ctx_add_type_var var.name var.index ctx)
     ctx vars
 
+let ctx_add_const_generic_params (vars : const_generic_var list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (var : const_generic_var) ->
+      ctx_add_const_generic_var var.name var.index ctx)
+    ctx vars
+
+let ctx_add_type_const_generic_params (tvars : type_var list)
+    (cgvars : const_generic_var list) (ctx : extraction_ctx) :
+    extraction_ctx * string list * string list =
+  let ctx, tys = ctx_add_type_params tvars ctx in
+  let ctx, cgs = ctx_add_const_generic_params cgvars ctx in
+  (ctx, tys, cgs)
+
 let ctx_add_type_decl_struct (def : type_decl) (ctx : extraction_ctx) :
     extraction_ctx * string =
   assert (match def.kind with Struct _ -> true | _ -> false);

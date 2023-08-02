@@ -1059,6 +1059,13 @@ let extract_const_generic (ctx : extraction_ctx) (fmt : F.formatter)
       let s = ctx_get_const_generic_var id ctx in
       F.pp_print_string fmt s
 
+let extract_literal_type (ctx : extraction_ctx) (fmt : F.formatter)
+    (ty : literal_type) : unit =
+  match ty with
+  | Bool -> F.pp_print_string fmt ctx.fmt.bool_name
+  | Char -> F.pp_print_string fmt ctx.fmt.char_name
+  | Integer int_ty -> F.pp_print_string fmt (ctx.fmt.int_name int_ty)
+
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
 
@@ -1132,6 +1139,8 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                   cgs);
               if print_paren then F.pp_print_string fmt ")"
           | HOL4 ->
+              (* Const generics are unsupported in HOL4 *)
+              assert (cgs = []);
               let print_tys =
                 match type_id with
                 | AdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
@@ -1150,9 +1159,7 @@ let rec extract_ty (ctx : extraction_ctx) (fmt : F.formatter)
                 F.pp_print_space fmt ());
               F.pp_print_string fmt (ctx_get_type with_opaque_pre type_id ctx)))
   | TypeVar vid -> F.pp_print_string fmt (ctx_get_type_var vid ctx)
-  | Literal Bool -> F.pp_print_string fmt ctx.fmt.bool_name
-  | Literal Char -> F.pp_print_string fmt ctx.fmt.char_name
-  | Literal (Integer int_ty) -> F.pp_print_string fmt (ctx.fmt.int_name int_ty)
+  | Literal lty -> extract_literal_type ctx fmt lty
   | Arrow (arg_ty, ret_ty) ->
       if inside then F.pp_print_string fmt "(";
       extract_rec false arg_ty;
@@ -1202,8 +1209,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
 (** Print the variants *)
 let extract_type_decl_variant (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (type_name : string)
-    (type_params : string list) (cons_name : string) (fields : field list) :
-    unit =
+    (type_params : string list) (cg_params : string list) (cons_name : string)
+    (fields : field list) : unit =
   F.pp_print_space fmt ();
   (* variant box *)
   F.pp_open_hvbox fmt ctx.indent_incr;
@@ -1255,16 +1262,18 @@ let extract_type_decl_variant (ctx : extraction_ctx) (fmt : F.formatter)
   let _ =
     List.fold_left (fun ctx (fid, f) -> print_field fid f ctx) ctx fields
   in
+  (* Sanity check: HOL4 doesn't support const generics *)
+  assert (cg_params = [] || !backend <> HOL4);
   (* Print the final type *)
   if !backend <> HOL4 then (
     F.pp_print_space fmt ();
     F.pp_open_hovbox fmt 0;
     F.pp_print_string fmt type_name;
     List.iter
-      (fun type_param ->
+      (fun p ->
         F.pp_print_space fmt ();
-        F.pp_print_string fmt type_param)
-      type_params;
+        F.pp_print_string fmt p)
+      (List.append type_params cg_params);
     F.pp_close_box fmt ());
   (* Close the variant box *)
   F.pp_close_box fmt ()
@@ -1272,7 +1281,8 @@ let extract_type_decl_variant (ctx : extraction_ctx) (fmt : F.formatter)
 (* TODO: we don' need the [def_name] paramter: it can be retrieved from the context *)
 let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (def : type_decl) (def_name : string)
-    (type_params : string list) (variants : variant list) : unit =
+    (type_params : string list) (cg_params : string list)
+    (variants : variant list) : unit =
   (* We want to generate a definition which looks like this (taking F* as example):
      {[
        type list a = | Cons : a -> list a -> list a | Nil : list a
@@ -1311,7 +1321,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     let cons_name = ctx.fmt.variant_name def.name v.variant_name in
     let fields = v.fields in
     extract_type_decl_variant ctx fmt type_decl_group def_name type_params
-      cons_name fields
+      cg_params cons_name fields
   in
   (* Print the variants *)
   let variants = VariantId.mapi (fun vid v -> (vid, v)) variants in
@@ -1319,7 +1329,8 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
-    (type_params : string list) (fields : field list) : unit =
+    (type_params : string list) (cg_params : string list) (fields : field list)
+    : unit =
   (* We want to generate a definition which looks like this (taking F* as example):
      {[
        type t = { x : int; y : bool; }
@@ -1446,7 +1457,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       in
       let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
       extract_type_decl_variant ctx fmt type_decl_group def_name type_params
-        cons_name fields)
+        cg_params cons_name fields)
   in
   ()
 
@@ -1493,19 +1504,25 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     else None
   in
   (* If in Coq and the declaration is opaque, it must have the shape:
-     [Axiom Ident : forall (T0 ... Tn : Type), ... -> ... -> ...].
+     [Axiom Ident : forall (T0 ... Tn : Type) (N0 : ...) ... (Nn : ...), ... -> ... -> ...].
 
      The boolean [is_opaque_coq] is used to detect this case.
   *)
   let is_opaque = type_kind = None in
   let is_opaque_coq = !backend = Coq && is_opaque in
-  let use_forall = is_opaque_coq && def.type_params <> [] in
+  let use_forall =
+    is_opaque_coq && (def.type_params <> [] || def.const_generic_params <> [])
+  in
   (* Retrieve the definition name *)
   let with_opaque_pre = false in
   let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
-  (* Add the type params - note that we need those bindings only for the
+  (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
-  let ctx_body, type_params = ctx_add_type_params def.type_params ctx in
+  let ctx_body, type_params, cg_params =
+    ctx_add_type_const_generic_params def.type_params def.const_generic_params
+      ctx
+  in
+  let ty_cg_params = List.append type_params cg_params in
   (* Add a break before *)
   if !backend <> HOL4 || not (decl_is_first_from_group kind) then
     F.pp_print_break fmt 0 0;
@@ -1518,31 +1535,47 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (match !backend with
   | Coq | FStar | HOL4 -> F.pp_open_hvbox fmt 0
   | Lean -> F.pp_open_vbox fmt 0);
-  (* Open a box for "type TYPE_NAME (TYPE_PARAMS) =" *)
+  (* Open a box for "type TYPE_NAME (TYPE_PARAMS CONST_GEN_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
   let qualif = ctx.fmt.type_decl_kind_to_qualif kind type_kind in
   (match qualif with
   | Some qualif -> F.pp_print_string fmt (qualif ^ " " ^ def_name)
   | None -> F.pp_print_string fmt def_name);
-  (* Print the type parameters *)
-  if def.type_params <> [] && !backend <> HOL4 then (
+  (* HOL4 doesn't support const generics *)
+  assert (cg_params = [] || !backend <> HOL4);
+  (* Print the type/const generic parameters *)
+  if ty_cg_params <> [] && !backend <> HOL4 then (
     if use_forall then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt ":";
       F.pp_print_space fmt ();
       F.pp_print_string fmt "forall");
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt "(";
+    (* Print the type parameters *)
+    if type_params <> [] then (
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "(";
+      List.iter
+        (fun s ->
+          F.pp_print_string fmt s;
+          F.pp_print_space fmt ())
+        type_params;
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt (type_keyword () ^ ")"));
+    (* Print the const generic parameters *)
     List.iter
-      (fun (p : type_var) ->
-        let pname = ctx_get_type_var p.index ctx_body in
-        F.pp_print_string fmt pname;
-        F.pp_print_space fmt ())
-      def.type_params;
-    F.pp_print_string fmt ":";
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt (type_keyword () ^ ")"));
+      (fun (var : const_generic_var) ->
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "(";
+        let n = ctx_get_const_generic_var var.index ctx in
+        F.pp_print_string fmt n;
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt ":";
+        F.pp_print_space fmt ();
+        extract_literal_type ctx fmt var.ty;
+        F.pp_print_string fmt ")")
+      def.const_generic_params);
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
@@ -1571,10 +1604,10 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      match def.kind with
      | Struct fields ->
          extract_type_decl_struct_body ctx_body fmt type_decl_group kind def
-           type_params fields
+           type_params cg_params fields
      | Enum variants ->
          extract_type_decl_enum_body ctx_body fmt type_decl_group def def_name
-           type_params variants
+           type_params cg_params variants
      | Opaque -> raise (Failure "Unreachable"));
   (* Add the definition end delimiter *)
   if !backend = HOL4 && decl_is_not_last_from_group kind then (
@@ -1601,6 +1634,8 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Retrieve the definition name *)
   let with_opaque_pre = false in
   let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
+  (* Generic parameters are unsupported *)
+  assert (def.const_generic_params = []);
   (* Count the number of parameters *)
   let num_params = List.length def.type_params in
   (* Generate the declaration *)
@@ -1624,6 +1659,7 @@ let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
   let def_name = ctx_get_local_type with_opaque_pre def.def_id ctx in
   (* Sanity check *)
   assert (def.type_params = []);
+  assert (def.const_generic_params = []);
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ("Type " ^ def_name ^ " = “: unit”");
@@ -1663,11 +1699,14 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   assert (!backend = Coq);
   (* Generating the [Arguments] instructions is useful only if there are type parameters *)
-  if decl.type_params = [] then ()
+  if decl.type_params = [] && decl.const_generic_params = [] then ()
   else
     (* Add the type params - note that we need those bindings only for the
      * body translation (they are not top-level) *)
-    let _ctx_body, type_params = ctx_add_type_params decl.type_params ctx in
+    let _ctx_body, type_params, cg_params =
+      ctx_add_type_const_generic_params decl.type_params
+        decl.const_generic_params ctx
+    in
     (* Auxiliary function to extract an [Arguments Cons {T} _ _.] instruction *)
     let extract_arguments_info (cons_name : string) (fields : 'a list) : unit =
       (* Add a break before *)
@@ -1675,12 +1714,12 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
       (* Open a box *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Small utility *)
-      let print_type_vars () =
+      let print_vars () =
         List.iter
           (fun (var : string) ->
             F.pp_print_space fmt ();
             F.pp_print_string fmt ("{" ^ var ^ "}"))
-          type_params
+          (List.append type_params cg_params)
       in
       let print_fields () =
         List.iter
@@ -1693,7 +1732,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_string fmt "Arguments";
       F.pp_print_space fmt ();
       F.pp_print_string fmt cons_name;
-      print_type_vars ();
+      print_vars ();
       print_fields ();
       F.pp_print_string fmt ".";
 
@@ -1747,7 +1786,10 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
       let is_rec = decl_is_from_rec_group kind in
       if is_rec then
         (* Add the type params *)
-        let ctx, type_params = ctx_add_type_params decl.type_params ctx in
+        let ctx, type_params, cg_params =
+          ctx_add_type_const_generic_params decl.type_params
+            decl.const_generic_params ctx
+        in
         let ctx, record_var = ctx_add_var "x" (VarId.of_int 0) ctx in
         let ctx, field_var = ctx_add_var "x" (VarId.of_int 1) ctx in
         let with_opaque_pre = false in
@@ -1780,6 +1822,19 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
             F.pp_print_space fmt ();
             F.pp_print_string fmt "Type}";
             F.pp_print_space fmt ());
+          (* Print the const generic parameters *)
+          if cg_params <> [] then
+            List.iter
+              (fun (v : const_generic_var) ->
+                F.pp_print_string fmt "{";
+                let n = ctx_get_const_generic_var v.index ctx in
+                F.pp_print_string fmt n;
+                F.pp_print_string fmt ":";
+                F.pp_print_space fmt ();
+                extract_literal_type ctx fmt v.ty;
+                F.pp_print_string fmt "}";
+                F.pp_print_space fmt ())
+              decl.const_generic_params;
           (* Print the record parameter *)
           F.pp_print_string fmt "(";
           F.pp_print_string fmt record_var;
@@ -1967,16 +2022,6 @@ let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0
-
-(** In some provers like HOL4, we don't print the type parameters when calling
-    functions (and the polymorphism is uniform...).
-
-    TODO: we may want to check that the polymorphism is indeed uniform when
-    generating code for such backends, and print at least a warning to the
-    user when it is not the case.
- *)
-let print_fun_type_params () : bool =
-  match !backend with FStar | Coq | Lean -> true | HOL4 -> false
 
 (** Compute the names for all the pure functions generated from a rust function
     (forward function and backward functions).
@@ -2193,7 +2238,8 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
       (* Top-level qualifier *)
       match qualif.id with
       | FunOrOp fun_id ->
-          extract_function_call ctx fmt inside fun_id qualif.type_args args
+          extract_function_call ctx fmt inside fun_id qualif.type_args
+            qualif.const_generic_args args
       | Global global_id -> extract_global ctx fmt global_id
       | AdtCons adt_cons_id ->
           extract_adt_cons ctx fmt inside adt_cons_id qualif.type_args
@@ -2223,7 +2269,7 @@ and extract_App (ctx : extraction_ctx) (fmt : F.formatter) (inside : bool)
 (** Subcase of the app case: function call *)
 and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (fid : fun_or_op_id) (type_args : ty list)
-    (args : texpression list) : unit =
+    (cg_args : const_generic list) (args : texpression list) : unit =
   match (fid, args) with
   | Unop unop, [ arg ] ->
       (* A unop can have *at most* one argument (the result can't be a function!).
@@ -2244,13 +2290,20 @@ and extract_function_call (ctx : extraction_ctx) (fmt : F.formatter)
       let with_opaque_pre = ctx.use_opaque_pre in
       let fun_name = ctx_get_function with_opaque_pre fun_id ctx in
       F.pp_print_string fmt fun_name;
+      (* Sanity check: HOL4 doesn't support const generics *)
+      assert (cg_args = [] || !backend <> HOL4);
       (* Print the type parameters, if the backend is not HOL4 *)
-      if !backend <> HOL4 then
+      if !backend <> HOL4 then (
         List.iter
           (fun ty ->
             F.pp_print_space fmt ();
             extract_ty ctx fmt TypeDeclId.Set.empty true ty)
           type_args;
+        List.iter
+          (fun cg ->
+            F.pp_print_space fmt ();
+            extract_const_generic ctx fmt true cg)
+          cg_args);
       (* Print the arguments *)
       List.iter
         (fun ve ->
@@ -2751,33 +2804,52 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : extraction_ctx * extraction_ctx =
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
-  let ctx, _ = ctx_add_type_params def.signature.type_params ctx in
+  let ctx, type_params, cg_params =
+    ctx_add_type_const_generic_params def.signature.type_params
+      def.signature.const_generic_params ctx
+  in
   (* Print the parameters - rem.: we should have filtered the functions
    * with no input parameters *)
   (* The type parameters.
 
      Note that in HOL4 we don't print the type parameters.
   *)
-  if def.signature.type_params <> [] && !backend <> HOL4 then (
-    (* Open a box for the type parameters *)
+  if (type_params <> [] || cg_params <> []) && !backend <> HOL4 then (
+    (* Open a box for the type and const generic parameters *)
     F.pp_open_hovbox fmt 0;
-    insert_req_space fmt space;
-    F.pp_print_string fmt "(";
-    List.iter
-      (fun (p : type_var) ->
-        let pname = ctx_get_type_var p.index ctx in
-        F.pp_print_string fmt pname;
-        F.pp_print_space fmt ())
-      def.signature.type_params;
-    F.pp_print_string fmt ":";
-    F.pp_print_space fmt ();
-    let type_keyword =
-      match !backend with
-      | FStar -> "Type0"
-      | Coq | Lean -> "Type"
-      | HOL4 -> raise (Failure "Unreachable")
-    in
-    F.pp_print_string fmt (type_keyword ^ ")");
+    (* The type parameters *)
+    if type_params <> [] then (
+      insert_req_space fmt space;
+      F.pp_print_string fmt "(";
+      List.iter
+        (fun (p : type_var) ->
+          let pname = ctx_get_type_var p.index ctx in
+          F.pp_print_string fmt pname;
+          F.pp_print_space fmt ())
+        def.signature.type_params;
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      let type_keyword =
+        match !backend with
+        | FStar -> "Type0"
+        | Coq | Lean -> "Type"
+        | HOL4 -> raise (Failure "Unreachable")
+      in
+      F.pp_print_string fmt (type_keyword ^ ")"));
+    (* The const generic parameters *)
+    if cg_params <> [] then
+      List.iter
+        (fun (p : const_generic_var) ->
+          let pname = ctx_get_const_generic_var p.index ctx in
+          insert_req_space fmt space;
+          F.pp_print_string fmt "(";
+          F.pp_print_string fmt pname;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":";
+          F.pp_print_space fmt ();
+          extract_literal_type ctx fmt p.ty;
+          F.pp_print_string fmt ")")
+        def.signature.const_generic_params;
     (* Close the box for the type parameters *)
     F.pp_close_box fmt ());
   (* The input parameters - note that doing this adds bindings to the context *)
@@ -3072,7 +3144,11 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      The boolean [is_opaque_coq] is used to detect this case.
   *)
   let is_opaque_coq = !backend = Coq && is_opaque in
-  let use_forall = is_opaque_coq && def.signature.type_params <> [] in
+  let use_forall =
+    is_opaque_coq
+    && (def.signature.type_params <> []
+       || def.signature.const_generic_params <> [])
+  in
   (* Print the qualifier ("assume", etc.).
 
      if `wrap_opaque_in_sig`: we generate a record of assumed funcions.
@@ -3145,13 +3221,20 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       (* The name of the decrease clause *)
       let decr_name = ctx_get_termination_measure def.def_id def.loop_id ctx in
       F.pp_print_string fmt decr_name;
-      (* Print the type parameters *)
+      (* Print the type/const generic parameters - TODO: we do this many
+         times, we should have a helper to factor it out *)
       List.iter
         (fun (p : type_var) ->
           let pname = ctx_get_type_var p.index ctx in
           F.pp_print_space fmt ();
           F.pp_print_string fmt pname)
         def.signature.type_params;
+      List.iter
+        (fun (p : const_generic_var) ->
+          let pname = ctx_get_const_generic_var p.index ctx in
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt pname)
+        def.signature.const_generic_params;
       (* Print the input values: we have to be careful here to print
        * only the input values which are in common with the *forward*
        * function (the additional input values "given back" to the
@@ -3238,12 +3321,20 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (* Open the box for [DECREASES] *)
     F.pp_open_hovbox fmt ctx.indent_incr;
     F.pp_print_string fmt terminates_name;
+    (* Print the type/const generic params - TODO: factor out *)
     List.iter
       (fun (p : type_var) ->
         let pname = ctx_get_type_var p.index ctx in
         F.pp_print_space fmt ();
         F.pp_print_string fmt pname)
       def.signature.type_params;
+    List.iter
+      (fun (p : const_generic_var) ->
+        let pname = ctx_get_const_generic_var p.index ctx in
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt pname)
+      def.signature.const_generic_params;
+    (* Print the variables *)
     List.iter
       (fun v ->
         F.pp_print_space fmt ();
@@ -3300,9 +3391,13 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_get_local_function with_opaque_pre def.def_id def.loop_id def.back_id
       ctx
   in
-  (* Add the type parameters - note that we need those bindings only for the
-   * generation of the type (they are not top-level) *)
-  let ctx, _ = ctx_add_type_params def.signature.type_params ctx in
+  assert (def.signature.const_generic_params = []);
+  (* Add the type/const gen parameters - note that we need those bindings
+     only for the generation of the type (they are not top-level) *)
+  let ctx, _, _ =
+    ctx_add_type_const_generic_params def.signature.type_params
+      def.signature.const_generic_params ctx
+  in
   (* Add breaks to insert new lines between definitions *)
   F.pp_print_break fmt 0 0;
   (* Open a box for the whole definition *)
@@ -3481,6 +3576,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   assert (List.length body.signature.inputs = 0);
   assert (List.length body.signature.doutputs = 1);
   assert (List.length body.signature.type_params = 0);
+  assert (List.length body.signature.const_generic_params = 0);
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
@@ -3551,6 +3647,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
   let sg = def.signature in
   if
     sg.type_params = []
+    && sg.const_generic_params = []
     && (sg.inputs = [ mk_unit_ty ] || sg.inputs = [])
     && sg.output = mk_result_ty mk_unit_ty
   then (
