@@ -707,7 +707,8 @@ let greedy_expand_symbolics_with_borrows (config : C.config) : cm_fun =
         | T.Adt ((Tuple | Assumed Box), _, _, _) | T.Ref (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config sv None
-        | T.Adt (Assumed (Vec | Option | Array | Slice | Str), _, _, _) ->
+        | T.Adt (Assumed (Vec | Option | Array | Slice | Str | Range), _, _, _)
+          ->
             (* We can't expand those *)
             raise
               (Failure

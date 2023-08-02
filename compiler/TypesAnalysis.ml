@@ -170,8 +170,10 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
         (* Continue exploring *)
         analyze expl_info ty_info rty
     | Adt
-        ((Tuple | Assumed (Box | Vec | Option | Slice | Array | Str)), _, tys, _)
-      ->
+        ( (Tuple | Assumed (Box | Vec | Option | Slice | Array | Str | Range)),
+          _,
+          tys,
+          _ ) ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze expl_info ty_info ty)

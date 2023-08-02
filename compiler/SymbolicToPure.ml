@@ -416,7 +416,8 @@ let rec translate_sty (ty : T.sty) : ty =
               )
           | T.Array -> Adt (Assumed Array, tys, cgs)
           | T.Slice -> Adt (Assumed Slice, tys, cgs)
-          | T.Str -> Adt (Assumed Str, tys, cgs)))
+          | T.Str -> Adt (Assumed Str, tys, cgs)
+          | T.Range -> Adt (Assumed Range, tys, cgs)))
   | TypeVar vid -> TypeVar vid
   | Literal ty -> Literal ty
   | Never -> raise (Failure "Unreachable")
@@ -472,6 +473,7 @@ let translate_type_id (id : T.type_id) : type_id =
         | T.Array -> Array
         | T.Slice -> Slice
         | T.Str -> Str
+        | T.Range -> Range
         | T.Box ->
             (* Boxes have to be eliminated: this type id shouldn't
                be translated *)
@@ -493,7 +495,8 @@ let rec translate_fwd_ty (type_infos : TA.type_infos) (ty : 'r T.ty) : ty =
       let t_tys = List.map translate tys in
       (* Eliminate boxes and simplify tuples *)
       match type_id with
-      | AdtId _ | T.Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str) ->
+      | AdtId _
+      | T.Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
           (* No general parametricity for now *)
           assert (not (List.exists (TypesUtils.ty_has_borrows type_infos) tys));
           let type_id = translate_type_id type_id in
@@ -537,7 +540,8 @@ let rec translate_back_ty (type_infos : TA.type_infos)
   match ty with
   | T.Adt (type_id, _, tys, cgs) -> (
       match type_id with
-      | T.AdtId _ | Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str) ->
+      | T.AdtId _
+      | Assumed (T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
           (* Don't accept ADTs (which are not tuples) with borrows for now *)
           assert (not (TypesUtils.ty_has_borrows type_infos ty));
           let type_id = translate_type_id type_id in
@@ -1037,7 +1041,8 @@ let rec typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
         let adt_id, _, _, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | T.AdtId _
-        | T.Assumed (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str) ->
+        | T.Assumed
+            (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
             assert (field_values = []);
             None
         | T.Tuple ->
@@ -1183,7 +1188,8 @@ let rec typed_avalue_to_given_back (mp : mplace option) (av : V.typed_avalue)
         let adt_id, _, _, _ = TypesUtils.ty_as_adt av.ty in
         match adt_id with
         | T.AdtId _
-        | T.Assumed (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str) ->
+        | T.Assumed
+            (T.Box | T.Vec | T.Option | T.Array | T.Slice | T.Str | T.Range) ->
             assert (field_values = []);
             (ctx, None)
         | T.Tuple ->
@@ -2272,6 +2278,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
        * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
       raise (Failure "Attempt to expand a non-expandable value")
+  | T.Assumed Range -> raise (Failure "Unimplemented")
   | T.Assumed T.Option ->
       (* We shouldn't get there in the "one-branch" case: options have
        * two variants *)

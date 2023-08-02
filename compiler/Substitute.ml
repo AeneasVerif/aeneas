@@ -230,6 +230,11 @@ let ctx_adt_value_get_instantiated_field_rtypes (ctx : C.eval_ctx)
           if adt.V.variant_id = Some T.option_some_id then type_params
           else if adt.V.variant_id = Some T.option_none_id then []
           else raise (Failure "Unreachable")
+      | T.Range ->
+          assert (List.length region_params = 0);
+          assert (List.length type_params = 1);
+          assert (List.length cg_params = 0);
+          type_params
       | T.Array | T.Slice | T.Str ->
           (* Those types don't have fields *)
           raise (Failure "Unreachable"))

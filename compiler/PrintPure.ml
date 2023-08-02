@@ -164,6 +164,7 @@ let assumed_ty_to_string (aty : assumed_ty) : string =
   | Array -> "Array"
   | Slice -> "Slice"
   | Str -> "Str"
+  | Range -> "Range"
 
 let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
@@ -293,9 +294,11 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
   | Assumed aty -> (
       (* Assumed type *)
       match aty with
-      | State | Vec | Array | Slice | Str ->
+      | State | Array | Slice | Str ->
           (* Those types are opaque: we can't get there *)
           raise (Failure "Unreachable")
+      | Vec -> "@Vec"
+      | Range -> "@Range"
       | Result ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then "@Result::Return"
@@ -334,6 +337,7 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
   | Assumed aty -> (
       (* Assumed type *)
       match aty with
+      | Range -> FieldId.to_string field_id
       | State | Fuel | Vec | Array | Slice | Str ->
           (* Opaque types: we can't get there *)
           raise (Failure "Unreachable")
@@ -425,7 +429,14 @@ let adt_g_value_to_string (fmt : value_formatter)
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in
           let id = assumed_ty_to_string aty in
-          id ^ " [" ^ String.concat "; " field_values ^ "]")
+          id ^ " [" ^ String.concat "; " field_values ^ "]"
+      | Range ->
+          assert (variant_id = None);
+          let field_values =
+            List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
+          in
+          let id = assumed_ty_to_string aty in
+          id ^ " {" ^ String.concat "; " field_values ^ "}")
   | _ ->
       let fmt = value_to_type_formatter fmt in
       raise

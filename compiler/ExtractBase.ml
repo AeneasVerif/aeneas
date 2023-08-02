@@ -292,7 +292,7 @@ type formatter = {
           indices to names, the responsability of finding a proper index is
           delegated to helper functions.
        *)
-  extract_primitive_value : F.formatter -> bool -> primitive_value -> unit;
+  extract_literal : F.formatter -> bool -> literal -> unit;
       (** Format a constant value.
 
           Inputs:
@@ -674,7 +674,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             if variant_id = option_some_id then "@option::Some"
             else if variant_id = option_none_id then "@option::None"
             else raise (Failure "Unreachable")
-        | Assumed (State | Vec | Fuel) -> raise (Failure "Unreachable")
+        | Assumed (State | Vec | Fuel | Array | Slice | Str | Range) ->
+            raise (Failure "Unreachable")
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
@@ -688,10 +689,10 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let field_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed (State | Result | Error | Fuel | Option) ->
-            raise (Failure "Unreachable")
-        | Assumed Vec ->
-            (* We can't directly have access to the fields of a vector *)
+        | Assumed
+            ( State | Result | Error | Fuel | Option | Vec | Array | Slice | Str
+            | Range ) ->
+            (* We can't directly have access to the fields of those types *)
             raise (Failure "Unreachable")
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in

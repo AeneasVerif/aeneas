@@ -64,6 +64,7 @@ type assumed_ty =
   | Array
   | Slice
   | Str
+  | Range
 [@@deriving show, ord]
 
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather

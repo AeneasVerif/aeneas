@@ -46,7 +46,11 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           if variant_id = option_some_id then [ ty ]
           else if variant_id = option_none_id then []
           else
-            raise (Failure "Unreachable: improper variant id for result type")
+            raise (Failure "Unreachable: improper variant id for option type")
+      | Range ->
+          let ty = Collections.List.to_cons_nil tys in
+          assert (variant_id = None);
+          [ ty; ty ]
       | Vec | Array | Slice | Str ->
           raise
             (Failure

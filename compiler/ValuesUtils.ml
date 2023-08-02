@@ -3,6 +3,7 @@ open TypesUtils
 open Types
 open Values
 module TA = TypesAnalysis
+include PrimitiveValuesUtils
 
 (** Utility exception *)
 exception FoundSymbolicValue of symbolic_value
