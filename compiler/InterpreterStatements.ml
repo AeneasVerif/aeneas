@@ -1051,12 +1051,10 @@ and eval_function_call (config : C.config) (call : A.call) : st_cm_fun =
 
 (** Evaluate a local (i.e., non-assumed) function call in concrete mode *)
 and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
-    (region_args : T.erased_region list) (type_args : T.ety list)
+    (_region_args : T.erased_region list) (type_args : T.ety list)
     (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
     st_cm_fun =
  fun cf ctx ->
-  assert (region_args = []);
-
   (* Retrieve the (correctly instantiated) body *)
   let def = C.ctx_lookup_fun_decl ctx fid in
   (* We can evaluate the function call only if it is not opaque *)
@@ -1157,11 +1155,10 @@ and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
  *)
 and eval_function_call_symbolic_from_inst_sig (config : C.config)
     (fid : A.fun_id) (inst_sg : A.inst_fun_sig)
-    (region_args : T.erased_region list) (type_args : T.ety list)
+    (_region_args : T.erased_region list) (type_args : T.ety list)
     (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
     st_cm_fun =
  fun cf ctx ->
-  assert (region_args = []);
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.A.output in
   let ret_spc = mk_fresh_symbolic_value V.FunCallRet ret_sv_ty in

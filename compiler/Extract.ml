@@ -218,44 +218,53 @@ let keywords () =
   List.concat [ named_unops; named_binops; misc ]
 
 let assumed_adts () : (assumed_ty * string) list =
-  List.map
-    (fun (t, s) ->
-      if !backend = Lean then
-        ( t,
-          Printf.sprintf "%c%s"
-            (Char.uppercase_ascii s.[0])
-            (String.sub s 1 (String.length s - 1)) )
-      else (t, s))
-    (match !backend with
-    | Lean ->
-        [
-          (State, "State");
-          (Result, "Result");
-          (Error, "Error");
-          (Fuel, "Nat");
-          (Option, "Option");
-          (Vec, "Vec");
-        ]
-    | Coq | FStar ->
-        [
-          (State, "state");
-          (Result, "result");
-          (Error, "error");
-          (Fuel, "nat");
-          (Option, "option");
-          (Vec, "vec");
-        ]
-    | HOL4 ->
-        [
-          (State, "state");
-          (Result, "result");
-          (Error, "error");
-          (Fuel, "num");
-          (Option, "option");
-          (Vec, "vec");
-        ])
+  match !backend with
+  | Lean ->
+      [
+        (State, "State");
+        (Result, "Result");
+        (Error, "Error");
+        (Fuel, "Nat");
+        (Option, "Option");
+        (Vec, "Vec");
+        (Array, "Array");
+        (Slice, "Slice");
+        (Str, "Str");
+        (Range, "Range");
+      ]
+  | Coq | FStar ->
+      [
+        (State, "state");
+        (Result, "result");
+        (Error, "error");
+        (Fuel, "nat");
+        (Option, "option");
+        (Vec, "vec");
+        (Array, "array");
+        (Slice, "slice");
+        (Str, "str");
+        (Range, "range");
+      ]
+  | HOL4 ->
+      [
+        (State, "state");
+        (Result, "result");
+        (Error, "error");
+        (Fuel, "num");
+        (Option, "option");
+        (Vec, "vec");
+        (Array, "array");
+        (Slice, "slice");
+        (Str, "str");
+        (Range, "range");
+      ]
 
-let assumed_structs : (assumed_ty * string) list = []
+let assumed_struct_constructors () : (assumed_ty * string) list =
+  match !backend with
+  | Lean -> [ (Range, "Range.mk"); (Array, "Array.mk") ]
+  | Coq -> [ (Range, "range.mk"); (Array, "array.mk") ]
+  | FStar -> [ (Range, "mkrange"); (Array, "mkarray") ]
+  | HOL4 -> [ (Range, "mk_range"); (Array, "mk_array") ]
 
 let assumed_variants () : (assumed_ty * VariantId.id * string) list =
   match !backend with
@@ -320,6 +329,21 @@ let assumed_llbc_functions () :
         (VecIndex, rg0, "vec_index_back") (* shouldn't be used *);
         (VecIndexMut, None, "vec_index_mut_fwd");
         (VecIndexMut, rg0, "vec_index_mut_back");
+        (ArraySharedIndex, None, "array_shared_index");
+        (ArrayMutIndex, None, "array_mut_index_fwd");
+        (ArrayMutIndex, rg0, "array_mut_index_back");
+        (ArrayToSharedSlice, None, "array_to_shared_slice");
+        (ArrayToMutSlice, None, "array_to_mut_slice_fwd");
+        (ArrayToMutSlice, rg0, "array_to_mut_slice_back");
+        (ArraySharedSubslice, None, "array_shared_subslice");
+        (ArrayMutSubslice, None, "array_mut_subslice_fwd");
+        (ArrayMutSubslice, rg0, "array_mut_subslice_back");
+        (SliceSharedIndex, None, "slice_shared_index");
+        (SliceMutIndex, None, "slice_mut_index_fwd");
+        (SliceMutIndex, rg0, "slice_mut_index_back");
+        (SliceSharedSubslice, None, "slice_shared_subslice");
+        (SliceMutSubslice, None, "slice_mut_subslice_fwd");
+        (SliceMutSubslice, rg0, "slice_mut_subslice_back");
       ]
   | Lean ->
       [
@@ -335,6 +359,21 @@ let assumed_llbc_functions () :
         (VecIndex, rg0, "Vec.index_back") (* shouldn't be used *);
         (VecIndexMut, None, "Vec.index_mut");
         (VecIndexMut, rg0, "Vec.index_mut_back");
+        (ArraySharedIndex, None, "Array.shared_index");
+        (ArrayMutIndex, None, "Array.mut_index");
+        (ArrayMutIndex, rg0, "Array.mut_index_back");
+        (ArrayToSharedSlice, None, "Array.to_shared_slice");
+        (ArrayToMutSlice, None, "Array.to_mut_slice");
+        (ArrayToMutSlice, rg0, "Array.to_mut_slice_back");
+        (ArraySharedSubslice, None, "Array.shared_subslice");
+        (ArrayMutSubslice, None, "Array.mut_subslice");
+        (ArrayMutSubslice, rg0, "Array.mut_subslice_back");
+        (SliceSharedIndex, None, "Slice.shared_index");
+        (SliceMutIndex, None, "Slice.mut_index");
+        (SliceMutIndex, rg0, "Slice.mut_index_back");
+        (SliceSharedSubslice, None, "Slice.shared_subslice");
+        (SliceMutSubslice, None, "Slice.mut_subslice");
+        (SliceMutSubslice, rg0, "Slice.mut_subslice_back");
       ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =
@@ -361,7 +400,7 @@ let names_map_init () : names_map_init =
   {
     keywords = keywords ();
     assumed_adts = assumed_adts ();
-    assumed_structs;
+    assumed_structs = assumed_struct_constructors ();
     assumed_variants = assumed_variants ();
     assumed_llbc_functions = assumed_llbc_functions ();
     assumed_pure_functions = assumed_pure_functions ();

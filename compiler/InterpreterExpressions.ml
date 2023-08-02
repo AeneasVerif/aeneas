@@ -713,17 +713,30 @@ let eval_rvalue_aggregate (config : C.config)
         let aggregated : V.typed_value = { V.value = Adt av; ty = aty } in
         (* Call the continuation *)
         cf aggregated ctx
-    | E.AggregatedArray (ety, cg) ->
+    | E.AggregatedArray (ety, cg) -> (
         (* Sanity check: all the values have the proper type *)
         assert (List.for_all (fun (v : V.typed_value) -> v.V.ty = ety) values);
         (* Sanity check: the number of values is consistent with the length *)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
-        assert (Z.to_int len = List.length values);
+        assert (len = Z.of_int (List.length values));
         let v = V.Adt { variant_id = None; field_values = values } in
         let ty = T.Adt (T.Assumed T.Array, [], [ ety ], [ cg ]) in
         let aggregated : V.typed_value = { V.value = v; ty } in
+        (* In order to generate a better AST, we introduce a symbolic
+           value equal to the array. The reason is that otherwise, the
+           array we introduce here might be duplicated in the generated
+           code: by introducing a symbolic value we introduce a let-binding
+           in the generated code. *)
+        let saggregated =
+          mk_fresh_symbolic_typed_value_from_ety V.Aggregate ty
+        in
         (* Call the continuation *)
-        cf aggregated ctx
+        match cf saggregated ctx with
+        | None -> None
+        | Some e ->
+            (* Introduce the symbolic value in the AST *)
+            let sv = ValuesUtils.value_as_symbolic saggregated.value in
+            Some (SymbolicAst.IntroSymbolic (ctx, None, sv, aggregated, e)))
   in
   (* Compose and apply *)
   comp eval_ops compute cf

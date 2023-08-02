@@ -126,7 +126,11 @@ module Values = struct
                 else raise (Failure "Unreachable")
             | Range, _ -> "@Range{ " ^ String.concat ", " field_values ^ "}"
             | Vec, _ -> "@Vec[" ^ String.concat ", " field_values ^ "]"
-            | _ -> raise (Failure "Inconsistent value"))
+            | Array, _ ->
+                (* Happens when we aggregate values *)
+                "@Array[" ^ String.concat ", " field_values ^ "]"
+            | _ ->
+                raise (Failure ("Inconsistent value: " ^ V.show_typed_value v)))
         | _ -> raise (Failure "Inconsistent typed value"))
     | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
     | Borrow bc -> borrow_content_to_string fmt bc

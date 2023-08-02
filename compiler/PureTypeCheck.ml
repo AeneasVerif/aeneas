@@ -3,7 +3,11 @@
 open Pure
 open PureUtils
 
-(** Utility function, used for type checking *)
+(** Utility function, used for type checking.
+
+    We need the number of fields for cases like `Slice`, when the number of fields
+    varies.
+ *)
 let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
     (type_id : type_id) (variant_id : VariantId.id option) (tys : ty list)
     (cgs : const_generic list) : ty list =
@@ -51,10 +55,18 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           let ty = Collections.List.to_cons_nil tys in
           assert (variant_id = None);
           [ ty; ty ]
-      | Vec | Array | Slice | Str ->
-          raise
-            (Failure
-               "Unreachable: trying to access the fields of an opaque type"))
+      | Array ->
+          let ty = Collections.List.to_cons_nil tys in
+          let cg = Collections.List.to_cons_nil cgs in
+          let len =
+            (PrimitiveValuesUtils.literal_as_scalar
+               (TypesUtils.const_generic_as_literal cg))
+              .value
+          in
+          let len = Z.to_int len in
+          Collections.List.repeat len ty
+      | Vec | Slice | Str ->
+          raise (Failure "Attempting to access the fields of an opaque type"))
 
 type tc_ctx = {
   type_decls : type_decl TypeDeclId.Map.t;  (** The type declarations *)

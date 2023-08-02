@@ -50,6 +50,8 @@ type sv_kind =
       (** A value given back by a loop (when ending abstractions while going backwards) *)
   | LoopJoin
       (** The result of a loop join (when computing loop fixed points) *)
+  | Aggregate
+      (** A symbolic value we introduce in place of an aggregate value *)
 [@@deriving show, ord]
 
 (** Ancestor for {!symbolic_value} iter visitor *)

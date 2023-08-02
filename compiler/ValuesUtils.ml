@@ -17,6 +17,9 @@ let mk_bottom (ty : ety) : typed_value = { value = Bottom; ty }
 let mk_abottom (ty : rty) : typed_avalue = { value = ABottom; ty }
 let mk_aignored (ty : rty) : typed_avalue = { value = AIgnored; ty }
 
+let value_as_symbolic (v : value) : symbolic_value =
+  match v with Symbolic v -> v | _ -> raise (Failure "Unexpected")
+
 (** Box a value *)
 let mk_box_value (v : typed_value) : typed_value =
   let box_ty = mk_box_ty v.ty in

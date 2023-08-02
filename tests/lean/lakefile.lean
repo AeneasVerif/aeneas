@@ -17,3 +17,4 @@ package «tests» {}
 @[default_target] lean_lib noNestedBorrows
 @[default_target] lean_lib paper
 @[default_target] lean_lib poloniusList
+@[default_target] lean_lib array

@@ -459,8 +459,20 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
             | T.Range, [ v0; v1 ], [], [ inner_ty ], [] ->
                 assert (v0.V.ty = inner_ty);
                 assert (v1.V.ty = inner_ty)
-            | (T.Array | T.Slice | T.Str), _, _, _, _ ->
-                raise (Failure "Unexpected")
+            | T.Array, inner_values, _, [ inner_ty ], [ cg ] ->
+                (* *)
+                assert (
+                  List.for_all
+                    (fun (v : V.typed_value) -> v.V.ty = inner_ty)
+                    inner_values);
+                (* The length is necessarily concrete *)
+                let len =
+                  (PrimitiveValuesUtils.literal_as_scalar
+                     (TypesUtils.const_generic_as_literal cg))
+                    .value
+                in
+                assert (Z.of_int (List.length inner_values) = len)
+            | (T.Slice | T.Str), _, _, _, _ -> raise (Failure "Unexpected")
             | _ -> raise (Failure "Erroneous type"))
         | V.Bottom, _ -> (* Nothing to check *) ()
         | V.Borrow bc, T.Ref (_, ref_ty, rkind) -> (
