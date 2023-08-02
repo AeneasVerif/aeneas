@@ -157,7 +157,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       ^ "\n- inside_loop: "
       ^ Print.bool_to_string inside_loop
       ^ "\n- ctx:\n"
-      ^ Print.Contexts.eval_ctx_to_string_gen true true ctx));
+      ^ Print.Contexts.eval_ctx_to_string ctx));
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh

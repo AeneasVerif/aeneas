@@ -456,6 +456,9 @@ let check_typing_invariant (ctx : C.eval_ctx) : unit =
                 List.iter
                   (fun (v : V.typed_value) -> assert (v.ty = vec_ty))
                   fvs
+            | T.Range, [ v0; v1 ], [], [ inner_ty ], [] ->
+                assert (v0.V.ty = inner_ty);
+                assert (v1.V.ty = inner_ty)
             | (T.Array | T.Slice | T.Str), _, _, _, _ ->
                 raise (Failure "Unexpected")
             | _ -> raise (Failure "Erroneous type"))
