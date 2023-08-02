@@ -42,6 +42,8 @@ module Sig = struct
   let rg_id_0 = T.RegionGroupId.of_int 0
   let tvar_id_0 = T.TypeVarId.of_int 0
   let tvar_0 : T.sty = T.TypeVar tvar_id_0
+  let cgvar_id_0 = T.ConstGenericVarId.of_int 0
+  let cgvar_0 : T.const_generic = T.ConstGenericVar cgvar_id_0
 
   (** Region 'a of id 0 *)
   let region_param_0 : T.region_var = { T.index = rvar_id_0; name = Some "'a" }
@@ -53,12 +55,24 @@ module Sig = struct
   (** Type parameter [T] of id 0 *)
   let type_param_0 : T.type_var = { T.index = tvar_id_0; name = "T" }
 
+  let usize_ty : T.sty = T.Literal (Integer Usize)
+
+  (** Const generic parameter [const N : usize] of id 0 *)
+  let cg_param_0 : T.const_generic_var =
+    { T.index = cgvar_id_0; name = "N"; ty = Integer Usize }
+
   let empty_const_generic_params : T.const_generic_var list = []
 
   let mk_ref_ty (r : T.RegionVarId.id T.region) (ty : T.sty) (is_mut : bool) :
       T.sty =
     let ref_kind = if is_mut then T.Mut else T.Shared in
     mk_ref_ty r ty ref_kind
+
+  let mk_array_ty (ty : T.sty) (cg : T.const_generic) : T.sty =
+    Adt (Assumed Array, [], [ ty ], [ cg ])
+
+  let mk_slice_ty (ty : T.sty) : T.sty = Adt (Assumed Slice, [], [ ty ], [])
+  let range_ty : T.sty = Adt (Assumed Range, [], [ usize_ty ], [])
 
   (** [fn<T>(&'a mut T, T) -> T] *)
   let mem_replace_sig : A.fun_sig =
@@ -243,6 +257,96 @@ module Sig = struct
 
   (** [fn<T>(&'a mut Vec<T>, usize) -> &'a mut T] *)
   let vec_index_mut_sig : A.fun_sig = vec_index_gen_sig true
+
+  (** Array/slice functions *)
+
+  (** Small helper.
+
+      Return the type:
+      {[
+        fn<'a, T>(&'a input_ty, index_ty) -> &'a output_ty
+      ]}
+
+      Remarks:
+      The [input_ty] and [output_ty] are parameterized by a type variable id.
+      The [mut_borrow] boolean controls whether we use a shared or a mutable
+      borrow.
+   *)
+  let mk_array_slice_borrow_sig (cgs : T.const_generic_var list)
+      (input_ty : T.TypeVarId.id -> T.sty) (index_ty : T.sty option)
+      (output_ty : T.TypeVarId.id -> T.sty) (is_mut : bool) : A.fun_sig =
+    (* The signature fields *)
+    let region_params = [ region_param_0 ] in
+    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
+    let type_params = [ type_param_0 ] (* <T> *) in
+    let inputs =
+      [
+        mk_ref_ty rvar_0
+          (input_ty type_param_0.index)
+          is_mut (* &'a (mut) input_ty<T> *);
+      ]
+    in
+    let inputs =
+      List.append inputs (match index_ty with None -> [] | Some ty -> [ ty ])
+    in
+    let output =
+      mk_ref_ty rvar_0
+        (output_ty type_param_0.index)
+        is_mut (* &'a (mut) output_ty<T> *)
+    in
+    {
+      region_params;
+      num_early_bound_regions = 0;
+      regions_hierarchy;
+      type_params;
+      const_generic_params = cgs;
+      inputs;
+      output;
+    }
+
+  let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : A.fun_sig =
+    (* Array<T, N> *)
+    let input_ty id =
+      if is_array then mk_array_ty (T.TypeVar id) cgvar_0
+      else mk_slice_ty (T.TypeVar id)
+    in
+    (* usize *)
+    let index_ty = usize_ty in
+    (* T *)
+    let output_ty id = T.TypeVar id in
+    let cgs = if is_array then [ cg_param_0 ] else [] in
+    mk_array_slice_borrow_sig cgs input_ty (Some index_ty) output_ty is_mut
+
+  let array_index_sig (is_mut : bool) = mk_array_slice_index_sig true is_mut
+  let slice_index_sig (is_mut : bool) = mk_array_slice_index_sig false is_mut
+
+  let array_to_slice_sig (is_mut : bool) : A.fun_sig =
+    (* Array<T, N> *)
+    let input_ty id = mk_array_ty (T.TypeVar id) cgvar_0 in
+    (* Slice<T> *)
+    let output_ty id = mk_slice_ty (T.TypeVar id) in
+    let cgs = [ cg_param_0 ] in
+    mk_array_slice_borrow_sig cgs input_ty None output_ty is_mut
+
+  let mk_array_slice_subslice_sig (is_array : bool) (is_mut : bool) : A.fun_sig
+      =
+    (* Array<T, N> *)
+    let input_ty id =
+      if is_array then mk_array_ty (T.TypeVar id) cgvar_0
+      else mk_slice_ty (T.TypeVar id)
+    in
+    (* Range *)
+    let index_ty = range_ty in
+    (* Slice<T> *)
+    let output_ty id = mk_slice_ty (T.TypeVar id) in
+    let cgs = if is_array then [ cg_param_0 ] else [] in
+    mk_array_slice_borrow_sig cgs input_ty (Some index_ty) output_ty is_mut
+
+  let array_subslice_sig (is_mut : bool) =
+    mk_array_slice_subslice_sig true is_mut
+
+  let slice_subslice_sig (is_mut : bool) =
+    mk_array_slice_subslice_sig false is_mut
 end
 
 type assumed_info = A.assumed_fun_id * A.fun_sig * bool * name
@@ -289,6 +393,45 @@ let assumed_infos : assumed_info list =
       Sig.vec_index_mut_sig,
       true,
       to_name (index_pre @ [ "IndexMut"; "index_mut" ]) );
+    (* Array Index *)
+    ( ArraySharedIndex,
+      Sig.array_index_sig false,
+      true,
+      to_name [ "@ArraySharedIndex" ] );
+    (ArrayMutIndex, Sig.array_index_sig true, true, to_name [ "@ArrayMutIndex" ]);
+    (* Array to slice*)
+    ( ArrayToSharedSlice,
+      Sig.array_to_slice_sig false,
+      false,
+      to_name [ "@ArrayToSharedSlice" ] );
+    ( ArrayToMutSlice,
+      Sig.array_to_slice_sig true,
+      false,
+      to_name [ "@ArrayToMutSlice" ] );
+    (* Array Subslice *)
+    ( ArraySharedSubslice,
+      Sig.array_subslice_sig false,
+      true,
+      to_name [ "@ArraySharedSubslice" ] );
+    ( ArrayMutSubslice,
+      Sig.array_subslice_sig true,
+      true,
+      to_name [ "@ArrayMutSubslice" ] );
+    (* Slice Index *)
+    ( SliceSharedIndex,
+      Sig.slice_index_sig false,
+      true,
+      to_name [ "@SliceSharedIndex" ] );
+    (SliceMutIndex, Sig.slice_index_sig true, true, to_name [ "@SliceMutIndex" ]);
+    (* Slice Subslice *)
+    ( SliceSharedSubslice,
+      Sig.slice_subslice_sig false,
+      true,
+      to_name [ "@SliceSharedSubslice" ] );
+    ( SliceMutSubslice,
+      Sig.slice_subslice_sig true,
+      true,
+      to_name [ "@SliceMutSubslice" ] );
   ]
 
 let get_assumed_info (id : A.assumed_fun_id) : assumed_info =
