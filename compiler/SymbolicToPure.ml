@@ -2272,18 +2272,33 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       raise (Failure "Unreachable")
 
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
-    (sv : V.symbolic_value) (v : V.typed_value) (e : S.expression)
+    (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)
     (ctx : bs_ctx) : texpression =
   let mplace = translate_opt_mplace p in
 
   (* Introduce a fresh variable for the symbolic value *)
   let ctx, var = fresh_var_for_symbolic_value sv ctx in
 
-  (* Translate the value *)
-  let v = typed_value_to_texpression ctx ectx v in
-
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
+
+  (* Translate the value: there are two cases, depending on whether this
+     is a "regular" let-binding or an array aggregate.
+  *)
+  let v =
+    match v with
+    | SingleValue v -> typed_value_to_texpression ctx ectx v
+    | Array values ->
+        (* We use a struct update to encode the array aggregate, in order
+           to preserve the structure and allow generating code of the shape
+           `[x0, ...., xn]` *)
+        let values = List.map (typed_value_to_texpression ctx ectx) values in
+        let values = FieldId.mapi (fun fid v -> (fid, v)) values in
+        let su : struct_update =
+          { struct_id = Assumed Array; init = None; updates = values }
+        in
+        { e = StructUpdate su; ty = var.ty }
+  in
 
   (* Make the let-binding *)
   let monadic = false in

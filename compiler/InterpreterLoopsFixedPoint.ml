@@ -322,7 +322,7 @@ let prepare_ashared_loans (loop_id : V.LoopId.id option) : cm_fun =
              let sv =
                V.SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values
              in
-             SymbolicAst.IntroSymbolic (ctx, None, sv, v, e))
+             SymbolicAst.IntroSymbolic (ctx, None, sv, SingleValue v, e))
            e !sid_subst)
 
 let prepare_ashared_loans_no_synth (loop_id : V.LoopId.id) (ctx : C.eval_ctx) :

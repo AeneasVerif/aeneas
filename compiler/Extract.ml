@@ -2260,7 +2260,7 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | Let (_, _, _, _) -> extract_lets ctx fmt inside e
   | Switch (scrut, body) -> extract_Switch ctx fmt inside scrut body
   | Meta (_, e) -> extract_texpression ctx fmt inside e
-  | StructUpdate supd -> extract_StructUpdate ctx fmt inside supd
+  | StructUpdate supd -> extract_StructUpdate ctx fmt inside e.ty supd
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
       raise (Failure "Unreachable")
@@ -2723,104 +2723,152 @@ and extract_Switch (ctx : extraction_ctx) (fmt : F.formatter) (_inside : bool)
   F.pp_close_box fmt ()
 
 and extract_StructUpdate (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (supd : struct_update) : unit =
+    (inside : bool) (e_ty : ty) (supd : struct_update) : unit =
   (* We can't update a subset of the fields in Coq (i.e., we can do
      [{| x:= 3; y := 4 |}], but there is no syntax for [{| s with x := 3 |}]) *)
   assert (!backend <> Coq || supd.init = None);
   (* In the case of HOL4, records with no fields are not supported and are
      thus extracted to unit. We need to check that by looking up the definition *)
   let extract_as_unit =
-    if !backend = HOL4 then
-      let d =
-        TypeDeclId.Map.find supd.struct_id ctx.trans_ctx.type_context.type_decls
-      in
-      d.kind = Struct []
-    else false
+    match (!backend, supd.struct_id) with
+    | HOL4, AdtId adt_id ->
+        let d =
+          TypeDeclId.Map.find adt_id ctx.trans_ctx.type_context.type_decls
+        in
+        d.kind = Struct []
+    | _ -> false
   in
   if extract_as_unit then
     (* Remark: this is only valid for HOL4 (for instance the Coq unit value is [tt]) *)
     F.pp_print_string fmt "()"
-  else (
-    F.pp_open_hvbox fmt 0;
-    F.pp_open_hvbox fmt ctx.indent_incr;
-    (* Inner/outer brackets: there are several syntaxes for the field updates.
-
-       For instance, in F*:
-       {[
-         { x with f = ..., ... }
-       ]}
-
-       In HOL4:
-       {[
-         x with <| f = ..., ... |>
-       ]}
-
-       In the above examples:
-       - in F*, the { } brackets are "outer" brackets
-       - in HOL4, the <| |> brackets are "inner" brackets
+  else
+    (* There are two cases:
+       - this is a regular struct
+       - this is an array
     *)
-    (* Outer brackets *)
-    let olb, orb =
-      match !backend with
-      | Lean | FStar -> (Some "{", Some "}")
-      | Coq -> (Some "{|", Some "|}")
-      | HOL4 -> (None, None)
-    in
-    (* Inner brackets *)
-    let ilb, irb =
-      match !backend with
-      | Lean | FStar | Coq -> (None, None)
-      | HOL4 -> (Some "<|", Some "|>")
-    in
-    (* Helper *)
-    let print_bracket (is_left : bool) b =
-      match b with
-      | Some b ->
-          if not is_left then F.pp_print_space fmt ();
-          F.pp_print_string fmt b;
-          if is_left then F.pp_print_space fmt ()
-      | None -> ()
-    in
-    print_bracket true olb;
-    let need_paren = inside && !backend = HOL4 in
-    if need_paren then F.pp_print_string fmt "(";
-    F.pp_open_hvbox fmt ctx.indent_incr;
-    if supd.init <> None then (
-      let var_name = ctx_get_var (Option.get supd.init) ctx in
-      F.pp_print_string fmt var_name;
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt "with";
-      F.pp_print_space fmt ());
-    print_bracket true ilb;
-    F.pp_open_hvbox fmt 0;
-    let delimiter =
-      match !backend with Lean -> "," | Coq | FStar | HOL4 -> ";"
-    in
-    let assign =
-      match !backend with Coq | Lean | HOL4 -> ":=" | FStar -> "="
-    in
-    Collections.List.iter_link
-      (fun () ->
-        F.pp_print_string fmt delimiter;
-        F.pp_print_space fmt ())
-      (fun (fid, fe) ->
+    match supd.struct_id with
+    | AdtId _ ->
+        F.pp_open_hvbox fmt 0;
         F.pp_open_hvbox fmt ctx.indent_incr;
-        let f = ctx_get_field (AdtId supd.struct_id) fid ctx in
-        F.pp_print_string fmt f;
-        F.pp_print_string fmt (" " ^ assign);
-        F.pp_print_space fmt ();
+        (* Inner/outer brackets: there are several syntaxes for the field updates.
+
+           For instance, in F*:
+           {[
+             { x with f = ..., ... }
+           ]}
+
+           In HOL4:
+           {[
+             x with <| f = ..., ... |>
+           ]}
+
+           In the above examples:
+           - in F*, the { } brackets are "outer" brackets
+           - in HOL4, the <| |> brackets are "inner" brackets
+        *)
+        (* Outer brackets *)
+        let olb, orb =
+          match !backend with
+          | Lean | FStar -> (Some "{", Some "}")
+          | Coq -> (Some "{|", Some "|}")
+          | HOL4 -> (None, None)
+        in
+        (* Inner brackets *)
+        let ilb, irb =
+          match !backend with
+          | Lean | FStar | Coq -> (None, None)
+          | HOL4 -> (Some "<|", Some "|>")
+        in
+        (* Helper *)
+        let print_bracket (is_left : bool) b =
+          match b with
+          | Some b ->
+              if not is_left then F.pp_print_space fmt ();
+              F.pp_print_string fmt b;
+              if is_left then F.pp_print_space fmt ()
+          | None -> ()
+        in
+        print_bracket true olb;
+        let need_paren = inside && !backend = HOL4 in
+        if need_paren then F.pp_print_string fmt "(";
         F.pp_open_hvbox fmt ctx.indent_incr;
-        extract_texpression ctx fmt true fe;
+        if supd.init <> None then (
+          let var_name = ctx_get_var (Option.get supd.init) ctx in
+          F.pp_print_string fmt var_name;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "with";
+          F.pp_print_space fmt ());
+        print_bracket true ilb;
+        F.pp_open_hvbox fmt 0;
+        let delimiter =
+          match !backend with Lean -> "," | Coq | FStar | HOL4 -> ";"
+        in
+        let assign =
+          match !backend with Coq | Lean | HOL4 -> ":=" | FStar -> "="
+        in
+        Collections.List.iter_link
+          (fun () ->
+            F.pp_print_string fmt delimiter;
+            F.pp_print_space fmt ())
+          (fun (fid, fe) ->
+            F.pp_open_hvbox fmt ctx.indent_incr;
+            let f = ctx_get_field supd.struct_id fid ctx in
+            F.pp_print_string fmt f;
+            F.pp_print_string fmt (" " ^ assign);
+            F.pp_print_space fmt ();
+            F.pp_open_hvbox fmt ctx.indent_incr;
+            extract_texpression ctx fmt true fe;
+            F.pp_close_box fmt ();
+            F.pp_close_box fmt ())
+          supd.updates;
         F.pp_close_box fmt ();
-        F.pp_close_box fmt ())
-      supd.updates;
-    F.pp_close_box fmt ();
-    print_bracket false irb;
-    F.pp_close_box fmt ();
-    F.pp_close_box fmt ();
-    if need_paren then F.pp_print_string fmt ")";
-    print_bracket false orb;
-    F.pp_close_box fmt ())
+        print_bracket false irb;
+        F.pp_close_box fmt ();
+        F.pp_close_box fmt ();
+        if need_paren then F.pp_print_string fmt ")";
+        print_bracket false orb;
+        F.pp_close_box fmt ()
+    | Assumed Array ->
+        (* Open the boxes *)
+        F.pp_open_hvbox fmt ctx.indent_incr;
+        let need_paren = inside in
+        if need_paren then F.pp_print_string fmt "(";
+        (* Open the box for `Array.mk T N [` *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        (* Print the array constructor *)
+        let cs = ctx_get_struct false (Assumed Array) ctx in
+        F.pp_print_string fmt cs;
+        (* Print the parameters *)
+        let _, tys, cgs = ty_as_adt e_ty in
+        let ty = Collections.List.to_cons_nil tys in
+        F.pp_print_space fmt ();
+        extract_ty ctx fmt TypeDeclId.Set.empty true ty;
+        let cg = Collections.List.to_cons_nil cgs in
+        F.pp_print_space fmt ();
+        extract_const_generic ctx fmt true cg;
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "[";
+        (* Close the box for `Array.mk T N [` *)
+        F.pp_close_box fmt ();
+        (* Print the values *)
+        let delimiter =
+          match !backend with Lean -> "," | Coq | FStar | HOL4 -> ";"
+        in
+        F.pp_print_space fmt ();
+        F.pp_open_hovbox fmt 0;
+        Collections.List.iter_link
+          (fun () ->
+            F.pp_print_string fmt delimiter;
+            F.pp_print_space fmt ())
+          (fun (_, fe) -> extract_texpression ctx fmt false fe)
+          supd.updates;
+        (* Close the boxes *)
+        F.pp_close_box fmt ();
+        if supd.updates <> [] then F.pp_print_space fmt ();
+        F.pp_print_string fmt "]";
+        if need_paren then F.pp_print_string fmt ")";
+        F.pp_close_box fmt ()
+    | _ -> raise (Failure "Unreachable")
 
 (** Insert a space, if necessary *)
 let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =

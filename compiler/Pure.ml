@@ -105,6 +105,29 @@ class ['self] map_type_id_base =
     method visit_assumed_ty : 'env -> assumed_ty -> assumed_ty = fun _ x -> x
   end
 
+(** Ancestor for reduce visitor for [ty] *)
+class virtual ['self] reduce_type_id_base =
+  object (self : 'self)
+    inherit [_] VisitorsRuntime.reduce
+
+    method visit_type_decl_id : 'env -> type_decl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_assumed_ty : 'env -> assumed_ty -> 'a = fun _ _ -> self#zero
+  end
+
+(** Ancestor for mapreduce visitor for [ty] *)
+class virtual ['self] mapreduce_type_id_base =
+  object (self : 'self)
+    inherit [_] VisitorsRuntime.mapreduce
+
+    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_assumed_ty : 'env -> assumed_ty -> assumed_ty * 'a =
+      fun _ x -> (x, self#zero)
+  end
+
 type type_id = AdtId of type_decl_id | Tuple | Assumed of assumed_ty
 [@@deriving
   show,
@@ -126,6 +149,22 @@ type type_id = AdtId of type_decl_id | Tuple | Assumed of assumed_ty
         nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
         concrete = true;
         polymorphic = false;
+      },
+    visitors
+      {
+        name = "reduce_type_id";
+        variety = "reduce";
+        ancestors = [ "reduce_type_id_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "mapreduce_type_id";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_type_id_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        polymorphic = false;
       }]
 
 type literal_type = T.literal_type [@@deriving show, ord]
@@ -146,6 +185,26 @@ class ['self] map_ty_base =
     inherit! [_] T.map_const_generic
     inherit! [_] PV.map_literal_type
     method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
+  end
+
+(** Ancestor for reduce visitor for [ty] *)
+class virtual ['self] reduce_ty_base =
+  object (self : 'self)
+    inherit [_] reduce_type_id
+    inherit! [_] T.reduce_const_generic
+    inherit! [_] PV.reduce_literal_type
+    method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
+  end
+
+(** Ancestor for mapreduce visitor for [ty] *)
+class virtual ['self] mapreduce_ty_base =
+  object (self : 'self)
+    inherit [_] mapreduce_type_id
+    inherit! [_] T.mapreduce_const_generic
+    inherit! [_] PV.mapreduce_literal_type
+
+    method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 type ty =
@@ -176,8 +235,24 @@ type ty =
         name = "map_ty";
         variety = "map";
         ancestors = [ "map_ty_base" ];
-        nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+        nude = true (* Don't inherit {!VisitorsRuntime.map} *);
         concrete = true;
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "reduce_ty";
+        variety = "reduce";
+        ancestors = [ "reduce_ty_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.reduce} *);
+        polymorphic = false;
+      },
+    visitors
+      {
+        name = "mapreduce_ty";
+        variety = "mapreduce";
+        ancestors = [ "mapreduce_ty_base" ];
+        nude = true (* Don't inherit {!VisitorsRuntime.mapreduce} *);
         polymorphic = false;
       }]
 
@@ -243,50 +318,38 @@ type variant_id = VariantId.id [@@deriving show]
 (** Ancestor for {!iter_typed_pattern} visitor *)
 class ['self] iter_typed_pattern_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.iter
-    method visit_literal : 'env -> literal -> unit = fun _ _ -> ()
+    inherit [_] iter_ty
     method visit_var : 'env -> var -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-    method visit_ty : 'env -> ty -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_typed_pattern} visitor *)
 class ['self] map_typed_pattern_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.map
-    method visit_literal : 'env -> literal -> literal = fun _ x -> x
+    inherit [_] map_ty
     method visit_var : 'env -> var -> var = fun _ x -> x
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
-    method visit_ty : 'env -> ty -> ty = fun _ x -> x
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_typed_pattern} visitor *)
 class virtual ['self] reduce_typed_pattern_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.reduce
-    method visit_literal : 'env -> literal -> 'a = fun _ _ -> self#zero
+    inherit [_] reduce_ty
     method visit_var : 'env -> var -> 'a = fun _ _ -> self#zero
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
-    method visit_ty : 'env -> ty -> 'a = fun _ _ -> self#zero
     method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_typed_pattern} visitor *)
 class virtual ['self] mapreduce_typed_pattern_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.mapreduce
-
-    method visit_literal : 'env -> literal -> literal * 'a =
-      fun _ x -> (x, self#zero)
-
+    inherit [_] mapreduce_ty
     method visit_var : 'env -> var -> var * 'a = fun _ x -> (x, self#zero)
 
     method visit_mplace : 'env -> mplace -> mplace * 'a =
       fun _ x -> (x, self#zero)
-
-    method visit_ty : 'env -> ty -> ty * 'a = fun _ x -> (x, self#zero)
 
     method visit_variant_id : 'env -> variant_id -> variant_id * 'a =
       fun _ x -> (x, self#zero)
@@ -419,11 +482,10 @@ type var_id = VarId.id [@@deriving show, ord]
 class ['self] iter_expression_base =
   object (_self : 'self)
     inherit [_] iter_typed_pattern
-    method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
+    inherit! [_] iter_type_id
     method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
-    method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
   end
 
@@ -431,17 +493,10 @@ class ['self] iter_expression_base =
 class ['self] map_expression_base =
   object (_self : 'self)
     inherit [_] map_typed_pattern
-
-    method visit_integer_type : 'env -> integer_type -> integer_type =
-      fun _ x -> x
-
+    inherit! [_] map_type_id
     method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
-
-    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id =
-      fun _ x -> x
-
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
   end
 
@@ -449,17 +504,10 @@ class ['self] map_expression_base =
 class virtual ['self] reduce_expression_base =
   object (self : 'self)
     inherit [_] reduce_typed_pattern
-
-    method visit_integer_type : 'env -> integer_type -> 'a =
-      fun _ _ -> self#zero
-
+    inherit! [_] reduce_type_id
     method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
-
-    method visit_type_decl_id : 'env -> type_decl_id -> 'a =
-      fun _ _ -> self#zero
-
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
   end
 
@@ -467,9 +515,7 @@ class virtual ['self] reduce_expression_base =
 class virtual ['self] mapreduce_expression_base =
   object (self : 'self)
     inherit [_] mapreduce_typed_pattern
-
-    method visit_integer_type : 'env -> integer_type -> integer_type * 'a =
-      fun _ x -> (x, self#zero)
+    inherit! [_] mapreduce_type_id
 
     method visit_var_id : 'env -> var_id -> var_id * 'a =
       fun _ x -> (x, self#zero)
@@ -478,9 +524,6 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
 
     method visit_loop_id : 'env -> loop_id -> loop_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_field_id : 'env -> field_id -> field_id * 'a =
@@ -592,9 +635,21 @@ and loop = {
     {[
       { s with x := 3 }
     ]}
+
+    We also use struct updates to encode array aggregates, so that whenever
+    the user writes code like:
+    {[
+      let a : [u32; 2] = [0, 1];
+      ...
+    ]}
+    this gets encoded to:
+    {[
+      let a : Array u32 2 = Array.mk [0, 1] in
+      ...
+    ]}
  *)
 and struct_update = {
-  struct_id : type_decl_id;
+  struct_id : type_id;
   init : var_id option;
   updates : (field_id * texpression) list;
 }

@@ -167,7 +167,7 @@ type expression =
       Contexts.eval_ctx
       * mplace option
       * V.symbolic_value
-      * V.typed_value
+      * value_aggregate
       * expression
       (** We introduce a new symbolic value, equal to some other value.
 
@@ -246,6 +246,13 @@ and expansion =
       T.integer_type * (V.scalar_value * expression) list * expression
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
+
+(* Remark: this type doesn't have to be mutually recursive with the other
+   types, but it makes it easy to generate the visitors *)
+and value_aggregate =
+  | SingleValue of V.typed_value  (** Regular case *)
+  | Array of V.typed_value list
+      (** This is used when introducing array aggregates *)
 [@@deriving
   show,
     visitors

@@ -5,8 +5,8 @@ open PureUtils
 
 (** Utility function, used for type checking.
 
-    We need the number of fields for cases like `Slice`, when the number of fields
-    varies.
+    This function should only be used for "regular" ADTs, where the number
+    of fields is fixed: it shouldn't be used for arrays, slices, etc.
  *)
 let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
     (type_id : type_id) (variant_id : VariantId.id option) (tys : ty list)
@@ -55,17 +55,9 @@ let get_adt_field_types (type_decls : type_decl TypeDeclId.Map.t)
           let ty = Collections.List.to_cons_nil tys in
           assert (variant_id = None);
           [ ty; ty ]
-      | Array ->
-          let ty = Collections.List.to_cons_nil tys in
-          let cg = Collections.List.to_cons_nil cgs in
-          let len =
-            (PrimitiveValuesUtils.literal_as_scalar
-               (TypesUtils.const_generic_as_literal cg))
-              .value
-          in
-          let len = Z.to_int len in
-          Collections.List.repeat len ty
-      | Vec | Slice | Str ->
+      | Vec | Array | Slice | Str ->
+          (* Array: when not symbolic values (for instance, because of aggregates),
+             the array expressions are introduced as struct updates *)
           raise (Failure "Attempting to access the fields of an opaque type"))
 
 type tc_ctx = {
@@ -207,7 +199,7 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       assert (Option.is_some loop.back_output_tys || loop.loop_body.ty = e.ty);
       check_texpression ctx loop.fun_end;
       check_texpression ctx loop.loop_body
-  | StructUpdate supd ->
+  | StructUpdate supd -> (
       (* Check the init value *)
       (if Option.is_some supd.init then
          match VarId.Map.find_opt (Option.get supd.init) ctx.env with
@@ -216,18 +208,29 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
       let adt_id, adt_type_args, adt_cg_args = ty_as_adt e.ty in
-      assert (adt_id = AdtId supd.struct_id);
-      let variant_id = None in
-      let expected_field_tys =
-        get_adt_field_types ctx.type_decls adt_id variant_id adt_type_args
-          adt_cg_args
-      in
-      List.iter
-        (fun (fid, fe) ->
-          let expected_field_ty = FieldId.nth expected_field_tys fid in
-          assert (expected_field_ty = fe.ty);
-          check_texpression ctx fe)
-        supd.updates
+      assert (adt_id = supd.struct_id);
+      (* The id can only be: a custom type decl or an array *)
+      match adt_id with
+      | AdtId _ ->
+          let variant_id = None in
+          let expected_field_tys =
+            get_adt_field_types ctx.type_decls adt_id variant_id adt_type_args
+              adt_cg_args
+          in
+          List.iter
+            (fun (fid, fe) ->
+              let expected_field_ty = FieldId.nth expected_field_tys fid in
+              assert (expected_field_ty = fe.ty);
+              check_texpression ctx fe)
+            supd.updates
+      | Assumed Array ->
+          let expected_field_ty = Collections.List.to_cons_nil adt_type_args in
+          List.iter
+            (fun (_, fe) ->
+              assert (expected_field_ty = fe.ty);
+              check_texpression ctx fe)
+            supd.updates
+      | _ -> raise (Failure "Unexpected"))
   | Meta (_, e_next) ->
       assert (e_next.ty = e.ty);
       check_texpression ctx e_next

@@ -719,9 +719,7 @@ let eval_rvalue_aggregate (config : C.config)
         (* Sanity check: the number of values is consistent with the length *)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
         assert (len = Z.of_int (List.length values));
-        let v = V.Adt { variant_id = None; field_values = values } in
         let ty = T.Adt (T.Assumed T.Array, [], [ ety ], [ cg ]) in
-        let aggregated : V.typed_value = { V.value = v; ty } in
         (* In order to generate a better AST, we introduce a symbolic
            value equal to the array. The reason is that otherwise, the
            array we introduce here might be duplicated in the generated
@@ -736,7 +734,7 @@ let eval_rvalue_aggregate (config : C.config)
         | Some e ->
             (* Introduce the symbolic value in the AST *)
             let sv = ValuesUtils.value_as_symbolic saggregated.value in
-            Some (SymbolicAst.IntroSymbolic (ctx, None, sv, aggregated, e)))
+            Some (SymbolicAst.IntroSymbolic (ctx, None, sv, Array values, e)))
   in
   (* Compose and apply *)
   comp eval_ops compute cf

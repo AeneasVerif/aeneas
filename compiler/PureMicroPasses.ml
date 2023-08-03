@@ -611,7 +611,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     (!Config.backend <> Lean && !Config.backend <> Coq)
                     || not is_rec
                   then
-                    let struct_id = adt_id in
+                    let struct_id = AdtId adt_id in
                     let init = None in
                     let updates =
                       FieldId.mapi
@@ -1168,8 +1168,8 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                       Var v ) ->
                       (* We check that this is the proper ADT, and the proper field *)
                       if
-                        proj_adt_id = struct_id && field_id = fid
-                        && x.ty = adt_ty
+                        AdtId proj_adt_id = struct_id
+                        && field_id = fid && x.ty = adt_ty
                       then Some v
                       else None
                   | _ -> None)
