@@ -284,6 +284,10 @@ def mk_opaque {α : Sort u} (x : α) : { y : α // y = x}  :=
 attribute [pp_dot] List.length -- use the dot notation when printing
 set_option pp.coercions false -- do not print coercions with ↑ (this doesn't parse)
 
+-- The proof below is a bit expensive, so we need to increase the maximum number
+-- of heart beats
+set_option maxHeartbeats 400000
+
 theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value : α)
   (hinv : hm.inv) (hnsat : hm.lookup key = none → hm.len_s < Usize.max) :
   ∃ nhm, hm.insert_no_resize α key value = ret nhm  ∧
