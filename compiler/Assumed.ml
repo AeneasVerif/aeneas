@@ -347,20 +347,42 @@ module Sig = struct
 
   let slice_subslice_sig (is_mut : bool) =
     mk_array_slice_subslice_sig false is_mut
+
+  (** Helper:
+      [fn<T>(&'a [T]) -> usize]
+   *)
+  let slice_len_sig : A.fun_sig =
+    (* The signature fields *)
+    let region_params = [ region_param_0 ] in
+    let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
+    let type_params = [ type_param_0 ] (* <T> *) in
+    let inputs =
+      [ mk_ref_ty rvar_0 (mk_slice_ty tvar_0) false (* &'a [T] *) ]
+    in
+    let output = mk_usize_ty (* usize *) in
+    {
+      region_params;
+      num_early_bound_regions = 0;
+      regions_hierarchy;
+      type_params;
+      const_generic_params = empty_const_generic_params;
+      inputs;
+      output;
+    }
 end
 
 type assumed_info = A.assumed_fun_id * A.fun_sig * bool * name
 
 (** The list of assumed functions and all their information:
     - their signature
-    - a boolean indicating whether the function can fail or not
+    - a boolean indicating whether the function can fail or not (if true: can fail)
     - their name
 
     Rk.: following what is written above, we don't include [Box::free].
-    
+
     Remark about the vector functions: for [Vec::len] to be correct and return
     a [usize], we have to make sure that vectors are bounded by the max usize.
-    Followingly, [Vec::push] is monadic.
+    As a consequence, [Vec::push] is monadic.
  *)
 let assumed_infos : assumed_info list =
   let deref_pre = [ "core"; "ops"; "deref" ] in
@@ -402,11 +424,11 @@ let assumed_infos : assumed_info list =
     (* Array to slice*)
     ( ArrayToSharedSlice,
       Sig.array_to_slice_sig false,
-      false,
+      true,
       to_name [ "@ArrayToSharedSlice" ] );
     ( ArrayToMutSlice,
       Sig.array_to_slice_sig true,
-      false,
+      true,
       to_name [ "@ArrayToMutSlice" ] );
     (* Array Subslice *)
     ( ArraySharedSubslice,
@@ -432,6 +454,7 @@ let assumed_infos : assumed_info list =
       Sig.slice_subslice_sig true,
       true,
       to_name [ "@SliceMutSubslice" ] );
+    (SliceLen, Sig.slice_len_sig, false, to_name [ "@SliceLen" ]);
   ]
 
 let get_assumed_info (id : A.assumed_fun_id) : assumed_info =

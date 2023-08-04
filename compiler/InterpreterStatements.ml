@@ -647,7 +647,7 @@ let eval_non_local_function_call_concrete (config : C.config)
           | ArraySharedIndex | ArrayMutIndex | ArrayToSharedSlice
           | ArrayToMutSlice | ArraySharedSubslice | ArrayMutSubslice
           | SliceSharedIndex | SliceMutIndex | SliceSharedSubslice
-          | SliceMutSubslice ->
+          | SliceMutSubslice | SliceLen ->
               raise (Failure "Unimplemented")
         in
 

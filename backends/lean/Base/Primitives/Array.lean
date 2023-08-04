@@ -14,7 +14,7 @@ namespace Primitives
 
 open Result Error
 
-abbrev Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
+def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
 
 instance (a : Type u) (n : Usize) : Arith.HasIntProp (Array a n) where
   prop_ty := λ v => v.val.len = n.val
@@ -33,19 +33,10 @@ abbrev Array.v {α : Type u} {n : Usize} (v : Array α n) : List α := v.val
 example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
-def Array.mk (α : Type u) (n : Usize) (init : List α) (hl : init.len = n.val := by decide) :
+def Array.make (α : Type u) (n : Usize) (init : List α) (hl : init.len = n.val := by decide) :
   Array α n := ⟨ init, by simp [← List.len_eq_length]; apply hl ⟩
 
-example : Array Int (Usize.ofInt 2) := Array.mk Int (Usize.ofInt 2) [0, 1]
-
--- Remark: not used yet, but could be used if explicit calls to Len are used in Rust
--- TODO: very annoying that the α and the n are explicit parameters
-def Array.len (α : Type u) (n : Usize) (v : Array α n) : Usize :=
-  Usize.ofIntCore v.val.len (by scalar_tac) (by scalar_tac)
-
-@[simp]
-theorem Array.len_val {α : Type u} {n : Usize} (v : Array α n) : (Array.len α n v).val = v.length :=
-  by rfl
+example : Array Int (Usize.ofInt 2) := Array.make Int (Usize.ofInt 2) [0, 1]
 
 @[simp]
 abbrev Array.index {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Int) : α :=
@@ -81,7 +72,7 @@ def Array.index_shared_back (α : Type u) (n : Usize) (v: Array α n) (i: Usize)
   else
     .fail arrayOutOfBounds
 
-def Array.index_mut (α : Type u) (v: Array α n) (i: Usize) : Result α :=
+def Array.index_mut (α : Type u) (n : Usize) (v: Array α n) (i: Usize) : Result α :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some x => ret x
@@ -89,13 +80,13 @@ def Array.index_mut (α : Type u) (v: Array α n) (i: Usize) : Result α :=
 @[pspec]
 theorem Array.index_mut_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_mut α i = ret x ∧ x = v.val.index i.val := by
+  ∃ x, v.index_mut α n i = ret x ∧ x = v.val.index i.val := by
   simp only [index_mut]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
   simp [*]
 
-def Array.index_mut_back (α : Type u) (v: Array α n) (i: Usize) (x: α) : Result (Array α n) :=
+def Array.index_mut_back (α : Type u) (n : Usize) (v: Array α n) (i: Usize) (x: α) : Result (Array α n) :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some _ =>
@@ -104,7 +95,7 @@ def Array.index_mut_back (α : Type u) (v: Array α n) (i: Usize) (x: α) : Resu
 @[pspec]
 theorem Array.index_mut_back_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.index_mut_back α i x = ret nv ∧
+  ∃ nv, v.index_mut_back α n i x = ret nv ∧
   nv.val = v.val.update i.val x
   := by
   simp only [index_mut_back]
@@ -209,6 +200,11 @@ theorem Slice.index_mut_back_spec {α : Type u} (v: Slice α) (i: Usize) (x : α
   . simp_all
 
 /- Array to slice/subslices -/
+
+/- We could make this function not use the `Result` type. By making it monadic, we
+   push the user to use the `Array.to_slice_spec` spec theorem below (through the
+   `progress` tactic), meaning `Array.to_slice` should be considered as opaque.
+   All what the spec theorem reveals is that the "representative" lists are the same. -/
 def Array.to_slice (α : Type u) (n : Usize) (v : Array α n) : Result (Slice α) :=
   ret ⟨ v.val, by simp [← List.len_eq_length]; scalar_tac ⟩
 
@@ -233,7 +229,7 @@ theorem Array.to_mut_slice_back_spec {α : Type u} {n : Usize} (a : Array α n) 
   ∃ na, to_mut_slice_back α n a ns = ret na ∧ na.val = ns.val
   := by simp [to_mut_slice_back, *]
 
-def Array.shared_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) : Result (Slice α) :=
+def Array.subslice_shared (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
   if r.start.val < r.end_.val ∧ r.end_.val ≤ a.val.len then
     ret ⟨ a.val.slice r.start.val r.end_.val,
@@ -245,29 +241,29 @@ def Array.shared_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range 
     fail panic
 
 @[pspec]
-theorem Array.shared_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
+theorem Array.subslice_shared_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
   (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ a.val.len) :
-  ∃ s, shared_subslice α n a r = ret s ∧
+  ∃ s, subslice_shared α n a r = ret s ∧
   s.val = a.val.slice r.start.val r.end_.val ∧
   (∀ i, 0 ≤ i → i + r.start.val < r.end_.val → s.val.index i = a.val.index (r.start.val + i))
   := by
-  simp [shared_subslice, *]
+  simp [subslice_shared, *]
   intro i _ _
   have := List.index_slice r.start.val r.end_.val i a.val (by scalar_tac) (by scalar_tac) (by trivial) (by scalar_tac)
   simp [*]
 
-def Array.mut_subslice (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) : Result (Slice α) :=
-  Array.shared_subslice α n a r
+def Array.subslice_mut (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) : Result (Slice α) :=
+  Array.subslice_shared α n a r
 
 @[pspec]
-theorem Array.mut_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
+theorem Array.subslice_mut_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
   (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ a.val.len) :
-  ∃ s, mut_subslice α n a r = ret s ∧
+  ∃ s, subslice_mut α n a r = ret s ∧
   s.val = a.slice r.start.val r.end_.val ∧
   (∀ i, 0 ≤ i → i + r.start.val < r.end_.val → s.val.index i = a.val.index (r.start.val + i))
-  := shared_subslice_spec a r h0 h1
+  := subslice_shared_spec a r h0 h1
 
-def Array.mut_subslice_back (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
+def Array.subslice_mut_back (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
   -- TODO: not completely sure here
   if h: r.start.val < r.end_.val ∧ r.end_.val ≤ a.length ∧ s.val.len = r.end_.val - r.start.val then
     let s_beg := a.val.itake r.start.val
@@ -292,13 +288,13 @@ def Array.mut_subslice_back (α : Type u) (n : Usize) (a : Array α n) (r : Rang
 -- We should introduce special symbols for the monadic arithmetic operations
 -- (the use will never write those symbols directly).
 @[pspec]
-theorem Array.mut_subslice_back_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
+theorem Array.subslice_mut_back_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
   (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : s.length = r.end_.val - r.start.val) :
-  ∃ na, mut_subslice_back α n a r s = ret na ∧
+  ∃ na, subslice_mut_back α n a r s = ret na ∧
   (∀ i, 0 ≤ i → i < r.start.val → na.index i = a.index i) ∧
   (∀ i, r.start.val ≤ i → i < r.end_.val → na.index i = s.index (i - r.start.val)) ∧
   (∀ i, r.end_.val ≤ i → i < n.val → na.index i = a.index i) := by
-  simp [mut_subslice_back, *]
+  simp [subslice_mut_back, *]
   have h := List.replace_slice_index r.start.val r.end_.val a.val s.val
     (by scalar_tac) (by scalar_tac) (by scalar_tac) (by scalar_tac)
   simp [List.replace_slice] at h
@@ -315,7 +311,7 @@ theorem Array.mut_subslice_back_spec {α : Type u} {n : Usize} [Inhabited α] (a
     have := h2 i (by int_tac) (by int_tac)
     simp [*]
 
-def Slice.shared_subslice (α : Type u) (s : Slice α) (r : Range Usize) : Result (Slice α) :=
+def Slice.subslice_shared (α : Type u) (s : Slice α) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
   if r.start.val < r.end_.val ∧ r.end_.val ≤ s.length then
     ret ⟨ s.val.slice r.start.val r.end_.val,
@@ -327,32 +323,32 @@ def Slice.shared_subslice (α : Type u) (s : Slice α) (r : Range Usize) : Resul
     fail panic
 
 @[pspec]
-theorem Slice.shared_subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
+theorem Slice.subslice_shared_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
   (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ s.val.len) :
-  ∃ ns, shared_subslice α s r = ret ns ∧
+  ∃ ns, subslice_shared α s r = ret ns ∧
   ns.val = s.slice r.start.val r.end_.val ∧
   (∀ i, 0 ≤ i → i + r.start.val < r.end_.val → ns.index i = s.index (r.start.val + i))
   := by
-  simp [shared_subslice, *]
+  simp [subslice_shared, *]
   intro i _ _
   have := List.index_slice r.start.val r.end_.val i s.val (by scalar_tac) (by scalar_tac) (by trivial) (by scalar_tac)
   simp [*]
 
-def Slice.mut_subslice (α : Type u) (s : Slice α) (r : Range Usize) : Result (Slice α) :=
-  Slice.shared_subslice α s r
+def Slice.subslice_mut (α : Type u) (s : Slice α) (r : Range Usize) : Result (Slice α) :=
+  Slice.subslice_shared α s r
 
 @[pspec]
-theorem Slice.mut_subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
+theorem Slice.subslice_mut_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
   (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ s.val.len) :
-  ∃ ns, mut_subslice α s r = ret ns ∧
+  ∃ ns, subslice_mut α s r = ret ns ∧
   ns.val = s.slice r.start.val r.end_.val ∧
   (∀ i, 0 ≤ i → i + r.start.val < r.end_.val → ns.index i = s.index (r.start.val + i))
-  := shared_subslice_spec s r h0 h1
+  := subslice_shared_spec s r h0 h1
 
 attribute [pp_dot] List.len List.length List.index -- use the dot notation when printing
 set_option pp.coercions false -- do not print coercions with ↑ (this doesn't parse)
 
-def Slice.mut_subslice_back (α : Type u) (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
+def Slice.subslice_mut_back (α : Type u) (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
   -- TODO: not completely sure here
   if h: r.start.val < r.end_.val ∧ r.end_.val ≤ s.length ∧ ss.val.len = r.end_.val - r.start.val then
     let s_beg := s.val.itake r.start.val
@@ -372,13 +368,13 @@ def Slice.mut_subslice_back (α : Type u) (s : Slice α) (r : Range Usize) (ss :
     fail panic
 
 @[pspec]
-theorem Slice.mut_subslice_back_spec {α : Type u} [Inhabited α] (a : Slice α) (r : Range Usize) (ss : Slice α)
+theorem Slice.subslice_mut_back_spec {α : Type u} [Inhabited α] (a : Slice α) (r : Range Usize) (ss : Slice α)
   (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : ss.length = r.end_.val - r.start.val) :
-  ∃ na, mut_subslice_back α a r ss = ret na ∧
+  ∃ na, subslice_mut_back α a r ss = ret na ∧
   (∀ i, 0 ≤ i → i < r.start.val → na.index i = a.index i) ∧
   (∀ i, r.start.val ≤ i → i < r.end_.val → na.index i = ss.index (i - r.start.val)) ∧
   (∀ i, r.end_.val ≤ i → i < a.length → na.index i = a.index i) := by
-  simp [mut_subslice_back, *]
+  simp [subslice_mut_back, *]
   have h := List.replace_slice_index r.start.val r.end_.val a.val ss.val
     (by scalar_tac) (by scalar_tac) (by scalar_tac) (by scalar_tac)
   simp [List.replace_slice, *] at h

@@ -261,7 +261,7 @@ let assumed_adts () : (assumed_ty * string) list =
 
 let assumed_struct_constructors () : (assumed_ty * string) list =
   match !backend with
-  | Lean -> [ (Range, "Range.mk"); (Array, "Array.mk") ]
+  | Lean -> [ (Range, "Range.mk"); (Array, "Array.make") ]
   | Coq -> [ (Range, "range.mk"); (Array, "array.mk") ]
   | FStar -> [ (Range, "mkrange"); (Array, "mkarray") ]
   | HOL4 -> [ (Range, "mk_range"); (Array, "mk_array") ]
@@ -329,21 +329,22 @@ let assumed_llbc_functions () :
         (VecIndex, rg0, "vec_index_back") (* shouldn't be used *);
         (VecIndexMut, None, "vec_index_mut_fwd");
         (VecIndexMut, rg0, "vec_index_mut_back");
-        (ArraySharedIndex, None, "array_index");
-        (ArrayMutIndex, None, "array_mut_index_fwd");
-        (ArrayMutIndex, rg0, "array_mut_index_back");
+        (ArraySharedIndex, None, "array_index_shared");
+        (ArrayMutIndex, None, "array_index_mut_fwd");
+        (ArrayMutIndex, rg0, "array_index_mut_back");
         (ArrayToSharedSlice, None, "array_to_slice");
         (ArrayToMutSlice, None, "array_to_mut_slice_fwd");
         (ArrayToMutSlice, rg0, "array_to_mut_slice_back");
-        (ArraySharedSubslice, None, "array_subslice");
-        (ArrayMutSubslice, None, "array_mut_subslice_fwd");
-        (ArrayMutSubslice, rg0, "array_mut_subslice_back");
-        (SliceSharedIndex, None, "slice_index");
-        (SliceMutIndex, None, "slice_mut_index_fwd");
-        (SliceMutIndex, rg0, "slice_mut_index_back");
-        (SliceSharedSubslice, None, "slice_subslice");
-        (SliceMutSubslice, None, "slice_mut_subslice_fwd");
-        (SliceMutSubslice, rg0, "slice_mut_subslice_back");
+        (ArraySharedSubslice, None, "array_subslice_shared");
+        (ArrayMutSubslice, None, "array_subslice_mut_fwd");
+        (ArrayMutSubslice, rg0, "array_subslice_mut_back");
+        (SliceSharedIndex, None, "slice_index_shared");
+        (SliceMutIndex, None, "slice_index_mut_fwd");
+        (SliceMutIndex, rg0, "slice_index_mut_back");
+        (SliceSharedSubslice, None, "slice_subslice_mut");
+        (SliceMutSubslice, None, "slice_subslice_mut_fwd");
+        (SliceMutSubslice, rg0, "slice_subslice_mut_back");
+        (SliceLen, None, "slice_len_fwd");
       ]
   | Lean ->
       [
@@ -355,27 +356,28 @@ let assumed_llbc_functions () :
         (VecInsert, None, "Vec.insert_fwd") (* Shouldn't be used *);
         (VecInsert, rg0, "Vec.insert");
         (VecLen, None, "Vec.len");
-        (VecIndex, None, "Vec.index");
-        (VecIndex, rg0, "Vec.index_back") (* shouldn't be used *);
+        (VecIndex, None, "Vec.index_shared");
+        (VecIndex, rg0, "Vec.index_shared_back") (* shouldn't be used *);
         (VecIndexMut, None, "Vec.index_mut");
         (VecIndexMut, rg0, "Vec.index_mut_back");
-        (* TODO: it would be good to only use Array.index (no Array.mut_index)
+        (* TODO: it would be good to only use Array.index (no Array.index_mut)
            (same for subslice, etc.) *)
-        (ArraySharedIndex, None, "Array.index");
-        (ArrayMutIndex, None, "Array.mut_index");
-        (ArrayMutIndex, rg0, "Array.mut_index_back");
+        (ArraySharedIndex, None, "Array.index_shared");
+        (ArrayMutIndex, None, "Array.index_mut");
+        (ArrayMutIndex, rg0, "Array.index_mut_back");
         (ArrayToSharedSlice, None, "Array.to_slice");
         (ArrayToMutSlice, None, "Array.to_mut_slice");
         (ArrayToMutSlice, rg0, "Array.to_mut_slice_back");
-        (ArraySharedSubslice, None, "Array.subslice");
-        (ArrayMutSubslice, None, "Array.mut_subslice");
-        (ArrayMutSubslice, rg0, "Array.mut_subslice_back");
-        (SliceSharedIndex, None, "Slice.index");
-        (SliceMutIndex, None, "Slice.mut_index");
-        (SliceMutIndex, rg0, "Slice.mut_index_back");
-        (SliceSharedSubslice, None, "Slice.subslice");
-        (SliceMutSubslice, None, "Slice.mut_subslice");
-        (SliceMutSubslice, rg0, "Slice.mut_subslice_back");
+        (ArraySharedSubslice, None, "Array.subslice_shared");
+        (ArrayMutSubslice, None, "Array.subslice_mut");
+        (ArrayMutSubslice, rg0, "Array.subslice_mut_back");
+        (SliceSharedIndex, None, "Slice.index_shared");
+        (SliceMutIndex, None, "Slice.index_mut");
+        (SliceMutIndex, rg0, "Slice.index_mut_back");
+        (SliceSharedSubslice, None, "Slice.subslice_shared");
+        (SliceMutSubslice, None, "Slice.subslice_mut");
+        (SliceMutSubslice, rg0, "Slice.subslice_mut_back");
+        (SliceLen, None, "Slice.len");
       ]
 
 let assumed_pure_functions () : (pure_assumed_fun_id * string) list =

@@ -512,6 +512,7 @@ let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   | ArrayToMutSlice -> "@ArrayToMutSlice"
   | ArraySharedSubslice -> "@ArraySharedSubslice"
   | ArrayMutSubslice -> "@ArrayMutSubslice"
+  | SliceLen -> "@SliceLen"
   | SliceSharedIndex -> "@SliceSharedIndex"
   | SliceMutIndex -> "@SliceMutIndex"
   | SliceSharedSubslice -> "@SliceSharedSubslice"
