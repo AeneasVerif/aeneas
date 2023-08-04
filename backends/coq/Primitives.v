@@ -213,6 +213,7 @@ Proof.
   pose (scalar_max_cons_valid ty).
   lia.
 Qed.
+Print scalar_le_max_valid.
 
 Definition scalar_in_bounds (ty: scalar_ty) (x: Z) : bool :=
   scalar_ge_min ty x && scalar_le_max ty x .
@@ -394,13 +395,15 @@ Notation "x s< y" := (scalar_ltb x y)  (at level 80) : Primitives_scope.
 Notation "x s>= y" := (scalar_geb x y)  (at level 80) : Primitives_scope.
 Notation "x s> y" := (scalar_gtb x y)  (at level 80) : Primitives_scope.
 
-(*** Vectors *)
+(*** Range *)
+Record range (T : Type) := mk_range {
+  start: T;
+  end_: T;
+}.
+Arguments mk_range {_}.
 
-Definition vec T := { l: list T | Z.of_nat (length l) <= usize_max }.
-
-Definition vec_to_list {T: Type} (v: vec T) : list T := proj1_sig v.
-
-Definition vec_length {T: Type} (v: vec T) : Z := Z.of_nat (length (vec_to_list v)).
+(*** Arrays *)
+Definition array T (n : usize) := { l: list T | Z.of_nat (length l) = to_Z n}.
 
 Lemma le_0_usize_max : 0 <= usize_max.
 Proof.
@@ -408,6 +411,47 @@ Proof.
   unfold u32_max in H.
   lia.
 Qed.
+
+Lemma eqb_imp_eq (x y : Z) : Z.eqb x y = true -> x = y.
+Proof.
+  lia.
+Qed.
+
+(* TODO: finish the definitions *)
+Axiom mk_array : forall (T : Type) (n : usize) (l : list T), array T n.
+
+Axiom array_index_shared : forall (T : Type) (n : usize) (x : array T n) (i : usize), result T.
+Axiom array_index_mut_fwd : forall (T : Type) (n : usize) (x : array T n) (i : usize), result T.
+Axiom array_index_mut_back : forall (T : Type) (n : usize) (x : array T n) (i : usize) (nx : T), result (array T n).
+
+(*** Slice *)
+Definition slice T := { l: list T | Z.of_nat (length l) <= usize_max}.
+
+Axiom slice_len : forall (T : Type) (s : slice T), usize.
+Axiom slice_index_shared : forall (T : Type) (x : slice T) (i : usize), result T.
+Axiom slice_index_mut_fwd : forall (T : Type) (x : slice T) (i : usize), result T.
+Axiom slice_index_mut_back : forall (T : Type) (x : slice T) (i : usize) (nx : T), result (slice T).
+
+(*** Subslices *)
+
+Axiom array_to_slice_shared : forall (T : Type) (n : usize) (x : array T n), result (slice T).
+Axiom array_to_slice_mut_fwd : forall (T : Type) (n : usize) (x : array T n), result (slice T).
+Axiom array_to_slice_mut_back : forall (T : Type) (n : usize) (x : array T n) (s : slice T), result (array T n).
+
+Axiom array_subslice_shared: forall (T : Type) (n : usize) (x : array T n) (r : range usize), result (slice T).
+Axiom array_subslice_mut_fwd: forall (T : Type) (n : usize) (x : array T n) (r : range usize), result (slice T).
+Axiom array_subslice_mut_back: forall (T : Type) (n : usize) (x : array T n) (r : range usize) (ns : slice T), result (array T n).
+Axiom slice_subslice_shared: forall (T : Type) (x : slice T) (r : range usize), result (slice T).
+Axiom slice_subslice_mut_fwd: forall (T : Type) (x : slice T) (r : range usize), result (slice T).
+Axiom slice_subslice_mut_back: forall (T : Type) (x : slice T) (r : range usize) (ns : slice T), result (slice T).
+
+(*** Vectors *)
+
+Definition vec T := { l: list T | Z.of_nat (length l) <= usize_max }.
+
+Definition vec_to_list {T: Type} (v: vec T) : list T := proj1_sig v.
+
+Definition vec_length {T: Type} (v: vec T) : Z := Z.of_nat (length (vec_to_list v)).
 
 Definition vec_new (T: Type) : vec T := (exist _ [] le_0_usize_max).
 

@@ -57,7 +57,7 @@ def Array.index_shared (α : Type u) (n : Usize) (v: Array α n) (i: Usize) : Re
  -/
 
 @[pspec]
-theorem Array.index_shared_spec {α : Type u} {n : Usize}[Inhabited α] (v: Array α n) (i: Usize)
+theorem Array.index_shared_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
   ∃ x, v.index_shared α n i = ret x ∧ x = v.val.index i.val := by
   simp only [index_shared]
@@ -202,32 +202,32 @@ theorem Slice.index_mut_back_spec {α : Type u} (v: Slice α) (i: Usize) (x : α
 /- Array to slice/subslices -/
 
 /- We could make this function not use the `Result` type. By making it monadic, we
-   push the user to use the `Array.to_slice_spec` spec theorem below (through the
-   `progress` tactic), meaning `Array.to_slice` should be considered as opaque.
+   push the user to use the `Array.to_slice_shared_spec` spec theorem below (through the
+   `progress` tactic), meaning `Array.to_slice_shared` should be considered as opaque.
    All what the spec theorem reveals is that the "representative" lists are the same. -/
-def Array.to_slice (α : Type u) (n : Usize) (v : Array α n) : Result (Slice α) :=
+def Array.to_slice_shared (α : Type u) (n : Usize) (v : Array α n) : Result (Slice α) :=
   ret ⟨ v.val, by simp [← List.len_eq_length]; scalar_tac ⟩
 
 @[pspec]
-theorem Array.to_slice_spec {α : Type u} {n : Usize} (v : Array α n) :
-  ∃ s, to_slice α n v = ret s ∧ v.val = s.val := by simp [to_slice]
+theorem Array.to_slice_shared_spec {α : Type u} {n : Usize} (v : Array α n) :
+  ∃ s, to_slice_shared α n v = ret s ∧ v.val = s.val := by simp [to_slice_shared]
 
-def Array.to_mut_slice (α : Type u) (n : Usize) (v : Array α n) : Result (Slice α) :=
-  to_slice α n v
+def Array.to_slice_mut (α : Type u) (n : Usize) (v : Array α n) : Result (Slice α) :=
+  to_slice_shared α n v
 
 @[pspec]
-theorem Array.to_mut_slice_spec {α : Type u} {n : Usize} (v : Array α n) :
-  ∃ s, Array.to_slice α n v = ret s ∧ v.val = s.val := to_slice_spec v
+theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (v : Array α n) :
+  ∃ s, Array.to_slice_shared α n v = ret s ∧ v.val = s.val := to_slice_shared_spec v
 
-def Array.to_mut_slice_back (α : Type u) (n : Usize) (_ : Array α n) (s : Slice α) : Result (Array α n) :=
+def Array.to_slice_mut_back (α : Type u) (n : Usize) (_ : Array α n) (s : Slice α) : Result (Array α n) :=
   if h: s.val.len = n.val then
     ret ⟨ s.val, by simp [← List.len_eq_length, *] ⟩
   else fail panic
 
 @[pspec]
-theorem Array.to_mut_slice_back_spec {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.len = n.val) :
-  ∃ na, to_mut_slice_back α n a ns = ret na ∧ na.val = ns.val
-  := by simp [to_mut_slice_back, *]
+theorem Array.to_slice_mut_back_spec {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.len = n.val) :
+  ∃ na, to_slice_mut_back α n a ns = ret na ∧ na.val = ns.val
+  := by simp [to_slice_mut_back, *]
 
 def Array.subslice_shared (α : Type u) (n : Usize) (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here

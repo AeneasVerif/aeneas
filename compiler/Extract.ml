@@ -262,8 +262,8 @@ let assumed_adts () : (assumed_ty * string) list =
 let assumed_struct_constructors () : (assumed_ty * string) list =
   match !backend with
   | Lean -> [ (Range, "Range.mk"); (Array, "Array.make") ]
-  | Coq -> [ (Range, "range.mk"); (Array, "array.mk") ]
-  | FStar -> [ (Range, "mkrange"); (Array, "mkarray") ]
+  | Coq -> [ (Range, "mk_range"); (Array, "mk_array") ]
+  | FStar -> [ (Range, "Mkrange"); (Array, "mk_array") ]
   | HOL4 -> [ (Range, "mk_range"); (Array, "mk_array") ]
 
 let assumed_variants () : (assumed_ty * VariantId.id * string) list =
@@ -332,19 +332,19 @@ let assumed_llbc_functions () :
         (ArraySharedIndex, None, "array_index_shared");
         (ArrayMutIndex, None, "array_index_mut_fwd");
         (ArrayMutIndex, rg0, "array_index_mut_back");
-        (ArrayToSharedSlice, None, "array_to_slice");
-        (ArrayToMutSlice, None, "array_to_mut_slice_fwd");
-        (ArrayToMutSlice, rg0, "array_to_mut_slice_back");
+        (ArrayToSharedSlice, None, "array_to_slice_shared");
+        (ArrayToMutSlice, None, "array_to_slice_mut_fwd");
+        (ArrayToMutSlice, rg0, "array_to_slice_mut_back");
         (ArraySharedSubslice, None, "array_subslice_shared");
         (ArrayMutSubslice, None, "array_subslice_mut_fwd");
         (ArrayMutSubslice, rg0, "array_subslice_mut_back");
         (SliceSharedIndex, None, "slice_index_shared");
         (SliceMutIndex, None, "slice_index_mut_fwd");
         (SliceMutIndex, rg0, "slice_index_mut_back");
-        (SliceSharedSubslice, None, "slice_subslice_mut");
+        (SliceSharedSubslice, None, "slice_subslice_shared");
         (SliceMutSubslice, None, "slice_subslice_mut_fwd");
         (SliceMutSubslice, rg0, "slice_subslice_mut_back");
-        (SliceLen, None, "slice_len_fwd");
+        (SliceLen, None, "slice_len");
       ]
   | Lean ->
       [
@@ -360,14 +360,12 @@ let assumed_llbc_functions () :
         (VecIndex, rg0, "Vec.index_shared_back") (* shouldn't be used *);
         (VecIndexMut, None, "Vec.index_mut");
         (VecIndexMut, rg0, "Vec.index_mut_back");
-        (* TODO: it would be good to only use Array.index (no Array.index_mut)
-           (same for subslice, etc.) *)
         (ArraySharedIndex, None, "Array.index_shared");
         (ArrayMutIndex, None, "Array.index_mut");
         (ArrayMutIndex, rg0, "Array.index_mut_back");
-        (ArrayToSharedSlice, None, "Array.to_slice");
-        (ArrayToMutSlice, None, "Array.to_mut_slice");
-        (ArrayToMutSlice, rg0, "Array.to_mut_slice_back");
+        (ArrayToSharedSlice, None, "Array.to_slice_shared");
+        (ArrayToMutSlice, None, "Array.to_slice_mut");
+        (ArrayToMutSlice, rg0, "Array.to_slice_mut_back");
         (ArraySharedSubslice, None, "Array.subslice_shared");
         (ArrayMutSubslice, None, "Array.subslice_mut");
         (ArrayMutSubslice, rg0, "Array.subslice_mut_back");

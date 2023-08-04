@@ -833,6 +833,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       Printf.fprintf out "Require Import Primitives.\n";
       Printf.fprintf out "Import Primitives.\n";
       Printf.fprintf out "Require Import Coq.ZArith.ZArith.\n";
+      Printf.fprintf out "Require Import List.\n";
+      Printf.fprintf out "Import ListNotations.\n";
       Printf.fprintf out "Local Open Scope Primitives_scope.\n";
 
       (* Add the custom imports *)
