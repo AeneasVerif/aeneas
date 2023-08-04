@@ -125,15 +125,13 @@ thol4-paper: SUBDIR := misc-paper
 
 trans-array: OPTIONS += -no-state
 trans-array: SUBDIR := array
-tfstar-array: OPTIONS +=
-tcoq-array: OPTIONS +=
+tfstar-array: OPTIONS += -decreases-clauses -template-clauses
+tcoq-array: OPTIONS += -use-fuel
 tlean-array: SUBDIR :=
 tlean-array: OPTIONS +=
 thol4-array: OPTIONS +=
 
 # TODO: activate the arrays for all the backends
-tcoq-array:
-	echo "Ignoring the array test for Coq"
 thol4-array:
 	echo "Ignoring the array test for HOL4"
 
@@ -144,7 +142,7 @@ tcoq-loops: OPTIONS += -use-fuel -no-split-files
 tlean-loops: SUBDIR :=
 thol4-loops: SUBDIR := misc-loops
 
-trans-hashmap: OPTIONS += -no-state
+trans-hashmap: OPTIONS += -no-state -test-trans-units
 trans-hashmap: SUBDIR := hashmap
 tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap: OPTIONS += -use-fuel
@@ -152,7 +150,7 @@ tlean-hashmap: SUBDIR :=
 tlean-hashmap: OPTIONS +=
 thol4-hashmap: OPTIONS +=
 
-trans-hashmap_main: OPTIONS +=
+trans-hashmap_main: OPTIONS += -test-trans-units
 trans-hashmap_main: SUBDIR := hashmap_on_disk
 tfstar-hashmap_main: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap_main: OPTIONS += -use-fuel
@@ -177,7 +175,7 @@ tlean-constants: OPTIONS +=
 thol4-constants: SUBDIR := misc-constants
 thol4-constants: OPTIONS +=
 
-trans-external: OPTIONS +=
+trans-external: OPTIONS += -test-trans-units
 trans-external: SUBDIR := misc
 tfstar-external: OPTIONS +=
 tcoq-external: OPTIONS +=
@@ -187,7 +185,7 @@ thol4-external: SUBDIR := misc-external
 thol4-external: OPTIONS +=
 
 BETREE_FSTAR_OPTIONS = -decreases-clauses -template-clauses
-transp-betree_main: OPTIONS += -backward-no-state-update
+transp-betree_main: OPTIONS += -backward-no-state-update -test-trans-units
 transp-betree_main: SUBDIR:=betree
 tfstarp-betree_main: OPTIONS += $(BETREE_FSTAR_OPTIONS)
 tcoqp-betree_main: OPTIONS += -use-fuel
@@ -239,20 +237,20 @@ transp-%: gen-llbcp-% tfstarp-% tcoqp-% tleanp-% thol4p-%
 	echo "# Test $* done"
 
 .PHONY: tfstar-%
-tfstar-%: OPTIONS += -backend fstar -test-trans-units
+tfstar-%: OPTIONS += -backend fstar
 tfstar-%: BACKEND_SUBDIR := fstar
 tfstar-%:
 	$(AENEAS_CMD)
 
 # "p" stands for "Polonius"
 .PHONY: tfstarp-%
-tfstarp-%: OPTIONS += -backend fstar -test-trans-units
+tfstarp-%: OPTIONS += -backend fstar
 tfstarp-%: BACKEND_SUBDIR := fstar
 tfstarp-%:
 	$(AENEAS_CMD)
 
 .PHONY: tcoq-%
-tcoq-%: OPTIONS += -backend coq -test-trans-units
+tcoq-%: OPTIONS += -backend coq
 tcoq-%: BACKEND_SUBDIR := coq
 tcoq-%:
 	$(AENEAS_CMD)
@@ -265,7 +263,7 @@ tcoqp-%:
 	$(AENEAS_CMD)
 
 .PHONY: tlean-%
-tlean-%: OPTIONS += -backend lean -test-trans-units
+tlean-%: OPTIONS += -backend lean
 tlean-%: BACKEND_SUBDIR := lean
 tlean-%:
 	$(AENEAS_CMD)
@@ -273,19 +271,19 @@ tlean-%:
 # "p" stands for "Polonius"
 .PHONY: tleanp-%
 
-tleanp-%: OPTIONS += -backend lean -test-trans-units
+tleanp-%: OPTIONS += -backend lean
 tleanp-%: BACKEND_SUBDIR := lean
 tleanp-%:
 	$(AENEAS_CMD)
 
 .PHONY: thol4-%
-thol4-%: OPTIONS += -backend hol4 -test-trans-units
+thol4-%: OPTIONS += -backend hol4
 thol4-%: BACKEND_SUBDIR := hol4
 thol4-%:
 	$(AENEAS_CMD)
 
 .PHONY: thol4p-%
-thol4p-%: OPTIONS += -backend hol4 -test-trans-units
+thol4p-%: OPTIONS += -backend hol4
 thol4p-%: BACKEND_SUBDIR := hol4
 thol4p-%:
 	$(AENEAS_CMD)

@@ -213,7 +213,6 @@ Proof.
   pose (scalar_max_cons_valid ty).
   lia.
 Qed.
-Print scalar_le_max_valid.
 
 Definition scalar_in_bounds (ty: scalar_ty) (x: Z) : bool :=
   scalar_ge_min ty x && scalar_le_max ty x .

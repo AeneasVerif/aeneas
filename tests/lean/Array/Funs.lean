@@ -9,24 +9,24 @@ namespace array
 /- [array::array_to_shared_slice_]: forward function -/
 def array_to_shared_slice_
   (T : Type) (s : Array T (Usize.ofInt 32)) : Result (Slice T) :=
-  Array.to_slice T (Usize.ofInt 32) s
+  Array.to_slice_shared T (Usize.ofInt 32) s
 
 /- [array::array_to_mut_slice_]: forward function -/
 def array_to_mut_slice_
   (T : Type) (s : Array T (Usize.ofInt 32)) : Result (Slice T) :=
-  Array.to_mut_slice T (Usize.ofInt 32) s
+  Array.to_slice_mut T (Usize.ofInt 32) s
 
 /- [array::array_to_mut_slice_]: backward function 0 -/
 def array_to_mut_slice__back
   (T : Type) (s : Array T (Usize.ofInt 32)) (ret0 : Slice T) :
   Result (Array T (Usize.ofInt 32))
   :=
-  Array.to_mut_slice_back T (Usize.ofInt 32) s ret0
+  Array.to_slice_mut_back T (Usize.ofInt 32) s ret0
 
 /- [array::array_len]: forward function -/
 def array_len (T : Type) (s : Array T (Usize.ofInt 32)) : Result Usize :=
   do
-    let s0 ← Array.to_slice T (Usize.ofInt 32) s
+    let s0 ← Array.to_slice_shared T (Usize.ofInt 32) s
     let i := Slice.len T s0
     Result.ret i
 
@@ -34,7 +34,7 @@ def array_len (T : Type) (s : Array T (Usize.ofInt 32)) : Result Usize :=
 def shared_array_len
   (T : Type) (s : Array T (Usize.ofInt 32)) : Result Usize :=
   do
-    let s0 ← Array.to_slice T (Usize.ofInt 32) s
+    let s0 ← Array.to_slice_shared T (Usize.ofInt 32) s
     let i := Slice.len T s0
     Result.ret i
 
@@ -109,21 +109,22 @@ def slice_subslice_mut__back
   :=
   Slice.subslice_mut_back U32 x (Range.mk y z) ret0
 
-/- [array::array_to_slice_shared]: forward function -/
-def array_to_slice_shared
+/- [array::array_to_slice_shared_]: forward function -/
+def array_to_slice_shared_
   (x : Array U32 (Usize.ofInt 32)) : Result (Slice U32) :=
-  Array.to_slice U32 (Usize.ofInt 32) x
+  Array.to_slice_shared U32 (Usize.ofInt 32) x
 
-/- [array::array_to_slice_mut]: forward function -/
-def array_to_slice_mut (x : Array U32 (Usize.ofInt 32)) : Result (Slice U32) :=
-  Array.to_mut_slice U32 (Usize.ofInt 32) x
+/- [array::array_to_slice_mut_]: forward function -/
+def array_to_slice_mut_
+  (x : Array U32 (Usize.ofInt 32)) : Result (Slice U32) :=
+  Array.to_slice_mut U32 (Usize.ofInt 32) x
 
-/- [array::array_to_slice_mut]: backward function 0 -/
-def array_to_slice_mut_back
+/- [array::array_to_slice_mut_]: backward function 0 -/
+def array_to_slice_mut__back
   (x : Array U32 (Usize.ofInt 32)) (ret0 : Slice U32) :
   Result (Array U32 (Usize.ofInt 32))
   :=
-  Array.to_mut_slice_back U32 (Usize.ofInt 32) x ret0
+  Array.to_slice_mut_back U32 (Usize.ofInt 32) x ret0
 
 /- [array::array_subslice_shared_]: forward function -/
 def array_subslice_shared_
@@ -186,16 +187,13 @@ def array_local_deep_copy (x : Array U32 (Usize.ofInt 32)) : Result Unit :=
 def f0 : Result Unit :=
   do
     let s ←
-      Array.to_mut_slice U32 (Usize.ofInt 2)
+      Array.to_slice_mut U32 (Usize.ofInt 2)
         (Array.make U32 (Usize.ofInt 2) [ (U32.ofInt 1), (U32.ofInt 2) ])
     let s0 ← Slice.index_mut_back U32 s (Usize.ofInt 0) (U32.ofInt 1)
     let _ ←
-      Array.to_mut_slice_back U32 (Usize.ofInt 2)
+      Array.to_slice_mut_back U32 (Usize.ofInt 2)
         (Array.make U32 (Usize.ofInt 2) [ (U32.ofInt 1), (U32.ofInt 2) ]) s0
     Result.ret ()
-
-/- Unit test for [array::f0] -/
-#assert (f0 == .ret ())
 
 /- [array::f1]: forward function -/
 def f1 : Result Unit :=
@@ -205,9 +203,6 @@ def f1 : Result Unit :=
         (Array.make U32 (Usize.ofInt 2) [ (U32.ofInt 1), (U32.ofInt 2) ])
         (Usize.ofInt 0) (U32.ofInt 1)
     Result.ret ()
-
-/- Unit test for [array::f1] -/
-#assert (f1 == .ret ())
 
 /- [array::sum]: loop 0: forward function -/
 divergent def sum_loop (s : Slice U32) (sum0 : U32) (i : Usize) : Result U32 :=
@@ -268,7 +263,7 @@ def f3 : Result U32 :=
         (Usize.ofInt 0)
     let _ ← f2 i
     let s ←
-      Array.to_slice U32 (Usize.ofInt 2)
+      Array.to_slice_shared U32 (Usize.ofInt 2)
         (Array.make U32 (Usize.ofInt 2) [ (U32.ofInt 1), (U32.ofInt 2) ])
     let s0 ←
       f4

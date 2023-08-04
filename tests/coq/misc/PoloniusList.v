@@ -3,6 +3,8 @@
 Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
+Require Import List.
+Import ListNotations.
 Local Open Scope Primitives_scope.
 Module PoloniusList.
 
