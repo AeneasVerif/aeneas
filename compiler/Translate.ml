@@ -1334,7 +1334,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          custom_includes = [];
        }
      in
-     (* Add the extension for F* *)
      extract_file gen_config gen_ctx file_info);
 
   (* Generate the build file *)
@@ -1352,7 +1351,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        * Generate the library entry point, if the crate is split between
        * different files.
        *)
-      if !Config.split_files then (
+      if !Config.split_files && !Config.generate_lib_entry_point then (
         let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
         let out = open_out filename in
         (* Write *)

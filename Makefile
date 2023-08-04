@@ -147,7 +147,7 @@ trans-hashmap: SUBDIR := hashmap
 tfstar-hashmap: OPTIONS += -decreases-clauses -template-clauses
 tcoq-hashmap: OPTIONS += -use-fuel
 tlean-hashmap: SUBDIR :=
-tlean-hashmap: OPTIONS +=
+tlean-hashmap: OPTIONS += -no-gen-lib-entry # We add a custom import in the Hashmap.lean file: we do not want to overwrite it
 thol4-hashmap: OPTIONS +=
 
 trans-hashmap_main: OPTIONS += -test-trans-units

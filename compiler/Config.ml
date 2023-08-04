@@ -162,6 +162,14 @@ let backward_no_state_update = ref false
  *)
 let split_files = ref true
 
+(** Generate the library entry point, if the crate is split between different files.
+
+    Sometimes we want to skip this: the library entry points just includes all the
+    files in the project, and the user may want to write their own entry point, to
+    add custom includes (to include the files containing the proofs, for instance).
+ *)
+let generate_lib_entry_point = ref true
+
 (** For Lean, controls whether we generate a lakefile or not.
 
  *)
