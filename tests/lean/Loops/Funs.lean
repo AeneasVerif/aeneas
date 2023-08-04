@@ -178,7 +178,7 @@ divergent def get_elem_shared_loop
 /- [loops::get_elem_shared]: forward function -/
 def get_elem_shared (slots : Vec (List Usize)) (x : Usize) : Result Usize :=
   do
-    let l ← Vec.index (List Usize) slots (Usize.ofInt 0)
+    let l ← Vec.index_shared (List Usize) slots (Usize.ofInt 0)
     get_elem_shared_loop x l
 
 /- [loops::id_mut]: forward function -/

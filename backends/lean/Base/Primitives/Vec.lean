@@ -79,7 +79,7 @@ theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
   ∃ nv, v.insert α i x = ret nv ∧ nv.val = v.val.update i.val x := by
   simp [insert, *]
 
-def Vec.index (α : Type u) (v: Vec α) (i: Usize) : Result α :=
+def Vec.index_shared (α : Type u) (v: Vec α) (i: Usize) : Result α :=
   match v.val.indexOpt i.val with
   | none => fail .arrayOutOfBounds
   | some x => ret x
@@ -90,10 +90,10 @@ def Vec.index (α : Type u) (v: Vec α) (i: Usize) : Result α :=
  -/
 
 @[pspec]
-theorem Vec.index_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+theorem Vec.index_shared_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index α i = ret x ∧ x = v.val.index i.val := by
-  simp only [index]
+  ∃ x, v.index_shared α i = ret x ∧ x = v.val.index i.val := by
+  simp only [index_shared]
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
   simp [*]
