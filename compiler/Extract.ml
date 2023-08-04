@@ -329,19 +329,19 @@ let assumed_llbc_functions () :
         (VecIndex, rg0, "vec_index_back") (* shouldn't be used *);
         (VecIndexMut, None, "vec_index_mut_fwd");
         (VecIndexMut, rg0, "vec_index_mut_back");
-        (ArraySharedIndex, None, "array_shared_index");
+        (ArraySharedIndex, None, "array_index");
         (ArrayMutIndex, None, "array_mut_index_fwd");
         (ArrayMutIndex, rg0, "array_mut_index_back");
-        (ArrayToSharedSlice, None, "array_to_shared_slice");
+        (ArrayToSharedSlice, None, "array_to_slice");
         (ArrayToMutSlice, None, "array_to_mut_slice_fwd");
         (ArrayToMutSlice, rg0, "array_to_mut_slice_back");
-        (ArraySharedSubslice, None, "array_shared_subslice");
+        (ArraySharedSubslice, None, "array_subslice");
         (ArrayMutSubslice, None, "array_mut_subslice_fwd");
         (ArrayMutSubslice, rg0, "array_mut_subslice_back");
-        (SliceSharedIndex, None, "slice_shared_index");
+        (SliceSharedIndex, None, "slice_index");
         (SliceMutIndex, None, "slice_mut_index_fwd");
         (SliceMutIndex, rg0, "slice_mut_index_back");
-        (SliceSharedSubslice, None, "slice_shared_subslice");
+        (SliceSharedSubslice, None, "slice_subslice");
         (SliceMutSubslice, None, "slice_mut_subslice_fwd");
         (SliceMutSubslice, rg0, "slice_mut_subslice_back");
       ]
@@ -359,19 +359,21 @@ let assumed_llbc_functions () :
         (VecIndex, rg0, "Vec.index_back") (* shouldn't be used *);
         (VecIndexMut, None, "Vec.index_mut");
         (VecIndexMut, rg0, "Vec.index_mut_back");
-        (ArraySharedIndex, None, "Array.shared_index");
+        (* TODO: it would be good to only use Array.index (no Array.mut_index)
+           (same for subslice, etc.) *)
+        (ArraySharedIndex, None, "Array.index");
         (ArrayMutIndex, None, "Array.mut_index");
         (ArrayMutIndex, rg0, "Array.mut_index_back");
-        (ArrayToSharedSlice, None, "Array.to_shared_slice");
+        (ArrayToSharedSlice, None, "Array.to_slice");
         (ArrayToMutSlice, None, "Array.to_mut_slice");
         (ArrayToMutSlice, rg0, "Array.to_mut_slice_back");
-        (ArraySharedSubslice, None, "Array.shared_subslice");
+        (ArraySharedSubslice, None, "Array.subslice");
         (ArrayMutSubslice, None, "Array.mut_subslice");
         (ArrayMutSubslice, rg0, "Array.mut_subslice_back");
-        (SliceSharedIndex, None, "Slice.shared_index");
+        (SliceSharedIndex, None, "Slice.index");
         (SliceMutIndex, None, "Slice.mut_index");
         (SliceMutIndex, rg0, "Slice.mut_index_back");
-        (SliceSharedSubslice, None, "Slice.shared_subslice");
+        (SliceSharedSubslice, None, "Slice.subslice");
         (SliceMutSubslice, None, "Slice.mut_subslice");
         (SliceMutSubslice, rg0, "Slice.mut_subslice_back");
       ]

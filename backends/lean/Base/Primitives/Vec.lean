@@ -1,3 +1,4 @@
+/- Vectors -/
 import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
@@ -5,6 +6,7 @@ import Mathlib.Tactic.RunCmd
 import Mathlib.Tactic.Linarith
 import Base.IList
 import Base.Primitives.Scalar
+import Base.Primitives.Array
 import Base.Arith
 import Base.Progress.Base
 
@@ -12,18 +14,15 @@ namespace Primitives
 
 open Result Error
 
--------------
--- VECTORS --
--------------
-
 def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
-
--- TODO: do we really need it? It should be with Subtype by default
-instance Vec.cast (a : Type u): Coe (Vec a) (List a)  where coe := λ v => v.val
 
 instance (a : Type u) : Arith.HasIntProp (Vec a) where
   prop_ty := λ v => 0 ≤ v.val.len ∧ v.val.len ≤ Scalar.max ScalarTy.Usize
   prop := λ ⟨ _, l ⟩ => by simp[Scalar.max, List.len_eq_length, *]
+
+instance {α : Type u} (p : Vec α → Prop) : Arith.HasIntProp (Subtype p) where
+  prop_ty := λ x => p x
+  prop := λ x => x.property
 
 @[simp]
 abbrev Vec.length {α : Type u} (v : Vec α) : Int := v.val.len
@@ -119,10 +118,6 @@ theorem Vec.index_mut_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   -- TODO: dependent rewrite
   have h := List.indexOpt_eq_index v.val i.val (by scalar_tac) (by simp [*])
   simp [*]
-
-instance {α : Type u} (p : Vec α → Prop) : Arith.HasIntProp (Subtype p) where
-  prop_ty := λ x => p x
-  prop := λ x => x.property
 
 def Vec.index_mut_back (α : Type u) (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   match v.val.indexOpt i.val with

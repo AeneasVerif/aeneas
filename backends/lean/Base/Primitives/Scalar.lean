@@ -787,15 +787,8 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
     | isTrue h  => isTrue (Scalar.eq_of_val_eq h)
     | isFalse h => isFalse (Scalar.ne_of_val_ne h)
 
-/- Remark: we can't write the following instance because of restrictions about
-   the type class parameters (`ty` doesn't appear in the return type, which is
-   forbidden):
-
-   ```
-   instance Scalar.cast (ty : ScalarTy) : Coe (Scalar ty) Int where coe := λ v => v.val
-   ```
- -/
-def Scalar.toInt {ty} (n : Scalar ty) : Int := n.val
+instance (ty : ScalarTy) : CoeOut (Scalar ty) Int where
+  coe := λ v => v.val
 
 -- -- We now define a type class that subsumes the various machine integer types, so
 -- -- as to write a concise definition for scalar_cast, rather than exhaustively
