@@ -29,8 +29,8 @@ let compute_type_fun_global_contexts (m : A.crate) :
 
 let initialize_eval_context (type_context : C.type_context)
     (fun_context : C.fun_context) (global_context : C.global_context)
-    (region_groups : T.RegionGroupId.id list) (type_vars : T.type_var list) :
-    C.eval_ctx =
+    (region_groups : T.RegionGroupId.id list) (type_vars : T.type_var list)
+    (const_generic_vars : T.const_generic_var list) : C.eval_ctx =
   C.reset_global_counters ();
   {
     C.type_context;
@@ -38,6 +38,7 @@ let initialize_eval_context (type_context : C.type_context)
     C.global_context;
     C.region_groups;
     C.type_vars;
+    C.const_generic_vars;
     C.env = [ C.Frame ];
     C.ended_regions = T.RegionId.Set.empty;
   }
@@ -76,11 +77,18 @@ let initialize_symbolic_context_for_fun (type_context : C.type_context)
   in
   let ctx =
     initialize_eval_context type_context fun_context global_context
-      region_groups sg.type_params
+      region_groups sg.type_params sg.const_generic_params
   in
   (* Instantiate the signature *)
-  let type_params = List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params in
-  let inst_sg = instantiate_fun_sig type_params sg in
+  let type_params =
+    List.map (fun (v : T.type_var) -> T.TypeVar v.T.index) sg.type_params
+  in
+  let cg_params =
+    List.map
+      (fun (v : T.const_generic_var) -> T.ConstGenericVar v.T.index)
+      sg.const_generic_params
+  in
+  let inst_sg = instantiate_fun_sig type_params cg_params sg in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
     List.map (fun ty -> mk_fresh_symbolic_value V.SynthInput ty) inst_sg.inputs
@@ -149,14 +157,21 @@ let evaluate_function_symbolic_synthesize_backward_from_return
       ^ "\n- inside_loop: "
       ^ Print.bool_to_string inside_loop
       ^ "\n- ctx:\n"
-      ^ Print.Contexts.eval_ctx_to_string_gen true true ctx));
+      ^ Print.Contexts.eval_ctx_to_string ctx));
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
   let sg = fdef.signature in
-  let type_params = List.map (fun tv -> T.TypeVar tv.T.index) sg.type_params in
-  let ret_inst_sg = instantiate_fun_sig type_params sg in
+  let type_params =
+    List.map (fun (v : T.type_var) -> T.TypeVar v.T.index) sg.type_params
+  in
+  let cg_params =
+    List.map
+      (fun (v : T.const_generic_var) -> T.ConstGenericVar v.T.index)
+      sg.const_generic_params
+  in
+  let ret_inst_sg = instantiate_fun_sig type_params cg_params sg in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)
   let pop_return_value = is_regular_return in
@@ -490,7 +505,7 @@ module Test = struct
       compute_type_fun_global_contexts crate
     in
     let ctx =
-      initialize_eval_context type_context fun_context global_context [] []
+      initialize_eval_context type_context fun_context global_context [] [] []
     in
 
     (* Insert the (uninitialized) local variables *)
@@ -518,13 +533,11 @@ module Test = struct
   (** Small helper: return true if the function is a *transparent* unit function
       (no parameters, no arguments) - TODO: move *)
   let fun_decl_is_transparent_unit (def : A.fun_decl) : bool =
-    match def.body with
-    | None -> false
-    | Some body ->
-        body.arg_count = 0
-        && List.length def.A.signature.region_params = 0
-        && List.length def.A.signature.type_params = 0
-        && List.length def.A.signature.inputs = 0
+    Option.is_some def.body
+    && def.A.signature.region_params = []
+    && def.A.signature.type_params = []
+    && def.A.signature.const_generic_params = []
+    && def.A.signature.inputs = []
 
   (** Test all the unit functions in a list of function definitions *)
   let test_unit_functions (crate : A.crate) : unit =

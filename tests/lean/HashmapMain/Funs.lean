@@ -4,6 +4,7 @@ import Base
 import HashmapMain.Types
 import HashmapMain.FunsExternal
 open Primitives
+
 namespace hashmap_main
 
 /- [hashmap_main::hashmap::hash_key]: forward function -/
@@ -260,7 +261,7 @@ def hashmap.HashMap.contains_key
     let hash ← hashmap.hash_key key
     let i := Vec.len (hashmap.List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index (hashmap.List T) self.slots hash_mod
+    let l ← Vec.index_shared (hashmap.List T) self.slots hash_mod
     hashmap.HashMap.contains_key_in_list T key l
 
 /- [hashmap_main::hashmap::HashMap::{0}::get_in_list]: loop 0: forward function -/
@@ -285,7 +286,7 @@ def hashmap.HashMap.get
     let hash ← hashmap.hash_key key
     let i := Vec.len (hashmap.List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index (hashmap.List T) self.slots hash_mod
+    let l ← Vec.index_shared (hashmap.List T) self.slots hash_mod
     hashmap.HashMap.get_in_list T key l
 
 /- [hashmap_main::hashmap::HashMap::{0}::get_mut_in_list]: loop 0: forward function -/

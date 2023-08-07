@@ -46,4 +46,8 @@ example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
 example (x y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
   scalar_tac
 
+-- Checking that we explore the goal *and* projectors correctly
+example (x : U32 × U32) : 0 ≤ x.fst.val := by
+  scalar_tac
+
 end Arith

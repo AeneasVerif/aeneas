@@ -19,6 +19,8 @@ module Values = struct
     r_to_string : T.RegionId.id -> string;
     type_var_id_to_string : T.TypeVarId.id -> string;
     type_decl_id_to_string : T.TypeDeclId.id -> string;
+    const_generic_var_id_to_string : T.ConstGenericVarId.id -> string;
+    global_decl_id_to_string : T.GlobalDeclId.id -> string;
     adt_variant_to_string : T.TypeDeclId.id -> T.VariantId.id -> string;
     var_id_to_string : E.VarId.id -> string;
     adt_field_names :
@@ -30,6 +32,8 @@ module Values = struct
       PT.r_to_string = PT.erased_region_to_string;
       PT.type_var_id_to_string = fmt.type_var_id_to_string;
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
     }
 
   let value_to_rtype_formatter (fmt : value_formatter) : PT.rtype_formatter =
@@ -37,6 +41,8 @@ module Values = struct
       PT.r_to_string = PT.region_to_string fmt.r_to_string;
       PT.type_var_id_to_string = fmt.type_var_id_to_string;
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
     }
 
   let value_to_stype_formatter (fmt : value_formatter) : PT.stype_formatter =
@@ -44,6 +50,8 @@ module Values = struct
       PT.r_to_string = PT.region_to_string fmt.rvar_to_string;
       PT.type_var_id_to_string = fmt.type_var_id_to_string;
       PT.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PT.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+      PT.global_decl_id_to_string = fmt.global_decl_id_to_string;
     }
 
   let var_id_to_string (id : E.VarId.id) : string =
@@ -72,16 +80,16 @@ module Values = struct
       string =
     let ty_fmt : PT.etype_formatter = value_to_etype_formatter fmt in
     match v.value with
-    | Primitive cv -> PPV.primitive_value_to_string cv
+    | Literal cv -> PPV.literal_to_string cv
     | Adt av -> (
         let field_values =
           List.map (typed_value_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.Adt (T.Tuple, _, _) ->
+        | T.Adt (T.Tuple, _, _, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.Adt (T.AdtId def_id, _, _) ->
+        | T.Adt (T.AdtId def_id, _, _, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -103,7 +111,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.Adt (T.Assumed aty, _, _) -> (
+        | T.Adt (T.Assumed aty, _, _, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
@@ -116,8 +124,13 @@ module Values = struct
                   assert (field_values = []);
                   "@Option::None")
                 else raise (Failure "Unreachable")
+            | Range, _ -> "@Range{ " ^ String.concat ", " field_values ^ "}"
             | Vec, _ -> "@Vec[" ^ String.concat ", " field_values ^ "]"
-            | _ -> raise (Failure "Inconsistent value"))
+            | Array, _ ->
+                (* Happens when we aggregate values *)
+                "@Array[" ^ String.concat ", " field_values ^ "]"
+            | _ ->
+                raise (Failure ("Inconsistent value: " ^ V.show_typed_value v)))
         | _ -> raise (Failure "Inconsistent typed value"))
     | Bottom -> "⊥ : " ^ PT.ty_to_string ty_fmt v.ty
     | Borrow bc -> borrow_content_to_string fmt bc
@@ -188,10 +201,10 @@ module Values = struct
           List.map (typed_avalue_to_string fmt) av.field_values
         in
         match v.ty with
-        | T.Adt (T.Tuple, _, _) ->
+        | T.Adt (T.Tuple, _, _, _) ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | T.Adt (T.AdtId def_id, _, _) ->
+        | T.Adt (T.AdtId def_id, _, _, _) ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -213,7 +226,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | T.Adt (T.Assumed aty, _, _) -> (
+        | T.Adt (T.Assumed aty, _, _, _) -> (
             (* Assumed type *)
             match (aty, field_values) with
             | Box, [ bv ] -> "@Box(" ^ bv ^ ")"
@@ -354,20 +367,27 @@ module Contexts = struct
     | DummyBinder bid -> dummy_var_id_to_string bid
 
   let env_elem_to_string (fmt : PV.value_formatter) (verbose : bool)
-      (indent : string) (indent_incr : string) (ev : C.env_elem) : string =
+      (with_var_types : bool) (indent : string) (indent_incr : string)
+      (ev : C.env_elem) : string =
     match ev with
     | Var (var, tv) ->
         let bv = binder_to_string var in
-        indent ^ bv ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
+        let ty =
+          if with_var_types then
+            " : " ^ PT.ty_to_string (PV.value_to_etype_formatter fmt) tv.V.ty
+          else ""
+        in
+        indent ^ bv ^ ty ^ " -> " ^ PV.typed_value_to_string fmt tv ^ " ;"
     | Abs abs -> PV.abs_to_string fmt verbose indent indent_incr abs
     | Frame -> raise (Failure "Can't print a Frame element")
 
   let opt_env_elem_to_string (fmt : PV.value_formatter) (verbose : bool)
-      (indent : string) (indent_incr : string) (ev : C.env_elem option) : string
-      =
+      (with_var_types : bool) (indent : string) (indent_incr : string)
+      (ev : C.env_elem option) : string =
     match ev with
     | None -> indent ^ "..."
-    | Some ev -> env_elem_to_string fmt verbose indent indent_incr ev
+    | Some ev ->
+        env_elem_to_string fmt verbose with_var_types indent indent_incr ev
 
   (** Filters "dummy" bindings from an environment, to gain space and clarity/
       See [env_to_string]. *)
@@ -404,16 +424,18 @@ module Contexts = struct
   (** Environments can have a lot of dummy or uninitialized values: [filter]
       allows to filter them when printing, replacing groups of such bindings with
       "..." to gain space and clarity.
+      [with_var_types]: if true, print the type of the variables
    *)
   let env_to_string (filter : bool) (fmt : PV.value_formatter) (verbose : bool)
-      (env : C.env) : string =
+      (with_var_types : bool) (env : C.env) : string =
     let env =
       if filter then filter_env env else List.map (fun ev -> Some ev) env
     in
     "{\n"
     ^ String.concat "\n"
         (List.map
-           (fun ev -> opt_env_elem_to_string fmt verbose "  " "  " ev)
+           (fun ev ->
+             opt_env_elem_to_string fmt verbose with_var_types "  " "  " ev)
            env)
     ^ "\n}"
 
@@ -425,6 +447,8 @@ module Contexts = struct
       PV.r_to_string = fmt.r_to_string;
       PV.type_var_id_to_string = fmt.type_var_id_to_string;
       PV.type_decl_id_to_string = fmt.type_decl_id_to_string;
+      PV.const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+      PV.global_decl_id_to_string = fmt.global_decl_id_to_string;
       PV.adt_variant_to_string = fmt.adt_variant_to_string;
       PV.var_id_to_string = fmt.var_id_to_string;
       PV.adt_field_names = fmt.adt_field_names;
@@ -450,8 +474,16 @@ module Contexts = struct
       let v = C.lookup_type_var ctx vid in
       v.name
     in
+    let const_generic_var_id_to_string vid =
+      let v = C.lookup_const_generic_var ctx vid in
+      v.name
+    in
     let type_decl_id_to_string def_id =
       let def = C.ctx_lookup_type_decl ctx def_id in
+      name_to_string def.name
+    in
+    let global_decl_id_to_string def_id =
+      let def = C.ctx_lookup_global_decl ctx def_id in
       name_to_string def.name
     in
     let adt_variant_to_string =
@@ -469,6 +501,8 @@ module Contexts = struct
       r_to_string;
       type_var_id_to_string;
       type_decl_id_to_string;
+      const_generic_var_id_to_string;
+      global_decl_id_to_string;
       adt_variant_to_string;
       var_id_to_string;
       adt_field_names;
@@ -492,6 +526,7 @@ module Contexts = struct
       r_to_string = ctx_fmt.PV.r_to_string;
       type_var_id_to_string = ctx_fmt.PV.type_var_id_to_string;
       type_decl_id_to_string = ctx_fmt.PV.type_decl_id_to_string;
+      const_generic_var_id_to_string = ctx_fmt.PV.const_generic_var_id_to_string;
       adt_variant_to_string = ctx_fmt.PV.adt_variant_to_string;
       var_id_to_string = ctx_fmt.PV.var_id_to_string;
       adt_field_names = ctx_fmt.PV.adt_field_names;
@@ -518,7 +553,7 @@ module Contexts = struct
     frames
 
   let fmt_eval_ctx_to_string_gen (fmt : ctx_formatter) (verbose : bool)
-      (filter : bool) (ctx : C.eval_ctx) : string =
+      (filter : bool) (with_var_types : bool) (ctx : C.eval_ctx) : string =
     let ended_regions = T.RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
@@ -540,23 +575,23 @@ module Contexts = struct
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string filter fmt verbose f
+          ^ env_to_string filter fmt verbose with_var_types f
           ^ "\n")
         frames
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
     ^ " frame(s)\n" ^ String.concat "" frames
 
-  let eval_ctx_to_string_gen (verbose : bool) (filter : bool) (ctx : C.eval_ctx)
-      : string =
+  let eval_ctx_to_string_gen (verbose : bool) (filter : bool)
+      (with_var_types : bool) (ctx : C.eval_ctx) : string =
     let fmt = eval_ctx_to_ctx_formatter ctx in
-    fmt_eval_ctx_to_string_gen fmt verbose filter ctx
+    fmt_eval_ctx_to_string_gen fmt verbose filter with_var_types ctx
 
   let eval_ctx_to_string (ctx : C.eval_ctx) : string =
-    eval_ctx_to_string_gen false true ctx
+    eval_ctx_to_string_gen false true true ctx
 
   let eval_ctx_to_string_no_filter (ctx : C.eval_ctx) : string =
-    eval_ctx_to_string_gen false false ctx
+    eval_ctx_to_string_gen false false true ctx
 end
 
 module PC = Contexts (* local module *)
@@ -626,7 +661,7 @@ module EvalCtxLlbcAst = struct
   let env_elem_to_string (ctx : C.eval_ctx) (indent : string)
       (indent_incr : string) (ev : C.env_elem) : string =
     let fmt = PC.eval_ctx_to_ctx_formatter ctx in
-    PC.env_elem_to_string fmt false indent indent_incr ev
+    PC.env_elem_to_string fmt false true indent indent_incr ev
 
   let abs_to_string (ctx : C.eval_ctx) (indent : string) (indent_incr : string)
       (abs : V.abs) : string =

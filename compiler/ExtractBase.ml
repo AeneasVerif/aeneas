@@ -286,13 +286,15 @@ type formatter = {
        *)
   type_var_basename : StringSet.t -> string -> string;
       (** Generates a type variable basename. *)
+  const_generic_var_basename : StringSet.t -> string -> string;
+      (** Generates a const generic variable basename. *)
   append_index : string -> int -> string;
       (** Appends an index to a name - we use this to generate unique
           names: when doing so, the role of the formatter is just to concatenate
           indices to names, the responsability of finding a proper index is
           delegated to helper functions.
        *)
-  extract_primitive_value : F.formatter -> bool -> primitive_value -> unit;
+  extract_literal : F.formatter -> bool -> literal -> unit;
       (** Format a constant value.
 
           Inputs:
@@ -392,6 +394,7 @@ type id =
           them here.
        *)
   | TypeVarId of TypeVarId.id
+  | ConstGenericVarId of ConstGenericVarId.id
   | VarId of VarId.id
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
@@ -674,7 +677,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
             if variant_id = option_some_id then "@option::Some"
             else if variant_id = option_none_id then "@option::None"
             else raise (Failure "Unreachable")
-        | Assumed (State | Vec | Fuel) -> raise (Failure "Unreachable")
+        | Assumed (State | Vec | Fuel | Array | Slice | Str | Range) ->
+            raise (Failure "Unreachable")
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
             match def.kind with
@@ -688,10 +692,10 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       let field_name =
         match id with
         | Tuple -> raise (Failure "Unreachable")
-        | Assumed (State | Result | Error | Fuel | Option) ->
-            raise (Failure "Unreachable")
-        | Assumed Vec ->
-            (* We can't directly have access to the fields of a vector *)
+        | Assumed
+            ( State | Result | Error | Fuel | Option | Vec | Array | Slice | Str
+            | Range ) ->
+            (* We can't directly have access to the fields of those types *)
             raise (Failure "Unreachable")
         | AdtId id -> (
             let def = TypeDeclId.Map.find id type_decls in
@@ -709,6 +713,8 @@ let id_to_string (id : id) (ctx : extraction_ctx) : string =
       "field name: " ^ field_name
   | UnknownId -> "keyword"
   | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
+  | ConstGenericVarId id ->
+      "const_generic_var_id: " ^ ConstGenericVarId.to_string id
   | VarId id -> "var_id: " ^ VarId.to_string id
 
 (** We might not check for collisions for some specific ids (ex.: field names) *)
@@ -787,6 +793,11 @@ let ctx_get_type_var (id : TypeVarId.id) (ctx : extraction_ctx) : string =
   let is_opaque = false in
   ctx_get is_opaque (TypeVarId id) ctx
 
+let ctx_get_const_generic_var (id : ConstGenericVarId.id) (ctx : extraction_ctx)
+    : string =
+  let is_opaque = false in
+  ctx_get is_opaque (ConstGenericVarId id) ctx
+
 let ctx_get_field (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
   let is_opaque = false in
@@ -822,6 +833,19 @@ let ctx_add_type_var (basename : string) (id : TypeVarId.id)
   let ctx = ctx_add is_opaque (TypeVarId id) name ctx in
   (ctx, name)
 
+(** Generate a unique const generic variable name and add it to the context *)
+let ctx_add_const_generic_var (basename : string) (id : ConstGenericVarId.id)
+    (ctx : extraction_ctx) : extraction_ctx * string =
+  let is_opaque = false in
+  let name =
+    ctx.fmt.const_generic_var_basename ctx.names_map.names_set basename
+  in
+  let name =
+    basename_to_unique ctx.names_map.names_set ctx.fmt.append_index name
+  in
+  let ctx = ctx_add is_opaque (ConstGenericVarId id) name ctx in
+  (ctx, name)
+
 (** See {!ctx_add_type_var} *)
 let ctx_add_type_vars (vars : (string * TypeVarId.id) list)
     (ctx : extraction_ctx) : extraction_ctx * string list =
@@ -853,6 +877,20 @@ let ctx_add_type_params (vars : type_var list) (ctx : extraction_ctx) :
   List.fold_left_map
     (fun ctx (var : type_var) -> ctx_add_type_var var.name var.index ctx)
     ctx vars
+
+let ctx_add_const_generic_params (vars : const_generic_var list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
+  List.fold_left_map
+    (fun ctx (var : const_generic_var) ->
+      ctx_add_const_generic_var var.name var.index ctx)
+    ctx vars
+
+let ctx_add_type_const_generic_params (tvars : type_var list)
+    (cgvars : const_generic_var list) (ctx : extraction_ctx) :
+    extraction_ctx * string list * string list =
+  let ctx, tys = ctx_add_type_params tvars ctx in
+  let ctx, cgs = ctx_add_const_generic_params cgvars ctx in
+  (ctx, tys, cgs)
 
 let ctx_add_type_decl_struct (def : type_decl) (ctx : extraction_ctx) :
     extraction_ctx * string =

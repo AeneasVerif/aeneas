@@ -12,7 +12,8 @@ open Identifiers
     in the environment, because they contain borrows for instance, typically
     because they might be overwritten during an assignment.
   *)
-module DummyVarId = IdGen ()
+module DummyVarId =
+IdGen ()
 
 type dummy_var_id = DummyVarId.id [@@deriving show, ord]
 
@@ -261,6 +262,7 @@ type eval_ctx = {
   global_context : global_context;
   region_groups : RegionGroupId.id list;
   type_vars : type_var list;
+  const_generic_vars : const_generic_var list;
   env : env;
   ended_regions : RegionId.Set.t;
 }
@@ -268,6 +270,10 @@ type eval_ctx = {
 
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
   TypeVarId.nth ctx.type_vars vid
+
+let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
+    const_generic_var =
+  ConstGenericVarId.nth ctx.const_generic_vars vid
 
 (** Lookup a variable in the current frame *)
 let env_lookup_var (env : env) (vid : VarId.id) : var_binder * typed_value =

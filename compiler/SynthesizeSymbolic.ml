@@ -32,16 +32,16 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
       (* Match on the symbolic value type to know which can of expansion happened *)
       let expansion =
         match sv.V.sv_ty with
-        | T.Bool -> (
+        | T.Literal PV.Bool -> (
             (* Boolean expansion: there should be two branches *)
             match ls with
             | [
-             (Some (V.SePrimitive (PV.Bool true)), true_exp);
-             (Some (V.SePrimitive (PV.Bool false)), false_exp);
+             (Some (V.SeLiteral (PV.Bool true)), true_exp);
+             (Some (V.SeLiteral (PV.Bool false)), false_exp);
             ] ->
                 ExpandBool (true_exp, false_exp)
             | _ -> raise (Failure "Ill-formed boolean expansion"))
-        | T.Integer int_ty ->
+        | T.Literal (PV.Integer int_ty) ->
             (* Switch over an integer: split between the "regular" branches
                and the "otherwise" branch (which should be the last branch) *)
             let branches, otherwise = C.List.pop_last ls in
@@ -50,7 +50,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             let get_scalar (see : V.symbolic_expansion option) : V.scalar_value
                 =
               match see with
-              | Some (V.SePrimitive (PV.Scalar cv)) ->
+              | Some (V.SeLiteral (PV.Scalar cv)) ->
                   assert (cv.PV.int_ty = int_ty);
                   cv
               | _ -> raise (Failure "Unreachable")
@@ -64,7 +64,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             assert (otherwise_see = None);
             (* Return *)
             ExpandInt (int_ty, branches, otherwise)
-        | T.Adt (_, _, _) ->
+        | T.Adt (_, _, _, _) ->
             (* Branching: it is necessarily an enumeration expansion *)
             let get_variant (see : V.symbolic_expansion option) :
                 T.VariantId.id option * V.symbolic_value list =
@@ -85,7 +85,7 @@ let synthesize_symbolic_expansion (sv : V.symbolic_value)
             match ls with
             | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
             | _ -> raise (Failure "Ill-formed borrow expansion"))
-        | T.TypeVar _ | Char | Never | Str | Array _ | Slice _ ->
+        | T.TypeVar _ | T.Literal Char | Never ->
             raise (Failure "Ill-formed symbolic expansion")
       in
       Some (Expansion (place, sv, expansion))
@@ -98,9 +98,9 @@ let synthesize_symbolic_expansion_no_branching (sv : V.symbolic_value)
 
 let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
     (abstractions : V.AbstractionId.id list) (type_params : T.ety list)
-    (args : V.typed_value list) (args_places : mplace option list)
-    (dest : V.symbolic_value) (dest_place : mplace option)
-    (e : expression option) : expression option =
+    (const_generic_params : T.const_generic list) (args : V.typed_value list)
+    (args_places : mplace option list) (dest : V.symbolic_value)
+    (dest_place : mplace option) (e : expression option) : expression option =
   Option.map
     (fun e ->
       let call =
@@ -109,6 +109,7 @@ let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
           ctx;
           abstractions;
           type_params;
+          const_generic_params;
           args;
           dest;
           args_places;
@@ -125,24 +126,25 @@ let synthesize_global_eval (gid : A.GlobalDeclId.id) (dest : V.symbolic_value)
 let synthesize_regular_function_call (fun_id : A.fun_id)
     (call_id : V.FunCallId.id) (ctx : Contexts.eval_ctx)
     (abstractions : V.AbstractionId.id list) (type_params : T.ety list)
-    (args : V.typed_value list) (args_places : mplace option list)
-    (dest : V.symbolic_value) (dest_place : mplace option)
-    (e : expression option) : expression option =
+    (const_generic_params : T.const_generic list) (args : V.typed_value list)
+    (args_places : mplace option list) (dest : V.symbolic_value)
+    (dest_place : mplace option) (e : expression option) : expression option =
   synthesize_function_call
     (Fun (fun_id, call_id))
-    ctx abstractions type_params args args_places dest dest_place e
+    ctx abstractions type_params const_generic_params args args_places dest
+    dest_place e
 
 let synthesize_unary_op (ctx : Contexts.eval_ctx) (unop : E.unop)
     (arg : V.typed_value) (arg_place : mplace option) (dest : V.symbolic_value)
     (dest_place : mplace option) (e : expression option) : expression option =
-  synthesize_function_call (Unop unop) ctx [] [] [ arg ] [ arg_place ] dest
+  synthesize_function_call (Unop unop) ctx [] [] [] [ arg ] [ arg_place ] dest
     dest_place e
 
 let synthesize_binary_op (ctx : Contexts.eval_ctx) (binop : E.binop)
     (arg0 : V.typed_value) (arg0_place : mplace option) (arg1 : V.typed_value)
     (arg1_place : mplace option) (dest : V.symbolic_value)
     (dest_place : mplace option) (e : expression option) : expression option =
-  synthesize_function_call (Binop binop) ctx [] [] [ arg0; arg1 ]
+  synthesize_function_call (Binop binop) ctx [] [] [] [ arg0; arg1 ]
     [ arg0_place; arg1_place ] dest dest_place e
 
 let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : V.abs)

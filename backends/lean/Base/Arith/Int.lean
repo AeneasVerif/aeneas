@@ -53,13 +53,21 @@ open Lean Lean.Elab Lean.Meta
 -- Explore a term by decomposing the applications (we explore the applied
 -- functions and their arguments, but ignore lambdas, forall, etc. -
 -- should we go inside?).
+-- Remark: we pretend projections are applications, and explore the projected
+-- terms.
 partial def foldTermApps (k : α → Expr → MetaM α) (s : α) (e : Expr) : MetaM α := do
-  -- We do it in a very simpler manner: we deconstruct applications,
-  -- and recursively explore the sub-expressions. Note that we do
-  -- not go inside foralls and abstractions (should we?).
-  e.withApp fun f args => do
-    let s ← k s f
-    args.foldlM (foldTermApps k) s
+  -- Explore the current expression
+  let e := e.consumeMData
+  let s ← k s e
+  -- Recurse
+  match e with
+  | .proj _ _ e' =>
+    foldTermApps k s e'
+  | .app .. =>
+    e.withApp fun f args => do
+      let s ← k s f
+      args.foldlM (foldTermApps k) s
+  | _ => pure s
 
 -- Provided a function `k` which lookups type class instances on an expression,
 -- collect all the instances lookuped by applying `k` on the sub-expressions of `e`.
@@ -83,15 +91,18 @@ def collectInstancesFromMainCtx (k : Expr → MetaM (Option Expr)) : Tactic.Tact
   let hs := HashSet.empty
   -- Explore the declarations
   let decls ← ctx.getDecls
-  decls.foldlM (fun hs d => collectInstances k hs d.toExpr) hs
+  let hs ← decls.foldlM (fun hs d => collectInstances k hs d.toExpr) hs
+  -- Also explore the goal
+  collectInstances k hs (← Tactic.getMainTarget)
 
 -- Helper
 def lookupProp (fName : String) (className : Name) (e : Expr) : MetaM (Option Expr) := do
   trace[Arith] fName
   -- TODO: do we need Lean.observing?
   -- This actually eliminates the error messages
+  trace[Arith] m!"{fName}: {e}"
   Lean.observing? do
-    trace[Arith] m!"{fName}: observing"
+    trace[Arith] m!"{fName}: observing: {e}"
     let ty ← Lean.Meta.inferType e
     let hasProp ← mkAppM className #[ty]
     let hasPropInst ← trySynthInstance hasProp
@@ -112,11 +123,11 @@ def collectHasIntPropInstancesFromMainCtx : Tactic.TacticM (HashSet Expr) := do
 
 -- Return an instance of `PropHasImp` for `e` if it has some
 def lookupPropHasImp (e : Expr) : MetaM (Option Expr) := do
-  trace[Arith] "lookupPropHasImp"
+  trace[Arith] m!"lookupPropHasImp: {e}"
   -- TODO: do we need Lean.observing?
   -- This actually eliminates the error messages
   Lean.observing? do
-    trace[Arith] "lookupPropHasImp: observing"
+    trace[Arith] "lookupPropHasImp: observing: {e}"
     let ty ← Lean.Meta.inferType e
     trace[Arith] "lookupPropHasImp: ty: {ty}"
     let cl ← mkAppM ``PropHasImp #[ty]

@@ -6,11 +6,15 @@ open PureUtils
 type type_formatter = {
   type_var_id_to_string : TypeVarId.id -> string;
   type_decl_id_to_string : TypeDeclId.id -> string;
+  const_generic_var_id_to_string : ConstGenericVarId.id -> string;
+  global_decl_id_to_string : GlobalDeclId.id -> string;
 }
 
 type value_formatter = {
   type_var_id_to_string : TypeVarId.id -> string;
   type_decl_id_to_string : TypeDeclId.id -> string;
+  const_generic_var_id_to_string : ConstGenericVarId.id -> string;
+  global_decl_id_to_string : GlobalDeclId.id -> string;
   adt_variant_to_string : TypeDeclId.id -> VariantId.id -> string;
   var_id_to_string : VarId.id -> string;
   adt_field_names : TypeDeclId.id -> VariantId.id option -> string list option;
@@ -20,6 +24,8 @@ let value_to_type_formatter (fmt : value_formatter) : type_formatter =
   {
     type_var_id_to_string = fmt.type_var_id_to_string;
     type_decl_id_to_string = fmt.type_decl_id_to_string;
+    const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+    global_decl_id_to_string = fmt.global_decl_id_to_string;
   }
 
 (* TODO: we need to store which variables we have encountered so far, and
@@ -28,6 +34,7 @@ let value_to_type_formatter (fmt : value_formatter) : type_formatter =
 type ast_formatter = {
   type_var_id_to_string : TypeVarId.id -> string;
   type_decl_id_to_string : TypeDeclId.id -> string;
+  const_generic_var_id_to_string : ConstGenericVarId.id -> string;
   adt_variant_to_string : TypeDeclId.id -> VariantId.id -> string;
   var_id_to_string : VarId.id -> string;
   adt_field_to_string :
@@ -41,6 +48,8 @@ let ast_to_value_formatter (fmt : ast_formatter) : value_formatter =
   {
     type_var_id_to_string = fmt.type_var_id_to_string;
     type_decl_id_to_string = fmt.type_decl_id_to_string;
+    const_generic_var_id_to_string = fmt.const_generic_var_id_to_string;
+    global_decl_id_to_string = fmt.global_decl_id_to_string;
     adt_variant_to_string = fmt.adt_variant_to_string;
     var_id_to_string = fmt.var_id_to_string;
     adt_field_names = fmt.adt_field_names;
@@ -55,20 +64,38 @@ let fun_name_to_string = Print.fun_name_to_string
 let global_name_to_string = Print.global_name_to_string
 let option_to_string = Print.option_to_string
 let type_var_to_string = Print.Types.type_var_to_string
-let integer_type_to_string = Print.Types.integer_type_to_string
+let const_generic_var_to_string = Print.Types.const_generic_var_to_string
+let integer_type_to_string = Print.PrimitiveValues.integer_type_to_string
+let literal_type_to_string = Print.PrimitiveValues.literal_type_to_string
 let scalar_value_to_string = Print.PrimitiveValues.scalar_value_to_string
+let literal_to_string = Print.PrimitiveValues.literal_to_string
 
 let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
-    (type_params : type_var list) : type_formatter =
+    (global_decls : A.global_decl GlobalDeclId.Map.t)
+    (type_params : type_var list)
+    (const_generic_params : const_generic_var list) : type_formatter =
   let type_var_id_to_string vid =
     let var = T.TypeVarId.nth type_params vid in
     type_var_to_string var
+  in
+  let const_generic_var_id_to_string vid =
+    let var = T.ConstGenericVarId.nth const_generic_params vid in
+    const_generic_var_to_string var
   in
   let type_decl_id_to_string def_id =
     let def = T.TypeDeclId.Map.find def_id type_decls in
     name_to_string def.name
   in
-  { type_var_id_to_string; type_decl_id_to_string }
+  let global_decl_id_to_string def_id =
+    let def = T.GlobalDeclId.Map.find def_id global_decls in
+    name_to_string def.name
+  in
+  {
+    type_var_id_to_string;
+    type_decl_id_to_string;
+    const_generic_var_id_to_string;
+    global_decl_id_to_string;
+  }
 
 (* TODO: there is a bit of duplication with Print.fun_decl_to_ast_formatter.
 
@@ -79,10 +106,15 @@ let mk_type_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
 let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     (fun_decls : A.fun_decl FunDeclId.Map.t)
     (global_decls : A.global_decl GlobalDeclId.Map.t)
-    (type_params : type_var list) : ast_formatter =
+    (type_params : type_var list)
+    (const_generic_params : const_generic_var list) : ast_formatter =
   let type_var_id_to_string vid =
     let var = T.TypeVarId.nth type_params vid in
     type_var_to_string var
+  in
+  let const_generic_var_id_to_string vid =
+    let var = T.ConstGenericVarId.nth const_generic_params vid in
+    const_generic_var_to_string var
   in
   let type_decl_id_to_string def_id =
     let def = T.TypeDeclId.Map.find def_id type_decls in
@@ -111,6 +143,7 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
   in
   {
     type_var_id_to_string;
+    const_generic_var_id_to_string;
     type_decl_id_to_string;
     adt_variant_to_string;
     var_id_to_string;
@@ -120,36 +153,51 @@ let mk_ast_formatter (type_decls : T.type_decl TypeDeclId.Map.t)
     global_decl_id_to_string;
   }
 
+let assumed_ty_to_string (aty : assumed_ty) : string =
+  match aty with
+  | State -> "State"
+  | Result -> "Result"
+  | Error -> "Error"
+  | Fuel -> "Fuel"
+  | Option -> "Option"
+  | Vec -> "Vec"
+  | Array -> "Array"
+  | Slice -> "Slice"
+  | Str -> "Str"
+  | Range -> "Range"
+
 let type_id_to_string (fmt : type_formatter) (id : type_id) : string =
   match id with
   | AdtId id -> fmt.type_decl_id_to_string id
   | Tuple -> ""
-  | Assumed aty -> (
-      match aty with
-      | State -> "State"
-      | Result -> "Result"
-      | Error -> "Error"
-      | Fuel -> "Fuel"
-      | Option -> "Option"
-      | Vec -> "Vec")
+  | Assumed aty -> assumed_ty_to_string aty
+
+(* TODO: duplicates  Charon.PrintTypes.const_generic_to_string *)
+let const_generic_to_string (fmt : type_formatter) (cg : T.const_generic) :
+    string =
+  match cg with
+  | ConstGenericGlobal id -> fmt.global_decl_id_to_string id
+  | ConstGenericVar id -> fmt.const_generic_var_id_to_string id
+  | ConstGenericValue lit -> literal_to_string lit
 
 let rec ty_to_string (fmt : type_formatter) (inside : bool) (ty : ty) : string =
   match ty with
-  | Adt (id, tys) -> (
+  | Adt (id, tys, cgs) -> (
       let tys = List.map (ty_to_string fmt false) tys in
+      let cgs = List.map (const_generic_to_string fmt) cgs in
+      let params = List.append tys cgs in
       match id with
-      | Tuple -> "(" ^ String.concat " * " tys ^ ")"
+      | Tuple ->
+          assert (cgs = []);
+          "(" ^ String.concat " * " tys ^ ")"
       | AdtId _ | Assumed _ ->
-          let tys_s = if tys = [] then "" else " " ^ String.concat " " tys in
-          let ty_s = type_id_to_string fmt id ^ tys_s in
-          if tys <> [] && inside then "(" ^ ty_s ^ ")" else ty_s)
+          let params_s =
+            if params = [] then "" else " " ^ String.concat " " params
+          in
+          let ty_s = type_id_to_string fmt id ^ params_s in
+          if params <> [] && inside then "(" ^ ty_s ^ ")" else ty_s)
   | TypeVar tv -> fmt.type_var_id_to_string tv
-  | Bool -> "bool"
-  | Char -> "char"
-  | Integer int_ty -> integer_type_to_string int_ty
-  | Str -> "str"
-  | Array aty -> "[" ^ ty_to_string fmt false aty ^ "; ?]"
-  | Slice sty -> "[" ^ ty_to_string fmt false sty ^ "]"
+  | Literal lty -> literal_type_to_string lty
   | Arrow (arg_ty, ret_ty) ->
       let ty =
         ty_to_string fmt true arg_ty ^ " -> " ^ ty_to_string fmt false ret_ty
@@ -246,9 +294,11 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
   | Assumed aty -> (
       (* Assumed type *)
       match aty with
-      | State ->
-          (* This type is opaque: we can't get there *)
+      | State | Array | Slice | Str ->
+          (* Those types are opaque: we can't get there *)
           raise (Failure "Unreachable")
+      | Vec -> "@Vec"
+      | Range -> "@Range"
       | Result ->
           let variant_id = Option.get variant_id in
           if variant_id = result_return_id then "@Result::Return"
@@ -270,10 +320,7 @@ let adt_variant_to_string (fmt : value_formatter) (adt_id : type_id)
           if variant_id = option_some_id then "@Option::Some "
           else if variant_id = option_none_id then "@Option::None"
           else
-            raise (Failure "Unreachable: improper variant id for result type")
-      | Vec ->
-          assert (variant_id = None);
-          "Vec")
+            raise (Failure "Unreachable: improper variant id for result type"))
 
 let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
     (field_id : FieldId.id) : string =
@@ -290,7 +337,8 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
   | Assumed aty -> (
       (* Assumed type *)
       match aty with
-      | State | Fuel | Vec ->
+      | Range -> FieldId.to_string field_id
+      | State | Fuel | Vec | Array | Slice | Str ->
           (* Opaque types: we can't get there *)
           raise (Failure "Unreachable")
       | Result | Error | Option ->
@@ -298,17 +346,17 @@ let adt_field_to_string (fmt : value_formatter) (adt_id : type_id)
           raise (Failure "Unreachable"))
 
 (** TODO: we don't need a general function anymore (it is now only used for
-    patterns (i.e., patterns)
+    patterns)
  *)
 let adt_g_value_to_string (fmt : value_formatter)
     (value_to_string : 'v -> string) (variant_id : VariantId.id option)
     (field_values : 'v list) (ty : ty) : string =
   let field_values = List.map value_to_string field_values in
   match ty with
-  | Adt (Tuple, _) ->
+  | Adt (Tuple, _, _) ->
       (* Tuple *)
       "(" ^ String.concat ", " field_values ^ ")"
-  | Adt (AdtId def_id, _) ->
+  | Adt (AdtId def_id, _, _) ->
       (* "Regular" ADT *)
       let adt_ident =
         match variant_id with
@@ -330,7 +378,7 @@ let adt_g_value_to_string (fmt : value_formatter)
             let field_values = String.concat " " field_values in
             adt_ident ^ " { " ^ field_values ^ " }"
       else adt_ident
-  | Adt (Assumed aty, _) -> (
+  | Adt (Assumed aty, _, _) -> (
       (* Assumed type *)
       match aty with
       | State ->
@@ -375,12 +423,20 @@ let adt_g_value_to_string (fmt : value_formatter)
             "@Option::None")
           else
             raise (Failure "Unreachable: improper variant id for result type")
-      | Vec ->
+      | Vec | Array | Slice | Str ->
           assert (variant_id = None);
           let field_values =
             List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
           in
-          "Vec [" ^ String.concat "; " field_values ^ "]")
+          let id = assumed_ty_to_string aty in
+          id ^ " [" ^ String.concat "; " field_values ^ "]"
+      | Range ->
+          assert (variant_id = None);
+          let field_values =
+            List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
+          in
+          let id = assumed_ty_to_string aty in
+          id ^ " {" ^ String.concat "; " field_values ^ "}")
   | _ ->
       let fmt = value_to_type_formatter fmt in
       raise
@@ -392,7 +448,7 @@ let adt_g_value_to_string (fmt : value_formatter)
 let rec typed_pattern_to_string (fmt : ast_formatter) (v : typed_pattern) :
     string =
   match v.value with
-  | PatConstant cv -> Print.PrimitiveValues.primitive_value_to_string cv
+  | PatConstant cv -> literal_to_string cv
   | PatVar (v, None) -> var_to_string (ast_to_type_formatter fmt) v
   | PatVar (v, Some mp) ->
       let mp = "[@mplace=" ^ mplace_to_string fmt mp ^ "]" in
@@ -450,6 +506,17 @@ let llbc_assumed_fun_id_to_string (fid : A.assumed_fun_id) : string =
   | A.VecLen -> "alloc::vec::Vec::len"
   | A.VecIndex -> "core::ops::index::Index<alloc::vec::Vec>::index"
   | A.VecIndexMut -> "core::ops::index::IndexMut<alloc::vec::Vec>::index_mut"
+  | ArrayIndexShared -> "@ArrayIndexShared"
+  | ArrayIndexMut -> "@ArrayIndexMut"
+  | ArrayToSliceShared -> "@ArrayToSliceShared"
+  | ArrayToSliceMut -> "@ArrayToSliceMut"
+  | ArraySubsliceShared -> "@ArraySubsliceShared"
+  | ArraySubsliceMut -> "@ArraySubsliceMut"
+  | SliceLen -> "@SliceLen"
+  | SliceIndexShared -> "@SliceIndexShared"
+  | SliceIndexMut -> "@SliceIndexMut"
+  | SliceSubsliceShared -> "@SliceSubsliceShared"
+  | SliceSubsliceMut -> "@SliceSubsliceMut"
 
 let pure_assumed_fun_id_to_string (fid : pure_assumed_fun_id) : string =
   match fid with
@@ -495,7 +562,7 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
   | Var var_id ->
       let s = fmt.var_id_to_string var_id in
       if inside then "(" ^ s ^ ")" else s
-  | Const cv -> Print.PrimitiveValues.primitive_value_to_string cv
+  | Const cv -> literal_to_string cv
   | App _ ->
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
       let app, args = destruct_apps e in
@@ -517,25 +584,39 @@ let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
   | Loop loop ->
       let e = loop_to_string fmt indent indent_incr loop in
       if inside then "(" ^ e ^ ")" else e
-  | StructUpdate supd ->
+  | StructUpdate supd -> (
       let s =
         match supd.init with
         | None -> ""
         | Some vid -> " " ^ fmt.var_id_to_string vid ^ " with"
       in
-      let field_names = Option.get (fmt.adt_field_names supd.struct_id None) in
       let indent1 = indent ^ indent_incr in
       let indent2 = indent1 ^ indent_incr in
-      let fields =
-        List.map
-          (fun (fid, fe) ->
-            let field = FieldId.nth field_names fid in
-            let fe = texpression_to_string fmt false indent2 indent_incr fe in
-            "\n" ^ indent1 ^ field ^ " := " ^ fe ^ ";")
-          supd.updates
-      in
-      let bl = if fields = [] then "" else "\n" ^ indent in
-      "{" ^ s ^ String.concat "" fields ^ bl ^ "}"
+      (* The id should be a custom type decl id or an array *)
+      match supd.struct_id with
+      | AdtId aid ->
+          let field_names = Option.get (fmt.adt_field_names aid None) in
+          let fields =
+            List.map
+              (fun (fid, fe) ->
+                let field = FieldId.nth field_names fid in
+                let fe =
+                  texpression_to_string fmt false indent2 indent_incr fe
+                in
+                "\n" ^ indent1 ^ field ^ " := " ^ fe ^ ";")
+              supd.updates
+          in
+          let bl = if fields = [] then "" else "\n" ^ indent in
+          "{" ^ s ^ String.concat "" fields ^ bl ^ "}"
+      | Assumed Array ->
+          let fields =
+            List.map
+              (fun (_, fe) ->
+                texpression_to_string fmt false indent2 indent_incr fe)
+              supd.updates
+          in
+          "[ " ^ String.concat ", " fields ^ " ]"
+      | _ -> raise (Failure "Unexpected"))
   | Meta (meta, e) -> (
       let meta_s = meta_to_string fmt meta in
       let e = texpression_to_string fmt inside indent indent_incr e in

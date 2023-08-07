@@ -48,6 +48,8 @@
   PrePasses
   Print
   PrintPure
+  PrimitiveValues
+  PrimitiveValuesUtils
   PureMicroPasses
   Pure
   PureTypeCheck
@@ -67,8 +69,7 @@
   TypesUtils
   Utils
   Values
-  ValuesUtils
-  PrimitiveValues))
+  ValuesUtils))
 
 (documentation
  (package aeneas))

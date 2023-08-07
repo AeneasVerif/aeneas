@@ -2,6 +2,7 @@
 -- [paper]
 import Base
 open Primitives
+
 namespace paper
 
 /- [paper::ref_incr]: merged forward/backward function

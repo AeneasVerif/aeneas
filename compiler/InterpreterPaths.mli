@@ -61,6 +61,7 @@ val compute_expanded_bottom_adt_value :
   T.VariantId.id option ->
   T.erased_region list ->
   T.ety list ->
+  T.const_generic list ->
   V.typed_value
 
 (** Compute an expanded [Option] ⊥ value *)

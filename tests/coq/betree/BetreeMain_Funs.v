@@ -3,6 +3,8 @@
 Require Import Primitives.
 Import Primitives.
 Require Import Coq.ZArith.ZArith.
+Require Import List.
+Import ListNotations.
 Local Open Scope Primitives_scope.
 Require Export BetreeMain_Types.
 Import BetreeMain_Types.
@@ -1189,5 +1191,8 @@ Definition betree_be_tree_lookup_back
 (** [betree_main::main]: forward function *)
 Definition main_fwd : result unit :=
   Return tt.
+
+(** Unit test for [betree_main::main] *)
+Check (main_fwd )%return.
 
 End BetreeMain_Funs .

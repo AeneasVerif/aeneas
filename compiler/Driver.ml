@@ -107,6 +107,10 @@ let () =
         Arg.Clear check_invariants,
         " Deactivate the invariant sanity checks performed at every evaluation \
          step. Dramatically increases speed." );
+      ( "-no-gen-lib-entry",
+        Arg.Clear generate_lib_entry_point,
+        " Do not generate the entry point file for the generated library (only \
+         valid if the crate is split between different files)" );
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
@@ -133,6 +137,8 @@ let () =
     (not !use_fuel)
     || (not !extract_decreases_clauses)
        && not !extract_template_decreases_clauses);
+  (* We have: not generate_lib_entry_point ==> split_files *)
+  assert (!split_files || !generate_lib_entry_point);
   if !lean_gen_lakefile && not (!backend = Lean) then
     log#error
       "The -lean-default-lakefile option is valid only for the Lean backend";

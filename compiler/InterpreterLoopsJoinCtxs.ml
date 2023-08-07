@@ -556,6 +556,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       global_context;
       region_groups;
       type_vars;
+      const_generic_vars;
       env = _;
       ended_regions = ended_regions0;
     } =
@@ -567,6 +568,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       global_context = _;
       region_groups = _;
       type_vars = _;
+      const_generic_vars = _;
       env = _;
       ended_regions = ended_regions1;
     } =
@@ -580,6 +582,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         global_context;
         region_groups;
         type_vars;
+        const_generic_vars;
         env;
         ended_regions;
       }
@@ -630,6 +633,7 @@ let refresh_abs (old_abs : V.AbstractionId.Set.t) (ctx : C.eval_ctx) :
   in
   let env =
     Subst.env_subst_ids
+      (fun x -> x)
       (fun x -> x)
       (fun x -> x)
       (fun x -> x)

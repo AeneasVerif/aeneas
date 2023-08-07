@@ -122,7 +122,7 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
   let rec analyze (expl_info : expl_info) (ty_info : partial_type_info)
       (ty : 'r ty) : partial_type_info =
     match ty with
-    | Bool | Char | Never | Integer _ | Str -> ty_info
+    | Literal _ | Never -> ty_info
     | TypeVar var_id -> (
         (* Update the information for the proper parameter, if necessary *)
         match ty_info.param_infos with
@@ -145,9 +145,6 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
             in
             let param_infos = Some param_infos in
             { ty_info with param_infos })
-    | Array ty | Slice ty ->
-        (* Just dive in *)
-        analyze expl_info ty_info ty
     | Ref (r, rty, rkind) ->
         (* Update the type info *)
         let contains_static = r_is_static r in
@@ -172,12 +169,16 @@ let analyze_full_ty (r_is_static : 'r -> bool) (updated : bool ref)
         in
         (* Continue exploring *)
         analyze expl_info ty_info rty
-    | Adt ((Tuple | Assumed (Box | Vec | Option)), _, tys) ->
+    | Adt
+        ( (Tuple | Assumed (Box | Vec | Option | Slice | Array | Str | Range)),
+          _,
+          tys,
+          _ ) ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze expl_info ty_info ty)
           ty_info tys
-    | Adt (AdtId adt_id, regions, tys) ->
+    | Adt (AdtId adt_id, regions, tys, _cgs) ->
         (* Lookup the information for this type definition *)
         let adt_info = TypeDeclId.Map.find adt_id infos in
         (* Update the type info with the information from the adt *)

@@ -452,8 +452,8 @@ let give_back_symbolic_value (_config : C.config)
   | V.SynthInputGivenBack | SynthRetGivenBack | FunCallGivenBack | LoopGivenBack
     ->
       ()
-  | FunCallRet | SynthInput | Global | LoopOutput | LoopJoin ->
-      raise (Failure "Unrechable"));
+  | FunCallRet | SynthInput | Global | LoopOutput | LoopJoin | Aggregate ->
+      raise (Failure "Unreachable"));
   (* Store the given-back value as a meta-value for synthesis purposes *)
   let mv = nsv in
   (* Substitution function, to replace the borrow projectors over symbolic values *)
@@ -1733,7 +1733,7 @@ let destructure_abs (abs_kind : V.abs_kind) (can_end : bool)
   and list_values (v : V.typed_value) : V.typed_avalue list * V.typed_value =
     let ty = v.V.ty in
     match v.V.value with
-    | Primitive _ -> ([], v)
+    | Literal _ -> ([], v)
     | Adt adt ->
         let avll, field_values =
           List.split (List.map list_values adt.field_values)
@@ -1841,7 +1841,7 @@ let convert_value_to_abstractions (abs_kind : V.abs_kind) (can_end : bool)
 
     let ty = v.V.ty in
     match v.V.value with
-    | V.Primitive _ -> ([], v)
+    | V.Literal _ -> ([], v)
     | V.Bottom ->
         (* Can happen: we *do* convert dummy values to abstractions, and dummy
            values can contain bottoms *)

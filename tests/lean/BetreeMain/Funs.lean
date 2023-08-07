@@ -4,6 +4,7 @@ import Base
 import BetreeMain.Types
 import BetreeMain.FunsExternal
 open Primitives
+
 namespace betree_main
 
 /- [betree_main::betree::load_internal_node]: forward function -/

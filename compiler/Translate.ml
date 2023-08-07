@@ -833,6 +833,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       Printf.fprintf out "Require Import Primitives.\n";
       Printf.fprintf out "Import Primitives.\n";
       Printf.fprintf out "Require Import Coq.ZArith.ZArith.\n";
+      Printf.fprintf out "Require Import List.\n";
+      Printf.fprintf out "Import ListNotations.\n";
       Printf.fprintf out "Local Open Scope Primitives_scope.\n";
 
       (* Add the custom imports *)
@@ -855,7 +857,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       (* Always open the Primitives namespace *)
       Printf.fprintf out "open Primitives\n";
       (* If we are inside the namespace: declare it, otherwise: open it *)
-      if fi.in_namespace then Printf.fprintf out "namespace %s\n" fi.namespace
+      if fi.in_namespace then Printf.fprintf out "\nnamespace %s\n" fi.namespace
       else Printf.fprintf out "open %s\n" fi.namespace
   | HOL4 ->
       Printf.fprintf out "open primitivesLib divDefLib\n";
@@ -1332,7 +1334,6 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
          custom_includes = [];
        }
      in
-     (* Add the extension for F* *)
      extract_file gen_config gen_ctx file_info);
 
   (* Generate the build file *)
@@ -1350,7 +1351,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
        * Generate the library entry point, if the crate is split between
        * different files.
        *)
-      if !Config.split_files then (
+      if !Config.split_files && !Config.generate_lib_entry_point then (
         let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
         let out = open_out filename in
         (* Write *)

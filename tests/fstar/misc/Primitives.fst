@@ -259,6 +259,81 @@ let u32_mul = scalar_mul #U32
 let u64_mul = scalar_mul #U64
 let u128_mul = scalar_mul #U128
 
+(*** Range *)
+type range (a : Type0) = {
+  start : a;
+  end_ : a;
+}
+
+(*** Array *)
+type array (a : Type0) (n : usize) = s:list a{length s = n}
+
+// We tried putting the normalize_term condition as a refinement on the list
+// but it didn't work. It works with the requires clause.
+let mk_array (a : Type0) (n : usize)
+  (l : list a) :
+  Pure (array a n)
+  (requires (normalize_term(FStar.List.Tot.length l) = n))
+  (ensures (fun _ -> True)) =
+  normalize_term_spec (FStar.List.Tot.length l);
+  l
+
+let array_index_shared (a : Type0) (n : usize) (x : array a n) (i : usize) : result a =
+  if i < length x then Return (index x i)
+  else Fail Failure
+
+let array_index_mut_fwd (a : Type0) (n : usize) (x : array a n) (i : usize) : result a =
+  if i < length x then Return (index x i)
+  else Fail Failure
+
+let array_index_mut_back (a : Type0) (n : usize) (x : array a n) (i : usize) (nx : a) : result (array a n) =
+  if i < length x then Return (list_update x i nx)
+  else Fail Failure
+
+(*** Slice *)
+type slice (a : Type0) = s:list a{length s <= usize_max}
+
+let slice_len (a : Type0) (s : slice a) : usize = length s
+
+let slice_index_shared (a : Type0) (x : slice a) (i : usize) : result a =
+  if i < length x then Return (index x i)
+  else Fail Failure
+
+let slice_index_mut_fwd (a : Type0) (x : slice a) (i : usize) : result a =
+  if i < length x then Return (index x i)
+  else Fail Failure
+
+let slice_index_mut_back (a : Type0) (x : slice a) (i : usize) (nx : a) : result (slice a) =
+  if i < length x then Return (list_update x i nx)
+  else Fail Failure
+
+(*** Subslices *)
+
+let array_to_slice_shared (a : Type0) (n : usize) (x : array a n) : result (slice a) = Return x
+let array_to_slice_mut_fwd (a : Type0) (n : usize) (x : array a n) : result (slice a) = Return x
+let array_to_slice_mut_back (a : Type0) (n : usize) (x : array a n) (s : slice a) : result (array a n) =
+  if length s = n then Return s
+  else Fail Failure
+
+// TODO: finish the definitions below (there lacks [List.drop] and [List.take] in the standard library *)
+let array_subslice_shared (a : Type0) (n : usize) (x : array a n) (r : range usize) : result (slice a) =
+  admit()
+
+let array_subslice_mut_fwd (a : Type0) (n : usize) (x : array a n) (r : range usize) : result (slice a) =
+  admit()
+
+let array_subslice_mut_back (a : Type0) (n : usize) (x : array a n) (r : range usize) (ns : slice a) : result (array a n) =
+  admit()
+
+let slice_subslice_shared (a : Type0) (x : slice a) (r : range usize) : result (slice a) =
+  admit()
+
+let slice_subslice_mut_fwd (a : Type0) (x : slice a) (r : range usize) : result (slice a) =
+  admit()
+
+let slice_subslice_mut_back (a : Type0) (x : slice a) (r : range usize) (ns : slice a) : result (slice a) =
+  admit()
+
 (*** Vector *)
 type vec (a : Type0) = v:list a{length v <= usize_max}
 

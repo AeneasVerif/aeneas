@@ -3,6 +3,7 @@
 import Base
 import Hashmap.Types
 open Primitives
+
 namespace hashmap
 
 /- [hashmap::hash_key]: forward function -/
@@ -238,7 +239,7 @@ def HashMap.contains_key
     let hash ← hash_key key
     let i := Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index (List T) self.slots hash_mod
+    let l ← Vec.index_shared (List T) self.slots hash_mod
     HashMap.contains_key_in_list T key l
 
 /- [hashmap::HashMap::{0}::get_in_list]: loop 0: forward function -/
@@ -261,7 +262,7 @@ def HashMap.get (T : Type) (self : HashMap T) (key : Usize) : Result T :=
     let hash ← hash_key key
     let i := Vec.len (List T) self.slots
     let hash_mod ← hash % i
-    let l ← Vec.index (List T) self.slots hash_mod
+    let l ← Vec.index_shared (List T) self.slots hash_mod
     HashMap.get_in_list T key l
 
 /- [hashmap::HashMap::{0}::get_mut_in_list]: loop 0: forward function -/

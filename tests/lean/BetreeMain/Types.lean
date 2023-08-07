@@ -2,6 +2,7 @@
 -- [betree_main]: type definitions
 import Base
 open Primitives
+
 namespace betree_main
 
 /- [betree_main::betree::List] -/

@@ -34,13 +34,13 @@ val compute_abs_borrows_loans_maps :
     We use it for joins, to check if two environments are convertible, etc.
     See for instance {!MakeJoinMatcher} and {!MakeCheckEquivMatcher}.
 
-    The functor is parameterized by a {!InterpreterLoopsCore.PrimMatcher}, which implements the
-    non-generic part of the match. More precisely, the role of {!InterpreterLoopsCore.PrimMatcher} is two
+    The functor is parameterized by a {!PrimMatcher}, which implements the
+    non-generic part of the match. More precisely, the role of {!PrimMatcher} is two
     provide generic functions which recursively match two values (by recursively
     matching the fields of ADT values for instance). When it does need to match
     values in a non-trivial manner (if two ADT values don't have the same
     variant for instance) it calls the corresponding specialized function from
-    {!InterpreterLoopsCore.PrimMatcher}.
+    {!PrimMatcher}.
  *)
 module MakeMatcher : functor (_ : PrimMatcher) -> Matcher
 

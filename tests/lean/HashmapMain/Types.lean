@@ -2,6 +2,7 @@
 -- [hashmap_main]: type definitions
 import Base
 open Primitives
+
 namespace hashmap_main
 
 /- [hashmap_main::hashmap::List] -/

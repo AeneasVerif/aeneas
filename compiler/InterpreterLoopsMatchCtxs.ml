@@ -44,11 +44,11 @@ let compute_abs_borrows_loans_maps (no_duplicates : bool)
         (id0 : Id0.id) (id1 : Id1.id) : unit =
       (* Sanity check *)
       (if check_singleton_sets || check_not_already_registered then
-       match Id0.Map.find_opt id0 !map with
-       | None -> ()
-       | Some set ->
-           assert (
-             (not check_not_already_registered) || not (Id1.Set.mem id1 set)));
+         match Id0.Map.find_opt id0 !map with
+         | None -> ()
+         | Some set ->
+             assert (
+               (not check_not_already_registered) || not (Id1.Set.mem id1 set)));
       (* Update the mapping *)
       map :=
         Id0.Map.update id0
@@ -149,9 +149,11 @@ let rec match_types (match_distinct_types : 'r T.ty -> 'r T.ty -> 'r T.ty)
     (match_regions : 'r -> 'r -> 'r) (ty0 : 'r T.ty) (ty1 : 'r T.ty) : 'r T.ty =
   let match_rec = match_types match_distinct_types match_regions in
   match (ty0, ty1) with
-  | Adt (id0, regions0, tys0), Adt (id1, regions1, tys1) ->
+  | Adt (id0, regions0, tys0, cgs0), Adt (id1, regions1, tys1, cgs1) ->
       assert (id0 = id1);
+      assert (cgs0 = cgs1);
       let id = id0 in
+      let cgs = cgs1 in
       let regions =
         List.map
           (fun (id0, id1) -> match_regions id0 id1)
@@ -160,16 +162,15 @@ let rec match_types (match_distinct_types : 'r T.ty -> 'r T.ty -> 'r T.ty)
       let tys =
         List.map (fun (ty0, ty1) -> match_rec ty0 ty1) (List.combine tys0 tys1)
       in
-      Adt (id, regions, tys)
+      Adt (id, regions, tys, cgs)
   | TypeVar vid0, TypeVar vid1 ->
       assert (vid0 = vid1);
       let vid = vid0 in
       TypeVar vid
-  | Bool, Bool | Char, Char | Never, Never | Str, Str -> ty0
-  | Integer int_ty0, Integer int_ty1 ->
-      assert (int_ty0 = int_ty1);
+  | Literal lty0, Literal lty1 ->
+      assert (lty0 = lty1);
       ty0
-  | Array ty0, Array ty1 | Slice ty0, Slice ty1 -> match_rec ty0 ty1
+  | Never, Never -> ty0
   | Ref (r0, ty0, k0), Ref (r1, ty1, k1) ->
       let r = match_regions r0 r1 in
       let ty = match_rec ty0 ty1 in
@@ -184,8 +185,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     let match_rec = match_typed_values ctx in
     let ty = M.match_etys v0.V.ty v1.V.ty in
     match (v0.V.value, v1.V.value) with
-    | V.Primitive pv0, V.Primitive pv1 ->
-        if pv0 = pv1 then v1 else M.match_distinct_primitive_values ty pv0 pv1
+    | V.Literal lv0, V.Literal lv1 ->
+        if lv0 = lv1 then v1 else M.match_distinct_literals ty lv0 lv1
     | V.Adt av0, V.Adt av1 ->
         if av0.variant_id = av1.variant_id then
           let fields = List.combine av0.field_values av1.field_values in
@@ -385,8 +386,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     assert (ty0 = ty1);
     ty0
 
-  let match_distinct_primitive_values (ty : T.ety) (_ : V.primitive_value)
-      (_ : V.primitive_value) : V.typed_value =
+  let match_distinct_literals (ty : T.ety) (_ : V.literal) (_ : V.literal) :
+      V.typed_value =
     mk_fresh_symbolic_typed_value_from_ety V.LoopJoin ty
 
   let match_distinct_adts (ty : T.ety) (adt0 : V.adt_value) (adt1 : V.adt_value)
@@ -834,8 +835,8 @@ struct
     in
     match_types match_distinct_types match_regions ty0 ty1
 
-  let match_distinct_primitive_values (ty : T.ety) (_ : V.primitive_value)
-      (_ : V.primitive_value) : V.typed_value =
+  let match_distinct_literals (ty : T.ety) (_ : V.literal) (_ : V.literal) :
+      V.typed_value =
     mk_fresh_symbolic_typed_value_from_ety V.LoopJoin ty
 
   let match_distinct_adts (_ty : T.ety) (_adt0 : V.adt_value)
@@ -1616,7 +1617,7 @@ let match_ctx_with_target (config : C.config) (loop_id : V.LoopId.id)
     cc
       (cf
          (if is_loop_entry then EndEnterLoop (loop_id, input_values)
-         else EndContinue (loop_id, input_values)))
+          else EndContinue (loop_id, input_values)))
       tgt_ctx
   in
 

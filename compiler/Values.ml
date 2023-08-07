@@ -14,7 +14,7 @@ module LoopId = IdGen ()
 
 type big_int = PrimitiveValues.big_int [@@deriving show, ord]
 type scalar_value = PrimitiveValues.scalar_value [@@deriving show, ord]
-type primitive_value = PrimitiveValues.primitive_value [@@deriving show, ord]
+type literal = PrimitiveValues.literal [@@deriving show, ord]
 type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
 type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
@@ -50,6 +50,8 @@ type sv_kind =
       (** A value given back by a loop (when ending abstractions while going backwards) *)
   | LoopJoin
       (** The result of a loop join (when computing loop fixed points) *)
+  | Aggregate
+      (** A symbolic value we introduce in place of an aggregate value *)
 [@@deriving show, ord]
 
 (** Ancestor for {!symbolic_value} iter visitor *)
@@ -110,10 +112,7 @@ type loan_id_set = BorrowId.Set.t [@@deriving show, ord]
 class ['self] iter_typed_value_base =
   object (self : 'self)
     inherit [_] iter_symbolic_value
-
-    method visit_primitive_value : 'env -> primitive_value -> unit =
-      fun _ _ -> ()
-
+    method visit_literal : 'env -> literal -> unit = fun _ _ -> ()
     method visit_erased_region : 'env -> erased_region -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
     method visit_ety : 'env -> ety -> unit = fun _ _ -> ()
@@ -131,9 +130,7 @@ class ['self] iter_typed_value_base =
 class ['self] map_typed_value_base =
   object (self : 'self)
     inherit [_] map_symbolic_value
-
-    method visit_primitive_value : 'env -> primitive_value -> primitive_value =
-      fun _ cv -> cv
+    method visit_literal : 'env -> literal -> literal = fun _ cv -> cv
 
     method visit_erased_region : 'env -> erased_region -> erased_region =
       fun _ r -> r
@@ -152,7 +149,7 @@ class ['self] map_typed_value_base =
 
 (** An untyped value, used in the environments *)
 type value =
-  | Primitive of primitive_value  (** Non-symbolic primitive value *)
+  | Literal of literal  (** Non-symbolic primitive value *)
   | Adt of adt_value  (** Enumerations and structures *)
   | Bottom  (** No value (uninitialized or moved value) *)
   | Borrow of borrow_content  (** A borrowed value *)
@@ -1019,7 +1016,7 @@ type abs = {
     TODO: this should rather be name "expanded_symbolic"
  *)
 type symbolic_expansion =
-  | SePrimitive of primitive_value
+  | SeLiteral of literal
   | SeAdt of (VariantId.id option * symbolic_value list)
   | SeMutRef of BorrowId.id * symbolic_value
   | SeSharedRef of BorrowId.Set.t * symbolic_value
