@@ -199,23 +199,154 @@ Definition array_local_deep_copy_fwd (x : array u32 32%usize) : result unit :=
   Return tt
 .
 
-(** [array::f0]: forward function *)
-Definition f0_fwd : result unit :=
-  s <-
-    array_to_slice_mut_fwd u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ]);
-  s0 <- slice_index_mut_back u32 s 0%usize 1%u32;
-  _ <-
-    array_to_slice_mut_back u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ])
-      s0;
+(** [array::take_array]: forward function *)
+Definition take_array_fwd (a : array u32 2%usize) : result unit :=
+  Return tt.
+
+(** [array::take_array_borrow]: forward function *)
+Definition take_array_borrow_fwd (a : array u32 2%usize) : result unit :=
   Return tt
 .
 
-(** [array::f1]: forward function *)
-Definition f1_fwd : result unit :=
+(** [array::take_slice]: forward function *)
+Definition take_slice_fwd (s : slice u32) : result unit :=
+  Return tt.
+
+(** [array::take_mut_slice]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
+Definition take_mut_slice_fwd_back (s : slice u32) : result (slice u32) :=
+  Return s
+.
+
+(** [array::take_all]: forward function *)
+Definition take_all_fwd : result unit :=
+  _ <- take_array_fwd (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  _ <- take_array_borrow_fwd (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  s <-
+    array_to_slice_shared u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  _ <- take_slice_fwd s;
+  s0 <-
+    array_to_slice_mut_fwd u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  s1 <- take_mut_slice_fwd_back s0;
   _ <-
-    array_index_mut_back u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ])
-      0%usize 1%u32;
+    array_to_slice_mut_back u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ])
+      s1;
   Return tt
+.
+
+(** [array::index_array]: forward function *)
+Definition index_array_fwd (x : array u32 2%usize) : result u32 :=
+  array_index_shared u32 2%usize x 0%usize
+.
+
+(** [array::index_array_borrow]: forward function *)
+Definition index_array_borrow_fwd (x : array u32 2%usize) : result u32 :=
+  array_index_shared u32 2%usize x 0%usize
+.
+
+(** [array::index_slice_u32_0]: forward function *)
+Definition index_slice_u32_0_fwd (x : slice u32) : result u32 :=
+  slice_index_shared u32 x 0%usize
+.
+
+(** [array::index_mut_slice_u32_0]: forward function *)
+Definition index_mut_slice_u32_0_fwd (x : slice u32) : result u32 :=
+  slice_index_shared u32 x 0%usize
+.
+
+(** [array::index_mut_slice_u32_0]: backward function 0 *)
+Definition index_mut_slice_u32_0_back (x : slice u32) : result (slice u32) :=
+  _ <- slice_index_shared u32 x 0%usize; Return x
+.
+
+(** [array::index_all]: forward function *)
+Definition index_all_fwd : result u32 :=
+  i <- index_array_fwd (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  i0 <- index_array_fwd (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  i1 <- u32_add i i0;
+  i2 <- index_array_borrow_fwd (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  i3 <- u32_add i1 i2;
+  s <-
+    array_to_slice_shared u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  i4 <- index_slice_u32_0_fwd s;
+  i5 <- u32_add i3 i4;
+  s0 <-
+    array_to_slice_mut_fwd u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  i6 <- index_mut_slice_u32_0_fwd s0;
+  i7 <- u32_add i5 i6;
+  s1 <- index_mut_slice_u32_0_back s0;
+  _ <-
+    array_to_slice_mut_back u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ])
+      s1;
+  Return i7
+.
+
+(** [array::update_array]: forward function *)
+Definition update_array_fwd (x : array u32 2%usize) : result unit :=
+  _ <- array_index_mut_back u32 2%usize x 0%usize 1%u32; Return tt
+.
+
+(** [array::update_array_mut_borrow]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
+Definition update_array_mut_borrow_fwd_back
+  (x : array u32 2%usize) : result (array u32 2%usize) :=
+  array_index_mut_back u32 2%usize x 0%usize 1%u32
+.
+
+(** [array::update_mut_slice]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
+Definition update_mut_slice_fwd_back (x : slice u32) : result (slice u32) :=
+  slice_index_mut_back u32 x 0%usize 1%u32
+.
+
+(** [array::update_all]: forward function *)
+Definition update_all_fwd : result unit :=
+  _ <- update_array_fwd (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  x <-
+    update_array_mut_borrow_fwd_back (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  s <- array_to_slice_mut_fwd u32 2%usize x;
+  s0 <- update_mut_slice_fwd_back s;
+  _ <- array_to_slice_mut_back u32 2%usize x s0;
+  Return tt
+.
+
+(** [array::range_all]: forward function *)
+Definition range_all_fwd : result unit :=
+  s <-
+    array_subslice_mut_fwd u32 4%usize
+      (mk_array u32 4%usize [ 0%u32; 0%u32; 0%u32; 0%u32 ]) (mk_range 1%usize
+      3%usize);
+  s0 <- update_mut_slice_fwd_back s;
+  _ <-
+    array_subslice_mut_back u32 4%usize
+      (mk_array u32 4%usize [ 0%u32; 0%u32; 0%u32; 0%u32 ]) (mk_range 1%usize
+      3%usize) s0;
+  Return tt
+.
+
+(** [array::deref_array_borrow]: forward function *)
+Definition deref_array_borrow_fwd (x : array u32 2%usize) : result u32 :=
+  array_index_shared u32 2%usize x 0%usize
+.
+
+(** [array::deref_array_mut_borrow]: forward function *)
+Definition deref_array_mut_borrow_fwd (x : array u32 2%usize) : result u32 :=
+  array_index_shared u32 2%usize x 0%usize
+.
+
+(** [array::deref_array_mut_borrow]: backward function 0 *)
+Definition deref_array_mut_borrow_back
+  (x : array u32 2%usize) : result (array u32 2%usize) :=
+  _ <- array_index_shared u32 2%usize x 0%usize; Return x
+.
+
+(** [array::take_array_t]: forward function *)
+Definition take_array_t_fwd (a : array T_t 2%usize) : result unit :=
+  Return tt.
+
+(** [array::non_copyable_array]: forward function *)
+Definition non_copyable_array_fwd : result unit :=
+  _ <- take_array_t_fwd (mk_array T_t 2%usize [ TA; TB ]); Return tt
 .
 
 (** [array::sum]: loop 0: forward function *)
@@ -268,6 +399,25 @@ Definition sum2_fwd (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
   if negb (i s= i0) then Fail_ Failure else sum2_loop_fwd n s s2 0%u32 0%usize
 .
 
+(** [array::f0]: forward function *)
+Definition f0_fwd : result unit :=
+  s <-
+    array_to_slice_mut_fwd u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ]);
+  s0 <- slice_index_mut_back u32 s 0%usize 1%u32;
+  _ <-
+    array_to_slice_mut_back u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ])
+      s0;
+  Return tt
+.
+
+(** [array::f1]: forward function *)
+Definition f1_fwd : result unit :=
+  _ <-
+    array_index_mut_back u32 2%usize (mk_array u32 2%usize [ 1%u32; 2%u32 ])
+      0%usize 1%u32;
+  Return tt
+.
+
 (** [array::f2]: forward function *)
 Definition f2_fwd (i : u32) : result unit :=
   Return tt.
@@ -295,6 +445,23 @@ Definition f3_fwd (n : nat) : result u32 :=
         0%u32; 0%u32
         ]) 16%usize 18%usize;
   sum2_fwd n s s0
+.
+
+(** [array::ite]: forward function *)
+Definition ite_fwd : result unit :=
+  s <-
+    array_to_slice_mut_fwd u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  s0 <-
+    array_to_slice_mut_fwd u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ]);
+  s1 <- index_mut_slice_u32_0_back s0;
+  _ <-
+    array_to_slice_mut_back u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ])
+      s1;
+  s2 <- index_mut_slice_u32_0_back s;
+  _ <-
+    array_to_slice_mut_back u32 2%usize (mk_array u32 2%usize [ 0%u32; 0%u32 ])
+      s2;
+  Return tt
 .
 
 End Array_Funs .

@@ -5,4 +5,9 @@ open Primitives
 
 namespace array
 
+/- [array::T] -/
+inductive T :=
+| A : T
+| B : T
+
 end array

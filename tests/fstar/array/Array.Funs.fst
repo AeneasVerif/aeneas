@@ -151,17 +151,124 @@ let update_update_array_fwd
 let array_local_deep_copy_fwd (x : array u32 32) : result unit =
   Return ()
 
-(** [array::f0]: forward function *)
-let f0_fwd : result unit =
-  let* s = array_to_slice_mut_fwd u32 2 (mk_array u32 2 [ 1; 2 ]) in
-  let* s0 = slice_index_mut_back u32 s 0 1 in
-  let* _ = array_to_slice_mut_back u32 2 (mk_array u32 2 [ 1; 2 ]) s0 in
+(** [array::take_array]: forward function *)
+let take_array_fwd (a : array u32 2) : result unit =
   Return ()
 
-(** [array::f1]: forward function *)
-let f1_fwd : result unit =
-  let* _ = array_index_mut_back u32 2 (mk_array u32 2 [ 1; 2 ]) 0 1 in
+(** [array::take_array_borrow]: forward function *)
+let take_array_borrow_fwd (a : array u32 2) : result unit =
   Return ()
+
+(** [array::take_slice]: forward function *)
+let take_slice_fwd (s : slice u32) : result unit =
+  Return ()
+
+(** [array::take_mut_slice]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
+let take_mut_slice_fwd_back (s : slice u32) : result (slice u32) =
+  Return s
+
+(** [array::take_all]: forward function *)
+let take_all_fwd : result unit =
+  let* _ = take_array_fwd (mk_array u32 2 [ 0; 0 ]) in
+  let* _ = take_array_borrow_fwd (mk_array u32 2 [ 0; 0 ]) in
+  let* s = array_to_slice_shared u32 2 (mk_array u32 2 [ 0; 0 ]) in
+  let* _ = take_slice_fwd s in
+  let* s0 = array_to_slice_mut_fwd u32 2 (mk_array u32 2 [ 0; 0 ]) in
+  let* s1 = take_mut_slice_fwd_back s0 in
+  let* _ = array_to_slice_mut_back u32 2 (mk_array u32 2 [ 0; 0 ]) s1 in
+  Return ()
+
+(** [array::index_array]: forward function *)
+let index_array_fwd (x : array u32 2) : result u32 =
+  array_index_shared u32 2 x 0
+
+(** [array::index_array_borrow]: forward function *)
+let index_array_borrow_fwd (x : array u32 2) : result u32 =
+  array_index_shared u32 2 x 0
+
+(** [array::index_slice_u32_0]: forward function *)
+let index_slice_u32_0_fwd (x : slice u32) : result u32 =
+  slice_index_shared u32 x 0
+
+(** [array::index_mut_slice_u32_0]: forward function *)
+let index_mut_slice_u32_0_fwd (x : slice u32) : result u32 =
+  slice_index_shared u32 x 0
+
+(** [array::index_mut_slice_u32_0]: backward function 0 *)
+let index_mut_slice_u32_0_back (x : slice u32) : result (slice u32) =
+  let* _ = slice_index_shared u32 x 0 in Return x
+
+(** [array::index_all]: forward function *)
+let index_all_fwd : result u32 =
+  let* i = index_array_fwd (mk_array u32 2 [ 0; 0 ]) in
+  let* i0 = index_array_fwd (mk_array u32 2 [ 0; 0 ]) in
+  let* i1 = u32_add i i0 in
+  let* i2 = index_array_borrow_fwd (mk_array u32 2 [ 0; 0 ]) in
+  let* i3 = u32_add i1 i2 in
+  let* s = array_to_slice_shared u32 2 (mk_array u32 2 [ 0; 0 ]) in
+  let* i4 = index_slice_u32_0_fwd s in
+  let* i5 = u32_add i3 i4 in
+  let* s0 = array_to_slice_mut_fwd u32 2 (mk_array u32 2 [ 0; 0 ]) in
+  let* i6 = index_mut_slice_u32_0_fwd s0 in
+  let* i7 = u32_add i5 i6 in
+  let* s1 = index_mut_slice_u32_0_back s0 in
+  let* _ = array_to_slice_mut_back u32 2 (mk_array u32 2 [ 0; 0 ]) s1 in
+  Return i7
+
+(** [array::update_array]: forward function *)
+let update_array_fwd (x : array u32 2) : result unit =
+  let* _ = array_index_mut_back u32 2 x 0 1 in Return ()
+
+(** [array::update_array_mut_borrow]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
+let update_array_mut_borrow_fwd_back (x : array u32 2) : result (array u32 2) =
+  array_index_mut_back u32 2 x 0 1
+
+(** [array::update_mut_slice]: merged forward/backward function
+    (there is a single backward function, and the forward function returns ()) *)
+let update_mut_slice_fwd_back (x : slice u32) : result (slice u32) =
+  slice_index_mut_back u32 x 0 1
+
+(** [array::update_all]: forward function *)
+let update_all_fwd : result unit =
+  let* _ = update_array_fwd (mk_array u32 2 [ 0; 0 ]) in
+  let* x = update_array_mut_borrow_fwd_back (mk_array u32 2 [ 0; 0 ]) in
+  let* s = array_to_slice_mut_fwd u32 2 x in
+  let* s0 = update_mut_slice_fwd_back s in
+  let* _ = array_to_slice_mut_back u32 2 x s0 in
+  Return ()
+
+(** [array::range_all]: forward function *)
+let range_all_fwd : result unit =
+  let* s =
+    array_subslice_mut_fwd u32 4 (mk_array u32 4 [ 0; 0; 0; 0 ]) (Mkrange 1 3)
+    in
+  let* s0 = update_mut_slice_fwd_back s in
+  let* _ =
+    array_subslice_mut_back u32 4 (mk_array u32 4 [ 0; 0; 0; 0 ]) (Mkrange 1 3)
+      s0 in
+  Return ()
+
+(** [array::deref_array_borrow]: forward function *)
+let deref_array_borrow_fwd (x : array u32 2) : result u32 =
+  array_index_shared u32 2 x 0
+
+(** [array::deref_array_mut_borrow]: forward function *)
+let deref_array_mut_borrow_fwd (x : array u32 2) : result u32 =
+  array_index_shared u32 2 x 0
+
+(** [array::deref_array_mut_borrow]: backward function 0 *)
+let deref_array_mut_borrow_back (x : array u32 2) : result (array u32 2) =
+  let* _ = array_index_shared u32 2 x 0 in Return x
+
+(** [array::take_array_t]: forward function *)
+let take_array_t_fwd (a : array t_t 2) : result unit =
+  Return ()
+
+(** [array::non_copyable_array]: forward function *)
+let non_copyable_array_fwd : result unit =
+  let* _ = take_array_t_fwd (mk_array t_t 2 [ TA; TB ]) in Return ()
 
 (** [array::sum]: loop 0: forward function *)
 let rec sum_loop_fwd
@@ -203,6 +310,18 @@ let sum2_fwd (s : slice u32) (s2 : slice u32) : result u32 =
   let i0 = slice_len u32 s2 in
   if not (i = i0) then Fail Failure else sum2_loop_fwd s s2 0 0
 
+(** [array::f0]: forward function *)
+let f0_fwd : result unit =
+  let* s = array_to_slice_mut_fwd u32 2 (mk_array u32 2 [ 1; 2 ]) in
+  let* s0 = slice_index_mut_back u32 s 0 1 in
+  let* _ = array_to_slice_mut_back u32 2 (mk_array u32 2 [ 1; 2 ]) s0 in
+  Return ()
+
+(** [array::f1]: forward function *)
+let f1_fwd : result unit =
+  let* _ = array_index_mut_back u32 2 (mk_array u32 2 [ 1; 2 ]) 0 1 in
+  Return ()
+
 (** [array::f2]: forward function *)
 let f2_fwd (i : u32) : result unit =
   Return ()
@@ -223,4 +342,14 @@ let f3_fwd : result u32 =
         0; 0; 0; 0; 0; 0; 0; 0
         ]) 16 18 in
   sum2_fwd s s0
+
+(** [array::ite]: forward function *)
+let ite_fwd : result unit =
+  let* s = array_to_slice_mut_fwd u32 2 (mk_array u32 2 [ 0; 0 ]) in
+  let* s0 = array_to_slice_mut_fwd u32 2 (mk_array u32 2 [ 0; 0 ]) in
+  let* s1 = index_mut_slice_u32_0_back s0 in
+  let* _ = array_to_slice_mut_back u32 2 (mk_array u32 2 [ 0; 0 ]) s1 in
+  let* s2 = index_mut_slice_u32_0_back s in
+  let* _ = array_to_slice_mut_back u32 2 (mk_array u32 2 [ 0; 0 ]) s2 in
+  Return ()
 

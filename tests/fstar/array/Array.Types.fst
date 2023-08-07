@@ -5,3 +5,6 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
+(** [array::T] *)
+type t_t = | TA : t_t | TB : t_t
+

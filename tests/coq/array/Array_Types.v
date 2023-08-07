@@ -8,4 +8,7 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module Array_Types.
 
+(** [array::T] *)
+Inductive T_t := | TA : T_t | TB : T_t.
+
 End Array_Types .
