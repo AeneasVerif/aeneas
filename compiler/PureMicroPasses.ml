@@ -1564,10 +1564,10 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     assert (args = []);
                     mk_unit_rvalue
                 | ( ( A.Replace | VecNew | VecPush | VecInsert | VecLen
-                    | VecIndex | VecIndexMut | ArraySharedSubslice
-                    | ArrayMutSubslice | SliceSharedIndex | SliceMutIndex
-                    | SliceSharedSubslice | SliceMutSubslice | ArraySharedIndex
-                    | ArrayMutIndex | ArrayToSharedSlice | ArrayToMutSlice
+                    | VecIndex | VecIndexMut | ArraySubsliceShared
+                    | ArraySubsliceMut | SliceIndexShared | SliceIndexMut
+                    | SliceSubsliceShared | SliceSubsliceMut | ArrayIndexShared
+                    | ArrayIndexMut | ArrayToSliceShared | ArrayToSliceMut
                     | SliceLen ),
                     _ ) ->
                     super#visit_texpression env e)

@@ -416,44 +416,44 @@ let assumed_infos : assumed_info list =
       true,
       to_name (index_pre @ [ "IndexMut"; "index_mut" ]) );
     (* Array Index *)
-    ( ArraySharedIndex,
+    ( ArrayIndexShared,
       Sig.array_index_sig false,
       true,
-      to_name [ "@ArraySharedIndex" ] );
-    (ArrayMutIndex, Sig.array_index_sig true, true, to_name [ "@ArrayMutIndex" ]);
+      to_name [ "@ArrayIndexShared" ] );
+    (ArrayIndexMut, Sig.array_index_sig true, true, to_name [ "@ArrayIndexMut" ]);
     (* Array to slice*)
-    ( ArrayToSharedSlice,
+    ( ArrayToSliceShared,
       Sig.array_to_slice_sig false,
       true,
-      to_name [ "@ArrayToSharedSlice" ] );
-    ( ArrayToMutSlice,
+      to_name [ "@ArrayToSliceShared" ] );
+    ( ArrayToSliceMut,
       Sig.array_to_slice_sig true,
       true,
-      to_name [ "@ArrayToMutSlice" ] );
+      to_name [ "@ArrayToSliceMut" ] );
     (* Array Subslice *)
-    ( ArraySharedSubslice,
+    ( ArraySubsliceShared,
       Sig.array_subslice_sig false,
       true,
-      to_name [ "@ArraySharedSubslice" ] );
-    ( ArrayMutSubslice,
+      to_name [ "@ArraySubsliceShared" ] );
+    ( ArraySubsliceMut,
       Sig.array_subslice_sig true,
       true,
-      to_name [ "@ArrayMutSubslice" ] );
+      to_name [ "@ArraySubsliceMut" ] );
     (* Slice Index *)
-    ( SliceSharedIndex,
+    ( SliceIndexShared,
       Sig.slice_index_sig false,
       true,
-      to_name [ "@SliceSharedIndex" ] );
-    (SliceMutIndex, Sig.slice_index_sig true, true, to_name [ "@SliceMutIndex" ]);
+      to_name [ "@SliceIndexShared" ] );
+    (SliceIndexMut, Sig.slice_index_sig true, true, to_name [ "@SliceIndexMut" ]);
     (* Slice Subslice *)
-    ( SliceSharedSubslice,
+    ( SliceSubsliceShared,
       Sig.slice_subslice_sig false,
       true,
-      to_name [ "@SliceSharedSubslice" ] );
-    ( SliceMutSubslice,
+      to_name [ "@SliceSubsliceShared" ] );
+    ( SliceSubsliceMut,
       Sig.slice_subslice_sig true,
       true,
-      to_name [ "@SliceMutSubslice" ] );
+      to_name [ "@SliceSubsliceMut" ] );
     (SliceLen, Sig.slice_len_sig, false, to_name [ "@SliceLen" ]);
   ]
 

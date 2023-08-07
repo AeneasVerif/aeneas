@@ -644,10 +644,10 @@ let eval_non_local_function_call_concrete (config : C.config)
           | VecNew | VecPush | VecInsert | VecLen | VecIndex | VecIndexMut ->
               eval_vec_function_concrete config fid region_params type_params
                 cg_params
-          | ArraySharedIndex | ArrayMutIndex | ArrayToSharedSlice
-          | ArrayToMutSlice | ArraySharedSubslice | ArrayMutSubslice
-          | SliceSharedIndex | SliceMutIndex | SliceSharedSubslice
-          | SliceMutSubslice | SliceLen ->
+          | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
+          | ArrayToSliceMut | ArraySubsliceShared | ArraySubsliceMut
+          | SliceIndexShared | SliceIndexMut | SliceSubsliceShared
+          | SliceSubsliceMut | SliceLen ->
               raise (Failure "Unimplemented")
         in
 
