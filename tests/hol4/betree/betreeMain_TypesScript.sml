@@ -31,12 +31,6 @@ Datatype:
 End
 
 Datatype:
-  (** [betree_main::betree::Node] *)
-  betree_node_t =
-  | BetreeNodeInternal betree_internal_t
-  | BetreeNodeLeaf betree_leaf_t
-  ;
-  
   (** [betree_main::betree::Internal] *)
   betree_internal_t =
   <|
@@ -45,6 +39,12 @@ Datatype:
     betree_internal_left : betree_node_t;
     betree_internal_right : betree_node_t;
   |>
+  ;
+  
+  (** [betree_main::betree::Node] *)
+  betree_node_t =
+  | BetreeNodeInternal betree_internal_t
+  | BetreeNodeLeaf betree_leaf_t
 End
 
 Datatype:

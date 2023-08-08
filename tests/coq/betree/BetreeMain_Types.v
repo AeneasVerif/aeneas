@@ -37,19 +37,19 @@ mkBetree_leaf_t {
 }
 .
 
-(** [betree_main::betree::Node] *)
-Inductive Betree_node_t :=
-| BetreeNodeInternal : Betree_internal_t -> Betree_node_t
-| BetreeNodeLeaf : Betree_leaf_t -> Betree_node_t
-
 (** [betree_main::betree::Internal] *)
-with Betree_internal_t :=
+Inductive Betree_internal_t :=
 | mkBetree_internal_t :
   u64 ->
   u64 ->
   Betree_node_t ->
   Betree_node_t ->
   Betree_internal_t
+
+(** [betree_main::betree::Node] *)
+with Betree_node_t :=
+| BetreeNodeInternal : Betree_internal_t -> Betree_node_t
+| BetreeNodeLeaf : Betree_leaf_t -> Betree_node_t
 .
 
 Definition Betree_internal_id (x : Betree_internal_t) :=

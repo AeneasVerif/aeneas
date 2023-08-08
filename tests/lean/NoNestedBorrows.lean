@@ -251,15 +251,15 @@ def test_char : Result Char :=
 
 mutual
 
-/- [no_nested_borrows::NodeElem] -/
-inductive NodeElem (T : Type) :=
-| Cons : Tree T → NodeElem T → NodeElem T
-| Nil : NodeElem T
-
 /- [no_nested_borrows::Tree] -/
 inductive Tree (T : Type) :=
 | Leaf : T → Tree T
 | Node : T → NodeElem T → Tree T → Tree T
+
+/- [no_nested_borrows::NodeElem] -/
+inductive NodeElem (T : Type) :=
+| Cons : Tree T → NodeElem T → NodeElem T
+| Nil : NodeElem T
 
 end
 

@@ -28,14 +28,14 @@ structure betree.Leaf where
 
 mutual
 
+/- [betree_main::betree::Internal] -/
+inductive betree.Internal :=
+| mk : U64 → U64 → betree.Node → betree.Node → betree.Internal
+
 /- [betree_main::betree::Node] -/
 inductive betree.Node :=
 | Internal : betree.Internal → betree.Node
 | Leaf : betree.Leaf → betree.Node
-
-/- [betree_main::betree::Internal] -/
-inductive betree.Internal :=
-| mk : U64 → U64 → betree.Node → betree.Node → betree.Internal
 
 end
 

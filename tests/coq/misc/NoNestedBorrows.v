@@ -238,22 +238,22 @@ Definition test_char_fwd : result char :=
   Return (char_of_byte Coq.Init.Byte.x61)
 .
 
-(** [no_nested_borrows::NodeElem] *)
-Inductive Node_elem_t (T : Type) :=
-| NodeElemCons : Tree_t T -> Node_elem_t T -> Node_elem_t T
-| NodeElemNil : Node_elem_t T
-
 (** [no_nested_borrows::Tree] *)
-with Tree_t (T : Type) :=
+Inductive Tree_t (T : Type) :=
 | TreeLeaf : T -> Tree_t T
 | TreeNode : T -> Node_elem_t T -> Tree_t T -> Tree_t T
-.
 
-Arguments NodeElemCons {T} _ _.
-Arguments NodeElemNil {T}.
+(** [no_nested_borrows::NodeElem] *)
+with Node_elem_t (T : Type) :=
+| NodeElemCons : Tree_t T -> Node_elem_t T -> Node_elem_t T
+| NodeElemNil : Node_elem_t T
+.
 
 Arguments TreeLeaf {T} _.
 Arguments TreeNode {T} _ _ _.
+
+Arguments NodeElemCons {T} _ _.
+Arguments NodeElemNil {T}.
 
 (** [no_nested_borrows::list_length]: forward function *)
 Fixpoint list_length_fwd (T : Type) (l : List_t T) : result u32 :=
