@@ -214,7 +214,9 @@ let () =
 
       (* Print a warning if the crate contains loops (loops are experimental for now) *)
       let has_loops =
-        List.exists Aeneas.LlbcAstUtils.fun_decl_has_loops m.functions
+        A.FunDeclId.Map.exists
+          (fun _ -> Aeneas.LlbcAstUtils.fun_decl_has_loops)
+          m.functions
       in
       if has_loops then log#lwarning (lazy "Support for loops is experimental");
 
@@ -222,7 +224,9 @@ let () =
          whenever there are opaque functions *)
       if
         !backend = Lean
-        && List.exists (fun (d : A.fun_decl) -> d.body = None) m.functions
+        && A.FunDeclId.Map.exists
+             (fun _ (d : A.fun_decl) -> d.body = None)
+             m.functions
         && not !split_files
       then (
         log#error

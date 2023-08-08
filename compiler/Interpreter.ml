@@ -15,7 +15,9 @@ let log = L.interpreter_log
 let compute_type_fun_global_contexts (m : A.crate) :
     C.type_context * C.fun_context * C.global_context =
   let type_decls_list, _, _ = split_declarations m.declarations in
-  let type_decls, fun_decls, global_decls = compute_defs_maps m in
+  let type_decls = m.types in
+  let fun_decls = m.functions in
+  let global_decls = m.globals in
   let type_decls_groups, _funs_defs_groups, _globals_defs_groups =
     split_declarations_to_group_maps m.declarations
   in
@@ -488,7 +490,7 @@ module Test = struct
    *)
   let test_unit_function (crate : A.crate) (fid : A.FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
-    let fdef = A.FunDeclId.nth crate.functions fid in
+    let fdef = A.FunDeclId.Map.find fid crate.functions in
     let body = Option.get fdef.body in
 
     (* Debug *)
@@ -541,11 +543,15 @@ module Test = struct
 
   (** Test all the unit functions in a list of function definitions *)
   let test_unit_functions (crate : A.crate) : unit =
-    let unit_funs = List.filter fun_decl_is_transparent_unit crate.functions in
-    let test_unit_fun (def : A.fun_decl) : unit =
+    let unit_funs =
+      A.FunDeclId.Map.filter
+        (fun _ -> fun_decl_is_transparent_unit)
+        crate.functions
+    in
+    let test_unit_fun _ (def : A.fun_decl) : unit =
       test_unit_function crate def.A.def_id
     in
-    List.iter test_unit_fun unit_funs
+    A.FunDeclId.Map.iter test_unit_fun unit_funs
 
   (** Execute the symbolic interpreter on a function. *)
   let test_function_symbolic (synthesize : bool) (type_context : C.type_context)
