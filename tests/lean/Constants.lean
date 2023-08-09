@@ -9,7 +9,7 @@ namespace constants
 def x0_body : Result U32 := Result.ret (U32.ofInt 0)
 def x0_c : U32 := eval_global x0_body (by simp)
 
-/- [core::num::u32::{9}::MAX] -/
+/- [core::num::u32::{8}::MAX] -/
 def core_num_u32_max_body : Result U32 := Result.ret (U32.ofInt 4294967295)
 def core_num_u32_max_c : U32 := eval_global core_num_u32_max_body (by simp)
 
