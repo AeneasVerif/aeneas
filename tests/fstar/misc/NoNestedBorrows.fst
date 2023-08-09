@@ -202,15 +202,15 @@ let _ = assert_norm (choose_test_fwd = Return ())
 let test_char_fwd : result char =
   Return 'a'
 
-(** [no_nested_borrows::NodeElem] *)
-type node_elem_t (t : Type0) =
-| NodeElemCons : tree_t t -> node_elem_t t -> node_elem_t t
-| NodeElemNil : node_elem_t t
-
 (** [no_nested_borrows::Tree] *)
-and tree_t (t : Type0) =
+type tree_t (t : Type0) =
 | TreeLeaf : t -> tree_t t
 | TreeNode : t -> node_elem_t t -> tree_t t -> tree_t t
+
+(** [no_nested_borrows::NodeElem] *)
+and node_elem_t (t : Type0) =
+| NodeElemCons : tree_t t -> node_elem_t t -> node_elem_t t
+| NodeElemNil : node_elem_t t
 
 (** [no_nested_borrows::list_length]: forward function *)
 let rec list_length_fwd (t : Type0) (l : list_t t) : result u32 =

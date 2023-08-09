@@ -47,7 +47,6 @@ sig
     val new_tuple3_fwd_def : thm
     val node_elem_t_TY_DEF : thm
     val node_elem_t_case_def : thm
-    val node_elem_t_size_def : thm
     val one_t_TY_DEF : thm
     val one_t_case_def : thm
     val one_t_size_def : thm
@@ -97,6 +96,7 @@ sig
     val test_weird_borrows1_fwd_def : thm
     val tree_t_TY_DEF : thm
     val tree_t_case_def : thm
+    val tree_t_size_def : thm
   
   (*  Theorems  *)
     val EXISTS_pair_t : thm
@@ -108,12 +108,12 @@ sig
     val datatype_empty_enum_t : thm
     val datatype_enum_t : thm
     val datatype_list_t : thm
-    val datatype_node_elem_t : thm
     val datatype_one_t : thm
     val datatype_pair_t : thm
     val datatype_struct_with_pair_t : thm
     val datatype_struct_with_tuple_t : thm
     val datatype_sum_t : thm
+    val datatype_tree_t : thm
     val empty_enum_t2num_11 : thm
     val empty_enum_t2num_ONTO : thm
     val empty_enum_t2num_num2empty_enum_t : thm
@@ -491,51 +491,40 @@ sig
       
       ⊢ ∃rep.
           TYPE_DEFINITION
-            (λa0'.
-                 ∀ $var$('node_elem_t') $var$('tree_t').
+            (λa1'.
+                 ∀ $var$('tree_t') $var$('node_elem_t').
                    (∀a0'.
-                      (∃a0 a1.
-                         a0' =
-                         (λa0 a1.
-                              ind_type$CONSTR 0 ARB
-                                (ind_type$FCONS a0
-                                   (ind_type$FCONS a1 (λn. ind_type$BOTTOM))))
-                           a0 a1 ∧ $var$('tree_t') a0 ∧
-                         $var$('node_elem_t') a1) ∨
-                      a0' =
-                      ind_type$CONSTR (SUC 0) ARB (λn. ind_type$BOTTOM) ⇒
-                      $var$('node_elem_t') a0') ∧
-                   (∀a1'.
-                      (∃a. a1' =
-                           (λa.
-                                ind_type$CONSTR (SUC (SUC 0)) a
-                                  (λn. ind_type$BOTTOM)) a) ∨
+                      (∃a. a0' =
+                           (λa. ind_type$CONSTR 0 a (λn. ind_type$BOTTOM))
+                             a) ∨
                       (∃a0 a1 a2.
-                         a1' =
+                         a0' =
                          (λa0 a1 a2.
-                              ind_type$CONSTR (SUC (SUC (SUC 0))) a0
+                              ind_type$CONSTR (SUC 0) a0
                                 (ind_type$FCONS a1
                                    (ind_type$FCONS a2 (λn. ind_type$BOTTOM))))
                            a0 a1 a2 ∧ $var$('node_elem_t') a1 ∧
                          $var$('tree_t') a2) ⇒
-                      $var$('tree_t') a1') ⇒
-                   $var$('node_elem_t') a0') rep
+                      $var$('tree_t') a0') ∧
+                   (∀a1'.
+                      (∃a0 a1.
+                         a1' =
+                         (λa0 a1.
+                              ind_type$CONSTR (SUC (SUC 0)) ARB
+                                (ind_type$FCONS a0
+                                   (ind_type$FCONS a1 (λn. ind_type$BOTTOM))))
+                           a0 a1 ∧ $var$('tree_t') a0 ∧
+                         $var$('node_elem_t') a1) ∨
+                      a1' =
+                      ind_type$CONSTR (SUC (SUC (SUC 0))) ARB
+                        (λn. ind_type$BOTTOM) ⇒
+                      $var$('node_elem_t') a1') ⇒
+                   $var$('node_elem_t') a1') rep
    
    [node_elem_t_case_def]  Definition
       
       ⊢ (∀a0 a1 f v. node_elem_t_CASE (NodeElemCons a0 a1) f v = f a0 a1) ∧
         ∀f v. node_elem_t_CASE NodeElemNil f v = v
-   
-   [node_elem_t_size_def]  Definition
-      
-      ⊢ (∀f a0 a1.
-           node_elem_t_size f (NodeElemCons a0 a1) =
-           1 + (tree_t_size f a0 + node_elem_t_size f a1)) ∧
-        (∀f. node_elem_t_size f NodeElemNil = 0) ∧
-        (∀f a. tree_t_size f (TreeLeaf a) = 1 + f a) ∧
-        ∀f a0 a1 a2.
-          tree_t_size f (TreeNode a0 a1 a2) =
-          1 + (f a0 + (node_elem_t_size f a1 + tree_t_size f a2))
    
    [one_t_TY_DEF]  Definition
       
@@ -923,40 +912,51 @@ sig
       
       ⊢ ∃rep.
           TYPE_DEFINITION
-            (λa1'.
-                 ∀ $var$('node_elem_t') $var$('tree_t').
+            (λa0'.
+                 ∀ $var$('tree_t') $var$('node_elem_t').
                    (∀a0'.
-                      (∃a0 a1.
-                         a0' =
-                         (λa0 a1.
-                              ind_type$CONSTR 0 ARB
-                                (ind_type$FCONS a0
-                                   (ind_type$FCONS a1 (λn. ind_type$BOTTOM))))
-                           a0 a1 ∧ $var$('tree_t') a0 ∧
-                         $var$('node_elem_t') a1) ∨
-                      a0' =
-                      ind_type$CONSTR (SUC 0) ARB (λn. ind_type$BOTTOM) ⇒
-                      $var$('node_elem_t') a0') ∧
-                   (∀a1'.
-                      (∃a. a1' =
-                           (λa.
-                                ind_type$CONSTR (SUC (SUC 0)) a
-                                  (λn. ind_type$BOTTOM)) a) ∨
+                      (∃a. a0' =
+                           (λa. ind_type$CONSTR 0 a (λn. ind_type$BOTTOM))
+                             a) ∨
                       (∃a0 a1 a2.
-                         a1' =
+                         a0' =
                          (λa0 a1 a2.
-                              ind_type$CONSTR (SUC (SUC (SUC 0))) a0
+                              ind_type$CONSTR (SUC 0) a0
                                 (ind_type$FCONS a1
                                    (ind_type$FCONS a2 (λn. ind_type$BOTTOM))))
                            a0 a1 a2 ∧ $var$('node_elem_t') a1 ∧
                          $var$('tree_t') a2) ⇒
-                      $var$('tree_t') a1') ⇒
-                   $var$('tree_t') a1') rep
+                      $var$('tree_t') a0') ∧
+                   (∀a1'.
+                      (∃a0 a1.
+                         a1' =
+                         (λa0 a1.
+                              ind_type$CONSTR (SUC (SUC 0)) ARB
+                                (ind_type$FCONS a0
+                                   (ind_type$FCONS a1 (λn. ind_type$BOTTOM))))
+                           a0 a1 ∧ $var$('tree_t') a0 ∧
+                         $var$('node_elem_t') a1) ∨
+                      a1' =
+                      ind_type$CONSTR (SUC (SUC (SUC 0))) ARB
+                        (λn. ind_type$BOTTOM) ⇒
+                      $var$('node_elem_t') a1') ⇒
+                   $var$('tree_t') a0') rep
    
    [tree_t_case_def]  Definition
       
       ⊢ (∀a f f1. tree_t_CASE (TreeLeaf a) f f1 = f a) ∧
         ∀a0 a1 a2 f f1. tree_t_CASE (TreeNode a0 a1 a2) f f1 = f1 a0 a1 a2
+   
+   [tree_t_size_def]  Definition
+      
+      ⊢ (∀f a. tree_t_size f (TreeLeaf a) = 1 + f a) ∧
+        (∀f a0 a1 a2.
+           tree_t_size f (TreeNode a0 a1 a2) =
+           1 + (f a0 + (node_elem_t_size f a1 + tree_t_size f a2))) ∧
+        (∀f a0 a1.
+           node_elem_t_size f (NodeElemCons a0 a1) =
+           1 + (tree_t_size f a0 + node_elem_t_size f a1)) ∧
+        ∀f. node_elem_t_size f NodeElemNil = 0
    
    [EXISTS_pair_t]  Theorem
       
@@ -994,11 +994,6 @@ sig
       
       ⊢ DATATYPE (list_t ListCons ListNil)
    
-   [datatype_node_elem_t]  Theorem
-      
-      ⊢ DATATYPE
-          (node_elem_t NodeElemCons NodeElemNil ∧ tree_t TreeLeaf TreeNode)
-   
    [datatype_one_t]  Theorem
       
       ⊢ DATATYPE (one_t OneOne)
@@ -1018,6 +1013,11 @@ sig
    [datatype_sum_t]  Theorem
       
       ⊢ DATATYPE (sum_t SumLeft SumRight)
+   
+   [datatype_tree_t]  Theorem
+      
+      ⊢ DATATYPE
+          (tree_t TreeLeaf TreeNode ∧ node_elem_t NodeElemCons NodeElemNil)
    
    [empty_enum_t2num_11]  Theorem
       
@@ -1167,10 +1167,11 @@ sig
    [node_elem_t_Axiom]  Theorem
       
       ⊢ ∀f0 f1 f2 f3. ∃fn0 fn1.
-          (∀a0 a1. fn0 (NodeElemCons a0 a1) = f0 a0 a1 (fn1 a0) (fn0 a1)) ∧
-          fn0 NodeElemNil = f1 ∧ (∀a. fn1 (TreeLeaf a) = f2 a) ∧
-          ∀a0 a1 a2.
-            fn1 (TreeNode a0 a1 a2) = f3 a0 a1 a2 (fn0 a1) (fn1 a2)
+          (∀a. fn0 (TreeLeaf a) = f0 a) ∧
+          (∀a0 a1 a2.
+             fn0 (TreeNode a0 a1 a2) = f1 a0 a1 a2 (fn1 a1) (fn0 a2)) ∧
+          (∀a0 a1. fn1 (NodeElemCons a0 a1) = f2 a0 a1 (fn0 a0) (fn1 a1)) ∧
+          fn1 NodeElemNil = f3
    
    [node_elem_t_case_cong]  Theorem
       
@@ -1192,10 +1193,10 @@ sig
    [node_elem_t_induction]  Theorem
       
       ⊢ ∀P0 P1.
-          (∀t n. P1 t ∧ P0 n ⇒ P0 (NodeElemCons t n)) ∧ P0 NodeElemNil ∧
-          (∀t. P1 (TreeLeaf t)) ∧
-          (∀n t. P0 n ∧ P1 t ⇒ ∀t0. P1 (TreeNode t0 n t)) ⇒
-          (∀n. P0 n) ∧ ∀t. P1 t
+          (∀t. P0 (TreeLeaf t)) ∧
+          (∀n t. P1 n ∧ P0 t ⇒ ∀t0. P0 (TreeNode t0 n t)) ∧
+          (∀t n. P0 t ∧ P1 n ⇒ P1 (NodeElemCons t n)) ∧ P1 NodeElemNil ⇒
+          (∀t. P0 t) ∧ ∀n. P1 n
    
    [node_elem_t_nchotomy]  Theorem
       
@@ -1557,10 +1558,11 @@ sig
    [tree_t_Axiom]  Theorem
       
       ⊢ ∀f0 f1 f2 f3. ∃fn0 fn1.
-          (∀a0 a1. fn0 (NodeElemCons a0 a1) = f0 a0 a1 (fn1 a0) (fn0 a1)) ∧
-          fn0 NodeElemNil = f1 ∧ (∀a. fn1 (TreeLeaf a) = f2 a) ∧
-          ∀a0 a1 a2.
-            fn1 (TreeNode a0 a1 a2) = f3 a0 a1 a2 (fn0 a1) (fn1 a2)
+          (∀a. fn0 (TreeLeaf a) = f0 a) ∧
+          (∀a0 a1 a2.
+             fn0 (TreeNode a0 a1 a2) = f1 a0 a1 a2 (fn1 a1) (fn0 a2)) ∧
+          (∀a0 a1. fn1 (NodeElemCons a0 a1) = f2 a0 a1 (fn0 a0) (fn1 a1)) ∧
+          fn1 NodeElemNil = f3
    
    [tree_t_case_cong]  Theorem
       
@@ -1582,10 +1584,10 @@ sig
    [tree_t_induction]  Theorem
       
       ⊢ ∀P0 P1.
-          (∀t n. P1 t ∧ P0 n ⇒ P0 (NodeElemCons t n)) ∧ P0 NodeElemNil ∧
-          (∀t. P1 (TreeLeaf t)) ∧
-          (∀n t. P0 n ∧ P1 t ⇒ ∀t0. P1 (TreeNode t0 n t)) ⇒
-          (∀n. P0 n) ∧ ∀t. P1 t
+          (∀t. P0 (TreeLeaf t)) ∧
+          (∀n t. P1 n ∧ P0 t ⇒ ∀t0. P0 (TreeNode t0 n t)) ∧
+          (∀t n. P0 t ∧ P1 n ⇒ P1 (NodeElemCons t n)) ∧ P1 NodeElemNil ⇒
+          (∀t. P0 t) ∧ ∀n. P1 n
    
    [tree_t_nchotomy]  Theorem
       

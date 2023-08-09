@@ -426,7 +426,9 @@ let remove_shallow_borrows (crate : A.crate) (f : A.fun_decl) : A.fun_decl =
 let apply_passes (crate : A.crate) : A.crate =
   let passes = [ remove_loop_breaks crate; remove_shallow_borrows crate ] in
   let functions =
-    List.fold_left (fun fl pass -> List.map pass fl) crate.functions passes
+    List.fold_left
+      (fun fl pass -> A.FunDeclId.Map.map pass fl)
+      crate.functions passes
   in
   let crate = { crate with functions } in
   log#ldebug

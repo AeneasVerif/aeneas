@@ -291,7 +291,9 @@ let translate_crate_to_pure (crate : A.crate) :
   let trans_ctx = { type_context; fun_context; global_context } in
 
   (* Translate all the type definitions *)
-  let type_decls = SymbolicToPure.translate_type_decls crate.types in
+  let type_decls =
+    SymbolicToPure.translate_type_decls (T.TypeDeclId.Map.values crate.types)
+  in
 
   (* Compute the type definition map *)
   let type_decls_map =
@@ -318,7 +320,7 @@ let translate_crate_to_pure (crate : A.crate) :
                 (LlbcAstUtils.fun_body_get_input_vars body)
         in
         (A.Regular fdef.def_id, input_names, fdef.signature))
-      crate.functions
+      (A.FunDeclId.Map.values crate.functions)
   in
   let sigs = List.append assumed_sigs local_sigs in
   let fun_sigs =
@@ -330,7 +332,7 @@ let translate_crate_to_pure (crate : A.crate) :
   let pure_translations =
     List.map
       (translate_function_to_pure trans_ctx fun_sigs type_decls_map)
-      crate.functions
+      (A.FunDeclId.Map.values crate.functions)
   in
 
   (* Apply the micro-passes *)
@@ -989,7 +991,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : A.crate) :
   in
 
   let ctx =
-    List.fold_left Extract.extract_global_decl_register_names ctx crate.globals
+    List.fold_left Extract.extract_global_decl_register_names ctx
+      (A.GlobalDeclId.Map.values crate.globals)
   in
 
   (* Open the output file *)

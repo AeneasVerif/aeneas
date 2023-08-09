@@ -279,11 +279,11 @@ val test_char_fwd_def = Define ‘
 ’
 
 Datatype:
-  (** [no_nested_borrows::NodeElem] *)
-  node_elem_t = | NodeElemCons tree_t node_elem_t | NodeElemNil ;
-  
   (** [no_nested_borrows::Tree] *)
-  tree_t = | TreeLeaf 't | TreeNode 't node_elem_t tree_t
+  tree_t = | TreeLeaf 't | TreeNode 't node_elem_t tree_t ;
+  
+  (** [no_nested_borrows::NodeElem] *)
+  node_elem_t = | NodeElemCons tree_t node_elem_t | NodeElemNil
 End
 
 val [list_length_fwd_def] = DefineDiv ‘

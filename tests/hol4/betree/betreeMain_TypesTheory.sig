@@ -22,6 +22,7 @@ sig
     val betree_internal_t_betree_internal_right : thm
     val betree_internal_t_betree_internal_right_fupd : thm
     val betree_internal_t_case_def : thm
+    val betree_internal_t_size_def : thm
     val betree_leaf_t_TY_DEF : thm
     val betree_leaf_t_betree_leaf_id : thm
     val betree_leaf_t_betree_leaf_id_fupd : thm
@@ -42,7 +43,6 @@ sig
     val betree_node_id_counter_t_size_def : thm
     val betree_node_t_TY_DEF : thm
     val betree_node_t_case_def : thm
-    val betree_node_t_size_def : thm
     val betree_params_t_TY_DEF : thm
     val betree_params_t_betree_params_min_flush_size : thm
     val betree_params_t_betree_params_min_flush_size_fupd : thm
@@ -177,11 +177,11 @@ sig
     val betree_upsert_fun_state_t_induction : thm
     val betree_upsert_fun_state_t_nchotomy : thm
     val datatype_betree_be_tree_t : thm
+    val datatype_betree_internal_t : thm
     val datatype_betree_leaf_t : thm
     val datatype_betree_list_t : thm
     val datatype_betree_message_t : thm
     val datatype_betree_node_id_counter_t : thm
-    val datatype_betree_node_t : thm
     val datatype_betree_params_t : thm
     val datatype_betree_upsert_fun_state_t : thm
   
@@ -253,30 +253,30 @@ sig
       
       ⊢ ∃rep.
           TYPE_DEFINITION
-            (λa1'.
-                 ∀ $var$('betree_node_t') $var$('betree_internal_t').
+            (λa0'.
+                 ∀ $var$('betree_internal_t') $var$('betree_node_t').
                    (∀a0'.
-                      (∃a. a0' =
-                           (λa.
-                                ind_type$CONSTR 0 (ARB,ARB,ARB)
-                                  (ind_type$FCONS a (λn. ind_type$BOTTOM)))
-                             a ∧ $var$('betree_internal_t') a) ∨
-                      (∃a. a0' =
-                           (λa.
-                                ind_type$CONSTR (SUC 0) (a,ARB,ARB)
-                                  (λn. ind_type$BOTTOM)) a) ⇒
-                      $var$('betree_node_t') a0') ∧
-                   (∀a1'.
                       (∃a0 a1 a2 a3.
-                         a1' =
+                         a0' =
                          (λa0 a1 a2 a3.
-                              ind_type$CONSTR (SUC (SUC 0)) (ARB,a0,a1)
+                              ind_type$CONSTR 0 (a0,a1,ARB)
                                 (ind_type$FCONS a2
                                    (ind_type$FCONS a3 (λn. ind_type$BOTTOM))))
                            a0 a1 a2 a3 ∧ $var$('betree_node_t') a2 ∧
                          $var$('betree_node_t') a3) ⇒
-                      $var$('betree_internal_t') a1') ⇒
-                   $var$('betree_internal_t') a1') rep
+                      $var$('betree_internal_t') a0') ∧
+                   (∀a1'.
+                      (∃a. a1' =
+                           (λa.
+                                ind_type$CONSTR (SUC 0) (ARB,ARB,ARB)
+                                  (ind_type$FCONS a (λn. ind_type$BOTTOM)))
+                             a ∧ $var$('betree_internal_t') a) ∨
+                      (∃a. a1' =
+                           (λa.
+                                ind_type$CONSTR (SUC (SUC 0)) (ARB,ARB,a)
+                                  (λn. ind_type$BOTTOM)) a) ⇒
+                      $var$('betree_node_t') a1') ⇒
+                   $var$('betree_internal_t') a0') rep
    
    [betree_internal_t_betree_internal_id]  Definition
       
@@ -328,6 +328,16 @@ sig
       ⊢ ∀a0 a1 a2 a3 f.
           betree_internal_t_CASE (betree_internal_t a0 a1 a2 a3) f =
           f a0 a1 a2 a3
+   
+   [betree_internal_t_size_def]  Definition
+      
+      ⊢ (∀a0 a1 a2 a3.
+           betree_internal_t_size (betree_internal_t a0 a1 a2 a3) =
+           1 + (betree_node_t_size a2 + betree_node_t_size a3)) ∧
+        (∀a. betree_node_t_size (BetreeNodeInternal a) =
+             1 + betree_internal_t_size a) ∧
+        ∀a. betree_node_t_size (BetreeNodeLeaf a) =
+            1 + betree_leaf_t_size a
    
    [betree_leaf_t_TY_DEF]  Definition
       
@@ -479,45 +489,35 @@ sig
       
       ⊢ ∃rep.
           TYPE_DEFINITION
-            (λa0'.
-                 ∀ $var$('betree_node_t') $var$('betree_internal_t').
+            (λa1'.
+                 ∀ $var$('betree_internal_t') $var$('betree_node_t').
                    (∀a0'.
-                      (∃a. a0' =
-                           (λa.
-                                ind_type$CONSTR 0 (ARB,ARB,ARB)
-                                  (ind_type$FCONS a (λn. ind_type$BOTTOM)))
-                             a ∧ $var$('betree_internal_t') a) ∨
-                      (∃a. a0' =
-                           (λa.
-                                ind_type$CONSTR (SUC 0) (a,ARB,ARB)
-                                  (λn. ind_type$BOTTOM)) a) ⇒
-                      $var$('betree_node_t') a0') ∧
-                   (∀a1'.
                       (∃a0 a1 a2 a3.
-                         a1' =
+                         a0' =
                          (λa0 a1 a2 a3.
-                              ind_type$CONSTR (SUC (SUC 0)) (ARB,a0,a1)
+                              ind_type$CONSTR 0 (a0,a1,ARB)
                                 (ind_type$FCONS a2
                                    (ind_type$FCONS a3 (λn. ind_type$BOTTOM))))
                            a0 a1 a2 a3 ∧ $var$('betree_node_t') a2 ∧
                          $var$('betree_node_t') a3) ⇒
-                      $var$('betree_internal_t') a1') ⇒
-                   $var$('betree_node_t') a0') rep
+                      $var$('betree_internal_t') a0') ∧
+                   (∀a1'.
+                      (∃a. a1' =
+                           (λa.
+                                ind_type$CONSTR (SUC 0) (ARB,ARB,ARB)
+                                  (ind_type$FCONS a (λn. ind_type$BOTTOM)))
+                             a ∧ $var$('betree_internal_t') a) ∨
+                      (∃a. a1' =
+                           (λa.
+                                ind_type$CONSTR (SUC (SUC 0)) (ARB,ARB,a)
+                                  (λn. ind_type$BOTTOM)) a) ⇒
+                      $var$('betree_node_t') a1') ⇒
+                   $var$('betree_node_t') a1') rep
    
    [betree_node_t_case_def]  Definition
       
       ⊢ (∀a f f1. betree_node_t_CASE (BetreeNodeInternal a) f f1 = f a) ∧
         ∀a f f1. betree_node_t_CASE (BetreeNodeLeaf a) f f1 = f1 a
-   
-   [betree_node_t_size_def]  Definition
-      
-      ⊢ (∀a. betree_node_t_size (BetreeNodeInternal a) =
-             1 + betree_internal_t_size a) ∧
-        (∀a. betree_node_t_size (BetreeNodeLeaf a) =
-             1 + betree_leaf_t_size a) ∧
-        ∀a0 a1 a2 a3.
-          betree_internal_t_size (betree_internal_t a0 a1 a2 a3) =
-          1 + (betree_node_t_size a2 + betree_node_t_size a3)
    
    [betree_params_t_TY_DEF]  Definition
       
@@ -883,11 +883,11 @@ sig
    [betree_internal_t_Axiom]  Theorem
       
       ⊢ ∀f0 f1 f2. ∃fn0 fn1.
-          (∀a. fn0 (BetreeNodeInternal a) = f0 a (fn1 a)) ∧
-          (∀a. fn0 (BetreeNodeLeaf a) = f1 a) ∧
-          ∀a0 a1 a2 a3.
-            fn1 (betree_internal_t a0 a1 a2 a3) =
-            f2 a0 a1 a2 a3 (fn0 a2) (fn0 a3)
+          (∀a0 a1 a2 a3.
+             fn0 (betree_internal_t a0 a1 a2 a3) =
+             f0 a0 a1 a2 a3 (fn1 a2) (fn1 a3)) ∧
+          (∀a. fn1 (BetreeNodeInternal a) = f1 a (fn0 a)) ∧
+          ∀a. fn1 (BetreeNodeLeaf a) = f2 a
    
    [betree_internal_t_accessors]  Theorem
       
@@ -1130,9 +1130,9 @@ sig
    [betree_internal_t_induction]  Theorem
       
       ⊢ ∀P0 P1.
-          (∀b. P1 b ⇒ P0 (BetreeNodeInternal b)) ∧
-          (∀b. P0 (BetreeNodeLeaf b)) ∧
-          (∀b b0. P0 b ∧ P0 b0 ⇒ ∀u u0. P1 (betree_internal_t u0 u b b0)) ⇒
+          (∀b b0. P1 b ∧ P1 b0 ⇒ ∀u u0. P0 (betree_internal_t u0 u b b0)) ∧
+          (∀b. P0 b ⇒ P1 (BetreeNodeInternal b)) ∧
+          (∀b. P1 (BetreeNodeLeaf b)) ⇒
           (∀b. P0 b) ∧ ∀b. P1 b
    
    [betree_internal_t_literal_11]  Theorem
@@ -1472,11 +1472,11 @@ sig
    [betree_node_t_Axiom]  Theorem
       
       ⊢ ∀f0 f1 f2. ∃fn0 fn1.
-          (∀a. fn0 (BetreeNodeInternal a) = f0 a (fn1 a)) ∧
-          (∀a. fn0 (BetreeNodeLeaf a) = f1 a) ∧
-          ∀a0 a1 a2 a3.
-            fn1 (betree_internal_t a0 a1 a2 a3) =
-            f2 a0 a1 a2 a3 (fn0 a2) (fn0 a3)
+          (∀a0 a1 a2 a3.
+             fn0 (betree_internal_t a0 a1 a2 a3) =
+             f0 a0 a1 a2 a3 (fn1 a2) (fn1 a3)) ∧
+          (∀a. fn1 (BetreeNodeInternal a) = f1 a (fn0 a)) ∧
+          ∀a. fn1 (BetreeNodeLeaf a) = f2 a
    
    [betree_node_t_case_cong]  Theorem
       
@@ -1498,9 +1498,9 @@ sig
    [betree_node_t_induction]  Theorem
       
       ⊢ ∀P0 P1.
-          (∀b. P1 b ⇒ P0 (BetreeNodeInternal b)) ∧
-          (∀b. P0 (BetreeNodeLeaf b)) ∧
-          (∀b b0. P0 b ∧ P0 b0 ⇒ ∀u u0. P1 (betree_internal_t u0 u b b0)) ⇒
+          (∀b b0. P1 b ∧ P1 b0 ⇒ ∀u u0. P0 (betree_internal_t u0 u b b0)) ∧
+          (∀b. P0 b ⇒ P1 (BetreeNodeInternal b)) ∧
+          (∀b. P1 (BetreeNodeLeaf b)) ⇒
           (∀b. P0 b) ∧ ∀b. P1 b
    
    [betree_node_t_nchotomy]  Theorem
@@ -1706,6 +1706,14 @@ sig
           (record betree_be_tree_t betree_be_tree_params
              betree_be_tree_node_id_cnt betree_be_tree_root)
    
+   [datatype_betree_internal_t]  Theorem
+      
+      ⊢ DATATYPE
+          (record betree_internal_t betree_internal_id
+             betree_internal_pivot betree_internal_left
+             betree_internal_right ∧
+           betree_node_t BetreeNodeInternal BetreeNodeLeaf)
+   
    [datatype_betree_leaf_t]  Theorem
       
       ⊢ DATATYPE (record betree_leaf_t betree_leaf_id betree_leaf_size)
@@ -1725,14 +1733,6 @@ sig
       ⊢ DATATYPE
           (record betree_node_id_counter_t
              betree_node_id_counter_next_node_id)
-   
-   [datatype_betree_node_t]  Theorem
-      
-      ⊢ DATATYPE
-          (betree_node_t BetreeNodeInternal BetreeNodeLeaf ∧
-           record betree_internal_t betree_internal_id
-             betree_internal_pivot betree_internal_left
-             betree_internal_right)
    
    [datatype_betree_params_t]  Theorem
       
