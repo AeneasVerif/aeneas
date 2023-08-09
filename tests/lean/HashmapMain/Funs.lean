@@ -147,7 +147,7 @@ def hashmap.HashMap.insert_no_resize
         let v ← Vec.index_mut_back (hashmap.List T) self.slots hash_mod l0
         Result.ret { self with slots := v }
 
-/- [core::num::u32::{9}::MAX] -/
+/- [core::num::u32::{8}::MAX] -/
 def core_num_u32_max_body : Result U32 := Result.ret (U32.ofInt 4294967295)
 def core_num_u32_max_c : U32 := eval_global core_num_u32_max_body (by simp)
 

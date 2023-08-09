@@ -170,7 +170,7 @@ val hash_map_insert_no_resize_fwd_back_def = Define ‘
     od
 ’
 
-(** [core::num::u32::{9}::MAX] *)
+(** [core::num::u32::{8}::MAX] *)
 Definition core_num_u32_max_body_def:
   core_num_u32_max_body : u32 result = Return (int_to_u32 4294967295)
 End

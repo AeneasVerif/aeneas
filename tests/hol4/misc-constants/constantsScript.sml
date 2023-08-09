@@ -13,7 +13,7 @@ Definition x0_c_def:
   x0_c : u32 = get_return_value x0_body
 End
 
-(** [core::num::u32::{9}::MAX] *)
+(** [core::num::u32::{8}::MAX] *)
 Definition core_num_u32_max_body_def:
   core_num_u32_max_body : u32 result = Return (int_to_u32 4294967295)
 End

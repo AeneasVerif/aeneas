@@ -208,7 +208,7 @@ Definition hashmap_hash_map_insert_no_resize_fwd_back
       |})
 .
 
-(** [core::num::u32::{9}::MAX] *)
+(** [core::num::u32::{8}::MAX] *)
 Definition core_num_u32_max_body : result u32 := Return 4294967295%u32.
 Definition core_num_u32_max_c : u32 := core_num_u32_max_body%global.
 

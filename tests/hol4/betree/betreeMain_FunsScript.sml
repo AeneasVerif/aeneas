@@ -88,7 +88,7 @@ val betree_node_id_counter_fresh_id_back_def = Define ‘
     od
 ’
 
-(** [core::num::u64::{10}::MAX] *)
+(** [core::num::u64::{9}::MAX] *)
 Definition core_num_u64_max_body_def:
   core_num_u64_max_body : u64 result = Return (int_to_u64 18446744073709551615)
 End

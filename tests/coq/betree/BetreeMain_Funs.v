@@ -75,7 +75,7 @@ Definition betree_node_id_counter_fresh_id_back
   Return {| Betree_node_id_counter_next_node_id := i |}
 .
 
-(** [core::num::u64::{10}::MAX] *)
+(** [core::num::u64::{9}::MAX] *)
 Definition core_num_u64_max_body : result u64 :=
   Return 18446744073709551615%u64
 .

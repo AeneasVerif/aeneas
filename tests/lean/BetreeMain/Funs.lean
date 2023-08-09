@@ -64,7 +64,7 @@ def betree.NodeIdCounter.fresh_id_back
     let i ← self.next_node_id + (U64.ofInt 1)
     Result.ret { next_node_id := i }
 
-/- [core::num::u64::{10}::MAX] -/
+/- [core::num::u64::{9}::MAX] -/
 def core_num_u64_max_body : Result U64 :=
   Result.ret (U64.ofInt 18446744073709551615)
 def core_num_u64_max_c : U64 := eval_global core_num_u64_max_body (by simp)

@@ -60,7 +60,7 @@ let betree_node_id_counter_fresh_id_back
   let* i = u64_add self.betree_node_id_counter_next_node_id 1 in
   Return { betree_node_id_counter_next_node_id = i }
 
-(** [core::num::u64::{10}::MAX] *)
+(** [core::num::u64::{9}::MAX] *)
 let core_num_u64_max_body : result u64 = Return 18446744073709551615
 let core_num_u64_max_c : u64 = eval_global core_num_u64_max_body
 
