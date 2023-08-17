@@ -86,7 +86,6 @@ module Sig = struct
     let output = tvar_0 (* T *) in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
       const_generic_params = empty_const_generic_params;
@@ -98,7 +97,6 @@ module Sig = struct
   let box_new_sig : A.fun_sig =
     {
       region_params = [];
-      num_early_bound_regions = 0;
       regions_hierarchy = [];
       type_params = [ type_param_0 ] (* <T> *);
       const_generic_params = empty_const_generic_params;
@@ -110,7 +108,6 @@ module Sig = struct
   let box_free_sig : A.fun_sig =
     {
       region_params = [];
-      num_early_bound_regions = 0;
       regions_hierarchy = [];
       type_params = [ type_param_0 ] (* <T> *);
       const_generic_params = empty_const_generic_params;
@@ -128,7 +125,6 @@ module Sig = struct
     let regions_hierarchy = [ region_group_0 ] (* <'a> *) in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params = [ type_param_0 ] (* <T> *);
       const_generic_params = empty_const_generic_params;
@@ -152,7 +148,6 @@ module Sig = struct
     let output = mk_vec_ty tvar_0 (* Vec<T> *) in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
       const_generic_params = empty_const_generic_params;
@@ -175,7 +170,6 @@ module Sig = struct
     let output = mk_unit_ty (* () *) in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
       const_generic_params = empty_const_generic_params;
@@ -199,7 +193,6 @@ module Sig = struct
     let output = mk_unit_ty (* () *) in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
       const_generic_params = empty_const_generic_params;
@@ -219,7 +212,6 @@ module Sig = struct
     let output = mk_usize_ty (* usize *) in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
       const_generic_params = empty_const_generic_params;
@@ -244,7 +236,6 @@ module Sig = struct
     let output = mk_ref_ty rvar_0 tvar_0 is_mut (* &'a (mut) T *) in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
       const_generic_params = empty_const_generic_params;
@@ -296,7 +287,6 @@ module Sig = struct
     in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
       const_generic_params = cgs;
@@ -362,7 +352,6 @@ module Sig = struct
     let output = mk_usize_ty (* usize *) in
     {
       region_params;
-      num_early_bound_regions = 0;
       regions_hierarchy;
       type_params;
       const_generic_params = empty_const_generic_params;
