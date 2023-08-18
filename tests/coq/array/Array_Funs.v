@@ -451,6 +451,15 @@ Definition f3_fwd (n : nat) : result u32 :=
   sum2_fwd n s s0
 .
 
+(** [array::SZ] *)
+Definition sz_body : result usize := Return 32%usize.
+Definition sz_c : usize := sz_body%global.
+
+(** [array::f5]: forward function *)
+Definition f5_fwd (x : array u32 32%usize) : result u32 :=
+  array_index_shared u32 32%usize x 0%usize
+.
+
 (** [array::ite]: forward function *)
 Definition ite_fwd : result unit :=
   s <-

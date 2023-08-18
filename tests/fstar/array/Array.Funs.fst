@@ -347,6 +347,14 @@ let f3_fwd : result u32 =
         ]) 16 18 in
   sum2_fwd s s0
 
+(** [array::SZ] *)
+let sz_body : result usize = Return 32
+let sz_c : usize = eval_global sz_body
+
+(** [array::f5]: forward function *)
+let f5_fwd (x : array u32 32) : result u32 =
+  array_index_shared u32 32 x 0
+
 (** [array::ite]: forward function *)
 let ite_fwd : result unit =
   let* s = array_to_slice_mut_fwd u32 2 (mk_array u32 2 [ 0; 0 ]) in

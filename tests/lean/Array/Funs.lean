@@ -447,6 +447,14 @@ def f3 : Result U32 :=
           ]) (Usize.ofInt 16) (Usize.ofInt 18)
     sum2 s s0
 
+/- [array::SZ] -/
+def sz_body : Result Usize := Result.ret (Usize.ofInt 32)
+def sz_c : Usize := eval_global sz_body (by simp)
+
+/- [array::f5]: forward function -/
+def f5 (x : Array U32 (Usize.ofInt 32)) : Result U32 :=
+  Array.index_shared U32 (Usize.ofInt 32) x (Usize.ofInt 0)
+
 /- [array::ite]: forward function -/
 def ite : Result Unit :=
   do
