@@ -37,6 +37,7 @@ module ConstGenericVarId = T.ConstGenericVarId
 type integer_type = T.integer_type [@@deriving show, ord]
 type const_generic_var = T.const_generic_var [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
+type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
 
 (** The assumed types for the pure AST.
 
@@ -536,6 +537,7 @@ class virtual ['self] mapreduce_expression_base =
  *)
 type expression =
   | Var of var_id  (** a variable *)
+  | CVar of const_generic_var_id  (** a const generic var *)
   | Const of literal
   | App of texpression * texpression
       (** Application of a function to an argument.

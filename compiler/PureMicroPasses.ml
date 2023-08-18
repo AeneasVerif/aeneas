@@ -376,8 +376,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ty = e.ty in
     let ctx, e =
       match e.e with
-      | Var _ -> (* Nothing to do *) (ctx, e.e)
-      | Const _ -> (* Nothing to do *) (ctx, e.e)
+      | Var _ | CVar _ | Const _ -> (* Nothing to do *) (ctx, e.e)
       | App (app, arg) ->
           let ctx, app = update_texpression app ctx in
           let ctx, arg = update_texpression arg ctx in
@@ -834,7 +833,7 @@ let expression_contains_child_call_in_all_paths (ctx : trans_ctx)
 
       method! visit_texpression env e =
         match e.e with
-        | Var _ | Const _ -> fun _ -> false
+        | Var _ | CVar _ | Const _ -> fun _ -> false
         | StructUpdate _ ->
             (* There shouldn't be monadic calls in structure updates - also
                note that by returning [false] we are conservative: we might
@@ -930,7 +929,7 @@ let filter_useless (filter_monadic_calls : bool) (ctx : trans_ctx)
 
       method! visit_expression env e =
         match e with
-        | Var _ | Const _ | App _ | Qualif _
+        | Var _ | CVar _ | Const _ | App _ | Qualif _
         | Switch (_, _)
         | Meta (_, _)
         | StructUpdate _ | Abs _ ->

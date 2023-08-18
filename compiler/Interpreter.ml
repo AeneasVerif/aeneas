@@ -34,6 +34,15 @@ let initialize_eval_context (type_context : C.type_context)
     (region_groups : T.RegionGroupId.id list) (type_vars : T.type_var list)
     (const_generic_vars : T.const_generic_var list) : C.eval_ctx =
   C.reset_global_counters ();
+  let const_generic_vars_map =
+    T.ConstGenericVarId.Map.of_list
+      (List.map
+         (fun (cg : T.const_generic_var) ->
+           let ty = TypesUtils.ety_no_regions_to_rty (T.Literal cg.ty) in
+           let cv = mk_fresh_symbolic_typed_value V.ConstGeneric ty in
+           (cg.index, cv))
+         const_generic_vars)
+  in
   {
     C.type_context;
     C.fun_context;
@@ -41,6 +50,7 @@ let initialize_eval_context (type_context : C.type_context)
     C.region_groups;
     C.type_vars;
     C.const_generic_vars;
+    C.const_generic_vars_map;
     C.env = [ C.Frame ];
     C.ended_regions = T.RegionId.Set.empty;
   }

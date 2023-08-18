@@ -557,6 +557,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       region_groups;
       type_vars;
       const_generic_vars;
+      const_generic_vars_map;
       env = _;
       ended_regions = ended_regions0;
     } =
@@ -569,6 +570,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
       region_groups = _;
       type_vars = _;
       const_generic_vars = _;
+      const_generic_vars_map = _;
       env = _;
       ended_regions = ended_regions1;
     } =
@@ -583,6 +585,7 @@ let join_ctxs (loop_id : V.LoopId.id) (fixed_ids : ids_sets) (ctx0 : C.eval_ctx)
         region_groups;
         type_vars;
         const_generic_vars;
+        const_generic_vars_map;
         env;
         ended_regions;
       }

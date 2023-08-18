@@ -230,17 +230,16 @@ let prepare_eval_operand_reorganize (config : C.config) (op : E.operand) :
   let prepare : cm_fun =
    fun cf ctx ->
     match op with
-    | Expressions.Constant (ty, cv) ->
+    | E.Constant _ ->
         (* No need to reorganize the context *)
-        literal_to_typed_value (TypesUtils.ty_as_literal ty) cv |> ignore;
         cf ctx
-    | Expressions.Copy p ->
+    | E.Copy p ->
         (* Access the value *)
         let access = Read in
         (* Expand the symbolic values, if necessary *)
         let expand_prim_copy = true in
         access_rplace_reorganize config expand_prim_copy access p cf ctx
-    | Expressions.Move p ->
+    | E.Move p ->
         (* Access the value *)
         let access = Move in
         let expand_prim_copy = false in
@@ -260,9 +259,35 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx ^ "\n"));
   (* Evaluate *)
   match op with
-  | Expressions.Constant (ty, cv) ->
-      cf (literal_to_typed_value (TypesUtils.ty_as_literal ty) cv) ctx
-  | Expressions.Copy p ->
+  | E.Constant cv -> (
+      match cv.value with
+      | E.CLiteral lit ->
+          cf (literal_to_typed_value (TypesUtils.ty_as_literal cv.ty) lit) ctx
+      | E.CVar vid -> (
+          let ctx0 = ctx in
+          (* Lookup the const generic value *)
+          let cv = C.ctx_lookup_const_generic_value ctx vid in
+          (* Copy the value *)
+          let allow_adt_copy = false in
+          let ctx, v = copy_value allow_adt_copy config ctx cv in
+          (* Continue *)
+          let e = cf v ctx in
+          (* We have to wrap the expression to introduce *)
+          match e with
+          | None -> None
+          | Some e ->
+              (* If we are synthesizing a symbolic AST, it means that we are in symbolic
+                 mode: the value of the const generic is necessarily symbolic. *)
+              assert (is_symbolic cv.V.value);
+              (* *)
+              Some
+                (SymbolicAst.IntroSymbolic
+                   ( ctx0,
+                     None,
+                     value_as_symbolic v.value,
+                     SymbolicAst.ConstGenericValue vid,
+                     e ))))
+  | E.Copy p ->
       (* Access the value *)
       let access = Read in
       let cc = read_place access p in
@@ -283,7 +308,7 @@ let eval_operand_no_reorganize (config : C.config) (op : E.operand)
       in
       (* Compose and apply *)
       comp cc copy cf ctx
-  | Expressions.Move p ->
+  | E.Move p ->
       (* Access the value *)
       let access = Move in
       let cc = read_place access p in

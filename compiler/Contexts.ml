@@ -263,6 +263,10 @@ type eval_ctx = {
   region_groups : RegionGroupId.id list;
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
+  const_generic_vars_map : typed_value Types.ConstGenericVarId.Map.t;
+      (** The map from const generic vars to their values. Those values
+          can be symbolic values or concrete values (in the latter case:
+          if we run in interpreter mode) *)
   env : env;
   ended_regions : RegionId.Set.t;
 }
@@ -311,6 +315,11 @@ let env_lookup_var_value (env : env) (vid : VarId.id) : typed_value =
 (** Retrieve a variable's value in an evaluation context *)
 let ctx_lookup_var_value (ctx : eval_ctx) (vid : VarId.id) : typed_value =
   env_lookup_var_value ctx.env vid
+
+(** Retrieve a const generic value in an evaluation context *)
+let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
+    : typed_value =
+  Types.ConstGenericVarId.Map.find vid ctx.const_generic_vars_map
 
 (** Update a variable's value in the current frame.
 

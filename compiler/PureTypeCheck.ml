@@ -65,6 +65,8 @@ type tc_ctx = {
   global_decls : A.global_decl A.GlobalDeclId.Map.t;
       (** The global declarations *)
   env : ty VarId.Map.t;  (** Environment from variables to types *)
+  const_generics : ty T.ConstGenericVarId.Map.t;
+      (** The types of the const generics *)
 }
 
 let check_literal (v : literal) (ty : literal_type) : unit =
@@ -115,6 +117,9 @@ let rec check_texpression (ctx : tc_ctx) (e : texpression) : unit =
       match VarId.Map.find_opt var_id ctx.env with
       | None -> ()
       | Some ty -> assert (ty = e.ty))
+  | CVar cg_id ->
+      let ty = T.ConstGenericVarId.Map.find cg_id ctx.const_generics in
+      assert (ty = e.ty)
   | Const cv -> check_literal cv (ty_as_literal e.ty)
   | App (app, arg) ->
       let input_ty, output_ty = destruct_arrow app.ty in

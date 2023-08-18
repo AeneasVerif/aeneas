@@ -2249,6 +2249,9 @@ let rec extract_texpression (ctx : extraction_ctx) (fmt : F.formatter)
   | Var var_id ->
       let var_name = ctx_get_var var_id ctx in
       F.pp_print_string fmt var_name
+  | CVar var_id ->
+      let var_name = ctx_get_const_generic_var var_id ctx in
+      F.pp_print_string fmt var_name
   | Const cv -> ctx.fmt.extract_literal fmt inside cv
   | App _ ->
       let app, args = destruct_apps e in

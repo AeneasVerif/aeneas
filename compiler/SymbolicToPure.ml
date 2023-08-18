@@ -201,29 +201,6 @@ type bs_ctx = {
 }
 [@@deriving show]
 
-let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
-  let env = VarId.Map.empty in
-  let ctx =
-    {
-      PureTypeCheck.type_decls = ctx.type_context.type_decls;
-      global_decls = ctx.global_context.llbc_global_decls;
-      env;
-    }
-  in
-  let _ = PureTypeCheck.check_typed_pattern ctx v in
-  ()
-
-let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
-  let env = VarId.Map.empty in
-  let ctx =
-    {
-      PureTypeCheck.type_decls = ctx.type_context.type_decls;
-      global_decls = ctx.global_context.llbc_global_decls;
-      env;
-    }
-  in
-  PureTypeCheck.check_texpression ctx e
-
 (* TODO: move *)
 let bs_ctx_to_ast_formatter (ctx : bs_ctx) : Print.Ast.ast_formatter =
   Print.Ast.decls_and_fun_decl_to_ast_formatter ctx.type_context.llbc_type_decls
@@ -588,6 +565,31 @@ let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
     (inside_mut : bool) (ty : 'r T.ty) : ty option =
   let type_infos = ctx.type_context.type_infos in
   translate_back_ty type_infos keep_region inside_mut ty
+
+let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
+  let const_generics =
+    T.ConstGenericVarId.Map.of_list
+      (List.map
+         (fun (cg : T.const_generic_var) ->
+           (cg.index, ctx_translate_fwd_ty ctx (T.Literal cg.ty)))
+         ctx.sg.const_generic_params)
+  in
+  let env = VarId.Map.empty in
+  {
+    PureTypeCheck.type_decls = ctx.type_context.type_decls;
+    global_decls = ctx.global_context.llbc_global_decls;
+    env;
+    const_generics;
+  }
+
+let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
+  let ctx = mk_type_check_ctx ctx in
+  let _ = PureTypeCheck.check_typed_pattern ctx v in
+  ()
+
+let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
+  let ctx = mk_type_check_ctx ctx in
+  PureTypeCheck.check_texpression ctx e
 
 (** List the ancestors of an abstraction *)
 let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
@@ -2298,6 +2300,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
           { struct_id = Assumed Array; init = None; updates = values }
         in
         { e = StructUpdate su; ty = var.ty }
+    | ConstGenericValue cg_id -> { e = CVar cg_id; ty = var.ty }
   in
 
   (* Make the let-binding *)

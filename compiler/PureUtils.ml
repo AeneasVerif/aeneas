@@ -164,7 +164,8 @@ let fun_sig_substitute (tsubst : TypeVarId.id -> ty)
  *)
 let rec let_group_requires_parentheses (e : texpression) : bool =
   match e.e with
-  | Var _ | Const _ | App _ | Abs _ | Qualif _ | StructUpdate _ -> false
+  | Var _ | CVar _ | Const _ | App _ | Abs _ | Qualif _ | StructUpdate _ ->
+      false
   | Let (monadic, _, _, next_e) ->
       if monadic then true else let_group_requires_parentheses next_e
   | Switch (_, _) -> false

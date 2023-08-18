@@ -559,9 +559,8 @@ let fun_or_op_id_to_string (fmt : ast_formatter) (fun_id : fun_or_op_id) :
 let rec texpression_to_string (fmt : ast_formatter) (inside : bool)
     (indent : string) (indent_incr : string) (e : texpression) : string =
   match e.e with
-  | Var var_id ->
-      let s = fmt.var_id_to_string var_id in
-      if inside then "(" ^ s ^ ")" else s
+  | Var var_id -> fmt.var_id_to_string var_id
+  | CVar cg_id -> fmt.const_generic_var_id_to_string cg_id
   | Const cv -> literal_to_string cv
   | App _ ->
       (* Recursively destruct the app, to have a pair (app, arguments list) *)

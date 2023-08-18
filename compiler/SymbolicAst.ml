@@ -79,6 +79,9 @@ class ['self] iter_expression_base =
     method visit_loop_id : 'env -> V.loop_id -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
 
+    method visit_const_generic_var_id : 'env -> T.const_generic_var_id -> unit =
+      fun _ _ -> ()
+
     method visit_symbolic_value_id : 'env -> V.symbolic_value_id -> unit =
       fun _ _ -> ()
 
@@ -171,14 +174,14 @@ type expression =
       * expression
       (** We introduce a new symbolic value, equal to some other value.
 
-        This is used for instance when reorganizing the environment to compute
-        fixed points: we duplicate some shared symbolic values to destructure
-        the shared values, in order to make the environment a bit more general
-        (while losing precision of course).
+          This is used for instance when reorganizing the environment to compute
+          fixed points: we duplicate some shared symbolic values to destructure
+          the shared values, in order to make the environment a bit more general
+          (while losing precision of course).
 
-        The context is the evaluation context from before introducing the new
-        value. It has the same purpose as for the {!Return} case.
-      *)
+          The context is the evaluation context from before introducing the new
+          value. It has the same purpose as for the {!Return} case.
+       *)
   | ForwardEnd of
       Contexts.eval_ctx
       * V.typed_value symbolic_value_id_map option
@@ -253,6 +256,9 @@ and value_aggregate =
   | SingleValue of V.typed_value  (** Regular case *)
   | Array of V.typed_value list
       (** This is used when introducing array aggregates *)
+  | ConstGenericValue of T.const_generic_var_id
+      (** This is used when evaluating a const generic value: in the interpreter,
+          we introduce a fresh symbolic value. *)
 [@@deriving
   show,
     visitors

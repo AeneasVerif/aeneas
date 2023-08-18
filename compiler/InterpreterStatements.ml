@@ -421,16 +421,16 @@ let pop_frame_assign (config : C.config) (dest : E.place) : cm_fun =
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_replace_concrete (_config : C.config)
     (_region_params : T.erased_region list) (_type_params : T.ety list)
-    (_cg_params : T.const_generic list) : cm_fun =
+    (_cg_args : T.const_generic list) : cm_fun =
  fun _cf _ctx -> raise Unimplemented
 
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_new_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
-    (cg_params : T.const_generic list) : cm_fun =
+    (cg_args : T.const_generic list) : cm_fun =
  fun cf ctx ->
   (* Check and retrieve the arguments *)
-  match (region_params, type_params, cg_params, ctx.env) with
+  match (region_params, type_params, cg_args, ctx.env) with
   | ( [],
       [ boxed_ty ],
       [],
@@ -470,10 +470,10 @@ let eval_box_new_concrete (config : C.config)
     and [std::DerefMut::deref_mut] - see {!eval_non_local_function_call} *)
 let eval_box_deref_mut_or_shared_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
-    (cg_params : T.const_generic list) (is_mut : bool) : cm_fun =
+    (cg_args : T.const_generic list) (is_mut : bool) : cm_fun =
  fun cf ctx ->
   (* Check the arguments *)
-  match (region_params, type_params, cg_params, ctx.env) with
+  match (region_params, type_params, cg_args, ctx.env) with
   | ( [],
       [ boxed_ty ],
       [],
@@ -517,18 +517,18 @@ let eval_box_deref_mut_or_shared_concrete (config : C.config)
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_deref_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
-    (cg_params : T.const_generic list) : cm_fun =
+    (cg_args : T.const_generic list) : cm_fun =
   let is_mut = false in
-  eval_box_deref_mut_or_shared_concrete config region_params type_params
-    cg_params is_mut
+  eval_box_deref_mut_or_shared_concrete config region_params type_params cg_args
+    is_mut
 
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_box_deref_mut_concrete (config : C.config)
     (region_params : T.erased_region list) (type_params : T.ety list)
-    (cg_params : T.const_generic list) : cm_fun =
+    (cg_args : T.const_generic list) : cm_fun =
   let is_mut = true in
-  eval_box_deref_mut_or_shared_concrete config region_params type_params
-    cg_params is_mut
+  eval_box_deref_mut_or_shared_concrete config region_params type_params cg_args
+    is_mut
 
 (** Auxiliary function - see {!eval_non_local_function_call}.
 
@@ -550,10 +550,10 @@ let eval_box_deref_mut_concrete (config : C.config)
     the destination (by setting it to [()]).
 *)
 let eval_box_free (config : C.config) (region_params : T.erased_region list)
-    (type_params : T.ety list) (cg_params : T.const_generic list)
+    (type_params : T.ety list) (cg_args : T.const_generic list)
     (args : E.operand list) (dest : E.place) : cm_fun =
  fun cf ctx ->
-  match (region_params, type_params, cg_params, args) with
+  match (region_params, type_params, cg_args, args) with
   | [], [ boxed_ty ], [], [ E.Move input_box_place ] ->
       (* Required type checking *)
       let input_box = InterpreterPaths.read_place Write input_box_place ctx in
@@ -573,14 +573,17 @@ let eval_box_free (config : C.config) (region_params : T.erased_region list)
 (** Auxiliary function - see {!eval_non_local_function_call} *)
 let eval_vec_function_concrete (_config : C.config) (_fid : A.assumed_fun_id)
     (_region_params : T.erased_region list) (_type_params : T.ety list)
-    (_cg_params : T.const_generic list) : cm_fun =
+    (_cg_args : T.const_generic list) : cm_fun =
  fun _cf _ctx -> raise Unimplemented
 
 (** Evaluate a non-local function call in concrete mode *)
 let eval_non_local_function_call_concrete (config : C.config)
     (fid : A.assumed_fun_id) (region_params : T.erased_region list)
-    (type_params : T.ety list) (cg_params : T.const_generic list)
+    (type_params : T.ety list) (cg_args : T.const_generic list)
     (args : E.operand list) (dest : E.place) : cm_fun =
+  (* Sanity check: we don't fully handle the const generic vars environment
+     in concrete mode yet *)
+  assert (cg_args = []);
   (* There are two cases (and this is extremely annoying):
      - the function is not box_free
      - the function is box_free
@@ -589,7 +592,7 @@ let eval_non_local_function_call_concrete (config : C.config)
   match fid with
   | A.BoxFree ->
       (* Degenerate case: box_free *)
-      eval_box_free config region_params type_params cg_params args dest
+      eval_box_free config region_params type_params cg_args args dest
   | _ ->
       (* "Normal" case: not box_free *)
       (* Evaluate the operands *)
@@ -612,7 +615,7 @@ let eval_non_local_function_call_concrete (config : C.config)
         let ret_vid = E.VarId.zero in
         let ret_ty =
           get_non_local_function_return_type fid region_params type_params
-            cg_params
+            cg_args
         in
         let ret_var = mk_var ret_vid (Some "@return") ret_ty in
         let cc = comp cc (push_uninitialized_var ret_var) in
@@ -631,19 +634,19 @@ let eval_non_local_function_call_concrete (config : C.config)
         let cf_eval_body : cm_fun =
           match fid with
           | A.Replace ->
-              eval_replace_concrete config region_params type_params cg_params
+              eval_replace_concrete config region_params type_params cg_args
           | BoxNew ->
-              eval_box_new_concrete config region_params type_params cg_params
+              eval_box_new_concrete config region_params type_params cg_args
           | BoxDeref ->
-              eval_box_deref_concrete config region_params type_params cg_params
+              eval_box_deref_concrete config region_params type_params cg_args
           | BoxDerefMut ->
               eval_box_deref_mut_concrete config region_params type_params
-                cg_params
+                cg_args
           | BoxFree ->
               (* Should have been treated above *) raise (Failure "Unreachable")
           | VecNew | VecPush | VecInsert | VecLen | VecIndex | VecIndexMut ->
               eval_vec_function_concrete config fid region_params type_params
-                cg_params
+                cg_args
           | ArrayIndexShared | ArrayIndexMut | ArrayToSliceShared
           | ArrayToSliceMut | ArraySubsliceShared | ArraySubsliceMut
           | SliceIndexShared | SliceIndexMut | SliceSubsliceShared
@@ -663,7 +666,7 @@ let eval_non_local_function_call_concrete (config : C.config)
       comp cf_eval_ops cf_eval_call
 
 let instantiate_fun_sig (type_params : T.ety list)
-    (cg_params : T.const_generic list) (sg : A.fun_sig) : A.inst_fun_sig =
+    (cg_args : T.const_generic list) (sg : A.fun_sig) : A.inst_fun_sig =
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let rg_abs_ids_bindings =
@@ -694,7 +697,7 @@ let instantiate_fun_sig (type_params : T.ety list)
   let rtype_params = List.map ety_no_regions_to_rty type_params in
   let tsubst = Subst.make_type_subst_from_vars sg.type_params rtype_params in
   let cgsubst =
-    Subst.make_const_generic_subst_from_vars sg.const_generic_params cg_params
+    Subst.make_const_generic_subst_from_vars sg.const_generic_params cg_args
   in
   (* Substitute the signature *)
   let inst_sig = Subst.substitute_signature asubst rsubst tsubst cgsubst sg in
@@ -1054,81 +1057,86 @@ and eval_local_function_call_concrete (config : C.config) (fid : A.FunDeclId.id)
     (_region_args : T.erased_region list) (type_args : T.ety list)
     (cg_args : T.const_generic list) (args : E.operand list) (dest : E.place) :
     st_cm_fun =
- fun cf ctx ->
-  (* Retrieve the (correctly instantiated) body *)
-  let def = C.ctx_lookup_fun_decl ctx fid in
-  (* We can evaluate the function call only if it is not opaque *)
-  let body =
-    match def.body with
-    | None ->
-        raise
-          (Failure
-             ("Can't evaluate a call to an opaque function: "
-             ^ Print.name_to_string def.name))
-    | Some body -> body
-  in
-  let tsubst =
-    Subst.make_type_subst_from_vars def.A.signature.type_params type_args
-  in
-  let cgsubst =
-    Subst.make_const_generic_subst_from_vars
-      def.A.signature.const_generic_params cg_args
-  in
-  let locals, body_st = Subst.fun_body_substitute_in_body tsubst cgsubst body in
+  (* Sanity check: we don't fully handle the const generic vars environment
+     in concrete mode yet *)
+  assert (cg_args = []);
+  fun cf ctx ->
+    (* Retrieve the (correctly instantiated) body *)
+    let def = C.ctx_lookup_fun_decl ctx fid in
+    (* We can evaluate the function call only if it is not opaque *)
+    let body =
+      match def.body with
+      | None ->
+          raise
+            (Failure
+               ("Can't evaluate a call to an opaque function: "
+               ^ Print.name_to_string def.name))
+      | Some body -> body
+    in
+    let tsubst =
+      Subst.make_type_subst_from_vars def.A.signature.type_params type_args
+    in
+    let cgsubst =
+      Subst.make_const_generic_subst_from_vars
+        def.A.signature.const_generic_params cg_args
+    in
+    let locals, body_st =
+      Subst.fun_body_substitute_in_body tsubst cgsubst body
+    in
 
-  (* Evaluate the input operands *)
-  assert (List.length args = body.A.arg_count);
-  let cc = eval_operands config args in
+    (* Evaluate the input operands *)
+    assert (List.length args = body.A.arg_count);
+    let cc = eval_operands config args in
 
-  (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
-   * of the operands evaluation from above to the functions afterwards, while
-   * ignoring it in this function *)
-  let cc = comp_transmit cc push_frame in
+    (* Push a frame delimiter - we use {!comp_transmit} to transmit the result
+     * of the operands evaluation from above to the functions afterwards, while
+     * ignoring it in this function *)
+    let cc = comp_transmit cc push_frame in
 
-  (* Compute the initial values for the local variables *)
-  (* 1. Push the return value *)
-  let ret_var, locals =
-    match locals with
-    | ret_ty :: locals -> (ret_ty, locals)
-    | _ -> raise (Failure "Unreachable")
-  in
-  let input_locals, locals =
-    Collections.List.split_at locals body.A.arg_count
-  in
+    (* Compute the initial values for the local variables *)
+    (* 1. Push the return value *)
+    let ret_var, locals =
+      match locals with
+      | ret_ty :: locals -> (ret_ty, locals)
+      | _ -> raise (Failure "Unreachable")
+    in
+    let input_locals, locals =
+      Collections.List.split_at locals body.A.arg_count
+    in
 
-  let cc = comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty)) in
+    let cc = comp_transmit cc (push_var ret_var (mk_bottom ret_var.var_ty)) in
 
-  (* 2. Push the input values *)
-  let cf_push_inputs cf args =
-    let inputs = List.combine input_locals args in
-    (* Note that this function checks that the variables and their values
-     * have the same type (this is important) *)
-    push_vars inputs cf
-  in
-  let cc = comp cc cf_push_inputs in
+    (* 2. Push the input values *)
+    let cf_push_inputs cf args =
+      let inputs = List.combine input_locals args in
+      (* Note that this function checks that the variables and their values
+       * have the same type (this is important) *)
+      push_vars inputs cf
+    in
+    let cc = comp cc cf_push_inputs in
 
-  (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
-  let cc = comp cc (push_uninitialized_vars locals) in
+    (* 3. Push the remaining local variables (initialized as {!Bottom}) *)
+    let cc = comp cc (push_uninitialized_vars locals) in
 
-  (* Execute the function body *)
-  let cc = comp cc (eval_function_body config body_st) in
+    (* Execute the function body *)
+    let cc = comp cc (eval_function_body config body_st) in
 
-  (* Pop the stack frame and move the return value to its destination *)
-  let cf_finish cf res =
-    match res with
-    | Panic -> cf Panic
-    | Return ->
-        (* Pop the stack frame, retrieve the return value, move it to
-         * its destination and continue *)
-        pop_frame_assign config dest (cf Unit)
-    | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
-    | EndContinue _ ->
-        raise (Failure "Unreachable")
-  in
-  let cc = comp cc cf_finish in
+    (* Pop the stack frame and move the return value to its destination *)
+    let cf_finish cf res =
+      match res with
+      | Panic -> cf Panic
+      | Return ->
+          (* Pop the stack frame, retrieve the return value, move it to
+           * its destination and continue *)
+          pop_frame_assign config dest (cf Unit)
+      | Break _ | Continue _ | Unit | LoopReturn _ | EndEnterLoop _
+      | EndContinue _ ->
+          raise (Failure "Unreachable")
+    in
+    let cc = comp cc cf_finish in
 
-  (* Continue *)
-  cc cf ctx
+    (* Continue *)
+    cc cf ctx
 
 (** Evaluate a local (i.e., non-assumed) function call in symbolic mode *)
 and eval_local_function_call_symbolic (config : C.config) (fid : A.FunDeclId.id)
