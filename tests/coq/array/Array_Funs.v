@@ -183,6 +183,10 @@ Definition index_index_array_fwd
   array_index_shared u32 32%usize a j
 .
 
+(** [array::const_gen_ret]: forward function *)
+Definition const_gen_ret_fwd (N : usize) : result usize :=
+  Return N.
+
 (** [array::update_update_array]: forward function *)
 Definition update_update_array_fwd
   (s : array (array u32 32%usize) 32%usize) (i : usize) (j : usize) :

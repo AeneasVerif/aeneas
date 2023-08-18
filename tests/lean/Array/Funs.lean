@@ -166,6 +166,10 @@ def index_index_array
       Array.index_shared (Array U32 (Usize.ofInt 32)) (Usize.ofInt 32) s i
     Array.index_shared U32 (Usize.ofInt 32) a j
 
+/- [array::const_gen_ret]: forward function -/
+def const_gen_ret (N : Usize) : Result Usize :=
+  Result.ret N
+
 /- [array::update_update_array]: forward function -/
 def update_update_array
   (s : Array (Array U32 (Usize.ofInt 32)) (Usize.ofInt 32)) (i : Usize)

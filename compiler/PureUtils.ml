@@ -185,6 +185,9 @@ let is_var (e : texpression) : bool =
 let as_var (e : texpression) : VarId.id =
   match e.e with Var v -> v | _ -> raise (Failure "Unreachable")
 
+let is_cvar (e : texpression) : bool =
+  match e.e with CVar _ -> true | _ -> false
+
 let is_global (e : texpression) : bool =
   match e.e with Qualif { id = Global _; _ } -> true | _ -> false
 

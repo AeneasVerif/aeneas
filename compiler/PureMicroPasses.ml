@@ -681,8 +681,8 @@ let inline_useless_var_reassignments (inline_named : bool) (inline_pure : bool)
               | _ -> false
             in
             (* And either:
-             * 2.1 the right-expression is a variable or a global *)
-            let var_or_global = is_var re || is_global re in
+             * 2.1 the right-expression is a variable, a global or a const generic var *)
+            let var_or_global = is_var re || is_cvar re || is_global re in
             (* Or:
              * 2.2 the right-expression is a constant value, an ADT value,
              *     a projection or a primitive function call *and* the flag
